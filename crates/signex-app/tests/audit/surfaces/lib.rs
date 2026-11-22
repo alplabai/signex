@@ -155,24 +155,9 @@ pub fn rows() -> Vec<Surface> {
         Surface {
             id: "m126",
             title: "Footprint Properties: Pour / Keepout / Cutout / Pattern / Sketch pad",
-            // Mapped state: Keepout (a sketch line with a keepout role,
-            // selected). Pour, Cutout, Pattern and Sketch pad are the other
-            // sub-forms of the same panel and are not mapped.
-            open: |app, r, fx| {
-                let path = fx.footprint.with_file_name("audit-keepout.snxfpt");
-                let (footprint, line) = keepout_footprint();
-                open_footprint_document(app, &path, footprint);
-                let _ = render::draw_main(r, app);
-                let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
-                    path,
-                    msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchSelect {
-                        id: Some(line),
-                        shift: false,
-                    }),
-                }));
-                let _ = render::draw_main(r, app);
-                Ok(())
-            },
+            // The Pattern sub-form the row draws. Keepout is `m126-keepout`;
+            // Pour, Cutout and Sketch pad are not mapped.
+            open: super::states_sketch::open_pattern_selected,
             window: WindowSel::Auto,
             checks: &[("a footprint tab is active", footprint_tab_active)],
         },
@@ -1041,7 +1026,11 @@ fn update_entries(app: &Signex, fx: &Fixture) -> Result<Vec<LibraryUpdateEntry>,
 }
 
 /// Put `footprint` in a footprint editor tab at `path`, made active.
-fn open_footprint_document(app: &mut Signex, path: &Path, footprint: signex_library::Footprint) {
+pub(super) fn open_footprint_document(
+    app: &mut Signex,
+    path: &Path,
+    footprint: signex_library::Footprint,
+) {
     let file = signex_library::FootprintFile::from_footprint(footprint);
     app.document_state.footprint_editors.insert(
         path.to_path_buf(),
@@ -1059,7 +1048,8 @@ fn open_footprint_document(app: &mut Signex, path: &Path, footprint: signex_libr
 
 /// A footprint whose sketch holds a 2 mm line with a no-routing keepout on
 /// the top copper; returns the line's id.
-fn keepout_footprint() -> (signex_library::Footprint, signex_sketch::id::SketchEntityId) {
+pub(super) fn keepout_footprint() -> (signex_library::Footprint, signex_sketch::id::SketchEntityId)
+{
     use signex_sketch::attr::{KeepoutAttr, KeepoutKinds};
     use signex_sketch::entity::{Entity, EntityKind};
     use signex_sketch::id::SketchEntityId;

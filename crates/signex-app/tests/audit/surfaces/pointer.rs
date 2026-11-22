@@ -24,6 +24,10 @@ pub enum PointerStep {
     /// Click this many pixels right of the text field holding this value,
     /// where a measurement field's picker sits.
     ClickRightOfInput(&'static str, u32),
+    /// Move to this window point. The vendored menu overlay cannot be walked
+    /// by a widget operation while open, so a row inside it is aimed by its
+    /// place: 28 px rows, 9 px more per separator, the first row at y 49.
+    HoverAt(u32, u32),
 }
 
 #[derive(Default)]
@@ -52,7 +56,9 @@ fn locate<'a, T: 'a>(
     step: PointerStep,
 ) -> Result<Point, String> {
     let mut labels = Labels::default();
-    ui.operate(r, &mut labels);
+    if !matches!(step, PointerStep::HoverAt(..)) {
+        ui.operate(r, &mut labels);
+    }
     let named = |list: &[(String, Rectangle)], want: &str, last: bool| {
         let mut hits = list.iter().filter(|(text, _)| text.trim() == want);
         let hit = if last { hits.last() } else { hits.next() };
@@ -66,6 +72,7 @@ fn locate<'a, T: 'a>(
             let field = named(&labels.inputs, want, false)?;
             Point::new(field.x + field.width + dx as f32, field.center_y())
         }
+        PointerStep::HoverAt(x, y) => Point::new(x as f32, y as f32),
     })
 }
 
@@ -94,16 +101,18 @@ fn redraw_event() -> Event {
 
 /// Run `steps` on the main window and draw it from the widget state they
 /// left. Fails when a label is missing or the steps changed no pixel, so a
-/// closed menu is never saved under an open menu's name.
+/// closed menu is never saved under an open menu's name. `height` is the
+/// window height: a menu taller than the usual window needs more.
 pub fn draw_after(
     r: &mut iced::Renderer,
     app: &Signex,
     steps: &[PointerStep],
+    height: u32,
 ) -> Result<Vec<u8>, String> {
-    let before = render::draw_main(r, app);
     let window = app.ui_state.main_window_id.ok_or("no main window")?;
+    let before = render::draw_window(r, app, window, (render::WIDTH, height));
     let theme = app.theme(window).ok_or("the main window has no theme")?;
-    let size = Size::new(render::WIDTH as f32, render::HEIGHT as f32);
+    let size = Size::new(render::WIDTH as f32, height as f32);
     let mut cache = Cache::default();
     let mut cursor = Cursor::Unavailable;
     for step in steps {
@@ -113,7 +122,9 @@ pub fn draw_after(
         cursor = Cursor::Available(at);
         let moved = Event::Mouse(mouse::Event::CursorMoved { position: at });
         match step {
-            PointerStep::Hover(_) => send(&mut ui, &[moved], cursor, r),
+            PointerStep::Hover(_) | PointerStep::HoverAt(..) => {
+                send(&mut ui, &[moved], cursor, r);
+            }
             PointerStep::Click(_) | PointerStep::ClickRightOfInput(..) => send(
                 &mut ui,
                 &[
@@ -138,7 +149,7 @@ pub fn draw_after(
         cursor,
     );
     let viewport = iced::advanced::graphics::Viewport::with_physical_size(
-        Size::new(render::WIDTH, render::HEIGHT),
+        Size::new(render::WIDTH, height),
         iced::advanced::renderer::Scale::default(),
     );
     let iced::Renderer::Primary(wgpu_renderer) = r else {

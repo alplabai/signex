@@ -70,17 +70,23 @@ fn pointer_rows() -> Vec<Surface> {
             "m4-reports",
             "Tools > Reports open",
             open_sheet,
-            WindowSel::MainPointer(&[PointerStep::Click("Tools"), PointerStep::Hover("Reports")]),
+            // Reports is the second row of the Tools menu.
+            WindowSel::MainPointer(&[PointerStep::Click("Tools"), PointerStep::HoverAt(400, 77)]),
         ),
         surface(
             "m166-menu",
             "View > Window > Layouts open",
             open_sheet,
-            WindowSel::MainPointer(&[
-                PointerStep::Click("View"),
-                PointerStep::Hover("Window"),
-                PointerStep::Hover("Layouts"),
-            ]),
+            // The View menu is taller than 900 px. Window follows 34 rows
+            // and 4 separators; Layouts follows 3 rows and a separator.
+            WindowSel::MainPointerTall(
+                &[
+                    PointerStep::Click("View"),
+                    PointerStep::HoverAt(260, 1037),
+                    PointerStep::HoverAt(480, 1130),
+                ],
+                1400,
+            ),
         ),
         surface(
             "m139-prefix",
@@ -92,7 +98,8 @@ fn pointer_rows() -> Vec<Surface> {
             "m139-unit",
             "Unit picker open",
             |app, _, fx| open_measurement(app, fx, "100", "ppm/C", SiPrefix::One),
-            WindowSel::MainPointer(&[PointerStep::ClickRightOfInput("100", 16)]),
+            // With no prefix picker, the unit picker is the next control.
+            WindowSel::MainPointer(&[PointerStep::ClickRightOfInput("100", 40)]),
         ),
     ]
 }
@@ -133,7 +140,14 @@ fn chrome_rows() -> Vec<Surface> {
         row("m19-no-match", "Projects filter: no match", |app, r, fx| {
             open_projects_filter(app, r, fx, "zzz")
         }),
-        row("m19-no-project", "Projects: none open", |app, _, _| {
+        // The dock shows only with a document open: a library tab has no
+        // project.
+        row("m19-no-project", "Projects: none open", |app, _, fx| {
+            fixture::mount_stock(app, fx)?;
+            settle_support::settle(
+                app,
+                Message::Library(LibraryMessage::OpenLibraryBrowser(fx.stock.clone())),
+            );
             helpers_c::show_panel(app, PanelKind::Projects)
         }),
         row("m20-planned", "Project menu: Planned", |app, r, fx| {
@@ -164,15 +178,30 @@ fn chrome_rows() -> Vec<Surface> {
 
 fn preference_rows() -> Vec<Surface> {
     vec![
-        row("m145-recorder", "Shortcut recorder", open_recorder),
-        row("m148-profiles", "Rule profiles", open_profiles),
-        row("m149-connected", "DigiKey connected", |app, _, _| {
-            open_distributors(app, Some("j.doe@example.com"))
-        }),
-        row(
+        // Preferences is its own window, so these capture with `Auto`.
+        surface(
+            "m145-recorder",
+            "Shortcut recorder",
+            open_recorder,
+            WindowSel::Auto,
+        ),
+        surface(
+            "m148-profiles",
+            "Rule profiles",
+            open_profiles,
+            WindowSel::Auto,
+        ),
+        surface(
+            "m149-connected",
+            "DigiKey connected",
+            |app, _, _| open_distributors(app, Some("j.doe@example.com")),
+            WindowSel::Auto,
+        ),
+        surface(
             "m149-not-connected",
             "DigiKey not connected",
             |app, _, _| open_distributors(app, None),
+            WindowSel::Auto,
         ),
     ]
 }
@@ -330,6 +359,17 @@ fn open_stock_copy(app: &mut Signex, _: &mut iced::Renderer, fx: &Fixture) -> Re
     let stock_dir = fx.stock.parent().ok_or("stock has no folder")?;
     let copy_dir = stock_dir.with_file_name("passives");
     copy_tree(stock_dir, &copy_dir).map_err(|e| format!("copy library: {e}"))?;
+    // A file carrying the stock id is refused as a copy of stock: this one
+    // is the user's own library, with its own id and name.
+    let library = copy_dir.join("Stock.snxlib");
+    let text = std::fs::read_to_string(&library).map_err(|e| format!("read library: {e}"))?;
+    let text = text
+        .replace(
+            &signex_app::library::state::STOCK_LIBRARY_ID.to_string(),
+            &uuid::Uuid::now_v7().to_string(),
+        )
+        .replace("name = \"Stock\"", "name = \"passives\"");
+    std::fs::write(&library, text).map_err(|e| format!("write library: {e}"))?;
     app.library.pending_mounts.clear();
     app.library.stock_copy_target = None;
     app.library.stock_library_root = Some(fx.stock.clone());
@@ -337,7 +377,7 @@ fn open_stock_copy(app: &mut Signex, _: &mut iced::Renderer, fx: &Fixture) -> Re
         .open_library_read_only(fx.stock.clone())
         .map_err(|e| format!("mount stock read-only: {e:?}"))?;
     app.library
-        .open_library(copy_dir.join("Stock.snxlib"))
+        .open_library(library)
         .map_err(|e| format!("mount the writable library: {e:?}"))?;
     settle_support::settle(app, Message::File(FileMsg::Opened(Some(fx.symbol.clone()))));
     reached(

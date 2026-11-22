@@ -30,7 +30,15 @@ pub enum WindowSel {
     /// The main window after these pointer steps, drawn from the widget
     /// state they left, so an open menu or pick list shows.
     MainPointer(&'static [PointerStep]),
+    /// [`Self::MainPointer`] in a window this tall, for a menu that does not
+    /// fit the usual height.
+    MainPointerTall(&'static [PointerStep], u32),
+    /// The newest dock panel opened as its own window.
+    DetachedPanel,
 }
+
+/// The size a panel in its own window is drawn at.
+const PANEL_SIZE: (u32, u32) = (720, 560);
 
 pub struct Surface {
     /// The mockup row, `"m42"` for row 42; a letter suffix (`"m122b"`) as
@@ -68,6 +76,20 @@ pub fn capture(
             ))
         }
         WindowSel::MainCrop(rect) => Ok(render::crop(&render::draw_main(r, app), main, rect)),
-        WindowSel::MainPointer(steps) => Ok((draw_after(r, app, steps)?, main)),
+        WindowSel::MainPointer(steps) => Ok((draw_after(r, app, steps, render::HEIGHT)?, main)),
+        WindowSel::MainPointerTall(steps, height) => {
+            Ok((draw_after(r, app, steps, height)?, (render::WIDTH, height)))
+        }
+        WindowSel::DetachedPanel => {
+            let id = app
+                .ui_state
+                .windows
+                .iter()
+                .filter(|(_, kind)| format!("{kind:?}").starts_with("DetachedPanel"))
+                .map(|(id, _)| *id)
+                .max()
+                .ok_or("no detached panel window opened")?;
+            Ok((render::draw_window(r, app, id, PANEL_SIZE), PANEL_SIZE))
+        }
     }
 }

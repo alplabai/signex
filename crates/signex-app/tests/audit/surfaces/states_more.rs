@@ -109,31 +109,38 @@ pub fn rows() -> Vec<Surface> {
             );
             helpers_d::rules_tab_active(app)
         }),
-        row(
-            "m143-dirty",
-            "Preferences: search and edits",
-            |app, _, _| {
+        // Preferences is its own window, so these capture with `Auto`.
+        Surface {
+            window: WindowSel::Auto,
+            ..row(
+                "m143-dirty",
+                "Preferences: search and edits",
+                |app, _, _| {
+                    settle_support::settle(app, Message::Preferences(PreferencesMsg::Open));
+                    for msg in [
+                        PrefMsg::NavSearchChanged("an".into()),
+                        PrefMsg::DraftIncrementStep(2),
+                    ] {
+                        let _ = app.update(Message::Preferences(PreferencesMsg::Inner(msg)));
+                    }
+                    reached(app.ui_state.preferences_open, "Preferences closed")
+                },
+            )
+        },
+        Surface {
+            window: WindowSel::Auto,
+            ..row("m147-error", "Editing: fast grid refused", |app, _, _| {
                 settle_support::settle(app, Message::Preferences(PreferencesMsg::Open));
-                for msg in [
-                    PrefMsg::NavSearchChanged("an".into()),
-                    PrefMsg::DraftIncrementStep(2),
-                ] {
-                    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(msg)));
-                }
+                settle_support::settle(
+                    app,
+                    Message::Preferences(PreferencesMsg::Nav(PrefNav::Editing)),
+                );
+                let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+                    PrefMsg::DraftFastGrid(1, "0.0000001".into()),
+                )));
                 reached(app.ui_state.preferences_open, "Preferences closed")
-            },
-        ),
-        row("m147-error", "Editing: fast grid refused", |app, _, _| {
-            settle_support::settle(app, Message::Preferences(PreferencesMsg::Open));
-            settle_support::settle(
-                app,
-                Message::Preferences(PreferencesMsg::Nav(PrefNav::Editing)),
-            );
-            let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
-                PrefMsg::DraftFastGrid(1, "0.0000001".into()),
-            )));
-            reached(app.ui_state.preferences_open, "Preferences closed")
-        }),
+            })
+        },
         row("m155-change", "Change Component picker", |app, r, fx| {
             fixture::open_sample(app, r, fx);
             fixture::mount_stock(app, fx)?;
@@ -154,7 +161,12 @@ pub fn rows() -> Vec<Surface> {
                     .iter()
                     .any(|s| s.filename.contains("contents"))
             });
-            reached(listed, "the project lists no contents sheet")
+            reached(listed, "the project lists no contents sheet")?;
+            // The sheet itself in front, so its table is what the row shows.
+            let contents = h::new_dir(fx, "hierarchy")?.join("contents.snxsch");
+            h::open(app, &contents)?;
+            h::show_sheet(app, r);
+            Ok(())
         }),
         row("m157-placing", "Dimension being placed", |app, r, fx| {
             fixture::open_sample(app, r, fx);
@@ -169,6 +181,8 @@ pub fn rows() -> Vec<Surface> {
             fixture::open_sample(app, r, fx);
             h::select_parts(app, &["C1", "U1", "C2"])?;
             h::open_panel(app, PanelKind::Unions);
+            // The popover opens at the pointer: over the selected parts.
+            app.interaction_state.last_mouse_pos = (640.0, 400.0);
             let mut msgs = vec![
                 UnionsMsg::CreateRequested,
                 UnionsMsg::Popover(UnionPopoverMsg::NameEdited("Regulator".into())),
@@ -209,16 +223,19 @@ pub fn rows() -> Vec<Surface> {
     ]
 }
 
-/// Move the panel `kind` from the bottom dock to the right one, through its
-/// tab menu as a user does, and bring it to the front.
+/// Bring the panel `kind` to the front of a tall dock: one already outside
+/// the bottom dock stays; a bottom one moves right through its tab menu, as
+/// a user does.
 pub(super) fn dock_right(app: &mut Signex, kind: PanelKind) -> Result<(), String> {
     let index = app
         .document_state
         .dock
         .panel_kinds(PanelPosition::Bottom)
         .iter()
-        .position(|k| *k == kind)
-        .ok_or_else(|| format!("no {kind:?} tab in the bottom dock"))?;
+        .position(|k| *k == kind);
+    let Some(index) = index else {
+        return fixture::select_panel(app, kind);
+    };
     h::settle(
         app,
         Message::Dock(DockMessage::TabContextMenuRequested(

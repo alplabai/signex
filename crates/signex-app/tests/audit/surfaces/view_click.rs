@@ -62,8 +62,17 @@ fn find_message(
     (step_x, step_y): (usize, usize),
     want: impl Fn(&Message) -> bool,
 ) -> Option<Message> {
-    let window = app.ui_state.main_window_id?;
-    let size = Size::new(render::WIDTH as f32, render::HEIGHT as f32);
+    // A dialog in its own window takes the clicks, as it does for a user.
+    let (window, size) = match render::detached_modal(app) {
+        Some(id) => {
+            let (w, h) = render::DETACHED_SIZE;
+            (id, Size::new(w as f32, h as f32))
+        }
+        None => (
+            app.ui_state.main_window_id?,
+            Size::new(render::WIDTH as f32, render::HEIGHT as f32),
+        ),
+    };
     let mut ui = UserInterface::build(app.view(window), size, Cache::default(), r);
     let waker = Waker::noop();
     for y in (area.y..area.y + area.h).step_by(step_y) {

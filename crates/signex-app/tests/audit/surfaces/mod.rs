@@ -24,6 +24,7 @@ mod states;
 mod states_drawn;
 mod states_final;
 mod states_more;
+mod states_sketch;
 mod view_click;
 
 /// Every group, by the name `AUDIT_ONLY` accepts, with its rows.
@@ -42,5 +43,6 @@ pub fn groups() -> Vec<(&'static str, Vec<Surface>)> {
         ("states_drawn", states_drawn::rows()),
         ("states_more", states_more::rows()),
         ("states_final", states_final::rows()),
+        ("states_sketch", states_sketch::rows()),
     ]
 }
