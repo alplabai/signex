@@ -331,9 +331,8 @@ mod tests {
     #[test]
     fn a_parts_overflow_row_handles_the_singular() {
         let i18n = signex_i18n::I18n::en_us();
-        let more = |count: usize| {
-            plain(t!(i18n, ids::PANELS_NET_INSPECTOR_MORE_PINS, "count" => count))
-        };
+        let more =
+            |count: usize| plain(t!(i18n, ids::PANELS_NET_INSPECTOR_MORE_PINS, "count" => count));
         assert_eq!(more(1), "+ 1 more pin");
         assert_eq!(more(8), "+ 8 more pins");
     }

@@ -56,7 +56,11 @@ pub(super) fn view<'a>(
             .boxed();
         body.push(warn_line(Glyph::Warn, note, None, tokens));
     }
-    body.push(cards::tab_choices(state, users, i18n, tokens).map(edited(project.id)).boxed());
+    body.push(
+        cards::tab_choices(state, users, i18n, tokens)
+            .map(edited(project.id))
+            .boxed(),
+    );
     body.push(rule_cards(project.id, state, i18n, tokens));
     body.push(super::agent_journals::view(
         project,
@@ -106,8 +110,12 @@ fn rule_cards<'a>(
             title,
             trailing: Vec::new(),
         };
-        container(card(Some(header), fields.map(edited(project_id)).boxed(), tokens))
-            .width(Length::FillPortion(1))
+        container(card(
+            Some(header),
+            fields.map(edited(project_id)).boxed(),
+            tokens,
+        ))
+        .width(Length::FillPortion(1))
     };
     row![
         titled(
