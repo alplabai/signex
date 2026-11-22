@@ -30,6 +30,7 @@ use iced::Task;
 use super::super::super::*;
 use crate::panels::PanelMsg;
 
+mod curve_fields;
 mod footprint;
 mod numeric_input;
 mod sketch_fixes;
@@ -840,6 +841,9 @@ fn apply_graphic_field(
     use signex_library::SymbolGraphicKind;
     if matches!(field, GraphicFieldId::StrokeWidth) {
         g.stroke_width = value;
+        return;
+    }
+    if curve_fields::apply(&mut g.kind, field, value) {
         return;
     }
     match (&mut g.kind, field) {

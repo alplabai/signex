@@ -81,9 +81,13 @@ impl NumericFieldKey {
                 } => value >= 0.0,
                 Self::PinLength(_)
                 | Self::Graphic {
-                    field: F::Radius | F::TextSize,
+                    field: F::Radius | F::RadiusX | F::RadiusY | F::TextSize,
                     ..
                 } => value >= MIN_SYMBOL_LENGTH_MM,
+                Self::Graphic {
+                    field: F::CornerRadius,
+                    ..
+                } => value >= 0.0,
                 Self::PinX(_) | Self::PinY(_) | Self::Graphic { .. } => true,
             }
     }
@@ -151,6 +155,7 @@ fn graphic_scalar(g: &GraphicSummary, field: GraphicFieldId) -> Option<f64> {
     use GraphicKindSummary as K;
     match (&g.kind, field) {
         (_, F::StrokeWidth) => Some(g.stroke_width),
+        (K::EllipticalArc { .. } | K::RoundRectangle { .. }, _) => curve_scalar(&g.kind, field),
         (K::Rectangle { from, .. } | K::Line { from, .. }, F::FromX) => Some(from[0]),
         (K::Rectangle { from, .. } | K::Line { from, .. }, F::FromY) => Some(from[1]),
         (K::Rectangle { to, .. } | K::Line { to, .. }, F::ToX) => Some(to[0]),
@@ -173,6 +178,29 @@ fn graphic_scalar(g: &GraphicSummary, field: GraphicFieldId) -> Option<f64> {
         (K::Text { position, .. }, F::PositionX) => Some(position[0]),
         (K::Text { position, .. }, F::PositionY) => Some(position[1]),
         (K::Text { size, .. }, F::TextSize) => Some(*size),
+        _ => None,
+    }
+}
+
+/// [`graphic_scalar`] for an elliptical arc or round rectangle.
+fn curve_scalar(kind: &GraphicKindSummary, field: GraphicFieldId) -> Option<f64> {
+    use crate::library::editor::symbol::rect_extent;
+    use GraphicFieldId as F;
+    use GraphicKindSummary as K;
+    match (kind, field) {
+        (K::EllipticalArc { center, .. }, F::CenterX) => Some(center[0]),
+        (K::EllipticalArc { center, .. }, F::CenterY) => Some(center[1]),
+        (K::EllipticalArc { radius_x, .. }, F::RadiusX) => Some(*radius_x),
+        (K::EllipticalArc { radius_y, .. }, F::RadiusY) => Some(*radius_y),
+        (K::EllipticalArc { start_deg, .. }, F::StartDeg) => Some(*start_deg),
+        (K::EllipticalArc { end_deg, .. }, F::EndDeg) => Some(*end_deg),
+        (K::RoundRectangle { from, .. }, F::FromX) => Some(from[0]),
+        (K::RoundRectangle { from, .. }, F::FromY) => Some(from[1]),
+        (K::RoundRectangle { to, .. }, F::ToX) => Some(to[0]),
+        (K::RoundRectangle { to, .. }, F::ToY) => Some(to[1]),
+        (K::RoundRectangle { from, to, .. }, F::Width) => Some(rect_extent(from[0], to[0])),
+        (K::RoundRectangle { from, to, .. }, F::Height) => Some(rect_extent(from[1], to[1])),
+        (K::RoundRectangle { corner_radius, .. }, F::CornerRadius) => Some(*corner_radius),
         _ => None,
     }
 }

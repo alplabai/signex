@@ -43,7 +43,10 @@ impl SymbolCanvas<'_> {
         // Right-click cancels any other in-progress multi-click draw;
         // otherwise starts a pan (same as schematic canvas).
         let draw_in_progress = match self.tool {
-            SymbolTool::PlaceRectangle => state.rect_from.is_some(),
+            SymbolTool::PlaceRectangle | SymbolTool::PlaceRoundRectangle => {
+                state.rect_from.is_some()
+            }
+            SymbolTool::PlaceEllipticalArc => state.ellipse.is_active(),
             SymbolTool::PlaceLine => state.line_from.is_some(),
             SymbolTool::PlaceCircle => state.circle_center.is_some(),
             SymbolTool::PlaceArc | SymbolTool::PlacePie => {
@@ -62,6 +65,7 @@ impl SymbolCanvas<'_> {
             state.arc_radius_start = None;
             state.arc_cursor = None;
             state.arc_end_deg_unwrapped = None;
+            state.ellipse = Default::default();
             return Some(canvas::Action::capture());
         }
         let pos = cursor.position_in(bounds)?;
@@ -239,8 +243,22 @@ impl SymbolCanvas<'_> {
         // While waiting for a subsequent click in a multi-click
         // draw flow, update the rubber-band cursor and force a
         // redraw so the preview animates in real time.
-        if self.tool == SymbolTool::PlaceRectangle && state.rect_from.is_some() {
+        if matches!(
+            self.tool,
+            SymbolTool::PlaceRectangle | SymbolTool::PlaceRoundRectangle
+        ) && state.rect_from.is_some()
+        {
             state.rect_cursor = Some((wx, wy));
+            return Some(
+                canvas::Action::publish(CanvasAction::CursorAt {
+                    x_mm: Some(ux),
+                    y_mm: Some(uy),
+                })
+                .and_capture(),
+            );
+        }
+        if self.tool == SymbolTool::PlaceEllipticalArc && state.ellipse.is_active() {
+            state.ellipse.track(wx, wy);
             return Some(
                 canvas::Action::publish(CanvasAction::CursorAt {
                     x_mm: Some(ux),

@@ -94,19 +94,30 @@ impl SymbolCanvas<'_> {
                 state.pin_cursor = Some((wx, wy));
                 Some(canvas::Action::capture())
             }
-            SymbolTool::PlaceRectangle => {
+            SymbolTool::PlaceEllipticalArc => Some(match state.ellipse.click(wx, wy) {
+                Some(action) => canvas::Action::publish(action).and_capture(),
+                None => canvas::Action::capture(),
+            }),
+            SymbolTool::PlaceRectangle | SymbolTool::PlaceRoundRectangle => {
                 if let Some((from_x, from_y)) = state.rect_from.take() {
                     // Second click — commit the rectangle.
                     state.rect_cursor = None;
-                    Some(
-                        canvas::Action::publish(CanvasAction::AddRectangle {
+                    let placed = if self.tool == SymbolTool::PlaceRoundRectangle {
+                        CanvasAction::AddRoundRectangle {
                             from_x,
                             from_y,
                             to_x: wx,
                             to_y: wy,
-                        })
-                        .and_capture(),
-                    )
+                        }
+                    } else {
+                        CanvasAction::AddRectangle {
+                            from_x,
+                            from_y,
+                            to_x: wx,
+                            to_y: wy,
+                        }
+                    };
+                    Some(canvas::Action::publish(placed).and_capture())
                 } else {
                     // First click — set the first corner and wait.
                     state.rect_from = Some((wx, wy));
@@ -333,7 +344,7 @@ impl SymbolCanvas<'_> {
 /// normalization — a zero-sweep point-arc that's invisible,
 /// unselectable, and un-deletable via the canvas, yet still saves to
 /// disk and still occupies its bounding box.
-fn arc_sweep_exceeds_full_turn(start_deg: f64, end_deg: f64) -> bool {
+pub(super) fn arc_sweep_exceeds_full_turn(start_deg: f64, end_deg: f64) -> bool {
     (end_deg - start_deg).abs() >= 360.0
 }
 

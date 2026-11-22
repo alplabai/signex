@@ -89,6 +89,106 @@ fn a_bezier_outline_runs_from_its_start_to_its_end() {
     assert_eq!(outline.last(), Some(&[5.08, 0.0]));
 }
 
+fn elliptical_arc() -> SymbolGraphicKind {
+    SymbolGraphicKind::EllipticalArc {
+        center: [1.27, 1.27],
+        radius_x: 5.08,
+        radius_y: 2.54,
+        start_deg: 45.0,
+        end_deg: 200.0,
+    }
+}
+
+fn round_rectangle() -> SymbolGraphicKind {
+    SymbolGraphicKind::round_rectangle([7.62, 5.08], [0.0, 0.0])
+}
+
+#[test]
+fn an_elliptical_arc_or_round_rectangle_saves_as_v4_and_reloads() {
+    for kind in [elliptical_arc(), round_rectangle()] {
+        let text = file_with(kind.clone(), BODY_NORMAL)
+            .to_toml_string()
+            .unwrap();
+        assert!(text.contains("format = \"snxsym/v4\""), "{text}");
+        let back = SymbolFile::from_toml_str(&text).unwrap();
+        assert_eq!(back.symbols[0].graphics[0].kind, kind);
+        assert_eq!(back.to_toml_string().unwrap(), text);
+    }
+}
+
+#[test]
+fn elliptical_arc_angles_are_geometric() {
+    let (rx, ry) = (4.0_f64, 2.0_f64);
+    let p = SymbolGraphicKind::point_on_ellipse([0.0, 0.0], rx, ry, 45.0);
+    assert!((p[0] - p[1]).abs() < 1e-9, "on the 45 degree ray: {p:?}");
+    let on_ellipse = (p[0] / rx).powi(2) + (p[1] / ry).powi(2);
+    assert!((on_ellipse - 1.0).abs() < 1e-9, "{p:?}");
+}
+
+#[test]
+fn an_elliptical_arc_outline_ends_on_its_two_angles() {
+    let outline = elliptical_arc().flattened_outline();
+    let at = |deg| SymbolGraphicKind::point_on_ellipse([1.27, 1.27], 5.08, 2.54, deg);
+    let close = |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).hypot(a[1] - b[1]) < 1e-9;
+    assert!(close(outline[0], at(45.0)));
+    assert!(close(outline[outline.len() - 1], at(200.0)));
+}
+
+#[test]
+fn a_new_round_rectangle_takes_the_default_radius_clamped_to_its_short_side() {
+    let SymbolGraphicKind::RoundRectangle {
+        from,
+        to,
+        corner_radius,
+    } = round_rectangle()
+    else {
+        panic!("expected a RoundRectangle");
+    };
+    assert_eq!((from, to), ([0.0, 0.0], [7.62, 5.08]));
+    assert_eq!(corner_radius, SymbolGraphicKind::DEFAULT_CORNER_RADIUS_MM);
+    let SymbolGraphicKind::RoundRectangle { corner_radius, .. } =
+        SymbolGraphicKind::round_rectangle([0.0, 0.0], [7.62, 1.27])
+    else {
+        panic!("expected a RoundRectangle");
+    };
+    assert_eq!(corner_radius, 0.635);
+}
+
+#[test]
+fn a_round_rectangle_ring_stays_inside_its_box_with_an_oversized_radius() {
+    let ring = SymbolGraphicKind::RoundRectangle {
+        from: [0.0, 0.0],
+        to: [4.0, 2.0],
+        corner_radius: 9.0,
+    }
+    .flattened_outline();
+    assert!(ring.len() > 4);
+    for p in &ring {
+        assert!((-1e-9..=4.0 + 1e-9).contains(&p[0]), "{p:?}");
+        assert!((-1e-9..=2.0 + 1e-9).contains(&p[1]), "{p:?}");
+    }
+}
+
+#[test]
+fn an_elliptical_arc_lowers_open_and_a_round_rectangle_closed() {
+    let placed = signex_types::schematic::Symbol {
+        lib_id: "L:C".to_string(),
+        ..Default::default()
+    };
+    for (kind, expect_closed) in [(elliptical_arc(), false), (round_rectangle(), true)] {
+        let lib = file_with(kind, BODY_NORMAL).symbols[0].to_lib_symbol("L:C");
+        let drawn = lower_symbol(
+            &lib,
+            &placed,
+            &signex_types::schematic::SchematicDefaults::BUILT_IN,
+        );
+        assert!(
+            matches!(drawn.as_slice(), [SymbolPrimitive::Path { closed, .. }] if *closed == expect_closed),
+            "{drawn:?}"
+        );
+    }
+}
+
 #[test]
 fn a_bezier_lowers_to_the_schematic_bezier() {
     let lib = file_with(bezier(), BODY_NORMAL).symbols[0].to_lib_symbol("L:C");

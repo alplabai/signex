@@ -391,6 +391,32 @@ pub(crate) fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -
             start_deg,
             end_deg,
         },
+        CanvasAction::AddEllipticalArc {
+            cx,
+            cy,
+            radius_x,
+            radius_y,
+            start_deg,
+            end_deg,
+        } => SymbolEditorMsg::AddEllipticalArc {
+            cx,
+            cy,
+            radius_x,
+            radius_y,
+            start_deg,
+            end_deg,
+        },
+        CanvasAction::AddRoundRectangle {
+            from_x,
+            from_y,
+            to_x,
+            to_y,
+        } => SymbolEditorMsg::AddRoundRectangle {
+            from_x,
+            from_y,
+            to_x,
+            to_y,
+        },
         CanvasAction::BezierClick { x, y } => SymbolEditorMsg::BezierClick { x, y },
         CanvasAction::AddText { x, y } => SymbolEditorMsg::AddText { x, y },
         CanvasAction::PolygonClick { x, y } => SymbolEditorMsg::PolygonClick { x, y },
@@ -470,6 +496,7 @@ fn graphic_handle_to_msg(handle: sym_state::GraphicHandle) -> GraphicHandleMsg {
         GraphicHandle::TextAnchor => GraphicHandleMsg::TextAnchor,
         GraphicHandle::PolygonVertex(i) => GraphicHandleMsg::PolygonVertex(i),
         GraphicHandle::BezierPoint(i) => GraphicHandleMsg::BezierPoint(i),
+        GraphicHandle::EllipseRadius(i) => GraphicHandleMsg::EllipseRadius(i),
     }
 }
 

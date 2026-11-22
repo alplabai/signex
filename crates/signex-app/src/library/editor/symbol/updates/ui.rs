@@ -18,6 +18,8 @@ pub(super) fn apply_symbol_ui(editor: &mut SymEditor, msg: SymbolEditorMsg) {
                 SymbolToolMsg::PlacePolygon => SymbolTool::PlacePolygon,
                 SymbolToolMsg::PlaceBezier => SymbolTool::PlaceBezier,
                 SymbolToolMsg::PlacePie => SymbolTool::PlacePie,
+                SymbolToolMsg::PlaceEllipticalArc => SymbolTool::PlaceEllipticalArc,
+                SymbolToolMsg::PlaceRoundRectangle => SymbolTool::PlaceRoundRectangle,
             };
             // A Bezier needs all four clicks: leaving the tool drops the
             // partial curve rather than placing one.

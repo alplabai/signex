@@ -292,6 +292,22 @@ pub enum SymbolGraphicKind {
         start_deg: f64,
         end_deg: f64,
     },
+    /// Open arc of an axis-aligned ellipse, counter-clockwise from
+    /// `start_deg` to `end_deg`. The angles are geometric: the direction
+    /// from `center` to the arc's end points. Never filled.
+    EllipticalArc {
+        center: [f64; 2],
+        radius_x: f64,
+        radius_y: f64,
+        start_deg: f64,
+        end_deg: f64,
+    },
+    /// Rectangle with one corner radius, at most half its short side.
+    RoundRectangle {
+        from: [f64; 2],
+        to: [f64; 2],
+        corner_radius: f64,
+    },
 }
 
 /// Normalise an `Arc`'s `start_deg`/`end_deg` into this codebase's
@@ -594,9 +610,9 @@ const SYMBOL_FILE_FORMAT_TOKEN_V2: &str = "snxsym/v2";
 /// v2 and v3.
 const SYMBOL_FILE_FORMAT_TOKEN_V3: &str = "snxsym/v3";
 
-/// Written when any graphic is a [`SymbolGraphicKind::Bezier`] or
-/// [`SymbolGraphicKind::Pie`] (#2838): a build without those kinds would
-/// fail on an unknown variant instead of refusing the token.
+/// Written when any graphic is a Bezier, Pie, EllipticalArc or RoundRectangle
+/// (#2838): a build without those kinds would fail on an unknown variant
+/// instead of refusing the token.
 const SYMBOL_FILE_FORMAT_TOKEN_V4: &str = "snxsym/v4";
 
 /// `.snxsym` version policy. `current` is the newest token; a save writes

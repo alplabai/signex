@@ -173,6 +173,24 @@ pub(in crate::panels::symbol_editor_properties) fn graphic(
             .part(stroke_leader(first, i18n))
         }
         GraphicKindSummary::Bezier { points } => bezier_parts(base, points, i18n)?,
+        kind @ (GraphicKindSummary::EllipticalArc { .. }
+        | GraphicKindSummary::RoundRectangle { .. }) => {
+            let outline = curve_outline(kind);
+            let fit = Fit::of(&outline, MARGIN, false)?;
+            let points: Vec<Point> = outline.iter().map(|v| fit.point(*v)).collect();
+            let first = *points.first()?;
+            let is_closed = matches!(kind, GraphicKindSummary::RoundRectangle { .. });
+            let base = if is_closed {
+                base.part(body(Primitive::Polyline {
+                    points: points.clone(),
+                    is_closed,
+                }))
+            } else {
+                base
+            };
+            base.part(edge(Primitive::Polyline { points, is_closed }))
+                .part(stroke_leader(first, i18n))
+        }
         GraphicKindSummary::Pie {
             center,
             radius,
@@ -226,6 +244,38 @@ pub(in crate::panels::symbol_editor_properties) fn graphic(
             ),
     };
     Some(ill)
+}
+
+/// The drawn outline of an elliptical arc or round rectangle.
+fn curve_outline(kind: &GraphicKindSummary) -> Vec<[f64; 2]> {
+    use signex_library::SymbolGraphicKind as K;
+    match *kind {
+        GraphicKindSummary::EllipticalArc {
+            center,
+            radius_x,
+            radius_y,
+            start_deg,
+            end_deg,
+        } => K::EllipticalArc {
+            center,
+            radius_x,
+            radius_y,
+            start_deg,
+            end_deg,
+        }
+        .flattened_outline(),
+        GraphicKindSummary::RoundRectangle {
+            from,
+            to,
+            corner_radius,
+        } => K::RoundRectangle {
+            from,
+            to,
+            corner_radius,
+        }
+        .flattened_outline(),
+        _ => Vec::new(),
+    }
 }
 
 /// A Bezier: the curve, its control arms, and a leader on each point.

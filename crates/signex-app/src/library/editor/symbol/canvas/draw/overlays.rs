@@ -85,7 +85,9 @@ impl SymbolCanvas<'_> {
         let w2s = |x: f64, y: f64| -> iced::Point {
             iced::Point::new(ox + (x as f32) * scale, oy - (y as f32) * scale)
         };
-        if let (Some((fx, fy)), Some((cx, cy))) = (state.rect_from, state.rect_cursor) {
+        if self.tool != SymbolTool::PlaceRoundRectangle
+            && let (Some((fx, fy)), Some((cx, cy))) = (state.rect_from, state.rect_cursor)
+        {
             let p0 = w2s(fx, fy);
             let p1 = w2s(cx, cy);
             // Screen-space top-left + size (y is flipped, so min/max in

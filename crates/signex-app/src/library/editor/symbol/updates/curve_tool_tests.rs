@@ -180,6 +180,148 @@ fn an_unfilled_pie_is_picked_on_its_edge_and_a_filled_one_inside() {
     );
 }
 
+fn place_ellipse(editor: &mut SymEditor, start_deg: f64, end_deg: f64) {
+    apply_symbol_primitive_edit(
+        editor,
+        SymbolEditorMsg::AddEllipticalArc {
+            cx: 0.0,
+            cy: 0.0,
+            radius_x: 5.08,
+            radius_y: 2.54,
+            start_deg,
+            end_deg,
+        },
+    );
+}
+
+fn place_round_rect(editor: &mut SymEditor, to: (f64, f64)) {
+    apply_symbol_primitive_edit(
+        editor,
+        SymbolEditorMsg::AddRoundRectangle {
+            from_x: 0.0,
+            from_y: 0.0,
+            to_x: to.0,
+            to_y: to.1,
+        },
+    );
+}
+
+#[test]
+fn an_elliptical_arc_placement_is_one_undo_step() {
+    let mut editor = new_editor(SymbolTool::PlaceEllipticalArc);
+    place_ellipse(&mut editor, 30.0, -60.0);
+    assert_eq!(editor.history.undo_len(), 1);
+    assert!(matches!(
+        editor.primitive().graphics[0].kind,
+        SymbolGraphicKind::EllipticalArc {
+            start_deg: 300.0,
+            end_deg: 30.0,
+            ..
+        }
+    ));
+    apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::Undo);
+    assert!(editor.primitive().graphics.is_empty());
+}
+
+#[test]
+fn an_elliptical_arc_with_no_sweep_places_nothing() {
+    let mut editor = new_editor(SymbolTool::PlaceEllipticalArc);
+    place_ellipse(&mut editor, 45.0, 45.0);
+    assert!(editor.primitive().graphics.is_empty());
+    assert_eq!(editor.history.undo_len(), 0);
+}
+
+#[test]
+fn a_quarter_turn_swaps_the_ellipse_radii_and_turns_its_angles() {
+    let mut editor = new_editor(SymbolTool::PlaceEllipticalArc);
+    place_ellipse(&mut editor, 0.0, 90.0);
+    state::rotate_selected(
+        editor.primitive_mut(),
+        Some(state::SymbolSelection::Graphic(0)),
+        false,
+    );
+    let SymbolGraphicKind::EllipticalArc {
+        radius_x,
+        radius_y,
+        start_deg,
+        end_deg,
+        ..
+    } = editor.primitive().graphics[0].kind
+    else {
+        panic!("expected an EllipticalArc");
+    };
+    assert_eq!((radius_x, radius_y), (2.54, 5.08));
+    assert!((start_deg - 90.0).abs() < 1e-9, "{start_deg}");
+    assert!((end_deg - 180.0).abs() < 1e-9, "{end_deg}");
+}
+
+#[test]
+fn an_elliptical_arc_radius_grip_keeps_its_angles() {
+    let mut editor = new_editor(SymbolTool::PlaceEllipticalArc);
+    place_ellipse(&mut editor, 10.0, 80.0);
+    state::move_graphic_handle(
+        editor.primitive_mut(),
+        0,
+        GraphicHandle::EllipseRadius(1),
+        0.0,
+        3.81,
+    );
+    assert!(matches!(
+        editor.primitive().graphics[0].kind,
+        SymbolGraphicKind::EllipticalArc {
+            radius_x: 5.08,
+            radius_y: 3.81,
+            start_deg: 10.0,
+            end_deg: 80.0,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn a_round_rectangle_placement_is_one_undo_step_with_eight_grips() {
+    let mut editor = new_editor(SymbolTool::PlaceRoundRectangle);
+    place_round_rect(&mut editor, (7.62, 5.08));
+    assert_eq!(editor.history.undo_len(), 1);
+    assert_eq!(state::graphic_handles(editor.primitive(), 0).len(), 8);
+    state::move_graphic_handle(
+        editor.primitive_mut(),
+        0,
+        GraphicHandle::RectCorner(1),
+        10.16,
+        7.62,
+    );
+    assert!(matches!(
+        editor.primitive().graphics[0].kind,
+        SymbolGraphicKind::RoundRectangle {
+            to: [10.16, 7.62],
+            corner_radius: 1.27,
+            ..
+        }
+    ));
+    apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::Undo);
+    assert!(editor.primitive().graphics.is_empty());
+}
+
+#[test]
+fn two_clicks_on_one_point_place_no_round_rectangle() {
+    let mut editor = new_editor(SymbolTool::PlaceRoundRectangle);
+    place_round_rect(&mut editor, (0.0, 0.0));
+    assert!(editor.primitive().graphics.is_empty());
+    assert_eq!(editor.history.undo_len(), 0);
+}
+
+#[test]
+fn placed_elliptical_arc_and_round_rectangle_survive_save_and_reload() {
+    let mut editor = new_editor(SymbolTool::PlaceEllipticalArc);
+    place_ellipse(&mut editor, 10.0, 200.0);
+    place_round_rect(&mut editor, (7.62, 5.08));
+    let text = editor.file.to_toml_string().unwrap();
+    assert!(text.contains("format = \"snxsym/v4\""), "{text}");
+    let back = SymbolFile::from_toml_str(&text).unwrap();
+    assert_eq!(back.symbols[0].graphics, editor.primitive().graphics);
+}
+
 #[test]
 fn placed_curves_survive_save_and_reload() {
     let mut editor = new_editor(SymbolTool::PlaceBezier);

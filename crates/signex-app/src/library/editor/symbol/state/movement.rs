@@ -170,7 +170,9 @@ fn snap_pin_to_grid(pin: &mut SymbolPin, step: f64) {
 
 fn snap_graphic_to_grid(kind: &mut SymbolGraphicKind, step: f64) {
     match kind {
-        SymbolGraphicKind::Rectangle { from, to } | SymbolGraphicKind::Line { from, to } => {
+        SymbolGraphicKind::Rectangle { from, to }
+        | SymbolGraphicKind::RoundRectangle { from, to, .. }
+        | SymbolGraphicKind::Line { from, to } => {
             from[0] = snap_value_to_grid(from[0], step);
             from[1] = snap_value_to_grid(from[1], step);
             to[0] = snap_value_to_grid(to[0], step);
@@ -178,6 +180,7 @@ fn snap_graphic_to_grid(kind: &mut SymbolGraphicKind, step: f64) {
         }
         SymbolGraphicKind::Circle { center, .. }
         | SymbolGraphicKind::Arc { center, .. }
+        | SymbolGraphicKind::EllipticalArc { center, .. }
         | SymbolGraphicKind::Pie { center, .. } => {
             center[0] = snap_value_to_grid(center[0], step);
             center[1] = snap_value_to_grid(center[1], step);
@@ -342,7 +345,10 @@ fn graphic_fully_inside_box(
             Some((gx0, gy0, gx1, gy1)) => gx0 >= xmin && gx1 <= xmax && gy0 >= ymin && gy1 <= ymax,
             None => false,
         },
-        SymbolGraphicKind::Bezier { .. } | SymbolGraphicKind::Pie { .. } => {
+        SymbolGraphicKind::Bezier { .. }
+        | SymbolGraphicKind::Pie { .. }
+        | SymbolGraphicKind::EllipticalArc { .. }
+        | SymbolGraphicKind::RoundRectangle { .. } => {
             match polygon_bbox(&kind.flattened_outline()) {
                 Some((gx0, gy0, gx1, gy1)) => {
                     gx0 >= xmin && gx1 <= xmax && gy0 >= ymin && gy1 <= ymax
@@ -383,7 +389,10 @@ fn graphic_intersects_box(
             Some((gx0, gy0, gx1, gy1)) => gx0 <= xmax && gx1 >= xmin && gy0 <= ymax && gy1 >= ymin,
             None => false,
         },
-        SymbolGraphicKind::Bezier { .. } | SymbolGraphicKind::Pie { .. } => {
+        SymbolGraphicKind::Bezier { .. }
+        | SymbolGraphicKind::Pie { .. }
+        | SymbolGraphicKind::EllipticalArc { .. }
+        | SymbolGraphicKind::RoundRectangle { .. } => {
             match polygon_bbox(&kind.flattened_outline()) {
                 Some((gx0, gy0, gx1, gy1)) => {
                     gx0 <= xmax && gx1 >= xmin && gy0 <= ymax && gy1 >= ymin

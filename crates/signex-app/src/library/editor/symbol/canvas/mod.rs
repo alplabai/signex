@@ -512,6 +512,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         self.draw_circle_preview(&mut frame, state);
         self.draw_arc_preview(&mut frame, state);
         self.draw_polygon_preview(&mut frame, state);
+        self.draw_curve_preview(&mut frame, state);
 
         vec![frame.into_geometry()]
     }
@@ -699,7 +700,7 @@ impl<'a> SymbolCanvas<'a> {
                         stroke_width_mm: stroke_mm,
                     });
                 }
-                SymbolGraphicKind::Bezier { .. } => {
+                SymbolGraphicKind::Bezier { .. } | SymbolGraphicKind::EllipticalArc { .. } => {
                     let outline = g.kind.flattened_outline();
                     wires.extend(outline.windows(2).enumerate().map(|(s, w)| WireInput {
                         id: BEZIER_WIRE_ID_BASE + (i as u64) * BEZIER_WIRE_ID_STEP + s as u64,
@@ -709,7 +710,7 @@ impl<'a> SymbolCanvas<'a> {
                         explicit_color: Some(to_rgba(stroke_color)),
                     }));
                 }
-                SymbolGraphicKind::Pie { .. } => {
+                SymbolGraphicKind::Pie { .. } | SymbolGraphicKind::RoundRectangle { .. } => {
                     let fill = g.fill.map_or([0.0, 0.0, 0.0, 0.0], |[fr, fg, fb, fa]| {
                         to_rgba(Color::from_rgba8(fr, fg, fb, fa as f32 / 255.0))
                     });

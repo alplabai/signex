@@ -37,9 +37,15 @@ impl SymbolCanvas<'_> {
                     );
                 }
                 let cancelled = match self.tool {
-                    SymbolTool::PlaceRectangle if state.rect_from.is_some() => {
+                    SymbolTool::PlaceRectangle | SymbolTool::PlaceRoundRectangle
+                        if state.rect_from.is_some() =>
+                    {
                         state.rect_from = None;
                         state.rect_cursor = None;
+                        true
+                    }
+                    SymbolTool::PlaceEllipticalArc if state.ellipse.is_active() => {
+                        state.ellipse = Default::default();
                         true
                     }
                     SymbolTool::PlaceLine if state.line_from.is_some() => {

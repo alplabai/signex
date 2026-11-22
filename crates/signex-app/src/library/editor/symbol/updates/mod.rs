@@ -158,6 +158,9 @@ pub(super) fn commit_or_discard_polygon(editor: &mut SymEditor) {
     }
 }
 
+/// Two arc angles this close (degrees) sweep nothing.
+const ARC_SAME_ANGLE_DEG: f64 = 1e-6;
+
 /// One click of the Bezier gesture. The fourth takes the stash and places
 /// the curve as a single undo step; four clicks on one point place nothing,
 /// as a degenerate polygon does.
@@ -435,6 +438,46 @@ pub(crate) fn apply_symbol_primitive_edit(
                 0.15,
             );
         }
+        SymbolEditorMsg::AddEllipticalArc {
+            cx,
+            cy,
+            radius_x,
+            radius_y,
+            start_deg,
+            end_deg,
+        } => {
+            let (start_deg, end_deg) = normalize_arc_commit_deg(start_deg, end_deg);
+            // An end click on the start angle sweeps nothing: place nothing.
+            if (end_deg - start_deg).abs() > ARC_SAME_ANGLE_DEG {
+                push_graphic(
+                    editor,
+                    signex_library::SymbolGraphicKind::EllipticalArc {
+                        center: [cx, cy],
+                        radius_x,
+                        radius_y,
+                        start_deg,
+                        end_deg,
+                    },
+                    0.15,
+                );
+            }
+        }
+        SymbolEditorMsg::AddRoundRectangle {
+            from_x,
+            from_y,
+            to_x,
+            to_y,
+        } => {
+            // Two clicks on one point have no shape to place.
+            let (from, to) = ([from_x, from_y], [to_x, to_y]);
+            if dist_sq(from, to).sqrt() > signex_library::CHAIN_ENDPOINT_EPSILON_MM {
+                push_graphic(
+                    editor,
+                    signex_library::SymbolGraphicKind::round_rectangle(from, to),
+                    0.15,
+                );
+            }
+        }
         SymbolEditorMsg::BezierClick { x, y } => bezier_click(editor, x, y),
         SymbolEditorMsg::AddText { x, y } => {
             push_graphic(
@@ -632,7 +675,10 @@ fn symbol_bbox(sym: &signex_library::Symbol) -> (f64, f64, f64, f64) {
                     include_rect(&mut bounds, v[0], v[1], v[0], v[1]);
                 }
             }
-            kind @ (SymbolGraphicKind::Bezier { .. } | SymbolGraphicKind::Pie { .. }) => {
+            kind @ (SymbolGraphicKind::Bezier { .. }
+            | SymbolGraphicKind::Pie { .. }
+            | SymbolGraphicKind::EllipticalArc { .. }
+            | SymbolGraphicKind::RoundRectangle { .. }) => {
                 for v in kind.flattened_outline() {
                     include_rect(&mut bounds, v[0], v[1], v[0], v[1]);
                 }
@@ -659,6 +705,7 @@ fn graphic_handle_msg_to_state(
         GraphicHandleMsg::TextAnchor => GraphicHandle::TextAnchor,
         GraphicHandleMsg::PolygonVertex(i) => GraphicHandle::PolygonVertex(i),
         GraphicHandleMsg::BezierPoint(i) => GraphicHandle::BezierPoint(i),
+        GraphicHandleMsg::EllipseRadius(i) => GraphicHandle::EllipseRadius(i),
     }
 }
 

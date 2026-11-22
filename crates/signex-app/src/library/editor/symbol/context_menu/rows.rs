@@ -213,6 +213,27 @@ pub const PLACE_TOOLS: &[(&str, MessageId, SymbolToolMsg)] = &[
         menu_ids::CTX_SYMBOL_POLYGON,
         SymbolToolMsg::PlacePolygon,
     ),
+    // In the Shapes menu's drawn order (#2838).
+    (
+        "symbol.place-elliptical-arc",
+        menu_ids::CTX_SHAPE_ELLIPTICAL_ARC,
+        SymbolToolMsg::PlaceEllipticalArc,
+    ),
+    (
+        "symbol.place-bezier",
+        menu_ids::CTX_SHAPE_BEZIER,
+        SymbolToolMsg::PlaceBezier,
+    ),
+    (
+        "symbol.place-round-rectangle",
+        menu_ids::CTX_SHAPE_ROUND_RECTANGLE,
+        SymbolToolMsg::PlaceRoundRectangle,
+    ),
+    (
+        "symbol.place-pie-chart",
+        menu_ids::CTX_SHAPE_PIE_CHART,
+        SymbolToolMsg::PlacePie,
+    ),
 ];
 
 /// `Place ▸` submenu built from [`PLACE_TOOLS`]. Always enabled:
@@ -298,8 +319,29 @@ mod tests {
                 "symbol.place-arc",
                 "symbol.place-text",
                 "symbol.place-polygon",
+                "symbol.place-elliptical-arc",
+                "symbol.place-bezier",
+                "symbol.place-round-rectangle",
+                "symbol.place-pie-chart",
             ]
         );
+        for (id, tool) in [
+            (
+                "symbol.place-elliptical-arc",
+                SymbolToolMsg::PlaceEllipticalArc,
+            ),
+            ("symbol.place-bezier", SymbolToolMsg::PlaceBezier),
+            (
+                "symbol.place-round-rectangle",
+                SymbolToolMsg::PlaceRoundRectangle,
+            ),
+            ("symbol.place-pie-chart", SymbolToolMsg::PlacePie),
+        ] {
+            assert!(
+                matches!(find(children, id).msg, Some(SymbolEditorMsg::SetTool(t)) if t == tool),
+                "{id} arms its tool"
+            );
+        }
     }
 
     /// Delete and Select All read their text through a command id

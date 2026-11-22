@@ -88,7 +88,10 @@ impl SymbolCanvas<'_> {
                         include_rect(&mut bounds, v[0], v[1], v[0], v[1]);
                     }
                 }
-                kind @ (SymbolGraphicKind::Bezier { .. } | SymbolGraphicKind::Pie { .. }) => {
+                kind @ (SymbolGraphicKind::Bezier { .. }
+                | SymbolGraphicKind::Pie { .. }
+                | SymbolGraphicKind::EllipticalArc { .. }
+                | SymbolGraphicKind::RoundRectangle { .. }) => {
                     for v in kind.flattened_outline() {
                         include_rect(&mut bounds, v[0], v[1], v[0], v[1]);
                     }

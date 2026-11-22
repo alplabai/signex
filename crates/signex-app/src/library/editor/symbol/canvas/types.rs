@@ -67,6 +67,23 @@ pub enum CanvasAction {
         start_deg: f64,
         end_deg: f64,
     },
+    /// Place an elliptical arc; emitted on the fifth click. Angles are
+    /// geometric and may be a raw clockwise drag, normalised on commit.
+    AddEllipticalArc {
+        cx: f64,
+        cy: f64,
+        radius_x: f64,
+        radius_y: f64,
+        start_deg: f64,
+        end_deg: f64,
+    },
+    /// Place a round rectangle on two opposite corners (second click).
+    AddRoundRectangle {
+        from_x: f64,
+        from_y: f64,
+        to_x: f64,
+        to_y: f64,
+    },
     /// One click of the four-click Bezier gesture (start, C1, C2, end),
     /// collected in `SymbolDocument::polygon_vertices`; the fourth places
     /// the curve. Esc / right-click cancel through `PolygonCancel`.
@@ -194,9 +211,8 @@ pub enum RotatePivotMode {
 
 /// Canvas tools — Altium-style `Tool` enum scoped to this surface.
 /// Mirrors the SchLib Place menu: Pin / Line / Rectangle / Ellipse
-/// (Circle) / Arc / Text / Polygon / Bezier / Pie are the working tools;
-/// Elliptical Arc and Round Rectangle stay disabled on the Active Bar
-/// (#2838).
+/// (Circle) / Arc / Text / Polygon / Bezier / Pie / Elliptical Arc /
+/// Round Rectangle are the working tools (#2838).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolTool {
     Select,
@@ -215,6 +231,10 @@ pub enum SymbolTool {
     PlaceBezier,
     /// The Arc gesture (center, radius + start, end), closed to the center.
     PlacePie,
+    /// Five clicks: center, X radius, Y radius, start, end.
+    PlaceEllipticalArc,
+    /// The Rectangle's two clicks, with the default corner radius.
+    PlaceRoundRectangle,
 }
 
 impl SymbolTool {
@@ -230,6 +250,8 @@ impl SymbolTool {
             SymbolTool::PlacePolygon => "Polygon",
             SymbolTool::PlaceBezier => "Bezier",
             SymbolTool::PlacePie => "Pie Chart",
+            SymbolTool::PlaceEllipticalArc => "Elliptical Arc",
+            SymbolTool::PlaceRoundRectangle => "Round Rectangle",
         }
     }
 }
@@ -328,6 +350,8 @@ pub struct CanvasState {
     /// per-widget-slot state that could in principle be stale right
     /// after a tab switch; it never drives a commit by itself.
     pub polygon_cursor: Option<(f64, f64)>,
+    /// The Elliptical Arc clicks so far.
+    pub ellipse: super::input::ellipse::EllipseGesture,
     /// Timestamp of the last `PlacePolygon` left-click — paired with
     /// `polygon_last_click_pos` to detect the close-by-double-click
     /// gesture (300 ms, same snapped vertex) without appending a

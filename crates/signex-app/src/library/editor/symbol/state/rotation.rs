@@ -80,8 +80,18 @@ fn rotate_graphic_90(
         GraphicRotationPivotMode::GeometryCenter => RotationPivot::GeometryCenter,
     };
 
+    // A quarter turn swaps an axis-aligned ellipse's radii.
+    if let SymbolGraphicKind::EllipticalArc {
+        radius_x, radius_y, ..
+    } = &mut g.kind
+    {
+        std::mem::swap(radius_x, radius_y);
+    }
+
     match &mut g.kind {
-        SymbolGraphicKind::Rectangle { from, to } | SymbolGraphicKind::Line { from, to } => {
+        SymbolGraphicKind::Rectangle { from, to }
+        | SymbolGraphicKind::RoundRectangle { from, to, .. }
+        | SymbolGraphicKind::Line { from, to } => {
             *from = rotate_graphic_point_90(
                 *from,
                 geometry_center,
@@ -118,6 +128,12 @@ fn rotate_graphic_90(
             }
         }
         SymbolGraphicKind::Arc {
+            center,
+            start_deg,
+            end_deg,
+            ..
+        }
+        | SymbolGraphicKind::EllipticalArc {
             center,
             start_deg,
             end_deg,
@@ -173,10 +189,13 @@ fn rotate_graphic_90(
 
 fn graphic_geometry_center(kind: &SymbolGraphicKind) -> [f64; 2] {
     match kind {
-        SymbolGraphicKind::Rectangle { from, to } | SymbolGraphicKind::Line { from, to } => {
+        SymbolGraphicKind::Rectangle { from, to }
+        | SymbolGraphicKind::RoundRectangle { from, to, .. }
+        | SymbolGraphicKind::Line { from, to } => {
             [(from[0] + to[0]) * 0.5, (from[1] + to[1]) * 0.5]
         }
         SymbolGraphicKind::Circle { center, .. }
+        | SymbolGraphicKind::EllipticalArc { center, .. }
         | SymbolGraphicKind::Arc { center, .. }
         | SymbolGraphicKind::Pie { center, .. } => *center,
         SymbolGraphicKind::Text { position, .. } => *position,
@@ -288,7 +307,8 @@ pub(super) fn translate_graphic_to(sym: &mut Symbol, idx: usize, x: f64, y: f64)
         return;
     };
     match &mut g.kind {
-        SymbolGraphicKind::Rectangle { from, to } => {
+        SymbolGraphicKind::Rectangle { from, to }
+        | SymbolGraphicKind::RoundRectangle { from, to, .. } => {
             let dx = x - from[0];
             let dy = y - from[1];
             from[0] += dx;
@@ -306,6 +326,7 @@ pub(super) fn translate_graphic_to(sym: &mut Symbol, idx: usize, x: f64, y: f64)
         }
         SymbolGraphicKind::Circle { center, .. }
         | SymbolGraphicKind::Arc { center, .. }
+        | SymbolGraphicKind::EllipticalArc { center, .. }
         | SymbolGraphicKind::Pie { center, .. } => {
             center[0] = x;
             center[1] = y;
@@ -339,7 +360,8 @@ pub(super) fn translate_graphic_to(sym: &mut Symbol, idx: usize, x: f64, y: f64)
 /// Shift a single graphic kind by `(dx, dy)` mm in-place.
 pub fn translate_graphic_by(kind: &mut SymbolGraphicKind, dx: f64, dy: f64) {
     match kind {
-        SymbolGraphicKind::Rectangle { from, to } => {
+        SymbolGraphicKind::Rectangle { from, to }
+        | SymbolGraphicKind::RoundRectangle { from, to, .. } => {
             from[0] += dx;
             from[1] += dy;
             to[0] += dx;
@@ -353,6 +375,7 @@ pub fn translate_graphic_by(kind: &mut SymbolGraphicKind, dx: f64, dy: f64) {
         }
         SymbolGraphicKind::Circle { center, .. }
         | SymbolGraphicKind::Arc { center, .. }
+        | SymbolGraphicKind::EllipticalArc { center, .. }
         | SymbolGraphicKind::Pie { center, .. } => {
             center[0] += dx;
             center[1] += dy;

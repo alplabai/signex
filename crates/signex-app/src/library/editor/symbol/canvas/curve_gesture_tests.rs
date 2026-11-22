@@ -110,6 +110,108 @@ fn esc_cancels_a_pie_with_nothing_placed() {
 }
 
 #[test]
+fn five_presses_place_an_elliptical_arc_at_the_clicked_angles() {
+    let mut rig = rig(SymbolTool::PlaceEllipticalArc);
+    for at in [(0.0, 0.0), (5.08, 0.0), (0.0, 2.54), (2.54, 2.54)] {
+        rig.press(at);
+        assert!(rig.editor.primitive().graphics.is_empty());
+    }
+    rig.moved((-2.54, 2.54));
+    rig.press((-2.54, 2.54));
+    let graphics = &rig.editor.primitive().graphics;
+    assert_eq!(graphics.len(), 1);
+    let SymbolGraphicKind::EllipticalArc {
+        radius_x,
+        radius_y,
+        start_deg,
+        end_deg,
+        ..
+    } = graphics[0].kind
+    else {
+        panic!("expected an EllipticalArc, got {:?}", graphics[0].kind);
+    };
+    assert!((radius_x - 5.08).abs() < 1e-3, "{radius_x}");
+    assert!((radius_y - 2.54).abs() < 1e-3, "{radius_y}");
+    assert!((start_deg - 45.0).abs() < 1e-3, "geometric: {start_deg}");
+    assert!((end_deg - 135.0).abs() < 1e-3, "geometric: {end_deg}");
+    assert_eq!(rig.editor.history.undo_len(), 1);
+}
+
+#[test]
+fn esc_and_right_click_cancel_an_elliptical_arc() {
+    let mut rig = rig(SymbolTool::PlaceEllipticalArc);
+    rig.press((0.0, 0.0));
+    rig.press((5.08, 0.0));
+    assert!(rig.escape());
+    assert!(!rig.cstate.ellipse.is_active());
+    rig.press((0.0, 0.0));
+    rig.right_click((2.54, 2.54));
+    assert!(!rig.cstate.ellipse.is_active());
+    assert_eq!(rig.editor.tool, SymbolTool::PlaceEllipticalArc);
+    assert!(rig.editor.primitive().graphics.is_empty());
+}
+
+#[test]
+fn two_presses_place_a_round_rectangle() {
+    let mut rig = rig(SymbolTool::PlaceRoundRectangle);
+    rig.press((7.62, 5.08));
+    rig.press((0.0, 0.0));
+    let graphics = &rig.editor.primitive().graphics;
+    assert_eq!(graphics.len(), 1);
+    let SymbolGraphicKind::RoundRectangle {
+        from,
+        to,
+        corner_radius,
+    } = graphics[0].kind
+    else {
+        panic!("expected a RoundRectangle, got {:?}", graphics[0].kind);
+    };
+    assert!(close(from, [0.0, 0.0]), "{from:?}");
+    assert!(close(to, [7.62, 5.08]), "{to:?}");
+    assert_eq!(corner_radius, 1.27);
+    assert_eq!(rig.editor.history.undo_len(), 1);
+}
+
+#[test]
+fn esc_cancels_a_round_rectangle() {
+    let mut rig = rig(SymbolTool::PlaceRoundRectangle);
+    rig.press((0.0, 0.0));
+    assert!(rig.escape());
+    rig.press((5.08, 5.08));
+    assert!(rig.editor.primitive().graphics.is_empty());
+}
+
+#[test]
+fn the_editor_draws_an_elliptical_arc_open_and_a_round_rectangle_as_a_ring() {
+    let mut rig = rig(SymbolTool::Select);
+    let arc = SymbolGraphicKind::EllipticalArc {
+        center: [0.0, 0.0],
+        radius_x: 5.08,
+        radius_y: 2.54,
+        start_deg: 0.0,
+        end_deg: 90.0,
+    };
+    let rect = SymbolGraphicKind::round_rectangle([0.0, 0.0], [7.62, 5.08]);
+    let (arc_points, rect_ring) = (arc.flattened_outline(), rect.flattened_outline());
+    for kind in [arc, rect] {
+        rig.editor
+            .primitive_mut()
+            .graphics
+            .push(signex_library::SymbolGraphic {
+                kind,
+                stroke_width: 0.15,
+                fill: None,
+                part_number: 1,
+                body_style: 1,
+            });
+    }
+    let drawn = snapshot(&rig);
+    assert_eq!(drawn.wires.len(), arc_points.len() - 1);
+    assert_eq!(drawn.polygons.len(), 1);
+    assert_eq!(drawn.polygons[0].vertices.len(), rect_ring.len());
+}
+
+#[test]
 fn the_editor_draws_a_bezier_as_segments_and_a_pie_as_a_closed_ring() {
     let mut rig = rig(SymbolTool::Select);
     let graphic = |kind| signex_library::SymbolGraphic {

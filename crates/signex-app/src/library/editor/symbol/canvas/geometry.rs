@@ -137,9 +137,11 @@ pub(super) fn selection_anchor(
                 .get(*idx)
                 .map(|graphic| match &graphic.kind {
                     SymbolGraphicKind::Rectangle { from, .. }
+                    | SymbolGraphicKind::RoundRectangle { from, .. }
                     | SymbolGraphicKind::Line { from, .. } => (from[0], from[1]),
                     SymbolGraphicKind::Circle { center, .. }
                     | SymbolGraphicKind::Arc { center, .. }
+                    | SymbolGraphicKind::EllipticalArc { center, .. }
                     | SymbolGraphicKind::Pie { center, .. } => (center[0], center[1]),
                     SymbolGraphicKind::Bezier { points } => (points[0][0], points[0][1]),
                     SymbolGraphicKind::Text { position, .. } => (position[0], position[1]),

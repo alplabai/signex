@@ -64,6 +64,25 @@ pub enum SymbolEditorMsg {
         end_deg: f64,
     },
 
+    /// Place an elliptical arc (fifth click). Angles are geometric.
+    AddEllipticalArc {
+        cx: f64,
+        cy: f64,
+        radius_x: f64,
+        radius_y: f64,
+        start_deg: f64,
+        end_deg: f64,
+    },
+
+    /// Place a round rectangle on two opposite corners, with the default
+    /// corner radius clamped to half its short side.
+    AddRoundRectangle {
+        from_x: f64,
+        from_y: f64,
+        to_x: f64,
+        to_y: f64,
+    },
+
     /// One click of the four-click Bezier gesture (start, C1, C2, end),
     /// collected in `SymbolDocument::polygon_vertices`. The fourth pushes
     /// the curve as one undo step; `PolygonCancel` drops the clicks.

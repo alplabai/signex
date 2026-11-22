@@ -222,6 +222,10 @@ ctx-tree-library-add-footprint-library = Footprint Library
 ctx-shape-rectangle = Rectangle
 ctx-shape-circle = Circle
 ctx-shape-arc = Arc
+ctx-shape-elliptical-arc = Elliptical Arc
+ctx-shape-bezier = Bezier
+ctx-shape-round-rectangle = Round Rectangle
+ctx-shape-pie-chart = Pie Chart
 ctx-deselect-all = Deselect All
 ctx-fit-to-window = Fit to Window
 # Symbol editor menu.

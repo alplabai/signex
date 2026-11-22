@@ -117,6 +117,9 @@ pub enum GraphicHandle {
     PolygonVertex(u32),
     /// Bezier point — `0=start, 1=C1, 2=C2, 3=end`.
     BezierPoint(u8),
+    /// Elliptical arc radius grip — `0=X` at `center + (rx, 0)`, `1=Y` at
+    /// `center + (0, ry)`.
+    EllipseRadius(u8),
 }
 
 /// Map a [`GraphicHandle`] to the mouse cursor that should be shown
@@ -583,6 +586,7 @@ fn next_pin_number(sym: &Symbol) -> String {
 
 mod body;
 mod context_menu;
+mod curve_grips;
 mod fields;
 mod hit_test;
 mod movement;
