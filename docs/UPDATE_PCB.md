@@ -164,6 +164,11 @@ the same footprint are one row with two possible directions. A side that is
 blocked keeps its reason, shown as the tooltip of its greyed choice, and is
 never chosen. The notes of both lists are listed under the rows.
 
+A pad row that keeps its net and only gains its lock is not a difference, so
+the report leaves it out and its Apply does not set that lock; Update PCB
+still lists it. A pad moving between two net numbers of one name is a real
+move and stays listed.
+
 ### Directions
 
 Each row has a three-way choice: Update PCB (the schematic wins), Update

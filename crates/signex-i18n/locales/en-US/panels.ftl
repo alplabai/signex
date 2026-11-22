@@ -1022,8 +1022,8 @@ panels-erc-net-waiver-title = { $rule } · net { $net }
 # Who waived a finding and when, as they wrote it.
 panels-erc-waived-by = by { $author } · { $date }
 
-## The waiver form ERC and DRC share (AV-13).
-panels-waiver-needs-both = Write a reason and an author to waive it.
+## The DRC waiver form: one required reason (mockup row 88).
+panels-waiver-needs-reason = Write a reason to waive it.
 
 ## Messages panel (#86): level chips, source and document filters.
 panels-messages-level-all = All

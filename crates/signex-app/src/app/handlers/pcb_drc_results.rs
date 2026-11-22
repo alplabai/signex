@@ -17,7 +17,7 @@ use signex_types::pcb_options::{BoardOptions, DrcWaiver};
 
 use crate::app::state::pcb_edit::CheckedStep;
 use crate::app::{Message, Signex};
-use crate::panels::{DrcFilter, DrcFilterChoice, DrcPanelMsg, DrcRow, DrcWaiveDraft};
+use crate::panels::{DrcFilter, DrcFilterChoice, DrcPanelMsg, DrcRow, DrcWaiveDraft, UserIdentity};
 
 /// What a DRC waiver says: why it is accepted, and who accepted it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -88,13 +88,6 @@ impl Signex {
                 }
                 None
             }
-            DrcPanelMsg::AuthorEdited(author) => {
-                if let Some(draft) = self.interaction_state.pcb_drc.waive_draft.as_mut() {
-                    draft.author = author;
-                    draft.blank = false;
-                }
-                None
-            }
             DrcPanelMsg::WaiveConfirmed => self.confirm_drc_waiver(&path),
             DrcPanelMsg::WaiveCancelled => {
                 self.interaction_state.pcb_drc.waive_draft = None;
@@ -119,30 +112,34 @@ impl Signex {
         follow
     }
 
-    /// Open the waiver form for `key`: the Author is the last one typed,
-    /// else the cached user identity (asked for once, AV-13).
+    /// Open the Reason form for `key`, its row selected; the author is the
+    /// cached git identity (asked for once). Waive on the row whose form is
+    /// already open keeps what was typed.
     fn start_drc_waiver(&mut self, key: String) -> Task<Message> {
-        let author = self
-            .interaction_state
-            .pcb_drc
-            .waive_draft
-            .as_ref()
-            .map(|d| d.author.clone())
-            .filter(|a| !a.trim().is_empty())
-            .unwrap_or_else(|| self.ui_state.validation_panels.identity.author());
+        self.ui_state.validation_panels.drc.selected = Some(key.clone());
+        let drafts = &self.interaction_state.pcb_drc.waive_draft;
+        if drafts.as_ref().is_some_and(|d| d.key == key) {
+            return Task::none();
+        }
+        let ask = self.ask_user_identity();
+        let identity = &self.ui_state.validation_panels.identity;
         self.interaction_state.pcb_drc.waive_draft = Some(DrcWaiveDraft {
             key,
-            author,
+            author: identity.author(),
+            awaits_identity: matches!(identity, UserIdentity::Asking),
             ..DrcWaiveDraft::default()
         });
-        self.ask_user_identity()
+        ask
     }
 
-    /// Store the form's waiver; a reason and an author are both required
-    /// (AV-13). The form stays open until the waiver is stored.
+    /// Store the form's waiver; the reason is required (mockup row 88).
+    /// The form stays open until the waiver is stored.
     fn confirm_drc_waiver(&mut self, path: &Path) -> Option<String> {
         let draft = self.interaction_state.pcb_drc.waive_draft.clone()?;
-        if draft.reason.is_empty() || draft.author.trim().is_empty() {
+        if draft.awaits_identity {
+            return None;
+        }
+        if draft.reason.is_empty() {
             if let Some(open) = self.interaction_state.pcb_drc.waive_draft.as_mut() {
                 open.blank = true;
             }
@@ -505,7 +502,6 @@ fn apply_drc_view(view: &mut crate::panels::DrcView, msg: DrcPanelMsg) {
         | DrcPanelMsg::MessagesShown
         | DrcPanelMsg::WaiveStarted(_)
         | DrcPanelMsg::ReasonActed(_)
-        | DrcPanelMsg::AuthorEdited(_)
         | DrcPanelMsg::WaiveConfirmed
         | DrcPanelMsg::WaiveCancelled
         | DrcPanelMsg::Unwaived(_) => {}

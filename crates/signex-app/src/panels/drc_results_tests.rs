@@ -294,10 +294,39 @@ fn a_row_names_its_layer_place_and_objects() {
     assert!(shown.contains(&line), "{line}: {shown:?}");
 }
 
-/// AV-13: Waive opens the shared form under the row: Reason and Author,
-/// with Cancel and Waive, and "both are needed" when one was left empty.
+/// Mockup row 88: the row whose form is open keeps Show and Waive, with
+/// neither hover nor selection, and Waive waits for the git identity.
 #[test]
-fn waive_opens_the_shared_form_under_the_row() {
+fn the_open_row_keeps_its_actions_above_the_form() {
+    let mut ctx = context(
+        vec![row(0, ViolationKind::Short, "builtin::short", None)],
+        DrcFilter::default(),
+    );
+    if let Some(drc) = ctx.pcb_drc.as_mut() {
+        drc.waive_draft = Some(DrcWaiveDraft {
+            key: "k0".into(),
+            awaits_identity: true,
+            ..DrcWaiveDraft::default()
+        });
+    }
+    let shown = texts(&ctx);
+    assert!(shown.iter().any(|t| t == "Show"), "{shown:?}");
+    // The row's Waive and the form's.
+    assert_eq!(shown.iter().filter(|t| *t == "Waive").count(), 2);
+    let window = iced::Size::new(1400.0, 1200.0);
+    let pressed = messages_on_click(view(&ctx), window, "Cancel");
+    assert!(
+        pressed
+            .iter()
+            .any(|m| matches!(m, PanelMsg::Drc(DrcPanelMsg::WaiveCancelled))),
+        "{pressed:?}"
+    );
+}
+
+/// Mockup row 88: Waive opens one Reason field under the row, with Cancel
+/// and Waive, and asks for the reason when it was left empty.
+#[test]
+fn waive_opens_the_reason_form_under_the_row() {
     let mut ctx = context(
         vec![row(0, ViolationKind::Short, "builtin::short", None)],
         DrcFilter::default(),
@@ -312,16 +341,14 @@ fn waive_opens_the_shared_form_under_the_row() {
     }
     let shown = texts(&ctx);
     assert!(shown.iter().any(|t| t == "Cancel"), "{shown:?}");
-    // The Author is a text input: its value is read off the inputs.
+    // No Author field: the author comes from git config.
     let inputs: Vec<String> = lay_out_inputs(view(&ctx), iced::Size::new(1400.0, 1200.0))
         .into_iter()
         .map(|t| t.text)
         .collect();
-    assert!(inputs.iter().any(|t| t == "C. Alp"), "{inputs:?}");
+    assert!(!inputs.iter().any(|t| t == "C. Alp"), "{inputs:?}");
     assert!(
-        shown
-            .iter()
-            .any(|t| t == "Write a reason and an author to waive it."),
+        shown.iter().any(|t| t == "Write a reason to waive it."),
         "{shown:?}"
     );
 }

@@ -16,6 +16,7 @@ define_ids! {
     DRC_PANEL_OBJECTS = "drc-panel-objects";
     DRC_PANEL_NONE_SHOWN = "drc-panel-none-shown";
     DRC_PANEL_WAIVE = "drc-panel-waive";
+    DRC_PANEL_WAIVE_PLACEHOLDER = "drc-panel-waive-placeholder";
     DRC_PANEL_UNWAIVE = "drc-panel-unwaive";
     DRC_PANEL_WAIVED_NOTE = "drc-panel-waived-note";
     DRC_PANEL_WAIVED_NO_NOTE = "drc-panel-waived-no-note";

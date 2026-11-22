@@ -1,13 +1,14 @@
-//! The waiver form ERC and DRC share (AV-13): a multi-line Reason and an
-//! Author, both required, with Cancel and Waive under the row being waived.
+//! The waiver forms under the row being waived, with Cancel and Waive. ERC's
+//! asks for a multi-line Reason and an Author (AV-13); DRC's asks for the
+//! Reason alone and takes the author from git config (mockup row 88).
 //!
-//! The Author starts as the user identity. Reading it means reading git
+//! The author starts as the user identity. Reading it means reading git
 //! config, so the app resolves it once off the update loop and caches it in
 //! the Model as a [`UserIdentity`]; this view only reads the cached value.
 
 use iced::widget::{Column, Space, row, text_editor};
 use iced::{Element, Length, Widget as _};
-use signex_i18n::{I18n, ids, t};
+use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, TextEditorPlaceholder as _, text, text_input, theme_ext};
 
@@ -146,14 +147,11 @@ where
     R: Fn(text_editor::Action) -> M + 'a,
     A: Fn(String) -> M + 'a,
 {
-    let reason = text_editor(view.reason.content())
-        .placeholder_label(t!(i18n, ids::PLACEHOLDER_ERC_WAIVER_REASON))
-        .on_action(events.reason)
-        .size(TS.body)
-        .padding(SP.s)
-        .height(Length::Fixed(
-            REASON_LINES * TS.body * crate::styles::LINE_HEIGHT + 2.0 * SP.s,
-        ));
+    let reason = reason_field(
+        view.reason,
+        t!(i18n, ids::PLACEHOLDER_ERC_WAIVER_REASON),
+        events.reason,
+    );
     let author = text_input(t!(i18n, ids::PLACEHOLDER_ERC_WAIVER_AUTHOR), view.author)
         .on_input(events.author)
         .on_submit(events.confirm.clone())
@@ -161,12 +159,98 @@ where
         .padding(SP.s)
         .style(super::form_look::text_input_style)
         .width(Length::Fill);
-    let mut col: Column<Element<'a, M>> = Column::new()
-        .spacing(SP.xs)
-        .width(Length::Fill)
-        .push(reason.boxed())
-        .push(author.boxed());
-    if let Some(error) = view.error {
+    form_column(
+        vec![reason, author.boxed()],
+        view.error,
+        Some(events.confirm),
+        events.cancel,
+        i18n,
+        tokens,
+    )
+}
+
+/// What the Reason-only form shows.
+pub struct ReasonFormView<'a> {
+    pub reason: &'a WaiverReason,
+    /// Why the last Waive was refused.
+    pub error: Option<Label<'a>>,
+}
+
+/// The messages the Reason-only form sends. `confirm` is `None` while Waive
+/// cannot be pressed yet.
+pub struct ReasonFormEvents<M, R>
+where
+    R: Fn(text_editor::Action) -> M,
+{
+    pub reason: R,
+    pub confirm: Option<M>,
+    pub cancel: M,
+}
+
+/// The DRC form (mockup row 88): one required Reason, then Cancel and Waive.
+pub fn reason_form<'a, M, R>(
+    view: ReasonFormView<'a>,
+    events: ReasonFormEvents<M, R>,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, M>
+where
+    M: Clone + 'a,
+    R: Fn(text_editor::Action) -> M + 'a,
+{
+    let reason = reason_field(
+        view.reason,
+        t!(i18n, ids::DRC_PANEL_WAIVE_PLACEHOLDER),
+        events.reason,
+    );
+    form_column(
+        vec![reason],
+        view.error,
+        events.confirm,
+        events.cancel,
+        i18n,
+        tokens,
+    )
+}
+
+fn reason_field<'a, M, R>(
+    reason: &'a WaiverReason,
+    placeholder: Localized,
+    on_action: R,
+) -> Element<'a, M>
+where
+    M: Clone + 'a,
+    R: Fn(text_editor::Action) -> M + 'a,
+{
+    text_editor(reason.content())
+        .placeholder_label(placeholder)
+        .on_action(on_action)
+        .size(TS.body)
+        .padding(SP.s)
+        .height(Length::Fixed(
+            REASON_LINES * TS.body * crate::styles::LINE_HEIGHT + 2.0 * SP.s,
+        ))
+        .boxed()
+}
+
+/// The fields, an error line when refused, then Cancel and Waive on the
+/// right.
+fn form_column<'a, M>(
+    fields: Vec<Element<'a, M>>,
+    error: Option<Label<'a>>,
+    confirm: Option<M>,
+    cancel: M,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, M>
+where
+    M: Clone + 'a,
+{
+    let mut col: Column<Element<'a, M>> = Column::new().spacing(SP.xs).width(Length::Fill);
+    for field in fields {
+        col = col.push(field);
+    }
+    if let Some(error) = error {
         col = col.push(
             text(error)
                 .size(TS.caption)
@@ -180,13 +264,13 @@ where
             dialog_button(
                 t!(i18n, ids::PANELS_ERC_WAIVER_CANCEL),
                 DialogButtonKind::Secondary,
-                Some(events.cancel),
+                Some(cancel),
                 tokens,
             ),
             dialog_button(
                 t!(i18n, ids::PANELS_ERC_WAIVE),
                 DialogButtonKind::Primary,
-                Some(events.confirm),
+                confirm,
                 tokens,
             ),
         ]

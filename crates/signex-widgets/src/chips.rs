@@ -595,6 +595,41 @@ where
     V: Copy + PartialEq + 'a,
     M: Clone + 'a,
 {
+    tab_row(tabs, selected, style, metrics, i18n, on_select).boxed()
+}
+
+/// [`tab_chips`] that wraps onto another line when the width runs out, so
+/// what sits beside the tabs keeps its room.
+pub fn wrapping_tab_chips<'a, V, M>(
+    tabs: impl IntoIterator<Item = TabChip<'a, V>>,
+    selected: V,
+    style: TabChipStyle,
+    metrics: ChipMetrics,
+    i18n: &I18n,
+    on_select: impl Fn(V) -> M + 'a,
+) -> Element<'a, M>
+where
+    V: Copy + PartialEq + 'a,
+    M: Clone + 'a,
+{
+    tab_row(tabs, selected, style, metrics, i18n, on_select)
+        .wrap()
+        .vertical_spacing(metrics.tab_spacing)
+        .boxed()
+}
+
+fn tab_row<'a, V, M>(
+    tabs: impl IntoIterator<Item = TabChip<'a, V>>,
+    selected: V,
+    style: TabChipStyle,
+    metrics: ChipMetrics,
+    i18n: &I18n,
+    on_select: impl Fn(V) -> M + 'a,
+) -> Row<Element<'a, M>>
+where
+    V: Copy + PartialEq + 'a,
+    M: Clone + 'a,
+{
     let mut bar: Row<Element<'a, M>> = Row::new().spacing(metrics.tab_spacing);
     for tab in tabs {
         let is_on = tab.value == selected;
@@ -635,7 +670,7 @@ where
                 .boxed(),
         );
     }
-    bar.boxed()
+    bar
 }
 
 #[cfg(test)]

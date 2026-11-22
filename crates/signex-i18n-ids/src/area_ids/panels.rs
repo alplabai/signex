@@ -270,7 +270,7 @@ define_ids! {
     PANELS_ERC_WAIVED_GROUP = "panels-erc-waived-group";
     PANELS_ERC_NET_WAIVER_TITLE = "panels-erc-net-waiver-title";
     PANELS_ERC_WAIVED_BY = "panels-erc-waived-by";
-    PANELS_WAIVER_NEEDS_BOTH = "panels-waiver-needs-both";
+    PANELS_WAIVER_NEEDS_REASON = "panels-waiver-needs-reason";
     PANELS_MESSAGES_LEVEL_ALL = "panels-messages-level-all";
     PANELS_MESSAGES_ALL_SOURCES = "panels-messages-all-sources";
     PANELS_MESSAGES_ALL_DOCUMENTS = "panels-messages-all-documents";

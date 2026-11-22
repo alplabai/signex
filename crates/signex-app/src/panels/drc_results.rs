@@ -113,14 +113,17 @@ impl DrcView {
     }
 }
 
-/// The waiver being written for the violation `key` (AV-13: a reason and
-/// an author, both required, as in ERC).
+/// The waiver being written for the violation `key`: one required reason;
+/// the author comes from git config (mockup row 88).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct DrcWaiveDraft {
     pub key: String,
     pub reason: WaiverReason,
     pub author: String,
-    /// The last Waive was pressed with the reason or the author empty.
+    /// The git identity is still being read: Waive waits for it, so a
+    /// waiver is never stored without the author it would have had.
+    pub awaits_identity: bool,
+    /// The last Waive was pressed with the reason empty.
     pub blank: bool,
 }
 
@@ -161,13 +164,11 @@ pub enum DrcPanelMsg {
     BaseRuleOpened(BaseRule),
     /// "see Messages" in a notice: bring the Messages panel forward.
     MessagesShown,
-    /// Waive was pressed on a row: the shared waiver form opens under it.
+    /// Waive was pressed on a row: the Reason form opens under it.
     WaiveStarted(String),
     /// The Reason field was typed in, or its cursor moved.
     ReasonActed(text_editor::Action),
-    /// The Author field was edited.
-    AuthorEdited(String),
-    /// The form's Waive (or Enter in Author): stored with reason and author.
+    /// The form's Waive: stored with the reason and the git author.
     WaiveConfirmed,
     /// The form's Cancel: nothing is stored.
     WaiveCancelled,
