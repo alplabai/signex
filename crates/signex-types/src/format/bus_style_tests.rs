@@ -43,7 +43,11 @@ fn an_unstyled_bus_writes_no_style_key_and_stays_at_the_low_token() {
     // Other tables have these columns too, so compare with a sheet with no bus.
     let without = save(&sheet_of(Vec::new()));
     for key in ["stroke_width", "color"] {
-        assert_eq!(text.matches(key).count(), without.matches(key).count(), "{text}");
+        assert_eq!(
+            text.matches(key).count(),
+            without.matches(key).count(),
+            "{text}"
+        );
     }
     assert_eq!(save(&load(&text).unwrap()), text);
 }
