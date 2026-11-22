@@ -11,11 +11,17 @@ use super::super::super::*;
 
 /// The text settings the next dimension is placed with (the tool
 /// properties); Properties edits them while a dimension tool is armed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DimensionToolStyle {
     pub units: DimensionUnits,
     pub precision: u8,
     pub arrows: DimensionArrows,
+    /// A direction picked in Properties; `None` follows the tool and drag.
+    pub direction: Option<DimensionDirection>,
+    /// The next dimension's typed value; it does not carry to the one after.
+    pub override_text: Option<String>,
+    /// Space put the line on the other side of the measured points.
+    pub flipped: bool,
 }
 
 impl Default for DimensionToolStyle {
@@ -24,7 +30,26 @@ impl Default for DimensionToolStyle {
             units: DimensionUnits::Mm,
             precision: 2,
             arrows: DimensionArrows::FilledInside,
+            direction: None,
+            override_text: None,
+            flipped: false,
         }
+    }
+}
+
+impl DimensionToolStyle {
+    /// The override the dimension is placed with; blank means the measured
+    /// value.
+    pub(crate) fn placed_override(&self) -> Option<String> {
+        self.override_text
+            .clone()
+            .filter(|text| !text.trim().is_empty())
+    }
+
+    /// Drop what belongs to one dimension only.
+    pub(crate) fn end_dimension(&mut self) {
+        self.override_text = None;
+        self.flipped = false;
     }
 }
 
@@ -34,6 +59,8 @@ pub(crate) struct AnnotationTool {
     /// The points clicked so far.
     pub points: Vec<Point>,
     pub dimension: DimensionToolStyle,
+    /// The values and points a Tab pause began with; Esc puts them back.
+    pub paused_with: Option<Box<(DimensionToolStyle, Vec<Point>)>>,
 }
 
 /// The dimension `points` (first, second) and the third click `at` place.
@@ -44,17 +71,18 @@ pub(crate) fn dimension_from_clicks(
     at: Point,
     style: DimensionToolStyle,
 ) -> SchDimension {
-    let direction = match tool {
+    let direction = style.direction.unwrap_or(match tool {
         Tool::AlignedDimension => DimensionDirection::Aligned,
         _ => SchDimension::linear_direction(from, to),
-    };
+    });
     let mut d = SchDimension::new(uuid::Uuid::now_v7(), from, to, 0.0, direction);
-    d.offset = d.offset_to(at);
+    d.offset = d.offset_on_side(at, style.flipped);
     d.units = style.units;
     d.precision = style
         .precision
         .min(signex_types::schematic::DIMENSION_MAX_PRECISION);
     d.arrows = style.arrows;
+    d.override_text = style.placed_override();
     d
 }
 
@@ -72,8 +100,9 @@ impl Signex {
     fn dimension_tool_point(&mut self, tool: Tool, p: Point) {
         let state = &mut self.interaction_state.annotation_tool;
         state.points.push(p);
-        let style = state.dimension;
+        let style = state.dimension.clone();
         let clicked = if state.points.len() >= 3 {
+            state.dimension.end_dimension();
             std::mem::take(&mut state.points)
         } else {
             Vec::new()
@@ -99,6 +128,7 @@ impl Signex {
     pub(crate) fn sync_annotation_draft(&mut self) {
         use crate::canvas::{AnnotationDraft, AnnotationDraftKind, HintInk};
         use signex_i18n::{ids, t};
+        self.document_state.panel_ctx.annotation.dimension_tool = self.dimension_tool_form();
         let tool = self.interaction_state.current_tool;
         let kind = match tool {
             Tool::Bezier => AnnotationDraftKind::Bezier,
@@ -146,6 +176,9 @@ impl Signex {
             units: state.dimension.units,
             precision: state.dimension.precision,
             arrows: state.dimension.arrows,
+            direction: state.dimension.direction,
+            override_text: state.dimension.placed_override(),
+            flipped: state.dimension.flipped,
             ink,
         };
         let canvas = self.interaction_state.active_canvas_mut();

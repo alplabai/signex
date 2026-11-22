@@ -202,6 +202,13 @@ impl SchDimension {
         }
     }
 
+    /// The offset for a line through `p`, or the same distance on the other
+    /// side of the measured points when `flipped`.
+    pub fn offset_on_side(&self, p: Point, flipped: bool) -> f64 {
+        let offset = self.offset_to(p);
+        if flipped { -offset } else { offset }
+    }
+
     /// The measured length in mm.
     pub fn measured_mm(&self) -> f64 {
         let (dx, dy) = (self.to.x - self.from.x, self.to.y - self.from.y);

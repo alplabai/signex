@@ -374,6 +374,7 @@ impl Signex {
                 }
                 self.refresh_placement_reference();
                 self.document_state.panel_ctx.pre_placement = before.map(|form| *form);
+                self.restore_dimension_tool_pause();
                 undone
             }
             Some(SheetPlacementPause::Footprint { path, pad_defaults }) => {

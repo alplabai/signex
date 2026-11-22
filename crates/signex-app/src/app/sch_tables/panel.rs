@@ -27,6 +27,10 @@ impl Signex {
     }
 
     pub(crate) fn handle_annotation_panel(&mut self, msg: AnnotationPanelMsg) -> Task<Message> {
+        if self.is_dimension_tool_form_shown() {
+            self.handle_dimension_tool_panel(msg);
+            return Task::none();
+        }
         let Some(id) = self.selected_annotation() else {
             return Task::none();
         };
@@ -72,14 +76,15 @@ impl Signex {
     /// selected table's part is gone.
     pub(crate) fn annotation_panel_state(&self) -> AnnotationPanelState {
         let ctx = &self.document_state.panel_ctx;
-        let draft = ctx
-            .annotation
-            .draft
-            .clone()
-            .filter(|(id, _, _)| ctx.selected_uuid == Some(*id));
+        let dimension_tool = self.dimension_tool_form();
+        // The armed tool's form types under the nil id.
+        let draft = ctx.annotation.draft.clone().filter(|(id, _, _)| {
+            ctx.selected_uuid == Some(*id) || (dimension_tool.is_some() && id.is_nil())
+        });
         let Some(engine) = self.document_state.active_engine() else {
             return AnnotationPanelState {
                 draft,
+                dimension_tool,
                 ..AnnotationPanelState::default()
             };
         };
@@ -92,6 +97,7 @@ impl Signex {
             draft,
             designators: super::designators(sheet),
             source_missing,
+            dimension_tool,
         }
     }
 }

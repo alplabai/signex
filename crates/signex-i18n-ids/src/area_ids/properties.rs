@@ -211,6 +211,7 @@ define_ids! {
     PROPERTIES_BEZIER_NOTE = "properties-bezier-note";
     PROPERTIES_DIMENSION_LINEAR = "properties-dimension-linear";
     PROPERTIES_DIMENSION_ALIGNED = "properties-dimension-aligned";
+    PROPERTIES_DIMENSION_TOOL_CAPTION = "properties-dimension-tool-caption";
     PROPERTIES_DIMENSION_SECTION_MEASURE = "properties-dimension-section-measure";
     PROPERTIES_DIMENSION_SECTION_TEXT = "properties-dimension-section-text";
     PROPERTIES_DIMENSION_FROM = "properties-dimension-from";

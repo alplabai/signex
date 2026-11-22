@@ -302,6 +302,7 @@ impl Signex {
                                 .as_ref()
                                 .and_then(|s| s.reference_override.clone()),
                         });
+                    self.note_dimension_tool_pause();
                     return Task::batch([show_properties, self.finish_update()]);
                 }
                 self.finish_update()
