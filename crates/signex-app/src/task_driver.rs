@@ -247,6 +247,24 @@ impl Effects {
         // The primary selection is unavailable, as the runtime answers it
         // outside X11 and Wayland.
         match action {
+            Clip::Read {
+                clipboard_kind: ClipboardKind::Primary,
+                channel,
+                ..
+            } => {
+                channel
+                    .send(Err(ClipboardError::ClipboardUnavailable))
+                    .ignore(UNANSWERED);
+            }
+            Clip::Write {
+                clipboard_kind: ClipboardKind::Primary,
+                channel,
+                ..
+            } => {
+                channel
+                    .send(Err(ClipboardError::ClipboardUnavailable))
+                    .ignore(UNANSWERED);
+            }
             Clip::Read { kind, channel, .. } => {
                 channel.send(self.read(kind)).ignore(UNANSWERED);
             }
