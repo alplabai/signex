@@ -99,6 +99,7 @@ impl Signex {
             .rekey_parked_pcb_board(old_path, new_path);
         self.rekey_board_sketch(old_path, new_path);
         self.rekey_board_3d(old_path, new_path);
+        self.rekey_only_unrouted(old_path, new_path);
         self.document_state.autosave.rekey(old_path, new_path);
         self.rekey_page_setup(old_path, new_path);
         // Renaming does not rewrite the parents' sheet symbols, so the

@@ -2,7 +2,8 @@
 //! unrouted connections, the pads each still has to join and, when a pour of
 //! the net is on the board, that the pour will connect them; Zoom frames the
 //! net's ratsnest lines. Route next frames the first unrouted connection and
-//! arms Interactive Routing.
+//! arms Interactive Routing. Show only unrouted dims the board except those
+//! lines, filled with the accent while on.
 
 use iced::Element;
 use iced::widget::{Widget, row};
@@ -119,13 +120,23 @@ pub(super) fn view<'a>(
         .collect();
     parts.push(scrolling(rows));
     parts.push(footer(
-        vec![small_button(
-            route_next_label(i18n, &list.route_key),
-            None,
-            false,
-            (list.unrouted > 0).then_some(BoardPopoverEvent::RouteNextRequested),
-            tokens,
-        )],
+        vec![
+            // Always pressable: a board routed while it is on can turn it off.
+            small_button(
+                t!(i18n, ids::BOARD_STATUS_SHOW_ONLY_UNROUTED),
+                None,
+                list.only_unrouted,
+                Some(BoardPopoverEvent::OnlyUnroutedToggled),
+                tokens,
+            ),
+            small_button(
+                route_next_label(i18n, &list.route_key),
+                None,
+                false,
+                (list.unrouted > 0).then_some(BoardPopoverEvent::RouteNextRequested),
+                tokens,
+            ),
+        ],
         tokens,
     ));
     card(card_width(BoardPopoverKind::Unrouted), parts, tokens)

@@ -27,6 +27,22 @@ fn text(content: &str, at: [f32; 2]) -> FootprintTextInput {
     }
 }
 
+/// #2821: Show only unrouted fades the board's texts with the rest of it.
+#[test]
+fn a_dimmed_board_draws_its_texts_faint() {
+    let layer = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
+    let plain = BoardPaint::default();
+    let dimmed = BoardPaint::default().with_board_dimmed(true);
+    assert_eq!(
+        text_colour(&plain, layer),
+        painted_layer_colour(&plain, layer)
+    );
+    let faint = text_colour(&dimmed, layer);
+    let full = painted_layer_colour(&plain, layer);
+    assert!((faint.a - full.a * DIMMED_ALPHA).abs() < 1e-6);
+    assert_eq!((faint.r, faint.g, faint.b), (full.r, full.g, full.b));
+}
+
 #[test]
 fn the_line_is_anchored_at_its_justified_end() {
     use iced::advanced::text::Alignment;

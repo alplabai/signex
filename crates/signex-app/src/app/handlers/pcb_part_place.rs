@@ -251,7 +251,7 @@ impl Signex {
         let part = carry.part.as_deref()?;
         let at = carry.anchor?;
         let board = self.document_state.pcb_board(&carry.path)?;
-        Some(self.pcb_snapshot_for(&carry.path, &part.preview_board(board, at)))
+        Some(self.pcb_ghost_snapshot_for(&carry.path, &part.preview_board(board, at)))
     }
 }
 

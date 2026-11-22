@@ -204,6 +204,7 @@ mod layer_pairs;
 mod layer_rows;
 mod layer_sets;
 mod layer_view;
+mod only_unrouted;
 mod ratsnest;
 mod used_layers;
 mod zone_fill;
@@ -362,6 +363,10 @@ impl ViewRenderer for PcbRenderer {
 
         if dirty.contains(DirtyFlags::OVERLAY) {
             emit_overlays(snapshot, theme, scene);
+        }
+
+        if snapshot.paint.is_board_dimmed() {
+            only_unrouted::dim_board(theme, dirty, scene);
         }
 
         scene.dirty |= dirty;

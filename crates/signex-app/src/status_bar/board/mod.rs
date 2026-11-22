@@ -131,6 +131,8 @@ pub enum BoardPopoverEvent {
     /// Route next: frame the first unrouted connection and arm Interactive
     /// Routing.
     RouteNextRequested,
+    /// Show only unrouted was pressed: the board dims, or comes back.
+    OnlyUnroutedToggled,
     /// A violation's Zoom, by its waiver key.
     ViolationZoomed(String),
     DrcRunRequested,
@@ -266,6 +268,8 @@ pub(crate) struct UnroutedList {
     pub unrouted: usize,
     pub nets: Vec<NetRow>,
     pub route_key: String,
+    /// Show only unrouted is on for this board.
+    pub only_unrouted: bool,
 }
 
 #[derive(Debug, Clone)]
