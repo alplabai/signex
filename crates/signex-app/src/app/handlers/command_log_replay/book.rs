@@ -398,6 +398,8 @@ pub(super) struct PendingTool {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ReplayBook {
     inputs: BTreeMap<u64, Arc<ReplayInput>>,
+    /// What each row with operands wrote on a board, for its Replay.
+    operand_guards: BTreeMap<u64, Arc<BoardReplayGuard>>,
     /// Inside a logged dispatch: the edits it made.
     pub(super) capturing: Option<Vec<ReplayInput>>,
     pub(super) pending: Option<PendingTool>,
@@ -430,6 +432,23 @@ impl ReplayBook {
             self.inputs = self.inputs.split_off(&oldest);
         }
         self.inputs.insert(seq, input);
+    }
+
+    pub(super) fn operand_guard_of(&self, seq: u64) -> Option<Arc<BoardReplayGuard>> {
+        self.operand_guards.get(&seq).cloned()
+    }
+
+    /// Keep `guard` for row `seq`, dropping rows older than `oldest`.
+    pub(super) fn keep_operand_guard(
+        &mut self,
+        seq: u64,
+        guard: Arc<BoardReplayGuard>,
+        oldest: Option<u64>,
+    ) {
+        if let Some(oldest) = oldest {
+            self.operand_guards = self.operand_guards.split_off(&oldest);
+        }
+        self.operand_guards.insert(seq, guard);
     }
 
     /// A Move was cancelled: no later drag belongs to its row.

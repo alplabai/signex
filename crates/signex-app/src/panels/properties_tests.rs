@@ -984,7 +984,7 @@ fn same_in_en_xa(mut ctx: PanelContext) -> Vec<String> {
 /// #2059: Document Options and a selected part with its footprint card
 /// draw no catalog text in English under en-XA; only the design's own
 /// words (the part's footprint name) stay. Unit symbols are not translated
-/// (DECISIONS 2026-11-07, `properties-unit-suffix`), so Document Options pins
+/// (DECISIONS 2026-11-22, Caner, "Unit symbols"), so Document Options pins
 /// its exact tags: in mm the Units segment, whose English text matches, and
 /// the Visible and Snap Grid tags; in mil the two grid tags. One more
 /// hard-coded unit on the panel changes these lists.
