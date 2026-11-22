@@ -18,6 +18,8 @@ use crate::app::{Message, ProjectMsg, Signex};
 /// The contents sheet's file name.
 pub(crate) const CONTENTS_FILE: &str = "contents.snxsch";
 
+/// The contents sheet's paper, the size a new sheet starts on.
+const CONTENTS_PAPER: &str = "A4";
 /// Where the heading and the table sit on the contents sheet (mm).
 const HEADING_AT: Point = Point::new(25.4, 25.4);
 const TABLE_AT: Point = Point::new(25.4, 35.56);
@@ -35,6 +37,7 @@ pub(crate) fn contents_sheet(
 ) -> SchematicSheet {
     let mut sheet = SchematicSheet {
         uuid: uuid::Uuid::now_v7(),
+        paper_size: CONTENTS_PAPER.to_string(),
         ..SchematicSheet::default()
     };
     sheet.text_notes.push(TextNote {
@@ -195,6 +198,14 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["Page", "Sheet", "Title", "Rev"]
         );
+    }
+
+    /// Mockup row 156: the generated sheet loads with no paper size warning.
+    #[test]
+    fn the_contents_sheet_has_a_paper_size_this_build_recognises() {
+        let sheet = contents_sheet("dcdc-buck", "Contents", Vec::new(), Vec::new());
+        let (size, _) = signex_types::schematic::SheetSize::parse(&sheet.paper_size);
+        assert!(size.is_recognized(), "{:?}", sheet.paper_size);
     }
 
     #[test]

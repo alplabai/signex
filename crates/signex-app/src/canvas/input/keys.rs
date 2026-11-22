@@ -30,6 +30,9 @@ impl SchematicCanvas<'_> {
         &self,
         state: &mut CanvasState,
     ) -> Option<canvas::Action<Message>> {
+        if state.bezier_drag.take().is_some() {
+            return Some(canvas::Action::capture());
+        }
         if state.is_floating() {
             state.clear_move();
             return Some(canvas::Action::capture());

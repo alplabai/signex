@@ -114,6 +114,24 @@ impl SchematicCanvas<'_> {
             state.last_click_time = Some(now);
             state.last_click_screen = Some((cursor_pos.x, cursor_pos.y));
 
+            // A press on a selected Bezier's handle holds that point; Shift
+            // is free here because it mirrors the handles (see `bezier_grip`).
+            state.bezier_drag = None;
+            if !self.drawing_mode
+                && !self.tool_places_on_click()
+                && !state.ctrl_held
+                && let Some(drag) = self.bezier_handle_at(cursor_pos, bounds, (wx, wy))
+            {
+                state.bezier_drag = Some(drag);
+                state.wire_grip = None;
+                state.click_on_selected = false;
+                state.move_origin = None;
+                state.move_dragging = false;
+                state.move_current = None;
+                state.select_drag_start = None;
+                return Some(canvas::Action::capture());
+            }
+
             // A press on a selected wire's end grip arms a drag of that end
             // alone (see `wire_grip`).
             state.wire_grip = None;
@@ -228,6 +246,9 @@ impl SchematicCanvas<'_> {
         &self,
         state: &mut CanvasState,
     ) -> Option<canvas::Action<Message>> {
+        if let Some(drag) = state.bezier_drag.take() {
+            return Some(drag.dropped());
+        }
         self.drop_stale_float(state);
         // A click-click move keeps floating through the picking press's
         // release; only the next press drops it.
@@ -328,6 +349,10 @@ impl SchematicCanvas<'_> {
         // Abort a floating move or in-progress drag — matches Altium / Esc.
         // `pan_moved` makes the matching right-release read as a drag, so the
         // press that cancelled does not also open the context menu.
+        if state.bezier_drag.take().is_some() {
+            state.pan_moved = true;
+            return Some(canvas::Action::capture());
+        }
         if state.is_floating() {
             state.clear_move();
             state.pan_moved = true;
@@ -434,6 +459,9 @@ impl SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
+        if let Some(action) = self.update_bezier_drag(state, bounds, cursor) {
+            return Some(action);
+        }
         self.drop_stale_float(state);
         let inside = cursor.position_in(bounds).is_some();
         let was_inside = std::mem::replace(&mut state.pointer_inside, inside);

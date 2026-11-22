@@ -55,6 +55,7 @@ impl SchematicCanvas<'_> {
         self.draw_measure_result(&mut frame, bounds);
         self.draw_move_guides(&mut frame, state, bounds);
         self.draw_select_rect(&mut frame, state, bounds);
+        self.draw_bezier_drag(&mut frame, state, bounds);
 
         frame.into_geometry()
     }

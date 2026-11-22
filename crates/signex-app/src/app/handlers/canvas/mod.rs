@@ -240,6 +240,12 @@ impl Signex {
                     true,
                 );
             }
+            CanvasEvent::BezierPointsDragged { drawing, points } => {
+                self.apply_annotation_edit_to(
+                    drawing,
+                    &crate::app::sch_tables::AnnotationEdit::BezierPoints(points),
+                );
+            }
             CanvasEvent::DoubleClicked {
                 world_x,
                 world_y,

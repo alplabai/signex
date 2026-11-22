@@ -153,6 +153,7 @@ fn field_swatch<'a>(current: Option<[u8; 4]>) -> Element<'a, PanelMsg> {
 /// opens or closes the popover.
 fn color_field_face<'a>(
     current: Option<[u8; 4]>,
+    default_name: MessageId,
     is_open: bool,
     on_toggle: PanelMsg,
     i18n: &I18n,
@@ -160,7 +161,7 @@ fn color_field_face<'a>(
     let name: signex_widgets::Label<'a> = match current {
         // A hex colour code is design data, not language.
         Some(c) => UserText::new(format!("#{:02X}{:02X}{:02X}", c[0], c[1], c[2])).into(),
-        None => t!(i18n, ids::PROPERTIES_COLOR_DEFAULT).into(),
+        None => t!(i18n, default_name).into(),
     };
     let face = Row::<Element<'a, PanelMsg>>::new()
         .spacing(SP.s + SP.xs)
@@ -363,6 +364,16 @@ pub struct PopoverColorRow {
 /// A labelled colour field whose popover opens right under it (mockup rows
 /// 43 and 46).
 pub fn popover_color_row<'a>(row: PopoverColorRow, i18n: &I18n) -> Element<'a, PanelMsg> {
+    popover_color_row_named(row, ids::PROPERTIES_COLOR_DEFAULT, i18n)
+}
+
+/// [`popover_color_row`] whose field reads `default_name` while the object
+/// has no colour of its own (a drawing's Auto, mockup row 48).
+pub fn popover_color_row_named<'a>(
+    row: PopoverColorRow,
+    default_name: MessageId,
+    i18n: &I18n,
+) -> Element<'a, PanelMsg> {
     let PopoverColorRow {
         label,
         current,
@@ -373,7 +384,8 @@ pub fn popover_color_row<'a>(row: PopoverColorRow, i18n: &I18n) -> Element<'a, P
         on_pick,
         on_clear,
     } = row;
-    let face = color_field_face(current, picker != WireColorPicker::Closed, on_toggle, i18n);
+    let is_open = picker != WireColorPicker::Closed;
+    let face = color_field_face(current, default_name, is_open, on_toggle, i18n);
     let control: Element<'a, PanelMsg> = match picker {
         WireColorPicker::Advanced => iced_aw::ColorPicker::new(
             true,

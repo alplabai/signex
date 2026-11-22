@@ -212,7 +212,7 @@ fn general_rows<'a>(
         i18n,
     ));
     c = super::library_rows::push_symbol_choice_row(c, id, &ctx.symbol_choices, muted, i18n);
-    c = super::body_row::push_body_row(c, id, &get("Body Style"), muted, input_bg, i18n);
+    c = super::body_row::push_body_row(c, id, &get("Body Style"), i18n);
     super::library_rows::push_part_actions(c, i18n)
 }
 

@@ -255,10 +255,11 @@ fn field<'a>(
 }
 
 /// The Repeat section (its header is the switch), then Channel naming and
-/// the Entries list.
+/// the `entries` list the caller picked for the symbol.
 pub(super) fn sections<'a>(
     ctx: &'a PanelContext,
     view: &'a SheetSymbolRepeatView,
+    entries: Element<'a, PanelMsg>,
 ) -> Element<'a, PanelMsg> {
     let i18n = &*ctx.i18n;
     let id = view.sheet_symbol;
@@ -331,14 +332,15 @@ pub(super) fn sections<'a>(
             .unwrap_or(iced::Color::TRANSPARENT);
         signex_widgets::inert::Inert::new(naming, veil).boxed()
     };
-    column![repeat, naming, entries(ctx, view)]
-        .width(Length::Fill)
-        .boxed()
+    column![repeat, naming, entries].width(Length::Fill).boxed()
 }
 
 /// Entry | Per channel: plain entries are "shared", `Repeat(…)` entries
 /// carry an accent Repeat pill.
-fn entries<'a>(ctx: &'a PanelContext, view: &'a SheetSymbolRepeatView) -> Element<'a, PanelMsg> {
+pub(super) fn entries<'a>(
+    ctx: &'a PanelContext,
+    view: &'a SheetSymbolRepeatView,
+) -> Element<'a, PanelMsg> {
     let i18n = &*ctx.i18n;
     let tokens = &ctx.tokens;
     let res = resolve(tokens);
