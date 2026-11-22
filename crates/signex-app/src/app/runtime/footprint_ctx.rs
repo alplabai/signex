@@ -746,8 +746,22 @@ pub(super) fn build_footprint_editor_panel_ctx(
                 template_library: pad.template_library.clone(),
             })
             .collect(),
-        silk_segments: crate::panels::outline_segments(&editor.primitive().silk_f),
-        assembly_segments: crate::panels::outline_segments(&editor.primitive().fab_f),
+        silk_segments: crate::panels::outline_segments(
+            &[
+                editor.primitive().silk_f.as_slice(),
+                editor.primitive().generated.silk.as_slice(),
+            ]
+            .concat(),
+        ),
+        assembly_segments: crate::panels::outline_segments(
+            &[
+                editor.primitive().fab_f.as_slice(),
+                editor.primitive().generated.assembly.as_slice(),
+            ]
+            .concat(),
+        ),
+        generated: editor.primitive().generated.clone(),
+        body_extent_mm: signex_bake::body_extent(editor.primitive()),
         sketch_state: {
             let (tone, label) = crate::library::editor::standalone::dof_chip::dof_state(editor);
             crate::panels::SketchStateSummary { tone, label }

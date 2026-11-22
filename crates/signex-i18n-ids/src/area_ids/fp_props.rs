@@ -20,6 +20,13 @@ define_ids! {
     EDITORS_FP_PROPS_COURTYARD_SIZE = "editors-fp-props-courtyard-size";
     EDITORS_FP_PROPS_EXPANSION = "editors-fp-props-expansion";
     EDITORS_FP_PROPS_LENGTH_MM = "editors-fp-props-length-mm";
+    EDITORS_FP_PROPS_SILK_OUTLINE = "editors-fp-props-silk-outline";
+    EDITORS_FP_PROPS_SILK_CLIPPED = "editors-fp-props-silk-clipped";
+    EDITORS_FP_PROPS_LINE_WIDTH = "editors-fp-props-line-width";
+    EDITORS_FP_PROPS_PAD_CLEARANCE = "editors-fp-props-pad-clearance";
+    EDITORS_FP_PROPS_PIN_ONE_DOT = "editors-fp-props-pin-one-dot";
+    EDITORS_FP_PROPS_ASSEMBLY_BODY = "editors-fp-props-assembly-body";
+    EDITORS_FP_PROPS_NO_BODY = "editors-fp-props-no-body";
     EDITORS_FP_PROPS_ILLUSTRATION_COURTYARD = "editors-fp-props-illustration-courtyard";
     EDITORS_FP_PROPS_ILLUSTRATION_SILKSCREEN = "editors-fp-props-illustration-silkscreen";
     EDITORS_FP_PROPS_ILLUSTRATION_ASSEMBLY = "editors-fp-props-illustration-assembly";

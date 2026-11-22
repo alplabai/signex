@@ -21,6 +21,8 @@ const SP: Spacing = Spacing::DEFAULT;
 pub(in crate::panels::footprint_editor_properties) enum Refusal {
     NotANumber,
     NotPositive,
+    /// Below zero, where zero is allowed.
+    Negative,
     /// The size leaves a trapezoid with no copper.
     NoCopper,
     /// A corner radius outside `pad_field::CORNER_RADIUS_PCT`.
@@ -44,6 +46,15 @@ impl Refusal {
         }
     }
 
+    /// Why `text` was not taken by a field that allows zero.
+    fn of_non_negative(text: &str) -> Option<Self> {
+        match crate::numeric_field::parse_field_f64(text) {
+            None => Some(Refusal::NotANumber),
+            Some(value) if value < 0.0 => Some(Refusal::Negative),
+            Some(_) => None,
+        }
+    }
+
     /// Why `text` was not taken as a corner radius.
     fn of_corner_radius(text: &str) -> Option<Self> {
         let Ok(value) = signex_types::numeric::parse_finite_f64(text) else {
@@ -56,6 +67,7 @@ impl Refusal {
         match self {
             Refusal::NotANumber => ids::EDITORS_FP_PAD_INVALID_NUMBER,
             Refusal::NotPositive => ids::EDITORS_FP_PAD_INVALID_POSITIVE,
+            Refusal::Negative => ids::EDITORS_FP_PAD_INVALID_NEGATIVE,
             Refusal::NoCopper => ids::EDITORS_FP_PAD_INVALID_NO_COPPER,
             Refusal::CornerRadiusRange => ids::EDITORS_FP_PAD_INVALID_CORNER_RADIUS,
         }
@@ -87,6 +99,20 @@ impl Shown {
         match buffer {
             Some(text) => Self {
                 refusal: Refusal::of(text, positive, fits),
+                text: text.clone(),
+            },
+            None => Self::value(stored),
+        }
+    }
+
+    /// A field that allows zero: `buffer` when present, else `stored`.
+    pub(in crate::panels::footprint_editor_properties) fn non_negative(
+        buffer: Option<&String>,
+        stored: String,
+    ) -> Self {
+        match buffer {
+            Some(text) => Self {
+                refusal: Refusal::of_non_negative(text),
                 text: text.clone(),
             },
             None => Self::value(stored),

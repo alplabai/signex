@@ -703,6 +703,7 @@ pub(super) fn view_footprint_canvas<'a>(
         sketch: editor.primitive().sketch.as_ref(),
         silk_f: editor.primitive().silk_f.as_slice(),
         silk_b: editor.primitive().silk_b.as_slice(),
+        generated_silk: editor.primitive().generated.silk.as_slice(),
         zoom_step: editor.zoom_step,
         trackpad_pan: editor.trackpad_pan,
         wheel_mode: editor.wheel_mode,

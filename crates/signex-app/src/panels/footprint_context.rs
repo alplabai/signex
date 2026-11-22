@@ -250,6 +250,10 @@ pub struct FootprintEditorPanelContext {
     pub silk_segments: Vec<super::footprint_outline::OutlineSegment>,
     /// The front assembly drawing's straight strokes (mockup row 124).
     pub assembly_segments: Vec<super::footprint_outline::OutlineSegment>,
+    /// The footprint's generated feature settings (mockup row 124).
+    pub generated: signex_library::primitive::footprint::GeneratedFeatures,
+    /// The body the generated outlines follow, `[min_x, min_y, max_x, max_y]`.
+    pub body_extent_mm: Option<[f64; 4]>,
     /// The sketch's solve state, as the canvas chip names it.
     pub sketch_state: SketchStateSummary,
 }

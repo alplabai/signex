@@ -13,6 +13,7 @@
 
 mod footprint_illustration;
 mod footprint_sections;
+mod generated_sections;
 mod header;
 mod sketch_sections;
 mod snap_illustration;

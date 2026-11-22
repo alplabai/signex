@@ -171,6 +171,7 @@ fn draw_editor(fp: &Footprint, at: &PreviewState) -> Painted {
         sketch: None,
         silk_f: &fp.silk_f,
         silk_b: &fp.silk_b,
+        generated_silk: &fp.generated.silk,
         zoom_step: 1.1,
         trackpad_pan: false,
         wheel_mode: Default::default(),
