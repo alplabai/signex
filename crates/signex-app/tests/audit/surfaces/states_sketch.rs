@@ -12,9 +12,7 @@ use super::lib;
 use crate::fixture::{self, Fixture};
 use crate::render;
 use crate::surface::{OpenFn, Surface, WindowSel};
-use signex_app::app::{
-    AssignFootprintsMsg, BoardSketchMsg, Message, PcbMsg, Signex, UpdatePcbMsg, WindowMsg,
-};
+use signex_app::app::{BoardSketchMsg, Message, PcbMsg, Signex, UpdatePcbMsg, WindowMsg};
 use signex_app::dock::{DockMessage, PanelPosition};
 use signex_app::library::LibraryMessage;
 use signex_app::library::editor::footprint::sketch_mode::SketchCanvasMsg;
@@ -166,23 +164,11 @@ fn panel_rows() -> Vec<Surface> {
         }),
         Surface {
             window: WindowSel::Auto,
-            ..row("m80-ticked", "Assign Footprints: ticked", |app, r, fx| {
-                fixture::open_sample(app, r, fx);
-                fixture::mount_stock(app, fx)?;
-                helpers_d::sample_project(app, fx);
-                helpers_d::command(app, "assign_footprints")?;
-                reached(
-                    app.ui_state.assign_footprints.is_some(),
-                    "assign_footprints opened no dialog",
-                )?;
-                for msg in [
-                    AssignFootprintsMsg::AllToggled(true),
-                    AssignFootprintsMsg::RowPreviewed(0),
-                ] {
-                    h::settle(app, Message::from(msg))?;
-                }
-                Ok(())
-            })
+            ..row(
+                "m80-ticked",
+                "Assign Footprints: ticked",
+                super::drawn_fixtures::open_assign_ticked,
+            )
         },
         Surface {
             window: WindowSel::Auto,

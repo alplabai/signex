@@ -163,8 +163,8 @@ fn project_rows() -> Vec<Surface> {
         row("m35-repository", "Project tab: repository", open_repository),
         Surface {
             id: "m39-commits",
-            title: "History panel with a commit",
-            open: open_history_commits,
+            title: "History panel on a merged branch",
+            open: super::drawn_fixtures::open_history_branches,
             // The History tab docks at the bottom, so a side crop misses it.
             window: WindowSel::Main,
             checks: project::HISTORY,

@@ -139,18 +139,22 @@ fn schematic_rows() -> Vec<Surface> {
             let _ = app.update(Message::Ui(UiMsg::ZoomPresetsToggled));
             Ok(())
         }),
-        row("m71-chooser", "Net colour row chooser", |app, r, fx| {
-            fixture::open_sample(app, r, fx);
-            drive(app, Message::NetColor(NetColorMsg::Open))?;
-            drive(
-                app,
-                Message::NetColor(NetColorMsg::RowOpened("+3V3".into())),
-            )?;
-            reached(
-                app.ui_state.net_color_palette.chooser.is_some(),
-                "the row opened no chooser",
-            )
-        }),
+        Surface {
+            // The palette has its own window.
+            window: WindowSel::Auto,
+            ..row("m71-chooser", "Net colour row chooser", |app, r, fx| {
+                fixture::open_sample(app, r, fx);
+                drive(app, Message::NetColor(NetColorMsg::Open))?;
+                drive(
+                    app,
+                    Message::NetColor(NetColorMsg::RowOpened("+3V3".into())),
+                )?;
+                reached(
+                    app.ui_state.net_color_palette.chooser.is_some(),
+                    "the row opened no chooser",
+                )
+            })
+        },
         row(
             "m91-presets",
             "Rules tab: Presets panel",
@@ -264,7 +268,7 @@ pub(super) fn open_clearance_matrix(
     r: &mut iced::Renderer,
     fx: &Fixture,
 ) -> Result<(), String> {
-    let project = annot_valid::open_rules(app, r, fx)?;
+    let project = super::drawn_fixtures::open_rules_with_classes(app, r, fx)?;
     settle_support::settle(
         app,
         Message::Project(ProjectMsg::Rules(RulesTabMsg::DomainPicked {
@@ -284,7 +288,10 @@ pub(super) fn open_clearance_matrix(
         .project_tabs
         .get(&project)
         .is_some_and(|tab| tab.rules.is_matrix_shown());
-    reached(shown, "the Matrix chip did not show the matrix")
+    reached(shown, "the Matrix chip did not show the matrix")?;
+    super::drawn_fixtures::fill_clearance_matrix(app, project)?;
+    let _ = render::draw_main(r, app);
+    Ok(())
 }
 
 /// The Rules tab with its Presets panel, opened by the toolbar button.

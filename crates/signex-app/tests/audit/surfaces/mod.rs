@@ -9,6 +9,7 @@ mod annot_valid;
 mod board_counters;
 mod canvas_pick;
 pub mod checks;
+mod drawn_fixtures;
 mod global;
 mod helpers_c;
 mod helpers_d;
