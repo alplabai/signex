@@ -43,15 +43,17 @@
 
 use crate::{Label, button, raw, text};
 use iced::widget::svg;
-use iced::widget::{Column, Row, Space, container, mouse_area};
+use iced::widget::{Row, Space, container, mouse_area};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 
 use crate::theme_ext;
 
 mod metrics;
+mod rows;
 
 pub use metrics::{MENU_LABEL_SIZE, MENU_SHORTCUT_SIZE, MONO_FAMILY, MenuMetrics};
+pub use rows::rows;
 
 /// Hover wash and corner radius of a menu row. Public so a `Custom` row
 /// built by the app hovers like an item row.
@@ -429,49 +431,7 @@ where
     // The card matches the bar (raised fill, 10 px radius, themed shadow,
     // soft separators).
     let skin = super::skin::Skin::of(tokens);
-    let line = skin.line_soft;
-
-    // Fill children inside a Shrink column lay out at zero width in the
-    // fork, so a fixed-width panel gets a Fill column (buttons stay clickable)
-    // and an unsized panel fits its content.
-    let fixed = width_hint.is_some();
-    let col_width = if fixed { Length::Fill } else { Length::Fit };
-    let mut col: Column<Element<'a, M>> = Column::new().spacing(0).width(col_width);
-    let shape = RowShape {
-        has_icons: metrics::has_icons(&entries),
-        has_chevrons: metrics::has_chevrons(&entries),
-        fixed,
-    };
-    for entry in entries {
-        let row = match entry {
-            DropdownEntry::Header(label) => container(
-                text(raw(label))
-                    .size(metrics.header_size)
-                    .color(look.muted)
-                    .wrapping(text::Wrapping::None),
-            )
-            .padding([0.0, metrics.row_pad_x])
-            .height(metrics.header_row_height())
-            .align_y(iced::alignment::Vertical::Center)
-            .width(Length::Fill)
-            .boxed(),
-            DropdownEntry::Separator => container(
-                container(Space::new())
-                    .height(1.0)
-                    .width(Length::Fill)
-                    .style(move |_: &Theme| container::Style {
-                        background: Some(Background::Color(line)),
-                        ..container::Style::default()
-                    }),
-            )
-            .padding([metrics.separator_margin, 0.0])
-            .width(Length::Fill)
-            .boxed(),
-            DropdownEntry::Custom(element) => element,
-            DropdownEntry::Item(item) => item_row(item, &metrics, look, shape),
-        };
-        col = col.push(row);
-    }
+    let col = rows::entry_column(entries, look, skin.line_soft, width_hint.is_some());
 
     let mut panel = container(col).padding(metrics.panel_pad);
     if let Some(w) = width_hint {

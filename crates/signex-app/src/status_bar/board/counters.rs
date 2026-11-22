@@ -13,11 +13,10 @@ use signex_widgets::{button, text};
 use super::super::graphite::{SP, TS};
 use super::kit::{
     BAR_GLYPH, Glyph, MONO, PX, SEGMENT_GAP, SEGMENT_PAD, SWATCH, Tone, badge, badge_width,
-    count_text, glyph, ui_font,
+    count_text, drawn_width, glyph, ui_font,
 };
 use super::{BoardCounter, BoardReadout, ConnectionTally, DrcAge, DrcTally};
 use crate::app::StatusBarRequest;
-use crate::dock::measure::text_width_in;
 use crate::styles::tokens::resolve;
 use crate::styles::{HAIRLINE, ti};
 
@@ -82,7 +81,7 @@ fn figure<'a>(s: Localized, tokens: &ThemeTokens) -> Element<'a, StatusBarReques
 }
 
 fn label_width(s: &Localized) -> f32 {
-    text_width_in(
+    drawn_width(
         &s.to_string(),
         TS.caption,
         ui_font(iced::font::Weight::Normal),
@@ -90,7 +89,7 @@ fn label_width(s: &Localized) -> f32 {
 }
 
 fn figure_width(s: &Localized) -> f32 {
-    text_width_in(&s.to_string(), MONO, super::super::graphite::mono_font())
+    drawn_width(&s.to_string(), MONO, super::super::graphite::mono_font())
 }
 
 /// The value of the board's Grid read-out: the pitch in the bar's unit, or

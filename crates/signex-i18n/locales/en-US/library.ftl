@@ -498,6 +498,24 @@ library-edit-row-slot-problem = ✗ { $reason }
 # Tooltip of a unit this version does not know, which is kept unchanged.
 library-edit-row-unit-kept = Kept as written
 
+## Unit menu captions (mockup row 139)
+# Muted caption of the "—" entry: the value carries no unit.
+library-unit-name-none = no unit
+# Muted caption of the Ω entry.
+library-unit-name-ohm = ohm
+# Muted caption of the F entry.
+library-unit-name-farad = farad
+# Muted caption of the H entry.
+library-unit-name-henry = henry
+# Muted caption of the V entry.
+library-unit-name-volt = volt
+# Muted caption of the A entry.
+library-unit-name-ampere = ampere
+# Muted caption of the W entry.
+library-unit-name-watt = watt
+# Muted caption of the Hz entry.
+library-unit-name-hertz = hertz
+
 ## Delete Component (mockup row 137)
 # Dialog title.
 library-delete-row-title = Delete Component?

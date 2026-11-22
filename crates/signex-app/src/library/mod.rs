@@ -73,6 +73,7 @@ pub mod stock_copy;
 pub mod symbol_delete;
 #[cfg(test)]
 pub(crate) mod test_adapters;
+pub(crate) mod unit_menu;
 pub(crate) mod unit_picker;
 pub mod updates_dialog;
 #[cfg(test)]

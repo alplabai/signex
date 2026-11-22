@@ -89,6 +89,30 @@ pub struct AnnotationPanelState {
     pub designators: Vec<String>,
     /// The selected table's part is gone from the sheet.
     pub source_missing: bool,
+    /// The armed dimension tool's form; it takes Properties while set.
+    pub dimension_tool: Option<Box<DimensionToolForm>>,
+}
+
+/// What Properties shows for the armed dimension tool (mockup row 157).
+#[derive(Debug, Clone, PartialEq)]
+pub struct DimensionToolForm {
+    /// The next dimension; a point not clicked yet holds a sample.
+    pub dimension: signex_types::schematic::SchDimension,
+    pub is_aligned: bool,
+    pub has_from: bool,
+    pub has_to: bool,
+}
+
+/// The armed dimension tool's form, scrolling in the panel.
+pub(in crate::panels) fn view_dimension_tool_properties<'a>(
+    ctx: &'a PanelContext,
+    form: &DimensionToolForm,
+) -> Element<'a, PanelMsg> {
+    iced::widget::scrollable(super::dimension::view_dimension_tool(ctx, form))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(form_look::scrollbar_style)
+        .boxed()
 }
 
 /// The Properties of the selected Bezier, dimension or table; `None` for
@@ -281,6 +305,31 @@ impl<'a> Rows<'a> {
                 fields.1,
                 format!("{y:.2}")
             ),
+        ]
+        .spacing(SP.s)
+        .width(Length::Fill);
+        self.field(label, pair.boxed())
+    }
+
+    /// A point with nothing to edit yet: two empty boxes that take no text.
+    pub fn blank_point(&self, label: Localized) -> Element<'a, PanelMsg> {
+        let cell = |prefix: MessageId| -> Element<'a, PanelMsg> {
+            row![
+                text(self.t(prefix)).size(TS.caption).color(self.faint()),
+                text_input(signex_i18n::UserText::new(String::new()), String::new())
+                    .size(TS.body)
+                    .padding([SP.xs, SP.s])
+                    .style(form_look::refusable_input_style(None))
+                    .width(Length::Fill),
+            ]
+            .spacing(SP.xs)
+            .align_y(Alignment::Center)
+            .width(Length::Fill)
+            .boxed()
+        };
+        let pair = row![
+            cell(signex_i18n::ids::PROPERTIES_ANNOTATION_X),
+            cell(signex_i18n::ids::PROPERTIES_ANNOTATION_Y),
         ]
         .spacing(SP.s)
         .width(Length::Fill);

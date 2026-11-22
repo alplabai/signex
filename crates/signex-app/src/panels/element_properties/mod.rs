@@ -43,7 +43,10 @@ mod symbol_field;
 mod table;
 mod text_note;
 
-pub use annotation::{AnnotationField, AnnotationPanelMsg, AnnotationPanelState};
+pub(super) use annotation::view_dimension_tool_properties;
+pub use annotation::{
+    AnnotationField, AnnotationPanelMsg, AnnotationPanelState, DimensionToolForm,
+};
 pub(crate) use body_row::{
     BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,
 };

@@ -41,6 +41,11 @@ pub struct AnnotationDraft {
     pub units: DimensionUnits,
     pub precision: u8,
     pub arrows: DimensionArrows,
+    /// A direction picked in Properties.
+    pub direction: Option<DimensionDirection>,
+    pub override_text: Option<String>,
+    /// The line goes on the far side of the measured points from the cursor.
+    pub flipped: bool,
     pub ink: HintInk,
 }
 
@@ -69,12 +74,19 @@ impl AnnotationDraft {
             AnnotationDraftKind::LinearDimension => SchDimension::linear_direction(from, to),
             AnnotationDraftKind::AlignedDimension => DimensionDirection::Aligned,
         };
-        let mut d = SchDimension::new(uuid::Uuid::nil(), from, to, DRAFT_OFFSET_MM, direction);
+        let direction = self.direction.unwrap_or(direction);
+        let first_offset = if self.flipped {
+            -DRAFT_OFFSET_MM
+        } else {
+            DRAFT_OFFSET_MM
+        };
+        let mut d = SchDimension::new(uuid::Uuid::nil(), from, to, first_offset, direction);
         d.units = self.units;
         d.precision = self.precision;
         d.arrows = self.arrows;
+        d.override_text = self.override_text.clone();
         if self.points.len() >= 2 {
-            d.offset = d.offset_to(cursor);
+            d.offset = d.offset_on_side(cursor, self.flipped);
         }
         Some(d)
     }
@@ -119,6 +131,12 @@ impl SchematicCanvas<'_> {
             .with_width(1.0);
         for p in &draft.points {
             frame.stroke(&canvas::Path::circle(to_screen(*p), 4.0), stroke);
+        }
+        // Paused, nothing follows the cursor, as with the other ghosts.
+        let is_dimension = draft.kind != AnnotationDraftKind::Bezier;
+        if self.placement_paused && is_dimension {
+            draw_hint_bar(frame, bounds, draft);
+            return;
         }
         if let Some(b) = draft.bezier_at(cursor) {
             let [s, c1, c2, e] = b.points().map(to_screen);

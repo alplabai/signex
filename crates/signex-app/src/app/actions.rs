@@ -211,6 +211,11 @@ impl Signex {
         self.interaction_state.polyline_points.clear();
         self.interaction_state.shape_anchor = None;
         self.interaction_state.annotation_tool.points.clear();
+        self.interaction_state
+            .annotation_tool
+            .dimension
+            .end_dimension();
+        self.drop_dimension_form_draft();
 
         // The main slot plus `canvases` is the full set of windows.
         let clear_canvas = |canvas: &mut crate::canvas::CanvasSlot| {

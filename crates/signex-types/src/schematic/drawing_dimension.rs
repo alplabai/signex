@@ -202,6 +202,19 @@ impl SchDimension {
         }
     }
 
+    /// The offset for a line through `p`, or through `p` mirrored across the
+    /// middle of the measured span when `flipped`, which puts a line outside
+    /// the two points on their other side even when they differ in height.
+    pub fn offset_on_side(&self, p: Point, flipped: bool) -> f64 {
+        if !flipped {
+            return self.offset_to(p);
+        }
+        self.offset_to(Point::new(
+            self.from.x + self.to.x - p.x,
+            self.from.y + self.to.y - p.y,
+        ))
+    }
+
     /// The measured length in mm.
     pub fn measured_mm(&self) -> f64 {
         let (dx, dy) = (self.to.x - self.from.x, self.to.y - self.from.y);

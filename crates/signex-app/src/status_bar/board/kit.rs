@@ -129,14 +129,16 @@ pub(super) fn count_text(i18n: &I18n, count: usize) -> Localized {
     t!(i18n, ids::BOARD_STATUS_COUNT, "count" => count)
 }
 
+/// Width of `s` as the bar draws it. The measuring shaper would count a
+/// catalog text's bidi isolation marks as glyphs, so they are left out.
+pub(super) fn drawn_width(s: &str, size: f32, font: Font) -> f32 {
+    crate::dock::measure::text_width_in(&s.replace(['\u{2068}', '\u{2069}'], ""), size, font)
+}
+
 /// Width of a badge holding `label`: the figures and its padding, at least
 /// [`BADGE`].
 pub(super) fn badge_width(label: &str) -> f32 {
-    let figures = crate::dock::measure::text_width_in(
-        label,
-        BADGE_TEXT,
-        mono_weight(iced::font::Weight::Semibold),
-    );
+    let figures = drawn_width(label, BADGE_TEXT, mono_weight(iced::font::Weight::Semibold));
     (figures + 2.0 * BADGE_PAD).max(BADGE)
 }
 
@@ -178,11 +180,11 @@ pub(super) fn badge<'a, M: 'a>(
 }
 
 /// The card around a popover's parts, `width` wide.
-pub(super) fn card<'a>(
+pub(super) fn card<'a, M: 'a>(
     width: f32,
-    parts: Vec<Element<'a, BoardPopoverEvent>>,
+    parts: Vec<Element<'a, M>>,
     tokens: &ThemeTokens,
-) -> Element<'a, BoardPopoverEvent> {
+) -> Element<'a, M> {
     container(Column::with_children(parts).width(Length::Fill))
         .width(width)
         .padding(CARD_PAD)
@@ -438,7 +440,8 @@ fn footer_with<'a>(
     .boxed()
 }
 
-/// The card of `model`, drawn for its kind.
+/// The card of `model`, drawn for its kind. The layer dropdown is its left
+/// column only: the app adds the sets and the card (`two_column_card`).
 pub(crate) fn popover_view<'a>(
     model: &BoardPopoverModel,
     tokens: &ThemeTokens,
@@ -447,7 +450,7 @@ pub(crate) fn popover_view<'a>(
     match model {
         BoardPopoverModel::Layer(list) => super::layer_popover::view(list, tokens, i18n),
         BoardPopoverModel::LayerDropdown(groups) => {
-            super::layer_dropdown::view(groups, tokens, i18n)
+            super::layer_dropdown::layer_column(groups, tokens, i18n)
         }
         BoardPopoverModel::Grid(grid) => super::grid_popover::view(grid, tokens, i18n),
         BoardPopoverModel::Unrouted(list) => super::unrouted_popover::view(list, tokens, i18n),

@@ -482,8 +482,11 @@ impl Signex {
                     }
                 }
                 BrowserEditMsg::SetParamUnit { key, unit } => {
+                    modal.unit_menu_open = None;
                     param_commit::pick_unit(modal, &key, unit, template);
                 }
+                BrowserEditMsg::UnitMenuOpened { key } => modal.unit_menu_open = Some(key),
+                BrowserEditMsg::UnitMenuDismissed => modal.unit_menu_open = None,
                 BrowserEditMsg::ParamPrefixPicked { key, prefix } => {
                     modal.param_prefix.insert(key.clone(), prefix);
                     param_commit::commit_param_buffer(modal, &key, template);
@@ -696,6 +699,33 @@ impl Signex {
         self.document_state.active_path = None;
         self.refresh_panel_ctx();
         self.resolve_open_preview_tab(&address)
+    }
+
+    /// Esc closes an Edit Component unit menu open in `window` and goes no
+    /// further, so the dialog and its draft stay. A dialog in its own window
+    /// answers only there; one in the main window only to the main window's
+    /// Esc, never to one typed in another secondary window.
+    pub(crate) fn close_unit_menu_in(&mut self, window: Option<iced::window::Id>) -> bool {
+        let owners = &self.ui_state.library_modal_owners;
+        let owner = window.and_then(|id| owners.get(&id));
+        let is_other_window = window.is_some_and(|id| self.ui_state.windows.contains_key(&id));
+        if owner.is_none() && is_other_window {
+            return false;
+        }
+        let open = self
+            .library
+            .library_browsers
+            .iter_mut()
+            .find_map(|(path, b)| {
+                let here = match owner {
+                    Some(owner) => owner == path,
+                    None => !owners.values().any(|o| o == path),
+                };
+                b.edit_modal
+                    .as_mut()
+                    .filter(|m| here && m.unit_menu_open.is_some())
+            });
+        open.map(|modal| modal.unit_menu_open = None).is_some()
     }
 
     /// Look up, off the UI thread, what the preview's shown tab needs that

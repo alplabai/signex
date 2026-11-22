@@ -30,6 +30,7 @@ mod move_pick;
 mod place_directive;
 mod place_harness;
 pub(crate) use place_directive::{blanket_directive, compile_mask_directive, diff_pair_directive};
+mod dimension_tool;
 mod place_bezier;
 mod place_dimension;
 pub(crate) use place_directive::{net_parameters_directive, parse_value};
@@ -49,6 +50,8 @@ mod shape_tool;
 mod shape_tool_tests;
 mod sheet_tool;
 pub use sheet_tool::SheetPlaceJobs;
+#[cfg(test)]
+mod dimension_tool_tests;
 mod library_status;
 #[cfg(test)]
 pub(crate) mod placement_tests;

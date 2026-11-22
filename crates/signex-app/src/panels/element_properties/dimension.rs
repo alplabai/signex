@@ -13,7 +13,7 @@ use signex_widgets::property_illustration::{
 };
 
 use super::super::{PanelContext, PanelMsg};
-use super::annotation::{AnnotationField, Rows};
+use super::annotation::{AnnotationField, DimensionToolForm, Rows};
 use crate::app::sch_tables::{AnnotationEdit, Axis};
 use crate::choice::Choice;
 
@@ -30,135 +30,217 @@ pub(super) fn view_dimension_properties<'a>(
         DimensionDirection::Aligned => ids::PROPERTIES_DIMENSION_ALIGNED,
         _ => ids::PROPERTIES_DIMENSION_LINEAR,
     };
-    let mut col = Column::new().spacing(0).width(Length::Fill);
-    col = col.push(rows.header(
+    let header = rows.header(
         crate::icons::icon_pcb_dimension(ctx.theme_id),
         rows.t(title),
         signex_i18n::UserText::new(d.label()),
-    ));
-    col = col.push(rows.illustration(illustration(&rows, d)));
+    );
+    body(&rows, header, d, (true, true))
+}
 
-    let measure = vec![
-        rows.point(
-            rows.t(ids::PROPERTIES_DIMENSION_FROM),
-            (
-                AnnotationField::DimensionPoint(false, Axis::X),
-                AnnotationField::DimensionPoint(false, Axis::Y),
-            ),
-            (d.from.x, ctx.shown_y(d.from.y)),
+/// The armed tool's form (mockup row 157): the same rows, editing what the
+/// next dimension is placed with. A point not clicked yet shows blank.
+pub(super) fn view_dimension_tool<'a>(
+    ctx: &'a PanelContext,
+    form: &DimensionToolForm,
+) -> Element<'a, PanelMsg> {
+    let d = &form.dimension;
+    let rows = Rows::new(ctx, &SchDrawing::Dimension(d.clone()));
+    let title = if form.is_aligned {
+        ids::PROPERTIES_DIMENSION_ALIGNED
+    } else {
+        ids::PROPERTIES_DIMENSION_LINEAR
+    };
+    let header = rows.header(
+        crate::icons::icon_pcb_dimension(ctx.theme_id),
+        rows.t(title),
+        rows.t(ids::PROPERTIES_DIMENSION_TOOL_CAPTION),
+    );
+    body(&rows, header, d, (form.has_from, form.has_to))
+}
+
+/// Header, illustration, Measure and Text; `clicked` says whether From and
+/// To hold real points.
+fn body<'a>(
+    rows: &Rows<'a>,
+    header: Element<'a, PanelMsg>,
+    d: &SchDimension,
+    clicked: (bool, bool),
+) -> Element<'a, PanelMsg> {
+    Column::new()
+        .spacing(0)
+        .width(Length::Fill)
+        .push(header)
+        .push(rows.illustration(illustration(rows, d)))
+        .push(rows.section(
+            "dimension_measure",
+            ids::PROPERTIES_DIMENSION_SECTION_MEASURE,
+            measure_rows(rows, d, clicked),
+        ))
+        .push(rows.section(
+            "dimension_text",
+            ids::PROPERTIES_DIMENSION_SECTION_TEXT,
+            text_rows(rows, d, clicked.1),
+        ))
+        .boxed()
+}
+
+fn point_row<'a>(
+    rows: &Rows<'a>,
+    label: signex_i18n::MessageId,
+    second: bool,
+    p: signex_types::schematic::Point,
+    is_clicked: bool,
+) -> Element<'a, PanelMsg> {
+    if !is_clicked {
+        return rows.blank_point(rows.t(label));
+    }
+    rows.point(
+        rows.t(label),
+        (
+            AnnotationField::DimensionPoint(second, Axis::X),
+            AnnotationField::DimensionPoint(second, Axis::Y),
         ),
-        rows.point(
-            rows.t(ids::PROPERTIES_DIMENSION_TO),
-            (
-                AnnotationField::DimensionPoint(true, Axis::X),
-                AnnotationField::DimensionPoint(true, Axis::Y),
-            ),
-            (d.to.x, ctx.shown_y(d.to.y)),
+        (p.x, rows.ctx.shown_y(p.y)),
+    )
+}
+
+fn measure_rows<'a>(
+    rows: &Rows<'a>,
+    d: &SchDimension,
+    (has_from, has_to): (bool, bool),
+) -> Vec<Element<'a, PanelMsg>> {
+    let mm = rows
+        .ctx
+        .i18n
+        .message_plain(ids::PROPERTIES_ANNOTATION_MM, &[]);
+    let length = if has_to {
+        format!("{:.3} {mm}", d.measured_mm())
+    } else {
+        mm.to_string()
+    };
+    vec![
+        point_row(
+            rows,
+            ids::PROPERTIES_DIMENSION_FROM,
+            false,
+            d.from,
+            has_from,
         ),
+        point_row(rows, ids::PROPERTIES_DIMENSION_TO, true, d.to, has_to),
         rows.field(
             rows.t(ids::PROPERTIES_DIMENSION_LENGTH),
-            rows.value(signex_i18n::UserText::new(format!(
-                "{:.3} {}",
-                d.measured_mm(),
-                ctx.i18n.message_plain(ids::PROPERTIES_ANNOTATION_MM, &[])
-            ))),
+            rows.value(signex_i18n::UserText::new(length)),
         ),
+        direction_row(rows, d),
+    ]
+}
+
+fn direction_row<'a>(rows: &Rows<'a>, d: &SchDimension) -> Element<'a, PanelMsg> {
+    rows.field(
+        rows.t(ids::PROPERTIES_DIMENSION_DIRECTION),
+        rows.segmented(
+            [
+                (
+                    DimensionDirection::Horizontal,
+                    ids::PROPERTIES_DIMENSION_HORIZONTAL,
+                ),
+                (
+                    DimensionDirection::Vertical,
+                    ids::PROPERTIES_DIMENSION_VERTICAL,
+                ),
+                (
+                    DimensionDirection::Aligned,
+                    ids::PROPERTIES_DIMENSION_ALIGNED_DIRECTION,
+                ),
+            ]
+            .into_iter()
+            .map(|(v, label)| (label, d.direction == v, AnnotationEdit::Direction(v)))
+            .collect(),
+        ),
+    )
+}
+
+fn text_rows<'a>(
+    rows: &Rows<'a>,
+    d: &SchDimension,
+    has_measure: bool,
+) -> Vec<Element<'a, PanelMsg>> {
+    vec![
+        units_row(rows, d),
+        precision_row(rows, d),
         rows.field(
-            rows.t(ids::PROPERTIES_DIMENSION_DIRECTION),
-            rows.segmented(
-                [
-                    (
-                        DimensionDirection::Horizontal,
-                        ids::PROPERTIES_DIMENSION_HORIZONTAL,
-                    ),
-                    (
-                        DimensionDirection::Vertical,
-                        ids::PROPERTIES_DIMENSION_VERTICAL,
-                    ),
-                    (
-                        DimensionDirection::Aligned,
-                        ids::PROPERTIES_DIMENSION_ALIGNED_DIRECTION,
-                    ),
-                ]
-                .into_iter()
-                .map(|(v, label)| (label, d.direction == v, AnnotationEdit::Direction(v)))
-                .collect(),
+            rows.t(ids::PROPERTIES_DIMENSION_ARROWS),
+            rows.dropdown(
+                Choice::named(&DimensionArrows::ALL, arrows_label, &rows.ctx.i18n),
+                Some(d.arrows),
+                AnnotationEdit::Arrows,
             ),
         ),
-    ];
-    col = col.push(rows.section(
-        "dimension_measure",
-        ids::PROPERTIES_DIMENSION_SECTION_MEASURE,
-        measure,
-    ));
+        override_row(rows, d, has_measure),
+    ]
+}
 
+fn units_row<'a>(rows: &Rows<'a>, d: &SchDimension) -> Element<'a, PanelMsg> {
+    rows.field(
+        rows.t(ids::PROPERTIES_DIMENSION_UNITS),
+        rows.segmented(
+            [
+                (DimensionUnits::Mm, ids::PROPERTIES_DIMENSION_UNIT_MM),
+                (DimensionUnits::Mil, ids::PROPERTIES_DIMENSION_UNIT_MIL),
+                (DimensionUnits::In, ids::PROPERTIES_DIMENSION_UNIT_IN),
+            ]
+            .into_iter()
+            .map(|(v, label)| (label, d.units == v, AnnotationEdit::Units(v)))
+            .collect(),
+        ),
+    )
+}
+
+fn precision_row<'a>(rows: &Rows<'a>, d: &SchDimension) -> Element<'a, PanelMsg> {
     let precision_ids = [
         ids::PROPERTIES_DIMENSION_PRECISION_0,
         ids::PROPERTIES_DIMENSION_PRECISION_1,
         ids::PROPERTIES_DIMENSION_PRECISION_2,
         ids::PROPERTIES_DIMENSION_PRECISION_3,
     ];
-    let override_on = d.override_text.is_some();
-    let override_box = rows.input(
-        AnnotationField::OverrideText,
-        d.override_text.clone().unwrap_or_else(|| d.measured_text()),
-    );
-    let text_rows = vec![
-        rows.field(
-            rows.t(ids::PROPERTIES_DIMENSION_UNITS),
-            rows.segmented(
-                [
-                    (DimensionUnits::Mm, ids::PROPERTIES_DIMENSION_UNIT_MM),
-                    (DimensionUnits::Mil, ids::PROPERTIES_DIMENSION_UNIT_MIL),
-                    (DimensionUnits::In, ids::PROPERTIES_DIMENSION_UNIT_IN),
-                ]
-                .into_iter()
-                .map(|(v, label)| (label, d.units == v, AnnotationEdit::Units(v)))
+    rows.field(
+        rows.t(ids::PROPERTIES_DIMENSION_PRECISION),
+        rows.segmented(
+            (0u8..=3)
+                .map(|p| {
+                    (
+                        precision_ids[usize::from(p)],
+                        d.precision.min(3) == p,
+                        AnnotationEdit::Precision(p),
+                    )
+                })
                 .collect(),
-            ),
         ),
+    )
+}
+
+/// The Override text header, which switches its Text row.
+fn override_row<'a>(rows: &Rows<'a>, d: &SchDimension, has_measure: bool) -> Element<'a, PanelMsg> {
+    let shown = d.override_text.clone().unwrap_or_else(|| {
+        if has_measure {
+            d.measured_text()
+        } else {
+            String::new()
+        }
+    });
+    signex_widgets::enable_section::EnableSection::new(
+        rows.t(ids::PROPERTIES_DIMENSION_OVERRIDE),
+        d.override_text.is_some(),
+    )
+    .on_toggle(|on| super::annotation::picked(AnnotationEdit::OverrideEnabled(on)))
+    .view(
+        crate::panels::enable_section::enable_section_style(&rows.ctx.tokens),
         rows.field(
-            rows.t(ids::PROPERTIES_DIMENSION_PRECISION),
-            rows.segmented(
-                (0u8..=3)
-                    .map(|p| {
-                        (
-                            precision_ids[usize::from(p)],
-                            d.precision.min(3) == p,
-                            AnnotationEdit::Precision(p),
-                        )
-                    })
-                    .collect(),
-            ),
+            rows.t(ids::PROPERTIES_DIMENSION_OVERRIDE_TEXT),
+            rows.input(AnnotationField::OverrideText, shown),
         ),
-        rows.field(
-            rows.t(ids::PROPERTIES_DIMENSION_ARROWS),
-            rows.dropdown(
-                Choice::named(&DimensionArrows::ALL, arrows_label, &ctx.i18n),
-                Some(d.arrows),
-                AnnotationEdit::Arrows,
-            ),
-        ),
-        // The Override text header switches its Text row.
-        signex_widgets::enable_section::EnableSection::new(
-            rows.t(ids::PROPERTIES_DIMENSION_OVERRIDE),
-            override_on,
-        )
-        .on_toggle(|on| super::annotation::picked(AnnotationEdit::OverrideEnabled(on)))
-        .view(
-            crate::panels::enable_section::enable_section_style(&ctx.tokens),
-            rows.field(
-                rows.t(ids::PROPERTIES_DIMENSION_OVERRIDE_TEXT),
-                override_box,
-            ),
-        ),
-    ];
-    col = col.push(rows.section(
-        "dimension_text",
-        ids::PROPERTIES_DIMENSION_SECTION_TEXT,
-        text_rows,
-    ));
-    col.boxed()
+    )
 }
 
 fn arrows_label(a: DimensionArrows) -> signex_i18n::MessageId {

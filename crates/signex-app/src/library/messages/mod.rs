@@ -560,6 +560,12 @@ pub enum BrowserEditMsg {
         key: String,
         unit: String,
     },
+    /// The closed face of a parameter's unit menu was pressed.
+    UnitMenuOpened {
+        key: String,
+    },
+    /// A press landed outside the open unit menu.
+    UnitMenuDismissed,
     /// The user picked an SI prefix for a measurement row's number.
     ParamPrefixPicked {
         key: String,
