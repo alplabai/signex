@@ -40,10 +40,10 @@ pub(super) fn bench_as_is(sheet: SchematicSheet) -> Bench {
     let path = dir.path().join("audit.snxsch");
     let (mut app, _task) = Signex::new();
     app.ui_state.first_run_tour_open = false;
-    app.document_state.engines.insert(
-        path.clone(),
-        signex_engine::Engine::new(sheet.clone()).expect("engine"),
-    );
+    // As a sheet read from its file: the opening state is the save point.
+    let mut engine = signex_engine::Engine::new(sheet.clone()).expect("engine");
+    engine.mark_saved();
+    app.document_state.engines.insert(path.clone(), engine);
     app.document_state.tabs.push(TabInfo {
         title: "audit".to_string(),
         path: path.clone(),
