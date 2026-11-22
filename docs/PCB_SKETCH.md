@@ -267,7 +267,9 @@ under the checks rounds each sharp corner between two lines to the router's
 radius, as one undo step (mockup row 179d). Each arc has a construction
 radius to each tangent point, held Perpendicular to its line, and a radius
 dimension, so it stays tangent through later dimension edits and adds no
-degree of freedom over the corner it replaces. A corner that is already an arc,
+degree of freedom over the corner it replaces. The old corner Point goes in the
+same step unless it carries an attribute or a pad names it, so a fully
+constrained sketch stays fully constrained. A corner that is already an arc,
 whose lines are too short for the radius, or that something depends on is
 left alone and said in Messages. A corner is depended on when a constraint,
 pattern, pad or other entity names its Point, or when an equal-length or

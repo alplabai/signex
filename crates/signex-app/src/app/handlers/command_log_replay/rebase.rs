@@ -1,7 +1,8 @@
 //! Replay of a command that carries a whole object or a whole pin list, onto
 //! a sheet that has moved on. A replaced object takes only the fields the
-//! recorded edit changed; a Sheet Entries sync whose list no longer fits is
-//! refused. Rules: `docs/COMMAND_LOG.md`, "Replay".
+//! recorded edit changed; a list changed on both sides that cannot be merged
+//! and a Sheet Entries sync whose list no longer fits are refused. Rules:
+//! `docs/COMMAND_LOG.md`, "Replay".
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -114,7 +115,8 @@ fn rebase_one(
 }
 
 /// `live` with the fields that differ between `before` and `after`. `None`
-/// when the three are not the same kind of object.
+/// when the three are not the same kind of object, or a changed list has
+/// moved on in a way the change cannot be merged into.
 fn with_changes<T: Serialize + DeserializeOwned>(before: &T, after: &T, live: &T) -> Option<T> {
     let before = serde_json::to_value(before).ok()?;
     let after = serde_json::to_value(after).ok()?;
@@ -122,23 +124,36 @@ fn with_changes<T: Serialize + DeserializeOwned>(before: &T, after: &T, live: &T
     if before.get("type") != after.get("type") || live.get("type") != after.get("type") {
         return None;
     }
-    carry_changes(&before, &after, &mut live);
+    carry_changes(&before, &after, &mut live)?;
     serde_json::from_value(live).ok()
 }
 
-/// Objects are compared key by key; anything else is one value.
-fn carry_changes(before: &Value, after: &Value, live: &mut Value) {
+/// Objects are compared key by key, lists by [`carry_list`]; anything else is
+/// one value. A list left out of the file when empty counts as empty.
+fn carry_changes(before: &Value, after: &Value, live: &mut Value) -> Option<()> {
     if before == after {
-        return;
+        return Some(());
+    }
+    if before.is_array() || after.is_array() || live.is_array() {
+        return carry_list(before, after, live);
     }
     if let (Value::Object(was), Value::Object(now), Value::Object(target)) =
         (before, after, &mut *live)
     {
-        for key in was.keys().filter(|key| !now.contains_key(*key)) {
+        for (key, old) in was.iter().filter(|(key, _)| !now.contains_key(*key)) {
+            if old.is_array() && target.get(key).is_some_and(|value| value != old) {
+                return None;
+            }
             target.remove(key);
         }
         for (key, value) in now {
             let Some(old) = was.get(key) else {
+                if value.is_array()
+                    && let Some(slot) = target.get_mut(key)
+                {
+                    carry_list(&Value::Array(Vec::new()), value, slot)?;
+                    continue;
+                }
                 target.insert(key.clone(), value.clone());
                 continue;
             };
@@ -146,15 +161,39 @@ fn carry_changes(before: &Value, after: &Value, live: &mut Value) {
                 continue;
             }
             match target.get_mut(key) {
-                Some(slot) => carry_changes(old, value, slot),
+                Some(slot) => carry_changes(old, value, slot)?,
                 None => {
                     target.insert(key.clone(), value.clone());
                 }
             }
         }
-        return;
+        return Some(());
     }
     *live = after.clone();
+    Some(())
+}
+
+/// Carry a list's change element by element. `None` unless all three have
+/// one length and no element changed on both sides to different values: a
+/// list that grew, shrank or was edited at the same place has no safe merge.
+fn carry_list(before: &Value, after: &Value, live: &mut Value) -> Option<()> {
+    if before == after || *live == *after {
+        return Some(());
+    }
+    if *live == *before {
+        *live = after.clone();
+        return Some(());
+    }
+    let (Value::Array(was), Value::Array(now), Value::Array(target)) = (before, after, live) else {
+        return None;
+    };
+    if was.len() != now.len() || was.len() != target.len() {
+        return None;
+    }
+    for ((old, new), slot) in was.iter().zip(now).zip(target.iter_mut()) {
+        carry_list(old, new, slot)?;
+    }
+    Some(())
 }
 
 /// Whether a recorded sync would now drop a pin made since, or add one.
@@ -207,7 +246,7 @@ pub(super) fn is_stale(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signex_types::schematic::{FillType, Point, SchDrawing, SheetPin};
+    use signex_types::schematic::{FillType, Point, SchDrawing, SchTable, SheetPin};
     use uuid::Uuid;
 
     const ID: Uuid = Uuid::from_u128(0x50);
@@ -249,6 +288,97 @@ mod tests {
             &commands[0],
             Command::UpdateSchDrawing { drawing } if *drawing == rect(50.0, FillType::Background)
         ));
+    }
+
+    fn table(rows: &[&[&str]]) -> SchDrawing {
+        let mut table = SchTable::new_typed(ID, Point::new(0.0, 0.0));
+        table.rows = rows
+            .iter()
+            .map(|row| row.iter().map(|cell| (*cell).to_string()).collect())
+            .collect();
+        SchDrawing::Table(table)
+    }
+
+    fn table_linking(links: &[&str]) -> SchDrawing {
+        let mut table = SchTable::new_typed(ID, Point::new(0.0, 0.0));
+        table.links = links.iter().map(|link| (*link).to_string()).collect();
+        SchDrawing::Table(table)
+    }
+
+    /// The edit `was` to `edit`, replayed onto `live`; `None` when refused.
+    fn replayed(was: SchDrawing, edit: SchDrawing, live: SchDrawing) -> Option<SchDrawing> {
+        let edit = Command::UpdateSchDrawing { drawing: edit };
+        let images = pre_images(&sheet_with(was), std::slice::from_ref(&edit));
+        let live = sheet_with(live);
+        let stale = is_stale(&live, std::slice::from_ref(&edit), &images);
+        let commands = rebased(&live, &[edit], &images);
+        assert_eq!(stale, commands.is_none(), "the refusal and the run agree");
+        match commands?.remove(0) {
+            Command::UpdateSchDrawing { drawing } => Some(drawing),
+            _ => None,
+        }
+    }
+
+    /// The review's case: y, typed after the recorded edit, stays.
+    #[test]
+    fn a_replayed_cell_edit_keeps_a_later_edit_of_another_cell() {
+        let now = replayed(
+            table(&[&["a", "b"]]),
+            table(&[&["x", "b"]]),
+            table(&[&["x", "y"]]),
+        );
+        assert_eq!(now, Some(table(&[&["x", "y"]])));
+    }
+
+    #[test]
+    fn a_replayed_cell_edit_merges_with_a_change_to_another_cell() {
+        let now = replayed(
+            table(&[&["a", "b"]]),
+            table(&[&["x", "b"]]),
+            table(&[&["a", "y"]]),
+        );
+        assert_eq!(now, Some(table(&[&["x", "y"]])));
+    }
+
+    #[test]
+    fn a_cell_changed_since_to_another_value_refuses_the_replay() {
+        let now = replayed(
+            table(&[&["a", "b"]]),
+            table(&[&["x", "b"]]),
+            table(&[&["z", "b"]]),
+        );
+        assert!(now.is_none());
+    }
+
+    #[test]
+    fn a_row_added_since_refuses_the_replay() {
+        let now = replayed(
+            table(&[&["a", "b"]]),
+            table(&[&["x", "b"]]),
+            table(&[&["a", "b"], &["c", "d"]]),
+        );
+        assert!(now.is_none());
+    }
+
+    /// `links` is left out of the JSON while empty.
+    #[test]
+    fn a_list_first_filled_by_the_edit_does_not_replace_a_later_one() {
+        let now = replayed(
+            table_linking(&[]),
+            table_linking(&["a.snxsch"]),
+            table_linking(&["b.snxsch"]),
+        );
+        assert!(now.is_none());
+    }
+
+    #[test]
+    fn a_list_emptied_by_the_edit_does_not_drop_a_later_one() {
+        let now = replayed(
+            table_linking(&["a.snxsch"]),
+            table_linking(&[]),
+            table_linking(&["b.snxsch"]),
+        );
+        assert!(now.is_none());
     }
 
     fn pin(name: &str, slot: f64) -> SheetPin {
