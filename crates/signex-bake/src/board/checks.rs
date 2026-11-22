@@ -19,6 +19,7 @@ use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_types::pcb::Point;
 
+use super::features::hole_places;
 use super::geometry::{boundary, circle};
 use super::inside_corners::tight_corners;
 use super::{BoardBakeError, Context};
@@ -454,7 +455,16 @@ fn openings_outside(ctx: &Context<'_>, outline: &ClosedOutline) -> Vec<Finding> 
             .and_then(|hole| hole.drill_expr.as_deref())
             .and_then(|expr| eval_mm(expr, &eval).ok())
             .map_or(radius, |drill| drill / 2.0);
-        if !disc_inside(centre, drill_radius, outline) {
+        // Every instance the bake drills; a refused pattern is the bake's
+        // to report.
+        let centres: Vec<Point> = hole_places(ctx, entity, centre).map_or_else(
+            |_| vec![centre],
+            |places| places.into_iter().map(|place| place.position).collect(),
+        );
+        if !centres
+            .into_iter()
+            .all(|at| disc_inside(at, drill_radius, outline))
+        {
             out.push(Finding::OpeningOutside {
                 entity: entity.id,
                 kind,

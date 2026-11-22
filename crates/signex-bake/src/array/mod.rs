@@ -41,6 +41,7 @@ mod links;
 mod links_tests;
 mod numbering;
 mod overrides;
+mod placements;
 mod polar;
 #[cfg(test)]
 mod polar_tests;
@@ -49,6 +50,7 @@ mod slots;
 mod walk;
 
 pub use instance_at::instance_at;
+pub(crate) use placements::source_places;
 pub use preview::{ArrayPreview, InstancePreview, preview_array};
 pub use slots::{PatternSlot, pattern_slots};
 
