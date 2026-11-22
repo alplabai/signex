@@ -441,7 +441,11 @@ fn show_only_unrouted_draws_a_hidden_ratsnest_and_keeps_it_hidden() {
     assert!(app.edit_pcb_view_at(&path, |view, _| view.set_only_unrouted(true)));
     assert_ne!(drawn(&app), 0, "the mode shows the unrouted lines");
     let board = app.active_pcb().expect("a board");
-    assert!(!app.undocked_pcb_snapshot(&path, board).ratsnest_lines.is_empty());
+    assert!(
+        !app.undocked_pcb_snapshot(&path, board)
+            .ratsnest_lines
+            .is_empty()
+    );
     assert!(!app.pcb_layer_view(&path).ratsnest_visible());
     assert!(app.edit_pcb_view_at(&path, |view, _| view.set_only_unrouted(false)));
     assert_eq!(drawn(&app), 0, "hidden again when the mode ends");

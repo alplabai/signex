@@ -237,7 +237,10 @@ mod tests {
         let edit = Command::UpdateSchDrawing {
             drawing: rect(20.0, FillType::Background),
         };
-        let was = pre_images(&sheet_with(rect(20.0, FillType::None)), std::slice::from_ref(&edit));
+        let was = pre_images(
+            &sheet_with(rect(20.0, FillType::None)),
+            std::slice::from_ref(&edit),
+        );
         let moved = sheet_with(rect(50.0, FillType::None));
 
         let commands = rebased(&moved, &[edit], &was).expect("it still fits");
