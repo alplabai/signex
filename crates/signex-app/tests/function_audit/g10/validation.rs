@@ -241,10 +241,10 @@ fn fill_waiver(rig: &mut Rig, reason: &str, author: &str) {
         &mut rig.app,
         PanelMsg::ErcWaiver(ErcWaiverMsg::ReasonActed(paste(reason))),
     );
-    panel(
-        &mut rig.app,
-        PanelMsg::ErcWaiver(ErcWaiverMsg::AuthorChanged(author.to_string())),
-    );
+    // The author is the git identity (mockup row 88), read off the UI thread.
+    let draft = rig.app.ui_state.erc_waive_draft.as_mut().expect("the form");
+    draft.author = author.to_string();
+    draft.awaits_identity = false;
 }
 
 #[test]
@@ -294,15 +294,15 @@ fn m85_a_blank_reason_is_refused_and_the_form_stays_open() {
 }
 
 #[test]
-fn m85_a_blank_author_is_refused() {
+fn m85_with_no_git_identity_the_waiver_stores_an_empty_author() {
     let mut rig = ran_erc();
     start_waive(&mut rig);
-    fill_waiver(&mut rig, "Two footprints share one part", "  ");
+    fill_waiver(&mut rig, "Two footprints share one part", "");
 
     panel(&mut rig.app, PanelMsg::ErcWaiver(ErcWaiverMsg::Confirmed));
 
-    assert!(rig.app.ui_state.erc_waive_draft.is_some(), "the form stays");
-    assert_eq!(waiver_count(&rig), 0);
+    assert!(rig.app.ui_state.erc_waive_draft.is_none(), "the form closes");
+    assert_eq!(waiver_count(&rig), 1);
 }
 
 #[test]
@@ -494,7 +494,16 @@ fn drc_waivers(rig: &BoardRig) -> usize {
 fn fill_drc_waiver(rig: &mut BoardRig, key: &str, reason: &str, author: &str) {
     drc(&mut rig.app, DrcPanelMsg::WaiveStarted(key.to_string()));
     drc(&mut rig.app, DrcPanelMsg::ReasonActed(paste(reason)));
-    drc(&mut rig.app, DrcPanelMsg::AuthorEdited(author.to_string()));
+    // The author is the git identity (mockup row 88), read off the UI thread.
+    let draft = rig
+        .app
+        .interaction_state
+        .pcb_drc
+        .waive_draft
+        .as_mut()
+        .expect("the form");
+    draft.author = author.to_string();
+    draft.awaits_identity = false;
 }
 
 #[test]
@@ -674,14 +683,14 @@ fn m88_a_blank_reason_is_refused_and_the_form_stays_open() {
 }
 
 #[test]
-fn m88_a_blank_author_is_refused() {
+fn m88_with_no_git_identity_the_waiver_stores_an_empty_author() {
     let (mut rig, key) = ran_drc();
-    fill_drc_waiver(&mut rig, &key, "Checked on the prototype", "  ");
+    fill_drc_waiver(&mut rig, &key, "Checked on the prototype", "");
 
     drc(&mut rig.app, DrcPanelMsg::WaiveConfirmed);
 
-    assert!(rig.app.interaction_state.pcb_drc.waive_draft.is_some());
-    assert_eq!(drc_waivers(&rig), 0);
+    assert!(rig.app.interaction_state.pcb_drc.waive_draft.is_none());
+    assert_eq!(drc_waivers(&rig), 1);
 }
 
 #[test]
