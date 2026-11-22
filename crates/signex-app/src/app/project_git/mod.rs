@@ -98,6 +98,12 @@ pub struct ProjectGitState {
     save_offer: Option<SwitchRequest>,
     /// A switch whose save landed and whose commit is still running.
     parked: Option<SwitchRequest>,
+    /// Moves on with each pick and each close of a switcher, so the read of
+    /// an earlier pick cannot offer Save and switch.
+    pick: u64,
+    /// Boards reopening after a switch that had a Layer Stack tab, and
+    /// whether that tab was the active one.
+    reopened_stacks: HashMap<PathBuf, bool>,
 }
 
 impl ProjectGitState {
@@ -121,6 +127,13 @@ impl ProjectGitState {
     /// Close the switcher, whichever project it is open for.
     pub(crate) fn close_switcher(&mut self) {
         self.switcher = None;
+        self.pick += 1;
+    }
+
+    /// Whether `board`'s Layer Stack tab comes back as it opens, and whether
+    /// it takes the focus. Asked once: the answer is used up.
+    pub(crate) fn take_reopened_stack(&mut self, board: &std::path::Path) -> Option<bool> {
+        self.reopened_stacks.remove(board)
     }
 
     fn repo_mut(&mut self, project: ProjectId) -> &mut RepoView {
@@ -151,6 +164,8 @@ pub enum ProjectGitMsg {
     /// The read of whether the picked branch has another project file.
     SwitchChecked {
         request: Box<SwitchRequest>,
+        /// [`ProjectGitState::pick`] when the read started.
+        pick: u64,
         result: Result<bool, SwitchRefusal>,
     },
     /// Save and switch was pressed.

@@ -1,6 +1,7 @@
 //! The one branch switch (mockup rows 35 and 39). It is all or nothing: a
 //! refusal writes no file, and a failure after the first write puts the
-//! working tree, the index and HEAD back.
+//! working tree, the index and HEAD back. Rollback tries every file; what it
+//! could not restore comes back as [`SwitchRefusal::NotRestored`].
 //!
 //! libgit2 runs no LFS filter, so a file whose blob on either side is an LFS
 //! pointer is not left to its checkout. Its content comes from
@@ -8,10 +9,12 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::commit_lock::lock_repo_for_commit;
 use super::lfs::{self, LfsPointer};
 use super::project_repo::SwitchRefusal;
+use super::tree_path::is_safe_to_write;
 use crate::repo_branches::{BranchTarget, local_name, target_commit};
 
 pub(crate) fn failed(what: &str, e: git2::Error) -> SwitchRefusal {
@@ -37,6 +40,8 @@ enum Incoming {
 
 struct LfsChange {
     rel: PathBuf,
+    /// The path as the tree spells it, for the index entry.
+    repo_path: Vec<u8>,
     incoming: Incoming,
     /// The target tree's blob, which the index records.
     blob: git2::Oid,
@@ -106,8 +111,15 @@ fn lfs_change(
         None if new_id.is_zero() => Incoming::Absent,
         None => Incoming::Blob(new_id),
     };
+    let repo_path = delta
+        .new_file()
+        .path_bytes()
+        .or(delta.old_file().path_bytes())
+        .unwrap_or_default()
+        .to_vec();
     Ok(LfsChange {
         rel: rel.to_path_buf(),
+        repo_path,
         incoming,
         blob: new_id,
         mode: u32::from(delta.new_file().mode()),
@@ -138,6 +150,8 @@ fn plan_switch(
         let after = pointer(delta.new_file().id())?;
         if before.is_none() && after.is_none() {
             plan.plain.push(rel.to_path_buf());
+        } else if !is_safe_to_write(workdir, rel) {
+            return Err(SwitchRefusal::UnsafePath(shown(rel)));
         } else {
             plan.lfs
                 .push(lfs_change(repo, workdir, rel, &delta, before, after)?);
@@ -177,8 +191,12 @@ impl Stash {
             }
             let kept = stash.dir.join(n.to_string());
             if let Err(e) = fs::rename(&abs, &kept) {
-                stash.put_back(workdir, &[]);
-                return Err(io_failed("move working file", e));
+                let lost = stash.put_back(workdir, &[]);
+                return Err(if lost.is_empty() {
+                    io_failed("move working file", e)
+                } else {
+                    SwitchRefusal::NotRestored(lost)
+                });
             }
             stash.moved.push((abs, kept));
         }
@@ -186,32 +204,48 @@ impl Stash {
     }
 
     /// Remove what the switch placed and return every moved file. A file
-    /// that cannot go back stays in the folder, which is then kept.
-    fn put_back(&mut self, workdir: &Path, changes: &[LfsChange]) {
+    /// that cannot go back stays in the folder, which is then kept. Returns
+    /// the paths left wrong. A path behind a link was never placed, and
+    /// removing it would reach outside the tree.
+    fn put_back(&mut self, workdir: &Path, changes: &[LfsChange]) -> Vec<String> {
+        let mut lost = Vec::new();
         for change in changes {
             let abs = workdir.join(&change.rel);
             let was_moved = self.moved.iter().any(|(path, _)| *path == abs);
-            if !was_moved
-                && !matches!(change.incoming, Incoming::Absent)
-                && let Err(e) = fs::remove_file(&abs)
+            if was_moved
+                || matches!(change.incoming, Incoming::Absent)
+                || !is_safe_to_write(workdir, &change.rel)
+            {
+                continue;
+            }
+            if let Err(e) = fs::remove_file(&abs)
                 && e.kind() != std::io::ErrorKind::NotFound
             {
                 tracing::error!(target: "signex::library", path = %abs.display(), error = %e,
                     "branch switch: a placed file could not be removed");
+                lost.push(shown(&change.rel));
             }
         }
         let mut is_whole = true;
         for (abs, kept) in self.moved.drain(..).rev() {
-            if let Err(e) = fs::rename(&kept, &abs) {
+            let rel = abs.strip_prefix(workdir).unwrap_or(&abs);
+            let returned = if is_safe_to_write(workdir, rel) {
+                fs::rename(&kept, &abs)
+            } else {
+                Err(std::io::Error::other("a folder on its path became a link"))
+            };
+            if let Err(e) = returned {
                 is_whole = false;
                 tracing::error!(target: "signex::library", path = %abs.display(),
                     kept = %kept.display(), error = %e,
                     "branch switch: a working file could not be put back");
+                lost.push(shown(rel));
             }
         }
         if is_whole {
             self.remove_folder();
         }
+        lost
     }
 
     fn remove_folder(&self) {
@@ -234,7 +268,11 @@ fn check_out_plain(
         return Ok(());
     }
     let mut checkout = git2::build::CheckoutBuilder::new();
-    checkout.safe().disable_pathspec_match(true);
+    // An ignored file is local work no commit holds: it surfaces as a conflict.
+    checkout
+        .safe()
+        .overwrite_ignored(false)
+        .disable_pathspec_match(true);
     for rel in plain {
         checkout.path(rel.as_path());
     }
@@ -261,6 +299,10 @@ fn place_lfs_file(
             .content()
             .to_vec(),
     };
+    // Again here: the plain checkout just ran and may have created a link.
+    if !is_safe_to_write(workdir, &change.rel) {
+        return Err(SwitchRefusal::UnsafePath(shown(&change.rel)));
+    }
     let abs = workdir.join(&change.rel);
     if let Some(parent) = abs.parent() {
         fs::create_dir_all(parent).map_err(|e| io_failed("create folder", e))?;
@@ -269,9 +311,61 @@ fn place_lfs_file(
         .map_err(|e| io_failed("write working file", e))
 }
 
+fn index_time(time: SystemTime) -> git2::IndexTime {
+    let since = time.duration_since(UNIX_EPOCH).unwrap_or_default();
+    git2::IndexTime::new(since.as_secs() as i32, since.subsec_nanos())
+}
+
+/// The stat fields only some platforms have: change time, device, inode,
+/// user and group.
+#[cfg(unix)]
+fn platform_stat(meta: &fs::Metadata) -> (git2::IndexTime, u32, u32, u32, u32) {
+    use std::os::unix::fs::MetadataExt;
+    let ctime = git2::IndexTime::new(meta.ctime() as i32, meta.ctime_nsec() as u32);
+    (
+        ctime,
+        meta.dev() as u32,
+        meta.ino() as u32,
+        meta.uid(),
+        meta.gid(),
+    )
+}
+
+#[cfg(not(unix))]
+fn platform_stat(meta: &fs::Metadata) -> (git2::IndexTime, u32, u32, u32, u32) {
+    let created = meta.created().unwrap_or(UNIX_EPOCH);
+    (index_time(created), 0, 0, 0, 0)
+}
+
+/// The index entry of a placed LFS file: the pointer's id with the real
+/// file's stat. Built by hand because `add_path` would store the whole file
+/// as a git blob, which is what LFS exists to avoid.
+fn lfs_index_entry(workdir: &Path, change: &LfsChange) -> std::io::Result<git2::IndexEntry> {
+    let meta = fs::metadata(workdir.join(&change.rel))?;
+    let (ctime, dev, ino, uid, gid) = platform_stat(&meta);
+    Ok(git2::IndexEntry {
+        ctime,
+        mtime: index_time(meta.modified()?),
+        dev,
+        ino,
+        mode: change.mode,
+        uid,
+        gid,
+        file_size: meta.len() as u32,
+        id: change.blob,
+        flags: change.repo_path.len().min(0xFFF) as u16,
+        flags_extended: 0,
+        path: change.repo_path.clone(),
+    })
+}
+
 /// The index records the pointer, with the stat of the real file beside it,
 /// as a commit of an LFS file leaves it.
-fn record_lfs_in_index(repo: &git2::Repository, changes: &[LfsChange]) -> Result<(), git2::Error> {
+fn record_lfs_in_index(
+    repo: &git2::Repository,
+    workdir: &Path,
+    changes: &[LfsChange],
+) -> Result<(), git2::Error> {
     if changes.is_empty() {
         return Ok(());
     }
@@ -281,12 +375,9 @@ fn record_lfs_in_index(repo: &git2::Repository, changes: &[LfsChange]) -> Result
             index.remove_path(&change.rel)?;
             continue;
         }
-        index.add_path(&change.rel)?;
-        if let Some(mut entry) = index.get_path(&change.rel, 0) {
-            entry.id = change.blob;
-            entry.mode = change.mode;
-            index.add(&entry)?;
-        }
+        let entry = lfs_index_entry(workdir, change)
+            .map_err(|e| git2::Error::from_str(&format!("read placed file: {e}")))?;
+        index.add(&entry)?;
     }
     index.write()
 }
@@ -334,7 +425,7 @@ fn apply_switch<'r>(
     for change in &plan.lfs {
         place_lfs_file(repo, workdir, change)?;
     }
-    record_lfs_in_index(repo, &plan.lfs).map_err(|e| failed("git index", e))?;
+    record_lfs_in_index(repo, workdir, &plan.lfs).map_err(|e| failed("git index", e))?;
     let name = local_name(target).to_owned();
     let mut created = create_tracking_branch(repo, target, &name, commit)?;
     if let Err(e) = repo.set_head(&format!("refs/heads/{name}")) {
@@ -346,23 +437,48 @@ fn apply_switch<'r>(
     Ok(name)
 }
 
-/// Put the plain files back. A path the old tree lacks was added by this
-/// switch: the safe checkout refuses one that existed before.
+/// Whether the working file at `rel` holds what `tree` records, or is absent
+/// when the tree has no such path.
+fn matches_tree(
+    repo: &git2::Repository,
+    workdir: &Path,
+    tree: &git2::Tree<'_>,
+    rel: &Path,
+) -> bool {
+    let abs = workdir.join(rel);
+    let Ok(entry) = tree.get_path(rel) else {
+        return fs::symlink_metadata(&abs).is_err();
+    };
+    let Ok(blob) = repo.find_blob(entry.id()) else {
+        return false;
+    };
+    fs::read(&abs).is_ok_and(|bytes| bytes == blob.content())
+}
+
+/// Put the plain files back, trying every one, and return the paths left
+/// wrong. A path the old tree lacks was added by this switch: the safe
+/// checkout refuses one that existed before. One that is not safe to write
+/// was never written, and removing it would reach outside the tree.
 fn restore_plain(
     repo: &git2::Repository,
     workdir: &Path,
     from: &git2::Tree<'_>,
     plain: &[PathBuf],
-) -> Result<(), git2::Error> {
+) -> Vec<String> {
     if plain.is_empty() {
-        return Ok(());
+        return Vec::new();
     }
+    let mut lost = Vec::new();
     for rel in plain {
-        if from.get_path(rel).is_err()
-            && let Err(e) = fs::remove_file(workdir.join(rel))
+        if from.get_path(rel).is_ok() || !is_safe_to_write(workdir, rel) {
+            continue;
+        }
+        if let Err(e) = fs::remove_file(workdir.join(rel))
             && e.kind() != std::io::ErrorKind::NotFound
         {
-            return Err(git2::Error::from_str(&format!("remove added file: {e}")));
+            tracing::error!(target: "signex::library", path = %rel.display(), error = %e,
+                "branch switch: an added file could not be removed");
+            lost.push(shown(rel));
         }
     }
     let mut force = git2::build::CheckoutBuilder::new();
@@ -370,7 +486,20 @@ fn restore_plain(
     for rel in plain {
         force.path(rel.as_path());
     }
-    repo.checkout_tree(from.as_object(), Some(&mut force))
+    if let Err(e) = repo.checkout_tree(from.as_object(), Some(&mut force)) {
+        tracing::error!(target: "signex::library", error = %e,
+            "branch switch: the old files could not be checked out again");
+        for rel in plain {
+            let name = shown(rel);
+            if is_safe_to_write(workdir, rel)
+                && !lost.contains(&name)
+                && !matches_tree(repo, workdir, from, rel)
+            {
+                lost.push(name);
+            }
+        }
+    }
+    lost
 }
 
 fn restore_index(repo: &git2::Repository, saved: Option<&[u8]>) -> Result<(), git2::Error> {
@@ -381,8 +510,8 @@ fn restore_index(repo: &git2::Repository, saved: Option<&[u8]>) -> Result<(), gi
     repo.index()?.read(true)
 }
 
-/// Undo a switch that failed part way. The refusal the user sees stays the
-/// original one; a failure here is logged with the paths involved.
+/// Undo a switch that failed part way. Every step runs whatever the one
+/// before it did. Returns the paths that could not be restored.
 fn roll_back(
     repo: &git2::Repository,
     workdir: &Path,
@@ -391,19 +520,17 @@ fn roll_back(
     stash: &mut Stash,
     saved_index: Option<&[u8]>,
     wrote_plain: bool,
-) {
-    stash.put_back(workdir, &plan.lfs);
-    let restored = restore_index(repo, saved_index).and_then(|()| {
-        if wrote_plain {
-            restore_plain(repo, workdir, from, &plan.plain)
-        } else {
-            Ok(())
-        }
-    });
-    if let Err(e) = restored {
+) -> Vec<String> {
+    let mut lost = stash.put_back(workdir, &plan.lfs);
+    if let Err(e) = restore_index(repo, saved_index) {
         tracing::error!(target: "signex::library", error = %e,
-            "branch switch: the working tree could not be fully restored");
+            "branch switch: the index could not be restored");
+        lost.push(".git/index".to_owned());
     }
+    if wrote_plain {
+        lost.extend(restore_plain(repo, workdir, from, &plan.plain));
+    }
+    lost
 }
 
 /// Switch the working tree and HEAD at `root` to `target`. `held` lists the
@@ -438,7 +565,7 @@ pub(crate) fn switch(
         Err(refusal) => {
             // A conflict is found before the checkout writes anything.
             let wrote_plain = !matches!(refusal, SwitchRefusal::WouldOverwrite);
-            roll_back(
+            let lost = roll_back(
                 &repo,
                 &workdir,
                 &from,
@@ -447,7 +574,11 @@ pub(crate) fn switch(
                 saved_index.as_deref(),
                 wrote_plain,
             );
-            Err(refusal)
+            Err(if lost.is_empty() {
+                refusal
+            } else {
+                SwitchRefusal::NotRestored(lost)
+            })
         }
     }
 }

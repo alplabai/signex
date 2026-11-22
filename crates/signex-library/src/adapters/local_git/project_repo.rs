@@ -43,7 +43,7 @@ pub struct RepoFacts {
 }
 
 /// Why a branch switch did not happen. The project and the working tree are
-/// as they were.
+/// as they were, except after [`SwitchRefusal::NotRestored`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SwitchRefusal {
     /// No branch of that name.
@@ -58,8 +58,15 @@ pub enum SwitchRefusal {
     ProjectFileUnreadable(String),
     /// A Git LFS file's content is not in `.git/lfs/objects`; its path.
     LfsContentMissing(String),
-    /// A file changed since its last commit would be overwritten.
+    /// A Git LFS path on the target branch would write outside the working
+    /// tree, into `.git` or through a link; its path.
+    UnsafePath(String),
+    /// A file changed since its last commit, or an ignored file, would be
+    /// overwritten.
     WouldOverwrite,
+    /// The switch failed and putting the tree back failed too: these paths
+    /// may hold the other branch's content, or are still in the switch folder.
+    NotRestored(Vec<String>),
     /// git failed; the system's reason.
     Failed(String),
 }

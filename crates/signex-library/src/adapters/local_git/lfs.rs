@@ -84,9 +84,10 @@ pub(crate) fn pointer_in_blob(
     }
 }
 
-/// Where the object of `oid` lives.
+/// Where the object of `oid` lives: the common git folder, which every linked
+/// worktree of the repository shares.
 pub(crate) fn object_path(repo: &git2::Repository, oid: &str) -> PathBuf {
-    repo.path()
+    repo.commondir()
         .join("lfs")
         .join("objects")
         .join(&oid[0..2])

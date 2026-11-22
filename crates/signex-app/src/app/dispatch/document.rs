@@ -257,6 +257,7 @@ impl Signex {
             } => {
                 // #478 review — same in-flight guard clear as above.
                 self.document_state.pending_opens.remove_untracked(&path);
+                let reopened_stack = self.ui_state.project_git.take_reopened_stack(&path);
                 if self.is_open_result_superseded(&path, &result) {
                     if result.is_ok() {
                         self.attach_parked_tab_for_superseded_open(&path, title);
@@ -275,6 +276,9 @@ impl Signex {
                         self.open_pcb_tab(path.clone(), title, *board);
                         if let Some(disk) = disk {
                             self.record_disk_read(&path, disk);
+                        }
+                        if let Some(takes_focus) = reopened_stack {
+                            self.restore_layer_stack_tab(path.clone(), takes_focus);
                         }
                     }
                     Err(message) => self.report_open_failure(message),

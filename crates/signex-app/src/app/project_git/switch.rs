@@ -81,12 +81,7 @@ impl Signex {
     /// edits come first: they are what the user can act on.
     pub(crate) fn branch_switch_block(&self, root: &Path) -> Option<SwitchBlock> {
         let d = &self.document_state;
-        let unsaved = d
-            .dirty_document_paths()
-            .into_iter()
-            .filter(|path| path.starts_with(root))
-            .min();
-        if let Some(path) = unsaved {
+        if let Some(path) = self.unsaved_paths_for_switch(root).into_iter().next() {
             let name = path.file_name().map_or_else(
                 || path.display().to_string(),
                 |n| n.to_string_lossy().into_owned(),
@@ -116,6 +111,58 @@ impl Signex {
         busy.then_some(SwitchBlock::WorkRunning)
     }
 
+    /// The unsaved documents a switch of `root` puts at risk, sorted: those in
+    /// the repository, and those a project in it reaches from outside (a
+    /// `../` child sheet), which its reopen would close.
+    fn unsaved_paths_for_switch(&self, root: &Path) -> Vec<PathBuf> {
+        let d = &self.document_state;
+        let (mut paths, outside): (Vec<PathBuf>, Vec<PathBuf>) = d
+            .dirty_document_paths()
+            .into_iter()
+            .partition(|path| path.starts_with(root));
+        if !outside.is_empty() {
+            for (index, project) in d.projects.iter().enumerate() {
+                if !project.dir().starts_with(root) {
+                    continue;
+                }
+                let reach = d.lexical_reach_sets(project.case_fold);
+                let reached = outside.iter().filter(|path| reach.reached_by(index, path));
+                paths.extend(reached.cloned());
+            }
+        }
+        paths.sort();
+        paths.dedup();
+        paths
+    }
+
+    /// A project closed: a waiting switch or Save and switch offer that only
+    /// it could answer goes with it, so its repository is not checked out.
+    pub(crate) fn forget_switch_requests_of(&mut self, closed: ProjectId) {
+        let docs = &self.document_state;
+        let Some(dir) = docs.project_by_id(closed).map(|p| p.dir().to_path_buf()) else {
+            return;
+        };
+        let is_orphaned = |request: &SwitchRequest| match request.surface {
+            SwitchSurface::ProjectTab(id) => id == closed,
+            SwitchSurface::History => {
+                dir.starts_with(&request.root)
+                    && !docs
+                        .projects
+                        .iter()
+                        .any(|p| p.id != closed && p.dir().starts_with(&request.root))
+            }
+        };
+        let git = &self.ui_state.project_git;
+        let drops_parked = git.parked.as_ref().is_some_and(is_orphaned);
+        let drops_offer = git.save_offer.as_ref().is_some_and(is_orphaned);
+        if drops_parked {
+            self.ui_state.project_git.parked = None;
+        }
+        if drops_offer {
+            self.clear_save_offer();
+        }
+    }
+
     /// Keep the History switcher's open notice true as saves start and finish.
     pub(in crate::app) fn sync_switch_block(&mut self) {
         if !self.document_state.history.ui.switcher_open {
@@ -139,14 +186,20 @@ impl Signex {
     /// no check against the disk: the project files, the open libraries and
     /// every open document other than a sheet or board, which the disk poll
     /// watches. A library that is the repository itself gives an empty path,
-    /// which holds every file.
+    /// which holds every file. A Layer Stack tab holds no document: its path
+    /// is its board's.
     pub(crate) fn branch_switch_held_paths(&self, root: &Path) -> Vec<PathBuf> {
         let d = &self.document_state;
         let projects = d.projects.iter().map(|project| project.path.as_path());
         let tabs = d
             .tabs
             .iter()
-            .filter(|tab| !matches!(tab.kind, TabKind::Schematic | TabKind::Pcb))
+            .filter(|tab| {
+                !matches!(
+                    tab.kind,
+                    TabKind::Schematic | TabKind::Pcb | TabKind::LayerStack
+                )
+            })
             .map(|tab| tab.path.as_path());
         let editors = d
             .footprint_editors
@@ -212,13 +265,17 @@ impl Signex {
     /// Drop a Save and switch offer: it names no branch, so it must not
     /// outlive the pick it answers.
     pub(in crate::app) fn clear_save_offer(&mut self) {
-        self.ui_state.project_git.save_offer = None;
+        let git = &mut self.ui_state.project_git;
+        git.save_offer = None;
+        git.pick += 1;
         self.document_state.history.ui.save_offered = false;
     }
 
-    /// A branch was picked on either surface. Pending drafts become edits
-    /// first, so the block below sees them.
+    /// A branch was picked on either surface: it replaces a switch still
+    /// waiting. Pending drafts become edits first, so the block below sees
+    /// them.
     pub(crate) fn request_branch_switch(&mut self, request: SwitchRequest) -> Task<Message> {
+        self.ui_state.project_git.parked = None;
         self.commit_pending_title_block_drafts();
         if !self.settle_board_sketch_of(None) {
             return Task::none();
@@ -245,23 +302,30 @@ impl Signex {
             return Task::none();
         }
         let (root, target) = (request.root.clone(), request.target.clone());
+        let pick = self.ui_state.project_git.pick;
         Task::perform(
             on_blocking_pool(move || Ok(project_file_differs(&root, &target, &files))),
             move |result| {
                 Message::from(ProjectGitMsg::SwitchChecked {
                     request: Box::new(request),
+                    pick,
                     result: result.unwrap_or_else(|why| Err(SwitchRefusal::Failed(why))),
                 })
             },
         )
     }
 
-    /// The read came back. A failed read keeps the plain unsaved-edits notice.
+    /// The read came back. A failed read keeps the plain unsaved-edits notice;
+    /// the read of a pick since replaced or dismissed offers nothing.
     pub(super) fn finish_switch_check(
         &mut self,
         request: SwitchRequest,
+        pick: u64,
         result: Result<bool, SwitchRefusal>,
     ) {
+        if pick != self.ui_state.project_git.pick {
+            return;
+        }
         let is_still_unsaved = matches!(
             self.branch_switch_block(&request.root),
             Some(SwitchBlock::UnsavedEdits(_))
@@ -284,13 +348,7 @@ impl Signex {
         };
         self.clear_save_offer();
         self.commit_pending_title_block_drafts();
-        let mut paths: Vec<PathBuf> = self
-            .document_state
-            .dirty_document_paths()
-            .into_iter()
-            .filter(|path| path.starts_with(&request.root))
-            .collect();
-        paths.sort();
+        let paths = self.unsaved_paths_for_switch(&request.root);
         if paths.is_empty() {
             return self.request_branch_switch(request);
         }
@@ -376,7 +434,8 @@ impl Signex {
         }
     }
 
-    /// Nothing moved: release the guard and say why, where the user asked.
+    /// Release the guard and say why, where the user asked. Nothing moved,
+    /// unless the refusal is `NotRestored`, which names what did.
     fn report_switch_refusal(
         &mut self,
         surface: SwitchSurface,

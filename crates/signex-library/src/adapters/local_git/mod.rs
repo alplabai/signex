@@ -540,6 +540,7 @@ pub use helpers::component_to_library_row;
 #[cfg(test)]
 mod ledger_hygiene_tests;
 pub(crate) mod lfs;
+mod tree_path;
 mod pinned_assets;
 mod primitives;
 mod read_cache;

@@ -295,6 +295,10 @@ project-vcs-switch-reopen-failed = The branch was switched, but { $file } could 
 project-vcs-switch-reopen-held = The branch was switched, but { $file } has edits or work still running, so it stayed open with its old content. Save or discard them, then close the project and open it again.
 project-vcs-switch-overwrite = Files changed since their last commit would be overwritten. Commit them first.
 project-vcs-switch-failed = The branch was not switched: { $why }
+# $file is a path inside the repository.
+project-vcs-switch-unsafe-path = { $file } on that branch would be written outside the project's files, so the branch was not switched.
+# $files is a comma-separated list of paths inside the repository.
+project-vcs-switch-not-restored = The branch was not switched, and these files could not be put back: { $files }. Check them before your next commit.
 project-vcs-last-commit = Last commit
 # $sha is the short commit id, $age how long ago, as the History panel says it.
 project-vcs-last-commit-line = { $sha } · { $subject } · { $age }

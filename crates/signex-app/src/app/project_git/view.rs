@@ -146,7 +146,13 @@ pub(crate) fn refusal_detail(refusal: &SwitchRefusal) -> Translatable {
         SwitchRefusal::LfsContentMissing(file) => {
             Translatable::new(ids::PROJECT_VCS_SWITCH_LFS).arg("file", file.clone())
         }
+        SwitchRefusal::UnsafePath(file) => {
+            Translatable::new(ids::PROJECT_VCS_SWITCH_UNSAFE_PATH).arg("file", file.clone())
+        }
         SwitchRefusal::WouldOverwrite => Translatable::new(ids::PROJECT_VCS_SWITCH_OVERWRITE),
+        SwitchRefusal::NotRestored(files) => {
+            Translatable::new(ids::PROJECT_VCS_SWITCH_NOT_RESTORED).arg("files", files.join(", "))
+        }
         SwitchRefusal::Failed(why) => {
             Translatable::new(ids::PROJECT_VCS_SWITCH_FAILED).arg("why", why.clone())
         }

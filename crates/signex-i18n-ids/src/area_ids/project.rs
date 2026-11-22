@@ -220,6 +220,8 @@ define_ids! {
     PROJECT_VCS_SWITCH_REOPEN_HELD = "project-vcs-switch-reopen-held";
     PROJECT_VCS_SWITCH_OVERWRITE = "project-vcs-switch-overwrite";
     PROJECT_VCS_SWITCH_FAILED = "project-vcs-switch-failed";
+    PROJECT_VCS_SWITCH_UNSAFE_PATH = "project-vcs-switch-unsafe-path";
+    PROJECT_VCS_SWITCH_NOT_RESTORED = "project-vcs-switch-not-restored";
     PROJECT_VCS_LAST_COMMIT = "project-vcs-last-commit";
     PROJECT_VCS_LAST_COMMIT_LINE = "project-vcs-last-commit-line";
     PROJECT_VCS_NO_COMMITS = "project-vcs-no-commits";

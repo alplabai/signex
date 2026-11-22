@@ -184,7 +184,9 @@ fn every_refusal_has_words() {
         SwitchBlock::Refused(SwitchRefusal::HeldFileDiffers("parts.snxlib".into())),
         SwitchBlock::Refused(SwitchRefusal::ProjectFileUnreadable("p.snxprj".into())),
         SwitchBlock::Refused(SwitchRefusal::LfsContentMissing("m.step".into())),
+        SwitchBlock::Refused(SwitchRefusal::UnsafePath("../m.step".into())),
         SwitchBlock::Refused(SwitchRefusal::WouldOverwrite),
+        SwitchBlock::Refused(SwitchRefusal::NotRestored(vec!["a.snxsch".into()])),
         SwitchBlock::Refused(SwitchRefusal::Failed("why".into())),
     ] {
         assert!(!block_words(&block, &i18n).into_string().is_empty());

@@ -1,6 +1,7 @@
 //! After a switch that changed a `.snxprj`: the project closes and opens
-//! again from the new file, with the tabs it had. Documents edited during
-//! the switch keep their tabs and edits.
+//! again from the new file, with the tabs it had. The Close Project scan
+//! decides what is unsaved: a document another project also claims keeps its
+//! tab and edits, and one only this project holds stops the reopen.
 
 use std::path::{Path, PathBuf};
 
@@ -21,7 +22,11 @@ struct ReopenedView {
     documents: Vec<PathBuf>,
     /// The Project tab's section, when that tab was open.
     section: Option<ProjectSection>,
-    /// Documents with edits, whose tabs stay open.
+    /// The Rules tab, when open: whether it was the active tab.
+    rules: Option<bool>,
+    /// Boards with a Layer Stack tab to bring back, and whether it was active.
+    layer_stacks: Vec<(PathBuf, bool)>,
+    /// This project's tabs of kept documents, which stay open.
     kept: Vec<PathBuf>,
 }
 
@@ -60,6 +65,20 @@ impl Signex {
                 return self.refresh_after_switch(&done);
             }
         };
+        let next = done
+            .reopen
+            .last()
+            .and_then(|rel| self.project_id_at(&done.root.join(rel)));
+        if let Some(id) = next
+            && !self.settle_before_reopen(id)
+        {
+            // The project stays open on its old file; the bake's notice shows.
+            let rel = done.reopen.pop().unwrap_or_default();
+            let detail =
+                Translatable::new(ids::PROJECT_VCS_SWITCH_REOPEN_HELD).arg("file", file_name(&rel));
+            crate::diagnostics::log_warning(format!("[git] {}", detail.render_en_us()));
+            return self.continue_reopen(done, Task::none());
+        }
         if !self.document_state.refs_are_current(&refs) {
             return self.reopen_refs_task(done);
         }
@@ -68,18 +87,38 @@ impl Signex {
             return self.refresh_after_switch(&done);
         };
         let path = done.root.join(&rel);
-        let project = self
-            .document_state
+        let project = self.project_id_at(&path);
+        let reopened = project.map_or_else(Task::none, |id| self.reopen_project(id, &refs));
+        self.continue_reopen(done, reopened)
+    }
+
+    fn project_id_at(&self, path: &Path) -> Option<ProjectId> {
+        self.document_state
             .projects
             .iter()
             .find(|project| project.path == path)
-            .map(|project| project.id);
-        let reopened = project.map_or_else(Task::none, |id| self.reopen_project(id, &refs));
+            .map(|project| project.id)
+    }
+
+    /// On to the next project, or finish once none is left.
+    fn continue_reopen(&mut self, done: Box<SwitchDone>, reopened: Task<Message>) -> Task<Message> {
         if done.reopen.is_empty() {
             self.document_state.branch_switch = None;
             return Task::batch([reopened, self.refresh_after_switch(&done)]);
         }
         Task::batch([reopened, self.reopen_refs_task(done)])
+    }
+
+    /// Turn the project's pending drafts and owed board sketch into edits, so
+    /// the scan sees them. `false`: the bake refused and its notice says why.
+    fn settle_before_reopen(&mut self, project_id: ProjectId) -> bool {
+        self.commit_drafts_of_project(project_id);
+        let sketched = self.board_sketch_owed().is_some_and(|board| {
+            self.document_state
+                .document_project(&board)
+                .is_some_and(|project| project.id == project_id)
+        });
+        !sketched || self.settle_board_sketch_of(None)
     }
 
     fn report_reopen_problem(&mut self, detail: Translatable) {
@@ -90,14 +129,21 @@ impl Signex {
         ));
     }
 
-    fn reopened_view(&self, project_id: ProjectId, dir: &Path) -> ReopenedView {
+    /// What to show again. `scan_kept` are the dirty documents the close
+    /// leaves open.
+    fn reopened_view(&self, project_id: ProjectId, scan_kept: &[PathBuf]) -> ReopenedView {
         let d = &self.document_state;
-        let kept: Vec<PathBuf> = d
-            .dirty_document_paths()
-            .into_iter()
-            .filter(|path| path.starts_with(dir))
+        let kept: Vec<PathBuf> = scan_kept
+            .iter()
+            .filter(|path| {
+                d.tabs
+                    .iter()
+                    .any(|tab| tab.path == **path && tab.project_id == Some(project_id))
+            })
+            .cloned()
             .collect();
         let active = d.tabs.get(d.active_tab).map(|tab| tab.path.clone());
+        let (rules, layer_stacks) = self.reopened_pages(project_id, &kept);
         let mut documents: Vec<PathBuf> = d
             .tabs
             .iter()
@@ -122,26 +168,68 @@ impl Signex {
         ReopenedView {
             documents,
             section,
+            rules,
+            layer_stacks,
             kept,
         }
     }
 
-    /// Close the project and open it from the new file. A `.snxprj` edited
-    /// during the switch stays open: closing would drop those edits.
+    /// The project's Rules tab and its boards' Layer Stack tabs, each with
+    /// whether it is the active tab. A kept board keeps its own page tab.
+    fn reopened_pages(
+        &self,
+        project_id: ProjectId,
+        kept: &[PathBuf],
+    ) -> (Option<bool>, Vec<(PathBuf, bool)>) {
+        let d = &self.document_state;
+        let active = d.tabs.get(d.active_tab);
+        let rules = d
+            .tabs
+            .iter()
+            .any(|tab| tab.kind.as_rules() == Some(project_id))
+            .then(|| active.and_then(|tab| tab.kind.as_rules()) == Some(project_id));
+        let layer_stacks = d
+            .tabs
+            .iter()
+            .filter(|tab| {
+                tab.project_id == Some(project_id)
+                    && tab.kind.is_layer_stack()
+                    && !kept.contains(&tab.path)
+            })
+            .map(|tab| {
+                let was_active =
+                    active.is_some_and(|a| a.kind.is_layer_stack() && a.path == tab.path);
+                (tab.path.clone(), was_active)
+            })
+            .collect();
+        (rules, layer_stacks)
+    }
+
+    /// Close the project and open it from the new file. A document only this
+    /// project holds unsaved stops it, as the Close Project prompt would:
+    /// closing without asking would drop those edits.
     fn reopen_project(&mut self, project_id: ProjectId, refs: &SheetRefs) -> Task<Message> {
-        let Some(project) = self.document_state.project_by_id(project_id) else {
+        let d = &self.document_state;
+        let Some(index) = d.projects.iter().position(|p| p.id == project_id) else {
             return Task::none();
         };
-        let (path, dir) = (project.path.clone(), project.dir().to_path_buf());
-        if self.document_state.is_document_dirty(&path) {
+        let path = d.projects[index].path.clone();
+        let scan = self.current_close_scan(index, refs);
+        let held = d
+            .is_document_dirty(&path)
+            .then(|| path.clone())
+            .or_else(|| scan.mine.first().cloned())
+            .or_else(|| scan.mine_rows.first().map(|row| row.library_path.clone()));
+        if let Some(file) = held {
             self.report_reopen_problem(
                 Translatable::new(ids::PROJECT_VCS_SWITCH_REOPEN_HELD)
-                    .arg("file", file_name(&path)),
+                    .arg("file", file_name(&file)),
             );
             return Task::none();
         }
-        let view = self.reopened_view(project_id, &dir);
-        let closed = self.execute_close_project(project_id, refs, &view.kept);
+        let view = self.reopened_view(project_id, &scan.kept);
+        // Every kept path stays out of the close's sweep, a tabless one too.
+        let closed = self.execute_close_project(project_id, refs, &scan.kept);
         if self.document_state.project_by_id(project_id).is_some() {
             let detail = Translatable::new(ids::PROJECT_VCS_SWITCH_REOPEN_HELD)
                 .arg("file", file_name(&path));
@@ -179,6 +267,14 @@ impl Signex {
                 tab.section = section;
             }
         }
+        if view.rules == Some(false) {
+            self.open_rules_tab(new_id);
+        }
+        // A board opens off the update thread: its Layer Stack tab follows.
+        self.ui_state
+            .project_git
+            .reopened_stacks
+            .extend(view.layer_stacks);
         let mut tasks = Vec::new();
         for document in view.documents {
             match self.open_document_path(document) {
@@ -187,6 +283,9 @@ impl Signex {
                     crate::diagnostics::log_error("Reopen after a branch switch", &error);
                 }
             }
+        }
+        if view.rules == Some(true) {
+            self.open_rules_tab(new_id);
         }
         tasks
     }

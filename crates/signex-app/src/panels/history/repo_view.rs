@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use chrono::Utc;
-use iced::widget::{Column, Row, Space, Stack, column, container, mouse_area, opaque, row, svg};
+use iced::widget::{Column, Row, Space, Stack, column, container, opaque, row, svg};
 use iced::{Alignment, Background, Border, Element, Length, Padding, Theme, Widget};
 use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_widgets::branch_switcher::{
@@ -21,6 +21,7 @@ use super::model::{
     HistoryBranchScope, HistoryCommitMsg, HistoryFilterMsg, HistoryPanelMsg, HistoryRepoView,
     HistorySwitcherMsg, RefPromptKind, can_create_branch, document_to_show,
 };
+use crate::panels::click_away::click_away_backdrop;
 use crate::panels::{PanelContext, PanelMsg, form_look, panel_scrollable};
 use crate::styles::tokens::resolve;
 use crate::styles::{file_kind_icon, ti};
@@ -424,8 +425,7 @@ fn with_switcher<'a>(
             on_save_and_switch,
         },
     );
-    let backdrop = mouse_area(Space::new().width(Length::Fill).height(Length::Fill))
-        .on_press(switcher_msg(HistorySwitcherMsg::Dismissed));
+    let backdrop = click_away_backdrop(switcher_msg(HistorySwitcherMsg::Dismissed));
     let anchored = Column::<Element<'a, PanelMsg>>::new()
         .width(Length::Fill)
         .push(Space::new().height(s.em(HEADER_EM)).boxed())
@@ -439,7 +439,7 @@ fn with_switcher<'a>(
         );
     Stack::new()
         .push(body)
-        .push(backdrop.boxed())
+        .push(backdrop)
         .push(anchored.boxed())
         .boxed()
 }
