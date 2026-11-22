@@ -167,14 +167,64 @@ fn refused_text_stays_marked_and_puts_the_old_value_back() {
     let (mut app, path) = app();
     typing(&mut app, "45");
     typing(&mut app, "45x");
-    assert_eq!(width(&app, 0), 20.0, "the document keeps its value");
+    assert_eq!(width(&app, 0), 45.0, "the last good preview while typing");
     assert_eq!(buffered(&app), Some("45x"));
     assert!(F::RectWidth.refuses("45x"));
 
     panel(&mut app, PanelMsg::DrawingFieldLeft(F::RectWidth));
+    assert_eq!(width(&app, 0), 20.0, "a typo never commits the preview");
     assert_eq!(buffered(&app), Some("45x"), "kept to be fixed");
     assert!(!can_undo(&app, &path));
     assert!(!app.document_state.is_document_dirty(&path));
+}
+
+#[test]
+fn fixing_a_typo_goes_on_as_the_same_edit() {
+    let (mut app, path) = app();
+    for text in ["45", "45x", "46"] {
+        typing(&mut app, text);
+    }
+    panel(&mut app, PanelMsg::DrawingFieldLeft(F::RectWidth));
+    assert_eq!(width(&app, 0), 46.0);
+    undo(&mut app);
+    assert_eq!(width(&app, 0), 20.0);
+    assert!(!can_undo(&app, &path));
+}
+
+#[test]
+fn esc_on_a_typo_restores_the_value_from_before_the_edit() {
+    let (mut app, path) = app();
+    typing(&mut app, "45");
+    typing(&mut app, "45x");
+    esc(&mut app);
+    assert_eq!(width(&app, 0), 20.0);
+    assert_eq!(buffered(&app), None);
+    assert!(!can_undo(&app, &path));
+}
+
+#[test]
+fn undo_on_a_typo_only_takes_back_the_preview() {
+    let (mut app, path) = app();
+    typing(&mut app, "30");
+    panel(&mut app, PanelMsg::DrawingFieldLeft(F::RectWidth));
+    typing(&mut app, "45");
+    typing(&mut app, "45x");
+    undo(&mut app);
+    assert_eq!(width(&app, 0), 30.0, "the earlier edit stays");
+    assert!(can_undo(&app, &path));
+}
+
+#[test]
+fn switching_the_selection_on_a_typo_does_not_commit_the_preview() {
+    let (mut app, path) = app();
+    typing(&mut app, "45");
+    typing(&mut app, "45x");
+    let other = app.document_state.engines[&path].document().drawings[1].uuid();
+    select(&mut app, other);
+    panel(&mut app, PanelMsg::CancelWireColorPicker);
+    assert_eq!(width(&app, 0), 20.0);
+    assert!(!can_undo(&app, &path));
+    assert_eq!(buffered(&app), None, "no text follows to the other shape");
 }
 
 #[test]

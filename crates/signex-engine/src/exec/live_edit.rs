@@ -70,6 +70,18 @@ impl Engine {
         self.bump_revision();
         Some(live.patch)
     }
+
+    /// [`Engine::serialize_with_extents`] of the sheet without an open
+    /// preview, for a recovery copy taken while a value is being typed.
+    pub fn serialize_committed_with_extents(
+        &self,
+        measure: impl FnMut(&signex_types::schematic::TextProbe<'_>) -> Option<f64>,
+    ) -> Result<String, EngineError> {
+        let committed = self.live_edit.as_ref().map(|live| &live.before);
+        let mut sheet = committed.unwrap_or(&self.document).clone();
+        sheet.text_extents = sheet.text_extents.refreshed(&sheet, measure);
+        Self::encode(sheet)
+    }
 }
 
 #[cfg(test)]
@@ -190,6 +202,21 @@ mod tests {
         assert!(engine.is_at_save_point());
         engine.undo().unwrap();
         assert!(!engine.is_at_save_point());
+    }
+
+    /// A recovery copy taken mid-typing holds the sheet without the preview.
+    #[test]
+    fn the_committed_serialization_leaves_out_an_open_preview() {
+        let (mut engine, id) = engine();
+        let before = engine.serialize_with_extents(|_| None).unwrap();
+        engine.preview_drawing(rect(id, 30.0)).unwrap();
+        assert_ne!(engine.serialize_with_extents(|_| None).unwrap(), before);
+        assert_eq!(
+            engine.serialize_committed_with_extents(|_| None).unwrap(),
+            before
+        );
+        assert_eq!(right(&engine), 30.0, "the typing is undisturbed");
+        assert!(engine.live_edit_drawing().is_some());
     }
 
     #[test]

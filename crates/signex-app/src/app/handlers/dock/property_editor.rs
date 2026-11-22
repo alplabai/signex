@@ -292,9 +292,10 @@ impl Signex {
                     true,
                 );
             }
-            crate::panels::PanelMsg::ChildSheetStrokeWidthTyping(uuid, value) => {
+            crate::panels::PanelMsg::ChildSheetStrokeWidthTyping(_uuid, value) => {
                 self.document_state.panel_ctx.child_sheet_stroke_width_buf = Some(value.clone());
-                self.document_state.line_width_draft_owner = Some(*uuid);
+                self.document_state.line_width_draft_selection =
+                    self.document_state.panel_ctx.selected_uuid;
             }
             crate::panels::PanelMsg::CommitChildSheetStrokeWidth(uuid) => {
                 // Refused text stays in the box to be fixed (#2767).
@@ -355,14 +356,14 @@ impl Signex {
         true
     }
 
-    /// Refused Line Width text belongs to its sheet symbol: a panel showing
-    /// another selection drops it. Run after every message.
+    /// Refused Line Width text belongs to the selection it was typed under:
+    /// a panel whose selection changed drops it. Run after every message.
     pub(crate) fn drop_line_width_text_of_another_symbol(&mut self) {
         let docs = &mut self.document_state;
-        let owner = docs.line_width_draft_owner;
+        let typed_under = docs.line_width_draft_selection;
         let panels = std::iter::once(&mut docs.panel_ctx).chain(docs.window_panel_ctx.values_mut());
         for ctx in panels {
-            if ctx.child_sheet_stroke_width_buf.is_some() && ctx.selected_uuid != owner {
+            if ctx.child_sheet_stroke_width_buf.is_some() && ctx.selected_uuid != typed_under {
                 ctx.child_sheet_stroke_width_buf = None;
             }
         }

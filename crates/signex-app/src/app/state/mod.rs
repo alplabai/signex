@@ -568,8 +568,8 @@ pub struct DocumentState {
     pub drafts: crate::panels::PanelDrafts,
     /// The drawing field being typed, if any (#2768).
     pub(crate) live_drawing_edit: Option<LiveDrawingEdit>,
-    /// The sheet symbol the Line Width box's typed text belongs to (#2767).
-    pub(crate) line_width_draft_owner: Option<uuid::Uuid>,
+    /// The selection the Line Width box's text was typed under (#2767).
+    pub(crate) line_width_draft_selection: Option<uuid::Uuid>,
     pub panel_ctx: crate::panels::PanelContext,
     /// The panel context of each undocked document window, so its dock
     /// panels show and edit that window's sheet (#1966).

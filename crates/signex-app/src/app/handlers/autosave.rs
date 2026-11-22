@@ -295,6 +295,18 @@ impl Signex {
 
     fn autosave_snapshot_task(&mut self, dir: &Path, path: &Path) -> Option<Task<Message>> {
         let engine = self.document_state.engines.get(path)?;
+        // A value still being typed is not an edit yet: the copy holds the
+        // sheet without it, stamped by content because the revision moves
+        // with each keystroke and does not move again on the commit (#2768).
+        if engine.live_edit_drawing().is_some() {
+            let bytes = engine
+                .serialize_committed_with_extents(
+                    crate::schematic_runtime::text_width::live_extent_measure(),
+                )
+                .map(String::into_bytes)
+                .map_err(|error| error.to_string());
+            return self.autosave_bytes_task(dir, path, bytes);
+        }
         let stamp = DocStamp {
             revision: engine.revision(),
         };
