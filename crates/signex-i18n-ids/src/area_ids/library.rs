@@ -138,6 +138,7 @@ define_ids! {
     LIBRARY_EDIT_ROW_ADD_SLOT_UNIT = "library-edit-row-add-slot-unit";
     LIBRARY_EDIT_ROW_SLOT_PROBLEM = "library-edit-row-slot-problem";
     LIBRARY_EDIT_ROW_UNIT_KEPT = "library-edit-row-unit-kept";
+    LIBRARY_EDIT_ROW_PREFIX = "library-edit-row-prefix";
     // Unit menu captions (mockup row 139)
     LIBRARY_UNIT_NAME_NONE = "library-unit-name-none";
     LIBRARY_UNIT_NAME_OHM = "library-unit-name-ohm";
