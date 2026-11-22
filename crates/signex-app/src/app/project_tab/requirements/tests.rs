@@ -392,6 +392,35 @@ fn finding(rule: &str) -> Finding {
     }
 }
 
+/// The section list's failed badge counts the last finished run only.
+#[test]
+fn the_failed_count_reads_the_last_finished_run() {
+    use super::{RequirementsRun, RequirementsTabState};
+    let entries: Vec<RequirementEntry> = [
+        json!({"id": "a", "kind": "erc_clean"}),
+        json!({"id": "b", "kind": "erc_clean"}),
+    ]
+    .into_iter()
+    .map(RequirementEntry::read)
+    .collect();
+    let with_run = |report| RequirementsTabState {
+        last_run: Some(Arc::new(RequirementsRun {
+            report,
+            finished_at: chrono::Utc::now(),
+        })),
+        ..RequirementsTabState::default()
+    };
+    assert_eq!(super::failed_count(&entries, None), 0);
+    assert_eq!(
+        super::failed_count(&entries, Some(&RequirementsTabState::default())),
+        0
+    );
+    let failed = with_run(Ok(report(&["req::a"], &["req::b"])));
+    assert_eq!(super::failed_count(&entries, Some(&failed)), 1);
+    let unfinished = with_run(Err("no run".to_string()));
+    assert_eq!(super::failed_count(&entries, Some(&unfinished)), 0);
+}
+
 fn report(failed: &[&str], passed: &[&str]) -> CheckReport {
     let findings = failed.iter().map(|rule| finding(rule)).collect();
     let mut report = CheckReport::new("requirements", findings, Vec::new(), Vec::new(), Vec::new());

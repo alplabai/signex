@@ -203,6 +203,9 @@ impl Signex {
             ProjectTabMsg::RenameRequested { project_id } => {
                 self.open_project_rename_from_tab(project_id);
             }
+            ProjectTabMsg::ExploreRequested { project_id } => {
+                self.explore_project_folder(project_id);
+            }
             // Routed by `dispatch_project_tab_message`, which returns their task.
             ProjectTabMsg::SetupEdited { .. }
             | ProjectTabMsg::Requirements { .. }
