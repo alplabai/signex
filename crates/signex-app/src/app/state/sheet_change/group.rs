@@ -306,12 +306,5 @@ fn skipped_notices(recorded: &UndoGroupSheets, undo: bool, sheets: &GroupSheets)
             recorded.holds(),
         )));
     }
-    if undo && !recorded.disk_only.is_empty() {
-        notices.push(warning_notice(format!(
-            "{title} undone on open sheets; not open, so still {} on disk: {}",
-            recorded.participle(),
-            file_names(&recorded.disk_only),
-        )));
-    }
     notices
 }

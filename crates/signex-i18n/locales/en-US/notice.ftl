@@ -213,9 +213,6 @@ notice-recent-gone = { $path } no longer exists. It has been removed from File >
 
 # $reason is why, in English.
 notice-run-refused = { $label } was not run: { $reason }
-# $count is a whole number; $sheets lists the files. The English keeps
-# "sheet(s)" for every count.
-notice-run-write-failed = { $label } could not write { $count } unopened sheet(s) and left them as they were on disk: { $sheets }. The open sheets were still renumbered, so run it again once the cause is fixed.
 # $sheets lists the sheets and why each is skipped.
 notice-run-would-skip = { $label } was not run: it would skip { $sheets }, and renumbering around a sheet can repeat its designators. Nothing was changed; try again once the sheet is free.
 # $summary lists the skipped sheets.

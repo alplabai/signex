@@ -349,6 +349,17 @@ impl Engine {
         Ok(patch_pair)
     }
 
+    /// [`Self::discard_undo_group_top`] for a run that stamped no group: the
+    /// caller knows the top entry is the one it just recorded. `None` when
+    /// there was nothing to undo.
+    pub fn discard_undo_top(&mut self) -> Result<Option<PatchPair>, EngineError> {
+        let patch_pair = self.undo()?;
+        if patch_pair.is_some() {
+            self.history.discard_top();
+        }
+        Ok(patch_pair)
+    }
+
     pub fn redo(&mut self) -> Result<Option<PatchPair>, EngineError> {
         self.field_edit_run = None;
         // As in `undo`: nothing to move, no revision.

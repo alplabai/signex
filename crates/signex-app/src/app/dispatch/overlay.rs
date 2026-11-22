@@ -595,22 +595,10 @@ impl Signex {
                 self.sync_diagnostics_panel_ctx();
                 task
             }
-            // The preview reloads when the run ends: only then has the disk
-            // (the unopened sheets it rewrote) and memory settled.
+            // The preview reloads when the run ends.
             AnnotateMsg::Run(mode) => self.handle_annotate(mode),
             AnnotateMsg::PassSheetsRead { generation, result } => {
                 let task = self.handle_annotate_sheets_read(generation, &result);
-                self.sync_diagnostics_panel_ctx();
-                task
-            }
-            AnnotateMsg::PassSheetsWritten {
-                generation,
-                result,
-                // Held to the end of this arm, after the copy removals the
-                // handler registered; dropping it releases quit.
-                hold: _hold,
-            } => {
-                let task = self.handle_annotate_sheets_written(generation, &result);
                 self.sync_diagnostics_panel_ctx();
                 task
             }

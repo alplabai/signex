@@ -18,9 +18,7 @@
 //! one is named in a Messages panel warning, in both directions:
 //! - open, but its history no longer holds the run (reopened, or trimmed past
 //!   the history cap);
-//! - closed since the run, so no engine holds its history;
-//! - rewritten on disk by the run with no engine (undo only; it was never
-//!   reverted, so a redo owes it nothing).
+//! - closed since the run, so no engine holds its history.
 
 use super::*;
 
@@ -29,16 +27,14 @@ use super::*;
 pub struct UndoGroupSheets {
     /// Sheets whose open engine recorded the group's entry.
     pub live: Vec<std::path::PathBuf>,
-    /// Sheets rewritten on disk with no engine, so with no history to undo.
-    pub disk_only: Vec<std::path::PathBuf>,
     /// Sheets the last undo of the group actually reverted. A redo requires
     /// exactly these, so a sheet the undo skipped (reopened, history trimmed)
     /// cannot block it, while one edited after the undo still does.
     pub undone: Vec<std::path::PathBuf>,
     /// What the group is, named in its undo and redo messages.
     pub kind: UndoGroupKind,
-    /// Sheets the run loaded into tabless parked engines (re-prefix of a
-    /// sheet that was not open). Back at their loaded state after an undo,
+    /// Sheets the run loaded into tabless parked engines (re-prefix or reset
+    /// of a sheet that was not open). Back at their loaded state after an undo,
     /// they are clean, not unsaved.
     pub parked: Vec<std::path::PathBuf>,
     /// Parked sheets an undo took back to disk state and dropped. Their
@@ -193,7 +189,7 @@ impl crate::app::state::DocumentState {
         group: signex_engine::UndoGroupId,
         sheets: UndoGroupSheets,
     ) {
-        if sheets.live.is_empty() && sheets.disk_only.is_empty() {
+        if sheets.live.is_empty() {
             self.undo_groups.remove(&group);
         } else {
             self.undo_groups.insert(group, sheets);
