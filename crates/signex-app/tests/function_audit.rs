@@ -27,3 +27,14 @@ mod g7a;
 mod g7b;
 #[path = "function_audit/g10.rs"]
 mod g10;
+
+#[path = "function_audit/b_board.rs"]
+mod b_board;
+#[path = "function_audit/b_chrome.rs"]
+mod b_chrome;
+#[path = "function_audit/b_library.rs"]
+mod b_library;
+#[path = "function_audit/b_project.rs"]
+mod b_project;
+#[path = "function_audit/b_sketch.rs"]
+mod b_sketch;
