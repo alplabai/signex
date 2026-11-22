@@ -104,9 +104,12 @@ message. The chrome catalog draws a sample of it.
   the project, shared, global) and the mount state read from the app as a
   pill (mounted, mounted read-only with a lock, missing at the last probe,
   not mounted); a missing library shows a warning glyph before its name.
-  Move up / Move down are icon buttons on row hover, as in Sheets. Adding,
-  removing and renaming stay in the project tree; a line under the table
-  says where.
+  Move up / Move down are icon buttons on row hover, as in Sheets, and a
+  grip in front of each row (Sheets too) drags it: a drop is one undo step,
+  Esc cancels. A missing library offers Locate…, the Library Missing
+  dialog's repoint: the picked file mounts, the project's entry follows and
+  the project is left unsaved. Adding, removing and renaming stay in the
+  project tree; a line under the table says where.
 - **ERC and annotation** — two cards. The ERC rules card names where the
   rules come from in a header pill (User Default for this machine's
   Preferences, Stored in project, or Newer version for an unreadable set
@@ -119,13 +122,22 @@ message. The chrome catalog draws a sample of it.
   project (`annotation.annotate_undo`) or following Preferences.
 - **Version control** — the Repository card shows the last probe of the
   project folder as a pill (Present, None, Checking…). With a repository it
-  gives the status and "Open History panel"; without one, Enable Version
-  Control… (the project tree's dialog) is the primary button. Below it,
+  gives the status, the Branch button with the branch switcher it shares
+  with the History panel (`app/project_git`), the last commit and "Open
+  History panel"; without one, Enable Version Control… (the project tree's
+  dialog) is the primary button. A switch is refused, naming why, while a
+  document of the project has unsaved edits or a save or commit runs, when
+  it would overwrite a file changed since its last commit, and when the
+  branches differ in the `.snxprj` or in a Git LFS file (the open project
+  and the LFS content cannot follow a checkout yet). Open documents that
+  changed raise the File Changed on Disk card, which offers Reload. Below it,
   "Commit every save" (`enable_git`) is a switch with its help under the
   label: turning it on needs a repository, turning it off keeps the
   repository, and a note says so when it cannot be turned on. "Commits in
-  progress" shows only while commits run. The branch, the last commit, the
-  commit author and remotes are not shown yet. The Enable Version Control
+  progress" shows only while commits run. **Author** shows the identity git
+  resolves; Enter writes `Name <email>` to the repository's own git config,
+  and an empty field removes it there so the user-level identity applies. It
+  is never stored in the project file. Remotes are not shown yet. The Enable Version Control
   dialog's own "Commit every save" switch (on by default) decides whether a
   successful Enable turns `enable_git` on, as the same General step.
 - **Schematic defaults** (#2026, mockup row 36) — two cards side by

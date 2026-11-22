@@ -3,7 +3,8 @@
 //! Version Control… (the project tree's dialog: `git init`, the first
 //! commit), and the "Commit every save" switch, which is the `.snxprj`
 //! `enable_git` flag and a General step. Turning it off keeps the repository.
-//! The look (mockup row 35) is in `view`.
+//! The look (mockup row 35) is in `view`; the branch, last commit and author
+//! it shows are the `project_git` slice's, which the History panel shares.
 
 mod view;
 
@@ -16,7 +17,7 @@ use crate::app::Signex;
 use crate::app::state::project_fs::git_marker;
 use crate::app::state::{LoadedProject, ProjectId};
 
-pub(super) use view::view;
+pub(super) use view::{GitView, view};
 
 /// Whether the project folder holds a Git repository, as last probed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

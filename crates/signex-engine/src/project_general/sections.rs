@@ -18,6 +18,12 @@ pub enum ProjectSectionCommand {
         filename: String,
         step: ListMove,
     },
+    /// Drop a sheet at page index `to` (mockup row 31): one step, however
+    /// far it moved.
+    PlaceSheet {
+        filename: String,
+        to: usize,
+    },
     /// Add a variant after the others (#1690).
     AddVariant {
         name: String,
@@ -37,6 +43,11 @@ pub enum ProjectSectionCommand {
     MoveLibrary {
         path: PathBuf,
         step: ListMove,
+    },
+    /// Drop a library at list index `to` (mockup row 33).
+    PlaceLibrary {
+        path: PathBuf,
+        to: usize,
     },
     /// The project's annotate undo choice; `None` follows Preferences
     /// (#1692). Clearing it over an unreadable section changes nothing.
@@ -67,12 +78,18 @@ impl ProjectSectionCommand {
             Self::MoveSheet { filename, step } => {
                 data.move_sheet(filename, *step);
             }
+            Self::PlaceSheet { filename, to } => {
+                data.place_sheet(filename, *to);
+            }
             Self::AddVariant { name } => data.add_variant(name)?,
             Self::RenameVariant { from, to } => data.rename_variant(from, to)?,
             Self::RemoveVariant { name } => data.remove_variant(name)?,
             Self::SetActiveVariant { name } => data.set_active_variant(name.as_deref())?,
             Self::MoveLibrary { path, step } => {
                 data.move_library(path, *step);
+            }
+            Self::PlaceLibrary { path, to } => {
+                data.place_library(path, *to);
             }
             Self::SetAnnotateUndo { choice } => {
                 if !(choice.is_none() && data.has_unreadable_annotation()) {

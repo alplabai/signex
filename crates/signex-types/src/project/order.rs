@@ -55,6 +55,18 @@ fn step_item<T>(items: &mut [T], index: usize, step: ListMove) -> bool {
     }
 }
 
+/// Move the item at `from` so it ends at index `to` (past the end: last);
+/// `false` when it is already there.
+fn place_item<T>(items: &mut Vec<T>, from: usize, to: usize) -> bool {
+    let to = to.min(items.len().saturating_sub(1));
+    if from == to || from >= items.len() {
+        return false;
+    }
+    let item = items.remove(from);
+    items.insert(to, item);
+    true
+}
+
 /// Put the items `order` names in that order, in the places those items hold
 /// now; an item it does not name keeps its place. Each name takes at most
 /// one item. So a sheet renamed or added since keeps its page.
@@ -98,6 +110,15 @@ impl ProjectData {
             .is_some_and(|index| step_item(&mut self.sheets, index, step))
     }
 
+    /// Drop the sheet `filename` at page index `to`, as a row drag does.
+    /// `false` when there is no such sheet or it is already there.
+    pub fn place_sheet(&mut self, filename: &str, to: usize) -> bool {
+        self.sheets
+            .iter()
+            .position(|s| s.filename == filename)
+            .is_some_and(|from| place_item(&mut self.sheets, from, to))
+    }
+
     /// Put the sheets back in `order` (see the module docs).
     pub fn restore_sheet_order(&mut self, order: &[String]) {
         let order: Vec<&str> = order.iter().map(String::as_str).collect();
@@ -115,6 +136,15 @@ impl ProjectData {
             .iter()
             .position(|l| l.path == path)
             .is_some_and(|index| step_item(&mut self.libraries, index, step))
+    }
+
+    /// Drop the library stored at `path` at list index `to`, as a row drag
+    /// does. `false` when there is no such library or it is already there.
+    pub fn place_library(&mut self, path: &Path, to: usize) -> bool {
+        self.libraries
+            .iter()
+            .position(|l| l.path == path)
+            .is_some_and(|from| place_item(&mut self.libraries, from, to))
     }
 
     /// Put the libraries back in `order` (see the module docs).
@@ -206,6 +236,28 @@ mod tests {
         assert!(!data.move_library(Path::new("x.snxlib"), ListMove::Down));
         data.restore_library_order(&before);
         assert_eq!(data.library_order(), before);
+    }
+
+    #[test]
+    fn a_dropped_row_lands_at_the_index_it_was_dropped_on() {
+        let mut data = project(&["a", "b", "c", "d"], &["x", "y"]);
+        assert!(data.place_sheet("a.snxsch", 2));
+        assert_eq!(
+            names(&data),
+            ["b.snxsch", "c.snxsch", "a.snxsch", "d.snxsch"]
+        );
+        assert!(data.place_sheet("d.snxsch", 0));
+        assert_eq!(
+            names(&data),
+            ["d.snxsch", "b.snxsch", "c.snxsch", "a.snxsch"]
+        );
+        assert!(!data.place_sheet("d.snxsch", 0), "already there");
+        assert!(!data.place_sheet("gone.snxsch", 1));
+        assert!(data.place_library(Path::new("x.snxlib"), 9), "past the end");
+        assert_eq!(
+            data.library_order(),
+            [PathBuf::from("y.snxlib"), PathBuf::from("x.snxlib")]
+        );
     }
 
     #[test]

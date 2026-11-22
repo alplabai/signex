@@ -342,6 +342,25 @@ pub(crate) fn pcb_rule_fields<'a>(
     col.boxed()
 }
 
+/// The copper layer stepper and the board thickness field, for the larger
+/// board rules view (mockup row 21).
+pub(super) fn board_size_fields<'a>(
+    state: &NewProjectState,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, NewProjectMsg> {
+    column![
+        labelled_row(
+            field_caption(PcbField::CopperLayers, i18n),
+            stepper(state, tokens),
+            tokens,
+        ),
+        rule_row(state, PcbField::Thickness, i18n, tokens),
+    ]
+    .spacing(SP.m)
+    .boxed()
+}
+
 /// One dropdown entry: the value and the words shown for it.
 #[derive(Clone, Debug, PartialEq)]
 struct Opt<T> {

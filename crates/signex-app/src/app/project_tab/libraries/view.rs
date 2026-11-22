@@ -2,7 +2,7 @@
 //! their location, kind and state pill, the move buttons on row hover, and
 //! the line that says where libraries are added and removed.
 
-use iced::widget::row;
+use iced::widget::{Space, row};
 use iced::{Alignment, Element, Length, Widget as _};
 use signex_i18n::{I18n, UserText, ids, t};
 use signex_types::project::ListMove;
@@ -11,7 +11,8 @@ use signex_widgets::text;
 
 use super::super::ProjectTabMsg;
 use super::super::general::tab_message;
-use super::super::look::{Glyph, ICON, glyph, info_line, mono_font, pill};
+use super::super::look::{ButtonKind, Glyph, ICON, glyph, info_line, mono_font, pill, text_button};
+use super::super::row_drag::{RowDrag, RowKey, grip_column, grip_of};
 use super::super::table::{SP, TS, TableRow, grid_table, icon_move_buttons, section, word_cell};
 use super::{LibraryMount, LibraryRow, kind_words, path_tail};
 use crate::app::Message;
@@ -30,6 +31,7 @@ pub(super) const LOCATION_CHARS: usize = 48;
 pub(in crate::app::project_tab) fn view<'a>(
     project_id: ProjectId,
     rows: &[LibraryRow],
+    drag: Option<&RowDrag>,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
@@ -37,7 +39,7 @@ pub(in crate::app::project_tab) fn view<'a>(
         vec![where_line(ids::PROJECT_LIBRARIES_EMPTY, i18n, tokens)]
     } else {
         vec![
-            library_table(project_id, rows, i18n, tokens),
+            library_table(project_id, rows, drag, i18n, tokens),
             where_line(ids::PROJECT_LIBRARIES_WHERE, i18n, tokens),
         ]
     };
@@ -62,10 +64,12 @@ fn where_line<'a>(
 fn library_table<'a>(
     project_id: ProjectId,
     rows: &[LibraryRow],
+    drag: Option<&RowDrag>,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let columns = [
+        grip_column(),
         (
             Some(ids::PROJECT_LIBRARIES_COL_NAME),
             Length::FillPortion(2),
@@ -85,6 +89,7 @@ fn library_table<'a>(
         .enumerate()
         .map(|(index, library)| {
             let path = library.stored.clone();
+            let key = RowKey::Library(path.clone());
             let moved = move |step: ListMove| {
                 tab_message(ProjectTabMsg::LibraryMoved {
                     project_id,
@@ -94,13 +99,15 @@ fn library_table<'a>(
             };
             TableRow {
                 cells: vec![
+                    Space::new().boxed(),
                     name_cell(library, tokens),
                     location_cell(library, tokens),
                     word_cell(t!(i18n, kind_words(library.kind)), tokens),
-                    state_pill(library.mount, i18n, tokens),
+                    state_cell(project_id, library, i18n, tokens),
                 ],
                 actions: Some(icon_move_buttons(index, rows.len(), moved, i18n, tokens)),
                 is_error: false,
+                grip: Some(grip_of(project_id, key, index, drag)),
             }
         })
         .collect();
@@ -142,6 +149,33 @@ fn location_cell<'a>(library: &LibraryRow, tokens: &ThemeTokens) -> Element<'a, 
         .color(ti(tokens.text_secondary))
         .wrapping(iced::widget::text::Wrapping::None)
         .ellipsis(iced::widget::text::Ellipsis::Start)
+        .boxed()
+}
+
+/// The State cell: the pill, and Locate… on a Missing row (mockup row 33).
+fn state_cell<'a>(
+    project_id: ProjectId,
+    library: &LibraryRow,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let state = state_pill(library.mount, i18n, tokens);
+    if library.mount != LibraryMount::Missing {
+        return state;
+    }
+    let locate = text_button(
+        None,
+        t!(i18n, ids::PROJECT_LIBRARIES_LOCATE),
+        Some(tab_message(ProjectTabMsg::LibraryLocateRequested {
+            project_id,
+            missing: library.resolved.clone(),
+        })),
+        ButtonKind::Ghost,
+        tokens,
+    );
+    row![state, locate]
+        .spacing(SP.xs)
+        .align_y(Alignment::Center)
         .boxed()
 }
 

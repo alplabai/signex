@@ -202,6 +202,8 @@ project-libraries-state-mounted = Mounted
 project-libraries-state-read-only = Mounted, read-only
 project-libraries-state-missing = Missing
 project-libraries-state-not-mounted = Not mounted
+# Button on a Missing library row: pick the file where it moved to.
+project-libraries-locate = Locate…
 project-libraries-empty = This project mounts no libraries. Right-click the project in the project tree, then Add New to Project ▸ Component Library.
 
 # ERC and annotation section (#1692).
@@ -262,6 +264,39 @@ project-vcs-state-absent = None
 project-vcs-state-checking = Checking…
 project-vcs-status = Status
 project-vcs-open-history = Open History panel
+
+# Branch, last commit and author (mockup rows 35 and 39).
+project-vcs-branch = Branch
+project-vcs-branch-count = { $count ->
+    [one] 1 local branch
+   *[other] { $count } local branches
+}
+project-vcs-branch-detached = Detached HEAD
+project-vcs-branch-current = current
+project-vcs-branch-ahead = { $count } ahead
+project-vcs-branch-behind = { $count } behind
+project-vcs-branch-ahead-behind = { $ahead } ahead · { $behind } behind
+project-vcs-switcher-heading = Local branches
+# Messages panel, after a branch switch.
+project-vcs-switched = Switched to branch { $branch }. Open documents that changed offer Reload.
+project-vcs-switch-unsaved = { $file } has unsaved edits. Save or discard them before switching; Signex never saves for you.
+project-vcs-switch-busy = A save or commit is still running. Try again when it finishes.
+project-vcs-switch-unknown = That branch no longer exists.
+project-vcs-switch-no-commits = The repository has no commit yet, so there is nothing to switch from.
+project-vcs-switch-project-file = This branch has a different project file. Close the project and switch in your Git tool, then open it again.
+project-vcs-switch-lfs = { $file } is stored with Git LFS and differs on this branch. Switch in your Git tool, which restores its content.
+project-vcs-switch-overwrite = Files changed since their last commit would be overwritten. Commit them first.
+project-vcs-switch-failed = The branch was not switched: { $why }
+project-vcs-last-commit = Last commit
+# $sha is the short commit id, $age how long ago, as the History panel says it.
+project-vcs-last-commit-line = { $sha } · { $subject } · { $age }
+project-vcs-no-commits = No commits yet
+project-vcs-read-failed = The repository could not be read: { $why }
+project-vcs-author = Author
+project-vcs-author-help = Commits are written as this person. Enter saves it to this repository's git config; left empty, your own git identity applies.
+project-vcs-author-placeholder = Name <email>
+project-vcs-author-invalid = Write the author as Name <email>.
+project-vcs-author-failed = The author was not saved: { $why }
 
 # Schematic defaults (mockup row 36).
 project-defaults-help = Unset widths and sizes on every sheet of this project follow these. Leave a field empty for the built-in value.

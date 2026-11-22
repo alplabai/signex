@@ -102,6 +102,19 @@ impl LibraryState {
         }
     }
 
+    /// `path` was repointed elsewhere: its queued dialog goes, and an open
+    /// one closes (the next queued one opens).
+    pub fn forget_missing_library(&mut self, path: &Path) {
+        self.missing.waiting.retain(|(waiting, _)| waiting != path);
+        let is_open = matches!(
+            &self.recovery,
+            Some(RecoveryDialog::LibraryMissing { path: open }) if open == path
+        );
+        if is_open {
+            self.finish_recovery();
+        }
+    }
+
     /// A project closed: its queued dialogs and the open one pass to
     /// `next_owner`, another open project that still lists the library,
     /// and are dropped when there is none.

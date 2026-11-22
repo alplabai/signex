@@ -123,6 +123,22 @@ dialog-new-project-preview-sheet = { $paper } sheet
 
 dialog-new-project-preview-note = New schematics and PCBs in this project start from these settings. Edit them any time in Project Options.
 
+# The board rules drawing (mockup rows 21 and 22).
+dialog-new-project-preview-rules = BOARD RULES
+dialog-new-project-preview-rules-hint = click a value to edit
+# Under the drawing; both values such as 0.15.
+dialog-new-project-preview-rules-line = { $clearance } mm clearance · { $track } mm tracks
+dialog-new-project-preview-sheet-heading = SHEET
+dialog-new-project-preview-expand = Larger view
+dialog-new-project-preview-close = Close
+# On the drawing while the drill is not smaller than the via.
+dialog-new-project-preview-drill-error = drill ≥ via size
+# Captions of the values on the drawing. Engineering shorthand.
+dialog-new-project-rule-cap-width = w
+dialog-new-project-rule-cap-clearance = clr
+dialog-new-project-rule-cap-drill = drill
+dialog-new-project-rule-cap-via = ⌀
+
 dialog-new-project-stack-silk-top = Top Silkscreen
 
 dialog-new-project-stack-mask-top = Top Solder

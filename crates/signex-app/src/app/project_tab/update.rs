@@ -31,6 +31,15 @@ impl Signex {
             ProjectTabMsg::PreviewActed { project_id, msg } => {
                 return self.act_on_project_preview(project_id, msg);
             }
+            ProjectTabMsg::LibraryLocateRequested {
+                project_id,
+                missing,
+            } => return self.pick_located_library(project_id, missing),
+            ProjectTabMsg::LibraryLocatePicked {
+                project_id,
+                missing,
+                picked,
+            } => return self.finish_library_locate(project_id, &missing, picked),
             _ => {}
         }
         // Showing the Variants section reads its parts; a variant edit that
@@ -45,7 +54,18 @@ impl Signex {
             | ProjectTabMsg::VariantRemoved { project_id, .. } => Some((*project_id, false)),
             _ => None,
         };
+        // Showing Version control reads the branch and last commit.
+        let repo_read = match &msg {
+            ProjectTabMsg::SectionSelected {
+                project_id,
+                section: ProjectSection::VersionControl,
+            } => Some(*project_id),
+            _ => None,
+        };
         self.apply_project_tab_message(msg);
+        if let Some(project_id) = repo_read {
+            return self.read_project_repo(project_id);
+        }
         match parts_read {
             Some((project_id, force)) => self.read_variant_parts(project_id, force),
             None => iced::Task::none(),
@@ -216,7 +236,12 @@ impl Signex {
             | ProjectTabMsg::VariantPartsReadRequested { .. } => {}
             // Routed by `dispatch_project_tab_message`: they open a dialog.
             ProjectTabMsg::AddSchematicRequested { .. }
-            | ProjectTabMsg::ErcDialogRequested { .. } => {}
+            | ProjectTabMsg::ErcDialogRequested { .. }
+            | ProjectTabMsg::LibraryLocateRequested { .. }
+            | ProjectTabMsg::LibraryLocatePicked { .. } => {}
+            ProjectTabMsg::RowDragged { project_id, msg } => {
+                self.act_on_row_drag(project_id, msg);
+            }
             ProjectTabMsg::SheetMoved {
                 project_id,
                 filename,
@@ -308,6 +333,7 @@ impl Signex {
         let pages_moved = matches!(
             command,
             signex_engine::ProjectSectionCommand::MoveSheet { .. }
+                | signex_engine::ProjectSectionCommand::PlaceSheet { .. }
         );
         self.after_project_general_change(pages_moved);
         Ok(true)
@@ -339,8 +365,10 @@ impl Signex {
     fn select_project_section(&mut self, project_id: ProjectId, section: ProjectSection) {
         // A preview's open label and window belong to the section left.
         self.ui_state.project_preview = super::ProjectPreviewUi::default();
+        self.ui_state.project_git.close_switcher();
         if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
             tab.section = section;
+            tab.row_drag = None;
             // A section switch ends the typing run: the next edit is its own
             // undo step.
             tab.general_history.close_run();

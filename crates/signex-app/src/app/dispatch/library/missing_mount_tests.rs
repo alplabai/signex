@@ -340,6 +340,28 @@ fn locate_rewrites_the_projects_entry_and_marks_it_dirty() {
     assert_eq!(open_path(&app), Some(b));
 }
 
+/// Mockup row 33: Locate… on a Project tab row repoints the entry, closes the
+/// dialog that asked about it and leaves the project unsaved.
+#[test]
+fn locate_from_the_project_tab_repoints_and_closes_the_dialog() {
+    let (mut app, _task) = Signex::new();
+    let (a, b, _, _dir) = two_missing(&mut app);
+    assert_eq!(open_path(&app), Some(a.clone()));
+    let moved = a.with_file_name("moved.snxlib");
+    crate::library::commands::create_library_file(&moved, &Default::default()).unwrap();
+    let _ = app.repoint_missing_library(&a, moved.clone());
+    let project = &app.document_state.projects[0];
+    assert_eq!(
+        project
+            .data
+            .resolve_library_path(&project.data.libraries[0]),
+        moved
+    );
+    let project_path = project.path.clone();
+    assert!(app.document_state.is_document_dirty(&project_path));
+    assert_eq!(open_path(&app), Some(b), "the next queued dialog opened");
+}
+
 /// The picked library replaces the missing one in the project, so it ranks
 /// as a project library against an installed copy sharing its id (#1908).
 #[test]

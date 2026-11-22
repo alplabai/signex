@@ -2,7 +2,7 @@
 
 use iced::Task;
 use signex_i18n::{ids, t};
-use signex_types::project::{ProjectSetup, ResolvedSetup, SheetDefaults};
+use signex_types::project::ResolvedSetup;
 
 use super::{DocumentSetupMsg, DocumentSetupState, SetupKind};
 use crate::app::new_project::{
@@ -18,21 +18,7 @@ impl Signex {
     /// values are used.
     pub(crate) fn resolved_project_setup(&mut self, project: ProjectId) -> Option<ResolvedSetup> {
         let loaded = self.document_state.project_by_id(project)?;
-        let mut resolved = ProjectSetup::for_project(
-            &loaded.data.project_defaults,
-            loaded.data.designator_standard(),
-            &self.ui_state.setup_profiles,
-        );
-        // A project that stores no sheet defaults and names no saved profile
-        // gets the blank sheet Add New always made (A4), not the New Project
-        // default.
-        if loaded.data.project_defaults.sheet.is_none() && resolved.setup.user_profile.is_none() {
-            let blank = crate::app::handlers::document_files::blank_schematic_sheet_for_new_doc();
-            resolved.setup.sheet = SheetDefaults {
-                paper_size: blank.paper_size,
-                show_title_block: blank.frame.show_title_block,
-            };
-        }
+        let resolved = super::new_document_setup(&loaded.data, &self.ui_state.setup_profiles);
         let ui = &mut self.ui_state;
         if let Some(missing) = &resolved.missing_profile
             && ui.missing_profiles_warned.insert(missing.clone())
@@ -172,6 +158,12 @@ impl Signex {
     fn edit_document_setup(&mut self, edit: NewProjectMsg) -> Task<Message> {
         use NewProjectMsg as M;
         match edit {
+            M::Preview(preview) => match self.ui_state.document_setup.as_mut() {
+                Some(state) => state.draft.act_on_preview(preview).map(|msg| {
+                    Message::from(DocumentSetupMsg::Setup(NewProjectMsg::Preview(msg)))
+                }),
+                None => Task::none(),
+            },
             M::ProfilePicked(_)
             | M::UserProfilePicked(_)
             | M::FabPicked(_)

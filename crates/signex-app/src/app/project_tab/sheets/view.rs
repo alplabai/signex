@@ -3,7 +3,7 @@
 //! with Add New ▸ Schematic, then the New sheets card (the defaults column
 //! beside the preview).
 
-use iced::widget::{Row, container, row};
+use iced::widget::{Row, Space, container, row};
 use iced::{Alignment, Element, Length, Widget as _};
 use signex_i18n::{I18n, UserText, ids, t};
 use signex_types::project::{ListMove, UserProfile};
@@ -15,6 +15,7 @@ use super::super::general::tab_message;
 use super::super::look::{
     ButtonKind, CardHeader, Glyph, card, info_line, mono_font, pill, text_button,
 };
+use super::super::row_drag::{RowDrag, RowKey, grip_column, grip_of};
 use super::super::table::{SP, TS, TableRow, grid_table, icon_move_buttons, mono_cell, section};
 use super::SheetRow;
 use super::preview;
@@ -34,6 +35,7 @@ const POPUP_HEIGHT_FACTOR: f32 = 2.5;
 pub(in crate::app::project_tab) fn view<'a>(
     project: &LoadedProject,
     rows: &[SheetRow],
+    drag: Option<&RowDrag>,
     setup_draft: Option<&NewProjectState>,
     users: &[UserProfile],
     canvas: &CanvasColors,
@@ -43,7 +45,7 @@ pub(in crate::app::project_tab) fn view<'a>(
     let pages = if rows.is_empty() {
         empty_state(project, i18n, tokens)
     } else {
-        page_table(project, rows, i18n, tokens)
+        page_table(project, rows, drag, i18n, tokens)
     };
     section(
         ids::PROJECT_SECTION_SHEETS,
@@ -57,16 +59,18 @@ pub(in crate::app::project_tab) fn view<'a>(
     )
 }
 
-/// The pages in list order: number, name (and `root`), file (and
-/// `missing`), and the move buttons.
+/// The pages in list order: the drag grip, number, name (and `root`), file
+/// (and `missing`), and the move buttons.
 fn page_table<'a>(
     project: &LoadedProject,
     rows: &[SheetRow],
+    drag: Option<&RowDrag>,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let project_id = project.id;
     let columns = [
+        grip_column(),
         (Some(ids::PROJECT_SHEETS_COL_NUMBER), Length::Fixed(PAGE_W)),
         (Some(ids::PROJECT_SHEETS_COL_NAME), Length::FillPortion(2)),
         (Some(ids::PROJECT_SHEETS_COL_FILE), Length::FillPortion(3)),
@@ -76,6 +80,7 @@ fn page_table<'a>(
         .enumerate()
         .map(|(index, sheet)| {
             let filename = sheet.filename.clone();
+            let key = RowKey::Sheet(filename.clone());
             let moved = move |step: ListMove| {
                 tab_message(ProjectTabMsg::SheetMoved {
                     project_id,
@@ -85,6 +90,7 @@ fn page_table<'a>(
             };
             TableRow {
                 cells: vec![
+                    Space::new().boxed(),
                     text(t!(i18n, ids::PROJECT_SHEETS_PAGE, "page" => index + 1))
                         .size(TS.body)
                         .font(mono_font())
@@ -95,6 +101,7 @@ fn page_table<'a>(
                 ],
                 actions: Some(icon_move_buttons(index, rows.len(), moved, i18n, tokens)),
                 is_error: false,
+                grip: Some(grip_of(project_id, key, index, drag)),
             }
         })
         .collect();
