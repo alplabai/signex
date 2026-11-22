@@ -45,7 +45,8 @@ static MARK: LazyLock<svg::Handle> = LazyLock::new(|| {
     svg::Handle::from_memory(include_bytes!("../assets/icons/chrome/signex_mark.svg").as_slice())
 });
 
-/// The dialog painted as a card in the main window.
+/// The dialog as a card in the main window, sized to itself: the overlay
+/// centres it over the click-outside layer.
 pub fn view<'a>(i18n: &I18n, tokens: &'a ThemeTokens) -> Element<'a, Message> {
     build(i18n, tokens, false)
 }
@@ -116,16 +117,10 @@ fn build<'a>(i18n: &I18n, tokens: &'a ThemeTokens, windowed: bool) -> Element<'a
         Message::Overlay(OverlayMsg::CloseAbout),
         tokens,
     );
-    let card = container(column![header, body, footer])
+    container(column![header, body, footer])
         .width(Length::Fixed(CARD_W))
         .clip(true)
-        .style(styles::modal_card(tokens));
-
-    container(card)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .center_x(Length::Fill)
-        .center_y(Length::Fill)
+        .style(styles::modal_card(tokens))
         .boxed()
 }
 

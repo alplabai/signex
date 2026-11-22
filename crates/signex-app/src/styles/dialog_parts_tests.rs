@@ -30,7 +30,7 @@ fn every_part_builds_for_every_theme() {
         let _: Element<'_, ()> = dialog_rows(None, vec![dialog_row(vec![body()])], None, &tokens);
         let _: Element<'_, ()> = dialog_rows(None, Vec::new(), Some(180.0), &tokens);
         for path in ["a.snxsch", "b.snxpcb", "l.snxlib/", "assets/", "x.txt"] {
-            let _: Element<'_, ()> = file_kind_icon(Path::new(path), &tokens);
+            let _: Element<'_, ()> = file_kind_icon(Path::new(path));
         }
         let _: Element<'_, ()> = dirty_dot(&tokens);
     }
@@ -77,21 +77,30 @@ fn file_kinds_follow_the_extension() {
     assert_eq!(FileKind::of(Path::new("assets/")).1, TreeIcon::Folder);
 }
 
-/// The inks of the kinds: schematic info, PCB ok, library violet, BOM warn,
-/// project accent, the rest muted.
+/// #2756: a file icon draws in its asset's colours. Pixels are grouped by
+/// their channel ratios, so edge smoothing of one colour stays one group; a
+/// tint over the whole shape would leave a single real group.
 #[test]
-fn file_kind_inks_are_the_kind_tag_tones() {
-    for id in ThemeId::BUILTINS {
-        let tokens = theme_tokens(*id);
-        let r = resolve(&tokens);
-        assert_eq!(FileKind::Schematic.ink(&tokens), r.info);
-        assert_eq!(FileKind::Pcb.ink(&tokens), ti(tokens.success));
-        assert_eq!(FileKind::Library.ink(&tokens), violet_pair(&tokens).1);
-        assert_eq!(FileKind::Bom.ink(&tokens), ti(tokens.warning));
-        assert_eq!(FileKind::Project.ink(&tokens), ti(tokens.accent));
-        for quiet in [FileKind::Output, FileKind::Folder, FileKind::Other] {
-            assert_eq!(quiet.ink(&tokens), r.ink3);
-        }
+fn a_file_icon_keeps_its_asset_colours() {
+    const MIN_PIXELS: usize = 3;
+    let window = iced::Size::new(32.0, 32.0);
+    for path in ["a.snxsch", "b.snxpcb", "l.snxlib/", "assets/", "x.txt"] {
+        let pixels =
+            crate::layout_probe::draw_pixels(file_kind_icon::<()>(Path::new(path)), window);
+        let mut hues: Vec<[u8; 3]> = pixels
+            .chunks_exact(4)
+            .filter(|p| p[0].max(p[1]).max(p[2]) > 96)
+            .map(|p| {
+                let top = u16::from(p[0].max(p[1]).max(p[2]));
+                [p[0], p[1], p[2]].map(|c| (u16::from(c) * 8 / (top + 1)) as u8)
+            })
+            .collect();
+        hues.sort_unstable();
+        let colours = hues
+            .chunk_by(|a, b| a == b)
+            .filter(|group| group.len() >= MIN_PIXELS)
+            .count();
+        assert!(colours > 1, "{path}: {colours} colour(s)");
     }
 }
 

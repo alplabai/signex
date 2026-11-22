@@ -81,7 +81,11 @@ pub(super) fn view<'a>(
             i18n,
             tokens,
         ));
-    container(body).padding([sp.xl, sp.xl]).boxed()
+    let page = container(body)
+        .width(Length::Fill)
+        .padding([sp.xl, sp.xl])
+        .boxed();
+    super::table::page_scroller(page, tokens)
 }
 
 /// Which stored part an edit of the section touches.

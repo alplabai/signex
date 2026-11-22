@@ -288,8 +288,7 @@ pub fn dialog_head_row<'a, M: 'a>(
         .boxed()
 }
 
-/// What a file is, for its icon tint. Matched on the extension: data, not UI
-/// text.
+/// What a file is, for its icon. Matched on the extension: data, not UI text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FileKind {
     Project,
@@ -336,34 +335,16 @@ impl FileKind {
         };
         (kind, icon)
     }
-
-    /// The ink of the kind: the tones of the Projects tree's kind tags.
-    fn ink(self, tokens: &ThemeTokens) -> Color {
-        let r = resolve(tokens);
-        match self {
-            Self::Project => super::tokens::accent(tokens),
-            Self::Schematic => r.info,
-            Self::Pcb => ti(tokens.success),
-            Self::Library => violet_pair(tokens).1,
-            Self::Bom => ti(tokens.warning),
-            Self::Output | Self::Folder | Self::Other => r.ink3,
-        }
-    }
 }
 
-/// The 16 px icon of the file at `path`, tinted by its kind: schematic info,
-/// PCB ok, library violet, BOM warn, project accent, outputs, folders and the
-/// rest muted. A `path` ending in a separator is a folder.
-pub fn file_kind_icon<'a, M: 'a>(path: &Path, tokens: &ThemeTokens) -> Element<'a, M> {
-    let (kind, icon) = FileKind::of(path);
-    let ink = kind.ink(tokens);
+/// The 16 px icon of the file at `path`, in the colours of its asset: a tint
+/// would repaint every path and flatten it to a solid shape. A `path` ending
+/// in a separator is a folder.
+pub fn file_kind_icon<'a, M: 'a>(path: &Path) -> Element<'a, M> {
+    let (_, icon) = FileKind::of(path);
     svg(icon.svg())
         .width(Length::Fixed(FILE_KIND_GLYPH))
         .height(Length::Fixed(FILE_KIND_GLYPH))
-        .style(move |_: &Theme, _| svg::Style {
-            color: Some(ink),
-            ..Default::default()
-        })
         .boxed()
 }
 

@@ -33,6 +33,122 @@ fn project_dirty(app: &Signex) -> bool {
     app.document_state.is_document_dirty(path)
 }
 
+/// Shorter than the Project setup and General pages.
+const SHORT_WINDOW: iced::Size = iced::Size::new(1200.0, 160.0);
+
+/// What `then` publishes at `at` once the wheel took the tab's page to its
+/// end. The redraw is what makes the scroller apply the new offset to the
+/// cursor, as a frame does in the running app.
+fn after_scrolling_to_the_end(app: &Signex, at: iced::Point, then: &[iced::Event]) -> Vec<Message> {
+    use iced::mouse::{Event as Mouse, ScrollDelta};
+    let project_id = app.document_state.projects[0].id;
+    let mut events = vec![
+        iced::Event::Mouse(Mouse::WheelScrolled {
+            delta: ScrollDelta::Pixels {
+                x: 0.0,
+                y: -100_000.0,
+            },
+        }),
+        iced::Event::Window(iced::window::Event::RedrawRequested(
+            std::time::Instant::now(),
+        )),
+    ];
+    events.extend_from_slice(then);
+    crate::layout_probe::messages_for_events(
+        app.view_project_tab(project_id),
+        SHORT_WINDOW,
+        at,
+        &events,
+    )
+}
+
+fn left_click() -> [iced::Event; 2] {
+    use iced::mouse::{Button, Event as Mouse};
+    [
+        iced::Event::Mouse(Mouse::ButtonPressed(Button::Left)),
+        iced::Event::Mouse(Mouse::ButtonReleased(Button::Left)),
+    ]
+}
+
+fn typed_digit() -> iced::Event {
+    use iced::keyboard::{self, key};
+    let digit = keyboard::Key::Character("7".into());
+    iced::Event::Keyboard(keyboard::Event::KeyPressed {
+        key: digit.clone(),
+        modified_key: digit,
+        physical_key: key::Physical::Unidentified(key::NativeCode::Unidentified),
+        location: keyboard::Location::Standard,
+        modifiers: keyboard::Modifiers::empty(),
+        text: Some("7".into()),
+        repeat: false,
+    })
+}
+
+/// #2755: the last control of a page taller than the window takes a click
+/// and a key once the page is scrolled to its end.
+#[test]
+fn the_last_row_of_a_tall_page_stays_reachable() {
+    let app = app();
+    let project_id = app.document_state.projects[0].id;
+    let inputs =
+        crate::layout_probe::lay_out_inputs(app.view_project_tab(project_id), SHORT_WINDOW);
+    let last = inputs.last().expect("the page has inputs").bounds;
+    assert!(
+        last.y > SHORT_WINDOW.height,
+        "the fixture must start with the last row below the window: {last:?}"
+    );
+    let mut events = left_click().to_vec();
+    events.push(typed_digit());
+    let reached = (0..SHORT_WINDOW.height as u32).step_by(2).any(|y| {
+        let at = iced::Point::new(last.center_x(), y as f32);
+        after_scrolling_to_the_end(&app, at, &events)
+            .iter()
+            .any(|m| {
+                matches!(
+                    m,
+                    Message::Project(ProjectMsg::Tab(
+                        ProjectTabMsg::AgentJournalLinesEdited { .. }
+                    ))
+                )
+            })
+    });
+    assert!(
+        reached,
+        "no point of the scrolled page reached the last row"
+    );
+}
+
+/// #2755: General scrolls too: at the end of the page its first row has
+/// moved out from under the pointer.
+#[test]
+fn the_general_page_scrolls() {
+    let mut app = app();
+    let project_id = app.document_state.projects[0].id;
+    let _ = app.update(Message::Project(ProjectMsg::Tab(
+        ProjectTabMsg::SectionSelected {
+            project_id,
+            section: ProjectSection::General,
+        },
+    )));
+    let is_rename = |m: &Message| {
+        matches!(
+            m,
+            Message::Project(ProjectMsg::Tab(ProjectTabMsg::RenameRequested { .. }))
+        )
+    };
+    let texts = crate::layout_probe::lay_out_texts(app.view_project_tab(project_id), SHORT_WINDOW);
+    let rename = crate::layout_probe::find(&texts, "Rename…").bounds.center();
+    let unscrolled = crate::layout_probe::messages_for_events(
+        app.view_project_tab(project_id),
+        SHORT_WINDOW,
+        rename,
+        &left_click(),
+    );
+    assert!(unscrolled.iter().any(is_rename), "{unscrolled:?}");
+    let scrolled = after_scrolling_to_the_end(&app, rename, &left_click());
+    assert!(!scrolled.iter().any(is_rename), "{scrolled:?}");
+}
+
 #[test]
 fn a_profile_and_a_clearance_are_stored_as_a_project_edit() {
     let mut app = app();

@@ -79,9 +79,21 @@ fn section_head<'a>(
     .boxed()
 }
 
-/// The content column (`.cin`): `head`, then `body`, in a vertical scroller
-/// with the thin scrollbar. Its height is left to the content: the shell
+/// `page` in the vertical scroller every Project tab page but Variants sits
+/// in, with the thin scrollbar. Its height is left to the content: the shell
 /// puts a Fill space under it.
+pub(in crate::app::project_tab) fn page_scroller<'a>(
+    page: Element<'a, Message>,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    scrollable(page)
+        .direction(crate::styles::thin_vertical())
+        .style(crate::styles::scrollbar_style(tokens))
+        .width(Length::Fill)
+        .boxed()
+}
+
+/// The content column (`.cin`): `head`, then `body`, in a [`page_scroller`].
 fn frame<'a>(
     head: Element<'a, Message>,
     body: Vec<Element<'a, Message>>,
@@ -100,11 +112,7 @@ fn frame<'a>(
             bottom: SP.xl * 2.0 + SP.s,
             left: SP.xl * 2.0,
         });
-    scrollable(padded)
-        .direction(crate::styles::thin_vertical())
-        .style(crate::styles::scrollbar_style(tokens))
-        .width(Length::Fill)
-        .boxed()
+    page_scroller(padded.boxed(), tokens)
 }
 
 /// Secondary text: help, a state, a reason.

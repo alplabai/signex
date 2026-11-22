@@ -129,15 +129,13 @@ impl Signex {
     }
 
     /// Keyboard-shortcuts reference modal.
-    pub(in crate::app::view) fn keyboard_shortcuts_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn keyboard_shortcuts_overlay(&self) -> Vec<Element<'_, Message>> {
         let ui = &self.ui_state;
         if !ui.keyboard_shortcuts_open
             || self.modal_detached(crate::app::state::ModalId::KeyboardShortcuts)
         {
-            return None;
+            return Vec::new();
         }
-        // `opaque` captures mouse presses inside the layer so they cannot
-        // pass through to the layers below it in the `Stack` (#618).
         let built;
         let sections = match &ui.shortcut_sections {
             Some(cached) => cached.as_slice(),
@@ -152,15 +150,15 @@ impl Signex {
             &ui.active_keymap,
             &ui.i18n,
         );
-        Some(
-            iced::widget::opaque(crate::keyboard_shortcuts_modal::view(
+        Self::dismiss_and_centre(
+            Message::Overlay(OverlayMsg::CloseKeyboardShortcuts),
+            crate::keyboard_shortcuts_modal::view(
                 &ui.i18n,
                 &self.document_state.panel_ctx.tokens,
                 sections,
                 &ui.shortcut_sheet,
                 &facts,
-            ))
-            .boxed(),
+            ),
         )
     }
 
@@ -191,17 +189,14 @@ impl Signex {
     }
 
     /// Help ▸ About Signex dialog.
-    pub(in crate::app::view) fn about_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn about_overlay(&self) -> Vec<Element<'_, Message>> {
         let ui = &self.ui_state;
         if !ui.about_open || self.modal_detached(crate::app::state::ModalId::About) {
-            return None;
+            return Vec::new();
         }
-        Some(
-            iced::widget::opaque(crate::about_modal::view(
-                &ui.i18n,
-                &self.document_state.panel_ctx.tokens,
-            ))
-            .boxed(),
+        Self::dismiss_and_centre(
+            Message::Overlay(OverlayMsg::CloseAbout),
+            crate::about_modal::view(&ui.i18n, &self.document_state.panel_ctx.tokens),
         )
     }
 
