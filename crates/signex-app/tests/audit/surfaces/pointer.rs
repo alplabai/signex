@@ -18,9 +18,6 @@ use signex_app::app::{Message, Signex};
 pub enum PointerStep {
     /// Click the first text reading exactly this.
     Click(&'static str),
-    /// Move onto the last text reading exactly this: an open menu draws
-    /// after the window.
-    Hover(&'static str),
     /// Click this many pixels right of the text field holding this value,
     /// where a measurement field's picker sits.
     ClickRightOfInput(&'static str, u32),
@@ -59,17 +56,16 @@ fn locate<'a, T: 'a>(
     if !matches!(step, PointerStep::HoverAt(..)) {
         ui.operate(r, &mut labels);
     }
-    let named = |list: &[(String, Rectangle)], want: &str, last: bool| {
-        let mut hits = list.iter().filter(|(text, _)| text.trim() == want);
-        let hit = if last { hits.last() } else { hits.next() };
-        hit.map(|(_, bounds)| *bounds)
+    let named = |list: &[(String, Rectangle)], want: &str| {
+        list.iter()
+            .find(|(text, _)| text.trim() == want)
+            .map(|(_, bounds)| *bounds)
             .ok_or_else(|| format!("nothing on screen reads {want:?}"))
     };
     Ok(match step {
-        PointerStep::Click(want) => named(&labels.texts, want, false)?.center(),
-        PointerStep::Hover(want) => named(&labels.texts, want, true)?.center(),
+        PointerStep::Click(want) => named(&labels.texts, want)?.center(),
         PointerStep::ClickRightOfInput(want, dx) => {
-            let field = named(&labels.inputs, want, false)?;
+            let field = named(&labels.inputs, want)?;
             Point::new(field.x + field.width + dx as f32, field.center_y())
         }
         PointerStep::HoverAt(x, y) => Point::new(x as f32, y as f32),
@@ -122,9 +118,7 @@ pub fn draw_after(
         cursor = Cursor::Available(at);
         let moved = Event::Mouse(mouse::Event::CursorMoved { position: at });
         match step {
-            PointerStep::Hover(_) | PointerStep::HoverAt(..) => {
-                send(&mut ui, &[moved], cursor, r);
-            }
+            PointerStep::HoverAt(..) => send(&mut ui, &[moved], cursor, r),
             PointerStep::Click(_) | PointerStep::ClickRightOfInput(..) => send(
                 &mut ui,
                 &[
