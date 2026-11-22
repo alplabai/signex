@@ -18,7 +18,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(editor: &mut Footpri
         };
         if report.refused > 0 {
             crate::diagnostics::log_warning(format!(
-                "Add fillets: {} corner(s) left as they were; the lines are too short for the radius",
+                "Add fillets: {} corner(s) left as they were; the lines are too short for the radius, or a constraint or pattern depends on the corner",
                 report.refused
             ));
         }

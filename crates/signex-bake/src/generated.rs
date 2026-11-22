@@ -42,15 +42,43 @@ fn graphic_points(kind: &FpGraphicKind) -> Vec<[f64; 2]> {
         FpGraphicKind::Line { from, to } | FpGraphicKind::Rectangle { from, to } => {
             vec![*from, *to]
         }
-        FpGraphicKind::Circle { center, radius } | FpGraphicKind::Arc { center, radius, .. } => {
+        FpGraphicKind::Circle { center, radius } => {
             vec![
                 [center[0] - radius, center[1] - radius],
                 [center[0] + radius, center[1] + radius],
             ]
         }
+        FpGraphicKind::Arc {
+            center,
+            radius,
+            start_deg,
+            end_deg,
+        } => arc_points(*center, *radius, *start_deg, *end_deg),
         FpGraphicKind::Polygon { vertices } => vertices.clone(),
         FpGraphicKind::Text { .. } => Vec::new(),
     }
+}
+
+/// What bounds an arc: its two ends and each axis extreme inside its sweep.
+fn arc_points(center: [f64; 2], radius: f64, start_deg: f64, end_deg: f64) -> Vec<[f64; 2]> {
+    let sweep = FpGraphicKind::arc_sweep_deg(start_deg, end_deg);
+    let at = |deg: f64| {
+        let (sin, cos) = deg.to_radians().sin_cos();
+        [center[0] + radius * cos, center[1] + radius * sin]
+    };
+    let mut points = vec![at(start_deg), at(start_deg + sweep)];
+    let extremes = [
+        (0.0, [radius, 0.0]),
+        (90.0, [0.0, radius]),
+        (180.0, [-radius, 0.0]),
+        (270.0, [0.0, -radius]),
+    ];
+    for (deg, [dx, dy]) in extremes {
+        if (deg - start_deg).rem_euclid(360.0) <= sweep {
+            points.push([center[0] + dx, center[1] + dy]);
+        }
+    }
+    points
 }
 
 fn extent_of(points: impl IntoIterator<Item = [f64; 2]>) -> Option<Extent> {
@@ -172,7 +200,8 @@ fn pad_extent(pad: &Pad) -> Extent {
     extent_of(placed).unwrap_or([centre[0], centre[1], centre[0], centre[1]])
 }
 
-/// A solid dot on the outer side of pad 1, `clearance` from its copper.
+/// A solid dot beside pad 1, `clearance` from all copper: on its outer side
+/// when that is clear, else on the first clear side. No side clear, no dot.
 fn pin_one_dot(pads: &[Pad], clearance: f64, width: f64) -> Option<FpGraphic> {
     let pad = pads.iter().find(|pad| pad.number == "1")?;
     let [px0, py0, px1, py1] = pad_extent(pad);
@@ -186,18 +215,42 @@ fn pin_one_dot(pads: &[Pad], clearance: f64, width: f64) -> Option<FpGraphic> {
     );
     // The dot's outer edge is one line width from its centre.
     let gap = clearance + width;
-    let center = if dx.abs() >= dy.abs() {
-        let x = if dx > 0.0 { px1 + gap } else { px0 - gap };
-        [x, (py0 + py1) / 2.0]
+    let (mid_x, mid_y) = ((px0 + px1) / 2.0, (py0 + py1) / 2.0);
+    let (near_x, far_x) = if dx > 0.0 {
+        (px1 + gap, px0 - gap)
     } else {
-        let y = if dy > 0.0 { py1 + gap } else { py0 - gap };
-        [(px0 + px1) / 2.0, y]
+        (px0 - gap, px1 + gap)
     };
-    let circle = FpGraphicKind::Circle {
-        center,
-        radius: width / 2.0,
+    let (near_y, far_y) = if dy > 0.0 {
+        (py1 + gap, py0 - gap)
+    } else {
+        (py0 - gap, py1 + gap)
     };
+    let along_x = [[near_x, mid_y], [far_x, mid_y]];
+    let along_y = [[mid_x, near_y], [mid_x, far_y]];
+    let sides = if dx.abs() >= dy.abs() {
+        [along_x, along_y]
+    } else {
+        [along_y, along_x]
+    };
+    let radius = width / 2.0;
+    let center = sides
+        .into_iter()
+        .flatten()
+        .find(|&center| dot_clears_pads(center, radius, pads, clearance))?;
+    let circle = FpGraphicKind::Circle { center, radius };
     Some(FpGraphic::drawn(circle, width, true))
+}
+
+/// Whether a dot at `center` stays `clearance` from every pad's copper box.
+fn dot_clears_pads(center: [f64; 2], radius: f64, pads: &[Pad], clearance: f64) -> bool {
+    pads.iter().all(|pad| {
+        let [x0, y0, x1, y1] = grown(pad_extent(pad), clearance);
+        center[0] + radius <= x0
+            || center[0] - radius >= x1
+            || center[1] + radius <= y0
+            || center[1] - radius >= y1
+    })
 }
 
 #[cfg(test)]

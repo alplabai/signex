@@ -4,8 +4,10 @@
 //! one undo step. Rules: `docs/FOOTPRINT_SKETCH.md`, "Roles".
 
 use signex_bake::closed_profiles::{ClosedProfile, profile_of, profile_pad};
+use signex_bake::profile::trace_closed_profile;
 use signex_sketch::entity::EntityKind;
 use signex_sketch::id::SketchEntityId;
+use signex_types::sketch::SketchAction;
 
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::sketch_conflict::mutate_solve_or_revert;
@@ -35,6 +37,14 @@ pub(in crate::library::editor::footprint::updates) fn route_role_pick(
         return msg;
     }
     if role == RoleTag::Pad {
+        // Minting goes through the row's path, which clears the edge roles.
+        // Everything else (a pad to select, a refusal to say) is the tool's.
+        let mints = profile_of(sketch, id)
+            .is_some_and(|profile| profile_pad(sketch, &profile).is_none())
+            && can_mint_pad(editor, id);
+        if mints {
+            return FootprintEditorMsg::SketchProfileRolePicked { seed: id, role };
+        }
         editor.state.selected_sketch = Some(id);
         return FootprintEditorMsg::SketchMakePadFromProfile;
     }
@@ -73,7 +83,7 @@ fn set_profile_role(editor: &mut FootprintDocument, seed: SketchEntityId, role: 
     let pad = profile_pad(sketch, &profile).map(|entity| entity.id);
     if role == RoleTag::Pad {
         // A circle has no loop to trace: see decisions on #2835.
-        let can_mint = !profile.is_circle(sketch) && editor.state.last_solve.is_some();
+        let can_mint = !profile.is_circle(sketch) && can_mint_pad(editor, profile.seed);
         if pad.is_none() && can_mint {
             make_pad(editor, &profile);
         }
@@ -94,6 +104,22 @@ fn set_profile_role(editor: &mut FootprintDocument, seed: SketchEntityId, role: 
     if let Err(error) = &solved {
         editor.with_parts(|state, _| report_solve_failure(state, error));
     }
+}
+
+/// Whether the mint will succeed, asked before [`make_pad`] clears the roles:
+/// this host has pads and the loop through `seed` traces to a real shape.
+fn can_mint_pad(editor: &FootprintDocument, seed: SketchEntityId) -> bool {
+    let (Some(solve), Some(sketch)) = (
+        editor.state.last_solve.as_ref(),
+        editor.primitive().sketch.as_ref(),
+    ) else {
+        return false;
+    };
+    editor
+        .state
+        .sketch_host()
+        .offers(SketchAction::MakePadFromProfile)
+        && trace_closed_profile(sketch, solve, seed).is_ok_and(|vertices| vertices.len() >= 3)
 }
 
 /// Clear the loop's edge roles and mint its pad.
@@ -216,6 +242,84 @@ mod tests {
             let edge = sketch.entities.iter().find(|e| e.id == *id).unwrap();
             assert_eq!(edge.courtyard, Some(CourtyardAttr {}));
         }
+    }
+
+    /// `docs/FOOTPRINT_SKETCH.md`, Roles: Pad on one edge does what the row
+    /// does, so the loop's old role goes with it.
+    #[test]
+    fn pad_picked_on_one_edge_clears_the_role_of_the_whole_loop() {
+        let (mut editor, edges) = square();
+        pick(&mut editor, edges[0], RoleTag::Courtyard);
+        let steps = editor.history.undo_len();
+        let before = editor.primitive().sketch.clone();
+
+        apply_footprint_primitive_edit(
+            &mut editor,
+            FootprintEditorMsg::SketchSetRole {
+                id: edges[2],
+                role: RoleTag::Pad,
+            },
+        );
+
+        assert_eq!(editor.primitive().pads.len(), 1);
+        let sketch = editor.primitive().sketch.as_ref().unwrap();
+        for id in &edges {
+            let edge = sketch.entities.iter().find(|e| e.id == *id).unwrap();
+            assert_eq!(edge.courtyard, None, "{id:?} keeps no courtyard");
+        }
+        assert_eq!(editor.history.undo_len(), steps + 1, "one undo step");
+        assert!(editor.undo());
+        assert_eq!(editor.primitive().sketch, before);
+    }
+
+    /// A forked loop is no profile, so the menu path refuses it too rather
+    /// than minting a pad from whichever edge happened to close it.
+    #[test]
+    fn a_forked_loop_mints_no_pad_from_any_edge() {
+        let (mut editor, edges) = square();
+        let sketch = editor.primitive_mut().sketch.as_mut().unwrap();
+        let plane = sketch.planes[0].id;
+        let EntityKind::Line { start: fork, .. } = sketch
+            .entities
+            .iter()
+            .find(|e| e.id == edges[0])
+            .unwrap()
+            .kind
+        else {
+            unreachable!("a square edge is a line");
+        };
+        let tip = SketchEntityId::new();
+        sketch.entities.push(Entity::new(
+            tip,
+            plane,
+            EntityKind::Point { x: -1.0, y: -1.0 },
+        ));
+        sketch.entities.push(Entity::new(
+            SketchEntityId::new(),
+            plane,
+            EntityKind::Line {
+                start: fork,
+                end: tip,
+            },
+        ));
+        let solved = {
+            let sketch = editor.primitive().sketch.as_ref().unwrap();
+            let params = resolve(&sketch.parameters).unwrap();
+            Solver::default().solve(sketch, &params).unwrap()
+        };
+        editor.state.last_solve = Some(solved);
+
+        for id in &edges {
+            apply_footprint_primitive_edit(
+                &mut editor,
+                FootprintEditorMsg::SketchSetRole {
+                    id: *id,
+                    role: RoleTag::Pad,
+                },
+            );
+        }
+
+        assert!(editor.primitive().pads.is_empty());
     }
 
     /// DECISIONS 2026-11-22, mockup row 190: a Point stays a simple pad.

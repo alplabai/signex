@@ -10,7 +10,7 @@ use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 
-use crate::profile::trace_closed_profile_entities;
+use crate::profile::{ProfileEntities, trace_closed_profile_entities};
 
 /// One closed profile: the edge it is reached by and all its edges.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -63,6 +63,9 @@ fn profile_from(sketch: &SketchData, entity: &Entity) -> Option<ClosedProfile> {
         }),
         EntityKind::Line { .. } | EntityKind::Arc { .. } => {
             let traced = trace_closed_profile_entities(sketch, entity.id).ok()?;
+            if forks_where_it_closes(sketch, &traced) {
+                return None;
+            }
             Some(ClosedProfile {
                 seed: entity.id,
                 edges: traced.edges.iter().map(|edge| edge.id).collect(),
@@ -70,6 +73,32 @@ fn profile_from(sketch: &SketchData, entity: &Entity) -> Option<ClosedProfile> {
         }
         EntityKind::Point { .. } => None,
     }
+}
+
+/// Whether the loop through `seed` closes on a vertex with a third baking
+/// edge. The walk stops there without looking, so the same fork would read
+/// as a loop from one edge and as branching from another.
+pub fn closes_at_a_fork(sketch: &SketchData, seed: SketchEntityId) -> bool {
+    trace_closed_profile_entities(sketch, seed)
+        .is_ok_and(|traced| forks_where_it_closes(sketch, &traced))
+}
+
+fn forks_where_it_closes(sketch: &SketchData, traced: &ProfileEntities) -> bool {
+    let Some(vertex) = traced.edges.first().map(|edge| edge.from) else {
+        return false;
+    };
+    let edges_at_vertex = sketch
+        .entities
+        .iter()
+        .filter(|e| !e.bake_skipped())
+        .filter(|e| match e.kind {
+            EntityKind::Line { start, end } | EntityKind::Arc { start, end, .. } => {
+                start == vertex || end == vertex
+            }
+            EntityKind::Point { .. } | EntityKind::Circle { .. } => false,
+        })
+        .count();
+    edges_at_vertex > 2
 }
 
 /// The pad whose custom shape is traced from `profile`, if any.
@@ -139,6 +168,45 @@ mod tests {
         assert!(square.iter().all(|id| found[0].edges.contains(id)));
         assert_eq!(found[1].edges, vec![circle]);
         assert!(found[1].is_circle(&sketch));
+    }
+
+    /// A spur at the vertex the walk closes on: no edge reads the loop as a
+    /// profile, whichever one seeds it.
+    #[test]
+    fn a_forked_loop_is_no_profile_from_any_edge() {
+        let (mut sketch, square, circle) = sketch();
+        let plane = sketch.planes[0].id;
+        let EntityKind::Line { start: fork, .. } = sketch
+            .entities
+            .iter()
+            .find(|e| e.id == square[0])
+            .unwrap()
+            .kind
+        else {
+            unreachable!("a square edge is a line");
+        };
+        let tip = SketchEntityId::new();
+        sketch.entities.push(Entity::new(
+            tip,
+            plane,
+            EntityKind::Point { x: -1.0, y: -1.0 },
+        ));
+        sketch.entities.push(Entity::new(
+            SketchEntityId::new(),
+            plane,
+            EntityKind::Line {
+                start: fork,
+                end: tip,
+            },
+        ));
+
+        for edge in &square {
+            assert_eq!(profile_of(&sketch, *edge), None, "seeded from {edge:?}");
+        }
+        let found = closed_profiles(&sketch);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].edges, vec![circle]);
+        assert!(closes_at_a_fork(&sketch, square[0]));
     }
 
     #[test]

@@ -1,11 +1,13 @@
 //! Add fillets on failing inside corners (mockup row 179d): a sharp corner
 //! between two lines takes a tangent arc of the radius the router needs. A
-//! corner that is an arc, or whose lines are too short, is left as it was
-//! and counted. Rules: `docs/PCB_SKETCH.md`, "Outline checks".
+//! corner that is an arc, whose lines are too short, or that something else
+//! depends on is left as it was and counted. Rules: `docs/PCB_SKETCH.md`,
+//! "Outline checks".
 
 use std::collections::HashMap;
 use std::f64::consts::PI;
 
+use signex_sketch::constraint::ConstraintKind;
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
@@ -60,7 +62,8 @@ pub fn add_fillets(
     let mut at = solved_points(sketch, solve);
     let mut report = FilletReport::default();
     for &(corner, radius) in targets {
-        let fillet = corner_arms(sketch, corner).and_then(|arms| {
+        let free_arms = corner_arms(sketch, corner).filter(|arms| !is_held(sketch, corner, arms));
+        let fillet = free_arms.and_then(|arms| {
             let geometry = fillet_geometry(
                 *at.get(&corner)?,
                 *at.get(&arms[0].far)?,
@@ -105,6 +108,32 @@ fn corner_arms(sketch: &SketchData, corner: SketchEntityId) -> Option<[Arm; 2]> 
         }
     }
     <[Arm; 2]>::try_from(arms).ok()
+}
+
+/// Whether rounding `corner` would break something that depends on it. The
+/// corner leaves the profile, so whatever names it (a pattern above all: the
+/// bake finds a pattern through the profile's points) would stop following
+/// the outline. A trim shortens both lines, so a constraint on their length
+/// or middle would move the outline; one on their direction still holds.
+fn is_held(sketch: &SketchData, corner: SketchEntityId, arms: &[Arm; 2]) -> bool {
+    let is_arm = |id: SketchEntityId| arms.iter().any(|arm| arm.line == id);
+    let on_other_entity = sketch.entities.iter().any(|e| {
+        (e.id == corner && e.pad.is_some())
+            || (e.id != corner && !is_arm(e.id) && e.point_refs().contains(&corner))
+    });
+    let in_a_pattern = sketch
+        .arrays
+        .iter()
+        .any(|a| a.kind.entity_refs().contains(&corner));
+    let constrained = sketch.constraints.iter().any(|c| {
+        c.kind.touches(corner)
+            || match c.kind {
+                ConstraintKind::EqualLength { l1, l2 } => is_arm(l1) || is_arm(l2),
+                ConstraintKind::Midpoint { line, .. } => is_arm(line),
+                _ => false,
+            }
+    });
+    on_other_entity || in_a_pattern || constrained
 }
 
 fn solved_points(sketch: &SketchData, solve: &FullSolveOutput) -> HashMap<SketchEntityId, Xy> {
@@ -228,6 +257,10 @@ fn move_line_end(
 #[cfg(test)]
 mod tests {
     use signex_sketch::Solver;
+    use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
+    use signex_sketch::attr::BoardCutoutAttr;
+    use signex_sketch::constraint::{Constraint, DimTarget};
+    use signex_sketch::id::ConstraintId;
     use signex_sketch::parameter::resolve;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 
@@ -336,5 +369,182 @@ mod tests {
         let g = fillet_geometry((0.0, 0.0), (5.0, 0.0), (0.0, 5.0), 1.0).unwrap();
         assert!(!g.sweep_ccw, "{g:?}");
         assert!((g.centre.0 - 1.0).abs() < 1e-9 && (g.centre.1 - 1.0).abs() < 1e-9);
+    }
+
+    /// The ids of an L outline: its six corner points, then its six lines.
+    fn l_ids(sketch: &SketchData) -> (Vec<SketchEntityId>, Vec<SketchEntityId>) {
+        let ids: Vec<SketchEntityId> = sketch.entities.iter().map(|e| e.id).collect();
+        (ids[..6].to_vec(), ids[6..12].to_vec())
+    }
+
+    fn constrain(sketch: &mut SketchData, kind: ConstraintKind) {
+        sketch.constraints.push(Constraint {
+            id: ConstraintId::new(),
+            kind,
+        });
+    }
+
+    /// Fillet the L's one failing corner, at (5, 5).
+    fn fillet_the_l(sketch: &mut SketchData) -> FilletReport {
+        let solve = solved(sketch);
+        let targets = fillet_targets(sketch, &checks(sketch, &solve));
+        assert_eq!(targets.len(), 1, "{targets:?}");
+        add_fillets(sketch, &solve, &targets)
+    }
+
+    const REFUSED: FilletReport = FilletReport {
+        applied: 0,
+        refused: 1,
+    };
+
+    #[test]
+    fn a_corner_a_dimension_names_is_refused_and_left_alone() {
+        let mut sketch = l_outline(5.0);
+        let (points, _) = l_ids(&sketch);
+        constrain(
+            &mut sketch,
+            ConstraintKind::DistancePtPt {
+                p1: points[3],
+                p2: points[2],
+                target: DimTarget::Literal(5.0),
+            },
+        );
+        let before = sketch.clone();
+
+        assert_eq!(fillet_the_l(&mut sketch), REFUSED);
+
+        assert_eq!(sketch, before);
+    }
+
+    #[test]
+    fn a_line_whose_length_is_constrained_keeps_its_corner() {
+        let mut sketch = l_outline(5.0);
+        let (_, lines) = l_ids(&sketch);
+        // Line 2 ends at the corner; line 1 is the 5 mm edge it must equal.
+        constrain(
+            &mut sketch,
+            ConstraintKind::EqualLength {
+                l1: lines[2],
+                l2: lines[1],
+            },
+        );
+        let before = sketch.clone();
+
+        assert_eq!(fillet_the_l(&mut sketch), REFUSED);
+
+        assert_eq!(sketch, before);
+    }
+
+    #[test]
+    fn a_midpoint_on_a_trimmed_line_keeps_its_corner() {
+        let mut sketch = l_outline(5.0);
+        let (_, lines) = l_ids(&sketch);
+        let plane = sketch.entities[0].plane;
+        let middle = SketchEntityId::new();
+        sketch.entities.push(Entity::new(
+            middle,
+            plane,
+            EntityKind::Point { x: 7.5, y: 5.0 },
+        ));
+        constrain(
+            &mut sketch,
+            ConstraintKind::Midpoint {
+                point: middle,
+                line: lines[2],
+            },
+        );
+        let before = sketch.clone();
+
+        assert_eq!(fillet_the_l(&mut sketch), REFUSED);
+
+        assert_eq!(sketch, before);
+    }
+
+    #[test]
+    fn a_direction_constraint_on_a_line_does_not_stop_the_fillet() {
+        let mut sketch = l_outline(5.0);
+        let (_, lines) = l_ids(&sketch);
+        constrain(&mut sketch, ConstraintKind::Horizontal { line: lines[2] });
+
+        let report = fillet_the_l(&mut sketch);
+
+        assert_eq!(
+            report,
+            FilletReport {
+                applied: 1,
+                refused: 0
+            }
+        );
+        assert_eq!(sketch.constraints.len(), 1, "the constraint stays");
+        let solve = solved(&sketch);
+        let after = checks(&sketch, &solve);
+        assert_eq!(after.inside_corners, CheckState::Passed, "{after:?}");
+    }
+
+    /// The review's case: a pattern of a corner Point repeats the cutout, so
+    /// the fillet must leave that Point in the profile. The cutout is 6 x 4
+    /// so that every corner has room for R 1.
+    #[test]
+    fn a_corner_a_pattern_repeats_is_kept_and_every_instance_still_bakes() {
+        let plane = PlaneId::new();
+        let mut sketch = SketchData::default();
+        sketch.planes.push(Plane {
+            id: plane,
+            kind: PlaneKind::BoardTop,
+        });
+        let corners: Vec<SketchEntityId> = [(0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0)]
+            .iter()
+            .map(|&(x, y)| {
+                let id = SketchEntityId::new();
+                sketch
+                    .entities
+                    .push(Entity::new(id, plane, EntityKind::Point { x, y }));
+                id
+            })
+            .collect();
+        for i in 0..4 {
+            let kind = EntityKind::Line {
+                start: corners[i],
+                end: corners[(i + 1) % 4],
+            };
+            let mut line = Entity::new(SketchEntityId::new(), plane, kind);
+            line.board_cutout = Some(BoardCutoutAttr {
+                edge_radius_expr: Some("0.5mm".into()),
+                through: true,
+            });
+            sketch.entities.push(line);
+        }
+        sketch.arrays.push(Array {
+            id: ArrayId::new(),
+            kind: ArrayKind::Linear {
+                source: corners[0],
+                count_expr: "2".into(),
+                dx_expr: "10mm".into(),
+                dy_expr: "0mm".into(),
+            },
+            numbering: NumberingScheme::default(),
+        });
+        let solve = solved(&sketch);
+        let targets: Vec<(SketchEntityId, f64)> = corners.iter().map(|&c| (c, 1.0)).collect();
+
+        let report = add_fillets(&mut sketch, &solve, &targets);
+
+        assert_eq!(
+            report,
+            FilletReport {
+                applied: 3,
+                refused: 1
+            }
+        );
+        let cutouts = crate::board::bake_board(&sketch, &[]).unwrap().cutouts;
+        let mut lowest: Vec<i64> = cutouts
+            .iter()
+            .map(|c| {
+                let x = c.boundary.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+                (x * 1e6).round() as i64
+            })
+            .collect();
+        lowest.sort_unstable();
+        assert_eq!(lowest, [0, 10_000_000], "both instances bake");
     }
 }
