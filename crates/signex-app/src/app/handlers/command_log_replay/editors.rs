@@ -2,7 +2,7 @@
 //! index, so a target is recorded with the pad or pin number it held: an
 //! index that now holds another number counts as gone.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use iced::Task;
 use signex_sketch::id::SketchEntityId;
@@ -12,7 +12,7 @@ use super::run::no_change;
 use super::scope::EditFamily;
 use crate::app::command::CommandOutcome;
 use crate::app::{Message, Signex};
-use crate::library::editor::footprint::state::pad::EditorPad;
+use crate::library::editor::footprint::EditorPad;
 use crate::library::editor::symbol::state::SymbolSelection;
 use crate::library::messages::{FootprintEditorMsg, PrimitiveEdit, SymbolEditorMsg};
 
@@ -275,7 +275,7 @@ impl Signex {
     /// Run `messages` on the recorded selection; the person's comes back.
     pub(super) fn run_editor_input(
         &mut self,
-        path: &PathBuf,
+        path: &Path,
         targets: &EditorTargets,
         messages: &[PrimitiveEdit],
     ) -> (CommandOutcome, Task<Message>) {
@@ -286,7 +286,7 @@ impl Signex {
         let tasks: Vec<Task<Message>> = messages
             .iter()
             .cloned()
-            .map(|message| self.handle_primitive_editor_event(path.clone(), message))
+            .map(|message| self.handle_primitive_editor_event(path.to_path_buf(), message))
             .collect();
         self.give_back_editor_selection(path, held);
         self.refresh_panel_ctx();
