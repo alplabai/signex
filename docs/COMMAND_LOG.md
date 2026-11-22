@@ -93,8 +93,9 @@ panel says what it will list.
 - **Replay** runs the row's command again with its recorded arguments, as the
   person's command, and logs it as a new GUI row. A row with arguments runs
   through the command's operand handler (`CommandArgs::parse_operands`, then
-  `run_operands`), as the CLI does; a row without runs through the dispatch.
-  A failed row fails the same way until its cause is fixed.
+  `run_operands`), as the CLI does. A row without is refused with the reason
+  (a new failed row and a Messages line), because its command would take the
+  current selection. A failed row fails the same way until its cause is fixed.
 - **Copy as CLI** copies the row as a `signex-cli run` line (the Usage of
   `docs/CLI.md`): `signex-cli run <project file> <command-id> --arg
   name=value ...`. Each value is the text `--arg` takes (a point as `x,y`),

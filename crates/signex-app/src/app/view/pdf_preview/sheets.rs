@@ -98,6 +98,12 @@ impl Signex {
                 PagesChoice::Specific => PrintPreviewMsg::SetPageRangeSpecific,
             })
         });
+        let refused = current == PagesChoice::Specific
+            && crate::app::handlers::menu::export::page_list::parse_page_list(
+                &preview.specific_page_input,
+            )
+            .is_none();
+        let tokens = &self.document_state.panel_ctx.tokens;
         let field = text_input(
             t!(i18n, ids::PLACEHOLDER_PDF_PAGE),
             &preview.specific_page_input,
@@ -105,7 +111,9 @@ impl Signex {
         .padding([SP.s, SP.m])
         .size(TS.body)
         .width(Length::Fill)
-        .style(crate::panels::form_look::text_input_style);
+        .style(crate::panels::form_look::refusable_input_style(
+            refused.then(|| crate::styles::ti(tokens.error)),
+        ));
         let field = if current == PagesChoice::Specific {
             field.on_input(|v| Message::PrintPreview(PrintPreviewMsg::SetSpecificPageInput(v)))
         } else {

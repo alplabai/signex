@@ -55,6 +55,7 @@ define_ids! {
     COMMAND_LOG_JUMP_TO = "command-log-jump-to";
     COMMAND_LOG_JUMP_TO_OBJECT = "command-log-jump-to-object";
     COMMAND_LOG_REPLAY_FAILED_HINT = "command-log-replay-failed-hint";
+    COMMAND_LOG_REPLAY_NO_ARGUMENTS = "command-log-replay-no-arguments";
     COMMAND_LOG_CLIENT_WINDOW = "command-log-client-window";
     COMMAND_LOG_CLIENT_UNDOCKED = "command-log-client-undocked";
     COMMAND_LOG_CLIENT_PID = "command-log-client-pid";

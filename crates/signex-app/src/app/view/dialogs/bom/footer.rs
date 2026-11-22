@@ -27,8 +27,8 @@ impl Signex {
             &preview.options.columns,
             preview.visible_lines.len(),
         );
-        // The dialog closes as Export starts, so it never shows a completed
-        // export: the dismiss button is always Cancel.
+        // The dialog closes when an export completes, so it never shows a
+        // completed one: the dismiss button is always Cancel.
         container(
             row![
                 text(status)

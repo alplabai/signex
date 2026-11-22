@@ -161,7 +161,14 @@ fn replay_runs_the_command_again_as_a_new_gui_row() {
     assert_eq!(replayed.command, "place_wire");
     assert_eq!(replayed.source, LogSource::Gui { window: None });
     assert!(replayed.seq > first.seq);
-    assert_eq!(replayed.outcome, first.outcome, "it fails the same way");
+    assert!(
+        matches!(
+            &replayed.outcome,
+            LogOutcome::Failed(reason) if reason.contains("no recorded arguments")
+        ),
+        "a row with no arguments is refused: {:?}",
+        replayed.outcome
+    );
 }
 
 #[test]

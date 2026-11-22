@@ -335,7 +335,8 @@ is tinted red; an undone one is struck through.
   narrow the list.
 - Click a row to see its arguments, the full error of a failed command
   (**Copy error** copies it), and the command as a `signex-cli run` line
-  (**Copy as CLI**). **Replay** runs it again with the same arguments;
+  (**Copy as CLI**). **Replay** runs it again with the same arguments, and
+  refuses a row that recorded none rather than act on the current selection;
   **Jump to** shows the part, net or point it named.
 - Zoom, pan and selection commands are hidden until **More ▸ Show view
   commands** is on.

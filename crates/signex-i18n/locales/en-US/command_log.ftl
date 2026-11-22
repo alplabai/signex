@@ -52,6 +52,7 @@ command-log-replay = Replay
 command-log-jump-to = Jump to { $target }
 command-log-jump-to-object = Jump to object
 command-log-replay-failed-hint = Replay runs it again with the same arguments; it fails the same way until the cause is fixed.
+command-log-replay-no-arguments = Not replayed: this row has no recorded arguments, and Replay never acts on the current selection.
 command-log-client-window = Signex window 1
 command-log-client-undocked = Signex window of { $document }
 command-log-client-pid = pid { $pid }

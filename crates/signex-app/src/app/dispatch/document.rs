@@ -329,6 +329,10 @@ impl Signex {
                 let task = self.handle_export_written(*outcome);
                 iced::Task::batch([task, self.finish_update()])
             }
+            ExportMsg::BomWritten { source, outcome } => {
+                let task = self.handle_bom_written(source, *outcome);
+                iced::Task::batch([task, self.finish_update()])
+            }
         }
     }
 

@@ -22,6 +22,10 @@ use crate::panels::command_log::{
     COPIED_FOR, CommandLogMsg, CopyTarget, JumpTarget, LogOutcome, LogRow, LogSource,
 };
 
+#[cfg(test)]
+#[path = "command_log_tests.rs"]
+mod tests;
+
 /// The default name Save log as… offers.
 const SAVE_FILE_NAME: &str = "command-log.jsonl";
 
@@ -373,7 +377,8 @@ impl Signex {
     }
 
     /// Replay: run the row's command again, with the arguments it was given,
-    /// as the person's command. It is logged as a new row.
+    /// as the person's command. It is logged as a new row. A row with no
+    /// arguments is refused: its command would take the current selection.
     fn replay_logged_command(&mut self, seq: u64) -> Task<Message> {
         let Some(row) = self.ui_state.command_log.log.row(seq).cloned() else {
             return Task::none();
@@ -388,7 +393,12 @@ impl Signex {
             return Task::none();
         };
         if row.operands.is_empty() {
-            return self.dispatch_command(&command, CommandArgs::none(), None);
+            let reason = signex_i18n::Translatable::new(ids::COMMAND_LOG_REPLAY_NO_ARGUMENTS);
+            let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
+            // Also in Messages: a paused log or a filter can hide the new row.
+            crate::diagnostics::log_warning(&reason);
+            self.record_refused_replay(&row, reason);
+            return Task::none();
         }
         let texts = row.operand_texts();
         let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
@@ -400,18 +410,23 @@ impl Signex {
                 .1
             }
             Err(error) => {
-                let document = self.command_document(None, &row.operands);
-                self.record_command(
-                    command.as_str(),
-                    row.operands.clone(),
-                    LogOutcome::Failed(error.to_string()),
-                    Duration::ZERO,
-                    LogSource::Gui { window: None },
-                    document,
-                );
+                self.record_refused_replay(&row, error.to_string());
                 Task::none()
             }
         }
+    }
+
+    /// Log a Replay that did not run as a new failed GUI row with `reason`.
+    fn record_refused_replay(&mut self, row: &LogRow, reason: String) {
+        let document = self.command_document(None, &row.operands);
+        self.record_command(
+            row.command.as_str(),
+            row.operands.clone(),
+            LogOutcome::Failed(reason),
+            Duration::ZERO,
+            LogSource::Gui { window: None },
+            document,
+        );
     }
 
     /// Jump to: show the object the row's arguments name on its sheet, the
