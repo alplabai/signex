@@ -400,3 +400,54 @@ fn on_a_board_esc_closes_the_table_before_discard() {
     assert!(in_sketch(&f), "Esc closed the table, not sketch mode");
     assert!(!table_open(&f), "the table closed");
 }
+
+/// Mockup row 189: Import from another footprint lists its parameters, a
+/// name in use stays unticked and keeps its value, and the copy is one step.
+#[test]
+fn importing_parameters_copies_the_ticked_ones_as_one_undo_step() {
+    let mut rig = rig();
+    rig.send(SketchParametersMsg::TableToggled);
+    let steps = rig.undo_steps();
+    rig.send(SketchParametersMsg::ImportSourcePicked {
+        source: "QFN-16".into(),
+        parameters: vec![
+            ("w".into(), "9mm".into()),
+            ("pitch".into(), "0.65mm".into()),
+            ("span".into(), "4mm".into()),
+        ],
+    });
+    assert_eq!(rig.undo_steps(), steps, "listing copies nothing");
+    let table = rig.editor().state.parameters_table.as_ref().unwrap();
+    let import = table.import.as_ref().expect("the list is open");
+    let ticked: Vec<&str> = import.picked().map(|r| r.name.as_str()).collect();
+    assert_eq!(ticked, ["pitch", "span"], "a name in use is not offered");
+
+    rig.send(SketchParametersMsg::ImportRowToggled {
+        name: "span".into(),
+    });
+    rig.send(SketchParametersMsg::ImportRowToggled { name: "w".into() });
+    rig.send(SketchParametersMsg::ImportConfirmed);
+
+    assert_eq!(rig.parameter("w").as_deref(), Some("2mm"), "never overwritten");
+    assert_eq!(rig.parameter("pitch").as_deref(), Some("0.65mm"));
+    assert_eq!(rig.parameter("span"), None, "unticked");
+    assert_eq!(rig.undo_steps(), steps + 1);
+    let table = rig.editor().state.parameters_table.as_ref().unwrap();
+    assert!(table.import.is_none(), "the list closed");
+    assert!(rig.editor_mut().undo());
+    assert_eq!(rig.parameter("pitch"), None);
+}
+
+#[test]
+fn cancelling_an_import_copies_nothing() {
+    let mut rig = rig();
+    rig.send(SketchParametersMsg::TableToggled);
+    let steps = rig.undo_steps();
+    rig.send(SketchParametersMsg::ImportSourcePicked {
+        source: "QFN-16".into(),
+        parameters: vec![("pitch".into(), "0.65mm".into())],
+    });
+    rig.send(SketchParametersMsg::ImportCancelled);
+    assert_eq!(rig.parameter("pitch"), None);
+    assert_eq!(rig.undo_steps(), steps);
+}

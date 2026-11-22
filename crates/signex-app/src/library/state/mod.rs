@@ -468,6 +468,9 @@ pub enum PrimitivePickerTarget {
         footprints: Vec<Uuid>,
         suggested: Vec<signex_library::PrimitiveRef>,
     },
+    /// Import from another footprint (mockup row 189): the sketch editor at
+    /// `editor` lists the picked footprint's parameters. Reads only.
+    SketchParameters { editor: std::path::PathBuf },
 }
 
 impl PrimitivePickerTarget {
@@ -478,7 +481,9 @@ impl PrimitivePickerTarget {
             | Self::EditRowModal(a)
             | Self::BrowserRow(a)
             | Self::PreviewAlternate(a) => Some(a),
-            Self::DesignPart { .. } | Self::BoardFootprint { .. } => None,
+            Self::DesignPart { .. }
+            | Self::BoardFootprint { .. }
+            | Self::SketchParameters { .. } => None,
         }
     }
 

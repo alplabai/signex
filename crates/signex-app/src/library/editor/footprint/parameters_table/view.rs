@@ -19,6 +19,7 @@ use super::SketchParametersMsg;
 use super::state::{DisplayUnit, ParametersTableState, display_value, suggestions};
 use crate::app::FootprintDocument;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+use crate::library::state::PrimitivePickerTarget;
 use crate::styles::{DialogButtonKind, Radii, dialog_button};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -39,10 +40,10 @@ pub const TOP_CLEARANCE_EM: f32 = 7.0;
 
 /// Builds the messages the card sends, for the editor at `path`.
 #[derive(Clone)]
-struct Sender(PathBuf);
+pub(super) struct Sender(PathBuf);
 
 impl Sender {
-    fn msg(&self, msg: SketchParametersMsg) -> LibraryMessage {
+    pub(super) fn msg(&self, msg: SketchParametersMsg) -> LibraryMessage {
         LibraryMessage::PrimitiveEditorEvent {
             path: self.0.clone(),
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchParameters(msg)),
@@ -60,11 +61,11 @@ struct Row {
 
 /// The colours the card draws with.
 #[derive(Clone, Copy)]
-struct Look {
-    ink: Color,
-    muted: Color,
+pub(super) struct Look {
+    pub(super) ink: Color,
+    pub(super) muted: Color,
     name: Color,
-    error: Color,
+    pub(super) error: Color,
     focus: Color,
     line: Color,
 }
@@ -107,13 +108,26 @@ pub fn overlay<'a>(
         ));
     }
 
-    let card = column![
+    let problems = rows
+        .iter()
+        .filter_map(|row| problem_line(row, table, i18n))
+        .collect();
+    let mut card = column![
         header(&send, look, tokens, i18n),
         column_titles(look, i18n),
         scrollable(list).height(Length::Fit.max(TS.body * ROWS_MAX_EM)),
         footer(&send, look, tokens, i18n),
     ]
     .spacing(SP.m);
+    if let Some(import) = &table.import {
+        card = card.push(super::import_view::panel(import, &send, look, tokens, i18n));
+    }
+    card = card.push(super::checks::section(
+        problems,
+        &editor.state.pads,
+        look,
+        i18n,
+    ));
     let card = container(card)
         .padding(SP.l)
         .width(Length::Fixed(TS.body * CARD_EM))
@@ -369,6 +383,28 @@ fn shown_value(row: &Row, table: &ParametersTableState) -> Option<(String, Displ
             Some((value, unit, true))
         }
     }
+}
+
+/// The live check of a row in error: why, and the value the drawing keeps.
+fn problem_line(row: &Row, table: &ParametersTableState, i18n: &I18n) -> Option<Localized> {
+    let reason = match &row.value {
+        RowValue::Value(_) => return None,
+        RowValue::Error(error) => error.to_string(),
+        RowValue::Blocked { by } => {
+            t!(i18n, ids::SKETCH_PARAMETERS_ERROR_BLOCKED, "name" => by.as_str()).into_string()
+        }
+    };
+    let value = match shown_value(row, table) {
+        Some((value, _, _)) => value,
+        None => t!(i18n, ids::SKETCH_PARAMETERS_NO_VALUE).into_string(),
+    };
+    Some(t!(
+        i18n,
+        ids::SKETCH_PARAMETERS_CHECK_ERROR,
+        "name" => row.name.as_str(),
+        "reason" => reason,
+        "value" => value
+    ))
 }
 
 fn value_cell<'a>(
@@ -637,6 +673,17 @@ fn footer<'a>(
             Some(send.msg(SketchParametersMsg::AddClicked)),
             tokens,
         ),
+        dialog_button(
+            t!(i18n, ids::SKETCH_PARAMETERS_IMPORT),
+            DialogButtonKind::Secondary,
+            Some(LibraryMessage::OpenPrimitivePicker {
+                kind: signex_library::PrimitiveKind::Footprint,
+                target: PrimitivePickerTarget::SketchParameters {
+                    editor: send.0.clone(),
+                },
+            }),
+            tokens,
+        ),
         caption(t!(i18n, ids::SKETCH_PARAMETERS_UNITS_HINT), look.muted),
     ]
     .spacing(SP.m)
@@ -644,12 +691,15 @@ fn footer<'a>(
     .boxed()
 }
 
-fn caption<'a>(label: impl Into<Label<'a>>, color: Color) -> Element<'a, LibraryMessage> {
+pub(super) fn caption<'a>(
+    label: impl Into<Label<'a>>,
+    color: Color,
+) -> Element<'a, LibraryMessage> {
     text(label).size(TS.caption).color(color).boxed()
 }
 
 /// A raised card inside the table: the autocomplete, row menu or prompt.
-fn popup<'a>(
+pub(super) fn popup<'a>(
     content: Element<'a, LibraryMessage>,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
@@ -670,7 +720,7 @@ fn popup<'a>(
         .boxed()
 }
 
-fn mono() -> iced::Font {
+pub(super) fn mono() -> iced::Font {
     crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
 }
 

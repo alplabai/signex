@@ -27,6 +27,8 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Width of a count row's label column, in body text heights.
 const COUNT_LABEL_EM: f32 = 9.0;
+/// Widest the bake preview card grows, in body text heights.
+pub(crate) const PREVIEW_CARD_MAX_EM: f32 = 26.0;
 
 /// The messages the mode bar sends; the host decides what they mean.
 pub struct ModeBarMessages<M> {
@@ -373,8 +375,10 @@ pub fn preview_card<'a, M: Clone + 'a>(
         card = card.push(caption(ids::SKETCH_BAKE_SELECT_HINT));
     }
     card = card.push(caption(ids::EDITORS_SKETCH_BAKE_NEVER));
+    // Capped so the failing place on the canvas stays visible (mockup row 179d).
     container(card)
         .padding([SP.s, SP.m])
+        .max_width(TS.body * PREVIEW_CARD_MAX_EM)
         .style(crate::styles::modal_card(tokens))
         .boxed()
 }
@@ -468,4 +472,45 @@ pub fn footprint_overlay<'a>(
         .align_x(Horizontal::Left)
         .align_y(Vertical::Bottom)
         .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Mockup row 179d: a long failing check wraps inside the capped card,
+    /// so the card leaves the canvas beside it visible.
+    #[test]
+    fn the_preview_card_keeps_to_its_width() {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        let i18n = I18n::en_us();
+        let warning = "self-intersection ".repeat(30);
+        let issues = PreviewIssues::<()> {
+            refusal_select: None,
+            heading: ids::SKETCH_BAKE_CHECKS,
+            lines: vec![(
+                CheckStatus::Failed,
+                t!(i18n, ids::SKETCH_BAKE_WARNING, "warning" => warning.as_str()),
+                None,
+            )],
+            caption: None,
+            gap: None,
+        };
+        let card = preview_card(
+            &BakePreview::Refused("open profile".into()),
+            issues,
+            &tokens,
+            &i18n,
+        );
+        let texts = crate::layout_probe::lay_out_texts(card, iced::Size::new(1200.0, 800.0));
+        let cap = TS.body * PREVIEW_CARD_MAX_EM;
+        assert!(!texts.is_empty());
+        for laid in &texts {
+            assert!(
+                laid.bounds.x + laid.bounds.width <= cap,
+                "{:?} passes {cap}",
+                laid.bounds
+            );
+        }
+    }
 }

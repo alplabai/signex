@@ -162,9 +162,6 @@ impl Signex {
             PanelMsg::FpEditorSetNextPadTemplate(v) => {
                 self.fp_editor_set_next_pad_template(v.clone())
             }
-            PanelMsg::FpEditorSetNextPadTemplateLibrary(v) => {
-                self.fp_editor_set_next_pad_template_library(v.clone())
-            }
             PanelMsg::FpEditorSetNextPadPasteMarginTop(v) => {
                 self.fp_editor_set_next_pad_paste_margin_top(v.clone())
             }
@@ -248,9 +245,6 @@ impl Signex {
             }
             PanelMsg::FpEditorSetSelectedPadTemplate { idx, value } => {
                 self.fp_editor_set_selected_pad_template(*idx, value.clone())
-            }
-            PanelMsg::FpEditorSetSelectedPadTemplateLibrary { idx, value } => {
-                self.fp_editor_set_selected_pad_template_library(*idx, value.clone())
             }
             PanelMsg::FpEditorSetSelectedPadPasteMarginTop { idx, value } => {
                 self.fp_editor_set_selected_pad_paste_margin_top(*idx, value.clone())
@@ -586,6 +580,17 @@ impl Signex {
             PanelMsg::FpEditorSetArrayNumberingScheme { array_id, scheme } => {
                 self.fp_editor_set_array_numbering_scheme(*array_id, *scheme)
             }
+            PanelMsg::FpEditorSetArraySweep { array_id, sweep } => {
+                self.fp_editor_set_array_sweep(*array_id, *sweep)
+            }
+            PanelMsg::FpEditorPickNextPadTemplate { template, library } => {
+                self.fp_editor_pick_next_pad_template(template.clone(), library.clone())
+            }
+            PanelMsg::FpEditorPickSelectedPadTemplate {
+                idx,
+                template,
+                library,
+            } => self.fp_editor_pick_selected_pad_template(*idx, template.clone(), library.clone()),
             PanelMsg::FpEditorSetBgaSkipLetters { array_id, value } => {
                 self.fp_editor_set_bga_skip_letters(*array_id, *value)
             }

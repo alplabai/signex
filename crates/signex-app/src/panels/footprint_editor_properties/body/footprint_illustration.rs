@@ -1,15 +1,17 @@
-//! The Footprint sections' illustration: the pads with a light fill, the
-//! courtyard dashed around them, a Courtyard leader and the Expansion
-//! callout between the pads and the courtyard.
+//! The Footprint sections' illustration (mockup row 124): the numbered pads
+//! with a light fill, the assembly outline, the silkscreen, the pin 1 dot,
+//! the courtyard dashed around them, and their callouts. Silkscreen and
+//! assembly are the footprint's own drawn strokes.
 
 use iced::{Point, Rectangle};
-use signex_i18n::{I18n, ids, t};
+use signex_i18n::{I18n, UserText, ids, t};
 use signex_widgets::property_illustration::{
-    Anchor, Callout, Illustration, Ink, Leader, Paint, Part, Primitive, Style, Tint, Weight,
+    Anchor, Callout, Illustration, Ink, Leader, Paint, Part, Primitive, Style, TextLabel, TextRole,
+    Tint, Weight,
 };
 
 use super::fields;
-use crate::panels::{FootprintEditorPanelContext, PadOutlineSummary};
+use crate::panels::{FootprintEditorPanelContext, OutlineSegment, PadOutlineSummary};
 
 /// The view box, in illustration units (the mockup's 264 × 140).
 const VIEW_W: f32 = 264.0;
@@ -24,6 +26,10 @@ const CALLOUT_DROP: f32 = 12.0;
 const LEADER_RUN: f32 = 10.0;
 /// A rotation within this many degrees of a quarter turn draws upright.
 const UPRIGHT_TOLERANCE_DEG: f64 = 1e-6;
+/// Most pads that still read with a number on each.
+const MAX_NUMBERED_PADS: usize = 32;
+/// Radius of the pin 1 dot, in view units.
+const PIN_ONE_RADIUS: f32 = 2.0;
 
 /// Footprint millimetres to view units: uniform scale, centred.
 struct Map {
@@ -75,25 +81,134 @@ fn pads_extent(pads: &[PadOutlineSummary]) -> Option<[f64; 4]> {
     pads.iter().flat_map(|pad| pad.corners_mm).fold(None, grow)
 }
 
-/// The illustration of `fp`'s pads and courtyard; `None` without either.
+/// The extent of straight strokes.
+fn segments_extent(segments: &[OutlineSegment]) -> Option<[f64; 4]> {
+    segments.iter().flatten().copied().fold(None, grow)
+}
+
+/// Everything drawn, as one extent; `None` when nothing is.
+fn drawing_extent(fp: &FootprintEditorPanelContext) -> Option<[f64; 4]> {
+    let corners = |e: Option<[f64; 4]>| e.into_iter().flat_map(|[a, b, c, d]| [[a, b], [c, d]]);
+    corners(pads_extent(&fp.pad_outlines))
+        .chain(corners(fp.courtyard_extent_mm))
+        .chain(corners(segments_extent(&fp.silk_segments)))
+        .chain(corners(segments_extent(&fp.assembly_segments)))
+        .fold(None, grow)
+}
+
+/// The illustration of `fp` (mockup row 124): numbered pads, the assembly
+/// outline, the silkscreen, the pin 1 dot and the courtyard, each with its
+/// callout; `None` with nothing to draw.
 pub(super) fn illustration(fp: &FootprintEditorPanelContext, i18n: &I18n) -> Option<Illustration> {
+    let map = Map::fit(drawing_extent(fp)?);
     let pads = pads_extent(&fp.pad_outlines);
-    let extent = match (pads, fp.courtyard_extent_mm) {
-        (Some(p), Some([x0, y0, x1, y1])) => grow(grow(Some(p), [x0, y0]), [x1, y1])?,
-        (Some(p), None) => p,
-        (None, Some(c)) => c,
-        (None, None) => return None,
-    };
-    let map = Map::fit(extent);
     let mut ill =
         Illustration::new(VIEW_W, VIEW_H).feature(fields::COURTYARD, fp.auto_fit_courtyard);
     for pad in &fp.pad_outlines {
         ill = ill.parts(pad_parts(pad, &map));
     }
+    ill = ill.parts(pad_numbers(&fp.pad_outlines, &map));
+    ill = ill.parts(assembly_parts(&fp.assembly_segments, &map, i18n));
+    ill = ill.parts(silk_parts(&fp.silk_segments, &map, i18n));
+    ill = ill.parts(pin_one_parts(&fp.pad_outlines, &map, i18n));
     if let Some(courtyard) = fp.courtyard_extent_mm {
         ill = ill.parts(courtyard_parts(courtyard, pads, &map, i18n));
     }
     Some(ill)
+}
+
+/// Each pad's designator on it; a dense footprint draws none.
+fn pad_numbers(pads: &[PadOutlineSummary], map: &Map) -> Vec<Part> {
+    if pads.len() > MAX_NUMBERED_PADS {
+        return Vec::new();
+    }
+    pads.iter()
+        .map(|pad| {
+            let label = TextLabel {
+                at: map.point(pad.position_mm),
+                text: UserText::new(pad.number.as_str()).into(),
+                anchor: Anchor::Middle,
+                role: TextRole::Mono,
+            };
+            Part::label(label, Ink::Secondary)
+        })
+        .collect()
+}
+
+fn stroke_parts(segments: &[OutlineSegment], style: Style, map: &Map) -> Vec<Part> {
+    segments
+        .iter()
+        .map(|[from, to]| {
+            let line = Primitive::Line {
+                from: map.point(*from),
+                to: map.point(*to),
+            };
+            Part::new(line, style)
+        })
+        .collect()
+}
+
+/// The dashed assembly outline, its leader at its right edge.
+fn assembly_parts(segments: &[OutlineSegment], map: &Map, i18n: &I18n) -> Vec<Part> {
+    let Some([_, y0, x1, y1]) = segments_extent(segments) else {
+        return Vec::new();
+    };
+    let style = Style::dashed().with_stroke_paint(Paint::Ink(Ink::Faint));
+    let mut parts = stroke_parts(segments, style, map);
+    let at = map.point([x1, (y0 + y1) / 2.0]);
+    parts.push(Part::leader(Leader {
+        at,
+        label_at: Point::new(at.x + 2.0 * LEADER_RUN, at.y),
+        label: t!(i18n, ids::EDITORS_FP_PROPS_ILLUSTRATION_ASSEMBLY).into(),
+        anchor: Anchor::Start,
+    }));
+    parts
+}
+
+/// The silkscreen strokes, their leader at the bottom left.
+fn silk_parts(segments: &[OutlineSegment], map: &Map, i18n: &I18n) -> Vec<Part> {
+    let Some([x0, _, _, y1]) = segments_extent(segments) else {
+        return Vec::new();
+    };
+    let mut parts = stroke_parts(segments, Style::edge(), map);
+    let at = map.point([x0, y1]);
+    parts.push(Part::leader(Leader {
+        at,
+        label_at: Point::new(at.x - LEADER_RUN, at.y + LEADER_RUN),
+        label: t!(i18n, ids::EDITORS_FP_PROPS_ILLUSTRATION_SILKSCREEN).into(),
+        anchor: Anchor::End,
+    }));
+    parts
+}
+
+/// The dot on the outer side of pad 1, with its leader.
+fn pin_one_parts(pads: &[PadOutlineSummary], map: &Map, i18n: &I18n) -> Vec<Part> {
+    let Some(pad) = pads.iter().find(|pad| pad.number == "1") else {
+        return Vec::new();
+    };
+    let xs = pad.corners_mm.map(|c| map.point(c).x);
+    let left = xs.iter().copied().fold(f32::INFINITY, f32::min);
+    let right = xs.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    let y = map.point(pad.position_mm).y;
+    let is_left = (left + right) / 2.0 <= VIEW_W / 2.0;
+    let gap = 2.0 * PIN_ONE_RADIUS;
+    let center = Point::new(if is_left { left - gap } else { right + gap }, y);
+    let run = if is_left { -LEADER_RUN } else { LEADER_RUN };
+    vec![
+        Part::new(
+            Primitive::Circle {
+                center,
+                radius: PIN_ONE_RADIUS,
+            },
+            Style::filled(Paint::Ink(Ink::Secondary), Tint::Solid),
+        ),
+        Part::leader(Leader {
+            at: center,
+            label_at: Point::new(center.x + run, center.y - LEADER_RUN),
+            label: t!(i18n, ids::EDITORS_FP_PROPS_ILLUSTRATION_PIN_ONE).into(),
+            anchor: if is_left { Anchor::End } else { Anchor::Start },
+        }),
+    ]
 }
 
 /// One pad: its copper with a light fill, and its hole knocked out.

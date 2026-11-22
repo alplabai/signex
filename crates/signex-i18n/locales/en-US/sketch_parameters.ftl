@@ -68,3 +68,16 @@ sketch-parameters-name-invalid = Use letters, digits and _, not starting with a 
 sketch-parameters-name-reserved = { $name } is reserved.
 sketch-parameters-name-taken = A parameter named { $name } already exists.
 sketch-parameters-name-missing = There is no parameter named { $name }.
+
+# Import from another footprint: a library picker, then its parameters.
+sketch-parameters-import = Import from another footprint…
+sketch-parameters-import-from = Import from { $footprint }
+sketch-parameters-import-none = This footprint has no parameters.
+sketch-parameters-import-taken = name in use
+sketch-parameters-import-apply = Import { $count }
+
+# The live checks under the table.
+sketch-parameters-checks-title = Live checks
+sketch-parameters-checks-passed = No problems found.
+sketch-parameters-check-error = { $name }: { $reason }. The drawing uses the last good value ({ $value }).
+sketch-parameters-check-overlap = Pads { $first } and { $second } overlap.

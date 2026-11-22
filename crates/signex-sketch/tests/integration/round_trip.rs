@@ -474,6 +474,7 @@ fn linear_array_round_trip() {
         numbering: NumberingScheme::LinearIncrement {
             start_expr: "1".into(),
             step_expr: "1".into(),
+            sweep: Default::default(),
         },
     };
     let s = toml::to_string(&a).unwrap();
@@ -518,6 +519,7 @@ fn polar_array_round_trip() {
         numbering: NumberingScheme::LinearIncrement {
             start_expr: "1".into(),
             step_expr: "1".into(),
+            sweep: Default::default(),
         },
     };
     let s = toml::to_string(&a).unwrap();
@@ -543,6 +545,7 @@ fn polar_array_with_depopulation_round_trip() {
         numbering: NumberingScheme::LinearIncrement {
             start_expr: "1".into(),
             step_expr: "1".into(),
+            sweep: Default::default(),
         },
     };
     let s = toml::to_string(&a).unwrap();

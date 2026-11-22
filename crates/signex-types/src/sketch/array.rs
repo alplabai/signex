@@ -179,6 +179,10 @@ pub enum NumberingScheme {
     LinearIncrement {
         start_expr: String,
         step_expr: String,
+        /// The order a grid's cells take their numbers (mockup row 126).
+        /// A one-dimensional pattern has no second axis and ignores it.
+        #[serde(default, skip_serializing_if = "GridSweep::is_row_by_row")]
+        sweep: GridSweep,
     },
 
     /// BGA convention — row letter + col number (`A1`, `H17`). IPC-7351
@@ -201,6 +205,42 @@ impl Default for NumberingScheme {
         Self::LinearIncrement {
             start_expr: "1".into(),
             step_expr: "1".into(),
+            sweep: GridSweep::default(),
+        }
+    }
+}
+
+/// The order a grid pattern numbers its cells (mockup row 126).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GridSweep {
+    /// Along each row, then the next row.
+    #[default]
+    RowByRow,
+    /// Along each column, then the next column.
+    ColumnByColumn,
+    /// Down the first column, up the next: the DIP order.
+    DownThenUp,
+}
+
+impl GridSweep {
+    pub const ALL: [Self; 3] = [Self::RowByRow, Self::ColumnByColumn, Self::DownThenUp];
+
+    pub fn is_row_by_row(&self) -> bool {
+        *self == Self::RowByRow
+    }
+
+    /// The 0-based place of cell `(i, j)` in the numbering of an `nx` × `ny`
+    /// grid. A `j` past the last row (a mirrored instance) keeps its
+    /// row-major place, so it continues after the grid's own numbers.
+    pub fn sequence(self, i: usize, j: usize, nx: usize, ny: usize) -> usize {
+        if j >= ny {
+            return j * nx + i;
+        }
+        match self {
+            Self::RowByRow => j * nx + i,
+            Self::ColumnByColumn => i * ny + j,
+            Self::DownThenUp if i % 2 == 1 => i * ny + (ny - 1 - j),
+            Self::DownThenUp => i * ny + j,
         }
     }
 }

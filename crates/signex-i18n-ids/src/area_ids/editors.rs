@@ -10,6 +10,8 @@ define_ids! {
     EDITORS_PAD_LOCKED = "editors-pad-locked";
     EDITORS_PAD_TEMPLATE = "editors-pad-template";
     EDITORS_PAD_TEMPLATE_LIBRARY = "editors-pad-template-library";
+    EDITORS_PAD_TEMPLATE_CUSTOM = "editors-pad-template-custom";
+    EDITORS_PAD_TEMPLATE_NAME = "editors-pad-template-name";
     EDITORS_PAD_TOP_SIDE = "editors-pad-top-side";
     EDITORS_PAD_BOTTOM_SIDE = "editors-pad-bottom-side";
     EDITORS_PAD_TOP_ASSEMBLY = "editors-pad-top-assembly";
@@ -344,6 +346,10 @@ define_ids! {
     EDITORS_ROLE_PATTERN_SCHEME_LINEAR = "editors-role-pattern-scheme-linear";
     EDITORS_ROLE_PATTERN_SCHEME_BGA = "editors-role-pattern-scheme-bga";
     EDITORS_ROLE_PATTERN_SCHEME_EXPLICIT = "editors-role-pattern-scheme-explicit";
+    EDITORS_ROLE_PATTERN_SWEEP = "editors-role-pattern-sweep";
+    EDITORS_ROLE_PATTERN_SWEEP_ROW = "editors-role-pattern-sweep-row";
+    EDITORS_ROLE_PATTERN_SWEEP_COLUMN = "editors-role-pattern-sweep-column";
+    EDITORS_ROLE_PATTERN_SWEEP_DIP = "editors-role-pattern-sweep-dip";
     EDITORS_ROLE_PATTERN_START_ROW_COL = "editors-role-pattern-start-row-col";
     EDITORS_ROLE_PATTERN_DELETE = "editors-role-pattern-delete";
     EDITORS_ROLE_PATTERN_DX_CALLOUT = "editors-role-pattern-dx-callout";

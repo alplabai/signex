@@ -50,9 +50,12 @@ use super::state::{ComponentPreviewState, EditorAddress, LibraryState, PreviewTa
 /// Fade over a read-only tab: the panel colour, so it dims on any theme.
 const READ_ONLY_VEIL_ALPHA: f32 = 0.55;
 
-/// Narrowest the editor lays out: the mock's 980 px window. A narrower
-/// window scrolls the editor sideways inside its frame.
-const MIN_EDITOR_W: f32 = 980.0;
+/// Narrowest the editor lays out, in body text heights: the General columns
+/// shrink down to it, so PIN TO PAD, Cancel and Save stay on screen in a
+/// docked tab (mockup row 128, decided 2026-11-22). A narrower window
+/// scrolls the editor sideways inside its frame.
+const MIN_EDITOR_EM: f32 = 52.0;
+const MIN_EDITOR_W: f32 = TS.body * MIN_EDITOR_EM;
 
 /// The widget id of a parameter's field, so the header's parse pill can
 /// focus it. Keyed by the row too: two editors can be open.

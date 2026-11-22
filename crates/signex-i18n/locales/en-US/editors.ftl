@@ -301,6 +301,10 @@ editors-pad-locked = Locked
 editors-pad-template = Template
 # The library the pad template comes from.
 editors-pad-template-library = Library
+# The Template row for a pad with no named template.
+editors-pad-template-custom = (custom)
+# The name of a template only this pad uses.
+editors-pad-template-name = Name
 # Pad features of each board side.
 editors-pad-top-side = Top Side
 editors-pad-bottom-side = Bottom Side
@@ -396,6 +400,9 @@ editors-fp-props-expansion = Expansion
 editors-fp-props-length-mm = { $value } mm
 # Leader label of the courtyard in the illustration.
 editors-fp-props-illustration-courtyard = Courtyard
+editors-fp-props-illustration-silkscreen = Silkscreen
+editors-fp-props-illustration-assembly = Assembly outline
+editors-fp-props-illustration-pin-one = Pin 1 marker
 editors-fp-props-section-snap = Snap Options
 editors-fp-props-snapping = Snapping
 editors-fp-props-snap-all-layers = All Layers
@@ -945,6 +952,10 @@ editors-role-pattern-scheme = Scheme
 editors-role-pattern-scheme-linear = Linear (1, 2, 3, …)
 editors-role-pattern-scheme-bga = BGA (A1, A2, …)
 editors-role-pattern-scheme-explicit = Explicit list
+editors-role-pattern-sweep = Sweep
+editors-role-pattern-sweep-row = Row by row
+editors-role-pattern-sweep-column = Column by column
+editors-role-pattern-sweep-dip = Down then up (DIP)
 editors-role-pattern-start-row-col = Start row / col
 editors-role-pattern-delete = Delete pattern
 # Drawing callouts; $value is a length in mm.

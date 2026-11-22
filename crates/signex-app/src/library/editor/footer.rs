@@ -134,19 +134,18 @@ fn editable_line<'a>(
     // The inline error sits under the field; this is the one-line
     // summary.
     if let Some((field, why)) = state.first_unparsed_field() {
-        line = line.push(
-            text(t!(
-                i18n,
-                ids::EDITORS_COMPONENT_FOOTER_UNPARSED,
-                "count" => state.params_error.len(),
-                "field" => field,
-                "reason" => why
-            ))
-            .size(TS.caption)
-            .color(theme_ext::error_color(tokens))
-            .wrapping(iced::widget::text::Wrapping::None)
-            .boxed(),
-        );
+        // Clipped to the room left, so a long reason never pushes Save out.
+        let summary = text(t!(
+            i18n,
+            ids::EDITORS_COMPONENT_FOOTER_UNPARSED,
+            "count" => state.params_error.len(),
+            "field" => field,
+            "reason" => why
+        ))
+        .size(TS.caption)
+        .color(theme_ext::error_color(tokens))
+        .wrapping(iced::widget::text::Wrapping::None);
+        line = line.push(container(summary).width(Length::Fill).clip(true).boxed());
     }
     line = line
         .push(Space::new().width(Length::Fill).boxed())
@@ -308,6 +307,32 @@ mod tests {
             &label,
         );
         assert!(clicked.is_empty(), "{clicked:?}");
+    }
+
+    /// Mockup row 128 (decided 2026-11-22): at the narrowest docked width
+    /// Cancel and Save stay inside the footer, also with a long parse error.
+    #[test]
+    fn cancel_and_save_stay_on_screen_at_the_narrowest_width() {
+        let (mut state, address) = editor();
+        state
+            .params_error
+            .insert("value".into(), "not a number ".repeat(20));
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        let i18n = I18n::en_us();
+        let width = super::super::MIN_EDITOR_W;
+        let texts = crate::layout_probe::lay_out_texts(
+            view(&state, &tokens, &i18n, &address, false),
+            iced::Size::new(width, 80.0),
+        );
+        for id in [ids::EDITORS_COMPONENT_CANCEL, ids::EDITORS_COMPONENT_SAVE] {
+            let label = t!(i18n, id).to_string();
+            let found = crate::layout_probe::find(&texts, &label);
+            assert!(
+                found.bounds.x + found.bounds.width <= width,
+                "{label:?} at {:?} in {width}",
+                found.bounds
+            );
+        }
     }
 
     /// Cancel is the editor's close path, which asks about unsaved edits.

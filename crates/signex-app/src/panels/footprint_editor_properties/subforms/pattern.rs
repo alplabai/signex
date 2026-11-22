@@ -20,6 +20,7 @@ use super::helpers::{
 };
 use super::pattern_drawing::drawing;
 use signex_bake::array::ArrayPreview;
+use signex_sketch::array::GridSweep;
 
 const LAYOUT_SECTION: &str = "fp_role_pattern_layout";
 const NUMBERING_SECTION: &str = "fp_role_pattern_numbering";
@@ -349,6 +350,50 @@ fn instance_grid<'a>(
     grid.boxed()
 }
 
+pub(super) fn sweep_label(i18n: &I18n, sweep: GridSweep) -> String {
+    let id = match sweep {
+        GridSweep::RowByRow => ids::EDITORS_ROLE_PATTERN_SWEEP_ROW,
+        GridSweep::ColumnByColumn => ids::EDITORS_ROLE_PATTERN_SWEEP_COLUMN,
+        GridSweep::DownThenUp => ids::EDITORS_ROLE_PATTERN_SWEEP_DIP,
+    };
+    t!(i18n, id).into_string()
+}
+
+/// Sweep (mockup row 126, decided 2026-11-22): the order a grid numbered
+/// 1, 2, 3 takes its numbers; greyed under the other schemes.
+fn sweep_row<'a>(
+    pattern: &ArraySummary,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, PanelMsg> {
+    let array_id = pattern.array_id;
+    let labels: Vec<(GridSweep, String)> = GridSweep::ALL
+        .iter()
+        .map(|&sweep| (sweep, sweep_label(i18n, sweep)))
+        .collect();
+    let list = pick_list(
+        Some(pattern.sweep.unwrap_or_default()),
+        GridSweep::ALL.to_vec(),
+        move |sweep: &GridSweep| {
+            labels
+                .iter()
+                .find(|(s, _)| s == sweep)
+                .map(|(_, label)| label.clone())
+                .unwrap_or_default()
+        },
+    )
+    .graphite()
+    .on_select(move |sweep| PanelMsg::FpEditorSetArraySweep { array_id, sweep })
+    .padding([SP.xs, SP.m])
+    .width(Length::Fill);
+    let row = field_row(
+        t!(i18n, ids::EDITORS_ROLE_PATTERN_SWEEP),
+        list.boxed(),
+        tokens,
+    );
+    gated(row, pattern.sweep.is_some(), tokens)
+}
+
 fn numbering_rows<'a>(
     pattern: &'a ArraySummary,
     tokens: &ThemeTokens,
@@ -379,6 +424,9 @@ fn numbering_rows<'a>(
         scheme.boxed(),
         tokens,
     )];
+    if kind_of(pattern) == PatternKind::Grid {
+        rows.push(sweep_row(pattern, tokens, i18n));
+    }
     // Other schemes show the BGA defaults, greyed.
     let (skip, start_row, start_col) = pattern.bga_config.as_ref().map_or((true, 'A', 1), |b| {
         (b.skip_letters, b.start_row, b.start_col)

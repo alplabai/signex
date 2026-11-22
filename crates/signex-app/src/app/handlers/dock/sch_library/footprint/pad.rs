@@ -290,13 +290,6 @@ impl Signex {
         self.refresh_panel_ctx();
         true
     }
-    pub(crate) fn fp_editor_set_next_pad_template_library(&mut self, value: String) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.state.next_pad_defaults.template_library = value;
-        }
-        self.refresh_panel_ctx();
-        true
-    }
     pub(crate) fn fp_editor_set_next_pad_paste_margin_top(&mut self, value: String) -> bool {
         self.set_next_pad_optional_mm(pad_field::PASTE_TOP, &value, |d, v| {
             d.stack.paste_margin_top = v
@@ -714,13 +707,29 @@ impl Signex {
         self.with_selected_pad_field(idx, Some("pad_template"), |pad| pad.template = value);
         true
     }
-    pub(crate) fn fp_editor_set_selected_pad_template_library(
+    /// A Template row for the next pad: the name and its library together.
+    pub(crate) fn fp_editor_pick_next_pad_template(
+        &mut self,
+        template: String,
+        library: String,
+    ) -> bool {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.template = template;
+            editor.state.next_pad_defaults.template_library = library;
+        }
+        self.refresh_panel_ctx();
+        true
+    }
+    /// A Template row for the selected pad, as one undo step.
+    pub(crate) fn fp_editor_pick_selected_pad_template(
         &mut self,
         idx: usize,
-        value: String,
+        template: String,
+        library: String,
     ) -> bool {
-        self.with_selected_pad_field(idx, Some("pad_template_library"), |pad| {
-            pad.template_library = value
+        self.with_selected_pad_field(idx, None, |pad| {
+            pad.template = template;
+            pad.template_library = library;
         });
         true
     }
