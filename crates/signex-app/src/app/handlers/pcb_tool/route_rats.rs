@@ -63,7 +63,7 @@ impl Signex {
         session: &BoardToolSession,
         preview: &PcbBoard,
     ) -> Option<RatLine> {
-        if !self.pcb_layer_view(&session.path).ratsnest_visible() {
+        if !self.pcb_layer_view(&session.path).ratsnest_drawn() {
             return None;
         }
         let end = route_end(preview, session.cursor?);

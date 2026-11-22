@@ -61,7 +61,7 @@ nothing and says so in the Messages panel.
 
 ## Navigator panel {#navigator-panel}
 
-The Navigator lists the project's sheet hierarchy (Graphite mockup #54)
+The Navigator lists the project's sheet hierarchy (Graphite mockup row 54)
 under a Sheets heading with the sheet count. Each row has the sheet icon, the sheet name, its file name in muted mono and,
 on the right, the page number from the project's sheet numbering; a child
 sheet placed twice has a row and a number per placement. The focused sheet

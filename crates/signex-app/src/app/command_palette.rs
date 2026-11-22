@@ -490,6 +490,9 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
 /// `GND` leads with the net `GND`, not a component whose value is GND.
 const EXACT_LABEL_BONUS: i32 = 1 << 20;
 
+/// Added to a row holding a query's words in the order they were typed.
+const WORDS_IN_ORDER_BONUS: i32 = 25;
+
 /// What a query is matched against: the label, then value and detail.
 fn search_text(entry: &CommandEntry) -> String {
     [
@@ -546,34 +549,48 @@ pub fn rank_results_in(i18n: &I18n, catalog: &[CommandEntry], query: &str) -> Ve
         return ranked;
     }
 
-    let query = query.trim();
+    let query = query.split_whitespace().collect::<Vec<_>>().join(" ");
     let mut ranked: Vec<(usize, i32)> = catalog
         .iter()
         .enumerate()
-        .filter_map(|(idx, entry)| {
-            let text = search_text(entry);
-            if !contains_query(i18n, query, &text) {
-                return None;
-            }
-            fuzzy_score_in(i18n, query, &text).map(|score| {
-                let source_bonus = match entry.source {
-                    CommandSource::Command => 5,
-                    CommandSource::Symbol => 3,
-                    CommandSource::Net => 2,
-                    CommandSource::Sheet => 2,
-                    CommandSource::File => 1,
-                };
-                let exact = if is_exact_label(i18n, query, &entry.label) {
-                    EXACT_LABEL_BONUS
-                } else {
-                    0
-                };
-                (idx, score + source_bonus + exact)
-            })
-        })
+        .filter_map(|(idx, entry)| Some((idx, entry_score(i18n, &query, entry)?)))
         .collect();
     ranked.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
     ranked
+}
+
+/// The rank of `entry` for `query`; `None` when it is not a result.
+fn entry_score(i18n: &I18n, query: &str, entry: &CommandEntry) -> Option<i32> {
+    let text = search_text(entry);
+    if !contains_query(i18n, query, &text) {
+        return None;
+    }
+    let source_bonus = match entry.source {
+        CommandSource::Command => 5,
+        CommandSource::Symbol => 3,
+        CommandSource::Net => 2,
+        CommandSource::Sheet => 2,
+        CommandSource::File => 1,
+    };
+    let exact = if is_exact_label(i18n, query, &entry.label) {
+        EXACT_LABEL_BONUS
+    } else {
+        0
+    };
+    Some(query_score(i18n, query, &text)? + source_bonus + exact)
+}
+
+/// Each word scored on its own, so any word order is a match; a row holding
+/// the words as typed ranks above one holding them reordered.
+fn query_score(i18n: &I18n, query: &str, text: &str) -> Option<i32> {
+    let words = query
+        .split_whitespace()
+        .map(|word| fuzzy_score_in(i18n, word, text))
+        .sum::<Option<i32>>()?;
+    let fold = |c: char| i18n.fold_char_for_search(c);
+    let folded = |s: &str| s.chars().map(fold).collect::<String>();
+    let in_order = query.contains(' ') && folded(text).contains(&folded(query));
+    Some(words + if in_order { WORDS_IN_ORDER_BONUS } else { 0 })
 }
 
 /// Sublime-text-style fuzzy score. Returns `None` if any query
@@ -760,6 +777,40 @@ mod tests {
         for label in ["GND", "#P1", "power"] {
             assert!(kept.contains(&label), "{label}: {kept:?}");
         }
+    }
+
+    /// Mockup row 9: a result holds every typed word, in any order and with
+    /// any spacing; a row missing a word is not a result.
+    #[test]
+    fn every_typed_word_matches_in_any_order_and_spacing() {
+        let catalog = vec![
+            entry(CommandSource::Command, "Place Wire", ""),
+            entry(CommandSource::Command, "Place Bus", ""),
+            entry(CommandSource::Command, "Align to grid", ""),
+        ];
+        let hits = |query: &str| -> Vec<String> {
+            rank_results(&catalog, query)
+                .into_iter()
+                .map(|(idx, _)| catalog[idx].label.clone())
+                .collect()
+        };
+        for query in ["place wire", "wire place", "place  wire", "  WIRE   place "] {
+            assert_eq!(hits(query), ["Place Wire"], "{query:?}");
+        }
+        assert_eq!(hits("grid align"), ["Align to grid"]);
+        assert!(hits("wire grid").is_empty());
+    }
+
+    /// Of two rows holding the same words, the one in the typed order leads.
+    #[test]
+    fn the_typed_word_order_ranks_first() {
+        let catalog = vec![
+            entry(CommandSource::Command, "Wire Place", ""),
+            entry(CommandSource::Command, "Place Wire", ""),
+        ];
+        let ranked = rank_results(&catalog, "place wire");
+        assert_eq!(ranked.len(), 2);
+        assert_eq!(catalog[ranked[0].0].label, "Place Wire");
     }
 
     /// Mockup row 9: the row named exactly what was typed leads, so NETS comes

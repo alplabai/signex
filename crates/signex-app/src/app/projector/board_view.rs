@@ -20,13 +20,13 @@ impl Signex {
         let ratsnest_key = self.active_pcb_ratsnest_key();
         let board_path = self.active_tab_path().unwrap_or_default();
         let mut ratsnest = std::mem::take(&mut self.interaction_state.pcb_ratsnest);
-        let ratsnest_visible = self.pcb_layer_view(&board_path).ratsnest_visible();
+        let ratsnest_drawn = self.pcb_layer_view(&board_path).ratsnest_drawn();
         let renderer_snapshot = self.active_pcb().map(|board| {
             ratsnest.refresh(ratsnest_key, board);
             let snapshot = self
                 .pcb_snapshot_for(&board_path, board)
                 .with_zone_fills(ratsnest.zone_fills());
-            if ratsnest_visible {
+            if ratsnest_drawn {
                 ratsnest.apply(&board_path, snapshot)
             } else {
                 snapshot

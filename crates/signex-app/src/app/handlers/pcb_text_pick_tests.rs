@@ -210,6 +210,45 @@ fn a_dragged_footprint_moves_itself_with_no_ghost() {
     assert_eq!(scene.top_polygons.len(), 2, "both pads are drawn");
 }
 
+fn only_unrouted_on(app: &mut Signex, path: &Path) {
+    assert!(app.edit_pcb_view_at(path, |view, _| view.set_only_unrouted(true)));
+}
+
+/// #2821: a carried part is drawn at full strength over the dimmed board.
+#[test]
+fn a_carried_part_is_not_faded_by_show_only_unrouted() {
+    let fills = |only_unrouted: bool| -> Vec<[f32; 4]> {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut app, path) = app_with_board(dir.path());
+        if only_unrouted {
+            only_unrouted_on(&mut app, &path);
+        }
+        drag(&mut app, Point::new(10.0, 11.0), Point::new(13.0, 11.0));
+        let canvas = &app.interaction_state.pcb_canvas;
+        let base = canvas.active_renderer_snapshot().expect("a board");
+        assert_eq!(base.paint.is_board_dimmed(), only_unrouted);
+        let scene = canvas.drag_preview_scene().expect("a moving scene");
+        scene.top_polygons.iter().map(|p| p.fill_color).collect()
+    };
+    let shown = fills(false);
+    assert_eq!(shown.len(), 2, "both pads are drawn");
+    assert_eq!(fills(true), shown);
+}
+
+/// #2821: a carried text is not faded, while the board under it stays dimmed.
+#[test]
+fn a_carried_text_is_not_faded_by_show_only_unrouted() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    only_unrouted_on(&mut app, &path);
+    drag(&mut app, Point::new(10.0, 10.0), Point::new(13.0, 12.0));
+    let canvas = &app.interaction_state.pcb_canvas;
+    assert_eq!(canvas.drag_preview_texts().len(), 1);
+    let base = canvas.active_renderer_snapshot().expect("a board");
+    assert!(base.paint.is_board_dimmed());
+    assert!(!canvas.drag_preview_text_paint().is_board_dimmed());
+}
+
 #[test]
 fn with_texts_filtered_out_a_designator_is_not_grabbed() {
     let dir = tempfile::tempdir().unwrap();

@@ -258,7 +258,7 @@ impl Signex {
             canvas.set_part_ghost(ghost.as_ref());
         }
         let ratsnest = view
-            .ratsnest_visible()
+            .ratsnest_drawn()
             .then_some((&interaction.pcb_ratsnest, path.as_path()));
         match board {
             Some(board) => {
@@ -329,7 +329,7 @@ impl Signex {
                 let own = ghost.as_ref().filter(|(owner, _)| *owner == id);
                 canvas.set_part_ghost(own.map(|(_, snapshot)| snapshot));
                 let ratsnest = view
-                    .ratsnest_visible()
+                    .ratsnest_drawn()
                     .then_some((&interaction.pcb_ratsnest, path));
                 sync_drag_preview(canvas, board, &view, standard, ratsnest, carry);
             }
@@ -384,8 +384,7 @@ fn sync_drag_preview(
         let arcs = followed_arcs(board, &carry.following_arcs(board), carry.delta);
         let mut moved = carried_board(board, &carried, &following, carry.delta);
         moved.free.arcs = arcs.clone();
-        let snapshot =
-            PcbSnapshot::from_board_with_view(&moved, view).with_designator_standard(standard);
+        let snapshot = carried_snapshot(&moved, view, standard);
         match ratsnest {
             Some((cache, path)) => {
                 let after = with_arcs_replaced(
@@ -425,7 +424,19 @@ fn sync_text_drag_preview(
         canvas.begin_text_drag_preview(text, base);
     }
     canvas.move_drag_preview(delta, || {
-        PcbSnapshot::from_board_with_view(&carried_text_board(board, text, delta), view)
-            .with_designator_standard(standard)
+        carried_snapshot(&carried_text_board(board, text, delta), view, standard)
     });
+}
+
+/// What is carried, as `view` shows it: like a ghost, it is never faded by
+/// Show only unrouted, while the board under it stays dimmed.
+fn carried_snapshot(
+    carried: &PcbBoard,
+    view: &PcbLayerView,
+    standard: Option<signex_types::designator::DesignatorStandard>,
+) -> PcbSnapshot {
+    let mut snapshot =
+        PcbSnapshot::from_board_with_view(carried, view).with_designator_standard(standard);
+    snapshot.paint = snapshot.paint.with_board_dimmed(false);
+    snapshot
 }
