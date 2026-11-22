@@ -193,7 +193,7 @@ fn the_stack_tile_labels_never_overlap() {
         for (i, a) in at.iter().enumerate() {
             let whole = crate::layout_probe::natural::<crate::panels::PanelMsg>(
                 iced::Widget::boxed(
-                    signex_widgets::text(signex_widgets::raw(names[i].clone()))
+                    signex_widgets::text(signex_i18n::UserText::new(names[i].clone()))
                         .size(crate::styles::TypeScale::DEFAULT.caption),
                 ),
                 &names[i],

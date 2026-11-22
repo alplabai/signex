@@ -4,7 +4,8 @@
 
 use iced::{Background, Element, Size, Theme, Widget as _};
 use signex_types::theme::{ThemeId, theme_tokens};
-use signex_widgets::{raw, text};
+use signex_i18n::UserText;
+use signex_widgets::{Label, text};
 
 use super::rows::{field_insets, labelled_row, mono, pair_row, segmented_style, unit_input};
 use crate::layout_probe::{find, lay_out_inputs, lay_out_texts, natural};
@@ -13,6 +14,12 @@ use crate::panels::form_look::{self, FormLook};
 use crate::styles::TypeScale;
 
 const TS: TypeScale = TypeScale::DEFAULT;
+
+/// Fixture text, not UI text.
+fn fixture_label(text: &str) -> Label<'static> {
+    UserText::new(text).into()
+}
+
 const DOCKS: [f32; 2] = [220.0, 300.0];
 const FORMATS: [&str; 3] = ["Template", "Standard", "Custom"];
 const VALUE: &str = "88.900";
@@ -20,12 +27,12 @@ const VALUE: &str = "88.900";
 fn format_row<'a>() -> Element<'a, PanelMsg> {
     let tokens = theme_tokens(ThemeId::GraphiteDark);
     let options = [
-        (0_u8, raw(FORMATS[0])),
-        (1, raw(FORMATS[1])),
-        (2, raw(FORMATS[2])),
+        (0_u8, fixture_label(FORMATS[0])),
+        (1, fixture_label(FORMATS[1])),
+        (2, fixture_label(FORMATS[2])),
     ];
     labelled_row(
-        raw("Format"),
+        fixture_label("Format"),
         signex_widgets::segmented(options, 0, segmented_style(&tokens), |_| PanelMsg::Noop),
     )
 }
@@ -37,7 +44,7 @@ fn segment_labels_never_overlap_and_stay_whole_at_220_and_300_px() {
         let at = FORMATS.map(|label| find(&texts, label).bounds);
         for (i, a) in at.iter().enumerate() {
             let whole =
-                natural::<PanelMsg>(text(raw(FORMATS[i])).size(TS.caption).boxed(), FORMATS[i]);
+                natural::<PanelMsg>(text(fixture_label(FORMATS[i])).size(TS.caption).boxed(), FORMATS[i]);
             assert!(
                 a.width + 1.0 >= whole.width,
                 "{} is cut at {dock} px: {a:?} vs {whole:?}",
@@ -54,19 +61,19 @@ fn segment_labels_never_overlap_and_stay_whole_at_220_and_300_px() {
 fn pair_view<'a>() -> Element<'a, PanelMsg> {
     let field = |axis: &'static str| {
         unit_input(
-            Some(raw(axis)),
+            Some(fixture_label(axis)),
             VALUE.to_string(),
-            Some(raw("mm")),
+            Some(fixture_label("mm")),
             |_| PanelMsg::Noop,
             PanelMsg::Noop,
         )
     };
-    pair_row(raw("Position"), field("X"), field("Y"))
+    pair_row(fixture_label("Position"), field("X"), field("Y"))
 }
 
 #[test]
 fn a_paired_value_fits_side_by_side_at_300_px_and_stacks_at_220_px() {
-    let value = natural::<PanelMsg>(text(raw(VALUE)).size(TS.body).font(mono()).boxed(), VALUE);
+    let value = natural::<PanelMsg>(text(fixture_label(VALUE)).size(TS.body).font(mono()).boxed(), VALUE);
     let (left, right) = field_insets(true, true);
     for dock in DOCKS {
         let inputs = lay_out_inputs(pair_view(), Size::new(dock, 400.0));
