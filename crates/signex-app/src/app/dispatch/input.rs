@@ -151,8 +151,9 @@ enum InputConsumer {
     /// Preferences ▸ Keyboard Shortcuts, while recording a chord.
     KeymapRecorder,
     CommandPalette,
-    /// Tab, Shift+Tab and Esc on a Rules tab drawing's open value label or
-    /// held handle (#2530); passes when none is open.
+    /// Tab, Shift+Tab and Esc on a Rules tab or Project tab drawing's open
+    /// value label or held handle (#2530, #2685), and Esc on the Project
+    /// tab's larger preview window; passes when none is open.
     RulePreview,
     /// The Esc ladder (#535 / #547 / #554), resolved in `escape.rs`.
     Escape,
@@ -368,12 +369,17 @@ impl Signex {
         match consumer {
             InputConsumer::KeymapRecorder => self.claim_keymap_recorder(target, event),
             InputConsumer::CommandPalette => self.claim_command_palette(target, event),
-            InputConsumer::RulePreview => match (target, self.rules_drawing_key(window, event)) {
-                (InputTarget::Main | InputTarget::UndockedTab, Some(message)) => {
-                    Claim::consume(message)
+            InputConsumer::RulePreview => {
+                let key = self
+                    .rules_drawing_key(window, event)
+                    .or_else(|| self.project_preview_key(window, event));
+                match (target, key) {
+                    (InputTarget::Main | InputTarget::UndockedTab, Some(message)) => {
+                        Claim::consume(message)
+                    }
+                    _ => Claim::Pass,
                 }
-                _ => Claim::Pass,
-            },
+            }
             InputConsumer::Escape => Self::claim_escape(window, event),
             InputConsumer::NewProject => self.claim_new_project(target, event),
             InputConsumer::UpdatePcb => self.claim_update_pcb(target, event),

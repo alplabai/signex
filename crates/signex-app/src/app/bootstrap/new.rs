@@ -401,6 +401,7 @@ impl Signex {
                 selected_segment,
                 preferences_draft_selected_segment: selected_segment,
                 i18n: std::sync::Arc::clone(&i18n),
+                project_preview: Default::default(),
                 // Mockup row 144a — seeded again (with its preview and the system
                 // language name) each time Preferences opens.
                 preferences_pages: Box::new(crate::preferences::PreferencesPagesState::new(

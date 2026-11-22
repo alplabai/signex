@@ -20,6 +20,7 @@ mod libraries;
 mod look;
 mod open;
 mod parameters;
+mod preview_ui;
 mod requirements;
 mod schematic_defaults;
 mod section_list;
@@ -57,6 +58,7 @@ pub(crate) use commands::{
 };
 pub use general::ProjectGeneralFacts;
 pub use parameters::ParameterGroup;
+pub use preview_ui::{PreviewPopup, ProjectPreviewMsg, ProjectPreviewUi};
 pub use requirements::{RequirementsMsg, RequirementsTabState};
 pub(crate) use requirements::{
     project_add_requirement, project_enable_requirement, project_remove_requirement,
@@ -416,5 +418,11 @@ pub enum ProjectTabMsg {
     Requirements {
         project_id: ProjectId,
         msg: RequirementsMsg,
+    },
+    /// A preview's value label, drag handle or larger window (mockup rows
+    /// 31 and 36).
+    PreviewActed {
+        project_id: ProjectId,
+        msg: ProjectPreviewMsg,
     },
 }

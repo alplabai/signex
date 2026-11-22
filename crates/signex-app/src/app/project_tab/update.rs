@@ -28,6 +28,9 @@ impl Signex {
             ProjectTabMsg::VariantPartsReadRequested { project_id } => {
                 return self.read_variant_parts(project_id, true);
             }
+            ProjectTabMsg::PreviewActed { project_id, msg } => {
+                return self.act_on_project_preview(project_id, msg);
+            }
             _ => {}
         }
         // Showing the Variants section reads its parts; a variant edit that
@@ -49,7 +52,7 @@ impl Signex {
         }
     }
 
-    fn apply_project_tab_message(&mut self, msg: ProjectTabMsg) {
+    pub(super) fn apply_project_tab_message(&mut self, msg: ProjectTabMsg) {
         match msg {
             ProjectTabMsg::SectionSelected {
                 project_id,
@@ -209,6 +212,7 @@ impl Signex {
             // Routed by `dispatch_project_tab_message`, which returns their task.
             ProjectTabMsg::SetupEdited { .. }
             | ProjectTabMsg::Requirements { .. }
+            | ProjectTabMsg::PreviewActed { .. }
             | ProjectTabMsg::VariantPartsReadRequested { .. } => {}
             // Routed by `dispatch_project_tab_message`: they open a dialog.
             ProjectTabMsg::AddSchematicRequested { .. }
@@ -333,6 +337,8 @@ impl Signex {
     }
 
     fn select_project_section(&mut self, project_id: ProjectId, section: ProjectSection) {
+        // A preview's open label and window belong to the section left.
+        self.ui_state.project_preview = super::ProjectPreviewUi::default();
         if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
             tab.section = section;
             // A section switch ends the typing run: the next edit is its own
@@ -438,6 +444,8 @@ impl Signex {
             }
             self.after_project_general_change(defaults_moved);
         }
+        // A label opened on the old value must not write over the step.
+        self.ui_state.project_preview.close_labels();
         moved
     }
 }

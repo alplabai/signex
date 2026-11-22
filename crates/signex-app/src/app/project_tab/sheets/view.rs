@@ -28,6 +28,8 @@ use crate::styles::{PillTone, ti, tokens::resolve};
 const PAGE_W: f32 = TS.body * 4.7;
 /// Width of the Move up / Move down column (90 px).
 const ACTIONS_W: f32 = TS.body * 7.5;
+/// How much taller the sheet is in the larger preview window.
+const POPUP_HEIGHT_FACTOR: f32 = 2.5;
 
 pub(in crate::app::project_tab) fn view<'a>(
     project: &LoadedProject,
@@ -178,6 +180,33 @@ fn empty_state<'a>(
     info_line(line, tokens)
 }
 
+/// The sheet of the New sheets card, as shown (the half-edited draft or the
+/// project's stored setup), for the larger preview window.
+pub(in crate::app::project_tab) fn popup_drawing<'a>(
+    project: &LoadedProject,
+    draft: Option<&NewProjectState>,
+    users: &[UserProfile],
+    canvas: &CanvasColors,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let stored;
+    let state = match draft {
+        Some(draft) => draft,
+        None => {
+            stored = NewProjectState::of_project(&project.data, users);
+            &stored
+        }
+    };
+    preview::large(
+        &state.setup.sheet,
+        preview::PREVIEW_H * POPUP_HEIGHT_FACTOR,
+        canvas,
+        i18n,
+        tokens,
+    )
+}
+
 /// The New sheets card: the New Project dialog's sheet column, fed from the
 /// project's stored setup (or the half-edited draft) with its edits sent as
 /// Project setup edits, beside the preview of the same size and
@@ -208,8 +237,14 @@ fn new_sheets_card<'a>(
         }),
     )
     .width(Length::FillPortion(1));
-    let preview = container(preview::view(&state.setup.sheet, canvas, i18n, tokens))
-        .width(Length::FillPortion(1));
+    let preview = container(preview::view(
+        project_id,
+        &state.setup.sheet,
+        canvas,
+        i18n,
+        tokens,
+    ))
+    .width(Length::FillPortion(1));
     let body = row![defaults, preview]
         .spacing(SP.l)
         .align_y(Alignment::Start)
