@@ -204,9 +204,16 @@ fn a_cancelled_move_tool_has_nothing_to_replay() {
 #[test]
 fn a_duplicate_replays_on_its_target_and_keeps_the_clipboard() {
     let (mut app, path) = app_with_parts();
+    // Keep reads no project numbers, so the first copy lands within `run`.
+    app.ui_state.paste_designators = crate::paste_prefs::PasteDesignators::Keep;
     select(&mut app, &[1]);
     run(&mut app, "duplicate");
     let seq = newest(&app).seq;
+    assert_eq!(
+        app.document_state.engines[&path].document().symbols.len(),
+        3,
+        "the first copy landed"
+    );
     // The copy lands at a fixed offset: its place must be free to replay.
     undo(&mut app, &path);
     let parts = app.document_state.engines[&path].document().symbols.len();
@@ -239,7 +246,10 @@ fn a_duplicate_replays_on_its_target_and_keeps_the_clipboard() {
 #[test]
 fn a_duplicate_replay_onto_its_own_copy_is_refused() {
     let (mut app, path) = app_with_parts();
+    // Keep reads no project numbers, so the first copy lands within `run`.
+    app.ui_state.paste_designators = crate::paste_prefs::PasteDesignators::Keep;
     select(&mut app, &[1]);
+    let (x, y) = position(&app, &path, 1);
     run(&mut app, "duplicate");
     let seq = newest(&app).seq;
     let places = |app: &Signex| -> Vec<(f64, f64)> {
@@ -249,6 +259,14 @@ fn a_duplicate_replay_onto_its_own_copy_is_refused() {
             .collect()
     };
     let before = places(&app);
+    let offset = crate::app::handlers::clipboard_workflows::DEFAULT_PASTE_OFFSET_MM;
+    assert_eq!(before.len(), 3, "the first copy landed");
+    assert!(
+        before
+            .iter()
+            .any(|p| (p.0 - (x + offset)).abs() < 1e-6 && (p.1 - (y + offset)).abs() < 1e-6),
+        "at the offset: {before:?}"
+    );
 
     replay(&mut app, seq);
 
