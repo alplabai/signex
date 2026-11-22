@@ -370,11 +370,11 @@ fn a_picked_unit_keeps_the_number_and_prefix_shown() {
 
     r.edit(BrowserEditMsg::SetParamUnit {
         key: RATING.to_string(),
-        unit: "F".to_string(),
+        unit: "Hz".to_string(),
     });
 
     let (value, unit) = draft_rating(&r);
-    assert_eq!(unit, "F");
+    assert_eq!(unit, "Hz");
     assert!((value - 4700.0).abs() < 1e-6, "4.7 k stays, got {value}");
 }
 

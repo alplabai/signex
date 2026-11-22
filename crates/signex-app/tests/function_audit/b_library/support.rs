@@ -293,13 +293,13 @@ pub(super) fn symbol_rig() -> SymbolRig {
     for y in [0.0, 2.54] {
         rig.canvas(SymbolEditorMsg::AddPin { x: 0.0, y });
     }
-    settle(
-        &mut rig.app,
-        Message::Library(LibraryMessage::PrimitiveEditorEvent {
-            path: rig.path.clone(),
-            msg: PrimitiveEdit::Save,
-        }),
-    );
+    // The path is not on disk, so a real Save would open the Save As dialog.
+    rig.app
+        .document_state
+        .symbol_editors
+        .get_mut(&rig.path)
+        .expect("the symbol is open")
+        .mark_saved();
     assert!(!rig.dirty(), "the rig opens at its save point");
     rig
 }

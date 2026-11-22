@@ -1,12 +1,16 @@
 //! m9 command palette, m10 hover tooltip.
 
 use signex_app::app::command_palette::{CommandAction, CommandEntry, CommandSource};
-use signex_app::app::{CommandPaletteMsg, Message, Signex};
+use iced::keyboard;
+use signex_app::app::{CommandPaletteMsg, InputMsg, Message, Signex};
 use signex_app::canvas::CanvasEvent;
 use signex_app::keymap::AppCommandId;
 
-use super::support::{app, desk, esc, is_dirty, sample_with_sheet};
+use super::support::{app, desk, is_dirty, main_window, sample_with_sheet};
 use crate::settle_support::settle;
+
+/// The palette row of the `open_preferences` catalog command.
+const PREFERENCES_ROW: &str = "Open preferences";
 
 fn palette(app: &mut Signex, msg: CommandPaletteMsg) {
     let _ = app.update(Message::CommandPalette(msg));
@@ -14,6 +18,25 @@ fn palette(app: &mut Signex, msg: CommandPaletteMsg) {
 
 fn query(app: &mut Signex, text: &str) {
     palette(app, CommandPaletteMsg::QueryChanged(text.to_string()));
+}
+
+/// Esc as the keyboard sends it: the open palette claims the raw key before
+/// the Esc ladder runs.
+fn press_esc(app: &mut Signex) {
+    let key = keyboard::Key::Named(keyboard::key::Named::Escape);
+    let event = keyboard::Event::KeyPressed {
+        key: key.clone(),
+        modified_key: key,
+        physical_key: keyboard::key::Physical::Unidentified(
+            keyboard::key::NativeCode::Unidentified,
+        ),
+        location: keyboard::Location::Standard,
+        modifiers: keyboard::Modifiers::default(),
+        text: None,
+        repeat: false,
+    };
+    let window = main_window(app);
+    settle(app, Message::Input(InputMsg::KeyInput { window, event }));
 }
 
 // ---- m9 Command palette ---------------------------------------------------
@@ -35,11 +58,11 @@ fn m9_typing_narrows_the_rows_to_the_query_and_resets_the_highlight() {
     let everything = app.ui_state.command_palette.total_matches;
     palette(&mut app, CommandPaletteMsg::MoveSelection(1));
 
-    query(&mut app, "About Signex");
+    query(&mut app, PREFERENCES_ROW);
 
     let state = &app.ui_state.command_palette;
     assert!(state.total_matches < everything);
-    assert!(state.results.iter().any(|row| row.label.contains("About")));
+    assert!(state.results.iter().any(|row| row.label == PREFERENCES_ROW));
     assert_eq!(state.selected_index, 0);
 }
 
@@ -58,21 +81,21 @@ fn m9_the_arrow_keys_wrap_at_both_ends() {
 fn m9_running_a_row_does_its_command_and_closes_the_palette() {
     let mut app = app();
     palette(&mut app, CommandPaletteMsg::Open);
-    query(&mut app, "About Signex");
+    query(&mut app, PREFERENCES_ROW);
     let row = app
         .ui_state
         .command_palette
         .results
         .iter()
-        .position(|row| row.label.contains("About"))
-        .expect("the About row");
+        .position(|row| row.label == PREFERENCES_ROW)
+        .expect("the Preferences row");
 
     settle(
         &mut app,
         Message::CommandPalette(CommandPaletteMsg::Select(row)),
     );
 
-    assert!(app.ui_state.about_open, "the command did not run");
+    assert!(app.ui_state.preferences_open, "the command did not run");
     let state = &app.ui_state.command_palette;
     assert!(!state.open);
     assert!(state.query.is_empty());
@@ -82,13 +105,13 @@ fn m9_running_a_row_does_its_command_and_closes_the_palette() {
 fn m9_esc_closes_without_running_and_keeps_the_query() {
     let mut app = app();
     palette(&mut app, CommandPaletteMsg::Open);
-    query(&mut app, "About Signex");
+    query(&mut app, PREFERENCES_ROW);
 
-    esc(&mut app);
+    press_esc(&mut app);
 
     assert!(!app.ui_state.command_palette.open);
-    assert_eq!(app.ui_state.command_palette.query, "About Signex");
-    assert!(!app.ui_state.about_open);
+    assert_eq!(app.ui_state.command_palette.query, PREFERENCES_ROW);
+    assert!(!app.ui_state.preferences_open);
 }
 
 #[test]

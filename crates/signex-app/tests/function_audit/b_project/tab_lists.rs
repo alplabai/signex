@@ -354,6 +354,8 @@ fn m34_open_electrical_rules_check_opens_the_dialog() {
 fn with_repository() -> Bench {
     let mut b = on(ProjectSection::VersionControl);
     let project_dir = PathBuf::from(&b.data().dir);
+    // The finish message re-probes the folder, so the repository must exist.
+    git2::Repository::init(&b.dir).expect("init the repository");
     b.send(Message::EnableVersionControl(
         EnableVersionControlMsg::Finished {
             scope: VersionControlScope::Project,

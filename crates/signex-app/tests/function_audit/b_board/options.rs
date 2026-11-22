@@ -2,13 +2,14 @@
 //! decisions on Snap Options and the board's one grid.
 
 use pcb_geom::PickKind;
-use signex_app::app::{Message, Signex, StatusBarRequest, UiMsg};
+use signex_app::app::{Message, PcbMsg, PcbViewMsg, Signex, StatusBarRequest, UiMsg};
 use signex_app::panels::{BoardField, BoardTab, ComponentSide, PanelKind, PcbBoardMsg};
 use signex_app::pcb_canvas::SnapScope;
 use signex_app::status_bar::{BoardCounter, BoardPopoverEvent};
 use signex_engine::pcb::placement::grid_step_mm;
 use signex_engine::pcb::snap::SnapObject;
 use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 use signex_types::pcb_options::{DesignatorDisplay, GuideKind, PolygonNaming};
 use uuid::Uuid;
 
@@ -285,10 +286,14 @@ fn off_grid_via() -> PcbBoard {
     board
 }
 
-/// Where the Line tool's first click near that via lands.
+/// Where the Line tool's first click near that via lands. The tool draws on
+/// a non-copper layer, so the overlay is made active first.
 fn line_start(set_up: impl FnOnce(&mut Bench)) -> Point {
     let mut b = open(off_grid_via());
     set_up(&mut b);
+    b.send(Message::Pcb(PcbMsg::View(PcbViewMsg::ActiveLayerPicked(
+        PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
+    ))));
     b.command("place_board_line");
     b.click(20.2, 5.2);
     b.app

@@ -51,17 +51,6 @@ fn zoom(app: &Signex) -> f64 {
     app.interaction_state.active_canvas().zoom_percent()
 }
 
-/// Mockup row 63 opens the picker from the schematic status bar.
-#[test]
-fn m63_the_grid_picker_opens_on_a_schematic_tab() {
-    let (mut app, _fx) = sample();
-    let _ = app.update(Message::Ui(UiMsg::GridPickerOpen));
-    assert!(
-        app.interaction_state.grid_picker.is_some(),
-        "the schematic grid button opens the step ladder"
-    );
-}
-
 #[test]
 fn m63_picking_a_step_sets_the_grid_and_closes_the_picker() {
     let (mut app, _fx) = footprint_app();

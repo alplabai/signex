@@ -202,7 +202,8 @@ fn m37_a_typed_rule_is_stored() {
 #[test]
 fn m37_a_drill_not_smaller_than_the_via_is_not_stored() {
     let mut b = on(ProjectSection::Setup);
-    setup(&mut b, NewProjectMsg::ProfilePicked(SetupProfile::Standard));
+    // Standard is already the shown card: picking it stores nothing.
+    setup(&mut b, NewProjectMsg::ProfilePicked(SetupProfile::Hdi));
     let good = b.data().project_defaults.pcb.clone().expect("stored");
     setup(
         &mut b,
@@ -230,7 +231,8 @@ fn m37_a_rule_that_is_no_number_is_not_stored() {
 #[test]
 fn m37_the_layer_stepper_stores_the_copper_count() {
     let mut b = on(ProjectSection::Setup);
-    setup(&mut b, NewProjectMsg::ProfilePicked(SetupProfile::Standard));
+    // Standard is already the shown card: picking it stores nothing.
+    setup(&mut b, NewProjectMsg::ProfilePicked(SetupProfile::Hdi));
     let before = b
         .data()
         .project_defaults
@@ -238,10 +240,7 @@ fn m37_the_layer_stepper_stores_the_copper_count() {
         .as_ref()
         .expect("stored")
         .copper_layers;
-    setup(
-        &mut b,
-        NewProjectMsg::CardLayersStepped(SetupProfile::Standard, 2),
-    );
+    setup(&mut b, NewProjectMsg::CardLayersStepped(SetupProfile::Hdi, 2));
     let pcb = b.data().project_defaults.pcb.as_ref().expect("stored");
     assert_eq!(pcb.copper_layers, before + 2);
 }
