@@ -31,8 +31,6 @@ pub struct WaiverKey {
 pub enum WaiverError {
     /// The reason is blank.
     MissingReason,
-    /// The author is blank.
-    MissingAuthor,
     /// The finding names no object on its sheet, so nothing could make the
     /// waiver lapse.
     NotWaivable,
@@ -42,7 +40,6 @@ impl std::fmt::Display for WaiverError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             WaiverError::MissingReason => "a waiver needs a reason",
-            WaiverError::MissingAuthor => "a waiver needs an author",
             WaiverError::NotWaivable => "this finding names no object, so it cannot be waived",
         })
     }
@@ -192,8 +189,8 @@ fn net_content(net: &crate::NetFinding) -> String {
     format!("{}|{}", net.name, pins.join(","))
 }
 
-/// A new waiver for the finding keyed `key`. Reason and author are trimmed
-/// and required.
+/// A new waiver for the finding keyed `key`. Reason and author are trimmed;
+/// the reason is required, and the author is empty when git has no identity.
 pub fn new_waiver(
     key: &WaiverKey,
     message: &str,
@@ -204,9 +201,6 @@ pub fn new_waiver(
     let (reason, author) = (reason.trim(), author.trim());
     if reason.is_empty() {
         return Err(WaiverError::MissingReason);
-    }
-    if author.is_empty() {
-        return Err(WaiverError::MissingAuthor);
     }
     if key.objects.is_empty() || key.fingerprint.is_empty() {
         return Err(WaiverError::NotWaivable);
@@ -258,7 +252,7 @@ pub struct WaiverSplit {
 
 /// Split one sheet's findings by `waivers`. Each finding must carry its
 /// [`Violation::waiver_key`] (see [`stamp_keys`]). An incomplete waiver (no
-/// reason or author) never hides anything.
+/// reason) never hides anything.
 pub fn split_waived(violations: Vec<Violation>, waivers: &[ErcWaiver]) -> WaiverSplit {
     let mut split = WaiverSplit::default();
     for v in violations {

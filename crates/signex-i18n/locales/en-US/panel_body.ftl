@@ -93,7 +93,7 @@ panels-erc-waiver-status-one = waived
 panels-erc-waiver-status-many = waives { $count } findings
 panels-erc-waiver-status-lapsed = LAPSED: an involved object changed
 panels-erc-waiver-status-unmatched = matches no finding
-panels-erc-waiver-status-incomplete = ignored: no reason or author
+panels-erc-waiver-status-incomplete = ignored: no reason
 
 ## Properties of a multi-selection
 panels-multi-title = Multi-Selection

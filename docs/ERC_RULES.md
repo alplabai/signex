@@ -161,7 +161,8 @@ provenance. Each entry holds:
 | `rule_id` | Stable rule id, `builtin::...` or `user::...`. |
 | `objects` | Sorted identity of the finding: the UUID of its primary object and `peer:<uuid>` of its peer (the role is kept, so A-against-B and B-against-A stay two findings); `pin:<number>@<x>,<y>` for a finding anchored at one pin (the tip in the symbol's own coordinates, in µm, so two pins sharing a number or name stay apart and moving the part changes nothing), `pin:<a>/<b>` for a pin pair; `tag:<x>` where a rule has several findings on the same objects (a part's placement designator, only for a symbol placed several times, so re-annotating a single placement lapses its waiver; `no-pins` / `not-loaded` on one sheet symbol; `symbol:<uuid>` on a child's unexposed hierarchical label, only when several sheet symbols place the same child file (one placement stays untagged), the child port a sheet pin disagrees with, `nets:<rails>` for a power-port short, which also carries the two ports' pin numbers); and for a net-level finding the net on its sheet, `net:<name>@<sheet id>`, or `pins:<R1.1,U2.3>@<sheet id>` for an unnamed net. A sheet-pin direction conflict is keyed by the extra output pin (primary) and the first output pin on the net (`peer:<uuid>`), with no tag. |
 | `fingerprint` | SHA-256 over the rule id and the canonical JSON (keys sorted) of each involved object. |
-| `reason`, `author` | Required; an entry missing either is kept on disk but never honoured. |
+| `reason` | Required; an entry without one is kept on disk but never honoured. |
+| `author` | The git identity when the waiver was made; empty when git has none (mockup row 88). An empty author does not stop the waiver hiding its finding. |
 | `date` | `YYYY-MM-DD` the waiver was made. |
 | `message` | The finding's text when waived, so a lapsed waiver still says what it was about. |
 

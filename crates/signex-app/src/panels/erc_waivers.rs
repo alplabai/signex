@@ -7,7 +7,7 @@ use signex_erc::waivers::violation::WaiverKey;
 use signex_i18n::{I18n, Localized, ids, t};
 
 use super::validation_kit::{FindingRow, finding_row, severity_badge, status_pill};
-use super::waiver_form::{WaiverFormEvents, WaiverFormView, WaiverReason, waiver_form};
+use super::waiver_form::{ReasonFormEvents, ReasonFormView, WaiverReason, reason_form};
 use super::*;
 use crate::styles::{PillTone, Spacing, TypeScale};
 
@@ -28,7 +28,6 @@ pub enum ErcWaiverMsg {
     },
     /// The Reason field was typed in, or its cursor moved.
     ReasonActed(text_editor::Action),
-    AuthorChanged(String),
     Confirmed,
     Cancelled,
     /// Restore the finding a stored waiver hides.
@@ -46,7 +45,10 @@ pub struct ErcWaiveDraft {
     pub sheet: std::path::PathBuf,
     pub message: String,
     pub reason: WaiverReason,
+    /// The git identity, empty when git has none (mockup row 88).
     pub author: String,
+    /// The git identity is still being read: Waive waits for it.
+    pub awaits_identity: bool,
     /// Why the last Confirm was refused.
     pub error: Option<String>,
 }
@@ -60,7 +62,7 @@ pub enum ErcWaiverStatus {
     Lapsed,
     /// No finding of this rule on these objects (fixed, or not run yet).
     Unmatched,
-    /// No reason or author (hand-edited file): never honoured.
+    /// No reason (hand-edited file): never honoured.
     Incomplete,
 }
 
@@ -144,22 +146,50 @@ pub(super) fn waive_editor<'a>(
         // raw: the refusal is worded by the waiver handler in English (#2061).
         error = Some(raw(why));
     }
-    let form = waiver_form(
-        WaiverFormView {
+    let form = reason_form(
+        ReasonFormView {
             reason: &draft.reason,
-            author: &draft.author,
+            placeholder: t!(ctx.i18n, ids::PLACEHOLDER_ERC_WAIVER_REASON),
             error,
         },
-        WaiverFormEvents {
+        ReasonFormEvents {
             reason: |action| PanelMsg::ErcWaiver(ErcWaiverMsg::ReasonActed(action)),
-            author: |author| PanelMsg::ErcWaiver(ErcWaiverMsg::AuthorChanged(author)),
-            confirm: PanelMsg::ErcWaiver(ErcWaiverMsg::Confirmed),
+            confirm: (!draft.awaits_identity).then(|| PanelMsg::ErcWaiver(ErcWaiverMsg::Confirmed)),
             cancel: PanelMsg::ErcWaiver(ErcWaiverMsg::Cancelled),
         },
         &ctx.i18n,
         &ctx.tokens,
     );
     Some(container(form).padding([SP.xs, SP.m]).boxed())
+}
+
+/// Who waived it and when; the date alone for a waiver with no author (git
+/// had no identity, mockup row 88).
+fn waived_by_line<'a>(
+    ctx: &'a PanelContext,
+    w: &'a ErcViolationWaiverEntry,
+) -> Option<Element<'a, PanelMsg>> {
+    let muted = theme_ext::text_secondary(&ctx.tokens);
+    if w.author.trim().is_empty() {
+        if w.date.is_empty() {
+            return None;
+        }
+        return Some(
+            text(signex_i18n::UserText::new(w.date.as_str()))
+                .size(TS.caption)
+                .color(muted)
+                .boxed(),
+        );
+    }
+    Some(
+        text(t!(
+            ctx.i18n, ids::PANELS_ERC_WAIVED_BY,
+            "author" => w.author.as_str(), "date" => w.date.as_str()
+        ))
+        .size(TS.caption)
+        .color(muted)
+        .boxed(),
+    )
 }
 
 /// A stored per-finding waiver in the Waived group: the finding, its status
@@ -184,18 +214,7 @@ pub(super) fn violation_waiver_row<'a>(
                 .boxed(),
         );
     }
-    let mut extra = Vec::new();
-    if !w.author.is_empty() || !w.date.is_empty() {
-        extra.push(
-            text(t!(
-                i18n, ids::PANELS_ERC_WAIVED_BY,
-                "author" => w.author.as_str(), "date" => w.date.as_str()
-            ))
-            .size(TS.caption)
-            .color(muted)
-            .boxed(),
-        );
-    }
+    let mut extra: Vec<Element<'a, PanelMsg>> = waived_by_line(ctx, w).into_iter().collect();
     extra.push(super::validation_kit::row_action(
         t!(i18n, ids::PANELS_ERC_RESTORE),
         PanelMsg::ErcWaiver(ErcWaiverMsg::Removed {
@@ -294,9 +313,24 @@ mod tests {
         assert_eq!(words(ErcWaiverStatus::Unmatched), "matches no finding");
         assert_eq!(
             words(ErcWaiverStatus::Incomplete),
-            "ignored: no reason or author"
+            "ignored: no reason"
         );
         assert_eq!(ErcWaiverStatus::of_net(0), ErcWaiverStatus::Unmatched);
         assert_eq!(ErcWaiverStatus::of_net(3), ErcWaiverStatus::Waiving(3));
+    }
+
+    /// Mockup row 88: a waiver stored with no author shows its date alone,
+    /// never a dangling "by".
+    #[test]
+    fn a_waiver_without_an_author_shows_its_date_alone() {
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut stored = waiver(ErcWaiverStatus::Waiving(1));
+        stored.author.clear();
+        ctx.erc_violation_waivers = vec![stored];
+        ctx.validation.erc.waived_open = Some(true);
+        let shown = texts(&ctx);
+        assert!(shown.iter().any(|t| t == "2026-11-16"), "{shown:?}");
+        assert!(!shown.iter().any(|t| t.starts_with("by ")), "{shown:?}");
     }
 }
