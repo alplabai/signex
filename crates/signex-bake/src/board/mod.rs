@@ -14,8 +14,11 @@ mod features;
 mod geometry;
 mod inside_corners;
 mod items;
+mod patterned;
 mod slot;
 
+#[cfg(test)]
+mod pattern_tests;
 #[cfg(test)]
 mod tests;
 
@@ -39,6 +42,7 @@ use signex_sketch::solver::FullSolveOutput;
 use signex_types::pcb::{NetDef, Point};
 use signex_types::pcb_sketch::BakedBoard;
 
+use crate::array::InstanceBudget;
 use crate::traced_loops::TracedLoops;
 use geometry::boundary;
 
@@ -61,6 +65,7 @@ pub(crate) fn solved<T>(
         sketch,
         solve: &solve,
         params: &params,
+        instances: InstanceBudget::default(),
     })
 }
 
@@ -112,6 +117,8 @@ impl BoardBakeError {
             | Self::AnchorWithoutComponent { entity }
             | Self::UnknownComponent { entity, .. }
             | Self::VScoreNotALine { entity }
+            | Self::NotPatternable { entity, .. }
+            | Self::TooManyInstances { entity, .. }
             | Self::Expression { entity, .. } => Some(entity),
             Self::MissingPoint { point, .. } => Some(point),
             Self::Parameters(_) | Self::Solve(_) | Self::OutlineCount { .. } => None,
@@ -124,6 +131,8 @@ pub(crate) struct Context<'a> {
     pub(crate) sketch: &'a SketchData,
     pub(crate) solve: &'a FullSolveOutput,
     pub(crate) params: &'a HashMap<String, f64>,
+    /// The pattern instances this bake may still write, over all targets.
+    pub(crate) instances: InstanceBudget,
 }
 
 impl Context<'_> {
@@ -149,6 +158,7 @@ fn outline(ctx: &Context<'_>) -> Result<Option<Vec<Point>>, BoardBakeError> {
     let mut found: Vec<Vec<Point>> = Vec::new();
     for entity in ctx.tagged(|e| e.board_outline) {
         if let Some(profile) = boundary(ctx, &mut loops, "outline", entity, KIND)? {
+            patterned::refuse_pattern(ctx, entity, KIND)?;
             found.push(profile);
         }
     }

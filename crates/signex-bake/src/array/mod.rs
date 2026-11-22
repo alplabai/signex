@@ -50,7 +50,9 @@ mod slots;
 mod walk;
 
 pub use instance_at::instance_at;
-pub(crate) use placements::source_places;
+pub(crate) use placements::{
+    InstanceBudget, PlacesRefused, SourcePlace, is_patterned, source_places,
+};
 pub use preview::{ArrayPreview, InstancePreview, preview_array};
 pub use slots::{PatternSlot, pattern_slots};
 

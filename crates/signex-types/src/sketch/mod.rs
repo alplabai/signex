@@ -28,6 +28,7 @@ pub use host::{RoleShape, SketchAction, SketchHost, SketchRole};
 mod board_tests;
 pub mod format_level;
 pub mod pad_override;
+pub mod pattern_instance;
 pub mod pattern_links;
 #[cfg(test)]
 mod pattern_links_tests;

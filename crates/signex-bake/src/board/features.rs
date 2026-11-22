@@ -13,8 +13,8 @@ use signex_types::pcb_sketch::{PcbCutout, PcbHole, PcbKeepout, PcbVScore};
 use uuid::Uuid;
 
 use super::geometry::{boundary, circle, point};
+use super::patterned::{boundary_places, own_sources, places};
 use super::{BoardBakeError, Context, slot};
-use crate::array::source_places;
 use crate::eval_util::{build_ctx, eval_dimensionless, eval_mm, opt_eval_mm};
 use crate::profile::trace_closed_profile_entities;
 use crate::traced_loops::TracedLoops;
@@ -34,12 +34,15 @@ pub(super) fn keepouts(ctx: &Context<'_>) -> Result<Vec<PcbKeepout>, BoardBakeEr
         else {
             continue;
         };
-        out.push(PcbKeepout {
-            uuid: entity.id.0,
-            boundary: polygon,
-            layers: vec![attr.layer],
-            forbids: attr.kinds,
-        });
+        let kind = BakedKind::Keepouts;
+        for place in boundary_places(ctx, entity, &polygon, kind, "keepout pattern")? {
+            out.push(PcbKeepout {
+                uuid: place.uuid,
+                boundary: place.ring(&polygon),
+                layers: vec![attr.layer],
+                forbids: attr.kinds,
+            });
+        }
     }
     Ok(out)
 }
@@ -65,12 +68,15 @@ pub(super) fn cutouts(ctx: &Context<'_>) -> Result<Vec<PcbCutout>, BoardBakeErro
                 .and_then(|r| finite(r.unwrap_or(0.0)))
                 .map_err(|message| expression(entity.id, "cutout edge radius", message))?
         };
-        out.push(PcbCutout {
-            uuid: entity.id.0,
-            boundary: polygon,
-            edge_radius,
-            through: attr.through,
-        });
+        let kind = BakedKind::Cutouts;
+        for place in boundary_places(ctx, entity, &polygon, kind, "cutout pattern")? {
+            out.push(PcbCutout {
+                uuid: place.uuid,
+                boundary: place.ring(&polygon),
+                edge_radius,
+                through: attr.through,
+            });
+        }
     }
     Ok(out)
 }
@@ -133,34 +139,15 @@ pub(super) fn hole_places(
     let EntityKind::Circle { center, .. } = entity.kind else {
         return Err(BoardBakeError::HoleNotACircle { entity: entity.id });
     };
-    let alone = || HolePlace {
-        uuid: entity.id.0,
-        position: centre,
-    };
-    if ctx.sketch.arrays.is_empty() {
-        return Ok(vec![alone()]);
-    }
-    let params_ast = crate::params::params_ast(ctx.sketch, ctx.params);
     let sources = [entity.id, center];
-    let at = (centre.x, centre.y);
-    let places = source_places(ctx.sketch, ctx.solve, &params_ast, &sources, at)
-        .map_err(|message| expression(entity.id, HOLE_PATTERN, message))?;
-    let Some(places) = places else {
-        return Ok(vec![alone()]);
-    };
-    places
-        .into_iter()
-        .map(|place| -> Result<HolePlace, BoardBakeError> {
-            let (x, y) = place.at;
-            finite(x)
-                .and_then(|_| finite(y))
-                .map_err(|message| expression(entity.id, HOLE_PATTERN, message))?;
-            Ok(HolePlace {
-                uuid: place.uuid(entity.id.0),
-                position: Point { x, y },
-            })
+    let found = places(ctx, entity, &sources, &[centre], HOLE_PATTERN)?;
+    Ok(found
+        .iter()
+        .map(|place| HolePlace {
+            uuid: place.uuid,
+            position: place.at(centre),
         })
-        .collect()
+        .collect())
 }
 
 /// A hole at each place of each circle tagged `mounting_hole`
@@ -226,14 +213,24 @@ pub(super) fn v_scores(ctx: &Context<'_>) -> Result<Vec<PcbVScore>, BoardBakeErr
             .and_then(|web| finite(web.unwrap_or(0.0)))
             .map_err(|message| expression(entity.id, "V-score minimum web", message))?
             .max(0.0);
-        out.push(PcbVScore {
-            uuid: entity.id.0,
-            from: point(ctx, start, BakedKind::VScores)?,
-            to: point(ctx, end, BakedKind::VScores)?,
-            depth_fraction,
-            min_web,
-            side: attr.side,
-        });
+        let from = point(ctx, start, BakedKind::VScores)?;
+        let to = point(ctx, end, BakedKind::VScores)?;
+        for place in places(
+            ctx,
+            entity,
+            &own_sources(entity),
+            &[from, to],
+            "V-score pattern",
+        )? {
+            out.push(PcbVScore {
+                uuid: place.uuid,
+                from: place.at(from),
+                to: place.at(to),
+                depth_fraction,
+                min_web,
+                side: attr.side,
+            });
+        }
     }
     Ok(out)
 }

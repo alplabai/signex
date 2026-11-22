@@ -36,8 +36,9 @@ board thickness, not in mm, so a thickness change needs no re-bake.
 `signex_bake::bake_board(&SketchData, &[NetDef]) -> Result<BakedBoard,
 BoardBakeError>` is pure: it resolves the parameters, solves the sketch and
 reads the solved positions. Every baked item takes the uuid of the entity it
-came from (the first tagged edge of its loop, or the circle), so baking an
-unchanged sketch again gives an equal result.
+came from (the first tagged edge of its loop, or the circle), or for a pattern
+instance one derived from it, so baking an unchanged sketch again gives an
+equal result.
 
 Unlike the footprint bake, which skips a broken feature with a warning, the
 board bake refuses: a keepout or hole dropped without a word would pass DRC
@@ -53,7 +54,9 @@ unseen. `BoardBakeError` names the problem:
 | `OutlineCount` | the outline tags more than one closed profile |
 | `HoleNotACircle`, `HoleDrill`, `UnknownNet` | a hole on a non-circle, a drill not above 0, a net name the board lacks |
 | `VScoreNotALine` | a V-score on an arc or circle |
-| `Expression` | a cutout radius, drill or V-score depth that does not evaluate to a finite number, or a mounting hole's pattern that does not expand |
+| `NotPatternable` | a pattern repeats the board outline or a component anchor, which cannot be instanced |
+| `TooManyInstances` | the sketch's patterns together write more than `MAX_ARRAY_INSTANCES` items |
+| `Expression` | a cutout radius, drill or V-score depth that does not evaluate to a finite number, or a board item's pattern that does not expand |
 
 **The outline is owned like a footprint's baked fields.** With an edge
 tagged `board_outline`, the bake returns the profile. With none tagged, it
@@ -304,10 +307,9 @@ stay open, since the overlay draws them over it. Decision: `DECISIONS.md`,
 - The board targets Slot, Pour, Room, Mechanical layer and Component
   anchor, and the Create rows Slot and Polygon (#2518): none is offered
   until it bakes. Modify offers Chamfer, Extend and Linear Pattern on both
-  hosts ([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#modify-tools)). A board
-  bake writes every instance of a patterned mounting hole
-  ([Patterned mounting holes](#patterned-mounting-holes)); a pattern of any
-  other board target still bakes its source alone (#2517).
+  hosts ([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#modify-tools)); a board
+  bake writes every instance
+  ([Patterned board items](#patterned-board-items)).
   Since 2026-11-20 the Create rows Slot and Polygon are offered on a board
   as on a footprint, and bake as any closed profile
   ([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#create-tools)).
@@ -374,33 +376,49 @@ the same in both Graphite themes.
 
 A board sketch stores pattern sources, pattern mirrors and per-instance
 overrides in `[board_sketch.sketch]` as a footprint sketch does
-([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#pattern-links)). A board bake
-expands them for mounting holes; for any other board target it bakes the
-source alone (#2517). A board sketch holding any of them, or a reference
-dimension, is saved as `snxpcb/1.7`, so an older build opens it read-only
-instead of dropping them.
+([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#pattern-links)), and a board bake
+expands them ([Patterned board items](#patterned-board-items)). A board
+sketch holding any of them, or a reference dimension, is saved as
+`snxpcb/1.7`, so an older build opens it read-only instead of dropping them.
 
-## Patterned mounting holes {#patterned-mounting-holes}
+## Patterned board items {#patterned-board-items}
 
-A pattern repeats a mounting hole when its innermost source is the circle or
-the circle's centre point (the pattern tools pick a Point). Mockup rows 179
-and 179e, #2772.
+A pattern repeats a board item when its innermost source is the item's entity
+or a point that defines it. For a closed profile (keepout, cutout, slot, pour)
+that is any edge or point of the loop, and the whole loop repeats. For a
+mounting hole it is the circle or its centre. A V-score or a mechanical drawing
+is one edge, so a pattern of a corner shared by two mechanical edges repeats
+those two edges. Mockup rows 179 and 179e, #2517, #2772.
 
-- **Every instance is written** as its own `PcbHole` with the source's drill,
-  plating and net: linear, grid and polar patterns, a pattern of a pattern,
-  and live mirrors. Spacing and counts read the sketch parameters on each bake.
-- **Suppressed instances are not drilled**, the source's slot included, as a
+- **Every instance is written** as its own item with the source's attributes:
+  linear, grid and polar patterns, a pattern of a pattern, and live mirrors.
+  Spacing and counts read the sketch parameters on each bake.
+- **Suppressed instances are not written**, the source's slot included, as a
   footprint pattern leaves out that pad.
-- **One hole per position.** Two instances on one spot (a hole on its mirror
-  line) drill once.
-- **Uuids.** The hole at the source's position keeps the circle's uuid; every
-  other takes one derived from the circle, the pattern and the instance, so an
-  unchanged sketch re-bakes equal.
+- **One item per place.** Instances whose whole shape lands on the same spot
+  (a hole on its mirror line, a circle turned about its centre) write once.
+  Instances that only share a point (a polar pattern about the item's own
+  corner) are all written.
+- **A reflection keeps the item valid.** A mirrored boundary keeps the source's
+  winding and a mirrored arc still runs counter-clockwise.
+- **Uuids.** The item at the source's place keeps the entity's uuid; every other
+  takes one derived from the entity, the pattern and the instance
+  (`sketch::pattern_instance`), so an unchanged sketch re-bakes equal.
+- **Re-baking replaces.** Keepouts, cutouts, holes and V-scores are stored whole
+  with the sketch. Zones and drawings live in the board's lists, so
+  `SetBoardSketchBake` finds earlier instances by the source their uuid names,
+  which also removes the instances of a pattern that shrank or went.
+- **The cap covers the whole bake.** One bake writes at most
+  `MAX_ARRAY_INSTANCES` pattern instances over all its patterns and targets;
+  past it the bake refuses with `TooManyInstances`.
+- **A target that cannot repeat refuses the bake** with `NotPatternable`: the
+  board outline (a board has one) and a component anchor (a component is in one
+  place).
 - **A pattern that does not expand refuses the bake** with `Expression`
-  ("mounting hole pattern"): a count that is not a positive number or is over
-  the cap, a spacing that does not evaluate, a looped source chain.
-- **Outline checks** read every instance: a hole with one instance outside the
-  board is named by its circle.
+  (for example "mounting hole pattern"): a count that is not a positive number
+  or is over the cap, a spacing that does not evaluate, a looped source chain.
+- **Outline checks** read every instance: a hole, cutout or keepout with one
+  instance outside the board is named by its entity.
 
 ## Targets {#targets}
 
@@ -437,7 +455,8 @@ they are the board's own rows, baked by `signex_bake::board::bake_board_items`
 its seed edge and a drawing that of its edge. The board command
 `SetBoardSketchBake` (`BoardCommand::set_board_sketch_with_items`) does what
 `SetBoardSketch` does and, in the same step, replaces every zone and drawing
-whose uuid is an entity of the board sketch before or after, and moves each
+whose uuid is an entity of the board sketch before or after, or a pattern
+instance of one ([Patterned board items](#patterned-board-items)), and moves each
 anchored footprint that is not locked (Messages names a locked one). Its
 inverse `RestoreBoardSketchBake` puts back the zone and drawing lists and the
 old positions bit for bit. The app uses it only when the sketch owns one of
