@@ -10,6 +10,7 @@ use signex_types::pcb::{BoardGraphic, PcbBoard, Point, Zone};
 use signex_types::pcb_sketch::{BakedBoard, BoardSketch};
 use signex_types::sketch::SketchData;
 use signex_types::sketch::board_attr::{BOARD_ITEM_KINDS, SketchBoardItems};
+use signex_types::sketch::pattern_instance::{instance_owner_key, owner_key_of};
 use uuid::Uuid;
 
 use super::refuse_non_finite;
@@ -71,18 +72,18 @@ pub(in crate::pcb) fn set(
         return Err(BoardCommandError::FootprintNotFound(anchor.footprint));
     }
 
-    let owned = owned_ids(board.sketch.as_ref(), sketch.as_deref());
+    let owned = OwnedItems::of(board.sketch.as_ref(), sketch.as_deref());
     let zones = board
         .zones
         .iter()
-        .filter(|zone| !owned.contains(&zone.uuid))
+        .filter(|zone| !owned.holds(zone.uuid))
         .cloned()
         .chain(items.zones)
         .collect();
     let graphics = board
         .graphics
         .iter()
-        .filter(|graphic| !owned.contains(&graphic.uuid))
+        .filter(|graphic| !owned.holds(graphic.uuid))
         .cloned()
         .chain(items.graphics)
         .collect();
@@ -153,14 +154,31 @@ fn applied(inverse: SketchBakeSnapshot) -> Applied {
     }
 }
 
-/// The uuids a board sketch owns on the board: every entity of the sketch
-/// it replaces and of the one it stores.
-fn owned_ids(before: Option<&BoardSketch>, after: Option<&BoardSketch>) -> HashSet<Uuid> {
-    [before, after]
-        .into_iter()
-        .flatten()
-        .flat_map(|stored| stored.sketch.entities.iter().map(|e| e.id.0))
-        .collect()
+/// What a board sketch owns on the board: the items of every entity of the
+/// sketch it replaces and of the one it stores, pattern instances included.
+struct OwnedItems {
+    entities: HashSet<Uuid>,
+    instance_owners: HashSet<u128>,
+}
+
+impl OwnedItems {
+    fn of(before: Option<&BoardSketch>, after: Option<&BoardSketch>) -> Self {
+        let entities: HashSet<Uuid> = [before, after]
+            .into_iter()
+            .flatten()
+            .flat_map(|stored| stored.sketch.entities.iter().map(|e| e.id.0))
+            .collect();
+        let instance_owners = entities.iter().copied().map(instance_owner_key).collect();
+        Self {
+            entities,
+            instance_owners,
+        }
+    }
+
+    fn holds(&self, item: Uuid) -> bool {
+        self.entities.contains(&item)
+            || owner_key_of(item).is_some_and(|key| self.instance_owners.contains(&key))
+    }
 }
 
 fn finite(p: Point) -> bool {

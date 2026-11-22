@@ -5,12 +5,14 @@
 use signex_types::pcb::{BoardGraphic, Point, Zone};
 use signex_types::pcb_sketch::BakedBoard;
 use signex_types::sketch::SketchData;
+use signex_types::sketch::array::ArrayId;
 use signex_types::sketch::baked_kinds::BakedKind;
 use signex_types::sketch::board_attr::{
     BakedAnchor, ComponentAnchorAttr, MechanicalAttr, SketchBoardItems,
 };
 use signex_types::sketch::entity::{Entity, EntityKind};
 use signex_types::sketch::id::SketchEntityId;
+use signex_types::sketch::pattern_instance::pattern_instance_uuid;
 use signex_types::sketch::plane::PlaneId;
 use uuid::Uuid;
 
@@ -176,6 +178,48 @@ fn a_re_bake_replaces_only_what_the_sketch_owns() {
     assert!(board.zones.iter().any(|z| z.uuid == id(ZONE_1)));
     assert_eq!(board.graphics.len(), 2, "the board's own drawing stays");
     assert_eq!(engine.undo_len(), 2);
+}
+
+/// #2517: the instances of a patterned pour carry derived uuids. A repeat
+/// bake replaces them, and a shorter pattern takes the extra one off.
+#[test]
+fn a_re_bake_replaces_pattern_instances_and_never_doubles_them() {
+    let pattern = ArrayId(Uuid::from_u128(0x0e10));
+    let patterned = |count: u32| {
+        let mut baked = items(2.0);
+        baked.zones.extend((1..count).map(|i| {
+            zone(
+                pattern_instance_uuid(POUR, pattern, i, 0),
+                2.0 + f64::from(i),
+            )
+        }));
+        baked.graphics.extend(
+            (1..count)
+                .map(|i| drawing(pattern_instance_uuid(DRAWING, pattern, i, 0), "Mechanical2")),
+        );
+        baked
+    };
+    let own_zones = |engine: &BoardEngine| {
+        engine
+            .board()
+            .zones
+            .iter()
+            .filter(|z| z.uuid != id(ZONE_1))
+            .count()
+    };
+    let mut engine = engine();
+    let drawings_before = engine.board().graphics.len();
+
+    engine.execute(bake(sketch(), patterned(3))).unwrap();
+    assert_eq!(own_zones(&engine), 3);
+    engine.execute(bake(sketch(), patterned(3))).unwrap();
+    assert_eq!(own_zones(&engine), 3, "a repeat bake adds nothing");
+    assert_eq!(engine.board().graphics.len(), drawings_before + 3);
+
+    engine.execute(bake(sketch(), patterned(2))).unwrap();
+    assert_eq!(own_zones(&engine), 2, "the dropped instance goes");
+    assert_eq!(engine.board().graphics.len(), drawings_before + 2);
+    assert!(engine.board().zones.iter().any(|z| z.uuid == id(ZONE_1)));
 }
 
 /// The pour entity deleted: its zone goes with the next bake, because the

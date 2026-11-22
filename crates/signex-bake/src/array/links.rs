@@ -114,6 +114,11 @@ impl Place {
         )
     }
 
+    /// Whether this placement reflects what it places.
+    pub(crate) fn mirrors(&self) -> bool {
+        self.sign < 0.0
+    }
+
     /// A pad rotation (degrees) as this placement leaves it.
     pub(crate) fn turn_deg(&self, deg: f64) -> f64 {
         if self.sign > 0.0 && self.offset_deg == 0.0 {

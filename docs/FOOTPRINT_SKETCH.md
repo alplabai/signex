@@ -462,9 +462,8 @@ stroke (0.30 mm), so their clicks place no Point. Each tool shows a ghost
 while armed: the Line a click would take, where an extended end would stop,
 the cursor's mirror image, or where the pattern's instances would land.
 
-On a board the same rows are offered. A board bake writes every instance of
-a patterned mounting hole ([PCB_SKETCH.md](PCB_SKETCH.md#patterned-mounting-holes));
-a pattern of any other board target still bakes its source alone (#2517).
+On a board the same rows are offered, and a board bake writes every instance
+([PCB_SKETCH.md](PCB_SKETCH.md#patterned-board-items)).
 
 The geometry of Chamfer and Extend is `signex_sketch::geom::line_edit`.
 
