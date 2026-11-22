@@ -493,9 +493,11 @@ A pad made in the sketch keeps the id of the entity that drives it
   a profile of N edges), its pattern instance, found from its position by
   `signex_bake::instance_at`, and its size.
 
-Not done yet: the outline of the pattern instance a pad came from (pads do
-not record their instance yet), and locking the pad's Size fields to "from
-sketch".
+- Edit in Sketch on a pattern instance focuses the pattern's source, found
+  by `signex_bake::instance_at`, and outlines that instance dashed (mockup
+  row 192). Back to pad returns to the instance.
+
+Not done yet: locking the pad's Size fields to "from sketch".
 
 ## Pattern links {#pattern-links}
 

@@ -239,7 +239,11 @@ pub struct FootprintEditorPanelContext {
     /// How far the generated courtyard grows past the pads, in mm.
     pub courtyard_expansion_mm: f64,
     /// The editor's pads as the Footprint sections' illustration draws them.
-    pub pad_outlines: Vec<PadOutlineSummary>,
+    pub pad_outlines: Vec<super::footprint_outline::PadOutlineSummary>,
+    /// The front silkscreen's straight strokes (mockup row 124).
+    pub silk_segments: Vec<super::footprint_outline::OutlineSegment>,
+    /// The front assembly drawing's straight strokes (mockup row 124).
+    pub assembly_segments: Vec<super::footprint_outline::OutlineSegment>,
     /// The sketch's solve state, as the canvas chip names it.
     pub sketch_state: SketchStateSummary,
 }
@@ -316,6 +320,8 @@ pub struct ArraySummary {
     /// the Properties panel can surface editable rows for each. `None`
     /// for Linear / Explicit numbering schemes.
     pub bga_config: Option<BgaConfigSummary>,
+    /// The sweep of a 1, 2, 3 numbering; `None` under any other scheme.
+    pub sweep: Option<signex_sketch::array::GridSweep>,
     /// Every instance with its offset and number, from the bake's own walk
     /// (`signex_bake::array::preview_array`); the pattern drawing shows it.
     pub preview: signex_bake::array::ArrayPreview,
@@ -759,21 +765,6 @@ pub struct MountingHoleProps {
     pub plated: bool,
     /// The net name; empty means no net.
     pub net: String,
-}
-
-/// One pad as the Footprint sections' illustration draws it.
-#[derive(Debug, Clone, PartialEq)]
-pub struct PadOutlineSummary {
-    /// Centre in mm.
-    pub position_mm: [f64; 2],
-    /// Width and height in mm, before rotation.
-    pub size_mm: [f64; 2],
-    pub rotation_deg: f64,
-    /// The four corners turned by the rotation, in mm.
-    pub corners_mm: [[f64; 2]; 4],
-    pub shape: signex_library::PadShape,
-    /// The pad has a drill hole.
-    pub has_drill: bool,
 }
 
 /// The sketch's solve state: the tone of its pill and the catalog message

@@ -570,6 +570,32 @@ mod tests {
     }
 
     fn texts(state: &ComponentPreviewState) -> Vec<String> {
+        laid_out(state, 980.0)
+            .into_iter()
+            .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect()
+    }
+
+    /// Mockup row 128 (decided 2026-11-22): at the narrowest docked width
+    /// the columns shrink and PIN TO PAD stays inside the tab.
+    #[test]
+    fn pin_to_pad_stays_visible_at_the_narrowest_width() {
+        let row = crate::library::component_preview::test_row();
+        let state = ComponentPreviewState::from_row("/tmp/test.snxlib".into(), "t".into(), row);
+        let width = super::super::MIN_EDITOR_W;
+        let texts = laid_out(&state, width);
+        let heading = crate::layout_probe::find(&texts, "PIN TO PAD");
+        assert!(
+            heading.bounds.x + heading.bounds.width <= width,
+            "{:?} in {width}",
+            heading.bounds
+        );
+    }
+
+    fn laid_out(
+        state: &ComponentPreviewState,
+        width: f32,
+    ) -> Vec<crate::layout_probe::LaidOutText> {
         let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteDark);
         let library = LibraryState::default();
         let address = EditorAddress::new(
@@ -593,11 +619,8 @@ mod tests {
                 address,
                 &I18n::en_us(),
             ),
-            iced::Size::new(980.0, 480.0),
+            iced::Size::new(width, 480.0),
         )
-        .into_iter()
-        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
-        .collect()
     }
 
     /// The General tab shows the three column captions and Change… for both

@@ -112,6 +112,7 @@ fn a_linear_pattern_previews_the_baked_pads() {
         NumberingScheme::LinearIncrement {
             start_expr: "10".into(),
             step_expr: "2".into(),
+            sweep: Default::default(),
         },
         |source| ArrayKind::Linear {
             source,

@@ -28,6 +28,7 @@ mod hole;
 mod paste_mask;
 mod properties;
 mod stack;
+mod template;
 mod view;
 
 pub(in crate::panels::footprint_editor_properties) use view::view_pad_form;
@@ -95,6 +96,8 @@ pub(in crate::panels::footprint_editor_properties) struct PadFormValues {
     pub(super) numeric_buffers: std::collections::HashMap<String, String>,
     /// The selected pad's position, mm; `None` for the next pad placed.
     pub(super) position_mm: Option<[f64; 2]>,
+    /// What the Template dropdown offers (mockup row 125).
+    pub(super) template_choices: template::TemplateChoices,
 }
 
 impl PadFormValues {
@@ -128,6 +131,12 @@ impl PadFormValues {
             copper_offset_y_mm: fp.next_pad_copper_offset_y_mm,
             numeric_buffers: fp.numeric_buffers.clone(),
             position_mm: None,
+            template_choices: template::choices(
+                &fp.pad_outlines,
+                None,
+                &fp.next_pad_template,
+                &fp.next_pad_template_library,
+            ),
         }
     }
     pub(in crate::panels::footprint_editor_properties) fn from_selected_pad(
@@ -166,6 +175,12 @@ impl PadFormValues {
             copper_offset_y_mm: pad.copper_offset_y_mm,
             numeric_buffers: fp.numeric_buffers.clone(),
             position_mm: Some(pad.position_mm),
+            template_choices: template::choices(
+                &fp.pad_outlines,
+                Some(pad.idx),
+                &pad.template,
+                &pad.template_library,
+            ),
         }
     }
 }
@@ -201,7 +216,6 @@ pad_msg_fns! {
     (pad_net_msg, String, FpEditorSetNextPadNet, FpEditorSetSelectedPadNet, value);
     (pad_rotation_msg, String, FpEditorSetNextPadRotation, FpEditorSetSelectedPadRotation, value);
     (pad_template_msg, String, FpEditorSetNextPadTemplate, FpEditorSetSelectedPadTemplate, value);
-    (pad_template_library_msg, String, FpEditorSetNextPadTemplateLibrary, FpEditorSetSelectedPadTemplateLibrary, value);
     (pad_size_x_msg, String, FpEditorSetNextPadSizeX, FpEditorSetSelectedPadSizeX, value);
     (pad_size_y_msg, String, FpEditorSetNextPadSizeY, FpEditorSetSelectedPadSizeY, value);
     (pad_drill_diameter_msg, String, FpEditorSetNextPadDrillDiameter, FpEditorSetSelectedPadDrillDiameter, value);

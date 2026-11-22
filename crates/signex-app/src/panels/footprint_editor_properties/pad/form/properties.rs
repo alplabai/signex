@@ -1,6 +1,6 @@
 //! The pad's Properties section (mockup row 125): Designator with Locked, Layer,
 //! Electrical Type (not for a hole), Net, the read-only position, Rotation
-//! and the template with its library.
+//! and the Template dropdown (`template.rs`).
 
 use iced::widget::{Column, Space};
 use iced::{Element, Length, Widget as _};
@@ -10,9 +10,8 @@ use signex_widgets::{CheckboxLabel as _, text_input};
 use super::super::super::super::PanelMsg;
 use super::super::field::{Shown, labelled_row, number_input, pair, read_only_cell, with_refusals};
 use super::{
-    Form, PadClass, pad_designator_msg, pad_electrical_type_msg, pad_input_row_w, pad_locked_msg,
-    pad_net_msg, pad_pick_row_w, pad_rotation_msg, pad_side_msg, pad_template_library_msg,
-    pad_template_msg,
+    Form, PadClass, pad_designator_msg, pad_electrical_type_msg, pad_locked_msg, pad_net_msg,
+    pad_pick_row_w, pad_rotation_msg, pad_side_msg,
 };
 use crate::library::editor::footprint::{PadSide, pad_field};
 use crate::styles::{Spacing, TypeScale};
@@ -112,21 +111,5 @@ pub(super) fn push<'a>(
         muted,
     );
     col = col.push(with_refusals(row, &[rotation.refusal], form.tokens, i18n));
-
-    col = col.push(pad_input_row_w(
-        fw,
-        t!(i18n, ids::EDITORS_PAD_TEMPLATE),
-        "",
-        v.template.clone(),
-        move |s| pad_template_msg(target, s),
-        muted,
-    ));
-    col.push(pad_input_row_w(
-        fw,
-        t!(i18n, ids::EDITORS_PAD_TEMPLATE_LIBRARY),
-        "",
-        v.template_library.clone(),
-        move |s| pad_template_library_msg(target, s),
-        muted,
-    ))
+    super::template::push(col, form)
 }

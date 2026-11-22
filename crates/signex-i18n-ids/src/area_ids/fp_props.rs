@@ -21,6 +21,9 @@ define_ids! {
     EDITORS_FP_PROPS_EXPANSION = "editors-fp-props-expansion";
     EDITORS_FP_PROPS_LENGTH_MM = "editors-fp-props-length-mm";
     EDITORS_FP_PROPS_ILLUSTRATION_COURTYARD = "editors-fp-props-illustration-courtyard";
+    EDITORS_FP_PROPS_ILLUSTRATION_SILKSCREEN = "editors-fp-props-illustration-silkscreen";
+    EDITORS_FP_PROPS_ILLUSTRATION_ASSEMBLY = "editors-fp-props-illustration-assembly";
+    EDITORS_FP_PROPS_ILLUSTRATION_PIN_ONE = "editors-fp-props-illustration-pin-one";
     EDITORS_FP_PROPS_SECTION_SNAP = "editors-fp-props-section-snap";
     EDITORS_FP_PROPS_SNAPPING = "editors-fp-props-snapping";
     EDITORS_FP_PROPS_SNAP_ALL_LAYERS = "editors-fp-props-snap-all-layers";

@@ -150,6 +150,33 @@ fn nothing_selected_shows_every_section_in_one_scroll() {
     assert!(top_of(&texts, "GRID MANAGER") < top_of(&texts, "SKETCH SOLVE"));
 }
 
+/// Mockup row 124: numbered pads, the pin 1 dot, and the silkscreen and
+/// assembly strokes with their callouts.
+#[test]
+fn the_footprint_illustration_draws_the_numbers_outlines_and_callouts() {
+    use signex_widgets::property_illustration::Primitive;
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.courtyard_extent_mm = None;
+    fp.silk_segments = vec![[[0.0, -1.0], [9.0, -1.0]]];
+    fp.assembly_segments = vec![[[0.5, -0.5], [8.5, -0.5]]];
+    let drawing = super::footprint_illustration::illustration(&fp, &signex_i18n::I18n::en_us())
+        .expect("eight pads draw");
+    let count = |want: fn(&Primitive) -> bool| {
+        drawing
+            .visible_parts()
+            .filter(|part| want(&part.primitive))
+            .count()
+    };
+    assert_eq!(count(|p| matches!(p, Primitive::Label(_))), 8, "pad numbers");
+    assert_eq!(
+        count(|p| matches!(p, Primitive::Leader(_))),
+        3,
+        "silkscreen, assembly and pin 1"
+    );
+    assert_eq!(count(|p| matches!(p, Primitive::Line { .. })), 2, "strokes");
+}
+
 #[test]
 fn the_pad_stack_check_sits_above_every_section() {
     let app = app_with_eight_pads();

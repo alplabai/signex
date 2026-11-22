@@ -84,7 +84,6 @@ pub enum PanelMsg {
     FpEditorSetNextPadTrapezoidDeltaX(String),
     FpEditorSetNextPadTrapezoidDeltaY(String),
     FpEditorSetNextPadTemplate(String),
-    FpEditorSetNextPadTemplateLibrary(String),
     FpEditorSetNextPadPasteMarginTop(String),
     FpEditorSetNextPadPasteMarginBottom(String),
     FpEditorToggleNextPadPasteEnabledTop(bool),
@@ -150,10 +149,6 @@ pub enum PanelMsg {
         value: String,
     },
     FpEditorSetSelectedPadTemplate {
-        idx: usize,
-        value: String,
-    },
-    FpEditorSetSelectedPadTemplateLibrary {
         idx: usize,
         value: String,
     },
@@ -499,6 +494,23 @@ pub enum PanelMsg {
     FpEditorSetArrayNumberingScheme {
         array_id: signex_sketch::array::ArrayId,
         scheme: NumberingSchemeKindUi,
+    },
+    /// The Sweep of a grid numbered 1, 2, 3 was picked (mockup row 126).
+    FpEditorSetArraySweep {
+        array_id: signex_sketch::array::ArrayId,
+        sweep: signex_sketch::array::GridSweep,
+    },
+    /// A Template row was picked for the next pad (mockup row 125): the name
+    /// and its library together; both empty is "(custom)".
+    FpEditorPickNextPadTemplate {
+        template: String,
+        library: String,
+    },
+    /// A Template row was picked for the selected pad (mockup row 125).
+    FpEditorPickSelectedPadTemplate {
+        idx: usize,
+        template: String,
+        library: String,
     },
     /// v0.25 polish — toggle BGA `skip_letters`. Active only when the
     /// array's numbering is BgaRowCol; ignored for Linear / Explicit.

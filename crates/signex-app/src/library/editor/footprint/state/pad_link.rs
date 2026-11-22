@@ -19,6 +19,8 @@ use super::{EditorMode, FootprintEditorState, SketchOverlay};
 pub struct PadLinkFocus {
     pub pad_idx: usize,
     pub entity: SketchEntityId,
+    /// The pad is a pattern instance of `entity`, which is its source.
+    pub is_instance: bool,
 }
 
 /// Events of the floating pad link on the sketch canvas.
@@ -58,11 +60,35 @@ impl FootprintEditorState {
         self.pad_link.filter(|focus| {
             self.mode == EditorMode::Sketch
                 && self.selected_sketch == Some(focus.entity)
-                && self
-                    .pads
-                    .get(focus.pad_idx)
-                    .is_some_and(|pad| pad.sketch_entity_id == Some(focus.entity))
+                && self.pads.get(focus.pad_idx).is_some_and(|pad| {
+                    focus.is_instance || pad.sketch_entity_id == Some(focus.entity)
+                })
         })
+    }
+
+    /// The outline of the pattern instance an Edit in Sketch came from
+    /// (mockup row 192): drawn dashed, apart from its source profile.
+    /// `None` when the focused pad is the source itself.
+    pub fn pad_link_instance_outline(&self) -> Option<[(f64, f64); 4]> {
+        let focus = self.live_pad_link().filter(|focus| focus.is_instance)?;
+        Some(self.pads.get(focus.pad_idx)?.rotated_corners_mm())
+    }
+
+    /// The entity driving pad `pad_idx`, and whether the pad is a pattern
+    /// instance of it: a baked instance carries no entity of its own, so
+    /// its pattern's source answers.
+    fn driving_entity(
+        &self,
+        sketch: Option<&SketchData>,
+        pad_idx: usize,
+    ) -> Option<(SketchEntityId, bool)> {
+        let pad = self.pads.get(pad_idx)?;
+        if let Some(id) = pad.sketch_entity_id {
+            return Some((id, false));
+        }
+        let (sketch, solve) = (sketch?, self.last_solve.as_ref()?);
+        let (pattern, _, _) = signex_bake::instance_at(sketch, solve, pad.position_mm)?;
+        Some((sketch.innermost_source(pattern)?, true))
     }
 
     /// The pad `entity` drives, if any.
@@ -91,19 +117,28 @@ impl FootprintEditorState {
 
     /// Edit in Sketch (mockup row 192, item D5): sketch mode with pad `pad_idx`'s driving entity
     /// selected and focused.
-    pub fn edit_pad_in_sketch(&mut self, pad_idx: usize) {
-        let entity = self.pads.get(pad_idx).and_then(|pad| pad.sketch_entity_id);
+    pub fn edit_pad_in_sketch(&mut self, pad_idx: usize, sketch: Option<&SketchData>) {
+        let driving = self.driving_entity(sketch, pad_idx);
         self.mode = EditorMode::Sketch;
         self.selected_pad = None;
-        self.selected_sketch = entity;
-        self.pad_link = entity.map(|entity| PadLinkFocus { pad_idx, entity });
+        self.selected_sketch = driving.map(|(entity, _)| entity);
+        self.pad_link = driving.map(|(entity, is_instance)| PadLinkFocus {
+            pad_idx,
+            entity,
+            is_instance,
+        });
         self.sketch_overlay = SketchOverlay::default();
     }
 
     /// Back to pad / Jump to pad (mockup row 192, item D6): Footprint mode with the pad `entity`
-    /// drives selected.
+    /// drives selected; after an Edit in Sketch, the pad it came from, which
+    /// may be one instance of many.
     pub fn return_to_pad(&mut self, entity: SketchEntityId) {
-        let pad_idx = self.pad_driven_by(entity);
+        let pad_idx = self
+            .live_pad_link()
+            .filter(|focus| focus.entity == entity)
+            .map(|focus| focus.pad_idx)
+            .or_else(|| self.pad_driven_by(entity));
         self.mode = EditorMode::Normal;
         self.selected_sketch = None;
         self.selected_sketch_secondary = None;

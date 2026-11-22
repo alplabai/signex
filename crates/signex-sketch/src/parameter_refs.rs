@@ -142,6 +142,7 @@ macro_rules! numbering_walk {
             NumberingScheme::LinearIncrement {
                 start_expr,
                 step_expr,
+                sweep: _,
             } => {
                 $visit($site(PatternField::NumberingStart), start_expr);
                 $visit($site(PatternField::NumberingStep), step_expr);

@@ -417,6 +417,7 @@ impl Signex {
                     NumberingSchemeKindUi::LinearIncrement => NumberingScheme::LinearIncrement {
                         start_expr: "1".into(),
                         step_expr: "1".into(),
+                        sweep: Default::default(),
                     },
                     NumberingSchemeKindUi::BgaRowCol => NumberingScheme::BgaRowCol {
                         skip_letters: true,
@@ -427,6 +428,34 @@ impl Signex {
                         NumberingScheme::Explicit { names: Vec::new() }
                     }
                 };
+                rebuild_sketch(editor);
+                true
+            });
+        }
+        self.refresh_panel_ctx();
+        true
+    }
+
+    /// The Sweep of a grid numbered 1, 2, 3 (mockup row 126), one undo step.
+    /// Any other scheme has no sweep and the edit is a no-op.
+    pub(crate) fn fp_editor_set_array_sweep(
+        &mut self,
+        array_id: signex_sketch::array::ArrayId,
+        value: signex_sketch::array::GridSweep,
+    ) -> bool {
+        use signex_sketch::array::NumberingScheme;
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.record_edit(None, |editor| {
+                let Some(array) = sketch_array_mut(editor, array_id) else {
+                    return false;
+                };
+                let NumberingScheme::LinearIncrement { sweep, .. } = &mut array.numbering else {
+                    return false;
+                };
+                if *sweep == value {
+                    return false;
+                }
+                *sweep = value;
                 rebuild_sketch(editor);
                 true
             });

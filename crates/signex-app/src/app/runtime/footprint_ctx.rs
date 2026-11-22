@@ -571,6 +571,10 @@ pub(super) fn build_footprint_editor_panel_ctx(
             numbering,
             repicking_polar_center,
             bga_config,
+            sweep: match &array.numbering {
+                NumberingScheme::LinearIncrement { sweep, .. } => Some(*sweep),
+                _ => None,
+            },
             preview,
             source_number: source
                 .and_then(|e| e.pad.as_ref())
@@ -731,8 +735,13 @@ pub(super) fn build_footprint_editor_panel_ctx(
                 corners_mm: pad.rotated_corners_mm().map(|(x, y)| [x, y]),
                 shape: pad.shape.clone(),
                 has_drill: pad.drill_diameter_mm.is_some(),
+                number: pad.number.clone(),
+                template: pad.template.clone(),
+                template_library: pad.template_library.clone(),
             })
             .collect(),
+        silk_segments: crate::panels::outline_segments(&editor.primitive().silk_f),
+        assembly_segments: crate::panels::outline_segments(&editor.primitive().fab_f),
         sketch_state: {
             let (tone, label) = crate::library::editor::standalone::dof_chip::dof_state(editor);
             crate::panels::SketchStateSummary { tone, label }

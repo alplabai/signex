@@ -20,6 +20,8 @@ const HALO: Color = Color {
 const STROKE_PX: f32 = 2.5;
 const HALO_PX: f32 = 7.0;
 const POINT_RING_PX: f32 = 6.0;
+/// Dash of the outlined pattern instance, in px.
+const INSTANCE_DASH: [f32; 2] = [5.0, 3.0];
 
 pub(in crate::library::editor::footprint::canvas::draw) fn draw_pad_link_profile(
     frame: &mut canvas::Frame,
@@ -30,10 +32,14 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_pad_link_profile
     let Some(focus) = state.live_pad_link() else {
         return;
     };
+    // The profile is the source's, also when the focus is one of its instances.
     let corners = state
-        .pads
-        .get(focus.pad_idx)
+        .pad_driven_by(focus.entity)
+        .and_then(|idx| state.pads.get(idx))
         .and_then(|pad| pad.corner_entity_ids);
+    if let Some(outline) = state.pad_link_instance_outline() {
+        draw_instance_outline(frame, cstate, outline);
+    }
     let pos = |id: SketchEntityId| -> Option<(f64, f64)> {
         if let Some(solve) = state.last_solve.as_ref()
             && let Some(p) = signex_sketch::solver::state::point_xy(
@@ -104,6 +110,33 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_pad_link_profile
             }
         }
     }
+}
+
+/// The pattern instance the focus came from, outlined dashed (mockup row 192).
+fn draw_instance_outline(
+    frame: &mut canvas::Frame,
+    cstate: &FootprintCanvasState,
+    corners: [(f64, f64); 4],
+) {
+    let outline = Path::new(|builder| {
+        builder.move_to(cstate.world_to_screen(corners[0]));
+        for corner in &corners[1..] {
+            builder.line_to(cstate.world_to_screen(*corner));
+        }
+        builder.close();
+    });
+    frame.stroke(
+        &outline,
+        Stroke {
+            line_dash: canvas::LineDash {
+                segments: &INSTANCE_DASH,
+                offset: 0,
+            },
+            ..Stroke::default()
+                .with_width(STROKE_PX)
+                .with_color(SELECTION)
+        },
+    );
 }
 
 /// An arc from `s` to `e` about `c` as a 16-segment polyline, the way the

@@ -3,7 +3,8 @@
 
 use std::collections::BTreeMap;
 
-use signex_sketch::parameter_refs::{ParameterNameError, RowValue};
+use signex_sketch::parameter::ParameterTable;
+use signex_sketch::parameter_refs::{ParameterNameError, RowValue, check_new_name};
 use signex_sketch::unit::{Quantity, UnitFamily};
 
 /// Most names the autocomplete offers at once.
@@ -24,6 +25,61 @@ pub struct ParametersTableState {
     /// Each parameter's last value, so a row in error shows the value the
     /// drawing still uses.
     pub last_good: BTreeMap<String, Quantity>,
+    /// Another footprint's parameters, offered to copy (mockup row 189).
+    pub import: Option<ParametersImport>,
+}
+
+/// The parameters of a picked footprint, each ticked to copy or not.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParametersImport {
+    /// The footprint they come from.
+    pub source: String,
+    pub rows: Vec<ImportRow>,
+}
+
+/// One parameter offered for import.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImportRow {
+    pub name: String,
+    pub expr: String,
+    /// The name is in use here or not valid: it cannot be imported.
+    pub is_refused: bool,
+    pub is_picked: bool,
+}
+
+impl ParametersImport {
+    /// `parameters` offered against `own`: every free name starts ticked,
+    /// and a name in use is never overwritten.
+    pub fn of(source: String, parameters: Vec<(String, String)>, own: &ParameterTable) -> Self {
+        let rows = parameters
+            .into_iter()
+            .map(|(name, expr)| {
+                let is_refused = check_new_name(own, &name).is_err();
+                ImportRow {
+                    name,
+                    expr,
+                    is_refused,
+                    is_picked: !is_refused,
+                }
+            })
+            .collect();
+        Self { source, rows }
+    }
+
+    /// Tick or untick `name`; a refused row stays unticked.
+    pub fn toggle(&mut self, name: &str) {
+        if let Some(row) = self
+            .rows
+            .iter_mut()
+            .find(|row| row.name == name && !row.is_refused)
+        {
+            row.is_picked = !row.is_picked;
+        }
+    }
+
+    pub fn picked(&self) -> impl Iterator<Item = &ImportRow> {
+        self.rows.iter().filter(|row| row.is_picked)
+    }
 }
 
 /// A rename in progress.
@@ -44,10 +100,11 @@ impl ParametersTableState {
         }
     }
 
-    /// Close the deepest open thing inside the table: the delete prompt, a
-    /// rename, then a row menu. False when none was open.
+    /// Close the deepest open thing inside the table: the import list, the
+    /// delete prompt, a rename, then a row menu. False when none was open.
     pub fn close_innermost(&mut self) -> bool {
-        self.delete_prompt.take().is_some()
+        self.import.take().is_some()
+            || self.delete_prompt.take().is_some()
             || self.rename.take().is_some()
             || self.menu.take().is_some()
     }
