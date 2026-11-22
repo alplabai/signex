@@ -264,7 +264,10 @@ the board's project on entry and after every edit; Properties shows it in a
 A failing inside corner is ringed on the canvas with a callout such as
 `R 0.00 < R 1.00`, and stays visible over the bake preview. **Add fillets**
 under the checks rounds each sharp corner between two lines to the router's
-radius, as one undo step (mockup row 179d). A corner that is already an arc,
+radius, as one undo step (mockup row 179d). Each arc has a construction
+radius to each tangent point, held Perpendicular to its line, and a radius
+dimension, so it stays tangent through later dimension edits and adds no
+degree of freedom over the corner it replaces. A corner that is already an arc,
 whose lines are too short for the radius, or that something depends on is
 left alone and said in Messages. A corner is depended on when a constraint,
 pattern, pad or other entity names its Point, or when an equal-length or

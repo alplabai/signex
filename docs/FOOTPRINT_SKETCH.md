@@ -97,7 +97,9 @@ written, so such a file keeps its lower token; anything else writes
 `snxfpt/1.3`.
 
 The pin 1 dot sits on pad 1's outer side, or on the first other side clear of
-every pad by the clearance; with no clear side there is no dot.
+every pad by the clearance; with no clear side there is no dot. While the
+silkscreen outline and the marker are on and no dot is placed, for that reason
+or because no pad is numbered 1, the section shows a note saying so.
 
 `signex_bake::bake_generated` rebuilds the strokes after a setting edit, a
 pad write-back (saves included), a 3D body mint and a sketch bake. They are

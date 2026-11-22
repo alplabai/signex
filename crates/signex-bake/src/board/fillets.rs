@@ -1,15 +1,17 @@
 //! Add fillets on failing inside corners (mockup row 179d): a sharp corner
 //! between two lines takes a tangent arc of the radius the router needs. A
 //! corner that is an arc, whose lines are too short, or that something else
-//! depends on is left as it was and counted. Rules: `docs/PCB_SKETCH.md`,
-//! "Outline checks".
+//! depends on is left as it was and counted. The arc is held tangent by a
+//! construction radius to each tangent point, as the Slot holds its ends.
+//! Rules: `docs/PCB_SKETCH.md`, "Outline checks".
 
 use std::collections::HashMap;
 use std::f64::consts::PI;
 
-use signex_sketch::constraint::ConstraintKind;
+use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::entity::{Entity, EntityKind};
-use signex_sketch::id::SketchEntityId;
+use signex_sketch::id::{ConstraintId, SketchEntityId};
+use signex_sketch::plane::PlaneId;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::solver::state::point_xy;
@@ -154,6 +156,7 @@ struct Geometry {
     on_first: Xy,
     on_second: Xy,
     centre: Xy,
+    radius: f64,
     sweep_ccw: bool,
 }
 
@@ -189,12 +192,14 @@ fn fillet_geometry(corner: Xy, a: Xy, b: Xy, radius: f64) -> Option<Geometry> {
         on_first,
         on_second,
         centre,
+        radius,
         sweep_ccw: sx * ey - sy * ex > 0.0,
     })
 }
 
-/// Add the arc and its points, and end the two lines on the arc. The arc
-/// takes the outline or cutout tag of the line it continues.
+/// Add the arc and its points, end the two lines on the arc and hold it
+/// tangent at its radius. The arc takes the outline or cutout tag of the
+/// line it continues.
 fn splice(
     sketch: &mut SketchData,
     at: &mut HashMap<SketchEntityId, Xy>,
@@ -234,6 +239,52 @@ fn splice(
     sketch.entities.push(arc);
     move_line_end(sketch, arms[0].line, corner, start);
     move_line_end(sketch, arms[1].line, corner, end);
+    let to_first = construction_radius(sketch, plane, center, start);
+    let to_second = construction_radius(sketch, plane, center, end);
+    // Three rows on the arc's five free coordinates leave the two the
+    // corner Point had.
+    let held = [
+        ConstraintKind::Perpendicular {
+            l1: to_first,
+            l2: arms[0].line,
+        },
+        ConstraintKind::Perpendicular {
+            l1: to_second,
+            l2: arms[1].line,
+        },
+        ConstraintKind::DistancePtPt {
+            p1: center,
+            p2: start,
+            target: DimTarget::Literal(geometry.radius),
+        },
+    ];
+    sketch
+        .constraints
+        .extend(held.into_iter().map(|kind| Constraint {
+            id: ConstraintId::new(),
+            kind,
+        }));
+}
+
+/// A construction line from the arc's centre to one tangent point.
+fn construction_radius(
+    sketch: &mut SketchData,
+    plane: PlaneId,
+    center: SketchEntityId,
+    tangent_point: SketchEntityId,
+) -> SketchEntityId {
+    let id = SketchEntityId::new();
+    let mut radius = Entity::new(
+        id,
+        plane,
+        EntityKind::Line {
+            start: center,
+            end: tangent_point,
+        },
+    );
+    radius.construction = true;
+    sketch.entities.push(radius);
+    id
 }
 
 fn move_line_end(
@@ -475,9 +526,126 @@ mod tests {
                 refused: 0
             }
         );
-        assert_eq!(sketch.constraints.len(), 1, "the constraint stays");
+        assert_eq!(
+            sketch.constraints[0].kind,
+            ConstraintKind::Horizontal { line: lines[2] },
+            "the constraint stays"
+        );
+        assert_eq!(
+            sketch.constraints.len(),
+            4,
+            "and the fillet adds its two perpendiculars and its radius"
+        );
         let solve = solved(&sketch);
         let after = checks(&sketch, &solve);
+        assert_eq!(after.inside_corners, CheckState::Passed, "{after:?}");
+    }
+
+    /// Rank of `rows` by Gram-Schmidt.
+    fn rank(rows: &[Vec<f64>]) -> usize {
+        let mut basis: Vec<Vec<f64>> = Vec::new();
+        for row in rows {
+            let length = row.iter().map(|v| v * v).sum::<f64>().sqrt();
+            if length < 1e-12 {
+                continue;
+            }
+            let mut rest = row.clone();
+            for b in &basis {
+                let dot: f64 = rest.iter().zip(b).map(|(r, q)| r * q).sum();
+                rest.iter_mut().zip(b).for_each(|(r, q)| *r -= dot * q);
+            }
+            let left = rest.iter().map(|v| v * v).sum::<f64>().sqrt();
+            if left > 1e-8 * length {
+                basis.push(rest.iter().map(|v| v / left).collect());
+            }
+        }
+        basis.len()
+    }
+
+    fn free_coordinates(solve: &FullSolveOutput) -> usize {
+        solve.result.state.len() - rank(&solve.jacobian)
+    }
+
+    /// The L with both arms of its corner held and the edge beside them
+    /// dimensioned at 5 mm, so that dimension moves the corner.
+    fn dimensioned_l() -> (SketchData, Vec<SketchEntityId>) {
+        let mut sketch = l_outline(5.0);
+        let (points, lines) = l_ids(&sketch);
+        for kind in [
+            ConstraintKind::Fixed { point: points[1] },
+            ConstraintKind::Fixed { point: points[4] },
+            ConstraintKind::Vertical { line: lines[1] },
+            ConstraintKind::Horizontal { line: lines[2] },
+            ConstraintKind::Vertical { line: lines[3] },
+            ConstraintKind::DistancePtPt {
+                p1: points[1],
+                p2: points[2],
+                target: DimTarget::Literal(5.0),
+            },
+        ] {
+            constrain(&mut sketch, kind);
+        }
+        (sketch, points)
+    }
+
+    /// DECISIONS 2026-11-22, mockup row 179d: the arc stays tangent and
+    /// keeps its radius through a later dimension edit.
+    #[test]
+    fn a_later_dimension_edit_keeps_the_fillet_tangent_at_its_radius() {
+        let (mut sketch, points) = dimensioned_l();
+        let free_before = free_coordinates(&solved(&sketch));
+        assert_eq!(fillet_the_l(&mut sketch).applied, 1);
+
+        let filleted = solved(&sketch);
+        assert!(filleted.over_constraints.is_empty(), "no conflict");
+        assert!(
+            filleted.redundant_constraints.is_empty(),
+            "nothing restated"
+        );
+        assert_eq!(free_coordinates(&filleted), free_before, "no freedom added");
+
+        for constraint in &mut sketch.constraints {
+            if let ConstraintKind::DistancePtPt { p2, target, .. } = &mut constraint.kind
+                && *p2 == points[2]
+            {
+                *target = DimTarget::Literal(7.0);
+            }
+        }
+        let edited = solved(&sketch);
+
+        assert!(edited.over_constraints.is_empty(), "no conflict");
+        let at = |id| {
+            point_xy(id, &edited.result.state, &edited.result.index, &sketch).expect("a point")
+        };
+        let (center, start, end) = sketch
+            .entities
+            .iter()
+            .find_map(|e| match e.kind {
+                EntityKind::Arc {
+                    center, start, end, ..
+                } => Some((at(center), at(start), at(end))),
+                _ => None,
+            })
+            .expect("the fillet arc");
+        let (near, far) = (at(points[2]), at(points[4]));
+        assert!((near.1 - 7.0).abs() < 1e-6, "the edge moved: {near:?}");
+        assert!((start.1 - 7.0).abs() < 1e-6, "the arc followed: {start:?}");
+        let radius = 1.0 + RADIUS_MARGIN_MM;
+        for point in [start, end] {
+            let reach = (point.0 - center.0).hypot(point.1 - center.1);
+            assert!((reach - radius).abs() < 1e-6, "radius kept: {reach}");
+        }
+        let radius_dot_line =
+            |p: Xy, q: Xy| (p.0 - center.0) * (p.0 - q.0) + (p.1 - center.1) * (p.1 - q.1);
+        assert!(
+            radius_dot_line(start, near).abs() < 1e-6,
+            "tangent to the first line"
+        );
+        assert!(
+            radius_dot_line(end, far).abs() < 1e-6,
+            "tangent to the second line"
+        );
+        let after = checks(&sketch, &edited);
         assert_eq!(after.inside_corners, CheckState::Passed, "{after:?}");
     }
 

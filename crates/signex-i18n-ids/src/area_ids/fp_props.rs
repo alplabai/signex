@@ -25,6 +25,7 @@ define_ids! {
     EDITORS_FP_PROPS_LINE_WIDTH = "editors-fp-props-line-width";
     EDITORS_FP_PROPS_PAD_CLEARANCE = "editors-fp-props-pad-clearance";
     EDITORS_FP_PROPS_PIN_ONE_DOT = "editors-fp-props-pin-one-dot";
+    EDITORS_FP_PROPS_PIN_ONE_NO_DOT = "editors-fp-props-pin-one-no-dot";
     EDITORS_FP_PROPS_ASSEMBLY_BODY = "editors-fp-props-assembly-body";
     EDITORS_FP_PROPS_NO_BODY = "editors-fp-props-no-body";
     EDITORS_FP_PROPS_ILLUSTRATION_COURTYARD = "editors-fp-props-illustration-courtyard";

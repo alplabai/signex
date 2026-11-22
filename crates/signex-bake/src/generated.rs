@@ -22,6 +22,17 @@ pub fn bake_generated(fp: &mut Footprint) {
     fp.generated.assembly = assembly;
 }
 
+/// Whether the silkscreen outline is on with its Pin 1 marker but the
+/// strokes hold no dot: no pad 1, or no side of it clear.
+pub fn pin_one_dot_is_missing(fp: &Footprint) -> bool {
+    let settings = &fp.generated;
+    settings.silk_outline
+        && settings.pin_one_marker
+        && !silk_strokes(fp)
+            .iter()
+            .any(|g| matches!(g.kind, FpGraphicKind::Circle { .. }))
+}
+
 /// The part's body: the 3D body outline, else the extent of the hand-drawn
 /// front fab graphics. `None` when neither gives an area.
 pub fn body_extent(fp: &Footprint) -> Option<Extent> {

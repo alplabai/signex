@@ -4,7 +4,7 @@ use signex_library::primitive::footprint::{
     Footprint, FpGraphic, FpGraphicKind, Pad, PadShape, Polygon,
 };
 
-use super::{bake_generated, body_extent};
+use super::{bake_generated, body_extent, pin_one_dot_is_missing};
 
 fn pad(number: &str, position: [f64; 2]) -> Pad {
     Pad {
@@ -226,6 +226,27 @@ fn with_no_clear_side_there_is_no_dot() {
     }
     bake_generated(&mut fp);
     assert!(dots(&fp.generated.silk).is_empty());
+    assert!(pin_one_dot_is_missing(&fp), "the panel says so");
+}
+
+/// DECISIONS 2026-11-22, mockup row 124: the note follows the dot.
+#[test]
+fn a_missing_dot_is_reported_only_while_the_marker_is_on() {
+    let mut fp = part();
+    fp.generated.silk_outline = true;
+    fp.generated.silk_line_width_mm = 0.1;
+    fp.generated.pad_clearance_mm = 0.2;
+    assert!(!pin_one_dot_is_missing(&fp), "a dot fits");
+
+    fp.pads[0].number = "A".into();
+    assert!(pin_one_dot_is_missing(&fp), "no pad 1");
+
+    fp.generated.pin_one_marker = false;
+    assert!(!pin_one_dot_is_missing(&fp), "the marker is off");
+
+    fp.generated.pin_one_marker = true;
+    fp.generated.silk_outline = false;
+    assert!(!pin_one_dot_is_missing(&fp), "the outline is off");
 }
 
 #[test]

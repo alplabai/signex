@@ -215,6 +215,37 @@ fn a_generated_outline_without_a_body_says_what_it_needs() {
     assert!(has(&texts, "needs a 3D body or fab outline"), "{texts:#?}");
 }
 
+/// DECISIONS 2026-11-22, mockup row 124: with the marker on and no pad 1 to
+/// mark, Courtyard & Silkscreen says no dot was placed.
+#[test]
+fn a_pin_one_marker_with_no_dot_shows_a_note() {
+    const NOTE: &str = "No dot placed: needs a pad 1 with a clear side";
+    let mut app = app_with_eight_pads();
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get_mut(&PathBuf::from(PATH))
+        .expect("the open editor");
+    editor.with_parts(|_, fp| fp.generated.silk_outline = true);
+    app.refresh_panel_ctx();
+    let fp = panel_ctx(&app);
+    assert!(!fp.pin_one_dot_missing, "pad 1 has a clear side");
+    assert!(!has(&texts(&app, &fp), NOTE));
+
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get_mut(&PathBuf::from(PATH))
+        .expect("the open editor");
+    editor.with_parts(|_, fp| fp.pads[0].number = "A".into());
+    app.refresh_panel_ctx();
+    let fp = panel_ctx(&app);
+    assert!(fp.pin_one_dot_missing, "no pad is numbered 1");
+    let shown = texts(&app, &fp);
+    assert!(has(&shown, NOTE), "{shown:#?}");
+    assert!(top_of(&shown, "Pin 1 marker") < top_of(&shown, NOTE));
+}
+
 #[test]
 fn switching_the_pin_one_marker_off_drops_its_dot() {
     use signex_widgets::property_illustration::Primitive;

@@ -73,7 +73,7 @@ fn silk_section<'a>(cx: Ctx<'a, '_>) -> Element<'a, PanelMsg> {
         number_input(&clearance, |v| msg(Edit::PadClearanceTyped(v)), tokens),
         muted,
     );
-    let body = Column::new()
+    let mut body = Column::new()
         .width(Length::Fill)
         .push(with_refusals(width_row, &[width.refusal], tokens, i18n))
         .push(with_refusals(
@@ -83,6 +83,9 @@ fn silk_section<'a>(cx: Ctx<'a, '_>) -> Element<'a, PanelMsg> {
             i18n,
         ))
         .push(pin_one_row(cx));
+    if fp.pin_one_dot_missing {
+        body = body.push(pin_one_missing_note(cx));
+    }
     let section = EnableSection::new(
         t!(i18n, ids::EDITORS_FP_PROPS_SILK_OUTLINE),
         settings.silk_outline,
@@ -116,6 +119,17 @@ fn pin_one_row<'a>(cx: Ctx<'a, '_>) -> Element<'a, PanelMsg> {
         field.boxed(),
         muted,
     )
+}
+
+/// Says why the marker that is on draws no dot.
+fn pin_one_missing_note<'a>(cx: Ctx<'a, '_>) -> Element<'a, PanelMsg> {
+    let note = text(t!(cx.i18n, ids::EDITORS_FP_PROPS_PIN_ONE_NO_DOT))
+        .size(TS.caption)
+        .color(cx.palette.muted);
+    container(note)
+        .padding([0.0, SP.m])
+        .width(Length::Fill)
+        .boxed()
 }
 
 fn assembly_section<'a>(cx: Ctx<'a, '_>) -> Element<'a, PanelMsg> {

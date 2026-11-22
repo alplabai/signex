@@ -408,6 +408,8 @@ editors-fp-props-line-width = Line width
 editors-fp-props-pad-clearance = Pad clearance
 # Checkbox text of the Pin 1 marker row.
 editors-fp-props-pin-one-dot = Dot beside pad 1
+# Note under the Pin 1 marker row when it is on and no dot could be placed.
+editors-fp-props-pin-one-no-dot = No dot placed: needs a pad 1 with a clear side
 # Size of the part's body. $width and $height are millimetre numbers.
 editors-fp-props-assembly-body = body { $width } × { $height }
 # Note when a generated outline has no body to follow.

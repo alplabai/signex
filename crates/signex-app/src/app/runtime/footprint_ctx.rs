@@ -762,6 +762,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
         ),
         generated: editor.primitive().generated.clone(),
         body_extent_mm: signex_bake::body_extent(editor.primitive()),
+        pin_one_dot_missing: signex_bake::pin_one_dot_is_missing(editor.primitive()),
         sketch_state: {
             let (tone, label) = crate::library::editor::standalone::dof_chip::dof_state(editor);
             crate::panels::SketchStateSummary { tone, label }

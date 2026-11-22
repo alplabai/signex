@@ -254,6 +254,8 @@ pub struct FootprintEditorPanelContext {
     pub generated: signex_library::primitive::footprint::GeneratedFeatures,
     /// The body the generated outlines follow, `[min_x, min_y, max_x, max_y]`.
     pub body_extent_mm: Option<[f64; 4]>,
+    /// The Pin 1 marker is on and no dot could be placed (mockup row 124).
+    pub pin_one_dot_missing: bool,
     /// The sketch's solve state, as the canvas chip names it.
     pub sketch_state: SketchStateSummary,
 }

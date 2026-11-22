@@ -37,7 +37,7 @@ pub use board::{BoardBakeError, OutlineChecks, bake_board, outline_checks};
 pub use body3d::bake_body3d;
 pub use courtyard::bake_courtyard;
 pub use cutout::bake_cutouts;
-pub use generated::{bake_generated, body_extent};
+pub use generated::{bake_generated, body_extent, pin_one_dot_is_missing};
 pub use keepout::bake_keepouts;
 pub use mask::{bake_mask_excludes, bake_mask_openings, bake_paste_apertures};
 pub use pad::bake_pads;
