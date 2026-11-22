@@ -11,7 +11,7 @@ use super::replay::{ContinuesAs, ReplayScope, replay_scope};
 use crate::app::command::CommandArgs;
 use crate::app::{Signex, TabInfo, TabKind};
 use crate::keymap::AppCommandId;
-use crate::library::editor::symbol::state::SymbolSelection;
+use crate::library::editor::symbol::SymbolSelection;
 use crate::library::messages::{PrimitiveEdit, SymbolEditorMsg};
 use crate::panels::command_log::{CommandLogMsg, LogOutcome, LogRow, LogSource};
 

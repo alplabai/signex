@@ -13,7 +13,7 @@ use super::scope::EditFamily;
 use crate::app::command::CommandOutcome;
 use crate::app::{Message, Signex};
 use crate::library::editor::footprint::EditorPad;
-use crate::library::editor::symbol::state::SymbolSelection;
+use crate::library::editor::symbol::SymbolSelection;
 use crate::library::messages::{FootprintEditorMsg, PrimitiveEdit, SymbolEditorMsg};
 
 /// An editor document's selection as recorded.
