@@ -162,6 +162,8 @@ define_ids! {
     RULES_PRESET_FROM_TO = "rules-preset-from-to";
     RULES_TEXT_PROBLEM_AT = "rules-text-problem-at";
     RULES_TEXT_UNDO_NOTE = "rules-text-undo-note";
+    RULES_TEXT_ALL_DOMAINS = "rules-text-all-domains";
+    RULES_TEXT_VIEW_TAG = "rules-text-view-tag";
     // The constraint grid (#2530): domains, column groups, columns, rows,
     // cells, the find box, the detail strip and the why chain.
     RULES_DOMAIN_PHYSICAL = "rules-domain-physical";

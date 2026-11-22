@@ -136,6 +136,15 @@ impl Signex {
                 }
             }
             RulesTabMsg::TextApplied { project_id } => self.apply_rules_text(project_id),
+            // These rewrite the stored text, which Apply of the typed text
+            // would then replace.
+            RulesTabMsg::SetRedefined { project_id, .. }
+            | RulesTabMsg::SetApplied { project_id, .. }
+            | RulesTabMsg::PresetApplied { project_id }
+                if self.rules_text_unapplied(project_id) =>
+            {
+                self.rules_tab_mut(project_id).refused = Some(TEXT_UNAPPLIED.to_string());
+            }
             msg @ (RulesTabMsg::ClearanceViewPicked { .. }
             | RulesTabMsg::MatrixCellCommitted { .. }
             | RulesTabMsg::MatrixCellCleared { .. }

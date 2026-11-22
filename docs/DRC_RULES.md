@@ -331,9 +331,12 @@ same undo step.
   in the error ink, and each problem is a banner under the field ("Line 9,
   column 32: ..."); clean text shows "No problems in the text." in green.
   Apply stores the text as one undo step and is off while the text has an
-  error; Discard drops what was typed. While typed text is not applied, Undo,
-  Redo and the switch back to the table wait and the tab says so; a text view
-  nobody typed in follows the stored rules.
+  error; Discard drops what was typed. Its bar reads "All domains" with a
+  "Text view" tag in place of the domain tabs, and keeps the Table and Text
+  switch, Constraint sets, Presets and Run DRC. While typed text is not
+  applied, Undo, Redo, the switch back to the table, a set's Use these limits
+  and Apply to scope, and a preset's Apply wait and the tab says so; a text
+  view nobody typed in follows the stored rules.
 
 ### Commands
 
