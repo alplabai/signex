@@ -303,32 +303,8 @@ pub(crate) fn apply_footprint_primitive_edit(
     editor: &mut crate::app::FootprintDocument,
     msg: FootprintEditorMsg,
 ) {
-    // v0.27 — Role=Pad on a Line is shorthand for "make this loop a
-    // pad." Rewrite the message here so the SetRole arm only ever
-    // sees Point-targeted Pad role assignments (where it makes
-    // sense). Without this, Role=Pad on a Line was a silent no-op
-    // — the Properties dropdown read as broken.
-    let msg = if let FootprintEditorMsg::SketchSetRole {
-        id,
-        role: crate::library::messages::RoleTag::Pad,
-    } = &msg
-    {
-        let is_line = editor
-            .primitive()
-            .sketch
-            .as_ref()
-            .and_then(|s| s.entities.iter().find(|e| e.id == *id))
-            .map(|e| matches!(e.kind, signex_sketch::entity::EntityKind::Line { .. }))
-            .unwrap_or(false);
-        if is_line {
-            editor.state.selected_sketch = Some(*id);
-            FootprintEditorMsg::SketchMakePadFromProfile
-        } else {
-            msg
-        }
-    } else {
-        msg
-    };
+    // Role on a line or arc speaks for its closed profile (mockup row 190).
+    let msg = sketch::profile_roles::route_role_pick(editor, msg);
 
     // A selection row of the right-click menu closes the menu, then runs
     // its action as that action's own edit (its own undo step).
@@ -385,6 +361,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                 redo,
             });
     }
+    crate::library::editor::footprint::sketch_mode::exit::settle_outcome(editor);
 }
 
 /// Route one footprint-editor message to the slice that owns it.
@@ -458,6 +435,9 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
             use crate::library::editor::footprint::state::EditorMode;
             if exit::apply(editor, &msg) == ExitOutcome::Leave {
                 view::apply(editor, FootprintEditorMsg::SetMode(EditorMode::Normal));
+                if matches!(msg, FootprintEditorMsg::SketchBakeRequested) {
+                    exit::record_outcome(editor);
+                }
             }
         }
         FootprintEditorMsg::SketchPlacementInputChar(..)
@@ -544,6 +524,10 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         }
         FootprintEditorMsg::SketchCloseGapRequested { keep, merge } => {
             sketch::close_gap::apply(editor, keep, merge)
+        }
+        FootprintEditorMsg::SketchAddFilletsRequested => sketch::add_fillets::apply(editor),
+        FootprintEditorMsg::SketchProfileRolePicked { seed, role } => {
+            sketch::profile_roles::apply(editor, seed, role)
         }
         // The board host answers it before this router; a footprint has no
         // such button.
@@ -753,6 +737,8 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         PadScopeAnswered(_) => false,
         // Close gap records its own step (`record_edit`), only when it joins.
         SketchCloseGapRequested { .. } => false,
+        // Likewise, only when they change the sketch.
+        SketchAddFilletsRequested | SketchProfileRolePicked { .. } => false,
         // Opens a file dialog; the import records its own step.
         SketchImportDxfRequested => false,
         // All other variants either add/remove/move geometry,

@@ -204,10 +204,28 @@ reads **Bake preview · Discard changes · Bake**:
   other fields are baked from the same solve when the canvas redraws
   (`canvas/draw/sketch/bake_overlay.rs`). The card also lists the last
   bake's warnings, the features it left out; they name no entity, so a
-  click on them does nothing.
+  click on them does nothing. One gap is one line, naming the object and
+  its place, and the canvas rings it.
+
+After **Bake**, Properties shows the outcome: `Baked · N pads`, what was
+written, and Edit in Sketch, until the selection changes or the footprint no
+longer holds those counts (mockup row 190).
 
 The Linetype control is a three-way segment, Normal / Construction /
 Centerline; it replaces the click-to-cycle pill.
+
+## Roles {#roles}
+
+With nothing selected, Properties in a footprint sketch has a **Roles**
+section: one row per closed profile with its role, then Solder mask (from the
+pad rule, no entity), the centerlines (they never bake), and Bake preview and
+Bake (mockup row 190). A role picked on a row applies to the whole profile as
+one undo step.
+
+A closed profile of lines and arcs can take the **Pad** role: a centre Point
+carries the pad, and its custom shape is traced from the loop. Picking Pad on
+any edge of the loop does the same, and an edge of that loop reads Pad. Another
+role on the loop removes the pad. A Point stays a simple pad.
 
 ## Parameters {#parameters}
 

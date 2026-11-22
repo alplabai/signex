@@ -637,6 +637,15 @@ pub enum FootprintEditorMsg {
         keep: signex_sketch::id::SketchEntityId,
         merge: signex_sketch::id::SketchEntityId,
     },
+    /// Add fillets was pressed on the failing inside corners (mockup row
+    /// 179d): round them to the required radius, one undo step.
+    SketchAddFilletsRequested,
+    /// A role was picked on a row of the Roles section (mockup row 190): the
+    /// whole closed profile through `seed` takes it, one undo step.
+    SketchProfileRolePicked {
+        seed: signex_sketch::id::SketchEntityId,
+        role: RoleTag,
+    },
     /// Import DXF… was pressed on a board sketch's bar (mockup row 179c).
     /// The board host answers it with the file dialog.
     SketchImportDxfRequested,

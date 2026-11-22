@@ -31,3 +31,7 @@ pub(super) mod canvas_values;
 pub(super) mod reference;
 // Close gap on an open profile (mockup row 190).
 pub(super) mod close_gap;
+// Add fillets on failing inside corners (mockup row 179d).
+pub(super) mod add_fillets;
+// The role of a whole closed profile (mockup row 190).
+pub(super) mod profile_roles;

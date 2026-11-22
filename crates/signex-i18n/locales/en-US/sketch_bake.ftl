@@ -24,6 +24,37 @@ sketch-bake-gap-too-wide = Gap { $gap } mm is wider than the { $tolerance } mm h
 # An open profile Close gap cannot be offered on: an end nothing pairs, or a
 # sketch with no solve. $x and $y are millimetres.
 sketch-bake-open-end = Open profile at ({ $x }, { $y }) mm
+# One open profile in the preview card: $object is its role, $x and $y are
+# millimetres, $heal says whether Close gap can join it.
+sketch-bake-open-profile = { $object } is open at ({ $x }, { $y }) mm. { $heal }
+# The fix on failing inside corners (mockup row 179d); $radius is millimetres.
+sketch-bake-add-fillets = Add fillets R { $radius }
+# The Roles section of a footprint sketch (mockup row 190): one row per closed
+# profile. $index counts the profiles, $edges is its number of edges.
+sketch-bake-roles = Roles
+sketch-bake-roles-profile = Profile { $index } · { $edges ->
+    [one] 1 edge
+   *[other] { $edges } edges
+}
+# A closed profile that is a pad; $number is the pad's designator.
+sketch-bake-roles-pad-profile = Pad { $number } profile · { $edges ->
+    [one] 1 edge
+   *[other] { $edges } edges
+}
+sketch-bake-roles-empty = No closed profiles yet.
+sketch-bake-roles-mask = Solder mask: from the pad rule, no entity
+# $count is the number of centerlines.
+sketch-bake-roles-centerlines = Centerlines: { $count }, never bake
+# Properties after Bake (mockup row 190), until the selection changes.
+sketch-bake-outcome-title = Baked · { $pads ->
+    [one] 1 pad
+   *[other] { $pads } pads
+}
+# $items lists what was written, $name is the footprint.
+sketch-bake-outcome-wrote = Baked { $items } into { $name }.
+sketch-bake-outcome-nothing = The bake wrote nothing into { $name }.
+# One entry of $items: a bake target and how many it holds.
+sketch-bake-outcome-item = { $target } { $count }
 # The layer colour legend over a footprint's bake preview (mockup row 190).
 sketch-bake-legend-top = Top
 sketch-bake-legend-paste = Paste

@@ -131,7 +131,7 @@ fn entity_rows<'a>(
         ));
         if !fp.selected_sketch_is_point && host.offers_role(RoleTag::Pad) {
             col = col.push(caption(
-                t!(i18n, ids::EDITORS_FOOTPRINT_ROLE_POINTS_ONLY),
+                t!(i18n, ids::EDITORS_FOOTPRINT_ROLE_PAD_HINT),
                 tokens,
             ));
         }

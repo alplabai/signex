@@ -90,6 +90,8 @@ fn footprint_edit(msg: &FootprintEditorMsg) -> Option<(&'static str, EditFamily,
         | M::SketchUnlinkCornerRadius { .. }
         | M::SketchResizeRoundPad { .. }
         | M::SketchCloseGapRequested { .. }
+        | M::SketchAddFilletsRequested
+        | M::SketchProfileRolePicked { .. }
         | M::SketchEditParameter { .. } => {
             ("edit_object_properties", EditFamily::Properties, false)
         }

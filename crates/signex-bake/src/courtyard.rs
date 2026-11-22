@@ -21,6 +21,7 @@ use signex_sketch::entity::EntityKind;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 
+use crate::open_ends::warn_open_profiles;
 use crate::profile::TraceError;
 use crate::traced_loops::TracedLoops;
 
@@ -37,6 +38,7 @@ pub fn bake_courtyard(
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
     let mut found_first = false;
+    let mut open = false;
     let mut loops = TracedLoops::default();
     for entity in &sketch.entities {
         if entity.bake_skipped() {
@@ -74,10 +76,7 @@ pub fn bake_courtyard(
                 *courtyard_out = Polygon::new(vertices);
                 found_first = true;
             }
-            Err(TraceError::OpenChain) => warnings.push(format!(
-                "entity {}: CourtyardAttr profile is not closed (open chain); skipping",
-                entity.id
-            )),
+            Err(TraceError::OpenChain) => open = true,
             Err(TraceError::Branching) => warnings.push(format!(
                 "entity {}: CourtyardAttr profile branches at a vertex; skipping",
                 entity.id
@@ -91,6 +90,15 @@ pub fn bake_courtyard(
                 entity.id
             )),
         }
+    }
+    if open {
+        warn_open_profiles(
+            sketch,
+            solve,
+            "Courtyard",
+            |e| e.courtyard.is_some(),
+            warnings,
+        );
     }
     Ok(())
 }

@@ -14,7 +14,7 @@ pub mod messages;
 pub mod roles;
 pub mod value_edit;
 
-pub use exit::{BakePreview, ExitOutcome, SketchExit};
+pub use exit::{BakeOutcome, BakePreview, ExitOutcome, SketchExit};
 pub use linetype::SketchLinetype;
 pub use messages::{ActiveTool, SketchEdit, SketchModeMsg, ToolEvent};
 pub use value_edit::SketchCanvasMsg;

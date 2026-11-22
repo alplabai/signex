@@ -48,6 +48,41 @@ impl FootprintEditorState {
             .find_map(GapOffer::of)
     }
 
+    /// What the canvas rings (mockup rows 179d, 190): each failing inside
+    /// corner and each open profile end, with a callout in numbers only.
+    pub fn failure_marks(&self, sketch: &SketchData) -> Vec<FailureMark> {
+        let mut marks = Vec::new();
+        if let Some(checks) = self.board_checks(Some(sketch)) {
+            for (_, finding) in checks.failures() {
+                if let Finding::TightCorner {
+                    at,
+                    radius_mm,
+                    tool_radius_mm,
+                    ..
+                } = finding
+                {
+                    marks.push(FailureMark {
+                        at: (at.x, at.y),
+                        label: format!("R {} < R {}", mm(*radius_mm, 2), mm(*tool_radius_mm, 2)),
+                    });
+                }
+            }
+        }
+        if let Some(solve) = self.last_solve.as_ref() {
+            for end in open_ends(sketch, solve, bakes_a_profile) {
+                let Some(at) = end.at else { continue };
+                let label = end
+                    .gap_mm
+                    .map_or_else(String::new, |gap| format!("{} mm", mm(gap, 3)));
+                marks.push(FailureMark {
+                    at: (at.x, at.y),
+                    label,
+                });
+            }
+        }
+        marks
+    }
+
     /// The first open profile end of `sketch`, paired or lone; `None` when
     /// every profile is closed. Whether a profile is open is topology, so
     /// this needs no solve: without one that knows every point, the ends are
@@ -70,6 +105,13 @@ impl FootprintEditorState {
             .into_iter()
             .next()
     }
+}
+
+/// A failing place on the canvas: a ring at `at` (mm) and its callout.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FailureMark {
+    pub at: (f64, f64),
+    pub label: String,
 }
 
 /// Whether `solve` can place every point of `sketch`. `open_ends` leaves out

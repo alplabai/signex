@@ -42,6 +42,74 @@ pub struct SketchExit {
     pub router_tool_diameter: Option<f64>,
     /// Why the last Bake found the sketch unsolvable. Footprint host only.
     solve_refusal: Option<SolveRefusal>,
+    /// What the last Bake wrote, for Properties (mockup row 190).
+    outcome: Option<BakeOutcome>,
+}
+
+/// What a footprint Bake wrote. Properties shows it until the selection
+/// changes, or until the counts it states are no longer true.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BakeOutcome {
+    pub name: String,
+    /// Each target the bake wrote something to, with its count.
+    pub written: Vec<(BakedKind, usize)>,
+    pub pads: usize,
+    selection: SelectionAtBake,
+}
+
+/// The pad, silk and sketch selection when Bake finished.
+type SelectionAtBake = (
+    Option<usize>,
+    Vec<usize>,
+    Option<usize>,
+    Option<signex_sketch::id::SketchEntityId>,
+);
+
+fn selection_now(editor: &FootprintDocument) -> SelectionAtBake {
+    let state = &editor.state;
+    (
+        state.selected_pad,
+        state.selected_pads_extra.clone(),
+        state.selected_silk_f,
+        state.selected_sketch,
+    )
+}
+
+fn written_counts(fp: &Footprint) -> Vec<(BakedKind, usize)> {
+    match BakePreview::of_footprint(fp) {
+        BakePreview::Counts(counts) => counts.into_iter().filter(|(_, n)| *n > 0).collect(),
+        BakePreview::Refused(_) => Vec::new(),
+    }
+}
+
+/// Bake finished on a footprint: remember what it wrote for Properties.
+pub fn record_outcome(editor: &mut FootprintDocument) {
+    if editor.state.sketch_host() != signex_types::sketch::SketchHost::Footprint {
+        return;
+    }
+    let outcome = BakeOutcome {
+        name: editor.primitive().name.clone(),
+        written: written_counts(editor.primitive()),
+        pads: editor.primitive().pads.len(),
+        selection: selection_now(editor),
+    };
+    editor.state.sketch_exit.outcome = Some(outcome);
+}
+
+/// The outcome Properties shows: none once the selection moved or the
+/// footprint no longer holds what it states.
+pub fn shown_outcome(editor: &FootprintDocument) -> Option<&BakeOutcome> {
+    editor.state.sketch_exit.outcome.as_ref().filter(|outcome| {
+        outcome.selection == selection_now(editor)
+            && outcome.written == written_counts(editor.primitive())
+    })
+}
+
+/// Forget an outcome that no longer shows, so it cannot come back.
+pub fn settle_outcome(editor: &mut FootprintDocument) {
+    if shown_outcome(editor).is_none() {
+        editor.state.sketch_exit.outcome = None;
+    }
 }
 
 /// A solver's refusal, for the sketch generation it was found on: an edit

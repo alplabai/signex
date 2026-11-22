@@ -283,7 +283,7 @@ editors-pad-kind-unknown = Unknown
 editors-footprint-dof = DOF
 editors-footprint-dof-fully-constrained = Fully constrained
 editors-footprint-unlink-corner-radius = Unlink corner radius
-editors-footprint-role-points-only = Pad role applies to Points only
+editors-footprint-role-pad-hint = Pad makes the closed profile of this line or arc a custom pad; a point is a simple pad
 # A silk graphic baked from the sketch: edited in Sketch mode only.
 editors-footprint-silk-from-sketch = From sketch: edit in Sketch mode
 # Pad placement form. TAB is the key that pauses placement.
