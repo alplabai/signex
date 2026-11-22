@@ -40,11 +40,11 @@ pub(super) fn apply(kind: &mut K, field: F, value: f64) -> bool {
                 F::ToY => to[1] = value,
                 F::Width => to[0] = rect_end_for_extent(from[0], to[0], value),
                 F::Height => to[1] = rect_end_for_extent(from[1], to[1], value),
-                F::CornerRadius => {
-                    *corner_radius = value.min(K::max_corner_radius(*from, *to));
-                }
+                F::CornerRadius => *corner_radius = value,
                 _ => {}
             }
+            // Every field can shrink the short side or raise the radius.
+            kind.clamp_corner_radius();
             true
         }
         _ => false,
@@ -63,6 +63,31 @@ mod tests {
             panic!("expected a RoundRectangle");
         };
         assert_eq!(corner_radius, 2.54);
+    }
+
+    /// The stored radius obeys "at most half the short side" after every
+    /// field that can shrink the shape.
+    #[test]
+    fn a_size_field_that_shrinks_the_short_side_lowers_the_stored_radius() {
+        for (field, value, expected) in [
+            (F::Height, 2.0, 1.0),
+            (F::Width, 4.0, 2.0),
+            (F::ToY, 6.0, 3.0),
+            (F::ToX, 8.0, 4.0),
+            (F::FromY, 7.0, 1.5),
+            (F::FromX, 9.0, 0.5),
+        ] {
+            let mut kind = K::RoundRectangle {
+                from: [0.0, 0.0],
+                to: [10.0, 10.0],
+                corner_radius: 5.0,
+            };
+            assert!(apply(&mut kind, field, value));
+            let K::RoundRectangle { corner_radius, .. } = kind else {
+                panic!("expected a RoundRectangle");
+            };
+            assert_eq!(corner_radius, expected, "{field:?}");
+        }
     }
 
     #[test]

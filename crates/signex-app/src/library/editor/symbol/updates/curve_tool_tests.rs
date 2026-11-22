@@ -322,6 +322,63 @@ fn placed_elliptical_arc_and_round_rectangle_survive_save_and_reload() {
     assert_eq!(back.symbols[0].graphics, editor.primitive().graphics);
 }
 
+fn large_round_rect(editor: &mut SymEditor) {
+    place_round_rect(editor, (10.0, 10.0));
+    let SymbolGraphicKind::RoundRectangle { corner_radius, .. } =
+        &mut editor.primitive_mut().graphics[0].kind
+    else {
+        panic!("expected a RoundRectangle");
+    };
+    *corner_radius = 5.0;
+}
+
+fn stored_radius(editor: &SymEditor) -> f64 {
+    match editor.primitive().graphics[0].kind {
+        SymbolGraphicKind::RoundRectangle { corner_radius, .. } => corner_radius,
+        ref other => panic!("expected a RoundRectangle, got {other:?}"),
+    }
+}
+
+/// The grip resize and its radius change are one undo step.
+#[test]
+fn a_grip_resize_lowers_the_stored_radius_in_one_undo_step() {
+    let mut editor = new_editor(SymbolTool::PlaceRoundRectangle);
+    large_round_rect(&mut editor);
+    let before = editor.primitive().graphics[0].kind.clone();
+    let undo_before = editor.history.undo_len();
+    for y in [6.0, 2.0] {
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::MoveGraphicHandle {
+                idx: 0,
+                handle: crate::library::messages::GraphicHandleMsg::RectEdge(0),
+                x: 5.0,
+                y,
+            },
+        );
+    }
+    apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::DragCommit);
+    assert_eq!(stored_radius(&editor), 1.0);
+    assert_eq!(editor.history.undo_len(), undo_before + 1);
+
+    apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::Undo);
+    assert_eq!(editor.primitive().graphics[0].kind, before);
+}
+
+#[test]
+fn align_to_grid_that_shrinks_a_round_rectangle_lowers_its_radius() {
+    let mut editor = new_editor(SymbolTool::PlaceRoundRectangle);
+    place_round_rect(&mut editor, (10.16, 1.9));
+    assert_eq!(stored_radius(&editor), 0.95);
+    let selection = Some(state::SymbolSelection::Graphic(0));
+    assert!(state::align_selected_to_grid(
+        editor.primitive_mut(),
+        &selection,
+        1.27
+    ));
+    assert_eq!(stored_radius(&editor), 0.635);
+}
+
 #[test]
 fn placed_curves_survive_save_and_reload() {
     let mut editor = new_editor(SymbolTool::PlaceBezier);

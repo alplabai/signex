@@ -373,4 +373,32 @@ pub struct CanvasState {
     /// `AddPin` press seen, release pending: the pin is placed where
     /// the button is released, so press-drag-release positions it.
     pub pin_armed: bool,
+    /// The `SymbolDocument::tool_epoch` these gestures belong to.
+    pub gesture_epoch: u64,
+}
+
+impl CanvasState {
+    /// Drop every half-placed gesture when the document's tool changed.
+    pub fn sync_tool_epoch(&mut self, epoch: u64) {
+        if self.gesture_epoch == epoch {
+            return;
+        }
+        self.gesture_epoch = epoch;
+        self.line_from = None;
+        self.line_cursor = None;
+        self.rect_from = None;
+        self.rect_cursor = None;
+        self.circle_center = None;
+        self.circle_cursor = None;
+        self.arc_center = None;
+        self.arc_radius_start = None;
+        self.arc_cursor = None;
+        self.arc_end_deg_unwrapped = None;
+        self.polygon_cursor = None;
+        self.polygon_last_click_time = None;
+        self.polygon_last_click_pos = None;
+        self.ellipse = Default::default();
+        self.pin_cursor = None;
+        self.pin_armed = false;
+    }
 }

@@ -146,6 +146,8 @@ pub struct SymbolCanvas<'a> {
     /// Preferences "Zoom speed" as a per-notch factor, for the middle-button
     /// drag. Set with [`Self::with_zoom_step`].
     pub zoom_step: f32,
+    /// `SymbolDocument::tool_epoch`. Set with [`Self::with_tool_epoch`].
+    pub tool_epoch: u64,
 }
 
 impl<'a> SymbolCanvas<'a> {
@@ -196,6 +198,7 @@ impl<'a> SymbolCanvas<'a> {
             selection_filter: state::SymbolSelectionFilter::default(),
             view_pending: false,
             measured_size: None,
+            tool_epoch: 0,
             bg_color: sheet_color,
             grid_color: palette.grid,
             body_color: palette.body,
@@ -251,6 +254,12 @@ impl<'a> SymbolCanvas<'a> {
     /// its real bounds on the next event.
     pub fn with_view_pending(mut self, pending: bool) -> Self {
         self.view_pending = pending;
+        self
+    }
+
+    /// The document's tool-change count, which ends a half-placed gesture.
+    pub fn with_tool_epoch(mut self, epoch: u64) -> Self {
+        self.tool_epoch = epoch;
         self
     }
 
@@ -374,6 +383,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         // `impl SymbolCanvas` method in `input::{tools, pointer,
         // camera, keys}`. Arm order + patterns are identical to the
         // pre-split god-function; behaviour is byte-identical.
+        state.sync_tool_epoch(self.tool_epoch);
         let followed = self.follow_middle_zoom(state, event, bounds, cursor);
         let routed = match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
@@ -506,13 +516,20 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         self.draw_symbol_with_renderer(&mut frame, &self.selected, self.camera.scale);
         self.draw_resize_handles(&mut frame);
         self.draw_box_select_overlay(&mut frame, state);
-        self.draw_pin_preview(&mut frame, state);
-        self.draw_rect_preview(&mut frame, state);
-        self.draw_line_preview(&mut frame, state);
-        self.draw_circle_preview(&mut frame, state);
-        self.draw_arc_preview(&mut frame, state);
+        // A gesture from before a tool change is dropped on the next event;
+        // until then it must not draw.
+        let gesture_is_current = state.gesture_epoch == self.tool_epoch;
+        if gesture_is_current {
+            self.draw_pin_preview(&mut frame, state);
+            self.draw_rect_preview(&mut frame, state);
+            self.draw_line_preview(&mut frame, state);
+            self.draw_circle_preview(&mut frame, state);
+            self.draw_arc_preview(&mut frame, state);
+        }
         self.draw_polygon_preview(&mut frame, state);
-        self.draw_curve_preview(&mut frame, state);
+        if gesture_is_current {
+            self.draw_curve_preview(&mut frame, state);
+        }
 
         vec![frame.into_geometry()]
     }

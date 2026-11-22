@@ -79,7 +79,8 @@ impl Rig {
             Color::BLACK,
         )
         .with_selection_filter(editor.selection_filter)
-        .with_view_pending(editor.pending_view.is_some());
+        .with_view_pending(editor.pending_view.is_some())
+        .with_tool_epoch(editor.tool_epoch);
         let action = canvas::Program::update(&canvas, &mut self.cstate, &event, BOUNDS, cursor);
         let claimed = action.is_some();
         if let Some((Some(published), _, _)) = action.map(canvas::Action::into_inner) {

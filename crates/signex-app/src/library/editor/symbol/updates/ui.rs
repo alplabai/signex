@@ -42,6 +42,11 @@ pub(super) fn apply_symbol_ui(editor: &mut SymEditor, msg: SymbolEditorMsg) {
             {
                 commit_or_discard_polygon(editor);
             }
+            // Any real change ends the half-placed gesture on the canvas.
+            if editor.tool != new_tool {
+                editor.tool_epoch = editor.tool_epoch.wrapping_add(1);
+                editor.canvas_cache.clear();
+            }
             editor.tool = new_tool;
             editor.active_bar_menu = None;
         }

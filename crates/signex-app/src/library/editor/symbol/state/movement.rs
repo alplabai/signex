@@ -202,6 +202,8 @@ fn snap_graphic_to_grid(kind: &mut SymbolGraphicKind, step: f64) {
             }
         }
     }
+    // Snapping both corners can shrink a round rectangle's short side.
+    kind.clamp_corner_radius();
 }
 
 fn snap_value_to_grid(v: f64, step: f64) -> f64 {

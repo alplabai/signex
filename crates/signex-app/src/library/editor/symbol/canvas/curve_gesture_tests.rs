@@ -211,6 +211,139 @@ fn the_editor_draws_an_elliptical_arc_open_and_a_round_rectangle_as_a_ring() {
     assert_eq!(drawn.polygons[0].vertices.len(), rect_ring.len());
 }
 
+fn pick(rig: &mut Rig, tool: crate::library::messages::SymbolToolMsg) {
+    apply_symbol_primitive_edit(
+        &mut rig.editor,
+        crate::library::messages::SymbolEditorMsg::SetTool(tool),
+    );
+}
+
+fn press_all(rig: &mut Rig, clicks: &[(f64, f64)]) {
+    for &at in clicks {
+        rig.press(at);
+    }
+}
+
+fn first_graphic(rig: &Rig) -> &SymbolGraphicKind {
+    &rig.editor.primitive().graphics[0].kind
+}
+
+const PIE_CLICKS: [(f64, f64); 3] = [(5.08, 5.08), (7.62, 5.08), (5.08, 7.62)];
+
+#[test]
+fn a_half_placed_arc_does_not_carry_into_the_pie_tool() {
+    use crate::library::messages::SymbolToolMsg as T;
+    let mut rig = rig(SymbolTool::PlaceArc);
+    rig.press((0.0, 0.0));
+    pick(&mut rig, T::PlacePie);
+    press_all(&mut rig, &PIE_CLICKS[..2]);
+    assert!(rig.editor.primitive().graphics.is_empty());
+    rig.press(PIE_CLICKS[2]);
+    let SymbolGraphicKind::Pie { center, .. } = *first_graphic(&rig) else {
+        panic!("expected a Pie");
+    };
+    assert!(close(center, [5.08, 5.08]), "{center:?}");
+}
+
+#[test]
+fn a_half_placed_pie_does_not_carry_into_the_arc_tool() {
+    use crate::library::messages::SymbolToolMsg as T;
+    let mut rig = rig(SymbolTool::PlacePie);
+    press_all(&mut rig, &[(0.0, 0.0), (2.54, 0.0)]);
+    pick(&mut rig, T::PlaceArc);
+    press_all(&mut rig, &PIE_CLICKS[..2]);
+    assert!(rig.editor.primitive().graphics.is_empty());
+    rig.press(PIE_CLICKS[2]);
+    let SymbolGraphicKind::Arc { center, .. } = *first_graphic(&rig) else {
+        panic!("expected an Arc");
+    };
+    assert!(close(center, [5.08, 5.08]), "{center:?}");
+}
+
+#[test]
+fn a_half_placed_rectangle_does_not_carry_into_the_round_rectangle_tool() {
+    use crate::library::messages::SymbolToolMsg as T;
+    let mut rig = rig(SymbolTool::PlaceRectangle);
+    rig.press((0.0, 0.0));
+    pick(&mut rig, T::PlaceRoundRectangle);
+    rig.press((5.08, 5.08));
+    assert!(rig.editor.primitive().graphics.is_empty());
+    rig.press((10.16, 10.16));
+    let SymbolGraphicKind::RoundRectangle { from, .. } = *first_graphic(&rig) else {
+        panic!("expected a RoundRectangle");
+    };
+    assert!(close(from, [5.08, 5.08]), "{from:?}");
+}
+
+#[test]
+fn a_half_placed_round_rectangle_does_not_carry_into_the_rectangle_tool() {
+    use crate::library::messages::SymbolToolMsg as T;
+    let mut rig = rig(SymbolTool::PlaceRoundRectangle);
+    rig.press((0.0, 0.0));
+    pick(&mut rig, T::PlaceRectangle);
+    rig.press((5.08, 5.08));
+    assert!(rig.editor.primitive().graphics.is_empty());
+    rig.press((10.16, 10.16));
+    let SymbolGraphicKind::Rectangle { from, .. } = *first_graphic(&rig) else {
+        panic!("expected a Rectangle");
+    };
+    assert!(close(from, [5.08, 5.08]), "{from:?}");
+}
+
+#[test]
+fn bezier_clicks_do_not_carry_into_the_polygon_tool() {
+    use crate::library::messages::SymbolToolMsg as T;
+    let mut rig = rig(SymbolTool::PlaceBezier);
+    press_all(&mut rig, &[(0.0, 0.0), (2.54, 2.54), (5.08, 2.54)]);
+    pick(&mut rig, T::PlacePolygon);
+    assert!(rig.editor.polygon_vertices.is_empty());
+    assert!(rig.editor.primitive().graphics.is_empty());
+}
+
+#[test]
+fn short_polygon_clicks_do_not_carry_into_the_bezier_tool() {
+    use crate::library::messages::SymbolToolMsg as T;
+    let mut rig = rig(SymbolTool::PlacePolygon);
+    press_all(&mut rig, &[(0.0, 0.0), (2.54, 2.54)]);
+    pick(&mut rig, T::PlaceBezier);
+    assert!(rig.editor.polygon_vertices.is_empty());
+    assert!(rig.editor.primitive().graphics.is_empty());
+}
+
+/// Out and back with no canvas event between still ends the gesture.
+#[test]
+fn leaving_and_returning_to_the_elliptical_arc_tool_starts_at_the_center() {
+    use crate::library::messages::SymbolToolMsg as T;
+    let mut rig = rig(SymbolTool::PlaceEllipticalArc);
+    press_all(&mut rig, &[(0.0, 0.0), (5.08, 0.0)]);
+    pick(&mut rig, T::Select);
+    pick(&mut rig, T::PlaceEllipticalArc);
+    let clicks = [
+        (2.54, 2.54),
+        (7.62, 2.54),
+        (2.54, 5.08),
+        (5.08, 5.08),
+        (0.0, 5.08),
+    ];
+    press_all(&mut rig, &clicks[..4]);
+    assert!(rig.editor.primitive().graphics.is_empty());
+    rig.press(clicks[4]);
+    let SymbolGraphicKind::EllipticalArc { center, .. } = *first_graphic(&rig) else {
+        panic!("expected an EllipticalArc");
+    };
+    assert!(close(center, [2.54, 2.54]), "{center:?}");
+}
+
+#[test]
+fn picking_the_armed_tool_again_keeps_its_gesture() {
+    use crate::library::messages::SymbolToolMsg as T;
+    let mut rig = rig(SymbolTool::PlaceRectangle);
+    rig.press((0.0, 0.0));
+    pick(&mut rig, T::PlaceRectangle);
+    rig.press((5.08, 5.08));
+    assert_eq!(rig.editor.primitive().graphics.len(), 1);
+}
+
 #[test]
 fn the_editor_draws_a_bezier_as_segments_and_a_pie_as_a_closed_ring() {
     let mut rig = rig(SymbolTool::Select);

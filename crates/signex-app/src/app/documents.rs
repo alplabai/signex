@@ -342,6 +342,10 @@ pub struct SymbolDocument {
     /// `PolygonCancel`, plus the synchronous flush in the `SetTool`
     /// handler when the user switches away from `PlacePolygon`.
     pub polygon_vertices: Vec<(f64, f64)>,
+    /// Counts tool changes. The canvas drops its half-placed gesture when
+    /// this moves, even if the tool changed and came back between two
+    /// canvas events.
+    pub tool_epoch: u64,
     /// Transient, user-visible status line rendered in the symbol
     /// editor's status footer (see `standalone::symbol::view_symbol_
     /// status`). `None` most of the time; set to `Some(reason)` when
@@ -428,6 +432,7 @@ impl SymbolDocument {
             graphic_fill_picker: None,
             local_color_picker: None,
             polygon_vertices: Vec::new(),
+            tool_epoch: 0,
             status_message: None,
             context_menu: None,
         };

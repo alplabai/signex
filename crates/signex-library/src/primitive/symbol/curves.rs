@@ -50,6 +50,19 @@ impl SymbolGraphicKind {
         (to[0] - from[0]).abs().min((to[1] - from[1]).abs()) * 0.5
     }
 
+    /// Hold a Round Rectangle's stored radius to half its short side, after
+    /// anything that resized it. Other kinds are untouched.
+    pub fn clamp_corner_radius(&mut self) {
+        if let Self::RoundRectangle {
+            from,
+            to,
+            corner_radius,
+        } = self
+        {
+            *corner_radius = corner_radius.min(Self::max_corner_radius(*from, *to));
+        }
+    }
+
     /// Where the ray at the geometric angle `deg` from `center` meets the
     /// ellipse.
     pub fn point_on_ellipse(center: [f64; 2], radius_x: f64, radius_y: f64, deg: f64) -> [f64; 2] {
@@ -124,8 +137,9 @@ fn elliptical_outline(
 }
 
 /// The ring counter-clockwise from the top-right corner's arc. A radius past
-/// half the short side (a later resize) draws clamped. Repeated points, as
-/// where two corners meet at the full radius, are dropped.
+/// half the short side (only a hand-edited file holds one) draws clamped.
+/// Repeated points, as where two corners meet at the full radius, are
+/// dropped.
 fn round_rectangle_outline(from: [f64; 2], to: [f64; 2], radius: f64) -> Vec<[f64; 2]> {
     let r = radius.clamp(0.0, SymbolGraphicKind::max_corner_radius(from, to));
     let (x0, x1) = (from[0].min(to[0]), from[0].max(to[0]));

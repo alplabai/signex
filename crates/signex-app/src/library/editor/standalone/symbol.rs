@@ -312,6 +312,7 @@ pub(crate) fn symbol_canvas<'a>(
     .with_graphite(tokens)
     .with_selection_filter(editor.selection_filter)
     .with_view_pending(editor.pending_view.is_some())
+    .with_tool_epoch(editor.tool_epoch)
     .with_measured_size(editor.viewport)
     .with_trackpad_pan(editor.trackpad_pan)
     .with_wheel_mode(editor.wheel_mode)

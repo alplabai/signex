@@ -520,6 +520,7 @@ pub fn move_graphic_handle(sym: &mut Symbol, idx: usize, handle: GraphicHandle, 
         return;
     };
     if move_curve_handle(&mut g.kind, handle, x, y) {
+        g.kind.clamp_corner_radius();
         return;
     }
     match (&mut g.kind, handle) {
