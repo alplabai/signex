@@ -76,6 +76,8 @@ pub enum AnnotationPanelMsg {
     FieldSubmitted(AnnotationField),
     /// A choice was picked (segment, dropdown, checkbox).
     Picked(AnnotationEdit),
+    /// Esc was pressed in the paused dimension tool's focused Override box.
+    OverrideEscaped,
     CsvImportRequested,
     CsvExportRequested,
 }
@@ -265,9 +267,15 @@ impl<'a> Rows<'a> {
     /// The paused tool's Override box: empty until typed in, with the
     /// measured value showing as its placeholder.
     pub fn override_tool_input(&self, value: String, measured: String) -> Element<'a, PanelMsg> {
-        self.input_box(AnnotationField::OverrideText, value, measured)
+        let input = self
+            .input_box(AnnotationField::OverrideText, value, measured)
             .id(iced::widget::Id::new(DIMENSION_OVERRIDE_INPUT))
-            .boxed()
+            .boxed();
+        signex_widgets::focused_escape::FocusedEscape::new(
+            input,
+            msg(AnnotationPanelMsg::OverrideEscaped),
+        )
+        .into()
     }
 
     fn input_box(
