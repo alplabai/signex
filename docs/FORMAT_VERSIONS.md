@@ -23,8 +23,8 @@ format declares only its own table row below.
   colour of its own, `snxpcb/1.6` when it has rooms (#2457) and `snxpcb/1.8`
   when its stackup has a name (#2833), a board sketch pattern repeats a baked
   target (#2517) or an array has a numbering sweep other than row by row
-  (mockup row 126), so a build that reads only the lower token opens it
-  read-only.
+  (mockup row 126), and `snxpcb/1.9` when a pour is shelved (#2738), so a
+  build that reads only the lower token opens it read-only.
 - **Load** reads every token in the format's readable list. `snxsch/1` and
   `snxsch/1.0` are the same version.
 - **A newer token** is refused on load with an error that names the token,
@@ -46,6 +46,7 @@ format declares only its own table row below.
 | `.snxpcb` | `snxpcb/1.4`; `1.5` with layer colours; `1.6` with rooms | `snxpcb/1` to `snxpcb/1.6` | opens read-only | refused |
 | `.snxpcb`, board sketch targets | `snxpcb/1.7` while the board sketch carries a slot, pour, mechanical drawing or component anchor (decision 2, 2026-11-20), or a reference dimension, pattern link, pattern mirror or pad override (decisions 5, 9, 10), rooms or not; else the token above, byte for byte | adds `snxpcb/1.7` | opens read-only | refused |
 | `.snxpcb`, stackup name, patterned targets, numbering sweep | `snxpcb/1.8` while `[stackup]` carries `stack_name` (mockup row 105, #2833), an array or mirror repeats a baked target (a source on or connected to one; #2517), or an array's numbering sweep is not row by row (mockup row 126), whatever else the board holds; else the tokens above, byte for byte | adds `snxpcb/1.8` | opens read-only | refused |
+| `.snxpcb`, shelved pour | `snxpcb/1.9` while any pour is shelved (#2738, DECISIONS 2026-11-23), whatever else the board holds; else the tokens above, byte for byte | adds `snxpcb/1.9` | opens read-only | refused |
 | `.snxprj` | `snxprj/1` | `snxprj/1` | refused | read as `snxprj/1` |
 | `.snxlib` | `snxlib/2` | `snxlib/2` | refused | refused |
 | `.snxfpt` | `snxfpt/1.1`, `1.2` with sketch links (reference dimensions, pattern sources and mirrors, per-instance pad overrides), or `1.3` with generated features (silkscreen outline, pad clearance, pin 1 marker, assembly outline; mockup row 124, #2834) or a pattern numbering sweep other than row by row (mockup row 126), whatever else it holds | `snxfpt/1`, `1.1`, `1.2`, `1.3` | refused | refused |

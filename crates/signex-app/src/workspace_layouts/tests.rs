@@ -379,6 +379,80 @@ fn a_stored_list_is_read_tolerantly() {
     assert_eq!(said.len(), 1);
 }
 
+/// #2746: an entry this build skipped is still in `user` and in `order`
+/// after a write, at its place, and every other stored key stays.
+#[test]
+fn a_skipped_entry_survives_the_next_write() {
+    let stored = serde_json::json!({
+        "active": "user-1",
+        "order": ["user-2", "user-1"],
+        "user": {
+            "user-1": { "name": "Bench", "split": "stacked" },
+            "user-2": { "name": "Grid", "split": "grid" }
+        },
+        "overrides": { "schematic": { "split": "grid" }, "pcb": { "dock": {} } },
+        "from_a_newer_build": 7
+    });
+    let (mut layouts, problems, kept) = store::read_list(&stored);
+    assert_eq!(problems.len(), 3, "{problems:?}");
+    assert_eq!(names(&layouts), ["Bench"]);
+    assert!(!kept.list_unreadable());
+    assert!(kept.holds_override(BuiltinLayout::Schematic));
+
+    layouts
+        .save("New", captured(&[PanelKind::Projects]), &english())
+        .expect("saved");
+    let written = store::to_json_keeping(&layouts, &kept);
+    assert_eq!(written["user"]["user-2"], stored["user"]["user-2"]);
+    assert_eq!(
+        written["overrides"]["schematic"],
+        stored["overrides"]["schematic"]
+    );
+    assert_eq!(written["overrides"]["pcb"], stored["overrides"]["pcb"]);
+    assert_eq!(written["from_a_newer_build"], serde_json::json!(7));
+    assert_eq!(written["order"][0], serde_json::json!("user-2"));
+    assert_eq!(written["order"][1], serde_json::json!("user-1"));
+    assert_eq!(
+        written["user"]["user-1"]["name"],
+        serde_json::json!("Bench")
+    );
+}
+
+/// #2746: a new layout never takes the id of an entry that is kept.
+#[test]
+fn a_new_layout_does_not_take_a_kept_id() {
+    let stored = serde_json::json!({
+        "user": { "user-1": { "name": "Grid", "split": "grid" } }
+    });
+    let (mut layouts, _, kept) = store::read_list(&stored);
+    let outcome = layouts
+        .save("New", captured(&[]), &english())
+        .expect("saved");
+    assert_eq!(outcome, SaveOutcome::Added(LayoutId::User("user-2".into())));
+    let written = store::to_json_keeping(&layouts, &kept);
+    assert_eq!(written["user"]["user-1"], stored["user"]["user-1"]);
+    assert_eq!(written["user"]["user-2"]["name"], serde_json::json!("New"));
+}
+
+/// DECISIONS 2026-11-23: a value without the list's shape is unreadable as a
+/// whole, also when only one of its keys has the wrong type.
+#[test]
+fn a_list_with_a_wrong_shape_is_unreadable() {
+    for bad in [
+        serde_json::json!(["not", "a", "list"]),
+        serde_json::json!({ "user": "garbled" }),
+        serde_json::json!({ "overrides": [1] }),
+        serde_json::json!({ "order": "user-1" }),
+        serde_json::json!({ "order": [1] }),
+        serde_json::json!({ "active": 3 }),
+    ] {
+        let (layouts, problems, kept) = store::read_list(&bad);
+        assert!(kept.list_unreadable(), "{bad}");
+        assert_eq!(layouts, Layouts::default(), "{bad}");
+        assert_eq!(problems, [store::LayoutProblem::ListUnreadable], "{bad}");
+    }
+}
+
 #[test]
 fn the_export_file_reads_back_and_a_foreign_file_is_refused() {
     let layouts = three();

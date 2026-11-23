@@ -73,8 +73,8 @@ menu-design-rooms = Rooms
 # Rows of the Project menu that are not commands.
 menu-project-close = Close Project
 
-## Reports menu (#2057)
-# Output rows of the Reports menu: the bill of materials, the netlist and the ERC report.
+## Tools ▸ Reports (#2057)
+# Output rows of the Tools ▸ Reports submenu: the bill of materials, the netlist and the ERC report.
 menu-reports-bom = Bill of Materials…
 menu-reports-netlist = Netlist (Protel .NET)...
 menu-reports-erc = ERC Report…

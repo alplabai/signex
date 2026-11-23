@@ -206,6 +206,36 @@ fn a_section_command_round_trips_as_json() {
     assert_eq!(back, command);
 }
 
+/// DECISIONS 2026-11-23 (#2750): every edit of an unreadable
+/// `schematic_design` section changes nothing and records no undo step.
+#[test]
+fn an_unreadable_schematic_design_section_refuses_every_edit() {
+    let text = br#"{"name":"P","dir":"","schematic_root":null,"pcb_file":null,"schematic_design":"garbled"}"#;
+    let mut data = signex_types::project::parse_project_bytes(Path::new("P.snxprj"), text).unwrap();
+    assert!(data.has_unreadable_schematic_design());
+    let mut history = ProjectGeneralHistory::default();
+    let naming = signex_types::project::ChannelNaming {
+        designator_format: "${Designator}${Channel}".into(),
+        net_format: "${Channel}_${Net}".into(),
+    };
+    let set_naming = ProjectSectionCommand::SetChannelNaming { naming };
+    assert_eq!(apply(&mut history, &mut data, set_naming), Ok(false));
+    let definition = signex_types::schematic::HarnessDefinition {
+        name: "UART".into(),
+        description: String::new(),
+        entries: Vec::new(),
+    };
+    let set_definitions = ProjectSectionCommand::SetHarnessDefinitions {
+        definitions: vec![definition],
+    };
+    assert_eq!(apply(&mut history, &mut data, set_definitions), Ok(false));
+    let classes = vec![signex_types::diff_pair_class::DiffPairClass::named("USB")];
+    let set_classes = ProjectGeneralCommand::SetDiffPairClasses(classes);
+    assert!(!history.apply(&mut data, set_classes));
+    assert!(data.schematic_design.is_default());
+    assert!(!history.can_undo());
+}
+
 #[test]
 fn clearing_the_annotate_choice_over_an_unreadable_section_records_nothing() {
     let text = br#"{"name":"P","dir":"","schematic_root":null,"pcb_file":null,"annotation":{"designator_standard":"iso9999"}}"#;

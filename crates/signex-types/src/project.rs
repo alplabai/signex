@@ -951,8 +951,8 @@ pub fn encode_project(data: &ProjectData) -> Result<Vec<u8>, serde_json::Error> 
             crate::agent_journal::merged_value(data)?,
         );
     }
-    // Settings made in this session replace an unreadable section kept.
-    if !data.schematic_design.is_default() {
+    // An unreadable section stays as it was (DECISIONS 2026-11-23, #2750).
+    if !data.schematic_design.is_default() && !data.has_unreadable_schematic_design() {
         stamped.insert(
             schematic_design::SCHEMATIC_DESIGN_KEY.into(),
             serde_json::to_value(&data.schematic_design)?,

@@ -267,12 +267,18 @@ impl Signex {
             .push(detail.boxed())
             .height(Length::Fill);
         let has_user = !layouts.user().is_empty();
+        let is_locked = self.ui_state.workspace_layouts.kept.list_unreadable();
+        let banner = if is_locked {
+            super::list_locked_banner(i18n, tokens)
+        } else {
+            Space::new().height(Length::Fixed(0.0)).boxed()
+        };
         let footer = dialog_footer_split(
             vec![
                 dialog_button(
                     t!(i18n, ids::WORKSPACE_LAYOUTS_IMPORT),
                     DialogButtonKind::Ghost,
-                    Some(manage(ManageLayoutsMsg::ImportRequested)),
+                    (!is_locked).then(|| manage(ManageLayoutsMsg::ImportRequested)),
                     tokens,
                 ),
                 dialog_button(
@@ -293,7 +299,7 @@ impl Signex {
             self.ui_state.window_size,
             super::MANAGE_LAYOUTS.0,
         );
-        let card = container(column![header, body, footer])
+        let card = container(column![header, banner, body, footer])
             .width(Length::Fixed(width))
             .height(Length::Fixed(super::MANAGE_LAYOUTS.1))
             .style(crate::styles::modal_card(tokens))

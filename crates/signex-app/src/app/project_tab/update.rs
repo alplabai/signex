@@ -304,6 +304,24 @@ impl Signex {
         }
     }
 
+    /// True when the project's `schematic_design` section is unreadable, so
+    /// an edit of it is refused; Messages says why (DECISIONS 2026-11-23).
+    pub(crate) fn refuse_schematic_design_edit(&mut self, project_id: ProjectId) -> bool {
+        let unreadable = self
+            .document_state
+            .project_by_id(project_id)
+            .is_some_and(|project| project.data.has_unreadable_schematic_design());
+        if unreadable {
+            let line = signex_i18n::t!(
+                self.ui_state.i18n,
+                signex_i18n::ids::DIALOG_SCHEMATIC_DESIGN_UNREADABLE
+            );
+            crate::diagnostics::log_warning(line.into_string());
+            self.sync_diagnostics_panel_ctx();
+        }
+        unreadable
+    }
+
     /// Apply one section edit (#1689-#1693) to the project's data as one
     /// step of its General history and mark the `.snxprj` dirty. `Ok(false)`
     /// when nothing changed or the project is no longer loaded; a refused

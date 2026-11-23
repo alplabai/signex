@@ -32,6 +32,9 @@ pub const UNDO_TOAST_DURATION: Duration = Duration::from_secs(8);
 /// The layouts and their two dialogs, in `UiState`.
 pub struct WorkspaceLayoutsState {
     pub layouts: Layouts,
+    /// What the stored list holds that this build could not read; every
+    /// write puts it back.
+    pub kept: store::KeptEntries,
     /// Where the list is written; a test swaps in a recorder.
     pub store: Arc<dyn WorkspaceLayoutsStore>,
     pub save: Option<SaveLayoutDialog>,
@@ -48,10 +51,11 @@ impl WorkspaceLayoutsState {
         prefs: Option<&serde_json::Value>,
         store: Arc<dyn WorkspaceLayoutsStore>,
     ) -> (Self, Vec<LayoutProblem>) {
-        let (layouts, problems) = store::from_prefs(prefs);
+        let (layouts, problems, kept) = store::read_prefs(prefs);
         (
             Self {
                 layouts,
+                kept,
                 store,
                 save: None,
                 manage: None,
@@ -241,6 +245,23 @@ pub enum ManageLayoutsMsg {
     ExportPicked(Option<PathBuf>),
     /// The written path, or the system's reason the write failed.
     ExportWritten(Result<PathBuf, String>),
+}
+
+impl ManageLayoutsMsg {
+    /// Whether this changes the stored list, so an unreadable list refuses
+    /// it. A drag is refused where it drops.
+    pub fn edits_the_list(&self) -> bool {
+        matches!(
+            self,
+            Self::RenameCommitted
+                | Self::DuplicateRequested
+                | Self::DeleteRequested
+                | Self::UndoDeleteRequested
+                | Self::UpdateFromCurrentRequested
+                | Self::ImportRequested
+                | Self::ImportRead { .. }
+        )
+    }
 }
 
 impl From<WorkspaceLayoutMsg> for crate::app::Message {

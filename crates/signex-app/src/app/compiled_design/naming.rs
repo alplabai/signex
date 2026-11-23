@@ -32,6 +32,14 @@ impl Signex {
             .unwrap_or_default()
     }
 
+    /// The active project's `schematic_design` section cannot be read, so
+    /// its channel naming cannot be edited.
+    pub(super) fn channel_naming_is_locked(&self) -> bool {
+        self.compile_target()
+            .and_then(|id| self.document_state.project_by_id(id))
+            .is_some_and(|project| project.data.has_unreadable_schematic_design())
+    }
+
     pub(super) fn toggle_naming_menu(&mut self, target: NamingTarget) {
         let store = &mut self.ui_state.compiled_design;
         let was_open = store
@@ -67,6 +75,9 @@ impl Signex {
         let Some(project) = self.compile_target() else {
             return;
         };
+        if self.refuse_schematic_design_edit(project) {
+            return;
+        }
         let mut naming = self.channel_naming();
         match target {
             NamingTarget::Designators => naming.designator_format = format,

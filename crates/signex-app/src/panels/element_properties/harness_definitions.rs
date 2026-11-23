@@ -52,6 +52,17 @@ pub(in crate::panels) fn view_harness_definitions<'a>(
         .padding(SP.m)
         .boxed(),
     );
+    if facts.are_definitions_locked {
+        col = col.push(
+            container(
+                text(t!(i18n, ids::DIALOG_SCHEMATIC_DESIGN_UNREADABLE))
+                    .size(TS.caption)
+                    .color(crate::styles::ti(ctx.tokens.warning)),
+            )
+            .padding([SP.xs, SP.m])
+            .boxed(),
+        );
+    }
     for (i, d) in defs.iter().enumerate() {
         let uses = facts.uses.get(i).copied().unwrap_or(0);
         let caption = entries_caption(d);

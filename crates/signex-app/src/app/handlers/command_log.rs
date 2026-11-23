@@ -441,14 +441,8 @@ impl Signex {
             return self.replay_without_operands(&row, &command);
         }
         let texts = row.operand_texts();
-        let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
-        match CommandArgs::parse_operands(&command, &refs) {
-            Ok(args) => {
-                self.logged_command(&command, row.operands.clone(), None, |app| {
-                    app.run_operands(&command, &args)
-                })
-                .1
-            }
+        match self.replay_operands(&command, row.operands.clone(), &texts) {
+            Ok(task) => task,
             Err(error) => {
                 self.record_refused_replay(&row, error.to_string());
                 Task::none()

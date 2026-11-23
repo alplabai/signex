@@ -98,6 +98,10 @@ workspace-layouts-imported = Workspace layouts: imported { $count } from { $path
 # A stored or imported entry that was skipped. { $key } is its stored id,
 # { $entry } its place in the imported file, { $why } a reason below.
 workspace-layouts-list-unreadable = Workspace layouts: the stored list is not readable; only the built-in layouts are available
+# The banner of Save Layout and Manage Layouts, and the Messages line of a refused edit.
+workspace-layouts-list-locked = Your saved layouts cannot be read by this version of Signex. They stay unchanged in prefs.json, so layouts cannot be saved, changed or imported.
+# { $name } is a built-in layout's name.
+workspace-layouts-edit-kept = Workspace layouts: your stored edit of “{ $name }” cannot be read by this version of Signex; it stays unchanged, so Update from current is off for it
 workspace-layouts-skipped-unknown-builtin = Workspace layouts: skipped the edit of an unknown built-in layout “{ $key }”
 workspace-layouts-skipped-builtin-edit = Workspace layouts: skipped your edit of the built-in layout “{ $key }”: { $why }
 workspace-layouts-skipped-builtin-id = Workspace layouts: skipped a layout stored under the built-in id “{ $key }”

@@ -211,7 +211,7 @@ fn a_read_only_board_cannot_be_edited() {
     let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
     let path = dir.path().join("newer.snxpcb");
     let mut newer = board();
-    newer.unknown.newer_minor_source = Some("snxpcb/1.9".into());
+    newer.unknown.newer_minor_source = Some("snxpcb/1.10".into());
     app.open_pcb_tab(path.clone(), "newer".into(), newer);
     let refused = app.execute_board_commands(&path, vec![move_to(FP_A, 1.0)], None);
     assert_eq!(refused, Err(BoardEditError::ReadOnly(path.clone())));

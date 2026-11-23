@@ -73,6 +73,8 @@ define_ids! {
     WORKSPACE_LAYOUTS_NOT_IMPORTED = "workspace-layouts-not-imported";
     WORKSPACE_LAYOUTS_IMPORTED = "workspace-layouts-imported";
     WORKSPACE_LAYOUTS_LIST_UNREADABLE = "workspace-layouts-list-unreadable";
+    WORKSPACE_LAYOUTS_LIST_LOCKED = "workspace-layouts-list-locked";
+    WORKSPACE_LAYOUTS_EDIT_KEPT = "workspace-layouts-edit-kept";
     WORKSPACE_LAYOUTS_SKIPPED_UNKNOWN_BUILTIN = "workspace-layouts-skipped-unknown-builtin";
     WORKSPACE_LAYOUTS_SKIPPED_BUILTIN_EDIT = "workspace-layouts-skipped-builtin-edit";
     WORKSPACE_LAYOUTS_SKIPPED_BUILTIN_ID = "workspace-layouts-skipped-builtin-id";

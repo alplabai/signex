@@ -78,7 +78,9 @@ impl Signex {
         let layouts = &self.ui_state.workspace_layouts.layouts;
         let clash = layouts.name_clash(&dialog.name, &naming, None);
         let has_split = self.current_document_split().is_some();
-        let can_save = !dialog.name.trim().is_empty()
+        let is_locked = self.ui_state.workspace_layouts.kept.list_unreadable();
+        let can_save = !is_locked
+            && !dialog.name.trim().is_empty()
             && !matches!(clash, NameClash::Builtin(_))
             && self.save_layout_stores_something(dialog);
         let confirm = can_save.then(|| Message::from(SaveLayoutMsg::Confirmed));
@@ -107,6 +109,9 @@ impl Signex {
                 name,
                 KEY_WIDTH,
             ));
+        if is_locked {
+            grid = grid.push(super::list_locked_banner(i18n, tokens));
+        }
         let warn = crate::styles::ti(tokens.warning);
         let note = match &clash {
             NameClash::User(id) => Some(t!(

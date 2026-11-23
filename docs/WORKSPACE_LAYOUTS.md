@@ -170,6 +170,20 @@ layout missing from `order` is kept at the end. Every change is written off
 the UI thread, in the order made, through the ordered preference writer, so
 quit waits for it; a failed write is said in Messages.
 
+What this build cannot read is never replaced (DECISIONS 2026-11-23, #2746;
+`store::KeptEntries`):
+
+- A skipped entry goes back into every write unchanged, a user entry at its
+  place in `order`, and so does any key beside the four above. A new layout
+  never takes a kept entry's id. Update from current is refused on a built-in
+  whose stored edit is kept.
+- A value without the list's shape (not an object, or a wrong type under
+  `user`, `overrides`, `order` or `active`) is unreadable as a whole. Only the
+  built-ins are offered and they still apply, but `prefs.json` keeps the value
+  untouched: nothing is written, Save, Rename, Duplicate, Delete, reorder,
+  Update from current and Import are refused, and Save Layout and Manage
+  Layouts show a banner saying why.
+
 Export writes your layouts (not the built-ins or their edits) to a JSON file
 picked through the file dialog port:
 `{"signex_workspace_layouts": 1, "layouts": [ … ]}`. Import reads such a

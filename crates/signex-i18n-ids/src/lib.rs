@@ -229,6 +229,7 @@ define_ids! {
     DIALOG_NEW_PROJECT_ERR_CREATE_PENDING = "dialog-new-project-err-create-pending";
     DIALOG_NEW_PROJECT_QUIT_HELD = "dialog-new-project-quit-held";
     DIALOG_NEW_PROJECT_SETUP_UNREADABLE = "dialog-new-project-setup-unreadable";
+    DIALOG_SCHEMATIC_DESIGN_UNREADABLE = "dialog-schematic-design-unreadable";
     DIALOG_NEW_PROJECT_NAME_PLACEHOLDER = "dialog-new-project-name-placeholder";
     DIALOG_NEW_PROJECT_LOCATION_PLACEHOLDER = "dialog-new-project-location-placeholder";
     LANGUAGE_SYSTEM_DEFAULT = "language-system-default";
