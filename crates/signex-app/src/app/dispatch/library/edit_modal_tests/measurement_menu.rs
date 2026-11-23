@@ -80,7 +80,7 @@ fn picking_a_unit_keeps_the_prefix_and_number_and_closes_the_menu() {
 #[test]
 fn escape_closes_the_measurement_menu_before_the_dialog() {
     let (mut app, root) = app_with_kilo_ohm_row();
-    let _ = app.handle_escape_pressed(None);
+    let _task = app.handle_escape_pressed(None);
     assert_eq!(open_unit_menu(&app, &root), None);
     assert!(app.library.library_browsers[&root].edit_modal.is_some());
 }

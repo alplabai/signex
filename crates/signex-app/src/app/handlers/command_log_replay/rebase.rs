@@ -194,7 +194,14 @@ fn edited_rows_held(was: &SchTable, after: &SchDrawing, live: &SchDrawing) -> bo
     was.rows.len() == after.rows.len()
         && was.rows.len() == live.rows.len()
         && (was.rows.iter().zip(&after.rows).zip(&live.rows))
-            .all(|((old, new), now)| old == new || now == old || now == new)
+            .all(|((old, new), now)| old == new || now == old || holds_edit(old, new, now))
+}
+
+/// Every cell the edit wrote already reads its value, so nothing is written.
+fn holds_edit(old: &[String], new: &[String], now: &[String]) -> bool {
+    old.len() == new.len()
+        && new.len() == now.len()
+        && (old.iter().zip(new).zip(now)).all(|((was, wrote), cell)| was == wrote || cell == wrote)
 }
 
 /// A directive's outline corners are rebuilt from each other.
