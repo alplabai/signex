@@ -104,6 +104,12 @@ impl CompareBoardState {
         matches!(self.phase, Phase::Ready)
     }
 
+    /// A direction can be picked: no read or net recompute is running, whose
+    /// landing would replace the report, and Apply is not stating sheets.
+    pub fn directions_live(&self) -> bool {
+        self.is_ready() && !self.checking
+    }
+
     /// Why there is no report, when a read failed.
     pub fn failure(&self) -> Option<&str> {
         match &self.phase {

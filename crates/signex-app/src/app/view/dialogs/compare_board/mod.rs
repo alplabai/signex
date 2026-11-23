@@ -12,6 +12,7 @@ use signex_engine::pcb::eco::{CompareKind, CompareReport, Direction};
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::chips::{ChipMetrics, ChipStyle, chip};
+use signex_widgets::segmented::segmented_disabled;
 use signex_widgets::{Label, button, segmented, text};
 
 use crate::app::compare_board::CompareBoardState;
@@ -399,11 +400,21 @@ fn chips_bar<'a>(
     }
     let r = tokens::resolve(tokens);
     let choices = Direction::ALL.map(|d| (Some(d), Label::from(t!(i18n, direction_id(d)))));
-    let shown = segmented(choices, state.shown_choice, r.segmented(TS.caption), |d| {
-        cb(CompareBoardMsg::ShownRowsDirectionPicked(
-            d.unwrap_or(Direction::Skip),
-        ))
-    });
+    let shown = if state.directions_live() {
+        segmented(choices, state.shown_choice, r.segmented(TS.caption), |d| {
+            cb(CompareBoardMsg::ShownRowsDirectionPicked(
+                d.unwrap_or(Direction::Skip),
+            ))
+        })
+    } else {
+        let grey = Color {
+            a: crate::styles::DISABLED_OPACITY,
+            ..r.ink4
+        };
+        let mut style = r.segmented(TS.caption).resting_ink(grey);
+        style.active_ink = grey;
+        segmented_disabled(choices, state.shown_choice, style)
+    };
     let line = chips
         .push(Space::new().width(Length::Fill).boxed())
         .push(

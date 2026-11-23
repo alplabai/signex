@@ -148,6 +148,33 @@ where
     V: Copy + PartialEq + 'a,
     M: Clone + 'a,
 {
+    segments(options, selected, style, Some(&on_select))
+}
+
+/// [`segmented`] that takes no press, for a choice that cannot change now.
+/// The caller passes the greyed colours in `style`.
+pub fn segmented_disabled<'a, V, M>(
+    options: impl IntoIterator<Item = (V, Label<'a>)>,
+    selected: V,
+    style: SegmentedStyle,
+) -> Element<'a, M>
+where
+    V: Copy + PartialEq + 'a,
+    M: Clone + 'a,
+{
+    segments(options, selected, style, None)
+}
+
+fn segments<'a, V, M>(
+    options: impl IntoIterator<Item = (V, Label<'a>)>,
+    selected: V,
+    style: SegmentedStyle,
+    on_select: Option<&dyn Fn(V) -> M>,
+) -> Element<'a, M>
+where
+    V: Copy + PartialEq + 'a,
+    M: Clone + 'a,
+{
     let m = SegmentedMetrics::from_text_size(style.text_size);
     let track_width = if style.fill_width {
         Length::Fill
@@ -170,7 +197,7 @@ where
         let seg = button(label)
             .padding(Padding::from([0.0, m.segment_pad_h]))
             .height(m.segment_height)
-            .on_press(on_select(value))
+            .on_press_maybe(on_select.map(|select| select(value)))
             .style(move |_: &Theme, _| button::Style {
                 background: is_active.then_some(Background::Color(style.active_fill)),
                 text_color: ink,

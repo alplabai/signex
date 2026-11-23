@@ -187,7 +187,9 @@ schematic (the board wins) or Skip. The defaults:
 allow the direction keeps its own. A footprint row's direction changes the
 board the net rows are computed for, so the net rows are recomputed on the
 worker, keeping every direction that still means the same change. Compare
-again reads both lists anew and keeps the directions the same way.
+again reads both lists anew and keeps the directions the same way. While
+either job runs the direction controls and "Set shown rows" are greyed and
+take no pick, so a landing job cannot overwrite one or supersede a read.
 
 ### Apply
 
