@@ -8,7 +8,9 @@ use signex_bake::board::{FilletReport, add_fillets, fillet_targets};
 use signex_sketch::sketch::SketchData;
 
 use crate::app::FootprintDocument;
-use crate::library::editor::footprint::sketch_conflict::mutate_solve_or_revert;
+use crate::library::editor::footprint::sketch_conflict::{
+    drop_dangling_selection, mutate_solve_or_revert,
+};
 use crate::library::editor::footprint::sketch_dispatch::report_solve_failure;
 
 pub(in crate::library::editor::footprint::updates) fn apply(editor: &mut FootprintDocument) {
@@ -26,8 +28,12 @@ pub(in crate::library::editor::footprint::updates) fn apply(editor: &mut Footpri
             return false;
         }
         let before = editor.primitive().sketch.clone();
-        let solved = editor
-            .with_parts(|state, fp| mutate_solve_or_revert(state, fp, |fp| fp.sketch = Some(next)));
+        // A rounded corner's Point leaves the sketch, and any selection of it.
+        let solved = editor.with_parts(|state, fp| {
+            let solved = mutate_solve_or_revert(state, fp, |fp| fp.sketch = Some(next));
+            drop_dangling_selection(state, fp);
+            solved
+        });
         if let Err(error) = &solved {
             editor.with_parts(|state, _| report_solve_failure(state, error));
         }
@@ -140,6 +146,19 @@ mod tests {
         assert!(editor.undo(), "one undo step");
         assert_eq!(editor.primitive().sketch, before);
         assert!(!editor.history.can_undo(), "and only one");
+    }
+
+    #[test]
+    fn add_fillets_drops_a_selection_of_the_corner_it_removes() {
+        let mut editor = l_board();
+        let corner = editor.primitive().sketch.as_ref().unwrap().entities[3].id;
+        editor.state.selected_sketch = Some(corner);
+
+        apply_footprint_primitive_edit(&mut editor, FootprintEditorMsg::SketchAddFilletsRequested);
+
+        let sketch = editor.primitive().sketch.as_ref().unwrap();
+        assert!(!sketch.entities.iter().any(|e| e.id == corner));
+        assert_eq!(editor.state.selected_sketch, None);
     }
 
     #[test]

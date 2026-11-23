@@ -163,6 +163,12 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .boxed();
     }
 
+    // An armed dimension tool shows its values all through placing, paused
+    // or not (mockup row 157).
+    if let Some(form) = ctx.annotation.dimension_tool.as_deref() {
+        return super::element_properties::view_dimension_tool_properties(ctx, form);
+    }
+
     // Tab pauses placement; the form edits what the next object is placed
     // with (#2532).
     if let Some(ref pp) = ctx.pre_placement {

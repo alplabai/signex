@@ -321,6 +321,10 @@ pub struct SymbolDocument {
     /// on the undo stack). Cleared by `SymbolDragCommit` (emitted on
     /// `ButtonReleased`).
     pub mid_drag: bool,
+    /// `(graphic, radius at drag start, radius last written)` while a grip
+    /// drags a Round Rectangle, so its clamp depends only on the current
+    /// size. A stored radius other than the last written one is a new start.
+    pub drag_corner_radius: Option<(usize, f64, f64)>,
     /// Which placed graphic's fill colour-picker is open, plus whether
     /// it has been expanded to the HSV / RGB overlay. `None` = closed.
     /// Transient UI-only state: never serialized, never snapshotted for
@@ -342,6 +346,10 @@ pub struct SymbolDocument {
     /// `PolygonCancel`, plus the synchronous flush in the `SetTool`
     /// handler when the user switches away from `PlacePolygon`.
     pub polygon_vertices: Vec<(f64, f64)>,
+    /// Counts tool changes. The canvas drops its half-placed gesture when
+    /// this moves, even if the tool changed and came back between two
+    /// canvas events.
+    pub tool_epoch: u64,
     /// Transient, user-visible status line rendered in the symbol
     /// editor's status footer (see `standalone::symbol::view_symbol_
     /// status`). `None` most of the time; set to `Some(reason)` when
@@ -425,9 +433,11 @@ impl SymbolDocument {
             history_generation: 0,
             last_edit_key: None,
             mid_drag: false,
+            drag_corner_radius: None,
             graphic_fill_picker: None,
             local_color_picker: None,
             polygon_vertices: Vec::new(),
+            tool_epoch: 0,
             status_message: None,
             context_menu: None,
         };

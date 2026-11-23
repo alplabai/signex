@@ -8,7 +8,7 @@ use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::{Label, button, text};
 
-use super::super::graphite::{SP, TS, mono_font, popup, popup_row};
+use super::super::graphite::{SP, TS, mono_font, popup, popup_row, popup_row_active};
 use super::{BoardPopoverEvent, BoardPopoverModel};
 use crate::styles::tokens::resolve;
 use crate::styles::{HAIRLINE, Radii, ti};
@@ -129,14 +129,16 @@ pub(super) fn count_text(i18n: &I18n, count: usize) -> Localized {
     t!(i18n, ids::BOARD_STATUS_COUNT, "count" => count)
 }
 
+/// Width of `s` as the bar draws it. The measuring shaper would count a
+/// catalog text's bidi isolation marks as glyphs, so they are left out.
+pub(super) fn drawn_width(s: &str, size: f32, font: Font) -> f32 {
+    crate::dock::measure::text_width_in(&s.replace(['\u{2068}', '\u{2069}'], ""), size, font)
+}
+
 /// Width of a badge holding `label`: the figures and its padding, at least
 /// [`BADGE`].
 pub(super) fn badge_width(label: &str) -> f32 {
-    let figures = crate::dock::measure::text_width_in(
-        label,
-        BADGE_TEXT,
-        mono_weight(iced::font::Weight::Semibold),
-    );
+    let figures = drawn_width(label, BADGE_TEXT, mono_weight(iced::font::Weight::Semibold));
     (figures + 2.0 * BADGE_PAD).max(BADGE)
 }
 
@@ -178,11 +180,11 @@ pub(super) fn badge<'a, M: 'a>(
 }
 
 /// The card around a popover's parts, `width` wide.
-pub(super) fn card<'a>(
+pub(super) fn card<'a, M: 'a>(
     width: f32,
-    parts: Vec<Element<'a, BoardPopoverEvent>>,
+    parts: Vec<Element<'a, M>>,
     tokens: &ThemeTokens,
-) -> Element<'a, BoardPopoverEvent> {
+) -> Element<'a, M> {
     container(Column::with_children(parts).width(Length::Fill))
         .width(width)
         .padding(CARD_PAD)
@@ -253,6 +255,32 @@ pub(super) fn list_row<'a>(
     on_press: Option<BoardPopoverEvent>,
     tokens: &ThemeTokens,
 ) -> Element<'a, BoardPopoverEvent> {
+    styled_row(lead, body, trail, on_press, popup_row(tokens))
+}
+
+/// The picked row of a list: the selected fill instead of a check.
+pub(super) fn active_list_row<'a>(
+    lead: Element<'a, BoardPopoverEvent>,
+    body: Element<'a, BoardPopoverEvent>,
+    on_press: BoardPopoverEvent,
+    tokens: &ThemeTokens,
+) -> Element<'a, BoardPopoverEvent> {
+    styled_row(
+        Some(lead),
+        body,
+        None,
+        Some(on_press),
+        popup_row_active(tokens),
+    )
+}
+
+fn styled_row<'a>(
+    lead: Option<Element<'a, BoardPopoverEvent>>,
+    body: Element<'a, BoardPopoverEvent>,
+    trail: Option<Element<'a, BoardPopoverEvent>>,
+    on_press: Option<BoardPopoverEvent>,
+    style: impl Fn(&Theme, iced::widget::button::Status) -> iced::widget::button::Style + 'a,
+) -> Element<'a, BoardPopoverEvent> {
     let lead = container(lead.unwrap_or_else(|| Space::new().boxed()))
         .width(ROW_LEAD)
         .center_x(ROW_LEAD);
@@ -275,7 +303,7 @@ pub(super) fn list_row<'a>(
         Some(event) => button(face)
             .padding(0)
             .width(Length::Fill)
-            .style(popup_row(tokens))
+            .style(style)
             .on_press(event)
             .boxed(),
         None => face.boxed(),
@@ -438,7 +466,8 @@ fn footer_with<'a>(
     .boxed()
 }
 
-/// The card of `model`, drawn for its kind.
+/// The card of `model`, drawn for its kind. The layer dropdown is its left
+/// column only: the app adds the sets and the card (`two_column_card`).
 pub(crate) fn popover_view<'a>(
     model: &BoardPopoverModel,
     tokens: &ThemeTokens,
@@ -447,7 +476,7 @@ pub(crate) fn popover_view<'a>(
     match model {
         BoardPopoverModel::Layer(list) => super::layer_popover::view(list, tokens, i18n),
         BoardPopoverModel::LayerDropdown(groups) => {
-            super::layer_dropdown::view(groups, tokens, i18n)
+            super::layer_dropdown::layer_column(groups, tokens, i18n)
         }
         BoardPopoverModel::Grid(grid) => super::grid_popover::view(grid, tokens, i18n),
         BoardPopoverModel::Unrouted(list) => super::unrouted_popover::view(list, tokens, i18n),

@@ -48,9 +48,10 @@ impl Signex {
                 if self.interaction_state.current_tool != Tool::Select
                     && self.interaction_state.active_canvas().placement_paused
                 {
-                    return self.update(Message::Dock(crate::dock::DockMessage::Panel(
+                    let confirmed = self.update(Message::Dock(crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::ConfirmPrePlacement,
                     )));
+                    return Task::batch([confirmed, self.release_dimension_override()]);
                 }
                 if self.interaction_state.current_tool != Tool::Select {
                     use crate::panels::PrePlacementKind;
@@ -302,7 +303,9 @@ impl Signex {
                                 .as_ref()
                                 .and_then(|s| s.reference_override.clone()),
                         });
-                    return Task::batch([show_properties, self.finish_update()]);
+                    self.note_dimension_tool_pause();
+                    let focus_override = self.focus_dimension_override();
+                    return Task::batch([show_properties, focus_override, self.finish_update()]);
                 }
                 self.finish_update()
             }
@@ -342,7 +345,11 @@ impl Signex {
                 } else {
                     Task::none()
                 };
-                Task::batch([resume_task, self.finish_update()])
+                Task::batch([
+                    resume_task,
+                    self.release_dimension_override(),
+                    self.finish_update(),
+                ])
             }
             ToolMessage::CycleDrawMode => {
                 let rule = self.interaction_state.corner_rule.with_next_mode();
@@ -407,6 +414,7 @@ impl Signex {
                 // on purpose: only a switch to a different tool drops the buffers.
                 if tool != self.interaction_state.current_tool {
                     self.clear_drawing_buffers();
+                    self.leave_dimension_tool();
                 }
                 self.interaction_state.current_tool = tool;
                 // Re-label the floating cursor tag so the user sees which

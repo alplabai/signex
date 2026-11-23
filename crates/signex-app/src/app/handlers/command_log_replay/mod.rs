@@ -2,6 +2,9 @@
 //! when it finished, and Replay runs that again on the same items, leaving
 //! the person's selection and tool as they were. Rules: `docs/COMMAND_LOG.md`.
 //!
+//! - [`safe_list`]: the only commands Replay may run, with their proofs.
+//! - [`gate`]: the check every Replay passes first.
+//! - [`sheet_guard`]: the target check of Move, Delete and Duplicate.
 //! - [`scope`]: how each catalog command replays.
 //! - [`book`]: the recorded input of each row.
 //! - [`capture`]: recording a finished edit.
@@ -16,11 +19,16 @@ mod capture;
 mod editor_panel;
 mod editors;
 mod edits;
+mod gate;
 mod rebase;
 mod run;
+mod safe_list;
 mod scope;
 mod selection;
+mod sheet_guard;
 
 pub(crate) use book::ReplayBook;
+#[cfg(test)]
+pub(super) use safe_list::{SAFE_COMMANDS, replay_proof};
 #[cfg(test)]
 pub(super) use scope::{ContinuesAs, ReplayScope, replay_scope};

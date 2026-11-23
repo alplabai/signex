@@ -14,9 +14,8 @@ use super::super::graphite::{
     zoom_text,
 };
 use super::counters::{counter_widths, grid_readout_width};
-use super::kit::{card_width, ui_font};
+use super::kit::{drawn_width, ui_font};
 use super::{BoardCounter, BoardPopoverKind, BoardReadout};
-use crate::dock::measure::text_width_in;
 use crate::styles::HAIRLINE;
 
 /// The Selection card's gap from its segment's right edge.
@@ -34,11 +33,11 @@ pub(crate) struct AnchorBar<'a> {
 }
 
 fn ui_width(s: &str, size: f32) -> f32 {
-    text_width_in(s, size, ui_font(iced::font::Weight::Normal))
+    drawn_width(s, size, ui_font(iced::font::Weight::Normal))
 }
 
 fn mono_width(s: &str, size: f32) -> f32 {
-    text_width_in(s, size, mono_font())
+    drawn_width(s, size, mono_font())
 }
 
 /// Where the active layer pill starts: after the Grid read-out, the Snap
@@ -98,9 +97,13 @@ fn counter_span(bar: &AnchorBar<'_>, counter: BoardCounter, i18n: &I18n) -> Opti
     None
 }
 
-/// The left edge of the `kind` card, kept inside the window.
-pub(crate) fn popover_left(kind: BoardPopoverKind, bar: &AnchorBar<'_>, i18n: &I18n) -> f32 {
-    let width = card_width(kind);
+/// The left edge of the `kind` card, `width` wide, kept inside the window.
+pub(crate) fn popover_left(
+    kind: BoardPopoverKind,
+    width: f32,
+    bar: &AnchorBar<'_>,
+    i18n: &I18n,
+) -> f32 {
     let wanted = match kind {
         BoardPopoverKind::Layer | BoardPopoverKind::ActiveLayer => layer_pill_x(bar, i18n),
         BoardPopoverKind::Grid => grid_readout_x(),

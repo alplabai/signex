@@ -136,6 +136,13 @@ impl Signex {
             self.refuse_replay(row, targets_gone(document, &missing));
             return Task::none();
         }
+        if self.targets_changed(row, document) {
+            let reason = Translatable::new(ids::COMMAND_LOG_REPLAY_STATE_CHANGED)
+                .arg("command", row.label.clone())
+                .arg("document", document_name(document));
+            self.refuse_replay(row, reason);
+            return Task::none();
+        }
         // A selection command with a tool running would act on the tool
         // (a part in hand turns), and a tab switch would end it.
         if !matches!(shown, Shown::Window(_)) && self.tool_in_progress() {
@@ -147,6 +154,23 @@ impl Signex {
             && !self.read_duplicate_numbers(document)
         {
             self.refuse_replay(row, numbers_unread(document));
+            return Task::none();
+        }
+        // A paste still waiting for its numbers has yet to place its copy.
+        if command.as_str() == "duplicate"
+            && self.ui_state.command_replay.has_waiting_paste(document)
+        {
+            let reason = Translatable::new(ids::COMMAND_LOG_REPLAY_PASTE_WAITING)
+                .arg("document", document_name(document));
+            self.refuse_replay(row, reason);
+            return Task::none();
+        }
+        // The offset is fixed: a second copy would stack on the first.
+        if command.as_str() == "duplicate" && self.duplicate_lands_on_a_copy(targets, document) {
+            let reason = Translatable::new(ids::COMMAND_LOG_REPLAY_COPY_IN_PLACE)
+                .arg("command", row.label.clone())
+                .arg("document", document_name(document));
+            self.refuse_replay(row, reason);
             return Task::none();
         }
         self.ui_state.command_replay.replaying = true;
@@ -365,9 +389,18 @@ impl Signex {
         let reason = reason.render_en_us();
         crate::diagnostics::log_warning(&reason);
         let input = self.ui_state.command_replay.input_of(row.seq);
+        let guard = self.ui_state.command_replay.target_guard_of(row.seq);
         self.record_refused_replay(row, reason);
         if let Some(input) = input {
             self.carry_replay_input(row, &input);
+        }
+        let log = &self.ui_state.command_log.log;
+        let oldest = log.rows().next().map(|new| new.seq);
+        let newest = log.rows().next_back().map(|new| new.seq);
+        if let (Some(guard), Some(seq)) = (guard, newest.filter(|seq| *seq > row.seq)) {
+            self.ui_state
+                .command_replay
+                .keep_target_guard(seq, guard, oldest);
         }
     }
 

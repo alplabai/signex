@@ -282,16 +282,14 @@ impl Signex {
         let board = self.status_board(window)?;
         let ui = &self.ui_state;
         let tokens = &self.document_state.panel_ctx.tokens;
-        let left = self.status_popover_left(window, model.kind(), &board);
+        let left = self.status_popover_left(window, model.kind(), model.card_width(), &board);
         let card = crate::status_bar::board_popover_view(&model, tokens, &ui.i18n)
             .map(|event| Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(event))))
             .boxed();
         // The strip and its set button are hidden under Dropdown, so the
-        // layer list carries the layer sets.
+        // layer list carries the layer sets, in one card (mockup row 6).
         let card: Element<'_, Message> = if matches!(model, BoardPopoverModel::LayerDropdown(_)) {
-            iced::widget::column![self.layer_dropdown_sets(window), card]
-                .spacing(crate::status_bar::POPUP_GAP)
-                .boxed()
+            crate::status_bar::layer_dropdown_card(card, self.layer_dropdown_sets(window), tokens)
         } else {
             card
         };
@@ -319,18 +317,24 @@ impl Signex {
     /// edge at the dropdown's, its bottom just above the status bar.
     pub(crate) fn layer_set_card_anchor(&self, window: iced::window::Id) -> (f32, f32) {
         let left = self.status_board(window).map_or(0.0, |board| {
-            self.status_popover_left(window, BoardPopoverKind::Layer, &board)
+            self.status_popover_left(
+                window,
+                BoardPopoverKind::Layer,
+                crate::status_bar::LAYER_DROPDOWN_WIDTH,
+                &board,
+            )
         });
         let status_h = crate::status_bar::status_bar_height(&self.document_state.panel_ctx.tokens);
         let (_, height) = self.ui_state.size_of_window(window);
         (left, height - status_h - crate::status_bar::POPUP_GAP)
     }
 
-    /// The left edge of the `kind` card in `window`'s bar.
+    /// The left edge of the `kind` card, `width` wide, in `window`'s bar.
     fn status_popover_left(
         &self,
         window: iced::window::Id,
         kind: BoardPopoverKind,
+        width: f32,
         board: &BoardReadout,
     ) -> f32 {
         let ui = &self.ui_state;
@@ -357,7 +361,7 @@ impl Signex {
             board,
             window_width,
         };
-        crate::status_bar::board_popover_left(kind, &bar, &ui.i18n)
+        crate::status_bar::board_popover_left(kind, width, &bar, &ui.i18n)
     }
 }
 

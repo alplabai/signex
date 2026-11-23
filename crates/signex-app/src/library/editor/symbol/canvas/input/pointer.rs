@@ -43,10 +43,15 @@ impl SymbolCanvas<'_> {
         // Right-click cancels any other in-progress multi-click draw;
         // otherwise starts a pan (same as schematic canvas).
         let draw_in_progress = match self.tool {
-            SymbolTool::PlaceRectangle => state.rect_from.is_some(),
+            SymbolTool::PlaceRectangle | SymbolTool::PlaceRoundRectangle => {
+                state.rect_from.is_some()
+            }
+            SymbolTool::PlaceEllipticalArc => state.ellipse.is_active(),
             SymbolTool::PlaceLine => state.line_from.is_some(),
             SymbolTool::PlaceCircle => state.circle_center.is_some(),
-            SymbolTool::PlaceArc => state.arc_center.is_some() || state.arc_radius_start.is_some(),
+            SymbolTool::PlaceArc | SymbolTool::PlacePie => {
+                state.arc_center.is_some() || state.arc_radius_start.is_some()
+            }
             _ => false,
         };
         if draw_in_progress {
@@ -60,6 +65,7 @@ impl SymbolCanvas<'_> {
             state.arc_radius_start = None;
             state.arc_cursor = None;
             state.arc_end_deg_unwrapped = None;
+            state.ellipse = Default::default();
             return Some(canvas::Action::capture());
         }
         let pos = cursor.position_in(bounds)?;
@@ -237,8 +243,22 @@ impl SymbolCanvas<'_> {
         // While waiting for a subsequent click in a multi-click
         // draw flow, update the rubber-band cursor and force a
         // redraw so the preview animates in real time.
-        if self.tool == SymbolTool::PlaceRectangle && state.rect_from.is_some() {
+        if matches!(
+            self.tool,
+            SymbolTool::PlaceRectangle | SymbolTool::PlaceRoundRectangle
+        ) && state.rect_from.is_some()
+        {
             state.rect_cursor = Some((wx, wy));
+            return Some(
+                canvas::Action::publish(CanvasAction::CursorAt {
+                    x_mm: Some(ux),
+                    y_mm: Some(uy),
+                })
+                .and_capture(),
+            );
+        }
+        if self.tool == SymbolTool::PlaceEllipticalArc && state.ellipse.is_active() {
+            state.ellipse.track(wx, wy);
             return Some(
                 canvas::Action::publish(CanvasAction::CursorAt {
                     x_mm: Some(ux),
@@ -267,7 +287,7 @@ impl SymbolCanvas<'_> {
                 .and_capture(),
             );
         }
-        if self.tool == SymbolTool::PlaceArc
+        if matches!(self.tool, SymbolTool::PlaceArc | SymbolTool::PlacePie)
             && (state.arc_center.is_some() || state.arc_radius_start.is_some())
         {
             state.arc_cursor = Some((wx, wy));
@@ -290,7 +310,11 @@ impl SymbolCanvas<'_> {
                 .and_capture(),
             );
         }
-        if self.tool == SymbolTool::PlacePolygon && !self.polygon_vertices.is_empty() {
+        if matches!(
+            self.tool,
+            SymbolTool::PlacePolygon | SymbolTool::PlaceBezier
+        ) && !self.polygon_vertices.is_empty()
+        {
             state.polygon_cursor = Some((wx, wy));
             return Some(
                 canvas::Action::publish(CanvasAction::CursorAt {
@@ -399,7 +423,9 @@ fn should_cancel_polygon_placement(
     tool: SymbolTool,
     polygon_vertices_empty: bool,
 ) -> bool {
-    button == mouse::Button::Right && tool == SymbolTool::PlacePolygon && !polygon_vertices_empty
+    button == mouse::Button::Right
+        && matches!(tool, SymbolTool::PlacePolygon | SymbolTool::PlaceBezier)
+        && !polygon_vertices_empty
 }
 
 /// Whether cumulative displacement from the fixed press `origin` to
@@ -433,6 +459,22 @@ mod tests {
             ),
             "a middle-button press must never destroy the vertex stash"
         );
+    }
+
+    /// #2838: the Bezier gesture shares the stash, so the right button
+    /// cancels it the same way.
+    #[test]
+    fn a_right_press_cancels_an_in_flight_bezier() {
+        assert!(should_cancel_polygon_placement(
+            mouse::Button::Right,
+            SymbolTool::PlaceBezier,
+            false,
+        ));
+        assert!(!should_cancel_polygon_placement(
+            mouse::Button::Middle,
+            SymbolTool::PlaceBezier,
+            false,
+        ));
     }
 
     #[test]

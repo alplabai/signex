@@ -9,12 +9,13 @@ use std::time::{Duration, Instant};
 use pcb_geom::ItemRef;
 use serde_json::Map;
 use signex_engine::Command;
-use signex_engine::pcb::BoardCommand;
+use signex_engine::pcb::{BoardCommand, BoardReplayGuard};
 use signex_types::schematic::SelectedItem;
 
 use super::book::{PendingTool, ReplayInput};
 use super::rebase;
 use super::scope::{EditFamily, ReplayScope, replay_scope};
+use super::sheet_guard::SheetTargetGuard;
 use crate::app::Signex;
 use crate::app::core::command_log::{RECORDED_INPUT, RecordedTargets};
 use crate::keymap::AppCommandId;
@@ -224,6 +225,8 @@ impl Signex {
             pre_images: engine.map_or_else(Vec::new, |engine| {
                 rebase::pre_images(engine.document(), commands)
             }),
+            guard: engine
+                .and_then(|engine| SheetTargetGuard::for_move(engine.document(), commands)),
         })
     }
 
@@ -232,10 +235,16 @@ impl Signex {
         let SheetEditRecord {
             commands,
             pre_images,
+            mut guard,
         } = record;
         let Some(document) = self.document_state.edit_path().map(Path::to_path_buf) else {
             return;
         };
+        if let (Some(guard), Some(engine)) =
+            (guard.as_mut(), self.document_state.engines.get(&document))
+        {
+            guard.record_after(engine.document());
+        }
         let family = sheet_family(&commands);
         let row = sheet_row_command(family, &commands);
         let input = if commands.iter().any(makes_object) {
@@ -252,21 +261,32 @@ impl Signex {
                 commands,
                 targets,
                 pre_images,
+                guard,
             }
         };
         self.note_finished_edit(document, family, row, input);
     }
 
-    /// A copy of `commands` for [`Self::note_board_edit`], when recorded.
+    /// A copy of `commands` for [`Self::note_board_edit`], when recorded,
+    /// with what they are about to replace on the board at `path`.
     pub(crate) fn board_edit_to_record(
         &self,
+        path: &Path,
         commands: &[BoardCommand],
-    ) -> Option<Vec<BoardCommand>> {
-        self.records_replay_input().then(|| commands.to_vec())
+    ) -> Option<BoardEditRecord> {
+        if !self.records_replay_input() {
+            return None;
+        }
+        let board = self.document_state.pcb_board(path)?;
+        Some(BoardEditRecord {
+            commands: commands.to_vec(),
+            guard: BoardReplayGuard::before(board, commands),
+        })
     }
 
-    /// `commands` changed the board at `path`.
-    pub(crate) fn note_board_edit(&mut self, path: &Path, commands: Vec<BoardCommand>) {
+    /// The recorded commands changed the board at `path`.
+    pub(crate) fn note_board_edit(&mut self, path: &Path, record: BoardEditRecord) {
+        let BoardEditRecord { commands, guard } = record;
         let book = &mut self.ui_state.command_replay;
         let from_panel = std::mem::take(&mut book.board_properties);
         let dropped = book.board_input.take();
@@ -281,9 +301,26 @@ impl Signex {
             .and_then(ReplayInput::row_command)
             .or(by_family);
         let input = match dropped {
+            Some(ReplayInput::BoardMove {
+                footprints,
+                delta,
+                leaves_tracks,
+                ..
+            }) => {
+                let mut guard = guard;
+                if let Some(board) = self.document_state.pcb_board(path) {
+                    guard.record_after(board);
+                }
+                ReplayInput::BoardMove {
+                    footprints,
+                    delta,
+                    leaves_tracks,
+                    guard: Some(guard),
+                }
+            }
             Some(input) => input,
             None if board_makes_objects(&commands) => ReplayInput::MadeNewObjects,
-            None => self.board_input(path, commands),
+            None => self.board_input(path, commands, guard),
         };
         self.note_finished_edit(path.to_path_buf(), family, row, input);
     }
@@ -346,7 +383,15 @@ impl Signex {
         }
     }
 
-    fn board_input(&self, path: &Path, commands: Vec<BoardCommand>) -> ReplayInput {
+    fn board_input(
+        &self,
+        path: &Path,
+        commands: Vec<BoardCommand>,
+        mut guard: BoardReplayGuard,
+    ) -> ReplayInput {
+        if let Some(board) = self.document_state.pcb_board(path) {
+            guard.record_after(board);
+        }
         let shown = self.active_tab_path().as_deref() == Some(path);
         let mut targets: Vec<ItemRef> = board_named_items(&commands);
         if shown {
@@ -363,7 +408,11 @@ impl Signex {
         }
         targets.sort();
         targets.dedup();
-        ReplayInput::Board { commands, targets }
+        ReplayInput::Board {
+            commands,
+            targets,
+            guard,
+        }
     }
 
     /// Hand a finished edit to the dispatch running, the tool that started
@@ -482,6 +531,9 @@ impl Signex {
         captured: Option<ReplayCaptured>,
         ran: bool,
     ) {
+        if let Some(ReplayCaptured(ReplayInput::Board { guard, .. })) = &captured {
+            self.keep_board_operand_guard(seq, guard);
+        }
         let scope = replay_scope(command.as_str());
         if let Some(targets) = targets {
             self.ui_state.command_log.log.keep_targets(seq, targets);
@@ -516,8 +568,15 @@ impl Signex {
 /// The edits one dispatch made.
 pub(crate) struct ReplayCaptured(ReplayInput);
 
+/// A board edit about to run, with what it is about to replace.
+pub(crate) struct BoardEditRecord {
+    commands: Vec<BoardCommand>,
+    guard: BoardReplayGuard,
+}
+
 /// A sheet edit about to run, with what it is about to replace.
 pub(crate) struct SheetEditRecord {
     commands: Vec<Command>,
     pre_images: Vec<Command>,
+    guard: Option<SheetTargetGuard>,
 }

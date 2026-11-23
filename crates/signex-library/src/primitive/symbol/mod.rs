@@ -279,6 +279,35 @@ pub enum SymbolGraphicKind {
     Polygon {
         vertices: Vec<[f64; 2]>,
     },
+    /// Open cubic Bezier through `[start, c1, c2, end]`; never filled.
+    Bezier {
+        points: [[f64; 2]; 4],
+    },
+    /// Closed wedge: the `Arc` sweep (same CCW-wraparound angles) joined to
+    /// `center` by two straight edges. Takes a fill like the other closed
+    /// shapes.
+    Pie {
+        center: [f64; 2],
+        radius: f64,
+        start_deg: f64,
+        end_deg: f64,
+    },
+    /// Open arc of an axis-aligned ellipse, counter-clockwise from
+    /// `start_deg` to `end_deg`. The angles are geometric: the direction
+    /// from `center` to the arc's end points. Never filled.
+    EllipticalArc {
+        center: [f64; 2],
+        radius_x: f64,
+        radius_y: f64,
+        start_deg: f64,
+        end_deg: f64,
+    },
+    /// Rectangle with one corner radius, at most half its short side.
+    RoundRectangle {
+        from: [f64; 2],
+        to: [f64; 2],
+        corner_radius: f64,
+    },
 }
 
 /// Normalise an `Arc`'s `start_deg`/`end_deg` into this codebase's
@@ -581,14 +610,20 @@ const SYMBOL_FILE_FORMAT_TOKEN_V2: &str = "snxsym/v2";
 /// v2 and v3.
 const SYMBOL_FILE_FORMAT_TOKEN_V3: &str = "snxsym/v3";
 
+/// Written when any graphic is a Bezier, Pie, EllipticalArc or RoundRectangle
+/// (#2838): a build without those kinds would fail on an unknown variant
+/// instead of refusing the token.
+const SYMBOL_FILE_FORMAT_TOKEN_V4: &str = "snxsym/v4";
+
 /// `.snxsym` version policy. `current` is the newest token; a save writes
-/// the lowest of the three the content needs (see `to_toml_string`).
+/// the lowest one the content needs (see `to_toml_string`).
 const SYMBOL_FILE_VERSION: FormatVersion = FormatVersion {
-    current: SYMBOL_FILE_FORMAT_TOKEN_V3,
+    current: SYMBOL_FILE_FORMAT_TOKEN_V4,
     readable: &[
         SYMBOL_FILE_FORMAT_TOKEN,
         SYMBOL_FILE_FORMAT_TOKEN_V2,
         SYMBOL_FILE_FORMAT_TOKEN_V3,
+        SYMBOL_FILE_FORMAT_TOKEN_V4,
     ],
     newer_minor: NewerMinor::Refused,
     missing: MissingToken::Refused,
@@ -914,7 +949,14 @@ impl SymbolFile {
             s.pins.iter().any(|p| p.body_style != BODY_NORMAL)
                 || s.graphics.iter().any(|g| g.body_style != BODY_NORMAL)
         });
-        let format = if has_body_styles {
+        let has_curve_kind = self
+            .symbols
+            .iter()
+            .flat_map(|s| &s.graphics)
+            .any(|g| g.kind.is_curve_kind());
+        let format = if has_curve_kind {
+            SYMBOL_FILE_FORMAT_TOKEN_V4.to_string()
+        } else if has_body_styles {
             SYMBOL_FILE_FORMAT_TOKEN_V3.to_string()
         } else if has_polygon {
             SYMBOL_FILE_FORMAT_TOKEN_V2.to_string()
@@ -1053,6 +1095,9 @@ mod body_style_tests;
 mod chain;
 #[cfg(test)]
 mod chain_tests;
+mod curves;
+#[cfg(test)]
+mod curves_tests;
 mod serde_tsv;
 #[cfg(test)]
 mod tests;

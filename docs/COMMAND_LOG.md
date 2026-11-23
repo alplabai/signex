@@ -109,52 +109,69 @@ clipped.
   `time`, `source`, `client`, `pid`, `window`, `id`, `args`, `result`, `text`,
   `took_ms`, `document`, `undoable`, `undone_at`), off the update thread.
   Nothing is written to disk unless asked.
-- **Replay** runs the row's command again on what it acted on, as the person's
-  command, and logs it as a new GUI row; it is one undo step. A failed row
-  fails the same way until its cause is fixed. By the kind of row:
+- **Replay refuses unless proven safe** (DECISIONS 2026-11-22, #2840). A row
+  runs only if its command is on the safe list
+  (`command_log_replay/safe_list.rs`) and its target is unchanged. Anything
+  else, a new command included, changes nothing and adds a failed row saying
+  why: "can't be replayed" for a command off the list or a row of a kind its
+  proof does not cover, "recorded no state" for a listed command with nothing
+  to check (an agent's row, a run that changed nothing, one that finished
+  after its reads), and "changed after" for a changed target.
+
+  | Command | Proof |
+  |---|---|
+  | `edit_object_properties` | Only a recorded edit of whole objects by id. On a sheet, a drawing, directive or harness connector writes only the fields it changed: it runs when another field changed since and keeps that change, inside a list's elements too, and refuses only if the same field holds a third value. An edit that writes a value derived from other fields runs only on the object as it found or left it: a Rect's size or place, an Arc's geometry, a dimension's direction or an override taken from the measured text, a table's source or a bound table's rows, a table's rows or columns once its source, column keys or column titles have changed, a table cell once another cell of its row has changed, a directive's outline, a connector's rotation, a mirrored Bezier handle, and any edit that changes more than one field. On a board, each written item or value against its guard. |
+  | `move_selection` | A recorded offset on recorded ids, on a sheet or board. Each target must be where the move found it or left it, so a replay cannot pull it from a later position. A sheet move also guards a fingerprint of everything that makes a net: wires, buses and entries, junctions, labels, no-connects, symbols and their library pins, sheet symbols with their entries, No-ERC markers, harnesses, and the directives that apply by position (Compile Mask, Net Blanket). A board move refuses if the offset would now carry a track it did not write. |
+  | `delete_selection` | Recorded ids on a sheet or board, each exactly as the command found it, so an item edited since is not removed. A target already gone is named in the refusal. |
+  | `duplicate` | Recorded source ids on a sheet or board, each exactly as found. Copies take new ids; the clipboard is kept. The copy lands at a fixed offset, so the row is refused while an object of the same kind already stands there, and while a paste on that sheet is still waiting for its designator numbers, since its copy has yet to land. |
+  | `lock_board_items`, `unlock_board_items` | Tracks and vias by uuid, an absolute flag. Every id must be one the row wrote, since an item already at the value records nothing. |
+  | `set_pad_shape` | Pads by uuid, absolute pad-local shape. The whole pad is guarded, and every id must be one the row wrote. |
+  | `panelize_board` | Writes the constant default panel; the board's panel is guarded. The outline only validates. |
+  | `remove_board_panel` | Writes no panel; the panel is guarded. |
+  | `set_board_panel` | One stored setting; the whole panel is guarded. |
+  | `set_layer_color`, `reset_layer_colors` | A colour keyed by its layer token; all board options are guarded. |
+  | `set_layer_stack` | The whole stack. Its rows name the layer each was, so a rerun on its own result would rename copper: it runs only on the stack, layers and thickness it found, and is refused while a via or pad holds a per-layer size on a layer it removes. |
+
+  Off the list until a guard proves them: every other relative or selection
+  command (rotate, mirror, flip, cut, `move_object`, `move_selection_xy`,
+  `drag_keep_connections`); view commands and tools; `undo` and `redo`; every
+  footprint and symbol editor row, Move and Delete included, since they name
+  pads and pins by index; `board_shape_from_selection` and `arrange_in_box`
+  (absolute writes over later edits); `set_board_graphic`, `add_board_graphic`
+  and `set_footprint_text` (operands resolve through the live origin or
+  designator); `set_via_span` and `set_layer_sizes` (layer names resolve by
+  place in the live stack); `reset_board_origin` (reads the live outline);
+  DRC waivers; `import_dxf` and `import_dxf_outline` (read a file again);
+  `update_pcb_from_schematic`, tuning, teardrops, stitching, gloss and keepout
+  (recompute from the live board); `swap_pins` and `swap_gates`; every net
+  class, `rules_*` and `project_*` command (no guard on the project's tables).
+
+  A listed row runs as the person's command and logs a new GUI row; it is one
+  undo step. The kinds of row, for the commands the list admits:
   - **Operands:** runs through the command's operand handler
     (`CommandArgs::parse_operands`, then `run_operands`), as the CLI does.
-  - **Recorded targets** (delete, cut, copy, duplicate, rotate, mirror, flip,
-    drawing order, Via Stitching, Teardrops, Gloss, Keepout and Board Shape
-    from Selection, Tune, lock, Swap Pins and Gates): the command's own handler
-    runs on exactly those items, in their document, in the window or tab that
-    shows it, then the person's selection comes back. What it creates gets new
-    ids, and a command that edits several documents keeps its one undo step
-    per document. Duplicate leaves the clipboard as it was. In project-wide
-    numbering it counts the designators of every project sheet, and is refused
-    if one of those sheets is not open.
-  - **Recorded edit** (Move and drags with their offset, Properties values,
-    unions, dialogs): the same engine or board commands run again on the same
-    items. A board move repeats its offset from where the footprints are now.
-    A new union gets a new id. Place Reuse Block places its block on its anchor
-    again with new ids. Change Footprint runs again from the footprint it read,
-    with its linked sheets. An edit that stores a whole drawing, directive or
-    harness connector changes only the fields it changed when recorded, so a
-    later move or edit of another field stays.
-  - **Footprint and symbol editors:** the recorded messages or Properties
-    panel edit run on the recorded pads, pins, silk or sketch entities of that
-    editor document, with the person's selection and tool put back. A pad or
-    sketch drag is one row and repeats its offset. Pads and pins are named by
-    index and number: an index holding another number counts as gone. A silk
-    item is named by index and counts as gone if the silk count changed. A
-    symbol selection is dropped if the replay changed the pin or graphic count
-    its indices rely on.
-  - **No target** (place wire, a view command): runs again as it is, with the
-    current selection held aside. Select All and Unselect All run as they are:
-    the selection is what they change.
-  - **Refused, nothing changes** (a new failed row and a Messages line): a
-    target is gone (the reason names it; Replay never runs on the survivors);
-    its document is not open; a tool is in progress and the run would need a
-    tab switch or would act on the tool; or the row has nothing repeatable:
-    - a tool or dialog started and cancelled, which no later edit can attach
-      to;
-    - a step of a tool in progress (Remove Last Vertex, Undo Last Segment);
-    - a pick at the pointer (Select Node, Toggle Selection);
-    - Find Similar, whose result is a selection made in its dialog;
-    - Save as Reuse Block, which writes a named file;
-    - a Sync Sheet Entries that added sheet pins, whose recorded commands name
-      ids that now exist, and one whose recorded entry list would now add a
-      pin or drop a pin made since.
+    A row that edited a board keeps the targets it wrote, and is refused with
+    nothing run once one has changed.
+  - **Recorded targets** (Delete, Duplicate): the command's own handler runs
+    on exactly those items, in their document, in the window or tab that shows
+    it, then the person's selection comes back. Duplicate's copies get new ids
+    and the clipboard stays. In project-wide numbering it counts the
+    designators of every project sheet, and is refused if one of those sheets
+    is not open. A target that is gone is named; Replay never runs on the
+    survivors. A tool in progress refuses the row.
+  - **Recorded edit** (Move, `edit_object_properties`): the same engine or
+    board commands run again on the same items. A move repeats its offset. A
+    move started and cancelled says it never finished. An edit that stores a
+    whole drawing, directive or harness connector changes only the fields it
+    changed when recorded, so a later edit of another field stays; a field it
+    changed that now holds a third value refuses the row. A list it changed
+    (table rows, say) is merged field by field when what changed since is
+    another field; a list that changed length or was edited at the same field
+    is refused. A board edit keeps each target it wrote as it stood before and
+    after, and runs only while every target is still one of the two; fields
+    are not merged, and one changed target refuses the whole row before
+    anything runs. A Properties edit of anything else (a symbol flag, an
+    editor document) has no such check and is refused.
 - **Copy as CLI** copies the row as a `signex-cli run` line (the Usage of
   `docs/CLI.md`): `signex-cli run <project file> <command-id> --arg
   name=value ...`. Each value is the text `--arg` takes (a point as `x,y`),

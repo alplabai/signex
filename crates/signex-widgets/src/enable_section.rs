@@ -57,6 +57,7 @@ pub struct EnableSection<'a, M> {
     is_enabled: bool,
     on_toggle: Option<Box<dyn Fn(bool) -> M + 'a>>,
     tip: Option<Label<'a>>,
+    is_live_while_off: bool,
     wrap_header: Option<HeaderWrap<'a, M>>,
 }
 
@@ -72,6 +73,7 @@ impl<'a, M: 'a> EnableSection<'a, M> {
             is_enabled,
             on_toggle: None,
             tip: None,
+            is_live_while_off: false,
             wrap_header: None,
         }
     }
@@ -92,6 +94,13 @@ impl<'a, M: 'a> EnableSection<'a, M> {
     /// region for the header, so it does not nest the dependents' own.
     pub fn wrap_header(mut self, wrap: impl FnOnce(Element<'a, M>) -> Element<'a, M> + 'a) -> Self {
         self.wrap_header = Some(Box::new(wrap));
+        self
+    }
+
+    /// Keeps the fields live and unveiled while the header is off, for a
+    /// field whose typing is what turns the header on.
+    pub fn live_while_off(mut self, is_live: bool) -> Self {
+        self.is_live_while_off = is_live;
         self
     }
 
@@ -142,7 +151,7 @@ impl<'a, M: 'a> EnableSection<'a, M> {
             .width(Length::Fill)
             .push(header)
             .push(gate_dependents(
-                dependents_veil(panel, self.is_enabled),
+                dependents_veil(panel, self.is_enabled || self.is_live_while_off),
                 body.into(),
             ))
             .boxed()

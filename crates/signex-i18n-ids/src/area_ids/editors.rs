@@ -178,6 +178,11 @@ define_ids! {
     EDITORS_SYMPROPS_ARC = "editors-symprops-arc";
     EDITORS_SYMPROPS_TEXT = "editors-symprops-text";
     EDITORS_SYMPROPS_POLYGON = "editors-symprops-polygon";
+    EDITORS_SYMPROPS_PIE = "editors-symprops-pie";
+    EDITORS_SYMPROPS_ELLIPTICAL_ARC = "editors-symprops-elliptical-arc";
+    EDITORS_SYMPROPS_ROUND_RECTANGLE = "editors-symprops-round-rectangle";
+    EDITORS_SYMPROPS_RADIUS_X_Y = "editors-symprops-radius-x-y";
+    EDITORS_SYMPROPS_CORNER_RADIUS = "editors-symprops-corner-radius";
     EDITORS_SYMPROPS_SECTION_GEOMETRY = "editors-symprops-section-geometry";
     EDITORS_SYMPROPS_SECTION_STYLE = "editors-symprops-section-style";
     EDITORS_SYMPROPS_START_X_Y = "editors-symprops-start-x-y";

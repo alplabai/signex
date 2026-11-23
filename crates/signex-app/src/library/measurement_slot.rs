@@ -19,6 +19,11 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 /// Corner radius of the joined control: a form field's.
 const RADIUS: f32 = Radii::GRAPHITE.control;
 
+/// Width shares of the number and the picker: a table laying the slot
+/// across its Value and Unit columns uses them as the column shares.
+pub(crate) const NUMBER_SHARE: u16 = 3;
+pub(crate) const PICKER_SHARE: u16 = 2;
+
 /// The slot: `value` in a mono input, with `picker` (from
 /// [`picker_segment_style`] pickers, or a read-only label) as its right
 /// segment. `on_submit` is sent on Enter.
@@ -60,14 +65,12 @@ pub(crate) fn measurement_slot<'a, M: Clone + 'a>(
     });
     let line = theme_ext::border_color(tokens);
     let field = crate::styles::tokens::resolve(tokens).field;
-    let divider = container(Space::new())
-        .width(HAIRLINE)
-        .height(Length::Fill)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(line)),
-            ..container::Style::default()
-        });
-    container(row![input, divider, picker].height(Length::Shrink))
+    let input = input.width(Length::FillPortion(NUMBER_SHARE));
+    let picker = container(picker).width(Length::FillPortion(PICKER_SHARE));
+    let joined = row![input, segment_divider(tokens), picker]
+        .height(Length::Shrink)
+        .align_y(iced::Alignment::Center);
+    container(joined)
         .width(Length::Fill)
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(field)),
@@ -77,6 +80,19 @@ pub(crate) fn measurement_slot<'a, M: Clone + 'a>(
                 radius: RADIUS.into(),
                 ..Border::default()
             },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// The hairline between two segments of a slot.
+fn segment_divider<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
+    let line = theme_ext::border_color(tokens);
+    container(Space::new())
+        .width(HAIRLINE)
+        .height(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(line)),
             ..container::Style::default()
         })
         .boxed()

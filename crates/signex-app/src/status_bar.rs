@@ -17,9 +17,10 @@ mod graphite;
 mod grid_popover;
 pub(crate) use board::{
     AnchorBar, BoardPopoverModel, BoardReadout, ConnectionTally, DrcAge, DrcList, DrcTally,
-    GridChoice, LayerChoice, LayerDropdownGroup, LayerList, NetRow, SelectedRow, SelectedWhat,
-    SelectionList, UnroutedList, board_grid_value, custom_pitch, group_layers,
-    popover_left as board_popover_left, popover_view as board_popover_view,
+    GridChoice, LAYER_DROPDOWN_WIDTH, LayerChoice, LayerDropdownGroup, LayerList, NetRow,
+    SelectedRow, SelectedWhat, SelectionList, UnroutedList, board_grid_value, custom_pitch,
+    group_layers, popover_left as board_popover_left, popover_view as board_popover_view,
+    two_column_card as layer_dropdown_card,
 };
 pub use board::{
     BoardCounter, BoardPopoverEvent, BoardPopoverKind, BoardStatusPopover, BoardStatusUi,

@@ -13,6 +13,7 @@ use crate::library::messages::{FootprintEditorMsg, SymbolEditorMsg};
 use crate::panels::PanelMsg;
 use crate::panels::command_log::{CommandLogMsg, LogOutcome, LogSource};
 
+mod board_replay;
 mod fixtures;
 use fixtures::*;
 
@@ -203,10 +204,20 @@ fn a_cancelled_move_tool_has_nothing_to_replay() {
 #[test]
 fn a_duplicate_replays_on_its_target_and_keeps_the_clipboard() {
     let (mut app, path) = app_with_parts();
+    // Keep reads no project numbers, so the first copy lands within `run`.
+    app.ui_state.paste_designators = crate::paste_prefs::PasteDesignators::Keep;
     select(&mut app, &[1]);
     run(&mut app, "duplicate");
     let seq = newest(&app).seq;
+    assert_eq!(
+        app.document_state.engines[&path].document().symbols.len(),
+        3,
+        "the first copy landed"
+    );
+    // The copy lands at a fixed offset: its place must be free to replay.
+    undo(&mut app, &path);
     let parts = app.document_state.engines[&path].document().symbols.len();
+    let (x, y) = position(&app, &path, 1);
     app.interaction_state.clipboard = None;
     app.interaction_state.clipboard_text = Some("kept".to_string());
     select(&mut app, &[2]);
@@ -215,6 +226,13 @@ fn a_duplicate_replays_on_its_target_and_keeps_the_clipboard() {
 
     let sheet = app.document_state.engines[&path].document();
     assert_eq!(sheet.symbols.len(), parts + 1, "one new copy");
+    let offset = crate::app::handlers::clipboard_workflows::DEFAULT_PASTE_OFFSET_MM;
+    assert!(
+        sheet.symbols.iter().any(|s| {
+            (s.position.x - (x + offset)).abs() < 1e-6 && (s.position.y - (y + offset)).abs() < 1e-6
+        }),
+        "the copy is at the offset"
+    );
     assert_eq!(selected(&app), vec![item(2)]);
     assert!(app.interaction_state.clipboard.is_none());
     assert_eq!(
@@ -223,8 +241,110 @@ fn a_duplicate_replays_on_its_target_and_keeps_the_clipboard() {
     );
 }
 
+/// The review's case: a second copy would stack exactly on the first, add a
+/// BOM line and join its pins.
 #[test]
-fn a_properties_edit_is_one_row_per_field_run_and_replays_its_value() {
+fn a_duplicate_replay_onto_its_own_copy_is_refused() {
+    let (mut app, path) = app_with_parts();
+    // Keep reads no project numbers, so the first copy lands within `run`.
+    app.ui_state.paste_designators = crate::paste_prefs::PasteDesignators::Keep;
+    select(&mut app, &[1]);
+    let (x, y) = position(&app, &path, 1);
+    run(&mut app, "duplicate");
+    let seq = newest(&app).seq;
+    let places = |app: &Signex| -> Vec<(f64, f64)> {
+        let sheet = app.document_state.engines[&path].document();
+        (sheet.symbols.iter())
+            .map(|s| (s.position.x, s.position.y))
+            .collect()
+    };
+    let before = places(&app);
+    let offset = crate::app::handlers::clipboard_workflows::DEFAULT_PASTE_OFFSET_MM;
+    assert_eq!(before.len(), 3, "the first copy landed");
+    assert!(
+        before
+            .iter()
+            .any(|p| (p.0 - (x + offset)).abs() < 1e-6 && (p.1 - (y + offset)).abs() < 1e-6),
+        "at the offset: {before:?}"
+    );
+
+    replay(&mut app, seq);
+
+    assert!(failure(&newest(&app)).contains("already holds a copy"));
+    assert_eq!(places(&app), before, "nothing was placed");
+}
+
+/// The answer of the numbering read a Duplicate started: its copy lands.
+fn answer_paste_numbers(app: &mut Signex) {
+    let request = crate::app::PasteRequest {
+        intent: crate::app::PasteIntent::Duplicate,
+        epoch: app.interaction_state.placement_epoch,
+        path: app.document_state.active_path.clone(),
+        dialog: 0,
+        from_agent: false,
+    };
+    let seed = crate::app::handlers::paste::PasteSeed::default();
+    let _ = app.update(Message::Edit(crate::app::EditMsg::PasteCountersSeeded {
+        request,
+        seed: std::sync::Arc::new(seed),
+    }));
+}
+
+fn symbol_count(app: &Signex, path: &std::path::Path) -> usize {
+    app.document_state.engines[path].document().symbols.len()
+}
+
+/// Default numbering: the first copy waits for the project's numbers.
+#[test]
+fn a_duplicate_replay_is_refused_while_its_paste_waits_for_numbers() {
+    let (mut app, path) = app_with_parts();
+    select(&mut app, &[1]);
+    run(&mut app, "duplicate");
+    let seq = newest(&app).seq;
+    assert_eq!(symbol_count(&app, &path), 2, "the paste is still waiting");
+
+    replay(&mut app, seq);
+
+    assert!(failure(&newest(&app)).contains("still waiting"));
+    assert_eq!(symbol_count(&app, &path), 2, "the replay placed nothing");
+    answer_paste_numbers(&mut app);
+    assert_eq!(symbol_count(&app, &path), 3, "only the paste's own copy");
+}
+
+#[test]
+fn a_duplicate_replay_after_its_numbers_answer_is_refused_on_the_copy() {
+    let (mut app, path) = app_with_parts();
+    select(&mut app, &[1]);
+    run(&mut app, "duplicate");
+    let seq = newest(&app).seq;
+    answer_paste_numbers(&mut app);
+    assert_eq!(symbol_count(&app, &path), 3, "the copy landed");
+
+    replay(&mut app, seq);
+
+    assert!(failure(&newest(&app)).contains("already holds a copy"));
+    assert_eq!(symbol_count(&app, &path), 3);
+}
+
+#[test]
+fn two_duplicate_replays_in_a_row_place_one_copy() {
+    let (mut app, path) = app_with_parts();
+    select(&mut app, &[1]);
+    run(&mut app, "duplicate");
+    let seq = newest(&app).seq;
+    answer_paste_numbers(&mut app);
+    undo(&mut app, &path);
+    assert_eq!(symbol_count(&app, &path), 2);
+
+    replay(&mut app, seq);
+    replay(&mut app, seq);
+
+    assert_eq!(symbol_count(&app, &path), 3, "at most one copy");
+    assert!(failure(&newest(&app)).contains("already holds a copy"));
+}
+
+#[test]
+fn a_properties_edit_is_one_row_per_field_run_and_a_symbol_flag_replay_is_refused() {
     let (mut app, path) = app_with_parts();
     select(&mut app, &[1]);
     let dnp = |dnp| Command::SetSymbolDnp {
@@ -257,12 +377,14 @@ fn a_properties_edit_is_one_row_per_field_run_and_replays_its_value() {
 
     replay(&mut app, row.seq);
 
-    assert_eq!(is_dnp(&app), Some(false), "the last value set");
+    // A symbol flag has no pre-image to check it against.
+    assert_eq!(is_dnp(&app), Some(true), "not run");
+    assert_not_replayable(&app);
     assert_eq!(selected(&app), vec![item(2)]);
 }
 
 #[test]
-fn a_union_replays_with_a_new_id() {
+fn a_union_replay_is_refused() {
     let (mut app, path) = app_with_parts();
     select(&mut app, &[1, 2]);
     let id = uuid::Uuid::from_u128(77);
@@ -287,8 +409,8 @@ fn a_union_replays_with_a_new_id() {
     replay(&mut app, row.seq);
 
     let unions = &app.document_state.engines[&path].document().unions;
-    assert_eq!(unions.len(), 1);
-    assert_ne!(unions[0].uuid, id, "a replay makes its own union");
+    assert!(unions.is_empty(), "Create Union is off the safe list");
+    assert_not_replayable(&app);
 }
 
 #[test]
@@ -313,7 +435,7 @@ fn replay_onto_a_sheet_behind_a_running_tool_is_refused() {
 }
 
 #[test]
-fn a_symbol_editor_delete_replays_on_its_pin_not_the_one_selected() {
+fn a_symbol_editor_delete_replay_is_refused() {
     let (mut app, path) = app_with_symbol();
     pick_pin(&mut app, &path, 0);
     symbol_edit(&mut app, &path, SymbolEditorMsg::DeleteSelected);
@@ -325,11 +447,16 @@ fn a_symbol_editor_delete_replays_on_its_pin_not_the_one_selected() {
 
     replay(&mut app, seq);
 
-    assert_eq!(pins(&app, &path), ["2"], "pin 1, the recorded target, went");
+    assert_eq!(
+        pins(&app, &path),
+        ["1", "2"],
+        "editor rows are off the list"
+    );
+    assert_not_replayable(&app);
 }
 
 #[test]
-fn a_symbol_editor_replay_is_refused_when_its_pin_is_gone() {
+fn a_symbol_editor_delete_replayed_over_its_own_result_is_refused() {
     let (mut app, path) = app_with_symbol();
     pick_pin(&mut app, &path, 0);
     symbol_edit(&mut app, &path, SymbolEditorMsg::DeleteSelected);
@@ -338,7 +465,7 @@ fn a_symbol_editor_replay_is_refused_when_its_pin_is_gone() {
     replay(&mut app, seq);
 
     assert_eq!(pins(&app, &path), ["2"], "nothing else was deleted");
-    assert!(failure(&newest(&app)).contains("Pin 1"));
+    assert_not_replayable(&app);
 }
 
 #[test]
@@ -394,7 +521,7 @@ fn a_targeted_row_with_no_recorded_targets_is_refused() {
 }
 
 #[test]
-fn a_footprint_delete_replays_on_its_pad_not_the_one_selected() {
+fn a_footprint_editor_delete_replay_is_refused() {
     let (mut app, path) = app_with_footprint();
     let before = pads(&app, &path);
     pick_pad(&mut app, &path, 0);
@@ -407,15 +534,12 @@ fn a_footprint_delete_replays_on_its_pad_not_the_one_selected() {
 
     replay(&mut app, seq);
 
-    assert_eq!(
-        pads(&app, &path),
-        before[1..],
-        "the recorded pad went, not the selected one"
-    );
+    assert_eq!(pads(&app, &path), before, "editor rows are off the list");
+    assert_not_replayable(&app);
 }
 
 #[test]
-fn a_pad_drag_is_one_row_and_replays_its_offset() {
+fn a_pad_drag_is_one_row_and_its_replay_is_refused() {
     let (mut app, path) = app_with_footprint();
     let start = pads(&app, &path);
     pick_pad(&mut app, &path, 0);
@@ -431,7 +555,8 @@ fn a_pad_drag_is_one_row_and_replays_its_offset() {
     replay(&mut app, row.seq);
 
     let now = pads(&app, &path);
-    assert!((now[0].1.0 - (x + 5.08)).abs() < 1e-6, "{now:?}");
+    assert!((now[0].1.0 - (x + 2.54)).abs() < 1e-6, "{now:?}");
+    assert_not_replayable(&app);
     assert_eq!(now[1], start[1], "the pad selected now stayed");
     let editor = &app.document_state.footprint_editors[&path];
     assert_eq!(
@@ -442,7 +567,7 @@ fn a_pad_drag_is_one_row_and_replays_its_offset() {
 }
 
 #[test]
-fn a_symbol_properties_edit_replays_its_value() {
+fn a_symbol_properties_replay_is_refused() {
     let (mut app, path) = app_with_symbol();
     app.document_state.tabs.push(TabInfo {
         title: "S".into(),
@@ -471,7 +596,8 @@ fn a_symbol_properties_edit_replays_its_value() {
 
     replay(&mut app, row.seq);
 
-    assert_eq!(length(&app), wanted);
+    assert_eq!(length(&app), before, "editor rows are off the list");
+    assert_not_replayable(&app);
 }
 
 #[test]
@@ -499,11 +625,15 @@ fn a_cancelled_dialog_leaves_no_row_waiting_for_a_later_edit() {
     );
     assert!(created);
     assert_ne!(newest(&app).seq, started, "the later edit has its own row");
+    assert!(
+        !app.ui_state.command_replay.has_input(started),
+        "the cancelled row took no input"
+    );
     let unions = app.document_state.engines[&path].document().unions.len();
 
     replay(&mut app, started);
 
-    assert!(failure(&newest(&app)).contains("never finished"));
+    assert_not_replayable(&app);
     assert_eq!(
         app.document_state.engines[&path].document().unions.len(),
         unions
@@ -539,7 +669,7 @@ fn a_duplicate_is_refused_while_a_project_sheet_is_not_open() {
 }
 
 #[test]
-fn a_footprint_swap_replays_from_its_recorded_footprint() {
+fn a_footprint_swap_replay_is_refused() {
     let dir = tempfile::tempdir().expect("a folder");
     let mut app = crate::app::handlers::menu::export::tests::app_workspace(
         &dir.path().to_string_lossy(),
@@ -578,12 +708,14 @@ fn a_footprint_swap_replays_from_its_recorded_footprint() {
 
     replay(&mut app, row.seq);
 
-    assert_eq!(id_of(&app), "New:Part");
+    assert_ne!(id_of(&app), "New:Part", "Change Footprint is off the list");
+    assert_not_replayable(&app);
 }
 
-/// `cycle_selection_mode` has no target and needs no document: it runs again.
+/// DECISIONS 2026-11-22, "refuses unless proven safe": a command with no
+/// target has nothing to prove unchanged, so it is refused too.
 #[test]
-fn a_command_with_no_target_runs_again_as_it_is() {
+fn a_command_with_no_target_is_refused() {
     let (mut app, _boot) = Signex::new();
     let mode = app.ui_state.selection_mode;
     let seq = app
@@ -599,11 +731,11 @@ fn a_command_with_no_target_runs_again_as_it_is() {
 
     let _ = app.handle_command_log_message(CommandLogMsg::ReplayRequested(seq));
 
-    assert_ne!(app.ui_state.selection_mode, mode, "the command ran");
+    assert_eq!(app.ui_state.selection_mode, mode, "the command did not run");
+    assert_not_replayable(&app);
     let log = &app.ui_state.command_log.log;
     assert_eq!(log.rows().count(), 2, "the replay is a new row");
     let again = log.rows().next_back().expect("the new row");
     assert_eq!(again.command, "cycle_selection_mode");
     assert_eq!(again.source, LogSource::Gui { window: None });
-    assert_eq!(again.outcome, LogOutcome::Ok(None));
 }

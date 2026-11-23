@@ -150,7 +150,7 @@ fn a_command_from_an_undocked_window_adds_exactly_one_row() {
 }
 
 #[test]
-fn replay_runs_the_command_again_as_a_new_gui_row() {
+fn replay_of_an_unlisted_command_is_a_new_refused_gui_row() {
     let mut app = fresh_app();
     let _ = app.update(menu_row("place_wire"));
     let first = last(&app);
@@ -161,10 +161,11 @@ fn replay_runs_the_command_again_as_a_new_gui_row() {
     assert_eq!(replayed.command, "place_wire");
     assert_eq!(replayed.source, LogSource::Gui { window: None });
     assert!(replayed.seq > first.seq);
-    assert_eq!(
-        replayed.outcome,
-        LogOutcome::Failed("No schematic is open".to_string()),
-        "place_wire has no target, so it ran again and met the same refusal"
+    // DECISIONS 2026-11-22, "refuses unless proven safe".
+    assert!(
+        matches!(&replayed.outcome, LogOutcome::Failed(why) if why.contains("can't be replayed")),
+        "place_wire is off the safe list: {:?}",
+        replayed.outcome
     );
 }
 

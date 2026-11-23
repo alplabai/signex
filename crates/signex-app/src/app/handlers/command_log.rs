@@ -128,6 +128,9 @@ impl Signex {
         // The window's document as it ran: a command may close or switch it.
         let document = self.command_document(window, &operands);
         let is_outer = ticket.started.is_some();
+        let target_guard = is_outer
+            .then(|| self.read_target_guard(command, document.as_deref(), targets.as_ref()))
+            .flatten();
         if is_outer {
             self.begin_replay_capture();
         }
@@ -150,6 +153,9 @@ impl Signex {
                 self.record_command(command.as_str(), operands, logged, took, source, document);
             if let Some(seq) = seq {
                 self.keep_replay_input(seq, command, targets, captured, ran);
+                if let Some(guard) = target_guard {
+                    self.keep_target_guard(seq, guard);
+                }
             }
         }
         (outcome, task)
@@ -428,6 +434,9 @@ impl Signex {
             crate::diagnostics::log_warning(line.into_string());
             return Task::none();
         };
+        if self.refuse_unproven_replay(&row) {
+            return Task::none();
+        }
         if !row.has_given_operands() {
             return self.replay_without_operands(&row, &command);
         }

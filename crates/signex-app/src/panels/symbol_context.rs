@@ -143,6 +143,14 @@ impl SymbolEditorPanelContext {
                         vertices: vertices.clone(),
                         filled,
                     },
+                    kind @ (K::Bezier { .. }
+                    | K::Pie { .. }
+                    | K::EllipticalArc { .. }
+                    | K::RoundRectangle { .. }) => PartShape::Outline {
+                        points: kind.flattened_outline(),
+                        is_closed: matches!(kind, K::Pie { .. } | K::RoundRectangle { .. }),
+                        filled,
+                    },
                     K::Text { .. } => return None,
                 })
             })
@@ -186,6 +194,13 @@ pub enum PartShape {
         /// find its vertices.
         idx: usize,
         vertices: Vec<[f64; 2]>,
+        filled: bool,
+    },
+    /// A flattened Bezier or elliptical arc (open), pie or round rectangle
+    /// (closed).
+    Outline {
+        points: Vec<[f64; 2]>,
+        is_closed: bool,
         filled: bool,
     },
 }
@@ -332,6 +347,29 @@ pub enum GraphicKindSummary {
     Polygon {
         vertex_count: usize,
     },
+    /// `[start, c1, c2, end]`.
+    Bezier {
+        points: [[f64; 2]; 4],
+    },
+    Pie {
+        center: [f64; 2],
+        radius: f64,
+        start_deg: f64,
+        end_deg: f64,
+    },
+    EllipticalArc {
+        center: [f64; 2],
+        radius_x: f64,
+        radius_y: f64,
+        start_deg: f64,
+        end_deg: f64,
+    },
+    /// `corner_radius` is the drawn one, clamped to half the short side.
+    RoundRectangle {
+        from: [f64; 2],
+        to: [f64; 2],
+        corner_radius: f64,
+    },
 }
 
 /// Identifier for one numeric field on a graphic — carried by
@@ -348,16 +386,26 @@ pub enum GraphicFieldId {
     ToX,
     /// `Rectangle`/`Line` `to.y`.
     ToY,
-    /// `Circle`/`Arc` `center.x`.
+    /// `Circle`/`Arc`/`Pie` `center.x`.
     CenterX,
-    /// `Circle`/`Arc` `center.y`.
+    /// `Circle`/`Arc`/`Pie` `center.y`.
     CenterY,
-    /// `Circle`/`Arc` `radius`.
+    /// `Circle`/`Arc`/`Pie` `radius`.
     Radius,
-    /// `Arc` `start_deg`.
+    /// `Arc`/`Pie` `start_deg`.
     StartDeg,
-    /// `Arc` `end_deg`.
+    /// `Arc`/`Pie` `end_deg`.
     EndDeg,
+    /// `Bezier` point `0..=3` (start, C1, C2, end), x.
+    BezierX(u8),
+    /// `Bezier` point `0..=3`, y.
+    BezierY(u8),
+    /// `EllipticalArc` `radius_x`.
+    RadiusX,
+    /// `EllipticalArc` `radius_y`.
+    RadiusY,
+    /// `RoundRectangle` `corner_radius`, clamped to half the short side.
+    CornerRadius,
     /// `Text` `position.x`.
     PositionX,
     /// `Text` `position.y`.

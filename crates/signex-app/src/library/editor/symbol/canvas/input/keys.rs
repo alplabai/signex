@@ -24,7 +24,11 @@ impl SymbolCanvas<'_> {
                 // editor model, so this needs its own publish (unlike
                 // the other multi-click tools below, whose in-progress
                 // state is purely local to `CanvasState`).
-                if self.tool == SymbolTool::PlacePolygon && !self.polygon_vertices.is_empty() {
+                if matches!(
+                    self.tool,
+                    SymbolTool::PlacePolygon | SymbolTool::PlaceBezier
+                ) && !self.polygon_vertices.is_empty()
+                {
                     state.polygon_cursor = None;
                     state.polygon_last_click_time = None;
                     state.polygon_last_click_pos = None;
@@ -33,9 +37,15 @@ impl SymbolCanvas<'_> {
                     );
                 }
                 let cancelled = match self.tool {
-                    SymbolTool::PlaceRectangle if state.rect_from.is_some() => {
+                    SymbolTool::PlaceRectangle | SymbolTool::PlaceRoundRectangle
+                        if state.rect_from.is_some() =>
+                    {
                         state.rect_from = None;
                         state.rect_cursor = None;
+                        true
+                    }
+                    SymbolTool::PlaceEllipticalArc if state.ellipse.is_active() => {
+                        state.ellipse = Default::default();
                         true
                     }
                     SymbolTool::PlaceLine if state.line_from.is_some() => {
@@ -48,7 +58,7 @@ impl SymbolCanvas<'_> {
                         state.circle_cursor = None;
                         true
                     }
-                    SymbolTool::PlaceArc
+                    SymbolTool::PlaceArc | SymbolTool::PlacePie
                         if state.arc_center.is_some() || state.arc_radius_start.is_some() =>
                     {
                         state.arc_center = None;

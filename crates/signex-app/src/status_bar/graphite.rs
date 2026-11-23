@@ -253,6 +253,24 @@ pub fn popup_row(
     }
 }
 
+/// The picked row of a popover list: `accent_soft` fill and ink, hovered or
+/// not (mockup row 6).
+pub fn popup_row_active(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+    let r = resolve(tokens);
+    let (fill, ink) = (r.accent_soft, r.accent_soft_ink);
+    move |_, _| button::Style {
+        background: Some(Background::Color(fill)),
+        text_color: ink,
+        border: Border {
+            radius: Radii::GRAPHITE.small.into(),
+            ..Border::default()
+        },
+        ..button::Style::default()
+    }
+}
+
 /// Ink of the "open" check mark in a popover row.
 pub fn check_ink(tokens: &ThemeTokens) -> Color {
     resolve(tokens).accent_text

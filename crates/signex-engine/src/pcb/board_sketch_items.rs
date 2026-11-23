@@ -14,7 +14,9 @@ use signex_types::sketch::pattern_instance::{instance_owner_key, owner_key_of};
 use uuid::Uuid;
 
 use super::refuse_non_finite;
-use crate::pcb::{Applied, BoardCommand, BoardCommandError, BoardPatch, BoardPatchKind};
+use crate::pcb::{
+    Applied, BoardCommand, BoardCommandError, BoardItemId, BoardPatch, BoardPatchKind,
+};
 
 /// What a [`BoardCommand::SetBoardSketchBake`] replaced, to put back bit for
 /// bit: the stored sketch, the outline when the bake wrote one, the whole
@@ -179,6 +181,21 @@ impl OwnedItems {
         self.entities.contains(&item)
             || owner_key_of(item).is_some_and(|key| self.instance_owners.contains(&key))
     }
+}
+
+/// The zones and drawings on `board` a bake storing `next` replaces.
+pub(in crate::pcb) fn owned_item_ids(
+    board: &PcbBoard,
+    next: Option<&BoardSketch>,
+) -> Vec<BoardItemId> {
+    let owned = OwnedItems::of(board.sketch.as_ref(), next);
+    let zones = (board.zones.iter())
+        .filter(|zone| owned.holds(zone.uuid))
+        .map(|zone| BoardItemId::Zone(zone.uuid));
+    let graphics = (board.graphics.iter())
+        .filter(|graphic| owned.holds(graphic.uuid))
+        .map(|graphic| BoardItemId::Graphic(graphic.uuid));
+    zones.chain(graphics).collect()
 }
 
 fn finite(p: Point) -> bool {

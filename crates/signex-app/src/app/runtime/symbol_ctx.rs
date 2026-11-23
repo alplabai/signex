@@ -226,5 +226,39 @@ fn graphic_kind_to_summary(
         SymbolGraphicKind::Polygon { vertices } => GraphicKindSummary::Polygon {
             vertex_count: vertices.len(),
         },
+        SymbolGraphicKind::Bezier { points } => GraphicKindSummary::Bezier { points: *points },
+        SymbolGraphicKind::EllipticalArc {
+            center,
+            radius_x,
+            radius_y,
+            start_deg,
+            end_deg,
+        } => GraphicKindSummary::EllipticalArc {
+            center: *center,
+            radius_x: *radius_x,
+            radius_y: *radius_y,
+            start_deg: *start_deg,
+            end_deg: *end_deg,
+        },
+        SymbolGraphicKind::RoundRectangle {
+            from,
+            to,
+            corner_radius,
+        } => GraphicKindSummary::RoundRectangle {
+            from: *from,
+            to: *to,
+            corner_radius: corner_radius.min(SymbolGraphicKind::max_corner_radius(*from, *to)),
+        },
+        SymbolGraphicKind::Pie {
+            center,
+            radius,
+            start_deg,
+            end_deg,
+        } => GraphicKindSummary::Pie {
+            center: *center,
+            radius: *radius,
+            start_deg: *start_deg,
+            end_deg: *end_deg,
+        },
     }
 }

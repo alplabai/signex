@@ -44,6 +44,7 @@ pub mod placement;
 pub mod pour_edit;
 pub mod primitive_edit;
 mod replace;
+mod replay_guard;
 pub mod reuse_block;
 pub mod rooms;
 pub mod route;
@@ -67,6 +68,8 @@ mod pad_shape_tests;
 #[cfg(test)]
 mod replace_tests;
 #[cfg(test)]
+mod replay_guard_tests;
+#[cfg(test)]
 mod tests;
 
 pub use batch::BatchRefusal;
@@ -78,4 +81,5 @@ pub use footprint::FootprintFace;
 pub use footprint_content::FootprintText;
 pub use items::{BoardItem, BoardItemId, RemovedItem};
 pub use replace::FootprintPad;
+pub use replay_guard::BoardReplayGuard;
 pub use stack::{ItemLayerSizes, StackSnapshot};

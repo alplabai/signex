@@ -89,6 +89,38 @@ pub struct AnnotationPanelState {
     pub designators: Vec<String>,
     /// The selected table's part is gone from the sheet.
     pub source_missing: bool,
+    /// The armed dimension tool's form; it takes Properties while set.
+    pub dimension_tool: Option<Box<DimensionToolForm>>,
+}
+
+/// Widget id of the Override box in the paused dimension tool's form.
+pub const DIMENSION_OVERRIDE_INPUT: &str = "signex.dimension_tool.override";
+
+/// Section key of the dimension form's Text section, which holds that box.
+pub const DIMENSION_TEXT_SECTION: &str = "dimension_text";
+
+/// What Properties shows for the armed dimension tool (mockup row 157).
+#[derive(Debug, Clone, PartialEq)]
+pub struct DimensionToolForm {
+    /// The next dimension; a point not clicked yet holds a sample.
+    pub dimension: signex_types::schematic::SchDimension,
+    pub is_aligned: bool,
+    pub has_from: bool,
+    pub has_to: bool,
+    /// Tab paused the tool: the Override box takes typing while it is off.
+    pub is_paused: bool,
+}
+
+/// The armed dimension tool's form, scrolling in the panel.
+pub(in crate::panels) fn view_dimension_tool_properties<'a>(
+    ctx: &'a PanelContext,
+    form: &DimensionToolForm,
+) -> Element<'a, PanelMsg> {
+    iced::widget::scrollable(super::dimension::view_dimension_tool(ctx, form))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(form_look::scrollbar_style)
+        .boxed()
 }
 
 /// The Properties of the selected Bezier, dimension or table; `None` for
@@ -227,6 +259,23 @@ impl<'a> Rows<'a> {
 
     /// A box showing `value` or its draft; typing applies once it parses.
     pub fn input(&self, field: AnnotationField, value: String) -> Element<'a, PanelMsg> {
+        self.input_box(field, value, String::new()).boxed()
+    }
+
+    /// The paused tool's Override box: empty until typed in, with the
+    /// measured value showing as its placeholder.
+    pub fn override_tool_input(&self, value: String, measured: String) -> Element<'a, PanelMsg> {
+        self.input_box(AnnotationField::OverrideText, value, measured)
+            .id(iced::widget::Id::new(DIMENSION_OVERRIDE_INPUT))
+            .boxed()
+    }
+
+    fn input_box(
+        &self,
+        field: AnnotationField,
+        value: String,
+        placeholder: String,
+    ) -> iced::widget::TextInput<'a, PanelMsg> {
         let draft = match &self.ctx.annotation.draft {
             Some((id, f, draft)) if *id == self.id && *f == field => Some(draft.clone()),
             _ => None,
@@ -236,14 +285,13 @@ impl<'a> Rows<'a> {
             .filter(|typed| field.refuses(typed))
             .map(|_| ti(self.ctx.tokens.error));
         let shown = draft.unwrap_or(value);
-        text_input(signex_i18n::UserText::new(String::new()), shown)
+        text_input(signex_i18n::UserText::new(placeholder), shown)
             .size(TS.body)
             .padding([SP.xs, SP.s])
             .on_input(move |s| msg(AnnotationPanelMsg::FieldTyped(field, s)))
             .on_submit(msg(AnnotationPanelMsg::FieldSubmitted(field)))
             .style(form_look::refusable_input_style(error))
             .width(Length::Fill)
-            .boxed()
     }
 
     /// `prefix` (X, Y) beside a box.
@@ -281,6 +329,31 @@ impl<'a> Rows<'a> {
                 fields.1,
                 format!("{y:.2}")
             ),
+        ]
+        .spacing(SP.s)
+        .width(Length::Fill);
+        self.field(label, pair.boxed())
+    }
+
+    /// A point with nothing to edit yet: two empty boxes that take no text.
+    pub fn blank_point(&self, label: Localized) -> Element<'a, PanelMsg> {
+        let cell = |prefix: MessageId| -> Element<'a, PanelMsg> {
+            row![
+                text(self.t(prefix)).size(TS.caption).color(self.faint()),
+                text_input(signex_i18n::UserText::new(String::new()), String::new())
+                    .size(TS.body)
+                    .padding([SP.xs, SP.s])
+                    .style(form_look::refusable_input_style(None))
+                    .width(Length::Fill),
+            ]
+            .spacing(SP.xs)
+            .align_y(Alignment::Center)
+            .width(Length::Fill)
+            .boxed()
+        };
+        let pair = row![
+            cell(signex_i18n::ids::PROPERTIES_ANNOTATION_X),
+            cell(signex_i18n::ids::PROPERTIES_ANNOTATION_Y),
         ]
         .spacing(SP.s)
         .width(Length::Fill);

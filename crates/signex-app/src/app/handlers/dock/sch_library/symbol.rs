@@ -410,7 +410,14 @@ impl Signex {
         if !storable_or_refuse(key, value, "Graphic field") {
             return true;
         }
-        self.sym_editor_mutate_graphic(idx, Some(("graphic_field", field as u128)), |g| {
+        // Typed edits of one field coalesce into one undo step.
+        let coalesce = {
+            use std::hash::{Hash, Hasher};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            field.hash(&mut hasher);
+            u128::from(hasher.finish())
+        };
+        self.sym_editor_mutate_graphic(idx, Some(("graphic_field", coalesce)), |g| {
             super::apply_graphic_field(g, field, value)
         })
     }

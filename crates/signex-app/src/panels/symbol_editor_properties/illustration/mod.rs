@@ -40,6 +40,8 @@ pub(super) mod field {
     pub const PIN_NUMBER_SHOWN: &str = "pin.numbershown";
     pub const G_START: &str = "g.start";
     pub const G_END: &str = "g.end";
+    pub const G_CONTROL_1: &str = "g.control1";
+    pub const G_CONTROL_2: &str = "g.control2";
     pub const G_SIZE: &str = "g.size";
     pub const G_CENTER: &str = "g.center";
     pub const G_RADIUS: &str = "g.radius";

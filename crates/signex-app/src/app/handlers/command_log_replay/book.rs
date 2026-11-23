@@ -9,13 +9,14 @@ use std::time::Instant;
 use pcb_geom::ItemRef;
 use serde_json::Value;
 use signex_engine::Command;
-use signex_engine::pcb::BoardCommand;
+use signex_engine::pcb::{BoardCommand, BoardReplayGuard};
 use signex_types::pcb::{Footprint, Point};
 use signex_types::schematic::SelectedItem;
 use uuid::Uuid;
 
 use super::editors::EditorTargets;
 use super::scope::ContinuesAs;
+use super::sheet_guard::{SheetTargetGuard, TargetGuard};
 use crate::library::messages::{FootprintEditorMsg, PrimitiveEdit, SymbolEditorMsg};
 use crate::panels::PanelMsg;
 
@@ -32,17 +33,24 @@ pub(super) enum ReplayInput {
         /// What the commands that replace a whole object replaced, oldest
         /// first: Replay carries only what they changed (`rebase`).
         pre_images: Vec<Command>,
+        /// For a move: its targets before and after.
+        guard: Option<SheetTargetGuard>,
     },
     /// Board commands, and the items they act on.
     Board {
         commands: Vec<BoardCommand>,
         targets: Vec<ItemRef>,
+        /// The touched targets before and after: Replay refuses once one
+        /// holds anything else.
+        guard: BoardReplayGuard,
     },
     /// Footprints carried by an offset.
     BoardMove {
         footprints: BTreeSet<Uuid>,
         delta: Point,
         leaves_tracks: bool,
+        /// What the move wrote, before and after; set once it has run.
+        guard: Option<BoardReplayGuard>,
     },
     /// A reuse block placed around an anchor; a replay makes new objects.
     ReuseBlock {
@@ -137,11 +145,13 @@ impl ReplayInput {
                     mut commands,
                     mut targets,
                     mut pre_images,
+                    guard,
                 },
                 Self::Sheet {
                     commands: more,
                     targets: more_targets,
                     pre_images: more_images,
+                    guard: more_guard,
                 },
             ) => {
                 commands.extend(more);
@@ -153,23 +163,30 @@ impl ReplayInput {
                     commands,
                     targets,
                     pre_images,
+                    guard: guard.zip(more_guard).map(|(a, b)| a.merged(b)),
                 }
             }
             (
                 Self::Board {
                     mut commands,
                     mut targets,
+                    guard,
                 },
                 Self::Board {
                     commands: more,
                     targets: more_targets,
+                    guard: more_guard,
                 },
             ) => {
                 commands.extend(more);
                 targets.extend(more_targets);
                 targets.sort();
                 targets.dedup();
-                Self::Board { commands, targets }
+                Self::Board {
+                    commands,
+                    targets,
+                    guard: guard.merged(more_guard),
+                }
             }
             _ => Self::MadeNewObjects,
         }
@@ -239,6 +256,7 @@ impl ReplayInput {
                     commands,
                     targets,
                     pre_images,
+                    guard,
                 },
                 Self::Sheet {
                     pre_images: first, ..
@@ -250,6 +268,7 @@ impl ReplayInput {
                     commands,
                     targets,
                     pre_images: kept,
+                    guard,
                 }
             }
             (input, _) => input,
@@ -389,6 +408,10 @@ pub(super) struct PendingTool {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ReplayBook {
     inputs: BTreeMap<u64, Arc<ReplayInput>>,
+    /// What each row with operands wrote on a board, for its Replay.
+    operand_guards: BTreeMap<u64, Arc<BoardReplayGuard>>,
+    /// What each Delete or Duplicate row found on its recorded targets.
+    target_guards: BTreeMap<u64, Arc<TargetGuard>>,
     /// Inside a logged dispatch: the edits it made.
     pub(super) capturing: Option<Vec<ReplayInput>>,
     pub(super) pending: Option<PendingTool>,
@@ -406,13 +429,38 @@ pub(crate) struct ReplayBook {
     pub(super) panel_edit_running: bool,
     /// Change Footprint is between its picker and its read.
     pub(super) swap_in_transit: bool,
+    /// The sheet of each paste still waiting for its designator numbers.
+    waiting_pastes: Vec<PathBuf>,
     /// How deep `Signex::update` is nested.
     update_depth: u32,
 }
 
 impl ReplayBook {
+    /// A paste on `sheet` started reading its numbers: it places later.
+    pub(crate) fn note_paste_waiting(&mut self, sheet: PathBuf) {
+        self.waiting_pastes.push(sheet);
+    }
+
+    /// The numbers of one paste on `sheet` came back, used or dropped.
+    pub(crate) fn note_paste_answered(&mut self, sheet: Option<&std::path::Path>) {
+        let at = (self.waiting_pastes.iter()).position(|path| Some(path.as_path()) == sheet);
+        if let Some(at) = at {
+            self.waiting_pastes.remove(at);
+        }
+    }
+
+    pub(super) fn has_waiting_paste(&self, sheet: &std::path::Path) -> bool {
+        self.waiting_pastes.iter().any(|path| path == sheet)
+    }
+
     pub(super) fn input_of(&self, seq: u64) -> Option<Arc<ReplayInput>> {
         self.inputs.get(&seq).cloned()
+    }
+
+    /// Whether row `seq` holds a recorded input.
+    #[cfg(test)]
+    pub(in crate::app::handlers) fn has_input(&self, seq: u64) -> bool {
+        self.input_of(seq).is_some()
     }
 
     /// Keep `input` for row `seq`, dropping rows older than `oldest`.
@@ -421,6 +469,40 @@ impl ReplayBook {
             self.inputs = self.inputs.split_off(&oldest);
         }
         self.inputs.insert(seq, input);
+    }
+
+    pub(super) fn operand_guard_of(&self, seq: u64) -> Option<Arc<BoardReplayGuard>> {
+        self.operand_guards.get(&seq).cloned()
+    }
+
+    /// Keep `guard` for row `seq`, dropping rows older than `oldest`.
+    pub(super) fn keep_operand_guard(
+        &mut self,
+        seq: u64,
+        guard: Arc<BoardReplayGuard>,
+        oldest: Option<u64>,
+    ) {
+        if let Some(oldest) = oldest {
+            self.operand_guards = self.operand_guards.split_off(&oldest);
+        }
+        self.operand_guards.insert(seq, guard);
+    }
+
+    pub(super) fn target_guard_of(&self, seq: u64) -> Option<Arc<TargetGuard>> {
+        self.target_guards.get(&seq).cloned()
+    }
+
+    /// Keep `guard` for row `seq`, dropping rows older than `oldest`.
+    pub(super) fn keep_target_guard(
+        &mut self,
+        seq: u64,
+        guard: Arc<TargetGuard>,
+        oldest: Option<u64>,
+    ) {
+        if let Some(oldest) = oldest {
+            self.target_guards = self.target_guards.split_off(&oldest);
+        }
+        self.target_guards.insert(seq, guard);
     }
 
     /// A Move was cancelled: no later drag belongs to its row.
@@ -456,6 +538,7 @@ impl ReplayBook {
             footprints,
             delta,
             leaves_tracks,
+            guard: None,
         });
     }
 

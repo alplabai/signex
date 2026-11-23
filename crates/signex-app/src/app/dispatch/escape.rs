@@ -36,6 +36,9 @@ impl Signex {
     ) -> Task<Message> {
         // #1378 - Esc abandons a pending chord, a waiting `T A` included.
         self.cancel_pending_chord();
+        if self.close_unit_menu_in(window) {
+            return Task::none();
+        }
         // Esc in a drawing's number box puts the old value back (#2768).
         if self.restore_drawing_field() {
             return self.finish_update();
@@ -406,6 +409,7 @@ impl Signex {
                 }
                 self.refresh_placement_reference();
                 self.document_state.panel_ctx.pre_placement = before.map(|form| *form);
+                self.restore_dimension_tool_pause();
                 undone
             }
             Some(SheetPlacementPause::Footprint { path, pad_defaults }) => {
