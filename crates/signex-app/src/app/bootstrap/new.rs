@@ -109,6 +109,15 @@ impl Signex {
     }
 
     pub fn new() -> (Self, Task<Message>) {
+        let (app, boot) = Self::new_boxed();
+        (*app, boot)
+    }
+
+    /// [`Self::new`] built straight into a `Box`: the headless boot holds
+    /// only the box, never a copy of the app (#2325). Its own frame, so the
+    /// caller's frame stays small.
+    #[inline(never)]
+    pub(crate) fn new_boxed() -> (Box<Self>, Task<Message>) {
         // One parse of `prefs.json` feeds every startup reader below; a
         // missing or malformed file reads as `None`, i.e. every default.
         let prefs_json = crate::fonts::load_prefs_json();
@@ -295,7 +304,7 @@ impl Signex {
         let restored_geometry = remember_window_geometry
             .then(crate::app::window_geometry::load)
             .flatten();
-        let mut app = Self {
+        let mut app = Box::new(Self {
             ui_state: UiState {
                 io: crate::io_ports::IoPorts::default(),
                 // Persisted user-toggleable state (UX §1.5). Reads
@@ -907,7 +916,7 @@ impl Signex {
             native_menu: Default::default(),
             agent: crate::app::agent::AgentState::new(),
             pan_zoom_bench: None,
-        };
+        });
         // The PCB canvas starts from the loaded grid state, not its own
         // defaults, so the first frame honours a saved "grid off" (#682).
         app.interaction_state.pcb_canvas.set_grid(
