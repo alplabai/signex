@@ -155,6 +155,7 @@ fn board_rows() -> Vec<Surface> {
                         role: RoleTag::MountingHole,
                     },
                 );
+                super::caps_d::sync_canvas_text(app);
                 Ok(())
             },
         ),
@@ -344,7 +345,7 @@ pub(super) fn open_sketch(
 }
 
 /// The primitives board carrying `sketch`, in board sketch mode.
-fn open_board_sketch(
+pub(super) fn open_board_sketch(
     app: &mut Signex,
     r: &mut iced::Renderer,
     fx: &Fixture,
