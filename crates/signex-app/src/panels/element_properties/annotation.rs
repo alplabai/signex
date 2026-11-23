@@ -96,6 +96,9 @@ pub struct AnnotationPanelState {
 /// Widget id of the Override box in the paused dimension tool's form.
 pub const DIMENSION_OVERRIDE_INPUT: &str = "signex.dimension_tool.override";
 
+/// Section key of the dimension form's Text section, which holds that box.
+pub const DIMENSION_TEXT_SECTION: &str = "dimension_text";
+
 /// What Properties shows for the armed dimension tool (mockup row 157).
 #[derive(Debug, Clone, PartialEq)]
 pub struct DimensionToolForm {

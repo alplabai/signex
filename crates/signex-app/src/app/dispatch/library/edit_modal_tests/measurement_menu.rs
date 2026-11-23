@@ -175,4 +175,26 @@ fn a_unit_without_the_current_prefix_keeps_the_number_in_its_base() {
     let _ = app.update(edit(&root, picked));
     assert_eq!(buffered_number(&app, &root).as_deref(), Some("4.7"));
     assert_eq!(draft_param(&app, &root, KEY), Some(measured(4.7, "F")));
+
+    let picked = BrowserEditMsg::SetParamUnit {
+        key: KEY.into(),
+        unit: "V".into(),
+    };
+    let _ = app.update(edit(&root, picked));
+    assert_eq!(draft_param(&app, &root, KEY), Some(measured(4.7, "V")));
+}
+
+/// Going through "no unit" does not bring the old prefix back either.
+#[test]
+fn a_unit_picked_after_no_unit_keeps_the_number_it_shows() {
+    let (mut app, root) = app_with_kilo_ohm_row();
+    for unit in ["", "V"] {
+        let picked = BrowserEditMsg::SetParamUnit {
+            key: KEY.into(),
+            unit: unit.into(),
+        };
+        let _ = app.update(edit(&root, picked));
+    }
+    assert_eq!(buffered_number(&app, &root).as_deref(), Some("4.7"));
+    assert_eq!(draft_param(&app, &root, KEY), Some(measured(4.7, "V")));
 }

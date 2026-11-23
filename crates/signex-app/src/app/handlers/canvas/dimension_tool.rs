@@ -105,6 +105,7 @@ impl Signex {
             // An emptied box holds nothing typed: Override is off again.
             AnnotationEdit::OverrideText(text) if form.is_paused && text.is_empty() => {
                 tool.dimension.override_text = None;
+                self.document_state.panel_ctx.annotation.draft = None;
                 return;
             }
             // Nothing is measured yet, so there is no value to start from.
@@ -174,6 +175,11 @@ impl Signex {
         tool.paused_with =
             is_armed.then(|| Box::new((tool.dimension.clone(), tool.points.clone())));
         if is_armed {
+            // A folded section has no box to take the keys.
+            self.document_state
+                .panel_ctx
+                .collapsed_sections
+                .remove(crate::panels::DIMENSION_TEXT_SECTION);
             self.sync_annotation_draft();
         }
     }

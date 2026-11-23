@@ -85,7 +85,7 @@ fn body<'a>(
             measure_rows(rows, d, clicked),
         ))
         .push(rows.section(
-            "dimension_text",
+            super::annotation::DIMENSION_TEXT_SECTION,
             ids::PROPERTIES_DIMENSION_SECTION_TEXT,
             text_rows(rows, d, clicked.1, is_paused),
         ))

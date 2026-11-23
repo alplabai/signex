@@ -125,7 +125,7 @@ mod planned_tests;
 
 pub use element_properties::{
     AnnotationField, AnnotationPanelMsg, AnnotationPanelState, DIMENSION_OVERRIDE_INPUT,
-    DimensionToolForm,
+    DIMENSION_TEXT_SECTION, DimensionToolForm,
 };
 pub(crate) use element_properties::{
     BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,

@@ -424,6 +424,30 @@ fn emptying_the_box_turns_override_off_again() {
         );
     }
     assert_eq!(override_text(&app), None);
+    assert_eq!(
+        app.document_state.panel_ctx.annotation.draft, None,
+        "no empty draft hides the measured value after the second Tab"
+    );
+}
+
+#[test]
+fn tab_unfolds_the_text_section_so_typing_reaches_the_override_box() {
+    let mut app = armed(Tool::LinearDimension);
+    click(&mut app, (0.0, 0.0));
+    click(&mut app, (12.7, 0.0));
+    let _ = app.update(Message::Dock(crate::dock::DockMessage::Panel(
+        PanelMsg::ToggleSection(crate::panels::DIMENSION_TEXT_SECTION.into()),
+    )));
+    assert!(
+        app.document_state
+            .panel_ctx
+            .collapsed_sections
+            .contains(crate::panels::DIMENSION_TEXT_SECTION)
+    );
+
+    tab(&mut app);
+    assert!(press_in_override(&mut app, letter_j(), Some("j")));
+    assert_eq!(override_text(&app), Some("j"));
 }
 
 #[test]
