@@ -334,6 +334,25 @@ mod tests {
         assert_eq!(name(Some(Unit::PpmPerKelvin)), None);
     }
 
+    /// The slot of a fixed unit is the measurement menu's Prefix section,
+    /// and there is none where the unit takes no prefix.
+    #[test]
+    fn a_fixed_unit_has_a_prefix_menu_only_where_it_takes_a_prefix() {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        let i18n = I18n::en_us();
+        let segment = |unit: Unit, prefix: SiPrefix| {
+            let menu = UnitMenu {
+                selected: Some(unit),
+                is_open: false,
+                on_open: SiPrefix::One,
+                on_dismiss: SiPrefix::One,
+            };
+            prefix_menu(menu, prefix, |p| p, &tokens, &i18n)
+        };
+        assert!(segment(Unit::Ohm, SiPrefix::Kilo).is_some());
+        assert!(segment(Unit::Percent, SiPrefix::One).is_none());
+    }
+
     #[derive(Debug, Clone, PartialEq)]
     enum Hit {
         Opened,

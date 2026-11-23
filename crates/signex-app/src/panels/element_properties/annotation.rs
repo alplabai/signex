@@ -78,6 +78,9 @@ pub enum AnnotationPanelMsg {
     Picked(AnnotationEdit),
     /// Esc was pressed in the paused dimension tool's focused Override box.
     OverrideEscaped,
+    /// The same Esc, in a detached Properties window: it paints no dialog
+    /// or menu, so the key can only be meant for the pause.
+    DetachedOverrideEscaped,
     CsvImportRequested,
     CsvExportRequested,
 }

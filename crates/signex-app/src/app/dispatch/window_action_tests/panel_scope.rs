@@ -624,32 +624,19 @@ fn tab_on_an_undocked_sheet_puts_the_keys_in_that_windows_override_box() {
     assert_eq!(dimension.override_text.as_deref(), Some("j"));
 }
 
-/// Mockup row 157: one Esc in that window's Override box resumes the sheet
-/// the window shows, and the tool stays armed.
-#[test]
-fn one_esc_in_an_undocked_sheets_override_box_resumes_that_sheet() {
-    use crate::app::{Tool, ToolMessage};
+/// Esc in `window`'s focused Override box: whether a widget captured it, and
+/// what the widgets published.
+fn escape_in_override_box(app: &Signex, window: iced::window::Id) -> (bool, Vec<Message>) {
     use iced::advanced::shell::{Bus, Waker};
     use iced::advanced::widget::operation::focusable;
     use iced::keyboard::{self, Key, key::Named};
     use iced_runtime::UserInterface;
     use iced_runtime::user_interface::Cache;
 
-    let mut f = fixture();
-    let window = f.window;
-    let _ = f.app.run_in_window_document(window, |app| {
-        app.update(Message::Tool(ToolMessage::SelectTool(
-            Tool::LinearDimension,
-        )))
-    });
-    let (outcome, _task) = super::surfaces::command(&mut f.app, "placement_properties", window);
-    drop(outcome);
-    assert!(f.app.interaction_state.canvases[&window].placement_paused);
-
     let mut renderer = crate::layout_probe::headless_renderer();
     let mut published = Bus::new();
     let captured = {
-        let view = f.app.view(window);
+        let view = app.view(window);
         let mut ui = UserInterface::build(view, SIZE, Cache::default(), &mut renderer);
         let id = iced::widget::Id::new(crate::panels::DIMENSION_OVERRIDE_INPUT);
         ui.operate(&renderer, &mut focusable::focus::<()>(id));
@@ -673,8 +660,28 @@ fn one_esc_in_an_undocked_sheets_override_box_resumes_that_sheet() {
         );
         statuses[0] == iced::event::Status::Captured
     };
+    (captured, published.into_iter().collect())
+}
+
+/// Mockup row 157: one Esc in that window's Override box resumes the sheet
+/// the window shows, and the tool stays armed.
+#[test]
+fn one_esc_in_an_undocked_sheets_override_box_resumes_that_sheet() {
+    use crate::app::{Tool, ToolMessage};
+
+    let mut f = fixture();
+    let window = f.window;
+    let _ = f.app.run_in_window_document(window, |app| {
+        app.update(Message::Tool(ToolMessage::SelectTool(
+            Tool::LinearDimension,
+        )))
+    });
+    let (outcome, _task) = super::surfaces::command(&mut f.app, "placement_properties", window);
+    drop(outcome);
+    assert!(f.app.interaction_state.canvases[&window].placement_paused);
+
+    let (captured, escaped) = escape_in_override_box(&f.app, window);
     assert!(captured, "the box answers this Esc, nothing else does");
-    let escaped: Vec<Message> = published.into_iter().collect();
     assert!(escaped.iter().all(|m| is_scoped(m, window)), "{escaped:?}");
     feed(&mut f.app, escaped);
     assert!(!f.app.interaction_state.canvases[&window].placement_paused);
