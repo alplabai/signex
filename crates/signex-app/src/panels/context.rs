@@ -196,6 +196,8 @@ pub struct PanelContext {
     /// hierarchical sheet is selected. Powers the editable
     /// border/fill colour pickers and stroke-width input.
     pub selected_child_sheet: Option<signex_types::schematic::ChildSheet>,
+    /// The file that sheet symbol resolves to from the sheet showing it.
+    pub selected_child_sheet_file: Option<std::path::PathBuf>,
     /// The selected Net Parameters directive or Net Blanket, as its
     /// Properties read it (#1281, #1489).
     pub directive_panel: Option<Box<super::DirectivePanel>>,

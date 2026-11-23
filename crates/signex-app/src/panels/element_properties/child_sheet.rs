@@ -45,7 +45,8 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
             .boxed();
     };
     let palette = PanelPalette::from_tokens(&ctx.tokens);
-    let missing = sheet_file_missing(&ctx.projects, &sheet.filename);
+    let missing = (ctx.selected_child_sheet_file.as_deref())
+        .is_some_and(|file| sheet_file_missing(&ctx.projects, file));
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
     // The multi-channel view of the symbol (#1279): its caption, its stacked
     // illustration and its Repeat, Channel naming and Entries sections.
@@ -111,40 +112,29 @@ fn shows_channels(view: &crate::panels::compiled_design::SheetSymbolRepeatView) 
     view.repeat.is_some()
 }
 
-/// The basename of a file reference, folded for comparison.
-fn file_key(reference: &str) -> String {
-    // A file-name match key, never shown: it must not follow the UI language.
-    // ast-grep-ignore: no-case-in-view
-    reference
-        .rsplit(['/', '\\'])
-        .next()
-        .unwrap_or(reference)
-        .to_lowercase()
-}
-
-/// Whether the project tree marks the file `reference` names as a missing
-/// child sheet. The tree's facts come from the off-thread file probe, so
-/// the view reads no disk; until a probe answers, a file counts as present.
+/// Whether the project tree marks the resolved path `file` as a missing child
+/// sheet, compared under each project's case rule. The tree's facts come from
+/// the off-thread file probe, so nothing here reads the disk; until a probe
+/// answers, a file counts as present.
 pub(crate) fn sheet_file_missing(
     projects: &[crate::panels::ProjectPanelInfo],
-    reference: &str,
+    file: &std::path::Path,
 ) -> bool {
-    projects
-        .iter()
-        .any(|p| rows_mark_missing(&p.sheets, reference))
+    let file = crate::app::project_sheets::lexically_normalize(file);
+    projects.iter().any(|p| {
+        let key = crate::app::project_sheets::fold_key(&file, p.case_fold);
+        rows_mark_missing(&p.sheets, &key)
+    })
 }
 
-/// Whether `rows` (or their children) hold a missing child reference to
-/// the file `reference` names, matched by file name.
-fn rows_mark_missing(rows: &[crate::panels::SheetInfo], reference: &str) -> bool {
-    fn walk(rows: &[crate::panels::SheetInfo], key: &str) -> bool {
-        rows.iter().any(|row| {
-            (row.is_child_reference && row.missing && file_key(&row.filename) == key)
-                || walk(&row.children, key)
+/// Whether `rows` (or their children) hold a missing child reference whose
+/// resolved file has the comparison key `key`.
+fn rows_mark_missing(rows: &[crate::panels::SheetInfo], key: &str) -> bool {
+    !key.is_empty()
+        && rows.iter().any(|row| {
+            (row.is_child_reference && row.missing && row.file_key == key)
+                || rows_mark_missing(&row.children, key)
         })
-    }
-    let key = file_key(reference);
-    !key.is_empty() && walk(rows, &key)
 }
 
 /// The error banner of a sheet symbol with no file: what is missing, and
@@ -586,6 +576,12 @@ mod tests {
     use super::*;
     use crate::panels::SheetInfo;
 
+    /// The comparison key of `path`, on a volume that ignores case.
+    fn key(path: &str) -> String {
+        let path = crate::app::project_sheets::lexically_normalize(std::path::Path::new(path));
+        crate::app::project_sheets::fold_key(&path, crate::app::CaseFold::case_only())
+    }
+
     fn info(filename: &str, missing: bool, child: bool) -> SheetInfo {
         SheetInfo {
             name: filename.into(),
@@ -598,6 +594,7 @@ mod tests {
             is_active: false,
             missing,
             is_child_reference: child,
+            file_key: key(filename),
             in_project_list: false,
             unreadable: false,
             children: Vec::new(),
@@ -611,21 +608,39 @@ mod tests {
     }
 
     /// Mockup row 46: the banner shows only for a child reference the probe found
-    /// absent, matched by its file name.
+    /// absent, matched by its resolved path under the project's case rule.
     #[test]
     fn the_missing_banner_shows_only_when_the_file_is_absent() {
         let absent = tree(info("debug.snxsch", true, true));
-        assert!(rows_mark_missing(&absent, "debug.snxsch"));
-        assert!(rows_mark_missing(&absent, "sub/Debug.snxsch"));
-        assert!(!rows_mark_missing(&absent, "power.snxsch"));
+        assert!(rows_mark_missing(&absent, &key("debug.snxsch")));
+        assert!(rows_mark_missing(&absent, &key("Debug.snxsch")));
+        assert!(
+            !rows_mark_missing(&absent, &key("sub/Debug.snxsch")),
+            "the same name in another folder is another file"
+        );
+        assert!(!rows_mark_missing(&absent, &key("power.snxsch")));
         assert!(!rows_mark_missing(&absent, ""));
         let present = tree(info("debug.snxsch", false, true));
-        assert!(!rows_mark_missing(&present, "debug.snxsch"));
+        assert!(!rows_mark_missing(&present, &key("debug.snxsch")));
         let project_page = tree(info("debug.snxsch", true, false));
         assert!(
-            !rows_mark_missing(&project_page, "debug.snxsch"),
+            !rows_mark_missing(&project_page, &key("debug.snxsch")),
             "a missing project page is not a sheet symbol's file"
         );
+    }
+
+    /// #2847: a healthy `a/debug.snxsch` is not marked because
+    /// `b/debug.snxsch` is missing.
+    #[test]
+    fn a_missing_file_does_not_mark_the_same_name_in_another_folder() {
+        let mut root = info("main.snxsch", false, false);
+        root.children = vec![
+            info("a/debug.snxsch", false, true),
+            info("b/debug.snxsch", true, true),
+        ];
+        let rows = vec![root];
+        assert!(!rows_mark_missing(&rows, &key("a/debug.snxsch")));
+        assert!(rows_mark_missing(&rows, &key("b/debug.snxsch")));
     }
 
     /// #2847: Open Sheet sends nothing while the file is missing.

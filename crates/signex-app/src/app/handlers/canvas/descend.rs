@@ -29,9 +29,19 @@ pub(super) fn log_missing_sheet_refused(path: &std::path::Path) {
 }
 
 impl Signex {
-    /// Open Sheet (double-click, context menu, Enter on a selection): open the
-    /// file `sheet_symbol` references and record that placement. A missing
-    /// file is refused with its reason; Create Sheet is its own action.
+    /// The file a sheet symbol on the sheet at `parent` resolves to. Lexical
+    /// only: it reads no disk, and a refused reference has none.
+    pub(crate) fn child_sheet_file(
+        parent: &std::path::Path,
+        filename: &str,
+    ) -> Option<std::path::PathBuf> {
+        crate::app::project_sheets::resolve_child_reference_quiet(parent.parent()?, filename).ok()
+    }
+
+    /// Open Sheet (double-click, context menu, Enter on a selection, the
+    /// harness panel's Go to): open the file `sheet_symbol` references and
+    /// record that placement. A missing file is refused with its reason;
+    /// Create Sheet is its own action.
     pub(crate) fn open_sheet_through_symbol(
         &mut self,
         sheet_symbol: Uuid,
@@ -50,8 +60,9 @@ impl Signex {
         self.descend(sheet_symbol, filename, OnMissingFile::OfferCreate)
     }
 
-    /// Whether the first selected sheet symbol in `window` is one the project
-    /// tree marks as missing. Reads only the probed facts, never the disk.
+    /// Whether the file of the first selected sheet symbol in `window` is one
+    /// the project tree marks as missing. Reads only the probed facts, never
+    /// the disk.
     pub(crate) fn selected_sheet_file_missing(&self, window: iced::window::Id) -> bool {
         let canvas = self.interaction_state.canvas_for_window(window);
         let Some(item) = canvas
@@ -61,16 +72,20 @@ impl Signex {
         else {
             return false;
         };
-        let Some(engine) = self
+        let Some(parent) = self
             .document_state
-            .engine_for_window(window, &self.ui_state)
+            .sheet_path_for_window(window, &self.ui_state)
         else {
+            return false;
+        };
+        let Some(engine) = self.document_state.engines.get(parent) else {
             return false;
         };
         let projects = &self.panel_ctx_for(window).projects;
         (engine.document().child_sheets.iter())
             .find(|sheet| sheet.uuid == item.uuid)
-            .is_some_and(|sheet| crate::panels::sheet_file_missing(projects, &sheet.filename))
+            .and_then(|sheet| Self::child_sheet_file(parent, &sheet.filename))
+            .is_some_and(|file| crate::panels::sheet_file_missing(projects, &file))
     }
 
     /// Show the file `sheet_symbol` references and record that placement. A
