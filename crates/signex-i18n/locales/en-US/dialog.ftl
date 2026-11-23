@@ -482,6 +482,8 @@ dialog-smart-paste-kept-power = kept · power net
 dialog-smart-paste-joins = { $net } (joins original)
 # $names lists the rewritten net names that already exist.
 dialog-smart-paste-names-taken = Smart Paste stopped: { $names } already exists, so the nets would join. Change the pattern or Start n at.
+# $sheets lists the project sheets that could not be read.
+dialog-smart-paste-sheet-unread = Smart Paste stopped: { $sheets } could not be read, so its net names are unknown and a rewritten net could join one. Fix the sheet, or keep the net names.
 dialog-smart-paste-preview = Preview
 dialog-smart-paste-copy-count = { $count ->
     [one] 1 copy

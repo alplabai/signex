@@ -249,9 +249,97 @@ fn app_with_a_compile(path: &std::path::Path) -> Signex {
             paths: std::collections::HashMap::from([(key, path.to_path_buf())]),
             compiled_at: "12:41".to_string(),
             stale: Default::default(),
+            has_unread_sheets: false,
+            unread_paths: Vec::new(),
+            bare_links_missing: Vec::new(),
         },
     );
     app
+}
+
+/// #2742: the compile tells a sheet it could not read from one that is gone.
+#[test]
+fn a_compile_tells_an_unreadable_sheet_from_an_absent_one() {
+    let dir = tempfile::tempdir().expect("dir");
+    std::fs::write(dir.path().join("bad.snxsch"), "not a sheet").expect("seed");
+
+    assert!(compile_of(dir.path(), &["bad.snxsch"], &[]).has_unread_sheets);
+    // A sheet symbol still places the missing file (Caner, 2026-11-23).
+    assert!(compile_of(dir.path(), &["gone.snxsch"], &[]).has_unread_sheets);
+}
+
+/// `top.snxsch`, open, with a sheet symbol per `children`, and `pages` as the
+/// project's declared pages.
+fn compile_of(dir: &std::path::Path, children: &[&str], pages: &[&str]) -> super::job::Compiled {
+    use crate::app::handlers::menu::export::tests::sheet_with_net;
+    compile_sheet(dir, sheet_with_net("R1", "N", children), pages)
+}
+
+/// `sheet`, open as `top.snxsch`, compiled with `pages` declared.
+fn compile_sheet(
+    dir: &std::path::Path,
+    sheet: SchematicSheet,
+    pages: &[&str],
+) -> super::job::Compiled {
+    let root = dir.join("top.snxsch");
+    let (mut app, _task) = Signex::new();
+    let job = super::job::CompileJob {
+        project: app.document_state.mint_project_id(),
+        generation: 1,
+        open: [(root.clone(), sheet)].into_iter().collect(),
+        pages: pages.iter().map(|page| dir.join(page)).collect(),
+        root,
+        fold: Default::default(),
+        project_dir: dir.to_path_buf(),
+        naming: Default::default(),
+    };
+    job.run().result.expect("the root compiles")
+}
+
+/// #2742: a missing file no sheet symbol places is really gone, so its row
+/// may leave the table.
+#[test]
+fn a_missing_page_no_sheet_symbol_places_counts_as_removed() {
+    let dir = tempfile::tempdir().expect("dir");
+
+    assert!(!compile_of(dir.path(), &[], &["gone.snxsch"]).has_unread_sheets);
+}
+
+/// #2742: a sheet symbol whose file escapes its folder still references a
+/// sheet the walk refused, so that sheet's row is not known to be gone.
+#[test]
+fn a_refused_child_reference_counts_as_unread() {
+    let parent = tempfile::tempdir().expect("dir");
+    let dir = parent.path().join("project");
+    std::fs::create_dir(&dir).expect("folder");
+
+    assert!(compile_of(&dir, &["../power.snxsch"], &[]).has_unread_sheets);
+}
+
+/// #2742: with a sheet unread, the job carries which bare contents links have
+/// no file beside their table; a complete compile does not look.
+#[test]
+fn the_compile_job_checks_bare_contents_links_on_disk_only_with_a_sheet_unread() {
+    use crate::app::handlers::menu::export::tests::sheet_with_net;
+    use signex_types::schematic::{SchDrawing, SchTable, TableSource};
+    let dir = tempfile::tempdir().expect("dir");
+    std::fs::write(dir.path().join("bad.snxsch"), "not a sheet").expect("seed");
+    std::fs::write(dir.path().join("beside.snxsch"), "x").expect("seed");
+    let with_table = |children: &[&str]| {
+        let mut table =
+            SchTable::new_typed(Uuid::from_u128(1), signex_types::schematic::Point::ZERO);
+        table.source = TableSource::ProjectSheets { per_channel: true };
+        table.links = vec!["beside.snxsch".to_string(), "moved.snxsch".to_string()];
+        let mut sheet = sheet_with_net("R1", "N", children);
+        sheet.drawings.push(SchDrawing::Table(table));
+        sheet
+    };
+
+    let unread = compile_sheet(dir.path(), with_table(&["bad.snxsch"]), &[]);
+    let complete = compile_sheet(dir.path(), with_table(&[]), &[]);
+
+    assert_eq!(unread.bare_links_missing, [dir.path().join("moved.snxsch")]);
+    assert!(complete.bare_links_missing.is_empty());
 }
 
 #[test]

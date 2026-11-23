@@ -221,6 +221,9 @@ impl Signex {
                 paths: compiled.paths.clone(),
                 compiled_at,
                 stale: Default::default(),
+                has_unread_sheets: compiled.has_unread_sheets,
+                unread_paths: compiled.unread_paths.clone(),
+                bare_links_missing: compiled.bare_links_missing.clone(),
             },
         );
         let ui = &mut self.ui_state.compiled_design;

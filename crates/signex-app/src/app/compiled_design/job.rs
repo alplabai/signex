@@ -41,6 +41,13 @@ pub struct CompileOutcome {
 pub struct Compiled {
     pub design: CompiledDesign,
     pub paths: HashMap<SheetKey, PathBuf>,
+    /// A sheet of the design was not read (`app::unread_sheets`).
+    pub has_unread_sheets: bool,
+    /// Those sheets.
+    pub unread_paths: Vec<PathBuf>,
+    /// With a sheet unread: the bare contents links with no file beside
+    /// their table, so they can only be legacy links to another folder.
+    pub bare_links_missing: Vec<PathBuf>,
 }
 
 impl CompileJob {
@@ -86,9 +93,18 @@ impl CompileJob {
             roots: &roots,
         };
         let design = signex_net::compile_design(&project, &self.naming);
+        let unread_paths = crate::app::unread_sheets::unread_sheets(&set);
+        let bare_links_missing = if unread_paths.is_empty() {
+            Vec::new()
+        } else {
+            crate::app::unread_sheets::bare_links_missing_on_disk(&self.open, self.fold)
+        };
         let compiled = Compiled {
             design,
             paths: graph.paths.clone(),
+            has_unread_sheets: !unread_paths.is_empty(),
+            unread_paths,
+            bare_links_missing,
         };
         outcome(Ok(compiled), warnings)
     }

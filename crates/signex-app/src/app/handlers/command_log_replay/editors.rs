@@ -9,7 +9,7 @@ use iced::Task;
 use signex_sketch::id::SketchEntityId;
 
 use super::book::ReplayInput;
-use super::run::no_change;
+use super::run::{no_change, refused};
 use super::scope::EditFamily;
 use crate::app::command::CommandOutcome;
 use crate::app::{FootprintDocument, Message, Signex, SymbolDocument};
@@ -383,7 +383,7 @@ impl Signex {
     ) -> (CommandOutcome, Task<Message>) {
         let before = self.editor_history(path);
         let Some(held) = self.put_editor_targets(path, targets) else {
-            return (CommandOutcome::disabled(no_change()), Task::none());
+            return (refused(no_change()), Task::none());
         };
         let tasks: Vec<Task<Message>> = messages
             .iter()
@@ -393,7 +393,7 @@ impl Signex {
         self.give_back_editor_selection(path, held);
         self.refresh_panel_ctx();
         let outcome = if self.editor_history(path) == before {
-            CommandOutcome::disabled(no_change())
+            refused(no_change())
         } else {
             CommandOutcome::Ran
         };

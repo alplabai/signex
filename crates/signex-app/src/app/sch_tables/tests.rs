@@ -429,3 +429,311 @@ fn contents_pages_follow_the_channel_choice() {
     assert_eq!(per_sheet.len(), 2);
     assert_eq!(per_sheet[1].file, "buck_channel.snxsch");
 }
+
+fn contents_entry(page: usize, name: &str, title: &str, rev: &str) -> rows::ContentsEntry {
+    rows::ContentsEntry {
+        page,
+        sheet: name.into(),
+        title: title.into(),
+        revision: rev.into(),
+        last_changed: String::new(),
+        file: format!("{name}.snxsch"),
+    }
+}
+
+/// A contents table listing `top`, `bad` (Title Buck, Rev B) and `leaf`.
+fn contents_table() -> SchTable {
+    let mut table = SchTable::new_typed(uuid::Uuid::from_u128(9), Point::new(0.0, 0.0));
+    table.source = TableSource::ProjectSheets { per_channel: true };
+    table.columns = SchTable::columns_for(&table.source);
+    let entries = [
+        contents_entry(1, "top", "Top", "A"),
+        contents_entry(2, "bad", "Buck", "B"),
+        contents_entry(3, "leaf", "Leaf", "C"),
+    ];
+    (table.rows, table.links) = rows::contents_table_rows(&entries, &table.columns);
+    table
+}
+
+/// What a compile that could not read `bad` lists: `leaf` moves up a page.
+fn pages_without_bad(leaf_title: &str) -> refresh::Contents {
+    vec![
+        contents_entry(1, "top", "Top", "A"),
+        contents_entry(2, "leaf", leaf_title, "C"),
+    ]
+}
+
+fn title_cells(table: &SchTable) -> Vec<String> {
+    let title = table
+        .columns
+        .iter()
+        .position(|c| c.key == signex_types::schematic::sheet_columns::TITLE)
+        .expect("a Title column");
+    table.rows.iter().map(|r| r[title].clone()).collect()
+}
+
+/// The refresh after a compile that left a sheet unread.
+fn rebuilt_unread(
+    sheet: &SchematicSheet,
+    table: &SchTable,
+    pages: &dyn Fn(bool) -> Option<refresh::Contents>,
+) -> Option<SchTable> {
+    let unread = rows::UnreadSheets::default();
+    refresh::rebuilt_table(sheet, table, pages, Some(&unread))
+}
+
+/// #2742: with a sheet unread nothing changed, so there is no edit at all.
+#[test]
+fn an_unread_sheet_keeps_its_row_and_the_refresh_changes_nothing() {
+    let table = contents_table();
+    let sheet = SchematicSheet::default();
+    let pages = |_: bool| Some(pages_without_bad("Leaf"));
+    assert_eq!(
+        rebuilt_unread(&sheet, &table, &pages),
+        None,
+        "same rows, same page numbers"
+    );
+}
+
+/// #2742: the readable rows refresh around the kept one, which stays in its
+/// place with its Title and Rev.
+#[test]
+fn readable_rows_refresh_around_an_unread_sheets_row() {
+    let table = contents_table();
+    let sheet = SchematicSheet::default();
+    let pages = |_: bool| Some(pages_without_bad("Leaf v2"));
+    let next = rebuilt_unread(&sheet, &table, &pages).expect("leaf changed");
+    assert_eq!(title_cells(&next), ["Top", "Buck", "Leaf v2"]);
+    assert_eq!(next.rows[1], table.rows[1], "the kept row is unchanged");
+    assert_eq!(next.links, table.links);
+    assert_eq!(
+        next.cell(2, 0),
+        "3",
+        "leaf keeps its page after the kept row"
+    );
+}
+
+/// #2742: with every sheet read, a sheet no longer in the project leaves.
+#[test]
+fn a_removed_sheet_leaves_the_table_when_every_sheet_was_read() {
+    let table = contents_table();
+    let sheet = SchematicSheet::default();
+    let pages = |_: bool| Some(pages_without_bad("Leaf"));
+    let next = refresh::rebuilt_table(&sheet, &table, &pages, None).expect("a row left");
+    assert_eq!(title_cells(&next), ["Top", "Leaf"]);
+    assert_eq!(next.links, ["top.snxsch", "leaf.snxsch"]);
+}
+
+/// #2742: an old bare link naming a sheet the compile reached is that sheet,
+/// not a second row, while another sheet is unread.
+#[test]
+fn a_bare_link_to_a_reached_sheet_is_not_kept_as_a_second_row() {
+    let mut table = contents_table();
+    table.links[2] = "leaf.snxsch".into();
+    let mut fresh = pages_without_bad("Leaf");
+    fresh[1].file = "power/leaf.snxsch".into();
+    let sheet = SchematicSheet::default();
+    let pages = |_: bool| Some(fresh.clone());
+    // The compile found no `leaf.snxsch` beside the table: the link is legacy.
+    let missing = [std::path::PathBuf::from("/p/leaf.snxsch")];
+    let unread = rows::UnreadSheets {
+        dir: Some(std::path::Path::new("/p")),
+        missing_beside: &missing,
+        ..Default::default()
+    };
+    let next = refresh::rebuilt_table(&sheet, &table, &pages, Some(&unread))
+        .expect("the link is rewritten");
+    assert_eq!(title_cells(&next), ["Top", "Buck", "Leaf"]);
+    assert_eq!(next.links[2], "power/leaf.snxsch");
+}
+
+fn table_of(entries: &[rows::ContentsEntry]) -> SchTable {
+    let mut table = SchTable::new_typed(uuid::Uuid::from_u128(9), Point::new(0.0, 0.0));
+    table.source = TableSource::ProjectSheets { per_channel: true };
+    table.columns = SchTable::columns_for(&table.source);
+    (table.rows, table.links) = rows::contents_table_rows(entries, &table.columns);
+    table
+}
+
+fn entry_of(page: usize, name: &str, file: &str, title: &str) -> rows::ContentsEntry {
+    rows::ContentsEntry {
+        file: file.into(),
+        ..contents_entry(page, name, title, "A")
+    }
+}
+
+/// #2742: two old rows store the same bare link for different sheets. The
+/// compile reaches only the second, so the first keeps its row.
+#[test]
+fn a_bare_link_takes_a_fresh_row_only_for_the_same_sheet_name() {
+    let table = table_of(&[
+        entry_of(1, "top", "top.snxsch", "Top"),
+        entry_of(2, "A leaf", "leaf.snxsch", "Leaf A"),
+        entry_of(3, "B leaf", "leaf.snxsch", "Leaf B"),
+    ]);
+    let fresh = vec![
+        entry_of(1, "top", "top.snxsch", "Top"),
+        entry_of(2, "B leaf", "b/leaf.snxsch", "Leaf B"),
+    ];
+    let sheet = SchematicSheet::default();
+    let pages = |_: bool| Some(fresh.clone());
+    let missing = [std::path::PathBuf::from("/p/leaf.snxsch")];
+    let unread = rows::UnreadSheets {
+        dir: Some(std::path::Path::new("/p")),
+        missing_beside: &missing,
+        ..Default::default()
+    };
+    let next = refresh::rebuilt_table(&sheet, &table, &pages, Some(&unread))
+        .expect("the reached row takes its new link");
+    assert_eq!(title_cells(&next), ["Top", "Leaf A", "Leaf B"]);
+    assert_eq!(next.links[1], "leaf.snxsch");
+    assert_eq!(next.links[2], "b/leaf.snxsch");
+}
+
+/// #2742: `top` places readable `A` and unread `B`, both place `common`. The
+/// compile lists `common` once, which is one of the two old rows.
+#[test]
+fn a_reused_file_keeps_the_row_of_its_unread_placement() {
+    let table = table_of(&[
+        entry_of(1, "top", "top.snxsch", "Top"),
+        entry_of(2, "A", "a.snxsch", "Sheet A"),
+        entry_of(3, "common", "common.snxsch", "Common in A"),
+        entry_of(4, "B", "b.snxsch", "Sheet B"),
+        entry_of(5, "common", "common.snxsch", "Common in B"),
+    ]);
+    let fresh = vec![
+        entry_of(1, "top", "top.snxsch", "Top"),
+        entry_of(2, "A", "a.snxsch", "Sheet A"),
+        entry_of(3, "common", "common.snxsch", "Common in A"),
+    ];
+    let sheet = SchematicSheet::default();
+    let pages = |_: bool| Some(fresh.clone());
+
+    assert_eq!(
+        rebuilt_unread(&sheet, &table, &pages),
+        None,
+        "every row and page number stays"
+    );
+}
+
+/// #2742: the channels of a repeat under an unread parent keep their rows when
+/// the same file's channels are reached through a readable parent.
+#[test]
+fn channel_rows_under_an_unread_parent_are_kept_one_for_one() {
+    let table = table_of(&[
+        entry_of(1, "top", "top.snxsch", "Top"),
+        entry_of(2, "buck · CH1", "buck.snxsch", "Read CH1"),
+        entry_of(3, "buck · CH2", "buck.snxsch", "Read CH2"),
+        entry_of(4, "B", "b.snxsch", "Sheet B"),
+        entry_of(5, "buck · CH1", "buck.snxsch", "Unread CH1"),
+        entry_of(6, "buck · CH2", "buck.snxsch", "Unread CH2"),
+    ]);
+    let fresh = vec![
+        entry_of(1, "top", "top.snxsch", "Top"),
+        entry_of(2, "buck · CH1", "buck.snxsch", "Read CH1"),
+        entry_of(3, "buck · CH2", "buck.snxsch", "Read CH2"),
+    ];
+    let sheet = SchematicSheet::default();
+    let pages = |_: bool| Some(fresh.clone());
+
+    assert_eq!(rebuilt_unread(&sheet, &table, &pages), None);
+}
+
+/// `/p/bad.snxsch`, beside the table, is the sheet the compile could not read.
+fn root_bad_unread<'a>(paths: &'a [std::path::PathBuf]) -> rows::UnreadSheets<'a> {
+    rows::UnreadSheets {
+        dir: Some(std::path::Path::new("/p")),
+        paths,
+        missing_beside: &[],
+        fold: Default::default(),
+    }
+}
+
+/// #2742: `bad.snxsch` exists beside the table, below a parent the compile
+/// could not read, so the compile neither lists it nor knows it as unread. A
+/// same-named sheet newly reached in another folder gets its own row.
+#[test]
+fn a_bare_link_to_a_file_beside_the_table_stays_below_an_unread_parent() {
+    let table = table_of(&[entry_of(1, "bad", "bad.snxsch", "Root title")]);
+    let fresh = vec![entry_of(1, "bad", "power/bad.snxsch", "Power title")];
+    let paths = [std::path::PathBuf::from("/p/parent.snxsch")];
+    let unread = root_bad_unread(&paths);
+    let sheet = SchematicSheet::default();
+    let pages = |_: bool| Some(fresh.clone());
+
+    let next = refresh::rebuilt_table(&sheet, &table, &pages, Some(&unread)).expect("a new row");
+
+    assert_eq!(title_cells(&next), ["Root title", "Power title"]);
+    assert_eq!(next.links, ["bad.snxsch", "power/bad.snxsch"]);
+}
+
+/// #2742: a table in the root lists `bad.snxsch` and `power/bad.snxsch`; the
+/// root file is unread and only the other is reached. The bare link is the
+/// sheet beside the table, so its row stays.
+#[test]
+fn a_bare_link_beside_the_table_is_not_a_same_named_sheet_in_another_folder() {
+    let table = table_of(&[
+        entry_of(1, "root bad", "bad.snxsch", "Root title"),
+        entry_of(2, "power bad", "power/bad.snxsch", "Power title"),
+    ]);
+    let fresh = vec![entry_of(1, "power bad", "power/bad.snxsch", "Power title")];
+    let paths = [std::path::PathBuf::from("/p/bad.snxsch")];
+    let unread = root_bad_unread(&paths);
+    let sheet = SchematicSheet::default();
+    let pages = |_: bool| Some(fresh.clone());
+
+    assert_eq!(
+        refresh::rebuilt_table(&sheet, &table, &pages, Some(&unread)),
+        None
+    );
+}
+
+/// #2742: the same when the table has no row yet for the sheet in the other
+/// folder, so no exact link takes the fresh row first.
+#[test]
+fn a_bare_link_to_an_unread_sheet_does_not_take_a_new_sheets_row() {
+    let table = table_of(&[entry_of(1, "bad", "bad.snxsch", "Root title")]);
+    let fresh = vec![entry_of(1, "bad", "power/bad.snxsch", "Power title")];
+    let paths = [std::path::PathBuf::from("/p/bad.snxsch")];
+    let unread = root_bad_unread(&paths);
+    let sheet = SchematicSheet::default();
+    let pages = |_: bool| Some(fresh.clone());
+
+    let next = refresh::rebuilt_table(&sheet, &table, &pages, Some(&unread)).expect("a new row");
+
+    assert_eq!(title_cells(&next), ["Root title", "Power title"]);
+    assert_eq!(next.links, ["bad.snxsch", "power/bad.snxsch"]);
+}
+
+/// #2742: through the real refresh, a compile with an unread sheet pushes no
+/// undo step and leaves the table as it was.
+#[test]
+fn the_refresh_after_a_compile_with_an_unread_sheet_pushes_no_undo_step() {
+    use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
+    let mut app = app_workspace("/w/toc-unread", &["contents.snxsch"]);
+    let path = std::path::PathBuf::from("/w/toc-unread/contents.snxsch");
+    let table = contents_table();
+    let mut sheet = SchematicSheet::default();
+    sheet.drawings.push(SchDrawing::Table(table.clone()));
+    open_with(&mut app.document_state, &path, sheet);
+    let project = app.document_state.projects[0].id;
+    app.document_state.compiled_design.results.insert(
+        project,
+        crate::app::core::compiled_design::CompiledResult {
+            design: std::sync::Arc::new(signex_net::CompiledDesign::default()),
+            paths: Default::default(),
+            compiled_at: "12:41".to_string(),
+            stale: Default::default(),
+            has_unread_sheets: true,
+            unread_paths: Vec::new(),
+            bare_links_missing: Vec::new(),
+        },
+    );
+    let steps = app.document_state.engines[&path].undo_position();
+
+    app.refresh_bound_tables(Some(project));
+
+    let engine = &app.document_state.engines[&path];
+    assert_eq!(engine.undo_position(), steps);
+    assert_eq!(engine.document().drawings[0], SchDrawing::Table(table));
+}

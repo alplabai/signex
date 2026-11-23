@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 
 use signex_types::schematic::{SchDrawing, SchTable, SchematicSheet, TableRefresh, TableSource};
 
-use super::rows::{ContentsEntry, contents_table_rows, pin_table_rows};
+use super::rows::{
+    ContentsEntry, UnreadSheets, contents_table_rows, keeping_unreached_rows, pin_table_rows,
+};
 use crate::app::Signex;
 use crate::app::handlers::canvas::link_from;
 use crate::app::mutation_gateway::MutationOutcome;
@@ -17,11 +19,14 @@ use crate::app::state::project_case::fold_of;
 pub(crate) type Contents = Vec<ContentsEntry>;
 
 /// `table` rebuilt from its source on `sheet`; `None` when it is typed,
-/// switched off, or its source is gone (the rows stay as they were).
+/// switched off, its source is gone (the rows stay as they were) or nothing
+/// changed. `unread`: the sheets the compile did not read, when there are
+/// any, so a contents row it did not reach stays (#2742).
 pub(crate) fn rebuilt_table(
     sheet: &SchematicSheet,
     table: &SchTable,
     contents: &dyn Fn(bool) -> Option<Contents>,
+    unread: Option<&UnreadSheets<'_>>,
 ) -> Option<SchTable> {
     if table.refresh == TableRefresh::Off {
         return None;
@@ -36,6 +41,10 @@ pub(crate) fn rebuilt_table(
         TableSource::ProjectSheets { per_channel } => {
             let entries = contents(*per_channel)?;
             let (rows, links) = contents_table_rows(&entries, &table.columns);
+            let (rows, links) = match unread {
+                Some(unread) => keeping_unreached_rows(table, rows, links, unread),
+                None => (rows, links),
+            };
             next.rows = rows;
             next.links = links;
         }
@@ -48,12 +57,13 @@ pub(crate) fn rebuilt_table(
 pub(crate) fn refresh_commands(
     sheet: &SchematicSheet,
     contents: &dyn Fn(bool) -> Option<Contents>,
+    unread: Option<&UnreadSheets<'_>>,
 ) -> Vec<signex_engine::Command> {
     sheet
         .drawings
         .iter()
         .filter_map(|d| match d {
-            SchDrawing::Table(t) => rebuilt_table(sheet, t, contents),
+            SchDrawing::Table(t) => rebuilt_table(sheet, t, contents, unread),
             _ => None,
         })
         .map(|t| signex_engine::Command::UpdateSchDrawing {
@@ -83,6 +93,16 @@ impl Signex {
             .cloned()
             .collect();
         paths.sort();
+        let not_read = project
+            .and_then(|id| self.document_state.compiled_design.results.get(&id))
+            .filter(|result| result.has_unread_sheets)
+            .map(|result| {
+                (
+                    result.unread_paths.as_slice(),
+                    result.bare_links_missing.as_slice(),
+                )
+            });
+        let fold = fold_of(project.and_then(|id| self.document_state.project_by_id(id)));
         let edits: Vec<(PathBuf, Vec<signex_engine::Command>)> = paths
             .into_iter()
             .filter_map(|path| {
@@ -95,7 +115,13 @@ impl Signex {
                             .and_then(|id| self.compiled_contents_of(id, dir))
                             .map(|c| c.pages(per_channel))
                     };
-                    refresh_commands(engine.document(), &pages)
+                    let unread = not_read.map(|(paths, missing_beside)| UnreadSheets {
+                        dir,
+                        paths,
+                        missing_beside,
+                        fold,
+                    });
+                    refresh_commands(engine.document(), &pages, unread.as_ref())
                 };
                 (!commands.is_empty()).then_some((path, commands))
             })

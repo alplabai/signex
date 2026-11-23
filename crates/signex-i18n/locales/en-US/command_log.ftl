@@ -74,6 +74,8 @@ command-log-replay-numbers-unread = Not replayed: the copy needs numbers from th
 command-log-replay-target-gone = Not replayed: { $count } recorded targets are no longer in { $document }: { $missing }
 command-log-replay-document-closed = Not replayed: { $document } is not open.
 command-log-replay-document-busy = Not replayed: { $document } cannot be brought forward right now.
+# $reason is the refusal of the edit itself, as the engine or handler worded it.
+command-log-replay-refused = { $reason }
 command-log-client-window = Signex window 1
 command-log-client-undocked = Signex window of { $document }
 command-log-client-pid = pid { $pid }

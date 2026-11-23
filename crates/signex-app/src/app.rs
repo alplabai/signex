@@ -111,6 +111,7 @@ pub(crate) mod stitched_netlist;
 mod symbol_history;
 mod undo_depth;
 mod undo_groups;
+pub(crate) mod unread_sheets;
 pub(crate) mod update_pcb;
 pub use undo_groups::{UndoGroupKind, UndoGroupSheets};
 pub(crate) mod view;

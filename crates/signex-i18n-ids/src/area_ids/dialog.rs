@@ -183,6 +183,7 @@ define_ids! {
     SMART_PASTE_KEPT_POWER = "dialog-smart-paste-kept-power";
     SMART_PASTE_JOINS = "dialog-smart-paste-joins";
     SMART_PASTE_NAMES_TAKEN = "dialog-smart-paste-names-taken";
+    SMART_PASTE_SHEET_UNREAD = "dialog-smart-paste-sheet-unread";
     SMART_PASTE_PREVIEW = "dialog-smart-paste-preview";
     SMART_PASTE_COPY_COUNT = "dialog-smart-paste-copy-count";
     SMART_PASTE_DRAG_HINT = "dialog-smart-paste-drag-hint";

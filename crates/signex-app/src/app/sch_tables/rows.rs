@@ -2,10 +2,15 @@
 //! the project's pages. Pure functions of plain data; `refresh` feeds them.
 
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use signex_types::schematic::{
     PinSort, SchTable, SchematicSheet, TableColumn, pin_columns, sheet_columns,
 };
+
+use crate::app::project_sheets::lexically_normalize;
+use crate::app::state::scope::{CaseFold, path_key_with};
+use crate::app::unread_sheets::is_bare_link;
 
 /// One page of the contents table.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -187,6 +192,120 @@ pub(crate) fn contents_table_rows(
         .map(|e| columns.iter().map(|c| contents_cell(e, &c.key)).collect())
         .collect();
     let links = entries.iter().map(|e| e.file.clone()).collect();
+    (rows, links)
+}
+
+/// The sheets a compile did not read, seen from the sheet holding a table.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct UnreadSheets<'a> {
+    /// The folder of the sheet holding the table.
+    pub dir: Option<&'a Path>,
+    pub paths: &'a [PathBuf],
+    /// Bare links the compile job confirmed have no file in their table's
+    /// folder. Anything else may be a sheet there.
+    pub missing_beside: &'a [PathBuf],
+    pub fold: CaseFold,
+}
+
+impl UnreadSheets<'_> {
+    /// Whether `link`, resolved from the table's folder, is one of `paths`.
+    fn lists(&self, paths: &[PathBuf], link: &str) -> bool {
+        let Some(dir) = self.dir else {
+            return false;
+        };
+        let key = path_key_with(&lexically_normalize(&dir.join(link)), self.fold);
+        paths
+            .iter()
+            .any(|path| path_key_with(path, self.fold) == key)
+    }
+
+    /// Whether the bare `link` cannot be a sheet in the table's own folder.
+    fn is_legacy_link(&self, link: &str) -> bool {
+        self.lists(self.missing_beside, link) && !self.lists(self.paths, link)
+    }
+}
+
+/// Whether the stored link `old` is an old bare file name for the fresh link,
+/// which now has its folder.
+fn is_bare_form_of(old: &str, fresh: &str) -> bool {
+    is_bare_link(old) && Path::new(fresh).file_name().is_some_and(|name| name == old)
+}
+
+/// For each old row of `table`, whether a fresh row is that row. Each fresh
+/// row answers for one old row, so a file placed twice with one placement
+/// unread keeps the other's row. The closest match is taken first: same link
+/// and Sheet, same link, an old bare link, then Sheet for a row with no link.
+/// A bare link is also the normal form of a sheet beside the table, so it
+/// matches another folder only when it cannot be one: the Sheet cell agrees,
+/// the compile does not list that link, did not fail to read that file, and
+/// found no such file in the table's folder.
+fn rows_reached(
+    table: &SchTable,
+    rows: &[Vec<String>],
+    links: &[String],
+    sheet: Option<usize>,
+    unread: &UnreadSheets<'_>,
+) -> Vec<bool> {
+    let same_name = |old: usize, fresh: usize| {
+        let cell = |row: Option<&Vec<String>>| sheet.and_then(|c| row?.get(c).cloned());
+        let name = cell(table.rows.get(old));
+        name.is_some() && name == cell(rows.get(fresh))
+    };
+    let same_link = |old: usize, fresh: usize| table.link(old) == Some(links[fresh].as_str());
+    let bare_link = |old: usize, fresh: usize| {
+        table.link(old).is_some_and(|link| {
+            is_bare_form_of(link, &links[fresh])
+                && same_name(old, fresh)
+                && !links.iter().any(|listed| listed == link)
+                && unread.is_legacy_link(link)
+        })
+    };
+    let no_link = |old: usize, fresh: usize| table.link(old).is_none() && same_name(old, fresh);
+    let exact = |old: usize, fresh: usize| same_link(old, fresh) && same_name(old, fresh);
+    let passes: [&dyn Fn(usize, usize) -> bool; 4] = [&exact, &same_link, &bare_link, &no_link];
+    let mut reached = vec![false; table.rows.len()];
+    let mut free = vec![true; links.len()];
+    for accepts in passes {
+        for (old, is_reached) in reached.iter_mut().enumerate() {
+            if *is_reached {
+                continue;
+            }
+            if let Some(fresh) = (0..free.len()).find(|&f| free[f] && accepts(old, f)) {
+                free[fresh] = false;
+                *is_reached = true;
+            }
+        }
+    }
+    reached
+}
+
+/// `rows` and `links` with every row of `table` the compile did not reach put
+/// back at its place, unchanged but for its page number. For a compile that
+/// could not read a sheet, or met a sheet symbol whose file is missing: a row
+/// it did not reach may be that sheet or one below it, so it is not known to
+/// be gone.
+pub(crate) fn keeping_unreached_rows(
+    table: &SchTable,
+    mut rows: Vec<Vec<String>>,
+    mut links: Vec<String>,
+    unread: &UnreadSheets<'_>,
+) -> (Vec<Vec<String>>, Vec<String>) {
+    let column = |key: &str| table.columns.iter().position(|c| c.key == key);
+    let reached = rows_reached(table, &rows, &links, column(sheet_columns::SHEET), unread);
+    for (i, old) in table.rows.iter().enumerate() {
+        if !reached[i] {
+            let at = i.min(rows.len());
+            rows.insert(at, old.clone());
+            links.insert(at, table.link(i).unwrap_or_default().to_string());
+        }
+    }
+    if let Some(page) = column(sheet_columns::PAGE) {
+        for (i, row) in rows.iter_mut().enumerate() {
+            if let Some(cell) = row.get_mut(page) {
+                *cell = (i + 1).to_string();
+            }
+        }
+    }
     (rows, links)
 }
 

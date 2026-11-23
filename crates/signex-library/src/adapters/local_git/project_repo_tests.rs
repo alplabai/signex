@@ -27,6 +27,15 @@ fn commit_all(repo: &git2::Repository, message: &str) -> git2::Oid {
 fn repo_with_branch() -> (tempfile::TempDir, git2::Repository) {
     let dir = tempfile::tempdir().unwrap();
     let repo = git2::Repository::init(dir.path()).unwrap();
+    // Byte expectations below must not depend on the machine's git config.
+    repo.config()
+        .unwrap()
+        .open_level(git2::ConfigLevel::Local)
+        .unwrap()
+        .set_bool("core.autocrlf", false)
+        .unwrap();
+    drop(repo);
+    let repo = git2::Repository::open(dir.path()).unwrap();
     repo.set_head("refs/heads/main").unwrap();
     fs::write(dir.path().join(PROJECT), "project").unwrap();
     fs::write(dir.path().join("a.snxsch"), "main\n").unwrap();

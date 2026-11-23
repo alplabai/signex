@@ -382,6 +382,15 @@ fn left<'a>(
                 .boxed(),
         );
     }
+    let unread = state.unread_sheets_text();
+    if !unread.is_empty() {
+        body = body.push(
+            text(t!(i18n, ids::SMART_PASTE_SHEET_UNREAD, "sheets" => unread))
+                .size(TS.caption)
+                .color(ti(theme_tokens.error))
+                .boxed(),
+        );
+    }
     container(scrollable(body).height(Length::Fill))
         .width(Length::Fixed(LEFT_W))
         .height(Length::Fill)

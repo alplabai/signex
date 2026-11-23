@@ -5,9 +5,11 @@
 
 use signex_app::app::{EditMsg, Message, Signex};
 use signex_app::smart_paste::{NetChoice, PlaceMode, SmartPasteMsg};
-use signex_types::schematic::{Label, LabelType, Point};
+use signex_types::schematic::{ChildSheet, FillType, Label, LabelType, Point};
 
-use crate::paste_support::sheet::{app_with_sheet, click, populated_sheet, select};
+use crate::paste_support::sheet::{
+    app_with_sheet, app_with_sheet_at, click, populated_sheet, select,
+};
 use crate::paste_support::smart_paste_dialog;
 
 fn dialog(app: &mut Signex, msg: SmartPasteMsg) {
@@ -103,6 +105,149 @@ fn a_rewritten_name_that_exists_stops_the_paste_and_is_named() {
     assert!(state.can_paste(), "D0_3 is free");
     dialog(&mut app, SmartPasteMsg::PasteConfirmed);
     assert!(app.interaction_state.placement.is_some());
+}
+
+/// The project read for this dialog could not read `bad.snxsch`.
+fn with_an_unread_sheet(app: &mut Signex) -> std::path::PathBuf {
+    let bad = std::path::PathBuf::from("bad.snxsch");
+    let target = app.document_state.active_path.clone().expect("a sheet");
+    app.interaction_state.paste_unread_sheets = Some((target, vec![bad.clone()]));
+    bad
+}
+
+/// #2744: a rewritten name may join a net on a sheet that was not read, so
+/// Paste is off with the sheet named, and a direct Paste says so in Messages
+/// and leaves the dialog open with nothing on the cursor.
+#[test]
+fn an_unread_sheet_stops_a_paste_that_rewrites_a_net_and_is_named() {
+    let _ = signex_app::diagnostics::init_logging();
+    let before = signex_app::diagnostics::newest_entry_id();
+    let mut app = app_with_copy();
+    let labels = label_texts(&app);
+    smart_paste_dialog(&mut app, |app| {
+        let bad = with_an_unread_sheet(app);
+        dialog(app, SmartPasteMsg::NetsPicked(NetChoice::Rewrite));
+        let state = app.ui_state.smart_paste.as_ref().expect("open");
+        assert_eq!(state.unread_sheets_in_the_way(), [bad]);
+        assert!(!state.can_paste());
+    });
+    assert!(
+        app.interaction_state.placement.is_none(),
+        "nothing goes on the cursor"
+    );
+    assert!(app.ui_state.smart_paste.is_some(), "the dialog stays open");
+    assert_eq!(label_texts(&app), labels);
+    assert!(
+        signex_app::diagnostics::entries_since(before)
+            .entries
+            .iter()
+            .any(|e| e.message.contains("Smart Paste stopped") && e.message.contains("bad.snxsch")),
+        "Messages names the sheet"
+    );
+}
+
+/// #2744: Keep rewrites no net name, so it has nothing to collide with.
+#[test]
+fn an_unread_sheet_does_not_stop_a_paste_that_keeps_its_nets() {
+    let mut app = app_with_copy();
+    smart_paste_dialog(&mut app, |app| {
+        with_an_unread_sheet(app);
+        dialog(app, SmartPasteMsg::NetsPicked(NetChoice::Keep));
+        let state = app.ui_state.smart_paste.as_ref().expect("open");
+        assert!(state.can_paste());
+    });
+    assert!(app.interaction_state.placement.is_some());
+}
+
+/// R1 and `D0` copied on a sheet in `dir`, whose sheet symbol places
+/// `reference`.
+fn app_placing(dir: &std::path::Path, reference: &str) -> Signex {
+    let mut sheet = populated_sheet();
+    sheet.child_sheets.push(ChildSheet {
+        uuid: uuid::Uuid::now_v7(),
+        name: "child".to_string(),
+        filename: reference.to_string(),
+        position: Point::new(100.0, 100.0),
+        size: (20.0, 20.0),
+        stroke_width: 0.0,
+        fill: FillType::None,
+        stroke_color: None,
+        fill_color: None,
+        fields_autoplaced: false,
+        pins: Vec::new(),
+        instances: Vec::new(),
+    });
+    let mut app = app_with_sheet_at(dir.join("top.snxsch"), sheet);
+    select(&mut app, &[("R1", 1)], true);
+    let _ = app.update(Message::Edit(EditMsg::Copy));
+    app
+}
+
+/// #2744: a file a sheet symbol places that is missing, or whose reference is
+/// refused, has unknown net names: a rewriting paste stops and names it.
+#[test]
+fn a_placed_missing_or_refused_sheet_stops_a_rewriting_paste() {
+    let _ = signex_app::diagnostics::init_logging();
+    for (reference, named) in [
+        ("gone.snxsch", "gone.snxsch"),
+        ("../power.snxsch", "power.snxsch"),
+    ] {
+        let parent = tempfile::tempdir().expect("dir");
+        let dir = parent.path().join("project");
+        std::fs::create_dir(&dir).expect("folder");
+        let before = signex_app::diagnostics::newest_entry_id();
+        let mut app = app_placing(&dir, reference);
+
+        smart_paste_dialog(&mut app, |app| {
+            let state = app.ui_state.smart_paste.as_ref().expect("open");
+            assert!(!state.can_paste(), "{reference}");
+            assert!(state.unread_sheets_text().contains(named), "{reference}");
+        });
+
+        assert!(app.interaction_state.placement.is_none(), "{reference}");
+        assert!(app.ui_state.smart_paste.is_some(), "{reference}");
+        assert!(
+            signex_app::diagnostics::entries_since(before)
+                .entries
+                .iter()
+                .any(|e| e.message.contains("Smart Paste stopped") && e.message.contains(named)),
+            "Messages names {named}"
+        );
+    }
+}
+
+/// #2744: keeping the net names rewrites nothing, so the same sheet does not
+/// stop the paste.
+#[test]
+fn a_placed_missing_sheet_does_not_stop_a_paste_that_keeps_its_nets() {
+    let parent = tempfile::tempdir().expect("dir");
+    let mut app = app_placing(parent.path(), "gone.snxsch");
+    smart_paste_dialog(&mut app, |app| {
+        dialog(app, SmartPasteMsg::NetsPicked(NetChoice::Keep));
+    });
+    assert!(app.interaction_state.placement.is_some());
+}
+
+/// #2744: the headless and agent `smart_paste` places labels as copied. It
+/// rewrites no net name, so by the rule an unread sheet does not stop it.
+#[test]
+fn a_headless_smart_paste_rewrites_no_net_so_an_unread_sheet_does_not_stop_it() {
+    let mut app = app_with_copy();
+    app.ui_state.io = signex_app::io_ports::IoPorts::headless(Default::default());
+    let before = label_texts(&app).len();
+    let _ = app.update(Message::Edit(EditMsg::SmartPaste));
+    with_an_unread_sheet(&mut app);
+
+    crate::paste_support::answer(&mut app, signex_app::app::PasteIntent::SmartPaste, None);
+
+    let texts = label_texts(&app);
+    assert_eq!(texts.len(), before * 2, "the copy landed: {texts:?}");
+    assert_eq!(
+        texts[before..],
+        texts[..before],
+        "no net name was rewritten"
+    );
+    assert!(app.ui_state.smart_paste.is_none());
 }
 
 #[test]
