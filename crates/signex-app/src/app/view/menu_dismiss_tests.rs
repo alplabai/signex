@@ -163,7 +163,12 @@ fn a_right_press_outside_the_projects_menu_closes_it_and_reaches_the_canvas() {
 /// takes the pointer, so the minimize button still answers.
 #[test]
 fn a_paused_placement_leaves_the_window_buttons_working() {
+    use crate::chrome::controls::WindowControlsPlacement::Trailing;
     let (mut app, main) = app();
+    // The placement every platform draws itself: macOS's default leaves the
+    // buttons to the OS, so no widget of ours could answer there (#2739).
+    app.ui_state.window_controls_placement = Trailing;
+    app.ui_state.window_controls_placement_at_boot = Trailing;
     app.interaction_state.active_canvas_mut().placement_paused = true;
     assert!(app.placement_paused_overlay(main).is_some());
     let minimizes = |point: Point| {
