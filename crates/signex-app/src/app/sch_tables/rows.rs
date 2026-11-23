@@ -236,9 +236,9 @@ fn is_bare_form_of(old: &str, fresh: &str) -> bool {
 /// unread keeps the other's row. The closest match is taken first: same link
 /// and Sheet, same link, an old bare link, then Sheet for a row with no link.
 /// A bare link is also the normal form of a sheet beside the table, so it
-/// matches another folder only when it cannot be one: the compile does not
-/// list that link, did not fail to read that file, and found no such file in
-/// the table's folder.
+/// matches another folder only when it cannot be one: the Sheet cell agrees,
+/// the compile does not list that link, did not fail to read that file, and
+/// found no such file in the table's folder.
 fn rows_reached(
     table: &SchTable,
     rows: &[Vec<String>],
@@ -255,6 +255,7 @@ fn rows_reached(
     let bare_link = |old: usize, fresh: usize| {
         table.link(old).is_some_and(|link| {
             is_bare_form_of(link, &links[fresh])
+                && same_name(old, fresh)
                 && !links.iter().any(|listed| listed == link)
                 && unread.is_legacy_link(link)
         })
