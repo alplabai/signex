@@ -148,10 +148,15 @@ clipped.
 
   A listed row runs as the person's command and logs a new GUI row; it is one
   undo step. The kinds of row, for the commands the list admits:
-  - **Operands:** runs through the command's operand handler
-    (`CommandArgs::parse_operands`, then `run_operands`), as the CLI does.
-    A row that edited a board keeps the targets it wrote, and is refused with
-    nothing run once one has changed.
+  - **Operands:** runs through the command's operand handler by one
+    sanctioned entry in `app/command` (`replay_operands`, as the person's
+    command, #2731), as the CLI does. `scripts/check_command_entry.sh` fails
+    on a `run_operands(` or `CommandArgs::parse_operands(` in production app
+    code outside `app/command` and `app/agent`. A row that edited a board
+    keeps the targets it wrote, and is refused with nothing run once one has
+    changed.
+  - **Query rows** are read-only and stay refused: the original answer stays
+    in the log (DECISIONS 2026-11-23, #2731).
   - **Recorded targets** (Delete, Duplicate): the command's own handler runs
     on exactly those items, in their document, in the window or tab that shows
     it, then the person's selection comes back. Duplicate's copies get new ids

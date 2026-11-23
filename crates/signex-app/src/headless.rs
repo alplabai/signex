@@ -288,7 +288,7 @@ impl Signex {
             } else if args.has_operands()
                 || crate::app::command::runs_headless_without_operands(command)
             {
-                app.journaled(command, &args, |app| app.run_operands(command, &args))
+                app.run_headless_operands(command, &args)
             } else {
                 let by_id = args.clone();
                 app.journaled(command, &by_id, |app| {
