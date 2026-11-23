@@ -331,6 +331,33 @@ fn a_switch_stores_no_lfs_content_as_a_git_blob() {
     assert!(!repo.odb().unwrap().exists(content_id));
 }
 
+/// On Unix a backslash is part of the file name. Spelled with a slash, the
+/// diff would miss the file and an edit in it would look clean.
+#[cfg(unix)]
+#[test]
+fn a_file_with_a_backslash_in_its_name_is_compared_under_its_own_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = init_repo(dir.path());
+    let name = Path::new(r"m\odel.step");
+    fs::write(dir.path().join(name), "committed\n").unwrap();
+    commit_all(&repo, "first");
+    let tree = repo.head().unwrap().peel_to_tree().unwrap();
+    assert!(working_file_matches_tree(&repo, &tree, name).unwrap());
+    fs::write(dir.path().join(name), "edited by hand\n").unwrap();
+    assert!(!working_file_matches_tree(&repo, &tree, name).unwrap());
+}
+
+/// A path the tree and the disk both lack is not a clean file.
+#[test]
+fn a_path_the_diff_does_not_find_is_not_clean() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = init_repo(dir.path());
+    fs::write(dir.path().join("a.snxsch"), "committed\n").unwrap();
+    commit_all(&repo, "first");
+    let tree = repo.head().unwrap().peel_to_tree().unwrap();
+    assert!(!working_file_matches_tree(&repo, &tree, Path::new("absent.snxsch")).unwrap());
+}
+
 /// `main` holds `model` at `m.step` and LF text in `a.snxsch`; `side` holds an
 /// LFS pointer at `m.step`. Both were committed with LF, then `main` is checked
 /// out again under `core.autocrlf=true`, so its text files have CRLF on every OS.

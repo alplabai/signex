@@ -57,7 +57,8 @@ struct Plan {
 /// Whether git sees the working file at `rel` as what `tree` records. The diff
 /// hashes it through the repository's clean filters, so a clean file checked
 /// out with CRLF under `core.autocrlf` matches its LF blob. Only content is at
-/// stake here, so a mode change alone is not a difference.
+/// stake here, so a mode change alone is not a difference. Only one delta that
+/// git calls unmodified counts: a path the diff missed is not a clean file.
 fn working_file_matches_tree(
     repo: &git2::Repository,
     tree: &git2::Tree<'_>,
@@ -65,11 +66,27 @@ fn working_file_matches_tree(
 ) -> Result<bool, git2::Error> {
     let mut options = git2::DiffOptions::new();
     options
-        .pathspec(shown(rel))
+        .pathspec(repo_path_of(rel))
         .disable_pathspec_match(true)
+        .include_unmodified(true)
         .ignore_filemode(true);
     let diff = repo.diff_tree_to_workdir(Some(tree), Some(&mut options))?;
-    Ok(diff.deltas().next().is_none())
+    let mut deltas = diff.deltas();
+    let first = deltas.next().map(|delta| delta.status());
+    Ok(first == Some(git2::Delta::Unmodified) && deltas.next().is_none())
+}
+
+/// `rel` spelled as the repository does. On Unix a backslash is part of a
+/// file name and a name need not be UTF-8, so the bytes are kept.
+#[cfg(unix)]
+fn repo_path_of(rel: &Path) -> Vec<u8> {
+    use std::os::unix::ffi::OsStrExt;
+    rel.as_os_str().as_bytes().to_vec()
+}
+
+#[cfg(not(unix))]
+fn repo_path_of(rel: &Path) -> Vec<u8> {
+    shown(rel).into_bytes()
 }
 
 /// Whether the file at `rel` still holds what the current commit `from`
