@@ -11,6 +11,13 @@ pub(crate) use signex_drc_dsl::schematic_rules::{
     schematic_rules,
 };
 
+/// The rule text Execute will store, checked before the board step.
+#[derive(Debug)]
+pub(crate) struct PreparedRules {
+    text: String,
+    names: Vec<String>,
+}
+
 /// The Messages line of a rule left out.
 pub(crate) fn problem_line(
     i18n: &signex_i18n::I18n,
@@ -60,15 +67,40 @@ impl crate::app::Signex {
         project: crate::app::state::ProjectId,
         rows: &[SchematicRuleRow],
     ) -> Result<(), String> {
+        let prepared = self.prepare_update_pcb_rules(project, rows)?;
+        self.commit_update_pcb_rules(project, prepared)
+    }
+
+    /// Every check of the rule half, run before the board is touched: the
+    /// stored rules can take a write and the merged text builds. `None`
+    /// when nothing is pending.
+    pub(crate) fn prepare_update_pcb_rules(
+        &self,
+        project: crate::app::state::ProjectId,
+        rows: &[SchematicRuleRow],
+    ) -> Result<Option<PreparedRules>, String> {
         if pending(rows) == 0 {
-            return Ok(());
+            return Ok(None);
         }
+        self.rules_writable(project)?;
         let dsl = self
             .rules_text_of(project)
             .map(|(text, _)| text)
             .unwrap_or_default();
         let text = merged_text(&dsl, rows).map_err(|e| e.to_string())?;
-        let names: Vec<String> = rows.iter().map(|r| r.rule.name.clone()).collect();
+        let names = rows.iter().map(|r| r.rule.name.clone()).collect();
+        Ok(Some(PreparedRules { text, names }))
+    }
+
+    /// Store what [`Self::prepare_update_pcb_rules`] built.
+    pub(crate) fn commit_update_pcb_rules(
+        &mut self,
+        project: crate::app::state::ProjectId,
+        prepared: Option<PreparedRules>,
+    ) -> Result<(), String> {
+        let Some(PreparedRules { text, names }) = prepared else {
+            return Ok(());
+        };
         self.commit_drc_section(project, move |drc| {
             drc.dsl = (!text.trim().is_empty()).then_some(text);
             for name in names {

@@ -102,7 +102,9 @@ The ticked rows are lowered to board commands and run as one labelled step at
 the list's revision (`execute_board_commands` with a `CheckedStep`): all or
 nothing, one undo step, refused once the board moved on. On success the dialog
 closes, the Messages panel says how many changes were applied and the board
-comes forward.
+comes forward. The rules the schematic asks for are checked first: when they
+cannot be stored (a rule set from a newer Signex, text that does not merge),
+Validate and Execute say why, the dialog stays open and nothing is applied.
 
 ## Decisions
 
