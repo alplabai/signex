@@ -602,6 +602,7 @@ mod tests {
         let reason = i18n.message_plain(menu_ids::MENU_PLANNED_TOOLTIP, &[]);
         let unbuilt: [&str; 0] = [];
         let mut seen = 0;
+        let mut live = 0;
         for entry in &entries {
             let DropdownEntry::Item(item) = entry else {
                 continue;
@@ -612,12 +613,14 @@ mod tests {
                 assert!(item.on_press.is_none(), "{} does nothing", item.label);
                 assert_eq!(item.tooltip.as_ref(), Some(&reason), "{}", item.label);
             } else {
+                live += 1;
                 assert!(!item.disabled, "{} stays live", item.label);
                 assert!(item.on_press.is_some(), "{} stays live", item.label);
                 assert!(item.tooltip.is_none(), "{} has no reason", item.label);
             }
         }
         assert_eq!(seen, unbuilt.len());
+        assert_eq!(live, 9, "every shape of the menu is built and was checked");
     }
 
     /// #2838: the built curve rows arm their own tools and show as armed.
