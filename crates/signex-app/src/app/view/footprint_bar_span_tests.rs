@@ -11,7 +11,7 @@ use super::*;
 use crate::app::state::WindowKind;
 use crate::app::{FootprintDocument, TabInfo, TabKind};
 use crate::dock::DOCK_HANDLE;
-use crate::library::editor::footprint::state::{EditorMode, FpActiveBarMenu};
+use crate::library::editor::footprint::{EditorMode, FpActiveBarMenu};
 use crate::library::editor::footprint::unified_active_bar::{
     BarSpan, PlacedBar, bar_items, place_bar, scrolling_slots,
 };
