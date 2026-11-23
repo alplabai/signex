@@ -18,6 +18,8 @@ use signex_app::app::{Message, Signex};
 pub enum PointerStep {
     /// Click the first text reading exactly this.
     Click(&'static str),
+    /// Move onto the first text reading exactly this.
+    Hover(&'static str),
     /// Click this many pixels right of the text field holding this value,
     /// where a measurement field's picker sits.
     ClickRightOfInput(&'static str, u32),
@@ -63,7 +65,7 @@ fn locate<'a, T: 'a>(
             .ok_or_else(|| format!("nothing on screen reads {want:?}"))
     };
     Ok(match step {
-        PointerStep::Click(want) => named(&labels.texts, want)?.center(),
+        PointerStep::Click(want) | PointerStep::Hover(want) => named(&labels.texts, want)?.center(),
         PointerStep::ClickRightOfInput(want, dx) => {
             let field = named(&labels.inputs, want)?;
             Point::new(field.x + field.width + dx as f32, field.center_y())
@@ -118,7 +120,7 @@ pub fn draw_after(
         cursor = Cursor::Available(at);
         let moved = Event::Mouse(mouse::Event::CursorMoved { position: at });
         match step {
-            PointerStep::HoverAt(..) => send(&mut ui, &[moved], cursor, r),
+            PointerStep::HoverAt(..) | PointerStep::Hover(_) => send(&mut ui, &[moved], cursor, r),
             PointerStep::Click(_) | PointerStep::ClickRightOfInput(..) => send(
                 &mut ui,
                 &[

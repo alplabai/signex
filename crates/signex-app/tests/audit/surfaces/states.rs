@@ -57,7 +57,8 @@ fn schematic_rows() -> Vec<Surface> {
         row("m9-query", "Command palette with a query", |app, r, fx| {
             fixture::open_sample(app, r, fx);
             helpers_d::sample_project(app, fx);
-            let _ = app.update(Message::CommandPalette(CommandPaletteMsg::Open));
+            // Settled, so the project index lands before the query.
+            settle_support::settle(app, Message::CommandPalette(CommandPaletteMsg::Open));
             settle_support::settle(
                 app,
                 Message::CommandPalette(CommandPaletteMsg::QueryChanged("GND".into())),

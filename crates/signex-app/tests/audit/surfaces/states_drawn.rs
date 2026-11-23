@@ -234,7 +234,8 @@ pub(super) fn open_palette_vbus(
     rename_to_vbus(fx)?;
     fixture::open_sample(app, r, fx);
     super::helpers_d::sample_project(app, fx);
-    let _ = app.update(Message::CommandPalette(CommandPaletteMsg::Open));
+    // Settled, so the project index lands before the query.
+    settle_support::settle(app, Message::CommandPalette(CommandPaletteMsg::Open));
     settle_support::settle(
         app,
         Message::CommandPalette(CommandPaletteMsg::QueryChanged("vbu".into())),
