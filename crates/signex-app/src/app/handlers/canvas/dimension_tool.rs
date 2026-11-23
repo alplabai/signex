@@ -64,6 +64,11 @@ impl Signex {
 
     /// A message of the armed tool's form: it edits the tool, never the sheet.
     pub(crate) fn handle_dimension_tool_panel(&mut self, msg: AnnotationPanelMsg) -> Task<Message> {
+        // The values of a dimension paused in another window are that
+        // window's form to edit.
+        if self.interaction_state.is_sheet_pause_elsewhere() {
+            return Task::none();
+        }
         let id = uuid::Uuid::nil();
         match msg {
             AnnotationPanelMsg::FieldTyped(field, text) => {
@@ -178,7 +183,9 @@ impl Signex {
         {
             return false;
         }
-        if !self.interaction_state.active_canvas().placement_paused {
+        if !self.interaction_state.active_canvas().placement_paused
+            && !self.interaction_state.is_sheet_pause_elsewhere()
+        {
             let style = &mut self.interaction_state.annotation_tool.dimension;
             style.flipped = !style.flipped;
             self.sync_annotation_draft();

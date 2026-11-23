@@ -3,13 +3,14 @@
 
 use std::path::{Path, PathBuf};
 
-use iced::Task;
 use signex_types::schematic::{Point, SchDrawing, SchematicSheet};
 
 use super::placement_tests::{app_with_tool, click};
-use crate::app::state::WindowKind;
+use crate::app::sch_tables::AnnotationEdit;
+use crate::app::state::{SheetPlacementPause, WindowKind};
 use crate::app::{InputMsg, Message, Signex, TabInfo, TabKind, Tool, ToolMessage, WindowMsg};
 use crate::canvas::CanvasEvent;
+use crate::menu_bar::MenuMessage;
 use crate::panels::{AnnotationPanelMsg, PanelMsg};
 
 const FROM: (f64, f64) = (0.0, 0.0);
@@ -187,15 +188,107 @@ fn closing_another_undocked_sheet_keeps_the_pause() {
 fn an_undo_in_a_window_keeps_a_pause_on_mains_sheet() {
     let (mut app, paths) = app_on_sheet_a(&["b.snxsch"]);
     let window = undocked_over(&mut app, &paths[1]);
+    click_in(&mut app, window, FROM);
+    click_in(&mut app, window, TO);
+    click_in(&mut app, window, (5.08, 5.08));
+    assert_eq!(dimensions_on(&app, &paths[1]), 1, "one edit to undo");
     click(&mut app, FROM);
     click(&mut app, TO);
     tab_key(&mut app);
-    let _ = app.run_in_window(window, false, |app| {
-        app.clear_drawing_buffers_after_undo();
-        Task::none()
-    });
+    let _ = app.update(Message::Ui(crate::app::UiMsg::MenuInWindow {
+        window,
+        msg: MenuMessage::command("undo"),
+    }));
+    assert_eq!(dimensions_on(&app, &paths[1]), 0, "the undo ran");
     let state = &app.interaction_state;
     assert!(state.active_canvas().placement_paused);
     assert!(state.annotation_tool.paused_with.is_some());
     assert_eq!(held_points(&app), 2);
+}
+
+#[test]
+fn the_os_closing_an_undocked_sheet_ends_its_pause_and_its_points() {
+    let (mut app, paths) = app_on_sheet_a(&["b.snxsch"]);
+    let window = undocked_over(&mut app, &paths[1]);
+    pause_in(&mut app, window);
+    let _ = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(window)));
+    let state = &app.interaction_state;
+    assert!(state.placement_pause.is_none());
+    assert!(state.annotation_tool.paused_with.is_none());
+    assert!(state.annotation_tool.points.is_empty());
+}
+
+#[test]
+fn tab_in_main_leaves_a_pause_with_its_window() {
+    let (mut app, paths) = app_on_sheet_a(&["b.snxsch"]);
+    let window = undocked_over(&mut app, &paths[1]);
+    pause_in(&mut app, window);
+    tab_key(&mut app);
+    let state = &app.interaction_state;
+    assert!(
+        !state.active_canvas().placement_paused,
+        "main did not pause"
+    );
+    assert!(state.canvases[&window].placement_paused, "the window did");
+    assert!(matches!(
+        state.placement_pause,
+        Some(SheetPlacementPause::Sheet { window: Some(w), .. }) if w == window
+    ));
+    assert_eq!(held_points(&app), 2);
+
+    escape_in(&mut app, None);
+    click(&mut app, (5.08, 5.08));
+    assert_eq!(dimensions_on(&app, &paths[0]), 0, "B's points stay off A");
+    assert_eq!(dimensions_on(&app, &paths[1]), 0);
+}
+
+#[test]
+fn tab_in_a_window_leaves_a_pause_with_main() {
+    let (mut app, paths) = app_on_sheet_a(&["b.snxsch"]);
+    let window = undocked_over(&mut app, &paths[1]);
+    click(&mut app, FROM);
+    click(&mut app, TO);
+    tab_key(&mut app);
+    let _ = app.run_in_window_document(window, |app| {
+        app.update(Message::Tool(ToolMessage::PrePlacementTab))
+    });
+    let state = &app.interaction_state;
+    assert!(state.active_canvas().placement_paused, "main keeps it");
+    assert!(!state.canvases[&window].placement_paused);
+    assert!(matches!(
+        state.placement_pause,
+        Some(SheetPlacementPause::Sheet { window: None, .. })
+    ));
+    assert_eq!(held_points(&app), 2);
+}
+
+#[test]
+fn a_pause_with_no_points_refuses_a_click_from_another_window() {
+    let (mut app, paths) = app_on_sheet_a(&["b.snxsch"]);
+    let window = undocked_over(&mut app, &paths[1]);
+    tab_key(&mut app);
+    click_in(&mut app, window, (5.08, 5.08));
+    assert_eq!(held_points(&app), 0, "B's point stays out of A's buffer");
+}
+
+#[test]
+fn mains_form_does_not_edit_a_dimension_paused_in_a_window() {
+    let (mut app, paths) = app_on_sheet_a(&["b.snxsch"]);
+    let window = undocked_over(&mut app, &paths[1]);
+    pause_in(&mut app, window);
+    let typed = AnnotationPanelMsg::Picked(AnnotationEdit::OverrideText("typed".to_string()));
+    let _ = app.update(Message::Dock(crate::dock::DockMessage::Panel(
+        PanelMsg::Annotation(typed),
+    )));
+    let dimension = &app.interaction_state.annotation_tool.dimension;
+    assert_eq!(dimension.override_text, None);
+}
+
+#[test]
+fn space_in_main_does_not_flip_a_dimension_paused_in_a_window() {
+    let (mut app, paths) = app_on_sheet_a(&["b.snxsch"]);
+    let window = undocked_over(&mut app, &paths[1]);
+    pause_in(&mut app, window);
+    assert!(app.flip_dimension_side(), "the key is still answered");
+    assert!(!app.interaction_state.annotation_tool.dimension.flipped);
 }

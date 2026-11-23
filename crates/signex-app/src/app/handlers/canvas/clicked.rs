@@ -136,10 +136,13 @@ impl Signex {
         if self.interaction_state.active_canvas_mut().placement_paused {
             return Task::none();
         }
-        // Points held by a pause in another window measure that window's
-        // sheet: a click here must not finish a dimension with them.
+        // The point buffer of a tool paused in another window belongs to
+        // that window's sheet, even while it is still empty.
         if self.interaction_state.is_sheet_pause_elsewhere()
-            && !self.interaction_state.annotation_tool.points.is_empty()
+            && matches!(
+                self.interaction_state.current_tool,
+                Tool::Bezier | Tool::LinearDimension | Tool::AlignedDimension
+            )
         {
             return Task::none();
         }
