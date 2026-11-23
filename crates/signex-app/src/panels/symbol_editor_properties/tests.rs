@@ -162,6 +162,26 @@ fn the_uuid_row_stays_on_one_line_inside_a_narrow_dock() {
     );
 }
 
+/// A symbol has one identifier, its Symbol name: General lists no Design
+/// Item ID row (mockup row 123 is overridden in `docs/DECISIONS.md`).
+#[test]
+fn symbol_general_has_the_symbol_name_and_no_design_item_id() {
+    let fx = Fixture::new();
+    let mut sym = ctx(opamp_pins(), SymbolEditorSelection::None);
+    sym.props.tab = SymbolPropsTab::Symbol;
+    let rows = super::symbol::view(&sym, &fx.form(), iced::Color::BLACK);
+    let texts = lay_out_texts(stacked(rows), DOCK);
+    find(
+        &texts,
+        &t!(fx.i18n, ids::EDITORS_SYMPROPS_SYMBOL_NAME).into_string(),
+    );
+    let dropped = t!(fx.i18n, ids::PCB_COMPONENT_DESIGN_ITEM_ID).into_string();
+    assert!(
+        !texts.iter().any(|t| t.text == dropped),
+        "General lists {dropped}: {texts:#?}"
+    );
+}
+
 #[test]
 fn the_part_chips_are_all_then_each_part_with_its_pin_count() {
     assert_eq!(
