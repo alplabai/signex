@@ -154,6 +154,32 @@ fn a_table_link_out_of_the_project_is_refused() {
     assert_eq!(app.table_link_path("   "), None);
 }
 
+/// #2742: in an undocked window the link resolves from that window's sheet,
+/// not from the tab active in the main window.
+#[test]
+fn a_table_link_in_an_undocked_window_resolves_from_that_windows_sheet() {
+    let mut app = app_focused_on("/w/a/power/buck.snxsch");
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        crate::app::state::WindowKind::UndockedTab {
+            path: PathBuf::from("/w/a/contents.snxsch"),
+            title: "contents".into(),
+        },
+    );
+    app.interaction_state
+        .canvases
+        .insert(window, crate::canvas::CanvasSlot::new());
+    let mut resolved = None;
+
+    let _ = app.run_in_window(window, false, |app| {
+        resolved = app.table_link_path("power/buck.snxsch");
+        iced::Task::none()
+    });
+
+    assert_eq!(resolved, Some(PathBuf::from("/w/a/power/buck.snxsch")));
+}
+
 /// Double-clicking a child sheet whose tab was closed with unsaved edits
 /// must reattach the parked engine, not replace it with the disk copy (#1135).
 #[test]
