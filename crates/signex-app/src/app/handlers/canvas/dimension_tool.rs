@@ -154,6 +154,12 @@ impl Signex {
         }
     }
 
+    /// Whether the armed tool's form holds text that does not read, in any
+    /// of its boxes: Tab keeps the pause for it (mockup row 157).
+    pub(crate) fn dimension_form_holds_refused_text(&self) -> bool {
+        self.armed_dimension_tool().is_some() && !self.dimension_form_draft_reads()
+    }
+
     /// Whether the text typed in the form, if any, reads for its own box.
     fn dimension_form_draft_reads(&self) -> bool {
         let draft = self.document_state.panel_ctx.annotation.draft.as_ref();

@@ -49,10 +49,14 @@ impl Signex {
                     return self.finish_update();
                 }
                 // A second Tab goes on placing with the edits, as the form's
-                // OK does; a Location that does not read keeps the pause.
+                // OK does; a Location or dimension text that does not read
+                // keeps the pause.
                 if self.interaction_state.current_tool != Tool::Select
                     && self.interaction_state.active_canvas().placement_paused
                 {
+                    if self.dimension_form_holds_refused_text() {
+                        return self.finish_update();
+                    }
                     let confirmed = self.update(Message::Dock(crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::ConfirmPrePlacement,
                     )));

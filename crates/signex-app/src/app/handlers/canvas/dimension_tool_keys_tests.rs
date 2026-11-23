@@ -462,9 +462,98 @@ fn refused_text_ends_with_the_pause(leave: ToolMessage) {
     assert!(!session.is_paused(), "no old text refuses this Enter");
 }
 
+fn press_tab(session: &mut Session) {
+    session.press(Key::Named(Named::Tab), None);
+}
+
+/// The pause, the text and its drawn mark are all still there.
+fn assert_tab_kept_the_refused_text(session: &Session, typed: &str, unmarked: usize) {
+    assert!(session.is_paused(), "Tab does not resume");
+    assert_eq!(draft_text(session), Some(typed), "the text stays");
+    assert!(refused_pixels(session) > unmarked, "the box stays marked");
+}
+
 #[test]
-fn a_second_tab_after_a_refused_enter_drops_the_text() {
-    refused_text_ends_with_the_pause(ToolMessage::PrePlacementTab);
+fn a_second_tab_after_a_refused_enter_keeps_the_pause_and_the_text() {
+    let mut session = Session::docked();
+    let unmarked = refused_pixels(&session);
+    let before = session.app.interaction_state.annotation_tool.points.clone();
+    let field = type_in_from_x(&mut session, "abc");
+    submit(&mut session, field);
+    for _ in 0..2 {
+        let _ = session
+            .app
+            .update(Message::Tool(ToolMessage::PrePlacementTab));
+        assert_tab_kept_the_refused_text(&session, "abc", unmarked);
+    }
+    let points = &session.app.interaction_state.annotation_tool.points;
+    assert_eq!(*points, before, "no old or partial value was committed");
+}
+
+#[test]
+fn tab_on_text_never_submitted_keeps_the_pause_in_the_focused_box() {
+    // The detached form's first text box is a point coordinate.
+    let mut session = Session::in_detached_properties();
+    let unmarked = refused_pixels(&session);
+    let j = Key::Character("j".into());
+    let took_it = session.press_after(j, Some("j"), |ui, renderer| {
+        run_operation(Box::new(FocusAnotherBox::default()), ui, renderer);
+    });
+    assert!(took_it, "the point box holds the keys");
+    assert_eq!(session.override_text(), None, "and it is not Override");
+    press_tab(&mut session);
+    // The key lands in front of the box's shown value.
+    assert_tab_kept_the_refused_text(&session, "j0.00", unmarked);
+}
+
+#[test]
+fn tab_with_the_refused_text_in_another_box_keeps_the_pause() {
+    let mut session = Session::docked();
+    let unmarked = refused_pixels(&session);
+    type_in_from_x(&mut session, "abc");
+    press_tab(&mut session);
+    assert_tab_kept_the_refused_text(&session, "abc", unmarked);
+    assert!(session.type_j(), "the Override box still has the keys");
+}
+
+#[test]
+fn the_resume_button_drops_the_text_a_tab_kept() {
+    let mut session = Session::docked();
+    let before = session.app.interaction_state.annotation_tool.points.clone();
+    type_in_from_x(&mut session, "abc");
+    press_tab(&mut session);
+    assert!(session.is_paused());
+    let _ = session
+        .app
+        .update(Message::Tool(ToolMessage::ResumePlacement));
+    assert!(!session.is_paused(), "Resume resumes");
+    assert_eq!(draft_text(&session), None, "the text is gone");
+    let points = &session.app.interaction_state.annotation_tool.points;
+    assert_eq!(*points, before, "the old value is the one in use");
+}
+
+#[test]
+fn tab_on_readable_text_goes_on_placing() {
+    let mut session = Session::docked();
+    type_in_from_x(&mut session, "2.54");
+    press_tab(&mut session);
+    assert!(
+        !session.is_paused(),
+        "readable text does not hold the pause"
+    );
+    let from = session.app.interaction_state.annotation_tool.points[0];
+    assert!((from.x - 2.54).abs() < 1e-9, "the value stands: {from:?}");
+}
+
+#[test]
+fn a_stale_form_draft_does_not_hold_another_tools_pause() {
+    let mut session = Session::docked();
+    type_in_from_x(&mut session, "abc");
+    session.app.interaction_state.current_tool = Tool::Wire;
+    let _ = session
+        .app
+        .update(Message::Tool(ToolMessage::PrePlacementTab));
+    assert!(!session.is_paused(), "only the dimension form refuses");
 }
 
 #[test]
