@@ -4,14 +4,14 @@
 
 use std::ops::Range;
 
-use iced::widget::scrollable::Direction;
+use iced::widget::scrollable::{Direction, Scrollbar};
 use iced::widget::{Row, scrollable};
-use iced::{Alignment, Element, Length, Widget};
+use iced::{Alignment, Element, Length, Padding, Widget};
 use signex_types::theme::ThemeTokens;
 
 use super::skin::Skin;
 use super::{ActiveBarItem, Metrics, bar_shell, offsets_for_widths, slot_offsets, view_item};
-use crate::theme_ext::{ChromeMetrics, thin_scrollbar, thin_scrollbar_style};
+use crate::theme_ext::thin_scrollbar_style;
 
 /// The run never narrows below this many buttons.
 const MIN_RUN_BUTTONS: usize = 3;
@@ -78,26 +78,42 @@ where
     let middle = items.split_off(run.start);
     let slots = |list: Vec<ActiveBarItem<M>>| -> Row<Element<'a, M>> {
         list.into_iter().fold(
-            Row::new().spacing(m.spacing).align_y(Alignment::Center),
+            Row::new()
+                .spacing(m.spacing)
+                .height(Length::Fixed(m.btn))
+                .align_y(Alignment::Center),
             |row, item| row.push(view_item(item, tokens, &m)),
         )
     };
-    // A visible thumb: a plain wheel does not move a horizontal scrollable,
-    // so a hidden one would leave the far buttons out of a mouse's reach.
-    // No margin, so the thumb's hit band takes the least of the buttons.
+    // A visible thumb: a plain wheel does not move a horizontal scrollable.
+    // The rail is embedded in the bar's bottom padding, below the buttons:
+    // a rail press pages and captures, so it must not share their hit area.
+    let rail = m.padding;
     let skin = Skin::of(tokens);
     let strip = scrollable(slots(middle))
         .direction(Direction::Horizontal(
-            thin_scrollbar(&ChromeMetrics::DEFAULT).margin(0.0),
+            Scrollbar::new()
+                .width(rail)
+                .scroller_width(rail)
+                .margin(0.0)
+                .spacing(0.0),
         ))
         .style(thin_scrollbar_style(skin.border, skin.icon_ink))
         .width(Length::Fixed(width))
-        .height(Length::Fixed(m.btn));
-    let bar = slots(items).push(strip.boxed());
-    let bar = tail
-        .into_iter()
-        .fold(bar, |row, item| row.push(view_item(item, tokens, &m)));
-    bar_shell(bar.boxed(), tokens)
+        .height(Length::Fixed(m.btn + rail));
+    let mut bar: Row<Element<'a, M>> = Row::new().spacing(m.spacing).align_y(Alignment::Start);
+    if !items.is_empty() {
+        bar = bar.push(slots(items).boxed());
+    }
+    bar = bar.push(strip.boxed());
+    if !tail.is_empty() {
+        bar = bar.push(slots(tail).boxed());
+    }
+    let padding = Padding {
+        bottom: 0.0,
+        ..Padding::new(m.padding)
+    };
+    bar_shell(bar.boxed(), padding, tokens)
 }
 
 #[cfg(test)]
