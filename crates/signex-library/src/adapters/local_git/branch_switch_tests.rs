@@ -331,6 +331,112 @@ fn a_switch_stores_no_lfs_content_as_a_git_blob() {
     assert!(!repo.odb().unwrap().exists(content_id));
 }
 
+/// `main` holds `model` at `m.step` and LF text in `a.snxsch`; `side` holds an
+/// LFS pointer at `m.step`. Both were committed with LF, then `main` is checked
+/// out again under `core.autocrlf=true`, so its text files have CRLF on every OS.
+fn crlf_repo(model: &[u8]) -> (tempfile::TempDir, git2::Repository) {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = init_repo(dir.path());
+    repo.set_head("refs/heads/main").unwrap();
+    fs::write(dir.path().join("m.step"), model).unwrap();
+    fs::write(dir.path().join("a.snxsch"), "main\nsecond\n").unwrap();
+    let first = commit_all(&repo, "first");
+    repo.branch("side", &repo.find_commit(first).unwrap(), false)
+        .unwrap();
+    check_out(&repo, "side");
+    let side_pointer = store_object(&repo, MODEL_SIDE);
+    fs::write(dir.path().join("m.step"), &side_pointer).unwrap();
+    commit_all(&repo, "on side");
+    check_out(&repo, "main");
+    set_local_config(&repo, "core.autocrlf", true);
+    set_local_config(&repo, "core.safecrlf", false);
+    drop(repo);
+    let repo = git2::Repository::open(dir.path()).unwrap();
+    fs::remove_file(dir.path().join("m.step")).unwrap();
+    fs::remove_file(dir.path().join("a.snxsch")).unwrap();
+    check_out(&repo, "main");
+    (dir, repo)
+}
+
+#[test]
+fn a_clean_file_checked_out_with_crlf_matches_its_tree() {
+    let (dir, repo) = crlf_repo(b"plain model\n");
+    assert_eq!(
+        fs::read(dir.path().join("a.snxsch")).unwrap(),
+        b"main\r\nsecond\r\n"
+    );
+    let tree = repo.head().unwrap().peel_to_tree().unwrap();
+
+    assert!(matches_tree(
+        &repo,
+        dir.path(),
+        &tree,
+        Path::new("a.snxsch")
+    ));
+}
+
+/// Same length as the clean file, so only its content can tell them apart.
+#[test]
+fn an_edited_file_checked_out_with_crlf_does_not_match_its_tree() {
+    let (dir, repo) = crlf_repo(b"plain model\n");
+    fs::write(dir.path().join("a.snxsch"), "main\r\nsecund\r\n").unwrap();
+    let tree = repo.head().unwrap().peel_to_tree().unwrap();
+
+    assert!(!matches_tree(
+        &repo,
+        dir.path(),
+        &tree,
+        Path::new("a.snxsch")
+    ));
+}
+
+#[test]
+fn a_clean_crlf_file_can_be_replaced_by_an_lfs_file() {
+    let (dir, repo) = crlf_repo(b"plain model\n");
+    assert_eq!(
+        fs::read(dir.path().join("m.step")).unwrap(),
+        b"plain model\r\n"
+    );
+
+    assert_eq!(switch(dir.path(), &side(), &[]).unwrap(), "side");
+
+    assert_eq!(head(&repo), "side");
+    assert_eq!(fs::read(dir.path().join("m.step")).unwrap(), MODEL_SIDE);
+}
+
+/// Data-loss guard: the clean filter must not hide a real edit.
+#[test]
+fn an_edited_crlf_file_is_not_replaced_by_an_lfs_file() {
+    let (dir, repo) = crlf_repo(b"plain model\n");
+    fs::write(dir.path().join("m.step"), "plain edits\r\n").unwrap();
+
+    let result = switch(dir.path(), &side(), &[]);
+
+    assert_eq!(result, Err(SwitchRefusal::WouldOverwrite));
+    assert_eq!(head(&repo), "main");
+    assert_eq!(
+        fs::read(dir.path().join("m.step")).unwrap(),
+        b"plain edits\r\n"
+    );
+}
+
+/// LFS content is byte exact: line endings are a real change to it.
+#[test]
+fn lfs_content_differing_only_in_line_endings_counts_as_edited() {
+    let (pointer, _) = pointer_for(b"model\nline\n");
+    let (dir, repo) = crlf_repo(&pointer);
+    fs::write(dir.path().join("m.step"), "model\r\nline\r\n").unwrap();
+
+    let result = switch(dir.path(), &side(), &[]);
+
+    assert_eq!(result, Err(SwitchRefusal::WouldOverwrite));
+    assert_eq!(head(&repo), "main");
+    assert_eq!(
+        fs::read(dir.path().join("m.step")).unwrap(),
+        b"model\r\nline\r\n"
+    );
+}
+
 #[test]
 fn a_pointer_names_only_a_sha256_hash() {
     let (pointer, oid) = pointer_for(b"x");
