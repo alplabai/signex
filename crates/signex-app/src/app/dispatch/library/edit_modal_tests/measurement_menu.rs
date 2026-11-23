@@ -249,7 +249,7 @@ fn escape_closes_a_template_row_menu_before_the_dialog() {
     let (mut app, root) = app_with_template_kilo_ohm_row();
     let opened = BrowserEditMsg::UnitMenuOpened { key: SLOT.into() };
     let _ = app.update(edit(&root, opened));
-    let _ = app.handle_escape_pressed(None);
+    let _task = app.handle_escape_pressed(None);
     assert_eq!(open_unit_menu(&app, &root), None);
     assert!(app.library.library_browsers[&root].edit_modal.is_some());
 }
