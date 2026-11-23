@@ -157,7 +157,12 @@ list opens it, docked on the left as a tab beside Projects.
   designators, and the nets that touch it. The footer has the unique totals.
 - Nets mode: every compiled net and the number of sheet occurrences it
   crosses; power nets are drawn in the power colour.
+- A sheet or channel row folds open (its chevron, closed by default) into the
+  Parts and Nets of that instance, under the designators and net names it has
+  there. A search also finds them and opens the rows that hold a match.
 - Clicking a row opens its sheet; a channel row opens it on its channel tab.
+  Clicking a part or net row, or a net in Nets mode, opens that instance and
+  selects the element.
 - Out of date: an electrical edit to a compiled sheet (any `DocumentPatch`
   but a colour-only one) marks its rows amber with a dot, and a banner offers
   Recompile. Recompile is never automatic.

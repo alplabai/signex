@@ -104,6 +104,53 @@ fn nets_list_their_sheet_count_and_power() {
     assert_eq!(c.nets.len(), c.net_count);
 }
 
+/// #2741: each sheet instance lists its own parts, by the designator it has
+/// there, in walk order.
+#[test]
+fn each_occurrence_lists_its_own_components() {
+    let c = compiled();
+    let designators = |row: usize| -> Vec<&str> {
+        c.sheets[row]
+            .components
+            .iter()
+            .map(|p| p.designator.as_str())
+            .collect()
+    };
+    assert_eq!(designators(1), ["J1", "R1", "J2"]);
+    assert_eq!(designators(3).len(), 9);
+    assert!(designators(3).iter().all(|d| d.starts_with("CH1_")));
+    assert!(designators(4).iter().all(|d| d.starts_with("CH2_")));
+    assert!(designators(2).is_empty(), "the channels list their own");
+    let target = &c.sheets[4].components[0].target;
+    assert_eq!(target.occurrence, c.sheets[4].path);
+    assert_eq!(target.kind, signex_types::schematic::SelectedKind::Symbol);
+}
+
+/// #2741: each sheet instance lists the nets touching it, each with an
+/// element of the net on that instance, as many as its count.
+#[test]
+fn each_occurrence_lists_its_nets_with_a_target_on_it() {
+    let c = compiled();
+    for row in c.sheets.iter().filter(|s| s.repeat.is_none()) {
+        assert_eq!(row.net_names.len(), row.nets, "{}", row.name);
+        for net in &row.net_names {
+            assert_eq!(net.target.occurrence, row.path, "{}", net.name);
+            assert_eq!(net.target.sheet, row.key, "{}", net.name);
+        }
+    }
+    let ch2 = &c.sheets[4];
+    assert!(ch2.net_names.iter().any(|n| n.name == "VOUT_3V3_CH2"));
+    assert!(!ch2.net_names.iter().any(|n| n.name == "VOUT_3V3_CH1"));
+    assert!(ch2.net_names.iter().any(|n| n.name == "GND" && n.is_power));
+}
+
+/// #2741: a net row has somewhere to go.
+#[test]
+fn every_net_has_a_target() {
+    let c = compiled();
+    assert!(c.nets.iter().all(|n| n.target.is_some()));
+}
+
 #[test]
 fn a_project_without_repeats_has_no_channel_rows() {
     let mut p = project();

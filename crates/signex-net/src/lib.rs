@@ -78,7 +78,10 @@ pub use project::{
 mod compiled;
 #[cfg(test)]
 mod compiled_tests;
-pub use compiled::{CompiledDesign, CompiledNet, CompiledSheet, compile_design};
+pub use compiled::{
+    CompiledDesign, CompiledNet, CompiledPart, CompiledSheet, CompiledSheetNet, CompiledTarget,
+    compile_design,
+};
 
 mod harness;
 #[cfg(test)]

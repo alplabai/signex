@@ -42,6 +42,14 @@ impl Signex {
                 Task::none()
             }
             M::RowClicked(row) => self.open_compiled_row(row),
+            M::RowExpanded(row) => {
+                let expanded = &mut self.ui_state.compiled_design.expanded;
+                if !expanded.remove(&row) {
+                    expanded.insert(row);
+                }
+                Task::none()
+            }
+            M::TargetClicked(target) => self.open_compiled_target(&target),
             M::ChannelPicked { sheet, channel } => {
                 self.pick_channel(sheet, channel);
                 Task::none()
@@ -217,6 +225,7 @@ impl Signex {
         );
         let ui = &mut self.ui_state.compiled_design;
         ui.folded.clear();
+        ui.expanded.clear();
         ui.selected = None;
         self.refresh_bound_tables(Some(outcome.project));
     }

@@ -292,6 +292,48 @@ fn compile_project_fills_the_panel_with_the_channels() {
     assert_eq!(panel.totals.channels, 2);
 }
 
+/// #2741, mockup row 154: a sheet instance lists its parts, and a click on
+/// one lands on the part on its sheet.
+#[test]
+fn a_component_row_opens_its_sheet_and_selects_the_part() {
+    let mut f = fixture("child_sheet", false);
+    send(&mut f.app, CompiledDesignMsg::CompileRequested);
+    let row = |app: &Signex| {
+        app.document_state
+            .panel_ctx
+            .compiled_design
+            .panel
+            .rows
+            .iter()
+            .find(|r| r.name == "child_sheet")
+            .cloned()
+            .expect("the child's row")
+    };
+    let folded = row(&f.app);
+    assert!(folded.has_children && !folded.is_expanded);
+    assert!(folded.part_rows.is_empty(), "folded by default");
+
+    send(&mut f.app, CompiledDesignMsg::RowExpanded(folded.index));
+    let open = row(&f.app);
+    let labels: Vec<&str> = open.part_rows.iter().map(|c| c.label.as_str()).collect();
+    assert_eq!(labels, ["R5"]);
+
+    let target = open.part_rows[0].target.clone();
+    send(&mut f.app, CompiledDesignMsg::TargetClicked(target));
+
+    assert_eq!(
+        f.app.document_state.active_path.as_deref(),
+        Some(f.child.as_path())
+    );
+    let selected = &f.app.interaction_state.active_canvas().selected;
+    assert!(
+        selected
+            .iter()
+            .any(|s| s.uuid == f.part && s.kind == SelectedKind::Symbol),
+        "{selected:?}"
+    );
+}
+
 /// Mockup row 154: Recompile is the panel's title-bar icon.
 #[test]
 fn the_title_bar_recompile_compiles_the_project() {

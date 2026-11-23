@@ -5,9 +5,9 @@
 use std::path::{Path, PathBuf};
 
 use iced::Task;
-use signex_types::schematic::{ChannelOccurrence, ChannelRepeat};
+use signex_types::schematic::{ChannelOccurrence, ChannelRepeat, SelectedItem};
 
-use crate::app::handlers::canvas::SheetOpen;
+use crate::app::handlers::canvas::{AfterOpen, SheetOpen};
 use crate::app::{Message, Signex};
 
 impl Signex {
@@ -116,6 +116,49 @@ impl Signex {
             None => SheetOpen::plain(),
         };
         self.open_sheet(path, open)
+    }
+
+    /// A part or net row was clicked: open the sheet instance it is on (a
+    /// channel on its tab), select the element and centre on it.
+    pub(super) fn open_compiled_target(
+        &mut self,
+        target: &signex_net::CompiledTarget,
+    ) -> Task<Message> {
+        let Some(project) = self.compile_target() else {
+            return Task::none();
+        };
+        let Some(result) = self.document_state.compiled_design.results.get(&project) else {
+            return Task::none();
+        };
+        let Some(path) = result.path_of(&target.sheet).cloned() else {
+            return Task::none();
+        };
+        let row = result.design.sheets.iter().position(|s| {
+            s.repeat.is_none() && s.key == target.sheet && s.path == target.occurrence
+        });
+        let channel = row
+            .and_then(|r| result.design.sheets[r].channel.as_ref())
+            .map(|c| c.index);
+        let store = &mut self.ui_state.compiled_design;
+        store.selected = row;
+        match channel {
+            Some(index) => store.channel_tabs.insert(path.clone(), index),
+            None => store.channel_tabs.remove(&path),
+        };
+        let item = Some(SelectedItem::new(target.id, target.kind));
+        let then = match target.at {
+            Some(at) => AfterOpen::FocusAt {
+                x: at.x,
+                y: at.y,
+                item,
+            },
+            None => AfterOpen::Reveal { item },
+        };
+        let open = match channel {
+            Some(_) => SheetOpen::plain(),
+            None => SheetOpen::at(Some(target.occurrence.clone())),
+        };
+        self.open_sheet(path, open.then(then))
     }
 
     /// `Some(reason)` when the sheet an edit acts on shows a channel tab:
