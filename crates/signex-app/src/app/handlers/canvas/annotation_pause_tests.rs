@@ -13,6 +13,7 @@ use crate::app::state::WindowKind;
 use crate::app::{ContextMenuMsg, InputMsg, Message, Signex, Tool, ToolMessage};
 use crate::canvas::{CanvasEvent, CanvasSlot};
 use crate::panels::{DIMENSION_OVERRIDE_INPUT, PanelContext, PanelKind};
+use signex_types::schematic::SchDrawing;
 
 type WindowId = Option<iced::window::Id>;
 
@@ -97,6 +98,30 @@ impl Paused {
 
     fn points(&self) -> usize {
         self.app.interaction_state.annotation_tool.points.len()
+    }
+
+    /// Finished dimensions and Beziers, on every open sheet.
+    fn placed(&self) -> usize {
+        let engines = self.app.document_state.engines.values();
+        let drawings = engines.flat_map(|engine| engine.document().drawings.iter());
+        drawings
+            .filter(|d| matches!(d, SchDrawing::Dimension(_) | SchDrawing::Bezier(_)))
+            .count()
+    }
+
+    /// Clicks after the two held points that finish this tool's object.
+    fn clicks_to_finish(&self) -> usize {
+        if self.tool == Tool::Bezier { 2 } else { 1 }
+    }
+
+    fn double_click_in(&mut self, window: WindowId, (world_x, world_y): (f64, f64)) {
+        let event = CanvasEvent::DoubleClicked {
+            world_x,
+            world_y,
+            screen_x: 0.0,
+            screen_y: 0.0,
+        };
+        self.canvas_event_in(window, event);
     }
 
     fn escape_in(&mut self, window: WindowId) {
@@ -248,6 +273,40 @@ fn another_canvas_ignores_clicks_double_clicks_and_right_clicks() {
         assert!(p.is_paused(), "{:?} owner {:?}", p.tool, p.owner);
         assert_eq!(p.points(), 2, "{:?}", p.tool);
         assert_eq!(p.app.interaction_state.current_tool, p.tool);
+    });
+}
+
+#[test]
+fn a_double_click_on_the_owners_paused_canvas_feeds_nothing() {
+    Paused::each(|mut p| {
+        let tool = p.tool;
+        p.double_click_in(p.owner, ELSEWHERE);
+        assert!(p.is_paused(), "{tool:?} owner {:?}", p.owner);
+        assert_eq!(p.points(), 2, "{tool:?}: no point during the pause");
+        assert_eq!(p.placed(), 0, "{tool:?}: nothing placed during the pause");
+        p.escape_in(p.owner);
+        assert!(!p.slot(p.owner).placement_paused, "{tool:?}");
+        assert_eq!(p.points(), 2, "{tool:?}: Esc restores the two points");
+        for step in 0..p.clicks_to_finish() {
+            assert_eq!(p.placed(), 0, "{tool:?} before click {step}");
+            let (x, y) = ELSEWHERE;
+            let (world_x, world_y) = (x + 2.54 * step as f64, y);
+            p.canvas_event_in(p.owner, CanvasEvent::Clicked { world_x, world_y });
+        }
+        assert_eq!(p.placed(), 1, "{tool:?}: exactly one object");
+        assert_eq!(p.points(), 0, "{tool:?}");
+    });
+}
+
+#[test]
+fn a_double_click_after_the_resume_feeds_the_tool_again() {
+    Paused::each(|mut p| {
+        let tool = p.tool;
+        p.escape_in(p.owner);
+        p.double_click_in(p.owner, ELSEWHERE);
+        let (points, placed) = if tool == Tool::Bezier { (3, 0) } else { (0, 1) };
+        assert_eq!(p.points(), points, "{tool:?} owner {:?}", p.owner);
+        assert_eq!(p.placed(), placed, "{tool:?} owner {:?}", p.owner);
     });
 }
 
