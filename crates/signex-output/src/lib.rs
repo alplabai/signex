@@ -94,7 +94,7 @@ pub struct ExportContext {
     /// the printed pages *plus* the hierarchical children reached through
     /// `child_sheets`, which are never printed pages. A terminal in the
     /// netlist can sit on any of these, so anything that joins netlist
-    /// terminals back to symbols (the Protel component blocks) must walk this
+    /// terminals back to symbols (the `.NET` component blocks) must walk this
     /// set, not [`Self::sheets`]. A sheet placed several times appears once.
     pub netlist_sheets: Vec<SchematicSheet>,
     /// Where each [`Self::netlist_sheets`] entry sits in the hierarchy: one

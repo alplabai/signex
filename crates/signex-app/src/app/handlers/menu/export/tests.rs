@@ -614,7 +614,7 @@ fn netlist_export_refuses_to_write_an_incomplete_netlist() {
 #[test]
 fn export_anyway_writes_a_clean_netlist_and_warns_in_the_messages_panel() {
     // #431 Option 2: the user chose "Export anyway (incomplete)". The partial
-    // .net is written as a clean, valid Protel netlist (the format has no
+    // .net is written as a clean, valid `.NET` netlist (the format has no
     // comment syntax, so no header), and the omission reaches the user through
     // the Messages panel, not only the dismissed dialog.
     let mut app = app_with_missing_child("gone-anyway.snxsch");
@@ -648,7 +648,7 @@ fn export_anyway_writes_a_clean_netlist_and_warns_in_the_messages_panel() {
     );
     assert!(
         !bytes.contains("INCOMPLETE") && !bytes.contains('#'),
-        "Protel has no comment syntax: {bytes}"
+        "the .NET format has no comment syntax: {bytes}"
     );
     assert!(
         export_anyway_warning_reached_the_panel("gone-anyway.snxsch"),
@@ -892,12 +892,12 @@ fn a_flat_projects_second_page_no_longer_vanishes_from_the_netlist() {
 }
 
 #[test]
-fn netlist_export_writes_the_protel_format_the_dialog_promises() {
-    // #354: the save dialog offers "Protel Netlist" / `.NET`, so the bytes the
-    // handler writes must be the Protel component + net blocks with CRLF line
+fn netlist_export_writes_the_net_text_format_the_dialog_promises() {
+    // #354: the save dialog offers "Netlist (.NET)", so the bytes the
+    // handler writes must be the `.NET` component + net blocks with CRLF line
     // endings — not the `# Signex netlist` debug listing.
     let mut app = app_flat_project();
-    let out = std::env::temp_dir().join(format!("signex-protel-{}.NET", Uuid::now_v7()));
+    let out = std::env::temp_dir().join(format!("signex-netlist-{}.NET", Uuid::now_v7()));
 
     let task = app.handle_export_netlist_finished(
         app.document_state.active_path.clone().expect("active"),
@@ -1005,7 +1005,7 @@ mod class_assign;
 mod class_picker;
 mod class_shared;
 mod class_styles;
-mod protel_hierarchy;
+mod net_text_hierarchy;
 
 mod bom_hierarchy;
 mod channel_outputs;

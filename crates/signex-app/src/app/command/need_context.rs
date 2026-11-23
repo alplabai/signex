@@ -13,8 +13,9 @@
 //!
 //! Known exception, pending kill-check decision 8 (`BoardSketchSession` lives
 //! in `InteractionState`): `document_is_dirty_board` and a board's
-//! `can_undo` / `can_redo` read its sketch session. A board sketch is board
-//! work, so the facts stay core;
+//! `can_undo` / `can_redo` read its sketch session, and so does
+//! `has_dirty_documents`, which counts an unapplied sketch as the board's
+//! unsaved work. A board sketch is board work, so the facts stay core;
 //! `a_board_sketch_session_is_the_known_interaction_read_of_the_core_facts`
 //! pins the dirty-board read, so moving the session turns it red.
 
@@ -37,6 +38,7 @@ pub(crate) struct CoreContext {
     pub can_undo: bool,
     pub can_redo: bool,
     pub project_dirty: bool,
+    pub has_dirty_documents: bool,
     pub has_document: bool,
     pub has_open_project: bool,
     pub has_active_path: bool,
@@ -89,6 +91,7 @@ impl CommandContext {
             can_undo: self.can_undo,
             can_redo: self.can_redo,
             project_dirty: self.project_dirty,
+            has_dirty_documents: self.has_dirty_documents,
             has_document: self.has_document,
             has_open_project: self.has_open_project,
             has_active_path: self.has_active_path,

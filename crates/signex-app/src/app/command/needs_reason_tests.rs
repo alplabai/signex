@@ -18,6 +18,8 @@ fn old_reason(need: Needs) -> &'static str {
             "Save needs a schematic or editor document, or a project with unsaved changes"
         }
         Needs::SaveAsTarget => "Save As needs a schematic, symbol or footprint document",
+        // New with `save_all` (#2844): it replaced no English literal.
+        Needs::UnsavedWork => "Nothing is unsaved",
         Needs::PrintTarget => "Print needs an open schematic or PCB",
         Needs::Document => "No document is open",
         Needs::Undo => "Nothing to undo",
@@ -85,7 +87,7 @@ fn every_need() -> Vec<Needs> {
 #[test]
 fn every_reason_renders_the_english_it_replaced() {
     let needs = every_need();
-    assert_eq!(needs.len(), 46, "a need no catalog id reaches: {needs:?}");
+    assert_eq!(needs.len(), 47, "a need no catalog id reaches: {needs:?}");
     for need in needs {
         assert_eq!(
             Translatable::new(need.reason()).render_en_us(),

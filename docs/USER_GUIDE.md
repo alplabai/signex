@@ -1183,7 +1183,7 @@ it, and **Save As** in the document's own folder. With no project open, or for
 the bundled Sample Project (which lives in the app's config folder), the export
 and New Project dialogs leave the folder to the operating system.
 
-**Tools ▸ Reports** also offers **Netlist (Protel .NET)…** and **ERC Report…**.
+**Tools ▸ Reports** also offers **Netlist (.NET)…** and **ERC Report…**.
 When some pages cannot go into the netlist (a missing or unreadable sheet file,
 a sheet cycle), the netlist export stops and lists them with the reason.
 **Cancel**, the default, writes nothing; **Export anyway (incomplete)** writes

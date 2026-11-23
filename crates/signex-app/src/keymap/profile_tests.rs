@@ -15,6 +15,28 @@ fn loads_built_in_profiles() {
     assert_eq!(set.active_profile().id, "signex_standard");
 }
 
+/// #2844: Save All is `Mod+Alt+S` in both profiles, Save As keeps
+/// `Mod+Shift+S`. On macOS the same binding is Cmd+Alt+S.
+#[test]
+fn save_all_and_save_as_keep_their_own_keys_in_both_profiles() {
+    let set = ShortcutProfileSet::built_ins().unwrap();
+    let save_all = AppCommandId::new("save_all").unwrap();
+    let save_as = AppCommandId::new("save_document_as").unwrap();
+    for profile in set.profiles() {
+        for (platform, all_key, as_key) in [
+            (Platform::Windows, "Ctrl+Alt+S", "Ctrl+Shift+S"),
+            (Platform::Linux, "Ctrl+Alt+S", "Ctrl+Shift+S"),
+            (Platform::MacOs, "\u{2325}\u{2318}S", "\u{21E7}\u{2318}S"),
+        ] {
+            let keymap = CompiledKeymap::compile_for(profile, platform);
+            let all_label = keymap.shortcut_label(&save_all);
+            let as_label = keymap.shortcut_label(&save_as);
+            assert_eq!(all_label.as_deref(), Some(all_key), "{}", profile.id);
+            assert_eq!(as_label.as_deref(), Some(as_key), "{}", profile.id);
+        }
+    }
+}
+
 #[test]
 fn lookup_supports_pending_multi_stroke_sequences() {
     let set = ShortcutProfileSet::built_ins().unwrap();

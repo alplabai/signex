@@ -5,8 +5,8 @@
 
 use signex_types::schematic::{HAlign, Point, TextNote, VAlign};
 
+use super::net_text_hierarchy::placed_app;
 use super::open_with;
-use super::protel_hierarchy::placed_app;
 use crate::app::handlers::menu::export::settle;
 use crate::app::{ExportMsg, Message, PrintPreviewMsg, Signex};
 

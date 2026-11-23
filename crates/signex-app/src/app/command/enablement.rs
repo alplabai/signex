@@ -1298,13 +1298,15 @@ mod tests {
         let after = app.command_context(None).core();
 
         assert!(before.document_is_dirty_board && !after.document_is_dirty_board);
+        assert!(before.has_dirty_documents && !after.has_dirty_documents);
         assert_eq!(
             super::super::need_context::CoreContext {
                 document_is_dirty_board: true,
+                has_dirty_documents: true,
                 ..after
             },
             before,
-            "in this fixture the session moves only the dirty-board fact; its \
+            "in this fixture the session moves only the two dirty facts; its \
              fresh history leaves can_undo / can_redo as the board has them"
         );
     }

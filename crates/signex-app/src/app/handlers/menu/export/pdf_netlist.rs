@@ -192,7 +192,7 @@ impl Signex {
         // #431: instead of a dead-end error, raise a two-choice prompt — the
         // refusal stays the default (nothing written until the user acts), but
         // "Export anyway (incomplete)" writes the partial `.net` and reports
-        // the omission to the Messages panel (Protel has no comment syntax, so
+        // the omission to the Messages panel (`.NET` has no comment syntax, so
         // the file itself stays clean). See
         // `handle_netlist_export_anyway`.
         if issues.netlist_is_incomplete() {
@@ -241,7 +241,7 @@ impl Signex {
     /// #431 — "Export anyway (incomplete)". The user explicitly chose to ship
     /// the partial netlist. Re-derives the export scope, writes the
     /// best-available (root-reachable) netlist to the pending path, then clears
-    /// the prompt. Protel has no comment syntax, so the file is a clean,
+    /// the prompt. `.NET` has no comment syntax, so the file is a clean,
     /// valid netlist; the omission is reported as a warning (the omitted pages,
     /// one per line) in the Messages panel and the log, so a partial `.net`
     /// never reaches disk without the user having been told.

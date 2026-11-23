@@ -12,7 +12,7 @@ File/Close Document	item	Close Document	close_active_document	Ctrl+F4	CloseDocum
 File/---	separator	-	-	-	-	-	-
 File/Save	item	Save	save_document	Mod+S	Save	01010011	cmd:save_document
 File/Save As...	item	Save As...	save_document_as	Mod+Shift+S	SaveAs	01010010	cmd:save_document_as
-File/Save All	item	Save All	-	-	SaveAll	01000001	dirty
+File/Save All	item	Save All	save_all	Mod+Alt+S	SaveAll	01000001	cmd:save_all
 File/---	separator	-	-	-	-	-	-
 File/Library	submenu	Library	-	-	-	-	-
 File/Library/Open Library...	item	Open Library...	-	-	LibraryOpenLibrary	11111111	always
@@ -208,7 +208,7 @@ Tools/Annotation/Back Annotate Schematics...	item	Back Annotate Schematics...	-	
 Tools/Annotation/Number Schematic Sheets...	item	Number Schematic Sheets...	-	-	NumberSchematicSheets	01001000	cmd:number_schematic_sheets
 Tools/Reports	submenu	Reports	-	-	-	-	-
 Tools/Reports/Bill of Materials…	item	Bill of Materials…	-	-	ExportBom	01000000	sch
-Tools/Reports/Netlist (Protel .NET)...	item	Netlist (Protel .NET)...	-	-	ExportNetlist	01000000	sch
+Tools/Reports/Netlist (.NET)...	item	Netlist (.NET)...	-	-	ExportNetlist	01000000	sch
 Tools/Reports/ERC Report…	item	ERC Report…	-	-	ExportErcReport	01000000	sch
 Tools/Reports/---	separator	-	-	-	-	-	-
 Tools/Reports/Board Bill of Materials…	item	Board Bill of Materials…	-	-	BoardReportBom	01100000	cmd:board_report_bom
