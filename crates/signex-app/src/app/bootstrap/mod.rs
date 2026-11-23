@@ -35,6 +35,8 @@ pub(in crate::app) fn main_window_title(i18n: &signex_i18n::I18n, dirty_count: u
 
 #[cfg(test)]
 mod boot_tests;
+#[cfg(test)]
+mod chooser_subscription_tests;
 mod new;
 #[cfg(test)]
 pub(in crate::app) use new::first_run_tour_boot;
