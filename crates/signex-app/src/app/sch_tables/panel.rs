@@ -28,8 +28,7 @@ impl Signex {
 
     pub(crate) fn handle_annotation_panel(&mut self, msg: AnnotationPanelMsg) -> Task<Message> {
         if self.is_dimension_tool_form_shown() {
-            self.handle_dimension_tool_panel(msg);
-            return Task::none();
+            return self.handle_dimension_tool_panel(msg);
         }
         let Some(id) = self.selected_annotation() else {
             return Task::none();
@@ -61,6 +60,8 @@ impl Signex {
                 self.document_state.panel_ctx.annotation.draft = None;
                 self.apply_annotation_edit_to(id, &edit);
             }
+            // Only the armed tool's form has this box.
+            AnnotationPanelMsg::OverrideEscaped => {}
             AnnotationPanelMsg::CsvImportRequested => {
                 return self.dispatch_tables(TablesMsg::CsvImportRequested(id));
             }

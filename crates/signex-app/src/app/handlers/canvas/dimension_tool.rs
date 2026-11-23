@@ -6,7 +6,7 @@ use signex_types::schematic::{DimensionDirection, Point, SchDimension, SchDrawin
 
 use super::super::super::*;
 use crate::app::sch_tables::{AnnotationEdit, apply_annotation_edit};
-use crate::panels::{AnnotationPanelMsg, DimensionToolForm};
+use crate::panels::{AnnotationField, AnnotationPanelMsg, DimensionToolForm};
 
 /// The span the form's drawing shows until two points are clicked (mm).
 const SAMPLE_SPAN_MM: f64 = 12.7;
@@ -63,7 +63,7 @@ impl Signex {
     }
 
     /// A message of the armed tool's form: it edits the tool, never the sheet.
-    pub(crate) fn handle_dimension_tool_panel(&mut self, msg: AnnotationPanelMsg) {
+    pub(crate) fn handle_dimension_tool_panel(&mut self, msg: AnnotationPanelMsg) -> Task<Message> {
         let id = uuid::Uuid::nil();
         match msg {
             AnnotationPanelMsg::FieldTyped(field, text) => {
@@ -77,18 +77,38 @@ impl Signex {
                 }
             }
             AnnotationPanelMsg::FieldSubmitted(field) => {
-                let draft = &mut self.document_state.panel_ctx.annotation.draft;
-                if matches!(draft, Some((d, f, _)) if *d == id && *f == field) {
-                    *draft = None;
-                }
+                return self.submit_dimension_tool_field(field);
             }
             AnnotationPanelMsg::Picked(edit) => {
                 self.document_state.panel_ctx.annotation.draft = None;
                 self.apply_dimension_tool_edit(&edit);
             }
+            // The box captured the key: this is the press's one Esc.
+            AnnotationPanelMsg::OverrideEscaped => {
+                return self.update(Message::Input(InputMsg::EscapePressed { window: None }));
+            }
             AnnotationPanelMsg::CsvImportRequested | AnnotationPanelMsg::CsvExportRequested => {}
         }
         self.sync_annotation_draft();
+        Task::none()
+    }
+
+    /// Enter in the form: the typed value stands and a paused tool goes on
+    /// placing, as a second Tab does. Text that does not read keeps the pause.
+    fn submit_dimension_tool_field(&mut self, field: AnnotationField) -> Task<Message> {
+        let draft = &mut self.document_state.panel_ctx.annotation.draft;
+        let typed = draft.take_if(|(id, f, _)| id.is_nil() && *f == field);
+        let reads = typed.is_none_or(|(_, _, text)| {
+            self.document_state.active_engine().is_some_and(|engine| {
+                let sheet = engine.document();
+                field.edit(&text, |y| sheet.page_y(y)).is_some()
+            })
+        });
+        self.sync_annotation_draft();
+        if !reads || !self.interaction_state.active_canvas().placement_paused {
+            return Task::none();
+        }
+        self.update(Message::Tool(ToolMessage::PrePlacementTab))
     }
 
     fn apply_dimension_tool_edit(&mut self, edit: &AnnotationEdit) {
