@@ -377,7 +377,7 @@ pub(super) fn open_measurement_pair(app: &mut Signex, fx: &Fixture) -> Result<()
 }
 
 /// Add a parameter row holding this measurement to the open modal.
-fn add_measurement(
+pub(super) fn add_measurement(
     app: &mut Signex,
     fx: &Fixture,
     value: &str,

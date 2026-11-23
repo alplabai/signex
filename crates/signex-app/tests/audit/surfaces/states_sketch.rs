@@ -12,7 +12,7 @@ use super::lib;
 use crate::fixture::{self, Fixture};
 use crate::render;
 use crate::surface::{OpenFn, Surface, WindowSel};
-use signex_app::app::{BoardSketchMsg, Message, PcbMsg, Signex, UpdatePcbMsg, WindowMsg};
+use signex_app::app::{BoardSketchMsg, Message, PcbMsg, Signex, UiMsg, UpdatePcbMsg, WindowMsg};
 use signex_app::dock::{DockMessage, PanelPosition};
 use signex_app::library::LibraryMessage;
 use signex_app::library::editor::footprint::sketch_mode::SketchCanvasMsg;
@@ -69,6 +69,18 @@ fn footprint_rows() -> Vec<Surface> {
         }),
         row("m191-mirror", "Mirror about a centerline", |app, r, fx| {
             let (mut draft, array) = patterned(false);
+            // The bake skips a pattern whose source is not a pad.
+            let seed = draft.sketch.entities[0].id;
+            if let ArrayKind::Linear { source, .. } = &mut draft.sketch.arrays[0].kind {
+                *source = seed;
+            }
+            draft.sketch.entities[0].pad = Some(PadAttr {
+                number: "1".into(),
+                shape: PadShape::Rect,
+                size_x_expr: "0.6mm".into(),
+                size_y_expr: "0.6mm".into(),
+                ..PadAttr::default()
+            });
             let (a, b) = (draft.point(0.0, -4.0), draft.point(0.0, 4.0));
             let line = draft.line(a, b);
             if let Some(entity) = draft.sketch.entities.iter_mut().find(|e| e.id == line) {
@@ -312,8 +324,9 @@ fn edit(app: &mut Signex, path: &Path, msg: FootprintEditorMsg) -> Result<(), St
     )
 }
 
-/// `sketch` in a footprint editor tab, in sketch mode.
-fn open_sketch(
+/// `sketch` in a footprint editor tab, in sketch mode. The idle cursor
+/// message fills the words the canvas draws (pattern letters, badges).
+pub(super) fn open_sketch(
     app: &mut Signex,
     r: &mut iced::Renderer,
     fx: &Fixture,
@@ -325,6 +338,7 @@ fn open_sketch(
     lib::open_footprint_document(app, &path, footprint);
     let _ = render::draw_main(r, app);
     edit(app, &path, FootprintEditorMsg::SetMode(EditorMode::Sketch))?;
+    h::settle(app, Message::Ui(UiMsg::DragMove(0.0, 0.0)))?;
     let _ = render::draw_main(r, app);
     Ok(path)
 }
