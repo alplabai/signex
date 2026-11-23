@@ -574,6 +574,39 @@ fn sheet_actions_open_child_sheet_needs_a_sheet_symbol() {
     assert!(!has_row(&top, "Open Child Sheet"), "left at the top level");
 }
 
+/// #2847: a sheet symbol whose file is missing greys Open Child Sheet with the
+/// reason; Create Sheet stays live, since that is how the file gets made.
+#[test]
+fn sheet_actions_open_is_greyed_with_the_reason_when_the_file_is_missing() {
+    let i18n = signex_i18n::I18n::en_us_ref();
+    let hint = |_: &str| String::new();
+    let rows = super::submenu::sheet_actions_entries(
+        i18n,
+        TID,
+        CanvasSelection {
+            child_sheet_selected: true,
+            child_sheet_file_missing: true,
+            ..selected()
+        },
+        &hint,
+    );
+    let open = rows
+        .iter()
+        .find_map(|entry| match entry {
+            DropdownEntry::Item(item) if item.command_id == Some("open_child_sheet") => Some(item),
+            _ => None,
+        })
+        .expect("the Open row");
+    assert!(open.disabled && open.on_press.is_none());
+    let reason = i18n.message_plain(signex_i18n::ids::PROPERTIES_SHEET_OPEN_MISSING, &[]);
+    assert_eq!(open.tooltip.as_deref(), Some(reason.as_str()));
+    let create = rows.iter().any(|entry| {
+        matches!(entry, DropdownEntry::Item(item)
+            if item.command_id == Some("create_sheet_from_sheet_symbol") && item.on_press.is_some())
+    });
+    assert!(create, "Create Sheet stays live");
+}
+
 /// The document tab menu for tab `tab_idx` of `total_tabs`, with the file in
 /// an open project, every tab on the main strip and `Ctrl+W` bound to
 /// `close_active_document`.

@@ -918,6 +918,32 @@ fn open_and_create_child_sheet_rows_start_the_descent_through_the_symbol() {
     }
 }
 
+/// #2847: Open Sheet on a file found missing logs the reason and opens
+/// nothing, with no Create Sheet dialog; the Create row still offers it.
+#[test]
+fn open_row_on_a_missing_file_says_why_and_only_create_offers_the_dialog() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, _tmp, child_path) = app_with_sheet_symbol(None);
+    let tabs = app.document_state.tabs.len();
+    let task = press(&mut app, "open_child_sheet");
+    crate::app::path_ops::settle_task(&mut app, task);
+    assert_eq!(app.document_state.tabs.len(), tabs, "no tab opened");
+    assert!(app.ui_state.create_child_sheet_confirm.is_none());
+    let reason = signex_i18n::I18n::en_us_ref()
+        .message_plain(signex_i18n::ids::PROPERTIES_SHEET_OPEN_MISSING, &[]);
+    let logged = format!("{reason} ({})", child_path.display());
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|entry| entry.message == logged),
+        "{logged}"
+    );
+
+    let task = press(&mut app, "create_sheet_from_sheet_symbol");
+    crate::app::path_ops::settle_task(&mut app, task);
+    assert!(app.ui_state.create_child_sheet_confirm.is_some());
+}
+
 #[test]
 fn find_row_opens_the_find_dialog() {
     let mut app = one_symbol();

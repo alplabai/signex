@@ -35,7 +35,7 @@ impl Signex {
         };
 
         if let Some((sheet_symbol, child_filename)) = child_filename_to_open {
-            return self.descend_through_sheet_symbol(sheet_symbol, child_filename.as_str());
+            return self.open_sheet_through_symbol(sheet_symbol, child_filename.as_str());
         }
 
         // Lasso already commits on the second single-click

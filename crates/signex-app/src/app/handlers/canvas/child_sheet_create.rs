@@ -30,9 +30,10 @@ pub(crate) struct ChildSheetPlan {
 }
 
 impl Signex {
-    /// A sheet symbol was descended into (double-click, Enter, "Open Child
-    /// Sheet", the context menu) but its file is missing: open the Create
-    /// Sheet dialog. `loud`: an unsaved parent gets a notice, not just a log.
+    /// Create Sheet was asked for a sheet symbol (its row, the Properties
+    /// banner, a missing row in the tree) whose file is missing: open the
+    /// Create Sheet dialog. `loud`: an unsaved parent gets a notice, not just a
+    /// log.
     pub(crate) fn open_create_child_sheet_dialog(&mut self, symbol: Uuid, loud: bool) {
         let Some((name, filename)) = self.sheet_symbol_identity(symbol) else {
             return;

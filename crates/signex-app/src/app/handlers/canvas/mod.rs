@@ -507,10 +507,10 @@ impl Signex {
         filenames
     }
 
-    /// Descend through the selected sheet symbol; `None` when none is selected.
+    /// Open Sheet on the selected sheet symbol; `None` when none is selected.
     pub(crate) fn open_selected_child_sheet(&mut self) -> Option<Task<Message>> {
         let (sheet_symbol, filename) = self.selected_child_sheet()?;
-        Some(self.descend_through_sheet_symbol(sheet_symbol, filename.as_str()))
+        Some(self.open_sheet_through_symbol(sheet_symbol, filename.as_str()))
     }
 
     /// The document a reported cursor point belongs to: the active schematic,

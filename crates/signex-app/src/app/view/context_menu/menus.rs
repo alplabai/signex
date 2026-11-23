@@ -122,6 +122,7 @@ impl Signex {
                 .selected
                 .iter()
                 .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet),
+            child_sheet_file_missing: self.selected_sheet_file_missing(window_id),
             drawing_selected: canvas
                 .selected
                 .iter()
@@ -386,6 +387,9 @@ impl Signex {
 pub(super) struct CanvasSelection {
     pub(super) has_selection: bool,
     pub(super) child_sheet_selected: bool,
+    /// The selected sheet symbol's file is missing: Open Sheet is greyed and
+    /// says why (#2847).
+    pub(super) child_sheet_file_missing: bool,
     pub(super) drawing_selected: bool,
     /// One non-power symbol: the placed-part actions apply (#1260).
     pub(super) placed_part_selected: bool,

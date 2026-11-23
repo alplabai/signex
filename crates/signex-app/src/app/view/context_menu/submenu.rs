@@ -405,12 +405,20 @@ pub(super) fn sheet_actions_entries(
         dd_ruled(i18n, icon, id, &hint(id), &selection.commands, applies)
     };
     let child = selection.child_sheet_selected;
-    vec![
-        row(
-            Some(ic::icon_dd_open_child_sheet(tid)),
-            "open_child_sheet",
-            child,
+    let file_missing = child && selection.child_sheet_file_missing;
+    let open = row(
+        Some(ic::icon_dd_open_child_sheet(tid)),
+        "open_child_sheet",
+        child && !file_missing,
+    );
+    let open = match open {
+        DropdownEntry::Item(item) if file_missing => DropdownEntry::Item(
+            item.tooltip(text(i18n, signex_i18n::ids::PROPERTIES_SHEET_OPEN_MISSING)),
         ),
+        other => other,
+    };
+    vec![
+        open,
         row(None, "create_sheet_from_sheet_symbol", child),
         row(None, "sync_sheet_pins", child),
         // #1276: the sync with a preview, then a new symbol from a sheet file.

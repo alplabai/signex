@@ -3,7 +3,8 @@
 //! Open Sheet) → Style (Border, Fill, Line Width, Reset to Default) →
 //! Entries (read-only, name and direction). A symbol whose file is not in
 //! the project folder gets an error banner offering Create Sheet… and
-//! Browse…, and its File field an error outline.
+//! Browse…, its File field an error outline, and Open Sheet is disabled with
+//! the reason under it.
 
 use super::super::*;
 use super::illustrations::sheet_symbol::{
@@ -14,7 +15,7 @@ use super::placed_rows::{RowLook, push_location_section};
 use crate::panels::SelectionFormMsg;
 use crate::panels::form_look;
 use crate::panels::multi_selection::{
-    control_row, counted_section, hover_linked, illustration_view,
+    control_row, counted_section, hover_linked, illustration_view, inset_caption,
 };
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
@@ -124,7 +125,7 @@ fn file_key(reference: &str) -> String {
 /// Whether the project tree marks the file `reference` names as a missing
 /// child sheet. The tree's facts come from the off-thread file probe, so
 /// the view reads no disk; until a probe answers, a file counts as present.
-pub(in crate::panels) fn sheet_file_missing(
+pub(crate) fn sheet_file_missing(
     projects: &[crate::panels::ProjectPanelInfo],
     reference: &str,
 ) -> bool {
@@ -208,6 +209,11 @@ fn missing_banner<'a>(ctx: &'a PanelContext, sheet: &ChildSheet) -> Element<'a, 
     .boxed()
 }
 
+/// What Open Sheet sends; a missing file leaves the button disabled.
+fn open_sheet_press(missing: bool) -> Option<PanelMsg> {
+    (!missing).then_some(PanelMsg::CommandButtonPressed(OPEN_SHEET_COMMAND))
+}
+
 /// Name, File (with Browse…) and the Open Sheet action.
 fn properties_section<'a>(
     ctx: &'a PanelContext,
@@ -244,7 +250,7 @@ fn properties_section<'a>(
                 .boxed();
             let open = button(text(t!(i18n, ids::PROPERTIES_SHEET_OPEN)).size(TS.caption))
                 .padding([SP.s, SP.m])
-                .on_press(PanelMsg::CommandButtonPressed(OPEN_SHEET_COMMAND))
+                .on_press_maybe(open_sheet_press(missing))
                 .style(form_look::ghost_button);
             let file_label = t!(i18n, ids::PANELS_CHILD_SHEET_FILE);
             // With the multi-channel view the name is the designator, where
@@ -263,7 +269,7 @@ fn properties_section<'a>(
                     control_row(label, name_input.boxed(), muted),
                 )
             };
-            Column::new()
+            let rows = Column::new()
                 .spacing(0)
                 .width(Length::Fill)
                 .push(name_row)
@@ -276,7 +282,15 @@ fn properties_section<'a>(
                     signex_i18n::UserText::new(String::new()),
                     open.boxed(),
                     muted,
+                ));
+            if missing {
+                rows.push(inset_caption(
+                    t!(i18n, ids::PROPERTIES_SHEET_OPEN_MISSING),
+                    muted,
                 ))
+            } else {
+                rows
+            }
         },
     )
     .boxed()
@@ -612,6 +626,16 @@ mod tests {
             !rows_mark_missing(&project_page, "debug.snxsch"),
             "a missing project page is not a sheet symbol's file"
         );
+    }
+
+    /// #2847: Open Sheet sends nothing while the file is missing.
+    #[test]
+    fn open_sheet_is_disabled_only_for_a_missing_file() {
+        assert!(open_sheet_press(true).is_none());
+        assert!(matches!(
+            open_sheet_press(false),
+            Some(PanelMsg::CommandButtonPressed(OPEN_SHEET_COMMAND))
+        ));
     }
 
     #[test]
