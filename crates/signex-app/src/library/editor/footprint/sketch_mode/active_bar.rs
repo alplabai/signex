@@ -13,7 +13,7 @@
 //!    tool's icon so the collapsed bar still shows what's in hand.
 //! 3. **Modify ▾** — the edit tools and Make Pad from Profile.
 //! 4. **Constrain** — all 19 constraint buttons, always; one the
-//!    selection cannot take is greyed and inert. In a narrow window this
+//!    selection cannot take is greyed and inert. On a narrow canvas this
 //!    strip alone scrolls ([`CONSTRAINT_SLOTS`]).
 //! 5. **Dimension input** — `Custom` slot with a `text_input` for
 //!    the `DistancePtPt` numeric value.

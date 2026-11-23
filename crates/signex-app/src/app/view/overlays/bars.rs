@@ -221,19 +221,25 @@ impl Signex {
             tokens,
             &self.ui_state.i18n,
         );
-        let window_width = self.ui_state.size_of_window(window_id).0;
+        let span = self.footprint_bar_span(window_id);
         let bar = signex_widgets::active_bar::view_within(
             bar_items,
             crate::library::editor::footprint::unified_active_bar::scrolling_slots(editor),
-            crate::library::editor::footprint::unified_active_bar::bar_max_width(window_width),
+            crate::library::editor::footprint::unified_active_bar::bar_max_width(span.width),
             tokens,
         )
         .map(Message::Library)
         .boxed();
+        let past_canvas = self.ui_state.size_of_window(window_id).0 - span.x - span.width;
         out.push(
             column![
                 iced::widget::Space::new().height(y_offset + bar_margin),
                 container(super::scroll_guard(bar))
+                    .padding(iced::Padding {
+                        left: span.x,
+                        right: past_canvas.max(0.0),
+                        ..iced::Padding::ZERO
+                    })
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
             ]
@@ -249,13 +255,28 @@ impl Signex {
                 tokens,
                 footprint_presets,
                 dropdown_top,
-                window_width,
+                span,
                 &self.ui_state.i18n,
             )
         {
             out.push(super::scroll_guard(overlay.map(Message::Library).boxed()));
         }
         out
+    }
+
+    /// The canvas between the docks of `window_id`, where the footprint
+    /// Active Bar fits and centres: the window's own layout when undocked,
+    /// the focused pane when the main window is tiled.
+    pub(in crate::app::view) fn footprint_bar_span(
+        &self,
+        window_id: iced::window::Id,
+    ) -> crate::library::editor::footprint::unified_active_bar::BarSpan {
+        let undocked = (self.ui_state.main_window_id != Some(window_id)).then_some(window_id);
+        let canvas = self.canvas_bounds_in(undocked);
+        crate::library::editor::footprint::unified_active_bar::BarSpan {
+            x: canvas.x,
+            width: canvas.width,
+        }
     }
 
     /// v0.26 — right-click context menu overlay for the footprint

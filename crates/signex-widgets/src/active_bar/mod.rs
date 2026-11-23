@@ -215,18 +215,21 @@ where
     for item in items {
         row_widget = row_widget.push(view_item(item, tokens, &m));
     }
-    bar_shell(row_widget.boxed(), tokens)
+    bar_shell(row_widget.boxed(), iced::Padding::new(m.padding), tokens)
 }
 
 /// The bar's padded, bordered surface around its row of slots.
-fn bar_shell<'a, M>(slots: Element<'a, M>, tokens: &'a ThemeTokens) -> Element<'a, M>
+fn bar_shell<'a, M>(
+    slots: Element<'a, M>,
+    padding: iced::Padding,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, M>
 where
     M: 'static + Clone,
 {
     let skin = skin::Skin::of(tokens);
-    let m = Metrics::GRAPHITE;
     container(slots)
-        .padding(m.padding)
+        .padding(padding)
         .style(move |_: &Theme| iced::widget::container::Style {
             background: Some(iced::Background::Color(skin.fill)),
             border: Border {
