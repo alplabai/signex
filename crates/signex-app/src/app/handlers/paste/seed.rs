@@ -21,6 +21,9 @@ pub struct PasteSeed {
     pub net_names: HashSet<String>,
     /// Sheets that exist but could not be read, with why.
     pub unreadable: Vec<(PathBuf, String)>,
+    /// Every sheet whose net names are unknown (`app::unread_sheets`): those
+    /// and the missing or refused files a sheet symbol places.
+    pub unread_sheets: Vec<PathBuf>,
     /// The read itself did not finish; `counters` says nothing.
     pub failed: bool,
 }
@@ -65,6 +68,7 @@ impl Signex {
                             .map(str::to_owned)
                             .collect(),
                         unreadable: set.unreadable.clone(),
+                        unread_sheets: crate::app::unread_sheets::unread_sheets(&set),
                     }
                 })
                 .await
@@ -74,6 +78,7 @@ impl Signex {
                     used: HashSet::new(),
                     net_names: HashSet::new(),
                     unreadable: vec![(target, format!("the numbering task failed: {error}"))],
+                    unread_sheets: Vec::new(),
                 })
             },
             move |seed| {
@@ -100,8 +105,10 @@ impl Signex {
                 .unreadable
                 .iter()
                 .map(|(path, _)| path.clone())
+                .chain(seed.unread_sheets.iter().cloned())
                 .collect();
             sheets.sort();
+            sheets.dedup();
             (target, sheets)
         });
         // A read that did not finish has no numbers: what an earlier read
@@ -153,6 +160,24 @@ mod tests {
         app.store_paste_seed(&request("a.snxsch"), &failed);
         let kept = app.interaction_state.paste_counters.as_ref().unwrap();
         assert_eq!(kept.counters.get("R"), Some(&4));
+    }
+
+    /// #2744: a missing or refused file a symbol places counts with the
+    /// unreadable ones, each named once.
+    #[test]
+    fn placed_missing_and_refused_sheets_are_kept_for_smart_paste() {
+        let (mut app, _task) = Signex::new();
+        let (bad, gone) = (PathBuf::from("bad.snxsch"), PathBuf::from("gone.snxsch"));
+        let seed = PasteSeed {
+            unreadable: vec![(bad.clone(), "garbled".into())],
+            unread_sheets: vec![bad.clone(), gone.clone()],
+            ..PasteSeed::default()
+        };
+        app.store_paste_seed(&request("a.snxsch"), &seed);
+        assert_eq!(
+            app.interaction_state.paste_unread_sheets,
+            Some((PathBuf::from("a.snxsch"), vec![bad, gone]))
+        );
     }
 
     /// #2744: an unread sheet is remembered for Smart Paste, also when the
