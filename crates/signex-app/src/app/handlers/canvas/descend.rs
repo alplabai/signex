@@ -23,7 +23,7 @@ enum OnMissingFile {
 /// Say why a sheet symbol's file cannot be opened, in the words Properties
 /// and the context menu use.
 pub(super) fn log_missing_sheet_refused(path: &std::path::Path) {
-    let reason = signex_i18n::I18n::en_us_ref()
+    let reason = signex_i18n::I18n::en_us()
         .message_plain(signex_i18n::ids::PROPERTIES_SHEET_OPEN_MISSING, &[]);
     crate::diagnostics::log_warning(format!("{reason} ({})", path.display()));
 }
