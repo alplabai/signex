@@ -105,6 +105,58 @@ fn a_rewritten_name_that_exists_stops_the_paste_and_is_named() {
     assert!(app.interaction_state.placement.is_some());
 }
 
+/// The project read for this dialog could not read `bad.snxsch`.
+fn with_an_unread_sheet(app: &mut Signex) -> std::path::PathBuf {
+    let bad = std::path::PathBuf::from("bad.snxsch");
+    let target = app.document_state.active_path.clone().expect("a sheet");
+    app.interaction_state.paste_unread_sheets = Some((target, vec![bad.clone()]));
+    bad
+}
+
+/// #2744: a rewritten name may join a net on a sheet that was not read, so
+/// Paste is off with the sheet named, and a direct Paste says so in Messages
+/// and leaves the dialog open with nothing on the cursor.
+#[test]
+fn an_unread_sheet_stops_a_paste_that_rewrites_a_net_and_is_named() {
+    let _ = signex_app::diagnostics::init_logging();
+    let before = signex_app::diagnostics::newest_entry_id();
+    let mut app = app_with_copy();
+    let labels = label_texts(&app);
+    smart_paste_dialog(&mut app, |app| {
+        let bad = with_an_unread_sheet(app);
+        dialog(app, SmartPasteMsg::NetsPicked(NetChoice::Rewrite));
+        let state = app.ui_state.smart_paste.as_ref().expect("open");
+        assert_eq!(state.unread_sheets_in_the_way(), [bad]);
+        assert!(!state.can_paste());
+    });
+    assert!(
+        app.interaction_state.placement.is_none(),
+        "nothing goes on the cursor"
+    );
+    assert!(app.ui_state.smart_paste.is_some(), "the dialog stays open");
+    assert_eq!(label_texts(&app), labels);
+    assert!(
+        signex_app::diagnostics::entries_since(before)
+            .entries
+            .iter()
+            .any(|e| e.message.contains("Smart Paste stopped") && e.message.contains("bad.snxsch")),
+        "Messages names the sheet"
+    );
+}
+
+/// #2744: Keep rewrites no net name, so it has nothing to collide with.
+#[test]
+fn an_unread_sheet_does_not_stop_a_paste_that_keeps_its_nets() {
+    let mut app = app_with_copy();
+    smart_paste_dialog(&mut app, |app| {
+        with_an_unread_sheet(app);
+        dialog(app, SmartPasteMsg::NetsPicked(NetChoice::Keep));
+        let state = app.ui_state.smart_paste.as_ref().expect("open");
+        assert!(state.can_paste());
+    });
+    assert!(app.interaction_state.placement.is_some());
+}
+
 #[test]
 fn the_offset_puts_the_copy_beside_the_click() {
     let mut app = app_with_copy();

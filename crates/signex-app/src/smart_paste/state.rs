@@ -63,6 +63,8 @@ pub struct SmartPasteState {
     pub copied_nets: Vec<(String, bool)>,
     /// The net names the project already writes (#2744).
     pub names_in_use: HashSet<String>,
+    /// Project sheets whose net names could not be read (#2744).
+    pub unread_sheets: Vec<PathBuf>,
     /// "R4 → R6, R5 → R7": what Next free calls the parts, per copy.
     pub next_free_text: String,
     /// The clipboard's drawables and their box, for the preview.
@@ -92,6 +94,7 @@ impl SmartPasteState {
             summary: ClipboardSummary::default(),
             copied_nets: Vec::new(),
             names_in_use: HashSet::new(),
+            unread_sheets: Vec::new(),
             next_free_text: String::new(),
             shapes: Vec::new(),
             bounds: ((0.0, 0.0), (0.0, 0.0)),
@@ -162,10 +165,33 @@ impl SmartPasteState {
             .unwrap_or_default()
     }
 
-    /// Whether Paste can go ahead: the input reads and no name is taken.
+    /// The unread sheets that stop this paste (#2744): their net names are
+    /// unknown, so a rewritten name could join one. Empty when the paste
+    /// rewrites no net name.
+    #[must_use]
+    pub fn unread_sheets_in_the_way(&self) -> &[PathBuf] {
+        let rewrites = self.input().is_ok_and(|input| input.rewrite.is_some())
+            && self.copied_nets.iter().any(|(_, power)| !power);
+        if rewrites { &self.unread_sheets } else { &[] }
+    }
+
+    /// The sheets of [`Self::unread_sheets_in_the_way`], as one line.
+    #[must_use]
+    pub fn unread_sheets_text(&self) -> String {
+        self.unread_sheets_in_the_way()
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    /// Whether Paste can go ahead: the input reads, no name is taken and no
+    /// unread sheet could hold a rewritten name.
     #[must_use]
     pub fn can_paste(&self) -> bool {
-        self.input().is_ok() && self.taken_names().is_empty()
+        self.input().is_ok()
+            && self.taken_names().is_empty()
+            && self.unread_sheets_in_the_way().is_empty()
     }
 
     /// The offset (or step) the drawing's first copy sits at.
@@ -276,6 +302,25 @@ mod tests {
         s.start = "2".into();
         s.nets = NetChoice::Keep;
         assert!(s.can_paste(), "Keep is a chosen join");
+    }
+
+    /// #2744: only a rewritten signal net can collide with an unread name.
+    #[test]
+    fn an_unread_sheet_stops_only_a_paste_that_rewrites_a_net_name() {
+        let bad = PathBuf::from("bad.snxsch");
+        let mut s = SmartPasteState::new(PathBuf::from("/p/a.snxsch"), 20.32);
+        s.unread_sheets = vec![bad.clone()];
+        s.copied_nets = vec![("FB".into(), false), ("GND".into(), true)];
+        assert_eq!(s.unread_sheets_in_the_way(), [bad]);
+        assert!(!s.can_paste());
+        s.nets = NetChoice::Keep;
+        assert!(s.unread_sheets_in_the_way().is_empty());
+        assert!(s.can_paste(), "Keep rewrites nothing");
+        s.nets = NetChoice::Rewrite;
+        s.copied_nets = vec![("GND".into(), true)];
+        assert!(s.can_paste(), "a power net is never rewritten");
+        s.copied_nets.clear();
+        assert!(s.can_paste(), "no net at all");
     }
 
     #[test]

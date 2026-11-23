@@ -889,6 +889,7 @@ impl Signex {
                 placement_pause: None,
                 last_placement: None,
                 paste_counters: None,
+                paste_unread_sheets: None,
                 paste_designators_override: None,
                 placement_epoch: 0,
                 pending_port: None,

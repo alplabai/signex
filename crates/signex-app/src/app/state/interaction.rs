@@ -227,6 +227,9 @@ pub struct InteractionState {
     /// Designator numbers for pasted parts (Next free), seeded when a paste
     /// starts.
     pub paste_counters: Option<super::PasteCounters>,
+    /// The sheet the last numbering read was for and the project sheets it
+    /// could not read; Smart Paste stops on them (#2744).
+    pub paste_unread_sheets: Option<(std::path::PathBuf, Vec<std::path::PathBuf>)>,
     /// The designator rule of the Smart Paste on the cursor (mockup row 155): its
     /// dialog's choice, used instead of the preference until the next paste
     /// starts.

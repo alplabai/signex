@@ -94,6 +94,16 @@ impl Signex {
                 path.display()
             ));
         }
+        // Kept for a failed read too: its net names are just as unknown.
+        self.interaction_state.paste_unread_sheets = request.path.clone().map(|target| {
+            let mut sheets: Vec<PathBuf> = seed
+                .unreadable
+                .iter()
+                .map(|(path, _)| path.clone())
+                .collect();
+            sheets.sort();
+            (target, sheets)
+        });
         // A read that did not finish has no numbers: what an earlier read
         // stored for this sheet stays, as it can only skip numbers.
         if seed.failed {
@@ -143,5 +153,31 @@ mod tests {
         app.store_paste_seed(&request("a.snxsch"), &failed);
         let kept = app.interaction_state.paste_counters.as_ref().unwrap();
         assert_eq!(kept.counters.get("R"), Some(&4));
+    }
+
+    /// #2744: an unread sheet is remembered for Smart Paste, also when the
+    /// read did not finish, and a clean read clears it.
+    #[test]
+    fn the_unread_sheets_of_the_last_read_are_kept_for_smart_paste() {
+        let (mut app, _task) = Signex::new();
+        let target = PathBuf::from("a.snxsch");
+        let bad = PathBuf::from("bad.snxsch");
+        for failed in [false, true] {
+            let seed = PasteSeed {
+                failed,
+                unreadable: vec![(bad.clone(), "garbled".into())],
+                ..PasteSeed::default()
+            };
+            app.store_paste_seed(&request("a.snxsch"), &seed);
+            assert_eq!(
+                app.interaction_state.paste_unread_sheets,
+                Some((target.clone(), vec![bad.clone()]))
+            );
+        }
+        app.store_paste_seed(&request("a.snxsch"), &PasteSeed::default());
+        assert_eq!(
+            app.interaction_state.paste_unread_sheets,
+            Some((target, Vec::new()))
+        );
     }
 }

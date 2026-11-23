@@ -912,8 +912,10 @@ the selection holds a member of a union. See
 Paste Special (`smart_paste`, mockup row 155) opens the Smart Paste dialog in a window:
 one copy at an offset or an array of copies, the designators Next free or
 kept, the net labels kept or rewritten with a pattern (power nets never). A
-rewritten name that already exists is named in the dialog and stops Paste. Its
-Paste puts every copy on the cursor and one click places them as one undo
+rewritten name that already exists is named in the dialog and stops Paste. So
+does a project sheet that cannot be read, when the paste rewrites a net name:
+its names are unknown, so the dialog names the sheet. Keeping the net names
+rewrites nothing and is not stopped. Its Paste puts every copy on the cursor and one click places them as one undo
 step; Esc cancels. A headless run of `smart_paste` places the copy at once
 beside the sheet's content, as before. Duplicate keeps its fixed offset.
 

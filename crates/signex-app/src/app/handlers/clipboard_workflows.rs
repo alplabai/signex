@@ -418,11 +418,19 @@ impl Signex {
         if let Some(live) = self.document_state.engines.get(&state.target) {
             names_in_use.extend(signex_net::sheet_net_names(live.document()).map(str::to_owned));
         }
+        let unread_sheets = self
+            .interaction_state
+            .paste_unread_sheets
+            .as_ref()
+            .filter(|(target, _)| *target == state.target)
+            .map(|(_, sheets)| sheets.clone())
+            .unwrap_or_default();
         let (shapes, bounds) = preview_shapes(&source);
         if let Some(state) = self.ui_state.smart_paste.as_deref_mut() {
             state.summary = summary;
             state.copied_nets = copied_nets;
             state.names_in_use = names_in_use;
+            state.unread_sheets = unread_sheets;
             state.next_free_text = next_free_text;
             state.shapes = shapes;
             state.bounds = bounds;
@@ -506,6 +514,18 @@ impl Signex {
                     self.ui_state.i18n,
                     signex_i18n::ids::SMART_PASTE_NAMES_TAKEN,
                     "names" => taken.join(", ")
+                )
+                .into_string(),
+            );
+            return;
+        }
+        let unread = state.unread_sheets_text();
+        if !unread.is_empty() {
+            crate::diagnostics::log_warning(
+                signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::SMART_PASTE_SHEET_UNREAD,
+                    "sheets" => unread
                 )
                 .into_string(),
             );
