@@ -37,7 +37,7 @@ pub(super) fn paste_button(
     state: &PasteArrayState,
     i18n: &I18n,
 ) -> (Localized, Option<PasteArrayMsg>) {
-    let label = match state.copies() {
+    let label = match state.new_copies() {
         Some(n) => t!(i18n, ids::PASTE_ARRAY_PASTE, "count" => n),
         None => t!(i18n, ids::PASTE_ARRAY_PASTE_NONE),
     };
@@ -70,7 +70,7 @@ fn help_line(state: &PasteArrayState, i18n: &I18n) -> Localized {
     match (state.sample_label.as_deref(), step) {
         (Some(label), Some(step)) => {
             let n = state
-                .copies()
+                .new_copies()
                 .map_or(1, |n| (n as usize).min(EXAMPLE_COPIES));
             let to = stepped_labels(label, step, n).join(", ");
             t!(i18n, ids::PASTE_ARRAY_HINT_EXAMPLE, "from" => label, "to" => to)
@@ -212,9 +212,9 @@ fn preview_block<'a>(
             state.unit
         )
     };
-    let plan = preview_plan(input.count);
+    let plan = preview_plan(input.positions());
     let drawing = preview::illustration(PreviewSpec {
-        copies: input.count,
+        positions: input.positions(),
         dx_mm: input.dx_mm,
         dy_mm: input.dy_mm,
         step: input.step,
@@ -467,17 +467,33 @@ mod tests {
     }
 
     #[test]
-    fn the_footer_counts_copies_times_items_per_copy() {
+    fn the_footer_counts_new_copies_times_items_per_copy() {
         let en = I18n::en_us();
         let mut s = state();
         s.count = "4".into();
         assert_eq!(
             plain(items_line(&s, &en).unwrap()),
-            "12 items will be placed"
+            "9 items will be placed"
         );
         let (label, msg) = paste_button(&s, &en);
-        assert_eq!(plain(label), "Paste 4 copies");
+        assert_eq!(plain(label), "Paste 3 copies");
         assert!(matches!(msg, Some(PasteArrayMsg::ApplyPressed)));
+    }
+
+    /// #2847: the default places one new copy; Copies = 1 places nothing, so
+    /// the button has no action and the field says why.
+    #[test]
+    fn the_default_is_one_new_copy_and_copies_1_is_refused() {
+        let en = I18n::en_us();
+        let mut s = state();
+        assert_eq!(s.count, "2");
+        assert_eq!(plain(paste_button(&s, &en).0), "Paste 1 copy");
+        s.count = "1".into();
+        let (label, msg) = paste_button(&s, &en);
+        assert_eq!(plain(label), "Paste");
+        assert!(msg.is_none());
+        assert!(items_line(&s, &en).is_none());
+        assert_eq!(s.invalid_field(), Some(PasteArrayField::Copies));
     }
 
     #[test]
@@ -502,7 +518,7 @@ mod tests {
         let texts = crate::layout_probe::lay_out_texts(view(&s, &tokens, &en), window);
         let button = texts
             .iter()
-            .find(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == "Paste 1,000 copies")
+            .find(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == "Paste 999 copies")
             .expect("the paste button is drawn");
         let sent = crate::layout_probe::messages_on_click_at(
             view(&s, &tokens, &en),
@@ -522,7 +538,7 @@ mod tests {
         let texts = crate::layout_probe::lay_out_texts(view(&s, &tokens, &en), window);
         let button = texts
             .iter()
-            .find(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == "Paste 1,000 copies")
+            .find(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == "Paste 999 copies")
             .expect("the paste button is drawn");
         let sent = crate::layout_probe::messages_on_click_at(
             view(&s, &tokens, &en),
@@ -562,7 +578,7 @@ mod tests {
         let mut s = state();
         s.count = "4".into();
         assert!(plain(help_line(&s, &en)).ends_with("(D0 → D1, D2, D3)."));
-        s.count = "1".into();
+        s.count = "2".into();
         assert!(plain(help_line(&s, &en)).ends_with("(D0 → D1)."));
         s.sample_label = None;
         assert_eq!(

@@ -500,6 +500,7 @@ impl Signex {
                 }
                 crate::panels::ProjectPanelInfo {
                     id: p.id,
+                    case_fold: p.case_fold,
                     name: p.data.name.clone(),
                     project_file: p.data.schematic_root.clone(),
                     project_file_open,
@@ -595,6 +596,11 @@ impl Signex {
         let selected_drawing_placement = self.document_state.panel_ctx.selected_drawing_placement;
         let annotation = self.annotation_panel_state();
         let selected_child_sheet = self.document_state.panel_ctx.selected_child_sheet.clone();
+        let selected_child_sheet_file = self
+            .document_state
+            .panel_ctx
+            .selected_child_sheet_file
+            .clone();
         let child_sheet_border_picker_open =
             self.document_state.panel_ctx.child_sheet_border_picker_open;
         let wire_color_picker = self.document_state.panel_ctx.wire_color_picker;
@@ -782,6 +788,7 @@ impl Signex {
             selected_drawing_placement,
             annotation,
             selected_child_sheet,
+            selected_child_sheet_file,
             directive_panel,
             child_sheet_border_picker_open,
             child_sheet_fill_picker_open,

@@ -106,7 +106,7 @@ paste-array-preview-caption = Preview · copy 1 is the original
 # Tooltips of the preview's expand button.
 paste-array-preview-expand = Expand preview
 paste-array-preview-collapse = Collapse preview
-# Beside the last drawn copy; $count is how many copies are not drawn.
+# Beside the last drawn copy; $count is how many positions are not drawn.
 paste-array-preview-more = +{ $count } more
 # Spacing callout on the preview; $value is the length with its unit.
 paste-array-preview-x = X { $value }
@@ -121,7 +121,8 @@ paste-array-items = { $count ->
     [one] 1 item will be placed
    *[other] { $count } items will be placed
 }
-# The primary button; $count is how many copies it places.
+# The primary button; $count is how many new copies it places, one less
+# than the Copies field, which counts the original.
 paste-array-paste = { $count ->
     [one] Paste 1 copy
    *[other] Paste { $count } copies

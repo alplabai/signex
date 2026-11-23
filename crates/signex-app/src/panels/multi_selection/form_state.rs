@@ -13,18 +13,20 @@ use signex_widgets::property_illustration::{IllustrationHover, IllustrationMsg};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum MultiKind {
     Parts,
+    PowerPorts,
     Labels,
     Wires,
 }
 
 impl MultiKind {
-    pub const ALL: [Self; 3] = [Self::Parts, Self::Labels, Self::Wires];
+    pub const ALL: [Self; 4] = [Self::Parts, Self::PowerPorts, Self::Labels, Self::Wires];
 
-    /// How many objects of this kind the form edits; `None` when the
+    /// How many objects of this kind the form counts; `None` when the
     /// selection holds none, so the chip and the section are left out.
     pub fn count_in(self, groups: &SelectionGroups) -> Option<usize> {
         match self {
             Self::Parts => groups.symbols.as_ref().map(|g| g.count),
+            Self::PowerPorts => (groups.power_ports > 0).then_some(groups.power_ports),
             Self::Labels => groups.labels.as_ref().map(|g| g.count),
             Self::Wires => groups.wires.as_ref().map(|g| g.count),
         }
