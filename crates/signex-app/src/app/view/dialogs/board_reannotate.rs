@@ -10,9 +10,7 @@ use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_engine::pcb::designators::{BottomSideOrder, Kept, KeptReason, ReannotateOrder};
 use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{
-    CheckboxLabel as _, Label, SegmentedStyle, button, checkbox, segmented, text,
-};
+use signex_widgets::{CheckboxLabel as _, Label, button, checkbox, segmented, text};
 
 use super::sizes;
 use crate::app::board_reannotate::preview::{PreviewRow, rows};
@@ -178,7 +176,7 @@ fn order_card<'a>(
     let words = column![
         text(name).size(TS.body).font(iced::Font {
             weight: iced::font::Weight::Semibold,
-            ..iced::Font::DEFAULT
+            ..signex_widgets::ui_font::regular()
         }),
         text(hint)
             .size(TS.caption)
@@ -199,7 +197,7 @@ fn order_card<'a>(
 
 /// A radio mark: an accent ring with a dot when picked, a hairline ring
 /// otherwise.
-fn radio_mark<'a>(on: bool, tokens: &ThemeTokens) -> Element<'a, Message> {
+pub(super) fn radio_mark<'a>(on: bool, tokens: &ThemeTokens) -> Element<'a, Message> {
     let r = tokens::resolve(tokens);
     let accent = tokens::accent(tokens);
     let edge = if on { accent } else { r.line_strong };
@@ -331,14 +329,7 @@ fn bottom_side<'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let r = tokens::resolve(tokens);
-    let style = SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        ti(tokens.text),
-        TS.body,
-    );
+    let style = r.segmented(TS.body);
     let options: [(BottomSideOrder, Label<'a>); 2] = [
         (
             BottomSideOrder::AfterTop,

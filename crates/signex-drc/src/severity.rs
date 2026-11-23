@@ -12,7 +12,7 @@ use crate::{LimitKind, UserRule, ViolationKind};
 
 impl ViolationKind {
     /// Every kind, most severe first (the report order).
-    pub const ALL: [ViolationKind; 18] = [
+    pub const ALL: [ViolationKind; 19] = [
         ViolationKind::Short,
         ViolationKind::Clearance,
         ViolationKind::Unconnected,
@@ -31,6 +31,7 @@ impl ViolationKind {
         ViolationKind::MaskExpansion,
         ViolationKind::PasteExpansion,
         ViolationKind::CourtyardOverlap,
+        ViolationKind::PartOutsideRoom,
     ];
 
     /// Stable rule id, stored in profiles and projects; never renamed.
@@ -54,6 +55,7 @@ impl ViolationKind {
             ViolationKind::MaskExpansion => "builtin::mask_expansion",
             ViolationKind::PasteExpansion => "builtin::paste_expansion",
             ViolationKind::CourtyardOverlap => "builtin::courtyard_overlap",
+            ViolationKind::PartOutsideRoom => "builtin::part_outside_room",
         }
     }
 
@@ -82,7 +84,8 @@ impl ViolationKind {
             | ViolationKind::ViaInPad
             | ViolationKind::MaskExpansion
             | ViolationKind::PasteExpansion
-            | ViolationKind::CourtyardOverlap => Severity::Error,
+            | ViolationKind::CourtyardOverlap
+            | ViolationKind::PartOutsideRoom => Severity::Error,
         }
     }
 
@@ -91,7 +94,9 @@ impl ViolationKind {
     pub const fn limits(self) -> &'static [LimitKind] {
         match self {
             ViolationKind::Short | ViolationKind::Clearance => &[LimitKind::MinClearance],
-            ViolationKind::Unconnected | ViolationKind::Keepout => &[],
+            ViolationKind::Unconnected
+            | ViolationKind::Keepout
+            | ViolationKind::PartOutsideRoom => &[],
             ViolationKind::TrackWidth => &[LimitKind::MinTrackWidth, LimitKind::MaxTrackWidth],
             ViolationKind::ViaDiameter => &[LimitKind::MinViaDiameter],
             ViolationKind::ViaDrill => &[LimitKind::MinViaDrill],

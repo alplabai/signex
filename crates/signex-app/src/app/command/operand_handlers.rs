@@ -99,6 +99,7 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("edit_no_erc_rules", directive::edit_no_erc_rules),
     ("place_compile_mask", directive::compile_mask),
     ("place_diff_pair", directive::diff_pair),
+    ("place_parameter_set", directive::net_parameters),
     ("autoplace_fields", extras::autoplace_fields),
     ("place_design_block", extras::place_design_block),
     ("import_graphics", extras::import_graphics),

@@ -99,8 +99,8 @@ fn align_and_shapes_have_expected_shape() {
     assert_eq!(items(&a).len(), 9);
     assert_eq!(seps(&a), 2);
     let s = render(signex_i18n::I18n::en_us_ref(), SHAPES, TID, true, true);
-    assert_eq!(items(&s).len(), 10);
-    assert_eq!(seps(&s), 2);
+    assert_eq!(items(&s).len(), 13);
+    assert_eq!(seps(&s), 3);
 }
 
 #[test]
@@ -130,6 +130,24 @@ fn filter_menu_is_a_single_custom_entry() {
     let filters = std::collections::HashSet::new();
     let entry = filter_entry(signex_i18n::I18n::en_us_ref(), &tokens, &filters, &[]);
     assert!(matches!(entry, DropdownEntry::Custom(_)));
+}
+
+/// Mockup row 61: the Selection Filter is a compact card with All / None,
+/// every chip and Save current inside it, in both themes.
+#[test]
+fn the_filter_menu_is_a_compact_card_holding_its_controls() {
+    let width = dropdown_min_width(ActiveBarMenu::Filter).expect("a pinned width");
+    for tid in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let tokens = signex_types::theme::theme_tokens(tid);
+        let filters = std::collections::HashSet::new();
+        let entry = filter_entry(signex_i18n::I18n::en_us_ref(), &tokens, &filters, &[]);
+        let card = signex_widgets::active_bar_dropdown::view(vec![entry], &tokens, Some(width));
+        let texts = crate::layout_probe::lay_out_texts(card, iced::Size::new(1440.0, 900.0));
+        for label in ["All", "None", "Sheet Symbols", "Other", "Save current"] {
+            let bounds = crate::layout_probe::find(&texts, label).bounds;
+            assert!(bounds.x + bounds.width <= width, "{label}: {bounds:?}");
+        }
+    }
 }
 
 /// Graphite mockup #61: the Power menu groups its ports under three subheads, labels each
@@ -166,10 +184,11 @@ fn power_menu_has_subheads_short_labels_and_full_tooltips() {
     }
 }
 
-/// The Harness group holds only planned tools, so the bar greys it and
-/// opens no menu; every other group opens one.
+/// No group holds only planned tools, so every group opens its menu: the
+/// Harness group's tools are live (#1280). The bar and its slot table have
+/// no greyed, menu-less group, so a group of only planned tools fails here.
 #[test]
-fn only_the_harness_group_is_planned() {
+fn no_group_is_planned() {
     use ActiveBarMenu as M;
     for menu in [
         M::Filter,
@@ -178,6 +197,7 @@ fn only_the_harness_group_is_planned() {
         M::Align,
         M::Wiring,
         M::Power,
+        M::Harness,
         M::SheetSymbol,
         M::Port,
         M::Directives,
@@ -187,7 +207,6 @@ fn only_the_harness_group_is_planned() {
     ] {
         assert!(!is_planned_menu(menu), "{menu:?}");
     }
-    assert!(is_planned_menu(M::Harness));
 }
 
 /// The table rows carry the active profile's key for their command.
@@ -648,9 +667,9 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         false,
         false,
         &[
-            "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -658,9 +677,9 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         false,
         true,
         &[
-            "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -668,9 +687,9 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         true,
         false,
         &[
-            "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -678,9 +697,9 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         true,
         true,
         &[
-            "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -768,10 +787,10 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         false,
         false,
         &[
-            "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Net Parameters|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Net Blanket|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
@@ -780,10 +799,10 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         false,
         true,
         &[
-            "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Net Parameters|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Net Blanket|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
@@ -792,10 +811,10 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         true,
         false,
         &[
-            "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Net Parameters|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Net Blanket|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
@@ -804,10 +823,10 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         true,
         true,
         &[
-            "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Net Parameters|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Net Blanket|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
@@ -865,7 +884,12 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Round Rectangle|disabled=true|icon=true|checked=false|shortcut=None",
             "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Bezier|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Table|disabled=false|icon=true|checked=false|shortcut=None",
+            "SEP",
+            "HEADER:Dimension",
+            "ITEM:Linear|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Aligned|disabled=false|icon=true|checked=false|shortcut=None",
             "SEP",
             "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
         ],
@@ -884,7 +908,12 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Round Rectangle|disabled=true|icon=true|checked=false|shortcut=None",
             "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Bezier|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Table|disabled=false|icon=true|checked=false|shortcut=None",
+            "SEP",
+            "HEADER:Dimension",
+            "ITEM:Linear|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Aligned|disabled=false|icon=true|checked=false|shortcut=None",
             "SEP",
             "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
         ],
@@ -903,7 +932,12 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Round Rectangle|disabled=true|icon=true|checked=false|shortcut=None",
             "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Bezier|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Table|disabled=false|icon=true|checked=false|shortcut=None",
+            "SEP",
+            "HEADER:Dimension",
+            "ITEM:Linear|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Aligned|disabled=false|icon=true|checked=false|shortcut=None",
             "SEP",
             "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
         ],
@@ -922,7 +956,12 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Round Rectangle|disabled=true|icon=true|checked=false|shortcut=None",
             "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Bezier|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Table|disabled=false|icon=true|checked=false|shortcut=None",
+            "SEP",
+            "HEADER:Dimension",
+            "ITEM:Linear|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Aligned|disabled=false|icon=true|checked=false|shortcut=None",
             "SEP",
             "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
         ],

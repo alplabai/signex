@@ -11,7 +11,7 @@ use super::illustrations::drawing_shape::{
     DRAW_SIZE, DRAW_WIDTH, ShapeFacts, shape_illustration,
 };
 use crate::app::contracts::DrawingFieldEdit as E;
-use crate::panels::form_look::{self, FormLook};
+use crate::panels::form_look;
 use crate::panels::multi_selection::{
     Cell, PairField, control_row, hover_linked, illustration_view, pair_row, segmented_cells,
 };
@@ -108,8 +108,16 @@ fn shown(field: DrawingFieldId, stored: f64, ctx: &PanelContext) -> String {
         .unwrap_or_else(|| format!("{stored:.3}"))
 }
 
-/// One half of a paired row: axis mark, box and unit. Each parsable
-/// keystroke is applied, as in every drawing field.
+/// The error colour while `field` holds text it cannot store (#2767).
+fn refused_ink(field: DrawingFieldId, ctx: &PanelContext) -> Option<Color> {
+    ctx.drawing_edit_buf
+        .get(&field)
+        .filter(|typed| field.refuses(typed))
+        .map(|_| crate::styles::ti(ctx.tokens.error))
+}
+
+/// One half of a paired row: axis mark, box and unit. A value the box can
+/// store previews while typed and commits on Enter or on leaving the box.
 fn half<'a>(
     ctx: &PanelContext,
     axis: MessageId,
@@ -122,7 +130,9 @@ fn half<'a>(
         value: shown(field, stored, ctx),
         unit: t!(ctx.i18n, unit),
         on_input: Box::new(move |s| PanelMsg::DrawingFieldTyping(field, s)),
-        on_submit: None,
+        on_submit: Some(PanelMsg::DrawingFieldLeft(field)),
+        on_blur: Some(PanelMsg::DrawingFieldLeft(field)),
+        error: refused_ink(field, ctx),
     }
 }
 
@@ -143,7 +153,9 @@ fn num_row<'a>(
     .padding(SP.s)
     .width(Length::Fill)
     .on_input(move |s| PanelMsg::DrawingFieldTyping(field, s))
-    .style(form_look::text_input_style);
+    .on_submit(PanelMsg::DrawingFieldLeft(field))
+    .on_blur(PanelMsg::DrawingFieldLeft(field))
+    .style(form_look::refusable_input_style(refused_ink(field, ctx)));
     let control = row![
         input,
         text(t!(ctx.i18n, unit)).size(TS.caption).color(muted)
@@ -485,7 +497,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
     let has_fill = matches!(kind.as_str(), "Rectangle" | "Circle" | "Polygon");
     let mut appearance = vec![drawing_stroke_color_row(
         current_color(ctx.selected_drawing.as_ref()),
-        muted,
+        ctx.wire_color_picker,
         &ctx.i18n,
     )];
     if has_fill {
@@ -519,66 +531,40 @@ fn current_color(drawing: Option<&SchDrawing>) -> Option<StrokeColor> {
         | SchDrawing::Circle { stroke_color, .. }
         | SchDrawing::Arc { stroke_color, .. }
         | SchDrawing::Polyline { stroke_color, .. } => *stroke_color,
+        SchDrawing::Bezier(b) => b.stroke_color,
+        SchDrawing::Dimension(d) => d.stroke_color,
+        SchDrawing::Table(_) => None,
     })
 }
 
-/// The stroke colour swatches: Auto (the theme's drawing colour) and five
-/// preset document colours. Each tile is one undoable edit.
+/// The stroke colour field (mockup row 48): a swatch reading Auto (the
+/// theme's drawing colour) or the code, opening the shared preset popover.
+/// Each pick is one undoable edit.
 fn drawing_stroke_color_row<'a>(
     current: Option<StrokeColor>,
-    muted: Color,
+    picker: crate::panels::WireColorPicker,
     i18n: &I18n,
 ) -> Element<'a, PanelMsg> {
-    use signex_widgets::{button, raw, text};
-    let rgb = |r: u8, g: u8, b: u8| -> StrokeColor { StrokeColor { r, g, b, a: 255 } };
-    let swatch = |c: StrokeColor| Color::from_rgb8(c.r, c.g, c.b);
-    // Only the Auto tile has a label; a colour tile is its swatch.
-    let tile = |label: Option<MessageId>, stored: Option<StrokeColor>| -> Element<'a, PanelMsg> {
-        let active = current == stored;
-        let face = match label {
-            Some(id) => text(t!(i18n, id)),
-            // raw: an empty face for a colour swatch, no text.
-            None => text(raw("")),
-        };
-        button(face.size(TS.body))
-            .padding([3, 6])
-            .on_press(PanelMsg::UpdateDrawingEdit(E::StrokeColor(stored)))
-            .style(move |theme: &Theme, _| {
-                let look = FormLook::of(theme);
-                iced::widget::button::Style {
-                    background: Some(Background::Color(stored.map_or(look.sunken, swatch))),
-                    border: Border {
-                        width: if active { 2.0 } else { 1.0 },
-                        radius: 3.0.into(),
-                        color: if active {
-                            look.accent
-                        } else {
-                            look.line_strong
-                        },
-                        ..Border::default()
-                    },
-                    text_color: look.ink,
-                    ..iced::widget::button::Style::default()
-                }
-            })
-            .boxed()
-    };
-    let presets = [
-        rgb(0xE5, 0x3E, 0x3E),
-        rgb(0x3E, 0xA5, 0x44),
-        rgb(0x3C, 0x85, 0xD6),
-        rgb(0xE6, 0xB7, 0x1E),
-        rgb(0xE0, 0xE0, 0xE0),
-    ];
-    let mut tiles = vec![tile(Some(ids::PANELS_DRAWING_COLOR_AUTO), None)];
-    tiles.extend(presets.into_iter().map(|c| tile(None, Some(c))));
-    control_row(
-        t!(i18n, ids::PANELS_DRAWING_COLOR),
-        iced::widget::Row::with_children(tiles)
-            .spacing(SP.s)
-            .width(Length::Fill)
-            .boxed(),
-        muted,
+    use crate::panels::wire_style_rows::{PopoverColorRow, popover_color_row_named};
+    let on_pick: std::rc::Rc<dyn Fn([u8; 4]) -> PanelMsg + 'static> =
+        std::rc::Rc::new(|[r, g, b, a]: [u8; 4]| {
+            PanelMsg::UpdateDrawingEdit(E::StrokeColor(Some(StrokeColor { r, g, b, a })))
+        });
+    popover_color_row_named(
+        PopoverColorRow {
+            label: t!(i18n, ids::PANELS_DRAWING_COLOR),
+            current: current.map(|c| [c.r, c.g, c.b, c.a]),
+            picker,
+            on_toggle: PanelMsg::ToggleWireColorPicker,
+            on_advanced: PanelMsg::OpenWireColorAdvancedPicker,
+            on_cancel: PanelMsg::CancelWireColorPicker,
+            on_pick,
+            on_clear: current
+                .is_some()
+                .then_some(PanelMsg::UpdateDrawingEdit(E::StrokeColor(None))),
+        },
+        ids::PANELS_DRAWING_COLOR_AUTO,
+        i18n,
     )
 }
 
@@ -685,6 +671,16 @@ mod tests {
             ],
         );
         assert!(at.windows(2).all(|w| w[0] < w[1]), "{shown:?}");
+    }
+
+    /// Mockup row 48: Color is one field reading Auto; its presets stay in
+    /// the popover until it is opened.
+    #[test]
+    fn the_color_row_is_one_field_reading_auto() {
+        let shown = texts("Rectangle", &[("Position", "1, 2"), ("Border", "0.2")]);
+        let at = order(&shown, &["Color", "Auto"]);
+        assert!(at[0] < at[1], "{shown:?}");
+        assert!(!shown.iter().any(|t| t == "Preset Colours"), "{shown:?}");
     }
 
     /// Mockup row 48: an arc keeps Center, Radius, Angles (Start / End on one row)

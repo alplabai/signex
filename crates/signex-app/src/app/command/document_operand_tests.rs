@@ -98,6 +98,7 @@ fn a_command_by_id_does_not_depend_on_what_the_active_tab_can_do() {
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uid(500),
@@ -313,6 +314,7 @@ fn a_document_that_cannot_take_the_command_is_refused_with_the_reason() {
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uid(500),
@@ -445,6 +447,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "edit_no_erc_rules",
         "place_compile_mask",
         "place_diff_pair",
+        "place_parameter_set",
         "place_component",
         "place_sheet_symbol",
         "place_sheet_entry",

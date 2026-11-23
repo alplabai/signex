@@ -184,7 +184,8 @@ pub(super) fn run_drc_rules_and_items(
                     | pcb_geom::ItemRef::Arc(id)
                     | pcb_geom::ItemRef::FreePad(id)
                     | pcb_geom::ItemRef::Dimension(id)
-                    | pcb_geom::ItemRef::Graphic { graphic: id, .. } => id.to_string(),
+                    | pcb_geom::ItemRef::Graphic { graphic: id, .. }
+                    | pcb_geom::ItemRef::Room(id) => id.to_string(),
                     pcb_geom::ItemRef::FootprintText { footprint, field } => {
                         format!("{footprint}/{}", field.id())
                     }

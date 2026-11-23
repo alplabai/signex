@@ -94,6 +94,8 @@ pub struct PasteCounters {
     pub counters: std::collections::HashMap<String, u32>,
     /// Every numbered designator the project uses, for Keep unless taken.
     pub used: std::collections::HashSet<String>,
+    /// Every net name the project's sheets write, for Smart Paste (#2744).
+    pub net_names: std::collections::HashSet<String>,
 }
 
 /// What "Repeat last item" arms again: the text-bearing tool that placed
@@ -125,6 +127,8 @@ pub enum SheetPlacementPause {
         at_pause: Option<Box<crate::panels::PrePlacementData>>,
         /// The designator typed for the part on the cursor.
         reference_override: Option<String>,
+        /// The undocked window paused in; `None` is the main window.
+        window: Option<iced::window::Id>,
     },
     /// A pad placement in the footprint editor at `path`.
     Footprint {

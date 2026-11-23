@@ -119,9 +119,10 @@ pub fn log_error(context: &str, error: &anyhow::Error) {
     error!("{context}: {error:#}");
 }
 
-/// [`log_error`] for a line already worded, context and cause chain included.
-pub fn log_error_line(line: &str) {
-    error!("{line}");
+/// [`log_error`] for a line already worded whole: a catalog message with its
+/// reason, or a context and cause chain.
+pub fn log_error_line(message: impl AsRef<str>) {
+    error!("{}", message.as_ref());
 }
 
 pub fn recent_entries() -> Vec<DiagnosticEntry> {

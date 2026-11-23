@@ -94,6 +94,7 @@ pub(super) fn power_sheet() -> SchematicSheet {
     s.directives.push(SchDirective::DiffPair {
         uuid: id(11),
         position: Point::new(3.0, 3.0),
+        class: None,
     });
     s
 }

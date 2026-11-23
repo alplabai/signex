@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 
 use iced::alignment::{Horizontal, Vertical};
 use iced::font::Weight;
-use iced::widget::{Row, container};
+use iced::widget::{Row, container, svg};
 use iced::{Alignment, Background, Border, Color, Element, Font, Length, Padding, Theme, Widget};
 use signex_i18n::{I18n, UserText};
 
@@ -31,6 +31,7 @@ const TAB_RADIUS_EM: f32 = 8.0 / 12.0;
 const BADGE_HEIGHT_EM: f32 = 16.0 / 12.0;
 const BADGE_PAD_EM: f32 = 4.0 / 12.0;
 const BADGE_TEXT_EM: f32 = 10.0 / 12.0;
+const DOT_EM: f32 = 7.0 / 12.0;
 /// Caption step of the type scale (`TypeScale::caption`).
 const CAPTION_RATIO: f32 = 10.0 / 11.0;
 
@@ -225,7 +226,7 @@ fn faded(c: Color, alpha: f32) -> Color {
 fn medium() -> Font {
     Font {
         weight: Weight::Medium,
-        ..Font::DEFAULT
+        ..crate::ui_font::regular()
     }
 }
 
@@ -262,11 +263,102 @@ pub fn chip<'a, M: Clone + 'a>(
     on_press: Option<M>,
 ) -> Element<'a, M> {
     let count = count.map(|n| count_text(i18n, n));
-    pill(label.into(), count, is_on, style, metrics, on_press)
+    pill(
+        Lead::None,
+        label.into(),
+        count,
+        is_on,
+        style,
+        metrics,
+        on_press,
+    )
+}
+
+/// A [`chip`] led by a monochrome glyph, tinted with the chip's ink.
+#[allow(clippy::too_many_arguments)]
+pub fn icon_chip<'a, M: Clone + 'a>(
+    glyph: svg::Handle,
+    label: impl Into<Label<'a>>,
+    count: Option<u32>,
+    is_on: bool,
+    style: ChipStyle,
+    metrics: ChipMetrics,
+    i18n: &I18n,
+    on_press: Option<M>,
+) -> Element<'a, M> {
+    let count = count.map(|n| count_text(i18n, n));
+    pill(
+        Lead::Glyph(glyph),
+        label.into(),
+        count,
+        is_on,
+        style,
+        metrics,
+        on_press,
+    )
+}
+
+/// A [`chip`] led by a round colour dot (a kind's colour). `count` is
+/// written out already, with [`count_text`].
+pub fn dot_chip<'a, M: Clone + 'a>(
+    dot: Color,
+    label: impl Into<Label<'a>>,
+    count: Option<String>,
+    is_on: bool,
+    style: ChipStyle,
+    metrics: ChipMetrics,
+    on_press: Option<M>,
+) -> Element<'a, M> {
+    pill(
+        Lead::Dot(dot),
+        label.into(),
+        count,
+        is_on,
+        style,
+        metrics,
+        on_press,
+    )
+}
+
+/// The round dot of a [`dot_chip`].
+fn dot_mark<'a, M: 'a>(colour: Color, metrics: ChipMetrics) -> Element<'a, M> {
+    let size = metrics.text_size * DOT_EM;
+    container(iced::widget::Space::new())
+        .width(size)
+        .height(size)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(colour)),
+            border: Border {
+                radius: (size / 2.0).into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// The glyph of an [`icon_chip`], one text size square.
+fn glyph_mark<'a, M: 'a>(handle: svg::Handle, ink: Color, metrics: ChipMetrics) -> Element<'a, M> {
+    svg(handle)
+        .width(metrics.text_size)
+        .height(metrics.text_size)
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(ink),
+            ..svg::Style::default()
+        })
+        .boxed()
+}
+
+/// What sits before a chip's label.
+enum Lead {
+    None,
+    Dot(Color),
+    Glyph(svg::Handle),
 }
 
 /// A chip whose count, if any, is already written out.
 fn pill<'a, M: Clone + 'a>(
+    lead: Lead,
     label: Label<'a>,
     count: Option<String>,
     is_on: bool,
@@ -284,6 +376,11 @@ fn pill<'a, M: Clone + 'a>(
         .spacing(metrics.gap)
         .height(Length::Fill)
         .align_y(Alignment::Center);
+    match lead {
+        Lead::None => {}
+        Lead::Dot(colour) => content = content.push(dot_mark(faded(colour, alpha), metrics)),
+        Lead::Glyph(handle) => content = content.push(glyph_mark(handle, ink, metrics)),
+    }
     content = content.push(label_text(label, metrics.text_size, ink, is_on));
     if let Some(count) = count {
         content = content.push(mono_text(
@@ -339,6 +436,7 @@ where
     for (value, label) in options {
         let on_press = Some(on_select(value));
         row = row.push(pill(
+            Lead::None,
             label,
             None,
             value == selected,
@@ -497,6 +595,41 @@ where
     V: Copy + PartialEq + 'a,
     M: Clone + 'a,
 {
+    tab_row(tabs, selected, style, metrics, i18n, on_select).boxed()
+}
+
+/// [`tab_chips`] that wraps onto another line when the width runs out, so
+/// what sits beside the tabs keeps its room.
+pub fn wrapping_tab_chips<'a, V, M>(
+    tabs: impl IntoIterator<Item = TabChip<'a, V>>,
+    selected: V,
+    style: TabChipStyle,
+    metrics: ChipMetrics,
+    i18n: &I18n,
+    on_select: impl Fn(V) -> M + 'a,
+) -> Element<'a, M>
+where
+    V: Copy + PartialEq + 'a,
+    M: Clone + 'a,
+{
+    tab_row(tabs, selected, style, metrics, i18n, on_select)
+        .wrap()
+        .vertical_spacing(metrics.tab_spacing)
+        .boxed()
+}
+
+fn tab_row<'a, V, M>(
+    tabs: impl IntoIterator<Item = TabChip<'a, V>>,
+    selected: V,
+    style: TabChipStyle,
+    metrics: ChipMetrics,
+    i18n: &I18n,
+    on_select: impl Fn(V) -> M + 'a,
+) -> Row<Element<'a, M>>
+where
+    V: Copy + PartialEq + 'a,
+    M: Clone + 'a,
+{
     let mut bar: Row<Element<'a, M>> = Row::new().spacing(metrics.tab_spacing);
     for tab in tabs {
         let is_on = tab.value == selected;
@@ -537,7 +670,7 @@ where
                 .boxed(),
         );
     }
-    bar.boxed()
+    bar
 }
 
 #[cfg(test)]
@@ -673,6 +806,17 @@ mod tests {
         let _: Element<'_, Kind> = kind_chip(sample("panel"), tone, m);
         let i18n = I18n::en_us_ref();
         let _: Element<'_, Kind> = chip(sample("Off"), Some(2), false, style(), m, i18n, None);
+        let glyph = svg::Handle::from_memory(&b"<svg xmlns='http://www.w3.org/2000/svg'/>"[..]);
+        let _: Element<'_, Kind> = icon_chip(
+            glyph,
+            sample("GUI"),
+            Some(1),
+            true,
+            style(),
+            m,
+            i18n,
+            Some(Kind::Errors),
+        );
         let _: Element<'_, Kind> = tab_chips(
             [
                 TabChip::new(Kind::Errors, sample("Clearance")).count(4),

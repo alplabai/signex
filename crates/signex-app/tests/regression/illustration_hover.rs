@@ -46,7 +46,7 @@ fn a_hover_of_another_subject_reads_as_none() {
     let mut app = app_with_empty_sheet();
     let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Wire)));
     let _ = app.update(Message::Tool(ToolMessage::PrePlacementTab));
-    hover(&mut app, IllustrationMsg::CalloutHovered(WIDTH));
+    hover(&mut app, IllustrationMsg::FieldHovered(WIDTH));
     assert!(is_lit(&app, &WIDTH));
 
     // The Tab form closes: the panel shows another subject.

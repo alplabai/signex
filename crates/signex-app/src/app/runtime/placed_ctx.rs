@@ -10,6 +10,10 @@ use super::super::*;
 impl Signex {
     pub(super) fn sync_placed_panel(&mut self) {
         let selected = &self.interaction_state.active_canvas().selected;
+        let selected_one = match selected.as_slice() {
+            [one] => Some(*one),
+            _ => None,
+        };
         let (item, geometry, locked, end, note) =
             match (selected.as_slice(), self.document_state.active_engine()) {
                 ([one], Some(engine)) => {
@@ -32,7 +36,20 @@ impl Signex {
                 _ => (None, None, None, None, None),
             };
         let sheet_path = self.document_state.active_path.clone();
+        let run_net = match (item, sheet_path.as_deref()) {
+            (Some(run), Some(sheet))
+                if matches!(
+                    run.kind,
+                    signex_types::schematic::SelectedKind::Wire
+                        | signex_types::schematic::SelectedKind::Bus
+                ) =>
+            {
+                self.run_net_of(sheet, run.uuid)
+            }
+            _ => None,
+        };
         let placed = &mut self.document_state.panel_ctx.placed;
+        placed.run_net = run_net;
         if placed.draft.as_ref().is_some_and(|d| Some(d.item) != item) {
             placed.draft = None;
         }
@@ -46,5 +63,6 @@ impl Signex {
             _ => None,
         };
         placed.sync_note(selected_note);
+        placed.sync_port_name(sheet_path.as_deref(), selected_one);
     }
 }

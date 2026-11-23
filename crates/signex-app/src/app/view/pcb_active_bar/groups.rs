@@ -1,12 +1,13 @@
 //! The tool group buttons of the PCB Active Bar (#2392), from the group
 //! table in `app/pcb_bar_groups.rs`. A button shows and runs the row its
 //! group used last, drawn selected while one of its tools is armed or its
-//! dropdown is open; a right-click opens the group's rows, greyed by the menu
-//! bar's gate, or with why for a tool the board editor cannot run yet. A
-//! group whose rows are all greyed is one greyed button that says why.
+//! dropdown is open; a right-click opens the group's rows under its name,
+//! greyed by the menu bar's gate, or with why for a tool the board editor
+//! cannot run yet. A group whose rows are all greyed is one greyed button
+//! that says why.
 
 use iced::widget::svg;
-use signex_i18n::{I18n, t};
+use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
@@ -72,37 +73,51 @@ pub(super) fn group_button(
     })
 }
 
-/// The rows of `group`'s dropdown. A live row runs its command, greyed as
-/// its menu row is in `ctx`; a tool the board editor cannot run yet is
-/// greyed and its tooltip says why.
+/// The dropdown of `group` (mockup row 108): a heading with the group's name, then
+/// its rows, the commands (Repour, Change Footprint) below a separator
+/// after the tools. The row the button shows (`last`) is drawn current. A
+/// live row runs its command, greyed as its menu row is in `ctx`; a tool the
+/// board editor cannot run yet is greyed and its tooltip says why.
 pub(super) fn entries(
     group: PcbBarGroup,
     i18n: &I18n,
     tid: ThemeId,
     ctx: &CommandContext,
+    last: &PcbBarLastTools,
 ) -> Vec<DropdownEntry<Message>> {
-    group
-        .rows()
-        .iter()
-        .map(|&row| {
-            let label = row_label(row, i18n);
-            let live = row
-                .command()
-                .and_then(|id| Some((id, AppCommandId::new(id).ok()?)));
-            let item = match live {
-                Some((id, command)) => {
-                    let enabled = is_enabled(&command, ctx);
-                    DropdownItem::new(label, bar_message(PcbBarMsg::CommandPicked(command)))
-                        .command(id)
-                        .disabled(!enabled)
-                }
-                None => DropdownItem::passive(label)
-                    .disabled(true)
-                    .tooltip(row_tooltip(row, i18n)),
-            };
-            DropdownEntry::Item(item.icon(menu_icon(row, tid)))
-        })
-        .collect()
+    let name = t!(i18n, ids::PCB_BAR_GROUP, "group" => group.key()).into_string();
+    let mut entries = vec![DropdownEntry::Header(i18n.upper_for_display(&name))];
+    let current = last.current(group);
+    let mut after_tool = false;
+    for &row in group.rows() {
+        let is_tool = matches!(row, PcbBarRow::Tool(_));
+        if after_tool && !is_tool {
+            entries.push(DropdownEntry::Separator);
+        }
+        after_tool = is_tool;
+        let item = row_item(row, i18n, ctx).selected(row == current);
+        entries.push(DropdownEntry::Item(item.icon(menu_icon(row, tid))));
+    }
+    entries
+}
+
+/// The dropdown row of `row`: live and gated by `ctx`, or greyed with why.
+fn row_item(row: PcbBarRow, i18n: &I18n, ctx: &CommandContext) -> DropdownItem<Message> {
+    let label = row_label(row, i18n);
+    let live = row
+        .command()
+        .and_then(|id| Some((id, AppCommandId::new(id).ok()?)));
+    match live {
+        Some((id, command)) => {
+            let enabled = is_enabled(&command, ctx);
+            DropdownItem::new(label, bar_message(PcbBarMsg::CommandPicked(command)))
+                .command(id)
+                .disabled(!enabled)
+        }
+        None => DropdownItem::passive(label)
+            .disabled(true)
+            .tooltip(row_tooltip(row, i18n)),
+    }
 }
 
 /// The row's name, as its Place (or Edit) row reads.
@@ -181,6 +196,7 @@ fn menu_icon(row: PcbBarRow, tid: ThemeId) -> svg::Handle {
         T::TextString => ic::icon_dd_text_string(tid),
         T::Dimension => ic::icon_pcb_dimension(tid),
         T::Keepout => ic::icon_pcb_keepout(tid),
+        T::Room => ic::icon_dd_rect(tid),
         T::Line => ic::icon_dd_line(tid),
         T::GraphicArc => ic::icon_dd_arc(tid),
         T::FullCircle => ic::icon_dd_circle(tid),

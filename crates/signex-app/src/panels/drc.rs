@@ -54,6 +54,9 @@ pub struct DrcPanel {
     /// The minimum clearance in mm, when the board set none and the default
     /// was used (or, before a run, will be).
     pub default_clearance_mm: Option<String>,
+    /// The clearance in mm the board is checked with where no rule is
+    /// written, its own or the default (mockup row 87).
+    pub checked_clearance_mm: Option<String>,
     /// The run applied a written clearance rule (the default note then says
     /// it holds only where no written rule does).
     pub written_clearance: bool,
@@ -90,7 +93,7 @@ pub(super) fn layer_label(i18n: &I18n, layer: Option<CopperLayer>) -> Option<Loc
     Some(crate::pcb_canvas::layer_style::copper_name(i18n, layer?))
 }
 
-pub(super) fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Localized) {
+pub(crate) fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Localized) {
     let kind = t!(i18n, kind_label(row.kind));
     // An unnetted object's net cell is empty.
     let net = |name: &String| {
@@ -139,6 +142,11 @@ pub(super) fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Loca
         | ViolationKind::SilkToPad
         | ViolationKind::SilkToSilk
         | ViolationKind::CourtyardOverlap => gap(),
+        // #2457: how far past the room's margin.
+        ViolationKind::PartOutsideRoom => t!(
+            i18n, ids::ROOMS_DRC_DETAIL,
+            "measured" => row.measured_mm.clone(), "margin" => row.required_mm.clone()
+        ),
         _ if row.over_maximum => limit(ids::DRC_DETAIL_AT_MOST),
         ViolationKind::TrackWidth
         | ViolationKind::ViaDiameter
@@ -174,6 +182,7 @@ pub(super) fn kind_label(kind: ViolationKind) -> signex_i18n::MessageId {
         ViolationKind::MaskExpansion => ids::DRC_KIND_MASK_EXPANSION,
         ViolationKind::PasteExpansion => ids::DRC_KIND_PASTE_EXPANSION,
         ViolationKind::CourtyardOverlap => ids::DRC_KIND_COURTYARD,
+        ViolationKind::PartOutsideRoom => ids::ROOMS_DRC_KIND,
     }
 }
 

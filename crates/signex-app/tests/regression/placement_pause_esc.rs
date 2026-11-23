@@ -17,6 +17,26 @@ fn esc(app: &mut Signex) {
     let _ = app.update(Message::Input(InputMsg::EscapePressed { window: None }));
 }
 
+/// #2769: a second Tab goes on placing with the edits, and leaves no pause
+/// for a later Esc to restore.
+#[test]
+fn a_second_tab_resumes_placing_with_the_edits() {
+    let mut app = app_with_empty_sheet();
+    app.ui_state.first_run_tour_open = false;
+    let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Wire)));
+    let _ = app.update(Message::Tool(ToolMessage::PrePlacementTab));
+    let _ = app.update(Message::Dock(DockMessage::Panel(
+        PanelMsg::SetPrePlacementWireWidth(WireWidthPreset::Large),
+    )));
+    let _ = app.update(Message::Tool(ToolMessage::PrePlacementTab));
+
+    assert!(!app.interaction_state.active_canvas().placement_paused);
+    assert!(app.interaction_state.placement_pause.is_none());
+    assert_eq!(app.interaction_state.current_tool, Tool::Wire);
+    let form = app.document_state.panel_ctx.pre_placement.as_ref();
+    assert_eq!(form.map(|f| f.wire_width), Some(WireWidthPreset::Large));
+}
+
 #[test]
 fn tab_edit_esc_then_the_next_wire_places_with_the_original_values() {
     let mut app = app_with_empty_sheet();

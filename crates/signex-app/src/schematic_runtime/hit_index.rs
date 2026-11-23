@@ -77,7 +77,7 @@ impl HitIndex {
                     let bus = &snapshot.buses[bus_index];
                     bus_index += 1;
                     let tolerance = widths
-                        .bus_mm()
+                        .bus_mm(bus)
                         .max(signex_types::schematic::SCHEMATIC_HIT_BUS_TOLERANCE_MM);
                     segment_entry(item.item, bus.start, bus.end, tolerance)
                 }
@@ -88,6 +88,16 @@ impl HitIndex {
                             extent,
                             shape: Shape::Frame { hole },
                         },
+                        None => Entry {
+                            item: item.item,
+                            extent: item.bbox.expand(0.25),
+                            shape: Shape::Box,
+                        },
+                    }
+                }
+                SelectedKind::HarnessWire => {
+                    match super::harness::wire_segment(snapshot, item.item.uuid) {
+                        Some((a, b, tolerance)) => segment_entry(item.item, a, b, tolerance),
                         None => Entry {
                             item: item.item,
                             extent: item.bbox.expand(0.25),

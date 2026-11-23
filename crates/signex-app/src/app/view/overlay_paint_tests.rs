@@ -71,6 +71,10 @@ fn the_netlist_incomplete_prompt_paints_with_no_editor_tab_active() {
             current_sheet: None,
             netlist_placements: Vec::new(),
         },
+        omitted: vec![crate::app::state::OmittedPage {
+            file: "two.snxsch".to_owned(),
+            reason: crate::app::state::OmittedReason::FileMissing { placed_by: None },
+        }],
     });
 
     let texts = main_window_texts(&app, window);

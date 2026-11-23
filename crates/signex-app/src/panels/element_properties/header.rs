@@ -62,7 +62,7 @@ fn title_row<'a>(header: &mut ObjectHeader<'a>) -> Element<'a, PanelMsg> {
                 .size(TS.label)
                 .font(iced::Font {
                     weight: iced::font::Weight::Semibold,
-                    ..iced::Font::DEFAULT
+                    ..signex_widgets::ui_font::regular()
                 })
                 .style(|theme: &Theme| iced::widget::text::Style {
                     color: Some(FormLook::of(theme).ink),

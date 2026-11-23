@@ -1,30 +1,23 @@
-//! #370 — "Align…" dialog for the footprint editor.
+//! #370 — "Align Selection" dialog for the footprint editor.
 //!
-//! The generic Align ▸ "Align…" row used to be a `coming soon` stub;
-//! this modal gives it a real per-axis dialog. It is a pure UI shell
-//! over the EXISTING [`AlignOp`] variants — it introduces no new
+//! A pure UI shell over the existing [`AlignOp`] variants: it adds no
 //! geometry. The user picks at most one horizontal op and at most one
-//! vertical op; Confirm applies both chosen axes under a SINGLE undo
-//! snapshot (the handler in `updates::active_bar` owns that), so the
-//! whole confirm is one undo step even when both axes move pads.
+//! vertical op, each on a segmented row (Left · Center · Right · Space ·
+//! None, Top · Center · Bottom · Space · None); Align applies both under a
+//! SINGLE undo snapshot (the handler in `updates::active_bar` owns that).
+//! "Space" is the distribute op: the outer pads stay, the gaps between
+//! the centres become equal.
 //!
-//! Structurally a sibling of `move_by_modal.rs` (the proven template):
-//! a `view_align_modal` returning `Option<Element>` that yields `None`
-//! when the modal is closed, all spacing/widths derived from the
-//! `FONT_SIZE` constant, and `ti(tokens.…)` for every colour.
-//!
-//! Mounting site: `app/view/mod.rs::collect_overlays`, alongside the
-//! Move-By modal. `footprint_align_overlay` returns nothing
-//! unless `ed.state.align_modal.is_some()`, so the modal's builder owns
-//! its open check and no other flag needs updating.
+//! Mounted by `app/view/overlays/bars.rs` (`footprint_align_overlay`),
+//! which draws nothing while `align_modal` is `None`.
 
 use std::path::Path;
 
 use iced::widget::{column, container, row};
 use iced::{Element, Length, Widget};
-use signex_widgets::{button, raw, text};
+use signex_widgets::{Label, SegmentedStyle, segmented, text};
 
-use signex_i18n::{ids, t};
+use signex_i18n::{I18n, MessageId, ids, t};
 use signex_types::theme::ThemeTokens;
 
 use crate::styles::{Spacing, TypeScale};
@@ -34,28 +27,37 @@ use crate::library::editor::footprint::state::AlignOp;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::library::modal_chrome;
 use crate::styles::ti;
-use crate::styles::tokens;
 
-/// The horizontal-axis options offered in the dialog, in display order.
-/// `None` = "leave the X axis untouched"; each `Some` maps to the same
-/// concrete [`AlignOp`] the dropdown's Align rows dispatch.
-const HORIZONTAL_OPTIONS: [(&str, Option<AlignOp>); 5] = [
-    ("None", None),
-    ("Left", Some(AlignOp::Left)),
-    ("Center", Some(AlignOp::CenterH)),
-    ("Right", Some(AlignOp::Right)),
-    ("Distribute", Some(AlignOp::DistributeH)),
+/// The horizontal-axis options, in display order. `None` leaves the X
+/// axis untouched; each `Some` is the op the dropdown's Align rows send.
+pub(crate) const HORIZONTAL_OPTIONS: [(MessageId, Option<AlignOp>); 5] = [
+    (ids::DIALOG_ALIGN_LEFT, Some(AlignOp::Left)),
+    (ids::DIALOG_ALIGN_CENTER, Some(AlignOp::CenterH)),
+    (ids::DIALOG_ALIGN_RIGHT, Some(AlignOp::Right)),
+    (ids::DIALOG_ALIGN_SPACE, Some(AlignOp::DistributeH)),
+    (ids::DIALOG_ALIGN_NONE, None),
 ];
 
-/// The vertical-axis options, in display order. `None` = "leave the Y
-/// axis untouched".
-const VERTICAL_OPTIONS: [(&str, Option<AlignOp>); 5] = [
-    ("None", None),
-    ("Top", Some(AlignOp::Top)),
-    ("Center", Some(AlignOp::CenterV)),
-    ("Bottom", Some(AlignOp::Bottom)),
-    ("Distribute", Some(AlignOp::DistributeV)),
+/// The vertical-axis options, in display order. `None` leaves the Y axis
+/// untouched.
+pub(crate) const VERTICAL_OPTIONS: [(MessageId, Option<AlignOp>); 5] = [
+    (ids::DIALOG_ALIGN_TOP, Some(AlignOp::Top)),
+    (ids::DIALOG_ALIGN_CENTER, Some(AlignOp::CenterV)),
+    (ids::DIALOG_ALIGN_BOTTOM, Some(AlignOp::Bottom)),
+    (ids::DIALOG_ALIGN_SPACE, Some(AlignOp::DistributeV)),
+    (ids::DIALOG_ALIGN_NONE, None),
 ];
+
+/// Card width and label column, in body-text ems: wide enough for all
+/// five segments of a row.
+const CARD_EM: f32 = 30.0;
+const LABEL_EM: f32 = 5.8;
+
+/// The segmented-control look from the theme tokens.
+fn segment_style(tokens: &ThemeTokens, text_size: f32) -> SegmentedStyle {
+    let r = crate::styles::tokens::resolve(tokens);
+    r.segmented(text_size).fill_width(true)
+}
 
 /// Build the Align dialog card for the active footprint editor. Returns
 /// `None` when the modal is closed (`align_modal` is `None`), so the
@@ -63,61 +65,66 @@ const VERTICAL_OPTIONS: [(&str, Option<AlignOp>); 5] = [
 pub fn view_align_modal<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
-    i18n: &signex_i18n::I18n,
+    i18n: &I18n,
 ) -> Option<Element<'a, LibraryMessage>> {
     let ts = TypeScale::default();
     let sp = Spacing::default();
     let modal = editor.state.align_modal.as_ref()?;
     let path = editor.path.clone();
-
     let text_muted = ti(tokens.text_secondary);
+    let style = segment_style(tokens, ts.body);
 
-    // Card width derives from the font size rather than magic pixels.
-    let card_w = Length::Fixed(ts.label * 26.0);
+    let header = modal_chrome::header(
+        &i18n.message_plain(ids::DIALOG_ALIGN_TITLE, &[]),
+        cancel_msg(&path),
+        false,
+        tokens,
+    );
 
-    let header = modal_chrome::header("Align Selection", cancel_msg(&path), false, tokens);
-
-    // One labelled axis group: a caption over a wrapping row of
-    // mutually-exclusive option chips. `selected` drives the accent
-    // highlight; each chip dispatches `ctor(option)` for the editor at
-    // `path`.
-    let axis_group = |caption: &'static str,
-                      options: &'static [(&'static str, Option<AlignOp>)],
-                      selected: Option<AlignOp>,
-                      ctor: fn(Option<AlignOp>) -> FootprintEditorMsg|
+    // One labelled axis row: the caption, then a segmented control whose
+    // pick sends `ctor(option)` to the editor at `path`.
+    let axis_row = |caption: MessageId,
+                    options: &[(MessageId, Option<AlignOp>); 5],
+                    selected: Option<AlignOp>,
+                    ctor: fn(Option<AlignOp>) -> FootprintEditorMsg|
      -> Element<'a, LibraryMessage> {
-        let mut chips = row![].spacing(sp.s);
-        for &(label, option) in options {
-            chips = chips.push(option_chip(
-                label,
-                option == selected,
-                LibraryMessage::PrimitiveEditorEvent {
-                    path: path.clone(),
-                    msg: PrimitiveEdit::Footprint(ctor(option)),
-                },
-                tokens,
-            ));
-        }
-        column![text(raw(caption)).size(ts.body).color(text_muted), chips,]
-            .spacing(sp.s)
-            .boxed()
+        let pick_path = path.clone();
+        let segments = segmented(
+            options
+                .iter()
+                .map(|&(label, option)| (option, Label::from(t!(i18n, label)))),
+            selected,
+            style,
+            move |option| LibraryMessage::PrimitiveEditorEvent {
+                path: pick_path.clone(),
+                msg: PrimitiveEdit::Footprint(ctor(option)),
+            },
+        );
+        row![
+            container(text(t!(i18n, caption)).size(ts.body).color(text_muted))
+                .width(Length::Fixed(ts.body * LABEL_EM)),
+            segments,
+        ]
+        .spacing(sp.s)
+        .align_y(iced::Alignment::Center)
+        .boxed()
     };
 
     let body = column![
-        axis_group(
-            "Horizontal",
+        axis_row(
+            ids::DIALOG_ALIGN_HORIZONTAL,
             &HORIZONTAL_OPTIONS,
             modal.horizontal,
             FootprintEditorMsg::AlignSetHorizontal,
         ),
-        axis_group(
-            "Vertical",
+        axis_row(
+            ids::DIALOG_ALIGN_VERTICAL,
             &VERTICAL_OPTIONS,
             modal.vertical,
             FootprintEditorMsg::AlignSetVertical,
         ),
     ]
-    .spacing(sp.l);
+    .spacing(sp.m);
 
     let footer = modal_chrome::footer_strip(
         Vec::new(),
@@ -128,7 +135,7 @@ pub fn view_align_modal<'a>(
                 tokens,
             ),
             modal_chrome::primary_btn(
-                t!(i18n, ids::DIALOG_BUTTON_OK),
+                t!(i18n, ids::DIALOG_BUTTON_ALIGN),
                 LibraryMessage::PrimitiveEditorEvent {
                     path,
                     msg: PrimitiveEdit::Footprint(FootprintEditorMsg::AlignConfirm),
@@ -139,9 +146,12 @@ pub fn view_align_modal<'a>(
         tokens,
     );
 
-    let card = container(column![header, container(body).padding(sp.l), footer,].width(card_w))
-        .style(crate::styles::modal_card(tokens))
-        .clip(true);
+    let card = container(
+        column![header, container(body).padding(sp.l), footer]
+            .width(Length::Fixed(ts.body * CARD_EM)),
+    )
+    .style(crate::styles::modal_card(tokens))
+    .clip(true);
 
     Some(card.boxed())
 }
@@ -155,28 +165,54 @@ fn cancel_msg(path: &Path) -> LibraryMessage {
     }
 }
 
-/// One mutually-exclusive option chip. `selected` fills it with the
-/// accent colour; otherwise it is a bordered outline chip.
-fn option_chip<'a>(
-    label: &'a str,
-    selected: bool,
-    message: LibraryMessage,
-    tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let ts = TypeScale::default();
-    let sp = Spacing::default();
-    let fg = if selected {
-        tokens::on_accent(tokens)
-    } else {
-        tokens::muted_text(tokens)
-    };
-    let chip = button(
-        container(text(raw(label.to_string())).size(ts.body).color(fg)).padding([sp.s, sp.m]),
-    )
-    .on_press(message);
-    if selected {
-        chip.style(crate::styles::accent_button(tokens)).boxed()
-    } else {
-        chip.style(crate::styles::outline_button(tokens)).boxed()
+#[cfg(test)]
+mod tests {
+    use super::{HORIZONTAL_OPTIONS, VERTICAL_OPTIONS};
+    use crate::library::editor::footprint::state::AlignOp;
+
+    fn labels(options: &[(signex_i18n::MessageId, Option<AlignOp>)]) -> Vec<String> {
+        let en = signex_i18n::I18n::en_us_ref();
+        options
+            .iter()
+            .map(|&(id, _)| en.message_plain(id, &[]))
+            .collect()
+    }
+
+    /// Each axis offers the same five choices as the radio lists did
+    /// (three aligns, distribute, leave alone), as segments in the order
+    /// Left Center Right Space None / Top Center Bottom Space None.
+    #[test]
+    fn each_axis_offers_three_aligns_distribute_and_none() {
+        assert_eq!(
+            labels(&HORIZONTAL_OPTIONS),
+            ["Left", "Center", "Right", "Space", "None"]
+        );
+        assert_eq!(
+            labels(&VERTICAL_OPTIONS),
+            ["Top", "Center", "Bottom", "Space", "None"]
+        );
+        let ops = |o: &[(signex_i18n::MessageId, Option<AlignOp>)]| {
+            o.iter().map(|&(_, op)| op).collect::<Vec<_>>()
+        };
+        assert_eq!(
+            ops(&HORIZONTAL_OPTIONS),
+            [
+                Some(AlignOp::Left),
+                Some(AlignOp::CenterH),
+                Some(AlignOp::Right),
+                Some(AlignOp::DistributeH),
+                None
+            ]
+        );
+        assert_eq!(
+            ops(&VERTICAL_OPTIONS),
+            [
+                Some(AlignOp::Top),
+                Some(AlignOp::CenterV),
+                Some(AlignOp::Bottom),
+                Some(AlignOp::DistributeV),
+                None
+            ]
+        );
     }
 }

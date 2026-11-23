@@ -147,7 +147,7 @@ fn rule<'a>(color: Color) -> Element<'a, PrefMsg> {
 fn medium() -> Font {
     Font {
         weight: iced::font::Weight::Medium,
-        ..Font::DEFAULT
+        ..signex_widgets::ui_font::regular()
     }
 }
 
@@ -273,10 +273,10 @@ fn table_row<'a>(
     match shadow_note(i18n, &row_model.trigger_config).filter(|_| !row_model.unbound) {
         Some(note) => tooltip(
             line,
-            iced::widget::container(
-                container(text(raw(note)).size(TS.caption)).padding([SP.xs, SP.m]),
-            )
-            .style(styles::context_menu(tokens)),
+            // raw: composed from the catalog and the fixed key's action name.
+            container(text(raw(note)).size(TS.caption))
+                .padding([SP.xs, SP.m])
+                .style(styles::context_menu(tokens)),
             tooltip::Position::FollowCursor,
         )
         .boxed(),
@@ -350,7 +350,7 @@ fn state_cell<'a>(i18n: &I18n, state: RowState, tokens: &ThemeTokens) -> Element
             .color(r.ink4)
             .font(Font {
                 style: iced::font::Style::Italic,
-                ..Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             })
             .boxed(),
         RowState::Editable | RowState::CreateCustom => {

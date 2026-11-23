@@ -7,6 +7,19 @@ use signex_types::schematic::{Bus, BusEntry, Point, Wire};
 
 use super::super::super::*;
 
+/// A wire's width in mm (0.0 = the default) and colour (`None` = the theme's).
+type WireStyle = (f64, Option<signex_types::theme::Color>);
+
+/// The style a new wire takes: each override of the wire it starts on wins
+/// over `base` (the Tab form's or the default); a field the start wire does
+/// not override keeps `base` (docs/DECISIONS.md, 2026-11-21).
+fn inherited_style(base: WireStyle, start: Option<WireStyle>) -> WireStyle {
+    let Some((width, color)) = start else {
+        return base;
+    };
+    (if width != 0.0 { width } else { base.0 }, color.or(base.1))
+}
+
 /// The commands that place `segments` as wires of `style` (width, colour):
 /// one per segment.
 pub(crate) fn wire_commands(
@@ -38,6 +51,7 @@ pub(crate) fn bus_commands(segments: &[(Point, Point)]) -> Vec<signex_engine::Co
                 uuid: uuid::Uuid::now_v7(),
                 start: seg.0,
                 end: seg.1,
+                ..Bus::default()
             },
         })
         .collect()
@@ -54,7 +68,11 @@ impl Signex {
         rule: CornerRule,
     ) -> (Point, bool) {
         let segments = rule.legs(start, end);
-        let commands = wire_commands(&segments, self.wire_placement_style());
+        let style = inherited_style(
+            self.wire_placement_style(),
+            self.interaction_state.wire_start_style,
+        );
+        let commands = wire_commands(&segments, style);
         let changed = !commands.is_empty() && self.apply_engine_commands(commands, false, false);
         (segments.last().map(|s| s.1).unwrap_or(end), changed)
     }
@@ -67,8 +85,25 @@ impl Signex {
         if signex_net::pt_key(&start) == signex_net::pt_key(&end) {
             return false;
         }
-        let commands = wire_commands(&[(start, end)], self.wire_placement_style());
+        // Inside a route the typed wire takes the route's start style.
+        let start_style = if self.interaction_state.wire_drawing {
+            self.interaction_state.wire_start_style
+        } else {
+            self.wire_style_at(start)
+        };
+        let style = inherited_style(self.wire_placement_style(), start_style);
+        let commands = wire_commands(&[(start, end)], style);
         self.apply_engine_commands(commands, false, false)
+    }
+
+    /// Width and colour of the wire at `at`: one ending there, else the one
+    /// whose body it is on, picked as `signex_net::wire_at_point` picks the
+    /// wire a label joins. `None` on no wire.
+    pub(crate) fn wire_style_at(&self, at: Point) -> Option<WireStyle> {
+        let sheet = self.document_state.edit_engine()?.document();
+        let id = signex_net::wire_at_point(sheet, &at)?;
+        let wire = sheet.wires.iter().find(|w| w.uuid == id)?;
+        Some((wire.stroke_width, wire.color))
     }
 
     /// The width and colour the next wire is placed with: what the Tab form

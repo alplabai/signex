@@ -19,7 +19,7 @@ const SP: Spacing = Spacing::DEFAULT;
 
 /// The root menus, left to right, as the menu bar names them. A test pins
 /// this to `menu_bar::model::root_titles`.
-const MENU_TITLES: [MessageId; 10] = [
+const MENU_TITLES: [MessageId; 8] = [
     ids::MENU_FILE,
     menu_ids::MENU_EDIT,
     menu_ids::MENU_VIEW,
@@ -27,8 +27,6 @@ const MENU_TITLES: [MessageId; 10] = [
     menu_ids::MENU_PLACE,
     menu_ids::MENU_DESIGN,
     menu_ids::MENU_TOOLS,
-    menu_ids::MENU_REPORTS,
-    menu_ids::MENU_WINDOW,
     menu_ids::MENU_HELP,
 ];
 

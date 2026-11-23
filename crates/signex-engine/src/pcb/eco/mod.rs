@@ -27,9 +27,14 @@
 //! - A part that cannot be read back is never removed or changed.
 //! - A placed part whose footprint cannot be resolved gets a note, and the
 //!   pads of it and of an unread part are left out of net sync.
+//!
+//! [`compare`] joins this list and Back Annotate's into one report of
+//! differences with a direction per row (Compare Board with Schematic,
+//! #2462).
 
 mod back;
 mod change;
+mod compare;
 mod diff;
 mod lower;
 mod nets;
@@ -41,6 +46,10 @@ pub use back::{
 };
 pub use change::{
     ChangeReason, EcoBlock, EcoChange, EcoChangeList, EcoGroup, EcoKey, EcoNote, EcoRow, GroupTicks,
+};
+pub use compare::{
+    CompareAction, CompareCounts, CompareJump, CompareKind, CompareObject, CompareReport,
+    CompareRow, CompareRowId, CompareValue, Compared, Direction, Unavailable, compare,
 };
 pub use diff::diff_board;
 pub(crate) use diff::remint_pads;
@@ -128,9 +137,31 @@ pub struct EcoInput<'a> {
 /// never dropped: dropping it would list its footprint for removal.
 pub fn design_eco_parts(
     sheets: &[(InstancePath, &SchematicSheet)],
+    resolve: impl FnMut(&DesignPart, &Symbol) -> Result<ResolvedFootprint, FootprintResolveError>,
+) -> Vec<EcoPart> {
+    eco_parts_of(signex_net::design_parts(sheets), sheets, resolve)
+}
+
+/// [`design_eco_parts`] with a part in a channel of a repeated sheet under
+/// its channel designator, so it matches the netlist's terminals.
+pub fn design_eco_parts_named(
+    sheets: &[(InstancePath, &SchematicSheet)],
+    channels: &signex_net::ChannelDesignators,
+    resolve: impl FnMut(&DesignPart, &Symbol) -> Result<ResolvedFootprint, FootprintResolveError>,
+) -> Vec<EcoPart> {
+    eco_parts_of(
+        signex_net::design_parts_named(sheets, channels),
+        sheets,
+        resolve,
+    )
+}
+
+fn eco_parts_of(
+    parts: Vec<DesignPart>,
+    sheets: &[(InstancePath, &SchematicSheet)],
     mut resolve: impl FnMut(&DesignPart, &Symbol) -> Result<ResolvedFootprint, FootprintResolveError>,
 ) -> Vec<EcoPart> {
-    signex_net::design_parts(sheets)
+    parts
         .into_iter()
         .map(|part| {
             let first = sheets

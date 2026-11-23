@@ -5,6 +5,8 @@
 //! Each file adds `impl CanvasSlot` methods; `canvas::Program::draw`
 //! assembles them in the original z-order.
 
+mod annotation_preview;
+pub(crate) use annotation_preview::{AnnotationDraft, AnnotationDraftKind, HintInk};
 mod background;
 mod drag;
 mod drag_points;

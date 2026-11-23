@@ -237,6 +237,7 @@ fn shared_divider_is_a_single_border_column() {
     let px = row(pill_quads, &first, &second);
     let at = |x: u32, y: u32| {
         let i = ((y * W + x) * 4) as usize;
+        // The headless screenshot is RGBA.
         [px[i], px[i + 1], px[i + 2]]
     };
     let border = [0.30f32, 0.32, 0.38].map(|c| (c * 255.0).round() as u8);

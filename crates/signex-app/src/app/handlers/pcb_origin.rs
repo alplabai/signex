@@ -5,7 +5,6 @@
 //! marks the board changed and is written on the next save. A read-only
 //! board takes none. See `docs/PCB_BOARD_OPTIONS.md`, "Origin".
 
-use signex_engine::pcb::placement::grid_for;
 use signex_i18n::{ids, t};
 use signex_types::pcb::Point;
 use std::path::Path;
@@ -69,7 +68,7 @@ impl Signex {
         let Some(board) = self.active_pcb() else {
             return true;
         };
-        let at = grid_for(board, GridUse::NonComponents).snap(at);
+        let at = self.board_grid_point(board, GridUse::NonComponents, at);
         self.set_pcb_origin(at);
         true
     }

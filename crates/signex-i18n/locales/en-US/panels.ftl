@@ -98,6 +98,37 @@ panels-pcb-nets-column-net = NET
 panels-pcb-nets-column-nodes = NODES
 # The routed length of the net, in millimetres.
 panels-pcb-nets-column-length = LENGTH
+# The net class a net belongs to.
+panels-pcb-nets-column-class = CLASS
+# Class cell of a net in no class.
+panels-pcb-nets-no-class = —
+# The PCB panel's mode dropdown.
+panels-pcb-mode-nets = Nets
+panels-pcb-mode-net-classes = Net Classes
+# Placeholder of the field that filters the net list by name.
+panels-pcb-nets-filter = Filter nets
+# Chips over the net list; the others are net class names.
+panels-pcb-nets-chip-all = All
+panels-pcb-nets-chip-unrouted = Unrouted
+# The chip and the filter leave no net in the list.
+panels-pcb-nets-no-match = No nets match this filter.
+# Detail of the selected net. $count is a whole number.
+panels-pcb-nets-detail-pads = Pads { $count }
+# One pad: its part's designator and its number.
+panels-pcb-nets-detail-pad = { $part }-{ $pad }
+# Where a drilled or multi-layer pad is.
+panels-pcb-nets-detail-multi = Multi
+panels-pcb-nets-detail-tracks = Tracks and vias
+panels-pcb-nets-detail-track-count =
+    { $count ->
+        [one] { $count } track
+       *[other] { $count } tracks
+    }
+# One layer's row: the layer's name and its track count.
+panels-pcb-nets-detail-layer-tracks = { $layer } · { $tracks }
+panels-pcb-nets-detail-vias = Vias
+# A length in millimetres; $length is already formatted.
+panels-pcb-nets-detail-mm = { $length } mm
 # Shown when the board has no nets.
 panels-pcb-nets-empty = This board has no nets.
 # Length cell of a net with nothing routed.
@@ -188,8 +219,6 @@ panels-kind-library = Library
 # Schematic symbol library.
 panels-kind-sch-library = SCH Library
 panels-kind-footprint-library = Footprint Library
-# The symbol editor's pin table.
-panels-kind-symbol-pins = Pins
 # The board's net list.
 panels-kind-pcb-nets = PCB
 panels-kind-layers = Layers
@@ -233,11 +262,16 @@ start-projects = Projects
 start-libraries = Libraries
 # A planned part search; the row has no backend yet.
 start-parts-search = Parts search
+# Pill on a navigation row that opens nothing yet.
+start-soon = soon
 start-open-sample = Open Sample Project
-# F1 is the key that opens the shortcut list.
-start-keyboard-shortcuts = Keyboard Shortcuts (F1)
+# The row shows the key bound to the shortcut list beside this label.
+start-keyboard-shortcuts = Keyboard Shortcuts
 # Count at the right of a navigation row. $count is a whole number.
 start-count = { $count }
+# The key bound to a navigation row's action, at its right. $key is the
+# key's label, such as F1.
+start-row-key = { $key }
 # Loaded libraries card: how many libraries are loaded and how many
 # components they hold. Both are whole numbers.
 start-libraries-summary =
@@ -274,6 +308,70 @@ start-pin-missing-warning = { $path } is no longer on disk; the pin is kept.
 # Messages panel warning when the start-up check of the pinned projects
 # could not run. $reason is the error text.
 start-pin-check-failed = Could not check the pinned projects on disk: { $reason }
+# Project tile of a project with no cached preview yet; the tile is small,
+# so keep it short.
+start-thumbnail-none = No preview yet
+# Tooltips of the project tile.
+start-thumbnail-board-hint = Board preview (cached on save)
+start-thumbnail-sheet-hint = Root sheet preview (no board yet)
+start-thumbnail-none-hint = Preview is written the next time the project is saved
+start-thumbnail-missing-hint = Project file not found
+# Messages panel warning when a project preview could not be saved. $project
+# is the project file's path, $reason the error text.
+start-thumbnail-write-failed = Could not save the preview of { $project }: { $reason }
+# Messages panel warning when the cached project previews could not be read
+# at start-up. $reason is the error text.
+start-thumbnail-read-failed = Could not read the cached project previews: { $reason }
+# Link at the right of RECENT PROJECTS that opens the Projects page.
+# $count is how many projects that page lists, a whole number.
+start-show-all = Show all { $count } ›
+# When a project was last opened, in the right column of its row.
+# $time is the local clock time, hours and minutes.
+start-opened-today = today { $time }
+start-opened-yesterday = yesterday
+# An earlier day. $date is the date in the user's locale.
+start-opened-date = { $date }
+# Shown when the time is not known, or the project is missing on disk.
+start-opened-unknown = —
+# Projects page: the line under the title, the filter field's
+# placeholder, and the switch. $count is a whole number.
+start-projects-body = Every project you have opened, newest first.
+start-projects-filter = Filter by name or folder
+start-scope-all = All { $count }
+start-scope-pinned = Pinned { $count }
+start-scope-missing = Missing { $count }
+# Empty states of a filtered list. $query is the text in the filter field.
+start-projects-no-match = No projects match “{ $query }”
+start-filter-no-match-body = Check the spelling, or clear the filter.
+start-clear-filter = Clear filter
+# Projects page with the Pinned or Missing switch on and nothing to list.
+start-projects-none-pinned = No pinned projects
+start-projects-none-pinned-body = Pin a project from its row on Home or from its right-click menu.
+start-projects-none-missing = No missing projects
+start-projects-none-missing-body = Every pinned project is on disk.
+# Libraries page: the line under the title, the toolbar and the table.
+start-libraries-body = Libraries loaded for every project. A project can add its own in Project Options.
+start-libraries-filter = Filter libraries
+start-add-library = Add library…
+start-open-library-browser = Open Library Browser
+# Column headings of the libraries table, shown in capitals.
+start-libraries-column-library = LIBRARY
+start-libraries-column-scope = SCOPE
+start-libraries-column-components = COMPONENTS
+# Caption under the library that comes with the install.
+start-libraries-stock-caption = ships with Signex · read-only
+start-libraries-no-match = No libraries match “{ $query }”
+start-libraries-none = No libraries loaded
+start-libraries-none-body = Add a library to use its parts in every project.
+# A project is open but no document is shown.
+start-hint-title = No document selected
+start-hint-body = Choose a schematic or PCB from the project tree, or open one here.
+# The open project has no schematic sheet and no board yet.
+start-hint-empty-title = This project has no documents yet
+start-hint-empty-body = Start with a schematic sheet; add the PCB once the schematic has parts.
+start-hint-new-sheet = New sheet
+start-hint-new-pcb = New PCB
+start-hint-project-options = Project Options…
 
 ## Projects panel
 
@@ -298,8 +396,26 @@ panels-projects-libraries =
 panels-projects-git = git
 # Placeholder of the project file filter.
 panels-projects-filter = Filter files
-# Shown when the filter matches no file.
-panels-projects-no-match = No files match
+# Tooltip of the gear button on a project card; it opens that project's
+# options in a tab.
+panels-projects-options = Project Options…
+# Pill behind a file the project lists but the disk does not have.
+panels-projects-pill-missing = missing
+# Pill behind a file that exists but could not be read.
+panels-projects-pill-unreadable = unreadable
+# Tooltip of the clear (x) button inside the file filter.
+panels-projects-clear-filter = Clear filter
+# Card shown when the file filter matches no file. $filter is the text the
+# user typed.
+panels-projects-no-match-title = No files match "{ $filter }"
+panels-projects-no-match-body = Clear the filter to see every file.
+# Buttons of the Projects panel when no project is open; the ellipsis says a
+# dialog follows.
+panels-projects-new-project = New Project…
+panels-projects-open = Open…
+# Section heading above the recently opened projects when no project is
+# open, shown in capitals.
+panels-projects-recent = Recent projects
 
 ## Net Classes section of the Properties panel
 
@@ -428,12 +544,13 @@ panels-status-bar-grid = Grid { $grid }
 panels-status-bar-grid-off = Grid OFF
 panels-status-bar-snap-on = Snap on
 panels-status-bar-snap-off = Snap off
-panels-status-bar-tool = Tool: { $tool }
+# The active tool's name alone; the live hint follows it.
+panels-status-bar-tool = { $tool }
 panels-status-bar-importing = Importing { $name }… ✕
-# The cursor position. $value is the coordinate as a number; $unit is the
-# unit symbol (mm, mil, in, µm).
-panels-status-bar-x = X { $value } { $unit }
-panels-status-bar-y = Y { $value } { $unit }
+# The cursor position. $value is the coordinate as a number; the unit is
+# written once after Y.
+panels-status-bar-x = X { $value }
+panels-status-bar-y = Y { $value }
 # The zoom level; $percent is a whole number, already written out.
 panels-status-bar-zoom = { $percent }%
 # Shown while saved documents are being committed to the project history;
@@ -479,6 +596,30 @@ panels-status-bar-move-without-wires = Moving without wires ({ $key }: drag with
 # Measure tool prompts.
 panels-status-bar-measure-first = Click the first point
 panels-status-bar-measure-second = Click the second point
+# The Grid & Snap popover a right-click on the Grid read-out opens.
+panels-grid-snap-title = Grid & Snap
+# The label of a grid's spacing field.
+panels-grid-snap-pitch = Pitch
+# A pitch callout on the drawing; $pitch is the spacing with its unit symbol.
+panels-grid-snap-pitch-value = { $pitch }
+panels-grid-snap-foot = The same settings as Properties ▸ Document Options ▸ General; a change here shows there.
+# Group captions of the status bar's panel list.
+panels-list-group-project = Project
+panels-list-group-inspect = Inspect
+panels-list-group-verify = Verify
+panels-list-group-library = Library
+panels-list-group-pcb = PCB
+# Where an open panel is, at the right of its row in the panel list.
+panels-list-region-left = left
+panels-list-region-right = right
+panels-list-region-bottom = bottom
+panels-list-region-floating = floating
+# A panel detached into a window of its own.
+panels-list-region-window = window
+# The PCB panel's row in the panel list, named for its first mode.
+panels-list-row-nets = Nets
+# Foot of the panel list: where the tool documents went.
+panels-list-foot = Rules and the other tool documents open as tabs, from their menus or the command palette.
 panels-erc-running = Running…
 panels-erc-no-findings-left = No findings left since the last run
 panels-erc-empty-hint = Run ERC to populate project-wide diagnostics
@@ -594,6 +735,14 @@ panels-library-row-symbol = Symbol
 panels-library-row-footprint = Footprint
 panels-library-row-pick-symbol = Pick Symbol…
 panels-library-row-pick-footprint = Pick Footprint…
+# Caption under the row's part number (mockup row 127). $table is the table name; $row
+# is the row's place in its table, or a short row id.
+panels-library-row-heading = Library Row · { $table } · row { $row }
+# After the lifecycle in the row's pill line. $version is the row's version.
+panels-library-row-version = · v{ $version }
+panels-library-row-section-bindings = Bindings
+# Button of a bound Symbol or Footprint card.
+panels-library-row-pick = Pick…
 
 ## Drawing properties (lines, rectangles, circles, arcs, polygons)
 panels-drawing-color = Color
@@ -637,10 +786,10 @@ panels-placed-name = Name
 panels-placed-direction = Direction
 panels-placed-sheet = Sheet
 panels-placed-sheet-file = Sheet File
-# Properties section of a selected Blanket directive: a drawn region whose
-# parameters apply to every net inside it.
-panels-directive-blanket = Blanket
-panels-directive-net-class = Net Class
+# The UI name of a Blanket directive: a drawn region whose parameters apply
+# to every net inside it.
+panels-directive-blanket = Net Blanket
+panels-directive-net-class = Net class
 
 ## Net Inspector panel (Graphite mockup #58): the By Net / By Component modes, the part
 ## list, the empty-state cards and the footer. Column headings are shown in
@@ -663,7 +812,14 @@ panels-net-inspector-column-pin-sheet = Sheet
 # Net cell of a pin on no net.
 panels-net-inspector-unconnected = — unconnected
 # The row under a long expanded list; clicking it lists the rest. $count is a whole number.
-panels-net-inspector-more-pins = + { $count } more pins
+panels-net-inspector-more-pins =
+    { $count ->
+        [one] + { $count } more pin
+       *[other] + { $count } more pins
+    }
+# The same row under an expanded net, whose list holds labels, ports and
+# sheet entries as well as pins. $count is a whole number.
+panels-net-inspector-more-members = + { $count } more
 # Footer in By Component mode. Whole numbers.
 panels-net-inspector-parts-summary =
     { $shown } of { $total ->
@@ -802,6 +958,7 @@ panels-object-list-noun-drawing = Drawing
 panels-object-list-noun-blanket = Blanket
 panels-object-list-noun-compile-mask = Compile mask
 panels-object-list-noun-diff-pair = Differential pair
+panels-object-list-noun-net-parameters = Net parameters
 # Value column words.
 panels-object-list-value-net-label = net label
 panels-object-list-value-power-port = power port
@@ -865,8 +1022,8 @@ panels-erc-net-waiver-title = { $rule } · net { $net }
 # Who waived a finding and when, as they wrote it.
 panels-erc-waived-by = by { $author } · { $date }
 
-## The waiver form ERC and DRC share (AV-13).
-panels-waiver-needs-both = Write a reason and an author to waive it.
+## The DRC waiver form: one required reason (mockup row 88).
+panels-waiver-needs-reason = Write a reason to waive it.
 
 ## Messages panel (#86): level chips, source and document filters.
 panels-messages-level-all = All
@@ -923,3 +1080,240 @@ panels-messages-pin-dot-refused-entry = { $pin } ({ $through }, { $other })
 panels-messages-unnamed-net = an unnamed net
 # The end of a list cut after its first few entries.
 panels-messages-list-more = { $names } and { $count } more
+
+## Multi-channel sheets and the Compiled Design panel (#1279, #1308).
+
+panels-kind-compiled-design = Compiled Design
+# Tooltip of the panel's title-row button and the out-of-date banner's button.
+panels-compiled-design-recompile = Recompile
+# The panel's mode switch.
+panels-compiled-design-mode-sheets = Sheets
+panels-compiled-design-mode-nets = Nets
+panels-compiled-design-find = Find sheet, channel or net
+panels-compiled-design-column-sheet = Sheet / channel
+panels-compiled-design-column-parts = Parts
+panels-compiled-design-column-nets = Nets
+panels-compiled-design-column-net = Net
+panels-compiled-design-column-sheets = Sheets
+# The out-of-date banner. $count is the number of changed sheets, $time the
+# time of the last compile (12:41).
+panels-compiled-design-stale =
+    { $count ->
+        [one] 1 sheet changed since { $time }. Counts may be wrong.
+       *[other] { $count } sheets changed since { $time }. Counts may be wrong.
+    }
+# Tooltip of the amber dot on a changed row.
+panels-compiled-design-stale-row = Changed since the last compile ({ $time })
+panels-compiled-design-empty-title = Not compiled yet
+panels-compiled-design-empty-body = Compile the project to see repeated sheets as channels, with part and net counts per sheet.
+panels-compiled-design-compile = Compile project
+panels-compiled-design-empty-note = Nothing is written to disk; the result lives in memory until the project closes.
+panels-compiled-design-compiling = Compiling…
+panels-compiled-design-no-project = Open a sheet of a project to compile it.
+panels-compiled-design-no-match = No sheet, channel or net matches.
+# The footer after a compile.
+panels-compiled-design-footer = { $parts } parts · { $nets } nets · { $sheets } sheets ({ $channels } channels)
+# The footer before the first compile. $files is the number of sheet files.
+panels-compiled-design-footer-none = { $files } sheet files · not compiled
+# The strip under a repeated sheet's canvas: the editable sheet, then one tab
+# per channel.
+panels-channel-strip-editor = Editor
+# The selected channel tab's count; $count is its parts.
+panels-channel-strip-parts = { $count } parts
+# The count of a channel tab that is not selected.
+panels-channel-strip-count = { $count }
+# The caption of a channel card in the compiled view.
+panels-channel-card-caption = { $parts } parts · { $nets } nets
+# Shown in the compiled view before the project is compiled.
+panels-channel-view-not-compiled = Compile the project to fill the channels with their parts and nets.
+# The Messages line when an edit is tried in a channel tab. $channel is CH1.
+panels-channel-read-only = Channel { $channel } is a compiled view; switch to Editor to edit
+# The compile result in Messages.
+panels-compiled-design-failed = Compile project: { $reason }
+
+## Signal harnesses (#1280).
+
+# Caption under the Harness Connector header: the sheet file and how many entries the connector has.
+panels-harness-caption = { $sheet } · { $count ->
+    [one] 1 entry
+   *[other] { $count } entries
+}
+# Warn banner: the child sheet $far expects an entry this harness names differently.
+panels-harness-mismatch = { $far } expects entry { $expects }; this harness has { $has }. One signal would not connect.
+panels-harness-rename = Rename { $from } to { $to }
+panels-harness-go-to = Go to { $sheet }
+panels-harness-section = Harness
+panels-harness-type = Type
+panels-harness-definition = Definition
+# A link that opens the harness definitions view.
+panels-harness-definition-link = { $type } · { $count } entries · edit…
+panels-harness-colour = Colour
+panels-harness-colour-default = harness default
+panels-harness-placement = Placement
+panels-harness-x = X
+panels-harness-y = Y
+panels-harness-width = Width
+panels-harness-pitch = Entry pitch
+panels-harness-entries = Entries
+panels-harness-entry = Entry
+panels-harness-net = Net on this sheet
+panels-harness-expects-pill = { $far } expects { $expects }
+# $example is a compiled net name such as SPI_BUS.SCK.
+panels-harness-compiled = Compiled net names: { $example } … unless a net label names them.
+panels-harness-start = Start
+panels-harness-end = End
+panels-harness-entry-type = Harness type
+# The Harness type choice of a plain signal sheet entry.
+panels-harness-no-type = None (signal)
+panels-harness-defs-title = Harness definitions
+panels-harness-defs-caption = project { $project } · { $count ->
+    [one] 1 type
+   *[other] { $count } types
+}
+# $entries is the entry count, nested types named, such as "2 + UART".
+panels-harness-defs-uses = { $entries } entries · { $uses ->
+    [one] 1 use
+   *[other] { $uses } uses
+}
+panels-harness-defs-name = Name
+panels-harness-defs-description = Description
+panels-harness-defs-kind = Kind
+panels-harness-defs-signal = signal
+panels-harness-defs-nested = harness · { $entries }
+panels-harness-defs-nested-section = { $type } (nested)
+panels-harness-defs-new = New harness type
+panels-harness-defs-back = Back
+
+## Properties of a Net Parameters directive (#1489): a flag on one wire that
+## sets its net's class, diff-pair class and routing rules.
+
+# Caption under the header: the net the flag sits on and the sheet file.
+panels-np-caption = on { $net } · { $sheet }
+# Caption when the flag sits on no wire.
+panels-np-caption-no-net = on no wire · { $sheet }
+panels-np-classes = Classes
+panels-np-diff-pair-class = Diff-pair class
+# A class dropdown entry: no class.
+panels-np-none = None
+# The diff-pair class dropdown while the net is not half of a pair.
+panels-np-single-net = None (single net)
+panels-np-rules = Rules
+# Column headings of the rule list.
+panels-np-rule = Rule
+panels-np-value = Value
+panels-np-width = Width
+panels-np-clearance = Clearance
+# Two inputs: the via diameter and the via hole.
+panels-np-via = Via dia / hole
+# The via on the flag and its illustration callout.
+panels-np-via-short = Via
+panels-np-current = Current
+# Beside Current: the value is information only, no rule is made.
+panels-np-info = info
+panels-np-unit-mm = mm
+# Unit of current: ampere.
+panels-np-unit-a = A
+panels-np-becomes-rules = Becomes PCB rules Width_{ $class } and Clearance_{ $class } on Update PCB.
+panels-np-display = Display
+panels-np-show-on-flag = Show parameters on the flag
+# The first line of the flag on the sheet and in the illustration.
+panels-np-flag-class = Net Class = { $class }
+panels-np-flag-no-class = Net Parameters
+panels-np-flag-hidden = parameters hidden on the flag
+panels-np-current-info = current (info) { $current } A
+
+## Properties of a Net Blanket (#1281).
+
+# Caption under the header: the sheet file and the outline size.
+panels-blanket-caption = { $sheet } · { $width } × { $height } mm
+panels-blanket-outline = Outline
+panels-blanket-xy = X / Y
+panels-blanket-size = Width / Height
+panels-blanket-directive = Directive
+# The width of the tracks of the caught nets, not of the outline.
+panels-blanket-track-width = Track width
+# How copper pours treat the nets under this blanket.
+panels-blanket-pour = Pour on nets
+panels-blanket-pour-normal = Normal
+panels-blanket-pour-keep-short = Keep short
+# Section title with the number of nets the blanket catches.
+panels-blanket-nets = Nets under the blanket · { $count }
+# A net row whose wires only cross the outline, left out.
+panels-blanket-edge-only = edge only
+# A net row whose wires only cross the outline, included.
+panels-blanket-edge-included = edge · included
+panels-blanket-no-nets = No net is under the blanket.
+panels-blanket-include-edge = Include nets that only cross the edge
+panels-blanket-hover-hint = Hover a net row to highlight it on the sheet. Power nets (GND) are never caught.
+# Note under the illustration.
+panels-blanket-caught-note = accent = caught by the blanket
+# Messages line: the Net Parameters tool was clicked away from a wire.
+panels-np-off-wire = Net Parameters sit on a wire: click on a wire. Nothing was placed.
+
+## Named unions (mockup row 158).
+
+# The Unions dock panel and the Create Union popover (mockup row 158).
+panels-kind-unions = Unions
+panels-unions-empty-title = No schematic sheet in view
+panels-unions-empty-body = Open a sheet to list its unions.
+panels-unions-filter = Filter by name or #tag
+panels-unions-create = Create from selection
+panels-unions-this-sheet = This sheet
+panels-unions-project = Project
+panels-unions-tags = Tags
+panels-unions-none = No unions here. Select objects and use Create Union to group them.
+panels-unions-select-members = Select members
+panels-unions-lock = Lock
+panels-unions-unlock = Unlock
+panels-unions-hide = Hide
+panels-unions-show = Show
+# The panel foot of a hidden union; $name is the union's name.
+panels-unions-foot-hidden = { $name } is hidden
+panels-unions-foot-hidden-note = Hidden on the canvas only. Show it to add, remove or rename members. Not an undo step.
+panels-unions-foot-members = { $count ->
+    [one] 1 member
+   *[other] { $count } members
+}
+panels-unions-foot-wires = { $count ->
+    [one] + 1 wire
+   *[other] + { $count } wires
+}
+panels-unions-foot-others = { $count ->
+    [one] + 1 other object
+   *[other] + { $count } other objects
+}
+panels-unions-foot-add = Add selection
+panels-unions-foot-remove = Remove selection
+panels-unions-foot-break = Break union
+# The popover title; $count is how many objects the union groups.
+panels-unions-create-title = { $count ->
+    [one] Create union · 1 object
+   *[other] Create union · { $count } objects
+}
+panels-unions-create-name = Name
+panels-unions-create-tags = Tags
+panels-unions-create-add-tag = add tag
+panels-unions-create-lock = Lock after creating
+panels-unions-create-confirm = Create
+# Removes a tag pill.
+panels-unions-tag-remove = ×
+
+## Messages lines of the unions, harness and compile slices.
+
+panels-unions-msg-not-a-sheet = Create Union works on a schematic sheet.
+panels-unions-msg-no-selection = Create Union: select the objects to group first.
+panels-unions-msg-sheet-changed = Create Union closed: the active sheet changed.
+# $reason is the engine's sentence saying why the union command was refused.
+panels-unions-msg-refused = Unions: { $reason }.
+panels-unions-msg-add-no-union = Add Selection to Union: pick a union in the Unions panel first.
+panels-unions-msg-remove-no-members = Remove Selection from Union: select members of a union first.
+panels-unions-msg-break-no-union = Break Union: select a union first.
+panels-harness-msg-defs-no-project = Harness definitions not changed: the sheet is in no open project
+# $why says why the project refused the edit.
+panels-harness-msg-defs-refused = Harness definitions not changed: { $why }
+# $file is the sheet, $why the engine's reason.
+panels-harness-msg-rename-failed = Harness type not renamed on { $file }: { $why }
+panels-harness-msg-entry-off-connector = Harness entry not placed: click on a harness connector
+panels-compiled-design-msg-no-project = Compile project: open a sheet of a project first; a sheet outside a project has no compiled design.
+# $why says why the project refused the edit.
+panels-compiled-design-naming-refused = Channel naming not changed: { $why }

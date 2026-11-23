@@ -230,8 +230,14 @@ pub(super) struct FilterChrome<M> {
     pub save: Option<M>,
 }
 
-/// Kind chips per line in the titled dropdown card.
-const TITLED_CHIPS_PER_LINE: usize = 3;
+/// `cells` wrapped to the width of the card.
+fn wrapped<M: 'static>(cells: Vec<Element<'static, M>>) -> Element<'static, M> {
+    iced::widget::Row::with_children(cells)
+        .spacing(SP.s)
+        .wrap()
+        .vertical_spacing(SP.s)
+        .boxed()
+}
 
 /// [`filter_menu_view`] in the titled dropdown layout.
 pub(super) fn titled_filter_menu_view<M: Clone + 'static>(
@@ -248,7 +254,7 @@ pub(super) fn titled_filter_menu_view<M: Clone + 'static>(
             .color(ink)
             .font(iced::Font {
                 weight: iced::font::Weight::Semibold,
-                ..iced::Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             }),
         Space::new().width(Length::Fill),
         graphite::all_none(tokens, scope, menu.all, menu.none),
@@ -281,10 +287,10 @@ pub(super) fn titled_filter_menu_view<M: Clone + 'static>(
     container(
         column![
             title,
-            lines_of(kinds, TITLED_CHIPS_PER_LINE),
+            wrapped(kinds),
             rule,
             text(chrome.presets_caption).size(TS.caption).color(ink3),
-            one_line(presets),
+            wrapped(presets),
         ]
         .spacing(SP.m),
     )

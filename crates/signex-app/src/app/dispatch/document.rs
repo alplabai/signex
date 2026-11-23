@@ -93,6 +93,11 @@ impl Signex {
             EditMsg::PasteArrayRequested => self.request_paste(PasteIntent::Array),
             EditMsg::PasteTextRead { request, text } => self.handle_paste_text_read(request, text),
             EditMsg::PasteCountersSeeded { request, seed } => {
+                // An open Paste Array dialog's read is not a waiting paste.
+                if request.intent != PasteIntent::ArraySeed {
+                    let path = request.path.as_deref();
+                    self.ui_state.command_replay.note_paste_answered(path);
+                }
                 self.handle_paste_counters_seeded(request, &seed)
             }
             EditMsg::PasteArray(msg) => self.handle_paste_array_message(msg),
@@ -108,6 +113,13 @@ impl Signex {
             }
             EditMsg::Extras(msg) => self.dispatch_placement_extras(msg),
             EditMsg::SheetSync(msg) => self.dispatch_sheet_sync(msg),
+            EditMsg::RailRename(msg) => self.dispatch_rail_rename(msg),
+            EditMsg::Tables(msg) => self.dispatch_tables(msg),
+            EditMsg::Unions(msg) => {
+                let task = self.handle_unions_message(msg);
+                Task::batch([task, self.finish_update()])
+            }
+            EditMsg::SmartPasteDialog(msg) => self.handle_smart_paste_message(msg),
         }
     }
 
@@ -195,6 +207,15 @@ impl Signex {
                 };
                 iced::Task::batch([task, self.finish_update()])
             }
+            FileMsg::DiskConflictSaveAsPicked {
+                conflicted,
+                picked,
+                same_on_disk,
+            } => {
+                let task =
+                    self.handle_disk_conflict_save_as_picked(conflicted, *picked, same_on_disk);
+                iced::Task::batch([task, self.finish_update()])
+            }
             FileMsg::SaveAsProjectPatched(done) => {
                 self.handle_save_as_project_patched(*done);
                 self.finish_update()
@@ -241,6 +262,7 @@ impl Signex {
             } => {
                 // #478 review — same in-flight guard clear as above.
                 self.document_state.pending_opens.remove_untracked(&path);
+                let reopened_stack = self.ui_state.project_git.take_reopened_stack(&path);
                 if self.is_open_result_superseded(&path, &result) {
                     if result.is_ok() {
                         self.attach_parked_tab_for_superseded_open(&path, title);
@@ -259,6 +281,9 @@ impl Signex {
                         self.open_pcb_tab(path.clone(), title, *board);
                         if let Some(disk) = disk {
                             self.record_disk_read(&path, disk);
+                        }
+                        if let Some(takes_focus) = reopened_stack {
+                            self.restore_layer_stack_tab(path.clone(), takes_focus);
                         }
                     }
                     Err(message) => self.report_open_failure(message),
@@ -314,11 +339,18 @@ impl Signex {
                 let task = self.handle_export_written(*outcome);
                 iced::Task::batch([task, self.finish_update()])
             }
+            ExportMsg::BomWritten { source, outcome } => {
+                let task = self.handle_bom_written(source, *outcome);
+                iced::Task::batch([task, self.finish_update()])
+            }
         }
     }
 
     /// BOM-preview modal message handler (namespaced family, ADR-0001 D3).
     pub(crate) fn dispatch_bom_preview_message(&mut self, msg: BomPreviewMsg) -> Task<Message> {
+        if self.bom_edit_waits_for_save(&msg) {
+            return Task::none();
+        }
         // Pure pointer/UI-state messages cannot change the rows on screen;
         // every other message (and any future one) re-sorts, re-filters and
         // re-flags after it ran.

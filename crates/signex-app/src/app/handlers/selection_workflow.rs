@@ -42,7 +42,10 @@ pub(crate) fn selection_filter_of(
         SelectedKind::Junction
         | SelectedKind::NoConnect
         | SelectedKind::NoErcDirective
-        | SelectedKind::Directive => SelectionFilter::Other,
+        | SelectedKind::Directive
+        | SelectedKind::HarnessConnector
+        | SelectedKind::HarnessEntry
+        | SelectedKind::HarnessWire => SelectionFilter::Other,
     }
 }
 
@@ -123,6 +126,19 @@ fn all_selectable_items(
         let uuid = drawing.uuid();
         items.push(SelectedItem::new(uuid, SelectedKind::Drawing));
     }
+    // #1280: harness connectors, their entries and harness wires.
+    for connector in &snapshot.harness.connectors {
+        items.push(SelectedItem::new(
+            connector.uuid,
+            SelectedKind::HarnessConnector,
+        ));
+        for entry in &connector.entries {
+            items.push(SelectedItem::new(entry.uuid, SelectedKind::HarnessEntry));
+        }
+    }
+    for wire in &snapshot.harness.wires {
+        items.push(SelectedItem::new(wire.uuid, SelectedKind::HarnessWire));
+    }
 
     items
 }
@@ -189,6 +205,10 @@ impl Signex {
                 }
             }
             selection_request::SelectionRequest::HitAt { world_x, world_y } => {
+                // A union's name tab selects the union (mockup row 158).
+                if self.select_union_at_tab(world_x, world_y) {
+                    return Task::none();
+                }
                 if let Some(snapshot) = self.active_render_snapshot() {
                     let hit = crate::schematic_runtime::hit_test::hit_test_styled(
                         snapshot,
@@ -221,15 +241,17 @@ impl Signex {
                     }
                     self.interaction_state.clicked_pin = clicked_pin;
                     self.interaction_state.active_canvas_mut().selected = hit.into_iter().collect();
+                    // A member brings its whole union along (mockup row 158).
+                    self.expand_selection_to_unions();
                     self.interaction_state
                         .active_canvas_mut()
                         .clear_overlay_cache();
                     self.update_selection_info();
-                    // The Pins rows read their nets from the project net index.
-                    // A cold index is built now, and the rows refresh when it
-                    // lands (`refresh_pin_rows`).
-                    if hit.is_some_and(|h| h.kind == signex_types::schematic::SelectedKind::Symbol)
-                    {
+                    // The Pins rows and a wire's Net Name read the project net
+                    // index. A cold index is built now, and the rows refresh
+                    // when it lands (`refresh_pin_rows`).
+                    use signex_types::schematic::SelectedKind as K;
+                    if hit.is_some_and(|h| matches!(h.kind, K::Symbol | K::Wire | K::Bus)) {
                         return self.warm_net_index_for_pin_rows();
                     }
                 }

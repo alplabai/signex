@@ -171,6 +171,7 @@ impl DocumentState {
         let Some(path) = self.sync_active_history_dirty() else {
             return ActiveSettlement::Unchanged;
         };
+        self.mark_compiled_stale(&path, patch);
         events.push(DocumentChanged { path, patch, cause }.into());
         ActiveSettlement::Shown
     }
@@ -193,6 +194,7 @@ impl DocumentState {
             self.note_sheet_edit();
         }
         self.sync_history_dirty(path);
+        self.mark_compiled_stale(path, patch);
         let path = path.to_path_buf();
         events.push(DocumentChanged { path, patch, cause }.into());
     }

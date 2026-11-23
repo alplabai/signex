@@ -281,6 +281,7 @@ fn remove_dialog_on_typed_note() -> (Signex, PathBuf, tempfile::TempDir) {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     (app, sheet, dir)
 }

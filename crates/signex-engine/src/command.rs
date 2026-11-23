@@ -86,6 +86,8 @@ pub enum CommandKind {
     SetSymbolFlag,
     SetWireWidth,
     SetWireColor,
+    SetBusWidth,
+    SetBusColor,
     SetSymbolBodyStyle,
     UpdateSymbolTextSize,
     UpdateSymbolLibId,
@@ -138,6 +140,15 @@ pub enum CommandKind {
     UpdateDirective,
     SetNoErcRules,
     AutoplaceFields,
+    PlaceHarnessConnector,
+    UpdateHarnessConnector,
+    PlaceHarnessEntry,
+    PlaceHarnessWire,
+    SetHarnessEntryType,
+    CreateUnion,
+    UpdateUnion,
+    SetUnionMembers,
+    BreakUnion,
 }
 
 /// The text-note properties [`Command::UpdateTextNoteProps`] sets; `None`
@@ -261,6 +272,17 @@ pub enum Command {
     /// colour. The wire colour wins over a per-net colour and a class colour.
     SetWireColor {
         wire_id: Uuid,
+        color: Option<signex_types::theme::Color>,
+    },
+    /// Set a bus's own stroke width in mm; 0 clears it to the project's bus
+    /// width.
+    SetBusWidth {
+        bus_id: Uuid,
+        width_mm: f64,
+    },
+    /// Set a bus's own colour; `None` clears it to the theme bus colour.
+    SetBusColor {
+        bus_id: Uuid,
         color: Option<signex_types::theme::Color>,
     },
     /// Show the normal or the alternate (De Morgan) body of a symbol's library
@@ -647,6 +669,60 @@ pub enum Command {
     AutoplaceFields {
         symbol_ids: Vec<Uuid>,
     },
+    /// Place a signal harness connector (#1280), with its entries.
+    PlaceHarnessConnector {
+        connector: signex_types::schematic::HarnessConnector,
+    },
+    /// Replace the connector `uuid` by `connector` (type, place, size,
+    /// entries). Refused when no such connector exists; unchanged when equal.
+    /// Consecutive updates of one connector share one undo step, like
+    /// [`Command::UpdateDirective`].
+    UpdateHarnessConnector {
+        uuid: Uuid,
+        connector: signex_types::schematic::HarnessConnector,
+    },
+    /// Insert `entry` into the connector `connector_id` at `index` (clamped
+    /// to its entry count).
+    PlaceHarnessEntry {
+        connector_id: Uuid,
+        entry: signex_types::schematic::HarnessEntry,
+        index: usize,
+    },
+    /// Place one harness wire segment.
+    PlaceHarnessWire {
+        wire: signex_types::schematic::HarnessWire,
+    },
+    /// Make the sheet entry `sheet_pin_id` harness-typed (`Some`) or a plain
+    /// signal entry again (`None`).
+    SetHarnessEntryType {
+        sheet_pin_id: Uuid,
+        harness_type: Option<String>,
+    },
+    /// Group objects of this sheet under a name and tags (mockup row 158). Refused
+    /// with a [`crate::UnionRefusal`] when the name is blank, a member is not
+    /// on the sheet or already in another union, or nothing is left. One
+    /// undo step.
+    CreateUnion {
+        union: signex_types::schematic::SchUnion,
+    },
+    /// Rename, retag, lock or unlock the union `uuid`. Renames and tag edits
+    /// of one union are one typing run; a lock change is a step of its own.
+    UpdateUnion {
+        uuid: Uuid,
+        name: String,
+        tags: Vec<String>,
+        locked: bool,
+    },
+    /// Replace the members of the union `uuid` (Add / Remove selection). An
+    /// empty list breaks it; refused on a locked union.
+    SetUnionMembers {
+        uuid: Uuid,
+        members: Vec<Uuid>,
+    },
+    /// Remove the union `uuid`; its objects stay. Refused when locked.
+    BreakUnion {
+        uuid: Uuid,
+    },
 }
 
 /// How [`Command::ArrangeDrawings`] moves the selected drawings. The list is
@@ -735,6 +811,8 @@ impl Command {
             Command::SetSymbolFlag { .. } => CommandKind::SetSymbolFlag,
             Command::SetWireWidth { .. } => CommandKind::SetWireWidth,
             Command::SetWireColor { .. } => CommandKind::SetWireColor,
+            Command::SetBusWidth { .. } => CommandKind::SetBusWidth,
+            Command::SetBusColor { .. } => CommandKind::SetBusColor,
             Command::SetSymbolBodyStyle { .. } => CommandKind::SetSymbolBodyStyle,
             Command::UpdateSymbolTextSize { .. } => CommandKind::UpdateSymbolTextSize,
             Command::UpdateSymbolLibId { .. } => CommandKind::UpdateSymbolLibId,
@@ -790,6 +868,15 @@ impl Command {
             Command::UpdateDirective { .. } => CommandKind::UpdateDirective,
             Command::SetNoErcRules { .. } => CommandKind::SetNoErcRules,
             Command::AutoplaceFields { .. } => CommandKind::AutoplaceFields,
+            Command::PlaceHarnessConnector { .. } => CommandKind::PlaceHarnessConnector,
+            Command::UpdateHarnessConnector { .. } => CommandKind::UpdateHarnessConnector,
+            Command::PlaceHarnessEntry { .. } => CommandKind::PlaceHarnessEntry,
+            Command::PlaceHarnessWire { .. } => CommandKind::PlaceHarnessWire,
+            Command::SetHarnessEntryType { .. } => CommandKind::SetHarnessEntryType,
+            Command::CreateUnion { .. } => CommandKind::CreateUnion,
+            Command::UpdateUnion { .. } => CommandKind::UpdateUnion,
+            Command::SetUnionMembers { .. } => CommandKind::SetUnionMembers,
+            Command::BreakUnion { .. } => CommandKind::BreakUnion,
         }
     }
 }

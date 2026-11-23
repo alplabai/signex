@@ -17,6 +17,7 @@ mod teardrop;
 use serde::{Deserialize, Serialize};
 
 pub use arrange::arrange_in_box;
+pub(crate) use arrange::{ARRANGE_GAP_MM, PackGrid, packing_order};
 pub use gloss::gloss_tracks;
 pub use keepout::keepout_from_selection;
 pub use outline::outline_from_tracks;

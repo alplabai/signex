@@ -65,7 +65,10 @@ impl Signex {
             return Task::none();
         }
         // Rewriting a file that is being renamed or deleted would recreate it.
-        if let Err(refusal) = self.refuse_while_path_op(&full_path, "restored") {
+        if let Err(refusal) = self
+            .refuse_while_path_op(&full_path, "restored")
+            .and_then(|()| self.refuse_during_branch_switch(&full_path))
+        {
             self.report_restore_failure(refusal.to_string());
             return Task::none();
         }
@@ -209,6 +212,7 @@ impl Signex {
     /// the write would race the restore's rewrite and re-read, and the
     /// loser's bytes would be installed or committed as the other's.
     pub(crate) fn refuse_save_while_restoring(&self, path: &std::path::Path) -> anyhow::Result<()> {
+        self.refuse_during_branch_switch(path)?;
         if !self.document_state.pending_restores.contains(path) {
             return Ok(());
         }
@@ -441,7 +445,7 @@ impl Signex {
     /// installed (`commit` false installs without a "Restore" commit: a
     /// disk-conflict Reload restores nothing): false when a failure card replaced it or a schematic's new
     /// engine could not start and the older one was kept.
-    pub(crate) fn apply_reloaded_reporting(
+    pub(super) fn install_reload_outcome(
         &mut self,
         idx: usize,
         outcome: Result<RestoreJobDocument, RestoreFailure>,
@@ -483,7 +487,7 @@ impl Signex {
                 self.document_state.set_pcb_board(idx, *board);
                 if idx == self.document_state.active_tab {
                     // Refresh canvas; preserve camera (don't fit-to-board).
-                    self.apply_loaded_pcb_document(false, false);
+                    self.show_loaded_board(false, false);
                 }
                 // The tab now matches disk. Leaving it dirty would let Ctrl+S
                 // re-encode the board and drop the restored file's comments
@@ -668,7 +672,7 @@ impl Signex {
         self.document_state.drop_pcb_board(active_idx);
         self.set_reloaded_dirty(path, false);
         if active_idx == self.document_state.active_tab {
-            self.apply_loaded_empty_document(false);
+            self.show_empty_document(false);
         }
         self.report_restore_failure(restore_reload_card(path, why, unreadable));
     }
@@ -777,7 +781,9 @@ fn restore_kind_of(kind: &crate::app::TabKind) -> Option<RestoreKind> {
         crate::app::TabKind::LibraryBrowser(_) | crate::app::TabKind::ComponentEditor(_) => {
             Some(RestoreKind::Library)
         }
-        crate::app::TabKind::Project(_) | crate::app::TabKind::Rules(_) => None,
+        crate::app::TabKind::Project(_)
+        | crate::app::TabKind::Rules(_)
+        | crate::app::TabKind::LayerStack => None,
     }
 }
 

@@ -58,9 +58,9 @@ fn without_any_active_keymap_the_fallback_stands_in() {
 }
 
 // #1378 item 6: Classic binds P, G and F1 to other commands, so the
-// Altium fallback hints would advertise keys that do something else.
+// Signex Standard fallback hints would advertise keys that do something else.
 #[test]
-fn the_classic_profile_shows_no_altium_fallback_hints() {
+fn the_classic_profile_shows_no_signex_standard_fallback_hints() {
     let mut set = crate::keymap::ShortcutProfileSet::built_ins().unwrap();
     set.set_active_profile("classic").unwrap();
     let ctx = MenuContext {

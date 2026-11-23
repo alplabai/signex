@@ -46,6 +46,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         super::theme_cards::theme_cards(v.draft_theme, t, i18n),
         font_row(v),
         ui_scale_row(v),
+        selected_segment_row(v),
         section(ids::PREFERENCES_APPEARANCE_SECTION_CANVAS),
         grid_style_row(v),
         grid_preview::grid_preview(v, false),
@@ -57,6 +58,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         wheel_mode_row(v),
         trackpad_pan_row(v),
         zoom_speed_row(v),
+        layer_switcher_row(v),
         section(ids::PREFERENCES_APPEARANCE_SECTION_WINDOW),
         window_buttons_row(v),
         remember_geometry_row(v),
@@ -310,6 +312,60 @@ fn wheel_mode_row<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     )
 }
 
+fn layer_switcher_row<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+    use crate::layer_strip_prefs::LayerSwitcher;
+    let (t, i18n) = (v.panel_tokens, v.i18n);
+    let control = segmented_choice(
+        vec![
+            (
+                LayerSwitcher::Strip,
+                t!(i18n, ids::PREFERENCES_LAYER_SWITCHER_STRIP),
+            ),
+            (
+                LayerSwitcher::Dropdown,
+                t!(i18n, ids::PREFERENCES_LAYER_SWITCHER_DROPDOWN),
+            ),
+        ],
+        v.draft_layer_switcher,
+        t,
+        PrefMsg::DraftLayerSwitcher,
+    );
+    row_with(
+        t!(i18n, ids::PREFERENCES_LAYER_SWITCHER_LABEL),
+        Vec::new(),
+        t!(i18n, ids::PREFERENCES_LAYER_SWITCHER_HELP),
+        control,
+        t,
+    )
+}
+
+fn selected_segment_row<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+    use signex_types::theme::SelectedSegmentLook;
+    let (t, i18n) = (v.panel_tokens, v.i18n);
+    let control = segmented_choice(
+        vec![
+            (
+                SelectedSegmentLook::Neutral,
+                t!(i18n, ids::PREFERENCES_SELECTED_SEGMENT_NEUTRAL),
+            ),
+            (
+                SelectedSegmentLook::Accent,
+                t!(i18n, ids::PREFERENCES_SELECTED_SEGMENT_ACCENT),
+            ),
+        ],
+        v.draft_selected_segment,
+        t,
+        PrefMsg::DraftSelectedSegment,
+    );
+    row_with(
+        t!(i18n, ids::PREFERENCES_SELECTED_SEGMENT_LABEL),
+        Vec::new(),
+        t!(i18n, ids::PREFERENCES_SELECTED_SEGMENT_HELP),
+        control,
+        t,
+    )
+}
+
 fn trackpad_pan_row<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     let (t, i18n) = (v.panel_tokens, v.i18n);
     row_with(
@@ -409,6 +465,21 @@ fn remember_geometry_row<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Mockup row 144: the Selected option help states both looks and that
+    /// Graphite Light is unchanged (decided 2026-11-21).
+    #[test]
+    fn the_selected_option_help_states_both_looks() {
+        let help = I18n::en_us().message_plain(ids::PREFERENCES_SELECTED_SEGMENT_HELP, &[]);
+        for needle in [
+            "Graphite Dark",
+            "Neutral: fill #3D4047, text #FFFFFF, with the chip shadow",
+            "Accent: fill #C2552D, text #FFFFFF, no shadow",
+            "Graphite Light is unchanged",
+        ] {
+            assert!(help.contains(needle), "{needle:?} not in {help:?}");
+        }
+    }
 
     /// The grid style names read as the `Display` names the pickers showed.
     #[test]

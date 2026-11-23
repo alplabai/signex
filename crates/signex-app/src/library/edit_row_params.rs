@@ -1,8 +1,8 @@
 //! The Parameters column of the Edit Component modal (mockup row 130): the
 //! section header with "+ Add Parameter", the missing-template-slot offer,
 //! and a boxed dense table Key | Value | Unit | ✕. Template rows carry a
-//! "template" pill and no ✕; a measurement's number and its prefix picker
-//! are one measurement slot (mockup row 139).
+//! "template" pill and no ✕; a measurement's number and its menu are one
+//! measurement slot (mockup row 139).
 
 use iced::widget::{Column, Row, Space, column, container, row};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget};
@@ -14,21 +14,22 @@ use signex_types::quantity::{SiPrefix, Unit};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text, theme_ext};
 
-use super::measurement_slot::measurement_slot;
+use super::measurement_slot::{NUMBER_SHARE, PICKER_SHARE, measurement_slot};
 use super::messages::{BrowserEditMsg, LibraryMessage};
 use super::modal_chrome::secondary_btn;
-use super::prefix_picker::prefix_segment;
 use super::state::EditRowModalState;
-use super::unit_picker::{unit_of_token, unit_picker};
+use super::unit_menu::{UnitMenu, measurement_menu, prefix_menu};
+use super::unit_picker::unit_of_token;
 use crate::styles::{HAIRLINE, PillTone, Radii};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
-/// Column shares of the table: Key 3, Value 3, Unit 2, then the ✕ column.
+/// Column shares of the table, then the ✕ column. The measurement slot
+/// spans Value and Unit, its picker under the Unit heading.
 const KEY_SHARE: u16 = 3;
-const VALUE_SHARE: u16 = 3;
-const UNIT_SHARE: u16 = 2;
+const VALUE_SHARE: u16 = NUMBER_SHARE;
+const UNIT_SHARE: u16 = PICKER_SHARE;
 /// Width of the ✕ column.
 const REMOVE_COL_W: f32 = 32.0;
 /// Horizontal padding of a table cell (8 px).
@@ -227,9 +228,10 @@ fn slot_offer<'a>(
 }
 
 /// One parameter row: the key (with the "template" pill on a template
-/// slot), the value as a measurement slot, the unit, and ✕ on a custom
-/// row. A class-template measurement slot fixes the unit (a label, no
-/// picker) and its sign rules apply; any other parameter picks its unit.
+/// slot), the value and unit as one measurement slot, and ✕ on a custom
+/// row. A class-template measurement slot fixes the unit (its menu holds
+/// only prefixes) and its sign rules apply; any other parameter picks its
+/// unit.
 fn param_row<'a>(
     edit: &'a EditRowModalState,
     key: &str,
@@ -254,20 +256,15 @@ fn param_row<'a>(
         .map(|u| u.token().to_string())
         .unwrap_or(buf_unit);
 
-    // A known unit takes the number in a picked SI prefix, the right
-    // segment of the slot; the number field itself never takes a prefix or
-    // unit. No segment for units that take no prefix (`%`, `ppm/C`).
-    let prefix = Unit::from_alias(cur_unit.trim()).and_then(|u| {
-        let selected = edit.param_prefix.get(key).copied().unwrap_or(SiPrefix::One);
-        let send_p = send.clone();
-        let key_p = key_owned.clone();
-        prefix_segment(&u, selected, move |prefix| {
-            send_p(BrowserEditMsg::ParamPrefixPicked {
-                key: key_p.clone(),
-                prefix,
-            })
-        })
-    });
+    let picker = slot_picker(
+        edit,
+        key,
+        fixed_unit.as_ref(),
+        &cur_unit,
+        tokens,
+        i18n,
+        send,
+    );
     let send_v = send.clone();
     let key_v = key_owned.clone();
     let field = measurement_slot(
@@ -282,7 +279,7 @@ fn param_row<'a>(
         Some(send(BrowserEditMsg::CommitParam {
             key: key_owned.clone(),
         })),
-        prefix,
+        Some(picker),
         tokens,
     );
     // A stored value that already breaks its slot stays as it is until it
@@ -299,8 +296,6 @@ fn param_row<'a>(
         None => field,
     };
 
-    let unit_cell = unit_cell(fixed_unit.as_ref(), &cur_unit, key, tokens, i18n, send);
-
     let name = text(UserText::new(key_owned.clone()))
         .size(TS.body)
         .color(theme_ext::text_primary(tokens));
@@ -315,8 +310,7 @@ fn param_row<'a>(
 
     row![
         cell(key_cell, KEY_SHARE),
-        cell(value_cell, VALUE_SHARE),
-        cell(unit_cell, UNIT_SHARE),
+        cell(value_cell, VALUE_SHARE + UNIT_SHARE),
         remove_cell(slot.is_some(), key_owned, tokens, send),
     ]
     .align_y(Alignment::Center)
@@ -349,49 +343,143 @@ fn remove_cell<'a>(
     .boxed()
 }
 
-/// The unit: fixed by the slot (a muted label), or picked, never typed. A
-/// unit string the build does not know is shown read-only as written and
-/// kept untouched; its tooltip says so.
-fn unit_cell<'a>(
+/// What a row's slot shows for its unit.
+#[derive(Debug, PartialEq)]
+enum UnitSegment<'u> {
+    /// A fixed unit the prefix menu's face already names (`kΩ`).
+    InPrefix,
+    /// A fixed unit that takes no prefix: a muted label.
+    Fixed(&'u Unit),
+    /// A row's own known unit, or none: the unit menu.
+    Menu(Option<Unit>),
+    /// A unit string the build does not know: read-only, as written.
+    KeptAsWritten(&'u str),
+}
+
+fn unit_segment_of<'u>(fixed: Option<&'u Unit>, cur_unit: &'u str) -> UnitSegment<'u> {
+    match (fixed, unit_of_token(cur_unit)) {
+        (Some(u), _) if u.takes_prefix() => UnitSegment::InPrefix,
+        (Some(u), _) => UnitSegment::Fixed(u),
+        (None, Ok(selected)) => UnitSegment::Menu(selected),
+        (None, Err(written)) => UnitSegment::KeptAsWritten(written),
+    }
+}
+
+/// The right part of a row's slot, always one control (mockup row 139): a
+/// fixed unit's prefix menu or label, the menu of a row that picks its own
+/// unit, or an unknown unit as written.
+fn slot_picker<'a>(
+    edit: &'a EditRowModalState,
+    key: &str,
     fixed: Option<&Unit>,
     cur_unit: &str,
-    key: &str,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
     send: &(impl Fn(BrowserEditMsg) -> LibraryMessage + Clone + 'a),
 ) -> Element<'a, LibraryMessage> {
-    let ink4 = crate::styles::tokens::resolve(tokens).ink4;
-    let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
-    match (fixed, unit_of_token(cur_unit)) {
-        (Some(u), _) => text(UserText::new(u.glyph()))
-            .size(TS.body)
-            .font(mono)
-            .color(ink4)
-            .boxed(),
-        (None, Ok(selected)) => {
-            let send_u = send.clone();
-            let key_u = key.to_string();
-            unit_picker(selected, true, move |unit| {
-                send_u(BrowserEditMsg::SetParamUnit {
-                    key: key_u.clone(),
-                    unit,
-                })
+    let fixed_prefix = fixed.and_then(|u| {
+        let menu = row_menu(edit, key, Some(u.clone()), send);
+        let on_prefix = |prefix| {
+            send(BrowserEditMsg::ParamPrefixPicked {
+                key: key.to_string(),
+                prefix,
             })
-        }
-        (None, Err(written)) => signex_widgets::tooltip(
-            text(UserText::new(written))
-                .size(TS.body)
-                .font(mono)
-                .color(ink4),
-            iced::widget::container(
-                container(text(t!(i18n, ids::LIBRARY_EDIT_ROW_UNIT_KEPT)).size(TS.caption))
-                    .padding([SP.xs, SP.s + SP.xs]),
-            )
-            .style(crate::styles::context_menu(tokens)),
-            iced::widget::tooltip::Position::Bottom,
-        )
-        .boxed(),
+        };
+        prefix_menu(menu, row_prefix(edit, key), on_prefix, tokens, i18n)
+    });
+    fixed_prefix
+        .or_else(|| {
+            let segment = unit_segment_of(fixed, cur_unit);
+            unit_segment(edit, key, segment, tokens, i18n, send)
+        })
+        .unwrap_or_else(|| Space::new().boxed())
+}
+
+/// The prefix the row's number is in.
+fn row_prefix(edit: &EditRowModalState, key: &str) -> SiPrefix {
+    edit.param_prefix.get(key).copied().unwrap_or(SiPrefix::One)
+}
+
+/// The open state and events of a row's menu.
+fn row_menu(
+    edit: &EditRowModalState,
+    key: &str,
+    selected: Option<Unit>,
+    send: &impl Fn(BrowserEditMsg) -> LibraryMessage,
+) -> UnitMenu<LibraryMessage> {
+    UnitMenu {
+        selected,
+        is_open: edit.unit_menu_open.as_deref() == Some(key),
+        on_open: send(BrowserEditMsg::UnitMenuOpened {
+            key: key.to_string(),
+        }),
+        on_dismiss: send(BrowserEditMsg::UnitMenuDismissed),
     }
+}
+
+/// The unit part of a slot; `None` when the prefix menu already names it.
+fn unit_segment<'a>(
+    edit: &'a EditRowModalState,
+    key: &str,
+    segment: UnitSegment<'_>,
+    tokens: &'a ThemeTokens,
+    i18n: &I18n,
+    send: &(impl Fn(BrowserEditMsg) -> LibraryMessage + Clone + 'a),
+) -> Option<Element<'a, LibraryMessage>> {
+    let ink4 = crate::styles::tokens::resolve(tokens).ink4;
+    let label = |glyph: &str| {
+        container(
+            text(UserText::new(glyph.to_string()))
+                .size(TS.body)
+                .font(crate::fonts::iced_font_for_family(
+                    crate::fonts::CHROME_MONO_FONT,
+                ))
+                .color(ink4),
+        )
+        .padding([SP.xs + SP.xs, SP.s + SP.xs])
+    };
+    match segment {
+        UnitSegment::InPrefix => None,
+        UnitSegment::Fixed(u) => Some(label(u.glyph()).boxed()),
+        UnitSegment::Menu(selected) => Some(menu_segment(edit, key, selected, tokens, i18n, send)),
+        UnitSegment::KeptAsWritten(written) => Some(
+            signex_widgets::tooltip(
+                label(written),
+                container(text(t!(i18n, ids::LIBRARY_EDIT_ROW_UNIT_KEPT)).size(TS.caption))
+                    .padding([SP.xs, SP.s + SP.xs])
+                    .style(crate::styles::context_menu(tokens)),
+                iced::widget::tooltip::Position::Bottom,
+            )
+            .boxed(),
+        ),
+    }
+}
+
+/// The one menu of a row that picks its own unit: prefixes and units when
+/// the unit takes prefixes, else units.
+fn menu_segment<'a>(
+    edit: &'a EditRowModalState,
+    key: &str,
+    selected: Option<Unit>,
+    tokens: &'a ThemeTokens,
+    i18n: &I18n,
+    send: &(impl Fn(BrowserEditMsg) -> LibraryMessage + Clone + 'a),
+) -> Element<'a, LibraryMessage> {
+    let menu = row_menu(edit, key, selected, send);
+    let on_prefix = |prefix| {
+        send(BrowserEditMsg::ParamPrefixPicked {
+            key: key.to_string(),
+            prefix,
+        })
+    };
+    let on_pick = |unit| {
+        send(BrowserEditMsg::SetParamUnit {
+            key: key.to_string(),
+            unit,
+        })
+    };
+    let prefix = row_prefix(edit, key);
+    measurement_menu(menu, prefix, on_prefix, on_pick, tokens, i18n)
 }
 
 /// The "template" pill after a template slot's key.
@@ -400,4 +488,28 @@ fn template_pill<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, LibraryMe
         .padding([0.0, SP.s + SP.xs])
         .style(crate::styles::pill(tokens, PillTone::Neutral))
         .boxed()
+}
+
+#[cfg(test)]
+mod slot_tests {
+    use super::*;
+
+    /// Mockup row 139: a fixed unit with prefixes lives in the prefix
+    /// picker, so the slot shows no second unit.
+    #[test]
+    fn the_slot_shows_one_unit() {
+        let ohm = Unit::Ohm;
+        let pct = Unit::Percent;
+        assert_eq!(unit_segment_of(Some(&ohm), "ohm"), UnitSegment::InPrefix);
+        assert_eq!(unit_segment_of(Some(&pct), "%"), UnitSegment::Fixed(&pct));
+        assert_eq!(
+            unit_segment_of(None, "ohm"),
+            UnitSegment::Menu(Some(Unit::Ohm))
+        );
+        assert_eq!(unit_segment_of(None, ""), UnitSegment::Menu(None));
+        assert_eq!(
+            unit_segment_of(None, "furlong"),
+            UnitSegment::KeptAsWritten("furlong")
+        );
+    }
 }

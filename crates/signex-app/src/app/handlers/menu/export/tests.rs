@@ -186,7 +186,9 @@ pub(crate) fn app_workspace(dir: &str, listed: &[&str]) -> Signex {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -985,6 +987,7 @@ fn a_child_that_exists_but_will_not_parse_is_not_called_missing() {
 }
 
 mod diagnosis;
+mod omitted_pages;
 
 #[test]
 fn uncovered_pdf_characters_are_named_in_the_export_warning() {
@@ -1005,6 +1008,7 @@ mod class_styles;
 mod protel_hierarchy;
 
 mod bom_hierarchy;
+mod channel_outputs;
 pub(crate) mod current_placement;
 
 mod export_status;
@@ -1046,7 +1050,9 @@ pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),

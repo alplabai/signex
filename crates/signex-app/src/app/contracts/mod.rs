@@ -162,6 +162,9 @@ pub enum Message {
     /// The pan/zoom frame bench (#2472), a dev/QA mode. Routed to
     /// `dispatch_pan_zoom_bench_message`.
     PanZoomBench(crate::pan_zoom_bench::BenchMsg),
+    /// Design ▸ Differential Pair Classes… (#1282). Routed to
+    /// `dispatch_diff_pair_classes_message`.
+    DiffPairClasses(crate::app::DiffPairClassesMsg),
 }
 
 impl Message {
@@ -174,6 +177,7 @@ impl Message {
 
 mod cross_probe;
 mod dialogs;
+pub(crate) mod grid_properties;
 mod layer_strip;
 mod messages;
 mod net_nav;

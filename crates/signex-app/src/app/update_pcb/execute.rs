@@ -24,6 +24,12 @@ impl Signex {
     /// What the dialog's board lets Execute do; `None` with no board loaded.
     pub(crate) fn update_pcb_board_status(&self) -> Option<BoardStatus> {
         let board = self.ui_state.update_pcb.as_ref()?.board.as_deref()?;
+        self.board_status(board)
+    }
+
+    /// What `board` lets a change list do; `None` while it is not loaded.
+    /// Update PCB and Compare Board with Schematic share it.
+    pub(crate) fn board_status(&self, board: &std::path::Path) -> Option<BoardStatus> {
         let engine = self.document_state.board_engine(board)?;
         Some(if !self.document_state.has_pcb_tab(board) {
             BoardStatus::Parked
@@ -68,19 +74,31 @@ impl Signex {
     /// takes en-US).
     fn update_pcb_execute_block_in(&self, i18n: &signex_i18n::I18n) -> Option<String> {
         let state = self.ui_state.update_pcb.as_ref()?;
-        let board = file_name(state.board.as_deref()?);
-        match self.update_pcb_board_status() {
-            Some(BoardStatus::Parked) => {
-                return Some(t!(i18n, ids::UPDATE_PCB_PARKED, "board" => board).into_string());
-            }
-            Some(BoardStatus::ReadOnly) => {
-                return Some(t!(i18n, ids::UPDATE_PCB_READ_ONLY, "board" => board).into_string());
-            }
-            Some(BoardStatus::Editable) => {}
-            None => return Some(board_missing_text(i18n, &board)),
+        if let Some(why) = self.board_block_in(state.board.as_deref()?, i18n) {
+            return Some(why);
         }
         self.update_pcb_stale()
             .then(|| t!(i18n, ids::UPDATE_PCB_STALE).into_string())
+    }
+
+    /// Why `board` cannot take a change list's step, in `i18n`: parked,
+    /// read-only or not loaded. `None` when it is editable.
+    pub(crate) fn board_block_in(
+        &self,
+        board: &std::path::Path,
+        i18n: &signex_i18n::I18n,
+    ) -> Option<String> {
+        let name = file_name(board);
+        match self.board_status(board) {
+            Some(BoardStatus::Parked) => {
+                Some(t!(i18n, ids::UPDATE_PCB_PARKED, "board" => name).into_string())
+            }
+            Some(BoardStatus::ReadOnly) => {
+                Some(t!(i18n, ids::UPDATE_PCB_READ_ONLY, "board" => name).into_string())
+            }
+            Some(BoardStatus::Editable) => None,
+            None => Some(board_missing_text(i18n, &name)),
+        }
     }
 
     /// Validate: would the ticked rows apply to the board as one step? Runs
@@ -96,7 +114,13 @@ impl Signex {
             _ if self.update_pcb_stale() => {
                 Err(t!(self.ui_state.i18n, ids::UPDATE_PCB_STALE).into_string())
             }
-            Some(engine) => check(list, engine).map_err(|e| e.to_string()),
+            Some(engine) => check(list, engine)
+                .map_err(|e| e.to_string())
+                .and_then(|()| {
+                    let rows = self.update_pcb_rule_rows(state);
+                    self.prepare_update_pcb_rules(state.project, &rows)
+                        .map(|_| ())
+                }),
             None => Err(board_missing_text(&self.ui_state.i18n, &file_name(board))),
         };
         if let Some(state) = self.ui_state.update_pcb.as_mut() {
@@ -113,8 +137,20 @@ impl Signex {
         let (Some(list), Some(board)) = (state.ready_list().cloned(), state.board.clone()) else {
             return Task::none();
         };
+        // #1489: the rules the schematic asks for go with the board's rows.
+        let project = state.project;
+        let rule_rows = self.update_pcb_rule_rows(state);
+        let rules_pending = super::rules_from_schematic::pending(&rule_rows);
         // The dialog's Execute is off with nothing ticked; Enter is too.
-        if !state.apply && state.execute_count() == 0 {
+        if !state.apply && state.execute_count() == 0 && rules_pending == 0 {
+            return Task::none();
+        }
+        if state.execute_count() == 0 {
+            if let Err(why) = self.apply_update_pcb_rules(project, &rule_rows) {
+                self.refuse_execute(why);
+                return Task::none();
+            }
+            self.ui_state.update_pcb = None;
             return Task::none();
         }
         if let Some(why) = self.update_pcb_execute_block() {
@@ -124,18 +160,25 @@ impl Signex {
             self.refuse_execute_as(&logged, why);
             return Task::none();
         }
-        let Some(engine) = self.document_state.board_engine(&board) else {
+        if self.document_state.board_engine(&board).is_none() {
             return Task::none();
+        }
+        // #2734: a rule half that cannot land refuses before the board moves.
+        let prepared = match self.prepare_update_pcb_rules(project, &rule_rows) {
+            Ok(prepared) => prepared,
+            Err(why) => {
+                self.refuse_execute(why);
+                return Task::none();
+            }
         };
-        let commands = lower(&list, engine.board());
         let count = list.rows.iter().filter(|r| list.applies(r)).count();
         let label = self.update_pcb_text(ids::UPDATE_PCB_TITLE);
-        let step = CheckedStep {
-            label: &label,
-            expected_revision: list.revision,
-        };
-        match self.execute_board_commands(&board, commands, Some(step)) {
-            Ok(_) => {
+        match self.execute_eco_list(&board, &list, &label) {
+            Ok(()) => {
+                if let Err(why) = self.commit_update_pcb_rules(project, prepared) {
+                    // The board step landed; say why the rules did not.
+                    crate::diagnostics::log_warning(why);
+                }
                 self.ui_state.update_pcb = None;
                 crate::diagnostics::log_info(
                     t!(
@@ -148,9 +191,32 @@ impl Signex {
                 );
                 self.activate_tab_for_path(&board);
             }
-            Err(error) => self.refuse_execute(error.to_string()),
+            Err(why) => self.refuse_execute(why),
         }
         Task::none()
+    }
+
+    /// The rows of `list` that apply, run on `board` as one undo step
+    /// labelled `label` at the list's revision: refused, with nothing
+    /// changed, once the board moved past it. Update PCB's Execute and
+    /// Compare Board with Schematic's Apply share it.
+    pub(crate) fn execute_eco_list(
+        &mut self,
+        board: &std::path::Path,
+        list: &signex_engine::pcb::eco::EcoChangeList,
+        label: &str,
+    ) -> Result<(), String> {
+        let Some(engine) = self.document_state.board_engine(board) else {
+            return Err(board_missing_text(&self.ui_state.i18n, &file_name(board)));
+        };
+        let commands = lower(list, engine.board());
+        let step = CheckedStep {
+            label,
+            expected_revision: list.revision,
+        };
+        self.execute_board_commands(board, commands, Some(step))
+            .map(|_| ())
+            .map_err(|error| error.to_string())
     }
 
     /// Execute did not run: Validate's line says why (a headless run ends).

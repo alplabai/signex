@@ -40,8 +40,7 @@ pub(super) struct Look {
     pub accent: Color,
     pub panel: Color,
     pub sunken: Color,
-    pub raised: Color,
-    pub shadow: Color,
+    pub segment: SegmentedStyle,
     pub line_soft: Color,
     pub line_strong: Color,
 }
@@ -57,8 +56,7 @@ impl Look {
             accent: crate::styles::ti(tokens.accent),
             panel: crate::styles::ti(tokens.panel_bg),
             sunken: r.sunken,
-            raised: r.raised,
-            shadow: r.shadow,
+            segment: r.segmented(TS.body),
             line_soft: r.line_soft,
             line_strong: r.line_strong,
         }
@@ -66,15 +64,7 @@ impl Look {
 
     /// The segmented switch of a settings row, sharing the row's width.
     pub(super) fn segmented(&self) -> SegmentedStyle {
-        SegmentedStyle::new(
-            self.sunken,
-            self.raised,
-            self.shadow,
-            self.ink3,
-            self.ink,
-            TS.body,
-        )
-        .fill_width(true)
+        self.segment.fill_width(true)
     }
 }
 
@@ -187,7 +177,7 @@ pub(super) fn num_field<'a>(
         .padding([SP.s, SP.m])
         .size(TS.body)
         .width(width)
-        .style(crate::panels::form_look::text_input_style);
+        .style(crate::panels::form_look::greyable_input_style);
     match on_input {
         Some(on_input) => field
             .on_input(move |v| Message::PrintPreview(on_input(v)))
@@ -383,7 +373,7 @@ impl Signex {
                 .color(look.ink3)
                 .font(iced::Font {
                     weight: iced::font::Weight::Medium,
-                    ..iced::Font::DEFAULT
+                    ..signex_widgets::ui_font::regular()
                 })
                 .width(Length::Fill)
                 .wrapping(iced::widget::text::Wrapping::None)

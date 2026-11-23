@@ -71,11 +71,15 @@ pub fn placed_geometry(sheet: &SchematicSheet, item: &SelectedItem) -> Option<Pl
         | SelectedKind::NoErcDirective
         | SelectedKind::TextNote
         | SelectedKind::SheetPin => sheet.item_anchor(item).map(at),
-        // A directive (#2420) is moved on the sheet, not from Properties.
+        SelectedKind::HarnessConnector => sheet.harness.connector(id).map(|c| at(c.position)),
+        SelectedKind::HarnessWire => sheet.harness.wire(id).map(|w| at(w.start)),
+        // A directive (#2420) is moved on the sheet, not from Properties; a
+        // harness entry sits in its connector's slot.
         SelectedKind::SymbolRefField
         | SelectedKind::SymbolValField
         | SelectedKind::Drawing
-        | SelectedKind::Directive => None,
+        | SelectedKind::Directive
+        | SelectedKind::HarnessEntry => None,
     }
 }
 
@@ -96,6 +100,8 @@ pub fn placed_item(sheet: &SchematicSheet, id: uuid::Uuid) -> Option<SelectedIte
         SelectedKind::NoErcDirective,
         SelectedKind::TextNote,
         SelectedKind::SheetPin,
+        SelectedKind::HarnessConnector,
+        SelectedKind::HarnessWire,
     ];
     kinds
         .into_iter()
@@ -311,6 +317,7 @@ mod tests {
             uuid: uuid::Uuid::now_v7(),
             start: Point::new(0.0, 0.0),
             end: Point::new(10.0, 0.0),
+            ..Default::default()
         };
         let item = SelectedItem::new(bus.uuid, SelectedKind::Bus);
         let mut engine = Engine::new(SchematicSheet {

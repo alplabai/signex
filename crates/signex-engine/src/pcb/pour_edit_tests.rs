@@ -133,3 +133,35 @@ fn a_slice_splits_the_pour_it_crosses() {
         "a line off every pour slices nothing"
     );
 }
+
+/// #2523: Shelve all and Unshelve all set every pour in one step, leave
+/// other zones as they are, and change nothing when already done.
+#[test]
+fn shelve_all_and_unshelve_all_are_one_step_each() {
+    let mut b = with_pour();
+    let mut second = b.zones[0].clone();
+    second.uuid = Uuid::from_u128(77);
+    b.zones.push(second);
+    let mut solid = b.zones[0].clone();
+    solid.uuid = Uuid::from_u128(78);
+    solid.fill_type = "solid".into();
+    b.zones.push(solid);
+
+    let mut engine = BoardEngine::new(b.clone(), 1);
+    let shelve = shelve_all_pours(engine.board(), true).expect("two pours to shelve");
+    engine.execute(shelve).expect("applies");
+    let shelved: Vec<bool> = engine.board().zones.iter().map(|z| z.shelved).collect();
+    assert_eq!(shelved, vec![true, true, false], "only the pours");
+    assert!(
+        shelve_all_pours(engine.board(), true).is_none(),
+        "already shelved"
+    );
+
+    let unshelve = shelve_all_pours(engine.board(), false).expect("two to unshelve");
+    engine.execute(unshelve).expect("applies");
+    assert_eq!(engine.board().zones, b.zones);
+    engine.undo().expect("undo").expect("a step");
+    assert!(engine.board().zones[..2].iter().all(|z| z.shelved));
+    engine.undo().expect("undo").expect("a step");
+    assert_eq!(engine.board().zones, b.zones, "each was a single step");
+}

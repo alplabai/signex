@@ -108,6 +108,9 @@ pub(crate) enum Needs {
     PcbSync,
     /// New PCB: a project is open.
     OpenProject,
+    /// Create Rooms from Sheets (#2457): a board in view that is not
+    /// read-only, with a project open to read the sheets from.
+    PcbInProject,
     Library,
     ProjectSheet,
     TileableWindows,
@@ -177,6 +180,7 @@ impl Needs {
                         || ctx.pcb.shown)
             }
             Self::OpenProject => ctx.has_open_project,
+            Self::PcbInProject => ctx.has_pcb && !ctx.pcb.read_only && ctx.has_open_project,
             // Library Editor focuses an open Library Browser tab, else opens the
             // first open library.
             Self::Library => ctx.has_open_library,
@@ -291,6 +295,7 @@ impl Needs {
             | Self::MoveObject
             | Self::PcbSync
             | Self::OpenProject
+            | Self::PcbInProject
             | Self::Library
             | Self::ProjectSheet => unreachable!("a CoreOnly need is met in is_met_from_core"),
         }
@@ -340,6 +345,7 @@ impl Needs {
             Self::ProbeTarget => ids::COMMAND_NEEDS_PROBE_TARGET,
             Self::PcbSync => ids::COMMAND_NEEDS_PCB_SYNC,
             Self::OpenProject => ids::COMMAND_NEEDS_OPEN_PROJECT,
+            Self::PcbInProject => ids::COMMAND_NEEDS_PCB_IN_PROJECT,
             Self::Library => ids::COMMAND_NEEDS_LIBRARY,
             Self::ProjectSheet => ids::COMMAND_NEEDS_PROJECT_SHEET,
             Self::TileableWindows => ids::COMMAND_NEEDS_TILEABLE_WINDOWS,
@@ -460,6 +466,13 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_blanket"
         | "place_compile_mask"
         | "place_diff_pair"
+        // #1280: the harness tools and the definitions view.
+        | "place_signal_harness"
+        | "place_harness_connector"
+        | "place_harness_entry"
+        | "open_harness_definitions"
+        // #1489: the Net Parameters flag sits on a wire of the sheet in view.
+        | "place_parameter_set"
         | "edit_blanket"
         // #1699: a No-ERC directive's rule list.
         | "edit_no_erc_rules"
@@ -475,8 +488,21 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // Lists the parts of the active schematic's project.
         | "assign_footprints"
         // Dots the bare pin touches of the sheet in view.
-        | "repair_pin_junctions" => Needs::Schematic,
+        | "repair_pin_junctions"
+        // #1267, #1300: the Bezier, dimension and table tools.
+        | "draw_bezier"
+        | "place_table"
+        | "place_linear_dimension"
+        | "place_aligned_dimension"
+        // Mockup row 158: the unions of the sheet in view; the handler says what to
+        // select when nothing fits.
+        | "create_union"
+        | "add_to_union"
+        | "remove_from_union"
+        | "break_union" => Needs::Schematic,
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
+        // #1300: the contents sheet of the active sheet's project.
+        "add_table_of_contents" => Needs::Sheets,
         "run_drc"
         | "reannotate_board"
         | "fabrication_outputs"
@@ -512,6 +538,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_board_quick_route"
         | "place_board_multi_route"
         | "place_board_route"
+        // #2457: a room by two corners.
+        | "place_board_room"
         // #2373: free pads, arcs, strings and dimensions.
         | "place_board_pad"
         | "place_board_arc"
@@ -559,7 +587,13 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "import_dxf" | "import_dxf_outline" => Needs::Pcb,
         "cross_probe" => Needs::ProbeTarget,
         "update_pcb_from_schematic" | "back_annotate_schematics" => Needs::PcbSync,
+        // #2462: gated like Update PCB.
+        "compare_board_with_schematic" => Needs::PcbSync,
         "new_pcb_document" | "new_schematic_sheet" | "open_rules" => Needs::OpenProject,
+        // #1282: the class dialog edits the project.
+        "open_diff_pair_classes" => Needs::OpenProject,
+        // #2457: the dialog reads the sheets of the board's project.
+        "create_rooms_from_sheets" => Needs::PcbInProject,
         "annotate_schematic_quietly" | "force_annotate_all_schematics" => Needs::ActiveSheet,
         "zoom_in_at_cursor" | "zoom_out_at_cursor" => Needs::Canvas,
         // Redraw, like a fit, acts on a main or undocked sheet or board canvas.
@@ -602,6 +636,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "view_rotate_reset" => Needs::TurnedPcbView,
         "open_library_browser" => Needs::Library,
         "number_schematic_sheets" => Needs::ProjectSheet,
+        "compile_project" => Needs::ProjectSheet,
         "tile_windows_horizontally" | "tile_windows_vertically" => Needs::TileableWindows,
         "untile_documents" => Needs::Tiled,
         _ => return None,

@@ -26,18 +26,26 @@ use signex_engine::pcb::component_edit;
 use signex_engine::pcb::designators::FootprintTextField;
 use signex_i18n::{MessageId, ids, t};
 use signex_types::pcb::PcbBoard;
+use signex_widgets::property_illustration::IllustrationHover;
 use uuid::Uuid;
 
 use crate::app::state::pcb_edit::CheckedStep;
 use crate::app::{Message, Signex};
+use crate::keymap::AppCommandId;
 use crate::panels::{ComponentField, PcbComponentFacts, PcbComponentMsg};
 
-/// The Component view's own state: the header's row filter and the text
-/// typed and not applied yet.
+/// The command the mismatch note's Update PCB button runs: Design ▸ Update
+/// PCB Document, worded Import Changes From on a board.
+const UPDATE_PCB_COMMAND: &str = "update_pcb_from_schematic";
+
+/// The Component view's own state: the header's row filter, the text typed
+/// and not applied yet, and the field or illustration part under the
+/// pointer.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct PcbComponentPanelState {
     pub search: String,
     pub draft: Option<PcbComponentDraft>,
+    pub illustration_hover: IllustrationHover,
 }
 
 /// Text typed into the Component view's fields for one set of footprints.
@@ -61,6 +69,26 @@ impl Signex {
         match msg {
             PcbComponentMsg::FootprintPickRequested { board, footprints } => {
                 return self.open_footprint_swap_picker(board, footprints);
+            }
+            PcbComponentMsg::UpdatePcbPressed => {
+                // The Design menu's command, so it is gated and worded the
+                // same way.
+                return match AppCommandId::new(UPDATE_PCB_COMMAND) {
+                    Ok(command) => self.run_menu_command(&command, None),
+                    Err(_) => Task::none(),
+                };
+            }
+            // Only the hover changes: patch the shown facts instead of
+            // rebuilding the board summary on every pointer crossing.
+            PcbComponentMsg::IllustrationHovered(hover) => {
+                let state = &mut self.interaction_state.pcb_component;
+                state.illustration_hover.update(hover.clone());
+                let hover = state.illustration_hover.clone();
+                let shown = self.document_state.panel_ctx.pcb_board.as_mut();
+                if let Some(facts) = shown.and_then(|b| b.component.as_mut()) {
+                    facts.illustration_hover = hover;
+                }
+                return Task::none();
             }
             PcbComponentMsg::SearchChanged(query) => {
                 self.interaction_state

@@ -1,4 +1,4 @@
-//! Panel implementations — uses signex-widgets for proper Altium-style content.
+//! Panel implementations, built on signex-widgets.
 
 use iced::widget::{Column, Space, container, row, scrollable, svg};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
@@ -9,6 +9,9 @@ use signex_widgets::theme_ext;
 use signex_widgets::tree_view::{TreeIcon, TreeMsg, TreeNode, TreeView};
 use signex_widgets::{button, raw, text};
 
+pub mod annotations;
+mod click_away;
+pub mod compiled_design;
 pub mod components_panel;
 mod element_properties;
 mod footprint_editor_properties;
@@ -24,9 +27,13 @@ mod symbol_editor_properties;
 
 // v0.14.x -- domain modules split out of the former single-file panels module.
 mod board_sketch_attr;
-pub use board_sketch_attr::BoardSketchAttrMsg;
+pub use board_sketch_attr::{BoardSketchAttrMsg, BoardTargetProps, ComponentChoice, LayerChoice};
+mod sketch_fix;
+pub use sketch_fix::SketchFixMsg;
 mod board_net_classes;
 mod color_field;
+pub mod command_log;
+pub use command_log::{CommandLogMsg, CommandLogState};
 mod context;
 mod drafts;
 mod drc;
@@ -38,6 +45,8 @@ pub use board_net_classes::{
     BoardNetClassDraft, BoardNetClassField, BoardNetClassMsg, BoardNetClassView,
 };
 pub use drc::{DrcPanel, DrcRow, MAX_ROWS as DRC_MAX_ROWS};
+// The DRC popover of the status bar words its rows as the panel does (#2460).
+pub(crate) use drc::row_text as drc_row_text;
 mod drc_idle;
 pub use drc_idle::BaseRule;
 mod drc_rows;
@@ -66,10 +75,17 @@ pub use validation_state::ValidationPanels;
 mod waiver_form;
 pub use waiver_form::{UserIdentity, WaiverReason};
 mod footprint_context;
+mod footprint_outline;
+mod footprint_place_block;
+mod footprint_properties_msg;
+pub use footprint_properties_msg::FpPropertiesMsg;
+mod footprint_subform_msg;
+pub use footprint_subform_msg::{FpSubformMsg, expansion_buffer_key};
+mod field_edits;
 pub(crate) mod form_look;
 pub(crate) mod graphite;
 pub(crate) mod illustration;
-mod library;
+mod library_row;
 mod messages;
 pub(crate) mod messages_row;
 mod multi_selection;
@@ -81,11 +97,13 @@ mod numeric_draft;
 pub mod object_list;
 pub mod paired;
 mod palette;
+pub mod panel_groups;
 mod paper;
 pub mod pcb_board_properties;
 pub mod pcb_component;
 pub mod pcb_nets;
 pub mod pcb_primitive_properties;
+pub mod pcb_room_properties;
 mod projects;
 mod projects_graphite;
 mod properties;
@@ -95,7 +113,9 @@ pub use selection_filter::{
 };
 pub(crate) mod rotation_steps;
 mod symbol_context;
+pub(crate) mod unions;
 mod widgets;
+mod window_scope;
 mod wire_style_rows;
 
 #[cfg(test)]
@@ -103,6 +123,10 @@ mod contrast_tests;
 #[cfg(test)]
 mod planned_tests;
 
+pub use element_properties::{
+    AnnotationField, AnnotationPanelMsg, AnnotationPanelState, DIMENSION_OVERRIDE_INPUT,
+    DIMENSION_TEXT_SECTION, DimensionToolForm,
+};
 pub(crate) use element_properties::{
     BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,
 };
@@ -110,8 +134,14 @@ pub use element_properties::{
     BlanketEdit, FootprintCardFacts, FootprintCardKey, FootprintCardStatus, FootprintCardView,
     FootprintCards, FootprintThumb, NoErcRuleEdit, PartPanelEffect, PartPanelMsg, PartPanelState,
 };
+pub use element_properties::{
+    BlanketNetRow, DirectivePanel, DirectivePanelMsg, DraftField, NetParametersEdit, NetRule,
+    OutlineField,
+};
+pub use element_properties::{HarnessField, HarnessMismatchRow, HarnessPanel, HarnessPanelMsg};
 use element_properties::{
-    view_child_sheet_properties, view_drawing_properties, view_selected_element_properties,
+    view_child_sheet_properties, view_drawing_properties, view_harness_definitions,
+    view_selected_element_properties,
 };
 use footprint_editor_properties::view_footprint_editor_properties;
 // HI-22: re-export the form / layout helpers extracted into
@@ -129,15 +159,16 @@ pub use properties_parameters::{
 };
 pub(super) use properties_parameters::{
     canvas_font_popup, empty_section_row, font_style_row, form_check_row, form_check_row_shortcut,
-    form_choice_row, form_edit_row, form_font_link_row, form_input_row, form_input_row_untipped,
+    form_choice_row, form_edit_row, form_edit_row_refusable, form_font_link_row, form_input_row,
     form_label, form_pick_row, justification_grid, label_anchor, net_params_add_bar,
-    net_params_tabs, props_tab_btn, seg_btn, thin_sep,
+    net_params_tabs, seg_btn, thin_sep,
 };
 use properties_parameters::{view_properties_general, view_properties_parameters};
 use symbol_editor_properties::view_symbol_editor_properties;
 
 // -- Re-exports: keep the `crate::panels::*` public surface stable and the
 //    sibling `super::` / `crate::panels::` paths resolving after the split. --
+pub use annotations::{AnnotationsMsg, AnnotationsState, AnnotationsView};
 pub use color_field::{ColorFieldProps, color_field};
 pub use context::{FootprintChoiceItem, PINS_SECTION_KEY, PanelContext, SymbolChoiceItem};
 pub use erc_waivers::{ErcViolationWaiverEntry, ErcWaiveDraft, ErcWaiverMsg, ErcWaiverStatus};
@@ -149,13 +180,18 @@ pub use footprint_context::{
     MountingHoleProps, NumberingSchemeKindUi, OverConstraintSummary, PadShapeParamSummary,
     PourSummary, RejectedConflictSummary, SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
+pub use footprint_context::{PATTERN_PREVIEW_MAX_INSTANCES, SketchStateSummary};
+pub use footprint_outline::{OutlineSegment, PadOutlineSummary, segments as outline_segments};
+pub use footprint_place_block::FootprintPlaceBlock;
 pub use illustration::{HoverSubject, PanelIllustrationHover};
 pub use layer_stack::{LayerStackFacts, LayerStackMsg, StackField};
-pub use library::{ComponentSheet, LibraryRowDetail};
-pub(super) use library::{
-    view_component_sheet, view_footprint_library, view_library_row_properties, view_sch_library,
-};
-pub use messages::{PanelMsg, SheetFrameEdit};
+pub use library_row::{ComponentSheet, LibraryRowDetail};
+pub(super) use library_row::{view_component_sheet, view_library_row_properties};
+mod doc_grid;
+pub(crate) use doc_grid::typed_pitch_mm;
+pub use doc_grid::{DocGridField, DocGridMsg};
+mod typed_pick;
+pub use messages::{FootprintFeatureEdit, PanelMsg, SheetFrameEdit};
 pub use multi_selection::{
     MultiEditMsg, MultiField, MultiKind, SelectionForm, SelectionFormMsg, SelectionKinds,
     edit_from_text_in as multi_edit_from_text,
@@ -184,10 +220,11 @@ pub use pcb_component::{
     Shared,
 };
 pub use pcb_layers::{LayersPanelMsg, LayersPanelUi, LayersTab, PcbLayersPanel};
-pub use pcb_nets::PcbNetsSummary;
+pub use pcb_nets::{PcbNetsSummary, PcbPanelMode, PcbPanelMsg, PcbPanelUi};
 pub use pcb_primitive_properties::{PcbPrimitiveFacts, PcbPrimitiveMsg};
 pub use placed_edit::{
-    NoteDraft, NoteLayout, PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel,
+    NoteDraft, NoteLayout, PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel, PortNameDraft,
+    RunNet,
 };
 pub use pre_placement::{
     PlacementPosition, PositionField, PrePlacementData, PrePlacementKind, PrePlacementPositionMsg,
@@ -222,6 +259,8 @@ pub enum PanelKind {
     Filter,
     Erc,
     Messages,
+    /// Every catalog command this session ran (#2458).
+    CommandLog,
     Drc,
     LayerStack,
     /// The layers of the active tab (#2223, #2359): a board's layers with
@@ -230,7 +269,6 @@ pub enum PanelKind {
     NetClasses,
     Variants,
     OutputJobs,
-    // Additional Altium schematic panels
     SchFilter,
     /// Every object of the sheet or the project, listed and selectable
     /// (#1259).
@@ -240,23 +278,16 @@ pub enum PanelKind {
     Snippets,
     Todo,
     Wiki,
-    /// v0.9 Library panel — open `*.snxlib/` libraries, drill into
-    /// their components, drag onto the canvas (Phase 2).
+    /// The one Library panel (mockup row 119): the symbols of the open `.snxsym`,
+    /// the footprints of the open `.snxfpt` or the parts of every open
+    /// library, picked with its kind chips.
     Library,
-    /// v0.9 phase 2.5 — Altium SCH Library panel. Lists symbols
-    /// inside the active `.snxsym` container; clicking switches the
-    /// editor's `active_idx`. Visible whenever a Symbol editor tab
-    /// is focused.
+    /// Panel-list alias of [`Self::Library`] in its Symbols kind (mockup row 120).
+    /// Opening it opens the Library panel; it is never docked itself.
     SchLibrary,
-    /// v0.14.2 — Altium PCB Library panel parity. Lists every
-    /// `.snxfpt` sibling inside the containing `.snxlib`'s
-    /// `footprints/` directory; clicking opens that footprint as a
-    /// new tab (same `Open ▸ Footprint` flow). Visible whenever a
-    /// Footprint editor tab is focused.
+    /// Panel-list alias of [`Self::Library`] in its Footprints kind (mockup row 121).
+    /// Opening it opens the Library panel; it is never docked itself.
     FootprintLibrary,
-    /// Symbol editor pin table (number, name, type, part, visibility).
-    /// Visible whenever a Symbol editor tab is focused.
-    SymbolPins,
     /// PCB editor net table: nets with pad counts and routed length.
     PcbNets,
     /// VSCode-style per-file Git history. Right-dock surface that
@@ -267,6 +298,14 @@ pub enum PanelKind {
     /// netlist, filterable, each expandable to its pins, labels, ports and
     /// sheets; a click goes to the member (#1269).
     NetInspector,
+    /// The compiled hierarchy: repeated sheets expanded into channels, with
+    /// part and net counts per sheet (#1308).
+    CompiledDesign,
+    /// Named unions of the sheet in view or the project (mockup row 158).
+    Unions,
+    /// Every annotation block of the project's Design Notebook files,
+    /// filterable; a reference chip goes to its part or net (mockup row 165).
+    Annotations,
 }
 
 /// All available panel kinds for the panel list button.
@@ -275,12 +314,14 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Components,
     PanelKind::Library,
     PanelKind::Navigator,
+    PanelKind::Annotations,
     PanelKind::Properties,
     PanelKind::Filter,
     PanelKind::SchFilter,
     PanelKind::ObjectList,
     PanelKind::Erc,
     PanelKind::Messages,
+    PanelKind::CommandLog,
     PanelKind::Drc,
     PanelKind::BomStudio,
     PanelKind::Favorites,
@@ -294,10 +335,11 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Wiki,
     PanelKind::SchLibrary,
     PanelKind::FootprintLibrary,
-    PanelKind::SymbolPins,
     PanelKind::PcbNets,
     PanelKind::History,
     PanelKind::NetInspector,
+    PanelKind::CompiledDesign,
+    PanelKind::Unions,
 ];
 
 impl PanelKind {
@@ -320,9 +362,24 @@ impl PanelKind {
 
     /// Whether this panel requires a PCB document to be open. Net Classes
     /// edits the project's table, so it needs a project, not a board (#2416,
-    /// #2417).
+    /// #2417). The panel list also offers Layers on a footprint tab.
     pub fn needs_pcb(self) -> bool {
-        matches!(self, PanelKind::Drc | PanelKind::LayerStack)
+        matches!(
+            self,
+            PanelKind::Drc | PanelKind::LayerStack | PanelKind::Layers | PanelKind::PcbNets
+        )
+    }
+
+    /// The Library panel kind an alias row opens it in (alias rows kept by
+    /// Caner, 2026-11-20): SCH Library opens Symbols and Footprint Library
+    /// opens Footprints.
+    pub fn library_alias(self) -> Option<crate::library::state::LibraryPanelKind> {
+        use crate::library::state::LibraryPanelKind;
+        match self {
+            PanelKind::SchLibrary => Some(LibraryPanelKind::Symbols),
+            PanelKind::FootprintLibrary => Some(LibraryPanelKind::Footprints),
+            _ => None,
+        }
     }
 
     /// The catalog message of [`Self::label`] (dock tabs and titles).
@@ -336,6 +393,7 @@ impl PanelKind {
             PanelKind::Filter => ids::PANELS_KIND_FILTER,
             PanelKind::Erc => ids::PANELS_KIND_ERC,
             PanelKind::Messages => ids::PANELS_KIND_MESSAGES,
+            PanelKind::CommandLog => ids::PANELS_KIND_COMMAND_LOG,
             PanelKind::Drc => ids::PANELS_KIND_DRC,
             PanelKind::LayerStack => ids::PANELS_KIND_LAYER_STACK,
             PanelKind::Layers => ids::PANELS_KIND_LAYERS,
@@ -352,10 +410,21 @@ impl PanelKind {
             PanelKind::Library => ids::PANELS_KIND_LIBRARY,
             PanelKind::SchLibrary => ids::PANELS_KIND_SCH_LIBRARY,
             PanelKind::FootprintLibrary => ids::PANELS_KIND_FOOTPRINT_LIBRARY,
-            PanelKind::SymbolPins => ids::PANELS_KIND_SYMBOL_PINS,
             PanelKind::PcbNets => ids::PANELS_KIND_PCB_NETS,
             PanelKind::History => ids::PANELS_KIND_HISTORY,
             PanelKind::NetInspector => ids::PANELS_KIND_NET_INSPECTOR,
+            PanelKind::CompiledDesign => ids::PANELS_KIND_COMPILED_DESIGN,
+            PanelKind::Unions => ids::PANELS_KIND_UNIONS,
+            PanelKind::Annotations => ids::PANELS_KIND_ANNOTATIONS,
+        }
+    }
+
+    /// The row's name in the panel list: the PCB panel is listed as Nets
+    /// (mockup row 7), its dock title stays PCB.
+    pub fn list_message(self) -> signex_i18n::MessageId {
+        match self {
+            PanelKind::PcbNets => signex_i18n::ids::PANELS_LIST_ROW_NETS,
+            other => other.message(),
         }
     }
 
@@ -368,6 +437,7 @@ impl PanelKind {
             PanelKind::Filter => "Filter",
             PanelKind::Erc => "ERC",
             PanelKind::Messages => "Messages",
+            PanelKind::CommandLog => "Command Log",
             PanelKind::Drc => "DRC",
             PanelKind::LayerStack => "Layer Stack",
             PanelKind::Layers => "Layers",
@@ -384,10 +454,12 @@ impl PanelKind {
             PanelKind::Library => "Library",
             PanelKind::SchLibrary => "SCH Library",
             PanelKind::FootprintLibrary => "Footprint Library",
-            PanelKind::SymbolPins => "Pins",
             PanelKind::PcbNets => "PCB",
             PanelKind::History => "History",
             PanelKind::NetInspector => "Net Inspector",
+            PanelKind::CompiledDesign => "Compiled Design",
+            PanelKind::Unions => "Unions",
+            PanelKind::Annotations => "Annotations",
         }
     }
 }
@@ -396,32 +468,71 @@ impl PanelKind {
 pub struct TitleAction {
     pub icon: svg::Handle,
     pub tip: signex_i18n::Localized,
-    pub on_press: PanelMsg,
+    /// `None` draws the action disabled.
+    pub on_press: Option<PanelMsg>,
 }
 
 /// The title-bar actions of `kind`: Clear of the ERC panel (#85) while it
-/// holds results, Copy and Clear of the Messages panel (#86).
+/// holds results, Copy and Clear of the Messages panel (#86), Recompile of
+/// Compiled Design (mockup row 154), Refresh of Annotations (row 165),
+/// Create Union of Unions (row 158) and the + of Projects (row 19): Add New,
+/// or New Project with no project open.
 pub fn title_actions(kind: PanelKind, ctx: &PanelContext) -> Vec<TitleAction> {
-    use signex_i18n::{ids, t};
+    use signex_i18n::{ids, menu_ids, t};
     let tid = ctx.theme_id;
     match kind {
+        PanelKind::Projects => vec![TitleAction {
+            icon: crate::icons::icon_plus(tid),
+            tip: if ctx.project_tree.is_empty() {
+                t!(ctx.i18n, ids::PANELS_PROJECTS_NEW_PROJECT)
+            } else {
+                t!(ctx.i18n, menu_ids::CTX_TREE_ADD_NEW)
+            },
+            on_press: Some(PanelMsg::Projects(ProjectsMsg::AddNewPressed)),
+        }],
         PanelKind::Erc if ctx.erc_ran || !ctx.erc_diagnostics.is_empty() => vec![TitleAction {
             icon: crate::icons::icon_dd_delete(tid),
             tip: t!(ctx.i18n, ids::PANELS_ERC_CLEAR_TOOLTIP),
-            on_press: PanelMsg::ClearErc,
+            on_press: Some(PanelMsg::ClearErc),
         }],
         PanelKind::Messages => vec![
             TitleAction {
                 icon: crate::icons::icon_dd_copy(tid),
                 tip: t!(ctx.i18n, ids::PANELS_MESSAGES_COPY_TOOLTIP),
-                on_press: PanelMsg::MessagesView(MessagesPanelMsg::Copied),
+                on_press: Some(PanelMsg::MessagesView(MessagesPanelMsg::Copied)),
             },
             TitleAction {
                 icon: crate::icons::icon_dd_delete(tid),
                 tip: t!(ctx.i18n, ids::PANELS_MESSAGES_CLEAR_TOOLTIP),
-                on_press: PanelMsg::MessagesView(MessagesPanelMsg::Cleared),
+                on_press: Some(PanelMsg::MessagesView(MessagesPanelMsg::Cleared)),
             },
         ],
+        PanelKind::CompiledDesign => vec![TitleAction {
+            icon: crate::icons::icon_chrome_refresh(tid),
+            tip: t!(ctx.i18n, ids::PANELS_COMPILED_DESIGN_RECOMPILE),
+            on_press: (ctx.compiled_design.panel.status
+                != compiled_design::CompiledStatus::NoProject)
+                .then(|| compiled_design::msg(crate::app::CompiledDesignMsg::CompileRequested)),
+        }],
+        PanelKind::History if ctx.history.active_path.is_some() => vec![TitleAction {
+            icon: crate::icons::icon_chrome_refresh(tid),
+            tip: t!(ctx.i18n, ids::PANELS_HISTORY_REFRESH),
+            on_press: Some(PanelMsg::History(history::HistoryPanelMsg::RefreshPressed)),
+        }],
+        PanelKind::Annotations if ctx.annotations.status == annotations::ListStatus::Ready => {
+            vec![TitleAction {
+                icon: crate::icons::icon_chrome_refresh(tid),
+                tip: t!(ctx.i18n, ids::ANNOTATIONS_REFRESH),
+                on_press: Some(PanelMsg::Annotations(AnnotationsMsg::RefreshRequested)),
+            }]
+        }
+        PanelKind::Unions if ctx.unions.has_sheet => vec![TitleAction {
+            icon: crate::icons::icon_plus(tid),
+            tip: t!(ctx.i18n, ids::UNIONS_PANEL_CREATE),
+            on_press: ctx.unions.can_create.then_some(PanelMsg::Unions(
+                crate::app::unions::UnionsMsg::CreateRequested,
+            )),
+        }],
         _ => Vec::new(),
     }
 }
@@ -444,8 +555,11 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Filter => selection_filter::filter_view(ctx),
         PanelKind::Erc => view_erc(ctx),
         PanelKind::Messages => view_messages(ctx),
+        // The log keeps its header and footer in place and scrolls its rows.
+        PanelKind::CommandLog => return command_log::view(ctx),
         PanelKind::Drc => drc_results::view(ctx),
-        PanelKind::LayerStack => layer_stack::view(ctx),
+        // Opens as a document tab (`show_panel`); never docked.
+        PanelKind::LayerStack => iced::widget::Space::new().boxed(),
         // One Layers panel follows the active tab (#2359): a footprint's
         // layers on a footprint tab, else the board's (or its empty state).
         PanelKind::Layers if ctx.footprint_editor.is_some() => {
@@ -476,13 +590,19 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Snippets => view_stub(ids::PANELS_KIND_SNIPPETS, ids::PANELS_STUB_SNIPPETS, ctx),
         PanelKind::Todo => view_stub(ids::PANELS_KIND_TODO, ids::PANELS_STUB_TODO, ctx),
         PanelKind::Wiki => view_stub(ids::PANELS_KIND_WIKI, ids::PANELS_STUB_WIKI, ctx),
-        PanelKind::Library => view_stub(ids::PANELS_KIND_LIBRARY, ids::PANELS_STUB_LIBRARY, ctx),
-        PanelKind::SchLibrary => view_sch_library(ctx),
-        PanelKind::FootprintLibrary => view_footprint_library(ctx),
-        PanelKind::SymbolPins => crate::library::editor::symbol::pins_panel::view(ctx),
-        PanelKind::PcbNets => pcb_nets::view(ctx),
+        // The dock draws the Library panel and its aliases with
+        // `library::panel::view`; this arm is only reached by a surface
+        // that does not route them there.
+        PanelKind::SchLibrary | PanelKind::FootprintLibrary | PanelKind::Library => {
+            view_stub(ids::PANELS_KIND_LIBRARY, ids::PANELS_STUB_LIBRARY, ctx)
+        }
+        // Its list and detail scroll on their own.
+        PanelKind::PcbNets => return pcb_nets::view(ctx),
         PanelKind::History => return history::view_history(ctx),
         PanelKind::NetInspector => return net_inspector::view(ctx),
+        PanelKind::CompiledDesign => return compiled_design::view(ctx),
+        PanelKind::Unions => return unions::view(ctx),
+        PanelKind::Annotations => return annotations::view(ctx),
     };
 
     panel_scrollable(content).boxed()

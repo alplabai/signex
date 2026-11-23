@@ -46,7 +46,9 @@ fn project_with_sheet(dir: &Path) -> (Signex, PathBuf) {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -75,6 +77,8 @@ fn rename_dialog(target: &Path, to: &str) -> RenameDialogState {
         buffer: to.to_string(),
         error: None,
         is_project_rename: false,
+        placing_symbols: Vec::new(),
+        name_clash: None,
     }
 }
 
@@ -87,6 +91,7 @@ fn delete_dialog(target: &Path) -> RemoveDialogState {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     }
 }
 
@@ -96,7 +101,7 @@ fn renaming_a_file_that_is_still_opening_is_refused() {
     let tmp = TempDir::new().expect("tempdir");
     let (mut app, sheet) = project_with_sheet(tmp.path());
     app.document_state.pending_opens.insert(sheet.clone());
-    app.ui_state.rename_dialog = Some(rename_dialog(&sheet, "Y.snxsch"));
+    app.ui_state.rename_dialog = Some(Box::new(rename_dialog(&sheet, "Y.snxsch")));
 
     let _ = app.update(Message::Rename(RenameMsg::Submit));
 
@@ -227,7 +232,7 @@ fn renaming_a_file_whose_restore_is_still_running_is_refused() {
     let (mut app, sheet) = project_with_sheet(tmp.path());
     // A restore's atomic write would recreate the old path after the move.
     app.document_state.pending_restores.begin(sheet.clone());
-    app.ui_state.rename_dialog = Some(rename_dialog(&sheet, "Y.snxsch"));
+    app.ui_state.rename_dialog = Some(Box::new(rename_dialog(&sheet, "Y.snxsch")));
 
     let _ = app.update(Message::Rename(RenameMsg::Submit));
 
@@ -257,14 +262,16 @@ fn renaming_a_project_folder_with_a_restore_still_running_is_refused() {
     std::fs::create_dir(&folder).expect("project folder");
     let (mut app, sheet) = project_with_sheet(&folder);
     app.document_state.pending_restores.begin(sheet.clone());
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: folder.join("P.snxprj"),
         tree_path: vec![0],
         buffer: "Q".to_string(),
         error: None,
         is_project_rename: true,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
 
     let _ = app.update(Message::Rename(RenameMsg::Submit));
 

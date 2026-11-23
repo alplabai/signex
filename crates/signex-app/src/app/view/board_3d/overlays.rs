@@ -44,7 +44,7 @@ pub(super) fn explode_popover<'a>(
             .color(look.text)
             .font(Font {
                 weight: Weight::Bold,
-                ..Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             })
             .width(Length::Fill),
         text(t!(i18n, ids::PCB_3D_EXPLODE_READOUT, "percent" => percent))
@@ -190,7 +190,7 @@ pub(super) fn lighting_toast<'a>(
         .color(look.text)
         .font(Font {
             weight: Weight::Bold,
-            ..Font::DEFAULT
+            ..signex_widgets::ui_font::regular()
         });
     let place = text(t!(
         i18n,

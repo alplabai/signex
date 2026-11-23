@@ -1,6 +1,6 @@
 //! Annotate and Reset Duplicate Designators without file IO in `update`
-//! (#859): what the three steps (read, number, write) guarantee, and what a
-//! stale or failed step leaves behind.
+//! (#859): what the two steps (read, number) guarantee, and what a stale or
+//! failed step leaves behind. No step writes a sheet file (#2760).
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -11,7 +11,7 @@ use signex_types::format::SnxSchematic;
 use signex_types::schematic::Symbol;
 
 use super::annotate_tests::{
-    child_path, child_refs, logged_since, notice_detail, project, root_refs, sheet_of, unit,
+    child_path, held_child_refs, logged_since, notice_detail, project, root_refs, sheet_of, unit,
 };
 use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
 use crate::app::path_ops::settle_task;
@@ -56,13 +56,6 @@ fn project_with_two_children(
     (app, dir)
 }
 
-/// Put a directory where the sheet file was: the worker reads nothing wrong
-/// with it any more, but cannot replace it.
-fn make_unwritable(path: &Path) {
-    std::fs::remove_file(path).expect("remove sheet");
-    std::fs::create_dir(path).expect("block the path");
-}
-
 fn numbered(refs: &[String]) -> bool {
     refs.iter().all(|r| !r.ends_with('?'))
 }
@@ -84,7 +77,7 @@ fn pending_nothing(app: &Signex, paths: &[&Path]) -> bool {
 // ---- (a) nothing blocks update.
 
 #[test]
-fn update_reads_and_writes_no_unopened_sheet_until_its_task_runs() {
+fn update_reads_no_unopened_sheet_until_its_task_runs_and_no_step_writes_it() {
     let (mut app, dir) = project(vec![unit("R?", 1, 0.0)], vec![unit("R?", 1, 0.0)]);
     let read = app.handle_annotate(ResetAndRenumber);
     assert!(app.ui_state.annotate_runs.is_running());
@@ -97,40 +90,32 @@ fn update_reads_and_writes_no_unopened_sheet_until_its_task_runs() {
     );
     let before = std::fs::read(child_path(&dir)).expect("child");
 
-    let write = app.update(completion(read));
+    let refresh = app.update(completion(read));
+    settle_task(&mut app, refresh);
 
-    assert_eq!(
-        std::fs::read(child_path(&dir)).expect("child"),
-        before,
-        "numbering must not write the unopened sheet"
-    );
-    assert!(
-        app.document_state
-            .document_saves
-            .is_saving(&child_path(&dir))
-    );
-    settle_task(&mut app, write);
-    let (root, child) = (root_refs(&app, &dir), child_refs(&dir));
+    let unchanged = std::fs::read(child_path(&dir)).expect("child") == before;
+    let (root, child) = (root_refs(&app, &dir), held_child_refs(&app, &dir));
     let idle = pending_nothing(&app, &[&child_path(&dir)]);
     std::fs::remove_dir_all(&dir).ok();
+    assert!(unchanged, "no step writes the unopened sheet");
     assert_eq!(child.len(), 2, "the worker read the replaced file");
     assert!(numbered(&child) && numbered(&root));
     assert!(idle);
 }
 
 #[test]
-fn reset_duplicates_writes_nothing_in_update_either() {
+fn reset_duplicates_writes_nothing_either() {
     let (mut app, dir) = project(vec![unit("R1", 1, 0.0)], vec![unit("R1", 1, 0.0)]);
     let read = app.handle_reset_duplicate_designators();
     let before = std::fs::read(child_path(&dir)).expect("child");
 
-    let write = app.update(completion(read));
+    let refresh = app.update(completion(read));
+    settle_task(&mut app, refresh);
 
     let untouched = std::fs::read(child_path(&dir)).expect("child") == before;
-    settle_task(&mut app, write);
-    let child = child_refs(&dir);
+    let child = held_child_refs(&app, &dir);
     std::fs::remove_dir_all(&dir).ok();
-    assert!(untouched, "the reset must not write in update");
+    assert!(untouched, "the reset must not write the file");
     assert_eq!(child, ["R?"]);
 }
 
@@ -209,15 +194,12 @@ fn an_edit_to_an_open_sheet_while_the_sheets_are_read_is_numbered_not_lost() {
         .iter()
         .map(|s| s.reference.clone())
         .collect();
-    let m_refs = SnxSchematic::parse(
-        &std::fs::read_to_string(dir.join("m_child.snxsch")).expect("m on disk"),
-    )
-    .expect("parse")
-    .sheet
-    .symbols
-    .iter()
-    .map(|s| s.reference.clone())
-    .collect::<Vec<_>>();
+    let m_refs = app.document_state.engines[&dir.join("m_child.snxsch")]
+        .document()
+        .symbols
+        .iter()
+        .map(|s| s.reference.clone())
+        .collect::<Vec<_>>();
     let root = root_refs(&app, &dir);
     std::fs::remove_dir_all(&dir).ok();
     assert_eq!(z_refs.len(), 2, "the edit is still there");
@@ -360,15 +342,8 @@ fn a_rename_or_delete_of_the_runs_sheets_is_refused_until_it_ends() {
         app.refuse_save_while_path_op(&root).is_err(),
     );
 
-    let write = app.update(completion(read));
-    let while_writing = (
-        app.refuse_start_while_path_op(&child, "renamed").is_err(),
-        app.refuse_start_while_path_op(&child, "deleted").is_err(),
-        app.refuse_while_path_op(&child, "opened").is_err(),
-        app.document_state.document_saves.is_saving(&child),
-    );
-
-    settle_task(&mut app, write);
+    let refresh = app.update(completion(read));
+    settle_task(&mut app, refresh);
     let after = (
         app.refuse_start_while_path_op(&child, "renamed").is_ok(),
         app.refuse_start_while_path_op(&root, "renamed").is_ok(),
@@ -378,7 +353,6 @@ fn a_rename_or_delete_of_the_runs_sheets_is_refused_until_it_ends() {
     // Reading holds the sheets against a rename or delete, but not a save
     // (the save moves the epoch and the run cancels, #1753).
     assert_eq!(while_reading, (true, false));
-    assert_eq!(while_writing, (true, true, true, true));
     assert_eq!(after, (true, true, true));
 }
 
@@ -395,90 +369,21 @@ fn a_second_run_while_one_is_going_is_refused_and_the_first_completes() {
     app.document_state.error_notice = None;
     settle_task(&mut app, first);
 
-    let (root, child) = (root_refs(&app, &dir), child_refs(&dir));
+    let (root, child) = (root_refs(&app, &dir), held_child_refs(&app, &dir));
     let idle = pending_nothing(&app, &[&child_path(&dir)]);
     std::fs::remove_dir_all(&dir).ok();
     assert!(refused.contains("still going"), "{refused}");
     assert!(numbered(&root) && numbered(&child) && idle);
 }
 
-// ---- (e) a write that fails.
+// ---- (e) a read that fails.
 
 #[test]
-fn one_sheet_that_cannot_be_written_is_reported_and_the_rest_stand() {
-    let _ = crate::diagnostics::init_logging();
-    let (mut app, dir) = project_with_two_children(
-        vec![unit("R?", 1, 0.0)],
-        vec![unit("R?", 1, 0.0)],
-        vec![unit("R?", 1, 0.0)],
-    );
-    let (m, z) = (dir.join("m_child.snxsch"), dir.join("z_child.snxsch"));
-    let read = app.handle_annotate(ResetAndRenumber);
-    let write = app.update(completion(read));
-    make_unwritable(&z);
-    let since = crate::diagnostics::newest_entry_id();
-
-    settle_task(&mut app, write);
-
-    let m_refs = SnxSchematic::parse(&std::fs::read_to_string(&m).expect("m on disk"))
-        .expect("parse")
-        .sheet
-        .symbols
-        .iter()
-        .map(|s| s.reference.clone())
-        .collect::<Vec<_>>();
-    let ds = &app.document_state;
-    let state = (
-        z.is_dir(),
-        ds.is_document_dirty(&m) || ds.is_document_dirty(&z),
-        numbered(&root_refs(&app, &dir)),
-    );
-    let notice = notice_detail(&app);
-    let idle = pending_nothing(&app, &[&m, &z]);
-    std::fs::remove_dir_all(&dir).ok();
-    assert!(numbered(&m_refs), "the sheet that could be written was");
-    assert_eq!(
-        state,
-        (true, false, true),
-        "failed sheet untouched, no stray dirty marks, open sheet numbered"
-    );
-    assert!(notice.contains("could not write 1 unopened"), "{notice}");
-    assert!(notice.contains("z_child.snxsch"), "{notice}");
-    assert!(logged_since(since, "Annotate could not write"));
-    assert!(idle);
-}
-
-#[test]
-fn a_reset_unopened_sheet_is_clean_only_when_its_write_landed() {
-    for fail in [false, true] {
-        let (mut app, dir) = project(vec![unit("R1", 1, 0.0)], vec![unit("R1", 1, 0.0)]);
-        let child = child_path(&dir);
-        app.document_state.mark_document_dirty(&child);
-        let read = app.handle_reset_duplicate_designators();
-        let write = app.update(completion(read));
-        if fail {
-            make_unwritable(&child);
-        }
-
-        settle_task(&mut app, write);
-
-        let dirty = app.document_state.is_document_dirty(&child);
-        let root = root_refs(&app, &dir);
-        let on_disk = (!fail).then(|| child_refs(&dir));
-        std::fs::remove_dir_all(&dir).ok();
-        assert_eq!(dirty, fail, "clean exactly when the bytes landed");
-        assert_eq!(root, ["R?"], "the open sheet was reset either way");
-        assert_eq!(on_disk, (!fail).then(|| vec!["R?".to_string()]));
-    }
-}
-
-#[test]
-fn a_worker_that_died_is_reported_and_releases_every_sheet() {
+fn a_read_worker_that_died_is_reported_and_releases_every_sheet() {
     let _ = crate::diagnostics::init_logging();
     let (mut app, dir) = project(vec![unit("R?", 1, 0.0)], vec![unit("R?", 1, 0.0)]);
     let child = child_path(&dir);
     let before = std::fs::read(&child).expect("child");
-    // The read worker died.
     let _unrun = app.handle_annotate(ResetAndRenumber);
     let generation = app.ui_state.annotate_runs.live_generation().expect("run");
     let dead_read = Message::Annotate(AnnotateMsg::PassSheetsRead {
@@ -487,33 +392,15 @@ fn a_worker_that_died_is_reported_and_releases_every_sheet() {
     });
     let task = app.update(dead_read);
     settle_task(&mut app, task);
-    let after_read = (notice_detail(&app), pending_nothing(&app, &[&child]));
-    // The write worker died.
-    let read = app.handle_annotate(ResetAndRenumber);
-    let unrun_write = app.update(completion(read));
-    let generation = app.ui_state.annotate_runs.live_generation().expect("run");
-    drop(unrun_write);
-    let dead_write = Message::Annotate(AnnotateMsg::PassSheetsWritten {
-        generation,
-        result: Arc::new(Err("the background task failed".to_string())),
-        hold: app.document_state.autosave.hold_for_save(),
-    });
-    let task = app.update(dead_write);
-    settle_task(&mut app, task);
     let notice = notice_detail(&app);
     let (idle, unchanged) = (
         pending_nothing(&app, &[&child]),
         std::fs::read(&child).expect("child") == before,
     );
     std::fs::remove_dir_all(&dir).ok();
-    assert!(
-        after_read.0.contains("could not be read"),
-        "{}",
-        after_read.0
-    );
-    assert!(after_read.1, "the guard outlived a dead read worker");
-    assert!(notice.contains("z_child.snxsch"), "{notice}");
-    assert!(idle && unchanged);
+    assert!(notice.contains("could not be read"), "{notice}");
+    assert!(idle, "the guard outlived a dead read worker");
+    assert!(unchanged);
 }
 
 #[test]
@@ -530,10 +417,10 @@ fn an_unopened_sheet_with_a_save_running_is_left_alone() {
     let task = app.handle_annotate(ResetAndRenumber);
     settle_task(&mut app, task);
 
-    let refs = child_refs(&dir);
+    let refs = held_child_refs(&app, &dir);
     let root = root_refs(&app, &dir);
     std::fs::remove_dir_all(&dir).ok();
-    assert_eq!(refs, ["R5"], "a sheet a save owns is not rewritten");
+    assert_eq!(refs, ["R5"], "a sheet a save owns is not changed");
     assert_eq!(
         root,
         ["R?"],
@@ -575,7 +462,7 @@ fn the_open_sheet_of_a_run_is_one_undo_step() {
 }
 
 #[test]
-fn the_project_undo_group_records_the_open_sheet_and_the_written_one() {
+fn the_project_undo_group_records_the_open_sheet_and_the_parked_one() {
     let (mut app, dir) = project(vec![unit("R?", 1, 0.0)], vec![unit("R?", 1, 0.0)]);
     app.ui_state.annotate_undo = crate::annotate_undo::AnnotateUndo::Project;
     let task = app.handle_annotate(ResetAndRenumber);
@@ -585,48 +472,15 @@ fn the_project_undo_group_records_the_open_sheet_and_the_written_one() {
     let record = (
         groups.len(),
         groups.first().map(|g| g.live.clone()),
-        groups.first().map(|g| g.disk_only.clone()),
+        groups.first().map(|g| g.parked.clone()),
     );
     let (root, child) = (root_path(&dir), child_path(&dir));
     std::fs::remove_dir_all(&dir).ok();
     assert_eq!(
         record,
-        (1, Some(vec![root]), Some(vec![child])),
-        "undo must say the written sheet stays annotated"
+        (1, Some(vec![root, child.clone()]), Some(vec![child])),
+        "one undo reaches the parked sheet too"
     );
-}
-
-#[test]
-fn an_undo_while_the_unopened_sheets_are_still_being_written_names_them() {
-    let _ = crate::diagnostics::init_logging();
-    let (mut app, dir) = project(vec![unit("R?", 1, 0.0)], vec![unit("R?", 1, 0.0)]);
-    app.ui_state.annotate_undo = crate::annotate_undo::AnnotateUndo::Project;
-    // Ctrl+Z steps the sheet the window's tab shows.
-    app.document_state.tabs.push(crate::app::TabInfo {
-        title: "a_root.snxsch".into(),
-        path: root_path(&dir),
-        cached_document: None,
-        project_id: None,
-        kind: crate::app::TabKind::Schematic,
-    });
-    app.document_state.active_tab = app.document_state.tabs.len() - 1;
-    let read = app.handle_annotate(ResetAndRenumber);
-    let write = app.update(completion(read));
-    let since = crate::diagnostics::newest_entry_id();
-
-    // Ctrl+Z after numbering, before the write worker has reported.
-    let undo = app.update(Message::Edit(crate::app::EditMsg::Undo));
-    settle_task(&mut app, undo);
-    let named = logged_since(since, "not open, so still annotated on disk");
-    let child = child_path(&dir);
-    let mentions_child = crate::diagnostics::recent_entries().iter().any(|e| {
-        Some(e.id) > since
-            && e.message.contains("still annotated on disk")
-            && e.message.contains("z_child.snxsch")
-    });
-    settle_task(&mut app, write);
-    std::fs::remove_dir_all(&dir).ok();
-    assert!(named && mentions_child, "undo must warn about {child:?}");
 }
 
 #[test]

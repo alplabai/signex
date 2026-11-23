@@ -10,7 +10,7 @@ mod child_sheet_path;
 #[cfg(test)]
 mod cursor_moved_tests;
 pub(crate) use child_sheet_path::{
-    escapes_through_symlink, reference_from, relative_within, resolve_new_sheet_path,
+    escapes_through_symlink, link_from, reference_from, relative_within, resolve_new_sheet_path,
 };
 mod break_wire_tool;
 mod clicked;
@@ -22,15 +22,30 @@ pub(crate) mod sheet_open_tests;
 pub use sheet_open::{AfterOpen, PendingSheetOpen, SheetOpen};
 mod double_clicked;
 mod field_edit;
-pub(crate) use field_edit::editor_placeholder;
+pub(crate) use field_edit::{editor_placeholder, next_part_field};
 pub(crate) mod fit_view;
 mod layout_drag;
 mod measure_tool;
 mod move_pick;
 mod place_directive;
+mod place_harness;
 pub(crate) use place_directive::{blanket_directive, compile_mask_directive, diff_pair_directive};
+mod annotation_pause;
+#[cfg(test)]
+mod annotation_pause_tests;
+mod dimension_tool;
+mod pause_end;
+#[cfg(test)]
+mod pause_end_tests;
+pub(crate) use dimension_tool::ends_held_resume_esc;
+mod place_bezier;
+mod place_dimension;
+pub(crate) use place_directive::{net_parameters_directive, parse_value};
+mod directive_panel;
 mod place_drawing;
+pub(crate) use place_dimension::AnnotationTool;
 mod place_label;
+mod place_table;
 pub(crate) use place_label::{GLOBAL_PORT_SHAPE, label_command};
 mod place_point;
 pub(crate) use place_point::{junction_command, no_connect_command, power_commands};
@@ -42,6 +57,16 @@ mod shape_tool;
 mod shape_tool_tests;
 mod sheet_tool;
 pub use sheet_tool::SheetPlaceJobs;
+#[cfg(test)]
+mod dimension_tool_holder_tests;
+#[cfg(test)]
+mod dimension_tool_keys_tests;
+#[cfg(test)]
+mod dimension_tool_pause_tests;
+#[cfg(test)]
+mod dimension_tool_tests;
+#[cfg(test)]
+mod dimension_tool_window_tests;
 mod library_status;
 #[cfg(test)]
 pub(crate) mod placement_tests;
@@ -231,6 +256,12 @@ impl Signex {
                     },
                     true,
                     true,
+                );
+            }
+            CanvasEvent::BezierPointsDragged { drawing, points } => {
+                self.apply_annotation_edit_to(
+                    drawing,
+                    &crate::app::sch_tables::AnnotationEdit::BezierPoints(points),
                 );
             }
             CanvasEvent::DoubleClicked {

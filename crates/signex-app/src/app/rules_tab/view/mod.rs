@@ -12,8 +12,11 @@ mod grid_preview;
 mod grid_toolbar;
 mod matrix;
 mod presets;
+// #1489: "from schematic" under a rule Update PCB wrote.
+mod schematic_source;
 mod sets;
 mod table;
+mod text_bar;
 mod text_view;
 
 use std::borrow::Cow;
@@ -243,12 +246,17 @@ impl Signex {
             .boxed(),
             _ => rules,
         };
-        let mut page = column![grid_toolbar::domains(&frame)].spacing(SP.s);
+        let bar = if state.text.is_some() {
+            text_bar::view(&frame)
+        } else {
+            grid_toolbar::domains(&frame)
+        };
+        let mut page = column![bar].spacing(SP.s);
         if state.text.is_none() {
             page = page.push(grid_toolbar::find_bar(&frame));
-            if state.panel == Some(RulesPanel::Sets) {
-                page = page.push(sets::view(&frame));
-            }
+        }
+        if state.panel == Some(RulesPanel::Sets) {
+            page = page.push(sets::view(&frame));
         }
         page = page.push(notes(&frame)).push(body);
         container(page.height(Length::Fill))

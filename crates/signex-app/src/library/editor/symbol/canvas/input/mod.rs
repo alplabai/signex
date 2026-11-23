@@ -11,8 +11,11 @@
 //! - [`camera`] — scroll-wheel zoom (cursor-anchored).
 //! - [`keys`] — keyboard handling (Escape cancel, Delete, Home,
 //!   rotate, undo/redo, select-all).
+//! - [`middle_zoom`] — the middle-button drag zoom.
 
 mod camera;
+pub(super) mod ellipse;
 mod keys;
+mod middle_zoom;
 mod pointer;
 mod tools;

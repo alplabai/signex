@@ -1,13 +1,15 @@
 //! Graphite parts shared by the dialog bodies: the mono face, the subtitled
 //! header, the call-to-action kind, the changed-designator ink and the
-//! recovery icon tile.
+//! callout.
 
-use iced::widget::container;
-use iced::{Background, Border, Element, Length, Theme, Widget as _};
+use iced::widget::{Row, container};
+use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{raw, text};
+use signex_widgets::{Label, text};
 
-use crate::styles::{self, DialogButtonKind, PillTone, Radii, Spacing, TypeScale, tokens};
+use crate::styles::{
+    self, DialogButtonKind, DialogIcon, Radii, Spacing, TypeScale, chrome_px, tokens,
+};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -44,29 +46,39 @@ pub(super) fn changed_ink(theme_tokens: &ThemeTokens) -> iced::Color {
     tokens::resolve(theme_tokens).accent_text
 }
 
-/// Soft-warning icon tile of the recovery prompt.
-pub(super) fn recovery_icon_tile<'a, M: 'a>(theme_tokens: &ThemeTokens) -> Element<'a, M> {
-    let (fill, ink) = styles::pill_colors(theme_tokens, PillTone::Warn);
-    let side = TS.glyph + 2.0 * SP.m;
-    container(
-        // raw: a restore glyph, not language.
-        text(raw("\u{21BA}"))
-            .size(TS.glyph)
-            .color(ink)
+/// Horizontal padding of a [`callout`] (10 px at the 12 px base).
+const CALLOUT_PAD_X: f32 = chrome_px(10.0 * 11.0 / 12.0);
+
+/// A note in a dialog body: `icon`'s glyph in its tone's ink, then
+/// `message` in the body ink, on the tone's soft fill. `DialogIcon::Info`
+/// explains, `DialogIcon::Warn` warns.
+pub(super) fn callout<'a, M: 'a>(
+    icon: DialogIcon,
+    message: impl Into<Label<'a>>,
+    theme_tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    let (fill, ink) = styles::pill_colors(theme_tokens, icon.tone());
+    // One body line tall, so the glyph sits on the first line.
+    let glyph = TS.body * styles::LINE_HEIGHT;
+    let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.m).align_y(Alignment::Start);
+    line = line.push(styles::tinted_glyph(icon.glyph_handle(), glyph, ink));
+    line = line.push(
+        text(message)
+            .size(TS.body)
+            .color(styles::ti(theme_tokens.text))
             .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(iced::alignment::Horizontal::Center)
-            .align_y(iced::alignment::Vertical::Center),
-    )
-    .width(Length::Fixed(side))
-    .height(Length::Fixed(side))
-    .style(move |_: &Theme| container::Style {
-        background: Some(Background::Color(fill)),
-        border: Border {
-            radius: Radii::GRAPHITE.card.into(),
-            ..Border::default()
-        },
-        ..container::Style::default()
-    })
-    .boxed()
+            .boxed(),
+    );
+    container(line)
+        .padding([SP.m, CALLOUT_PAD_X])
+        .width(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(fill)),
+            border: Border {
+                radius: Radii::GRAPHITE.button.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
 }

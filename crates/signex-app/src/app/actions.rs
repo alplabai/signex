@@ -190,19 +190,67 @@ impl Signex {
     /// not survive into the next (a half-drawn wire turning into a
     /// polyline vertex, a Line anchor becoming a Rectangle corner).
     pub(crate) fn clear_drawing_buffers(&mut self) {
-        let was_drawing = std::mem::take(&mut self.interaction_state.wire_drawing);
+        self.clear_drawing_buffers_keeping(false, false);
+    }
+
+    /// Main's tab changed: its buffers and its Tab pause go. A wire or
+    /// dimension begun, or a tool paused, in an undocked window belongs to
+    /// that window's sheet and stays.
+    pub(crate) fn clear_drawing_buffers_of_main(&mut self) {
+        let wire_in_a_window =
+            self.interaction_state.wire_drawing && self.interaction_state.wire_window.is_some();
+        let paused_elsewhere = self.interaction_state.is_sheet_pause_elsewhere();
+        let dimension_in_a_window = matches!(
+            self.interaction_state.dimension_points_window(),
+            Some(Some(_))
+        );
+        self.clear_drawing_buffers_keeping(
+            wire_in_a_window,
+            paused_elsewhere || dimension_in_a_window,
+        );
+        if !paused_elsewhere {
+            self.interaction_state.end_sheet_placement_pause();
+            self.interaction_state.active_canvas_mut().placement_paused = false;
+            self.interaction_state.annotation_tool.paused_with = None;
+        }
+    }
+
+    /// An undo moved the acting sheet: its buffers go, but a tool paused on
+    /// another sheet keeps its points and what Esc restores.
+    pub(crate) fn clear_drawing_buffers_after_undo(&mut self) {
+        let paused_elsewhere = self.interaction_state.is_sheet_pause_elsewhere();
+        self.clear_drawing_buffers_keeping(false, paused_elsewhere);
+    }
+
+    pub(in crate::app) fn clear_drawing_buffers_keeping(
+        &mut self,
+        keep_wire: bool,
+        keep_annotation: bool,
+    ) {
+        let was_drawing = !keep_wire && self.interaction_state.wire_drawing;
         if was_drawing {
+            self.interaction_state.wire_drawing = false;
             self.interaction_state.wire_points.clear();
         }
         self.interaction_state.arc_points.clear();
         self.interaction_state.polyline_points.clear();
         self.interaction_state.shape_anchor = None;
+        if !keep_annotation {
+            let tool = &mut self.interaction_state.annotation_tool;
+            tool.points.clear();
+            tool.dimension.end_dimension();
+            tool.paused_with = None;
+            self.drop_dimension_form_draft();
+        }
 
         // The main slot plus `canvases` is the full set of windows.
         let clear_canvas = |canvas: &mut crate::canvas::CanvasSlot| {
             if was_drawing {
                 canvas.wire_preview.clear();
                 canvas.drawing_mode = false;
+            }
+            if !keep_annotation {
+                canvas.annotation_draft = None;
             }
             canvas.arc_points.clear();
             canvas.polyline_points.clear();

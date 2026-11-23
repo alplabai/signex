@@ -105,10 +105,10 @@ pub(crate) struct CommandContext {
     pub has_project_sheet: bool,
     /// Two documents can share the main window in tile panes (#2249), or a
     /// document tab is undocked into its own window and the main window's
-    /// screen is known, so Window ▸ Tile has a plan.
+    /// screen is known, so View ▸ Window ▸ Tile has a plan.
     pub can_tile_windows: bool,
-    /// The main window shows its documents in tile panes, so Window ▸
-    /// Untile has something to undo (#2249).
+    /// The main window shows its documents in tile panes, so View ▸ Window
+    /// ▸ Untile has something to undo (#2249).
     pub is_tiled: bool,
     /// The active symbol editor's current part can be removed: a symbol
     /// keeps its first part, so Remove Part refuses part 1.
@@ -260,6 +260,18 @@ impl Signex {
         } else {
             main_has_schematic
         };
+        // So is an undocked editor window, by the document it shows.
+        let shown_kind = match window
+            .filter(|id| self.is_document_window(*id))
+            .and_then(|id| self.ui_state.windows.get(&id))
+        {
+            Some(crate::app::state::WindowKind::UndockedTab { path, .. }) => document
+                .tabs
+                .iter()
+                .find(|t| t.path == *path)
+                .map(|t| &t.kind),
+            _ => active_kind,
+        };
         CommandContext {
             has_schematic,
             // An undocked PCB window is enabled by the board it shows (#2223).
@@ -271,8 +283,8 @@ impl Signex {
             document_is_editor: own.is_editor,
             document_is_dirty_board: own.is_dirty_board,
             has_sheets: document.active_project.is_some() || !document.engines.is_empty(),
-            has_symbol_editor,
-            has_footprint_editor,
+            has_symbol_editor: matches!(shown_kind, Some(TabKind::SymbolEditor(_))),
+            has_footprint_editor: matches!(shown_kind, Some(TabKind::FootprintEditor(_))),
             has_selection: !shown_canvas.selected.is_empty(),
             selection_all_locked: shown_engine
                 .is_some_and(|engine| engine.all_locked(&shown_canvas.selected)),
@@ -581,7 +593,9 @@ mod tests {
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                schematic_design: Default::default(),
                 fab_outputs: None,
+                router_tool_diameter: None,
                 requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
@@ -763,6 +777,11 @@ mod tests {
             // #2416: the sheet's selection filter and the Net Classes panel.
             "open_selection_filter",
             "open_net_classes",
+            // #1280: the harness tools and the definitions view.
+            "place_signal_harness",
+            "place_harness_connector",
+            "place_harness_entry",
+            "open_harness_definitions",
         ] {
             assert!(!is_enabled(&id(name), &off), "{name} without a schematic");
             assert!(is_enabled(&id(name), &on), "{name} with a schematic");
@@ -1113,7 +1132,9 @@ mod tests {
     #[test]
     fn planned_tool_commands_are_never_enabled_but_always_explain() {
         let ids = planned_ids();
-        assert!(ids.contains(&"place_signal_harness"), "{ids:?}");
+        assert!(ids.contains(&"place_device_sheet_symbol"), "{ids:?}");
+        // #1280: the harness tools are built.
+        assert!(!ids.contains(&"place_signal_harness"), "{ids:?}");
         let with_command = crate::active_bar::PLANNED_TOOLS
             .iter()
             .filter(|(planned, _)| {
@@ -1154,11 +1175,15 @@ mod tests {
     fn a_planned_tool_keystroke_still_logs_the_refusal() {
         let _ = crate::diagnostics::init_logging();
         let (mut app, _t) = Signex::new();
-        let _ = app.dispatch_command(&id("place_signal_harness"), CommandArgs::default(), None);
+        let _ = app.dispatch_command(
+            &id("place_device_sheet_symbol"),
+            CommandArgs::default(),
+            None,
+        );
         assert!(
             crate::diagnostics::recent_entries().iter().any(|e| e
                 .message
-                .starts_with("Planned, not available yet: Signal Harness")),
+                .starts_with("Planned, not available yet: Device Sheet Symbol")),
             "the refusal must reach the Messages panel, not be dropped"
         );
     }

@@ -134,7 +134,11 @@ impl Catalog {
                 "Passive network calculator control",
                 tokens,
                 self.passive_calculator
-                    .view(tokens)
+                    .view(
+                        crate::locale::en_us(),
+                        tokens,
+                        crate::calculator::look(tokens),
+                    )
                     .map(Message::PassiveCalculator)
                     .boxed(),
             ),

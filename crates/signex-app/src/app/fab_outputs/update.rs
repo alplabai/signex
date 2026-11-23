@@ -113,7 +113,6 @@ impl Signex {
         let tab = document.project_tabs.entry(project_id).or_default();
         let command = ProjectGeneralCommand::SetFabOutputs(kinds.stored());
         if tab.general_history.apply(&mut project.data, command) {
-            tab.rules_step_newest = false;
             // Not a rule or a sheet: ERC results stay current.
             document.sync_project_history_dirty(project_id, false);
             self.refresh_panel_ctx();

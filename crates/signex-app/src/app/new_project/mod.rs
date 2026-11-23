@@ -4,6 +4,7 @@
 
 mod card_edits;
 mod command;
+pub(crate) mod preview;
 mod profiles;
 mod state;
 mod target;
@@ -11,6 +12,7 @@ mod update;
 
 pub(crate) use card_edits::profile_name_id;
 pub(crate) use command::new_project_with_profile;
+pub use preview::{DialogPreview, SetupPreview, SetupPreviewMsg};
 pub use profiles::ProfileUndo;
 pub(crate) use profiles::{ProfileStored, store_profile};
 pub use state::NewProjectState;
@@ -122,6 +124,8 @@ pub enum NewProjectMsg {
     ProfileRenameEdited(String),
     ProfileRenameConfirmed,
     ProfileRenameCancelled,
+    /// A value, handle or expand button of a preview (mockup rows 21, 22).
+    Preview(SetupPreviewMsg),
     /// The disk check of generation `generation` finished.
     TargetChecked {
         generation: u64,

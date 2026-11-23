@@ -9,34 +9,65 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use pcb_geom::{RatLine, ZoneFills};
+use pcb_geom::{ConnectionCounts, PointNm, RatLine, RouteRats, ZoneFills};
 use signex_renderer::pcb::PcbSnapshot;
 use signex_types::pcb::PcbBoard;
 
 /// A board and the revision of it the lines were computed for.
 pub(crate) type RatsnestKey = (PathBuf, u64);
 
+/// A route being drawn, as its ratsnest split is keyed: the board and its
+/// revision, the route's net and where it started.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RouteRatsKey {
+    pub board: RatsnestKey,
+    pub net: u32,
+    pub start: PointNm,
+}
+
 #[derive(Debug, Default)]
 pub struct PcbRatsnest {
     key: Option<RatsnestKey>,
     lines: Vec<RatLine>,
+    /// The routed net's pads split by the route's start (Caner,
+    /// 2026-11-21): the board leaves out the lines from the start's copper
+    /// while the route is drawn, and the route draws one from its end.
+    route: Option<(RouteRatsKey, RouteRats)>,
     /// The pour fills of the board the lines were computed for.
     fills: ZoneFills,
     /// Hidden net numbers per board: a net number means nothing off its board.
     hidden_nets: BTreeMap<PathBuf, BTreeSet<u32>>,
+    /// The status bar's Routed and Unrouted counts (#2460) of every board
+    /// the lines were computed for, with that board's revision: a board
+    /// shown in its own window keeps its counts while another is in view.
+    counts: BTreeMap<PathBuf, (u64, ConnectionCounts)>,
 }
 
 impl PcbRatsnest {
     /// Recompute the pour fills and the lines unless `key` is the board they
     /// were computed for. A `None` key (a board with no revision) always
-    /// recomputes. The one place a board's fills are refreshed.
+    /// recomputes. The one place a board's fills are refreshed, and with
+    /// them the board's connection counts.
     pub(crate) fn refresh(&mut self, key: Option<RatsnestKey>, board: &PcbBoard) {
         if key.is_some() && key == self.key {
             return;
         }
         self.fills = pcb_geom::zone_fills(board);
         self.lines = pcb_geom::ratsnest_with_fills(board, &self.fills);
+        if let Some((path, revision)) = &key {
+            let counts = pcb_geom::connection_counts(board, &self.lines);
+            self.counts.insert(path.clone(), (*revision, counts));
+        }
         self.key = key;
+    }
+
+    /// The connection counts of the board at `path`, if they were computed
+    /// for its `revision`; `None` before that.
+    pub(crate) fn counts_for(&self, path: &Path, revision: u64) -> Option<&ConnectionCounts> {
+        self.counts
+            .get(path)
+            .filter(|(at, _)| *at == revision)
+            .map(|(_, counts)| counts)
     }
 
     pub fn lines(&self) -> &[RatLine] {
@@ -111,11 +142,58 @@ impl PcbRatsnest {
         snapshot.with_ratsnest(&lines, hidden)
     }
 
-    /// `snapshot` with the lines of every net of `board` that is not hidden.
+    /// `snapshot` with the lines of every net of `board` that is not hidden;
+    /// while a route is drawn on it, without the routed net's lines from
+    /// the route's start (the route draws its own, `route_line`).
     pub(crate) fn apply(&self, board: &Path, snapshot: PcbSnapshot) -> PcbSnapshot {
         let none = BTreeSet::new();
         let hidden = self.hidden_nets.get(board).unwrap_or(&none);
-        snapshot.with_ratsnest(&self.lines, hidden)
+        match self.route_on(board) {
+            Some(route) => snapshot.with_ratsnest(&route.without_start(&self.lines), hidden),
+            None => snapshot.with_ratsnest(&self.lines, hidden),
+        }
+    }
+
+    /// The route split held, keyed by what it was computed for.
+    pub(crate) fn route_key(&self) -> Option<&RouteRatsKey> {
+        self.route.as_ref().map(|(key, _)| key)
+    }
+
+    /// Split the routed net's pads for the route `key` describes on `board`
+    /// (the board that key names). Reads the fills held when they are this
+    /// revision's.
+    pub(crate) fn set_route(&mut self, key: RouteRatsKey, board: &PcbBoard) {
+        let fresh;
+        let fills = match self.fills_for(&key.board) {
+            Some(fills) => fills,
+            None => {
+                fresh = pcb_geom::zone_fills(board);
+                &fresh
+            }
+        };
+        let rats = pcb_geom::route_rats(board, fills, key.net, key.start);
+        self.route = Some((key, rats));
+    }
+
+    /// Forget the route split: the route ended.
+    pub(crate) fn clear_route(&mut self) {
+        self.route = None;
+    }
+
+    /// The route split of `board`, while the lines held are of the revision
+    /// it was computed for.
+    pub(crate) fn route_on(&self, board: &Path) -> Option<&RouteRats> {
+        let (key, rats) = self.route.as_ref()?;
+        (key.board.0 == board && self.key.as_ref() == Some(&key.board)).then_some(rats)
+    }
+
+    /// The routed net's line from `end` on `board`, unless that net is
+    /// hidden; `None` without a route split.
+    pub(crate) fn route_line(&self, board: &Path, end: PointNm) -> Option<RatLine> {
+        let rats = self.route_on(board)?;
+        (!self.is_net_hidden(board, rats.net))
+            .then(|| rats.line_from(end))
+            .flatten()
     }
 }
 
@@ -177,6 +255,7 @@ mod tests {
         PcbBoard {
             sketch: None,
             stackup: None,
+            rooms: Vec::new(),
             options: Default::default(),
             uuid: Uuid::nil(),
             version: 1,
@@ -217,6 +296,26 @@ mod tests {
         state.refresh(None, &board(&[0.0, 5.0]));
         state.refresh(None, &board(&[0.0, 5.0, 9.0, 12.0]));
         assert_eq!(state.lines().len(), 3);
+    }
+
+    /// #2460: the counts follow the lines, per board and revision, and a
+    /// board's counts outlive a refresh for another board.
+    #[test]
+    fn the_connection_counts_are_kept_per_board_and_revision() {
+        let mut state = PcbRatsnest::default();
+        let a = Path::new("a.snxpcb");
+        assert!(state.counts_for(a, 1).is_none());
+        state.refresh(key(1), &board(&[0.0, 5.0, 9.0]));
+        let counts = state.counts_for(a, 1).expect("counted");
+        assert_eq!((counts.total, counts.unrouted), (2, 2));
+        assert!(state.counts_for(a, 2).is_none(), "another revision");
+        state.refresh(Some((PathBuf::from("b.snxpcb"), 7)), &board(&[0.0]));
+        assert!(state.counts_for(a, 1).is_some(), "kept for its board");
+        let b = state.counts_for(Path::new("b.snxpcb"), 7).expect("b");
+        assert_eq!((b.total, b.unrouted), (0, 0));
+        // No revision: nothing to key the counts by.
+        state.refresh(None, &board(&[0.0, 5.0]));
+        assert!(state.counts_for(a, 1).is_some());
     }
 
     #[test]

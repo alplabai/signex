@@ -756,14 +756,10 @@ fn the_delete_confirm_names_the_row_and_its_close_cancels() {
         "Delete Component?",
         "Delete R-1500?",
         "Delete row R-1500 from R? This cannot be undone from the UI.",
+        "Placed parts keep their embedded copy.",
     ] {
         assert!(texts.iter().any(|t| t == wanted), "{wanted}: {texts:?}");
     }
-    // The mockup row 137 caption is only a proposal: it is not drawn until accepted.
-    assert!(
-        !texts.iter().any(|t| t.contains("embedded copy")),
-        "{texts:?}"
-    );
     let clicked = crate::layout_probe::messages_on_click(build(), size, "\u{00D7}");
     assert!(
         clicked
@@ -771,4 +767,79 @@ fn the_delete_confirm_names_the_row_and_its_close_cancels() {
             .any(|m| matches!(m, LibraryMessage::BrowserDeleteRowCancel { .. })),
         "{clicked:?}"
     );
+}
+
+mod measurement_menu;
+
+fn open_unit_menu(app: &Signex, root: &Path) -> Option<String> {
+    app.library.library_browsers[root]
+        .edit_modal
+        .as_ref()
+        .and_then(|m| m.unit_menu_open.clone())
+}
+
+/// Mockup row 139: the unit menu opens on its face, a press outside closes
+/// it, and a pick closes it and applies the unit.
+#[test]
+fn the_unit_menu_opens_closes_and_applies_a_pick() {
+    let (mut app, root, row_id) = app_with_browser();
+    open_modal(&mut app, &root, row_id);
+    let _ = app.update(edit(&root, BrowserEditMsg::AddParam));
+    let key = "param_1".to_string();
+    let opened = || BrowserEditMsg::UnitMenuOpened { key: key.clone() };
+    let _ = app.update(edit(&root, opened()));
+    assert_eq!(open_unit_menu(&app, &root), Some(key.clone()));
+    let _ = app.update(edit(&root, BrowserEditMsg::UnitMenuDismissed));
+    assert_eq!(open_unit_menu(&app, &root), None);
+    let _ = app.update(edit(&root, opened()));
+    let _ = app.update(edit(
+        &root,
+        BrowserEditMsg::SetParamUnit {
+            key: key.clone(),
+            unit: "ohm".into(),
+        },
+    ));
+    assert_eq!(open_unit_menu(&app, &root), None);
+    let buffered = app.library.library_browsers[&root]
+        .edit_modal
+        .as_ref()
+        .and_then(|m| m.param_buf.get(&key).map(|(_, unit)| unit.clone()));
+    assert_eq!(buffered.as_deref(), Some("ohm"));
+}
+
+/// Esc with the unit menu open closes the menu and keeps the dialog and its
+/// draft; the next Esc cancels the dialog.
+#[test]
+fn escape_closes_the_unit_menu_before_the_dialog() {
+    let (mut app, root, row_id) = app_with_browser();
+    open_modal(&mut app, &root, row_id);
+    let _ = app.update(edit(&root, BrowserEditMsg::AddParam));
+    let key = "param_1".to_string();
+    let _ = app.update(edit(&root, BrowserEditMsg::UnitMenuOpened { key }));
+
+    let _ = app.handle_escape_pressed(None);
+    assert_eq!(open_unit_menu(&app, &root), None);
+    assert!(draft_param(&app, &root, "param_1").is_some());
+
+    let _ = app.handle_escape_pressed(None);
+    assert!(app.library.library_browsers[&root].edit_modal.is_none());
+}
+
+/// Esc typed in a detached panel window leaves a main-window unit menu open.
+#[test]
+fn escape_in_another_window_leaves_the_unit_menu_open() {
+    let (mut app, root, row_id) = app_with_browser();
+    open_modal(&mut app, &root, row_id);
+    let _ = app.update(edit(&root, BrowserEditMsg::AddParam));
+    let key = "param_1".to_string();
+    let opened = BrowserEditMsg::UnitMenuOpened { key: key.clone() };
+    let _ = app.update(edit(&root, opened));
+    let panel = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        panel,
+        crate::app::WindowKind::DetachedPanel(crate::panels::PanelKind::Projects),
+    );
+
+    assert!(!app.close_unit_menu_in(Some(panel)));
+    assert_eq!(open_unit_menu(&app, &root), Some(key));
 }

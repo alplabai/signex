@@ -19,6 +19,7 @@ use signex_types::pcb_layer::PcbLayer;
 use signex_types::zone_keepout::keepout_copper;
 use uuid::Uuid;
 
+use super::outline_preview::open_outline;
 use super::{BoardToolDefaults, BoardToolSession};
 use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
@@ -181,7 +182,9 @@ impl Signex {
         self.note_board_tool(line.into_string());
     }
 
-    /// The area the next click closes, drawn into `preview`.
+    /// The area the next click closes, drawn into `preview`; while the
+    /// corners enclose no area yet, the open outline to the pointer
+    /// (`outline_preview`).
     pub(super) fn area_preview(
         &self,
         session: &BoardToolSession,
@@ -198,14 +201,23 @@ impl Signex {
         let active = self.pcb_layer_view(&path).active();
         let outline = outline_to(session, cursor);
         let defaults = &self.interaction_state.pcb_tool_defaults;
-        preview.zones.extend(area_zone(
+        let zone = area_zone(
             session.tool,
             board,
             defaults,
             Uuid::nil(),
-            outline,
+            outline.clone(),
             active,
-        ));
+        );
+        let drawable = match session.tool {
+            BoardPlaceTool::Keepout => keepout_copper(active).is_some(),
+            _ => active.is_copper(),
+        };
+        match zone {
+            Some(zone) => preview.zones.push(zone),
+            None if drawable => preview.segments.extend(open_outline(&outline, active)),
+            None => {}
+        }
     }
 
     /// The area the tool armed on the board in view places next, for its

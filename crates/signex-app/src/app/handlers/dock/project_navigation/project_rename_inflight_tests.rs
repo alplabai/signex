@@ -555,6 +555,8 @@ fn restoring_an_offered_copy_whose_move_is_owed_keeps_it_offered_and_safe() {
         path: fx.sheet.clone(),
         age_secs: 60,
         older_than_file: false,
+        saved_age_secs: Some(600),
+        checked_at: std::time::SystemTime::UNIX_EPOCH,
     });
     let task = rename_foo_to_bar(&mut fx);
     run_task(&mut fx.app, task);
@@ -638,14 +640,16 @@ fn a_rename_is_refused_while_a_recovery_check_still_runs() {
         rename_error(&fx)
     );
 
-    fx.app.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+    fx.app.ui_state.rename_dialog = Some(Box::new(crate::app::RenameDialogState {
         project_id: None,
         target_path: fx.sheet.clone(),
         tree_path: vec![0, 0],
         buffer: "other.snxsch".to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     let task = fx
         .app
         .update(crate::app::Message::Rename(crate::app::RenameMsg::Submit));
@@ -681,6 +685,8 @@ fn a_restore_read_that_a_rename_overtook_re_offers_the_copy_at_the_new_path() {
         path: fx.sheet.clone(),
         age_secs: 60,
         older_than_file: false,
+        saved_age_secs: Some(600),
+        checked_at: std::time::SystemTime::UNIX_EPOCH,
     });
     // Restore issues the read, and the folder rename lands before it runs.
     let restore = fx.app.update(Message::Autosave(AutosaveMsg::Recovery(
@@ -792,14 +798,16 @@ fn renaming_a_closed_sheet_carries_its_earlier_run_copy() {
     std::fs::write(&closed, b"sheet").expect("closed sheet");
     crate::autosave::sidecar::write(&recovery, &closed, b"crash edits").expect("copy");
 
-    fx.app.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+    fx.app.ui_state.rename_dialog = Some(Box::new(crate::app::RenameDialogState {
         project_id: None,
         target_path: closed.clone(),
         tree_path: vec![0, 0],
         buffer: "renamed.snxsch".to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     let task = fx
         .app
         .update(crate::app::Message::Rename(crate::app::RenameMsg::Submit));

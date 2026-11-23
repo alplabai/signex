@@ -16,8 +16,7 @@ use iced::{
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{
-    Label, SegmentedStyle, ToggleSwitchStyle, button, rich_text, segmented, span, text,
-    toggle_switch, tooltip,
+    Label, ToggleSwitchStyle, button, rich_text, segmented, span, text, toggle_switch, tooltip,
 };
 
 const TS: styles::TypeScale = styles::TypeScale::DEFAULT;
@@ -42,8 +41,8 @@ const SLIDER_KNOB_RADIUS: f32 = 7.0;
 const SLIDER_KNOB_RING: f32 = 1.5;
 
 /// The mockup's 16 px stroke glyphs; the style recolours them.
-pub(in crate::preferences) const GLYPH_EXPAND: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="#000" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5L9 7M2.5 13.5L7 9"/></svg>"##;
-pub(in crate::preferences) const GLYPH_SHRINK: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="#000" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 6.5h-4v-4M2.5 9.5h4v4M9.5 6.5L14 2M6.5 9.5L2 14"/></svg>"##;
+pub(crate) const GLYPH_EXPAND: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="#000" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5L9 7M2.5 13.5L7 9"/></svg>"##;
+pub(crate) const GLYPH_SHRINK: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="#000" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 6.5h-4v-4M2.5 9.5h4v4M9.5 6.5L14 2M6.5 9.5L2 14"/></svg>"##;
 pub(in crate::preferences) const GLYPH_MINUS: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="#000" stroke-width="1.4" stroke-linecap="round"><path d="M3 8h10"/></svg>"##;
 pub(in crate::preferences) const GLYPH_PLUS: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="#000" stroke-width="1.4" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>"##;
 /// The pencil on an editable pitch label.
@@ -119,8 +118,7 @@ where
     V: Copy + PartialEq + 'a,
 {
     let r = tokens::resolve(t);
-    let style = SegmentedStyle::new(r.sunken, r.raised, r.shadow, r.ink3, ti(t.text), TS.body)
-        .fill_width(true);
+    let style = r.segmented(TS.body).fill_width(true);
     segmented(
         options
             .into_iter()

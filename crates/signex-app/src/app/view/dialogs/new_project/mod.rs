@@ -16,6 +16,7 @@ use crate::styles::{
     DialogButtonKind, Spacing, TypeScale, dialog_button, dialog_footer_split, ti, tokens,
 };
 
+mod board_rules;
 mod card_parts;
 pub(crate) mod cards;
 pub(crate) mod customize;
@@ -97,11 +98,25 @@ impl Signex {
             .padding([SP.xl + SP.s, SP.xl + SP.m]),
         )
         .width(Length::Fill);
-        let body = row![
+        let canvas_colors = &self.document_state.panel_ctx.canvas_colors;
+        let columns: Element<'_, Message> = row![
             left,
-            preview::pane(state, ids::DIALOG_NEW_PROJECT_PREVIEW_NOTE, i18n, tokens).map(np)
+            preview::pane(
+                state,
+                ids::DIALOG_NEW_PROJECT_PREVIEW_NOTE,
+                Some(canvas_colors),
+                i18n,
+                tokens
+            )
+            .map(np)
         ]
-        .height(Length::Fill);
+        .height(Length::Fill)
+        .boxed();
+        let body = with_larger_preview(
+            columns,
+            board_rules::expanded_layer(state, canvas_colors, i18n, tokens)
+                .map(|e| iced::Widget::boxed(e.map(np))),
+        );
         let hint = text(t!(i18n, ids::DIALOG_NEW_PROJECT_FOOTER_HINT))
             .size(TS.body)
             .color(tokens::muted_text(tokens))
@@ -147,6 +162,20 @@ impl Signex {
             .style(crate::styles::modal_card(tokens))
             .clip(true)
             .boxed()
+    }
+}
+
+/// The dialog's body with its larger preview over it, while one is open.
+fn with_larger_preview<'a>(
+    body: Element<'a, Message>,
+    layer: Option<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    match layer {
+        Some(layer) => iced::widget::stack![body, layer]
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .boxed(),
+        None => body,
     }
 }
 

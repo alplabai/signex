@@ -3,7 +3,7 @@
 //! 13 group buttons in four groups (Select / Place / Annotate), each with a
 //! dropdown menu behind its corner triangle.
 
-use iced::Element;
+use iced::{Element, Widget as _};
 use signex_i18n::I18n;
 use signex_types::theme::{ThemeId, ThemeTokens};
 
@@ -61,6 +61,18 @@ pub enum ActiveBarMenu {
 pub enum ActiveBarMsg {
     ToggleMenu(ActiveBarMenu),
     CloseMenus,
+    /// A bar button took a right press and opens `menu`; the release of that
+    /// press stays off the canvas.
+    MenuRightPressed(ActiveBarMenu),
+    /// A right press outside the open flyout closed it; its release stays
+    /// off the canvas.
+    FlyoutRightPressed,
+    /// A part of the bar or of its open flyout that opens no menu took a
+    /// right press: nothing changes, and its release stays off the canvas.
+    RightPressTaken,
+    /// A canvas saw the held-back right release, or a new right press after
+    /// that release was lost.
+    RightReleaseSwallowed,
     Action(ActiveBarAction),
     ToggleFilter(SelectionFilter),
     ToggleAllFilters,
@@ -122,7 +134,19 @@ pub fn view_bar<'a>(
         has_selection,
         has_net_colors,
     };
-    signex_widgets::active_bar::view(bar_items(&state, tokens, i18n), tokens)
+    let mut items = bar_items(&state, tokens, i18n);
+    for item in &mut items {
+        if let signex_widgets::active_bar::ActiveBarItem::Button(button) = item
+            && let Some(ActiveBarMsg::ToggleMenu(menu)) = button.on_right_press
+        {
+            button.on_right_press = Some(ActiveBarMsg::MenuRightPressed(menu));
+        }
+    }
+    // Buttons take their own right press first; this takes the rest of the
+    // bar (the corner pill, separators, padding).
+    iced::widget::mouse_area(signex_widgets::active_bar::view(items, tokens))
+        .on_right_press(ActiveBarMsg::RightPressTaken)
+        .boxed()
 }
 
 #[cfg(test)]

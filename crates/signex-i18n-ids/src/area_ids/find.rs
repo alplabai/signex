@@ -62,6 +62,8 @@ define_ids! {
     PASTE_ARRAY_AXIS_Y = "paste-array-axis-y";
     PASTE_ARRAY_COUNT_UP = "paste-array-count-up";
     PASTE_ARRAY_PREVIEW_CAPTION = "paste-array-preview-caption";
+    PASTE_ARRAY_PREVIEW_EXPAND = "paste-array-preview-expand";
+    PASTE_ARRAY_PREVIEW_COLLAPSE = "paste-array-preview-collapse";
     PASTE_ARRAY_PREVIEW_MORE = "paste-array-preview-more";
     PASTE_ARRAY_PREVIEW_X = "paste-array-preview-x";
     PASTE_ARRAY_PREVIEW_Y = "paste-array-preview-y";

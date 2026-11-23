@@ -120,6 +120,15 @@ pub(crate) fn palette_window_height(rows: usize) -> f32 {
     filter + list + crate::styles::dense_footer_height()
 }
 
+/// Whether `event` is a press of any mouse button or a finger.
+pub(crate) fn is_pointer_press(event: &iced::Event) -> bool {
+    matches!(
+        event,
+        iced::Event::Mouse(iced::mouse::Event::ButtonPressed(_))
+            | iced::Event::Touch(iced::touch::Event::FingerPressed { .. })
+    )
+}
+
 /// `c` as a `#RRGGBB` hex code.
 pub(crate) fn hex_of(c: iced::Color) -> String {
     let t = theme_color_of(c);
@@ -193,6 +202,13 @@ impl Signex {
             }
             NetColorMsg::CustomShow(show) => {
                 let custom = &mut self.ui_state.net_color_custom;
+                if show && !custom.show {
+                    custom.draft_at_open = custom.draft;
+                }
+                // Cancel: the pick is not offered again on the next open.
+                if !show && custom.show {
+                    custom.draft = custom.draft_at_open;
+                }
                 custom.show = show;
                 if !show {
                     custom.net = None;
@@ -227,6 +243,17 @@ impl Signex {
                 };
                 Task::none()
             }
+            NetColorMsg::ChooserDismissed => {
+                self.ui_state.net_color_palette.chooser = None;
+                Task::none()
+            }
+            NetColorMsg::PressedInWindow(window) => {
+                let palette = self.detached_window_of(crate::app::state::ModalId::NetColorPalette);
+                if palette != Some(window) {
+                    self.ui_state.net_color_palette.chooser = None;
+                }
+                Task::none()
+            }
             NetColorMsg::CustomOpenedFor(net) => {
                 self.ui_state.net_color_palette.chooser = None;
                 let seed = self
@@ -234,6 +261,9 @@ impl Signex {
                     .map(|c| iced::Color::from_rgb8(c.r, c.g, c.b));
                 let sheet = self.document_state.active_path.clone();
                 let custom = &mut self.ui_state.net_color_custom;
+                if !custom.show {
+                    custom.draft_at_open = custom.draft;
+                }
                 if let Some(seed) = seed {
                     custom.draft = seed;
                 }

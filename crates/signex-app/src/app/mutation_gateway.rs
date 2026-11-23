@@ -54,8 +54,21 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> (MutationOutcome, Option<String>) {
+        // A channel tab of a repeated sheet is a compiled view (#1279).
+        if !commands.is_empty()
+            && let Some(reason) = self.refuse_if_channel_view()
+        {
+            return (MutationOutcome::Failed, Some(reason));
+        }
+        let recorded = self.sheet_edit_to_record(&commands);
         let edit = self.document_state.execute_batch_on_edit_path(commands);
-        self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info)
+        let done = self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info);
+        if done.0 == MutationOutcome::Changed
+            && let Some(commands) = recorded
+        {
+            self.note_sheet_edit(commands);
+        }
+        done
     }
 
     /// Project an edit's events on the active canvas; its outcome and refusal.
@@ -130,10 +143,22 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> (MutationOutcome, Option<String>) {
+        if let Some(reason) = self.refuse_if_channel_view() {
+            return (MutationOutcome::Failed, Some(reason));
+        }
+        let recorded = record_history
+            .then(|| self.sheet_edit_to_record(std::slice::from_ref(&command)))
+            .flatten();
         let edit = self
             .document_state
             .execute_on_edit_path(command, record_history);
-        self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info)
+        let done = self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info);
+        if done.0 == MutationOutcome::Changed
+            && let Some(commands) = recorded
+        {
+            self.note_sheet_edit(commands);
+        }
+        done
     }
 
     /// Mark the active document as having unsaved edits, without running a
@@ -174,6 +199,10 @@ impl Signex {
     }
 
     fn apply_engine_step(&mut self, direction: StepDirection, update_selection_info: bool) -> bool {
+        // Undo and redo do not reach past a channel tab either (#1279).
+        if self.refuse_if_channel_view().is_some() {
+            return false;
+        }
         if let Some(group) = self
             .document_state
             .active_engine()
@@ -561,12 +590,19 @@ mod tests {
         let task = app.handle_reset_duplicate_designators();
         crate::app::path_ops::settle_task(&mut app, task);
 
-        let written = std::fs::read_to_string(&child_path).expect("read child back");
+        // The run parks the child unsaved: the file waits for the user's save.
+        let on_disk = std::fs::read_to_string(&child_path).expect("read child back");
+        let parked = signex_types::format::SnxSchematic::new(
+            app.document_state.engines[&child_path].document().clone(),
+        )
+        .write_string()
+        .expect("serialize parked child");
         std::fs::remove_dir_all(&dir).ok();
         assert!(
-            written.contains("R?"),
-            "the on-disk child's duplicate R1 must have been reset: {written}"
+            parked.contains("R?"),
+            "the unopened child's duplicate R1 must have been reset: {parked}"
         );
+        assert!(!on_disk.contains("R?"), "no file is written before a save");
     }
 
     /// Project `top` -> `child`, both open, `child` focused.

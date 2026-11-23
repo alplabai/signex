@@ -91,6 +91,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -134,7 +135,7 @@ fn open_board_as(newer: bool) -> Fixture {
     let path = tmp.path().join("board.snxpcb");
     let mut text = SnxPcb::new(board()).write_string().unwrap();
     if newer {
-        text = text.replacen(signex_types::format::SNXPCB_FORMAT_V1, "snxpcb/1.9", 1);
+        text = text.replacen(signex_types::format::SNXPCB_FORMAT_V1, "snxpcb/1.10", 1);
     }
     std::fs::write(&path, text).unwrap();
     let (mut app, _boot) = Signex::new();

@@ -48,6 +48,8 @@ pub(crate) fn board_footprint(
         (&footprint.silk_b, TechnicalLayer::SilkscreenBottom),
         (&footprint.fab_f, TechnicalLayer::FabTop),
         (&footprint.fab_b, TechnicalLayer::FabBottom),
+        (&footprint.generated.silk, TechnicalLayer::SilkscreenTop),
+        (&footprint.generated.assembly, TechnicalLayer::FabTop),
     ] {
         for graphic in list {
             graphics.push(board_graphic(graphic, layer)?);

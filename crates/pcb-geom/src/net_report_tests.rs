@@ -87,6 +87,7 @@ fn via(n: u128, at: (f64, f64), net: u32) -> Via {
 fn board(footprints: Vec<Footprint>, segments: Vec<Segment>, vias: Vec<Via>) -> PcbBoard {
     PcbBoard {
         stackup: None,
+        rooms: Vec::new(),
         free: Default::default(),
         sketch: None,
         options: Default::default(),

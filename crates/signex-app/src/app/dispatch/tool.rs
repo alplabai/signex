@@ -43,6 +43,28 @@ impl Signex {
                 {
                     return self.finish_update();
                 }
+                // A pause belongs to the window it began in: Tab elsewhere
+                // neither takes it over nor resumes it, and a dimension's
+                // held point is not another window's to pause over.
+                if self.interaction_state.is_sheet_pause_elsewhere()
+                    || self.interaction_state.is_dimension_held_elsewhere()
+                {
+                    return self.finish_update();
+                }
+                // A second Tab goes on placing with the edits, as the form's
+                // OK does; a Location or dimension text that does not read
+                // keeps the pause.
+                if self.interaction_state.current_tool != Tool::Select
+                    && self.interaction_state.active_canvas().placement_paused
+                {
+                    if self.dimension_form_holds_refused_text() {
+                        return self.finish_update();
+                    }
+                    let confirmed = self.update(Message::Dock(crate::dock::DockMessage::Panel(
+                        crate::panels::PanelMsg::ConfirmPrePlacement,
+                    )));
+                    return Task::batch([confirmed, self.release_dimension_override()]);
+                }
                 if self.interaction_state.current_tool != Tool::Select {
                     use crate::panels::PrePlacementKind;
                     let session_form = self.placement_form();
@@ -292,8 +314,11 @@ impl Signex {
                                 .placement
                                 .as_ref()
                                 .and_then(|s| s.reference_override.clone()),
+                            window: self.interaction_state.acting_window,
                         });
-                    return Task::batch([show_properties, self.finish_update()]);
+                    self.note_dimension_tool_pause();
+                    let focus_override = self.focus_dimension_override();
+                    return Task::batch([show_properties, focus_override, self.finish_update()]);
                 }
                 self.finish_update()
             }
@@ -333,7 +358,11 @@ impl Signex {
                 } else {
                     Task::none()
                 };
-                Task::batch([resume_task, self.finish_update()])
+                Task::batch([
+                    resume_task,
+                    self.release_dimension_override(),
+                    self.finish_update(),
+                ])
             }
             ToolMessage::CycleDrawMode => {
                 let rule = self.interaction_state.corner_rule.with_next_mode();
@@ -397,7 +426,9 @@ impl Signex {
                 // Re-selecting the active tool mid-gesture keeps the gesture
                 // on purpose: only a switch to a different tool drops the buffers.
                 if tool != self.interaction_state.current_tool {
+                    self.end_annotation_pause();
                     self.clear_drawing_buffers();
+                    self.leave_dimension_tool();
                 }
                 self.interaction_state.current_tool = tool;
                 // Re-label the floating cursor tag so the user sees which
@@ -420,9 +451,17 @@ impl Signex {
                     Tool::SheetEntry => Some("Sheet Entry".to_string()),
                     Tool::Measure => Some("Measure".to_string()),
                     Tool::BreakWire => Some("Break Wire".to_string()),
-                    Tool::Blanket => Some("Blanket".to_string()),
+                    Tool::Blanket => Some("Net Blanket".to_string()),
                     Tool::CompileMask => Some("Compile Mask".to_string()),
                     Tool::DiffPair => Some("Differential Pair".to_string()),
+                    Tool::Bezier => Some("Bezier".to_string()),
+                    Tool::LinearDimension => Some("Linear Dimension".to_string()),
+                    Tool::AlignedDimension => Some("Aligned Dimension".to_string()),
+                    Tool::Table => Some("Table".to_string()),
+                    Tool::HarnessWire => Some("Signal Harness".to_string()),
+                    Tool::HarnessConnector => Some("Harness Connector".to_string()),
+                    Tool::HarnessEntry => Some("Harness Entry".to_string()),
+                    Tool::NetParameters => Some("Net Parameters".to_string()),
                     _ => None,
                 };
                 // Clear every cursor-following ghost so a leftover from a
@@ -430,6 +469,9 @@ impl Signex {
                 // presets (Label/Power port/etc.) re-arm their specific
                 // ghost after the dispatch.
                 self.clear_ghost_previews();
+                // The Bezier and dimension tools' hint bar (#1267); cleared
+                // for every other tool.
+                self.sync_annotation_draft();
                 // A port the previous pick armed is not this tool's: a
                 // placement that wants one sets it after this arm (#1920).
                 self.interaction_state.pending_port = None;

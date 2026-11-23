@@ -36,6 +36,13 @@ impl Signex {
     ) -> Task<Message> {
         // #1378 - Esc abandons a pending chord, a waiting `T A` included.
         self.cancel_pending_chord();
+        if self.close_unit_menu_in(window) {
+            return Task::none();
+        }
+        // Esc in a drawing's number box puts the old value back (#2768).
+        if self.restore_drawing_field() {
+            return self.finish_update();
+        }
         // Esc in the status bar's angle field closes it and goes no further
         // (#2316): the board's tool and selection stay.
         if self.close_view_angle_entry_in(window) {
@@ -108,6 +115,7 @@ impl Signex {
                 if let Some(dismiss) = self
                     .components_row_menu_escape()
                     .or_else(|| self.layer_tab_menu_escape())
+                    .or_else(|| self.active_bar_menu_escape())
                 {
                     return self.update(dismiss);
                 }
@@ -123,12 +131,15 @@ impl Signex {
                         app.clear_pcb_selection();
                         Task::none()
                     });
+                    if self.is_annotation_pause_of_another(window) {
+                        return cleared;
+                    }
                     let reset = self.update(Message::Tool(crate::app::ToolMessage::SelectTool(
                         crate::app::Tool::Select,
                     )));
                     return Task::batch([cleared, reset]);
                 }
-                self.escape_tool_reset()
+                self.escape_tool_reset(window)
             }
 
             InputTarget::Main => {
@@ -139,6 +150,7 @@ impl Signex {
                 if let Some(dismiss) = self
                     .components_row_menu_escape()
                     .or_else(|| self.layer_tab_menu_escape())
+                    .or_else(|| self.active_bar_menu_escape())
                     .or_else(|| self.board_3d_popover_escape())
                 {
                     return self.update(dismiss);
@@ -170,9 +182,41 @@ impl Signex {
                 if let Some(overlay_msg) = self.escape_overlay_message() {
                     return self.update(overlay_msg);
                 }
-                self.escape_editor_or_tool_reset()
+                if let Some(dismiss) = self.panel_menu_escape() {
+                    return self.update(dismiss);
+                }
+                self.escape_editor_or_tool_reset(window)
             }
         }
+    }
+
+    /// Esc closes a menu open in a panel the user can see, and nothing behind
+    /// it. Below the modal ladder: a dialog paints over the panels.
+    fn panel_menu_escape(&self) -> Option<Message> {
+        use crate::panels::history::{HistoryCommitMsg, HistoryPanelMsg, HistorySwitcherMsg};
+        use crate::panels::{LayersPanelMsg, PanelKind, PanelMsg};
+        let docs = &self.document_state;
+        let history = docs
+            .dock
+            .is_frontmost(PanelKind::History)
+            .then_some(&docs.history.ui)
+            .and_then(|ui| {
+                if ui.switcher_open {
+                    Some(HistoryPanelMsg::Switcher(HistorySwitcherMsg::Dismissed))
+                } else if ui.more_open {
+                    Some(HistoryPanelMsg::Commit(HistoryCommitMsg::MoreToggled))
+                } else {
+                    None
+                }
+            })
+            .map(PanelMsg::History);
+        let layers = (docs.panel_ctx.pcb_layers_ui.more_menu_open
+            && self.has_active_pcb()
+            && docs.dock.is_frontmost(PanelKind::Layers))
+        .then_some(PanelMsg::LayersPanel(LayersPanelMsg::MoreMenuDismissed));
+        history
+            .or(layers)
+            .map(|msg| Message::Dock(crate::dock::DockMessage::Panel(msg)))
     }
 
     /// Stop a floating-panel drag in flight, leaving the panel floating.
@@ -215,6 +259,23 @@ impl Signex {
             )))
     }
 
+    /// Esc closes an open Active Bar flyout, schematic or board, and nothing
+    /// behind it (#2377): an armed tool stays armed.
+    fn active_bar_menu_escape(&self) -> Option<Message> {
+        let interaction = &self.interaction_state;
+        if interaction.active_bar_menu.is_some() {
+            return Some(Message::ActiveBar(
+                crate::active_bar::ActiveBarMsg::CloseMenus,
+            ));
+        }
+        interaction
+            .pcb_bar_menu
+            .is_some()
+            .then_some(Message::Pcb(PcbMsg::Bar(
+                crate::app::PcbBarMsg::MenuDismissed,
+            )))
+    }
+
     /// Esc closes an open dock tab right-click menu.
     fn dock_tab_menu_escape(&self) -> Option<Message> {
         self.document_state
@@ -227,7 +288,7 @@ impl Signex {
     /// v0.15 — the main window's post-ladder Esc: if its active tab is a
     /// primitive editor, cancel that editor's state; otherwise fall back
     /// to the schematic tool reset.
-    fn escape_editor_or_tool_reset(&mut self) -> Task<Message> {
+    fn escape_editor_or_tool_reset(&mut self, window: Option<iced::window::Id>) -> Task<Message> {
         // A board in sketch mode: cancel the sketch tool, then leave (#2234).
         if let Some(msg) = self.board_sketch_escape() {
             return self.update(msg);
@@ -297,7 +358,7 @@ impl Signex {
             ));
         }
 
-        self.escape_tool_reset()
+        self.escape_tool_reset(window)
     }
 
     /// Cancel the placement session and drop back to `Tool::Select`.
@@ -308,7 +369,10 @@ impl Signex {
     /// sets those same globals — so this is the same operation whichever
     /// window the Esc came from. Only the *visuals* are per-window, and
     /// `clear_transient_schematic_tool_state` sweeps all of them.
-    fn escape_tool_reset(&mut self) -> Task<Message> {
+    fn escape_tool_reset(&mut self, window: Option<iced::window::Id>) -> Task<Message> {
+        if let Some(answered) = self.escape_annotation_pause(window) {
+            return answered;
+        }
         // The first Esc of a paused placement resumes it; the next one
         // leaves the tool (#2529).
         if self.interaction_state.active_canvas().placement_paused {
@@ -338,12 +402,13 @@ impl Signex {
     /// Esc while placement is paused: go on placing with the values the
     /// pause began with. The panel edits made while paused are dropped, the
     /// tool stays armed (#2529).
-    fn resume_placement_without_edits(&mut self) -> Task<Message> {
+    pub(in crate::app) fn resume_placement_without_edits(&mut self) -> Task<Message> {
         let undone = match self.interaction_state.placement_pause.take() {
             Some(SheetPlacementPause::Sheet {
                 before,
                 at_pause,
                 reference_override,
+                ..
             }) => {
                 let undone = self.undo_pause_mirrors(at_pause.as_deref());
                 if let Some(session) = self.interaction_state.placement.as_mut() {
@@ -351,6 +416,7 @@ impl Signex {
                 }
                 self.refresh_placement_reference();
                 self.document_state.panel_ctx.pre_placement = before.map(|form| *form);
+                self.restore_dimension_tool_pause();
                 undone
             }
             Some(SheetPlacementPause::Footprint { path, pad_defaults }) => {
@@ -436,6 +502,47 @@ mod tests {
 
     fn detach(app: &mut Signex, modal: ModalId) -> iced::window::Id {
         open_window(app, WindowKind::DetachedModal(modal))
+    }
+
+    /// The History panel in front, with the tool armed that a fall-through
+    /// Esc would reset.
+    fn history_in_front() -> Signex {
+        use crate::panels::PanelKind;
+        let mut app = quiet_app();
+        app.document_state.dock.show_panel(PanelKind::History);
+        app.interaction_state.current_tool = Tool::Wire;
+        app
+    }
+
+    #[test]
+    fn esc_closes_the_history_switcher_and_leaves_the_tool() {
+        let mut app = history_in_front();
+        app.document_state.history.ui.switcher_open = true;
+        let _ = app.handle_escape_pressed(None);
+        assert!(!app.document_state.history.ui.switcher_open);
+        assert_eq!(app.interaction_state.current_tool, Tool::Wire);
+    }
+
+    #[test]
+    fn esc_closes_the_history_more_row_and_leaves_the_tool() {
+        let mut app = history_in_front();
+        app.document_state.history.ui.more_open = true;
+        let _ = app.handle_escape_pressed(None);
+        assert!(!app.document_state.history.ui.more_open);
+        assert_eq!(app.interaction_state.current_tool, Tool::Wire);
+    }
+
+    /// A menu left open in a panel behind another tab is not on screen, so
+    /// it does not take the key.
+    #[test]
+    fn esc_ignores_a_menu_in_a_panel_behind_another_tab() {
+        use crate::panels::PanelKind;
+        let mut app = history_in_front();
+        app.document_state.history.ui.switcher_open = true;
+        let _ = app.document_state.dock.close_panel(PanelKind::History);
+        let _ = app.handle_escape_pressed(None);
+        assert!(app.document_state.history.ui.switcher_open);
+        assert_eq!(app.interaction_state.current_tool, Tool::Select);
     }
 
     // ── #547: a detached modal's own window ─────────────────────────

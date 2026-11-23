@@ -11,10 +11,15 @@ use signex_widgets::{text, theme_ext};
 
 use crate::app::state::BoardSketchSession;
 use crate::app::{BoardSketchMsg, Message, PcbMsg, Signex};
+use crate::dock::DockMessage;
+use crate::library::editor::footprint::CheckStatus;
 use crate::library::editor::standalone::sketch_exit::{
-    ModeBarLook, ModeBarMessages, mode_bar, preview_card,
+    GapLine, ModeBarLook, ModeBarMessages, PreviewIssues, mode_bar, preview_card,
 };
+use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+use crate::panels::PanelMsg;
 use crate::styles::{Spacing, TypeScale};
+use signex_i18n::RenderTranslatable as _;
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -37,7 +42,25 @@ impl Signex {
             &self.ui_state.i18n,
         )
         .map(Message::Library);
-        Some(stack![canvas, self.board_sketch_bar(session)].boxed())
+        // The constraint / pattern menu at the right-click (mockup row 188), measured
+        // in the UI font and kept inside the canvas, under the mode bar.
+        let menu = crate::library::editor::footprint::sketch_mode::constraint_menu::overlay(
+            &session.editor,
+            tokens,
+            &self.ui_state.i18n,
+            &self.document_state.panel_ctx.ui_font_name,
+        )
+        .map(Message::Library);
+        let mut layers = stack![canvas, menu, self.board_sketch_bar(session)];
+        // Over everything: the sketch waits for Import or Cancel (mockup row 179c).
+        if let Some(dialog) = session.dxf_dialog.as_deref() {
+            layers = layers.push(super::board_sketch_dxf::overlay(
+                dialog,
+                tokens,
+                &self.ui_state.i18n,
+            ));
+        }
+        Some(layers.boxed())
     }
 
     /// The mode bar, with the bake preview card above it while open: the
@@ -69,7 +92,8 @@ impl Signex {
         let exit = &session.editor.state.sketch_exit;
         let mut overlay = column![].spacing(SP.m);
         if let Some(preview) = session.preview.as_ref().filter(|_| exit.preview) {
-            overlay = overlay.push(preview_card(preview, tokens, i18n));
+            let issues = self.board_preview_issues(session);
+            overlay = overlay.push(preview_card(preview, issues, tokens, i18n));
         }
         overlay = overlay.push(mode_bar(look, exit, msgs, tokens, i18n));
         container(overlay)
@@ -80,4 +104,71 @@ impl Signex {
             .align_y(Vertical::Bottom)
             .boxed()
     }
+
+    /// What the board's preview card lists besides its counts (mockup row 190): the
+    /// refusal's entity, and the failed outline checks (mockup row 179d) as
+    /// Properties has them, each selecting its place on a click. A failed
+    /// check warns only; Bake stays available.
+    fn board_preview_issues(&self, session: &BoardSketchSession) -> PreviewIssues<Message> {
+        let i18n = &self.ui_state.i18n;
+        let select = |id| {
+            Message::Dock(DockMessage::Panel(PanelMsg::FpEditorSelectSketchEntity {
+                id,
+            }))
+        };
+        let checks = self
+            .document_state
+            .panel_ctx
+            .footprint_editor
+            .as_ref()
+            .and_then(|fp| fp.board.as_ref())
+            .map(|board| board.outline_checks.as_slice())
+            .unwrap_or_default();
+        PreviewIssues {
+            refusal_select: session
+                .preview_error
+                .as_ref()
+                .and_then(|error| error.place())
+                .map(select),
+            heading: ids::SKETCH_BAKE_CHECKS,
+            lines: checks
+                .iter()
+                .filter(|line| line.status == CheckStatus::Failed)
+                .map(|line| {
+                    (
+                        line.status,
+                        line.text.localized(i18n),
+                        line.place.map(select),
+                    )
+                })
+                .collect(),
+            caption: Some(ids::SKETCH_BAKE_CHECKS_WARN),
+            gap: board_gap_line(session, i18n),
+        }
+    }
+}
+
+/// The gap of an open profile the bake refuses (mockup row 190): whether it heals
+/// under the tolerance, and Close gap when it does.
+fn board_gap_line(
+    session: &BoardSketchSession,
+    i18n: &signex_i18n::I18n,
+) -> Option<GapLine<Message>> {
+    if !matches!(
+        session.preview_error,
+        Some(signex_bake::BoardBakeError::OpenProfile { .. })
+    ) {
+        return None;
+    }
+    let editor = &session.editor;
+    let offer = editor.state.gap_offer(editor.primitive().sketch.as_ref())?;
+    Some(GapLine::of(&offer, i18n, |keep, merge| {
+        Message::Library(LibraryMessage::PrimitiveEditorEvent {
+            path: session.board_path.clone(),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchCloseGapRequested {
+                keep,
+                merge,
+            }),
+        })
+    }))
 }

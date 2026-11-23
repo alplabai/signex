@@ -24,7 +24,7 @@ mod tests;
 
 pub use query::{FindQuery, MatchOptions, PatternError};
 pub use replace::{designator_commands, replace_all_ci, replace_commands};
-pub use scan::scan_sheet;
+pub use scan::{scan_sheet, value_part_name};
 
 use crate::TextTarget;
 use signex_types::schematic::{InstancePath, Point, SelectedItem};

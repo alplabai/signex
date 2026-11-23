@@ -57,6 +57,10 @@ pub enum TabKind {
     /// in the project's [`crate::app::ProjectTabState::rules`];
     /// `TabInfo.path` is the `.snxprj` path, which Save writes.
     Rules(super::state::ProjectId),
+    /// A board's Layer Stack as a page tab (mockup row 105). `TabInfo.path`
+    /// is the board's path, which Save writes; the board stays in its own
+    /// PCB tab, and this tab always sits after it (`app/layer_stack_tab`).
+    LayerStack,
 }
 
 impl TabKind {
@@ -112,10 +116,18 @@ impl TabKind {
         }
     }
 
-    /// A tab that shows a project's own settings, not a drawing: the
-    /// Project and Rules tabs. Neither is undocked or restored from History.
+    /// A board's Layer Stack tab.
+    pub fn is_layer_stack(&self) -> bool {
+        matches!(self, TabKind::LayerStack)
+    }
+
+    /// A page tab, not a drawing: the Project, Rules and Layer Stack tabs.
+    /// None is undocked or restored from History.
     pub fn is_project_page(&self) -> bool {
-        matches!(self, TabKind::Project(_) | TabKind::Rules(_))
+        matches!(
+            self,
+            TabKind::Project(_) | TabKind::Rules(_) | TabKind::LayerStack
+        )
     }
 }
 
@@ -309,6 +321,10 @@ pub struct SymbolDocument {
     /// on the undo stack). Cleared by `SymbolDragCommit` (emitted on
     /// `ButtonReleased`).
     pub mid_drag: bool,
+    /// `(graphic, radius at drag start, radius last written)` while a grip
+    /// drags a Round Rectangle, so its clamp depends only on the current
+    /// size. A stored radius other than the last written one is a new start.
+    pub drag_corner_radius: Option<(usize, f64, f64)>,
     /// Which placed graphic's fill colour-picker is open, plus whether
     /// it has been expanded to the HSV / RGB overlay. `None` = closed.
     /// Transient UI-only state: never serialized, never snapshotted for
@@ -330,6 +346,10 @@ pub struct SymbolDocument {
     /// `PolygonCancel`, plus the synchronous flush in the `SetTool`
     /// handler when the user switches away from `PlacePolygon`.
     pub polygon_vertices: Vec<(f64, f64)>,
+    /// Counts tool changes. The canvas drops its half-placed gesture when
+    /// this moves, even if the tool changed and came back between two
+    /// canvas events.
+    pub tool_epoch: u64,
     /// Transient, user-visible status line rendered in the symbol
     /// editor's status footer (see `standalone::symbol::view_symbol_
     /// status`). `None` most of the time; set to `Some(reason)` when
@@ -413,9 +433,11 @@ impl SymbolDocument {
             history_generation: 0,
             last_edit_key: None,
             mid_drag: false,
+            drag_corner_radius: None,
             graphic_fill_picker: None,
             local_color_picker: None,
             polygon_vertices: Vec::new(),
+            tool_epoch: 0,
             status_message: None,
             context_menu: None,
         };
@@ -866,10 +888,10 @@ impl FootprintDocument {
         }
     }
 
-    /// v0.24 Phase 1 — write a snapshot back into the live editor
-    /// state. Resets the canvas cache so the next render reflects
-    /// the rolled-back geometry.
+    /// Writes a snapshot back into the live editor state and redraws.
     fn restore(&mut self, snap: FootprintHistorySnapshot) {
+        // Refused field text belongs to the state that is gone.
+        self.state.numeric_buffers.clear();
         // The file's id is the live one, not the snapshot's (#2172).
         let live_id = self.file.file_uuid;
         self.file = snap.file;
@@ -1000,6 +1022,23 @@ pub enum Tool {
     CompileMask,
     /// One click on a `_P` or `_N` net marks the differential pair (#2420).
     DiffPair,
+    /// Four clicks draw a cubic Bezier: start, C1, C2, end (#1267).
+    Bezier,
+    /// Two points, then the line: a horizontal or vertical dimension, by
+    /// the drag direction (#1267).
+    LinearDimension,
+    /// Two points, then the line: a dimension along the two points (#1267).
+    AlignedDimension,
+    /// One click places a typed table (#1300).
+    Table,
+    /// Click by click draws harness wire segments, like the wire tool (#1280).
+    HarnessWire,
+    /// Two clicks place a harness connector body (#1280).
+    HarnessConnector,
+    /// One click on a connector's flat side adds an entry there (#1280).
+    HarnessEntry,
+    /// One click on a wire places a Net Parameters flag there (#1489).
+    NetParameters,
 }
 
 impl std::fmt::Display for Tool {
@@ -1024,9 +1063,17 @@ impl std::fmt::Display for Tool {
             Tool::SheetEntry => write!(f, "Place Sheet Entry"),
             Tool::Measure => write!(f, "Measure Distance"),
             Tool::BreakWire => write!(f, "Break Wire"),
-            Tool::Blanket => write!(f, "Place Blanket"),
+            Tool::Blanket => write!(f, "Place Net Blanket"),
             Tool::CompileMask => write!(f, "Place Compile Mask"),
             Tool::DiffPair => write!(f, "Place Differential Pair"),
+            Tool::Bezier => write!(f, "Draw Bezier"),
+            Tool::LinearDimension => write!(f, "Place Linear Dimension"),
+            Tool::AlignedDimension => write!(f, "Place Aligned Dimension"),
+            Tool::Table => write!(f, "Place Table"),
+            Tool::HarnessWire => write!(f, "Draw Signal Harness"),
+            Tool::HarnessConnector => write!(f, "Place Harness Connector"),
+            Tool::HarnessEntry => write!(f, "Place Harness Entry"),
+            Tool::NetParameters => write!(f, "Place Net Parameters"),
         }
     }
 }

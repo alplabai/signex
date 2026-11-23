@@ -21,17 +21,20 @@ mod holes;
 mod holes_reference_tests;
 #[cfg(test)]
 mod holes_touching_tests;
+pub mod line_edit;
 pub mod offset;
 pub mod point;
 mod point_grid;
 pub mod predicates;
 pub mod segment;
+pub mod shapes;
 mod tolerant_clip;
 pub mod triangulate;
 
 pub use aabb_index::{Aabb, AabbIndex};
 pub use boolean_general::{BoolOp, PolygonOpError, polygon_op};
 pub use curves::{arc_arc_intersections, arc_circle_intersections, circle_circle_intersections};
+pub use line_edit::{ChamferRefusal, ExtendHit, chamfer_cut, extension_hit};
 pub use offset::{CornerStyle, offset_polygon};
 pub use point::{point_in_polygon, point_to_segment_distance, point_to_segment_distance_sq};
 pub use predicates::{Sign, orient2d, signed_area};

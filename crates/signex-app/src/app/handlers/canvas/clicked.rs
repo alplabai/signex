@@ -136,6 +136,11 @@ impl Signex {
         if self.interaction_state.active_canvas_mut().placement_paused {
             return Task::none();
         }
+        // The point buffer of a tool paused in another window belongs to
+        // that window's sheet, even while it is still empty.
+        if self.is_annotation_pause_of_another(None) {
+            return Task::none();
+        }
         // A click outside the inline editor commits its current value
         // and returns to normal selection — same convention as most
         // IDEs (Escape cancels, click elsewhere confirms).
@@ -167,6 +172,7 @@ impl Signex {
             return self.handle_placement_click(wx, wy);
         }
 
+        self.end_wire_of_another_canvas();
         match self.interaction_state.current_tool {
             Tool::Wire => {
                 let pt = signex_types::schematic::Point::new(wx, wy);
@@ -187,6 +193,23 @@ impl Signex {
                         self.place_bus_at(start, pt, self.interaction_state.corner_rule);
                     self.continue_wire_drawing(end_pt);
                 }
+            }
+            // #1280: a harness wire is drawn like a bus.
+            Tool::HarnessWire => {
+                let pt = signex_types::schematic::Point::new(wx, wy);
+                if !self.interaction_state.wire_drawing {
+                    self.start_wire_drawing(pt);
+                } else if let Some(&start) = self.interaction_state.wire_points.last() {
+                    let (end_pt, _) =
+                        self.place_harness_wire_at(start, pt, self.interaction_state.corner_rule);
+                    self.continue_wire_drawing(end_pt);
+                }
+            }
+            Tool::HarnessConnector => {
+                self.harness_connector_click(signex_types::schematic::Point::new(wx, wy));
+            }
+            Tool::HarnessEntry => {
+                self.harness_entry_click(signex_types::schematic::Point::new(wx, wy));
             }
             Tool::Component if self.interaction_state.pending_power.is_some() => {
                 if let Some((net_name, lib_id)) = self.interaction_state.pending_power.clone() {
@@ -214,6 +237,12 @@ impl Signex {
                 let p = signex_types::schematic::Point::new(wx, wy);
                 self.shape_tool_point(tool, p, ClickKind::Click);
             }
+            // #1267 / #1300: the Bezier and dimension tools take one point
+            // per click; the Table tool places on its first.
+            tool
+            @ (Tool::Bezier | Tool::LinearDimension | Tool::AlignedDimension | Tool::Table) => {
+                self.annotation_tool_point(tool, signex_types::schematic::Point::new(wx, wy));
+            }
             Tool::Sheet => return self.place_sheet_click(wx, wy),
             Tool::SheetEntry => self.place_sheet_entry_click(wx, wy),
             Tool::Measure => self.measure_click(wx, wy),
@@ -223,6 +252,9 @@ impl Signex {
                 self.directive_region_point(tool, p, ClickKind::Click);
             }
             Tool::DiffPair => self.diff_pair_click(signex_types::schematic::Point::new(wx, wy)),
+            Tool::NetParameters => {
+                self.net_parameters_click(signex_types::schematic::Point::new(wx, wy));
+            }
             Tool::Text => {
                 let note_text = self
                     .document_state
@@ -256,11 +288,31 @@ impl Signex {
         Task::none()
     }
 
+    /// A wire belongs to the canvas it started on: a click on another one
+    /// must not commit a segment from that sheet's point into this sheet.
+    /// The old wire ends, so the click starts a new one here.
+    fn end_wire_of_another_canvas(&mut self) {
+        let state = &mut self.interaction_state;
+        if !state.wire_drawing || state.wire_window == state.acting_window {
+            return;
+        }
+        // Main's own slot is out of reach while a window acts: `run_in_window`
+        // clears it when it swaps back.
+        if let Some(slot) = state.wire_window.and_then(|id| state.canvases.get_mut(&id)) {
+            slot.wire_preview.clear();
+            slot.drawing_mode = false;
+        }
+        state.wire_drawing = false;
+        state.wire_points.clear();
+    }
+
     /// The first click of a wire or bus: anchor it at `pt`.
     fn start_wire_drawing(&mut self, pt: signex_types::schematic::Point) {
         self.interaction_state.wire_drawing = true;
+        self.interaction_state.wire_window = self.interaction_state.acting_window;
         self.interaction_state.wire_points.clear();
         self.interaction_state.wire_points.push(pt);
+        self.interaction_state.wire_start_style = self.wire_style_at(pt);
         let canvas = self.interaction_state.active_canvas_mut();
         canvas.wire_preview = vec![pt];
         canvas.drawing_mode = true;

@@ -17,8 +17,13 @@ pub struct PasteSeed {
     pub counters: HashMap<String, u32>,
     /// Every numbered designator in use across the project sheets.
     pub used: HashSet<String>,
+    /// Every net name the project sheets write (#2744).
+    pub net_names: HashSet<String>,
     /// Sheets that exist but could not be read, with why.
     pub unreadable: Vec<(PathBuf, String)>,
+    /// Every sheet whose net names are unknown (`app::unread_sheets`): those
+    /// and the missing or refused files a sheet symbol places.
+    pub unread_sheets: Vec<PathBuf>,
     /// The read itself did not finish; `counters` says nothing.
     pub failed: bool,
 }
@@ -29,7 +34,10 @@ impl Signex {
     /// sheet. Paste Array reads them only when its dialog opens on Next free;
     /// a later choice of Next free asks for them with `ArraySeed`.
     pub(crate) fn paste_seed_task(&self, request: &PasteRequest) -> Option<Task<Message>> {
+        // The Smart Paste dialog offers Next free whatever the preference.
         let needs = request.intent == PasteIntent::ArraySeed
+            || (request.intent == PasteIntent::SmartPaste
+                && self.smart_paste_opens_dialog(request))
             || self.ui_state.paste_designators.reads_project();
         if !needs {
             return None;
@@ -53,7 +61,14 @@ impl Signex {
                         failed: false,
                         counters: seed_counters(references()),
                         used: references().map(|r| r.trim().to_owned()).collect(),
+                        net_names: set
+                            .sheets
+                            .values()
+                            .flat_map(signex_net::sheet_net_names)
+                            .map(str::to_owned)
+                            .collect(),
                         unreadable: set.unreadable.clone(),
+                        unread_sheets: crate::app::unread_sheets::unread_sheets(&set),
                     }
                 })
                 .await
@@ -61,7 +76,9 @@ impl Signex {
                     failed: true,
                     counters: HashMap::new(),
                     used: HashSet::new(),
+                    net_names: HashSet::new(),
                     unreadable: vec![(target, format!("the numbering task failed: {error}"))],
+                    unread_sheets: Vec::new(),
                 })
             },
             move |seed| {
@@ -78,10 +95,22 @@ impl Signex {
     pub(crate) fn store_paste_seed(&mut self, request: &PasteRequest, seed: &PasteSeed) {
         for (path, why) in &seed.unreadable {
             crate::diagnostics::log_warning(format!(
-                "Designators on paste: {} could not be read ({why}), so its designators are not counted.",
+                "Designators on paste: {} could not be read ({why}), so its designators and net names are not counted.",
                 path.display()
             ));
         }
+        // Kept for a failed read too: its net names are just as unknown.
+        self.interaction_state.paste_unread_sheets = request.path.clone().map(|target| {
+            let mut sheets: Vec<PathBuf> = seed
+                .unreadable
+                .iter()
+                .map(|(path, _)| path.clone())
+                .chain(seed.unread_sheets.iter().cloned())
+                .collect();
+            sheets.sort();
+            sheets.dedup();
+            (target, sheets)
+        });
         // A read that did not finish has no numbers: what an earlier read
         // stored for this sheet stays, as it can only skip numbers.
         if seed.failed {
@@ -92,6 +121,7 @@ impl Signex {
                 target,
                 counters: seed.counters.clone(),
                 used: seed.used.clone(),
+                net_names: seed.net_names.clone(),
             });
         }
     }
@@ -107,6 +137,7 @@ mod tests {
             epoch: 0,
             path: Some(PathBuf::from(path)),
             dialog: 0,
+            from_agent: false,
         }
     }
 
@@ -129,5 +160,49 @@ mod tests {
         app.store_paste_seed(&request("a.snxsch"), &failed);
         let kept = app.interaction_state.paste_counters.as_ref().unwrap();
         assert_eq!(kept.counters.get("R"), Some(&4));
+    }
+
+    /// #2744: a missing or refused file a symbol places counts with the
+    /// unreadable ones, each named once.
+    #[test]
+    fn placed_missing_and_refused_sheets_are_kept_for_smart_paste() {
+        let (mut app, _task) = Signex::new();
+        let (bad, gone) = (PathBuf::from("bad.snxsch"), PathBuf::from("gone.snxsch"));
+        let seed = PasteSeed {
+            unreadable: vec![(bad.clone(), "garbled".into())],
+            unread_sheets: vec![bad.clone(), gone.clone()],
+            ..PasteSeed::default()
+        };
+        app.store_paste_seed(&request("a.snxsch"), &seed);
+        assert_eq!(
+            app.interaction_state.paste_unread_sheets,
+            Some((PathBuf::from("a.snxsch"), vec![bad, gone]))
+        );
+    }
+
+    /// #2744: an unread sheet is remembered for Smart Paste, also when the
+    /// read did not finish, and a clean read clears it.
+    #[test]
+    fn the_unread_sheets_of_the_last_read_are_kept_for_smart_paste() {
+        let (mut app, _task) = Signex::new();
+        let target = PathBuf::from("a.snxsch");
+        let bad = PathBuf::from("bad.snxsch");
+        for failed in [false, true] {
+            let seed = PasteSeed {
+                failed,
+                unreadable: vec![(bad.clone(), "garbled".into())],
+                ..PasteSeed::default()
+            };
+            app.store_paste_seed(&request("a.snxsch"), &seed);
+            assert_eq!(
+                app.interaction_state.paste_unread_sheets,
+                Some((target.clone(), vec![bad.clone()]))
+            );
+        }
+        app.store_paste_seed(&request("a.snxsch"), &PasteSeed::default());
+        assert_eq!(
+            app.interaction_state.paste_unread_sheets,
+            Some((target, Vec::new()))
+        );
     }
 }

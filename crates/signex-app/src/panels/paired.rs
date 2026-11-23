@@ -57,7 +57,7 @@ impl<M: Clone> PairedHeader<M> {
             .size(TS.body)
             .font(Font {
                 weight: font::Weight::Semibold,
-                ..Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             })
             .color(ti(tokens.text))
             .wrapping(Wrapping::None);

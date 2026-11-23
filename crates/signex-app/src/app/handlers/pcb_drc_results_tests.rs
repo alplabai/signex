@@ -89,16 +89,73 @@ fn panel(app: &mut Signex, msg: DrcPanelMsg) {
     let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::Drc(msg))));
 }
 
-/// Type `reason` into the open waiver form's Reason, and an author, as the
-/// shared form does (AV-13: both are required).
+/// The git identity lands as "A. Designer" and `reason` is typed into the
+/// open form (mockup row 88: the reason is the one field).
 fn write_waiver(app: &mut Signex, reason: &str) {
+    app.handle_waiver_identity_resolved(Some("A. Designer".into()));
+    type_reason(app, reason);
+}
+
+fn type_reason(app: &mut Signex, reason: &str) {
     panel(
         app,
         DrcPanelMsg::ReasonActed(iced::widget::text_editor::Action::Edit(
             iced::widget::text_editor::Edit::Paste(std::sync::Arc::new(reason.to_string())),
         )),
     );
-    panel(app, DrcPanelMsg::AuthorEdited("A. Designer".into()));
+}
+
+/// Mockup row 88: Waive selects its row, waits for the git identity, needs
+/// only a reason, and a second press on the open row keeps what was typed.
+#[test]
+fn the_waive_form_needs_one_reason_and_takes_the_git_author() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    run_drc(&mut app);
+    let clearance = key_of(&app, "builtin::clearance");
+    panel(&mut app, DrcPanelMsg::WaiveStarted(clearance.clone()));
+    assert_eq!(
+        app.ui_state.validation_panels.drc.selected.as_deref(),
+        Some(clearance.as_str())
+    );
+    type_reason(&mut app, "by design");
+    panel(&mut app, DrcPanelMsg::WaiveStarted(clearance.clone()));
+    let draft = app.pcb_drc_panel().unwrap().waive_draft.expect("open");
+    assert_eq!(draft.reason.text(), "by design", "the second press");
+    assert!(draft.awaits_identity);
+    panel(&mut app, DrcPanelMsg::WaiveConfirmed);
+    assert!(
+        board_waivers(&app, &path).is_empty(),
+        "waits for the author"
+    );
+
+    app.handle_waiver_identity_resolved(Some("C. Alp".into()));
+    panel(&mut app, DrcPanelMsg::WaiveConfirmed);
+    let stored = board_waivers(&app, &path);
+    assert_eq!(stored.len(), 1);
+    assert_eq!(stored[0].note, "by design");
+    assert_eq!(stored[0].author, "C. Alp");
+}
+
+/// Mockup row 88: with the identity known, an empty reason is refused.
+#[test]
+fn an_empty_reason_is_refused() {
+    let _serial = drc_serial();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = board_app(&dir);
+    run_drc(&mut app);
+    app.handle_waiver_identity_resolved(Some("C. Alp".into()));
+    let clearance = key_of(&app, "builtin::clearance");
+    panel(&mut app, DrcPanelMsg::WaiveStarted(clearance));
+    panel(&mut app, DrcPanelMsg::WaiveConfirmed);
+    assert!(board_waivers(&app, &path).is_empty());
+    let draft = app
+        .pcb_drc_panel()
+        .unwrap()
+        .waive_draft
+        .expect("still open");
+    assert!(draft.blank);
 }
 
 fn rows(app: &Signex) -> Vec<crate::panels::DrcRow> {
@@ -674,7 +731,9 @@ fn rule_links_open_the_catalog_domain_of_the_limit_they_check() {
             .into_iter()
             .find(|f| f.limit_kind() == *kind)
     };
-    for kind in K::ALL {
+    // A part outside its room has no Rules-tab limit; it opens Placement
+    // (`domain_tests::a_part_outside_its_room_opens_the_rules_at_placement`).
+    for kind in K::ALL.into_iter().filter(|k| *k != K::PartOutsideRoom) {
         let domains = kind
             .limits()
             .iter()

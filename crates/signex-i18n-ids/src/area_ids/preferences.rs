@@ -30,11 +30,13 @@ define_ids! {
     PREFERENCES_PROFILES_TITLE = "preferences-profiles-title";
     PREFERENCES_PROFILES_HELP = "preferences-profiles-help";
     PREFERENCES_PROFILES_READING = "preferences-profiles-reading";
-    PREFERENCES_PROFILES_AUTOMATIC = "preferences-profiles-automatic";
+    PREFERENCES_PROFILES_LIST_HEADING = "preferences-profiles-list-heading";
+    PREFERENCES_PROFILES_AUTOMATIC_NAME = "preferences-profiles-automatic-name";
+    PREFERENCES_PROFILES_AUTOMATIC_NOTE = "preferences-profiles-automatic-note";
+    PREFERENCES_PROFILES_HINT = "preferences-profiles-hint";
     PREFERENCES_PROFILES_NOTE_BUILTIN = "preferences-profiles-note-builtin";
     PREFERENCES_PROFILES_NOTE_USER_DEFAULT = "preferences-profiles-note-user-default";
     PREFERENCES_PROFILES_ROW = "preferences-profiles-row";
-    PREFERENCES_PROFILES_ROW_NOTE = "preferences-profiles-row-note";
     PREFERENCES_PROFILES_IS_DEFAULT = "preferences-profiles-is-default";
     PREFERENCES_PROFILES_USE_AS_DEFAULT = "preferences-profiles-use-as-default";
     PREFERENCES_PROFILES_NEW = "preferences-profiles-new";
@@ -43,7 +45,13 @@ define_ids! {
     PREFERENCES_PROFILES_DELETE_CONFIRM = "preferences-profiles-delete-confirm";
     PREFERENCES_PROFILES_KEEP = "preferences-profiles-keep";
     PREFERENCES_PROFILES_NAME = "preferences-profiles-name";
-    PREFERENCES_PROFILES_EDITING = "preferences-profiles-editing";
+    PREFERENCES_PROFILES_SAVED = "preferences-profiles-saved";
+    PREFERENCES_PROFILES_SAVED_LINE = "preferences-profiles-saved-line";
+    PREFERENCES_PROFILES_MACHINE_READ_ONLY = "preferences-profiles-machine-read-only";
+    PREFERENCES_PROFILES_MACHINE_LOADING = "preferences-profiles-machine-loading";
+    PREFERENCES_PROFILES_MACHINE_NOT_SAVING = "preferences-profiles-machine-not-saving";
+    PREFERENCES_PROFILES_RULE_TITLE = "preferences-profiles-rule-title";
+    PREFERENCES_PROFILES_RULE_SUMMARY = "preferences-profiles-rule-summary";
     PREFERENCES_PROFILES_READ_ONLY = "preferences-profiles-read-only";
     PREFERENCES_PROFILES_NONE_SELECTED = "preferences-profiles-none-selected";
     PREFERENCES_PROFILES_RESET_CONFIRM = "preferences-profiles-reset-confirm";
@@ -59,6 +67,7 @@ define_ids! {
     // Annotation page (mockup row 146).
     PREFERENCES_PAGE_LANGUAGE = "preferences-page-language";
     PREFERENCES_LANGUAGE_FOOTER_NOTE = "preferences-language-footer-note";
+    PREFERENCES_RULE_PROFILES_FOOTER_NOTE = "preferences-rule-profiles-footer-note";
     PREFERENCES_FILE_WHERE = "preferences-file-where";
     PREFERENCES_FILE_OPEN_FOLDER = "preferences-file-open-folder";
     PREFERENCES_FILE_OPEN_FOLDER_FAILED = "preferences-file-open-folder-failed";
@@ -116,6 +125,14 @@ define_ids! {
     PREFERENCES_WHEEL_MODE_ZOOM = "preferences-wheel-mode-zoom";
     PREFERENCES_WHEEL_MODE_SCROLL = "preferences-wheel-mode-scroll";
     PREFERENCES_WHEEL_MODE_SHORT_HELP = "preferences-wheel-mode-short-help";
+    PREFERENCES_LAYER_SWITCHER_LABEL = "preferences-layer-switcher-label";
+    PREFERENCES_LAYER_SWITCHER_STRIP = "preferences-layer-switcher-strip";
+    PREFERENCES_LAYER_SWITCHER_DROPDOWN = "preferences-layer-switcher-dropdown";
+    PREFERENCES_LAYER_SWITCHER_HELP = "preferences-layer-switcher-help";
+    PREFERENCES_SELECTED_SEGMENT_LABEL = "preferences-selected-segment-label";
+    PREFERENCES_SELECTED_SEGMENT_NEUTRAL = "preferences-selected-segment-neutral";
+    PREFERENCES_SELECTED_SEGMENT_ACCENT = "preferences-selected-segment-accent";
+    PREFERENCES_SELECTED_SEGMENT_HELP = "preferences-selected-segment-help";
     PREFERENCES_APPEARANCE_TRACKPAD_PAN_SHORT_HELP = "preferences-appearance-trackpad-pan-short-help";
     PREFERENCES_APPEARANCE_REMEMBER_GEOMETRY_SHORT_HELP = "preferences-appearance-remember-geometry-short-help";
     PREFERENCES_EDITING_HEADING = "preferences-editing-heading";

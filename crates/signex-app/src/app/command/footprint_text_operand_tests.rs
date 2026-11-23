@@ -76,7 +76,7 @@ fn a_drag_on_the_designator_moves_it_alone_in_one_step() {
     let before = designator_at(&app, &path, "R1");
     assert!(close(before, Point::new(10.0, 8.0)));
     let to = Point::new(before.x + 3.0, before.y - 1.0);
-    app.pcb_footprints_dragged(before, to, 0.1);
+    app.pcb_footprints_dragged(before, to, 0.1, false);
     app.pcb_footprints_dropped(before, to);
     assert!(close(designator_at(&app, &path, "R1"), to));
     assert_eq!(footprint_at(&app, &path), Point::new(10.0, 10.0));
@@ -90,7 +90,7 @@ fn a_locked_footprints_designator_stays() {
     let (mut app, path) = app_with_board(dir.path());
     let before = designator_at(&app, &path, "U2");
     let to = Point::new(before.x + 3.0, before.y);
-    app.pcb_footprints_dragged(before, to, 0.1);
+    app.pcb_footprints_dragged(before, to, 0.1, false);
     app.pcb_footprints_dropped(before, to);
     assert!(close(designator_at(&app, &path, "U2"), before));
 }

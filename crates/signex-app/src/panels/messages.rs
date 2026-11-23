@@ -1,5 +1,6 @@
 //! Panel message type -- the `PanelMsg` enum every panel surface emits.
 
+pub use super::field_edits::{FootprintFeatureEdit, SheetFrameEdit};
 use super::*;
 
 /// Panel-level message wrapping widget messages.
@@ -243,6 +244,8 @@ pub enum PanelMsg {
     FpEditorSetFootprintDefaultDesignator(String),
     FpEditorSetFootprintComponentType(signex_library::primitive::footprint::ComponentType),
     FpEditorSetFootprintHeight(String),
+    /// A generated feature's switch or value was edited (mockup row 124).
+    FpEditorGeneratedFeature(FootprintFeatureEdit),
     /// v0.21 — Selected silk graphic edits (Line + Text only;
     /// Arc/Region/Fill/etc are sketch-mode-authored).
     FpEditorSetSilkLineFromX(String),
@@ -437,6 +440,8 @@ pub enum PanelMsg {
     /// Cancel on the History panel's "Discard unsaved edits and restore"
     /// confirmation row.
     HistoryRestoreCancelled,
+    /// The History panel's header, filters, graph and branch switcher.
+    History(super::history::HistoryPanelMsg),
     /// #1073 — restore paste (both sides) and thermal relief on the sketch
     /// pads that still carry the pre-#1052 all-false stack. One undo step;
     /// the document stays unsaved.
@@ -499,6 +504,23 @@ pub enum PanelMsg {
     FpEditorSetArrayNumberingScheme {
         array_id: signex_sketch::array::ArrayId,
         scheme: NumberingSchemeKindUi,
+    },
+    /// The Sweep of a grid numbered 1, 2, 3 was picked (mockup row 126).
+    FpEditorSetArraySweep {
+        array_id: signex_sketch::array::ArrayId,
+        sweep: signex_sketch::array::GridSweep,
+    },
+    /// A Template row was picked for the next pad (mockup row 125): the name
+    /// and its library together; both empty is "(custom)".
+    FpEditorPickNextPadTemplate {
+        template: String,
+        library: String,
+    },
+    /// A Template row was picked for the selected pad (mockup row 125).
+    FpEditorPickSelectedPadTemplate {
+        idx: usize,
+        template: String,
+        library: String,
     },
     /// v0.25 polish — toggle BGA `skip_letters`. Active only when the
     /// array's numbering is BgaRowCol; ignored for Linear / Explicit.
@@ -630,9 +652,8 @@ pub enum PanelMsg {
     /// promote `panel_selected_idx` to `active_idx` so the canvas
     /// switches to the selected sibling.
     FpLibraryEditInternal(usize),
-    /// v0.18.8 — `Place` button: place the selected internal
-    /// footprint as a Component on the active PCB. Stubbed until
-    /// the PCB integration lands; for now no-op + tracing-warn.
+    /// `Place` button: put this internal footprint on the cursor of the
+    /// open board (mockup row 119).
     FpLibraryPlaceInternal(usize),
     /// Run the design-rule check of the board in view (#2222).
     RunDrc,
@@ -692,6 +713,8 @@ pub enum PanelMsg {
     PcbComponent(super::PcbComponentMsg),
     /// The selected tracks', vias' or pads' panel (#2355).
     PcbPrimitive(super::PcbPrimitiveMsg),
+    /// Room Properties (#2457).
+    Room(crate::app::rooms::RoomMsg),
     /// The Layer Stack manager (#2401).
     LayerStack(super::LayerStackMsg),
     /// F15 — Properties panel: open the primitive picker (symbol /
@@ -728,8 +751,19 @@ pub enum PanelMsg {
     SwitchFootprintChoice(uuid::Uuid, String),
     /// The Net Inspector panel (#1269).
     NetInspector(super::NetInspectorMsg),
+    /// The Compiled Design panel and the multi-channel Properties rows
+    /// (#1279, #1308).
+    CompiledDesign(crate::app::CompiledDesignMsg),
+    /// The Unions panel (mockup row 158).
+    Unions(crate::app::unions::UnionsMsg),
+    /// The PCB panel (mockup row 106).
+    PcbPanel(super::PcbPanelMsg),
     /// The Object List panel (#1259).
     ObjectList(super::ObjectListMsg),
+    /// The Command Log panel (#2458).
+    CommandLog(super::CommandLogMsg),
+    /// The Annotations panel and its scans (mockup row 165).
+    Annotations(super::AnnotationsMsg),
     /// Toggle a symbol's mirror_x.
     ToggleSymbolMirrorX(uuid::Uuid),
     /// Toggle a symbol's mirror_y.
@@ -762,6 +796,8 @@ pub enum PanelMsg {
     EditLabelFontSizePt(uuid::Uuid, u32),
     /// Edit a Blanket's net class or ERC exclusions (#2420).
     EditBlanket(uuid::Uuid, super::BlanketEdit),
+    /// A Net Parameters edit or a hover in a directive's Properties (#1489).
+    Directive(super::DirectivePanelMsg),
     /// Edit the rules a No-ERC directive silences (#1699).
     EditNoErcRules(uuid::Uuid, super::NoErcRuleEdit),
     /// Set (`Some`) or clear (`None`, inherit the sheet default) the font
@@ -793,6 +829,10 @@ pub enum PanelMsg {
     EditWireWidth(uuid::Uuid, signex_types::schematic::WireWidthPreset),
     /// Properties of a selected wire: its colour, as an undoable edit.
     EditWireColor(uuid::Uuid, Option<signex_types::theme::Color>),
+    /// Properties of a selected bus: its width, as an undoable edit.
+    EditBusWidth(uuid::Uuid, signex_types::schematic::WireWidthPreset),
+    /// Properties of a selected bus: its colour, as an undoable edit.
+    EditBusColor(uuid::Uuid, Option<signex_types::theme::Color>),
     /// Open or close the wire colour palette.
     ToggleWireColorPicker,
     /// Switch the wire colour picker to the full HSV / RGB picker.
@@ -998,12 +1038,16 @@ pub enum PanelMsg {
     /// The user backed out of that Delete.
     SchLibraryDeleteCancelled,
     UpdateDrawingEdit(crate::app::contracts::DrawingFieldEdit),
-    /// Numeric text_input keystroke for a drawing field. The string
-    /// is stored verbatim in panel_ctx.drawing_edit_buf so empty /
-    /// partial input survives between frames; the handler parses
-    /// best-effort and fires UpdateDrawingEdit when the value is a
-    /// valid f64.
+    /// Numeric text_input keystroke for a drawing field. The string is
+    /// stored verbatim in panel_ctx.drawing_edit_buf so empty / partial
+    /// input survives between frames; a value the field can store is
+    /// previewed on the sheet until the field is left (#2768).
     DrawingFieldTyping(DrawingFieldId, String),
+    /// Enter in a drawing field, or the field lost the focus: the typed
+    /// value becomes one undo step.
+    DrawingFieldLeft(DrawingFieldId),
+    /// The Properties of a Bezier, dimension or table (#1267, #1300).
+    Annotation(super::AnnotationPanelMsg),
     /// Open / close the border-colour picker overlay for a child sheet.
     ToggleChildSheetBorderPicker(uuid::Uuid),
     /// Open / close the fill-colour picker overlay for a child sheet.
@@ -1043,6 +1087,8 @@ pub enum PanelMsg {
     SetGridSize(f32),
     /// Set visible grid size (mm) — independent of snap grid.
     SetVisibleGridSize(f32),
+    /// The typed text of Document Options' grid rows (mockup row 40).
+    DocGrid(super::DocGridMsg),
     /// Toggle snap to electrical object hotspots.
     ToggleSnapHotspots,
     /// Change the UI font (saved to prefs; applies on next restart).
@@ -1111,6 +1157,8 @@ pub enum PanelMsg {
     /// The Position, Rotation, Size and Parameters rows of one placed
     /// object (#2418).
     PlacedEdit(super::PlacedEditMsg),
+    /// The harness Properties and the harness definitions view (#1280).
+    Harness(super::HarnessPanelMsg),
     Illustration(signex_widgets::property_illustration::IllustrationMsg),
     /// Document Options view events: Parameters filter, zone counts and the
     /// illustration hover (#2531).
@@ -1118,32 +1166,14 @@ pub enum PanelMsg {
     /// The placed part's ⋯ menu, its focused pin and its illustration
     /// hover (mockup rows 42, 50).
     Part(super::PartPanelMsg),
-}
-
-/// One change to the active sheet's frame settings (#1134).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SheetFrameEdit {
-    ShowBorder(bool),
-    ShowTitleBlock(bool),
-    /// Zones lettered A, B, C… down the sides.
-    VerticalZones(u8),
-    /// Zones numbered 1, 2, 3… along the top and bottom.
-    HorizontalZones(u8),
-}
-
-impl SheetFrameEdit {
-    /// `settings` with this change applied.
-    pub fn apply(
-        self,
-        settings: signex_types::schematic::SheetFrameSettings,
-    ) -> signex_types::schematic::SheetFrameSettings {
-        let mut settings = settings;
-        match self {
-            Self::ShowBorder(on) => settings.show_border = on,
-            Self::ShowTitleBlock(on) => settings.show_title_block = on,
-            Self::VerticalZones(n) => settings.vertical_zones = n,
-            Self::HorizontalZones(n) => settings.horizontal_zones = n,
-        }
-        settings
-    }
+    /// The symbol editor's Properties panel: its tabs, the Pins tab and the
+    /// illustration hover (mockup rows 122 and 123).
+    SymbolProps(crate::library::editor::symbol::SymbolPropsMsg),
+    /// View state of the footprint Properties panel: the illustration hover
+    /// link and the page shown with nothing selected. Never an edit.
+    FpProperties(super::FpPropertiesMsg),
+    /// The footprint role sub-forms: keepout layer, sketch pad expansions.
+    FpSubform(super::FpSubformMsg),
+    /// A sketch fix picked in Properties for the sketch in view.
+    SketchFix(super::SketchFixMsg),
 }

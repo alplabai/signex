@@ -1,16 +1,18 @@
 use signex_net::board::BoardNetEdit;
 use signex_types::pcb::{
-    BoardGraphic, ComponentAttributes, Footprint, PcbBoard, Point, SymbolLink,
+    BoardGraphic, ComponentAttributes, Footprint, PcbBoard, Point, Room, RoomOutline, SymbolLink,
 };
 use signex_types::pcb_options::BoardOptions;
 use signex_types::pcb_panel::BoardPanel;
 use signex_types::pcb_sketch::BoardSketch;
 use signex_types::pcb_stack::LayerStack;
 use signex_types::property::PcbProperty;
+use signex_types::sketch::board_attr::SketchBoardItems;
 use uuid::Uuid;
 
 use super::batch;
 use super::board_sketch;
+use super::board_sketch::items::SketchBakeSnapshot;
 use super::error::BoardCommandError;
 use super::footprint::{self, FootprintFace};
 use super::footprint_content::{self, FootprintText};
@@ -20,6 +22,7 @@ use super::lock;
 use super::options;
 use super::panel;
 use super::replace::{self, FootprintPad, Values};
+use super::rooms;
 use super::stack::{self, StackSnapshot};
 
 /// One edit of a board. Targets are absolute so the inverse is exact.
@@ -55,6 +58,21 @@ pub enum BoardCommand {
         sketch: Option<Box<BoardSketch>>,
         outline: Option<Vec<Point>>,
     },
+    /// [`BoardCommand::SetBoardSketch`] that also replaces the zones and
+    /// drawings the sketch owns (uuid of an entity of the old or new sketch)
+    /// with `items` and moves the anchored footprints, a locked one
+    /// excepted (decision 2, 2026-11-20). Build it with
+    /// [`BoardCommand::set_board_sketch_with_items`]. Refused for a number
+    /// that is not finite or an anchor naming a footprint that is gone. The
+    /// inverse is a [`BoardCommand::RestoreBoardSketchBake`].
+    SetBoardSketchBake {
+        sketch: Option<Box<BoardSketch>>,
+        outline: Option<Vec<Point>>,
+        items: Box<SketchBoardItems>,
+    },
+    /// Put back what a [`BoardCommand::SetBoardSketchBake`] replaced; the
+    /// inverse of it and of itself.
+    RestoreBoardSketchBake(Box<SketchBakeSnapshot>),
     /// Remove the named items.
     DeleteItems { items: Vec<BoardItemId> },
     /// Put removed items back at their recorded list indices; the inverse
@@ -168,9 +186,13 @@ pub enum BoardCommand {
     SetNets(BoardNetEdit),
     /// Set the board's snap grid step in mm, `PcbSetup::grid_size` (#2353).
     /// `0` is the PCB default step. Refused for a negative or non-finite
-    /// step and on a board without a setup. The inverse is another one
-    /// holding the old step.
+    /// step. The inverse is another one holding the old step; on a board
+    /// without a setup it gives the board one with every other value unset
+    /// (`0`, read as the default), and the inverse is [`Self::RemoveSetup`].
     SetGridSize { grid_mm: f64 },
+    /// Take away the setup a [`Self::SetGridSize`] gave a board that had
+    /// none. The inverse is that command again.
+    RemoveSetup,
     /// Replace the board options (#2374): guides, extra snap grids, the
     /// sheet and the naming options. Refused for a number that is not
     /// finite, a grid step or sheet side that is not positive, or a guide or
@@ -185,6 +207,10 @@ pub enum BoardCommand {
     /// copper row moved inward, and a copper layer left out with items or a
     /// keepout on it. The inverse is a [`BoardCommand::RestoreLayerStack`].
     SetLayerStack { stack: Box<LayerStack> },
+    /// Name the stackup (mockup row 105), trimmed; `None` or blank takes the
+    /// name away. Rows, layers and thickness stay. The inverse is a
+    /// [`BoardCommand::RestoreLayerStack`].
+    SetStackupName { name: Option<String> },
     /// Put back the stack, layer list, thickness and copper names a stack
     /// edit replaced; the inverse of [`BoardCommand::SetLayerStack`] and of
     /// itself. Nothing is checked: the values were on the board before.
@@ -206,6 +232,40 @@ pub enum BoardCommand {
     /// may change later and an undo must restore what was there. The inverse
     /// is another one holding the old panel.
     SetBoardPanel { panel: Option<Box<BoardPanel>> },
+    /// Append a room (#2457). Refused for a uuid already used by a room, an
+    /// empty name, an outline without area or with a number that is not
+    /// finite, a colour that is not `#RRGGBB` and a negative margin. The
+    /// inverse is a [`BoardCommand::RemoveRoom`].
+    AddRoom { room: Box<Room> },
+    /// Remove a room; its parts stay. The inverse is a
+    /// [`BoardCommand::RestoreRoom`].
+    RemoveRoom { room: Uuid },
+    /// Put a removed room back at `index`; the inverse of
+    /// [`BoardCommand::RemoveRoom`].
+    RestoreRoom { room: Box<Room>, index: usize },
+    /// Put `room` over the room with its uuid: name, source, layer, shape and
+    /// outline, colour, Keep parts inside, margin and lock. Checked as
+    /// [`BoardCommand::AddRoom`]; a locked room that stays locked keeps its
+    /// outline. The inverse is another one holding the old room.
+    EditRoom { room: Box<Room> },
+    /// Move the room so its box starts at `to`, and its unlocked member
+    /// parts by the same distance, as one change. Refused for a locked room.
+    /// The inverse is a [`BoardCommand::PlaceRoom`].
+    MoveRoom { room: Uuid, to: Point },
+    /// Set a room's outline and put each named footprint at its origin: the
+    /// absolute form a move, a fit and a pull undo to, and its own inverse.
+    PlaceRoom {
+        room: Uuid,
+        outline: RoomOutline,
+        footprints: Vec<(Uuid, Point)>,
+    },
+    /// Fit the room round its member parts' bodies plus its margin. Refused
+    /// for a locked room and a room without members. The inverse is a
+    /// [`BoardCommand::PlaceRoom`].
+    FitRoomToParts { room: Uuid },
+    /// Pack the unlocked member parts outside the room into it, in rows. The
+    /// inverse is a [`BoardCommand::PlaceRoom`].
+    PullPartsIntoRoom { room: Uuid },
 }
 
 /// What a command changed, for a consumer that redraws or re-derives only
@@ -257,6 +317,9 @@ pub enum BoardPatchKind {
     GraphicsChanged,
     /// The panel (#2410). Names no items.
     PanelChanged,
+    /// A room added, removed, edited or placed (#2457). The items are the
+    /// footprints moved with it.
+    RoomsChanged,
 }
 
 /// The result of applying a command: the command that undoes it and the
@@ -283,6 +346,14 @@ impl BoardCommand {
             } => footprint::restore_face(board, id, face),
             Self::SetBoardOutline { outline } => set_outline(board, outline),
             Self::SetBoardSketch { sketch, outline } => board_sketch::set(board, sketch, outline),
+            Self::SetBoardSketchBake {
+                sketch,
+                outline,
+                items,
+            } => board_sketch::items::set(board, sketch, outline, *items),
+            Self::RestoreBoardSketchBake(snapshot) => {
+                board_sketch::items::restore(board, *snapshot)
+            }
             Self::DeleteItems { items: ids } => items::delete(board, &ids),
             Self::RestoreItems { items: removed } => items::restore(board, removed),
             Self::AddItems { items: added } => items::add(board, added),
@@ -336,13 +407,27 @@ impl BoardCommand {
             } => footprint::set_component(board, id, component),
             Self::SetNets(edit) => batch::set_nets(board, edit),
             Self::SetGridSize { grid_mm } => set_grid_size(board, grid_mm),
+            Self::RemoveSetup => remove_setup(board),
             Self::SetBoardOptions { options: new } => options::set(board, *new),
             Self::SetLayerStack { stack: new } => stack::set(board, *new),
+            Self::SetStackupName { name } => stack::set_name(board, name),
             Self::RestoreLayerStack(snapshot) => stack::restore(board, *snapshot),
             Self::SetItemsLocked { items: locks } => lock::set_locked(board, locks),
             Self::AddGraphics { graphics } => graphics::add(board, graphics),
             Self::RemoveGraphics { graphics } => graphics::remove(board, graphics),
             Self::SetBoardPanel { panel: new } => panel::set(board, new.map(|p| *p)),
+            Self::AddRoom { room } => rooms::add(board, *room),
+            Self::RemoveRoom { room } => rooms::remove(board, room),
+            Self::RestoreRoom { room, index } => rooms::restore(board, *room, index),
+            Self::EditRoom { room } => rooms::edit(board, *room),
+            Self::MoveRoom { room, to } => rooms::move_room(board, room, to),
+            Self::PlaceRoom {
+                room,
+                outline,
+                footprints,
+            } => rooms::place(board, room, outline, footprints),
+            Self::FitRoomToParts { room } => rooms::fit(board, room),
+            Self::PullPartsIntoRoom { room } => rooms::pull(board, room),
         }
     }
 }
@@ -371,10 +456,40 @@ fn set_grid_size(board: &mut PcbBoard, grid_mm: f64) -> Result<Applied, BoardCom
     if grid_mm < 0.0 {
         return Err(BoardCommandError::NegativeGridStep(grid_mm));
     }
-    let setup = board.setup.as_mut().ok_or(BoardCommandError::NoSetup)?;
-    let previous = std::mem::replace(&mut setup.grid_size, grid_mm);
+    let inverse = match board.setup.as_mut() {
+        Some(setup) => BoardCommand::SetGridSize {
+            grid_mm: std::mem::replace(&mut setup.grid_size, grid_mm),
+        },
+        None => {
+            // Every reader takes an unset (0) value as its default.
+            board.setup = Some(signex_types::pcb::PcbSetup {
+                grid_size: grid_mm,
+                trace_width: 0.0,
+                via_diameter: 0.0,
+                via_drill: 0.0,
+                clearance: 0.0,
+                track_min_width: 0.0,
+                via_min_diameter: 0.0,
+                via_min_drill: 0.0,
+            });
+            BoardCommand::RemoveSetup
+        }
+    };
     Ok(Applied {
-        inverse: BoardCommand::SetGridSize { grid_mm: previous },
+        inverse,
+        patch: BoardPatch {
+            kind: BoardPatchKind::GridChanged,
+            items: Vec::new(),
+        },
+    })
+}
+
+fn remove_setup(board: &mut PcbBoard) -> Result<Applied, BoardCommandError> {
+    let setup = board.setup.take().ok_or(BoardCommandError::NoSetup)?;
+    Ok(Applied {
+        inverse: BoardCommand::SetGridSize {
+            grid_mm: setup.grid_size,
+        },
         patch: BoardPatch {
             kind: BoardPatchKind::GridChanged,
             items: Vec::new(),

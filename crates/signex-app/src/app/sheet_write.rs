@@ -47,6 +47,8 @@ pub(crate) struct SheetWrite<'a> {
 struct Changed {
     path: PathBuf,
     tabless: bool,
+    /// No unsaved edits before this run.
+    clean_before: bool,
     patch: Option<signex_engine::DocumentPatch>,
 }
 
@@ -93,6 +95,7 @@ impl Signex {
                 self.roll_back_sheet_write(write.label, group, &changed);
                 return Err(SheetWriteRefusal::NotLoaded(path));
             }
+            let clean_before = !self.document_state.is_document_dirty(&path);
             let Some(engine) = self.document_state.engines.get_mut(&path) else {
                 continue;
             };
@@ -101,6 +104,7 @@ impl Signex {
                 Ok(result) if result.changed => changed.push(Changed {
                     path,
                     tabless,
+                    clean_before,
                     patch: result.patch_pair.map(|pair| pair.document),
                 }),
                 Ok(_) => self.drop_unchanged_tabless(&path, tabless),
@@ -159,6 +163,9 @@ impl Signex {
             recorded.live.push(done.path.clone());
             if done.tabless {
                 recorded.parked.push(done.path.clone());
+            }
+            if done.clean_before {
+                recorded.clean_before.push(done.path.clone());
             }
             if active.as_deref() == Some(done.path.as_path()) {
                 active_patch = done.patch;

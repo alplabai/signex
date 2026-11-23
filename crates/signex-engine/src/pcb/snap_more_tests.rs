@@ -44,6 +44,8 @@ fn query<'a>(objects: &'a BTreeSet<SnapObject>, skip: &'a BTreeSet<Uuid>) -> Sna
         layers: u32::MAX,
         skip,
         radius_mm: 0.6,
+        shown: ShownLayers::ALL,
+        net: None,
     }
 }
 

@@ -357,3 +357,51 @@ fn named_rule_sets_round_trip_and_stay_absent_when_empty() {
     assert!(!serde_json::to_string(&plain).unwrap().contains("sets"));
     assert!(!drc.is_empty());
 }
+
+/// #1489: the names of the rules Update PCB wrote from the schematic ride
+/// in `drc.from_schematic`, are left out while empty, and survive a build
+/// that does not know the key (it lands in that build's `unknown` bag).
+#[test]
+fn schematic_rule_sources_round_trip_and_an_older_build_keeps_them() {
+    use crate::project::{DrcRuleSet, UnknownJson};
+    let text = r#"{"dsl":"rule Width_PWR on track when class == \"PWR\" require width >= 0.8mm then error",
+        "from_schematic":["Width_PWR"]}"#;
+    let drc: DrcRuleSet = serde_json::from_str(text).unwrap();
+    assert_eq!(drc.from_schematic, ["Width_PWR"]);
+    assert!(drc.is_from_schematic("Width_PWR"));
+    assert!(!drc.is_from_schematic("Clearance_PWR"));
+    assert!(drc.unknown.is_empty());
+    assert!(!drc.is_empty());
+    let back: DrcRuleSet = serde_json::from_str(&serde_json::to_string(&drc).unwrap()).unwrap();
+    assert_eq!(back, drc);
+
+    let plain = DrcRuleSet {
+        dsl: Some("x".into()),
+        ..DrcRuleSet::default()
+    };
+    assert!(
+        !serde_json::to_string(&plain)
+            .unwrap()
+            .contains("from_schematic")
+    );
+    let only_sources = DrcRuleSet {
+        from_schematic: vec!["Width_PWR".into()],
+        ..DrcRuleSet::default()
+    };
+    assert!(!only_sources.is_empty());
+
+    // The `drc` section as a build before the key reads it: every known
+    // field, and the rest flattened into `unknown`.
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct OlderDrc {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        dsl: Option<String>,
+        #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
+        unknown: UnknownJson,
+    }
+    let older: OlderDrc = serde_json::from_str(text).unwrap();
+    assert!(!older.unknown.is_empty());
+    let resaved = serde_json::to_string(&older).unwrap();
+    let again: DrcRuleSet = serde_json::from_str(&resaved).unwrap();
+    assert_eq!(again, drc);
+}

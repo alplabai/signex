@@ -10,11 +10,14 @@ mod keymap_tests;
 pub(crate) mod language;
 mod pages_view;
 mod prefs_file;
+mod profile_page;
 mod profiles;
 #[cfg(test)]
 mod profiles_tests;
 mod save;
 mod save_guard;
+#[cfg(test)]
+mod selected_segment_tests;
 #[cfg(test)]
 mod theme_repaint_tests;
 
@@ -127,6 +130,8 @@ impl Signex {
         self.ui_state.preferences_body_fill_picker_open = false;
         self.ui_state.preferences_draft_trackpad_pan = self.ui_state.trackpad_pan;
         self.ui_state.preferences_draft_wheel_mode = self.ui_state.wheel_mode;
+        self.ui_state.preferences_draft_layer_switcher = self.ui_state.layer_switcher;
+        self.ui_state.preferences_draft_selected_segment = self.ui_state.selected_segment;
         self.ui_state.preferences_draft_remember_window_geometry =
             self.ui_state.remember_window_geometry;
         self.ui_state.preferences_draft_drag_direction_select = self.ui_state.drag_direction_select;
@@ -307,8 +312,13 @@ impl Signex {
             }
             PrefMsg::SaveAndClose => {
                 // Save as the Save button does; a refused save leaves the
-                // dialog dirty, so the close guard keeps it open.
+                // dialog dirty, so the close guard keeps it open. A refused
+                // pitch label is not a dirty draft: it keeps it open itself.
+                let held = self.snap_label_holds_refused_text();
                 let saved = self.handle_preferences_save();
+                if held {
+                    return saved;
+                }
                 return Task::batch([saved, self.handle_preferences_close_requested()]);
             }
             PrefMsg::Save => return self.handle_preferences_save(),
@@ -328,6 +338,8 @@ impl Signex {
             | PrefMsg::SymbolBodyFill(..)
             | PrefMsg::DraftTrackpadPan(..)
             | PrefMsg::DraftWheelMode(..)
+            | PrefMsg::DraftLayerSwitcher(..)
+            | PrefMsg::DraftSelectedSegment(..)
             | PrefMsg::DraftRememberWindowGeometry(..)
             | PrefMsg::DraftIncrementStep(..)
             | PrefMsg::DraftPasteDesignators(..)

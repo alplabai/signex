@@ -13,7 +13,7 @@ use signex_widgets::tree_view::{TreeIcon, TreeMsg};
 use signex_widgets::{text, text_input};
 
 use super::{NavigatorMsg, NavigatorRow};
-use crate::panels::graphite::{active_fill, selection_fill};
+use crate::panels::graphite::selection_fill;
 use crate::panels::{EmptyStateAction, PanelContext, PanelMsg, empty_state_card_with_actions};
 use crate::styles::{ChromeMetrics, HAIRLINE, Radii, Spacing, TypeScale, ti, tokens::resolve};
 
@@ -139,10 +139,10 @@ fn sheet_row<'a>(ctx: &'a PanelContext, line: NavigatorRow) -> Element<'a, Panel
     let name_font = if line.is_loose {
         Font {
             style: iced::font::Style::Italic,
-            ..Font::DEFAULT
+            ..signex_widgets::ui_font::regular()
         }
     } else {
-        Font::DEFAULT
+        signex_widgets::ui_font::regular()
     };
     let chevron: Element<'a, PanelMsg> = if line.has_children {
         signex_widgets::button(signex_widgets::chevron::chevron(
@@ -198,7 +198,7 @@ fn sheet_row<'a>(ctx: &'a PanelContext, line: NavigatorRow) -> Element<'a, Panel
     .align_y(Alignment::Center);
     let is_selected = ctx.navigator.selected.as_deref() == Some(line.path.as_slice());
     let fill = if line.is_active {
-        Some(active_fill(tokens))
+        Some(signex_widgets::theme_ext::accent_soft(tokens))
     } else if is_selected {
         Some(selection_fill(tokens))
     } else {

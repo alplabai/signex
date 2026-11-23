@@ -543,6 +543,8 @@ fn merged_connectivity(sheet: &SchematicSheet) -> SheetConnectivity {
         &segments,
         &junctions,
     );
+    // Same-named harness entries of one bundle are one net (#1280).
+    crate::harness::join_entry_nets(sheet, &mut conn.parent);
     conn
 }
 
@@ -722,6 +724,7 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
     }
     let mut membership = collect_membership(sheet, &mut parent);
     let mut net_terms = collect_terminals(sheet, &InstancePath::root(), &mut parent);
+    let harness_names = crate::harness::sample(sheet, &mut parent).names;
 
     // A net exists wherever at least one terminal lands. A label with no pins
     // is a dangling label — it carries no connectivity, so it forms no net.
@@ -747,8 +750,11 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
                 .map(|v| v.iter().map(String::as_str).collect())
                 .unwrap_or_default();
             let selected = best_net_name(labels, &power_vals);
+            // A label names a harness net; `<Type>.<Entry>` only stands in
+            // for the auto name (#1280).
             let name = selected
                 .map(|(_, t)| t)
+                .or_else(|| harness_names.get(&root).cloned())
                 .unwrap_or_else(|| format!("N${}", id.0));
 
             let (wires, junctions) = membership.remove(&root).unwrap_or_default();
@@ -775,7 +781,7 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
     dedup_net_names(&mut nets);
 
     let mut netlist = Netlist { nets };
-    crate::directives::apply_blanket_classes(sheet, &mut netlist);
+    crate::directives::apply_directive_classes(sheet, &mut netlist);
     netlist
 }
 

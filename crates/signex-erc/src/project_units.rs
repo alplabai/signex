@@ -19,9 +19,10 @@ pub fn project_units_not_placed<K: Clone>(sheets: &[(K, &SchematicSheet)]) -> Ve
     let mut units: Vec<PlacedUnit> = Vec::new();
     for (key, sheet) in sheets {
         for symbol in &sheet.symbols {
+            // No library body: the part's units are not known, so none is due.
             let unit_count = sheet
                 .resolve_lib_symbol(symbol)
-                .map_or(1, |lib| lib.unit_count());
+                .map_or(0, |lib| lib.unit_count());
             for designator in placement_designators(symbol) {
                 if !PlacedUnit::is_eligible(designator, symbol.is_power) {
                     continue;

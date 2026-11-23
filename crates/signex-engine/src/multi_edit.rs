@@ -121,7 +121,8 @@ pub enum MultiEdit {
     WireWidthMm(f64),
 }
 
-fn selected_symbols<'a>(sheet: &'a SchematicSheet, items: &[SelectedItem]) -> Vec<&'a Symbol> {
+/// The parts of `items` a multi-selection edits: selected symbols, no port.
+pub fn selected_symbols<'a>(sheet: &'a SchematicSheet, items: &[SelectedItem]) -> Vec<&'a Symbol> {
     let ids = ids_of(items, SelectedKind::Symbol);
     sheet
         .symbols

@@ -1,13 +1,13 @@
-//! Tools ▸ Annotation ▸ Number Schematic Sheets and Window ▸ Tile
+//! Tools ▸ Annotation ▸ Number Schematic Sheets and View ▸ Window ▸ Tile
 //! Horizontally / Tile Vertically, the rows #2247 wired from stubs: when
-//! they are live and what a click sends; Window ▸ Untile (#2249).
+//! they are live and what a click sends; View ▸ Window ▸ Untile (#2249).
 
 use super::*;
 
 const NUMBER: &str = "Tools/Annotation/Number Schematic Sheets...";
-const TILE_H: &str = "Window/Tile Horizontally";
-const TILE_V: &str = "Window/Tile Vertically";
-const UNTILE: &str = "Window/Untile";
+const TILE_H: &str = "View/Window/Tile Horizontally";
+const TILE_V: &str = "View/Window/Tile Vertically";
+const UNTILE: &str = "View/Window/Untile";
 
 #[test]
 fn number_schematic_sheets_needs_a_sheet_of_a_project() {

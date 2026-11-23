@@ -22,15 +22,8 @@ pub const PLANNED_TOOLS: &[(ActiveBarAction, &str)] = &[
     (ActiveBarAction::PlaceReuseBlock, "Reuse Block"),
     (ActiveBarAction::DrawRoundRectangle, "Round Rectangle"),
     (ActiveBarAction::PlaceGraphic, "Graphic"),
-    // #1248: a rule directive must never enter the netlist, and no
-    // non-electrical directive object exists yet.
-    (ActiveBarAction::PlaceParameterSet, "Parameter Set"),
-    (ActiveBarAction::DrawBezier, "Bezier"),
     (ActiveBarAction::DrawEllipse, "Ellipse"),
     (ActiveBarAction::DrawEllipticalArc, "Elliptical Arc"),
-    (ActiveBarAction::PlaceSignalHarness, "Signal Harness"),
-    (ActiveBarAction::PlaceHarnessConnector, "Harness Connector"),
-    (ActiveBarAction::PlaceHarnessEntry, "Harness Entry"),
 ];
 
 /// The user-facing name of `action` when it is a planned placeholder.
@@ -66,13 +59,8 @@ mod tests {
         "Reuse Block",
         "Round Rectangle",
         "Graphic",
-        "Parameter Set",
-        "Bezier",
         "Ellipse",
         "Elliptical Arc",
-        "Signal Harness",
-        "Harness Connector",
-        "Harness Entry",
     ];
 
     #[test]
@@ -208,10 +196,17 @@ mod tests {
         use super::super::{ActiveBarMsg, bar::button_tooltip};
         use signex_i18n::ids;
         let i18n = signex_i18n::I18n::en_us();
+        // #1280: the Harness button is live now; a planned sheet tool stands
+        // in for the planned case.
+        let planned = ActiveBarMsg::Action(ActiveBarAction::PlaceDeviceSheetSymbol);
+        assert_eq!(
+            button_tooltip(&planned, ids::CHROME_ACTIVE_BAR_SHEET_SYMBOL, &i18n),
+            "Sheet Symbol — Planned — not available yet"
+        );
         let harness = ActiveBarMsg::Action(ActiveBarAction::PlaceSignalHarness);
         assert_eq!(
             button_tooltip(&harness, ids::CHROME_ACTIVE_BAR_HARNESS, &i18n),
-            "Harness — Planned — not available yet"
+            "Harness"
         );
         let wire = ActiveBarMsg::Action(ActiveBarAction::DrawWire);
         assert_eq!(

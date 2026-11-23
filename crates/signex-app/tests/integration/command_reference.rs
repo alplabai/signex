@@ -22,7 +22,8 @@ use signex_app::keymap::{
     AppCommandId, CatalogTextExt, CommandGroup, all_command_ids, metadata_for,
 };
 
-const ALTIUM_TOML: &str = include_str!("../../assets/keyboard-shortcuts/altium.toml");
+const SIGNEX_STANDARD_TOML: &str =
+    include_str!("../../assets/keyboard-shortcuts/signex_standard.toml");
 const CLASSIC_TOML: &str = include_str!("../../assets/keyboard-shortcuts/classic.toml");
 
 const DOC_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/COMMANDS.md");
@@ -32,7 +33,7 @@ const DOC_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/COMMANDS
 /// Parses the `"TRIGGER" = "command_id"` binding lines directly rather
 /// than going through the TOML loader: this is a documentation artifact,
 /// and reading the shipped file verbatim is what keeps it honest. Profile
-/// metadata (`profile_id = "altium"`, `context = "global"`) is excluded
+/// metadata (`profile_id = "signex_standard"`, `context = "global"`) is excluded
 /// by requiring a quoted key.
 ///
 /// Each trigger is its finished table text: `` `Mod+S` ``, and
@@ -83,7 +84,7 @@ fn cell(bound: Option<&Vec<String>>) -> String {
 }
 
 fn render() -> String {
-    let altium = bindings(ALTIUM_TOML);
+    let signex_standard = bindings(SIGNEX_STANDARD_TOML);
     let classic = bindings(CLASSIC_TOML);
 
     let mut doc = String::new();
@@ -174,7 +175,7 @@ fn render() -> String {
                         id,
                         metadata.label_in(signex_i18n::I18n::en_us_ref()),
                         metadata.category,
-                        cell(altium.get(id)),
+                        cell(signex_standard.get(id)),
                         cell(classic.get(id)),
                     ),
                 ))
@@ -187,7 +188,7 @@ fn render() -> String {
             doc.push_str("_No commands in this group yet._\n");
             continue;
         }
-        doc.push_str("| command id | label | category | Altium | Classic |\n");
+        doc.push_str("| command id | label | category | Signex Standard | Classic |\n");
         doc.push_str("| --- | --- | --- | --- | --- |\n");
         for (_, row) in rows {
             doc.push_str(&row);
@@ -220,12 +221,12 @@ fn command_reference_matches_the_catalog() {
 /// been regenerated from the same broken parse.
 #[test]
 fn both_shipped_profiles_yield_bindings() {
-    let altium = bindings(ALTIUM_TOML);
+    let signex_standard = bindings(SIGNEX_STANDARD_TOML);
     let classic = bindings(CLASSIC_TOML);
     assert!(
-        altium.len() >= 70,
-        "altium.toml parsed to only {} bound ids — binding-line shape changed?",
-        altium.len()
+        signex_standard.len() >= 70,
+        "signex_standard.toml parsed to only {} bound ids — binding-line shape changed?",
+        signex_standard.len()
     );
     assert!(
         classic.len() >= 85,
@@ -233,7 +234,7 @@ fn both_shipped_profiles_yield_bindings() {
         classic.len()
     );
     assert!(
-        !altium.contains_key("altium") && !altium.contains_key("global"),
+        !signex_standard.contains_key("signex_standard") && !signex_standard.contains_key("global"),
         "profile metadata leaked into the binding map"
     );
 }

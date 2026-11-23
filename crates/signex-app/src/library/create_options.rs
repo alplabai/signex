@@ -4,7 +4,7 @@
 
 use iced::font::Weight;
 use iced::widget::{Space, column, container, row};
-use iced::{Border, Element, Font, Length, Theme, Widget};
+use iced::{Border, Color, Element, Font, Length, Theme, Widget};
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::enable_section::dependents_veil;
@@ -46,6 +46,7 @@ pub fn view<'a>(
 
     let git = option_card(
         state.enable_git,
+        true,
         t!(i18n, ids::LIBRARY_CREATE_OPTIONS_GIT),
         t!(i18n, ids::LIBRARY_CREATE_OPTIONS_GIT_HELP),
         LibraryMessage::LibraryCreateOptionsToggleGit,
@@ -53,13 +54,15 @@ pub fn view<'a>(
     );
     let lfs = option_card(
         state.use_lfs,
+        state.enable_git,
         t!(i18n, ids::LIBRARY_CREATE_OPTIONS_LFS),
         t!(i18n, ids::LIBRARY_CREATE_OPTIONS_LFS_HELP),
         LibraryMessage::LibraryCreateOptionsToggleLfs,
         tokens,
     );
     // Disable-when-off: LFS stays visible, greyed and inert, until Git is
-    // on (the handler clears it when Git turns off).
+    // on (the handler clears it when Git turns off). As in the mockup, the
+    // words take the faintest ink and the veil then dims the whole card.
     let lfs = match dependents_veil(ti(tokens.paper), state.enable_git) {
         Some(veil) => Inert::new(lfs, veil).boxed(),
         None => lfs,
@@ -67,7 +70,7 @@ pub fn view<'a>(
 
     let mut body = column![git, row![Space::new().width(LFS_INDENT), lfs]].spacing(CARD_GAP);
     if let Some(reason) = &state.refusal {
-        body = body.push(refusal_banner(reason, i18n, tokens));
+        body = body.push(refusal_banner(reason, state.existing_library, i18n, tokens));
     }
 
     let refused = state.refusal.is_some();
@@ -78,13 +81,18 @@ pub fn view<'a>(
         tokens,
     );
     let create = if refused {
+        let tip = if state.existing_library {
+            ids::LIBRARY_CREATE_OPTIONS_EXISTS_TIP
+        } else if state.path_refused {
+            ids::LIBRARY_CREATE_OPTIONS_PATH_TIP
+        } else {
+            ids::LIBRARY_CREATE_OPTIONS_REFUSED_TIP
+        };
         tooltip(
             create,
-            iced::widget::container(
-                container(text(t!(i18n, ids::LIBRARY_CREATE_OPTIONS_REFUSED_TIP)).size(TS.body))
-                    .padding([SP.xs, SP.s]),
-            )
-            .style(crate::styles::context_menu(tokens)),
+            container(text(t!(i18n, tip)).size(TS.body))
+                .padding([SP.xs, SP.s])
+                .style(crate::styles::context_menu(tokens)),
             tooltip::Position::Top,
         )
         .boxed()
@@ -125,7 +133,18 @@ pub fn view<'a>(
 fn title_font() -> Font {
     Font {
         weight: Weight::Medium,
-        ..Font::DEFAULT
+        ..signex_widgets::ui_font::regular()
+    }
+}
+
+/// The title and help inks of an option card; a card that is not live has
+/// both in the faintest ink.
+fn option_inks(is_live: bool, tokens: &ThemeTokens) -> (Color, Color) {
+    let r = resolve(tokens);
+    if is_live {
+        (ti(tokens.text), r.ink3)
+    } else {
+        (r.ink4, r.ink4)
     }
 }
 
@@ -134,13 +153,14 @@ fn title_font() -> Font {
 /// switch does.
 fn option_card<'a>(
     is_on: bool,
+    is_live: bool,
     title: Localized,
     help: Localized,
     on_toggle: LibraryMessage,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let r = resolve(tokens);
-    let ink = ti(tokens.text);
+    let (ink, help_ink) = option_inks(is_live, tokens);
     let line = ti(tokens.border);
     let switch = toggle_switch(
         is_on,
@@ -149,7 +169,7 @@ fn option_card<'a>(
     );
     let words = column![
         text(title).size(TS.body).font(title_font()).color(ink),
-        text(help).size(TS.caption).color(r.ink3),
+        text(help).size(TS.caption).color(help_ink),
     ]
     .spacing(SP.xs)
     .width(Length::Fill);
@@ -175,25 +195,30 @@ fn option_card<'a>(
     .boxed()
 }
 
-/// The refusal as an error banner, with the way out: choose another
-/// location (the save-as picker again).
+/// The refusal as an error banner, with the ways out: choose another
+/// location (the save-as picker again) and, when a library is already
+/// there, open it.
 fn refusal_banner<'a>(
     reason: &str,
+    existing_library: bool,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    // raw: the library guard words its own refusal, in English.
+    // raw: the reason is already worded, by the handler or the library guard.
     let body = text(raw(reason.to_owned())).size(TS.body).boxed();
-    notice_banner(
-        PillTone::Err,
-        body,
-        vec![small_btn(
-            t!(i18n, ids::LIBRARY_CREATE_OPTIONS_RELOCATE),
-            LibraryMessage::LibraryCreateOptionsRelocateRequested,
-            tokens,
-        )],
+    let mut actions = vec![small_btn(
+        t!(i18n, ids::LIBRARY_CREATE_OPTIONS_RELOCATE),
+        LibraryMessage::LibraryCreateOptionsRelocateRequested,
         tokens,
-    )
+    )];
+    if existing_library {
+        actions.push(small_btn(
+            t!(i18n, ids::LIBRARY_CREATE_OPTIONS_OPEN_EXISTING),
+            LibraryMessage::LibraryCreateOptionsOpenExistingRequested,
+            tokens,
+        ));
+    }
+    notice_banner(PillTone::Err, body, actions, tokens)
 }
 
 /// A small bordered action inside a banner (the mock's `btn sm`).
@@ -226,6 +251,38 @@ mod tests {
             enable_git,
             use_lfs: false,
             refusal: refusal.map(str::to_owned),
+            existing_library: false,
+            path_refused: false,
+        }
+    }
+
+    /// Mockup row 133: while Git is off the LFS card's title and help are
+    /// in the faintest ink, in both themes; a live card keeps its inks.
+    #[test]
+    fn a_card_that_is_not_live_greys_its_words() {
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let tokens = signex_types::theme::theme_tokens(id);
+            let r = resolve(&tokens);
+            assert_eq!(option_inks(false, &tokens), (r.ink4, r.ink4), "{id:?}");
+            assert_eq!(
+                option_inks(true, &tokens),
+                (ti(tokens.text), r.ink3),
+                "{id:?}"
+            );
+        }
+    }
+
+    /// The banner for a library already at the path builds, in both themes.
+    #[test]
+    fn the_view_builds_with_a_library_already_at_the_path() {
+        let i18n = I18n::en_us();
+        let refused = LibraryCreateOptionsState {
+            existing_library: true,
+            ..state(false, Some("A library already exists"))
+        };
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let tokens = signex_types::theme::theme_tokens(id);
+            let _ = view(&refused, &tokens, &i18n, false);
         }
     }
 

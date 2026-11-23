@@ -14,6 +14,7 @@
 
 use std::path::PathBuf;
 
+use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
@@ -59,6 +60,7 @@ pub fn entries(
     active_tool: SymbolTool,
     path: PathBuf,
     tid: ThemeId,
+    i18n: &I18n,
 ) -> Vec<DropdownEntry<LibraryMessage>> {
     match menu {
         SymActiveBarMenu::Filter => filter_entries(selection_filter, path),
@@ -68,7 +70,7 @@ pub fn entries(
         SymActiveBarMenu::Align => align_entries(path, tid),
         SymActiveBarMenu::Pin => pin_entries(active_tool, path),
         SymActiveBarMenu::Text => text_entries(active_tool, path, tid),
-        SymActiveBarMenu::Shapes => shapes_entries(active_tool, path, tid),
+        SymActiveBarMenu::Shapes => shapes_entries(active_tool, path, tid, i18n),
     }
 }
 
@@ -374,47 +376,88 @@ fn shapes_entries(
     active_tool: SymbolTool,
     path: PathBuf,
     tid: ThemeId,
+    i18n: &I18n,
 ) -> Vec<DropdownEntry<LibraryMessage>> {
-    let arm = |tool: SymbolToolMsg| -> LibraryMessage {
-        sym(path.clone(), SymbolEditorMsg::SetTool(tool))
+    // The armed tool's row keeps the highlight as well as the check; the
+    // stub rows below have no glyph and keep the icon column empty.
+    let shape = |label: &'static str,
+                 tool: SymbolToolMsg,
+                 armed: SymbolTool,
+                 icon: iced::widget::svg::Handle|
+     -> DropdownEntry<LibraryMessage> {
+        let is_armed = active_tool == armed;
+        DropdownEntry::Item(
+            DropdownItem::new(label, sym(path.clone(), SymbolEditorMsg::SetTool(tool)))
+                .icon(icon)
+                .checked(is_armed)
+                .active(is_armed),
+        )
+    };
+    // A shape with no glyph: the icon column stays empty (mockup row 141).
+    let plain = |label: &'static str, tool: SymbolToolMsg, armed: SymbolTool| {
+        let is_armed = active_tool == armed;
+        DropdownEntry::Item(
+            DropdownItem::new(label, sym(path.clone(), SymbolEditorMsg::SetTool(tool)))
+                .checked(is_armed)
+                .active(is_armed),
+        )
     };
     vec![
-        DropdownEntry::Item(
-            DropdownItem::new("Line", arm(SymbolToolMsg::PlaceLine))
-                .icon(ic::icon_dd_line(tid))
-                .checked(active_tool == SymbolTool::PlaceLine),
+        DropdownEntry::Header(t!(i18n, ids::EDITORS_SYMBOL_BAR_SHAPES).into_string()),
+        shape(
+            "Line",
+            SymbolToolMsg::PlaceLine,
+            SymbolTool::PlaceLine,
+            ic::icon_dd_line(tid),
         ),
-        DropdownEntry::Item(
-            DropdownItem::new("Arc", arm(SymbolToolMsg::PlaceArc))
-                .icon(ic::icon_dd_arc(tid))
-                .checked(active_tool == SymbolTool::PlaceArc),
+        shape(
+            "Arc",
+            SymbolToolMsg::PlaceArc,
+            SymbolTool::PlaceArc,
+            ic::icon_dd_arc(tid),
         ),
-        DropdownEntry::Item(
-            DropdownItem::new("Ellipse / Circle", arm(SymbolToolMsg::PlaceCircle))
-                .icon(ic::icon_dd_circle(tid))
-                .checked(active_tool == SymbolTool::PlaceCircle),
+        plain(
+            "Elliptical Arc",
+            SymbolToolMsg::PlaceEllipticalArc,
+            SymbolTool::PlaceEllipticalArc,
         ),
-        DropdownEntry::Item(
-            DropdownItem::new("Rectangle", arm(SymbolToolMsg::PlaceRectangle))
-                .icon(ic::icon_dd_rect(tid))
-                .checked(active_tool == SymbolTool::PlaceRectangle),
+        shape(
+            "Bezier",
+            SymbolToolMsg::PlaceBezier,
+            SymbolTool::PlaceBezier,
+            ic::icon_dd_bezier(tid),
         ),
-        DropdownEntry::Item(
-            DropdownItem::new("Polygon", arm(SymbolToolMsg::PlacePolygon))
-                .icon(ic::icon_dd_polygon(tid))
-                .checked(active_tool == SymbolTool::PlacePolygon),
+        shape(
+            "Polygon",
+            SymbolToolMsg::PlacePolygon,
+            SymbolTool::PlacePolygon,
+            ic::icon_dd_polygon(tid),
         ),
-        DropdownEntry::Separator,
-        DropdownEntry::Item(stub("Round Rectangle", path.clone())),
-        DropdownEntry::Item(stub("Bezier", path.clone())),
-        DropdownEntry::Item(stub("Pie Chart", path.clone())),
-        DropdownEntry::Item(stub("Elliptical Arc", path)),
+        shape(
+            "Rectangle",
+            SymbolToolMsg::PlaceRectangle,
+            SymbolTool::PlaceRectangle,
+            ic::icon_dd_rect(tid),
+        ),
+        plain(
+            "Round Rectangle",
+            SymbolToolMsg::PlaceRoundRectangle,
+            SymbolTool::PlaceRoundRectangle,
+        ),
+        shape(
+            "Ellipse / Circle",
+            SymbolToolMsg::PlaceCircle,
+            SymbolTool::PlaceCircle,
+            ic::icon_dd_circle(tid),
+        ),
+        plain("Pie Chart", SymbolToolMsg::PlacePie, SymbolTool::PlacePie),
     ]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use signex_i18n::menu_ids;
     use signex_types::theme::ThemeId;
 
     /// Look up a dropdown row by its exact label — robust against the
@@ -504,5 +547,146 @@ mod tests {
                 other => panic!("row {label:?}: expected routed ActiveBarStub, got {other:?}"),
             }
         }
+    }
+
+    /// Mockup row 141: the Shapes menu is one list in the drawn order, with
+    /// no divider.
+    #[test]
+    fn shapes_menu_is_one_list_in_the_drawn_order() {
+        let i18n = I18n::en_us();
+        let entries = shapes_entries(
+            SymbolTool::Select,
+            PathBuf::from("t.snxsym"),
+            ThemeId::GraphiteDark,
+            &i18n,
+        );
+        assert!(
+            !entries
+                .iter()
+                .any(|e| matches!(e, DropdownEntry::Separator))
+        );
+        let labels: Vec<&str> = entries
+            .iter()
+            .filter_map(|e| match e {
+                DropdownEntry::Item(item) => Some(item.label.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            labels,
+            [
+                "Line",
+                "Arc",
+                "Elliptical Arc",
+                "Bezier",
+                "Polygon",
+                "Rectangle",
+                "Round Rectangle",
+                "Ellipse / Circle",
+                "Pie Chart",
+            ]
+        );
+    }
+
+    /// DECISIONS 2026-11-22: a shape with no tool yet keeps its row, greyed,
+    /// with a reason and no action; a shape with a tool stays live.
+    #[test]
+    fn the_unbuilt_shapes_are_disabled_with_a_reason() {
+        let i18n = I18n::en_us();
+        let entries = shapes_entries(
+            SymbolTool::Select,
+            PathBuf::from("t.snxsym"),
+            ThemeId::GraphiteDark,
+            &i18n,
+        );
+        let reason = i18n.message_plain(menu_ids::MENU_PLANNED_TOOLTIP, &[]);
+        let unbuilt: [&str; 0] = [];
+        let mut seen = 0;
+        let mut live = 0;
+        for entry in &entries {
+            let DropdownEntry::Item(item) = entry else {
+                continue;
+            };
+            if unbuilt.contains(&item.label.as_str()) {
+                seen += 1;
+                assert!(item.disabled, "{} is greyed", item.label);
+                assert!(item.on_press.is_none(), "{} does nothing", item.label);
+                assert_eq!(item.tooltip.as_ref(), Some(&reason), "{}", item.label);
+            } else {
+                live += 1;
+                assert!(!item.disabled, "{} stays live", item.label);
+                assert!(item.on_press.is_some(), "{} stays live", item.label);
+                assert!(item.tooltip.is_none(), "{} has no reason", item.label);
+            }
+        }
+        assert_eq!(seen, unbuilt.len());
+        assert_eq!(live, 9, "every shape of the menu is built and was checked");
+    }
+
+    /// #2838: the built curve rows arm their own tools and show as armed.
+    #[test]
+    fn the_bezier_and_pie_rows_arm_their_tools() {
+        let i18n = I18n::en_us();
+        for (label, armed) in [
+            ("Bezier", SymbolTool::PlaceBezier),
+            ("Pie Chart", SymbolTool::PlacePie),
+            ("Elliptical Arc", SymbolTool::PlaceEllipticalArc),
+            ("Round Rectangle", SymbolTool::PlaceRoundRectangle),
+        ] {
+            let entries = shapes_entries(
+                armed,
+                PathBuf::from("t.snxsym"),
+                ThemeId::GraphiteDark,
+                &i18n,
+            );
+            let row = entries.iter().find_map(|e| match e {
+                DropdownEntry::Item(item) if item.label == label => Some(item),
+                _ => None,
+            });
+            assert!(
+                row.is_some_and(|item| item.active),
+                "{label} is highlighted"
+            );
+            let expected = match item_msg(&entries, label) {
+                SymbolEditorMsg::SetTool(SymbolToolMsg::PlaceBezier) => SymbolTool::PlaceBezier,
+                SymbolEditorMsg::SetTool(SymbolToolMsg::PlacePie) => SymbolTool::PlacePie,
+                SymbolEditorMsg::SetTool(SymbolToolMsg::PlaceEllipticalArc) => {
+                    SymbolTool::PlaceEllipticalArc
+                }
+                SymbolEditorMsg::SetTool(SymbolToolMsg::PlaceRoundRectangle) => {
+                    SymbolTool::PlaceRoundRectangle
+                }
+                other => panic!("{label}: {other:?}"),
+            };
+            assert_eq!(expected, armed);
+        }
+    }
+
+    /// Mockup row 141: the Shapes menu opens under a "Shapes" header and highlights
+    /// the armed tool's row (and only it).
+    #[test]
+    fn shapes_menu_has_a_header_and_highlights_the_armed_tool() {
+        let i18n = I18n::en_us();
+        let entries = shapes_entries(
+            SymbolTool::PlaceRectangle,
+            PathBuf::from("t.snxsym"),
+            ThemeId::GraphiteLight,
+            &i18n,
+        );
+        let header = t!(i18n, ids::EDITORS_SYMBOL_BAR_SHAPES).into_string();
+        assert_eq!(header, "Shapes");
+        assert!(matches!(&entries[0], DropdownEntry::Header(h) if *h == header));
+        let highlighted: Vec<&str> = entries
+            .iter()
+            .filter_map(|e| match e {
+                DropdownEntry::Item(item) if item.active => Some(item.label.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(highlighted, ["Rectangle"]);
+        assert!(matches!(
+            item_msg(&entries, "Rectangle"),
+            SymbolEditorMsg::SetTool(SymbolToolMsg::PlaceRectangle)
+        ));
     }
 }

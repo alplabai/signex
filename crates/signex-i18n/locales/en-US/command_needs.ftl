@@ -38,6 +38,7 @@ command-needs-reuse-anchor = Select one unlocked component of the channel to pla
 command-needs-probe-target = Nothing is selected on the sheet or board to cross probe
 command-needs-pcb-sync = No schematic or PCB of an open project is in view
 command-needs-open-project = No project is open
+command-needs-pcb-in-project = No board of an open project is in view, or it is read-only
 command-needs-library = No library is open
 command-needs-project-sheet = No sheet of a project is open
 command-needs-tileable-windows = Tile needs two documents in the main window, or a document in its own window

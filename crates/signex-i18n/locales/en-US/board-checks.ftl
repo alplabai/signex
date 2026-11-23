@@ -17,6 +17,7 @@ drc-panel-objects =
     }
 drc-panel-none-shown = No violations match the filters.
 drc-panel-waive = Waive
+drc-panel-waive-placeholder = Why is this violation accepted?
 drc-panel-unwaive = Unwaive
 drc-panel-waived-note = Waived: { $note }
 drc-panel-waived-no-note = Waived

@@ -5,9 +5,10 @@
 mod designator_standard;
 mod view;
 
-pub(super) use view::{labelled, tab_message, view};
+pub(super) use view::{tab_message, view};
 
-use crate::app::state::LoadedProject;
+use crate::app::Signex;
+use crate::app::state::{LoadedProject, ProjectId};
 
 /// The read-only rows of the General section, read from the project as it
 /// is now. Kept apart from the view so it is testable without widgets.
@@ -28,6 +29,22 @@ impl ProjectGeneralFacts {
             schematic_root: project.data.schematic_root.clone(),
             pcb_file: project.data.pcb_file.clone(),
             library_count: project.data.libraries.len(),
+        }
+    }
+}
+
+impl Signex {
+    /// Explore: the project's folder in the file manager, as the project
+    /// tree's Explore shows it. A project closed meanwhile shows nothing.
+    pub(in crate::app::project_tab) fn explore_project_folder(&self, project_id: ProjectId) {
+        let Some(project) = self.document_state.project_by_id(project_id) else {
+            return;
+        };
+        if let Err(err) = self.ui_state.io.opener.reveal(project.dir()) {
+            crate::diagnostics::log_error(
+                "Failed to reveal in file manager",
+                &anyhow::anyhow!("{err}"),
+            );
         }
     }
 }

@@ -55,7 +55,9 @@ fn app_with_project(dir: &Path) -> Signex {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -321,6 +323,7 @@ fn a_board_and_a_project_with_no_id_are_given_one() {
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
@@ -469,6 +472,7 @@ fn an_unloaded_board_is_read_from_its_file() {
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uid(77),
@@ -1001,6 +1005,7 @@ fn board_with(id: uuid::Uuid, thickness: f64) -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: id,

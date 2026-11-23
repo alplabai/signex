@@ -10,34 +10,7 @@ use signex_i18n::{ids, t};
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// Stable identifiers for every numeric drawing-field editor so the
-/// panel keeps a transient string buffer per field across rerenders.
-/// Erasing a text_input leaves an empty string in the buffer until
-/// the user types a valid f64, at which point UpdateDrawingEdit fires.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum DrawingFieldId {
-    LineStartX,
-    LineStartY,
-    LineEndX,
-    LineEndY,
-    LineWidth,
-    RectStartX,
-    RectStartY,
-    RectWidth,
-    RectHeight,
-    RectBorder,
-    CircleCenterX,
-    CircleCenterY,
-    CircleRadius,
-    CircleBorder,
-    ArcCenterX,
-    ArcCenterY,
-    ArcRadius,
-    ArcStartAngle,
-    ArcEndAngle,
-    ArcWidth,
-    PolyBorder,
-}
+pub use crate::app::core::drawing_field::DrawingFieldId;
 
 impl DrawingFieldId {
     /// A Y coordinate on the sheet: shown and typed from the page origin.
@@ -50,6 +23,45 @@ impl DrawingFieldId {
                 | Self::CircleCenterY
                 | Self::ArcCenterY
         )
+    }
+
+    /// The edit this box makes with `value`.
+    pub fn edit(self, value: f64) -> crate::app::contracts::DrawingFieldEdit {
+        use crate::app::contracts::DrawingFieldEdit as E;
+        match self {
+            Self::LineStartX => E::LineStartX(value),
+            Self::LineStartY => E::LineStartY(value),
+            Self::LineEndX => E::LineEndX(value),
+            Self::LineEndY => E::LineEndY(value),
+            Self::RectStartX => E::RectStartX(value),
+            Self::RectStartY => E::RectStartY(value),
+            Self::RectWidth => E::RectWidthMm(value),
+            Self::RectHeight => E::RectHeightMm(value),
+            Self::CircleCenterX => E::CircleCenterX(value),
+            Self::CircleCenterY => E::CircleCenterY(value),
+            Self::CircleRadius => E::CircleRadius(value),
+            Self::ArcCenterX => E::ArcCenterX(value),
+            Self::ArcCenterY => E::ArcCenterY(value),
+            Self::ArcRadius => E::ArcRadius(value),
+            Self::ArcStartAngle => E::ArcStartAngle(value),
+            Self::ArcEndAngle => E::ArcEndAngle(value),
+            Self::LineWidth
+            | Self::RectBorder
+            | Self::CircleBorder
+            | Self::ArcWidth
+            | Self::PolyBorder => E::Width(value),
+        }
+    }
+
+    /// Whether `text` reads as a value this box can store.
+    pub fn reads(self, text: &str) -> bool {
+        signex_types::numeric::parse_finite_f64(text).is_ok_and(|v| self.edit(v).is_valid())
+    }
+
+    /// Whether the box shows `text` as invalid: not a value it can store and
+    /// not the start of one (empty, a lone `-`).
+    pub fn refuses(self, text: &str) -> bool {
+        crate::numeric_field::text_refused(text, self.reads(text))
     }
 }
 
@@ -66,6 +78,28 @@ pub const PROPERTY_ROW_PAD_X: u16 = 6;
 /// Gap between a property row's label and its field.
 pub const PROPERTY_ROW_GAP: f32 = 6.0;
 
+/// The tool's form, veiled and deaf while its pause belongs to another window
+/// (mockup row 157).
+fn read_only_while_paused_elsewhere<'a>(
+    ctx: &PanelContext,
+    form: Element<'a, PanelMsg>,
+) -> Element<'a, PanelMsg> {
+    let panel = crate::styles::ti(ctx.tokens.panel_bg);
+    let is_editable = !ctx.annotation.is_tool_paused_elsewhere;
+    match signex_widgets::enable_section::dependents_veil(panel, is_editable) {
+        Some(veil) => signex_widgets::inert::Inert::new(form, veil).into(),
+        None => form,
+    }
+}
+
+/// The pre-placement form Properties shows: none once its tool has ended,
+/// though the values stay for the next placement (mockup row 157).
+fn shown_placement_form(ctx: &PanelContext) -> Option<&PrePlacementData> {
+    ctx.pre_placement
+        .as_ref()
+        .filter(|_| !ctx.annotation.is_placement_form_idle)
+}
+
 pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let palette = PanelPalette::from_tokens(&ctx.tokens);
     let PanelPalette {
@@ -75,24 +109,19 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         ..
     } = palette;
 
-    // Library Browser tab — Properties panel surfaces the selected
-    // row's metadata + Pick Symbol / Pick Footprint. F15 (2026-05-03
-    // library polish): "right pane can be opened on properties
-    // instead." Takes precedence over the schematic / pre-placement /
-    // symbol-editor branches so when a Library Browser tab is active
-    // the panel stays focused on it.
+    // A Component editor tab or a Library Browser row (mockup row 127) takes
+    // precedence over the schematic / pre-placement / symbol-editor
+    // branches, so the panel stays on the library row while its tab is
+    // active.
     if let Some(sheet) = ctx.component_sheet.as_ref() {
         return super::view_component_sheet(sheet, &ctx.tokens, &ctx.i18n);
     }
+    // A channel tab of a repeated sheet shows its channel, read-only (#1279).
+    if let Some(channel) = super::element_properties::channel_view_properties(ctx) {
+        return channel;
+    }
     if let Some(detail) = ctx.library_row_detail.as_ref() {
-        return view_library_row_properties(
-            detail,
-            muted,
-            primary,
-            border_c,
-            theme_ext::warning_color(&ctx.tokens),
-            &ctx.i18n,
-        );
+        return view_library_row_properties(detail, &ctx.tokens, &ctx.i18n);
     }
 
     // Symbol-editor tab takes precedence — when the user is editing a
@@ -103,9 +132,8 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if let Some(sym) = ctx.symbol_editor.as_ref() {
         return view_symbol_editor_properties(
             sym,
+            &ctx.collapsed_sections,
             ctx.numeric_draft.as_ref(),
-            muted,
-            primary,
             border_c,
             &ctx.tokens,
             &ctx.i18n,
@@ -120,6 +148,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         return view_footprint_editor_properties(
             fp,
             palette,
+            &ctx.tokens,
             &ctx.collapsed_sections,
             ctx.unit,
             &ctx.i18n,
@@ -156,10 +185,22 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .boxed();
     }
 
+    // An armed dimension tool shows its values all through placing, paused
+    // or not (mockup row 157).
+    if let Some(form) = ctx.annotation.dimension_tool.as_deref() {
+        let form = super::element_properties::view_dimension_tool_properties(ctx, form);
+        return read_only_while_paused_elsewhere(ctx, form);
+    }
+
     // Tab pauses placement; the form edits what the next object is placed
     // with (#2532).
-    if let Some(ref pp) = ctx.pre_placement {
-        return super::pre_placement::view(pp, ctx);
+    if let Some(pp) = shown_placement_form(ctx) {
+        return read_only_while_paused_elsewhere(ctx, super::pre_placement::view(pp, ctx));
+    }
+
+    // #1280: the harness definitions view, while it is open.
+    if ctx.harness.definitions_open {
+        return super::view_harness_definitions(ctx, muted, primary);
     }
 
     // ── Context-aware: if something is selected, show element properties (Altium style) ──
@@ -207,15 +248,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // ── General | Parameters: a segmented switch ──
     let tab = ctx.properties_tab;
     let r = crate::styles::tokens::resolve(&ctx.tokens);
-    let tab_style = signex_widgets::SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        crate::styles::ti(ctx.tokens.text),
-        TS.body,
-    )
-    .fill_width(true);
+    let tab_style = r.segmented(TS.body).fill_width(true);
     let tabs: [(usize, signex_widgets::Label<'a>); 2] = [
         (0, t!(ctx.i18n, ids::PANELS_PROPERTIES_TAB_GENERAL).into()),
         (

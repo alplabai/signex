@@ -59,26 +59,41 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     let is_power_port = elem_type == "Power Port";
     let is_placed_part = !is_power_port && selected_kind == Some(SelectedKind::Symbol);
 
+    // A Bezier, dimension or table has its own panel and header (#1267, #1300).
+    let mut annotation = super::annotation::view_annotation_properties(ctx);
+
     // ── Header ──
-    let header = match kind_title(elem_type, selected_kind, is_power_port) {
-        Some(title) => {
-            let line = match selected_kind {
-                _ if is_power_port => get("Value"),
-                Some(SelectedKind::Label) => get("Text"),
-                _ => String::new(),
-            };
-            titled_header(ctx, title, line, primary)
-        }
-        None => super::header::selection_header(
-            ctx,
-            elem_type,
-            is_placed_part,
-            &get("Description"),
-            primary,
-        ),
-    };
-    col = col.push(header);
-    col = col.push(thin_sep(border_c));
+    if annotation.is_none() {
+        let header = match kind_title(elem_type, selected_kind, is_power_port) {
+            Some(title) => {
+                let line = match selected_kind {
+                    _ if is_power_port => get("Value"),
+                    Some(SelectedKind::Label) => get("Text"),
+                    Some(SelectedKind::ChildSheet) => ctx
+                        .selected_child_sheet
+                        .as_ref()
+                        .map_or_else(String::new, |sheet| sheet.name.clone()),
+                    Some(SelectedKind::Wire) => run_net_line(ctx),
+                    Some(SelectedKind::Bus) => ctx
+                        .placed
+                        .run_net
+                        .as_ref()
+                        .map_or_else(String::new, |net| net.name.clone()),
+                    _ => String::new(),
+                };
+                titled_header(ctx, title, line, primary)
+            }
+            None => super::header::selection_header(
+                ctx,
+                elem_type,
+                is_placed_part,
+                &get("Description"),
+                primary,
+            ),
+        };
+        col = col.push(header);
+        col = col.push(thin_sep(border_c));
+    }
 
     if is_power_port && let Some(id) = uuid {
         col = super::power_port::push_power_port_sections(col, ctx, id, st);
@@ -100,7 +115,11 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             col = super::text_note::push_text_note_sections(col, ctx, uuid, st);
         }
         Some(SelectedKind::Drawing) => {
-            col = col.push(view_drawing_properties(ctx, muted, primary, border_c));
+            col = col.push(
+                annotation
+                    .take()
+                    .unwrap_or_else(|| view_drawing_properties(ctx, muted, primary, border_c)),
+            );
         }
         Some(SelectedKind::ChildSheet) => {
             col = col.push(view_child_sheet_properties(ctx, muted, primary, border_c));
@@ -122,11 +141,28 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         Some(signex_types::schematic::SelectedKind::NoErcDirective) => {
             col = super::no_erc::push_no_erc_sections(col, ctx, uuid, st);
         }
+        // #1280: an entry shows its connector.
+        Some(
+            signex_types::schematic::SelectedKind::HarnessConnector
+            | signex_types::schematic::SelectedKind::HarnessEntry,
+        ) => {
+            col = super::harness_connector::push_harness_connector_sections(col, ctx, st);
+        }
+        Some(signex_types::schematic::SelectedKind::HarnessWire) => {
+            col = super::harness_wire::push_harness_wire_sections(col, ctx, st);
+        }
+    }
+    // #1280: a sheet entry can carry a harness.
+    if let (Some(pin), Some(signex_types::schematic::SelectedKind::SheetPin)) =
+        (uuid, selected_kind)
+    {
+        col = super::harness_wire::push_sheet_entry_harness_type(col, ctx, pin, st);
     }
 
     // ── Style ──: width preset and own colour, undoable.
     if let (Some(id), Some((width, color))) = (uuid, ctx.selected_wire_style) {
         let picker = ctx.wire_color_picker;
+        let is_bus = selected_kind == Some(SelectedKind::Bus);
         col = col.push(
             ctx.collapsible(
                 "sel_wire_style",
@@ -136,11 +172,11 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                     Column::new()
                         .spacing(0)
                         .width(Length::Fill)
-                        .push(wire_width_grid(id, width, st, &ctx.i18n))
+                        .push(run_width_grid(id, is_bus, width, st, &ctx.i18n))
                         .push(crate::panels::wire_color_row(
                             color,
                             picker,
-                            std::rc::Rc::new(move |c| PanelMsg::EditWireColor(id, c)),
+                            std::rc::Rc::new(move |c| color_picked(id, is_bus, c)),
                             muted,
                             border_c,
                             &ctx.i18n,
@@ -171,9 +207,20 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     scrollable(col).width(Length::Fill).boxed()
 }
 
+/// The muted header line of a wire (mockup row 43): `net /SPI_CLK`, empty
+/// until the project's net index has answered.
+fn run_net_line(ctx: &PanelContext) -> String {
+    ctx.placed.run_net.as_ref().map_or_else(String::new, |net| {
+        ctx.i18n.message_plain(
+            ids::PROPERTIES_WIRE_NET_LINE,
+            &[("net", net.name.as_str().into())],
+        )
+    })
+}
+
 /// The header title of the kinds that name themselves from the catalog: a
-/// wire, a bus, a label or port, a power port and a text note. `None` keeps
-/// the shared header (a part, a drawing, a sheet symbol, …).
+/// wire, a bus, a label or port, a power port, a text note and a sheet
+/// symbol. `None` keeps the shared header (a part, a drawing, …).
 fn kind_title(
     elem_type: &str,
     kind: Option<SelectedKind>,
@@ -186,6 +233,7 @@ fn kind_title(
         SelectedKind::Wire => Some(ids::PROPERTIES_KIND_WIRE),
         SelectedKind::Bus => Some(ids::PROPERTIES_KIND_BUS),
         SelectedKind::TextNote => Some(ids::PROPERTIES_KIND_TEXT_NOTE),
+        SelectedKind::ChildSheet => Some(ids::PROPERTIES_SHEET_SYMBOL_TITLE),
         // The engine names a label by its type (`Global Label`, …).
         SelectedKind::Label => Some(match elem_type {
             "Global Label" => ids::PROPERTIES_KIND_GLOBAL_PORT,
@@ -214,7 +262,7 @@ fn titled_header<'a>(
                 .color(primary)
                 .font(iced::Font {
                     weight: iced::font::Weight::Semibold,
-                    ..iced::Font::DEFAULT
+                    ..signex_widgets::ui_font::regular()
                 })
                 .wrapping(iced::widget::text::Wrapping::None)
                 .boxed(),
@@ -295,29 +343,55 @@ pub(super) fn wire_width_cells(current: WireWidthPreset) -> [[(WireWidthPreset, 
     [[cell(a), cell(b)], [cell(c), cell(d)]]
 }
 
-/// The Width row of a selected wire: the four presets as a 2 x 2 segmented
-/// control, so no label is cut off.
-fn wire_width_grid<'a>(
+/// The edit a Width pick sends for the selected wire or bus.
+fn width_picked(id: uuid::Uuid, is_bus: bool, preset: WireWidthPreset) -> PanelMsg {
+    if is_bus {
+        PanelMsg::EditBusWidth(id, preset)
+    } else {
+        PanelMsg::EditWireWidth(id, preset)
+    }
+}
+
+/// The edit a Color pick sends for the selected wire or bus.
+fn color_picked(
     id: uuid::Uuid,
+    is_bus: bool,
+    color: Option<signex_types::theme::Color>,
+) -> PanelMsg {
+    if is_bus {
+        PanelMsg::EditBusColor(id, color)
+    } else {
+        PanelMsg::EditWireColor(id, color)
+    }
+}
+
+/// The Width row of a selected wire or bus: the four presets as a 2 x 2
+/// segmented control, so no label is cut off.
+fn run_width_grid<'a>(
+    id: uuid::Uuid,
+    is_bus: bool,
     current: WireWidthPreset,
     st: PanelStyle,
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
-    let mut grid = Column::new().spacing(SP.xs).width(Length::Fill);
-    for pair in wire_width_cells(current) {
-        let mut line = iced::widget::Row::new().spacing(SP.xs).width(Length::Fill);
-        for (preset, active) in pair {
-            line = line.push(seg_btn(
+    let cells: Vec<Element<'a, PanelMsg>> = wire_width_cells(current)
+        .into_iter()
+        .flatten()
+        .map(|(preset, active)| {
+            seg_btn(
                 t!(i18n, super::super::wire_style_rows::preset_label(preset)),
                 active,
-                PanelMsg::EditWireWidth(id, preset),
+                width_picked(id, is_bus, preset),
                 st.palette.input_bg,
                 st.primary,
                 st.muted,
-            ));
-        }
-        grid = grid.push(line);
-    }
+            )
+        })
+        .collect();
+    let grid = signex_widgets::FitRow::new(cells)
+        .spacing(SP.xs)
+        .fill(true)
+        .max_columns(2);
     container(
         row![
             property_label(t!(i18n, ids::PROPERTIES_WIRE_WIDTH), st.muted),
@@ -577,6 +651,22 @@ mod tests {
         }
     }
 
+    /// Mockup row 46: a sheet symbol's header is the catalog's Sheet Symbol,
+    /// not the engine's type word.
+    #[test]
+    fn a_sheet_symbol_header_reads_sheet_symbol() {
+        use signex_types::schematic::SelectedKind;
+        let texts = shown_texts(
+            SelectedKind::ChildSheet,
+            vec![("Type".to_string(), "Hierarchical Sheet".to_string())],
+        );
+        assert!(texts.iter().any(|t| t == "Sheet Symbol"), "{texts:?}");
+        assert!(
+            !texts.iter().any(|t| t == "Hierarchical Sheet"),
+            "{texts:?}"
+        );
+    }
+
     /// The Width grid marks exactly the wire's preset, in the 2 x 2 order.
     #[test]
     fn the_width_grid_marks_the_wires_preset() {
@@ -589,6 +679,56 @@ mod tests {
             .map(|(p, _)| *p)
             .collect();
         assert_eq!(active, [WireWidthPreset::Medium]);
+    }
+
+    /// Mockup row 43: a bus's Style picks send the bus edits, a wire's the
+    /// wire edits.
+    #[test]
+    fn style_picks_send_the_edit_of_the_selected_kind() {
+        use crate::panels::PanelMsg;
+        use signex_types::schematic::WireWidthPreset::Large;
+        let id = uuid::Uuid::from_u128(1);
+        assert!(matches!(
+            super::width_picked(id, true, Large),
+            PanelMsg::EditBusWidth(got, Large) if got == id
+        ));
+        assert!(matches!(
+            super::width_picked(id, false, Large),
+            PanelMsg::EditWireWidth(got, Large) if got == id
+        ));
+        assert!(matches!(
+            super::color_picked(id, true, None),
+            PanelMsg::EditBusColor(got, None) if got == id
+        ));
+        assert!(matches!(
+            super::color_picked(id, false, None),
+            PanelMsg::EditWireColor(got, None) if got == id
+        ));
+    }
+
+    /// Mockup row 43: a selected bus shows the Style section.
+    #[test]
+    fn a_selected_bus_shows_the_style_section() {
+        use signex_types::schematic::{SelectedKind, WireWidthPreset};
+        let (app, _task) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.selected_kind = Some(SelectedKind::Bus);
+        ctx.selected_uuid = Some(uuid::Uuid::now_v7());
+        ctx.selected_wire_style = Some((WireWidthPreset::Large, None));
+        let view = super::view_selected_element_properties(
+            &ctx,
+            iced::Color::WHITE,
+            iced::Color::WHITE,
+            iced::Color::BLACK,
+        );
+        let texts: Vec<String> =
+            crate::layout_probe::lay_out_texts(view, iced::Size::new(400.0, 4000.0))
+                .into_iter()
+                .map(|t| t.text)
+                .collect();
+        for want in ["STYLE", "Smallest", "Small", "Medium", "Large"] {
+            assert!(texts.iter().any(|t| t == want), "lacks {want}: {texts:?}");
+        }
     }
 
     /// The single-object views end in the "1 object selected" footer, a

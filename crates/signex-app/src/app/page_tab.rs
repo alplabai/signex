@@ -1,5 +1,5 @@
 //! Page tabs: document tabs that show one of a project's pages rather than
-//! a drawing (Project and Rules today; Layer Stack, BOM Studio, Export Job
+//! a drawing (Project, Rules and Layer Stack today; BOM Studio, Export Job
 //! and the other #2523 kinds join here). Two rules hold for every one:
 //!
 //! - the title is `<project name> — <page name>` ("sensor-node — Layer
@@ -23,6 +23,7 @@ pub(crate) fn page_name(kind: &TabKind) -> Option<MessageId> {
     match kind {
         TabKind::Project(_) => Some(ids::CHROME_PAGE_TAB_PROJECT),
         TabKind::Rules(_) => Some(ids::RULES_TAB_TITLE),
+        TabKind::LayerStack => Some(ids::PCB_STACK_TITLE),
         TabKind::Schematic
         | TabKind::Pcb
         | TabKind::ComponentEditor(_)
@@ -32,7 +33,8 @@ pub(crate) fn page_name(kind: &TabKind) -> Option<MessageId> {
     }
 }
 
-/// The project a page tab shows a page of.
+/// The project a page tab shows a page of. A Layer Stack tab shows a page of
+/// its board, which may have no project: `Signex::layer_stack_title` names it.
 pub(crate) fn page_project(kind: &TabKind) -> Option<ProjectId> {
     page_name(kind)?;
     kind.as_project().or_else(|| kind.as_rules())
@@ -88,7 +90,15 @@ impl Signex {
             .tabs
             .iter()
             .enumerate()
-            .filter_map(|(i, tab)| self.page_tab_title(&tab.kind).map(|title| (i, title)))
+            .filter_map(|(i, tab)| {
+                self.page_tab_title(&tab.kind)
+                    .or_else(|| {
+                        tab.kind
+                            .is_layer_stack()
+                            .then(|| self.layer_stack_title(&tab.path, tab.project_id))
+                    })
+                    .map(|title| (i, title))
+            })
             .collect();
         for (i, title) in titles {
             self.document_state.tabs[i].title = title;

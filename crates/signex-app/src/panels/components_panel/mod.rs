@@ -163,14 +163,7 @@ pub(crate) fn view<'a>(
         .height(Length::Fill)
         .boxed();
     }
-    let divider = iced::widget::mouse_area(
-        container(Space::new())
-            .height(split::HANDLE_HEIGHT)
-            .width(Length::Fill)
-            .style(crate::styles::resize_handle_edge(tokens, false)),
-    )
-    .interaction(iced::mouse::Interaction::ResizingVertically)
-    .on_press(LibraryMessage::ComponentsPanelSplitDragStarted);
+    let divider = split::handle(panel.split_hovered, panel.split_dragging, tokens);
     let library_name = panel
         .selected
         .as_ref()

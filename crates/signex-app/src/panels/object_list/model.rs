@@ -98,6 +98,7 @@ pub enum ObjectNoun {
     Blanket,
     CompileMask,
     DiffPair,
+    NetParameters,
 }
 
 /// A fixed word in the Value column.
@@ -312,9 +313,14 @@ pub fn sheet_rows(
                 (ObjectNoun::CompileMask, midpoint(*start, *end))
             }
             SchDirective::DiffPair { position, .. } => (ObjectNoun::DiffPair, *position),
+            SchDirective::NetParameters { position, .. } => (ObjectNoun::NetParameters, *position),
         };
         let value = match d {
             SchDirective::Blanket {
+                net_class: Some(class),
+                ..
+            }
+            | SchDirective::NetParameters {
                 net_class: Some(class),
                 ..
             } => RowValue::Text(class.clone()),
@@ -342,6 +348,9 @@ fn drawing_at(d: &SchDrawing) -> Point {
         SchDrawing::Circle { center, .. } => *center,
         SchDrawing::Arc { mid, .. } => *mid,
         SchDrawing::Polyline { points, .. } => points.first().copied().unwrap_or(Point::ZERO),
+        SchDrawing::Bezier(b) => midpoint(b.start, b.end),
+        SchDrawing::Dimension(d) => midpoint(d.from, d.to),
+        SchDrawing::Table(t) => t.position,
     }
 }
 

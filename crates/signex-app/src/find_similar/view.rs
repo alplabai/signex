@@ -76,7 +76,7 @@ pub(super) fn select_message(state: &FindSimilarState) -> Option<FindSimilarMsg>
 
 fn segmented_look(tokens: &ThemeTokens, size: f32) -> SegmentedStyle {
     let r = tokens::resolve(tokens);
-    SegmentedStyle::new(r.sunken, r.raised, r.shadow, r.ink3, ti(tokens.text), size)
+    r.segmented(size)
 }
 
 fn mono() -> Font {
@@ -110,11 +110,9 @@ fn value_cell<'a>(value: &str, tokens: &ThemeTokens, i18n: &I18n) -> Element<'a,
                 .size(TS.body)
                 .font(mono())
                 .color(ink),
-            iced::widget::container(
-                container(text(UserText::new(full)).size(TS.body).font(mono()))
-                    .padding([SP.xs, SP.s]),
-            )
-            .style(styles::context_menu(tokens)),
+            container(text(UserText::new(full)).size(TS.body).font(mono()))
+                .padding([SP.xs, SP.s])
+                .style(styles::context_menu(tokens)),
             tooltip::Position::Top,
         )
         .boxed(),

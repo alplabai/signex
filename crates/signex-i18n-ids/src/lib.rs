@@ -153,12 +153,22 @@ define_ids! {
     DIALOG_NEW_PROJECT_SCH_TITLE_BLOCK_DEFAULT = "dialog-new-project-sch-title-block-default";
     DIALOG_NEW_PROJECT_SCH_TITLE_BLOCK_NONE = "dialog-new-project-sch-title-block-none";
     DIALOG_NEW_PROJECT_SCH_DESIGNATORS = "dialog-new-project-sch-designators";
-    DIALOG_NEW_PROJECT_SHEET_LANDSCAPE = "dialog-new-project-sheet-landscape";
     DIALOG_NEW_PROJECT_PREVIEW_HEADING = "dialog-new-project-preview-heading";
     DIALOG_NEW_PROJECT_PREVIEW_LAYERS = "dialog-new-project-preview-layers";
     DIALOG_NEW_PROJECT_PREVIEW_BOARD = "dialog-new-project-preview-board";
     DIALOG_NEW_PROJECT_PREVIEW_SHEET = "dialog-new-project-preview-sheet";
     DIALOG_NEW_PROJECT_PREVIEW_NOTE = "dialog-new-project-preview-note";
+    DIALOG_NEW_PROJECT_PREVIEW_RULES = "dialog-new-project-preview-rules";
+    DIALOG_NEW_PROJECT_PREVIEW_RULES_HINT = "dialog-new-project-preview-rules-hint";
+    DIALOG_NEW_PROJECT_PREVIEW_RULES_LINE = "dialog-new-project-preview-rules-line";
+    DIALOG_NEW_PROJECT_PREVIEW_SHEET_HEADING = "dialog-new-project-preview-sheet-heading";
+    DIALOG_NEW_PROJECT_PREVIEW_EXPAND = "dialog-new-project-preview-expand";
+    DIALOG_NEW_PROJECT_PREVIEW_CLOSE = "dialog-new-project-preview-close";
+    DIALOG_NEW_PROJECT_PREVIEW_DRILL_ERROR = "dialog-new-project-preview-drill-error";
+    DIALOG_NEW_PROJECT_RULE_CAP_WIDTH = "dialog-new-project-rule-cap-width";
+    DIALOG_NEW_PROJECT_RULE_CAP_CLEARANCE = "dialog-new-project-rule-cap-clearance";
+    DIALOG_NEW_PROJECT_RULE_CAP_DRILL = "dialog-new-project-rule-cap-drill";
+    DIALOG_NEW_PROJECT_RULE_CAP_VIA = "dialog-new-project-rule-cap-via";
     DIALOG_NEW_PROJECT_STACK_SILK_TOP = "dialog-new-project-stack-silk-top";
     DIALOG_NEW_PROJECT_STACK_MASK_TOP = "dialog-new-project-stack-mask-top";
     DIALOG_NEW_PROJECT_STACK_COPPER_TOP = "dialog-new-project-stack-copper-top";
@@ -219,6 +229,7 @@ define_ids! {
     DIALOG_NEW_PROJECT_ERR_CREATE_PENDING = "dialog-new-project-err-create-pending";
     DIALOG_NEW_PROJECT_QUIT_HELD = "dialog-new-project-quit-held";
     DIALOG_NEW_PROJECT_SETUP_UNREADABLE = "dialog-new-project-setup-unreadable";
+    DIALOG_SCHEMATIC_DESIGN_UNREADABLE = "dialog-schematic-design-unreadable";
     DIALOG_NEW_PROJECT_NAME_PLACEHOLDER = "dialog-new-project-name-placeholder";
     DIALOG_NEW_PROJECT_LOCATION_PLACEHOLDER = "dialog-new-project-location-placeholder";
     LANGUAGE_SYSTEM_DEFAULT = "language-system-default";
@@ -336,6 +347,7 @@ define_ids! {
     BACK_ANNOTATE_BLOCK_DUPLICATE = "back-annotate-block-duplicate";
     BACK_ANNOTATE_BLOCK_BOARD_NOT_ANNOTATED = "back-annotate-block-board-not-annotated";
     BACK_ANNOTATE_BLOCK_SHARED_SHEET = "back-annotate-block-shared-sheet";
+    BACK_ANNOTATE_BLOCK_CHANNEL = "back-annotate-block-channel";
     BACK_ANNOTATE_BLOCK_FOOTPRINT = "back-annotate-block-footprint";
     BACK_ANNOTATE_NOTES_HEADING = "back-annotate-notes-heading";
     BACK_ANNOTATE_NOTE_UNREADABLE = "back-annotate-note-unreadable";
@@ -523,7 +535,6 @@ define_ids! {
     DIALOG_GRID_DOTS = "dialog-grid-dots";
     DIALOG_GRID_HIDDEN = "dialog-grid-hidden";
     DIALOG_GRID_MULTIPLIER = "dialog-grid-multiplier";
-    DIALOG_GRID_HELP = "dialog-grid-help";
     DIALOG_SELECTION_FILTER_HELP = "dialog-selection-filter-help";
     DIALOG_SELECTION_FILTER_PADS = "dialog-selection-filter-pads";
     DIALOG_SELECTION_FILTER_TRACKS = "dialog-selection-filter-tracks";
@@ -538,6 +549,8 @@ define_ids! {
     MENU_BAR_SEARCH_PLACEHOLDER = "menu-bar-search-placeholder";
     MENU_BAR_LIGHT_THEME = "menu-bar-light-theme";
     MENU_BAR_DARK_THEME = "menu-bar-dark-theme";
+    MENU_BAR_SEARCH_BUTTON = "menu-bar-search-button";
+    MENU_BAR_SEARCH_BUTTON_KEY = "menu-bar-search-button-key";
     PANELS_ERC_RUNNING = "panels-erc-running";
     PANELS_ERC_NO_FINDINGS_LEFT = "panels-erc-no-findings-left";
     PANELS_ERC_EMPTY_HINT = "panels-erc-empty-hint";
@@ -578,7 +591,6 @@ define_ids! {
     EDITORS_COMPONENT_HEADER_UNPARSED = "editors-component-header-unparsed";
     EDITORS_FOOTPRINT_STATUS_PAD_SELECTED = "editors-footprint-status-pad-selected";
     EDITORS_FOOTPRINT_STATUS_PAD_COUNT = "editors-footprint-status-pad-count";
-    EDITORS_PINS_NO_SYMBOL = "editors-pins-no-symbol";
     EDITORS_PINS_SUMMARY = "editors-pins-summary";
     EDITORS_PINS_COLUMN_NUMBER = "editors-pins-column-number";
     EDITORS_PINS_COLUMN_NAME = "editors-pins-column-name";
@@ -800,7 +812,6 @@ define_ids! {
     PANELS_KIND_LIBRARY = "panels-kind-library";
     PANELS_KIND_SCH_LIBRARY = "panels-kind-sch-library";
     PANELS_KIND_FOOTPRINT_LIBRARY = "panels-kind-footprint-library";
-    PANELS_KIND_SYMBOL_PINS = "panels-kind-symbol-pins";
     PANELS_KIND_PCB_NETS = "panels-kind-pcb-nets";
     PANELS_KIND_LAYERS = "panels-kind-layers";
     PANELS_KIND_HISTORY = "panels-kind-history";
@@ -847,7 +858,6 @@ define_ids! {
     PANELS_PROJECTS_LIBRARIES = "panels-projects-libraries";
     PANELS_PROJECTS_GIT = "panels-projects-git";
     PANELS_PROJECTS_FILTER = "panels-projects-filter";
-    PANELS_PROJECTS_NO_MATCH = "panels-projects-no-match";
     PANELS_NET_CLASSES_ADD = "panels-net-classes-add";
     PANELS_NET_CLASSES_UNDO = "panels-net-classes-undo";
     PANELS_NET_CLASSES_REDO = "panels-net-classes-redo";
@@ -1017,6 +1027,7 @@ define_ids! {
     SETUP_SHEET_NO_PROJECT = "setup-sheet-no-project";
     SETUP_SHEET_TITLE = "setup-sheet-title";
     SETUP_PCB_INTRO = "setup-pcb-intro";
+    SETUP_PCB_INTRO_NO_SETUP = "setup-pcb-intro-no-setup";
     SETUP_SHEET_INTRO = "setup-sheet-intro";
     SETUP_CREATE_PCB = "setup-create-pcb";
     SETUP_CREATE_SHEET = "setup-create-sheet";
@@ -1055,6 +1066,7 @@ define_ids! {
     OVERLAY_PALETTE_NO_RESULTS = "overlay-palette-no-results";
     OVERLAY_PALETTE_WINDOW_SEARCH = "overlay-palette-window-search";
     OVERLAY_PALETTE_MORE_RESULTS = "overlay-palette-more-results";
+    OVERLAY_PALETTE_RESULT_COUNT = "overlay-palette-result-count";
     OVERLAY_PALETTE_NAVIGATE = "overlay-palette-navigate";
     OVERLAY_PALETTE_RUN = "overlay-palette-run";
     DIALOG_ERC_SCOPE_PROJECT = "dialog-erc-scope-project";
@@ -1117,7 +1129,7 @@ define_ids! {
     EDITORS_FOOTPRINT_DOF = "editors-footprint-dof";
     EDITORS_FOOTPRINT_DOF_FULLY_CONSTRAINED = "editors-footprint-dof-fully-constrained";
     EDITORS_FOOTPRINT_UNLINK_CORNER_RADIUS = "editors-footprint-unlink-corner-radius";
-    EDITORS_FOOTPRINT_ROLE_POINTS_ONLY = "editors-footprint-role-points-only";
+    EDITORS_FOOTPRINT_ROLE_PAD_HINT = "editors-footprint-role-pad-hint";
     EDITORS_FOOTPRINT_SILK_FROM_SKETCH = "editors-footprint-silk-from-sketch";
     EDITORS_PAD_PLACEMENT_PAUSED = "editors-pad-placement-paused";
     EDITORS_PAD_PLACEMENT_PAUSE_HINT = "editors-pad-placement-pause-hint";

@@ -172,7 +172,7 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   The window-layout commands `tile_windows_horizontally`,
   `tile_windows_vertically` and `untile_documents` (#2249) name no document:
   they are open to agents by the maintainer's rule that everything is
-  AI-controllable, run the Window menu row's handler (refused with its reason
+  AI-controllable, run the View ▸ Window menu row's handler (refused with its reason
   when the row is greyed) and answer with the layout they left:
   `{"tiled", "layout": "stacked" | "side_by_side" | null, "panes"}`, each
   pane `{"focused", "document", "name"}` in pane order (`document` and

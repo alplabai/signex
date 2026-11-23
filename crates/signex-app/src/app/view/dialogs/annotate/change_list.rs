@@ -7,7 +7,7 @@ use super::super::*;
 use iced::widget::{Column, Row, column, container, row, scrollable};
 use iced::{Alignment, Background, Element, Length, Theme, Widget};
 use signex_i18n::{UserText, ids, t};
-use signex_widgets::{SegmentedStyle, button, segmented, text, text_input};
+use signex_widgets::{button, segmented, text, text_input};
 
 use super::super::graphite as gr;
 use super::super::graphite_annotate as ga;
@@ -161,15 +161,7 @@ impl Signex {
         let r = crate::styles::tokens::resolve(tokens);
         let session = &self.ui_state.annotate_session;
         let entries = &self.ui_state.annotate_preview.entries;
-        let switch_style = SegmentedStyle::new(
-            r.sunken,
-            r.raised,
-            r.shadow,
-            r.ink3,
-            crate::styles::ti(tokens.text),
-            TS.body,
-        )
-        .fill_width(true);
+        let switch_style = r.segmented(TS.body).fill_width(true);
         let switch = segmented(
             [
                 (

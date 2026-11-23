@@ -233,10 +233,8 @@ pub(super) fn push_part_menu<'a>(
     .style(super::super::form_look::ghost_button);
     let more = signex_widgets::tooltip(
         more,
-        iced::widget::container(
-            signex_widgets::text(t!(i18n, ids::PROPERTIES_PART_MORE_TIP)).size(TS.body),
-        )
-        .style(crate::styles::context_menu(&ctx.tokens)),
+        container(signex_widgets::text(t!(i18n, ids::PROPERTIES_PART_MORE_TIP)).size(TS.body))
+            .style(crate::styles::context_menu(&ctx.tokens)),
         iced::widget::tooltip::Position::Left,
     );
     col = col.push(

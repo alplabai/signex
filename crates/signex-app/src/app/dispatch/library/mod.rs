@@ -71,6 +71,7 @@ mod primitive_copy;
 #[cfg(test)]
 mod primitive_copy_tests;
 mod primitive_picker;
+mod primitive_preview;
 #[cfg(test)]
 mod range_filter_tests;
 mod read_only;
@@ -80,6 +81,8 @@ mod recovery_read_only_tests;
 mod refresh;
 mod registration;
 mod rename_guard;
+#[cfg(test)]
+mod row_flows_tests;
 mod row_summary;
 #[cfg(test)]
 mod row_summary_tests;
@@ -136,8 +139,18 @@ impl Signex {
                     ..
                 }
         );
+        let shown_row = self.shown_browser_row();
         let task = self.route_library_message(msg);
-        let task = Task::batch([task, self.refresh_components_details_if_stale()]);
+        // Properties and its Pick buttons act on the row in the panel context
+        // (mockup row 127), so any change of selection rebuilds it.
+        if self.shown_browser_row() != shown_row {
+            self.refresh_panel_ctx();
+        }
+        let task = Task::batch([
+            task,
+            self.refresh_components_details_if_stale(),
+            self.refresh_browser_previews(),
+        ]);
         if per_event {
             self.sync_diagnostics_panel_ctx();
             // A part-number keystroke in the preview retitles its tab.
@@ -334,6 +347,9 @@ impl Signex {
             }
             LibraryMessage::LibraryCreateOptionsRelocateRequested => {
                 self.handle_library_create_options_relocate()
+            }
+            LibraryMessage::LibraryCreateOptionsOpenExistingRequested => {
+                self.handle_library_create_options_open_existing()
             }
             LibraryMessage::AddLibrarySymbolFilePicked { project_id, path } => {
                 self.handle_add_library_symbol_file_picked(project_id, path)
@@ -578,7 +594,20 @@ impl Signex {
                 self.handle_components_panel_row_menu_picked(action)
             }
             LibraryMessage::ComponentsPanelSplitDragStarted => {
+                self.library.components_panel.split_dragging = true;
                 self.handle_layout_drag_started(DragTarget::ComponentsSplit);
+                Task::none()
+            }
+            LibraryMessage::ComponentsPanelSplitHovered(is_hovered) => {
+                self.library.components_panel.split_hovered = is_hovered;
+                Task::none()
+            }
+            LibraryMessage::ComponentsPanelPreviewMoved(pane, gesture) => {
+                let zoom_step = self.ui_state.effective_zoom_step();
+                self.library
+                    .components_panel
+                    .preview_views
+                    .apply(pane, gesture, zoom_step);
                 Task::none()
             }
             LibraryMessage::ComponentsPanelDetailsLoaded {
@@ -643,6 +672,14 @@ impl Signex {
             }
             LibraryMessage::ComponentsPanelOpenProjectClicked => {
                 Task::done(Message::Menu(crate::menu_bar::MenuMessage::OpenProject))
+            }
+            LibraryMessage::BrowserPreviewLoaded {
+                key,
+                generation,
+                result,
+            } => self.handle_browser_preview_loaded(key, generation, result),
+            LibraryMessage::BrowserMoreMenuToggled { library_path } => {
+                self.handle_browser_more_menu_toggled(library_path)
             }
         }
     }

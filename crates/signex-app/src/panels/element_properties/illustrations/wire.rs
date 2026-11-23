@@ -1,6 +1,6 @@
 //! A wire or a bus: the segment at its width preset, the Start dot, the End
 //! mark and the derived length. Callouts stay off the stroke: Start / End
-//! under the ends of a horizontal wire and left of a vertical bus, the
+//! under the ends of a horizontal run and left of a vertical one, the
 //! length label beyond its dimension line, Width on a short leader below.
 
 use iced::Point;
@@ -13,11 +13,26 @@ use signex_widgets::property_illustration::{
 
 use super::{HEIGHT_EM, fields};
 
-/// Whether the run is drawn as a horizontal wire or a vertical bus.
+/// Whether a wire or bus is drawn lying down or standing up.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunShape {
-    Wire,
-    Bus,
+    Horizontal,
+    Vertical,
+}
+
+impl RunShape {
+    /// The way the segment from `start` to `end` runs on the sheet; a
+    /// diagonal counts by its longer axis.
+    pub fn of_segment(
+        start: signex_types::schematic::Point,
+        end: signex_types::schematic::Point,
+    ) -> Self {
+        if (end.y - start.y).abs() > (end.x - start.x).abs() {
+            Self::Vertical
+        } else {
+            Self::Horizontal
+        }
+    }
 }
 
 const VIEW_W: f32 = 264.0;
@@ -39,8 +54,8 @@ pub(super) fn band_width(preset: WireWidthPreset) -> f32 {
 /// it (value and unit).
 pub fn run(shape: RunShape, width: WireWidthPreset, length: String, i18n: &I18n) -> Illustration {
     let (start, end) = match shape {
-        RunShape::Wire => (Point::new(48.0, 56.0), Point::new(216.0, 56.0)),
-        RunShape::Bus => (Point::new(132.0, 20.0), Point::new(132.0, 96.0)),
+        RunShape::Horizontal => (Point::new(48.0, 56.0), Point::new(216.0, 56.0)),
+        RunShape::Vertical => (Point::new(132.0, 20.0), Point::new(132.0, 96.0)),
     };
     let segment = Part::new(
         Primitive::Band {
@@ -82,7 +97,7 @@ pub fn run(shape: RunShape, width: WireWidthPreset, length: String, i18n: &I18n)
     let end_text: Text = t!(i18n, ids::PANELS_PLACED_END).into();
     let width_text: Text = t!(i18n, ids::PROPERTIES_WIRE_WIDTH).into();
     let (names, length_callout, width_leader) = match shape {
-        RunShape::Wire => (
+        RunShape::Horizontal => (
             [
                 name(Point::new(start.x, 76.0), Anchor::Middle, start_text),
                 name(Point::new(end.x, 76.0), Anchor::Middle, end_text),
@@ -99,7 +114,7 @@ pub fn run(shape: RunShape, width: WireWidthPreset, length: String, i18n: &I18n)
                 anchor: Anchor::Start,
             },
         ),
-        RunShape::Bus => (
+        RunShape::Vertical => (
             [
                 name(Point::new(112.0, start.y), Anchor::End, start_text),
                 name(Point::new(112.0, end.y), Anchor::End, end_text),

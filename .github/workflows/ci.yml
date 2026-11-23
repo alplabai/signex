@@ -610,6 +610,17 @@ jobs:
         if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
         run: bash scripts/test_check_document_load_seam.sh
 
+      # Command operands run only through the entries in app/command and the
+      # agent route (#2731): zero production calls elsewhere in signex-app.
+      # Rules and blind spots live in the script. Hard gate.
+      - name: Command entry ratchet
+        if: ${{ !cancelled() }}
+        run: bash scripts/check_command_entry.sh
+
+      - name: Command entry ratchet controls
+        if: ${{ !cancelled() }}
+        run: bash scripts/test_check_command_entry.sh
+
       # A panic in the app must not leave a value taken out (#2651, ADR-0006):
       # production catch_unwind calls under crates/signex-app/src/app may only
       # get fewer. Rules and blind spots live in the script. Hard gate.

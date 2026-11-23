@@ -27,10 +27,12 @@ use crate::app::command::{CommandArgs, CommandContext, InvocationContext, bridge
 use crate::keymap::{AppCommandId, CatalogTextExt};
 use std::collections::BTreeSet;
 
-use super::menus::{CanvasSelection, CanvasShortcuts, canvas_menu_entries};
+use super::menus::{CanvasSelection, CanvasShortcuts, canvas_menu_entries, unions_entries};
+use super::project_tree::library::library_add_new_entries;
+use super::project_tree::planned::planned_entries as project_planned_entries;
 use super::submenu::{
-    align_entries, arrange_entries, part_actions_entries, place_entries, planned_entries,
-    sheet_actions_entries,
+    add_new_entries, align_entries, arrange_entries, part_actions_entries, place_entries,
+    planned_entries, sheet_actions_entries,
 };
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
@@ -48,15 +50,15 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     ("VCC", "power-port family, awaiting place_power_port(style)"),
     ("+5", "power-port family, awaiting place_power_port(style)"),
     ("+12", "power-port family, awaiting place_power_port(style)"),
-    // Place flyout: the greyed row standing for the planned tools (Graphite mockup #62).
-    ("5 planned tools…", "planned tools, no behaviour"),
+    // Place flyout: the greyed row standing for the planned tools (mockup row
+    // 62); Device Sheet Symbol is the one left.
+    ("1 planned tool…", "planned tools, no behaviour"),
     // Project tree: the Print row keeps its own wording (menu text per
     // surface is a later concern).
     ("Print...", "tree-addressed wording, no per-surface id"),
     // Canvas: planned rows that run nothing yet, in the "Planned (N)"
     // flyout (docs/MENU_BAR.md, "Sheet right-click menu").
     ("References", "planned submenu stub"),
-    ("Unions", "planned submenu stub"),
     ("Snippets", "planned submenu stub"),
     ("Comment...", "planned, no behaviour"),
     ("Pin Mapping...", "planned, no behaviour"),
@@ -75,18 +77,27 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     ("Close Project Documents", "tree-addressed"),
     ("Close Project", "tree-addressed"),
     ("Explore", "tree-addressed"),
-    ("Variants...", "planned, tree-addressed"),
+    ("Variant Manager", "tree-addressed"),
     ("Project Packager...", "planned, tree-addressed"),
     ("Project Releaser...", "planned, tree-addressed"),
     ("Share...", "planned, tree-addressed"),
     ("Enable Version Control...", "tree-addressed"),
-    ("Add New ▸ Component", "library-node action"),
-    ("Add New ▸ Symbol Library", "library-node action"),
-    ("Add New ▸ Footprint Library", "library-node action"),
+    // The library node's Add New flyout (mockup row 20).
+    ("Component", "library-node action"),
+    ("Symbol Library", "library-node or project action"),
+    ("Footprint Library", "library-node action"),
     ("Refresh All Pricing", "library-node action"),
     ("Remove from Project...", "tree-addressed"),
-    ("Remove from Project", "tree-addressed"),
     ("Open", "tree-addressed"),
+    // The project root's Add New to Project flyout.
+    ("Schematic", "tree-addressed"),
+    ("PCB", "tree-addressed"),
+    ("Component Library", "project action"),
+    ("PCB Library", "tree-addressed"),
+    ("Design Notebook", "planned, tree-addressed"),
+    ("Export Job", "planned, tree-addressed"),
+    ("Constraint File", "planned, tree-addressed"),
+    ("VHDL File", "planned, tree-addressed"),
     ("Show Differences...", "planned, tree-addressed"),
     ("Collapse", "tree-addressed"),
     ("Expand", "tree-addressed"),
@@ -285,7 +296,7 @@ fn check_live_row(
 #[test]
 fn command_rows_read_label_and_shortcut_from_the_catalog() {
     let mut walk = Walk::default();
-    for profile in ["altium", "classic"] {
+    for profile in ["signex_standard", "classic"] {
         let app = app_with_keymap(profile);
         let hint = |id: &str| app.keymap_shortcut_label(id);
         let sc = CanvasShortcuts::resolve(hint);
@@ -328,6 +339,8 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
                     "sheet actions",
                     sheet_actions_entries(i18n, TID, selection, &hint),
                 ),
+                // Mockup row 158: the Unions flyout.
+                ("unions", unions_entries(i18n, selection, &hint)),
             ];
             for (name, rows) in flyouts {
                 check_rows(
@@ -375,6 +388,19 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
             &flyout_ctx,
             &mut walk,
         );
+        // The project tree's flyouts (mockup row 20).
+        let i18n = signex_i18n::I18n::en_us_ref();
+        let tree_flyouts = [
+            (
+                "add new to project flyout",
+                add_new_entries(i18n, TID, vec!["proj".to_string()]),
+            ),
+            ("project planned flyout", project_planned_entries(i18n, TID)),
+            ("library add new flyout", library_add_new_entries(i18n, TID)),
+        ];
+        for (name, rows) in tree_flyouts {
+            check_rows(name, &rows, &app, &app.command_context(None), &mut walk);
+        }
 
         for has_schematic in [false, true] {
             let mut app = app_with_keymap(profile);
@@ -387,6 +413,7 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
                     x: 0.0,
                     y: 0.0,
                     key: Some(key),
+                    add_new_only: false,
                     window: None,
                 };
                 let rows = app

@@ -115,6 +115,9 @@ rules-preset-no-change = Nothing changes.
 rules-preset-apply = Apply
 rules-preset-cancel = Cancel
 
+# Under a rule Update PCB wrote from the schematic's Net Parameters directives (#1489).
+rules-from-schematic = from schematic
+
 # Rule drawings (#2530): the live preview under the grid and the matrix.
 rules-preview-heading = Preview
 rules-preview-expand = Expand preview
@@ -193,9 +196,12 @@ rules-preset-pill-changed = Changed
 rules-preset-pill-removed = Removed
 rules-preset-from-to = { $from } → { $to }
 
-# Text view (#2530): the problem banner and the undo note.
+# Text view (#2530): the problem banner, the undo note and the bar's label
+# and tag, which stand in for the domain tabs.
 rules-text-problem-at = Line { $line }, column { $column }:
 rules-text-undo-note = Edits apply as one undo step.
+rules-text-all-domains = All domains
+rules-text-view-tag = Text view
 
 # Constraint grid (#2530): the domain tabs. Signal integrity arrives with
 # the simulation band.

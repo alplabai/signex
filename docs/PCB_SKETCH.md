@@ -36,8 +36,9 @@ board thickness, not in mm, so a thickness change needs no re-bake.
 `signex_bake::bake_board(&SketchData, &[NetDef]) -> Result<BakedBoard,
 BoardBakeError>` is pure: it resolves the parameters, solves the sketch and
 reads the solved positions. Every baked item takes the uuid of the entity it
-came from (the first tagged edge of its loop, or the circle), so baking an
-unchanged sketch again gives an equal result.
+came from (the first tagged edge of its loop, or the circle), or for a pattern
+instance one derived from it, so baking an unchanged sketch again gives an
+equal result.
 
 Unlike the footprint bake, which skips a broken feature with a warning, the
 board bake refuses: a keepout or hole dropped without a word would pass DRC
@@ -53,7 +54,9 @@ unseen. `BoardBakeError` names the problem:
 | `OutlineCount` | the outline tags more than one closed profile |
 | `HoleNotACircle`, `HoleDrill`, `UnknownNet` | a hole on a non-circle, a drill not above 0, a net name the board lacks |
 | `VScoreNotALine` | a V-score on an arc or circle |
-| `Expression` | a cutout radius, drill or V-score depth that does not evaluate to a finite number |
+| `NotPatternable` | a pattern repeats the board outline or a component anchor, which cannot be instanced |
+| `TooManyInstances` | the sketch's patterns together write more than `MAX_ARRAY_INSTANCES` items |
+| `Expression` | a cutout radius, drill or V-score depth that does not evaluate to a finite number, or a board item's pattern that does not expand |
 
 **The outline is owned like a footprint's baked fields.** With an edge
 tagged `board_outline`, the bake returns the profile. With none tagged, it
@@ -188,7 +191,18 @@ Bake**.
   "Discard changes"). It never writes.
 - **Bake preview** opens a card with what Bake would write, a count per
   board target, or why the sketch does not bake; "Back to sketch" closes
-  it. It writes nothing.
+  it. It writes nothing. While it is open the canvas draws the result
+  (Graphite mockup row 190): a veil in the ground colour, then the baked outline over the
+  board area, cutouts and mounting holes as openings, keepouts outlined
+  and faintly filled, V-scores dashed, all in the theme slots of
+  [Drawing the board](#drawing-the-board), with the sketch faint on top.
+  The bake runs in `BoardSketchSession::refresh_preview` and the canvas
+  reads it from `SketchExit::board_result`; a refused bake draws nothing.
+  When the sketch does not bake, the card names why, and a click on the
+  reason selects the entity the refusal names
+  (`BoardBakeError::place`). The card also lists the failed
+  [outline checks](#outline-checks), each selecting its place; they warn
+  only.
 
 A save, close, quit or undock still commits the copy and keeps the mode on
 (`settle_board_sketch_of`), so a save never drops sketch work; the working
@@ -209,6 +223,74 @@ board starts with a fresh copy. A session whose board is no longer open
 
 The DOF chip's second pill names the board (its file stem), with no pad
 count.
+
+The board sketch has the footprint sketch's info bar ("Board shape · plane
+Top · grid …") and its Parameters button and table
+([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#parameters)); on a board, Esc
+with only the table open still acts as Discard changes, so close the
+table with its Close button.
+
+## Outline checks {#outline-checks}
+
+With nothing selected, Properties shows an **Outline checks** section under
+the Board summary (Graphite mockup row 179d). The checks run on the solve the editor already
+has (no second solve) and walk the outline with the bake's own profile walk
+(`signex_bake::board::outline_checks`), so they see what Bake would write.
+They are read each time the panel is built, so every edit, Properties edit,
+undo or solve shows them at once.
+
+| Check | Fails with |
+|---|---|
+| Closed: one loop | each pair of open ends (the two edges and the gap between their ends, in mm), a fork, or the number of loops |
+| No self-intersection | the two crossing edges and the point |
+| Holes, cutouts and keepouts inside the outline | each opening that is not inside (a mounting hole by its drill; touching the edge counts as inside) |
+| Inside corners: the router can cut them | each corner tighter than the router tool: a concave corner of the outline and every corner of a cutout or slot opening (radius 0 for a sharp corner, the cutout's edge radius when it names one, an arc's radius for a fillet), read `Inside corner R 0.00 < R 1.00 at (x, y)`; drilled mounting holes are skipped |
+
+A check that cannot run says why: no outline drawn (the board keeps its
+own), the outline not one closed loop yet, the sketch not solved, or (for
+inside corners) the project's fab profile names no router tool. A failing
+line names its place, and a click selects that entity (the first one, for a
+pair).
+
+The router tool diameter is the project's (`router_tool_diameter` in the
+`.snxprj`), set when a fab tier or a fab profile naming one is applied
+(`DRC_RULES.md`, "Fab profiles"). The board sketch session copies it from
+the board's project on entry and after every edit; Properties shows it in a
+**Fab profile** group (`Router tool Ø 2.00 · from profile`).
+
+**Every outline check warns only; Bake still applies the sketch**
+(`DECISIONS.md`, Caner 2026-11-20, decision 3).
+
+A failing inside corner is ringed on the canvas with a callout such as
+`R 0.00 < R 1.00`, and stays visible over the bake preview. **Add fillets**
+under the checks rounds each sharp corner between two lines to the router's
+radius, as one undo step (mockup row 179d). Each arc has a construction
+radius to each tangent point, held Perpendicular to its line, and a radius
+dimension, so it stays tangent through later dimension edits and adds no
+degree of freedom over the corner it replaces. The old corner Point goes in the
+same step unless it carries an attribute or a pad names it, so a fully
+constrained sketch stays fully constrained. A corner that is already an arc,
+whose lines are too short for the radius, or that something depends on is
+left alone and said in Messages. A corner is depended on when a constraint,
+pattern, pad or other entity names its Point, or when an equal-length or
+midpoint constraint measures one of its lines; a constraint on a line's
+direction still holds after the trim and does not stop the fillet.
+
+## Close gap {#close-gap}
+
+An open profile whose two nearest open ends are at most **0.05 mm** apart
+(`signex_sketch::heal::HEAL_TOLERANCE_MM`, the one heal tolerance shared with
+the DXF import, Caner 2026-11-20, decision 4) offers **Close gap**: on the open-outline
+line of the Outline checks, and in the bake preview card when the bake
+refuses an open profile. The line names the gap and the tolerance (`Gap 0.03
+mm, closes under the 0.05 mm heal tolerance`); a wider gap says `Gap 0.12 mm
+is wider than the 0.05 mm heal tolerance` and offers no button. Close gap
+joins the two end points into one (every edge, constraint and pattern that
+named the removed end names the kept one; a fixed end is kept), re-solves,
+and is one undo step. The open ends are found by one helper on both hosts,
+`signex_bake::open_ends`. An end pairs only with an end on the same plane and
+of the same role, and Close gap refuses two ends of different roles, so it
+never welds a courtyard to a keepout.
 
 ## Drawing the board {#drawing-the-board}
 
@@ -240,12 +322,14 @@ stay open, since the overlay draws them over it. Decision: `DECISIONS.md`,
 ## Not done yet
 
 - The board targets Slot, Pour, Room, Mechanical layer and Component
-  anchor, and the Create / Modify rows Slot, Polygon, Chamfer, Extend and
-  Linear Pattern (#2518): none is offered until it bakes. Patterns bake
-  their instances with #2517.
-- The bake preview drawn on the canvas in layer colours; today it is a
-  count per target.
-
+  anchor, and the Create rows Slot and Polygon (#2518): none is offered
+  until it bakes. Modify offers Chamfer, Extend and Linear Pattern on both
+  hosts ([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#modify-tools)); a board
+  bake writes every instance
+  ([Patterned board items](#patterned-board-items)).
+  Since 2026-11-20 the Create rows Slot and Polygon are offered on a board
+  as on a footprint, and bake as any closed profile
+  ([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#create-tools)).
 - Drawing V-scores. (Exporting them is done: through cutouts go to the
   Gerber profile, mounting holes to the drill files and V-scores to their own
   Gerber image; see [FABRICATION_OUTPUTS.md](FABRICATION_OUTPUTS.md).)
@@ -257,3 +341,154 @@ stay open, since the overlay draws them over it. Decision: `DECISIONS.md`,
   copper of that net. It reads no board area today, so the outline does not
   affect it.
 - A corpus golden for a board with a sketch (`SIGNEX_BLESS_CORPUS=1`).
+- Inside corners: the mockup's "Add fillets R 1.00" fix (not part of
+  decision 3), and the Project tab's Project setup tier pick setting the
+  router tool. Undoing a Presets apply puts the rules back but keeps the
+  router tool it set (the rule history holds the rules only).
+
+## Values, menus and patterns on the drawing
+
+The board sketch shares the footprint sketch's values on the drawing, its
+constraint and pattern menus, pattern glyphs, instance suppression and
+conflict badge, on the same canvas and the same code
+([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#values-on-the-drawing)).
+
+## Snapping to the board {#snapping-to-the-board}
+
+On a board sketch the cursor also snaps to the board drawn under the
+sketch (#2518, Graphite mockup row 179): the outline's vertices and the
+nearest point on an outline edge, placed pads' centres, drilled pads'
+centres (plated and not), via centres, both ends of every track and the
+corners of component courtyards (`snap_board.rs`). The backdrop carries
+them (`BoardBackdrop::from_board`); a courtyard drawn as an arc or a
+circle is not carried yet.
+
+- **Point only.** A board-feature snap places the point there and lands
+  no constraint. The point does not follow the feature when the board
+  changes: references to board features are not decided yet.
+- **Priority.** A sketch Point within reach still wins; the board comes
+  next, before guides, intersections, the H / V and angle inference and
+  the grid. Among board features a point (vertex, centre, track end,
+  corner) wins over an outline edge, and a through-hole pad reads as a pad
+  rather than its hole.
+- **Reach.** The sketch Point snap's 8 px, in board mm at the current
+  zoom.
+- **Snap ▾.** The board sketch's Snap ▾ adds a Board features group: Snap
+  to board features (one switch for all) and one row per kind (Board
+  outline, Pad centres, Hole centres, Via centres, Track ends, Courtyard
+  corners). All are on by default; the kind rows grey out while the switch
+  for all is off. Like the other Snap ▾ rows they are the sketch editor's
+  snap options, not board data: they record no undo step, are not saved,
+  and start on again with the next sketch mode. The footprint
+  sketch has no board and does not show the group.
+- **Badge.** The badge names the feature: "Pad · J1-1", "Courtyard · J1",
+  "Board outline", under a hollow square glyph (see
+  [FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#snap-badges)).
+
+The backdrop also draws placed pads (top, bottom or Multi-Layer copper)
+and component courtyards faint, in the board palette's colours, which are
+the same in both Graphite themes.
+
+## Pattern links on a board
+
+A board sketch stores pattern sources, pattern mirrors and per-instance
+overrides in `[board_sketch.sketch]` as a footprint sketch does
+([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#pattern-links)), and a board bake
+expands them ([Patterned board items](#patterned-board-items)). A board
+sketch holding any of them, or a reference dimension, is saved as
+`snxpcb/1.7`, so an older build opens it read-only instead of dropping them.
+A pattern that repeats a baked target, or a numbering sweep other than row by
+row, writes `snxpcb/1.8`: a build before the expansion would lose the
+instances on its next bake (`docs/FORMAT_VERSIONS.md`).
+
+## Patterned board items {#patterned-board-items}
+
+A pattern repeats a board item when its innermost source is the item's entity
+or a point that defines it. For a closed profile (keepout, cutout, slot, pour)
+that is any edge or point of the loop, and the whole loop repeats. For a
+mounting hole it is the circle or its centre. A V-score is one edge. Mechanical
+edges repeat as a connected shape: patterning any edge or point of it repeats
+all of it, whether it is a closed loop, an open chain or a branching figure.
+Edges connect where they share an end Point on the same mechanical layer; an
+arc's centre connects nothing, and a circle is a shape of its own (Caner,
+2026-11-22). Mockup rows 179 and 179e, #2517, #2772.
+
+- **Every instance is written** as its own item with the source's attributes:
+  linear, grid and polar patterns, a pattern of a pattern, and live mirrors.
+  Spacing and counts read the sketch parameters on each bake.
+- **Suppressed instances are not written**, the source's slot included, as a
+  footprint pattern leaves out that pad.
+- **One item per place.** Instances whose whole shape lands on the same spot
+  (a hole on its mirror line, a circle turned about its centre) write once.
+  Instances that only share a point (a polar pattern about the item's own
+  corner) are all written.
+- **A reflection keeps the item valid.** A mirrored boundary keeps the source's
+  winding and a mirrored arc still runs counter-clockwise.
+- **Uuids.** The item at the source's place keeps the entity's uuid; every other
+  takes one derived from the entity, the pattern and the instance
+  (`sketch::pattern_instance`), so an unchanged sketch re-bakes equal.
+- **Re-baking replaces.** Keepouts, cutouts, holes and V-scores are stored whole
+  with the sketch. Zones and drawings live in the board's lists, so
+  `SetBoardSketchBake` finds earlier instances by the source their uuid names,
+  which also removes the instances of a pattern that shrank or went.
+- **The cap covers the whole bake.** One bake writes at most
+  `MAX_ARRAY_INSTANCES` pattern instances over all its patterns and targets;
+  past it the bake refuses with `TooManyInstances`.
+- **A target that cannot repeat refuses the bake** with `NotPatternable`: the
+  board outline (a board has one) and a component anchor (a component is in one
+  place).
+- **A pattern that does not expand refuses the bake** with `Expression`
+  (for example "mounting hole pattern"): a count that is not a positive number
+  or is over the cap, a spacing that does not evaluate, a looped source chain.
+- **Outline checks** read every instance: a hole, cutout or keepout with one
+  instance outside the board is named by its entity.
+
+## Targets {#targets}
+
+Decision 2 (Caner, 2026-11-20) adds four board targets to the role picker,
+in the order of mockup row 179 without Room (rooms are not on the board yet): Board outline,
+Cutout, Slot, Keepout, Pour, V-score, Mechanical layer, Component anchor,
+Mounting hole (`SketchHost::Board.roles()`). The picker refuses a shape a
+role cannot take (`SketchRole::fits`; `SketchRole::misfit` names the shape:
+lines only, points only, circles only, edges).
+
+| Role | Entity attribute | Entity | Bakes to |
+|---|---|---|---|
+| Slot | `board_cutout` + `board_slot` (`BoardSlotAttr`) | a closed loop | a `PcbCutout` with the stadium boundary, `edge_radius` = width / 2 |
+| Pour | `pour` (`PourAttr`: copper layer, net name, priority, thermals) | a loop or a circle | a board `Zone`, `fill_type = "pour"` (`BakedKind::BoardPours`) |
+| Mechanical layer | `mechanical` (`MechanicalAttr`: `MechanicalLayer`, 1-based) | a line, arc or circle | a `BoardGraphic` on `Mechanical<n>` |
+| Component anchor | `component_anchor` (`ComponentAnchorAttr`: footprint uuid) | a point | the footprint's `position` |
+
+A Slot profile is checked by `signex_bake::board::slot`: exactly four edges,
+lines and arcs alternating, the lines parallel, of one length and twice the
+arc radius apart, the arcs of one radius, tangent to both lines and bulging
+outward. Anything else is `BoardBakeError::NotASlot` naming the seed edge. A
+plain Cutout on the same loop is not checked.
+
+The board pour is its own `BakedKind::BoardPours` (token `board_pours`), not
+the footprint's `Pours`: a board bake answers for exactly
+`SketchHost::Board.bake_targets()`, and `Pours` is a footprint field. A
+pour's net is a name the board's net table must hold (`UnknownNet`), an
+anchor's component a footprint the board holds (`UnknownComponent`; no
+component picked is `AnchorWithoutComponent`).
+
+Pours, mechanical drawings and anchors are not kept in `[board_sketch]`:
+they are the board's own rows, baked by `signex_bake::board::bake_board_items`
+(or `bake_board_with_items`, one solve for both). A zone takes the uuid of
+its seed edge and a drawing that of its edge. The board command
+`SetBoardSketchBake` (`BoardCommand::set_board_sketch_with_items`) does what
+`SetBoardSketch` does and, in the same step, replaces every zone and drawing
+whose uuid is an entity of the board sketch before or after, or a pattern
+instance of one ([Patterned board items](#patterned-board-items)), and moves each
+anchored footprint that is not locked (Messages names a locked one). Its
+inverse `RestoreBoardSketchBake` puts back the zone and drawing lists and the
+old positions bit for bit. The app uses it only when the sketch owns one of
+the three kinds now or did before (`SketchData::owns_board_items`), so a
+sketch without them commits through `SetBoardSketch` as before.
+
+The `.snxpcb` token is `snxpcb/1.7` while the board sketch carries any of
+`board_slot`, `pour`, `mechanical` or `component_anchor`
+(`SketchData::carries_board_targets`), `snxpcb/1.8` when a pattern repeats a
+target (`SketchData::repeats_baked_target`), else what it was (1.4, or 1.5
+with layer colours), byte for byte. Still to do: the drill and route output emits a
+Slot cutout as a stadium cutout, not a routed slot.

@@ -60,6 +60,9 @@ impl PanelContext {
         if self.net_inspector != main.net_inspector {
             self.net_inspector.clone_from(&main.net_inspector);
         }
+        if !std::sync::Arc::ptr_eq(&self.annotations, &main.annotations) {
+            self.annotations = std::sync::Arc::clone(&main.annotations);
+        }
         if self.component_classes != main.component_classes {
             self.component_classes.clone_from(&main.component_classes);
         }
@@ -112,7 +115,7 @@ impl PanelContext {
 
 /// What a window's context was built from; unchanged means it is current.
 ///
-/// The window's sheet revision; a stamp of what its panels read from the
+/// The window's sheet or board revision; a stamp of what its panels read from the
 /// app (the open tabs, the projects' names, sheets, parameters and net
 /// classes, which documents are dirty); the library data version; and
 /// whether ERC is running. Not the global edit epochs: an edit to another
@@ -173,7 +176,8 @@ impl Signex {
                 .document_state
                 .engines
                 .get(path)
-                .map(signex_engine::Engine::revision),
+                .map(signex_engine::Engine::revision)
+                .or_else(|| self.document_state.pcb_revisions.get(path).copied()),
             _ => None,
         };
         (
@@ -327,6 +331,7 @@ impl Signex {
         if self.interaction_state.acting_window.is_some() {
             return;
         }
+        self.sync_paused_tool_forms();
         let shares: Vec<(iced::window::Id, bool)> = self
             .document_state
             .window_panel_ctx

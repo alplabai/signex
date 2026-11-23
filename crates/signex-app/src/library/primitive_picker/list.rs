@@ -7,7 +7,10 @@ use signex_library::{PrimitiveKind, PrimitiveRef, PrimitiveSummary};
 use super::{PICKER_H, ROW_H};
 use crate::library::browser::{OVERSCAN_ROWS, visible_range};
 use crate::library::loose_symbols::LooseSymbol;
+use crate::library::primitive_label;
 use crate::library::state::{LibraryState, PrimitivePickerState, PrimitivePickerTarget};
+
+pub(super) use crate::library::state::PrimitiveChoice as Choice;
 
 /// What a group of rows holds.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,15 +23,6 @@ pub(super) enum Group {
     NotOpen(String),
     /// Symbols of files that belong to no library.
     NoLibrary,
-}
-
-/// What choosing a row does.
-#[derive(Debug, Clone)]
-pub(super) enum Choice {
-    /// Bind a primitive of an open library.
-    Pick(PrimitiveRef),
-    /// Ask to copy (or, for a library that is not open, link) the symbol.
-    Loose(LooseSymbol),
 }
 
 /// One entry of the flattened list.
@@ -88,30 +82,25 @@ fn push_group(items: &mut Vec<ListItem>, group: Group, rows: Vec<ListItem>) {
 }
 
 /// "file · name" from the summary's file; "name.ext" when the backend keeps
-/// no file.
+/// no file or the file is named by a uuid.
 fn library_row(s: &PrimitiveSummary, kind: PrimitiveKind, pick: PrimitiveRef) -> ListItem {
     let file = s
         .file
         .as_deref()
+        .filter(|file| !primitive_label::is_named_by_id(file))
         .and_then(std::path::Path::file_name)
         .map(|n| n.to_string_lossy().into_owned());
     let (file, name) = match file {
         Some(file) => (file, Some(s.name.clone())),
-        None => (format!("{}.{}", s.name, extension(kind)), None),
+        None => (
+            format!("{}.{}", s.name, primitive_label::extension(kind)),
+            None,
+        ),
     };
     ListItem::Row {
         file,
         name,
         choice: Choice::Pick(pick),
-    }
-}
-
-fn extension(kind: PrimitiveKind) -> &'static str {
-    match kind {
-        PrimitiveKind::Symbol => "snxsym",
-        PrimitiveKind::Footprint => "snxfpt",
-        PrimitiveKind::Sim => "snxsim",
-        _ => "snx",
     }
 }
 

@@ -73,6 +73,9 @@ impl Signex {
                 PasteArrayMsg::StepChanged(text) => state.step = text,
                 PasteArrayMsg::CountUpToggled(on) => state.set_count_up(on, preferred_step),
                 PasteArrayMsg::PreviewHovered(hover) => state.hover.update(hover),
+                PasteArrayMsg::PreviewExpandToggled => {
+                    state.preview_expanded = !state.preview_expanded;
+                }
                 PasteArrayMsg::DesignatorsChosen(mode) => {
                     state.designators = mode;
                     if mode.reads_project() {
@@ -94,6 +97,7 @@ impl Signex {
             epoch: self.interaction_state.placement_epoch,
             path: self.document_state.active_path.clone(),
             dialog: self.ui_state.paste_array.as_ref().map_or(0, |d| d.id),
+            from_agent: false,
         };
         let task = self.paste_seed_task(&request);
         if let (Some(_), Some(dialog)) = (&task, self.ui_state.paste_array.as_mut()) {

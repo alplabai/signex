@@ -21,6 +21,8 @@ pub(super) fn empty_snapshot() -> SchematicRenderSnapshot {
         drawings: Vec::new(),
         no_erc_directives: Vec::new(),
         directives: Vec::new(),
+        harness: Default::default(),
+        unions: Vec::new(),
         title_block: HashMap::new(),
         text_widths: Default::default(),
         text_extents: Default::default(),
@@ -69,6 +71,7 @@ fn hit_test_picks_the_right_wire_and_bus_among_many() {
         uuid: bus_uuid,
         start: Point::new(50.0, 0.0),
         end: Point::new(60.0, 0.0),
+        ..Default::default()
     });
 
     for (i, uuid) in wires.iter().enumerate() {

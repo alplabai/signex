@@ -1,22 +1,15 @@
-use crate::dropdown_style::GraphiteDropdown;
-use crate::{PickListPlaceholder, button, raw, text};
-use chrono::{Datelike, Local};
-use iced::widget::{column, container, pick_list, row};
-use iced::{Alignment, Background, Border, Element, Length, Widget};
-use signex_types::theme::ThemeTokens;
+//! The RKM encoder tab: a value, its tolerance and the optional resistor
+//! fields turned into an RKM code, plus an optional production date code.
+//! Plain data with a pure `update`; the page is drawn in
+//! `rkm_encoder_view.rs`.
 
-use super::color_code::ComponentColorCode;
-use super::color_code_view::color_code_representations;
+use chrono::{Datelike, Local, NaiveDate};
+
 use super::domain::{
     ComponentKind, ESeries, PreferredComponent, PreferredNumber, SiPrefix, Tolerance,
 };
-use super::network::format_value;
 use super::production_date_code::{ProductionDateCode, ProductionDateCycle, ProductionMonth};
 use super::rkm_code::{RatedPower, RkmCode, TemperatureCoefficient};
-use super::widgets::{MetricSizes, labeled, metric, token_color};
-
-/// Width (px) shared by the Component and Tolerance pickers.
-const WIDE_PICK_W: f32 = 125.0;
 
 #[derive(Debug, Clone)]
 pub enum RkmEncoderMessage {
@@ -30,7 +23,10 @@ pub enum RkmEncoderMessage {
     ProductionYearChanged(u16),
     ProductionMonthChanged(ProductionMonth),
     ClearResistorOptionalFields,
-    ClearProductionDate,
+    /// The "Optional" section header was clicked: fold or unfold it.
+    OptionalSectionToggled,
+    /// The production date subsection's enable box was ticked or cleared.
+    ProductionDateToggled(bool),
 }
 
 #[derive(Debug, Clone)]
@@ -41,20 +37,18 @@ pub struct RkmEncoder {
     pub tolerance: Tolerance,
     pub temperature_coefficient: Option<TemperatureCoefficient>,
     pub rated_power: Option<RatedPower>,
+    /// Whether the production date code is generated. While off, the picks
+    /// below are kept but give no code; turning it on restores them.
+    pub is_production_date_enabled: bool,
     pub production_date_cycle: Option<ProductionDateCycle>,
     pub production_year: Option<u16>,
     pub production_month: Option<ProductionMonth>,
+    /// Whether the "Optional" section (temperature coefficient, rated
+    /// power) is unfolded.
+    pub is_optional_expanded: bool,
     value_options: Vec<PreferredNumber>,
     production_year_options: Vec<u16>,
 }
-
-/// Caption size of the RKM encoder's controls.
-const RKM_CAPTION_SIZE: f32 = 12.0;
-/// The RKM result reads larger than the other tabs' read-outs.
-const RKM_METRIC: MetricSizes = MetricSizes {
-    label: 11.0,
-    value: 16.0,
-};
 
 impl Default for RkmEncoder {
     fn default() -> Self {
@@ -73,9 +67,11 @@ impl Default for RkmEncoder {
             tolerance: Tolerance::Percent1,
             temperature_coefficient: None,
             rated_power: None,
+            is_production_date_enabled: false,
             production_date_cycle: None,
             production_year: None,
             production_month: None,
+            is_optional_expanded: true,
             value_options,
             production_year_options: production_year_options(current_year),
         }
@@ -119,12 +115,31 @@ impl RkmEncoder {
                 self.temperature_coefficient = None;
                 self.rated_power = None;
             }
-            RkmEncoderMessage::ClearProductionDate => {
-                self.production_date_cycle = None;
-                self.production_year = None;
-                self.production_month = None;
+            RkmEncoderMessage::OptionalSectionToggled => {
+                self.is_optional_expanded = !self.is_optional_expanded;
+            }
+            RkmEncoderMessage::ProductionDateToggled(is_enabled) => {
+                self.set_production_date_enabled(is_enabled, Local::now().date_naive());
             }
         }
+    }
+
+    /// Switches the production date code on or off. The first time it is
+    /// switched on with nothing picked, the picks start at `today` (the
+    /// 20-year cycle, this year and month); picks made before are kept.
+    pub(super) fn set_production_date_enabled(&mut self, is_enabled: bool, today: NaiveDate) {
+        self.is_production_date_enabled = is_enabled;
+        let is_unpicked = self.production_date_cycle.is_none()
+            && self.production_year.is_none()
+            && self.production_month.is_none();
+        if !is_enabled || !is_unpicked {
+            return;
+        }
+        self.production_date_cycle = Some(ProductionDateCycle::TwentyYear);
+        self.production_year = u16::try_from(today.year()).ok();
+        self.production_month = usize::try_from(today.month0())
+            .ok()
+            .and_then(|index| ProductionMonth::ALL.get(index).copied());
     }
 
     pub fn code(&self) -> RkmCode {
@@ -139,7 +154,12 @@ impl RkmEncoder {
         code
     }
 
+    /// The production date code, or `None` while the subsection is off or
+    /// a pick is missing.
     pub fn production_date_code(&self) -> Option<ProductionDateCode> {
+        if !self.is_production_date_enabled {
+            return None;
+        }
         Some(ProductionDateCode::new(
             self.production_date_cycle?,
             self.production_year?,
@@ -155,196 +175,7 @@ impl RkmEncoder {
         &self.value_options
     }
 
-    pub fn view<'a>(&'a self, tokens: &'a ThemeTokens) -> Element<'a, RkmEncoderMessage> {
-        let inputs = row![
-            labeled(
-                RKM_CAPTION_SIZE,
-                "Component",
-                pick_list(Some(self.kind), ComponentKind::ALL, ToString::to_string)
-                    .graphite()
-                    .on_select(RkmEncoderMessage::KindChanged)
-                    .width(WIDE_PICK_W),
-            ),
-            labeled(
-                RKM_CAPTION_SIZE,
-                "Value",
-                pick_list(
-                    Some(self.value),
-                    self.value_options.as_slice(),
-                    ToString::to_string
-                )
-                .graphite()
-                .on_select(RkmEncoderMessage::ValueChanged)
-                .width(130),
-            ),
-            labeled(
-                RKM_CAPTION_SIZE,
-                "Unit",
-                pick_list(
-                    Some(self.prefix),
-                    SiPrefix::for_kind(self.kind),
-                    ToString::to_string
-                )
-                .graphite()
-                .on_select(RkmEncoderMessage::PrefixChanged)
-                .width(100),
-            ),
-            text(raw(self.prefix.unit(self.kind)))
-                .size(14)
-                .color(token_color(tokens.text_secondary)),
-            labeled(
-                RKM_CAPTION_SIZE,
-                "Tolerance",
-                pick_list(Some(self.tolerance), Tolerance::ALL, ToString::to_string)
-                    .graphite()
-                    .on_select(RkmEncoderMessage::ToleranceChanged)
-                    .width(WIDE_PICK_W),
-            ),
-        ]
-        .spacing(12)
-        .align_y(Alignment::End);
-
-        let mut content = column![inputs].spacing(14);
-        if self.kind == ComponentKind::Resistor {
-            let optional_fields = row![
-                labeled(
-                    RKM_CAPTION_SIZE,
-                    "Temperature coefficient",
-                    pick_list(
-                        self.temperature_coefficient,
-                        TemperatureCoefficient::ALL,
-                        ToString::to_string
-                    )
-                    .graphite()
-                    .on_select(RkmEncoderMessage::TemperatureCoefficientChanged)
-                    .placeholder_label(raw("Not specified"))
-                    .width(165),
-                ),
-                labeled(
-                    RKM_CAPTION_SIZE,
-                    "Rated power",
-                    pick_list(self.rated_power, RatedPower::ALL, ToString::to_string)
-                        .graphite()
-                        .on_select(RkmEncoderMessage::RatedPowerChanged)
-                        .placeholder_label(raw("Not specified"))
-                        .width(135),
-                ),
-                button(text(raw("Clear optional fields")))
-                    .padding([9, 14])
-                    .on_press(RkmEncoderMessage::ClearResistorOptionalFields),
-            ]
-            .spacing(12)
-            .align_y(Alignment::End);
-            content = content.push(optional_fields.boxed());
-        }
-
-        let production_date_fields = row![
-            labeled(
-                RKM_CAPTION_SIZE,
-                "Production date cycle",
-                pick_list(
-                    self.production_date_cycle,
-                    ProductionDateCycle::ALL,
-                    ToString::to_string
-                )
-                .graphite()
-                .on_select(RkmEncoderMessage::ProductionDateCycleChanged)
-                .placeholder_label(raw("Not specified"))
-                .width(150),
-            ),
-            labeled(
-                RKM_CAPTION_SIZE,
-                "Production year",
-                pick_list(
-                    self.production_year,
-                    self.production_year_options.as_slice(),
-                    ToString::to_string
-                )
-                .graphite()
-                .on_select(RkmEncoderMessage::ProductionYearChanged)
-                .placeholder_label(raw("Not specified"))
-                .width(130),
-            ),
-            labeled(
-                RKM_CAPTION_SIZE,
-                "Production month",
-                pick_list(
-                    self.production_month,
-                    ProductionMonth::ALL,
-                    ToString::to_string
-                )
-                .graphite()
-                .on_select(RkmEncoderMessage::ProductionMonthChanged)
-                .placeholder_label(raw("Not specified"))
-                .width(145),
-            ),
-            button(text(raw("Clear production date")))
-                .padding([9, 14])
-                .on_press(RkmEncoderMessage::ClearProductionDate),
-        ]
-        .spacing(12)
-        .align_y(Alignment::End);
-        content = content.push(production_date_fields.boxed());
-
-        let component = self.component();
-        let mut specification = format!(
-            "{} {}",
-            format_value(component.value(), self.kind),
-            self.tolerance
-        );
-        if let Some(temperature_coefficient) = self.temperature_coefficient {
-            specification.push_str(&format!(" {temperature_coefficient}"));
-        }
-        if let Some(rated_power) = self.rated_power {
-            specification.push_str(&format!(" {rated_power}"));
-        }
-        let color_codes = color_code_representations(
-            ComponentColorCode::representations_for_kind_with_temperature_coefficient(
-                self.kind,
-                component,
-                self.tolerance,
-                self.temperature_coefficient,
-            ),
-            self.kind,
-            tokens,
-        );
-        let mut output = column![
-            metric(RKM_METRIC, "Specification", specification, tokens),
-            metric(RKM_METRIC, "RKM code", self.code().to_string(), tokens),
-        ]
-        .spacing(10);
-        if let Some(production_date_code) = self.production_date_code() {
-            output = output.push(metric(
-                RKM_METRIC,
-                "Production date code",
-                production_date_code.to_string(),
-                tokens,
-            ));
-        } else if self.production_date_cycle.is_some()
-            || self.production_year.is_some()
-            || self.production_month.is_some()
-        {
-            output = output.push(
-                text(raw(
-                    "Select a production-date cycle, year, and month to generate the code.",
-                ))
-                .size(12)
-                .color(token_color(tokens.text_secondary))
-                .boxed(),
-            );
-        }
-        output = output.push(color_codes);
-        let output: Element<'a, RkmEncoderMessage> = container(output)
-            .padding(14)
-            .width(Length::Fill)
-            .style(move |_theme| panel_style(tokens))
-            .boxed();
-        content = content.push(output);
-
-        content.boxed()
-    }
-
-    fn component(&self) -> PreferredComponent {
+    pub(super) fn component(&self) -> PreferredComponent {
         PreferredComponent {
             number: self.value,
             decade: self.prefix.exponent(),
@@ -358,17 +189,4 @@ fn production_year_options(current_year: u16) -> Vec<u16> {
         return vec![current_year];
     }
     (FIRST_DOCUMENTED_YEAR..=current_year).rev().collect()
-}
-
-fn panel_style(tokens: &ThemeTokens) -> container::Style {
-    container::Style {
-        background: Some(Background::Color(token_color(tokens.panel_bg))),
-        border: Border {
-            width: 1.0,
-            radius: 4.0.into(),
-            color: token_color(tokens.border),
-            ..Border::default()
-        },
-        ..container::Style::default()
-    }
 }

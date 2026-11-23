@@ -68,11 +68,13 @@ cargo run --example build_stock_library -p signex-app -- --force
 
 The four power ports (GND, VCC, +3V3, +5V) take their stem and head
 geometry from `power_port_lib_symbol` in `signex-types`, so a stock port
-and a built-in one are the same size (2.54 mm stem, 1.27 mm for GND; #2091,
-#2101). Their committed files were edited in place to match the generator,
-which keeps any other edit made in Signex. GND already had the 1.27 mm stem
-and is byte-identical to before. The resistor (R) and inductor (L) were
-reshaped in #2101, with their pins kept at ±3.81 mm.
+and a built-in one are the same size (#2091, #2101). Their committed files
+were edited in place to match the generator, which keeps any other edit
+made in Signex. Since 2026-11-21 every port has the 1.27 mm stem GND always
+had: VCC, +3V3 and +5V went from 2.54 mm to 1.27 mm (pin length and head
+moved one grid step closer to the pin tip), edited in place the same way,
+and GND is byte-identical. The resistor (R) and inductor (L) were reshaped
+in #2101, with their pins kept at ±3.81 mm.
 
 No symbol version was bumped for it, for the reason given under Chip
 passives below: drift is decided by content hash, not by version. A sheet

@@ -42,10 +42,13 @@ notice-library-read-only-detail = The library "{ $library }" ships with { -brand
 # $library is the library's name.
 notice-library-history-missing-detail = The library "{ $library }" is open read-only because its Git history is missing. Close it and open it again to re-init its history, or restore its .git folder.
 # A save found its file changed outside the app. $name is the file name.
-notice-disk-changed =
-    { $name } changed on disk since it was opened or last saved. Saving now would discard that change.
-
-    Overwrite replaces the file with this document. Reload from disk loads the file and discards the unsaved edits in this document.
+notice-disk-changed = { $name } changed on disk since it was opened or last saved. Saving now would discard that change.
+# What each choice of that card does, shown beside the choice's button label
+# ("Save As…", "Overwrite", "Reload from disk"). Lower case: each one
+# continues the label.
+notice-disk-changed-save-as = writes this document to a new file and leaves the changed file as it is.
+notice-disk-changed-overwrite = replaces the file with this document.
+notice-disk-changed-reload = loads the file and discards the unsaved edits in this document.
 # $name is the file name; $path is the full path the save writes to.
 notice-disk-missing = { $name } is missing on disk (deleted or moved). Re-create writes this document to { $path }.
 # $name is the file name; $folder is the folder that is gone.
@@ -81,7 +84,7 @@ notice-stock-copy-failed =
 
 ## Autosave recovery: a Restore that did not happen. $name is the file name.
 
-notice-recovery-needs-open = Restore needs the document open: reopen { $name } to restore. The copy is kept and autosave stays paused for it.
+notice-recovery-needs-open = Restore needs the document open in a tab. { $name } has unsaved changes but no tab: open it from the project tree, which keeps those changes, then choose Restore. The copy is kept and autosave stays paused for it.
 notice-recovery-still-moving = The recovery copy of { $name } is still being moved to the file's new name. It was kept; choose Restore again in a moment.
 notice-recovery-renamed-while-reading = { $name } was renamed while its recovery copy was being read. The copy was kept and is offered again.
 # $reason is why the copy could not be read, in English.
@@ -92,7 +95,7 @@ notice-recovery-copy-gone =
 notice-recovery-copy-unreadable =
     { $reason }
     The copy was kept and is offered again. Autosave stays paused for this document until you answer.
-notice-recovery-edited-during-prompt = { $name } was edited while the prompt was open, so its recovery copy was not loaded over those edits. The copy was kept and is offered again. Autosave stays paused for this document until you answer, so neither version is overwritten.
+notice-recovery-edited-during-prompt = { $name } was edited while the prompt was open, so its recovery copy was not loaded over those edits. If it has no tab, a project-wide run such as Annotate made them: open it from the project tree to see them. To restore the copy instead, undo or save those edits first. The copy was kept and is offered again. Autosave stays paused for this document until you answer, so neither version is overwritten.
 notice-recovery-tab-not-activated = The tab of { $name } could not be activated, so its recovery copy was not restored. The copy was kept and is offered again. Autosave stays paused for this document until you answer.
 notice-recovery-target-closed = { $name } was closed, so its recovery copy was not restored. The copy was kept and is offered again the next time the file is opened.
 
@@ -210,9 +213,6 @@ notice-recent-gone = { $path } no longer exists. It has been removed from File >
 
 # $reason is why, in English.
 notice-run-refused = { $label } was not run: { $reason }
-# $count is a whole number; $sheets lists the files. The English keeps
-# "sheet(s)" for every count.
-notice-run-write-failed = { $label } could not write { $count } unopened sheet(s) and left them as they were on disk: { $sheets }. The open sheets were still renumbered, so run it again once the cause is fixed.
 # $sheets lists the sheets and why each is skipped.
 notice-run-would-skip = { $label } was not run: it would skip { $sheets }, and renumbering around a sheet can repeat its designators. Nothing was changed; try again once the sheet is free.
 # $summary lists the skipped sheets.
@@ -241,7 +241,7 @@ notice-bom-issues = Wrote { $path } with { $summary }.{ $issues }
 notice-bom-issues-more =
     Wrote { $path } with { $summary }.{ $issues }
     { "..." } and { $more } more
-notice-export-page-invalid = Specific page must be a positive page number (1, 2, 3, ...).
+notice-export-page-invalid = Pages must be page numbers or ranges from 1 up, such as 1-2, 4.
 notice-export-no-files = Select at least one file in the Settings tab before exporting.
 notice-bom-no-sheet = Cannot build BOM: no active schematic.
 # $path is the source document.

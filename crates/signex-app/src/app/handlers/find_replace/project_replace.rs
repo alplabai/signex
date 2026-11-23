@@ -421,11 +421,13 @@ impl Signex {
             return false;
         };
         let mut sheet = sheet.clone();
+        let read_hash = sheet.take_source_hash();
         crate::app::sheet_repairs::take_and_log(path, &mut sheet);
         match Engine::new_with_path(sheet, Some(path.to_path_buf())) {
             Ok(engine) => {
                 self.document_state
                     .insert_engine(path.to_path_buf(), engine);
+                self.settle_parked_sheet(path, read_hash);
                 true
             }
             Err(error) => {
@@ -442,7 +444,7 @@ impl Signex {
     /// the path for the rest of the session and shadow a later open.
     pub(crate) fn drop_unchanged_tabless(&mut self, path: &Path, tabless: bool) {
         if tabless {
-            self.document_state.remove_engine(path);
+            self.abandon_parked_sheet(path);
         }
     }
 }

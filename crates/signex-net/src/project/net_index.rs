@@ -312,6 +312,32 @@ impl NetIndex {
             .collect()
     }
 
+    /// The [`steps`](Self::steps) of `net` as a member list shows them: a
+    /// power port once, as its port, without the pin of its own symbol.
+    pub fn listed_members(&self, net: usize) -> Vec<&NetMember> {
+        let ports: HashSet<(&SheetKey, Uuid)> = self.nets.get(net).map_or_else(HashSet::new, |n| {
+            n.members
+                .iter()
+                .filter(|m| m.kind == NetMemberKind::PowerPort)
+                .map(|m| (&m.sheet, m.id))
+                .collect()
+        });
+        self.steps(net)
+            .into_iter()
+            .filter(|m| {
+                !matches!(m.kind, NetMemberKind::Pin { .. }) || !ports.contains(&(&m.sheet, m.id))
+            })
+            .collect()
+    }
+
+    /// The component pins of `net`: its listed pins, so no power port.
+    pub fn component_pin_count(&self, net: usize) -> usize {
+        self.listed_members(net)
+            .iter()
+            .filter(|m| matches!(m.kind, NetMemberKind::Pin { .. }))
+            .count()
+    }
+
     /// Every element of net `net` that is drawn, per sheet, for dimming
     /// everything else: members plus the sheet symbol a sheet entry sits on.
     pub fn highlight_elements(

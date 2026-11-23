@@ -522,6 +522,7 @@ mod tests {
             "place_net_label",
             "place_no_connect",
             "place_no_erc",
+            "place_parameter_set",
             "place_power_symbol",
             "place_sheet_entry",
             "place_sheet_symbol",

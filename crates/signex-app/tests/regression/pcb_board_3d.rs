@@ -87,6 +87,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -434,14 +435,16 @@ fn a_renamed_board_keeps_its_3d_view() {
     let mut f = open_board();
     f.menu("view_board_3d");
     let renamed = f.path.with_file_name("renamed.snxpcb");
-    f.app.ui_state.rename_dialog = Some(RenameDialogState {
+    f.app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: f.path.clone(),
         tree_path: vec![0],
         buffer: "renamed.snxpcb".to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     crate::settle_support::settle(&mut f.app, Message::Rename(RenameMsg::Submit));
     assert!(renamed.exists(), "the file moved");
     f.path = renamed;

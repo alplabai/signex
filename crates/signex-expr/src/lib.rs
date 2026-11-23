@@ -27,6 +27,7 @@ mod format;
 mod func;
 mod lex;
 pub mod parse;
+pub mod rename;
 pub mod resolver;
 pub mod source;
 pub mod symbols;
@@ -39,6 +40,9 @@ pub use deps::{dependency_order, references};
 pub use dimension::{Dimension, MAX_DIM_EXPONENT};
 pub use eval::eval;
 pub use parse::{RESERVED_CONSTANTS, is_reserved_constant, parse, parse_with};
+pub use rename::{
+    inline_reference, is_identifier, reads_reference, referenced_names, rename_reference,
+};
 pub use resolver::{Binding, Layered, NoBindings, Resolver};
 pub use source::{FieldText, classify, expression_body};
 pub use symbols::{BareM, LiteralContext, bare_m_meaning};

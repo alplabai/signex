@@ -413,7 +413,6 @@ fn moved_graphite_strings_of_the_third_wave_keep_their_english() {
             "This symbol has no pins yet. Open the Symbol Editor to add some.",
         ),
         (ids::EDITORS_COMPONENT_PARTS_EMPTY, "No alternates yet."),
-        (ids::OVERLAY_SYMBOL_CARD_DESIGNATOR, "Designator"),
         (ids::OVERLAY_SYMBOL_CARD_LIBRARY, "Library"),
         (ids::LIBRARY_ROW_NO_SYMBOL, "No symbol bound"),
         (
@@ -488,7 +487,10 @@ fn moved_dialog_button_labels_keep_their_english() {
         (ids::DIALOG_AUTOSAVE_RECOVERY_RESTORE, "Restore"),
         (ids::DIALOG_AUTOSAVE_RECOVERY_LATER, "Decide later"),
         (ids::DIALOG_UNSAVED_DISCARD_ALL, "Discard All"),
-        (ids::DIALOG_CREATE_CHILD_SHEET_OPEN_EXISTING, "Open it"),
+        (
+            ids::DIALOG_CREATE_CHILD_SHEET_OPEN_EXISTING,
+            "Use existing file",
+        ),
         (ids::DIALOG_CREATE_CHILD_SHEET_BROWSE, "Browse..."),
         (ids::DIALOG_CREATE_CHILD_SHEET_LATER, "Later"),
         (

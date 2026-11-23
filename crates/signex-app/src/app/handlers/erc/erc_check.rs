@@ -73,9 +73,17 @@ impl Signex {
             project_dir: project.map(|p| p.dir().to_path_buf()),
             overrides,
             rule_set: self.rule_set_identity_of(project),
-            config: signex_erc::ErcConfig::with_pin_matrix_overrides(&pin_matrix_overrides),
+            config: signex_erc::ErcConfig::with_pin_matrix_overrides(&pin_matrix_overrides)
+                .with_harness_definitions(
+                    project
+                        .map(|p| p.data.schematic_design.harness_definitions.as_slice())
+                        .unwrap_or_default(),
+                ),
             net_waivers: rules.map(|r| r.erc_net_waivers.clone()).unwrap_or_default(),
             violation_waivers: rules.map(|r| r.erc_waivers.clone()).unwrap_or_default(),
+            channel_naming: project
+                .map(|p| crate::app::saved_channel_naming::SavedChannelNaming::of(&p.data))
+                .unwrap_or_default(),
             fold: crate::app::state::project_case::fold_of(project),
         };
         (inputs, notes)

@@ -13,7 +13,7 @@ use crate::styles::{
     self, DialogButtonKind, PillTone, Radii, chrome_px, dialog_button, ti, tokens,
 };
 use iced::widget::{Column, Space, column, container, row, scrollable};
-use iced::{Alignment, Background, Border, Element, Font, Length, Theme, Widget as _};
+use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text, tooltip};
@@ -153,7 +153,11 @@ fn nav_row<'a>(
         ti(t.selection),
         tokens::overlay(t, tokens::Overlay::Hover),
     );
-    let font = if active { medium() } else { Font::DEFAULT };
+    let font = if active {
+        medium()
+    } else {
+        signex_widgets::ui_font::regular()
+    };
     let mut line = row![
         text(t!(i18n, graphite_label(item)))
             .size(TS.label)
@@ -212,11 +216,9 @@ fn dirty_dot<'a>(t: &ThemeTokens, i18n: &I18n) -> Element<'a, PrefMsg> {
         });
     tooltip(
         dot,
-        iced::widget::container(
-            container(text(t!(i18n, ids::PREFERENCES_UNSAVED)).size(TS.caption))
-                .padding([SP.xs, SP.s + SP.xs]),
-        )
-        .style(styles::context_menu(t)),
+        container(text(t!(i18n, ids::PREFERENCES_UNSAVED)).size(TS.caption))
+            .padding([SP.xs, SP.s + SP.xs])
+            .style(styles::context_menu(t)),
         tooltip::Position::Bottom,
     )
     .boxed()
@@ -225,12 +227,13 @@ fn dirty_dot<'a>(t: &ThemeTokens, i18n: &I18n) -> Element<'a, PrefMsg> {
 /// What the footer says left of its buttons, in the mock's order: the
 /// Language page says when the language changes; otherwise unsaved changes
 /// show the warn pill; otherwise the Appearance page says themes preview
-/// live.
+/// live and the Rule Profiles page that its edits save at once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum FooterNote {
     LanguageApplies,
     Unsaved,
     ThemePreviews,
+    RuleProfilesSave,
     Nothing,
 }
 
@@ -239,6 +242,7 @@ pub(super) fn footer_note(nav: PrefNav, dirty: bool) -> FooterNote {
         (PrefNav::Language, _) => FooterNote::LanguageApplies,
         (_, true) => FooterNote::Unsaved,
         (PrefNav::Appearance, false) => FooterNote::ThemePreviews,
+        (PrefNav::RuleProfiles, false) => FooterNote::RuleProfilesSave,
         _ => FooterNote::Nothing,
     }
 }
@@ -266,10 +270,20 @@ fn graphite_footer<'a>(v: &PrefsView<'a>) -> Element<'a, PrefMsg> {
             .size(TS.body)
             .color(ink3)
             .boxed(),
+        FooterNote::RuleProfilesSave => {
+            text(t!(v.i18n, ids::PREFERENCES_RULE_PROFILES_FOOTER_NOTE))
+                .size(TS.body)
+                .color(ink3)
+                .boxed()
+        }
         FooterNote::Nothing => Space::new().boxed(),
     };
+    // A pitch label holding refused text stays open: Save refuses it, and
+    // the plain Close of a clean dialog would drop it.
     let ok_msg = if v.dirty {
         PrefMsg::SaveAndClose
+    } else if v.pages_view.snap_label_refused(v.draft_fast_grids, v.i18n) {
+        PrefMsg::Save
     } else {
         PrefMsg::Close
     };
@@ -331,6 +345,20 @@ mod tests {
             FooterNote::ThemePreviews
         );
         assert_eq!(footer_note(PrefNav::Annotation, false), FooterNote::Nothing);
+    }
+
+    /// Mockup row 148: the page says its edits save at once; unsaved changes
+    /// of another page still take the footer.
+    #[test]
+    fn the_rule_profiles_page_says_it_saves_at_once() {
+        assert_eq!(
+            footer_note(PrefNav::RuleProfiles, false),
+            FooterNote::RuleProfilesSave
+        );
+        assert_eq!(
+            footer_note(PrefNav::RuleProfiles, true),
+            FooterNote::Unsaved
+        );
     }
 
     #[test]

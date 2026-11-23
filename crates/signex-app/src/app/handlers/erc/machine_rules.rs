@@ -14,7 +14,9 @@ use iced::Task;
 use signex_erc::project_rules::profile::adopt_profile;
 use signex_types::project::RuleProfile;
 
-use super::super::super::state::rule_profile_ui::{Dispatch, QueuedWrite, WriteOutcome, run_all};
+use super::super::super::state::rule_profile_ui::{
+    Dispatch, MachineRulesIssue, QueuedWrite, WriteOutcome, run_all,
+};
 use super::super::super::*;
 use super::rule_profiles::blocking;
 use crate::rule_profiles::{self, ProfileKind, USER_DEFAULT_PROFILE_NAME};
@@ -22,7 +24,7 @@ use crate::rule_profiles::{self, ProfileKind, USER_DEFAULT_PROFILE_NAME};
 impl Signex {
     /// Whether the machine's rules may be edited now. They may not while the
     /// boot task is still reading them: a write would store defaults over the
-    /// user's file. The ERC dialog says so (`machine_rules_notice`).
+    /// user's file. The ERC dialog says so (`machine_rules_issue`).
     fn machine_rules_editable(&self) -> bool {
         if let Some(why) = &self.ui_state.machine_rules_locked {
             crate::diagnostics::log_warning(format!(
@@ -40,23 +42,26 @@ impl Signex {
         true
     }
 
-    /// A line for the ERC dialog when it edits the machine's rules and they
-    /// are not in a state where edits are saved.
+    /// Why edits of the machine's rules are not being saved, for the ERC
+    /// dialog and the Rule Profiles page.
+    pub(crate) fn machine_rules_issue(&self) -> Option<MachineRulesIssue<'_>> {
+        let ui = &self.ui_state;
+        if let Some(why) = ui.machine_rules_locked.as_deref() {
+            return Some(MachineRulesIssue::ReadOnly(why));
+        }
+        if ui.machine_rules_loading {
+            return Some(MachineRulesIssue::Loading);
+        }
+        ui.machine_rules_problem
+            .as_deref()
+            .map(MachineRulesIssue::NotSaving)
+    }
+
+    /// [`Self::machine_rules_issue`] as the plain sentence the user reads.
+    #[cfg(test)]
     pub(crate) fn machine_rules_notice(&self) -> Option<String> {
-        if let Some(why) = &self.ui_state.machine_rules_locked {
-            return Some(format!(
-                "The machine's rules are read-only this session, because your old ERC \
-                 preferences could not be merged into User Default yet: {why}"
-            ));
-        }
-        if self.ui_state.machine_rules_loading {
-            return Some(
-                "Loading the User Default profile; changes wait until it has loaded.".into(),
-            );
-        }
-        self.ui_state.machine_rules_problem.as_ref().map(|why| {
-            format!("User Default is not saving: {why} Your changes last until you quit.")
-        })
+        let notice = self.machine_rules_issue()?.localized(&self.ui_state.i18n);
+        Some(notice.into_string().replace(['\u{2068}', '\u{2069}'], ""))
     }
 
     /// Set one rule's severity in the machine's rules and queue the write.
@@ -117,6 +122,12 @@ impl Signex {
             &self.ui_state.erc_severity_override,
             &self.ui_state.pin_matrix_overrides,
         );
+        self.show_machine_rules(&erc);
+        self.submit_profile_write(USER_DEFAULT_PROFILE_NAME, QueuedWrite::UserDefault(erc))
+    }
+
+    /// Put `erc` on the `User Default` row of the profile listing.
+    fn show_machine_rules(&mut self, erc: &signex_types::project::ErcRules) {
         if let Some(entry) = self
             .ui_state
             .profile_manager
@@ -125,19 +136,39 @@ impl Signex {
             .iter_mut()
             .find(|l| l.kind == ProfileKind::UserDefault)
         {
-            entry.profile.erc = adopt_profile(&entry.profile.erc, &erc);
+            entry.profile.erc = adopt_profile(&entry.profile.erc, erc);
         }
-        self.submit_profile_write(USER_DEFAULT_PROFILE_NAME, QueuedWrite::UserDefault(erc))
+    }
+
+    /// After a read of the library: while the machine's rules are not saving,
+    /// ERC runs with the in-memory rules, so the page shows those and not the
+    /// older file.
+    pub(crate) fn keep_unsaved_machine_rules_shown(&mut self) {
+        if self.ui_state.machine_rules_problem.is_none() {
+            return;
+        }
+        let erc = signex_erc::project_rules::seed_from_overrides(
+            &self.ui_state.erc_severity_override,
+            &self.ui_state.pin_matrix_overrides,
+        );
+        self.show_machine_rules(&erc);
     }
 
     /// Hand `write` to the queue; the returned Task is the worker when the
     /// queue was idle, else nothing (the write waits its turn).
     pub(crate) fn submit_profile_write(&mut self, key: &str, write: QueuedWrite) -> Task<Message> {
         if rule_profiles::profiles_dir().is_none() {
-            crate::diagnostics::log_warning(
-                "This platform has no config folder for rule profiles, so the change is kept \
-                 for this session only.",
-            );
+            let why = "This platform has no config folder for rule profiles, so the change is \
+                       kept for this session only.";
+            crate::diagnostics::log_warning(why);
+            // The page's Saved pill reads these: the change reached no file.
+            if matches!(write, QueuedWrite::UserDefault(_)) {
+                self.ui_state.machine_rules_problem = Some(why.into());
+            } else {
+                let manager = &mut self.ui_state.profile_manager;
+                manager.status = Some((true, why.into()));
+                manager.failed_write = Some(key.to_lowercase());
+            }
             return Task::none();
         }
         match self.ui_state.profile_writes.submit(key, write) {
@@ -146,28 +177,29 @@ impl Signex {
         }
     }
 
-    /// A queued write ended. A failure is shown where the user is looking (the
-    /// Rule Profiles pane, or the ERC dialog for the machine's rules) as well
-    /// as logged; the pane reads the files again so it never keeps showing an
-    /// edit that did not reach the disk.
+    /// A queued write ended. A failure is logged and shown on the Rule Profiles
+    /// page (and in the ERC dialog for the machine's rules). The page reads
+    /// the files again: a library profile goes back to what its file holds,
+    /// while the machine's rules stay as ERC runs them, marked as not saved.
     pub(crate) fn handle_profile_write_finished(
         &mut self,
         result: &Result<WriteOutcome, String>,
     ) -> Task<Message> {
-        let machine = matches!(
-            self.ui_state.profile_writes.running().map(|d| &d.write),
-            Some(QueuedWrite::UserDefault(_))
-        );
-        let mut relist = false;
+        let running = self.ui_state.profile_writes.running();
+        let machine = matches!(running.map(|d| &d.write), Some(QueuedWrite::UserDefault(_)));
+        let key = running.map(|d| d.key.clone());
         match result {
             Err(why) => {
                 crate::diagnostics::log_warning(why);
+                let manager = &mut self.ui_state.profile_manager;
                 if machine {
                     self.ui_state.machine_rules_problem = Some(why.clone());
                 } else {
-                    self.ui_state.profile_manager.status = Some((true, why.clone()));
+                    manager.status = Some((true, why.clone()));
+                    manager.failed_write = key;
                 }
-                relist = true;
+                // Kept until the queue drains: a later write must not lose it.
+                manager.relist_pending |= manager.loaded;
             }
             // Another runner already ran this write; that says nothing about
             // the file, so the problem state stays as it was.
@@ -175,6 +207,8 @@ impl Signex {
             Ok(WriteOutcome::Done(done)) => {
                 if machine {
                     self.ui_state.machine_rules_problem = None;
+                } else if self.ui_state.profile_manager.failed_write == key {
+                    self.ui_state.profile_manager.failed_write = None;
                 }
                 if let Some(profile) = done {
                     self.ui_state
@@ -188,10 +222,8 @@ impl Signex {
             None => {
                 let manager = &mut self.ui_state.profile_manager;
                 // A listing held back (even the first one, before the pane
-                // counted as loaded) is read again now; a failed write only
-                // matters to a pane that is showing profiles.
-                let held_back = std::mem::take(&mut manager.relist_pending);
-                if held_back || (relist && manager.loaded) {
+                // counted as loaded) or owed by a failed write is read now.
+                if std::mem::take(&mut manager.relist_pending) {
                     return Self::list_profiles_task();
                 }
                 Task::none()

@@ -43,6 +43,7 @@ pcb-geom = { path = "../pcb-geom" }
 signex-drc = { workspace = true }
 signex-drc-dsl = { workspace = true }
 signex-req = { workspace = true }
+signex-notebook = { workspace = true }
 signex-net = { workspace = true }
 signex-output = { workspace = true }
 # The Gerber Viewer's reader and compare (#2539), UI-free.

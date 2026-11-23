@@ -395,6 +395,8 @@ fn restore_recovery_copy(app: &mut Signex, path: &std::path::Path, copy: Schemat
             path: path.to_path_buf(),
             age_secs: 0,
             older_than_file: false,
+            saved_age_secs: None,
+            checked_at: std::time::SystemTime::UNIX_EPOCH,
         },
         result: Ok(RestoredDocument::Schematic(Box::new(copy))),
     };

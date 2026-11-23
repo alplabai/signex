@@ -193,6 +193,13 @@ surface floor (`scene_shader::SchematicSurface`) and the Symbol Editor.
    The paper border in `canvas/draw/background.rs` is chrome, not a
    schematic stroke: a fixed `with_width(1.0)` logical px, outside the floor
    rule and the snap.
+
+   **Stroke ends.** A solid scene line (a placed wire or bus segment) is
+   stroked with round ends, `renderer_scene_canvas::solid_line_stroke`, so two
+   segments meeting at a bend close the corner even where the snap moves
+   their ends apart. The wire and bus routing preview strokes its segments
+   with the same function, so a route draws its corners as the placed one
+   will (`wire_corner_tests::the_routing_preview_joins_its_corners_like_a_placed_segment`).
 5. **Display scale.** The floor and the snap are defined in device pixels.
    Each window's scale (OS factor times the interface scale,
    `UiState::device_px_per_logical_px`) reaches its canvas through
@@ -214,9 +221,9 @@ A power port (`Symbol::is_power`) draws its body strokes, its pin and its
 Value text in the theme's `power` colour, on the canvas and in SVG / PDF
 (still through the focus dimming). The reference keeps the body colour. The
 placement ghost keeps the single ghost colour. Built-in power port heads are
-sized to the stock library: the stem is one stock pin (2.54 mm), except
-the hanging grounds (power ground, signal ground, earth), whose stem is
-one grid step (1.27 mm) so the bars sit close under the wire, and the
+sized to the stock library: every style's stem is one grid step (1.27 mm;
+the rising styles had 2.54 mm until Caner's decision of 2026-11-21), so the
+head sits close to the wire, and the
 heads (bar half width 1.016 mm, ground bars 2.54 / 1.524 / 0.508 mm) sit in
 proportion. The connection point is the pin tip at the symbol origin and
 never moves; a sheet's own saved library entry keeps the size it was placed
@@ -246,6 +253,19 @@ The canvas, the SVG page (and so PDF and print) and the drag ghost read the one
 function, `signex_types::schematic::junction_wire_colors`. During a drag the
 moving items are drawn apart from the rest, so a dot that moves while its
 wires stay (or the other way round) shows its own rule until the drop.
+
+---
+
+## sch-junction-places — Where a junction dot stands
+
+Every dot is a stored junction; the canvas draws what the sheet holds and
+derives none at draw time. The engine mints an automatic dot (`minted`) where
+a wire ends inside another wire (a T), where three or more wire ends meet,
+where a pin end lies inside a wire, where two wire ends meet on a pin end (a
+part's or a power port's), and at the foot of a directive's stem on a wire (a
+Net Parameters flag, a Differential Pair with a class). It drops the dot once
+that meeting is gone. A net label on a wire gets no dot. Decisions: the
+2026-11-18, 2026-11-19 and 2026-11-21 junction rows of `docs/DECISIONS.md`.
 
 ---
 
@@ -503,31 +523,55 @@ the board as the flat view does; Bottom mirrors it left to right.
 **Lowering** (`signex_renderer::board3d::build_board_scene`, one indexed
 mesh, `signex_gfx::scene3d::Scene3d`):
 
-- **Board.** The outline extruded to the thickness, with every drill hole
-  (pads, vias), cutout and mounting hole that lies inside it cut through;
-  hidden layers do not close a hole. A board with no outline gets the box
-  round its copper, 1 mm wider each side. Faces in the solder mask colour,
-  edge and hole walls a darker shade of it. A hole that meets one cut
-  before it (two vias at one point, a pad drill on a mounting hole, a
+- **Physical stack.** From the laminate out on each side: copper, solder
+  mask, silkscreen. Heights come from the board's layer stack, or the stack
+  derived from its copper list and thickness, scaled to the board thickness
+  (`board3d::stack::StackHeights`). The outer mask surfaces are the board's
+  two faces (z = 0 and z = thickness). A mask or outer copper row is drawn
+  at least 0.005 mm thick so its order survives the depth buffer; nothing
+  else is exaggerated. Silkscreen stands 0.015 mm off the mask.
+- **Materials.** The assembled board uses physical colours
+  (`board_3d_colors`), never the flat view's layer colours: green,
+  slightly translucent mask, FR-4 laminate, copper, gold finish, white
+  silkscreen. The board stores no mask colour or surface finish, so these
+  are the defaults. The mask is drawn after the copper so it blends over it.
+- **Board.** The laminate is the outline with every drill hole (pads, vias),
+  cutout and mounting hole that lies inside it cut through; hidden layers do
+  not close a hole. A board with no outline gets the box round its copper,
+  1 mm wider each side. Edge and unplated hole walls are FR-4, plated drill
+  walls take the finish; walls run the full thickness. A hole that meets one
+  cut before it (two vias at one point, a pad drill on a mounting hole, a
   drill inside a cutout) is left out (`signex_gfx::ring_fill::disjoint_holes`,
   counted in `BoardScene3d::dropped_holes` and logged), so one such pair
   cannot make the fill refuse every hole. The fill with holes is the flat
   view's (`signex_gfx::ring_fill::triangulate_with_holes`).
+- **Solder mask** covers the board on both faces, whatever the mask layers'
+  eyes say. Openings come from the data: a pad's listed mask layers, or its
+  type's default as the fabrication images read it (a pad stores no
+  expansion of its own), a via per side unless tented (with its manual
+  expansion, from the hole edge when set), a track with a manual mask
+  expansion, and shapes and zones drawn on the mask layer. Mask over copper
+  or a tented via is a lighter tint of the mask colour; a tent spans the
+  drill.
 - **Single-layer mode does not reach 3D.** It is an editing aid of the flat
   view; in 3D the copper of every shown layer and the parts of both faces
-  stay. Only a layer's eye hides it (`PcbLayerView::is_hidden`).
-- **Copper** comes from the same `PcbSnapshot` the flat view draws, so a
-  hidden layer is hidden in 3D too: top copper on the top face, bottom
-  copper on the bottom face, vias and through-hole pads on both, inner
-  copper not drawn. Copper sits 0.035 mm (1 oz) off its face, zones lowest,
-  then tracks, then pads and vias, so nothing fights in the depth buffer.
-  Silkscreen waits for the board graphics lowering (#2387).
+  stay. Only a layer's eye hides it (`PcbLayerView::is_hidden`). The active
+  layer's per-layer size does not reach 3D either: a via or pad keeps its
+  stored `diameter` or `size`.
+- **Copper** follows the layer eyes, so a hidden layer is hidden in 3D too.
+  Each layer is the union of its tracks, pads, vias and poured fills, clipped
+  to the board and cut by every drill, at its stack height. Copper inside a
+  mask opening takes the finish; the rest is under the mask. Inner copper
+  sits inside the laminate, seen only in the explode and at drill walls.
+- **Silkscreen** is the shown silkscreen drawings, texts and zones as areas,
+  clipped to the board and kept out of mask openings and holes.
 - **Parts.** One per footprint whose face's 3D Body layer is shown. The
   model is the library footprint's (`library_ref`), read off the update
   thread: its attached model file (`step/<hash>.step`; a `.wrl` or `.vrml`
   name reads VRML), in the file's units taken as mm, the model's y up the
   board, turned by the attachment's x, y, z angles and moved by its offset;
-  else its 3D Body (outline, height, offset, colours). A footprint with no
+  else its 3D Body (outline, height, offset, colours; a neutral body colour
+  when it has none). A footprint with no
   library footprint, or one that could not be read (Messages says why), is
   its body box (`pcb_geom::footprint_body`) extruded to its component height
   (1 mm when unset). Parts are placed by `pcb_geom::Placement`; a bottom part
@@ -539,7 +583,10 @@ centre of the view, always shown: the "3D View" title; 2D | 3D; Top, Iso,
 Front, Left, Right, Back, Reset and Fit; Flip and Explode; the lighting
 preset; the screenshot button and its menu chevron. The interaction hint is
 a quiet caption at the bottom right, the status pill sits at the bottom
-left, the view cube at the top right. As decided (DECISIONS, the 2026-11-19
+left, the view cube at the top right, under the toolbar's band so the two
+never overlap at any view width. Under the cube, while the view is tall
+enough, a legend card lists the stack from the laminate out in the scene's
+own materials (mockup row 109). As decided (DECISIONS, the 2026-11-19
 board 3D view toolbar row), the "3D View" title stays and Left and Right
 are separate buttons (no single Side button with Shift+click).
 
@@ -572,7 +619,9 @@ in the Esc ladder), so it never reaches the tool reset behind the view.
 
 **Explode** opens a popover under its button: a slider from Assembled
 (0 %) to Layers apart (100 %) and two tick boxes, Separate copper and mask
-and Lift components. The scene the view draws and picks with is
+and Lift components. Apart, the layers keep their stack order: from the
+core out on each side, inner copper, outer copper, mask, silkscreen, then
+the parts. The scene the view draws and picks with is
 `BoardScene3d::exploded` of the assembled one (only heights move), cached by
 the assembled scene's generation and the explode, so a click still selects
 a lifted part. The button reads `Explode <n> %` and is tinted while its
@@ -621,6 +670,69 @@ Checks: `signex_gfx::scene3d::tests`, `signex_gfx::ring_fill::tests`, `signex_gf
 `signex_renderer::board3d::tests`, regression `pcb_board_3d` and
 `pcb_board_3d_toolbar`, `styles::board_palette::tests`,
 `app::handlers::board_3d_screenshot::tests`.
+
+## sch-annotations — Bezier, dimension and table drawings (#1267, #1300)
+
+Three drawing kinds that are annotation only: no connectivity, no ERC, drawn
+and exported like the other drawings and ordered with them (Behind / Above,
+Arrange). Their geometry is computed once in `signex-types`, so the canvas,
+the hit box, SVG and PDF place every line and cell at the same spot.
+
+**Bezier.** `SchBezier::flatten` gives 32 straight segments (both ends exact);
+the canvas strokes them in the line style (`LineSegment` dash and dot bits),
+SVG writes one cubic path when solid and the flattened dash marks otherwise.
+`arrow_heads` gives a filled head per end `ends` asks for, pointing along the
+end tangent (towards the control point). With no own colour the curve takes
+the sheet's drawing colour (DECISIONS 2026-11-19).
+
+**Dimensions.** `SchDimension::geometry` holds the dimension line (offset from
+the measured points along the dimension's normal: `(0, 1)` horizontal, `(1, 0)`
+vertical, the axis turned a quarter when aligned), the two extension lines
+(0.5 mm gap at the point, 1 mm past the line), the heads (filled inside,
+filled outside with tails past the extension lines, or open) and the text
+anchor: the line's middle, 0.5 mm out on the side away from the points, the
+text turned to read left to right or bottom to top. The text is the measured
+value in the dimension's unit and decimals with the unit symbol (`12.70 mm`),
+or the override. A turn maps the line with the points, so a horizontal
+dimension turned a quarter becomes a vertical one of the same length.
+
+**Tables.** `SchTable::layout` places the cells: a monospace advance of 0.6 em
+per character, a column as wide as its longest cell or title (three
+characters at least) plus the padding on both sides, every row `text size +
+2 × padding` high, the title line above the grid. Hidden columns are left
+out. The header row is filled with the sheet's net-label colour mixed 18 %
+over the paper (`table_header_fill`) when Header fill is on; All draws every
+cell edge, Outer the outline and the header rule, None no lines. Cell text is
+in the value colour, a bound pin table's net cell that names a power port's
+net in the power colour. A table never turns or mirrors: its centre follows
+the transform.
+
+**While placing.** The Bezier tool draws the clicked points, the control
+lines and the curve through the cursor; a dimension tool draws the dimension
+the cursor would place with its value in an accent tag set off the line on
+its outer side (so it clears text next to the line), and a hint bar at the
+canvas's bottom-left names the tool and the next click.
+
+Checks: `schematic::drawing_kinds_tests`, `signex_output::svg::annotation_drawing_tests`,
+`annotation_drawing_tests` (engine), `app::sch_tables::tests`.
+
+## Canvas cursor
+
+Decided by Caner, 2026-11-21. One rule for the schematic, board, footprint
+editor and symbol editor canvases (`canvas::cursor::tool_cursor`):
+
+- **Idle selection tool:** the OS arrow (`mouse::Interaction::Idle`).
+- **A tool armed:** the crosshair, while a placement, drawing or routing
+  tool or Measure is active, or a part, power port, paste or Edit ▸ Move
+  waits for clicks. On the board that is the canvas's clicks-only state.
+- **Gestures keep their own cursors:** grabbing while panning, move while
+  dragging the selection or a board footprint, the resize cursor over a
+  handle.
+- **Footprint Sketch mode:** the Select tool shows the arrow and draws no
+  mark of its own except the line-hover resize arrow; a drawing tool hides
+  the OS cursor and its reticle is the crosshair.
+
+Checks: `canvas::cursor::tests`.
 
 ## What this document is *not*
 

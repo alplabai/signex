@@ -41,6 +41,10 @@ impl crate::app::Signex {
         let Some(engine) = self.document_state.engines.get(path) else {
             return false;
         };
+        // A typed preview is the next undo, and it ends any redo branch.
+        if engine.live_edit_drawing().is_some() {
+            return undoing;
+        }
         engine.steps_from_top(undoing).any(|marker| {
             marker.is_none_or(|m| self.document_state.net_class_pick_is_live(m, undoing))
         })

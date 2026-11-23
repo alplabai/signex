@@ -1,5 +1,5 @@
 //! Camera input handling — first-draw fit, one-shot Fit-to-Window,
-//! scroll-wheel zoom (cursor-anchored), and middle/right-drag panning.
+//! scroll-wheel zoom (cursor-anchored), and right-drag panning.
 //!
 //! Extracted verbatim from the canvas `Program::update` god-function;
 //! behaviour is byte-identical — same conditions, same coordinate
@@ -266,7 +266,7 @@ impl FootprintCanvas<'_> {
     }
 
     /// Redraw after a zoom or pan, and publish the cursor world position.
-    fn publish_view_changed(
+    pub(in crate::library::editor::footprint::canvas) fn publish_view_changed(
         &self,
         cstate: &FootprintCanvasState,
         cursor_pos: Point,
@@ -291,7 +291,7 @@ impl FootprintCanvas<'_> {
         .and_capture()
     }
 
-    /// Middle/right-drag pan step. Returns `Some(action)` when a pan
+    /// Right-drag pan step. Returns `Some(action)` when a pan
     /// was applied (mirrors the original always-returns behaviour of
     /// the pan branch), `None` when no pan is in flight so the caller
     /// falls through to the rest of the cursor-move handling.

@@ -19,7 +19,7 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// What the last solve says about the sketch, or why there is nothing to say.
-fn dof_state(editor: &FootprintDocument) -> (PillTone, MessageId) {
+pub(crate) fn dof_state(editor: &FootprintDocument) -> (PillTone, MessageId) {
     if editor.primitive().sketch.is_none() {
         return (PillTone::Neutral, ids::EDITORS_SKETCH_NONE);
     }

@@ -23,6 +23,7 @@ fn sheet() -> SchematicSheet {
             uuid: id(),
             start: Point::new(x, 25.0),
             end: Point::new(x + 40.0, 31.0 + f64::from(k)),
+            ..Default::default()
         });
         sheet.bus_entries.push(BusEntry {
             uuid: id(),

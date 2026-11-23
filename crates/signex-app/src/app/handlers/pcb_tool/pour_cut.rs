@@ -13,17 +13,14 @@ use signex_engine::pcb::BoardCommand;
 use signex_engine::pcb::draw;
 use signex_engine::pcb::pour_edit::{cut_pours, slice_pours};
 use signex_i18n::{ids, t};
-use signex_types::format::pcb_layer_token;
-use signex_types::pcb::{PcbBoard, Point, Segment};
+use signex_types::pcb::{PcbBoard, Point};
 use signex_types::pcb_layer::PcbLayer;
 use uuid::Uuid;
 
 use super::BoardToolSession;
+use super::outline_preview::open_outline;
 use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
-
-/// The width, in mm, the slice line is previewed at.
-const SLICE_PREVIEW_WIDTH_MM: f64 = 0.1;
 
 impl Signex {
     /// A Pour Cutout click at `at`: a new corner, or the cut once it closes
@@ -116,28 +113,19 @@ impl Signex {
         let Some(&first) = session.points.first() else {
             return;
         };
-        let Some(layer) = self.active_copper_layer() else {
+        let Some(layer) = self.active_copper_layer().map(PcbLayer::Copper) else {
             return;
         };
         if session.tool == BoardPlaceTool::SlicePour {
-            preview.segments.push(Segment {
-                locked: false,
-                attributes: Default::default(),
-                uuid: Uuid::nil(),
-                start: first,
-                end: cursor,
-                width: SLICE_PREVIEW_WIDTH_MM,
-                layer: pcb_layer_token(PcbLayer::Copper(layer)),
-                net: 0,
-                unknown_columns: Default::default(),
-            });
+            preview
+                .segments
+                .extend(open_outline(&[first, cursor], layer));
             return;
         }
         let outline: Vec<Point> = session.points.iter().copied().chain([cursor]).collect();
-        preview.zones.extend(draw::new_keepout(
-            Uuid::nil(),
-            outline,
-            PcbLayer::Copper(layer),
-        ));
+        match draw::new_keepout(Uuid::nil(), outline.clone(), layer) {
+            Some(zone) => preview.zones.push(zone),
+            None => preview.segments.extend(open_outline(&outline, layer)),
+        }
     }
 }

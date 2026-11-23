@@ -31,6 +31,11 @@ pub enum NetColorMsg {
     /// A palette row was clicked: its chooser opens, or closes when it was
     /// the open one.
     RowOpened(String),
+    /// A press landed outside the open chooser, or on its own row: it closes.
+    ChooserDismissed,
+    /// A press landed in `window`: the chooser closes unless that is the
+    /// palette's own window, whose presses the card sorts out itself.
+    PressedInWindow(iced::window::Id),
     /// The chooser's Custom… was pressed: the custom picker opens for that
     /// net.
     CustomOpenedFor(String),
@@ -154,13 +159,6 @@ pub enum AnnotateMsg {
     PassSheetsRead {
         generation: u64,
         result: std::sync::Arc<Result<crate::app::handlers::erc::SheetsRead, String>>,
-    },
-    /// The worker wrote the unopened sheets the run renumbered. `hold` keeps
-    /// quit waiting until the completion has registered what it owes.
-    PassSheetsWritten {
-        generation: u64,
-        result: std::sync::Arc<Result<Vec<crate::app::handlers::erc::SheetWrite>, String>>,
-        hold: crate::autosave::SaveHold,
     },
     /// The change list's Changes / All switch was picked (#75).
     ListViewPicked(crate::app::handlers::erc::AnnotateListView),
@@ -351,6 +349,12 @@ pub enum EnableVersionControlMsg {
         project_dir: std::path::PathBuf,
         outcome: EnableVersionControlOutcome,
     },
+    /// "Select all" was clicked: every row is ticked.
+    AllTicked,
+    /// The first commit message field was edited.
+    CommitMessageChanged(String),
+    /// The "Commit every save" switch was flipped.
+    CommitEverySaveToggled,
 }
 
 /// What an Enable Version Control run did on disk.
@@ -404,6 +408,9 @@ pub enum RemoveMsg {
     /// The delete worker finished: forget the documents of what it removed
     /// (#859).
     Deleted(Box<crate::app::path_ops::DeleteDone>),
+    /// A card of the Remove modal was clicked: it is selected, and nothing
+    /// is removed until the footer action sends `Confirm` (#2262).
+    ChoicePicked(RemoveChoice),
 }
 
 /// Context-menu subsystem message family (ADR-0001 D3). Namespaced
@@ -507,6 +514,12 @@ pub enum ExportMsg {
     NetlistCancelIncomplete,
     /// An export deliverable's off-thread write finished (#859).
     FileWritten(Box<ExportWriteOutcome>),
+    /// A BOM's off-thread write finished; `source` is the document its dialog
+    /// was opened for, which closes when the file was written.
+    BomWritten {
+        source: std::path::PathBuf,
+        outcome: Box<ExportWriteOutcome>,
+    },
 }
 
 /// What an export's background file write produced, carried back to `update`
@@ -582,6 +595,9 @@ pub struct PasteRequest {
     pub path: Option<PathBuf>,
     /// The Paste Array dialog an `ArraySeed` read is for; 0 otherwise.
     pub dialog: u64,
+    /// An agent asked (`Origin::Agent` when the request was made): Paste
+    /// Special pastes at once rather than opening a dialog no one answers.
+    pub from_agent: bool,
 }
 
 /// Edit-command message family (ADR-0001 D3). Namespaced under
@@ -649,6 +665,15 @@ pub enum EditMsg {
     /// Bottom-up hierarchy (#1276): a sheet symbol from a sheet, and the
     /// sheet entry sync with its preview.
     SheetSync(crate::app::SheetSyncMsg),
+    /// A power rail rename's sheet reads finished (mockup row 45).
+    RailRename(crate::app::RailRenameMsg),
+    /// Schematic tables (#1300): contents sheet, CSV, cell edits.
+    Tables(crate::app::TablesMsg),
+    /// Named unions (mockup row 158): the canvas menu rows, the keymap and the Create
+    /// Union popover.
+    Unions(crate::app::unions::UnionsMsg),
+    /// A Smart Paste dialog event (mockup row 155).
+    SmartPasteDialog(crate::smart_paste::SmartPasteMsg),
 }
 
 /// Per-shape edit descriptor. The Properties panel dispatches one of
@@ -680,4 +705,31 @@ pub enum DrawingFieldEdit {
     /// Put the drawing behind or above the circuit (#1583). Not a field of
     /// the drawing itself: it is stored per sheet.
     Placement(signex_types::schematic::DrawingPlacement),
+}
+
+impl DrawingFieldEdit {
+    /// Whether the value can be stored (#2767): a size or radius is above
+    /// zero, a stroke is zero or more, and every number is finite.
+    pub fn is_valid(self) -> bool {
+        match self {
+            Self::Width(v) => v.is_finite() && v >= 0.0,
+            Self::RectWidthMm(v)
+            | Self::RectHeightMm(v)
+            | Self::CircleRadius(v)
+            | Self::ArcRadius(v) => v.is_finite() && v > 0.0,
+            Self::LineStartX(v)
+            | Self::LineStartY(v)
+            | Self::LineEndX(v)
+            | Self::LineEndY(v)
+            | Self::RectStartX(v)
+            | Self::RectStartY(v)
+            | Self::CircleCenterX(v)
+            | Self::CircleCenterY(v)
+            | Self::ArcCenterX(v)
+            | Self::ArcCenterY(v)
+            | Self::ArcStartAngle(v)
+            | Self::ArcEndAngle(v) => v.is_finite(),
+            Self::Fill(_) | Self::StrokeColor(_) | Self::Placement(_) => true,
+        }
+    }
 }

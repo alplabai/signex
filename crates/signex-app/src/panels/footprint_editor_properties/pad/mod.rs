@@ -1,17 +1,28 @@
-//! Pads-mode Properties-panel surface: the pad form (types, message
-//! helpers, row primitives, and the three render functions), the pad-
-//! stack preview + Choice enums, and the pad-properties table cells.
+//! Pads-mode Properties-panel surface (mockup row 125): the pad header, the
+//! property illustration, the pad form sections, the Rule / Manual
+//! expansion row, the shape and hole choices and the per-layer pad stack
+//! table.
 //!
-//! Folded from the former flat `pad_form` / `pad_stack_preview` /
-//! `pad_table` siblings; `form` carries the cross-module surface the
-//! parent panel and its sub-forms consume, re-exported below.
+//! `form` carries the cross-module surface the parent panel and its
+//! sub-forms consume, re-exported below.
 
+mod choices;
+mod driven_by;
+mod field;
 mod form;
-mod stack_preview;
+mod header;
+mod illustration;
+mod layer_titles;
+mod rule_row;
 mod table;
 
-pub(super) use form::{
-    PadEditTarget, PadFormValues, pad_check_row, pad_check_row_w, pad_input_row, pad_input_row_w,
-    pad_pick_row, render_pad_form_pad_features, render_pad_form_pad_stack,
-    render_pad_form_properties,
+pub(super) use driven_by::view_driven_by;
+pub(in crate::panels::footprint_editor_properties) use field::{
+    Shown, number_input, with_refusals,
 };
+pub(super) use form::{PadEditTarget, view_pad_form};
+#[cfg(test)]
+pub(super) use header::selected_pad_heading;
+pub(super) use header::view_pad_header;
+pub(in crate::panels::footprint_editor_properties) use layer_titles::layer_title;
+pub(in crate::panels::footprint_editor_properties) use rule_row::rule_or_manual_row;

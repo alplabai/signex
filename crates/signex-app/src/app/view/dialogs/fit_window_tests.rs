@@ -160,6 +160,7 @@ fn the_remove_card_fits_a_window_just_wider_than_its_design() {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     assert_card_inside(
         &mut app,
@@ -191,6 +192,8 @@ fn the_autosave_recovery_card_fits_a_window_just_wider_than_its_design() {
         path: "a.snxsch".into(),
         age_secs: 30,
         older_than_file: false,
+        saved_age_secs: Some(600),
+        checked_at: std::time::SystemTime::UNIX_EPOCH,
     };
     assert_card_inside(
         &mut app,
@@ -211,6 +214,7 @@ fn the_remove_unsaved_edits_card_fits_a_window_just_wider_than_its_design() {
         is_outside_project: false,
         unsaved_prompt: true,
         is_directory_package: false,
+        choice: None,
     });
     assert_card_inside(
         &mut app,
@@ -232,6 +236,7 @@ fn the_create_sheet_card_fits_a_window_just_wider_than_its_design() {
             path_text: "power.snxsch".to_string(),
             error: None,
             exists: false,
+            reuse_warning: None,
         });
     assert_card_inside(
         &mut app,

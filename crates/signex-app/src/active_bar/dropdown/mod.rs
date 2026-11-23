@@ -143,9 +143,10 @@ fn menu_table(menu: ActiveBarMenu) -> Option<&'static [EntrySpec]> {
     })
 }
 
-/// Whether every row of `menu` is a planned tool: the bar greys its button
-/// and opens no menu whose rows would all say "planned".
-pub(super) fn is_planned_menu(menu: ActiveBarMenu) -> bool {
+/// Whether every row of `menu` is a planned tool. The bar has no greyed
+/// group (no `BarSlot::Planned`), so `no_group_is_planned` keeps this false.
+#[cfg(test)]
+fn is_planned_menu(menu: ActiveBarMenu) -> bool {
     menu_table(menu).is_some_and(|specs| {
         let mut actions = specs.iter().filter_map(EntrySpec::action).peekable();
         actions.peek().is_some() && actions.all(super::is_planned)
@@ -208,11 +209,10 @@ fn dropdown_entries_with(
 ///
 /// Widths are sized to the longest label in each menu (Inter @ 12 +
 /// the 16 px icon column, row padding and the shortcut column).
-/// `Filter` returns `None` because its chip wrap layout already drives
-/// its own width.
 fn dropdown_min_width(menu: ActiveBarMenu) -> Option<f32> {
     Some(match menu {
-        ActiveBarMenu::Filter => return None,
+        // The compact card of mockup row 61; its chips wrap inside it.
+        ActiveBarMenu::Filter => 296.0,
         // "Flip Selected Sheet Symbols Along X" (36 chars)
         ActiveBarMenu::Select => 320.0,
         // "Touching Rectangle" (18)

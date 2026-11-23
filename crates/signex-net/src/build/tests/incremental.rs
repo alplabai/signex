@@ -241,6 +241,7 @@ fn buses_and_bus_entries_are_not_nets() {
         uuid: Uuid::now_v7(),
         start: pt(12.5, 10.0),
         end: pt(12.5, 40.0),
+        ..Default::default()
     });
     cand.bus_entries.push(signex_types::schematic::BusEntry {
         uuid: Uuid::now_v7(),

@@ -33,6 +33,7 @@ members = [
     "crates/signex-req",
     "crates/signex-mcad",
     "crates/signex-gerber",
+    "crates/signex-notebook",
 ]
 # A bare `cargo build` / `cargo test` at the root only builds the daily-
 # driver crates. The library server and the chrome-catalog dev sandbox are
@@ -64,6 +65,7 @@ default-members = [
     "crates/signex-req",
     "crates/signex-mcad",
     "crates/signex-gerber",
+    "crates/signex-notebook",
 ]
 
 [workspace.package]
@@ -137,6 +139,7 @@ signex-output = { path = "crates/signex-output" }
 signex-3d-model-importer = { path = "crates/signex-3d-model-importer" }
 signex-mcad = { path = "crates/signex-mcad" }
 signex-gerber = { path = "crates/signex-gerber" }
+signex-notebook = { path = "crates/signex-notebook" }
 
 # Library subsystem (v0.9 plan, restored at v0.11)
 chrono = { version = "0.4", features = ["serde"] }
@@ -209,7 +212,7 @@ unused_must_use = "deny"
 # level, which scripts/check_lint_lockstep.sh now fails CI over (#570).
 
 # Signex fork of iced (upstream master + cherry-picked PRs, see FORK.md in alplabai/iced).
-# Tag iced-signex-v0.15.0-alpha.9 = fork commit cc3924c4c (the signex release branch). Pinned by rev, not tag: a tag can be moved. It is the upstream sync to 98bd48fe0, where vello_cpu replaces tiny_skia, with vello_cpu parity (alplabai/iced#118). It includes MonitorData::size() dividing by the scale factor (alplabai/iced#49), which the window placement code relies on, the canvas glyph mesh cache (alplabai/iced#79) for rotated text (#2128), and the native menu API (`iced::menu`, quit requests, `system::menu_failures`; failure report alplabai/iced#93).
+# Tag iced-signex-v0.15.0-alpha.9 = fork commit cc3924c4c (the signex release branch). Pinned by rev, not tag: a tag can be moved. It includes MonitorData::size() dividing by the scale factor (alplabai/iced#49), which the window placement code relies on, the canvas glyph mesh cache (alplabai/iced#79) for rotated text (#2128), and the native menu API (`iced::menu`, quit requests, `system::menu_failures`; failure report alplabai/iced#93).
 [patch.crates-io]
 iced_fonts = { path = "vendor/iced_fonts" }
 iced = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }

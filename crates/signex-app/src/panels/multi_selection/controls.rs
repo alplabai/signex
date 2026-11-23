@@ -9,7 +9,6 @@ use crate::panels::form_look::{self, FormLook};
 use crate::panels::{SelectionFormMsg, graphite::PROPERTY_FIELD_RADIUS};
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
-use iced::widget::Row;
 use signex_widgets::Label;
 use signex_widgets::property_illustration::{FieldId, IllustrationMsg};
 
@@ -38,8 +37,9 @@ impl<'a, V> Cell<'a, V> {
     }
 }
 
-/// A Graphite segmented control, `columns` cells to a line, on one sunken
-/// frame. `selected: None` lights no cell: the values are mixed.
+/// A Graphite segmented control, at most `columns` cells to a line and fewer
+/// when their labels need it, on one sunken frame. `selected: None` lights
+/// no cell: the values are mixed.
 pub(in crate::panels) fn segmented_cells<'a, V>(
     cells: Vec<Cell<'a, V>>,
     selected: Option<V>,
@@ -49,21 +49,17 @@ pub(in crate::panels) fn segmented_cells<'a, V>(
 where
     V: Copy + PartialEq + 'a,
 {
-    let columns = columns.max(1);
-    let mut lines: Column<Element<'a, PanelMsg>> = Column::new().spacing(SP.xs);
-    let mut line: Row<Element<'a, PanelMsg>> = Row::new().spacing(SP.xs).width(Length::Fill);
-    let mut in_line = 0;
+    let mut shown: Vec<Element<'a, PanelMsg>> = Vec::with_capacity(cells.len());
     for Cell { value, label, tip } in cells {
         let active = selected == Some(value);
         let cell = button(
             text(label)
                 .size(TS.body)
                 .wrapping(iced::widget::text::Wrapping::None)
-                .align_x(iced::alignment::Horizontal::Center)
-                .width(Length::Fill),
+                .ellipsis(iced::widget::text::Ellipsis::End)
+                .align_x(iced::alignment::Horizontal::Center),
         )
         .padding([SP.s, SP.xs])
-        .width(Length::Fill)
         .on_press(on_pick(value))
         .style(move |theme: &Theme, status: iced::widget::button::Status| {
             let hovered = matches!(status, iced::widget::button::Status::Hovered);
@@ -73,26 +69,20 @@ where
         let cell = match tip {
             Some(tip) => signex_widgets::tooltip(
                 cell,
-                iced::widget::container(
-                    container(text(tip).size(TS.caption)).padding([SP.xs, SP.s]),
-                )
-                .style(form_look::value_tip),
+                container(text(tip).size(TS.caption))
+                    .padding([SP.xs, SP.s])
+                    .style(form_look::value_tip),
                 signex_widgets::tooltip::Position::Bottom,
             )
             .boxed(),
             None => cell,
         };
-        line = line.push(container(cell).width(Length::Fill).boxed());
-        in_line += 1;
-        if in_line == columns {
-            lines = lines.push(line.boxed());
-            line = Row::new().spacing(SP.xs).width(Length::Fill);
-            in_line = 0;
-        }
+        shown.push(cell);
     }
-    if in_line > 0 {
-        lines = lines.push(line.boxed());
-    }
+    let lines = signex_widgets::FitRow::new(shown)
+        .spacing(SP.xs)
+        .fill(true)
+        .max_columns(columns.max(1));
     container(lines)
         .padding(SP.xs)
         .width(Length::Fill)
@@ -195,6 +185,9 @@ pub(in crate::panels) struct PairField<'a> {
     pub unit: signex_i18n::Localized,
     pub on_input: Box<dyn Fn(String) -> PanelMsg + 'a>,
     pub on_submit: Option<PanelMsg>,
+    pub on_blur: Option<PanelMsg>,
+    /// The error colour while the box holds text it refuses.
+    pub error: Option<Color>,
 }
 
 fn pair_half<'a>(half: PairField<'a>, muted: Color) -> Element<'a, PanelMsg> {
@@ -204,13 +197,16 @@ fn pair_half<'a>(half: PairField<'a>, muted: Color) -> Element<'a, PanelMsg> {
         unit,
         on_input,
         on_submit,
+        on_blur,
+        error,
     } = half;
     let mut input = signex_widgets::text_input(signex_i18n::UserText::new(String::new()), value)
         .size(TS.body)
         .padding(SP.s)
         .width(Length::Fill)
         .on_input(on_input)
-        .style(form_look::text_input_style);
+        .on_blur_maybe(on_blur)
+        .style(form_look::refusable_input_style(error));
     if let Some(submit) = on_submit {
         input = input.on_submit(submit);
     }
@@ -234,10 +230,11 @@ pub(in crate::panels) fn pair_row<'a>(
 ) -> Element<'a, PanelMsg> {
     control_row(
         label,
-        row![pair_half(first, muted), pair_half(second, muted)]
-            .spacing(SP.s)
-            .width(Length::Fill)
-            .boxed(),
+        crate::panels::element_properties::rows::pair_line(
+            pair_half(first, muted),
+            pair_half(second, muted),
+            crate::panels::element_properties::rows::PAIR_FIELD_MIN,
+        ),
         muted,
     )
 }

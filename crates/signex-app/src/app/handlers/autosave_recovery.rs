@@ -134,11 +134,9 @@ impl Signex {
                 // A parked engine (tab closed while dirty) is still open here.
                 let still_open = self.is_open_document(&path);
                 if still_open {
-                    self.document_state.autosave.offer(RecoveryOffer {
-                        path,
-                        age_secs: copy.age_secs,
-                        older_than_file: copy.older_than_file,
-                    });
+                    self.document_state
+                        .autosave
+                        .offer(RecoveryOffer::new(path, &copy));
                 }
             }
             Ok(None) => {}
@@ -466,6 +464,8 @@ mod tests {
                 path: PathBuf::from("a.snxsch"),
                 age_secs: 0,
                 older_than_file: false,
+                saved_age_secs: Some(0),
+                checked_at: SystemTime::UNIX_EPOCH,
             },
             result: Err(LoadError::Invalid(format!(
                 "{needle}: could not read recovery copy a.recovery"
@@ -498,6 +498,7 @@ mod tests {
         let mut board = signex_types::pcb::PcbBoard {
             sketch: None,
             stackup: None,
+            rooms: Vec::new(),
             options: Default::default(),
             unknown: Default::default(),
             uuid: uuid::Uuid::now_v7(),
@@ -540,6 +541,8 @@ mod tests {
                 path: path.clone(),
                 age_secs: 0,
                 older_than_file: false,
+                saved_age_secs: Some(0),
+                checked_at: SystemTime::UNIX_EPOCH,
             },
             result: Ok(RestoredDocument::Pcb(Box::new(board))),
         });

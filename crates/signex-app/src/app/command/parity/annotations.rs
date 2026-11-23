@@ -22,6 +22,18 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // A project without rules runs with the machine's ERC overrides
     // (`erc_rule_settings`).
     (&["run_erc"], Bridge, &[RenderCache, Settings]),
+    // The active document's project: its sheets to compile or to list.
+    (
+        &["compile_project", "add_table_of_contents"],
+        Bridge,
+        &[ActiveDocument],
+    ),
+    // The canvas selection and the union picked in the Unions panel (mockup row 158).
+    (
+        &["add_to_union", "remove_from_union", "break_union"],
+        Bridge,
+        &[ActiveDocument, Selection],
+    ),
     (
         &[
             "select_all",
@@ -502,6 +514,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "edit_blanket",
             "place_compile_mask",
             "place_diff_pair",
+            "place_parameter_set",
             "place_component",
             "place_sheet_symbol",
             "place_sheet_entry",
@@ -681,6 +694,26 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Bridge,
         &[Window],
     ),
+    // Workspace layouts live in prefs.json (settings). Apply and Reset also
+    // read which panels are open, detached or floating (`arrange_dock`).
+    (
+        &[
+            "apply_layout_schematic",
+            "apply_layout_board",
+            "apply_layout_review",
+            "apply_layout_notebook",
+            "reset_workspace_layout",
+        ],
+        Bridge,
+        &[Window, Settings],
+    ),
+    // The dialogs open on the saved list: Save's first free name, Manage's
+    // active or first own layout.
+    (
+        &["save_workspace_layout", "manage_workspace_layouts"],
+        Bridge,
+        &[Settings],
+    ),
     // Dialogs, pickers and panels that open on nothing implicit, and the
     // tools that are only armed.
     (
@@ -691,6 +724,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "find_text",
             "find_and_replace",
             "open_command_palette",
+            "open_compiled_design",
             "open_grid_properties",
             "open_net_color_palette",
             "open_net_inspector",
@@ -813,17 +847,12 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
 ];
 
 const PLANNED: &[&str] = &[
-    "draw_bezier",
     "draw_ellipse",
     "draw_elliptical_arc",
     "draw_round_rectangle",
     "place_device_sheet_symbol",
     "place_graphic",
-    "place_harness_connector",
-    "place_harness_entry",
-    "place_parameter_set",
     "place_reuse_block",
-    "place_signal_harness",
 ];
 
 /// The hand annotation of `(id, form)`, if any.

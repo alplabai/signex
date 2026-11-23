@@ -276,6 +276,7 @@ fn make_footprint(index: usize) -> Footprint {
         default_designator: "U?".into(),
         component_type: signex_library::primitive::footprint::ComponentType::Standard,
         height_mm: Some(1.75),
+        generated: Default::default(),
     }
 }
 

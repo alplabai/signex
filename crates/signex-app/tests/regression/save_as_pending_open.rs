@@ -243,6 +243,7 @@ fn empty_pcb_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),
@@ -649,7 +650,9 @@ fn push_waiver_project(app: &mut Signex, dir: &Path, old: uuid::Uuid, other: uui
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                schematic_design: Default::default(),
                 fab_outputs: None,
+                router_tool_diameter: None,
                 requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),

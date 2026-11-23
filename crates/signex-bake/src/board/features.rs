@@ -6,15 +6,21 @@
 //! arcs, like the outline.
 
 use signex_sketch::baked_kinds::BakedKind;
-use signex_sketch::entity::EntityKind;
+use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
-use signex_types::pcb::NetDef;
+use signex_types::pcb::{NetDef, Point};
 use signex_types::pcb_sketch::{PcbCutout, PcbHole, PcbKeepout, PcbVScore};
+use uuid::Uuid;
 
 use super::geometry::{boundary, circle, point};
-use super::{BoardBakeError, Context};
+use super::patterned::{boundary_places, own_sources, places};
+use super::{BoardBakeError, Context, slot};
 use crate::eval_util::{build_ctx, eval_dimensionless, eval_mm, opt_eval_mm};
+use crate::profile::trace_closed_profile_entities;
 use crate::traced_loops::TracedLoops;
+
+/// What a refused hole pattern is called in `BoardBakeError::Expression`.
+const HOLE_PATTERN: &str = "mounting hole pattern";
 
 pub(super) fn keepouts(ctx: &Context<'_>) -> Result<Vec<PcbKeepout>, BoardBakeError> {
     let mut loops = TracedLoops::default();
@@ -28,12 +34,15 @@ pub(super) fn keepouts(ctx: &Context<'_>) -> Result<Vec<PcbKeepout>, BoardBakeEr
         else {
             continue;
         };
-        out.push(PcbKeepout {
-            uuid: entity.id.0,
-            boundary: polygon,
-            layers: vec![attr.layer],
-            forbids: attr.kinds,
-        });
+        let kind = BakedKind::Keepouts;
+        for place in boundary_places(ctx, entity, &polygon, kind, "keepout pattern")? {
+            out.push(PcbKeepout {
+                uuid: place.uuid,
+                boundary: place.ring(&polygon),
+                layers: vec![attr.layer],
+                forbids: attr.kinds,
+            });
+        }
     }
     Ok(out)
 }
@@ -51,21 +60,99 @@ pub(super) fn cutouts(ctx: &Context<'_>) -> Result<Vec<PcbCutout>, BoardBakeErro
         else {
             continue;
         };
-        let edge_radius = opt_eval_mm(&attr.edge_radius_expr, &eval)
-            .and_then(|r| finite(r.unwrap_or(0.0)))
-            .map_err(|message| expression(entity.id, "cutout edge radius", message))?;
-        out.push(PcbCutout {
-            uuid: entity.id.0,
-            boundary: polygon,
-            edge_radius,
-            through: attr.through,
-        });
+        // A slot's routed edge is its own radius (decision 2, 2026-11-20).
+        let edge_radius = if is_slot(ctx, entity) {
+            slot::check(ctx, entity.id)?.width / 2.0
+        } else {
+            opt_eval_mm(&attr.edge_radius_expr, &eval)
+                .and_then(|r| finite(r.unwrap_or(0.0)))
+                .map_err(|message| expression(entity.id, "cutout edge radius", message))?
+        };
+        let kind = BakedKind::Cutouts;
+        for place in boundary_places(ctx, entity, &polygon, kind, "cutout pattern")? {
+            out.push(PcbCutout {
+                uuid: place.uuid,
+                boundary: place.ring(&polygon),
+                edge_radius,
+                through: attr.through,
+            });
+        }
     }
     Ok(out)
 }
 
-/// A hole at each circle tagged `mounting_hole`: its solved centre, its
-/// diameter or the attribute's drill, and the named net's number.
+/// Whether the cutout seeded by `seed` is a Slot: the seed, or any edge of
+/// its loop, carries `board_slot`. A circle tagged Slot is checked, and
+/// refused, as one.
+fn is_slot(ctx: &Context<'_>, seed: &Entity) -> bool {
+    if seed.board_slot.is_some() {
+        return true;
+    }
+    if !matches!(seed.kind, EntityKind::Line { .. } | EntityKind::Arc { .. }) {
+        return false;
+    }
+    let Ok(profile) = trace_closed_profile_entities(ctx.sketch, seed.id) else {
+        return false;
+    };
+    profile.edges.iter().any(|edge| {
+        ctx.sketch
+            .entities
+            .iter()
+            .any(|e| e.id == edge.id && e.board_slot.is_some())
+    })
+}
+
+/// The board net `name` names, for the entity that names it; `None` for no
+/// name. A name the table lacks refuses the bake with `unknown`, which
+/// names the kind of entity.
+pub(super) fn named_net<'n>(
+    entity: SketchEntityId,
+    name: Option<&str>,
+    nets: &'n [NetDef],
+    unknown: fn(SketchEntityId, String) -> BoardBakeError,
+) -> Result<Option<&'n NetDef>, BoardBakeError> {
+    match name.filter(|name| !name.is_empty()) {
+        None => Ok(None),
+        Some(name) => nets
+            .iter()
+            .find(|n| n.name == name)
+            .map(Some)
+            .ok_or_else(|| unknown(entity, name.to_string())),
+    }
+}
+
+/// Where one mounting hole is written.
+pub(super) struct HolePlace {
+    pub(super) uuid: Uuid,
+    pub(super) position: Point,
+}
+
+/// Every place the hole `entity`, centred at `centre`, is drilled: the
+/// instances of the patterns of the circle or of its centre point, or the
+/// circle alone. A pattern that does not expand refuses the bake, since a
+/// dropped instance would pass DRC unseen.
+pub(super) fn hole_places(
+    ctx: &Context<'_>,
+    entity: &Entity,
+    centre: Point,
+) -> Result<Vec<HolePlace>, BoardBakeError> {
+    let EntityKind::Circle { center, .. } = entity.kind else {
+        return Err(BoardBakeError::HoleNotACircle { entity: entity.id });
+    };
+    let sources = [entity.id, center];
+    let found = places(ctx, entity, &sources, &[centre], HOLE_PATTERN)?;
+    Ok(found
+        .iter()
+        .map(|place| HolePlace {
+            uuid: place.uuid,
+            position: place.at(centre),
+        })
+        .collect())
+}
+
+/// A hole at each place of each circle tagged `mounting_hole`
+/// ([`hole_places`]): its diameter or the attribute's drill, and the named
+/// net's number.
 pub(super) fn holes(ctx: &Context<'_>, nets: &[NetDef]) -> Result<Vec<PcbHole>, BoardBakeError> {
     let eval = build_ctx(ctx.sketch, ctx.params);
     let mut out = Vec::new();
@@ -88,26 +175,20 @@ pub(super) fn holes(ctx: &Context<'_>, nets: &[NetDef]) -> Result<Vec<PcbHole>, 
                 drill,
             });
         }
-        let net = match attr.net.as_deref().filter(|name| !name.is_empty()) {
-            None => None,
-            Some(name) => Some(
-                nets.iter()
-                    .find(|n| n.name == name)
-                    .map(|n| n.number)
-                    .ok_or_else(|| BoardBakeError::UnknownNet {
-                        entity: entity.id,
-                        net: name.to_string(),
-                    })?,
-            ),
-        };
-        out.push(PcbHole {
-            uuid: entity.id.0,
-            position,
-            drill,
-            plated: attr.plated,
-            net,
-            unknown_columns: Default::default(),
-        });
+        let net = named_net(entity.id, attr.net.as_deref(), nets, |entity, net| {
+            BoardBakeError::UnknownNet { entity, net }
+        })?
+        .map(|n| n.number);
+        for place in hole_places(ctx, entity, position)? {
+            out.push(PcbHole {
+                uuid: place.uuid,
+                position: place.position,
+                drill,
+                plated: attr.plated,
+                net,
+                unknown_columns: Default::default(),
+            });
+        }
     }
     Ok(out)
 }
@@ -132,20 +213,30 @@ pub(super) fn v_scores(ctx: &Context<'_>) -> Result<Vec<PcbVScore>, BoardBakeErr
             .and_then(|web| finite(web.unwrap_or(0.0)))
             .map_err(|message| expression(entity.id, "V-score minimum web", message))?
             .max(0.0);
-        out.push(PcbVScore {
-            uuid: entity.id.0,
-            from: point(ctx, start, BakedKind::VScores)?,
-            to: point(ctx, end, BakedKind::VScores)?,
-            depth_fraction,
-            min_web,
-            side: attr.side,
-        });
+        let from = point(ctx, start, BakedKind::VScores)?;
+        let to = point(ctx, end, BakedKind::VScores)?;
+        for place in places(
+            ctx,
+            entity,
+            &own_sources(entity),
+            &[from, to],
+            "V-score pattern",
+        )? {
+            out.push(PcbVScore {
+                uuid: place.uuid,
+                from: place.at(from),
+                to: place.at(to),
+                depth_fraction,
+                min_web,
+                side: attr.side,
+            });
+        }
     }
     Ok(out)
 }
 
 /// A value the board can store: a NaN or infinity would fail the save.
-fn finite(value: f64) -> Result<f64, String> {
+pub(super) fn finite(value: f64) -> Result<f64, String> {
     if value.is_finite() {
         Ok(value)
     } else {
@@ -153,7 +244,11 @@ fn finite(value: f64) -> Result<f64, String> {
     }
 }
 
-fn expression(entity: SketchEntityId, what: &'static str, message: String) -> BoardBakeError {
+pub(super) fn expression(
+    entity: SketchEntityId,
+    what: &'static str,
+    message: String,
+) -> BoardBakeError {
     BoardBakeError::Expression {
         entity,
         what,

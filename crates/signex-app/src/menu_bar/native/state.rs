@@ -34,6 +34,8 @@ pub(crate) struct MenuInputs {
     cross_select: bool,
     /// What Design ▸ Update PCB Document names (#1312).
     pcb_sync: Option<crate::app::update_pcb::PcbSyncLabel>,
+    /// What View ▸ Window ▸ Layouts lists (mockup row 166).
+    layouts: crate::workspace_layouts::LayoutsMenu,
 }
 
 impl PartialEq for MenuInputs {
@@ -44,6 +46,7 @@ impl PartialEq for MenuInputs {
             && self.open_panels == other.open_panels
             && self.cross_select == other.cross_select
             && self.pcb_sync == other.pcb_sync
+            && self.layouts == other.layouts
             && match (&self.keymap, &other.keymap) {
                 (Some(a), Some(b)) => Arc::ptr_eq(a, b),
                 (None, None) => true,
@@ -72,7 +75,17 @@ impl MenuInputs {
             i18n,
             cross_select: true,
             pcb_sync: None,
+            layouts: Default::default(),
         }
+    }
+
+    pub(crate) fn with_layouts(mut self, layouts: crate::workspace_layouts::LayoutsMenu) -> Self {
+        self.layouts = layouts;
+        self
+    }
+
+    pub(super) fn layouts(&self) -> &crate::workspace_layouts::LayoutsMenu {
+        &self.layouts
     }
 
     pub(crate) fn with_pcb_sync(

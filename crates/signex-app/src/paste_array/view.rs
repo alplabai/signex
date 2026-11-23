@@ -198,11 +198,12 @@ fn preview_block<'a>(
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, PasteArrayMsg> {
-    let caption = text(t!(i18n, ids::PASTE_ARRAY_PREVIEW_CAPTION))
-        .size(TS.caption)
-        .color(tokens::resolve(tokens).ink3);
+    let caption = t!(i18n, ids::PASTE_ARRAY_PREVIEW_CAPTION);
     let Ok(input) = state.input() else {
-        return caption.boxed();
+        return text(caption)
+            .size(TS.caption)
+            .color(tokens::resolve(tokens).ink3)
+            .boxed();
     };
     let length = |mm: f64| {
         format!(
@@ -223,13 +224,42 @@ fn preview_block<'a>(
         x_label: t!(i18n, ids::PASTE_ARRAY_PREVIEW_X, "value" => length(input.dx_mm)).into(),
         y_label: t!(i18n, ids::PASTE_ARRAY_PREVIEW_Y, "value" => length(input.dy_mm)).into(),
         more_label: t!(i18n, ids::PASTE_ARRAY_PREVIEW_MORE, "count" => plan.more).into(),
-    });
-    column![
+    })
+    .height_em(preview::height_em(state.preview_expanded));
+    crate::app::view::dialogs::preview_frame(
         caption,
         property_illustration(drawing, &state.hover, tokens, TS.caption)
-            .map(PasteArrayMsg::PreviewHovered),
-    ]
-    .spacing(SP.xs)
+            .map(PasteArrayMsg::PreviewHovered)
+            .boxed(),
+        Some(expand_button(state.preview_expanded, tokens, i18n)),
+        tokens,
+    )
+}
+
+/// The tooltip of the preview's expand button.
+fn expand_tip(expanded: bool) -> signex_i18n::MessageId {
+    if expanded {
+        ids::PASTE_ARRAY_PREVIEW_COLLAPSE
+    } else {
+        ids::PASTE_ARRAY_PREVIEW_EXPAND
+    }
+}
+
+/// The button that draws the preview taller, or back.
+fn expand_button<'a>(
+    expanded: bool,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, PasteArrayMsg> {
+    let ink = tokens::resolve(tokens).ink3;
+    signex_widgets::tooltip(
+        signex_widgets::button(signex_widgets::chevron::chevron(expanded, TS.body, ink))
+            .padding(SP.xs)
+            .on_press(PasteArrayMsg::PreviewExpandToggled)
+            .style(crate::styles::ghost_button(tokens)),
+        text(t!(i18n, expand_tip(expanded))).size(TS.caption),
+        iced::widget::tooltip::Position::Left,
+    )
     .boxed()
 }
 
@@ -539,6 +569,20 @@ mod tests {
             plain(help_line(&s, &en)),
             en.message_plain(ids::PASTE_ARRAY_HINT, &[])
         );
+    }
+
+    /// Mockup row 69: the expand button's tooltip says what a press does,
+    /// and the card builds either way in both themes.
+    #[test]
+    fn the_expand_button_names_its_action() {
+        let en = I18n::en_us();
+        assert_eq!(en.message_plain(expand_tip(false), &[]), "Expand preview");
+        assert_eq!(en.message_plain(expand_tip(true), &[]), "Collapse preview");
+        let mut s = state();
+        s.preview_expanded = true;
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let _ = view(&s, &theme_tokens(id), &en);
+        }
     }
 
     #[test]

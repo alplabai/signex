@@ -173,6 +173,14 @@ fn run_flow(tag: &str, work: &Path) -> Outputs {
         })
         .expect("the fixture has a finding to waive");
     let panel = |msg| Message::Dock(DockMessage::Panel(PanelMsg::ErcWaiver(msg)));
+    // The author is the git identity (mockup row 88), known before the form
+    // opens so this machine's git config never reaches the file.
+    send(
+        &mut app,
+        Message::Dock(DockMessage::Panel(PanelMsg::WaiverIdentityResolved(Some(
+            "Tester".into(),
+        )))),
+    );
     send(
         &mut app,
         panel(ErcWaiverMsg::Started {
@@ -188,10 +196,6 @@ fn run_flow(tag: &str, work: &Path) -> Outputs {
                 std::sync::Arc::new("by design".to_string()),
             )),
         )),
-    );
-    send(
-        &mut app,
-        panel(ErcWaiverMsg::AuthorChanged("Tester".into())),
     );
     send(&mut app, panel(ErcWaiverMsg::Confirmed));
 

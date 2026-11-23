@@ -17,9 +17,12 @@ library. Two option cards:
 - "Use Git LFS for binary 3D models", indented under it, greyed and inert
   while Git is off (disable-when-off).
 
-A refused Create (the folder is the root of a repository with history) shows
-as an error banner with "Choose another location…", and Create stays disabled
-until the refusal clears.
+A refused Create shows as an error banner with "Choose another location…", and
+Create stays disabled until the refusal clears. Version control off clears a
+refusal for a folder that is the root of a repository with history. A library
+already at the path stays refused either way, and its banner adds "Open
+existing library". A file name that is not portable and a path the project
+already waits to create are refused the same way and also survive the toggle.
 
 It is mounted as a full-screen overlay backdrop via
 `app/view/mod.rs::collect_overlays` when `LibraryState::create_options` is
@@ -39,20 +42,23 @@ case-insensitively; the uuid is not shown.
 ┌─[Pick Symbol   for R-0402-10K-1% ─────────────────── X]─┐
 │ [⌕ Filter…]                                              │
 ├──────────────────────────────────────────────────────────┤
-│ PASSIVES (3)                                             │
-│   resistor.snxsym · R                                    │
-│ IN LIBRARY POWER-ICS (NOT OPEN) (1)                      │
-│   sense.snxsym · R_Shunt                                 │
-│ NOT IN A LIBRARY (1)                                     │
-│   C:\work\old\res_trim.snxsym                            │
+│ PASSIVES (3)                         │ ┌───────────────┐ │
+│   resistor.snxsym · R                │ │    drawing    │ │
+│ IN LIBRARY POWER-ICS (NOT OPEN) (1)  │ └───────────────┘ │
+│   sense.snxsym · R_Shunt             │ 2 pins · 1 part   │
+│ NOT IN A LIBRARY (1)                 │                   │
+│   C:\work\old\res_trim.snxsym        │                   │
 ├──────────────────────────────────────────────────────────┤
-│ Browse filesystem…                          [ Cancel ]   │
+│ Browse filesystem…                   [ Cancel ] [ Pick ] │
 └──────────────────────────────────────────────────────────┘
 ```
 
-A row click picks at once. A symbol outside the row's library opens the copy
-confirm (below) in place of the list. A row of a library that is not open has
-no button of its own: Link without copying and Copy into are on that confirm.
+A row click highlights the row and previews it, read off the UI thread; Pick
+confirms (decided 2026-11-22). Pick and the preview follow the highlighted row
+only while the filter shows it. A file named by a uuid lists as `<name>.<ext>`.
+Pick on a symbol outside the row's library opens the copy confirm (below) in
+place of the list. A row of a library that is not open has no button of its
+own: Link without copying and Copy into are on that confirm.
 
 ### Copy into library confirm
 

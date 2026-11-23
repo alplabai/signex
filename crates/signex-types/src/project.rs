@@ -19,10 +19,12 @@ mod fab_tier;
 mod order;
 mod profile_override;
 mod requirements;
+mod router_tool;
 mod rule_file;
 mod rule_profile;
 mod rules;
 mod schematic_defaults;
+mod schematic_design;
 mod setup;
 mod setup_profile;
 #[cfg(test)]
@@ -51,7 +53,8 @@ pub use requirements::{
 };
 pub use rule_file::{MAX_RULE_FILE_BYTES, RuleFileError, RuleTemplate};
 pub use rule_profile::{
-    FabProfileInfo, RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RuleProfile, RuleProfileError,
+    FabProfileInfo, RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RULE_PROFILE_SCHEMA_V2,
+    RuleProfile, RuleProfileError,
 };
 pub use rules::{
     DrcRuleSet, ErcRules, NamedRuleSet, ProjectRules, RULES_SCHEMA_V1, RuleProfileRef, RuleSetUse,
@@ -60,6 +63,10 @@ pub use rules::{
 pub use schematic_defaults::{
     MAX_BUS_WIDTH_MM, MAX_DEFAULT_WIDTH_MM, MIN_TEXT_SIZE_PT, SchematicDefaultField,
     SchematicDefaultOverrides,
+};
+pub use schematic_design::{
+    ChannelNaming, DEFAULT_CHANNEL_DESIGNATOR_FORMAT, DEFAULT_CHANNEL_NET_FORMAT,
+    SchematicDesignSettings,
 };
 pub use setup::{
     COPPER_LAYERS, DEFAULT_DESIGNATORS, NEW_BOARD_GRID_MM, PcbDefaults, PcbField, PcbValueError,
@@ -299,6 +306,12 @@ pub struct ProjectData {
     /// build keeps the key in `unknown`. No format token changes.
     #[serde(default, skip_serializing_if = "AgentJournalSettings::is_default")]
     pub agent_journal: AgentJournalSettings,
+    /// Channel naming, harness definitions and differential pair classes
+    /// (Schematic Refinement). Skipped on save at the defaults, so an old
+    /// file re-saves byte-identical, and an old build keeps the key in
+    /// `unknown`. No format token changes.
+    #[serde(default, skip_serializing_if = "SchematicDesignSettings::is_default")]
+    pub schematic_design: SchematicDesignSettings,
     /// The kinds of file Fabrication Outputs writes (#2489). `None` is the
     /// defaults and is skipped on save, so a project whose ticks were never
     /// changed re-saves byte-identical. An unreadable value reads as `None`.
@@ -313,6 +326,17 @@ pub struct ProjectData {
     /// profile. Skipped on save when empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub requirements: Vec<RequirementEntry>,
+    /// The router tool diameter of the project's fab tier or profile, in mm
+    /// (mockup row 179d). `None` when none was applied, skipped on save. A
+    /// value that is not a positive number reads as `None`. Read and set it
+    /// through [`ProjectData::router_tool_diameter`] and
+    /// [`ProjectData::set_router_tool_diameter`].
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "router_tool::lenient_router_tool_diameter"
+    )]
+    pub router_tool_diameter: Option<f64>,
     /// Keys written by a newer build that this one does not know; kept so a
     /// save does not drop them (#788).
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -337,6 +361,19 @@ impl ProjectData {
     /// verbatim for re-save, not applied (#1180).
     pub fn has_unreadable_rules(&self) -> bool {
         self.rules.is_none() && self.unknown.get(RULES_KEY).is_some()
+    }
+
+    /// The router tool diameter in mm, absent when none was applied or the
+    /// stored value is not a positive number.
+    pub fn router_tool_diameter(&self) -> Option<f64> {
+        self.router_tool_diameter
+            .filter(|mm| router_tool::is_usable_diameter(*mm))
+    }
+
+    /// Store the router tool diameter; `None`, or a value that is not a
+    /// positive number, clears it.
+    pub fn set_router_tool_diameter(&mut self, mm: Option<f64>) {
+        self.router_tool_diameter = mm.filter(|mm| router_tool::is_usable_diameter(*mm));
     }
 
     /// Resolve a [`LibraryEntry`]'s `path` to an absolute path. Project-
@@ -365,6 +402,8 @@ mod parameters_tests;
 mod requirements_tests;
 #[cfg(test)]
 mod schematic_defaults_tests;
+#[cfg(test)]
+mod schematic_design_tests;
 #[cfg(test)]
 mod unknown_tests;
 
@@ -556,7 +595,9 @@ mod tests {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -593,7 +634,9 @@ mod tests {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -755,9 +798,15 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         let requirements = value
             .as_object_mut()
             .and_then(|map| map.remove(requirements::REQUIREMENTS_KEY));
+        let design = value
+            .as_object_mut()
+            .and_then(|map| map.remove(schematic_design::SCHEMATIC_DESIGN_KEY));
         let mut data = serde_json::from_value::<ProjectData>(value).map_err(corrupt)?;
         if let Some(raw) = requirements {
             requirements::take_requirements(&mut data, raw);
+        }
+        if let Some(raw) = design {
+            schematic_design::take_schematic_design(&mut data, raw);
         }
         if let Some(raw) = journal {
             crate::agent_journal::take_agent_journal(&mut data, raw);
@@ -828,7 +877,9 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
         fab_outputs: None,
+        router_tool_diameter: None,
         requirements: Vec::new(),
         parameters: Default::default(),
         unknown: UnknownJson::default(),
@@ -898,6 +949,13 @@ pub fn encode_project(data: &ProjectData) -> Result<Vec<u8>, serde_json::Error> 
         stamped.insert(
             crate::agent_journal::AGENT_JOURNAL_KEY.into(),
             crate::agent_journal::merged_value(data)?,
+        );
+    }
+    // An unreadable section stays as it was (DECISIONS 2026-11-23, #2750).
+    if !data.schematic_design.is_default() && !data.has_unreadable_schematic_design() {
+        stamped.insert(
+            schematic_design::SCHEMATIC_DESIGN_KEY.into(),
+            serde_json::to_value(&data.schematic_design)?,
         );
     }
     serde_json::to_vec_pretty(&Value::Object(stamped))

@@ -54,6 +54,18 @@ Blank lines are skipped.
 {"id": "save_document", "args": {"document": "main.snxsch"}}
 ```
 
+The project-wide numbering commands (`annotate_schematic_quietly`,
+`force_annotate_all_schematics`) write no file: each sheet they change, opened
+or not, stays unsaved in memory. To keep the result, run with `--save` and send
+one `save_document` naming each changed sheet (`list_documents` lists them). A
+run that ends with changes unsaved names those sheets, and they are lost with
+the run. A save never overwrites a file that changed since it was read.
+`undo document=<sheet>` never steps such a run, saved or not: it moves other
+sheets too, so the command is refused with `the next step belongs to a
+project-wide run (annotate, replace or re-prefix) and moves other sheets too;
+undo it from the sheet it was run on`. Undo the run in the app window, where
+Ctrl+Z restores every sheet until you save.
+
 An argument is a string, a number, a boolean, or `[x, y]` for a point (mm).
 The names, kinds and units of a command's arguments are in
 `signex-cli commands --json`; the same checks as `CommandArgs::parse_operands`
@@ -112,7 +124,10 @@ The placements (`place_net_label` and the other labels, `place_power_symbol`,
 `place_junction`, `place_no_connect`, `place_no_erc`, `place_wire`, `draw_wire`,
 `place_bus`, `draw_bus`, `place_text`, `place_text_string`, `draw_line`,
 `draw_graphic_line`, `draw_rectangle`, and the directives `place_blanket`,
-`place_compile_mask`, `place_diff_pair` and `edit_blanket` (#2420), and
+`place_compile_mask`, `place_diff_pair` and `edit_blanket` (#2420) and
+`place_parameter_set` (#1489: `at` on a wire, refused off one; optional
+`class`, `diff_pair_class`, `width`, `clearance`, `via_diameter` and
+`via_hole` in mm, and `current` in A, information only), and
 `edit_no_erc_rules` (#1699, see
 [SCHEMATIC_DIRECTIVES.md](SCHEMATIC_DIRECTIVES.md))) take an optional
 `document`, an id or a path as for `apply_edits`. Given, the command runs on that sheet and never on

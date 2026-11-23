@@ -57,6 +57,7 @@ pub mod preview_refresh;
 #[cfg(test)]
 mod preview_refresh_tests;
 pub mod pricing;
+pub(crate) mod primitive_label;
 pub mod primitive_picker;
 pub mod range_filter;
 pub mod recovery;
@@ -72,6 +73,7 @@ pub mod stock_copy;
 pub mod symbol_delete;
 #[cfg(test)]
 pub(crate) mod test_adapters;
+pub(crate) mod unit_menu;
 pub(crate) mod unit_picker;
 pub mod updates_dialog;
 #[cfg(test)]

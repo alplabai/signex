@@ -1,5 +1,6 @@
 //! Round 9 of #2262: a PCB tab's Properties show the board, not a schematic
-//! hint; #2353: the board panel's sections.
+//! hint; #2353: the board panel's sections; #2523 (mockup row 93): the size row, the
+//! stat tiles, the sections closed by default and the Health Check cards.
 
 use super::*;
 use crate::app::Signex;
@@ -20,6 +21,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),
@@ -45,12 +47,27 @@ fn context(selected: usize) -> PanelContext {
     let mut ctx = app.document_state.panel_ctx.clone();
     ctx.has_pcb = true;
     ctx.unit = Unit::Mm;
-    ctx.pcb_board = Some(PcbBoardSummary::of(
+    ctx.pcb_board = Some(Box::new(PcbBoardSummary::of(
         &board(),
         "mixed-tht-smd".into(),
         selected,
-    ));
+    )));
     ctx
+}
+
+/// The sections and the fold that start closed (#2523), opened as a click
+/// on their headers would.
+fn open_all(ctx: &mut PanelContext) {
+    for key in [
+        "pcb_board_filter",
+        "pcb_board_snap",
+        "pcb_board_guides",
+        "pcb_board_panel",
+        "pcb_board_info_more",
+    ] {
+        ctx.collapsed_sections
+            .insert(super::chrome::toggle_key(key, true));
+    }
 }
 
 /// Every text the Properties panel lays out, isolation marks removed.
@@ -77,11 +94,14 @@ fn the_summary_reads_the_outline_layers_and_thickness() {
 
 #[test]
 fn an_unselected_board_shows_its_own_properties() {
-    let texts = texts(&context(0));
+    let mut ctx = context(0);
+    let texts_closed = texts(&ctx);
+    open_all(&mut ctx);
+    let texts = texts(&ctx);
     for wanted in [
         "Board",
         "mixed-tht-smd",
-        "Board Size",
+        "Size 50.000 × 40.000 mm",
         "Width",
         "50.000 mm",
         "Height",
@@ -100,6 +120,25 @@ fn an_unselected_board_shows_its_own_properties() {
     ] {
         assert!(texts.iter().any(|t| t == wanted), "{wanted} in {texts:?}");
     }
+    // #2523: the same sections and figures with the closed ones closed;
+    // only the fold's Signal waits for it to open.
+    for wanted in [
+        "Size 50.000 × 40.000 mm",
+        "50.000 mm",
+        "2000.00 mm²",
+        "SELECTION FILTER",
+        "SNAP OPTIONS",
+        "GUIDE MANAGER",
+    ] {
+        assert!(
+            texts_closed.iter().any(|t| t == wanted),
+            "{wanted} in {texts_closed:?}"
+        );
+    }
+    assert!(
+        !texts_closed.iter().any(|t| t == "Signal"),
+        "{texts_closed:?}"
+    );
     assert!(
         !texts.iter().any(|t| t.contains("schematic is active")),
         "{texts:?}"
@@ -115,7 +154,9 @@ fn a_selection_shows_a_card_naming_the_board() {
             .any(|t| t == "3 items selected on mixed-tht-smd"),
         "{texts:?}"
     );
-    assert!(!texts.iter().any(|t| t == "Board Size"), "{texts:?}");
+    for gone in ["BOARD INFORMATION", "Edit board shape…"] {
+        assert!(!texts.iter().any(|t| t == gone), "{gone} in {texts:?}");
+    }
 }
 
 fn footprint_context(
@@ -137,8 +178,10 @@ fn footprint_context(
     };
     let component = super::super::pcb_component::tests::one_component("R7", "R_0603");
     ctx.pcb_board = ctx.pcb_board.map(|b| {
-        b.with_footprint(Some(facts))
-            .with_component(Some(component))
+        Box::new(
+            b.with_footprint(Some(facts))
+                .with_component(Some(component)),
+        )
     });
     ctx
 }
@@ -219,6 +262,7 @@ fn the_search_keeps_matching_rows() {
 #[test]
 fn the_header_counts_the_kinds_that_are_on() {
     let mut ctx = context(0);
+    open_all(&mut ctx);
     let total = PickKind::ALL.len();
     let texts_all = texts(&ctx);
     let all = format!("{total}/{total}");
@@ -230,7 +274,7 @@ fn the_header_counts_the_kinds_that_are_on() {
     let texts = texts(&ctx);
     let fewer = format!("{}/{total}", total - 1);
     assert!(texts.contains(&fewer), "{texts:?}");
-    let width = DEFAULT_DOCK;
+    let width = NARROW_DOCK;
     let button = laid_out(&ctx, width)
         .into_iter()
         .find(|t| t.text == fewer)
@@ -258,6 +302,7 @@ fn the_header_counts_the_kinds_that_are_on() {
 fn the_managers_list_the_boards_guides_and_grids() {
     use signex_types::pcb_options::{BoardGrid, BoardGuide, GuideKind, MARK_COLORS};
     let mut ctx = context(0);
+    open_all(&mut ctx);
     if let Some(board) = ctx.pcb_board.as_mut() {
         board.options.guides.push(BoardGuide::new(
             uuid::Uuid::from_u128(1),
@@ -284,8 +329,8 @@ fn the_managers_list_the_boards_guides_and_grids() {
     );
 }
 
-/// The default width of the right dock (`UiState::right_width` at startup).
-const DEFAULT_DOCK: f32 = 220.0;
+/// The narrow dock every board panel row must still fit (#2386).
+const NARROW_DOCK: f32 = 220.0;
 
 fn laid_out(ctx: &PanelContext, width: f32) -> Vec<crate::layout_probe::LaidOutText> {
     let window = iced::Size::new(width, WINDOW.height);
@@ -298,49 +343,80 @@ fn laid_out(ctx: &PanelContext, width: f32) -> Vec<crate::layout_probe::LaidOutT
         .collect()
 }
 
-/// #2386: the Components card lays Total, Top and Bottom out on one row.
-#[test]
-fn the_components_card_puts_its_three_figures_on_one_row() {
-    let texts = laid_out(&context(0), DEFAULT_DOCK);
-    // The Selection Filter has a Components chip too: start at Board Size.
-    let size = texts
+/// The width of the mockup's dock (#2523, mockup row 93).
+const MOCKUP_DOCK: f32 = 300.0;
+
+/// The texts from Board Information's title to the next section's.
+fn board_information(
+    texts: &[crate::layout_probe::LaidOutText],
+) -> &[crate::layout_probe::LaidOutText] {
+    let from = texts
         .iter()
-        .position(|t| t.text == "Board Size")
-        .expect("card");
-    let card = size
-        + texts[size..]
-            .iter()
-            .position(|t| t.text == "Components")
-            .expect("the Components card");
-    let after = &texts[card..];
-    let y = |label: &str| crate::layout_probe::find(after, label).bounds.y;
-    assert_eq!(y("Total"), y("Top"), "{after:?}");
-    assert_eq!(y("Top"), y("Bottom"), "{after:?}");
-    let x = |label: &str| crate::layout_probe::find(after, label).bounds.x;
-    assert!(x("Total") < x("Top") && x("Top") < x("Bottom"));
+        .position(|t| t.text == "BOARD INFORMATION")
+        .expect("Board Information");
+    let rest = &texts[from..];
+    let to = rest
+        .iter()
+        .position(|t| t.text == "GRID MANAGER")
+        .expect("Grid Manager");
+    &rest[..to]
 }
 
-/// #2386: no label of the board panel wraps at the default dock width.
+/// #2386, #2523: the Components, Top and Bottom tiles share one row, in
+/// that order, at the mockup's dock width (three tiles a row); in the
+/// narrow dock two tiles a row keep every value whole.
 #[test]
-fn no_board_panel_label_wraps_at_the_default_dock_width() {
-    let texts = laid_out(&context(0), DEFAULT_DOCK);
+fn the_component_tiles_share_a_row_and_values_fit_their_tiles() {
+    let wide = laid_out(&context(0), MOCKUP_DOCK);
+    let info = board_information(&wide);
+    let y = |label: &str| crate::layout_probe::find(info, label).bounds.y;
+    assert_eq!(y("Components"), y("Top"), "{info:?}");
+    assert_eq!(y("Top"), y("Bottom"), "{info:?}");
+    let x = |label: &str| crate::layout_probe::find(info, label).bounds.x;
+    assert!(x("Components") < x("Top") && x("Top") < x("Bottom"));
+    assert_eq!(y("Width"), y("Thickness"), "three a row: {info:?}");
+
+    let narrow = laid_out(&context(0), NARROW_DOCK);
+    let info = board_information(&narrow);
+    let width = crate::layout_probe::find(info, "Width").bounds;
+    let height = crate::layout_probe::find(info, "Height").bounds;
+    assert_eq!(width.y, height.y, "two a row: {info:?}");
+    let area = crate::layout_probe::find(info, "2000.00 mm²").bounds;
+    assert!(area.x + area.width <= NARROW_DOCK, "{area:?}");
+    let value = crate::layout_probe::find(info, "50.000 mm").bounds;
+    assert!(
+        value.x + value.width <= height.x,
+        "{value:?} runs into Height"
+    );
+}
+
+/// #2386: no label of the board panel wraps at the narrow dock width.
+#[test]
+fn no_board_panel_label_wraps_at_the_narrow_dock_width() {
+    let mut ctx = context(0);
+    open_all(&mut ctx);
+    let texts = laid_out(&ctx, NARROW_DOCK);
     let one_line = crate::layout_probe::find(&texts, "Width").bounds.height;
     for label in [
         "Width",
         "Height",
         "Thickness",
         "Parts Area",
-        "Unrouted",
+        "Unrouted nets",
         "Holes",
+        "Hidden nets",
         "Keepouts",
         "DRC Violations",
+        "Snap to",
         "Snapping",
         "Distance",
         "Axis Range",
+        "Visible Grid",
         "Global Snap Grid",
         "Fast Grids",
         "Pour Names",
         "Designators",
+        "Edit board shape…",
     ] {
         let found = crate::layout_probe::find(&texts, label);
         assert!(
@@ -351,61 +427,81 @@ fn no_board_panel_label_wraps_at_the_default_dock_width() {
 }
 
 /// #2386: a board with no outline shows one muted "No board outline" line
-/// in place of its width, height and area.
+/// in place of its width, height and area (#2523: in the size row, with no
+/// Width, Height or Area tile).
 #[test]
 fn an_outline_less_board_says_so_on_one_line() {
     let mut ctx = context(0);
     let mut no_outline = board();
     no_outline.outline.clear();
-    ctx.pcb_board = Some(PcbBoardSummary::of(&no_outline, "b".into(), 0));
-    let texts = laid_out(&ctx, DEFAULT_DOCK);
+    ctx.pcb_board = Some(Box::new(PcbBoardSummary::of(&no_outline, "b".into(), 0)));
+    let texts = laid_out(&ctx, NARROW_DOCK);
     let line = crate::layout_probe::find(&texts, "No board outline");
     let thickness = crate::layout_probe::find(&texts, "Thickness");
     assert!(
         line.bounds.height < thickness.bounds.height * 2.0,
         "{line:?}"
     );
-    let from = texts
-        .iter()
-        .position(|t| t.text == "Board Size")
-        .expect("card");
-    let rest = &texts[from..];
-    let to = rest
-        .iter()
-        .position(|t| t.text == "Components")
-        .expect("next card");
-    let card = &rest[..to];
+    let info = board_information(&texts);
     for gone in ["Width", "Height", "Area"] {
-        assert!(!card.iter().any(|t| t.text == gone), "{gone} in {card:?}");
+        assert!(!info.iter().any(|t| t.text == gone), "{gone} in {info:?}");
     }
+    // No size readout: only the no-outline line.
+    assert!(!texts.iter().any(|t| t.text.contains(" × ")), "{texts:?}");
 }
 
-/// #2386: the Primitives card leaves out kinds the board cannot hold and
-/// counts the drawn areas.
+/// #2386: the Primitives list leaves out kinds the board cannot hold and
+/// counts the drawn areas (#2523: in the fold under the tiles, with the
+/// layer counts and the hidden nets).
 #[test]
 fn the_primitives_card_counts_what_the_board_holds() {
-    let texts = texts(&context(0));
-    for wanted in ["Fills", "Regions", "Keepouts", "Polygons", "Holes"] {
+    let mut ctx = context(0);
+    open_all(&mut ctx);
+    let texts = texts(&ctx);
+    for wanted in [
+        "Layers · Primitives & Others",
+        "Layers",
+        "Signal",
+        "Fills",
+        "Regions",
+        "Keepouts",
+        "Polygons",
+        "Holes",
+        "Hidden nets",
+    ] {
         assert!(texts.iter().any(|t| t == wanted), "{wanted} in {texts:?}");
     }
     assert!(!texts.iter().any(|t| t == "Not available"), "{texts:?}");
 }
 
-/// #2383, #2386: Add Preset and the Board Information Run DRC send their
-/// messages from the laid-out panel.
+/// #2383: Add Preset sends its message from the laid-out panel; #2523: Run
+/// DRC is on the Health Check tab, not on General.
 #[test]
 fn add_preset_and_run_drc_are_wired() {
-    let ctx = context(0);
-    let window = iced::Size::new(DEFAULT_DOCK, WINDOW.height);
-    let view = || super::super::properties::view_properties(&ctx);
-    let added = crate::layout_probe::messages_on_click(view(), window, "Add Preset");
+    let mut ctx = context(0);
+    open_all(&mut ctx);
+    let window = iced::Size::new(NARROW_DOCK, WINDOW.height);
+    let added = crate::layout_probe::messages_on_click(
+        super::super::properties::view_properties(&ctx),
+        window,
+        "Add Preset",
+    );
     assert!(
         added
             .iter()
             .any(|m| matches!(m, PanelMsg::PcbBoard(PcbBoardMsg::FilterPresetAdded))),
         "{added:?}"
     );
-    let run = crate::layout_probe::messages_on_click(view(), window, "Run DRC");
+    let general = texts(&ctx);
+    assert!(!general.iter().any(|t| t == "Run DRC"), "{general:?}");
+    if let Some(board) = ctx.pcb_board.as_mut() {
+        board.view.tab = BoardTab::HealthCheck;
+    }
+    let run = crate::layout_probe::messages_on_click(
+        super::super::properties::view_properties(&ctx),
+        window,
+        "Run DRC",
+    );
     assert!(run.iter().any(|m| matches!(m, PanelMsg::RunDrc)), "{run:?}");
 }
 
@@ -460,15 +556,16 @@ fn the_global_grid_card_cannot_be_moved_or_deleted() {
 }
 
 /// #2386: the grid and guide cards, the Other rows and the Sheet card keep
-/// every text on one line at the default dock width.
+/// every text on one line at the narrow dock width.
 #[test]
-fn the_manager_cards_do_not_wrap_at_the_default_dock_width() {
+fn the_manager_cards_do_not_wrap_at_the_narrow_dock_width() {
     let mut ctx = context(0);
+    open_all(&mut ctx);
     managed(&mut ctx);
     if let Some(board) = ctx.pcb_board.as_mut() {
         board.view.guide_add_open = true;
     }
-    let texts = laid_out(&ctx, DEFAULT_DOCK);
+    let texts = laid_out(&ctx, NARROW_DOCK);
     let one_line = crate::layout_probe::find(&texts, "Parts").bounds.height;
     for label in [
         "Global Snap Grid",
@@ -508,14 +605,15 @@ fn pour_names_read_as_examples_and_the_sheet_follows_the_board() {
 #[test]
 fn the_snapping_choices_do_not_overlap_in_a_narrow_dock() {
     let narrow = iced::Size::new(220.0, 4000.0);
-    let laid = lay_out_texts(
-        super::super::properties::view_properties(&context(0)),
-        narrow,
-    );
+    let mut ctx = context(0);
+    open_all(&mut ctx);
+    let laid = lay_out_texts(super::super::properties::view_properties(&ctx), narrow);
+    // The last of each: the Snap Options header names the scope in use too.
     let bounds: Vec<iced::Rectangle> = ["All Layers", "Current Layer", "Off"]
         .iter()
         .map(|label| {
             laid.iter()
+                .rev()
                 .find(|t| t.text == *label)
                 .unwrap_or_else(|| panic!("{label:?} not laid out"))
                 .bounds
@@ -530,4 +628,227 @@ fn the_snapping_choices_do_not_overlap_in_a_narrow_dock() {
             assert!(a.intersection(b).is_none(), "{a:?} overlaps {b:?}");
         }
     }
+}
+
+/// A board without a panel shows no Panel section or Panelize button; the
+/// section comes with a panel (Caner, 2026-11-21).
+#[test]
+fn the_panel_section_shows_only_on_a_panelized_board() {
+    let mut ctx = context(0);
+    open_all(&mut ctx);
+    let shown = texts(&ctx);
+    for gone in ["Panel", "Panelize Board"] {
+        assert!(!shown.iter().any(|t| t == gone), "{gone} in {shown:?}");
+    }
+
+    let mut panelized = board();
+    panelized.options.panel = Some(signex_types::pcb_panel::BoardPanel::default());
+    ctx.pcb_board = Some(Box::new(PcbBoardSummary::of(
+        &panelized,
+        "panelized".into(),
+        0,
+    )));
+    let shown = texts(&ctx);
+    for wanted in ["PANEL", "Remove Panel"] {
+        assert!(shown.iter().any(|t| t == wanted), "{wanted} in {shown:?}");
+    }
+}
+
+/// #2523 (mockup row 93): Selection Filter, Snap Options and Guide Manager,
+/// and Panel on a panelized board, start closed with a summary in their
+/// header, and the fold of layer and primitive counts too; a click on a
+/// header opens it.
+#[test]
+fn closed_sections_show_their_summary_and_open_on_a_click() {
+    let ctx = context(0);
+    let shown = texts(&ctx);
+    for gone in [
+        "3D Bodies",
+        "Pad Centers",
+        "+ Add Guide",
+        "Panelize Board",
+        "Signal",
+    ] {
+        assert!(!shown.iter().any(|t| t == gone), "{gone} in {shown:?}");
+    }
+    let total = PickKind::ALL.len();
+    let count = format!("{total}/{total}");
+    // The header's filter button and the Selection Filter's header pill.
+    assert_eq!(
+        shown.iter().filter(|t| **t == count).count(),
+        2,
+        "{shown:?}"
+    );
+    for summary in std::iter::once("All Layers") {
+        assert_eq!(
+            shown.iter().filter(|t| *t == summary).count(),
+            1,
+            "{summary} in {shown:?}"
+        );
+    }
+    let window = iced::Size::new(NARROW_DOCK, WINDOW.height);
+    let sent = crate::layout_probe::messages_on_click(
+        super::super::properties::view_properties(&ctx),
+        window,
+        "SELECTION FILTER",
+    );
+    let key = super::chrome::toggle_key("pcb_board_filter", true);
+    assert!(
+        sent.iter()
+            .any(|m| matches!(m, PanelMsg::ToggleSection(k) if *k == key)),
+        "{sent:?}"
+    );
+    let mut opened = ctx.clone();
+    opened.collapsed_sections.insert(key);
+    let shown = texts(&opened);
+    assert!(shown.iter().any(|t| t == "3D Bodies"), "{shown:?}");
+}
+
+/// #2523 (mockup row 93): the size is read from the board shape and
+/// read-only; the size row says so and offers Edit board shape….
+#[test]
+fn the_size_row_reads_the_board_shape_and_offers_to_edit_it() {
+    let ctx = context(0);
+    let shown = texts(&ctx);
+    for wanted in [
+        "Size 50.000 × 40.000 mm",
+        "· from board shape",
+        "Edit board shape…",
+    ] {
+        assert!(shown.iter().any(|t| t == wanted), "{wanted} in {shown:?}");
+    }
+    let window = iced::Size::new(NARROW_DOCK, WINDOW.height);
+    let sent = crate::layout_probe::messages_on_click(
+        super::super::properties::view_properties(&ctx),
+        window,
+        "Edit board shape…",
+    );
+    assert!(
+        sent.iter()
+            .any(|m| matches!(m, PanelMsg::PcbBoard(PcbBoardMsg::BoardShapeEditPressed))),
+        "{sent:?}"
+    );
+}
+
+/// #2523: an outline that is not a rectangle reads as its bounding box.
+#[test]
+fn a_shaped_outline_reads_as_a_bounding_box() {
+    let p = |x: f64, y: f64| Point { x, y };
+    let mut shaped = board();
+    // An L: the extent is still 50 x 40 mm.
+    shaped.outline = vec![
+        p(10.0, 5.0),
+        p(60.0, 5.0),
+        p(60.0, 25.0),
+        p(35.0, 25.0),
+        p(35.0, 45.0),
+        p(10.0, 45.0),
+    ];
+    let summary = PcbBoardSummary::of(&shaped, "b".into(), 0);
+    assert!(!summary.outline_is_rectangle);
+    let mut ctx = context(0);
+    ctx.pcb_board = Some(Box::new(summary));
+    let shown = texts(&ctx);
+    assert!(
+        shown.iter().any(|t| t == "Bounding box 50.000 × 40.000 mm"),
+        "{shown:?}"
+    );
+    assert!(PcbBoardSummary::of(&board(), "b".into(), 0).outline_is_rectangle);
+    // A closing vertex repeated at the end is still a rectangle.
+    let mut closed = board();
+    closed.outline.push(p(10.0, 5.0));
+    assert!(PcbBoardSummary::of(&closed, "b".into(), 0).outline_is_rectangle);
+}
+
+/// #2523 (mockup row 176): Other links to the Layer Stack for the board's
+/// materials, and Board Information's header holds Reports.
+#[test]
+fn the_materials_link_and_reports_send_their_messages() {
+    let ctx = context(0);
+    let window = iced::Size::new(MOCKUP_DOCK, WINDOW.height);
+    let view = || super::super::properties::view_properties(&ctx);
+    let link = "Board materials & finish → Open Layer Stack";
+    let sent = crate::layout_probe::messages_on_click(view(), window, link);
+    assert!(
+        sent.iter()
+            .any(|m| matches!(m, PanelMsg::PcbBoard(PcbBoardMsg::LayerStackOpened))),
+        "{sent:?}"
+    );
+    let sent = crate::layout_probe::messages_on_click(view(), window, "Reports");
+    assert!(
+        sent.iter()
+            .any(|m| matches!(m, PanelMsg::PcbBoard(PcbBoardMsg::ReportsOpened))),
+        "{sent:?}"
+    );
+    let laid = laid_out(&ctx, MOCKUP_DOCK);
+    let title = crate::layout_probe::find(&laid, "BOARD INFORMATION").bounds;
+    let reports = crate::layout_probe::find(&laid, "Reports").bounds;
+    assert!(
+        (title.center_y() - reports.center_y()).abs() < title.height,
+        "Reports sits in the header: {title:?} {reports:?}"
+    );
+}
+
+/// #2523: the pointer over the Width tile reports the Width field, so the
+/// illustration lights its callout.
+#[test]
+fn hovering_the_width_tile_reports_its_field() {
+    use signex_widgets::property_illustration::IllustrationMsg;
+    let ctx = context(0);
+    let laid = laid_out(&ctx, MOCKUP_DOCK);
+    let info = board_information(&laid);
+    let tile = crate::layout_probe::find(info, "Width").bounds;
+    let sent = crate::layout_probe::messages_for_moves(
+        super::super::properties::view_properties(&ctx),
+        iced::Size::new(MOCKUP_DOCK, WINDOW.height),
+        &[iced::Point::ORIGIN, tile.center()],
+    );
+    assert!(
+        sent.iter().any(|m| matches!(
+            m,
+            PanelMsg::PcbBoard(PcbBoardMsg::IllustrationHovered(
+                IllustrationMsg::FieldHovered(field)
+            )) if *field == BOARD_WIDTH
+        )),
+        "{sent:?}"
+    );
+}
+
+/// #2523 (mockup row 93): the Health Check tab is one card per check, with Run DRC
+/// and Show results on the design rules card; neither check has run here.
+#[test]
+fn the_health_check_tab_has_a_card_per_check() {
+    let mut ctx = context(0);
+    if let Some(board) = ctx.pcb_board.as_mut() {
+        board.view.tab = BoardTab::HealthCheck;
+    }
+    let shown = texts(&ctx);
+    for wanted in [
+        "Design rules",
+        "Run DRC",
+        "Show results",
+        "Electrical rules",
+        "From the project's schematic check",
+    ] {
+        assert!(shown.iter().any(|t| t == wanted), "{wanted} in {shown:?}");
+    }
+    assert_eq!(
+        shown.iter().filter(|t| *t == "Not run").count(),
+        2,
+        "{shown:?}"
+    );
+    for gone in ["Search", "SNAP OPTIONS", "Edit board shape…"] {
+        assert!(!shown.iter().any(|t| t == gone), "{gone} in {shown:?}");
+    }
+    let window = iced::Size::new(NARROW_DOCK, WINDOW.height);
+    let sent = crate::layout_probe::messages_on_click(
+        super::super::properties::view_properties(&ctx),
+        window,
+        "Show results",
+    );
+    assert!(
+        sent.iter()
+            .any(|m| matches!(m, PanelMsg::PcbBoard(PcbBoardMsg::DrcResultsOpened))),
+        "{sent:?}"
+    );
 }

@@ -421,6 +421,7 @@ fn the_bar_draws_in_the_browser_and_the_picker_with_a_between_filter() {
         &state.library_browsers[&root],
         &tokens,
         &signex_i18n::I18n::en_us(),
+        crate::library::browser::PreviewLook::for_tests(),
     ));
     drop(crate::library::picker::view(
         state.picker.as_ref().unwrap(),

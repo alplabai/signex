@@ -103,15 +103,17 @@ With `layers: Some(PdfLayerVisibility)` the export writes optional content:
 
 | `PdfLayer` | Group name | What it holds |
 |---|---|---|
-| `WiresAndBuses` | Wires and buses | Wires, buses, bus entries, junctions |
+| `WiresAndBuses` | Wires and buses | Wires, buses, bus entries, signal harnesses, junctions |
 | `Parts` | Parts | Part bodies, pins and their designator and value text |
 | `NetLabelsAndPorts` | Net labels and ports | Net, global and hierarchical labels (ports) |
 | `PowerPorts` | Power ports | Power port symbols and power labels |
 | `TitleBlockAndBorder` | Title block and border | The sheet border, the template frame and the title block |
 | `Watermark` | Watermark | The watermark |
 
-Not in any group, so always visible: the page's paper fill, free drawings,
-notes, no-connect and No-ERC markers, and sheet symbols.
+Not in any group, so always visible: the page's paper fill, free drawings
+(Bezier curves, dimensions and tables included), notes, no-connect and No-ERC
+markers, and sheet symbols (a repeated sheet's stack and its ×N pill
+included).
 
 The Watermark group is written only when the export has a watermark. It
 carries `/Usage << /Print << /PrintState /ON >> >>`, and the default

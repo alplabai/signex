@@ -80,6 +80,18 @@ fn read_container(file: &Path) -> Result<SymbolFile, String> {
     SymbolFile::from_bytes(&bytes).map_err(|e| format!("Could not read {}: {e}", file.display()))
 }
 
+/// Read one symbol of `file`, for the picker's preview. Reads the disk, so
+/// call it off the UI thread.
+pub(crate) fn read_loose_symbol(
+    file: &Path,
+    symbol: Uuid,
+) -> Result<signex_library::Symbol, String> {
+    read_container(file)?
+        .get_symbol(symbol)
+        .cloned()
+        .ok_or_else(|| format!("{} no longer holds that symbol.", file.display()))
+}
+
 /// Copy `symbol` of `file` into the library of `adapter` through its save
 /// path (container write inside the library, commit). The symbol keeps its
 /// uuid unless the library already has one with it. The source is left

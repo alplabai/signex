@@ -77,7 +77,7 @@ fn card<'a>(
             row![
                 text(t!(i18n, name)).size(TS.label).color(ink).font(Font {
                     weight: Weight::Semibold,
-                    ..Font::DEFAULT
+                    ..signex_widgets::ui_font::regular()
                 }),
                 tone_pill(t!(i18n, pill), PillTone::Neutral, active),
             ]
@@ -114,7 +114,7 @@ fn card<'a>(
 }
 
 /// The radio mark: a ring, with an accent dot when chosen.
-fn radio<'a>(selected: bool, t: &ThemeTokens) -> Element<'a, PrefMsg> {
+pub(super) fn radio<'a>(selected: bool, t: &ThemeTokens) -> Element<'a, PrefMsg> {
     let r = tokens::resolve(t);
     let (accent, ring, fill) = (ti(t.accent), r.line_strong, r.field);
     let dot = container(Space::new())

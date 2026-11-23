@@ -125,8 +125,9 @@ pub(super) struct BarState<'a> {
 }
 
 /// One group button: its glyph, whether its tool is armed, what a left
-/// click sends, the menu behind its corner triangle and its hover name. A
-/// group whose every row is planned is greyed at the bar and opens no menu.
+/// click sends, the menu behind its corner triangle and its hover name.
+/// Every group opens its menu: none holds only planned tools
+/// (`dropdown::tests::no_group_is_planned`).
 fn group_button(
     s: &BarState<'_>,
     i18n: &I18n,
@@ -136,23 +137,18 @@ fn group_button(
     menu: ActiveBarMenu,
     tooltip: MessageId,
 ) -> ActiveBarItem<ActiveBarMsg> {
-    let planned_group = super::dropdown::is_planned_menu(menu);
-    let enabled = !planned_group
-        && match &left {
-            ActiveBarMsg::Action(a) => action_enabled(a, s.has_selection, s.has_net_colors),
-            _ => true,
-        };
-    let opens = (!planned_group).then_some(ActiveBarMsg::ToggleMenu(menu));
+    let enabled = match &left {
+        ActiveBarMsg::Action(a) => action_enabled(a, s.has_selection, s.has_net_colors),
+        _ => true,
+    };
     ActiveBarItem::Button(ActiveBarButton {
         icon: ActiveBarIcon::Svg(icon),
         tooltip: button_tooltip(&left, tooltip, i18n),
         enabled,
         selected,
         on_press: Some(left),
-        dropdown_indicator: opens
-            .is_some()
-            .then(|| ActiveBarIcon::Svg(ic::icon_chevron_45(s.tid))),
-        on_right_press: opens,
+        dropdown_indicator: Some(ActiveBarIcon::Svg(ic::icon_chevron_45(s.tid))),
+        on_right_press: Some(ActiveBarMsg::ToggleMenu(menu)),
     })
 }
 
@@ -274,7 +270,16 @@ pub(super) fn bar_items(
         ),
         b(
             ic::icon_shapes(tid),
-            matches!(tool, Tool::Line | Tool::Rectangle | Tool::Circle),
+            matches!(
+                tool,
+                Tool::Line
+                    | Tool::Rectangle
+                    | Tool::Circle
+                    | Tool::Bezier
+                    | Tool::Table
+                    | Tool::LinearDimension
+                    | Tool::AlignedDimension
+            ),
             last("shapes", ActiveBarAction::DrawLine),
             Menu::Shapes,
             ids::CHROME_ACTIVE_BAR_DRAWING_TOOLS,

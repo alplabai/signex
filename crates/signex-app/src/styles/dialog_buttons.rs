@@ -19,6 +19,9 @@ pub(super) const BORDER_WIDTH: f32 = 1.0;
 /// Fill alpha of the danger tint at rest, hover and pressed.
 const DANGER_TINT: [f32; 3] = [0.08, 0.14, 0.24];
 
+/// Black laid over the solid danger fill on hover and pressed.
+const SOLID_STEP: [f32; 2] = [0.08, 0.16];
+
 /// Rest, hover and pressed fill, border colour and label colour of a role.
 struct Look {
     fills: [Color; 3],
@@ -49,6 +52,18 @@ fn look(kind: DialogButtonKind, tokens: &ThemeTokens) -> Look {
                 fills: DANGER_TINT.map(|a| Color { a, ..danger }),
                 border: danger,
                 text: danger,
+            }
+        }
+        DialogButtonKind::DangerSolid => {
+            let danger = tokens::danger(tokens);
+            let step = |a: f32| tokens::composite_over(Color::from_rgba(0.0, 0.0, 0.0, a), danger);
+            Look {
+                fills: [danger, step(SOLID_STEP[0]), step(SOLID_STEP[1])],
+                // The border is the fill: none shows.
+                border: danger,
+                // White on the light theme's deep red, the dark ink on the
+                // dark theme's pale red.
+                text: tokens::keep_readable_on(tokens::resolve(tokens).primary_ink, danger),
             }
         }
         DialogButtonKind::Ghost => Look {
@@ -109,10 +124,11 @@ mod tests {
     use super::*;
     use signex_types::theme::ThemeId;
 
-    const KINDS: [DialogButtonKind; 6] = [
+    const KINDS: [DialogButtonKind; 7] = [
         DialogButtonKind::Primary,
         DialogButtonKind::Secondary,
         DialogButtonKind::Danger,
+        DialogButtonKind::DangerSolid,
         DialogButtonKind::Accent,
         DialogButtonKind::Ghost,
         DialogButtonKind::Cancel,
@@ -198,5 +214,50 @@ mod tests {
             assert_eq!(fill(&primary), Some(tokens::accent_fill(&tokens)), "{id:?}");
             assert_eq!(primary.border.color, tokens::accent_fill(&tokens), "{id:?}");
         }
+    }
+
+    /// The solid danger role is the full `error` fill, darker on hover and
+    /// darker still when pressed, with a label that reads on the fill: white
+    /// on Graphite Light, the dark ink on Graphite Dark. The soft Danger role
+    /// is unchanged beside it.
+    #[test]
+    fn solid_danger_is_the_error_fill_with_a_readable_label() {
+        for &id in ThemeId::BUILTINS {
+            let tokens = signex_types::theme::theme_tokens(id);
+            let red = tokens::danger(&tokens);
+            let [rest, hover, pressed] = [
+                button::Status::Active,
+                button::Status::Hovered,
+                button::Status::Pressed,
+            ]
+            .map(|s| style(DialogButtonKind::DangerSolid, id, s));
+            assert_eq!(fill(&rest), Some(red), "{id:?}");
+            assert_eq!(rest.border.color, red, "{id:?}");
+            let lum = |s: &button::Style| tokens::relative_luminance(fill(s).expect("a fill"));
+            assert!(lum(&hover) < lum(&rest), "{id:?}: hover is darker");
+            assert!(
+                lum(&pressed) < lum(&hover),
+                "{id:?}: pressed is darker still"
+            );
+            assert!(
+                tokens::contrast_ratio(rest.text_color, red) >= tokens::UNREADABLE_CONTRAST,
+                "{id:?}: the label reads on the fill"
+            );
+            assert_ne!(
+                style(DialogButtonKind::Danger, id, button::Status::Active),
+                rest,
+                "{id:?}: soft and solid danger differ"
+            );
+        }
+        let light = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
+        let dark = signex_types::theme::theme_tokens(ThemeId::GraphiteDark);
+        assert_eq!(
+            dialog_label_color(DialogButtonKind::DangerSolid, &light),
+            Color::WHITE
+        );
+        assert_eq!(
+            dialog_label_color(DialogButtonKind::DangerSolid, &dark),
+            tokens::resolve(&dark).primary_ink
+        );
     }
 }

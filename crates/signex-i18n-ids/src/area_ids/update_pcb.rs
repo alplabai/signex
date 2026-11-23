@@ -41,6 +41,14 @@ define_ids! {
     UPDATE_PCB_FIX_SHEET_CLOSED = "update-pcb-fix-sheet-closed";
     UPDATE_PCB_FIX_NOT_SET = "update-pcb-fix-not-set";
     UPDATE_PCB_EXECUTE_COUNT = "update-pcb-execute-count";
+    UPDATE_PCB_SCHEMATIC_RULES = "update-pcb-schematic-rules";
+    UPDATE_PCB_RULE_CHANGED = "update-pcb-rule-changed";
+    UPDATE_PCB_RULE_ADDED = "update-pcb-rule-added";
+    UPDATE_PCB_RULE_UNCHANGED = "update-pcb-rule-unchanged";
+    UPDATE_PCB_RULE_WAS = "update-pcb-rule-was";
+    UPDATE_PCB_RULES_NOTE = "update-pcb-rules-note";
+    UPDATE_PCB_RULE_NET_NOT_ON_BOARD = "update-pcb-rule-net-not-on-board";
+    UPDATE_PCB_RULE_NAME_CLASH = "update-pcb-rule-name-clash";
     CHANGE_ROW_ICON_SKIPPED = "change-row-icon-skipped";
     CHANGE_ROW_ICON_BLOCKED = "change-row-icon-blocked";
     CHANGE_ROW_ICON_INFO = "change-row-icon-info";
@@ -57,6 +65,7 @@ define_ids! {
     BACK_ANNOTATE_SHOW_ROW = "back-annotate-show-row";
     BACK_ANNOTATE_DUPLICATE_ON_SHEET = "back-annotate-duplicate-on-sheet";
     BACK_ANNOTATE_DUPLICATE_EXISTS = "back-annotate-duplicate-exists";
+    BACK_ANNOTATE_DUPLICATE_CONTESTED = "back-annotate-duplicate-contested";
     PCB_REANNOTATE_ORDER_COLUMNS_HINT = "pcb-reannotate-order-columns-hint";
     PCB_REANNOTATE_ORDER_ROWS_HINT = "pcb-reannotate-order-rows-hint";
     PCB_REANNOTATE_PREVIEW = "pcb-reannotate-preview";

@@ -37,3 +37,21 @@ render floor), Small 0 (unset, so it draws at the default 0.254 mm and a
 project or net class width still applies; this is the default choice), Medium
 0.5 mm, Large 1.0 mm. A stored width that matches none shows as the nearest
 preset.
+
+## Bus width and colour
+
+A bus row of `[extras.sheet]` `buses` may carry two optional keys (#2813):
+
+- `stroke_width`, in mm. Omitted at 0, which draws at the project's bus width,
+  else the built-in 0.45 mm. A set width is floored at 0.15 mm.
+- `color`, written `#rrggbbaa`; `#RRGGBB` is read too. Omitted when the bus has
+  no colour of its own, which draws in the theme's bus colour.
+
+Any styled bus makes the sheet `snxsch/1.4`, because a 1.3 build drops unknown
+keys of a typed row on save; it opens the sheet read-only instead. Unlike a
+wire's `color` cell, a bus row has no foreign-cell slot, so an unreadable
+`color` refuses the file and names the value rather than losing it on the next
+save.
+
+The Properties Style section uses the same four presets. On a bus, Small is
+the unset 0, so it follows the bus default rather than the wire default.

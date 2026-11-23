@@ -29,6 +29,7 @@
 //! the legacy schema in favour of user-defined columns.
 
 pub mod project;
+pub mod project_repo;
 mod symbol_index;
 mod symbol_problems;
 
@@ -516,6 +517,7 @@ impl LocalGitAdapter {
 }
 
 mod adapter;
+pub(crate) mod branch_switch;
 mod commit_lock;
 mod disk_sync;
 /// `add_all` callback: stage everything except a write-lock file (#832).
@@ -542,6 +544,7 @@ mod pinned_assets;
 mod primitives;
 mod read_cache;
 mod row_edit;
+mod tree_path;
 mod uncommitted;
 #[cfg(test)]
 mod uncommitted_tests;

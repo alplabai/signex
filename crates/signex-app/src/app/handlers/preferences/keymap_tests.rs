@@ -17,7 +17,7 @@ fn app_recording_a_custom_profile_row() -> Signex {
         .rows()
         .into_iter()
         .find(|row| row.trigger == "Ctrl+W")
-        .expect("altium binds Ctrl+W");
+        .expect("signex_standard binds Ctrl+W");
     app.ui_state.preferences_keymap_editor = editor;
     app.ui_state.preferences_keymap_recorder = Some(crate::app::KeymapRecorderState::new(
         row.slot,
@@ -36,7 +36,10 @@ fn send(app: &mut Signex, msg: PrefMsg) {
 #[test]
 fn switching_profile_closes_the_recorder() {
     let mut app = app_recording_a_custom_profile_row();
-    send(&mut app, PrefMsg::KeymapProfileSelected("altium".into()));
+    send(
+        &mut app,
+        PrefMsg::KeymapProfileSelected("signex_standard".into()),
+    );
     assert!(app.ui_state.preferences_keymap_recorder.is_none());
 }
 

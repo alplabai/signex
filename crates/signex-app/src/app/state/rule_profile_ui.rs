@@ -6,9 +6,36 @@ use std::collections::{HashMap, VecDeque};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::project::{ErcRules, RuleProfile};
 
 use crate::rule_profiles::{ListedProfile, ProfileKind, ProfileListing, RuleEdit};
+
+/// Why edits of the machine's rules (`User Default`) are not reaching its
+/// file. The ERC dialog and the Rule Profiles page both show it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MachineRulesIssue<'a> {
+    /// The old preferences could not be merged, so edits are refused.
+    ReadOnly(&'a str),
+    /// The boot task is still reading the file.
+    Loading,
+    /// The file could not be read or written; edits last until quit.
+    NotSaving(&'a str),
+}
+
+impl MachineRulesIssue<'_> {
+    pub fn localized(self, i18n: &I18n) -> Localized {
+        match self {
+            Self::ReadOnly(why) => {
+                t!(i18n, ids::PREFERENCES_PROFILES_MACHINE_READ_ONLY, "why" => why)
+            }
+            Self::Loading => t!(i18n, ids::PREFERENCES_PROFILES_MACHINE_LOADING),
+            Self::NotSaving(why) => {
+                t!(i18n, ids::PREFERENCES_PROFILES_MACHINE_NOT_SAVING, "why" => why)
+            }
+        }
+    }
+}
 
 /// The open "Save as profile" dialog of the ERC dialog. Nothing is written
 /// until Save; a name that exists asks before replacing it.
@@ -40,6 +67,7 @@ impl SaveProfileDialog {
 }
 
 pub use crate::app::core::rule_list_filter::RuleListFilter;
+pub use crate::app::core::rule_profile_page::{ProfileEditorTab, ProfileNameAction};
 
 /// Preferences ▸ Rule Profiles. Edits apply at once, like the ERC dialog's:
 /// each one is written to the profile's file, not held as a draft.
@@ -55,6 +83,12 @@ pub struct ProfileManager {
     pub selected: Option<String>,
     /// Text of the name field used by New / Duplicate / Rename.
     pub name_input: String,
+    /// The action the name field is open for; closed, the page shows none.
+    pub name_prompt: Option<ProfileNameAction>,
+    /// The half of the rule editor the page shows.
+    pub editor_tab: ProfileEditorTab,
+    /// The one rule open in the rule editor, over the tab's table.
+    pub open_rule: Option<signex_erc::RuleKind>,
     /// Delete waiting for confirmation, by profile name.
     pub confirm_delete: Option<String>,
     /// Outcome of the last action: `(is_error, sentence)`.
@@ -68,9 +102,17 @@ pub struct ProfileManager {
     /// library again once they finish, so the screen never shows a state
     /// older than what was written.
     pub relist_pending: bool,
+    /// Write-queue key of the library profile whose shown edit did not reach
+    /// its file. Cleared by a good write or by the next read of the library.
+    pub failed_write: Option<String>,
 }
 
 impl ProfileManager {
+    /// Whether the page is showing an edit of `name` that its file lacks.
+    pub fn write_failed(&self, name: &str) -> bool {
+        self.failed_write.as_deref() == Some(name.to_lowercase().as_str())
+    }
+
     pub fn selected_profile(&self) -> Option<&ListedProfile> {
         let name = self.selected.as_deref()?;
         self.listing
@@ -92,11 +134,14 @@ impl ProfileManager {
     pub fn apply_listing(&mut self, listing: ProfileListing) {
         self.listing = listing;
         self.loaded = true;
+        self.failed_write = None;
         let keep = self
             .selected
             .as_deref()
             .is_some_and(|name| self.listing.profiles.iter().any(|l| l.profile.name == name));
         if !keep {
+            self.name_prompt = None;
+            self.open_rule = None;
             self.selected = self
                 .listing
                 .profiles
@@ -129,6 +174,8 @@ impl ProfileManager {
         self.confirm_delete = None;
         self.confirm_reset = None;
         self.status = None;
+        self.name_prompt = None;
+        self.open_rule = None;
     }
 
     /// Whether `name` is the machine's own rule set.

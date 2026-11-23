@@ -125,6 +125,34 @@ impl Signex {
         )
     }
 
+    /// An Active Bar flyout `card` at the absolute `at`, as one overlay layer
+    /// over [`Self::flyout_dismiss_layer`]. A right press on the card sends
+    /// `on_card_right_press` and leaves the flyout open.
+    pub(in crate::app::view) fn flyout_and_place<'a>(
+        on_dismiss: Message,
+        on_right_press: Message,
+        on_card_right_press: Message,
+        card: Element<'a, Message>,
+        at: (f32, f32),
+    ) -> Vec<Element<'a, Message>> {
+        let scrim = crate::styles::tokens::scrim(crate::styles::tokens::BACKDROP_ALPHA);
+        let card = iced::widget::mouse_area(claim_pointer(card))
+            .on_right_press(on_card_right_press)
+            .boxed();
+        vec![
+            iced::widget::Stack::new()
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .push(Self::flyout_dismiss_layer(
+                    on_dismiss,
+                    on_right_press,
+                    scrim,
+                ))
+                .push(signex_widgets::Translate::new(card, at).boxed())
+                .boxed(),
+        ]
+    }
+
     /// [`Self::dismiss_over`] with `card` centred in the window.
     pub(in crate::app::view) fn dismiss_and_centre<'a>(
         on_dismiss: Message,

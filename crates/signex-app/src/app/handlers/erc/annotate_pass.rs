@@ -1,13 +1,11 @@
 //! The project-wide annotate walk, shared by Annotate and (#1315) Re-prefix.
-//! The sheets always come from a read worker (#859, #1756); nothing here reads disk.
+//! The sheets always come from a read worker (#859, #1756); nothing here reads
+//! or writes disk. Unopened sheets are parked, unsaved (#2760).
 
 use iced::Task;
 
 use super::super::super::*;
-use super::annotate::{
-    PassFailed, annotate_unopened_for_write, annotate_unopened_in_memory, read_only_sheets,
-};
-use super::annotate_job::{PassApplied, PendingWrite, RunUndo};
+use super::annotate::{PassFailed, annotate_unopened_in_memory, read_only_sheets};
 use crate::app::project_sheets::ProjectSheetSet;
 
 /// What one project-wide pass does: the engine mode, and (#1315) an optional
@@ -26,13 +24,13 @@ pub(super) struct AnnotatePass<'a> {
 impl Signex {
     /// Annotate the project `project_set` (read by a worker): one shared
     /// counter across every sheet, in the order `ordered_project_sheet_paths`
-    /// defines. Open sheets are annotated in place; each unopened sheet comes
-    /// back as bytes for the write worker.
+    /// defines. Open sheets are annotated in place; each unopened sheet loads
+    /// into a parked engine, unsaved until the user saves (#2760).
     pub(super) fn apply_annotate(
         &mut self,
         mode: signex_engine::AnnotateMode,
         project_set: ProjectSheetSet,
-    ) -> PassApplied {
+    ) -> Task<Message> {
         self.number_project(
             AnnotatePass {
                 mode,
@@ -43,19 +41,18 @@ impl Signex {
         )
     }
 
-    /// Number `project_set` under `pass`. Shared by Annotate, Reset Duplicates
-    /// and Re-prefix: every one of them reaches it with sheets a worker read.
+    /// Number `project_set` under `pass`. Shared by Annotate and Re-prefix:
+    /// each reaches it with sheets a worker read.
     pub(super) fn number_project(
         &mut self,
         pass: AnnotatePass<'_>,
         project_set: ProjectSheetSet,
-    ) -> PassApplied {
+    ) -> Task<Message> {
         let AnnotatePass {
             mode,
             reprefix,
             label,
         } = pass;
-        let mut writes: Vec<PendingWrite> = Vec::new();
         // Designators before the pass, to tell afterwards which symbols it
         // renumbered.
         let before: std::collections::HashMap<_, std::collections::HashMap<uuid::Uuid, String>> =
@@ -116,8 +113,20 @@ impl Signex {
             && matches!(mode, signex_engine::AnnotateMode::ResetAndRenumber)
             && self.refuse_reset_that_skips(label, &project_set, &in_run, &read_only)
         {
-            return PassApplied::without_writes(Task::none());
+            return Task::none();
         }
+        // Reset All numbers nothing, but one undo must still cover the whole
+        // project, so a sheet it cannot reach refuses it too (#2760). A
+        // read-only sheet stays skipped and named, as it cannot change.
+        if reprefix.is_none()
+            && matches!(mode, signex_engine::AnnotateMode::ResetOnly)
+            && self.refuse_reset_all_that_skips(label, &project_set, &in_run)
+        {
+            return Task::none();
+        }
+        // A re-prefix or reset that left one sheet out would split a prefix
+        // or a part; Incremental still skips a sheet it cannot change.
+        let all_or_nothing = reprefix.is_some() || resets;
         let (parts, mut next_by_prefix, first_unit, placements) =
             self.walk_project(&project_set, &ordered_paths, &locked, resets);
         let mut assigned: std::collections::HashMap<usize, String> =
@@ -142,11 +151,13 @@ impl Signex {
         for (path, why) in &project_set.unreadable {
             crate::diagnostics::log_info(format!("Annotate: sheet '{}' {why}", path.display()));
         }
-        // Re-prefix is all or nothing: a sheet that fails undoes the rest, so
-        // no part is left half converted. What it needs to put back:
+        // Re-prefix and Reset are all or nothing: a sheet that fails undoes
+        // the rest, so no project is left half done. What they put back:
         let mut failed = false;
         let mut parked_here: std::collections::HashSet<std::path::PathBuf> = Default::default();
         let mut newly_dirty: Vec<std::path::PathBuf> = Vec::new();
+        let active_was_clean = (active_path.as_deref())
+            .is_some_and(|path| !self.document_state.is_document_dirty(path));
         for (sheet, path) in ordered_paths.iter().enumerate() {
             let scope = signex_engine::AnnotateScope {
                 parts: &parts,
@@ -178,7 +189,7 @@ impl Signex {
                             "Annotate failed on the active sheet",
                             &error,
                         );
-                        if reprefix.is_some() {
+                        if all_or_nothing {
                             failed = true;
                             break;
                         }
@@ -211,7 +222,7 @@ impl Signex {
                             &format!("Annotate failed on '{}'", path.display()),
                             &error,
                         );
-                        if reprefix.is_some() {
+                        if all_or_nothing {
                             failed = true;
                             break;
                         }
@@ -220,51 +231,22 @@ impl Signex {
                 }
                 continue;
             }
-            // A project sheet that isn't currently open as a tab — annotate
-            // the already-parsed copy with the shared counter and write it
-            // back. Altium's Annotate-Across-Project covers even the sheets
-            // the user hasn't opened so designators stay unique project-wide.
-            let Some(document) = project_set.sheets.get(path).cloned() else {
+            // A project sheet with no engine: numbered with the shared counter
+            // so designators stay unique project-wide, and loaded into a parked
+            // engine, dirty and unsaved, in the same undo group as every other
+            // sheet. Nothing is written behind the user's back (#669, #2760).
+            let Some(mut document) = project_set.sheets.get(path).cloned() else {
                 continue;
             };
             if self.unopened_write_blocked("Annotate", path) {
-                // A re-prefix is all or nothing: leaving one sheet out would
-                // split a prefix across the project.
-                if reprefix.is_some() {
+                if all_or_nothing {
                     failed = true;
                     break;
                 }
                 continue;
             }
-            if reprefix.is_some() {
-                // Re-prefix never writes behind the user's back: the sheet
-                // is loaded into a parked engine, dirty and unsaved, inside
-                // the same undo group as every other sheet (#669).
-                match annotate_unopened_in_memory(
-                    document,
-                    path,
-                    mode,
-                    &mut next_by_prefix,
-                    scope,
-                    &mut assigned,
-                ) {
-                    Ok(Some(engine)) => {
-                        self.document_state.insert_engine(path.clone(), engine);
-                        parked_here.insert(path.clone());
-                        newly_dirty.push(path.clone());
-                        self.document_state.mark_document_dirty(path);
-                        any_cached_changed = true;
-                        touched_sheets.live.push(path.clone());
-                    }
-                    Ok(None) => {}
-                    Err(PassFailed) => {
-                        failed = true;
-                        break;
-                    }
-                }
-                continue;
-            }
-            if let Some(bytes) = annotate_unopened_for_write(
+            let read_hash = document.take_source_hash();
+            match annotate_unopened_in_memory(
                 document,
                 path,
                 mode,
@@ -272,21 +254,32 @@ impl Signex {
                 scope,
                 &mut assigned,
             ) {
-                writes.push(PendingWrite {
-                    path: path.clone(),
-                    bytes,
-                });
+                Ok(Some(engine)) => {
+                    self.document_state.insert_engine(path.clone(), engine);
+                    self.settle_parked_sheet(path, read_hash);
+                    parked_here.insert(path.clone());
+                    newly_dirty.push(path.clone());
+                    self.document_state.mark_document_dirty(path);
+                    any_cached_changed = true;
+                    touched_sheets.live.push(path.clone());
+                }
+                Ok(None) => {}
+                Err(PassFailed) => {
+                    if all_or_nothing {
+                        failed = true;
+                        break;
+                    }
+                }
             }
         }
         if failed {
-            let task = self.roll_back_reprefix(
+            return self.roll_back_run(
                 undo_group,
                 &touched_sheets.live,
                 &parked_here,
                 &newly_dirty,
                 label,
             );
-            return PassApplied::without_writes(task);
         }
         self.warn_mixed_after_renumbering(&before);
         // Windows and tile panes on the other annotated sheets follow; the
@@ -298,8 +291,10 @@ impl Signex {
         }
         let changed_sheets = touched_sheets.live.len();
         touched_sheets.parked = parked_here.iter().cloned().collect();
-        // Owed to disk already, so an undo before the write lands still names them.
-        touched_sheets.disk_only = writes.iter().map(|w| w.path.clone()).collect();
+        touched_sheets.clean_before = newly_dirty;
+        if any_active_changed && active_was_clean {
+            touched_sheets.clean_before.extend(active_path.clone());
+        }
         if let Some(group) = undo_group {
             self.set_undo_group_sheets(group, touched_sheets);
         }
@@ -333,25 +328,21 @@ impl Signex {
             ));
         } else {
             crate::diagnostics::log_info(format!(
-                "Annotated symbols on {changed_sheets} open sheet(s) ({mode:?}), {} unopened \
-                 sheet(s) to write",
-                writes.len(),
+                "{label}: changed {changed_sheets} sheet(s) in memory ({mode:?}); nothing is \
+                 written until you save",
             ));
         }
         self.report_read_only_skipped(label, &read_only);
-        PassApplied {
-            writes,
-            task: Task::none(),
-            undo: undo_group.map(|group| RunUndo { group }),
-        }
+        Task::none()
     }
 }
 
 impl Signex {
-    /// A re-prefix sheet failed: undo every sheet already changed (the pass's
-    /// own entry is on top of each history) and forget the sheets it parked,
-    /// so the project is exactly as it was and no part is left half converted.
-    pub(super) fn roll_back_reprefix(
+    /// A sheet of an all-or-nothing run failed: undo every sheet already
+    /// changed (the pass's own entry is on top of each history) and forget the
+    /// sheets it parked, so the project is exactly as it was. `group` is `None`
+    /// for a run under the per-sheet Annotate undo setting.
+    pub(super) fn roll_back_run(
         &mut self,
         group: Option<signex_engine::UndoGroupId>,
         touched: &[std::path::PathBuf],
@@ -362,14 +353,16 @@ impl Signex {
         let mut not_rolled_back = std::collections::HashSet::new();
         for path in touched {
             if parked.contains(path) {
-                self.document_state.remove_engine(path);
-            } else if let Some(engine) = self.document_state.engines.get_mut(path)
-                && let Some(group) = group
-            {
+                self.abandon_parked_sheet(path);
+            } else if let Some(engine) = self.document_state.engines.get_mut(path) {
                 // Discarded, not undone: an undo would leave the half run on
                 // the redo stack for Ctrl+Y to bring back. No library drift
                 // check: a take-back of the same call is not a Step.
-                match engine.discard_undo_group_top(group) {
+                let discarded = match group {
+                    Some(group) => engine.discard_undo_group_top(group),
+                    None => engine.discard_undo_top(),
+                };
+                match discarded {
                     Ok(Some(_)) => {}
                     // The run is still in the sheet: it must stay dirty.
                     Ok(None) => {
@@ -402,7 +395,7 @@ impl Signex {
         }
         if not_rolled_back.is_empty() {
             crate::diagnostics::log_warning(format!(
-                "{label}: a sheet could not be converted, so the whole run was undone and \
+                "{label}: a sheet could not be changed, so the whole run was undone and \
                  nothing was changed. Any redo history the touched sheets had before the run \
                  is gone."
             ));
@@ -413,7 +406,7 @@ impl Signex {
                 .collect();
             names.sort();
             crate::diagnostics::log_warning(format!(
-                "{label}: a sheet could not be converted and the run could not be undone on: \
+                "{label}: a sheet could not be changed and the run could not be undone on: \
                  {}. Those sheets keep the run's changes and stay unsaved; undo them by hand.",
                 names.join(", ")
             ));

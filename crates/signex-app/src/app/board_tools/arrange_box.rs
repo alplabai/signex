@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use iced::Task;
-use signex_engine::pcb::placement::{editable_footprints, grid_for};
+use signex_engine::pcb::placement::editable_footprints;
 use signex_i18n::{ids, t};
 use signex_types::pcb::Point;
 use signex_types::pcb_options::GridUse;
@@ -71,7 +71,7 @@ impl Signex {
         let Some(board) = self.active_pcb() else {
             return Some(Task::none());
         };
-        let at = grid_for(board, GridUse::NonComponents).snap(at);
+        let at = self.board_grid_point(board, GridUse::NonComponents, at);
         let Some(first) = armed.first else {
             if let Some(armed) = self.interaction_state.pcb_arrange_box.as_mut() {
                 armed.first = Some(at);

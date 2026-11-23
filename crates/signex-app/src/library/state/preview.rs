@@ -78,14 +78,15 @@ pub enum PreviewTab {
 }
 
 impl PreviewTab {
-    /// The Graphite tab strip, in display order.
+    /// The Graphite tab strip, in display order (mockup row 128: General,
+    /// Parameters, Supply, Datasheet, Simulation, Pin Map, Alternates).
     pub const GRAPHITE_ORDER: &'static [PreviewTab] = &[
         PreviewTab::Preview,
-        PreviewTab::Datasheet,
-        PreviewTab::PinMap,
         PreviewTab::Parameters,
         PreviewTab::Supply,
+        PreviewTab::Datasheet,
         PreviewTab::Simulation,
+        PreviewTab::PinMap,
         PreviewTab::Alternates,
     ];
 
@@ -331,6 +332,15 @@ impl ComponentPreviewState {
                     .map(|p| p.prefix)
             })
             .unwrap_or(signex_types::quantity::SiPrefix::One)
+    }
+
+    /// The first parameter (by name) whose pending edit does not parse, with
+    /// why. Save stays disabled while there is one.
+    pub fn first_unparsed_field(&self) -> Option<(&str, &str)> {
+        self.params_error
+            .iter()
+            .min_by(|a, b| a.0.cmp(b.0))
+            .map(|(name, why)| (name.as_str(), why.as_str()))
     }
 
     /// Unsaved work: the dirty flag, or a half-typed numeric value still in

@@ -1,30 +1,31 @@
-//! Graphite look of the status bar and its Panels popover. Legacy themes
-//! never reach these helpers.
+//! Graphite look of the status bar and its popovers: sizes, styles, the
+//! read-out texts and the small controls the clusters are made of. Legacy
+//! themes never reach these helpers.
 
-use iced::widget::{Text, Widget, container, row, space};
-use iced::{Background, Border, Color, Element, Length, Padding, Theme};
-use signex_i18n::{Localized, MessageId, ids, t};
+use iced::widget::{Text, Widget, container, row};
+use iced::{Background, Border, Color, Element, Padding, Theme};
+use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
 
-use super::{Readout, ViewAngleReadout};
+use super::ViewAngleReadout;
 use crate::app::StatusBarRequest;
 use crate::styles::tokens::resolve;
-use crate::styles::{ChromeMetrics, Radii, Spacing, TypeScale, ti};
+use crate::styles::{ChromeMetrics, HAIRLINE, LINE_HEIGHT, Radii, Spacing, TypeScale, ti};
 
-const TS: TypeScale = TypeScale::DEFAULT;
-const SP: Spacing = Spacing::DEFAULT;
+pub(super) const TS: TypeScale = TypeScale::DEFAULT;
+pub(super) const SP: Spacing = Spacing::DEFAULT;
 
-/// Width of the Panels popover.
-pub const POPUP_WIDTH: f32 = 200.0;
+/// Width of the Panels popover (the mock's 236 px menu card).
+pub const POPUP_WIDTH: f32 = 236.0;
 /// Inner padding of the Panels popover.
 pub const POPUP_PADDING: f32 = 4.0;
 /// Gap between the popover's right edge and the window edge.
 pub const POPUP_RIGHT_MARGIN: f32 = 6.0;
-/// Gap between the popover's bottom edge and the status bar.
+/// Gap between a popover's bottom edge and the status bar.
 pub const POPUP_GAP: f32 = 4.0;
-/// Radius of the small controls in the bar (Snap pill, Panels button).
+/// Radius of the small controls in the bar (pills, Panels button).
 const BAR_CONTROL_RADIUS: f32 = 5.0;
 
 /// Padding of the bar: 12 px left, 4 px right, centred vertically.
@@ -35,14 +36,75 @@ pub const BAR_PADDING: Padding = Padding {
     left: 12.0,
 };
 
+/// Gap between the bar's segments and around a cluster rule.
+pub(super) const BAR_GAP: f32 = SP.xl;
+/// Gap between the members of one cluster.
+pub(super) const CLUSTER_GAP: f32 = SP.m;
+/// The X column: fixed so the bar does not jitter as the number changes
+/// width (the mock's 96 px).
+pub(super) const X_COLUMN: f32 = TS.body * 8.0;
+/// The Y column (the mock's 84 px).
+pub(super) const Y_COLUMN: f32 = TS.body * 7.0;
+/// The unit button after Y: room for "mil" in the mono face.
+pub(super) const UNIT_COLUMN: f32 = TS.body * 2.5;
+/// Height of a cluster rule.
+const RULE_HEIGHT: f32 = TS.body;
+/// Side of the Panels button's icon.
+pub(super) const PANELS_ICON: f32 = TS.body;
+
+/// Where the Grid read-out starts, from the window's left edge: the bar's
+/// left padding, the cursor cluster and the rule after it. The Grid & Snap
+/// popover is anchored here.
+pub fn grid_readout_x() -> f32 {
+    BAR_PADDING.left
+        + X_COLUMN
+        + CLUSTER_GAP
+        + Y_COLUMN
+        + CLUSTER_GAP
+        + UNIT_COLUMN
+        + BAR_GAP
+        + HAIRLINE
+        + BAR_GAP
+}
+
 /// Height of a Panels popover row.
 pub fn popup_row_height() -> f32 {
     ChromeMetrics::DEFAULT.field
 }
 
+/// Height of a group caption in the Panels popover: the section line with
+/// the menu caption's padding above and below.
+pub fn popup_caption_height() -> f32 {
+    popup_caption_padding().top + TS.section * LINE_HEIGHT + popup_caption_padding().bottom
+}
+
+/// Padding of a group caption: 6 px above, 2 px below, the row inset at the
+/// sides (the mock's `.mh`).
+pub fn popup_caption_padding() -> Padding {
+    Padding {
+        top: SP.s + SP.xs,
+        right: SP.m,
+        bottom: SP.xs,
+        left: SP.m,
+    }
+}
+
 /// Total height of a popover with `rows` rows.
 pub fn popup_height(rows: usize) -> f32 {
     rows as f32 * popup_row_height() + 2.0 * POPUP_PADDING
+}
+
+/// Total height of the Panels popover: `rows` rows under `captions` group
+/// captions.
+pub fn panel_list_height(rows: usize, captions: usize) -> f32 {
+    popup_height(rows) + captions as f32 * popup_caption_height()
+}
+
+/// Height of the panel list's foot caption: three caption lines inside the
+/// group caption's padding.
+pub fn panel_list_foot_height() -> f32 {
+    let padding = popup_caption_padding();
+    padding.top + 3.0 * TS.caption * LINE_HEIGHT + padding.bottom
 }
 
 /// The chrome mono face (coordinates, grid, snap).
@@ -87,6 +149,41 @@ pub fn layer_pill(
         background: Some(Background::Color(match status {
             button::Status::Hovered | button::Status::Pressed => hover,
             _ => fill,
+        })),
+        text_color: ink,
+        border: Border {
+            radius: BAR_CONTROL_RADIUS.into(),
+            ..Border::default()
+        },
+        ..button::Style::default()
+    }
+}
+
+/// The active-layer pill as a plain label: the pill's fill, no hover.
+pub fn layer_label(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
+    let r = resolve(tokens);
+    let (fill, ink) = (r.accent_soft, r.accent_soft_ink);
+    move |_| container::Style {
+        background: Some(Background::Color(fill)),
+        text_color: Some(ink),
+        border: Border {
+            radius: BAR_CONTROL_RADIUS.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    }
+}
+
+/// The selection summary as a button: a sunken pill in the text ink, since
+/// a click opens Properties.
+pub fn selection_pill(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+    let (sunken, ink, hover) = (resolve(tokens).sunken, ti(tokens.text), ti(tokens.hover));
+    move |_, status| button::Style {
+        background: Some(Background::Color(match status {
+            button::Status::Hovered | button::Status::Pressed => hover,
+            _ => sunken,
         })),
         text_color: ink,
         border: Border {
@@ -156,9 +253,45 @@ pub fn popup_row(
     }
 }
 
+/// The picked row of a popover list: `accent_soft` fill and ink, hovered or
+/// not (mockup row 6).
+pub fn popup_row_active(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+    let r = resolve(tokens);
+    let (fill, ink) = (r.accent_soft, r.accent_soft_ink);
+    move |_, _| button::Style {
+        background: Some(Background::Color(fill)),
+        text_color: ink,
+        border: Border {
+            radius: Radii::GRAPHITE.small.into(),
+            ..Border::default()
+        },
+        ..button::Style::default()
+    }
+}
+
 /// Ink of the "open" check mark in a popover row.
 pub fn check_ink(tokens: &ThemeTokens) -> Color {
     resolve(tokens).accent_text
+}
+
+/// Colour of the faint rule between two clusters.
+pub(super) fn rule_ink(tokens: &ThemeTokens) -> Color {
+    resolve(tokens).line_strong
+}
+
+/// A faint vertical rule between two clusters, 12 px tall.
+pub(super) fn rule<'a>(tokens: &ThemeTokens) -> Element<'a, StatusBarRequest> {
+    let ink = rule_ink(tokens);
+    container(iced::widget::Space::new())
+        .width(HAIRLINE)
+        .height(RULE_HEIGHT)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(ink)),
+            ..container::Style::default()
+        })
+        .boxed()
 }
 
 /// The zoom readout's number: whole percent, no grouping, like the
@@ -168,7 +301,7 @@ pub(super) fn zoom_value(zoom: f64) -> String {
 }
 
 /// The zoom segment of the bar: `zoom` as a whole percent.
-fn zoom_text(i18n: &signex_i18n::I18n, zoom: f64) -> Localized {
+pub(super) fn zoom_text(i18n: &I18n, zoom: f64) -> Localized {
     t!(i18n, ids::PANELS_STATUS_BAR_ZOOM, "percent" => zoom_value(zoom))
 }
 
@@ -182,11 +315,26 @@ pub(super) fn coord_values(unit: Unit, x: f64, y: f64) -> (String, String) {
     }
 }
 
-/// The Grid span's value: the spacing in `unit`, or "OFF".
-pub(super) fn grid_label(visible: bool, size_mm: f32, unit: Unit) -> String {
-    if !visible {
-        return "OFF".to_string();
-    }
+/// The X and Y columns: numbers only, the unit follows once after Y.
+pub(super) fn cursor_texts(i18n: &I18n, unit: Unit, x: f64, y: f64) -> (Localized, Localized) {
+    let (xs, ys) = coord_values(unit, x, y);
+    (
+        t!(i18n, ids::PANELS_STATUS_BAR_X, "value" => xs),
+        t!(i18n, ids::PANELS_STATUS_BAR_Y, "value" => ys),
+    )
+}
+
+/// The X and Y columns with no document to read a position from.
+pub(super) fn no_cursor_texts(i18n: &I18n) -> (Localized, Localized) {
+    const NO_VALUE: &str = "—";
+    (
+        t!(i18n, ids::PANELS_STATUS_BAR_X, "value" => NO_VALUE),
+        t!(i18n, ids::PANELS_STATUS_BAR_Y, "value" => NO_VALUE),
+    )
+}
+
+/// A grid spacing in `unit`, with its unit symbol.
+pub(crate) fn grid_value(size_mm: f32, unit: Unit) -> String {
     let mm = f64::from(size_mm);
     match unit {
         Unit::Mm => format!("{mm:.3} {unit}"),
@@ -196,18 +344,35 @@ pub(super) fn grid_label(visible: bool, size_mm: f32, unit: Unit) -> String {
     }
 }
 
-fn mono_text(s: String, color: Color) -> Text<'static> {
+/// The Grid span's value: the spacing in `unit`, or "OFF".
+pub(super) fn grid_label(visible: bool, size_mm: f32, unit: Unit) -> String {
+    if !visible {
+        return "OFF".to_string();
+    }
+    grid_value(size_mm, unit)
+}
+
+/// The Grid read-out: "Grid 1.270 mm", always with its unit, or "Grid OFF".
+pub(super) fn grid_text(i18n: &I18n, visible: bool, size_mm: f32, unit: Unit) -> Localized {
+    if visible {
+        t!(i18n, ids::PANELS_STATUS_BAR_GRID, "grid" => grid_label(true, size_mm, unit))
+    } else {
+        t!(i18n, ids::PANELS_STATUS_BAR_GRID_OFF)
+    }
+}
+
+pub(super) fn mono_text(s: String, color: Color) -> Text<'static> {
     // raw: a reading, a unit symbol, or an activity note its caller already
     // rendered from the catalog.
     text(raw(s)).size(TS.body).color(color).font(mono_font())
 }
 
 /// A catalog message in the mono face.
-fn mono_message(s: Localized, color: Color) -> Text<'static> {
+pub(super) fn mono_message(s: Localized, color: Color) -> Text<'static> {
     text(s).size(TS.body).color(color).font(mono_font())
 }
 
-fn mono_button(
+pub(super) fn mono_button(
     label: Text<'static>,
     request: StatusBarRequest,
 ) -> button::Button<'static, StatusBarRequest, Text<'static>> {
@@ -219,7 +384,10 @@ fn mono_button(
 
 /// The board view's angle (#2316): a caption and the value, a click opens a
 /// value field in its place; Enter applies a number.
-fn view_angle<'a>(r: ViewAngleReadout, tokens: &ThemeTokens) -> Element<'a, StatusBarRequest> {
+pub(super) fn view_angle<'a>(
+    r: ViewAngleReadout,
+    tokens: &ThemeTokens,
+) -> Element<'a, StatusBarRequest> {
     let muted = resolve(tokens).ink3;
     let ink = ti(tokens.text);
     let caption = text(r.caption).size(TS.body).color(muted);
@@ -288,155 +456,14 @@ pub(super) fn snap_label(snapping: bool) -> MessageId {
     }
 }
 
-/// The Graphite status bar: mono X / Y / Grid spans, a Snap on/off pill and
-/// the tool at the left; the selection, zoom, unit and the bordered Panels
-/// button at the right.
-/// No separators; the spans are spaced apart.
-pub(super) fn view<'a>(
-    r: &Readout<'_>,
-    tokens: &ThemeTokens,
-    i18n: &signex_i18n::I18n,
-) -> Element<'a, StatusBarRequest> {
-    let ink = ti(tokens.text);
-    let muted = resolve(tokens).ink3;
-    let unit = r.unit;
-    let (xs, ys) = coord_values(unit, r.x, r.y);
-    let grid = grid_label(r.grid_visible, r.grid_size_mm, unit);
-
-    let mut bar = row![
-        mono_message(
-            t!(i18n, ids::PANELS_STATUS_BAR_X, "value" => xs, "unit" => unit.to_string()),
-            muted
-        )
-        .boxed(),
-        mono_message(
-            t!(i18n, ids::PANELS_STATUS_BAR_Y, "value" => ys, "unit" => unit.to_string()),
-            muted
-        )
-        .boxed(),
-        mono_button(
-            mono_message(
-                if r.grid_visible {
-                    t!(i18n, ids::PANELS_STATUS_BAR_GRID, "grid" => grid)
-                } else {
-                    t!(i18n, ids::PANELS_STATUS_BAR_GRID_OFF)
-                },
-                muted,
-            ),
-            StatusBarRequest::ToggleGrid,
-        )
-        .boxed(),
-        button(mono_message(
-            t!(i18n, snap_label(r.snap_enabled)),
-            if r.snap_enabled {
-                ti(tokens.success)
-            } else {
-                muted
-            },
-        ))
-        .padding([1.5, 6.0])
-        .style(snap_pill(tokens, r.snap_enabled))
-        .on_press(StatusBarRequest::ToggleSnap)
-        .boxed(),
-        mono_message(
-            t!(i18n, ids::PANELS_STATUS_BAR_TOOL, "tool" => r.tool.as_str()),
-            muted,
-        )
-        .boxed(),
-    ];
-    if let Some(activity) = r.activity {
-        let ink = if activity.is_error {
-            signex_widgets::theme_ext::error_color(tokens)
-        } else {
-            muted
-        };
-        bar = bar.push(mono_text(activity.text.clone(), ink).boxed());
-    }
-    // The active copper layer of an open board; a click steps to the next.
-    if let Some((caption, name)) = r.board.active_layer.clone() {
-        bar = bar.push(
-            button(
-                row![
-                    text(caption).size(TS.body).color(muted),
-                    text(name).size(TS.body).color(ink),
-                ]
-                .spacing(SP.xs)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([1.5, 6.0])
-            .style(layer_pill(tokens))
-            .on_press(StatusBarRequest::ActiveLayerStepRequested)
-            .boxed(),
-        );
-    }
-    if r.pending_git_commits > 0 {
-        let label = t!(i18n, ids::PANELS_STATUS_BAR_SAVING, "count" => r.pending_git_commits);
-        bar = bar.push(mono_message(label, muted).boxed());
-    }
-    if let Some(name) = r.altium_import {
-        bar = bar.push(
-            mono_button(
-                mono_message(
-                    t!(i18n, ids::PANELS_STATUS_BAR_IMPORTING, "name" => name),
-                    ink,
-                ),
-                StatusBarRequest::CancelAltiumImport,
-            )
-            .boxed(),
-        );
-    }
-    bar = bar.push(space::horizontal().boxed());
-    if let Some(summary) = r.selection.clone() {
-        bar = bar.push(
-            mono_button(
-                mono_message(summary, ink),
-                StatusBarRequest::OpenPropertiesForSelection,
-            )
-            .boxed(),
-        );
-    }
-    if let Some(angle) = r.board.view_angle.clone() {
-        bar = bar.push(view_angle(angle, tokens));
-    }
-    let bar = bar
-        .push(mono_message(zoom_text(i18n, r.zoom), muted).boxed())
-        .push(
-            mono_button(
-                mono_text(format!("{unit}"), muted),
-                StatusBarRequest::CycleUnit,
-            )
-            .boxed(),
-        )
-        .push(
-            button(
-                text(signex_i18n::t!(
-                    i18n,
-                    signex_i18n::ids::PANELS_STATUS_BAR_PANELS
-                ))
-                .size(TS.section)
-                .color(ink),
-            )
-            .padding([1.5, 10.0])
-            .style(panels_button(tokens))
-            .on_press(StatusBarRequest::TogglePanelList)
-            .boxed(),
-        )
-        .spacing(SP.xl)
-        .align_y(iced::Alignment::Center);
-
-    container(bar)
-        .width(Length::Fill)
-        .height(ChromeMetrics::DEFAULT.status)
-        .padding(BAR_PADDING)
-        .align_y(iced::alignment::Vertical::Center)
-        .style(crate::styles::status_bar(tokens))
-        .boxed()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use signex_types::theme::{ThemeId, theme_tokens};
+
+    fn plain(text: Localized) -> String {
+        text.into_string().replace(['\u{2068}', '\u{2069}'], "")
+    }
 
     #[test]
     fn the_snap_pill_is_filled_only_while_snapping() {
@@ -456,14 +483,44 @@ mod tests {
         assert_eq!(grid_label(false, 1.27, Unit::Mm), "OFF");
     }
 
+    /// The unit sits after Y, not by the grid, so the Grid read-out always
+    /// names its own unit (mockup row 6, accepted by Caner).
+    #[test]
+    fn the_grid_read_out_carries_its_unit_in_every_unit() {
+        let i18n = I18n::en_us();
+        assert_eq!(
+            plain(grid_text(&i18n, true, 1.27, Unit::Mm)),
+            "Grid 1.270 mm"
+        );
+        assert_eq!(
+            plain(grid_text(&i18n, true, 0.127, Unit::Mil)),
+            "Grid 5.0 mil"
+        );
+        assert_eq!(
+            plain(grid_text(&i18n, true, 2.54, Unit::Inch)),
+            "Grid 0.1000 in"
+        );
+        assert_eq!(plain(grid_text(&i18n, false, 2.54, Unit::Mm)), "Grid OFF");
+    }
+
+    /// X and Y are numbers only; the unit is written once, after Y.
+    #[test]
+    fn the_cursor_columns_hold_numbers_only() {
+        let i18n = I18n::en_us();
+        let (x, y) = cursor_texts(&i18n, Unit::Mm, 127.0, 45.72);
+        assert_eq!(plain(x), "X 127.00");
+        assert_eq!(plain(y), "Y 45.72");
+        let (x, y) = cursor_texts(&i18n, Unit::Mil, 31.75, 22.352);
+        assert_eq!(plain(x), "X 1250.0");
+        assert_eq!(plain(y), "Y 880.0");
+    }
+
     /// The zoom reads as trunk's `format!("{:.0}%")` did, for every value.
     #[test]
     fn the_zoom_reads_as_a_whole_percent_without_grouping() {
-        let i18n = signex_i18n::I18n::en_us();
+        let i18n = I18n::en_us();
         for zoom in [0.5, 2.5, 12.5, 99.5, 100.0, 1600.0, 12345.4] {
-            let shown = zoom_text(&i18n, zoom)
-                .into_string()
-                .replace(['\u{2068}', '\u{2069}'], "");
+            let shown = plain(zoom_text(&i18n, zoom));
             assert_eq!(shown, format!("{:.0}%", zoom), "zoom {zoom}");
         }
         assert_eq!(zoom_value(0.5), "0");
@@ -484,6 +541,30 @@ mod tests {
         assert_eq!(s.border.width, 1.0);
     }
 
+    /// The selection summary is a sunken pill in the text ink.
+    #[test]
+    fn the_selection_pill_is_sunken_in_the_text_ink() {
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let t = theme_tokens(id);
+            let s = selection_pill(&t)(&Theme::Dark, button::Status::Active);
+            assert_eq!(
+                s.background,
+                Some(Background::Color(resolve(&t).sunken)),
+                "{id:?}"
+            );
+            assert_eq!(s.text_color, ti(t.text), "{id:?}");
+        }
+    }
+
+    /// The cluster rules are the faint line token of each Graphite theme.
+    #[test]
+    fn the_cluster_rule_uses_the_line_token() {
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let t = theme_tokens(id);
+            assert_eq!(rule_ink(&t), resolve(&t).line_strong, "{id:?}");
+        }
+    }
+
     #[test]
     fn the_popup_is_a_card_with_a_shadow() {
         let t = theme_tokens(ThemeId::GraphiteLight);
@@ -494,5 +575,38 @@ mod tests {
         );
         assert!(s.shadow.blur_radius > 0.0);
         assert_eq!(popup_height(3), 3.0 * 26.0 + 8.0);
+    }
+
+    /// The Panels popover is the mock's 236 px card with 26 px rows; each
+    /// group caption adds its own fixed height.
+    #[test]
+    fn the_panel_list_card_is_236_wide_with_26_px_rows() {
+        assert_eq!(POPUP_WIDTH, 236.0);
+        assert_eq!(popup_row_height(), 26.0);
+        assert_eq!(
+            panel_list_height(4, 2),
+            4.0 * 26.0 + 8.0 + 2.0 * popup_caption_height()
+        );
+        assert!(popup_caption_height() > TS.section);
+    }
+
+    /// The Grid & Snap popover is anchored after the cursor cluster and its
+    /// rule: the 96 and 84 px columns, the unit, the gaps and the rule.
+    #[test]
+    fn the_grid_read_out_starts_after_the_cursor_cluster() {
+        assert_eq!(X_COLUMN, 96.0);
+        assert_eq!(Y_COLUMN, 84.0);
+        let x = grid_readout_x();
+        assert!(x > BAR_PADDING.left + X_COLUMN + Y_COLUMN + UNIT_COLUMN);
+        assert_eq!(
+            x,
+            BAR_PADDING.left
+                + X_COLUMN
+                + Y_COLUMN
+                + UNIT_COLUMN
+                + 2.0 * CLUSTER_GAP
+                + 2.0 * BAR_GAP
+                + HAIRLINE
+        );
     }
 }

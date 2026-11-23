@@ -58,7 +58,7 @@ pub(crate) fn net_rows(data: &ProjectNetData, state: &NetInspectorState) -> Vec<
             Some(NetRow {
                 name: hover.name,
                 class: hover.class,
-                pins: hover.pins.len(),
+                pins: data.index.component_pin_count(net),
                 expanded,
                 members,
                 more,
@@ -76,14 +76,15 @@ pub(crate) fn net_rows(data: &ProjectNetData, state: &NetInspectorState) -> Vec<
 }
 
 /// The pins, labels, power ports and sheet entries of `net`, one per element
-/// and pin, in walk order; a pin with its name from `names`.
+/// and pin, in walk order; a pin with its name from `names`. A power port
+/// is one row, its port (mockup row 58).
 fn members_of(
     data: &ProjectNetData,
     net: usize,
     names: &HashMap<NetAnchor, String>,
 ) -> Vec<NetMemberRow> {
     data.index
-        .steps(net)
+        .listed_members(net)
         .into_iter()
         .filter_map(|m| {
             let kind = match &m.kind {

@@ -48,6 +48,7 @@ impl Signex {
                 self.ui_state
                     .profile_manager
                     .apply_listing((*listing).clone());
+                self.keep_unsaved_machine_rules_shown();
                 Task::none()
             }
             ProfilesMsg::Selected(name) => {
@@ -56,8 +57,11 @@ impl Signex {
                 manager.selected = Some(name);
                 manager.confirm_delete = None;
                 manager.confirm_reset = None;
+                manager.name_prompt = None;
+                manager.open_rule = None;
                 Task::none()
             }
+            ProfilesMsg::Page(page) => self.handle_profile_page(page),
             ProfilesMsg::SeverityChanged(rule, severity) => {
                 self.edit_selected_profile(RuleEdit::Severity(rule, severity))
             }
@@ -302,8 +306,11 @@ impl Signex {
                         (text, None)
                     }
                 };
-                self.ui_state.profile_manager.status = Some((false, text));
-                self.ui_state.profile_manager.selected = selected;
+                let manager = &mut self.ui_state.profile_manager;
+                manager.status = Some((false, text));
+                manager.selected = selected;
+                manager.name_prompt = None;
+                manager.open_rule = None;
             }
         }
         Task::batch(follow)

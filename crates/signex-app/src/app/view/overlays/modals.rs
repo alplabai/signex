@@ -86,16 +86,56 @@ impl Signex {
         )
     }
 
+    /// The Create Union popover (mockup row 158), laid at the point it opened: a
+    /// click-outside layer that cancels it, then the card.
+    pub(in crate::app::view) fn union_popover_overlay(&self) -> Vec<Element<'_, Message>> {
+        let Some(popover) = self.ui_state.unions.popover.as_ref() else {
+            return Vec::new();
+        };
+        let wrap = |msg| {
+            Message::Edit(crate::app::EditMsg::Unions(
+                crate::app::unions::UnionsMsg::Popover(msg),
+            ))
+        };
+        let card = crate::app::unions::popover_view(
+            popover,
+            &self.ui_state.i18n,
+            &self.document_state.panel_ctx.tokens,
+        )
+        .map(wrap)
+        .boxed();
+        Self::anchored_layers(
+            wrap(crate::app::unions::UnionPopoverMsg::Cancelled),
+            crate::app::view::context_menu::AnchoredMenu::new(card, popover.anchor),
+        )
+    }
+
+    /// The Smart Paste dialog (mockup row 155). In-window only.
+    pub(in crate::app::view) fn smart_paste_overlay(&self) -> Option<Element<'_, Message>> {
+        let state = self.ui_state.smart_paste.as_deref()?;
+        let size = crate::app::view::dialogs::fit_modal_size(
+            self.ui_state.window_size,
+            crate::smart_paste::DIALOG_SIZE,
+        );
+        let card = crate::smart_paste::view(
+            state,
+            size,
+            &self.document_state.panel_ctx.tokens,
+            &self.ui_state.i18n,
+        )
+        .map(|msg| Message::Edit(crate::app::EditMsg::SmartPasteDialog(msg)))
+        .boxed();
+        Some(self.wrap_centred_dialog(card, crate::smart_paste::DIALOG_SIZE))
+    }
+
     /// Keyboard-shortcuts reference modal.
-    pub(in crate::app::view) fn keyboard_shortcuts_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn keyboard_shortcuts_overlay(&self) -> Vec<Element<'_, Message>> {
         let ui = &self.ui_state;
         if !ui.keyboard_shortcuts_open
             || self.modal_detached(crate::app::state::ModalId::KeyboardShortcuts)
         {
-            return None;
+            return Vec::new();
         }
-        // `opaque` captures mouse presses inside the layer so they cannot
-        // pass through to the layers below it in the `Stack` (#618).
         let built;
         let sections = match &ui.shortcut_sections {
             Some(cached) => cached.as_slice(),
@@ -105,15 +145,20 @@ impl Signex {
                 built.as_slice()
             }
         };
-        Some(
-            iced::widget::opaque(crate::keyboard_shortcuts_modal::view(
+        let facts = crate::keyboard_shortcuts_modal::SheetFacts::read(
+            &ui.keymap_profiles,
+            &ui.active_keymap,
+            &ui.i18n,
+        );
+        Self::dismiss_and_centre(
+            Message::Overlay(OverlayMsg::CloseKeyboardShortcuts),
+            crate::keyboard_shortcuts_modal::view(
                 &ui.i18n,
                 &self.document_state.panel_ctx.tokens,
                 sections,
-            ))
-            // Wheel over the modal must not zoom or pan the canvas below.
-            .capture_scroll(true)
-            .boxed(),
+                &ui.shortcut_sheet,
+                &facts,
+            ),
         )
     }
 
@@ -129,26 +174,29 @@ impl Signex {
                 built.as_slice()
             }
         };
+        let facts = crate::keyboard_shortcuts_modal::SheetFacts::read(
+            &ui.keymap_profiles,
+            &ui.active_keymap,
+            &ui.i18n,
+        );
         crate::keyboard_shortcuts_modal::window_view(
             &ui.i18n,
             &self.document_state.panel_ctx.tokens,
             sections,
+            &ui.shortcut_sheet,
+            &facts,
         )
     }
 
     /// Help ▸ About Signex dialog.
-    pub(in crate::app::view) fn about_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn about_overlay(&self) -> Vec<Element<'_, Message>> {
         let ui = &self.ui_state;
         if !ui.about_open || self.modal_detached(crate::app::state::ModalId::About) {
-            return None;
+            return Vec::new();
         }
-        Some(
-            iced::widget::opaque(crate::about_modal::view(
-                &self.document_state.panel_ctx.tokens,
-            ))
-            // Wheel over the modal must not zoom or pan the canvas below.
-            .capture_scroll(true)
-            .boxed(),
+        Self::dismiss_and_centre(
+            Message::Overlay(OverlayMsg::CloseAbout),
+            crate::about_modal::view(&ui.i18n, &self.document_state.panel_ctx.tokens),
         )
     }
 
@@ -161,6 +209,7 @@ impl Signex {
             return None;
         }
         Some(crate::passive_calculator_modal::view(
+            &ui.i18n,
             &self.document_state.panel_ctx.tokens,
             &ui.passive_calculator,
         ))
@@ -173,8 +222,13 @@ impl Signex {
         {
             return None;
         }
+        let ui = &self.ui_state;
+        let facts =
+            crate::first_run_tour::TourFacts::read(ui.wheel_mode, &ui.active_keymap, &ui.i18n);
         Some(crate::first_run_tour::view(
+            &ui.i18n,
             &self.document_state.panel_ctx.tokens,
+            &facts,
         ))
     }
 
@@ -303,6 +357,23 @@ impl Signex {
             .then(|| self.view_board_reannotate_dialog())
     }
 
+    /// Design ▸ Differential Pair Classes… (#1282), while open.
+    pub(in crate::app::view) fn diff_pair_classes_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .diff_pair_classes
+            .is_some()
+            .then(|| self.view_diff_pair_classes_dialog())
+    }
+
+    /// Design ▸ Rooms ▸ Create Rooms from Sheets (#2457).
+    pub(in crate::app::view) fn create_rooms_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .rooms
+            .create
+            .is_some()
+            .then(|| self.view_create_rooms_dialog())
+    }
+
     pub(in crate::app::view) fn fab_outputs_overlay(&self) -> Option<Element<'_, Message>> {
         self.ui_state
             .fab_outputs
@@ -323,6 +394,25 @@ impl Signex {
             .back_annotate
             .is_some()
             .then(|| self.view_back_annotate_dialog())
+    }
+
+    /// Compare Board with Schematic (#2462).
+    pub(in crate::app::view) fn compare_board_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .compare_board
+            .is_some()
+            .then(|| self.view_compare_board_dialog())
+    }
+
+    /// The confirmation before its Apply deletes from the board.
+    pub(in crate::app::view) fn compare_board_confirm_overlay(
+        &self,
+    ) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .compare_board
+            .as_ref()
+            .is_some_and(|state| state.confirming)
+            .then(|| self.view_compare_board_confirm())
     }
 
     /// Update PCB from Schematic (#1312); a headless `apply=true` run has no
@@ -422,6 +512,14 @@ impl Signex {
                 tokens,
                 &self.ui_state.i18n,
                 windowed,
+                crate::library::browser::PreviewLook {
+                    canvas_colors: self.document_state.panel_ctx.canvas_colors,
+                    grid: self.sheet_grid(),
+                    device_px_per_logical_px: self
+                        .document_state
+                        .panel_ctx
+                        .device_px_per_logical_px,
+                },
             )
             .map(Message::Library)
             .boxed(),
@@ -630,8 +728,8 @@ impl Signex {
     }
 
     /// Command palette dropdown (Ctrl+Shift+P). Painted last so it sits
-    /// above every other modal layer; click-outside dismisses via the
-    /// standard dismiss_layer pattern. Pushes the dismiss layer then the
+    /// above every other modal layer; click-outside dismisses through the
+    /// backdrop (`command_palette_backdrop`). Pushes the backdrop then the
     /// dropdown.
     pub(in crate::app::view) fn command_palette_overlay(
         &self,
@@ -643,10 +741,11 @@ impl Signex {
         {
             return Vec::new();
         }
-        // The palette dims the app with the theme's modal scrim, like a dialog.
+        // The palette dims the app with the theme's modal scrim, like a dialog,
+        // except over the title-bar field it is typed into.
         let scrim = crate::app::view::dialogs::dialog_scrim(&self.document_state.panel_ctx.tokens);
         vec![
-            Self::dismiss_layer_tinted(Message::CommandPalette(CommandPaletteMsg::Close), scrim),
+            self.command_palette_backdrop(scrim),
             self.view_command_palette_dropdown(),
         ]
     }

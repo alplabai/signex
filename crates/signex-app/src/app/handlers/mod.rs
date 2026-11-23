@@ -1,4 +1,5 @@
 pub mod active_bar;
+pub(crate) mod annotations;
 pub mod autosave;
 pub mod autosave_pcb;
 pub mod autosave_primitives;
@@ -11,6 +12,7 @@ pub(crate) mod board_net_classes;
 mod board_sketch;
 pub mod canvas;
 pub mod clipboard_workflows;
+pub(crate) mod command_log;
 mod component_history;
 mod cross_probe;
 #[cfg(test)]
@@ -27,12 +29,15 @@ pub mod dock;
 pub mod document_files;
 mod document_identity;
 pub mod document_tabs;
+#[cfg(test)]
+mod document_tabs_tests;
 mod document_tiling;
 pub mod drawing_order;
 pub mod editing_commands;
 pub mod erc;
 pub mod find_replace;
 pub mod find_similar;
+pub(crate) mod grid_snap_popover;
 mod intro_wrap;
 pub(in crate::app) mod keymap_mod_prompt;
 pub mod library_drift;
@@ -55,6 +60,7 @@ mod pcb_drc_results;
 #[cfg(test)]
 mod pcb_drc_results_tests;
 pub(crate) mod pcb_dxf_import;
+pub(crate) mod pcb_dxf_sketch;
 pub(crate) use pcb_drc_check::DRC_CHECK;
 pub(crate) use pcb_drc_check::LOOSE_BOARD_WARNING;
 pub(crate) use pcb_drc_results::DrcWaiverText;
@@ -73,11 +79,17 @@ mod pcb_edit;
 #[cfg(test)]
 mod pcb_edit_tests;
 mod pcb_filter_presets;
+mod pcb_footprint_place;
 pub(crate) mod pcb_footprint_text;
 pub(crate) mod pcb_item_edits;
 pub(crate) mod pcb_layer_stack;
 pub(crate) mod pcb_layer_strip;
 mod pcb_layers_panel;
+mod pcb_nets_panel;
+#[cfg(test)]
+mod pcb_nets_panel_tests;
+#[cfg(test)]
+mod pcb_one_grid_tests;
 mod pcb_origin;
 #[cfg(test)]
 mod pcb_origin_tests;
@@ -94,6 +106,8 @@ pub(crate) mod pcb_query;
 pub mod pcb_select;
 #[cfg(test)]
 mod pcb_select_tests;
+#[cfg(test)]
+mod pcb_snap_options_tests;
 mod pcb_text_move;
 #[cfg(test)]
 mod pcb_text_pick_tests;
@@ -101,6 +115,9 @@ pub(crate) mod pcb_tool;
 pub(crate) mod pcb_tune;
 #[cfg(test)]
 mod pcb_tune_tests;
+mod pcb_via_move;
+#[cfg(test)]
+mod pcb_via_move_tests;
 pub mod pcb_view;
 pub mod pcb_view_rotation;
 pub mod placed_part;
@@ -118,3 +135,4 @@ pub mod window_controls;
 pub mod window_geometry_events;
 pub mod window_placement;
 pub mod window_tiling;
+pub(crate) mod workspace_layouts;

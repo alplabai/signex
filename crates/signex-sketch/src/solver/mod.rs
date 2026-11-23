@@ -5,6 +5,7 @@ pub mod jacobian;
 pub mod linalg;
 pub mod lm;
 pub mod math;
+pub mod measure;
 pub mod redundancy;
 pub mod residual;
 pub mod residuals;
@@ -13,6 +14,8 @@ pub mod work;
 
 #[cfg(test)]
 mod derivatives_tests;
+#[cfg(test)]
+mod driven_tests;
 #[cfg(test)]
 mod shrink_tests;
 

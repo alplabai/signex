@@ -97,7 +97,7 @@ preferences-appearance-pin-selection-help = How a click selects a pin on the sym
 preferences-appearance-ui-scale = Interface scale
 preferences-appearance-ui-scale-help = Scales text, panels, menus and dialogs on top of the display scale. Applied to every window when you save.
 preferences-appearance-zoom-speed = Zoom speed
-preferences-appearance-zoom-speed-help = How far one mouse-wheel notch zooms on the schematic, PCB, symbol and footprint canvases.
+preferences-appearance-zoom-speed-help = How far one mouse-wheel notch, or a middle-button drag, zooms on the schematic, PCB, symbol and footprint canvases.
 preferences-appearance-trackpad-pan = Two-finger scroll pans
 preferences-appearance-trackpad-pan-help = When on, a two-finger trackpad scroll pans the schematic, PCB, symbol and footprint canvases instead of zooming them. Pinching and Ctrl/Cmd + scroll still zoom, and a mouse wheel notch still zooms. Off by default.
 preferences-appearance-remember-geometry = Remember window size and position
@@ -237,16 +237,19 @@ preferences-file-start-fresh = Start a fresh preferences file
 
 ## Rule Profiles
 preferences-profiles-title = Rule Profiles
-preferences-profiles-help = A profile is a named set of ERC rules. A new project starts with a copy of the default profile. Changes here are saved to the profile's file at once.
+preferences-profiles-help = A profile is a named set of ERC rules. A new project starts with a copy of the default profile.
 preferences-profiles-reading = Reading the profile library...
-preferences-profiles-automatic = Automatic (User Default if you have one, else { -brand-name } Default)
-# Notes after a profile's name and version.
+# Heading of the profile list.
+preferences-profiles-list-heading = Profiles
+preferences-profiles-automatic-name = Automatic
+preferences-profiles-automatic-note = User Default if you have one, else { -brand-name } Default
+# Under the profile list.
+preferences-profiles-hint = The radio marks the default for new projects. Click a row to edit it.
+# Notes under a profile's name and version.
 preferences-profiles-note-builtin = shipped, read-only
 preferences-profiles-note-user-default = this machine's rules
 # $name and $version are the profile's.
 preferences-profiles-row = { $name }  v{ $version }
-# $name and $version are the profile's; $note is one of the notes above.
-preferences-profiles-row-note = { $name }  v{ $version }  ({ $note })
 preferences-profiles-is-default = Default for new projects
 preferences-profiles-use-as-default = Use as default
 preferences-profiles-new = New
@@ -256,15 +259,31 @@ preferences-profiles-rename = Rename
 preferences-profiles-delete-confirm = Delete "{ $name }"? Projects that recorded it keep their rules but can no longer find it for Update from profile.
 preferences-profiles-keep = Keep
 preferences-profiles-name = Name
-# $name is the profile's name.
-preferences-profiles-editing = Editing "{ $name }". Changes are saved to the profile's file immediately.
+# Pill beside the profile's name once its edits reached its file.
+preferences-profiles-saved = Saved
+preferences-profiles-saved-line = Changes are saved to the profile's file immediately.
+# Why edits of the User Default profile are not saved; $why is the file error.
+preferences-profiles-machine-read-only = The machine's rules are read-only this session, because your old ERC preferences could not be merged into User Default yet: { $why }
+preferences-profiles-machine-loading = Loading the User Default profile; changes wait until it has loaded.
+preferences-profiles-machine-not-saving = User Default is not saving: { $why } Your changes last until you quit.
+# Title of the rule editor opened for one rule; $name is the profile's name.
+preferences-profiles-rule-title = Rule Profile: { $name }
+# $rules counts every rule; $changed and $cells count what differs.
+preferences-profiles-rule-summary = Preferences ▸ Rule Profiles · { $rules } rules · { $changed ->
+        [one] 1 rule
+       *[other] { $changed } rules
+    } and { $cells ->
+        [one] 1 matrix cell
+       *[other] { $cells } matrix cells
+    } differ from the shipped profile
 # $name is the profile's name.
 preferences-profiles-read-only = "{ $name }" is read-only. Duplicate it to change the rules.
 preferences-profiles-none-selected = No profile is selected.
 # $name is the profile's name.
 preferences-profiles-reset-confirm = Put every rule of "{ $name }" back to the { -brand-name } Default values?
 preferences-profiles-reset = Reset
-preferences-profiles-reset-to-default = Reset to { -brand-name } Default
+# The ellipsis says the button asks before it acts.
+preferences-profiles-reset-to-default = Reset to { -brand-name } Default…
 
 ## Designators on paste: the choices (also in Paste Array)
 # The pasted part keeps its designator unless the project already uses it.
@@ -286,6 +305,9 @@ preferences-page-language = Language
 
 # Footer note on the Language page: when a chosen language takes effect.
 preferences-language-footer-note = The language changes when you press Apply or OK; no restart
+
+# Footer note on the Rule Profiles page (mockup row 148).
+preferences-rule-profiles-footer-note = Rule profiles save to their files at once.
 
 # Second line of the preferences-file banner. $path is the file; $error says
 # what is wrong with it, in English.
@@ -386,6 +408,16 @@ preferences-appearance-antialiasing-short-help = Smooth the edges of canvas shap
 preferences-wheel-mode-zoom = Zoom
 preferences-wheel-mode-scroll = Scroll
 preferences-wheel-mode-short-help = Zoom: the wheel zooms the canvas. Scroll: the wheel and two-finger scroll pan, Shift + wheel pans sideways, Ctrl/Cmd + wheel or a pinch zooms.
+# How a board picks its active layer.
+preferences-layer-switcher-label = Layer switcher
+preferences-layer-switcher-strip = Strip
+preferences-layer-switcher-dropdown = Dropdown
+preferences-layer-switcher-help = Strip: layer tabs under the board. Dropdown: the status bar's Layer pill opens a list of the visible layers.
+# How the selected option of a segmented control looks.
+preferences-selected-segment-label = Selected option
+preferences-selected-segment-neutral = Neutral
+preferences-selected-segment-accent = Accent
+preferences-selected-segment-help = How the selected option of a segmented control looks in Graphite Dark. Neutral: fill #3D4047, text #FFFFFF, with the chip shadow. Accent: fill #C2552D, text #FFFFFF, no shadow. Graphite Light is unchanged under both.
 preferences-appearance-trackpad-pan-short-help = A two-finger trackpad scroll pans instead of zooming. Pinch and Ctrl/Cmd + scroll still zoom. Only used when Mouse wheel is Zoom.
 preferences-appearance-remember-geometry-short-help = Reopen the main window at the size and position it had when you last closed it.
 

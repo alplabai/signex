@@ -1,0 +1,250 @@
+# Built-in "Signex Standard" keyboard shortcut profile defaults for Signex.
+#
+# `Mod` is Cmd on macOS and Ctrl elsewhere; a plain `Ctrl` stays the physical
+# Control key (it is kept where Cmd would collide with a macOS system chord).
+# Bindings inside one section load in alphabetical order of their trigger
+# text, and the last binding of a command gives its menu hint. The global
+# sections are split so the load order is the one the all-`Ctrl` spelling had
+# (see docs/KEYBOARD_SHORTCUTS.md, "Built-in profiles").
+
+[signex_settings]
+application = "signex"
+file_kind = "keyboard_shortcuts"
+version = 1
+
+[keyboard_shortcuts]
+schema_version = 1
+profile_id = "signex_standard"
+profile_name = "Signex Standard"
+profile_kind = "built_in"
+description = "Signex Standard keyboard shortcut defaults."
+
+# On a board `Q` toggles the unit (#2406). It loads first so the global
+# `Ctrl+Q` below stays the command's menu hint.
+[[keyboard_shortcuts.sections]]
+context = "pcb"
+
+[keyboard_shortcuts.sections.bindings]
+"Q" = "cycle_unit"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Alt+A" = "annotate_schematic_quietly"
+"Backspace" = "remove_last_vertex"
+"Mod+C" = "copy"
+"Mod+D" = "duplicate"
+"Mod+N" = "new_document"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Ctrl+Q" = "cycle_unit"
+"Mod+R" = "rubber_stamp_copy"
+"Mod+Shift+S" = "save_document_as"
+"Mod+Shift+V" = "smart_paste"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Ctrl+Space" = "cycle_wiring_mode"
+"Mod+V" = "paste"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Ctrl+W" = "place_wire"
+"Mod+X" = "cut"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"DoubleClick" = "edit_object_properties"
+"E W" = "break_wire"
+"Enter" = "placement_accept"
+"Escape" = "cancel_current_tool"
+"F1" = "show_current_command_hotkeys"
+"F2" = "edit_text_in_place"
+"F5" = "open_net_color_palette"
+"F8" = "run_erc"
+"F9" = "toggle_auto_focus"
+"Insert" = "copy_attributes_or_add_vertex"
+"M M" = "move_object"
+"P B" = "place_bus"
+"P N" = "place_net_label"
+"P P" = "open_components_panel"
+"P V K" = "place_compile_mask"
+"P V N" = "place_no_erc"
+"P W" = "place_wire"
+"R I" = "report_manager_bom"
+"Shift+Alt+A" = "force_annotate_all_schematics"
+"Shift+F1" = "show_current_command_shortcuts"
+"Shift+Space" = "rotate_clockwise"
+"Space" = "rotate_counterclockwise"
+"T A" = "annotate_schematic"
+"T A E" = "reset_schematic_designators"
+"T P" = "open_schematic_preferences"
+"Tab" = "placement_properties"
+"X" = "mirror_x"
+"Y" = "mirror_y"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Alt+Click" = "highlight_related_net_objects"
+"Mod+," = "open_preferences"
+"Mod+A" = "select_all"
+"Mod+F" = "find"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Ctrl+F4" = "close_active_document"
+"Ctrl+H" = "find_and_replace"
+"Ctrl+M" = "measure_distance"
+"Mod+O" = "open_document"
+"Mod+P" = "print"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Ctrl+PageDown" = "zoom_to_fit"
+"Mod+S" = "save_document"
+"Mod+Shift+G" = "toggle_visible_grid"
+"Mod+Shift+P" = "open_command_palette"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Ctrl+Shift+Tab" = "previous_document_tab"
+"Mod+Shift+X" = "toggle_cross_select_mode"
+
+# macOS only: Cmd+H hides the app and Cmd+W is the Mac close chord, so Replace
+# and Close Document get the Mac chords next to Ctrl+H / Ctrl+F4. Redo keeps
+# its plain Ctrl+Shift+Z below (the same chord on every OS) and gains the Mac
+# chord here; this section sits before Ctrl+Y so redo's menu hint stays Ctrl+Y.
+# A Mac keyboard has no Insert key, so add vertex also takes Alt+I (⌥I), and
+# macOS takes Ctrl+Space for the input source, so the drag wiring mode also
+# takes Shift+Tab.
+[[keyboard_shortcuts.sections]]
+platform = "macos"
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Alt+I" = "copy_attributes_or_add_vertex"
+"Mod+Alt+F" = "find_and_replace"
+"Mod+Shift+Z" = "redo"
+"Mod+W" = "close_active_document"
+"Shift+Tab" = "cycle_wiring_mode"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Ctrl+Shift+Z" = "redo"
+"Ctrl+Tab" = "next_document_tab"
+"Ctrl+Y" = "redo"
+"Mod+Z" = "undo"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Delete" = "delete_selection"
+"End" = "refresh_view"
+"F11" = "toggle_properties_panel"
+"F12" = "toggle_schematic_filter_panel"
+"F3" = "find_next"
+"F4" = "toggle_floating_panels"
+"G" = "cycle_snap_grid_forward"
+"Home" = "center_view_at_cursor"
+"PageDown" = "zoom_out_at_cursor"
+"PageUp" = "zoom_in_at_cursor"
+"Shift+Click" = "toggle_selection"
+"Shift+E" = "toggle_electrical_grid"
+"Shift+F" = "find_similar_objects"
+"Shift+F12" = "toggle_schematic_list_panel"
+"Shift+F3" = "find_previous"
+"Shift+G" = "cycle_snap_grid_backward"
+
+# #2416: Cross Probe and the Net Inspector, on a sheet or a board.
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"T C" = "cross_probe"
+"V N" = "open_net_inspector"
+
+# #2249: View > Window > Tile Horizontally, Tile Vertically and Untile.
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"W H" = "tile_windows_horizontally"
+"W U" = "untile_documents"
+"W V" = "tile_windows_vertically"
+
+# #2416: the sheet's placement tools with no key before (sheet tabs only).
+# Mockup row 158: `Mod+G` makes a union of the selection; a sheet-only reuse of the
+# key, so the footprint editor's own use of it stays free (DECISIONS
+# 2026-11-19).
+[[keyboard_shortcuts.sections]]
+context = "schematic"
+
+[keyboard_shortcuts.sections.bindings]
+"Mod+G" = "create_union"
+"P C" = "place_off_sheet_connector"
+"P R" = "place_port"
+"P S" = "place_sheet_symbol"
+"P U" = "place_bus_entry"
+"P X" = "place_no_connect"
+
+# The board view (PCB tabs only): `+` steps to the next layer of the board,
+# `*` to the next signal layer,
+# `-` to the previous layer; Shift+S turns single-layer mode on or off; `3`
+# shows the board in 3D or flat again. A
+# shifted `+` or `*` is its own stroke on a US layout. #2406: `1` enters or
+# leaves the board sketch, `L` flips the selection or the part on the cursor
+# to the other side, `N` shows or hides the ratsnest, `F` changes the
+# footprint, `P K` draws a keepout and `T D` runs the design rule check.
+# `E O S` sets the board origin (Edit ▸ Origin ▸ Set, 2026-11-18).
+[[keyboard_shortcuts.sections]]
+context = "pcb"
+
+[keyboard_shortcuts.sections.bindings]
+"+" = "next_layer"
+"Shift++" = "next_layer"
+"*" = "next_signal_layer"
+"Shift+*" = "next_signal_layer"
+"-" = "prev_layer"
+"1" = "board_sketch"
+"3" = "view_board_3d"
+"E O S" = "set_board_origin"
+"F" = "change_footprint"
+"L" = "flip_selection"
+"N" = "toggle_ratsnest"
+"P F" = "place_board_fill"
+"P G" = "place_board_polygon_pour"
+"P K" = "place_board_keepout"
+"P R" = "place_board_region"
+"P T" = "place_board_track"
+"P V" = "place_board_via"
+"Shift+S" = "toggle_single_layer_mode"
+"T D" = "run_drc"
+
+[[keyboard_shortcuts.sections]]
+context = "footprint"
+
+[keyboard_shortcuts.sections.bindings]
+"1" = "footprint_mode_sketch"
+"2" = "footprint_mode_pads"
+"3" = "footprint_mode_view_3d"

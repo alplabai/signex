@@ -60,7 +60,7 @@ fn glyph<'a>(bytes: &'static [u8], ink: Color) -> iced::widget::Svg<'a> {
 fn semibold() -> Font {
     Font {
         weight: Weight::Semibold,
-        ..Font::DEFAULT
+        ..signex_widgets::ui_font::regular()
     }
 }
 

@@ -20,7 +20,8 @@ use super::dd_item;
 /// renderer (#457, epic #278).
 pub(super) enum EntrySpec {
     Separator,
-    /// A subhead over a group of rows.
+    /// A subhead over a group of rows (Power's Common / Styles / Grounds,
+    /// the Drawing Tools' Dimension).
     Header(MessageId),
     Item {
         icon: fn(ThemeId) -> svg::Handle,
@@ -385,7 +386,7 @@ pub(super) const PORT: &[EntrySpec] = &[
 pub(super) const DIRECTIVES: &[EntrySpec] = &[
     EntrySpec::item(
         ic::icon_dd_param_set,
-        "Parameter Set",
+        "Net Parameters",
         ActiveBarAction::PlaceParameterSet,
     ),
     EntrySpec::item(
@@ -400,7 +401,7 @@ pub(super) const DIRECTIVES: &[EntrySpec] = &[
     ),
     EntrySpec::item(
         ic::icon_dd_blanket,
-        "Blanket",
+        "Net Blanket",
         ActiveBarAction::PlaceBlanket,
     ),
     EntrySpec::item(
@@ -451,6 +452,19 @@ pub(super) const SHAPES: &[EntrySpec] = &[
     ),
     EntrySpec::item(ic::icon_dd_polygon, "Polygon", ActiveBarAction::DrawPolygon),
     EntrySpec::item(ic::icon_dd_bezier, "Bezier", ActiveBarAction::DrawBezier),
+    EntrySpec::item(ic::icon_dd_table, "Table", ActiveBarAction::DrawTable),
+    EntrySpec::Separator,
+    EntrySpec::Header(signex_i18n::menu_ids::MENU_PLACE_DIMENSION),
+    EntrySpec::item(
+        ic::icon_pcb_dimension,
+        "Linear",
+        ActiveBarAction::PlaceLinearDimension,
+    ),
+    EntrySpec::item(
+        ic::icon_pcb_dimension,
+        "Aligned",
+        ActiveBarAction::PlaceAlignedDimension,
+    ),
     EntrySpec::Separator,
     EntrySpec::item(
         ic::icon_dd_graphic,

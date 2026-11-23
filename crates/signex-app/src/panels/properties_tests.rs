@@ -508,11 +508,9 @@ fn each_pick_list_shows_the_stored_entry() {
         SelectedKindForTest::Symbol,
         &[("Type", "Symbol"), ("Body Style", "Alternate")],
     );
-    check(
-        "Body",
-        beside(&texts(&body), "Body"),
-        "Alternate (De Morgan)",
-    );
+    // Body is a Normal / Alternate segmented control (mockup row 42):
+    // `body_row::tests` checks the segment a state marks.
+    check("Body", beside(&texts(&body), "Body"), "Normal");
 
     let note = one_selected(
         SelectedKindForTest::TextNote,
@@ -555,6 +553,70 @@ fn picking_a_power_port_style_asks_for_its_library_id() {
     })
     .collect();
     assert_eq!(asked, ["power:arrow"]);
+}
+
+/// Mockup row 46: a sheet symbol that does not repeat lists its entries with
+/// their directions, even with the multi-channel view up.
+#[test]
+fn a_single_sheet_symbol_lists_entry_directions() {
+    use crate::panels::compiled_design::SheetSymbolRepeatView;
+    use signex_types::schematic::{ChildSheet, FillType, Point, SheetPin};
+    let id = uuid::Uuid::from_u128(9);
+    let mut ctx = one_selected(SelectedKindForTest::ChildSheet, &[("Type", "Sheet Symbol")]);
+    ctx.selected_child_sheet = Some(ChildSheet {
+        uuid: id,
+        name: "Power".into(),
+        filename: "power.snxsch".into(),
+        position: Point::new(10.0, 10.0),
+        size: (40.0, 30.0),
+        stroke_width: 0.0,
+        fill: FillType::None,
+        stroke_color: None,
+        fill_color: None,
+        fields_autoplaced: false,
+        pins: vec![SheetPin {
+            uuid: uuid::Uuid::from_u128(10),
+            name: "VIN".into(),
+            direction: "input".into(),
+            position: Point::new(10.0, 20.0),
+            rotation: 0.0,
+            auto_generated: false,
+            user_moved: false,
+        }],
+        instances: Vec::new(),
+    });
+    ctx.compiled_design.sheet_symbol = Some(SheetSymbolRepeatView {
+        sheet_symbol: id,
+        file: "power.snxsch".into(),
+        designator: "Power".into(),
+        entries: vec![("VIN".into(), false)],
+        size_mm: (40.0, 30.0),
+        ..Default::default()
+    });
+    let shown = texts(&ctx);
+    assert!(shown.iter().any(|t| t.text == "Input"), "{shown:#?}");
+    assert!(!shown.iter().any(|t| t.text == "Per channel"), "{shown:#?}");
+}
+
+/// DECISIONS 2026-11-22 (mockup row 45): a power port has one Name field and
+/// no Net Name row; Physical Name stays read-only under Net.
+#[test]
+fn a_power_port_has_one_name_field() {
+    let ctx = one_selected(
+        SelectedKindForTest::Symbol,
+        &[
+            ("Type", "Power Port"),
+            ("Library ID", "power:bar"),
+            ("Value", "+3V3"),
+        ],
+    );
+    let shown = texts(&ctx);
+    assert!(shown.iter().any(|t| t.text == "Name"), "{shown:#?}");
+    assert!(
+        shown.iter().any(|t| t.text == "Physical Name"),
+        "{shown:#?}"
+    );
+    assert!(!shown.iter().any(|t| t.text == "Net Name"), "{shown:#?}");
 }
 
 /// Document Options open on the Parameters tab.
@@ -806,22 +868,53 @@ fn a_sheet_entrys_facts_sit_under_properties() {
     assert_eq!(beside(&shown, "Name"), "VIN");
 }
 
-/// A Blanket's two sections keep their titles above their rows.
+/// A Net Blanket's sections keep their titles above their rows (#1281:
+/// Outline, Directive with the net class, the nets under it, then the
+/// Suppressed rules section shared with the No-ERC directive).
 #[test]
 fn a_blankets_sections_keep_their_titles() {
-    let ctx = one_selected(
+    let mut ctx = one_selected(
         SelectedKindForTest::Directive,
-        &[("Type", "Blanket"), ("Net Class", "PWR")],
+        &[("Type", "Net Blanket"), ("Net Class", "PWR")],
     );
+    let mut sheet = signex_types::schematic::SchematicSheet {
+        paper_size: "A4".to_string(),
+        ..Default::default()
+    };
+    sheet
+        .directives
+        .push(signex_types::schematic::SchDirective::Blanket {
+            uuid: uuid::Uuid::from_u128(7),
+            start: signex_types::schematic::Point::new(10.0, 10.0),
+            end: signex_types::schematic::Point::new(60.8, 40.48),
+            net_class: Some("PWR".to_string()),
+            erc_exclusions: Vec::new(),
+            track_width: None,
+            pour: signex_types::schematic::BlanketPour::Normal,
+            include_edge_nets: false,
+        });
+    ctx.directive_panel = crate::panels::DirectivePanel::build(
+        &sheet,
+        uuid::Uuid::from_u128(7),
+        "power_in.snxsch",
+        vec!["PWR".to_string()],
+        Vec::new(),
+    )
+    .map(Box::new);
     let shown = texts(&ctx);
     let all = plain(&shown);
     let at = |text: &str| all.iter().position(|t| *t == text);
     assert!(
-        at("BLANKET").is_some() && at("BLANKET") < at("Net Class"),
+        at("OUTLINE").is_some() && at("OUTLINE") < at("Width / Height"),
         "{all:?}"
     );
     assert!(
-        at("SUPPRESSED RULES").is_some() && at("Net Class") < at("SUPPRESSED RULES"),
+        at("DIRECTIVE").is_some() && at("DIRECTIVE") < at("Net class"),
+        "{all:?}"
+    );
+    assert!(at("Net class") < at("Track width"), "{all:?}");
+    assert!(
+        at("SUPPRESSED RULES").is_some() && at("Track width") < at("SUPPRESSED RULES"),
         "{all:?}"
     );
 }
@@ -890,10 +983,22 @@ fn same_in_en_xa(mut ctx: PanelContext) -> Vec<String> {
 
 /// #2059: Document Options and a selected part with its footprint card
 /// draw no catalog text in English under en-XA; only the design's own
-/// words (the part's footprint name) stay.
+/// words (the part's footprint name) stay. Unit symbols are not translated
+/// (DECISIONS 2026-11-22, Caner, "Unit symbols"), so Document Options pins
+/// its exact tags: in mm the Units segment, whose English text matches, and
+/// the Visible and Snap Grid tags; in mil the two grid tags. One more
+/// hard-coded unit on the panel changes these lists.
 #[test]
 fn the_properties_panel_draws_no_english_under_en_xa() {
-    assert_eq!(same_in_en_xa(document_options()), Vec::<String>::new());
+    let in_unit = |unit| {
+        let mut ctx = document_options();
+        ctx.unit = unit;
+        ctx.grid_visible = true;
+        ctx.snap_enabled = true;
+        same_in_en_xa(ctx)
+    };
+    assert_eq!(in_unit(signex_types::coord::Unit::Mm), ["mm", "mm", "mm"]);
+    assert_eq!(in_unit(signex_types::coord::Unit::Mil), ["mil", "mil"]);
     assert_eq!(same_in_en_xa(document_parameters()), Vec::<String>::new());
     let mut part = one_selected(
         SelectedKindForTest::Symbol,

@@ -10,12 +10,14 @@ mod footprint_card;
 mod footprint_ctx;
 mod footprint_summaries;
 mod history;
+mod history_repo;
 mod label_class_pick;
 pub(super) mod navigator_ctx;
 pub(in crate::app) mod net_class_styles;
 mod panel_ctx;
 mod pin_focus;
 mod placed_ctx;
+mod run_style;
 mod selection_filter_ctx;
 mod sheet_frame;
 mod sheet_tree;
@@ -25,15 +27,24 @@ mod symbol_ctx;
 mod value_evaluation;
 mod window_panel_ctx;
 pub(crate) use window_panel_ctx::WindowCtxKey;
+#[cfg(test)]
+mod mirror_cache_tests;
+mod sketch_canvas_text;
 mod window_hierarchies;
 #[cfg(test)]
 mod window_placement_tests;
 
 impl Signex {
-    /// Copy the UI-state grid/unit/snap fields and SCH Filter's preset
-    /// rename into the panel context.
+    /// Copy the UI-state grid/unit/snap fields, SCH Filter's preset rename
+    /// and the recent projects into the panel context. Runs on the
+    /// idle-cursor DragMove path, so the recent list is compared first and
+    /// cloned only when it changed.
     pub(in crate::app) fn sync_panel_ctx_mirrors(&mut self) {
         self.document_state.panel_ctx.selection_filter.rename = self.filter_preset_rename();
+        let recent = crate::start_screen::visible_recent(self.ui_state.recent_projects.entries());
+        if self.document_state.panel_ctx.recent_projects.as_slice() != recent {
+            self.document_state.panel_ctx.recent_projects = recent.to_vec();
+        }
         self.document_state.panel_ctx.unit = self.ui_state.unit;
         self.document_state.panel_ctx.grid_visible = self.ui_state.grid_visible;
         self.document_state.panel_ctx.snap_enabled = self.ui_state.snap_enabled;
@@ -48,6 +59,8 @@ impl Signex {
             canvas.set_grid(visible, visible_grid_mm);
         }
         self.sync_zoom_step();
+        self.sync_unions_panel();
+        self.sync_sketch_canvas_text();
     }
 
     /// Push the effective "Zoom speed" into the canvases that hold their
@@ -59,6 +72,7 @@ impl Signex {
         let zoom_step = self.ui_state.effective_zoom_step();
         let trackpad_pan = self.ui_state.trackpad_pan;
         let wheel_mode = self.ui_state.wheel_mode;
+        self.library.components_panel.wheel_mode = wheel_mode;
         for canvas in self.interaction_state.all_pcb_canvases_mut() {
             canvas.zoom_step = zoom_step;
             canvas.trackpad_pan = trackpad_pan;
@@ -267,8 +281,13 @@ impl Signex {
             .as_ref()
             .map(|c| (c.symbol, c.pin.clone()));
         self.sync_focused_pin(clicked_pin.clone());
-        self.sync_pin_focus_sections(clicked_pin.is_some());
+        let folds = self.pin_focus_folds(clicked_pin.as_ref().map(|(symbol, _)| *symbol));
+        self.sync_pin_focus_sections(folds);
         self.sync_placed_panel();
+        self.refresh_directive_panel();
+        self.sync_sheet_symbol_repeat_view();
+        self.document_state.panel_ctx.selection_form.kinds =
+            crate::panels::SelectionKinds::of(&self.interaction_state.active_canvas().selected);
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();
@@ -288,6 +307,10 @@ impl Signex {
             }
             _ => Default::default(),
         };
+        let selected_items = selected.clone();
+        self.document_state.panel_ctx.multi_footprint_choices =
+            self.common_footprint_choices(&selected_items);
+        let selected = &self.interaction_state.active_canvas_mut().selected;
 
         if selected.len() != 1 {
             if !selected.is_empty() {
@@ -324,21 +347,11 @@ impl Signex {
                 self.document_state.designator_standard_for(&path),
             );
             self.document_state.panel_ctx.selection_info.extend(rows);
-            if details.selected_kind == signex_types::schematic::SelectedKind::Wire {
-                self.document_state.panel_ctx.selected_wire_style = engine
-                    .document()
-                    .wires
-                    .iter()
-                    .find(|w| w.uuid == details.selected_uuid)
-                    .map(|w| {
-                        (
-                            signex_types::schematic::WireWidthPreset::from_stroke_mm(
-                                w.stroke_width,
-                            ),
-                            w.color,
-                        )
-                    });
-            }
+            self.document_state.panel_ctx.selected_wire_style = run_style::of_selected(
+                engine.document(),
+                details.selected_kind,
+                details.selected_uuid,
+            );
             let pins = pin_focus::pin_keys(&self.document_state.panel_ctx.selection_info);
             let nets = self.pin_net_names(&path, details.selected_uuid, &pins);
             pin_focus::add_pin_rows(
@@ -497,6 +510,7 @@ impl Signex {
             }
         }
         self.document_state.panel_ctx.footprint_card = self.resolve_footprint_card();
+        self.refresh_harness_panel();
     }
 
     /// Canvas colours for a given theme id — the one derivation shared by
@@ -511,9 +525,12 @@ impl Signex {
     }
 
     /// UI chrome tokens for a given theme id — the token twin of
-    /// [`Self::canvas_colors_for`].
+    /// [`Self::canvas_colors_for`]. The saved "Selected option" preference
+    /// sets the selected-segment tokens.
     pub(crate) fn tokens_for(&self, id: ThemeId) -> signex_types::theme::ThemeTokens {
-        signex_types::theme::theme_tokens(id)
+        self.ui_state
+            .selected_segment
+            .apply(id, signex_types::theme::theme_tokens(id))
     }
 
     /// Panel tokens and icon-tint theme for the effective theme: the
@@ -609,6 +626,7 @@ impl Signex {
             drag_wiring: self.interaction_state.drag_wiring,
             current_tool: self.interaction_state.current_tool,
             window_width: self.ui_state.size_of_window(window).0,
+            swallow_right_release: self.interaction_state.swallow_right_release,
             wire_color_overrides: self.net_colors_shown_in(window),
             wire_class_styles: self.ui_state.net_class_styles.styles_in(placement.as_ref()),
             wire_class_revision: self
@@ -627,6 +645,11 @@ impl Signex {
             selection_filters: &self.interaction_state.selection_filters,
             placement: None,
             power_port_pending: self.interaction_state.pending_power.is_some(),
+            unions: self.union_view(
+                self.document_state
+                    .sheet_path_for_window(window, &self.ui_state)
+                    .map(std::path::PathBuf::as_path),
+            ),
             device_px_per_logical_px: self.ui_state.device_px_per_logical_px(window),
         }
     }

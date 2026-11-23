@@ -196,6 +196,7 @@ mod tests {
             copy_confirm: Some(symbol.clone()),
             copying: false,
             opening_library: None,
+            selection: Default::default(),
         }
     }
 

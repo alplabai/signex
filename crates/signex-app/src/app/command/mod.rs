@@ -86,6 +86,7 @@ pub(crate) mod queries;
 #[cfg(test)]
 mod repair_reset_operand_tests;
 mod repair_reset_operands;
+mod replay;
 mod routing;
 #[cfg(test)]
 mod selection_filter_operand_tests;
@@ -209,7 +210,30 @@ impl Signex {
     /// ([`enablement::explains_when_unavailable`]): that one still runs, and
     /// is reported as `Disabled` too, so a caller is never told `Ran` for a
     /// command that had nothing to act on.
+    ///
+    /// Every call adds one Command Log row (#2458); a call made while
+    /// another runs (an undocked window's undo, an agent request) does not.
     pub(crate) fn dispatch_command_reporting(
+        &mut self,
+        command: &crate::keymap::AppCommandId,
+        args: CommandArgs,
+        window: Option<iced::window::Id>,
+    ) -> (CommandOutcome, Task<Message>) {
+        let mut operands = crate::app::handlers::command_log::operands_of(&args);
+        let targets = self.command_targets(command, args.has_operands(), window);
+        if let Some(targets) = &targets {
+            operands.insert(
+                crate::app::core::command_log::RECORDED_TARGETS.to_string(),
+                targets.to_operand(),
+            );
+        }
+        self.logged_command_on(command, operands, targets, window, |app| {
+            app.dispatch_command_unlogged(command, args, window)
+        })
+    }
+
+    /// [`Self::dispatch_command_reporting`] without the Command Log row.
+    fn dispatch_command_unlogged(
         &mut self,
         command: &crate::keymap::AppCommandId,
         args: CommandArgs,
@@ -468,7 +492,7 @@ mod tests {
         let _ = crate::diagnostics::init_logging();
         let (mut app, _task) = Signex::new();
 
-        let command = AppCommandId::new("place_signal_harness").unwrap();
+        let command = AppCommandId::new("place_device_sheet_symbol").unwrap();
         let (outcome, _task) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
 
         assert!(
@@ -479,7 +503,7 @@ mod tests {
         assert!(
             crate::diagnostics::recent_entries().iter().any(|e| e
                 .message
-                .starts_with("Planned, not available yet: Signal Harness")),
+                .starts_with("Planned, not available yet: Device Sheet Symbol")),
             "the handler ran and explained"
         );
     }

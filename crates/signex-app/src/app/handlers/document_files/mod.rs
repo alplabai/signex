@@ -34,6 +34,7 @@ mod project_save;
 #[cfg(test)]
 mod project_save_tests;
 mod recent;
+mod reload_pause;
 #[cfg(test)]
 mod restore_cancel_tests;
 #[cfg(test)]
@@ -185,6 +186,8 @@ fn blank_schematic_sheet() -> signex_types::schematic::SchematicSheet {
         drawings: Vec::new(),
         no_erc_directives: Vec::new(),
         directives: Vec::new(),
+        harness: Default::default(),
+        unions: Vec::new(),
         title_block: Default::default(),
         variables: Default::default(),
         lib_symbols: Default::default(),

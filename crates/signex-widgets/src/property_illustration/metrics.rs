@@ -13,14 +13,11 @@ const SHORT_SPAN_EM: f32 = 1.4;
 /// How far the dimension line runs past a short span.
 const SHORT_OVERHANG_EM: f32 = 1.07;
 const LABEL_GAP_EM: f32 = 0.5;
-const HIT_TOLERANCE_EM: f32 = 0.5;
 const DASH_EM: f32 = 0.36;
 const DASH_GAP_EM: f32 = 0.24;
 const LEADER_DOT_EM: f32 = 0.15;
 const NOTE_SCALE: f32 = 0.93;
 const MONO_SCALE: f32 = 1.07;
-/// Average advance of a glyph, for the hover box of a label.
-const GLYPH_ADVANCE_EM: f32 = 0.55;
 
 /// Sizes in logical pixels for one caption size.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -65,10 +62,6 @@ impl Metrics {
         self.em(LABEL_GAP_EM)
     }
 
-    pub fn hit_tolerance(&self) -> f32 {
-        self.em(HIT_TOLERANCE_EM)
-    }
-
     /// Dash and gap lengths of a dashed stroke.
     pub fn dash(&self) -> [f32; 2] {
         [self.em(DASH_EM), self.em(DASH_GAP_EM)]
@@ -84,11 +77,6 @@ impl Metrics {
             TextRole::Note => self.em(NOTE_SCALE),
             TextRole::Mono => self.em(MONO_SCALE),
         }
-    }
-
-    /// Approximate width of `text` at `role`, for hover boxes only.
-    pub fn text_width(&self, text: &str, role: TextRole) -> f32 {
-        text.chars().count() as f32 * self.text(role) * GLYPH_ADVANCE_EM
     }
 
     /// Widget height for an illustration `height_em` captions tall.

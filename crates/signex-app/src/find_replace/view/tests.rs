@@ -66,6 +66,19 @@ fn sample() -> FindReplaceState {
     state
 }
 
+/// Mockup row 67: the part a Value result belongs to reaches its row.
+#[test]
+fn a_value_row_names_its_part() {
+    let mut state = sample();
+    state.matches[4].placement_label = Some("R5".into());
+    let shown = groups(&state);
+    let value = shown
+        .iter()
+        .find(|g| g.kind == "Value")
+        .expect("Value group");
+    assert_eq!(value.rows[0].extra.as_deref(), Some("R5"));
+}
+
 #[test]
 fn the_pill_keeps_its_english_and_follows_the_language() {
     let en = I18n::en_us();

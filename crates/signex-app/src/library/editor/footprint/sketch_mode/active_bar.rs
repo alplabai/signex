@@ -27,7 +27,7 @@ use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 use signex_widgets::theme_ext;
-use signex_widgets::{SegmentedStyle, raw, segmented, text, text_input};
+use signex_widgets::{raw, segmented, text, text_input};
 
 use super::SketchLinetype;
 use crate::app::FootprintDocument;
@@ -303,15 +303,7 @@ fn linetype_segments(
 ) -> Element<'static, LibraryMessage> {
     let path = editor.path.clone();
     let r = crate::styles::tokens::resolve(tokens);
-    let style = SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        theme_ext::text_primary(tokens),
-        TS.body,
-    )
-    .fill_width(true);
+    let style = r.segmented(TS.body).fill_width(true);
     let glyph = |linetype| match linetype {
         SketchLinetype::Normal => ids::EDITORS_SKETCH_LINETYPE_NORMAL,
         SketchLinetype::Construction => ids::EDITORS_SKETCH_LINETYPE_CONSTRUCTION,
@@ -395,6 +387,11 @@ fn sketch_tool_icon(
         SketchTool::Offset => icons::icon_sk_offset(theme_id),
         SketchTool::RectPattern => icons::icon_sk_rect_pattern(theme_id),
         SketchTool::CircularPattern => icons::icon_sk_circular_pattern(theme_id),
+        SketchTool::Chamfer => icons::icon_sk_chamfer(theme_id),
+        SketchTool::Extend => icons::icon_sk_extend(theme_id),
+        SketchTool::LinearPattern => icons::icon_sk_linear_pattern(theme_id),
+        SketchTool::Slot => icons::icon_sk_slot(theme_id),
+        SketchTool::Polygon => icons::icon_sk_polygon(theme_id),
         // BreakTrack (#372) / DragTrackEnd (#361) land on this file via the
         // trunk merge; they are armed from the main bar's "Modify Tracks"
         // dropdown, not a sketch group trigger, so this icon is only a

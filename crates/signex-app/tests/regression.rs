@@ -133,6 +133,11 @@ mod pcb_board_menu_view;
 #[path = "regression/pcb_hidden_layer_select.rs"]
 mod pcb_hidden_layer_select;
 
+// Decision 2 (2026-11-20) - board sketch targets Slot, Pour, Mechanical
+// layer and Component anchor.
+#[path = "regression/board_sketch_targets.rs"]
+mod board_sketch_targets;
+
 // #2234 - board sketch mode: entry points, commit, refused bake, Esc.
 #[path = "regression/board_sketch.rs"]
 mod board_sketch;
@@ -177,6 +182,9 @@ mod pcb_canvas_select;
 mod pcb_carry_windows;
 #[path = "regression/pcb_placement.rs"]
 mod pcb_placement;
+// #2460 — the board counters of the status bar and their popovers.
+#[path = "regression/pcb_status_counters.rs"]
+mod pcb_status_counters;
 // #2358 - press on an unselected footprint and drag: select and move.
 #[path = "regression/pcb_drag_unselected.rs"]
 mod pcb_drag_unselected;
@@ -207,12 +215,27 @@ mod pcb_component_schematic;
 // #2355: the track, via and pad Properties panels.
 #[path = "regression/board_primitive_properties.rs"]
 mod board_primitive_properties;
+// Mockup rows 96 and 97: via types, Override and the SMD pad's single
+// copper row.
+#[path = "regression/board_via_pad_panel.rs"]
+mod board_via_pad_panel;
 // #2373, #2393: free arcs, pads, strings and dimensions on a board.
 #[path = "regression/board_free_primitives.rs"]
 mod board_free_primitives;
+// #2523: the track, arc and drawing panels' illustrations, Ends and arc
+// Placement rows.
+#[path = "regression/board_track_arc_graphic_panel.rs"]
+mod board_track_arc_graphic_panel;
+// #2523: a pour's Shelve and Repour, string quick rotation, dimension
+// precision.
+#[path = "regression/board_pour_text_dimension_panel.rs"]
+mod board_pour_text_dimension_panel;
 // #1312 PR 2: Back Annotate.
 #[path = "regression/back_annotate.rs"]
 mod back_annotate;
+// #2462: Compare Board with Schematic.
+#[path = "regression/compare_board.rs"]
+mod compare_board;
 
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;
@@ -252,6 +275,9 @@ mod preferences_export_status;
 mod preferences_prefs_recovery;
 #[path = "regression/rule_profiles_ui.rs"]
 mod rule_profiles_ui;
+
+#[path = "regression/rule_profiles_page.rs"]
+mod rule_profiles_page;
 
 #[path = "regression/preferences_symbol_drafts.rs"]
 mod preferences_symbol_drafts;
@@ -306,6 +332,9 @@ mod footprint_hand_silk_rebake;
 mod footprint_legacy_pad_stack;
 #[path = "regression/footprint_pad_fields_persist.rs"]
 mod footprint_pad_fields_persist;
+// Mockup row 126: the keepout layer and the sketch pad expansions of the role sub-forms.
+#[path = "regression/footprint_role_subforms.rs"]
+mod footprint_role_subforms;
 // #2242 — a trapezoid delta without copper is named when the file opens.
 #[path = "regression/footprint_trapezoid_warning.rs"]
 mod footprint_trapezoid_warning;
@@ -488,7 +517,7 @@ mod symbol_body_style;
 mod text_extents_save;
 #[path = "regression/window_tile_rows.rs"]
 mod window_tile_rows;
-// #2249: Window ▸ Tile shows the documents in panes; Untile.
+// #2249: View ▸ Window ▸ Tile shows the documents in panes; Untile.
 #[path = "regression/document_tiling.rs"]
 mod document_tiling;
 
@@ -606,6 +635,10 @@ mod schematic_field_drag;
 #[path = "regression/schematic_directives.rs"]
 mod schematic_directives;
 
+// #1280 — signal harnesses.
+#[path = "regression/signal_harness.rs"]
+mod signal_harness;
+
 #[path = "regression/surface_failures.rs"]
 mod surface_failures;
 #[path = "regression/text_font_family.rs"]
@@ -630,6 +663,10 @@ mod click_click_move;
 mod rubber_band_move;
 #[path = "regression/symbol_drag_entry_points.rs"]
 mod symbol_drag_entry_points;
+// Mockup rows 122 and 123 - the Pins tab of the symbol editor's Properties
+// panel.
+#[path = "regression/symbol_properties_pins_tab.rs"]
+mod symbol_properties_pins_tab;
 
 // #1057 - grid snapping lands on exact nm multiples (align / move).
 #[path = "regression/grid_snap_exact.rs"]
@@ -663,6 +700,8 @@ mod pending_open_rename_delete;
 // (Space / Shift+Space / X / Y), at placement and on a selected entry.
 #[path = "regression/bus_entry.rs"]
 mod bus_entry;
+#[path = "regression/bus_style.rs"]
+mod bus_style;
 
 // #1404 — the X / Y keys, context-menu Mirror X / Y and the active bar's
 // Flip Along X / Y all flip a symbol the same way.
@@ -684,6 +723,9 @@ mod rotate_mirror_selection;
 mod document_options_persist;
 #[path = "regression/page_origin_readout.rs"]
 mod page_origin_readout;
+// Document Options rows (General, Page Options) hold one steady hover.
+#[path = "regression/properties_row_hover.rs"]
+mod properties_row_hover;
 #[path = "regression/sample_title_block.rs"]
 mod sample_title_block;
 #[path = "regression/title_block_fields.rs"]
@@ -743,12 +785,18 @@ mod illustration_hover;
 mod setup_profile_cards;
 #[path = "regression/sketch_host.rs"]
 mod sketch_host;
+#[path = "regression/smart_paste_dialog.rs"]
+mod smart_paste_dialog;
 #[path = "regression/stroke_law_source_guard.rs"]
 mod stroke_law_source_guard;
 #[path = "regression/stroke_zoom_law.rs"]
 mod stroke_zoom_law;
+#[path = "regression/unions.rs"]
+mod unions;
 #[path = "regression/validation_panels_graphite.rs"]
 mod validation_panels_graphite;
+#[path = "regression/wire_inherit_style.rs"]
+mod wire_inherit_style;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
 
@@ -773,6 +821,13 @@ mod preferences_keymap_page;
 #[path = "regression/preferences_library_pages.rs"]
 mod preferences_library_pages;
 
+// #1267, #1300: Bezier, dimension and table tools; schematic tables.
+#[path = "regression/drawing_tools.rs"]
+mod drawing_tools;
+#[path = "regression/multi_channel.rs"]
+mod multi_channel;
+#[path = "regression/schematic_tables.rs"]
+mod schematic_tables;
 // Graphite mockup #55: the Filter panel edits the filter a box select picks with.
 #[path = "regression/selection_filter_panels.rs"]
 mod selection_filter_panels;
@@ -790,6 +845,11 @@ mod floating_panel_menu;
 #[path = "regression/rules_grid.rs"]
 mod rules_grid;
 
+// #2523 (mockup row 93) - the board Properties panel: Edit board shape, the materials
+// link, the bounding-box size row and the tile-callout hover.
+#[path = "regression/board_options_panel.rs"]
+mod board_options_panel;
+
 // #2525 — Find and Replace: Whole word renames only the exact net.
 #[path = "regression/find_replace_whole_word.rs"]
 mod find_replace_whole_word;
@@ -797,6 +857,17 @@ mod find_replace_whole_word;
 // Move Selection offsets are typed in the display unit.
 #[path = "regression/move_selection_unit.rs"]
 mod move_selection_unit;
+
+#[path = "regression/command_log.rs"]
+mod command_log;
+
+// Mockup row 165 — the Annotations panel and its notebook scan.
+#[path = "regression/annotations_panel.rs"]
+mod annotations_panel;
+
+// Mockup row 166 — workspace layouts: apply, Save Layout and Manage Layouts.
+#[path = "regression/workspace_layouts.rs"]
+mod workspace_layouts;
 
 // Graphite #78 / #80 - Number Schematic Sheets greys Apply on a clash, gap
 // or high number; Assign Footprints filter chips, ticked bar and reason pills.
@@ -806,3 +877,50 @@ mod sheet_tools_graphite;
 // #2533: the Graphite Update PCB dialog keeps a blocked row out and runs the rest.
 #[path = "regression/board_sync_graphite.rs"]
 mod board_sync_graphite;
+
+// Mockup row 6: Find and Replace, Paste Array and the Parameter Manager close
+// the status-bar Grid & Snap popover.
+#[path = "regression/grid_snap_popover_dialogs.rs"]
+mod grid_snap_popover_dialogs;
+
+// mockup row 189: the sketch parameters table, rename / delete with the in-use prompt
+// (Caner 2026-11-20) and Make parameter, each one undo step.
+#[path = "regression/sketch_parameters.rs"]
+mod sketch_parameters;
+// mockup row 187 / mockup row 191: the sketch canvas's pattern values and instance suppression.
+#[path = "regression/sketch_canvas_values.rs"]
+mod sketch_canvas_values;
+// #2518 / Graphite mockup row 179: a board sketch snaps to the board under it; Snap ▾
+// board rows turn that off without an undo step.
+#[path = "regression/sketch_snap_board.rs"]
+mod sketch_snap_board;
+// mockup row 179d / mockup row 190 - board sketch outline checks in Properties and the bake
+// preview drawn on the canvas.
+#[path = "regression/board_sketch_checks.rs"]
+mod board_sketch_checks;
+// mockup row 187 / mockup row 191 / mockup row 192: Chamfer, Extend, Linear Pattern, Mirror about a
+// centerline, and the pad link of Edit in Sketch.
+#[path = "regression/sketch_tools_padlink.rs"]
+mod sketch_tools_padlink;
+// mockup row 191: Mirror and the pattern tools with a pattern selected keep live
+// pattern links; a loop is refused.
+#[path = "regression/sketch_pattern_links.rs"]
+mod sketch_pattern_links;
+// mockup row 192, item D1: an edit of a patterned pad asks This pad / All pads.
+#[path = "regression/sketch_pad_scope.rs"]
+mod sketch_pad_scope;
+// mockup row 187 / mockup row 188 (decision 5): Convert to reference and Make driving.
+#[path = "regression/sketch_reference.rs"]
+mod sketch_reference;
+// Caner (2026-11-20) items 1 and 6: Create ▾ Slot and Polygon, and the
+// Midpoint / Centre / Intersection snaps that land their constraint.
+#[path = "regression/sketch_create_inference.rs"]
+mod sketch_create_inference;
+// Decisions 3 and 4 (mockup row 179d, mockup row 190): the router tool of the project's fab tier
+// and the inside-corner check, and Close gap on both hosts.
+#[path = "regression/board_sketch_router.rs"]
+mod board_sketch_router;
+// mockup row 187 (decision 8): the footprint editor bar's Footprint / Sketch switch and
+// the 3D toggle that returns to the mode it came from.
+#[path = "regression/editor_mode_switch.rs"]
+mod editor_mode_switch;

@@ -24,10 +24,15 @@ impl std::fmt::Display for PrefixChoice {
     }
 }
 
+/// A prefix and unit as one glyph: `kΩ`, `µF`, plain `Ω`.
+pub(crate) fn prefixed_glyph(prefix: SiPrefix, unit: &Unit) -> String {
+    format!("{}{}", prefix.symbol(), unit.glyph())
+}
+
 fn choice(prefix: SiPrefix, unit: &Unit) -> PrefixChoice {
     PrefixChoice {
         prefix,
-        label: format!("{}{}", prefix.symbol(), unit.glyph()),
+        label: prefixed_glyph(prefix, unit),
     }
 }
 
@@ -83,19 +88,6 @@ pub(crate) fn prefix_picker<'a, M: Clone + 'a>(
     prefix_list(unit, selected, on_pick).map(|list| list.boxed())
 }
 
-/// [`prefix_picker`] drawn as the right segment of a
-/// [`measurement_slot`](super::measurement_slot::measurement_slot).
-pub(crate) fn prefix_segment<'a, M: Clone + 'a>(
-    unit: &Unit,
-    selected: SiPrefix,
-    on_pick: impl Fn(SiPrefix) -> M + 'a,
-) -> Option<Element<'a, M>> {
-    prefix_list(unit, selected, on_pick).map(|list| {
-        list.style(super::measurement_slot::picker_segment_style)
-            .boxed()
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,14 +108,6 @@ mod tests {
             .collect();
         assert_eq!(labels, ["mΩ", "Ω", "kΩ", "MΩ", "GΩ"]);
         assert!(prefix_picker(&Unit::Ohm, SiPrefix::Kilo, |p| p).is_some());
-    }
-
-    /// The slot segment offers the same picker, and none where the unit
-    /// takes no prefix.
-    #[test]
-    fn the_slot_segment_is_the_same_picker() {
-        assert!(prefix_segment(&Unit::Ohm, SiPrefix::Kilo, |p| p).is_some());
-        assert!(prefix_segment(&Unit::Percent, SiPrefix::One, |p| p).is_none());
     }
 
     #[test]

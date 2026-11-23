@@ -8,7 +8,7 @@ use signex_erc::{RuleKind, Severity};
 use crate::app::command::CommandArgs;
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::state::{ModalId, WindowKind};
-use crate::app::{Message, ProjectMsg, ProjectTabMsg, Signex};
+use crate::app::{EditMsg, Message, ProjectMsg, ProjectTabMsg, Signex};
 use crate::keymap::AppCommandId;
 
 fn project_tab_with_stored_rules() -> Signex {
@@ -25,6 +25,51 @@ fn project_tab_with_stored_rules() -> Signex {
 fn press(app: &mut Signex, window: Option<iced::window::Id>) {
     let id = AppCommandId::new("undo").expect("catalog id");
     let _ = app.dispatch_command(&id, CommandArgs::none(), window);
+}
+
+/// #2775: Undo in the Project tab takes the newest edit of either history,
+/// so a General edit made before Store stays until the store is undone.
+#[test]
+fn undo_in_the_tab_walks_general_and_rule_steps_in_edit_order() {
+    let dir = std::env::temp_dir().join(format!("signex-prj-undo-{}", uuid::Uuid::now_v7()));
+    let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
+    app.open_project_tab(0);
+    let project_id = app.document_state.projects[0].id;
+    let tab = |app: &mut Signex, msg| {
+        let _ = app.update(Message::Project(ProjectMsg::Tab(msg)));
+    };
+    let step = |app: &mut Signex, edit| {
+        let _ = app.update(Message::Edit(edit));
+    };
+    let read = |app: &Signex| {
+        let data = &app.document_state.projects[0].data;
+        (data.description.clone(), data.rules.is_some())
+    };
+    tab(
+        &mut app,
+        ProjectTabMsg::DescriptionEdited {
+            project_id,
+            text: "before".to_string(),
+        },
+    );
+    tab(
+        &mut app,
+        ProjectTabMsg::ErcRulesStoreRequested { project_id },
+    );
+    let before = Some("before".to_string());
+    assert_eq!(read(&app), (before.clone(), true));
+    step(&mut app, EditMsg::Undo);
+    assert_eq!(read(&app), (before.clone(), false), "the store goes first");
+    step(&mut app, EditMsg::Undo);
+    assert_eq!(read(&app), (None, false), "then the older edit");
+    step(&mut app, EditMsg::Redo);
+    assert_eq!(
+        read(&app),
+        (before.clone(), false),
+        "redo in the same order"
+    );
+    step(&mut app, EditMsg::Redo);
+    assert_eq!(read(&app), (before, true));
 }
 
 #[test]

@@ -22,13 +22,15 @@ use crate::app::{Message, ProjectMsg, Signex, TabKind};
 
 impl Signex {
     /// The Constraint sets button: the set cards (the Sets panel) shown or
-    /// hidden; the Presets panel gives way to them.
+    /// hidden; the Presets panel gives way to them and its open preview goes
+    /// (#2771).
     pub(super) fn toggle_rules_sets(&mut self, id: ProjectId) {
         let tab = self.rules_tab_mut(id);
         tab.panel = match tab.panel {
             Some(RulesPanel::Sets) => None,
             _ => Some(RulesPanel::Sets),
         };
+        tab.preview = None;
     }
 
     /// Overridden rows only: lay the rows out again.

@@ -27,12 +27,17 @@ overlay-palette-no-results = No results
 overlay-palette-window-search = Search files, symbols, commands…
 # Footer note: matches beyond the rows shown. $count is a whole number.
 overlay-palette-more-results = { $count } more results — refine query
+# Footer note when every match is shown: how many rows matched. $count is a
+# whole number.
+overlay-palette-result-count = { $count ->
+    [one] 1 result
+   *[other] { $count } results
+}
 # Footer key hints: the arrow keys move the selection, Enter runs it.
 overlay-palette-navigate = Navigate
 overlay-palette-run = Run
 
-## Hover card of a placed symbol: the field names
-overlay-symbol-card-designator = Designator
+## Hover card of a placed symbol: the field names under its designator
 overlay-symbol-card-value = Value
 overlay-symbol-card-footprint = Footprint
 overlay-symbol-card-library = Library
@@ -44,6 +49,13 @@ overlay-net-card-class = Class: { $class }
 # The card lists a few pins; $count is how many more it leaves out, a whole
 # number.
 overlay-net-card-more = +{ $count } more
+# Pill beside the net's name: how many pins the net has; $count is a whole
+# number.
+overlay-net-card-pin-count =
+    { $count ->
+        [one] { $count } pin
+       *[other] { $count } pins
+    }
 
 # Badge over the canvas of a sheet written by a newer Signex, which opens
 # read-only.
@@ -57,3 +69,5 @@ overlay-locked-window-hint = A dialog is open: click to show it, Esc to cancel
 overlay-read-only-badge-tooltip = This sheet was saved by a newer { -brand-name }. Edits are off so nothing it wrote is lost. Update { -brand-name } to edit it.
 # Key hint above the in-place text editor, shown for its first few uses.
 overlay-text-edit-hint = Enter apply · Esc cancel
+# The same hint on a part's field that has a next field to Tab to.
+overlay-text-edit-hint-next-field = Enter apply · Esc cancel · Tab next field

@@ -218,7 +218,7 @@ fn result_row<'a>(
     let font = if row_data.mono {
         mono()
     } else {
-        iced::Font::DEFAULT
+        signex_widgets::ui_font::regular()
     };
     let ink = if included || !boxes {
         ti(theme_tokens.text)

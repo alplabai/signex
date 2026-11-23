@@ -39,7 +39,8 @@ fn item_id(item: ItemRef) -> String {
         | ItemRef::Arc(id)
         | ItemRef::FreePad(id)
         | ItemRef::Dimension(id)
-        | ItemRef::Graphic { graphic: id, .. } => id.to_string(),
+        | ItemRef::Graphic { graphic: id, .. }
+        | ItemRef::Room(id) => id.to_string(),
         ItemRef::FootprintText { footprint, field } => format!("{footprint}/{}", field.id()),
     }
 }

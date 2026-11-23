@@ -20,12 +20,24 @@ A sheet symbol whose file does not exist opens the **Create Sheet** dialog:
   with an inline error and nothing is written). Missing sub-folders are created.
 - **Create.** Writes a blank sheet plus one Hierarchical label per entry on
   the symbol (`signex_engine::child_document_for_symbol`), on a worker thread
-  with a temp file, fsync and a no-clobber rename. A file that already exists is
-  never overwritten: the dialog offers "Open it" instead. The file is listed
+  with a temp file, fsync and a no-clobber rename. The file is listed
   in the project's `sheets` with its project-relative path (`.snxprj` marked
   changed, saved with the project), the symbol's File field is set to the path
-  relative to the parent sheet, and the child opens with the placement recorded.
-- **Later.** Keeps the symbol, writes nothing, and says so in the Messages panel.
+  relative to the parent sheet (the note under the field says so), and the
+  child opens with the placement recorded. Enter in the field is Create.
+- **A file that already exists.** It is never overwritten. The dialog says so
+  in an error box and offers "Use existing file", which points the symbol at
+  that file and opens it, writing nothing. It is not the default: Create stays
+  the primary button, disabled while the typed name exists, and Enter in the
+  field does nothing, so picking another name is the safe path. When the
+  project already has that file as a page, or a sheet symbol on another open
+  sheet places it, a warning says that using it makes this symbol a copy of
+  that sheet ("mcu.snxsch is already sheet 3; ..."; the number is the file's
+  position in the project's sheet list, left out when the file is not
+  listed). A file another sheet symbol on the same parent already points at is
+  refused instead, with no "Use existing file" (#1835).
+- **Later.** Keeps the symbol, writes nothing, and says so in the Messages
+  panel. The footer hint beside it says the same.
 - **Which document.** The dialog holds the parent sheet's path and the symbol's
   id and acts on that document, whatever tab is active when it is answered.
   If the symbol has vanished, the Messages panel says so. An unsaved parent
@@ -49,7 +61,7 @@ nothing and says so in the Messages panel.
 
 ## Navigator panel {#navigator-panel}
 
-The Navigator lists the project's sheet hierarchy (Graphite mockup #54)
+The Navigator lists the project's sheet hierarchy (Graphite mockup row 54)
 under a Sheets heading with the sheet count. Each row has the sheet icon, the sheet name, its file name in muted mono and,
 on the right, the page number from the project's sheet numbering; a child
 sheet placed twice has a row and a number per placement. The focused sheet

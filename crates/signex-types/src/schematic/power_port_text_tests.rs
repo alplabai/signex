@@ -79,7 +79,7 @@ fn the_text_moves_with_the_port() {
 #[test]
 fn the_text_follows_a_turn_and_stays_upright_away_from_the_head() {
     let (x, y) = AT;
-    let reach = 2.54 + 0.254;
+    let reach = 1.27 + 0.254; // the 1.27 mm stem, then the gap
     // (rotation, expected anchor, expected justification)
     let cases = [
         (0.0, (x, y - reach), (HAlign::Center, VAlign::Bottom)),
@@ -97,7 +97,7 @@ fn the_text_follows_a_turn_and_stays_upright_away_from_the_head() {
 #[test]
 fn the_text_follows_a_mirror() {
     let (x, y) = AT;
-    let reach = 2.54 + 0.254;
+    let reach = 1.27 + 0.254; // the 1.27 mm stem, then the gap
     let (anchor, style) = drawn(&port("power:VCC", 0.0, true, false));
     assert!(near(anchor, x, y + reach), "{anchor:?}");
     assert_eq!(style, (0.0, HAlign::Center, VAlign::Top));

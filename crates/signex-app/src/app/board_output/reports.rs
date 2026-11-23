@@ -166,18 +166,25 @@ impl Signex {
             .map(|b| board_report(&b, kind))
     }
 
-    /// The save dialog for the table in view, or the BOM of the board in
-    /// view when Board Reports is not open.
-    pub(super) fn request_board_report_csv(&mut self) -> Task<Message> {
-        let picked = match self.ui_state.board_output.dialog.as_deref() {
+    /// What a CSV export writes: the table in view; with Board Print open,
+    /// the BOM of that dialog's board; else the BOM of the board in view.
+    pub(crate) fn board_csv_source(&self) -> Option<(PathBuf, BoardReportKind)> {
+        match self.ui_state.board_output.dialog.as_deref() {
             Some(BoardOutputDialog::Reports(state)) => {
                 Some((state.board.clone(), state.report.kind))
             }
-            _ => self
+            Some(BoardOutputDialog::Print(state)) => {
+                Some((state.board.clone(), BoardReportKind::Bom))
+            }
+            None => self
                 .board_in_view()
                 .map(|(board, _)| (board, BoardReportKind::Bom)),
-        };
-        let Some((board, kind)) = picked else {
+        }
+    }
+
+    /// The save dialog for [`Self::board_csv_source`].
+    pub(super) fn request_board_report_csv(&mut self) -> Task<Message> {
+        let Some((board, kind)) = self.board_csv_source() else {
             self.explain_no_board();
             return Task::none();
         };

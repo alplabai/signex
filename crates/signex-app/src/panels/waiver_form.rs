@@ -1,15 +1,15 @@
-//! The waiver form ERC and DRC share (AV-13): a multi-line Reason and an
-//! Author, both required, with Cancel and Waive under the row being waived.
+//! The waiver form under the row being waived, shared by ERC and DRC: one
+//! required multi-line Reason, then Cancel and Waive (mockup row 88).
 //!
-//! The Author starts as the user identity. Reading it means reading git
-//! config, so the app resolves it once off the update loop and caches it in
-//! the Model as a [`UserIdentity`]; this view only reads the cached value.
+//! The author is the git identity. Reading it means reading git config, so
+//! the app resolves it once off the update loop and caches it in the Model
+//! as a [`UserIdentity`]; this view only reads the cached value.
 
 use iced::widget::{Column, Space, row, text_editor};
 use iced::{Element, Length, Widget as _};
-use signex_i18n::{I18n, ids, t};
+use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{Label, TextEditorPlaceholder as _, text, text_input, theme_ext};
+use signex_widgets::{Label, TextEditorPlaceholder as _, text, theme_ext};
 
 use crate::styles::{DialogButtonKind, Spacing, TypeScale, dialog_button};
 
@@ -76,7 +76,7 @@ impl PartialEq<&str> for WaiverReason {
     }
 }
 
-/// The user identity a new waiver's Author starts as, cached in the Model.
+/// The git identity a new waiver is authored by, cached in the Model.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum UserIdentity {
     /// No form has opened yet, so nothing was read.
@@ -84,14 +84,14 @@ pub enum UserIdentity {
     NotAsked,
     /// The read is in flight.
     Asking,
-    /// The name to start the Author with.
+    /// The git author name.
     Known(String),
-    /// Neither git nor the login names anyone: the Author starts empty.
+    /// Git has no identity: the author is stored empty.
     Unknown,
 }
 
 impl UserIdentity {
-    /// The Author a new form starts with: the name, or empty.
+    /// The author a new waiver gets: the name, or empty.
     pub fn author(&self) -> String {
         match self {
             Self::Known(name) => name.clone(),
@@ -114,59 +114,85 @@ impl UserIdentity {
 }
 
 /// What the form shows.
-pub struct WaiverFormView<'a> {
+pub struct ReasonFormView<'a> {
     pub reason: &'a WaiverReason,
-    pub author: &'a str,
+    /// The Reason field's hint, worded by the panel.
+    pub placeholder: Localized,
     /// Why the last Waive was refused.
     pub error: Option<Label<'a>>,
 }
 
-/// The messages the form sends, in the caller's message type.
-pub struct WaiverFormEvents<M, R, A>
+/// The messages the form sends. `confirm` is `None` while Waive cannot be
+/// pressed yet.
+pub struct ReasonFormEvents<M, R>
 where
     R: Fn(text_editor::Action) -> M,
-    A: Fn(String) -> M,
 {
     pub reason: R,
-    pub author: A,
-    pub confirm: M,
+    pub confirm: Option<M>,
     pub cancel: M,
 }
 
-/// The form: Reason, Author, an error line when refused, then Cancel and
-/// Waive on the right.
-pub fn waiver_form<'a, M, R, A>(
-    view: WaiverFormView<'a>,
-    events: WaiverFormEvents<M, R, A>,
+/// The form (mockup row 88): one required Reason, then Cancel and Waive.
+pub fn reason_form<'a, M, R>(
+    view: ReasonFormView<'a>,
+    events: ReasonFormEvents<M, R>,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, M>
 where
     M: Clone + 'a,
     R: Fn(text_editor::Action) -> M + 'a,
-    A: Fn(String) -> M + 'a,
 {
-    let reason = text_editor(view.reason.content())
-        .placeholder_label(t!(i18n, ids::PLACEHOLDER_ERC_WAIVER_REASON))
-        .on_action(events.reason)
+    let reason = reason_field(view.reason, view.placeholder, events.reason);
+    form_column(
+        vec![reason],
+        view.error,
+        events.confirm,
+        events.cancel,
+        i18n,
+        tokens,
+    )
+}
+
+fn reason_field<'a, M, R>(
+    reason: &'a WaiverReason,
+    placeholder: Localized,
+    on_action: R,
+) -> Element<'a, M>
+where
+    M: Clone + 'a,
+    R: Fn(text_editor::Action) -> M + 'a,
+{
+    text_editor(reason.content())
+        .placeholder_label(placeholder)
+        .on_action(on_action)
         .size(TS.body)
         .padding(SP.s)
         .height(Length::Fixed(
             REASON_LINES * TS.body * crate::styles::LINE_HEIGHT + 2.0 * SP.s,
-        ));
-    let author = text_input(t!(i18n, ids::PLACEHOLDER_ERC_WAIVER_AUTHOR), view.author)
-        .on_input(events.author)
-        .on_submit(events.confirm.clone())
-        .size(TS.body)
-        .padding(SP.s)
-        .style(super::form_look::text_input_style)
-        .width(Length::Fill);
-    let mut col: Column<Element<'a, M>> = Column::new()
-        .spacing(SP.xs)
-        .width(Length::Fill)
-        .push(reason.boxed())
-        .push(author.boxed());
-    if let Some(error) = view.error {
+        ))
+        .boxed()
+}
+
+/// The fields, an error line when refused, then Cancel and Waive on the
+/// right.
+fn form_column<'a, M>(
+    fields: Vec<Element<'a, M>>,
+    error: Option<Label<'a>>,
+    confirm: Option<M>,
+    cancel: M,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, M>
+where
+    M: Clone + 'a,
+{
+    let mut col: Column<Element<'a, M>> = Column::new().spacing(SP.xs).width(Length::Fill);
+    for field in fields {
+        col = col.push(field);
+    }
+    if let Some(error) = error {
         col = col.push(
             text(error)
                 .size(TS.caption)
@@ -180,13 +206,13 @@ where
             dialog_button(
                 t!(i18n, ids::PANELS_ERC_WAIVER_CANCEL),
                 DialogButtonKind::Secondary,
-                Some(events.cancel),
+                Some(cancel),
                 tokens,
             ),
             dialog_button(
                 t!(i18n, ids::PANELS_ERC_WAIVE),
                 DialogButtonKind::Primary,
-                Some(events.confirm),
+                confirm,
                 tokens,
             ),
         ]

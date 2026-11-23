@@ -48,14 +48,7 @@ fn chip_style(tokens: &ThemeTokens) -> ChipStyle {
 
 fn segmented_style(tokens: &ThemeTokens) -> SegmentedStyle {
     let r = resolve(tokens);
-    SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        ti(tokens.text),
-        TS.body,
-    )
+    r.segmented(TS.body)
 }
 
 fn count(n: usize) -> Option<u32> {

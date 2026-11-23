@@ -42,8 +42,13 @@ through the `new_project_with_profile` command.
   defaults (sheet size, title block, designator standard). The Fab tier field
   mirrors the picked card. The layer stepper moves the picked card's count and
   keeps its tier.
-- **Preview**: the stack-up on the board ground, the board line and the sheet
-  line.
+- **Preview**: the board rules drawing (two tracks at their width and
+  clearance, a via at its size and drill; click a value to edit it, Enter
+  commits, Tab goes to the next, Esc cancels, handles drag it, and each edit
+  is the rule field's own), the board line, the stack-up on the board ground,
+  and the sheet drawing. Each drawing has an expand button; the larger board
+  view adds the layer count and thickness. New PCB shows the same column
+  without the sheet.
 
 The dialog opens as its own native window ("New Project"), like the other
 dialogs (`docs/DETACHED_MODALS.md`), and locks the main window while it is
@@ -128,7 +133,9 @@ not stored per sheet, so a project value would do nothing.
 Project Options has a **Project setup** section with the dialog's own profile
 cards, PCB rules and schematic defaults, filled in from the
 project. An edit is a project edit like the other sections: it marks the
-`.snxprj` dirty, is written by Save, and Ctrl+Z undoes it.
+`.snxprj` dirty, is written by Save, and Ctrl+Z undoes it. The section's page
+header holds **Save as profile...**, Your profiles is one line under the
+cards, and the PCB rules and Schematic fields sit in two titled cards.
 
 - Only the part an edit changes is stored: a board pick stores
   `project_defaults.pcb`, a sheet pick `project_defaults.sheet`, a designator

@@ -6,9 +6,7 @@
 //! re-exported from `mod.rs` at `pub(in crate::preferences)`. Pure code
 //! motion out of the former single-file `preferences` module.
 
-use super::*;
-use iced::widget::{Space, container};
-use iced::{Background, Border, Element, Length, Theme, Widget};
+use iced::{Background, Border, Theme};
 use signex_widgets::{button, text};
 
 // ─── Theme-aware text styles ──────────────────────────────────
@@ -67,17 +65,6 @@ pub(super) fn danger_button_style(theme: &Theme, status: button::Status) -> butt
     }
 }
 
-pub(super) fn h_sep<'a>() -> Element<'a, PrefMsg> {
-    container(Space::new())
-        .width(Length::Fill)
-        .height(1)
-        .style(move |theme: &Theme| container::Style {
-            background: Some(Background::Color(rule_color(theme))),
-            ..container::Style::default()
-        })
-        .boxed()
-}
-
 /// `a` moved `t` of the way to `b`, channel by channel.
 fn toward(a: iced::Color, b: iced::Color, t: f32) -> iced::Color {
     iced::Color::from_rgb(
@@ -98,40 +85,8 @@ pub(super) fn muted_color(theme: &Theme) -> iced::Color {
     )
 }
 
-/// The neutral hairline between sections, mixed the same way.
-pub(super) fn rule_color(theme: &Theme) -> iced::Color {
-    let palette = theme.palette();
-    toward(
-        palette.background.base.text,
-        palette.background.base.color,
-        RULE_TOWARD_PAGE,
-    )
-}
-
-/// How far the hint ink and the hairline sit from the text toward the page.
+/// How far the hint ink sits from the text toward the page.
 const MUTED_TOWARD_PAGE: f32 = 0.45;
-const RULE_TOWARD_PAGE: f32 = 0.88;
-
-/// Neutral secondary button (Import / Export / Edit / Cancel / Clear) —
-/// theme-derived so it reads on both light and dark palettes.
-pub(super) fn secondary_button_style(theme: &Theme, status: button::Status) -> button::Style {
-    let palette = theme.palette();
-    let bg = match status {
-        button::Status::Hovered | button::Status::Pressed => palette.background.strong.color,
-        _ => palette.background.weak.color,
-    };
-    button::Style {
-        background: Some(Background::Color(bg)),
-        text_color: palette.background.base.text,
-        border: Border {
-            width: 1.0,
-            color: palette.background.strong.color,
-            radius: 3.0.into(),
-            ..Border::default()
-        },
-        ..button::Style::default()
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -143,18 +98,16 @@ mod tests {
         c.r.max(c.g).max(c.b) - c.r.min(c.g).min(c.b)
     }
 
-    /// #2262: hint text and section rules are neutral greys, not the warm
-    /// secondary (brown) and strong background (tan) of the iced palette.
+    /// #2262: hint text is a neutral grey, not the warm secondary (brown) of
+    /// the iced palette.
     #[test]
-    fn hint_ink_and_rules_are_neutral_in_both_graphite_themes() {
+    fn hint_ink_is_neutral_in_both_graphite_themes() {
         for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
             let theme = crate::app::Signex::id_to_iced_theme(id);
             let palette = theme.palette();
-            for (what, c) in [("hint", muted_color(&theme)), ("rule", rule_color(&theme))] {
-                assert!(tint(c) < 0.03, "{id:?} {what} is tinted: {c:?}");
-            }
+            let hint = muted_color(&theme);
+            assert!(tint(hint) < 0.03, "{id:?} hint is tinted: {hint:?}");
             assert_ne!(muted_color(&theme), palette.secondary.base.color);
-            assert_ne!(rule_color(&theme), palette.background.strong.color);
             assert_eq!(text_muted(&theme).color, Some(muted_color(&theme)));
         }
     }

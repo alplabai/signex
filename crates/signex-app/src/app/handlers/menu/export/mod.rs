@@ -6,6 +6,7 @@ use signex_output::{ExportContext, ProjectMetadata, SheetSnapshot};
 use signex_types::schematic::InstancePath;
 
 use crate::app::Signex;
+use crate::app::saved_channel_naming::SavedChannelNaming;
 
 mod bom;
 mod class_styles;
@@ -13,6 +14,8 @@ mod class_styles;
 mod current_page_tests;
 mod erc_report;
 mod loose_bom;
+mod omitted;
+pub(crate) mod page_list;
 mod page_setup;
 mod pdf_netlist;
 pub(crate) mod placements;
@@ -106,6 +109,9 @@ pub(crate) struct ExportIssues {
     pub(crate) sheet_numbering: Option<sheet_numbers::ScopeNumbering>,
     /// The placements the stitcher walked (#1133), to vet a remembered one.
     pub(crate) live: placements::LiveOccurrences,
+    /// The project has channels and its saved naming cannot be read: this
+    /// scope's channel names are not the project's, so nothing is output.
+    pub(crate) channel_naming_unreadable: bool,
 }
 
 impl ExportIssues {
@@ -451,7 +457,7 @@ fn build_scope(
     // hierarchical subtrees; root reachability alone drops flat pages.
     //
     // A project-wide export roots at the *project's* root sheet. Rooting at
-    // `active_path` made one Reports > Netlist yield either the project
+    // `active_path` made one Tools ▸ Reports ▸ Netlist yield either the project
     // netlist or a subtree-only netlist depending on which sheet the user
     // happened to be looking at — same intent, two different .net files, no
     // way to tell them apart. Active-path rooting stays on the loose-document
@@ -493,6 +499,11 @@ fn build_scope(
     // the per-placement page copies below.
     let mut page_occurrences: Vec<signex_net::SheetOccurrence> = Vec::new();
     let mut page_keying: Option<(Option<PathBuf>, crate::app::state::scope::CaseFold)> = None;
+    let saved_naming = owning_project
+        .map(|project| SavedChannelNaming::of(&project.data))
+        .unwrap_or_default();
+    let default_naming = signex_types::project::ChannelNaming::default();
+    let mut channels = signex_net::ChannelDesignators::default();
     let netlist = set.root.clone().and_then(|root_path| {
         // A declared page that exists and was read but that nothing
         // hierarchically references is stitched in below as its own
@@ -558,7 +569,11 @@ fn build_scope(
             resolved: &graph.resolved,
             roots: &roots,
         };
-        let result = signex_net::build_project_netlist(&project);
+        let naming = saved_naming.for_design(&project);
+        issues.channel_naming_unreadable = naming.is_err();
+        let naming = naming.unwrap_or(&default_naming);
+        let result = signex_net::build_project_netlist_named(&project, naming);
+        channels = signex_net::ChannelDesignators::of_project(&project, naming);
         let occurrences = signex_net::project_occurrences(&project);
         page_occurrences = occurrences.clone();
         page_keying = Some((base_dir.clone(), fold));
@@ -587,6 +602,11 @@ fn build_scope(
             let keys: Vec<_> = keyed.iter().map(|(key, _)| key.clone()).collect();
             netlist_placements = placements::netlist_placements(&keys, occurrences);
             netlist_sheets = keyed.into_iter().map(|(_, sheet)| sheet).collect();
+            placements::stamp_channel_designators(
+                &mut netlist_sheets,
+                &netlist_placements,
+                &channels,
+            );
         }
         let mut stitch = result.issues;
         stitch.extend(graph.issues);
@@ -599,8 +619,13 @@ fn build_scope(
     // copies (#829). Without a derived hierarchy the pages print as they are.
     let sheets = match &page_keying {
         Some((base_dir, fold)) => {
-            let copies =
-                placements::page_copies(sheets, &page_occurrences, base_dir.as_deref(), *fold);
+            let copies = placements::page_copies(
+                sheets,
+                &page_occurrences,
+                base_dir.as_deref(),
+                *fold,
+                &channels,
+            );
             match &issues.sheet_numbering {
                 Some(numbering) => numbering.numbered_pages(copies),
                 None => copies,
@@ -609,7 +634,7 @@ fn build_scope(
         None => sheets,
     };
 
-    issues.live = placements::LiveOccurrences::new(page_occurrences, page_keying);
+    issues.live = placements::LiveOccurrences::new(page_occurrences, page_keying, channels);
     let mut ctx = ExportContext {
         sheets,
         metadata,
@@ -719,7 +744,7 @@ fn isolate_undeclared_current(
         .and_then(|s| s.to_str())
         .unwrap_or("Sheet")
         .to_string();
-    let schematic = engine.document().clone();
+    let mut schematic = engine.document().clone();
     // The placement the user descended through, when one was recorded (#1133).
     // A child opened straight from disk has none, so print the copy a
     // placed-twice child would list first: the smallest occurrence path among
@@ -741,6 +766,7 @@ fn isolate_undeclared_current(
             .unwrap_or_default()
         }
     };
+    issues.live.stamp_channels(&mut schematic, &placement);
     // A child with no symbol on a net terminal guesses the root path, which no
     // placement of it carries: number it as its first placement instead.
     let (sheet_number, sheet_count) = issues.sheet_numbering.as_ref().map_or((1, 1), |numbering| {

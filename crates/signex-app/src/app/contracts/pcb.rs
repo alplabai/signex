@@ -66,6 +66,8 @@ pub enum PcbMsg {
     Panel(crate::app::BoardPanelMsg),
     /// Back Annotate and its dialog (#1312).
     BackAnnotate(crate::app::BackAnnotateMsg),
+    /// Compare Board with Schematic and its dialog (#2462).
+    CompareBoard(crate::app::CompareBoardMsg),
     /// Board Reports (#2404) and Board Print / PDF (#2402).
     Output(crate::app::BoardOutputMsg),
     /// The PCB Active Bar's dropdowns (#2352).
@@ -108,6 +110,10 @@ pub enum PcbMsg {
     PartSwap(PartSwapMsg),
     /// Design reuse blocks of the project (#2410).
     ReuseBlock(crate::app::board_reuse::ReuseBlockMsg),
+    /// A room of the board in view was edited in Room Properties (#2457).
+    Room(crate::app::rooms::RoomMsg),
+    /// Create Rooms from Sheets and its dialog (#2457).
+    CreateRooms(crate::app::rooms::CreateRoomsMsg),
     /// Edit ▸ Origin on the board in view (2026-11-18).
     Origin(BoardOriginMsg),
 }
@@ -233,6 +239,15 @@ pub enum PcbBarMsg {
     MenuToggled(PcbBarMenu),
     /// The user clicked outside the open dropdown.
     MenuDismissed,
+    /// A bar button took a right press and toggles `menu`; the release of
+    /// that press stays off the canvas.
+    MenuRightPressed(PcbBarMenu),
+    /// A right press outside the open dropdown closed it; its release stays
+    /// off the canvas.
+    FlyoutRightPressed,
+    /// A part of the bar or of its open dropdown that opens no menu took a
+    /// right press: nothing changes, and its release stays off the canvas.
+    RightPressTaken,
     /// A dropdown row was picked: the dropdown closes and the command runs
     /// as its menu row runs it.
     CommandPicked(crate::keymap::AppCommandId),
@@ -269,13 +284,13 @@ pub enum PcbViewMsg {
     /// The user asked to show or hide the board origin marker (#2351).
     OriginMarkerVisibilityToggled,
     /// The user stepped the active layer to the next or previous one of the
-    /// board's layers (`+`, `-`, the status bar pill).
+    /// board's layers (`+`, `-`, View ▸ Next / Previous Layer).
     ActiveLayerStepped { forward: bool },
     /// The user stepped the active layer to the next or previous signal
     /// layer (`*`).
     SignalLayerStepped { forward: bool },
-    /// The user made one layer the active one (a tab under the canvas or a
-    /// Layers panel row).
+    /// The user made one layer the active one (a tab under the canvas, a
+    /// Layers panel row or a row of the status bar's Active layer popover).
     ActiveLayerPicked(PcbLayer),
     /// The user turned single-layer mode on or off (Shift+S, the View
     /// Options switch).
@@ -325,6 +340,9 @@ pub enum PcbViewMsg {
     /// The Layers panel lists only the layers the board uses, or every
     /// layer again (Used On, #2363).
     UsedLayersOnlySet(bool),
+    /// The user turned Show only unrouted on or off (the Unrouted popover,
+    /// mockup row 164): view state, never a board edit or an undo step.
+    OnlyUnroutedToggled,
     /// The user showed or hid one kind of object; `None`: every kind the
     /// view can hide (View Options, #2363).
     ObjectVisibilitySet {
@@ -510,4 +528,18 @@ pub enum DxfImportMsg {
         text: Result<String, String>,
         waiting: Option<crate::app::agent::WaitingCommand>,
     },
+    /// The file dialog of a board sketch's Import DXF answered (mockup row
+    /// 179c); `None` is a cancel.
+    SketchPicked {
+        board: std::path::PathBuf,
+        path: Option<std::path::PathBuf>,
+    },
+    /// That file was read off the UI thread, or why it could not be.
+    SketchRead {
+        board: std::path::PathBuf,
+        path: std::path::PathBuf,
+        source: Result<std::sync::Arc<signex_engine::pcb::dxf::DxfSource>, String>,
+    },
+    /// A choice, Import or Cancel in the sketch's Import DXF dialog.
+    SketchDialog(crate::app::state::SketchDxfMsg),
 }

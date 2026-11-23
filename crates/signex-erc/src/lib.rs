@@ -30,6 +30,7 @@ pub mod engine;
 #[cfg(test)]
 mod fixtures;
 mod group;
+mod harness_snapshot;
 mod hierarchy;
 mod net_finding;
 mod overrides;
@@ -48,7 +49,9 @@ pub use hierarchy::HierarchyMemo;
 pub use net_finding::{NetFinding, NetFindingPin};
 pub use overrides::apply_overrides;
 pub use pin_matrix::{ErcConfig, PinAxis, PinMatrix};
-pub use project_names::{ProjectNetNames, project_net_multiple_names};
+pub use project_names::{
+    ProjectNetNames, project_net_multiple_names, project_net_multiple_names_named,
+};
 pub use project_units::project_units_not_placed;
 pub use rule::{AnalysisScope, Applicability, RuleDefinition, RuleId, RuleTarget};
 
@@ -122,6 +125,9 @@ pub enum RuleKind {
     PartWithoutValue,
     /// A part carries no manufacturer part number field.
     PartWithoutMpn,
+    /// A non-power part whose library body is not on the sheet: its pins are
+    /// not known, so they get no pin checks and join no net.
+    PartWithoutLibraryBody,
     /// A part's designator is empty or still unannotated (`R?`).
     UnannotatedDesignator,
     /// A net connects exactly one pin and goes nowhere else.
@@ -144,6 +150,16 @@ pub enum RuleKind {
     SheetPinUnconnected,
     /// Two or more sheet pins set to `output` drive one net.
     SheetPinDirectionConflict,
+    /// A `Repeat(<net>)` entry on a repeated sheet symbol meets no bus, or a
+    /// bus with fewer members than the symbol has channels (#1279).
+    RepeatEntryNeedsBus,
+    /// A harness connector entry its type's definition does not list, or an
+    /// entry the far side of the harness carries and this side lacks, so one
+    /// signal would not connect (#1280).
+    HarnessEntryMismatch,
+    /// Connectors or sheet entries of two harness types share one harness
+    /// (#1280).
+    HarnessTypeConflict,
 }
 
 impl RuleKind {
@@ -174,6 +190,7 @@ impl RuleKind {
             RuleKind::PartWithoutFootprint => "Part without footprint",
             RuleKind::PartWithoutValue => "Part without value",
             RuleKind::PartWithoutMpn => "Part without MPN",
+            RuleKind::PartWithoutLibraryBody => "Part without library body",
             RuleKind::UnannotatedDesignator => "Unannotated designator",
             RuleKind::SinglePinNet => "Single-pin net",
             RuleKind::NetWithNoDriver => "Net with no driver",
@@ -183,6 +200,9 @@ impl RuleKind {
             RuleKind::LabelsOnlyNet => "Net carries only labels",
             RuleKind::SheetPinUnconnected => "Sheet pin not connected",
             RuleKind::SheetPinDirectionConflict => "Sheet pin direction conflict",
+            RuleKind::RepeatEntryNeedsBus => "Repeat entry needs a bus",
+            RuleKind::HarnessEntryMismatch => "Harness entry mismatch",
+            RuleKind::HarnessTypeConflict => "Harness type conflict",
         }
     }
 
@@ -206,7 +226,7 @@ impl RuleKind {
     }
 
     /// Every built-in rule, in the order the ERC dialog lists them.
-    pub const ALL: [RuleKind; 33] = [
+    pub const ALL: [RuleKind; 37] = [
         RuleKind::UnusedPin,
         RuleKind::DuplicateRefDesignator,
         RuleKind::HierPortDisconnected,
@@ -231,6 +251,7 @@ impl RuleKind {
         RuleKind::PartWithoutFootprint,
         RuleKind::PartWithoutValue,
         RuleKind::PartWithoutMpn,
+        RuleKind::PartWithoutLibraryBody,
         RuleKind::UnannotatedDesignator,
         RuleKind::SinglePinNet,
         RuleKind::NetWithNoDriver,
@@ -240,6 +261,9 @@ impl RuleKind {
         RuleKind::LabelsOnlyNet,
         RuleKind::SheetPinUnconnected,
         RuleKind::SheetPinDirectionConflict,
+        RuleKind::RepeatEntryNeedsBus,
+        RuleKind::HarnessEntryMismatch,
+        RuleKind::HarnessTypeConflict,
     ];
 
     /// The one source of truth for a rule's severity: [`Diagnostic::new`]
@@ -252,6 +276,8 @@ impl RuleKind {
     pub fn default_severity(self) -> Severity {
         match self {
             RuleKind::DuplicateRefDesignator
+            | RuleKind::PartWithoutLibraryBody
+            | RuleKind::RepeatEntryNeedsBus
             | RuleKind::BusBitWidthMismatch
             | RuleKind::BadHierSheetPin
             | RuleKind::PowerPortShort
@@ -276,7 +302,9 @@ impl RuleKind {
             | RuleKind::UnitsNotPlaced
             | RuleKind::LabelsOnlyNet
             | RuleKind::SheetPinUnconnected
-            | RuleKind::SheetPinDirectionConflict => Severity::Warning,
+            | RuleKind::SheetPinDirectionConflict
+            | RuleKind::HarnessEntryMismatch
+            | RuleKind::HarnessTypeConflict => Severity::Warning,
             RuleKind::NetMultipleNames => Severity::Info,
             RuleKind::MissingPowerFlag | RuleKind::SymbolOutsideSheet => Severity::Info,
             RuleKind::PartWithoutFootprint | RuleKind::PartWithoutValue | RuleKind::OffGrid => {

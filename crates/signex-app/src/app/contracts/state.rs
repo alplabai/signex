@@ -51,9 +51,18 @@ pub enum ContextSubmenu {
     /// Project-tree → "Add New to Project ›" launcher. Items are
     /// version-tagged placeholders today; they do not create documents yet.
     AddNewToProject,
+    /// "Unions ›": create a union from the selection, add or remove the
+    /// selection, break the union (mockup row 158). Shown with a selection.
+    Unions,
     /// The greyed "Planned (N) ›" launcher of the sheet menu: the features
     /// not built yet, each row with what it will do (Graphite mockup #62).
     Planned,
+    /// Project-tree root → "Planned ›": the project features that are not
+    /// built yet, as greyed rows (mockup row 20).
+    ProjectPlanned,
+    /// Project-tree library node → "Add New ›": a component, symbol library
+    /// or footprint library in that library (mockup row 20).
+    AddNewToLibrary,
 }
 
 /// Widget id of the in-place editor, so opening it can focus it.
@@ -64,6 +73,11 @@ pub static TEXT_EDIT_INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
 /// it (#2316).
 pub static VIEW_ANGLE_INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
     std::sync::LazyLock::new(|| iced::widget::Id::new("signex.view_angle"));
+
+/// Widget id of the Rename dialog's name field, focused with its text
+/// selected when the dialog opens.
+pub static RENAME_INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::widget::Id::new("signex.rename.name"));
 
 /// The in-place editor. `kind` says which text of `uuid` it edits: a label
 /// or text note, a part's designator (`SymbolRefField`) or value
@@ -105,20 +119,28 @@ pub struct ContextMenuState {
 pub struct GridPickerState {
     pub x: f32,
     pub y: f32,
+    /// The footprint its rows and Grid Properties act on.
+    pub target: std::path::PathBuf,
+    /// The undocked window it opened in; `None` for the main window.
+    pub owner: Option<iced::window::Id>,
 }
 
-/// v0.18.11 — Cartesian Grid Editor modal state. Carries the
-/// in-flight Step X / Step Y string buffers + the X/Y link toggle.
-/// Writes happen on `GridPropertiesApply`; close discards.
-///
-/// v0.18.19 added Fine / Coarse display + Multiplier draft fields.
-#[derive(Debug, Clone)]
+/// Grid Properties dialog draft (Ctrl+G in a footprint editor): the step
+/// text, the fine and coarse display and the multiplier. OK
+/// (`GridPropertiesMsg::Apply`) writes them; Cancel discards.
+#[derive(Debug, Clone, Default)]
 pub struct GridPropertiesState {
     /// Grid step in mm; one value drives both axes.
     pub step_mm: String,
     pub fine_display: crate::library::editor::footprint::state::GridDisplay,
     pub coarse_display: crate::library::editor::footprint::state::GridDisplay,
     pub multiplier: u32,
+    /// The live preview is drawn taller.
+    pub preview_expanded: bool,
+    /// The step and coarse labels on the preview: which one is open.
+    pub preview_labels: signex_widgets::dimension_label::DimensionLabels,
+    /// The document Apply writes to: the one it was opened on.
+    pub target: std::path::PathBuf,
 }
 
 /// v0.18.14.1 — Custom Selection Filter modal draft state. Mirrors
@@ -141,6 +163,8 @@ pub struct SelectionFilterCustomState {
     pub other: bool,
     /// The name Apply saves the filter under as a preset; blank = "Filter N".
     pub preset_name: String,
+    /// The document Apply writes to: the one it was opened on.
+    pub target: std::path::PathBuf,
 }
 
 /// State for the Projects-panel tree-view right-click menu. The menu's
@@ -156,6 +180,9 @@ pub struct ProjectTreeContextMenuState {
     /// `Some(key)` = right-click on a specific node; `None` = right-click
     /// in empty tree area, offering only the generic actions.
     pub key: Option<signex_widgets::tree_view::TreeKey>,
+    /// The Projects title bar + opened it: only the Add New rows of the
+    /// project at `key` show (mockup row 19).
+    pub add_new_only: bool,
     /// The undocked window the menu was opened in (`None`: the main window).
     /// Only that window paints it, and the tree it names is that window's.
     pub window: Option<iced::window::Id>,
@@ -217,8 +244,12 @@ pub struct CreateChildSheetConfirmState {
     pub path_text: String,
     /// Why Create refused, shown under the field.
     pub error: Option<signex_i18n::Translatable>,
-    /// The typed path names a file that already exists: offer to open it.
+    /// The typed path names a file that already exists: offer to use it.
     pub exists: bool,
+    /// What using that existing file would make of this symbol, when the
+    /// Model shows the file is already a page of the project or placed by a
+    /// sheet symbol of another open sheet (mockup row 27); `None` otherwise.
+    pub reuse_warning: Option<signex_i18n::Translatable>,
 }
 
 /// State for the "Exit Signex — Unsaved Edits" confirmation modal.
@@ -253,6 +284,8 @@ pub enum SaveAllNext {
     CloseLibrary { library_path: std::path::PathBuf },
     /// File ▸ Save All: report the outcome and do nothing else.
     Nothing,
+    /// Run the branch switch Save and switch asked for.
+    SwitchBranch(Box<crate::app::core::branch_switch::SwitchRequest>),
 }
 
 /// A Save All whose loose documents' volumes have been probed off-thread;
@@ -366,6 +399,13 @@ pub enum TabContextAction {
     CloseAll,
     /// Pop the tab at this index into its own OS window.
     Undock(usize),
+    /// Close every tab to the right of the one at this index.
+    CloseToTheRight(usize),
+    /// Put the file path of the tab at this index on the clipboard.
+    CopyPath(usize),
+    /// Show the Projects panel with the file of the tab at this index
+    /// selected in its tree.
+    RevealInProjects(usize),
 }
 
 /// Concrete actions dispatched when the user picks a menu item in the
@@ -421,6 +461,9 @@ pub enum ProjectTreeAction {
     /// Project root: Project Options… opens (or focuses) the project's
     /// Project tab (#1202).
     OpenProjectOptions(signex_widgets::tree_view::TreeKey),
+    /// Project root: Variant Manager opens the Project tab on its Variants
+    /// section (mockup row 20).
+    OpenVariantManager(signex_widgets::tree_view::TreeKey),
     /// Project root: open a file dialog and add the picked file
     /// to the project. Files outside the project directory are copied
     /// in; files already inside just trigger a tree refresh.
@@ -486,6 +529,7 @@ impl ProjectTreeAction {
             | ValidateProject(k)
             | OpenProjectRenameDialog(k)
             | OpenProjectOptions(k)
+            | OpenVariantManager(k)
             | AddExistingToProject(k)
             | AddNewSchematic(k)
             | AddNewPcb(k)
@@ -536,6 +580,14 @@ pub struct RenameDialogState {
     /// trio stays grouped under the new project name. `false` is the
     /// per-file rename used by sheet leaves.
     pub is_project_rename: bool,
+    /// Sheet symbols of the file's own project that place it, read from the
+    /// Model when the dialog opened. The rename re-points them, and the
+    /// dialog says so.
+    pub placing_symbols: Vec<crate::app::path_ops::PlacingSymbol>,
+    /// The composed new name, when another file the Model knows in the same
+    /// folder already has it. Set on every edit; Rename is withheld while it
+    /// stands.
+    pub name_clash: Option<String>,
 }
 
 /// One file/directory entry surfaced on the Enable Version Control
@@ -546,13 +598,32 @@ pub struct RenameDialogState {
 pub struct TrackItem {
     pub absolute: std::path::PathBuf,
     pub relative: String,
-    /// Short kind badge ("Schematic", "PCB", "Library", "Folder",
-    /// "Config", etc.) shown next to the path in the picker.
-    pub label: String,
+    /// What the entry is; the picker shows its catalog name next to the
+    /// path.
+    pub kind: TrackKind,
     /// True for directory entries — drives trailing-slash in the
     /// generated `.gitignore` pattern.
     pub is_directory: bool,
     pub tracked: bool,
+}
+
+/// The kind of a [`TrackItem`] row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrackKind {
+    /// The `.snxprj`.
+    Project,
+    /// A schematic sheet.
+    Schematic,
+    /// The board.
+    Pcb,
+    /// A project-local library folder.
+    Library,
+    /// A library's `library.toml`.
+    Config,
+    /// A library's `components.tsv`.
+    Components,
+    /// A library subfolder.
+    Folder,
 }
 
 /// Whether the Enable Version Control modal is initialising a
@@ -598,10 +669,12 @@ pub struct EnableVersionControlState {
     /// "Track binary 3D models via Git LFS" checkbox. Off by
     /// default; only writes `.gitattributes` when on.
     pub use_lfs: bool,
-    /// Pre-formatted intro paragraph that interpolates the working
-    /// tree path. Computed once at modal-open time so the view
-    /// doesn't allocate a fresh `String` on every render frame.
-    pub intro_text: String,
+    /// Subject of the first commit, prefilled from the catalog ("Initial
+    /// version of <name>"). Enable is withheld while it is blank.
+    pub commit_message: String,
+    /// "Commit every save" (project scope): on success `enable_git` is
+    /// turned on only when this is set. On by default.
+    pub commit_every_save: bool,
     /// Last error from a confirm attempt — surfaces inline so the
     /// user can fix the cause (LFS not installed, etc.) and retry
     /// without reopening the modal.
@@ -636,6 +709,11 @@ pub struct RemoveDialogState {
     /// Is the target a `.snxlib` directory package (deleted whole, with
     /// everything inside)? Decided when the dialog opens: `view` must not stat.
     pub is_directory_package: bool,
+    /// The card the user clicked (#2262). `None` until then, and the card
+    /// the modal selects is its default: Exclude when offered, else Delete
+    /// (`RemoveOffer::selected`). A pick that is no longer offered falls
+    /// back to that default too.
+    pub choice: Option<RemoveChoice>,
 }
 
 /// User choice from the Remove-from-Project modal.
@@ -666,11 +744,24 @@ pub enum StatusBarRequest {
     /// Click on the selection-summary segment opens the Properties panel
     /// scoped to the current selection.
     OpenPropertiesForSelection,
-    /// Click on the "Importing …" segment cancels the running Altium
+    /// Click on the "Importing …" segment cancels the running board
     /// import (#1123).
-    CancelAltiumImport,
-    /// Click on the active-layer pill steps to the next copper layer (#2223).
-    ActiveLayerStepRequested,
+    CancelBoardImport,
+    /// A click on a board counter (Routed, Unrouted, DRC, Selected) or the
+    /// Dropdown switcher's layer pill, or a right-click on the layer pill or
+    /// the Grid read-out, opens its popover
+    /// above it, or closes it when open (#2460). The bar sends
+    /// `window: None`; `Signex::status_bar_message` names the window it was
+    /// clicked in.
+    BoardCounterClicked {
+        window: Option<iced::window::Id>,
+        counter: crate::status_bar::BoardCounter,
+    },
+    /// An event of the open board popover; it acts in the popover's window.
+    BoardPopover(crate::status_bar::BoardPopoverEvent),
+    /// The 30 s tick that ages the DRC counter's "N min ago" while a board
+    /// with a finished run is shown.
+    BoardClockTicked,
     /// Click on the board view's angle readout opens or closes its value
     /// field (#2316).
     ViewAngleClicked,
@@ -678,4 +769,10 @@ pub enum StatusBarRequest {
     ViewAngleEdited(String),
     /// Enter in the angle field.
     ViewAngleSubmitted,
+    /// Right-click on a sheet's Grid read-out: opens or closes the Grid &
+    /// Snap popover above it (mockup row 6).
+    GridReadoutRightClicked,
+    /// Click on the Library Missing chip: reopens the dialog of a skipped
+    /// library (mockup row 138).
+    LibraryMissingChipClicked,
 }

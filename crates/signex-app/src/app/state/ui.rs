@@ -80,8 +80,8 @@ pub struct UiState {
     /// edit now could be overwritten by that migration on a later launch.
     pub machine_rules_locked: Option<String>,
     /// Why the machine's rules are not being saved (the `User Default` file
-    /// could not be read or written), shown in the ERC dialog. `None` when
-    /// they are.
+    /// could not be read or written), shown in the ERC dialog and on the Rule
+    /// Profiles page. `None` when they are.
     pub machine_rules_problem: Option<String>,
     /// The profile new projects start from; `None` means "User Default if
     /// the machine has one, else Signex Default" (#1608). Persisted in
@@ -91,7 +91,7 @@ pub struct UiState {
     pub save_profile_dialog: Option<crate::app::state::rule_profile_ui::SaveProfileDialog>,
     /// Profile file writes waiting their turn (#1608).
     pub profile_writes: crate::app::state::rule_profile_ui::ProfileWriteQueue,
-    /// Loaded keyboard-shortcut profiles (bundled Altium / Classic
+    /// Loaded keyboard-shortcut profiles (bundled Signex Standard / Classic
     /// built-ins plus any user profile in the OS config dir). Drives
     /// shortcut dispatch and the Help ▸ Keyboard Shortcuts reference.
     pub keymap_profiles: crate::keymap::ShortcutProfileSet,
@@ -142,6 +142,13 @@ pub struct UiState {
     /// menu are placed inside it, not inside the main window (#1910).
     pub undocked_window_sizes: std::collections::HashMap<iced::window::Id, (f32, f32)>,
     pub panel_list_open: bool,
+    /// The Grid & Snap popover a right-click on a sheet's Grid read-out
+    /// opens (mockup row 6), with the window it belongs to; `None` while closed. Boxed
+    /// to keep `UiState` under its size ceiling.
+    pub grid_snap_popover: Option<Box<crate::status_bar::GridSnapPopover>>,
+    /// The board counters' open popover and the time their DRC age is read
+    /// against (#2460). Boxed to keep `UiState` under its size ceiling.
+    pub board_status: Box<crate::status_bar::BoardStatusUi>,
     pub preferences_open: bool,
     /// Help ▸ Keyboard Shortcuts modal — reference table over the
     /// active keyboard-shortcut profile. Toggled from the Help menu
@@ -154,6 +161,9 @@ pub struct UiState {
     /// the view then computes the sections inline, so a stale cache is
     /// impossible by construction.
     pub shortcut_sections: Option<Vec<crate::keyboard_shortcuts_modal::ShortcutSection>>,
+    /// The shortcuts sheet's filter text and scope, set afresh each time
+    /// the sheet opens (#2262).
+    pub shortcut_sheet: crate::keyboard_shortcuts_modal::ShortcutSheet,
     /// Help ▸ About Signex dialog.
     pub about_open: bool,
     /// File ▸ Open Recent — loaded from `prefs.json` at boot, updated on
@@ -162,6 +172,10 @@ pub struct UiState {
     /// The Start screen's pinned projects (#2305), loaded from `prefs.json`
     /// at boot and saved on every pin and unpin.
     pub pinned_projects: crate::pinned_projects::PinnedProjects,
+    /// The Start screen project thumbnails (mockup row 1): read from the cache
+    /// at boot, rebuilt after a save. Boxed: a pointer of the size budget
+    /// (#2412).
+    pub project_thumbnails: Box<crate::project_thumbnail::ProjectThumbnails>,
     /// First-run tour overlay — a single dismissible card shown only
     /// before the user has dismissed it once. Initial value is read
     /// from prefs in `bootstrap`; transitions to `false` on the first
@@ -211,9 +225,21 @@ pub struct UiState {
     pub wheel_mode: crate::canvas::WheelMode,
     /// Draft mirror of [`Self::wheel_mode`] for the Preferences dialog.
     pub preferences_draft_wheel_mode: crate::canvas::WheelMode,
+    /// How a board picks its active layer: the tabs or a dropdown.
+    pub layer_switcher: crate::layer_strip_prefs::LayerSwitcher,
+    /// Draft mirror of [`Self::layer_switcher`] for the Preferences dialog.
+    pub preferences_draft_layer_switcher: crate::layer_strip_prefs::LayerSwitcher,
+    /// How the selected option of a segmented control looks in a dark theme.
+    pub selected_segment: signex_types::theme::SelectedSegmentLook,
+    /// Draft mirror of [`Self::selected_segment`] for the Preferences dialog.
+    pub preferences_draft_selected_segment: signex_types::theme::SelectedSegmentLook,
     /// The locale in force: its catalog bundle and the Language list. Shared
     /// with the menus; replaced by `Signex::set_language` (#2055).
     pub i18n: std::sync::Arc<signex_i18n::I18n>,
+    /// The Project tab previews' open label, held handle and larger window.
+    pub project_preview: crate::app::project_tab::ProjectPreviewUi,
+    /// Each project's repository as last read, and the one branch switcher.
+    pub project_git: Box<crate::app::project_git::ProjectGitState>,
     /// The Preferences language draft, dirty pages and page view state.
     /// Boxed: a pointer of the size budget (#2412).
     pub preferences_pages: Box<crate::preferences::PreferencesPagesState>,
@@ -434,8 +460,9 @@ pub struct UiState {
     pub preferences_keymap_recorder: Option<KeymapRecorderState>,
     pub preferences_dirty: bool,
     /// Rename-sheet modal state. Opened from the Projects-panel tree
-    /// context menu; `None` when the modal is closed.
-    pub rename_dialog: Option<crate::app::RenameDialogState>,
+    /// context menu; `None` when the modal is closed. Boxed: a closed dialog
+    /// costs one pointer (#2412).
+    pub rename_dialog: Option<Box<crate::app::RenameDialogState>>,
     /// Remove-from-project modal state (Delete / Exclude / Cancel).
     pub remove_dialog: Option<crate::app::RemoveDialogState>,
     /// "Close Project — Unsaved Edits" confirmation modal. `Some`
@@ -460,8 +487,9 @@ pub struct UiState {
     /// v0.18.11 — Cartesian Grid Editor modal (Ctrl+G in a
     /// footprint editor). `Some` while the dialog is visible;
     /// carries the in-flight Step X / Step Y / link buffers so
-    /// keystrokes don't immediately mutate the active editor.
-    pub grid_properties: Option<crate::app::GridPropertiesState>,
+    /// keystrokes don't immediately mutate the active editor. Boxed: a
+    /// closed dialog costs one pointer (#2412).
+    pub grid_properties: Option<Box<crate::app::GridPropertiesState>>,
     /// The New Project setup dialog, while open (#2232). Nothing is on disk
     /// until its Create. Boxed so a closed dialog costs one pointer (#2412).
     pub new_project: Option<Box<crate::app::NewProjectState>>,
@@ -496,9 +524,16 @@ pub struct UiState {
     pub board_reannotate: Option<crate::app::BoardReannotateState>,
     /// The options Re-Annotate Board was last used with, for its next opening.
     pub board_reannotate_options: signex_engine::pcb::designators::ReannotateOptions,
+    /// Rooms (#2457): the Room Properties drafts and illustration hover, and
+    /// Create Rooms from Sheets while open. Boxed: a pointer of the size
+    /// budget (#2412).
+    pub rooms: Box<crate::app::rooms::RoomsUi>,
     /// File ▸ Fabrication Outputs (#2388), while open. Nothing is written
     /// until Generate.
     pub fab_outputs: Option<Box<crate::app::FabOutputsState>>,
+    /// Design ▸ Differential Pair Classes… (#1282), while open: a copy of
+    /// the project's classes until OK.
+    pub diff_pair_classes: Option<Box<crate::app::DiffPairClassesState>>,
     /// Generation of the newest Fabrication Outputs write, outside the
     /// dialog so a reopened dialog never takes an older answer.
     pub fab_outputs_writes: u64,
@@ -509,6 +544,9 @@ pub struct UiState {
     /// memory as one undo group; nothing is written to disk. Boxed like
     /// `new_project`.
     pub back_annotate: Option<Box<crate::app::BackAnnotateState>>,
+    /// Compare Board with Schematic (#2462), while open. Boxed like
+    /// `back_annotate`.
+    pub compare_board: Option<Box<crate::app::CompareBoardState>>,
     /// The Find Similar Objects dialog, while open (#1257); boxed so the
     /// closed dialog costs one pointer (#2412).
     pub find_similar: Option<Box<crate::find_similar::FindSimilarState>>,
@@ -527,6 +565,17 @@ pub struct UiState {
     pub net_inspector: Box<crate::panels::NetInspectorState>,
     /// The Object List panel's picks and rows (#1259); boxed as above.
     pub object_list: Box<crate::panels::ObjectListState>,
+    /// The Compiled Design panel, channel tabs and Repeat rows (#1279, #1308).
+    /// Boxed: the `UiState` size ceiling.
+    pub compiled_design: Box<crate::app::compiled_design::CompiledDesignUi>,
+    /// Named unions: hidden per sheet, the panel and the popover (mockup row 158).
+    /// Boxed: the `UiState` size ceiling.
+    pub unions: Box<crate::app::unions::UnionsState>,
+    /// The open Smart Paste dialog (mockup row 155).
+    pub smart_paste: Option<Box<crate::smart_paste::SmartPasteState>>,
+    /// The Annotations panel's filters, expanded row and last scan (mockup row 165).
+    /// Boxed: a pointer of the size budget (#2412).
+    pub annotations: Box<crate::panels::AnnotationsState>,
     /// The open Paste Array dialog (#1264); boxed as `find_similar`.
     pub paste_array: Option<Box<crate::paste_array::PasteArrayState>>,
     /// How many Paste Array dialogs were opened: tags each one so a numbers
@@ -721,7 +770,7 @@ pub struct UiState {
     /// (later) undocked tabs. `SecondaryWindowClosed` removes entries so
     /// the detached content reattaches to the main window.
     pub windows: std::collections::HashMap<iced::window::Id, WindowKind>,
-    /// Window ▸ Tile: the main window shows its documents in panes in this
+    /// View ▸ Window ▸ Tile: the main window shows its documents in panes in this
     /// layout (#2249); `None` shows the active document alone.
     pub document_tiling: Option<crate::app::TileLayout>,
     /// Calculator state, owned here so the modal view stays a pure
@@ -733,6 +782,21 @@ pub struct UiState {
     /// row. The chrome-strip search bar is the always-rendered input;
     /// `open` gates the dropdown overlay only.
     pub command_palette: super::super::command_palette::CommandPaletteState,
+    /// The Start screen's page and its filters, back to Home once the
+    /// screen goes away. Boxed: a pointer of the size budget (#2412).
+    pub start_screen: Box<crate::start_screen::StartScreenState>,
+    /// The tab strip's "+N" overflow menu is open (mockup row 5); it lists the tabs
+    /// the main window's strip has no room for.
+    pub tab_overflow_menu_open: bool,
+    /// The Command Log (#2458): every command this session ran and what its
+    /// panel shows. Session only; boxed, a pointer of the size budget (#2412).
+    pub command_log: Box<crate::panels::CommandLogState>,
+    /// What each Command Log row took, for Replay. Beside the log, not in
+    /// the copy the panel holds. Boxed: the size budget (#2412).
+    pub(crate) command_replay: Box<crate::app::handlers::command_log::ReplayBook>,
+    /// Workspace layouts (mockup row 166): the list, its store, and the Save Layout
+    /// and Manage Layouts dialogs while open. Boxed: the size budget (#2412).
+    pub workspace_layouts: Box<crate::workspace_layouts::WorkspaceLayoutsState>,
 }
 
 impl UiState {
@@ -810,6 +874,8 @@ mod tests {
             ),
             ("update_pcb", field_size(|ui| &ui.update_pcb)),
             ("back_annotate", field_size(|ui| &ui.back_annotate)),
+            ("compare_board", field_size(|ui| &ui.compare_board)),
+            ("rooms.create", field_size(|ui| &ui.rooms.create)),
             (
                 "pending_profile_update",
                 field_size(|ui| &ui.pending_profile_update),

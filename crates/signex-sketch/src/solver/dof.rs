@@ -100,7 +100,7 @@ pub fn entity_colours(
     let mut over_points = std::collections::HashSet::new();
     if !over_ids.is_empty() {
         let over_set: std::collections::HashSet<ConstraintId> = over_ids.into_iter().collect();
-        for c in &sketch.constraints {
+        for c in sketch.driving_constraints() {
             if !over_set.contains(&c.id) {
                 continue;
             }
@@ -182,7 +182,8 @@ pub fn over_constraint_ids(
     // constraint.
     let mut unevaluable: Vec<ConstraintId> = Vec::new();
     let mut first_error: Option<String> = None;
-    for c in &sketch.constraints {
+    // A driven (reference) dimension measures; it is never in conflict.
+    for c in sketch.driving_constraints() {
         let r = match residual(c, &solve_result.state, &solve_result.index, sketch, params) {
             Ok(r) => r,
             Err(e) => {

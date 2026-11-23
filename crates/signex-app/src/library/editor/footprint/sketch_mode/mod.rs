@@ -6,15 +6,18 @@
 //! [`FootprintEditorState::sketch_host`]: crate::library::editor::footprint::state::FootprintEditorState::sketch_host
 
 pub mod active_bar;
+pub mod constraint_menu;
 pub mod exit;
 pub mod linetype;
 pub mod menus;
 pub mod messages;
 pub mod roles;
+pub mod value_edit;
 
-pub use exit::{BakePreview, ExitOutcome, SketchExit};
+pub use exit::{BakeOutcome, BakePreview, ExitOutcome, SketchExit};
 pub use linetype::SketchLinetype;
 pub use messages::{ActiveTool, SketchEdit, SketchModeMsg, ToolEvent};
+pub use value_edit::SketchCanvasMsg;
 
 use signex_types::sketch::SketchHost;
 

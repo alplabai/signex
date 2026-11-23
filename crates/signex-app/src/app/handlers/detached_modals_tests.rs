@@ -31,14 +31,16 @@ fn open(app: &mut Signex, modal: ModalId) {
         }
         ModalId::FindReplace => ui.find_replace.open = true,
         ModalId::RenameDialog => {
-            ui.rename_dialog = Some(RenameDialogState {
+            ui.rename_dialog = Some(Box::new(RenameDialogState {
                 target_path: "p.snxsch".into(),
                 tree_path: vec![0],
                 project_id: None,
                 buffer: "p".into(),
                 error: None,
                 is_project_rename: false,
-            })
+                placing_symbols: Vec::new(),
+                name_clash: None,
+            }))
         }
         ModalId::RemoveDialog => {
             ui.remove_dialog = Some(RemoveDialogState {
@@ -49,6 +51,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 is_outside_project: false,
                 unsaved_prompt: false,
                 is_directory_package: false,
+                choice: None,
             })
         }
         ModalId::EnableVersionControl => {
@@ -59,19 +62,21 @@ fn open(app: &mut Signex, modal: ModalId) {
                 project_name: "p".into(),
                 items: Vec::new(),
                 use_lfs: false,
-                intro_text: String::new(),
+                commit_message: "Initial version".to_string(),
+                commit_every_save: true,
                 error: None,
                 working: false,
                 scanning: false,
             })
         }
         ModalId::GridProperties => {
-            ui.grid_properties = Some(GridPropertiesState {
+            ui.grid_properties = Some(Box::new(GridPropertiesState {
                 step_mm: "1".into(),
                 fine_display: Default::default(),
                 coarse_display: Default::default(),
                 multiplier: 5,
-            })
+                ..GridPropertiesState::default()
+            }))
         }
         ModalId::SelectionFilterCustom => {
             ui.selection_filter_custom = Some(Box::new(SelectionFilterCustomState {
@@ -88,6 +93,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 fills: true,
                 other: true,
                 preset_name: String::new(),
+                target: std::path::PathBuf::new(),
             }))
         }
         ModalId::About => ui.about_open = true,
@@ -106,6 +112,8 @@ fn open(app: &mut Signex, modal: ModalId) {
                     path: "p.snxsch".into(),
                     age_secs: 90,
                     older_than_file: false,
+                    saved_age_secs: Some(600),
+                    checked_at: std::time::SystemTime::UNIX_EPOCH,
                 })
         }
         ModalId::ProjectCloseConfirm => {
@@ -134,6 +142,8 @@ fn open(app: &mut Signex, modal: ModalId) {
                 enable_git: false,
                 use_lfs: false,
                 refusal: None,
+                existing_library: false,
+                path_refused: false,
             })
         }
         ModalId::LibraryCloseConfirm => {
@@ -168,6 +178,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 copy_confirm: None,
                 copying: false,
                 opening_library: None,
+                selection: Default::default(),
             })
         }
         ModalId::LibraryDocumentOptions => {
@@ -207,6 +218,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                     path_text: "s.snxsch".into(),
                     error: None,
                     exists: false,
+                    reuse_warning: None,
                 })
         }
         other => panic!("{other:?} is not followed"),
@@ -720,9 +732,13 @@ fn a_list_dialog_is_sized_to_its_rows_and_caps_at_a_scrolling_list() {
         let (app, id) = quit_with_rows(rows);
         let size = window_size(&app, id, ModalId::AppQuitConfirm);
         let texts = lay_out_texts(app.view(id), size);
+        // A list row's texts (its name, kind cap and folder) may sit in the
+        // scrolled-off part of the list.
+        let folder = std::path::Path::new("/p").display().to_string();
+        let in_a_row = |t: &str| t.starts_with("sheet") || t == "SCH" || t == folder;
         let visible_bottom = texts
             .iter()
-            .filter(|t| !t.text.starts_with("sheet"))
+            .filter(|t| !in_a_row(&t.text))
             .map(|t| t.bounds.y + t.bounds.height)
             .fold(0.0_f32, f32::max);
         assert!(
@@ -965,6 +981,8 @@ fn recovery_dialog_text_has_no_indentation_gaps() {
             path: "p.snxsch".into(),
             age_secs: 90,
             older_than_file: true,
+            saved_age_secs: Some(30),
+            checked_at: std::time::SystemTime::UNIX_EPOCH,
         });
     open(&mut app, ModalId::AutosaveRecovery);
     let _ = app.sync_detached_modals();
@@ -977,4 +995,36 @@ fn recovery_dialog_text_has_no_indentation_gaps() {
     for t in texts {
         assert!(!t.text.contains("  "), "gap in dialog text: {:?}", t.text);
     }
+}
+
+/// The saved-file-newer case carries one note more than the case the fit
+/// sweep opens (the warning and the Restore explanation): its window still
+/// shows the whole footer.
+#[test]
+fn the_recovery_window_fits_the_saved_file_newer_case() {
+    let (mut app, _main) = test_app();
+    app.document_state
+        .autosave
+        .offer(crate::autosave::RecoveryOffer {
+            path: "p.snxsch".into(),
+            age_secs: 2 * 86_400,
+            older_than_file: true,
+            saved_age_secs: Some(30),
+            checked_at: std::time::SystemTime::UNIX_EPOCH,
+        });
+    open(&mut app, ModalId::AutosaveRecovery);
+    let _ = app.sync_detached_modals();
+    let id = window_of(&app, ModalId::AutosaveRecovery).expect("window");
+    let size = app.modal_window_size(ModalId::AutosaveRecovery);
+    let texts = lay_out_texts(app.view(id), size);
+    let bottom = texts
+        .iter()
+        .map(|t| t.bounds.y + t.bounds.height)
+        .fold(0.0_f32, f32::max);
+    assert!(
+        bottom <= size.height,
+        "content ends at {bottom}, window is {}",
+        size.height
+    );
+    assert!(texts.iter().any(|t| t.text == "Decide later"), "{texts:#?}");
 }

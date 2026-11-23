@@ -768,10 +768,10 @@ fn a_marker_pass_that_drops_the_save_point_updates_the_tab_mark() {
     assert_eq!(sheet_dirty(&app), !at_save, "the tab says so too");
 }
 
-/// A group step that passes a dead marker on a member sheet's full stack and
-/// is then refused still leaves that sheet's tab mark equal to its engine.
+/// A refused group step passes no dead marker on a member sheet's full stack,
+/// so that sheet keeps its save point and its tab mark equals its engine.
 #[test]
-fn a_group_pass_that_drops_a_sheets_save_point_updates_its_tab_mark() {
+fn a_refused_group_step_keeps_a_sheets_save_point_and_tab_mark() {
     let _ = crate::diagnostics::init_logging();
     let (mut app, _symbol) = app_with_sheet();
     let a = app.document_state.active_path.clone().unwrap();
@@ -812,10 +812,10 @@ fn a_group_pass_that_drops_a_sheets_save_point_updates_its_tab_mark() {
     assert!(!sheet_dirty(&app));
 
     activate(&mut app, &a);
-    app.redo_active_sheet(); // passes B's dead marker onto its full stack
+    app.redo_active_sheet(); // refused: B's dead marker stays where it is
 
     activate(&mut app, &b);
     let at_save = app.document_state.engines[&b].is_at_save_point();
-    assert!(!at_save, "fixture: the pass drops B's save point");
+    assert!(at_save, "a refused step leaves B at its save point");
     assert_eq!(sheet_dirty(&app), !at_save, "B's tab says so too");
 }

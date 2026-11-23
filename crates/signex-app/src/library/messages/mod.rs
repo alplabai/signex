@@ -316,6 +316,9 @@ pub enum EditorMsg {
     },
     /// Fire-and-forget save of the active SimModel primitive.
     SaveSim(uuid::Uuid, Box<SimModel>),
+    /// The header's "N fields do not parse" pill was pressed: show the tab
+    /// holding the first field that does not parse and focus it.
+    UnparsedFieldsPillPressed,
 }
 
 /// Pure-data alias for `ParamKind` so messages don't depend on
@@ -342,6 +345,10 @@ pub enum SymbolToolMsg {
     PlaceArc,
     PlaceText,
     PlacePolygon,
+    PlaceBezier,
+    PlacePie,
+    PlaceEllipticalArc,
+    PlaceRoundRectangle,
 }
 
 /// v0.13.3 — selection-aware constraint kind tag. The dispatcher
@@ -453,6 +460,10 @@ pub enum GraphicHandleMsg {
     /// Polygon vertex at the given index — pure-data alias of
     /// `editor::symbol::state::GraphicHandle::PolygonVertex`.
     PolygonVertex(u32),
+    /// Bezier point — `0=start, 1=C1, 2=C2, 3=end`.
+    BezierPoint(u8),
+    /// Elliptical arc radius grip — `0=X, 1=Y`.
+    EllipseRadius(u8),
 }
 
 /// Pivot mode for Symbol-graphic rotate operations.
@@ -480,6 +491,7 @@ pub enum SymbolContextTargetMsg {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolContextSubmenuMsg {
     Place,
+    Align,
 }
 
 mod footprint;
@@ -519,6 +531,8 @@ pub enum PickerMsg {
     PlaceSelected,
     /// A range filter on a parameter column of the picker's list.
     RangeFilter(RangeFilterMsg),
+    /// A kind chip of the Library panel was pressed (mockup row 119).
+    PanelKindPicked(super::state::LibraryPanelKind),
 }
 
 /// Edit Component Details modal sub-message tree — keeps
@@ -546,6 +560,12 @@ pub enum BrowserEditMsg {
         key: String,
         unit: String,
     },
+    /// The closed face of a parameter's unit menu was pressed.
+    UnitMenuOpened {
+        key: String,
+    },
+    /// A press landed outside the open unit menu.
+    UnitMenuDismissed,
     /// The user picked an SI prefix for a measurement row's number.
     ParamPrefixPicked {
         key: String,
@@ -611,6 +631,14 @@ pub enum PrimitivePickerMsg {
     LooseListed {
         read: std::sync::Arc<crate::library::loose_symbols::LooseRead>,
         from_browse: bool,
+    },
+    /// A row was clicked: highlight it and preview it (mockup row 131).
+    RowHighlighted(crate::library::state::PrimitiveChoice),
+    /// The highlighted row's drawing was read; `Ok(None)` for a kind with
+    /// no drawing. `generation` drops a read of an earlier highlight.
+    PreviewLoaded {
+        generation: u64,
+        result: Result<Option<std::sync::Arc<crate::library::state::PrimitiveDrawing>>, String>,
     },
     /// A loose symbol was chosen: ask whether to copy (or link) it.
     PickLoose(crate::library::loose_symbols::LooseSymbol),

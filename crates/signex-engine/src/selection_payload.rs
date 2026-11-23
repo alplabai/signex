@@ -43,6 +43,7 @@ impl Engine {
             no_connects: clip.no_connects,
             no_erc_directives: clip.no_erc_directives,
             text_notes: clip.text_notes,
+            harness: clip.harness,
             ..Default::default()
         };
         for symbol in &fragment.symbols {
@@ -148,6 +149,9 @@ impl PlacementPayload {
         }
         for tn in &f.text_notes {
             add(dot(&tn.position, 1.27));
+        }
+        if let Some(harness) = crate::clipboard_harness::harness_bounds(&f.harness) {
+            add(harness);
         }
         bounds
     }

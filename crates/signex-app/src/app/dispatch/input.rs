@@ -67,6 +67,7 @@
 //! this module rather than inventing a parallel one.
 
 mod key_repeat;
+mod text_edit_tab;
 
 use super::*;
 use crate::keymap::{KeyStroke, ModifiersExt as _};
@@ -150,8 +151,9 @@ enum InputConsumer {
     /// Preferences ▸ Keyboard Shortcuts, while recording a chord.
     KeymapRecorder,
     CommandPalette,
-    /// Tab, Shift+Tab and Esc on a Rules tab drawing's open value label or
-    /// held handle (#2530); passes when none is open.
+    /// Tab, Shift+Tab and Esc on a Rules tab or Project tab drawing's open
+    /// value label or held handle (#2530, #2685), and Esc on the Project
+    /// tab's larger preview window; passes when none is open.
     RulePreview,
     /// The Esc ladder (#535 / #547 / #554), resolved in `escape.rs`.
     Escape,
@@ -164,8 +166,12 @@ enum InputConsumer {
     DocumentSetup,
     /// Enter picks Place while a Components row menu is open (#2535).
     ComponentsRowMenu,
+    /// Enter saves all in Close Project and is swallowed in Remove (#2262).
+    ConfirmDefault,
     /// F1 toggles the keyboard-shortcuts sheet.
     ShortcutsSheet,
+    /// Tab moves the in-place editor along a part's fields (mockup row 65).
+    TextEditTab,
     /// Ctrl/Alt+1-8 — the digit is data the keymap profile cannot
     /// express, which is why these stay hardcoded.
     SelectionSlots,
@@ -179,7 +185,7 @@ enum InputConsumer {
 /// Order is behaviour. It is ported verbatim from the `if` chain this
 /// module replaced, and it is NOT derived from `PAINT_ORDER` — see the
 /// module docs for the counterexample that rules that out.
-const CLAIM_ORDER: [InputConsumer; 11] = [
+const CLAIM_ORDER: [InputConsumer; 13] = [
     InputConsumer::KeymapRecorder,
     InputConsumer::CommandPalette,
     InputConsumer::RulePreview,
@@ -188,7 +194,9 @@ const CLAIM_ORDER: [InputConsumer; 11] = [
     InputConsumer::UpdatePcb,
     InputConsumer::DocumentSetup,
     InputConsumer::ComponentsRowMenu,
+    InputConsumer::ConfirmDefault,
     InputConsumer::ShortcutsSheet,
+    InputConsumer::TextEditTab,
     InputConsumer::SelectionSlots,
     InputConsumer::Keymap,
 ];
@@ -203,12 +211,12 @@ pub(crate) struct FixedKey {
 }
 
 impl FixedKey {
-    fn matches(&self, key: &keyboard::Key) -> bool {
+    pub(crate) fn matches(&self, key: &keyboard::Key) -> bool {
         matches!(key.as_ref(), keyboard::Key::Named(named) if named == self.named)
     }
 }
 
-const ESCAPE_KEY: FixedKey = FixedKey {
+pub(crate) const ESCAPE_KEY: FixedKey = FixedKey {
     named: keyboard::key::Named::Escape,
     action: "Esc (cancel / close)",
 };
@@ -274,6 +282,9 @@ impl Signex {
         window: iced::window::Id,
         event: keyboard::Event,
     ) -> Task<Message> {
+        if self.is_repeat_of_resuming_esc(&event) {
+            return Task::none();
+        }
         let (message, swallowed_by) = self.route_key_by(window, &event);
         // #1378 - a key press that is not a keymap stroke (Esc, F1, a
         // selection slot, a palette or recorder key) abandons the pending
@@ -361,12 +372,25 @@ impl Signex {
         match consumer {
             InputConsumer::KeymapRecorder => self.claim_keymap_recorder(target, event),
             InputConsumer::CommandPalette => self.claim_command_palette(target, event),
-            InputConsumer::RulePreview => match (target, self.rules_drawing_key(window, event)) {
-                (InputTarget::Main | InputTarget::UndockedTab, Some(message)) => {
-                    Claim::consume(message)
+            InputConsumer::RulePreview => {
+                use crate::app::new_project::preview::SetupPreviewKey;
+                let own_window =
+                    target == InputTarget::DetachedModal(crate::app::state::ModalId::NewProject);
+                match self.setup_preview_key(own_window, target.paints_overlay_stack(), event) {
+                    Some(SetupPreviewKey::Consume(message)) => return Claim::consume(*message),
+                    Some(SetupPreviewKey::Swallow) => return Claim::Swallow,
+                    None => {}
                 }
-                _ => Claim::Pass,
-            },
+                let key = self
+                    .rules_drawing_key(window, event)
+                    .or_else(|| self.project_preview_key(window, event));
+                match (target, key) {
+                    (InputTarget::Main | InputTarget::UndockedTab, Some(message)) => {
+                        Claim::consume(message)
+                    }
+                    _ => Claim::Pass,
+                }
+            }
             InputConsumer::Escape => Self::claim_escape(window, event),
             InputConsumer::NewProject => self.claim_new_project(target, event),
             InputConsumer::UpdatePcb => self.claim_update_pcb(target, event),
@@ -374,7 +398,9 @@ impl Signex {
             InputConsumer::ComponentsRowMenu => {
                 self.claim_components_row_menu(target, window, event)
             }
+            InputConsumer::ConfirmDefault => self.claim_confirm_default(target, event),
             InputConsumer::ShortcutsSheet => self.claim_shortcuts_sheet(target, event),
+            InputConsumer::TextEditTab => self.claim_text_edit_tab(target, window, event),
             InputConsumer::SelectionSlots => Self::claim_selection_slots(event),
             InputConsumer::Keymap => self.claim_keymap(target, window, event),
         }
@@ -637,6 +663,35 @@ impl Signex {
             Claim::consume(Message::from(D::Setup(N::SaveProfileConfirmed)))
         } else {
             Claim::consume(Message::from(D::SubmitRequested))
+        }
+    }
+
+    /// Enter in the Remove or Close Project confirm, in the window that shows
+    /// its card: Close Project saves all; Remove swallows it, so Enter never
+    /// removes or deletes (`confirm_enter_message`).
+    fn claim_confirm_default(&self, target: InputTarget, event: &keyboard::Event) -> Claim {
+        use crate::app::state::ModalId;
+        let keyboard::Event::KeyPressed {
+            key: keyboard::Key::Named(keyboard::key::Named::Enter),
+            modifiers,
+            ..
+        } = event
+        else {
+            return Claim::Pass;
+        };
+        if !modifiers.is_empty() {
+            return Claim::Pass;
+        }
+        let front = match target {
+            InputTarget::DetachedModal(modal) => Some(modal),
+            _ if target.paints_overlay_stack() => self.confirm_in_front(),
+            _ => None,
+        };
+        match front {
+            Some(modal @ (ModalId::RemoveDialog | ModalId::ProjectCloseConfirm)) => self
+                .confirm_enter_message(modal)
+                .map_or(Claim::Swallow, Claim::consume),
+            _ => Claim::Pass,
         }
     }
 
@@ -946,7 +1001,9 @@ mod tests {
             InputConsumer::UpdatePcb,
             InputConsumer::DocumentSetup,
             InputConsumer::ComponentsRowMenu,
+            InputConsumer::ConfirmDefault,
             InputConsumer::ShortcutsSheet,
+            InputConsumer::TextEditTab,
             InputConsumer::SelectionSlots,
             InputConsumer::Keymap,
         ] {

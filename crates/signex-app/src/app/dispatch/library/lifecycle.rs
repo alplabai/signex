@@ -71,7 +71,7 @@ impl Signex {
     }
 
     /// The open project that lists `path` as a library, if any.
-    fn owning_project_of_library(
+    pub(super) fn owning_project_of_library(
         &self,
         path: &std::path::Path,
     ) -> Option<crate::app::state::ProjectId> {

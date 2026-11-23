@@ -46,13 +46,26 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
     let palette = PanelPalette::from_tokens(&ctx.tokens);
     let missing = sheet_file_missing(&ctx.projects, &sheet.filename);
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
+    // The multi-channel view of the symbol (#1279): its caption, its stacked
+    // illustration and its Repeat, Channel naming and Entries sections.
+    let repeat_view = ctx
+        .compiled_design
+        .sheet_symbol
+        .as_ref()
+        .filter(|view| view.sheet_symbol == sheet.uuid);
     if missing {
         col = col.push(missing_banner(ctx, sheet));
     }
-    col = col.push(illustration_view(
-        ctx,
-        sheet_symbol_illustration(sheet, &ctx.i18n),
-    ));
+    if let Some(view) = repeat_view {
+        col = col.push(super::child_sheet_repeat::caption(ctx, view));
+    }
+    // Only a repeated sheet draws as a stack (mockup row 151); one sheet
+    // shows its entries' direction shapes on their edges (mockup row 46).
+    let repeated_view = repeat_view.filter(|view| shows_channels(view));
+    col = col.push(match repeated_view {
+        Some(view) => super::child_sheet_repeat::illustration(ctx, view),
+        None => illustration_view(ctx, sheet_symbol_illustration(sheet, &ctx.i18n)),
+    });
     col = col.push(
         container(
             text(t!(ctx.i18n, ids::PROPERTIES_SHEET_ENTRIES_NOTE))
@@ -68,10 +81,33 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
         input_bg: palette.input_bg,
     };
     col = push_location_section(col, ctx, look);
-    col = col.push(properties_section(ctx, sheet, missing, muted));
+    col = col.push(properties_section(
+        ctx,
+        sheet,
+        missing,
+        repeated_view.is_some(),
+        muted,
+    ));
     col = col.push(style_section(ctx, sheet, palette));
-    col = col.push(entries_section(ctx, sheet, muted));
+    col = col.push(match repeat_view {
+        // Repeat and Channel naming (#1279). Entries are per channel on a
+        // repeated sheet and name + direction on one sheet.
+        Some(view) if shows_channels(view) => {
+            let entries = super::child_sheet_repeat::entries(ctx, view);
+            super::child_sheet_repeat::sections(ctx, view, entries)
+        }
+        Some(view) => {
+            let entries = entries_section(ctx, sheet, muted);
+            super::child_sheet_repeat::sections(ctx, view, entries)
+        }
+        None => entries_section(ctx, sheet, muted),
+    });
     col.boxed()
+}
+
+/// Whether the symbol repeats, so its drawing and Entries are per channel.
+fn shows_channels(view: &crate::panels::compiled_design::SheetSymbolRepeatView) -> bool {
+    view.repeat.is_some()
 }
 
 /// The basename of a file reference, folded for comparison.
@@ -177,6 +213,7 @@ fn properties_section<'a>(
     ctx: &'a PanelContext,
     sheet: &ChildSheet,
     missing: bool,
+    repeat: bool,
     muted: Color,
 ) -> Element<'a, PanelMsg> {
     let id = sheet.uuid;
@@ -209,16 +246,27 @@ fn properties_section<'a>(
                 .padding([SP.s, SP.m])
                 .on_press(PanelMsg::CommandButtonPressed(OPEN_SHEET_COMMAND))
                 .style(form_look::ghost_button);
-            let name_label = t!(i18n, ids::PANELS_CHILD_SHEET_NAME);
             let file_label = t!(i18n, ids::PANELS_CHILD_SHEET_FILE);
+            // With the multi-channel view the name is the designator, where
+            // `Repeat(CH, 1, 4)` repeats the sheet (#1279).
+            let name_row = if repeat {
+                let label = t!(i18n, ids::PROPERTIES_SHEET_SYMBOL_DESIGNATOR);
+                super::child_sheet_repeat::linked(
+                    super::child_sheet_repeat::FIELD_DESIGNATOR,
+                    control_row(label, name_input.boxed(), muted),
+                )
+            } else {
+                let label = t!(i18n, ids::PANELS_CHILD_SHEET_NAME);
+                hover_linked(
+                    ctx,
+                    SHEET_NAME,
+                    control_row(label, name_input.boxed(), muted),
+                )
+            };
             Column::new()
                 .spacing(0)
                 .width(Length::Fill)
-                .push(hover_linked(
-                    ctx,
-                    SHEET_NAME,
-                    control_row(name_label, name_input.boxed(), muted),
-                ))
+                .push(name_row)
                 .push(hover_linked(
                     ctx,
                     SHEET_FILE,
@@ -270,6 +318,7 @@ fn style_section<'a>(
         ctx.child_sheet_fill_advanced_open,
     );
     let stroke_width_buf = ctx.child_sheet_stroke_width_buf.clone();
+    let refused_ink = crate::styles::ti(ctx.tokens.error);
     let i18n: &'a signex_i18n::I18n = &ctx.i18n;
     ctx.collapsible(
         "sel_child_sheet_style",
@@ -282,7 +331,6 @@ fn style_section<'a>(
                 stroke_color,
                 border_open,
                 border_advanced,
-                palette,
                 /* is_border */ true,
                 i18n,
             );
@@ -291,7 +339,6 @@ fn style_section<'a>(
                 fill_color,
                 fill_open,
                 fill_advanced,
-                palette,
                 /* is_border */ false,
                 i18n,
             );
@@ -317,6 +364,7 @@ fn style_section<'a>(
                         stroke_width,
                         stroke_width_buf,
                         palette.muted,
+                        refused_ink,
                         i18n,
                     ),
                 ))
@@ -398,35 +446,20 @@ fn entries_section<'a>(
     )
 }
 
-/// One swatch row in the child-sheet Style section.
-///
-/// Click flow:
-///   1. Click swatch → expands an inline preset palette panel below
-///      the row (full panel width, like the canvas-font popup) with
-///      a 12-colour grid plus "Custom…" and (when an override is
-///      active) "Reset to Default".
-///   2. Click the swatch again to collapse, or click "Custom…" to
-///      switch to the iced_aw HSV / RGB ColorPicker overlay.
-///
-/// Both the palette pick and the advanced-picker submit reuse the
-/// same `EditChildSheet*Color` message so engine command + undo/redo
-/// round-trip is identical for both paths.
+/// One colour field of the child-sheet Style section (mockup row 46): the
+/// swatch, its code or Default and a chevron, opening the preset popover.
+/// Custom… switches to the HSV / RGB picker. Both picks send the same
+/// `EditChildSheet*Color` message, so undo is identical for both.
 fn child_sheet_color_row<'a>(
     sheet_id: uuid::Uuid,
     current: Option<signex_types::schematic::StrokeColor>,
     show_picker: bool,
     show_advanced: bool,
-    palette: PanelPalette,
     is_border: bool,
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
+    use crate::panels::wire_style_rows::{PopoverColorRow, WireColorPicker, popover_color_row};
     use std::rc::Rc;
-
-    let PanelPalette {
-        muted,
-        border: border_c,
-        ..
-    } = palette;
 
     // StrokeColor → [u8; 4] RGBA so the generic widget stays agnostic
     // of the schematic colour type.
@@ -459,15 +492,18 @@ fn child_sheet_color_row<'a>(
     } else {
         ids::PROPERTIES_SHEET_FILL
     };
-    color_field(
-        ColorFieldProps {
-            label: t!(i18n, label).into(),
+    let picker = if show_advanced {
+        WireColorPicker::Advanced
+    } else if show_picker {
+        WireColorPicker::Palette
+    } else {
+        WireColorPicker::Closed
+    };
+    popover_color_row(
+        PopoverColorRow {
+            label: t!(i18n, label),
             current: current_rgba,
-            none_label: t!(i18n, ids::PROPERTIES_COLOR_DEFAULT).into(),
-            show_palette: show_picker,
-            show_advanced,
-            muted,
-            border_c,
+            picker,
             on_toggle,
             on_advanced: PanelMsg::OpenChildSheetAdvancedPicker(sheet_id, is_border),
             on_cancel: PanelMsg::CancelChildSheetColorPicker,
@@ -498,16 +534,19 @@ fn child_sheet_stroke_width_row<'a>(
     stored_value: f64,
     buffered: Option<String>,
     muted: Color,
+    error: Color,
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     let placeholder = t!(i18n, ids::PLACEHOLDER_CHILD_SHEET_LINE_WIDTH);
+    let refused = (buffered.as_deref())
+        .is_some_and(|typed| crate::numeric_field::typed_line_width(typed).is_none());
     let input = signex_widgets::text_input(placeholder, line_width_text(stored_value, buffered))
         .size(TS.body)
         .padding(SP.s)
         .width(Length::Fill)
         .on_input(move |s| PanelMsg::ChildSheetStrokeWidthTyping(sheet_id, s))
         .on_submit(PanelMsg::CommitChildSheetStrokeWidth(sheet_id))
-        .style(form_look::text_input_style);
+        .style(form_look::refusable_input_style(refused.then_some(error)));
     let control = row![
         input,
         text(t!(i18n, ids::PROPERTIES_UNIT_MM))

@@ -11,16 +11,19 @@ pub(crate) mod overlay_id;
 
 mod board_3d;
 mod board_sketch;
+mod board_sketch_dxf;
 pub(in crate::app) mod canvas_region;
 mod chrome;
 mod context_menu;
+pub(crate) use context_menu::AnchoredMenu;
+mod detached_panel;
 mod library_tab;
 mod modals;
 mod net_color;
 mod overlays;
 pub(crate) mod parameter_manager;
 mod pcb_active_bar;
-mod pcb_strip;
+pub(in crate::app) mod pcb_strip;
 mod pdf_preview;
 mod print_preview;
 mod status;
@@ -63,25 +66,7 @@ impl Signex {
                 // window id they render into.
                 super::state::WindowKind::UndockedTab { .. } => self.view_main_for(window_id),
                 super::state::WindowKind::DetachedPanel(kind) => {
-                    let ctx = &self.document_state.panel_ctx;
-                    let panel = if *kind == crate::panels::PanelKind::Components {
-                        crate::panels::components_panel::view(
-                            &self.library,
-                            ctx,
-                            &ctx.tokens,
-                            self.sheet_grid(),
-                        )
-                        .map(crate::dock::DockMessage::Library)
-                        .boxed()
-                    } else {
-                        crate::panels::view_panel(*kind, ctx)
-                            .map(crate::dock::DockMessage::Panel)
-                            .boxed()
-                    }
-                    .map(Message::Dock);
-                    iced::widget::container(iced::widget::scrollable(panel))
-                        .padding(SP.m)
-                        .boxed()
+                    self.view_detached_panel_window(window_id, *kind)
                 }
                 // Detached Component Preview window — render the same
                 // editor surface as the inline tab. The editor state
@@ -186,6 +171,7 @@ impl Signex {
             i18n: std::sync::Arc::clone(&ui.i18n),
             cross_select: interaction.cross_select.enabled,
             pcb_sync: self.pcb_sync_label(Some(window_id)),
+            layouts: self.layouts_menu(),
         };
         let undocked = ui.main_window_id != Some(window_id);
         let menu_row = || {
@@ -320,7 +306,10 @@ impl Signex {
                 .style(crate::styles::chrome_separator(&document.panel_ctx.tokens))
                 .boxed(),
         );
-        if !document.tabs.is_empty() && !visible_paths.is_empty() {
+        // A Layer Stack tab stays on the main strip while its board is
+        // undocked, so it can be the strip's only tab.
+        let shows_page = is_main_window && document.tabs.iter().any(|t| t.kind.is_layer_stack());
+        if !document.tabs.is_empty() && (!visible_paths.is_empty() || shows_page) {
             // Resolve "really dragging" — Some only after the
             // cursor has travelled past a 6 px threshold from
             // the press origin. Without this, every click-to-
@@ -345,16 +334,8 @@ impl Signex {
                     document.active_tab,
                     dragging,
                     &visible_paths,
-                    &tab_bar::TabMarks {
-                        dirty_paths: &dirty_paths,
-                        read_only_paths: &read_only_paths,
-                        tooltips_enabled: interaction.tab_context_menu.is_none(),
-                        project_name: document
-                            .active_document_project()
-                            .map(|p| p.data.name.as_str()),
-                        i18n: &ui.i18n,
-                        projects: &document.projects,
-                    },
+                    is_main_window,
+                    &self.tab_strip_marks(window_id, &dirty_paths, &read_only_paths),
                     &document.panel_ctx.tokens,
                 )
                 .map(move |msg| Message::Tab { window_id, msg })
@@ -457,7 +438,6 @@ impl Signex {
             iced::widget::mouse_area(hint)
                 .on_press(Message::Window(WindowMsg::LockedWindowClicked)),
         )
-        // A locked window takes no wheel either.
         .capture_scroll(true)
         .boxed()
     }
@@ -469,6 +449,9 @@ impl Signex {
         }
         if let Some(project_id) = self.rules_tab_in_window(is_main) {
             return self.view_rules_tab(project_id);
+        }
+        if self.layer_stack_tab_in_window(is_main) {
+            return self.view_layer_stack_tab();
         }
 
         // Component Preview, symbol / footprint editor and Library Browser
@@ -536,7 +519,8 @@ impl Signex {
             } else {
                 iced::widget::Space::new().boxed()
             };
-            stack![base, badge].boxed()
+            // A repeated sheet gets its channel tabs under the canvas (#1279).
+            self.with_channel_strip(is_main, stack![base, badge].boxed())
         } else if let Some(sketch) = self.board_sketch_view(window_id) {
             // The board in sketch mode: the sketch over the board (#2234).
             sketch
@@ -558,8 +542,12 @@ impl Signex {
                     .boxed()
             };
             // The board's layers as tabs under the canvas; a tab click acts
-            // on this window's board (#2357).
-            let strip = self.pcb_for_window(window_id).and_then(|board| {
+            // on this window's board (#2357). The Dropdown layer switcher
+            // has none.
+            let shown = self
+                .pcb_for_window(window_id)
+                .filter(|_| self.shows_pcb_layer_strip());
+            let strip = shown.and_then(|board| {
                 let undocked = self.undocked_pcb_path(window_id);
                 let path = undocked.clone().or_else(|| self.active_tab_path())?;
                 let view = self.pcb_layer_view(&path);
@@ -569,6 +557,11 @@ impl Signex {
                         view: &view,
                         window: undocked.map(|_| window_id),
                         prefs: &self.ui_state.layer_strip,
+                        set_menu_open: self
+                            .interaction_state
+                            .pcb_layer_set_menu
+                            .as_ref()
+                            .is_some_and(|m| self.overlay_belongs_to(m.window, window_id)),
                     },
                     &self.ui_state.i18n,
                     &self.document_state.panel_ctx.tokens,
@@ -622,36 +615,31 @@ impl Signex {
         } else {
             // "Nothing loaded" gets the actionable start screen; "project
             // loaded, no document picked" keeps its own quieter hint.
-            use crate::start_screen::{self, Surface};
+            use crate::start_screen::{self, HintFacts, StartScreenData, Surface};
             let tokens = &self.document_state.panel_ctx.tokens;
+            let i18n = &self.ui_state.i18n;
             match Surface::select(self.document_state.active_project.is_some()) {
-                Surface::ProjectHint => start_screen::hint_view(tokens),
-                Surface::Start => {
-                    let open_shortcut = self.keymap_shortcut_label("open_document");
-                    let libraries: Vec<start_screen::LoadedLibrary> = self
-                        .library
-                        .open_libraries
-                        .iter()
-                        .map(|lib| {
-                            (
-                                lib.root
-                                    .file_name()
-                                    .map(|n| n.to_string_lossy().into_owned())
-                                    .unwrap_or_default(),
-                                lib.cached_components.len(),
-                            )
-                        })
-                        .collect();
-                    start_screen::view(
-                        tokens,
-                        &self.ui_state.i18n,
-                        &open_shortcut,
-                        self.ui_state.recent_projects.entries(),
-                        &self.ui_state.pinned_projects,
-                        &libraries,
-                        self.interaction_state.start_section,
-                    )
-                }
+                Surface::ProjectHint => start_screen::hint_view(
+                    tokens,
+                    i18n,
+                    HintFacts::of(self.document_state.active_loaded_project()),
+                ),
+                Surface::Start => start_screen::view(
+                    tokens,
+                    i18n,
+                    StartScreenData {
+                        open_shortcut: self.keymap_shortcut_label("open_document"),
+                        shortcuts_shortcut: self
+                            .keymap_shortcut_label("show_current_command_hotkeys"),
+                        recent: &self.ui_state.recent_projects,
+                        pinned: &self.ui_state.pinned_projects,
+                        libraries: start_screen::loaded_libraries(&self.library),
+                        thumbnails: &self.ui_state.project_thumbnails,
+                        state: &self.ui_state.start_screen,
+                        // `update` stamps it whenever the screen shows.
+                        now: self.ui_state.start_screen.now.unwrap_or_default(),
+                    },
+                ),
             }
         }
     }
@@ -726,6 +714,8 @@ impl Signex {
     }
 }
 
+#[cfg(test)]
+mod active_bar_dismiss_tests;
 #[cfg(test)]
 mod canvas_wheel_tests;
 #[cfg(test)]

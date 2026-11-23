@@ -86,6 +86,9 @@ pub enum LibraryMessage {
     /// banner. Closes the dialog and reopens the New Library save-as
     /// picker for the same project; nothing is written.
     LibraryCreateOptionsRelocateRequested,
+    /// New Library dialog — "Open existing library" on the banner shown when
+    /// a library is already at the path. Closes the dialog and opens it.
+    LibraryCreateOptionsOpenExistingRequested,
     /// F34 — Save-As dialog confirmed for a new symbol library file
     /// (`.snxsym`). Writes an empty `SymbolFile` to the picked path,
     /// refreshes the cached library file enumeration so the project
@@ -571,6 +574,13 @@ pub enum LibraryMessage {
     /// The divider above the details section was pressed; the pointer now
     /// drives the list height until release.
     ComponentsPanelSplitDragStarted,
+    /// The pointer entered (`true`) or left the divider above the details.
+    ComponentsPanelSplitHovered(bool),
+    /// A zoom, pan or fit gesture landed on one preview of the details card.
+    ComponentsPanelPreviewMoved(
+        crate::panels::components_panel::details::preview_view::PreviewPane,
+        crate::panels::components_panel::details::preview_view::PreviewGesture,
+    ),
     /// The off-thread read of a row's details finished. A result for a row
     /// that is no longer the selected one is dropped.
     ComponentsPanelDetailsLoaded {
@@ -660,6 +670,22 @@ pub enum LibraryMessage {
     ),
     /// The empty Components panel's "Open Project…" was pressed (#2535).
     ComponentsPanelOpenProjectClicked,
+    /// The off-thread read behind a Library Browser preview pane finished
+    /// (mockup row 118). A result for a row that is no longer selected, or
+    /// from an older read, is dropped.
+    BrowserPreviewLoaded {
+        key: super::super::state::ComponentsPanelRowKey,
+        /// Which read of the row this is; an older one is dropped.
+        generation: u64,
+        result: Result<
+            Box<crate::panels::components_panel::details::ComponentDetails>,
+            super::super::state::BrowserPreviewError,
+        >,
+    },
+    /// The preview pane's ⋯ button was pressed: its menu opened or closed.
+    BrowserMoreMenuToggled {
+        library_path: PathBuf,
+    },
 }
 
 /// The drawing a placed symbol is switched to, read off-thread: the

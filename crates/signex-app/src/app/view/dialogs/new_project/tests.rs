@@ -8,6 +8,43 @@ use super::cards::{SELECTED_BORDER, card_style};
 use super::preview::{Layer, stack_rows};
 use crate::styles::{ti, tokens};
 
+/// Mockup rows 21 and 22: the column and both larger views build, and the
+/// drawing's Expand opens and Esc's message closes them.
+#[test]
+fn the_dialog_renders_its_previews_and_larger_views() {
+    use crate::app::new_project::{DialogPreview, NewProjectMsg, SetupPreviewMsg};
+    use crate::app::{Message, Signex};
+    let (mut app, _task) = Signex::new();
+    let _ = app.open_new_project_dialog();
+    let _ = app.view_new_project_dialog();
+    for view in [DialogPreview::BoardRules, DialogPreview::Sheet] {
+        let open = NewProjectMsg::Preview(SetupPreviewMsg::Expanded(Some(view)));
+        let _ = app.update(Message::from(open));
+        let state = app.ui_state.new_project.as_ref().unwrap();
+        assert_eq!(state.preview.expanded, Some(view));
+        let _ = app.view_new_project_dialog();
+        let close = NewProjectMsg::Preview(SetupPreviewMsg::Expanded(None));
+        let _ = app.update(Message::from(close));
+    }
+    let state = app.ui_state.new_project.as_ref().unwrap();
+    assert_eq!(state.preview.expanded, None);
+}
+
+/// Mockup row 22: only a board of a project with a saved setup says it
+/// starts from that setup.
+#[test]
+fn the_new_pcb_intro_follows_whether_the_project_saved_a_setup() {
+    use super::document_setup::intro_id;
+    use crate::app::SetupKind;
+    use signex_i18n::ids;
+    assert_eq!(intro_id(SetupKind::Pcb, true), ids::SETUP_PCB_INTRO);
+    assert_eq!(
+        intro_id(SetupKind::Pcb, false),
+        ids::SETUP_PCB_INTRO_NO_SETUP
+    );
+    assert_eq!(intro_id(SetupKind::Sheet, false), ids::SETUP_SHEET_INTRO);
+}
+
 #[test]
 fn the_selected_card_has_the_accent_border_and_the_soft_fill() {
     for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
@@ -106,6 +143,18 @@ fn the_summary_lines_name_the_tier_layers_and_rules() {
     );
 }
 
+/// The size picker names the size alone: Orientation carries the direction,
+/// so a portrait sheet never reads "landscape" (mockup rows 21, 22, 31, 37).
+#[test]
+fn the_size_picker_names_the_size_alone() {
+    let options = super::customize::size_options();
+    assert_eq!(options.len(), signex_types::project::SHEET_SIZES.len());
+    for (value, label) in options {
+        assert_eq!(value, label);
+        assert!(!label.contains("landscape"), "{label}");
+    }
+}
+
 #[test]
 fn the_stack_up_has_a_copper_layer_per_count_and_a_dielectric_between() {
     for copper in 1..=32u8 {
@@ -156,6 +205,28 @@ fn the_dialog_builds_closed_open_and_with_many_layers() {
     let _ = app.view_new_project_dialog();
     app.ui_state.new_project.as_mut().unwrap().step_layers(30);
     let _ = app.view_new_project_dialog();
+}
+
+/// Mockup row 22: a card's blurb wraps inside a narrow card instead of
+/// running past its edge.
+#[test]
+fn a_profile_card_blurb_wraps_inside_a_narrow_card() {
+    let (mut app, _t) = crate::app::Signex::new();
+    let _ = app.update(crate::app::Message::Menu(
+        crate::menu_bar::MenuMessage::NewProject,
+    ));
+    let state = app.ui_state.new_project.as_ref().expect("dialog open");
+    let i18n = signex_i18n::I18n::en_us_ref();
+    let body = crate::styles::TypeScale::DEFAULT.body;
+    const ROOM: f32 = 460.0;
+    for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let t = theme_tokens(id);
+        let grid = super::cards::tier_grid(state, &[], i18n, &t);
+        let texts = crate::layout_probe::lay_out_texts(grid, iced::Size::new(ROOM, 800.0));
+        let blurb = crate::layout_probe::find(&texts, "Fine-pitch BGAs, laser microvias.").bounds;
+        assert!(blurb.height >= 2.0 * body, "{id:?}: {blurb:?}");
+        assert!(blurb.x + blurb.width <= ROOM / 2.0, "{id:?}: {blurb:?}");
+    }
 }
 
 /// A rendered message without Fluent's bidi isolation marks.

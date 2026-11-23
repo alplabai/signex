@@ -15,7 +15,7 @@ use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Background, Element, Length, Theme, Widget as _};
 use signex_i18n::{Localized, ids, t};
 use signex_net::NetAnchor;
-use signex_widgets::segmented::{SegmentedStyle, segmented};
+use signex_widgets::segmented::segmented;
 use signex_widgets::{text, text_input};
 
 pub(crate) use model::preview;
@@ -25,7 +25,7 @@ pub use model::{
 };
 
 use super::{EmptyStateAction, PanelContext, PanelMsg, empty_state_card_with_actions};
-use crate::styles::{Spacing, TypeScale, ti, tokens::resolve};
+use crate::styles::{Spacing, TypeScale, tokens::resolve};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -163,15 +163,7 @@ fn tab_strip<'a>(ctx: &'a PanelContext, view: &'a NetInspectorView) -> Element<'
     let i18n = &*ctx.i18n;
     let tokens = &ctx.tokens;
     let r = resolve(tokens);
-    let style = SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        ti(tokens.text),
-        TS.body,
-    )
-    .fill_width(true);
+    let style = r.segmented(TS.body).fill_width(true);
     let by_net: signex_widgets::Label<'a> =
         t!(i18n, ids::PANELS_NET_INSPECTOR_BY_NET, "count" => view.total).into();
     let by_component: signex_widgets::Label<'a> =

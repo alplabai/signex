@@ -143,6 +143,21 @@ cmd-tile-windows-vertically = Tile windows side by side
 cmd-menu-tile-windows-vertically = Tile Vertically
 cmd-untile-documents = Untile documents
 cmd-menu-untile-documents = Untile
+# Workspace layouts (mockup row 166): View ▸ Window ▸ Layouts.
+cmd-apply-layout-schematic = Workspace layout: Schematic
+cmd-menu-apply-layout-schematic = Schematic
+cmd-apply-layout-board = Workspace layout: Layout
+cmd-menu-apply-layout-board = Layout
+cmd-apply-layout-review = Workspace layout: Review
+cmd-menu-apply-layout-review = Review
+cmd-apply-layout-notebook = Workspace layout: Notebook
+cmd-menu-apply-layout-notebook = Notebook
+cmd-save-workspace-layout = Save the panel arrangement as a workspace layout
+cmd-menu-save-workspace-layout = Save Layout…
+cmd-manage-workspace-layouts = Manage workspace layouts
+cmd-menu-manage-workspace-layouts = Manage Layouts…
+cmd-reset-workspace-layout = Reset the edited built-in workspace layout
+cmd-menu-reset-workspace-layout = Reset Layout
 cmd-toggle-cross-select-mode = Toggle Cross Select Mode
 cmd-menu-toggle-cross-select-mode = Cross Select Mode
 cmd-toggle-electrical-grid = Toggle electrical grid
@@ -289,6 +304,8 @@ cmd-menu-change-component = Change Component…
 cmd-open-project-options = Open Project Options for the active project
 cmd-menu-open-project-options = Project Options...
 cmd-update-pcb-from-schematic = Update PCB from schematic
+cmd-compare-board-with-schematic = Compare board with schematic
+cmd-menu-compare-board-with-schematic = Compare Board with Schematic…
 cmd-back-annotate-schematics = Back-annotate the board's designators and values to the schematic
 cmd-menu-back-annotate-schematics = Back Annotate Schematics...
 cmd-open-selection-filter = Open the selection filter of the sheet
@@ -372,14 +389,15 @@ cmd-place-port = Place port
 cmd-menu-place-port = Port
 cmd-place-off-sheet-connector = Place off sheet connector
 cmd-menu-place-off-sheet-connector = Off Sheet Connector
-cmd-place-parameter-set = Place parameter set
-cmd-menu-place-parameter-set = Parameter Set
+cmd-place-parameter-set = Place net parameters
+# Noun: a directive flag on one wire that sets its net's class and rules.
+cmd-menu-place-parameter-set = Net Parameters
 cmd-place-diff-pair = Place diff pair
 cmd-menu-place-diff-pair = Differential Pair
-cmd-place-blanket = Place blanket
+cmd-place-blanket = Place net blanket
 # Noun: a directive that covers an area of the sheet.
-cmd-menu-place-blanket = Blanket
-cmd-edit-blanket = Edit blanket parameters
+cmd-menu-place-blanket = Net Blanket
+cmd-edit-blanket = Edit net blanket parameters
 cmd-edit-no-erc-rules = Edit No ERC rules
 cmd-place-text-string = Place text string
 cmd-menu-place-text-string = Text String
@@ -645,6 +663,11 @@ cmd-save-board-reuse-block = Save the selected placed and routed parts as a reus
 cmd-menu-save-board-reuse-block = Save as Reuse Block
 cmd-place-board-reuse-block = Place a reuse block on the channel of the selected component
 cmd-menu-place-board-reuse-block = Place Reuse Block
+# Rooms (#2457).
+cmd-place-board-room = Draw a room by two corners: an area for the parts of one sheet
+cmd-menu-place-board-room = Room
+cmd-create-rooms-from-sheets = Make a room for each sheet of the project and move its parts into it
+cmd-menu-create-rooms-from-sheets = Create Rooms from Sheets...
 cmd-footprint-mode-pads = Switch footprint editor to Pads mode
 cmd-footprint-mode-sketch = Switch footprint editor to Sketch mode
 cmd-footprint-mode-view-3d = Switch footprint editor to 3D View mode
@@ -674,3 +697,38 @@ cmd-category-uncategorized = Uncategorized
 
 # The placeholder label of a command row that has none (never shown for a catalog command).
 cmd-unnamed = Unnamed command
+
+## Bezier, dimension and table drawings (#1267, #1300).
+cmd-place-table = Place table
+cmd-menu-place-table = Table
+cmd-place-linear-dimension = Place linear dimension
+cmd-menu-place-linear-dimension = Linear
+cmd-place-aligned-dimension = Place aligned dimension
+cmd-menu-place-aligned-dimension = Aligned
+cmd-add-table-of-contents = Add table of contents sheet
+cmd-menu-add-table-of-contents = Add Table of Contents Sheet
+
+## Multi-channel sheets and the Compiled Design panel (#1279, #1308).
+
+cmd-compile-project = Compile the project
+cmd-menu-compile-project = Compile Project
+cmd-open-compiled-design = Open Compiled Design panel
+cmd-menu-open-compiled-design = Compiled Design
+
+## Signal harnesses (#1280).
+
+cmd-open-harness-definitions = Open the harness definitions
+
+## Differential pair classes (#1282).
+cmd-open-diff-pair-classes = Open the project's differential pair classes
+cmd-menu-open-diff-pair-classes = Differential Pair Classes…
+
+## Named unions (mockup row 158).
+cmd-create-union = Create a union from the selection
+cmd-menu-create-union = Create Union…
+cmd-add-to-union = Add the selection to the selected union
+cmd-menu-add-to-union = Add Selection to Union
+cmd-remove-from-union = Remove the selection from its union
+cmd-menu-remove-from-union = Remove Selection from Union
+cmd-break-union = Break the selected union
+cmd-menu-break-union = Break Union

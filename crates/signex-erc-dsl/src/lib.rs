@@ -110,6 +110,7 @@ mod tests {
             }],
             children: HashMap::new(),
             key: None,
+            harness: Default::default(),
         }
     }
 

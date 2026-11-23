@@ -74,7 +74,9 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
         fab_outputs: None,
+        router_tool_diameter: None,
         requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
@@ -95,14 +97,16 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
 
 /// Open the rename modal targeting a project root.
 fn arm_project_rename(app: &mut Signex, target: &Path, new_stem: &str) {
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0],
         buffer: new_stem.to_string(),
         error: None,
         is_project_rename: true,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
 }
 
 /// Open the remove modal for a tree leaf.
@@ -119,6 +123,7 @@ fn arm_remove_dialog(app: &mut Signex, target: &Path) {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
 }
 
@@ -848,7 +853,9 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
         fab_outputs: None,
+        router_tool_diameter: None,
         requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
@@ -1593,7 +1600,9 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                schematic_design: Default::default(),
                 fab_outputs: None,
+                router_tool_diameter: None,
                 requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),

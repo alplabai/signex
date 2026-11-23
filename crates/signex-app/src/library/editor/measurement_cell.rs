@@ -82,7 +82,20 @@ pub(super) fn view<'a>(
 
     let input_slot = slot.cloned();
     let (input_address, input_name) = (address.clone(), name.to_string());
+    // A pending edit that does not parse gets the error outline:
+    // the header pill focuses this field by its id.
+    let refused = state.params_error.contains_key(name);
+    let error_c = theme_ext::error_color(tokens);
     let field = text_input(raw(""), buf)
+        .id(super::unparsed_field_id(address, name))
+        .style(move |theme: &iced::Theme, status| {
+            let mut style = iced::widget::text_input::default(theme, status);
+            if refused {
+                style.border.color = error_c;
+                style.border.width = 1.0;
+            }
+            style
+        })
         .on_input(move |s| {
             super::params::editor_event(
                 &input_address,

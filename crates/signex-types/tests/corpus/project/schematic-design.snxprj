@@ -1,0 +1,79 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "schematic-design",
+  "pcb_file": null,
+  "schematic_design": {
+    "channel_naming": {
+      "designator_format": "${Designator}_${Channel}",
+      "net_format": "${Channel}_${Net}"
+    },
+    "diff_pair_classes": [
+      {
+        "gap_mm": 0.175,
+        "impedance_ohm": 90.0,
+        "impedance_tolerance_pct": 10.0,
+        "name": "USB",
+        "width_mm": 0.265
+      },
+      {
+        "impedance_ohm": 100.0,
+        "impedance_tolerance_pct": 10.0,
+        "name": "LVDS_100R",
+        "pair_by_suffix": false
+      }
+    ],
+    "harness_definitions": [
+      {
+        "description": "Serial flash bus",
+        "entries": [
+          {
+            "name": "SCK"
+          },
+          {
+            "name": "MOSI"
+          },
+          {
+            "name": "MISO"
+          },
+          {
+            "name": "CS"
+          }
+        ],
+        "name": "SPI_BUS"
+      },
+      {
+        "entries": [
+          {
+            "name": "TX"
+          },
+          {
+            "name": "RX"
+          }
+        ],
+        "name": "UART"
+      },
+      {
+        "entries": [
+          {
+            "name": "SWDIO"
+          },
+          {
+            "name": "SWCLK"
+          },
+          {
+            "harness": "UART",
+            "name": "UART"
+          }
+        ],
+        "name": "DEBUG"
+      }
+    ]
+  },
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

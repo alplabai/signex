@@ -15,13 +15,13 @@
 //! route [`IllustrationMsg`] into it, emit
 //! [`IllustrationMsg::FieldHovered`] / [`IllustrationMsg::FieldLeft`] from
 //! the field rows, and ask [`IllustrationHover::is_field_highlighted`] when
-//! drawing a row. Hovering a part reports its first field; hovering a field
-//! highlights every part linked to it.
+//! drawing a row. Hovering a field highlights every part linked to it; the
+//! drawing itself does not follow the pointer.
 
+mod callout_layout;
 mod draw;
 mod field;
 mod geometry;
-mod hit;
 mod hover;
 mod illustration;
 mod metrics;
@@ -31,7 +31,7 @@ mod program;
 mod style;
 
 pub use field::FieldId;
-pub use hover::{HoverSource, IllustrationHover, IllustrationMsg, hover_transition};
+pub use hover::{IllustrationHover, IllustrationMsg};
 pub use illustration::{DEFAULT_HEIGHT_EM, Illustration, Part};
 pub use metrics::Metrics;
 pub use palette::Palette;

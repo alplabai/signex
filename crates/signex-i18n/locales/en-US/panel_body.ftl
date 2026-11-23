@@ -39,6 +39,43 @@ panels-history-file-deleted = D
 panels-history-show-differences = Show differences…
 panels-history-show-on-board = Show on board / sheet
 panels-history-more = More: new branch here, tag, copy SHA
+panels-history-new-branch-here = New branch here…
+panels-history-tag = Tag…
+panels-history-copy-sha = Copy SHA
+panels-history-branch-name = Branch name
+panels-history-tag-name = Tag name
+panels-history-create = Create
+# Panel header: how many commits are listed and how many branches hold work
+# the current branch lacks. $count is a whole number.
+panels-history-commits-one = { $count } commit
+panels-history-commits-many = { $count } commits
+panels-history-branches-ahead-one = { $count } branch ahead
+panels-history-branches-ahead-many = { $count } branches ahead
+# $commits and $branches are the two texts above.
+panels-history-counts = { $commits } · { $branches }
+panels-history-refresh = Refresh history
+# Filter chips and search.
+panels-history-all-branches = All branches
+panels-history-this-file = This file only
+panels-history-search = Search commits
+panels-history-search-placeholder = Subject, author or SHA
+panels-history-no-matches = No commits match these filters.
+# The branch chip when HEAD is on a commit and not on a branch.
+panels-history-detached = detached
+# Branch switcher.
+panels-history-branch-switch = Switch branch
+panels-history-branch-find = Find or create a branch
+panels-history-branch-local = Local branches
+panels-history-branch-remote = Remote
+panels-history-branch-current = current
+panels-history-branch-up-to-date = up to date
+panels-history-branch-ahead = { $count } ahead
+panels-history-branch-behind = { $count } behind
+panels-history-branch-ahead-behind = { $ahead } ahead · { $behind } behind
+# Error card when a switch was refused; nothing on disk changed.
+panels-history-switch-failed = Branch not switched
+# Error card when a new branch or tag could not be created.
+panels-history-ref-failed = Branch or tag not created
 
 ## ERC panel: per-finding waivers
 panels-erc-waive = Waive
@@ -49,7 +86,7 @@ panels-erc-waiver-status-one = waived
 panels-erc-waiver-status-many = waives { $count } findings
 panels-erc-waiver-status-lapsed = LAPSED: an involved object changed
 panels-erc-waiver-status-unmatched = matches no finding
-panels-erc-waiver-status-incomplete = ignored: no reason or author
+panels-erc-waiver-status-incomplete = ignored: no reason
 
 ## Properties of a multi-selection
 panels-multi-title = Multi-Selection
@@ -78,10 +115,6 @@ panels-projects-group-bom = Bill of Materials
 panels-projects-group-outputs = Export Jobs
 panels-projects-group-libraries = Libraries
 panels-projects-group-settings = Settings
-# A tree row whose file is gone from disk. $name is the file name.
-panels-projects-file-missing = { $name }  (missing)
-# A tree row whose sheet could not be read. $name is the file name.
-panels-projects-file-unreadable = { $name }  (unreadable)
 panels-navigator-sheets = Sheets
 panels-navigator-no-project = No project
 # Navigator rows of a sheet that is not a plain page. $name is the sheet's name.

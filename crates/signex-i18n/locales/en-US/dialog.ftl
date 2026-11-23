@@ -1,8 +1,9 @@
 # Dialogs.
 
-# Autosave recovery card: how long ago the recovered copy was written.
-# $age is an already-worded duration, such as "5 minutes ago".
-dialog-autosave-recovery-autosaved-age = autosaved { $age }
+# Autosave recovery prompt, the recovery copy's row: how long ago the copy
+# was written and when. $age is an already-worded duration, such as
+# "5 minutes ago"; $time is a clock time, such as "14:26" or "Nov 16 17:40".
+dialog-autosave-recovery-autosaved-age = autosaved { $age } · { $time }
 
 ## Tools ▸ Assign Footprints (#2248): the project's placed parts and the
 ## footprints their library rows offer.
@@ -142,17 +143,50 @@ dialog-annotate-reprefix-note = Re-prefix to standard uses { $standard } (Projec
 dialog-annotate-running = Running…
 dialog-version-control-track-heading = Track in repository
 dialog-version-control-lfs = Track binary 3D models via Git LFS
-dialog-version-control-lfs-help = Routes `*.step / *.stp / *.wrl / *.iges` through Git LFS. Requires `git lfs` locally.
+dialog-version-control-lfs-help = Routes *.step / *.stp / *.wrl / *.iges through Git LFS. Requires git lfs locally.
 dialog-version-control-scanning = Reading the project folder…
 dialog-grid-step = Step
-dialog-grid-step-unit = mm, both axes
-dialog-grid-fine = Fine
-dialog-grid-coarse = Coarse
+dialog-grid-step-unit = mm
+dialog-grid-fine = Fine display
+dialog-grid-coarse = Coarse display
 dialog-grid-lines = Lines
 dialog-grid-dots = Dots
 dialog-grid-hidden = Hidden
 dialog-grid-multiplier = Multiplier
-dialog-grid-help = The step applies to both axes (one grid step per footprint editor). Display: Lines / Dots / Hidden. Multiplier sets the coarse-grid stride (5× / 10× are typical Altium defaults).
+# Grid Properties (mockup row 142): the note beside the title, the step's scope and the footer.
+dialog-grid-note = Cartesian · mm
+dialog-grid-both-axes = both axes
+dialog-grid-footer = One grid per footprint editor
+# One multiplier segment. $multiplier is 1, 2, 5 or 10.
+dialog-grid-multiplier-option = { $multiplier }
+# The coarse grid spacing, step × multiplier. $value is the number in millimetres.
+dialog-grid-coarse-value = coarse = { $value }
+# Notes on the grid preview.
+dialog-grid-too-dense = Fine grid too dense to draw at this size
+dialog-grid-no-step = No grid: the step is not a number above zero
+dialog-grid-label-refused = Not a length: type a number in mm, or press Esc
+# Labels on the grid preview, before the value. $multiplier is 1, 2, 5 or 10.
+dialog-grid-preview-step = step
+dialog-grid-preview-coarse = { $multiplier }× =
+# Tooltips of the preview's expand button.
+dialog-grid-expand = Expand preview
+dialog-grid-collapse = Collapse preview
+# Move Selection By (footprint editor): the offset along X and Y, in millimetres.
+dialog-move-by-title = Move Selection By
+dialog-move-by-x = X (mm)
+dialog-move-by-y = Y (mm)
+# Align Selection (footprint editor): one choice per axis. "Space" makes the
+# gaps between the centres equal; "None" leaves that axis alone.
+dialog-align-title = Align Selection
+dialog-align-horizontal = Horizontal
+dialog-align-vertical = Vertical
+dialog-align-left = Left
+dialog-align-center = Center
+dialog-align-right = Right
+dialog-align-top = Top
+dialog-align-bottom = Bottom
+dialog-align-space = Space
+dialog-align-none = None
 dialog-selection-filter-help = Only Pads filters the canvas today. The other kinds are stored for later.
 dialog-selection-filter-pads = Pads
 dialog-selection-filter-tracks = Tracks
@@ -196,8 +230,9 @@ dialog-autosave-recovery-restore = Restore
 dialog-autosave-recovery-later = Decide later
 # Closing a project or quitting with unsaved documents.
 dialog-unsaved-discard-all = Discard All
-# Create Sheet: the file already exists; open it instead.
-dialog-create-child-sheet-open-existing = Open it
+# Create Sheet: the file already exists; point the sheet symbol at it and open
+# it instead of creating one.
+dialog-create-child-sheet-open-existing = Use existing file
 dialog-create-child-sheet-browse = Browse...
 dialog-create-child-sheet-later = Later
 dialog-erc-store-rules = Store ERC rules in this project
@@ -224,12 +259,29 @@ dialog-parameter-manager-done = Done
 # The file changed or vanished on disk since it was opened.
 dialog-disk-conflict-reload = Reload from disk
 dialog-disk-conflict-recreate = Re-create
+# Writes the open document to a new file and leaves the changed one as it is.
+dialog-disk-conflict-save-as = Save As…
 dialog-netlist-export-anyway = Export anyway (incomplete)
 dialog-print-preview-export-pdf = Export PDF
 # Footer of Print Preview when no file is ticked for export.
 dialog-print-preview-no-files = No files selected for export
 dialog-netlist-incomplete-title = Netlist is incomplete
-dialog-netlist-incomplete-body = The project netlist does not cover the whole project. Exporting it would produce a file missing components and carrying the wrong net names wherever nets merge through a page that is not in it — and a PCB import cannot tell. You can export it anyway: the file stays a valid netlist, and the omitted pages are reported in the Messages panel.
+# Headline of the netlist-incomplete prompt. $count is how many pages are
+# left out, a whole number.
+dialog-netlist-incomplete-count =
+    { $count ->
+        [one] { $count } page is not in the netlist
+       *[other] { $count } pages are not in the netlist
+    }
+dialog-netlist-incomplete-detail = The file would miss their components, and nets that merge through them would carry the wrong names. A PCB import cannot tell.
+dialog-netlist-incomplete-anyway-note = If you export anyway, the file is still a valid netlist and the omitted pages are reported in the Messages panel.
+# Column headings of the omitted-page list.
+dialog-netlist-omitted-page = Omitted page
+dialog-netlist-omitted-why = Why
+# Why a page is left out: no file at its path.
+dialog-netlist-omitted-file-missing = file missing
+# $symbol is the name of the sheet symbol that places the missing file.
+dialog-netlist-omitted-placed-by = file missing · placed by { $symbol }
 
 ## Shared by dialog footer buttons (#2225): one id per common action, so
 ## every dialog's Cancel, OK, Save … translates the same way.
@@ -247,6 +299,8 @@ dialog-button-copy = Copy
 dialog-button-undo = Undo
 dialog-button-redo = Redo
 dialog-button-place = Place
+dialog-button-move = Move
+dialog-button-align = Align
 
 ## Create Sheet (#1275): the file of a sheet symbol that has none yet.
 dialog-create-child-sheet-title = Create Sheet
@@ -260,8 +314,19 @@ dialog-create-child-sheet-relative-to-project = Relative to the project folder
 dialog-create-child-sheet-linked-folder = The sheet must be inside the project folder (a linked folder leaves it)
 # $symbol is the name of the other sheet symbol.
 dialog-create-child-sheet-file-placed = A file with that name already exists, and sheet symbol '{ $symbol }' already points at it. A sheet file is placed by one sheet symbol; pick another name.
-dialog-create-child-sheet-file-exists = A file with that name already exists. Open it, or pick another name.
+dialog-create-child-sheet-file-exists = A file with that name already exists. Use it, or pick another name.
 dialog-create-child-sheet-symbol-gone = The sheet symbol is no longer there
+# Label of the file path field.
+dialog-create-child-sheet-file-label = File
+dialog-create-child-sheet-file-note = The sheet symbol's File field is set to this path when the file is created.
+# Footer hint beside the Later button.
+dialog-create-child-sheet-later-hint = Later keeps the symbol without a file
+# The existing file is already a page of the project. $file is its file name,
+# $page its sheet number (a whole number), $name the sheet symbol's name.
+dialog-create-child-sheet-reuse-page = { $file } is already sheet { $page }; using it makes { $name } a copy of it.
+# The existing file is already placed by a sheet symbol of another sheet.
+# $file is its file name, $name the sheet symbol's name.
+dialog-create-child-sheet-reuse = { $file } is already a sheet of this project; using it makes { $name } a copy of it.
 ## Native title bar of a dialog shown in its own window: the name the OS
 ## window switcher shows.
 dialog-title-annotate = Annotate
@@ -307,6 +372,129 @@ dialog-title-library-recovery = Library Recovery
 dialog-title-net-color-custom = Custom Net Colour
 # $path is the parent sheet's file.
 dialog-create-child-sheet-not-focused = The sheet's File field was not updated: { $path } could not be focused
+
+## Design ▸ Differential Pair Classes… (#1282).
+
+dialog-dpc-title = Differential Pair Classes
+# $project is the project name; $classes and $pairs are whole numbers.
+dialog-dpc-subtitle = { $project } · { $classes ->
+        [one] { $classes } class
+       *[other] { $classes } classes
+    } · { $pairs ->
+        [one] { $pairs } pair
+       *[other] { $pairs } pairs
+    }
+# Under a class name: how many pairs use it. $count is a whole number.
+dialog-dpc-pairs = { $count ->
+        [one] { $count } pair
+       *[other] { $count } pairs
+    }
+# The button that opens a class row's menu.
+dialog-dpc-menu = ⋯
+dialog-dpc-rename = Rename
+dialog-dpc-duplicate = Duplicate
+dialog-dpc-delete = Delete
+dialog-dpc-new-class = New class
+dialog-dpc-pairs-from = Pairs come from Differential Pair directives on the schematic, or from Create Pair from Nets in the PCB panel.
+dialog-dpc-class = Class
+dialog-dpc-name = Name
+dialog-dpc-impedance = Impedance
+dialog-dpc-width-gap = Width / Gap
+dialog-dpc-on-top = on Top, from the stack
+dialog-dpc-max-skew = Max skew
+dialog-dpc-max-uncoupled = Max uncoupled
+# A limit the Rules tab owns and no rule sets yet.
+dialog-dpc-not-set = —
+dialog-dpc-edit-in-rules = Edit in Rules ▸ High Speed
+dialog-dpc-unit-mm = mm
+dialog-dpc-unit-ohm = Ω
+dialog-dpc-unit-pct = %
+dialog-dpc-plus-minus = ±
+dialog-dpc-members = Members
+dialog-dpc-col-pair = Pair
+dialog-dpc-col-p = P net
+dialog-dpc-col-n = N net
+dialog-dpc-col-source = Source
+# Where a pair comes from. $sheet is the sheet file.
+dialog-dpc-source-directive = directive · { $sheet }
+dialog-dpc-no-members = No pair on the open sheets uses this class.
+dialog-dpc-pairing = Pairing
+dialog-dpc-pair-by-suffix = Pair nets by suffix _P/_N, DP/DN, +/-
+dialog-dpc-no-class = The project has no differential pair class. Add one with New class.
+dialog-dpc-footer = Shown in PCB panel ▸ Differential Pairs mode.
+dialog-dpc-cancel = Cancel
+dialog-dpc-ok = OK
+dialog-dpc-blank-name = Every class needs a name.
+dialog-dpc-duplicate-name = Two classes have the same name.
+# Callouts of the preview. $value is a length in mm, or —.
+dialog-dpc-width-label = Width { $value } mm
+dialog-dpc-gap-label = Gap { $value } mm
+dialog-dpc-zdiff-label = Zdiff { $ohm } Ω ± { $pct } %
+dialog-dpc-p-net = P net
+dialog-dpc-n-net = N net
+dialog-dpc-no-project = Differential Pair Classes: open a project first.
+dialog-dpc-project-closed = Differential Pair Classes: the project was closed; nothing was applied.
+# The banner, and the Messages line of a refused edit, while the project's schematic_design section is unreadable.
+dialog-schematic-design-unreadable = This project's channel naming, harness definitions and differential pair classes cannot be read by this version of Signex. They stay unchanged in the project file and cannot be edited here.
+# Why a class's name and Delete are greyed. $count is a whole number.
+dialog-dpc-locked-by-pairs = { $count ->
+        [one] { $count } pair uses this class: it keeps its name and cannot be deleted.
+       *[other] { $count } pairs use this class: it keeps its name and cannot be deleted.
+    }
+dialog-dpc-locked-by-closed-sheets = Some sheets of the project are not open, so their pairs cannot be counted. Open every sheet to rename or delete a class.
+# The name a new class starts with (a net-class style name, not a sentence).
+dialog-dpc-new-class-name = DIFF
+
+## Smart Paste (mockup row 155).
+
+# The Smart Paste dialog (mockup row 155).
+dialog-smart-paste-title = Smart Paste
+# $parts lists the copied designators; $wires and $labels count the rest.
+dialog-smart-paste-subtitle = Clipboard: { $parts } · { $wires ->
+    [one] 1 wire
+   *[other] { $wires } wires
+} · { $labels ->
+    [one] 1 net label
+   *[other] { $labels } net labels
+}
+dialog-smart-paste-close = ×
+dialog-smart-paste-place = Place
+dialog-smart-paste-once = Once, with offset
+dialog-smart-paste-array = Array
+dialog-smart-paste-offset = Offset X / Y
+dialog-smart-paste-copies = Copies
+dialog-smart-paste-step = Step X / Y
+dialog-smart-paste-mm = mm
+dialog-smart-paste-designators = Designators
+# $mapping is "R4 → R6, R5 → R7" (one copy) or "R4 → R6, R8; R5 → R7, R9" (several).
+dialog-smart-paste-next-free = Next free ({ $mapping })
+dialog-smart-paste-next-free-plain = Next free
+dialog-smart-paste-keep-designators = Keep unless taken
+dialog-smart-paste-net-names = Net names
+dialog-smart-paste-keep-nets = Keep (pasted nets join the originals)
+dialog-smart-paste-rewrite-nets = Rewrite with a pattern
+dialog-smart-paste-pattern = Pattern
+dialog-smart-paste-start = Start n at
+dialog-smart-paste-net = Net
+dialog-smart-paste-after = After paste
+dialog-smart-paste-kept-power = kept · power net
+# $net is the copied net's name.
+dialog-smart-paste-joins = { $net } (joins original)
+# $names lists the rewritten net names that already exist.
+dialog-smart-paste-names-taken = Smart Paste stopped: { $names } already exists, so the nets would join. Change the pattern or Start n at.
+# $sheets lists the project sheets that could not be read.
+dialog-smart-paste-sheet-unread = Smart Paste stopped: { $sheets } could not be read, so its net names are unknown and a rewritten net could join one. Fix the sheet, or keep the net names.
+dialog-smart-paste-preview = Preview
+dialog-smart-paste-copy-count = { $count ->
+    [one] 1 copy
+   *[other] { $count } copies
+}
+dialog-smart-paste-drag-hint = Ghosts show where the copies land; drag the first copy to set the offset (1.27 mm grid).
+dialog-smart-paste-footer = Paste places at the cursor; Esc cancels.
+dialog-smart-paste-paste = Paste
+dialog-smart-paste-paste-copies = Paste { $count } copies
+dialog-smart-paste-nothing-copied = Smart Paste: nothing to paste yet; copy a selection first.
+dialog-smart-paste-sheet-changed = Smart Paste closed: the active sheet changed.
 
 ## ERC dialog (#2413): where the rules come from, and the Profile menu
 # Pill under the title: the dialog edits the rules stored in the project.

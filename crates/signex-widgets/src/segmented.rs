@@ -3,10 +3,11 @@
 //! modes, a two-page toggle). Stateless — the caller owns the selection and
 //! maps each pick to a message. Sizes derive from the text size.
 
-use crate::{Label, button, text};
+use crate::widest_face::WidestFace;
+use crate::{FitRow, Label, button, text};
 use iced::alignment::{Horizontal, Vertical};
 use iced::font::Weight;
-use iced::widget::{Row, container};
+use iced::widget::container;
 use iced::{
     Background, Border, Color, Element, Font, Length, Padding, Shadow, Theme, Vector, Widget,
 };
@@ -19,6 +20,15 @@ const SEGMENT_PAD_EM: f32 = 10.0 / 12.0;
 const TRACK_RADIUS_EM: f32 = 7.0 / 12.0;
 const SHADOW_OFFSET_EM: f32 = 1.0 / 12.0;
 const SHADOW_BLUR_EM: f32 = 2.0 / 12.0;
+
+/// The face of a segment's label: the UI font, medium when selected.
+fn segment_font(is_selected: bool) -> Font {
+    crate::ui_font::at(if is_selected {
+        Weight::Medium
+    } else {
+        Weight::Normal
+    })
+}
 
 /// Colours for [`segmented`]; they come from the caller's tokens.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -35,7 +45,9 @@ pub struct SegmentedStyle {
     pub active_ink: Color,
     /// Body text size; every metric derives from it.
     pub text_size: f32,
-    /// Stretch segments to share the full width instead of hugging labels.
+    /// Take the full width, segments sharing what their labels leave spare,
+    /// instead of hugging the labels. Either way the segments fold onto more
+    /// lines rather than overlap.
     pub fill_width: bool,
 }
 
@@ -62,6 +74,12 @@ impl SegmentedStyle {
 
     pub fn fill_width(mut self, fill_width: bool) -> Self {
         self.fill_width = fill_width;
+        self
+    }
+
+    /// The same style with `ink` on the unselected segments.
+    pub fn resting_ink(mut self, ink: Color) -> Self {
+        self.ink = ink;
         self
     }
 }
@@ -104,6 +122,20 @@ pub fn segment_radius(track_radius: f32, track_pad: f32) -> f32 {
     (track_radius - track_pad).max(0.0)
 }
 
+/// A segment's label in `font`.
+fn label_face<'a, M: 'a>(label: Label<'a>, size: f32, ink: Color, font: Font) -> Element<'a, M> {
+    let face = text(label)
+        .size(size)
+        .color(ink)
+        .font(font)
+        .height(Length::Fill)
+        .align_y(Vertical::Center)
+        .align_x(Horizontal::Center)
+        .wrapping(iced::widget::text::Wrapping::None)
+        .ellipsis(iced::widget::text::Ellipsis::End);
+    iced::Widget::boxed(face)
+}
+
 /// Segmented control over `options` (value, label). `on_select` maps the
 /// picked value to the caller's message; picking the selected one re-emits it.
 pub fn segmented<'a, V, M>(
@@ -116,14 +148,41 @@ where
     V: Copy + PartialEq + 'a,
     M: Clone + 'a,
 {
+    segments(options, selected, style, Some(&on_select))
+}
+
+/// [`segmented`] that takes no press, for a choice that cannot change now.
+/// The caller passes the greyed colours in `style`.
+pub fn segmented_disabled<'a, V, M>(
+    options: impl IntoIterator<Item = (V, Label<'a>)>,
+    selected: V,
+    style: SegmentedStyle,
+) -> Element<'a, M>
+where
+    V: Copy + PartialEq + 'a,
+    M: Clone + 'a,
+{
+    segments(options, selected, style, None)
+}
+
+fn segments<'a, V, M>(
+    options: impl IntoIterator<Item = (V, Label<'a>)>,
+    selected: V,
+    style: SegmentedStyle,
+    on_select: Option<&dyn Fn(V) -> M>,
+) -> Element<'a, M>
+where
+    V: Copy + PartialEq + 'a,
+    M: Clone + 'a,
+{
     let m = SegmentedMetrics::from_text_size(style.text_size);
-    let seg_w = if style.fill_width {
+    let track_width = if style.fill_width {
         Length::Fill
     } else {
         Length::Shrink
     };
 
-    let mut row: Row<Element<'a, M>> = Row::new().spacing(m.gap);
+    let mut cells: Vec<Element<'a, M>> = Vec::new();
     for (value, label) in options {
         let is_active = value == selected;
         let ink = if is_active {
@@ -131,25 +190,14 @@ where
         } else {
             style.ink
         };
-        let mut label = text(label)
-            .size(style.text_size)
-            .color(ink)
-            .height(Length::Fill)
-            .align_y(Vertical::Center)
-            .align_x(Horizontal::Center)
-            .wrapping(iced::widget::text::Wrapping::None)
-            .width(seg_w);
-        if is_active {
-            label = label.font(Font {
-                weight: Weight::Medium,
-                ..Font::DEFAULT
-            });
-        }
+        // Both faces are measured, so picking a segment cannot refold the row.
+        let plain = label_face(label.clone(), style.text_size, ink, segment_font(false));
+        let medium = label_face(label, style.text_size, ink, segment_font(true));
+        let label: Element<'a, M> = WidestFace::new(plain, medium, is_active).into();
         let seg = button(label)
             .padding(Padding::from([0.0, m.segment_pad_h]))
-            .width(seg_w)
             .height(m.segment_height)
-            .on_press(on_select(value))
+            .on_press_maybe(on_select.map(|select| select(value)))
             .style(move |_: &Theme, _| button::Style {
                 background: is_active.then_some(Background::Color(style.active_fill)),
                 text_color: ink,
@@ -168,12 +216,13 @@ where
                 },
                 ..button::Style::default()
             });
-        row = row.push(seg.boxed());
+        cells.push(seg.boxed());
     }
 
-    container(row)
+    let cells = FitRow::new(cells).spacing(m.gap).fill(style.fill_width);
+    container(cells)
         .padding(m.track_pad)
-        .width(seg_w)
+        .width(track_width)
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(style.track)),
             border: Border {
@@ -216,6 +265,15 @@ mod tests {
     fn segment_radius_is_concentric_and_never_negative() {
         assert_eq!(segment_radius(7.0, 2.0), 5.0);
         assert_eq!(segment_radius(1.0, 2.0), 0.0);
+    }
+
+    #[test]
+    fn a_selected_segment_uses_the_family_of_an_unselected_one() {
+        let (selected, unselected) = (segment_font(true), segment_font(false));
+        assert_eq!(selected.family, unselected.family);
+        assert_eq!(selected.family, crate::ui_font::regular().family);
+        assert_eq!(selected.weight, Weight::Medium);
+        assert_eq!(unselected.weight, Weight::Normal);
     }
 
     #[derive(Clone, Copy, PartialEq, Debug)]

@@ -209,7 +209,7 @@ fn group_header<'a>(
     };
     tooltip(
         press,
-        iced::widget::container(
+        container(
             text(t!(
                 i18n,
                 tip,

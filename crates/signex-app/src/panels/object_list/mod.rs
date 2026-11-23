@@ -309,6 +309,7 @@ fn noun_id(noun: ObjectNoun) -> MessageId {
         ObjectNoun::Blanket => ids::PANELS_OBJECT_LIST_NOUN_BLANKET,
         ObjectNoun::CompileMask => ids::PANELS_OBJECT_LIST_NOUN_COMPILE_MASK,
         ObjectNoun::DiffPair => ids::PANELS_OBJECT_LIST_NOUN_DIFF_PAIR,
+        ObjectNoun::NetParameters => ids::PANELS_OBJECT_LIST_NOUN_NET_PARAMETERS,
     }
 }
 

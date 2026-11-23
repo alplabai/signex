@@ -44,35 +44,70 @@ greyed row's is `Disabled`. The golden fixture still names each such row by the
 message it used to send; `COMMAND_ROW_NAMES` in `menu_bar/golden_tests.rs` maps
 the id back to that name.
 
+## Header entries {#header-entries}
+
+A header is a small caption over a group of rows, such as BUILT-IN and YOUR
+LAYOUTS in [View ▸ Window ▸ Layouts](#window-layouts). It is not a command
+row and not a greyed row (maintainer decision, Caner, 2026-11-20). In the
+model it is a `MenuItem` in the `ItemState::Header` state, not a `MenuEntry`
+variant of its own (`MenuEntry` stays `Item`, `Submenu`, `Separator`), built
+by `header()` in
+`model/items.rs`, with catalog text, no command, no shortcut and no check
+mark. `MenuItem::is_header()` says which rows are headers.
+
+- **In-window bar.** The caption is drawn at the caption type step in the
+  muted text colour, with the row padding and the shared menu card's header
+  height. It is a plain container, not a button, so it has no hover fill and
+  no press handler, and iced_aw never makes it the active row.
+- **Command walks.** A header never dispatches (`dispatches()` is `None`), so
+  it is not a live row, and it is not a planned or unexplained greyed row:
+  the `stub` and `unavailable` ratchets in `menu_bar/planned_tests.rs` do not
+  count it. It has no command id, so the shortcut, catalog and accelerator
+  checks skip it too.
+- **Golden fixture.** `menu_bar.golden.tsv` lists it with the kind `header`,
+  enablement `0` and gate `never`.
+- **Native macOS menu.** An OS menu has no caption row, so the header shows
+  as inert text there.
+
 ## Root menus {#root-menus}
 
-Ten roots, left to right, as in the Graphite mock-up: File, Edit, View,
-Project, Place, Design, Tools, Reports, Window, Help (`ROOT_TITLES`). The model
-is shared, so every theme and the native macOS bar show all ten. Project and
-Reports were added on 2026-11-07 (maintainer decision, `DECISIONS.md`); they
-are built only from existing commands and messages, after the Altium
-convention (`UX_REFERENCE_ALTIUM.md`). Moved rows keep their shortcut hint and
-enablement; no command left the app.
+Eight roots, left to right: File, Edit, View, Project, Place, Design, Tools,
+Help (`ROOT_TITLES`). The model is shared, so every theme and the native macOS
+bar show the same eight. Project was added on 2026-11-07 (maintainer decision,
+`DECISIONS.md`), built only from existing commands and messages. On
+2026-11-19 the Reports root became the **Tools ▸ Reports** submenu, directly
+under Tools ▸ Annotation, and the Window root became the **View ▸ Window**
+submenu, the last entry of View after a separator (#2524). Both submenus keep
+the old root's rows, order, catalog ids, shortcut hints and enablement, and
+their titles are the old root titles (`menu-reports`, `menu-window`); no
+command left the app. A submenu row is never greyed itself: with no document
+open, Tools ▸ Reports and View ▸ Window still open, and every row in them is
+greyed.
 
 **Project** (project-wide actions):
 
 - Electrical Rules Check (`open_erc_dialog`; F8 `run_erc` runs at once)
+- Add Table of Contents Sheet (`add_table_of_contents`, #1300): writes
+  `contents.snxsch` next to the root sheet (refused, and said so, when that
+  file is there) and adds it to the project; gated like Electrical Rules
+  Check. See `SCHEMATIC_TABLES.md`.
+- Compare Board with Schematic… (`compare_board_with_schematic`, see
+  [below](#project-compare-board))
 - Project Options... (greyed with no project, like Close Project)
 - Close Project
 
-**Tools ▸ Annotation** (top of Tools, then a separator, as Altium's schematic
-Tools menu has it): Annotate Schematics..., Reset Schematic Designators...,
+**Tools ▸ Annotation** (top of Tools, then Tools ▸ Reports, then a
+separator): Annotate Schematics..., Reset Schematic Designators...,
 Reset Duplicate Schematic Designators..., Annotate Schematics Quietly (Alt+A),
 Force Annotate All Schematics (Shift+Alt+A), Back Annotate Schematics... (see
 [below](#back-annotate)), and Number Schematic Sheets... (see
 [below](#number-schematic-sheets)).
 
-**Reports** (outputs of the open schematic, all greyed without one):
+**Tools ▸ Reports** (outputs of the open schematic, all greyed without one):
 
-- Bill of Materials... (the one BOM dialog; the old Design ▸ Generate BOM row
-  was a second row for the same message and is folded in). File ▸ Export ▸
-  Export BOM… opens the same dialog. This row keeps its name until BOM Studio
-  (mockup row 113) takes the Reports row.
+- Bill of Materials... (the one BOM dialog). File ▸ Export ▸ Export BOM…
+  opens the same dialog. This row keeps its name until BOM Studio (mockup
+  row 113) takes the Reports row.
 - Netlist (Protel .NET)...
 - ERC Report...
 
@@ -85,13 +120,24 @@ board's top and bottom assembly drawings into a folder the person picks; the
 PDF pages are Board Print / PDF's Assembly Drawing sets. Rules:
 `BOARD_OUTPUT.md`.
 
+**View ▸ Window** (the last entry of View, after the panel rows and a
+separator): Tile Horizontally, Tile Vertically, Untile (see
+[below](#window-tile)), a separator, the Layouts submenu (mockup row 166, see
+[below](#window-layouts)), and Close All Documents (see
+[below](#tools-library-editor)). Their built-in keys are unchanged.
+
 **Design** has Update PCB Document (see
 [Design ▸ Update PCB Document](#design-update-pcb)), Update Schematics (see
 [Back Annotate](#back-annotate)), Board Sketch (see
 [Design ▸ Board Sketch](#design-board-sketch)), Layer Stack Manager... (see
-[Design ▸ Layer Stack Manager](#design-layer-stack)), a separator, then
+[Design ▸ Layer Stack Manager](#design-layer-stack)), the Rooms submenu (see
+[Design ▸ Rooms](#design-rooms)), a separator, then
 Parameter Manager..., Net Classes (see
-[below](#find-similar-filter-net-classes)) and Rules... (the project's design rules as a document tab,
+[below](#find-similar-filter-net-classes)), Differential Pair Classes…
+(`open_diff_pair_classes`, #1282: the project's differential pair classes in
+a dialog, greyed with no project open; see
+[SCHEMATIC_DIRECTIVES.md](SCHEMATIC_DIRECTIVES.md#differential-pair-classes))
+and Rules... (the project's design rules as a document tab,
 greyed with no project open; see [DRC_RULES.md](DRC_RULES.md#rules-manager), #2398),
 then, after a separator, Create Sheet Symbol From Sheet... and Synchronize
 Sheet Entries and Ports..., greyed with no sheet in view (see
@@ -114,8 +160,8 @@ Every row that carries a command id runs that id; no row keeps an action of its
 own. Two rows point at an id other than the one their key suggests (#1991):
 
 - View ▸ Cycle Grid Size runs `next_grid`, which steps the snap grid (the `N`
-  key in the Classic profile). `cycle_snap_grid_forward` (`G` in the Altium
-  profile) still opens the footprint editor's grid picker.
+  key in the Classic profile). `cycle_snap_grid_forward` (`G` in the Signex
+  Standard profile) still opens the footprint editor's grid picker.
 - Project ▸ Electrical Rules Check runs `open_erc_dialog`, which opens the ERC
   dialog to choose the rules. `run_erc` (F8) runs ERC at once. The row shows no
   key, as `open_erc_dialog` has no default binding.
@@ -259,6 +305,23 @@ The dialog has the Update PCB dialog's look with the board as the source:
 - Opening the board for the read brings its tab to the front, as Update
   PCB does.
 
+## Project ▸ Compare Board with Schematic {#project-compare-board}
+
+Project ▸ Compare Board with Schematic… (right after Electrical Rules
+Check) and the board right-click menu's Compare with Schematic run
+`compare_board_with_schematic` (#2462). Both are gated like Update PCB:
+greyed unless a schematic or a board of an open project is in view. The
+command is also in the palette; no keymap preset binds it. It opens a modal
+report of every difference between the project's schematic and its board,
+opening the board first when it is not open; Esc closes it (or, while it is
+open, the confirmation before Apply).
+
+Each row picks Update PCB, Update schematic or Skip; Extra on board and
+Footprint mismatches start skipped. Apply asks first when a chosen
+row deletes from the board, then runs the PCB side as one board undo step
+and the schematic side as one undo group. Rows, defaults and Apply:
+[UPDATE_PCB.md](UPDATE_PCB.md#compare-board-with-schematic).
+
 ## Board Properties: designator and value {#board-properties}
 
 With exactly one footprint selected on a board, the Properties panel shows
@@ -289,7 +352,7 @@ command palette; no keymap preset binds it.
 Tools ▸ Cross Select Mode runs `toggle_cross_select_mode` and shows a check
 mark while the mode is on, which it is by default. While on, a selection on
 one side is selected in every sheet or board window on screen on the other
-side; it never opens a document or takes focus. The Altium preset binds it to
+side; it never opens a document or takes focus. The Signex Standard profile binds it to
 Ctrl+Shift+X. How parts and nets are matched: `DECISIONS.md`, 2026-11-09.
 
 ## Design ▸ Update PCB Document, File ▸ New ▸ PCB {#design-update-pcb}
@@ -302,7 +365,10 @@ a board Import Changes From `<project>`. It is greyed unless a schematic or a
 board is in view and a project is open. The undocked windows' menu bars word
 and gate it by the window's own document. The same command is in the command
 palette, and the Projects tree's project row has an Update PCB Document row
-for the clicked project. No keymap preset binds it. The dialog:
+for the clicked project. The board component Properties panel runs it too:
+when a selected component's designator differs from the schematic's, a warn
+callout in Schematic Reference Information carries an Update PCB button,
+greyed on a read-only board (#2523). No keymap preset binds it. The dialog:
 [UPDATE_PCB.md](UPDATE_PCB.md).
 
 File ▸ New ▸ PCB runs `new_pcb_document`: it opens the New PCB setup dialog
@@ -334,6 +400,15 @@ each edit is one undo step. It is greyed while no PCB is open. The same
 command is a palette row and the layer tab menu's "Layer stack..." row; no
 keymap preset binds it. The table and its rules:
 [PCB_LAYER_STACK.md](PCB_LAYER_STACK.md#stack).
+
+## Design ▸ Rooms {#design-rooms}
+
+Design ▸ Rooms (#2457) holds Create Rooms from Sheets..., which runs
+`create_rooms_from_sheets`: it reads the sheets of the board's project off
+the update thread and opens its dialog. It is greyed unless a board that is
+not read-only is in view and belongs to an open project (`Needs::PcbInProject`).
+No keymap preset binds it. Rooms, the dialog and its plan:
+[PCB_ROOMS.md](PCB_ROOMS.md#create-rooms-from-sheets).
 
 ## File ▸ Library {#file-library}
 
@@ -395,7 +470,7 @@ On a board (#2488), File ▸ Export ▸ STEP 3D Model... (`export_board_step`)
 asks where to save and writes the board body and its parts as a STEP model;
 greyed without a board in view. Rules: `BOARD_OUTPUT.md`, "STEP export".
 
-Ctrl+F4 (Close Document, Altium profile) is a macOS system default ("Move
+Ctrl+F4 (Close Document, Signex Standard profile) is a macOS system default ("Move
 focus to active or next window") and may never reach Signex there; the menu
 row always works.
 
@@ -403,14 +478,13 @@ row always works.
 
 File ▸ Fabrication Outputs… runs `fabrication_outputs` (#2388), after the
 Export submenu: it opens the Fabrication Outputs dialog on the board in view,
-greyed while no PCB is in view. The same command is the PCB Active Bar's
-Fabrication Outputs button (after Board Sketch) and a palette row; no keymap
-preset binds it. Nothing is written until the dialog's Generate. Files,
+greyed while no PCB is in view. The same command is a palette row; it is not
+on the PCB Active Bar, and no keymap preset binds it. Nothing is written until the dialog's Generate. Files,
 formats and frame: [FABRICATION_OUTPUTS.md](FABRICATION_OUTPUTS.md).
 
 ## File: close, save all {#file-close-save-all}
 
-Close Document (the `close_active_document` command, Ctrl+F4 in the Altium
+Close Document (the `close_active_document` command, Ctrl+F4 in the Signex Standard
 profile, closes the active tab like the tab menu's Close and parks a dirty
 draft) is greyed when no tab is open. Project ▸ Close Project (the project tree's Close
 Project for the active project, behind its unsaved-changes gate) is greyed when
@@ -421,7 +495,7 @@ nothing is unsaved (`CommandContext::has_dirty_documents`), has no shortcut
 (the catalog has no `save_all` command), and reports "Save All: saved N
 item(s)" or the failures in the Messages panel.
 
-## Place ▸ Sheet Entry, Tools ▸ Library Editor, Window ▸ Close All Documents {#tools-library-editor}
+## Place ▸ Sheet Entry, Tools ▸ Library Editor, View ▸ Window ▸ Close All Documents {#tools-library-editor}
 
 These three rows were planned stubs until #2247; each now runs a catalog
 command, so the palette and a user key binding run the same id (none of the
@@ -443,7 +517,7 @@ three has a default key).
   of the Libraries panel); a library with no browser tab gets a new one. From
   there the user picks a symbol or footprint to edit. Greyed when no library
   is open.
-- **Window ▸ Close All Documents** runs `close_all_documents`, the project
+- **View ▸ Window ▸ Close All Documents** runs `close_all_documents`, the project
   tree's Close Project Documents: every tab closes, and an unsaved document is
   parked as a draft exactly as the tab menu's Close All Documents does. Greyed
   when no tab is open.
@@ -460,10 +534,15 @@ buttons (`menu_bar/model/sheet_place.rs`):
 
 - **Ports & Connectors**: Port, Off Sheet Connector; Sheet Symbol, Device
   Sheet Symbol, Reuse Block; Signal Harness, Harness Connector, Harness Entry.
-- **Directives**: Parameter Set, Generic No ERC, Differential Pair, Blanket,
-  Compile Mask.
+- **Directives**: Net Parameters, Generic No ERC, Differential Pair, Net
+  Blanket, Compile Mask (#1489: Net Parameters was the planned Parameter Set
+  row; the commands keep their ids `place_parameter_set` and
+  `place_blanket`).
 - **Graphics**: Arc, Full Circle, Elliptical Arc, Ellipse; Line, Rectangle,
-  Round Rectangle, Polygon, Bezier; Graphic.
+  Round Rectangle, Polygon, Bezier, Table, then the **Dimension** submenu
+  (Linear, Aligned); Graphic. Bezier (`draw_bezier`) went live and Table
+  (`place_table`), Linear (`place_linear_dimension`) and Aligned
+  (`place_aligned_dimension`) were added with #1267 / #1300.
 
 A live row runs its catalog command, the one the Active Bar's row names, and
 is gated by it (`Needs::Schematic`: greyed without a sheet). Its shortcut is
@@ -497,7 +576,8 @@ Rows added by #2416, each a catalog command greyed without a sheet:
 Place follows the document in view (#2360). While the window shows a board
 (`CommandContext::pcb.shown`), it lists the board's tools: Component, Pad,
 Via, Interactive Routing, Track, Arc, Fill, Solid Region, Polygon Pour,
-String, Dimension and Keepout, the Graphics submenu (Line, Arc, Full Circle,
+String, Dimension, Keepout and Room (`place_board_room`, #2457), the
+Graphics submenu (Line, Arc, Full Circle,
 Rectangle and Text Frame on non-copper layers, #2424, the PCB Active Bar's
 Graphics group), then Board Sketch (`board_sketch`, the same command as
 Design ▸ Board Sketch and the PCB Active Bar's button). Every other tab keeps
@@ -569,6 +649,16 @@ by designator. The project's sheets are read off the UI thread when it opens.
   and no closed file can drift between the read and Apply. A sheet written by
   a newer Signex is listed read-only too.
 
+## View ▸ Annotations {#view-annotations}
+
+A panel row (`MenuMessage::OpenAnnotationsPanel`, mockup row 165) right under
+Navigator: it opens (or reveals) the Annotations panel, docked on the right
+by default, and is checked while the panel is open anywhere. Always
+available, like the other panel rows; without a project in view the panel
+says so. It has no command id and no default key. The panel lists the
+annotation blocks of the project's `notebook/*.snxnbk` files; see
+[NOTEBOOK_ANNOTATIONS.md](NOTEBOOK_ANNOTATIONS.md).
+
 ## Tools ▸ Repair Pin Junctions {#tools-repair-pin-junctions}
 
 Right after Assign Footprints, Tools ▸ Repair Pin Junctions runs
@@ -599,7 +689,7 @@ View since #2416 (it was in Tools); the key is `V N` in the default profile and
   one built off the UI thread; after an edit the last list stays shown until
   the new index lands.
 - Each row shows the net's name, its first matching net class as a pill and,
-  on the right, how many component pins it connects (Graphite mockup #58).
+  on the right, how many component pins it connects (Graphite mockup row 58).
   Named nets come first, then auto-named ones. The filter matches the net
   name or the class name.
 - Clicking a net expands it, on the selection fill, to its pins, labels,
@@ -627,6 +717,50 @@ View since #2416 (it was in Tools); the key is `V N` in the default profile and
   from `pcb_geom::net_reports`: routed length, vias, pads and whether the
   net is routed (or how many connections are still open). Each row's Select
   and Highlight run what Select Net and Highlight Net run, for that net.
+
+## View ▸ Unions {#view-unions}
+
+Opens (or reveals) the Unions panel (`PanelKind::Unions`, named unions),
+docked on the right. The row sits after Layers, among the panel rows, and
+behaves like them; the panel is also in the status bar's Panels list
+(DECISIONS 2026-11-19: every dock panel is listed in both). No key is bound
+and there is no command id: the row sends `OpenUnionsPanel`, as the other
+panel rows do. Always available.
+
+- The panel lists the unions of the sheet in view (This sheet) or of every
+  open sheet of the project (Project), filters by name or `#tag`, and locks,
+  hides, renames, adds or removes members and breaks a union. Rules:
+  `docs/SCHEMATIC_UNIONS.md`.
+
+## View ▸ Compiled Design {#view-compiled-design}
+
+Runs `open_compiled_design` (#1308), which opens (or reveals) the Compiled
+Design panel, docked on the left as a tab beside Projects. The row sits under
+Net Inspector; the panel is also in the status bar's Panels list. No key is
+bound. Always available; with no sheet of a project open the panel says so.
+
+- The panel shows the last compile of the active document's project: its
+  hierarchy with every repeated sheet expanded into its channels (CH1, CH2,
+  ...), each row with the parts and nets of that sheet occurrence, and a
+  Nets mode listing every compiled net with the number of sheets it crosses.
+  Rules and states: `docs/MULTI_CHANNEL.md`, "Compiled Design panel".
+- `compile_project` (palette only, no menu row; Design category) compiles the
+  project off the UI thread with the project's channel naming. It needs a
+  sheet of a project (`Needs::ProjectSheet`, as Number Schematic Sheets). The
+  panel's Recompile button and its Compile project button run it too. The
+  result lives in memory until the project closes; nothing is written.
+  Recompile is never automatic: an edit to a compiled sheet only marks its
+  rows out of date.
+
+## View ▸ Command Log {#view-command-log}
+
+A panel row right after View ▸ Messages (#2458): it opens (or reveals) the
+Command Log panel, docked at the bottom by default, and carries a check mark
+while the panel is open, like the other panel rows. It runs
+`MenuMessage::OpenCommandLogPanel`, not a catalog command, so it has no key
+and is never greyed. The panel lists every catalog command the session ran,
+from the GUI, the CLI and the agent socket; see
+[COMMAND_LOG.md](COMMAND_LOG.md).
 
 ## Tools: board edits {#tools-board-edits}
 
@@ -688,7 +822,7 @@ with its file and its number.
   sheet changes; if a sheet still fails part-way, every sheet already changed
   is put back and the sheets it loaded are dropped.
 
-## Window ▸ Tile Horizontally / Tile Vertically / Untile {#window-tile}
+## View ▸ Window ▸ Tile Horizontally / Tile Vertically / Untile {#window-tile}
 
 Run `tile_windows_horizontally`, `tile_windows_vertically` (#2247, #2249) and
 `untile_documents` (#2249). Tile Horizontally stacks in equal rows, one above
@@ -714,9 +848,25 @@ monitor's full size, not its work area, so the tiles cover the whole monitor.
 Tile is greyed when it has neither to do. The Messages panel names how many
 documents or windows were arranged.
 
+## View ▸ Window ▸ Layouts {#window-layouts}
+
+Workspace layouts (mockup row 166), between the tiling rows' separator and Close All
+Documents: the [header](#header-entries) BUILT-IN, the four built-ins Schematic,
+Layout, Review and Notebook (`apply_layout_schematic`, `apply_layout_board`,
+`apply_layout_review`, `apply_layout_notebook`; check rows, the active
+layout checked), then, when you have saved any, the header YOUR LAYOUTS
+and one row per layout of yours in your order (`MenuMessage::
+WorkspaceLayoutChosen` with the layout's id, checked while active), a
+separator, Save Layout… (`save_workspace_layout`), Manage Layouts…
+(`manage_workspace_layouts`), and Reset "<name>" (`reset_workspace_layout`)
+only while the active built-in carries your edit. Every row other than the
+two headers is live in every context; none has a key by default. The native macOS bar shows the same
+three-level submenu. Rules, dialogs and storage:
+[WORKSPACE_LAYOUTS.md](WORKSPACE_LAYOUTS.md).
+
 ## Sheet right-click menu {#sheet-context-menu}
 
-The schematic canvas menu (#2419, Graphite mockup #62, `app/view/context_menu/menus.rs`) shows
+The schematic canvas menu (#2419, Graphite mockup row 62, `app/view/context_menu/menus.rs`) shows
 rows by what was right-clicked and makes each command row live by the
 command's own enablement rule (`app/command/needs.rs`), the rule the menu bar
 greys the same row by and a keystroke is dropped by. A muted first line names
@@ -733,7 +883,7 @@ Project Options, Preferences.
 
 With a selection: Properties (bold, the default row), Find Similar Objects,
 Cross Probe; Cut, Copy, Duplicate, Delete; Rotate, Mirror X, Mirror Y, the
-Align submenu and Arrange (a drawing selected); the Part Actions, Sheet Actions
+Align submenu, Arrange (a drawing selected) and the Unions submenu; the Part Actions, Sheet Actions
 and Place submenus; Highlight Net, Net Color..., Assign Net Class..., Clear
 Filter while a net highlight is on; Undo; then a greyed "Planned (N)" submenu
 that opens on hover and lists the planned rows below.
@@ -751,6 +901,26 @@ over, else the selected part. Sheet Actions holds Open Child Sheet, Create Sheet
 From Sheet Symbol, Sync Sheet Pins and Synchronize Sheet Entries and Ports...,
 live with a sheet symbol selected, then Create Sheet Symbol From Sheet... and
 Number Schematic Sheets (#1276).
+
+Unions (mockup row 158) holds Create Union… (`create_union`, live with a selection,
+`Ctrl+G` in the default profile), Add Selection to Union (`add_to_union`, the
+union picked in the Unions panel), Remove Selection from Union
+(`remove_from_union`) and Break Union (`break_union`), the last two live when
+the selection holds a member of a union. See
+[SCHEMATIC_UNIONS.md](SCHEMATIC_UNIONS.md).
+
+Paste Special (`smart_paste`, mockup row 155) opens the Smart Paste dialog in a window:
+one copy at an offset or an array of copies, the designators Next free or
+kept, the net labels kept or rewritten with a pattern (power nets never). A
+rewritten name that already exists is named in the dialog and stops Paste. So
+does, when the paste rewrites a net name, a project sheet that cannot be read,
+a file a sheet symbol places that is missing from disk, or a sheet reference
+that is refused: their names are unknown, so the dialog names the sheet. A
+missing declared page no symbol places does not stop it, and keeping the net
+names rewrites nothing and is not stopped. Its Paste puts every copy on the cursor and one click places them as one undo
+step; Esc cancels. A headless run of `smart_paste` places the copy at once
+beside the sheet's content, as before; it keeps the copied net names, so an
+unread sheet does not stop it. Duplicate keeps its fixed offset.
 
 ## Bottom-up hierarchy {#bottom-up-hierarchy}
 
@@ -771,8 +941,10 @@ from operands; see [CLI.md](CLI.md#bottom-up-hierarchy).
 Design ▸ Synchronize Sheet Entries and Ports... (`sync_sheet_entries`) opens a
 dialog for the selected sheet symbol. Choose the side that wins: **Sheet to
 sheet symbol** changes the symbol's entries, **Sheet symbol to sheet** changes
-the sheet's hierarchical ports. The dialog lists the names that would be added,
-removed and renamed, and Apply makes exactly those changes as one undo step.
+the sheet's hierarchical ports. The dialog draws the written side after Apply
+or as it is now (After / Before, with an expand button) and lists each entry
+that would be added, removed or renamed with its I/O type. None of this changes
+a sheet: Apply makes exactly the listed changes as one undo step.
 Esc and Cancel close it without a change. A rename is read only when, for one
 direction (input, output, ...), exactly one name is gone and one is new; it
 keeps the entry's place and wires, or the port label's place. Sheet to sheet
@@ -794,7 +966,6 @@ with the shared planned tooltip, and these rows, greyed with a tooltip saying
 what each will do:
 
 - **References**: list where the selected objects are used across the project (designators, net labels, sheet entries).
-- **Unions**: group the selected objects into a union that selects, moves and copies as one, stored on the sheet.
 - **Pin Mapping**: edit the selected part's symbol-pin to footprint-pad map, the map Update PCB reads.
 - **Supplier Links**: link the selected part to supplier part numbers and prices through the library's distributor adapter.
 
@@ -803,22 +974,20 @@ what each will do:
 Every other menu row runs a command (#2247). The only greyed tool rows are the
 planned tools of Place on a sheet and on a board, each with its reason.
 
-Place on a sheet has eleven planned commands (#2415), greyed with the planned
+Place on a sheet has six planned commands (#2415; Bezier left the list with
+#1267 and Parameter Set with #1489), greyed with the planned
 tooltip in every state until their tools are built
-(`menu_bar/model/sheet_place.rs`, `active_bar::PLANNED_TOOLS`):
+(`menu_bar/model/sheet_place.rs`, `active_bar::PLANNED_TOOLS`). The three
+harness rows went live with the harness tools (#1280, see
+`docs/SIGNAL_HARNESSES.md`):
 
 | Submenu | Row | Command |
 |---|---|---|
 | Ports & Connectors | Device Sheet Symbol | `place_device_sheet_symbol` |
 | Ports & Connectors | Reuse Block... | `place_reuse_block` |
-| Ports & Connectors | Signal Harness | `place_signal_harness` |
-| Ports & Connectors | Harness Connector | `place_harness_connector` |
-| Ports & Connectors | Harness Entry | `place_harness_entry` |
-| Directives | Parameter Set | `place_parameter_set` |
 | Graphics | Elliptical Arc | `draw_elliptical_arc` |
 | Graphics | Ellipse | `draw_ellipse` |
 | Graphics | Round Rectangle | `draw_round_rectangle` |
-| Graphics | Bezier | `draw_bezier` |
 | Graphics | Graphic... | `place_graphic` |
 
 Each one is the row of a planned Active Bar tool. It is not a
@@ -851,9 +1020,10 @@ and when a selected footprint is locked; the key for a greyed row on a locked
 footprint still reaches the handler, which names the locked footprint in the
 Messages panel and changes nothing. Mirror X (the `X` key) flips a footprint
 to the other board side, like Flip Selection; Mirror Y flips it and turns it
-half a turn, so it mirrors top to bottom. Only the footprint moves: tracks
-and vias that end on a moved, rotated, flipped or deleted footprint stay
-where they are. Flip Selection is `L` on a board in both built-in profiles
+half a turn, so it mirrors top to bottom. A moved footprint takes the track
+ends on its pads along (#2379), unless Ctrl is held during a drag; vias stay.
+Tracks and vias on a rotated, flipped or deleted footprint stay where they
+are. Flip Selection is `L` on a board in both built-in profiles
 (#2406), which also flips a part on the cursor, and is greyed outside a board.
 
 Edit ▸ Arrange orders schematic drawings, so it is not in the Edit menu while
@@ -891,13 +1061,14 @@ Selection follow. Change Footprint, Swap Pins, Swap Gates and Arrange in Box
 show only with a footprint selected; Lock, Unlock, Gloss Selected Routes and
 Add Teardrops only with a track or via selected; Select Net
 (`select_board_net`) and Highlight Net (`highlight_board_net`) only when the
-selection or the object under the pointer has a net; Cross Probe and
-Properties with an object. Each row runs its catalog command and is live
-exactly when that command is enabled in the window's `CommandContext`, so
-the menu greys what the keys and the menu bar grey. A board written by a
-newer Signex is read-only (`PcbTargets::read_only`): every row that edits
-it, the Place tools and Board Sketch included, is greyed, and the rows that
-only read it stay live.
+selection or the object under the pointer has a net; Cross Probe,
+Properties and Compare with Schematic (`compare_board_with_schematic` under
+a shorter name, see [above](#project-compare-board)) with an object. Each row
+runs its catalog command and is live exactly when that command is enabled in
+the window's `CommandContext`, so the menu greys what the keys and the menu
+bar grey. A board written by a newer Signex is read-only
+(`PcbTargets::read_only`): every row that edits it, the Place tools and
+Board Sketch included, is greyed, and the rows that only read it stay live.
 
 ## Edit clipboard on a board {#edit-clipboard-board}
 
@@ -922,7 +1093,7 @@ the other kind does nothing and says why in the Messages panel.
 Five View rows act on the board in view and are greyed without one (#2223):
 Toggle Ratsnest, Next Layer, Previous Layer, Toggle Layer Visibility (the
 active layer) and Show All Layers. Next and Previous Layer show the keys of
-the active keymap: `Shift++` and `-` in the Altium and Classic profiles, which
+the active keymap: `Shift++` and `-` in the Signex Standard and Classic profiles, which
 bind `+`, `Shift++`, `*` and `Shift+*` to Next Layer and `-` to Previous Layer
 in the `pcb` context. The Layers panel row sits with the other panel rows and,
 like them, works without a document (the panel shows its empty state). In an

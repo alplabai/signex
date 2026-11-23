@@ -23,7 +23,10 @@ impl Signex {
         let (id, key) = match msg {
             M::OutlineToggled { id, .. }
             | M::MountingHoleToggled { id, .. }
-            | M::HolePlatedToggled { id, .. } => (*id, None),
+            | M::HolePlatedToggled { id, .. }
+            | M::PourLayerPicked { id, .. }
+            | M::MechanicalLayerPicked { id, .. }
+            | M::AnchorComponentPicked { id, .. } => (*id, None),
             M::HoleDrillEdited { id, .. } => (*id, Some(("hole_drill", id.0.as_u128()))),
             M::HoleNetEdited { id, .. } => (*id, Some(("hole_net", id.0.as_u128()))),
         };
@@ -84,6 +87,25 @@ fn apply(entity: &mut Entity, msg: &BoardSketchAttrMsg) -> bool {
                 return false;
             };
             hole.net = optional(value);
+        }
+        // Decision 2 (2026-11-20): each picker edits its own role's attribute.
+        M::PourLayerPicked { layer, .. } => {
+            let Some(pour) = entity.pour.as_mut().filter(|_| layer.is_copper()) else {
+                return false;
+            };
+            pour.layer = *layer;
+        }
+        M::MechanicalLayerPicked { layer, .. } => {
+            let Some(drawing) = entity.mechanical.as_mut() else {
+                return false;
+            };
+            drawing.layer = *layer;
+        }
+        M::AnchorComponentPicked { footprint, .. } => {
+            let Some(anchor) = entity.component_anchor.as_mut() else {
+                return false;
+            };
+            anchor.footprint = Some(*footprint);
         }
     }
     true

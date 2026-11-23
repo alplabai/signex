@@ -15,6 +15,8 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 mod buttons;
 mod graphite;
 
+pub(in crate::app::view) use graphite::SearchSlot;
+
 impl Signex {
     /// Custom chrome for the borderless main window. Replaces the OS
     /// title bar with a strip (`MENU_BAR_HEIGHT`; Graphite themes use
@@ -28,7 +30,7 @@ impl Signex {
     /// Which buttons sit where depends on the platform and the Window
     /// controls preference (`Signex::window_controls_layout`). The search
     /// bar is stacked on top of it, centred on the window
-    /// (see `chrome_search_bar_geometry`).
+    /// (see `chrome_search_slot`).
     ///
     /// The drag zones are the only mouse-area clickable regions — menu
     /// buttons, search, and window controls keep their own click
@@ -41,9 +43,10 @@ impl Signex {
         self.view_graphite_window_chrome(menu_row, tokens)
     }
 
-    /// `(x, width)` of the search bar for the current window width and
-    /// control layout; the palette dropdown centres on the same field.
-    pub(in crate::app::view) fn chrome_search_bar_geometry(&self) -> (f32, f32) {
+    /// Where the search sits (the field at `x`, `w` wide, or the search
+    /// button) for the current window width and control layout; the palette
+    /// card centres under the same slot.
+    pub(in crate::app::view) fn chrome_search_slot(&self) -> SearchSlot {
         let fullscreen = self.ui_state.main_window_is_fullscreen();
         let (leading_w, trailing_w) =
             buttons::extents_for(&self.window_controls_layout(), fullscreen, true);
@@ -86,6 +89,8 @@ impl Signex {
             body_fill_picker_open: ui.preferences_body_fill_picker_open,
             draft_trackpad_pan: ui.preferences_draft_trackpad_pan,
             draft_wheel_mode: ui.preferences_draft_wheel_mode,
+            draft_layer_switcher: ui.preferences_draft_layer_switcher,
+            draft_selected_segment: ui.preferences_draft_selected_segment,
             draft_remember_window_geometry: ui.preferences_draft_remember_window_geometry,
             draft_drag_direction_select: ui.preferences_draft_drag_direction_select,
             draft_increment_step: ui.preferences_draft_increment_step,
@@ -117,6 +122,8 @@ impl Signex {
             draft_ui_scale_percent: ui.preferences_draft_ui_scale_percent,
             dirty: ui.preferences_dirty,
             profiles: &ui.profile_manager,
+            profiles_saving: !ui.profile_writes.is_idle(),
+            machine_rules_issue: self.machine_rules_issue(),
             default_profile: ui.default_rule_profile.as_deref(),
             distributor_settings: &self.library.settings,
             panel_tokens: &self.document_state.panel_ctx.tokens,
@@ -163,11 +170,13 @@ impl Signex {
             ModalId::GridProperties => self.view_grid_properties_dialog_body(),
             ModalId::SelectionFilterCustom => self.view_selection_filter_custom_body(),
             ModalId::NewProject => self.view_new_project_window(),
-            ModalId::About => {
-                crate::about_modal::window_view(&self.document_state.panel_ctx.tokens)
-            }
+            ModalId::About => crate::about_modal::window_view(
+                &self.ui_state.i18n,
+                &self.document_state.panel_ctx.tokens,
+            ),
             ModalId::KeyboardShortcuts => self.view_keyboard_shortcuts_window(),
             ModalId::PassiveCalculator => crate::passive_calculator_modal::window_view(
+                &self.ui_state.i18n,
                 &self.document_state.panel_ctx.tokens,
                 &self.ui_state.passive_calculator,
             ),
@@ -208,7 +217,17 @@ impl Signex {
             ModalId::ProjectCloseConfirm => self.view_project_close_confirm_body(),
             ModalId::AppQuitConfirm => self.view_app_quit_confirm_body(),
             ModalId::FirstRunTour => {
-                crate::first_run_tour::window_view(&self.document_state.panel_ctx.tokens)
+                let ui = &self.ui_state;
+                let facts = crate::first_run_tour::TourFacts::read(
+                    ui.wheel_mode,
+                    &ui.active_keymap,
+                    &ui.i18n,
+                );
+                crate::first_run_tour::window_view(
+                    &ui.i18n,
+                    &self.document_state.panel_ctx.tokens,
+                    &facts,
+                )
             }
         }
     }

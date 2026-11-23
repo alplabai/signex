@@ -71,6 +71,9 @@ fn rule<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
             .boxed();
     };
     body = body.push(rule_line(frame, row));
+    if let Some(source) = super::schematic_source::caption(frame, row) {
+        body = body.push(source);
+    }
     body = body.push(
         text(user(row.text(&frame.src).to_string()))
             .size(TS.body)

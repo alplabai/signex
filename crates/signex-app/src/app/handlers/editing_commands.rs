@@ -37,6 +37,11 @@ impl Signex {
     /// One undo of the active sheet: its newest net-class pick or engine edit
     /// (net colours are engine edits), whichever came last. Whether a step ran.
     pub(crate) fn undo_active_sheet(&mut self) -> bool {
+        // A value still being typed is the newest step; a typo that put the
+        // sheet back has already been this undo.
+        if self.commit_live_drawing_edit() {
+            return true;
+        }
         if self.step_net_class_pick(true) {
             return true;
         }
@@ -47,13 +52,14 @@ impl Signex {
             // A multi-click buffer anchors at the end of the segment the
             // undo just removed; drawing on from it would leave an orphan
             // (#1831). The tool stays armed, the next click starts afresh.
-            self.clear_drawing_buffers();
+            self.clear_drawing_buffers_after_undo();
         }
         undone
     }
 
     /// One redo of the active sheet, see [`Self::undo_active_sheet`].
     pub(crate) fn redo_active_sheet(&mut self) -> bool {
+        self.commit_live_drawing_edit();
         if self.step_net_class_pick(false) {
             return true;
         }
@@ -81,20 +87,7 @@ impl Signex {
             );
             return iced::Task::none();
         }
-        let Some(engine) = self.document_state.active_engine() else {
-            return iced::Task::none();
-        };
-        let doc = engine.document();
-        let Some(current) = doc
-            .drawings
-            .iter()
-            .find(|d| d.uuid() == target_uuid)
-            .cloned()
-        else {
-            return iced::Task::none();
-        };
-        let next = apply_drawing_edit(current, edit);
-        if let Some(next) = next {
+        if let Some(next) = self.drawing_with_edit(target_uuid, edit) {
             self.apply_engine_command(
                 signex_engine::Command::UpdateSchDrawing { drawing: next },
                 true,
@@ -102,6 +95,19 @@ impl Signex {
             );
         }
         iced::Task::none()
+    }
+
+    /// The active sheet's drawing `target` with `edit` applied. `None` when
+    /// it is not there, or the edit does not fit it or is refused (#2767).
+    pub(crate) fn drawing_with_edit(
+        &self,
+        target: uuid::Uuid,
+        edit: crate::app::contracts::DrawingFieldEdit,
+    ) -> Option<signex_types::schematic::SchDrawing> {
+        let engine = self.document_state.active_engine()?;
+        let drawings = &engine.document().drawings;
+        let current = drawings.iter().find(|d| d.uuid() == target).cloned()?;
+        apply_drawing_edit(current, edit)
     }
 }
 
@@ -118,6 +124,9 @@ fn apply_drawing_edit(
 ) -> Option<signex_types::schematic::SchDrawing> {
     use crate::app::contracts::DrawingFieldEdit as E;
     use signex_types::schematic::{Point, SchDrawing, circumcircle};
+    if !edit.is_valid() {
+        return None;
+    }
     let mut next = current;
     match (&mut next, edit) {
         // Stroke width applies to every variant.
@@ -129,7 +138,7 @@ fn apply_drawing_edit(
             | SchDrawing::Polyline { width, .. },
             E::Width(w),
         ) => {
-            *width = w.max(0.0);
+            *width = w;
         }
         // Fill applies to filled variants only.
         (
@@ -176,19 +185,19 @@ fn apply_drawing_edit(
             let y0 = start.y.min(end.y);
             let y1 = start.y.max(end.y);
             *start = Point::new(x0, y0);
-            *end = Point::new(x0 + v.max(0.01), y1);
+            *end = Point::new(x0 + v, y1);
         }
         (SchDrawing::Rect { start, end, .. }, E::RectHeightMm(v)) => {
             let x0 = start.x.min(end.x);
             let x1 = start.x.max(end.x);
             let y0 = start.y.min(end.y);
             *start = Point::new(x0, y0);
-            *end = Point::new(x1, y0 + v.max(0.01));
+            *end = Point::new(x1, y0 + v);
         }
         // Circle
         (SchDrawing::Circle { center, .. }, E::CircleCenterX(v)) => center.x = v,
         (SchDrawing::Circle { center, .. }, E::CircleCenterY(v)) => center.y = v,
-        (SchDrawing::Circle { radius, .. }, E::CircleRadius(v)) => *radius = v.max(0.01),
+        (SchDrawing::Circle { radius, .. }, E::CircleRadius(v)) => *radius = v,
         // Arc — needs full (start,mid,end) reconstruction so it's
         // handled separately (original values live inside `next`).
         (
@@ -213,7 +222,7 @@ fn apply_drawing_edit(
                 match edit {
                     E::ArcCenterX(v) => ncx = v,
                     E::ArcCenterY(v) => ncy = v,
-                    E::ArcRadius(v) => nr = v.max(0.01),
+                    E::ArcRadius(v) => nr = v,
                     E::ArcStartAngle(deg) => nsa = deg.to_radians(),
                     E::ArcEndAngle(deg) => nea = deg.to_radians(),
                     _ => {}

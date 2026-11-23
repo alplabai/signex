@@ -21,6 +21,11 @@ impl Signex {
                 }
                 Task::none()
             }
+            RulesTabMsg::OpenedAt {
+                project_id,
+                domain,
+                rule,
+            } => self.open_rules_on(project_id, domain, rule),
             RulesTabMsg::DrcRequested { project_id } => self.run_rules_drc(project_id),
             RulesTabMsg::GridActed { project_id, msg } => self.act_on_rules_grid(project_id, msg),
             RulesTabMsg::PreviewActed { project_id, msg } => {
@@ -131,6 +136,15 @@ impl Signex {
                 }
             }
             RulesTabMsg::TextApplied { project_id } => self.apply_rules_text(project_id),
+            // These rewrite the stored text, which Apply of the typed text
+            // would then replace.
+            RulesTabMsg::SetRedefined { project_id, .. }
+            | RulesTabMsg::SetApplied { project_id, .. }
+            | RulesTabMsg::PresetApplied { project_id }
+                if self.rules_text_unapplied(project_id) =>
+            {
+                self.rules_tab_mut(project_id).refused = Some(TEXT_UNAPPLIED.to_string());
+            }
             msg @ (RulesTabMsg::ClearanceViewPicked { .. }
             | RulesTabMsg::MatrixCellCommitted { .. }
             | RulesTabMsg::MatrixCellCleared { .. }
@@ -148,6 +162,7 @@ impl Signex {
             | RulesTabMsg::MatrixPairPinned { .. }
             | RulesTabMsg::MatrixPairTyped { .. }) => self.apply_rules_panel_message(msg),
             RulesTabMsg::OpenRequested { .. }
+            | RulesTabMsg::OpenedAt { .. }
             | RulesTabMsg::PresetsListRequested { .. }
             | RulesTabMsg::DrcRequested { .. }
             | RulesTabMsg::GridActed { .. }

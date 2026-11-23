@@ -23,11 +23,15 @@ mod update_matrix;
 mod view;
 
 #[cfg(test)]
+mod domain_bar_tests;
+#[cfg(test)]
 mod matrix_preview_tests;
 #[cfg(test)]
 mod matrix_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod text_bar_tests;
 
 pub(crate) use analysis::RulesAnalysis;
 pub(crate) use commands::{rules_add, rules_enable, rules_remove, rules_set};
@@ -237,6 +241,13 @@ pub enum RulesTabMsg {
     /// `project`, or of the active document's project.
     OpenRequested {
         project: Option<ProjectId>,
+    },
+    /// A DRC link: open the tab of `project_id` on `domain`, with `rule`
+    /// selected. Runs on the main window, whichever window sent it.
+    OpenedAt {
+        project_id: ProjectId,
+        domain: Domain,
+        rule: Option<String>,
     },
     DomainPicked {
         project_id: ProjectId,

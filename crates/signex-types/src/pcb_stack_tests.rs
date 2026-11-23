@@ -13,6 +13,38 @@ fn def(name: &str, layer_type: &str) -> LayerDef {
     }
 }
 
+/// Mockup row 105: a derived stack mirrors; a thicker dielectric on one side
+/// or a heavier copper layer does not.
+#[test]
+fn a_stack_is_symmetric_until_one_side_differs() {
+    let inner = [
+        def("TopCopper", "signal"),
+        def("Inner1Copper", "signal"),
+        def("Inner2Copper", "plane"),
+        def("BottomCopper", "signal"),
+    ];
+    let stack = LayerStack::derived(&inner, 1.6);
+    assert!(stack.is_symmetric(), "Signal and Plane may mirror");
+
+    let mut thicker = stack.clone();
+    let row = thicker
+        .layers
+        .iter()
+        .position(|l| l.kind == StackLayerKind::Dielectric)
+        .unwrap();
+    thicker.layers[row].thickness_mm += 0.1;
+    assert!(!thicker.is_symmetric());
+
+    let mut heavier = stack;
+    let row = heavier
+        .layers
+        .iter()
+        .position(|l| l.kind.is_copper())
+        .unwrap();
+    heavier.layers[row].copper_weight_oz = 2.0;
+    assert!(!heavier.is_symmetric());
+}
+
 #[test]
 fn a_board_without_layers_derives_two_copper_layers_summing_to_its_thickness() {
     let stack = LayerStack::derived(&[], 1.6);

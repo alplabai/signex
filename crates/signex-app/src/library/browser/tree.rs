@@ -22,7 +22,7 @@ pub(super) fn view_libraries_tree<'a>(
     let (muted, line, pill_fill) = (r.ink3, r.line_soft, r.sunken);
     let active_bg = look::active_fill(tokens);
     let hover_bg = look::row_hover_fill(tokens);
-    let radius = crate::styles::Radii::GRAPHITE.button;
+    let radius = crate::styles::Radii::GRAPHITE.small;
 
     let mut col: Column<Element<'a, LibraryMessage>> = column![
         container(
@@ -31,10 +31,10 @@ pub(super) fn view_libraries_tree<'a>(
                 .style(crate::styles::section_label(tokens))
         )
         .padding(iced::Padding {
-            top: 6.0,
-            right: 8.0,
-            bottom: 4.0,
-            left: 12.0,
+            top: SP.m,
+            right: SP.m,
+            bottom: SP.xs,
+            left: SP.m,
         })
         .boxed()
     ]
@@ -45,6 +45,11 @@ pub(super) fn view_libraries_tree<'a>(
         let is_current = lib.root == library_path;
         let rows: usize = lib.tables.values().map(Vec::len).sum();
         let mut label: Row<Element<'a, LibraryMessage>> = row![
+            super::header::tinted_icon(
+                crate::icons::icon_chrome_library(signex_types::theme::ThemeId::GraphiteDark),
+                BROWSER_TEXT_SIZE,
+                muted
+            ),
             text(signex_i18n::UserText::new(lib.display_name.clone()))
                 .size(BROWSER_TEXT_SIZE)
                 .color(text_c)
@@ -77,18 +82,16 @@ pub(super) fn view_libraries_tree<'a>(
         }
         label = label.push(
             text(t!(i18n, ids::LIBRARY_BROWSER_ROW_COUNT, "count" => rows))
-                .size(BROWSER_TEXT_SIZE)
+                .size(TS.caption)
+                .font(crate::fonts::iced_font_for_family(
+                    crate::fonts::CHROME_MONO_FONT,
+                ))
                 .color(muted)
                 .boxed(),
         );
         col = col.push(
             button(label)
-                .padding(iced::Padding {
-                    top: 5.0,
-                    right: 8.0,
-                    bottom: 5.0,
-                    left: 12.0,
-                })
+                .padding([5.0, SP.m])
                 .width(Length::Fill)
                 .on_press(LibraryMessage::OpenLibraryBrowser(lib.root.clone()))
                 .style(move |_: &Theme, status: iced::widget::button::Status| {
@@ -108,7 +111,5 @@ pub(super) fn view_libraries_tree<'a>(
                 .boxed(),
         );
     }
-    container(col.boxed())
-        .width(Length::Fixed(sidebar::SIDEBAR_W))
-        .boxed()
+    col.boxed()
 }

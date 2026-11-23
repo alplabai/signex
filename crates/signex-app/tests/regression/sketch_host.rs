@@ -26,7 +26,7 @@ fn entity(f: &Fixture, id: signex_sketch::id::SketchEntityId) -> signex_sketch::
 }
 
 #[test]
-fn the_board_host_offers_its_five_targets_and_v_score_bakes_as_one_step() {
+fn the_board_host_offers_its_targets_and_v_score_bakes_as_one_step() {
     let mut f = open_board();
     let before = snapshot(&f);
     send(&mut f, menu_row("board_sketch"));
@@ -40,12 +40,17 @@ fn the_board_host_offers_its_five_targets_and_v_score_bakes_as_one_step() {
     assert_eq!(ctx.sketch_host, SketchHost::Board);
     assert_eq!(
         ctx.sketch_host.roles(),
+        // Decision 2 (Caner, 2026-11-20): the mockup row 179 order, Room out.
         &[
             RoleTag::Unassigned,
             RoleTag::BoardOutline,
             RoleTag::Cutout,
+            RoleTag::Slot,
             RoleTag::Keepout,
+            RoleTag::BoardPour,
             RoleTag::VScore,
+            RoleTag::MechanicalLayer,
+            RoleTag::ComponentAnchor,
             RoleTag::MountingHole,
         ]
     );

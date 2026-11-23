@@ -82,6 +82,9 @@ pub struct BomPreviewState {
     pub selected_row: Option<usize>,
     /// Horizontal offset of the table body; the sticky header follows it.
     pub scroll_x: f32,
+    /// An Export is in its save dialog or its write. The settings it took
+    /// are the ones written, so the dialog takes no edit until it ends.
+    pub export_pending: bool,
 }
 
 /// The table line an issue points at.

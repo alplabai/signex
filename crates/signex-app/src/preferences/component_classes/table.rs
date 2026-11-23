@@ -103,7 +103,7 @@ fn header<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, PrefMsg> {
     let (ink3, fill, line) = (r.ink3, ti(tokens.toolbar_bg), ti(tokens.border));
     let medium = Font {
         weight: iced::font::Weight::Medium,
-        ..Font::DEFAULT
+        ..signex_widgets::ui_font::regular()
     };
     let title = |name: MessageId, note: MessageId| {
         row![

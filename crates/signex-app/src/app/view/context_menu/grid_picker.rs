@@ -83,15 +83,10 @@ impl Signex {
     pub(in crate::app::view) fn view_grid_picker_menu(&self) -> Element<'_, Message> {
         use iced::widget::Widget as _;
         let active_step = self
-            .document_state
-            .tabs
-            .get(self.document_state.active_tab)
-            .and_then(|t| match &t.kind {
-                crate::app::TabKind::FootprintEditor(p) => {
-                    self.document_state.footprint_editors.get(p)
-                }
-                _ => None,
-            })
+            .interaction_state
+            .grid_picker
+            .as_ref()
+            .and_then(|picker| self.document_state.footprint_editors.get(&picker.target))
             .map(|e| e.state.snap_options.grid_step_mm);
         let panel_ctx = &self.document_state.panel_ctx;
         let i18n = &self.ui_state.i18n;
@@ -152,7 +147,7 @@ fn grid_picker_entries(i18n: &I18n, active_step: Option<f64>) -> Vec<DropdownEnt
     v.push(DropdownEntry::Separator);
     v.push(DropdownEntry::Item(DropdownItem::new(
         text(i18n, menu_ids::CTX_GRID_PROPERTIES),
-        Message::GridProperties(GridPropertiesMsg::Open),
+        Message::GridProperties(GridPropertiesMsg::OpenFromPicker),
     )));
     v
 }
@@ -219,7 +214,7 @@ mod tests {
         assert_eq!(last.label, "Grid Properties…");
         assert!(matches!(
             last.on_press,
-            Some(Message::GridProperties(GridPropertiesMsg::Open))
+            Some(Message::GridProperties(GridPropertiesMsg::OpenFromPicker))
         ));
     }
 

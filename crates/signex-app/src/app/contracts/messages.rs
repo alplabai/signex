@@ -124,15 +124,18 @@ pub enum WindowMsg {
     /// The monitor size was read after a resize; together with the mode it
     /// tells a real fullscreen window from winit's stale flag mid-exit.
     MainWindowMonitorSizeRead(Option<iced::Size>),
-    /// Window ▸ Tile Horizontally / Tile Vertically (#2247, #2249): show the
+    /// View ▸ Window ▸ Tile Horizontally / Tile Vertically (#2247, #2249): show the
     /// main window's documents in tile panes and arrange the main window
     /// with the undocked document windows.
     TileRequested(crate::app::TileLayout),
-    /// Window ▸ Untile (#2249): back to one document in the main window.
+    /// View ▸ Window ▸ Untile (#2249): back to one document in the main window.
     UntileRequested,
     /// A press on an unfocused tile pane, carrying the index of the tab it
     /// shows: that document becomes the active one (#2249).
     TilePanePressed(usize),
+    /// Dock back was pressed in the title strip of the detached panel
+    /// window: the window closes, which re-docks the panel (mockup row 8).
+    DetachedPanelDockBackPressed(iced::window::Id),
 }
 
 /// Command-palette message family (ADR-0001 D3). Namespaced under
@@ -176,6 +179,11 @@ pub enum CommandPaletteMsg {
             Result<std::sync::Arc<crate::app::palette_index::ProjectSearchIndex>, String>,
         >,
     },
+    /// The title-bar search field was clicked while the palette is open in
+    /// the main window. The palette's backdrop leaves the field undimmed but
+    /// takes the click, so the field keeps the focus and the palette stays
+    /// open.
+    FieldClicked,
 }
 
 /// In-canvas text-edit message family (ADR-0001 D3). Namespaced under
@@ -189,6 +197,9 @@ pub enum TextEditMsg {
     /// A command (F2, V, U, F) asked to edit a field in place; the target
     /// is the object under the cursor, else the single selection.
     Requested(TextEditTarget),
+    /// Tab in the editor on a part's field: keep the text and go on to the
+    /// part's next field (mockup row 65).
+    NextFieldRequested,
 }
 
 /// Which text a field-edit command asks for (#1670).
@@ -259,6 +270,12 @@ pub enum OverlayMsg {
     DiskConflictOverwriteChosen,
     /// "Reload from disk" on the same card: replace the document with the file.
     DiskConflictReloadChosen,
+    /// "Save As…" on the same card: write the document to a new file and
+    /// leave the changed one as it is (mockup row 11).
+    DiskConflictSaveAsChosen,
+    /// "Copy" on the error card: its heading, sentence and system part go to
+    /// the clipboard.
+    ErrorNoticeCopyPressed,
     /// User pressed the title bar of a modal at window-space (x, y) —
     /// begin dragging it. The next DragMove events update its offset.
     ModalDragStart {
@@ -278,6 +295,25 @@ pub enum OverlayMsg {
     },
     /// Toggle AutoFocus — dim everything not in the current selection.
     ToggleAutoFocus,
+    /// The Grid read-out of `window`'s status bar was right-clicked: the
+    /// Grid & Snap popover opens there, or closes when it is open there.
+    GridSnapPopoverToggled(iced::window::Id),
+    /// A press outside the Grid & Snap popover closed it.
+    GridSnapPopoverDismissed,
+    /// The pointer moved over the popover's drawing or a Pitch row.
+    GridSnapPreviewHovered(signex_widgets::property_illustration::IllustrationMsg),
+    /// Help cards (#2262). The Keyboard Shortcuts filter text changed.
+    ShortcutsFilterChanged(String),
+    /// The filter's clear button was pressed.
+    ShortcutsFilterCleared,
+    /// A scope was picked on the switch, or All from the no-match note.
+    ShortcutsScopePicked(crate::keyboard_shortcuts_modal::ShortcutScope),
+    /// "Edit in Preferences…" was pressed: the sheet closes and Preferences
+    /// opens on its Keyboard Shortcuts page.
+    ShortcutsPreferencesPressed,
+    /// The first-run card's "change" link was pressed: Preferences opens on
+    /// Appearance (the Mouse wheel setting); the card stays open.
+    FirstRunTourWheelChangePressed,
 }
 
 /// What a finished `Mod` move of a custom shortcut profile hands back.
@@ -336,6 +372,12 @@ pub enum UiMsg {
         generation: u32,
         path: std::path::PathBuf,
         result: Result<crate::panels::history::HistoryLoad, String>,
+    },
+    /// A History panel repository job finished. `window` as for
+    /// [`UiMsg::HistoryLoaded`]; branch and tag writes report on `None`.
+    HistoryRepo {
+        window: Option<iced::window::Id>,
+        event: crate::panels::history::HistoryRepoEvent,
     },
     /// Switch the active colour theme and persist the preference.
     ThemeChanged(ThemeId),
@@ -700,19 +742,26 @@ impl PrintPreviewMsg {
 /// `dispatch_grid_properties_message`.
 #[derive(Debug, Clone)]
 pub enum GridPropertiesMsg {
-    /// v0.18.11 — open the Cartesian Grid Editor modal (Ctrl+G).
+    /// v0.18.11 — open the Grid Properties modal (Ctrl+G).
     /// Footprint editor only; other contexts no-op.
     Open,
-    /// v0.18.11 — close the Grid Properties modal (Cancel button or
-    /// Esc). Discards in-flight edits.
+    /// The grid picker's last row: open it for the picker's footprint.
+    OpenFromPicker,
+    /// v0.18.11 — close the Grid Properties modal (Esc). Discards
+    /// in-flight edits; Esc while a preview label is open closes only
+    /// that label.
     Close,
+    /// Cancel or the header X was pressed: the modal closes, discarding
+    /// in-flight edits and any open preview label.
+    CancelPressed,
     /// v0.18.11 — Grid Properties modal: text input bound to the
     /// Step field (one value for both axes). Strings are validated on
     /// Apply, not per keystroke, so partial input doesn't fight the user.
     SetStep(String),
-    /// v0.18.11 — Grid Properties modal: Apply button. Validates +
-    /// writes the active footprint editor's `snap_options.grid_step_mm`
-    /// and commits fine/coarse display + multiplier.
+    /// v0.18.11 — Grid Properties modal: OK button (and Enter in the Step
+    /// field). Validates + writes the active footprint editor's
+    /// `snap_options.grid_step_mm` and commits fine/coarse display +
+    /// multiplier.
     Apply,
     /// v0.18.19 — Grid Properties modal: Fine grid display style.
     SetFineDisplay(crate::library::editor::footprint::state::GridDisplay),
@@ -720,6 +769,11 @@ pub enum GridPropertiesMsg {
     SetCoarseDisplay(crate::library::editor::footprint::state::GridDisplay),
     /// v0.18.19 — Grid Properties modal: Multiplier (5x / 10x / 2x / 1x).
     SetMultiplier(u32),
+    /// The preview's expand button was pressed: taller, or back.
+    PreviewExpandToggled,
+    /// A step or coarse label on the preview was pressed, edited, committed
+    /// (Enter) or closed (Esc, a press elsewhere).
+    PreviewLabelEdited(signex_widgets::dimension_label::DimensionLabelMessage),
 }
 
 /// Keyboard-input message family (ADR-0001 D3). Routed to
@@ -755,6 +809,9 @@ pub enum InputMsg {
         window: iced::window::Id,
         event: iced::keyboard::Event,
     },
+    /// The Esc press that resumed from the dimension Override box is over:
+    /// it was released, or its window lost the keys.
+    HeldEscapeEnded,
     /// Footprint editor mode switch (`1` / `2` / `3`). The dispatcher
     /// sets the mode only when the active tab is a footprint editor, so
     /// the keys don't steal text input on other tabs.

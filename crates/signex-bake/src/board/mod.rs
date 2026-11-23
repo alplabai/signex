@@ -8,47 +8,77 @@
 //! command. Construction and centerline entities never bake
 //! (`Entity::bake_skipped`). Rules and formats: `docs/PCB_SKETCH.md`.
 
+mod checks;
+mod edge_chains;
 mod error;
 mod features;
+mod fillets;
 mod geometry;
+mod inside_corners;
+mod items;
+mod patterned;
+mod slot;
 
+#[cfg(test)]
+mod pattern_tests;
 #[cfg(test)]
 mod tests;
 
+pub use checks::{
+    CheckState, Finding, NotChecked, OutlineCheck, OutlineChecks, outline_checks,
+    outline_checks_after, outline_checks_with, outline_checks_with_router,
+};
 pub use error::BoardBakeError;
+pub use fillets::{FilletReport, add_fillets, fillet_targets};
+pub use items::{bake_board_items, bake_board_with_items, baked_item_count};
+pub use slot::{Slot, slot_size};
 
 use std::collections::HashMap;
 
 use signex_sketch::Solver;
 use signex_sketch::baked_kinds::BakedKind;
 use signex_sketch::entity::Entity;
+use signex_sketch::id::SketchEntityId;
 use signex_sketch::parameter::resolve;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_types::pcb::{NetDef, Point};
 use signex_types::pcb_sketch::BakedBoard;
 
+use crate::array::InstanceBudget;
 use crate::traced_loops::TracedLoops;
 use geometry::boundary;
 
 /// Bake `sketch` into board geometry. `nets` is the board's net table: a
 /// mounting hole names its net, and the hole stores that net's number.
 pub fn bake_board(sketch: &SketchData, nets: &[NetDef]) -> Result<BakedBoard, BoardBakeError> {
+    solved(sketch, |ctx| baked(ctx, nets))
+}
+
+/// Resolve and solve `sketch` once and run `bake` on the result.
+pub(crate) fn solved<T>(
+    sketch: &SketchData,
+    bake: impl FnOnce(&Context<'_>) -> Result<T, BoardBakeError>,
+) -> Result<T, BoardBakeError> {
     let params = resolve(&sketch.parameters).map_err(BoardBakeError::Parameters)?;
     let solve = Solver::default()
         .solve(sketch, &params)
         .map_err(BoardBakeError::Solve)?;
-    let ctx = Context {
+    bake(&Context {
         sketch,
         solve: &solve,
         params: &params,
-    };
+        instances: InstanceBudget::default(),
+    })
+}
+
+fn baked(ctx: &Context<'_>, nets: &[NetDef]) -> Result<BakedBoard, BoardBakeError> {
     Ok(BakedBoard {
-        outline: outline(&ctx)?,
-        keepouts: features::keepouts(&ctx)?,
-        cutouts: features::cutouts(&ctx)?,
-        holes: features::holes(&ctx, nets)?,
-        v_scores: features::v_scores(&ctx)?,
+        outline: outline(ctx)?,
+        keepouts: features::keepouts(ctx)?,
+        cutouts: features::cutouts(ctx)?,
+        holes: features::holes(ctx, nets)?,
+        v_scores: features::v_scores(ctx)?,
     })
 }
 
@@ -71,11 +101,41 @@ pub fn baked_count(baked: &BakedBoard, kind: BakedKind) -> Option<usize> {
     })
 }
 
+impl BoardBakeError {
+    /// The sketch entity the refusal is about, for the bake preview to
+    /// select; `None` when it is about the whole sketch.
+    pub fn place(&self) -> Option<SketchEntityId> {
+        match *self {
+            Self::OpenProfile { edge, .. }
+            | Self::BranchingProfile { edge, .. }
+            | Self::UntraceableProfile { edge, .. } => Some(edge),
+            Self::NotAnEdge { entity, .. }
+            | Self::HoleNotACircle { entity }
+            | Self::HoleDrill { entity, .. }
+            | Self::UnknownNet { entity, .. }
+            | Self::PourUnknownNet { entity, .. }
+            | Self::NotASlot { entity }
+            | Self::PourNotCopper { entity }
+            | Self::AnchorNotAPoint { entity }
+            | Self::AnchorWithoutComponent { entity }
+            | Self::UnknownComponent { entity, .. }
+            | Self::VScoreNotALine { entity }
+            | Self::NotPatternable { entity, .. }
+            | Self::TooManyInstances { entity, .. }
+            | Self::Expression { entity, .. } => Some(entity),
+            Self::MissingPoint { point, .. } => Some(point),
+            Self::Parameters(_) | Self::Solve(_) | Self::OutlineCount { .. } => None,
+        }
+    }
+}
+
 /// What every bake stage reads.
 pub(crate) struct Context<'a> {
     pub(crate) sketch: &'a SketchData,
     pub(crate) solve: &'a FullSolveOutput,
     pub(crate) params: &'a HashMap<String, f64>,
+    /// The pattern instances this bake may still write, over all targets.
+    pub(crate) instances: InstanceBudget,
 }
 
 impl Context<'_> {
@@ -101,6 +161,7 @@ fn outline(ctx: &Context<'_>) -> Result<Option<Vec<Point>>, BoardBakeError> {
     let mut found: Vec<Vec<Point>> = Vec::new();
     for entity in ctx.tagged(|e| e.board_outline) {
         if let Some(profile) = boundary(ctx, &mut loops, "outline", entity, KIND)? {
+            patterned::refuse_pattern(ctx, entity, KIND)?;
             found.push(profile);
         }
     }

@@ -95,10 +95,10 @@ mod tests {
     #[test]
     fn a_run_is_drawn_at_its_width_preset() {
         let en = I18n::en_us();
-        let at = |preset| band_width_of(&run(RunShape::Wire, preset, "1 mm".into(), &en));
+        let at = |preset| band_width_of(&run(RunShape::Horizontal, preset, "1 mm".into(), &en));
         assert!(at(WireWidthPreset::Smallest) < at(WireWidthPreset::Small));
         assert!(at(WireWidthPreset::Medium) < at(WireWidthPreset::Large));
-        for shape in [RunShape::Wire, RunShape::Bus] {
+        for shape in [RunShape::Horizontal, RunShape::Vertical] {
             let drawing = run(shape, WireWidthPreset::Small, "1 mm".into(), &en);
             assert!(has_no_arc(&drawing), "{shape:?}");
             for field in [fields::START, fields::END, fields::LENGTH, fields::WIDTH] {
@@ -106,6 +106,22 @@ mod tests {
                 assert!(linked, "{shape:?} lacks a {field} callout");
             }
         }
+    }
+
+    /// Mockup row 43: the preview lies the way the run lies on the sheet,
+    /// whichever kind it is.
+    #[test]
+    fn a_run_is_drawn_the_way_it_runs_on_the_sheet() {
+        use signex_types::schematic::Point;
+        let at = |x, y| Point::new(x, y);
+        assert_eq!(
+            RunShape::of_segment(at(160.0, 169.0), at(190.5, 169.0)),
+            RunShape::Horizontal
+        );
+        assert_eq!(
+            RunShape::of_segment(at(63.5, 50.8), at(63.5, 101.6)),
+            RunShape::Vertical
+        );
     }
 
     #[test]

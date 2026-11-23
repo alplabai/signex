@@ -156,6 +156,25 @@ pub struct RecoveryOffer {
     /// The copy is older than the saved file (see
     /// [`recovery::Recoverable::older_than_file`]).
     pub older_than_file: bool,
+    /// How long before the check the saved file was last written, in
+    /// seconds; `None` for a Component Preview row, which has no file.
+    pub saved_age_secs: Option<u64>,
+    /// When the check ran: the prompt shows `checked_at` minus each age, so
+    /// the view never reads the clock.
+    pub checked_at: std::time::SystemTime,
+}
+
+impl RecoveryOffer {
+    /// The offer of `copy`, the recovery copy of the document at `path`.
+    pub fn new(path: PathBuf, copy: &recovery::Recoverable) -> Self {
+        Self {
+            path,
+            age_secs: copy.age_secs,
+            older_than_file: copy.older_than_file,
+            saved_age_secs: copy.saved_age_secs,
+            checked_at: copy.checked_at,
+        }
+    }
 }
 
 /// "5 minutes ago" for the recovery prompt.
@@ -883,6 +902,8 @@ mod tests {
             path: PathBuf::from(name),
             age_secs: 5,
             older_than_file: false,
+            saved_age_secs: Some(60),
+            checked_at: std::time::SystemTime::UNIX_EPOCH,
         };
         state.offer(offer("a"));
         state.offer(offer("a"));

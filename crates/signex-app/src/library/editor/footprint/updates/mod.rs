@@ -17,11 +17,15 @@ mod attempt;
 mod attempt_tests;
 mod context_menu;
 mod geometry;
+#[cfg(test)]
+mod no_edit_tests;
+mod pad_scope;
 mod selection;
 mod sketch;
 mod view;
 
 pub(crate) use active_bar::{apply_filter_preset, capture_filter_preset};
+pub(crate) use pad_scope::hold_patterned_pad_edit;
 pub(crate) use sketch::solved::settle_pending_inline;
 
 use crate::library::editor::footprint::sketch_solve_task;
@@ -299,32 +303,18 @@ pub(crate) fn apply_footprint_primitive_edit(
     editor: &mut crate::app::FootprintDocument,
     msg: FootprintEditorMsg,
 ) {
-    // v0.27 — Role=Pad on a Line is shorthand for "make this loop a
-    // pad." Rewrite the message here so the SetRole arm only ever
-    // sees Point-targeted Pad role assignments (where it makes
-    // sense). Without this, Role=Pad on a Line was a silent no-op
-    // — the Properties dropdown read as broken.
-    let msg = if let FootprintEditorMsg::SketchSetRole {
-        id,
-        role: crate::library::messages::RoleTag::Pad,
-    } = &msg
+    // Role on a line or arc speaks for its closed profile (mockup row 190).
+    let msg = sketch::profile_roles::route_role_pick(editor, msg);
+
+    // A selection row of the right-click menu closes the menu, then runs
+    // its action as that action's own edit (its own undo step).
+    if let FootprintEditorMsg::ContextMenuAction(
+        crate::library::editor::footprint::state::FootprintContextAction::OnSelection(pick),
+    ) = msg
     {
-        let is_line = editor
-            .primitive()
-            .sketch
-            .as_ref()
-            .and_then(|s| s.entities.iter().find(|e| e.id == *id))
-            .map(|e| matches!(e.kind, signex_sketch::entity::EntityKind::Line { .. }))
-            .unwrap_or(false);
-        if is_line {
-            editor.state.selected_sketch = Some(*id);
-            FootprintEditorMsg::SketchMakePadFromProfile
-        } else {
-            msg
-        }
-    } else {
-        msg
-    };
+        editor.state.context_menu = None;
+        return apply_footprint_primitive_edit(editor, context_menu::selection_message(pick));
+    }
 
     // v0.24 Phase 1 (Track B) — capture an undo snapshot ahead of
     // any mutating message. Selection-only / cursor-tracking /
@@ -371,6 +361,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                 redo,
             });
     }
+    crate::library::editor::footprint::sketch_mode::exit::settle_outcome(editor);
 }
 
 /// Route one footprint-editor message to the slice that owns it.
@@ -384,6 +375,12 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
             use crate::library::editor::footprint::sketch_mode::exit;
             exit::apply(editor, &FootprintEditorMsg::SketchDiscardCancelled);
         }
+        // Esc answers an open "This pad / All pads" with Cancel (mockup row 192, item D1).
+        FootprintEditorMsg::ToolEscape if editor.state.pad_scope.is_some() => {
+            use crate::library::editor::footprint::state::pad_scope::PadScope;
+            pad_scope::apply(editor, PadScope::Cancel);
+        }
+        FootprintEditorMsg::PadScopeAnswered(scope) => pad_scope::apply(editor, scope),
         FootprintEditorMsg::SelectActiveIdx(..)
         | FootprintEditorMsg::ToggleSelectionFilter(..)
         | FootprintEditorMsg::SelectSilkF(..)
@@ -438,6 +435,9 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
             use crate::library::editor::footprint::state::EditorMode;
             if exit::apply(editor, &msg) == ExitOutcome::Leave {
                 view::apply(editor, FootprintEditorMsg::SetMode(EditorMode::Normal));
+                if matches!(msg, FootprintEditorMsg::SketchBakeRequested) {
+                    exit::record_outcome(editor);
+                }
             }
         }
         FootprintEditorMsg::SketchPlacementInputChar(..)
@@ -460,7 +460,9 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         | FootprintEditorMsg::SketchAddConstraintForSelection(..) => {
             sketch::constraints::apply(editor, msg)
         }
-        FootprintEditorMsg::SketchToolClick { .. } => sketch::tools::apply(editor, msg),
+        FootprintEditorMsg::SketchToolClick { .. }
+        | FootprintEditorMsg::SketchToolClickInferred { .. }
+        | FootprintEditorMsg::SketchPlacePointInferred { .. } => sketch::tools::apply(editor, msg),
         FootprintEditorMsg::ToggleLayer(..)
         | FootprintEditorMsg::LayersShowAllClicked
         | FootprintEditorMsg::LayersTopSideOnlyClicked
@@ -510,6 +512,26 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         | FootprintEditorMsg::ActiveBarSelectAll
         | FootprintEditorMsg::ActiveBarClearSelection
         | FootprintEditorMsg::ActiveBarSetSketchTool(..) => active_bar::apply(editor, msg),
+        FootprintEditorMsg::SketchParameters(m) => sketch::parameters::apply(editor, m),
+        FootprintEditorMsg::SketchCanvas(msg) => sketch::canvas_values::apply(editor, msg),
+        FootprintEditorMsg::SketchReference(msg) => sketch::reference::apply(editor, msg),
+        FootprintEditorMsg::SketchSnap(snap) => {
+            crate::library::editor::footprint::snap_menu::apply(editor, snap)
+        }
+        FootprintEditorMsg::PadLink(msg) => {
+            editor.state.apply_pad_link(msg);
+            editor.canvas_cache.clear();
+        }
+        FootprintEditorMsg::SketchCloseGapRequested { keep, merge } => {
+            sketch::close_gap::apply(editor, keep, merge)
+        }
+        FootprintEditorMsg::SketchAddFilletsRequested => sketch::add_fillets::apply(editor),
+        FootprintEditorMsg::SketchProfileRolePicked { seed, role } => {
+            sketch::profile_roles::apply(editor, seed, role)
+        }
+        // The board host answers it before this router; a footprint has no
+        // such button.
+        FootprintEditorMsg::SketchImportDxfRequested => {}
     }
 }
 
@@ -567,7 +589,22 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         CursorAt { .. }
         | ViewScaleChanged { .. }
         | SelectPad(_)
+        | SelectPads(_)
         | SelectSilkF(_)
+        | SetSelectionMode2d(_)
+        | SelectAllOnLayer
+        | LassoArm
+        | LassoAddVertex { .. }
+        | LassoCancel
+        | LassoCommit
+        | TouchingLineArm
+        | TouchingLineFirst { .. }
+        | TouchingLineCancel
+        | TouchingLineCommit { .. }
+        | SelectOverlapped
+        | SelectNextOverlapped
+        | SelectOffGridPads
+        | SketchSelectMany(_)
         | ToggleLayer(_)
         | LayersShowAllClicked
         | LayersTopSideOnlyClicked
@@ -682,7 +719,28 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         | ActiveBarRotateSelection
         | ActiveBarFlipSelection
         | ActiveBarAlignSelectionToGrid
-        | ActiveBarMoveOriginToGrid => false,
+        | ActiveBarMoveOriginToGrid
+        // mockup row 192 — the pad link changes mode and selection only.
+        | PadLink(_) => false,
+        // The parameters table: typing records here; its other edits record
+        // their own step, only when they change something.
+        SketchParameters(m) => m.records_undo_step(),
+        // The canvas values and menus record their own step for the edits
+        // that change the sketch (`record_edit`), and none for UI state.
+        SketchCanvas(_) => false,
+        // Convert to reference, Make driving, Delete mirror: likewise.
+        SketchReference(_) => false,
+        // A board sketch's Snap ▾ board rows: snap switches, no geometry.
+        SketchSnap(_) => false,
+        // This pad / All pads records its own step (`record_edit`) when it
+        // changes the sketch; Cancel changes nothing.
+        PadScopeAnswered(_) => false,
+        // Close gap records its own step (`record_edit`), only when it joins.
+        SketchCloseGapRequested { .. } => false,
+        // Likewise, only when they change the sketch.
+        SketchAddFilletsRequested | SketchProfileRolePicked { .. } => false,
+        // Opens a file dialog; the import records its own step.
+        SketchImportDxfRequested => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
         // need a history snapshot.

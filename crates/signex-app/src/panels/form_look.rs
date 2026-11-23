@@ -82,6 +82,19 @@ pub(in crate::panels) fn value_box(theme: &Theme) -> (Color, Color, f32) {
     (l.field, l.line, PROPERTY_FIELD_RADIUS)
 }
 
+/// A value the panel only reports: the sunken fill with no border, so it
+/// cannot be taken for a field (mockup rows 42, 43, 45 and 50).
+pub(in crate::panels) fn read_only_value(theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(FormLook::of(theme).sunken)),
+        border: Border {
+            radius: PROPERTY_FIELD_RADIUS.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    }
+}
+
 /// The tooltip that shows a field's whole value: a raised card with the
 /// field's ink and hairline.
 pub(in crate::panels) fn value_tip(theme: &Theme) -> container::Style {
@@ -119,6 +132,49 @@ pub(crate) fn text_input_style(theme: &Theme, status: text_input::Status) -> tex
         value: l.ink,
         selection: Color { a: 0.4, ..l.accent },
     }
+}
+
+/// [`text_input_style`] for a value that reads inline in a list: no fill or
+/// outline until the box is hovered or focused.
+pub(crate) fn inline_value_input_style(
+    theme: &Theme,
+    status: text_input::Status,
+) -> text_input::Style {
+    let mut style = text_input_style(theme, status);
+    if !matches!(
+        status,
+        text_input::Status::Hovered | text_input::Status::Focused { .. }
+    ) {
+        style.background = Background::Color(Color::TRANSPARENT);
+        style.border.color = Color::TRANSPARENT;
+    }
+    style
+}
+
+/// [`text_input_style`] with the outline in `error` while the box holds text
+/// it refuses (#2767).
+pub(crate) fn refusable_input_style(
+    error: Option<Color>,
+) -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
+    move |theme, status| {
+        let mut style = text_input_style(theme, status);
+        if let Some(error) = error {
+            style.border.color = error;
+        }
+        style
+    }
+}
+
+/// [`text_input_style`] that greys while the field takes no input: the sunken
+/// fill with faint ink (mockup row 111).
+pub(crate) fn greyable_input_style(theme: &Theme, status: text_input::Status) -> text_input::Style {
+    let mut style = text_input_style(theme, status);
+    if matches!(status, text_input::Status::Disabled) {
+        let l = FormLook::of(theme);
+        style.background = Background::Color(l.sunken);
+        style.value = l.ink4;
+    }
+    style
 }
 
 /// `checkbox` style for a form toggle.

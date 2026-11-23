@@ -4,6 +4,7 @@ mod patch;
 
 mod annotation;
 mod annotation_placements;
+mod clipboard_harness;
 mod clipboard_text;
 mod derived_ids;
 mod notice;
@@ -18,6 +19,7 @@ pub mod part_swap;
 mod paste_edit;
 mod placed_edit;
 mod placement;
+mod placement_repeat;
 mod placement_sources;
 mod power_port;
 mod project_general;
@@ -37,6 +39,7 @@ pub use sheet_identity::other_sheet_symbol_using_file;
 pub mod pcb;
 mod sheet_placement;
 mod sheet_sync;
+mod sheet_sync_entries;
 #[cfg(test)]
 mod sheet_sync_tests;
 mod transform;
@@ -46,10 +49,13 @@ mod exec;
 mod find;
 mod find_similar;
 mod graphics_import;
+pub mod unions;
 
 #[cfg(test)]
 pub(crate) mod test_support;
 
+#[cfg(test)]
+mod annotation_drawing_tests;
 #[cfg(test)]
 mod annotation_placements_tests;
 #[cfg(test)]
@@ -94,11 +100,15 @@ mod save_point_tests;
 mod symbol_drag_local_tests;
 
 #[cfg(test)]
+mod corner_dot_tests;
+#[cfg(test)]
 mod id_source_tests;
 #[cfg(test)]
 mod pin_junction_tests;
 #[cfg(test)]
 mod sheet_identity_tests;
+#[cfg(test)]
+mod stem_dot_tests;
 #[cfg(test)]
 mod undo_depth_tests;
 #[cfg(test)]
@@ -121,7 +131,7 @@ pub use exec::change_component::{
 pub use exec::pin_changes::{SwitchBlockers, switch_blockers};
 pub use find::{
     DesignatorScope, FindHit, FindKind, FindQuery, MatchOptions, PatternError, designator_commands,
-    replace_all_ci, replace_commands, scan_sheet,
+    replace_all_ci, replace_commands, scan_sheet, value_part_name,
 };
 pub use find_similar::{
     SimilarProperty, SimilarValue, describe, find_similar, kind_label, properties_of,
@@ -133,7 +143,7 @@ use history::HistoryStep;
 pub use history::{ClassPickMarker, UndoGroupId};
 pub use multi_edit::{
     LabelGroup, MultiEdit, SelectionGroups, Shared, SymbolGroup, WireGroup,
-    edit_commands as multi_edit_commands, selection_groups,
+    edit_commands as multi_edit_commands, selected_symbols, selection_groups,
 };
 pub use net_class_table::{
     HISTORY_LIMIT as NET_CLASS_HISTORY_LIMIT, NetClassCommand, NetClassError, NetClassHistory,
@@ -171,6 +181,9 @@ pub use sheet_sync::{
     port_sync_commands, sheet_symbol_from_sheet, sheet_symbol_spot, sync_from_sheet_command,
     unused_sheet_symbol_name,
 };
+pub use sheet_sync_entries::{
+    SheetEntryChange, SheetSyncEntry, sheet_ports_after_sync, symbol_entries_after_sync,
+};
 use signex_history::{DEFAULT_UNDO_DEPTH, History};
 use signex_types::corner::DragWiringMode;
 use signex_types::schematic::{SchematicSheet, SelectedItem};
@@ -184,6 +197,7 @@ pub use transform::rubber_band::{
 pub(crate) use transform::rubber_band::{
     WirePoint, bailing_wires, carried_points, carry_points, held_at, pin_dots_to_keep,
 };
+pub use unions::UnionRefusal;
 
 pub(crate) use transform::{PreWires, TouchingPairs};
 
@@ -249,6 +263,9 @@ pub struct Engine {
     /// The parameter cell the last recorded edit wrote, while typing in it
     /// goes on; see [`Engine::end_field_edit_run`].
     field_edit_run: Option<history::FieldEditRun>,
+    /// The drawing field being typed, shown but not yet in the history
+    /// (`exec/live_edit.rs`, #2768).
+    live_edit: Option<exec::live_edit::LiveEdit>,
     /// Full-sheet pre-image clones taken by `execute` (test hook for the
     /// one-snapshot-per-batch guarantee).
     #[cfg(test)]
@@ -497,6 +514,7 @@ impl Engine {
             transaction: None,
             batch_ids: Default::default(),
             field_edit_run: None,
+            live_edit: None,
             #[cfg(test)]
             pre_image_clones: 0,
             revision: crate::next_revision(),
@@ -545,6 +563,7 @@ impl Engine {
             transaction: None,
             batch_ids: Default::default(),
             field_edit_run: None,
+            live_edit: None,
             #[cfg(test)]
             pre_image_clones: 0,
             revision: crate::next_revision(),
@@ -798,7 +817,7 @@ impl Engine {
         };
         self.crossed_taps.clear();
 
-        let result = match cmd {
+        let mut result = match cmd {
             Command::ReplaceDocument { .. }
             | Command::UpdateText { .. }
             | Command::UpdateLabelProps { .. }
@@ -809,6 +828,8 @@ impl Engine {
             | Command::SetSymbolFlag { .. }
             | Command::SetWireWidth { .. }
             | Command::SetWireColor { .. }
+            | Command::SetBusWidth { .. }
+            | Command::SetBusColor { .. }
             | Command::SetSymbolBodyStyle { .. }
             | Command::UpdateSymbolTextSize { .. }
             | Command::UpdateSymbolLibId { .. }
@@ -870,11 +891,21 @@ impl Engine {
             Command::AutoplaceFields { symbol_ids } => {
                 Ok(self.exec_autoplace_fields(before, &symbol_ids))
             }
+            Command::PlaceHarnessConnector { .. }
+            | Command::UpdateHarnessConnector { .. }
+            | Command::PlaceHarnessEntry { .. }
+            | Command::PlaceHarnessWire { .. }
+            | Command::SetHarnessEntryType { .. } => self.exec_harness(before, cmd),
+            Command::CreateUnion { .. }
+            | Command::UpdateUnion { .. }
+            | Command::SetUnionMembers { .. }
+            | Command::BreakUnion { .. } => self.exec_unions(before, cmd),
             Command::SetRunEnd { run, start, to } => self.set_run_end(before, run, start, to),
             Command::UpdateTextNoteProps { note_id, props } => {
                 Ok(self.update_text_note_props(before, note_id, props))
             }
         };
+        self.prune_union_members(&mut result);
         self.taps_before = None;
         // A pin end the edit left bare where wires of two nets overlap: no dot
         // merges two nets (2026-11-19), and the user is told which. A drag
@@ -935,6 +966,7 @@ impl Engine {
 
     /// Unguarded: installs `document` even over a read-only sheet. Test-only by convention.
     pub fn set_document(&mut self, document: SchematicSheet) {
+        self.live_edit = None;
         self.history.forget();
         self.bump_revision();
         self.bump_connectivity_revision();

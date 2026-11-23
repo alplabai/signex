@@ -61,6 +61,9 @@ impl Signex {
                     return Task::none();
                 }
             };
+        if self.refused_for_channel_naming(&issues) {
+            return Task::none();
+        }
         // Class styles are not something the user picked in the modal: they
         // follow the netlist this export just derived, so a sheet that is
         // not open in a tab is styled like one that is.
@@ -167,6 +170,9 @@ impl Signex {
                     return Task::none();
                 }
             };
+        if self.refused_for_channel_naming(&issues) {
+            return Task::none();
+        }
         super::log_stitch_issues(&source, &ctx, &issues);
 
         // Not a hole the user can accept: the file would be wrong, not partial.
@@ -200,6 +206,7 @@ impl Signex {
                     save_path,
                     messages: issues.messages(),
                     ctx,
+                    omitted: issues.omitted_pages(),
                 });
             return Task::none();
         }

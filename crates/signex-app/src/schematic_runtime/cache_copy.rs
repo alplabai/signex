@@ -50,6 +50,8 @@ pub(crate) fn copy_invalidated(
         drawings,
         no_erc_directives,
         directives,
+        harness,
+        unions,
         title_block,
         lib_symbols,
         net_colors,
@@ -94,6 +96,12 @@ pub(crate) fn copy_invalidated(
     }
     if invalidation.intersects(R::DIRECTIVES) {
         dst.directives.clone_from(directives);
+    }
+    if invalidation.intersects(R::HARNESS) {
+        dst.harness.clone_from(harness);
+    }
+    if invalidation.intersects(R::UNIONS) {
+        dst.unions.clone_from(unions);
     }
     if invalidation.intersects(R::CHILD_SHEETS) {
         dst.child_sheets.clone_from(child_sheets);

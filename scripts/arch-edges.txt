@@ -22,6 +22,7 @@ signex-app -> signex-i18n
 signex-app -> signex-i18n-ids
 signex-app -> signex-library
 signex-app -> signex-net
+signex-app -> signex-notebook
 signex-app -> signex-output
 signex-app -> signex-renderer
 signex-app -> signex-req
@@ -42,6 +43,7 @@ signex-drc -> pcb-geom
 signex-drc -> signex-types
 signex-drc-dsl -> pcb-geom
 signex-drc-dsl -> signex-drc
+signex-drc-dsl -> signex-net
 signex-drc-dsl -> signex-types
 signex-engine -> pcb-geom
 signex-engine -> signex-history

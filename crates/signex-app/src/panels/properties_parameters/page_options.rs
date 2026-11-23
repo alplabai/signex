@@ -70,21 +70,24 @@ fn custom_size_row<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let i18n = &ctx.i18n;
     let hover = &ctx.document_options.hover;
     let (w, h) = paper_dimensions(&ctx.paper_size);
-    let shown = |edge: PaperEdge, value: f32| {
+    let typed = |edge: PaperEdge| {
         ctx.title_block_sheet
             .as_deref()
             .and_then(|sheet| ctx.drafts.paper_edge_text(sheet, edge))
-            .unwrap_or_else(|| format!("{value:.1}"))
     };
     let field = |edge: PaperEdge, axis, value: f32| {
+        let draft = typed(edge);
+        let refused = draft.as_deref().is_some_and(|text| {
+            crate::numeric_field::text_refused(text, crate::panels::typed_mm(text).is_some())
+        });
         axis_field(
             t!(i18n, axis),
-            shown(edge, value),
+            draft.unwrap_or_else(|| format!("{value:.1}")),
             Some(t!(i18n, ids::PROPERTIES_UNIT_MM).into()),
             &ctx.tokens,
             move |s| PanelMsg::CustomPaperEdgeTyping(edge, s),
             PanelMsg::CommitCustomPaperEdge(edge),
-            false,
+            refused,
         )
     };
     let width = hover_row(
@@ -256,13 +259,16 @@ pub(super) fn page_options_section<'a>(ctx: &'a PanelContext) -> Column<Element<
         PanelMsg::SetPageOrigin,
     );
     c = c.push(hover_row(ORIGIN, hover, &ctx.tokens, origin));
+    // The hover region is the header only: wrapping the whole section would
+    // nest the Zones row's region inside it and light both rows together.
     let border = EnableSection::new(t!(i18n, ids::PROPERTIES_SHOW_BORDER), frame.show_border)
         .on_toggle(|on| PanelMsg::EditSheetFrame(SheetFrameEdit::ShowBorder(on)))
+        .wrap_header(move |header| hover_row(BORDER, hover, &ctx.tokens, header))
         .view(
             crate::panels::enable_section::enable_section_style(&ctx.tokens),
             zones_row(ctx),
         );
-    c = c.push(hover_row(BORDER, hover, &ctx.tokens, border));
+    c = c.push(border);
     let title_block = check_row(enable_box(
         t!(i18n, ids::PROPERTIES_SHOW_TITLE_BLOCK),
         frame.show_title_block,
