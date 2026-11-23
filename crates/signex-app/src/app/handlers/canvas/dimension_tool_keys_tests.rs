@@ -416,6 +416,62 @@ fn a_placed_dimensions_box_is_not_marked_by_the_paused_form() {
     assert!(!panel.paused_form_refuses(uuid::Uuid::now_v7(), field, "abc"));
 }
 
+/// How many pixels of the drawn window carry the refused colour.
+fn refused_pixels(session: &Session) -> usize {
+    let error = crate::styles::ti(session.app.document_state.panel_ctx.tokens.error);
+    let [r, g, b, _] = error.into_rgba8();
+    let near = |have: u8, want: u8| have.abs_diff(want) <= 2;
+    crate::layout_probe::draw_pixels(session.app.view(session.window), SIZE)
+        .chunks_exact(4)
+        .filter(|p| near(p[0], r) && near(p[1], g) && near(p[2], b))
+        .count()
+}
+
+#[test]
+fn the_real_box_is_drawn_refused_only_while_its_text_does_not_read() {
+    let mut session = Session::docked();
+    let unmarked = refused_pixels(&session);
+    let field = type_in_from_x(&mut session, "abc");
+    submit(&mut session, field);
+    assert!(refused_pixels(&session) > unmarked, "the box is marked");
+    type_in_from_x(&mut session, "2.54");
+    assert_eq!(refused_pixels(&session), unmarked, "the mark is gone");
+}
+
+/// Refused text, then `leave` ending the pause: the text goes with it and
+/// the next pause opens with nothing marked and Enter free to resume.
+fn refused_text_ends_with_the_pause(leave: ToolMessage) {
+    let mut session = Session::docked();
+    let unmarked = refused_pixels(&session);
+    let before = session.app.interaction_state.annotation_tool.points.clone();
+    let field = type_in_from_x(&mut session, "abc");
+    submit(&mut session, field);
+    let _ = session.app.update(Message::Tool(leave));
+    assert!(!session.is_paused(), "placing goes on");
+    assert_eq!(draft_text(&session), None, "the refused text is gone");
+    let points = &session.app.interaction_state.annotation_tool.points;
+    assert_eq!(*points, before, "the old value is the one in use");
+
+    let _ = session
+        .app
+        .update(Message::Tool(ToolMessage::PrePlacementTab));
+    assert!(session.is_paused());
+    assert_eq!(draft_text(&session), None);
+    assert_eq!(refused_pixels(&session), unmarked, "the new pause is clean");
+    submit(&mut session, field);
+    assert!(!session.is_paused(), "no old text refuses this Enter");
+}
+
+#[test]
+fn a_second_tab_after_a_refused_enter_drops_the_text() {
+    refused_text_ends_with_the_pause(ToolMessage::PrePlacementTab);
+}
+
+#[test]
+fn the_resume_button_after_a_refused_enter_drops_the_text() {
+    refused_text_ends_with_the_pause(ToolMessage::ResumePlacement);
+}
+
 #[test]
 fn holding_esc_in_the_override_box_resumes_once_and_stays_armed() {
     let mut session = Session::docked();

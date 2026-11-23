@@ -211,12 +211,12 @@ pub(crate) struct FixedKey {
 }
 
 impl FixedKey {
-    fn matches(&self, key: &keyboard::Key) -> bool {
+    pub(crate) fn matches(&self, key: &keyboard::Key) -> bool {
         matches!(key.as_ref(), keyboard::Key::Named(named) if named == self.named)
     }
 }
 
-const ESCAPE_KEY: FixedKey = FixedKey {
+pub(crate) const ESCAPE_KEY: FixedKey = FixedKey {
     named: keyboard::key::Named::Escape,
     action: "Esc (cancel / close)",
 };

@@ -5,6 +5,7 @@
 use signex_types::schematic::{DimensionDirection, Point, SchDimension, SchDrawing};
 
 use super::super::super::*;
+use crate::app::dispatch::input::ESCAPE_KEY;
 use crate::app::sch_tables::{AnnotationEdit, apply_annotation_edit};
 use crate::panels::{AnnotationField, AnnotationPanelMsg, DimensionToolForm};
 
@@ -12,18 +13,13 @@ use crate::panels::{AnnotationField, AnnotationPanelMsg, DimensionToolForm};
 const SAMPLE_SPAN_MM: f64 = 12.7;
 const SAMPLE_OFFSET_MM: f64 = -2.54;
 
-fn is_escape(key: &iced::keyboard::Key) -> bool {
-    matches!(
-        key,
-        iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape)
-    )
-}
-
 /// Whether `event` shows the Esc press that resumed is no longer down: its
 /// release, or a window event after which that release may never arrive.
 pub(crate) fn ends_held_resume_esc(event: &iced::Event) -> bool {
     match event {
-        iced::Event::Keyboard(iced::keyboard::Event::KeyReleased { key, .. }) => is_escape(key),
+        iced::Event::Keyboard(iced::keyboard::Event::KeyReleased { key, .. }) => {
+            ESCAPE_KEY.matches(key)
+        }
         iced::Event::Window(iced::window::Event::Unfocused | iced::window::Event::Closed) => true,
         _ => false,
     }
@@ -146,11 +142,11 @@ impl Signex {
         use iced::keyboard::Event::{KeyPressed, KeyReleased};
         let held = &mut self.interaction_state.annotation_tool.is_resume_esc_held;
         match event {
-            KeyPressed { key, repeat, .. } if is_escape(key) => {
+            KeyPressed { key, repeat, .. } if ESCAPE_KEY.matches(key) => {
                 *held &= *repeat;
                 *held
             }
-            KeyReleased { key, .. } if is_escape(key) => {
+            KeyReleased { key, .. } if ESCAPE_KEY.matches(key) => {
                 *held = false;
                 false
             }
@@ -276,13 +272,15 @@ impl Signex {
         ))
     }
 
-    /// The pause ended: the box lets go, so Space and Tab reach the tool.
+    /// The pause ended: the box lets go, so Space and Tab reach the tool, and
+    /// text it refused does not outlive the pause it was typed in.
     pub(crate) fn release_dimension_override(&mut self) -> Task<Message> {
         if self.armed_dimension_tool().is_none()
             || self.interaction_state.active_canvas().placement_paused
         {
             return Task::none();
         }
+        self.drop_dimension_form_draft();
         self.sync_annotation_draft();
         super::super::detached_modals::unfocus_text_inputs()
     }
