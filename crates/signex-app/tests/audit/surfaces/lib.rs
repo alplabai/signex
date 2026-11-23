@@ -383,10 +383,9 @@ pub fn rows() -> Vec<Surface> {
         Surface {
             id: "m139",
             title: "Prefix / unit pickers",
-            // Both slots, the prefix list open by a real click. One list is
-            // open at a time; `m139-unit` shows the other.
-            open: |app, _, fx| super::states_final::open_measurement_pair(app, fx),
-            window: WindowSel::MainPointer(&[PointerStep::ClickRightOfInput("4.7", 16)]),
+            // Both slots, with the first slot's measurement menu open.
+            open: |app, _, fx| super::states_final::open_measurement_pair_menu(app, fx),
+            window: WindowSel::Auto,
             checks: &[("the Edit row modal is open", edit_modal_open)],
         },
         Surface {

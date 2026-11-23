@@ -327,6 +327,21 @@ fn open_measurement(
     Ok(())
 }
 
+/// Mockup row 139's two slots, with the first slot's menu open.
+pub(super) fn open_measurement_pair_menu(app: &mut Signex, fx: &Fixture) -> Result<(), String> {
+    open_measurement_pair(app, fx)?;
+    settle_support::settle(
+        app,
+        Message::Library(LibraryMessage::BrowserEdit {
+            library_path: fx.stock.clone(),
+            msg: BrowserEditMsg::UnitMenuOpened {
+                key: "value".into(),
+            },
+        }),
+    );
+    Ok(())
+}
+
 /// The Edit row modal with the two measurement slots mockup row 139 draws.
 pub(super) fn open_measurement_pair(app: &mut Signex, fx: &Fixture) -> Result<(), String> {
     lib::open_edit_row(app, fx)?;
