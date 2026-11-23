@@ -3,7 +3,7 @@
 //! reads (`app::stitched_netlist`, `app::project_sheets`), then
 //! `signex_net::compile_design` walks it with the project's channel naming.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use signex_net::{CompiledDesign, SheetKey};
@@ -11,7 +11,7 @@ use signex_types::project::ChannelNaming;
 
 use crate::app::project_sheets::{self, OpenSheets};
 use crate::app::state::ProjectId;
-use crate::app::state::scope::CaseFold;
+use crate::app::state::scope::{CaseFold, path_key_with};
 
 /// Everything a compile needs, owned so it can leave the UI thread.
 pub(super) struct CompileJob {
@@ -41,7 +41,7 @@ pub struct CompileOutcome {
 pub struct Compiled {
     pub design: CompiledDesign,
     pub paths: HashMap<SheetKey, PathBuf>,
-    /// A sheet exists but could not be read; an absent file does not count.
+    /// A sheet could not be read, or a sheet symbol places a missing file.
     pub has_unread_sheets: bool,
 }
 
@@ -91,10 +91,32 @@ impl CompileJob {
         let compiled = Compiled {
             design,
             paths: graph.paths.clone(),
-            has_unread_sheets: !set.unreadable.is_empty(),
+            has_unread_sheets: has_unread_sheets(&set),
         };
         outcome(Ok(compiled), warnings)
     }
+}
+
+/// Whether a sheet of the design was not read: one that exists but could not
+/// be, or a missing file a sheet symbol still places. A missing page no
+/// symbol places is not part of the design any more (#2742).
+fn has_unread_sheets(set: &project_sheets::ProjectSheetSet) -> bool {
+    if !set.unreadable.is_empty() {
+        return true;
+    }
+    let absent: HashSet<String> = set
+        .absent
+        .iter()
+        .map(|path| path_key_with(path, set.fold))
+        .collect();
+    !absent.is_empty()
+        && set.sheets.iter().any(|(path, sheet)| {
+            let dir = path.parent().unwrap_or_else(|| std::path::Path::new(""));
+            sheet.child_sheets.iter().any(|child| {
+                project_sheets::resolve_child_reference_quiet(dir, &child.filename)
+                    .is_ok_and(|file| absent.contains(&path_key_with(&file, set.fold)))
+            })
+        })
 }
 
 fn root_missing(root: &std::path::Path) -> String {

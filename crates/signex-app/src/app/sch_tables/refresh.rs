@@ -18,8 +18,9 @@ pub(crate) type Contents = Vec<ContentsEntry>;
 
 /// `table` rebuilt from its source on `sheet`; `None` when it is typed,
 /// switched off, its source is gone (the rows stay as they were) or nothing
-/// changed. `has_unread_sheets`: the compile could not read a sheet, so a
-/// contents row it did not reach stays (#2742).
+/// changed. `has_unread_sheets`: the compile could not read a sheet, or a
+/// sheet symbol places a missing file, so a contents row it did not reach
+/// stays (#2742).
 pub(crate) fn rebuilt_table(
     sheet: &SchematicSheet,
     table: &SchTable,

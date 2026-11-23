@@ -258,29 +258,42 @@ fn app_with_a_compile(path: &std::path::Path) -> Signex {
 /// #2742: the compile tells a sheet it could not read from one that is gone.
 #[test]
 fn a_compile_tells_an_unreadable_sheet_from_an_absent_one() {
-    use crate::app::handlers::menu::export::tests::sheet_with_net;
     let dir = tempfile::tempdir().expect("dir");
-    let root = dir.path().join("top.snxsch");
-    let compile = |child: &str| {
-        let (mut app, _task) = Signex::new();
-        let job = super::job::CompileJob {
-            project: app.document_state.mint_project_id(),
-            generation: 1,
-            open: [(root.clone(), sheet_with_net("R1", "N", &[child]))]
-                .into_iter()
-                .collect(),
-            pages: Vec::new(),
-            root: root.clone(),
-            fold: Default::default(),
-            project_dir: dir.path().to_path_buf(),
-            naming: Default::default(),
-        };
-        job.run().result.expect("the root compiles")
-    };
     std::fs::write(dir.path().join("bad.snxsch"), "not a sheet").expect("seed");
 
-    assert!(compile("bad.snxsch").has_unread_sheets);
-    assert!(!compile("gone.snxsch").has_unread_sheets);
+    assert!(compile_of(dir.path(), &["bad.snxsch"], &[]).has_unread_sheets);
+    // A sheet symbol still places the missing file (Caner, 2026-11-23).
+    assert!(compile_of(dir.path(), &["gone.snxsch"], &[]).has_unread_sheets);
+}
+
+/// `top.snxsch`, open, with a sheet symbol per `children`, and `pages` as the
+/// project's declared pages.
+fn compile_of(dir: &std::path::Path, children: &[&str], pages: &[&str]) -> super::job::Compiled {
+    use crate::app::handlers::menu::export::tests::sheet_with_net;
+    let root = dir.join("top.snxsch");
+    let (mut app, _task) = Signex::new();
+    let job = super::job::CompileJob {
+        project: app.document_state.mint_project_id(),
+        generation: 1,
+        open: [(root.clone(), sheet_with_net("R1", "N", children))]
+            .into_iter()
+            .collect(),
+        pages: pages.iter().map(|page| dir.join(page)).collect(),
+        root,
+        fold: Default::default(),
+        project_dir: dir.to_path_buf(),
+        naming: Default::default(),
+    };
+    job.run().result.expect("the root compiles")
+}
+
+/// #2742: a missing file no sheet symbol places is really gone, so its row
+/// may leave the table.
+#[test]
+fn a_missing_page_no_sheet_symbol_places_counts_as_removed() {
+    let dir = tempfile::tempdir().expect("dir");
+
+    assert!(!compile_of(dir.path(), &[], &["gone.snxsch"]).has_unread_sheets);
 }
 
 #[test]

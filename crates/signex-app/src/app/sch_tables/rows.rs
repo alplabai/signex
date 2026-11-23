@@ -202,8 +202,9 @@ fn same_sheet_link(old: &str, fresh: &str) -> bool {
 
 /// `rows` and `links` with every row of `table` the compile did not reach put
 /// back at its place, unchanged but for its page number. For a compile that
-/// could not read a sheet: a row it did not reach may be that sheet or one
-/// below it, so it is not known to be gone.
+/// could not read a sheet, or met a sheet symbol whose file is missing: a row
+/// it did not reach may be that sheet or one below it, so it is not known to
+/// be gone.
 pub(crate) fn keeping_unreached_rows(
     table: &SchTable,
     mut rows: Vec<Vec<String>>,
