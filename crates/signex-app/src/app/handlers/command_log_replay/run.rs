@@ -301,7 +301,7 @@ impl Signex {
             let outcome = if ran {
                 CommandOutcome::Ran
             } else {
-                CommandOutcome::disabled(no_change())
+                refused(no_change())
             };
             (outcome, Task::none())
         };
@@ -450,6 +450,15 @@ fn numbers_unread(document: &Path) -> Translatable {
         .arg("document", document_name(document))
 }
 
-pub(super) fn no_change() -> String {
-    Translatable::new(ids::COMMAND_LOG_REPLAY_NO_CHANGE).render_en_us()
+pub(super) fn no_change() -> Translatable {
+    Translatable::new(ids::COMMAND_LOG_REPLAY_NO_CHANGE)
+}
+
+pub(super) fn refused(reason: Translatable) -> CommandOutcome {
+    CommandOutcome::Disabled { reason }
+}
+
+/// A refusal in the words of the engine or handler that made it.
+pub(super) fn refused_with(reason: String) -> CommandOutcome {
+    refused(Translatable::new(ids::COMMAND_LOG_REPLAY_REFUSED).arg("reason", reason))
 }

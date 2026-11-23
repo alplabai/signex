@@ -7,13 +7,14 @@ use iced::Task;
 use pcb_geom::ItemRef;
 use signex_engine::Command;
 use signex_engine::pcb::{BoardCommand, BoardReplayGuard, placement};
-use signex_i18n::{RenderTranslatable, Translatable, ids};
+use signex_i18n::{Translatable, ids};
 use signex_types::pcb::Point;
 
 use super::book::ReplayInput;
 use super::rebase;
 use super::run::{
-    document_busy, document_closed, document_name, no_change, targets_gone, tool_active,
+    document_busy, document_closed, document_name, no_change, refused, refused_with, targets_gone,
+    tool_active,
 };
 use super::selection::Shown;
 use crate::app::command::CommandOutcome;
@@ -38,9 +39,9 @@ fn board_outcome<E: std::fmt::Display>(
     result: Result<Vec<signex_engine::pcb::BoardPatch>, E>,
 ) -> CommandOutcome {
     match result {
-        Ok(patches) if patches.is_empty() => CommandOutcome::disabled(no_change()),
+        Ok(patches) if patches.is_empty() => refused(no_change()),
         Ok(_) => CommandOutcome::Ran,
-        Err(error) => CommandOutcome::disabled(error.to_string()),
+        Err(error) => refused_with(error.to_string()),
     }
 }
 
@@ -179,7 +180,7 @@ impl Signex {
             _ => {
                 let outcome = match row.document.as_deref() {
                     Some(document) => self.run_document_input(document, input),
-                    None => CommandOutcome::disabled(no_change()),
+                    None => refused(no_change()),
                 };
                 (outcome, Task::none())
             }
@@ -198,7 +199,7 @@ impl Signex {
                 let now = engine.and_then(|e| rebase::rebased(e.document(), commands, pre_images));
                 match now {
                     Some(commands) => self.run_sheet_commands(document, &commands),
-                    None => CommandOutcome::disabled(no_change()),
+                    None => refused(no_change()),
                 }
             }
             ReplayInput::Board { commands, .. } => self.run_board_commands(document, commands),
@@ -214,7 +215,7 @@ impl Signex {
                 degrees,
             } => match self.place_reuse_block(document, name, *anchor, *degrees) {
                 Ok(_) => CommandOutcome::Ran,
-                Err(why) => CommandOutcome::disabled(why),
+                Err(why) => refused_with(why),
             },
             ReplayInput::FootprintSwap {
                 footprints,
@@ -223,14 +224,14 @@ impl Signex {
                 let before = self.board_revision(document);
                 self.swap_footprints(document, footprints, Ok(template.clone()));
                 let outcome = if self.board_revision(document) == before {
-                    CommandOutcome::disabled(no_change())
+                    refused(no_change())
                 } else {
                     CommandOutcome::Ran
                 };
                 self.repaint_board_selection(document);
                 outcome
             }
-            _ => CommandOutcome::disabled(no_change()),
+            _ => refused(no_change()),
         }
     }
 
@@ -248,7 +249,7 @@ impl Signex {
                 let held = self.take_main_selection();
                 if !self.focus_open_sheet(document) {
                     self.give_back_main_selection(held);
-                    return CommandOutcome::disabled(document_busy(document).render_en_us());
+                    return refused(document_busy(document));
                 }
                 let outcome = self.apply_recorded_sheet(commands);
                 self.clear_main_selection();
@@ -256,7 +257,7 @@ impl Signex {
                 self.give_back_main_selection(held);
                 outcome
             }
-            None => CommandOutcome::disabled(document_closed(document).render_en_us()),
+            None => refused(document_closed(document)),
         }
     }
 
@@ -266,7 +267,7 @@ impl Signex {
         commands: Vec<Command>,
         window: iced::window::Id,
     ) -> CommandOutcome {
-        let mut outcome = CommandOutcome::disabled(no_change());
+        let mut outcome = refused(no_change());
         let _done = self.run_in_window_document(window, |app| {
             outcome = app.apply_recorded_sheet(commands);
             Task::none()
@@ -291,7 +292,7 @@ impl Signex {
         match outcome {
             MutationOutcome::Changed => CommandOutcome::Ran,
             MutationOutcome::Unchanged | MutationOutcome::Failed => {
-                CommandOutcome::disabled(refusal.unwrap_or_else(no_change))
+                refusal.map_or_else(|| refused(no_change()), refused_with)
             }
         }
     }
@@ -312,7 +313,7 @@ impl Signex {
         leaves_tracks: bool,
     ) -> CommandOutcome {
         let Some(board) = self.document_state.pcb_board(document) else {
-            return CommandOutcome::disabled(document_closed(document).render_en_us());
+            return refused(document_closed(document));
         };
         let built = if leaves_tracks {
             placement::move_footprints_only(board, footprints, delta)
@@ -321,7 +322,7 @@ impl Signex {
         };
         match built {
             Ok(commands) => self.run_board_commands(document, &commands),
-            Err(refusal) => CommandOutcome::disabled(refusal.to_string()),
+            Err(refusal) => refused_with(refusal.to_string()),
         }
     }
 

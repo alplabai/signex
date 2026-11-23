@@ -8,7 +8,7 @@ use signex_i18n::Translatable;
 
 use super::book::ReplayInput;
 use super::editors::{EditorTargets, footprint_targets, symbol_targets};
-use super::run::{document_closed, no_change, targets_gone, tool_active};
+use super::run::{document_closed, no_change, refused, targets_gone, tool_active};
 use super::scope::EditFamily;
 use super::selection::Shown;
 use crate::app::command::CommandOutcome;
@@ -127,7 +127,7 @@ impl Signex {
                 let held = self.take_main_selection();
                 if !self.focus_open_sheet(path) {
                     self.give_back_main_selection(held);
-                    return (CommandOutcome::disabled(no_change()), Task::none());
+                    return (refused(no_change()), Task::none());
                 }
                 let task = self.on_editor_targets(path, targets, send);
                 self.return_to_tab(back.as_ref());
@@ -138,7 +138,7 @@ impl Signex {
         };
         self.refresh_panel_ctx();
         let outcome = if self.editor_history(path) == before {
-            CommandOutcome::disabled(no_change())
+            refused(no_change())
         } else {
             CommandOutcome::Ran
         };
@@ -176,7 +176,7 @@ impl Signex {
             .and_then(|editor| editor.state.pads.get(idx))
             .map(|pad| pad.position_mm)
         else {
-            return (CommandOutcome::disabled(no_change()), Task::none());
+            return (refused(no_change()), Task::none());
         };
         let message = PrimitiveEdit::Footprint(FootprintEditorMsg::MovePad {
             idx,
