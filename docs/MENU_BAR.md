@@ -904,7 +904,10 @@ selected. Copy Attributes copies the object at the point the menu was opened
 over, else the selected part. Sheet Actions holds Open Child Sheet, Create Sheet
 From Sheet Symbol, Sync Sheet Pins and Synchronize Sheet Entries and Ports...,
 live with a sheet symbol selected, then Create Sheet Symbol From Sheet... and
-Number Schematic Sheets (#1276).
+Number Schematic Sheets (#1276). When the symbol's file is missing, Open Child
+Sheet is disabled with the reason, a double-click or the harness panel's Go to
+logs the same reason and opens nothing, and Create Sheet From Sheet Symbol makes
+the file (#2847).
 
 Unions (mockup row 158) holds Create Union… (`create_union`, live with a selection,
 `Ctrl+G` in the default profile), Add Selection to Union (`add_to_union`, the
