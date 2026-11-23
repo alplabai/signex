@@ -25,6 +25,10 @@ use crate::panels::{
 
 const SIZE: iced::Size = iced::Size::new(1600.0, 1000.0);
 
+/// Puts the From X box's right edge on x = 1498 whatever the UI font, so its
+/// 1 px border has whole pixels in the exact colour.
+const PIXEL_ALIGNED_RIGHT_DOCK: f32 = 300.0 + 4.0 / 11.0;
+
 /// One window of a running app: its widget state survives between keys.
 struct Session {
     app: Signex,
@@ -128,6 +132,11 @@ impl Session {
         let mut app = app_with_tool(Tool::LinearDimension);
         let main = iced::window::Id::unique();
         app.ui_state.main_window_id = Some(main);
+        // Every update refits the shown width from the preferred one.
+        app.document_state
+            .dock
+            .set_preferred_width(crate::dock::PanelPosition::Right, PIXEL_ALIGNED_RIGHT_DOCK);
+        app.ui_state.right_width = PIXEL_ALIGNED_RIGHT_DOCK;
         Self::paused_in(app, main)
     }
 
@@ -427,13 +436,31 @@ fn refused_pixels(session: &Session) -> usize {
         .count()
 }
 
+/// For a failed mark: a small closest distance is a border that missed whole
+/// pixels, a large one a box not drawn in the refused colour.
+fn refused_report(session: &Session, unmarked: usize) -> String {
+    let error = crate::styles::ti(session.app.document_state.panel_ctx.tokens.error);
+    let [r, g, b, _] = error.into_rgba8();
+    let closest = crate::layout_probe::draw_pixels(session.app.view(session.window), SIZE)
+        .chunks_exact(4)
+        .map(|p| p[0].abs_diff(r).max(p[1].abs_diff(g)).max(p[2].abs_diff(b)))
+        .min()
+        .unwrap_or(u8::MAX);
+    let marked = refused_pixels(session);
+    format!("{marked} refused pixels, {unmarked} unmarked, closest channel distance {closest}")
+}
+
 #[test]
 fn the_real_box_is_drawn_refused_only_while_its_text_does_not_read() {
     let mut session = Session::docked();
     let unmarked = refused_pixels(&session);
     let field = type_in_from_x(&mut session, "abc");
     submit(&mut session, field);
-    assert!(refused_pixels(&session) > unmarked, "the box is marked");
+    assert!(
+        refused_pixels(&session) > unmarked,
+        "the box is marked: {}",
+        refused_report(&session, unmarked)
+    );
     type_in_from_x(&mut session, "2.54");
     assert_eq!(refused_pixels(&session), unmarked, "the mark is gone");
 }
@@ -470,7 +497,11 @@ fn press_tab(session: &mut Session) {
 fn assert_tab_kept_the_refused_text(session: &Session, typed: &str, unmarked: usize) {
     assert!(session.is_paused(), "Tab does not resume");
     assert_eq!(draft_text(session), Some(typed), "the text stays");
-    assert!(refused_pixels(session) > unmarked, "the box stays marked");
+    assert!(
+        refused_pixels(session) > unmarked,
+        "the box stays marked: {}",
+        refused_report(session, unmarked)
+    );
 }
 
 #[test]
