@@ -249,9 +249,38 @@ fn app_with_a_compile(path: &std::path::Path) -> Signex {
             paths: std::collections::HashMap::from([(key, path.to_path_buf())]),
             compiled_at: "12:41".to_string(),
             stale: Default::default(),
+            has_unread_sheets: false,
         },
     );
     app
+}
+
+/// #2742: the compile tells a sheet it could not read from one that is gone.
+#[test]
+fn a_compile_tells_an_unreadable_sheet_from_an_absent_one() {
+    use crate::app::handlers::menu::export::tests::sheet_with_net;
+    let dir = tempfile::tempdir().expect("dir");
+    let root = dir.path().join("top.snxsch");
+    let compile = |child: &str| {
+        let (mut app, _task) = Signex::new();
+        let job = super::job::CompileJob {
+            project: app.document_state.mint_project_id(),
+            generation: 1,
+            open: [(root.clone(), sheet_with_net("R1", "N", &[child]))]
+                .into_iter()
+                .collect(),
+            pages: Vec::new(),
+            root: root.clone(),
+            fold: Default::default(),
+            project_dir: dir.path().to_path_buf(),
+            naming: Default::default(),
+        };
+        job.run().result.expect("the root compiles")
+    };
+    std::fs::write(dir.path().join("bad.snxsch"), "not a sheet").expect("seed");
+
+    assert!(compile("bad.snxsch").has_unread_sheets);
+    assert!(!compile("gone.snxsch").has_unread_sheets);
 }
 
 #[test]

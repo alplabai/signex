@@ -429,3 +429,133 @@ fn contents_pages_follow_the_channel_choice() {
     assert_eq!(per_sheet.len(), 2);
     assert_eq!(per_sheet[1].file, "buck_channel.snxsch");
 }
+
+fn contents_entry(page: usize, name: &str, title: &str, rev: &str) -> rows::ContentsEntry {
+    rows::ContentsEntry {
+        page,
+        sheet: name.into(),
+        title: title.into(),
+        revision: rev.into(),
+        last_changed: String::new(),
+        file: format!("{name}.snxsch"),
+    }
+}
+
+/// A contents table listing `top`, `bad` (Title Buck, Rev B) and `leaf`.
+fn contents_table() -> SchTable {
+    let mut table = SchTable::new_typed(uuid::Uuid::from_u128(9), Point::new(0.0, 0.0));
+    table.source = TableSource::ProjectSheets { per_channel: true };
+    table.columns = SchTable::columns_for(&table.source);
+    let entries = [
+        contents_entry(1, "top", "Top", "A"),
+        contents_entry(2, "bad", "Buck", "B"),
+        contents_entry(3, "leaf", "Leaf", "C"),
+    ];
+    (table.rows, table.links) = rows::contents_table_rows(&entries, &table.columns);
+    table
+}
+
+/// What a compile that could not read `bad` lists: `leaf` moves up a page.
+fn pages_without_bad(leaf_title: &str) -> refresh::Contents {
+    vec![
+        contents_entry(1, "top", "Top", "A"),
+        contents_entry(2, "leaf", leaf_title, "C"),
+    ]
+}
+
+fn title_cells(table: &SchTable) -> Vec<String> {
+    let title = table
+        .columns
+        .iter()
+        .position(|c| c.key == signex_types::schematic::sheet_columns::TITLE)
+        .expect("a Title column");
+    table.rows.iter().map(|r| r[title].clone()).collect()
+}
+
+/// #2742: with a sheet unread nothing changed, so there is no edit at all.
+#[test]
+fn an_unread_sheet_keeps_its_row_and_the_refresh_changes_nothing() {
+    let table = contents_table();
+    let sheet = SchematicSheet::default();
+    let pages = |_: bool| Some(pages_without_bad("Leaf"));
+    assert_eq!(
+        refresh::rebuilt_table(&sheet, &table, &pages, true),
+        None,
+        "same rows, same page numbers"
+    );
+}
+
+/// #2742: the readable rows refresh around the kept one, which stays in its
+/// place with its Title and Rev.
+#[test]
+fn readable_rows_refresh_around_an_unread_sheets_row() {
+    let table = contents_table();
+    let sheet = SchematicSheet::default();
+    let pages = |_: bool| Some(pages_without_bad("Leaf v2"));
+    let next = refresh::rebuilt_table(&sheet, &table, &pages, true).expect("leaf changed");
+    assert_eq!(title_cells(&next), ["Top", "Buck", "Leaf v2"]);
+    assert_eq!(next.rows[1], table.rows[1], "the kept row is unchanged");
+    assert_eq!(next.links, table.links);
+    assert_eq!(
+        next.cell(2, 0),
+        "3",
+        "leaf keeps its page after the kept row"
+    );
+}
+
+/// #2742: with every sheet read, a sheet no longer in the project leaves.
+#[test]
+fn a_removed_sheet_leaves_the_table_when_every_sheet_was_read() {
+    let table = contents_table();
+    let sheet = SchematicSheet::default();
+    let pages = |_: bool| Some(pages_without_bad("Leaf"));
+    let next = refresh::rebuilt_table(&sheet, &table, &pages, false).expect("a row left");
+    assert_eq!(title_cells(&next), ["Top", "Leaf"]);
+    assert_eq!(next.links, ["top.snxsch", "leaf.snxsch"]);
+}
+
+/// #2742: an old bare link naming a sheet the compile reached is that sheet,
+/// not a second row, while another sheet is unread.
+#[test]
+fn a_bare_link_to_a_reached_sheet_is_not_kept_as_a_second_row() {
+    let mut table = contents_table();
+    table.links[2] = "leaf.snxsch".into();
+    let mut fresh = pages_without_bad("Leaf");
+    fresh[1].file = "power/leaf.snxsch".into();
+    let sheet = SchematicSheet::default();
+    let pages = |_: bool| Some(fresh.clone());
+    let next = refresh::rebuilt_table(&sheet, &table, &pages, true).expect("the link is rewritten");
+    assert_eq!(title_cells(&next), ["Top", "Buck", "Leaf"]);
+    assert_eq!(next.links[2], "power/leaf.snxsch");
+}
+
+/// #2742: through the real refresh, a compile with an unread sheet pushes no
+/// undo step and leaves the table as it was.
+#[test]
+fn the_refresh_after_a_compile_with_an_unread_sheet_pushes_no_undo_step() {
+    use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
+    let mut app = app_workspace("/w/toc-unread", &["contents.snxsch"]);
+    let path = std::path::PathBuf::from("/w/toc-unread/contents.snxsch");
+    let table = contents_table();
+    let mut sheet = SchematicSheet::default();
+    sheet.drawings.push(SchDrawing::Table(table.clone()));
+    open_with(&mut app.document_state, &path, sheet);
+    let project = app.document_state.projects[0].id;
+    app.document_state.compiled_design.results.insert(
+        project,
+        crate::app::core::compiled_design::CompiledResult {
+            design: std::sync::Arc::new(signex_net::CompiledDesign::default()),
+            paths: Default::default(),
+            compiled_at: "12:41".to_string(),
+            stale: Default::default(),
+            has_unread_sheets: true,
+        },
+    );
+    let steps = app.document_state.engines[&path].undo_position();
+
+    app.refresh_bound_tables(Some(project));
+
+    let engine = &app.document_state.engines[&path];
+    assert_eq!(engine.undo_position(), steps);
+    assert_eq!(engine.document().drawings[0], SchDrawing::Table(table));
+}

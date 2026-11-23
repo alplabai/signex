@@ -41,6 +41,8 @@ pub struct CompileOutcome {
 pub struct Compiled {
     pub design: CompiledDesign,
     pub paths: HashMap<SheetKey, PathBuf>,
+    /// A sheet exists but could not be read; an absent file does not count.
+    pub has_unread_sheets: bool,
 }
 
 impl CompileJob {
@@ -89,6 +91,7 @@ impl CompileJob {
         let compiled = Compiled {
             design,
             paths: graph.paths.clone(),
+            has_unread_sheets: !set.unreadable.is_empty(),
         };
         outcome(Ok(compiled), warnings)
     }

@@ -43,6 +43,13 @@ and Properties says the part is gone. The refresh is a normal edit through the
 mutation gateway, so a sheet showing a channel tab or a read-only sheet
 refuses it and Messages says why (`docs/MULTI_CHANNEL.md`, "Bound tables").
 
+When a compile could not read a sheet that exists, a Project sheets row it did
+not reach stays in its place with its Title and Rev: it may be that sheet or a
+sheet below it, so it is not known to be gone. The rows the compile read
+refresh around it, and a table with nothing new gets no undo step. Once every
+sheet reads, a sheet no longer in the project leaves the table. A file that is
+absent is not "cannot be read", so its row leaves.
+
 ## CSV
 
 A typed table's Import… reads a CSV file (comma separated, quoted fields may

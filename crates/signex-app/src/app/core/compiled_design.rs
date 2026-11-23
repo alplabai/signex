@@ -21,6 +21,9 @@ pub struct CompiledResult {
     pub compiled_at: String,
     /// Sheets edited since the compile.
     pub stale: BTreeSet<PathBuf>,
+    /// A sheet exists but could not be read, so a page missing from `design`
+    /// is not known to be removed from the project (#2742).
+    pub has_unread_sheets: bool,
 }
 
 impl CompiledResult {

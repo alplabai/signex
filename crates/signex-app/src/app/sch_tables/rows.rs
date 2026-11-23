@@ -190,6 +190,54 @@ pub(crate) fn contents_table_rows(
     (rows, links)
 }
 
+/// Whether the stored link `old` names the sheet of the fresh link: the same
+/// text, or an old bare file name for a link that now has its folder.
+fn same_sheet_link(old: &str, fresh: &str) -> bool {
+    old == fresh
+        || (!old.contains(['/', '\\'])
+            && std::path::Path::new(fresh)
+                .file_name()
+                .is_some_and(|name| name == old))
+}
+
+/// `rows` and `links` with every row of `table` the compile did not reach put
+/// back at its place, unchanged but for its page number. For a compile that
+/// could not read a sheet: a row it did not reach may be that sheet or one
+/// below it, so it is not known to be gone.
+pub(crate) fn keeping_unreached_rows(
+    table: &SchTable,
+    mut rows: Vec<Vec<String>>,
+    mut links: Vec<String>,
+) -> (Vec<Vec<String>>, Vec<String>) {
+    let column = |key: &str| table.columns.iter().position(|c| c.key == key);
+    let sheet = column(sheet_columns::SHEET);
+    let names: Vec<String> = sheet
+        .map(|c| rows.iter().filter_map(|r| r.get(c).cloned()).collect())
+        .unwrap_or_default();
+    let reached_links = links.clone();
+    for (i, old) in table.rows.iter().enumerate() {
+        let reached = match table.link(i) {
+            Some(link) => reached_links.iter().any(|f| same_sheet_link(link, f)),
+            None => sheet
+                .and_then(|c| old.get(c))
+                .is_some_and(|name| names.contains(name)),
+        };
+        if !reached {
+            let at = i.min(rows.len());
+            rows.insert(at, old.clone());
+            links.insert(at, table.link(i).unwrap_or_default().to_string());
+        }
+    }
+    if let Some(page) = column(sheet_columns::PAGE) {
+        for (i, row) in rows.iter_mut().enumerate() {
+            if let Some(cell) = row.get_mut(page) {
+                *cell = (i + 1).to_string();
+            }
+        }
+    }
+    (rows, links)
+}
+
 /// The designators of the parts on `sheet`, in natural order, each once
 /// (power ports left out).
 pub(crate) fn designators(sheet: &SchematicSheet) -> Vec<String> {
