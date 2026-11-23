@@ -5,12 +5,25 @@
 use signex_types::schematic::{DimensionDirection, Point, SchDimension, SchDrawing};
 
 use super::super::super::*;
+use crate::app::dispatch::input::ESCAPE_KEY;
 use crate::app::sch_tables::{AnnotationEdit, apply_annotation_edit};
-use crate::panels::{AnnotationPanelMsg, DimensionToolForm};
+use crate::panels::{AnnotationField, AnnotationPanelMsg, DimensionToolForm};
 
 /// The span the form's drawing shows until two points are clicked (mm).
 const SAMPLE_SPAN_MM: f64 = 12.7;
 const SAMPLE_OFFSET_MM: f64 = -2.54;
+
+/// Whether `event` shows the Esc press that resumed is no longer down: its
+/// release, or a window event after which that release may never arrive.
+pub(crate) fn ends_held_resume_esc(event: &iced::Event) -> bool {
+    match event {
+        iced::Event::Keyboard(iced::keyboard::Event::KeyReleased { key, .. }) => {
+            ESCAPE_KEY.matches(key)
+        }
+        iced::Event::Window(iced::window::Event::Unfocused | iced::window::Event::Closed) => true,
+        _ => false,
+    }
+}
 
 impl Signex {
     /// The dimension tool armed on a schematic sheet.
@@ -63,7 +76,12 @@ impl Signex {
     }
 
     /// A message of the armed tool's form: it edits the tool, never the sheet.
-    pub(crate) fn handle_dimension_tool_panel(&mut self, msg: AnnotationPanelMsg) {
+    pub(crate) fn handle_dimension_tool_panel(&mut self, msg: AnnotationPanelMsg) -> Task<Message> {
+        // The values of a dimension paused in another window are that
+        // window's form to edit.
+        if self.interaction_state.is_sheet_pause_elsewhere() {
+            return Task::none();
+        }
         let id = uuid::Uuid::nil();
         match msg {
             AnnotationPanelMsg::FieldTyped(field, text) => {
@@ -77,18 +95,76 @@ impl Signex {
                 }
             }
             AnnotationPanelMsg::FieldSubmitted(field) => {
-                let draft = &mut self.document_state.panel_ctx.annotation.draft;
-                if matches!(draft, Some((d, f, _)) if *d == id && *f == field) {
-                    *draft = None;
-                }
+                return self.submit_dimension_tool_field(field);
             }
             AnnotationPanelMsg::Picked(edit) => {
                 self.document_state.panel_ctx.annotation.draft = None;
                 self.apply_dimension_tool_edit(&edit);
             }
+            // The box captured the key: this is the press's one Esc. Only the
+            // pause answers, so no menu or dialog of any window closes.
+            AnnotationPanelMsg::OverrideEscaped => {
+                self.cancel_pending_chord();
+                if self.interaction_state.active_canvas().placement_paused {
+                    self.interaction_state.annotation_tool.is_resume_esc_held = true;
+                    return self.resume_placement_without_edits();
+                }
+                return Task::none();
+            }
             AnnotationPanelMsg::CsvImportRequested | AnnotationPanelMsg::CsvExportRequested => {}
         }
         self.sync_annotation_draft();
+        Task::none()
+    }
+
+    /// Enter in the form: the typed value stands and a paused tool goes on
+    /// placing, as a second Tab does. Text that does not read, in whichever
+    /// box of the form holds it, stays there and keeps the pause.
+    fn submit_dimension_tool_field(&mut self, field: AnnotationField) -> Task<Message> {
+        let is_paused = self.interaction_state.active_canvas().placement_paused;
+        if is_paused && !self.dimension_form_draft_reads() {
+            return Task::none();
+        }
+        let draft = &mut self.document_state.panel_ctx.annotation.draft;
+        draft.take_if(|(id, f, _)| id.is_nil() && *f == field);
+        self.sync_annotation_draft();
+        if !is_paused {
+            return Task::none();
+        }
+        self.update(Message::Tool(ToolMessage::PrePlacementTab))
+    }
+
+    /// Whether this key event is a repeat of the Esc press that resumed from
+    /// the Override box. A new Esc press or its release ends that hold; the
+    /// release is read here too because a quick tap can arrive before the
+    /// held-Esc listener is live.
+    pub(crate) fn is_repeat_of_resuming_esc(&mut self, event: &iced::keyboard::Event) -> bool {
+        use iced::keyboard::Event::{KeyPressed, KeyReleased};
+        let held = &mut self.interaction_state.annotation_tool.is_resume_esc_held;
+        match event {
+            KeyPressed { key, repeat, .. } if ESCAPE_KEY.matches(key) => {
+                *held &= *repeat;
+                *held
+            }
+            KeyReleased { key, .. } if ESCAPE_KEY.matches(key) => {
+                *held = false;
+                false
+            }
+            _ => false,
+        }
+    }
+
+    /// Whether the text typed in the form, if any, reads for its own box.
+    fn dimension_form_draft_reads(&self) -> bool {
+        let draft = self.document_state.panel_ctx.annotation.draft.as_ref();
+        draft
+            .filter(|(id, _, _)| id.is_nil())
+            .is_none_or(|(_, field, text)| {
+                self.document_state.active_engine().is_some_and(|engine| {
+                    let sheet = engine.document();
+                    field.edit(text, |y| sheet.page_y(y)).is_some()
+                })
+            })
     }
 
     fn apply_dimension_tool_edit(&mut self, edit: &AnnotationEdit) {
@@ -144,7 +220,9 @@ impl Signex {
         {
             return false;
         }
-        if !self.interaction_state.active_canvas().placement_paused {
+        if !self.interaction_state.active_canvas().placement_paused
+            && !self.interaction_state.is_sheet_pause_elsewhere()
+        {
             let style = &mut self.interaction_state.annotation_tool.dimension;
             style.flipped = !style.flipped;
             self.sync_annotation_draft();
@@ -194,13 +272,15 @@ impl Signex {
         ))
     }
 
-    /// The pause ended: the box lets go, so Space and Tab reach the tool.
+    /// The pause ended: the box lets go, so Space and Tab reach the tool, and
+    /// text it refused does not outlive the pause it was typed in.
     pub(crate) fn release_dimension_override(&mut self) -> Task<Message> {
         if self.armed_dimension_tool().is_none()
             || self.interaction_state.active_canvas().placement_paused
         {
             return Task::none();
         }
+        self.drop_dimension_form_draft();
         self.sync_annotation_draft();
         super::super::detached_modals::unfocus_text_inputs()
     }

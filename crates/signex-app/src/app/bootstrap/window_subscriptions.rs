@@ -3,8 +3,9 @@
 
 use iced::Subscription;
 
+use crate::app::handlers::canvas::ends_held_resume_esc;
 use crate::app::handlers::editing_commands::net_color_palette::is_pointer_press;
-use crate::app::{Message, NetColorMsg, WindowMsg};
+use crate::app::{InputMsg, Message, NetColorMsg, WindowMsg};
 
 /// Which window has focus: the system menu bar acts on it.
 pub(super) fn window_focus() -> Subscription<Message> {
@@ -27,6 +28,17 @@ pub(super) fn net_color_chooser_presses(is_open: bool) -> Subscription<Message> 
     }
     iced::event::listen_with(|event, _status, window| {
         is_pointer_press(&event).then_some(Message::NetColor(NetColorMsg::PressedInWindow(window)))
+    })
+}
+
+/// The end of the Esc press that resumed a dimension, while it is held.
+/// Captured events count: a widget taking the release must not leave it held.
+pub(super) fn held_escape_end(is_held: bool) -> Subscription<Message> {
+    if !is_held {
+        return Subscription::none();
+    }
+    iced::event::listen_with(|event, _status, _window| {
+        ends_held_resume_esc(&event).then_some(Message::Input(InputMsg::HeldEscapeEnded))
     })
 }
 

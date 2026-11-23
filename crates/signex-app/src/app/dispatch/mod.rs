@@ -378,6 +378,7 @@ impl Signex {
                         // that's gone.
                         WindowKind::UndockedTab { path, .. } => {
                             self.end_wire_of_window(id);
+                            self.end_pause_of_window(id);
                             self.interaction_state.canvases.remove(&id);
                             self.interaction_state.pcb_canvases.remove(&id);
                             self.interaction_state.pcb_selections.remove(&id);
@@ -523,6 +524,7 @@ impl Signex {
                 self.ui_state.forget_undocked_window_size(id);
                 let reattached = self.ui_state.windows.remove(&id);
                 self.end_wire_of_window(id);
+                self.end_pause_of_window(id);
                 self.interaction_state.canvases.remove(&id);
                 self.interaction_state.pcb_canvases.remove(&id);
                 self.interaction_state.pcb_selections.remove(&id);

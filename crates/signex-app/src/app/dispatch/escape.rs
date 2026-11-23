@@ -396,12 +396,13 @@ impl Signex {
     /// Esc while placement is paused: go on placing with the values the
     /// pause began with. The panel edits made while paused are dropped, the
     /// tool stays armed (#2529).
-    fn resume_placement_without_edits(&mut self) -> Task<Message> {
+    pub(in crate::app) fn resume_placement_without_edits(&mut self) -> Task<Message> {
         let undone = match self.interaction_state.placement_pause.take() {
             Some(SheetPlacementPause::Sheet {
                 before,
                 at_pause,
                 reference_override,
+                ..
             }) => {
                 let undone = self.undo_pause_mirrors(at_pause.as_deref());
                 if let Some(session) = self.interaction_state.placement.as_mut() {

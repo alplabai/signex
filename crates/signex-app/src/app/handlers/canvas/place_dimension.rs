@@ -61,6 +61,9 @@ pub(crate) struct AnnotationTool {
     pub dimension: DimensionToolStyle,
     /// The values and points a Tab pause began with; Esc puts them back.
     pub paused_with: Option<Box<(DimensionToolStyle, Vec<Point>)>>,
+    /// The Esc press that resumed from the Override box is still down, so
+    /// its repeats are not new presses.
+    pub is_resume_esc_held: bool,
 }
 
 /// The dimension `points` (first, second) and the third click `at` place.
@@ -130,6 +133,11 @@ impl Signex {
         use crate::canvas::{AnnotationDraft, AnnotationDraftKind, HintInk};
         use signex_i18n::{ids, t};
         self.document_state.panel_ctx.annotation.dimension_tool = self.dimension_tool_form();
+        // Points paused in another window are not this canvas's to preview.
+        if self.interaction_state.is_sheet_pause_elsewhere() {
+            self.interaction_state.active_canvas_mut().annotation_draft = None;
+            return;
+        }
         let tool = self.interaction_state.current_tool;
         let kind = match tool {
             Tool::Bezier => AnnotationDraftKind::Bezier,

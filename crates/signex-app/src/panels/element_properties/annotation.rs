@@ -72,10 +72,13 @@ impl AnnotationField {
 pub enum AnnotationPanelMsg {
     /// A keystroke in a box: kept as a draft, applied once it parses.
     FieldTyped(AnnotationField, String),
-    /// Enter in a box: the draft is dropped, the box shows the stored value.
+    /// Enter in a box: the draft is dropped and the box shows the stored
+    /// value, except text the paused dimension form refuses, which stays.
     FieldSubmitted(AnnotationField),
     /// A choice was picked (segment, dropdown, checkbox).
     Picked(AnnotationEdit),
+    /// Esc was pressed in the paused dimension tool's focused Override box.
+    OverrideEscaped,
     CsvImportRequested,
     CsvExportRequested,
 }
@@ -91,6 +94,21 @@ pub struct AnnotationPanelState {
     pub source_missing: bool,
     /// The armed dimension tool's form; it takes Properties while set.
     pub dimension_tool: Option<Box<DimensionToolForm>>,
+}
+
+impl AnnotationPanelState {
+    /// Whether `typed` in the paused dimension form's `field` does not read
+    /// (mockup row 157). The drawing `id` of the tool's form is nil.
+    pub(crate) fn paused_form_refuses(
+        &self,
+        id: uuid::Uuid,
+        field: AnnotationField,
+        typed: &str,
+    ) -> bool {
+        id.is_nil()
+            && self.dimension_tool.as_ref().is_some_and(|f| f.is_paused)
+            && field.edit(typed, |y| y).is_none()
+    }
 }
 
 /// Widget id of the Override box in the paused dimension tool's form.
@@ -265,9 +283,15 @@ impl<'a> Rows<'a> {
     /// The paused tool's Override box: empty until typed in, with the
     /// measured value showing as its placeholder.
     pub fn override_tool_input(&self, value: String, measured: String) -> Element<'a, PanelMsg> {
-        self.input_box(AnnotationField::OverrideText, value, measured)
+        let input = self
+            .input_box(AnnotationField::OverrideText, value, measured)
             .id(iced::widget::Id::new(DIMENSION_OVERRIDE_INPUT))
-            .boxed()
+            .boxed();
+        signex_widgets::focused_escape::FocusedEscape::new(
+            input,
+            msg(AnnotationPanelMsg::OverrideEscaped),
+        )
+        .into()
     }
 
     fn input_box(
@@ -282,7 +306,13 @@ impl<'a> Rows<'a> {
         };
         let error = draft
             .as_deref()
-            .filter(|typed| field.refuses(typed))
+            .filter(|typed| {
+                field.refuses(typed)
+                    || self
+                        .ctx
+                        .annotation
+                        .paused_form_refuses(self.id, field, typed)
+            })
             .map(|_| ti(self.ctx.tokens.error));
         let shown = draft.unwrap_or(value);
         text_input(signex_i18n::UserText::new(placeholder), shown)

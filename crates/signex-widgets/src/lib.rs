@@ -15,6 +15,7 @@ pub mod dropdown_style;
 pub mod enable_section;
 pub mod fit_row;
 pub mod flow_progress;
+pub mod focused_escape;
 pub mod history_graph;
 pub mod history_pane;
 mod house;

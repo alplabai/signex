@@ -140,6 +140,21 @@ fn a_press_on_empty_palette_space_closes_the_chooser() {
     assert_eq!(chooser(&app), None);
 }
 
+/// The pointer leaving and focus going elsewhere are not presses on the card
+/// or the rows, so the open card ignores them.
+#[test]
+fn the_palette_view_losing_focus_leaves_the_chooser_open() {
+    let mut app = palette_with_nets();
+    open_row(&mut app, "A");
+    let at = name_of(&app, "C");
+    let events = [
+        Event::Mouse(mouse::Event::CursorLeft),
+        Event::Window(iced::window::Event::Unfocused),
+    ];
+    let _ = deliver(&mut app, &events, at, Cache::default());
+    assert_eq!(chooser(&app), Some("A"));
+}
+
 #[test]
 fn a_press_in_another_window_closes_the_chooser_and_one_in_the_palette_does_not() {
     let mut app = palette_with_nets();

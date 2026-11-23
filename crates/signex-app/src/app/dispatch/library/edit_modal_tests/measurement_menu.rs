@@ -8,6 +8,7 @@ use signex_types::quantity::SiPrefix;
 use super::*;
 
 const KEY: &str = "param_1";
+const SLOT: &str = "value";
 
 fn measured(value: f64, unit: &str) -> ParamValue {
     ParamValue::Measurement {
@@ -147,6 +148,110 @@ fn a_template_row_still_refuses_a_unit_pick() {
     let modal = app.library.library_browsers[&root].edit_modal.as_ref();
     let error = modal.and_then(|m| m.error.as_deref()).unwrap_or_default();
     assert!(error.contains("fixes its unit"), "{error}");
+}
+
+/// A template row holding 4.7 kΩ under a slot that fixes the ohm.
+fn app_with_template_kilo_ohm_row() -> (Signex, PathBuf) {
+    let (mut app, root, row_id) = app_with_browser();
+    let template = ParameterTemplate {
+        class: "generic".into(),
+        description: String::new(),
+        required_params: vec![ParamSlot {
+            name: SLOT.into(),
+            kind: ParamKind::Measurement,
+            unit: Some("ohm".into()),
+            allow_zero: false,
+            allow_negative: false,
+            display_plus_minus: false,
+        }],
+        optional_params: Vec::new(),
+    };
+    let library_id = app.library.library_at(&root).expect("library").library_id;
+    std::sync::Arc::make_mut(&mut app.library.template_registry)
+        .insert_for_library(library_id, template);
+    open_modal(&mut app, &root, row_id);
+    add_slot(&mut app, &root, SLOT);
+    for msg in [
+        BrowserEditMsg::SetParamValue {
+            key: SLOT.into(),
+            value: "4.7".into(),
+        },
+        BrowserEditMsg::ParamPrefixPicked {
+            key: SLOT.into(),
+            prefix: SiPrefix::Kilo,
+        },
+    ] {
+        let _ = app.update(edit(&root, msg));
+    }
+    assert_eq!(
+        draft_param(&app, &root, SLOT),
+        Some(measured(4700.0, "ohm"))
+    );
+    (app, root)
+}
+
+/// Mockup row 139, decided 2026-11-23: the template row's one face opens
+/// the same menu state as a custom row's.
+#[test]
+fn a_template_row_face_opens_the_measurement_menu() {
+    let (app, root) = app_with_template_kilo_ohm_row();
+    let texts = dialog_texts(&app, &root);
+    assert_eq!(texts.iter().filter(|t| *t == "kΩ").count(), 1, "{texts:?}");
+    let modal = app.library.library_browsers[&root]
+        .edit_modal
+        .as_ref()
+        .expect("the dialog is open");
+    let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+    let i18n = signex_i18n::I18n::en_us_ref();
+    let context = crate::library::edit_row_modal::EditRowContext::resolve(
+        &app.library,
+        &root,
+        modal,
+        Vec::new(),
+    );
+    let view = crate::library::edit_row_modal::view(&root, modal, &tokens, i18n, false, context);
+    let hits = crate::layout_probe::messages_on_click(view, iced::Size::new(1200.0, 900.0), "kΩ");
+    assert!(
+        matches!(
+            hits.as_slice(),
+            [LibraryMessage::BrowserEdit {
+                msg: BrowserEditMsg::UnitMenuOpened { key },
+                ..
+            }] if key == SLOT
+        ),
+        "{hits:?}"
+    );
+}
+
+#[test]
+fn a_prefix_pick_on_a_template_row_keeps_the_unit_and_number() {
+    let (mut app, root) = app_with_template_kilo_ohm_row();
+    let opened = BrowserEditMsg::UnitMenuOpened { key: SLOT.into() };
+    let _ = app.update(edit(&root, opened));
+    let picked = BrowserEditMsg::ParamPrefixPicked {
+        key: SLOT.into(),
+        prefix: SiPrefix::Mega,
+    };
+    let _ = app.update(edit(&root, picked));
+    assert_eq!(open_unit_menu(&app, &root), None);
+    let modal = app.library.library_browsers[&root].edit_modal.as_ref();
+    let number = modal.and_then(|m| m.param_buf.get(SLOT).map(|(n, _)| n.clone()));
+    assert_eq!(number.as_deref(), Some("4.7"));
+    assert_eq!(
+        draft_param(&app, &root, SLOT),
+        Some(measured(4_700_000.0, "ohm"))
+    );
+}
+
+/// Esc closes a template row's menu first, as it does a custom row's.
+#[test]
+fn escape_closes_a_template_row_menu_before_the_dialog() {
+    let (mut app, root) = app_with_template_kilo_ohm_row();
+    let opened = BrowserEditMsg::UnitMenuOpened { key: SLOT.into() };
+    let _ = app.update(edit(&root, opened));
+    let _task = app.handle_escape_pressed(None);
+    assert_eq!(open_unit_menu(&app, &root), None);
+    assert!(app.library.library_browsers[&root].edit_modal.is_some());
 }
 
 /// A row with an unknown unit shows it as written.

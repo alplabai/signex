@@ -125,6 +125,8 @@ pub enum SheetPlacementPause {
         at_pause: Option<Box<crate::panels::PrePlacementData>>,
         /// The designator typed for the part on the cursor.
         reference_override: Option<String>,
+        /// The undocked window paused in; `None` is the main window.
+        window: Option<iced::window::Id>,
     },
     /// A pad placement in the footprint editor at `path`.
     Footprint {

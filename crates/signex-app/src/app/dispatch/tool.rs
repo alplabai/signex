@@ -43,6 +43,11 @@ impl Signex {
                 {
                     return self.finish_update();
                 }
+                // A pause belongs to the window it began in: Tab elsewhere
+                // neither takes it over nor resumes it.
+                if self.interaction_state.is_sheet_pause_elsewhere() {
+                    return self.finish_update();
+                }
                 // A second Tab goes on placing with the edits, as the form's
                 // OK does; a Location that does not read keeps the pause.
                 if self.interaction_state.current_tool != Tool::Select
@@ -302,6 +307,7 @@ impl Signex {
                                 .placement
                                 .as_ref()
                                 .and_then(|s| s.reference_override.clone()),
+                            window: self.interaction_state.acting_window,
                         });
                     self.note_dimension_tool_pause();
                     let focus_override = self.focus_dimension_override();

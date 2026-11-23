@@ -372,6 +372,7 @@ impl Signex {
         self.cancel_placement_session();
         // The tool goes back to Select here, so no wire can go on, in any window.
         self.clear_drawing_buffers();
+        self.end_every_sheet_pause();
         self.interaction_state
             .active_canvas_mut()
             .set_render_cache(None);
@@ -388,6 +389,21 @@ impl Signex {
             .active_canvas_mut()
             .clear_overlay_cache();
         self.interaction_state.current_tool = Tool::Select;
+    }
+
+    /// The sheet tool ended for every window, so no canvas stays frozen.
+    fn end_every_sheet_pause(&mut self) {
+        let state = &mut self.interaction_state;
+        if matches!(
+            state.placement_pause,
+            Some(super::state::SheetPlacementPause::Sheet { .. })
+        ) {
+            state.placement_pause = None;
+            state.canvas.placement_paused = false;
+            for canvas in state.canvases.values_mut() {
+                canvas.placement_paused = false;
+            }
+        }
     }
 
     pub(crate) fn apply_loaded_pcb_document(

@@ -82,6 +82,21 @@ pub(crate) fn measurement_menu<'a, M: Clone + 'a>(
     dropdown(menu, prefixed_glyph(prefix, &unit), body, tokens)
 }
 
+/// The same menu for a row whose unit is fixed (mockup row 139): only the
+/// Prefix section. `None` for a unit that takes no prefix.
+pub(crate) fn prefix_menu<'a, M: Clone + 'a>(
+    menu: UnitMenu<M>,
+    prefix: SiPrefix,
+    on_prefix: impl Fn(SiPrefix) -> M,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Option<Element<'a, M>> {
+    let unit = menu.selected.clone().filter(Unit::takes_prefix)?;
+    let prefix = effective_prefix(&unit, prefix);
+    let body = prefix_rows(&unit, prefix, &on_prefix, tokens, i18n);
+    Some(dropdown(menu, prefixed_glyph(prefix, &unit), body, tokens))
+}
+
 /// The face labelled `label` over the open list of `body`.
 fn dropdown<'a, M: Clone + 'a>(
     menu: UnitMenu<M>,
@@ -179,13 +194,12 @@ fn unit_rows<'a, M: Clone + 'a>(
         .collect()
 }
 
-/// The "Prefix" section, then the "Unit" section, each marking its current
-/// entry. A prefix reads joined to the unit, so "no prefix" is a plain `Ω`.
-fn prefix_and_unit_rows<'a, M: Clone + 'a>(
+/// The "Prefix" heading and its entries, the current one marked. A prefix
+/// reads joined to the unit, so "no prefix" is a plain `Ω`.
+fn prefix_rows<'a, M: Clone + 'a>(
     unit: &Unit,
     prefix: SiPrefix,
     on_prefix: &impl Fn(SiPrefix) -> M,
-    on_pick: &impl Fn(String) -> M,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Column<Element<'a, M>> {
@@ -197,10 +211,23 @@ fn prefix_and_unit_rows<'a, M: Clone + 'a>(
         };
         entry(look, on_prefix(choice.prefix), tokens, i18n)
     });
-    let current = UnitChoice(Some(unit.clone()));
     Column::new()
         .push(heading(ids::LIBRARY_EDIT_ROW_PREFIX, tokens, i18n))
         .extend(prefixes)
+}
+
+/// The "Prefix" section, then the "Unit" section, each marking its current
+/// entry.
+fn prefix_and_unit_rows<'a, M: Clone + 'a>(
+    unit: &Unit,
+    prefix: SiPrefix,
+    on_prefix: &impl Fn(SiPrefix) -> M,
+    on_pick: &impl Fn(String) -> M,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Column<Element<'a, M>> {
+    let current = UnitChoice(Some(unit.clone()));
+    prefix_rows(unit, prefix, on_prefix, tokens, i18n)
         .extend(unit_rows(&current, on_pick, tokens, i18n))
 }
 
@@ -305,6 +332,25 @@ mod tests {
         assert_eq!(name(Some(Unit::Watt)).as_deref(), Some("watt"));
         assert_eq!(name(Some(Unit::Percent)), None);
         assert_eq!(name(Some(Unit::PpmPerKelvin)), None);
+    }
+
+    /// The slot of a fixed unit is the measurement menu's Prefix section,
+    /// and there is none where the unit takes no prefix.
+    #[test]
+    fn a_fixed_unit_has_a_prefix_menu_only_where_it_takes_a_prefix() {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        let i18n = I18n::en_us();
+        let segment = |unit: Unit, prefix: SiPrefix| {
+            let menu = UnitMenu {
+                selected: Some(unit),
+                is_open: false,
+                on_open: SiPrefix::One,
+                on_dismiss: SiPrefix::One,
+            };
+            prefix_menu(menu, prefix, |p| p, &tokens, &i18n)
+        };
+        assert!(segment(Unit::Ohm, SiPrefix::Kilo).is_some());
+        assert!(segment(Unit::Percent, SiPrefix::One).is_none());
     }
 
     #[derive(Debug, Clone, PartialEq)]
@@ -444,6 +490,68 @@ mod tests {
         let texts = crate::layout_probe::lay_out_texts(element, TALL);
         assert!(texts.iter().all(|t| t.text != "Prefix"));
         assert_eq!(texts[0].text, "Unit");
+    }
+
+    /// Mockup row 139, decided 2026-11-23: a fixed unit's list is the Prefix
+    /// section alone, with the current prefix marked.
+    #[test]
+    fn a_fixed_unit_list_holds_only_the_prefixes_with_the_current_marked() {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        let i18n = I18n::en_us();
+        let body = prefix_rows(&Unit::Ohm, SiPrefix::Kilo, &Pick::Prefix, &tokens, &i18n);
+        let texts: Vec<String> = crate::layout_probe::lay_out_texts(list(body, &tokens), TALL)
+            .into_iter()
+            .map(|t| t.text)
+            .collect();
+        let expected = ["Prefix", "mΩ", "Ω", "kΩ", "\u{2713}", "MΩ", "GΩ"];
+        assert_eq!(texts, expected);
+    }
+
+    /// The real open menu stops after the prefixes: where the joined list
+    /// would hold its unit entries, a press is off the list and dismisses.
+    #[test]
+    fn the_open_prefix_menu_ends_after_its_prefixes() {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        let i18n = I18n::en_us();
+        let click = |y: f32| {
+            let menu = UnitMenu {
+                selected: Some(Unit::Ohm),
+                is_open: true,
+                on_open: Pick::Unit("opened".into()),
+                on_dismiss: Pick::Unit("dismissed".into()),
+            };
+            let menu = prefix_menu(menu, SiPrefix::Kilo, Pick::Prefix, &tokens, &i18n)
+                .expect("ohm takes prefixes");
+            let gap = Space::new().height(Length::Fill).boxed();
+            let page: Element<'_, Pick> = Column::new().push(menu).push(gap).boxed();
+            click_through_overlays(page, y)
+        };
+        let on_list = click(80.0);
+        assert!(
+            matches!(on_list.as_slice(), [Pick::Prefix(_)]),
+            "{on_list:?}"
+        );
+        assert_eq!(click(300.0), vec![Pick::Unit("dismissed".into())]);
+    }
+
+    /// The fixed unit's menu opens above a low row too, and a press on an
+    /// entry sends a prefix pick.
+    #[test]
+    fn the_prefix_menu_of_a_low_row_opens_above_it() {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        let i18n = I18n::en_us();
+        let menu = UnitMenu {
+            selected: Some(Unit::Ohm),
+            is_open: true,
+            on_open: Pick::Unit("opened".into()),
+            on_dismiss: Pick::Unit("dismissed".into()),
+        };
+        let menu = prefix_menu(menu, SiPrefix::Kilo, Pick::Prefix, &tokens, &i18n)
+            .expect("ohm takes prefixes");
+        let gap = Space::new().height(Length::Fill).boxed();
+        let page: Element<'_, Pick> = Column::new().push(gap).push(menu).boxed();
+        let hits = click_through_overlays(page, WINDOW.height - 80.0);
+        assert!(matches!(hits.as_slice(), [Pick::Prefix(_)]), "{hits:?}");
     }
 
     /// The longer joined list still opens above a low row, in reach.

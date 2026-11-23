@@ -211,12 +211,12 @@ pub(crate) struct FixedKey {
 }
 
 impl FixedKey {
-    fn matches(&self, key: &keyboard::Key) -> bool {
+    pub(crate) fn matches(&self, key: &keyboard::Key) -> bool {
         matches!(key.as_ref(), keyboard::Key::Named(named) if named == self.named)
     }
 }
 
-const ESCAPE_KEY: FixedKey = FixedKey {
+pub(crate) const ESCAPE_KEY: FixedKey = FixedKey {
     named: keyboard::key::Named::Escape,
     action: "Esc (cancel / close)",
 };
@@ -282,6 +282,9 @@ impl Signex {
         window: iced::window::Id,
         event: keyboard::Event,
     ) -> Task<Message> {
+        if self.is_repeat_of_resuming_esc(&event) {
+            return Task::none();
+        }
         let (message, swallowed_by) = self.route_key_by(window, &event);
         // #1378 - a key press that is not a keymap stroke (Esc, F1, a
         // selection slot, a palette or recorder key) abandons the pending

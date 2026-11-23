@@ -136,6 +136,16 @@ impl Signex {
         if self.interaction_state.active_canvas_mut().placement_paused {
             return Task::none();
         }
+        // The point buffer of a tool paused in another window belongs to
+        // that window's sheet, even while it is still empty.
+        if self.interaction_state.is_sheet_pause_elsewhere()
+            && matches!(
+                self.interaction_state.current_tool,
+                Tool::Bezier | Tool::LinearDimension | Tool::AlignedDimension
+            )
+        {
+            return Task::none();
+        }
         // A click outside the inline editor commits its current value
         // and returns to normal selection — same convention as most
         // IDEs (Escape cancels, click elsewhere confirms).
