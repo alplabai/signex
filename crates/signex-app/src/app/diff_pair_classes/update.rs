@@ -177,6 +177,12 @@ impl Signex {
     /// OK: write the classes to the project as one undo step and close; a
     /// blank or repeated name keeps the dialog open and says why.
     fn apply_diff_pair_classes(&mut self) {
+        let Some(project_id) = self.ui_state.diff_pair_classes.as_ref().map(|s| s.project) else {
+            return;
+        };
+        if self.refuse_schematic_design_edit(project_id) {
+            return;
+        }
         let Some(state) = self.ui_state.diff_pair_classes.as_mut() else {
             return;
         };
@@ -184,7 +190,6 @@ impl Signex {
             state.problem = Some(problem);
             return;
         }
-        let project_id = state.project;
         let classes = state.applied();
         self.ui_state.diff_pair_classes = None;
         let closed = signex_i18n::t!(

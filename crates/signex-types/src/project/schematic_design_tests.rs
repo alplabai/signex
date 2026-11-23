@@ -182,16 +182,41 @@ fn an_unreadable_section_opens_the_project_and_is_written_back_unchanged() {
     }
 }
 
+/// DECISIONS 2026-11-23 (#2750), superseding replace-on-Set: even settings
+/// that reach the model never replace a section this build cannot read.
 #[test]
-fn settings_made_now_replace_an_unreadable_section() {
+fn settings_made_now_never_replace_an_unreadable_section() {
     let dir = tempfile::tempdir().unwrap();
     let mut body = bare();
     body["schematic_design"] = json!("garbled");
     let path = write_raw(dir.path(), &body);
     let mut data = parse_project(&path).unwrap();
+    assert!(data.has_unreadable_schematic_design());
     data.schematic_design = settings();
     write_project(&path, &data).unwrap();
-    assert_eq!(parse_project(&path).unwrap().schematic_design, settings());
+    assert_eq!(saved_json(&path)["schematic_design"], json!("garbled"));
+    let back = parse_project(&path).unwrap();
+    assert!(back.has_unreadable_schematic_design());
+    assert!(back.schematic_design.is_default());
+}
+
+/// #2750: one missing naming field takes its default, so the harness
+/// definitions beside it stay readable.
+#[test]
+fn a_missing_channel_naming_field_takes_its_default() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut body = bare();
+    body["schematic_design"] = json!({
+        "channel_naming": { "net_format": "${Channel}_${Net}" },
+        "harness_definitions": [{ "name": "UART", "entries": [{ "name": "TX" }] }]
+    });
+    let path = write_raw(dir.path(), &body);
+    let data = parse_project(&path).unwrap();
+    assert!(!data.has_unreadable_schematic_design());
+    let naming = &data.schematic_design.channel_naming;
+    assert_eq!(naming.designator_format, DEFAULT_CHANNEL_DESIGNATOR_FORMAT);
+    assert_eq!(naming.net_format, "${Channel}_${Net}");
+    assert_eq!(data.schematic_design.harness_definitions[0].name, "UART");
 }
 
 /// A build from before the key existed reads `schematic_design` into its

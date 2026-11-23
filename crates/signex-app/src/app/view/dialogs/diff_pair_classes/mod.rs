@@ -120,6 +120,18 @@ impl Signex {
                     .boxed(),
             );
         }
+        let is_locked = self
+            .document_state
+            .project_by_id(state.project)
+            .is_some_and(|project| project.data.has_unreadable_schematic_design());
+        if is_locked {
+            extras.push(
+                text(t!(i18n, ids::DIALOG_SCHEMATIC_DESIGN_UNREADABLE))
+                    .size(TS.caption)
+                    .color(ti(tokens.warning))
+                    .boxed(),
+            );
+        }
         let footer = dialog_footer_split(
             extras,
             vec![
@@ -132,7 +144,7 @@ impl Signex {
                 dialog_button(
                     t!(i18n, ids::DIALOG_DPC_OK),
                     super::graphite::call_to_action(tokens),
-                    Some(dpc(DiffPairClassesMsg::OkRequested)),
+                    (!is_locked).then(|| dpc(DiffPairClassesMsg::OkRequested)),
                     tokens,
                 ),
             ],

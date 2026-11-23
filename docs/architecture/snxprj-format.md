@@ -340,8 +340,12 @@ added without bumping the `snxprj/1` token.
   the unknown-key bag and writes it back unchanged
   (`project::schematic_design_tests`).
 - A section this build cannot read (another shape, a wrong-typed value) opens
-  the project, is not applied, and is written back verbatim until settings are
-  made in this build, which replace it.
+  the project, is not applied, and is written back verbatim. It is never
+  replaced: channel naming, harness definitions and differential pair classes
+  cannot be edited while it is unreadable, and those surfaces show a banner
+  saying why (DECISIONS 2026-11-23, #2750, superseding replace-on-Set). A
+  missing `channel_naming` field takes its default rather than making the
+  section unreadable.
 - Known gap: keys a newer build adds directly under `schematic_design`,
   inside `channel_naming` or inside a harness definition are not kept (only a
   diff-pair class has an unknown-key bag); a newer build that adds such keys

@@ -127,6 +127,7 @@ impl Signex {
             is_from_refused: is_range_field_refused(draft, RepeatField::From),
             is_to_refused: is_range_field_refused(draft, RepeatField::To),
             naming: self.channel_naming(),
+            is_naming_locked: self.channel_naming_is_locked(),
             menu,
             entries: cs
                 .pins

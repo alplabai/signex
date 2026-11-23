@@ -153,6 +153,8 @@ pub struct SheetSymbolRepeatView {
     pub is_from_refused: bool,
     pub is_to_refused: bool,
     pub naming: ChannelNaming,
+    /// The project's settings section is unreadable: naming cannot be edited.
+    pub is_naming_locked: bool,
     pub menu: NamingMenuView,
     /// The symbol's entries: name and whether it is a `Repeat(…)` entry.
     pub entries: Vec<(String, bool)>,
