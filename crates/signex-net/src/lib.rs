@@ -86,3 +86,6 @@ pub use harness::{
     HarnessBundle, HarnessMismatch, HarnessPort, HarnessSheetEntry, harness_bundles,
     harness_mismatches, harness_segments_touch, on_harness,
 };
+
+mod names_in_use;
+pub use names_in_use::sheet_net_names;

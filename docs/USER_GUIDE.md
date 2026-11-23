@@ -633,8 +633,11 @@ place one copy at an offset (in mm) or an array of copies with a step, give the
 parts the next free designators or keep theirs unless the project already
 uses one (a taken designator takes the next free number), and keep the
 net labels (the pasted nets join the originals) or rewrite them with a pattern
-such as `${Net}_${n}`; power nets are never rewritten. The drawing on the right
-shows where the copies land, and you can drag the first copy to set the
+such as `${Net}_${n}`; power nets are never rewritten. The pattern needs `${n}`
+for several copies and `${Net}` for several signal nets. If a rewritten name
+already exists in the project, the dialog names it and **Paste** stays off until
+you change the pattern or **Start n at**, so nets never join by accident. The
+drawing on the right shows where the copies land, and you can drag the first copy to set the
 offset. **Paste** puts every copy on the cursor; one click places them all as
 one **Undo** step, and `Esc` cancels. A sheet written by a newer Signex is
 read-only in this build, so nothing is pasted into it.

@@ -2,6 +2,8 @@
 //! choices: the copies and where each sits, the net names they carry, and
 //! the After paste table. Power nets are never rewritten.
 
+use std::collections::HashSet;
+
 use signex_engine::PlacementPayload;
 use signex_types::object_id::UuidV7Ids;
 use signex_types::schematic::{LabelType, SchematicSheet};
@@ -63,7 +65,8 @@ pub enum InputProblem {
     Copies,
     /// Start n at is not a whole number.
     Start,
-    /// The pattern lacks `${Net}` and `${n}` both, so copies would not differ.
+    /// The pattern would give two nets one name: it needs `${n}` for several
+    /// copies, `${Net}` for several signal nets, and one of them always.
     Pattern,
 }
 
@@ -89,6 +92,15 @@ pub fn rewritten(pattern: &str, net: &str, n: i64) -> String {
     pattern
         .replace("${Net}", net)
         .replace("${n}", &n.to_string())
+}
+
+/// Whether `pattern` keeps `copies` copies of `signal_nets` nets apart.
+#[must_use]
+pub fn pattern_separates(pattern: &str, copies: u32, signal_nets: usize) -> bool {
+    let (has_net, has_n) = (pattern.contains("${Net}"), pattern.contains("${n}"));
+    (has_net || has_n)
+        && (has_n || copies <= 1 || signal_nets == 0)
+        && (has_net || signal_nets <= 1)
 }
 
 /// Whether a copied net is a power net: a power label, never rewritten.
@@ -144,6 +156,37 @@ pub fn after_paste(nets: &[(String, bool)], input: &PasteInput) -> Vec<(String, 
             (net.clone(), after)
         })
         .collect()
+}
+
+/// The rewritten names that would join a net (#2744), each once, in table
+/// order: a name already in `in_use`, a copied power net's name, or a name
+/// two rewritten nets share. Names compare trimmed, as [`signex_net`] lists
+/// them. Empty when nets are kept: that join is the user's choice.
+#[must_use]
+pub fn taken_names(
+    nets: &[(String, bool)],
+    input: &PasteInput,
+    in_use: &HashSet<String>,
+) -> Vec<String> {
+    let mut seen: HashSet<String> = nets
+        .iter()
+        .filter(|(_, power)| *power)
+        .map(|(name, _)| name.trim().to_owned())
+        .collect();
+    let mut taken: Vec<String> = Vec::new();
+    for (_, after) in after_paste(nets, input) {
+        let NetAfter::Renamed(names) = after else {
+            continue;
+        };
+        for name in names {
+            let name = name.trim().to_owned();
+            let clashes = in_use.contains(&name) || !seen.insert(name.clone());
+            if clashes && !taken.contains(&name) {
+                taken.push(name);
+            }
+        }
+    }
+    taken
 }
 
 /// The payload a Smart Paste puts on the cursor: every copy at its place
@@ -344,6 +387,56 @@ mod tests {
             .chain(harness.wires.iter().map(|w| w.uuid))
             .collect();
         assert_eq!(ids.len(), 9, "no two harness objects share an id");
+    }
+
+    fn in_use(names: &[&str]) -> HashSet<String> {
+        names.iter().map(|n| (*n).to_owned()).collect()
+    }
+
+    #[test]
+    fn a_rewritten_name_already_in_use_is_named_once() {
+        let nets = copied_nets(&fragment());
+        let taken = taken_names(&nets, &input(3, true), &in_use(&["FB_3", "OTHER"]));
+        assert_eq!(taken, ["FB_3"]);
+        assert!(taken_names(&nets, &input(3, true), &in_use(&["OTHER"])).is_empty());
+    }
+
+    #[test]
+    fn keeping_the_nets_takes_no_name() {
+        let nets = copied_nets(&fragment());
+        assert!(taken_names(&nets, &input(1, false), &in_use(&["FB"])).is_empty());
+    }
+
+    #[test]
+    fn two_rewritten_nets_landing_on_one_name_are_named() {
+        let nets = vec![("X".to_string(), false), ("X1".to_string(), false)];
+        let clash = PasteInput {
+            rewrite: Some(("${Net}${n}".to_string(), 1)),
+            ..input(11, false)
+        };
+        // X at n = 11 and X1 at n = 1 both read X11.
+        assert_eq!(taken_names(&nets, &clash, &in_use(&[])), ["X11"]);
+    }
+
+    #[test]
+    fn a_rewritten_name_equal_to_a_copied_power_net_is_named() {
+        let nets = vec![("FB".to_string(), false), ("VCC".to_string(), true)];
+        let onto_power = PasteInput {
+            rewrite: Some(("VCC".to_string(), 1)),
+            ..input(1, false)
+        };
+        assert_eq!(taken_names(&nets, &onto_power, &in_use(&[])), ["VCC"]);
+    }
+
+    #[test]
+    fn the_pattern_must_keep_copies_and_nets_apart() {
+        assert!(pattern_separates("${Net}_${n}", 3, 2));
+        assert!(!pattern_separates("${n}", 1, 2), "two nets, one name");
+        assert!(pattern_separates("${n}", 3, 1));
+        assert!(!pattern_separates("${Net}_A", 3, 1), "copies share a name");
+        assert!(pattern_separates("${Net}_A", 1, 2));
+        assert!(pattern_separates("${Net}_A", 3, 0), "nothing is rewritten");
+        assert!(!pattern_separates("plain", 1, 1));
     }
 
     #[test]
