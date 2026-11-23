@@ -102,13 +102,30 @@ impl Signex {
     /// writes run in the order they were made, so the newest list lands last;
     /// quit waits for them.
     fn persist_workspace_layouts(&self) -> Task<Message> {
-        let value = store::to_json(&self.ui_state.workspace_layouts.layouts);
-        let sink = std::sync::Arc::clone(&self.ui_state.workspace_layouts.store);
+        let state = &self.ui_state.workspace_layouts;
+        // An unreadable stored list is never replaced (DECISIONS 2026-11-23).
+        if state.kept.list_unreadable() {
+            return Task::none();
+        }
+        let value = store::to_json_keeping(&state.layouts, &state.kept);
+        let sink = std::sync::Arc::clone(&state.store);
         crate::fonts::background_pref_merge(
             store::PREFS_KEY,
             move || sink.write(&value),
             |result| WorkspaceLayoutMsg::Saved(result).into(),
         )
+    }
+
+    /// True when the stored list is unreadable, so this edit is refused;
+    /// Messages says why, as the dialogs' banner does.
+    fn refuse_layout_list_edit(&mut self) -> bool {
+        if !self.ui_state.workspace_layouts.kept.list_unreadable() {
+            return false;
+        }
+        let line = t!(self.ui_state.i18n, ids::WORKSPACE_LAYOUTS_LIST_LOCKED);
+        log_warning(line.into_string());
+        self.sync_diagnostics_panel_ctx();
+        true
     }
 
     /// Arrange the panels of layout `id` and split the document area as it
@@ -229,6 +246,9 @@ impl Signex {
         let Some(dialog) = self.ui_state.workspace_layouts.save.clone() else {
             return Task::none();
         };
+        if self.refuse_layout_list_edit() {
+            return Task::none();
+        }
         if !self.save_layout_stores_something(&dialog) {
             return Task::none();
         }
@@ -263,6 +283,10 @@ impl Signex {
             return Task::none();
         }
         if self.ui_state.workspace_layouts.manage.is_none() {
+            return Task::none();
+        }
+        if msg.edits_the_list() && self.refuse_layout_list_edit() {
+            self.with_manage(|dialog| dialog.rename = None);
             return Task::none();
         }
         match msg {
@@ -476,6 +500,16 @@ impl Signex {
         let Some(id) = self.selected_layout() else {
             return Task::none();
         };
+        // A stored edit this build cannot read is never replaced.
+        if let Some(builtin) = id.builtin()
+            && self.ui_state.workspace_layouts.kept.holds_override(builtin)
+        {
+            let name = self.layout_naming().builtin(builtin).to_string();
+            let line = t!(self.ui_state.i18n, ids::WORKSPACE_LAYOUTS_EDIT_KEPT, "name" => name);
+            log_warning(line.into_string());
+            self.sync_diagnostics_panel_ctx();
+            return Task::none();
+        }
         let captured = self.capture_layout(true, true);
         if !self
             .ui_state
@@ -498,6 +532,9 @@ impl Signex {
         else {
             return Task::none();
         };
+        if self.refuse_layout_list_edit() {
+            return Task::none();
+        }
         if !self
             .ui_state
             .workspace_layouts

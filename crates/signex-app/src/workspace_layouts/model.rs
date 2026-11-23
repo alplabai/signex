@@ -3,7 +3,7 @@
 //! one. Plain data, no iced and no IO; the names a person sees come in
 //! through [`Naming`]. Design: docs/WORKSPACE_LAYOUTS.md.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::dock::DockLayoutSnapshot;
 
@@ -204,6 +204,9 @@ pub struct Layouts {
     overrides: BTreeMap<BuiltinLayout, WorkspaceLayout>,
     user: Vec<WorkspaceLayout>,
     active: Option<LayoutId>,
+    /// Ids of stored entries this build could not read: a new layout never
+    /// takes one, so the kept entry is not overwritten.
+    reserved_ids: BTreeSet<String>,
 }
 
 /// Names compare trimmed and case-blind: "bench" replaces "Bench".
@@ -222,6 +225,7 @@ impl Layouts {
             overrides,
             user: Vec::new(),
             active: None,
+            reserved_ids: BTreeSet::new(),
         };
         for layout in user {
             if layouts.find_user(&layout.id).is_none() {
@@ -230,6 +234,12 @@ impl Layouts {
         }
         layouts.active = active.filter(|id| layouts.get(id).is_some());
         layouts
+    }
+
+    /// Keep `ids` (stored entries this build could not read) from being
+    /// handed to a new layout.
+    pub fn reserve_ids(&mut self, ids: impl IntoIterator<Item = String>) {
+        self.reserved_ids.extend(ids);
     }
 
     pub fn user(&self) -> &[WorkspaceLayout] {
@@ -326,11 +336,11 @@ impl Layouts {
             .unwrap_or_default()
     }
 
-    /// An id no user layout has: `user-1`, `user-2`, …
+    /// An id no user layout has and no kept entry holds: `user-1`, `user-2`, …
     fn fresh_id(&self) -> LayoutId {
         (1..)
             .map(|n| LayoutId::User(format!("user-{n}")))
-            .find(|id| self.find_user(id).is_none())
+            .find(|id| self.find_user(id).is_none() && !self.reserved_ids.contains(id.key()))
             .unwrap_or_else(|| LayoutId::User(String::from("user")))
     }
 

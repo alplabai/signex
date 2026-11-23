@@ -41,6 +41,19 @@ impl Signex {
     }
 }
 
+/// The banner while the stored list cannot be read and so cannot be edited.
+fn list_locked_banner<'a>(i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
+    container(
+        text(t!(i18n, signex_i18n::ids::WORKSPACE_LAYOUTS_LIST_LOCKED))
+            .size(TS.caption)
+            .color(ti(tokens.warning))
+            .width(Length::Fill),
+    )
+    .padding([SP.s, SP.m])
+    .width(Length::Fill)
+    .boxed()
+}
+
 /// An inline icon in `color`.
 fn icon<'a>(handle: svg::Handle, color: iced::Color, side: f32) -> Element<'a, Message> {
     svg(handle)

@@ -192,21 +192,163 @@ pub fn to_json(layouts: &Layouts) -> Value {
     })
 }
 
+/// What the stored list holds that this build could not read. It goes back
+/// into every write (DECISIONS 2026-11-23, #2746): docs/WORKSPACE_LAYOUTS.md,
+/// "Storage".
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct KeptEntries {
+    /// The stored value as a whole is unreadable: nothing is written.
+    list_unreadable: bool,
+    user: Map<String, Value>,
+    overrides: Map<String, Value>,
+    /// Each kept user entry's place in the stored `order`.
+    places: Vec<(usize, String)>,
+    /// Keys beside the four this build writes.
+    other: Map<String, Value>,
+}
+
+impl KeptEntries {
+    fn of(value: &Value, layouts: &Layouts) -> Self {
+        let Some(object) = value.as_object().filter(|o| is_list_shape(o)) else {
+            return Self {
+                list_unreadable: true,
+                ..Self::default()
+            };
+        };
+        let mut kept = Self::default();
+        if let Some(stored) = object.get("user").and_then(Value::as_object) {
+            let is_read = |key: &str| layouts.user().iter().any(|l| l.id.key() == key);
+            kept.user = stored
+                .iter()
+                .filter(|(key, _)| !is_read(key))
+                .map(|(key, body)| (key.clone(), body.clone()))
+                .collect();
+        }
+        if let Some(stored) = object.get("overrides").and_then(Value::as_object) {
+            let is_read = |key: &str| {
+                BuiltinLayout::from_key(key).is_some_and(|b| layouts.overrides().contains_key(&b))
+            };
+            kept.overrides = stored
+                .iter()
+                .filter(|(key, _)| !is_read(key))
+                .map(|(key, body)| (key.clone(), body.clone()))
+                .collect();
+        }
+        if let Some(order) = object.get("order").and_then(Value::as_array) {
+            for (at, key) in order.iter().filter_map(Value::as_str).enumerate() {
+                let seen = kept.places.iter().any(|(_, k)| k == key);
+                if kept.user.contains_key(key) && !seen {
+                    kept.places.push((at, key.to_string()));
+                }
+            }
+        }
+        kept.other = object
+            .iter()
+            .filter(|(key, _)| !LIST_KEYS.contains(&key.as_str()))
+            .map(|(key, body)| (key.clone(), body.clone()))
+            .collect();
+        kept
+    }
+
+    /// The stored value cannot be read as a list, so it is never replaced
+    /// and the list cannot be edited.
+    pub fn list_unreadable(&self) -> bool {
+        self.list_unreadable
+    }
+
+    /// The stored edit of built-in `b` could not be read and is kept.
+    pub fn holds_override(&self, b: BuiltinLayout) -> bool {
+        self.overrides.contains_key(b.key())
+    }
+}
+
+/// The keys of the list this build reads and writes.
+const LIST_KEYS: [&str; 4] = ["active", "order", "user", "overrides"];
+
+/// Whether `object` has the list's shape: a wrong type under one of its keys
+/// would otherwise read as empty and be replaced by the next write.
+fn is_list_shape(object: &Map<String, Value>) -> bool {
+    let holds = |key: &str, is_valid: fn(&Value) -> bool| {
+        object.get(key).is_none_or(|v| v.is_null() || is_valid(v))
+    };
+    holds("user", Value::is_object)
+        && holds("overrides", Value::is_object)
+        && holds("active", Value::is_string)
+        && holds("order", |order| {
+            order
+                .as_array()
+                .is_some_and(|keys| keys.iter().all(Value::is_string))
+        })
+}
+
+/// [`to_json`] with the entries this build could not read put back, each
+/// user entry at its stored place in `order`.
+pub fn to_json_keeping(layouts: &Layouts, kept: &KeptEntries) -> Value {
+    let mut value = to_json(layouts);
+    let Some(object) = value.as_object_mut() else {
+        return value;
+    };
+    for (key, body) in &kept.other {
+        object.insert(key.clone(), body.clone());
+    }
+    if let Some(user) = object.get_mut("user").and_then(Value::as_object_mut) {
+        for (key, body) in &kept.user {
+            user.insert(key.clone(), body.clone());
+        }
+    }
+    if let Some(overrides) = object.get_mut("overrides").and_then(Value::as_object_mut) {
+        for (key, body) in &kept.overrides {
+            overrides.insert(key.clone(), body.clone());
+        }
+    }
+    if let Some(order) = object.get_mut("order").and_then(Value::as_array_mut) {
+        for (at, key) in &kept.places {
+            order.insert((*at).min(order.len()), json!(key));
+        }
+        for key in kept.user.keys() {
+            if !order.iter().any(|k| k.as_str() == Some(key.as_str())) {
+                order.push(json!(key));
+            }
+        }
+    }
+    value
+}
+
 /// The list in `prefs` (its whole JSON), with a problem per entry that was
 /// skipped. No key reads as the built-ins alone.
 pub fn from_prefs(prefs: Option<&Value>) -> (Layouts, Vec<LayoutProblem>) {
+    let (layouts, problems, _) = read_prefs(prefs);
+    (layouts, problems)
+}
+
+/// [`from_prefs`] with what the write must put back.
+pub fn read_prefs(prefs: Option<&Value>) -> (Layouts, Vec<LayoutProblem>, KeptEntries) {
     match prefs.and_then(|p| p.get(PREFS_KEY)) {
-        None => (Layouts::default(), Vec::new()),
-        Some(value) => from_json(value),
+        None => (Layouts::default(), Vec::new(), KeptEntries::default()),
+        Some(value) => read_list(value),
     }
+}
+
+/// [`from_json`] with what the write must put back. A kept entry's id is
+/// reserved, so a new layout cannot overwrite it.
+pub fn read_list(value: &Value) -> (Layouts, Vec<LayoutProblem>, KeptEntries) {
+    let (mut layouts, problems) = parse_list(value);
+    let kept = KeptEntries::of(value, &layouts);
+    layouts.reserve_ids(kept.user.keys().cloned());
+    (layouts, problems, kept)
 }
 
 /// The stored list. Tolerant: a malformed entry is skipped and named in the
 /// returned problems, an unknown panel key drops that panel only, and a
 /// user layout missing from `order` is kept at the end.
 pub fn from_json(value: &Value) -> (Layouts, Vec<LayoutProblem>) {
+    let (layouts, problems, _) = read_list(value);
+    (layouts, problems)
+}
+
+fn parse_list(value: &Value) -> (Layouts, Vec<LayoutProblem>) {
     let mut problems = Vec::new();
-    let Some(object) = value.as_object() else {
+    let Some(object) = value.as_object().filter(|o| is_list_shape(o)) else {
         problems.push(LayoutProblem::ListUnreadable);
         return (Layouts::default(), problems);
     };
