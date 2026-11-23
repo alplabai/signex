@@ -944,6 +944,45 @@ fn open_row_on_a_missing_file_says_why_and_only_create_offers_the_dialog() {
     assert!(app.ui_state.create_child_sheet_confirm.is_some());
 }
 
+fn harness_go_to(far: &str) -> Message {
+    Message::Dock(crate::dock::DockMessage::Panel(
+        crate::panels::PanelMsg::Harness(crate::panels::HarnessPanelMsg::GoToSheetClicked {
+            far: far.to_string(),
+        }),
+    ))
+}
+
+/// #2847: the harness panel's Go to refuses a missing file like Open Sheet:
+/// the same reason, no tab and no Create Sheet dialog.
+#[test]
+fn harness_go_to_a_missing_file_says_why_and_opens_nothing() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, _tmp, child_path) = app_with_sheet_symbol(None);
+    let tabs = app.document_state.tabs.len();
+    let task = app.update(harness_go_to("Child"));
+    crate::app::path_ops::settle_task(&mut app, task);
+    assert_eq!(app.document_state.tabs.len(), tabs, "no tab opened");
+    assert!(app.ui_state.pending_sheet_opens.is_empty());
+    assert!(app.ui_state.create_child_sheet_confirm.is_none());
+    let reason = signex_i18n::I18n::en_us_ref()
+        .message_plain(signex_i18n::ids::PROPERTIES_SHEET_OPEN_MISSING, &[]);
+    let logged = format!("{reason} ({})", child_path.display());
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|entry| entry.message == logged),
+        "{logged}"
+    );
+}
+
+/// The refusal is only for a missing file: Go to still opens one on disk.
+#[test]
+fn harness_go_to_an_existing_file_starts_the_open() {
+    let (mut app, _tmp, child_path) = app_with_sheet_symbol(Some(sheet_of(Vec::new())));
+    let _ = app.update(harness_go_to("Child"));
+    assert!(app.ui_state.pending_sheet_opens.contains_key(&child_path));
+}
+
 #[test]
 fn find_row_opens_the_find_dialog() {
     let mut app = one_symbol();
