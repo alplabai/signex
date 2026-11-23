@@ -9,6 +9,9 @@ impl Signex {
         world_x: f64,
         world_y: f64,
     ) -> Task<Message> {
+        if self.is_annotation_pause_of_another(None) {
+            return Task::none();
+        }
         // In Select mode, double-clicking a child-sheet symbol
         // navigates into the referenced schematic.
         let child_filename_to_open = if self.interaction_state.current_tool == Tool::Select

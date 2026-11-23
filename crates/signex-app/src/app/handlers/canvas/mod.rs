@@ -30,6 +30,9 @@ mod move_pick;
 mod place_directive;
 mod place_harness;
 pub(crate) use place_directive::{blanket_directive, compile_mask_directive, diff_pair_directive};
+mod annotation_pause;
+#[cfg(test)]
+mod annotation_pause_tests;
 mod dimension_tool;
 pub(crate) use dimension_tool::ends_held_resume_esc;
 mod place_bezier;

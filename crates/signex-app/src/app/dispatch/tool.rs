@@ -419,6 +419,7 @@ impl Signex {
                 // Re-selecting the active tool mid-gesture keeps the gesture
                 // on purpose: only a switch to a different tool drops the buffers.
                 if tool != self.interaction_state.current_tool {
+                    self.end_annotation_pause();
                     self.clear_drawing_buffers();
                     self.leave_dimension_tool();
                 }

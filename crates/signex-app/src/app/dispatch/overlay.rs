@@ -292,13 +292,10 @@ impl Signex {
         y: f32,
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
-        // Altium convention: right-click during placement terminates
-        // the placement flow (tool-stuck OR ghost-armed OR pending
-        // power/port OR paused preview OR net-colour pen armed)
-        // instead of opening the context menu. On a board that is a
-        // footprint Move in progress (#2240).
-        // A Move left on a board this window no longer shows is forgotten,
-        // so it cannot swallow a right-click on a sheet.
+        // Right-click during placement ends it (armed tool, ghost, pending
+        // power/port, paused preview, net-colour pen) instead of opening the
+        // menu; on a board, a footprint Move (#2240). A Move left on a board
+        // this window no longer shows is forgotten, so it cannot swallow this.
         self.drop_stale_pcb_carry();
         if self.has_own_pcb_carry() {
             self.end_pcb_carry();
@@ -307,6 +304,9 @@ impl Signex {
         // A board placement tool closes a Solid Region, or ends its shape and
         // then itself (#2373).
         if self.close_board_region() || self.step_back_board_tool() {
+            return Task::none();
+        }
+        if self.is_annotation_pause_of_another(window) {
             return Task::none();
         }
         let canvas = self.interaction_state.active_canvas();

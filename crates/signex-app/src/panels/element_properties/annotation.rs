@@ -94,6 +94,9 @@ pub struct AnnotationPanelState {
     pub source_missing: bool,
     /// The armed dimension tool's form; it takes Properties while set.
     pub dimension_tool: Option<Box<DimensionToolForm>>,
+    /// A dimension or Bezier is paused in another window: the tool's form
+    /// here is read-only.
+    pub is_tool_paused_elsewhere: bool,
 }
 
 impl AnnotationPanelState {

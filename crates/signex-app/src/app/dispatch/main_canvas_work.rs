@@ -4,10 +4,12 @@
 
 use super::super::*;
 
-/// Main's wire and dimension before a window's handler ran.
+/// Main's wire, dimension and paused annotation tool before a window's
+/// handler ran.
 pub(super) struct MainCanvasWork {
     has_wire: bool,
     has_dimension: bool,
+    has_annotation_pause: bool,
 }
 
 impl Signex {
@@ -16,6 +18,7 @@ impl Signex {
         MainCanvasWork {
             has_wire: state.wire_drawing && state.wire_window.is_none(),
             has_dimension: state.dimension_points_window() == Some(None),
+            has_annotation_pause: state.paused_annotation_window() == Some(None),
         }
     }
 
@@ -31,6 +34,18 @@ impl Signex {
             self.drop_dimension_form_draft();
             self.sync_annotation_draft();
             self.interaction_state.canvas.clear_overlay_cache();
+        }
+        let state = &mut self.interaction_state;
+        let is_still_paused = matches!(
+            state.placement_pause,
+            Some(crate::app::state::SheetPlacementPause::Sheet { window: None, .. })
+        );
+        if before.has_annotation_pause && !is_still_paused {
+            let canvas = &mut state.canvas;
+            canvas.placement_paused = false;
+            canvas.tool_preview = None;
+            canvas.annotation_draft = None;
+            canvas.clear_overlay_cache();
         }
     }
 }
