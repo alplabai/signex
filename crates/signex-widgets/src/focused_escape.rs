@@ -22,7 +22,8 @@ impl<'a, Message, Theme, Renderer> FocusedEscape<'a, Message, Theme, Renderer>
 where
     Renderer: iced::advanced::Renderer,
 {
-    /// Wrap `content`; `on_escape` is sent for an Esc it has the focus for.
+    /// Wrap `content`; `on_escape` is sent for an Esc press it has the focus
+    /// for, and not for that press's repeats.
     pub fn new(content: Element<'a, Message, Theme, Renderer>, on_escape: Message) -> Self {
         Self { content, on_escape }
     }
@@ -49,6 +50,13 @@ fn is_escape(event: &Event) -> bool {
             key: keyboard::Key::Named(Named::Escape),
             ..
         })
+    )
+}
+
+fn is_repeat(event: &Event) -> bool {
+    matches!(
+        event,
+        Event::Keyboard(keyboard::Event::KeyPressed { repeat: true, .. })
     )
 }
 
@@ -114,6 +122,11 @@ where
         if is_escape(event) {
             self.content
                 .operate(tree, layout, viewport, renderer, &mut holds_focus);
+        }
+        // A held key's repeat is not a press: the box keeps the focus.
+        if holds_focus.0 && is_repeat(event) {
+            shell.capture_event();
+            return;
         }
         self.content
             .update(tree, event, layout, cursor, renderer, shell, viewport);

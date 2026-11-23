@@ -12,6 +12,23 @@ use crate::panels::{AnnotationField, AnnotationPanelMsg, DimensionToolForm};
 const SAMPLE_SPAN_MM: f64 = 12.7;
 const SAMPLE_OFFSET_MM: f64 = -2.54;
 
+fn is_escape(key: &iced::keyboard::Key) -> bool {
+    matches!(
+        key,
+        iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape)
+    )
+}
+
+/// Whether `event` shows the Esc press that resumed is no longer down: its
+/// release, or a window event after which that release may never arrive.
+pub(crate) fn ends_held_resume_esc(event: &iced::Event) -> bool {
+    match event {
+        iced::Event::Keyboard(iced::keyboard::Event::KeyReleased { key, .. }) => is_escape(key),
+        iced::Event::Window(iced::window::Event::Unfocused | iced::window::Event::Closed) => true,
+        _ => false,
+    }
+}
+
 impl Signex {
     /// The dimension tool armed on a schematic sheet.
     fn armed_dimension_tool(&self) -> Option<Tool> {
@@ -93,6 +110,7 @@ impl Signex {
             AnnotationPanelMsg::OverrideEscaped => {
                 self.cancel_pending_chord();
                 if self.interaction_state.active_canvas().placement_paused {
+                    self.interaction_state.annotation_tool.is_resume_esc_held = true;
                     return self.resume_placement_without_edits();
                 }
                 return Task::none();
@@ -105,16 +123,39 @@ impl Signex {
 
     /// Enter in the form: the typed value stands and a paused tool goes on
     /// placing, as a second Tab does. Text that does not read, in whichever
-    /// box of the form holds it, keeps the pause.
+    /// box of the form holds it, stays there and keeps the pause.
     fn submit_dimension_tool_field(&mut self, field: AnnotationField) -> Task<Message> {
-        let reads = self.dimension_form_draft_reads();
+        let is_paused = self.interaction_state.active_canvas().placement_paused;
+        if is_paused && !self.dimension_form_draft_reads() {
+            return Task::none();
+        }
         let draft = &mut self.document_state.panel_ctx.annotation.draft;
         draft.take_if(|(id, f, _)| id.is_nil() && *f == field);
         self.sync_annotation_draft();
-        if !reads || !self.interaction_state.active_canvas().placement_paused {
+        if !is_paused {
             return Task::none();
         }
         self.update(Message::Tool(ToolMessage::PrePlacementTab))
+    }
+
+    /// Whether this key event is a repeat of the Esc press that resumed from
+    /// the Override box. A new Esc press or its release ends that hold; the
+    /// release is read here too because a quick tap can arrive before the
+    /// held-Esc listener is live.
+    pub(crate) fn is_repeat_of_resuming_esc(&mut self, event: &iced::keyboard::Event) -> bool {
+        use iced::keyboard::Event::{KeyPressed, KeyReleased};
+        let held = &mut self.interaction_state.annotation_tool.is_resume_esc_held;
+        match event {
+            KeyPressed { key, repeat, .. } if is_escape(key) => {
+                *held &= *repeat;
+                *held
+            }
+            KeyReleased { key, .. } if is_escape(key) => {
+                *held = false;
+                false
+            }
+            _ => false,
+        }
     }
 
     /// Whether the text typed in the form, if any, reads for its own box.

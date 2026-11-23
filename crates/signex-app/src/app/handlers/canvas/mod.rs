@@ -31,6 +31,7 @@ mod place_directive;
 mod place_harness;
 pub(crate) use place_directive::{blanket_directive, compile_mask_directive, diff_pair_directive};
 mod dimension_tool;
+pub(crate) use dimension_tool::ends_held_resume_esc;
 mod place_bezier;
 mod place_dimension;
 pub(crate) use place_directive::{net_parameters_directive, parse_value};

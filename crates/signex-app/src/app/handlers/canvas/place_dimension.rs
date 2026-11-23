@@ -61,6 +61,9 @@ pub(crate) struct AnnotationTool {
     pub dimension: DimensionToolStyle,
     /// The values and points a Tab pause began with; Esc puts them back.
     pub paused_with: Option<Box<(DimensionToolStyle, Vec<Point>)>>,
+    /// The Esc press that resumed from the Override box is still down, so
+    /// its repeats are not new presses.
+    pub is_resume_esc_held: bool,
 }
 
 /// The dimension `points` (first, second) and the third click `at` place.

@@ -1125,6 +1125,9 @@ impl Signex {
             window_subscriptions::net_color_chooser_presses(
                 self.ui_state.net_color_palette.chooser.is_some(),
             ),
+            window_subscriptions::held_escape_end(
+                self.interaction_state.annotation_tool.is_resume_esc_held,
+            ),
             chord_cancel,
             chord_timeout,
             // The Start screen's minute clock; none while it is off screen.

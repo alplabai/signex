@@ -14,6 +14,7 @@ use iced_runtime::user_interface::Cache;
 use iced_runtime::{Action, UserInterface};
 use signex_types::schematic::{SchDimension, SchDrawing};
 
+use super::ends_held_resume_esc;
 use super::placement_tests::{app_with_tool, click, doc};
 use crate::app::sch_tables::Axis;
 use crate::app::state::WindowKind;
@@ -155,7 +156,18 @@ impl Session {
             &iced::Renderer,
         ),
     ) -> bool {
-        let event = key_event(key, text);
+        self.send_after(key_event(key, text), prepare)
+    }
+
+    /// Send a key event after `prepare` ran on the live widgets.
+    fn send_after(
+        &mut self,
+        event: keyboard::Event,
+        prepare: impl FnOnce(
+            &mut UserInterface<'_, Message, iced::Theme, iced::Renderer>,
+            &iced::Renderer,
+        ),
+    ) -> bool {
         let mut published = Bus::new();
         let cache = std::mem::take(&mut self.cache);
         let tasks = std::mem::take(&mut self.pending);
@@ -196,6 +208,40 @@ impl Session {
 
     fn enter(&mut self) -> bool {
         self.press(Key::Named(Named::Enter), None)
+    }
+
+    /// The key repeat of a held Esc, as the OS sends it.
+    fn escape_repeat(&mut self) -> bool {
+        let mut event = key_event(Key::Named(Named::Escape), None);
+        if let keyboard::Event::KeyPressed { repeat, .. } = &mut event {
+            *repeat = true;
+        }
+        self.send_after(event, |_, _| {})
+    }
+
+    fn escape_release(&mut self) -> bool {
+        let key = Key::Named(Named::Escape);
+        let event = keyboard::Event::KeyReleased {
+            key: key.clone(),
+            modified_key: key,
+            physical_key: keyboard::key::Physical::Code(keyboard::key::Code::Escape),
+            location: keyboard::Location::Standard,
+            modifiers: keyboard::Modifiers::empty(),
+        };
+        self.send_after(event, |_, _| {})
+    }
+
+    /// A window event, as the held-Esc listener hears it.
+    fn window_event(&mut self, event: iced::window::Event) {
+        if ends_held_resume_esc(&iced::Event::Window(event)) {
+            let ended = Message::Input(InputMsg::HeldEscapeEnded);
+            self.pending.push(self.app.update(ended));
+        }
+    }
+
+    fn is_armed_with_points(&self) -> bool {
+        let state = &self.app.interaction_state;
+        state.current_tool == Tool::LinearDimension && state.annotation_tool.points.len() == 2
     }
 
     fn is_paused(&self) -> bool {
@@ -311,6 +357,133 @@ fn enter_on_a_point_that_does_not_read_keeps_the_pause() {
             )));
     }
     assert!(session.is_paused(), "nothing was committed");
+}
+
+fn submit(session: &mut Session, field: AnnotationField) {
+    let submitted = AnnotationPanelMsg::FieldSubmitted(field);
+    let _ = session
+        .app
+        .update(Message::Dock(crate::dock::DockMessage::Panel(
+            PanelMsg::Annotation(submitted),
+        )));
+}
+
+fn draft_text(session: &Session) -> Option<&str> {
+    let draft = &session.app.document_state.panel_ctx.annotation.draft;
+    draft.as_ref().map(|(_, _, text)| text.as_str())
+}
+
+/// A second Enter must not find the box emptied and resume on the old value.
+#[test]
+fn enter_on_text_that_does_not_read_keeps_it_refused_and_paused() {
+    let mut session = Session::docked();
+    let before = session.app.interaction_state.annotation_tool.points.clone();
+    let field = type_in_from_x(&mut session, "abc");
+    for _ in 0..2 {
+        submit(&mut session, field);
+        assert!(session.is_paused(), "Enter does not resume");
+        assert_eq!(draft_text(&session), Some("abc"), "the text stays");
+    }
+    let panel = &session.app.document_state.panel_ctx.annotation;
+    assert!(
+        panel.paused_form_refuses(uuid::Uuid::nil(), field, "abc"),
+        "the box is marked as refused"
+    );
+    let points = &session.app.interaction_state.annotation_tool.points;
+    assert_eq!(*points, before, "no old or partial value was committed");
+}
+
+#[test]
+fn readable_text_after_a_refused_enter_commits_and_resumes() {
+    let mut session = Session::docked();
+    let field = type_in_from_x(&mut session, "abc");
+    submit(&mut session, field);
+    type_in_from_x(&mut session, "2.54");
+    let panel = &session.app.document_state.panel_ctx.annotation;
+    assert!(!panel.paused_form_refuses(uuid::Uuid::nil(), field, "2.54"));
+    submit(&mut session, field);
+    assert!(!session.is_paused(), "readable text resumes");
+    assert_eq!(draft_text(&session), None);
+    let from = session.app.interaction_state.annotation_tool.points[0];
+    assert!((from.x - 2.54).abs() < 1e-9, "the value stands: {from:?}");
+}
+
+#[test]
+fn a_placed_dimensions_box_is_not_marked_by_the_paused_form() {
+    let session = Session::docked();
+    let field = AnnotationField::DimensionPoint(false, Axis::X);
+    let panel = &session.app.document_state.panel_ctx.annotation;
+    assert!(!panel.paused_form_refuses(uuid::Uuid::now_v7(), field, "abc"));
+}
+
+#[test]
+fn holding_esc_in_the_override_box_resumes_once_and_stays_armed() {
+    let mut session = Session::docked();
+    session.type_j();
+    assert!(session.escape(), "the box took the press");
+    for _ in 0..4 {
+        session.escape_repeat();
+        assert!(session.is_armed_with_points(), "a repeat cancels nothing");
+        assert!(!session.is_paused());
+    }
+}
+
+#[test]
+fn a_new_esc_press_after_a_hold_cancels_even_when_the_release_was_lost() {
+    let mut session = Session::docked();
+    session.escape();
+    session.escape_repeat();
+    assert!(session.is_armed_with_points());
+    session.escape();
+    assert!(!session.is_armed_with_points(), "a new press cancels");
+    let tool = &session.app.interaction_state.annotation_tool;
+    assert!(!tool.is_resume_esc_held, "the hold ended with that press");
+}
+
+#[test]
+fn the_release_on_the_keyboard_path_ends_the_hold() {
+    let mut session = Session::docked();
+    session.escape();
+    session.escape_repeat();
+    assert!(session.is_armed_with_points());
+    session.escape_release();
+    let tool = &session.app.interaction_state.annotation_tool;
+    assert!(!tool.is_resume_esc_held, "the press is over");
+    session.escape_repeat();
+    assert!(
+        !session.is_armed_with_points(),
+        "a later repeat is not that press's"
+    );
+}
+
+#[test]
+fn a_repeat_after_the_window_lost_focus_is_not_ignored() {
+    let mut session = Session::docked();
+    session.escape();
+    session.window_event(iced::window::Event::Unfocused);
+    session.escape_repeat();
+    assert!(
+        !session.is_armed_with_points(),
+        "the hold ended with the focus, so this Esc is answered as usual"
+    );
+}
+
+#[test]
+fn a_repeat_of_esc_with_no_resume_behind_it_is_answered_as_usual() {
+    let mut session = Session::docked();
+    session.enter();
+    assert!(!session.is_paused());
+    session.escape_repeat();
+    assert!(!session.is_armed_with_points(), "nothing swallows this one");
+}
+
+#[test]
+fn a_repeat_reaching_the_focused_box_does_not_resume() {
+    let mut session = Session::docked();
+    session.type_j();
+    assert!(session.escape_repeat(), "the box keeps the held key");
+    assert!(session.is_paused(), "only a press resumes");
+    assert_eq!(session.override_text(), Some("j"), "the edit stays");
 }
 
 fn type_in_from_x(session: &mut Session, typed: &str) -> AnnotationField {

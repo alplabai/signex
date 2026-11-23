@@ -809,6 +809,9 @@ pub enum InputMsg {
         window: iced::window::Id,
         event: iced::keyboard::Event,
     },
+    /// The Esc press that resumed from the dimension Override box is over:
+    /// it was released, or its window lost the keys.
+    HeldEscapeEnded,
     /// Footprint editor mode switch (`1` / `2` / `3`). The dispatcher
     /// sets the mode only when the active tab is a footprint editor, so
     /// the keys don't steal text input on other tabs.
