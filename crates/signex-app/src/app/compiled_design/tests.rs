@@ -296,6 +296,17 @@ fn a_missing_page_no_sheet_symbol_places_counts_as_removed() {
     assert!(!compile_of(dir.path(), &[], &["gone.snxsch"]).has_unread_sheets);
 }
 
+/// #2742: a sheet symbol whose file escapes its folder still references a
+/// sheet the walk refused, so that sheet's row is not known to be gone.
+#[test]
+fn a_refused_child_reference_counts_as_unread() {
+    let parent = tempfile::tempdir().expect("dir");
+    let dir = parent.path().join("project");
+    std::fs::create_dir(&dir).expect("folder");
+
+    assert!(compile_of(&dir, &["../power.snxsch"], &[]).has_unread_sheets);
+}
+
 #[test]
 fn an_electrical_edit_marks_a_compiled_sheet_out_of_date() {
     let path = PathBuf::from("/p/child.snxsch");
