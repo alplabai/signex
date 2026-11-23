@@ -54,15 +54,36 @@ struct Plan {
     lfs: Vec<LfsChange>,
 }
 
-/// Whether the file at `abs` still holds what the current commit records. A
-/// missing file has nothing to lose.
+/// Whether git sees the working file at `rel` as what `tree` records. The diff
+/// hashes it through the repository's clean filters, so a clean file checked
+/// out with CRLF under `core.autocrlf` matches its LF blob. Only content is at
+/// stake here, so a mode change alone is not a difference.
+fn working_file_matches_tree(
+    repo: &git2::Repository,
+    tree: &git2::Tree<'_>,
+    rel: &Path,
+) -> Result<bool, git2::Error> {
+    let mut options = git2::DiffOptions::new();
+    options
+        .pathspec(shown(rel))
+        .disable_pathspec_match(true)
+        .ignore_filemode(true);
+    let diff = repo.diff_tree_to_workdir(Some(tree), Some(&mut options))?;
+    Ok(diff.deltas().next().is_none())
+}
+
+/// Whether the file at `rel` still holds what the current commit `from`
+/// records. A missing file has nothing to lose. LFS content is compared byte
+/// exact; a plain file as git sees it.
 fn working_file_is_committed(
     repo: &git2::Repository,
-    abs: &Path,
+    workdir: &Path,
+    from: &git2::Tree<'_>,
+    rel: &Path,
     committed: git2::Oid,
     pointer: Option<&LfsPointer>,
 ) -> Result<bool, SwitchRefusal> {
-    let bytes = match fs::read(abs) {
+    let bytes = match fs::read(workdir.join(rel)) {
         Ok(bytes) => bytes,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(true),
         Err(e) => return Err(io_failed("read working file", e)),
@@ -79,25 +100,21 @@ fn working_file_is_committed(
             }
             Ok(is_committed)
         }
-        None => {
-            let blob = repo
-                .find_blob(committed)
-                .map_err(|e| failed("git blob", e))?;
-            Ok(blob.content() == bytes.as_slice())
-        }
+        None => working_file_matches_tree(repo, from, rel).map_err(|e| failed("git diff", e)),
     }
 }
 
 fn lfs_change(
     repo: &git2::Repository,
     workdir: &Path,
+    from: &git2::Tree<'_>,
     rel: &Path,
     delta: &git2::DiffDelta<'_>,
     before: Option<LfsPointer>,
     after: Option<LfsPointer>,
 ) -> Result<LfsChange, SwitchRefusal> {
     let (old_id, new_id) = (delta.old_file().id(), delta.new_file().id());
-    if !working_file_is_committed(repo, &workdir.join(rel), old_id, before.as_ref())? {
+    if !working_file_is_committed(repo, workdir, from, rel, old_id, before.as_ref())? {
         return Err(SwitchRefusal::WouldOverwrite);
     }
     let incoming = match after {
@@ -154,7 +171,7 @@ fn plan_switch(
             return Err(SwitchRefusal::UnsafePath(shown(rel)));
         } else {
             plan.lfs
-                .push(lfs_change(repo, workdir, rel, &delta, before, after)?);
+                .push(lfs_change(repo, workdir, from, rel, &delta, before, after)?);
         }
     }
     Ok(plan)
@@ -437,22 +454,19 @@ fn apply_switch<'r>(
     Ok(name)
 }
 
-/// Whether the working file at `rel` holds what `tree` records, or is absent
-/// when the tree has no such path.
+/// Whether the working file at `rel` holds what `tree` records, as git sees
+/// it, or is absent when the tree has no such path.
 fn matches_tree(
     repo: &git2::Repository,
     workdir: &Path,
     tree: &git2::Tree<'_>,
     rel: &Path,
 ) -> bool {
-    let abs = workdir.join(rel);
     let Ok(entry) = tree.get_path(rel) else {
-        return fs::symlink_metadata(&abs).is_err();
+        return fs::symlink_metadata(workdir.join(rel)).is_err();
     };
-    let Ok(blob) = repo.find_blob(entry.id()) else {
-        return false;
-    };
-    fs::read(&abs).is_ok_and(|bytes| bytes == blob.content())
+    entry.kind() == Some(git2::ObjectType::Blob)
+        && working_file_matches_tree(repo, tree, rel).is_ok_and(|matches| matches)
 }
 
 /// Put the plain files back, trying every one, and return the paths left
