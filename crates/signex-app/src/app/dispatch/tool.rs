@@ -302,6 +302,7 @@ impl Signex {
                                 .placement
                                 .as_ref()
                                 .and_then(|s| s.reference_override.clone()),
+                            window: self.interaction_state.acting_window,
                         });
                     self.note_dimension_tool_pause();
                     let focus_override = self.focus_dimension_override();

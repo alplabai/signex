@@ -136,6 +136,13 @@ impl Signex {
         if self.interaction_state.active_canvas_mut().placement_paused {
             return Task::none();
         }
+        // Points held by a pause in another window measure that window's
+        // sheet: a click here must not finish a dimension with them.
+        if self.interaction_state.is_sheet_pause_elsewhere()
+            && !self.interaction_state.annotation_tool.points.is_empty()
+        {
+            return Task::none();
+        }
         // A click outside the inline editor commits its current value
         // and returns to normal selection — same convention as most
         // IDEs (Escape cancels, click elsewhere confirms).

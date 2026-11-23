@@ -61,7 +61,7 @@ impl Signex {
                 self.apply_annotation_edit_to(id, &edit);
             }
             // Only the armed tool's form has this box.
-            AnnotationPanelMsg::OverrideEscaped | AnnotationPanelMsg::DetachedOverrideEscaped => {}
+            AnnotationPanelMsg::OverrideEscaped => {}
             AnnotationPanelMsg::CsvImportRequested => {
                 return self.dispatch_tables(TablesMsg::CsvImportRequested(id));
             }

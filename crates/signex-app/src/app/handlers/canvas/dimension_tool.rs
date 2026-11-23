@@ -83,13 +83,9 @@ impl Signex {
                 self.document_state.panel_ctx.annotation.draft = None;
                 self.apply_dimension_tool_edit(&edit);
             }
-            // The box captured the key: this is the press's one Esc.
+            // The box captured the key: this is the press's one Esc. Only the
+            // pause answers, so no menu or dialog of any window closes.
             AnnotationPanelMsg::OverrideEscaped => {
-                return self.update(Message::Input(InputMsg::EscapePressed { window: None }));
-            }
-            // The main window's Esc ladder would close a surface not on
-            // screen here, so only the pause answers.
-            AnnotationPanelMsg::DetachedOverrideEscaped => {
                 self.cancel_pending_chord();
                 if self.interaction_state.active_canvas().placement_paused {
                     return self.resume_placement_without_edits();

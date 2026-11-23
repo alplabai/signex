@@ -402,6 +402,7 @@ impl Signex {
                 before,
                 at_pause,
                 reference_override,
+                ..
             }) => {
                 let undone = self.undo_pause_mirrors(at_pause.as_deref());
                 if let Some(session) = self.interaction_state.placement.as_mut() {

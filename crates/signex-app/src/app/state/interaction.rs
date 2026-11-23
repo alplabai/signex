@@ -280,6 +280,16 @@ impl InteractionState {
         }
     }
 
+    /// Whether a sheet Tab pause belongs to a window other than the one
+    /// acting now, so a change to the acting sheet must leave it alone.
+    pub fn is_sheet_pause_elsewhere(&self) -> bool {
+        matches!(
+            self.placement_pause,
+            Some(super::SheetPlacementPause::Sheet { window, .. })
+                if window != self.acting_window
+        )
+    }
+
     pub fn active_canvas(&self) -> &CanvasSlot {
         &self.canvas
     }

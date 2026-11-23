@@ -324,6 +324,27 @@ fn type_in_from_x(session: &mut Session, typed: &str) -> AnnotationField {
     field
 }
 
+/// The box's Esc answers only the pause, so a main-window menu stays open.
+#[test]
+fn esc_in_the_override_box_leaves_an_open_main_window_menu_open() {
+    use crate::active_bar::ActiveBarMenu;
+    let mut session = Session::docked();
+    session.app.interaction_state.active_bar_menu = Some(ActiveBarMenu::Align);
+    assert!(session.type_j(), "the box took the key");
+    assert!(session.escape(), "the box answered the Esc");
+    assert_eq!(
+        session.app.interaction_state.active_bar_menu,
+        Some(ActiveBarMenu::Align),
+        "the menu stays open"
+    );
+    assert!(!session.is_paused(), "the one Esc resumes");
+    assert_eq!(session.override_text(), None, "the edit is dropped");
+    assert_eq!(
+        session.app.interaction_state.current_tool,
+        Tool::LinearDimension
+    );
+}
+
 /// A dialog open in the main window is not on screen in the detached one.
 #[test]
 fn esc_in_a_detached_override_box_leaves_a_main_window_dialog_open() {

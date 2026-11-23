@@ -53,6 +53,8 @@ pub use sheet_tool::SheetPlaceJobs;
 #[cfg(test)]
 mod dimension_tool_keys_tests;
 #[cfg(test)]
+mod dimension_tool_pause_tests;
+#[cfg(test)]
 mod dimension_tool_tests;
 mod library_status;
 #[cfg(test)]

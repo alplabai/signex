@@ -130,6 +130,11 @@ impl Signex {
         use crate::canvas::{AnnotationDraft, AnnotationDraftKind, HintInk};
         use signex_i18n::{ids, t};
         self.document_state.panel_ctx.annotation.dimension_tool = self.dimension_tool_form();
+        // Points paused in another window are not this canvas's to preview.
+        if self.interaction_state.is_sheet_pause_elsewhere() {
+            self.interaction_state.active_canvas_mut().annotation_draft = None;
+            return;
+        }
         let tool = self.interaction_state.current_tool;
         let kind = match tool {
             Tool::Bezier => AnnotationDraftKind::Bezier,

@@ -109,6 +109,29 @@ impl Signex {
         }
     }
 
+    /// A tool paused in `window`, which is closing, ends its dimension with
+    /// it: those points must not go on to the sheet main shows.
+    pub(crate) fn end_pause_of_window(&mut self, window: iced::window::Id) {
+        let state = &mut self.interaction_state;
+        if !matches!(
+            state.placement_pause,
+            Some(crate::app::state::SheetPlacementPause::Sheet { window: Some(w), .. })
+                if w == window
+        ) {
+            return;
+        }
+        state.placement_pause = None;
+        if let Some(canvas) = state.canvases.get_mut(&window) {
+            canvas.placement_paused = false;
+        }
+        let tool = &mut state.annotation_tool;
+        tool.points.clear();
+        tool.paused_with = None;
+        tool.dimension.end_dimension();
+        self.drop_dimension_form_draft();
+        self.sync_annotation_draft();
+    }
+
     /// `path` came back from its own window: main shows it, as it did
     /// before the window took it, and ends what it had under way on the tab
     /// it leaves. A closed document has no tab to show.
