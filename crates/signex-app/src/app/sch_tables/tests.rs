@@ -562,6 +562,34 @@ fn entry_of(page: usize, name: &str, file: &str, title: &str) -> rows::ContentsE
     }
 }
 
+/// #2742: two old rows store the same bare link for different sheets. The
+/// compile reaches only the second, so the first keeps its row.
+#[test]
+fn a_bare_link_takes_a_fresh_row_only_for_the_same_sheet_name() {
+    let table = table_of(&[
+        entry_of(1, "top", "top.snxsch", "Top"),
+        entry_of(2, "A leaf", "leaf.snxsch", "Leaf A"),
+        entry_of(3, "B leaf", "leaf.snxsch", "Leaf B"),
+    ]);
+    let fresh = vec![
+        entry_of(1, "top", "top.snxsch", "Top"),
+        entry_of(2, "B leaf", "b/leaf.snxsch", "Leaf B"),
+    ];
+    let sheet = SchematicSheet::default();
+    let pages = |_: bool| Some(fresh.clone());
+    let missing = [std::path::PathBuf::from("/p/leaf.snxsch")];
+    let unread = rows::UnreadSheets {
+        dir: Some(std::path::Path::new("/p")),
+        missing_beside: &missing,
+        ..Default::default()
+    };
+    let next = refresh::rebuilt_table(&sheet, &table, &pages, Some(&unread))
+        .expect("the reached row takes its new link");
+    assert_eq!(title_cells(&next), ["Top", "Leaf A", "Leaf B"]);
+    assert_eq!(next.links[1], "leaf.snxsch");
+    assert_eq!(next.links[2], "b/leaf.snxsch");
+}
+
 /// #2742: `top` places readable `A` and unread `B`, both place `common`. The
 /// compile lists `common` once, which is one of the two old rows.
 #[test]
