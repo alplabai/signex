@@ -37,12 +37,7 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("save_document", "Mod+S")),
         cmd_item_gated(ctx, cmd("save_document_as", "Mod+Shift+S")),
         // Greyed when nothing is unsaved; runs the shared Save All flow.
-        item_if(
-            ctx,
-            menu_ids::MENU_FILE_SAVE_ALL,
-            MenuMessage::SaveAll,
-            ctx.commands.has_dirty_documents,
-        ),
+        cmd_item_gated(ctx, cmd("save_all", "Mod+Alt+S")),
         SEP,
         // No New Component row here: docs/MENU_BAR.md#file-library
         submenu(ctx, menu_ids::MENU_FILE_LIBRARY, library(ctx)),

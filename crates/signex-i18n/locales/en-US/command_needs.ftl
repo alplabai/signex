@@ -43,3 +43,4 @@ command-needs-library = No library is open
 command-needs-project-sheet = No sheet of a project is open
 command-needs-tileable-windows = Tile needs two documents in the main window, or a document in its own window
 command-needs-tiled = The documents are not tiled
+command-needs-unsaved-work = Nothing is unsaved

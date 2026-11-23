@@ -401,6 +401,7 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "open_document",
     "save_document",
     "save_document_as",
+    "save_all",
     "print",
     "close_active_document",
     "close_all_documents",

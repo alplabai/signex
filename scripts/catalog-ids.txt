@@ -325,6 +325,7 @@ rules_set_create
 rules_set_edit
 run_drc
 run_erc
+save_all
 save_board_reuse_block
 save_document
 save_document_as

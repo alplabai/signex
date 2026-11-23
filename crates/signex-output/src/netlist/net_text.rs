@@ -1,4 +1,4 @@
-//! Protel-format (`.NET`) netlist emitter — a one-way export for downstream
+//! `.NET` text netlist emitter — a one-way export for downstream
 //! PCB tools.
 //!
 //! The format is plain text. Each component is a `[ ... ]` block and each net
@@ -49,8 +49,8 @@ struct Component {
     comment: String,
 }
 
-/// Emit the Protel netlist for `netlist`, joining footprint/value from the
-/// symbols in `ctx.netlist_sheets`. The output is always a clean, valid Protel
+/// Emit the `.NET` text for `netlist`, joining footprint/value from the
+/// symbols in `ctx.netlist_sheets`. The output is always a clean, valid `.NET`
 /// file: the format has no comment syntax, so an incomplete export is not
 /// marked in the file — the caller reports it to the user instead.
 pub(super) fn emit(ctx: &ExportContext, netlist: &Netlist) -> Result<Vec<u8>, NetlistError> {
@@ -328,7 +328,7 @@ mod tests {
         c.netlist = Some(Netlist {
             nets: vec![net(1, "N", &[("R1", "1"), ("R_CHILD", "1")])],
         });
-        let text = protel(&c, None);
+        let text = net_text(&c, None);
         assert!(text.contains("[\r\nR_CHILD\r\nR_0402\r\n1k\r\n"), "{text}");
     }
 
@@ -351,13 +351,13 @@ mod tests {
         c.netlist = Some(Netlist {
             nets: vec![net(1, "GND", &[("GND1", "1"), ("R1", "1")])],
         });
-        let text = protel(&c, None);
+        let text = net_text(&c, None);
         assert!(!text.contains("GND1"), "{text}");
     }
 
-    fn protel(ctx: &ExportContext, note: Option<Vec<String>>) -> String {
+    fn net_text(ctx: &ExportContext, note: Option<Vec<String>>) -> String {
         let opts = NetlistOptions {
-            format: NetlistFormat::Protel,
+            format: NetlistFormat::NetText,
             incomplete_note: note,
         };
         let out = NetlistExporter.export(ctx, &opts).expect("netlist present");
@@ -391,7 +391,7 @@ mod tests {
         .iter()
         .map(|l| format!("{l}\r\n"))
         .collect::<String>();
-        assert_eq!(protel(&fixture(), None), expected);
+        assert_eq!(net_text(&fixture(), None), expected);
     }
 
     #[test]
@@ -404,7 +404,7 @@ mod tests {
             ],
             vec![net(1, "GND", &[("#PWR01", "1"), ("R1", "1"), ("", "4")])],
         );
-        let text = protel(&c, None);
+        let text = net_text(&c, None);
         assert!(text.ends_with("(\r\nGND\r\nR1-1\r\n)\r\n"), "{text}");
         assert!(!text.contains("#PWR01") && !text.contains("-4"), "{text}");
     }
@@ -432,7 +432,7 @@ mod tests {
             vec![symbol("R1", "10k", "R_0603", false), off_board],
             vec![net(1, "N", &[("R1", "1"), ("TP1", "1")])],
         );
-        let text = protel(&c, None);
+        let text = net_text(&c, None);
         assert!(!text.contains("TP1"), "{text}");
         assert!(text.ends_with("(\r\nN\r\nR1-1\r\n)\r\n"), "{text}");
         assert_eq!(text.matches("[\r\n").count(), 1, "{text}");
@@ -448,19 +448,22 @@ mod tests {
             vec![symbol("R1", "10k", "R_0603", false), off_board],
             vec![net(1, "N", &[("R1", "1")])],
         );
-        assert!(protel(&c, None).contains("R1-1"));
+        assert!(net_text(&c, None).contains("R1-1"));
     }
 
     #[test]
     fn a_net_with_no_terminals_is_still_a_block() {
         let c = ctx(vec![], vec![net(7, "FLOATING", &[])]);
-        assert_eq!(protel(&c, None), "(\r\nFLOATING\r\n)\r\n");
+        assert_eq!(net_text(&c, None), "(\r\nFLOATING\r\n)\r\n");
     }
 
     #[test]
     fn an_empty_footprint_leaves_its_line_blank() {
         let c = ctx(vec![symbol("R1", "10k", "", false)], vec![]);
-        assert_eq!(protel(&c, None), "[\r\nR1\r\n\r\n10k\r\n\r\n\r\n\r\n]\r\n");
+        assert_eq!(
+            net_text(&c, None),
+            "[\r\nR1\r\n\r\n10k\r\n\r\n\r\n\r\n]\r\n"
+        );
     }
 
     #[test]
@@ -470,7 +473,7 @@ mod tests {
             vec![net(1, "A\nB", &[("R1", "1")]), net(2, "", &[("R1", "2")])],
         );
         assert_eq!(
-            protel(&c, None),
+            net_text(&c, None),
             "[\r\nR1\r\nR 0603\r\n10k  )\r\n\r\n\r\n\r\n]\r\n\
              (\r\nA B\r\nR1-1\r\n)\r\n(\r\nNET2\r\nR1-2\r\n)\r\n"
         );
@@ -488,7 +491,7 @@ mod tests {
             ],
             vec![],
         );
-        assert_eq!(protel(&c, None).matches("[\r\n").count(), 1);
+        assert_eq!(net_text(&c, None).matches("[\r\n").count(), 1);
     }
 
     /// #824: part membership follows the shared rule, so a unit whose library
@@ -514,7 +517,7 @@ mod tests {
                 ..symbol("U1", "OPAMP", "SOIC-8", false)
             }],
         );
-        assert_eq!(protel(&c, None).matches("[\r\n").count(), 1);
+        assert_eq!(net_text(&c, None).matches("[\r\n").count(), 1);
     }
 
     /// The same unit placed twice under one designator is a second part,
@@ -534,7 +537,7 @@ mod tests {
 
     fn export_err(c: &ExportContext) -> NetlistError {
         let opts = NetlistOptions {
-            format: NetlistFormat::Protel,
+            format: NetlistFormat::NetText,
             incomplete_note: None,
         };
         NetlistExporter.export(c, &opts).expect_err("must refuse")
@@ -587,7 +590,7 @@ mod tests {
             vec![net(1, ")", &[("R1", "1")])],
         );
         assert_eq!(
-            protel(&c, None),
+            net_text(&c, None),
             "[\r\nR1\r\n_)\r\n_]\r\n\r\n\r\n\r\n]\r\n(\r\n_)\r\nR1-1\r\n)\r\n"
         );
     }
@@ -616,7 +619,7 @@ mod tests {
                 symbol("#PWR02", "GND", "", true),
             ],
         );
-        let text = protel(&c, None);
+        let text = net_text(&c, None);
         let lines: Vec<&str> = text.split("\r\n").collect();
         let count = |l: &str| lines.iter().filter(|x| **x == l).count();
         for name in ["GND", "SIG"] {
@@ -633,14 +636,14 @@ mod tests {
     #[test]
     fn export_twice_is_byte_identical() {
         let c = fixture();
-        assert_eq!(protel(&c, None), protel(&c, None));
+        assert_eq!(net_text(&c, None), net_text(&c, None));
     }
 
     #[test]
     fn an_incomplete_note_never_puts_a_comment_in_the_file() {
         let note = Some(vec!["page 'b.snxsch' omitted".to_string()]);
-        let text = protel(&fixture(), note);
-        assert_eq!(text, protel(&fixture(), None), "the file is unchanged");
+        let text = net_text(&fixture(), note);
+        assert_eq!(text, net_text(&fixture(), None), "the file is unchanged");
         assert!(text.starts_with("[\r\n"), "{text}");
         assert!(
             !text.contains("INCOMPLETE") && !text.contains('#'),

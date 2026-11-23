@@ -126,6 +126,7 @@ cmd-save-document = Save document
 cmd-menu-save-document = Save
 cmd-save-document-as = Save as
 cmd-menu-save-document-as = Save As...
+cmd-save-all = Save all unsaved documents
 cmd-select-all = Select all
 cmd-menu-select-all = Select All
 cmd-select-expand-connection = Select / expand connection

@@ -34,6 +34,8 @@ pub(crate) enum Needs {
     Planned,
     SaveTarget,
     SaveAsTarget,
+    /// Save All: some document or Component row has unsaved work (#2844).
+    UnsavedWork,
     PrintTarget,
     Document,
     Undo,
@@ -150,6 +152,7 @@ impl Needs {
                     || (ctx.document_has_file && ctx.project_dirty)
             }
             Self::SaveAsTarget => ctx.document_is_schematic || ctx.document_is_editor,
+            Self::UnsavedWork => ctx.has_dirty_documents,
             // A board prints through Board Print / PDF (#2402).
             Self::PrintTarget => ctx.document_is_schematic || ctx.pcb.shown,
             Self::Document => ctx.has_document,
@@ -278,6 +281,7 @@ impl Needs {
             Self::Planned
             | Self::SaveTarget
             | Self::SaveAsTarget
+            | Self::UnsavedWork
             | Self::PrintTarget
             | Self::Document
             | Self::Undo
@@ -308,6 +312,7 @@ impl Needs {
             Self::Planned => ids::COMMAND_NEEDS_PLANNED,
             Self::SaveTarget => ids::COMMAND_NEEDS_SAVE_TARGET,
             Self::SaveAsTarget => ids::COMMAND_NEEDS_SAVE_AS_TARGET,
+            Self::UnsavedWork => ids::COMMAND_NEEDS_UNSAVED_WORK,
             Self::PrintTarget => ids::COMMAND_NEEDS_PRINT_TARGET,
             Self::Document => ids::COMMAND_NEEDS_DOCUMENT,
             Self::Undo => ids::COMMAND_NEEDS_UNDO,
@@ -385,6 +390,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
     Some(match command.as_str() {
         "save_document" => Needs::SaveTarget,
         "save_document_as" => Needs::SaveAsTarget,
+        "save_all" => Needs::UnsavedWork,
         "print" => Needs::PrintTarget,
         "close_active_document" | "close_all_documents" => Needs::Document,
         "undo" => Needs::Undo,

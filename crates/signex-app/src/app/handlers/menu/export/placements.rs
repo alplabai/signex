@@ -1,6 +1,6 @@
 //! Which sheet placements a netlist export walks.
 //!
-//! The Protel file keys every component on its designator, and a sheet file
+//! The `.NET` file keys every component on its designator, and a sheet file
 //! placed twice can carry a different designator per placement (#829), so the
 //! exporter needs one entry per placement, not one per file.
 

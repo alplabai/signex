@@ -90,6 +90,8 @@ pub fn parse_list(text: &str) -> Result<BTreeSet<Capability>, String> {
 const SAVES: &[&str] = &[
     "save_document",
     "save_document_as",
+    // Writes every unsaved document (#2844).
+    "save_all",
     "new_document",
     "new_project_with_profile",
     // Writes the blank sheet and lists it in the saved project (#2232).
@@ -176,6 +178,7 @@ mod tests {
             (Capability::Save, "new_schematic_sheet"),
             (Capability::Save, "save_document"),
             (Capability::Save, "save_document_as"),
+            (Capability::Save, "save_all"),
             (Capability::Save, "save_board_reuse_block"),
             (Capability::Save, "save_layer_set"),
             (Capability::Save, "save_workspace_layout"),

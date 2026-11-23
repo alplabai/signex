@@ -124,6 +124,7 @@ define_ids! {
         CMD_MENU_SAVE_DOCUMENT = "cmd-menu-save-document";
         CMD_SAVE_DOCUMENT_AS = "cmd-save-document-as";
         CMD_MENU_SAVE_DOCUMENT_AS = "cmd-menu-save-document-as";
+        CMD_SAVE_ALL = "cmd-save-all";
         CMD_SELECT_ALL = "cmd-select-all";
         CMD_MENU_SELECT_ALL = "cmd-menu-select-all";
         CMD_SELECT_EXPAND_CONNECTION = "cmd-select-expand-connection";

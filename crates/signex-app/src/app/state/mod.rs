@@ -356,7 +356,7 @@ impl LoadedProject {
 /// netlist that does not cover the whole project. Holds the picked `save_path`
 /// and the omitted-page `messages` so the two prompt actions can act without
 /// re-deriving: "Export anyway" writes the partial `.net` (a clean file —
-/// Protel has no comment syntax) and logs these messages as a warning;
+/// `.NET` has no comment syntax) and logs these messages as a warning;
 /// "Cancel" writes nothing. The
 /// refusal stays the default — nothing reaches disk until the user acts.
 #[derive(Debug, Clone)]

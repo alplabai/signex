@@ -42,6 +42,7 @@ context = "global"
 
 [keyboard_shortcuts.sections.bindings]
 "Ctrl+Q" = "cycle_unit"
+"Mod+Alt+S" = "save_all"
 "Mod+R" = "rubber_stamp_copy"
 "Mod+Shift+S" = "save_document_as"
 "Mod+Shift+V" = "smart_paste"

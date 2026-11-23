@@ -64,12 +64,12 @@ fn custom_profile_trigger_edit_updates_compiled_keymap() {
 
     let slot = slot_of(&editor, "save_document", "Ctrl+S");
     editor
-        .edit_active_trigger(slot, "Ctrl+Alt+S".into())
+        .edit_active_trigger(slot, "Ctrl+Alt+Y".into())
         .unwrap();
 
     let keymap = editor.active_keymap();
     let lookup = keymap.lookup(
-        &[KeyStroke::from_str("Ctrl+Alt+S").unwrap()],
+        &[KeyStroke::from_str("Ctrl+Alt+Y").unwrap()],
         &[ShortcutContext::Global],
     );
     assert_eq!(lookup.command.as_ref(), Some(&command));
@@ -166,7 +166,7 @@ fn built_in_profile_trigger_edit_is_rejected() {
     let slot = slot_of(&editor, "save_document", "Ctrl+S");
 
     let error = editor
-        .edit_active_trigger(slot, "Ctrl+Alt+S".into())
+        .edit_active_trigger(slot, "Ctrl+Alt+Y".into())
         .unwrap_err()
         .to_string();
 
@@ -190,7 +190,7 @@ fn valid_trigger_edit_marks_editor_as_differing() {
         .unwrap();
     let slot = slot_of(&editor, "save_document", "Ctrl+S");
     editor
-        .edit_active_trigger(slot, "Ctrl+Alt+S".into())
+        .edit_active_trigger(slot, "Ctrl+Alt+Y".into())
         .unwrap();
 
     assert!(editor.differs_from(&live));
@@ -204,7 +204,7 @@ fn rejected_built_in_edit_still_counts_as_differing() {
     let live = ShortcutProfileSet::built_ins().unwrap();
     let mut editor = KeymapEditorModel::new(live.clone()).with_platform(Platform::Windows);
     let slot = slot_of(&editor, "save_document", "Ctrl+S");
-    let _ = editor.edit_active_trigger(slot, "Ctrl+Alt+S".into());
+    let _ = editor.edit_active_trigger(slot, "Ctrl+Alt+Y".into());
 
     assert!(editor.has_invalid_trigger_drafts());
     assert!(editor.differs_from(&live));

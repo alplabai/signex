@@ -44,4 +44,5 @@ define_ids! {
     COMMAND_NEEDS_PROJECT_SHEET = "command-needs-project-sheet";
     COMMAND_NEEDS_TILEABLE_WINDOWS = "command-needs-tileable-windows";
     COMMAND_NEEDS_TILED = "command-needs-tiled";
+    COMMAND_NEEDS_UNSAVED_WORK = "command-needs-unsaved-work";
 }

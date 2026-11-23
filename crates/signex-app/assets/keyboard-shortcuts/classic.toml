@@ -70,6 +70,7 @@ context = "global"
 
 [keyboard_shortcuts.sections.bindings]
 "Ctrl+Q" = "cycle_unit"
+"Mod+Alt+S" = "save_all"
 "Mod+S" = "save_document"
 "Mod+Shift+A" = "unselect_all"
 "Mod+Shift+E" = "edit_library_symbol"

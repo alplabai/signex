@@ -98,6 +98,11 @@ portable; other OSes record exactly what was pressed. On macOS the conflict
 check also flags a binding on ⌘Q, ⌘H, ⌘M, ⌘Space, ⌘Tab, ⌘` or ⌘, (unless it is
 Preferences) as reserved by the system.
 
+Save All is `Mod+Alt+S` in both built-in profiles: Ctrl+Alt+S on Windows and
+Linux, Cmd+Alt+S on macOS. Save As keeps `Mod+Shift+S`. Windows reports AltGr
+as Ctrl+Alt, so on a layout where AltGr+S types a character the key types it,
+and Save All is reached from the File menu.
+
 Layouts: a key press is matched by the logical key first, exactly as before
 (AZERTY `z` stays `z`; a binding on `Ctrl+ö` still fires). Only when that
 matches nothing, and Ctrl, Cmd or Alt is held, is the physical key's

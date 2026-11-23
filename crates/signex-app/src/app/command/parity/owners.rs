@@ -285,6 +285,7 @@ const MENU_DOCUMENT: &[&str] = &[
     "reset_layer_colors",
     "run_drc",
     "run_erc",
+    "save_all",
     "save_document",
     "send_drawings_backward",
     "send_drawings_to_back",

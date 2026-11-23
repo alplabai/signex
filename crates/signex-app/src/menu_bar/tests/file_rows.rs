@@ -178,7 +178,7 @@ fn print_and_export_pdf_open_the_print_preview() {
 fn export_netlist_asks_where_to_save() {
     let mut app = one_symbol_selected();
     let before = probe(&app);
-    let task = click(&mut app, "Tools/Reports/Netlist (Protel .NET)...");
+    let task = click(&mut app, "Tools/Reports/Netlist (.NET)...");
     assert!(has_work(&task), "no dialog");
     assert_eq!(probe(&app), before);
 }
@@ -312,7 +312,7 @@ fn rows_without_a_document_are_greyed() {
         "File/Save All",
         "File/Library/Place Component...",
         "File/Export/PDF…",
-        "Tools/Reports/Netlist (Protel .NET)...",
+        "Tools/Reports/Netlist (.NET)...",
         "Tools/Reports/Bill of Materials…",
         "Tools/Reports/ERC Report…",
         "File/Print...",
