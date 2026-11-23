@@ -25,6 +25,8 @@ pub enum WindowSel {
     Main,
     /// The detached dialog window; the row fails when none opened.
     Detached,
+    /// The detached dialog window at this height, for a page that scrolls.
+    DetachedTall(u32),
     /// A rectangle of the main window.
     MainCrop(Crop),
     /// The main window after these pointer steps, drawn from the widget
@@ -74,6 +76,11 @@ pub fn capture(
                 render::draw_window(r, app, id, render::DETACHED_SIZE),
                 render::DETACHED_SIZE,
             ))
+        }
+        WindowSel::DetachedTall(height) => {
+            let id = render::detached_modal(app).ok_or("no detached dialog window opened")?;
+            let size = (render::DETACHED_SIZE.0, height);
+            Ok((render::draw_window(r, app, id, size), size))
         }
         WindowSel::MainCrop(rect) => Ok(render::crop(&render::draw_main(r, app), main, rect)),
         WindowSel::MainPointer(steps) => Ok((draw_after(r, app, steps, render::HEIGHT)?, main)),

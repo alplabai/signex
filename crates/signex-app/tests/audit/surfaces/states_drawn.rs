@@ -295,7 +295,7 @@ pub(super) fn open_clearance_matrix(
 }
 
 /// The Rules tab with its Presets panel, opened by the toolbar button.
-fn open_rules_presets(
+pub(super) fn open_rules_presets(
     app: &mut Signex,
     r: &mut iced::Renderer,
     fx: &Fixture,
