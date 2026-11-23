@@ -227,6 +227,20 @@ iced_wgpu = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14
 iced_widget = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
 iced_winit = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
 iced_debug = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
+# Same alplabai/wgpu rev as alplabai/iced's root Cargo.toml (alplabai/iced#133, #2848): wgpu 30.0.1 plus DX12 window
+# swapchains with DXGI_SCALING_NONE, so a resize shows no stretched frame. The whole family comes from one
+# rev so there is one copy of each crate. A stale patch only warns: after every iced re-pin or wgpu bump,
+# `cargo tree -i wgpu-hal` must still show the alplabai/wgpu source.
+naga = { git = "https://github.com/alplabai/wgpu.git", rev = "e738655e169b416fb53c31e3ceb9581d1a63035e" }
+naga-types = { git = "https://github.com/alplabai/wgpu.git", rev = "e738655e169b416fb53c31e3ceb9581d1a63035e" }
+wgpu = { git = "https://github.com/alplabai/wgpu.git", rev = "e738655e169b416fb53c31e3ceb9581d1a63035e" }
+wgpu-core = { git = "https://github.com/alplabai/wgpu.git", rev = "e738655e169b416fb53c31e3ceb9581d1a63035e" }
+wgpu-core-deps-apple = { git = "https://github.com/alplabai/wgpu.git", rev = "e738655e169b416fb53c31e3ceb9581d1a63035e" }
+wgpu-core-deps-emscripten = { git = "https://github.com/alplabai/wgpu.git", rev = "e738655e169b416fb53c31e3ceb9581d1a63035e" }
+wgpu-core-deps-windows-linux-android = { git = "https://github.com/alplabai/wgpu.git", rev = "e738655e169b416fb53c31e3ceb9581d1a63035e" }
+wgpu-hal = { git = "https://github.com/alplabai/wgpu.git", rev = "e738655e169b416fb53c31e3ceb9581d1a63035e" }
+wgpu-naga-bridge = { git = "https://github.com/alplabai/wgpu.git", rev = "e738655e169b416fb53c31e3ceb9581d1a63035e" }
+wgpu-types = { git = "https://github.com/alplabai/wgpu.git", rev = "e738655e169b416fb53c31e3ceb9581d1a63035e" }
 
 # Local release builds keep cargo's parallel codegen defaults; shipped binaries
 # get lto = "thin" + codegen-units = 1 from env in .github/workflows/release.yml.

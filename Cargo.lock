@@ -3839,8 +3839,7 @@ checksum = "13d2233c9842d08cfe13f9eac96e207ca6a2ea10b80259ebe8ad0268be27d2af"
 [[package]]
 name = "naga"
 version = "30.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a616d2fb8c89516ac2723a581f69d6c18576046bed761bd6b305e5618e6ae130"
+source = "git+https://github.com/alplabai/wgpu.git?rev=e738655e169b416fb53c31e3ceb9581d1a63035e#e738655e169b416fb53c31e3ceb9581d1a63035e"
 dependencies = [
  "arrayvec",
  "bit-set",
@@ -3865,8 +3864,7 @@ dependencies = [
 [[package]]
 name = "naga-types"
 version = "30.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "590afbf58a6f4f62873cd5cff4468061844bafa1cdf399cc954537c22d768d49"
+source = "git+https://github.com/alplabai/wgpu.git?rev=e738655e169b416fb53c31e3ceb9581d1a63035e#e738655e169b416fb53c31e3ceb9581d1a63035e"
 dependencies = [
  "hashbrown 0.17.2",
  "indexmap",
@@ -8104,8 +8102,7 @@ checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
 [[package]]
 name = "wgpu"
 version = "30.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "527ccdf43dd5b2e8676eed9984ce00e2bbb0a1b85b70c1969dcb6cd2eb55ab9e"
+source = "git+https://github.com/alplabai/wgpu.git?rev=e738655e169b416fb53c31e3ceb9581d1a63035e#e738655e169b416fb53c31e3ceb9581d1a63035e"
 dependencies = [
  "arrayvec",
  "bitflags 2.11.1",
@@ -8134,8 +8131,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core"
 version = "30.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14c018fce9b6270aa203c2fdd56f3cce996713534bd757e4ea58c8560b121f14"
+source = "git+https://github.com/alplabai/wgpu.git?rev=e738655e169b416fb53c31e3ceb9581d1a63035e#e738655e169b416fb53c31e3ceb9581d1a63035e"
 dependencies = [
  "arrayvec",
  "bit-set",
@@ -8168,8 +8164,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core-deps-apple"
 version = "30.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "061f3d319a40d39d00b1ecc2c33b89fe21d4e6fe01859df3500a3a8ecccd6b68"
+source = "git+https://github.com/alplabai/wgpu.git?rev=e738655e169b416fb53c31e3ceb9581d1a63035e#e738655e169b416fb53c31e3ceb9581d1a63035e"
 dependencies = [
  "wgpu-hal",
 ]
@@ -8177,8 +8172,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core-deps-emscripten"
 version = "30.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d98b86cf4abf524a902dd35f18ca6a3f08fc2ae9847c8f10b48e30491b1f0b86"
+source = "git+https://github.com/alplabai/wgpu.git?rev=e738655e169b416fb53c31e3ceb9581d1a63035e#e738655e169b416fb53c31e3ceb9581d1a63035e"
 dependencies = [
  "wgpu-hal",
 ]
@@ -8186,8 +8180,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core-deps-windows-linux-android"
 version = "30.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7586165fd5f6d881cb9ce4bb71f40d6caab2c0f1837e3fc1d9788a197fb6004f"
+source = "git+https://github.com/alplabai/wgpu.git?rev=e738655e169b416fb53c31e3ceb9581d1a63035e#e738655e169b416fb53c31e3ceb9581d1a63035e"
 dependencies = [
  "wgpu-hal",
 ]
@@ -8195,8 +8188,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "30.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6b7fb58561a792bc237628ba0792e332de418fefe145f13b5ed8201e6d52f58"
+source = "git+https://github.com/alplabai/wgpu.git?rev=e738655e169b416fb53c31e3ceb9581d1a63035e#e738655e169b416fb53c31e3ceb9581d1a63035e"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -8251,8 +8243,7 @@ dependencies = [
 [[package]]
 name = "wgpu-naga-bridge"
 version = "30.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2f62e73117bb7a62bfd9c5a5841438a823f6566c6442a808ee269d2d055c081"
+source = "git+https://github.com/alplabai/wgpu.git?rev=e738655e169b416fb53c31e3ceb9581d1a63035e#e738655e169b416fb53c31e3ceb9581d1a63035e"
 dependencies = [
  "naga",
  "wgpu-types",
@@ -8261,8 +8252,7 @@ dependencies = [
 [[package]]
 name = "wgpu-types"
 version = "30.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99dad6f1fbdbbdb4c278a6508b059d44688f5cebddf78d005a46a31340269286"
+source = "git+https://github.com/alplabai/wgpu.git?rev=e738655e169b416fb53c31e3ceb9581d1a63035e#e738655e169b416fb53c31e3ceb9581d1a63035e"
 dependencies = [
  "bitflags 2.11.1",
  "bytemuck",
