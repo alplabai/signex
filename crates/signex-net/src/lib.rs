@@ -83,7 +83,7 @@ mod harness;
 #[cfg(test)]
 mod harness_fixture;
 pub use harness::{
-    HarnessBundle, HarnessMismatch, HarnessPort, HarnessSheetEntry, harness_bundles,
+    HarnessBundle, HarnessLeaf, HarnessMismatch, HarnessPort, HarnessSheetEntry, harness_bundles,
     harness_mismatches, harness_segments_touch, on_harness,
 };
 

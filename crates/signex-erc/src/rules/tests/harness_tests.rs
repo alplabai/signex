@@ -125,6 +125,97 @@ fn matching_sides_report_nothing() {
     assert!(found(&ctx, RuleKind::HarnessEntryMismatch).is_empty());
 }
 
+/// #2743: an extra entry here, with nothing missing to pair it with.
+#[test]
+fn an_entry_only_the_parent_has_is_named() {
+    let ctx = with_child(&parent(&["SCK", "CS", "CS2"]), &child(&["SCK", "CS"]));
+    let hits = found(&ctx, RuleKind::HarnessEntryMismatch);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0].message, "sensor has no entry CS2");
+    let cs2 = &ctx.harness.connectors[0].entries[2];
+    let primary = hits[0].primary.expect("on the entry");
+    assert_eq!(primary.uuid, cs2.uuid);
+    assert_eq!(primary.kind, SelectedKind::HarnessEntry);
+    assert_eq!(hits[0].tag.as_deref(), Some("extra:sensor:CS2"));
+}
+
+#[test]
+fn an_entry_only_the_child_has_is_named() {
+    let ctx = with_child(&parent(&["SCK", "CS"]), &child(&["SCK", "CS", "CS2"]));
+    let hits = found(&ctx, RuleKind::HarnessEntryMismatch);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(
+        hits[0].message,
+        "sensor expects entry CS2; this harness lacks it"
+    );
+}
+
+/// `sheet`'s connector gets a `UART` connector of `names` nested at entry 0.
+fn nest_uart(sheet: &mut SchematicSheet, names: &[&str]) {
+    let at = sheet.harness.connectors[0].entry_point(0);
+    let inner = harness_connector("UART", pt(at.x - 40.0, at.y + 40.0), names);
+    sheet
+        .harness
+        .wires
+        .push(harness_wire(inner.tip_point(), at));
+    sheet.harness.connectors.push(inner);
+}
+
+#[test]
+fn a_nested_entry_only_the_parent_has_is_named_by_its_path() {
+    let mut near = parent(&["UART"]);
+    nest_uart(&mut near, &["TX", "RX"]);
+    let mut far = child(&["UART"]);
+    nest_uart(&mut far, &["TX"]);
+    let hits = found(&with_child(&near, &far), RuleKind::HarnessEntryMismatch);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0].message, "sensor has no entry UART.RX");
+}
+
+#[test]
+fn a_nested_entry_only_the_child_has_is_named_by_its_path() {
+    let mut near = parent(&["UART"]);
+    nest_uart(&mut near, &["TX"]);
+    let mut far = child(&["UART"]);
+    nest_uart(&mut far, &["TX", "RX"]);
+    let hits = found(&with_child(&near, &far), RuleKind::HarnessEntryMismatch);
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(
+        hits[0].message,
+        "sensor expects entry UART.RX; this harness lacks it"
+    );
+}
+
+/// A rename of the top entry would move every leaf under it, so a nested
+/// difference is never offered as one.
+#[test]
+fn a_nested_difference_is_never_paired_as_a_rename() {
+    let mut near = parent(&["UART"]);
+    nest_uart(&mut near, &["TX", "RTS"]);
+    let mut far = child(&["UART"]);
+    nest_uart(&mut far, &["TX", "RX"]);
+    let hits = found(&with_child(&near, &far), RuleKind::HarnessEntryMismatch);
+    let mut messages: Vec<&str> = hits.iter().map(|d| d.message.as_str()).collect();
+    messages.sort_unstable();
+    assert_eq!(
+        messages,
+        [
+            "sensor expects entry UART.RX; this harness lacks it",
+            "sensor has no entry UART.RTS",
+        ]
+    );
+}
+
+#[test]
+fn matching_nested_entries_report_nothing() {
+    let mut near = parent(&["UART"]);
+    nest_uart(&mut near, &["TX", "RX"]);
+    let mut far = child(&["UART"]);
+    nest_uart(&mut far, &["RX", "TX"]);
+    let hits = found(&with_child(&near, &far), RuleKind::HarnessEntryMismatch);
+    assert!(hits.is_empty(), "{hits:?}");
+}
+
 #[test]
 fn an_entry_the_definition_does_not_list_is_reported() {
     let ctx = ErcContext::from_snapshot(&child(&["SCK", "CS", "IRQ"]));
