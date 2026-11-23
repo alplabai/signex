@@ -65,8 +65,8 @@ mod net_index;
 mod root_order;
 mod sheet_numbers;
 
-pub(crate) use channels::{CompiledOccurrence, compiled_occurrences};
 pub use channels::{ChannelDesignators, EntryBuses, channel_uuid};
+pub(crate) use channels::{CompiledOccurrence, compiled_occurrences};
 pub use components::{ComponentPin, ComponentReport, PlacedPin, PlacedSymbol, UnconnectedPin};
 pub use members::{NetMember, NetMemberKind, NetMembers};
 pub use name_changes::{ProjectNetChange, project_name_changes};
