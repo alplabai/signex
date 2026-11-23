@@ -75,6 +75,24 @@ pub fn channel_uuid(sheet_symbol: Uuid, number: u32) -> Uuid {
     uuid::Builder::from_custom_bytes(bytes).into_uuid()
 }
 
+/// The version [`channel_uuid`] stamps on every channel placement.
+const CHANNEL_UUID_VERSION: usize = 8;
+
+/// The repeated sheet symbol in `placed` (uuid, designator) whose channel is
+/// the placement `step`, with that channel.
+fn channel_at_step<'a>(
+    step: Uuid,
+    mut placed: impl Iterator<Item = (Uuid, &'a str)>,
+) -> Option<(Uuid, ChannelOccurrence)> {
+    placed.find_map(|(symbol, designator)| {
+        let channel = ChannelRepeat::parse(designator)?
+            .occurrences()
+            .into_iter()
+            .find(|c| channel_uuid(symbol, c.number) == step)?;
+        Some((symbol, channel))
+    })
+}
+
 /// `base` as it reads in a placement inside `channels` (outermost first).
 /// A blank designator stays blank.
 pub(super) fn channel_designator<'s>(
@@ -165,18 +183,33 @@ impl ChannelDesignators {
         placed: impl Iterator<Item = &'a ChildSheet> + Clone,
         naming: &ChannelNaming,
     ) -> Self {
+        Self::of_placements(path, placed.map(|cs| (cs.uuid, cs.name.as_str())), naming)
+    }
+
+    /// Whether a step of `path` has a channel uuid's form and no sheet symbol
+    /// in `placed` (uuid, designator) explains it: the part's channel name
+    /// cannot be told yet.
+    pub fn has_unknown_channel<'a>(
+        path: &InstancePath,
+        placed: impl Iterator<Item = (Uuid, &'a str)> + Clone,
+    ) -> bool {
+        path.chain().iter().any(|&step| {
+            step.get_version_num() == CHANNEL_UUID_VERSION
+                && channel_at_step(step, placed.clone()).is_none()
+        })
+    }
+
+    /// [`Self::of_path`] from each sheet symbol's uuid and designator, for a
+    /// reader whose parent sheets are not open.
+    pub fn of_placements<'a>(
+        path: &InstancePath,
+        placed: impl Iterator<Item = (Uuid, &'a str)> + Clone,
+        naming: &ChannelNaming,
+    ) -> Self {
         let mut logical = Vec::with_capacity(path.chain().len());
         let mut channels = Vec::new();
         for &step in path.chain() {
-            let found = placed.clone().find_map(|cs| {
-                let repeat = ChannelRepeat::parse(&cs.name)?;
-                let channel = repeat
-                    .occurrences()
-                    .into_iter()
-                    .find(|c| channel_uuid(cs.uuid, c.number) == step)?;
-                Some((cs.uuid, channel))
-            });
-            match found {
+            match channel_at_step(step, placed.clone()) {
                 Some((symbol, channel)) => {
                     logical.push(symbol);
                     channels.push(channel);
