@@ -200,6 +200,46 @@ fn same_sheet_link(old: &str, fresh: &str) -> bool {
                 .is_some_and(|name| name == old))
 }
 
+/// For each old row of `table`, whether a fresh row is that row. Each fresh
+/// row answers for one old row, so a file placed twice with one placement
+/// unread keeps the other's row. The closest match is taken first: same link
+/// and Sheet, same link, an old bare link, then Sheet for a row with no link.
+fn rows_reached(
+    table: &SchTable,
+    rows: &[Vec<String>],
+    links: &[String],
+    sheet: Option<usize>,
+) -> Vec<bool> {
+    let same_name = |old: usize, fresh: usize| {
+        let cell = |row: Option<&Vec<String>>| sheet.and_then(|c| row?.get(c).cloned());
+        let name = cell(table.rows.get(old));
+        name.is_some() && name == cell(rows.get(fresh))
+    };
+    let same_link = |old: usize, fresh: usize| table.link(old) == Some(links[fresh].as_str());
+    let bare_link = |old: usize, fresh: usize| {
+        table
+            .link(old)
+            .is_some_and(|link| same_sheet_link(link, &links[fresh]))
+    };
+    let no_link = |old: usize, fresh: usize| table.link(old).is_none() && same_name(old, fresh);
+    let exact = |old: usize, fresh: usize| same_link(old, fresh) && same_name(old, fresh);
+    let passes: [&dyn Fn(usize, usize) -> bool; 4] = [&exact, &same_link, &bare_link, &no_link];
+    let mut reached = vec![false; table.rows.len()];
+    let mut free = vec![true; links.len()];
+    for accepts in passes {
+        for (old, is_reached) in reached.iter_mut().enumerate() {
+            if *is_reached {
+                continue;
+            }
+            if let Some(fresh) = (0..free.len()).find(|&f| free[f] && accepts(old, f)) {
+                free[fresh] = false;
+                *is_reached = true;
+            }
+        }
+    }
+    reached
+}
+
 /// `rows` and `links` with every row of `table` the compile did not reach put
 /// back at its place, unchanged but for its page number. For a compile that
 /// could not read a sheet, or met a sheet symbol whose file is missing: a row
@@ -211,19 +251,9 @@ pub(crate) fn keeping_unreached_rows(
     mut links: Vec<String>,
 ) -> (Vec<Vec<String>>, Vec<String>) {
     let column = |key: &str| table.columns.iter().position(|c| c.key == key);
-    let sheet = column(sheet_columns::SHEET);
-    let names: Vec<String> = sheet
-        .map(|c| rows.iter().filter_map(|r| r.get(c).cloned()).collect())
-        .unwrap_or_default();
-    let reached_links = links.clone();
+    let reached = rows_reached(table, &rows, &links, column(sheet_columns::SHEET));
     for (i, old) in table.rows.iter().enumerate() {
-        let reached = match table.link(i) {
-            Some(link) => reached_links.iter().any(|f| same_sheet_link(link, f)),
-            None => sheet
-                .and_then(|c| old.get(c))
-                .is_some_and(|name| names.contains(name)),
-        };
-        if !reached {
+        if !reached[i] {
             let at = i.min(rows.len());
             rows.insert(at, old.clone());
             links.insert(at, table.link(i).unwrap_or_default().to_string());

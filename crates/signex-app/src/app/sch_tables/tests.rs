@@ -529,6 +529,70 @@ fn a_bare_link_to_a_reached_sheet_is_not_kept_as_a_second_row() {
     assert_eq!(next.links[2], "power/leaf.snxsch");
 }
 
+fn table_of(entries: &[rows::ContentsEntry]) -> SchTable {
+    let mut table = SchTable::new_typed(uuid::Uuid::from_u128(9), Point::new(0.0, 0.0));
+    table.source = TableSource::ProjectSheets { per_channel: true };
+    table.columns = SchTable::columns_for(&table.source);
+    (table.rows, table.links) = rows::contents_table_rows(entries, &table.columns);
+    table
+}
+
+fn entry_of(page: usize, name: &str, file: &str, title: &str) -> rows::ContentsEntry {
+    rows::ContentsEntry {
+        file: file.into(),
+        ..contents_entry(page, name, title, "A")
+    }
+}
+
+/// #2742: `top` places readable `A` and unread `B`, both place `common`. The
+/// compile lists `common` once, which is one of the two old rows.
+#[test]
+fn a_reused_file_keeps_the_row_of_its_unread_placement() {
+    let table = table_of(&[
+        entry_of(1, "top", "top.snxsch", "Top"),
+        entry_of(2, "A", "a.snxsch", "Sheet A"),
+        entry_of(3, "common", "common.snxsch", "Common in A"),
+        entry_of(4, "B", "b.snxsch", "Sheet B"),
+        entry_of(5, "common", "common.snxsch", "Common in B"),
+    ]);
+    let fresh = vec![
+        entry_of(1, "top", "top.snxsch", "Top"),
+        entry_of(2, "A", "a.snxsch", "Sheet A"),
+        entry_of(3, "common", "common.snxsch", "Common in A"),
+    ];
+    let sheet = SchematicSheet::default();
+    let pages = |_: bool| Some(fresh.clone());
+
+    assert_eq!(
+        refresh::rebuilt_table(&sheet, &table, &pages, true),
+        None,
+        "every row and page number stays"
+    );
+}
+
+/// #2742: the channels of a repeat under an unread parent keep their rows when
+/// the same file's channels are reached through a readable parent.
+#[test]
+fn channel_rows_under_an_unread_parent_are_kept_one_for_one() {
+    let table = table_of(&[
+        entry_of(1, "top", "top.snxsch", "Top"),
+        entry_of(2, "buck · CH1", "buck.snxsch", "Read CH1"),
+        entry_of(3, "buck · CH2", "buck.snxsch", "Read CH2"),
+        entry_of(4, "B", "b.snxsch", "Sheet B"),
+        entry_of(5, "buck · CH1", "buck.snxsch", "Unread CH1"),
+        entry_of(6, "buck · CH2", "buck.snxsch", "Unread CH2"),
+    ]);
+    let fresh = vec![
+        entry_of(1, "top", "top.snxsch", "Top"),
+        entry_of(2, "buck · CH1", "buck.snxsch", "Read CH1"),
+        entry_of(3, "buck · CH2", "buck.snxsch", "Read CH2"),
+    ];
+    let sheet = SchematicSheet::default();
+    let pages = |_: bool| Some(fresh.clone());
+
+    assert_eq!(refresh::rebuilt_table(&sheet, &table, &pages, true), None);
+}
+
 /// #2742: through the real refresh, a compile with an unread sheet pushes no
 /// undo step and leaves the table as it was.
 #[test]
