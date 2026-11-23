@@ -33,10 +33,10 @@ pub(crate) use place_directive::{blanket_directive, compile_mask_directive, diff
 mod annotation_pause;
 #[cfg(test)]
 mod annotation_pause_tests;
+mod dimension_tool;
 mod pause_end;
 #[cfg(test)]
 mod pause_end_tests;
-mod dimension_tool;
 pub(crate) use dimension_tool::ends_held_resume_esc;
 mod place_bezier;
 mod place_dimension;
