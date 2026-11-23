@@ -57,6 +57,8 @@ mod dimension_tool_keys_tests;
 mod dimension_tool_pause_tests;
 #[cfg(test)]
 mod dimension_tool_tests;
+#[cfg(test)]
+mod dimension_tool_window_tests;
 mod library_status;
 #[cfg(test)]
 pub(crate) mod placement_tests;

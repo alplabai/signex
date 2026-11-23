@@ -193,17 +193,25 @@ impl Signex {
         self.clear_drawing_buffers_keeping(false, false);
     }
 
-    /// Main's tab changed: its buffers and its Tab pause go. A wire drawn or
-    /// a tool paused in an undocked window belongs to that window's sheet
-    /// and stays.
+    /// Main's tab changed: its buffers and its Tab pause go. A wire or
+    /// dimension begun, or a tool paused, in an undocked window belongs to
+    /// that window's sheet and stays.
     pub(crate) fn clear_drawing_buffers_of_main(&mut self) {
         let wire_in_a_window =
             self.interaction_state.wire_drawing && self.interaction_state.wire_window.is_some();
         let paused_elsewhere = self.interaction_state.is_sheet_pause_elsewhere();
-        self.clear_drawing_buffers_keeping(wire_in_a_window, paused_elsewhere);
+        let dimension_in_a_window = matches!(
+            self.interaction_state.dimension_points_window(),
+            Some(Some(_))
+        );
+        self.clear_drawing_buffers_keeping(
+            wire_in_a_window,
+            paused_elsewhere || dimension_in_a_window,
+        );
         if !paused_elsewhere {
             self.interaction_state.end_sheet_placement_pause();
             self.interaction_state.active_canvas_mut().placement_paused = false;
+            self.interaction_state.annotation_tool.paused_with = None;
         }
     }
 

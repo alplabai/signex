@@ -819,8 +819,7 @@ impl Signex {
         // that a panicking handler may leave `self` in a partially
         // mutated state, which is fine as long as the swap itself
         // unwinds deterministically below.
-        let main_had_wire =
-            self.interaction_state.wire_drawing && self.interaction_state.wire_window.is_none();
+        let main_work = self.main_canvas_work();
         let saved_acting = self.interaction_state.acting_window.replace(window_id);
         let task_result = catch_unwind(AssertUnwindSafe(|| {
             if fresh_ctx {
@@ -856,13 +855,6 @@ impl Signex {
             self.interaction_state
                 .canvases
                 .insert(window_id, swapped_canvas);
-        }
-        // The handler ended main's wire while main's slot sat in a local.
-        let main_has_wire =
-            self.interaction_state.wire_drawing && self.interaction_state.wire_window.is_none();
-        if main_had_wire && !main_has_wire {
-            self.interaction_state.canvas.wire_preview.clear();
-            self.interaction_state.canvas.drawing_mode = false;
         }
         if let Some(mut pcb) = swapped_pcb {
             std::mem::swap(&mut self.interaction_state.pcb_canvas, &mut pcb);
@@ -916,6 +908,8 @@ impl Signex {
             (path, _) => path,
         };
         self.document_state.active_path = saved_active_path;
+        // What the handler ended of main's, while main's slot sat in a local.
+        self.end_main_canvas_work(&main_work);
         if main_shows_target && revision_before != revision_after {
             self.refresh_main_canvas_from_engine(&target_path);
         }
