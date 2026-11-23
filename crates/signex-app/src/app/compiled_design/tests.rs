@@ -251,6 +251,7 @@ fn app_with_a_compile(path: &std::path::Path) -> Signex {
             stale: Default::default(),
             has_unread_sheets: false,
             unread_paths: Vec::new(),
+            bare_links_missing: Vec::new(),
         },
     );
     app
@@ -271,14 +272,21 @@ fn a_compile_tells_an_unreadable_sheet_from_an_absent_one() {
 /// project's declared pages.
 fn compile_of(dir: &std::path::Path, children: &[&str], pages: &[&str]) -> super::job::Compiled {
     use crate::app::handlers::menu::export::tests::sheet_with_net;
+    compile_sheet(dir, sheet_with_net("R1", "N", children), pages)
+}
+
+/// `sheet`, open as `top.snxsch`, compiled with `pages` declared.
+fn compile_sheet(
+    dir: &std::path::Path,
+    sheet: SchematicSheet,
+    pages: &[&str],
+) -> super::job::Compiled {
     let root = dir.join("top.snxsch");
     let (mut app, _task) = Signex::new();
     let job = super::job::CompileJob {
         project: app.document_state.mint_project_id(),
         generation: 1,
-        open: [(root.clone(), sheet_with_net("R1", "N", children))]
-            .into_iter()
-            .collect(),
+        open: [(root.clone(), sheet)].into_iter().collect(),
         pages: pages.iter().map(|page| dir.join(page)).collect(),
         root,
         fold: Default::default(),
@@ -306,6 +314,32 @@ fn a_refused_child_reference_counts_as_unread() {
     std::fs::create_dir(&dir).expect("folder");
 
     assert!(compile_of(&dir, &["../power.snxsch"], &[]).has_unread_sheets);
+}
+
+/// #2742: with a sheet unread, the job carries which bare contents links have
+/// no file beside their table; a complete compile does not look.
+#[test]
+fn the_compile_job_checks_bare_contents_links_on_disk_only_with_a_sheet_unread() {
+    use crate::app::handlers::menu::export::tests::sheet_with_net;
+    use signex_types::schematic::{SchDrawing, SchTable, TableSource};
+    let dir = tempfile::tempdir().expect("dir");
+    std::fs::write(dir.path().join("bad.snxsch"), "not a sheet").expect("seed");
+    std::fs::write(dir.path().join("beside.snxsch"), "x").expect("seed");
+    let with_table = |children: &[&str]| {
+        let mut table =
+            SchTable::new_typed(Uuid::from_u128(1), signex_types::schematic::Point::ZERO);
+        table.source = TableSource::ProjectSheets { per_channel: true };
+        table.links = vec!["beside.snxsch".to_string(), "moved.snxsch".to_string()];
+        let mut sheet = sheet_with_net("R1", "N", children);
+        sheet.drawings.push(SchDrawing::Table(table));
+        sheet
+    };
+
+    let unread = compile_sheet(dir.path(), with_table(&["bad.snxsch"]), &[]);
+    let complete = compile_sheet(dir.path(), with_table(&[]), &[]);
+
+    assert_eq!(unread.bare_links_missing, [dir.path().join("moved.snxsch")]);
+    assert!(complete.bare_links_missing.is_empty());
 }
 
 #[test]

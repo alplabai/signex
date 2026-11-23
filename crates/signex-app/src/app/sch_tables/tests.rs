@@ -534,7 +534,15 @@ fn a_bare_link_to_a_reached_sheet_is_not_kept_as_a_second_row() {
     fresh[1].file = "power/leaf.snxsch".into();
     let sheet = SchematicSheet::default();
     let pages = |_: bool| Some(fresh.clone());
-    let next = rebuilt_unread(&sheet, &table, &pages).expect("the link is rewritten");
+    // The compile found no `leaf.snxsch` beside the table: the link is legacy.
+    let missing = [std::path::PathBuf::from("/p/leaf.snxsch")];
+    let unread = rows::UnreadSheets {
+        dir: Some(std::path::Path::new("/p")),
+        missing_beside: &missing,
+        ..Default::default()
+    };
+    let next = refresh::rebuilt_table(&sheet, &table, &pages, Some(&unread))
+        .expect("the link is rewritten");
     assert_eq!(title_cells(&next), ["Top", "Buck", "Leaf"]);
     assert_eq!(next.links[2], "power/leaf.snxsch");
 }
@@ -608,8 +616,27 @@ fn root_bad_unread<'a>(paths: &'a [std::path::PathBuf]) -> rows::UnreadSheets<'a
     rows::UnreadSheets {
         dir: Some(std::path::Path::new("/p")),
         paths,
+        missing_beside: &[],
         fold: Default::default(),
     }
+}
+
+/// #2742: `bad.snxsch` exists beside the table, below a parent the compile
+/// could not read, so the compile neither lists it nor knows it as unread. A
+/// same-named sheet newly reached in another folder gets its own row.
+#[test]
+fn a_bare_link_to_a_file_beside_the_table_stays_below_an_unread_parent() {
+    let table = table_of(&[entry_of(1, "bad", "bad.snxsch", "Root title")]);
+    let fresh = vec![entry_of(1, "bad", "power/bad.snxsch", "Power title")];
+    let paths = [std::path::PathBuf::from("/p/parent.snxsch")];
+    let unread = root_bad_unread(&paths);
+    let sheet = SchematicSheet::default();
+    let pages = |_: bool| Some(fresh.clone());
+
+    let next = refresh::rebuilt_table(&sheet, &table, &pages, Some(&unread)).expect("a new row");
+
+    assert_eq!(title_cells(&next), ["Root title", "Power title"]);
+    assert_eq!(next.links, ["bad.snxsch", "power/bad.snxsch"]);
 }
 
 /// #2742: a table in the root lists `bad.snxsch` and `power/bad.snxsch`; the
@@ -671,6 +698,7 @@ fn the_refresh_after_a_compile_with_an_unread_sheet_pushes_no_undo_step() {
             stale: Default::default(),
             has_unread_sheets: true,
             unread_paths: Vec::new(),
+            bare_links_missing: Vec::new(),
         },
     );
     let steps = app.document_state.engines[&path].undo_position();

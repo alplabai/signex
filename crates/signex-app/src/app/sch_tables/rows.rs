@@ -10,6 +10,7 @@ use signex_types::schematic::{
 
 use crate::app::project_sheets::lexically_normalize;
 use crate::app::state::scope::{CaseFold, path_key_with};
+use crate::app::unread_sheets::is_bare_link;
 
 /// One page of the contents table.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -200,26 +201,34 @@ pub(crate) struct UnreadSheets<'a> {
     /// The folder of the sheet holding the table.
     pub dir: Option<&'a Path>,
     pub paths: &'a [PathBuf],
+    /// Bare links the compile job confirmed have no file in their table's
+    /// folder. Anything else may be a sheet there.
+    pub missing_beside: &'a [PathBuf],
     pub fold: CaseFold,
 }
 
 impl UnreadSheets<'_> {
-    /// Whether `link`, resolved from the table's folder, is an unread sheet.
-    fn holds(&self, link: &str) -> bool {
+    /// Whether `link`, resolved from the table's folder, is one of `paths`.
+    fn lists(&self, paths: &[PathBuf], link: &str) -> bool {
         let Some(dir) = self.dir else {
             return false;
         };
         let key = path_key_with(&lexically_normalize(&dir.join(link)), self.fold);
-        self.paths
+        paths
             .iter()
             .any(|path| path_key_with(path, self.fold) == key)
+    }
+
+    /// Whether the bare `link` cannot be a sheet in the table's own folder.
+    fn is_legacy_link(&self, link: &str) -> bool {
+        self.lists(self.missing_beside, link) && !self.lists(self.paths, link)
     }
 }
 
 /// Whether the stored link `old` is an old bare file name for the fresh link,
 /// which now has its folder.
 fn is_bare_form_of(old: &str, fresh: &str) -> bool {
-    !old.contains(['/', '\\']) && Path::new(fresh).file_name().is_some_and(|name| name == old)
+    is_bare_link(old) && Path::new(fresh).file_name().is_some_and(|name| name == old)
 }
 
 /// For each old row of `table`, whether a fresh row is that row. Each fresh
@@ -227,8 +236,9 @@ fn is_bare_form_of(old: &str, fresh: &str) -> bool {
 /// unread keeps the other's row. The closest match is taken first: same link
 /// and Sheet, same link, an old bare link, then Sheet for a row with no link.
 /// A bare link is also the normal form of a sheet beside the table, so it
-/// matches another folder only when it cannot be one: the compile neither
-/// lists that link nor failed to read that file.
+/// matches another folder only when it cannot be one: the compile does not
+/// list that link, did not fail to read that file, and found no such file in
+/// the table's folder.
 fn rows_reached(
     table: &SchTable,
     rows: &[Vec<String>],
@@ -246,7 +256,7 @@ fn rows_reached(
         table.link(old).is_some_and(|link| {
             is_bare_form_of(link, &links[fresh])
                 && !links.iter().any(|listed| listed == link)
-                && !unread.holds(link)
+                && unread.is_legacy_link(link)
         })
     };
     let no_link = |old: usize, fresh: usize| table.link(old).is_none() && same_name(old, fresh);

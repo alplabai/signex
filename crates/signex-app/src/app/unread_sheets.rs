@@ -7,10 +7,13 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
+use signex_types::schematic::{SchDrawing, TableSource};
+
 use crate::app::project_sheets::{
-    ChildReferenceRefusal, ProjectSheetSet, lexically_normalize, resolve_child_reference_quiet,
+    ChildReferenceRefusal, OpenSheets, ProjectSheetSet, lexically_normalize,
+    resolve_child_reference_quiet,
 };
-use crate::app::state::scope::path_key_with;
+use crate::app::state::scope::{CaseFold, path_key_with};
 
 /// The sheets of `set` that were not read, sorted, each once.
 pub(crate) fn unread_sheets(set: &ProjectSheetSet) -> Vec<PathBuf> {
@@ -40,6 +43,48 @@ pub(crate) fn unread_sheets(set: &ProjectSheetSet) -> Vec<PathBuf> {
     out
 }
 
+/// Whether a stored contents link is a file name with no folder.
+pub(crate) fn is_bare_link(link: &str) -> bool {
+    !link.contains(['/', '\\'])
+}
+
+/// The bare contents-table links of the `open` sheets with no file in their
+/// table's folder, resolved from it, sorted, each once. Reads the disk, so
+/// only the compile job calls it. A check that fails for any reason but "not
+/// found" leaves the file out: it may be there, so its row stays (#2742).
+pub(crate) fn bare_links_missing_on_disk(open: &OpenSheets, fold: CaseFold) -> Vec<PathBuf> {
+    let open_keys: HashSet<String> = open.keys().map(|p| path_key_with(p, fold)).collect();
+    let mut out = Vec::new();
+    for (path, sheet) in open {
+        let dir = parent_of(path);
+        let tables = sheet.drawings.iter().filter_map(|drawing| match drawing {
+            SchDrawing::Table(t) if matches!(t.source, TableSource::ProjectSheets { .. }) => {
+                Some(t)
+            }
+            _ => None,
+        });
+        for link in tables.flat_map(|t| &t.links) {
+            if link.is_empty() || !is_bare_link(link) {
+                continue;
+            }
+            let file = lexically_normalize(&dir.join(link));
+            if !open_keys.contains(&path_key_with(&file, fold)) && is_confirmed_missing(&file) {
+                out.push(file);
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+fn is_confirmed_missing(file: &Path) -> bool {
+    matches!(
+        std::fs::symlink_metadata(file),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound
+    )
+}
+
 fn parent_of(path: &Path) -> &Path {
     path.parent().unwrap_or_else(|| Path::new(""))
 }
@@ -61,6 +106,49 @@ mod tests {
             sheet_with_net("R1", "N", &[reference]),
         );
         set
+    }
+
+    /// An open sheet in `dir` with a contents table linking to `links`.
+    fn open_with_links(dir: &Path, links: &[&str]) -> OpenSheets {
+        use signex_types::schematic::{Point, SchTable, SchematicSheet};
+        let mut table = SchTable::new_typed(uuid::Uuid::from_u128(1), Point::new(0.0, 0.0));
+        table.source = TableSource::ProjectSheets { per_channel: true };
+        table.links = links.iter().map(|link| (*link).to_string()).collect();
+        let mut sheet = SchematicSheet::default();
+        sheet.drawings.push(SchDrawing::Table(table));
+        OpenSheets::from([(dir.join("contents.snxsch"), sheet)])
+    }
+
+    #[test]
+    fn only_a_bare_link_with_no_file_beside_the_table_is_missing() {
+        let dir = tempfile::tempdir().expect("dir");
+        std::fs::write(dir.path().join("here.snxsch"), "x").expect("seed");
+        let open = open_with_links(
+            dir.path(),
+            &["here.snxsch", "gone.snxsch", "power/gone.snxsch", ""],
+        );
+
+        let missing = bare_links_missing_on_disk(&open, CaseFold::default());
+
+        assert_eq!(missing, [dir.path().join("gone.snxsch")]);
+    }
+
+    #[test]
+    fn an_open_sheet_not_yet_on_disk_is_not_missing() {
+        let dir = tempfile::tempdir().expect("dir");
+        let mut open = open_with_links(dir.path(), &["new.snxsch"]);
+        open.insert(dir.path().join("new.snxsch"), Default::default());
+
+        assert!(bare_links_missing_on_disk(&open, CaseFold::default()).is_empty());
+    }
+
+    /// A NUL in the name makes the check itself fail, not "not found".
+    #[test]
+    fn a_failed_disk_check_counts_as_present() {
+        let dir = tempfile::tempdir().expect("dir");
+        let open = open_with_links(dir.path(), &["bad\0name.snxsch"]);
+
+        assert!(bare_links_missing_on_disk(&open, CaseFold::default()).is_empty());
     }
 
     #[test]

@@ -51,6 +51,12 @@ so it is not known to be gone. The rows the compile read refresh around it, and
 a table with nothing new gets no undo step. Once every sheet reads, a sheet no
 sheet symbol references leaves the table.
 
+While a sheet is unread, a stored bare link (`bad.snxsch`) is taken as an old
+link to a same-named sheet in another folder only if no file of that name is in
+the table's own folder. The compile job checks the disk, off the UI thread, and
+carries the result to the refresh; a check that fails counts as a file there,
+so the row stays.
+
 ## CSV
 
 A typed table's Import… reads a CSV file (comma separated, quoted fields may

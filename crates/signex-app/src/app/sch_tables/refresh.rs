@@ -93,10 +93,15 @@ impl Signex {
             .cloned()
             .collect();
         paths.sort();
-        let unread_paths = project
+        let not_read = project
             .and_then(|id| self.document_state.compiled_design.results.get(&id))
             .filter(|result| result.has_unread_sheets)
-            .map(|result| result.unread_paths.as_slice());
+            .map(|result| {
+                (
+                    result.unread_paths.as_slice(),
+                    result.bare_links_missing.as_slice(),
+                )
+            });
         let fold = fold_of(project.and_then(|id| self.document_state.project_by_id(id)));
         let edits: Vec<(PathBuf, Vec<signex_engine::Command>)> = paths
             .into_iter()
@@ -110,7 +115,12 @@ impl Signex {
                             .and_then(|id| self.compiled_contents_of(id, dir))
                             .map(|c| c.pages(per_channel))
                     };
-                    let unread = unread_paths.map(|paths| UnreadSheets { dir, paths, fold });
+                    let unread = not_read.map(|(paths, missing_beside)| UnreadSheets {
+                        dir,
+                        paths,
+                        missing_beside,
+                        fold,
+                    });
                     refresh_commands(engine.document(), &pages, unread.as_ref())
                 };
                 (!commands.is_empty()).then_some((path, commands))
