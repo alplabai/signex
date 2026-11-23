@@ -43,6 +43,8 @@ pub struct Compiled {
     pub paths: HashMap<SheetKey, PathBuf>,
     /// A sheet of the design was not read (`app::unread_sheets`).
     pub has_unread_sheets: bool,
+    /// Those sheets.
+    pub unread_paths: Vec<PathBuf>,
 }
 
 impl CompileJob {
@@ -88,10 +90,12 @@ impl CompileJob {
             roots: &roots,
         };
         let design = signex_net::compile_design(&project, &self.naming);
+        let unread_paths = crate::app::unread_sheets::unread_sheets(&set);
         let compiled = Compiled {
             design,
             paths: graph.paths.clone(),
-            has_unread_sheets: !crate::app::unread_sheets::unread_sheets(&set).is_empty(),
+            has_unread_sheets: !unread_paths.is_empty(),
+            unread_paths,
         };
         outcome(Ok(compiled), warnings)
     }

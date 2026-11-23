@@ -24,6 +24,8 @@ pub struct CompiledResult {
     /// A sheet could not be read, or a sheet symbol places a missing file, so
     /// a page missing from `design` is not known to be removed (#2742).
     pub has_unread_sheets: bool,
+    /// Those sheets, as the compile would have read them.
+    pub unread_paths: Vec<PathBuf>,
 }
 
 impl CompiledResult {

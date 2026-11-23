@@ -250,6 +250,7 @@ fn app_with_a_compile(path: &std::path::Path) -> Signex {
             compiled_at: "12:41".to_string(),
             stale: Default::default(),
             has_unread_sheets: false,
+            unread_paths: Vec::new(),
         },
     );
     app

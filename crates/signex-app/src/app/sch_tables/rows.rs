@@ -2,10 +2,14 @@
 //! the project's pages. Pure functions of plain data; `refresh` feeds them.
 
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use signex_types::schematic::{
     PinSort, SchTable, SchematicSheet, TableColumn, pin_columns, sheet_columns,
 };
+
+use crate::app::project_sheets::lexically_normalize;
+use crate::app::state::scope::{CaseFold, path_key_with};
 
 /// One page of the contents table.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -190,25 +194,47 @@ pub(crate) fn contents_table_rows(
     (rows, links)
 }
 
-/// Whether the stored link `old` names the sheet of the fresh link: the same
-/// text, or an old bare file name for a link that now has its folder.
-fn same_sheet_link(old: &str, fresh: &str) -> bool {
-    old == fresh
-        || (!old.contains(['/', '\\'])
-            && std::path::Path::new(fresh)
-                .file_name()
-                .is_some_and(|name| name == old))
+/// The sheets a compile did not read, seen from the sheet holding a table.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct UnreadSheets<'a> {
+    /// The folder of the sheet holding the table.
+    pub dir: Option<&'a Path>,
+    pub paths: &'a [PathBuf],
+    pub fold: CaseFold,
+}
+
+impl UnreadSheets<'_> {
+    /// Whether `link`, resolved from the table's folder, is an unread sheet.
+    fn holds(&self, link: &str) -> bool {
+        let Some(dir) = self.dir else {
+            return false;
+        };
+        let key = path_key_with(&lexically_normalize(&dir.join(link)), self.fold);
+        self.paths
+            .iter()
+            .any(|path| path_key_with(path, self.fold) == key)
+    }
+}
+
+/// Whether the stored link `old` is an old bare file name for the fresh link,
+/// which now has its folder.
+fn is_bare_form_of(old: &str, fresh: &str) -> bool {
+    !old.contains(['/', '\\']) && Path::new(fresh).file_name().is_some_and(|name| name == old)
 }
 
 /// For each old row of `table`, whether a fresh row is that row. Each fresh
 /// row answers for one old row, so a file placed twice with one placement
 /// unread keeps the other's row. The closest match is taken first: same link
 /// and Sheet, same link, an old bare link, then Sheet for a row with no link.
+/// A bare link is also the normal form of a sheet beside the table, so it
+/// matches another folder only when it cannot be one: the compile neither
+/// lists that link nor failed to read that file.
 fn rows_reached(
     table: &SchTable,
     rows: &[Vec<String>],
     links: &[String],
     sheet: Option<usize>,
+    unread: &UnreadSheets<'_>,
 ) -> Vec<bool> {
     let same_name = |old: usize, fresh: usize| {
         let cell = |row: Option<&Vec<String>>| sheet.and_then(|c| row?.get(c).cloned());
@@ -217,9 +243,11 @@ fn rows_reached(
     };
     let same_link = |old: usize, fresh: usize| table.link(old) == Some(links[fresh].as_str());
     let bare_link = |old: usize, fresh: usize| {
-        table
-            .link(old)
-            .is_some_and(|link| same_sheet_link(link, &links[fresh]))
+        table.link(old).is_some_and(|link| {
+            is_bare_form_of(link, &links[fresh])
+                && !links.iter().any(|listed| listed == link)
+                && !unread.holds(link)
+        })
     };
     let no_link = |old: usize, fresh: usize| table.link(old).is_none() && same_name(old, fresh);
     let exact = |old: usize, fresh: usize| same_link(old, fresh) && same_name(old, fresh);
@@ -249,9 +277,10 @@ pub(crate) fn keeping_unreached_rows(
     table: &SchTable,
     mut rows: Vec<Vec<String>>,
     mut links: Vec<String>,
+    unread: &UnreadSheets<'_>,
 ) -> (Vec<Vec<String>>, Vec<String>) {
     let column = |key: &str| table.columns.iter().position(|c| c.key == key);
-    let reached = rows_reached(table, &rows, &links, column(sheet_columns::SHEET));
+    let reached = rows_reached(table, &rows, &links, column(sheet_columns::SHEET), unread);
     for (i, old) in table.rows.iter().enumerate() {
         if !reached[i] {
             let at = i.min(rows.len());
