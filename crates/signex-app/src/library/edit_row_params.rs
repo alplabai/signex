@@ -1,8 +1,8 @@
 //! The Parameters column of the Edit Component modal (mockup row 130): the
 //! section header with "+ Add Parameter", the missing-template-slot offer,
 //! and a boxed dense table Key | Value | Unit | ✕. Template rows carry a
-//! "template" pill and no ✕; a measurement's number and its prefix picker
-//! are one measurement slot (mockup row 139).
+//! "template" pill and no ✕; a measurement's number and its menu are one
+//! measurement slot (mockup row 139).
 
 use iced::widget::{Column, Row, Space, column, container, row};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget};
@@ -17,9 +17,8 @@ use signex_widgets::{button, raw, text, theme_ext};
 use super::measurement_slot::{NUMBER_SHARE, PICKER_SHARE, measurement_slot};
 use super::messages::{BrowserEditMsg, LibraryMessage};
 use super::modal_chrome::secondary_btn;
-use super::prefix_picker::prefix_segment;
 use super::state::EditRowModalState;
-use super::unit_menu::{UnitMenu, measurement_menu};
+use super::unit_menu::{UnitMenu, measurement_menu, prefix_menu};
 use super::unit_picker::unit_of_token;
 use crate::styles::{HAIRLINE, PillTone, Radii};
 
@@ -230,8 +229,9 @@ fn slot_offer<'a>(
 
 /// One parameter row: the key (with the "template" pill on a template
 /// slot), the value and unit as one measurement slot, and ✕ on a custom
-/// row. A class-template measurement slot fixes the unit (no unit menu)
-/// and its sign rules apply; any other parameter picks its unit.
+/// row. A class-template measurement slot fixes the unit (its menu holds
+/// only prefixes) and its sign rules apply; any other parameter picks its
+/// unit.
 fn param_row<'a>(
     edit: &'a EditRowModalState,
     key: &str,
@@ -343,10 +343,10 @@ fn remove_cell<'a>(
     .boxed()
 }
 
-/// What a row's slot shows for its unit, beside any prefix picker.
+/// What a row's slot shows for its unit.
 #[derive(Debug, PartialEq)]
 enum UnitSegment<'u> {
-    /// A fixed unit the prefix picker already names (`kΩ`).
+    /// A fixed unit the prefix menu's face already names (`kΩ`).
     InPrefix,
     /// A fixed unit that takes no prefix: a muted label.
     Fixed(&'u Unit),
@@ -366,8 +366,8 @@ fn unit_segment_of<'u>(fixed: Option<&'u Unit>, cur_unit: &'u str) -> UnitSegmen
 }
 
 /// The right part of a row's slot, always one control (mockup row 139): a
-/// fixed unit's prefix picker or label, the menu of a row that picks its
-/// own unit, or an unknown unit as written.
+/// fixed unit's prefix menu or label, the menu of a row that picks its own
+/// unit, or an unknown unit as written.
 fn slot_picker<'a>(
     edit: &'a EditRowModalState,
     key: &str,
@@ -378,14 +378,14 @@ fn slot_picker<'a>(
     send: &(impl Fn(BrowserEditMsg) -> LibraryMessage + Clone + 'a),
 ) -> Element<'a, LibraryMessage> {
     let fixed_prefix = fixed.and_then(|u| {
-        let send_p = send.clone();
-        let key_p = key.to_string();
-        prefix_segment(u, row_prefix(edit, key), move |prefix| {
-            send_p(BrowserEditMsg::ParamPrefixPicked {
-                key: key_p.clone(),
+        let menu = row_menu(edit, key, Some(u.clone()), send);
+        let on_prefix = |prefix| {
+            send(BrowserEditMsg::ParamPrefixPicked {
+                key: key.to_string(),
                 prefix,
             })
-        })
+        };
+        prefix_menu(menu, row_prefix(edit, key), on_prefix, tokens, i18n)
     });
     fixed_prefix
         .or_else(|| {
@@ -400,7 +400,24 @@ fn row_prefix(edit: &EditRowModalState, key: &str) -> SiPrefix {
     edit.param_prefix.get(key).copied().unwrap_or(SiPrefix::One)
 }
 
-/// The unit part of a slot; `None` when the prefix picker already names it.
+/// The open state and events of a row's menu.
+fn row_menu(
+    edit: &EditRowModalState,
+    key: &str,
+    selected: Option<Unit>,
+    send: &impl Fn(BrowserEditMsg) -> LibraryMessage,
+) -> UnitMenu<LibraryMessage> {
+    UnitMenu {
+        selected,
+        is_open: edit.unit_menu_open.as_deref() == Some(key),
+        on_open: send(BrowserEditMsg::UnitMenuOpened {
+            key: key.to_string(),
+        }),
+        on_dismiss: send(BrowserEditMsg::UnitMenuDismissed),
+    }
+}
+
+/// The unit part of a slot; `None` when the prefix menu already names it.
 fn unit_segment<'a>(
     edit: &'a EditRowModalState,
     key: &str,
@@ -448,14 +465,7 @@ fn menu_segment<'a>(
     i18n: &I18n,
     send: &(impl Fn(BrowserEditMsg) -> LibraryMessage + Clone + 'a),
 ) -> Element<'a, LibraryMessage> {
-    let menu = UnitMenu {
-        selected,
-        is_open: edit.unit_menu_open.as_deref() == Some(key),
-        on_open: send(BrowserEditMsg::UnitMenuOpened {
-            key: key.to_string(),
-        }),
-        on_dismiss: send(BrowserEditMsg::UnitMenuDismissed),
-    };
+    let menu = row_menu(edit, key, selected, send);
     let on_prefix = |prefix| {
         send(BrowserEditMsg::ParamPrefixPicked {
             key: key.to_string(),

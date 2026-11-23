@@ -88,20 +88,6 @@ pub(crate) fn prefix_picker<'a, M: Clone + 'a>(
     prefix_list(unit, selected, on_pick).map(|list| list.boxed())
 }
 
-/// [`prefix_picker`] drawn as the right segment of a
-/// [`measurement_slot`](super::measurement_slot::measurement_slot).
-pub(crate) fn prefix_segment<'a, M: Clone + 'a>(
-    unit: &Unit,
-    selected: SiPrefix,
-    on_pick: impl Fn(SiPrefix) -> M + 'a,
-) -> Option<Element<'a, M>> {
-    prefix_list(unit, selected, on_pick).map(|list| {
-        list.style(super::measurement_slot::picker_segment_style)
-            .width(iced::Length::Fill)
-            .boxed()
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,12 +110,23 @@ mod tests {
         assert!(prefix_picker(&Unit::Ohm, SiPrefix::Kilo, |p| p).is_some());
     }
 
-    /// The slot segment offers the same picker, and none where the unit
-    /// takes no prefix.
+    /// The slot segment of a fixed unit is the measurement menu's Prefix
+    /// section, and there is none where the unit takes no prefix.
     #[test]
     fn the_slot_segment_is_the_same_picker() {
-        assert!(prefix_segment(&Unit::Ohm, SiPrefix::Kilo, |p| p).is_some());
-        assert!(prefix_segment(&Unit::Percent, SiPrefix::One, |p| p).is_none());
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        let i18n = signex_i18n::I18n::en_us();
+        let segment = |unit: Unit, prefix: SiPrefix| {
+            let menu = super::super::unit_menu::UnitMenu {
+                selected: Some(unit),
+                is_open: false,
+                on_open: SiPrefix::One,
+                on_dismiss: SiPrefix::One,
+            };
+            super::super::unit_menu::prefix_menu(menu, prefix, |p| p, &tokens, &i18n)
+        };
+        assert!(segment(Unit::Ohm, SiPrefix::Kilo).is_some());
+        assert!(segment(Unit::Percent, SiPrefix::One).is_none());
     }
 
     #[test]
