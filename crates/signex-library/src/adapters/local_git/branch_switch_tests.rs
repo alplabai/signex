@@ -8,6 +8,24 @@ use crate::adapters::local_git::lfs::pointer_for;
 const MODEL_MAIN: &[u8] = b"ISO-10303-21; main";
 const MODEL_SIDE: &[u8] = b"ISO-10303-21; side";
 
+/// A repository whose byte expectations do not depend on the machine's
+/// `core.autocrlf`. Reopened so no handle caches the earlier value.
+fn init_repo(path: &Path) -> git2::Repository {
+    let repo = git2::Repository::init(path).unwrap();
+    set_local_config(&repo, "core.autocrlf", false);
+    drop(repo);
+    git2::Repository::open(path).unwrap()
+}
+
+fn set_local_config(repo: &git2::Repository, key: &str, value: bool) {
+    repo.config()
+        .unwrap()
+        .open_level(git2::ConfigLevel::Local)
+        .unwrap()
+        .set_bool(key, value)
+        .unwrap();
+}
+
 fn store_object(repo: &git2::Repository, content: &[u8]) -> Vec<u8> {
     let (pointer, oid) = pointer_for(content);
     let object = lfs::object_path(repo, &oid);
@@ -42,7 +60,7 @@ fn check_out(repo: &git2::Repository, branch: &str) {
 /// the working file, as a commit through LFS leaves it.
 fn lfs_repo() -> (tempfile::TempDir, git2::Repository) {
     let dir = tempfile::tempdir().unwrap();
-    let repo = git2::Repository::init(dir.path()).unwrap();
+    let repo = init_repo(dir.path());
     repo.set_head("refs/heads/main").unwrap();
     let main_pointer = store_object(&repo, MODEL_MAIN);
     fs::write(dir.path().join("m.step"), &main_pointer).unwrap();
@@ -181,7 +199,7 @@ fn a_switch_keeps_content_whose_object_was_pruned() {
 /// checked out with a hand-edited copy of that ignored file.
 fn ignored_file_repo() -> (tempfile::TempDir, git2::Repository) {
     let dir = tempfile::tempdir().unwrap();
-    let repo = git2::Repository::init(dir.path()).unwrap();
+    let repo = init_repo(dir.path());
     repo.set_head("refs/heads/main").unwrap();
     fs::write(dir.path().join(".gitignore"), "outputs/\n").unwrap();
     fs::write(dir.path().join("a.snxsch"), "main\n").unwrap();
@@ -241,7 +259,7 @@ fn rollback_leaves_a_path_outside_the_tree_alone() {
     let parent = tempfile::tempdir().unwrap();
     let work = parent.path().join("work");
     fs::create_dir(&work).unwrap();
-    let repo = git2::Repository::init(&work).unwrap();
+    let repo = init_repo(&work);
     repo.set_head("refs/heads/main").unwrap();
     fs::write(work.join("a.snxsch"), "main\n").unwrap();
     commit_all(&repo, "first");
@@ -261,7 +279,7 @@ fn rollback_leaves_a_path_outside_the_tree_alone() {
 #[test]
 fn an_lfs_path_behind_a_link_refuses_the_switch() {
     let dir = tempfile::tempdir().unwrap();
-    let repo = git2::Repository::init(dir.path()).unwrap();
+    let repo = init_repo(dir.path());
     repo.set_head("refs/heads/main").unwrap();
     let main_pointer = store_object(&repo, MODEL_MAIN);
     fs::create_dir(dir.path().join("models")).unwrap();
