@@ -217,7 +217,9 @@ reads **Bake preview · Discard changes · Bake**. The constraint strip always
 shows all 19 buttons; one the selection cannot take is greyed and does nothing.
 The bar fits and centres on the canvas between the docks. When the canvas is
 too narrow for it, the strip alone scrolls sideways, by a thin scrollbar under
-its buttons or Shift+wheel, so every other control stays in reach:
+its buttons or Shift+wheel. A bar still wider than the canvas (a narrow tile)
+stays whole and passes over the docks, kept inside the window, so every other
+control stays in reach:
 
 - **Bake** keeps the edits and goes back to the pads view. The footprint
   bakes on every solve, so nothing more is written. An open profile stops

@@ -221,29 +221,23 @@ impl Signex {
             tokens,
             &self.ui_state.i18n,
         );
+        use crate::library::editor::footprint::unified_active_bar as footprint_bar;
         let span = self.footprint_bar_span(window_id);
+        let run = footprint_bar::scrolling_slots(editor);
+        let left = footprint_bar::bar_left_in(&bar_items, run.clone(), span);
         let bar = signex_widgets::active_bar::view_within(
             bar_items,
-            crate::library::editor::footprint::unified_active_bar::scrolling_slots(editor),
-            crate::library::editor::footprint::unified_active_bar::bar_max_width(span.width),
+            run,
+            footprint_bar::bar_max_width(span.width),
             tokens,
         )
         .map(Message::Library)
         .boxed();
-        let past_canvas = self.ui_state.size_of_window(window_id).0 - span.x - span.width;
+        // Translated, not padded: padding would limit a bar wider than the
+        // canvas and squeeze its last slots to nothing.
         out.push(
-            column![
-                iced::widget::Space::new().height(y_offset + bar_margin),
-                container(super::scroll_guard(bar))
-                    .padding(iced::Padding {
-                        left: span.x,
-                        right: past_canvas.max(0.0),
-                        ..iced::Padding::ZERO
-                    })
-                    .width(Length::Fill)
-                    .align_x(iced::alignment::Horizontal::Center),
-            ]
-            .boxed(),
+            signex_widgets::Translate::new(super::scroll_guard(bar), (left, y_offset + bar_margin))
+                .boxed(),
         );
         // Position the dropdown panel directly below the bar's bottom
         // edge (see the schematic mount for the 42 px derivation).
@@ -276,6 +270,7 @@ impl Signex {
         crate::library::editor::footprint::unified_active_bar::BarSpan {
             x: canvas.x,
             width: canvas.width,
+            window_width: self.ui_state.size_of_window(window_id).0,
         }
     }
 

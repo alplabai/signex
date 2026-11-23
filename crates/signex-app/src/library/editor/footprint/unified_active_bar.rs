@@ -88,29 +88,61 @@ pub fn bar_max_width(canvas_width: f32) -> f32 {
 const PANEL_EDGE_MARGIN: f32 = 4.0;
 
 /// The horizontal run of the canvas between the docks, in window
-/// coordinates: the bar fits and centres in it.
+/// coordinates, and the window it sits in. The bar centres on the canvas;
+/// one wider than the canvas stays whole and is kept inside the window.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BarSpan {
     pub x: f32,
     pub width: f32,
+    pub window_width: f32,
 }
 
 impl BarSpan {
-    /// Window x of a centred bar `bar_width` wide.
+    /// Window x of a bar `bar_width` wide: centred on the canvas, then
+    /// moved as little as keeps it inside the window.
     fn bar_left(self, bar_width: f32) -> f32 {
-        self.x + ((self.width - bar_width) / 2.0).max(0.0)
+        let centred = self.x + (self.width - bar_width) / 2.0;
+        centred.min(self.window_width - bar_width).max(0.0)
+    }
+
+    /// This span grown to cover `bar`, so a dropdown of a bar wider than
+    /// the canvas can stay under its trigger.
+    fn covering(self, bar: &PlacedBar) -> Self {
+        let left = self.x.min(bar.left);
+        let right = (self.x + self.width).max(bar.left + bar.width);
+        Self {
+            x: left,
+            width: right - left,
+            ..self
+        }
     }
 
     /// Window x of a dropdown panel under a trigger at `trigger_x`, moved
-    /// left when it would pass the canvas's right edge.
+    /// left when it would pass the span's right edge, and kept in the window.
     fn panel_x(self, trigger_x: f32, panel_width: f32) -> f32 {
         let right = self.x + self.width;
-        if trigger_x + panel_width + PANEL_EDGE_MARGIN > right {
+        let x = if trigger_x + panel_width + PANEL_EDGE_MARGIN > right {
             (right - panel_width - PANEL_EDGE_MARGIN).max(self.x)
         } else {
             trigger_x
-        }
+        };
+        x.min(self.window_width - panel_width - PANEL_EDGE_MARGIN)
+            .max(0.0)
     }
+}
+
+/// Window x of the bar `items` draw in `span`, with the slots of `run`
+/// scrolling when it does not fit the canvas.
+pub fn bar_left_in(
+    items: &[ActiveBarItem<LibraryMessage>],
+    run: std::ops::Range<usize>,
+    span: BarSpan,
+) -> f32 {
+    let metrics = signex_widgets::active_bar::Metrics::GRAPHITE;
+    let max_width = bar_max_width(span.width);
+    let (_, width) =
+        signex_widgets::active_bar::slot_offsets_within(items, run, max_width, &metrics);
+    span.bar_left(width)
 }
 
 /// The bar as drawn in a [`BarSpan`], in window coordinates.
@@ -257,7 +289,9 @@ pub fn dropdown_overlay<'a>(
     // stale menu key from a mode switch. Draw nothing rather than
     // park a panel over an unrelated button.
     let trigger_x = placed.trigger_x?;
-    let abs_x = span.panel_x(trigger_x, width_hint.unwrap_or(220.0));
+    let abs_x = span
+        .covering(&placed)
+        .panel_x(trigger_x, width_hint.unwrap_or(220.0));
 
     let panel_anchor = signex_widgets::Translate::new(panel, (abs_x, top_padding_px as f32));
 
@@ -626,6 +660,7 @@ mod tests {
         let span = BarSpan {
             x: 245.0,
             width: 816.0,
+            window_width: 4096.0,
         };
         let right = span.x + span.width;
         assert_eq!(span.panel_x(300.0, 260.0), 300.0, "room: under its trigger");
@@ -634,6 +669,40 @@ mod tests {
             right - 260.0 - PANEL_EDGE_MARGIN
         );
         assert_eq!(span.panel_x(300.0, 2000.0), span.x, "wider than the canvas");
+    }
+
+    /// #2843: a bar wider than the canvas stays whole, centred on the canvas
+    /// until a window edge stops it.
+    #[test]
+    fn a_bar_wider_than_the_canvas_is_kept_inside_the_window() {
+        let at = |x| BarSpan {
+            x,
+            width: 100.0,
+            window_width: 500.0,
+        };
+        assert_eq!(at(200.0).bar_left(300.0), 100.0, "centred");
+        assert_eq!(at(0.0).bar_left(300.0), 0.0, "left window edge");
+        assert_eq!(at(400.0).bar_left(300.0), 200.0, "right window edge");
+    }
+
+    /// A dropdown of such a bar stays under a trigger past the canvas.
+    #[test]
+    fn a_dropdown_follows_a_trigger_past_the_canvas() {
+        let span = BarSpan {
+            x: 400.0,
+            width: 100.0,
+            window_width: 1000.0,
+        };
+        let bar = PlacedBar {
+            left: 300.0,
+            width: 400.0,
+            trigger_x: Some(600.0),
+        };
+        assert_eq!(span.covering(&bar).panel_x(420.0, 200.0), 420.0);
+        assert_eq!(
+            span.covering(&bar).panel_x(600.0, 200.0),
+            700.0 - 200.0 - PANEL_EDGE_MARGIN
+        );
     }
 
     /// #2843: a press on the lowest row of a strip button reaches the

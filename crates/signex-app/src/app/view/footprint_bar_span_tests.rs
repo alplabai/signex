@@ -52,6 +52,65 @@ fn app_in_sketch() -> (Signex, iced::window::Id) {
 
 /// The sketch bar as placed in `span`, anchored on its Snap ▾ trigger.
 fn placed(app: &Signex, span: BarSpan) -> PlacedBar {
+    placed_on(app, span, FpActiveBarMenu::Snap)
+}
+
+/// `count` documents tiled side by side in the main window, the footprint
+/// in the last pane.
+fn tile(app: &mut Signex, count: usize) {
+    for index in 1..count {
+        let path = PathBuf::from(format!("tile-{index}.snxfpt"));
+        app.document_state.tabs.insert(
+            0,
+            TabInfo {
+                title: "t".into(),
+                path: path.clone(),
+                cached_document: None,
+                project_id: None,
+                kind: TabKind::FootprintEditor(path),
+            },
+        );
+    }
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    app.ui_state.document_tiling = Some(crate::app::TileLayout::SideBySide);
+}
+
+/// Press `menu`'s trigger where the anchor says it is, in the real overlay
+/// of `window`, and report whether the press opened that menu.
+fn press_trigger(
+    app: &Signex,
+    window: iced::window::Id,
+    size: Size,
+    menu: FpActiveBarMenu,
+) -> bool {
+    let m = Metrics::GRAPHITE;
+    let bar = placed_on(app, app.footprint_bar_span(window), menu);
+    let trigger = bar.trigger_x.expect("the trigger");
+    assert!(bar.left >= 0.0, "{bar:?}");
+    assert!(trigger + m.btn <= size.width, "{bar:?} leaves the window");
+    let at = Point::new(
+        trigger + m.btn / 2.0,
+        app.canvas_bounds().y
+            + crate::active_bar::bar_top_margin()
+            + crate::active_bar::bar_height_for(&m) / 2.0,
+    );
+    let stack =
+        iced::widget::Stack::with_children(app.footprint_active_bar_overlay(window)).boxed();
+    crate::layout_probe::messages_on_click_at(stack, size, None, at)
+        .iter()
+        .any(|message| {
+            matches!(
+                message,
+                Message::Library(LibraryMessage::PrimitiveEditorEvent {
+                    msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleActiveBarMenu(pressed)),
+                    ..
+                }) if *pressed == menu
+            )
+        })
+}
+
+/// The bar as placed in `span`, anchored on `menu`'s trigger.
+fn placed_on(app: &Signex, span: BarSpan, menu: FpActiveBarMenu) -> PlacedBar {
     let editor = &app.document_state.footprint_editors[&PathBuf::from(PATH)];
     let items = bar_items(
         editor,
@@ -59,7 +118,7 @@ fn placed(app: &Signex, span: BarSpan) -> PlacedBar {
         &app.document_state.panel_ctx.tokens,
         &app.ui_state.i18n,
     );
-    place_bar(&items, FpActiveBarMenu::Snap, scrolling_slots(editor), span)
+    place_bar(&items, menu, scrolling_slots(editor), span)
 }
 
 fn assert_inside(bar: PlacedBar, span: BarSpan) {
@@ -138,6 +197,55 @@ fn with_collapsed_docks_the_whole_bar_centres_between_the_rails() {
     assert_inside(bar, span);
     let centre = bar.left + bar.width / 2.0;
     assert!((centre - WINDOW.width / 2.0).abs() < 0.01, "{bar:?}");
+}
+
+/// A sketch bar wider than its 408 px tile stays whole: Snap ▾ is drawn and
+/// takes a press.
+#[test]
+fn snap_takes_a_press_in_a_408_px_tile() {
+    let (mut app, main) = app_in_sketch();
+    tile(&mut app, 2);
+    assert_eq!(app.footprint_bar_span(main).width, 408.0);
+    assert!(press_trigger(&app, main, WINDOW, FpActiveBarMenu::Snap));
+}
+
+/// The Pads bar has no scrolling run; in a 272 px tile it still draws whole.
+#[test]
+fn shapes_takes_a_press_in_a_272_px_tile() {
+    let (mut app, main) = app_in_sketch();
+    let path = PathBuf::from(PATH);
+    app.document_state
+        .footprint_editors
+        .get_mut(&path)
+        .expect("the editor")
+        .state
+        .mode = EditorMode::Normal;
+    tile(&mut app, 3);
+    assert_eq!(app.footprint_bar_span(main).width, 272.0);
+    assert!(press_trigger(&app, main, WINDOW, FpActiveBarMenu::Shapes));
+}
+
+/// An undocked window draws the shared docks at its own size, leaving a
+/// 150 px canvas at 700 px. The bar passes over them and Snap ▾ still works.
+#[test]
+fn snap_takes_a_press_in_an_undocked_700_px_window() {
+    const OWN: Size = Size::new(700.0, 768.0);
+    let (mut app, _main) = app_in_sketch();
+    let undocked = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        undocked,
+        WindowKind::UndockedTab {
+            path: PathBuf::from(PATH),
+            title: "f".to_string(),
+        },
+    );
+    app.ui_state
+        .set_undocked_window_size(undocked, (OWN.width, OWN.height));
+    assert_eq!(
+        app.footprint_bar_span(undocked).width,
+        OWN.width - 2.0 * DOCK_HANDLE - LEFT - RIGHT
+    );
+    assert!(press_trigger(&app, undocked, OWN, FpActiveBarMenu::Snap));
 }
 
 /// An undocked tab window lays out the docks at its own width.
