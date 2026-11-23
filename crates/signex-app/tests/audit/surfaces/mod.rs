@@ -8,6 +8,7 @@ use crate::surface::Surface;
 mod annot_valid;
 mod board_counters;
 mod canvas_pick;
+mod caps_c;
 pub mod checks;
 mod drawn_fixtures;
 mod global;
@@ -46,5 +47,6 @@ pub fn groups() -> Vec<(&'static str, Vec<Surface>)> {
         ("states_more", states_more::rows()),
         ("states_final", states_final::rows()),
         ("states_sketch", states_sketch::rows()),
+        ("caps_c", caps_c::rows()),
     ]
 }
