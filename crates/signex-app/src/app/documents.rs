@@ -854,6 +854,7 @@ impl FootprintDocument {
         self.history.finish_step(current, true);
         self.restore(snap);
         self.sync_dirty_to_history();
+        crate::library::editor::footprint::sketch_mode::exit::settle_outcome(self);
         true
     }
 
@@ -870,6 +871,7 @@ impl FootprintDocument {
         self.history.finish_step(current, false);
         self.restore(snap);
         self.sync_dirty_to_history();
+        crate::library::editor::footprint::sketch_mode::exit::settle_outcome(self);
         true
     }
 

@@ -26,6 +26,10 @@ define_ids! {
     SKETCH_BAKE_OUTCOME_WROTE = "sketch-bake-outcome-wrote";
     SKETCH_BAKE_OUTCOME_NOTHING = "sketch-bake-outcome-nothing";
     SKETCH_BAKE_OUTCOME_ITEM = "sketch-bake-outcome-item";
+    SKETCH_BAKE_OUTCOME_LINK = "sketch-bake-outcome-link";
+    SKETCH_BAKE_OUTCOME_LINK_HINT = "sketch-bake-outcome-link-hint";
+    SKETCH_BAKE_OUTCOME_LINK_PAD = "sketch-bake-outcome-link-pad";
+    SKETCH_BAKE_OUTCOME_LINK_NONE = "sketch-bake-outcome-link-none";
     SKETCH_BAKE_LEGEND_TOP = "sketch-bake-legend-top";
     SKETCH_BAKE_LEGEND_PASTE = "sketch-bake-legend-paste";
     SKETCH_BAKE_LEGEND_MASK = "sketch-bake-legend-mask";

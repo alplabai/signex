@@ -95,7 +95,8 @@ pub struct FootprintEditorPanelContext {
     /// Point. A non-point gets the closed-profile Pad hint on the Role
     /// pick_list.
     pub selected_sketch_is_point: bool,
-    /// What the last Bake wrote, until the selection changes (mockup row 190).
+    /// What the last Bake wrote, until a non-pad object, a multi-selection,
+    /// an edit or an empty click ends it (mockup row 190).
     pub bake_outcome: Option<crate::library::editor::footprint::sketch_mode::BakeOutcome>,
     /// The Roles section's rows, in a footprint sketch (mockup row 190).
     pub profile_roles: Vec<crate::library::editor::footprint::sketch_mode::roles::ProfileRoleRow>,

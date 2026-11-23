@@ -69,6 +69,21 @@ pub fn bar_items(
     items
 }
 
+/// The slots that scroll in a window too narrow for the bar: the sketch
+/// bar's constraint strip; no other bar has a run.
+pub fn scrolling_slots(editor: &FootprintDocument) -> std::ops::Range<usize> {
+    if editor.state.mode == EditorMode::Sketch {
+        crate::library::editor::footprint::sketch_mode::active_bar::CONSTRAINT_SLOTS
+    } else {
+        0..0
+    }
+}
+
+/// The widest the bar may draw in a window `window_width` wide.
+pub fn bar_max_width(window_width: f32) -> f32 {
+    window_width - 2.0 * signex_widgets::active_bar::Metrics::GRAPHITE.padding
+}
+
 /// Where `menu`'s trigger button sits: its left edge in px from the
 /// bar's own left edge, plus the bar's total width. `None` when the
 /// current bar has no trigger for that menu (the two sketch group
@@ -84,12 +99,18 @@ pub fn bar_items(
 /// menu trigger publishes `ToggleActiveBarMenu(menu)` on right-press,
 /// while the left-press action varies (Place / Select / Text arm a tool
 /// instead). Nothing else on the bar sends that message.
-fn menu_trigger_geometry(
+///
+/// Measured as drawn inside `max_width`, with the slots of `run` scrolling
+/// when the bar does not fit.
+fn menu_trigger_geometry_within(
     items: &[ActiveBarItem<LibraryMessage>],
     menu: FpActiveBarMenu,
+    run: std::ops::Range<usize>,
+    max_width: f32,
 ) -> (Option<f32>, f32) {
     let metrics = signex_widgets::active_bar::Metrics::GRAPHITE;
-    let (offsets, total) = signex_widgets::active_bar::slot_offsets(items, &metrics);
+    let (offsets, total) =
+        signex_widgets::active_bar::slot_offsets_within(items, run, max_width, &metrics);
     let opens = |item: &ActiveBarItem<LibraryMessage>| -> bool {
         let ActiveBarItem::Button(b) = item else {
             return false;
@@ -103,6 +124,15 @@ fn menu_trigger_geometry(
         )
     };
     (items.iter().position(opens).map(|i| offsets[i]), total)
+}
+
+/// The geometry of the whole bar, unconstrained by a window.
+#[cfg(test)]
+fn menu_trigger_geometry(
+    items: &[ActiveBarItem<LibraryMessage>],
+    menu: FpActiveBarMenu,
+) -> (Option<f32>, f32) {
+    menu_trigger_geometry_within(items, menu, 0..0, f32::INFINITY)
 }
 
 /// Build the dropdown overlay (panel + click-outside backstop) for
@@ -167,8 +197,12 @@ pub fn dropdown_overlay<'a>(
     // the items this same bar just built. Clamp the panel's right edge
     // inside the viewport so a near-rightmost button still keeps it
     // fully visible.
-    let (trigger_x, bar_w) =
-        menu_trigger_geometry(&bar_items(editor, theme_id, tokens, i18n), menu);
+    let (trigger_x, bar_w) = menu_trigger_geometry_within(
+        &bar_items(editor, theme_id, tokens, i18n),
+        menu,
+        scrolling_slots(editor),
+        bar_max_width(window_width),
+    );
     // No trigger on the current bar means nothing to anchor to — a
     // stale menu key from a mode switch. Draw nothing rather than
     // park a panel over an unrelated button.
@@ -438,6 +472,26 @@ mod tests {
                 "Create: Line, Rectangle, Rounded Rectangle, Circle, Arc, Tangent Arc, Edge Arc, Point",
                 "Modify: Fillet, Trim, Mirror, Offset, patterns, Make Pad from Profile",
                 "|",
+                "Fix point in place (needs 1 Point)",
+                "Coincident (needs 2 Points)",
+                "Distance between Points (needs 2 Points + dim input)",
+                "Horizontal (needs 1 Line)",
+                "Vertical (needs 1 Line)",
+                "Parallel (needs 2 Lines)",
+                "Perpendicular (needs 2 Lines)",
+                "Equal length (needs 2 Lines)",
+                "Point on line (needs 1 Point + 1 Line)",
+                "Midpoint (needs 1 Point + 1 Line)",
+                "Tangent (needs 1 Line + 1 Arc)",
+                "Tangent (needs 2 Arcs)",
+                "Angle between Lines (needs 2 Lines + dim input, degrees)",
+                "Equal radius (needs 2 Circles/Arcs)",
+                "Point on arc (needs 1 Point + 1 Arc)",
+                "Distance Point↔Line (needs 1 Point + 1 Line + dim input)",
+                "Distance Point↔Circle (needs 1 Point + 1 Circle/Arc + dim input)",
+                "Symmetric about line (needs 2 Points + 1 Line in selection)",
+                "Symmetric about point (needs 3 Points: 2 + a centre)",
+                "|",
                 "custom",
                 "|",
                 "custom",
@@ -490,6 +544,45 @@ mod tests {
         // the build rather than waiting for a test run.
         const { assert!(DIM_INPUT_W > Metrics::GRAPHITE.btn) };
         const { assert!(LINETYPE_W > Metrics::GRAPHITE.btn) };
+    }
+
+    /// #2843: in an 800 px window the full sketch bar does not fit. The
+    /// strip scrolls, so Snap ▾ past it stays inside the window, and its
+    /// dropdown anchors to where it is drawn.
+    #[test]
+    fn a_narrow_window_keeps_the_triggers_past_the_strip_in_reach() {
+        use crate::library::editor::footprint::state::EditorMode;
+        use signex_types::theme::ThemeId;
+
+        const NARROW: f32 = 800.0;
+        let tid = ThemeId::DEFAULT;
+        let tokens = signex_types::theme::theme_tokens(tid);
+        let m = Metrics::GRAPHITE;
+        let editor = editor_in(EditorMode::Sketch);
+        let items = bar_items(&editor, tid, &tokens, &signex_i18n::I18n::en_us());
+        let (_, full) = menu_trigger_geometry(&items, FpActiveBarMenu::Snap);
+        assert!(full > NARROW, "the full bar is {full} px wide");
+
+        let run = scrolling_slots(&editor);
+        let max = bar_max_width(NARROW);
+        let (snap, fitted) =
+            menu_trigger_geometry_within(&items, FpActiveBarMenu::Snap, run.clone(), max);
+        let snap = snap.expect("Snap trigger");
+        assert!(fitted <= max, "{fitted} fits {max}");
+        assert!(snap + m.btn <= fitted, "Snap at {snap} is inside {fitted}");
+        let (create, _) =
+            menu_trigger_geometry_within(&items, FpActiveBarMenu::SketchCreate, run, max);
+        assert_eq!(
+            create,
+            menu_trigger_geometry(&items, FpActiveBarMenu::SketchCreate).0
+        );
+    }
+
+    /// Only the sketch bar has a scrolling run.
+    #[test]
+    fn the_pads_bar_has_no_scrolling_run() {
+        use crate::library::editor::footprint::state::EditorMode;
+        assert!(scrolling_slots(&editor_in(EditorMode::Normal)).is_empty());
     }
 
     /// Outside Sketch mode each trigger sits in the group its tag names:

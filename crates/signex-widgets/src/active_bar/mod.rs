@@ -43,9 +43,11 @@
 //! floats over the canvas content.
 
 pub mod dropdown;
+mod fit;
 mod metrics;
 mod skin;
 
+pub use fit::{slot_offsets_within, view_within};
 pub use metrics::Metrics;
 
 use crate::{button, raw, text, tooltip};
@@ -208,14 +210,22 @@ pub fn view<'a, M>(items: Vec<ActiveBarItem<M>>, tokens: &'a ThemeTokens) -> Ele
 where
     M: 'static + Clone,
 {
-    let skin = skin::Skin::of(tokens);
     let m = Metrics::GRAPHITE;
     let mut row_widget = row![].spacing(m.spacing).align_y(iced::Alignment::Center);
     for item in items {
         row_widget = row_widget.push(view_item(item, tokens, &m));
     }
+    bar_shell(row_widget.boxed(), tokens)
+}
 
-    container(row_widget)
+/// The bar's padded, bordered surface around its row of slots.
+fn bar_shell<'a, M>(slots: Element<'a, M>, tokens: &'a ThemeTokens) -> Element<'a, M>
+where
+    M: 'static + Clone,
+{
+    let skin = skin::Skin::of(tokens);
+    let m = Metrics::GRAPHITE;
+    container(slots)
         .padding(m.padding)
         .style(move |_: &Theme| iced::widget::container::Style {
             background: Some(iced::Background::Color(skin.fill)),
