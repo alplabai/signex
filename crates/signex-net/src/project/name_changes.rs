@@ -147,6 +147,36 @@ pub fn project_name_changes_named(
 ) -> Vec<ProjectNetChange> {
     let channels_before = ChannelNetNames::of_project(before, naming);
     let channels_after = ChannelNetNames::of_project(after, naming);
+    judged_changes(
+        before,
+        after,
+        edited,
+        naming,
+        (&channels_before, &channels_after),
+    )
+}
+
+/// [`project_name_changes`] reporting every name as written on its sheet, for
+/// a project whose saved naming cannot be read. The verdicts are the same.
+pub fn project_name_changes_as_written(
+    before: &ProjectGraph,
+    after: &ProjectGraph,
+    edited: &SheetKey,
+) -> Vec<ProjectNetChange> {
+    let naming = ChannelNaming::default();
+    let written = ChannelNetNames::as_written(&naming);
+    judged_changes(before, after, edited, &naming, (&written, &written))
+}
+
+/// The changes of the edit; `channels` reads the names of the graphs before
+/// and after it.
+fn judged_changes(
+    before: &ProjectGraph,
+    after: &ProjectGraph,
+    edited: &SheetKey,
+    naming: &ChannelNaming,
+    (channels_before, channels_after): (&ChannelNetNames, &ChannelNetNames),
+) -> Vec<ProjectNetChange> {
     let before = stitch_named(before, Want::Members, naming).members;
     let after = stitch_named(after, Want::Members, naming).members;
     // The edited sheet's placements; an ancestor's placement path is a prefix.
@@ -163,12 +193,12 @@ pub fn project_name_changes_named(
             .iter()
             .any(|path| path.starts_with(occurrence.chain()))
     });
-    let before = named_nets(before, &hidden, &channels_before);
+    let before = named_nets(before, &hidden, channels_before);
     let mut owner: HashMap<&NamedId, usize> = HashMap::new();
     for (index, net) in before.iter().enumerate() {
         owner.extend(net.ids.iter().map(|id| (id, index)));
     }
-    named_nets(after, &hidden, &channels_after)
+    named_nets(after, &hidden, channels_after)
         .into_iter()
         .filter_map(|net| {
             let absorbed: BTreeSet<usize> = net

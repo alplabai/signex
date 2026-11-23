@@ -142,7 +142,7 @@ impl Signex {
                 .unwrap_or_default(),
             channel_naming: ds
                 .active_document_project()
-                .map(|p| p.data.schematic_design.channel_naming.clone())
+                .map(|p| crate::app::saved_channel_naming::SavedChannelNaming::of(&p.data))
                 .unwrap_or_default(),
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
         };

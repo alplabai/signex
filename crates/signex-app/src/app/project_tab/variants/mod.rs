@@ -50,6 +50,9 @@ fn read_failed(i18n: &I18n, why: &PartsReadError) -> Localized {
             ids::PROJECT_VARIANTS_READ_ROOT_UNREADABLE,
             "path" => path.display().to_string()
         ),
+        PartsReadError::ChannelNamingUnreadable => {
+            t!(i18n, ids::DIALOG_SCHEMATIC_DESIGN_UNREADABLE)
+        }
         PartsReadError::Interrupted(reason) => {
             t!(i18n, ids::PROJECT_VARIANTS_READ_FAILED, "reason" => reason.as_str())
         }

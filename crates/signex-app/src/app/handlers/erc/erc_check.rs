@@ -82,7 +82,7 @@ impl Signex {
             net_waivers: rules.map(|r| r.erc_net_waivers.clone()).unwrap_or_default(),
             violation_waivers: rules.map(|r| r.erc_waivers.clone()).unwrap_or_default(),
             channel_naming: project
-                .map(|p| p.data.schematic_design.channel_naming.clone())
+                .map(|p| crate::app::saved_channel_naming::SavedChannelNaming::of(&p.data))
                 .unwrap_or_default(),
             fold: crate::app::state::project_case::fold_of(project),
         };

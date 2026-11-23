@@ -64,6 +64,14 @@ impl Signex {
             return PartIdentity::NotRead;
         }
         let channels = signex_net::ChannelDesignators::of_placements(&link.sheet, symbols, &naming);
+        let naming_is_unknown = project.is_some_and(|project| {
+            crate::app::saved_channel_naming::SavedChannelNaming::of(&project.data)
+                .readable()
+                .is_none()
+        });
+        if naming_is_unknown && channels.is_channel(&link.sheet) {
+            return PartIdentity::NotRead;
+        }
         PartIdentity::Read {
             designator: channels
                 .designator_of(symbol, &link.sheet)

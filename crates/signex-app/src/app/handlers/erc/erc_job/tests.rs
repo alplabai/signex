@@ -327,11 +327,9 @@ fn with_one_pin_part(mut sheet: SchematicSheet) -> SchematicSheet {
     sheet
 }
 
-/// #2740: the run reads the project's saved channel naming. The net count
-/// does not depend on a name; it is pinned so the named stitch counts each
-/// channel's net.
-#[test]
-fn the_job_reports_channel_nets_by_the_saved_naming() {
+/// A root placing `child.snxsch` as `Repeat(CH, 1, 2)`; the child's one wire
+/// has a part and the Hierarchical names `FB` and `SENSE`.
+fn repeated_job() -> (ErcRunInputs, PathBuf) {
     let (mut inputs, ..) = colliding_job();
     let dir = Path::new("/proj");
     let (root_path, child_path) = (dir.join("root.snxsch"), dir.join("child.snxsch"));
@@ -354,10 +352,20 @@ fn the_job_reports_channel_nets_by_the_saved_naming() {
     inputs.tab_paths = open.keys().cloned().collect();
     inputs.open = open;
     inputs.root = Some(root_path);
+    (inputs, child_path)
+}
+
+/// #2740: the run reads the project's saved channel naming. The net count
+/// does not depend on a name; it is pinned so the named stitch counts each
+/// channel's net.
+#[test]
+fn the_job_reports_channel_nets_by_the_saved_naming() {
+    let (mut inputs, child_path) = repeated_job();
     inputs.channel_naming = signex_types::project::ChannelNaming {
         net_format: "${Channel}_${Net}".to_string(),
         ..Default::default()
-    };
+    }
+    .into();
 
     let outcome = run_erc_job(inputs);
 
@@ -369,6 +377,32 @@ fn the_job_reports_channel_nets_by_the_saved_naming() {
         filed[0].message
     );
     assert_eq!(outcome.checked[2], 2, "one net per channel");
+}
+
+/// #2740: with the saved naming unreadable the run still checks the sheets,
+/// says why, and names no exported channel net it cannot know.
+#[test]
+fn an_unreadable_naming_claims_no_exported_channel_net_name() {
+    let (mut inputs, child_path) = repeated_job();
+    inputs.channel_naming = crate::app::saved_channel_naming::SavedChannelNaming::unreadable();
+
+    let outcome = run_erc_job(inputs);
+
+    let filed = multi_names(&outcome.by_path[&child_path]);
+    assert_eq!(filed.len(), 1, "{filed:?}");
+    assert!(
+        !filed[0].message.contains("the netlist uses"),
+        "{}",
+        filed[0].message
+    );
+    let banner = signex_i18n::I18n::en_us_ref()
+        .message_plain(signex_i18n::ids::DIALOG_SCHEMATIC_DESIGN_UNREADABLE, &[]);
+    assert!(
+        outcome.warnings.iter().any(|w| w.contains(&banner)),
+        "{:?}",
+        outcome.warnings
+    );
+    assert_eq!(outcome.checked[2], 2, "the count needs no name");
 }
 
 #[test]

@@ -11,12 +11,12 @@ use signex_engine::pcb::eco::{
 };
 use signex_types::net::Netlist;
 use signex_types::pcb::PcbBoard;
-use signex_types::project::ChannelNaming;
 use signex_types::schematic::InstancePath;
 
 use super::Computed;
 use crate::app::design_read::{DesignGraph, LibraryRows, Resolver};
 use crate::app::project_sheets::ProjectSheetPlan;
+use crate::app::saved_channel_naming::SavedChannelNaming;
 
 /// The design and board one change list was computed from. Kept for the net
 /// refresh after a tick and for Refresh, which keeps the ticks.
@@ -66,7 +66,7 @@ pub(crate) struct DesignRequest {
     /// The list before a Refresh, whose ticks the new one keeps.
     pub previous: Option<EcoChangeList>,
     /// The project's saved channel naming.
-    pub naming: ChannelNaming,
+    pub naming: SavedChannelNaming,
 }
 
 /// Read the design and diff the board. `Err` says why there is no list.
@@ -74,8 +74,12 @@ pub(crate) fn compute(request: DesignRequest) -> Result<Arc<Computed>, String> {
     let set = request.plan.assemble();
     let design = DesignGraph::read(&set, &request.project_dir)?;
     let project = design.project();
-    let netlist = signex_net::build_project_netlist_named(&project, &request.naming).netlist;
-    let channels = signex_net::ChannelDesignators::of_project(&project, &request.naming);
+    let naming = request
+        .naming
+        .for_design(&project)
+        .map_err(|refused| refused.to_string())?;
+    let netlist = signex_net::build_project_netlist_named(&project, naming).netlist;
+    let channels = signex_net::ChannelDesignators::of_project(&project, naming);
     let sheets = design.sheets();
     let resolver = Resolver::open(&request.libraries);
     let parts = design_eco_parts_named(&sheets, &channels, |_, symbol| resolver.resolve(symbol));

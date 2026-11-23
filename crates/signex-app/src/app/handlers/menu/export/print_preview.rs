@@ -29,6 +29,9 @@ impl Signex {
                 return iced::Task::none();
             }
         };
+        if self.refused_for_channel_naming(&issues) {
+            return iced::Task::none();
+        }
         // Opening the modal is a user action, so the stitch issues surface
         // here — once. `rerasterize_print_preview` below must stay silent: it
         // fires on every settings toggle and on every keystroke in the
@@ -398,6 +401,9 @@ impl Signex {
                     return None;
                 }
             };
+        if issues.channel_naming_unreadable {
+            return None;
+        }
         // Class styles follow the context's own netlist, so sheets that are
         // not open in a tab are styled in the preview as in the export.
         let mut pdf_opts = pdf_opts;

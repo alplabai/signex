@@ -94,6 +94,7 @@ mod read_only_refusal;
 pub mod restore_job;
 mod runtime;
 mod selection_request;
+pub(crate) mod saved_channel_naming;
 pub(crate) mod sheet_hierarchy;
 mod state;
 pub mod window_geometry;

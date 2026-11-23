@@ -63,7 +63,8 @@ pub use signature::{NetSignature, net_members, net_signatures, net_signatures_at
 mod project;
 pub use project::{
     ChannelDesignators, EntryBuses, build_project_netlist_indexed_named,
-    build_project_netlist_named, channel_uuid, multi_named_nets_named, project_name_changes_named,
+    build_project_netlist_named, channel_uuid, multi_named_nets_named,
+    project_name_changes_as_written, project_name_changes_named,
 };
 pub use project::{
     ComponentPin, ComponentReport, HoverPin, MultiNamedNet, NetAnchor, NetHover, NetIndex,

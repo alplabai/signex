@@ -34,7 +34,7 @@ pub(super) struct ErcRunInputs {
     /// The project's per-finding waivers (#1285); empty without stored rules.
     pub violation_waivers: Vec<signex_types::project::ErcWaiver>,
     /// The project's saved channel naming; the default without a project.
-    pub channel_naming: signex_types::project::ChannelNaming,
+    pub channel_naming: crate::app::saved_channel_naming::SavedChannelNaming,
     /// The owning project's key rules, chosen once by whoever picked the project.
     pub fold: crate::app::state::scope::CaseFold,
 }
@@ -221,15 +221,25 @@ fn run_job(
         );
     }
 
-    add_project_net_names(
-        &mut by_path,
-        &graph,
-        &roots,
-        base_dir.as_deref(),
-        fold,
-        &inputs.overrides,
-        &inputs.channel_naming,
-    );
+    // Without the saved naming a channel net's exported name is unknown, so
+    // the sheets keep their own findings, which claim no exported name.
+    let naming = inputs.channel_naming.for_design(&signex_net::ProjectGraph {
+        sheets: &graph.sheets,
+        resolved: &graph.resolved,
+        roots: &roots,
+    });
+    match naming {
+        Ok(naming) => add_project_net_names(
+            &mut by_path,
+            &graph,
+            &roots,
+            base_dir.as_deref(),
+            fold,
+            &inputs.overrides,
+            naming,
+        ),
+        Err(refused) => warnings.push(format!("ERC: {refused}")),
+    }
     add_project_units_not_placed(&mut by_path, &snapshots, &project_paths, &inputs.overrides);
     for line in refile_child_sheet_violations(&mut by_path, logged) {
         if !warnings.contains(&line) {
@@ -262,7 +272,10 @@ fn run_job(
         "ERC: {total} total violations across {} sheet(s)",
         by_path.len()
     ));
-    let checked = checked_counts(&snapshots, &graph, &roots, &inputs.channel_naming);
+    // A name never changes how many nets there are.
+    let default_naming = signex_types::project::ChannelNaming::default();
+    let counted_with = naming.unwrap_or(&default_naming);
+    let checked = checked_counts(&snapshots, &graph, &roots, counted_with);
     let outcome = ErcRunOutcome {
         by_path,
         warnings,

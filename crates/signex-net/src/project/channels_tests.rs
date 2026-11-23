@@ -8,7 +8,8 @@ use uuid::Uuid;
 use super::{
     ChannelDesignators, ProjectGraph, SheetKey, StitchIssue, build_project_netlist,
     build_project_netlist_indexed, build_project_netlist_named, channel_uuid,
-    multi_named_nets_named, project_name_changes, project_name_changes_named, project_occurrences,
+    multi_named_nets_named, project_name_changes, project_name_changes_as_written,
+    project_name_changes_named, project_occurrences,
 };
 use crate::fixtures::multi_channel::{BUCK, BUCK_PARTS, BUCK_SYMBOL, TOP, project};
 use crate::fixtures::{label, pt};
@@ -361,4 +362,12 @@ fn an_edit_in_a_channel_reports_the_saved_naming_and_keeps_its_verdict() {
     let default = project_name_changes(&p.graph(), &after, &key);
     assert_eq!(default.len(), got.len());
     assert!(default.iter().all(|c| c.needs_allow_merge), "{default:?}");
+    // #2740: an unreadable naming reports the names as written, same verdict.
+    let written = project_name_changes_as_written(&p.graph(), &after, &key);
+    assert_eq!(written.len(), got.len());
+    assert!(written.iter().all(|c| c.needs_allow_merge), "{written:?}");
+    assert!(
+        written.iter().all(|c| c.names == ["FB", "SENSE"]),
+        "{written:?}"
+    );
 }

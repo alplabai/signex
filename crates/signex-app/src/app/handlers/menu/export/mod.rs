@@ -6,6 +6,7 @@ use signex_output::{ExportContext, ProjectMetadata, SheetSnapshot};
 use signex_types::schematic::InstancePath;
 
 use crate::app::Signex;
+use crate::app::saved_channel_naming::SavedChannelNaming;
 
 mod bom;
 mod class_styles;
@@ -108,6 +109,9 @@ pub(crate) struct ExportIssues {
     pub(crate) sheet_numbering: Option<sheet_numbers::ScopeNumbering>,
     /// The placements the stitcher walked (#1133), to vet a remembered one.
     pub(crate) live: placements::LiveOccurrences,
+    /// The project has channels and its saved naming cannot be read: this
+    /// scope's channel names are not the project's, so nothing is output.
+    pub(crate) channel_naming_unreadable: bool,
 }
 
 impl ExportIssues {
@@ -495,9 +499,10 @@ fn build_scope(
     // the per-placement page copies below.
     let mut page_occurrences: Vec<signex_net::SheetOccurrence> = Vec::new();
     let mut page_keying: Option<(Option<PathBuf>, crate::app::state::scope::CaseFold)> = None;
-    let naming = owning_project
-        .map(|project| project.data.schematic_design.channel_naming.clone())
+    let saved_naming = owning_project
+        .map(|project| SavedChannelNaming::of(&project.data))
         .unwrap_or_default();
+    let default_naming = signex_types::project::ChannelNaming::default();
     let mut channels = signex_net::ChannelDesignators::default();
     let netlist = set.root.clone().and_then(|root_path| {
         // A declared page that exists and was read but that nothing
@@ -564,8 +569,11 @@ fn build_scope(
             resolved: &graph.resolved,
             roots: &roots,
         };
-        let result = signex_net::build_project_netlist_named(&project, &naming);
-        channels = signex_net::ChannelDesignators::of_project(&project, &naming);
+        let naming = saved_naming.for_design(&project);
+        issues.channel_naming_unreadable = naming.is_err();
+        let naming = naming.unwrap_or(&default_naming);
+        let result = signex_net::build_project_netlist_named(&project, naming);
+        channels = signex_net::ChannelDesignators::of_project(&project, naming);
         let occurrences = signex_net::project_occurrences(&project);
         page_occurrences = occurrences.clone();
         page_keying = Some((base_dir.clone(), fold));

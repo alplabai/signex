@@ -233,6 +233,11 @@ impl ChannelDesignators {
         }
     }
 
+    /// Whether any placement is a channel of a repeated sheet.
+    pub fn has_channels(&self) -> bool {
+        !self.placements.is_empty()
+    }
+
     /// Whether `path` is a channel of a repeated sheet.
     pub fn is_channel(&self, path: &InstancePath) -> bool {
         self.placements.contains_key(path)
@@ -332,6 +337,14 @@ impl<'n> ChannelNetNames<'n> {
             .filter_map(|o| Some((o.path, o.channel?)))
             .collect();
         Self { scopes, naming }
+    }
+
+    /// Every label reads as written: for a naming that could not be read.
+    pub(super) fn as_written(naming: &'n ChannelNaming) -> Self {
+        Self {
+            scopes: HashMap::new(),
+            naming,
+        }
     }
 
     /// A Hierarchical or local label's text at placement `path`; off a

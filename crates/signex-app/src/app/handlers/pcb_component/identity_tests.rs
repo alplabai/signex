@@ -96,6 +96,28 @@ fn a_closed_parent_in_the_hierarchy_keeps_the_channel_designator() {
 }
 
 #[test]
+fn an_unreadable_saved_naming_is_not_read_so_it_is_no_mismatch() {
+    let dir = "/w/ch-unreadable-naming";
+    let (mut app, board, footprint) = closed_parent(dir);
+    let buck = node(
+        "Repeat(CH, 1, 2)",
+        Some(REPEAT_SYMBOL),
+        Path::new(dir).join("buck.snxsch"),
+        Vec::new(),
+    );
+    let top = node("top", None, Path::new(dir).join("top.snxsch"), vec![buck]);
+    app.document_state.panel_ctx.navigator.hierarchy = Some(SheetHierarchy {
+        root: Some(top),
+        ..Default::default()
+    });
+    app.document_state.projects[0].data.unknown =
+        serde_json::from_value(serde_json::json!({"schematic_design": "garbled"}))
+            .expect("a kept section");
+
+    assert_eq!(app.part_identity(&board, &footprint), PartIdentity::NotRead);
+}
+
+#[test]
 fn an_unknown_parent_is_not_read_so_it_is_no_mismatch() {
     let (app, board, footprint) = closed_parent("/w/ch-closed-unknown");
 

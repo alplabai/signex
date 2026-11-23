@@ -8,8 +8,10 @@ use signex_types::project::ChannelNaming;
 
 use super::{app_workspace, open_with, sheet_with_net};
 use crate::app::Signex;
+use crate::app::back_annotate::read::{BackRequest, compute as back_compute};
 use crate::app::handlers::menu::export::{build_bom_export_context, build_export_scope};
 use crate::app::project_sheets::plan_project_sheets_for;
+use crate::app::saved_channel_naming::SavedChannelNaming;
 use crate::app::update_pcb::design::{DesignRequest, compute};
 
 /// `top` places `buck` as `Repeat(CH, 1, 2)`; `buck` holds R5.
@@ -119,7 +121,7 @@ fn update_pcb_reads_the_saved_naming_on_parts_and_terminals() {
         libraries: Vec::new(),
         open_revisions: Vec::new(),
         previous: None,
-        naming: alpha_naming(),
+        naming: alpha_naming().into(),
     })
     .expect("the design reads");
 
@@ -141,4 +143,122 @@ fn update_pcb_reads_the_saved_naming_on_parts_and_terminals() {
     for part in ["R5_A", "R5_B"] {
         assert!(terminals.contains(&part), "{part} in {terminals:?}");
     }
+}
+
+fn mark_naming_unreadable(app: &mut Signex) {
+    app.document_state.projects[0].data.unknown =
+        serde_json::from_value(serde_json::json!({"schematic_design": "garbled"}))
+            .expect("a kept section");
+}
+
+fn empty_board() -> signex_types::pcb::PcbBoard {
+    serde_json::from_value(serde_json::json!({
+        "uuid": uuid::Uuid::from_u128(1),
+        "outline": [{"x": 0.0, "y": 0.0}, {"x": 50.0, "y": 0.0}, {"x": 50.0, "y": 30.0}]
+    }))
+    .expect("an empty board")
+}
+
+fn update_pcb_read(app: &Signex, dir: &str) -> Result<(), String> {
+    let root = PathBuf::from(dir).join("top.snxsch");
+    compute(DesignRequest {
+        plan: plan_project_sheets_for(&app.document_state, &root),
+        project_dir: PathBuf::from(dir),
+        board: empty_board(),
+        revision: 0,
+        libraries: Vec::new(),
+        open_revisions: Vec::new(),
+        previous: None,
+        naming: SavedChannelNaming::of(&app.document_state.projects[0].data),
+    })
+    .map(|_| ())
+}
+
+fn banner() -> String {
+    signex_i18n::I18n::en_us_ref()
+        .message_plain(signex_i18n::ids::DIALOG_SCHEMATIC_DESIGN_UNREADABLE, &[])
+}
+
+#[test]
+fn an_unreadable_naming_refuses_update_pcb_on_a_project_with_channels() {
+    let dir = "/w/ch-unreadable-pcb";
+    let mut app = repeated(dir);
+    mark_naming_unreadable(&mut app);
+
+    assert_eq!(update_pcb_read(&app, dir), Err(banner()));
+}
+
+#[test]
+fn an_unreadable_naming_refuses_back_annotate_on_a_project_with_channels() {
+    let dir = "/w/ch-unreadable-back";
+    let mut app = repeated(dir);
+    mark_naming_unreadable(&mut app);
+    let root = PathBuf::from(dir).join("top.snxsch");
+
+    let read = back_compute(BackRequest {
+        plan: plan_project_sheets_for(&app.document_state, &root),
+        project_dir: PathBuf::from(dir),
+        board: empty_board(),
+        revision: 0,
+        libraries: Vec::new(),
+        open_revisions: Vec::new(),
+        previous: None,
+        naming: SavedChannelNaming::of(&app.document_state.projects[0].data),
+    });
+
+    assert_eq!(read.err(), Some(banner()));
+}
+
+#[test]
+fn an_unreadable_naming_leaves_a_project_without_channels_working() {
+    let dir = "/w/ch-unreadable-plain";
+    let mut app = repeated(dir);
+    let mut root = sheet_with_net("R_TOP", "TOP_NET", &["buck.snxsch"]);
+    root.child_sheets[0].name = "buck".to_string();
+    open_with(
+        &mut app.document_state,
+        &PathBuf::from(dir).join("top.snxsch"),
+        root,
+    );
+    mark_naming_unreadable(&mut app);
+
+    assert_eq!(update_pcb_read(&app, dir), Ok(()));
+    let (_, issues) = build_export_scope(&app.document_state).expect("scope");
+    assert!(!issues.channel_naming_unreadable);
+}
+
+#[test]
+fn an_unreadable_naming_refuses_the_netlist_file_and_writes_nothing() {
+    let dir = "/w/ch-unreadable-net";
+    let mut app = repeated(dir);
+    mark_naming_unreadable(&mut app);
+    let source = PathBuf::from(dir).join("top.snxsch");
+    let target = std::env::temp_dir().join(format!("signex-{}.net", uuid::Uuid::now_v7()));
+
+    let _ = app.handle_export_netlist_finished(source, Ok(target.clone()));
+
+    assert!(app.document_state.error_notice.is_some());
+    assert!(!target.exists());
+}
+
+#[test]
+fn an_unreadable_naming_refuses_the_bom_preview() {
+    let mut app = repeated("/w/ch-unreadable-bom");
+    mark_naming_unreadable(&mut app);
+
+    let _ = app.handle_bom_preview_open();
+
+    assert!(app.document_state.bom_preview.is_none());
+    assert!(app.document_state.error_notice.is_some());
+}
+
+#[test]
+fn an_unreadable_naming_refuses_the_print_preview() {
+    let mut app = repeated("/w/ch-unreadable-pdf");
+    mark_naming_unreadable(&mut app);
+
+    let _ = app.handle_print_preview_requested();
+
+    assert!(app.document_state.preview.is_none());
+    assert!(app.document_state.error_notice.is_some());
 }
