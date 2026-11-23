@@ -378,7 +378,8 @@ fn left<'a>(
         body = body.push(
             text(t!(i18n, ids::SMART_PASTE_NAMES_TAKEN, "names" => taken.join(", ")))
                 .size(TS.caption)
-                .color(ti(theme_tokens.error)),
+                .color(ti(theme_tokens.error))
+                .boxed(),
         );
     }
     container(scrollable(body).height(Length::Fill))
