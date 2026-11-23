@@ -98,16 +98,15 @@ fn pointer_rows() -> Vec<Surface> {
         ),
         surface(
             "m139-prefix",
-            "Prefix picker open",
+            "Measurement menu open on a prefix-taking unit",
             |app, _, fx| open_measurement(app, fx, "4.7", "ohm", SiPrefix::Kilo),
-            WindowSel::MainPointer(&[PointerStep::ClickRightOfInput("4.7", 16)]),
+            WindowSel::Auto,
         ),
         surface(
             "m139-unit",
-            "Unit picker open",
+            "Measurement menu open on a unit without prefixes",
             |app, _, fx| open_measurement(app, fx, "100", "ppm/C", SiPrefix::One),
-            // With no prefix picker, the unit picker is the next control.
-            WindowSel::MainPointer(&[PointerStep::ClickRightOfInput("100", 40)]),
+            WindowSel::Auto,
         ),
     ]
 }
@@ -312,7 +311,20 @@ fn open_measurement(
     prefix: SiPrefix,
 ) -> Result<(), String> {
     lib::open_edit_row(app, fx)?;
-    add_measurement(app, fx, value, unit, prefix)
+    let before = param_keys(app, fx);
+    add_measurement(app, fx, value, unit, prefix)?;
+    let key = param_keys(app, fx)
+        .into_iter()
+        .find(|k| !before.contains(k))
+        .ok_or("the measurement row is missing")?;
+    settle_support::settle(
+        app,
+        Message::Library(LibraryMessage::BrowserEdit {
+            library_path: fx.stock.clone(),
+            msg: BrowserEditMsg::UnitMenuOpened { key },
+        }),
+    );
+    Ok(())
 }
 
 /// The Edit row modal with the two measurement slots mockup row 139 draws.

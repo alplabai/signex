@@ -140,11 +140,9 @@ pub fn rows() -> Vec<Surface> {
         Surface {
             id: "m105",
             title: "Layer Stack",
-            // Today a dock panel; the mockup proposes a document tab.
             open: |app, r, fx| {
                 fixture::open_board(app, r, fx);
                 command(app, "board_layer_stack")?;
-                fixture::select_panel(app, PanelKind::LayerStack)?;
                 let _ = render::draw_main(r, app);
                 Ok(())
             },
@@ -266,7 +264,7 @@ const LAYERS: &[Check] = &[("the Layers panel is docked", layers_shown)];
 
 const LAYER_TAB_MENU: &[Check] = &[("Dismissed closes the menu", layer_tab_menu_dismisses)];
 
-const LAYER_STACK: &[Check] = &[("the Layer Stack panel is docked", layer_stack_shown)];
+const LAYER_STACK: &[Check] = &[("the Layer Stack document tab is active", layer_stack_shown)];
 
 const PCB_NETS: &[Check] = &[("the PCB Nets panel is docked", pcb_nets_shown)];
 
@@ -284,7 +282,12 @@ fn layers_shown(app: &mut Signex) -> Result<(), String> {
 }
 
 fn layer_stack_shown(app: &mut Signex) -> Result<(), String> {
-    helpers_d::panel_shown(app, PanelKind::LayerStack)
+    let tabs = &app.document_state.tabs;
+    let active = tabs.get(app.document_state.active_tab);
+    active
+        .is_some_and(|tab| tab.kind.is_layer_stack())
+        .then_some(())
+        .ok_or_else(|| "the Layer Stack tab is not active".to_string())
 }
 
 fn pcb_nets_shown(app: &mut Signex) -> Result<(), String> {
