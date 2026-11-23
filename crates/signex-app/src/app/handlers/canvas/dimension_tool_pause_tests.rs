@@ -17,7 +17,7 @@ const FROM: (f64, f64) = (0.0, 0.0);
 const TO: (f64, f64) = (12.7, 0.0);
 
 /// The tool armed on sheet A in main, with `others` open behind it.
-fn app_on_sheet_a(others: &[&str]) -> (Signex, Vec<PathBuf>) {
+pub(super) fn app_on_sheet_a(others: &[&str]) -> (Signex, Vec<PathBuf>) {
     let mut app = app_with_tool(Tool::LinearDimension);
     app.ui_state.main_window_id = Some(iced::window::Id::unique());
     let mut paths = vec![PathBuf::from("placement.snxsch")];
@@ -37,13 +37,13 @@ fn app_on_sheet_a(others: &[&str]) -> (Signex, Vec<PathBuf>) {
     (app, paths)
 }
 
-fn show_tab(app: &mut Signex, path: &Path) {
+pub(super) fn show_tab(app: &mut Signex, path: &Path) {
     let index = app.document_state.tabs.iter().position(|t| t.path == path);
     app.document_state.active_tab = index.expect("the tab");
     app.sync_active_tab();
 }
 
-fn tab_key(app: &mut Signex) {
+pub(super) fn tab_key(app: &mut Signex) {
     let _ = app.update(Message::Tool(ToolMessage::PrePlacementTab));
 }
 
@@ -51,13 +51,13 @@ fn escape_in(app: &mut Signex, window: Option<iced::window::Id>) {
     let _ = app.update(Message::Input(InputMsg::EscapePressed { window }));
 }
 
-fn dimensions_on(app: &Signex, path: &Path) -> usize {
+pub(super) fn dimensions_on(app: &Signex, path: &Path) -> usize {
     let sheet = app.document_state.engines[path].document();
     let is_dimension = |d: &&SchDrawing| matches!(d, SchDrawing::Dimension(_));
     sheet.drawings.iter().filter(is_dimension).count()
 }
 
-fn undocked_over(app: &mut Signex, path: &Path) -> iced::window::Id {
+pub(super) fn undocked_over(app: &mut Signex, path: &Path) -> iced::window::Id {
     let window = iced::window::Id::unique();
     app.ui_state.windows.insert(
         window,
@@ -72,7 +72,7 @@ fn undocked_over(app: &mut Signex, path: &Path) -> iced::window::Id {
     window
 }
 
-fn click_in(app: &mut Signex, window: iced::window::Id, (x, y): (f64, f64)) {
+pub(super) fn click_in(app: &mut Signex, window: iced::window::Id, (x, y): (f64, f64)) {
     let _ = app.update(Message::CanvasEventInWindow {
         window_id: window,
         event: CanvasEvent::Clicked {
@@ -83,7 +83,7 @@ fn click_in(app: &mut Signex, window: iced::window::Id, (x, y): (f64, f64)) {
 }
 
 /// Two points down and Tab pressed, in `window`.
-fn pause_in(app: &mut Signex, window: iced::window::Id) {
+pub(super) fn pause_in(app: &mut Signex, window: iced::window::Id) {
     click_in(app, window, FROM);
     click_in(app, window, TO);
     let _ = app.run_in_window_document(window, |app| {
@@ -92,7 +92,7 @@ fn pause_in(app: &mut Signex, window: iced::window::Id) {
     assert!(app.interaction_state.canvases[&window].placement_paused);
 }
 
-fn held_points(app: &Signex) -> usize {
+pub(super) fn held_points(app: &Signex) -> usize {
     app.interaction_state.annotation_tool.points.len()
 }
 

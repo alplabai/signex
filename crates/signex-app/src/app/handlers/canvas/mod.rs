@@ -30,7 +30,13 @@ mod move_pick;
 mod place_directive;
 mod place_harness;
 pub(crate) use place_directive::{blanket_directive, compile_mask_directive, diff_pair_directive};
+mod annotation_pause;
+#[cfg(test)]
+mod annotation_pause_tests;
 mod dimension_tool;
+mod pause_end;
+#[cfg(test)]
+mod pause_end_tests;
 pub(crate) use dimension_tool::ends_held_resume_esc;
 mod place_bezier;
 mod place_dimension;
@@ -52,11 +58,15 @@ mod shape_tool_tests;
 mod sheet_tool;
 pub use sheet_tool::SheetPlaceJobs;
 #[cfg(test)]
+mod dimension_tool_holder_tests;
+#[cfg(test)]
 mod dimension_tool_keys_tests;
 #[cfg(test)]
 mod dimension_tool_pause_tests;
 #[cfg(test)]
 mod dimension_tool_tests;
+#[cfg(test)]
+mod dimension_tool_window_tests;
 mod library_status;
 #[cfg(test)]
 pub(crate) mod placement_tests;

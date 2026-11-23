@@ -44,15 +44,22 @@ impl Signex {
                     return self.finish_update();
                 }
                 // A pause belongs to the window it began in: Tab elsewhere
-                // neither takes it over nor resumes it.
-                if self.interaction_state.is_sheet_pause_elsewhere() {
+                // neither takes it over nor resumes it, and a dimension's
+                // held point is not another window's to pause over.
+                if self.interaction_state.is_sheet_pause_elsewhere()
+                    || self.interaction_state.is_dimension_held_elsewhere()
+                {
                     return self.finish_update();
                 }
                 // A second Tab goes on placing with the edits, as the form's
-                // OK does; a Location that does not read keeps the pause.
+                // OK does; a Location or dimension text that does not read
+                // keeps the pause.
                 if self.interaction_state.current_tool != Tool::Select
                     && self.interaction_state.active_canvas().placement_paused
                 {
+                    if self.dimension_form_holds_refused_text() {
+                        return self.finish_update();
+                    }
                     let confirmed = self.update(Message::Dock(crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::ConfirmPrePlacement,
                     )));
@@ -419,6 +426,7 @@ impl Signex {
                 // Re-selecting the active tool mid-gesture keeps the gesture
                 // on purpose: only a switch to a different tool drops the buffers.
                 if tool != self.interaction_state.current_tool {
+                    self.end_annotation_pause();
                     self.clear_drawing_buffers();
                     self.leave_dimension_tool();
                 }

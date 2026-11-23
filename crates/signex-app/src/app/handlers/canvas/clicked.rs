@@ -138,12 +138,7 @@ impl Signex {
         }
         // The point buffer of a tool paused in another window belongs to
         // that window's sheet, even while it is still empty.
-        if self.interaction_state.is_sheet_pause_elsewhere()
-            && matches!(
-                self.interaction_state.current_tool,
-                Tool::Bezier | Tool::LinearDimension | Tool::AlignedDimension
-            )
-        {
+        if self.is_annotation_pause_of_another(None) {
             return Task::none();
         }
         // A click outside the inline editor commits its current value

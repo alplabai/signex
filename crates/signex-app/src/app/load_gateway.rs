@@ -399,10 +399,17 @@ impl Signex {
             Some(super::state::SheetPlacementPause::Sheet { .. })
         ) {
             state.placement_pause = None;
-            state.canvas.placement_paused = false;
-            for canvas in state.canvases.values_mut() {
+            let unfreeze = |canvas: &mut crate::canvas::CanvasSlot| {
                 canvas.placement_paused = false;
-            }
+                canvas.tool_preview = None;
+                canvas.ghost_label = None;
+                canvas.ghost_symbol = None;
+                canvas.ghost_text = None;
+                canvas.ghost_bus_entry = None;
+                canvas.clear_overlay_cache();
+            };
+            unfreeze(&mut state.canvas);
+            state.canvases.values_mut().for_each(unfreeze);
         }
     }
 
@@ -412,6 +419,12 @@ impl Signex {
         refresh_panel_ctx: bool,
     ) {
         self.clear_schematic_ui_state();
+        self.show_loaded_board(fit_to_board, refresh_panel_ctx);
+    }
+
+    /// Draw the active board. A reload of the board main already shows comes
+    /// here directly: main did not move, so a window's placement goes on.
+    pub(crate) fn show_loaded_board(&mut self, fit_to_board: bool, refresh_panel_ctx: bool) {
         self.sync_pcb_canvas_from_visible_board();
         if fit_to_board {
             // A board opened into the tab starts upright (#2316).
@@ -432,6 +445,12 @@ impl Signex {
 
     pub(crate) fn apply_loaded_empty_document(&mut self, refresh_panel_ctx: bool) {
         self.clear_schematic_ui_state();
+        self.show_empty_document(refresh_panel_ctx);
+    }
+
+    /// Draw no document. A board whose reload failed comes here directly:
+    /// main stays on its tab, so a window's placement goes on.
+    pub(crate) fn show_empty_document(&mut self, refresh_panel_ctx: bool) {
         self.interaction_state
             .pcb_canvas
             .set_renderer_snapshot(None);

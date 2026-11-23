@@ -9,6 +9,9 @@ impl Signex {
         world_x: f64,
         world_y: f64,
     ) -> Task<Message> {
+        if self.is_annotation_pause_of_another(None) {
+            return Task::none();
+        }
         // In Select mode, double-clicking a child-sheet symbol
         // navigates into the referenced schematic.
         let child_filename_to_open = if self.interaction_state.current_tool == Tool::Select
@@ -75,6 +78,10 @@ impl Signex {
             }
             // A quick next click of the Bezier or dimension tool (#1267).
             tool @ (Tool::Bezier | Tool::LinearDimension | Tool::AlignedDimension) => {
+                // The single-click path has this gate too: a pause takes no point.
+                if self.interaction_state.active_canvas().placement_paused {
+                    return Task::none();
+                }
                 let p = signex_types::schematic::Point::new(snapped_x, snapped_y);
                 self.annotation_tool_point(tool, p);
                 return Task::none();

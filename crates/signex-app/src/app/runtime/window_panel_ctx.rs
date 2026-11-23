@@ -331,6 +331,7 @@ impl Signex {
         if self.interaction_state.acting_window.is_some() {
             return;
         }
+        self.sync_paused_tool_forms();
         let shares: Vec<(iced::window::Id, bool)> = self
             .document_state
             .window_panel_ctx

@@ -109,20 +109,23 @@ impl Signex {
         }
     }
 
-    /// A tool paused in `window`, which is closing, ends its dimension with
-    /// it: those points must not go on to the sheet main shows.
+    /// A tool paused in `window`, or a dimension begun there, ends with the
+    /// closing window: those points must not go on to the sheet main shows.
     pub(crate) fn end_pause_of_window(&mut self, window: iced::window::Id) {
         let state = &mut self.interaction_state;
-        if !matches!(
+        let is_paused_here = matches!(
             state.placement_pause,
             Some(crate::app::state::SheetPlacementPause::Sheet { window: Some(w), .. })
                 if w == window
-        ) {
+        );
+        if !is_paused_here && state.dimension_points_window() != Some(Some(window)) {
             return;
         }
-        state.placement_pause = None;
-        if let Some(canvas) = state.canvases.get_mut(&window) {
-            canvas.placement_paused = false;
+        if is_paused_here {
+            state.placement_pause = None;
+            if let Some(canvas) = state.canvases.get_mut(&window) {
+                canvas.placement_paused = false;
+            }
         }
         let tool = &mut state.annotation_tool;
         tool.points.clear();

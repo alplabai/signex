@@ -445,7 +445,7 @@ impl Signex {
     /// installed (`commit` false installs without a "Restore" commit: a
     /// disk-conflict Reload restores nothing): false when a failure card replaced it or a schematic's new
     /// engine could not start and the older one was kept.
-    pub(crate) fn apply_reloaded_reporting(
+    pub(super) fn install_reload_outcome(
         &mut self,
         idx: usize,
         outcome: Result<RestoreJobDocument, RestoreFailure>,
@@ -487,7 +487,7 @@ impl Signex {
                 self.document_state.set_pcb_board(idx, *board);
                 if idx == self.document_state.active_tab {
                     // Refresh canvas; preserve camera (don't fit-to-board).
-                    self.apply_loaded_pcb_document(false, false);
+                    self.show_loaded_board(false, false);
                 }
                 // The tab now matches disk. Leaving it dirty would let Ctrl+S
                 // re-encode the board and drop the restored file's comments
@@ -672,7 +672,7 @@ impl Signex {
         self.document_state.drop_pcb_board(active_idx);
         self.set_reloaded_dirty(path, false);
         if active_idx == self.document_state.active_tab {
-            self.apply_loaded_empty_document(false);
+            self.show_empty_document(false);
         }
         self.report_restore_failure(restore_reload_card(path, why, unreadable));
     }

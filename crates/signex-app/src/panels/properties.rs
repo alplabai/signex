@@ -78,6 +78,28 @@ pub const PROPERTY_ROW_PAD_X: u16 = 6;
 /// Gap between a property row's label and its field.
 pub const PROPERTY_ROW_GAP: f32 = 6.0;
 
+/// The tool's form, veiled and deaf while its pause belongs to another window
+/// (mockup row 157).
+fn read_only_while_paused_elsewhere<'a>(
+    ctx: &PanelContext,
+    form: Element<'a, PanelMsg>,
+) -> Element<'a, PanelMsg> {
+    let panel = crate::styles::ti(ctx.tokens.panel_bg);
+    let is_editable = !ctx.annotation.is_tool_paused_elsewhere;
+    match signex_widgets::enable_section::dependents_veil(panel, is_editable) {
+        Some(veil) => signex_widgets::inert::Inert::new(form, veil).into(),
+        None => form,
+    }
+}
+
+/// The pre-placement form Properties shows: none once its tool has ended,
+/// though the values stay for the next placement (mockup row 157).
+fn shown_placement_form(ctx: &PanelContext) -> Option<&PrePlacementData> {
+    ctx.pre_placement
+        .as_ref()
+        .filter(|_| !ctx.annotation.is_placement_form_idle)
+}
+
 pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let palette = PanelPalette::from_tokens(&ctx.tokens);
     let PanelPalette {
@@ -166,13 +188,14 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // An armed dimension tool shows its values all through placing, paused
     // or not (mockup row 157).
     if let Some(form) = ctx.annotation.dimension_tool.as_deref() {
-        return super::element_properties::view_dimension_tool_properties(ctx, form);
+        let form = super::element_properties::view_dimension_tool_properties(ctx, form);
+        return read_only_while_paused_elsewhere(ctx, form);
     }
 
     // Tab pauses placement; the form edits what the next object is placed
     // with (#2532).
-    if let Some(ref pp) = ctx.pre_placement {
-        return super::pre_placement::view(pp, ctx);
+    if let Some(pp) = shown_placement_form(ctx) {
+        return read_only_while_paused_elsewhere(ctx, super::pre_placement::view(pp, ctx));
     }
 
     // #1280: the harness definitions view, while it is open.

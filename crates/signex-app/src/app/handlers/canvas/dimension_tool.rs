@@ -5,6 +5,7 @@
 use signex_types::schematic::{DimensionDirection, Point, SchDimension, SchDrawing};
 
 use super::super::super::*;
+use super::place_dimension::DimensionToolStyle;
 use crate::app::dispatch::input::ESCAPE_KEY;
 use crate::app::sch_tables::{AnnotationEdit, apply_annotation_edit};
 use crate::panels::{AnnotationField, AnnotationPanelMsg, DimensionToolForm};
@@ -25,6 +26,55 @@ pub(crate) fn ends_held_resume_esc(event: &iced::Event) -> bool {
     }
 }
 
+/// The form showing `points` and the values the next dimension takes.
+fn dimension_form(
+    tool: Tool,
+    style: &DimensionToolStyle,
+    points: &[Point],
+    is_paused: bool,
+) -> Box<DimensionToolForm> {
+    let from = points.first().copied();
+    let to = points.get(1).copied();
+    let shown_from = from.unwrap_or(Point::new(0.0, 0.0));
+    let shown_to = to.unwrap_or(Point::new(shown_from.x + SAMPLE_SPAN_MM, shown_from.y));
+    let is_aligned = tool == Tool::AlignedDimension;
+    let direction = style.direction.unwrap_or(if is_aligned {
+        DimensionDirection::Aligned
+    } else {
+        SchDimension::linear_direction(shown_from, shown_to)
+    });
+    let mut dimension = SchDimension::new(
+        uuid::Uuid::nil(),
+        shown_from,
+        shown_to,
+        SAMPLE_OFFSET_MM,
+        direction,
+    );
+    dimension.units = style.units;
+    dimension.precision = style.precision;
+    dimension.arrows = style.arrows;
+    dimension.override_text = style.override_text.clone();
+    Box::new(DimensionToolForm {
+        dimension,
+        is_aligned,
+        has_from: from.is_some(),
+        has_to: to.is_some(),
+        is_paused,
+    })
+}
+
+/// The form of a window that does not hold the dimension under way: the
+/// tool's settings, without that dimension's points and Override.
+fn form_without_points(
+    tool: Tool,
+    style: &DimensionToolStyle,
+    is_paused: bool,
+) -> Box<DimensionToolForm> {
+    let mut settings = style.clone();
+    settings.end_dimension();
+    dimension_form(tool, &settings, &[], is_paused)
+}
+
 impl Signex {
     /// The dimension tool armed on a schematic sheet.
     fn armed_dimension_tool(&self) -> Option<Tool> {
@@ -38,36 +88,32 @@ impl Signex {
     /// What Properties shows while a dimension tool is armed.
     pub(crate) fn dimension_tool_form(&self) -> Option<Box<DimensionToolForm>> {
         let tool = self.armed_dimension_tool()?;
-        let state = &self.interaction_state.annotation_tool;
-        let style = &state.dimension;
-        let from = state.points.first().copied();
-        let to = state.points.get(1).copied();
-        let shown_from = from.unwrap_or(Point::new(0.0, 0.0));
-        let shown_to = to.unwrap_or(Point::new(shown_from.x + SAMPLE_SPAN_MM, shown_from.y));
-        let is_aligned = tool == Tool::AlignedDimension;
-        let direction = style.direction.unwrap_or(if is_aligned {
-            DimensionDirection::Aligned
-        } else {
-            SchDimension::linear_direction(shown_from, shown_to)
-        });
-        let mut dimension = SchDimension::new(
-            uuid::Uuid::nil(),
-            shown_from,
-            shown_to,
-            SAMPLE_OFFSET_MM,
-            direction,
-        );
-        dimension.units = style.units;
-        dimension.precision = style.precision;
-        dimension.arrows = style.arrows;
-        dimension.override_text = style.override_text.clone();
-        Some(Box::new(DimensionToolForm {
-            dimension,
-            is_aligned,
-            has_from: from.is_some(),
-            has_to: to.is_some(),
-            is_paused: self.interaction_state.active_canvas().placement_paused,
-        }))
+        let state = &self.interaction_state;
+        let is_paused = state.active_canvas().placement_paused;
+        let annotation = &state.annotation_tool;
+        if state.is_dimension_held_elsewhere() && !state.is_sheet_pause_elsewhere() {
+            return Some(form_without_points(tool, &annotation.dimension, is_paused));
+        }
+        Some(dimension_form(
+            tool,
+            &annotation.dimension,
+            &annotation.points,
+            is_paused,
+        ))
+    }
+
+    /// The form for windows that do not hold the unpaused dimension under
+    /// way, with the window that does.
+    pub(crate) fn form_for_other_windows(
+        &self,
+    ) -> Option<(Option<iced::window::Id>, Box<DimensionToolForm>)> {
+        let state = &self.interaction_state;
+        let owner = state.dimension_points_window()?;
+        if state.paused_annotation_window().is_some() {
+            return None;
+        }
+        let form = form_without_points(state.current_tool, &state.annotation_tool.dimension, false);
+        Some((owner, form))
     }
 
     /// Whether the Properties form belongs to the armed dimension tool.
@@ -75,11 +121,30 @@ impl Signex {
         self.armed_dimension_tool().is_some()
     }
 
+    /// Whether `msg` edits what belongs to a dimension held in another
+    /// window: its points, its Override text.
+    fn edits_dimension_held_elsewhere(&self, msg: &AnnotationPanelMsg) -> bool {
+        use AnnotationField::{DimensionPoint, OverrideText};
+        self.interaction_state.is_dimension_held_elsewhere()
+            && matches!(
+                msg,
+                AnnotationPanelMsg::FieldTyped(DimensionPoint(..) | OverrideText, _)
+                    | AnnotationPanelMsg::FieldSubmitted(DimensionPoint(..) | OverrideText)
+                    | AnnotationPanelMsg::Picked(
+                        AnnotationEdit::DimensionPoint(..)
+                            | AnnotationEdit::OverrideEnabled(_)
+                            | AnnotationEdit::OverrideText(_)
+                    )
+            )
+    }
+
     /// A message of the armed tool's form: it edits the tool, never the sheet.
     pub(crate) fn handle_dimension_tool_panel(&mut self, msg: AnnotationPanelMsg) -> Task<Message> {
         // The values of a dimension paused in another window are that
-        // window's form to edit.
-        if self.interaction_state.is_sheet_pause_elsewhere() {
+        // window's form to edit, and a held point is its window's alone.
+        if self.interaction_state.is_sheet_pause_elsewhere()
+            || self.edits_dimension_held_elsewhere(&msg)
+        {
             return Task::none();
         }
         let id = uuid::Uuid::nil();
@@ -154,6 +219,12 @@ impl Signex {
         }
     }
 
+    /// Whether the armed tool's form holds text that does not read, in any
+    /// of its boxes: Tab keeps the pause for it (mockup row 157).
+    pub(crate) fn dimension_form_holds_refused_text(&self) -> bool {
+        self.armed_dimension_tool().is_some() && !self.dimension_form_draft_reads()
+    }
+
     /// Whether the text typed in the form, if any, reads for its own box.
     fn dimension_form_draft_reads(&self) -> bool {
         let draft = self.document_state.panel_ctx.annotation.draft.as_ref();
@@ -171,6 +242,8 @@ impl Signex {
         let Some(form) = self.dimension_tool_form() else {
             return;
         };
+        // This window's form has no Override of the dimension held elsewhere.
+        let keeps_override = self.interaction_state.is_dimension_held_elsewhere();
         let tool = &mut self.interaction_state.annotation_tool;
         match edit {
             // A pick pins the direction even when it matches the drag's.
@@ -209,7 +282,9 @@ impl Signex {
         tool.dimension.units = next.units;
         tool.dimension.precision = next.precision;
         tool.dimension.arrows = next.arrows;
-        tool.dimension.override_text = next.override_text;
+        if !keeps_override {
+            tool.dimension.override_text = next.override_text;
+        }
     }
 
     /// Space while a dimension is under way: the line goes to the other side
@@ -222,6 +297,7 @@ impl Signex {
         }
         if !self.interaction_state.active_canvas().placement_paused
             && !self.interaction_state.is_sheet_pause_elsewhere()
+            && !self.interaction_state.is_dimension_held_elsewhere()
         {
             let style = &mut self.interaction_state.annotation_tool.dimension;
             style.flipped = !style.flipped;

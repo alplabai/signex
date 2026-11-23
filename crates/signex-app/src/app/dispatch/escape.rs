@@ -131,12 +131,15 @@ impl Signex {
                         app.clear_pcb_selection();
                         Task::none()
                     });
+                    if self.is_annotation_pause_of_another(window) {
+                        return cleared;
+                    }
                     let reset = self.update(Message::Tool(crate::app::ToolMessage::SelectTool(
                         crate::app::Tool::Select,
                     )));
                     return Task::batch([cleared, reset]);
                 }
-                self.escape_tool_reset()
+                self.escape_tool_reset(window)
             }
 
             InputTarget::Main => {
@@ -182,7 +185,7 @@ impl Signex {
                 if let Some(dismiss) = self.panel_menu_escape() {
                     return self.update(dismiss);
                 }
-                self.escape_editor_or_tool_reset()
+                self.escape_editor_or_tool_reset(window)
             }
         }
     }
@@ -285,7 +288,7 @@ impl Signex {
     /// v0.15 — the main window's post-ladder Esc: if its active tab is a
     /// primitive editor, cancel that editor's state; otherwise fall back
     /// to the schematic tool reset.
-    fn escape_editor_or_tool_reset(&mut self) -> Task<Message> {
+    fn escape_editor_or_tool_reset(&mut self, window: Option<iced::window::Id>) -> Task<Message> {
         // A board in sketch mode: cancel the sketch tool, then leave (#2234).
         if let Some(msg) = self.board_sketch_escape() {
             return self.update(msg);
@@ -355,7 +358,7 @@ impl Signex {
             ));
         }
 
-        self.escape_tool_reset()
+        self.escape_tool_reset(window)
     }
 
     /// Cancel the placement session and drop back to `Tool::Select`.
@@ -366,7 +369,10 @@ impl Signex {
     /// sets those same globals — so this is the same operation whichever
     /// window the Esc came from. Only the *visuals* are per-window, and
     /// `clear_transient_schematic_tool_state` sweeps all of them.
-    fn escape_tool_reset(&mut self) -> Task<Message> {
+    fn escape_tool_reset(&mut self, window: Option<iced::window::Id>) -> Task<Message> {
+        if let Some(answered) = self.escape_annotation_pause(window) {
+            return answered;
+        }
         // The first Esc of a paused placement resumes it; the next one
         // leaves the tool (#2529).
         if self.interaction_state.active_canvas().placement_paused {

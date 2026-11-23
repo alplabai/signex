@@ -430,7 +430,11 @@ impl Signex {
         }
         match result {
             Err(refusal) => self.report_switch_refusal(surface, refusal),
-            Ok(done) => self.land_branch_switch(done),
+            Ok(done) => {
+                // The branch moved under a sheet of this repository.
+                let ended = self.end_pause_on_sheet(|sheet| sheet.starts_with(&done.root));
+                Task::batch([ended, self.land_branch_switch(done)])
+            }
         }
     }
 

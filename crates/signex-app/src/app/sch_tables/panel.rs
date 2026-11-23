@@ -82,10 +82,14 @@ impl Signex {
         let draft = ctx.annotation.draft.clone().filter(|(id, _, _)| {
             ctx.selected_uuid == Some(*id) || (dimension_tool.is_some() && id.is_nil())
         });
+        let is_tool_paused_elsewhere = self.is_annotation_pause_of_another(None);
+        let is_placement_form_idle = self.interaction_state.is_placement_form_idle();
         let Some(engine) = self.document_state.active_engine() else {
             return AnnotationPanelState {
                 draft,
                 dimension_tool,
+                is_tool_paused_elsewhere,
+                is_placement_form_idle,
                 ..AnnotationPanelState::default()
             };
         };
@@ -99,6 +103,8 @@ impl Signex {
             designators: super::designators(sheet),
             source_missing,
             dimension_tool,
+            is_tool_paused_elsewhere,
+            is_placement_form_idle,
         }
     }
 }

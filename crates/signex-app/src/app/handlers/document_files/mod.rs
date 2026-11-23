@@ -34,6 +34,7 @@ mod project_save;
 #[cfg(test)]
 mod project_save_tests;
 mod recent;
+mod reload_pause;
 #[cfg(test)]
 mod restore_cancel_tests;
 #[cfg(test)]

@@ -189,6 +189,21 @@ fn native_action_row(
 }
 
 impl Signex {
+    /// The document a detached panel's strip names: the undocked `owner` it
+    /// follows, else main's active tab.
+    fn detached_strip_document(&self, owner: Option<iced::window::Id>) -> Option<String> {
+        use crate::app::state::WindowKind;
+        let owner_title = owner.and_then(|w| match self.ui_state.windows.get(&w) {
+            Some(WindowKind::UndockedTab { title, .. }) => Some(title.clone()),
+            _ => None,
+        });
+        let document = &self.document_state;
+        owner_title.or_else(|| {
+            let tab = document.tabs.get(document.active_tab);
+            tab.map(|tab| tab.title.clone())
+        })
+    }
+
     /// The whole detached panel window `window` showing `kind`: the title
     /// strip over the panel body, inside the resize edges.
     pub(super) fn view_detached_panel_window(
@@ -196,7 +211,9 @@ impl Signex {
         window: iced::window::Id,
         kind: PanelKind,
     ) -> Element<'_, Message> {
-        let ctx = &self.document_state.panel_ctx;
+        // Properties follows the undocked sheet that owns a paused tool.
+        let owner = self.detached_properties_owner(kind);
+        let ctx = owner.map_or(&self.document_state.panel_ctx, |w| self.panel_ctx_for(w));
         let i18n = &self.ui_state.i18n;
         let panel = match kind {
             PanelKind::Components => crate::panels::components_panel::view(
@@ -215,14 +232,16 @@ impl Signex {
                 .map(crate::dock::DockMessage::Panel)
                 .boxed(),
         }
-        .map(Message::Dock);
+        .map(move |msg| match owner {
+            Some(owner) => self.scope_dock_message(owner, Message::Dock(msg)),
+            None => Message::Dock(msg),
+        });
         // Sent like the body's messages: a detached panel acts on the main
         // window's document.
         let actions: Vec<Element<'static, Message>> = crate::dock::title_actions(kind, ctx)
             .into_iter()
             .map(|action| action.map(Message::Dock).boxed())
             .collect();
-        let document = &self.document_state;
         let borderless = self.dialog_window_is_borderless(window);
         let (strip_actions, native_actions) = if borderless {
             (actions, Vec::new())
@@ -232,10 +251,7 @@ impl Signex {
         let facts = StripFacts {
             window,
             panel_name: signex_i18n::t!(i18n, kind.message()),
-            document: document
-                .tabs
-                .get(document.active_tab)
-                .map(|tab| tab.title.clone()),
+            document: self.detached_strip_document(owner),
             actions: strip_actions,
             dock_back_tip: signex_i18n::t!(i18n, signex_i18n::menu_ids::CTX_DOCK_BACK),
             theme: self.ui_state.effective_theme_id(),

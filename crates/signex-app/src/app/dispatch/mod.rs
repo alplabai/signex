@@ -15,6 +15,7 @@ pub(crate) mod input;
 mod keyboard;
 mod keymap;
 pub(crate) mod library;
+mod main_canvas_work;
 #[cfg(test)]
 mod net_color_tests;
 mod overlay;
