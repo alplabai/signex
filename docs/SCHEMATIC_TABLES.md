@@ -33,9 +33,12 @@ change under the cursor. Only the open sheets of the compiled project are
 refreshed, and a Project sheets table reads that project's own compile;
 another open project's sheets are never touched. Every sheet whose tables
 changed gets one undo step; a sheet whose tables are already current gets
-none. A title and revision come from the title block of the sheet file the
-compile read, matched by its path, never by file name alone. A table set to
-Refresh Off keeps its rows. A table whose part left the sheet keeps its rows,
+none. A title, revision and date come from the title block of the sheet file
+the compile read, whether or not that sheet is open, so closing a sheet never
+blanks its row. A row's link is the sheet's path relative to the sheet holding
+the table (`power/buck.snxsch`, `../power/buck.snxsch`); a link that climbs out
+of that folder opens only a file inside the project or one the last compile
+read. A table set to Refresh Off keeps its rows. A table whose part left the sheet keeps its rows,
 and Properties says the part is gone. The refresh is a normal edit through the
 mutation gateway, so a sheet showing a channel tab or a read-only sheet
 refuses it and Messages says why (`docs/MULTI_CHANNEL.md`, "Bound tables").

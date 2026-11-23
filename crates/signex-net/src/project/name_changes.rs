@@ -7,11 +7,13 @@
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 
+use signex_types::project::ChannelNaming;
 use signex_types::schematic::{InstancePath, LabelType};
 use uuid::Uuid;
 
+use super::channels::ChannelNetNames;
 use super::members::{NetMember, NetMemberKind, NetMembers};
-use super::{ProjectGraph, SheetKey, Want, stitch_project};
+use super::{ProjectGraph, SheetKey, Want, stitch_named};
 use crate::join_rule::{NetNames, needs_allow_merge};
 
 /// One named element of a sheet placement: a label or a power port.
@@ -20,7 +22,10 @@ type NamedId = (SheetKey, InstancePath, Uuid);
 /// A net of the project that carries at least one name.
 struct NamedNet {
     ids: Vec<NamedId>,
+    /// The names as written: what the merge rule judges.
     names: NetNames,
+    /// The same names as the design calls them, for the report.
+    shown: NetNames,
 }
 
 fn id_of(member: &NetMember) -> NamedId {
@@ -62,25 +67,39 @@ fn behind_port(nets: &[NetMembers]) -> HashSet<LocalName> {
 
 /// The named nets of a stitch; the local names in `hidden` play no part, a
 /// later copy on the same placement included.
-fn named_nets(nets: Vec<NetMembers>, hidden: &HashSet<LocalName>) -> Vec<NamedNet> {
+fn named_nets(
+    nets: Vec<NetMembers>,
+    hidden: &HashSet<LocalName>,
+    channels: &ChannelNetNames,
+) -> Vec<NamedNet> {
     nets.into_iter()
         .filter_map(|net| {
             let mut out = NamedNet {
                 ids: Vec::new(),
                 names: NetNames::default(),
+                shown: NetNames::default(),
             };
             for member in net.members.iter().filter(|m| !m.text.is_empty()) {
-                let side = match member.kind {
-                    NetMemberKind::Label(LabelType::Hierarchical) => &mut out.names.aliases,
+                let in_channel = || channels.label_text(&member.occurrence, &member.text);
+                let (side, shown_side, shown) = match member.kind {
+                    NetMemberKind::Label(LabelType::Hierarchical) => {
+                        (&mut out.names.aliases, &mut out.shown.aliases, in_channel())
+                    }
                     NetMemberKind::Label(LabelType::Net)
                         if hidden.contains(&local_name_of(member)) =>
                     {
                         continue;
                     }
-                    NetMemberKind::Label(_) | NetMemberKind::PowerPort => &mut out.names.own,
+                    NetMemberKind::Label(LabelType::Net) => {
+                        (&mut out.names.own, &mut out.shown.own, in_channel())
+                    }
+                    NetMemberKind::Label(_) | NetMemberKind::PowerPort => {
+                        (&mut out.names.own, &mut out.shown.own, member.text.clone())
+                    }
                     _ => continue,
                 };
                 side.insert(member.text.clone());
+                shown_side.insert(shown);
                 out.ids.push(id_of(member));
             }
             (!out.ids.is_empty()).then_some(out)
@@ -91,9 +110,11 @@ fn named_nets(nets: Vec<NetMembers>, hidden: &HashSet<LocalName>) -> Vec<NamedNe
 /// A net of the project after an edit that is not simply a net as it was.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectNetChange {
-    /// Every name the net carries, own and alias, sorted.
+    /// Every name the net carries, own and alias, sorted; a name inside a
+    /// channel reads as the channel net format makes it.
     pub names: Vec<String>,
-    /// The names it carries only through a child's hierarchical label.
+    /// The names it carries only through a child's hierarchical label, read
+    /// the same way.
     pub aliases: Vec<String>,
     /// Whether the edit needs `allow_merge`: see [`project_name_changes`].
     pub needs_allow_merge: bool,
@@ -112,8 +133,52 @@ pub fn project_name_changes(
     after: &ProjectGraph,
     edited: &SheetKey,
 ) -> Vec<ProjectNetChange> {
-    let before = stitch_project(before, Want::Members).members;
-    let after = stitch_project(after, Want::Members).members;
+    project_name_changes_named(before, after, edited, &ChannelNaming::default())
+}
+
+/// [`project_name_changes`] with repeated sheets named through `naming`. The
+/// naming changes how the names read, never which edits need `allow_merge`:
+/// the rule judges the names as written.
+pub fn project_name_changes_named(
+    before: &ProjectGraph,
+    after: &ProjectGraph,
+    edited: &SheetKey,
+    naming: &ChannelNaming,
+) -> Vec<ProjectNetChange> {
+    let channels_before = ChannelNetNames::of_project(before, naming);
+    let channels_after = ChannelNetNames::of_project(after, naming);
+    judged_changes(
+        before,
+        after,
+        edited,
+        naming,
+        (&channels_before, &channels_after),
+    )
+}
+
+/// [`project_name_changes`] reporting every name as written on its sheet, for
+/// a project whose saved naming cannot be read. The verdicts are the same.
+pub fn project_name_changes_as_written(
+    before: &ProjectGraph,
+    after: &ProjectGraph,
+    edited: &SheetKey,
+) -> Vec<ProjectNetChange> {
+    let naming = ChannelNaming::default();
+    let written = ChannelNetNames::as_written(&naming);
+    judged_changes(before, after, edited, &naming, (&written, &written))
+}
+
+/// The changes of the edit; `channels` reads the names of the graphs before
+/// and after it.
+fn judged_changes(
+    before: &ProjectGraph,
+    after: &ProjectGraph,
+    edited: &SheetKey,
+    naming: &ChannelNaming,
+    (channels_before, channels_after): (&ChannelNetNames, &ChannelNetNames),
+) -> Vec<ProjectNetChange> {
+    let before = stitch_named(before, Want::Members, naming).members;
+    let after = stitch_named(after, Want::Members, naming).members;
     // The edited sheet's placements; an ancestor's placement path is a prefix.
     let edited_paths: HashSet<&[Uuid]> = before
         .iter()
@@ -128,12 +193,12 @@ pub fn project_name_changes(
             .iter()
             .any(|path| path.starts_with(occurrence.chain()))
     });
-    let before = named_nets(before, &hidden);
+    let before = named_nets(before, &hidden, channels_before);
     let mut owner: HashMap<&NamedId, usize> = HashMap::new();
     for (index, net) in before.iter().enumerate() {
         owner.extend(net.ids.iter().map(|id| (id, index)));
     }
-    named_nets(after, &hidden)
+    named_nets(after, &hidden, channels_after)
         .into_iter()
         .filter_map(|net| {
             let absorbed: BTreeSet<usize> = net
@@ -151,11 +216,11 @@ pub fn project_name_changes(
             }
             Some(ProjectNetChange {
                 needs_allow_merge: needs_allow_merge(&nets, &net.names.own),
-                names: names.into_iter().collect(),
+                names: net.shown.all().into_iter().collect(),
                 aliases: net
-                    .names
+                    .shown
                     .aliases
-                    .difference(&net.names.own)
+                    .difference(&net.shown.own)
                     .cloned()
                     .collect(),
             })

@@ -14,7 +14,7 @@ pub mod uf;
 pub mod board;
 
 mod parts;
-pub use parts::{DesignPart, design_parts};
+pub use parts::{DesignPart, design_parts, design_parts_named};
 
 pub mod cross_probe;
 
@@ -62,6 +62,11 @@ pub use signature::{NetSignature, net_members, net_signatures, net_signatures_at
 
 mod project;
 pub use project::{
+    ChannelDesignators, EntryBuses, build_project_netlist_indexed_named,
+    build_project_netlist_named, channel_uuid, multi_named_nets_named,
+    project_name_changes_as_written, project_name_changes_named,
+};
+pub use project::{
     ComponentPin, ComponentReport, HoverPin, MultiNamedNet, NetAnchor, NetHover, NetIndex,
     NetMember, NetMemberKind, NetMembers, NetNameSource, NumberingIssue, PagePlacement, PlacedPin,
     PlacedSymbol, ProjectGraph, ProjectNetChange, ProjectNetlist, ProjectRoot, SheetKey,
@@ -70,19 +75,22 @@ pub use project::{
     number_issues, parse_page_number, project_name_changes, project_occurrences, sheet_numbering,
     with_page_number,
 };
-pub use project::{
-    EntryBuses, build_project_netlist_indexed_named, build_project_netlist_named, channel_uuid,
-};
 
 mod compiled;
 #[cfg(test)]
 mod compiled_tests;
-pub use compiled::{CompiledDesign, CompiledNet, CompiledSheet, compile_design};
+pub use compiled::{
+    CompiledDesign, CompiledNet, CompiledPart, CompiledSheet, CompiledSheetNet, CompiledTarget,
+    SheetTitle, compile_design,
+};
 
 mod harness;
 #[cfg(test)]
 mod harness_fixture;
 pub use harness::{
-    HarnessBundle, HarnessMismatch, HarnessPort, HarnessSheetEntry, harness_bundles,
+    HarnessBundle, HarnessLeaf, HarnessMismatch, HarnessPort, HarnessSheetEntry, harness_bundles,
     harness_mismatches, harness_segments_touch, on_harness,
 };
+
+mod names_in_use;
+pub use names_in_use::sheet_net_names;

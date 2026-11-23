@@ -8,12 +8,12 @@ use std::collections::HashMap;
 
 use std::path::{Path, PathBuf};
 
-use signex_net::{SheetKey, SheetOccurrence};
+use signex_net::{ChannelDesignators, SheetKey, SheetOccurrence};
 use signex_output::SheetSnapshot;
 
 use crate::app::state::scope::CaseFold;
 use signex_types::net::SheetPlacement;
-use signex_types::schematic::InstancePath;
+use signex_types::schematic::{InstancePath, SchematicSheet};
 
 /// The occurrences the stitcher walked, with how sheet paths key against them:
 /// the authority on whether a remembered placement (#1133) still exists. A
@@ -24,17 +24,25 @@ use signex_types::schematic::InstancePath;
 pub(crate) struct LiveOccurrences {
     occurrences: Vec<SheetOccurrence>,
     keying: Option<(Option<PathBuf>, CaseFold)>,
+    channels: ChannelDesignators,
 }
 
 impl LiveOccurrences {
     pub(super) fn new(
         occurrences: Vec<SheetOccurrence>,
         keying: Option<(Option<PathBuf>, CaseFold)>,
+        channels: ChannelDesignators,
     ) -> Self {
         Self {
             occurrences,
             keying,
+            channels,
         }
+    }
+
+    /// Give a page's render copy its channel designators at `placement`.
+    pub(super) fn stamp_channels(&self, sheet: &mut SchematicSheet, placement: &InstancePath) {
+        self.channels.stamp(sheet, placement);
     }
 
     /// Whether the walk reached the sheet at `path` through `placement`. With
@@ -74,6 +82,21 @@ pub(crate) fn netlist_placements(
     placements
 }
 
+/// Give the export's own copies of `sheets` their channel designators at each
+/// of `placements`, so the BOM and the netlist file read them through
+/// `Symbol::designator_in` (#2740). `sheets` is what `placements` index.
+pub(crate) fn stamp_channel_designators(
+    sheets: &mut [SchematicSheet],
+    placements: &[SheetPlacement],
+    channels: &ChannelDesignators,
+) {
+    for placement in placements {
+        if let Some(sheet) = sheets.get_mut(placement.sheet_index) {
+            channels.stamp(sheet, &placement.instance_path);
+        }
+    }
+}
+
 /// The printed pages, one copy per placement of each page's sheet (#829).
 ///
 /// A page whose sheet the walk reached once prints as that placement, with its
@@ -89,6 +112,7 @@ pub(super) fn page_copies(
     occurrences: &[SheetOccurrence],
     base_dir: Option<&Path>,
     fold: CaseFold,
+    channels: &ChannelDesignators,
 ) -> Vec<SheetSnapshot> {
     let mut out: Vec<SheetSnapshot> = Vec::with_capacity(pages.len());
     let mut added_copies = false;
@@ -109,10 +133,9 @@ pub(super) fn page_copies(
             } else {
                 String::new()
             };
-            out.push(
-                page.clone()
-                    .for_placement(occ.instance_path.clone(), &label),
-            );
+            let mut copy = page.clone();
+            channels.stamp(&mut copy.schematic, &occ.instance_path);
+            out.push(copy.for_placement(occ.instance_path.clone(), &label));
         }
     }
     if added_copies {

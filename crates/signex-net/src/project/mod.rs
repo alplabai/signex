@@ -65,12 +65,15 @@ mod net_index;
 mod root_order;
 mod sheet_numbers;
 
+pub use channels::{ChannelDesignators, EntryBuses, channel_uuid};
 pub(crate) use channels::{CompiledOccurrence, compiled_occurrences};
-pub use channels::{EntryBuses, channel_uuid};
 pub use components::{ComponentPin, ComponentReport, PlacedPin, PlacedSymbol, UnconnectedPin};
 pub use members::{NetMember, NetMemberKind, NetMembers};
-pub use name_changes::{ProjectNetChange, project_name_changes};
-pub use names::{MultiNamedNet, NetNameSource};
+pub use name_changes::{
+    ProjectNetChange, project_name_changes, project_name_changes_as_written,
+    project_name_changes_named,
+};
+pub use names::{MultiNamedNet, NetNameSource, multi_named_nets_named};
 pub use net_index::{HoverPin, NetAnchor, NetHover, NetIndex, is_auto_name};
 
 pub use designators::instance_entry_designators;
@@ -231,6 +234,10 @@ struct Occ<'a> {
     /// The `ChildSheet.uuid` chain from the root to this occurrence (empty for
     /// a root page); what a symbol's per-placement designator is keyed by.
     path: InstancePath,
+    /// `path` with each channel step replaced by its sheet symbol's uuid: the
+    /// one placement all channels of a repeat share, where a designator is
+    /// stored. Equals `path` outside any repeated sheet.
+    logical_path: InstancePath,
     /// The [`SheetKey`] this occurrence was reached by (a root's own key, or
     /// the child's resolved key). Occurrences that share a key are instances
     /// of one sheet.
@@ -837,6 +844,7 @@ fn walk_occurrences<'a>(
             sheet,
             name_chain: Vec::new(),
             path: InstancePath::root(),
+            logical_path: InstancePath::root(),
             key,
             channels: Vec::new(),
             channel: None,
@@ -919,6 +927,7 @@ fn visit<'a>(
                         sheet: child_sheet,
                         name_chain,
                         path: parent.path.child(placement),
+                        logical_path: parent.logical_path.child(cs.uuid),
                         key: child_key.clone(),
                         channels: inside,
                         channel: scope,
@@ -983,7 +992,7 @@ fn detect_shared_references(occs: &[Occ], naming: &ChannelNaming, issues: &mut V
             let mut resolved: HashSet<String> = HashSet::new();
             for &oid in occ_ids {
                 let occ = &occs[oid];
-                let base = sym.designator_in(&occ.path);
+                let base = sym.designator_in(&occ.logical_path);
                 let designator = channels::channel_designator(base, &occ.channels, naming);
                 if designator.is_empty() {
                     continue;

@@ -200,6 +200,7 @@ fn after_table<'a>(
     let r = tokens::resolve(theme_tokens);
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
     let power_ink = ti(theme_tokens.error);
+    let taken = state.taken_names();
     let cell = |content: Element<'a, SmartPasteMsg>, w: Length| {
         container(content)
             .padding([0.0, SP.s])
@@ -242,12 +243,19 @@ fn after_table<'a>(
                 .font(mono)
                 .color(r.ink3)
                 .boxed(),
-            NetAfter::Renamed(names) => text(UserText::new(names.join(", ")))
-                .size(TS.body)
-                .font(mono)
-                .color(ti(theme_tokens.text))
-                .wrapping(iced::widget::text::Wrapping::None)
-                .boxed(),
+            NetAfter::Renamed(names) => {
+                let clashes = names.iter().any(|n| taken.iter().any(|t| t == n.trim()));
+                text(UserText::new(names.join(", ")))
+                    .size(TS.body)
+                    .font(mono)
+                    .color(if clashes {
+                        ti(theme_tokens.error)
+                    } else {
+                        ti(theme_tokens.text)
+                    })
+                    .wrapping(iced::widget::text::Wrapping::None)
+                    .boxed()
+            }
         };
         table = table.push(
             row![
@@ -351,7 +359,7 @@ fn left<'a>(
         rewriting,
         theme_tokens,
     );
-    let body = column![
+    let mut body = column![
         group(t!(i18n, ids::SMART_PASTE_PLACE), theme_tokens),
         mode,
         place_fields(state, i18n, theme_tokens),
@@ -365,6 +373,15 @@ fn left<'a>(
     ]
     .spacing(SP.m)
     .padding([SP.l, SP.xl]);
+    let taken = state.taken_names();
+    if !taken.is_empty() {
+        body = body.push(
+            text(t!(i18n, ids::SMART_PASTE_NAMES_TAKEN, "names" => taken.join(", ")))
+                .size(TS.caption)
+                .color(ti(theme_tokens.error))
+                .boxed(),
+        );
+    }
     container(scrollable(body).height(Length::Fill))
         .width(Length::Fixed(LEFT_W))
         .height(Length::Fill)
@@ -698,10 +715,7 @@ pub fn view<'a>(
             dialog_button(
                 t!(i18n, paste_label(copies), "count" => i64::from(copies)),
                 DialogButtonKind::Primary,
-                state
-                    .input()
-                    .is_ok()
-                    .then_some(SmartPasteMsg::PasteConfirmed),
+                state.can_paste().then_some(SmartPasteMsg::PasteConfirmed),
                 theme_tokens,
             ),
         ],

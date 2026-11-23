@@ -100,6 +100,7 @@ fn back_block_text(why: &BackBlock) -> &'static str {
         BackBlock::DuplicateDesignator(_) => "the designator is used twice; run Annotate",
         BackBlock::BoardNotAnnotated => "the board designator is empty or holds ?",
         BackBlock::SharedSheet => "the sheet is placed more than once",
+        BackBlock::ChannelDesignator => "a channel's designator comes from its sheet and naming",
         BackBlock::FootprintFromBoard => "taking a footprint from the board is not built yet",
     }
 }

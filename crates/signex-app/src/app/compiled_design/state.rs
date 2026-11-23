@@ -36,6 +36,8 @@ pub struct CompiledDesignUi {
     pub find: String,
     /// Repeated rows folded by the user, by row index of the result.
     pub folded: HashSet<usize>,
+    /// Sheet rows showing their parts and nets, by row index of the result.
+    pub expanded: HashSet<usize>,
     /// The selected tree row, by row index of the result.
     pub selected: Option<usize>,
     /// The channel each sheet file shows (1-based index); absent is Editor.

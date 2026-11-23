@@ -454,9 +454,10 @@ and via stitching read no copper for it, since each takes a pour's copper
 from the fills. The design rule check reads no pour copper either way. The
 canvas draws a shelved pour's outline dashed. The flag is the zone key
 `shelved = true`, written only when on, so a board with no shelved pour
-saves as before, and a build that does not know the key keeps it on
-re-save. Fabrication Outputs does not count a shelved pour as a zone left
-unfilled.
+saves as before. A board with one writes `snxpcb/1.9` (#2738, DECISIONS
+2026-11-23), so a build that does not know the key opens it read-only
+instead of flooding the pour. Fabrication Outputs does not count a shelved
+pour as a zone left unfilled.
 
 ### Picking and editing a pour
 

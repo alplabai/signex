@@ -74,6 +74,23 @@ pub struct CompiledRow {
     /// Its sheet changed since the compile.
     pub is_stale: bool,
     pub is_selected: bool,
+    /// The row lists parts or nets, so it has a fold chevron.
+    pub has_children: bool,
+    /// Its part and net rows show below it.
+    pub is_expanded: bool,
+    /// The parts shown while expanded (a search keeps the matches).
+    pub part_rows: Vec<CompiledChildRow>,
+    /// The nets shown while expanded (a search keeps the matches).
+    pub net_rows: Vec<CompiledChildRow>,
+}
+
+/// A part or net listed under a sheet instance.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompiledChildRow {
+    pub label: String,
+    pub is_power: bool,
+    /// Where a click goes.
+    pub target: signex_net::CompiledTarget,
 }
 
 /// One row of the Nets list.
@@ -82,6 +99,8 @@ pub struct CompiledNetRow {
     pub name: String,
     pub sheets: usize,
     pub is_power: bool,
+    /// Where a click goes.
+    pub target: Option<signex_net::CompiledTarget>,
 }
 
 /// The unique totals of the footer.
@@ -153,6 +172,8 @@ pub struct SheetSymbolRepeatView {
     pub is_from_refused: bool,
     pub is_to_refused: bool,
     pub naming: ChannelNaming,
+    /// The project's settings section is unreadable: naming cannot be edited.
+    pub is_naming_locked: bool,
     pub menu: NamingMenuView,
     /// The symbol's entries: name and whether it is a `Repeat(…)` entry.
     pub entries: Vec<(String, bool)>,

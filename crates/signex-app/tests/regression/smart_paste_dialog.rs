@@ -77,6 +77,34 @@ fn keep_lets_the_pasted_nets_join_the_originals() {
     assert_eq!(texts.iter().filter(|t| *t == "D0").count(), 2);
 }
 
+/// #2744: the second paste with the defaults would call its net D0_2 too. The
+/// dialog names it, Paste stops with nothing on the cursor, and another Start
+/// lets it through.
+#[test]
+fn a_rewritten_name_that_exists_stops_the_paste_and_is_named() {
+    let mut app = app_with_copy();
+    smart_paste_dialog(&mut app, |_| {});
+    click(&mut app, (60.96, 60.96));
+    assert!(label_texts(&app).iter().any(|t| t == "D0_2"));
+    let before = label_texts(&app);
+    smart_paste_dialog(&mut app, |app| {
+        let state = app.ui_state.smart_paste.as_ref().expect("open");
+        assert_eq!(state.taken_names(), ["D0_2"]);
+        assert!(!state.can_paste());
+    });
+    assert!(
+        app.interaction_state.placement.is_none(),
+        "nothing goes on the cursor"
+    );
+    assert!(app.ui_state.smart_paste.is_some(), "the dialog stays open");
+    assert_eq!(label_texts(&app), before);
+    dialog(&mut app, SmartPasteMsg::StartEdited("3".into()));
+    let state = app.ui_state.smart_paste.as_ref().expect("open");
+    assert!(state.can_paste(), "D0_3 is free");
+    dialog(&mut app, SmartPasteMsg::PasteConfirmed);
+    assert!(app.interaction_state.placement.is_some());
+}
+
 #[test]
 fn the_offset_puts_the_copy_beside_the_click() {
     let mut app = app_with_copy();

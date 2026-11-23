@@ -434,6 +434,8 @@ dialog-dpc-p-net = P net
 dialog-dpc-n-net = N net
 dialog-dpc-no-project = Differential Pair Classes: open a project first.
 dialog-dpc-project-closed = Differential Pair Classes: the project was closed; nothing was applied.
+# The banner, and the Messages line of a refused edit, while the project's schematic_design section is unreadable.
+dialog-schematic-design-unreadable = This project's channel naming, harness definitions and differential pair classes cannot be read by this version of Signex. They stay unchanged in the project file and cannot be edited here.
 # Why a class's name and Delete are greyed. $count is a whole number.
 dialog-dpc-locked-by-pairs = { $count ->
         [one] { $count } pair uses this class: it keeps its name and cannot be deleted.
@@ -478,6 +480,8 @@ dialog-smart-paste-after = After paste
 dialog-smart-paste-kept-power = kept · power net
 # $net is the copied net's name.
 dialog-smart-paste-joins = { $net } (joins original)
+# $names lists the rewritten net names that already exist.
+dialog-smart-paste-names-taken = Smart Paste stopped: { $names } already exists, so the nets would join. Change the pattern or Start n at.
 dialog-smart-paste-preview = Preview
 dialog-smart-paste-copy-count = { $count ->
     [one] 1 copy

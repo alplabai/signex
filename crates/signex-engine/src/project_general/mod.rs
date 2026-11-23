@@ -332,7 +332,10 @@ impl ProjectGeneralHistory {
             }
             ProjectGeneralCommand::SetFabOutputs(kinds) => data.fab_outputs = kinds,
             ProjectGeneralCommand::SetDiffPairClasses(classes) => {
-                data.schematic_design.diff_pair_classes = classes;
+                // An unreadable section is never replaced (DECISIONS 2026-11-23).
+                if !data.has_unreadable_schematic_design() {
+                    data.schematic_design.diff_pair_classes = classes;
+                }
             }
         }
         if GeneralSnapshot::of_step(data, owns_rules) == before {

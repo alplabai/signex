@@ -287,6 +287,30 @@ fn a_child_placed_twice_gets_its_own_designators_per_placement_and_exports() {
     );
 }
 
+/// #2740: the channels of a repeat are one logical sheet. Annotate numbers
+/// it once and writes nothing under a compiled channel.
+#[test]
+fn a_repeated_sheet_is_numbered_once_with_no_instance_entries() {
+    let dir = std::env::temp_dir().join(format!("signex-annotate-repeat-{}", Uuid::now_v7()));
+    std::fs::create_dir_all(&dir).expect("tempdir");
+    write(&dir, "m_child.snxsch", sheet(&[], &[("R?", 1)]));
+    let mut app = app_workspace(&dir.to_string_lossy(), &["b_root.snxsch"]);
+    let mut root = sheet(&["m_child.snxsch"], &[]);
+    root.child_sheets[0].uuid = Uuid::from_u128(1);
+    root.child_sheets[0].name = "Repeat(CH, 1, 3)".to_string();
+    let root_path = dir.join("b_root.snxsch");
+    open_with(&mut app.document_state, &root_path, root);
+    app.document_state.active_path = Some(root_path);
+
+    let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+    settle_task(&mut app, task);
+
+    let child = parked_sheet(&app, &dir.join("m_child.snxsch"));
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(refs_of(&child), ["R1"]);
+    assert!(child.symbols[0].instances.is_empty());
+}
+
 #[test]
 fn a_part_added_later_to_a_child_placed_twice_is_numbered_per_placement() {
     let (mut app, dir, [a, b]) = project_with_a_child_placed_twice();

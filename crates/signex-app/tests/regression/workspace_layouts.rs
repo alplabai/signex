@@ -58,6 +58,7 @@ fn fixture() -> Fixture {
     let layout_writes = Arc::new(LayoutsRecorder::default());
     // A fresh list: the test user's own prefs never leak in.
     app.ui_state.workspace_layouts.layouts = Default::default();
+    app.ui_state.workspace_layouts.kept = Default::default();
     let store: Arc<dyn WorkspaceLayoutsStore> = layout_writes.clone();
     app.ui_state.workspace_layouts.store = store;
     Fixture {
@@ -164,6 +165,79 @@ fn applying_a_built_in_rebuilds_the_dock_and_writes_it_once() {
         lists.last().map(|v| v["active"].clone()),
         Some(serde_json::json!("schematic"))
     );
+}
+
+/// DECISIONS 2026-11-23 (#2746): with an unreadable stored list, Apply still
+/// arranges the panels, but nothing is written and every edit is refused.
+#[test]
+fn an_unreadable_stored_list_is_never_written_or_edited() {
+    let mut f = fixture();
+    let (layouts, _, kept) =
+        signex_app::workspace_layouts::store::read_list(&serde_json::json!("garbled"));
+    f.app.ui_state.workspace_layouts.layouts = layouts;
+    f.app.ui_state.workspace_layouts.kept = kept;
+
+    let apply = WorkspaceLayoutMsg::ApplyRequested(LayoutId::Builtin(BuiltinLayout::Review));
+    let _ = run(send(&mut f.app, apply));
+    assert_eq!(
+        f.app.document_state.dock.panel_kinds(PanelPosition::Right),
+        [PanelKind::History],
+        "Apply still arranges the panels"
+    );
+
+    let _ = send(&mut f.app, SaveLayoutMsg::Requested);
+    let _ = send(&mut f.app, SaveLayoutMsg::NameEdited("Bench".into()));
+    let _ = run(send(&mut f.app, SaveLayoutMsg::Confirmed));
+    assert!(user_names(&f.app).is_empty(), "Save is refused");
+
+    let _ = send(&mut f.app, SaveLayoutMsg::Cancelled);
+    let _ = send(&mut f.app, ManageLayoutsMsg::Requested);
+    let review = LayoutId::Builtin(BuiltinLayout::Review);
+    let _ = send(&mut f.app, ManageLayoutsMsg::RowSelected(review));
+    let _ = run(send(&mut f.app, ManageLayoutsMsg::DuplicateRequested));
+    let _ = run(send(
+        &mut f.app,
+        ManageLayoutsMsg::UpdateFromCurrentRequested,
+    ));
+    assert!(user_names(&f.app).is_empty(), "Duplicate is refused");
+    assert!(
+        !f.app
+            .ui_state
+            .workspace_layouts
+            .layouts
+            .is_edited(BuiltinLayout::Review),
+        "Update from current is refused"
+    );
+    assert!(
+        f.layout_writes.writes.lock().unwrap().is_empty(),
+        "the stored value is never replaced"
+    );
+}
+
+/// #2746: Update from current does not replace a stored edit of a built-in
+/// that this build cannot read.
+#[test]
+fn update_from_current_keeps_an_unreadable_edit_of_a_built_in() {
+    let mut f = fixture();
+    let stored = serde_json::json!({ "overrides": { "schematic": { "split": "grid" } } });
+    let (layouts, _, kept) = signex_app::workspace_layouts::store::read_list(&stored);
+    f.app.ui_state.workspace_layouts.layouts = layouts;
+    f.app.ui_state.workspace_layouts.kept = kept;
+    let _ = send(&mut f.app, ManageLayoutsMsg::Requested);
+    let schematic = LayoutId::Builtin(BuiltinLayout::Schematic);
+    let _ = send(&mut f.app, ManageLayoutsMsg::RowSelected(schematic));
+    let _ = run(send(
+        &mut f.app,
+        ManageLayoutsMsg::UpdateFromCurrentRequested,
+    ));
+    assert!(
+        !f.app
+            .ui_state
+            .workspace_layouts
+            .layouts
+            .is_edited(BuiltinLayout::Schematic)
+    );
+    assert!(f.layout_writes.writes.lock().unwrap().is_empty());
 }
 
 #[test]

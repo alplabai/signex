@@ -292,6 +292,48 @@ fn compile_project_fills_the_panel_with_the_channels() {
     assert_eq!(panel.totals.channels, 2);
 }
 
+/// #2741, mockup row 154: a sheet instance lists its parts, and a click on
+/// one lands on the part on its sheet.
+#[test]
+fn a_component_row_opens_its_sheet_and_selects_the_part() {
+    let mut f = fixture("child_sheet", false);
+    send(&mut f.app, CompiledDesignMsg::CompileRequested);
+    let row = |app: &Signex| {
+        app.document_state
+            .panel_ctx
+            .compiled_design
+            .panel
+            .rows
+            .iter()
+            .find(|r| r.name == "child_sheet")
+            .cloned()
+            .expect("the child's row")
+    };
+    let folded = row(&f.app);
+    assert!(folded.has_children && !folded.is_expanded);
+    assert!(folded.part_rows.is_empty(), "folded by default");
+
+    send(&mut f.app, CompiledDesignMsg::RowExpanded(folded.index));
+    let open = row(&f.app);
+    let labels: Vec<&str> = open.part_rows.iter().map(|c| c.label.as_str()).collect();
+    assert_eq!(labels, ["R5"]);
+
+    let target = open.part_rows[0].target.clone();
+    send(&mut f.app, CompiledDesignMsg::TargetClicked(target));
+
+    assert_eq!(
+        f.app.document_state.active_path.as_deref(),
+        Some(f.child.as_path())
+    );
+    let selected = &f.app.interaction_state.active_canvas().selected;
+    assert!(
+        selected
+            .iter()
+            .any(|s| s.uuid == f.part && s.kind == SelectedKind::Symbol),
+        "{selected:?}"
+    );
+}
+
 /// Mockup row 154: Recompile is the panel's title-bar icon.
 #[test]
 fn the_title_bar_recompile_compiles_the_project() {
@@ -362,6 +404,133 @@ fn a_compile_refreshes_only_its_own_projects_contents_tables() {
             .values()
             .all(|result| result.stale.is_empty()),
         "the table refresh marks no sheet out of date"
+    );
+}
+
+/// `root.snxsch` holding a contents table and a sheet symbol on
+/// `power/buck.snxsch`, titled Buck, rev A. Both are open, the root in front.
+struct ContentsProject {
+    app: Signex,
+    root: std::path::PathBuf,
+    buck: std::path::PathBuf,
+    _dir: TempDir,
+}
+
+fn contents_project() -> ContentsProject {
+    let tmp = TempDir::new().expect("tempdir");
+    let dir = tmp.path().to_path_buf();
+    std::fs::create_dir(dir.join("power")).expect("subfolder");
+    let (root_path, buck_path) = (
+        dir.join("root.snxsch"),
+        dir.join("power").join("buck.snxsch"),
+    );
+    let mut root = sheet_with_contents_table();
+    root.child_sheets.push(ChildSheet {
+        uuid: Uuid::now_v7(),
+        name: "U_BUCK".to_string(),
+        filename: "power/buck.snxsch".to_string(),
+        // Clear of the table, so a double-click on a row hits the row.
+        position: Point::new(200.0, 200.0),
+        size: (40.64, 43.18),
+        stroke_width: 0.0,
+        fill: FillType::None,
+        stroke_color: None,
+        fill_color: None,
+        fields_autoplaced: false,
+        pins: Vec::new(),
+        instances: Vec::new(),
+    });
+    let mut buck = sheet();
+    buck.title_block.insert("title".into(), "Buck".into());
+    buck.title_block.insert("revision".into(), "A".into());
+    write_sheet(&root_path, root.clone());
+    write_sheet(&buck_path, buck.clone());
+    let (prj, data) = write_project_file(&dir, "Proj", &["root.snxsch", "power/buck.snxsch"]);
+    let (mut app, _task) = Signex::new();
+    let project = load_project(&mut app, prj, data);
+    app.document_state.active_project = Some(project);
+    open_tab(&mut app, project, "root", &root_path, root);
+    open_tab(&mut app, project, "buck", &buck_path, buck);
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(root_path.clone());
+    ContentsProject {
+        app,
+        root: root_path,
+        buck: buck_path,
+        _dir: tmp,
+    }
+}
+
+fn contents_table(app: &Signex, path: &std::path::Path) -> SchTable {
+    app.document_state.engines[path]
+        .document()
+        .drawings
+        .iter()
+        .find_map(|d| match d {
+            SchDrawing::Table(t) => Some(t.clone()),
+            _ => None,
+        })
+        .expect("a contents table")
+}
+
+/// A point on body row `row` of `table`.
+fn point_on_row(table: &SchTable, row: usize) -> Point {
+    (0..2000_i32)
+        .map(|step| {
+            Point::new(
+                table.position.x + 0.5,
+                table.position.y + f64::from(step) * 0.05,
+            )
+        })
+        .find(|at| table.cell_at(*at).and_then(|cell| cell.row) == Some(row))
+        .expect("the row is on the sheet")
+}
+
+/// #2742: the link is the real path, and a double-click opens that file.
+#[test]
+fn a_contents_row_opens_its_sheet_in_a_subfolder() {
+    let mut f = contents_project();
+    send(&mut f.app, CompiledDesignMsg::CompileRequested);
+    let table = contents_table(&f.app, &f.root);
+    assert_eq!(table.links, ["root.snxsch", "power/buck.snxsch"]);
+
+    let buck = f.buck.clone();
+    f.app.document_state.engines.remove(&buck);
+    f.app.document_state.tabs.retain(|tab| tab.path != buck);
+    let at = point_on_row(&table, 1);
+    crate::settle_support::settle(
+        &mut f.app,
+        Message::CanvasEvent(signex_app::canvas::CanvasEvent::DoubleClicked {
+            world_x: at.x,
+            world_y: at.y,
+            screen_x: 0.0,
+            screen_y: 0.0,
+        }),
+    );
+    assert_eq!(f.app.document_state.active_path.as_ref(), Some(&buck));
+}
+
+/// #2742: closing a sheet leaves its Title and Rev, and the next compile
+/// pushes no undo step.
+#[test]
+fn a_closed_sheet_keeps_its_title_and_rev_with_no_undo_step() {
+    let mut f = contents_project();
+    send(&mut f.app, CompiledDesignMsg::CompileRequested);
+    let rows = contents_rows(&f.app, &f.root);
+    assert_eq!((rows[1][2].as_str(), rows[1][3].as_str()), ("Buck", "A"));
+    let revision = f.app.document_state.engines[&f.root].revision();
+
+    let buck = f.buck.clone();
+    f.app.document_state.engines.remove(&buck);
+    f.app.document_state.tabs.retain(|tab| tab.path != buck);
+    send(&mut f.app, CompiledDesignMsg::CompileRequested);
+
+    let rows = contents_rows(&f.app, &f.root);
+    assert_eq!((rows[1][2].as_str(), rows[1][3].as_str()), ("Buck", "A"));
+    assert_eq!(
+        f.app.document_state.engines[&f.root].revision(),
+        revision,
+        "the second refresh changed nothing"
     );
 }
 

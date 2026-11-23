@@ -133,9 +133,13 @@ pub(super) fn placed_symbols(occs: &[Occ<'_>], naming: &ChannelNaming) -> Vec<Pl
                 sheet: occ.key.clone(),
                 occurrence: occ.path.clone(),
                 id: s.uuid,
-                designator: channel_designator(s.designator_in(&occ.path), &occ.channels, naming)
-                    .trim()
-                    .to_string(),
+                designator: channel_designator(
+                    s.designator_in(&occ.logical_path),
+                    &occ.channels,
+                    naming,
+                )
+                .trim()
+                .to_string(),
                 value: evaluated_value(symbols, s, &variables, false),
                 footprint: s.footprint.clone(),
                 pins,

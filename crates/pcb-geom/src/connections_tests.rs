@@ -208,6 +208,23 @@ fn a_pad_outside_the_pour_is_unrouted_and_the_pour_will_connect_it() {
     assert_eq!(net.pads, vec![(name("U1", "2"), name("J1", "3"))]);
 }
 
+/// #2750: a shelved pour holds no copper, so the Unrouted popover does not
+/// say it will connect the pad.
+#[test]
+fn a_shelved_pour_will_not_connect_a_pad_outside_it() {
+    let mut zone = pour();
+    zone.shelved = true;
+    zone.holes = vec![vec![
+        Point::new(18.0, -2.0),
+        Point::new(22.0, -2.0),
+        Point::new(22.0, 2.0),
+        Point::new(18.0, 2.0),
+    ]];
+    let c = counts(&board(three_pads(), Vec::new(), vec![zone]));
+    assert_eq!((c.total, c.unrouted, c.routed()), (2, 2, 0));
+    assert!(!c.per_net[&1].pour_will_connect);
+}
+
 #[test]
 fn routed_never_exceeds_total() {
     let c = ConnectionCounts {

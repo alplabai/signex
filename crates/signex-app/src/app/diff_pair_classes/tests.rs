@@ -106,6 +106,30 @@ fn open(app: &mut Signex) {
     }));
 }
 
+/// DECISIONS 2026-11-23 (#2750): OK over an unreadable section changes
+/// nothing and keeps the dialog open.
+#[test]
+fn ok_over_an_unreadable_section_is_refused() {
+    let mut app = app_with_project(Vec::new());
+    let garbled = serde_json::json!("garbled");
+    let text = br#"{"name":"dcdc-buck","dir":"","schematic_root":null,"pcb_file":null,"schematic_design":"garbled"}"#;
+    app.document_state.projects[0].data =
+        signex_types::project::parse_project_bytes(std::path::Path::new("dcdc-buck.snxprj"), text)
+            .expect("a project");
+    assert!(
+        app.document_state.projects[0]
+            .data
+            .has_unreadable_schematic_design()
+    );
+    open(&mut app);
+    let _ = app.update(DiffPairClassesMsg::ClassAdded.into());
+    let _ = app.update(DiffPairClassesMsg::OkRequested.into());
+    assert!(classes_of(&app).is_empty());
+    assert!(app.ui_state.diff_pair_classes.is_some(), "the dialog stays");
+    let data = &app.document_state.projects[0].data;
+    assert_eq!(data.unknown.get("schematic_design"), Some(&garbled));
+}
+
 fn dialog(app: &Signex) -> &DiffPairClassesState {
     app.ui_state.diff_pair_classes.as_deref().expect("open")
 }

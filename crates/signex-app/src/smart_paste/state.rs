@@ -3,11 +3,12 @@
 //! clipboard summary are worked out in `update` (they read the sheet and
 //! the project's designators) and kept here for the view.
 
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use super::plan::{
     DesignatorChoice, InputProblem, MAX_COPIES, NetAfter, NetChoice, PasteInput, PlaceMode,
-    after_paste, parse_mm,
+    after_paste, parse_mm, pattern_separates, taken_names,
 };
 
 /// The dialog's size (mockup: 880 x 600).
@@ -60,6 +61,8 @@ pub struct SmartPasteState {
     pub summary: ClipboardSummary,
     /// The copied nets, `true` for a power net.
     pub copied_nets: Vec<(String, bool)>,
+    /// The net names the project already writes (#2744).
+    pub names_in_use: HashSet<String>,
     /// "R4 → R6, R5 → R7": what Next free calls the parts, per copy.
     pub next_free_text: String,
     /// The clipboard's drawables and their box, for the preview.
@@ -88,6 +91,7 @@ impl SmartPasteState {
             start: "2".into(),
             summary: ClipboardSummary::default(),
             copied_nets: Vec::new(),
+            names_in_use: HashSet::new(),
             next_free_text: String::new(),
             shapes: Vec::new(),
             bounds: ((0.0, 0.0), (0.0, 0.0)),
@@ -120,7 +124,8 @@ impl SmartPasteState {
                     .trim()
                     .parse::<i64>()
                     .map_err(|_| InputProblem::Start)?;
-                if !self.pattern.contains("${Net}") && !self.pattern.contains("${n}") {
+                let signal_nets = self.copied_nets.iter().filter(|(_, p)| !p).count();
+                if !pattern_separates(&self.pattern, copies, signal_nets) {
                     return Err(InputProblem::Pattern);
                 }
                 Some((self.pattern.clone(), start))
@@ -147,6 +152,20 @@ impl SmartPasteState {
         self.input()
             .map(|input| after_paste(&self.copied_nets, &input))
             .unwrap_or_default()
+    }
+
+    /// The rewritten names that would join a net; Paste stops on any (#2744).
+    #[must_use]
+    pub fn taken_names(&self) -> Vec<String> {
+        self.input()
+            .map(|input| taken_names(&self.copied_nets, &input, &self.names_in_use))
+            .unwrap_or_default()
+    }
+
+    /// Whether Paste can go ahead: the input reads and no name is taken.
+    #[must_use]
+    pub fn can_paste(&self) -> bool {
+        self.input().is_ok() && self.taken_names().is_empty()
     }
 
     /// The offset (or step) the drawing's first copy sits at.
@@ -217,6 +236,46 @@ mod tests {
         assert_eq!(s.input(), Err(InputProblem::Pattern));
         s.nets = NetChoice::Keep;
         assert_eq!(s.input().expect("valid").rewrite, None);
+    }
+
+    /// #2744: one number for two signal nets would short them.
+    #[test]
+    fn a_number_alone_is_refused_for_two_signal_nets() {
+        let mut s = SmartPasteState::new(PathBuf::from("/p/a.snxsch"), 20.32);
+        s.copied_nets = vec![
+            ("FB".into(), false),
+            ("VOUT".into(), false),
+            ("GND".into(), true),
+        ];
+        s.pattern = "${n}".into();
+        assert_eq!(s.input(), Err(InputProblem::Pattern));
+        assert!(!s.can_paste());
+    }
+
+    #[test]
+    fn a_pattern_without_a_number_is_refused_for_an_array() {
+        let mut s = SmartPasteState::new(PathBuf::from("/p/a.snxsch"), 20.32);
+        s.copied_nets = vec![("FB".into(), false)];
+        s.pattern = "${Net}_A".into();
+        assert!(s.input().is_ok(), "one copy keeps one name");
+        s.mode = PlaceMode::Array;
+        s.copies = "3".into();
+        assert_eq!(s.input(), Err(InputProblem::Pattern));
+    }
+
+    #[test]
+    fn a_name_in_use_is_flagged_and_stops_paste() {
+        let mut s = SmartPasteState::new(PathBuf::from("/p/a.snxsch"), 20.32);
+        s.copied_nets = vec![("FB".into(), false)];
+        assert!(s.can_paste());
+        s.names_in_use.insert("FB_2".into());
+        assert_eq!(s.taken_names(), ["FB_2"]);
+        assert!(!s.can_paste());
+        s.start = "3".into();
+        assert!(s.can_paste(), "another Start clears it");
+        s.start = "2".into();
+        s.nets = NetChoice::Keep;
+        assert!(s.can_paste(), "Keep is a chosen join");
     }
 
     #[test]

@@ -68,6 +68,42 @@ placement once per channel:
   channel's `VOUT_3V3_CH1` wins over a local member label.
 - A project without repeats walks and stitches exactly as before.
 
+Every reader outside the stitch asks one place what a part is called in a
+placement: `signex_net::ChannelDesignators`, built from the walk and the saved
+naming.
+
+- BOM, the netlist file, PDF pages, the requirement BOM and the Variants
+  matrix read it through their own export copy of the sheet, which gets the
+  channel designators as instance entries. Those copies are never saved.
+- Update PCB and Compare read their parts through it, so a footprint is named
+  `CH1_R5` and its pads match the netlist's terminals.
+- Back Annotate reads the same names and blocks a designator row on a channel
+  part: the name is derived from the sheet and the naming, so there is no
+  stored value to change. Rename the part on the sheet, or change the naming.
+- Annotate numbers the channels of one repeated placement as one sheet. A
+  per-placement designator of a repeat is stored at the sheet symbol's own
+  path, never under a channel uuid, so changing the range leaves nothing
+  behind.
+- ERC's net count and its "Net has multiple names" finding stitch through the
+  saved naming, so "the netlist uses" names what the export writes. The
+  finding's list of sources still shows each label as written on its sheet.
+- The headless edit checks report a channel's net names through the saved
+  naming (`CH1_FB`). Whether an edit needs `allow_merge` is judged on the names
+  as written, so changing the naming never changes what an edit is refused for.
+
+When a project's `schematic_design` section cannot be read, its saved naming
+is unknown (`app/saved_channel_naming.rs`). A project with no repeated sheet is
+unaffected. One with channels:
+
+- refuses Update PCB, Compare, Back Annotate, the BOM, netlist and PDF exports,
+  Print Preview, the requirement BOM and the Variants matrix with the
+  unreadable-settings banner, and writes nothing;
+- still runs ERC: each sheet keeps its own multiple-names finding, the project
+  pass that states an exported name is skipped, and Messages gives the reason;
+- reports the headless edit checks' names as written on the sheet;
+- shows a channel footprint's schematic designator as not read, so it counts
+  as no mismatch.
+
 The ERC rule `repeat_entry_needs_bus` (Error) reports a `Repeat(<net>)` entry
 that meets no bus, or a bus with fewer members than the symbol has channels.
 `bad_hier_sheet_pin` matches a `Repeat(<net>)` entry with the port `<net>`.
@@ -140,7 +176,12 @@ list opens it, docked on the left as a tab beside Projects.
   designators, and the nets that touch it. The footer has the unique totals.
 - Nets mode: every compiled net and the number of sheet occurrences it
   crosses; power nets are drawn in the power colour.
+- A sheet or channel row folds open (its chevron, closed by default) into the
+  Parts and Nets of that instance, under the designators and net names it has
+  there. A search also finds them and opens the rows that hold a match.
 - Clicking a row opens its sheet; a channel row opens it on its channel tab.
+  Clicking a part or net row, or a net in Nets mode, opens that instance and
+  selects the element.
 - Out of date: an electrical edit to a compiled sheet (any `DocumentPatch`
   but a colour-only one) marks its rows amber with a dot, and a banner offers
   Recompile. Recompile is never automatic.

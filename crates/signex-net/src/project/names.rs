@@ -9,9 +9,15 @@ use signex_types::schematic::{LabelType, Point};
 use uuid::Uuid;
 
 use super::channels::scoped_name;
-use super::{Analysis, L2, Occ, SheetKey};
+use super::{Analysis, L2, Occ, ProjectGraph, SheetKey, Want, stitch_named};
 use crate::build::pt_key;
 use signex_types::net::Net;
+
+/// [`multi_named_nets`](super::multi_named_nets) with repeated sheets named
+/// through `naming`.
+pub fn multi_named_nets_named(graph: &ProjectGraph, naming: &ChannelNaming) -> Vec<MultiNamedNet> {
+    stitch_named(graph, Want::Names, naming).reports
+}
 
 /// One place a net gets a name from.
 #[derive(Debug, Clone, PartialEq)]

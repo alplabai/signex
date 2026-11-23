@@ -31,6 +31,8 @@ pub(crate) struct NetIndexJob {
     project: ProjectId,
     key: ProjectKey,
     project_dir: PathBuf,
+    /// The project's saved channel naming; part of `key`'s stamp.
+    naming: signex_types::project::ChannelNaming,
     /// Shared with the net-class style job of the same project and key.
     stitch: StitchSlot,
 }
@@ -43,6 +45,7 @@ impl NetIndexJob {
             project,
             key,
             project_dir,
+            naming,
             stitch,
         } = self;
         let stitched = stitch.get_or_init(|| {
@@ -52,6 +55,7 @@ impl NetIndexJob {
                 &key.root,
                 key.fold,
                 Some(project_dir.clone()),
+                &naming,
             )
         });
         let result = match &stitched.index {
@@ -158,6 +162,7 @@ impl Signex {
             project: planned.project,
             key: planned.key,
             project_dir: planned.project_dir,
+            naming: planned.naming,
             stitch,
         }
     }

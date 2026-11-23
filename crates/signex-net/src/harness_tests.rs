@@ -129,6 +129,17 @@ fn bundles_list_ports_typed_entries_and_nesting() {
 }
 
 #[test]
+fn a_bundle_lists_its_leaves_with_nested_entries_expanded() {
+    let bundles = harness_bundles(&connectors());
+    let top = bundles.iter().find(|b| !b.nested).unwrap();
+    let paths: Vec<String> = top.leaves.iter().map(HarnessLeaf::dotted).collect();
+    assert_eq!(paths, ["SWDIO", "SWCLK", "UART.TX", "UART.RX"]);
+    assert!(top.leaves[0].is_plain());
+    assert!(!top.leaves[2].is_plain());
+    assert_eq!(top.leaves[2].connector, top.connectors[0]);
+}
+
+#[test]
 fn a_sheet_without_harness_is_left_exactly_as_it_was() {
     let mut s = sensor();
     s.harness = Default::default();

@@ -2,9 +2,11 @@
 //! choices: the copies and where each sits, the net names they carry, and
 //! the After paste table. Power nets are never rewritten.
 
+use std::collections::HashSet;
+
 use signex_engine::PlacementPayload;
+use signex_types::object_id::UuidV7Ids;
 use signex_types::schematic::{LabelType, SchematicSheet};
-use uuid::Uuid;
 
 /// Grid the preview drag snaps the first copy to, in mm.
 pub const DRAG_GRID_MM: f64 = 1.27;
@@ -63,7 +65,8 @@ pub enum InputProblem {
     Copies,
     /// Start n at is not a whole number.
     Start,
-    /// The pattern lacks `${Net}` and `${n}` both, so copies would not differ.
+    /// The pattern would give two nets one name: it needs `${n}` for several
+    /// copies, `${Net}` for several signal nets, and one of them always.
     Pattern,
 }
 
@@ -89,6 +92,15 @@ pub fn rewritten(pattern: &str, net: &str, n: i64) -> String {
     pattern
         .replace("${Net}", net)
         .replace("${n}", &n.to_string())
+}
+
+/// Whether `pattern` keeps `copies` copies of `signal_nets` nets apart.
+#[must_use]
+pub fn pattern_separates(pattern: &str, copies: u32, signal_nets: usize) -> bool {
+    let (has_net, has_n) = (pattern.contains("${Net}"), pattern.contains("${n}"));
+    (has_net || has_n)
+        && (has_n || copies <= 1 || signal_nets == 0)
+        && (has_net || signal_nets <= 1)
 }
 
 /// Whether a copied net is a power net: a power label, never rewritten.
@@ -146,36 +158,35 @@ pub fn after_paste(nets: &[(String, bool)], input: &PasteInput) -> Vec<(String, 
         .collect()
 }
 
-/// `fragment` with fresh ids for every object, so copies placed side by
-/// side in one payload never share an id.
-fn with_fresh_ids(mut fragment: SchematicSheet) -> SchematicSheet {
-    let fresh = Uuid::now_v7;
-    fragment.symbols.iter_mut().for_each(|o| o.uuid = fresh());
-    fragment.wires.iter_mut().for_each(|o| o.uuid = fresh());
-    fragment.buses.iter_mut().for_each(|o| o.uuid = fresh());
-    fragment
-        .bus_entries
-        .iter_mut()
-        .for_each(|o| o.uuid = fresh());
-    fragment.junctions.iter_mut().for_each(|o| o.uuid = fresh());
-    fragment
-        .no_connects
-        .iter_mut()
-        .for_each(|o| o.uuid = fresh());
-    fragment
-        .no_erc_directives
-        .iter_mut()
-        .for_each(|o| o.uuid = fresh());
-    fragment.labels.iter_mut().for_each(|o| o.uuid = fresh());
-    fragment
-        .text_notes
-        .iter_mut()
-        .for_each(|o| o.uuid = fresh());
-    fragment
-        .drawings
-        .iter_mut()
-        .for_each(|o| o.set_uuid(fresh()));
-    fragment
+/// The rewritten names that would join a net (#2744), each once, in table
+/// order: a name already in `in_use`, a copied power net's name, or a name
+/// two rewritten nets share. Names compare trimmed, as [`signex_net`] lists
+/// them. Empty when nets are kept: that join is the user's choice.
+#[must_use]
+pub fn taken_names(
+    nets: &[(String, bool)],
+    input: &PasteInput,
+    in_use: &HashSet<String>,
+) -> Vec<String> {
+    let mut seen: HashSet<String> = nets
+        .iter()
+        .filter(|(_, power)| *power)
+        .map(|(name, _)| name.trim().to_owned())
+        .collect();
+    let mut taken: Vec<String> = Vec::new();
+    for (_, after) in after_paste(nets, input) {
+        let NetAfter::Renamed(names) = after else {
+            continue;
+        };
+        for name in names {
+            let name = name.trim().to_owned();
+            let clashes = in_use.contains(&name) || !seen.insert(name.clone());
+            if clashes && !taken.contains(&name) {
+                taken.push(name);
+            }
+        }
+    }
+    taken
 }
 
 /// The payload a Smart Paste puts on the cursor: every copy at its place
@@ -183,46 +194,17 @@ fn with_fresh_ids(mut fragment: SchematicSheet) -> SchematicSheet {
 /// rewritten, the library bodies once. Designators are given at the click.
 #[must_use]
 pub fn copies_payload(payload: &PlacementPayload, input: &PasteInput) -> PlacementPayload {
-    let source = payload.fragment();
-    // The bodies and sheet settings once; the objects come from the copies.
-    let mut merged = source.clone();
-    merged.symbols.clear();
-    merged.wires.clear();
-    merged.buses.clear();
-    merged.bus_entries.clear();
-    merged.junctions.clear();
-    merged.no_connects.clear();
-    merged.no_erc_directives.clear();
-    merged.labels.clear();
-    merged.text_notes.clear();
-    merged.drawings.clear();
-    for k in 1..=input.copies {
-        let step = f64::from(k);
-        let mut copy = PlacementPayload::new(source.clone())
-            .translated(input.dx * step, input.dy * step)
-            .fragment()
-            .clone();
-        if let Some((pattern, start)) = &input.rewrite {
-            let n = start + i64::from(k) - 1;
-            for label in copy.labels.iter_mut() {
-                if !is_power_label(label.label_type) {
-                    label.text = rewritten(pattern, &label.text, n);
-                }
-            }
-        }
-        let copy = if k == 1 { copy } else { with_fresh_ids(copy) };
-        merged.symbols.extend(copy.symbols);
-        merged.wires.extend(copy.wires);
-        merged.buses.extend(copy.buses);
-        merged.bus_entries.extend(copy.bus_entries);
-        merged.junctions.extend(copy.junctions);
-        merged.no_connects.extend(copy.no_connects);
-        merged.no_erc_directives.extend(copy.no_erc_directives);
-        merged.labels.extend(copy.labels);
-        merged.text_notes.extend(copy.text_notes);
-        merged.drawings.extend(copy.drawings);
-    }
-    PlacementPayload::new(merged)
+    payload.repeated(
+        input.copies,
+        input.dx,
+        input.dy,
+        &mut UuidV7Ids,
+        |k, label| {
+            let (pattern, start) = input.rewrite.as_ref()?;
+            (!is_power_label(label.label_type))
+                .then(|| rewritten(pattern, &label.text, start + i64::from(k) - 1))
+        },
+    )
 }
 
 /// "R4 → R6, R5 → R7" for one copy, or "R4 → R6, R8; R5 → R7, R9" for
@@ -268,7 +250,10 @@ pub fn mapping_text(mapping: &[(String, Vec<String>)], copies: u32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signex_types::schematic::{Label, Point, Symbol};
+    use signex_types::schematic::{
+        HarnessConnector, HarnessEntry, HarnessWire, Label, Point, Symbol,
+    };
+    use uuid::Uuid;
 
     fn fragment() -> SchematicSheet {
         let mut f = SchematicSheet::default();
@@ -359,6 +344,99 @@ mod tests {
                 "GND"
             ]
         );
+    }
+
+    /// #2730: a copied harness travels with its parts, once per copy.
+    #[test]
+    fn an_array_gives_every_copy_its_own_shifted_harness() {
+        let mut source = fragment();
+        let connector = HarnessConnector {
+            uuid: Uuid::from_u128(0xA1),
+            harness_type: "SPI_BUS".into(),
+            position: Point::new(0.0, 0.0),
+            width: 10.16,
+            entry_pitch: 2.54,
+            rotation: 0.0,
+            entries: vec![HarnessEntry {
+                uuid: Uuid::from_u128(0xB1),
+                name: "SCK".into(),
+            }],
+            locked: false,
+        };
+        let tip = connector.tip_point();
+        source.harness.wires.push(HarnessWire {
+            uuid: Uuid::from_u128(0xC1),
+            start: tip,
+            end: Point::new(tip.x + 5.0, tip.y),
+            locked: false,
+        });
+        source.harness.connectors.push(connector);
+        let step = PasteInput {
+            dx: 10.0,
+            ..input(3, false)
+        };
+        let placed = copies_payload(&PlacementPayload::new(source), &step);
+        let harness = &placed.fragment().harness;
+        let xs: Vec<f64> = harness.connectors.iter().map(|c| c.position.x).collect();
+        assert_eq!(xs, [10.0, 20.0, 30.0]);
+        assert_eq!(harness.wires.len(), 3);
+        let ids: std::collections::HashSet<Uuid> = harness
+            .connectors
+            .iter()
+            .flat_map(|c| std::iter::once(c.uuid).chain(c.entries.iter().map(|e| e.uuid)))
+            .chain(harness.wires.iter().map(|w| w.uuid))
+            .collect();
+        assert_eq!(ids.len(), 9, "no two harness objects share an id");
+    }
+
+    fn in_use(names: &[&str]) -> HashSet<String> {
+        names.iter().map(|n| (*n).to_owned()).collect()
+    }
+
+    #[test]
+    fn a_rewritten_name_already_in_use_is_named_once() {
+        let nets = copied_nets(&fragment());
+        let taken = taken_names(&nets, &input(3, true), &in_use(&["FB_3", "OTHER"]));
+        assert_eq!(taken, ["FB_3"]);
+        assert!(taken_names(&nets, &input(3, true), &in_use(&["OTHER"])).is_empty());
+    }
+
+    #[test]
+    fn keeping_the_nets_takes_no_name() {
+        let nets = copied_nets(&fragment());
+        assert!(taken_names(&nets, &input(1, false), &in_use(&["FB"])).is_empty());
+    }
+
+    #[test]
+    fn two_rewritten_nets_landing_on_one_name_are_named() {
+        let nets = vec![("X".to_string(), false), ("X1".to_string(), false)];
+        let clash = PasteInput {
+            rewrite: Some(("${Net}${n}".to_string(), 1)),
+            ..input(11, false)
+        };
+        // X at n = 11 and X1 at n = 1 both read X11.
+        assert_eq!(taken_names(&nets, &clash, &in_use(&[])), ["X11"]);
+    }
+
+    #[test]
+    fn a_rewritten_name_equal_to_a_copied_power_net_is_named() {
+        let nets = vec![("FB".to_string(), false), ("VCC".to_string(), true)];
+        let onto_power = PasteInput {
+            rewrite: Some(("VCC".to_string(), 1)),
+            ..input(1, false)
+        };
+        assert_eq!(taken_names(&nets, &onto_power, &in_use(&[])), ["VCC"]);
+    }
+
+    #[test]
+    fn the_pattern_must_keep_copies_and_nets_apart() {
+        assert!(pattern_separates("${Net}_${n}", 3, 2));
+        assert!(!pattern_separates("${n}", 1, 2), "two nets, one name");
+        assert!(pattern_separates("${n}", 3, 1));
+        assert!(!pattern_separates("${Net}_A", 3, 1), "copies share a name");
+        assert!(pattern_separates("${Net}_A", 1, 2));
+        assert!(pattern_separates("${Net}_A", 3, 0), "nothing is rewritten");
+        assert!(!pattern_separates("plain", 1, 1));
     }
 
     #[test]

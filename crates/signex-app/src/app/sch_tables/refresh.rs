@@ -2,14 +2,16 @@
 //! a table does not change under the cursor (#1300). One undo step per
 //! sheet that changed; nothing at all when no table changed.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use signex_types::schematic::{SchDrawing, SchTable, SchematicSheet, TableRefresh, TableSource};
 
 use super::rows::{ContentsEntry, contents_table_rows, pin_table_rows};
 use crate::app::Signex;
+use crate::app::handlers::canvas::link_from;
 use crate::app::mutation_gateway::MutationOutcome;
 use crate::app::state::ProjectId;
+use crate::app::state::project_case::fold_of;
 
 /// The pages a contents table lists, from the last compile.
 pub(crate) type Contents = Vec<ContentsEntry>;
@@ -73,8 +75,6 @@ impl Signex {
     /// showing a channel tab (a compiled view) refuse the refresh and say so
     /// in Messages. See `docs/MULTI_CHANNEL.md`, "Bound tables".
     pub(crate) fn refresh_bound_tables(&mut self, project: Option<ProjectId>) {
-        let contents = project.and_then(|id| self.compiled_contents_of(id));
-        let pages = |per_channel: bool| contents.as_ref().map(|c| c.pages(per_channel));
         let mut paths: Vec<PathBuf> = self
             .document_state
             .engines
@@ -87,7 +87,16 @@ impl Signex {
             .into_iter()
             .filter_map(|path| {
                 let engine = self.document_state.engines.get(&path)?;
-                let commands = refresh_commands(engine.document(), &pages);
+                // A row's link is relative to the sheet holding the table.
+                let commands = {
+                    let dir = path.parent();
+                    let pages = |per_channel: bool| {
+                        project
+                            .and_then(|id| self.compiled_contents_of(id, dir))
+                            .map(|c| c.pages(per_channel))
+                    };
+                    refresh_commands(engine.document(), &pages)
+                };
                 (!commands.is_empty()).then_some((path, commands))
             })
             .collect();
@@ -126,30 +135,33 @@ impl Signex {
         }
     }
 
-    /// `project`'s pages as its last compile walked them, with the title
-    /// block of each sheet that is open (found by the path the compile read
-    /// it from, never by bare file name); `None` before a compile.
-    pub(super) fn compiled_contents_of(&self, project: ProjectId) -> Option<CompiledPages> {
+    /// `project`'s pages as its last compile walked them, each with the title
+    /// block the compile read, open or not, and its file as a link from
+    /// `from_dir` (the folder of the sheet holding the table); `None` before
+    /// a compile.
+    pub(super) fn compiled_contents_of(
+        &self,
+        project: ProjectId,
+        from_dir: Option<&Path>,
+    ) -> Option<CompiledPages> {
         let result = self.document_state.compiled_design.results.get(&project)?;
-        let design = result.design.as_ref();
-        let mut sheets = Vec::with_capacity(design.sheets.len());
-        for s in &design.sheets {
-            let title_block = result
-                .path_of(&s.key)
-                .and_then(|path| self.document_state.engines.get(path))
-                .map(|engine| engine.document().title_block.clone())
-                .unwrap_or_default();
-            let field = |key: &str| title_block.get(key).cloned().unwrap_or_default();
-            sheets.push(CompiledPage {
+        let fold = fold_of(self.document_state.project_by_id(project));
+        let sheets = result
+            .design
+            .sheets
+            .iter()
+            .map(|s| CompiledPage {
                 name: s.name.clone(),
-                file: s.file.clone(),
+                file: from_dir
+                    .zip(result.path_of(&s.key))
+                    .map_or_else(|| s.file.clone(), |(dir, path)| link_from(dir, path, fold)),
                 is_channel: s.channel.is_some(),
                 is_repeat: s.repeat.is_some(),
-                title: field("title"),
-                revision: field("revision"),
-                date: field("date"),
-            });
-        }
+                title: s.title.title.clone(),
+                revision: s.title.revision.clone(),
+                date: s.title.date.clone(),
+            })
+            .collect();
         Some(CompiledPages { sheets })
     }
 }

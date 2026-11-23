@@ -40,18 +40,26 @@ pub const SNXPCB_FORMAT_BOARD_SKETCH_TARGETS: &str = "snxpcb/1.7";
 /// it opens 1.8 read-only. A board with none keeps its token, byte for byte.
 pub const SNXPCB_FORMAT_V1_8: &str = "snxpcb/1.8";
 
+/// Written when a pour is shelved (#2738, 2026-11-23): a build that does not
+/// know the key would flood the pour and export copper the author took out,
+/// so it opens 1.9 read-only. A board with no shelved pour keeps its token,
+/// byte for byte.
+pub const SNXPCB_FORMAT_V1_9: &str = "snxpcb/1.9";
+
 /// The token a save of `board` writes, from its content, highest need
-/// first: a stackup name, a patterned baked target or a numbering sweep
-/// needs [`SNXPCB_FORMAT_V1_8`], the board sketch targets
-/// [`SNXPCB_FORMAT_BOARD_SKETCH_TARGETS`], rooms [`SNXPCB_FORMAT_ROOMS`],
-/// layer colours [`SNXPCB_FORMAT_LAYER_COLORS`], anything else
-/// [`SNXPCB_FORMAT_V1`]. A board whose last such item is gone goes back to
-/// the lower token.
+/// first: a shelved pour needs [`SNXPCB_FORMAT_V1_9`], a stackup name, a
+/// patterned baked target or a numbering sweep [`SNXPCB_FORMAT_V1_8`], the
+/// board sketch targets [`SNXPCB_FORMAT_BOARD_SKETCH_TARGETS`], rooms
+/// [`SNXPCB_FORMAT_ROOMS`], layer colours [`SNXPCB_FORMAT_LAYER_COLORS`],
+/// anything else [`SNXPCB_FORMAT_V1`]. A board whose last such item is gone
+/// goes back to the lower token.
 pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
     let sketch = board.sketch.as_ref().map(|stored| &stored.sketch);
     let patterned = sketch.is_some_and(|s| s.repeats_baked_target() || s.has_numbering_sweep());
     let targets = sketch.is_some_and(|s| s.carries_board_targets() || s.needs_format_1_2());
-    if patterned || board.stackup.as_ref().is_some_and(|s| s.name.is_some()) {
+    if board.zones.iter().any(|zone| zone.is_shelved_pour()) {
+        SNXPCB_FORMAT_V1_9
+    } else if patterned || board.stackup.as_ref().is_some_and(|s| s.name.is_some()) {
         SNXPCB_FORMAT_V1_8
     } else if targets {
         SNXPCB_FORMAT_BOARD_SKETCH_TARGETS
@@ -67,7 +75,7 @@ pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
 /// `.snxpcb` version policy: a newer minor opens read-only. A save writes
 /// the lowest token its content needs ([`snxpcb_token`]).
 pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
-    current: SNXPCB_FORMAT_V1_8,
+    current: SNXPCB_FORMAT_V1_9,
     readable: &[
         "snxpcb/1",
         "snxpcb/1.1",
@@ -78,6 +86,7 @@ pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
         SNXPCB_FORMAT_ROOMS,
         SNXPCB_FORMAT_BOARD_SKETCH_TARGETS,
         SNXPCB_FORMAT_V1_8,
+        SNXPCB_FORMAT_V1_9,
     ],
     newer_minor: NewerMinor::ReadOnly,
     missing: MissingToken::Refused,

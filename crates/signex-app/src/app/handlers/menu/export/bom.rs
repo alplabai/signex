@@ -53,10 +53,14 @@ impl Signex {
             },
             ..BomOptions::default()
         };
-        let Some((table, validation_report)) = self.rebuild_bom_table(&opts) else {
+        let Some((ctx, issues)) = super::build_bom_export_scope(&self.document_state) else {
             self.refuse_export(signex_i18n::ids::NOTICE_BOM_NO_SHEET);
             return Task::none();
         };
+        if self.refused_for_channel_naming(&issues) {
+            return Task::none();
+        }
+        let (table, validation_report) = self.bom_table_of(ctx, &opts);
         // Default sort: ascending by the Designator column when it exists
         // in the column set, so lines open in designator order.
         let default_sort = opts
@@ -411,14 +415,23 @@ impl Signex {
         &self,
         opts: &BomOptions,
     ) -> Option<(signex_output::BomTable, signex_output::BomValidationReport)> {
-        let mut ctx = super::build_bom_export_context(&self.document_state)?;
+        let ctx = super::build_bom_export_context(&self.document_state)?;
+        Some(self.bom_table_of(ctx, opts))
+    }
+
+    /// The rolled-up table and its validation of an assembled scope.
+    fn bom_table_of(
+        &self,
+        mut ctx: signex_output::ExportContext,
+        opts: &BomOptions,
+    ) -> (signex_output::BomTable, signex_output::BomValidationReport) {
         crate::library::drift::apply_library_names(&mut ctx, &self.library.drift.names);
         let opts = BomOptions {
             price_book: crate::library::bom_prices::price_book(&self.library),
             board_left_out: self.active_board_left_out_of_bom(),
             ..opts.clone()
         };
-        Some(signex_output::bom::rollup_with_validation(&ctx, &opts))
+        signex_output::bom::rollup_with_validation(&ctx, &opts)
     }
 
     fn rerollup_bom_preview(&mut self) {
@@ -467,6 +480,10 @@ impl Signex {
                     return Task::none();
                 }
             };
+        if self.refused_for_channel_naming(&issues) {
+            self.end_bom_export(&source);
+            return Task::none();
+        }
         // A BOM is a machine-and-procurement-consumed deliverable, not the
         // print-preview intermediate `rebuild_bom_table` renders — so unlike
         // that path it must not stay silent. A cross-dir child-filename

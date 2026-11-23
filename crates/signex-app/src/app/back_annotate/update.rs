@@ -178,6 +178,7 @@ impl Signex {
             return Task::none();
         };
         let request = BackRequest {
+            naming: crate::app::saved_channel_naming::SavedChannelNaming::of(&project.data),
             plan: plan_project_sheets_for(&self.document_state, &root),
             project_dir: project.dir().to_path_buf(),
             board,

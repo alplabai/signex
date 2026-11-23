@@ -58,9 +58,11 @@ mod tests {
 
     fn named(operands: &[&str]) -> Result<Option<Uuid>, String> {
         let command = AppCommandId::new("swap_pins").unwrap();
-        // `/b.snxpcb` has no drive, so it is not absolute on Windows.
-        let board_path = std::env::temp_dir().join("b.snxpcb");
-        let document = format!("document={}", board_path.display());
+        // `/b.snxpcb` is not absolute on Windows (no drive); the file is never read.
+        let document = format!(
+            "document={}",
+            std::env::temp_dir().join("b.snxpcb").display()
+        );
         let mut texts = vec![document.as_str(), "pins=1,2"];
         texts.extend_from_slice(operands);
         let args = CommandArgs::parse_operands(&command, &texts).expect("operands parse");

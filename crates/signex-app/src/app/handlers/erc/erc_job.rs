@@ -33,6 +33,8 @@ pub(super) struct ErcRunInputs {
     pub net_waivers: signex_erc::waivers::NetWaivers,
     /// The project's per-finding waivers (#1285); empty without stored rules.
     pub violation_waivers: Vec<signex_types::project::ErcWaiver>,
+    /// The project's saved channel naming; the default without a project.
+    pub channel_naming: crate::app::saved_channel_naming::SavedChannelNaming,
     /// The owning project's key rules, chosen once by whoever picked the project.
     pub fold: crate::app::state::scope::CaseFold,
 }
@@ -219,14 +221,25 @@ fn run_job(
         );
     }
 
-    add_project_net_names(
-        &mut by_path,
-        &graph,
-        &roots,
-        base_dir.as_deref(),
-        fold,
-        &inputs.overrides,
-    );
+    // Without the saved naming a channel net's exported name is unknown, so
+    // the sheets keep their own findings, which claim no exported name.
+    let naming = inputs.channel_naming.for_design(&signex_net::ProjectGraph {
+        sheets: &graph.sheets,
+        resolved: &graph.resolved,
+        roots: &roots,
+    });
+    match naming {
+        Ok(naming) => add_project_net_names(
+            &mut by_path,
+            &graph,
+            &roots,
+            base_dir.as_deref(),
+            fold,
+            &inputs.overrides,
+            naming,
+        ),
+        Err(refused) => warnings.push(format!("ERC: {refused}")),
+    }
     add_project_units_not_placed(&mut by_path, &snapshots, &project_paths, &inputs.overrides);
     for line in refile_child_sheet_violations(&mut by_path, logged) {
         if !warnings.contains(&line) {
@@ -259,7 +272,10 @@ fn run_job(
         "ERC: {total} total violations across {} sheet(s)",
         by_path.len()
     ));
-    let checked = checked_counts(&snapshots, &graph, &roots);
+    // A name never changes how many nets there are.
+    let default_naming = signex_types::project::ChannelNaming::default();
+    let counted_with = naming.unwrap_or(&default_naming);
+    let checked = checked_counts(&snapshots, &graph, &roots, counted_with);
     let outcome = ErcRunOutcome {
         by_path,
         warnings,
@@ -281,6 +297,7 @@ fn checked_counts(
     snapshots: &HashMap<PathBuf, SchematicRenderSnapshot>,
     graph: &project_sheets::AssembledGraph,
     roots: &[signex_net::ProjectRoot],
+    naming: &signex_types::project::ChannelNaming,
 ) -> [usize; 3] {
     let nets = if roots.is_empty() {
         snapshots
@@ -293,7 +310,7 @@ fn checked_counts(
             resolved: &graph.resolved,
             roots,
         };
-        signex_net::build_project_netlist(&project)
+        signex_net::build_project_netlist_named(&project, naming)
             .netlist
             .nets
             .len()
@@ -374,6 +391,7 @@ fn add_project_net_names(
     base_dir: Option<&Path>,
     fold: crate::app::state::scope::CaseFold,
     overrides: &HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    naming: &signex_types::project::ChannelNaming,
 ) {
     if roots.is_empty() {
         return;
@@ -383,7 +401,7 @@ fn add_project_net_names(
         resolved: &graph.resolved,
         roots,
     };
-    let found = signex_erc::project_net_multiple_names(&project);
+    let found = signex_erc::project_net_multiple_names_named(&project, naming);
     for (path, list) in by_path.iter_mut() {
         let key = project_sheets::sheet_key_with(path, base_dir, fold);
         // A path that lost a key collision is not the sheet the graph holds.

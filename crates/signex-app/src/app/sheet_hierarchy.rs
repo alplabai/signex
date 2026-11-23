@@ -214,6 +214,18 @@ impl SheetHierarchy {
         out
     }
 
+    /// Every sheet symbol the walk met, as (uuid, designator), closed parents
+    /// included.
+    pub fn sheet_symbols(&self) -> Vec<(Uuid, &str)> {
+        fn walk<'a>(node: &'a SheetNode, out: &mut Vec<(Uuid, &'a str)>) {
+            out.extend(node.placed_as.map(|uuid| (uuid, node.name.as_str())));
+            node.children.iter().for_each(|child| walk(child, out));
+        }
+        let mut out = Vec::new();
+        self.top_level().for_each(|node| walk(node, &mut out));
+        out
+    }
+
     /// Whether the walk saw the whole hierarchy: every node is a loaded
     /// sheet, none Missing, Unreadable, Rejected, a Cycle or Truncated. Only
     /// then is [`placements_of`](Self::placements_of) every placement there

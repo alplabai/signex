@@ -259,6 +259,7 @@ impl Signex {
         };
         let project_dir = project.dir().to_path_buf();
         let request = DesignRequest {
+            naming: crate::app::saved_channel_naming::SavedChannelNaming::of(&project.data),
             plan: plan_project_sheets_for(&self.document_state, &root),
             project_dir,
             board,

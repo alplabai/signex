@@ -97,13 +97,18 @@ impl ProjectSectionCommand {
                 }
             }
             Self::SetVersionControl { on } => data.enable_git = *on,
+            // An unreadable section is never replaced (DECISIONS 2026-11-23).
             Self::SetChannelNaming { naming } => {
-                data.schematic_design.channel_naming = naming.clone();
+                if !data.has_unreadable_schematic_design() {
+                    data.schematic_design.channel_naming = naming.clone();
+                }
             }
             Self::SetHarnessDefinitions { definitions } => {
-                data.schematic_design
-                    .harness_definitions
-                    .clone_from(definitions);
+                if !data.has_unreadable_schematic_design() {
+                    data.schematic_design
+                        .harness_definitions
+                        .clone_from(definitions);
+                }
             }
         }
         Ok(())

@@ -64,7 +64,7 @@ other name the naming rule ranks, see `docs/NET_NAMING.md`) outranks it.
 
 | Rule | Severity | Finds |
 |---|---|---|
-| `harness_entry_mismatch` | Warning | An entry the far side of the harness carries and this connector lacks (`sensor expects entry CS_ADC; this harness has CS`), a definition entry the connector lacks, or a connector entry its definition does not list. Located on the entry. |
+| `harness_entry_mismatch` | Warning | An entry the far side of the harness carries and this connector lacks (`sensor expects entry CS_ADC; this harness has CS`), an entry only this connector carries (`sensor has no entry CS2`), compared by full path so nested entries count (`sensor has no entry UART.RX`) and reported on the parent sheet, a definition entry the connector lacks, or a connector entry its definition does not list. Located on the entry. |
 | `harness_type_conflict` | Warning | Connectors or typed sheet entries of two types on one harness. |
 
 Waivers and No-ERC directives work as for every rule. A port on a harness
@@ -73,9 +73,11 @@ an unconnected sheet pin, and a wire into a harness entry neither dangles nor
 ends its net on the sheet. The built-in rule profile moved to version 1.2 with
 these two rules.
 
-The connector's Properties show the far side's mismatch as a warn banner with
-two buttons: **Rename** renames this side's entry (one undo step) and **Go
-to** opens the child sheet. The canvas marks the entry with the ERC warning
+The connector's Properties show a far-side mismatch that pairs two plain
+entries as a warn banner with two buttons: **Rename** renames this side's entry
+(one undo step) and **Go to** opens the child sheet. An unpaired or nested
+difference appears in the ERC results only, because renaming a nested entry
+would move every signal under it. The canvas marks the entry with the ERC warning
 marker.
 
 ## Colour

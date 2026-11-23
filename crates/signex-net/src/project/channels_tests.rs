@@ -2,13 +2,17 @@
 //! channel designators, channel-local nets and Repeat entries joined to the
 //! parent bus member by member.
 use signex_types::project::ChannelNaming;
-use signex_types::schematic::ChannelRepeat;
+use signex_types::schematic::{ChannelRepeat, InstancePath, LabelType};
+use uuid::Uuid;
 
 use super::{
-    StitchIssue, build_project_netlist, build_project_netlist_indexed, build_project_netlist_named,
-    channel_uuid, project_occurrences,
+    ChannelDesignators, ProjectGraph, SheetKey, StitchIssue, build_project_netlist,
+    build_project_netlist_indexed, build_project_netlist_named, channel_uuid,
+    multi_named_nets_named, project_name_changes, project_name_changes_as_written,
+    project_name_changes_named, project_occurrences,
 };
 use crate::fixtures::multi_channel::{BUCK, BUCK_PARTS, BUCK_SYMBOL, TOP, project};
+use crate::fixtures::{label, pt};
 use signex_types::net::Netlist;
 
 /// The references on the net named `name`, sorted.
@@ -207,4 +211,163 @@ fn the_repeat_count_follows_the_designator() {
     // Channels 5 and 6 meet no bus member: their VOUT nets stay local.
     let nl = build_project_netlist(&p.graph()).netlist;
     assert_eq!(refs_on(&nl, "VOUT_3V3_CH6"), ["CH6_C4", "CH6_L1"]);
+}
+
+/// #2740: the parts Update PCB reads carry the saved channel naming.
+#[test]
+fn design_parts_take_the_channel_designator_of_the_saved_naming() {
+    let p = project();
+    let naming = ChannelNaming {
+        designator_format: "${Designator}_${ChannelAlpha}".to_string(),
+        ..ChannelNaming::default()
+    };
+    let channels = ChannelDesignators::of_project(&p.graph(), &naming);
+    let buck = &p.sheets[&SheetKey::new(BUCK)];
+    let sheets: Vec<_> = project_occurrences(&p.graph())
+        .into_iter()
+        .filter(|o| o.key.as_str() == BUCK)
+        .map(|o| (o.instance_path, buck))
+        .collect();
+
+    let parts = crate::design_parts_named(&sheets, &channels);
+
+    assert_eq!(parts.len(), 4 * BUCK_PARTS.len());
+    for want in ["R5_A", "R5_B", "R5_C", "R5_D"] {
+        assert!(parts.iter().any(|part| part.designator == want), "{want}");
+    }
+    assert!(parts.iter().all(|part| part.designator != "R5"));
+}
+
+/// #2740: the export's copy reads the channel designator; the sheet it was
+/// copied from gains no entry.
+#[test]
+fn a_stamped_copy_reads_its_channel_designator_and_the_sheet_keeps_none() {
+    let p = project();
+    let channels = ChannelDesignators::of_project(&p.graph(), &ChannelNaming::default());
+    let buck = &p.sheets[&SheetKey::new(BUCK)];
+    let path = InstancePath::root().child(channel_uuid(BUCK_SYMBOL, 2));
+
+    let mut copy = buck.clone();
+    channels.stamp(&mut copy, &path);
+
+    let r5 = copy.symbols.iter().find(|s| s.reference == "R5").unwrap();
+    assert_eq!(r5.designator_in(&path), "CH2_R5");
+    assert!(buck.symbols.iter().all(|s| s.instances.is_empty()));
+}
+
+/// #2740: a designator stored at the repeated placement reaches every
+/// channel, and a channel path collapses to that placement.
+#[test]
+fn a_designator_stored_at_the_repeat_reaches_every_channel() {
+    let mut p = project();
+    let logical = InstancePath::root().child(BUCK_SYMBOL);
+    let r5 = p
+        .sheet_mut(BUCK)
+        .symbols
+        .iter_mut()
+        .find(|s| s.reference == "R5")
+        .unwrap();
+    r5.set_instance_designator(&logical, "R50".to_string());
+
+    let nl = build_project_netlist(&p.graph()).netlist;
+    for want in ["CH1_R50", "CH4_R50"] {
+        assert!(
+            nl.nets
+                .iter()
+                .any(|n| n.terminals.iter().any(|t| t.reference == want)),
+            "{want} is on a net"
+        );
+    }
+    let channels = ChannelDesignators::of_project(&p.graph(), &ChannelNaming::default());
+    let channel = InstancePath::root().child(channel_uuid(BUCK_SYMBOL, 3));
+    assert_eq!(channels.logical_path(&channel), &logical);
+}
+
+/// #2740: a stored board link resolves like the project walk.
+#[test]
+fn a_stored_channel_path_reads_like_the_walk() {
+    let p = project();
+    let top = &p.sheets[&SheetKey::new(TOP)];
+    let buck = &p.sheets[&SheetKey::new(BUCK)];
+    let r5 = buck.symbols.iter().find(|s| s.reference == "R5").unwrap();
+    let path = InstancePath::root().child(channel_uuid(BUCK_SYMBOL, 3));
+
+    let channels =
+        ChannelDesignators::of_path(&path, top.child_sheets.iter(), &ChannelNaming::default());
+
+    assert_eq!(channels.designator_of(r5, &path), "CH3_R5");
+}
+
+fn channel_first_nets() -> ChannelNaming {
+    ChannelNaming {
+        net_format: "${Channel}_${Net}".to_string(),
+        ..ChannelNaming::default()
+    }
+}
+
+/// #2740: a net with two names reports the names of the saved naming.
+#[test]
+fn a_multi_named_channel_net_reports_the_saved_naming() {
+    let mut p = project();
+    p.sheet_mut(BUCK)
+        .labels
+        .push(label("SENSE", pt(0.0, 40.0), LabelType::Net));
+
+    let found = multi_named_nets_named(&p.graph(), &channel_first_nets());
+
+    for ch in 1..=4 {
+        let want = format!("CH{ch}_FB");
+        let net = found
+            .iter()
+            .find(|net| net.exported == want)
+            .unwrap_or_else(|| panic!("no report for {want}: {found:?}"));
+        let mut exported: Vec<&str> = net.sources.iter().map(|s| s.exported.as_str()).collect();
+        exported.sort_unstable();
+        assert_eq!(exported, [want.clone(), format!("CH{ch}_SENSE")]);
+    }
+}
+
+/// #2740: the names an edit reports are the saved naming's; whether it needs
+/// `allow_merge` is judged on the names as written, so the naming cannot
+/// change it.
+#[test]
+fn an_edit_in_a_channel_reports_the_saved_naming_and_keeps_its_verdict() {
+    let mut p = project();
+    for sheet in p.sheets.values_mut() {
+        for l in &mut sheet.labels {
+            l.uuid = Uuid::now_v7();
+        }
+    }
+    let mut edited = p.sheets.clone();
+    let buck = edited.get_mut(&SheetKey::new(BUCK)).unwrap();
+    let mut sense = label("SENSE", pt(0.0, 40.0), LabelType::Net);
+    sense.uuid = Uuid::now_v7();
+    buck.labels.push(sense);
+    let after = ProjectGraph {
+        sheets: &edited,
+        resolved: &p.resolved,
+        roots: &p.roots,
+    };
+    let key = SheetKey::new(BUCK);
+
+    let got = project_name_changes_named(&p.graph(), &after, &key, &channel_first_nets());
+
+    let mut names: Vec<Vec<String>> = got.iter().map(|c| c.names.clone()).collect();
+    names.sort();
+    let want: Vec<Vec<String>> = (1..=4)
+        .map(|ch| vec![format!("CH{ch}_FB"), format!("CH{ch}_SENSE")])
+        .collect();
+    assert_eq!(names, want);
+    assert!(got.iter().all(|c| c.needs_allow_merge), "{got:?}");
+    let default = project_name_changes(&p.graph(), &after, &key);
+    assert_eq!(default.len(), got.len());
+    assert!(default.iter().all(|c| c.needs_allow_merge), "{default:?}");
+    // #2740: an unreadable naming reports the names as written, same verdict.
+    let written = project_name_changes_as_written(&p.graph(), &after, &key);
+    assert_eq!(written.len(), got.len());
+    assert!(written.iter().all(|c| c.needs_allow_merge), "{written:?}");
+    assert!(
+        written.iter().all(|c| c.names == ["FB", "SENSE"]),
+        "{written:?}"
+    );
 }

@@ -55,6 +55,11 @@ pub(super) fn view<'a>(
     }
     for r in &view.rows {
         list = list.push(sheet_row(ctx, view, r));
+        if r.is_expanded {
+            for child in child_rows(ctx, r) {
+                list = list.push(child);
+            }
+        }
     }
     scrollable(list)
         .width(Length::Fill)
@@ -139,6 +144,15 @@ fn sheet_row<'a>(
                 .style(crate::styles::menu_item(tokens))
                 .boxed()
         }
+        _ if r.has_children => signex_widgets::button(signex_widgets::chevron::chevron(
+            r.is_expanded,
+            TS.body,
+            res.ink3,
+        ))
+        .padding(0)
+        .on_press(msg(CompiledDesignMsg::RowExpanded(r.index)))
+        .style(crate::styles::menu_item(tokens))
+        .boxed(),
         _ => Space::new().width(TS.body).height(Length::Shrink).boxed(),
     };
     let icon = match r.kind {
@@ -216,6 +230,83 @@ fn sheet_row<'a>(
         return body;
     }
     row![bar(accent), body].boxed()
+}
+
+/// The Parts and Nets of an expanded sheet instance, one level in.
+fn child_rows<'a>(ctx: &'a PanelContext, r: &'a CompiledRow) -> Vec<Element<'a, PanelMsg>> {
+    let i18n = &*ctx.i18n;
+    let indent = DOT + SP.s + INDENT * (r.depth + 1) as f32 + TS.body + SP.s;
+    let mut out = Vec::with_capacity(r.part_rows.len() + r.net_rows.len() + 2);
+    let groups = [
+        (
+            t!(i18n, ids::PANELS_COMPILED_DESIGN_COLUMN_PARTS),
+            &r.part_rows,
+        ),
+        (
+            t!(i18n, ids::PANELS_COMPILED_DESIGN_COLUMN_NETS),
+            &r.net_rows,
+        ),
+    ];
+    for (title, rows) in groups {
+        if rows.is_empty() {
+            continue;
+        }
+        out.push(
+            row![
+                Space::new().width(indent).height(Length::Shrink),
+                text(title)
+                    .size(TS.section)
+                    .color(resolve(&ctx.tokens).ink3),
+            ]
+            .height(ROW_H)
+            .padding([0.0, SP.l])
+            .align_y(Alignment::Center)
+            .boxed(),
+        );
+        out.extend(rows.iter().map(|child| child_row(ctx, child, indent)));
+    }
+    out
+}
+
+/// One part or net under a sheet instance; a click goes to it.
+fn child_row<'a>(
+    ctx: &'a PanelContext,
+    child: &'a super::CompiledChildRow,
+    indent: f32,
+) -> Element<'a, PanelMsg> {
+    let ink = if child.is_power {
+        ti(ctx.canvas_colors.power)
+    } else {
+        ti(ctx.tokens.text)
+    };
+    let hover = ti(ctx.tokens.hover);
+    let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
+    let line = row![
+        Space::new().width(indent).height(Length::Shrink),
+        container(
+            text(UserText::new(child.label.as_str()))
+                .size(TS.body)
+                .font(mono)
+                .color(ink)
+                .wrapping(iced::widget::text::Wrapping::None),
+        )
+        .width(Length::Fill)
+        .clip(true),
+    ]
+    .height(ROW_H)
+    .align_y(Alignment::Center);
+    signex_widgets::button(line)
+        .width(Length::Fill)
+        .padding([0.0, SP.l])
+        .on_press(msg(CompiledDesignMsg::TargetClicked(child.target.clone())))
+        .style(
+            move |_: &Theme, status: iced::widget::button::Status| iced::widget::button::Style {
+                background: matches!(status, iced::widget::button::Status::Hovered)
+                    .then_some(Background::Color(hover)),
+                ..iced::widget::button::Style::default()
+            },
+        )
+        .boxed()
 }
 
 /// The 2 px accent bar at the start of the selected row.

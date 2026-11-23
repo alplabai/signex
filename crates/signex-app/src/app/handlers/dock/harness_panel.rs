@@ -50,6 +50,10 @@ impl Signex {
         let project = self.project_in_view().and_then(|id| docs.project_by_id(id));
         if let Some(project) = project {
             (project.id, &project.data.name).hash(&mut hasher);
+            project
+                .data
+                .has_unreadable_schematic_design()
+                .hash(&mut hasher);
             for d in &project.data.schematic_design.harness_definitions {
                 (&d.name, &d.description).hash(&mut hasher);
                 for e in &d.entries {
@@ -98,6 +102,8 @@ impl Signex {
             .project_in_view()
             .and_then(|id| self.document_state.project_by_id(id));
         facts.project_name = project.map(|p| p.data.name.clone()).unwrap_or_default();
+        facts.are_definitions_locked =
+            project.is_some_and(|p| p.data.has_unreadable_schematic_design());
         let engines = &self.document_state.engines;
         facts.uses = facts
             .definitions
@@ -319,14 +325,18 @@ impl Signex {
     }
 
     /// Apply `edit` to the project's definitions as one step of the project's
-    /// history.
-    fn edit_harness_definitions(&mut self, edit: impl FnOnce(&mut Vec<HarnessDefinition>)) {
+    /// history. `false` when there is no project or its settings section is
+    /// unreadable, so nothing that follows from the edit should run.
+    fn edit_harness_definitions(&mut self, edit: impl FnOnce(&mut Vec<HarnessDefinition>)) -> bool {
         let Some(id) = self.project_in_view() else {
             crate::diagnostics::log_warning(
                 t!(self.ui_state.i18n, ids::HARNESS_MSG_DEFS_NO_PROJECT).into_string(),
             );
-            return;
+            return false;
         };
+        if self.refuse_schematic_design_edit(id) {
+            return false;
+        }
         let mut definitions = self.harness_definitions_in_view();
         edit(&mut definitions);
         let command = signex_engine::ProjectSectionCommand::SetHarnessDefinitions { definitions };
@@ -336,6 +346,7 @@ impl Signex {
                     .into_string(),
             );
         }
+        true
     }
 
     /// Rename the definition `index` to `name`, and the type of every
@@ -349,8 +360,8 @@ impl Signex {
         else {
             return;
         };
-        self.edit_harness_definitions(|defs| defs[index].name = name.clone());
-        if old == name {
+        let edited = self.edit_harness_definitions(|defs| defs[index].name = name.clone());
+        if !edited || old == name {
             return;
         }
         let active = self.document_state.active_path.clone();

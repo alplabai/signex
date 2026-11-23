@@ -429,6 +429,83 @@ fn set_shown_rows_leaves_rows_that_cannot_take_the_direction() {
     );
 }
 
+/// #2749 A: a pick made while the net rows recompute would be overwritten
+/// when they land, so it is refused and the row keeps what it shows.
+#[test]
+fn a_pick_while_the_net_rows_recompute_is_refused() {
+    let mut rig = rig();
+    open(&mut rig);
+    let footprint = row(&rig, &EcoKey::RemoveFootprint(FP_TP3)).id();
+    let value = row(&rig, &EcoKey::SetValue(FP_R1)).id();
+    let recompute = rig
+        .app
+        .update(Message::from(CompareBoardMsg::RowDirectionPicked {
+            row: footprint,
+            direction: Direction::UpdatePcb,
+        }));
+    let state = rig.app.ui_state.compare_board.as_ref().unwrap();
+    assert!(!state.directions_live(), "the recompute is running");
+
+    let _ = rig
+        .app
+        .update(Message::from(CompareBoardMsg::RowDirectionPicked {
+            row: value,
+            direction: Direction::Skip,
+        }));
+    let _ = rig
+        .app
+        .update(Message::from(CompareBoardMsg::ShownRowsDirectionPicked(
+            Direction::Skip,
+        )));
+    crate::drive::drive(&mut rig.app, recompute);
+
+    assert_eq!(
+        row(&rig, &EcoKey::SetValue(FP_R1)).direction,
+        Direction::UpdatePcb,
+        "the refused pick changed nothing"
+    );
+    assert_eq!(
+        row(&rig, &EcoKey::RemoveFootprint(FP_TP3)).direction,
+        Direction::UpdatePcb,
+        "the pick that started the recompute stands"
+    );
+}
+
+/// #2749 B: a pick while Compare again reads starts no job, so the read
+/// lands and the report shows what it read.
+#[test]
+fn a_pick_during_compare_again_does_not_swallow_the_read() {
+    let mut rig = rig();
+    open(&mut rig);
+    assert_eq!(report(&rig).compared.parts, 2);
+    let footprint = row(&rig, &EcoKey::RemoveFootprint(FP_TP3)).id();
+    let mut sheet = rig.app.document_state.engines[&rig.root].document().clone();
+    sheet.symbols.push(part(Uuid::from_u128(0x103), "R3", "1k"));
+    let engine = signex_engine::Engine::new_with_path(sheet, Some(rig.root.clone())).unwrap();
+    rig.app
+        .document_state
+        .engines
+        .insert(rig.root.clone(), engine);
+
+    let read = rig
+        .app
+        .update(Message::from(CompareBoardMsg::CompareAgainRequested));
+    let _ = rig
+        .app
+        .update(Message::from(CompareBoardMsg::RowDirectionPicked {
+            row: footprint,
+            direction: Direction::UpdatePcb,
+        }));
+    crate::drive::drive(&mut rig.app, read);
+
+    assert_eq!(report(&rig).compared.parts, 3, "the new read landed");
+    assert_eq!(
+        row(&rig, &EcoKey::RemoveFootprint(FP_TP3)).direction,
+        Direction::Skip,
+        "the refused pick changed nothing"
+    );
+}
+
 #[test]
 fn export_report_writes_through_the_file_port() {
     let mut rig = rig();

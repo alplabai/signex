@@ -17,6 +17,8 @@ pub struct PasteSeed {
     pub counters: HashMap<String, u32>,
     /// Every numbered designator in use across the project sheets.
     pub used: HashSet<String>,
+    /// Every net name the project sheets write (#2744).
+    pub net_names: HashSet<String>,
     /// Sheets that exist but could not be read, with why.
     pub unreadable: Vec<(PathBuf, String)>,
     /// The read itself did not finish; `counters` says nothing.
@@ -56,6 +58,12 @@ impl Signex {
                         failed: false,
                         counters: seed_counters(references()),
                         used: references().map(|r| r.trim().to_owned()).collect(),
+                        net_names: set
+                            .sheets
+                            .values()
+                            .flat_map(signex_net::sheet_net_names)
+                            .map(str::to_owned)
+                            .collect(),
                         unreadable: set.unreadable.clone(),
                     }
                 })
@@ -64,6 +72,7 @@ impl Signex {
                     failed: true,
                     counters: HashMap::new(),
                     used: HashSet::new(),
+                    net_names: HashSet::new(),
                     unreadable: vec![(target, format!("the numbering task failed: {error}"))],
                 })
             },
@@ -81,7 +90,7 @@ impl Signex {
     pub(crate) fn store_paste_seed(&mut self, request: &PasteRequest, seed: &PasteSeed) {
         for (path, why) in &seed.unreadable {
             crate::diagnostics::log_warning(format!(
-                "Designators on paste: {} could not be read ({why}), so its designators are not counted.",
+                "Designators on paste: {} could not be read ({why}), so its designators and net names are not counted.",
                 path.display()
             ));
         }
@@ -95,6 +104,7 @@ impl Signex {
                 target,
                 counters: seed.counters.clone(),
                 used: seed.used.clone(),
+                net_names: seed.net_names.clone(),
             });
         }
     }

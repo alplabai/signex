@@ -137,9 +137,31 @@ pub struct EcoInput<'a> {
 /// never dropped: dropping it would list its footprint for removal.
 pub fn design_eco_parts(
     sheets: &[(InstancePath, &SchematicSheet)],
+    resolve: impl FnMut(&DesignPart, &Symbol) -> Result<ResolvedFootprint, FootprintResolveError>,
+) -> Vec<EcoPart> {
+    eco_parts_of(signex_net::design_parts(sheets), sheets, resolve)
+}
+
+/// [`design_eco_parts`] with a part in a channel of a repeated sheet under
+/// its channel designator, so it matches the netlist's terminals.
+pub fn design_eco_parts_named(
+    sheets: &[(InstancePath, &SchematicSheet)],
+    channels: &signex_net::ChannelDesignators,
+    resolve: impl FnMut(&DesignPart, &Symbol) -> Result<ResolvedFootprint, FootprintResolveError>,
+) -> Vec<EcoPart> {
+    eco_parts_of(
+        signex_net::design_parts_named(sheets, channels),
+        sheets,
+        resolve,
+    )
+}
+
+fn eco_parts_of(
+    parts: Vec<DesignPart>,
+    sheets: &[(InstancePath, &SchematicSheet)],
     mut resolve: impl FnMut(&DesignPart, &Symbol) -> Result<ResolvedFootprint, FootprintResolveError>,
 ) -> Vec<EcoPart> {
-    signex_net::design_parts(sheets)
+    parts
         .into_iter()
         .map(|part| {
             let first = sheets

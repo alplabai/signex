@@ -52,6 +52,9 @@ pub struct HarnessPanel {
     pub project_name: String,
     /// The project's harness definitions.
     pub definitions: Vec<HarnessDefinition>,
+    /// The project's settings section is unreadable: definitions cannot be
+    /// edited.
+    pub are_definitions_locked: bool,
     /// Per definition: how many connectors of the open sheets use it.
     pub uses: Vec<usize>,
     /// The selected connector (or the one owning the selected entry).

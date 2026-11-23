@@ -59,6 +59,33 @@ fn replay_acts_on_the_targets_and_puts_the_selection_back_as_one_undo_step() {
     );
 }
 
+/// DECISIONS 2026-11-23 (#2731): a read-only query row is not run again; the
+/// replay adds a failed row and the original answer stays in the log.
+#[test]
+fn a_replayed_query_is_refused_and_keeps_the_original_answer() {
+    let (mut app, _path) = app_with_parts();
+    let answer = LogOutcome::Ok(Some("{\"name\":\"P\"}".to_string()));
+    let seq = app
+        .record_command(
+            "project_settings",
+            Map::new(),
+            answer.clone(),
+            Duration::ZERO,
+            LogSource::Gui { window: None },
+            None,
+        )
+        .expect("the row is logged");
+
+    replay(&mut app, seq);
+
+    let row = newest(&app);
+    assert!(row.seq > seq, "the refusal is a new row");
+    assert_eq!(row.command, "project_settings");
+    assert!(row.outcome.is_failed(), "{:?}", row.outcome);
+    let original = app.ui_state.command_log.log.row(seq).expect("still logged");
+    assert_eq!(original.outcome, answer);
+}
+
 #[test]
 fn a_target_that_is_gone_refuses_the_whole_replay() {
     let (mut app, path) = app_with_parts();

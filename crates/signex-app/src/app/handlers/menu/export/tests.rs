@@ -1008,6 +1008,7 @@ mod class_styles;
 mod protel_hierarchy;
 
 mod bom_hierarchy;
+mod channel_outputs;
 pub(crate) mod current_placement;
 
 mod export_status;

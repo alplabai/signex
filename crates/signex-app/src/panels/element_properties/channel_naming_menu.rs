@@ -55,6 +55,17 @@ pub(super) fn naming_section<'a>(
         "channel-net" => view.naming.net(EXAMPLE_NET, &ch)
     );
     let mut body: Column<Element<'a, PanelMsg>> = column![].width(Length::Fill);
+    if view.is_naming_locked {
+        body = body.push(
+            container(
+                text(t!(i18n, ids::DIALOG_SCHEMATIC_DESIGN_UNREADABLE))
+                    .size(TS.caption)
+                    .color(ti(ctx.tokens.warning)),
+            )
+            .padding([SP.xs, SP.m])
+            .boxed(),
+        );
+    }
     for target in [NamingTarget::Designators, NamingTarget::Nets] {
         body = body.push(format_field(ctx, view, target));
         if view.menu.target == Some(target) {

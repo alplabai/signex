@@ -51,6 +51,10 @@ pub enum CompiledDesignMsg {
     RowToggled(usize),
     /// A tree row was clicked: open its sheet (a channel on its tab).
     RowClicked(usize),
+    /// The chevron of a sheet instance: show or hide its parts and nets.
+    RowExpanded(usize),
+    /// A part or net row was clicked: open its sheet instance and go to it.
+    TargetClicked(signex_net::CompiledTarget),
     /// A tab of the channel strip of `sheet` was picked; `None` is Editor,
     /// else the channel's 1-based index.
     ChannelPicked {

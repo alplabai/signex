@@ -229,6 +229,7 @@ define_ids! {
     DIALOG_NEW_PROJECT_ERR_CREATE_PENDING = "dialog-new-project-err-create-pending";
     DIALOG_NEW_PROJECT_QUIT_HELD = "dialog-new-project-quit-held";
     DIALOG_NEW_PROJECT_SETUP_UNREADABLE = "dialog-new-project-setup-unreadable";
+    DIALOG_SCHEMATIC_DESIGN_UNREADABLE = "dialog-schematic-design-unreadable";
     DIALOG_NEW_PROJECT_NAME_PLACEHOLDER = "dialog-new-project-name-placeholder";
     DIALOG_NEW_PROJECT_LOCATION_PLACEHOLDER = "dialog-new-project-location-placeholder";
     LANGUAGE_SYSTEM_DEFAULT = "language-system-default";
@@ -346,6 +347,7 @@ define_ids! {
     BACK_ANNOTATE_BLOCK_DUPLICATE = "back-annotate-block-duplicate";
     BACK_ANNOTATE_BLOCK_BOARD_NOT_ANNOTATED = "back-annotate-block-board-not-annotated";
     BACK_ANNOTATE_BLOCK_SHARED_SHEET = "back-annotate-block-shared-sheet";
+    BACK_ANNOTATE_BLOCK_CHANNEL = "back-annotate-block-channel";
     BACK_ANNOTATE_BLOCK_FOOTPRINT = "back-annotate-block-footprint";
     BACK_ANNOTATE_NOTES_HEADING = "back-annotate-notes-heading";
     BACK_ANNOTATE_NOTE_UNREADABLE = "back-annotate-note-unreadable";

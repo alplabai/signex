@@ -10,9 +10,9 @@ use super::repeat_edit::default_repeat;
 use super::state::{CompiledResult, RepeatDraft};
 use crate::app::Signex;
 use crate::panels::compiled_design::{
-    ChannelStripView, ChannelTabView, CompiledDesignView, CompiledNetRow, CompiledPanelView,
-    CompiledRow, CompiledRowKind, CompiledStatus, CompiledTotals, NamingMenuView, RepeatField,
-    SheetSymbolRepeatView,
+    ChannelStripView, ChannelTabView, CompiledChildRow, CompiledDesignView, CompiledNetRow,
+    CompiledPanelView, CompiledRow, CompiledRowKind, CompiledStatus, CompiledTotals,
+    NamingMenuView, RepeatField, SheetSymbolRepeatView,
 };
 
 impl Signex {
@@ -71,7 +71,7 @@ impl Signex {
             channels: design.channel_count,
         };
         let needle = ui.find.trim().to_lowercase();
-        view.rows = tree_rows(result, &needle, &ui.folded, ui.selected);
+        view.rows = tree_rows(result, &needle, &ui.folded, &ui.expanded, ui.selected);
         view.nets = design
             .nets
             .iter()
@@ -80,6 +80,7 @@ impl Signex {
                 name: n.name.clone(),
                 sheets: n.sheets,
                 is_power: n.is_power,
+                target: n.target.clone(),
             })
             .collect();
         view
@@ -127,6 +128,7 @@ impl Signex {
             is_from_refused: is_range_field_refused(draft, RepeatField::From),
             is_to_refused: is_range_field_refused(draft, RepeatField::To),
             naming: self.channel_naming(),
+            is_naming_locked: self.channel_naming_is_locked(),
             menu,
             entries: cs
                 .pins
@@ -223,12 +225,43 @@ fn is_range_field_refused(draft: Option<&RepeatDraft>, field: RepeatField) -> bo
     })
 }
 
+/// The parts and nets of `sheet` a search keeps, as rows.
+fn child_rows(
+    sheet: &signex_net::CompiledSheet,
+    needle: &str,
+) -> (Vec<CompiledChildRow>, Vec<CompiledChildRow>) {
+    let shown = |label: &str| needle.is_empty() || label.to_lowercase().contains(needle);
+    let parts = sheet
+        .components
+        .iter()
+        .filter(|p| shown(&p.designator))
+        .map(|p| CompiledChildRow {
+            label: p.designator.clone(),
+            is_power: false,
+            target: p.target.clone(),
+        })
+        .collect();
+    let nets = sheet
+        .net_names
+        .iter()
+        .filter(|n| shown(&n.name))
+        .map(|n| CompiledChildRow {
+            label: n.name.clone(),
+            is_power: n.is_power,
+            target: n.target.clone(),
+        })
+        .collect();
+    (parts, nets)
+}
+
 /// The tree rows the search keeps; channels of a folded repeated row are
-/// left out unless a search is on.
+/// left out unless a search is on. A sheet instance shows its parts and nets
+/// while expanded, and the ones a search finds in it.
 fn tree_rows(
     result: &CompiledResult,
     needle: &str,
     folded: &std::collections::HashSet<usize>,
+    expanded: &std::collections::HashSet<usize>,
     selected: Option<usize>,
 ) -> Vec<CompiledRow> {
     let mut rows = Vec::new();
@@ -255,7 +288,12 @@ fn tree_rows(
         if needle.is_empty() && matches!(kind, CompiledRowKind::Repeated { open: false }) {
             hidden_below = Some(sheet.depth);
         }
+        let finds = |label: &str| label.to_lowercase().contains(needle);
+        let child_hit = !needle.is_empty()
+            && (sheet.components.iter().any(|p| finds(&p.designator))
+                || sheet.net_names.iter().any(|n| finds(&n.name)));
         let matches = needle.is_empty()
+            || child_hit
             || sheet.name.to_lowercase().contains(needle)
             || caption
                 .as_deref()
@@ -263,6 +301,14 @@ fn tree_rows(
         if !matches {
             continue;
         }
+        let has_children = !sheet.components.is_empty() || !sheet.net_names.is_empty();
+        let is_expanded = child_hit || (needle.is_empty() && expanded.contains(&index));
+        let is_expanded = has_children && is_expanded;
+        let (part_rows, net_rows) = if is_expanded {
+            child_rows(sheet, needle)
+        } else {
+            (Vec::new(), Vec::new())
+        };
         let is_stale = result
             .path_of(&sheet.key)
             .is_some_and(|p| result.stale.contains(p));
@@ -276,6 +322,10 @@ fn tree_rows(
             nets: sheet.nets,
             is_stale,
             is_selected: selected == Some(index),
+            has_children,
+            is_expanded,
+            part_rows,
+            net_rows,
         });
     }
     rows

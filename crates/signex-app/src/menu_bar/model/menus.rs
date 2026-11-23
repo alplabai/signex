@@ -127,7 +127,7 @@ fn export(ctx: &MenuContext) -> Vec<MenuEntry> {
             MenuMessage::ExportPdf,
             enabled(ctx, "print"),
         ),
-        // The BOM export dialog, the one Reports ▸ Bill of Materials… opens,
+        // The BOM export dialog, the one Tools ▸ Reports ▸ Bill of Materials… opens,
         // named by its result (mockup row 112).
         item_if(
             ctx,

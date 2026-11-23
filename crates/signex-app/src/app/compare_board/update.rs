@@ -44,6 +44,21 @@ impl Signex {
         {
             return Task::none();
         }
+        // #2749: a pick made while a job runs would be lost when it lands,
+        // or would supersede a Compare again.
+        let directions_live = self
+            .ui_state
+            .compare_board
+            .as_ref()
+            .is_some_and(|s| s.directions_live());
+        if !directions_live
+            && matches!(
+                msg,
+                M::RowDirectionPicked { .. } | M::ShownRowsDirectionPicked(_)
+            )
+        {
+            return Task::none();
+        }
         match msg {
             M::Requested => self.open_compare_board(),
             M::Read { job, result } => self.compare_board_read(job, result),
@@ -194,8 +209,10 @@ impl Signex {
             .iter()
             .map(|(path, engine)| (path.clone(), engine.revision()))
             .collect();
+        let naming = crate::app::saved_channel_naming::SavedChannelNaming::of(&project.data);
         let request = CompareRequest {
             design: DesignRequest {
+                naming: naming.clone(),
                 plan: plan_project_sheets_for(&self.document_state, &root),
                 project_dir: project_dir.clone(),
                 board: board.clone(),
@@ -205,6 +222,7 @@ impl Signex {
                 previous: None,
             },
             back: BackRequest {
+                naming,
                 plan: plan_project_sheets_for(&self.document_state, &root),
                 project_dir,
                 board,

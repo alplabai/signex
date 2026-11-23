@@ -93,6 +93,7 @@ pub(crate) mod project_sheets;
 mod read_only_refusal;
 pub mod restore_job;
 mod runtime;
+pub(crate) mod saved_channel_naming;
 mod selection_request;
 pub(crate) mod sheet_hierarchy;
 mod state;
