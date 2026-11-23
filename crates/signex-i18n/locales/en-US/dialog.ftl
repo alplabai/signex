@@ -478,6 +478,8 @@ dialog-smart-paste-after = After paste
 dialog-smart-paste-kept-power = kept · power net
 # $net is the copied net's name.
 dialog-smart-paste-joins = { $net } (joins original)
+# $names lists the rewritten net names that already exist.
+dialog-smart-paste-names-taken = Smart Paste stopped: { $names } already exists, so the nets would join. Change the pattern or Start n at.
 dialog-smart-paste-preview = Preview
 dialog-smart-paste-copy-count = { $count ->
     [one] 1 copy

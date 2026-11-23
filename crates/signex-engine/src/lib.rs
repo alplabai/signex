@@ -19,6 +19,7 @@ pub mod part_swap;
 mod paste_edit;
 mod placed_edit;
 mod placement;
+mod placement_repeat;
 mod placement_sources;
 mod power_port;
 mod project_general;

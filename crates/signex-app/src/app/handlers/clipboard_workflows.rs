@@ -406,10 +406,23 @@ impl Signex {
             labels: source.labels.len(),
         };
         let copied_nets = crate::smart_paste::plan::copied_nets(&source);
+        // The project's names from the read made when the dialog opened, and
+        // the target sheet's as they are now.
+        let mut names_in_use = self
+            .interaction_state
+            .paste_counters
+            .as_ref()
+            .filter(|c| c.target == state.target)
+            .map(|c| c.net_names.clone())
+            .unwrap_or_default();
+        if let Some(live) = self.document_state.engines.get(&state.target) {
+            names_in_use.extend(signex_net::sheet_net_names(live.document()).map(str::to_owned));
+        }
         let (shapes, bounds) = preview_shapes(&source);
         if let Some(state) = self.ui_state.smart_paste.as_deref_mut() {
             state.summary = summary;
             state.copied_nets = copied_nets;
+            state.names_in_use = names_in_use;
             state.next_free_text = next_free_text;
             state.shapes = shapes;
             state.bounds = bounds;
@@ -477,6 +490,8 @@ impl Signex {
     /// ONE undo step (the paste session's click), Esc cancels. Designators
     /// follow the dialog's choice at that click.
     fn put_smart_paste_on_cursor(&mut self) {
+        // The sheet may have changed since the last edit of the dialog.
+        self.refresh_smart_paste();
         let Some(state) = self.ui_state.smart_paste.as_deref() else {
             return;
         };
@@ -484,6 +499,18 @@ impl Signex {
             Ok(input) => input,
             Err(_) => return,
         };
+        let taken = state.taken_names();
+        if !taken.is_empty() {
+            crate::diagnostics::log_warning(
+                signex_i18n::t!(
+                    self.ui_state.i18n,
+                    signex_i18n::ids::SMART_PASTE_NAMES_TAKEN,
+                    "names" => taken.join(", ")
+                )
+                .into_string(),
+            );
+            return;
+        }
         let Some((payload, target, _origin)) = self.prepared_paste() else {
             return;
         };

@@ -44,6 +44,32 @@ pub struct HarnessBundle {
     pub entry_names: Vec<String>,
     /// Whether the bundle hangs off an entry of another connector (nested).
     pub nested: bool,
+    /// Every leaf signal its connectors carry, nested entries expanded.
+    pub leaves: Vec<HarnessLeaf>,
+}
+
+/// One leaf signal a connector carries, by the path connectivity joins on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HarnessLeaf {
+    pub connector: Uuid,
+    /// The connector's own entry the leaf runs through.
+    pub entry: Uuid,
+    /// Entry names from the connector down: `["UART", "TX"]`.
+    pub path: Vec<String>,
+}
+
+impl HarnessLeaf {
+    /// The path as connectivity compares it: `UART.TX`.
+    #[must_use]
+    pub fn dotted(&self) -> String {
+        self.path.join(".")
+    }
+
+    /// Whether the leaf is the connector's own entry, not a nested one.
+    #[must_use]
+    pub fn is_plain(&self) -> bool {
+        self.path.len() == 1
+    }
 }
 
 impl HarnessBundle {
@@ -155,6 +181,44 @@ impl<'a> Topology<'a> {
                         let at = self.sheet.harness.connectors[ci].entry_point(ei);
                         out.push((vec![name], pt_key(&at)));
                     }
+                }
+            }
+        }
+        out
+    }
+
+    /// The leaves of every connector on the bundle `class`, each tied to the
+    /// connector's own entry. An entry whose nested bundle has no connector
+    /// counts as a leaf under its own name.
+    fn connector_leaves(&mut self, class: Key) -> Vec<HarnessLeaf> {
+        let mut out = Vec::new();
+        for ci in 0..self.sheet.harness.connectors.len() {
+            if self.tip_class(ci) != class {
+                continue;
+            }
+            let connector = self.sheet.harness.connectors[ci].uuid;
+            for ei in 0..self.sheet.harness.connectors[ci].entries.len() {
+                let entry = self.sheet.harness.connectors[ci].entries[ei].uuid;
+                let name = self.sheet.harness.connectors[ci].entries[ei].name.clone();
+                let nested = match self.nested_at(ci, ei) {
+                    Some(sub) => self.leaves(sub, &mut HashSet::from([class])),
+                    None => Vec::new(),
+                };
+                if nested.is_empty() {
+                    out.push(HarnessLeaf {
+                        connector,
+                        entry,
+                        path: vec![name],
+                    });
+                    continue;
+                }
+                for (mut path, _) in nested {
+                    path.insert(0, name.clone());
+                    out.push(HarnessLeaf {
+                        connector,
+                        entry,
+                        path,
+                    });
                 }
             }
         }
@@ -424,9 +488,11 @@ pub fn harness_bundles(sheet: &SchematicSheet) -> Vec<HarnessBundle> {
     let classes: Vec<Key> = bundles.keys().copied().collect();
     for class in classes {
         let types = topo.types_of(class);
+        let leaves = topo.connector_leaves(class);
         if let Some(b) = bundles.get_mut(&class) {
             b.types = types;
             b.nested = nested.contains(&class);
+            b.leaves = leaves;
         }
     }
     bundles.into_values().collect()

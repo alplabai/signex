@@ -3,7 +3,7 @@
 //! derives. The project's harness definitions travel in the
 //! [`ErcConfig`](crate::ErcConfig).
 
-use signex_net::{HarnessBundle, harness_bundles, harness_segments_touch};
+use signex_net::{HarnessBundle, HarnessLeaf, harness_bundles, harness_segments_touch};
 use signex_types::schematic::{HarnessConnector, Point, SchematicSheet};
 
 /// The harness part of an [`ErcContext`](crate::ErcContext).
@@ -47,14 +47,14 @@ impl ErcHarness {
             .collect()
     }
 
-    /// The entry names the top-level bundle with the harness port `name`
-    /// carries, when the sheet has such a port.
-    pub fn port_entries(&self, name: &str) -> Option<&[String]> {
+    /// The leaves of the top-level bundle with the harness port `name`,
+    /// nested entries expanded, when the sheet has such a port.
+    pub fn port_leaves(&self, name: &str) -> Option<&[HarnessLeaf]> {
         self.bundles
             .iter()
             .filter(|b| !b.nested)
             .find(|b| b.ports.iter().any(|p| p.name == name))
-            .map(|b| b.entry_names.as_slice())
+            .map(|b| b.leaves.as_slice())
     }
 
     /// The connector `id`.

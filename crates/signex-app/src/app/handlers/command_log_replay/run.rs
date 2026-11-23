@@ -327,6 +327,7 @@ impl Signex {
             target: document.to_path_buf(),
             counters: seed_counters(references.iter().map(String::as_str)),
             used: references.iter().map(|r| r.trim().to_owned()).collect(),
+            ..PasteCounters::default()
         });
         true
     }
