@@ -37,8 +37,24 @@ impl Signex {
         let design_item_id = row
             .map(|row| row.internal_pn.0.clone())
             .or_else(|| (!lib_id.is_empty()).then(|| lib_id.to_string()));
+        // A part in a channel reads as its channel designator, the name
+        // Update PCB gave the footprint.
+        let naming = self
+            .document_state
+            .document_project(board)
+            .map(|project| project.data.schematic_design.channel_naming.clone())
+            .unwrap_or_default();
+        let placed = self
+            .document_state
+            .engines
+            .values()
+            .flat_map(|engine| engine.document().child_sheets.iter());
+        let channels = signex_net::ChannelDesignators::of_path(&link.sheet, placed, &naming);
         PartIdentity::Read {
-            designator: symbol.designator_in(&link.sheet).trim().to_string(),
+            designator: channels
+                .designator_of(symbol, &link.sheet)
+                .trim()
+                .to_string(),
             design_item_id,
             source: library.map(|l| l.display_name.clone()),
         }

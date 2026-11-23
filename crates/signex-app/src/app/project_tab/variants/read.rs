@@ -15,7 +15,9 @@ use super::super::general::tab_message;
 use super::super::{ProjectSection, ProjectTabMsg};
 use crate::app::core::parts_read_error::PartsReadError;
 use crate::app::handlers::menu::export::export_metadata_with;
-use crate::app::handlers::menu::export::placements::netlist_placements;
+use crate::app::handlers::menu::export::placements::{
+    netlist_placements, stamp_channel_designators,
+};
 use crate::app::project_sheets::{
     OpenSheets, assemble_project_sheets_quiet_from, open_sheets_snapshot, project_graph_quiet,
     project_pages, project_root_sheet_path, project_roots, sheet_key_with,
@@ -35,6 +37,8 @@ struct PartsRead {
     /// The project's parameters and the document facts (clock, file times),
     /// so a value evaluates on its sheet as the BOM evaluates it (#1986).
     metadata: ProjectMetadata,
+    /// The project's saved channel naming.
+    naming: signex_types::project::ChannelNaming,
 }
 
 impl Signex {
@@ -79,6 +83,7 @@ impl Signex {
             fold: crate::app::state::project_case::fold_of(Some(project)),
             variants: project.data.variant_definitions.clone(),
             metadata,
+            naming: project.data.schematic_design.channel_naming.clone(),
         };
         let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) else {
             return Task::none();
@@ -146,15 +151,19 @@ fn read_parts(read: PartsRead) -> Result<VariantMatrix, PartsReadError> {
         roots: &roots,
     };
     let occurrences = signex_net::project_occurrences(&walk);
+    let channels = signex_net::ChannelDesignators::of_project(&walk, &read.naming);
     let mut keyed: Vec<_> = graph.sheets.into_iter().collect();
     keyed.sort_by(|a, b| a.0.cmp(&b.0));
     let keys: Vec<_> = keyed.iter().map(|(key, _)| key.clone()).collect();
+    let placements = netlist_placements(&keys, occurrences);
+    let mut netlist_sheets: Vec<_> = keyed.into_iter().map(|(_, sheet)| sheet).collect();
+    stamp_channel_designators(&mut netlist_sheets, &placements, &channels);
     let ctx = ExportContext {
         sheets: Vec::new(),
         metadata: read.metadata,
         netlist: None,
-        netlist_placements: netlist_placements(&keys, occurrences),
-        netlist_sheets: keyed.into_iter().map(|(_, sheet)| sheet).collect(),
+        netlist_placements: placements,
+        netlist_sheets,
         current_sheet: None,
     };
     Ok(signex_output::variant_matrix(&ctx, &read.variants))

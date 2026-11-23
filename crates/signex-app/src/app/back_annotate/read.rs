@@ -7,9 +7,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use signex_engine::pcb::eco::{
-    BackChangeList, BackInput, BackPart, EcoPart, design_eco_parts, diff_schematic,
+    BackChangeList, BackInput, BackPart, EcoPart, design_eco_parts_named, diff_schematic,
 };
 use signex_types::pcb::PcbBoard;
+use signex_types::project::ChannelNaming;
 use signex_types::schematic::{InstancePath, SchematicSheet};
 use uuid::Uuid;
 
@@ -53,6 +54,8 @@ pub(crate) struct BackRequest {
     pub open_revisions: Vec<(PathBuf, u64)>,
     /// The list before a Refresh, whose ticks the new one keeps.
     pub previous: Option<BackChangeList>,
+    /// The project's saved channel naming.
+    pub naming: ChannelNaming,
 }
 
 /// Read the design and diff it against the board. `Err` says why there is
@@ -70,7 +73,9 @@ pub(crate) fn compute(request: BackRequest) -> Result<BackRead, String> {
         .map(|(path, sheet, _)| (path.clone(), *sheet))
         .collect();
     let resolver = Resolver::open(&request.libraries);
-    let eco_parts = design_eco_parts(&sheets, |_, symbol| resolver.resolve(symbol));
+    let channels = signex_net::ChannelDesignators::of_project(&design.project(), &request.naming);
+    let eco_parts =
+        design_eco_parts_named(&sheets, &channels, |_, symbol| resolver.resolve(symbol));
     let mut files = HashMap::new();
     let parts: Vec<BackPart> = eco_parts
         .into_iter()
@@ -95,6 +100,7 @@ pub(crate) fn compute(request: BackRequest) -> Result<BackRead, String> {
         parts: &parts,
         unreadable: &design.unreadable,
     });
+    list.block_channel_designators(|sheet| channels.is_channel(sheet));
     if let Some(previous) = &request.previous {
         list.keep_choices_from(previous);
     }

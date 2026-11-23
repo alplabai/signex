@@ -37,17 +37,20 @@ pub(super) fn multi_placed_files(
         return HashMap::new();
     }
     let roots = ps::project_roots(root_key, set, &graph, base_dir, set.fold);
-    let occurrences = signex_net::project_occurrences(&signex_net::ProjectGraph {
+    let project = signex_net::ProjectGraph {
         sheets: &graph.sheets,
         resolved: &graph.resolved,
         roots: &roots,
-    });
+    };
+    let occurrences = signex_net::project_occurrences(&project);
+    // The channels of a repeat are one logical sheet: it is numbered once and
+    // nothing is written under a compiled channel (#2740). Naming plays no
+    // part in the placement a channel collapses to.
+    let channels = signex_net::ChannelDesignators::of_project(&project, &Default::default());
     let mut by_key: HashMap<signex_net::SheetKey, Vec<InstancePath>> = HashMap::new();
     for occurrence in occurrences {
-        by_key
-            .entry(occurrence.key)
-            .or_default()
-            .push(occurrence.instance_path);
+        let placement = channels.logical_path(&occurrence.instance_path).clone();
+        by_key.entry(occurrence.key).or_default().push(placement);
     }
     by_key
         .into_iter()

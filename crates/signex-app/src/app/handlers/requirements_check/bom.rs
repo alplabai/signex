@@ -13,7 +13,9 @@ use signex_output::{ExportContext, ProjectMetadata};
 use signex_types::pcb::PcbBoard;
 
 use crate::app::Signex;
-use crate::app::handlers::menu::export::placements::netlist_placements;
+use crate::app::handlers::menu::export::placements::{
+    netlist_placements, stamp_channel_designators,
+};
 use crate::app::project_sheets::{
     OpenSheets, assemble_project_sheets_guarded_from, open_sheets_snapshot, project_graph_quiet,
     project_pages, project_root_sheet_path, project_roots, sheet_key_with, stitch_issue_message,
@@ -31,6 +33,8 @@ pub(super) struct BomInputs {
     /// The library's current part names (`library::drift`).
     names: HashMap<String, String>,
     variant: Option<String>,
+    /// The project's saved channel naming.
+    naming: signex_types::project::ChannelNaming,
 }
 
 /// The BOM grouped as it is bought, one row per part, and what could not be
@@ -56,6 +60,7 @@ impl Signex {
             fold: crate::app::state::project_case::fold_of(Some(project)),
             names: self.library.drift.names.clone(),
             variant,
+            naming: project.data.schematic_design.channel_naming.clone(),
         }
     }
 }
@@ -110,15 +115,19 @@ pub(super) fn project_boms(
         roots: &roots,
     };
     let occurrences = signex_net::project_occurrences(&walk);
+    let channels = signex_net::ChannelDesignators::of_project(&walk, &inputs.naming);
     let mut keyed: Vec<_> = graph.sheets.into_iter().collect();
     keyed.sort_by(|a, b| a.0.cmp(&b.0));
     let keys: Vec<_> = keyed.iter().map(|(key, _)| key.clone()).collect();
+    let placements = netlist_placements(&keys, occurrences);
+    let mut netlist_sheets: Vec<_> = keyed.into_iter().map(|(_, sheet)| sheet).collect();
+    stamp_channel_designators(&mut netlist_sheets, &placements, &channels);
     let mut ctx = ExportContext {
         sheets: Vec::new(),
         metadata: ProjectMetadata::default(),
         netlist: None,
-        netlist_placements: netlist_placements(&keys, occurrences),
-        netlist_sheets: keyed.into_iter().map(|(_, sheet)| sheet).collect(),
+        netlist_placements: placements,
+        netlist_sheets,
         current_sheet: None,
     };
     crate::library::drift::apply_library_names(&mut ctx, &inputs.names);

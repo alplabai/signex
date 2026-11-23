@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use iced::Task;
 use signex_types::net_class::NetClassStyle;
+use signex_types::project::ChannelNaming;
 use uuid::Uuid;
 
 use crate::app::contracts::{Message, UiMsg};
@@ -39,6 +40,8 @@ pub(in crate::app) struct PlannedProject {
     pub(in crate::app) key: ProjectKey,
     pub(in crate::app) open_paths: Vec<PathBuf>,
     pub(in crate::app) project_dir: PathBuf,
+    /// The project's saved channel naming, hashed into `key.connectivity`.
+    pub(in crate::app) naming: ChannelNaming,
 }
 
 /// Everything a worker needs to stitch one project: owned, so it can leave
@@ -49,6 +52,7 @@ struct ProjectJob {
     /// The request number the answer is stamped with.
     seq: u64,
     project_dir: PathBuf,
+    naming: ChannelNaming,
     /// Shared with the net index job of the same project and key.
     stitch: StitchSlot,
 }
@@ -84,6 +88,7 @@ fn resolve_project(open: &OpenSheets, job: ProjectJob) -> ResolvedProject {
         key,
         seq,
         project_dir,
+        naming,
         stitch,
     } = job;
     let mut resolved = ResolvedProject {
@@ -106,6 +111,7 @@ fn resolve_project(open: &OpenSheets, job: ProjectJob) -> ResolvedProject {
             &resolved.key.root,
             resolved.key.fold,
             Some(project_dir),
+            &naming,
         )
     });
     resolved.warnings = stitched.warnings.clone();
@@ -127,11 +133,22 @@ fn resolve_project(open: &OpenSheets, job: ProjectJob) -> ResolvedProject {
 /// any edit that can change a net, and on a sheet opening, closing or being
 /// replaced; not on an edit that leaves connectivity alone.
 pub(in crate::app) fn connectivity_stamp(document: &DocumentState) -> u64 {
-    document.engines.iter().fold(0u64, |acc, (path, engine)| {
+    let sheets = document.engines.iter().fold(0u64, |acc, (path, engine)| {
         let mut hasher = DefaultHasher::new();
         (path, engine.instance_id(), engine.connectivity_revision()).hash(&mut hasher);
         acc.wrapping_add(hasher.finish())
+    });
+    document.projects.iter().fold(sheets, |acc, project| {
+        acc.wrapping_add(naming_stamp(&project.data.schematic_design.channel_naming))
     })
+}
+
+/// A saved naming renames channel parts and nets, so it counts as a
+/// connectivity change for everything keyed on the stitch.
+fn naming_stamp(naming: &ChannelNaming) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    (&naming.designator_format, &naming.net_format).hash(&mut hasher);
+    hasher.finish()
 }
 
 /// Every project that owns an open sheet, with the key to resolve it under.
@@ -163,10 +180,11 @@ pub(in crate::app) fn plan_projects(document: &DocumentState) -> Vec<PlannedProj
             // declared root.
             entry.paths.sort();
             let root = project_sheets::resolve_netlist_root_for(document, entry.paths.first()?);
+            let naming = project.data.schematic_design.channel_naming.clone();
             Some(PlannedProject {
                 project: project.id,
                 key: ProjectKey {
-                    connectivity: entry.stamp,
+                    connectivity: entry.stamp.wrapping_add(naming_stamp(&naming)),
                     pages: project_sheets::project_pages(Some(project)),
                     root,
                     fold: fold_of(Some(project)),
@@ -174,6 +192,7 @@ pub(in crate::app) fn plan_projects(document: &DocumentState) -> Vec<PlannedProj
                 },
                 open_paths: entry.paths,
                 project_dir: project.dir().to_path_buf(),
+                naming,
             })
         })
         .collect()
@@ -229,6 +248,7 @@ impl Signex {
                 seq: cache.request_seq(project.project),
                 key: project.key,
                 project_dir: project.project_dir,
+                naming: project.naming,
                 stitch,
             });
         }

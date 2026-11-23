@@ -7,10 +7,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use signex_engine::pcb::eco::{
-    EcoChangeList, EcoInput, EcoPart, Staging, design_eco_parts, diff_board,
+    EcoChangeList, EcoInput, EcoPart, Staging, design_eco_parts_named, diff_board,
 };
 use signex_types::net::Netlist;
 use signex_types::pcb::PcbBoard;
+use signex_types::project::ChannelNaming;
 use signex_types::schematic::InstancePath;
 
 use super::Computed;
@@ -64,16 +65,20 @@ pub(crate) struct DesignRequest {
     pub open_revisions: Vec<(PathBuf, u64)>,
     /// The list before a Refresh, whose ticks the new one keeps.
     pub previous: Option<EcoChangeList>,
+    /// The project's saved channel naming.
+    pub naming: ChannelNaming,
 }
 
 /// Read the design and diff the board. `Err` says why there is no list.
 pub(crate) fn compute(request: DesignRequest) -> Result<Arc<Computed>, String> {
     let set = request.plan.assemble();
     let design = DesignGraph::read(&set, &request.project_dir)?;
-    let netlist = signex_net::build_project_netlist(&design.project()).netlist;
+    let project = design.project();
+    let netlist = signex_net::build_project_netlist_named(&project, &request.naming).netlist;
+    let channels = signex_net::ChannelDesignators::of_project(&project, &request.naming);
     let sheets = design.sheets();
     let resolver = Resolver::open(&request.libraries);
-    let parts = design_eco_parts(&sheets, |_, symbol| resolver.resolve(symbol));
+    let parts = design_eco_parts_named(&sheets, &channels, |_, symbol| resolver.resolve(symbol));
     let open: HashMap<PathBuf, u64> = request.open_revisions.into_iter().collect();
     let net_names: std::collections::HashSet<&str> =
         netlist.nets.iter().map(|n| n.name.as_str()).collect();

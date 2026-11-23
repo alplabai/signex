@@ -68,6 +68,23 @@ placement once per channel:
   channel's `VOUT_3V3_CH1` wins over a local member label.
 - A project without repeats walks and stitches exactly as before.
 
+Every reader outside the stitch asks one place what a part is called in a
+placement: `signex_net::ChannelDesignators`, built from the walk and the saved
+naming.
+
+- BOM, the netlist file, PDF pages, the requirement BOM and the Variants
+  matrix read it through their own export copy of the sheet, which gets the
+  channel designators as instance entries. Those copies are never saved.
+- Update PCB and Compare read their parts through it, so a footprint is named
+  `CH1_R5` and its pads match the netlist's terminals.
+- Back Annotate reads the same names and blocks a designator row on a channel
+  part: the name is derived from the sheet and the naming, so there is no
+  stored value to change. Rename the part on the sheet, or change the naming.
+- Annotate numbers the channels of one repeated placement as one sheet. A
+  per-placement designator of a repeat is stored at the sheet symbol's own
+  path, never under a channel uuid, so changing the range leaves nothing
+  behind.
+
 The ERC rule `repeat_entry_needs_bus` (Error) reports a `Repeat(<net>)` entry
 that meets no bus, or a bus with fewer members than the symbol has channels.
 `bad_hier_sheet_pin` matches a `Repeat(<net>)` entry with the port `<net>`.

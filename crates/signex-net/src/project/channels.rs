@@ -7,11 +7,10 @@
 use std::borrow::Cow;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
-use signex_types::net::Terminal;
 use signex_types::project::ChannelNaming;
 use signex_types::schematic::{
     ChannelOccurrence, ChannelRepeat, ChildSheet, InstancePath, LabelType, Point, SchematicSheet,
-    normalize_port_name, parse_bus_name, repeated_entry_name,
+    Symbol, normalize_port_name, parse_bus_name, repeated_entry_name,
 };
 use uuid::Uuid;
 
@@ -99,23 +98,145 @@ pub(super) fn rename_terminals(analysis: &mut Analysis, occ: &Occ, naming: &Chan
     if occ.channels.is_empty() {
         return;
     }
-    let power: HashSet<Uuid> = occ
+    let named: HashMap<Uuid, Cow<'_, str>> = occ
         .sheet
         .symbols
         .iter()
-        .filter(|s| s.is_power)
-        .map(|s| s.uuid)
+        .filter(|s| !s.is_power)
+        .map(|s| {
+            let base = s.designator_in(&occ.logical_path);
+            (s.uuid, channel_designator(base, &occ.channels, naming))
+        })
         .collect();
     for terminals in analysis.terminals.values_mut() {
-        for t in terminals.iter_mut().filter(|t| !power.contains(&t.symbol)) {
-            rename_terminal(t, &occ.channels, naming);
+        for t in terminals.iter_mut() {
+            if let Some(name) = named.get(&t.symbol) {
+                t.reference = name.to_string();
+            }
         }
     }
 }
 
-fn rename_terminal(t: &mut Terminal, channels: &[ChannelOccurrence], naming: &ChannelNaming) {
-    if let Cow::Owned(name) = channel_designator(&t.reference, channels, naming) {
-        t.reference = name;
+/// The one answer to "what is this symbol called in this placement" for a
+/// project with repeated sheets. Every reader outside the stitch (BOM,
+/// netlist file, PDF, Update PCB, Annotate) asks here. A placement in no
+/// channel is not listed and reads as [`Symbol::designator_in`].
+#[derive(Debug, Clone, Default)]
+pub struct ChannelDesignators {
+    naming: ChannelNaming,
+    placements: HashMap<InstancePath, ChannelPlacement>,
+}
+
+#[derive(Debug, Clone)]
+struct ChannelPlacement {
+    /// The placement all channels of the repeat share.
+    logical: InstancePath,
+    /// The channels it sits in, outermost first.
+    channels: Vec<ChannelOccurrence>,
+}
+
+impl ChannelDesignators {
+    /// The channel placements of the project walk, named through `naming`.
+    pub fn of_project(graph: &ProjectGraph, naming: &ChannelNaming) -> Self {
+        let mut issues = Vec::new();
+        let (occs, _) = walk_occurrences(graph, &mut issues);
+        let placements = occs
+            .into_iter()
+            .filter(|o| !o.channels.is_empty())
+            .map(|o| {
+                let placement = ChannelPlacement {
+                    logical: o.logical_path,
+                    channels: o.channels,
+                };
+                (o.path, placement)
+            })
+            .collect();
+        Self {
+            naming: naming.clone(),
+            placements,
+        }
+    }
+
+    /// The one placement `path` reads as, from the sheet symbols in `placed`
+    /// (any sheets holding the chain's symbols). For a reader with a stored
+    /// placement and no project walk; a step no symbol explains stays as is.
+    pub fn of_path<'a>(
+        path: &InstancePath,
+        placed: impl Iterator<Item = &'a ChildSheet> + Clone,
+        naming: &ChannelNaming,
+    ) -> Self {
+        let mut logical = Vec::with_capacity(path.chain().len());
+        let mut channels = Vec::new();
+        for &step in path.chain() {
+            let found = placed.clone().find_map(|cs| {
+                let repeat = ChannelRepeat::parse(&cs.name)?;
+                let channel = repeat
+                    .occurrences()
+                    .into_iter()
+                    .find(|c| channel_uuid(cs.uuid, c.number) == step)?;
+                Some((cs.uuid, channel))
+            });
+            match found {
+                Some((symbol, channel)) => {
+                    logical.push(symbol);
+                    channels.push(channel);
+                }
+                None => logical.push(step),
+            }
+        }
+        let mut placements = HashMap::new();
+        if !channels.is_empty() {
+            placements.insert(
+                path.clone(),
+                ChannelPlacement {
+                    logical: InstancePath::from_chain(logical),
+                    channels,
+                },
+            );
+        }
+        Self {
+            naming: naming.clone(),
+            placements,
+        }
+    }
+
+    /// Whether `path` is a channel of a repeated sheet.
+    pub fn is_channel(&self, path: &InstancePath) -> bool {
+        self.placements.contains_key(path)
+    }
+
+    /// The placement a designator of `path` is stored at: the repeated
+    /// placement for a channel, else `path` itself.
+    pub fn logical_path<'a>(&'a self, path: &'a InstancePath) -> &'a InstancePath {
+        self.placements.get(path).map_or(path, |p| &p.logical)
+    }
+
+    /// The designator `symbol` carries at `path`. A power symbol keeps its
+    /// own, as in the netlist.
+    pub fn designator_of<'s>(&self, symbol: &'s Symbol, path: &InstancePath) -> Cow<'s, str> {
+        let Some(placement) = self.placements.get(path) else {
+            return Cow::Borrowed(symbol.designator_in(path));
+        };
+        let base = symbol.designator_in(&placement.logical);
+        if symbol.is_power {
+            return Cow::Borrowed(base);
+        }
+        channel_designator(base, &placement.channels, &self.naming)
+    }
+
+    /// Give a throwaway copy of a sheet its channel designators at `path` as
+    /// instance entries, so a reader of [`Symbol::designator_in`] prints them.
+    /// Never call this on a document: nothing of it may reach a file.
+    pub fn stamp(&self, sheet: &mut SchematicSheet, path: &InstancePath) {
+        if !self.is_channel(path) {
+            return;
+        }
+        for symbol in sheet.symbols.iter_mut().filter(|s| !s.is_power) {
+            let name = self.designator_of(symbol, path).into_owned();
+            if !name.trim().is_empty() {
+                symbol.set_instance_designator(path, name);
+            }
+        }
     }
 }
 

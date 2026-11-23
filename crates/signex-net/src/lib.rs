@@ -14,7 +14,7 @@ pub mod uf;
 pub mod board;
 
 mod parts;
-pub use parts::{DesignPart, design_parts};
+pub use parts::{DesignPart, design_parts, design_parts_named};
 
 pub mod cross_probe;
 
@@ -62,6 +62,10 @@ pub use signature::{NetSignature, net_members, net_signatures, net_signatures_at
 
 mod project;
 pub use project::{
+    ChannelDesignators, EntryBuses, build_project_netlist_indexed_named,
+    build_project_netlist_named, channel_uuid,
+};
+pub use project::{
     ComponentPin, ComponentReport, HoverPin, MultiNamedNet, NetAnchor, NetHover, NetIndex,
     NetMember, NetMemberKind, NetMembers, NetNameSource, NumberingIssue, PagePlacement, PlacedPin,
     PlacedSymbol, ProjectGraph, ProjectNetChange, ProjectNetlist, ProjectRoot, SheetKey,
@@ -69,9 +73,6 @@ pub use project::{
     build_project_netlist_indexed, instance_entry_designators, is_auto_name, multi_named_nets,
     number_issues, parse_page_number, project_name_changes, project_occurrences, sheet_numbering,
     with_page_number,
-};
-pub use project::{
-    EntryBuses, build_project_netlist_indexed_named, build_project_netlist_named, channel_uuid,
 };
 
 mod compiled;

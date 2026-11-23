@@ -524,6 +524,7 @@ pub(super) fn block_text(i18n: &I18n, why: &BackBlock) -> Localized {
         ),
         BackBlock::BoardNotAnnotated => t!(i18n, ids::BACK_ANNOTATE_BLOCK_BOARD_NOT_ANNOTATED),
         BackBlock::SharedSheet => t!(i18n, ids::BACK_ANNOTATE_BLOCK_SHARED_SHEET),
+        BackBlock::ChannelDesignator => t!(i18n, ids::BACK_ANNOTATE_BLOCK_CHANNEL),
         BackBlock::FootprintFromBoard => t!(i18n, ids::BACK_ANNOTATE_BLOCK_FOOTPRINT),
     }
 }

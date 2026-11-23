@@ -194,8 +194,10 @@ impl Signex {
             .iter()
             .map(|(path, engine)| (path.clone(), engine.revision()))
             .collect();
+        let naming = project.data.schematic_design.channel_naming.clone();
         let request = CompareRequest {
             design: DesignRequest {
+                naming: naming.clone(),
                 plan: plan_project_sheets_for(&self.document_state, &root),
                 project_dir: project_dir.clone(),
                 board: board.clone(),
@@ -205,6 +207,7 @@ impl Signex {
                 previous: None,
             },
             back: BackRequest {
+                naming,
                 plan: plan_project_sheets_for(&self.document_state, &root),
                 project_dir,
                 board,

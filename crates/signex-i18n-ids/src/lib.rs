@@ -346,6 +346,7 @@ define_ids! {
     BACK_ANNOTATE_BLOCK_DUPLICATE = "back-annotate-block-duplicate";
     BACK_ANNOTATE_BLOCK_BOARD_NOT_ANNOTATED = "back-annotate-block-board-not-annotated";
     BACK_ANNOTATE_BLOCK_SHARED_SHEET = "back-annotate-block-shared-sheet";
+    BACK_ANNOTATE_BLOCK_CHANNEL = "back-annotate-block-channel";
     BACK_ANNOTATE_BLOCK_FOOTPRINT = "back-annotate-block-footprint";
     BACK_ANNOTATE_NOTES_HEADING = "back-annotate-notes-heading";
     BACK_ANNOTATE_NOTE_UNREADABLE = "back-annotate-note-unreadable";
