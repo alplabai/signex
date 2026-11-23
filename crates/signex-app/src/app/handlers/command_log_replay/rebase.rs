@@ -131,12 +131,7 @@ fn rebase_one(
 /// first taken from the measured text, a table's source and a bound table's
 /// rows (built from the design). A table's rows and columns are placed by
 /// index, so they count as stored only while `live` keeps the same source.
-fn drawing_stores(
-    drawing: &SchDrawing,
-    after: &SchDrawing,
-    live: &SchDrawing,
-    key: &str,
-) -> bool {
+fn drawing_stores(drawing: &SchDrawing, after: &SchDrawing, live: &SchDrawing, key: &str) -> bool {
     match drawing {
         SchDrawing::Line { .. } => {
             matches!(key, "start" | "end" | "width" | "stroke_color" | "locked")
@@ -181,7 +176,8 @@ fn drawing_stores(
             let same_source = matches!(live, SchDrawing::Table(l) if l.source == t.source
                 && l.columns.iter().map(named).eq(t.columns.iter().map(named)));
             matches!(key, "refresh" | "style" | "locked")
-                || (same_source && (key == "columns"
+                || (same_source
+                    && (key == "columns"
                         || (key == "rows"
                             && !t.source.is_bound()
                             && edited_rows_held(t, after, live))))
