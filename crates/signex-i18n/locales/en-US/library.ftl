@@ -497,6 +497,8 @@ library-edit-row-add-slot-unit = + { $name } ({ $unit })
 library-edit-row-slot-problem = ✗ { $reason }
 # Tooltip of a unit this version does not know, which is kept unchanged.
 library-edit-row-unit-kept = Kept as written
+# Heading over the SI prefixes in a measurement's menu (mockup row 139).
+library-edit-row-prefix = Prefix
 
 ## Unit menu captions (mockup row 139)
 # Muted caption of the "—" entry: the value carries no unit.

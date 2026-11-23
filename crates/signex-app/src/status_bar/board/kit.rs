@@ -8,7 +8,7 @@ use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::{Label, button, text};
 
-use super::super::graphite::{SP, TS, mono_font, popup, popup_row};
+use super::super::graphite::{SP, TS, mono_font, popup, popup_row, popup_row_active};
 use super::{BoardPopoverEvent, BoardPopoverModel};
 use crate::styles::tokens::resolve;
 use crate::styles::{HAIRLINE, Radii, ti};
@@ -255,6 +255,32 @@ pub(super) fn list_row<'a>(
     on_press: Option<BoardPopoverEvent>,
     tokens: &ThemeTokens,
 ) -> Element<'a, BoardPopoverEvent> {
+    styled_row(lead, body, trail, on_press, popup_row(tokens))
+}
+
+/// The picked row of a list: the selected fill instead of a check.
+pub(super) fn active_list_row<'a>(
+    lead: Element<'a, BoardPopoverEvent>,
+    body: Element<'a, BoardPopoverEvent>,
+    on_press: BoardPopoverEvent,
+    tokens: &ThemeTokens,
+) -> Element<'a, BoardPopoverEvent> {
+    styled_row(
+        Some(lead),
+        body,
+        None,
+        Some(on_press),
+        popup_row_active(tokens),
+    )
+}
+
+fn styled_row<'a>(
+    lead: Option<Element<'a, BoardPopoverEvent>>,
+    body: Element<'a, BoardPopoverEvent>,
+    trail: Option<Element<'a, BoardPopoverEvent>>,
+    on_press: Option<BoardPopoverEvent>,
+    style: impl Fn(&Theme, iced::widget::button::Status) -> iced::widget::button::Style + 'a,
+) -> Element<'a, BoardPopoverEvent> {
     let lead = container(lead.unwrap_or_else(|| Space::new().boxed()))
         .width(ROW_LEAD)
         .center_x(ROW_LEAD);
@@ -277,7 +303,7 @@ pub(super) fn list_row<'a>(
         Some(event) => button(face)
             .padding(0)
             .width(Length::Fill)
-            .style(popup_row(tokens))
+            .style(style)
             .on_press(event)
             .boxed(),
         None => face.boxed(),

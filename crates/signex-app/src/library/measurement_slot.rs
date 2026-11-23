@@ -86,7 +86,7 @@ pub(crate) fn measurement_slot<'a, M: Clone + 'a>(
 }
 
 /// The hairline between two segments of a slot.
-pub(crate) fn segment_divider<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
+fn segment_divider<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
     let line = theme_ext::border_color(tokens);
     container(Space::new())
         .width(HAIRLINE)

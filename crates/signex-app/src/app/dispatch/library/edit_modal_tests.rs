@@ -769,6 +769,8 @@ fn the_delete_confirm_names_the_row_and_its_close_cancels() {
     );
 }
 
+mod measurement_menu;
+
 fn open_unit_menu(app: &Signex, root: &Path) -> Option<String> {
     app.library.library_browsers[root]
         .edit_modal

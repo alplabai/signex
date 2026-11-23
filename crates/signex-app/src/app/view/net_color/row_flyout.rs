@@ -8,19 +8,29 @@ use iced::advanced::{Overlay, Shell, overlay, renderer};
 use iced::mouse::{self, Cursor};
 use iced::{Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector};
 
+use crate::app::handlers::editing_commands::net_color_palette::is_pointer_press;
 use crate::app::view::context_menu::clamp_menu_origin;
 
 /// `row`, with `card` floating level with it at the window's right edge.
 pub(super) struct RowFlyout<'a, Message> {
     /// The row, then the card.
     children: [Element<'a, Message>; 2],
+    on_outside_press: Option<Message>,
 }
 
 impl<'a, Message> RowFlyout<'a, Message> {
     pub(super) fn new(row: Element<'a, Message>, card: Element<'a, Message>) -> Self {
         Self {
             children: [row, card],
+            on_outside_press: None,
         }
+    }
+
+    /// Publishes `message` on a press outside the card. The press still
+    /// reaches whatever is under it.
+    pub(super) fn on_outside_press(mut self, message: Message) -> Self {
+        self.on_outside_press = Some(message);
+        self
     }
 }
 
@@ -39,7 +49,7 @@ fn chooser_origin(row: Rectangle, card: Size, list: Rectangle, window: Size) -> 
 
 impl<Message> widget::Meta for RowFlyout<'_, Message> {}
 
-impl<Message> Widget<Message, Theme, Renderer> for RowFlyout<'_, Message> {
+impl<Message: Clone> Widget<Message, Theme, Renderer> for RowFlyout<'_, Message> {
     fn diff(&mut self, tree: &mut Tree) {
         tree.diff_children(self.children.as_mut_slice());
     }
@@ -151,6 +161,7 @@ impl<Message> Widget<Message, Theme, Renderer> for RowFlyout<'_, Message> {
             tree: card_tree,
             layout: card_layout.move_to(origin),
             window,
+            on_outside_press: self.on_outside_press.as_ref(),
         })));
         overlays
     }
@@ -162,9 +173,10 @@ struct CardLayer<'a, 'b, Message> {
     tree: &'a mut Tree,
     layout: Layout,
     window: Size,
+    on_outside_press: Option<&'a Message>,
 }
 
-impl<Message> Overlay<Message, Theme, Renderer> for CardLayer<'_, '_, Message> {
+impl<Message: Clone> Overlay<Message, Theme, Renderer> for CardLayer<'_, '_, Message> {
     fn draw(
         &self,
         renderer: &mut Renderer,
@@ -210,6 +222,12 @@ impl<Message> Overlay<Message, Theme, Renderer> for CardLayer<'_, '_, Message> {
             shell,
             &window,
         );
+        if let Some(message) = self.on_outside_press
+            && is_pointer_press(event)
+            && !cursor.observe().is_over(self.layout.bounds())
+        {
+            shell.publish(message.clone());
+        }
     }
 
     /// The card's padding claims the pointer too, so a press there never

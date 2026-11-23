@@ -74,7 +74,9 @@ impl Signex {
                 let open = state.chooser.as_deref() == Some(net_row.net.as_str());
                 let row_element = palette_row(&net_row, open, tokens);
                 rows = rows.push(if open {
-                    RowFlyout::new(row_element, self.chooser(&net_row)).boxed()
+                    RowFlyout::new(row_element, self.chooser(&net_row))
+                        .on_outside_press(net_message(NetColorMsg::ChooserDismissed))
+                        .boxed()
                 } else {
                     row_element
                 });
@@ -192,6 +194,13 @@ fn mono() -> iced::Font {
 fn palette_row<'a>(net_row: &PaletteRow, open: bool, tokens: &ThemeTokens) -> Element<'a, Message> {
     let ghost = crate::styles::ghost_button(tokens);
     let open_fill = crate::panels::graphite::selection_fill(tokens);
+    // The open row only ever closes: its press has already dismissed the
+    // chooser, and a toggle in the same event batch would reopen it.
+    let press = if open {
+        NetColorMsg::ChooserDismissed
+    } else {
+        NetColorMsg::RowOpened(net_row.net.clone())
+    };
     let face = row![
         swatch(net_row.color.map(to_iced), SWATCH, tokens),
         text(UserText::new(net_row.net.clone()))
@@ -205,7 +214,7 @@ fn palette_row<'a>(net_row: &PaletteRow, open: bool, tokens: &ThemeTokens) -> El
         .width(Length::Fill)
         .height(Length::Fixed(ChromeMetrics::DEFAULT.row))
         .padding([0.0, SP.m])
-        .on_press(net_message(NetColorMsg::RowOpened(net_row.net.clone())))
+        .on_press(net_message(press))
         .style(move |theme: &Theme, status| {
             let mut style = ghost(theme, status);
             if open {

@@ -14,12 +14,12 @@ use signex_types::quantity::{SiPrefix, Unit};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text, theme_ext};
 
-use super::measurement_slot::{NUMBER_SHARE, PICKER_SHARE, measurement_slot, segment_divider};
+use super::measurement_slot::{NUMBER_SHARE, PICKER_SHARE, measurement_slot};
 use super::messages::{BrowserEditMsg, LibraryMessage};
 use super::modal_chrome::secondary_btn;
 use super::prefix_picker::prefix_segment;
 use super::state::EditRowModalState;
-use super::unit_menu::{UnitMenu, unit_menu};
+use super::unit_menu::{UnitMenu, measurement_menu};
 use super::unit_picker::unit_of_token;
 use crate::styles::{HAIRLINE, PillTone, Radii};
 
@@ -365,8 +365,9 @@ fn unit_segment_of<'u>(fixed: Option<&'u Unit>, cur_unit: &'u str) -> UnitSegmen
     }
 }
 
-/// The right part of a row's slot: the prefix picker of a known unit that
-/// takes one, then the unit segment, joined by a hairline.
+/// The right part of a row's slot, always one control (mockup row 139): a
+/// fixed unit's prefix picker or label, the menu of a row that picks its
+/// own unit, or an unknown unit as written.
 fn slot_picker<'a>(
     edit: &'a EditRowModalState,
     key: &str,
@@ -376,32 +377,27 @@ fn slot_picker<'a>(
     i18n: &I18n,
     send: &(impl Fn(BrowserEditMsg) -> LibraryMessage + Clone + 'a),
 ) -> Element<'a, LibraryMessage> {
-    let prefix = Unit::from_alias(cur_unit.trim()).and_then(|u| {
-        let selected = edit.param_prefix.get(key).copied().unwrap_or(SiPrefix::One);
+    let fixed_prefix = fixed.and_then(|u| {
         let send_p = send.clone();
         let key_p = key.to_string();
-        prefix_segment(&u, selected, move |prefix| {
+        prefix_segment(u, row_prefix(edit, key), move |prefix| {
             send_p(BrowserEditMsg::ParamPrefixPicked {
                 key: key_p.clone(),
                 prefix,
             })
         })
     });
-    let unit = unit_segment(
-        edit,
-        key,
-        unit_segment_of(fixed, cur_unit),
-        tokens,
-        i18n,
-        send,
-    );
-    match (prefix, unit) {
-        (Some(prefix), Some(unit)) => row![prefix, segment_divider(tokens), unit]
-            .align_y(Alignment::Center)
-            .boxed(),
-        (Some(only), None) | (None, Some(only)) => only,
-        (None, None) => Space::new().boxed(),
-    }
+    fixed_prefix
+        .or_else(|| {
+            let segment = unit_segment_of(fixed, cur_unit);
+            unit_segment(edit, key, segment, tokens, i18n, send)
+        })
+        .unwrap_or_else(|| Space::new().boxed())
+}
+
+/// The prefix the row's number is in.
+fn row_prefix(edit: &EditRowModalState, key: &str) -> SiPrefix {
+    edit.param_prefix.get(key).copied().unwrap_or(SiPrefix::One)
 }
 
 /// The unit part of a slot; `None` when the prefix picker already names it.
@@ -442,7 +438,8 @@ fn unit_segment<'a>(
     }
 }
 
-/// The unit menu of a row that picks its own unit.
+/// The one menu of a row that picks its own unit: prefixes and units when
+/// the unit takes prefixes, else units.
 fn menu_segment<'a>(
     edit: &'a EditRowModalState,
     key: &str,
@@ -459,13 +456,20 @@ fn menu_segment<'a>(
         }),
         on_dismiss: send(BrowserEditMsg::UnitMenuDismissed),
     };
+    let on_prefix = |prefix| {
+        send(BrowserEditMsg::ParamPrefixPicked {
+            key: key.to_string(),
+            prefix,
+        })
+    };
     let on_pick = |unit| {
         send(BrowserEditMsg::SetParamUnit {
             key: key.to_string(),
             unit,
         })
     };
-    unit_menu(menu, on_pick, tokens, i18n)
+    let prefix = row_prefix(edit, key);
+    measurement_menu(menu, prefix, on_prefix, on_pick, tokens, i18n)
 }
 
 /// The "template" pill after a template slot's key.

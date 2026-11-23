@@ -48,9 +48,10 @@ impl Signex {
                 if self.interaction_state.current_tool != Tool::Select
                     && self.interaction_state.active_canvas().placement_paused
                 {
-                    return self.update(Message::Dock(crate::dock::DockMessage::Panel(
+                    let confirmed = self.update(Message::Dock(crate::dock::DockMessage::Panel(
                         crate::panels::PanelMsg::ConfirmPrePlacement,
                     )));
+                    return Task::batch([confirmed, self.release_dimension_override()]);
                 }
                 if self.interaction_state.current_tool != Tool::Select {
                     use crate::panels::PrePlacementKind;
@@ -303,7 +304,8 @@ impl Signex {
                                 .and_then(|s| s.reference_override.clone()),
                         });
                     self.note_dimension_tool_pause();
-                    return Task::batch([show_properties, self.finish_update()]);
+                    let focus_override = self.focus_dimension_override();
+                    return Task::batch([show_properties, focus_override, self.finish_update()]);
                 }
                 self.finish_update()
             }
@@ -343,7 +345,11 @@ impl Signex {
                 } else {
                     Task::none()
                 };
-                Task::batch([resume_task, self.finish_update()])
+                Task::batch([
+                    resume_task,
+                    self.release_dimension_override(),
+                    self.finish_update(),
+                ])
             }
             ToolMessage::CycleDrawMode => {
                 let rule = self.interaction_state.corner_rule.with_next_mode();

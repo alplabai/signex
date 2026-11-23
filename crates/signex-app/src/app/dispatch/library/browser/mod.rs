@@ -488,6 +488,7 @@ impl Signex {
                 BrowserEditMsg::UnitMenuOpened { key } => modal.unit_menu_open = Some(key),
                 BrowserEditMsg::UnitMenuDismissed => modal.unit_menu_open = None,
                 BrowserEditMsg::ParamPrefixPicked { key, prefix } => {
+                    modal.unit_menu_open = None;
                     modal.param_prefix.insert(key.clone(), prefix);
                     param_commit::commit_param_buffer(modal, &key, template);
                 }

@@ -568,3 +568,58 @@ fn a_drc_rule_link_in_a_window_opens_the_rules_tab_on_main() {
     crate::app::path_ops::settle_task(&mut app, task);
     assert_eq!(app.rules_tab_in_window(true), Some(id));
 }
+
+/// Mockup row 157: with the sheet undocked and Properties in the shared
+/// dock, the Override box is in the sheet window's own tree, so the keys
+/// that window receives reach it.
+#[test]
+fn tab_on_an_undocked_sheet_puts_the_keys_in_that_windows_override_box() {
+    use crate::app::{Tool, ToolMessage};
+    use iced::advanced::shell::{Bus, Waker};
+    use iced::advanced::widget::operation::focusable;
+    use iced::keyboard::{self, Key};
+    use iced_runtime::UserInterface;
+    use iced_runtime::user_interface::Cache;
+
+    let mut f = fixture();
+    let window = f.window;
+    let _ = f.app.run_in_window_document(window, |app| {
+        app.update(Message::Tool(ToolMessage::SelectTool(
+            Tool::LinearDimension,
+        )))
+    });
+    let (outcome, _task) = super::surfaces::command(&mut f.app, "placement_properties", window);
+    drop(outcome);
+
+    let mut renderer = crate::layout_probe::headless_renderer();
+    let mut published = Bus::new();
+    {
+        let view = f.app.view(window);
+        let mut ui = UserInterface::build(view, SIZE, Cache::default(), &mut renderer);
+        let id = iced::widget::Id::new(crate::panels::DIMENSION_OVERRIDE_INPUT);
+        ui.operate(&renderer, &mut focusable::focus::<()>(id));
+        let key = Key::Character("j".into());
+        let event = iced::Event::Keyboard(keyboard::Event::KeyPressed {
+            key: key.clone(),
+            modified_key: key,
+            physical_key: keyboard::key::Physical::Code(keyboard::key::Code::KeyJ),
+            location: keyboard::Location::Standard,
+            modifiers: keyboard::Modifiers::empty(),
+            text: Some("j".into()),
+            repeat: false,
+        });
+        let _ = ui.update(
+            &iced::window::Headless,
+            &Waker::noop(),
+            std::slice::from_ref(&event),
+            iced::mouse::Cursor::Unavailable,
+            &mut renderer,
+            &mut published,
+        );
+    }
+    let typed: Vec<Message> = published.into_iter().collect();
+    assert!(typed.iter().all(|m| is_scoped(m, window)), "{typed:?}");
+    feed(&mut f.app, typed);
+    let dimension = &f.app.interaction_state.annotation_tool.dimension;
+    assert_eq!(dimension.override_text.as_deref(), Some("j"));
+}

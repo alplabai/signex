@@ -1,12 +1,17 @@
 //! The armed dimension tool's Properties, Tab and Space (mockup row 157),
 //! driven through `Signex::update`.
 
+use iced::advanced::shell::{Bus, Waker};
+use iced::advanced::widget::operation::focusable;
+use iced::keyboard::{self, Key};
+use iced_runtime::UserInterface;
+use iced_runtime::user_interface::Cache;
 use signex_types::schematic::{DimensionDirection, DimensionUnits, SchDimension, SchDrawing};
 
 use super::placement_tests::{app_with_tool, click, doc};
 use crate::app::sch_tables::AnnotationEdit;
 use crate::app::{EditMsg, InputMsg, Message, Signex, Tool, ToolMessage};
-use crate::panels::{AnnotationField, AnnotationPanelMsg, PanelMsg};
+use crate::panels::{AnnotationField, AnnotationPanelMsg, DIMENSION_OVERRIDE_INPUT, PanelMsg};
 
 fn armed(tool: Tool) -> Signex {
     let mut app = app_with_tool(tool);
@@ -314,4 +319,179 @@ fn the_hint_names_tab_and_space_from_the_second_point() {
         .hint
         .clone();
     assert!(hint.contains("Tab edits value") && hint.contains("Space flips side"));
+}
+
+/// The live Properties panel: focus the Override box as Tab's task does,
+/// press `key` with `text`, and hand what the box published to `update`.
+/// Returns whether a widget captured the key.
+fn press_in_override(app: &mut Signex, key: Key, text: Option<&str>) -> bool {
+    // The bare test sheet has no render snapshot to set this from.
+    app.document_state.panel_ctx.has_schematic = true;
+    let size = iced::Size::new(300.0, 1000.0);
+    let mut renderer = crate::layout_probe::headless_renderer();
+    let mut published = Bus::new();
+    let captured = {
+        let view = crate::panels::view_properties(&app.document_state.panel_ctx);
+        let mut ui = UserInterface::build(view, size, Cache::default(), &mut renderer);
+        let mut focus = focusable::focus::<()>(iced::widget::Id::new(DIMENSION_OVERRIDE_INPUT));
+        ui.operate(&renderer, &mut focus);
+        let event = iced::Event::Keyboard(keyboard::Event::KeyPressed {
+            key: key.clone(),
+            modified_key: key,
+            physical_key: keyboard::key::Physical::Code(keyboard::key::Code::KeyJ),
+            location: keyboard::Location::Standard,
+            modifiers: keyboard::Modifiers::empty(),
+            text: text.map(Into::into),
+            repeat: false,
+        });
+        let (_, statuses) = ui.update(
+            &iced::window::Headless,
+            &Waker::noop(),
+            std::slice::from_ref(&event),
+            iced::mouse::Cursor::Unavailable,
+            &mut renderer,
+            &mut published,
+        );
+        statuses[0] == iced::event::Status::Captured
+    };
+    for message in published {
+        let _ = app.update(Message::Dock(crate::dock::DockMessage::Panel(message)));
+    }
+    captured
+}
+
+fn letter_j() -> Key {
+    Key::Character("j".into())
+}
+
+fn override_text(app: &Signex) -> Option<&str> {
+    app.interaction_state
+        .annotation_tool
+        .dimension
+        .override_text
+        .as_deref()
+}
+
+#[test]
+fn tab_puts_the_keys_in_the_override_box_and_typing_turns_it_on() {
+    let mut app = armed(Tool::LinearDimension);
+    click(&mut app, (0.0, 0.0));
+    click(&mut app, (12.7, 0.0));
+    assert!(
+        !press_in_override(&mut app, letter_j(), Some("j")),
+        "before Tab the switched-off box takes no keys"
+    );
+    assert_eq!(override_text(&app), None);
+
+    tab(&mut app);
+    assert_eq!(override_text(&app), None, "Tab alone leaves Override off");
+    assert!(press_in_override(&mut app, letter_j(), Some("j")));
+    assert_eq!(override_text(&app), Some("j"));
+}
+
+#[test]
+fn the_focused_box_leaves_tab_to_the_tool() {
+    let mut app = armed(Tool::LinearDimension);
+    click(&mut app, (0.0, 0.0));
+    tab(&mut app);
+    let tab_key = Key::Named(keyboard::key::Named::Tab);
+    assert!(!press_in_override(&mut app, tab_key, Some("\t")));
+    assert_eq!(override_text(&app), None);
+}
+
+#[test]
+fn tab_with_nothing_typed_places_the_measured_value() {
+    let mut app = armed(Tool::LinearDimension);
+    click(&mut app, (0.0, 0.0));
+    click(&mut app, (12.7, 0.0));
+    tab(&mut app);
+    tab(&mut app);
+    assert!(!app.interaction_state.active_canvas().placement_paused);
+    click(&mut app, (5.08, 5.08));
+    assert_eq!(dimensions(&app)[0].override_text, None);
+}
+
+#[test]
+fn emptying_the_box_turns_override_off_again() {
+    let mut app = armed(Tool::LinearDimension);
+    click(&mut app, (0.0, 0.0));
+    click(&mut app, (12.7, 0.0));
+    tab(&mut app);
+    for typed in ["J", ""] {
+        panel(
+            &mut app,
+            AnnotationPanelMsg::FieldTyped(AnnotationField::OverrideText, typed.into()),
+        );
+    }
+    assert_eq!(override_text(&app), None);
+    assert_eq!(
+        app.document_state.panel_ctx.annotation.draft, None,
+        "no empty draft hides the measured value after the second Tab"
+    );
+}
+
+#[test]
+fn tab_unfolds_the_text_section_so_typing_reaches_the_override_box() {
+    let mut app = armed(Tool::LinearDimension);
+    click(&mut app, (0.0, 0.0));
+    click(&mut app, (12.7, 0.0));
+    let _ = app.update(Message::Dock(crate::dock::DockMessage::Panel(
+        PanelMsg::ToggleSection(crate::panels::DIMENSION_TEXT_SECTION.into()),
+    )));
+    assert!(
+        app.document_state
+            .panel_ctx
+            .collapsed_sections
+            .contains(crate::panels::DIMENSION_TEXT_SECTION)
+    );
+
+    tab(&mut app);
+    assert!(press_in_override(&mut app, letter_j(), Some("j")));
+    assert_eq!(override_text(&app), Some("j"));
+}
+
+#[test]
+fn the_form_is_paused_only_between_the_two_tabs() {
+    let mut app = armed(Tool::LinearDimension);
+    let shown = |app: &Signex| {
+        let form = app
+            .document_state
+            .panel_ctx
+            .annotation
+            .dimension_tool
+            .as_ref();
+        form.expect("the tool's form").is_paused
+    };
+    assert!(!shown(&app));
+    tab(&mut app);
+    assert!(shown(&app));
+    tab(&mut app);
+    assert!(!shown(&app));
+}
+
+#[test]
+fn the_direction_carries_to_the_next_dimension_and_the_override_does_not() {
+    let mut app = armed(Tool::LinearDimension);
+    click(&mut app, (0.0, 0.0));
+    click(&mut app, (12.7, 12.7));
+    tab(&mut app);
+    panel(
+        &mut app,
+        AnnotationPanelMsg::Picked(AnnotationEdit::Direction(DimensionDirection::Vertical)),
+    );
+    panel(
+        &mut app,
+        AnnotationPanelMsg::FieldTyped(AnnotationField::OverrideText, "J1".into()),
+    );
+    tab(&mut app);
+    click(&mut app, (5.08, 5.08));
+    // Wider than tall: the drag alone would make this one horizontal.
+    click(&mut app, (0.0, 0.0));
+    click(&mut app, (12.7, 2.54));
+    click(&mut app, (5.08, 5.08));
+
+    let placed = dimensions(&app);
+    assert_eq!(placed[0].override_text.as_deref(), Some("J1"));
+    assert_eq!(placed[1].override_text, None);
+    assert_eq!(placed[1].direction, DimensionDirection::Vertical);
 }

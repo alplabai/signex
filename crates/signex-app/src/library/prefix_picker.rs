@@ -24,10 +24,15 @@ impl std::fmt::Display for PrefixChoice {
     }
 }
 
+/// A prefix and unit as one glyph: `kΩ`, `µF`, plain `Ω`.
+pub(crate) fn prefixed_glyph(prefix: SiPrefix, unit: &Unit) -> String {
+    format!("{}{}", prefix.symbol(), unit.glyph())
+}
+
 fn choice(prefix: SiPrefix, unit: &Unit) -> PrefixChoice {
     PrefixChoice {
         prefix,
-        label: format!("{}{}", prefix.symbol(), unit.glyph()),
+        label: prefixed_glyph(prefix, unit),
     }
 }
 

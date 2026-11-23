@@ -55,7 +55,7 @@ const LOCKING: [ModalId; 14] = [
 ];
 
 /// Take keyboard focus away from whatever text input holds it, in every window.
-fn unfocus_text_inputs() -> Task<Message> {
+pub(super) fn unfocus_text_inputs() -> Task<Message> {
     iced_runtime::task::effect(iced_runtime::Action::widget(
         iced::advanced::widget::operation::focusable::unfocus::<()>(),
     ))

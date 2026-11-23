@@ -685,7 +685,7 @@ fn the_layer_dropdown_is_one_two_column_card() {
     let card = app.board_popover_card(main).expect("the dropdown");
     let texts = crate::layout_probe::lay_out_texts(card, iced::Size::new(1600.0, 900.0));
     let at = |label| crate::layout_probe::find(&texts, label).bounds;
-    let (copper, sets) = (at("Copper"), at("LAYER SETS"));
+    let (copper, sets) = (at("COPPER"), at("LAYER SETS"));
     let (layer, all) = (at("Top Layer"), at("All Layers"));
     assert!(
         sets.x > layer.x + layer.width,
@@ -716,6 +716,23 @@ fn the_two_column_dropdown_stays_inside_a_narrow_window() {
     let texts = crate::layout_probe::lay_out_texts(card, iced::Size::new(640.0, 900.0));
     let sets = crate::layout_probe::find(&texts, "Mechanical Layers").bounds;
     assert!(sets.x + sets.width <= 640.0, "{sets:?}");
+}
+
+/// Mockup row 6: in a window too short for it the card stays inside the
+/// window, above the status bar, and its list scrolls.
+#[test]
+fn the_layer_dropdown_stays_inside_a_short_window() {
+    let (mut app, _path, main) = app_with_board();
+    let window = iced::Size::new(1600.0, 120.0);
+    app.ui_state.window_size = (window.width, window.height);
+    open_dropdown(&mut app, main);
+    let card = app.board_popover_card(main).expect("the dropdown");
+    let texts = crate::layout_probe::lay_out_texts(card, window);
+    let heading = crate::layout_probe::find(&texts, "COPPER").bounds;
+    assert!(
+        heading.y >= 0.0,
+        "the card's top is in the window: {heading:?}"
+    );
 }
 
 /// Save current as set... reaches the naming card, above the status bar.

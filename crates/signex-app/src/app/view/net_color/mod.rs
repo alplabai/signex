@@ -1,6 +1,8 @@
 //! The net colour dialogs: the F5 palette (#71) and the custom picker (#72),
 //! with the swatch both draw.
 
+#[cfg(test)]
+mod chooser_press_tests;
 mod custom_picker;
 mod palette;
 mod row_flyout;
