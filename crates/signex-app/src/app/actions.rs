@@ -222,7 +222,11 @@ impl Signex {
         self.clear_drawing_buffers_keeping(false, paused_elsewhere);
     }
 
-    fn clear_drawing_buffers_keeping(&mut self, keep_wire: bool, keep_annotation: bool) {
+    pub(in crate::app) fn clear_drawing_buffers_keeping(
+        &mut self,
+        keep_wire: bool,
+        keep_annotation: bool,
+    ) {
         let was_drawing = !keep_wire && self.interaction_state.wire_drawing;
         if was_drawing {
             self.interaction_state.wire_drawing = false;
