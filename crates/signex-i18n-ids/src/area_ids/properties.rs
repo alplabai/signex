@@ -431,6 +431,7 @@ define_ids! {
     PROPERTIES_TEXT_SIZE_UNIT = "properties-text-size-unit";
     // Sheet symbol, drawing shape, directive and multi-selection forms (#1699).
     PROPERTIES_SHEET_OPEN = "properties-sheet-open";
+    PROPERTIES_SHEET_OPEN_MISSING = "properties-sheet-open-missing";
     PROPERTIES_SHEET_BROWSE = "properties-sheet-browse";
     PROPERTIES_SHEET_BROWSE_TITLE = "properties-sheet-browse-title";
     PROPERTIES_SHEET_CREATE = "properties-sheet-create";
@@ -475,6 +476,9 @@ define_ids! {
     PROPERTIES_RULE_NO_MATCH = "properties-rule-no-match";
     PROPERTIES_KIND_ALL = "properties-kind-all";
     PROPERTIES_KIND_PARTS = "properties-kind-parts";
+    PROPERTIES_KIND_POWER_PORTS = "properties-kind-power-ports";
+    PROPERTIES_MULTI_POWER_NOTE = "properties-multi-power-note";
+    PROPERTIES_COUNT_POWER_PORTS = "properties-count-power-ports";
     PROPERTIES_KIND_LABELS = "properties-kind-labels";
     PROPERTIES_KIND_WIRES = "properties-kind-wires";
     PROPERTIES_MULTI_MIXED_BOTH = "properties-multi-mixed-both";

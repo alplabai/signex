@@ -41,6 +41,12 @@ pub fn view_multi_selection<'a>(
         if form.shows(MultiKind::Parts, groups) {
             col = col.push(parts_section(ctx, muted));
         }
+        if form.effective_filter(groups) == Some(MultiKind::PowerPorts) {
+            col = col.push(inset_caption(
+                t!(ctx.i18n, ids::PROPERTIES_MULTI_POWER_NOTE),
+                muted,
+            ));
+        }
         if form.shows(MultiKind::Labels, groups) {
             col = col.push(labels_section(ctx, muted));
         }
@@ -69,7 +75,7 @@ fn header<'a>(ctx: &'a PanelContext, muted: Color, primary: Color) -> Element<'a
             text(t!(
                 i18n,
                 ids::PANELS_MULTI_OBJECTS_SELECTED,
-                "count" => ctx.selection_count.to_string()
+                "count" => counted_objects(ctx).to_string()
             ))
             .size(TS.caption)
             .color(muted),
@@ -98,8 +104,29 @@ fn chip_style(tokens: &ThemeTokens) -> ChipStyle {
 fn kind_label(kind: MultiKind) -> MessageId {
     match kind {
         MultiKind::Parts => ids::PROPERTIES_KIND_PARTS,
+        MultiKind::PowerPorts => ids::PROPERTIES_KIND_POWER_PORTS,
         MultiKind::Labels => ids::PROPERTIES_KIND_LABELS,
         MultiKind::Wires => ids::PROPERTIES_KIND_WIRES,
+    }
+}
+
+/// The catalog message counting `n` objects of a chip's kind.
+fn chip_count_id(kind: MultiKind) -> MessageId {
+    match kind {
+        MultiKind::Parts => ids::PROPERTIES_COUNT_PARTS,
+        MultiKind::PowerPorts => ids::PROPERTIES_COUNT_POWER_PORTS,
+        MultiKind::Labels => ids::PROPERTIES_COUNT_LABELS,
+        MultiKind::Wires => ids::PROPERTIES_COUNT_WIRES,
+    }
+}
+
+/// What the header, All and the footer count: the chips' sum, or the whole
+/// selection when nothing in it can be edited together.
+fn counted_objects(ctx: &PanelContext) -> usize {
+    if ctx.multi_groups.is_empty() {
+        ctx.selection_count
+    } else {
+        ctx.multi_groups.counted()
     }
 }
 
@@ -118,7 +145,7 @@ fn kind_chips<'a>(ctx: &'a PanelContext, groups: &SelectionGroups) -> Element<'a
     let count = |n: usize| Some(u32::try_from(n).unwrap_or(u32::MAX));
     let mut chips = row![chip(
         t!(i18n, ids::PROPERTIES_KIND_ALL),
-        count(ctx.selection_count),
+        count(counted_objects(ctx)),
         on.is_none(),
         style,
         metrics,
@@ -505,10 +532,20 @@ pub(super) fn kind_count_id(kind: SelectedKind) -> MessageId {
 }
 
 /// "9 parts, 3 labels, 2 wires": every kind of the selection with its count.
-/// The two part-field kinds count as one.
+/// The two part-field kinds count as one, and power ports are not parts.
 pub(super) fn kinds_text(ctx: &PanelContext) -> String {
     let mut merged: Vec<(MessageId, usize)> = Vec::new();
     for (kind, n) in ctx.selection_form.kinds.iter() {
+        if kind == SelectedKind::Symbol {
+            let ports = ctx.multi_groups.power_ports.min(n);
+            if n > ports {
+                merged.push((ids::PROPERTIES_COUNT_PARTS, n - ports));
+            }
+            if ports > 0 {
+                merged.push((ids::PROPERTIES_COUNT_POWER_PORTS, ports));
+            }
+            continue;
+        }
         let id = kind_count_id(kind);
         match merged.iter_mut().find(|(seen, _)| *seen == id) {
             Some((_, total)) => *total += n,
@@ -522,16 +559,37 @@ pub(super) fn kinds_text(ctx: &PanelContext) -> String {
         .join(", ")
 }
 
-/// The footer: "14 selected: 9 parts, 3 labels, 2 wires".
+/// The chips' kinds with their counts, in chip order.
+fn counted_kinds_text(ctx: &PanelContext) -> String {
+    MultiKind::ALL
+        .into_iter()
+        .filter_map(|kind| {
+            let n = kind.count_in(&ctx.multi_groups)?;
+            Some(
+                ctx.i18n
+                    .message_plain(chip_count_id(kind), &[("count", n.into())]),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// The footer: "14 selected: 9 parts, 3 labels, 2 wires". It counts what All
+/// counts; with nothing editable it lists the whole selection.
 pub(super) fn footer_text(ctx: &PanelContext) -> signex_i18n::Localized {
-    let kinds = kinds_text(ctx);
+    let kinds = if ctx.multi_groups.is_empty() {
+        kinds_text(ctx)
+    } else {
+        counted_kinds_text(ctx)
+    };
+    let count = counted_objects(ctx);
     if kinds.is_empty() {
-        t!(ctx.i18n, ids::PROPERTIES_MULTI_FOOTER_PLAIN, "count" => ctx.selection_count)
+        t!(ctx.i18n, ids::PROPERTIES_MULTI_FOOTER_PLAIN, "count" => count)
     } else {
         t!(
             ctx.i18n,
             ids::PROPERTIES_MULTI_FOOTER,
-            "count" => ctx.selection_count,
+            "count" => count,
             "kinds" => kinds
         )
     }
