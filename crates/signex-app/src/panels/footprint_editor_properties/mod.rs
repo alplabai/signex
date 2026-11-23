@@ -55,7 +55,8 @@ pub(super) fn view_footprint_editor_properties<'a>(
     if let Some(target) = pad_target(fp) {
         let mut col = Column::new().spacing(0).width(Length::Fill);
         if let Some(outcome) = fp.bake_outcome.as_ref() {
-            col = bake_outcome::view_bake_outcome(col, outcome, tokens, i18n);
+            let pad = fp.selected_pad.as_ref();
+            col = bake_outcome::view_bake_outcome(col, outcome, pad, palette, tokens, i18n);
         }
         col = col.push(pad::view_pad_header(fp, target, tokens, i18n));
         if let Some(section) = pad::view_driven_by(fp, target, palette, i18n) {

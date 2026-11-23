@@ -221,9 +221,15 @@ impl Signex {
             tokens,
             &self.ui_state.i18n,
         );
-        let bar = signex_widgets::active_bar::view(bar_items, tokens)
-            .map(Message::Library)
-            .boxed();
+        let window_width = self.ui_state.size_of_window(window_id).0;
+        let bar = signex_widgets::active_bar::view_within(
+            bar_items,
+            crate::library::editor::footprint::unified_active_bar::scrolling_slots(editor),
+            crate::library::editor::footprint::unified_active_bar::bar_max_width(window_width),
+            tokens,
+        )
+        .map(Message::Library)
+        .boxed();
         out.push(
             column![
                 iced::widget::Space::new().height(y_offset + bar_margin),
@@ -243,7 +249,7 @@ impl Signex {
                 tokens,
                 footprint_presets,
                 dropdown_top,
-                self.ui_state.window_size.0,
+                window_width,
                 &self.ui_state.i18n,
             )
         {

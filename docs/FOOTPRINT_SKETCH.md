@@ -213,7 +213,10 @@ The footprint editor shares the board sketch's tools and its way out
 [PCB_SKETCH.md](PCB_SKETCH.md#hosts)). In sketch mode the Active Bar is the
 sketch bar alone, Select | Create ▾ | Modify ▾ | constraints | dimension
 input | Linetype | Snap ▾, and the mode bar at the canvas's bottom left
-reads **Bake preview · Discard changes · Bake**:
+reads **Bake preview · Discard changes · Bake**. The constraint strip always
+shows all 19 buttons; one the selection cannot take is greyed and does nothing.
+In a window too narrow for the whole bar the strip alone scrolls sideways, by
+its thin scrollbar or Shift+wheel, so every other control stays in reach:
 
 - **Bake** keeps the edits and goes back to the pads view. The footprint
   bakes on every solve, so nothing more is written. An open profile stops
@@ -240,8 +243,10 @@ reads **Bake preview · Discard changes · Bake**:
   its place, and the canvas rings it.
 
 After **Bake**, Properties shows the outcome: `Baked · N pads`, what was
-written, and Edit in Sketch, until the selection changes or the footprint no
-longer holds those counts (mockup row 190).
+written, a **Pads ↔ Sketch** row and Edit in Sketch (mockup row 190). Clicking
+one pad keeps the panel and fills the row with that pad and its sketch source.
+A non-pad object, a multi-selection, an edit or an empty click ends the panel,
+and it does not come back on Undo or Redo.
 
 The Linetype control is a three-way segment, Normal / Construction /
 Centerline; it replaces the click-to-cycle pill.

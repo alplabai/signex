@@ -45,7 +45,8 @@ sketch-bake-roles-empty = No closed profiles yet.
 sketch-bake-roles-mask = Solder mask: from the pad rule, no entity
 # $count is the number of centerlines.
 sketch-bake-roles-centerlines = Centerlines: { $count }, never bake
-# Properties after Bake (mockup row 190), until the selection changes.
+# Properties after Bake (mockup row 190), until a non-pad object, a
+# multi-selection, an edit or an empty click ends it.
 sketch-bake-outcome-title = Baked · { $pads ->
     [one] 1 pad
    *[other] { $pads } pads
@@ -55,6 +56,12 @@ sketch-bake-outcome-wrote = Baked { $items } into { $name }.
 sketch-bake-outcome-nothing = The bake wrote nothing into { $name }.
 # One entry of $items: a bake target and how many it holds.
 sketch-bake-outcome-item = { $target } { $count }
+# The row linking a clicked pad to its sketch source. $number is the pad's
+# designator, $source names the geometry that drives it.
+sketch-bake-outcome-link = Pads ↔ Sketch
+sketch-bake-outcome-link-hint = Click a pad
+sketch-bake-outcome-link-pad = Pad { $number } · { $source }
+sketch-bake-outcome-link-none = Pad { $number } · no sketch source
 # The layer colour legend over a footprint's bake preview (mockup row 190).
 sketch-bake-legend-top = Top
 sketch-bake-legend-paste = Paste
