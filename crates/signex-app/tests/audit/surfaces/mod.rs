@@ -12,6 +12,7 @@ mod caps_a;
 mod caps_b;
 mod caps_c;
 mod caps_d;
+mod caps_e;
 pub mod checks;
 mod drawn_fixtures;
 mod global;
@@ -54,5 +55,6 @@ pub fn groups() -> Vec<(&'static str, Vec<Surface>)> {
         ("caps_b", caps_b::rows()),
         ("caps_c", caps_c::rows()),
         ("caps_d", caps_d::rows()),
+        ("caps_e", caps_e::rows()),
     ]
 }
