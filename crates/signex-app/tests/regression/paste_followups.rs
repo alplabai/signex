@@ -172,7 +172,11 @@ fn choosing_next_free_in_the_dialog_reads_the_numbers_and_ok_waits_for_them() {
 
     let _ = app.update(seeded);
     let _ = app.update(dialog(PasteArrayMsg::ApplyPressed));
-    assert_eq!(references(&app)[before..], ["R4", "R5"]);
+    assert_eq!(
+        references(&app)[before..],
+        ["R4"],
+        "the default Copies = 2 is the original and one new copy"
+    );
 }
 
 #[test]

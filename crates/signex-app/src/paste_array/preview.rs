@@ -40,19 +40,19 @@ pub fn height_em(expanded: bool) -> f32 {
     }
 }
 
-/// How many copies the preview draws, and how many it only counts.
+/// How many positions the preview draws, and how many it only counts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PreviewPlan {
-    /// Drawn copies, copy 1 (the original) first.
+    /// Drawn positions, copy 1 (the original) first.
     pub drawn: usize,
-    /// Copies past [`PREVIEW_MAX_DRAWN`], named "+N more".
+    /// Positions past [`PREVIEW_MAX_DRAWN`], named "+N more".
     pub more: usize,
 }
 
-/// The plan for `copies` new copies: the original plus each copy, the
-/// first [`PREVIEW_MAX_DRAWN`] drawn.
-pub fn preview_plan(copies: u32) -> PreviewPlan {
-    let total = copies as usize + 1;
+/// The plan for `positions` positions, the original included, the first
+/// [`PREVIEW_MAX_DRAWN`] drawn.
+pub fn preview_plan(positions: u32) -> PreviewPlan {
+    let total = positions as usize;
     let drawn = total.min(PREVIEW_MAX_DRAWN);
     PreviewPlan {
         drawn,
@@ -70,7 +70,8 @@ pub fn stepped_labels(label: &str, step: i32, n: usize) -> Vec<String> {
 
 /// What the preview draws, in mm on the sheet.
 pub struct PreviewSpec {
-    pub copies: u32,
+    /// Positions in the array, the original included.
+    pub positions: u32,
     pub dx_mm: f64,
     pub dy_mm: f64,
     pub step: i32,
@@ -90,7 +91,7 @@ fn pt(x: f64, y: f64) -> Point {
 /// The preview as an illustration, in view units of mm shifted so the
 /// drawing starts at the origin.
 pub fn illustration(spec: PreviewSpec) -> Illustration {
-    let plan = preview_plan(spec.copies);
+    let plan = preview_plan(spec.positions);
     let (w, h) = spec
         .copy_size_mm
         .filter(|(w, h)| w.is_finite() && h.is_finite() && *w > 0.0 && *h > 0.0)
@@ -230,9 +231,9 @@ fn callouts(spec: &PreviewSpec, (ox, oy): (f64, f64), w: f64, margin: f64) -> Ve
 mod tests {
     use super::*;
 
-    fn spec(copies: u32) -> PreviewSpec {
+    fn spec(positions: u32) -> PreviewSpec {
         PreviewSpec {
-            copies,
+            positions,
             dx_mm: 10.16,
             dy_mm: 0.0,
             step: 1,
@@ -262,18 +263,18 @@ mod tests {
 
     #[test]
     fn the_preview_draws_up_to_12_copies_then_counts_the_rest() {
-        assert_eq!(preview_plan(3), PreviewPlan { drawn: 4, more: 0 });
-        assert_eq!(preview_plan(11), PreviewPlan { drawn: 12, more: 0 });
-        assert_eq!(preview_plan(12), PreviewPlan { drawn: 12, more: 1 });
+        assert_eq!(preview_plan(4), PreviewPlan { drawn: 4, more: 0 });
+        assert_eq!(preview_plan(12), PreviewPlan { drawn: 12, more: 0 });
+        assert_eq!(preview_plan(13), PreviewPlan { drawn: 12, more: 1 });
         assert_eq!(
             preview_plan(1000),
             PreviewPlan {
                 drawn: 12,
-                more: 989
+                more: 988
             }
         );
 
-        let small = illustration(spec(3));
+        let small = illustration(spec(4));
         assert_eq!(bodies(&small), 4, "the original and three copies");
         assert_eq!(mores(&small), 0);
         let big = illustration(spec(40));
