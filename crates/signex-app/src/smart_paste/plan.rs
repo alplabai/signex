@@ -3,8 +3,8 @@
 //! the After paste table. Power nets are never rewritten.
 
 use signex_engine::PlacementPayload;
+use signex_types::object_id::UuidV7Ids;
 use signex_types::schematic::{LabelType, SchematicSheet};
-use uuid::Uuid;
 
 /// Grid the preview drag snaps the first copy to, in mm.
 pub const DRAG_GRID_MM: f64 = 1.27;
@@ -146,83 +146,22 @@ pub fn after_paste(nets: &[(String, bool)], input: &PasteInput) -> Vec<(String, 
         .collect()
 }
 
-/// `fragment` with fresh ids for every object, so copies placed side by
-/// side in one payload never share an id.
-fn with_fresh_ids(mut fragment: SchematicSheet) -> SchematicSheet {
-    let fresh = Uuid::now_v7;
-    fragment.symbols.iter_mut().for_each(|o| o.uuid = fresh());
-    fragment.wires.iter_mut().for_each(|o| o.uuid = fresh());
-    fragment.buses.iter_mut().for_each(|o| o.uuid = fresh());
-    fragment
-        .bus_entries
-        .iter_mut()
-        .for_each(|o| o.uuid = fresh());
-    fragment.junctions.iter_mut().for_each(|o| o.uuid = fresh());
-    fragment
-        .no_connects
-        .iter_mut()
-        .for_each(|o| o.uuid = fresh());
-    fragment
-        .no_erc_directives
-        .iter_mut()
-        .for_each(|o| o.uuid = fresh());
-    fragment.labels.iter_mut().for_each(|o| o.uuid = fresh());
-    fragment
-        .text_notes
-        .iter_mut()
-        .for_each(|o| o.uuid = fresh());
-    fragment
-        .drawings
-        .iter_mut()
-        .for_each(|o| o.set_uuid(fresh()));
-    fragment
-}
-
 /// The payload a Smart Paste puts on the cursor: every copy at its place
 /// from the anchor (copy `k` at `k` times the offset), its net labels
 /// rewritten, the library bodies once. Designators are given at the click.
 #[must_use]
 pub fn copies_payload(payload: &PlacementPayload, input: &PasteInput) -> PlacementPayload {
-    let source = payload.fragment();
-    // The bodies and sheet settings once; the objects come from the copies.
-    let mut merged = source.clone();
-    merged.symbols.clear();
-    merged.wires.clear();
-    merged.buses.clear();
-    merged.bus_entries.clear();
-    merged.junctions.clear();
-    merged.no_connects.clear();
-    merged.no_erc_directives.clear();
-    merged.labels.clear();
-    merged.text_notes.clear();
-    merged.drawings.clear();
-    for k in 1..=input.copies {
-        let step = f64::from(k);
-        let mut copy = PlacementPayload::new(source.clone())
-            .translated(input.dx * step, input.dy * step)
-            .fragment()
-            .clone();
-        if let Some((pattern, start)) = &input.rewrite {
-            let n = start + i64::from(k) - 1;
-            for label in copy.labels.iter_mut() {
-                if !is_power_label(label.label_type) {
-                    label.text = rewritten(pattern, &label.text, n);
-                }
-            }
-        }
-        let copy = if k == 1 { copy } else { with_fresh_ids(copy) };
-        merged.symbols.extend(copy.symbols);
-        merged.wires.extend(copy.wires);
-        merged.buses.extend(copy.buses);
-        merged.bus_entries.extend(copy.bus_entries);
-        merged.junctions.extend(copy.junctions);
-        merged.no_connects.extend(copy.no_connects);
-        merged.no_erc_directives.extend(copy.no_erc_directives);
-        merged.labels.extend(copy.labels);
-        merged.text_notes.extend(copy.text_notes);
-        merged.drawings.extend(copy.drawings);
-    }
-    PlacementPayload::new(merged)
+    payload.repeated(
+        input.copies,
+        input.dx,
+        input.dy,
+        &mut UuidV7Ids,
+        |k, label| {
+            let (pattern, start) = input.rewrite.as_ref()?;
+            (!is_power_label(label.label_type))
+                .then(|| rewritten(pattern, &label.text, start + i64::from(k) - 1))
+        },
+    )
 }
 
 /// "R4 → R6, R5 → R7" for one copy, or "R4 → R6, R8; R5 → R7, R9" for
@@ -268,7 +207,10 @@ pub fn mapping_text(mapping: &[(String, Vec<String>)], copies: u32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signex_types::schematic::{Label, Point, Symbol};
+    use signex_types::schematic::{
+        HarnessConnector, HarnessEntry, HarnessWire, Label, Point, Symbol,
+    };
+    use uuid::Uuid;
 
     fn fragment() -> SchematicSheet {
         let mut f = SchematicSheet::default();
@@ -359,6 +301,49 @@ mod tests {
                 "GND"
             ]
         );
+    }
+
+    /// #2730: a copied harness travels with its parts, once per copy.
+    #[test]
+    fn an_array_gives_every_copy_its_own_shifted_harness() {
+        let mut source = fragment();
+        let connector = HarnessConnector {
+            uuid: Uuid::from_u128(0xA1),
+            harness_type: "SPI_BUS".into(),
+            position: Point::new(0.0, 0.0),
+            width: 10.16,
+            entry_pitch: 2.54,
+            rotation: 0.0,
+            entries: vec![HarnessEntry {
+                uuid: Uuid::from_u128(0xB1),
+                name: "SCK".into(),
+            }],
+            locked: false,
+        };
+        let tip = connector.tip_point();
+        source.harness.wires.push(HarnessWire {
+            uuid: Uuid::from_u128(0xC1),
+            start: tip,
+            end: Point::new(tip.x + 5.0, tip.y),
+            locked: false,
+        });
+        source.harness.connectors.push(connector);
+        let step = PasteInput {
+            dx: 10.0,
+            ..input(3, false)
+        };
+        let placed = copies_payload(&PlacementPayload::new(source), &step);
+        let harness = &placed.fragment().harness;
+        let xs: Vec<f64> = harness.connectors.iter().map(|c| c.position.x).collect();
+        assert_eq!(xs, [10.0, 20.0, 30.0]);
+        assert_eq!(harness.wires.len(), 3);
+        let ids: std::collections::HashSet<Uuid> = harness
+            .connectors
+            .iter()
+            .flat_map(|c| std::iter::once(c.uuid).chain(c.entries.iter().map(|e| e.uuid)))
+            .chain(harness.wires.iter().map(|w| w.uuid))
+            .collect();
+        assert_eq!(ids.len(), 9, "no two harness objects share an id");
     }
 
     #[test]
