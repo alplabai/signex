@@ -917,7 +917,8 @@ does a project sheet that cannot be read, when the paste rewrites a net name:
 its names are unknown, so the dialog names the sheet. Keeping the net names
 rewrites nothing and is not stopped. Its Paste puts every copy on the cursor and one click places them as one undo
 step; Esc cancels. A headless run of `smart_paste` places the copy at once
-beside the sheet's content, as before. Duplicate keeps its fixed offset.
+beside the sheet's content, as before; it keeps the copied net names, so an
+unread sheet does not stop it. Duplicate keeps its fixed offset.
 
 ## Bottom-up hierarchy {#bottom-up-hierarchy}
 

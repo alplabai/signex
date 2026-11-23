@@ -157,6 +157,28 @@ fn an_unread_sheet_does_not_stop_a_paste_that_keeps_its_nets() {
     assert!(app.interaction_state.placement.is_some());
 }
 
+/// #2744: the headless and agent `smart_paste` places labels as copied. It
+/// rewrites no net name, so by the rule an unread sheet does not stop it.
+#[test]
+fn a_headless_smart_paste_rewrites_no_net_so_an_unread_sheet_does_not_stop_it() {
+    let mut app = app_with_copy();
+    app.ui_state.io = signex_app::io_ports::IoPorts::headless(Default::default());
+    let before = label_texts(&app).len();
+    let _ = app.update(Message::Edit(EditMsg::SmartPaste));
+    with_an_unread_sheet(&mut app);
+
+    crate::paste_support::answer(&mut app, signex_app::app::PasteIntent::SmartPaste, None);
+
+    let texts = label_texts(&app);
+    assert_eq!(texts.len(), before * 2, "the copy landed: {texts:?}");
+    assert_eq!(
+        texts[before..],
+        texts[..before],
+        "no net name was rewritten"
+    );
+    assert!(app.ui_state.smart_paste.is_none());
+}
+
 #[test]
 fn the_offset_puts_the_copy_beside_the_click() {
     let mut app = app_with_copy();
