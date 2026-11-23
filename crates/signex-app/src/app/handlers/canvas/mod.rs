@@ -10,7 +10,7 @@ mod child_sheet_path;
 #[cfg(test)]
 mod cursor_moved_tests;
 pub(crate) use child_sheet_path::{
-    escapes_through_symlink, reference_from, relative_within, resolve_new_sheet_path,
+    escapes_through_symlink, link_from, reference_from, relative_within, resolve_new_sheet_path,
 };
 mod break_wire_tool;
 mod clicked;

@@ -205,17 +205,7 @@ impl Signex {
         edit: impl FnOnce(&mut DrcRuleSet),
         router: Option<f64>,
     ) -> Result<(), String> {
-        let project = self
-            .document_state
-            .project_by_id(id)
-            .ok_or_else(|| "the project is no longer open".to_string())?;
-        if project.data.has_unreadable_rules() {
-            return Err(
-                "this project holds a rule set from a newer Signex, which storing \
-                        rules would replace"
-                    .to_string(),
-            );
-        }
+        let project = self.rules_writable(id)?;
         let before = project.data.rules.clone();
         let router_before = project.data.router_tool_diameter();
         let router_after = router.or(router_before);
@@ -232,6 +222,27 @@ impl Signex {
         };
         self.replace_rule_state_of(id, state, true);
         Ok(())
+    }
+
+    /// `id` when its stored rules can take a write, else why not. A caller
+    /// with a second step to land asks first, so it can refuse with nothing
+    /// applied.
+    pub(crate) fn rules_writable(
+        &self,
+        id: ProjectId,
+    ) -> Result<&crate::app::state::LoadedProject, String> {
+        let project = self
+            .document_state
+            .project_by_id(id)
+            .ok_or_else(|| "the project is no longer open".to_string())?;
+        if project.data.has_unreadable_rules() {
+            return Err(
+                "this project holds a rule set from a newer Signex, which storing \
+                        rules would replace"
+                    .to_string(),
+            );
+        }
+        Ok(project)
     }
 
     /// Whether `id`'s text view holds typed text not applied yet.

@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use signex_types::designator::compare_references;
 use signex_types::project::ChannelNaming;
 use signex_types::schematic::{
-    ChannelOccurrence, ChannelRepeat, InstancePath, LabelType, Point, SelectedKind,
+    ChannelOccurrence, ChannelRepeat, InstancePath, LabelType, Point, SchematicSheet, SelectedKind,
 };
 use uuid::Uuid;
 
@@ -110,6 +110,27 @@ pub struct CompiledSheet {
     /// The nets touching this occurrence, by name; empty on a repeated
     /// placement.
     pub net_names: Vec<CompiledSheetNet>,
+    /// The title block of the sheet file as the compile read it.
+    pub title: SheetTitle,
+}
+
+/// The title block values a contents table lists.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SheetTitle {
+    pub title: String,
+    pub revision: String,
+    pub date: String,
+}
+
+impl SheetTitle {
+    fn of(sheet: &SchematicSheet) -> Self {
+        let field = |key: &str| sheet.title_block.get(key).cloned().unwrap_or_default();
+        Self {
+            title: field("title"),
+            revision: field("revision"),
+            date: field("date"),
+        }
+    }
 }
 
 /// One net of the compiled design.
@@ -140,14 +161,21 @@ pub fn compile_design(graph: &ProjectGraph, naming: &ChannelNaming) -> CompiledD
         let net_names = listed.nets.remove(&own).unwrap_or_default();
         if let (Some((repeat, placement)), Some(channel)) = (&occ.repeat, &occ.channel) {
             if headed.insert(placement.clone()) {
-                sheets.push(repeat_row(occ, repeat, placement, &occurrences, &counts));
+                sheets.push(repeat_row(
+                    graph,
+                    occ,
+                    repeat,
+                    placement,
+                    &occurrences,
+                    &counts,
+                ));
             }
             sheets.push(CompiledSheet {
                 name: channel.name.clone(),
                 channel: Some(channel.clone()),
                 components,
                 net_names,
-                ..row(occ, &counts.of(&[own]))
+                ..row(graph, occ, &counts.of(&[own]))
             });
             continue;
         }
@@ -158,7 +186,7 @@ pub fn compile_design(graph: &ProjectGraph, naming: &ChannelNaming) -> CompiledD
                 .unwrap_or_else(|| stem(&file_name(&occ.key))),
             components,
             net_names,
-            ..row(occ, &counts.of(&[own]))
+            ..row(graph, occ, &counts.of(&[own]))
         });
     }
 
@@ -193,6 +221,7 @@ pub fn compile_design(graph: &ProjectGraph, naming: &ChannelNaming) -> CompiledD
 
 /// The row of a repeated placement: its channels' counts together.
 fn repeat_row(
+    graph: &ProjectGraph<'_>,
     first: &CompiledOccurrence,
     repeat: &ChannelRepeat,
     placement: &InstancePath,
@@ -211,11 +240,15 @@ fn repeat_row(
         depth: first.depth.saturating_sub(1),
         repeat: Some(repeat.clone()),
         channel: None,
-        ..row(first, &counts.of(&channels))
+        ..row(graph, first, &counts.of(&channels))
     }
 }
 
-fn row(occ: &CompiledOccurrence, (parts, nets): &(usize, usize)) -> CompiledSheet {
+fn row(
+    graph: &ProjectGraph<'_>,
+    occ: &CompiledOccurrence,
+    (parts, nets): &(usize, usize),
+) -> CompiledSheet {
     CompiledSheet {
         key: occ.key.clone(),
         name: String::new(),
@@ -228,6 +261,11 @@ fn row(occ: &CompiledOccurrence, (parts, nets): &(usize, usize)) -> CompiledShee
         nets: *nets,
         components: Vec::new(),
         net_names: Vec::new(),
+        title: graph
+            .sheets
+            .get(&occ.key)
+            .map(SheetTitle::of)
+            .unwrap_or_default(),
     }
 }
 

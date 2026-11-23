@@ -102,7 +102,9 @@ The ticked rows are lowered to board commands and run as one labelled step at
 the list's revision (`execute_board_commands` with a `CheckedStep`): all or
 nothing, one undo step, refused once the board moved on. On success the dialog
 closes, the Messages panel says how many changes were applied and the board
-comes forward.
+comes forward. The rules the schematic asks for are checked first: when they
+cannot be stored (a rule set from a newer Signex, text that does not merge),
+Validate and Execute say why, the dialog stays open and nothing is applied.
 
 ## Decisions
 
@@ -185,7 +187,9 @@ schematic (the board wins) or Skip. The defaults:
 allow the direction keeps its own. A footprint row's direction changes the
 board the net rows are computed for, so the net rows are recomputed on the
 worker, keeping every direction that still means the same change. Compare
-again reads both lists anew and keeps the directions the same way.
+again reads both lists anew and keeps the directions the same way. While
+either job runs the direction controls and "Set shown rows" are greyed and
+take no pick, so a landing job cannot overwrite one or supersede a read.
 
 ### Apply
 

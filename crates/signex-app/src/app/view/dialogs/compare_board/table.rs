@@ -187,7 +187,7 @@ pub(super) fn view<'a>(
             tokens,
         ));
         for row in rows {
-            body = body.push(row_view(report, row, i18n, tokens));
+            body = body.push(row_view(report, row, state.directions_live(), i18n, tokens));
         }
     }
     if !any {
@@ -355,6 +355,7 @@ fn object_text(i18n: &I18n, object: &CompareObject) -> Label<'static> {
 fn row_view<'a>(
     report: &CompareReport,
     row: &CompareRow,
+    live: bool,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
@@ -388,7 +389,10 @@ fn row_view<'a>(
             tokens,
         ))
         .push(cell(jump_links(row, i18n, tokens), Length::Fixed(JUMP_W)))
-        .push(cell(action_cell(report, row, i18n, tokens), Length::Fill));
+        .push(cell(
+            action_cell(report, row, live, i18n, tokens),
+            Length::Fill,
+        ));
     line_box(line, None, tokens)
 }
 
@@ -435,6 +439,7 @@ fn jump_links<'a>(row: &CompareRow, i18n: &I18n, tokens: &ThemeTokens) -> Elemen
 fn action_cell<'a>(
     report: &CompareReport,
     row: &CompareRow,
+    live: bool,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
@@ -448,7 +453,7 @@ fn action_cell<'a>(
         }
     };
     action_line(
-        direction_control(row, i18n, tokens),
+        direction_control(row, live, i18n, tokens),
         text(caption)
             .size(TS.caption)
             .color(r.ink4)
@@ -476,8 +481,10 @@ fn action_line<'a>(
 
 /// Update PCB / Update schematic / Skip on a sunken track, the chosen one
 /// raised, every choice in the same selected style (decided 2026-11-19).
+/// Greyed and inert unless `live` (#2749).
 fn direction_control<'a>(
     row: &CompareRow,
+    live: bool,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
@@ -487,10 +494,11 @@ fn direction_control<'a>(
     for direction in Direction::ALL {
         let is_on = row.direction == direction;
         let why = row.unavailable(direction);
-        let ink = match (is_on, why.is_some()) {
+        let can_pick = live && why.is_none();
+        let ink = match (is_on && live, can_pick) {
             (true, _) => ti(tokens.text),
-            (false, false) => r.ink3,
-            (false, true) => Color {
+            (false, true) => r.ink3,
+            (false, false) => Color {
                 a: crate::styles::DISABLED_OPACITY,
                 ..r.ink4
             },
@@ -518,7 +526,7 @@ fn direction_control<'a>(
         let segment = button(face)
             .padding([0.0, m.segment_pad_h])
             .height(Length::Fixed(m.segment_height))
-            .on_press_maybe(why.is_none().then(|| {
+            .on_press_maybe(can_pick.then(|| {
                 cb(CompareBoardMsg::RowDirectionPicked {
                     row: row.id(),
                     direction,

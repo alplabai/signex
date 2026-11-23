@@ -36,10 +36,48 @@ impl Signex {
                 .map(str::to_string),
             _ => None,
         })?;
-        let path = self.resolve_child_sheet_path(&link)?;
+        let path = self.table_link_path(&link)?;
         if self.focus_open_sheet(&path) {
             return Some(Task::none());
         }
         Some(self.open_sheet(path, super::SheetOpen::plain()))
+    }
+
+    /// The sheet a contents row's link names, from the folder of the sheet
+    /// holding the table. A link may climb out of that folder (`../power/x`)
+    /// only to a file inside the project or one its last compile read.
+    pub(super) fn table_link_path(&self, link: &str) -> Option<std::path::PathBuf> {
+        use crate::app::project_sheets::{
+            lexically_normalize, resolve_child_reference, resolve_child_reference_quiet,
+        };
+        let Some(carrier) = self.active_tab_path() else {
+            return self.resolve_child_sheet_path(link);
+        };
+        let Some(dir) = carrier.parent() else {
+            return self.resolve_child_sheet_path(link);
+        };
+        if let Ok(path) = resolve_child_reference_quiet(dir, link) {
+            return Some(path);
+        }
+        let trimmed = link.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+        let target = lexically_normalize(&dir.join(trimmed));
+        let docs = &self.document_state;
+        let known = docs.document_project(&carrier).is_some_and(|project| {
+            let fold = crate::app::state::project_case::fold_of(Some(project));
+            super::relative_within(project.dir(), &target, fold).is_some()
+                || docs
+                    .compiled_design
+                    .results
+                    .get(&project.id)
+                    .is_some_and(|result| result.covers(&target))
+        });
+        if known {
+            Some(target)
+        } else {
+            resolve_child_reference(dir, link)
+        }
     }
 }

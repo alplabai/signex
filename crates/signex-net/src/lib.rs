@@ -80,7 +80,7 @@ mod compiled;
 mod compiled_tests;
 pub use compiled::{
     CompiledDesign, CompiledNet, CompiledPart, CompiledSheet, CompiledSheetNet, CompiledTarget,
-    compile_design,
+    SheetTitle, compile_design,
 };
 
 mod harness;

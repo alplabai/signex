@@ -114,7 +114,13 @@ impl Signex {
             _ if self.update_pcb_stale() => {
                 Err(t!(self.ui_state.i18n, ids::UPDATE_PCB_STALE).into_string())
             }
-            Some(engine) => check(list, engine).map_err(|e| e.to_string()),
+            Some(engine) => check(list, engine)
+                .map_err(|e| e.to_string())
+                .and_then(|()| {
+                    let rows = self.update_pcb_rule_rows(state);
+                    self.prepare_update_pcb_rules(state.project, &rows)
+                        .map(|_| ())
+                }),
             None => Err(board_missing_text(&self.ui_state.i18n, &file_name(board))),
         };
         if let Some(state) = self.ui_state.update_pcb.as_mut() {
@@ -157,11 +163,19 @@ impl Signex {
         if self.document_state.board_engine(&board).is_none() {
             return Task::none();
         }
+        // #2734: a rule half that cannot land refuses before the board moves.
+        let prepared = match self.prepare_update_pcb_rules(project, &rule_rows) {
+            Ok(prepared) => prepared,
+            Err(why) => {
+                self.refuse_execute(why);
+                return Task::none();
+            }
+        };
         let count = list.rows.iter().filter(|r| list.applies(r)).count();
         let label = self.update_pcb_text(ids::UPDATE_PCB_TITLE);
         match self.execute_eco_list(&board, &list, &label) {
             Ok(()) => {
-                if let Err(why) = self.apply_update_pcb_rules(project, &rule_rows) {
+                if let Err(why) = self.commit_update_pcb_rules(project, prepared) {
                     // The board step landed; say why the rules did not.
                     crate::diagnostics::log_warning(why);
                 }
