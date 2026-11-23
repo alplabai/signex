@@ -323,6 +323,7 @@ rules_set_create	-	f2929686b07ef725
 rules_set_edit	-	f2929686b07ef725
 run_drc	Pcb	119d310e454dd5e4
 run_erc	Sheets	dbabab24e3cbbb45
+save_all	UnsavedWork	31ed2b0a3a6afe21
 save_board_reuse_block	ReuseSource	e6894e598b35f83d
 save_document	SaveTarget	2a52f0b0dbe3f4f7
 save_document_as	SaveAsTarget	b6cfd6e46a78555f
