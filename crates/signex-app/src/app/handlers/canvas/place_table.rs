@@ -44,13 +44,15 @@ impl Signex {
     }
 
     /// The sheet a contents row's link names, from the folder of the sheet
-    /// holding the table. A link may climb out of that folder (`../power/x`)
-    /// only to a file inside the project or one its last compile read.
+    /// holding the table: the document this event runs in, which in an
+    /// undocked window is not the main window's tab. A link may climb out of
+    /// that folder (`../power/x`) only to a file inside the project or one
+    /// its last compile read.
     pub(super) fn table_link_path(&self, link: &str) -> Option<std::path::PathBuf> {
         use crate::app::project_sheets::{
             lexically_normalize, resolve_child_reference, resolve_child_reference_quiet,
         };
-        let Some(carrier) = self.active_tab_path() else {
+        let Some(carrier) = self.document_state.active_path.clone() else {
             return self.resolve_child_sheet_path(link);
         };
         let Some(dir) = carrier.parent() else {

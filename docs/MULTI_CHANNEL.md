@@ -84,6 +84,25 @@ naming.
   per-placement designator of a repeat is stored at the sheet symbol's own
   path, never under a channel uuid, so changing the range leaves nothing
   behind.
+- ERC's net count and its "Net has multiple names" finding stitch through the
+  saved naming, so "the netlist uses" names what the export writes. The
+  finding's list of sources still shows each label as written on its sheet.
+- The headless edit checks report a channel's net names through the saved
+  naming (`CH1_FB`). Whether an edit needs `allow_merge` is judged on the names
+  as written, so changing the naming never changes what an edit is refused for.
+
+When a project's `schematic_design` section cannot be read, its saved naming
+is unknown (`app/saved_channel_naming.rs`). A project with no repeated sheet is
+unaffected. One with channels:
+
+- refuses Update PCB, Compare, Back Annotate, the BOM, netlist and PDF exports,
+  Print Preview, the requirement BOM and the Variants matrix with the
+  unreadable-settings banner, and writes nothing;
+- still runs ERC: each sheet keeps its own multiple-names finding, the project
+  pass that states an exported name is skipped, and Messages gives the reason;
+- reports the headless edit checks' names as written on the sheet;
+- shows a channel footprint's schematic designator as not read, so it counts
+  as no mismatch.
 
 The ERC rule `repeat_entry_needs_bus` (Error) reports a `Repeat(<net>)` entry
 that meets no bus, or a bus with fewer members than the symbol has channels.

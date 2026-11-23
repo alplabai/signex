@@ -10,6 +10,9 @@ pub enum PartsReadError {
     NoRootSheet,
     /// The root sheet could not be read.
     RootUnreadable(PathBuf),
+    /// The project has repeated sheets and its saved channel naming cannot
+    /// be read, so a channel part's name is unknown.
+    ChannelNamingUnreadable,
     /// The background read stopped (the runtime's own text).
     Interrupted(String),
 }

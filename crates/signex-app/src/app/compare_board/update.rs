@@ -209,7 +209,7 @@ impl Signex {
             .iter()
             .map(|(path, engine)| (path.clone(), engine.revision()))
             .collect();
-        let naming = project.data.schematic_design.channel_naming.clone();
+        let naming = crate::app::saved_channel_naming::SavedChannelNaming::of(&project.data);
         let request = CompareRequest {
             design: DesignRequest {
                 naming: naming.clone(),

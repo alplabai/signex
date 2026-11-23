@@ -69,8 +69,11 @@ pub use channels::{ChannelDesignators, EntryBuses, channel_uuid};
 pub(crate) use channels::{CompiledOccurrence, compiled_occurrences};
 pub use components::{ComponentPin, ComponentReport, PlacedPin, PlacedSymbol, UnconnectedPin};
 pub use members::{NetMember, NetMemberKind, NetMembers};
-pub use name_changes::{ProjectNetChange, project_name_changes};
-pub use names::{MultiNamedNet, NetNameSource};
+pub use name_changes::{
+    ProjectNetChange, project_name_changes, project_name_changes_as_written,
+    project_name_changes_named,
+};
+pub use names::{MultiNamedNet, NetNameSource, multi_named_nets_named};
 pub use net_index::{HoverPin, NetAnchor, NetHover, NetIndex, is_auto_name};
 
 pub use designators::instance_entry_designators;

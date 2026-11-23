@@ -49,7 +49,9 @@ pub use hierarchy::HierarchyMemo;
 pub use net_finding::{NetFinding, NetFindingPin};
 pub use overrides::apply_overrides;
 pub use pin_matrix::{ErcConfig, PinAxis, PinMatrix};
-pub use project_names::{ProjectNetNames, project_net_multiple_names};
+pub use project_names::{
+    ProjectNetNames, project_net_multiple_names, project_net_multiple_names_named,
+};
 pub use project_units::project_units_not_placed;
 pub use rule::{AnalysisScope, Applicability, RuleDefinition, RuleId, RuleTarget};
 

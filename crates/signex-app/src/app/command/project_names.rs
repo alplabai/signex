@@ -147,11 +147,22 @@ impl Signex {
             resolved: &after_graph.resolved,
             roots: &roots,
         };
-        Ok(Some(signex_net::project_name_changes(
-            &project_before,
-            &project_after,
-            &edited,
-        )))
+        // The verdict does not depend on the naming; an unreadable one only
+        // leaves the names as written on their sheets.
+        let saved = crate::app::saved_channel_naming::SavedChannelNaming::of(&project.data);
+        Ok(Some(match saved.readable() {
+            Some(naming) => signex_net::project_name_changes_named(
+                &project_before,
+                &project_after,
+                &edited,
+                naming,
+            ),
+            None => signex_net::project_name_changes_as_written(
+                &project_before,
+                &project_after,
+                &edited,
+            ),
+        }))
     }
 }
 

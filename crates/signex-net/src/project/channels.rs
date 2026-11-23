@@ -75,6 +75,24 @@ pub fn channel_uuid(sheet_symbol: Uuid, number: u32) -> Uuid {
     uuid::Builder::from_custom_bytes(bytes).into_uuid()
 }
 
+/// The version [`channel_uuid`] stamps on every channel placement.
+const CHANNEL_UUID_VERSION: usize = 8;
+
+/// The repeated sheet symbol in `placed` (uuid, designator) whose channel is
+/// the placement `step`, with that channel.
+fn channel_at_step<'a>(
+    step: Uuid,
+    mut placed: impl Iterator<Item = (Uuid, &'a str)>,
+) -> Option<(Uuid, ChannelOccurrence)> {
+    placed.find_map(|(symbol, designator)| {
+        let channel = ChannelRepeat::parse(designator)?
+            .occurrences()
+            .into_iter()
+            .find(|c| channel_uuid(symbol, c.number) == step)?;
+        Some((symbol, channel))
+    })
+}
+
 /// `base` as it reads in a placement inside `channels` (outermost first).
 /// A blank designator stays blank.
 pub(super) fn channel_designator<'s>(
@@ -165,18 +183,33 @@ impl ChannelDesignators {
         placed: impl Iterator<Item = &'a ChildSheet> + Clone,
         naming: &ChannelNaming,
     ) -> Self {
+        Self::of_placements(path, placed.map(|cs| (cs.uuid, cs.name.as_str())), naming)
+    }
+
+    /// Whether a step of `path` has a channel uuid's form and no sheet symbol
+    /// in `placed` (uuid, designator) explains it: the part's channel name
+    /// cannot be told yet.
+    pub fn has_unknown_channel<'a>(
+        path: &InstancePath,
+        placed: impl Iterator<Item = (Uuid, &'a str)> + Clone,
+    ) -> bool {
+        path.chain().iter().any(|&step| {
+            step.get_version_num() == CHANNEL_UUID_VERSION
+                && channel_at_step(step, placed.clone()).is_none()
+        })
+    }
+
+    /// [`Self::of_path`] from each sheet symbol's uuid and designator, for a
+    /// reader whose parent sheets are not open.
+    pub fn of_placements<'a>(
+        path: &InstancePath,
+        placed: impl Iterator<Item = (Uuid, &'a str)> + Clone,
+        naming: &ChannelNaming,
+    ) -> Self {
         let mut logical = Vec::with_capacity(path.chain().len());
         let mut channels = Vec::new();
         for &step in path.chain() {
-            let found = placed.clone().find_map(|cs| {
-                let repeat = ChannelRepeat::parse(&cs.name)?;
-                let channel = repeat
-                    .occurrences()
-                    .into_iter()
-                    .find(|c| channel_uuid(cs.uuid, c.number) == step)?;
-                Some((cs.uuid, channel))
-            });
-            match found {
+            match channel_at_step(step, placed.clone()) {
                 Some((symbol, channel)) => {
                     logical.push(symbol);
                     channels.push(channel);
@@ -198,6 +231,11 @@ impl ChannelDesignators {
             naming: naming.clone(),
             placements,
         }
+    }
+
+    /// Whether any placement is a channel of a repeated sheet.
+    pub fn has_channels(&self) -> bool {
+        !self.placements.is_empty()
     }
 
     /// Whether `path` is a channel of a repeated sheet.
@@ -256,20 +294,66 @@ pub(super) fn scoped_name(
     }
     let chain = &occ.name_chain;
     let (chain, text): (&[String], Cow<str>) = match &occ.channel {
-        Some(scope) => {
-            let up = &chain[..chain.len().saturating_sub(1)];
-            if scope.shared.contains(text) {
-                (up, Cow::Borrowed(text))
-            } else {
-                (up, Cow::Owned(naming.net(text, &scope.channel)))
-            }
-        }
+        Some(scope) => (
+            &chain[..chain.len().saturating_sub(1)],
+            channel_net_text(scope, text, naming),
+        ),
         None => (chain.as_slice(), Cow::Borrowed(text)),
     };
     if chain.is_empty() {
         text.into_owned()
     } else {
         format!("{}/{}", chain.join("/"), text)
+    }
+}
+
+/// A Hierarchical or local label's text in channel `scope`: a shared entry's
+/// name stays, any other takes the channel net format.
+fn channel_net_text<'t>(
+    scope: &ChannelScope,
+    text: &'t str,
+    naming: &ChannelNaming,
+) -> Cow<'t, str> {
+    if scope.shared.contains(text) {
+        Cow::Borrowed(text)
+    } else {
+        Cow::Owned(naming.net(text, &scope.channel))
+    }
+}
+
+/// The channel each directly repeated placement of a project walk is, for a
+/// reader that holds a label's placement and not its occurrence.
+pub(super) struct ChannelNetNames<'n> {
+    scopes: HashMap<InstancePath, ChannelScope>,
+    naming: &'n ChannelNaming,
+}
+
+impl<'n> ChannelNetNames<'n> {
+    pub(super) fn of_project(graph: &ProjectGraph, naming: &'n ChannelNaming) -> Self {
+        let mut issues = Vec::new();
+        let (occs, _) = walk_occurrences(graph, &mut issues);
+        let scopes = occs
+            .into_iter()
+            .filter_map(|o| Some((o.path, o.channel?)))
+            .collect();
+        Self { scopes, naming }
+    }
+
+    /// Every label reads as written: for a naming that could not be read.
+    pub(super) fn as_written(naming: &'n ChannelNaming) -> Self {
+        Self {
+            scopes: HashMap::new(),
+            naming,
+        }
+    }
+
+    /// A Hierarchical or local label's text at placement `path`; off a
+    /// channel it is the text as written.
+    pub(super) fn label_text(&self, path: &InstancePath, text: &str) -> String {
+        match self.scopes.get(path) {
+            Some(scope) => channel_net_text(scope, text, self.naming).into_owned(),
+            None => text.to_string(),
+        }
     }
 }
 

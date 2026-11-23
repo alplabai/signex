@@ -20,6 +20,7 @@ use crate::app::project_sheets::{
     OpenSheets, assemble_project_sheets_guarded_from, open_sheets_snapshot, project_graph_quiet,
     project_pages, project_root_sheet_path, project_roots, sheet_key_with, stitch_issue_message,
 };
+use crate::app::saved_channel_naming::SavedChannelNaming;
 use crate::app::state::LoadedProject;
 use crate::app::state::scope::CaseFold;
 
@@ -34,7 +35,7 @@ pub(super) struct BomInputs {
     names: HashMap<String, String>,
     variant: Option<String>,
     /// The project's saved channel naming.
-    naming: signex_types::project::ChannelNaming,
+    naming: SavedChannelNaming,
 }
 
 /// The BOM grouped as it is bought, one row per part, and what could not be
@@ -60,7 +61,7 @@ impl Signex {
             fold: crate::app::state::project_case::fold_of(Some(project)),
             names: self.library.drift.names.clone(),
             variant,
-            naming: project.data.schematic_design.channel_naming.clone(),
+            naming: SavedChannelNaming::of(&project.data),
         }
     }
 }
@@ -114,8 +115,12 @@ pub(super) fn project_boms(
         resolved: &graph.resolved,
         roots: &roots,
     };
+    let naming = inputs
+        .naming
+        .for_design(&walk)
+        .map_err(|refused| refused.to_string())?;
     let occurrences = signex_net::project_occurrences(&walk);
-    let channels = signex_net::ChannelDesignators::of_project(&walk, &inputs.naming);
+    let channels = signex_net::ChannelDesignators::of_project(&walk, naming);
     let mut keyed: Vec<_> = graph.sheets.into_iter().collect();
     keyed.sort_by(|a, b| a.0.cmp(&b.0));
     let keys: Vec<_> = keyed.iter().map(|(key, _)| key.clone()).collect();

@@ -448,4 +448,10 @@ fn a_failed_read_names_its_cause_from_the_catalog() {
     .to_string();
     assert!(unreadable.contains("top.snxsch"), "{unreadable}");
     assert_ne!(unreadable, no_root);
+    let naming =
+        super::read_failed(&i18n, &super::PartsReadError::ChannelNamingUnreadable).to_string();
+    assert_eq!(
+        naming,
+        t!(i18n, ids::DIALOG_SCHEMATIC_DESIGN_UNREADABLE).to_string()
+    );
 }
