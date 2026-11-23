@@ -135,6 +135,25 @@ fn an_empty_child_reference_resolves_to_nothing() {
     assert_eq!(app.resolve_child_sheet_path("   "), None);
 }
 
+/// #2742: a contents row may climb to a sheet elsewhere in its project.
+#[test]
+fn a_table_link_climbs_to_a_sheet_inside_the_project() {
+    let app = app_focused_on("/w/a/sub/mid.snxsch");
+    assert_eq!(
+        app.table_link_path("../power/buck.snxsch"),
+        Some(PathBuf::from("/w/a/power/buck.snxsch"))
+    );
+}
+
+/// #2742: climbing out of the project stays refused (#463).
+#[test]
+fn a_table_link_out_of_the_project_is_refused() {
+    let app = app_focused_on("/w/a/sub/mid.snxsch");
+    assert_eq!(app.table_link_path("../../../etc/passwd"), None);
+    assert_eq!(app.table_link_path("/elsewhere/leaf.snxsch"), None);
+    assert_eq!(app.table_link_path("   "), None);
+}
+
 /// Double-clicking a child sheet whose tab was closed with unsaved edits
 /// must reattach the parked engine, not replace it with the disk copy (#1135).
 #[test]

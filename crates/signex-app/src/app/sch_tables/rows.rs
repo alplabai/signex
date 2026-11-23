@@ -16,7 +16,7 @@ pub(crate) struct ContentsEntry {
     pub title: String,
     pub revision: String,
     pub last_changed: String,
-    /// The sheet file the row opens.
+    /// The sheet file the row opens, relative to the sheet holding the table.
     pub file: String,
 }
 

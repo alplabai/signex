@@ -98,7 +98,7 @@ impl Signex {
             .and_then(|root| root.parent().map(std::path::Path::to_path_buf))
             .unwrap_or_else(|| project.dir().to_path_buf());
         let path = dir.join(CONTENTS_FILE);
-        let (rows, links) = match self.contents_now(project_id) {
+        let (rows, links) = match self.contents_now(project_id, &dir) {
             Some(entries) => {
                 let columns =
                     SchTable::columns_for(&TableSource::ProjectSheets { per_channel: true });
@@ -168,12 +168,14 @@ impl Signex {
         }
     }
 
-    /// The contents rows `project`'s last compile gives, one per channel.
+    /// The contents rows `project`'s last compile gives, one per channel,
+    /// their links relative to `dir`, where the contents sheet goes.
     fn contents_now(
         &self,
         project: crate::app::state::ProjectId,
+        dir: &std::path::Path,
     ) -> Option<super::refresh::Contents> {
-        self.compiled_contents_of(project)
+        self.compiled_contents_of(project, Some(dir))
             .map(|pages| pages.pages(true))
     }
 }
