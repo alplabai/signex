@@ -31,6 +31,11 @@ pub enum NetColorMsg {
     /// A palette row was clicked: its chooser opens, or closes when it was
     /// the open one.
     RowOpened(String),
+    /// A press landed outside the open chooser, or on its own row: it closes.
+    ChooserDismissed,
+    /// A press landed in `window`: the chooser closes unless that is the
+    /// palette's own window, whose presses the card sorts out itself.
+    PressedInWindow(iced::window::Id),
     /// The chooser's Custom… was pressed: the custom picker opens for that
     /// net.
     CustomOpenedFor(String),
