@@ -97,6 +97,9 @@ pub struct AnnotationPanelState {
     /// A dimension or Bezier is paused in another window: the tool's form
     /// here is read-only.
     pub is_tool_paused_elsewhere: bool,
+    /// No placement tool is armed: the stored pre-placement form keeps its
+    /// values for the next placement and does not take Properties.
+    pub is_placement_form_idle: bool,
 }
 
 impl AnnotationPanelState {

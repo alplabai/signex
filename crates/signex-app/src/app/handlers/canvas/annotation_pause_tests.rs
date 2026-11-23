@@ -357,6 +357,33 @@ fn picking_another_tool_ends_the_pause_and_unfreezes_the_owner() {
     }
 }
 
+/// Whether Properties fell through to Document Options.
+fn shows_document_options(ctx: &PanelContext) -> bool {
+    let title = ctx
+        .i18n
+        .message_plain(signex_i18n::ids::PANELS_PROPERTIES_DOCUMENT_OPTIONS, &[]);
+    let view = crate::panels::view_panel(PanelKind::Properties, ctx);
+    crate::layout_probe::lay_out_texts(view, SIZE)
+        .iter()
+        .any(|shown| shown.text.replace(['\u{2068}', '\u{2069}'], "") == *title)
+}
+
+#[test]
+fn select_from_either_window_takes_the_ended_form_off_properties() {
+    for picked_in_owner in [true, false] {
+        Paused::each(|mut p| {
+            let picker = if picked_in_owner { p.owner } else { p.other };
+            p.pick_tool_in(picker, Tool::Select);
+            p.app.sync_window_panel_ctx_shared();
+            for window in [p.owner, p.other] {
+                let ctx = p.ctx(window);
+                assert!(ctx.annotation.dimension_tool.is_none(), "{:?}", p.tool);
+                assert!(shows_document_options(ctx), "{:?} {window:?}", p.tool);
+            }
+        });
+    }
+}
+
 #[test]
 fn picking_the_same_tool_keeps_the_pause() {
     Paused::each(|mut p| {

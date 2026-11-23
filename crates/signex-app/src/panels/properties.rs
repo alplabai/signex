@@ -92,6 +92,14 @@ fn read_only_while_paused_elsewhere<'a>(
     }
 }
 
+/// The pre-placement form Properties shows: none once its tool has ended,
+/// though the values stay for the next placement (mockup row 157).
+fn shown_placement_form(ctx: &PanelContext) -> Option<&PrePlacementData> {
+    ctx.pre_placement
+        .as_ref()
+        .filter(|_| !ctx.annotation.is_placement_form_idle)
+}
+
 pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let palette = PanelPalette::from_tokens(&ctx.tokens);
     let PanelPalette {
@@ -186,7 +194,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     // Tab pauses placement; the form edits what the next object is placed
     // with (#2532).
-    if let Some(ref pp) = ctx.pre_placement {
+    if let Some(pp) = shown_placement_form(ctx) {
         return read_only_while_paused_elsewhere(ctx, super::pre_placement::view(pp, ctx));
     }
 

@@ -232,6 +232,18 @@ fn main_moving_to_a_board_ends_the_pause() {
 }
 
 #[test]
+fn a_main_move_takes_the_ended_form_off_a_windows_properties() {
+    let mut paused = Paused::new(true);
+    let path = PathBuf::from("board.snxpcb");
+    paused.app.open_pcb_tab(path, "board".into(), board());
+    paused.app.sync_window_panel_ctx_shared();
+    let ctx = &paused.app.document_state.window_panel_ctx[&paused.window];
+    assert!(ctx.annotation.is_placement_form_idle);
+    assert!(ctx.annotation.dimension_tool.is_none());
+    assert!(ctx.pre_placement.is_some(), "the typed values stay");
+}
+
+#[test]
 fn main_moving_to_a_library_tab_ends_the_pause() {
     Paused::each(|mut paused| {
         let library = PathBuf::from("parts.snxlib");

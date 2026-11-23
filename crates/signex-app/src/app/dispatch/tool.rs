@@ -44,8 +44,11 @@ impl Signex {
                     return self.finish_update();
                 }
                 // A pause belongs to the window it began in: Tab elsewhere
-                // neither takes it over nor resumes it.
-                if self.interaction_state.is_sheet_pause_elsewhere() {
+                // neither takes it over nor resumes it, and a dimension's
+                // held point is not another window's to pause over.
+                if self.interaction_state.is_sheet_pause_elsewhere()
+                    || self.interaction_state.is_dimension_held_elsewhere()
+                {
                     return self.finish_update();
                 }
                 // A second Tab goes on placing with the edits, as the form's

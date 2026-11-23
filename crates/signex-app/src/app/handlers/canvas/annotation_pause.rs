@@ -5,7 +5,7 @@
 
 use super::super::super::*;
 use crate::app::state::{InteractionState, SheetPlacementPause};
-use crate::panels::{PanelContext, PanelKind};
+use crate::panels::{DimensionToolForm, PanelContext, PanelKind};
 
 impl InteractionState {
     /// The window of a paused dimension or Bezier: `None` when neither is
@@ -20,21 +20,43 @@ impl InteractionState {
             _ => None,
         }
     }
+
+    /// No placement tool is armed, so a stored pre-placement form waits for
+    /// the next one instead of taking Properties.
+    pub(crate) fn is_placement_form_idle(&self) -> bool {
+        self.current_tool == Tool::Select && self.placement.is_none()
+    }
 }
 
-/// One Properties context's view of the pause; `this` is its window.
-fn sync_form(
-    ctx: &mut PanelContext,
-    this: Option<iced::window::Id>,
-    owner: Option<Option<iced::window::Id>>,
+/// What every Properties context is brought in line with.
+struct ToolFormSync {
+    /// The window of a paused dimension or Bezier.
+    pause_owner: Option<Option<iced::window::Id>>,
     is_dimension: bool,
-) {
+    /// No placement tool is armed: a stored form waits, unshown.
+    is_form_idle: bool,
+    /// The holder of an unpaused dimension, and the form for everyone else.
+    held: Option<(Option<iced::window::Id>, Box<DimensionToolForm>)>,
+}
+
+/// One Properties context's view of the tool; `this` is its window.
+fn sync_form(ctx: &mut PanelContext, this: Option<iced::window::Id>, sync: &ToolFormSync) {
     let annotation = &mut ctx.annotation;
+    let owner = sync.pause_owner;
     annotation.is_tool_paused_elsewhere = owner.is_some_and(|owner| owner != this);
-    if !is_dimension {
+    annotation.is_placement_form_idle = sync.is_form_idle;
+    if !sync.is_dimension {
         annotation.dimension_tool = None;
         annotation.draft.take_if(|(id, _, _)| id.is_nil());
-    } else if let Some(form) = annotation.dimension_tool.as_mut() {
+        return;
+    }
+    if let Some((_, form)) = sync.held.as_ref().filter(|(holder, _)| *holder != this)
+        && annotation.dimension_tool.is_some()
+    {
+        annotation.dimension_tool = Some(form.clone());
+        annotation.draft.take_if(|(id, _, _)| id.is_nil());
+    }
+    if let Some(form) = annotation.dimension_tool.as_mut() {
         form.is_paused = owner == Some(this);
     }
 }
@@ -107,15 +129,19 @@ impl Signex {
         if state.acting_window.is_some() {
             return;
         }
-        let owner = state.paused_annotation_window();
-        let is_dimension = matches!(
-            state.current_tool,
-            Tool::LinearDimension | Tool::AlignedDimension
-        );
+        let sync = ToolFormSync {
+            pause_owner: state.paused_annotation_window(),
+            is_dimension: matches!(
+                state.current_tool,
+                Tool::LinearDimension | Tool::AlignedDimension
+            ),
+            is_form_idle: state.is_placement_form_idle(),
+            held: self.form_for_other_windows(),
+        };
         let document = &mut self.document_state;
-        sync_form(&mut document.panel_ctx, None, owner, is_dimension);
+        sync_form(&mut document.panel_ctx, None, &sync);
         for (window, ctx) in &mut document.window_panel_ctx {
-            sync_form(ctx, Some(*window), owner, is_dimension);
+            sync_form(ctx, Some(*window), &sync);
         }
     }
 
