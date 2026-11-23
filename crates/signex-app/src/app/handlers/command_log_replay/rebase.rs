@@ -10,7 +10,8 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use signex_engine::{Command, SheetPort, SymbolEntryRenames};
 use signex_types::schematic::{
-    ChildSheet, SchDirective, SchDrawing, SchematicSheet, TableColumn, normalize_port_name,
+    ChildSheet, SchDirective, SchDrawing, SchTable, SchematicSheet, TableColumn,
+    normalize_port_name,
 };
 
 /// The object `command` replaces, as it stands on `sheet`, in the same form.
@@ -101,7 +102,9 @@ fn rebase_one(
             Command::UpdateSchDrawing { drawing: was },
             Command::UpdateSchDrawing { drawing: now },
         ) => Some(Command::UpdateSchDrawing {
-            drawing: with_field_changes(was, drawing, &now, |key| drawing_stores(was, &now, key))?,
+            drawing: with_field_changes(was, drawing, &now, |key| {
+                drawing_stores(was, drawing, &now, key)
+            })?,
         }),
         (
             Command::UpdateDirective { directive },
@@ -128,7 +131,12 @@ fn rebase_one(
 /// first taken from the measured text, a table's source and a bound table's
 /// rows (built from the design). A table's rows and columns are placed by
 /// index, so they count as stored only while `live` keeps the same source.
-fn drawing_stores(drawing: &SchDrawing, live: &SchDrawing, key: &str) -> bool {
+fn drawing_stores(
+    drawing: &SchDrawing,
+    after: &SchDrawing,
+    live: &SchDrawing,
+    key: &str,
+) -> bool {
     match drawing {
         SchDrawing::Line { .. } => {
             matches!(key, "start" | "end" | "width" | "stroke_color" | "locked")
@@ -173,9 +181,24 @@ fn drawing_stores(drawing: &SchDrawing, live: &SchDrawing, key: &str) -> bool {
             let same_source = matches!(live, SchDrawing::Table(l) if l.source == t.source
                 && l.columns.iter().map(named).eq(t.columns.iter().map(named)));
             matches!(key, "refresh" | "style" | "locked")
-                || (same_source && (key == "columns" || (key == "rows" && !t.source.is_bound())))
+                || (same_source && (key == "columns"
+                        || (key == "rows"
+                            && !t.source.is_bound()
+                            && edited_rows_held(t, after, live))))
         }
     }
+}
+
+/// Rows have no identity: a row the edit touches must still be the row it
+/// was recorded on, or the value would land on another part's row.
+fn edited_rows_held(was: &SchTable, after: &SchDrawing, live: &SchDrawing) -> bool {
+    let (SchDrawing::Table(after), SchDrawing::Table(live)) = (after, live) else {
+        return false;
+    };
+    was.rows.len() == after.rows.len()
+        && was.rows.len() == live.rows.len()
+        && (was.rows.iter().zip(&after.rows).zip(&live.rows))
+            .all(|((old, new), now)| old == new || now == old || now == new)
 }
 
 /// A directive's outline corners are rebuilt from each other.
@@ -702,13 +725,24 @@ mod tests {
     }
 
     #[test]
-    fn a_replayed_cell_edit_merges_with_a_change_to_another_cell() {
+    fn a_replayed_cell_edit_merges_with_a_change_to_another_row() {
         let now = replayed(
-            table(&[&["a", "b"]]),
-            table(&[&["x", "b"]]),
-            table(&[&["a", "y"]]),
+            table(&[&["a", "b"], &["c", "d"]]),
+            table(&[&["x", "b"], &["c", "d"]]),
+            table(&[&["a", "b"], &["c", "y"]]),
         );
-        assert_eq!(now, Some(table(&[&["x", "y"]])));
+        assert_eq!(now, Some(table(&[&["x", "b"], &["c", "y"]])));
+    }
+
+    /// DECISIONS 2026-11-23: the edited row must still be the recorded row.
+    #[test]
+    fn a_cell_edit_is_refused_once_its_row_changed() {
+        let now = replayed(
+            table(&[&["R1", ""], &["R2", "4k7"]]),
+            table(&[&["R1", "10k"], &["R2", "4k7"]]),
+            table(&[&["C1", ""], &["R1", ""]]),
+        );
+        assert!(now.is_none());
     }
 
     #[test]
