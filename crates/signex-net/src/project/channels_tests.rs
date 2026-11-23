@@ -2,13 +2,16 @@
 //! channel designators, channel-local nets and Repeat entries joined to the
 //! parent bus member by member.
 use signex_types::project::ChannelNaming;
-use signex_types::schematic::{ChannelRepeat, InstancePath};
+use signex_types::schematic::{ChannelRepeat, InstancePath, LabelType};
+use uuid::Uuid;
 
 use super::{
-    ChannelDesignators, SheetKey, StitchIssue, build_project_netlist,
-    build_project_netlist_indexed, build_project_netlist_named, channel_uuid, project_occurrences,
+    ChannelDesignators, ProjectGraph, SheetKey, StitchIssue, build_project_netlist,
+    build_project_netlist_indexed, build_project_netlist_named, channel_uuid,
+    multi_named_nets_named, project_name_changes, project_name_changes_named, project_occurrences,
 };
 use crate::fixtures::multi_channel::{BUCK, BUCK_PARTS, BUCK_SYMBOL, TOP, project};
+use crate::fixtures::{label, pt};
 use signex_types::net::Netlist;
 
 /// The references on the net named `name`, sorted.
@@ -292,4 +295,70 @@ fn a_stored_channel_path_reads_like_the_walk() {
         ChannelDesignators::of_path(&path, top.child_sheets.iter(), &ChannelNaming::default());
 
     assert_eq!(channels.designator_of(r5, &path), "CH3_R5");
+}
+
+fn channel_first_nets() -> ChannelNaming {
+    ChannelNaming {
+        net_format: "${Channel}_${Net}".to_string(),
+        ..ChannelNaming::default()
+    }
+}
+
+/// #2740: a net with two names reports the names of the saved naming.
+#[test]
+fn a_multi_named_channel_net_reports_the_saved_naming() {
+    let mut p = project();
+    p.sheet_mut(BUCK)
+        .labels
+        .push(label("SENSE", pt(0.0, 40.0), LabelType::Net));
+
+    let found = multi_named_nets_named(&p.graph(), &channel_first_nets());
+
+    for ch in 1..=4 {
+        let want = format!("CH{ch}_FB");
+        let net = found
+            .iter()
+            .find(|net| net.exported == want)
+            .unwrap_or_else(|| panic!("no report for {want}: {found:?}"));
+        let mut exported: Vec<&str> = net.sources.iter().map(|s| s.exported.as_str()).collect();
+        exported.sort_unstable();
+        assert_eq!(exported, [want.clone(), format!("CH{ch}_SENSE")]);
+    }
+}
+
+/// #2740: the names an edit reports are the saved naming's; whether it needs
+/// `allow_merge` is judged on the names as written, so the naming cannot
+/// change it.
+#[test]
+fn an_edit_in_a_channel_reports_the_saved_naming_and_keeps_its_verdict() {
+    let mut p = project();
+    for sheet in p.sheets.values_mut() {
+        for l in &mut sheet.labels {
+            l.uuid = Uuid::now_v7();
+        }
+    }
+    let mut edited = p.sheets.clone();
+    let buck = edited.get_mut(&SheetKey::new(BUCK)).unwrap();
+    let mut sense = label("SENSE", pt(0.0, 40.0), LabelType::Net);
+    sense.uuid = Uuid::now_v7();
+    buck.labels.push(sense);
+    let after = ProjectGraph {
+        sheets: &edited,
+        resolved: &p.resolved,
+        roots: &p.roots,
+    };
+    let key = SheetKey::new(BUCK);
+
+    let got = project_name_changes_named(&p.graph(), &after, &key, &channel_first_nets());
+
+    let mut names: Vec<Vec<String>> = got.iter().map(|c| c.names.clone()).collect();
+    names.sort();
+    let want: Vec<Vec<String>> = (1..=4)
+        .map(|ch| vec![format!("CH{ch}_FB"), format!("CH{ch}_SENSE")])
+        .collect();
+    assert_eq!(names, want);
+    assert!(got.iter().all(|c| c.needs_allow_merge), "{got:?}");
+    let default = project_name_changes(&p.graph(), &after, &key);
+    assert_eq!(default.len(), got.len());
+    assert!(default.iter().all(|c| c.needs_allow_merge), "{default:?}");
 }

@@ -98,6 +98,7 @@ impl Fixture {
             Some(&self.dir),
             CaseFold::host_default(),
             overrides,
+            &Default::default(),
         );
     }
 }
@@ -286,9 +287,88 @@ fn colliding_job() -> (ErcRunInputs, PathBuf, PathBuf, PathBuf) {
         config: signex_erc::ErcConfig::default(),
         net_waivers: Default::default(),
         violation_waivers: Vec::new(),
+        channel_naming: Default::default(),
         fold: CaseFold::FOLD,
     };
     (inputs, root_path, child_path, loose_path)
+}
+
+/// A one-pin part `R1` at the origin, for a net the netlist exports.
+fn with_one_pin_part(mut sheet: SchematicSheet) -> SchematicSheet {
+    use signex_types::schematic::{LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Symbol};
+    let lib: LibSymbol = serde_json::from_value(serde_json::json!({"id": "P"})).expect("lib");
+    let pin = Pin {
+        direction: PinDirection::Passive,
+        shape_style: PinShapeStyle::Plain,
+        position: pt(0.0, 0.0),
+        rotation: 0.0,
+        length: 0.0,
+        name: String::new(),
+        number: "1".to_string(),
+        visible: true,
+        name_visible: true,
+        number_visible: true,
+    };
+    let pins = vec![LibPin {
+        unit: 0,
+        body_style: 1,
+        pin,
+    }];
+    sheet
+        .lib_symbols
+        .insert("P".to_string(), LibSymbol { pins, ..lib });
+    sheet.symbols.push(Symbol {
+        uuid: Uuid::now_v7(),
+        lib_id: "P".to_string(),
+        reference: "R1".to_string(),
+        position: pt(0.0, 0.0),
+        ..Default::default()
+    });
+    sheet
+}
+
+/// #2740: the run reads the project's saved channel naming. The net count
+/// does not depend on a name; it is pinned so the named stitch counts each
+/// channel's net.
+#[test]
+fn the_job_reports_channel_nets_by_the_saved_naming() {
+    let (mut inputs, ..) = colliding_job();
+    let dir = Path::new("/proj");
+    let (root_path, child_path) = (dir.join("root.snxsch"), dir.join("child.snxsch"));
+    let mut placement = child_with_pin("child.snxsch", "UNUSED");
+    placement.name = "Repeat(CH, 1, 2)".to_string();
+    placement.uuid = Uuid::from_u128(0x2740);
+    placement.pins.clear();
+    let root = SchematicSheet {
+        child_sheets: vec![placement],
+        ..Default::default()
+    };
+    let child = with_one_pin_part(named_wire(
+        ("FB", LabelType::Hierarchical),
+        ("SENSE", LabelType::Hierarchical),
+    ));
+    let open: crate::app::project_sheets::OpenSheets =
+        [(root_path.clone(), root), (child_path.clone(), child)]
+            .into_iter()
+            .collect();
+    inputs.tab_paths = open.keys().cloned().collect();
+    inputs.open = open;
+    inputs.root = Some(root_path);
+    inputs.channel_naming = signex_types::project::ChannelNaming {
+        net_format: "${Channel}_${Net}".to_string(),
+        ..Default::default()
+    };
+
+    let outcome = run_erc_job(inputs);
+
+    let filed = multi_names(&outcome.by_path[&child_path]);
+    assert_eq!(filed.len(), 1, "{filed:?}");
+    assert!(
+        filed[0].message.contains("the netlist uses 'CH1_FB'"),
+        "{}",
+        filed[0].message
+    );
+    assert_eq!(outcome.checked[2], 2, "one net per channel");
 }
 
 #[test]

@@ -256,20 +256,58 @@ pub(super) fn scoped_name(
     }
     let chain = &occ.name_chain;
     let (chain, text): (&[String], Cow<str>) = match &occ.channel {
-        Some(scope) => {
-            let up = &chain[..chain.len().saturating_sub(1)];
-            if scope.shared.contains(text) {
-                (up, Cow::Borrowed(text))
-            } else {
-                (up, Cow::Owned(naming.net(text, &scope.channel)))
-            }
-        }
+        Some(scope) => (
+            &chain[..chain.len().saturating_sub(1)],
+            channel_net_text(scope, text, naming),
+        ),
         None => (chain.as_slice(), Cow::Borrowed(text)),
     };
     if chain.is_empty() {
         text.into_owned()
     } else {
         format!("{}/{}", chain.join("/"), text)
+    }
+}
+
+/// A Hierarchical or local label's text in channel `scope`: a shared entry's
+/// name stays, any other takes the channel net format.
+fn channel_net_text<'t>(
+    scope: &ChannelScope,
+    text: &'t str,
+    naming: &ChannelNaming,
+) -> Cow<'t, str> {
+    if scope.shared.contains(text) {
+        Cow::Borrowed(text)
+    } else {
+        Cow::Owned(naming.net(text, &scope.channel))
+    }
+}
+
+/// The channel each directly repeated placement of a project walk is, for a
+/// reader that holds a label's placement and not its occurrence.
+pub(super) struct ChannelNetNames<'n> {
+    scopes: HashMap<InstancePath, ChannelScope>,
+    naming: &'n ChannelNaming,
+}
+
+impl<'n> ChannelNetNames<'n> {
+    pub(super) fn of_project(graph: &ProjectGraph, naming: &'n ChannelNaming) -> Self {
+        let mut issues = Vec::new();
+        let (occs, _) = walk_occurrences(graph, &mut issues);
+        let scopes = occs
+            .into_iter()
+            .filter_map(|o| Some((o.path, o.channel?)))
+            .collect();
+        Self { scopes, naming }
+    }
+
+    /// A Hierarchical or local label's text at placement `path`; off a
+    /// channel it is the text as written.
+    pub(super) fn label_text(&self, path: &InstancePath, text: &str) -> String {
+        match self.scopes.get(path) {
+            Some(scope) => channel_net_text(scope, text, self.naming).into_owned(),
+            None => text.to_string(),
+        }
     }
 }
 

@@ -84,6 +84,12 @@ naming.
   per-placement designator of a repeat is stored at the sheet symbol's own
   path, never under a channel uuid, so changing the range leaves nothing
   behind.
+- ERC's net count and its "Net has multiple names" finding stitch through the
+  saved naming, so "the netlist uses" names what the export writes. The
+  finding's list of sources still shows each label as written on its sheet.
+- The headless edit checks report a channel's net names through the saved
+  naming (`CH1_FB`). Whether an edit needs `allow_merge` is judged on the names
+  as written, so changing the naming never changes what an edit is refused for.
 
 The ERC rule `repeat_entry_needs_bus` (Error) reports a `Repeat(<net>)` entry
 that meets no bus, or a bus with fewer members than the symbol has channels.

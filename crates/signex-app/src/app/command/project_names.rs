@@ -147,10 +147,11 @@ impl Signex {
             resolved: &after_graph.resolved,
             roots: &roots,
         };
-        Ok(Some(signex_net::project_name_changes(
+        Ok(Some(signex_net::project_name_changes_named(
             &project_before,
             &project_after,
             &edited,
+            &project.data.schematic_design.channel_naming,
         )))
     }
 }
