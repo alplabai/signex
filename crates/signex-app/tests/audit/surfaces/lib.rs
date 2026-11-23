@@ -1,6 +1,5 @@
 //! Mockup group `lib` (rows m118-m142).
 
-use super::pointer::PointerStep;
 use crate::fixture::{self, Fixture};
 use crate::surface::{Check, Surface, WindowSel};
 use crate::{render, settle_support};
