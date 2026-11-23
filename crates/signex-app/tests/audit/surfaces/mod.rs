@@ -9,6 +9,7 @@ mod annot_valid;
 mod board_counters;
 mod canvas_pick;
 mod caps_a;
+mod caps_b;
 pub mod checks;
 mod drawn_fixtures;
 mod global;
@@ -48,5 +49,6 @@ pub fn groups() -> Vec<(&'static str, Vec<Surface>)> {
         ("states_final", states_final::rows()),
         ("states_sketch", states_sketch::rows()),
         ("caps_a", caps_a::rows()),
+        ("caps_b", caps_b::rows()),
     ]
 }
