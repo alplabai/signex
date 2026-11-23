@@ -49,6 +49,18 @@ fn icon_button_style(hover: Color) -> impl Fn(&iced::Theme, button::Status) -> b
     }
 }
 
+/// A panel message as this window sends it: the Override box's Esc says it
+/// came from a window with no dialog or menu of its own.
+fn sent_from_detached_window(msg: crate::panels::PanelMsg) -> crate::panels::PanelMsg {
+    use crate::panels::{AnnotationPanelMsg as Annotation, PanelMsg};
+    match msg {
+        PanelMsg::Annotation(Annotation::OverrideEscaped) => {
+            PanelMsg::Annotation(Annotation::DetachedOverrideEscaped)
+        }
+        other => other,
+    }
+}
+
 /// A strip glyph in `ink`.
 fn glyph(handle: svg::Handle, ink: Color) -> Element<'static, Message> {
     svg(handle)
@@ -212,7 +224,7 @@ impl Signex {
                 crate::library::panel::view(&self.library, ctx)
             }
             other => crate::panels::view_panel(other, ctx)
-                .map(crate::dock::DockMessage::Panel)
+                .map(|msg| crate::dock::DockMessage::Panel(sent_from_detached_window(msg)))
                 .boxed(),
         }
         .map(Message::Dock);

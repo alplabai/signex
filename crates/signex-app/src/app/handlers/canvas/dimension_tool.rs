@@ -87,6 +87,15 @@ impl Signex {
             AnnotationPanelMsg::OverrideEscaped => {
                 return self.update(Message::Input(InputMsg::EscapePressed { window: None }));
             }
+            // The main window's Esc ladder would close a surface not on
+            // screen here, so only the pause answers.
+            AnnotationPanelMsg::DetachedOverrideEscaped => {
+                self.cancel_pending_chord();
+                if self.interaction_state.active_canvas().placement_paused {
+                    return self.resume_placement_without_edits();
+                }
+                return Task::none();
+            }
             AnnotationPanelMsg::CsvImportRequested | AnnotationPanelMsg::CsvExportRequested => {}
         }
         self.sync_annotation_draft();
@@ -94,21 +103,30 @@ impl Signex {
     }
 
     /// Enter in the form: the typed value stands and a paused tool goes on
-    /// placing, as a second Tab does. Text that does not read keeps the pause.
+    /// placing, as a second Tab does. Text that does not read, in whichever
+    /// box of the form holds it, keeps the pause.
     fn submit_dimension_tool_field(&mut self, field: AnnotationField) -> Task<Message> {
+        let reads = self.dimension_form_draft_reads();
         let draft = &mut self.document_state.panel_ctx.annotation.draft;
-        let typed = draft.take_if(|(id, f, _)| id.is_nil() && *f == field);
-        let reads = typed.is_none_or(|(_, _, text)| {
-            self.document_state.active_engine().is_some_and(|engine| {
-                let sheet = engine.document();
-                field.edit(&text, |y| sheet.page_y(y)).is_some()
-            })
-        });
+        draft.take_if(|(id, f, _)| id.is_nil() && *f == field);
         self.sync_annotation_draft();
         if !reads || !self.interaction_state.active_canvas().placement_paused {
             return Task::none();
         }
         self.update(Message::Tool(ToolMessage::PrePlacementTab))
+    }
+
+    /// Whether the text typed in the form, if any, reads for its own box.
+    fn dimension_form_draft_reads(&self) -> bool {
+        let draft = self.document_state.panel_ctx.annotation.draft.as_ref();
+        draft
+            .filter(|(id, _, _)| id.is_nil())
+            .is_none_or(|(_, field, text)| {
+                self.document_state.active_engine().is_some_and(|engine| {
+                    let sheet = engine.document();
+                    field.edit(text, |y| sheet.page_y(y)).is_some()
+                })
+            })
     }
 
     fn apply_dimension_tool_edit(&mut self, edit: &AnnotationEdit) {

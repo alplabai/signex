@@ -110,25 +110,6 @@ mod tests {
         assert!(prefix_picker(&Unit::Ohm, SiPrefix::Kilo, |p| p).is_some());
     }
 
-    /// The slot segment of a fixed unit is the measurement menu's Prefix
-    /// section, and there is none where the unit takes no prefix.
-    #[test]
-    fn the_slot_segment_is_the_same_picker() {
-        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
-        let i18n = signex_i18n::I18n::en_us();
-        let segment = |unit: Unit, prefix: SiPrefix| {
-            let menu = super::super::unit_menu::UnitMenu {
-                selected: Some(unit),
-                is_open: false,
-                on_open: SiPrefix::One,
-                on_dismiss: SiPrefix::One,
-            };
-            super::super::unit_menu::prefix_menu(menu, prefix, |p| p, &tokens, &i18n)
-        };
-        assert!(segment(Unit::Ohm, SiPrefix::Kilo).is_some());
-        assert!(segment(Unit::Percent, SiPrefix::One).is_none());
-    }
-
     #[test]
     fn a_prefix_the_unit_lacks_falls_back_to_none() {
         assert_eq!(

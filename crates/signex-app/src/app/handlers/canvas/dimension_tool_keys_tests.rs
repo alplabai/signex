@@ -312,3 +312,75 @@ fn enter_on_a_point_that_does_not_read_keeps_the_pause() {
     }
     assert!(session.is_paused(), "nothing was committed");
 }
+
+fn type_in_from_x(session: &mut Session, typed: &str) -> AnnotationField {
+    let field = AnnotationField::DimensionPoint(false, Axis::X);
+    let typed = AnnotationPanelMsg::FieldTyped(field, typed.into());
+    let _ = session
+        .app
+        .update(Message::Dock(crate::dock::DockMessage::Panel(
+            PanelMsg::Annotation(typed),
+        )));
+    field
+}
+
+/// A dialog open in the main window is not on screen in the detached one.
+#[test]
+fn esc_in_a_detached_override_box_leaves_a_main_window_dialog_open() {
+    let mut session = Session::in_detached_properties();
+    session.app.ui_state.preferences_open = true;
+    assert!(session.type_j(), "the detached box took the key");
+    assert!(session.escape(), "the box answered the Esc");
+    assert!(session.app.ui_state.preferences_open, "the dialog stays");
+    assert!(!session.is_paused(), "the one Esc resumes");
+    assert_eq!(session.override_text(), None, "the edit is dropped");
+    assert_eq!(
+        session.app.interaction_state.current_tool,
+        Tool::LinearDimension
+    );
+}
+
+#[test]
+fn enter_in_override_keeps_the_pause_while_another_box_does_not_read() {
+    let mut session = Session::docked();
+    let field = type_in_from_x(&mut session, "abc");
+    assert!(session.enter(), "the Override box took Enter");
+    assert!(session.is_paused(), "the refused point holds the pause");
+    let draft = &session.app.document_state.panel_ctx.annotation.draft;
+    assert!(
+        matches!(draft, Some((id, f, text)) if id.is_nil() && *f == field && text == "abc"),
+        "the refused text stays in its box: {draft:?}"
+    );
+}
+
+#[test]
+fn enter_in_override_resumes_when_another_box_reads() {
+    let mut session = Session::docked();
+    type_in_from_x(&mut session, "2.54");
+    assert!(session.enter(), "the Override box took Enter");
+    assert!(!session.is_paused(), "a readable point does not hold it");
+}
+
+#[test]
+fn after_enter_the_override_box_lets_go_of_the_keys() {
+    let mut session = Session::docked();
+    session.type_j();
+    session.enter();
+    assert!(!session.type_j(), "the next key reaches the app");
+}
+
+#[test]
+fn after_esc_the_override_box_lets_go_of_the_keys() {
+    let mut session = Session::docked();
+    session.type_j();
+    session.escape();
+    assert!(!session.type_j(), "the next key reaches the app");
+}
+
+#[test]
+fn after_esc_in_a_detached_window_the_box_lets_go_of_the_keys() {
+    let mut session = Session::in_detached_properties();
+    session.type_j();
+    session.escape();
+    assert!(!session.type_j(), "the next key reaches the app");
+}
