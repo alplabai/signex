@@ -10,8 +10,9 @@ through the `new_project_with_profile` command.
 - **Project name** and **Location**, with **Browse...**. The checkbox
   `Create "<name>" folder` sits under Location, is on by default and its label
   follows the name as it is typed; while the name is empty it reads
-  `Create a folder named after the project`. There is no path preview line
-  (maintainer, 2026-11-09: keep it simple).
+  `Create a folder named after the project`. Beside it, a line shows the
+  project file Create will write. With an empty name it asks for a project
+  name, and Create stays disabled (maintainer, 2026-11-23).
   - On: `<Location>/<name>/<name>.snxprj`, the folder created by Create.
   - Off: `<Location>/<name>.snxprj`, for a folder the user already made.
   - Create is off, with the reason shown inline, when the target `.snxprj`
