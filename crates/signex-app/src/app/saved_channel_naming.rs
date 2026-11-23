@@ -23,8 +23,8 @@ pub(crate) struct ChannelNamingUnreadable;
 
 impl std::fmt::Display for ChannelNamingUnreadable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let banner = signex_i18n::I18n::en_us_ref()
-            .message_plain(ids::DIALOG_SCHEMATIC_DESIGN_UNREADABLE, &[]);
+        let banner =
+            signex_i18n::I18n::en_us().message_plain(ids::DIALOG_SCHEMATIC_DESIGN_UNREADABLE, &[]);
         f.write_str(&banner)
     }
 }
