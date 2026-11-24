@@ -308,8 +308,8 @@ mod tests {
     }
 
     /// Mockup row 7, under the decision of 2026-11-22: the foot caption does
-    /// not send anyone to a BOM Studio or Export Jobs tab, which are still
-    /// panels in this list.
+    /// not send anyone to a BOM Studio or Export Jobs tab: they are not listed
+    /// here, but do not open as a tab yet.
     #[test]
     fn the_foot_caption_names_only_what_opens_as_a_tab() {
         let i18n = signex_i18n::I18n::en_us();

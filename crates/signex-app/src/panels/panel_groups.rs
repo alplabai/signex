@@ -42,9 +42,17 @@ impl PanelGroup {
     }
 }
 
-/// The group `kind` is listed under.
-pub fn panel_group(kind: PanelKind) -> PanelGroup {
-    match kind {
+/// The group `kind` is listed under. `None` for a tool document: Layer
+/// Stack, BOM Studio, Export Jobs, Variants and the Design Notebook open as
+/// document tabs of their project, so the list leaves them out (DECISIONS
+/// 2026-11-18, mockup row 7).
+pub fn panel_group(kind: PanelKind) -> Option<PanelGroup> {
+    let group = match kind {
+        PanelKind::LayerStack
+        | PanelKind::BomStudio
+        | PanelKind::OutputJobs
+        | PanelKind::Variants
+        | PanelKind::Wiki => return None,
         PanelKind::Projects
         | PanelKind::Components
         | PanelKind::Library
@@ -52,10 +60,9 @@ pub fn panel_group(kind: PanelKind) -> PanelGroup {
         | PanelKind::Annotations
         | PanelKind::Favorites
         | PanelKind::Snippets
-        | PanelKind::Variants
-        | PanelKind::BomStudio
-        | PanelKind::OutputJobs
-        | PanelKind::Wiki
+        // Classes belong to the project (#2417); on a board they are a mode
+        // of the Nets panel (mockup row 106), so the PCB group has no row.
+        | PanelKind::NetClasses
         | PanelKind::Todo
         // A sibling tab of Projects (#1308).
         | PanelKind::CompiledDesign => PanelGroup::Project,
@@ -70,10 +77,9 @@ pub fn panel_group(kind: PanelKind) -> PanelGroup {
         }
         PanelKind::CommandLog => PanelGroup::Verify,
         PanelKind::SchLibrary | PanelKind::FootprintLibrary => PanelGroup::Library,
-        PanelKind::Layers | PanelKind::LayerStack | PanelKind::NetClasses | PanelKind::PcbNets => {
-            PanelGroup::Pcb
-        }
-    }
+        PanelKind::Layers | PanelKind::PcbNets => PanelGroup::Pcb,
+    };
+    Some(group)
 }
 
 /// The panels `is_shown` keeps, grouped: each group in [`PanelGroup::ALL`]
@@ -86,7 +92,7 @@ pub fn grouped_panels(is_shown: impl Fn(PanelKind) -> bool) -> Vec<(PanelGroup, 
             let kinds: Vec<PanelKind> = ALL_PANELS
                 .iter()
                 .copied()
-                .filter(|&kind| panel_group(kind) == group && is_shown(kind))
+                .filter(|&kind| panel_group(kind) == Some(group) && is_shown(kind))
                 .collect();
             (group, kinds)
         })
@@ -98,20 +104,50 @@ pub fn grouped_panels(is_shown: impl Fn(PanelKind) -> bool) -> Vec<(PanelGroup, 
 mod tests {
     use super::*;
 
+    /// The tool documents that open as tabs (DECISIONS 2026-11-18).
+    const TOOL_DOCUMENTS: [PanelKind; 5] = [
+        PanelKind::LayerStack,
+        PanelKind::BomStudio,
+        PanelKind::OutputJobs,
+        PanelKind::Variants,
+        PanelKind::Wiki,
+    ];
+
     /// Every panel of the list sits in exactly one group, so grouping
-    /// drops none and lists none twice.
+    /// drops none and lists none twice; a tool document sits in none.
     #[test]
     fn every_panel_is_in_exactly_one_group() {
         let grouped = grouped_panels(|_| true);
         let listed: Vec<PanelKind> = grouped.iter().flat_map(|(_, k)| k.clone()).collect();
-        assert_eq!(listed.len(), ALL_PANELS.len());
+        assert_eq!(listed.len(), ALL_PANELS.len() - TOOL_DOCUMENTS.len());
         for kind in ALL_PANELS {
+            let expected = usize::from(!TOOL_DOCUMENTS.contains(kind));
             assert_eq!(
                 listed.iter().filter(|&&k| k == *kind).count(),
-                1,
+                expected,
                 "{kind:?}"
             );
         }
+    }
+
+    /// Mockup row 7: Layer Stack, BOM Studio, Export Jobs, Variants and the
+    /// Design Notebook are document tabs, so the panel list never lists
+    /// them, whatever is open; each is still a panel kind the command
+    /// palette reaches.
+    #[test]
+    fn the_tool_documents_are_not_listed() {
+        for kind in TOOL_DOCUMENTS {
+            assert!(ALL_PANELS.contains(&kind), "{kind:?}");
+            assert_eq!(panel_group(kind), None, "{kind:?}");
+        }
+        let listed: Vec<PanelKind> = grouped_panels(|_| true)
+            .into_iter()
+            .flat_map(|(_, kinds)| kinds)
+            .collect();
+        assert!(
+            TOOL_DOCUMENTS.iter().all(|kind| !listed.contains(kind)),
+            "{listed:?}"
+        );
     }
 
     /// The groups and their members as mockup row 7 lists them; inside a
@@ -137,13 +173,10 @@ mod tests {
                 K::Library,
                 K::Navigator,
                 K::Annotations,
-                K::BomStudio,
                 K::Favorites,
                 K::Snippets,
-                K::Variants,
-                K::OutputJobs,
+                K::NetClasses,
                 K::Todo,
-                K::Wiki,
                 K::CompiledDesign,
             ]
         );
@@ -166,16 +199,29 @@ mod tests {
             members(PanelGroup::Library),
             [K::SchLibrary, K::FootprintLibrary]
         );
+        assert_eq!(members(PanelGroup::Pcb), [K::Layers, K::PcbNets]);
+    }
+
+    /// Mockup row 7 lists the PCB group as Layers and Nets only: Net Classes
+    /// is a project panel (#2417), so a sheet with no board shows no PCB
+    /// caption for it.
+    #[test]
+    fn net_classes_is_a_project_panel() {
         assert_eq!(
-            members(PanelGroup::Pcb),
-            [K::LayerStack, K::Layers, K::NetClasses, K::PcbNets]
+            panel_group(PanelKind::NetClasses),
+            Some(PanelGroup::Project)
+        );
+        let sheet_only = grouped_panels(|kind| !kind.needs_pcb());
+        assert!(
+            sheet_only.iter().all(|(g, _)| *g != PanelGroup::Pcb),
+            "{sheet_only:?}"
         );
     }
 
     /// A group whose panels are all hidden gets no caption: it is left out.
     #[test]
     fn a_group_with_no_shown_panel_is_omitted() {
-        let grouped = grouped_panels(|kind| panel_group(kind) != PanelGroup::Pcb);
+        let grouped = grouped_panels(|kind| panel_group(kind) != Some(PanelGroup::Pcb));
         assert!(grouped.iter().all(|(g, _)| *g != PanelGroup::Pcb));
         assert_eq!(grouped.len(), PanelGroup::ALL.len() - 1);
         assert!(grouped_panels(|_| false).is_empty());
