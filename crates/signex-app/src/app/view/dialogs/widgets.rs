@@ -127,7 +127,9 @@ impl Signex {
 
     /// An Active Bar flyout `card` at the absolute `at`, as one overlay layer
     /// over [`Self::flyout_dismiss_layer`]. A right press on the card sends
-    /// `on_card_right_press` and leaves the flyout open.
+    /// `on_card_right_press` and leaves the flyout open. The layer paints
+    /// nothing: the flyout opens over the sheet with the window undimmed, as
+    /// the board's bar does (mockup row 61).
     pub(in crate::app::view) fn flyout_and_place<'a>(
         on_dismiss: Message,
         on_right_press: Message,
@@ -135,7 +137,7 @@ impl Signex {
         card: Element<'a, Message>,
         at: (f32, f32),
     ) -> Vec<Element<'a, Message>> {
-        let scrim = crate::styles::tokens::scrim(crate::styles::tokens::BACKDROP_ALPHA);
+        let scrim = Color::TRANSPARENT;
         let card = iced::widget::mouse_area(claim_pointer(card))
             .on_right_press(on_card_right_press)
             .boxed();
@@ -301,5 +303,49 @@ mod tests {
         assert_eq!(outside.len(), 1, "{outside:?}");
         let on_padding = click(iced::Point::new(55.0, 45.0));
         assert!(on_padding.is_empty(), "{on_padding:?}");
+    }
+
+    /// Mockup row 61: an open Active Bar menu leaves the title bar, docks,
+    /// canvas and Messages at full brightness; its click-outside layer
+    /// paints no scrim.
+    #[test]
+    fn an_open_active_bar_menu_leaves_the_window_undimmed() {
+        let window = iced::Size::new(1400.0, 900.0);
+        let (mut app, _boot) = Signex::new();
+        app.ui_state.window_size = (window.width, window.height);
+        let main = iced::window::Id::unique();
+        app.ui_state.main_window_id = Some(main);
+        app.interaction_state.active_bar_menu = Some(crate::active_bar::ActiveBarMenu::Align);
+        let layers = app.active_bar_menu_overlay(main);
+        assert_eq!(layers.len(), 1, "backdrop and card in one layer");
+
+        // The layer over a white window: a scrim would darken it.
+        let white = container(Space::new())
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(|_: &Theme| container::Style {
+                background: Some(Background::Color(Color::WHITE)),
+                ..container::Style::default()
+            });
+        let mut stack = iced::widget::Stack::new()
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .push(white.boxed());
+        for layer in layers {
+            stack = stack.push(layer);
+        }
+        let pixels = crate::layout_probe::draw_pixels(stack.boxed(), window);
+        let rgb = |x: usize, y: usize| {
+            let i = (y * window.width as usize + x) * 4;
+            [pixels[i], pixels[i + 1], pixels[i + 2]]
+        };
+        // The title bar's corner and the bottom-left corner, both away from
+        // the card under the bar.
+        assert_eq!(rgb(4, 4), [255, 255, 255], "the title bar is dimmed");
+        assert_eq!(
+            rgb(4, window.height as usize - 4),
+            [255, 255, 255],
+            "the window is dimmed"
+        );
     }
 }
