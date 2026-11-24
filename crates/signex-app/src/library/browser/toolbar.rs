@@ -187,7 +187,7 @@ fn column_card<'a>(
             .style(crate::panels::form_look::checkbox_style);
         let cells = row![
             tick.boxed(),
-            text(raw(name))
+            text(signex_i18n::UserText::new(name))
                 .size(BROWSER_TEXT_SIZE)
                 .color(ink)
                 .wrapping(iced::widget::text::Wrapping::None)

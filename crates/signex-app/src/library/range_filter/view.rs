@@ -217,7 +217,11 @@ fn filter_chip<'a, M: Clone + 'a>(
             .boxed(),
         );
     }
-    let remove = button(text(raw("✕")).size(metrics.caption_size).color(ink))
+    let remove = button(
+        text(t!(i18n, ids::LIBRARY_RANGE_FILTER_REMOVE))
+            .size(metrics.caption_size)
+            .color(ink),
+    )
         .padding(0)
         .style(flat)
         .on_press(wrap(RangeFilterMsg::Cleared {

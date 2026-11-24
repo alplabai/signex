@@ -851,3 +851,6 @@ library-change-component-warn-unit = The new part has no drawing for unit { $uni
 library-change-component-warn-dangling = Connected pins with no match, their wires will dangle: { $pins }
 library-change-component-warn-moved = Connected pins that sit elsewhere on the new part, their wires will no longer reach them: { $pins }
 library-change-component-warn-gained = New pins landing on a wire they were not mapped to: { $pins }
+# range-filter-chip glyph
+# The × that removes an applied range filter chip.
+library-range-filter-remove = ✕

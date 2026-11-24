@@ -336,4 +336,6 @@ define_ids! {
     LIBRARY_CHANGE_COMPONENT_WARN_DANGLING = "library-change-component-warn-dangling";
     LIBRARY_CHANGE_COMPONENT_WARN_MOVED = "library-change-component-warn-moved";
     LIBRARY_CHANGE_COMPONENT_WARN_GAINED = "library-change-component-warn-gained";
+    // range-filter-chip glyph
+    LIBRARY_RANGE_FILTER_REMOVE = "library-range-filter-remove";
 }

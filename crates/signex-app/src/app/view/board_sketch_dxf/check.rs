@@ -127,7 +127,7 @@ pub(super) fn check_card<'a>(
 fn heal_row<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, Message> {
     // No on_input: the field shows the tolerance and takes no edit.
     let value: text_input::TextInput<'a, Message> =
-        text_input(UserText::new(""), mm(HEAL_TOLERANCE_MM, 2))
+        text_input(t!(i18n, ids::BOARD_SKETCH_DXF_HEAL_UNDER), mm(HEAL_TOLERANCE_MM, 2))
             .size(TS.dense)
             .padding(SP.xs)
             .width(Length::Fixed(TS.body * HEAL_FIELD_EM))
