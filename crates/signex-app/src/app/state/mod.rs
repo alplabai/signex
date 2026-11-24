@@ -77,7 +77,8 @@ pub use board_3d::{Board3dSession, BuiltScene};
 pub use board_net_classes::BoardNetClassPanelState;
 pub use board_sketch::BoardSketchSession;
 pub use board_sketch_dxf::{
-    DXF_LAYER_TARGETS, DxfLayerTarget, SketchDxfDialog, SketchDxfMsg, SketchDxfProblem,
+    DXF_LAYER_TARGETS, DxfImportMode, DxfLayerTarget, SketchDxfDialog, SketchDxfMsg,
+    SketchDxfProblem, SketchDxfResult, SketchDxfStep,
 };
 pub use bom_preview::{BomIssueLine, BomPreviewState, BomSidebarTab, ColumnResizeState};
 pub(crate) use document_load::SheetInstall;

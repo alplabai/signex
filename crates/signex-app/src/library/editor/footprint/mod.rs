@@ -64,7 +64,7 @@ pub(crate) mod updates;
 // the Properties footprint card), named here so callers outside the slice do
 // not reach into `canvas`.
 pub use canvas::PreviewFootprint;
-pub(crate) use canvas::graphite_look_for;
+pub(crate) use canvas::{SketchInk, graphite_look_for};
 
 // What board sketch mode (#2234) hosts the sketch tool with: the tool and
 // mode its messages name, the board backdrop, and the edit router.
