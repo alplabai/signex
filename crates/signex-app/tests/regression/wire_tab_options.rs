@@ -60,8 +60,11 @@ fn tab_in_the_wire_tool_opens_a_form_that_styles_this_and_the_following_wires() 
     assert_eq!(placed[0].stroke_width, WireWidthPreset::Large.stroke_mm());
     assert_eq!(placed[0].color, Some(RED));
 
-    // The next wire of the session keeps the choice.
+    // The next wire of the session keeps the choice. It takes two clicks of
+    // its own: the second click ended the first wire (docs/DECISIONS.md,
+    // 2026-11-24, Caner: the wire tool no longer continues a wire).
     click(&mut app, (30.0, 40.0));
+    click(&mut app, (30.0, 60.0));
     let placed = wires(&app);
     assert_eq!(placed.len(), 2);
     assert_eq!(placed[1].stroke_width, 1.0);
