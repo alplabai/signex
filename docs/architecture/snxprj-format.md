@@ -386,7 +386,10 @@ the `snxprj/1` token. It sits beside `variant_definitions` and
 "variant_settings": {
   "default": "Lite",
   "parts": [
-    { "designator": "J3", "fitted": false, "variant": "Lite" },
+    {
+      "designator": "J3", "fitted": false, "variant": "Lite",
+      "part": { "sheet": [], "units": ["0190a6f2-…"] }
+    },
     { "designator": "R5", "parameters": { "Value": "47k" }, "variant": "Lite" }
   ]
 }
@@ -394,13 +397,24 @@ the `snxprj/1` token. It sits beside `variant_definitions` and
 
 - `default`: the default variant's name; absent is Base. It is not the
   active variant (what the editors show).
-- `parts`: what one variant changes on one part, named by the designator
-  the BOM lists. `fitted` (absent: as the sheets say) and `parameters`, by
-  name: `Value`, `Footprint` or a field name. An entry that changes nothing
-  is dropped. A variant's own fit and values decide over the part's fields
-  on the sheets (`Fitted@V`, `DNP@V`, ...); Base is always the sheets.
+- `parts`: what one variant changes on one part. `fitted` (absent: as the
+  sheets say) and `parameters`, by name: `Value`, `Footprint` or a field
+  name. An entry that changes nothing is dropped. A variant's own fit and
+  values decide over the part's fields on the sheets (`Fitted@V`,
+  `DNP@V`, ...); Base is always the sheets.
+- `part`: the placed part the entry was set on, in the board link's shape
+  (`SymbolLink`: the sheet placement's uuid chain and the unit uuids). It
+  decides over `designator`, so an entry stays on its part through a
+  re-annotation or a designator edit and never lands on the part that takes
+  the old designator. `designator` is the name the part had when the entry
+  was last set; an entry without `part` (written by hand) names the part by
+  it. The Variant Manager writes `part` on every cell edit.
 - A rename of a variant renames its entries and the default; a removal drops
-  them (and the default falls back to Base).
+  them (and the default falls back to Base). Both are refused, like every
+  settings edit, while the section is unreadable.
+- Keys a newer build writes inside the section or inside an entry are kept
+  and written back (#788); an entry that holds such a key is not dropped
+  when this build clears what it knows of it.
 - Each list and the whole key are omitted when empty, so a project that
   never set one re-saves byte-identical.
 - Why no new token: the key is additive. A build that predates it keeps it

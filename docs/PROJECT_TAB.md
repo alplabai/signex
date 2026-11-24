@@ -83,7 +83,9 @@ message. The chrome catalog draws a sample of it.
   (mockup row 32), `<project> — Variants`, and does not change the Project
   tab's section; the project tree's Variant Manager row opens the same tab,
   and opening it again focuses it. The tab saves into the `.snxprj` and its
-  edits are undo steps of the project's General history. Its layout (#1293):
+  edits are undo steps of the project's General history. It sits in the
+  shared document-tab shell (`signex_widgets::doc_tab_shell`): the top bar
+  is the shell's toolbar and the status line its footer. Its layout (#1293):
   the top bar holds the
   Active variant select (Base or a definition), the parts filter (designator,
   value as written or value shown; terms split at commas and spaces, `U*` a wildcard over the whole
@@ -109,21 +111,25 @@ message. The chrome catalog draws a sample of it.
   of its own shows the value and what it replaces (value, footprint,
   override). A click selects a cell and the right pane shows that part in
   that variant: a Fitting switch (Fitted, Not fitted; Alternate is greyed,
-  not built yet; As on the sheets drops the cell's own fit), the parameter
-  overrides (Value, Footprint and the part's fields with Base's value, the
-  variant's value typed in place and stored on Enter, an empty one or the
-  reset arrow back to Base; greyed while the part is not fitted) and the
-  part in the other variants. Base's cells are the sheets: shown, not
+  not built yet; As on the sheets drops the cell's own fit; picking the fit
+  the sheets already give records nothing), the parameter overrides
+  (Parameter, Base and variant columns: Value, Footprint and the part's
+  fields with Base's value, the variant's value typed in place and stored on
+  Enter or when the typing moves to another parameter or cell, an empty one
+  or the reset arrow back to Base; greyed while the part is not fitted) and
+  the part in the other variants. A cell whose part is not fitted shows Not
+  fitted, never a value of its own. Base's cells are the sheets: shown, not
   edited. These settings are stored in the `.snxprj` (`variant_settings`,
-  see `docs/architecture/snxprj-format.md`) and laid over the read as it is
-  shown, so an edit shows without reading the sheets again; the BOM lists a
-  variant with the same settings. No sheet preview of the part yet. Its
+  see `docs/architecture/snxprj-format.md`) on the placed part, so they stay
+  on it through a re-annotation, and laid over the read as it is shown, so
+  an edit shows without reading the sheets again; the BOM lists a variant
+  with the same settings. No sheet preview of the part yet. Its
   parts are read off the UI thread from every sheet of
   the project, open ones with their unsaved edits, each child sheet once per
   placement as the BOM counts it, with the BOM's own fit rule
   (`signex_output::variant_fit`) and the value the BOM lists (an `=` value
   evaluated on its sheet, #1986); after a sheet edit or a change of the
-  project parameters the status line offers Read again. Names are trimmed, at most 64 characters, no control
+  project parameters the footer says so and the top bar offers Read again. Names are trimmed, at most 64 characters, no control
   characters, unique ignoring ASCII case, and never `Base`; a refused edit
   shows its reason and changes nothing. Settings, Compare variants, Open in
   BOM Studio, alternate parts, the cell menu and the sheet preview are not
