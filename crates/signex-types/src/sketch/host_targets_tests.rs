@@ -215,3 +215,23 @@ fn a_mechanical_attribute_on_another_layer_is_a_read_error() {
     let err = serde_json::from_str::<MechanicalAttr>(json).unwrap_err();
     assert!(err.to_string().contains("TopCopper"), "{err}");
 }
+
+/// Caner 2026-11-24 (mockup row 179e): rails and mouse bites stay with the
+/// panel tool, and the enclosure keep-in waits for MCAD, so the board sketch
+/// bakes into exactly these targets and V-score is its only panel feature.
+#[test]
+fn the_board_sketch_bakes_no_panel_rails_or_enclosure_keep_in() {
+    assert_eq!(
+        SketchHost::Board.bake_targets(),
+        &[
+            BakedKind::BoardOutline,
+            BakedKind::Cutouts,
+            BakedKind::Keepouts,
+            BakedKind::BoardPours,
+            BakedKind::VScores,
+            BakedKind::Mechanical,
+            BakedKind::ComponentAnchors,
+            BakedKind::MountingHoles,
+        ]
+    );
+}
