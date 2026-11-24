@@ -887,7 +887,8 @@ Project Options, Preferences.
 
 With a selection: Properties (bold, the default row), Find Similar Objects,
 Cross Probe; Cut, Copy, Duplicate, Delete; Rotate, Mirror X, Mirror Y, the
-Align submenu, Arrange (a drawing selected) and the Unions submenu; the Part Actions, Sheet Actions
+Align submenu, Arrange (a drawing selected) and the Unions submenu; the Part Actions,
+In variant (when the project has a variant besides Base), Sheet Actions
 and Place submenus; Highlight Net, Net Color..., Assign Net Class..., Clear
 Filter while a net highlight is on; Undo; then a greyed "Planned (N)" submenu
 that opens on hover and lists the planned rows below.
@@ -908,6 +909,15 @@ Number Schematic Sheets (#1276). When the symbol's file is missing, Open Child
 Sheet is disabled with the reason, a double-click or the harness panel's Go to
 logs the same reason and opens nothing, and Create Sheet From Sheet Symbol makes
 the file (#2847).
+
+In variant: <name> (mockup row 62) names the project's active variant, Base
+when none is, and shows only when the project defines a variant. Its flyout is
+headed "<part> in <variant>" for one selected part. Fitted, Not fitted,
+Alternate part… and Edit value for this variant… are greyed with a "Planned"
+tooltip: changing a part's fit, part or value in one variant is not built.
+Show in Variant Manager opens the project's tab on its Variants section; New
+variant… opens it and adds the first free "Variant N" from Base with its name
+open for typing, as the section's `+` does.
 
 Unions (mockup row 158) holds Create Union… (`create_union`, live with a selection,
 `Ctrl+G` in the default profile), Add Selection to Union (`add_to_union`, the

@@ -392,6 +392,50 @@ pub(super) fn part_actions_entries(
     ]
 }
 
+/// In variant submenu (mockup row 62, the rows of mockup row 59 b): headed
+/// "<part> in <variant>" for one selected part. Changing a part's fit, part
+/// or value in one variant is not built, so those rows are greyed with what
+/// they will do; Show in Variant Manager and New variant… open the
+/// project's Variant Manager.
+pub(super) fn in_variant_entries(
+    i18n: &I18n,
+    variant: &super::menus::MenuVariant,
+    part: Option<&str>,
+) -> Vec<DropdownEntry<Message>> {
+    let planned =
+        |label| dd_planned_because(i18n, None, label, menu_ids::CTX_IN_VARIANT_PLANNED, false);
+    let mut v = Vec::with_capacity(8);
+    if let Some(part) = part {
+        v.push(DropdownEntry::Header(i18n.message_plain(
+            menu_ids::CTX_IN_VARIANT_PART,
+            &[
+                ("part", part.to_string().into()),
+                ("variant", variant.name.clone().into()),
+            ],
+        )));
+    }
+    v.extend([
+        planned(signex_i18n::ids::PROJECT_VARIANTS_FITTED),
+        planned(signex_i18n::ids::PROJECT_VARIANTS_NOT_FITTED),
+        planned(menu_ids::CTX_IN_VARIANT_ALTERNATE_PART),
+        planned(menu_ids::CTX_IN_VARIANT_EDIT_VALUE),
+        DropdownEntry::Separator,
+        dd_kb(
+            None,
+            &text(i18n, menu_ids::CTX_IN_VARIANT_SHOW_MANAGER),
+            "",
+            ContextAction::ShowInVariantManager(variant.project_id),
+        ),
+        dd_kb(
+            None,
+            &text(i18n, menu_ids::CTX_IN_VARIANT_NEW),
+            "",
+            ContextAction::NewVariant(variant.project_id),
+        ),
+    ]);
+    v
+}
+
 /// Sheet Actions submenu (#2419) — the selected sheet symbol's child-sheet
 /// actions (live with a sheet symbol selected), then the project's sheet
 /// numbering, each also gated by the command's own rule.
@@ -508,7 +552,8 @@ pub(super) fn add_new_entries(
 
 impl Signex {
     /// Build the secondary submenu (Place / Align / Arrange / Part Actions /
-    /// Sheet Actions / Add New to Project / Planned / a library's Add New)
+    /// Sheet Actions / In variant / Add New to Project / Planned / a
+    /// library's Add New)
     /// shown to the right of the parent
     /// context menu. The selection is the one of the sheet `window_id` shows
     /// (#1910); the target project is resolved from `self`. The pure entry
@@ -561,6 +606,19 @@ impl Signex {
             ContextSubmenu::AddNewToLibrary => {
                 super::project_tree::library::library_add_new_entries(i18n, tid)
             }
+            ContextSubmenu::InVariant => match self.canvas_menu_variant() {
+                Some(variant) => {
+                    let part = match self.canvas_menu_context(window_id) {
+                        super::menus::MenuContext::Selection {
+                            part: Some((reference, _)),
+                            ..
+                        } => Some(reference),
+                        _ => None,
+                    };
+                    in_variant_entries(i18n, &variant, part.as_deref())
+                }
+                None => Vec::new(),
+            },
         };
         super::placement::menu_card(entries, tokens, &self.document_state.panel_ctx.ui_font_name)
             .element
@@ -591,5 +649,319 @@ impl Signex {
         };
         let panel_ctx = &self.document_state.panel_ctx;
         super::placement::menu_card(entries, &panel_ctx.tokens, &panel_ctx.ui_font_name).element
+    }
+}
+
+/// Mockup row 62: "In variant: <name> ›" after Part Actions when the
+/// project has a variant besides Base, and its flyout.
+#[cfg(test)]
+mod tests {
+    use super::super::menus::{
+        CanvasSelection, CanvasShortcuts, MenuContext, MenuVariant, canvas_menu_with_variant,
+    };
+    use super::*;
+    use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
+    use crate::app::{ProjectSection, TabInfo, TabKind};
+    use signex_types::schematic::{SchematicSheet, SelectedItem, SelectedKind, Symbol};
+
+    const TID: ThemeId = ThemeId::GraphiteDark;
+
+    /// Each entry as one line: an item's label, `# header`, `---`.
+    fn layout(entries: &[DropdownEntry<Message>]) -> Vec<String> {
+        entries
+            .iter()
+            .map(|entry| match entry {
+                DropdownEntry::Item(item) => item.label.clone(),
+                DropdownEntry::Header(header) => format!("# {header}"),
+                _ => "---".to_string(),
+            })
+            .collect()
+    }
+
+    fn item<'a>(
+        entries: &'a [DropdownEntry<Message>],
+        label: &str,
+    ) -> &'a signex_widgets::active_bar_dropdown::DropdownItem<Message> {
+        entries
+            .iter()
+            .find_map(|entry| match entry {
+                DropdownEntry::Item(item) if item.label == label => Some(item),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("no row {label:?} in {:?}", layout(entries)))
+    }
+
+    fn selected() -> CanvasSelection {
+        CanvasSelection {
+            has_selection: true,
+            placed_part_selected: true,
+            commands: crate::app::command::CommandContext {
+                has_schematic: true,
+                has_selection: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    /// The selection menu's rows for `variant`.
+    fn selection_menu(variant: Option<&MenuVariant>) -> Vec<String> {
+        layout(&canvas_menu_with_variant(
+            I18n::en_us_ref(),
+            TID,
+            selected(),
+            None,
+            None,
+            &CanvasShortcuts::default(),
+            variant,
+        ))
+    }
+
+    /// The rows from Part Actions to Place.
+    fn flyout_block(rows: &[String]) -> Vec<String> {
+        let from = rows
+            .iter()
+            .position(|r| r == "Part Actions")
+            .expect("Part Actions");
+        let to = rows.iter().position(|r| r == "Place").expect("Place");
+        rows[from..=to].to_vec()
+    }
+
+    /// A project whose one sheet, open in the active tab, places R5 (31.6k),
+    /// which is selected; the project defines `definitions` with `active`
+    /// active. The folder lives as long as the returned guard.
+    fn app_with(
+        definitions: &[&str],
+        active: Option<&str>,
+    ) -> (Signex, crate::app::ProjectId, tempfile::TempDir) {
+        let dir = tempfile::tempdir().expect("a folder");
+        let mut app = app_workspace(&dir.path().to_string_lossy(), &["a.snxsch"]);
+        let path = dir.path().join("a.snxsch");
+        let part = uuid::Uuid::from_u128(5);
+        let sheet = SchematicSheet {
+            symbols: vec![Symbol {
+                uuid: part,
+                lib_id: "Device:R".to_string(),
+                reference: "R5".to_string(),
+                value: "31.6k".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        open_with(&mut app.document_state, &path, sheet);
+        let id = app.document_state.projects[0].id;
+        app.document_state.tabs.push(TabInfo {
+            title: "a".to_string(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: Some(id),
+            kind: TabKind::Schematic,
+        });
+        app.document_state.active_tab = app.document_state.tabs.len() - 1;
+        app.document_state.active_path = Some(path);
+        let data = &mut app.document_state.projects[0].data;
+        data.variant_definitions = definitions.iter().map(|d| d.to_string()).collect();
+        data.active_variant = active.map(str::to_string);
+        app.interaction_state.active_canvas_mut().selected =
+            vec![SelectedItem::new(part, SelectedKind::Symbol)];
+        (app, id, dir)
+    }
+
+    fn lite(app: &Signex) -> MenuVariant {
+        app.canvas_menu_variant()
+            .expect("the project has a variant")
+    }
+
+    #[test]
+    fn the_in_variant_row_follows_part_actions_and_names_the_active_variant() {
+        let (app, id, _dir) = app_with(&["Lite"], Some("Lite"));
+        let variant = lite(&app);
+        assert_eq!(
+            variant,
+            MenuVariant {
+                project_id: id,
+                name: "Lite".to_string(),
+            }
+        );
+        assert_eq!(
+            flyout_block(&selection_menu(Some(&variant))),
+            ["Part Actions", "In variant: Lite", "Sheet Actions", "Place"]
+        );
+        let rows = canvas_menu_with_variant(
+            I18n::en_us_ref(),
+            TID,
+            selected(),
+            Some(ContextSubmenu::InVariant),
+            None,
+            &CanvasShortcuts::default(),
+            Some(&variant),
+        );
+        let row = item(&rows, "In variant: Lite");
+        assert!(row.submenu && row.active && !row.disabled);
+        assert!(row.on_hover.is_some(), "hovering opens the flyout");
+    }
+
+    #[test]
+    fn a_project_with_only_base_has_no_in_variant_row() {
+        let (app, _id, _dir) = app_with(&[], None);
+        assert_eq!(app.canvas_menu_variant(), None);
+        assert_eq!(
+            flyout_block(&selection_menu(None)),
+            ["Part Actions", "Sheet Actions", "Place"]
+        );
+    }
+
+    #[test]
+    fn a_loose_sheet_has_no_in_variant_row() {
+        let (mut app, _id, _dir) = app_with(&["Lite"], Some("Lite"));
+        app.document_state.projects.clear();
+        assert_eq!(app.canvas_menu_variant(), None);
+    }
+
+    #[test]
+    fn with_base_active_the_row_names_base() {
+        let (app, _id, _dir) = app_with(&["Lite"], None);
+        let variant = lite(&app);
+        assert_eq!(variant.name, "Base");
+        assert!(selection_menu(Some(&variant)).contains(&"In variant: Base".to_string()));
+    }
+
+    #[test]
+    fn the_sheet_menu_has_no_in_variant_row() {
+        let (app, _id, _dir) = app_with(&["Lite"], Some("Lite"));
+        let variant = lite(&app);
+        let rows = layout(&canvas_menu_with_variant(
+            I18n::en_us_ref(),
+            TID,
+            CanvasSelection::default(),
+            None,
+            None,
+            &CanvasShortcuts::default(),
+            Some(&variant),
+        ));
+        assert!(
+            !rows.iter().any(|r| r.starts_with("In variant")),
+            "{rows:?}"
+        );
+    }
+
+    #[test]
+    fn the_flyout_heads_with_the_part_and_greys_the_edits_not_built() {
+        let (app, _id, _dir) = app_with(&["Lite"], Some("Lite"));
+        let window = app.ui_state.main_window_id.expect("main window");
+        let MenuContext::Selection {
+            part: Some((reference, _)),
+            ..
+        } = app.canvas_menu_context(window)
+        else {
+            panic!("one part is selected");
+        };
+        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), Some(&reference));
+        assert_eq!(
+            layout(&rows),
+            [
+                "# R5 in Lite",
+                "Fitted",
+                "Not fitted",
+                "Alternate part…",
+                "Edit value for this variant…",
+                "---",
+                "Show in Variant Manager",
+                "New variant…",
+            ]
+        );
+        for label in [
+            "Fitted",
+            "Not fitted",
+            "Alternate part…",
+            "Edit value for this variant…",
+        ] {
+            let row = item(&rows, label);
+            assert!(row.disabled && row.on_press.is_none(), "{label}");
+            assert_eq!(
+                row.tooltip.as_deref(),
+                Some(
+                    "Planned: change a part's fit, part or value in one variant. \
+                     The Variant Manager lists each part's fit today."
+                ),
+                "{label}"
+            );
+        }
+        // A multi-selection names no single part.
+        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None);
+        assert_eq!(layout(&rows)[0], "Fitted");
+    }
+
+    #[test]
+    fn show_in_variant_manager_opens_the_projects_variants_section() {
+        let (mut app, id, _dir) = app_with(&["Lite"], Some("Lite"));
+        app.interaction_state.context_menu = Some(crate::app::ContextMenuState {
+            x: 0.0,
+            y: 0.0,
+            world: None,
+            window: None,
+        });
+        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None);
+        let press = item(&rows, "Show in Variant Manager")
+            .on_press
+            .clone()
+            .expect("a live row");
+        let _ = app.update(press);
+        assert!(
+            app.interaction_state.context_menu.is_none(),
+            "the menu closes"
+        );
+        let tab = &app.document_state.tabs[app.document_state.active_tab];
+        assert!(matches!(tab.kind, TabKind::Project(p) if p == id));
+        assert_eq!(
+            app.document_state.project_tabs[&id].section,
+            ProjectSection::Variants
+        );
+        assert_eq!(
+            app.document_state.projects[0].data.variant_definitions,
+            ["Lite"]
+        );
+    }
+
+    #[test]
+    fn new_variant_adds_one_from_base_in_the_variant_manager() {
+        let (mut app, id, _dir) = app_with(&["Lite"], Some("Lite"));
+        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None);
+        let press = item(&rows, "New variant…")
+            .on_press
+            .clone()
+            .expect("a live row");
+        let _ = app.update(press);
+        let data = &app.document_state.projects[0].data;
+        assert_eq!(data.variant_definitions, ["Lite", "Variant 1"]);
+        assert_eq!(
+            data.active_variant.as_deref(),
+            Some("Lite"),
+            "not made active"
+        );
+        let tab = &app.document_state.tabs[app.document_state.active_tab];
+        assert!(matches!(tab.kind, TabKind::Project(p) if p == id));
+        let state = &app.document_state.project_tabs[&id];
+        assert_eq!(state.section, ProjectSection::Variants);
+        assert_eq!(state.variant_selected.as_deref(), Some("Variant 1"));
+        assert!(
+            state.variant_rename.is_some(),
+            "its name is open for typing"
+        );
+    }
+
+    #[test]
+    fn a_pick_for_a_closed_project_is_dropped() {
+        let (mut app, id, _dir) = app_with(&["Lite"], Some("Lite"));
+        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None);
+        let press = item(&rows, "New variant…")
+            .on_press
+            .clone()
+            .expect("a live row");
+        let tabs = app.document_state.tabs.len();
+        app.document_state.projects.clear();
+        let _ = app.update(press);
+        assert_eq!(app.document_state.tabs.len(), tabs, "no tab opens");
+        assert!(!app.document_state.project_tabs.contains_key(&id));
     }
 }
