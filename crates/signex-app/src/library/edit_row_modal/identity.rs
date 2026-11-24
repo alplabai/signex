@@ -103,13 +103,14 @@ fn input<'a>(
     }
 }
 
-/// The Identity fields, top to bottom. `pn_conflict` is the table of
-/// another row that already holds the draft's Internal PN: the field gets
-/// the error outline and the reason under it.
+/// The Identity fields, top to bottom. `conflicting` when another row
+/// already holds the draft's Internal PN: the field gets the error outline;
+/// the reason is the banner at the foot of the Parameters column (mockup
+/// row 130).
 pub(super) fn view<'a>(
     edit: &'a EditRowModalState,
     classes: Vec<crate::fonts::ComponentClassEntry>,
-    pn_conflict: Option<&str>,
+    conflicting: bool,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
     send: impl Fn(BrowserEditMsg) -> LibraryMessage + Clone + 'a,
@@ -117,7 +118,6 @@ pub(super) fn view<'a>(
     let gap = SP.m;
 
     let error = theme_ext::error_color(tokens);
-    let conflicting = pn_conflict.is_some();
     let pn_input = input(
         t!(i18n, ids::LIBRARY_EDIT_ROW_INTERNAL_PN),
         edit.draft.internal_pn.as_str(),
@@ -134,24 +134,11 @@ pub(super) fn view<'a>(
         }
         style
     });
-    let mut pn_cell = labelled(
+    let pn_cell = labelled(
         t!(i18n, ids::LIBRARY_EDIT_ROW_INTERNAL_PN),
         pn_input.boxed(),
         tokens,
     );
-    if let Some(table) = pn_conflict {
-        pn_cell = pn_cell.push(
-            text(t!(
-                i18n,
-                ids::LIBRARY_EDIT_ROW_PN_CONFLICT,
-                "pn" => edit.draft.internal_pn.as_str().trim(),
-                "table" => table
-            ))
-            .size(TS.caption)
-            .color(error)
-            .boxed(),
-        );
-    }
 
     let class_picks: Vec<ClassPick> = classes
         .iter()

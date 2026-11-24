@@ -423,8 +423,13 @@ be found, the list says "Stock library not found. Reinstall Signex to restore
 the bundled parts." when you pick the Stock chip. The **+ Add** button in the
 panel header asks where to add a library (**Project**, **Installed** or
 **Global**), and **File ▸ Library ▸ Open Library…** mounts a `.snxlib`
-library. Type in **Filter components…** to narrow the components. Clicking a
-part row opens its Component Preview tab.
+library. Type in the search field to narrow the components; every word must
+match. The search reads values: `100n`, `0.1u` and `0.1 µF` all find a
+100 nF part, `4k7` a 4.7 kΩ one, and a unit limits the match (`16V`).
+Prefixes are case-sensitive, so `1m` is milli and `1M` mega. A bare number
+such as `100` finds every value that shows 100 (100 pF, 100 nF, 100 µF), and a
+line under the header counts what it matched. Clicking a part row opens its
+Component Preview tab.
 
 **The Library panel.** One panel browses what the open libraries hold. Its
 chips switch between **Symbols** (the symbols of the `.snxsym` open in the
@@ -1320,7 +1325,8 @@ the default Signex Standard profile; the menu path always works.
    save dialog, and keep the `.snxprj` ending (section 3). Signex creates a
    folder named after the project; a blank `.snxsch` in it opens in a tab.
 2. **Find a part.** Open **View ▸ Components** and expand **Stock**
-   (section 5). Type in **Filter components…** to find the part.
+   (section 5). Type in the search field (a part number or a value such as
+   `100n`) to find the part.
 3. **Place it.** Choose **Place ▸ Component…** (or **File ▸ Library ▸ Place
    Component…**), select the
    part and press **Place** (or press **Place** on the part's row in the

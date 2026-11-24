@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use signex_library::adapters::local_git::project_repo::SwitchRefusal;
+use signex_library::repo_diff::FileDiff;
 use signex_library::repo_graph::{
     RepoFileChange, RepoFileChangeKind, RepoRefKind, RepoRefTip, RepoSnapshot,
 };
@@ -212,6 +213,27 @@ pub fn document_to_show(files: &[ChangedFile], tracked: &str) -> Option<String> 
         .map(|f| f.path.clone())
 }
 
+/// The file Show differences… compares: the picked row, else the file the
+/// panel follows, else the commit's first file. `None` while the commit's
+/// files are not in.
+pub fn file_to_diff(files: &[ChangedFile], picked: Option<&str>, tracked: &str) -> Option<String> {
+    let listed = |path: &str| files.iter().any(|f| f.path == path);
+    picked
+        .filter(|path| listed(path))
+        .or_else(|| listed(tracked).then_some(tracked))
+        .or_else(|| files.first().map(|f| f.path.as_str()))
+        .map(str::to_owned)
+}
+
+/// The differences open under the detail strip: one commit's change to one
+/// file. `result` is `None` while the read runs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HistoryDiff {
+    pub sha: String,
+    pub path: String,
+    pub result: Option<Result<Arc<FileDiff>, String>>,
+}
+
 /// Whether the find field's text can name a new local branch.
 pub fn can_create_branch(branches: &[BranchRow], query: &str) -> bool {
     let name = query.trim();
@@ -250,6 +272,9 @@ pub struct HistoryUi {
     pub save_offered: bool,
     /// A save of the file makes a commit, so Commit… has something to do.
     pub commits_on_save: bool,
+    /// The file row picked in the detail strip, for Show differences….
+    pub picked_file: Option<String>,
+    pub diff: Option<HistoryDiff>,
 }
 
 /// The filter chips and the search field.
@@ -268,6 +293,10 @@ pub enum HistoryCommitMsg {
     /// Commit… on the working-tree row.
     CommitPressed,
     ShowDocumentPressed(String),
+    /// A file row of the detail strip was pressed.
+    FilePicked(String),
+    ShowDifferencesPressed,
+    DifferencesClosed,
     MoreToggled,
     NewBranchPressed,
     TagPressed,
@@ -312,6 +341,11 @@ pub enum HistoryRepoEvent {
         generation: u32,
         sha: String,
         result: Result<Vec<ChangedFile>, String>,
+    },
+    DiffLoaded {
+        sha: String,
+        path: String,
+        result: Result<Arc<FileDiff>, String>,
     },
     RefCreated(Result<(), String>),
     SwitchFinished(Result<crate::app::project_git::SwitchDone, SwitchRefusal>),
@@ -444,5 +478,32 @@ mod tests {
             Some("dcdc-buck.snxpcb")
         );
         assert_eq!(document_to_show(&files[..1], "power.snxsch"), None);
+    }
+
+    /// Mockup row 39: Show differences… compares the picked file, the
+    /// followed file when nothing is picked, and otherwise the first one.
+    #[test]
+    fn show_differences_compares_the_picked_then_the_followed_file() {
+        let file = |status, path: &str| ChangedFile {
+            status,
+            path: path.into(),
+        };
+        let files = [
+            file(FileStatus::Modified, "dcdc-buck.snxpcb"),
+            file(FileStatus::Modified, "power.snxsch"),
+            file(FileStatus::Added, "assets/Q2.step"),
+        ];
+        let pick = |picked: Option<&str>, tracked: &str| file_to_diff(&files, picked, tracked);
+        assert_eq!(
+            pick(Some("assets/Q2.step"), "power.snxsch").as_deref(),
+            Some("assets/Q2.step")
+        );
+        assert_eq!(pick(None, "power.snxsch").as_deref(), Some("power.snxsch"));
+        assert_eq!(
+            pick(Some("gone.snxsch"), "other.snxsch").as_deref(),
+            Some("dcdc-buck.snxpcb"),
+            "a pick the commit does not list falls back"
+        );
+        assert_eq!(file_to_diff(&[], None, "power.snxsch"), None);
     }
 }

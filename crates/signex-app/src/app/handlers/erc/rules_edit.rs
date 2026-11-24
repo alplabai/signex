@@ -185,7 +185,9 @@ impl Signex {
         let Some(before) = self.rule_state_of(id) else {
             return;
         };
-        let router_moved = before.router_tool_diameter != state.router_tool_diameter;
+        let min_slot_of = |state: &RuleState| state.rules.as_ref().and_then(|r| r.min_slot());
+        let fab_moved = before.router_tool_diameter != state.router_tool_diameter
+            || min_slot_of(&before) != min_slot_of(&state);
         let ds = &mut self.document_state;
         if record {
             ds.note_project_clean_state(id);
@@ -205,8 +207,8 @@ impl Signex {
                 .set_router_tool_diameter(state.router_tool_diameter);
         }
         ds.sync_project_history_dirty(id, true);
-        if router_moved {
-            self.sync_board_sketch_router();
+        if fab_moved {
+            self.sync_board_sketch_fab();
         }
         self.refresh_panel_ctx();
     }

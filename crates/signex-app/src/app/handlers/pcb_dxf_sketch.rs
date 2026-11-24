@@ -1,7 +1,9 @@
 //! Import DXF into a board sketch (#2794, mockup row 179c). The file is picked
 //! and read off the UI thread, then the dialog shows its units, scale and
-//! layers. Nothing changes until Import, which adds the geometry to the
-//! working copy as one sketch undo step; Cancel or Esc drops the dialog.
+//! layers, and Next the profile check. Nothing changes until Heal and merge
+//! or Import as is, which adds the geometry to the working copy as one sketch
+//! undo step and shows what landed until Done; Cancel or Esc drops the
+//! dialog.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -13,7 +15,7 @@ use signex_sketch::import::ImportCheck;
 use signex_sketch::plane::PlaneId;
 
 use super::pcb_dxf_import::{file_label, read_text};
-use crate::app::state::{SketchDxfDialog, SketchDxfMsg};
+use crate::app::state::{DxfImportMode, SketchDxfDialog, SketchDxfMsg, SketchDxfStep};
 use crate::app::{DxfImportMsg, Message, PcbMsg, Signex};
 use crate::library::editor::footprint::land_sketch_import;
 use crate::library::editor::footprint::sketch_redundancy_task::dispatch_redundancy;
@@ -120,8 +122,8 @@ impl Signex {
             return Task::none();
         };
         match event {
-            SketchDxfMsg::Cancelled => session.dxf_dialog = None,
-            SketchDxfMsg::Confirmed => return self.confirm_sketch_dxf(),
+            SketchDxfMsg::Cancelled | SketchDxfMsg::Dismissed => session.dxf_dialog = None,
+            SketchDxfMsg::Confirmed(mode) => return self.confirm_sketch_dxf(mode),
             event => {
                 if let Some(dialog) = session.dxf_dialog.as_mut() {
                     dialog.apply(event);
@@ -131,13 +133,18 @@ impl Signex {
         Task::none()
     }
 
-    /// Import: the geometry joins the working copy as one undo step. The
+    /// Heal and merge, or Import as is, on the check: the geometry joins the
+    /// working copy as one undo step and the card shows what landed. The
     /// board changes only when the sketch is baked.
-    fn confirm_sketch_dxf(&mut self) -> Task<Message> {
+    fn confirm_sketch_dxf(&mut self, mode: DxfImportMode) -> Task<Message> {
         let Some(session) = self.interaction_state.board_sketch.as_mut() else {
             return Task::none();
         };
-        let Some(dialog) = session.dxf_dialog.as_ref() else {
+        let Some(dialog) = session
+            .dxf_dialog
+            .as_deref()
+            .filter(|d| d.step == SketchDxfStep::Checking)
+        else {
             return Task::none();
         };
         let plane = session
@@ -147,17 +154,22 @@ impl Signex {
             .as_ref()
             .and_then(|sketch| sketch.planes.first())
             .map_or_else(PlaneId::new, |plane| plane.id);
-        let Ok(import) = dialog.build(plane) else {
+        let Ok(import) = dialog.build_as(plane, mode) else {
             return Task::none();
         };
         let check = import.check;
+        let result = SketchDxfDialog::result_of(mode, &import);
         let file = dialog.file.clone();
-        let Some(dialog) = session.dxf_dialog.take() else {
-            return Task::none();
-        };
         let landed = land_sketch_import(&mut session.editor, import, plane, |tag| {
             dialog.role_of(tag)
         });
+        if landed {
+            if let Some(dialog) = session.dxf_dialog.as_mut() {
+                dialog.land(result);
+            }
+        } else {
+            session.dxf_dialog = None;
+        }
         let path = session.board_path.clone();
         let solve = dispatch_pending(&mut session.editor, &path).map(Message::Library);
         let redundancy = dispatch_redundancy(&mut session.editor, &path).map(Message::Library);

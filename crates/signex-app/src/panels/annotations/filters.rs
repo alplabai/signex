@@ -1,5 +1,6 @@
 //! The tools block above the list: the search field, the kind chips with
-//! their counts, and the Part, Status and Date filter fields.
+//! their counts, and the Part, Status and Date filter fields with New
+//! annotation at their right end.
 
 use iced::widget::{Column, Row, container, pick_list, row, svg};
 use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Theme, Widget as _};
@@ -23,7 +24,8 @@ const FIELD_PAD: f32 = TS.body * 6.0 / 12.0;
 const GLYPH: f32 = TS.body;
 
 const SEARCH: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.3" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10.2 10.2l3.3 3.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>"#;
-const CLEAR: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>"#;
+const PLUS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>"#;
+const CLEAR: &[u8] =br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>"#;
 
 /// The block: search, chips, filters; 8 / 8 / 4 padding, a soft rule under.
 pub(super) fn tools<'a>(ctx: &'a PanelContext, view: &'a AnnotationsView) -> Element<'a, PanelMsg> {
@@ -177,9 +179,28 @@ fn filter_row<'a>(ctx: &'a PanelContext, view: &'a AnnotationsView) -> Element<'
             AnnotationsMsg::DatePicked(DateWindow::Any),
         ),
     };
-    row![cell(part), cell(status), cell(date),]
+    row![cell(part), cell(status), cell(date), new_annotation(ctx)]
         .spacing(PAD_TIGHT)
+        .align_y(Alignment::Center)
         .boxed()
+}
+
+/// New annotation (+) at the bar's right end: it inserts a note annotation
+/// into the open notebook and is greyed without one (decision 2026-11-24).
+/// No notebook tab exists yet, so it is always greyed and says why.
+fn new_annotation<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    let tokens = &ctx.tokens;
+    let face = button(container(glyph(PLUS, GLYPH, resolve(tokens).ink4)).center(Length::Fill))
+        .width(METRICS.row)
+        .height(METRICS.row)
+        .padding(0)
+        .style(crate::styles::menu_item(tokens));
+    crate::panels::graphite::hint_tooltip(
+        face.boxed(),
+        t!(ctx.i18n, ids::ANNOTATIONS_NEW_NEEDS_NOTEBOOK),
+        tokens,
+        iced::widget::tooltip::Position::Bottom,
+    )
 }
 
 fn cell<'a>(content: Element<'a, PanelMsg>) -> Element<'a, PanelMsg> {

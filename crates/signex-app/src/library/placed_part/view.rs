@@ -173,7 +173,7 @@ pub fn change_preview_view<'a>(
     let mut lines = column![
         text(raw(format!(
             "{} becomes {}. Its designator and parameters stay.",
-            change.reference, change.resolved.internal_pn
+            change.session.reference, change.resolved.internal_pn
         )))
         .size(TS.body)
         .color(text_c),

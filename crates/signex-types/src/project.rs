@@ -16,6 +16,7 @@ mod annotation;
 mod erc_waiver;
 mod fab_outputs;
 mod fab_tier;
+mod min_slot;
 mod order;
 mod profile_override;
 mod requirements;
@@ -54,11 +55,11 @@ pub use requirements::{
 pub use rule_file::{MAX_RULE_FILE_BYTES, RuleFileError, RuleTemplate};
 pub use rule_profile::{
     FabProfileInfo, RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RULE_PROFILE_SCHEMA_V2,
-    RuleProfile, RuleProfileError,
+    RULE_PROFILE_SCHEMA_V3, RuleProfile, RuleProfileError,
 };
 pub use rules::{
-    DrcRuleSet, ErcRules, NamedRuleSet, ProjectRules, RULES_SCHEMA_V1, RuleProfileRef, RuleSetUse,
-    rule_set_sha256,
+    DrcRuleSet, ErcRules, NamedRuleSet, ProjectRules, RULES_SCHEMA_V1, RULES_SCHEMA_V2,
+    RuleProfileRef, RuleSetUse, rule_set_sha256,
 };
 pub use schematic_defaults::{
     MAX_BUS_WIDTH_MM, MAX_DEFAULT_WIDTH_MM, MIN_TEXT_SIZE_PT, SchematicDefaultField,
@@ -917,9 +918,10 @@ pub fn encode_project(data: &ProjectData) -> Result<Vec<u8>, serde_json::Error> 
         stamped.extend(fields);
     }
     // A rule set stored in this session replaces a section kept from a
-    // newer build; serde would otherwise let the kept copy win.
+    // newer build; serde would otherwise let the kept copy win. Its schema
+    // follows its content (`ProjectRules::written_schema`).
     if let Some(rules) = &data.rules {
-        stamped.insert(RULES_KEY.into(), serde_json::to_value(rules)?);
+        stamped.insert(RULES_KEY.into(), rules.to_written_value()?);
     }
     // Same for the annotation settings: an explicit choice replaces an
     // unreadable section kept from a newer build.

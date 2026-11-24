@@ -117,12 +117,17 @@ fn a_clean_outline_reads_ok_and_the_router_check_says_why_it_did_not_run() {
             CheckStatus::Passed,
             CheckStatus::Passed,
             CheckStatus::NotChecked,
+            CheckStatus::NotChecked,
         ]
     );
     assert_eq!(english(&lines[0]), "Closed: one loop");
     assert_eq!(
         english(&lines[3]),
         "Inside corners: not checked, the project's fab profile names no router tool"
+    );
+    assert_eq!(
+        english(&lines[4]),
+        "Min slot: not checked, the project's fab profile names no min slot"
     );
     assert!(lines.iter().all(|l| l.place.is_none()), "nothing to select");
 }
@@ -317,4 +322,65 @@ fn a_footprint_with_an_open_profile_offers_close_gap() {
         .expect("an open courtyard offers Close gap");
     assert!(offer.closes());
     assert!((offer.gap_mm - 0.02).abs() < 1e-9);
+}
+
+/// [`BOARD`]'s outline and a Slot cutout `width` across inside it; returns
+/// the sketch and the slot's tagged edge.
+fn board_with_slot(width: f64) -> (SketchData, SketchEntityId) {
+    let (mut sketch, _) = outline_sketch(&BOARD);
+    let plane = sketch.planes[0].id;
+    let mut add = |kind| {
+        let id = SketchEntityId::new();
+        sketch.entities.push(Entity::new(id, plane, kind));
+        id
+    };
+    let r = width / 2.0;
+    let point = |x, y| EntityKind::Point { x, y };
+    let (a, b) = (add(point(10.0, 10.0)), add(point(15.0, 10.0)));
+    let (c, d) = (
+        add(point(15.0, 10.0 + width)),
+        add(point(10.0, 10.0 + width)),
+    );
+    let (right, left) = (add(point(15.0, 10.0 + r)), add(point(10.0, 10.0 + r)));
+    let arc = |center, start, end| EntityKind::Arc {
+        center,
+        start,
+        end,
+        sweep_ccw: true,
+    };
+    let seed = add(EntityKind::Line { start: a, end: b });
+    add(arc(right, b, c));
+    add(EntityKind::Line { start: c, end: d });
+    add(arc(left, d, a));
+    let entity = sketch.entities.iter_mut().find(|e| e.id == seed).unwrap();
+    entity.board_cutout = Some(signex_sketch::attr::BoardCutoutAttr {
+        edge_radius_expr: None,
+        through: true,
+    });
+    entity.board_slot = Some(signex_types::sketch::board_attr::BoardSlotAttr::default());
+    (sketch, seed)
+}
+
+/// mockup row 179d: the board session's min slot reaches the check; a
+/// narrower slot is one failing line that selects it, a wide one passes.
+#[test]
+fn the_session_min_slot_checks_each_slot_and_a_narrow_one_names_its_place() {
+    let (sketch, seed) = board_with_slot(0.6);
+    let mut editor = solved_editor(sketch, true);
+    editor.state.sketch_exit.min_slot = Some(0.8);
+    let lines = lines_of(&editor);
+    let failed: Vec<&CheckLine> = lines
+        .iter()
+        .filter(|l| l.status == CheckStatus::Failed)
+        .collect();
+    assert_eq!(failed.len(), 1, "{lines:#?}");
+    assert_eq!(english(failed[0]), "Slot 0.60 mm wide < min slot 0.80 mm");
+    assert_eq!(failed[0].place, Some(seed), "a click selects the slot");
+
+    let (sketch, _) = board_with_slot(0.8);
+    let mut editor = solved_editor(sketch, true);
+    editor.state.sketch_exit.min_slot = Some(0.8);
+    let lines = lines_of(&editor);
+    assert_eq!(lines[4].status, CheckStatus::Passed, "{lines:#?}");
+    assert_eq!(english(&lines[4]), "Slots: none narrower than the min slot");
 }

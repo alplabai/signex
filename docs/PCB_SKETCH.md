@@ -254,12 +254,19 @@ undo or solve shows them at once.
 | No self-intersection | the two crossing edges and the point |
 | Holes, cutouts and keepouts inside the outline | each opening that is not inside (a mounting hole by its drill; touching the edge counts as inside) |
 | Inside corners: the router can cut them | each corner tighter than the router tool: a concave corner of the outline and every corner of a cutout or slot opening (radius 0 for a sharp corner, the cutout's edge radius when it names one, an arc's radius for a fillet), read `Inside corner R 0.00 < R 1.00 at (x, y)`; drilled mounting holes are skipped |
+| Slots: none narrower than the min slot | each Slot opening narrower across than the project's min slot, read `Slot 0.60 mm wide < min slot 0.80 mm`; checked whatever the outline is, a plain cutout is no slot |
 
 A check that cannot run says why: no outline drawn (the board keeps its
-own), the outline not one closed loop yet, the sketch not solved, or (for
-inside corners) the project's fab profile names no router tool. A failing
-line names its place, and a click selects that entity (the first one, for a
-pair).
+own), the outline not one closed loop yet, the sketch not solved, or the
+project's fab profile names no router tool (inside corners) or no min slot
+(min slot). A failing line names its place, and a click selects that entity
+(the first one, for a pair).
+
+The min slot is the project's (`rules.min_slot` in the `.snxprj`, which
+writes the `rules` section at schema 2), set with the rules when a fab tier
+(Standard 0.80 mm, Advanced 0.60 mm, HDI 0.50 mm) or a fab profile naming
+one is applied; the Fab profile group lists it under the router tool (`Min
+slot Ø 0.80 · from profile`).
 
 The router tool diameter is the project's (`router_tool_diameter` in the
 `.snxprj`), set when a fab tier or a fab profile naming one is applied

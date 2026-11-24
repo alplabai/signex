@@ -4,18 +4,29 @@
 //!
 //! Top to bottom, the same in every kind: the kind chips with their
 //! counts, the breadcrumb, the filter, the toolbar (Place, Add, Edit, and
-//! Delete at the right end), then the kind's list. The panel opens on the
+//! the row-style switch and Delete at the right end), then the kind's list
+//! in compact or thumbnail rows. The panel opens on the
 //! kind of the active editor tab; a chip pick holds while that tab stays
 //! active (see `library::state::panel_kind`). Open Library… is the folder
 //! button in the dock title bar.
 
 mod empty;
+mod footprint_tile;
 mod footprints;
 mod frame;
 mod parts;
+mod row_style;
 mod symbols;
 #[cfg(test)]
 mod tests;
+
+pub use footprint_tile::FootprintTile;
+#[cfg(test)]
+pub(crate) use row_style::SWITCH_BUTTON as ROW_STYLE_SWITCH_BUTTON;
+pub(crate) use row_style::{
+    RowDrawing, TILE_H as THUMB_TILE_H, TILE_W as THUMB_TILE_W, switch as row_style_switch,
+    tile as row_tile,
+};
 
 use iced::widget::{Column, column};
 use iced::{Element, Length, Widget};
@@ -73,6 +84,34 @@ pub fn kind_counts(library: &LibraryState, ctx: &PanelContext) -> KindCounts {
     }
 }
 
+/// Most Parts rows per library whose symbol drawings are asked for; a row
+/// further down shows the kind's glyph.
+pub(crate) const MAX_THUMB_ROWS_PER_LIBRARY: usize = 200;
+
+/// The symbols of the Parts rows the panel lists in thumbnail rows: the
+/// rows of every expanded library (every library while filtering). Empty in
+/// compact rows, so nothing is read for them.
+pub(crate) fn wanted_thumbnails(library: &LibraryState) -> Vec<signex_library::PrimitiveRef> {
+    if library.library_panel.row_style != crate::library::state::LibraryRowStyle::Thumbnail {
+        return Vec::new();
+    }
+    let filtering = !library.panel_search.trim().is_empty();
+    library
+        .open_libraries
+        .iter()
+        .filter(|lib| filtering || library.panel_expanded.contains(&lib.root))
+        .flat_map(|lib| {
+            library
+                .library_panel
+                .rows
+                .visible_rows(&lib.root, MAX_THUMB_ROWS_PER_LIBRARY)
+                .filter_map(move |(table, index)| {
+                    Some(lib.tables.get(table)?.get(index)?.symbol_ref)
+                })
+        })
+        .collect()
+}
+
 /// Nothing to browse: no library open and no symbol or footprint editor.
 pub fn has_nothing_open(library: &LibraryState, ctx: &PanelContext) -> bool {
     library.open_libraries.is_empty()
@@ -119,7 +158,7 @@ pub fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Element<'a,
         frame::kind_chips(kind, kind_counts(library, ctx), !nothing_open, tokens, i18n),
         frame::crumb(shown.crumb, tokens, i18n),
         frame::filter_field(&library.panel_search, placeholder, !nothing_open, tokens),
-        frame::toolbar(shown.tools, tokens, i18n),
+        frame::toolbar(shown.tools, library.library_panel.row_style, tokens, i18n),
     ]
     .width(Length::Fill);
     column![

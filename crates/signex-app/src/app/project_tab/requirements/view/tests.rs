@@ -111,6 +111,7 @@ fn a_failed_card_reads_its_findings_as_one_sentence() {
     tab.requirements.last_run = Some(Arc::new(RequirementsRun {
         report: Ok(report),
         finished_at: chrono::Utc::now(),
+        board_mm: None,
     }));
     let texts = texts(&app, id);
     // The report puts its findings in one order (`CheckReport::new`, by

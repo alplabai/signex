@@ -681,6 +681,21 @@ impl Signex {
             LibraryMessage::BrowserMoreMenuToggled { library_path } => {
                 self.handle_browser_more_menu_toggled(library_path)
             }
+            LibraryMessage::BrowserColumnsMenuToggled { library_path } => {
+                if let Some(browser) = self.library.library_browsers.get_mut(&library_path) {
+                    browser.columns_menu_open = !browser.columns_menu_open;
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserColumnToggled {
+                library_path,
+                column_key,
+            } => {
+                if let Some(browser) = self.library.library_browsers.get_mut(&library_path) {
+                    browser.toggle_column(column_key);
+                }
+                Task::none()
+            }
         }
     }
 }

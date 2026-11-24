@@ -51,20 +51,23 @@ pub(crate) const KV_KEY_W: f32 = 96.0;
 pub(crate) const KV_ROW_GAP: f32 = 5.0;
 const KV_COL_GAP: f32 = 10.0;
 
+/// Width of the symbol-in-use Delete confirm (mockup row 137).
+pub(crate) const SYMBOL_DELETE_W: f32 = 500.0;
+
 /// What sits at the right end of a dialog header.
-enum HeaderEnd {
+enum HeaderEnd<M> {
     Nothing,
-    Close(LibraryMessage),
+    Close(M),
     /// A muted note, then the close button.
-    NoteAndClose(String, LibraryMessage),
+    NoteAndClose(String, M),
 }
 
-fn header_strip<'a>(
+fn header_strip<'a, M: Clone + 'a>(
     title: &str,
-    end: HeaderEnd,
+    end: HeaderEnd<M>,
     windowed: bool,
     tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'a, M> {
     // In its own OS window the window's title bar carries the title and the
     // close: the slot stays empty (docs/DETACHED_MODALS.md).
     if windowed {
@@ -106,13 +109,14 @@ fn header_strip<'a>(
 
 /// Header of a Library dialog: title and a close button, or the empty slot
 /// when `windowed` (the OS window's title bar carries both). Every Library
-/// dialog builds its header here.
-pub(crate) fn header<'a>(
+/// dialog builds its header here; the SCH Library panel's symbol Delete
+/// confirm too, with its panel message.
+pub(crate) fn header<'a, M: Clone + 'a>(
     title: &str,
-    on_close: LibraryMessage,
+    on_close: M,
     windowed: bool,
     tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'a, M> {
     header_strip(title, HeaderEnd::Close(on_close), windowed, tokens)
 }
 
@@ -153,11 +157,11 @@ pub(crate) fn secondary_btn<'a>(
 
 /// The dismissing footer action (Cancel): Ghost on Graphite, bordered
 /// elsewhere. It goes first in the right-aligned button row.
-pub(crate) fn cancel_btn<'a>(
+pub(crate) fn cancel_btn<'a, M: Clone + 'a>(
     label: impl Into<Label<'a>>,
-    message: LibraryMessage,
+    message: M,
     tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'a, M> {
     dialog_button(label, DialogButtonKind::Cancel, Some(message), tokens)
 }
 
@@ -188,22 +192,22 @@ pub(crate) fn primary_btn_if<'a>(
 
 /// Footer of a Library dialog on the flat footer strip: `extras` at the
 /// left end, `buttons` right-aligned with the standard gaps.
-pub(crate) fn footer_strip<'a>(
-    extras: Vec<Element<'a, LibraryMessage>>,
-    buttons: Vec<Element<'a, LibraryMessage>>,
+pub(crate) fn footer_strip<'a, M: 'a>(
+    extras: Vec<Element<'a, M>>,
+    buttons: Vec<Element<'a, M>>,
     tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'a, M> {
     container(dialog_footer_split(extras, buttons))
         .style(crate::styles::modal_footer_strip(tokens))
         .boxed()
 }
 
 /// Destructive footer action (Delete, Discard): error-coloured outline.
-pub(crate) fn danger_btn<'a>(
+pub(crate) fn danger_btn<'a, M: Clone + 'a>(
     label: impl Into<Label<'a>>,
-    message: LibraryMessage,
+    message: M,
     tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'a, M> {
     dialog_button(label, DialogButtonKind::Danger, Some(message), tokens)
 }
 

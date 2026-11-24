@@ -13,7 +13,7 @@
 //! `.snxprj`.
 //!
 //! A section this build cannot interpret — a `schema` newer than
-//! [`RULES_SCHEMA_V1`], or a value whose shape changed — never stops the
+//! [`RULES_SCHEMA_V2`], or a value whose shape changed — never stops the
 //! project from opening: [`crate::project::parse_project`] keeps it verbatim
 //! in the project's `unknown` keys, where it is written back untouched and
 //! not applied (#1180).
@@ -27,6 +27,12 @@ use super::UnknownJson;
 /// Current version of the `rules` section, independent of the `.snxprj`
 /// format token.
 pub const RULES_SCHEMA_V1: u32 = 1;
+
+/// The schema of a section that names a min slot (mockup row 179d). An
+/// older build reads only 1, so it keeps a 2 section verbatim, unapplied,
+/// instead of reading the rules and losing the value. Content-driven:
+/// [`ProjectRules::written_schema`].
+pub const RULES_SCHEMA_V2: u32 = 2;
 
 /// The `rules` section of a `.snxprj`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -61,6 +67,17 @@ pub struct ProjectRules {
     /// so a file without one re-saves without one.
     #[serde(default, skip_serializing_if = "DrcRuleSet::is_empty")]
     pub drc: DrcRuleSet,
+    /// The narrowest slot the project's fab tier or profile routes, across,
+    /// in mm (mockup row 179d); the board sketch warns at a narrower slot.
+    /// `None` when none was applied, skipped on save; a value that is not
+    /// a positive number reads as `None`. Not part of the rule-set hash.
+    /// Read and set it through [`Self::min_slot`] and [`Self::set_min_slot`].
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "super::min_slot::lenient_min_slot"
+    )]
+    pub min_slot: Option<f64>,
     /// Keys written by a newer build (`annotation`, ...); kept so a save
     /// does not drop them.
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -76,6 +93,7 @@ impl Default for ProjectRules {
             erc_net_waivers: BTreeMap::new(),
             erc_waivers: Vec::new(),
             drc: DrcRuleSet::default(),
+            min_slot: None,
             unknown: UnknownJson::default(),
         }
     }
@@ -84,7 +102,45 @@ impl Default for ProjectRules {
 impl ProjectRules {
     /// Whether this build understands the section's version.
     pub fn is_supported_schema(&self) -> bool {
-        self.schema.unwrap_or(RULES_SCHEMA_V1) <= RULES_SCHEMA_V1
+        self.schema.unwrap_or(RULES_SCHEMA_V1) <= RULES_SCHEMA_V2
+    }
+
+    /// The min slot in mm, absent when none was applied or the stored value
+    /// is not a positive number.
+    pub fn min_slot(&self) -> Option<f64> {
+        self.min_slot.filter(|mm| super::min_slot::is_usable(*mm))
+    }
+
+    /// Store the min slot; `None`, or a value that is not a positive
+    /// number, clears it. The schema follows, so the section equals what a
+    /// save reads back.
+    pub fn set_min_slot(&mut self, mm: Option<f64>) {
+        self.min_slot = mm.filter(|mm| super::min_slot::is_usable(*mm));
+        self.schema = self.written_schema();
+    }
+
+    /// The schema the section is written at: 2 while it names a min slot,
+    /// else as read (a 2 with nothing that needs it goes back to 1), so a
+    /// section without the value re-saves as today.
+    pub fn written_schema(&self) -> Option<u32> {
+        if self.min_slot().is_some() {
+            return Some(RULES_SCHEMA_V2);
+        }
+        match self.schema {
+            Some(RULES_SCHEMA_V2) => Some(RULES_SCHEMA_V1),
+            other => other,
+        }
+    }
+
+    /// The section as the `.snxprj` writes it, at [`Self::written_schema`].
+    pub fn to_written_value(&self) -> Result<serde_json::Value, serde_json::Error> {
+        let written = self.written_schema();
+        if written == self.schema {
+            return serde_json::to_value(self);
+        }
+        let mut copy = self.clone();
+        copy.schema = written;
+        serde_json::to_value(&copy)
     }
 }
 

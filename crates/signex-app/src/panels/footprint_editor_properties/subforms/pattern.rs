@@ -19,7 +19,7 @@ use super::helpers::{
     ghost_action, header, illustration, is_open, note, pair, section_header, segmented, value_box,
 };
 use super::pattern_drawing::drawing;
-use signex_bake::array::ArrayPreview;
+use signex_bake::array::{ArrayPreview, NumberMaskRefusal, instances_numbered, suppressed_numbers};
 use signex_sketch::array::GridSweep;
 
 const LAYOUT_SECTION: &str = "fp_role_pattern_layout";
@@ -141,7 +141,10 @@ pub(super) fn view<'a>(
         i18n,
     ));
     if numbering_open {
-        parts.extend(numbering_rows(pattern, tokens, i18n));
+        let mask = fp
+            .numeric_buffers
+            .get(&crate::panels::number_mask_buffer_key(pattern.array_id));
+        parts.extend(numbering_rows(pattern, mask, tokens, i18n));
     }
     parts.push(danger_action(
         t!(i18n, ids::EDITORS_ROLE_PATTERN_DELETE),
@@ -394,8 +397,106 @@ fn sweep_row<'a>(
     gated(row, pattern.sweep.is_some(), tokens)
 }
 
+/// The instances on a pattern's suppressed list, as `(i, j)` (`j` is 0 on
+/// a polar pattern).
+fn suppressed_cells(pattern: &ArraySummary) -> Vec<(u32, u32)> {
+    match &pattern.kind {
+        ArrayKindSummary::Grid {
+            suppressed_instances,
+            ..
+        } => suppressed_instances.clone(),
+        ArrayKindSummary::Polar {
+            suppressed_instances,
+            ..
+        } => suppressed_instances.iter().map(|&i| (i, 0)).collect(),
+        ArrayKindSummary::Linear { .. } => Vec::new(),
+    }
+}
+
+/// What the Numbering Mask shows: the typed text while it is refused or
+/// skips what the pattern skips, else the skipped pads' numbers.
+pub(super) fn shown_number_mask(
+    pattern: &ArraySummary,
+    typed: Option<&String>,
+) -> (String, Option<NumberMaskRefusal>) {
+    let mut suppressed = suppressed_cells(pattern);
+    let stored = suppressed_numbers(&pattern.preview, &suppressed).join(", ");
+    let Some(text) = typed else {
+        return (stored, None);
+    };
+    match instances_numbered(&pattern.preview, text) {
+        Err(refusal) => (text.clone(), Some(refusal)),
+        Ok(mut cells) => {
+            cells.sort_unstable();
+            suppressed.sort_unstable();
+            if cells == suppressed {
+                (text.clone(), None)
+            } else {
+                (stored, None)
+            }
+        }
+    }
+}
+
+/// Numbering Mask (mockup row 126): the pad numbers the pattern skips; a
+/// linear pattern has no suppressed list and greys it.
+fn number_mask_row<'a>(
+    pattern: &ArraySummary,
+    typed: Option<&String>,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, PanelMsg> {
+    let array_id = pattern.array_id;
+    let (value, refusal) = shown_number_mask(pattern, typed);
+    let field = super::helpers::input(
+        t!(i18n, ids::EDITORS_ROLE_PATTERN_NUMBER_MASK_HINT),
+        value,
+        move |value| PanelMsg::FpEditorEditArrayParam {
+            array_id,
+            field: ArrayParamField::NumberMask,
+            value,
+        },
+    );
+    let mut rows = Column::<Element<'a, PanelMsg>>::new()
+        .width(Length::Fill)
+        .push(field_row(
+            t!(i18n, ids::EDITORS_PATTERN_MASK),
+            field,
+            tokens,
+        ));
+    if let Some(refusal) = refusal {
+        let reason = match &refusal {
+            NumberMaskRefusal::NotInPattern(number) => t!(
+                i18n,
+                ids::EDITORS_ROLE_PATTERN_NUMBER_MASK_UNKNOWN,
+                "number" => number.as_str()
+            ),
+            NumberMaskRefusal::IsSource(number) => t!(
+                i18n,
+                ids::EDITORS_ROLE_PATTERN_NUMBER_MASK_SOURCE,
+                "number" => number.as_str()
+            ),
+            NumberMaskRefusal::Unresolved => {
+                t!(i18n, ids::EDITORS_ROLE_PATTERN_NUMBER_MASK_UNRESOLVED)
+            }
+        };
+        let line = text(reason)
+            .size(TS.caption)
+            .color(crate::styles::ti(tokens.error));
+        rows = rows.push(
+            container(line)
+                .padding([0.0, SP.m])
+                .width(Length::Fill)
+                .boxed(),
+        );
+    }
+    let enabled = kind_of(pattern) != PatternKind::Linear;
+    gated(rows.boxed(), enabled, tokens)
+}
+
 fn numbering_rows<'a>(
     pattern: &'a ArraySummary,
+    mask: Option<&String>,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Vec<Element<'a, PanelMsg>> {
@@ -449,6 +550,7 @@ fn numbering_rows<'a>(
         tokens,
     );
     rows.push(gated(start, enabled, tokens));
+    rows.push(number_mask_row(pattern, mask, tokens, i18n));
     let skip_row = field_row(
         UserText::new(String::new()),
         check(

@@ -349,12 +349,19 @@ fn a_rename_whose_move_back_also_fails_tells_the_user_where_the_file_is() {
     }));
     let task = f.app.update(Message::Rename(RenameMsg::Submit));
     let mut messages = run(task);
-    if let Some(Message::Rename(RenameMsg::FileRenamed(done))) = messages.first_mut() {
-        done.result = Err(RenameIoError::ProjectNotPatched {
-            reason: "the project file could not be updated".to_string(),
-            moved_back: Err("denied".to_string()),
-        });
-    }
+    // The rename's completion, wherever it lands among the update's tasks
+    // (the project in view also starts its notebook read).
+    let done = messages
+        .iter_mut()
+        .find_map(|m| match m {
+            Message::Rename(RenameMsg::FileRenamed(done)) => Some(done),
+            _ => None,
+        })
+        .expect("the rename completes");
+    done.result = Err(RenameIoError::ProjectNotPatched {
+        reason: "the project file could not be updated".to_string(),
+        moved_back: Err("denied".to_string()),
+    });
     f.app.ui_state.rename_dialog = None;
     for message in messages {
         let _ = f.app.update(message);
