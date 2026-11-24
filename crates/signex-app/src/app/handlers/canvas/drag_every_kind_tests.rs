@@ -476,6 +476,52 @@ fn a_harness_connector_drags() {
     drag_one(s, SelectedItem::new(id(1), SelectedKind::HarnessConnector));
 }
 
+/// A drag on an entry slides it along its connector's side, its wire kept
+/// on it (docs/DECISIONS.md, 2026-11-24).
+#[test]
+fn a_harness_entry_slides_along_its_connector() {
+    let mut s = sheet();
+    let connector = HarnessConnector {
+        uuid: id(1),
+        harness_type: "SPI_BUS".into(),
+        position: at(),
+        width: 10.16,
+        entry_pitch: 2.54,
+        rotation: 0.0,
+        entries: ["SCK", "MOSI", "MISO"]
+            .iter()
+            .enumerate()
+            .map(|(i, name)| HarnessEntry {
+                uuid: id(10 + i as u128),
+                name: (*name).into(),
+            })
+            .collect(),
+        locked: false,
+    };
+    let first = connector.entry_point(0);
+    s.wires.push(Wire {
+        uuid: id(20),
+        start: Point::new(first.x - 10.16, first.y),
+        end: first,
+        ..Default::default()
+    });
+    s.harness.connectors.push(connector);
+    let after = assert_drags(
+        app_with_sheet(s),
+        SelectedItem::new(id(10), SelectedKind::HarnessEntry),
+        first,
+    );
+    let moved = &after.harness.connectors[0];
+    let names: Vec<&str> = moved.entries.iter().map(|e| e.name.as_str()).collect();
+    assert_eq!(names, ["MOSI", "MISO", "SCK"], "SCK slid to the last slot");
+    let wire = after.wires.iter().find(|w| w.uuid == id(20)).expect("wire");
+    let sck = moved.entry_point(2);
+    assert!(
+        (wire.end.x - sck.x).abs() < 1e-9 && (wire.end.y - sck.y).abs() < 1e-9,
+        "the wire stays on SCK: {wire:?}"
+    );
+}
+
 #[test]
 fn a_text_note_drags() {
     let mut s = sheet();
@@ -604,6 +650,17 @@ fn every_directive_drags() {
                 uuid: id(1),
                 position: at(),
                 class: None,
+            },
+            at(),
+        ),
+        (
+            SchDirective::NetParameters {
+                uuid: id(1),
+                position: at(),
+                net_class: Some("Power".into()),
+                diff_pair_class: None,
+                rules: Default::default(),
+                show_on_flag: false,
             },
             at(),
         ),
