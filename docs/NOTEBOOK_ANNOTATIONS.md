@@ -116,9 +116,11 @@ line:
 - **Scope:** the whole project of the active document (the drawn choice of
   the mock-up), every `.snxnbk` file in `<project>/notebook/`, sorted by file
   name.
-- **When:** the panel reads the files off the UI thread when it is shown,
-  when the project in view changes (a project is opened), and on the Refresh
-  button. While a new read runs, the last list stays shown.
+- **When:** the files are read off the UI thread when the panel is shown,
+  when the project in view changes (a project is opened, or a switch to
+  another project and back), and on the Refresh button. The project-change
+  read runs with the panel closed too, since the schematic's annotation
+  flags come from it. While a new read runs, the last list stays shown.
 - **Parts:** the same read assembles the project's sheets (open sheets with
   their unsaved edits, the others from disk) and lists every designator and
   the sheet holding it. A `#component` or `#pin` whose part is not in the
@@ -169,8 +171,10 @@ on by default, the mock-up's choice):
   ports carry no flag.
 - A part is matched by the designator the canvas draws for it, so a sheet
   reused under several placements flags each placement's own parts.
-- The flags come from the panel's last read, and show only on the sheets of
-  the project that read was of. While a read of another project runs, and
+- The flags come from the last read, which runs whether or not the
+  Annotations panel is open, and show only on the sheets of the project that
+  read was of. A notebook file edited outside Signex shows once the project
+  is read again (the panel shown, a project switch, or Refresh). While a read of another project runs, and
   with no project in view, there are none.
 - They are sized from the caption text and keep their size on screen at any
   zoom. They are drawn in the selection layer, so they are editor-only and

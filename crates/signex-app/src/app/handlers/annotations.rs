@@ -45,15 +45,16 @@ struct DesignInputs {
 }
 
 impl Signex {
-    /// Keep the panel's scan current: a scan starts when the panel is shown
-    /// and when the project in view changes (a project opened). Runs after
-    /// every message; does nothing while the panel is closed.
+    /// Keep the scan current: a scan starts when the panel is shown and when
+    /// the project in view changes (a project opened, a switch to another),
+    /// panel open or not, since the schematic's annotation flags come from
+    /// it and are drawn by default. Runs after every message.
     pub(crate) fn sync_annotations_panel(&mut self) -> Task<Message> {
-        if !self.is_panel_open(PanelKind::Annotations) {
+        let open = self.is_panel_open(PanelKind::Annotations);
+        let newly_shown = open && !std::mem::replace(&mut self.ui_state.annotations.shown, true);
+        if !open {
             self.ui_state.annotations.shown = false;
-            return Task::none();
         }
-        let newly_shown = !std::mem::replace(&mut self.ui_state.annotations.shown, true);
         // Compared without building the target: this runs on every message.
         let held = self.ui_state.annotations.target.as_ref();
         let active = self.document_state.active_document_project();
@@ -878,5 +879,53 @@ mod tests {
         app.ui_state.annotations.flags = flags_of(&[("U3", AnnotationTone::Note, 1)]);
         let _ = app.start_annotations_scan(None);
         assert!(app.ui_state.annotations.flags.is_empty());
+    }
+
+    /// The flags are drawn by default (mockup row 165), so the project in
+    /// view is read with the Annotations panel closed too.
+    #[test]
+    fn the_flags_show_with_the_annotations_panel_closed() {
+        let (mut app, path, id) = app_with_u3();
+        assert!(!app.is_panel_open(PanelKind::Annotations));
+        app.document_state.active_path = Some(path.clone());
+        app.ui_state.annotations.target = None;
+        let before = app.ui_state.annotations.generation;
+        let _ = app.sync_annotations_panel();
+        let state = &app.ui_state.annotations;
+        assert_eq!(state.generation, before + 1, "a read started");
+        assert_eq!(state.target.as_ref().map(|t| t.0), Some(id));
+        let generation = state.generation;
+        settle(
+            &mut app,
+            AnnotationsMsg::Scanned {
+                generation,
+                result: Arc::new(Ok(notebook(
+                    "#annotation(kind: \"issue\")[#component(\"U3\") runs warm]\n",
+                    None,
+                ))),
+            },
+        );
+        assert!(!app.is_panel_open(PanelKind::Annotations));
+        assert!(app.annotation_flag_view(Some(path.as_path())).has_flags());
+    }
+
+    #[test]
+    fn a_closed_panel_reads_again_only_when_the_project_in_view_changes() {
+        let (mut app, path, _id) = app_with_u3();
+        assert!(!app.is_panel_open(PanelKind::Annotations));
+        app.document_state.active_path = Some(path);
+        app.ui_state.annotations.target = None;
+        let _ = app.sync_annotations_panel();
+        let read = app.ui_state.annotations.generation;
+        let _ = app.sync_annotations_panel();
+        assert_eq!(app.ui_state.annotations.generation, read, "nothing moved");
+        let other = app.document_state.mint_project_id();
+        app.ui_state.annotations.target = Some((other, PathBuf::from("/w/other")));
+        let _ = app.sync_annotations_panel();
+        assert_eq!(
+            app.ui_state.annotations.generation,
+            read + 1,
+            "back on this project after another one's read"
+        );
     }
 }
