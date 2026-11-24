@@ -1317,3 +1317,99 @@ panels-harness-msg-entry-off-connector = Harness entry not placed: click on a ha
 panels-compiled-design-msg-no-project = Compile project: open a sheet of a project first; a sheet outside a project has no compiled design.
 # $why says why the project refused the edit.
 panels-compiled-design-naming-refused = Channel naming not changed: { $why }
+
+# pcb-nets-modes
+## The PCB panel's Differential Pairs, xSignals, Polygons and Net Classes
+## modes (mockup row 106).
+
+panels-pcb-mode-diff-pairs = Differential Pairs
+panels-pcb-mode-xsignals = xSignals
+panels-pcb-mode-polygons = Polygons
+# A mode dropdown entry: the mode's name and how many items it lists.
+panels-pcb-mode-count = { $mode } · { $count }
+# An unset rule: the board's own rule is in force.
+panels-pcb-board-value = board
+panels-pcb-pairs-empty = This board has no differential pairs. Name two nets with _P and _N (or + and -), or give a net class a pair gap and two nets.
+# $skew is a length in mm, already formatted.
+panels-pcb-pairs-skew = skew { $skew }
+# A pair's half: its net and routed length in mm, already formatted.
+panels-pcb-pairs-positive = P { $net } { $length }
+panels-pcb-pairs-negative = N { $net } { $length }
+# $gap and $width are lengths in mm or the word for the board's rule.
+panels-pcb-pairs-rules = gap { $gap } · width { $width }
+panels-pcb-pairs-summary =
+    { $count ->
+        [one] { $count } pair
+       *[other] { $count } pairs
+    }
+panels-pcb-pairs-detail-positive = Positive
+panels-pcb-pairs-detail-negative = Negative
+panels-pcb-pairs-detail-gap-width = Gap / Width
+panels-pcb-pairs-detail-routed = Routed
+# Routed length of each half, in mm, already formatted.
+panels-pcb-pairs-detail-routed-value = P { $positive } · N { $negative }
+panels-pcb-pairs-detail-skew = Skew
+# Two values of one detail row, as "0.175 / 0.265".
+panels-pcb-pair-of-values = { $first } / { $second }
+panels-pcb-xsignals-empty = This board has no xSignals yet.
+panels-pcb-xsignals-summary =
+    { $count ->
+        [one] { $count } xSignal
+       *[other] { $count } xSignals
+    }
+panels-pcb-pours-open-manager = Open Polygon Manager
+panels-pcb-pours-manager-later = The Polygon Manager tab is not available yet.
+# Chip over the pour list: the shelved pours.
+panels-pcb-pours-chip-attention = Needs attention
+panels-pcb-pours-poured = Poured
+panels-pcb-pours-shelved = Shelved
+panels-pcb-pours-no-net = No net
+# A pour's layer and its pour priority, a whole number.
+panels-pcb-pours-detail = { $layer } · priority { $priority }
+panels-pcb-pours-empty = This board has no polygon pours.
+panels-pcb-pours-no-match = No pours need attention.
+panels-pcb-pours-summary =
+    { $count ->
+        [one] { $count } pour
+       *[other] { $count } pours
+    }
+panels-pcb-classes-summary =
+    { $count ->
+        [one] { $count } class
+       *[other] { $count } classes
+    }
+panels-pcb-classes-first-wins = The first matching class wins.
+# A class's track width and clearance in mm, already formatted.
+panels-pcb-classes-rule-summary = { $width } / { $clearance }
+# The rules, then the via diameter and drill in mm, already formatted.
+panels-pcb-classes-via-summary = { $rules } · via { $diameter }/{ $drill }
+# An unset rule in a class's summary.
+panels-pcb-classes-unset = —
+panels-pcb-classes-nets =
+    { $count ->
+        [one] { $count } net
+       *[other] { $count } nets
+    }
+# Member nets and patterns of a class; $nets is a whole number.
+panels-pcb-classes-nets-patterns =
+    { $nets } + { $patterns ->
+        [one] { $patterns } pattern
+       *[other] { $patterns } patterns
+    }
+panels-pcb-classes-rules = Rules · { $class }
+panels-pcb-classes-width-clearance = Width / Clear.
+panels-pcb-classes-via = Via
+panels-pcb-classes-impedance = Impedance
+panels-pcb-classes-impedance-tip = A net class stores no impedance yet.
+panels-pcb-classes-members = Member nets
+panels-pcb-classes-nodes =
+    { $count ->
+        [one] { $count } node
+       *[other] { $count } nodes
+    }
+# A glob pattern's row: how many board nets it matches.
+panels-pcb-classes-matches =
+    { $count ->
+        [one] { $count } match
+       *[other] { $count } matches
+    }
