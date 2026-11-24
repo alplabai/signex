@@ -153,6 +153,8 @@ pub(crate) enum OverlayId {
     StockCopy,
     CloseLibraryConfirm,
     LibraryRecovery,
+    /// The SCH Library panel's Delete of a symbol still in use (mockup row 137).
+    SymbolDeleteConfirm,
 
     // Painted last, above everything else.
     CommandPalette,
@@ -175,7 +177,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 81] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 82] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -259,6 +261,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 81] = [
     OverlayId::StockCopy,
     OverlayId::CloseLibraryConfirm,
     OverlayId::LibraryRecovery,
+    OverlayId::SymbolDeleteConfirm,
     OverlayId::CommandPalette,
     OverlayId::HoverTooltip,
     OverlayId::LibraryUpdates,
@@ -397,6 +400,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::StockCopy
         | OverlayId::CloseLibraryConfirm
         | OverlayId::LibraryRecovery
+        | OverlayId::SymbolDeleteConfirm
         | OverlayId::CommandPalette
         | OverlayId::LibraryUpdates => true,
     }
@@ -641,6 +645,7 @@ impl Signex {
             OverlayId::StockCopy => layers.extend(self.stock_copy_overlay()),
             OverlayId::CloseLibraryConfirm => layers.extend(self.close_library_confirm_overlay()),
             OverlayId::LibraryRecovery => layers.extend(self.library_recovery_overlay()),
+            OverlayId::SymbolDeleteConfirm => layers.extend(self.symbol_delete_confirm_overlay()),
             OverlayId::CommandPalette => layers.extend(self.command_palette_overlay(window_id)),
             OverlayId::HoverTooltip => layers.extend(self.view_hover_tooltip(window_id)),
             OverlayId::LibraryUpdates => layers.extend(self.library_updates_overlay()),

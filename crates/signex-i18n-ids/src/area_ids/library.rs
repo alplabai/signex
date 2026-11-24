@@ -300,4 +300,6 @@ define_ids! {
     LIBRARY_RANGE_FILTER_CHIP_TIP = "library-range-filter-chip-tip";
     LIBRARY_RANGE_FILTER_REMOVE_TIP = "library-range-filter-remove-tip";
     LIBRARY_RANGE_FILTER_DONE = "library-range-filter-done";
+    // symbol-delete-modal
+    LIBRARY_SYMBOL_DELETE_TITLE = "library-symbol-delete-title";
 }

@@ -14,7 +14,7 @@ use uuid::Uuid;
 use super::closed_sheets::ClosedSheetScan;
 use super::drift::split_lib_id;
 use super::state::OpenLibrary;
-use crate::panels::SymbolDeleteWarning;
+use crate::panels::{PanelMsg, SymbolDeleteWarning};
 
 /// Names listed per group before the rest is counted.
 const MAX_LISTED: usize = 6;
@@ -224,6 +224,99 @@ fn capped(items: &[String]) -> String {
         text.push_str(&format!("; and {} more", items.len() - MAX_LISTED));
     }
     text
+}
+
+/// The "Delete Symbol?" confirm (mockup row 137): an amber warning intro,
+/// the in-use lines in a box, then Cancel and Delete anyway. The header's
+/// close runs the same Cancel as the footer.
+pub fn view<'a>(
+    warning: &'a SymbolDeleteWarning,
+    tokens: &'a signex_types::theme::ThemeTokens,
+    i18n: &signex_i18n::I18n,
+) -> iced::Element<'a, PanelMsg> {
+    use super::modal_chrome::{SYMBOL_DELETE_W, cancel_btn, danger_btn, footer_strip, header};
+    use crate::styles::{DialogIcon, Spacing, dialog_body, dialog_intro};
+    use iced::widget::{Column, column, container};
+    use iced::{Length, Widget as _};
+    use signex_i18n::{ids, t};
+    const SP: Spacing = Spacing::DEFAULT;
+
+    let cancel = PanelMsg::SchLibraryDeleteCancelled;
+    let title = t!(i18n, ids::LIBRARY_SYMBOL_DELETE_TITLE).into_string();
+    let intro = dialog_intro(
+        DialogIcon::Warn,
+        warning.heading(i18n).into_string(),
+        Some(t!(i18n, ids::PANELS_SCH_LIBRARY_DELETE_WARNING_NOTE).into_string()),
+        tokens,
+    );
+    let mut content: Column<iced::Element<'a, PanelMsg>> =
+        column![intro].spacing(SP.m).width(Length::Fill);
+    if !warning.lines.is_empty() {
+        content = content.push(usage_box(&warning.lines, tokens));
+    }
+    let footer = footer_strip(
+        Vec::new(),
+        vec![
+            cancel_btn(
+                t!(i18n, ids::PANELS_SCH_LIBRARY_DELETE_CANCEL),
+                cancel.clone(),
+                tokens,
+            ),
+            danger_btn(
+                t!(i18n, ids::PANELS_SCH_LIBRARY_DELETE_ANYWAY),
+                PanelMsg::SchLibraryDeleteConfirmed(warning.idx),
+                tokens,
+            ),
+        ],
+        tokens,
+    );
+    container(
+        column![
+            header(&title, cancel, false, tokens),
+            dialog_body(content),
+            footer
+        ]
+        .width(Length::Fixed(SYMBOL_DELETE_W)),
+    )
+    .style(crate::styles::modal_card(tokens))
+    .clip(true)
+    .boxed()
+}
+
+/// The in-use lines, one per kind of user, in a bordered box.
+fn usage_box<'a>(
+    lines: &'a [String],
+    tokens: &signex_types::theme::ThemeTokens,
+) -> iced::Element<'a, PanelMsg> {
+    use crate::styles::{HAIRLINE, Radii, Spacing, TypeScale, ti};
+    use iced::widget::{Column, container};
+    use iced::{Border, Length, Theme, Widget as _};
+    use signex_widgets::{raw, text};
+    const SP: Spacing = Spacing::DEFAULT;
+    const TS: TypeScale = TypeScale::DEFAULT;
+
+    let ink = ti(tokens.text);
+    let line = ti(tokens.border);
+    let mut list: Column<iced::Element<'a, PanelMsg>> =
+        Column::new().spacing(SP.xs).width(Length::Fill);
+    for entry in lines {
+        // raw: the in-use lines are worded in English by the delete check
+        // above (#2060).
+        list = list.push(text(raw(entry.as_str())).size(TS.body).color(ink).boxed());
+    }
+    container(list)
+        .padding(SP.m)
+        .width(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            border: Border {
+                width: HAIRLINE,
+                color: line,
+                radius: Radii::GRAPHITE.button.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
 }
 
 #[cfg(test)]
@@ -450,6 +543,58 @@ mod tests {
         );
         assert!(!pending.warning.only_unknown);
         assert_eq!(heading(&pending), "Symbol \"A\" is still in use");
+    }
+
+    /// Mockup row 137: title, then the warning intro, then the in-use lines,
+    /// then the footer, all inside the card's width, in both themes.
+    #[test]
+    fn the_modal_stacks_intro_lines_and_footer_inside_its_width() {
+        use crate::layout_probe::{LaidOutText, lay_out_texts};
+        use signex_types::theme::{ThemeId, theme_tokens};
+        let i18n = signex_i18n::I18n::en_us();
+        let mut pending = pending_for(&editor());
+        pending.warning.lines = vec![
+            "Component rows: R-0402 (Lib / Resistors)".into(),
+            "Open sheets with placed parts: dcdc.snxsch: R1, R2".into(),
+        ];
+        let at = |texts: &[LaidOutText], needle: &str| {
+            texts
+                .iter()
+                .find(|t| {
+                    t.text
+                        .replace(['\u{2068}', '\u{2069}'], "")
+                        .contains(needle)
+                })
+                .unwrap_or_else(|| panic!("no {needle:?} in {texts:#?}"))
+                .bounds
+        };
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let tokens = theme_tokens(id);
+            let texts = lay_out_texts(
+                view(&pending.warning, &tokens, &i18n),
+                iced::Size::new(900.0, 700.0),
+            );
+            let title = at(&texts, "Delete Symbol?");
+            let heading = at(&texts, "Symbol \"A\" is still in use");
+            let note = at(&texts, "the library symbol will be missing");
+            let rows = at(&texts, "Component rows:");
+            let sheets = at(&texts, "Open sheets with placed parts:");
+            let confirm = at(&texts, "Delete anyway");
+            let cancel = at(&texts, "Cancel");
+            assert!(title.y + title.height <= heading.y, "{id:?}");
+            assert!(heading.y + heading.height <= note.y + 0.5, "{id:?}");
+            assert!(note.y + note.height <= rows.y, "{id:?}");
+            assert!(rows.y + rows.height <= sheets.y + 0.5, "{id:?}");
+            assert!(sheets.y + sheets.height <= confirm.y, "{id:?}");
+            assert!(
+                cancel.x + cancel.width <= confirm.x,
+                "Cancel before Delete anyway"
+            );
+            assert!(
+                confirm.x + confirm.width <= super::super::modal_chrome::SYMBOL_DELETE_W,
+                "{id:?}"
+            );
+        }
     }
 
     /// The warning heading in English, without Fluent's isolation marks.

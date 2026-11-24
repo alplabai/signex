@@ -776,3 +776,7 @@ library-range-filter-chip-tip = Edit this filter
 library-range-filter-remove-tip = Remove this filter
 # Button that folds a finished range filter editor into its chip.
 library-range-filter-done = Done
+
+# symbol-delete-modal
+# Title of the confirm a Delete of a symbol still in use opens (mockup row 137).
+library-symbol-delete-title = Delete Symbol?
