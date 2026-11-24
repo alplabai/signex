@@ -6,7 +6,7 @@
 //! is a draft that never reaches the document or undo.
 
 use super::super::*;
-use super::graphite_table::ParameterRow;
+use super::graphite_table::{ParameterRow, inline_value_input};
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
 
@@ -256,20 +256,10 @@ pub(super) fn title_block_rows<'a>(
                 None => t!(i18n, ids::PROPERTIES_PARAMETERS_NOT_SET).into(),
             };
             let shown = shown_title_block_value(ctx, field);
-            let mut input = signex_widgets::text_input(placeholder, shown.clone())
+            let is_unset = source == TitleBlockSource::Unset;
+            let input = inline_value_input(placeholder, shown.clone(), is_unset)
                 .on_input(move |s| PanelMsg::TitleBlockTyping(field, s))
-                .on_submit(PanelMsg::CommitTitleBlockField(field))
-                .size(TS.body)
-                .padding(SP.xs)
-                .style(crate::panels::form_look::inline_value_input_style)
-                .width(Length::Fill);
-            if shown.is_empty() && source == TitleBlockSource::Unset {
-                // "Not set" reads as a muted italic value, inline.
-                input = input.font(iced::Font {
-                    style: iced::font::Style::Italic,
-                    ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
-                });
-            }
+                .on_submit(PanelMsg::CommitTitleBlockField(field));
             let mut cell = row![input].spacing(SP.xs).align_y(iced::Alignment::Center);
             if shown.is_empty() && source == TitleBlockSource::Project {
                 cell = cell.push(project_pill(ctx));
