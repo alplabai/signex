@@ -1,7 +1,8 @@
 //! The detail pane of the picked row: a failed row's full error first, then
 //! time, client, duration and undo state, the arguments as JSON, the result
-//! and the row as a CLI line, scrolling; Replay and Jump to stay pinned
-//! under them, so a short dock never hides them (mockup row 161).
+//! and the row as a CLI line, scrolling; Replay and Jump to (with a failed
+//! row's Replay hint) stay pinned under them, so a short dock never hides
+//! them (mockup row 161).
 
 use iced::widget::scrollable::{Direction, Scrollbar};
 use iced::widget::{Column, Space, container, row, scrollable};
@@ -41,7 +42,7 @@ pub(super) fn view<'a>(
             .boxed(),
     );
     let edge = ti(tokens.border);
-    let pinned = container(actions(ctx, row))
+    let pinned = container(pinned(ctx, row))
         .padding([SP.m, SP.l + SP.xs])
         .width(Length::Fill)
         .style(move |_: &Theme| container::Style {
@@ -110,16 +111,24 @@ fn body<'a>(
     col = col.push(section(tokens, i18n, ids::COMMAND_LOG_COPY_AS_CLI));
     col = col.push(gap(SP.xs * 2.0));
     col = col.push(cli_box(ctx, state, row));
-    if failed {
+    col
+}
+
+/// What stays pinned: Replay and Jump to, and under them on a failed row the
+/// hint that qualifies Replay, so the two are never apart.
+fn pinned<'a>(ctx: &'a PanelContext, row: &'a super::LogRow) -> Element<'a, PanelMsg> {
+    let mut col: Column<Element<'a, PanelMsg>> =
+        Column::new().push(actions(ctx, row)).width(Length::Fill);
+    if row.outcome.is_failed() {
         col = col.push(gap(SP.s + SP.xs));
         col = col.push(
-            text(t!(i18n, ids::COMMAND_LOG_REPLAY_FAILED_HINT))
+            text(t!(ctx.i18n, ids::COMMAND_LOG_REPLAY_FAILED_HINT))
                 .size(TS.caption)
-                .color(r.ink4)
+                .color(resolve(&ctx.tokens).ink4)
                 .boxed(),
         );
     }
-    col
+    col.boxed()
 }
 
 /// The command's label with its source pill, and its catalog id.
@@ -381,7 +390,6 @@ fn cli_box<'a>(
                 tokens,
                 glyph,
                 tip,
-                false,
                 message(CommandLogMsg::CopyCliRequested(row.seq))
             ),
         ]

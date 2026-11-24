@@ -456,18 +456,15 @@ fn labelled_button<'a>(
     b.boxed()
 }
 
-/// A 24 px square icon button with a hover fill and a tooltip; `on` gives it
-/// the soft accent fill.
+/// A 24 px square icon button with a hover fill and a tooltip.
 fn icon_button<'a>(
     tokens: &ThemeTokens,
     glyph: svg::Handle,
     tip: Localized,
-    on: bool,
     on_press: PanelMsg,
 ) -> Element<'a, PanelMsg> {
-    let r = resolve(tokens);
-    let ink = if on { r.accent_soft_ink } else { r.ink3 };
-    let (hover, soft) = (hover_overlay(tokens), r.accent_soft);
+    let ink = resolve(tokens).ink3;
+    let hover = hover_overlay(tokens);
     let side = CM.field - SP.xs;
     let face = button(container(icon(glyph, ICON, ink)).center(Length::Fill))
         .width(side)
@@ -476,12 +473,8 @@ fn icon_button<'a>(
         .on_press(on_press)
         .style(
             move |_: &iced::Theme, status: button::Status| button::Style {
-                background: if on {
-                    Some(Background::Color(soft))
-                } else {
-                    matches!(status, button::Status::Hovered | button::Status::Pressed)
-                        .then_some(Background::Color(hover))
-                },
+                background: matches!(status, button::Status::Hovered | button::Status::Pressed)
+                    .then_some(Background::Color(hover)),
                 border: Border {
                     radius: Radii::GRAPHITE.small.into(),
                     ..Border::default()
@@ -655,7 +648,15 @@ mod tests {
             (line(follow) - line(source)).abs() < tolerance,
             "{follow:?}"
         );
-        assert!(follow.x > all.x + all.width, "Follow newest comes last");
+        let undone = bounds(&texts, "Undone 0");
+        assert!(
+            (line(undone) - line(source)).abs() < tolerance,
+            "{undone:?}"
+        );
+        assert!(
+            follow.x > undone.x + undone.width,
+            "Follow newest comes after the last result segment"
+        );
         assert!(follow.x + follow.width <= SHORT_DOCK.width, "{follow:?}");
     }
 
@@ -681,5 +682,20 @@ mod tests {
         );
         let jump = bounds(&texts, "Jump to object");
         assert!(jump.y + jump.height <= SHORT_DOCK.height, "{jump:?}");
+    }
+
+    /// A failed row's Replay hint stays pinned under Replay, so a short dock
+    /// never shows Replay without the hint that qualifies it.
+    #[test]
+    fn a_short_dock_keeps_the_replay_hint_under_replay() {
+        let ctx = context_with_one_row();
+        let texts = laid_out(&ctx, SHORT_DOCK);
+        let replay = bounds(&texts, "Replay");
+        let hint = bounds(
+            &texts,
+            "Replay runs it again with the same arguments; it fails the same way until the cause is fixed.",
+        );
+        assert!(hint.y >= replay.y + replay.height, "{hint:?} vs {replay:?}");
+        assert!(hint.y + hint.height <= SHORT_DOCK.height, "{hint:?}");
     }
 }

@@ -27,7 +27,7 @@ pub(super) fn bar<'a>(
     width: f32,
 ) -> Element<'a, PanelMsg> {
     let one_row = layout::filters_on_one_row(width);
-    let filters = filter_group(ctx, state, counts, empty, width, one_row);
+    let filters = filter_group(ctx, state, counts, empty, width);
     let follow = follow_switch(ctx, state);
     let line: Element<'a, PanelMsg> = if one_row {
         row![filters, follow]
@@ -47,15 +47,14 @@ pub(super) fn bar<'a>(
         .boxed()
 }
 
-/// Search, source chips and the result switch, on one row or, narrower,
-/// wrapping. In an empty session every filter reads 0 and is greyed.
+/// Search, source chips and the result switch, wrapping when they do not fit
+/// on one line. In an empty session every filter reads 0 and is greyed.
 fn filter_group<'a>(
     ctx: &'a PanelContext,
     state: &'a CommandLogState,
     counts: &LogCounts,
     empty: bool,
     width: f32,
-    one_row: bool,
 ) -> Element<'a, PanelMsg> {
     let i18n: &I18n = &ctx.i18n;
     let tokens = &ctx.tokens;
@@ -113,11 +112,9 @@ fn filter_group<'a>(
         state.log.filters.result,
         counts,
     ));
-    let filters = if one_row {
-        filters.boxed()
-    } else {
-        filters.wrap().vertical_spacing(SP.xs).boxed()
-    };
+    // Wrapping in both layouts: a longer language takes a second line
+    // instead of running under Follow newest.
+    let filters = filters.wrap().vertical_spacing(SP.xs).boxed();
     signex_widgets::inert::unless_read_only_veiled(empty, veil(tokens), filters)
 }
 
