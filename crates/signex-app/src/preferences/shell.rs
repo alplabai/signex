@@ -3,8 +3,8 @@
 //! list with an accent dot on every page holding unsaved changes, and the
 //! footer: a note, Cancel, Apply and OK. Cancel, Apply and OK are the
 //! discard, save and save-and-close actions; on Rule Profiles, whose edits
-//! save at once, Cancel reads Close (mockup row 148). Restore defaults has no backend
-//! yet, so it is not drawn.
+//! save at once, Cancel reads Close and closes as the X does (mockup row
+//! 148). Restore defaults has no backend yet, so it is not drawn.
 
 use super::graphite_fields::{graphite_label, group_messages, nav_matches, nav_search};
 use super::setting_row::{hairline, medium};
@@ -248,13 +248,23 @@ pub(super) fn footer_note(nav: PrefNav, dirty: bool) -> FooterNote {
     }
 }
 
-/// The footer's discard button: Close on Rule Profiles, whose edits are
-/// already in their files, so nothing is left for Cancel to undo (mockup
-/// row 148); Cancel on every other page. Both send the same message.
-pub(super) fn dismiss_label(nav: PrefNav) -> MessageId {
+/// The footer's dismiss button, label and message (mockup row 148). Rule
+/// Profiles edits are already in their files, so the button is Close and
+/// takes the guarded close of the X and Esc: unsaved drafts of another
+/// page keep the dialog open. Every draft page offers Cancel, which
+/// discards the drafts and closes.
+pub(super) fn dismiss_button(nav: PrefNav) -> (MessageId, PrefMsg) {
     match nav {
-        PrefNav::RuleProfiles => ids::DIALOG_BUTTON_CLOSE,
-        _ => ids::DIALOG_BUTTON_CANCEL,
+        PrefNav::RuleProfiles => (ids::DIALOG_BUTTON_CLOSE, PrefMsg::Close),
+        PrefNav::Appearance
+        | PrefNav::Language
+        | PrefNav::General
+        | PrefNav::Annotation
+        | PrefNav::Editing
+        | PrefNav::SchematicDisplay
+        | PrefNav::Keyboard
+        | PrefNav::LibraryDistributors
+        | PrefNav::ComponentClasses => (ids::DIALOG_BUTTON_CANCEL, PrefMsg::DiscardAndClose),
     }
 }
 
@@ -299,14 +309,15 @@ fn graphite_footer<'a>(v: &PrefsView<'a>) -> Element<'a, PrefMsg> {
         PrefMsg::Close
     };
     let chrome = ti(t.toolbar_bg);
+    let (dismiss_id, dismiss_msg) = dismiss_button(v.nav);
     container(
         row![
             Space::new().width(Length::Fill),
             note,
             dialog_button(
-                t!(v.i18n, dismiss_label(v.nav)),
+                t!(v.i18n, dismiss_id),
                 DialogButtonKind::Cancel,
-                Some(PrefMsg::DiscardAndClose),
+                Some(dismiss_msg),
                 t
             ),
             dialog_button(
@@ -377,15 +388,37 @@ mod tests {
     #[test]
     fn the_rule_profiles_footer_says_close_in_place_of_cancel() {
         let en = I18n::en_us();
-        assert_eq!(
-            t!(en, dismiss_label(PrefNav::RuleProfiles)).into_string(),
-            "Close"
-        );
+        let (close, msg) = dismiss_button(PrefNav::RuleProfiles);
+        assert_eq!(t!(en, close).into_string(), "Close");
+        assert!(matches!(msg, PrefMsg::Close), "{msg:?}");
         for &nav in PrefNav::ALL {
             if nav != PrefNav::RuleProfiles {
-                assert_eq!(dismiss_label(nav), ids::DIALOG_BUTTON_CANCEL, "{nav:?}");
+                let (cancel, msg) = dismiss_button(nav);
+                assert_eq!(cancel, ids::DIALOG_BUTTON_CANCEL, "{nav:?}");
+                assert!(matches!(msg, PrefMsg::DiscardAndClose), "{nav:?}");
             }
         }
+    }
+
+    /// Mockup row 148: Close on Rule Profiles is the guarded close, so an
+    /// unsaved draft of another page keeps the dialog open and is kept.
+    #[test]
+    fn the_rule_profiles_close_keeps_another_pages_unsaved_draft() {
+        use crate::app::{Message, PreferencesMsg, Signex};
+        let send = |app: &mut Signex, msg: PrefMsg| {
+            let _ = app.update(Message::Preferences(PreferencesMsg::Inner(msg)));
+        };
+        let (mut app, _boot) = Signex::new();
+        let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+        let wires = !app.ui_state.move_keeps_wires;
+        send(&mut app, PrefMsg::DraftMoveKeepsWires(wires));
+        send(&mut app, PrefMsg::Nav(PrefNav::RuleProfiles));
+        assert!(app.ui_state.preferences_dirty);
+
+        send(&mut app, dismiss_button(PrefNav::RuleProfiles).1);
+        assert!(app.ui_state.preferences_open);
+        assert_eq!(app.ui_state.preferences_draft_move_keeps_wires, wires);
+        assert!(app.ui_state.preferences_dirty);
     }
 
     #[test]

@@ -22,6 +22,8 @@ mod distributors;
 mod editing;
 mod fast_grids;
 mod graphite_fields;
+#[cfg(test)]
+pub(crate) use graphite_fields::setting_labels;
 mod keycaps;
 mod keymap;
 mod language;

@@ -1,7 +1,6 @@
 //! View state of the Appearance, Editing and General pages (mockup rows 144
-//! and 147): the help
-//! texts opened with More…, the preview that fills the page, and the pitch
-//! labels on the snap preview. None of it is a preference, so none of it
+//! and 147): the help texts opened with More…, the preview that fills the
+//! page, and the pitch labels on the snap preview. None of it is a preference, so none of it
 //! marks the dialog dirty; the shell resets it when Preferences opens.
 
 use iced::Task;

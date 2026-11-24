@@ -568,6 +568,25 @@ mod layout_tests {
         }
     }
 
+    /// Mockup row 143: nav search finds a page by its listed setting
+    /// labels, so each page draws every label listed for it.
+    #[test]
+    fn every_listed_setting_label_is_drawn_on_its_page() {
+        use crate::preferences::{PrefNav, setting_labels};
+        let (mut app, _task) = Signex::new();
+        // The fill colour row is drawn only while the body fill is on.
+        app.ui_state.preferences_draft_symbol_body_fill.enabled = true;
+        let en = signex_i18n::I18n::en_us();
+        for &nav in PrefNav::ALL {
+            app.ui_state.preferences_nav = nav;
+            let texts = preferences_texts(&app);
+            for &id in setting_labels(nav) {
+                let label = signex_i18n::t!(en, id).into_string();
+                assert!(texts.contains(&label), "{nav:?} does not draw {label}");
+            }
+        }
+    }
+
     fn main_window_app() -> (Signex, iced::window::Id) {
         let window = iced::window::Id::unique();
         let (mut app, _task) = Signex::new();

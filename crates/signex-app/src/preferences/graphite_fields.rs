@@ -67,9 +67,10 @@ fn former_names(item: PrefNav) -> &'static [&'static str] {
 }
 
 /// The labels of the setting rows a page draws, so a search for a setting
-/// finds its page (mockup row 143). A row added to a page goes here too.
+/// finds its page (mockup row 143). A row added to a page goes here too;
+/// a layout test in `app::view::chrome` checks each page draws its list.
 /// The table pages (shortcuts, profiles, distributors, classes) have none.
-pub(super) fn setting_labels(item: PrefNav) -> &'static [MessageId] {
+pub(crate) fn setting_labels(item: PrefNav) -> &'static [MessageId] {
     match item {
         PrefNav::Appearance => &[
             ids::PREFERENCES_APPEARANCE_UI_FONT,
@@ -116,7 +117,8 @@ pub(super) fn setting_labels(item: PrefNav) -> &'static [MessageId] {
 /// Whether a nav row stays visible for the search `query`: the casemap fold
 /// of the UI language over the shown page name and group, the English page
 /// and group names, the page's former English names and its setting labels
-/// in the UI language. An empty query shows every row.
+/// in the UI language and in English, as the page names are. An empty query
+/// shows every row.
 pub(super) fn nav_matches(i18n: &I18n, item: PrefNav, query: &str) -> bool {
     let q = i18n.fold_for_search(query.trim());
     if q.is_empty() {
@@ -124,9 +126,10 @@ pub(super) fn nav_matches(i18n: &I18n, item: PrefNav, query: &str) -> bool {
     }
     let page = t!(i18n, graphite_label(item)).into_string();
     let group = t!(i18n, group_messages(item).0).into_string();
+    let en = I18n::en_us();
     let settings: Vec<String> = setting_labels(item)
         .iter()
-        .map(|&id| t!(i18n, id).into_string())
+        .flat_map(|&id| [t!(i18n, id).into_string(), t!(en, id).into_string()])
         .collect();
     [page.as_str(), group.as_str(), item.label(), item.group()]
         .into_iter()
