@@ -757,3 +757,81 @@ library-browser-read-only-note = This library ships with Signex and is not edita
 library-browser-preview-loading = Loading…
 # A preview tile whose drawing could not be read.
 library-browser-preview-unreadable = Could not be read
+# picker-and-change-component
+# Change Component header note: $reference is the part's designator, $sheet the sheet's file name.
+library-change-component-note = { $reference } · { $sheet }
+# Placeholder of Change Component's search field.
+library-change-component-search = Search parts
+# Filter chip: only parts drawn with the placed part's symbol.
+library-change-component-same-symbol = Same symbol
+# Filter chip: only parts with the placed part's value (its class's value parameter).
+library-change-component-same-value = Same value
+# Filter chip: only parts a distributor last reported in stock.
+library-change-component-in-stock = In stock
+# Tag of a listed part with as many pins as the placed part.
+library-change-component-pins-same = same pins
+# Tag of a listed part with another pin count; $row and $placed are whole numbers.
+library-change-component-pins-differ = { $row ->
+        [one] { $row } pin
+       *[other] { $row } pins
+    }, not { $placed }
+# Tooltip of that tag; $reference is the placed part's designator.
+library-change-component-pins-differ-tip = Pins do not match: { $row ->
+        [one] { $row } pin
+       *[other] { $row } pins
+    }, { $reference } has { $placed }
+# Card heading: the part placed now.
+library-change-component-placed-now = Placed now
+# Card heading: the picked part that replaces it.
+library-change-component-replace-with = Replace with
+# Shown beside the list until a part is picked; $reference is the placed part's designator.
+library-change-component-pick-prompt = Pick a part in the list to compare it with { $reference }.
+# Section heading of the Now / After table.
+library-change-component-parameters = Parameters
+# Column headings of the Now / After table.
+library-change-component-column-parameter = Parameter
+library-change-component-column-now = Now
+library-change-component-column-after = After
+library-change-component-column-keep = Keep now
+# Keep now cell of a row the new part gives the same value.
+library-change-component-same = same
+# After cell of a user parameter the new part does not have.
+library-change-component-not-in-part = not in part
+# Caption after a user parameter's name.
+library-change-component-user = user
+# Names of the part-data rows of the table.
+library-change-component-value = Value
+library-change-component-footprint = Footprint
+library-change-component-datasheet = Datasheet
+# Section heading: what the change keeps.
+library-change-component-kept = Kept
+# What the change keeps; $matched and $total are whole numbers of pins.
+library-change-component-kept-summary = Designator { $reference } · position and rotation · pins matched by number, { $matched } of { $total }
+# Section heading of the scope choice.
+library-change-component-apply-to = Apply to
+# Scope choice: only the part the change started on.
+library-change-component-scope-this = Only { $reference } on this sheet
+# Scope choice: every part of the same library part on the sheet; $count is a whole number.
+library-change-component-scope-sheet = Every { $part } on this sheet ({ $count ->
+        [one] { $count } part
+       *[other] { $count } parts
+    })
+# Primary button; $count is the whole number of parts changed.
+library-change-component-apply = { $count ->
+        [one] Change { $count } part
+       *[other] Change { $count } parts
+    }
+# Primary button when the change loses connections or data.
+library-change-component-apply-anyway = { $count ->
+        [one] Change { $count } part anyway
+       *[other] Change { $count } parts anyway
+    }
+# Footer caption of Change Component.
+library-change-component-footer = One undo step. The PCB footprint changes on Update PCB.
+# Messages line after several parts changed; $count is a whole number, $part the new part number.
+library-change-component-done-many = { $count } parts now use { $part }.
+# Change Component warnings; $unit is a whole number, $pins a comma-separated list of pin numbers.
+library-change-component-warn-unit = The new part has no drawing for unit { $unit }.
+library-change-component-warn-dangling = Connected pins with no match, their wires will dangle: { $pins }
+library-change-component-warn-moved = Connected pins that sit elsewhere on the new part, their wires will no longer reach them: { $pins }
+library-change-component-warn-gained = New pins landing on a wire they were not mapped to: { $pins }

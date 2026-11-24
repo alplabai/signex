@@ -463,7 +463,7 @@ fn change_component_confirmed_for_an_undocked_windows_sheet_changes_that_sheet()
     use crate::library::messages::{
         LibraryMessage, PlacedPartMsg, PlacedPartTarget, ResolvedPlacement,
     };
-    use crate::library::state::{ChangePreview, PickerMode};
+    use crate::library::state::{ChangePreview, ChangeScope, ChangeSession, PickerMode};
     use signex_engine::ComponentReplacement;
 
     let mut f = fixture();
@@ -512,10 +512,13 @@ fn change_component_confirmed_for_an_undocked_windows_sheet_changes_that_sheet()
     let preview = signex_engine::change_component_preview(&doc, symbol.uuid, &replacement);
     f.app.library.picker = Some(crate::library::PickerState {
         mode: PickerMode::ChangePreview(Box::new(ChangePreview {
-            target,
-            reference: symbol.reference.clone(),
+            session: ChangeSession::new(target, symbol.reference.clone()),
             resolved,
             preview,
+            rows: Vec::new(),
+            dropped: Vec::new(),
+            scope: ChangeScope::ThisPart,
+            same_parts: Vec::new(),
         })),
         ..Default::default()
     });

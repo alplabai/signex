@@ -1,0 +1,288 @@
+//! Layout probes of Change Component's one dialog (mockup row 155).
+
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+use iced::Size;
+use signex_i18n::{Arg, I18n, ids};
+use signex_library::{ComponentSummary, InternalPn, LifecycleState, PrimitiveRef};
+use signex_types::theme::{ThemeId, theme_tokens};
+use uuid::Uuid;
+
+use super::view;
+use crate::layout_probe::{lay_out_texts, messages_on_click};
+use crate::library::messages::{
+    LibraryMessage, PlacedPartMsg, PlacedPartTarget, ResolvedPlacement,
+};
+use crate::library::state::{
+    ChangePreview, ChangeScope, ChangeSession, CompareField, CompareKind, CompareRow, LibraryState,
+    OpenLibrary, PickerMode, PickerState,
+};
+
+const LIB: Uuid = Uuid::from_u128(0x11);
+const SAME: Uuid = Uuid::from_u128(0x21);
+const WIDE: Uuid = Uuid::from_u128(0x22);
+const WINDOW: Size = Size::new(1400.0, 900.0);
+
+fn summary(row_id: Uuid, mpn: &str, description: &str) -> ComponentSummary {
+    ComponentSummary {
+        row_id,
+        internal_pn: InternalPn::new(mpn),
+        mpn: mpn.into(),
+        state: LifecycleState::Released,
+        description: description.into(),
+    }
+}
+
+/// Two listed parts: one with the placed part's 2 pins, one with 4.
+fn state() -> LibraryState {
+    let rows = [SAME, WIDE].map(|row_id| {
+        let mut row = crate::library::component_preview::test_row();
+        row.row_id = row_id;
+        row.symbol_ref = PrimitiveRef::new(LIB, Uuid::from_u128(0x31));
+        row
+    });
+    let mut state = LibraryState::default();
+    state.open_libraries.push(OpenLibrary {
+        root: PathBuf::from("/libs/passives.snxlib"),
+        display_name: "passives".into(),
+        library_id: LIB,
+        tables: HashMap::from([("R".to_string(), rows.to_vec())]),
+        cached_components: vec![
+            summary(SAME, "RC0603FR-0731K6L", "31.6k · 1% · 0603"),
+            summary(WIDE, "YC164-FR-0731K6L", "31.6k · 4 × array · 0612"),
+        ],
+        cached_symbols: Vec::new(),
+        cached_footprints: Vec::new(),
+        cached_sims: Vec::new(),
+        cached_classes: Vec::new(),
+        observed_stamp: None,
+        dangling: Default::default(),
+        own_edit_stamp: None,
+        display: Default::default(),
+        pricing: Default::default(),
+    });
+    state.touch_data();
+    let target = PlacedPartTarget {
+        sheet: PathBuf::from("/p/buck_channel.snxsch"),
+        engine_instance: 1,
+        symbol_id: Uuid::from_u128(1),
+    };
+    let mut session = ChangeSession::new(target, "R5".into());
+    session.placed.part = "RC0402FR-0731K6L".into();
+    session.placed.footprint = "R_0402".into();
+    session.placed.pins = Some(2);
+    session.row_pins = HashMap::from([(SAME, 2), (WIDE, 4)]);
+    state.picker = Some(PickerState {
+        mode: PickerMode::ChangeComponent(Box::new(session)),
+        ..PickerState::default()
+    });
+    state.sync_view_caches();
+    state
+}
+
+fn resolved() -> ResolvedPlacement {
+    let lib_symbol = serde_json::from_value(serde_json::json!({ "id": "L:NEW" })).unwrap();
+    ResolvedPlacement {
+        lib_id: "L:NEW".into(),
+        lib_symbol,
+        library_id: LIB,
+        row_id: SAME,
+        library_version: "1".into(),
+        stamp: signex_types::schematic::RowStamp::new(SAME),
+        internal_pn: "R-0603-31K6".into(),
+        value: "31.6k".into(),
+        is_power: false,
+        prefix: "R".into(),
+        class: "resistor".into(),
+        prefix_override: None,
+        footprint: "R_0603".into(),
+        datasheet: String::new(),
+        fields: vec![("MPN".into(), "RC0603FR-0731K6L".into())],
+    }
+}
+
+/// The state with SAME picked and compared, the sheet scope chosen.
+fn compared() -> LibraryState {
+    let mut state = state();
+    let picker = state.picker.as_mut().unwrap();
+    let PickerMode::ChangeComponent(session) = &picker.mode else {
+        unreachable!()
+    };
+    let session = (**session).clone();
+    let row = |field, now: &str, after: &str, kind| CompareRow {
+        field,
+        now: now.into(),
+        after: after.into(),
+        kind,
+    };
+    picker.selected = Some((
+        PathBuf::from("/libs/passives.snxlib"),
+        summary(SAME, "RC0603FR-0731K6L", "31.6k · 1% · 0603"),
+    ));
+    picker.mode = PickerMode::ChangePreview(Box::new(ChangePreview {
+        session,
+        resolved: resolved(),
+        preview: Default::default(),
+        rows: vec![
+            row(CompareField::Value, "31.6k", "31.6k", CompareKind::Same),
+            row(
+                CompareField::Footprint,
+                "R_0402",
+                "R_0603",
+                CompareKind::Replaced,
+            ),
+            row(
+                CompareField::Named("Note".into()),
+                "FB divider",
+                "",
+                CompareKind::User,
+            ),
+        ],
+        dropped: Vec::new(),
+        scope: ChangeScope::SameOnSheet,
+        same_parts: vec![Uuid::from_u128(2)],
+    }));
+    state
+}
+
+/// The laid-out texts, without the bidi isolates the catalog puts around
+/// arguments.
+fn texts(state: &LibraryState) -> Vec<String> {
+    let i18n = I18n::en_us_ref();
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
+    let card = view(state.picker.as_ref().unwrap(), &tokens, i18n, false).expect("a card");
+    lay_out_texts(card, WINDOW)
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect()
+}
+
+fn clicks(state: &LibraryState, label: &str) -> Vec<LibraryMessage> {
+    let i18n = I18n::en_us_ref();
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
+    let card = view(state.picker.as_ref().unwrap(), &tokens, i18n, false).expect("a card");
+    messages_on_click(card, WINDOW, label)
+}
+
+#[test]
+fn the_list_has_the_three_chips_and_a_pin_tag_on_every_row() {
+    let shown = texts(&state());
+    for label in [
+        "Same symbol",
+        "Same value",
+        "In stock",
+        "RC0603FR-0731K6L",
+        "31.6k · 1% · 0603",
+        "same pins",
+        "4 pins, not 2",
+        "Pick a part in the list to compare it with R5.",
+        "R5 · buck_channel.snxsch",
+    ] {
+        assert!(shown.iter().any(|t| t == label), "{label:?} in {shown:#?}");
+    }
+}
+
+#[test]
+fn a_row_with_the_same_pins_is_picked_and_one_whose_pins_differ_is_not() {
+    let state = state();
+    let picked = clicks(&state, "RC0603FR-0731K6L");
+    assert!(
+        picked.iter().any(|m| matches!(
+            m,
+            LibraryMessage::PlacedPart(PlacedPartMsg::ChangeRowClicked(id)) if *id == SAME
+        )),
+        "{picked:?}"
+    );
+    assert!(clicks(&state, "YC164-FR-0731K6L").is_empty());
+}
+
+#[test]
+fn the_comparison_shows_both_parts_the_table_kept_and_apply_to() {
+    let shown = texts(&compared());
+    let i18n = I18n::en_us_ref();
+    let upper = |id| i18n.upper_for_display(&i18n.message_plain(id, &[]));
+    for label in [
+        "Placed now".to_string(),
+        "Replace with".into(),
+        "RC0402FR-0731K6L".into(),
+        "R_0603".into(),
+        "Keep now".into(),
+        "not in part".into(),
+        "user".into(),
+        upper(ids::LIBRARY_CHANGE_COMPONENT_PARAMETERS),
+        upper(ids::LIBRARY_CHANGE_COMPONENT_KEPT),
+        upper(ids::LIBRARY_CHANGE_COMPONENT_APPLY_TO),
+        "Change 2 parts".into(),
+        "One undo step. The PCB footprint changes on Update PCB.".into(),
+    ] {
+        assert!(shown.iter().any(|t| *t == label), "{label:?} in {shown:#?}");
+    }
+}
+
+#[test]
+fn change_confirms_only_while_the_list_shows_the_compared_part() {
+    let i18n = I18n::en_us_ref();
+    let label = i18n
+        .message(
+            ids::LIBRARY_CHANGE_COMPONENT_APPLY,
+            &[("count", Arg::from(2_usize))],
+        )
+        .into_string();
+    let state = compared();
+    let confirmed = |messages: &[LibraryMessage]| {
+        messages.iter().any(|m| {
+            matches!(
+                m,
+                LibraryMessage::PlacedPart(PlacedPartMsg::ChangeConfirmed)
+            )
+        })
+    };
+    assert!(confirmed(&clicks(&state, &label)));
+
+    let mut hidden = compared();
+    if let Some(picker) = hidden.picker.as_mut()
+        && let PickerMode::ChangePreview(change) = &mut picker.mode
+    {
+        change.session.hidden.insert(SAME);
+    }
+    assert!(!confirmed(&clicks(&hidden, &label)), "a hidden part");
+}
+
+#[test]
+fn a_user_parameter_box_toggles_its_keep() {
+    let mut state = compared();
+    if let Some(picker) = state.picker.as_mut()
+        && let PickerMode::ChangePreview(change) = &mut picker.mode
+    {
+        change.rows.retain(|r| r.kind == CompareKind::User);
+    }
+    let i18n = I18n::en_us_ref();
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
+    let card = view(state.picker.as_ref().unwrap(), &tokens, i18n, false).unwrap();
+    let laid = lay_out_texts(card, WINDOW);
+    let note = crate::layout_probe::find(&laid, "Note").bounds;
+    let keep = crate::layout_probe::find(&laid, "Keep now").bounds;
+    // The box sits in the Keep now column, on the Note row.
+    let at = iced::Point::new(keep.x + keep.height / 2.0, note.center_y());
+    let card = view(state.picker.as_ref().unwrap(), &tokens, i18n, false).unwrap();
+    let toggled = crate::layout_probe::messages_on_click_at(card, WINDOW, None, at);
+    assert!(
+        toggled.iter().any(|m| matches!(
+            m,
+            LibraryMessage::PlacedPart(PlacedPartMsg::ChangeKeepToggled(name)) if name == "Note"
+        )),
+        "{toggled:?}"
+    );
+}
+
+#[test]
+fn the_dialog_builds_on_every_theme() {
+    let i18n = I18n::en_us_ref();
+    for state in [state(), compared()] {
+        for id in ThemeId::BUILTINS {
+            let tokens = theme_tokens(*id);
+            assert!(view(state.picker.as_ref().unwrap(), &tokens, i18n, false).is_some());
+        }
+    }
+}
