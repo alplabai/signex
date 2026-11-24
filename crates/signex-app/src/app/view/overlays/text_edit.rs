@@ -526,10 +526,42 @@ mod tests {
     #[test]
     fn the_open_editor_shows_its_text() {
         let mut app = app_with_selected_note();
-        let _task = app.request_text_edit(crate::app::TextEditTarget::Text);
+        let task = app.request_text_edit(crate::app::TextEditTarget::Text);
+        assert!(
+            iced_runtime::task::into_stream(task).is_some(),
+            "opening focuses the editor"
+        );
         let main = app.ui_state.main_window_id.expect("the main window");
         let overlay = app.text_edit_overlay(main).expect("the editor overlay");
         let inputs = crate::layout_probe::lay_out_inputs(overlay, iced::Size::new(1200.0, 800.0));
         assert!(inputs.iter().any(|i| i.text == "note"), "{inputs:?}");
+    }
+
+    /// Mockup row 65, decided 2026-11-24: a click outside the editor applies
+    /// the typed text, as the panel fields do, as one undo step.
+    #[test]
+    fn a_click_outside_the_editor_applies_the_edit() {
+        let mut app = app_with_selected_note();
+        let path = app.document_state.active_path.clone().expect("the sheet");
+        let opened = app.request_text_edit(crate::app::TextEditTarget::Text);
+        assert!(iced_runtime::task::into_stream(opened).is_some());
+        let _ = app.update(Message::TextEdit(crate::app::TextEditMsg::Changed(
+            "typed".into(),
+        )));
+        let _ = app.update(Message::CanvasEvent(crate::canvas::CanvasEvent::Clicked {
+            world_x: 200.0,
+            world_y: 200.0,
+        }));
+        assert!(app.interaction_state.editing_text.is_none(), "it closed");
+        let note_text = |app: &crate::app::Signex| {
+            app.document_state.engines[&path].document().text_notes[0]
+                .text
+                .clone()
+        };
+        assert_eq!(note_text(&app), "typed");
+        let engine = app.document_state.engines.get_mut(&path).expect("engine");
+        engine.undo().expect("undo").expect("one step");
+        assert!(!engine.has_document_step(true), "the edit was one step");
+        assert_eq!(note_text(&app), "note");
     }
 }
