@@ -5,6 +5,7 @@
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length, Widget};
 use signex_erc::RuleKind;
+use signex_erc::project_rules::ResolvedRules;
 use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, segmented, text};
@@ -40,22 +41,7 @@ pub(super) fn view<'a>(
     let editable = listed.kind != ProfileKind::Builtin;
     let name = listed.profile.name.as_str();
     let resolved = signex_erc::project_rules::resolve(&listed.profile.erc);
-    let editor = RuleEditor {
-        i18n,
-        tokens,
-        severity: &resolved.severity,
-        pin_matrix: &resolved.pin_matrix,
-        shipped: shipped_rules(),
-        editable,
-        changed_only: manager.rule_list.changed_only,
-        filter: &manager.rule_list.query,
-        on_severity: |rule, severity| pane(ProfilesMsg::SeverityChanged(rule, severity)),
-        on_pin_cell: |row, col| pane(ProfilesMsg::PinCellCycled { row, col }),
-        on_changed_only: |on| pane(ProfilesMsg::ChangedOnlyToggled(on)),
-        on_filter: |query| pane(ProfilesMsg::RuleFilterChanged(query)),
-        on_open_rule: Some(open_rule as fn(RuleKind) -> PrefMsg),
-        on_open_matrix: Some(open_matrix()),
-    };
+    let editor = profile_rule_editor(manager, &resolved, editable, tokens, i18n);
     let body: Element<'static, PrefMsg> = match (manager.open_rule, manager.editor_tab) {
         (Some(rule), _) => one_rule(&editor, rule, name, i18n),
         (None, ProfileEditorTab::Severity) => severity_pane(&editor),
@@ -72,6 +58,33 @@ pub(super) fn view<'a>(
     out.push(tabs(manager.editor_tab, tokens, i18n))
         .push(body)
         .boxed()
+}
+
+/// The shared rule editor as Rule Profiles drives it: a rule opens alone,
+/// and the matrix link opens the matrix tab (mockup row 148).
+fn profile_rule_editor<'a>(
+    manager: &'a ProfileManager,
+    resolved: &'a ResolvedRules,
+    editable: bool,
+    tokens: &'a ThemeTokens,
+    i18n: &'a I18n,
+) -> RuleEditor<'a, PrefMsg> {
+    RuleEditor {
+        i18n,
+        tokens,
+        severity: &resolved.severity,
+        pin_matrix: &resolved.pin_matrix,
+        shipped: shipped_rules(),
+        editable,
+        changed_only: manager.rule_list.changed_only,
+        filter: &manager.rule_list.query,
+        on_severity: |rule, severity| pane(ProfilesMsg::SeverityChanged(rule, severity)),
+        on_pin_cell: |row, col| pane(ProfilesMsg::PinCellCycled { row, col }),
+        on_changed_only: |on| pane(ProfilesMsg::ChangedOnlyToggled(on)),
+        on_filter: |query| pane(ProfilesMsg::RuleFilterChanged(query)),
+        on_open_rule: Some(open_rule as fn(RuleKind) -> PrefMsg),
+        on_open_matrix: Some(open_matrix()),
+    }
 }
 
 /// The profile's name and Saved pill, what editing it does (or why edits are
@@ -228,5 +241,29 @@ mod tests {
         let manager = &app.ui_state.profile_manager;
         assert_eq!(manager.editor_tab, ProfileEditorTab::PinMatrix);
         assert_eq!(manager.open_rule, None, "the matrix half shows");
+    }
+
+    /// Mockup row 148: Rule Profiles hands the shared editor a matrix link,
+    /// and the message it sends is the one that opens the matrix tab.
+    #[test]
+    fn rule_profiles_give_the_shared_editor_its_matrix_link() {
+        let (mut app, _) = Signex::new();
+        let tab = app.ui_state.profile_manager.editor_tab;
+        assert_eq!(tab, ProfileEditorTab::Severity);
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteDark);
+        let link = profile_rule_editor(
+            &app.ui_state.profile_manager,
+            shipped_rules(),
+            true,
+            &tokens,
+            I18n::en_us_ref(),
+        )
+        .on_open_matrix
+        .expect("Rule Profiles has a matrix tab to open");
+
+        let _ = app.update(Message::Preferences(PreferencesMsg::Inner(link)));
+
+        let manager = &app.ui_state.profile_manager;
+        assert_eq!(manager.editor_tab, ProfileEditorTab::PinMatrix);
     }
 }

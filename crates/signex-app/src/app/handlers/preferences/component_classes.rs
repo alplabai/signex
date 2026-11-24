@@ -180,6 +180,18 @@ mod tests {
         assert_eq!(row(&app, 1), ("fb", "Ferrite bead (SMD)"));
     }
 
+    /// Mockup row 150: once Apply saves the list, the added row is an
+    /// existing class, so a later relabel keeps its key.
+    #[test]
+    fn a_saved_row_key_no_longer_follows_its_label() {
+        let mut app = added();
+        label(&mut app, 1, "Ferrite bead");
+        send(&mut app, PrefMsg::Save);
+        assert_eq!(app.ui_state.preferences_pages.classes_view.new_row, None);
+        label(&mut app, 1, "Bead");
+        assert_eq!(row(&app, 1), ("ferrite_bead", "Bead"));
+    }
+
     /// Only the added row generates its key: relabelling a seed class never
     /// changes the key parts store.
     #[test]

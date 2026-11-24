@@ -657,7 +657,9 @@ pub fn client_credentials() -> (String, String) {
 
 /// The resolution order behind [`client_credentials`]: a set environment
 /// client id overrides the built-in pair, and brings the environment's
-/// secret with it (never the built-in one); otherwise the built-in pair.
+/// secret with it (never the built-in one); otherwise the built-in pair,
+/// which counts only when it is whole: a built-in id without its secret
+/// would offer Connect and then fail the token exchange.
 fn resolve_credentials(
     env_id: Option<String>,
     env_secret: Option<String>,
@@ -665,6 +667,7 @@ fn resolve_credentials(
 ) -> (String, String) {
     match env_id.filter(|id| client_id_configured(id)) {
         Some(id) => (id, env_secret.unwrap_or_default()),
+        None if built_in.1.is_empty() => (String::new(), String::new()),
         None => (built_in.0.to_owned(), built_in.1.to_owned()),
     }
 }
@@ -911,11 +914,16 @@ mod tests {
         let (id, secret) = resolve_credentials(None, Some("env-secret".into()), ("", ""));
         assert!(!client_id_configured(&id));
         assert_eq!(secret, "");
-        let (id, _) = resolve_credentials(None, None, ("built-in-id", ""));
-        assert!(
-            client_id_configured(&id),
-            "a built-in id alone is configured"
-        );
+    }
+
+    /// Mockup row 149: a release build that baked the id but not its secret
+    /// is not configured, so the card never offers a Connect that the token
+    /// exchange would then refuse.
+    #[test]
+    fn a_built_in_id_without_its_secret_is_not_configured() {
+        let (id, secret) = resolve_credentials(None, None, ("built-in-id", ""));
+        assert!(!client_id_configured(&id), "{id}");
+        assert_eq!(secret, "");
     }
 
     const GOOD_REQUEST: &str = "GET /callback?code=the-code&state=the-state HTTP/1.1\r\n\r\n";

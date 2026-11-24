@@ -112,6 +112,9 @@ impl Signex {
             crate::preferences::saved_classes(&self.ui_state.preferences_draft_component_classes);
         self.ui_state.preferences_draft_component_classes = self.ui_state.component_classes.clone();
         self.document_state.panel_ctx.component_classes = self.ui_state.component_classes.clone();
+        // A saved row is no longer the added one: its key stops following
+        // its label, and the dedupe above may have moved it (mockup row 150).
+        self.ui_state.preferences_pages.classes_view.new_row = None;
     }
 
     /// Commit the keymap working copy: persist it first, then swap it into
