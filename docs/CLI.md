@@ -937,7 +937,7 @@ The report:
 - A finding's `rule` is `req::<id>`, its `severity` the requirement's.
   `evidence` holds the `kind` and what was measured: the board's
   `width_mm`/`height_mm` and the limits; a part's `designator`, `library_row`
-  and `state`; a net's `net` and `class`, or a class's set and minimum
+  and `state`, with `parts`, how many parts were checked; a net's `net` and `class`, or a class's set and minimum
   values; the cost's `unit_cost`, `total_cost`, `quantity` and `currency`;
   for `erc_clean`/`drc_clean` one finding with the counts (`errors`,
   `warnings`, `info`, `waived`, `run_warnings`) and the run's `rule_set`, not

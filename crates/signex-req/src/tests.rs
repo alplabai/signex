@@ -272,6 +272,71 @@ fn parts_state_names_each_part_outside_the_allowed_states() {
     assert_eq!(keys.len(), 3, "each part has a key of its own");
 }
 
+/// Mockup row 38: a failed requirement's card reads one sentence, the
+/// parts counted and each named with what it is, never key: value dumps.
+#[test]
+fn a_requirements_findings_read_as_one_sentence() {
+    let mut facts = facts(json!([
+        {"id": "parts", "kind": "parts_state", "states": ["released", "deprecated"]},
+        {"id": "one", "kind": "parts_state", "states": ["released"]},
+    ]));
+    let released = library_row_key("lib", "r1");
+    let draft = library_row_key("lib", "r2");
+    facts.row_states = [
+        (released.clone(), "released".to_string()),
+        (draft.clone(), "draft".to_string()),
+    ]
+    .into_iter()
+    .collect();
+    facts.parts = Some(Ok(BomTable {
+        rows: vec![
+            row(&["R1"], 1, Some(&released), ""),
+            row(&["R2"], 1, Some(&draft), ""),
+            row(&["R3"], 1, None, ""),
+            row(&["R4"], 1, Some("other/r9"), ""),
+        ],
+        metadata: Default::default(),
+    }));
+    let report = check_report(&facts);
+    let of = |rule: &str| -> Vec<&Finding> {
+        report.findings.iter().filter(|f| f.rule == rule).collect()
+    };
+    assert_eq!(
+        findings_sentence(&of("req::parts")).as_deref(),
+        Some(
+            "3 of 4 parts are not released or deprecated: R2 is draft, R3 was not placed \
+             from a library row and R4's library row is in no open library."
+        )
+    );
+    assert_eq!(
+        findings_sentence(&of("req::one")).as_deref(),
+        Some(
+            "3 of 4 parts are not released: R2 is draft, R3 was not placed from a library \
+             row and R4's library row is in no open library."
+        )
+    );
+    assert_eq!(findings_sentence(&[]), None);
+
+    let mut nets = facts(json!([
+        {"id": "usb", "kind": "net_class", "nets": "USB_*", "class": "USB",
+         "min_trace_width_mm": 0.2},
+    ]));
+    nets.board = read_board(board(10.0, 10.0, &["USB_DP", "USB_DM", "GND"]));
+    let mut usb = NetClass::named("USB");
+    usb.nets = vec!["USB_DP".into()];
+    usb.trace_width = 0.15;
+    nets.classes = vec![usb];
+    let report = check_report(&nets);
+    let found: Vec<&Finding> = report.findings.iter().collect();
+    assert_eq!(found.len(), 2, "two misses of one requirement");
+    assert_eq!(
+        findings_sentence(&found).as_deref(),
+        Some(
+            "Class USB sets a track width of 0.15 mm, under 0.2 mm; net USB_DM is in no class, not USB."
+        )
+    );
+}
+
 #[test]
 fn an_unknown_lifecycle_state_is_not_checked() {
     let mut facts = facts(json!([

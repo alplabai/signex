@@ -20,7 +20,7 @@ use super::super::super::table::{SP, TS, problem};
 use super::super::words::{field_words, kind_words, problem_words};
 use super::super::{EntryKey, RequirementsMsg, RequirementsTabState, message};
 use super::summary::summary_words;
-use super::{Choice, Verdict, findings_of, plain, stored_text, verdict};
+use super::{Choice, Verdict, findings_of, stored_text, verdict};
 use crate::app::Message;
 use crate::app::state::ProjectId;
 use crate::styles::tokens::{self as ink, resolve};
@@ -45,14 +45,14 @@ const HEADER_GAP: f32 = SP.m + SP.xs;
 /// a refusal stays open, so what was typed and why it was refused stay in
 /// sight.
 pub(in crate::app::project_tab::requirements) fn is_open(
-    verdict: Option<Verdict>,
+    verdict: Verdict,
     has_draft_or_problem: bool,
     toggled: bool,
 ) -> bool {
     if has_draft_or_problem {
         return true;
     }
-    let passed = verdict == Some(Verdict::Passed);
+    let passed = verdict == Verdict::Passed;
     passed == toggled
 }
 
@@ -103,7 +103,7 @@ impl Card<'_> {
         }
         container(col)
             .width(Length::Fill)
-            .style(card_style(self.tokens, verdict == Some(Verdict::Failed)))
+            .style(card_style(self.tokens, verdict == Verdict::Failed))
             .boxed()
     }
 
@@ -113,19 +113,17 @@ impl Card<'_> {
         &self,
         requirement: &Requirement,
         raw: &Value,
-        verdict: Option<Verdict>,
+        verdict: Verdict,
         chevron: Option<bool>,
     ) -> Element<'a, Message> {
         let mut line: Row<Element<'a, Message>> = row![
             self.switch(requirement.enabled),
             self.veiled(requirement.enabled, self.header_info(requirement, raw)),
+            self.outcome_pill(verdict),
+            self.remove(),
         ]
         .spacing(HEADER_GAP)
         .align_y(Alignment::Center);
-        if let Some(verdict) = verdict {
-            line = line.push(self.outcome_pill(verdict));
-        }
-        line = line.push(self.remove());
         if let Some(open) = chevron {
             line = line.push(self.expand_button(open));
         }
@@ -187,24 +185,22 @@ impl Card<'_> {
     fn unreadable_header<'a>(
         &self,
         entry: &RequirementEntry,
-        verdict: Option<Verdict>,
+        verdict: Verdict,
     ) -> Element<'a, Message> {
         let label = entry
             .id()
             .map_or_else(|| format!("#{}", self.index + 1), str::to_string);
-        let mut line: Row<Element<'a, Message>> = row![
+        let line: Row<Element<'a, Message>> = row![
             text(UserText::new(label))
                 .size(TS.body)
                 .font(semibold())
                 .color(ti(self.tokens.text))
                 .width(Length::Fill),
+            self.outcome_pill(verdict),
+            self.remove(),
         ]
         .spacing(HEADER_GAP)
         .align_y(Alignment::Center);
-        if let Some(verdict) = verdict {
-            line = line.push(self.outcome_pill(verdict));
-        }
-        line = line.push(self.remove());
         container(line)
             .padding([SP.m, SP.l])
             .width(Length::Fill)
@@ -291,8 +287,8 @@ impl Card<'_> {
             }
             col = col.push(line.boxed());
         }
-        for finding in findings {
-            col = col.push(self.evidence(finding));
+        if let Some(sentence) = signex_req::findings_sentence(findings) {
+            col = col.push(self.evidence(sentence));
         }
         container(col)
             .padding(Padding {
@@ -427,17 +423,9 @@ impl Card<'_> {
         self.cell(field, input.boxed())
     }
 
-    /// A finding of the last run: its message and the measured values.
-    fn evidence<'a>(&self, finding: &Finding) -> Element<'a, Message> {
-        let mut parts = vec![finding.message.clone()];
-        if let Value::Object(map) = &finding.evidence {
-            parts.extend(
-                map.iter()
-                    .filter(|(key, _)| key.as_str() != "kind")
-                    .map(|(key, value)| format!("{key}: {}", plain(value))),
-            );
-        }
-        let words = text(UserText::new(parts.join(" · ")))
+    /// What the last run found unmet, one sentence with its measured values.
+    fn evidence<'a>(&self, sentence: String) -> Element<'a, Message> {
+        let words = text(UserText::new(sentence))
             .size(TS.body)
             .color(ink::danger(self.tokens))
             .width(Length::Fill);
