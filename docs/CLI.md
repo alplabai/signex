@@ -619,6 +619,34 @@ layer back to the palette colour. A read-only board is refused.
 A locked object is refused with the lock's reason before anything is sent.
 Without operands (the palette, a key) each says which Properties row to use.
 
+### Drawing order and Delete by uuid
+
+The Arrange rows and Delete act on the selection in a window; with operands
+they act on the items `ids` names, by uuid, on the document named (#2326).
+Each is one undo step; the answer is `{"document", "ids", "changed"}`.
+
+```text
+bring_drawings_forward document=<sheet> ids=<drawing uuids>
+bring_drawings_to_front document=<sheet> ids=<drawing uuids>
+send_drawings_backward document=<sheet> ids=<drawing uuids>
+send_drawings_to_back document=<sheet> ids=<drawing uuids>
+delete_selection document=<sheet or board> ids=<uuids>
+```
+
+- The drawing order moves only drawings: a uuid that is no drawing of the
+  sheet refuses the whole command (`sheet-target-unknown`).
+- `delete_selection` deletes objects of an open sheet (a part's uuid is the
+  part, never only its designator or value field) or items of an open board
+  (a footprint, track, via, area, text, arc, free pad, dimension or drawing;
+  a pad's uuid is no board item). A uuid that names nothing there refuses
+  the whole command (`sheet-target-unknown`, `board-target-unknown`); any
+  other document is refused (`delete-document-not-open`). Locked objects on
+  a sheet are skipped and named in Messages, as a key press does; a locked
+  footprint refuses a board delete with the placement's reason.
+- A headless run without operands acts on the session's own selection, as
+  the window's key does. Delete in a footprint editor stays the editor's own
+  route until slice S-L and takes no operands.
+
 ## Placement extras
 
 The operand forms of three placement extras (#1667). Each is one undo step

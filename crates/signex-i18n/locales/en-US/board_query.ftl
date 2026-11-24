@@ -47,3 +47,7 @@ board-component-both = Name the component by ids or by designator, not both; not
 board-component-none = Name the component by ids (its uuid) or by designator; nothing was changed
 # { $count } is how many uuids ids named.
 board-component-many = ids names { $count } items, and this command acts on one component; nothing was changed
+# The drawing order and delete_selection name sheet items by uuid too.
+sheet-target-unknown = { $id } names nothing on the sheet this command acts on; nothing was changed
+# { $name } is the document delete_selection named; it deletes on an open sheet or board only.
+delete-document-not-open = { $name } is not an open sheet or board; nothing was deleted

@@ -29,17 +29,41 @@ type Ran = (CommandOutcome, Task<Message>);
 /// the box, so that row stays `bridge`. `place_board_reuse_block` has no
 /// bridge row: a context-menu row carries the block name. Each id's GUI
 /// route test checks [`ran`], so a route that calls the engine itself
-/// fails it.
+/// fails it. `delete_selection` on a footprint editor tab is the one GUI
+/// half that does not translate: the editor deletes on its own until slice
+/// S-L (a declared exception, `parity/owners.rs`).
 #[cfg(test)]
 pub(crate) const TRANSLATED: &[&str] = &[
     "board_shape_from_selection",
+    "bring_drawings_forward",
+    "bring_drawings_to_front",
+    "delete_selection",
     "gloss_selected_routes",
     "keepout_from_selection",
     "place_board_reuse_block",
     "save_board_reuse_block",
+    "send_drawings_backward",
+    "send_drawings_to_back",
     "swap_gates",
     "swap_pins",
 ];
+
+/// The translated ids a headless run without operands still runs on the
+/// session's own selection, as before they took operands (#2326 decision 2:
+/// the CLI keeps its own selection): their bridge arm translates it.
+const ON_THE_SESSION_SELECTION: &[&str] = &[
+    "bring_drawings_forward",
+    "bring_drawings_to_front",
+    "delete_selection",
+    "send_drawings_backward",
+    "send_drawings_to_back",
+];
+
+/// Whether a headless run of `id` without operands acts on the session's
+/// selection rather than asking for them.
+pub(crate) fn runs_on_the_session_selection(id: &str) -> bool {
+    ON_THE_SESSION_SELECTION.contains(&id)
+}
 
 /// Whether the bridge arm of the command `id` is a translator.
 #[cfg(test)]

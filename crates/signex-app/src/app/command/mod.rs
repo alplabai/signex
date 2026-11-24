@@ -74,6 +74,8 @@ mod part_operands;
 mod placed_operand_tests;
 mod placed_operands;
 #[cfg(test)]
+mod placement_defaults_tests;
+#[cfg(test)]
 mod placement_extras_operand_tests;
 mod placement_extras_operands;
 #[cfg(test)]
@@ -91,6 +93,9 @@ mod routing;
 #[cfg(test)]
 mod selection_filter_operand_tests;
 mod selection_filter_operands;
+#[cfg(test)]
+mod selection_operand_tests;
+mod selection_operands;
 #[cfg(test)]
 mod sheet_entry_ref_tests;
 #[cfg(test)]

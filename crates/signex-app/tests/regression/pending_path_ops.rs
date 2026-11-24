@@ -571,10 +571,17 @@ fn a_failed_completion_message_for_a_closed_dialog_raises_the_card() {
     let task = start_rename(&mut f.app, &f.old.clone(), "PSU.snxsch");
     let mut messages = run(task);
     f.app.ui_state.rename_dialog = None;
-    if let Some(Message::Rename(RenameMsg::FileRenamed(done))) = messages.first_mut() {
-        let FileRenameDone { result, .. } = done.as_mut();
-        *result = Err(RenameIoError::Os("denied".to_string()));
-    }
+    // The task's messages need not come in a fixed order, so find the
+    // completion wherever it is rather than assuming it is first (#2880).
+    let done = messages
+        .iter_mut()
+        .find_map(|message| match message {
+            Message::Rename(RenameMsg::FileRenamed(done)) => Some(done),
+            _ => None,
+        })
+        .expect("the rename worker reports its completion");
+    let FileRenameDone { result, .. } = done.as_mut();
+    *result = Err(RenameIoError::Os("denied".to_string()));
     for message in messages {
         let _follow_up = f.app.update(message);
     }

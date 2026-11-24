@@ -8,8 +8,8 @@ use super::super::super::*;
 /// The pin direction a Port (global label) is armed with, and a CLI run uses.
 pub(crate) const GLOBAL_PORT_SHAPE: &str = "bidirectional";
 
-/// A label to place: its kind and text, and the look the pre-placement form
-/// and the project defaults set.
+/// A label to place: its kind and text, and its look (a click's from the
+/// pre-placement form, an operand run's from the project defaults).
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct LabelSpec {
     pub label_type: LabelType,
@@ -43,31 +43,40 @@ impl Signex {
             .map(|pp| pp.label_text.trim().to_string())
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| default_text.to_string());
-        let (rotation, font_size_mm, justify_h, justify_v) = pre
-            .map(|pp| {
-                (
-                    pp.rotation,
-                    pp.font_size_pt as f64 * signex_types::schematic::SCHEMATIC_PT_TO_MM,
-                    pp.justify_h,
-                    pp.justify_v,
-                )
-            })
-            .unwrap_or((
-                0.0,
-                self.document_state
-                    .active_schematic_defaults()
-                    .placed_text_mm(),
-                HAlign::Left,
-                VAlign::Bottom,
-            ));
+        let spec = self.label_spec_from_defaults(label_type, shape, text);
+        match pre {
+            Some(pp) => LabelSpec {
+                rotation: pp.rotation,
+                font_size_mm: pp.font_size_pt as f64 * signex_types::schematic::SCHEMATIC_PT_TO_MM,
+                justify_h: pp.justify_h,
+                justify_v: pp.justify_v,
+                ..spec
+            },
+            None => spec,
+        }
+    }
+
+    /// A label of `label_type`, `shape` and `text` in the look the project
+    /// defaults give the sheet the edit targets: unrotated, the default text
+    /// size and font, left and bottom justified. What an agent or CLI run
+    /// places where its operands say nothing; it never reads the form (#2326).
+    pub(crate) fn label_spec_from_defaults(
+        &self,
+        label_type: LabelType,
+        shape: String,
+        text: String,
+    ) -> LabelSpec {
         LabelSpec {
             label_type,
             shape,
             text,
-            rotation,
-            font_size_mm,
-            justify_h,
-            justify_v,
+            rotation: 0.0,
+            font_size_mm: self
+                .document_state
+                .active_schematic_defaults()
+                .placed_text_mm(),
+            justify_h: HAlign::Left,
+            justify_v: VAlign::Bottom,
             font_family: self.document_state.placed_font_family(),
         }
     }

@@ -152,13 +152,19 @@ impl TestAdapter {
         (outcome_of(outcome), self.hold(task))
     }
 
-    /// The answer of the query `id`, asked by a person.
+    /// The answer of the query `id`, asked by a person. A check is answered
+    /// once its run lands.
     pub fn query(&mut self, id: &str, args: &[&str]) -> Result<serde_json::Value, Outcome> {
         let (command, args) = parse(id, args)?;
         let asked = self
             .app
             .with_origin(crate::app::agent::Origin::Person, |app| {
-                app.run_query_headless(&command, &args)
+                match app.run_query_headless(&command, &args) {
+                    Some((CommandOutcome::Deferred { ticket }, task)) => {
+                        Some(app.settle_deferred(ticket, task))
+                    }
+                    asked => asked,
+                }
             });
         match asked {
             Some((CommandOutcome::Answered(value), _)) => Ok(value),

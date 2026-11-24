@@ -33,4 +33,6 @@ define_ids! {
     BOARD_COMPONENT_BOTH = "board-component-both";
     BOARD_COMPONENT_NONE = "board-component-none";
     BOARD_COMPONENT_MANY = "board-component-many";
+    SHEET_TARGET_UNKNOWN = "sheet-target-unknown";
+    DELETE_DOCUMENT_NOT_OPEN = "delete-document-not-open";
 }
