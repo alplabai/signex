@@ -29,8 +29,9 @@ pub(crate) mod user_cards;
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
-/// Width of the preview column: about 24 em of body text.
-const PREVIEW_W: f32 = TS.body * 24.0;
+/// Width of the preview column: the board rules drawing and the pane's
+/// padding either side, so the drawing and its expand button are not cut.
+const PREVIEW_W: f32 = crate::app::new_project::preview::VIEW_W + 2.0 * SP.xl;
 
 fn np(msg: NewProjectMsg) -> Message {
     Message::from(msg)

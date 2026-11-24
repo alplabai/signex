@@ -20,10 +20,12 @@ fn edit(msg: NewProjectMsg) -> Message {
     ds(DocumentSetupMsg::Setup(msg))
 }
 
-/// Design size, in body-text units, so the card scales with the font.
-fn design_size(kind: SetupKind) -> (f32, f32) {
+/// Design size, in body-text units, so the card scales with the font. A
+/// board's is wide enough for the cards beside the preview and tall enough
+/// for the rule fields and the preview column (mockup row 22).
+pub(super) fn design_size(kind: SetupKind) -> (f32, f32) {
     match kind {
-        SetupKind::Pcb => (TS.body * 66.0, TS.body * 54.0),
+        SetupKind::Pcb => (TS.body * 83.0, TS.body * 60.0),
         SetupKind::Sheet => (TS.body * 52.0, TS.body * 44.0),
     }
 }
