@@ -765,3 +765,14 @@ library-browser-columns = Columns
 library-panel-rows-compact = Compact rows
 # Tooltip of the Library panel button that shows rows with a preview thumbnail.
 library-panel-rows-thumbnail = Rows with preview thumbnail
+# range-filter-chip
+# Chip of an applied range filter: column, operator (≥ ≤ =), number with its prefix, unit. "Value ≥ 1k Ω".
+library-range-filter-chip = { $column } { $op } { $value } { $unit }
+# Chip of an applied between filter: column, low, high, unit. "Resistance 1k – 100k Ω".
+library-range-filter-chip-between = { $column } { $low } – { $high } { $unit }
+# Tooltip of a range filter chip.
+library-range-filter-chip-tip = Edit this filter
+# Tooltip of the × on a range filter chip.
+library-range-filter-remove-tip = Remove this filter
+# Button that folds a finished range filter editor into its chip.
+library-range-filter-done = Done

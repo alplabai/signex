@@ -294,4 +294,10 @@ define_ids! {
     LIBRARY_BROWSER_COLUMNS = "library-browser-columns";
     LIBRARY_PANEL_ROWS_COMPACT = "library-panel-rows-compact";
     LIBRARY_PANEL_ROWS_THUMBNAIL = "library-panel-rows-thumbnail";
+    // range-filter-chip
+    LIBRARY_RANGE_FILTER_CHIP = "library-range-filter-chip";
+    LIBRARY_RANGE_FILTER_CHIP_BETWEEN = "library-range-filter-chip-between";
+    LIBRARY_RANGE_FILTER_CHIP_TIP = "library-range-filter-chip-tip";
+    LIBRARY_RANGE_FILTER_REMOVE_TIP = "library-range-filter-remove-tip";
+    LIBRARY_RANGE_FILTER_DONE = "library-range-filter-done";
 }
