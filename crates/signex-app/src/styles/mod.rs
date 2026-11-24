@@ -11,6 +11,7 @@ use signex_widgets::button;
 
 pub mod board_palette;
 mod buttons;
+mod dashed_outline;
 mod dialog_buttons;
 mod dialog_kit;
 mod dialog_parts;
@@ -24,6 +25,7 @@ pub mod scrollbar;
 pub mod tokens;
 pub mod typography;
 
+pub use dashed_outline::dashed_frame;
 pub use disabled::{DISABLED_OPACITY, dimmed, dimmed_button, read_only_field, read_only_row};
 pub use graphite::{
     PillTone, card, field, floating_shadow, key_cap, pill, pill_colors, resize_handle_edge,

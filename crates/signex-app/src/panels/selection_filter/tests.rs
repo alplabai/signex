@@ -8,7 +8,7 @@ use pcb_geom::PickKind;
 use signex_types::pcb::{PcbBoard, Via, ViaType};
 use signex_types::schematic::{Point, SchematicSheet, Wire};
 
-use super::kinds::bulk_pick;
+use super::kinds::{bulk_pick, toggle_edge, toggle_row};
 use super::{FilterEditor, KindCounts, SchFilterMsg, board_counts};
 use crate::active_bar::{CUSTOM_FILTER_PRESET_LIMIT, CustomFilterPreset, SelectionFilter};
 use crate::app::{Message, Signex, TabInfo, TabKind};
@@ -406,4 +406,83 @@ fn the_rename_draft_survives_a_panel_context_rebuild() {
     app.interaction_state.custom_filter_presets.truncate(1);
     app.refresh_panel_ctx();
     assert_eq!(app.document_state.panel_ctx.selection_filter.rename, None);
+}
+
+/// Mockup row 55: the first kind reads "Components", not "Parts".
+#[test]
+fn the_first_kind_reads_components() {
+    let app = app_on_sheet();
+    let shown = texts(PanelKind::Filter, &app.document_state.panel_ctx);
+    assert!(shown.iter().any(|t| t == "Components"), "{shown:?}");
+    assert!(!shown.iter().any(|t| t == "Parts"), "{shown:?}");
+}
+
+/// Mockup row 55: an on kind keeps the solid hairline; an off kind has no
+/// solid border and a dashed outline in the faded hairline colour, its
+/// dash sized from the body text.
+#[test]
+fn an_off_kind_trades_its_hairline_for_a_dashed_outline() {
+    use crate::styles::{TypeScale, dimmed, ti};
+    use signex_types::theme::{ThemeId, theme_tokens};
+    for &id in ThemeId::BUILTINS {
+        let tokens = theme_tokens(id);
+        let line = ti(tokens.border);
+        assert_eq!(toggle_edge(&tokens, true), (line, None), "{id:?}");
+        let (solid, dashed) = toggle_edge(&tokens, false);
+        assert_eq!(solid, iced::Color::TRANSPARENT, "{id:?}");
+        let dashed = dashed.unwrap_or_else(|| panic!("{id:?}: an off kind is not dashed"));
+        assert_eq!(dashed.color, dimmed(line), "{id:?}");
+        let body = TypeScale::DEFAULT.body;
+        assert!(dashed.dash.iter().all(|d| *d > 0.0 && *d < body), "{id:?}");
+    }
+}
+
+/// How often the colour changes along the top pixel row of a drawn toggle,
+/// over its middle half (clear of the rounded corners).
+fn top_edge_changes(app: &Signex, on: bool) -> usize {
+    let ctx = &app.document_state.panel_ctx;
+    let msg = PanelMsg::SchFilter(SchFilterMsg::KindToggled(SelectionFilter::Wires));
+    let row = toggle_row(ctx, SelectionFilter::Wires, on, Some(3), msg);
+    let width = 240usize;
+    let window = iced::Size::new(width as f32, 40.0);
+    let pixels = crate::layout_probe::draw_pixels(row, window);
+    let rgb = |x: usize| &pixels[x * 4..x * 4 + 3];
+    (width / 4..width * 3 / 4)
+        .filter(|&x| {
+            let step: u32 = rgb(x)
+                .iter()
+                .zip(rgb(x + 1))
+                .map(|(a, b)| u32::from(a.abs_diff(*b)))
+                .sum();
+            step > 8
+        })
+        .count()
+}
+
+/// Mockup row 55, as drawn: the on toggle's top edge is one solid line, the
+/// off toggle's breaks into dashes.
+#[test]
+fn an_off_kind_is_drawn_with_a_dashed_edge() {
+    let app = app_on_sheet();
+    assert_eq!(top_edge_changes(&app, true), 0, "solid edge");
+    let dashes = top_edge_changes(&app, false);
+    assert!(dashes >= 6, "{dashes} colour changes along the dashed edge");
+}
+
+/// The dashed outline over an off kind takes no input: its toggle still
+/// turns it back on.
+#[test]
+fn an_off_kind_still_toggles_through_its_dashed_outline() {
+    let mut app = app_on_sheet();
+    send(&mut app, SchFilterMsg::NonePicked);
+    let wires = click(PanelKind::Filter, &app.document_state.panel_ctx, "Wires");
+    assert!(
+        matches!(
+            wires.as_slice(),
+            [PanelMsg::SchFilter(SchFilterMsg::KindToggled(
+                SelectionFilter::Wires
+            ))]
+        ),
+        "{wires:?}"
+    );
 }
