@@ -75,8 +75,9 @@ pub(crate) fn redundancy_block_cost(rows: usize, cols: usize) -> u64 {
         .saturating_add(4u64.saturating_mul(d).saturating_mul(basis_sum))
 }
 
-/// Work units of the DOF analysis after a solve: one Jacobian, its QR
-/// (`m·n²`) and one residual pass for the over-constraint check. Recorded by
+/// Work units of the DOF analysis after a solve: one Jacobian, its row
+/// reduction for the rank and the free motions (`m·n·min(m, n)`, charged as
+/// `m·n²`) and one residual pass for the over-constraint check. Recorded by
 /// [`WorkMeter::record_analysis`], never charged to the pool (see there).
 pub(crate) fn analysis_cost(n: usize, m: usize) -> u64 {
     let (n64, m64) = (n as u64, m as u64);
@@ -123,7 +124,9 @@ impl WorkMeter {
     /// a solve the budget does not bound: it grows as `m·n²` and measures
     /// 0.7 ns per unit on an under-constrained sketch (`m` well below `n`)
     /// and up to 2.7 ns per unit on a fully constrained one (`m` close to
-    /// `n`, the QR's worst case), so up to three times the LM runs' rate.
+    /// `n`, the worst case), so up to three times the LM runs' rate. Those
+    /// rates were measured with a QR rank; the row reduction that replaced
+    /// it (mockup row 179) has not been timed yet.
     pub fn analysis_spent(&self) -> u64 {
         self.analysis
     }

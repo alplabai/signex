@@ -405,6 +405,40 @@ fn the_sketch_solve_section_leads_with_the_dof_card_and_the_free_motions() {
     assert!(top_of(&texts, "4 points slide along X") < top_of(&texts, "ITERATIONS"));
 }
 
+/// Mockup row 179: a board sketch with nothing selected leads with the
+/// Sketch DOF section, titled with its DOF, right under the board header and
+/// above the Board, Outline checks and Snap Options sections; the solve
+/// section shows once and Parameters stays at the bottom.
+#[test]
+fn a_board_sketch_leads_with_the_sketch_dof_section() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.mode_kind = FootprintModeKind::Sketch;
+    fp.sketch_host = signex_types::sketch::SketchHost::Board;
+    fp.board = Some(crate::panels::BoardSketchProps::default());
+    fp.last_solve = Some(FootprintSolveSummary {
+        iterations: 6,
+        elapsed_ms: 3,
+        final_residual_norm: 0.0,
+        over_constraint_count: 0,
+        over_constraints: Vec::new(),
+        redundant_constraints: Vec::new(),
+        dof: 2,
+        free_motions: Vec::new(),
+    });
+    assert!(matches!(body_state(&fp), BodyState::Board(_)));
+    let texts = texts(&app, &fp);
+    let dof = top_of(&texts, "SKETCH: 2 DOF");
+    assert!(top_of(&texts, "Board Sketch") < dof, "{texts:#?}");
+    assert!(dof < top_of(&texts, "Under-constrained · 2 DOF"));
+    for below in ["Name", "Outline checks", "SNAP OPTIONS", "PARAMETERS"] {
+        assert!(dof < top_of(&texts, below), "{below:?}: {texts:#?}");
+    }
+    let solves = texts.iter().filter(|t| t.text == "SKETCH: 2 DOF").count();
+    assert_eq!(solves, 1, "{texts:#?}");
+    assert!(!has(&texts, "SKETCH SOLVE"), "{texts:#?}");
+}
+
 /// Mockup row 179e: the Parameters list stays under a selected entity's
 /// form in Sketch mode, so a pattern's spacing and the parameters it names
 /// sit together.

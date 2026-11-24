@@ -6,8 +6,10 @@
 //! - A sketch entity: its role sub-form or header, the Entity section, then
 //!   Snap Options and the sketch sections as before.
 //! - A silk graphic: the silk form, then Snap Options.
-//! - A board sketch with nothing selected: the board summary and the
-//!   sections the board showed before (#2234; its redesign is mockup row 110).
+//! - A board sketch with nothing selected: the Sketch DOF section, the board
+//!   summary and the sections the board showed before (#2234; its redesign
+//!   is mockup row 110). Under a board selection, the Sketch DOF section
+//!   follows the selection's header (mockup row 179).
 //! - A board sketch with its bake preview open: the Bake panel (mockup row
 //!   179), above any selection.
 //!
@@ -148,12 +150,12 @@ pub(super) fn view_body<'a>(
         }
         BodyState::SketchEntity(entity) => {
             let col = super::selection::view_sketch_entity(col, cx, entity);
-            selection_tail(col, cx)
+            selection_tail(col, cx, super::sections::leads_with_solve(cx))
         }
         BodyState::SelectedPad(pad) => super::selection::view_selected_pad(col, cx, pad),
         BodyState::Silk(silk) => {
             let col = super::silk::view_silk_selection(col, cx, silk);
-            selection_tail(col, cx)
+            selection_tail(col, cx, false)
         }
         BodyState::Board(board) => view_board(col, cx, board),
         BodyState::NothingSelected => view_nothing_selected(col, cx),
@@ -161,21 +163,36 @@ pub(super) fn view_body<'a>(
 }
 
 /// Below a selection: the board section, the pad stack check, Snap Options
-/// and, in Sketch mode, the sketch sections, as they showed before.
+/// and, in Sketch mode, the sketch sections, as they showed before; without
+/// the solve section when the selection already led with it (`solve_shown`).
 fn selection_tail<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     cx: Ctx<'a, '_>,
+    solve_shown: bool,
 ) -> Column<Element<'a, PanelMsg>> {
     col = super::board::view_board_section(col, cx.fp, cx.palette, cx.i18n);
     col = super::pad_stack_check::view_pad_stack_check(col, cx.fp, cx.i18n);
     col = super::snap_options::view_snap_options(col, cx, true);
-    if cx.fp.mode_kind == FootprintModeKind::Sketch {
-        col = super::sections::view_sketch_sections(col, cx);
-    }
+    col = sketch_sections_below(col, cx, solve_shown);
     col.push(hint(cx))
 }
 
-/// A board sketch with nothing selected: the board summary, then the
+/// In Sketch mode, the sketch sections, less the solve section when the
+/// body already showed it.
+fn sketch_sections_below<'a>(
+    col: Column<Element<'a, PanelMsg>>,
+    cx: Ctx<'a, '_>,
+    solve_shown: bool,
+) -> Column<Element<'a, PanelMsg>> {
+    match (cx.fp.mode_kind == FootprintModeKind::Sketch, solve_shown) {
+        (false, _) => col,
+        (true, true) => super::sections::view_sketch_sections_after_solve(col, cx),
+        (true, false) => super::sections::view_sketch_sections(col, cx),
+    }
+}
+
+/// A board sketch with nothing selected: the board header, the Sketch DOF
+/// section right under it (mockup row 179), the board summary, then the
 /// sections the board showed before (#2234).
 fn view_board<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
@@ -188,14 +205,24 @@ fn view_board<'a>(
         Some(t!(i18n, ids::BOARD_SKETCH_TITLE).into()),
         cx.tokens,
     ));
-    col = super::board::view_board_summary(col, cx.fp, board, cx.palette, cx.collapsed, i18n);
+    let leads = super::sections::leads_with_solve(cx);
+    if leads {
+        col = super::sections::view_sketch_solve_section(col, cx);
+    }
+    col = super::board::view_board_summary(
+        col,
+        cx.fp,
+        board,
+        cx.palette,
+        cx.collapsed,
+        cx.unit,
+        i18n,
+    );
     col = super::pad_stack_check::view_pad_stack_check(col, cx.fp, cx.i18n);
     col = super::snap_options::view_snap_options(col, cx, false);
     col = super::managers::view_grid_manager(col, cx);
     col = col.push(footprint_sections::units_row(cx));
-    if cx.fp.mode_kind == FootprintModeKind::Sketch {
-        col = super::sections::view_sketch_sections(col, cx);
-    }
+    col = sketch_sections_below(col, cx, leads);
     col.push(hint(cx))
 }
 

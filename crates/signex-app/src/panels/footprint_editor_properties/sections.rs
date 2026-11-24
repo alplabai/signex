@@ -3,14 +3,15 @@
 //! iterations, residual and time, the redundant and conflicting
 //! constraints), Parameters and Solve warnings.
 //! The nothing-selected body shows them, and so does Sketch mode under a
-//! selection.
+//! selection. A board sketch leads with the solve section, titled Sketch DOF,
+//! right under its object header (mockup row 179).
 
 use iced::widget::{Column, container, row};
 use iced::{Element, Length, Widget as _};
-use signex_i18n::{UserText, ids, t};
+use signex_i18n::{Localized, UserText, ids, t};
 use signex_widgets::{raw, text, text_input};
 
-use super::super::PanelMsg;
+use super::super::{FootprintModeKind, PanelMsg};
 use super::body::{Ctx, caption, is_open, kv_row, pill, section};
 use super::conflicts;
 use crate::panels::form_look;
@@ -32,8 +33,50 @@ pub(super) fn view_sketch_sections<'a>(
     cx: Ctx<'a, '_>,
 ) -> Column<Element<'a, PanelMsg>> {
     let col = solve_section(col, cx);
+    view_sketch_sections_after_solve(col, cx)
+}
+
+/// A board sketch in Sketch mode puts the Sketch DOF section right under
+/// its object header (mockup row 179, m179-slot); a footprint keeps it with
+/// the other sketch sections.
+pub(super) fn leads_with_solve(cx: Ctx<'_, '_>) -> bool {
+    cx.fp.board.is_some() && cx.fp.mode_kind == FootprintModeKind::Sketch
+}
+
+/// The Sketch solve section alone, for a body that leads with it.
+pub(super) fn view_sketch_solve_section<'a>(
+    col: Column<Element<'a, PanelMsg>>,
+    cx: Ctx<'a, '_>,
+) -> Column<Element<'a, PanelMsg>> {
+    solve_section(col, cx)
+}
+
+/// The sketch sections after the solve: Parameters and Solve warnings.
+pub(super) fn view_sketch_sections_after_solve<'a>(
+    col: Column<Element<'a, PanelMsg>>,
+    cx: Ctx<'a, '_>,
+) -> Column<Element<'a, PanelMsg>> {
     let col = parameters_section(col, cx);
     warnings_section(col, cx)
+}
+
+/// The solve section's title: "Sketch solve" on a footprint; on a board the
+/// mockup's "Sketch DOF", "Sketch: 2 DOF" or "Sketch DOF: 1 conflict"
+/// (mockup row 179).
+fn solve_title(cx: Ctx<'_, '_>) -> Localized {
+    let i18n = cx.i18n;
+    if cx.fp.board.is_none() {
+        return t!(i18n, ids::EDITORS_FP_PROPS_SECTION_SOLVE);
+    }
+    match cx.fp.last_solve.as_ref() {
+        Some(solve) if solve.over_constraint_count > 0 => t!(
+            i18n, ids::SKETCH_DOF_SECTION_OVER, "count" => solve.over_constraint_count
+        ),
+        Some(solve) if solve.dof > 0 => {
+            t!(i18n, ids::SKETCH_DOF_SECTION_UNDER, "dof" => solve.dof)
+        }
+        _ => t!(i18n, ids::SKETCH_DOF_SECTION),
+    }
 }
 
 /// The "+N more" caption under a cut list.
@@ -63,7 +106,7 @@ fn solve_section<'a>(
     let Ctx {
         fp, tokens, i18n, ..
     } = cx;
-    let title = t!(i18n, ids::EDITORS_FP_PROPS_SECTION_SOLVE);
+    let title = solve_title(cx);
     let header = section(
         SOLVE_KEY,
         &title,

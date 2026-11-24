@@ -32,6 +32,10 @@ mod board_bake_preview;
 pub use board_bake_preview::{
     BakedHole, BakedKeepout, BakedOutline, BoardBakePreview, BoardBakeRefusal, BoardBakeRows,
 };
+mod board_sketch_props;
+pub use board_sketch_props::{BoardSketchProps, MountingHoleProps};
+mod free_motion_summary;
+pub use free_motion_summary::FreeMotionSummary;
 mod sketch_fix;
 pub use sketch_fix::SketchFixMsg;
 mod board_net_classes;
@@ -177,14 +181,14 @@ pub use color_field::{ColorFieldProps, color_field};
 pub use context::{FootprintChoiceItem, PINS_SECTION_KEY, PanelContext, SymbolChoiceItem};
 pub use erc_waivers::{ErcViolationWaiverEntry, ErcWaiveDraft, ErcWaiverMsg, ErcWaiverStatus};
 pub use footprint_context::{
-    ArrayKindSummary, ArrayParamField, ArraySummary, BgaConfigSummary, BoardSketchProps,
-    CutoutSummary, FootprintEditorPanelContext, FootprintLibInternalRow, FootprintLibSibling,
-    FootprintModeKind, FootprintPadSummary, FootprintSelectedSilkSummary,
-    FootprintSketchEntitySummary, FootprintSolveSummary, KeepoutKindFlag, KeepoutSummary,
-    MountingHoleProps, NumberingSchemeKindUi, OverConstraintSummary, PadShapeParamSummary,
-    PourSummary, RejectedConflictSummary, SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
+    ArrayKindSummary, ArrayParamField, ArraySummary, BgaConfigSummary, CutoutSummary,
+    FootprintEditorPanelContext, FootprintLibInternalRow, FootprintLibSibling, FootprintModeKind,
+    FootprintPadSummary, FootprintSelectedSilkSummary, FootprintSketchEntitySummary,
+    FootprintSolveSummary, KeepoutKindFlag, KeepoutSummary, NumberingSchemeKindUi,
+    OverConstraintSummary, PadShapeParamSummary, PourSummary, RejectedConflictSummary,
+    SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
-pub use footprint_context::{FreeMotionSummary, PATTERN_PREVIEW_MAX_INSTANCES, SketchStateSummary};
+pub use footprint_context::{PATTERN_PREVIEW_MAX_INSTANCES, SketchStateSummary};
 pub use footprint_outline::{OutlineSegment, PadOutlineSummary, segments as outline_segments};
 pub use footprint_place_block::FootprintPlaceBlock;
 pub use illustration::{HoverSubject, PanelIllustrationHover};

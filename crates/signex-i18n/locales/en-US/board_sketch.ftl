@@ -187,9 +187,22 @@ board-sketch-bake-holes-plated = { $count } × Ø { $drill } mm · plated
 board-sketch-bake-holes-unplated = { $count } × Ø { $drill } mm · unplated
 # A keepout; $layers lists its layers, $kinds what it keeps out.
 board-sketch-bake-keepout-kinds = On { $layers } · { $kinds }
-# The board's size read from the sketch's closed outline (mockup row 179e);
-# $width and $height are millimetres.
-board-sketch-size-from-shape = { $width } × { $height } mm · from board shape
+# The Size row of a rectangular board (mockup row 179e); $width and $height
+# are lengths in $unit.
+board-sketch-size-value = { $width } × { $height } { $unit }
 # A pattern's spacing as its expressions resolve (mockup row 179e); $dx and
 # $dy are millimetres.
 sketch-pattern-spacing-value = Spacing { $dx } × { $dy } mm
+# The Sketch solve section title on a board (mockup row 179): $dof free
+# degrees of freedom, $count conflicts.
+sketch-dof-section = Sketch DOF
+sketch-dof-section-under = Sketch: { $dof } DOF
+sketch-dof-section-over =
+    { $count ->
+        [one] Sketch DOF: { $count } conflict
+       *[other] Sketch DOF: { $count } conflicts
+    }
+# The Fab profile group's profile row (mockup row 179d); $name is the rule
+# profile the project's rules were seeded from.
+board-sketch-fab-profile = Profile { $name }
+board-sketch-fab-profile-none = Profile: the project's rules name none

@@ -6,8 +6,10 @@
 //! The basis comes from the reduced row echelon form of the Jacobian with
 //! partial pivoting: each free column gives the motion that moves that
 //! variable by one and the pivot variables with it. The motions are
-//! linearised at the solved state, as the canvas's DOF arrows are. Derived
-//! from first principles; no third-party numerical source consulted.
+//! linearised at the solved state, as the canvas's DOF arrows are. The same
+//! row reduction gives the rank the DOF colours read ([`rank`]), so the
+//! header pill and the card cannot disagree. Derived from first principles;
+//! no third-party numerical source consulted.
 
 use std::collections::HashSet;
 
@@ -63,12 +65,25 @@ enum Axis {
 /// no residual reads ([`crate::solver::state::EntityIndex::frozen`]) are
 /// free in any direction and come last, in sketch order.
 pub fn free_motions(result: &SolveResult, jacobian: &[Vec<f64>]) -> FreeMotions {
+    free_motions_and_rank(result, jacobian).0
+}
+
+/// The numerical rank of the `m × n` `jacobian`: its pivot count under
+/// [`RANK_TOL`]. The DOF colours read it.
+pub fn rank(jacobian: &[Vec<f64>], n: usize) -> usize {
+    n - null_space(jacobian, n).len()
+}
+
+/// [`free_motions`] and [`rank`] from one row reduction, for the solve.
+pub(crate) fn free_motions_and_rank(
+    result: &SolveResult,
+    jacobian: &[Vec<f64>],
+) -> (FreeMotions, usize) {
     let n = result.state.len();
+    let basis = null_space(jacobian, n);
+    let rank = n - basis.len();
     let owners = owners(result);
-    let mut motions: Vec<FreeMotion> = null_space(jacobian, n)
-        .iter()
-        .filter_map(|v| motion(v, &owners))
-        .collect();
+    let mut motions: Vec<FreeMotion> = basis.iter().filter_map(|v| motion(v, &owners)).collect();
     motions = merge_plane_slides(motions);
     let mut frozen: Vec<SketchEntityId> = result.index.frozen.iter().copied().collect();
     frozen.sort_by_key(|id| result.index.slots.get(id).copied().unwrap_or(usize::MAX));
@@ -77,10 +92,11 @@ pub fn free_motions(result: &SolveResult, jacobian: &[Vec<f64>]) -> FreeMotions 
         kind: MotionKind::AnyDirection,
         dof: 2,
     }));
-    FreeMotions {
+    let motions = FreeMotions {
         dof: motions.iter().map(|m| m.dof).sum(),
         motions,
-    }
+    };
+    (motions, rank)
 }
 
 /// The entity and axis of each state variable.
@@ -103,14 +119,11 @@ fn owners(result: &SolveResult) -> Vec<Option<(SketchEntityId, Axis)>> {
 
 /// One null-space vector of the `m × n` `jacobian` per free column, from
 /// its reduced row echelon form. A Jacobian without rows leaves every
-/// column free; a row of another width is left out.
+/// column free; a row of another width is left out. A pivot must exceed
+/// [`RANK_TOL`], the absolute threshold of the DOF analysis.
 fn null_space(jacobian: &[Vec<f64>], n: usize) -> Vec<Vec<f64>> {
     let mut rows: Vec<Vec<f64>> = jacobian.iter().filter(|r| r.len() == n).cloned().collect();
-    let scale = rows
-        .iter()
-        .flatten()
-        .fold(1.0_f64, |max, v| max.max(v.abs()));
-    let tol = RANK_TOL * scale;
+    let tol = RANK_TOL;
     let mut pivots: Vec<usize> = Vec::new();
     for column in 0..n {
         let r = pivots.len();

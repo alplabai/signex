@@ -94,6 +94,11 @@ define_ids! {
     BOARD_SKETCH_BAKE_HOLES_PLATED = "board-sketch-bake-holes-plated";
     BOARD_SKETCH_BAKE_HOLES_UNPLATED = "board-sketch-bake-holes-unplated";
     BOARD_SKETCH_BAKE_KEEPOUT_KINDS = "board-sketch-bake-keepout-kinds";
-    BOARD_SKETCH_SIZE_FROM_SHAPE = "board-sketch-size-from-shape";
+    BOARD_SKETCH_SIZE_VALUE = "board-sketch-size-value";
     SKETCH_PATTERN_SPACING_VALUE = "sketch-pattern-spacing-value";
+    SKETCH_DOF_SECTION = "sketch-dof-section";
+    SKETCH_DOF_SECTION_UNDER = "sketch-dof-section-under";
+    SKETCH_DOF_SECTION_OVER = "sketch-dof-section-over";
+    BOARD_SKETCH_FAB_PROFILE = "board-sketch-fab-profile";
+    BOARD_SKETCH_FAB_PROFILE_NONE = "board-sketch-fab-profile-none";
 }

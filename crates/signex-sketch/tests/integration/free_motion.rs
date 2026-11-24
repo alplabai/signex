@@ -6,7 +6,9 @@ use crate::common::{self, Sketch};
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::id::{ConstraintId, SketchEntityId};
 use signex_sketch::solver::FullSolveOutput;
-use signex_sketch::solver::free_motion::MotionKind;
+use signex_sketch::solver::dof::{DofColor, RANK_TOL};
+use signex_sketch::solver::free_motion::{self, MotionKind};
+use signex_sketch::solver::linalg::QrDecomposition;
 use signex_sketch::solver::residual::ResolvedParams;
 
 fn constrain(s: &mut Sketch, kind: ConstraintKind) {
@@ -107,4 +109,34 @@ fn a_point_nothing_constrains_is_free_in_any_direction() {
     };
     assert_eq!(motion.entities, vec![p1]);
     assert_eq!(motion.kind, MotionKind::AnyDirection);
+}
+
+/// The rank keeps the DOF analysis's absolute threshold: a pivot above it
+/// counts however large the other entries are, as in the QR rank, so a
+/// scaled Jacobian does not read one DOF more on the card than the pill.
+#[test]
+fn the_rank_counts_a_small_pivot_next_to_large_entries() {
+    let jacobian = vec![vec![1.0e3, 0.0], vec![0.0, 5.0e-7]];
+    let qr = QrDecomposition::new(&jacobian).expect("factors");
+    assert_eq!(qr.rank(RANK_TOL), 2);
+    assert_eq!(free_motion::rank(&jacobian, 2), 2);
+    let singular = vec![vec![1.0e3, 0.0], vec![0.0, 1.0e-12]];
+    assert_eq!(free_motion::rank(&singular, 2), 1);
+}
+
+/// The DOF card and the header pill share one rule: the card counts free
+/// degrees of freedom exactly when the colours mark a point under-constrained.
+#[test]
+fn the_card_and_the_colours_agree_on_whether_anything_is_free() {
+    let mut anchored = Sketch::new();
+    let (p1, _) = horizontal_line(&mut anchored);
+    constrain(&mut anchored, ConstraintKind::Fixed { point: p1 });
+    let mut loose = Sketch::new();
+    horizontal_line(&mut loose);
+    for (sketch, free) in [(&anchored, false), (&loose, true)] {
+        let out = solve(sketch);
+        let under = out.colours.values().any(|c| *c == DofColor::Under);
+        assert_eq!(out.free_motions.dof > 0, free, "{:?}", out.free_motions);
+        assert_eq!(under, free, "{:?}", out.colours);
+    }
 }

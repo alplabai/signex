@@ -390,6 +390,19 @@ impl PcbBoardSummary {
     }
 }
 
+/// Whether `outline` is an axis-aligned rectangle, by the rule of the Size
+/// row here: the board sketch's Board section reads its size the same way.
+pub fn outline_is_rectangle(outline: &[signex_types::pcb::Point]) -> bool {
+    let Some((first, rest)) = outline.split_first() else {
+        return false;
+    };
+    let extent = rest.iter().fold(
+        (first.x, first.y, first.x, first.y),
+        |(x0, y0, x1, y1), p| (x0.min(p.x), y0.min(p.y), x1.max(p.x), y1.max(p.y)),
+    );
+    is_rectangle(outline, extent)
+}
+
 /// Whether `outline` is the rectangle `extent`: four corners, each on a
 /// corner of the extent (a repeated closing vertex is ignored).
 fn is_rectangle(outline: &[signex_types::pcb::Point], extent: (f64, f64, f64, f64)) -> bool {
