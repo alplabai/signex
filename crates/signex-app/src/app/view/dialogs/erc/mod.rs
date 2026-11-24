@@ -85,6 +85,8 @@ impl Signex {
             on_changed_only: |on| Message::Erc(ErcMsg::RulesChangedOnlyToggled(on)),
             on_filter: |query| Message::Erc(ErcMsg::RuleFilterChanged(query)),
             on_open_rule: None,
+            // The matrix is beside the list here.
+            on_open_matrix: None,
         });
 
         // In-window: sized to the window-capped modal. Detached: the OS

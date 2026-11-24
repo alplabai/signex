@@ -31,7 +31,7 @@ fn distributor_settings_default_reads_nothing_and_bootstrap_fills_it_in() {
     let settings = &app.library.settings;
     assert_eq!(
         settings.digikey_client_configured,
-        crate::library::settings::digikey_oauth::env_client_configured()
+        crate::library::settings::digikey_oauth::client_configured()
     );
     assert_eq!(
         settings.preferred_order_path,

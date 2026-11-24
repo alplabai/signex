@@ -38,7 +38,8 @@ pub enum DialogButtonKind {
     /// The accent fill, for a call to action beside a `Primary`.
     Accent,
     /// A quiet action with no fill or visible border at rest ("Decide
-    /// later").
+    /// later"), its label drawn in the accent text, as every mockup's
+    /// `.btn.ghost`.
     Ghost,
     /// A text action in the accent ink with no fill or border at rest, nor
     /// when it has no action ("Clear all colors", mockup row 71).
