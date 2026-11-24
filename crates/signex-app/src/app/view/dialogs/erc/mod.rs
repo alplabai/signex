@@ -1,5 +1,5 @@
 //! Electrical Rules Check (ERC) modal (#2413): the source strip (where the
-//! rules come from, plus severity count tiles), the shared rule editor body
+//! rules come from, plus severity count chips), the shared rule editor body
 //! (per-rule severities and the pin-connection matrix), the profile forms and
 //! the footer (Profile menu, Undo / Redo, Close, Run ERC).
 

@@ -242,4 +242,6 @@ define_ids! {
     DIALOG_REPREFIX_SKIP_PER_PLACEMENT = "dialog-reprefix-skip-per-placement";
     DIALOG_REPREFIX_SKIP_MIXED_VERSIONS = "dialog-reprefix-skip-mixed-versions";
     DIALOG_REPREFIX_SKIP_HAND_EDITED = "dialog-reprefix-skip-hand-edited";
+    // find-messages
+    DIALOG_RULES_MATRIX_CYCLE_HINT = "dialog-rules-matrix-cycle-hint";
 }

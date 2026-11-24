@@ -29,7 +29,7 @@ impl Signex {
 
     /// How many rules the ERC dialog shows at each severity, in the order
     /// Error, Warning, Info, Off: the project's stored rules, else the
-    /// machine's. The dialog's severity tiles (#2413).
+    /// machine's. The dialog's severity chips (#2413).
     pub fn erc_dialog_severity_counts(&self) -> [(signex_erc::Severity, usize); 4] {
         let stored = self
             .document_state
