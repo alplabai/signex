@@ -533,3 +533,7 @@ preferences-classes-reset-confirm-yes = Reset
 preferences-page-general = General
 preferences-general-heading = General
 preferences-general-intro = Settings that cover every editor: recovery copies of unsaved documents and connections from agents.
+## Editing page (mockup row 147): the shortened net hover help; More… shows the whole text.
+preferences-net-hover-help-summary = Resting the pointer on a wire, pin or label shows a card with the net's name, net class and pins.
+## Rule Profiles page (mockup row 148): the action that asks before it deletes.
+preferences-profiles-delete-action = Delete…

@@ -36,6 +36,7 @@ const SNAP_FIELD_ID: Id = Id::new("signex.preferences.snap_pitch");
 pub enum HelpTopic {
     KeepWiresConnected,
     SelectByDragDirection,
+    NetHover,
     PasteDesignators,
     Autosave,
     AgentConnections,

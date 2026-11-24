@@ -200,4 +200,6 @@ define_ids! {
     PREFERENCES_PAGE_GENERAL = "preferences-page-general";
     PREFERENCES_GENERAL_HEADING = "preferences-general-heading";
     PREFERENCES_GENERAL_INTRO = "preferences-general-intro";
+    PREFERENCES_NET_HOVER_HELP_SUMMARY = "preferences-net-hover-help-summary";
+    PREFERENCES_PROFILES_DELETE_ACTION = "preferences-profiles-delete-action";
 }

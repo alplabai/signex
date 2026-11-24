@@ -568,6 +568,24 @@ mod layout_tests {
         }
     }
 
+    /// Mockup row 147: Show net info on hover shows the one-sentence summary
+    /// with More…, and the whole help only once More… is pressed.
+    #[test]
+    fn the_net_hover_help_draws_its_summary_with_more() {
+        use signex_i18n::ids;
+        let en = signex_i18n::I18n::en_us();
+        let summary = en.message_plain(ids::PREFERENCES_NET_HOVER_HELP_SUMMARY, &[]);
+        let whole = en.message_plain(ids::PREFERENCES_NET_HOVER_HELP, &[]);
+        let (mut app, _task) = Signex::new();
+        app.ui_state.preferences_nav = crate::preferences::PrefNav::Editing;
+
+        let texts = preferences_texts(&app);
+
+        let help = texts.iter().find(|t| t.starts_with(&summary));
+        assert_eq!(help.map(|t| t.ends_with("More…")), Some(true), "{texts:#?}");
+        assert!(!texts.iter().any(|t| t.contains(&whole)), "{texts:#?}");
+    }
+
     /// Mockup row 143: nav search finds a page by its listed setting
     /// labels, so each page draws every label listed for it.
     #[test]

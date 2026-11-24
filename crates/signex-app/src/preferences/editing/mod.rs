@@ -78,7 +78,13 @@ pub(super) fn content_editing<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         toggle_row(
             v,
             ids::PREFERENCES_NET_HOVER,
-            Help::Plain(ids::PREFERENCES_NET_HOVER_HELP),
+            Help::More(
+                HelpTopic::NetHover,
+                [
+                    ids::PREFERENCES_NET_HOVER_HELP_SUMMARY,
+                    ids::PREFERENCES_NET_HOVER_HELP,
+                ],
+            ),
             (v.draft_net_hover_enabled, PrefMsg::DraftNetHoverEnabled),
         ),
         section(ids::PREFERENCES_EDITING_SECTION_GRID),
@@ -247,6 +253,16 @@ mod tests {
         );
     }
 
+    /// Mockup row 147: the net hover help is cut to the mockup's one sentence.
+    #[test]
+    fn the_net_hover_summary_is_the_mockup_sentence() {
+        let en = I18n::en_us();
+        assert_eq!(
+            en.message_plain(ids::PREFERENCES_NET_HOVER_HELP_SUMMARY, &[]),
+            "Resting the pointer on a wire, pin or label shows a card with the net's name, net class and pins."
+        );
+    }
+
     /// Each summary is shorter than the whole text its More… opens.
     #[test]
     fn every_summary_comes_with_its_whole_help_text() {
@@ -263,6 +279,10 @@ mod tests {
             (
                 ids::PREFERENCES_PASTE_DESIGNATORS_HELP_SUMMARY,
                 ids::PREFERENCES_PASTE_DESIGNATORS_HELP,
+            ),
+            (
+                ids::PREFERENCES_NET_HOVER_HELP_SUMMARY,
+                ids::PREFERENCES_NET_HOVER_HELP,
             ),
             (
                 ids::PREFERENCES_AUTOSAVE_HELP_SUMMARY,
