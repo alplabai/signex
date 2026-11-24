@@ -26,7 +26,9 @@ mod unrouted_popover;
 
 pub(crate) use anchor::{AnchorBar, popover_left};
 pub(crate) use counters::grid_value as board_grid_value;
-pub(super) use counters::{board_counters, board_grid_readout, layer_chevron, layer_swatch};
+pub(super) use counters::{
+    board_counters, board_grid_readout, grid_glyph, layer_chevron, layer_swatch,
+};
 pub(crate) use grid_popover::custom_pitch;
 pub(crate) use kit::popover_view;
 pub(crate) use layer_dropdown::{
