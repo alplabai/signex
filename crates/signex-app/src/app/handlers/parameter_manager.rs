@@ -71,6 +71,18 @@ impl Signex {
                 }
                 Task::none()
             }
+            ParameterManagerMsg::CellFocused {
+                symbol_uuid,
+                is_focused,
+            } => {
+                let editing = &mut self.ui_state.parameter_table.editing_row;
+                if is_focused {
+                    *editing = Some(symbol_uuid);
+                } else if *editing == Some(symbol_uuid) {
+                    *editing = None;
+                }
+                Task::none()
+            }
             ParameterManagerMsg::TableScrolled { pane, x, y } => follow_table_scroll(pane, x, y),
         }
     }
@@ -466,5 +478,30 @@ mod tests {
         );
         let _ = app.update(hover("Tolerance", false));
         assert_eq!(app.ui_state.parameter_table.hovered_column, None);
+    }
+
+    /// Mockup row 70: the row of the focused cell is the row being edited.
+    /// Moving to R3 and then the blur of R1 keeps R3; R3's own blur ends it,
+    /// and closing the dialog forgets it.
+    #[test]
+    fn the_focused_cell_marks_its_row_as_edited_until_it_blurs() {
+        let mut app = app();
+        let focus = |n: u128, is_focused: bool| {
+            Message::ParameterManager(Pm::CellFocused {
+                symbol_uuid: Uuid::from_u128(n),
+                is_focused,
+            })
+        };
+        let editing = |app: &Signex| app.ui_state.parameter_table.editing_row;
+        let _ = app.update(focus(1, true));
+        assert_eq!(editing(&app), Some(Uuid::from_u128(1)));
+        let _ = app.update(focus(3, true));
+        let _ = app.update(focus(1, false));
+        assert_eq!(editing(&app), Some(Uuid::from_u128(3)));
+        let _ = app.update(focus(3, false));
+        assert_eq!(editing(&app), None);
+        let _ = app.update(focus(2, true));
+        let _ = app.update(Message::ParameterManager(Pm::Close));
+        assert_eq!(editing(&app), None);
     }
 }

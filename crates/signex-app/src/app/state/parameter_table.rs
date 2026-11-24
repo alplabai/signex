@@ -23,6 +23,9 @@ pub struct ParameterTableState {
     /// The parameter column whose header the pointer is over: its remove
     /// button shows only then.
     pub hovered_column: Option<String>,
+    /// The symbol whose row holds the focused cell: the row being edited,
+    /// drawn tinted (mockup row 70).
+    pub editing_row: Option<uuid::Uuid>,
 }
 
 /// One cell of the table: a parameter of a symbol on a sheet.

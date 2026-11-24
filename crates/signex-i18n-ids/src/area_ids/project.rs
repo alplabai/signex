@@ -270,4 +270,6 @@ define_ids! {
     PROJECT_PREVIEW_CLOSE = "project-preview-close";
     PROJECT_PREVIEW_HINT_VALUES = "project-preview-hint-values";
     PROJECT_PREVIEW_HINT_SHEET = "project-preview-hint-sheet";
+    // dialog-polish
+    PROJECT_PARAMETER_UNRESOLVED = "project-parameter-unresolved";
 }

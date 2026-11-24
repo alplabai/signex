@@ -82,6 +82,13 @@ pub enum ParameterManagerMsg {
     /// column `key`. A leave names its column, so it never clears the
     /// hover of the header just entered.
     ColumnHeaderHovered { key: String, is_hovered: bool },
+    /// A cell in the row of `symbol_uuid` took (`is_focused`) or lost the
+    /// focus. A loss names its row, so it never clears the row just
+    /// focused.
+    CellFocused {
+        symbol_uuid: uuid::Uuid,
+        is_focused: bool,
+    },
     /// One pane of the table scrolled to `x`, `y`; the others follow, so the
     /// header row and the Reference column stay in view.
     TableScrolled {

@@ -131,6 +131,36 @@ fn isolation_marks_wrap_only_placeables() {
     assert_eq!(hello, format!("Hello {FSI}R1{PDI}"));
 }
 
+/// A message splits around an argument's value where the argument is, not
+/// where the same word occurs in the sentence, and the isolation marks are
+/// dropped with the split (the reset confirm's key cap, mockup row 76). A value the
+/// message does not hold, or an empty one, does not split it.
+#[test]
+fn a_message_splits_around_an_argument_value() {
+    let en = i18n("en-US");
+    let undo = en.message(
+        ids::DIALOG_ANNOTATE_RESET_ONE_STEP,
+        &[("undo", Arg::from("Ctrl+Z"))],
+    );
+    let (before, value, after) = undo
+        .split_around("Ctrl+Z")
+        .expect("the shortcut is in the sentence");
+    assert_eq!(before.into_string(), "One undo step: ");
+    assert_eq!(value.into_string(), "Ctrl+Z");
+    assert_eq!(after.into_string(), " restores every sheet until you save.");
+
+    let word = en.message(
+        ids::DIALOG_ANNOTATE_RESET_ONE_STEP,
+        &[("undo", Arg::from("step"))],
+    );
+    let (before, _, after) = word.split_around("step").expect("the argument");
+    assert_eq!(before.into_string(), "One undo step: ");
+    assert_eq!(after.into_string(), " restores every sheet until you save.");
+
+    assert!(undo.split_around("Ctrl+Y").is_none());
+    assert!(undo.split_around("").is_none());
+}
+
 #[test]
 fn the_catalog_title_has_no_isolation_marks() {
     let title = t!(i18n("en-US"), ids::MENU_FILE).to_string();
