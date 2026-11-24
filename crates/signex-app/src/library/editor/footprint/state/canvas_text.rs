@@ -8,6 +8,7 @@
 
 use signex_i18n::{Arg, I18n, ids};
 use signex_sketch::id::ConstraintId;
+use signex_types::sketch::{SketchHost, SketchRole};
 
 /// The constraint lists a conflict count was taken from: the last solve's
 /// over-constrained set and the rejected edit's conflict. Equal lists give
@@ -85,12 +86,25 @@ pub struct SketchCanvasText {
     pub pattern_mirror: String,
     /// Joins a pattern's glyph to the pattern it repeats ("of").
     pub pattern_of: String,
+
+    /// The role tag a baked loop draws (mockup row 190): each role's name
+    /// as the role picker on that host shows it.
+    pub role_tags: Vec<(SketchHost, SketchRole, String)>,
 }
 
 impl SketchCanvasText {
     /// Whether these words were rendered for `locale`.
     pub fn is_rendered_for(&self, locale: &str) -> bool {
         self.locale == Some(locale)
+    }
+
+    /// The tag of a loop with `role` on `host`; `None` before the words are
+    /// rendered or for a role the host's picker does not offer.
+    pub fn role_tag(&self, host: SketchHost, role: SketchRole) -> Option<&str> {
+        self.role_tags
+            .iter()
+            .find(|(h, r, _)| *h == host && *r == role)
+            .map(|(_, _, word)| word.as_str())
     }
 
     /// Render the badge for `count` conflicts in `i18n`'s language, unless
