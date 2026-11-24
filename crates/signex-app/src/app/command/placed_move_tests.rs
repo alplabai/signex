@@ -125,6 +125,31 @@ fn u1(sheet: &SchematicSheet) -> Uuid {
     part.expect("U1 on the sample").uuid
 }
 
+/// The answer's `moved_wires` are exactly the wires that are new or got other
+/// ends between `loaded` and `after`, its `removed_wires` the ones gone.
+fn assert_wire_ids(answer: &Value, loaded: &[Wire], after: &[Wire]) {
+    let ids = |key: &str| -> Vec<String> {
+        let mut ids: Vec<String> = (answer[key].as_array().expect("a list").iter())
+            .map(|id| id.as_str().expect("an id").to_string())
+            .collect();
+        ids.sort();
+        ids
+    };
+    let same = |a: &Wire, b: &Wire| (a.start, a.end) == (b.start, b.end);
+    let mut moved: Vec<String> = (after.iter())
+        .filter(|w| !loaded.iter().any(|l| l.uuid == w.uuid && same(l, w)))
+        .map(|w| w.uuid.to_string())
+        .collect();
+    let mut removed: Vec<String> = (loaded.iter())
+        .filter(|l| !after.iter().any(|w| w.uuid == l.uuid))
+        .map(|l| l.uuid.to_string())
+        .collect();
+    moved.sort();
+    removed.sort();
+    assert_eq!(ids("moved_wires"), moved, "{answer}");
+    assert_eq!(ids("removed_wires"), removed, "{answer}");
+}
+
 const MODES: [(DragWiringMode, &str); 4] = [
     (DragWiringMode::Auto, "auto"),
     (DragWiringMode::HorizontalFirst, "horizontal_first"),
@@ -149,12 +174,14 @@ fn every_mode_as_the_drag(sheet: &SchematicSheet, id: Uuid, dx: f64, dy: f64) ->
         gui.interaction_state.drag_wiring = mode;
         drag(&mut gui, id, dx, dy);
         let (mut agent, _a) = app_with(sheet.clone());
+        let loaded = doc(&agent).wires.clone();
         let wiring = format!("wiring={word}");
         let answer = agent_move(&mut agent, id, dx, dy, &[&wiring]);
 
         assert_eq!(shape(doc(&agent)), shape(doc(&gui)), "{word}");
         assert_ne!(shape(doc(&agent)).wires, shape(sheet).wires, "{word}");
         assert_eq!(nets(doc(&agent)), before, "{word}: the net shape");
+        assert_wire_ids(&answer, &loaded, &doc(&agent).wires);
         assert!(
             !answer["moved_wires"].as_array().expect("list").is_empty(),
             "{word}: {answer}"
@@ -207,6 +234,7 @@ fn keep_wires_false_leaves_the_wires_as_they_were() {
     assert_eq!(doc(&agent).wires, loaded);
     assert_eq!(shape(doc(&agent)), shape(doc(&gui)));
     assert_eq!(answer["moved_wires"], serde_json::json!([]));
+    assert_eq!(answer["removed_wires"], serde_json::json!([]));
     let moved = part_at(&agent, id);
     assert_eq!(signex_net::pt_key(&moved), {
         let from = sheet.symbols.iter().find(|s| s.uuid == id).expect("U1");
@@ -343,11 +371,18 @@ fn resistor_with(wires: Vec<Wire>) -> (SchematicSheet, Uuid) {
 #[test]
 fn a_contact_that_cannot_be_kept_is_named_in_the_answer() {
     let (sheet, r1) = blocked_resistor();
+    let (mut plain, _p) = app_with(sheet.clone());
+    agent_move(&mut plain, r1, 0.0, 10.0, &["keep_wires=false"]);
     let (mut app, _d) = app_with(sheet);
     let loaded = doc(&app).wires.clone();
     let answer = agent_move(&mut app, r1, 0.0, 10.0, &[]);
 
     assert_eq!(doc(&app).wires, loaded, "a plain move");
+    assert_eq!(
+        nets(doc(&app)),
+        nets(doc(&plain)),
+        "the plain move's netlist"
+    );
     assert_eq!(part_at(&app, r1), Point::new(50.0, 60.0));
     let fallbacks = answer["fallbacks"].as_array().expect("list");
     assert_eq!(fallbacks.len(), 1, "{answer}");
@@ -355,4 +390,25 @@ fn a_contact_that_cannot_be_kept_is_named_in_the_answer() {
     assert_eq!(fallbacks[0]["names"], serde_json::json!(["R1 pin 1"]));
     let message = fallbacks[0]["message"].as_str().expect("a line");
     assert!(message.contains("R1 pin 1"), "{message}");
+}
+
+/// A move that folds a following wire to nothing removes it, as the drag
+/// commit does, and the answer names it in `removed_wires`.
+#[test]
+fn a_wire_the_move_folds_away_is_named_as_removed() {
+    let (sheet, r1) = resistor_with(vec![
+        wire((45.0, 40.0), (45.0, 50.0)),
+        wire((30.0, 40.0), (45.0, 40.0)),
+    ]);
+    let (mut gui, _g) = app_with(sheet.clone());
+    gui.ui_state.move_keeps_wires = true;
+    drag(&mut gui, r1, 0.0, -10.0);
+    let (mut agent, _a) = app_with(sheet);
+    let loaded = doc(&agent).wires.clone();
+    let answer = agent_move(&mut agent, r1, 0.0, -10.0, &[]);
+
+    assert_eq!(shape(doc(&agent)), shape(doc(&gui)));
+    assert_wire_ids(&answer, &loaded, &doc(&agent).wires);
+    let removed = answer["removed_wires"].as_array().expect("a list");
+    assert!(!removed.is_empty(), "{answer}");
 }

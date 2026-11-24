@@ -63,7 +63,8 @@ impl Signex {
         if let Some(reason) = engine.lock_refusal(&command) {
             return Err(PlacedRefusal::new(reason));
         }
-        let (outcome, reason, notices) = self.apply_engine_command_noting(command);
+        let (outcome, reason, notices) =
+            self.apply_engine_command_recording(command, true, true, true);
         if outcome == Applied::Failed {
             return Err(PlacedRefusal {
                 reason: reason.unwrap_or_else(|| "the engine refused the edit".into()),

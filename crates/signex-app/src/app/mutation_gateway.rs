@@ -138,22 +138,10 @@ impl Signex {
         (outcome, refusal)
     }
 
-    /// [`Self::apply_engine_command_reporting`] that also hands back the
-    /// engine notices the command raised (a pin the rubber band could not
-    /// keep), for a caller that answers with them (#2552). They still go to
-    /// Messages.
-    pub(crate) fn apply_engine_command_noting(
-        &mut self,
-        command: signex_engine::Command,
-    ) -> (
-        MutationOutcome,
-        Option<String>,
-        Vec<signex_engine::EngineNotice>,
-    ) {
-        self.apply_engine_command_recording(command, true, true, true)
-    }
-
-    fn apply_engine_command_recording(
+    /// The edit tail itself; also hands back the engine notices the command
+    /// raised (a pin the rubber band could not keep), for a caller that
+    /// answers with them (#2552). They still go to Messages.
+    pub(crate) fn apply_engine_command_recording(
         &mut self,
         command: signex_engine::Command,
         record_history: bool,
