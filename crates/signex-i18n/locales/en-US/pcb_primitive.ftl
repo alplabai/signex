@@ -379,6 +379,14 @@ pcb-prim-solder-tented = Solder mask: Tented
 ## #2523: the pour, string and dimension panels and their illustrations.
 # The unit after an area field.
 pcb-prim-unit-mm2 = mm²
+# pcb-props-bar
+# A read-only fact on the String panel: the string's layer is on the bottom side, so it reads mirrored.
+pcb-prim-string-mirrored = Mirrored (bottom side)
+# The unit after a length field when the board shows mils.
+pcb-prim-unit-mil = mil
+# A dimension's measured value in mils; $value is the number to its precision.
+pcb-prim-dim-value-mil = { $value } mil
+## #2523, continued.
 pcb-prim-pour-fill-mode = Fill Mode
 pcb-prim-pour-fill-solid = Solid
 pcb-prim-pour-fill-hatched = Hatched
@@ -426,14 +434,7 @@ pcb-prim-string-drawing-origin = Position X/Y
 pcb-prim-dim-style = Style
 # A decimals step of the Precision control.
 pcb-prim-dim-precision-step = { $decimals }
-# $layer is the layer's name, $height the text height in mm.
+# $layer is the layer's name, $height the text height in the board's Units.
 pcb-prim-dim-drawing-note = { $layer } · text { $height }
 # The caption under a dimension's Layer row.
 pcb-prim-dim-layer-note = Any board layer, copper included. On copper a dimension is a drawing only: no copper, DRC or Gerber.
-# pcb-props-bar
-# A read-only fact on the String panel: the string's layer is on the bottom side, so it reads mirrored.
-pcb-prim-string-mirrored = Mirrored (bottom side)
-# The unit after a length field when the board shows mils.
-pcb-prim-unit-mil = mil
-# A dimension's measured value in mils; $value is the number to its precision.
-pcb-prim-dim-value-mil = { $value } mil
