@@ -37,7 +37,8 @@ pub enum DialogButtonKind {
     /// The accent fill, for a call to action beside a `Primary`.
     Accent,
     /// A quiet action with no fill or visible border at rest ("Decide
-    /// later").
+    /// later"), its label drawn in the accent text, as every mockup's
+    /// `.btn.ghost`.
     Ghost,
     /// The dismissing action of a footer (Cancel, Close, Later): drawn as
     /// Secondary, it sits first in the right-aligned row.
