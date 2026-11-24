@@ -136,12 +136,27 @@ impl Signex {
             // A board's net rows (#2403).
             NetInspectorMsg::BoardNetSelected(net) => self.select_board_net(Some(&net)),
             NetInspectorMsg::BoardNetHighlighted(net) => self.highlight_board_net(Some(&net)),
+            // A schematic net row's hover and its Highlight (mockup row 58).
+            NetInspectorMsg::NetRowEntered(net) => self.hover_net_row(Some(net)),
+            NetInspectorMsg::NetRowLeft(net) => {
+                let held = &self.document_state.panel_ctx.net_inspector.hovered_net;
+                if held.as_ref() == Some(&net) {
+                    self.hover_net_row(None);
+                }
+            }
+            NetInspectorMsg::NetHighlighted(net) => self.highlight_listed_net(&net),
         }
         Task::none()
     }
 
+    /// The net row the pointer is over, which shows its Highlight. View
+    /// state of the panel alone: the rows are not rebuilt for it.
+    fn hover_net_row(&mut self, net: Option<String>) {
+        self.document_state.panel_ctx.net_inspector.hovered_net = net;
+    }
+
     /// The project the panel lists: the active document's.
-    fn inspected_project(&self) -> Option<ProjectId> {
+    pub(super) fn inspected_project(&self) -> Option<ProjectId> {
         self.document_state
             .active_path
             .as_deref()
@@ -151,7 +166,7 @@ impl Signex {
     /// Where the panel's list comes from now, and the index to read it from.
     /// While a newer index is built after an edit the last one stays listed,
     /// so the list does not blink on every change.
-    fn net_inspector_source(&self) -> (NetListStatus, Option<Arc<ProjectNetData>>) {
+    pub(super) fn net_inspector_source(&self) -> (NetListStatus, Option<Arc<ProjectNetData>>) {
         let Some(project) = self.inspected_project() else {
             return (NetListStatus::NoProject, None);
         };
@@ -239,8 +254,17 @@ impl Signex {
         if same_source && self.document_state.panel_ctx.net_inspector.status == status {
             return warm;
         }
-        self.document_state.panel_ctx.net_inspector =
-            self.schematic_view(data.as_deref(), &state, status);
+        // The row under the pointer stays hovered through a rebuild.
+        let hovered = self
+            .document_state
+            .panel_ctx
+            .net_inspector
+            .hovered_net
+            .take();
+        self.document_state.panel_ctx.net_inspector = NetInspectorView {
+            hovered_net: hovered,
+            ..self.schematic_view(data.as_deref(), &state, status)
+        };
         self.document_state.net_nav.inspector_source = data.map(|data| (data, state));
         warm
     }

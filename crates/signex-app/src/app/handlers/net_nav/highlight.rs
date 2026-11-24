@@ -242,6 +242,52 @@ impl Signex {
         task
     }
 
+    /// A schematic Net Inspector row's Highlight (mockup row 58), as a board
+    /// row's: draw net `name` bright on every sheet of the project listed,
+    /// or no longer when it is the net already highlighted. Nothing moves
+    /// and nothing is selected.
+    pub(super) fn highlight_listed_net(&mut self, name: &str) {
+        let Some(project) = self.inspected_project() else {
+            crate::diagnostics::log_info(messages::no_project("the Net Inspector"));
+            return;
+        };
+        let highlight = &self.document_state.net_nav.highlight;
+        if highlight
+            .as_ref()
+            .is_some_and(|h| h.project == project && h.name == name)
+        {
+            let _ = self.clear_net_highlight();
+            return;
+        }
+        // The index the panel lists the row from.
+        let Some(data) = self.net_inspector_source().1 else {
+            return;
+        };
+        let net = (0..data.index.net_count())
+            .find(|&net| data.index.net(net).is_some_and(|n| n.name == name));
+        let Some((net, anchor)) = net.and_then(|net| Some((net, data.index.anchor_of(net)?)))
+        else {
+            crate::diagnostics::log_info(messages::highlight_gone());
+            return;
+        };
+        let elements = bright_elements(&data, net);
+        let places = elements.len();
+        let sheets = elements
+            .keys()
+            .map(|(path, _)| path)
+            .collect::<HashSet<_>>()
+            .len();
+        self.document_state.net_nav.highlight = Some(NetHighlight {
+            project,
+            name: name.to_string(),
+            anchor,
+            cursor: None,
+            elements,
+        });
+        self.sync_net_highlight_to_canvases();
+        crate::diagnostics::log_info(messages::highlighted(name, places, sheets));
+    }
+
     /// Remove the net highlight.
     pub(crate) fn clear_net_highlight(&mut self) -> Task<Message> {
         if self.document_state.net_nav.highlight.take().is_none() {

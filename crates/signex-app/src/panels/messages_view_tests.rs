@@ -1,5 +1,9 @@
 //! #86: the Messages panel's level chips, verbosity rule, filters and Clear.
 
+use std::path::PathBuf;
+
+use signex_types::schematic::{SelectedItem, SelectedKind};
+
 use super::*;
 use crate::layout_probe::{lay_out_texts, messages_on_click};
 
@@ -11,7 +15,95 @@ fn entry(id: u64, level: DiagnosticLevel, code: &str, message: &str) -> Diagnost
         message: message.into(),
         at: chrono::Utc::now(),
         link: None,
+        document: None,
+        object: None,
     }
+}
+
+/// An entry about `object` on the sheet `document`.
+fn entry_at(
+    id: u64,
+    message: &str,
+    document: &str,
+    object: Option<SelectedItem>,
+) -> DiagnosticEntry {
+    DiagnosticEntry {
+        document: Some(PathBuf::from(document)),
+        object,
+        ..entry(id, DiagnosticLevel::Info, "SIGNEX-FIND_SIMILAR", message)
+    }
+}
+
+fn plain(text: &str) -> String {
+    text.replace(['\u{2068}', '\u{2069}'], "")
+}
+
+/// Mockup row 86: the Document filter keeps the rows that name its sheet;
+/// a row that names none is kept only by All documents.
+#[test]
+fn the_document_filter_keeps_the_rows_that_name_its_sheet() {
+    let mut entries = log();
+    entries.push(entry_at(7, "R3 on power", "/w/p/power.snxsch", None));
+    entries.push(entry_at(8, "R4 on mcu", "/w/p/mcu.snxsch", None));
+    let i18n = I18n::en_us();
+    let mut view = MessagesView::default();
+    let all = shown(&entries, &view, false, &i18n).len();
+    assert_eq!(all, 6, "All documents keeps every row");
+    view.apply(
+        MessagesPanelMsg::DocumentPicked(Some(PathBuf::from("/w/p/power.snxsch"))),
+        None,
+    );
+    let ids: Vec<u64> = shown(&entries, &view, false, &i18n)
+        .iter()
+        .map(|e| e.id)
+        .collect();
+    assert_eq!(ids, [7]);
+    let visible = visible(&entries, &MessagesView::default(), false);
+    assert_eq!(
+        super::named_documents(&visible),
+        [
+            PathBuf::from("/w/p/mcu.snxsch"),
+            PathBuf::from("/w/p/power.snxsch")
+        ],
+        "the dropdown lists each named sheet once, by name"
+    );
+}
+
+/// Mockup row 86: a row that names a sheet shows it in the Document cell
+/// and offers Show, which sends the sheet and the object; a plain click on
+/// the row's text sends nothing.
+#[test]
+fn a_row_that_names_a_sheet_shows_it_and_offers_show() {
+    let (app, _boot) = crate::app::Signex::new();
+    let mut ctx = app.document_state.panel_ctx.clone();
+    let item = SelectedItem::new(uuid::Uuid::now_v7(), SelectedKind::Symbol);
+    ctx.diagnostics = vec![
+        entry(1, DiagnosticLevel::Info, "SIGNEX-PROJECT", "no sheet here"),
+        entry_at(2, "Symbol R3 elsewhere", "/w/p/power.snxsch", Some(item)),
+    ];
+    ctx.diagnostics_level = "info".into();
+    let window = iced::Size::new(1400.0, 600.0);
+    let shown: Vec<String> = lay_out_texts(view_messages(&ctx), window)
+        .into_iter()
+        .map(|t| plain(&t.text))
+        .collect();
+    assert!(shown.iter().any(|t| t == "power.snxsch"), "{shown:?}");
+    assert_eq!(
+        shown.iter().filter(|t| *t == "Show").count(),
+        1,
+        "only the row that names a sheet offers Show: {shown:?}"
+    );
+    let pressed = messages_on_click(view_messages(&ctx), window, "Show");
+    assert!(
+        matches!(
+            pressed.as_slice(),
+            [PanelMsg::MessagesView(MessagesPanelMsg::ShowPressed { document, object })]
+                if document == &PathBuf::from("/w/p/power.snxsch") && *object == Some(item)
+        ),
+        "{pressed:?}"
+    );
+    let clicked = messages_on_click(view_messages(&ctx), window, "Symbol R3 elsewhere");
+    assert!(clicked.is_empty(), "{clicked:?}");
 }
 
 fn log() -> Vec<DiagnosticEntry> {

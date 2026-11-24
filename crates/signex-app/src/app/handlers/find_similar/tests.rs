@@ -566,3 +566,81 @@ fn a_project_scope_outside_any_project_says_it_searched_the_sheet() {
     );
     assert_eq!(selected_ids(&app).len(), 1, "the sheet was searched");
 }
+
+/// Mockup row 68: the search keeps every match on another sheet with its
+/// object, in the order the counts are kept.
+#[test]
+fn the_project_search_keeps_each_match_with_its_sheet() {
+    let other = part("R7", "10k", 0.0);
+    let id = other.uuid;
+    let pa = PathBuf::from("/p/a.snxsch");
+    let pb = PathBuf::from("/p/b.snxsch");
+    let found = run_search(SearchInputs {
+        criteria: vec![
+            SimilarValue {
+                property: SimilarProperty::Kind,
+                value: "Symbol".into(),
+            },
+            SimilarValue {
+                property: SimilarProperty::Value,
+                value: "10k".into(),
+            },
+        ],
+        open: [
+            (pa.clone(), sheet_of(vec![part("R1", "10k", 0.0)], vec![])),
+            (pb.clone(), sheet_of(vec![other], vec![])),
+        ]
+        .into_iter()
+        .collect(),
+        pages: vec![pa.clone(), pb.clone()],
+        root: pa.clone(),
+        active: Some(pa),
+        fold: crate::app::state::scope::CaseFold::host_default(),
+    });
+    assert_eq!(found.elsewhere, vec![(pb.clone(), 1)]);
+    assert_eq!(
+        found.listed,
+        vec![crate::find_similar::SimilarMatch {
+            sheet: pb,
+            item: SelectedItem::new(id, SelectedKind::Symbol),
+            described: "Symbol R7".into(),
+        }]
+    );
+}
+
+/// Mockup row 68: with Whole project, Select lists every match on another
+/// sheet in Messages, each row naming its sheet and object so Show opens it.
+#[test]
+fn select_lists_the_matches_on_other_sheets_in_messages() {
+    let parts = vec![part("R1", "10k", 0.0)];
+    let seed = symbol_item(&parts[0]);
+    let mut app = app_in_a_project(sheet_of(parts, vec![]));
+    let _ = crate::diagnostics::init_logging();
+    open_project_dialog(&mut app, seed);
+    let generation = app.ui_state.find_similar_generation;
+    let other = PathBuf::from("/w/p/other.snxsch");
+    let item = SelectedItem::new(Uuid::now_v7(), SelectedKind::Symbol);
+    let found = crate::find_similar::ProjectMatches {
+        elsewhere: vec![(other.clone(), 1)],
+        listed: vec![crate::find_similar::SimilarMatch {
+            sheet: other.clone(),
+            item,
+            described: "Symbol R9".into(),
+        }],
+        sheets_searched: 2,
+        ..Default::default()
+    };
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ProjectSearched {
+        generation,
+        result: std::sync::Arc::new(Ok(found)),
+    }));
+    let _ = app.update(find_similar_msg(FindSimilarMsg::ApplyPressed));
+    let rows: Vec<_> = crate::diagnostics::recent_entries()
+        .into_iter()
+        .filter(|e| e.object == Some(item))
+        .collect();
+    assert_eq!(rows.len(), 1, "one row per match");
+    assert_eq!(rows[0].document.as_deref(), Some(other.as_path()));
+    let text = rows[0].message.replace(['\u{2068}', '\u{2069}'], "");
+    assert_eq!(text, "Find Similar: Part R9 on other.snxsch");
+}

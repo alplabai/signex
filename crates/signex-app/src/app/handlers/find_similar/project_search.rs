@@ -6,12 +6,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use iced::Task;
-use signex_engine::{SimilarValue, find_similar};
+use signex_engine::{SimilarValue, describe, find_similar};
+use signex_i18n::{ids, t};
 
 use super::super::super::*;
 use crate::app::project_sheets::{self, OpenSheets};
 use crate::app::state::scope::CaseFold;
-use crate::find_similar::{FindSimilarMsg, ProjectMatches};
+use crate::find_similar::{FindSimilarMsg, ProjectMatches, SimilarMatch, shown_seed};
 
 pub(super) struct SearchInputs {
     pub(super) criteria: Vec<SimilarValue>,
@@ -41,10 +42,18 @@ pub(super) fn run_search(inputs: SearchInputs) -> ProjectMatches {
         if inputs.active.as_deref() == Some(path.as_path()) {
             continue;
         }
-        let count = find_similar(sheet, &inputs.criteria).len();
-        if count > 0 {
-            found.elsewhere.push((path, count));
+        let items = find_similar(sheet, &inputs.criteria);
+        if items.is_empty() {
+            continue;
         }
+        found.elsewhere.push((path.clone(), items.len()));
+        found
+            .listed
+            .extend(items.into_iter().map(|item| SimilarMatch {
+                sheet: path.clone(),
+                described: describe(sheet, &item),
+                item,
+            }));
     }
     found
 }
@@ -114,7 +123,9 @@ impl Signex {
         }
     }
 
-    /// The per-sheet counts of a project search, one line each in the log.
+    /// What a project search found elsewhere: the total, then every match
+    /// on its own Messages row, which names its sheet and object so the
+    /// row's Show opens it (mockup row 68).
     pub(super) fn report_other_sheets(&self, found: &ProjectMatches) {
         let dir = self
             .document_state
@@ -132,12 +143,24 @@ impl Signex {
                 found.elsewhere.len()
             ));
         }
-        for (path, count) in &found.elsewhere {
+        let i18n = &self.ui_state.i18n;
+        for listed in &found.listed {
             let shown = dir
                 .as_deref()
-                .and_then(|d| path.strip_prefix(d).ok())
-                .unwrap_or(path);
-            crate::diagnostics::log_info(format!("Find Similar: {count} on {}", shown.display()));
+                .and_then(|d| listed.sheet.strip_prefix(d).ok())
+                .unwrap_or(&listed.sheet);
+            let line = t!(
+                i18n,
+                ids::FIND_SIMILAR_LISTED,
+                "what" => shown_seed(&listed.described, i18n),
+                "sheet" => shown.display().to_string()
+            );
+            crate::diagnostics::log_info_at(
+                module_path!(),
+                line.into_string(),
+                listed.sheet.clone(),
+                Some(listed.item),
+            );
         }
         for (path, why) in &found.unreadable {
             crate::diagnostics::log_warning(format!(

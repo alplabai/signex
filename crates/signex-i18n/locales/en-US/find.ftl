@@ -151,3 +151,12 @@ find-similar-prop-designator-prefix = Designator prefix
 find-similar-prop-net-name = Net name
 # Net, global, hierarchical or power label.
 find-similar-prop-label-type = Label type
+
+# find-messages
+# Find mode footer buttons: step to the result before / after the current one
+# (Shift+Enter / Enter).
+find-previous = Previous
+find-next = Next
+# A Messages row for one match on another sheet; $what names the object as
+# the engine describes it (such as "Symbol R3"), $sheet is the sheet's file.
+find-similar-listed = Find Similar: { $what } on { $sheet }

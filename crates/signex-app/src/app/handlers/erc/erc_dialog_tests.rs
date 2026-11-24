@@ -218,3 +218,28 @@ fn every_machine_rules_notice_has_single_spaces() {
         .expect("a notice on a write problem");
     assert!(!problem.contains("  "), "{problem:?}");
 }
+
+/// Mockup row 84: Run ERC in the dialog closes the dialog and brings the
+/// ERC panel to the front at once, so the run and its results are in view.
+/// A run with the dialog shut (F8) leaves the panels as they are until its
+/// results land.
+#[test]
+fn run_erc_from_the_dialog_closes_it_and_shows_the_erc_panel() {
+    use crate::panels::PanelKind;
+    let mut app = workspace("run");
+    app.document_state.dock.close_panel(PanelKind::Erc);
+    let _ = app.handle_open_erc_dialog();
+    assert!(app.ui_state.erc_dialog_open);
+    assert!(!app.is_panel_open(PanelKind::Erc));
+    let _ = app.update(crate::app::Message::Erc(ErcMsg::Run));
+    assert!(!app.ui_state.erc_dialog_open, "the dialog closed");
+    assert!(app.ui_state.erc_running, "the run started");
+    assert!(app.document_state.dock.is_frontmost(PanelKind::Erc));
+
+    app.document_state.dock.close_panel(PanelKind::Erc);
+    let _ = app.update(crate::app::Message::Erc(ErcMsg::Run));
+    assert!(
+        !app.is_panel_open(PanelKind::Erc),
+        "a run without the dialog shows the panel when its results land"
+    );
+}

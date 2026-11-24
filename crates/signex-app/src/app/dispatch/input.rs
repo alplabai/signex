@@ -168,6 +168,8 @@ enum InputConsumer {
     ComponentsRowMenu,
     /// Enter saves all in Close Project and is swallowed in Remove (#2262).
     ConfirmDefault,
+    /// Enter / Shift+Enter step through the Find results (mockup row 67).
+    FindStep,
     /// F1 toggles the keyboard-shortcuts sheet.
     ShortcutsSheet,
     /// Tab moves the in-place editor along a part's fields (mockup row 65).
@@ -185,7 +187,7 @@ enum InputConsumer {
 /// Order is behaviour. It is ported verbatim from the `if` chain this
 /// module replaced, and it is NOT derived from `PAINT_ORDER` — see the
 /// module docs for the counterexample that rules that out.
-const CLAIM_ORDER: [InputConsumer; 13] = [
+const CLAIM_ORDER: [InputConsumer; 14] = [
     InputConsumer::KeymapRecorder,
     InputConsumer::CommandPalette,
     InputConsumer::RulePreview,
@@ -195,6 +197,7 @@ const CLAIM_ORDER: [InputConsumer; 13] = [
     InputConsumer::DocumentSetup,
     InputConsumer::ComponentsRowMenu,
     InputConsumer::ConfirmDefault,
+    InputConsumer::FindStep,
     InputConsumer::ShortcutsSheet,
     InputConsumer::TextEditTab,
     InputConsumer::SelectionSlots,
@@ -399,6 +402,15 @@ impl Signex {
                 self.claim_components_row_menu(target, window, event)
             }
             InputConsumer::ConfirmDefault => self.claim_confirm_default(target, event),
+            InputConsumer::FindStep => {
+                use crate::app::state::ModalId;
+                // Its own window, or the main window while it has none.
+                let in_dialog = target == InputTarget::DetachedModal(ModalId::FindReplace)
+                    || (target.paints_overlay_stack()
+                        && self.detached_window_of(ModalId::FindReplace).is_none());
+                self.find_step_key(in_dialog, event)
+                    .map_or(Claim::Pass, Claim::consume)
+            }
             InputConsumer::ShortcutsSheet => self.claim_shortcuts_sheet(target, event),
             InputConsumer::TextEditTab => self.claim_text_edit_tab(target, window, event),
             InputConsumer::SelectionSlots => Self::claim_selection_slots(event),
@@ -1002,6 +1014,7 @@ mod tests {
             InputConsumer::DocumentSetup,
             InputConsumer::ComponentsRowMenu,
             InputConsumer::ConfirmDefault,
+            InputConsumer::FindStep,
             InputConsumer::ShortcutsSheet,
             InputConsumer::TextEditTab,
             InputConsumer::SelectionSlots,

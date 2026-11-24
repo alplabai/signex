@@ -260,6 +260,49 @@ fn find_mode_shows_no_replace_controls() {
     assert!(!texts.iter().any(|t| t.contains('\u{2192}')));
 }
 
+/// Mockup row 67: Find mode's footer has Previous and Next, which step
+/// through the results as Find previous / next do; Replace mode has its
+/// own buttons instead, and with no result both are off.
+#[test]
+fn find_mode_steps_with_previous_and_next() {
+    use crate::find_replace::FindReplaceMsg;
+    use crate::layout_probe::messages_on_click;
+    let en = I18n::en_us();
+    let tokens = theme_tokens(ThemeId::GraphiteDark);
+    let window = iced::Size::new(1200.0, 900.0);
+    let mut state = sample();
+    state.replace_mode = false;
+    let texts = |state: &FindReplaceState| -> Vec<String> {
+        crate::layout_probe::lay_out_texts(super::view(state, &tokens, &en), window)
+            .into_iter()
+            .map(|t| plain(t.text))
+            .collect()
+    };
+    let shown = texts(&state);
+    assert!(shown.iter().any(|t| t == "Previous"), "{shown:?}");
+    assert!(shown.iter().any(|t| t == "Next"), "{shown:?}");
+    let next = messages_on_click(super::view(&state, &tokens, &en), window, "Next");
+    assert!(
+        matches!(next.as_slice(), [FindReplaceMsg::NextRequested]),
+        "{next:?}"
+    );
+    let previous = messages_on_click(super::view(&state, &tokens, &en), window, "Previous");
+    assert!(
+        matches!(previous.as_slice(), [FindReplaceMsg::PreviousRequested]),
+        "{previous:?}"
+    );
+    state.matches.clear();
+    state.selected_index = None;
+    let none = messages_on_click(super::view(&state, &tokens, &en), window, "Next");
+    assert!(none.is_empty(), "no result to step to: {none:?}");
+    state = sample();
+    let shown = texts(&state);
+    assert!(
+        !shown.iter().any(|t| t == "Previous" || t == "Next"),
+        "{shown:?}"
+    );
+}
+
 /// #2060: every hit kind reads as the engine's `label` and follows the
 /// language.
 #[test]

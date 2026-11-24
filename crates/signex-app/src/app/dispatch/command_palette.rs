@@ -225,14 +225,12 @@ impl Signex {
         let Some(item) = select else {
             return Task::none();
         };
-        let position = self.document_state.active_engine().and_then(|engine| {
-            engine
-                .document()
-                .symbols
-                .iter()
-                .find(|s| s.uuid == item.uuid)
-                .map(|s| s.position)
-        });
+        // Any kind with a point (a Messages row's Show names labels and
+        // wires too, mockup row 86); a symbol's point is its position.
+        let position = self
+            .document_state
+            .active_engine()
+            .and_then(|engine| engine.document().item_anchor(&item));
         let Some(position) = position else {
             crate::diagnostics::log_info(format!(
                 "Search: that item is no longer on {}.",

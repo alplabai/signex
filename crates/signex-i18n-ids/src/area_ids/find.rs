@@ -81,4 +81,8 @@ define_ids! {
     FIND_SIMILAR_PROP_DESIGNATOR_PREFIX = "find-similar-prop-designator-prefix";
     FIND_SIMILAR_PROP_NET_NAME = "find-similar-prop-net-name";
     FIND_SIMILAR_PROP_LABEL_TYPE = "find-similar-prop-label-type";
+    // find-messages
+    FIND_PREVIOUS = "find-previous";
+    FIND_NEXT = "find-next";
+    FIND_SIMILAR_LISTED = "find-similar-listed";
 }
