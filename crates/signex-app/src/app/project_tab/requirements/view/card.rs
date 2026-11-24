@@ -7,7 +7,9 @@ use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Theme
 use serde_json::Value;
 use signex_i18n::{I18n, UserText, ids, t};
 use signex_types::check::{CheckReport, Finding, Severity};
-use signex_types::project::{Requirement, RequirementEntry, RequirementField, RequirementProblem};
+use signex_types::project::{
+    Requirement, RequirementEntry, RequirementField, RequirementKind, RequirementProblem,
+};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::chips::{ChipMetrics, ChipTone, kind_chip};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
@@ -20,7 +22,7 @@ use super::super::super::table::{SP, TS, problem};
 use super::super::words::{field_words, kind_words, problem_words};
 use super::super::{EntryKey, RequirementsMsg, RequirementsTabState, message};
 use super::summary::summary_words;
-use super::{Choice, Verdict, findings_of, plain, stored_text, verdict};
+use super::{Choice, Verdict, board_size, findings_of, plain, stored_text, verdict};
 use crate::app::Message;
 use crate::app::state::ProjectId;
 use crate::styles::tokens::{self as ink, resolve};
@@ -66,6 +68,9 @@ pub(super) struct Card<'s> {
     pub(super) refused_here: bool,
     pub(super) tab: Option<&'s RequirementsTabState>,
     pub(super) report: Option<&'s CheckReport>,
+    /// The board outline's width and height in mm as the last run measured
+    /// them, for a Board size card.
+    pub(super) measured: Option<(f64, f64)>,
     pub(super) i18n: &'s I18n,
     pub(super) tokens: &'s ThemeTokens,
 }
@@ -161,6 +166,10 @@ impl Card<'_> {
         .spacing(HEADER_GAP)
         .align_y(Alignment::Center);
         if let Some(words) = summary_words(requirement, raw, self.i18n) {
+            info = info.push(text(words).size(TS.caption).color(r.ink3).boxed());
+        }
+        if let (Some(_), Some(measured)) = (board_limit(requirement), self.measured) {
+            let words = board_size::measured_words(measured, self.i18n);
             info = info.push(text(words).size(TS.caption).color(r.ink3).boxed());
         }
         info.push(Space::new().width(Length::Fill).boxed())
@@ -280,6 +289,10 @@ impl Card<'_> {
         for field in RequirementField::of_kind(requirement.kind.name()) {
             cells.push(self.kind_field(*field, raw));
         }
+        let limit = board_limit(requirement);
+        if limit.is_some() {
+            cells.push(board_size::measured_from(self.i18n, self.tokens));
+        }
         let mut col: Column<Element<'a, Message>> = Column::new().spacing(SP.m);
         let mut cells = cells.into_iter();
         let rows = cells.len().div_ceil(GRID_COLUMNS);
@@ -290,6 +303,11 @@ impl Card<'_> {
                 line = line.push(container(cell).width(Length::FillPortion(1)).boxed());
             }
             col = col.push(line.boxed());
+        }
+        if let Some(preview) = limit
+            .and_then(|limit| board_size::preview(limit, self.measured, self.i18n, self.tokens))
+        {
+            col = col.push(preview);
         }
         for finding in findings {
             col = col.push(self.evidence(finding));
@@ -497,6 +515,20 @@ impl Card<'_> {
         let in_box =
             matches!(entry, RequirementEntry::Known { .. }) && tab.problem_field.is_some_and(shows);
         (self.refused_here && !in_box).then_some(refused)
+    }
+}
+
+/// The limit of a Board size requirement; `None` for any other kind.
+fn board_limit(requirement: &Requirement) -> Option<board_size::Limit> {
+    match requirement.kind {
+        RequirementKind::BoardSize {
+            max_width_mm,
+            max_height_mm,
+        } => Some(board_size::Limit {
+            width_mm: max_width_mm,
+            height_mm: max_height_mm,
+        }),
+        _ => None,
     }
 }
 

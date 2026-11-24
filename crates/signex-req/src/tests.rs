@@ -149,6 +149,18 @@ fn a_board_over_the_limit_fails_with_its_size_under_the_board() {
 }
 
 #[test]
+fn the_board_extent_is_the_size_board_size_measures() {
+    assert_eq!(
+        board_extent_mm(&read_board(board(48.5, 36.0, &[]))),
+        Some((48.5, 36.0))
+    );
+    assert_eq!(board_extent_mm(&Board::NotListed), None);
+    let mut open = board(10.0, 10.0, &[]);
+    open.outline.truncate(2);
+    assert_eq!(board_extent_mm(&read_board(open)), None, "no outline");
+}
+
+#[test]
 fn a_board_requirement_with_no_board_is_a_finding_not_a_pass() {
     let report = check_report(&facts(json!([
         {"id": "size", "kind": "board_size", "max_width_mm": 100, "max_height_mm": 80},
