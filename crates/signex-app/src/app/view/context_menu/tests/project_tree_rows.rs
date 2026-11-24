@@ -6,6 +6,7 @@ use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 use signex_widgets::tree_view::{TreeIcon, TreeNode, key_of};
 
 use super::TID;
+use crate::app::view::context_menu::project_tree::kind_inks::KindInks;
 use crate::app::view::context_menu::project_tree::library::library_add_new_entries;
 use crate::app::view::context_menu::project_tree::planned::planned_entries;
 use crate::app::view::context_menu::submenu::add_new_entries;
@@ -15,6 +16,11 @@ use crate::app::{
 use crate::menu_bar::MenuMessage;
 
 const SEP: &str = "---";
+
+/// The file-kind inks of [`TID`]'s tokens.
+fn inks() -> KindInks {
+    KindInks::of(&signex_types::theme::theme_tokens(TID))
+}
 
 /// The text of a row's badge pill, if it has one.
 fn badge_of(item: &DropdownItem<Message>) -> Option<&str> {
@@ -426,7 +432,7 @@ fn the_library_menu_has_one_add_new_launcher() {
 /// rows ran.
 #[test]
 fn the_library_add_new_flyout_creates_component_symbol_and_footprint() {
-    let rows = library_add_new_entries(signex_i18n::I18n::en_us_ref(), TID);
+    let rows = library_add_new_entries(signex_i18n::I18n::en_us_ref(), TID, inks());
     let mut expected = vec!["Component", "Symbol Library"];
     if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
         expected.push("Footprint Library");
@@ -455,6 +461,7 @@ fn the_add_new_to_project_flyout_is_grouped_documents_libraries_planned() {
     let rows = add_new_entries(
         signex_i18n::I18n::en_us_ref(),
         TID,
+        inks(),
         vec!["proj".to_string()],
     );
     let mut expected = vec![
