@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use signex_engine::{Engine, EngineError};
+use signex_i18n_ids::{MessageId, Translatable, ids};
 use signex_types::schematic::SchematicSheet;
 
 use super::SheetInstall;
@@ -43,12 +44,10 @@ impl DocumentState {
                 self.active_path = Some(p);
                 SheetInstall::installed()
             }
-            Err(error) => SheetInstall::failed(Some(Notice::legacy_english(
-                NoticeLevel::Warning,
-                format!(
-                    "{} could not be loaded into the editor ({error}); the sheet already open was kept",
-                    p.display()
-                ),
+            Err(error) => SheetInstall::failed(Some(failed_install(
+                ids::NOTICE_LOAD_NOT_INSTALLED,
+                &p,
+                &error,
             ))),
         }
     }
@@ -69,14 +68,21 @@ impl DocumentState {
             }
             Err(error) => {
                 self.engines.remove(path);
-                SheetInstall::failed(Some(Notice::legacy_english(
-                    NoticeLevel::Warning,
-                    format!(
-                        "[git] restore: {} was restored but its engine could not start: {error}",
-                        path.display()
-                    ),
+                SheetInstall::failed(Some(failed_install(
+                    ids::NOTICE_LOAD_RESTORE_ENGINE_FAILED,
+                    path,
+                    &error,
                 )))
             }
         }
     }
+}
+
+/// The warning for the sheet at `path` whose engine `error` kept from
+/// starting; `line` is a catalog line with `{ $file }` and `{ $error }`.
+fn failed_install(line: MessageId, path: &Path, error: &EngineError) -> Notice {
+    let text = Translatable::new(line)
+        .arg("file", path.display().to_string())
+        .arg("error", error.to_string());
+    Notice::new(NoticeLevel::Warning, text)
 }

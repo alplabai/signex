@@ -1,7 +1,5 @@
 //! Notices an edit raises for the Messages panel, as data (ADR-0006: the core
-//! returns what happened; the host words it through its catalog). The
-//! older notices are still English strings (`Engine::take_warnings`); new
-//! ones are added here, never there.
+//! returns what happened; the host words it through its catalog).
 
 use signex_types::schematic::Point;
 
@@ -19,6 +17,20 @@ pub enum EngineNotice {
     HeldPinsNotJoined { pins: Vec<String> },
     /// Pin ends left with no junction dot because one would merge two nets.
     PinDotRefused { pins: Vec<RefusedPinDot> },
+    /// Connected pins a "keep wires" move left as a plain move, because
+    /// keeping them connected would cross another net ("R1 pin 1").
+    PinsNotKept { pins: Vec<String> },
+}
+
+#[cfg(test)]
+impl EngineNotice {
+    /// The pins of a [`Self::PinsNotKept`]; none for any other notice.
+    pub(crate) fn pins_not_kept(&self) -> &[String] {
+        match self {
+            Self::PinsNotKept { pins } => pins,
+            _ => &[],
+        }
+    }
 }
 
 /// A pin end left without a dot, and the two nets a dot would have merged.

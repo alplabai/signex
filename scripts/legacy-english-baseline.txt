@@ -1,5 +1,5 @@
 # Legacy-English ratchet baseline (scripts/check_legacy_english.sh). Counts may only go down.
 # Regenerate with: bash scripts/check_legacy_english.sh --generate
 command_outcome_disabled=73
-translatable_legacy_english=2
-notice_legacy_english=7
+translatable_legacy_english=1
+notice_legacy_english=0

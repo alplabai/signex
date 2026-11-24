@@ -1501,5 +1501,8 @@ fn the_fallback_sample_really_falls_back_with_a_notice() {
         .expect("move");
     let notices = engine.take_warnings();
     assert_eq!(notices.len(), 1, "{notices:?}");
-    assert!(notices[0].contains("U? pin 1"), "{notices:?}");
+    assert!(
+        notices[0].pins_not_kept().iter().any(|p| p == "U? pin 1"),
+        "{notices:?}"
+    );
 }

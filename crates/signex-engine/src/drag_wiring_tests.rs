@@ -171,9 +171,7 @@ fn a_blocked_straight_leg_is_a_plain_move_with_a_warning() {
     let (mut engine, _) = drag_over(&blockers, false, DragWiringMode::Straight);
     let warnings = engine.take_warnings();
     assert!(
-        warnings
-            .iter()
-            .any(|w| w.contains("could not keep R1 pin 1 connected")),
+        warnings.iter().any(|w| w.pins_not_kept() == ["R1 pin 1"]),
         "{warnings:?}"
     );
     assert_wires(
