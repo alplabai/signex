@@ -8,7 +8,7 @@ use iced::{Alignment, Background, Border, Element, Font, Length, Theme, Widget};
 use signex_engine::SimilarValue;
 use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{Label, SegmentedStyle, raw, segmented, text, tooltip};
+use signex_widgets::{Label, SegmentedStyle, segmented, text, tooltip};
 
 use crate::styles::{
     self, DialogButtonKind, PillTone, Radii, Spacing, TypeScale, chrome_px, dialog_body,
@@ -28,6 +28,28 @@ const MATCH_W: f32 = chrome_px(120.0 * 11.0 / 12.0);
 const SCOPE_LABEL_W: f32 = chrome_px(52.0 * 11.0 / 12.0);
 /// The seed value column is cut to this many characters.
 const VALUE_SHOWN_CHARS: usize = 28;
+
+/// The catalog name of a property row.
+fn property_label(property: signex_engine::SimilarProperty) -> signex_i18n::MessageId {
+    use signex_engine::SimilarProperty as P;
+    match property {
+        P::Kind => ids::FIND_SIMILAR_PROP_KIND,
+        P::Value => ids::PROPERTIES_VALUE,
+        P::Footprint => ids::PROPERTIES_FOOTPRINT,
+        P::LibraryPart => ids::FIND_SIMILAR_PROP_LIBRARY_PART,
+        P::DesignatorPrefix => ids::FIND_SIMILAR_PROP_DESIGNATOR_PREFIX,
+        P::NetName => ids::FIND_SIMILAR_PROP_NET_NAME,
+        P::LabelType => ids::FIND_SIMILAR_PROP_LABEL_TYPE,
+        P::Text => ids::PROPERTIES_TEXT,
+        P::Name => ids::PROPERTIES_NAME,
+        P::FileName => ids::FAB_OUTPUTS_NAME,
+        P::Layer => ids::PCB_PRIM_LAYER,
+        P::Width => ids::PCB_PRIM_WIDTH,
+        P::Size => ids::PROPERTIES_SIZE,
+        P::Drill => ids::BOARD_NET_CLASSES_COL_DRILL,
+        P::Shape => ids::PCB_PRIM_SHAPE,
+    }
+}
 
 /// How a seed value is drawn in its cell.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -138,8 +160,7 @@ fn property_row<'a>(
         move |same| FindSimilarMsg::PropertySet(property, same),
     );
     let line = row![
-        // raw: the property's name comes from signex-engine (#2060).
-        text(raw(v.property.label()))
+        text(t!(i18n, property_label(v.property)))
             .size(TS.body)
             .color(ti(tokens.text))
             .width(PROPERTY_W),
@@ -397,6 +418,19 @@ mod tests {
         // The Kind cell reads Part; matching keeps the engine's value.
         assert_eq!(row_value(&state.values[0], &en), "Part");
         assert_eq!(state.criteria()[0].value, "Symbol");
+    }
+
+    /// #2060: every property name reads as the engine's `label` and
+    /// follows the language.
+    #[test]
+    fn the_property_names_keep_their_english() {
+        let en = I18n::en_us();
+        let xa = I18n::new(&signex_i18n::LanguagePref::Locale("en-XA".to_owned()));
+        for property in SimilarProperty::ALL {
+            let id = property_label(property);
+            assert_eq!(en.message_plain(id, &[]), property.label());
+            assert_ne!(xa.message_plain(id, &[]), property.label());
+        }
     }
 
     #[test]

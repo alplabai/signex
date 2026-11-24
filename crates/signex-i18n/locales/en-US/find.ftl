@@ -129,3 +129,18 @@ paste-array-paste = { $count ->
 }
 # The primary button while the Copies field does not parse.
 paste-array-paste-none = Paste
+
+## Names the engine gives
+# Kind of a match in the results list: a net label on the sheet (a noun,
+# not the Place command).
+find-kind-net-label = Net Label
+# Kind of a match in the results list: a text note on the sheet.
+find-kind-text-note = Text Note
+# Property names in the Find Similar table.
+find-similar-prop-kind = Kind
+find-similar-prop-library-part = Library part
+# The letters a designator starts with, such as "R" for "R12".
+find-similar-prop-designator-prefix = Designator prefix
+find-similar-prop-net-name = Net name
+# Net, global, hierarchical or power label.
+find-similar-prop-label-type = Label type

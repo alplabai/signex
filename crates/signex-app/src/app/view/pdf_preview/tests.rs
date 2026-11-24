@@ -86,6 +86,30 @@ fn click_on_and_off(
     )
 }
 
+/// #2060: every page-size and scale name keeps the English its domain
+/// `Display` gives, comes from the catalog, and follows the language.
+#[test]
+fn the_page_setup_names_keep_their_english() {
+    use super::page_setup::{page_size_label, scale_mode_label};
+    use signex_output::{PageSizeKind, PdfScaleMode};
+
+    let en = I18n::en_us();
+    let xa = I18n::new(&LanguagePref::Locale("en-XA".to_owned()));
+    let check = |id, english: String| {
+        assert_eq!(en.message_plain(id, &[]), english);
+        // The pseudo-locale only changes letters, so `1:1` reads the same.
+        if english.chars().any(char::is_alphabetic) {
+            assert_ne!(xa.message_plain(id, &[]), english);
+        }
+    };
+    for kind in PageSizeKind::ALL {
+        check(page_size_label(kind), kind.to_string());
+    }
+    for mode in PdfScaleMode::ALL {
+        check(scale_mode_label(mode), mode.to_string());
+    }
+}
+
 /// A section title follows the language in force.
 #[test]
 fn the_pdf_text_follows_the_language() {
