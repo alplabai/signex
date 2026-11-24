@@ -5,19 +5,21 @@
 //! Update PCB banner, and the footer. State and rules:
 //! `app/board_reannotate/`.
 
-use iced::widget::{Column, Row, Space, canvas, column, container, row, scrollable};
+use iced::widget::{Column, Space, canvas, column, container, row, scrollable};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_engine::pcb::designators::{BottomSideOrder, Kept, KeptReason, ReannotateOrder};
 use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{CheckboxLabel as _, Label, button, checkbox, segmented, text};
+use signex_widgets::{
+    CheckboxLabel as _, Label, button, checkbox, rich_text, segmented, span, text,
+};
 
 use super::sizes;
 use crate::app::board_reannotate::preview::{PreviewRow, rows};
 use crate::app::{BoardReannotateMsg, BoardReannotateState, Message, ReannotateProblem, Signex};
 use crate::styles::{
-    DialogButtonKind, PillTone, Radii, Spacing, TypeScale, dialog_button, dialog_footer_split,
-    pill_colors, ti, tokens,
+    DialogButtonKind, PillTone, Radii, Spacing, TypeScale, dialog_button, dialog_footer_split, ti,
+    tokens,
 };
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -31,6 +33,8 @@ const DIAGRAM_W: f32 = TS.body * 52.0 / 12.0;
 const DIAGRAM_H: f32 = TS.body * 38.0 / 12.0;
 /// Side of an option card's radio mark.
 const RADIO: f32 = TS.body * 14.0 / 12.0;
+/// Width of the Bottom side column: the mockup's 150 at the 12 px body.
+const BOTTOM_W: f32 = TS.body * 150.0 / 12.0;
 
 fn ra(msg: BoardReannotateMsg) -> Message {
     Message::from(msg)
@@ -146,14 +150,17 @@ fn body<'a>(
             ),
             tokens,
         ));
-    col = col.push(cards.boxed());
-    col = col.push(bottom_side(options.bottom, i18n, tokens));
+    // Bottom side sits in a column beside the Order cards (mockup row 83).
+    col = col.push(
+        row![
+            cards.width(Length::Fill).boxed(),
+            bottom_side(options.bottom, i18n, tokens)
+        ]
+        .spacing(SP.l)
+        .boxed(),
+    );
     col = col.push(preview(state, i18n, tokens));
-    col = col.push(info_banner(
-        t!(i18n, ids::PCB_DESIGNATOR_UPDATE_PCB_NOTE),
-        i18n,
-        tokens,
-    ));
+    col = col.push(info_banner(i18n, tokens));
     col.boxed()
 }
 
@@ -316,10 +323,29 @@ fn walk_diagram<'a>(order: ReannotateOrder, tokens: &ThemeTokens) -> Element<'a,
         lane: tokens::resolve(tokens).ink3,
         accent: tokens::accent(tokens),
     });
-    diagram
-        .width(Length::Fixed(DIAGRAM_W))
-        .height(Length::Fixed(DIAGRAM_H))
-        .boxed()
+    container(
+        diagram
+            .width(Length::Fixed(DIAGRAM_W))
+            .height(Length::Fixed(DIAGRAM_H)),
+    )
+    .style(diagram_tile(tokens))
+    .boxed()
+}
+
+/// The walk diagram's tile: the field fill in a hairline border with the
+/// small radius (mockup row 83).
+fn diagram_tile(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
+    let (fill, edge) = (tokens::resolve(tokens).field, ti(tokens.border));
+    move |_: &Theme| container::Style {
+        background: Some(Background::Color(fill)),
+        border: Border {
+            width: 1.0,
+            color: edge,
+            radius: Radii::GRAPHITE.small.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    }
 }
 
 /// Bottom side: After the top side / With the top side.
@@ -340,16 +366,17 @@ fn bottom_side<'a>(
             t!(i18n, ids::PCB_REANNOTATE_BOTTOM_WITH).into(),
         ),
     ];
-    let control = segmented(options, bottom, style, |picked| {
+    // The column is narrower than both segments side by side, so the
+    // control stacks them, each the column's width.
+    let control = segmented(options, bottom, style.fill_width(true), |picked| {
         ra(BoardReannotateMsg::BottomPicked(picked))
     });
-    row![
+    column![
         section_label(t!(i18n, ids::PCB_REANNOTATE_BOTTOM), tokens),
-        Space::new().width(Length::Fill),
         control,
     ]
-    .spacing(SP.m)
-    .align_y(Alignment::Center)
+    .spacing(SP.s)
+    .width(Length::Fixed(BOTTOM_W))
     .boxed()
 }
 
@@ -459,39 +486,44 @@ fn preview<'a>(
         .boxed()
 }
 
-/// The info banner naming Back Annotate as the follow-up step.
-fn info_banner<'a>(words: Localized, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
-    let (fill, ink) = pill_colors(tokens, PillTone::Info);
-    let content: Row<Element<'a, Message>> = Row::new()
-        .spacing(SP.s)
-        .align_y(Alignment::Center)
-        .push(
-            text(t!(i18n, ids::CHANGE_ROW_ICON_INFO))
-                .size(TS.body)
-                .color(ink)
-                .boxed(),
-        )
-        .push(
-            text(words)
-                .size(TS.body)
-                .color(ti(tokens.text))
-                .width(Length::Fill)
-                .boxed(),
-        );
-    container(content)
-        .padding([SP.s, SP.m])
-        .width(Length::Fill)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(fill)),
-            border: Border {
-                width: 1.0,
-                color: ink,
-                radius: Radii::GRAPHITE.card.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
+/// The info banner naming Back Annotate as the follow-up step: the info
+/// glyph and the sentence, the command in medium weight, on the soft info
+/// fill with no outline (mockup row 83).
+fn info_banner<'a>(i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
+    let ink = ti(tokens.text);
+    let spans: Vec<_> = banner_runs(i18n)
+        .into_iter()
+        .map(|(run, strong)| {
+            // Runs of the already rendered catalog sentence: shown as they are.
+            let s = span::<()>(UserText::new(run)).color(ink);
+            if strong {
+                s.font(super::board_output::kit::medium())
+            } else {
+                s
+            }
         })
-        .boxed()
+        .collect();
+    let words = rich_text::<(), Message, Theme>(spans).size(TS.body).boxed();
+    super::board_output::kit::banner(PillTone::Info, words, None, tokens)
+}
+
+/// The banner sentence as runs, the command's name flagged for emphasis.
+/// Fluent wraps the name in bidi isolation marks, which locate it.
+fn banner_runs(i18n: &I18n) -> Vec<(String, bool)> {
+    let command = t!(i18n, ids::PCB_REANNOTATE_BACK_ANNOTATE).into_string();
+    let sentence =
+        t!(i18n, ids::PCB_DESIGNATOR_UPDATE_PCB_NOTE, "command" => command.as_str()).into_string();
+    let split = sentence
+        .split_once('\u{2068}')
+        .and_then(|(before, rest)| rest.split_once('\u{2069}').map(|(n, a)| (before, n, a)));
+    let Some((before, name, after)) = split else {
+        return vec![(sentence, false)];
+    };
+    [(before, false), (name, true), (after, false)]
+        .into_iter()
+        .filter(|(run, _)| !run.is_empty())
+        .map(|(run, strong)| (run.to_owned(), strong))
+        .collect()
 }
 
 fn problem_text(problem: &ReannotateProblem, i18n: &I18n) -> Localized {
@@ -562,5 +594,104 @@ mod tests {
             !shown.iter().any(|t| t == "Positional Re-Annotate"),
             "{shown:?}"
         );
+    }
+
+    fn open_dialog() -> Signex {
+        let (mut app, _boot) = Signex::new();
+        app.ui_state.i18n = signex_i18n::I18n::en_us();
+        app.ui_state.board_reannotate = Some(BoardReannotateState {
+            board: "dcdc-4ch.snxpcb".into(),
+            board_name: "dcdc-4ch.snxpcb".into(),
+            options: ReannotateOptions::default(),
+            plan: ReannotatePlan::default(),
+            revision: 1,
+            problem: None,
+            in_order: Vec::new(),
+            show_in_order: false,
+        });
+        app
+    }
+
+    /// Mockup row 83: Bottom side is a column beside the Order cards, its
+    /// heading level with Order and its two choices stacked, above the
+    /// preview.
+    #[test]
+    fn bottom_side_sits_beside_the_order_cards_with_its_choices_stacked() {
+        use crate::layout_probe::{find, lay_out_texts};
+        let app = open_dialog();
+        let texts = lay_out_texts(app.view_board_reannotate_card(), WINDOW);
+        let at = |label: &str| find(&texts, label).bounds;
+        let (order, card) = (at("Order"), at("By X, then by Y"));
+        let (bottom, after, with) = (
+            at("Bottom side"),
+            at("After the top side"),
+            at("With the top side"),
+        );
+        assert!(bottom.x > card.x + card.width, "{bottom:?} {card:?}");
+        assert!((bottom.y - order.y).abs() < 2.0, "{bottom:?} {order:?}");
+        assert!(with.y >= after.y + after.height, "{after:?} {with:?}");
+        assert!(at("Preview").y > with.y + with.height, "{with:?}");
+    }
+
+    /// Mockup row 83: the banner names Back Annotate in its own run, the
+    /// one drawn in medium weight.
+    #[test]
+    fn the_banner_sets_back_annotate_apart() {
+        let i18n = signex_i18n::I18n::en_us();
+        assert_eq!(
+            super::banner_runs(&i18n),
+            vec![
+                (
+                    "Update PCB renames parts back to the schematic's designators; use ".into(),
+                    false
+                ),
+                ("Back Annotate".into(), true),
+                (" to keep them.".into(), false),
+            ]
+        );
+    }
+
+    /// Mockup row 83: the banner is the soft info fill with no outline and
+    /// an info glyph, not the text glyph the font may lack.
+    #[test]
+    fn the_banner_is_a_soft_fill_with_no_outline() {
+        use crate::styles::tokens::composite_over;
+        use signex_types::theme::{ThemeId, theme_tokens};
+        let i18n = signex_i18n::I18n::en_us();
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let tokens = theme_tokens(id);
+            let shown =
+                crate::layout_probe::lay_out_texts(super::info_banner(&i18n, &tokens), WINDOW);
+            assert!(!shown.iter().any(|t| t.text == "\u{24D8}"), "{shown:?}");
+            let window = iced::Size::new(560.0, 200.0);
+            let size = crate::layout_probe::root_size(super::info_banner(&i18n, &tokens), window);
+            let pixels =
+                crate::layout_probe::draw_pixels(super::info_banner(&i18n, &tokens), window);
+            let at = (size.height / 2.0) as usize * window.width as usize * 4;
+            let fill = crate::styles::pill_colors(&tokens, crate::styles::PillTone::Info).0;
+            let want = composite_over(fill, iced::Color::BLACK);
+            let channel = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+            let want = [channel(want.r), channel(want.g), channel(want.b)];
+            let drawn = &pixels[at..at + 3];
+            assert!(
+                drawn.iter().zip(want).all(|(d, w)| d.abs_diff(w) <= 3),
+                "{id:?}: left edge {drawn:?}, fill {want:?}"
+            );
+        }
+    }
+
+    /// Mockup row 83: each walk diagram sits in a tile, the field fill in a
+    /// hairline border.
+    #[test]
+    fn the_walk_diagram_sits_in_a_bordered_tile() {
+        use signex_types::theme::{ThemeId, theme_tokens};
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let tokens = theme_tokens(id);
+            let style = super::diagram_tile(&tokens)(&iced::Theme::Light);
+            let field = crate::styles::tokens::resolve(&tokens).field;
+            assert_eq!(style.background, Some(iced::Background::Color(field)));
+            assert_eq!(style.border.width, 1.0);
+            assert_eq!(style.border.color, crate::styles::ti(tokens.border));
+        }
     }
 }

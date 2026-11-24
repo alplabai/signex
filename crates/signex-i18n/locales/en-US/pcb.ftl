@@ -421,9 +421,9 @@ pcb-reannotate-stale = The board changed, so the list was made again. Check it, 
 pcb-reannotate-refused = Nothing was changed: { $why }
 pcb-reannotate-cancel = Cancel
 pcb-reannotate-execute = Execute
-# Under the Designator field and in the Re-Annotate dialog: the board's
-# designators are not carried to the schematic by Update PCB.
-pcb-designator-update-pcb-note = Update PCB renames parts back to the schematic's designators; use Back Annotate to keep them.
+# The Re-Annotate dialog's banner: the board's designators are not carried
+# to the schematic by Update PCB. $command is pcb-reannotate-back-annotate.
+pcb-designator-update-pcb-note = Update PCB renames parts back to the schematic's designators; use { $command } to keep them.
 # $designator is the kept footprint's designator.
 pcb-reannotate-kept-unlinked = { $designator } is not linked to a schematic part, so it keeps its designator.
 # Messages panel lines. $what is the field (Designator or Value), $why the reason.
@@ -612,3 +612,6 @@ pcb-reannotate-show-in-order = Show already in order
 pcb-reannotate-arrow = →
 pcb-reannotate-footer-note = One undo step; save the board to keep it.
 pcb-reannotate-execute-count = Execute { $count }
+# chrome-copy-help
+# The command the Re-Annotate banner names, in medium weight (mockup row 83).
+pcb-reannotate-back-annotate = Back Annotate
