@@ -343,6 +343,26 @@ fn a_higher_priority_pour_fills_first_and_the_other_keeps_clear_of_it() {
     assert_eq!(fill_bounds(&b, 1).min.x, 0, "the higher one is whole");
 }
 
+/// Mockup row 178: the fill order the Polygon Manager shows is the one the
+/// fill uses: a higher priority first, then board order, no shelved pour
+/// and no zone that is not a pour.
+#[test]
+fn the_pour_fill_order_is_priority_then_board_order_without_shelved_pours() {
+    let mut b = board(Vec::new());
+    for n in 2..=4 {
+        b.zones
+            .push(zone(n, 2, POUR_FILL, "TopCopper", (0.0, 0.0, 1.0, 1.0)));
+    }
+    b.zones
+        .push(zone(5, 2, "solid", "TopCopper", (0.0, 0.0, 1.0, 1.0)));
+    assert_eq!(pour_fill_order(&b), [0, 1, 2, 3]);
+    b.zones[2].priority = 4;
+    b.zones[3].priority = 1;
+    assert_eq!(pour_fill_order(&b), [2, 3, 0, 1]);
+    b.zones[3].shelved = true;
+    assert_eq!(pour_fill_order(&b), [2, 0, 1]);
+}
+
 /// #2216: pours of one net may overlap; neither clears the other.
 #[test]
 fn pours_of_one_net_overlap() {
