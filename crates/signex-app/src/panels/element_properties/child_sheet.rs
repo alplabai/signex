@@ -92,16 +92,23 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
     ));
     col = col.push(style_section(ctx, sheet, palette));
     col = col.push(match repeat_view {
-        // Repeat and Channel naming (#1279). Entries are per channel on a
-        // repeated sheet and name + direction on one sheet.
+        // Repeat and Channel naming (#1279), then the per-channel Entries
+        // (mockup row 151).
         Some(view) if shows_channels(view) => {
             let entries = super::child_sheet_repeat::entries(ctx, view);
             super::child_sheet_repeat::sections(ctx, view, entries)
         }
-        Some(view) => {
-            let entries = entries_section(ctx, sheet, muted);
-            super::child_sheet_repeat::sections(ctx, view, entries)
-        }
+        // One sheet keeps the row 46 order, Style then Entries, so the
+        // entries are not pushed under the switched-off Repeat (#2827).
+        Some(view) => Column::new()
+            .width(Length::Fill)
+            .push(entries_section(ctx, sheet, muted))
+            .push(super::child_sheet_repeat::sections(
+                ctx,
+                view,
+                Space::new().boxed(),
+            ))
+            .boxed(),
         None => entries_section(ctx, sheet, muted),
     });
     col.boxed()
@@ -346,13 +353,14 @@ fn style_section<'a>(
                 /* is_border */ false,
                 i18n,
             );
+            // Mockup row 46: a small ghost action under the fields.
             let reset = container(
                 button(text(t!(i18n, ids::PANELS_PROPERTIES_RESET_STYLE)).size(TS.caption))
-                    .padding([SP.s, SP.m])
+                    .padding([SP.xs, SP.m])
                     .on_press(PanelMsg::ResetChildSheetStyle(id))
-                    .style(form_look::option_tile(false)),
+                    .style(form_look::ghost_button),
             )
-            .padding([6.0, SP.m])
+            .padding([SP.s, SP.m])
             .width(Length::Fill)
             .boxed();
             Column::new()
@@ -572,9 +580,10 @@ fn buffered_or(buf: &Option<(uuid::Uuid, String)>, id: uuid::Uuid, live: &str) -
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
     use crate::panels::SheetInfo;
+    use signex_types::schematic::SelectedKind as Kind;
 
     /// The comparison key of `path`, on a volume that ignores case.
     fn key(path: &str) -> String {
@@ -651,6 +660,157 @@ mod tests {
             open_sheet_press(false),
             Some(PanelMsg::CommandButtonPressed(OPEN_SHEET_COMMAND))
         ));
+    }
+
+    /// A sheet holding the sheet symbol `name` at (20, 20), 40 x 30 mm, on
+    /// `child.snxsch`, with an input entry on its left edge and an output
+    /// on its right.
+    fn sheet_with_symbol(name: &str) -> (signex_types::schematic::SchematicSheet, uuid::Uuid) {
+        use signex_types::schematic::{Point, SheetPin};
+        let pin = |name: &str, direction: &str, x: f64| SheetPin {
+            uuid: uuid::Uuid::now_v7(),
+            name: name.into(),
+            direction: direction.into(),
+            position: Point::new(x, 30.0),
+            rotation: 0.0,
+            auto_generated: false,
+            user_moved: false,
+        };
+        let symbol = ChildSheet {
+            uuid: uuid::Uuid::now_v7(),
+            name: name.into(),
+            filename: "child.snxsch".into(),
+            position: Point::new(20.0, 20.0),
+            size: (40.0, 30.0),
+            stroke_width: 0.0,
+            fill: Default::default(),
+            stroke_color: None,
+            fill_color: None,
+            fields_autoplaced: false,
+            pins: vec![pin("VIN", "input", 20.0), pin("PG", "output", 60.0)],
+            instances: Vec::new(),
+        };
+        let id = symbol.uuid;
+        let sheet = signex_types::schematic::SchematicSheet {
+            paper_size: "A4".into(),
+            child_sheets: vec![symbol],
+            ..Default::default()
+        };
+        (sheet, id)
+    }
+
+    /// An app showing `sheet` in its one tab, snapping off so a click lands
+    /// where it is aimed.
+    pub(in crate::panels::element_properties) fn app_showing(
+        sheet: signex_types::schematic::SchematicSheet,
+    ) -> crate::app::Signex {
+        let (mut app, _task) = crate::app::Signex::new();
+        app.ui_state.first_run_tour_open = false;
+        app.ui_state.snap_enabled = false;
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "props".into(),
+            path: std::path::PathBuf::from("props.snxsch"),
+            cached_document: None,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        app.document_state.active_tab = app.document_state.tabs.len() - 1;
+        app.apply_loaded_schematic(Some(sheet), false, false, false);
+        app
+    }
+
+    /// A plain click on the canvas at `(x, y)` mm, the way a user selects.
+    pub(in crate::panels::element_properties) fn click(
+        app: &mut crate::app::Signex,
+        (x, y): (f64, f64),
+    ) {
+        let _task = app.update(crate::app::Message::CanvasEvent(
+            crate::canvas::CanvasEvent::Clicked {
+                world_x: x,
+                world_y: y,
+            },
+        ));
+    }
+
+    /// The texts of the laid-out Properties view, top to bottom, with the
+    /// bidi isolation marks of interpolated values removed.
+    pub(in crate::panels::element_properties) fn properties_texts(
+        app: &crate::app::Signex,
+    ) -> Vec<(String, f32)> {
+        let ctx = &app.document_state.panel_ctx;
+        let view = super::super::selected::view_selected_element_properties(
+            ctx,
+            Color::WHITE,
+            Color::WHITE,
+            Color::BLACK,
+        );
+        let mut texts: Vec<(String, f32)> =
+            crate::layout_probe::lay_out_texts(view, iced::Size::new(320.0, 6000.0))
+                .into_iter()
+                .map(|t| (t.text.replace(['\u{2068}', '\u{2069}'], ""), t.bounds.y))
+                .collect();
+        texts.sort_by(|a, b| a.1.total_cmp(&b.1));
+        texts
+    }
+
+    /// The top of the first text that reads `want`, ignoring case.
+    fn top_of(texts: &[(String, f32)], want: &str) -> Option<f32> {
+        (texts.iter())
+            .find(|(t, _)| t.eq_ignore_ascii_case(want))
+            .map(|(_, y)| *y)
+    }
+
+    /// #2800, mockup rows 46 and 151: clicking a repeated sheet symbol on
+    /// the canvas reaches the selection refresh, so Properties is headed
+    /// Sheet Symbol, the Name row reads Designator, the stacked view of four
+    /// channels is shown and the Repeat and Channel naming sections are there.
+    #[test]
+    fn clicking_a_repeated_sheet_symbol_shows_its_multi_channel_properties() {
+        let (sheet, id) = sheet_with_symbol("Repeat(CH, 1, 4)");
+        let mut app = app_showing(sheet);
+        click(&mut app, (40.0, 35.0));
+        let ctx = &app.document_state.panel_ctx;
+        assert_eq!(ctx.selected_kind, Some(Kind::ChildSheet));
+        let view = (ctx.compiled_design.sheet_symbol.as_ref()).expect("the multi-channel view");
+        assert_eq!(view.sheet_symbol, id);
+        assert_eq!(view.repeat.as_ref().map(|r| r.count()), Some(4));
+        let texts = properties_texts(&app);
+        let shown: Vec<&str> = texts.iter().map(|(t, _)| t.as_str()).collect();
+        for want in [
+            "Sheet Symbol",
+            "Designator",
+            "Repeat",
+            "Channel name",
+            "Channel naming",
+            "Designators",
+            "Local nets",
+            "child.snxsch · repeated ×4",
+        ] {
+            assert!(top_of(&texts, want).is_some(), "lacks {want}: {shown:?}");
+        }
+        assert!(top_of(&texts, "Name").is_none(), "{shown:?}");
+    }
+
+    /// #2827, mockup row 46: one sheet keeps Style then Entries, with the
+    /// switched-off Repeat after them, and its Name row reads Name.
+    #[test]
+    fn one_sheet_lists_its_entries_before_the_repeat_switch() {
+        let (sheet, _) = sheet_with_symbol("Power");
+        let mut app = app_showing(sheet);
+        click(&mut app, (40.0, 35.0));
+        let texts = properties_texts(&app);
+        let shown: Vec<&str> = texts.iter().map(|(t, _)| t.as_str()).collect();
+        let at =
+            |want: &str| top_of(&texts, want).unwrap_or_else(|| panic!("lacks {want}: {shown:?}"));
+        let (style, entries, repeat) = (at("Style"), at("Entries"), at("Repeat"));
+        assert!(style < entries && entries < repeat, "{shown:?}");
+        for entry in ["VIN", "PG", "Input", "Output"] {
+            assert!(
+                at(entry) > entries && at(entry) < repeat,
+                "{entry}: {shown:?}"
+            );
+        }
+        assert!(top_of(&texts, "Name").is_some(), "{shown:?}");
     }
 
     #[test]

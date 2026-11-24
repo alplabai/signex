@@ -346,6 +346,51 @@ mod tests {
         assert!(height(&"long words ".repeat(200)) <= cap);
     }
 
+    /// #2800, mockup row 47: the first click on a text note seeds its Text
+    /// box, so Properties shows the multi-line box at once, not the one-line
+    /// field kept for a box not yet seeded.
+    #[test]
+    fn the_first_click_on_a_note_shows_the_multi_line_box() {
+        use super::super::child_sheet::tests::{app_showing, click};
+        let stored = "Place C14 near U3\nKeep the SW node small";
+        let note = signex_types::schematic::TextNote {
+            uuid: uuid::Uuid::now_v7(),
+            text: stored.into(),
+            position: signex_types::schematic::Point::new(60.0, 60.0),
+            rotation: 0.0,
+            font_size: 2.54,
+            font_family: None,
+            justify_h: HAlign::Center,
+            justify_v: VAlign::Center,
+            locked: false,
+        };
+        let id = note.uuid;
+        let sheet = signex_types::schematic::SchematicSheet {
+            paper_size: "A4".into(),
+            text_notes: vec![note],
+            ..Default::default()
+        };
+        let mut app = app_showing(sheet);
+        click(&mut app, (60.0, 60.0));
+        let ctx = &app.document_state.panel_ctx;
+        assert_eq!(ctx.selected_kind, Some(SelectedKind::TextNote));
+        let draft = ctx.placed.note.as_ref().expect("the Text box is seeded");
+        assert_eq!(draft.item, SelectedItem::new(id, SelectedKind::TextNote));
+        assert_eq!(draft.content.text(), stored);
+        assert_eq!(draft.visible_lines(), 2);
+        let view = super::super::selected::view_selected_element_properties(
+            ctx,
+            Color::WHITE,
+            Color::WHITE,
+            Color::BLACK,
+        );
+        let inputs = crate::layout_probe::lay_out_inputs(view, iced::Size::new(320.0, 4000.0));
+        assert!(
+            !inputs.iter().any(|i| i.text == stored),
+            "no one-line Text field: {inputs:?}"
+        );
+    }
+
     #[test]
     fn rotation_shows_the_nearest_quarter_turn() {
         assert_eq!(nearest_quarter_turn(0.0), 0);
