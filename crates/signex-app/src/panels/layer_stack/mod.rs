@@ -4,11 +4,18 @@
 //! [`LayerStackMsg`] the app turns into one `SetLayerStack` board step.
 
 mod drills;
+mod finish;
+mod materials;
 mod page;
 mod section;
 mod table;
 mod toolbar;
 
+pub use finish::{FinishFacts, FinishMsg};
+pub use materials::{
+    MaterialDraft, MaterialField, MaterialPick, MaterialSource, MaterialsFacts, MaterialsMsg,
+    UserLibrary,
+};
 pub use page::view;
 
 use std::collections::BTreeMap;
@@ -96,22 +103,28 @@ impl StackUnit {
 }
 
 /// The sub-tab in view. The other sub-tabs of mockup row 105 are not drawn:
-/// Finish, Materials and Templates are #2798; Impedance and Back Drill wait
-/// until after the release (DECISIONS, 2026-11-22).
+/// Templates is #2798; Impedance and Back Drill wait until after the
+/// release (DECISIONS, 2026-11-22).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum StackSubTab {
     #[default]
     Stack,
     Drills,
+    /// The material library (mockup row 177).
+    Materials,
+    /// Mask, silkscreen, surface finish and board materials (mockup row 176).
+    Finish,
 }
 
 impl StackSubTab {
-    pub const ALL: [Self; 2] = [Self::Stack, Self::Drills];
+    pub const ALL: [Self; 4] = [Self::Stack, Self::Drills, Self::Materials, Self::Finish];
 
     fn message(self) -> MessageId {
         match self {
             Self::Stack => ids::PCB_STACK_SUB_STACK,
             Self::Drills => ids::PCB_STACK_SUB_DRILLS,
+            Self::Materials => ids::PCB_STACK_SUB_MATERIALS,
+            Self::Finish => ids::PCB_STACK_SUB_FINISH,
         }
     }
 }
@@ -173,6 +186,10 @@ pub enum LayerStackMsg {
         board: PathBuf,
         tab: StackSubTab,
     },
+    /// An event of the Materials sub-tab.
+    Materials(MaterialsMsg),
+    /// An event of the Finish sub-tab.
+    Finish(FinishMsg),
 }
 
 /// One row of the Drill pairs table.
@@ -238,6 +255,10 @@ pub struct LayerStackFacts {
     pub copper_use: Vec<Option<CopperUse>>,
     /// The project's fab profile, as named; `None` when it names none.
     pub fab_profile: Option<String>,
+    /// The Materials sub-tab.
+    pub materials: MaterialsFacts,
+    /// The Finish sub-tab.
+    pub finish: FinishFacts,
 }
 
 /// A copper kind in a row's Type dropdown.
@@ -341,6 +362,7 @@ mod tests {
                 .into_iter()
                 .map(signex_types::pcb_stack::StackLayer::new)
                 .collect(),
+            finish: None,
         }
     }
 

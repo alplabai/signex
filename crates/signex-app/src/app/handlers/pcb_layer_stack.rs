@@ -4,11 +4,14 @@
 //! (`signex_engine::pcb::stack_edit`) and the result goes to the board as one
 //! `SetLayerStack`. A refusal changes nothing and says why in Messages.
 //! `set_layer_stack` (an agent, the CLI) runs the same step with a whole
-//! stack.
+//! stack. The Materials and Finish sub-tabs (mockup rows 176 and 177) edit
+//! the stack the same way; the user material library is read and written
+//! in tasks, off the update thread.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use iced::Task;
 use signex_engine::pcb::drill_pairs::{drill_pairs, via_type_counts};
 use signex_engine::pcb::stack_edit::{StackEdit, edit_stack};
 use signex_engine::pcb::via_types::{ViaTypeDef, via_types};
@@ -22,13 +25,18 @@ use signex_types::project::{ProfileRef, resolve_profile};
 use crate::app::new_project::profile_name_id;
 use crate::app::state::ProjectId;
 use crate::app::state::pcb_edit::CheckedStep;
-use crate::app::{Signex, TabKind};
+use crate::app::{Message, Signex, TabKind};
 use crate::panels::layer_stack::{
-    CopperUse, DrillPairRow, StackSubTab, StackUnit, ViaTypeRow, kind_label,
+    CopperUse, DrillPairRow, FinishFacts, MaterialDraft, MaterialPick, StackSubTab, StackUnit,
+    UserLibrary, ViaTypeRow, kind_label,
 };
 use crate::panels::pcb_primitive_properties::parse_number;
 use crate::panels::{LayerStackFacts, LayerStackMsg, StackField};
 use crate::pcb_canvas::layer_style;
+
+mod materials;
+
+use materials::materials_facts;
 
 /// The manager's own state: the selected row, unapplied cell text and the
 /// sub-tab, for the board they were made on, and the unit lengths read in.
@@ -42,24 +50,67 @@ pub struct LayerStackPanel {
     pub name_draft: Option<String>,
     pub unit: StackUnit,
     pub sub_tab: StackSubTab,
+    /// The user material library, read once; not tied to a board.
+    pub library: UserLibrary,
+    pub library_write: LibraryWrite,
+    /// The library entry picked in the Materials sub-tab.
+    pub material: Option<MaterialPick>,
+    pub material_draft: MaterialDraft,
+    /// The mask thickness over laminate as typed, until Enter.
+    pub finish_draft: Option<String>,
+}
+
+/// Writes of the user library, one at a time: an edit made while one is
+/// running is owed and written when it ends, so the file ends up as the
+/// library is.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct LibraryWrite {
+    pub running: bool,
+    pub owed: bool,
+    /// Why the last write failed.
+    pub error: Option<String>,
 }
 
 impl LayerStackPanel {
     /// Start over for `board` when the state was made for another one. The
-    /// unit is the person's choice and carries over.
+    /// unit and the user library are the person's and carry over.
     fn follow(&mut self, board: &Path) {
         if self.board.as_deref() != Some(board) {
             *self = Self {
                 board: Some(board.to_path_buf()),
                 unit: self.unit,
+                library: std::mem::take(&mut self.library),
+                library_write: std::mem::take(&mut self.library_write),
                 ..Self::default()
             };
         }
     }
+
+    fn is_for(&self, board: &Path) -> bool {
+        self.board.as_deref() == Some(board)
+    }
 }
 
 impl Signex {
-    pub(crate) fn handle_layer_stack(&mut self, msg: &LayerStackMsg) {
+    /// One Layer Stack event; reading or writing the user material library
+    /// comes back as a task.
+    pub(crate) fn handle_layer_stack(&mut self, msg: &LayerStackMsg) -> Task<Message> {
+        let task = match msg {
+            LayerStackMsg::Materials(m) => self.handle_stack_materials(m),
+            LayerStackMsg::Finish(f) => {
+                self.handle_stack_finish(f);
+                Task::none()
+            }
+            table => {
+                self.handle_stack_table(table);
+                self.read_user_library_when_shown()
+            }
+        };
+        self.document_state.panel_ctx.layer_stack = self.layer_stack_facts();
+        task
+    }
+
+    fn handle_stack_table(&mut self, msg: &LayerStackMsg) {
         use LayerStackMsg as M;
         match msg {
             M::RowSelected { board, row } => {
@@ -136,14 +187,16 @@ impl Signex {
                 panel
                     .drafts
                     .retain(|(_, field), _| *field != StackField::Thickness);
+                panel.finish_draft = None;
             }
             M::SubTabPicked { board, tab } => {
                 let panel = &mut self.interaction_state.pcb_layer_stack;
                 panel.follow(board);
                 panel.sub_tab = *tab;
             }
+            // Routed by `handle_layer_stack`.
+            M::Materials(_) | M::Finish(_) => {}
         }
-        self.document_state.panel_ctx.layer_stack = self.layer_stack_facts();
     }
 
     fn selected_stack_row(&self, board: &Path) -> Option<usize> {
@@ -317,6 +370,12 @@ impl Signex {
             has_project: tab.project_id.is_some(),
             copper_use: copper_use(board, &stack),
             fab_profile: tab.project_id.and_then(|id| self.fab_profile_name(id)),
+            materials: materials_facts(panel, ours),
+            finish: FinishFacts {
+                finish: stack.shown_finish(),
+                stored: stack.finish.is_some(),
+                draft: panel.finish_draft.clone().filter(|_| ours),
+            },
             names,
             stack,
             board: path,

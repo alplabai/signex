@@ -2,8 +2,11 @@
 //! the stack. The result goes to the board as one
 //! [`BoardCommand::SetLayerStack`](super::BoardCommand::SetLayerStack), which
 //! checks what the board can hold (copper count, layers in use). Pure.
+//! The Materials and Finish sub-tabs (mockup rows 176 and 177) edit through
+//! here too, so a material pick or a finish change is one undo step.
 
-use signex_types::pcb_stack::{LayerStack, StackLayer, StackLayerKind};
+use signex_types::material_library::Material;
+use signex_types::pcb_stack::{BoardFinish, LayerStack, StackLayer, StackLayerKind};
 
 /// One change to the table, by row index (top row 0).
 #[derive(Debug, Clone, PartialEq)]
@@ -49,6 +52,16 @@ pub enum StackEdit {
         row: usize,
         oz: f64,
     },
+    /// Copy a library material's values into a row it fits; the board keeps
+    /// the copy, not a link to the library.
+    UseMaterial {
+        row: usize,
+        material: Material,
+    },
+    /// Replace the board's mask, silkscreen and surface finish.
+    SetFinish {
+        finish: BoardFinish,
+    },
 }
 
 /// Why an edit was not made. The stack is unchanged.
@@ -64,6 +77,8 @@ pub enum StackEditRefusal {
     BadNumber,
     #[error("the row is already at the end of the stack")]
     AtEdge,
+    #[error("this material does not fit the selected layer")]
+    MaterialDoesNotFit,
 }
 
 /// `stack` with `edit` made.
@@ -112,8 +127,31 @@ pub fn edit_stack(stack: &LayerStack, edit: &StackEdit) -> Result<LayerStack, St
         StackEdit::SetCopperWeight { row, oz } => {
             rows[row_of(*row)?].copper_weight_oz = number(*oz)?;
         }
+        StackEdit::UseMaterial { row, material } => {
+            use_material(&mut rows[row_of(*row)?], material)?
+        }
+        StackEdit::SetFinish { finish } => out.finish = Some(checked_finish(finish)?),
     }
     Ok(out)
+}
+
+fn checked_finish(finish: &BoardFinish) -> Result<BoardFinish, StackEditRefusal> {
+    if finish.numbers_valid() {
+        Ok(finish.clone())
+    } else {
+        Err(StackEditRefusal::BadNumber)
+    }
+}
+
+fn use_material(row: &mut StackLayer, material: &Material) -> Result<(), StackEditRefusal> {
+    if !material.kind.fits(row.kind) {
+        return Err(StackEditRefusal::MaterialDoesNotFit);
+    }
+    if material.fault().is_some() {
+        return Err(StackEditRefusal::BadNumber);
+    }
+    material.copy_into(row);
+    Ok(())
 }
 
 fn number(value: f64) -> Result<f64, StackEditRefusal> {
@@ -267,5 +305,102 @@ mod tests {
         assert_eq!(edit_stack(&stack, &top), Err(StackEditRefusal::AtEdge));
         let gone = StackEdit::Remove { row: 99 };
         assert_eq!(edit_stack(&stack, &gone), Err(StackEditRefusal::NoRow(99)));
+    }
+
+    fn library(name: &str) -> Material {
+        signex_types::material_library::builtin_materials()
+            .into_iter()
+            .find(|m| m.name == name)
+            .expect("a built-in material")
+    }
+
+    /// Mockup row 177: a picked material's values are copied into the row;
+    /// the rest of the stack is untouched.
+    #[test]
+    fn a_library_material_is_copied_into_the_row_it_fits() {
+        let stack = LayerStack::derived(&[], 1.6);
+        let core = stack
+            .layers
+            .iter()
+            .position(|l| l.kind == StackLayerKind::Dielectric)
+            .unwrap();
+        let material = library("Prepreg 1080");
+        let used = edit_stack(
+            &stack,
+            &StackEdit::UseMaterial {
+                row: core,
+                material: material.clone(),
+            },
+        )
+        .unwrap();
+        let row = &used.layers[core];
+        assert_eq!(row.material, "Prepreg 1080");
+        assert_eq!(row.thickness_mm, material.thickness_mm);
+        assert_eq!(row.dielectric_constant, material.dielectric_constant);
+        assert_eq!(row.loss_tangent, material.loss_tangent);
+        for (i, (a, b)) in used.layers.iter().zip(&stack.layers).enumerate() {
+            assert!(i == core || a == b, "row {i} changed");
+        }
+    }
+
+    #[test]
+    fn a_material_that_does_not_fit_the_row_is_refused() {
+        let stack = LayerStack::derived(&[], 1.6);
+        let copper = stack
+            .layers
+            .iter()
+            .position(|l| l.kind.is_copper())
+            .unwrap();
+        let prepreg = StackEdit::UseMaterial {
+            row: copper,
+            material: library("Prepreg 1080"),
+        };
+        assert_eq!(
+            edit_stack(&stack, &prepreg),
+            Err(StackEditRefusal::MaterialDoesNotFit)
+        );
+        let foil = StackEdit::UseMaterial {
+            row: copper,
+            material: library("Copper foil 2 oz"),
+        };
+        let heavier = edit_stack(&stack, &foil).unwrap();
+        assert!((heavier.layers[copper].copper_weight_oz - 2.0).abs() < 1e-9);
+        let mut bad = library("Prepreg 1080");
+        bad.thickness_mm = -0.1;
+        let negative = StackEdit::UseMaterial {
+            row: 4,
+            material: bad,
+        };
+        assert_eq!(
+            edit_stack(&stack, &negative),
+            Err(StackEditRefusal::BadNumber)
+        );
+    }
+
+    /// Mockup row 176: the finish is set on the stack; a bad number is
+    /// refused.
+    #[test]
+    fn the_finish_is_set_and_a_bad_number_refused() {
+        use signex_types::pcb_stack::SurfaceFinish;
+        let stack = LayerStack::derived(&[], 1.6);
+        let finish = BoardFinish {
+            surface: SurfaceFinish::Osp,
+            ..BoardFinish::default()
+        };
+        let set = edit_stack(
+            &stack,
+            &StackEdit::SetFinish {
+                finish: finish.clone(),
+            },
+        )
+        .unwrap();
+        assert_eq!(set.finish, Some(finish.clone()));
+        assert_eq!(set.layers, stack.layers);
+        let mut bad = finish;
+        bad.mask.over_laminate_mm = f64::NAN;
+        assert_eq!(
+            edit_stack(&stack, &StackEdit::SetFinish { finish: bad }),
+            Err(StackEditRefusal::BadNumber)
+        );
     }
 }
