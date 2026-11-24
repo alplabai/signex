@@ -40,6 +40,7 @@ impl Signex {
             &session.editor,
             tokens,
             &self.ui_state.i18n,
+            self.library.mirror_cards.get(&session.board_path),
         )
         .map(Message::Library);
         // The constraint / pattern menu at the right-click (mockup row 188), measured

@@ -13,6 +13,9 @@ use signex_widgets::{button, raw, text};
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::canvas::FootprintCanvas;
 use crate::library::editor::footprint::layers::FpLayer;
+use crate::library::editor::footprint::sketch_mode::mirror_card::{
+    MirrorCard, overlay as mirror_overlay,
+};
 use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -28,6 +31,7 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 /// Footprint primitive's `body_3d` and `step_attachment` slots and the
 /// view tree for them is reused via the Component Editor surface.
 /// Pure pad-layout standalone editing is what `.snxfpt` needs first.
+/// `mirror_card` is the editor's open Mirror card (mockup row 191).
 pub fn view_footprint<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
@@ -35,6 +39,7 @@ pub fn view_footprint<'a>(
     i18n: &signex_i18n::I18n,
     show_layer_strip: bool,
     ui_family: &str,
+    mirror_card: Option<&MirrorCard>,
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
     // v0.16.2.2 — footprint canvas uses Altium PCB-editor colours
@@ -107,6 +112,8 @@ pub fn view_footprint<'a>(
                     editor, tokens, i18n, ui_family,
                 ),
             )
+            // The Mirror options card while Mirror is armed (mockup row 191).
+            .push(mirror_overlay(editor, mirror_card, tokens, i18n))
             .boxed(),
         EditorMode::Normal => stack
             .push(super::dof_chip::overlay(editor, tokens, i18n))

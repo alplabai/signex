@@ -8,14 +8,19 @@ use signex_i18n::I18n;
 use signex_types::theme::ThemeTokens;
 
 use crate::app::FootprintDocument;
+use crate::library::editor::footprint::sketch_mode::mirror_card::{
+    MirrorCard, overlay as mirror_overlay,
+};
 use crate::library::messages::LibraryMessage;
 
 /// The sketch canvas and DOF chip of `editor`, a board's sketch editor, on
-/// the dark board ground.
+/// the dark board ground, with the Mirror card (mockup row 191) while
+/// Mirror is armed; `mirror_card` is the editor's open card.
 pub fn view_board_sketch<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
+    mirror_card: Option<&MirrorCard>,
 ) -> Element<'a, LibraryMessage> {
     let look = crate::library::editor::footprint::graphite_look_for(tokens);
     Stack::new()
@@ -29,5 +34,6 @@ pub fn view_board_sketch<'a>(
                 editor, tokens, i18n,
             ),
         )
+        .push(mirror_overlay(editor, mirror_card, tokens, i18n))
         .boxed()
 }
