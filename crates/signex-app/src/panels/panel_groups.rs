@@ -70,9 +70,11 @@ pub fn panel_group(kind: PanelKind) -> PanelGroup {
         }
         PanelKind::CommandLog => PanelGroup::Verify,
         PanelKind::SchLibrary | PanelKind::FootprintLibrary => PanelGroup::Library,
-        PanelKind::Layers | PanelKind::LayerStack | PanelKind::NetClasses | PanelKind::PcbNets => {
-            PanelGroup::Pcb
-        }
+        PanelKind::Layers
+        | PanelKind::LayerStack
+        | PanelKind::NetClasses
+        | PanelKind::PcbNets
+        | PanelKind::LengthMatching => PanelGroup::Pcb,
     }
 }
 
@@ -168,7 +170,13 @@ mod tests {
         );
         assert_eq!(
             members(PanelGroup::Pcb),
-            [K::LayerStack, K::Layers, K::NetClasses, K::PcbNets]
+            [
+                K::LayerStack,
+                K::Layers,
+                K::NetClasses,
+                K::PcbNets,
+                K::LengthMatching,
+            ]
         );
     }
 

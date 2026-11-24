@@ -453,4 +453,7 @@ define_ids! {
     PANELS_COMPONENTS_MATCH_MORE = "panels-components-match-more";
     PANELS_COMPONENTS_MATCH_BY_NAME = "panels-components-match-by-name";
     PANELS_COMPONENTS_MATCH_SEPARATOR = "panels-components-match-separator";
+    // pcb-panel-group
+    PANELS_LENGTH_MATCHING_EMPTY_TITLE = "panels-length-matching-empty-title";
+    PANELS_LENGTH_MATCHING_EMPTY_BODY = "panels-length-matching-empty-body";
 }
