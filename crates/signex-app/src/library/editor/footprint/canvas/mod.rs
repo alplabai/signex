@@ -330,7 +330,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
         }
         let replayed = link.replayed(event, cursor);
         let event = replayed.as_ref().unwrap_or(event);
-        link.observe(cursor.position_in(bounds), bounds.size());
+        link.observe_event(event, cursor, bounds);
         link.set_dragging(cstate.drag.is_some_and(|drag| drag.moved));
         if let Some(action) = self.end_middle_zoom_on(cstate, event) {
             return Some(action);

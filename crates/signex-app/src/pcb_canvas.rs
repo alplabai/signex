@@ -663,8 +663,7 @@ impl canvas::Program<Message> for PcbCanvas {
         // An edge pan moved the view: the redraw replays the pointer (#2872).
         let replayed = self.edge_pan.replayed(event, cursor);
         let event = replayed.as_ref().unwrap_or(event);
-        self.edge_pan
-            .observe(cursor.position_in(bounds), bounds.size());
+        self.edge_pan.observe_event(event, cursor, bounds);
         if let Some(action) = self.middle_zoom_event(state, event, bounds, cursor) {
             return Some(action);
         }

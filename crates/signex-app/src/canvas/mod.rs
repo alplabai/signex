@@ -913,8 +913,7 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         // An edge pan moved the view: the redraw replays the pointer (#2872).
         let replayed = self.edge_pan.replayed(event, cursor);
         let event = replayed.as_ref().unwrap_or(event);
-        self.edge_pan
-            .observe(cursor.position_in(bounds), bounds.size());
+        self.edge_pan.observe_event(event, cursor, bounds);
         let action = self.dispatch_event(state, event, bounds, cursor);
         if self.mode == ContentMode::GpuOverlay {
             return self.publish_drag(state, action);
