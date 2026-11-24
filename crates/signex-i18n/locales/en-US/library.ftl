@@ -757,3 +757,14 @@ library-browser-read-only-note = This library ships with Signex and is not edita
 library-browser-preview-loading = Loading…
 # A preview tile whose drawing could not be read.
 library-browser-preview-unreadable = Could not be read
+# range-filter-chip
+# Chip of an applied range filter: column, operator (≥ ≤ =), number with its prefix, unit. "Value ≥ 1k Ω".
+library-range-filter-chip = { $column } { $op } { $value } { $unit }
+# Chip of an applied between filter: column, low, high, unit. "Resistance 1k – 100k Ω".
+library-range-filter-chip-between = { $column } { $low } – { $high } { $unit }
+# Tooltip of a range filter chip.
+library-range-filter-chip-tip = Edit this filter
+# Tooltip of the × on a range filter chip.
+library-range-filter-remove-tip = Remove this filter
+# Button that folds a finished range filter editor into its chip.
+library-range-filter-done = Done

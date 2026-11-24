@@ -290,4 +290,10 @@ define_ids! {
     LIBRARY_BROWSER_READ_ONLY_NOTE = "library-browser-read-only-note";
     LIBRARY_BROWSER_PREVIEW_LOADING = "library-browser-preview-loading";
     LIBRARY_BROWSER_PREVIEW_UNREADABLE = "library-browser-preview-unreadable";
+    // range-filter-chip
+    LIBRARY_RANGE_FILTER_CHIP = "library-range-filter-chip";
+    LIBRARY_RANGE_FILTER_CHIP_BETWEEN = "library-range-filter-chip-between";
+    LIBRARY_RANGE_FILTER_CHIP_TIP = "library-range-filter-chip-tip";
+    LIBRARY_RANGE_FILTER_REMOVE_TIP = "library-range-filter-remove-tip";
+    LIBRARY_RANGE_FILTER_DONE = "library-range-filter-done";
 }
