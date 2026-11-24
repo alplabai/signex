@@ -5,11 +5,13 @@ use iced::Color;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
-use crate::app::Message;
-use crate::styles::{PillTone, pill_colors, violet_pair};
+use signex_widgets::tree_view::TreeIcon;
 
-/// Schematic info, board ok, library violet: the inks of the tree's SCH,
-/// PCB and LIB tags.
+use crate::app::Message;
+use crate::panels::graphite::{kind_tone, tree_style};
+use crate::styles::ti;
+
+/// The inks of the tree's SCH, PCB and LIB tags.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(in crate::app::view::context_menu) struct KindInks {
     pub schematic: Color,
@@ -19,10 +21,17 @@ pub(in crate::app::view::context_menu) struct KindInks {
 
 impl KindInks {
     pub(in crate::app::view::context_menu) fn of(tokens: &ThemeTokens) -> Self {
+        let style = tree_style(tokens);
+        // A kind without a tag tone keeps the menu's text ink.
+        let ink = |icon: TreeIcon| {
+            kind_tone(icon)
+                .and_then(|tone| style.tone_colors(tone))
+                .map_or(ti(tokens.text), |(_, ink)| ink)
+        };
         Self {
-            schematic: pill_colors(tokens, PillTone::Info).1,
-            pcb: pill_colors(tokens, PillTone::Ok).1,
-            library: violet_pair(tokens).1,
+            schematic: ink(TreeIcon::SnxSchematic),
+            pcb: ink(TreeIcon::SnxPcb),
+            library: ink(TreeIcon::SnxLibrary),
         }
     }
 }
@@ -43,8 +52,9 @@ mod tests {
     use super::*;
     use crate::app::view::context_menu::project_tree::library::library_add_new_entries;
     use crate::app::view::context_menu::submenu::add_new_entries;
+    use crate::panels::graphite::decorate_tree;
     use signex_types::theme::{ThemeId, theme_tokens};
-    use signex_widgets::tree_view::BadgeTone;
+    use signex_widgets::tree_view::TreeNode;
 
     /// The glyph ink of the row labelled `label`.
     fn tint_of(rows: &[DropdownEntry<Message>], label: &str) -> Option<Color> {
@@ -56,10 +66,12 @@ mod tests {
             .unwrap_or_else(|| panic!("missing row {label:?}"))
     }
 
-    /// The ink of the tree's kind tag in `tone`.
-    fn tag_ink(tokens: &ThemeTokens, tone: BadgeTone) -> Option<Color> {
-        let style = crate::panels::graphite::tree_style(tokens);
-        style.tone_colors(tone).map(|(_, ink)| ink)
+    /// The ink of the kind tag the Projects tree draws on the row `file`.
+    fn tag_ink(tokens: &ThemeTokens, file: &str, icon: TreeIcon) -> Option<Color> {
+        let rows = decorate_tree(&[TreeNode::leaf(file, icon)]);
+        assert!(rows[0].badge.is_some(), "{file} has no kind tag");
+        let style = tree_style(tokens);
+        style.tone_colors(rows[0].badge_tone).map(|(_, ink)| ink)
     }
 
     /// Mockup row 20: Add New to Project draws each live row's glyph in the
@@ -70,16 +82,16 @@ mod tests {
             let tokens = theme_tokens(tid);
             let i18n = signex_i18n::I18n::en_us_ref();
             let rows = add_new_entries(i18n, tid, KindInks::of(&tokens), vec!["p".into()]);
-            let info = tag_ink(&tokens, BadgeTone::Info);
-            let violet = tag_ink(&tokens, BadgeTone::Violet);
-            assert_eq!(tint_of(&rows, "Schematic"), info, "{tid:?}");
-            assert_eq!(
-                tint_of(&rows, "PCB"),
-                tag_ink(&tokens, BadgeTone::Ok),
-                "{tid:?}"
-            );
+            let sch = tag_ink(&tokens, "a.snxsch", TreeIcon::SnxSchematic);
+            let pcb = tag_ink(&tokens, "a.snxpcb", TreeIcon::SnxPcb);
+            let violet = tag_ink(&tokens, "a.snxlib", TreeIcon::SnxLibrary);
+            assert_eq!(tint_of(&rows, "Schematic"), sch, "{tid:?}");
+            assert_eq!(tint_of(&rows, "PCB"), pcb, "{tid:?}");
             assert_eq!(tint_of(&rows, "Component Library"), violet, "{tid:?}");
             assert_eq!(tint_of(&rows, "Symbol Library"), violet, "{tid:?}");
+            if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
+                assert_eq!(tint_of(&rows, "PCB Library"), violet, "{tid:?}");
+            }
             for planned in [
                 "Design Notebook",
                 "Export Job",
@@ -99,7 +111,7 @@ mod tests {
             let tokens = theme_tokens(tid);
             let i18n = signex_i18n::I18n::en_us_ref();
             let rows = library_add_new_entries(i18n, tid, KindInks::of(&tokens));
-            let violet = tag_ink(&tokens, BadgeTone::Violet);
+            let violet = tag_ink(&tokens, "a.snxlib", TreeIcon::SnxLibrary);
             assert!(violet.is_some());
             for row in &rows {
                 if let DropdownEntry::Item(item) = row {
