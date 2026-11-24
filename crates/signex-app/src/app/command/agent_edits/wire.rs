@@ -341,10 +341,33 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
 const BOARD_EDIT: &str =
     "it edits a board, which no sheet's undo step covers; run it as its own command";
 
+/// Commands an agent runs as their own labelled step but an edit list does
+/// not carry yet: whether a list may carry them is not decided (#2326 slice
+/// 6.P2b, docs/DECISIONS.md).
+const NOT_YET_IN_LISTS: &[&str] = &[
+    "bring_drawings_forward",
+    "bring_drawings_to_front",
+    "send_drawings_backward",
+    "send_drawings_to_back",
+    "delete_selection",
+];
+
 /// Why `command` may not be one of the edits, or `None` when it may: it must
 /// be an undoable edit of a document that runs headless through an operand
 /// handler, and touch nothing outside that one sheet's engine.
 pub fn edit_refusal(command: &AppCommandId) -> Option<String> {
+    let id = command.as_str();
+    step_refusal(command).or_else(|| {
+        NOT_YET_IN_LISTS
+            .contains(&id)
+            .then(|| format!("`{id}` runs as its own command; an edit list does not carry it yet"))
+    })
+}
+
+/// Why an agent's run of `command` is not one labelled undo step, or `None`
+/// when it is: [`edit_refusal`] without the commands a list does not carry
+/// yet.
+pub(super) fn step_refusal(command: &AppCommandId) -> Option<String> {
     let id = command.as_str();
     let Some(meta) = metadata_for(command) else {
         return Some(format!("`{id}` is not a command"));
@@ -545,6 +568,16 @@ mod tests {
         assert_eq!(found, expected);
     }
 
+    /// #2326 slice 6.P2b: an agent's own run of the drawing order or Delete
+    /// is one labelled undo step, though a list does not carry them yet.
+    #[test]
+    fn the_drawing_order_and_delete_run_as_one_step_outside_a_list() {
+        for command in NOT_YET_IN_LISTS {
+            assert!(super::super::runs_as_one_step(&id(command)), "{command}");
+            assert!(edit_refusal(&id(command)).is_some(), "{command}");
+        }
+    }
+
     #[test]
     fn queries_history_files_and_project_data_are_refused_with_a_reason() {
         for (command, needle) in [
@@ -568,6 +601,12 @@ mod tests {
             ("reset_layer_colors", "edits a board"),
             ("reset_board_origin", "edits a board"),
             ("set_board_origin", "not runnable headless"),
+            // #2326 slice 6.P2b: run by uuid on their own, not in a list yet.
+            ("bring_drawings_forward", "does not carry it yet"),
+            ("bring_drawings_to_front", "does not carry it yet"),
+            ("send_drawings_backward", "does not carry it yet"),
+            ("send_drawings_to_back", "does not carry it yet"),
+            ("delete_selection", "does not carry it yet"),
         ] {
             let reason = edit_refusal(&id(command)).unwrap_or_else(|| panic!("{command}"));
             assert!(reason.contains(needle), "{command}: {reason}");

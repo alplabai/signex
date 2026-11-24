@@ -293,3 +293,24 @@ fn a_component_is_found_by_its_designator_once() {
     b.footprints[2].reference = "U2".into();
     assert!(by_designator(&b, "U2").unwrap_err().contains("several"));
 }
+
+/// #2326: a uuid names the board item of its kind; a pad's uuid is no board
+/// item (its footprint is), nor is an unknown one.
+#[test]
+fn a_uuid_names_its_board_item_whatever_the_kind() {
+    let b = board_with_via_arc();
+    assert_eq!(
+        BoardItemId::on_board(&b, id(2)),
+        Some(BoardItemId::Footprint(id(2)))
+    );
+    assert_eq!(
+        BoardItemId::on_board(&b, id(50)),
+        Some(BoardItemId::Via(id(50)))
+    );
+    assert_eq!(
+        BoardItemId::on_board(&b, id(51)),
+        Some(BoardItemId::Arc(id(51)))
+    );
+    assert_eq!(BoardItemId::on_board(&b, id(2 * 16)), None);
+    assert_eq!(BoardItemId::on_board(&b, id(99)), None);
+}

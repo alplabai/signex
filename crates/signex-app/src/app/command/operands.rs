@@ -157,8 +157,13 @@ impl CommandArgs {
 /// The first required operand of `command` that a headless run with none
 /// cannot do without. Without it the no-operand form only arms a tool or opens
 /// a picker, and would be reported as run. A `path` is a dialog answer a
-/// headless run gives through its answers, so it is not asked for here.
+/// headless run gives through its answers, so it is not asked for here. A
+/// command that fills its operands from the session's selection asks for
+/// none (`translator::runs_on_the_session_selection`).
 pub(crate) fn missing_headless_operand(command: &AppCommandId) -> Option<&'static str> {
+    if super::translator::runs_on_the_session_selection(command.as_str()) {
+        return None;
+    }
     metadata_for(command)?
         .operands
         .iter()

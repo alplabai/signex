@@ -10,18 +10,19 @@ use crate::app::command::operand_handlers::OperandHandler;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
-use super::wire::edit_refusal;
+use super::wire::step_refusal;
 
 use super::super::{CommandArgs, CommandOutcome};
 
 type Ran = (CommandOutcome, Task<Message>);
 
 /// Is `command` one an agent's run turns into a labelled undo step? Exactly
-/// the commands that may be an edit of `apply_edits` (`edit_refusal`): so not
-/// `apply_edits` itself, which runs a transaction of its own, nor the
-/// project-wide `assign_net_class`, which leaves only a pick marker (no group).
+/// the commands that may be an edit of `apply_edits`, plus those a list does
+/// not carry yet (`step_refusal`): so not `apply_edits` itself, which runs a
+/// transaction of its own, nor the project-wide `assign_net_class`, which
+/// leaves only a pick marker (no group).
 pub(crate) fn runs_as_one_step(command: &AppCommandId) -> bool {
-    edit_refusal(command).is_none()
+    step_refusal(command).is_none()
 }
 
 /// Run `handler` for `command` inside one engine transaction on the sheet its

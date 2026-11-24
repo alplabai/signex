@@ -94,6 +94,9 @@ mod routing;
 mod selection_filter_operand_tests;
 mod selection_filter_operands;
 #[cfg(test)]
+mod selection_operand_tests;
+mod selection_operands;
+#[cfg(test)]
 mod sheet_entry_ref_tests;
 #[cfg(test)]
 mod sheet_symbol_check_tests;

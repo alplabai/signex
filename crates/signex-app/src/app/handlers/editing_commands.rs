@@ -1,4 +1,6 @@
 use super::super::*;
+use crate::app::command::{CommandOutcome, OperandValue, translator};
+use signex_types::schematic::{SelectedItem, SelectedKind};
 
 impl Signex {
     /// Delete the selection. `true` when something was deleted.
@@ -17,6 +19,34 @@ impl Signex {
             return true;
         }
         false
+    }
+
+    /// Delete on a sheet: the objects of the selection run
+    /// `delete_selection`'s operand handler on the sheet in view
+    /// (`command::translator`), and the selection clears when something
+    /// went. A selection holding nothing the sheet has does nothing.
+    pub(crate) fn delete_sheet_selection(&mut self) -> Task<Message> {
+        let selected = &self.interaction_state.active_canvas().selected;
+        let (Some(path), Some(engine)) = (
+            self.document_state.active_path.clone(),
+            self.document_state.active_engine(),
+        ) else {
+            return Task::none();
+        };
+        if !engine.has_selected_items(selected) {
+            return Task::none();
+        }
+        let ids = (selected.iter())
+            .filter_map(|item| delete_target(engine, item))
+            .collect();
+        let operands = vec![("ids", OperandValue::Targets(ids))];
+        let (outcome, task) = translator::run(self, "delete_selection", &path, operands);
+        if let CommandOutcome::Answered(answer) = &outcome
+            && answer["changed"].as_bool() == Some(true)
+        {
+            self.interaction_state.active_canvas_mut().selected.clear();
+        }
+        task
     }
 
     /// Undo in the main window: whatever its tab shows (see
@@ -259,6 +289,19 @@ fn normalize_rad(a: f64) -> f64 {
         t += TAU;
     }
     t
+}
+
+/// The uuid Delete names `item` by on its sheet, or none when it deletes
+/// nothing. A designator or value field is no object: it is passed, as its
+/// part, only when that part is locked, so the lock is named as before;
+/// an object the sheet does not hold is left out, as the engine skipped it.
+fn delete_target(engine: &signex_engine::Engine, item: &SelectedItem) -> Option<uuid::Uuid> {
+    let one = std::slice::from_ref(item);
+    let kept = match item.kind {
+        SelectedKind::SymbolRefField | SelectedKind::SymbolValField => engine.all_locked(one),
+        _ => engine.has_selected_items(one),
+    };
+    kept.then_some(item.uuid)
 }
 
 fn norm_ccw(a: f64, b: f64) -> f64 {
