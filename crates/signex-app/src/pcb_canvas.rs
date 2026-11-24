@@ -46,7 +46,7 @@ pub use highlight::{Highlight, HighlightLayer};
 pub use marks::BoardMarks;
 pub use msg::{LEAVE_TRACKS_KEY, PcbCanvasMsg};
 pub use rooms::{RoomMark, RoomsOverlay};
-pub use select::{DraggedItems, PcbSelectionState};
+pub use select::{DraggedItems, DraggedSelection, PcbSelectionState};
 pub use snap_options::{PcbSnapOptions, SnapScope, SnapView};
 
 use crate::scene_generation::next_scene_generation;
