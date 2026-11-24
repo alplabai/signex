@@ -107,10 +107,12 @@ impl Signex {
                 dialog_footer(
                     footer_buttons(action)
                         .into_iter()
-                        .map(|(label, kind)| {
-                            let on_press = match kind {
-                                DialogButtonKind::Danger => run.clone(),
-                                _ => Some(Message::Annotate(AnnotateMsg::CloseResetConfirm)),
+                        .map(|(label, kind, does)| {
+                            let on_press = match does {
+                                FooterAction::Reset => run.clone(),
+                                FooterAction::Close => {
+                                    Some(Message::Annotate(AnnotateMsg::CloseResetConfirm))
+                                }
                             };
                             dialog_button(t!(i18n, label), kind, on_press, tokens)
                         })
@@ -132,11 +134,24 @@ impl Signex {
 /// "Save all first": a reset writes no file and one undo restores every
 /// sheet, so saving first protects nothing (mockup row 76, Caner
 /// 2026-11-24).
-fn footer_buttons(action: MessageId) -> [(MessageId, DialogButtonKind); 2] {
+fn footer_buttons(action: MessageId) -> [(MessageId, DialogButtonKind, FooterAction); 2] {
     [
-        (ids::DIALOG_BUTTON_CANCEL, DialogButtonKind::Cancel),
-        (action, DialogButtonKind::Danger),
+        (
+            ids::DIALOG_BUTTON_CANCEL,
+            DialogButtonKind::Cancel,
+            FooterAction::Close,
+        ),
+        (action, DialogButtonKind::Danger, FooterAction::Reset),
     ]
+}
+
+/// What a footer button of the confirm does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FooterAction {
+    /// Closes the confirm and resets nothing.
+    Close,
+    /// Runs the reset asked for.
+    Reset,
 }
 
 /// The undo caveat as one wrapping paragraph, its shortcut drawn as a key
@@ -205,7 +220,7 @@ mod tests {
     /// reset only, with no "Save all first", for both resets.
     #[test]
     fn the_reset_confirm_offers_cancel_and_the_reset_only() {
-        use super::footer_buttons;
+        use super::{FooterAction, footer_buttons};
         use crate::styles::DialogButtonKind;
         for action in [
             ids::DIALOG_ANNOTATE_RESET_ALL,
@@ -214,8 +229,12 @@ mod tests {
             assert_eq!(
                 footer_buttons(action),
                 [
-                    (ids::DIALOG_BUTTON_CANCEL, DialogButtonKind::Cancel),
-                    (action, DialogButtonKind::Danger),
+                    (
+                        ids::DIALOG_BUTTON_CANCEL,
+                        DialogButtonKind::Cancel,
+                        FooterAction::Close
+                    ),
+                    (action, DialogButtonKind::Danger, FooterAction::Reset),
                 ]
             );
         }
