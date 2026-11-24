@@ -274,9 +274,10 @@ fn the_preview_is_the_bake_panel_and_no_card() {
     ] {
         assert!(!has(&canvas, card), "{card:?} over the canvas: {canvas:#?}");
     }
+    // While the preview is open the mode bar's toggle reads Back to sketch.
     assert!(
-        has(&canvas, "Bake preview"),
-        "the mode bar keeps its button"
+        has(&canvas, "Back to sketch"),
+        "the mode bar keeps its toggle: {canvas:#?}"
     );
 
     // The mode bar's Bake preview button closes the panel.
