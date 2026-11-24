@@ -25,6 +25,8 @@ mod double_clicked;
 #[cfg(test)]
 mod drag_every_kind_tests;
 mod field_edit;
+#[cfg(test)]
+mod field_edit_click_away_tests;
 pub(crate) use field_edit::{editor_placeholder, next_part_field};
 pub(crate) mod fit_view;
 mod layout_drag;
