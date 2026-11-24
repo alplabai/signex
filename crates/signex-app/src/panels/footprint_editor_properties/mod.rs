@@ -22,6 +22,7 @@ const SCROLLBAR_GUTTER: f32 = 12.0;
 
 // Submodule declarations (split from the original 4570-line file).
 mod bake_outcome;
+mod bake_panel;
 mod board;
 mod body;
 mod conflicts;
