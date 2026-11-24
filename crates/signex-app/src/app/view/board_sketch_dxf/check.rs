@@ -126,12 +126,14 @@ pub(super) fn check_card<'a>(
 /// Heal under: the one heal tolerance, shared with Close gap, read only.
 fn heal_row<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, Message> {
     // No on_input: the field shows the tolerance and takes no edit.
-    let value: text_input::TextInput<'a, Message> =
-        text_input(t!(i18n, ids::BOARD_SKETCH_DXF_HEAL_UNDER), mm(HEAL_TOLERANCE_MM, 2))
-            .size(TS.dense)
-            .padding(SP.xs)
-            .width(Length::Fixed(TS.body * HEAL_FIELD_EM))
-            .style(field_style(tokens, false));
+    let value: text_input::TextInput<'a, Message> = text_input(
+        t!(i18n, ids::BOARD_SKETCH_DXF_HEAL_UNDER),
+        mm(HEAL_TOLERANCE_MM, 2),
+    )
+    .size(TS.dense)
+    .padding(SP.xs)
+    .width(Length::Fixed(TS.body * HEAL_FIELD_EM))
+    .style(field_style(tokens, false));
     row![
         text(t!(i18n, ids::BOARD_SKETCH_DXF_HEAL_UNDER))
             .size(TS.caption)
