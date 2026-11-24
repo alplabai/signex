@@ -6,8 +6,8 @@
 use super::*;
 use crate::dock::{DropGeometry, PanelPosition};
 use crate::styles::DashedOutline;
+use iced::Rectangle;
 use iced::widget::{Space, Stack, canvas, container};
-use iced::{Point, Rectangle, Size, Theme};
 use signex_i18n::menu_ids;
 use signex_widgets::text;
 
@@ -71,39 +71,6 @@ fn zone_label(position: PanelPosition) -> signex_i18n::MessageId {
     }
 }
 
-/// Canvas program of a dashed rounded outline filling its bounds.
-struct Outline(DashedOutline);
-
-impl<M> canvas::Program<M> for Outline {
-    type State = ();
-
-    fn draw(
-        &self,
-        _state: &(),
-        renderer: &iced::Renderer,
-        _theme: &Theme,
-        bounds: Rectangle,
-        _cursor: iced::mouse::Cursor,
-    ) -> Vec<canvas::Geometry> {
-        let mut frame = canvas::Frame::new(renderer, bounds.size());
-        let w = self.0.width;
-        let path = canvas::Path::rounded_rectangle(
-            Point::new(w / 2.0, w / 2.0),
-            Size::new((bounds.width - w).max(0.0), (bounds.height - w).max(0.0)),
-            self.0.radius.into(),
-        );
-        let mut stroke = canvas::Stroke::default()
-            .with_color(self.0.color)
-            .with_width(w);
-        stroke.line_dash = canvas::LineDash {
-            segments: &self.0.dash,
-            offset: 0,
-        };
-        frame.stroke(&path, stroke);
-        vec![frame.into_geometry()]
-    }
-}
-
 impl Signex {
     /// The drop zones while a floating panel is dragged, or `None` when no
     /// drag (and no drop preview) is in flight.
@@ -159,8 +126,7 @@ impl Signex {
                     .style(crate::styles::dock_zone_highlight(tokens))
                     .boxed()
             } else {
-                let dashes: canvas::Canvas<Outline, Message> =
-                    canvas::Canvas::new(Outline(outline));
+                let dashes: canvas::Canvas<DashedOutline, Message> = canvas::Canvas::new(outline);
                 iced::widget::stack![
                     dashes.width(Length::Fill).height(Length::Fill).boxed(),
                     centred.boxed(),
@@ -268,7 +234,7 @@ mod tests {
         for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
             let t = theme_tokens(id);
             let r = crate::styles::tokens::resolve(&t);
-            let style = crate::styles::dock_zone_highlight(&t)(&Theme::Dark);
+            let style = crate::styles::dock_zone_highlight(&t)(&iced::Theme::Dark);
             assert_eq!(
                 style.background,
                 Some(iced::Background::Color(r.accent_soft))
