@@ -1137,3 +1137,99 @@ editors-mode-footprint = Footprint
 editors-mode-sketch = Sketch
 editors-mode-3d = 3D
 editors-mode-3d-tooltip = Show the 3D body; click again to go back
+# pin-table-tab
+## The Pin table document tab of a symbol (mockup row 122b), opened by the
+## Pins tab's Edit pins in table….
+
+# The page name of the tab.
+editors-pin-table-page = Pin table
+# The tab's title. $symbol is the symbol's name.
+editors-pin-table-tab-title = { $symbol } · Pin table
+# Short mono code of the tab kind on the tab strip.
+editors-pin-table-tab-kind = PIN
+# The title over the table. $symbol is the symbol's name.
+editors-pin-table-heading = { $symbol } pins
+# The line under the title. $file is the file name; $pins and $parts are
+# whole numbers.
+editors-pin-table-summary =
+    { $file } · { $pins ->
+        [one] { $pins } pin
+       *[other] { $pins } pins
+    } · { $parts ->
+        [one] { $parts } part
+       *[other] { $parts } parts
+    }
+# The issues button. $count is how many rows have an issue.
+editors-pin-table-issues =
+    { $count ->
+        [one] { $count } row with issues
+       *[other] { $count } rows with issues
+    }
+# The issues button while only the rows with issues show.
+editors-pin-table-issues-only =
+    { $count ->
+        [one] { $count } row with issues · showing only these
+       *[other] { $count } rows with issues · showing only these
+    }
+editors-pin-table-no-issues = No issues
+editors-pin-table-issues-tip = Show only rows with issues
+editors-pin-table-delete = Delete selected
+editors-pin-table-paste = Paste rows…
+editors-pin-table-none-selected = No rows selected
+# $count is how many rows are ticked.
+editors-pin-table-selected =
+    { $count ->
+        [one] { $count } row selected
+       *[other] { $count } rows selected
+    }
+# Labels of the bulk edit bar.
+editors-pin-table-bulk-type = Type
+editors-pin-table-bulk-part = Part
+editors-pin-table-bulk-length = Length
+editors-pin-table-bulk-orientation = Orientation
+editors-pin-table-bulk-hidden = Hidden
+# A bulk field left as it is keeps each row's value.
+editors-pin-table-keep = Keep
+editors-pin-table-yes = Yes
+editors-pin-table-no = No
+editors-pin-table-apply = Apply to selected
+# Column heading, in capitals: what is wrong with the row.
+editors-pin-table-column-check = CHECK
+# Check column pills.
+editors-pin-table-no-number = No number
+# $number is the pin number two or more pins have.
+editors-pin-table-duplicate = Duplicate # { $number }
+editors-pin-table-no-name = No name
+editors-pin-table-ok = OK
+editors-pin-table-no-match-hint = Clear the filter or the issues-only view.
+# $symbol is the symbol's name.
+editors-pin-table-foot = Edits go straight into { $symbol }, one undo step each, like Properties. Click a cell to type; Tab moves on; tick rows to edit them together.
+editors-pin-table-paste-hint = Paste rows copied from a datasheet pin table or a spreadsheet. Columns are split on a tab or two or more spaces; – and - in names become −.
+editors-pin-table-paste-columns = Columns
+# $number is the column's place, from 1.
+editors-pin-table-paste-column = Column { $number }
+editors-pin-table-paste-type-words = Type words
+editors-pin-table-paste-type-words-hint = I → Input · O → Output · I/O → Bidirectional · P, PWR, — → Power input · OC → Open collector · anything else → Passive
+editors-pin-table-paste-mode = Mode
+editors-pin-table-mode-update = Update by #
+editors-pin-table-mode-append = Append
+editors-pin-table-mode-replace = Replace all
+editors-pin-table-preview-empty = Nothing to paste yet.
+# $rows, $updated and $added are whole numbers.
+editors-pin-table-preview-update = { $rows } rows read · { $updated } update existing pins · { $added } added as new pins
+# $rows is a whole number.
+editors-pin-table-preview-append = { $rows } rows read · all added as new pins
+# $rows and $pins are whole numbers.
+editors-pin-table-preview-replace = { $rows } rows read · replaces all { $pins } pins
+editors-pin-table-paste-cancel = Cancel
+editors-pin-table-paste-apply = Apply paste
+# What a pasted column is read as.
+editors-pin-table-field-number = #
+editors-pin-table-field-name = Name
+editors-pin-table-field-electrical = Electrical type
+editors-pin-table-field-part = Part
+editors-pin-table-field-length = Length (mm)
+editors-pin-table-field-description = Description
+editors-pin-table-field-ignore = Ignore
+# Messages panel: a bulk length that was not written. $value is what was typed.
+editors-pin-table-length-refused = Pin length { $value } was not applied: a pin cannot have that length.
