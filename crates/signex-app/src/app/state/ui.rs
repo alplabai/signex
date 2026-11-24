@@ -475,6 +475,9 @@ pub struct UiState {
     /// A Create Sheet request from the Projects tree waiting for its parent
     /// sheet to open: `(parent sheet, missing child file)` (#1618).
     pub pending_create_sheet: Option<(std::path::PathBuf, std::path::PathBuf)>,
+    /// A Show History from the Projects tree waiting for its file to open
+    /// (mockup row 20).
+    pub pending_tree_history: Option<std::path::PathBuf>,
     /// "Exit Signex — Unsaved Edits" confirmation modal. `Some` while
     /// the user is being asked to save / discard / cancel an app-exit
     /// request that touches a dirty document. Cleared on any of the

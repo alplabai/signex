@@ -342,10 +342,26 @@ fn the_document_leaf_show_history_row_is_live() {
 
 /// Mockup row 20: Show History opens the History panel filtered to the file
 /// (This file only on); a second pick keeps the filter on, it is no toggle.
+/// The leaf is already open, so the panel follows it at once; a leaf read on
+/// a worker is covered in `project_navigation::tree_history_tests`.
 #[test]
 fn show_history_opens_the_history_panel_with_this_file_only() {
+    use crate::app::handlers::menu::export::tests::{open_with, sheet_with_net};
+    use crate::app::{TabInfo, TabKind};
     use crate::panels::PanelKind;
     let mut app = app_with_tree();
+    let leaf = std::path::PathBuf::from("/p/a.snxsch");
+    let sheet = sheet_with_net("R1", "N", &[]);
+    open_with(&mut app.document_state, &leaf, sheet);
+    app.document_state.tabs.push(TabInfo {
+        title: "a".to_string(),
+        path: leaf.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    assert_eq!(app.history_target_path(), Some(leaf));
     let _ = app.document_state.dock.close_panel(PanelKind::History);
     assert!(!app.is_panel_open(PanelKind::History));
     let rows = rows_at(&app, &[0, 0, 0]);

@@ -72,6 +72,9 @@ mod sheet_symbols_named_tests;
 pub(crate) mod sheet_users;
 #[cfg(test)]
 mod subdir_entry_tests;
+mod tree_history;
+#[cfg(test)]
+mod tree_history_tests;
 #[cfg(test)]
 mod tree_key_tests;
 mod version_control;
@@ -164,29 +167,6 @@ impl Signex {
                 Task::none()
             }
         }
-    }
-
-    /// Show History on a leaf (mockup row 20): open the file so the History
-    /// panel follows it, turn This file only on (set, not toggled), and show
-    /// the panel.
-    fn show_tree_row_history(&mut self, path: &[usize]) -> Task<Message> {
-        use crate::panels::history::{HistoryFilterMsg, HistoryPanelMsg};
-        use signex_widgets::tree_view::get_node;
-        let tree = self.document_state.panel_ctx.project_tree.as_slice();
-        let Some(label) = get_node(tree, path)
-            .filter(|node| tree_row_opens(node))
-            .map(|node| node.label.clone())
-        else {
-            return Task::none();
-        };
-        let opened = self.open_tree_row(path, label);
-        let filtered = if self.document_state.history.ui.filter.this_file_only {
-            Task::none()
-        } else {
-            self.handle_history_panel(HistoryPanelMsg::Filter(HistoryFilterMsg::ThisFileToggled))
-        };
-        let shown = self.show_panel(crate::panels::PanelKind::History);
-        Task::batch([opened, filtered, shown, self.finish_update()])
     }
 
     fn dispatch_show_project_tree_context_menu(
