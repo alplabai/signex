@@ -69,7 +69,7 @@ pub(crate) use requirements::{
 };
 pub use row_drag::RowDragMsg;
 pub(crate) use sheets::sheet_thumbnail;
-pub use variants::{VariantManagerMsg, VariantManagerUi};
+pub use variants::VariantManagerMsg;
 
 pub use crate::app::core::row_drag::RowDrag;
 use crate::app::state::ProjectId;
