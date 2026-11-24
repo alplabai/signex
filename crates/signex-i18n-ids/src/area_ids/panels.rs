@@ -147,6 +147,7 @@ define_ids! {
     PANELS_FILTER_NO_PRESETS = "panels-filter-no-presets";
     PANELS_FILTER_PRESET_KINDS = "panels-filter-preset-kinds";
     PANELS_FILTER_PRESET_NO_KINDS = "panels-filter-preset-no-kinds";
+    PANELS_FILTER_PRESET_EDITING = "panels-filter-preset-editing";
     PANELS_OBJECT_LIST_FILTER = "panels-object-list-filter";
     PANELS_OBJECT_LIST_SCOPE_SHEET = "panels-object-list-scope-sheet";
     PANELS_OBJECT_LIST_SCOPE_PROJECT = "panels-object-list-scope-project";

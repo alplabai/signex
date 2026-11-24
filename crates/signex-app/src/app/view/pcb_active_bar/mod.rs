@@ -99,6 +99,7 @@ impl Signex {
             ctx: &ctx,
             filter: &self.ui_state.pcb_pick_filter,
             presets: &self.ui_state.pcb_filter_presets,
+            editing: self.ui_state.pcb_filter_preset_editing,
             last: &self.ui_state.pcb_bar_last_tools,
         };
         let entries = pcb_bar_menu_entries(menu, &self.ui_state.i18n, tokens, tid, &sources);
@@ -409,6 +410,8 @@ pub(in crate::app::view) struct MenuSources<'a> {
     pub filter: &'a pcb_geom::PickFilter,
     /// The saved filter presets.
     pub presets: &'a [CustomFilterPreset<pcb_geom::PickKind>],
+    /// The preset selected for editing (#2873).
+    pub editing: Option<usize>,
     /// The row each tool group used last, drawn current in its dropdown.
     pub last: &'a PcbBarLastTools,
 }
@@ -424,7 +427,9 @@ pub(in crate::app::view) fn pcb_bar_menu_entries(
     src: &MenuSources<'_>,
 ) -> Vec<DropdownEntry<Message>> {
     match menu {
-        PcbBarMenu::Filter => return filter::entries(i18n, tokens, src.filter, src.presets),
+        PcbBarMenu::Filter => {
+            return filter::entries(i18n, tokens, src.filter, src.presets, src.editing);
+        }
         PcbBarMenu::Group(group) => return groups::entries(group, i18n, tid, src.ctx, src.last),
         PcbBarMenu::Align | PcbBarMenu::Move | PcbBarMenu::View => {}
     }

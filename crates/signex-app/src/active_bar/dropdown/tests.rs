@@ -128,8 +128,21 @@ fn net_color_swatches_and_gated_clear_rows() {
 fn filter_menu_is_a_single_custom_entry() {
     let tokens = signex_types::theme::theme_tokens(TID);
     let filters = std::collections::HashSet::new();
-    let entry = filter_entry(signex_i18n::I18n::en_us_ref(), &tokens, &filters, &[]);
+    let entry = filter_entry(
+        signex_i18n::I18n::en_us_ref(),
+        &tokens,
+        &no_presets(&filters),
+    );
     assert!(matches!(entry, DropdownEntry::Custom(_)));
+}
+
+/// The schematic filter `filters` with no saved preset.
+fn no_presets(filters: &std::collections::HashSet<SelectionFilter>) -> SchematicFilterState<'_> {
+    SchematicFilterState {
+        filters,
+        presets: &[],
+        editing: None,
+    }
 }
 
 /// Mockup row 61: the Selection Filter is a compact card with All / None,
@@ -140,7 +153,11 @@ fn the_filter_menu_is_a_compact_card_holding_its_controls() {
     for tid in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
         let tokens = signex_types::theme::theme_tokens(tid);
         let filters = std::collections::HashSet::new();
-        let entry = filter_entry(signex_i18n::I18n::en_us_ref(), &tokens, &filters, &[]);
+        let entry = filter_entry(
+            signex_i18n::I18n::en_us_ref(),
+            &tokens,
+            &no_presets(&filters),
+        );
         let card = signex_widgets::active_bar_dropdown::view(vec![entry], &tokens, Some(width));
         let texts = crate::layout_probe::lay_out_texts(card, iced::Size::new(1440.0, 900.0));
         for label in ["All", "None", "Sheet Symbols", "Other", "Save current"] {

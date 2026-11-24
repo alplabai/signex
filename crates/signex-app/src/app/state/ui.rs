@@ -30,8 +30,9 @@ pub struct UiState {
     /// The board filter's saved presets (#2383), the schematic's mechanism
     /// keyed on board kinds; kept in `prefs.json`.
     pub pcb_filter_presets: Vec<crate::active_bar::CustomFilterPreset<pcb_geom::PickKind>>,
-    /// The preset the board panel edits.
-    pub pcb_filter_preset_tab: usize,
+    /// The preset selected for editing: chip clicks change it in place
+    /// (#2873). `None`: chips change only the filter.
+    pub pcb_filter_preset_editing: Option<usize>,
     /// How carried board items snap (#2353), one for the editor. Session only.
     pub pcb_snap: crate::pcb_canvas::PcbSnapOptions,
     /// The row each PCB Active Bar group last ran (#2392), kept in

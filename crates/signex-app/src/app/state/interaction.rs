@@ -208,6 +208,9 @@ pub struct InteractionState {
     /// SCH Filter's inline preset rename: the preset and the name typed so
     /// far. Mirrored into each panel context after every update.
     pub filter_preset_rename: Option<(usize, String)>,
+    /// The schematic preset selected for editing: chip clicks change it in
+    /// place (#2873). `None`: chips change only the filter.
+    pub editing_custom_filter: Option<usize>,
     /// User-defined footprint-editor filter presets (capped at
     /// `crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT`). Loaded from
     /// `~/.config/signex/prefs.json` on launch; parallel to

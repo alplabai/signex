@@ -21,8 +21,6 @@ define_ids! {
     PCB_BOARD_FILTER_PRESET_FULL = "pcb-board-filter-preset-full";
     PCB_BOARD_FILTER_PRESET_APPLY_TIP = "pcb-board-filter-preset-apply-tip";
     PCB_BOARD_FILTER_PRESET_NAME = "pcb-board-filter-preset-name";
-    PCB_BOARD_FILTER_PRESET_UPDATE = "pcb-board-filter-preset-update";
-    PCB_BOARD_FILTER_PRESET_UPDATE_TIP = "pcb-board-filter-preset-update-tip";
     PCB_BOARD_KIND_COMPONENTS = "pcb-board-kind-components";
     PCB_BOARD_KIND_BODIES = "pcb-board-kind-bodies";
     PCB_BOARD_KIND_KEEPOUTS = "pcb-board-kind-keepouts";
