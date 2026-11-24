@@ -1,4 +1,4 @@
-//! The grid picker popup (Graphite mockup #63): the standard grid ladder under Imperial and
+//! The grid picker popup (mockup row 63): the standard grid ladder under Imperial and
 //! Metric subheads, mil rows captioned with their mm value, the active step
 //! checked on the accent-soft fill, and a final Grid Properties… row; a
 //! read-only preview of the hovered step (the active one when no row is
@@ -7,7 +7,7 @@
 use super::*;
 
 use super::items::text;
-use signex_i18n::{I18n, Localized, MessageId, menu_ids};
+use signex_i18n::{Arg, I18n, Localized, MessageId, menu_ids};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
 /// One rung of the ladder: its label, its step in mm and whether its row
@@ -59,22 +59,28 @@ fn is_step(a: f64, b: f64) -> bool {
     (a - b).abs() < 1e-9
 }
 
-/// The ladder label of `step_mm`, when it is a rung.
-fn rung_name(i18n: &I18n, step_mm: f64) -> Option<String> {
+/// The rung whose step is `step_mm`, when there is one.
+fn rung_of(step_mm: f64) -> Option<&'static Rung> {
     IMPERIAL
         .iter()
         .chain(METRIC)
         .find(|rung| is_step(rung.step_mm, step_mm))
-        .map(|rung| text(i18n, rung.label))
 }
 
-/// `step_mm` as the "1.27 mm" caption; engineering values keep '.' in every
-/// locale.
+/// The ladder label of `step_mm`, when it is a rung.
+fn rung_name(i18n: &I18n, step_mm: f64) -> Option<String> {
+    rung_of(step_mm).map(|rung| text(i18n, rung.label))
+}
+
+/// The arguments of the "1.27 mm" caption; engineering values keep '.' in
+/// every locale.
+fn mm_caption_args(step_mm: f64) -> [(&'static str, Arg); 1] {
+    [("mm", step_mm.to_string().into())]
+}
+
+/// `step_mm` as the "1.27 mm" caption.
 fn mm_caption(i18n: &I18n, step_mm: f64) -> String {
-    i18n.message_plain(
-        menu_ids::CTX_GRID_MM_CAPTION,
-        &[("mm", step_mm.to_string().into())],
-    )
+    i18n.message_plain(menu_ids::CTX_GRID_MM_CAPTION, &mm_caption_args(step_mm))
 }
 
 /// The step the preview draws: the hovered rung, else the active step.
@@ -85,53 +91,63 @@ fn previewed_step(hovered_mm: Option<f64>, active_mm: f64) -> f64 {
 /// The preview's caption for `step_mm`: its ladder name, marked active when
 /// it is `active_mm`.
 fn preview_caption(i18n: &I18n, step_mm: f64, active_mm: f64) -> Localized {
+    let rung = rung_of(step_mm);
     if is_step(step_mm, active_mm) {
-        let name = rung_name(i18n, step_mm).unwrap_or_else(|| mm_caption(i18n, step_mm));
+        let name = rung.map_or_else(|| mm_caption(i18n, step_mm), |r| text(i18n, r.label));
         return i18n.message(menu_ids::CTX_GRID_PREVIEW_ACTIVE, &[("step", name.into())]);
     }
-    match IMPERIAL
-        .iter()
-        .chain(METRIC)
-        .find(|rung| is_step(rung.step_mm, step_mm))
-    {
+    match rung {
         Some(rung) => i18n.message(rung.label, &[]),
-        None => i18n.message(
-            menu_ids::CTX_GRID_MM_CAPTION,
-            &[("mm", step_mm.to_string().into())],
-        ),
+        None => i18n.message(menu_ids::CTX_GRID_MM_CAPTION, &mm_caption_args(step_mm)),
     }
 }
 
 impl Signex {
+    /// The grid step of the footprint editor the open picker targets.
+    fn grid_picker_active_step(&self) -> Option<f64> {
+        let picker = self.interaction_state.grid_picker.as_ref()?;
+        self.document_state
+            .footprint_editors
+            .get(&picker.target)
+            .map(|e| e.state.snap_options.grid_step_mm)
+    }
+
+    /// The step the picker's preview draws, with its caption: the hovered
+    /// row's step, else the active one; `None` when no editor is targeted.
+    fn grid_preview_of(&self) -> Option<(f64, Localized)> {
+        let active = self.grid_picker_active_step()?;
+        let hovered = self
+            .interaction_state
+            .grid_picker
+            .as_ref()
+            .and_then(|picker| picker.hovered_step_mm);
+        let step = previewed_step(hovered, active);
+        Some((step, preview_caption(&self.ui_state.i18n, step, active)))
+    }
+
     /// The grid picker popup: the ladder card and, beside it, the preview of
     /// the hovered step, or the active one when no row is hovered (mockup
     /// row 63). Clicking a step sends
     /// `Message::Ui(UiMsg::GridPickerSelect(step_mm))` and closes the popup.
     pub(in crate::app::view) fn view_grid_picker_menu(&self) -> Element<'_, Message> {
         use iced::widget::Widget as _;
-        let picker = self.interaction_state.grid_picker.as_ref();
-        let active_step = picker
-            .and_then(|picker| self.document_state.footprint_editors.get(&picker.target))
-            .map(|e| e.state.snap_options.grid_step_mm);
-        let hovered_step = picker.and_then(|picker| picker.hovered_step_mm);
         let panel_ctx = &self.document_state.panel_ctx;
         let i18n = &self.ui_state.i18n;
         let ladder = super::placement::menu_card(
-            grid_picker_entries(i18n, active_step),
+            grid_picker_entries(i18n, self.grid_picker_active_step()),
             &panel_ctx.tokens,
             &panel_ctx.ui_font_name,
         )
         .element;
-        let Some(active) = active_step else {
+        let Some((step, caption)) = self.grid_preview_of() else {
             return ladder;
         };
-        let step = previewed_step(hovered_step, active);
         let preview = super::grid_preview::grid_preview_card(
             i18n,
             &panel_ctx.tokens,
             self.ui_state.effective_theme_id(),
             step,
-            preview_caption(i18n, step, active),
+            caption,
         );
         iced::widget::row![ladder, preview]
             .spacing(crate::styles::Spacing::DEFAULT.m)
@@ -335,6 +351,39 @@ mod tests {
         assert_eq!(hovered(&app), None);
         let _ = app.update(Message::Ui(UiMsg::GridPickerStepHovered(f64::NAN)));
         assert_eq!(hovered(&app), None, "a bad step is not hovered");
+    }
+
+    /// The open picker's preview draws the active step until a row is
+    /// hovered, then the hovered row's step under its own name (mockup row
+    /// 63).
+    #[test]
+    fn the_open_pickers_preview_draws_the_hovered_row() {
+        let mut app = app_with_picker();
+        let path = std::path::PathBuf::from("part.snxfpt");
+        let file =
+            signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
+        let mut editor = crate::app::FootprintDocument::new(path.clone(), file);
+        editor.state.snap_options.grid_step_mm = 1.27;
+        app.document_state.footprint_editors.insert(path, editor);
+        let preview = |app: &Signex| {
+            app.grid_preview_of().map(|(step, caption)| {
+                let caption = caption.into_string().replace(['\u{2068}', '\u{2069}'], "");
+                (step, caption)
+            })
+        };
+        assert_eq!(preview(&app), Some((1.27, "50 Mil · active".to_owned())));
+        let _ = app.update(Message::Ui(UiMsg::GridPickerStepHovered(2.54)));
+        assert_eq!(preview(&app), Some((2.54, "100 Mil".to_owned())));
+        let _ = app.update(Message::Ui(UiMsg::GridPickerStepLeft(2.54)));
+        assert_eq!(preview(&app), Some((1.27, "50 Mil · active".to_owned())));
+    }
+
+    /// The preview needs the editor the picker targets; without it there is
+    /// none to draw.
+    #[test]
+    fn a_picker_without_its_editor_has_no_preview() {
+        let app = app_with_picker();
+        assert!(app.grid_preview_of().is_none());
     }
 
     /// A hover with the picker closed opens nothing.

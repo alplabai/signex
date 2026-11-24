@@ -1,4 +1,4 @@
-//! The grid picker's read-only preview (Graphite mockup #63): line art of a resistor, a
+//! The grid picker's read-only preview (mockup row 63): line art of a resistor, a
 //! power port and a ground on the hovered ladder step (the active step when
 //! no row is hovered), each pin ringed green when the 2.54 mm pin pitch
 //! lands on the grid and amber when it does not. No expand button and no
