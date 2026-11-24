@@ -446,4 +446,9 @@ define_ids! {
     HARNESS_MSG_ENTRY_OFF_CONNECTOR = "panels-harness-msg-entry-off-connector";
     PANELS_COMPILED_DESIGN_MSG_NO_PROJECT = "panels-compiled-design-msg-no-project";
     PANELS_COMPILED_DESIGN_NAMING_REFUSED = "panels-compiled-design-naming-refused";
+    // components-panel-cx
+    PANELS_COMPONENTS_MATCH_VALUE = "panels-components-match-value";
+    PANELS_COMPONENTS_MATCH_MORE = "panels-components-match-more";
+    PANELS_COMPONENTS_MATCH_BY_NAME = "panels-components-match-by-name";
+    PANELS_COMPONENTS_MATCH_SEPARATOR = "panels-components-match-separator";
 }

@@ -86,15 +86,12 @@ pub(super) fn filter_field<'a>(
         .boxed()
 }
 
-/// Width the filter keeps beside Add and Previews, so its text stays
-/// readable; when the dock cannot hold all three, Previews wraps below
-/// (mockup row 52).
-const FILTER_ROW_W: f32 = TS.body * 10.5;
-
 /// Height of a source chip.
 const CHIP_HEIGHT: f32 = 22.0;
 
-/// The filter row: the search field and the "+ Add" ghost button.
+/// The panel header: "+ Add" and Previews on the first line, the search
+/// field across the whole dock width under them, so its placeholder stays
+/// readable at any dock width (mockup row 52).
 pub(super) fn header_row<'a>(
     filter: Element<'a, LibraryMessage>,
     row_style: ComponentsRowStyle,
@@ -115,16 +112,108 @@ pub(super) fn header_row<'a>(
     .padding([3.0, 8.0])
     .on_press(LibraryMessage::ComponentsPanelAddMenuToggled)
     .style(crate::panels::form_look::ghost_button);
-    row![
-        container(filter).width(Length::Fixed(FILTER_ROW_W)),
-        add,
-        previews_switch(row_style, tokens, i18n),
-    ]
-    .spacing(CHEVRON_GAP)
-    .padding([0.0, EDGE])
-    .align_y(Alignment::Center)
-    .wrap()
-    .boxed()
+    let controls = row![add, previews_switch(row_style, tokens, i18n)]
+        .spacing(CHEVRON_GAP)
+        .align_y(Alignment::Center);
+    iced::widget::column![controls, filter]
+        .padding(Padding {
+            top: super::SP.s,
+            right: EDGE,
+            bottom: 0.0,
+            left: EDGE,
+        })
+        .width(Length::Fill)
+        .boxed()
+}
+
+/// The info line under the header that says what each bare number of the
+/// search matched, with part counts: `100  100 pF 8 · 100 nF 8 · name or
+/// text 2` (components-cx decisions 6 and 9). `None` without one.
+pub(super) fn match_summary<'a>(
+    lines: &[super::query::MatchLine],
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Option<Element<'a, LibraryMessage>> {
+    /// Values listed before "+N more".
+    const SHOWN: usize = 5;
+    let r = resolve(tokens);
+    let ink = r.info;
+    let item = |label: Localized| -> Element<'a, LibraryMessage> {
+        text(label).size(TS.caption).color(ink).boxed()
+    };
+    let sep = || -> Element<'a, LibraryMessage> {
+        text(t!(i18n, ids::PANELS_COMPONENTS_MATCH_SEPARATOR))
+            .size(TS.caption)
+            .color(Color { a: 0.55, ..ink })
+            .boxed()
+    };
+    let mut col = iced::widget::Column::new().spacing(super::SP.xs);
+    for line in lines {
+        if line.values.is_empty() && line.by_name == 0 {
+            continue;
+        }
+        let mut items: Vec<Element<'a, LibraryMessage>> = line
+            .values
+            .iter()
+            .take(SHOWN)
+            .map(|(value, count)| {
+                item(t!(
+                    i18n,
+                    ids::PANELS_COMPONENTS_MATCH_VALUE,
+                    "value" => value.as_str(),
+                    "count" => *count
+                ))
+            })
+            .collect();
+        if line.values.len() > SHOWN {
+            items.push(item(t!(
+                i18n,
+                ids::PANELS_COMPONENTS_MATCH_MORE,
+                "count" => line.values.len() - SHOWN
+            )));
+        }
+        if line.by_name > 0 {
+            items.push(item(t!(
+                i18n,
+                ids::PANELS_COMPONENTS_MATCH_BY_NAME,
+                "count" => line.by_name
+            )));
+        }
+        let mut words = iced::widget::Row::new()
+            .spacing(super::SP.xs)
+            .align_y(Alignment::Center)
+            .push(
+                text(signex_i18n::UserText::new(line.word.clone()))
+                    .size(TS.caption)
+                    .color(ink)
+                    .font(Font {
+                        weight: iced::font::Weight::Semibold,
+                        ..Font::DEFAULT
+                    })
+                    .boxed(),
+            );
+        for (i, entry) in items.into_iter().enumerate() {
+            if i > 0 {
+                words = words.push(sep());
+            }
+            words = words.push(entry);
+        }
+        col = col.push(words.wrap().boxed());
+    }
+    if lines.iter().all(|l| l.values.is_empty() && l.by_name == 0) {
+        return None;
+    }
+    let fill = r.info_soft;
+    Some(
+        container(col)
+            .padding([super::SP.xs, EDGE])
+            .width(Length::Fill)
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(fill)),
+                ..container::Style::default()
+            })
+            .boxed(),
+    )
 }
 
 /// The "Previews" switch next to Add: rows with a symbol thumbnail and a
