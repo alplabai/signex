@@ -62,7 +62,7 @@ fn sketch_editor() -> (FootprintDocument, SketchEntityId, SketchEntityId) {
     let mut fp = Footprint::empty("t");
     fp.sketch = Some(sketch);
     let mut editor = FootprintDocument::new(
-        PathBuf::from("/tmp/mirror-card/t.snxpcb"),
+        PathBuf::from("/tmp/mirror-card/t.snxfpt"),
         FootprintFile::from_footprint(fp),
     );
     editor.state.mode = EditorMode::Sketch;

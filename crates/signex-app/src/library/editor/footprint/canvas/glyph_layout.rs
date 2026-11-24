@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use iced::{Point, Rectangle, Size};
 use signex_sketch::SketchData;
-use signex_sketch::array::{Array, ArrayId};
+use signex_sketch::array::{Array, ArrayId, ArrayKind};
 use signex_sketch::constraint::{Constraint, ConstraintKind};
 use signex_sketch::entity::EntityKind;
 use signex_sketch::id::{ConstraintId, SketchEntityId};
@@ -138,7 +138,10 @@ pub(crate) fn glyph_at(glyphs: &[Glyph], p: Point) -> Option<&Glyph> {
 }
 
 /// A label `text` long, centred on `anchor`.
-fn label_rect(anchor: Point, text: &str) -> Rectangle {
+pub(in crate::library::editor::footprint::canvas) fn label_rect(
+    anchor: Point,
+    text: &str,
+) -> Rectangle {
     let width =
         text.chars().count() as f32 * GLYPH_TEXT * ADVANCE_EM + 2.0 * GLYPH_TEXT * LABEL_PAD_EM;
     let height = GLYPH_TEXT * LABEL_HEIGHT_EM;
@@ -468,6 +471,23 @@ fn pattern_value_name(
     }
 }
 
+/// The `name · value` label of a pattern value ("count = rows · 4"), as
+/// the selected pattern's glyphs and a linear pattern's dimensions at
+/// rest both show it.
+pub(in crate::library::editor::footprint::canvas) fn pattern_value_label(
+    field: PatternField,
+    kind: &ArrayKind,
+    sketch: &SketchData,
+    text: &SketchCanvasText,
+) -> String {
+    let source = field.expr(kind).unwrap_or_default();
+    format!(
+        "{} · {}",
+        pattern_value_name(field, source, sketch, text),
+        value_edit::pattern_value_text(sketch, field, source, text)
+    )
+}
+
 /// How many pattern links a glyph text follows: a pattern of a mirror of
 /// a pattern still reads ("P×4 of ⇔ L×4"); a longer chain stops there.
 const GLYPH_LINK_DEPTH: u8 = 2;
@@ -531,7 +551,6 @@ fn pattern_glyphs(
         return;
     }
     for (k, &field) in PatternField::of(&array.kind).iter().enumerate() {
-        let source_expr = field.expr(&array.kind).unwrap_or_default();
         let value_anchor = Point::new(anchor.x, anchor.y + (k + 1) as f32 * row);
         let edit = l
             .state
@@ -541,11 +560,7 @@ fn pattern_glyphs(
             .filter(|e| e.target == ValueTarget::Pattern(array.id, field));
         let text = match edit {
             Some(e) => e.buffer.clone(),
-            None => format!(
-                "{} · {}",
-                pattern_value_name(field, source_expr, l.sketch, text_set),
-                value_edit::pattern_value_text(l.sketch, field, source_expr, text_set)
-            ),
+            None => pattern_value_label(field, &array.kind, l.sketch, text_set),
         };
         out.push(Glyph {
             target: GlyphTarget::PatternValue(array.id, field),

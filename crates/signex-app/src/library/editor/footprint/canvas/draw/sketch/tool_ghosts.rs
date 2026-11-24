@@ -8,13 +8,13 @@
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point};
 use signex_sketch::SketchData;
-use signex_sketch::array::ArrayId;
+use signex_sketch::array::{ArrayId, ArrayKind};
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::geom::shapes;
 use signex_sketch::geom::{Point2, extension_hit};
 use signex_sketch::id::SketchEntityId;
 
-use super::pattern_instances::{SourceSlots, source_slots};
+use super::pattern_instances::source_slots;
 use crate::library::editor::footprint::canvas::FootprintCanvasState;
 use crate::library::editor::footprint::sketch_mode::mirror_card::{
     MirrorCard, MirrorField, MirrorObject,
@@ -393,12 +393,13 @@ impl MirrorGhost {
             Some((at.of(s)?, at.of(e)?))
         });
         let reflect = line.and_then(|(a, b)| reflection(a, b));
+        let picked = |id| card.objects.contains(&MirrorObject::Entity(id));
         for object in &card.objects {
             let id = match *object {
                 MirrorObject::Entity(id) => id,
                 MirrorObject::Pattern(pattern) => {
                     if let Some(reflect) = &reflect {
-                        ghost.pattern_copies(at, pattern, reflect);
+                        ghost.pattern_copies(at, pattern, reflect, picked);
                     }
                     continue;
                 }
@@ -424,15 +425,18 @@ impl MirrorGhost {
         ghost
     }
 
-    /// The mirrored copy of a picked pattern: every instance it bakes,
-    /// reflected; a circle source as its circles, any other source as a
-    /// mark at each instance's anchor. A suppressed instance bakes nothing
-    /// and gets no copy.
+    /// The mirrored copy of a picked pattern: the source's own shape at
+    /// every instance it bakes, reflected. A suppressed instance bakes
+    /// nothing and gets no copy; the source's own slot is skipped when
+    /// `picked` holds the source, which then draws once as an entity. A
+    /// picked pattern mirror draws no copy: its instances are not in
+    /// `sketch.arrays` (`signex_bake::pattern_slots` walks arrays only).
     fn pattern_copies(
         &mut self,
         at: &Positions<'_>,
         pattern: ArrayId,
         reflect: &impl Fn((f64, f64)) -> (f64, f64),
+        picked: impl Fn(SketchEntityId) -> bool,
     ) {
         let Some(solve) = at.state.last_solve.as_ref() else {
             return;
@@ -440,14 +444,26 @@ impl MirrorGhost {
         let Some(array) = at.sketch.arrays.iter().find(|a| a.id == pattern) else {
             return;
         };
-        let Some(SourceSlots { radius, slots }) = source_slots(array, at.sketch, solve) else {
+        let source = array.kind.source();
+        let (Some(shape), Some(found)) = (at.shape(source), source_slots(array, at.sketch, solve))
+        else {
             return;
         };
-        for slot in slots.iter().filter(|s| !s.suppressed) {
-            let image = reflect(slot.at);
-            match radius {
-                Some(r) => self.copies.push(circle_path(image, r)),
-                None => self.copied_points.push(image),
+        let centre = match array.kind {
+            ArrayKind::Polar { center, .. } => at.of(center),
+            _ => None,
+        };
+        let source_picked = picked(source);
+        for slot in found.slots.iter().filter(|s| !s.suppressed) {
+            if source_picked && (slot.i, slot.j) == (0, 0) {
+                continue;
+            }
+            let place = placement(found.anchor, slot.at, centre);
+            match &shape {
+                GhostShape::Point(p) => self.copied_points.push(reflect(place(*p))),
+                GhostShape::Polyline(path) => self
+                    .copies
+                    .push(path.iter().map(|p| reflect(place(*p))).collect()),
             }
         }
     }
@@ -482,6 +498,28 @@ impl MirrorGhost {
                 frame.stroke(&Path::line(from, to), stroke(GHOST_PX));
             }
         }
+    }
+}
+
+/// What carries a pattern's source from its anchor `from` to the slot at
+/// `to`: a turn about a polar pattern's `centre`, as the bake places it,
+/// else a shift. A polar source anchored on its centre shows no turn to
+/// read, and shifts (by nothing).
+fn placement(
+    from: (f64, f64),
+    to: (f64, f64),
+    centre: Option<(f64, f64)>,
+) -> impl Fn((f64, f64)) -> (f64, f64) {
+    let turn = centre.and_then(|c| {
+        let (u, v) = ((from.0 - c.0, from.1 - c.1), (to.0 - c.0, to.1 - c.1));
+        (u.0.hypot(u.1) > 1e-9).then(|| (c, (v.1.atan2(v.0) - u.1.atan2(u.0)).sin_cos()))
+    });
+    move |p: (f64, f64)| match turn {
+        Some((c, (sin, cos))) => {
+            let (dx, dy) = (p.0 - c.0, p.1 - c.1);
+            (c.0 + dx * cos - dy * sin, c.1 + dx * sin + dy * cos)
+        }
+        None => (p.0 + to.0 - from.0, p.1 + to.1 - from.1),
     }
 }
 

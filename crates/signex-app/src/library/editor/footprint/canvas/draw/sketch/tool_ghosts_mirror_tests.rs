@@ -190,6 +190,86 @@ fn a_picked_pattern_draws_its_mirrored_instances() {
     assert!(near_mm(centres[1], (-3.0, 0.0)), "{centres:?}");
 }
 
+/// `d` with `kind` added as a pattern, solved into `state`; the pattern's id.
+fn with_pattern(d: &mut Drawing, kind: ArrayKind) -> (ArrayId, FootprintEditorState) {
+    let array = Array {
+        id: ArrayId::new(),
+        kind,
+        numbering: NumberingScheme::default(),
+    };
+    let id = array.id;
+    d.sketch.arrays.push(array);
+    let params = signex_sketch::parameter::resolve(&d.sketch.parameters).expect("resolves");
+    let mut state = FootprintEditorState::empty();
+    state.last_solve = Some(Solver::default().solve(&d.sketch, &params).expect("solves"));
+    (id, state)
+}
+
+/// Mockup row 191: a pattern of a Line mirrors the Line's own shape at
+/// each instance, not a mark; with the source Line picked too, the
+/// source's copy is drawn once.
+#[test]
+fn a_picked_pattern_mirrors_its_sources_shape_and_the_source_once() {
+    let mut d = drawing();
+    let kind = ArrayKind::Linear {
+        source: d.line,
+        count_expr: "2".into(),
+        dx_expr: "0mm".into(),
+        dy_expr: "3mm".into(),
+    };
+    let (pattern, state) = with_pattern(&mut d, kind);
+    let picked = vec![MirrorObject::Entity(d.line), MirrorObject::Pattern(pattern)];
+    let ghost = plan(&d, &state, Some(&card(picked, Some(d.centerline))));
+
+    assert!(
+        ghost.copied_points.is_empty(),
+        "a Line source copies as Lines"
+    );
+    assert_eq!(ghost.copies.len(), 2, "the source once, its instance once");
+    let source = &ghost.copies[0];
+    assert!(near_mm(source[0], (-2.0, 0.0)) && near_mm(source[1], (-4.0, 1.0)));
+    let moved = &ghost.copies[1];
+    assert!(
+        near_mm(moved[0], (-2.0, 3.0)) && near_mm(moved[1], (-4.0, 4.0)),
+        "{moved:?}"
+    );
+}
+
+/// A circular pattern's instances turn about its centre before the
+/// mirror, as the bake places them.
+#[test]
+fn a_picked_circular_pattern_mirrors_its_turned_instances() {
+    let mut d = drawing();
+    let plane = d.sketch.planes[0].id;
+    let centre = SketchEntityId::new();
+    d.sketch.entities.push(Entity::new(
+        centre,
+        plane,
+        EntityKind::Point { x: 3.0, y: -1.0 },
+    ));
+    let kind = ArrayKind::Polar {
+        source: d.line,
+        center: centre,
+        count_expr: "2".into(),
+        sweep_angle_expr: "360deg".into(),
+        depopulation: None,
+    };
+    let (pattern, state) = with_pattern(&mut d, kind);
+    let picked = vec![MirrorObject::Pattern(pattern)];
+    let ghost = plan(&d, &state, Some(&card(picked, Some(d.centerline))));
+
+    assert_eq!(ghost.copies.len(), 2, "{:?}", ghost.copies);
+    // The Line (2, 0)-(4, 1) turned half way about (3, -1) is
+    // (4, -2)-(2, -3); mirrored about x = 0, (-4, -2)-(-2, -3).
+    let turned = &ghost.copies[1];
+    assert!(near_mm(turned[0], (-4.0, -2.0)), "{turned:?}");
+    assert!(near_mm(turned[1], (-2.0, -3.0)), "{turned:?}");
+}
+
+fn near_mm(a: (f64, f64), b: (f64, f64)) -> bool {
+    (a.0 - b.0).hypot(a.1 - b.1) < 1e-6
+}
+
 #[test]
 fn no_card_no_ghost() {
     let d = drawing();

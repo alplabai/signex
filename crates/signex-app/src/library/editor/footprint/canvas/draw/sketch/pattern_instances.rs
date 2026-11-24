@@ -3,27 +3,27 @@
 //! slots (`signex_bake::pattern_slots`), so an edited spacing moves them. A
 //! slot the suppression list holds back keeps its place and draws faint and
 //! struck through (B5), apart from the holes that bake. A linear pattern
-//! draws its spacing and count as dimensions on the drawing, named by the
-//! parameters they are bound to.
+//! draws its spacing and count as `name · value` pills on dimension lines,
+//! the text its selected value glyphs show; a diagonal step draws its X
+//! and Y spacing as two dimensions.
 
-use iced::Point;
 use iced::widget::canvas::{self, LineDash, Path, Stroke};
+use iced::{Point, Vector};
 use signex_bake::PatternSlot;
 use signex_sketch::SketchData;
-use signex_sketch::array::{Array, ArrayKind};
+use signex_sketch::array::{Array, ArrayId, ArrayKind};
 use signex_sketch::entity::EntityKind;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::solver::state::point_xy;
 
 use super::SELECTION;
-use super::arrows::draw_arrow_head;
-use super::sketch_ink::SketchInk;
+use super::dimension_labels::{LabelInk, dimension_stroke, draw_value};
 use crate::library::editor::footprint::canvas::FootprintCanvasState;
-use crate::library::editor::footprint::canvas::glyph_layout::GLYPH_TEXT;
-use crate::library::editor::footprint::sketch_mode::value_edit::{
-    MAX_DRAWN_SLOTS, bound_parameter, pattern_value_text,
+use crate::library::editor::footprint::canvas::glyph_layout::{
+    GLYPH_TEXT, Glyph, GlyphFace, GlyphTarget, label_rect, pattern_value_label,
 };
+use crate::library::editor::footprint::sketch_mode::value_edit::MAX_DRAWN_SLOTS;
 use crate::library::editor::footprint::state::FootprintEditorState;
 use crate::library::editor::footprint::state::canvas_text::SketchCanvasText;
 use crate::library::editor::footprint::state::sketch_overlay::PatternField;
@@ -39,13 +39,14 @@ const SUPPRESSED_DASH: &[f32] = &[2.0, 3.0];
 const DIMENSION_OFFSET_EM: f32 = 1.6;
 /// How far an extension line runs past its dimension line, in text heights.
 const EXTENSION_OVERSHOOT_EM: f32 = 0.3;
-/// Arrowhead length of the spacing dimension, in text heights.
-const ARROW_HEAD_EM: f32 = 0.4;
-/// Width of a dimension and its extension lines, in px.
-const DIMENSION_PX: f32 = 1.0;
+/// The gap between the last instance and the count pill, in text heights.
+const COUNT_GAP_EM: f32 = 0.6;
 
-/// Where a pattern places its source: the source's extent and every slot.
+/// Where a pattern places its source: the source's anchor and extent, and
+/// every slot.
 pub(in crate::library::editor::footprint::canvas) struct SourceSlots {
+    /// The point the source is placed by, mm.
+    pub anchor: (f64, f64),
     /// The source circle's radius, mm; `None` for any other source.
     pub radius: Option<f64>,
     /// Every slot the bake places or the suppression list holds back, the
@@ -87,37 +88,34 @@ pub(in crate::library::editor::footprint::canvas) fn source_slots(
             EntityKind::Circle { radius, .. } => Some(radius),
             _ => None,
         });
-    let at = source_anchor(sketch, solve, source)?;
-    let slots = signex_bake::pattern_slots(sketch, solve, array.id, at, MAX_DRAWN_SLOTS)?;
-    Some(SourceSlots { radius, slots })
+    let anchor = source_anchor(sketch, solve, source)?;
+    let slots = signex_bake::pattern_slots(sketch, solve, array.id, anchor, MAX_DRAWN_SLOTS)?;
+    Some(SourceSlots {
+        anchor,
+        radius,
+        slots,
+    })
 }
 
 /// One further instance of a pattern of circles, as the drawing shows it.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(in crate::library::editor::footprint::canvas) struct InstanceCircle {
-    pub at: (f64, f64),
-    pub radius: f64,
+struct InstanceCircle {
+    at: (f64, f64),
+    radius: f64,
     /// On the suppression list: the slot stays, the bake leaves it out.
-    pub suppressed: bool,
+    suppressed: bool,
 }
 
-/// Every further instance `array` of a Circle source places, suppressed
+/// Every further instance a pattern of a Circle source places, suppressed
 /// ones included; the source itself is left out. Empty for any other
 /// source (a pad pattern draws as baked pads).
-pub(in crate::library::editor::footprint::canvas) fn instance_slots(
-    array: &Array,
-    sketch: &SketchData,
-    solve: &FullSolveOutput,
-) -> Vec<InstanceCircle> {
-    let Some(SourceSlots {
-        radius: Some(radius),
-        slots,
-    }) = source_slots(array, sketch, solve)
-    else {
+fn instance_slots(found: &SourceSlots) -> Vec<InstanceCircle> {
+    let Some(radius) = found.radius else {
         return Vec::new();
     };
-    slots
-        .into_iter()
+    found
+        .slots
+        .iter()
         .filter(|slot| (slot.i, slot.j) != (0, 0))
         .map(|slot| InstanceCircle {
             at: slot.at,
@@ -127,73 +125,66 @@ pub(in crate::library::editor::footprint::canvas) fn instance_slots(
         .collect()
 }
 
-/// A linear pattern's count and spacing as dimensions on the drawing
-/// (mockup row 191): the spacing spans the source and the first further
-/// instance, the count sits past the last one. A value bound to a
-/// parameter is named by it ("pitch = 0.65 mm").
+/// One spacing dimension of a linear pattern, between two points, mm.
 #[derive(Debug, Clone, PartialEq)]
-pub(in crate::library::editor::footprint::canvas) struct LinearDimensions {
-    /// The source's slot and the next one, mm.
-    pub span: ((f64, f64), (f64, f64)),
-    /// The last slot, mm.
-    pub last: (f64, f64),
-    /// How far the source reaches from its anchor, mm (a circle's radius).
-    pub clearance_mm: f64,
-    pub spacing: String,
-    pub count: String,
+struct SpacingDimension {
+    field: PatternField,
+    from: (f64, f64),
+    to: (f64, f64),
+    text: String,
 }
 
-/// A pattern value as a dimension shows it: `name = value` when bound to
-/// a parameter, else the value.
-fn bound_text(
-    sketch: &SketchData,
-    field: PatternField,
-    kind: &ArrayKind,
-    text: &SketchCanvasText,
-) -> String {
-    let source = field.expr(kind).unwrap_or_default();
-    let value = pattern_value_text(sketch, field, source, text);
-    match bound_parameter(source, sketch) {
-        Some(param) => format!("{param} = {value}"),
-        None => value,
-    }
+/// A linear pattern's count and spacing as dimensions on the drawing
+/// (mockup row 191): the spacing spans the source and the next instance,
+/// its X and Y steps apart; the count sits past the last instance.
+#[derive(Debug, Clone, PartialEq)]
+struct LinearDimensions {
+    array: ArrayId,
+    /// The X step, then the Y step; a zero step draws none.
+    spacing: Vec<SpacingDimension>,
+    /// The source's slot and the next one, mm.
+    step: ((f64, f64), (f64, f64)),
+    /// The last slot, mm.
+    last: (f64, f64),
+    /// How far the source reaches from its anchor, mm (a circle's radius).
+    clearance_mm: f64,
+    count: String,
 }
 
 /// The dimensions of `array` when it is a linear pattern of at least two
 /// instances; `None` otherwise.
-pub(in crate::library::editor::footprint::canvas) fn linear_dimensions(
+fn linear_dimensions(
     array: &Array,
     sketch: &SketchData,
-    solve: &FullSolveOutput,
+    found: &SourceSlots,
     text: &SketchCanvasText,
 ) -> Option<LinearDimensions> {
     if !matches!(array.kind, ArrayKind::Linear { .. }) {
         return None;
     }
-    let SourceSlots { radius, slots } = source_slots(array, sketch, solve)?;
-    let (first, next, last) = (slots.first()?, slots.get(1)?, slots.last()?);
-    let step = (next.at.0 - first.at.0, next.at.1 - first.at.1);
+    let first = found.slots.first()?.at;
+    let next = found.slots.get(1)?.at;
+    let corner = (next.0, first.1);
     let spacing = [
-        (PatternField::SpacingX, step.0),
-        (PatternField::SpacingY, step.1),
+        (PatternField::SpacingX, first, corner),
+        (PatternField::SpacingY, corner, next),
     ]
     .into_iter()
-    .filter(|(_, d)| d.abs() > 1e-9)
-    .map(|(field, _)| bound_text(sketch, field, &array.kind, text))
-    .collect::<Vec<_>>()
-    .join(", ");
-    let count_expr = PatternField::Count.expr(&array.kind).unwrap_or_default();
-    let count = bound_text(sketch, PatternField::Count, &array.kind, text);
-    let count = match bound_parameter(count_expr, sketch) {
-        Some(_) => count,
-        None => format!("\u{00D7}{count}"),
-    };
+    .filter(|(_, from, to)| (to.0 - from.0).hypot(to.1 - from.1) > 1e-9)
+    .map(|(field, from, to)| SpacingDimension {
+        field,
+        from,
+        to,
+        text: pattern_value_label(field, &array.kind, sketch, text),
+    })
+    .collect();
     Some(LinearDimensions {
-        span: (first.at, next.at),
-        last: last.at,
-        clearance_mm: radius.unwrap_or(0.0),
+        array: array.id,
         spacing,
-        count,
+        step: (first, next),
+        last: found.slots.last()?.at,
+        clearance_mm: found.radius.unwrap_or(0.0),
+        count: pattern_value_label(PatternField::Count, &array.kind, sketch, text),
     })
 }
 
@@ -202,11 +193,41 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_pattern_instance
     cstate: &FootprintCanvasState,
     sketch: &SketchData,
     state: &FootprintEditorState,
+    conflict_colour: iced::Color,
 ) {
     let Some(solve) = state.last_solve.as_ref() else {
         return;
     };
-    let ring = |alpha: f32, dash: &'static [f32]| Stroke {
+    let ink = LabelInk::new(conflict_colour);
+    for array in &sketch.arrays {
+        let Some(found) = source_slots(array, sketch, solve) else {
+            continue;
+        };
+        for slot in instance_slots(&found) {
+            draw_instance_circle(frame, cstate, slot);
+        }
+        // A selected pattern shows its values as glyphs (`glyph_layout`).
+        if state.sketch_overlay.selected_pattern != Some(array.id)
+            && let Some(dims) = linear_dimensions(array, sketch, &found, &state.canvas_text)
+        {
+            draw_linear_dimensions(frame, cstate, &dims, &ink);
+        }
+    }
+}
+
+/// A kept instance as a dashed ring; a suppressed one fainter, finer
+/// dashed and struck through.
+fn draw_instance_circle(
+    frame: &mut canvas::Frame,
+    cstate: &FootprintCanvasState,
+    slot: InstanceCircle,
+) {
+    let (alpha, dash) = if slot.suppressed {
+        (SUPPRESSED_ALPHA, SUPPRESSED_DASH)
+    } else {
+        (INK_ALPHA, DASH)
+    };
+    let ring = Stroke {
         line_dash: LineDash {
             segments: dash,
             offset: 0,
@@ -218,90 +239,97 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_pattern_instance
                 ..SELECTION
             })
     };
-    let kept = ring(INK_ALPHA, DASH);
-    let held_back = ring(SUPPRESSED_ALPHA, SUPPRESSED_DASH);
-    for array in &sketch.arrays {
-        for slot in instance_slots(array, sketch, solve) {
-            let c = cstate.world_to_screen(slot.at);
-            let r = slot.radius as f32 * cstate.scale;
-            if !slot.suppressed {
-                frame.stroke(&Path::circle(c, r), kept);
-                continue;
-            }
-            frame.stroke(&Path::circle(c, r), held_back);
-            let d = r * std::f32::consts::FRAC_1_SQRT_2;
-            let strike = Stroke {
-                line_dash: LineDash::default(),
-                ..held_back
-            };
-            frame.stroke(
-                &Path::line(Point::new(c.x - d, c.y + d), Point::new(c.x + d, c.y - d)),
-                strike,
-            );
-        }
-        // A selected pattern shows its values as glyphs (`glyph_layout`).
-        if state.sketch_overlay.selected_pattern != Some(array.id)
-            && let Some(dims) = linear_dimensions(array, sketch, solve, &state.canvas_text)
-        {
-            draw_linear_dimensions(frame, cstate, &dims);
-        }
+    let c = cstate.world_to_screen(slot.at);
+    let r = slot.radius as f32 * cstate.scale;
+    frame.stroke(&Path::circle(c, r), ring);
+    if slot.suppressed {
+        let d = r * std::f32::consts::FRAC_1_SQRT_2;
+        let strike = Stroke {
+            line_dash: LineDash::default(),
+            ..ring
+        };
+        frame.stroke(
+            &Path::line(Point::new(c.x - d, c.y + d), Point::new(c.x + d, c.y - d)),
+            strike,
+        );
     }
 }
 
-/// The spacing dimension beside the first two instances and the count
-/// past the last one.
+/// The unit direction from `a` to `b` on screen and its normal; `None`
+/// when they are under a pixel apart.
+fn axes(a: Point, b: Point) -> Option<(Vector, Vector)> {
+    let length = a.distance(b);
+    (length >= 1.0).then(|| {
+        let dir = Vector::new((b.x - a.x) / length, (b.y - a.y) / length);
+        (dir, Vector::new(-dir.y, dir.x))
+    })
+}
+
+/// A value pill at `at`, on the dimension line `span` when it has one.
+fn value_glyph(target: GlyphTarget, text: &str, at: Point, span: Option<(Point, Point)>) -> Glyph {
+    Glyph {
+        target,
+        face: GlyphFace::Value {
+            text: text.to_string(),
+            editing: false,
+            invalid: false,
+            reference: false,
+            span,
+        },
+        anchor: at,
+        rect: label_rect(at, text),
+    }
+}
+
+/// Each spacing dimension beside its instances, its pill on the line, and
+/// the count pill past the last instance.
 fn draw_linear_dimensions(
     frame: &mut canvas::Frame,
     cstate: &FootprintCanvasState,
     dims: &LinearDimensions,
+    ink: &LabelInk,
 ) {
-    let ink = SketchInk::board();
-    let a = cstate.world_to_screen(dims.span.0);
-    let b = cstate.world_to_screen(dims.span.1);
-    let length = a.distance(b);
-    if length < 1.0 {
-        return;
-    }
-    let dir = ((b.x - a.x) / length, (b.y - a.y) / length);
-    let normal = (-dir.1, dir.0);
     let clearance = dims.clearance_mm as f32 * cstate.scale;
     let off = clearance + GLYPH_TEXT * DIMENSION_OFFSET_EM;
-    let shift = |p: Point, by: f32| Point::new(p.x + normal.0 * by, p.y + normal.1 * by);
-    let stroke = Stroke::default()
-        .with_width(DIMENSION_PX)
-        .with_color(ink.dimension);
     let reach = off + GLYPH_TEXT * EXTENSION_OVERSHOOT_EM;
-    for p in [a, b] {
-        frame.stroke(&Path::line(shift(p, clearance), shift(p, reach)), stroke);
+    let extension = dimension_stroke(ink, false, false);
+    for dim in &dims.spacing {
+        let a = cstate.world_to_screen(dim.from);
+        let b = cstate.world_to_screen(dim.to);
+        let Some((_, normal)) = axes(a, b) else {
+            continue;
+        };
+        let shift = |p: Point, by: f32| p + normal * by;
+        for p in [a, b] {
+            frame.stroke(&Path::line(shift(p, clearance), shift(p, reach)), extension);
+        }
+        let span = (shift(a, off), shift(b, off));
+        let mid = Point::new((span.0.x + span.1.x) / 2.0, (span.0.y + span.1.y) / 2.0);
+        let target = GlyphTarget::PatternValue(dims.array, dim.field);
+        let pill = value_glyph(target, &dim.text, mid, Some(span));
+        draw_value(frame, &pill, ink, false);
     }
-    let (da, db) = (shift(a, off), shift(b, off));
-    frame.stroke(&Path::line(da, db), stroke);
-    draw_arrow_head(frame, da, db, GLYPH_TEXT * ARROW_HEAD_EM, stroke);
-    draw_arrow_head(frame, db, da, GLYPH_TEXT * ARROW_HEAD_EM, stroke);
-    let mid = Point::new((da.x + db.x) / 2.0, (da.y + db.y) / 2.0);
-    dimension_text(frame, shift(mid, GLYPH_TEXT), &dims.spacing, ink.label);
-    let last = cstate.world_to_screen(dims.last);
-    let count_at = Point::new(last.x + dir.0 * off, last.y + dir.1 * off);
-    dimension_text(frame, count_at, &dims.count, ink.label);
-}
-
-fn dimension_text(frame: &mut canvas::Frame, at: Point, content: &str, color: iced::Color) {
-    frame.fill_text(canvas::Text {
-        content: content.to_string(),
-        position: at,
-        color,
-        size: iced::Pixels(GLYPH_TEXT),
-        align_x: iced::alignment::Horizontal::Center.into(),
-        align_y: iced::alignment::Vertical::Center,
-        ..canvas::Text::default()
-    });
+    let step = (
+        cstate.world_to_screen(dims.step.0),
+        cstate.world_to_screen(dims.step.1),
+    );
+    let Some((dir, _)) = axes(step.0, step.1) else {
+        return;
+    };
+    let size = label_rect(Point::ORIGIN, &dims.count).size();
+    let half = (dir.x.abs() * size.width + dir.y.abs() * size.height) / 2.0;
+    let gap = clearance + GLYPH_TEXT * COUNT_GAP_EM + half;
+    let at = cstate.world_to_screen(dims.last) + dir * gap;
+    let target = GlyphTarget::PatternValue(dims.array, PatternField::Count);
+    let pill = value_glyph(target, &dims.count, at, None);
+    draw_value(frame, &pill, ink, false);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use signex_sketch::Solver;
-    use signex_sketch::array::{ArrayId, NumberingScheme};
+    use signex_sketch::array::NumberingScheme;
     use signex_sketch::entity::Entity;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 
@@ -313,7 +341,9 @@ mod tests {
         sketch: &SketchData,
         solve: &FullSolveOutput,
     ) -> Vec<((f64, f64), f64)> {
-        instance_slots(array, sketch, solve)
+        source_slots(array, sketch, solve)
+            .map(|found| instance_slots(&found))
+            .unwrap_or_default()
             .into_iter()
             .filter(|c| !c.suppressed)
             .map(|c| (c.at, c.radius))
@@ -389,10 +419,14 @@ mod tests {
         Solver::default().solve(sketch, &params).expect("solves")
     }
 
+    /// The en-US canvas words the labels below read.
     fn words() -> SketchCanvasText {
         SketchCanvasText {
             unit_mm: "mm".into(),
             value_unresolved: "?".into(),
+            pattern_count: "count".into(),
+            pattern_spacing_x: "spacing X".into(),
+            pattern_spacing_y: "spacing Y".into(),
             ..SketchCanvasText::default()
         }
     }
@@ -413,6 +447,15 @@ mod tests {
         array
     }
 
+    fn dimensions(array: &Array, sketch: &SketchData) -> Option<LinearDimensions> {
+        let found = source_slots(array, sketch, &solved(sketch)).expect("slots");
+        linear_dimensions(array, sketch, &found, &words())
+    }
+
+    fn near(a: (f64, f64), b: (f64, f64)) -> bool {
+        (a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6
+    }
+
     /// Mockup row 191 (B5): a suppressed instance keeps its slot on the
     /// drawing, marked suppressed, and is not among the plain ghosts.
     #[test]
@@ -422,7 +465,8 @@ mod tests {
         sketch.arrays = vec![array.clone()];
         let solve = solved(&sketch);
 
-        let slots = instance_slots(&array, &sketch, &solve);
+        let found = source_slots(&array, &sketch, &solve).expect("slots");
+        let slots = instance_slots(&found);
         assert_eq!(slots.len(), 3, "the suppressed slot stays: {slots:?}");
         let held_back: Vec<&InstanceCircle> = slots.iter().filter(|s| s.suppressed).collect();
         assert_eq!(held_back.len(), 1, "{slots:?}");
@@ -440,48 +484,58 @@ mod tests {
 
     /// Mockup row 191: a linear pattern bound to `rows` and `pitch` draws
     /// its spacing between the first two instances and its count past the
-    /// last, each named by its parameter.
+    /// last, as `name · value` pills naming the parameters, the text the
+    /// selected pattern's glyphs show (DECISIONS 2026-11-20).
     #[test]
     fn a_linear_pattern_draws_count_and_spacing_bound_to_parameters() {
         let (mut sketch, hole) = hole_sketch();
         sketch.parameters.insert("rows", "4");
         sketch.parameters.insert("pitch", "0.65mm");
         let array = linear(&mut sketch, hole, ["rows", "0mm", "pitch"]);
-        let solve = solved(&sketch);
 
-        let dims = linear_dimensions(&array, &sketch, &solve, &words()).expect("dimensions");
-        assert_eq!(dims.spacing, "pitch = 0.65 mm");
-        assert_eq!(dims.count, "rows = 4");
-        let ((x0, y0), (x1, y1)) = dims.span;
-        assert!(
-            (x0 - 1.0).abs() < 1e-6 && (y0 - 2.0).abs() < 1e-6,
-            "{dims:?}"
-        );
-        assert!(
-            (x1 - 1.0).abs() < 1e-6 && (y1 - 2.65).abs() < 1e-6,
-            "{dims:?}"
-        );
+        let dims = dimensions(&array, &sketch).expect("dimensions");
+        assert_eq!(dims.spacing.len(), 1, "a zero X step draws none: {dims:?}");
+        let spacing = &dims.spacing[0];
+        assert_eq!(spacing.field, PatternField::SpacingY);
+        assert_eq!(spacing.text, "spacing Y = pitch · 0.65 mm");
+        assert_eq!(dims.count, "count = rows · 4");
+        assert!(near(spacing.from, (1.0, 2.0)), "{dims:?}");
+        assert!(near(spacing.to, (1.0, 2.65)), "{dims:?}");
         assert!((dims.last.1 - (2.0 + 3.0 * 0.65)).abs() < 1e-6, "{dims:?}");
         assert!((dims.clearance_mm - 0.5).abs() < 1e-9);
     }
 
-    /// A literal count and spacing show their values; the count keeps its
-    /// times sign.
+    /// A literal count and spacing show their field and value.
     #[test]
     fn a_literal_linear_pattern_shows_its_values() {
         let (mut sketch, hole) = hole_sketch();
         let array = linear(&mut sketch, hole, ["3", "2mm", "0mm"]);
-        let solve = solved(&sketch);
 
-        let dims = linear_dimensions(&array, &sketch, &solve, &words()).expect("dimensions");
-        assert_eq!(dims.spacing, "2.00 mm");
-        assert_eq!(dims.count, "\u{00D7}3");
+        let dims = dimensions(&array, &sketch).expect("dimensions");
+        assert_eq!(dims.spacing.len(), 1, "{dims:?}");
+        assert_eq!(dims.spacing[0].text, "spacing X · 2.00 mm");
+        assert_eq!(dims.count, "count · 3");
+    }
+
+    /// A diagonal step draws its X and Y spacing as two dimensions, each
+    /// named by its own field and as long as the value it shows.
+    #[test]
+    fn a_diagonal_linear_pattern_draws_its_x_and_y_spacing_apart() {
+        let (mut sketch, hole) = hole_sketch();
+        let array = linear(&mut sketch, hole, ["2", "2mm", "1mm"]);
+
+        let dims = dimensions(&array, &sketch).expect("dimensions");
+        assert_eq!(dims.spacing.len(), 2, "{dims:?}");
+        let (x, y) = (&dims.spacing[0], &dims.spacing[1]);
+        assert_eq!(x.text, "spacing X · 2.00 mm");
+        assert!(near(x.from, (1.0, 2.0)) && near(x.to, (3.0, 2.0)), "{x:?}");
+        assert_eq!(y.text, "spacing Y · 1.00 mm");
+        assert!(near(y.from, (3.0, 2.0)) && near(y.to, (3.0, 3.0)), "{y:?}");
     }
 
     #[test]
     fn a_grid_pattern_draws_no_linear_dimensions() {
         let (sketch, array) = circle_grid();
-        let solve = solved(&sketch);
-        assert_eq!(linear_dimensions(&array, &sketch, &solve, &words()), None);
+        assert_eq!(dimensions(&array, &sketch), None);
     }
 }
