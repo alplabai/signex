@@ -196,6 +196,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 label: "R".into(),
                 previous_unavailable: None,
                 error: None,
+                selected: None,
             })
         }
         ModalId::LibraryUpdates => {

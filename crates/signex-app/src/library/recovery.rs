@@ -10,7 +10,7 @@
 //! The three share one layout: an intro with a glyph, the facts in a
 //! key / value box, a caption saying what Skip for now leaves behind, and a
 //! footer with the destructive action on the left, then Skip for now, then
-//! the fix as the primary.
+//! the fix as the primary ([`footer_plan`]).
 //!
 //! 1. **Library missing** (`.snxlib` is gone) — *Locate…* re-opens the
 //!    file picker so the user can point Signex at a moved library.
@@ -28,7 +28,9 @@
 //!    reason. The close (x, Esc) leaves the library unopened.
 //!    *Restore from remote* is reserved for when the
 //!    manifest records a `[users.<remote>]` URL; v0.9 leaves the button
-//!    disabled because no remote field exists yet (Stage 13+).
+//!    disabled because no remote field exists yet (Stage 13+). While it is
+//!    disabled it stands before Skip for now, which is the primary (mockup
+//!    row 138).
 //!
 //! 3. **Broken primitive binding** (a row's `symbol_uuid` /
 //!    `footprint_uuid` resolves to a UUID with no on-disk file) —
@@ -47,7 +49,7 @@ use std::path::{Path, PathBuf};
 
 use iced::widget::{Column, Space, column, container};
 use iced::{Element, Length, Widget};
-use signex_i18n::{I18n, Localized, UserText, ids, t};
+use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_library::PrimitiveKind;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::text;
@@ -55,8 +57,7 @@ use uuid::Uuid;
 
 use super::messages::LibraryMessage;
 use super::modal_chrome::{
-    danger_btn, footer_strip, header_with_note_closing, key_value_box, mono_value, notice_banner,
-    secondary_btn,
+    footer_strip, header_with_note_closing, key_value_box, mono_value, notice_banner,
 };
 use crate::styles::{
     DialogButtonKind, DialogIcon, PillTone, Spacing, TypeScale, dialog_body, dialog_button,
@@ -394,70 +395,119 @@ fn facts<'a>(
     }
 }
 
-/// The destructive action on the left, then Skip for now, then the fix.
+/// Whether the fix can be pressed: Restore from remote needs a known
+/// remote; the other fixes always can.
+pub(crate) fn fix_enabled(dialog: &RecoveryDialog) -> bool {
+    !matches!(dialog, RecoveryDialog::GitMissing { remote: None, .. })
+}
+
+/// One footer button: its label, its role, and what a press sends (`None`
+/// draws it disabled).
+#[derive(Debug, Clone)]
+pub(crate) struct FooterButton {
+    pub label: MessageId,
+    pub kind: DialogButtonKind,
+    pub message: Option<LibraryMessage>,
+}
+
+/// The footer of `dialog`: the destructive action for the left end, and
+/// the right-aligned buttons with the one primary last (DECISIONS
+/// 2026-11-08). That is Skip for now, then the fix as the primary. While
+/// the fix cannot be pressed it is drawn disabled before Skip for now, and
+/// Skip for now is the primary, so the dialog keeps a default action
+/// (mockup row 138).
+pub(crate) fn footer_plan(dialog: &RecoveryDialog) -> (FooterButton, Vec<FooterButton>) {
+    let (destroy, skip_message, (fix_label, fix_message)) = footer_actions(dialog);
+    let skip = |kind| FooterButton {
+        label: ids::LIBRARY_RECOVERY_SKIP_FOR_NOW,
+        kind,
+        message: Some(skip_message.clone()),
+    };
+    let fix = |kind| FooterButton {
+        label: fix_label,
+        kind,
+        message: fix_message.clone(),
+    };
+    let right = if fix_enabled(dialog) {
+        vec![
+            skip(DialogButtonKind::Secondary),
+            fix(DialogButtonKind::Primary),
+        ]
+    } else {
+        vec![
+            fix(DialogButtonKind::Secondary),
+            skip(DialogButtonKind::Primary),
+        ]
+    };
+    let destroy = FooterButton {
+        label: destroy.0,
+        kind: DialogButtonKind::Danger,
+        message: Some(destroy.1),
+    };
+    (destroy, right)
+}
+
+/// The destructive action, what Skip for now sends, and the fix of
+/// `dialog`; Restore from remote has no message until a remote is known.
+fn footer_actions(
+    dialog: &RecoveryDialog,
+) -> (
+    (MessageId, LibraryMessage),
+    LibraryMessage,
+    (MessageId, Option<LibraryMessage>),
+) {
+    use LibraryMessage::{RecoveryBrokenBinding, RecoveryGitMissing, RecoveryLibraryMissing};
+    match dialog {
+        RecoveryDialog::LibraryMissing { .. } => (
+            (
+                ids::LIBRARY_RECOVERY_REMOVE_FROM_PROJECT,
+                RecoveryLibraryMissing(LibraryMissingChoice::RemoveFromProject),
+            ),
+            RecoveryLibraryMissing(LibraryMissingChoice::Cancel),
+            (
+                ids::LIBRARY_RECOVERY_LOCATE,
+                Some(RecoveryLibraryMissing(LibraryMissingChoice::Locate)),
+            ),
+        ),
+        RecoveryDialog::GitMissing { remote, .. } => (
+            (
+                ids::LIBRARY_RECOVERY_REINIT,
+                RecoveryGitMissing(GitMissingChoice::ReInit),
+            ),
+            RecoveryGitMissing(GitMissingChoice::Skip),
+            (
+                ids::LIBRARY_RECOVERY_RESTORE_REMOTE,
+                remote
+                    .as_ref()
+                    .map(|_| RecoveryGitMissing(GitMissingChoice::RestoreFromRemote)),
+            ),
+        ),
+        RecoveryDialog::BrokenPrimitiveBinding { .. } => (
+            (
+                ids::LIBRARY_RECOVERY_REMOVE_ROW,
+                RecoveryBrokenBinding(BrokenBindingChoice::RemoveRow),
+            ),
+            RecoveryBrokenBinding(BrokenBindingChoice::Cancel),
+            (
+                ids::LIBRARY_RECOVERY_REBIND,
+                Some(RecoveryBrokenBinding(BrokenBindingChoice::Rebind)),
+            ),
+        ),
+    }
+}
+
+/// The footer as [`footer_plan`] lays it out.
 fn footer<'a>(
     dialog: &RecoveryDialog,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    let skip_label = t!(i18n, ids::LIBRARY_RECOVERY_SKIP_FOR_NOW);
-    let (destroy, skip, fix) = match dialog {
-        RecoveryDialog::LibraryMissing { .. } => (
-            danger_btn(
-                t!(i18n, ids::LIBRARY_RECOVERY_REMOVE_FROM_PROJECT),
-                LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::RemoveFromProject),
-                tokens,
-            ),
-            LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Cancel),
-            dialog_button(
-                t!(i18n, ids::LIBRARY_RECOVERY_LOCATE),
-                DialogButtonKind::Primary,
-                Some(LibraryMessage::RecoveryLibraryMissing(
-                    LibraryMissingChoice::Locate,
-                )),
-                tokens,
-            ),
-        ),
-        // Restoring is the fix once a remote is known; until then it is
-        // drawn disabled.
-        RecoveryDialog::GitMissing { remote, .. } => (
-            danger_btn(
-                t!(i18n, ids::LIBRARY_RECOVERY_REINIT),
-                LibraryMessage::RecoveryGitMissing(GitMissingChoice::ReInit),
-                tokens,
-            ),
-            LibraryMessage::RecoveryGitMissing(GitMissingChoice::Skip),
-            dialog_button(
-                t!(i18n, ids::LIBRARY_RECOVERY_RESTORE_REMOTE),
-                DialogButtonKind::Primary,
-                remote.as_ref().map(|_| {
-                    LibraryMessage::RecoveryGitMissing(GitMissingChoice::RestoreFromRemote)
-                }),
-                tokens,
-            ),
-        ),
-        RecoveryDialog::BrokenPrimitiveBinding { .. } => (
-            danger_btn(
-                t!(i18n, ids::LIBRARY_RECOVERY_REMOVE_ROW),
-                LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::RemoveRow),
-                tokens,
-            ),
-            LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Cancel),
-            dialog_button(
-                t!(i18n, ids::LIBRARY_RECOVERY_REBIND),
-                DialogButtonKind::Primary,
-                Some(LibraryMessage::RecoveryBrokenBinding(
-                    BrokenBindingChoice::Rebind,
-                )),
-                tokens,
-            ),
-        ),
+    let (destroy, right) = footer_plan(dialog);
+    let draw = |button: FooterButton| {
+        dialog_button(t!(i18n, button.label), button.kind, button.message, tokens)
     };
-    footer_strip(
-        vec![destroy],
-        vec![secondary_btn(skip_label, skip, tokens), fix],
-        tokens,
-    )
+    let left = vec![draw(destroy)];
+    footer_strip(left, right.into_iter().map(draw).collect(), tokens)
 }
 
 #[cfg(test)]
@@ -596,6 +646,66 @@ mod tests {
             "{shown:?}"
         );
         assert!(banners(&dialogs[0], &i18n).is_empty());
+    }
+
+    /// `(label, role, can be pressed)` of the right-aligned footer buttons.
+    fn right_shape(dialog: &RecoveryDialog) -> Vec<(MessageId, DialogButtonKind, bool)> {
+        footer_plan(dialog)
+            .1
+            .iter()
+            .map(|b| (b.label, b.kind, b.message.is_some()))
+            .collect()
+    }
+
+    /// Mockup row 138 (layout): the fix is the one primary, last, after a
+    /// secondary Skip for now. With no remote, the disabled Restore from
+    /// remote is secondary and stands first, and Skip for now is the
+    /// primary at the right end; the built footer draws them in that order.
+    #[test]
+    fn skip_for_now_is_the_primary_while_restore_from_remote_is_disabled() {
+        use crate::styles::DialogButtonKind::{Danger, Primary, Secondary};
+        let skip = ids::LIBRARY_RECOVERY_SKIP_FOR_NOW;
+        let dialogs = all_dialogs();
+        let no_remote = &dialogs[1];
+        assert!(!fix_enabled(no_remote));
+        assert_eq!(
+            right_shape(no_remote),
+            vec![
+                (ids::LIBRARY_RECOVERY_RESTORE_REMOTE, Secondary, false),
+                (skip, Primary, true),
+            ]
+        );
+        assert!(matches!(
+            footer_plan(no_remote).1[1].message,
+            Some(LibraryMessage::RecoveryGitMissing(GitMissingChoice::Skip))
+        ));
+        let fixes = [
+            (&dialogs[0], ids::LIBRARY_RECOVERY_LOCATE),
+            (&dialogs[2], ids::LIBRARY_RECOVERY_RESTORE_REMOTE),
+            (&dialogs[3], ids::LIBRARY_RECOVERY_REBIND),
+            (&dialogs[4], ids::LIBRARY_RECOVERY_REBIND),
+        ];
+        for (dialog, fix) in fixes {
+            assert!(fix_enabled(dialog), "{dialog:?}");
+            let expected = vec![(skip, Secondary, true), (fix, Primary, true)];
+            assert_eq!(right_shape(dialog), expected, "{dialog:?}");
+        }
+        for dialog in &dialogs {
+            assert_eq!(footer_plan(dialog).0.kind, Danger, "{dialog:?}");
+        }
+
+        let i18n = I18n::en_us();
+        let tokens = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
+        let window = iced::Size::new(MODAL_W, 2000.0);
+        let texts = crate::layout_probe::lay_out_texts(
+            view(no_remote, None, &tokens, &i18n, false),
+            window,
+        );
+        let x = |label: &str| crate::layout_probe::find(&texts, label).bounds.x;
+        assert!(
+            x("Restore from remote") < x("Skip for now"),
+            "the primary Skip for now is the last button"
+        );
     }
 
     /// Mockup row 138: the Library Missing caption names what Skip for now
