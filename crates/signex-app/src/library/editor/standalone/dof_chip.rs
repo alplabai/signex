@@ -78,8 +78,22 @@ fn pill<'a>(
         .boxed()
 }
 
-/// The chips floating at the canvas's top-left.
+/// The chips floating at the canvas's top-left (the footprint editor).
 pub fn overlay<'a>(
+    editor: &'a FootprintDocument,
+    tokens: &'a ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, LibraryMessage> {
+    container(chips(editor, tokens, i18n))
+        .padding(SP.xl)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .boxed()
+}
+
+/// The solve-state pill above the name chip, unplaced; a board sketch lays
+/// them out in its chrome row (`board_sketch`).
+pub fn chips<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
@@ -109,11 +123,7 @@ pub fn overlay<'a>(
         theme_ext::text_secondary(tokens),
         line,
     );
-    container(column![dof, info].spacing(SP.m))
-        .padding(SP.xl)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .boxed()
+    column![dof, info].spacing(SP.m).boxed()
 }
 
 /// Scale factor of one zoom-pill click, the symbol editor's step.
