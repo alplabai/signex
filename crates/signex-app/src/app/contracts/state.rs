@@ -126,6 +126,9 @@ pub struct GridPickerState {
     /// The ladder step under the pointer, in mm; the preview draws it in
     /// place of the active step (mockup row 63).
     pub hovered_step_mm: Option<f64>,
+    /// The card's bottom, not its top, sits at (x, y): it was opened from
+    /// the status bar's Grid caret, above the bar (mockup row 63).
+    pub opens_upward: bool,
 }
 
 /// Grid Properties dialog draft (Ctrl+G in a footprint editor): the step

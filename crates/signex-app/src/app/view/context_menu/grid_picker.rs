@@ -326,6 +326,7 @@ mod tests {
             target: std::path::PathBuf::from("part.snxfpt"),
             owner: None,
             hovered_step_mm: None,
+            opens_upward: false,
         });
         app
     }

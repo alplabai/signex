@@ -177,6 +177,7 @@ impl Signex {
                         target,
                         owner,
                         hovered_step_mm: None,
+                        opens_upward: false,
                     });
                 }
                 self.finish_update()
@@ -287,17 +288,6 @@ impl Signex {
             }
             // `status_bar_message` names the window; a bare one is the main
             // window's.
-            // The caret opens the step list as the open_grid_picker key
-            // does in that window: an undocked one runs it on its footprint.
-            UiMsg::StatusBar(StatusBarRequest::GridCaretClicked { window }) => {
-                let open = Message::Ui(UiMsg::GridPickerOpen);
-                match window {
-                    Some(window) if self.is_document_window(window) => {
-                        self.run_command_in_window(window, open)
-                    }
-                    _ => self.dispatch_update(open),
-                }
-            }
             UiMsg::StatusBar(StatusBarRequest::GridReadoutRightClicked) => {
                 match self.ui_state.main_window_id {
                     Some(main) => {
@@ -305,6 +295,23 @@ impl Signex {
                     }
                     None => Task::none(),
                 }
+            }
+            // The caret opens the step list as the open_grid_picker key
+            // does in that window (an undocked one runs it on its
+            // footprint), then sets it above the bar.
+            UiMsg::StatusBar(StatusBarRequest::GridCaretClicked { window }) => {
+                let open = Message::Ui(UiMsg::GridPickerOpen);
+                let opened = match window {
+                    Some(window) if self.is_document_window(window) => {
+                        self.run_command_in_window(window, open)
+                    }
+                    _ => self.dispatch_update(open),
+                };
+                let (x, y) = self.grid_caret_anchor(window);
+                if let Some(picker) = self.interaction_state.grid_picker.as_mut() {
+                    (picker.x, picker.y, picker.opens_upward) = (x, y, true);
+                }
+                opened
             }
             // On a board the same key steps the Snapping mode (#2353).
             UiMsg::ToggleSnapHotspots if self.has_active_pcb() => {

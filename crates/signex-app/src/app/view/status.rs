@@ -252,20 +252,13 @@ mod tests {
     #[test]
     fn a_footprint_tab_reads_the_step_its_picker_marks() {
         let (mut app, window) = app_with_window();
-        let path = std::path::PathBuf::from("f.snxfpt");
-        app.document_state.tabs.push(crate::app::TabInfo {
-            title: "f".into(),
-            path: path.clone(),
-            cached_document: None,
-            project_id: None,
-            kind: crate::app::TabKind::FootprintEditor(path.clone()),
-        });
-        app.document_state.active_tab = app.document_state.tabs.len() - 1;
-        let file =
-            signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("f"));
-        let mut editor = crate::app::FootprintDocument::new(path.clone(), file);
+        let path = open_footprint_tab(&mut app);
+        let editor = app
+            .document_state
+            .footprint_editors
+            .get_mut(&path)
+            .expect("the footprint is open");
         editor.state.snap_options.grid_step_mm = 0.5;
-        app.document_state.footprint_editors.insert(path, editor);
         assert_ne!(app.ui_state.grid_size_mm, 0.5);
         assert_eq!(app.status_grid(window).size_mm, 0.5);
     }
@@ -336,6 +329,49 @@ mod tests {
                 .map(|p| p.target.clone()),
             Some(path)
         );
+    }
+
+    /// Mockup row 63: the step list the caret opens is drawn above the
+    /// status bar, its left edge at the Grid read-out; the key's list still
+    /// opens at the pointer.
+    #[test]
+    fn the_carets_step_list_is_drawn_above_the_bar() {
+        let (mut app, window) = app_with_window();
+        let size = iced::Size::new(1400.0, 1400.0);
+        app.ui_state.window_size = (size.width, size.height);
+        open_footprint_tab(&mut app);
+        let tokens = &app.document_state.panel_ctx.tokens;
+        let bar_h = crate::status_bar::status_bar_height(tokens);
+        let card_bottom = size.height - bar_h - crate::status_bar::POPUP_GAP;
+        // The click lands on the caret, inside the bar.
+        let readout_x = crate::status_bar::grid_readout_x();
+        app.interaction_state.last_mouse_pos = (readout_x + bar_h, size.height - bar_h / 2.0);
+        let caret = StatusBarRequest::GridCaretClicked { window: None };
+        let _ = app.update(Signex::status_bar_message(window, None, caret));
+        let mut overlay = app.grid_picker_overlay(window);
+        assert_eq!(overlay.len(), 2, "backdrop and menu");
+        let texts = crate::layout_probe::lay_out_texts(overlay.remove(1), size);
+        assert!(!texts.is_empty(), "the step list is drawn");
+        let bottom = texts
+            .iter()
+            .map(|t| t.bounds.y + t.bounds.height)
+            .fold(f32::MIN, f32::max);
+        let left = texts.iter().map(|t| t.bounds.x).fold(f32::MAX, f32::min);
+        assert!(
+            bottom <= card_bottom,
+            "rows reach {bottom}, card ends at {card_bottom}"
+        );
+        assert!(left >= readout_x, "left {left}");
+        let picker = app.interaction_state.grid_picker.as_ref().expect("open");
+        assert!(picker.opens_upward);
+        assert_eq!(picker.y, card_bottom);
+
+        let _ = app.update(Message::Ui(UiMsg::GridPickerClose));
+        app.interaction_state.last_mouse_pos = (300.0, 200.0);
+        let _ = app.update(Message::Ui(UiMsg::GridPickerOpen));
+        let picker = app.interaction_state.grid_picker.as_ref().expect("open");
+        assert!(!picker.opens_upward, "the key's list opens at the pointer");
+        assert_eq!((picker.x, picker.y), (300.0, 200.0));
     }
 
     /// A right-click on the Grid read-out opens the popover over the window
