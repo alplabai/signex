@@ -296,7 +296,10 @@ same undo step.
   muted, the clearance Run DRC checks with anyway: the open board's setup
   clearance (0.2 mm when it sets none or no board is open), raised for a class's nets by the
   class's own clearance; All shows it even while inherited values are
-  hidden. A value of the row's own is bold
+  hidden. Every other All cell is empty until a fab tier is picked, then
+  shows the tier's floor, also while inherited values are hidden.
+  Short-circuit (Allowed) and Un-routed net (Check) show the fixed No and
+  On on All, since Run DRC always checks them. A value of the row's own is bold
   with ↺, which drops that value only; an inherited value is muted; a value
   a constraint set wrote has a blue edge, and the row carries a ⧉ chip
   naming the set. The tooltip names where the value comes from. Show
