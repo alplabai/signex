@@ -152,3 +152,33 @@ fn a_pin_focus_folds_a_part_but_not_a_power_port() {
     assert!(app.pin_focus_folds(Some(PART)));
     assert!(!app.pin_focus_folds(None));
 }
+
+/// Select `symbol` the way a click on its pin does: the pin focused.
+fn click_pin(app: &mut Signex, path: &std::path::Path, symbol: uuid::Uuid) {
+    let placement = app.shown_placement(path);
+    app.interaction_state.clicked_pin = Some(crate::app::state::ClickedPin {
+        sheet: path.to_path_buf(),
+        placement,
+        symbol,
+        pin: "1".into(),
+    });
+    select(app, symbol);
+}
+
+/// Mockup row 45: a part's pin focus folds Location, and a click on the
+/// power port's own pin next opens its Location with Position and Rotation.
+#[test]
+fn a_power_port_pin_click_shows_its_location_open() {
+    let (mut app, path) = app();
+    click_pin(&mut app, &path, PART);
+    let collapsed =
+        |app: &Signex| (app.document_state.panel_ctx.collapsed_sections).contains("sel_location");
+    assert!(collapsed(&app), "a part's pin focus folds Location");
+    click_pin(&mut app, &path, PORT);
+    assert!(
+        app.interaction_state.clicked_pin.is_some(),
+        "the port's pin stays focused"
+    );
+    assert!(!collapsed(&app), "the power port's Location is open");
+    assert_eq!(app.document_state.panel_ctx.placed.item, Some(item(PORT)));
+}
