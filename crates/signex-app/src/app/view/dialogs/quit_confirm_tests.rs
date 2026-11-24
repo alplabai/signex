@@ -309,9 +309,10 @@ fn the_list_changed_note_sits_above_the_list() {
     assert!(heading.y < row.y);
 }
 
-/// Cancel leads at the left; Discard All, then Save All, end the footer.
+/// Mockup row 136: Discard All stands alone at the left; Cancel, then Save
+/// All, end the footer.
 #[test]
-fn cancel_leads_the_footer() {
+fn discard_all_leads_the_footer() {
     let app = dirty_app(&["/x/loose.snxsch"], Vec::new());
     let texts = lay_out_texts(
         app.view_app_quit_confirm_body(),
@@ -320,9 +321,54 @@ fn cancel_leads_the_footer() {
     let cancel = find(&texts, "Cancel").bounds;
     let discard = find(&texts, "Discard All").bounds;
     let save = find(&texts, "Save All").bounds;
-    assert!(cancel.x < discard.x && discard.x < save.x);
+    assert!(discard.x < cancel.x && cancel.x < save.x);
     assert!(
-        discard.x - (cancel.x + cancel.width) > 100.0,
-        "Cancel stands apart"
+        cancel.x - (discard.x + discard.width) > 100.0,
+        "Discard All stands apart"
     );
+}
+
+/// The question is the intro's title, above the fact line, and both sit
+/// above the grouped list (mockup row 136, warn intro).
+#[test]
+fn the_question_heads_the_intro_above_the_fact_line() {
+    let app = dirty_app(&["/x/loose.snxsch"], Vec::new());
+    let texts = lay_out_texts(
+        app.view_app_quit_confirm_body(),
+        iced::Size::new(500.0, 600.0),
+    );
+    let question = texts
+        .iter()
+        .find(|t| t.text.starts_with("Save changes before"))
+        .expect("the question")
+        .bounds;
+    let fact = texts
+        .iter()
+        .find(|t| t.text.contains("unsaved document"))
+        .expect("the fact line")
+        .bounds;
+    let heading = find(&texts, "OTHER FILES").bounds;
+    assert!(question.y < fact.y && fact.y < heading.y);
+}
+
+/// Each button still answers with its own choice.
+#[test]
+fn each_button_keeps_its_outcome() {
+    use crate::app::ProjectCloseChoice;
+    use crate::app::contracts::{Message, ProjectMsg};
+    let choice = |label: &str| {
+        let app = dirty_app(&["/x/loose.snxsch"], Vec::new());
+        let messages = crate::layout_probe::messages_on_click(
+            app.view_app_quit_confirm_body(),
+            iced::Size::new(500.0, 600.0),
+            label,
+        );
+        match messages.as_slice() {
+            [Message::Project(ProjectMsg::AppQuitConfirm(choice))] => *choice,
+            other => panic!("{label}: {other:?}"),
+        }
+    };
+    assert_eq!(choice("Discard All"), ProjectCloseChoice::DiscardAll);
+    assert_eq!(choice("Cancel"), ProjectCloseChoice::Cancel);
+    assert_eq!(choice("Save All"), ProjectCloseChoice::SaveAll);
 }

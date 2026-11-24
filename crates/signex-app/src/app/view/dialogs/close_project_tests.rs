@@ -214,6 +214,80 @@ fn rows_show_their_kind_and_discard_all_stands_at_the_left() {
     assert!(x("Cancel") < x("Save All"), "{texts:#?}");
 }
 
+/// Each button of the shared footer (mockup row 136) still answers with its
+/// own choice.
+#[test]
+fn each_button_keeps_its_outcome() {
+    use crate::app::ProjectCloseChoice;
+    use crate::app::contracts::{Message, ProjectMsg};
+    let choice = |label: &str| {
+        let app = app_closing(&["a.snxsch"], Default::default());
+        let messages = crate::layout_probe::messages_on_click(
+            app.view_project_close_confirm_body(),
+            iced::Size::new(900.0, 700.0),
+            label,
+        );
+        match messages.as_slice() {
+            [Message::Project(ProjectMsg::CloseConfirm(choice))] => *choice,
+            other => panic!("{label}: {other:?}"),
+        }
+    };
+    assert_eq!(choice("Discard All"), ProjectCloseChoice::DiscardAll);
+    assert_eq!(choice("Cancel"), ProjectCloseChoice::Cancel);
+    assert_eq!(choice("Save All"), ProjectCloseChoice::SaveAll);
+}
+
+/// The shared warn intro (mockup row 136) heads the grouped list: the
+/// question, then the count line, then the group heading and its rows.
+#[test]
+fn the_intro_heads_the_grouped_list() {
+    let app = app_closing(&["a.snxsch"], Default::default());
+    let texts = lay_out_texts(
+        app.view_project_close_confirm_body(),
+        iced::Size::new(900.0, 700.0),
+    );
+    let en = I18n::en_us_ref();
+    let question = en.message_plain(ids::DIALOG_CLOSE_PROJECT_QUESTION, &[]);
+    let question = find(&texts, &question).bounds;
+    let detail = texts
+        .iter()
+        .find(|t| plain(t.text.clone()).contains("unsaved"))
+        .expect("the count line")
+        .bounds;
+    let heading = find(&texts, "OTHER FILES").bounds;
+    let row = find(&texts, "a.snxsch").bounds;
+    assert!(question.y < detail.y, "{texts:#?}");
+    assert!(detail.y < heading.y && heading.y < row.y, "{texts:#?}");
+}
+
+/// An unreadable sheet withholds Discard All and says why under the grouped
+/// list; Cancel and Save All stay.
+#[test]
+fn an_unreadable_sheet_withholds_discard_all() {
+    let mut refs = crate::app::state::sheet_refs::SheetRefs::default();
+    refs.unreadable
+        .push(crate::app::state::sheet_refs::UnreadableSheet {
+            path: PathBuf::from("/p/broken.snxsch"),
+            reason: String::new(),
+            whole_path: false,
+        });
+    let app = app_closing(&["a.snxsch"], refs);
+    let texts = lay_out_texts(
+        app.view_project_close_confirm_body(),
+        iced::Size::new(900.0, 700.0),
+    );
+    assert!(texts.iter().all(|t| t.text != "Discard All"), "{texts:#?}");
+    let row = find(&texts, "a.snxsch").bounds;
+    let reason = texts
+        .iter()
+        .find(|t| t.text.contains("broken.snxsch"))
+        .expect("the reason")
+        .bounds;
+    assert!(row.y < reason.y, "the reason sits under the list");
+    find(&texts, "Cancel");
+    find(&texts, "Save All");
+}
+
 #[test]
 fn kept_documents_say_why_they_stay_open() {
     let en = I18n::en_us_ref();
