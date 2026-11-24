@@ -1,15 +1,18 @@
 //! The Arc panel (#2373, #2523, mockup row 98): the illustration, Net Information
 //! (closed, copper arcs only), then Properties: while the Arc tool is armed
 //! how the next arc is drawn, the net of a copper arc, layer, width, ends,
-//! and for a placed arc its centre, radius, angles and length.
+//! and for a placed arc its centre, radius, angles and length. Lengths
+//! read to three decimals, angles to one.
 
 use iced::Element;
 use signex_engine::pcb::draw::ArcMode;
 use signex_i18n::{MessageId, ids};
 
 use super::drawing::{self, keys};
-use super::linked::{self, Segment, linked_row, prefixed, segments, two_fields, unit};
-use super::rows::{Look, Section, any_layer_value, labelled, net_value, stack, with_tip};
+use super::linked::{self, Segment, linked_row, prefixed_text, segments, two_fields, unit};
+use super::rows::{
+    Look, Section, any_layer_value, fixed_degrees, fixed_mm, labelled, net_value, stack, with_tip,
+};
 use super::{ArcFacts, PcbPrimitiveMsg, PrimitiveField as F, net_info};
 use crate::panels::{PanelContext, PanelMsg};
 
@@ -99,7 +102,7 @@ fn properties<'a>(look: Look<'a>, f: &'a ArcFacts) -> Option<Element<'a, PanelMs
             common,
             keys::WIDTH,
             ids::PCB_PRIM_WIDTH,
-            linked::mm(look, common, F::Width, f.width),
+            linked::mm_text(look, common, F::Width, f.width.map(fixed_mm)),
         ),
     );
     s.push(
@@ -126,8 +129,20 @@ fn properties<'a>(look: Look<'a>, f: &'a ArcFacts) -> Option<Element<'a, PanelMs
             keys::CENTRE,
             ids::PCB_PRIM_CENTRE,
             two_fields(
-                prefixed(look, common, F::X, f.center.0, ids::PCB_PRIM_X),
-                prefixed(look, common, F::Y, f.center.1, ids::PCB_PRIM_Y),
+                prefixed_text(
+                    look,
+                    common,
+                    F::X,
+                    f.center.0.map(fixed_mm),
+                    ids::PCB_PRIM_X,
+                ),
+                prefixed_text(
+                    look,
+                    common,
+                    F::Y,
+                    f.center.1.map(fixed_mm),
+                    ids::PCB_PRIM_Y,
+                ),
                 unit(look, ids::PCB_PRIM_UNIT_MM),
             ),
         ),
@@ -140,7 +155,7 @@ fn properties<'a>(look: Look<'a>, f: &'a ArcFacts) -> Option<Element<'a, PanelMs
             common,
             keys::RADIUS,
             ids::PCB_PRIM_RADIUS,
-            linked::mm(look, common, F::Radius, f.radius),
+            linked::mm_text(look, common, F::Radius, f.radius.map(fixed_mm)),
         ),
     );
     // Angles are read from the board origin with Y up, as the pad's
@@ -154,18 +169,18 @@ fn properties<'a>(look: Look<'a>, f: &'a ArcFacts) -> Option<Element<'a, PanelMs
             keys::ANGLES,
             ids::PCB_PRIM_ANGLES,
             two_fields(
-                prefixed(
+                prefixed_text(
                     look,
                     common,
                     F::StartAngle,
-                    f.start_angle,
+                    f.start_angle.map(fixed_degrees),
                     ids::PCB_PRIM_POINT_START,
                 ),
-                prefixed(
+                prefixed_text(
                     look,
                     common,
                     F::EndAngle,
-                    f.end_angle,
+                    f.end_angle.map(fixed_degrees),
                     ids::PCB_PRIM_POINT_END,
                 ),
                 unit(look, ids::PCB_PRIM_UNIT_DEGREES),
@@ -180,7 +195,7 @@ fn properties<'a>(look: Look<'a>, f: &'a ArcFacts) -> Option<Element<'a, PanelMs
             common,
             keys::LENGTH,
             ids::PCB_PRIM_LENGTH,
-            linked::length(look, f.length_mm),
+            linked::length(look, f.length_mm.map(fixed_mm)),
         ),
     );
     s.finish()
