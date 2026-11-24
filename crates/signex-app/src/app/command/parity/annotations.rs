@@ -199,6 +199,11 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "project_set_version_control",
             "project_set_requirement",
             "project_enable_requirement",
+            "bring_drawings_forward",
+            "bring_drawings_to_front",
+            "send_drawings_backward",
+            "send_drawings_to_back",
+            "delete_selection",
         ],
         Operand,
         &[],
@@ -309,7 +314,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         StillRunsRefusal,
         &[ActiveDocument, Selection, ToolState],
     ),
-    // The active tab's selection: a footprint editor's, a board's or a sheet's.
+    // The active tab's selection: a footprint editor's, a board's or a
+    // sheet's, which the translators fill in as `document` and `ids`
+    // (`delete_pcb_selection`, `delete_sheet_selection`,
+    // `handle_drawings_arrange_requested`).
     (
         &[
             "delete_selection",
@@ -318,7 +326,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "send_drawings_backward",
             "send_drawings_to_back",
         ],
-        Bridge,
+        Translator,
         &[ActiveDocument, Selection],
     ),
     (

@@ -129,12 +129,14 @@ break_wire	bridge	Tool(SelectTool(BreakWire))	gui	active document	gate
 break_wire	in_window_rewrite	document_window	gui	window	routing
 break_wire	refusal_needs	Schematic	gui	active document	routing
 break_wire	headless_refusal	headless_refusal	gui	none	routing
-bring_drawings_forward	bridge	Edit(ArrangeDrawings(Forward))	core	active document,selection	handler
+bring_drawings_forward	translator	Edit(ArrangeDrawings(Forward))	gui	active document,selection	handler
+bring_drawings_forward	operand_handler	run_operands: named document	core	origin	handler
 bring_drawings_forward	in_window_rewrite	document_window	gui	window	routing
-bring_drawings_forward	refusal_needs	DrawingSelection	core	active document,selection	routing
-bring_drawings_to_front	bridge	Edit(ArrangeDrawings(ToFront))	core	active document,selection	handler
+bring_drawings_forward	refusal_needs	DrawingSelection	gui	active document,selection	routing
+bring_drawings_to_front	translator	Edit(ArrangeDrawings(ToFront))	gui	active document,selection	handler
+bring_drawings_to_front	operand_handler	run_operands: named document	core	origin	handler
 bring_drawings_to_front	in_window_rewrite	document_window	gui	window	routing
-bring_drawings_to_front	refusal_needs	DrawingSelection	core	active document,selection	routing
+bring_drawings_to_front	refusal_needs	DrawingSelection	gui	active document,selection	routing
 bring_to_front	active_bar	BringToFront	core	active document,selection	handler
 bring_to_front	in_window_rewrite	document_window	gui	window	routing
 bring_to_front_of	active_bar	BringToFrontOf	gui	selection	handler
@@ -263,7 +265,8 @@ delete_layer_set	headless_missing_operand	needs `name`	gui	none	routing
 delete_net_class	operand_handler	run_operands: named document	core	origin	handler
 delete_net_class	refusal_needs_operands	needs_operands_reason	gui	none	routing
 delete_net_class	headless_missing_operand	needs `document`	core	none	routing
-delete_selection	bridge	Edit(DeleteSelected)	core	active document,selection	handler
+delete_selection	translator	Edit(DeleteSelected)	core	active document,selection	handler
+delete_selection	operand_handler	run_operands: named document	core	origin	handler
 delete_selection	in_window_rewrite	document_window	gui	window	routing
 delete_selection	refusal_needs	DeleteTarget	core	active document,selection	routing
 delete_selection	disabled_still_runs_refusal	explains_refusal_in	core	active document,selection	handler
@@ -1254,12 +1257,14 @@ select_expand_connection	headless_refusal	headless_refusal	gui	none	routing
 select_node_or_connection_item	bridge	Selection(ConnectionItemAtCursorRequested)	gui	cursor,render cache	handler
 select_node_or_connection_item	in_window_rewrite	document_window	gui	window	routing
 select_node_or_connection_item	headless_refusal	headless_refusal	gui	none	routing
-send_drawings_backward	bridge	Edit(ArrangeDrawings(Backward))	core	active document,selection	handler
+send_drawings_backward	translator	Edit(ArrangeDrawings(Backward))	gui	active document,selection	handler
+send_drawings_backward	operand_handler	run_operands: named document	core	origin	handler
 send_drawings_backward	in_window_rewrite	document_window	gui	window	routing
-send_drawings_backward	refusal_needs	DrawingSelection	core	active document,selection	routing
-send_drawings_to_back	bridge	Edit(ArrangeDrawings(ToBack))	core	active document,selection	handler
+send_drawings_backward	refusal_needs	DrawingSelection	gui	active document,selection	routing
+send_drawings_to_back	translator	Edit(ArrangeDrawings(ToBack))	gui	active document,selection	handler
+send_drawings_to_back	operand_handler	run_operands: named document	core	origin	handler
 send_drawings_to_back	in_window_rewrite	document_window	gui	window	routing
-send_drawings_to_back	refusal_needs	DrawingSelection	core	active document,selection	routing
+send_drawings_to_back	refusal_needs	DrawingSelection	gui	active document,selection	routing
 send_to_back	active_bar	SendToBack	core	active document,selection	handler
 send_to_back	in_window_rewrite	document_window	gui	window	routing
 send_to_back_of	active_bar	SendToBackOf	gui	selection	handler

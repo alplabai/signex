@@ -501,8 +501,13 @@ mod tests {
     fn the_editable_commands_are_the_sheet_placements_and_net_colours() {
         let expected = [
             "autoplace_fields",
+            // #2326 slice 6.P2b: the drawing order and Delete by uuid; a list
+            // names sheets only, so a list's Delete is a sheet's.
+            "bring_drawings_forward",
+            "bring_drawings_to_front",
             "clear_all_net_colors",
             "color_net",
+            "delete_selection",
             "draw_bus",
             "draw_graphic_line",
             "draw_line",
@@ -531,6 +536,8 @@ mod tests {
             "place_wire",
             // The sheet's bare pin touches get their dots.
             "repair_pin_junctions",
+            "send_drawings_backward",
+            "send_drawings_to_back",
             "set_object_position",
             "set_object_rotation",
             "set_sheet_symbol_size",
