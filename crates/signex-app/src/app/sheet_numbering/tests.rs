@@ -25,7 +25,7 @@ fn row(number: usize, position: usize, manual: bool, placed: bool) -> NumberingR
 }
 
 /// The root, two placed pages, the second numbered 5 by hand.
-fn shown() -> SheetNumberingState {
+pub(crate) fn shown() -> SheetNumberingState {
     let mut state = SheetNumberingState::reading(1, 0, Default::default(), "p".into());
     state.show(Arc::new(NumberingRead {
         rows: vec![

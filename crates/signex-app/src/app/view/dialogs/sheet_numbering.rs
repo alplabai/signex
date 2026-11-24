@@ -491,3 +491,29 @@ fn page_row<'a>(
         .align_y(Alignment::Center)
         .boxed()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Mockup row 78 (Caner 2026-11-24): with 1, 1, 2 typed the clash is in
+    /// the error banner and the gap only in the warning line under it.
+    #[test]
+    fn a_gap_leaves_the_banner_for_the_warning_line() {
+        let en = I18n::en_us();
+        let mut state = crate::app::sheet_numbering::tests::shown();
+        state.edit(1, "1".into());
+        state.edit(2, "2".into());
+        let shown = |lines: Vec<Localized>| -> Vec<String> {
+            lines.iter().map(ToString::to_string).collect()
+        };
+        let clash = t!(en, ids::DIALOG_SHEET_NUMBERING_CLASH, "number" => 1usize);
+        assert_eq!(shown(banner_lines(&state, &en)), [clash.to_string()]);
+        let warnings = shown(warning_lines(&state, &en));
+        let plain: Vec<String> = warnings
+            .iter()
+            .map(|line| line.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect();
+        assert_eq!(plain, ["No page is numbered 3."]);
+    }
+}
