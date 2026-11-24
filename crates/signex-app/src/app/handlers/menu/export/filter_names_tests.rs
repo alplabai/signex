@@ -37,7 +37,7 @@ fn bom_filters_keep_their_english() {
 #[test]
 fn netlist_filters_keep_their_english() {
     let en = I18n::en_us();
-    for format in [NetlistFormat::Listing, NetlistFormat::Protel] {
+    for format in [NetlistFormat::Listing, NetlistFormat::NetText] {
         let id = netlist_filter(format);
         assert_eq!(en.message_plain(id, &[]), format.label());
         assert_ne!(xa().message_plain(id, &[]), format.label());

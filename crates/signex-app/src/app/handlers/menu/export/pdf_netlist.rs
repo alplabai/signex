@@ -308,6 +308,6 @@ pub(super) fn netlist_filter(format: signex_output::NetlistFormat) -> signex_i18
     use signex_output::NetlistFormat;
     match format {
         NetlistFormat::Listing => signex_i18n::ids::FILE_FILTER_NETLIST_LISTING,
-        NetlistFormat::Protel => signex_i18n::ids::FILE_FILTER_NETLIST_PROTEL,
+        NetlistFormat::NetText => signex_i18n::ids::FILE_FILTER_NETLIST_NET_TEXT,
     }
 }

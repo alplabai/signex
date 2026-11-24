@@ -247,8 +247,8 @@ pub(super) fn page_size_label(kind: PageSizeKind) -> signex_i18n::MessageId {
 /// The catalog name of a scale picker entry.
 pub(super) fn scale_mode_label(mode: PdfScaleMode) -> signex_i18n::MessageId {
     match mode {
-        PdfScaleMode::FitToPage => ids::BOARD_PRINT_SCALE_FIT,
-        PdfScaleMode::OneToOne => ids::BOARD_PRINT_SCALE_ONE,
+        PdfScaleMode::FitToPage => ids::PDF_SCALE_FIT,
+        PdfScaleMode::OneToOne => ids::PDF_SCALE_ONE_TO_ONE,
         PdfScaleMode::Percent => ids::PDF_SCALE_MODE_PERCENT,
     }
 }

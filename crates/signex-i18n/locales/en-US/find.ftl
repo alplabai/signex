@@ -130,7 +130,7 @@ paste-array-paste = { $count ->
 # The primary button while the Copies field does not parse.
 paste-array-paste-none = Paste
 
-## Names the engine gives (#2060)
+## Names the engine gives
 # Kind of a match in the results list: a net label on the sheet (a noun,
 # not the Place command).
 find-kind-net-label = Net Label
