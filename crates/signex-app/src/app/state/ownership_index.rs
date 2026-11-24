@@ -1,4 +1,4 @@
-//! Which project owns a sheet or board path, answered from a cached index (#1470).
+//! Which project owns a sheet, board or Export Job path, answered from a cached index (#1470).
 //!
 //! `DocumentState::document_project` runs from many UI-thread call sites and
 //! used to rebuild everything per call: the child-reference map cloned out of
@@ -135,7 +135,9 @@ impl OwnershipIndex {
     /// rule: a parent found under rule F is accepted only when the project
     /// listing it also has rule F, so a folding map can never attribute a
     /// different file to a case-sensitive project. Cycles terminate on the
-    /// visited set.
+    /// visited set. An Export Job no project lists skips the hierarchy walk
+    /// and goes to the deepest open project folder that holds it
+    /// (`holding_folder`), or to none.
     pub(crate) fn owner<'a>(
         &self,
         projects: &'a [LoadedProject],
@@ -490,6 +492,17 @@ mod tests {
         assert_eq!(owner(&ds, "/w/a/fab.snxout"), Some(outer));
         ds.projects.retain(|p| p.id != inner);
         assert_eq!(owner(&ds, "/w/a/sub/out/fab.snxout"), Some(outer));
+    }
+
+    /// Two open projects in one folder: the earlier project in order owns
+    /// the Export Jobs there.
+    #[test]
+    fn the_earlier_project_owns_an_export_job_in_a_shared_folder() {
+        let (mut ds, first) = state();
+        let second = ds.mint_project_id();
+        ds.projects.push(project(second, "/w/a", &["s.snxsch"]));
+        assert_eq!(owner(&ds, "/w/a/fab.snxout"), Some(first));
+        assert_eq!(owner(&ds, "/w/a/out/fab.snxout"), Some(first));
     }
 
     #[test]
