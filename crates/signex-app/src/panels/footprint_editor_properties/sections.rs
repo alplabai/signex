@@ -124,8 +124,8 @@ fn solve_section<'a>(
     if let Some(solve) = fp.last_solve.as_ref() {
         col = super::dof_card::push_dof_card(col, cx, solve);
     }
-    // On a board the card already shows the constraint count and the solve
-    // time, so their rows go (mockup row 179).
+    // On a board the card already shows the constraint count, and the solve
+    // time when it reports no conflicts, so those rows go (mockup row 179).
     let card_counts = fp.board.is_some() && fp.last_solve.is_some();
     let kv = |id: signex_i18n::MessageId, value: String| kv_row(&t!(i18n, id), value, tokens, i18n);
     col = col.push(kv(
@@ -150,7 +150,9 @@ fn solve_section<'a>(
         ids::EDITORS_FP_PROPS_RESIDUAL,
         format!("{:.3e}", solve.final_residual_norm),
     ));
-    if !card_counts {
+    // A card with conflicts says "last good solve kept", with no time.
+    let card_shows_time = card_counts && solve.over_constraint_count == 0;
+    if !card_shows_time {
         col = col.push(kv(
             ids::EDITORS_FP_PROPS_ELAPSED,
             t!(i18n, ids::EDITORS_FP_PROPS_ELAPSED_VALUE, "ms" => solve.elapsed_ms).into_string(),

@@ -471,6 +471,55 @@ fn a_board_sketch_dof_section_does_not_repeat_the_card_counts() {
     }
 }
 
+/// Mockup row 179: an over-constrained board card says "last good solve
+/// kept" with no time, so the Elapsed row stays; the count is on the card,
+/// so the Constraints row still goes.
+#[test]
+fn an_over_constrained_board_sketch_keeps_the_elapsed_row() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.mode_kind = FootprintModeKind::Sketch;
+    fp.sketch_host = signex_types::sketch::SketchHost::Board;
+    fp.board = Some(crate::panels::BoardSketchProps::default());
+    fp.sketch_constraint_count = 46;
+    fp.last_solve = Some(FootprintSolveSummary {
+        iterations: 6,
+        elapsed_ms: 3,
+        final_residual_norm: 0.0,
+        over_constraint_count: 1,
+        over_constraints: Vec::new(),
+        redundant_constraints: Vec::new(),
+        dof: 0,
+        free_motions: Vec::new(),
+    });
+    let texts = texts(&app, &fp);
+    assert!(
+        has(&texts, "46 constraints · last good solve kept"),
+        "{texts:#?}"
+    );
+    for kept in ["ELAPSED", "3 ms", "ENTITIES", "ITERATIONS", "RESIDUAL"] {
+        assert!(has(&texts, kept), "{kept:?} missing: {texts:#?}");
+    }
+    assert!(!has(&texts, "CONSTRAINTS"), "{texts:#?}");
+}
+
+/// Mockup row 179: before a first solve a board sketch has no card, so the
+/// Constraints row stays.
+#[test]
+fn an_unsolved_board_sketch_keeps_the_constraints_row() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.mode_kind = FootprintModeKind::Sketch;
+    fp.sketch_host = signex_types::sketch::SketchHost::Board;
+    fp.board = Some(crate::panels::BoardSketchProps::default());
+    fp.sketch_constraint_count = 46;
+    fp.last_solve = None;
+    let texts = texts(&app, &fp);
+    for kept in ["ENTITIES", "CONSTRAINTS", "46", "Not solved yet"] {
+        assert!(has(&texts, kept), "{kept:?} missing: {texts:#?}");
+    }
+}
+
 /// Mockup row 179e: the Parameters list stays under a selected entity's
 /// form in Sketch mode, so a pattern's spacing and the parameters it names
 /// sit together.
