@@ -232,8 +232,11 @@ fn text_size_row<'a>(
 }
 
 /// The Text box drawn as a form field (mockup row 47): the field ground
-/// and hairline of every other box, the accent border while focused.
+/// and hairline of every other box, the accent border while focused. A
+/// locked note's box takes the read-only look of its locked Text Size
+/// (`sunken_value`): the sunken fill, no border, the value in ink3.
 fn note_box_style(theme: &Theme, status: text_editor::Status) -> text_editor::Style {
+    use crate::panels::form_look::{FormLook, text_input_style};
     use iced::widget::text_input::Status as Field;
     let as_field = match status {
         text_editor::Status::Active => Field::Active,
@@ -241,14 +244,21 @@ fn note_box_style(theme: &Theme, status: text_editor::Status) -> text_editor::St
         text_editor::Status::Focused { is_hovered } => Field::Focused { is_hovered },
         text_editor::Status::Disabled => Field::Disabled,
     };
-    let field = crate::panels::form_look::text_input_style(theme, as_field);
-    text_editor::Style {
+    let field = text_input_style(theme, as_field);
+    let mut style = text_editor::Style {
         background: field.background,
         border: field.border,
         placeholder: field.placeholder,
         value: field.value,
         selection: field.selection,
+    };
+    if matches!(status, text_editor::Status::Disabled) {
+        let look = FormLook::of(theme);
+        style.background = iced::Background::Color(look.sunken);
+        style.border.width = 0.0;
+        style.value = look.ink3;
     }
+    style
 }
 
 /// The tallest the Text box gets: `NoteDraft::MAX_VISIBLE_LINES` lines and
@@ -476,6 +486,22 @@ mod tests {
             let input = crate::panels::form_look::text_input_style(&theme, as_field);
             let drawn = note_box_style(&theme, focused);
             assert_eq!(drawn.border, input.border, "{id:?}");
+        }
+    }
+
+    /// Mockup row 47: a locked note's Text box reads as the locked Text
+    /// Size beside it, the sunken read-only value, not an editable field.
+    #[test]
+    fn a_locked_text_box_reads_as_a_read_only_value() {
+        use signex_types::theme::ThemeId;
+        for &id in ThemeId::BUILTINS {
+            let theme = crate::app::Signex::id_to_iced_theme(id);
+            let idle = note_box_style(&theme, text_editor::Status::Active);
+            let locked = note_box_style(&theme, text_editor::Status::Disabled);
+            assert_ne!(locked.background, idle.background, "{id:?}");
+            let sunken = crate::panels::form_look::read_only_value(&theme);
+            assert_eq!(Some(locked.background), sunken.background, "{id:?}");
+            assert_eq!(locked.border.width, sunken.border.width, "{id:?}");
         }
     }
 
