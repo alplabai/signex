@@ -37,6 +37,7 @@ fn published(logical: &str, code: Code) -> Option<FootprintEditorMsg> {
         Physical::Code(code),
         &keyboard::Modifiers::COMMAND,
         None,
+        false,
     )?;
     match action.into_inner().0? {
         LibraryMessage::EditorEvent {
