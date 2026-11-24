@@ -441,15 +441,10 @@ fn page_row<'a>(
         .font(super::graphite::mono())
         .width(FILE_W)
         .boxed();
-    let wrong = numbered.clash || numbered.invalid || numbered.out_of_range;
-    let value = if wrong {
-        danger
-    } else if numbered.automatic {
-        r.ink4
-    } else {
-        ink
-    };
+    let wrong = is_wrong(&numbered);
+    let value = number_ink(&numbered, tokens);
     let field: Element<'a, Message> = if top_level {
+        let frame = crate::styles::field(tokens, false);
         container(
             text(UserText::new(numbered.row.number.to_string()))
                 .size(TS.body)
@@ -458,7 +453,14 @@ fn page_row<'a>(
         )
         .padding([SP.xs, SP.s])
         .width(FIELD_W)
-        .style(crate::styles::field(tokens, false))
+        // A clashing top-level number is red like any other (mockup row 78).
+        .style(move |theme: &Theme| {
+            let mut style = frame(theme);
+            if wrong {
+                style.border.color = danger;
+            }
+            style
+        })
         .boxed()
     } else {
         text_input(
@@ -492,6 +494,24 @@ fn page_row<'a>(
         .boxed()
 }
 
+/// Whether the row's number clashes, is above the page count or is not a
+/// number: its field is red.
+fn is_wrong(numbered: &NumberedRow<'_>) -> bool {
+    numbered.clash || numbered.invalid || numbered.out_of_range
+}
+
+/// The ink of the row's number: red when wrong, faint when it follows the
+/// hierarchy (the automatic value), full ink when typed (mockup row 78).
+fn number_ink(numbered: &NumberedRow<'_>, tokens: &ThemeTokens) -> Color {
+    if is_wrong(numbered) {
+        tokens::danger(tokens)
+    } else if numbered.automatic {
+        tokens::resolve(tokens).ink4
+    } else {
+        ti(tokens.text)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -515,5 +535,59 @@ mod tests {
             .map(|line| line.replace(['\u{2068}', '\u{2069}'], ""))
             .collect();
         assert_eq!(plain, ["No page is numbered 3."]);
+    }
+
+    fn graphite_light() -> ThemeTokens {
+        signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight)
+    }
+
+    /// Mockup row 78: a number that follows the hierarchy is faint, a typed
+    /// one is full ink. With 3 and 2 typed on the placed pages nothing
+    /// clashes; the top level keeps its automatic 1.
+    #[test]
+    fn an_automatic_number_is_faint_and_a_typed_one_full_ink() {
+        let tokens = graphite_light();
+        let mut state = crate::app::sheet_numbering::tests::shown();
+        state.edit(1, "3".into());
+        state.edit(2, "2".into());
+        let rows = state.numbered_rows();
+        let (faint, full) = (tokens::resolve(&tokens).ink4, ti(tokens.text));
+        assert_ne!(faint, full);
+        assert!(rows[0].automatic && !is_wrong(&rows[0]));
+        assert_eq!(number_ink(&rows[0], &tokens), faint);
+        assert!(!rows[1].automatic && !is_wrong(&rows[1]));
+        assert_eq!(number_ink(&rows[1], &tokens), full);
+        assert_eq!(number_ink(&rows[2], &tokens), full);
+    }
+
+    /// Mockup row 78: when the top-level page's number clashes, its read-only
+    /// field is framed in red, like the clashing typed one.
+    #[test]
+    fn a_clashing_top_level_number_has_a_red_field() {
+        use crate::layout_probe::{draw_pixels, find, lay_out_texts};
+        let en = I18n::en_us();
+        let tokens = graphite_light();
+        let mut state = crate::app::sheet_numbering::tests::shown();
+        state.edit(1, "1".into());
+        let root = || {
+            state
+                .numbered_rows()
+                .into_iter()
+                .next()
+                .expect("the top level")
+        };
+        assert!(root().clash);
+        let window = iced::Size::new(TS.body * 60.0, TS.body * 4.0);
+        let texts = lay_out_texts(page_row(0, root(), &en, &tokens), window);
+        let pixels = draw_pixels(page_row(0, root(), &en, &tokens), window);
+        let number = find(&texts, "1").bounds;
+        let danger = tokens::danger(&tokens).into_rgba8();
+        let edge = number.x - SP.s;
+        let y = number.center_y() as usize;
+        let red = (edge as usize - 2..=edge as usize + 2).any(|x| {
+            let i = (y * window.width as usize + x) * 4;
+            (0..3).all(|c| pixels[i + c].abs_diff(danger[c]) <= 48)
+        });
+        assert!(red, "no red frame left of the top-level number");
     }
 }
