@@ -2,9 +2,11 @@
 //! mode through `Signex::update`. One model, the same engine commands as
 //! Properties, one undo step per edit.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use signex_types::pcb::PcbBoard;
+use pcb_geom::ItemRef;
+use signex_types::pcb::{PcbBoard, Point};
 use uuid::Uuid;
 
 use crate::app::handlers::menu::export::tests::app_workspace;
@@ -14,6 +16,7 @@ use crate::keymap::AppCommandId;
 use crate::menu_bar::MenuMessage;
 use crate::panels::polygons::{PolygonMsg, PourField, PourState};
 use crate::panels::{PanelMsg, PcbPanelMode, PcbPanelMsg};
+use crate::pcb_canvas::PcbCanvasMsg;
 
 /// A GND pour on the top copper, one on the bottom, and a VCC pour on the
 /// top copper with a higher priority, so it fills first.
@@ -326,4 +329,109 @@ fn closing_the_board_closes_its_polygon_manager_tab() {
         "every page of the board closes with it"
     );
     assert!(!app.document_state.has_pcb_tab(&path));
+}
+
+/// Type `text` in a cell of pour `n` and press Enter.
+fn type_into(app: &mut Signex, path: &Path, n: u128, field: PourField, text: &str) {
+    let (board, zone) = (path.to_path_buf(), zone(n));
+    let typed = PolygonMsg::FieldTyped {
+        board: board.clone(),
+        zone,
+        field,
+        text: text.into(),
+    };
+    send(app, typed);
+    send(app, PolygonMsg::FieldSubmitted { board, zone, field });
+}
+
+/// The tab of `path` that is its Polygon Manager (`page`) or its board.
+fn tab_of(app: &Signex, path: &Path, page: bool) -> usize {
+    let tabs = &app.document_state.tabs;
+    let wanted = |kind: &TabKind| {
+        if page {
+            kind.is_polygon_manager()
+        } else {
+            matches!(kind, TabKind::Pcb)
+        }
+    };
+    tabs.iter()
+        .position(|t| t.path == path && wanted(&t.kind))
+        .unwrap()
+}
+
+fn show(app: &mut Signex, at: usize) {
+    app.document_state.active_tab = at;
+    app.sync_active_tab();
+}
+
+#[test]
+fn coming_back_from_another_board_shows_the_fills_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, a) = app_with(dir.path());
+    run_command(&mut app);
+    let b = dir.path().join("other.snxpcb");
+    app.open_pcb_tab(b.clone(), "other".into(), board());
+    show(&mut app, tab_of(&app, &b, false));
+    assert!(
+        app.current_pour_fills(&a).is_none(),
+        "the other board's canvas filled the other board"
+    );
+    show(&mut app, tab_of(&app, &a, true));
+    let facts = app.document_state.panel_ctx.polygons.clone().expect("rows");
+    assert_eq!(facts.board, a);
+    assert!(
+        facts.rows.iter().all(|row| row.area_mm2.is_some()),
+        "every pour shows its fill again"
+    );
+}
+
+#[test]
+fn an_empty_clearance_follows_the_board_clearance_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path());
+    run_command(&mut app);
+    type_into(&mut app, &path, TOP_GND, PourField::Clearance, "0.5");
+    assert_eq!(zone_of(&app, &path, TOP_GND).clearance, 0.5);
+    type_into(&mut app, &path, TOP_GND, PourField::Clearance, " ");
+    assert_eq!(zone_of(&app, &path, TOP_GND).clearance, 0.0);
+}
+
+#[test]
+fn undo_drops_the_text_typed_and_not_applied() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path());
+    run_command(&mut app);
+    type_into(&mut app, &path, TOP_GND, PourField::Clearance, "0.5");
+    let typed = PolygonMsg::FieldTyped {
+        board: path.clone(),
+        zone: zone(TOP_GND),
+        field: PourField::Clearance,
+        text: "0.7".into(),
+    };
+    send(&mut app, typed);
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    let ui = &app.document_state.panel_ctx.pcb_panel.polygons;
+    assert_eq!(ui.draft(zone(TOP_GND), PourField::Clearance), None);
+    let facts = app.document_state.panel_ctx.polygons.as_ref().unwrap();
+    assert_eq!(facts.row(zone(TOP_GND)).unwrap().clearance_mm, 0.0);
+}
+
+#[test]
+fn a_right_click_on_a_pour_opens_the_manager_with_that_pour_ticked() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path());
+    let _ = app.update(Message::PcbCanvas(PcbCanvasMsg::PointerMoved {
+        at: Point::new(0.0, 5.0),
+        zoom_pct: 100.0,
+        tolerance_mm: 0.05,
+    }));
+    let Some(ItemRef::Zone { zone: hovered, .. }) = app.interaction_state.pcb_selection.hover()
+    else {
+        panic!("the pointer is on the edge of the pours");
+    };
+    assert!(app.selected_pours(&path).is_empty(), "nothing is selected");
+    run_command(&mut app);
+    let ui = &app.document_state.panel_ctx.pcb_panel.polygons;
+    assert_eq!(ui.selected, BTreeSet::from([hovered]));
+    assert_eq!(ui.current, Some(hovered));
 }

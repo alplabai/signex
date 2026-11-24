@@ -494,3 +494,5 @@ polygon-manager-all-chip = All
 polygon-manager-needs-attention = Needs attention
 # Under a pour's name in the panel: its net and layer.
 polygon-manager-panel-where = { $net } · { $layer }
+# A cell with no value: a shelved pour's order, a pour with no fill.
+polygon-manager-none-value = —

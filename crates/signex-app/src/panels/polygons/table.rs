@@ -12,7 +12,7 @@ use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{MessageId, UserText, ids, t};
 use signex_widgets::{button, checkbox, text, text_input};
 
-use super::widgets::{action, area_text, dash, net_label, state_chip, value};
+use super::widgets::{action, area_text, dash, net_label, row_ink, state_chip, value_in};
 use super::{PolygonFacts, PolygonMsg, PourField, PourRow, PourState, SP, TS, msg};
 use crate::panels::graphite::{hint_tooltip, selection_fill};
 use crate::panels::pcb_primitive_properties::format_number;
@@ -217,20 +217,21 @@ fn cells<'a>(
     facts: &'a PolygonFacts,
     pour: &'a PourRow,
 ) -> [Element<'a, PanelMsg>; 12] {
+    let ink = row_ink(ctx, pour.state);
     let order = pour
         .order
-        .map_or_else(|| dash(ctx), |order| value(ctx, order.to_string()));
+        .map_or_else(|| dash(ctx), |order| value_in(order.to_string(), ink));
     let area = pour
         .area_mm2
-        .map_or_else(|| dash(ctx), |area| value(ctx, area_text(area)));
+        .map_or_else(|| dash(ctx), |area| value_in(area_text(area), ink));
     let pieces = pour
         .pieces
-        .map_or_else(|| dash(ctx), |pieces| value(ctx, pieces.to_string()));
+        .map_or_else(|| dash(ctx), |pieces| value_in(pieces.to_string(), ink));
     [
         order,
         name_cell(ctx, facts, pour),
-        value(ctx, net_label(&ctx.i18n, pour)),
-        value(ctx, pour.layer.clone()),
+        value_in(net_label(&ctx.i18n, pour), ink),
+        value_in(pour.layer.clone(), ink),
         state_chip(&ctx.i18n, &ctx.tokens, pour.state),
         field(ctx, facts, pour, PourField::Clearance),
         field(ctx, facts, pour, PourField::MinWidth),
@@ -253,7 +254,7 @@ fn name_cell<'a>(
         text(UserText::new(pour.name.as_str()))
             .size(TS.dense)
             .font(mono)
-            .color(ti(ctx.tokens.text)),
+            .color(row_ink(ctx, pour.state)),
     )
     .padding([SP.xs, 0.0])
     .style(form_look::ghost_button)

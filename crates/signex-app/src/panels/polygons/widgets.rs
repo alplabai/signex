@@ -58,18 +58,27 @@ pub(super) fn action<'a>(
     )
 }
 
-/// A value read from the board, not typed.
-pub(super) fn value<'a>(ctx: &PanelContext, shown: String) -> Element<'a, PanelMsg> {
+/// A value read from the board, not typed, in `ink` (see [`row_ink`]).
+pub(super) fn value_in<'a>(shown: String, ink: iced::Color) -> Element<'a, PanelMsg> {
     text(UserText::new(shown))
         .size(TS.dense)
-        .color(ti(ctx.tokens.text))
+        .color(ink)
         .wrapping(Wrapping::None)
         .boxed()
 }
 
+/// The ink of a row's text: muted while the pour is shelved.
+pub(super) fn row_ink(ctx: &PanelContext, state: PourState) -> iced::Color {
+    if state == PourState::Shelved {
+        resolve(&ctx.tokens).ink3
+    } else {
+        ti(ctx.tokens.text)
+    }
+}
+
 /// A dash where there is nothing to show.
 pub(super) fn dash<'a>(ctx: &PanelContext) -> Element<'a, PanelMsg> {
-    text(t!(ctx.i18n, ids::PCB_STACK_NONE))
+    text(t!(ctx.i18n, ids::POLYGON_MANAGER_NONE_VALUE))
         .size(TS.dense)
         .color(resolve(&ctx.tokens).ink4)
         .boxed()

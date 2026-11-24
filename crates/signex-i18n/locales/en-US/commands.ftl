@@ -564,10 +564,6 @@ cmd-repour-selected = Fill the selected polygon pours again and report their cop
 cmd-menu-repour-selected = Repour Selected
 cmd-repour-all = Fill every polygon pour of the board again and report their copper
 cmd-menu-repour-all = Repour All
-# polygon-manager
-# Mockup row 178: the board's Polygon Manager tab.
-cmd-polygon-manager = Open the Polygon Manager of the board
-cmd-menu-polygon-manager = Polygon Manager...
 cmd-place-board-route = Route on the active copper layer around other nets, keeping the rule clearance
 cmd-menu-place-board-route = Interactive Routing
 cmd-cycle-route-mode = Switch Interactive Routing between walking around and pushing other nets' tracks
@@ -737,3 +733,8 @@ cmd-remove-from-union = Remove the selection from its union
 cmd-menu-remove-from-union = Remove Selection from Union
 cmd-break-union = Break the selected union
 cmd-menu-break-union = Break Union
+
+# polygon-manager
+# Mockup row 178: the board's Polygon Manager tab.
+cmd-polygon-manager = Open the Polygon Manager of the board
+cmd-menu-polygon-manager = Polygon Manager...

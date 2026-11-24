@@ -9,7 +9,8 @@ PCB panel's Polygons mode (mockup row 106): one model, two pure views
 
 - Tools ▸ Polygon Manager... runs `polygon_manager` on the board in view.
 - The board menu offers Polygon Manager on a polygon pour; the pours
-  selected on the board are ticked in the tab.
+  selected on the board are ticked in the tab, or else the pour under the
+  pointer.
 - The PCB panel's Polygons mode has Open Polygon Manager in its header.
 
 All three send `PolygonMsg::ManagerOpened`. A second open focuses the tab.
@@ -33,8 +34,15 @@ and Save and Undo act on the board.
   order), Net, Layer, State, Clearance (empty follows the board), Min
   width, Islands below, Dead copper, Area mm², Pieces, and Repour and
   Shelve / Unshelve. Clearance, Min width and Islands below are typed in
-  place and applied with Enter; Dead copper is a tick box. A click on the
-  name ticks that row alone and shows it on the right.
+  place and applied with Enter; an emptied Clearance follows the board
+  again. Dead copper is a tick box. A shelved pour's row is dimmed. A click
+  on the name ticks that row alone and shows it on the right.
+- **Typed text.** Text typed and not applied is dropped when the board
+  changes (an edit, undo, redo), so every cell shows what the board stores;
+  a bulk field's text is dropped too when the ticked rows change.
+- **Fills.** No canvas fills the board while its Polygon Manager tab is in
+  view, so the tab fills it for the current revision whenever the panels
+  are rebuilt (a tab switch, a reload, an edit).
 - **Detail.** The pour picked last: its net, layer, copper, the islands its
   rules removed, and the issues of its fill (why it has none).
 - **Bulk edit.** With two or more rows ticked, one field per typed column
@@ -79,3 +87,12 @@ Shelve / Unshelve. A click on a line picks the pour the tab shows.
   Duplicate to layer and Delete, Last poured.
 - A pour picked in the panel is not highlighted on the board.
 - A branch switch does not reopen the tab.
+- Esc in a typed cell does not cancel its text.
+- The layer names over the rows scroll sideways with the table; they are
+  not pinned to the left edge.
+- The Shelve all, Unshelve all and Shelve selected messages have no Undo
+  link; Undo on the board takes the step back.
+- The detail column shows the pour's values; they are typed in the table
+  or in Properties, not in the detail column.
+- A right-click in an undocked board window: the pours ticked are read
+  from the main window's selection and hover, not checked for that window.

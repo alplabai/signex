@@ -236,6 +236,55 @@ fn the_page_and_mode_text_comes_from_the_catalog() {
 }
 
 #[test]
+fn an_empty_clearance_reads_as_the_board_clearance() {
+    assert_eq!(PourField::Clearance.read(""), Some(0.0));
+    assert_eq!(PourField::Clearance.read("  "), Some(0.0));
+    assert_eq!(PourField::Clearance.read("0.4 mm"), Some(0.4));
+    assert_eq!(
+        PourField::MinWidth.read(""),
+        None,
+        "only Clearance has a default"
+    );
+    assert_eq!(PourField::IslandsBelow.read("wide"), None);
+}
+
+#[test]
+fn a_change_of_ticks_or_of_the_board_drops_the_typed_text() {
+    let mut ui = PolygonsUi::default();
+    let bulk = |text: &str| PolygonMsg::BulkTyped {
+        board: board(),
+        field: PourField::MinWidth,
+        text: text.into(),
+    };
+    apply(&mut ui, bulk("0.3"));
+    let ticked = PolygonMsg::RowTicked {
+        board: board(),
+        zone: Uuid::from_u128(2),
+        on: true,
+    };
+    apply(&mut ui, ticked);
+    assert!(
+        ui.bulk_drafts.is_empty(),
+        "typed for the rows ticked before"
+    );
+    apply(&mut ui, bulk("0.4"));
+    let cell = PolygonMsg::FieldTyped {
+        board: board(),
+        zone: Uuid::from_u128(1),
+        field: PourField::Clearance,
+        text: "0.6".into(),
+    };
+    apply(&mut ui, cell);
+    ui.drop_drafts_of(&PathBuf::from("another.snxpcb"));
+    assert_eq!(
+        ui.draft(Uuid::from_u128(1), PourField::Clearance),
+        Some("0.6")
+    );
+    ui.drop_drafts_of(&board());
+    assert!(ui.drafts.is_empty() && ui.bulk_drafts.is_empty());
+}
+
+#[test]
 fn builds_on_both_themes_with_and_without_a_board() {
     let (app, _boot) = crate::app::Signex::new();
     for id in ThemeId::BUILTINS {

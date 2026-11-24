@@ -544,9 +544,6 @@ define_ids! {
         CMD_MENU_REPOUR_SELECTED = "cmd-menu-repour-selected";
         CMD_REPOUR_ALL = "cmd-repour-all";
         CMD_MENU_REPOUR_ALL = "cmd-menu-repour-all";
-        // polygon-manager
-        CMD_POLYGON_MANAGER = "cmd-polygon-manager";
-        CMD_MENU_POLYGON_MANAGER = "cmd-menu-polygon-manager";
         CMD_PLACE_BOARD_ROUTE = "cmd-place-board-route";
         CMD_MENU_PLACE_BOARD_ROUTE = "cmd-menu-place-board-route";
         CMD_CYCLE_ROUTE_MODE = "cmd-cycle-route-mode";
@@ -701,5 +698,8 @@ define_ids! {
         CMD_MENU_REMOVE_FROM_UNION = "cmd-menu-remove-from-union";
         CMD_BREAK_UNION = "cmd-break-union";
         CMD_MENU_BREAK_UNION = "cmd-menu-break-union";
+        // polygon-manager
+        CMD_POLYGON_MANAGER = "cmd-polygon-manager";
+        CMD_MENU_POLYGON_MANAGER = "cmd-menu-polygon-manager";
     }
 }

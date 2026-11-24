@@ -371,4 +371,5 @@ define_ids! {
     POLYGON_MANAGER_ALL_CHIP = "polygon-manager-all-chip";
     POLYGON_MANAGER_NEEDS_ATTENTION = "polygon-manager-needs-attention";
     POLYGON_MANAGER_PANEL_WHERE = "polygon-manager-panel-where";
+    POLYGON_MANAGER_NONE_VALUE = "polygon-manager-none-value";
 }

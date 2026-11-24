@@ -261,7 +261,7 @@ fn detail<'a>(ctx: &'a PanelContext, facts: &'a PolygonFacts) -> Element<'a, Pan
             "area" => area_text(area),
             "pieces" => pieces
         ),
-        _ => t!(i18n, ids::PCB_STACK_NONE),
+        _ => t!(i18n, ids::POLYGON_MANAGER_NONE_VALUE),
     };
     let heading = text(UserText::new(pour.name.clone()))
         .size(TS.body)

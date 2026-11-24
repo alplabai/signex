@@ -20,8 +20,9 @@ use signex_i18n::{MessageId, ids, t};
 use uuid::Uuid;
 
 use crate::app::{Message, Signex, TabKind};
+use pcb_geom::ItemRef;
+
 use crate::panels::PolygonFacts;
-use crate::panels::pcb_primitive_properties::parse_number;
 use crate::panels::polygons::{PolygonMsg, PourField};
 
 /// The zone edit a typed `value` of `field` stands for.
@@ -45,11 +46,12 @@ impl Signex {
     }
 
     /// Open or focus the Polygon Manager of the board in view, with the
-    /// pours selected on the board ticked (a pour's right-click).
+    /// pours selected on the board ticked, or else the pour under the
+    /// pointer (a pour's right-click).
     fn open_polygon_manager(&mut self) {
         let picked = self
             .page_board()
-            .map(|board| self.selected_pours(&board))
+            .map(|board| self.pours_to_tick(&board))
             .unwrap_or_default();
         let Some(board) = self.open_board_page_tab(TabKind::PolygonManager) else {
             return;
@@ -61,6 +63,31 @@ impl Signex {
             ui.selected = picked;
         }
         self.refresh_polygon_facts();
+    }
+
+    /// The pours selected on `board`; without one, the pour under the
+    /// pointer, which a right-click on a pour leaves there.
+    fn pours_to_tick(&self, board: &Path) -> BTreeSet<Uuid> {
+        let selected = self.selected_pours(board);
+        if !selected.is_empty() {
+            return selected;
+        }
+        let state = &self.interaction_state.pcb_selection;
+        let Some(pcb) = self
+            .document_state
+            .pcb_board(board)
+            .filter(|_| state.document() == Some(board))
+        else {
+            return selected;
+        };
+        match state.hover() {
+            Some(ItemRef::Zone { zone, .. })
+                if pcb.zones.iter().any(|z| z.uuid == zone && z.is_pour()) =>
+            {
+                BTreeSet::from([zone])
+            }
+            _ => selected,
+        }
     }
 
     /// The board part of `msg`; its view state is already applied.
@@ -132,7 +159,7 @@ impl Signex {
     /// number changes nothing and says so in Messages.
     fn apply_typed(&mut self, board: &Path, zones: Vec<Uuid>, field: PourField, text: &str) {
         let what = field.message();
-        match parse_number(text) {
+        match field.read(text) {
             Some(value) => self.edit_pours(board, zones, field_edit(field, value), what),
             None => {
                 let line = t!(self.ui_state.i18n, ids::PCB_PRIM_NOT_A_NUMBER, "text" => text);
@@ -214,18 +241,32 @@ impl Signex {
         })
     }
 
-    /// Fill the board in view for its current revision when its fills are
-    /// not, then read the rows again. On the Polygon Manager tab no canvas
-    /// fills the board, so the tab refreshes the fills itself.
+    /// Fill the board of the Polygon Manager tab in view for its current
+    /// revision when its fills are not, then read the rows again.
     pub(crate) fn refresh_polygon_facts(&mut self) {
-        if let Some(path) = self.active_tab_path()
-            && let Some(&revision) = self.document_state.pcb_revisions.get(&path)
-            && let Some(board) = self.document_state.pcb_board(&path)
+        self.fill_polygon_manager_board();
+        self.document_state.panel_ctx.polygons = self.polygon_facts();
+    }
+
+    /// On a Polygon Manager tab no canvas fills the board, so the tab fills
+    /// it itself: after a tab switch, a reload or an edit, the fills may be
+    /// another board's or an older revision's. A no-op on any other tab, and
+    /// when the fills are already this revision's.
+    pub(crate) fn fill_polygon_manager_board(&mut self) {
+        let docs = &self.document_state;
+        let Some(tab) = docs.tabs.get(docs.active_tab) else {
+            return;
+        };
+        if !tab.kind.is_polygon_manager() {
+            return;
+        }
+        let path = tab.path.clone();
+        if let Some(&revision) = docs.pcb_revisions.get(&path)
+            && let Some(board) = docs.pcb_board(&path)
         {
             self.interaction_state
                 .pcb_ratsnest
-                .refresh(Some((path.clone(), revision)), board);
+                .refresh(Some((path, revision)), board);
         }
-        self.document_state.panel_ctx.polygons = self.polygon_facts();
     }
 }

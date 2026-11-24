@@ -105,6 +105,8 @@ impl Signex {
     /// repaints its own selection. This repaints only: it does not touch the
     /// tool or the placement in progress.
     fn after_board_change(&mut self, path: &Path) {
+        let polygons = &mut self.document_state.panel_ctx.pcb_panel.polygons;
+        polygons.drop_drafts_of(path);
         let active = self.active_tab_path().as_deref() == Some(path);
         if active {
             // Also repaints the undocked windows that show the active tab.

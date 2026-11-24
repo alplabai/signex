@@ -330,6 +330,8 @@ impl Signex {
         // retarget them at that sheet's project.
         let main_level = self.interaction_state.acting_window.is_none();
         if main_level {
+            // Before `polygon_facts` reads the fills (mockup row 178).
+            self.fill_polygon_manager_board();
             let context = match self
                 .document_state
                 .tabs

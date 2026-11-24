@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 use signex_i18n::{MessageId, ids};
 use uuid::Uuid;
 
+use crate::panels::pcb_primitive_properties::parse_number;
+
 /// Where a pour stands. A pour's copper is computed from the board as it is
 /// now, so there is no Out of date state yet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -60,6 +62,16 @@ impl PourField {
             Self::MinWidth => ids::PCB_PRIM_MIN_THICKNESS,
             Self::IslandsBelow => ids::PCB_PRIM_MIN_ISLAND_AREA,
         }
+    }
+
+    /// The value `text` typed in this field stands for; `None` when it is
+    /// no number. An empty Clearance is 0: the pour follows the board's
+    /// clearance, as the column's hint says.
+    pub fn read(self, text: &str) -> Option<f64> {
+        if self == Self::Clearance && text.trim().is_empty() {
+            return Some(0.0);
+        }
+        parse_number(text)
     }
 }
 
@@ -336,6 +348,16 @@ impl PolygonsUi {
         self.board.as_deref() == Some(board)
     }
 
+    /// Drop the text typed and not applied on `board`: the board changed
+    /// (undo, redo, an edit from Properties), so the cells show what it
+    /// stores now, as Properties drops its own drafts.
+    pub fn drop_drafts_of(&mut self, board: &Path) {
+        if self.is_for(board) {
+            self.drafts.clear();
+            self.bulk_drafts.clear();
+        }
+    }
+
     /// Apply the view-state part of `msg`; the app carries out the rest.
     pub fn apply(&mut self, msg: &PolygonMsg) {
         let Some(board) = msg.board() else {
@@ -347,6 +369,13 @@ impl PolygonsUi {
 
     fn apply_view(&mut self, msg: &PolygonMsg) {
         use PolygonMsg as M;
+        // A bulk draft was typed for the rows ticked then.
+        if matches!(
+            msg,
+            M::RowClicked { .. } | M::RowTicked { .. } | M::ShownTicked { .. }
+        ) {
+            self.bulk_drafts.clear();
+        }
         match msg {
             M::SubTabPicked { tab, .. } => self.sub_tab = *tab,
             M::LayerFilterPicked { layer, .. } => self.layer.clone_from(layer),
