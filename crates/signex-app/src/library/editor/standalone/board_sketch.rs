@@ -25,7 +25,10 @@ pub fn view_board_sketch<'a>(
     let look = crate::library::editor::footprint::graphite_look_for(tokens);
     Stack::new()
         .push(super::footprint::view_footprint_canvas(
-            editor, tokens, look.bg, look.dot,
+            editor,
+            tokens,
+            (look.bg, look.dot),
+            mirror_card,
         ))
         .push(super::dof_chip::overlay(editor, tokens, i18n))
         .push(super::sketch_info_bar::overlay(editor, tokens, i18n))

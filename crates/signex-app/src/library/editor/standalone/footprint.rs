@@ -14,7 +14,7 @@ use crate::app::FootprintDocument;
 use crate::library::editor::footprint::canvas::FootprintCanvas;
 use crate::library::editor::footprint::layers::FpLayer;
 use crate::library::editor::footprint::sketch_mode::mirror_card::{
-    MirrorCard, overlay as mirror_overlay,
+    MirrorCard, overlay as mirror_overlay, shown as shown_mirror_card,
 };
 use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
@@ -57,7 +57,7 @@ pub fn view_footprint<'a>(
     // The canvas fills the tab: layer visibility lives in the Layers dock
     // panel, and the cursor and pad summary in the global status bar
     // (`footprint::status`), so nothing sits under the canvas (#2262).
-    let canvas_area = view_footprint_canvas(editor, tokens, bg, grid);
+    let canvas_area = view_footprint_canvas(editor, tokens, (bg, grid), mirror_card);
 
     // Active bar floats OVER the canvas via Stack so the canvas
     // drawing area extends edge-to-edge behind it instead of being
@@ -684,8 +684,8 @@ fn view_footprint_toolbar<'a>(
 pub(super) fn view_footprint_canvas<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
-    bg: iced::Color,
-    grid: iced::Color,
+    (bg, grid): (iced::Color, iced::Color),
+    mirror_card: Option<&MirrorCard>,
 ) -> Element<'a, LibraryMessage> {
     let border = theme_ext::border_color(tokens);
 
@@ -714,6 +714,8 @@ pub(super) fn view_footprint_canvas<'a>(
         zoom_step: editor.zoom_step,
         trackpad_pan: editor.trackpad_pan,
         wheel_mode: editor.wheel_mode,
+        // The Mirror ghost draws what the card's OK writes (mockup row 191).
+        mirror_card: shown_mirror_card(editor, mirror_card),
     };
     let canvas_widget: Element<'a, LibraryMessage> = iced::widget::canvas(prog)
         .width(Length::Fill)
@@ -830,6 +832,26 @@ mod tests {
                 ..
             } => {}
             other => panic!("expected uniform Footprint passthrough, got {other:?}"),
+        }
+    }
+
+    // The footprint canvas is built only here, for a tab or a board sketch;
+    // a Mirror click from it reaches the Mirror card's route under the
+    // editor's path (mockup row 191).
+    #[test]
+    fn a_mirror_click_reaches_the_editor_path_where_the_card_takes_it() {
+        let path = PathBuf::from("t.snxfpt");
+        let click = FootprintEditorMsg::SketchToolClick {
+            x_mm: 1.0,
+            y_mm: 2.0,
+            snap_id: None,
+        };
+        match translate_footprint_canvas_msg(wrap(click), &path) {
+            LibraryMessage::PrimitiveEditorEvent {
+                path: to,
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchToolClick { .. }),
+            } => assert_eq!(to, path),
+            other => panic!("expected the tab's primitive editor, got {other:?}"),
         }
     }
 }

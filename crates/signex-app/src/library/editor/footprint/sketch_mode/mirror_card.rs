@@ -81,6 +81,12 @@ pub fn is_armed(editor: &FootprintDocument) -> bool {
     editor.state.mode == EditorMode::Sketch && editor.state.active_tool == SketchTool::Mirror
 }
 
+/// The card `editor` shows: its open `card`, or the one the next message
+/// opens. `None` while Mirror is not armed.
+pub fn shown(editor: &FootprintDocument, card: Option<&MirrorCard>) -> Option<MirrorCard> {
+    is_armed(editor).then(|| card.cloned().unwrap_or_else(|| MirrorCard::opened(editor)))
+}
+
 /// A click of the armed Mirror tool: a card pick, never a tool click.
 pub fn is_card_pick(editor: &FootprintDocument, msg: &FootprintEditorMsg) -> bool {
     is_armed(editor)
@@ -222,6 +228,9 @@ pub fn route(
     let card = cards
         .entry(editor.path.clone())
         .or_insert_with(|| MirrorCard::opened(editor));
+    // The canvas draws the card's picks and copies (`mirror_ghost`). The
+    // cache is iced's own bookkeeping, cleared through a shared reference.
+    editor.canvas_cache.clear();
     match msg {
         FootprintEditorMsg::SketchMirrorCard(answer) => match answer {
             MirrorCardMsg::FieldFocused(field) => {
@@ -334,17 +343,10 @@ pub fn overlay<'a>(
     tokens: &'a ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
-    if !is_armed(editor) {
+    let Some(open) = shown(editor, card) else {
         return Space::new().boxed();
-    }
-    let opened;
-    let card = match card {
-        Some(card) => card,
-        None => {
-            opened = MirrorCard::opened(editor);
-            &opened
-        }
     };
+    let card = &open;
     let send = |msg: MirrorCardMsg| {
         Some(LibraryMessage::PrimitiveEditorEvent {
             path: editor.path.clone(),
@@ -458,3 +460,7 @@ pub fn overlay<'a>(
         .align_y(Vertical::Top)
         .boxed()
 }
+
+#[cfg(test)]
+#[path = "mirror_card_tests.rs"]
+mod tests;
