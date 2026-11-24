@@ -258,6 +258,8 @@ fn cells(
 
 /// A row's icon in the check column, in the row's ink. The glyphs are line
 /// art; any theme's handle draws the same strokes and the style colours them.
+/// Sized to the check column (MARK_WIDTH), not M.icon_size, on purpose: a
+/// wider glyph would push labels off the shared start line.
 fn icon_cell(icon: model::MenuIcon, ink: iced::Color) -> Element<'static, MenuMessage> {
     const GLYPH_THEME: signex_types::theme::ThemeId = signex_types::theme::ThemeId::GraphiteDark;
     let handle = match icon {
