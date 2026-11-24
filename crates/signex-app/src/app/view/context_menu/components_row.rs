@@ -102,16 +102,11 @@ impl Signex {
             Some(_) => pointer,
         };
         let menu = super::placement::menu_card(entries, &panel_ctx.tokens, &panel_ctx.ui_font_name);
-        // Mockup row 53: the menu floats over the dock and the window stays
-        // at full brightness, so the click-outside layer paints nothing.
-        let layers = vec![
-            super::backdrop::MenuBackdrop::new(
-                Message::Library(LibraryMessage::ComponentsPanelRowMenuDismissed),
-                iced::Color::TRANSPARENT,
-            )
-            .boxed(),
-            super::anchored::AnchoredMenu::new(menu.element, anchor).boxed(),
-        ];
+        let layers = Self::menu_overlay(
+            Message::Library(LibraryMessage::ComponentsPanelRowMenuDismissed),
+            menu.element,
+            anchor,
+        );
         match menu_ctx.window {
             None => layers,
             // A pick in an undocked window acts on that window's sheet.
@@ -286,56 +281,6 @@ mod tests {
             180.0,
         );
         assert_eq!(floating, (5.0, 6.0));
-    }
-
-    /// Mockup row 53: with the row menu open the rest of the window keeps
-    /// its full brightness; the click-outside layer paints no scrim.
-    #[test]
-    fn the_open_menu_leaves_the_window_undimmed() {
-        use crate::library::state::{ComponentsPanelRowKey, ComponentsRowMenu};
-        use iced::widget::{Space, Stack, container};
-
-        let window = iced::Size::new(1400.0, 900.0);
-        let (mut app, _boot) = Signex::new();
-        app.ui_state.window_size = (window.width, window.height);
-        app.library.components_panel.row_menu = Some(ComponentsRowMenu {
-            key: ComponentsPanelRowKey {
-                library_path: "lib.snxlib".into(),
-                table: "t".into(),
-                row_id: signex_library::RowId::from_uuid(uuid::Uuid::from_u128(1)),
-            },
-            x: 100.0,
-            y: 100.0,
-            window: None,
-        });
-        let main = iced::window::Id::unique();
-        app.ui_state.main_window_id = Some(main);
-        let layers = app.components_row_context_menu_overlay(main);
-        assert_eq!(layers.len(), 2, "backdrop and menu");
-
-        // The layers over a white window: a scrim would darken the corner.
-        let white = container(Space::new())
-            .width(iced::Length::Fill)
-            .height(iced::Length::Fill)
-            .style(|_: &iced::Theme| container::Style {
-                background: Some(iced::Background::Color(iced::Color::WHITE)),
-                ..container::Style::default()
-            });
-        let mut stack = Stack::new()
-            .width(iced::Length::Fill)
-            .height(iced::Length::Fill)
-            .push(white.boxed());
-        for layer in layers {
-            stack = stack.push(layer);
-        }
-        let pixels = crate::layout_probe::draw_pixels(stack.boxed(), window);
-        // The bottom-left corner, far below the card at y = 100.
-        let at = ((window.height as usize - 4) * window.width as usize + 4) * 4;
-        assert_eq!(
-            &pixels[at..at + 3],
-            &[255, 255, 255],
-            "the window is dimmed"
-        );
     }
 
     /// The opened menu, laid out, shows each row's label on one line at its

@@ -301,6 +301,129 @@ fn the_place_flyout_lines_up_with_its_launcher() {
     );
 }
 
+/// The bottom-left pixel of `layers` drawn over a white window: far from
+/// every card these tests open, so only a scrim can change it.
+fn corner_over_white(layers: Vec<Element<'_, Message>>, window: iced::Size) -> [u8; 3] {
+    let white = iced::widget::container(iced::widget::Space::new())
+        .width(iced::Length::Fill)
+        .height(iced::Length::Fill)
+        .style(|_: &iced::Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(iced::Color::WHITE)),
+            ..iced::widget::container::Style::default()
+        });
+    let mut stack: iced::widget::Stack<Element<'_, Message>> = iced::widget::Stack::new()
+        .width(iced::Length::Fill)
+        .height(iced::Length::Fill)
+        .push(white.boxed());
+    for layer in layers {
+        stack = stack.push(layer);
+    }
+    let pixels = crate::layout_probe::draw_pixels(stack.boxed(), window);
+    let at = ((window.height as usize - 4) * window.width as usize + 4) * 4;
+    [pixels[at], pixels[at + 1], pixels[at + 2]]
+}
+
+/// The window point the scrim tests press: the corner they read.
+fn corner(window: iced::Size) -> iced::Point {
+    iced::Point::new(4.0, window.height - 4.0)
+}
+
+/// The app with the canvas menu, a Components row menu or the schematic
+/// Active Bar's Align menu open at (100, 100) in `window`.
+fn app_with_menu(which: usize, window: iced::Size) -> (Signex, iced::window::Id) {
+    use crate::library::state::{ComponentsPanelRowKey, ComponentsRowMenu};
+    let (mut app, main) = graphite_app();
+    app.ui_state.window_size = (window.width, window.height);
+    match which {
+        0 => open_canvas_menu(&mut app, (100.0, 100.0)),
+        1 => {
+            app.library.components_panel.row_menu = Some(ComponentsRowMenu {
+                key: ComponentsPanelRowKey {
+                    library_path: "lib.snxlib".into(),
+                    table: "t".into(),
+                    row_id: signex_library::RowId::from_uuid(uuid::Uuid::from_u128(1)),
+                },
+                x: 100.0,
+                y: 100.0,
+                window: None,
+            });
+        }
+        _ => app.interaction_state.active_bar_menu = Some(crate::active_bar::ActiveBarMenu::Align),
+    }
+    (app, main)
+}
+
+/// The open menu's overlay layers, for [`app_with_menu`]'s `which`.
+fn menu_layers(app: &Signex, which: usize, main: iced::window::Id) -> Vec<Element<'_, Message>> {
+    match which {
+        0 => app.context_menu_overlay(main),
+        1 => app.components_row_context_menu_overlay(main),
+        _ => app.active_bar_menu_overlay(main),
+    }
+}
+
+/// Mockup rows 53 and 61: the schematic canvas menu, a panel row menu and
+/// an Active Bar menu all dim the window behind them, in one scrim.
+#[test]
+fn every_menu_dims_the_window_behind_it_alike() {
+    let window = iced::Size::new(1400.0, 900.0);
+    let dims: Vec<[u8; 3]> = (0..3)
+        .map(|which| {
+            let (app, main) = app_with_menu(which, window);
+            let layers = menu_layers(&app, which, main);
+            assert!(!layers.is_empty(), "menu {which} is not open");
+            corner_over_white(layers, window)
+        })
+        .collect();
+    for (which, rgb) in dims.iter().enumerate() {
+        assert!(
+            rgb.iter().all(|&c| c < 200),
+            "menu {which} leaves the window undimmed: {rgb:?}"
+        );
+    }
+    assert!(
+        dims.windows(2).all(|pair| pair[0] == pair[1]),
+        "the menus dim the window differently: {dims:?}"
+    );
+}
+
+/// A press on the scrim closes each menu with the message an outside click
+/// sent before the scrim was painted.
+#[test]
+fn a_press_on_the_scrim_closes_each_menu() {
+    let window = iced::Size::new(1400.0, 900.0);
+    let closed: [fn(&Message) -> bool; 3] = [
+        |m| matches!(m, Message::ContextMenu(ContextMenuMsg::Close)),
+        |m| {
+            matches!(
+                m,
+                Message::Library(
+                    crate::library::messages::LibraryMessage::ComponentsPanelRowMenuDismissed
+                )
+            )
+        },
+        |m| {
+            matches!(
+                m,
+                Message::ActiveBar(crate::active_bar::ActiveBarMsg::CloseMenus)
+            )
+        },
+    ];
+    for (which, is_close) in closed.iter().enumerate() {
+        let (app, main) = app_with_menu(which, window);
+        let messages = messages_on_click_at(
+            stacked(menu_layers(&app, which, main)),
+            window,
+            None,
+            corner(window),
+        );
+        assert!(
+            messages.iter().any(is_close),
+            "menu {which}: a scrim press sent {messages:?}"
+        );
+    }
+}
+
 /// The row height the placement assumes is the one the dropdown really lays
 /// out, with and without icons, in both looks; a submenu launcher is exactly
 /// one item row tall (#2136).
