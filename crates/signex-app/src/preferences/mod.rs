@@ -175,6 +175,10 @@ pub enum PrefMsg {
     DraftDragDirectionSelect(bool),
     /// Toggle "Show net info on hover". Persisted on Save.
     DraftNetHoverEnabled(bool),
+    /// Toggle "Pan at the canvas edge" (#2872). Persisted on Save.
+    DraftEdgePanEnabled(bool),
+    /// Choose the edge pan speed. Persisted on Save.
+    DraftEdgePanSpeed(crate::app::edge_pan::EdgePanSpeed),
     /// The "Fill symbol bodies" rows changed. Persisted on Save.
     SymbolBodyFill(BodyFillMsg),
     /// Toggle "Two-finger scroll pans". Persisted on Save.
@@ -346,6 +350,7 @@ pub struct PrefsView<'a> {
     pub draft_annotate_undo: crate::annotate_undo::AnnotateUndo,
     pub draft_move_keeps_wires: bool,
     pub draft_net_hover_enabled: bool,
+    pub draft_edge_pan: crate::app::edge_pan::EdgePanPrefs,
     pub draft_symbol_body_fill: crate::symbol_fill_prefs::SymbolBodyFill,
     /// The fill colour field's preset palette and custom picker are open.
     pub body_fill_palette_open: bool,

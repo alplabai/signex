@@ -33,6 +33,7 @@ mod document;
 pub mod document_ids;
 pub mod document_read;
 mod documents;
+pub(crate) mod edge_pan;
 pub(crate) mod engine_notices;
 pub(crate) mod fab_outputs;
 // #1282: Design ▸ Differential Pair Classes….

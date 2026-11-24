@@ -1162,6 +1162,7 @@ impl Signex {
             net_hover_tick,
             library_poll,
             autosave_tick,
+            self.edge_pan_subscription(),
             // Frames only while the 3D view's flip turns or a screenshot waits.
             self.board_3d_subscription(),
             // None unless started with SIGNEX_BENCH_PAN_ZOOM (#2472).

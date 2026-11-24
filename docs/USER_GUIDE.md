@@ -202,6 +202,11 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 - **Pan:** hold the right mouse button and drag.
   A right-click without dragging opens the context menu, unless you are in the
   middle of drawing a wire, where it cancels the wire.
+- **Pan at the edge:** while a tool is armed or you drag or move something,
+  hold the pointer near an edge of the canvas and the view moves that way,
+  faster the closer you are to the edge; what you are placing or dragging
+  stays under the pointer. Move onto a panel to stop; the tool stays armed.
+  **Preferences ▸ Editing** turns it off and sets its speed.
 - **Zoom:** scroll the mouse wheel. Zoom is centred on the pointer. Or hold the
   middle mouse button (the wheel button) and drag: up zooms in, down zooms out,
   about the point you pressed. A tool you have armed stays armed. In the 3D

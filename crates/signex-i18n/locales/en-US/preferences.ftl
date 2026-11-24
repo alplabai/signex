@@ -193,6 +193,14 @@ preferences-move-keeps-wires = Keep wires connected when moving
 preferences-move-keeps-wires-help = When on, moving, rotating or mirroring symbols, child sheets or sheet pins (drag, Move, Move By, align, rotate, mirror) drags the wires on their pins along, adding a bend where needed to keep them horizontal or vertical. A net check afterwards keeps this from changing connectivity beyond what a plain move, rotate or mirror would do; a pin that cannot be kept connected moves alone and is reported in the Messages panel. When off, only the selected items move or turn and attached wires stay where they were. Hold Alt through one drag to do the opposite for that drag only; the Drag with connections command (G in the Classic profile) drags the picked object with its wires whatever this says.
 preferences-net-hover = Show net info on hover
 preferences-net-hover-help = When on, resting the pointer on a wire, pin or label for a moment shows a card with the net's name, its net class and the pins on it with the sheet each is on. Turn it off if the card gets in the way while you edit.
+# Edge pan (#2872): the board, sheet, footprint and symbol canvases.
+preferences-edge-pan = Pan at the canvas edge
+preferences-edge-pan-help = When on, while a tool is armed or you drag or move something, holding the pointer near an edge of the canvas moves the view that way, faster the closer the pointer is to the edge. Moving the pointer onto a panel stops it; the tool stays armed.
+preferences-edge-pan-speed = Edge pan speed
+preferences-edge-pan-speed-help = How fast the view moves with the pointer at the very edge of the canvas.
+preferences-edge-pan-speed-slow = Slow
+preferences-edge-pan-speed-medium = Medium
+preferences-edge-pan-speed-fast = Fast
 preferences-drag-direction = Select by drag direction
 preferences-drag-direction-help = When on, dragging a selection box from left to right selects only what the box fully contains, and from right to left selects everything the box touches. When off, the Inside / Touching selection mode (Shift+S cycles it) decides for both directions; while on, that mode is not used for box selection.
 preferences-increment-step = Increment step
