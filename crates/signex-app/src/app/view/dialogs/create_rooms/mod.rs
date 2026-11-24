@@ -120,11 +120,15 @@ impl Signex {
     }
 }
 
+/// A section heading (mockup row 163): upper case, cased for the language
+/// in force at display time.
 fn small_label<'a>(id: MessageId, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
-    text(t!(i18n, id))
-        .size(TS.section)
-        .color(resolve(tokens).ink3)
-        .boxed()
+    text(UserText::new(
+        i18n.upper_for_display(&t!(i18n, id).into_string()),
+    ))
+    .size(TS.section)
+    .color(resolve(tokens).ink3)
+    .boxed()
 }
 
 fn caption<'a>(line: Localized, tokens: &ThemeTokens) -> Element<'a, Message> {
@@ -400,4 +404,57 @@ fn right_column<'a>(
     .width(Length::Fill)
     .height(Length::Fill)
     .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use iced::Size;
+    use signex_i18n::{I18n, LanguagePref, MessageId, ids};
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    use super::{SIZE, small_label};
+    use crate::layout_probe::lay_out_texts;
+
+    const HEADINGS: [MessageId; 3] = [
+        ids::ROOMS_DIALOG_TO_CREATE,
+        ids::ROOMS_DIALOG_OPTIONS,
+        ids::ROOMS_PREVIEW,
+    ];
+
+    /// The section headings as laid out, in the language `tag`.
+    fn headings(tag: &str) -> (I18n, Vec<String>) {
+        let i18n = I18n::new(&LanguagePref::Locale(tag.to_owned()));
+        let tokens = theme_tokens(ThemeId::GraphiteLight);
+        let window = Size::new(SIZE.0, SIZE.1);
+        let shown = HEADINGS
+            .into_iter()
+            .map(|id| {
+                lay_out_texts(small_label(id, &i18n, &tokens), window)
+                    .into_iter()
+                    .map(|t| t.text)
+                    .collect::<Vec<_>>()
+                    .join("|")
+            })
+            .collect();
+        (i18n, shown)
+    }
+
+    /// Mockup row 163: the section headings read in upper case, cased at
+    /// display time in the language in force; the catalog keeps its case.
+    #[test]
+    fn the_section_headings_are_upper_case_in_the_language_in_force() {
+        let (en, shown) = headings("en-US");
+        assert_eq!(shown, ["ROOMS TO CREATE", "OPTIONS", "PREVIEW"]);
+        assert_eq!(
+            en.message_plain(ids::ROOMS_DIALOG_TO_CREATE, &[]),
+            "Rooms to create"
+        );
+        let (xa, shown) = headings("en-XA");
+        let expected: Vec<String> = HEADINGS
+            .into_iter()
+            .map(|id| xa.upper_for_display(&xa.message_plain(id, &[])))
+            .collect();
+        assert_eq!(shown, expected);
+        assert_ne!(shown[0], "ROOMS TO CREATE");
+    }
 }
