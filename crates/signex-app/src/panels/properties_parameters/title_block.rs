@@ -259,7 +259,7 @@ fn overrides_pill<'a>(ctx: &'a PanelContext, value: &str) -> Element<'a, PanelMs
     let radius = ChipMetrics::pill_radius(metrics.kind_height);
     let pill = container(label)
         .height(metrics.kind_height)
-        .max_width(TS.body * OVERRIDES_PILL_MAX_EMS)
+        .width(Length::Shrink.max(TS.body * OVERRIDES_PILL_MAX_EMS))
         .padding([0.0, metrics.pad_h])
         .align_y(iced::alignment::Vertical::Center)
         .style(move |_: &Theme| container::Style {
