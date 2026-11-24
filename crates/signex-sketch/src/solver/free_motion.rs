@@ -6,10 +6,11 @@
 //! The basis comes from the reduced row echelon form of the Jacobian with
 //! partial pivoting: each free column gives the motion that moves that
 //! variable by one and the pivot variables with it. The motions are
-//! linearised at the solved state, as the canvas's DOF arrows are. The same
-//! row reduction gives the rank the DOF colours read ([`rank`]), so the
-//! header pill and the card cannot disagree. Derived from first principles;
-//! no third-party numerical source consulted.
+//! linearised at the solved state, as the canvas's DOF arrows are. The row
+//! reduction only lists motions: the DOF colours keep the QR rank of
+//! [`crate::solver::dof`], so on a near-dependent constraint set the card can
+//! list a motion the colours leave Full. Derived from first principles; no
+//! third-party numerical source consulted.
 
 use std::collections::HashSet;
 
@@ -69,12 +70,13 @@ pub fn free_motions(result: &SolveResult, jacobian: &[Vec<f64>]) -> FreeMotions 
 }
 
 /// The numerical rank of the `m × n` `jacobian`: its pivot count under
-/// [`RANK_TOL`]. The DOF colours read it.
+/// [`RANK_TOL`], the count the free motions leave. The DOF colours read the
+/// QR rank instead.
 pub fn rank(jacobian: &[Vec<f64>], n: usize) -> usize {
     n - null_space(jacobian, n).len()
 }
 
-/// [`free_motions`] and [`rank`] from one row reduction, for the solve.
+/// [`free_motions`] and [`rank`] from one row reduction.
 pub(crate) fn free_motions_and_rank(
     result: &SolveResult,
     jacobian: &[Vec<f64>],

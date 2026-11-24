@@ -326,9 +326,9 @@ mod tests {
     }
 
     /// Mockup row 7, under the decision of 2026-11-22: the foot caption does
-    /// not send anyone to a BOM Studio or Export Jobs tab: they are not listed
-    /// here, but do not open as a tab yet. Layer Stack opens as a tab (mockup
-    /// row 105), so the foot names it.
+    /// not send anyone to a BOM Studio or Export Jobs tab, which are still
+    /// panels in this list. Layer Stack opens as a tab (mockup row 105), so
+    /// the foot names it.
     #[test]
     fn the_foot_caption_names_only_what_opens_as_a_tab() {
         let i18n = signex_i18n::I18n::en_us();
@@ -338,6 +338,36 @@ mod tests {
         for listed in ["BOM Studio", "Export Jobs"] {
             assert!(!foot.contains(listed), "{foot}");
         }
+    }
+
+    /// DECISIONS 2026-11-24, mockup row 7: with a sheet open the Project
+    /// group still lists BOM Studio, Export Jobs, Variants and the Design
+    /// Notebook, which do not open as tabs yet; To-Do and Layer Stack are
+    /// not rows.
+    #[test]
+    fn a_sheet_lists_the_tool_documents_that_are_not_tabs_yet() {
+        let sheet = OpenDocuments {
+            schematic: true,
+            pcb: false,
+            footprint: false,
+        };
+        let groups = grouped_panels(|kind| sheet.offers(kind));
+        let project = groups
+            .iter()
+            .find(|(g, _)| *g == PanelGroup::Project)
+            .map(|(_, kinds)| kinds.clone())
+            .unwrap_or_default();
+        for kind in [
+            PanelKind::BomStudio,
+            PanelKind::OutputJobs,
+            PanelKind::Variants,
+            PanelKind::Wiki,
+        ] {
+            assert!(project.contains(&kind), "{kind:?} in {project:?}");
+        }
+        let listed: Vec<PanelKind> = groups.into_iter().flat_map(|(_, k)| k).collect();
+        assert!(!listed.contains(&PanelKind::Todo), "{listed:?}");
+        assert!(!listed.contains(&PanelKind::LayerStack), "{listed:?}");
     }
 
     /// Mockup row 7: with a board open the PCB group reads Layers, Nets,

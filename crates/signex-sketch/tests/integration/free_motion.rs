@@ -6,7 +6,7 @@ use crate::common::{self, Sketch};
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::id::{ConstraintId, SketchEntityId};
 use signex_sketch::solver::FullSolveOutput;
-use signex_sketch::solver::dof::{DofColor, RANK_TOL};
+use signex_sketch::solver::dof::{DofColor, RANK_TOL, entity_colours};
 use signex_sketch::solver::free_motion::{self, MotionKind};
 use signex_sketch::solver::linalg::QrDecomposition;
 use signex_sketch::solver::residual::ResolvedParams;
@@ -124,8 +124,8 @@ fn the_rank_counts_a_small_pivot_next_to_large_entries() {
     assert_eq!(free_motion::rank(&singular, 2), 1);
 }
 
-/// The DOF card and the header pill share one rule: the card counts free
-/// degrees of freedom exactly when the colours mark a point under-constrained.
+/// On a well-conditioned sketch the DOF card counts free degrees of freedom
+/// exactly when the colours mark a point under-constrained.
 #[test]
 fn the_card_and_the_colours_agree_on_whether_anything_is_free() {
     let mut anchored = Sketch::new();
@@ -139,4 +139,44 @@ fn the_card_and_the_colours_agree_on_whether_anything_is_free() {
         assert_eq!(out.free_motions.dof > 0, free, "{:?}", out.free_motions);
         assert_eq!(under, free, "{:?}", out.colours);
     }
+}
+
+/// The DOF colours keep the QR rank (Caner, 2026-11-24): on a near-dependent
+/// Jacobian whose small entries add up past `RANK_TOL` in the QR but stay
+/// under it as row-reduction pivots, the free point stays Full as on trunk,
+/// while the free motions still list the motion the row reduction leaves.
+#[test]
+fn a_near_dependent_set_keeps_the_qr_colour_and_lists_its_motion() {
+    let mut s = Sketch::new();
+    let p1 = s.add_point(0.0, 0.0);
+    let p2 = s.add_point(5.0, 0.0);
+    let line = s.add_line(p1, p2);
+    constrain(&mut s, ConstraintKind::Fixed { point: p1 });
+    constrain(&mut s, ConstraintKind::Horizontal { line });
+    let out = solve(&s);
+    assert_eq!(out.result.state.len(), 2, "p2's x and y are the state");
+    // Four rows of 6e-10 on one column: each pivot is under RANK_TOL, their
+    // QR diagonal 1.2e-9 is over it.
+    let small = 6.0e-10;
+    let mut jacobian = vec![vec![1.0, 0.0]];
+    jacobian.extend((0..4).map(|_| vec![0.0, small]));
+    let qr = QrDecomposition::new(&jacobian).expect("factors");
+    assert_eq!(qr.rank(RANK_TOL), 2);
+    assert_eq!(free_motion::rank(&jacobian, 2), 1);
+
+    let colours = entity_colours(
+        &s.data,
+        &out.result,
+        &jacobian,
+        &out.result.index,
+        &ResolvedParams::new(),
+    );
+    assert_eq!(colours.get(&p2), Some(&DofColor::Full), "{colours:?}");
+
+    let motions = free_motion::free_motions(&out.result, &jacobian);
+    assert_eq!(motions.dof, 1, "{motions:?}");
+    let [motion] = motions.motions.as_slice() else {
+        panic!("one motion: {motions:?}");
+    };
+    assert_eq!(motion.entities, vec![p2]);
 }

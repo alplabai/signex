@@ -67,7 +67,8 @@ fn library_rows_count_as_items() {
 }
 
 /// Each row says what it is with the kind cap its tab shows, as in the Exit
-/// confirm (mockup row 16); a file of another kind has no cap.
+/// confirm (mockup row 16): a library reads LIB (DECISIONS 2026-11-24), and
+/// a plain file of another kind has no cap.
 #[test]
 fn each_row_says_what_it_is() {
     let en = I18n::en_us_ref();
@@ -100,7 +101,7 @@ fn each_row_says_what_it_is() {
             row("dcdc-buck.snxprj", Some("PRJ")),
             row("r.snxsym", Some("SYM")),
             row("r0402.snxfpt", Some("FPT")),
-            row("Stock.snxlib", None),
+            row("Stock.snxlib", Some("LIB")),
             row("notes.txt", None),
         ]
     );

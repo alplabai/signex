@@ -42,19 +42,14 @@ impl PanelGroup {
     }
 }
 
-/// The group `kind` is listed under. `None` for a tool document: Layer
-/// Stack, BOM Studio, Export Jobs, Variants and the Design Notebook open as
-/// document tabs of their project, so the list leaves them out (DECISIONS
-/// 2026-11-18, mockup row 7). To-Do is left out too: it folds into the
-/// Design Notebook (DECISIONS 2026-11-24, mockup row 7).
+/// The group `kind` is listed under. A tool document leaves the list only
+/// once it opens as a document tab (DECISIONS 2026-11-24, mockup row 7):
+/// Layer Stack does, so it has none; BOM Studio, Export Jobs, Variants and
+/// the Design Notebook are still panels and keep their Project row. To-Do
+/// folds into the Design Notebook (DECISIONS 2026-11-24, mockup row 7).
 pub fn panel_group(kind: PanelKind) -> Option<PanelGroup> {
     let group = match kind {
-        PanelKind::LayerStack
-        | PanelKind::BomStudio
-        | PanelKind::OutputJobs
-        | PanelKind::Variants
-        | PanelKind::Wiki
-        | PanelKind::Todo => return None,
+        PanelKind::LayerStack | PanelKind::Todo => return None,
         PanelKind::Projects
         | PanelKind::Components
         | PanelKind::Library
@@ -62,6 +57,11 @@ pub fn panel_group(kind: PanelKind) -> Option<PanelGroup> {
         | PanelKind::Annotations
         | PanelKind::Favorites
         | PanelKind::Snippets
+        // Tool documents that do not open as tabs yet.
+        | PanelKind::BomStudio
+        | PanelKind::OutputJobs
+        | PanelKind::Variants
+        | PanelKind::Wiki
         // Classes belong to the project (#2417); on a board they are a mode
         // of the Nets panel (mockup row 106), so the PCB group has no row.
         | PanelKind::NetClasses
@@ -105,19 +105,20 @@ pub fn grouped_panels(is_shown: impl Fn(PanelKind) -> bool) -> Vec<(PanelGroup, 
 mod tests {
     use super::*;
 
-    /// The tool documents that open as tabs (DECISIONS 2026-11-18).
-    const TOOL_DOCUMENTS: [PanelKind; 5] = [
-        PanelKind::LayerStack,
+    /// The tool documents that do not open as document tabs yet, so they
+    /// keep their panel row (DECISIONS 2026-11-24).
+    const PANEL_TOOL_DOCUMENTS: [PanelKind; 4] = [
         PanelKind::BomStudio,
         PanelKind::OutputJobs,
         PanelKind::Variants,
         PanelKind::Wiki,
     ];
 
-    /// Panels the list leaves out: the tool documents, and To-Do, which
-    /// folds into the Design Notebook (DECISIONS 2026-11-24, mockup row 7).
+    /// Panels the list leaves out: Layer Stack, which opens as a tab, and
+    /// To-Do, which folds into the Design Notebook (DECISIONS 2026-11-24,
+    /// mockup row 7).
     fn is_unlisted(kind: PanelKind) -> bool {
-        TOOL_DOCUMENTS.contains(&kind) || kind == PanelKind::Todo
+        kind == PanelKind::LayerStack || kind == PanelKind::Todo
     }
 
     /// Every panel of the list sits in exactly one group, so grouping
@@ -127,7 +128,7 @@ mod tests {
         let grouped = grouped_panels(|_| true);
         let listed: Vec<PanelKind> = grouped.iter().flat_map(|(_, k)| k.clone()).collect();
         let unlisted = ALL_PANELS.iter().filter(|&&k| is_unlisted(k)).count();
-        assert_eq!(unlisted, TOOL_DOCUMENTS.len() + 1);
+        assert_eq!(unlisted, 2);
         assert_eq!(listed.len(), ALL_PANELS.len() - unlisted);
         for kind in ALL_PANELS {
             let expected = usize::from(!is_unlisted(*kind));
@@ -139,24 +140,29 @@ mod tests {
         }
     }
 
-    /// Mockup row 7: Layer Stack, BOM Studio, Export Jobs, Variants and the
-    /// Design Notebook are document tabs, so the panel list never lists
-    /// them, whatever is open; each is still a panel kind the command
+    /// DECISIONS 2026-11-24, mockup row 7: a tool document leaves the list
+    /// only once it opens as a tab. BOM Studio, Export Jobs, Variants and the
+    /// Design Notebook do not yet, so they keep their Project row; Layer
+    /// Stack does, so it has no group and is still a panel kind the command
     /// palette reaches.
     #[test]
-    fn the_tool_documents_are_not_listed() {
-        for kind in TOOL_DOCUMENTS {
-            assert!(ALL_PANELS.contains(&kind), "{kind:?}");
-            assert_eq!(panel_group(kind), None, "{kind:?}");
+    fn tool_documents_stay_listed_until_they_open_as_tabs() {
+        for kind in PANEL_TOOL_DOCUMENTS {
+            assert_eq!(panel_group(kind), Some(PanelGroup::Project), "{kind:?}");
         }
+        assert!(ALL_PANELS.contains(&PanelKind::LayerStack));
+        assert_eq!(panel_group(PanelKind::LayerStack), None);
         let listed: Vec<PanelKind> = grouped_panels(|_| true)
             .into_iter()
             .flat_map(|(_, kinds)| kinds)
             .collect();
         assert!(
-            TOOL_DOCUMENTS.iter().all(|kind| !listed.contains(kind)),
+            PANEL_TOOL_DOCUMENTS
+                .iter()
+                .all(|kind| listed.contains(kind)),
             "{listed:?}"
         );
+        assert!(!listed.contains(&PanelKind::LayerStack), "{listed:?}");
     }
 
     /// The groups and their members as mockup row 7 lists them; inside a
@@ -182,9 +188,13 @@ mod tests {
                 K::Library,
                 K::Navigator,
                 K::Annotations,
+                K::BomStudio,
                 K::Favorites,
                 K::Snippets,
                 K::NetClasses,
+                K::Variants,
+                K::OutputJobs,
+                K::Wiki,
                 K::CompiledDesign,
             ]
         );

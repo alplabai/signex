@@ -26,7 +26,7 @@ use crate::error::SolveError;
 use crate::id::{ConstraintId, SketchEntityId};
 use crate::sketch::SketchData;
 
-use self::dof::{DofColor, entity_colours_at_rank, over_constraint_ids};
+use self::dof::{DofColor, entity_colours, over_constraint_ids};
 use self::jacobian::jacobian;
 use self::lm::{
     LmFailure, SolveResult, solve_lm_keeping_state, solve_lm_perturbed, undo_retry_offset,
@@ -332,12 +332,12 @@ impl Solver {
             .map_err(|e| lm::residual_failure("post-solve jacobian", e))?;
         meter.record_analysis(result.state.len(), jacobian.len());
 
-        // One row reduction gives the free motions and the rank the
-        // colours read, so the card and the pill share one DOF rule.
+        // The colours read the QR rank; the row reduction only lists the
+        // free motions for the DOF card (docs/DECISIONS.md, 2026-11-24).
         // HI-14: thread the solved params through both analyses so
         // parametric constraints are evaluated rather than dropped.
-        let (free_motions, rank) = free_motion::free_motions_and_rank(&result, &jacobian);
-        let colours = entity_colours_at_rank(sketch, &result, &result.index, params, rank);
+        let colours = entity_colours(sketch, &result, &jacobian, &result.index, params);
+        let free_motions = free_motion::free_motions(&result, &jacobian);
         let over_constraints = over_constraint_ids(sketch, &result, params);
 
         let (redundant_constraints, warnings) = if with_redundancy {

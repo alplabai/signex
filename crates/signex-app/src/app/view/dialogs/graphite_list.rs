@@ -32,8 +32,8 @@ const TILE_CODE: f32 = chrome_px(8.5 * 11.0 / 12.0);
 const PILL_H: f32 = chrome_px(16.0 * 11.0 / 12.0);
 
 /// The kind code of the document at `path`, by extension, as its tab shows
-/// it: SCH, PCB, SYM, FPT, PRJ or OUT (an Export Job). `None` for any other
-/// file.
+/// it: SCH, PCB, SYM, FPT, PRJ, OUT (an Export Job) or LIB (a library,
+/// DECISIONS 2026-11-24). `None` for any other file.
 pub(super) fn kind_code(path: &Path) -> Option<MessageId> {
     [
         ("snxsch", ids::PANELS_TAB_KIND_SCHEMATIC),
@@ -42,6 +42,7 @@ pub(super) fn kind_code(path: &Path) -> Option<MessageId> {
         ("snxfpt", ids::PANELS_TAB_KIND_FOOTPRINT),
         ("snxprj", ids::PANELS_TAB_KIND_PROJECT),
         ("snxout", ids::PANELS_TAB_KIND_OUTPUT_JOB),
+        ("snxlib", ids::PANELS_TAB_KIND_LIBRARY),
     ]
     .into_iter()
     .find(|(ext, _)| has_extension(path, ext))
@@ -251,14 +252,20 @@ mod tests {
         assert_eq!(code("lib/s.snxsym"), Some(ids::PANELS_TAB_KIND_SYMBOL));
         assert_eq!(code("lib/f.snxfpt"), Some(ids::PANELS_TAB_KIND_FOOTPRINT));
         assert_eq!(code("p.snxprj"), Some(ids::PANELS_TAB_KIND_PROJECT));
+        assert_eq!(
+            code("libs/Stock.SNXLIB"),
+            Some(ids::PANELS_TAB_KIND_LIBRARY)
+        );
         assert_eq!(code("notes.txt"), None);
         let en = I18n::en_us();
-        let shown: Vec<String> = ["a.snxsch", "b.snxpcb", "s.snxsym", "f.snxfpt", "p.snxprj"]
-            .iter()
-            .filter_map(|p| code(p))
-            .map(|id| en.message_plain(id, &[]))
-            .collect();
-        assert_eq!(shown, ["SCH", "PCB", "SYM", "FPT", "PRJ"]);
+        let shown: Vec<String> = [
+            "a.snxsch", "b.snxpcb", "s.snxsym", "f.snxfpt", "p.snxprj", "l.snxlib",
+        ]
+        .iter()
+        .filter_map(|p| code(p))
+        .map(|id| en.message_plain(id, &[]))
+        .collect();
+        assert_eq!(shown, ["SCH", "PCB", "SYM", "FPT", "PRJ", "LIB"]);
     }
 
     /// An Export Job (`.snxout`) leads with OUT, as on its tab (mockup row
