@@ -20,7 +20,9 @@ use super::rename::{RenameNote, problem_words, rename_note};
 use super::{ParameterGroup, VisibleParameters, field_words, variable_count, visible_parameters};
 use crate::app::Message;
 use crate::app::project_tab::general::tab_message;
-use crate::app::project_tab::look::{ButtonKind, Glyph, glyph, icon_button, pill, text_button};
+use crate::app::project_tab::look::{
+    ButtonKind, Glyph, glyph, icon_button, panel_pill, pill, text_button,
+};
 use crate::app::project_tab::table::{SP, TS, section};
 use crate::app::project_tab::{ProjectTabMsg, ProjectTabState};
 use crate::app::state::{LoadedProject, ProjectId};
@@ -93,7 +95,8 @@ struct Rows<'s> {
 pub(super) enum Evaluation {
     /// The result, in a green pill beside the value.
     Shows(String),
-    /// Why it does not evaluate, under the value in an error-filled row.
+    /// Why it does not evaluate, under the value in an error-filled row
+    /// with a "?" pill beside the value.
     Error(String),
 }
 
@@ -106,6 +109,21 @@ pub(super) fn evaluation(parameters: &BTreeMap<String, String>, name: &str) -> O
     Some(match variable_text(&TextTable(parameters), name)? {
         Ok(value) => Evaluation::Shows(value),
         Err(error) => Evaluation::Error(error.to_string()),
+    })
+}
+
+/// The words of an expression's result pill and whether it is the error
+/// "?" of one that does not evaluate (mockup row 30).
+pub(super) fn result_words(
+    i18n: &I18n,
+    evaluated: Option<&Evaluation>,
+) -> Option<(Localized, bool)> {
+    Some(match evaluated? {
+        Evaluation::Shows(value) => (
+            t!(i18n, ids::PROJECT_PARAMETER_SHOWS, "value" => value.clone()),
+            false,
+        ),
+        Evaluation::Error(_) => (t!(i18n, ids::PROJECT_PARAMETER_UNRESOLVED), true),
     })
 }
 
@@ -210,7 +228,7 @@ impl Rows<'_> {
             let cells = shown.title_block.iter().map(|field| {
                 let value = parameters.get(field.key()).map_or("", String::as_str);
                 let evaluated = evaluation(parameters, field.key());
-                let shows = self.shows_pill(evaluated.as_ref());
+                let shows = self.result_pill(evaluated.as_ref());
                 let line = self.title_block_row(*field, value, shows);
                 self.noted(
                     line,
@@ -270,7 +288,7 @@ impl Rows<'_> {
                 .into_iter()
                 .chain(self.error_note(evaluated.as_ref()))
                 .collect();
-            let shows = self.shows_pill(evaluated.as_ref());
+            let shows = self.result_pill(evaluated.as_ref());
             let line = self.variable_line(name, typed, value, shows);
             self.noted(line, notes)
         });
@@ -371,13 +389,15 @@ impl Rows<'_> {
         hover(line, wash(self.look, None)).boxed()
     }
 
-    /// The green "Shows …" pill of an expression that evaluates.
-    fn shows_pill<'a>(&self, evaluated: Option<&Evaluation>) -> Option<Element<'a, Message>> {
-        let Some(Evaluation::Shows(value)) = evaluated else {
-            return None;
-        };
-        let words = t!(self.i18n, ids::PROJECT_PARAMETER_SHOWS, "value" => value.clone());
-        Some(pill(words, PillTone::Ok, None, self.tokens))
+    /// The result pill of an expression: the green "Shows …" pill, or the
+    /// error "?" on the panel fill when it does not evaluate.
+    fn result_pill<'a>(&self, evaluated: Option<&Evaluation>) -> Option<Element<'a, Message>> {
+        let (words, is_error) = result_words(self.i18n, evaluated)?;
+        Some(if is_error {
+            panel_pill(words, PillTone::Err, self.tokens)
+        } else {
+            pill(words, PillTone::Ok, None, self.tokens)
+        })
     }
 
     /// The "Error: …" note of an expression that does not evaluate, drawn

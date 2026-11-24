@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use super::rename::{ParameterNameProblem, RenameNote, checked_rename, rename_note};
-use super::view::{Evaluation, evaluation};
+use super::view::{Evaluation, evaluation, result_words};
 use super::{ParameterGroup, visible_parameters};
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::state::ProjectId;
@@ -400,6 +400,28 @@ fn an_expression_shows_its_result_or_its_error_and_a_literal_neither() {
     ));
     assert_eq!(evaluation(&parameters, "VOUT"), None);
     assert_eq!(evaluation(&parameters, "MISSING"), None);
+}
+
+/// Mockup row 30: the result pill reads "Shows …" for an expression that
+/// evaluates and an error "?" for one that does not; a literal has none.
+#[test]
+fn the_result_pill_reads_shows_or_an_error_question_mark() {
+    use signex_i18n::{ids, t};
+    let i18n = signex_i18n::I18n::en_us();
+    let words = |evaluated: Option<Evaluation>| {
+        result_words(&i18n, evaluated.as_ref())
+            .map(|(words, is_error)| (words.to_string(), is_error))
+    };
+    let shows = t!(i18n, ids::PROJECT_PARAMETER_SHOWS, "value" => "1.65V".to_string());
+    assert_eq!(
+        words(Some(Evaluation::Shows("1.65V".to_string()))),
+        Some((shows.to_string(), false))
+    );
+    assert_eq!(
+        words(Some(Evaluation::Error("POUT is not defined".to_string()))),
+        Some(("?".to_string(), true))
+    );
+    assert_eq!(words(None), None);
 }
 
 /// The section draws the result pill, the error row and an error row that

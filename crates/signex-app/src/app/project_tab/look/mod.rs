@@ -142,6 +142,34 @@ pub(in crate::app::project_tab) fn pill<'a>(
         .boxed()
 }
 
+/// A pill on the panel fill in the tone's ink, for a row already filled in
+/// that tone (the error "?" of mockup row 30).
+pub(in crate::app::project_tab) fn panel_pill<'a>(
+    words: Localized,
+    tone: PillTone,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let (fill, ink) = (ti(tokens.panel_bg), pill_colors(tokens, tone).1);
+    let words = text(words)
+        .size(TS.caption)
+        .color(ink)
+        .wrapping(iced::widget::text::Wrapping::None);
+    container(words)
+        .height(Length::Fixed(PILL_H))
+        .padding([0.0, SP.s + SP.xs])
+        .align_y(Vertical::Center)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(fill)),
+            text_color: Some(ink),
+            border: Border {
+                radius: Radii::GRAPHITE.pill.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
 /// A tinted status line: `glyph` in `ink`, then `content`, then `action`.
 fn status_line<'a>(
     g: Glyph,
