@@ -231,6 +231,8 @@ canonical_icon!(icon_chrome_window_min, "chrome/window_min.svg");
 // The status bar's Panels button and the open mark in its panel list.
 canonical_icon!(icon_chrome_check, "chrome/check.svg");
 canonical_icon!(icon_chrome_panels, "chrome/panels.svg");
+// The net colour chooser's Custom… button (mockup row 71).
+canonical_icon!(icon_chrome_palette, "chrome/palette.svg");
 // Library Browser header, uncommitted banner, ⋯ menu (`icon_chrome_more`,
 // above); component editor footer (mockup rows 118 and 128). Monochrome; the
 // view tints them with an ink token.
