@@ -526,7 +526,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         &[ToolState],
     ),
     // The tool defaults, and the active layer when `layer` is not given.
-    // Declared 6.P3 exception: still the person's form (docs/DECISIONS.md, 2026-11-24).
+    // Declared 6.P3 exception: still the person's form until #2876 (docs/DECISIONS.md, 2026-11-24).
     (
         &["add_board_graphic"],
         Operand,
