@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use signex_i18n::ids;
 use signex_library::repo_branches::{self, BranchTarget};
+use signex_library::repo_diff::{self, FileDiff};
 use signex_library::repo_graph;
 
 use super::super::*;
@@ -14,9 +15,9 @@ use super::history::{locate_in_repo, tracked_file};
 use crate::app::project_git::{SwitchRequest, SwitchSurface};
 use crate::app::state::{ErrorNotice, verbatim};
 use crate::panels::history::{
-    HistoryCommitMsg, HistoryFilterMsg, HistoryPanelMsg, HistoryRepoEvent, HistoryRepoView,
-    HistorySwitcherMsg, RefPrompt, RefPromptKind, can_create_branch, changed_files,
-    visible_commits,
+    HistoryCommitMsg, HistoryDiff, HistoryFilterMsg, HistoryPanelMsg, HistoryRepoEvent,
+    HistoryRepoView, HistorySwitcherMsg, RefPrompt, RefPromptKind, can_create_branch,
+    changed_files, file_to_diff, visible_commits,
 };
 
 /// Blocking: the repository graph around `target`, `None` outside a repository.
@@ -171,6 +172,9 @@ impl Signex {
                 };
                 return Task::done(Message::File(FileMsg::Opened(Some(root.join(rel)))));
             }
+            HistoryCommitMsg::FilePicked(path) => return self.pick_history_file(path),
+            HistoryCommitMsg::ShowDifferencesPressed => return self.show_history_differences(),
+            HistoryCommitMsg::DifferencesClosed => ui.diff = None,
             HistoryCommitMsg::MoreToggled => {
                 ui.more_open ^= true;
                 ui.prompt = None;
@@ -199,12 +203,84 @@ impl Signex {
         ui.more_open = false;
         ui.prompt = None;
         ui.files.clear();
+        ui.picked_file = None;
+        ui.diff = None;
         if ui.selected.as_deref() == Some(sha.as_str()) {
             ui.selected = None;
             return Task::none();
         }
         ui.selected = Some(sha.clone());
         self.load_commit_files_task(sha)
+    }
+
+    /// A file row of the detail strip: Show differences… compares it, and
+    /// open differences switch to it.
+    fn pick_history_file(&mut self, path: String) -> Task<Message> {
+        let ui = &mut self.document_state.history.ui;
+        ui.picked_file = Some(path);
+        if ui.diff.is_some() {
+            return self.show_history_differences();
+        }
+        Task::none()
+    }
+
+    /// Show differences…: read the lines the selected commit changed in the
+    /// file it compares. A commit never changes, so the open one is kept.
+    fn show_history_differences(&mut self) -> Task<Message> {
+        let Some(repo) = self.document_state.history.repo.clone() else {
+            return Task::none();
+        };
+        let window = self.interaction_state.acting_window;
+        let ui = &mut self.document_state.history.ui;
+        let Some(sha) = ui.selected.clone() else {
+            return Task::none();
+        };
+        let Some(path) = file_to_diff(&ui.files, ui.picked_file.as_deref(), &repo.tracked) else {
+            return Task::none();
+        };
+        if ui
+            .diff
+            .as_ref()
+            .is_some_and(|open| open.sha == sha && open.path == path)
+        {
+            return Task::none();
+        }
+        ui.diff = Some(HistoryDiff {
+            sha: sha.clone(),
+            path: path.clone(),
+            result: None,
+        });
+        let root = repo.root.clone();
+        let (reply_sha, reply_path) = (sha.clone(), path.clone());
+        let job = move || {
+            repo_diff::commit_file_diff(&root, &sha, &path)
+                .map(Arc::new)
+                .map_err(|e| e.to_string())
+        };
+        Task::perform(on_worker(job, Err), move |result| {
+            Message::Ui(UiMsg::HistoryRepo {
+                window,
+                event: HistoryRepoEvent::DiffLoaded {
+                    sha: reply_sha.clone(),
+                    path: reply_path.clone(),
+                    result,
+                },
+            })
+        })
+    }
+
+    /// A finished differences read, kept only while it is still the open one.
+    fn apply_history_diff(&mut self, sha: &str, path: &str, result: Result<Arc<FileDiff>, String>) {
+        let Some(open) = &mut self.document_state.history.ui.diff else {
+            return;
+        };
+        if open.sha != sha || open.path != path {
+            return;
+        }
+        if let Err(error) = &result {
+            tracing::warn!(target: "signex::history", %error, "commit differences not read");
+        }
+        open.result = Some(result);
     }
 
     fn open_ref_prompt(&mut self, kind: RefPromptKind) {
@@ -319,6 +395,10 @@ impl Signex {
                 self.apply_history_files(generation, &sha, result);
                 Task::none()
             }
+            HistoryRepoEvent::DiffLoaded { sha, path, result } => {
+                self.apply_history_diff(&sha, &path, result);
+                Task::none()
+            }
             HistoryRepoEvent::RefCreated(result) => self.finish_ref_created(result),
             HistoryRepoEvent::SwitchFinished(result) => {
                 self.finish_branch_switch(SwitchSurface::History, result)
@@ -362,6 +442,8 @@ impl Signex {
         if kept.is_none() {
             history.ui.selected = None;
             history.ui.files.clear();
+            history.ui.picked_file = None;
+            history.ui.diff = None;
         }
         kept.map_or_else(Task::none, |sha| self.load_commit_files_task(sha))
     }
@@ -511,6 +593,127 @@ mod tests {
         drop(task);
 
         assert_eq!(app.document_state.history.repo, old);
+    }
+
+    /// The mockup's commit selected with its three files in, the panel
+    /// following `power.snxsch`.
+    fn app_with_selected_commit() -> Signex {
+        use signex_widgets::history_graph::{ChangedFile, FileStatus};
+        let (mut app, _boot) = Signex::new();
+        app.document_state.history.repo = Some(Arc::new(HistoryRepoView {
+            root: PathBuf::from("/work/board"),
+            tracked: "power.snxsch".into(),
+            ..HistoryRepoView::default()
+        }));
+        let ui = &mut app.document_state.history.ui;
+        ui.selected = Some("9e01f4d".into());
+        let file = |status, path: &str| ChangedFile {
+            status,
+            path: path.into(),
+        };
+        ui.files = vec![
+            file(FileStatus::Modified, "dcdc-buck.snxpcb"),
+            file(FileStatus::Modified, "power.snxsch"),
+        ];
+        app
+    }
+
+    fn commit_press(app: &mut Signex, msg: HistoryCommitMsg) {
+        drop(app.handle_history_panel(HistoryPanelMsg::Commit(msg)));
+    }
+
+    fn open_diff(app: &Signex) -> Option<HistoryDiff> {
+        app.document_state.panel_ctx.history.ui.diff.clone()
+    }
+
+    fn diff_of(path: &str) -> FileDiff {
+        FileDiff {
+            path: path.into(),
+            added: 1,
+            removed: 0,
+            body: signex_library::repo_diff::FileDiffBody::Binary,
+        }
+    }
+
+    fn diff_landed(app: &mut Signex, path: &str) {
+        let event = HistoryRepoEvent::DiffLoaded {
+            sha: "9e01f4d".into(),
+            path: path.into(),
+            result: Ok(Arc::new(diff_of(path))),
+        };
+        drop(app.apply_history_repo_event(event));
+    }
+
+    /// Mockup row 39: Show differences… opens the selected commit's change
+    /// to the followed file, reading while the panel says so.
+    #[test]
+    fn show_differences_opens_the_followed_file_of_the_selected_commit() {
+        let mut app = app_with_selected_commit();
+        commit_press(&mut app, HistoryCommitMsg::ShowDifferencesPressed);
+        assert_eq!(
+            open_diff(&app),
+            Some(HistoryDiff {
+                sha: "9e01f4d".into(),
+                path: "power.snxsch".into(),
+                result: None,
+            })
+        );
+        diff_landed(&mut app, "power.snxsch");
+        let shown = open_diff(&app).and_then(|d| d.result);
+        assert_eq!(shown, Some(Ok(Arc::new(diff_of("power.snxsch")))));
+    }
+
+    #[test]
+    fn a_read_for_a_file_no_longer_open_is_dropped() {
+        let mut app = app_with_selected_commit();
+        commit_press(&mut app, HistoryCommitMsg::ShowDifferencesPressed);
+        diff_landed(&mut app, "dcdc-buck.snxpcb");
+        assert_eq!(open_diff(&app).and_then(|d| d.result), None);
+    }
+
+    /// A picked row is the file Show differences… compares, and open
+    /// differences follow the pick.
+    #[test]
+    fn picking_a_file_switches_the_open_differences() {
+        let mut app = app_with_selected_commit();
+        commit_press(
+            &mut app,
+            HistoryCommitMsg::FilePicked("dcdc-buck.snxpcb".into()),
+        );
+        assert_eq!(open_diff(&app), None, "a pick alone opens nothing");
+        commit_press(&mut app, HistoryCommitMsg::ShowDifferencesPressed);
+        assert_eq!(
+            open_diff(&app).map(|d| d.path).as_deref(),
+            Some("dcdc-buck.snxpcb")
+        );
+        commit_press(
+            &mut app,
+            HistoryCommitMsg::FilePicked("power.snxsch".into()),
+        );
+        let diff = open_diff(&app).expect("still open");
+        assert_eq!((diff.path.as_str(), diff.result), ("power.snxsch", None));
+    }
+
+    #[test]
+    fn close_and_another_commit_close_the_differences() {
+        let mut app = app_with_selected_commit();
+        commit_press(&mut app, HistoryCommitMsg::ShowDifferencesPressed);
+        commit_press(&mut app, HistoryCommitMsg::DifferencesClosed);
+        assert_eq!(open_diff(&app), None);
+
+        commit_press(&mut app, HistoryCommitMsg::ShowDifferencesPressed);
+        commit_press(&mut app, HistoryCommitMsg::Selected("0b3f9e1".into()));
+        let ui = &app.document_state.panel_ctx.history.ui;
+        assert_eq!((ui.diff.clone(), ui.picked_file.clone()), (None, None));
+    }
+
+    /// With the commit's files not in yet there is nothing to compare.
+    #[test]
+    fn show_differences_waits_for_the_commit_files() {
+        let mut app = app_with_selected_commit();
+        app.document_state.history.ui.files.clear();
+        commit_press(&mut app, HistoryCommitMsg::ShowDifferencesPressed);
+        assert_eq!(open_diff(&app), None);
     }
 
     #[test]
