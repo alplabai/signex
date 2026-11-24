@@ -1,5 +1,6 @@
 //! The Graphics tools (#2424), on the active non-copper layer (not a
-//! keep-out), each drawing one undo step:
+//! keep-out), each drawing one undo step (Line and Arc on copper place
+//! tracks: `graphic_copper`):
 //! - Line: a run; each click adds a line from the last point, a click on
 //!   the last point ends the run;
 //! - Arc: the centre, the start (its distance is the radius), the end;
@@ -112,11 +113,14 @@ impl Signex {
 
     /// A Graphics tool click at `at`: a point of the drawing, or the drawing
     /// itself once it has its points. Off a layer a drawing may go on, the
-    /// Messages panel says so and nothing changes.
+    /// Messages panel and the status bar say so and nothing changes.
     pub(super) fn graphic_clicked(&mut self, tool: BoardPlaceTool, at: Point) {
         let Some(kind) = tool.graphic_kind() else {
             return;
         };
+        if self.copper_graphic_clicked(tool, at) {
+            return;
+        }
         let name = t!(self.ui_state.i18n, tool.name()).into_string();
         let Some(layer) = self.active_graphic_layer() else {
             let note = t!(
@@ -124,7 +128,7 @@ impl Signex {
                 ids::PCB_TOOL_NEEDS_GRAPHIC_LAYER,
                 "tool" => name.as_str()
             );
-            crate::diagnostics::log_warning(note.into_string());
+            self.note_board_tool(note.into_string());
             return;
         };
         let Some(session) = self.own_board_tool() else {
@@ -182,6 +186,9 @@ impl Signex {
         cursor: Point,
         preview: &mut PcbBoard,
     ) {
+        if self.copper_graphic_preview(session, cursor, preview) {
+            return;
+        }
         let (Some(kind), Some(layer)) = (session.tool.graphic_kind(), self.active_graphic_layer())
         else {
             return;

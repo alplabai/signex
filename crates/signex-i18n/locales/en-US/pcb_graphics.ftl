@@ -16,8 +16,8 @@ pcb-bar-rectangle-tooltip = Place Rectangle
 pcb-bar-text-frame-tooltip = Place Text Frame
 
 ## What the Messages panel says when a Graphics tool is armed.
-pcb-tool-hint-line = Line: on a non-copper layer, click to start, then click each next point; each line is one step. Esc or a right-click ends the run, then the tool
-pcb-tool-hint-graphic-arc = Arc: on a non-copper layer, click the centre, then the start (it sets the radius), then the end; the arc runs clockwise. Esc or a right-click drops it, then ends the tool
+pcb-tool-hint-line = Line: click to start, then click each next point; each line is one step, and on a copper layer a track on the net it starts on. Esc or a right-click ends the run, then the tool
+pcb-tool-hint-graphic-arc = Arc: click the centre, then the start (it sets the radius), then the end; the arc runs clockwise, and on a copper layer it is a track arc on the net under its start. Esc or a right-click drops it, then ends the tool
 pcb-tool-hint-circle = Full Circle: on a non-copper layer, click the centre, then a point on the circle. Esc or a right-click drops it, then ends the tool
 pcb-tool-hint-rectangle = Rectangle: on a non-copper layer, click two opposite corners. Esc or a right-click drops it, then ends the tool
 pcb-tool-hint-text-frame = Text Frame: on a non-copper layer, click two opposite corners of the box; Tab pauses to edit its text in Properties. Esc or a right-click drops it, then ends the tool

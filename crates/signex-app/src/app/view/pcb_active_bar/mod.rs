@@ -309,7 +309,8 @@ pub(in crate::app::view) fn pcb_bar_items(
 
 /// The tool groups between the Align button and Board Sketch, a separator
 /// between each run: what goes on the board, the copper (routing, tuning,
-/// vias and pads, areas, drawing), then what annotates it (mockup row 108).
+/// vias and pads, areas), then what annotates it (mockup row 108). Copper
+/// lines and arcs are drawn with the Graphics tools (#2869).
 const BAR_GROUPS: [&[PcbBarGroup]; 3] = [
     &[PcbBarGroup::Components],
     &[
@@ -317,7 +318,6 @@ const BAR_GROUPS: [&[PcbBarGroup]; 3] = [
         PcbBarGroup::Tune,
         PcbBarGroup::ViaPad,
         PcbBarGroup::CopperAreas,
-        PcbBarGroup::CopperDrawing,
     ],
     &[
         PcbBarGroup::Dimensions,

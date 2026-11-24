@@ -34,6 +34,7 @@ pub mod footprint_swap;
 pub mod footprint_text_edit;
 pub mod graphic;
 mod graphics;
+pub mod item_move;
 mod items;
 pub mod lock;
 mod options;

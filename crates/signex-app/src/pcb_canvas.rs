@@ -3,6 +3,7 @@ use std::sync::Arc;
 mod board_text;
 mod camera;
 mod carry;
+mod carry_items;
 mod content;
 #[cfg(test)]
 mod content_pixel_tests;
@@ -35,16 +36,17 @@ pub use board_text::BoardTextLayer;
 pub use camera::BoardCamera;
 pub use carry::{
     CarryKind, PasteLoad, PcbCarry, board_after_move, board_without, board_without_text,
-    carried_board, carried_text_board, carry_delta, followed_arcs, snap_point, snap_point_on,
-    via_carry_delta, with_arcs_replaced,
+    carried_board, carried_text_board, carry_delta, followed_arcs, item_carry_delta, snap_point,
+    snap_point_on, via_carry_delta, with_arcs_replaced,
 };
+pub use carry_items::{carried_item_ids, item_points};
 pub use content::BoardContentLayer;
 pub(crate) use grid::stroke_origin_marker;
 pub use highlight::{Highlight, HighlightLayer};
 pub use marks::BoardMarks;
 pub use msg::{LEAVE_TRACKS_KEY, PcbCanvasMsg};
 pub use rooms::{RoomMark, RoomsOverlay};
-pub use select::PcbSelectionState;
+pub use select::{DraggedItems, PcbSelectionState};
 pub use snap_options::{PcbSnapOptions, SnapDistance, SnapScope, SnapView};
 
 use crate::scene_generation::next_scene_generation;

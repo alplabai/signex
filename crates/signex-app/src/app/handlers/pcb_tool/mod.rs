@@ -31,6 +31,7 @@ mod form;
 mod free;
 mod free_form;
 mod graphic;
+mod graphic_copper;
 mod outline_preview;
 mod pour_cut;
 mod quick;
@@ -54,6 +55,8 @@ mod area_tests;
 mod form_tests;
 #[cfg(test)]
 mod free_tests;
+#[cfg(test)]
+mod graphic_copper_tests;
 #[cfg(test)]
 mod graphic_tests;
 #[cfg(test)]

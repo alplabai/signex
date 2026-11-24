@@ -140,9 +140,10 @@ fn the_pcb_bar_button_is_named_and_drawn_as_board_sketch() {
 }
 
 /// #2352, #2373, #2388, #2389, #2392, #2424, mockup row 108: Selection Filter, Move,
-/// Align | Components | Route, Tune, Via/Pad, Copper Areas, Copper Drawing |
-/// Dimensions, Text, Graphics | Board Sketch | View. Fabrication Outputs is
-/// not on the bar (Caner, 2026-11-21). A group with a live row runs it; a
+/// Align | Components | Route, Tune, Via/Pad, Copper Areas | Dimensions,
+/// Text, Graphics | Board Sketch | View; no Copper Drawing group, as the
+/// Graphics Line and Arc draw tracks on copper (#2869). Fabrication Outputs
+/// is not on the bar (Caner, 2026-11-21). A group with a live row runs it; a
 /// group with none is greyed with a tooltip that says it is not on boards yet.
 #[test]
 fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
@@ -154,7 +155,12 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
         None,
     );
     let all = buttons(&items);
-    assert_eq!(all.len(), 14);
+    assert_eq!(all.len(), 13);
+    assert!(
+        !all.iter()
+            .any(|b| runs(b, "place_board_track") || runs(b, "place_board_arc")),
+        "#2869: no Copper Drawing flyout"
+    );
     assert!(
         !all.iter().any(|b| runs(b, "fabrication_outputs")),
         "Fabrication Outputs stays in its menu"
@@ -180,12 +186,12 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
     let after: Vec<usize> = (0..all.len()).filter(|&i| separator_after(i)).collect();
     assert_eq!(
         after,
-        [2, 3, 8, 11, 12],
-        "Align | Components | Copper Drawing | Graphics | Board Sketch |"
+        [2, 3, 7, 10, 11],
+        "Align | Components | Copper Areas | Graphics | Board Sketch |"
     );
     let live = all.iter().filter(|button| button.enabled).count();
     assert_eq!(
-        live, 14,
+        live, 13,
         "#2373, #2389, #2424: every button, Tune, Dimensions, Text and Graphics included, is live"
     );
     assert!(runs(all[1], "move_object"), "Move follows the filter");
@@ -200,15 +206,14 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
         runs(all[7], "place_board_polygon_pour"),
         "#2216: Polygon Pour heads its group"
     );
-    assert!(runs(all[8], "place_board_track"));
-    assert!(runs(all[9], "place_board_dimension"), "#2373");
-    assert!(runs(all[10], "place_board_string"), "#2373");
+    assert!(runs(all[8], "place_board_dimension"), "#2373");
+    assert!(runs(all[9], "place_board_string"), "#2373");
     assert!(
-        runs(all[11], "place_board_line"),
+        runs(all[10], "place_board_line"),
         "#2424: Line heads Graphics"
     );
-    assert!(runs(all[12], "board_sketch"));
-    assert!(runs(all[13], "view_rotate"), "View closes the bar");
+    assert!(runs(all[11], "board_sketch"));
+    assert!(runs(all[12], "view_rotate"), "View closes the bar");
     for button in all.iter().filter(|button| !button.enabled) {
         assert!(button.on_press.is_none() && button.on_right_press.is_none());
         assert!(
@@ -220,8 +225,8 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
     assert!(all[0].tooltip.starts_with("Selection Filter"));
     assert!(all[4].tooltip.starts_with("Interactive Routing"));
     assert_eq!(all[5].tooltip, "Length Tuning");
-    assert!(all[9].tooltip.starts_with("Place Dimension"));
-    assert!(all[10].tooltip.starts_with("Place String"));
+    assert!(all[8].tooltip.starts_with("Place Dimension"));
+    assert!(all[9].tooltip.starts_with("Place String"));
 }
 
 /// #2352 / #2360 / #2392: every tool the Place menu greys on a board is
