@@ -25,6 +25,7 @@ pub mod inert;
 mod label;
 pub mod length_format;
 pub mod passive_calculator;
+mod pen_glyph;
 pub mod press_outside;
 pub mod property_illustration;
 pub mod segmented;

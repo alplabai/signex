@@ -13,11 +13,11 @@ use signex_drc_dsl::table::matrix::{self, CellKey, OBJECT_PAIRS};
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::coord::Unit;
 use signex_widgets::constraint_grid::{
-    GridMetrics, GridStyle, MatrixText, matrix_view, mirror_swatch,
+    GridMetrics, GridStyle, MatrixText, PairClearance, cell_text, matrix_view, mirror_swatch,
 };
-use signex_widgets::{LengthFormat, button, text, text_input, tooltip};
+use signex_widgets::{Label, LengthFormat, button, text, text_input, tooltip};
 
-use super::{Frame, SP, TS, up, user};
+use super::{Frame, SP, TS, up};
 use crate::app::Message;
 use crate::app::rules_tab::RulesTabMsg;
 use crate::app::rules_tab::matrix::{
@@ -155,6 +155,7 @@ fn legend<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
     let (i18n, tokens) = (frame.i18n, frame.tokens);
     let style = GridStyle::from_tokens(tokens, TS.body);
     let format = LengthFormat::new(i18n, Unit::Mm);
+    let words = matrix_words(i18n);
     let muted = tokens::muted_text(tokens);
     let word = |id| text(t!(i18n, id)).size(TS.caption).color(muted).boxed();
     let item = |sample: Element<'a, Message>, name: Element<'a, Message>| {
@@ -169,7 +170,7 @@ fn legend<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
         .spacing(SP.l)
         .align_y(Alignment::Center)
         .push(item(
-            text(user(format.number(0.8)))
+            text(cell_text(PairClearance::Written(0.8), format, &words))
                 .size(TS.caption)
                 .font(mono())
                 .color(ti(tokens.text))
@@ -177,7 +178,7 @@ fn legend<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
             word(ids::RULES_MATRIX_LEGEND_WRITTEN),
         ))
         .push(item(
-            text(t!(i18n, ids::RULES_MATRIX_DEFAULT, "value" => format.number(0.15)))
+            text(cell_text(PairClearance::Fallback(0.15), format, &words))
                 .size(TS.caption)
                 .font(mono())
                 .color(style.faint_ink)
@@ -331,9 +332,9 @@ fn pair_row<'a>(frame: &Frame<'a>, key: CellKey, whole: Option<&CellKey>) -> Ele
             .get(&default_key(&key))
             .map(|nm| crate::app::rules_tab::json::mm(*nm)),
     };
-    let placeholder = match placeholder_mm {
-        Some(mm) => t!(i18n, ids::RULES_MATRIX_DEFAULT, "value" => format.number(mm)),
-        None => t!(i18n, ids::RULES_MATRIX_NO_DEFAULT),
+    let placeholder: Label<'static> = match placeholder_mm {
+        Some(mm) => cell_text(PairClearance::Fallback(mm), format, &matrix_words(i18n)),
+        None => t!(i18n, ids::RULES_MATRIX_NO_DEFAULT).into(),
     };
     let value = match frame
         .state

@@ -82,7 +82,7 @@ rules-text-clean = No problems in the text.
 # The class-to-class clearance matrix (Clearance domain).
 rules-view-matrix = Matrix
 rules-matrix-no-classes = This project has no net classes yet, so the matrix is empty.
-rules-matrix-default = ({ $value } mm)
+rules-matrix-default = ({ $value } { $unit })
 rules-matrix-no-default = (board setup)
 rules-matrix-objects-title = Objects between { $a } and { $b }
 rules-matrix-all-objects = All objects

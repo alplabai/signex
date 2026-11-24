@@ -1,6 +1,7 @@
 //! The class-to-class matrix view. Pure: the matrix's view state and the
-//! caller's [`PairValues`] in, `Element<MatrixMessage>` out. Values are in
-//! the monospace face, centred: a written value full ink, a fallback faint
+//! caller's [`PairValues`] in, `Element<MatrixMessage>` out. Class names and
+//! values are in the monospace face, values centred: a written value full
+//! ink, a fallback faint
 //! in parentheses with its unit. The mirror half is hatched and inert, and
 //! the pinned cell carries the accent ring (mockup row 90).
 
@@ -35,14 +36,14 @@ pub struct MatrixText<'a> {
     /// Tooltip of a fallback value ("No value of its own: the larger class
     /// clearance").
     pub fallback: Label<'a>,
-    /// A fallback value as a cell shows it, `$value` the number in the
-    /// format's unit: `({ $value } mm)`.
+    /// A fallback value as a cell shows it, `$value` the number and `$unit`
+    /// the symbol of the format's unit: `({ $value } { $unit })`.
     pub fallback_value: MessageId,
 }
 
 /// What a cell shows for `clearance`: a written value as its number, a
-/// fallback in [`MatrixText::fallback_value`] (`(0.15 mm)`), as the legend
-/// shows the two.
+/// fallback in [`MatrixText::fallback_value`] (`(0.15 mm)`) in the format's
+/// unit, as the legend shows the two.
 pub fn cell_text(
     clearance: PairClearance,
     format: LengthFormat<'_>,
@@ -50,9 +51,13 @@ pub fn cell_text(
 ) -> Label<'static> {
     match clearance {
         PairClearance::Written(mm) => format.label(mm),
-        PairClearance::Fallback(mm) => {
-            t!(format.i18n, words.fallback_value, "value" => format.number(mm)).into()
-        }
+        PairClearance::Fallback(mm) => t!(
+            format.i18n,
+            words.fallback_value,
+            "value" => format.number(mm),
+            "unit" => format.unit.to_string()
+        )
+        .into(),
     }
 }
 
@@ -150,13 +155,21 @@ pub fn mirror_swatch<'a, M: 'a>(side: f32, style: GridStyle) -> Element<'a, M> {
     hatched(style.text_size * SWATCH_HATCH_EM, side, side, style)
 }
 
+/// Class names are in the style's monospace face at the heading weight.
+pub(super) fn name_font(style: GridStyle) -> Font {
+    Font {
+        weight: strong_font().weight,
+        ..style.mono
+    }
+}
+
 fn name_cell<'a>(name: &'a str, width: f32, style: GridStyle) -> Element<'a, MatrixMessage> {
     let m = style.metrics();
     container(
         text(UserText::new(name))
             .size(style.text_size)
             .color(style.ink)
-            .font(strong_font())
+            .font(name_font(style))
             .wrapping(iced::widget::text::Wrapping::None),
     )
     .padding(Padding::from([0.0, m.pad]))

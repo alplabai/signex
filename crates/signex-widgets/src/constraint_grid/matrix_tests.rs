@@ -267,6 +267,27 @@ fn a_fallback_cell_reads_in_parentheses_with_its_unit() {
     assert_eq!(plain(&written), "0.8");
 }
 
+/// Mockup row 90: the class names down and across are mono too, at the
+/// table's heading weight.
+#[test]
+fn class_names_are_mono_at_the_heading_weight() {
+    use signex_types::theme::{ThemeId, theme_tokens};
+    let style = GridStyle::from_tokens(&theme_tokens(ThemeId::GraphiteDark), 12.0);
+    let own = iced::Font::new("Chrome Mono");
+    let font = super::matrix_view::name_font(style.with_mono(own));
+    assert_eq!(font.family, iced::font::Family::Name("Chrome Mono"));
+    assert_eq!(font.weight, iced::font::Weight::Semibold);
+}
+
+/// A fallback names the format's unit, not a fixed millimetre.
+#[test]
+fn a_fallback_cell_names_the_display_unit() {
+    let words = catalog_words();
+    let mil = LengthFormat::new(I18n::en_us_ref(), Unit::Mil);
+    let fallback = cell_text(PairClearance::Fallback(0.254), mil, &words);
+    assert_eq!(plain(&fallback), "(10 mil)");
+}
+
 /// Mockup row 90: cell values are in the monospace face, a written one
 /// heavier; a fallback is in the faint ink, not the table's muted ink.
 #[test]
