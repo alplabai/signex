@@ -44,6 +44,8 @@ pub enum StackField {
     Thickness,
     DielectricConstant,
     CopperWeight,
+    /// Df (mockup row 177); 0 clears it.
+    LossTangent,
 }
 
 impl StackField {

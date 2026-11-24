@@ -166,4 +166,8 @@ define_ids! {
     PCB_STACK_FINISH_NOTE = "pcb-stack-finish-note";
     PCB_STACK_FINISH_DEFAULT = "pcb-stack-finish-default";
     PCB_STACK_MATERIAL_NO_CONFIG = "pcb-stack-material-no-config";
+    PCB_STACK_COL_DF_STORED_TIP = "pcb-stack-col-df-stored-tip";
+    PCB_STACK_BOARD_MATERIAL_THICKNESS = "pcb-stack-board-material-thickness";
+    PCB_STACK_BOARD_MATERIAL_DK = "pcb-stack-board-material-dk";
+    PCB_STACK_BOARD_MATERIAL_DF = "pcb-stack-board-material-df";
 }

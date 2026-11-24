@@ -272,9 +272,20 @@ where
 }
 
 fn mask<'a>(ctx: &'a PanelContext, facts: &'a LayerStackFacts) -> Element<'a, PanelMsg> {
+    let mut lines: Vec<Element<'a, PanelMsg>> = mask_pickers(ctx, facts).into();
+    lines.push(over_laminate(ctx, facts));
+    lines.push(over_copper(ctx, facts));
+    Column::with_children(lines).spacing(SP.xs).boxed()
+}
+
+/// The mask's Type, Colour, Finish and Sides.
+fn mask_pickers<'a>(
+    ctx: &'a PanelContext,
+    facts: &'a LayerStackFacts,
+) -> [Element<'a, PanelMsg>; 4] {
     let i18n = &*ctx.i18n;
     let mask = &facts.finish.finish.mask;
-    let lines: Vec<Element<'a, PanelMsg>> = vec![
+    [
         setting(
             ctx,
             t!(i18n, ids::PCB_STACK_FINISH_TYPE),
@@ -318,10 +329,7 @@ fn mask<'a>(ctx: &'a PanelContext, facts: &'a LayerStackFacts) -> Element<'a, Pa
                 |f, v| f.mask.sides = v,
             ),
         ),
-        over_laminate(ctx, facts),
-        over_copper(ctx, facts),
-    ];
-    Column::with_children(lines).spacing(SP.xs).boxed()
+    ]
 }
 
 /// The mask thickness over laminate, typed and applied with Enter.
@@ -456,14 +464,16 @@ fn material_line<'a>(
         }
     };
     let unit = facts.unit.label(i18n).into_string();
-    let dk = t!(i18n, ids::PCB_STACK_COL_DK).into_string();
-    let df = t!(i18n, ids::PCB_STACK_COL_DF).into_string();
+    let thickness = facts.unit.show(layer.thickness_mm);
     let cells = [
         layer.material.clone(),
         kind_label(i18n, layer.kind).into_string(),
-        format!("{} {unit}", facts.unit.show(layer.thickness_mm)),
-        format!("{dk} {}", number(layer.dielectric_constant)),
-        format!("{df} {}", number(layer.loss_tangent)),
+        t!(i18n, ids::PCB_STACK_BOARD_MATERIAL_THICKNESS, "value" => thickness, "unit" => unit)
+            .into_string(),
+        t!(i18n, ids::PCB_STACK_BOARD_MATERIAL_DK, "value" => number(layer.dielectric_constant))
+            .into_string(),
+        t!(i18n, ids::PCB_STACK_BOARD_MATERIAL_DF, "value" => number(layer.loss_tangent))
+            .into_string(),
     ];
     let mut line: Row<Element<'a, PanelMsg>> = Row::new().spacing(SP.m);
     for cell in cells {

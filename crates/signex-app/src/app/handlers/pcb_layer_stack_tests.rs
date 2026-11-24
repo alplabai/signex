@@ -194,6 +194,49 @@ fn a_typed_thickness_applies_on_enter_as_one_step() {
     assert!(board_of(&app, &path).stackup.is_none());
 }
 
+/// Mockup row 177: a layer's Df is typed in the Stack table and applied on
+/// Enter as one undo step; 0 clears it again.
+#[test]
+fn a_typed_loss_tangent_applies_on_enter_and_zero_clears_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+    let row = row_of(&facts(&app), StackLayerKind::Dielectric, 0);
+    let type_df = |app: &mut Signex, text: &str| {
+        send(
+            app,
+            LayerStackMsg::FieldTyped {
+                board: path.clone(),
+                row,
+                field: StackField::LossTangent,
+                text: text.into(),
+            },
+        );
+        send(
+            app,
+            LayerStackMsg::FieldSubmitted {
+                board: path.clone(),
+                row,
+                field: StackField::LossTangent,
+            },
+        );
+    };
+    type_df(&mut app, "0.018");
+    let df = |app: &Signex| {
+        board_of(app, &path)
+            .stackup
+            .as_ref()
+            .expect("stored")
+            .layers[row]
+            .loss_tangent
+    };
+    assert_eq!(df(&app), 0.018);
+    assert_eq!(facts(&app).stack.layers[row].loss_tangent, 0.018);
+    type_df(&mut app, "0");
+    assert_eq!(df(&app), 0.0, "0 clears the Df");
+    undo(&mut app);
+    assert_eq!(df(&app), 0.018, "one undo per edit");
+}
+
 #[test]
 fn a_layer_with_a_track_on_it_is_not_removed() {
     let dir = tempfile::tempdir().unwrap();

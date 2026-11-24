@@ -52,6 +52,11 @@ pub enum StackEdit {
         row: usize,
         oz: f64,
     },
+    /// The row's loss tangent (Df); 0 clears it.
+    SetLossTangent {
+        row: usize,
+        value: f64,
+    },
     /// Copy a library material's values into a row it fits; the board keeps
     /// the copy, not a link to the library.
     UseMaterial {
@@ -97,25 +102,8 @@ pub fn edit_stack(stack: &LayerStack, edit: &StackEdit) -> Result<LayerStack, St
             let row = row_of(*row)?;
             remove(rows, row);
         }
-        StackEdit::Move { row, up } => {
-            let row = row_of(*row)?;
-            let other = if *up {
-                row.checked_sub(1)
-            } else {
-                Some(row + 1)
-            };
-            match other.filter(|o| *o < rows.len()) {
-                Some(other) => rows.swap(row, other),
-                None => return Err(StackEditRefusal::AtEdge),
-            }
-        }
-        StackEdit::SetKind { row, kind } => {
-            let row = row_of(*row)?;
-            if !(rows[row].kind.is_copper() && kind.is_copper()) {
-                return Err(StackEditRefusal::KindFixed);
-            }
-            rows[row].kind = *kind;
-        }
+        StackEdit::Move { row, up } => move_row(rows, row_of(*row)?, *up)?,
+        StackEdit::SetKind { row, kind } => set_kind(&mut rows[row_of(*row)?], *kind)?,
         StackEdit::SetName { row, text } => rows[row_of(*row)?].name = text.trim().to_string(),
         StackEdit::SetMaterial { row, text } => {
             rows[row_of(*row)?].material = text.trim().to_string();
@@ -127,12 +115,40 @@ pub fn edit_stack(stack: &LayerStack, edit: &StackEdit) -> Result<LayerStack, St
         StackEdit::SetCopperWeight { row, oz } => {
             rows[row_of(*row)?].copper_weight_oz = number(*oz)?;
         }
+        StackEdit::SetLossTangent { row, value } => {
+            rows[row_of(*row)?].loss_tangent = number(*value)?;
+        }
         StackEdit::UseMaterial { row, material } => {
             use_material(&mut rows[row_of(*row)?], material)?
         }
         StackEdit::SetFinish { finish } => out.finish = Some(checked_finish(finish)?),
     }
     Ok(out)
+}
+
+/// Swap `row` with the row above (`up`) or below.
+fn move_row(rows: &mut [StackLayer], row: usize, up: bool) -> Result<(), StackEditRefusal> {
+    let other = if up {
+        row.checked_sub(1)
+    } else {
+        Some(row + 1)
+    };
+    match other.filter(|o| *o < rows.len()) {
+        Some(other) => {
+            rows.swap(row, other);
+            Ok(())
+        }
+        None => Err(StackEditRefusal::AtEdge),
+    }
+}
+
+/// A copper row switches between signal and plane; no other kind changes.
+fn set_kind(row: &mut StackLayer, kind: StackLayerKind) -> Result<(), StackEditRefusal> {
+    if !(row.kind.is_copper() && kind.is_copper()) {
+        return Err(StackEditRefusal::KindFixed);
+    }
+    row.kind = kind;
+    Ok(())
 }
 
 fn checked_finish(finish: &BoardFinish) -> Result<BoardFinish, StackEditRefusal> {
@@ -401,6 +417,38 @@ mod tests {
         assert_eq!(
             edit_stack(&stack, &StackEdit::SetFinish { finish: bad }),
             Err(StackEditRefusal::BadNumber)
+        );
+    }
+
+    /// Mockup row 177: the Df a material left on a row is typed over in the
+    /// Stack table, 0 clears it, and a bad number is refused.
+    #[test]
+    fn a_row_loss_tangent_is_set_cleared_and_checked() {
+        let stack = LayerStack::derived(&[], 1.6);
+        let core = stack
+            .layers
+            .iter()
+            .position(|l| l.kind == StackLayerKind::Dielectric)
+            .unwrap();
+        let set = |value| StackEdit::SetLossTangent { row: core, value };
+        let with_df = edit_stack(&stack, &set(0.018)).unwrap();
+        assert_eq!(with_df.layers[core].loss_tangent, 0.018);
+        assert!(with_df.has_materials_data());
+        let cleared = edit_stack(&with_df, &set(0.0)).unwrap();
+        assert_eq!(cleared, stack, "a cleared Df leaves the stack as it was");
+        assert_eq!(
+            edit_stack(&stack, &set(-0.01)),
+            Err(StackEditRefusal::BadNumber)
+        );
+        assert_eq!(
+            edit_stack(
+                &stack,
+                &StackEdit::SetLossTangent {
+                    row: 99,
+                    value: 0.01
+                }
+            ),
+            Err(StackEditRefusal::NoRow(99))
         );
     }
 }

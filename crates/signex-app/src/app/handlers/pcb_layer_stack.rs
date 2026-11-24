@@ -229,6 +229,9 @@ impl Signex {
                 number().map(|value| StackEdit::SetDielectricConstant { row, value })
             }
             StackField::CopperWeight => number().map(|oz| StackEdit::SetCopperWeight { row, oz }),
+            StackField::LossTangent => {
+                number().map(|value| StackEdit::SetLossTangent { row, value })
+            }
         };
         match edit {
             Some(edit) => {

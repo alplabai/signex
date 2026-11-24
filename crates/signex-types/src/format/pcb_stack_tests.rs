@@ -271,3 +271,30 @@ fn a_finish_without_rows_finishes_the_derived_stack() {
         LayerStack::derived(&read.layers, read.thickness).layers
     );
 }
+
+/// A mask or silkscreen table that leaves fields out still opens the board;
+/// each missing field takes its default.
+#[test]
+fn a_partial_mask_or_silkscreen_table_takes_the_defaults() {
+    use crate::pcb_stack::{FinishColor, FinishSides, MaskGloss, SilkscreenFinish};
+    let base = SnxPcb::new(empty_board()).write_string().unwrap();
+    let text = format!(
+        "{base}\n[stackup.finish.mask]\ngloss = \"matte\"\n\
+         [stackup.finish.silkscreen]\nsides = \"top\"\n"
+    );
+    let read = SnxPcb::parse(&text).unwrap().board;
+    let finish = read.stackup.unwrap().finish.expect("finish");
+    let mask = crate::pcb_stack::MaskFinish {
+        gloss: MaskGloss::Matte,
+        ..Default::default()
+    };
+    assert_eq!(finish.mask, mask);
+    assert_eq!(finish.mask.color, FinishColor::Green);
+    assert_eq!(
+        finish.silkscreen,
+        SilkscreenFinish {
+            sides: FinishSides::Top,
+            ..Default::default()
+        }
+    );
+}

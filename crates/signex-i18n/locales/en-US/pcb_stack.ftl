@@ -205,3 +205,10 @@ pcb-stack-finish-purple = Purple
 pcb-stack-finish-note = Mask, silkscreen and finish are saved in the board. Undo works per edit.
 pcb-stack-finish-default = Not set yet: these are the defaults, and the first change saves them with the board.
 pcb-stack-material-no-config = this system has no config folder to keep it in
+pcb-stack-col-df-stored-tip = Loss tangent of the layer, copied from the material library or typed here. 0 clears it.
+# $value is already formatted; $unit is mm, µm or mil.
+pcb-stack-board-material-thickness = { $value } { $unit }
+# $value is the Dk, or a dash when none is set.
+pcb-stack-board-material-dk = Dk { $value }
+# $value is the Df, or a dash when none is set.
+pcb-stack-board-material-df = Df { $value }

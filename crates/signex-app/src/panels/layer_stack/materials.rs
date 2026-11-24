@@ -406,44 +406,79 @@ fn add_row<'a>(ctx: &'a PanelContext, facts: &'a LayerStackFacts) -> Element<'a,
     let mut line: Row<Element<'a, PanelMsg>> = Row::new().spacing(SP.s).align_y(Alignment::Center);
     line = line.push(kind_list(ctx, facts, writable));
     for (field, placeholder, value, portion) in fields {
-        let mut input = text_input(placeholder, value.clone())
-            .size(TS.dense)
-            .padding(SP.xs)
-            .style(form_look::text_input_style)
-            .width(Length::FillPortion(portion));
-        if writable {
-            let board = facts.board.clone();
-            input = input.on_input(move |text| {
-                materials_msg(MaterialsMsg::DraftTyped {
-                    board: board.clone(),
-                    field,
-                    text,
-                })
-            });
-        }
-        line = line.push(input.boxed());
+        line = line.push(draft_input(
+            facts,
+            field,
+            placeholder,
+            value.clone(),
+            portion,
+            writable,
+        ));
     }
-    line = line.push(library_button(
-        ctx,
-        ids::PCB_STACK_MATERIAL_ADD,
-        ids::PCB_STACK_MATERIAL_ADD_TIP,
-        writable.then(|| MaterialsMsg::Added {
-            board: facts.board.clone(),
-        }),
-    ));
+    for action in library_buttons(ctx, facts, writable) {
+        line = line.push(action);
+    }
+    line.boxed()
+}
+
+/// One typed field of the Add row; inert unless the library can be written.
+fn draft_input<'a>(
+    facts: &'a LayerStackFacts,
+    field: MaterialField,
+    placeholder: Localized,
+    value: String,
+    portion: u16,
+    writable: bool,
+) -> Element<'a, PanelMsg> {
+    let input = text_input(placeholder, value)
+        .size(TS.dense)
+        .padding(SP.xs)
+        .style(form_look::text_input_style)
+        .width(Length::FillPortion(portion));
+    if !writable {
+        return input.boxed();
+    }
+    let board = facts.board.clone();
+    input
+        .on_input(move |text| {
+            materials_msg(MaterialsMsg::DraftTyped {
+                board: board.clone(),
+                field,
+                text,
+            })
+        })
+        .boxed()
+}
+
+/// Add material, and Remove for a picked entry of the user library.
+fn library_buttons<'a>(
+    ctx: &'a PanelContext,
+    facts: &'a LayerStackFacts,
+    writable: bool,
+) -> [Element<'a, PanelMsg>; 2] {
     let removable = writable
-        && materials
+        && facts
+            .materials
             .selected
             .is_some_and(|pick| pick.source == MaterialSource::User);
-    line = line.push(library_button(
-        ctx,
-        ids::PCB_STACK_MATERIAL_REMOVE,
-        ids::PCB_STACK_MATERIAL_REMOVE_TIP,
-        removable.then(|| MaterialsMsg::Removed {
-            board: facts.board.clone(),
-        }),
-    ));
-    line.boxed()
+    [
+        library_button(
+            ctx,
+            ids::PCB_STACK_MATERIAL_ADD,
+            ids::PCB_STACK_MATERIAL_ADD_TIP,
+            writable.then(|| MaterialsMsg::Added {
+                board: facts.board.clone(),
+            }),
+        ),
+        library_button(
+            ctx,
+            ids::PCB_STACK_MATERIAL_REMOVE,
+            ids::PCB_STACK_MATERIAL_REMOVE_TIP,
+            removable.then(|| MaterialsMsg::Removed {
+                board: facts.board.clone(),
+            }),
+        ),
+    ]
 }
 
 /// The Add row's Type dropdown.

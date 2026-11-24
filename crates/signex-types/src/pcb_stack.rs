@@ -412,15 +412,14 @@ impl FinishColor {
 }
 
 /// The solder mask. Its thickness over copper and its Dk are the Solder
-/// Mask rows' of the stack, so they have one home.
+/// Mask rows' of the stack, so they have one home. A field the file leaves
+/// out takes its [`Default`] value.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct MaskFinish {
-    #[serde(default)]
     pub kind: MaskType,
     pub color: FinishColor,
-    #[serde(default)]
     pub gloss: MaskGloss,
-    #[serde(default)]
     pub sides: FinishSides,
     /// Thickness over bare laminate, mm.
     pub over_laminate_mm: f64,
@@ -438,10 +437,11 @@ impl Default for MaskFinish {
     }
 }
 
+/// A field the file leaves out takes its [`Default`] value.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct SilkscreenFinish {
     pub color: FinishColor,
-    #[serde(default)]
     pub sides: FinishSides,
 }
 
