@@ -3,7 +3,8 @@
 //! dimensions. It never solves. It reads `last_solve` and the parameters
 //! that solve ran with, so while a row is in error the last good bake stays
 //! on show, marked. Both hosts draw the baking edges; a footprint also
-//! draws its baked pads. Drawing: `preview_canvas`.
+//! draws its baked pads, except in a last-good preview. Drawing:
+//! `preview_canvas`.
 
 use std::collections::{BTreeSet, HashMap};
 use std::f64::consts::TAU;
@@ -36,6 +37,9 @@ pub(super) struct BakePreview {
     pub(super) edges: Vec<Vec<Mm>>,
     /// The baked pads; always empty on a board sketch.
     pub(super) pads: Vec<PreviewPad>,
+    /// The sketch bakes pads but they are not drawn: a parameter is in
+    /// error, so their unit families cannot be read.
+    pub(super) pads_hidden: bool,
     pub(super) dimensions: Vec<DrivingDimension>,
     /// A parameter is in error, so this is the last good bake.
     pub(super) is_last_good: bool,
@@ -100,16 +104,25 @@ impl BakePreview {
             .filter(|entity| !entity.bake_skipped())
             .filter_map(|entity| at.edge(entity))
             .collect();
-        let pads = match host {
-            SketchHost::Footprint => baked_pads(sketch, solve)
+        let has_pads = host == SketchHost::Footprint
+            && sketch.entities.iter().any(|entity| entity.pad.is_some());
+        // `solve.params` holds bare canonical numbers, and the pad bake takes
+        // each parameter's unit family from the sketch's table, which reads
+        // none while a row fails: an angle would be read as a length. So a
+        // last-good preview hides the pads rather than draw them wrong.
+        let pads_hidden = has_pads && !failing.is_empty();
+        let pads = if has_pads && !pads_hidden {
+            baked_pads(sketch, solve)
                 .iter()
                 .map(PreviewPad::of)
-                .collect(),
-            SketchHost::Board => Vec::new(),
+                .collect()
+        } else {
+            Vec::new()
         };
         Self {
             edges,
             pads,
+            pads_hidden,
             dimensions: driving_dimensions(sketch, solve, &at, failing),
             is_last_good: !failing.is_empty(),
         }

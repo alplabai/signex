@@ -219,6 +219,52 @@ fn a_footprint_previews_its_baked_pads_and_a_board_sketch_none() {
     }
     let board = BakePreview::of(&sketch, &solve, SketchHost::Board, &none);
     assert!(board.pads.is_empty());
+    assert!(!footprint.pads_hidden && !board.pads_hidden);
+}
+
+/// The angle a drawn pad outline is turned by, in degrees.
+fn outline_angle_deg(pad: &PreviewPad) -> f64 {
+    let PreviewPad::Outline(corners) = pad else {
+        panic!("a 0.6 x 1 mm pad is drawn as its outline");
+    };
+    let (dx, dy) = (corners[1].0 - corners[0].0, corners[1].1 - corners[0].1);
+    dy.atan2(dx).to_degrees()
+}
+
+/// A pad turned by the angle parameter `rot` (30 deg). While another row
+/// is in error the pad bake cannot read `rot` as an angle, so the preview
+/// draws no pad rather than one turned by a length-read value.
+#[test]
+fn an_angle_driven_pad_is_drawn_at_its_angle_or_not_at_all() {
+    let mut sketch = pad_sketch();
+    sketch.arrays.clear();
+    sketch.parameters.insert("rot", "30deg");
+    for entity in &mut sketch.entities {
+        if let Some(pad) = entity.pad.as_mut() {
+            pad.rotation_expr = Some("rot".into());
+        }
+    }
+    let params = resolve(&sketch.parameters).unwrap();
+    let solve = Solver::default().solve(&sketch, &params).unwrap();
+
+    let read = BakePreview::of(&sketch, &solve, SketchHost::Footprint, &BTreeSet::new());
+    assert_eq!(read.pads.len(), 1);
+    assert!((outline_angle_deg(&read.pads[0]).abs() - 30.0).abs() < 1e-6);
+
+    sketch.parameters.insert("junk", "bodyy + 1mm");
+    let failing = failing_parameters(&sketch);
+    assert_eq!(failing, BTreeSet::from(["junk".to_string()]));
+    let last_good = BakePreview::of(&sketch, &solve, SketchHost::Footprint, &failing);
+    for pad in &last_good.pads {
+        assert!(
+            (outline_angle_deg(pad).abs() - 30.0).abs() < 1e-6,
+            "a drawn pad keeps the solved angle"
+        );
+    }
+    assert!(last_good.pads.is_empty(), "the families cannot be read");
+    assert!(last_good.pads_hidden, "and the card says so");
+    assert!(last_good.is_last_good);
+    assert_eq!(last_good.edges, read.edges, "edges stay");
 }
 
 #[test]

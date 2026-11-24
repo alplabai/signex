@@ -100,13 +100,20 @@ fn preview_card<'a>(
             look.error,
         ));
     }
+    if preview.pads_hidden {
+        card = card.push(caption(
+            t!(i18n, ids::SKETCH_PARAMETERS_PREVIEW_PADS_HIDDEN),
+            look.error,
+        ));
+    }
     if preview.extent().is_none() {
-        return card
-            .push(caption(
+        if !preview.pads_hidden {
+            card = card.push(caption(
                 t!(i18n, ids::SKETCH_PARAMETERS_PREVIEW_EMPTY),
                 look.muted,
-            ))
-            .boxed();
+            ));
+        }
+        return card.boxed();
     }
     let labels = preview
         .dimensions

@@ -66,6 +66,7 @@ define_ids! {
     SKETCH_PARAMETERS_PREVIEW_LAST_GOOD = "sketch-parameters-preview-last-good";
     SKETCH_PARAMETERS_PREVIEW_NONE = "sketch-parameters-preview-none";
     SKETCH_PARAMETERS_PREVIEW_EMPTY = "sketch-parameters-preview-empty";
+    SKETCH_PARAMETERS_PREVIEW_PADS_HIDDEN = "sketch-parameters-preview-pads-hidden";
     SKETCH_PARAMETERS_PREVIEW_DIMENSION = "sketch-parameters-preview-dimension";
     SKETCH_PARAMETERS_PREVIEW_DIMENSION_NAMED = "sketch-parameters-preview-dimension-named";
 }
