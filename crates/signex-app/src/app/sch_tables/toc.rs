@@ -1,8 +1,10 @@
 //! Project ▸ Add Table of Contents Sheet (#1300): writes `contents.snxsch`
 //! next to the root sheet, with a heading (`<project> · Contents`) and a
 //! table bound to the project's sheets, then adds it to the project like
-//! Add Existing does. The write is atomic, runs in a `Task`, and refuses a
-//! file that is already there. See docs/SCHEMATIC_TABLES.md.
+//! Add Existing does. The table starts with the last compile's pages, or
+//! before any compile with the pages the project lists (mockup row 156).
+//! The write is atomic, runs in a `Task`, and refuses a file that is already
+//! there. See docs/SCHEMATIC_TABLES.md.
 
 use std::path::PathBuf;
 
@@ -28,7 +30,7 @@ const HEADING_MM: f64 = 3.81;
 
 /// The contents sheet of project `name`: its heading (`<name> · <word>`,
 /// `word` the catalog's "Contents") and a contents table with `rows` and
-/// `links` (empty until the next compile fills them).
+/// `links`.
 pub(crate) fn contents_sheet(
     name: &str,
     word: &str,
@@ -58,6 +60,44 @@ pub(crate) fn contents_sheet(
     table.links = links;
     sheet.drawings.push(SchDrawing::Table(table));
     sheet
+}
+
+/// The rows the contents table starts with.
+#[derive(Debug)]
+enum StartRows {
+    /// The last compile's pages, one per channel.
+    Compiled(Vec<super::rows::ContentsEntry>),
+    /// Before any compile: the pages the project lists. The title blocks of
+    /// the sheets that are not open are read with the write, off the update
+    /// thread.
+    Declared(Vec<super::rows::DeclaredPage>),
+}
+
+/// The text of project `name`'s contents sheet, its table filled from
+/// `start`; `read` gives a closed sheet's title block.
+fn contents_text(
+    name: &str,
+    word: &str,
+    start: StartRows,
+    read: &dyn Fn(&std::path::Path) -> Option<signex_net::SheetTitle>,
+) -> Result<String, String> {
+    let entries = match start {
+        StartRows::Compiled(entries) => entries,
+        StartRows::Declared(pages) => super::rows::declared_contents(&pages, read),
+    };
+    let columns = SchTable::columns_for(&TableSource::ProjectSheets { per_channel: true });
+    let (rows, links) = super::rows::contents_table_rows(&entries, &columns);
+    signex_types::format::SnxSchematic::new(contents_sheet(name, word, rows, links))
+        .write_string()
+        .map_err(|e| e.to_string())
+}
+
+/// The title block of the sheet file at `path`, read from disk.
+fn title_on_disk(path: &std::path::Path) -> Option<signex_net::SheetTitle> {
+    crate::app::project_sheets::load_sheet_file(path)
+        .ok()
+        .flatten()
+        .map(|sheet| signex_net::SheetTitle::of(&sheet))
 }
 
 /// Write `text` to `path` unless a file is there already. The name is
@@ -98,32 +138,20 @@ impl Signex {
             .and_then(|root| root.parent().map(std::path::Path::to_path_buf))
             .unwrap_or_else(|| project.dir().to_path_buf());
         let path = dir.join(CONTENTS_FILE);
-        let (rows, links) = match self.contents_now(project_id, &dir) {
-            Some(entries) => {
-                let columns =
-                    SchTable::columns_for(&TableSource::ProjectSheets { per_channel: true });
-                super::rows::contents_table_rows(&entries, &columns)
-            }
-            None => (Vec::new(), Vec::new()),
+        let start = match self.contents_now(project_id, &dir) {
+            Some(entries) => StartRows::Compiled(entries),
+            None => StartRows::Declared(self.declared_pages(project_id, &dir)),
         };
         let word = t!(i18n, ids::TABLE_TOC_HEADING).into_string();
-        let sheet = contents_sheet(&name, &word, rows, links);
-        let text = match signex_types::format::SnxSchematic::new(sheet).write_string() {
-            Ok(text) => text,
-            Err(error) => {
-                crate::diagnostics::log_error(
-                    &t!(i18n, ids::TABLE_TOC_NOT_SERIALISED).into_string(),
-                    &anyhow::Error::new(error),
-                );
-                return Task::none();
-            }
-        };
         let target = path.clone();
         Task::perform(
             async move {
-                crate::app::path_op_jobs::run_blocking(move || write_new(&target, &text))
-                    .await
-                    .and_then(std::convert::identity)
+                crate::app::path_op_jobs::run_blocking(move || {
+                    let text = contents_text(&name, &word, start, &title_on_disk)?;
+                    write_new(&target, &text)
+                })
+                .await
+                .and_then(std::convert::identity)
             },
             move |result| {
                 Message::from(TablesMsg::TableOfContentsWritten {
@@ -178,10 +206,47 @@ impl Signex {
         self.compiled_contents_of(project, Some(dir))
             .map(|pages| pages.pages(true))
     }
+
+    /// The pages `project` lists, in its order, each linked from `dir` and
+    /// with the title block of its open tab when it has one.
+    fn declared_pages(
+        &self,
+        project: crate::app::state::ProjectId,
+        dir: &std::path::Path,
+    ) -> Vec<super::rows::DeclaredPage> {
+        let Some(loaded) = self.document_state.project_by_id(project) else {
+            return Vec::new();
+        };
+        let fold = crate::app::state::project_case::fold_of(Some(loaded));
+        let project_dir = loaded.dir();
+        loaded
+            .data
+            .sheets
+            .iter()
+            .map(|entry| {
+                let path = project_dir.join(&entry.filename);
+                super::rows::DeclaredPage {
+                    name: entry.name.clone(),
+                    file: crate::app::handlers::canvas::link_from(dir, &path, fold),
+                    title: self
+                        .document_state
+                        .engines
+                        .get(&path)
+                        .map(|engine| signex_net::SheetTitle::of(engine.document())),
+                    path,
+                }
+            })
+            .collect()
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
+    use signex_net::SheetTitle;
+
+    use super::super::rows::{ContentsEntry, DeclaredPage};
     use super::*;
 
     #[test]
@@ -219,5 +284,115 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&path).expect("read"), "mine");
         let fresh = dir.path().join("other.snxsch");
         assert_eq!(write_new(&fresh, "new"), Ok(()));
+    }
+
+    fn title(title: &str, revision: &str) -> SheetTitle {
+        SheetTitle {
+            title: title.to_string(),
+            revision: revision.to_string(),
+            date: String::new(),
+        }
+    }
+
+    /// The table of the written contents text, as the sheet loads it.
+    fn written_table(start: StartRows, read: &dyn Fn(&Path) -> Option<SheetTitle>) -> SchTable {
+        let text = contents_text("dcdc-buck", "Contents", start, read).expect("text");
+        let sheet = signex_types::format::SnxSchematic::parse(&text)
+            .expect("parse")
+            .sheet;
+        let [SchDrawing::Table(t)] = &sheet.drawings[..] else {
+            panic!("one table");
+        };
+        t.clone()
+    }
+
+    /// The drawn cells, row by row, in the shown columns.
+    fn drawn_cells(t: &SchTable) -> Vec<Vec<String>> {
+        let shown = t.shown_columns();
+        (0..t.layout().body_rows)
+            .map(|r| shown.iter().map(|&c| t.cell(r, c).to_string()).collect())
+            .collect()
+    }
+
+    /// Mockup row 156: a contents sheet added before any compile draws a row
+    /// per page under its header, with each page's title block.
+    #[test]
+    fn before_a_compile_the_contents_table_draws_the_projects_pages() {
+        let page = |name: &str, title: Option<SheetTitle>| DeclaredPage {
+            name: name.to_string(),
+            path: PathBuf::from(format!("/p/{name}.snxsch")),
+            file: format!("{name}.snxsch"),
+            title,
+        };
+        let start = StartRows::Declared(vec![
+            page("top", Some(title("Top level", "B"))),
+            page("power_in", None),
+            page("lost", None),
+        ]);
+        let read = |path: &Path| {
+            (path == Path::new("/p/power_in.snxsch")).then(|| title("USB-C input", "B"))
+        };
+
+        let t = written_table(start, &read);
+
+        assert_eq!(t.layout().body_rows, 3, "one drawn row per page");
+        assert_eq!(
+            drawn_cells(&t),
+            [
+                ["1", "top", "Top level", "B"],
+                ["2", "power_in", "USB-C input", "B"],
+                ["3", "lost", "", ""],
+            ]
+        );
+        assert_eq!(t.links, ["top.snxsch", "power_in.snxsch", "lost.snxsch"]);
+    }
+
+    /// After a compile the table starts with the compiled pages; no sheet
+    /// file is read.
+    #[test]
+    fn after_a_compile_the_contents_table_starts_with_the_compiled_pages() {
+        let start = StartRows::Compiled(vec![ContentsEntry {
+            page: 1,
+            sheet: "buck_channel · CH1".to_string(),
+            title: "3.3 V buck, channel 1".to_string(),
+            revision: "B".to_string(),
+            last_changed: String::new(),
+            file: "buck_channel.snxsch".to_string(),
+        }]);
+        let read = |_: &Path| -> Option<SheetTitle> { panic!("a compiled page is not read") };
+
+        let t = written_table(start, &read);
+
+        assert_eq!(
+            drawn_cells(&t),
+            [["1", "buck_channel · CH1", "3.3 V buck, channel 1", "B"]]
+        );
+        assert_eq!(t.links, ["buck_channel.snxsch"]);
+    }
+
+    /// The declared pages follow the project's order; an open sheet gives
+    /// its tab's title block, a closed one is left for the write to read.
+    #[test]
+    fn the_declared_pages_take_an_open_sheets_title_block() {
+        use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
+        let mut app = app_workspace("/w/toc-declared", &["top.snxsch", "power.snxsch"]);
+        let top = PathBuf::from("/w/toc-declared/top.snxsch");
+        let mut sheet = SchematicSheet::default();
+        sheet
+            .title_block
+            .insert("title".to_string(), "Top level".to_string());
+        open_with(&mut app.document_state, &top, sheet);
+        let project = app.document_state.projects[0].id;
+
+        let pages = app.declared_pages(project, Path::new("/w/toc-declared"));
+
+        assert_eq!(
+            pages
+                .iter()
+                .map(|p| (p.file.as_str(), p.title.as_ref().map(|t| t.title.as_str())))
+                .collect::<Vec<_>>(),
+            [("top.snxsch", Some("Top level")), ("power.snxsch", None)]
+        );
+        assert_eq!(pages[1].path, PathBuf::from("/w/toc-declared/power.snxsch"));
     }
 }

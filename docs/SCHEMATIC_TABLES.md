@@ -72,7 +72,11 @@ loop; an export is an atomic write.
 Project ▸ Add Table of Contents Sheet (`add_table_of_contents`) writes
 `contents.snxsch` next to the project's root sheet: a heading
 (`<project> · Contents`) and a Project sheets table, filled from the last
-compile when there is one. The write is atomic and refuses a file that is
+compile when there is one. Before any compile the table lists the pages the
+project lists, in its order, each with its title block (an open sheet's tab,
+else the file read with the write, off the update thread), so the new sheet
+draws its rows at once (mockup row 156); the next compile replaces them with
+the compiled hierarchy, one row per channel. The write is atomic and refuses a file that is
 already there: the name is claimed with a create-new open first, so a file
 made there in the meantime is never overwritten. The new sheet is then added to the project the way Add
 Existing adds a file. Double-clicking a row of the contents table opens that
