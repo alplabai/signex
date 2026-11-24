@@ -1,29 +1,72 @@
 //! Enable Version Control flow for the project-navigation dock.
 
 use super::*;
-use crate::app::contracts::TrackKind;
+use crate::app::contracts::{CommitAuthor, TrackKind};
+
+/// The generated-outputs folder; its row starts unticked (mockup row 26).
+const OUTPUTS_FOLDER: &str = "outputs";
+
+impl CommitAuthor {
+    /// Whether a run may start: git has an author, or both fields are filled.
+    pub(crate) fn is_ready(&self) -> bool {
+        match self {
+            Self::Probing => false,
+            Self::Resolved => true,
+            Self::Missing { .. } => self.typed().is_some(),
+        }
+    }
+
+    /// The typed name and email, trimmed; `None` unless both are filled.
+    pub(crate) fn typed(&self) -> Option<(String, String)> {
+        let Self::Missing { name, email } = self else {
+            return None;
+        };
+        let (name, email) = (name.trim(), email.trim());
+        (!name.is_empty() && !email.is_empty()).then(|| (name.to_owned(), email.to_owned()))
+    }
+}
+
+/// Ask git, off the UI thread, whether it resolves a commit author; the
+/// dialog asks for one only when it does not (mockup row 26). A probe that
+/// fails asks too.
+fn probe_commit_author(project_dir: std::path::PathBuf) -> Task<Message> {
+    Task::perform(
+        crate::app::path_op_jobs::run_blocking(|| {
+            signex_library::git_identity::identity_for_default_config().is_ok()
+        }),
+        move |joined| {
+            Message::EnableVersionControl(crate::app::EnableVersionControlMsg::AuthorProbed {
+                project_dir: project_dir.clone(),
+                has_identity: joined.unwrap_or(false),
+            })
+        },
+    )
+}
 
 impl Signex {
-    pub(crate) fn open_enable_version_control_dialog(&mut self, tree_path: Vec<usize>) {
+    pub(crate) fn open_enable_version_control_dialog(
+        &mut self,
+        tree_path: Vec<usize>,
+    ) -> Task<Message> {
         let Some(&project_idx) = tree_path.first() else {
-            return;
+            return Task::none();
         };
         let Some(project) = self.document_state.projects.get(project_idx) else {
-            return;
+            return Task::none();
         };
-        let Some(project_dir) = project.path.parent() else {
-            return;
+        let Some(project_dir) = project.path.parent().map(std::path::Path::to_path_buf) else {
+            return Task::none();
         };
-        if !self.document_state.project_fs.facts.lacks_git(project_dir) {
+        if !self.document_state.project_fs.facts.lacks_git(&project_dir) {
             // Already version-controlled (or not probed yet) — nothing to enable.
-            return;
+            return Task::none();
         }
-        let items = collect_track_items(project, project_dir);
+        let items = collect_track_items(project, &project_dir);
         let commit_message = self.first_commit_message(&project.data.name);
         self.ui_state.enable_version_control = Some(crate::app::EnableVersionControlState {
             scope: crate::app::VersionControlScope::Project,
             project_path: project.path.clone(),
-            project_dir: project_dir.to_path_buf(),
+            project_dir: project_dir.clone(),
             project_name: project.data.name.clone(),
             items,
             use_lfs: false,
@@ -32,7 +75,35 @@ impl Signex {
             error: None,
             working: false,
             scanning: false,
+            author: CommitAuthor::Probing,
         });
+        probe_commit_author(project_dir)
+    }
+
+    /// Git answered whether it has a commit author. Without one the dialog
+    /// shows the name and email fields. Dropped when the dialog was closed or
+    /// reopened for another directory meanwhile.
+    pub(crate) fn handle_enable_version_control_author_probed(
+        &mut self,
+        project_dir: &std::path::Path,
+        has_identity: bool,
+    ) {
+        let Some(state) = self
+            .ui_state
+            .enable_version_control
+            .as_mut()
+            .filter(|s| s.author == CommitAuthor::Probing && s.project_dir == project_dir)
+        else {
+            return;
+        };
+        state.author = if has_identity {
+            CommitAuthor::Resolved
+        } else {
+            CommitAuthor::Missing {
+                name: String::new(),
+                email: String::new(),
+            }
+        };
     }
 
     /// The first commit message the dialog offers for `name`, in the UI
@@ -72,7 +143,21 @@ impl Signex {
             Msg::AllTicked => s.items.iter_mut().for_each(|item| item.tracked = true),
             Msg::CommitMessageChanged(text) => s.commit_message = text,
             Msg::CommitEverySaveToggled => s.commit_every_save = !s.commit_every_save,
-            Msg::Confirm | Msg::Close | Msg::ItemsScanned { .. } | Msg::Finished { .. } => {}
+            Msg::AuthorNameChanged(text) => {
+                if let CommitAuthor::Missing { name, .. } = &mut s.author {
+                    *name = text;
+                }
+            }
+            Msg::AuthorEmailChanged(text) => {
+                if let CommitAuthor::Missing { email, .. } = &mut s.author {
+                    *email = text;
+                }
+            }
+            Msg::Confirm
+            | Msg::Close
+            | Msg::ItemsScanned { .. }
+            | Msg::Finished { .. }
+            | Msg::AuthorProbed { .. } => {}
         }
     }
 
@@ -134,8 +219,10 @@ impl Signex {
             error: None,
             working: false,
             scanning: true,
+            author: CommitAuthor::Probing,
         });
-        Task::perform(
+        let probe = probe_commit_author(project_dir.clone());
+        let scan = Task::perform(
             crate::app::path_op_jobs::run_blocking(move || {
                 collect_track_items_for_library(&scan_dir)
             }),
@@ -145,7 +232,8 @@ impl Signex {
                     result: joined,
                 })
             },
-        )
+        );
+        Task::batch([scan, probe])
     }
 
     /// The row list of a library-scope dialog arrived. Dropped when the dialog
@@ -192,9 +280,11 @@ impl Signex {
         }
         // A blank subject is refused: the dialog withholds Enable meanwhile.
         let message = state.commit_message.trim().to_string();
-        if message.is_empty() {
+        // So is a run before git answered, or with an author field blank.
+        if message.is_empty() || !state.author.is_ready() {
             return Task::none();
         }
+        let author = state.author.typed();
         state.working = true;
         state.error = None;
         // Build the `.gitignore` body from unticked rows. An empty
@@ -232,7 +322,10 @@ impl Signex {
                         use_lfs,
                         gitignore.as_deref(),
                         keep_journals,
-                        &message,
+                        FirstCommit {
+                            message: &message,
+                            author: author.as_ref().map(|(n, e)| (n.as_str(), e.as_str())),
+                        },
                     )
                 })
                 .await
@@ -400,6 +493,14 @@ impl Signex {
     }
 }
 
+/// The first commit: its subject, and the author the dialog asked for when
+/// git had none (`None` uses git's own).
+#[derive(Debug, Clone, Copy)]
+struct FirstCommit<'a> {
+    message: &'a str,
+    author: Option<(&'a str, &'a str)>,
+}
+
 /// Blocking: everything Enable Version Control does on disk. Run from
 /// `spawn_blocking`.
 fn enable_version_control_blocking(
@@ -409,7 +510,7 @@ fn enable_version_control_blocking(
     use_lfs: bool,
     gitignore: Option<&str>,
     keep_journals: bool,
-    message: &str,
+    commit: FirstCommit<'_>,
 ) -> crate::app::EnableVersionControlOutcome {
     use crate::app::EnableVersionControlOutcome as Outcome;
     // Refuse a folder that holds other projects or personal files (#1205)
@@ -425,7 +526,7 @@ fn enable_version_control_blocking(
         matches!(scope, crate::app::VersionControlScope::Project),
         gitignore,
         keep_journals,
-        message,
+        commit,
     ) {
         return Outcome::InitFailed(error.to_string());
     }
@@ -443,23 +544,25 @@ fn enable_version_control_blocking(
 /// surface the `LibraryError` as a user-facing string.
 /// `project_scope` adds the managed `.gitattributes` block; both scopes
 /// get the managed `.gitignore` block. `gitignore` is the picker's unticked
-/// rows, merged in outside the block, or `None` for none. `message` is the
-/// first commit's subject.
+/// rows, merged in outside the block, or `None` for none. `commit` is the
+/// first commit's subject and the author the dialog asked for, which the
+/// library writes into the new repository's config (mockup row 26).
 fn try_init_project_repo(
     project_dir: &std::path::Path,
     use_lfs: bool,
     project_scope: bool,
     gitignore: Option<&str>,
     keep_journals: bool,
-    message: &str,
+    commit: FirstCommit<'_>,
 ) -> Result<(), signex_library::LibraryError> {
-    signex_library::enable_project_version_control_with_message(
+    signex_library::enable_project_version_control_as(
         project_dir,
         use_lfs,
         project_scope,
         gitignore,
         keep_journals,
-        message,
+        commit.message,
+        commit.author,
     )
 }
 
@@ -536,7 +639,21 @@ pub(crate) fn collect_track_items(
             tracked: true,
         });
     }
+    items.push(outputs_item(project_dir));
     items
+}
+
+/// The generated-outputs folder, unticked: its files churn with every export,
+/// so they stay out of the first commit unless the user ticks it (mockup row
+/// 26). Listed whether or not it exists yet, so later outputs stay out too.
+fn outputs_item(project_dir: &std::path::Path) -> crate::app::TrackItem {
+    crate::app::TrackItem {
+        absolute: project_dir.join(OUTPUTS_FOLDER),
+        relative: OUTPUTS_FOLDER.to_string(),
+        kind: TrackKind::Folder,
+        is_directory: true,
+        tracked: false,
+    }
 }
 
 /// Build the per-row pick-list for the library-scope Enable Version

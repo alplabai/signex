@@ -25,6 +25,9 @@ impl Signex {
             ProjectTabMsg::ErcDialogRequested { project_id } => {
                 return self.open_erc_from_tab(project_id);
             }
+            ProjectTabMsg::EnableVersionControlRequested { project_id } => {
+                return self.open_version_control_from_tab(project_id);
+            }
             ProjectTabMsg::VariantPartsReadRequested { project_id } => {
                 return self.read_variant_parts(project_id, true);
             }
@@ -237,6 +240,7 @@ impl Signex {
             // Routed by `dispatch_project_tab_message`: they open a dialog.
             ProjectTabMsg::AddSchematicRequested { .. }
             | ProjectTabMsg::ErcDialogRequested { .. }
+            | ProjectTabMsg::EnableVersionControlRequested { .. }
             | ProjectTabMsg::LibraryLocateRequested { .. }
             | ProjectTabMsg::LibraryLocatePicked { .. } => {}
             ProjectTabMsg::RowDragged { project_id, msg } => {
@@ -297,9 +301,6 @@ impl Signex {
             }
             ProjectTabMsg::VersionControlToggled { project_id, on } => {
                 self.toggle_project_version_control(project_id, on);
-            }
-            ProjectTabMsg::EnableVersionControlRequested { project_id } => {
-                self.open_version_control_from_tab(project_id);
             }
         }
     }

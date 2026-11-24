@@ -223,6 +223,32 @@ pub fn enable_project_version_control_with_message(
     keep_agent_journals_in_git: bool,
     message: &str,
 ) -> Result<(), adapter::LibraryError> {
+    enable_project_version_control_as(
+        project_dir,
+        use_lfs,
+        project_scope,
+        gitignore,
+        keep_agent_journals_in_git,
+        message,
+        None,
+    )
+}
+
+/// [`enable_project_version_control_with_message`] by `author` (name,
+/// email) when git resolves none (mockup row 26). The author signs the first
+/// commit and is written to the new repository's own config with
+/// [`adapters::local_git::project_repo::write_author`], so later commits use
+/// it too. `None` uses git's own identity, as before.
+#[cfg(feature = "local-git")]
+pub fn enable_project_version_control_as(
+    project_dir: &std::path::Path,
+    use_lfs: bool,
+    project_scope: bool,
+    gitignore: Option<&str>,
+    keep_agent_journals_in_git: bool,
+    message: &str,
+    author: Option<(&str, &str)>,
+) -> Result<(), adapter::LibraryError> {
     use adapter::LibraryError;
     let message = if message.trim().is_empty() {
         DEFAULT_FIRST_COMMIT_MESSAGE
@@ -238,18 +264,11 @@ pub fn enable_project_version_control_with_message(
 
     // Before anything else touches disk: a refusal must leave a
     // user's existing .gitignore / .gitattributes exactly as they were.
-    let (sig_name, sig_email) = git_identity::identity_for_default_config()?;
-
-    // Any entry named `.git` (even a dangling link) is not ours to replace.
-    if std::fs::symlink_metadata(project_dir.join(".git")).is_ok() {
-        return Err(LibraryError::Conflict(format!(
-            "{} already has a .git directory",
-            project_dir.display()
-        )));
-    }
-    std::fs::create_dir_all(project_dir).map_err(|e| {
-        LibraryError::Backend(format!("create project dir {}: {e}", project_dir.display()))
-    })?;
+    let (sig_name, sig_email) = match author {
+        Some((name, email)) => (name.to_owned(), email.to_owned()),
+        None => git_identity::identity_for_default_config()?,
+    };
+    prepare_new_repo_dir(project_dir)?;
 
     // Merge the managed blocks into the user's files in memory first, so a
     // malformed marker pair or a link refuses before anything touches disk.
@@ -266,12 +285,29 @@ pub fn enable_project_version_control_with_message(
 
     // From here on any failure restores the user's files, and removes the
     // `.git` this call created (the check above guarantees there was none).
-    if let Err(e) = init_and_commit(project_dir, use_lfs, &sig_name, &sig_email, message) {
+    let signature = (sig_name.as_str(), sig_email.as_str());
+    if let Err(e) = init_and_commit(project_dir, use_lfs, signature, author.is_some(), message) {
         let mut notes = files.roll_back();
         notes.extend(vcs_init_files::remove_new_git_dir(project_dir));
         return Err(with_rollback_notes(e, notes));
     }
     Ok(())
+}
+
+/// Refuse a folder that already has an entry named `.git` (even a dangling
+/// link is not ours to replace), then make sure the folder exists.
+#[cfg(feature = "local-git")]
+fn prepare_new_repo_dir(project_dir: &std::path::Path) -> Result<(), adapter::LibraryError> {
+    use adapter::LibraryError;
+    if std::fs::symlink_metadata(project_dir.join(".git")).is_ok() {
+        return Err(LibraryError::Conflict(format!(
+            "{} already has a .git directory",
+            project_dir.display()
+        )));
+    }
+    std::fs::create_dir_all(project_dir).map_err(|e| {
+        LibraryError::Backend(format!("create project dir {}: {e}", project_dir.display()))
+    })
 }
 
 /// Append rollback failures to `error` so the user hears about them.
@@ -290,22 +326,27 @@ fn with_rollback_notes(error: adapter::LibraryError, notes: Vec<String>) -> adap
     }
 }
 
-/// `git init`, stage the tree and make the initial commit with `message`.
+/// `git init`, stage the tree and make the initial commit with `message`,
+/// signed by `(name, email)`; `store_author` writes them to the new
+/// repository's config first.
 #[cfg(feature = "local-git")]
 fn init_and_commit(
     project_dir: &std::path::Path,
     use_lfs: bool,
-    sig_name: &str,
-    sig_email: &str,
+    (sig_name, sig_email): (&str, &str),
+    store_author: bool,
     message: &str,
 ) -> Result<(), adapter::LibraryError> {
     use adapter::LibraryError;
 
-    let repo = git2::Repository::init(project_dir)
-        .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
-
     let sig = git2::Signature::now(sig_name, sig_email)
         .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
+
+    let repo = git2::Repository::init(project_dir)
+        .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
+    if store_author {
+        adapters::local_git::project_repo::write_author(project_dir, Some((sig_name, sig_email)))?;
+    }
 
     let mut index = repo
         .index()

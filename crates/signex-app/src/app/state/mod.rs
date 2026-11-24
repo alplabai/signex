@@ -101,6 +101,8 @@ pub use placement::{
 };
 pub use preview::{PdfQuality, PreviewState};
 pub use profile_update::PendingProfileUpdate;
+pub(crate) use sheet_read::SheetUnreadable;
+pub use sheet_read::UnreadableCause;
 pub use tab_placements::{TabPlacements, default_placement};
 pub use ui::{DEFAULT_BOTTOM_PANEL_HEIGHT, UiState};
 

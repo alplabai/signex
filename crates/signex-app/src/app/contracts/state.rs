@@ -637,6 +637,15 @@ pub enum VersionControlScope {
     Library,
 }
 
+/// Who the first commit is by (mockup row 26): git is still being asked,
+/// git has an identity, or it has none and the dialog asks for one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommitAuthor {
+    Probing,
+    Resolved,
+    Missing { name: String, email: String },
+}
+
 /// State for the "Enable Version Control" confirm modal — opened
 /// from the project root context menu when the project directory
 /// has no `.git/` yet, or from a plain-files `.snxlib` node's
@@ -686,6 +695,8 @@ pub struct EnableVersionControlState {
     /// the dialog shows no rows yet and ignores edits and Confirm until
     /// `EnableVersionControlMsg::ItemsScanned` fills them.
     pub scanning: bool,
+    /// The commit author; Enable waits while it is probed or left blank.
+    pub author: CommitAuthor,
 }
 
 /// State for the "Remove from Project" modal. `Delete` removes the file

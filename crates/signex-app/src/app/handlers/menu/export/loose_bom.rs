@@ -46,6 +46,7 @@ pub(super) fn loose_bom_scope(
             issues.stitch.extend(extra.stitch);
             issues.missing_pages.extend(extra.missing_pages);
             issues.unreadable.extend(extra.unreadable);
+            issues.unreadable_causes.extend(extra.unreadable_causes);
         }
     }
     let count = sheets.len();

@@ -368,7 +368,7 @@ impl Signex {
                 return self.add_project_footprint_library(tree_path);
             }
             ProjectTreeAction::OpenEnableVersionControl(_) => {
-                self.open_enable_version_control_dialog(tree_path);
+                return self.open_enable_version_control_dialog(tree_path);
             }
             ProjectTreeAction::OpenLibraryEnableVersionControl(row) => {
                 return self.open_library_enable_version_control_dialog(row);

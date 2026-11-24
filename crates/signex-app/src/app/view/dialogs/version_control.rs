@@ -9,7 +9,7 @@ use signex_i18n::{MessageId, UserText, ids, t};
 use signex_widgets::{ToggleSwitchStyle, checkbox, raw, text, text_input, toggle_switch};
 
 use super::widgets::modal_title_header;
-use crate::app::contracts::TrackKind;
+use crate::app::contracts::{CommitAuthor, TrackKind};
 use crate::app::{EnableVersionControlState, TrackItem, VersionControlScope};
 use crate::styles::{
     DialogButtonKind, DialogIcon, dialog_body, dialog_button, dialog_caption, dialog_field_label,
@@ -51,10 +51,46 @@ pub(in crate::app::view) fn track_display_path(item: &TrackItem) -> String {
     }
 }
 
-/// Enable is offered once the rows are read, while no run is in flight and
-/// the first commit message is not blank.
+/// Enable is offered once the rows are read, while no run is in flight, the
+/// first commit message is not blank and the commit author is known (git's,
+/// or both fields filled; mockup row 26).
 pub(in crate::app::view) fn can_enable(st: &EnableVersionControlState) -> bool {
-    !st.working && !st.scanning && !st.commit_message.trim().is_empty()
+    !st.working && !st.scanning && !st.commit_message.trim().is_empty() && st.author.is_ready()
+}
+
+/// The name and email fields, shown only while git has no author.
+fn author_fields<'a>(
+    st: &'a EnableVersionControlState,
+    i18n: &signex_i18n::I18n,
+    tokens: &signex_types::theme::ThemeTokens,
+) -> Option<Element<'a, Message>> {
+    let CommitAuthor::Missing { name, email } = &st.author else {
+        return None;
+    };
+    let field = |value: &'a str, on: fn(String) -> EnableVersionControlMsg| {
+        let mut input = text_input(UserText::new(String::new()), value)
+            .style(crate::panels::form_look::text_input_style)
+            .size(TS.body)
+            .padding([SP.s, SP.m])
+            .width(Length::Fill);
+        if !st.working {
+            input = input.on_input(move |s| Message::EnableVersionControl(on(s)));
+        }
+        input.boxed()
+    };
+    let ink3 = crate::styles::tokens::resolve(tokens).ink3;
+    let note = text(t!(i18n, ids::DIALOG_VERSION_CONTROL_AUTHOR_NOTE))
+        .size(TS.caption)
+        .color(ink3);
+    let column = column![
+        note,
+        dialog_field_label(t!(i18n, ids::DIALOG_VERSION_CONTROL_AUTHOR_NAME), tokens),
+        field(name.as_str(), EnableVersionControlMsg::AuthorNameChanged),
+        dialog_field_label(t!(i18n, ids::DIALOG_VERSION_CONTROL_AUTHOR_EMAIL), tokens),
+        field(email.as_str(), EnableVersionControlMsg::AuthorEmailChanged),
+    ]
+    .spacing(SP.xs);
+    Some(column.boxed())
 }
 
 impl Signex {
@@ -113,6 +149,9 @@ impl Signex {
             ]
             .boxed(),
         );
+        if let Some(fields) = author_fields(st, i18n, tokens) {
+            body = body.push(fields);
+        }
         let lfs = checkbox(st.use_lfs)
             .style(crate::panels::form_look::checkbox_style)
             .size(ROW_CHECKBOX)
@@ -358,6 +397,7 @@ mod tests {
             error: None,
             working: false,
             scanning: false,
+            author: CommitAuthor::Resolved,
         }
     }
 
@@ -417,6 +457,55 @@ mod tests {
         st.scanning = false;
         st.working = true;
         assert!(!can_enable(&st));
+    }
+
+    /// Mockup row 26: Enable waits for git's answer and, when git has no
+    /// author, for both the name and the email.
+    #[test]
+    fn enable_needs_a_known_author() {
+        let mut st = dialog(VersionControlScope::Project, Vec::new());
+        st.author = CommitAuthor::Probing;
+        assert!(!can_enable(&st), "git has not answered yet");
+        let missing = |name: &str, email: &str| CommitAuthor::Missing {
+            name: name.to_string(),
+            email: email.to_string(),
+        };
+        st.author = missing("", "");
+        assert!(!can_enable(&st));
+        st.author = missing("Ada", "  ");
+        assert!(!can_enable(&st), "a blank email withholds Enable");
+        st.author = missing("Ada", "ada@example.org");
+        assert!(can_enable(&st));
+    }
+
+    /// Mockup row 26: the name and email fields show only while git has no
+    /// author.
+    #[test]
+    fn the_author_fields_show_only_when_git_has_none() {
+        let texts = |author: CommitAuthor| {
+            let (mut app, _) = Signex::new();
+            let mut st = dialog(VersionControlScope::Project, Vec::new());
+            st.author = author;
+            app.ui_state.enable_version_control = Some(st);
+            crate::layout_probe::lay_out_texts(
+                app.view_enable_version_control_dialog_body(),
+                iced::Size::new(1200.0, 900.0),
+            )
+            .into_iter()
+            .map(|t| t.text)
+            .collect::<Vec<String>>()
+        };
+        let missing = texts(CommitAuthor::Missing {
+            name: String::new(),
+            email: String::new(),
+        });
+        for want in ["Your name", "Your email"] {
+            assert!(missing.iter().any(|s| s == want), "{want:?} in {missing:?}");
+        }
+        for author in [CommitAuthor::Resolved, CommitAuthor::Probing] {
+            let shown = texts(author);
+            assert!(!shown.iter().any(|s| s == "Your name"), "{shown:?}");
+        }
     }
 
     /// The dialog builds in both Graphite themes, for both scopes, with the

@@ -137,11 +137,10 @@ impl Signex {
             ],
         ]
         .spacing(SP.l);
-        if !st.placing_symbols.is_empty() {
-            let line = placed_by_line(i18n, &st.placing_symbols);
+        for note in self.rename_info_notes(st, i18n) {
             body = body.push(dialog_callout(
                 CalloutTone::Info,
-                text(line).size(TS.body).boxed(),
+                text(note).size(TS.body).boxed(),
                 tokens,
             ));
         }
@@ -187,6 +186,28 @@ impl Signex {
         .style(crate::styles::modal_card(tokens))
         .clip(true);
         dialog.boxed()
+    }
+
+    /// The info callouts under the field: a project rename whose folder keeps
+    /// its name says so (mockup row 23); a sheet names the symbols that follow.
+    pub(in crate::app::view) fn rename_info_notes(
+        &self,
+        st: &crate::app::RenameDialogState,
+        i18n: &signex_i18n::I18n,
+    ) -> Vec<signex_i18n::Localized> {
+        let mut notes = Vec::new();
+        let keeps_folder = st.is_project_rename
+            && st
+                .tree_path
+                .first()
+                .is_some_and(|&idx| self.project_rename_keeps_folder(idx, &st.target_path));
+        if keeps_folder {
+            notes.push(t!(i18n, ids::DIALOG_RENAME_PROJECT_FOLDER_KEPT));
+        }
+        if !st.placing_symbols.is_empty() {
+            notes.push(placed_by_line(i18n, &st.placing_symbols));
+        }
+        notes
     }
 }
 
@@ -298,5 +319,48 @@ mod tests {
         assert_eq!(bare.compose("p"), "p.snxsch");
         let none = NameParts::of("README", Path::new("/p/README"), false);
         assert_eq!((none.stem.as_str(), none.suffix.as_str()), ("README", ""));
+    }
+
+    fn rename_texts(dir: &str, is_project_rename: bool) -> Vec<String> {
+        let mut app =
+            crate::app::handlers::menu::export::tests::app_workspace(dir, &["top.snxsch"]);
+        let target = std::path::PathBuf::from(dir).join(if is_project_rename {
+            "ProjectA.snxprj"
+        } else {
+            "top.snxsch"
+        });
+        app.ui_state.rename_dialog = Some(Box::new(crate::app::RenameDialogState {
+            project_id: None,
+            target_path: target,
+            tree_path: vec![0],
+            buffer: "Renamed".to_string(),
+            error: None,
+            is_project_rename,
+            placing_symbols: Vec::new(),
+            name_clash: None,
+        }));
+        crate::layout_probe::lay_out_texts(
+            app.view_rename_dialog_body(),
+            iced::Size::new(1200.0, 900.0),
+        )
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect()
+    }
+
+    /// Mockup row 23: Rename Project says, from the catalog, that the folder
+    /// is not renamed when it keeps its name; a folder named after the
+    /// project follows the rename, and a file rename never says it.
+    #[test]
+    fn rename_project_says_the_folder_is_not_renamed_only_when_it_stays() {
+        const NOTE: &str = "The project folder is not renamed.";
+        let kept = rename_texts("/w/a", true);
+        assert!(kept.iter().any(|s| s == NOTE), "{kept:?}");
+
+        let follows = rename_texts("/w/ProjectA", true);
+        assert!(!follows.iter().any(|s| s == NOTE), "{follows:?}");
+
+        let file = rename_texts("/w/a", false);
+        assert!(!file.iter().any(|s| s == NOTE), "{file:?}");
     }
 }

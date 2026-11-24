@@ -250,6 +250,19 @@ impl Signex {
             })
     }
 
+    /// Whether renaming the project file `target` (project `idx`) leaves its
+    /// folder as it is: the folder is not named after the project, or it
+    /// cannot move. The same two checks Submit makes; the Rename dialog says
+    /// so (mockup row 23). The new name does not change the answer.
+    pub(crate) fn project_rename_keeps_folder(&self, idx: usize, target: &Path) -> bool {
+        let (Some(dir), Some(stem)) =
+            (target.parent(), target.file_stem().and_then(|s| s.to_str()))
+        else {
+            return true;
+        };
+        folder_target(dir, stem, stem).is_none() || !self.project_folder_can_move(idx)
+    }
+
     /// A library the app holds (mounted, Global, Installed, browser tab or
     /// mount in flight) that lies under the folder of the project at `idx`.
     /// The move does not re-key libraries, so one in there would be left

@@ -784,8 +784,17 @@ impl Signex {
             | EnableVersionControlMsg::ToggleItem(_)
             | EnableVersionControlMsg::AllTicked
             | EnableVersionControlMsg::CommitMessageChanged(_)
-            | EnableVersionControlMsg::CommitEverySaveToggled) => {
+            | EnableVersionControlMsg::CommitEverySaveToggled
+            | EnableVersionControlMsg::AuthorNameChanged(_)
+            | EnableVersionControlMsg::AuthorEmailChanged(_)) => {
                 self.edit_enable_version_control(edit);
+                Task::none()
+            }
+            EnableVersionControlMsg::AuthorProbed {
+                project_dir,
+                has_identity,
+            } => {
+                self.handle_enable_version_control_author_probed(&project_dir, has_identity);
                 Task::none()
             }
             EnableVersionControlMsg::Confirm => self.handle_enable_version_control_confirm(),
