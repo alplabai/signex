@@ -12,9 +12,9 @@ use signex_widgets::{button, text};
 use super::Readout;
 use super::graphite::{
     BAR_GAP, BAR_PADDING, CLUSTER_GAP, PANELS_ICON, SP, TS, UNIT_COLUMN, X_COLUMN, Y_COLUMN,
-    cursor_texts, grid_text, layer_label, layer_pill, mono_button, mono_message, mono_text,
-    no_cursor_texts, panels_button, rule, selection_pill, snap_label, snap_pill, view_angle,
-    zoom_text,
+    cursor_texts, footprint_grid_readout, grid_text, layer_label, layer_pill, mono_button,
+    mono_message, mono_text, no_cursor_texts, panels_button, rule, selection_pill, snap_label,
+    snap_pill, view_angle, zoom_text,
 };
 use crate::app::StatusBarRequest;
 use crate::styles::tokens::resolve;
@@ -265,22 +265,22 @@ fn cursor_cluster<'a>(
 }
 
 /// The Grid read-out (a click shows or hides the grid; a right-click opens
-/// the Grid & Snap popover on a sheet, the Grid popover on a board, #2460)
-/// and the Snap pill.
+/// the Grid & Snap popover on a sheet, the Grid popover on a board, #2460;
+/// in a footprint editor its caret opens the step list, mockup row 63) and
+/// the Snap pill.
 fn grid_snap_cluster<'a>(
     r: &Readout<'_>,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, StatusBarRequest> {
     let muted = resolve(tokens).ink3;
-    let grid = mono_button(
-        mono_message(
-            grid_text(i18n, r.grid_visible, r.grid_size_mm, r.unit),
-            muted,
-        ),
-        StatusBarRequest::ToggleGrid,
+    let label = mono_message(
+        grid_text(i18n, r.grid_visible, r.grid_size_mm, r.unit),
+        muted,
     );
-    let grid: Element<'a, StatusBarRequest> = if let Some(board) = &r.surface.board {
+    let grid: Element<'a, StatusBarRequest> = if r.surface.opens_grid_picker {
+        footprint_grid_readout(label, tokens)
+    } else if let Some(board) = &r.surface.board {
         let value = super::board::board_grid_value(
             i18n,
             r.grid_visible,
@@ -291,11 +291,11 @@ fn grid_snap_cluster<'a>(
         let open = board.open == Some(super::BoardPopoverKind::Grid);
         super::board::board_grid_readout(value, open, tokens, i18n)
     } else if r.surface.opens_grid_popover {
-        mouse_area(grid)
+        mouse_area(mono_button(label, StatusBarRequest::ToggleGrid))
             .on_right_press(StatusBarRequest::GridReadoutRightClicked)
             .boxed()
     } else {
-        grid.boxed()
+        mono_button(label, StatusBarRequest::ToggleGrid).boxed()
     };
     let snap = button(mono_message(
         t!(i18n, snap_label(r.snap_enabled)),
@@ -485,6 +485,7 @@ mod tests {
                 entry: None,
             }),
             opens_grid_popover: false,
+            opens_grid_picker: false,
             board: Some(BoardReadout::default()),
             no_document: false,
             missing_libraries: 0,

@@ -173,8 +173,8 @@ impl Signex {
                 return Task::batch([task, self.finish_update()]);
             }
             if let crate::panels::PanelMsg::LayerStack(msg) = panel_msg {
-                self.handle_layer_stack(msg);
-                return self.finish_update();
+                let task = self.handle_layer_stack(msg);
+                return Task::batch([task, self.finish_update()]);
             }
             if let Some(task) = self.handle_dock_harness_message(panel_msg) {
                 return Task::batch([task, self.finish_update()]);

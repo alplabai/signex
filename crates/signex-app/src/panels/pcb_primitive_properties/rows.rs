@@ -282,6 +282,15 @@ pub(super) fn field<'a>(
     }
 }
 
+/// The face a value input reads in when it is not the default: italics
+/// while it reads "Mixed".
+pub(super) fn input_font(is_mixed: bool) -> Option<iced::Font> {
+    is_mixed.then(|| iced::Font {
+        style: iced::font::Style::Italic,
+        ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
+    })
+}
+
 /// The text input of `field`, unstyled: the draft while one is typed, else
 /// `value`. A value the selected items do not share reads "Mixed" in
 /// italics. It sends what is typed and Enter while the selection is
@@ -308,11 +317,8 @@ pub(super) fn input<'a>(
         .size(TS.body)
         .padding(SP.s)
         .width(Length::Fill);
-    if is_mixed {
-        input = input.font(iced::Font {
-            style: iced::font::Style::Italic,
-            ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
-        });
+    if let Some(font) = input_font(is_mixed) {
+        input = input.font(font);
     }
     if common.target.is_placement() && super::is_placement_focus(field) {
         input = input.id(super::PLACEMENT_INPUT_ID.clone());

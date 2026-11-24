@@ -23,7 +23,13 @@ use crate::panels::{
 
 const UUID: &str = "a1cf3b2e-4cdd-4cdd-9420-8bdf89c0ffee";
 
-fn pin(idx: usize, number: &str, name: &str, electrical: &str, part: u8) -> SymbolPinSummary {
+pub(super) fn pin(
+    idx: usize,
+    number: &str,
+    name: &str,
+    electrical: &str,
+    part: u8,
+) -> SymbolPinSummary {
     SymbolPinSummary {
         idx,
         number: number.to_string(),
@@ -51,7 +57,7 @@ fn pin(idx: usize, number: &str, name: &str, electrical: &str, part: u8) -> Symb
 }
 
 /// The op-amp of the mockup: two parts and the shared supply pins.
-fn opamp_pins() -> Vec<SymbolPinSummary> {
+pub(super) fn opamp_pins() -> Vec<SymbolPinSummary> {
     vec![
         pin(0, "1", "OUTA", "Output", 1),
         pin(1, "2", "-INA", "Input", 1),
@@ -64,7 +70,10 @@ fn opamp_pins() -> Vec<SymbolPinSummary> {
     ]
 }
 
-fn ctx(pins: Vec<SymbolPinSummary>, selected: SymbolEditorSelection) -> SymbolEditorPanelContext {
+pub(super) fn ctx(
+    pins: Vec<SymbolPinSummary>,
+    selected: SymbolEditorSelection,
+) -> SymbolEditorPanelContext {
     SymbolEditorPanelContext {
         path: std::path::PathBuf::from("opamps.snxsym"),
         symbol_name: "OPA2333".to_string(),
@@ -96,15 +105,15 @@ fn ctx(pins: Vec<SymbolPinSummary>, selected: SymbolEditorSelection) -> SymbolEd
     }
 }
 
-struct Fixture {
-    tokens: ThemeTokens,
-    i18n: std::sync::Arc<I18n>,
+pub(super) struct Fixture {
+    pub(super) tokens: ThemeTokens,
+    pub(super) i18n: std::sync::Arc<I18n>,
     hover: IllustrationHover,
-    toggled: CollapsedSections,
+    pub(super) toggled: CollapsedSections,
 }
 
 impl Fixture {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             tokens: theme_tokens(ThemeId::GraphiteLight),
             i18n: I18n::en_us(),
@@ -113,7 +122,7 @@ impl Fixture {
         }
     }
 
-    fn form(&self) -> Form<'_> {
+    pub(super) fn form(&self) -> Form<'_> {
         Form {
             look: Look::of(&self.tokens),
             tokens: &self.tokens,
@@ -421,43 +430,34 @@ fn a_toggled_section_opens_without_a_context_rebuild() {
     assert!(fields_open(&app), "the toggle opened Fields");
 }
 
-/// The Pins tab keeps the bulk edit of the old Pins panel reachable: Edit
-/// pins in table… asks for the table, and in the table a row's Hidden cell
-/// toggles that pin through the Pin properties' message.
+/// Mockup row 122b: Edit pins in table… asks for the Pin table document
+/// tab, also for a symbol with no pins (Paste rows fills it), and the Pins
+/// tab keeps its compact list. The table's Hidden cell is pinned in
+/// `pin_table::tests`.
 #[test]
-fn the_pin_table_opens_from_the_pins_tab_and_toggles_hidden_in_place() {
+fn edit_pins_in_table_asks_for_the_pin_table_tab() {
     let fx = Fixture::new();
+    let open = t!(fx.i18n, ids::EDITORS_SYMPROPS_PIN_TABLE_OPEN).into_string();
+    for pins in [opamp_pins(), Vec::new()] {
+        let mut sym = ctx(pins, SymbolEditorSelection::None);
+        sym.props.tab = SymbolPropsTab::Pins;
+        let messages = messages_on_click(stacked(pins_tab::view(&sym, &fx.form())), DOCK, &open);
+        assert!(
+            messages.iter().any(|m| matches!(
+                m,
+                PanelMsg::SymbolProps(SymbolPropsMsg::EditPinsInTablePressed)
+            )),
+            "{messages:?}"
+        );
+    }
     let mut sym = ctx(opamp_pins(), SymbolEditorSelection::None);
     sym.props.tab = SymbolPropsTab::Pins;
-    let open = t!(fx.i18n, ids::EDITORS_SYMPROPS_PIN_TABLE_OPEN).into_string();
-    let messages = messages_on_click(stacked(pins_tab::view(&sym, &fx.form())), DOCK, &open);
-    assert!(
-        messages
-            .iter()
-            .any(|m| matches!(m, PanelMsg::SymbolProps(SymbolPropsMsg::PinTableToggled))),
-        "{messages:?}"
-    );
-
-    sym.props.pin_table = true;
-    sym.props.pin_filter = "OUTB".to_string();
     let texts = lay_out_texts(stacked(pins_tab::view(&sym, &fx.form())), DOCK);
-    let close = t!(fx.i18n, ids::EDITORS_SYMPROPS_PIN_TABLE_CLOSE).into_string();
-    find(&texts, &close);
-    find(
-        &texts,
-        &t!(fx.i18n, ids::EDITORS_PINS_COLUMN_ORIENTATION).into_string(),
-    );
-    // The table is wider than `DOCK` and scrolls sideways; its Shown cell
-    // lies past the dock edge, where no click reaches it. Click it in a
-    // dock wide enough to show the whole table.
-    let wide = Size::new(800.0, DOCK.height);
-    let shown = t!(fx.i18n, ids::EDITORS_PINS_SHOWN).into_string();
-    let messages = messages_on_click(stacked(pins_tab::view(&sym, &fx.form())), wide, &shown);
+    find(&texts, "OUTB");
+    let orientation = t!(fx.i18n, ids::EDITORS_PINS_COLUMN_ORIENTATION).into_string();
     assert!(
-        messages
-            .iter()
-            .any(|m| matches!(m, PanelMsg::SymEditorTogglePinHidden(6))),
-        "{messages:?}"
+        !texts.iter().any(|t| t.text == orientation),
+        "the seven-column table lives in its own tab"
     );
 }
 

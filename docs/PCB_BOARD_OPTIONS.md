@@ -83,31 +83,44 @@ grid that applies to components governs every component carry on the board.
 
 `pcb_canvas::carry_delta`, in order:
 
-1. An object point within the snap distance (Distance × the board step)
-   takes the grab point exactly onto it. Snapping Off skips this step and
-   step 4.
+1. An object point within the snap distance takes the grab point exactly
+   onto it. The snap distance is Snap Distance, a length in the board's unit
+   (default 1 mm, #2879), or 8 screen pixels when that is more; it does not
+   depend on the grid. Snapping Off skips this step and step 4.
 2. Otherwise the nearest footprint origin lands on the components grid (with
    Grids on).
 3. With Guides on, a crossing of two enabled guides within the snap distance
    takes the grab point onto it; a vertical guide fixes x, a horizontal one
    fixes y, a diagonal one takes the grab point onto its nearest point.
-4. With Axes on, an axis no guide fixed lines up with the nearest object point
-   that is within Axis Range of the pointer and within the snap distance
-   on that axis.
+4. With Axes on, an axis no guide fixed lines up with the nearest fixed object
+   point (a vertex, centre, origin, crossing or text, not the nearest point of
+   a line or edge) that is within Axis Range of the pointer and within the
+   snap distance on that axis.
 
-The object kinds are the Objects for snapping list. Track/Arc Lines snap to the
-nearest point of a track, a board line or a board circle; Intersections to
-where two tracks or board lines near the pointer cross; Arc Centers to the
-centres of board and footprint arcs and circles (All Layers only, as they sit
-on no copper layer); Pad Vertices to the corners of rectangular pads; Pad Edges
-to the nearest point of a pad's outline. 3D Body Snap Points stays disabled:
-a board holds no 3D bodies.
+The object kinds are the Objects for snapping list; every supported kind starts
+on (#2879). Track/Arc Lines snap to the nearest point of a track, a free arc, a
+board drawing or a footprint drawing (lines, arcs, circles and the sides of
+rectangles and polygons); Intersections to where two of those, a region edge or
+the board edge cross near the pointer (line-line, line-arc and arc-arc); Arc
+Centers to the centres of free, board and footprint arcs and circles; Pad
+Vertices to the corners of rectangular and polygon pads; Pad Edges to the
+nearest point of a pad's outline; Regions/Polygons/Fills and Board Shape to
+their vertices and the nearest point of their edges. 3D Body Snap Points stays
+disabled: a board holds no 3D bodies.
+
+Snapping All Layers takes objects on every shown layer. Current Layer takes
+objects of any kind on the active layer only, copper or not (texts, drawings,
+regions); a through pad or via counts on every copper layer. Shift+E
+(`cycle_board_snapping`, in every built-in profile) steps All Layers, Current
+Layer and Off; elsewhere Shift+E stays `toggle_electrical_grid`.
 
 ## Settings kept for the session
 
-Grids / Guides / Axes, Snapping, the object list, Distance and Axis Range
-(default 10 mm) are editor settings in `UiState::pcb_snap`, as #2353
-decided for the snap options. They are not written to the board.
+Grids / Guides / Axes, Snapping, the object list, Snap Distance (default 1 mm)
+and Axis Range (default 2 mm) are editor settings in `UiState::pcb_snap`, as
+#2353 decided for the snap options. They are not written to the board or to
+the preferences, so there is no stored value of the old grid-multiple Distance
+to carry over: a new session starts on the defaults.
 
 ## File format
 

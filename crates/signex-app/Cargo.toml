@@ -92,6 +92,9 @@ same-file = "1"
 # The agent channel's session token and boot id (#1924): OS randomness. Already
 # in the lock file at this version through `tempfile`.
 getrandom = "0.4"
+# The Gerber Viewer reads a zip package in place (mockup row 193f). Already in
+# the lock file at this version, with these features, through rust_xlsxwriter.
+zip = { version = "9.0", default-features = false, features = ["deflate"] }
 
 [features]
 # Redirects all four prefs resolvers (`fonts::prefs_path()`,

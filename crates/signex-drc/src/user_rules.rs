@@ -52,9 +52,10 @@ pub enum CopperObject {
 }
 
 impl CopperObject {
-    /// The kind of `item`; `None` for a footprint, a drawn area, a string or
-    /// a dimension, which the copper rules do not measure. A copper arc is
-    /// measured as a track and a free pad as a pad (#2373).
+    /// The kind of `item`; `None` for a footprint, a drawn area, a string,
+    /// a drawing or a dimension, which no object rule names. A copper arc is
+    /// measured as a track and a free pad as a pad (#2373); a string or
+    /// drawing on copper (#2883) by the rules that name no object kind.
     pub fn of(item: &ItemRef) -> Option<CopperObject> {
         match item {
             ItemRef::Track(_) | ItemRef::Arc(_) => Some(CopperObject::Track),

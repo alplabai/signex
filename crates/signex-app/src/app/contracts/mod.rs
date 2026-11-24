@@ -165,6 +165,9 @@ pub enum Message {
     /// Design ▸ Differential Pair Classes… (#1282). Routed to
     /// `dispatch_diff_pair_classes_message`.
     DiffPairClasses(crate::app::DiffPairClassesMsg),
+    /// The Gerber Viewer tab and window file drops (mockup rows 193 and
+    /// 193f). Routed to `dispatch_gerber_viewer_message`.
+    GerberViewer(crate::app::GerberViewerMsg),
 }
 
 impl Message {

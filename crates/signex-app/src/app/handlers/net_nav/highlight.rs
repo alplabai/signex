@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use iced::Task;
+use signex_i18n::{ids, t};
 use signex_net::NetMemberKind;
 use signex_types::schematic::{InstancePath, SelectedItem};
 
@@ -124,13 +125,6 @@ impl Signex {
             .net(net)
             .map(|n| n.name.clone())
             .unwrap_or_default();
-        let elements = bright_elements(data, net);
-        let places = elements.len();
-        let sheets = elements
-            .keys()
-            .map(|(path, _)| path)
-            .collect::<HashSet<_>>()
-            .len();
         let anchor = data
             .index
             .anchor_in(net, &key, target.item.uuid)
@@ -139,18 +133,39 @@ impl Signex {
             crate::diagnostics::log_info(messages::on_no_net());
             return;
         };
+        if select_here {
+            self.select_net_members_here(data, &key, net, placement.as_ref());
+        }
+        self.set_net_highlight(project, data, net, name, anchor);
+    }
+
+    /// Draw `net` bright on every sheet it reaches, named `name` and found
+    /// again by `anchor` after a rebuild, and say where it is.
+    fn set_net_highlight(
+        &mut self,
+        project: ProjectId,
+        data: &ProjectNetData,
+        net: usize,
+        name: String,
+        anchor: signex_net::NetAnchor,
+    ) {
+        let elements = bright_elements(data, net);
+        let places = elements.len();
+        let sheets = elements
+            .keys()
+            .map(|(path, _)| path)
+            .collect::<HashSet<_>>()
+            .len();
+        let said = messages::highlighted(&name, places, sheets);
         self.document_state.net_nav.highlight = Some(NetHighlight {
             project,
-            name: name.clone(),
+            name,
             anchor,
             cursor: None,
             elements,
         });
-        if select_here {
-            self.select_net_members_here(data, &key, net, placement.as_ref());
-        }
         self.sync_net_highlight_to_canvases();
-        crate::diagnostics::log_info(messages::highlighted(&name, places, sheets));
+        crate::diagnostics::log_info(said);
     }
 
     /// Select the members of `net` that sit on the focused sheet.
@@ -240,6 +255,41 @@ impl Signex {
         };
         crate::diagnostics::log_info(messages::stepped(&name, kind, &what, &sheet, at + 1, total));
         task
+    }
+
+    /// A schematic Net Inspector row's Highlight (mockup row 58), as a board
+    /// row's: draw net `name` bright on every sheet of the project listed,
+    /// or no longer when it is the net already highlighted. Nothing moves
+    /// and nothing is selected.
+    pub(super) fn highlight_listed_net(&mut self, name: &str) -> Task<Message> {
+        let Some(project) = self.inspected_project() else {
+            crate::diagnostics::log_info(messages::no_project("the Net Inspector"));
+            return Task::none();
+        };
+        let highlight = &self.document_state.net_nav.highlight;
+        if highlight
+            .as_ref()
+            .is_some_and(|h| h.project == project && h.name == name)
+        {
+            return self.clear_net_highlight();
+        }
+        // The index the panel lists the row from. A row is listed only
+        // from an index, so none here means it could not be read.
+        let Some(data) = self.net_inspector_source().1 else {
+            crate::diagnostics::log_warning(messages::index_unavailable());
+            return Task::none();
+        };
+        let net = (0..data.index.net_count())
+            .find(|&net| data.index.net(net).is_some_and(|n| n.name == name));
+        let Some((net, anchor)) = net.and_then(|net| Some((net, data.index.anchor_of(net)?)))
+        else {
+            let i18n = &self.ui_state.i18n;
+            let line = t!(i18n, ids::PANELS_NET_INSPECTOR_NET_GONE, "net" => name.to_string());
+            crate::diagnostics::log_info(line.into_string());
+            return Task::none();
+        };
+        self.set_net_highlight(project, &data, net, name.to_string(), anchor);
+        Task::none()
     }
 
     /// Remove the net highlight.

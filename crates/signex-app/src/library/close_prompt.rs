@@ -9,7 +9,9 @@
 //! Save All / Discard All / Cancel.
 //!
 //! The header names the library; each draft row says whether it is a table
-//! row or a file. Discard All sits on the left, away from Save All.
+//! row or a file. The intro, list and footer come from the shared
+//! unsaved-prompt chrome (`modal_chrome::unsaved_body` and
+//! `unsaved_footer_parts`), as the Close Project and Exit confirms do.
 
 use iced::widget::text::{Ellipsis, Wrapping};
 use iced::widget::{Space, column, container, row};
@@ -18,13 +20,12 @@ use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::text;
 
-use crate::styles::{
-    DialogIcon, HAIRLINE, Spacing, TypeScale, dialog_body, dialog_intro, dialog_list, ti, tokens,
-};
+use crate::styles::{HAIRLINE, Spacing, TypeScale, dialog_list, ti, tokens};
 
 use super::messages::{CloseLibraryChoice, LibraryMessage};
 use super::modal_chrome::{
-    cancel_btn, danger_btn, footer_strip, header_with_note_closing, primary_btn,
+    UnsavedActions, UnsavedBody, footer_strip, header_with_note_closing, unsaved_body,
+    unsaved_footer_parts,
 };
 use super::state::{CloseLibraryConfirmState, LibraryState};
 
@@ -103,7 +104,6 @@ pub fn view<'a>(
 
     let drafts = confirm.dirty_editors.len() + confirm.dirty_paths.len();
     let (intro_title, intro_text) = intro_texts(i18n, &confirm.library_name, drafts);
-    let summary = dialog_intro(DialogIcon::Warn, intro_title, Some(intro_text), tokens);
 
     // The drafts by internal part number, looked up in `state.editors` (keyed
     // by `EditorAddress`) so the modal stays accurate while other editors
@@ -128,24 +128,29 @@ pub fn view<'a>(
     }
     let list = container(dialog_list(rows, tokens)).height(Length::Fixed(list_height(drafts)));
 
-    let body = dialog_body(column![summary, list].spacing(SP.m));
-
-    let footer = footer_strip(
-        vec![danger_btn(
-            t!(i18n, ids::DIALOG_UNSAVED_DISCARD_ALL),
-            LibraryMessage::CloseLibraryConfirm(CloseLibraryChoice::DiscardAll),
-            tokens,
-        )],
-        vec![
-            cancel_btn(t!(i18n, ids::DIALOG_BUTTON_CANCEL), cancel, tokens),
-            primary_btn(
-                t!(i18n, ids::DIALOG_BUTTON_SAVE_ALL),
-                LibraryMessage::CloseLibraryConfirm(CloseLibraryChoice::SaveAll),
-                tokens,
-            ),
-        ],
+    let body = unsaved_body(
+        UnsavedBody {
+            title: intro_title,
+            detail: intro_text,
+            above: Vec::new(),
+            list: list.boxed(),
+            below: Vec::new(),
+        },
         tokens,
     );
+
+    let (left, right) = unsaved_footer_parts(
+        i18n,
+        UnsavedActions {
+            discard_all: Some(LibraryMessage::CloseLibraryConfirm(
+                CloseLibraryChoice::DiscardAll,
+            )),
+            cancel,
+            save_all: LibraryMessage::CloseLibraryConfirm(CloseLibraryChoice::SaveAll),
+        },
+        tokens,
+    );
+    let footer = footer_strip(left, right, tokens);
 
     // As tall as the content in the main window; in its own window (sized
     // to the content) the footer stays at the bottom.
@@ -228,16 +233,47 @@ mod tests {
         assert_eq!(plain(three), "'passives' has 3 unsaved drafts.");
     }
 
-    /// The prompt draws from tokens alone in every built-in theme.
-    #[test]
-    fn the_prompt_draws_in_every_theme() {
-        let state = LibraryState::default();
-        let confirm = CloseLibraryConfirmState {
+    fn one_file_confirm() -> CloseLibraryConfirmState {
+        CloseLibraryConfirmState {
             library_path: "/libs/passives/passives.snxlib".into(),
             library_name: "passives".into(),
             dirty_editors: Vec::new(),
             dirty_paths: vec!["/libs/passives/symbols/resistor.snxsym".into()],
+        }
+    }
+
+    /// On the shared unsaved-prompt footer (mockup row 136) Discard All
+    /// stands at the left, Cancel and Save All at the right, and each button
+    /// still answers with its own choice.
+    #[test]
+    fn the_footer_order_and_outcomes_hold() {
+        use crate::layout_probe::{find, lay_out_texts, messages_on_click};
+        let state = LibraryState::default();
+        let confirm = one_file_confirm();
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::BUILTINS[0]);
+        let i18n = I18n::en_us();
+        let window = iced::Size::new(600.0, 500.0);
+        let texts = lay_out_texts(view(&state, &confirm, &tokens, &i18n, false), window);
+        let x = |label| find(&texts, label).bounds.x;
+        assert!(x("Discard All") < x("Cancel") && x("Cancel") < x("Save All"));
+        let choice = |label: &str| {
+            let messages =
+                messages_on_click(view(&state, &confirm, &tokens, &i18n, false), window, label);
+            match messages.as_slice() {
+                [LibraryMessage::CloseLibraryConfirm(choice)] => *choice,
+                other => panic!("{label}: {other:?}"),
+            }
         };
+        assert_eq!(choice("Discard All"), CloseLibraryChoice::DiscardAll);
+        assert_eq!(choice("Cancel"), CloseLibraryChoice::Cancel);
+        assert_eq!(choice("Save All"), CloseLibraryChoice::SaveAll);
+    }
+
+    /// The prompt draws from tokens alone in every built-in theme.
+    #[test]
+    fn the_prompt_draws_in_every_theme() {
+        let state = LibraryState::default();
+        let confirm = one_file_confirm();
         let i18n = I18n::en_us();
         for id in signex_types::theme::ThemeId::BUILTINS {
             let tokens = signex_types::theme::theme_tokens(*id);

@@ -1503,3 +1503,84 @@ fn the_mode_switch_changes_the_mode_in_place() {
     send(&mut app, FindReplaceMsg::ModeChanged(false));
     assert!(!app.ui_state.find_replace.replace_mode);
 }
+
+fn enter(modifiers: iced::keyboard::Modifiers) -> iced::keyboard::Event {
+    let key = iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter);
+    iced::keyboard::Event::KeyPressed {
+        key: key.clone(),
+        modified_key: key,
+        physical_key: iced::keyboard::key::Physical::Unidentified(
+            iced::keyboard::key::NativeCode::Unidentified,
+        ),
+        location: iced::keyboard::Location::Standard,
+        modifiers,
+        text: None,
+        repeat: false,
+    }
+}
+
+/// Mockup row 67: in Find mode Enter is Next and Shift+Enter is Previous,
+/// the footer's two buttons; in Replace mode, or with the dialog closed,
+/// Enter steps nothing.
+#[test]
+fn enter_and_shift_enter_step_the_find_results() {
+    use iced::keyboard::Modifiers;
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.first_run_tour_open = false;
+    let main = app.ui_state.main_window_id.expect("the main window");
+    let step = |app: &Signex, modifiers| match app.route_key_for_test(main, &enter(modifiers)) {
+        Some(crate::app::Message::FindReplaceMsg(FindReplaceMsg::NextRequested)) => Some(true),
+        Some(crate::app::Message::FindReplaceMsg(FindReplaceMsg::PreviousRequested)) => Some(false),
+        _ => None,
+    };
+    assert_eq!(step(&app, Modifiers::empty()), None, "closed: no step");
+    app.ui_state.find_replace.open = true;
+    assert_eq!(step(&app, Modifiers::empty()), Some(true), "Enter: Next");
+    assert_eq!(
+        step(&app, Modifiers::SHIFT),
+        Some(false),
+        "Shift+Enter: Previous"
+    );
+    assert_eq!(step(&app, Modifiers::CTRL), None);
+    app.ui_state.find_replace.replace_mode = true;
+    assert_eq!(
+        step(&app, Modifiers::empty()),
+        None,
+        "Replace mode keeps Enter"
+    );
+}
+
+/// Mockup row 67: Enter steps Find only in the window that paints the
+/// dialog, and not while another dialog is painted above it there.
+#[test]
+fn enter_steps_find_only_where_the_dialog_is_in_front() {
+    use iced::keyboard::Modifiers;
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.first_run_tour_open = false;
+    let main = app.ui_state.main_window_id.expect("the main window");
+    let tab = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        tab,
+        crate::app::state::WindowKind::UndockedTab {
+            path: PathBuf::from("/tmp/sheet.snxsch"),
+            title: "sheet".to_string(),
+        },
+    );
+    let steps = |app: &Signex, window| {
+        matches!(
+            app.route_key_for_test(window, &enter(Modifiers::empty())),
+            Some(crate::app::Message::FindReplaceMsg(
+                FindReplaceMsg::NextRequested
+            ))
+        )
+    };
+    app.ui_state.find_replace.open = true;
+    assert!(steps(&app, main), "opened in the main window: steps there");
+    assert!(!steps(&app, tab), "a tab window that shows no Find");
+    app.ui_state.find_replace.window = Some(tab);
+    assert!(steps(&app, tab), "opened in the tab window: steps there");
+    assert!(!steps(&app, main), "the main window shows no Find now");
+    app.ui_state.find_replace.window = None;
+    app.ui_state.passive_calculator_open = true;
+    assert!(!steps(&app, main), "a dialog above Find keeps Enter");
+}

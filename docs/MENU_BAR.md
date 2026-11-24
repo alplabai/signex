@@ -173,11 +173,12 @@ greyed while no PCB is open. The command is also in the command palette and
 as the Run DRC button of the Messages panel. On a board the key is `T D` in
 the default profile and `F7` in Classic.
 
-## Tools ▸ DRC Results and Tools ▸ Net Classes {#tools-drc-results}
+## Tools ▸ DRC and Tools ▸ Net Classes {#tools-drc-results}
 
-Right after Design Rule Check, Tools ▸ DRC Results (`open_drc_panel`, #2399)
-and Tools ▸ Net Classes (`open_net_classes_panel`, #2400) open the board's
-DRC results panel and the Net Classes panel. DRC Results is greyed while no
+Right after Design Rule Check, Tools ▸ DRC (`open_drc_panel`, #2399; named
+like the ERC panel since mockup row 87) and Tools ▸ Net Classes
+(`open_net_classes_panel`, #2400) open the board's DRC panel and the Net
+Classes panel. DRC is greyed while no
 PCB is open. Net Classes is an alias of Design ▸ Net Classes
 (`open_net_classes`), live on a sheet or a board: see
 [Design ▸ Net Classes](#find-similar-filter-net-classes). No keymap preset
@@ -208,7 +209,8 @@ net-class history, with the panel's Undo and Redo. The commands are
 
 Tools ▸ Re-Annotate Board... runs `reannotate_board` (#1312), right after
 Design Rule Check with the other board rows, and is greyed while no PCB is
-open. It opens the Positional Re-Annotate dialog for the board in view:
+open. It opens the Re-Annotate Board dialog (subtitle "Positional · <board>")
+for the board in view:
 
 - **Order**: by X, then by Y (the default), or by Y, then by X. The sort is
   exact at 1 µm: parts are not grouped into columns or rows by a tolerance,
@@ -801,9 +803,10 @@ with its file and its number.
   symbol to hold a number and keeps its position; it is shown read-only.
 - Auto-number (footer left, and as the fix in the error banner) puts every
   page back at its position and clears the hand numbers. A number that is not
-  a whole number from 1, a clash, a gap or a number above the page count greys
-  Apply (Graphite #78): the clashing rows take the error fill and a red field,
-  and an error banner names the clash, gap or high number. An automatic number
+  a whole number from 1, a clash or a number above the page count greys
+  Apply (mockup row 78): the clashing rows take the error fill and a red field,
+  and an error banner names the clash or high number. A gap only warns, as a
+  warning line under the table (Caner 2026-11-24). An automatic number
   (one that follows the hierarchy order) is drawn in faint ink, a typed one in
   full ink. Export still only warns.
 - Apply writes each changed number into the `ChildSheet.instances` entry of
@@ -887,7 +890,8 @@ Project Options, Preferences.
 
 With a selection: Properties (bold, the default row), Find Similar Objects,
 Cross Probe; Cut, Copy, Duplicate, Delete; Rotate, Mirror X, Mirror Y, the
-Align submenu, Arrange (a drawing selected) and the Unions submenu; the Part Actions, Sheet Actions
+Align submenu, Arrange (a drawing selected) and the Unions submenu; the Part Actions,
+In variant (when the project has a variant besides Base), Sheet Actions
 and Place submenus; Highlight Net, Net Color..., Assign Net Class..., Clear
 Filter while a net highlight is on; Undo; then a greyed "Planned (N)" submenu
 that opens on hover and lists the planned rows below.
@@ -908,6 +912,15 @@ Number Schematic Sheets (#1276). When the symbol's file is missing, Open Child
 Sheet is disabled with the reason, a double-click or the harness panel's Go to
 logs the same reason and opens nothing, and Create Sheet From Sheet Symbol makes
 the file (#2847).
+
+In variant: <name> (mockup row 62) names the project's active variant, Base
+when none is, and shows only when the project defines a variant. Its flyout is
+headed "<part> in <variant>" for one selected part. Fitted, Not fitted,
+Alternate part… and Edit value for this variant… are greyed with a "Planned"
+tooltip: changing a part's fit, part or value in one variant is not built.
+Show in Variant Manager opens the project's tab on its Variants section; New
+variant… opens it and adds the first free "Variant N" from Base with its name
+open for typing, as the section's `+` does.
 
 Unions (mockup row 158) holds Create Union… (`create_union`, live with a selection,
 `Ctrl+G` in the default profile), Add Selection to Union (`add_to_union`, the

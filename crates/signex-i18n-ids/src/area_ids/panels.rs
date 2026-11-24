@@ -147,6 +147,7 @@ define_ids! {
     PANELS_FILTER_NO_PRESETS = "panels-filter-no-presets";
     PANELS_FILTER_PRESET_KINDS = "panels-filter-preset-kinds";
     PANELS_FILTER_PRESET_NO_KINDS = "panels-filter-preset-no-kinds";
+    PANELS_FILTER_PRESET_EDITING = "panels-filter-preset-editing";
     PANELS_OBJECT_LIST_FILTER = "panels-object-list-filter";
     PANELS_OBJECT_LIST_SCOPE_SHEET = "panels-object-list-scope-sheet";
     PANELS_OBJECT_LIST_SCOPE_PROJECT = "panels-object-list-scope-project";
@@ -278,6 +279,10 @@ define_ids! {
     PANELS_MESSAGES_COPY_TOOLTIP = "panels-messages-copy-tooltip";
     PANELS_MESSAGES_CLEAR_TOOLTIP = "panels-messages-clear-tooltip";
     PANELS_MESSAGES_NONE_MATCH = "panels-messages-none-match";
+    // find-messages
+    PANELS_MESSAGES_SHOW = "panels-messages-show";
+    PANELS_NET_INSPECTOR_HIGHLIGHT = "panels-net-inspector-highlight";
+    PANELS_NET_INSPECTOR_NET_GONE = "panels-net-inspector-net-gone";
     PANELS_PAIRED_OPEN_AS_TAB = "panels-paired-open-as-tab";
     PANELS_PAIRED_LENGTH_MATCHING = "panels-paired-length-matching";
     PANELS_COMPACT_GROUP_MEMBERS = "panels-compact-group-members";
@@ -294,6 +299,8 @@ define_ids! {
     PANELS_MESSAGES_PIN_DOT_REFUSED_ONE = "panels-messages-pin-dot-refused-one";
     PANELS_MESSAGES_PIN_DOT_REFUSED_MANY = "panels-messages-pin-dot-refused-many";
     PANELS_MESSAGES_PIN_DOT_REFUSED_ENTRY = "panels-messages-pin-dot-refused-entry";
+    PANELS_MESSAGES_PINS_NOT_KEPT_ONE = "panels-messages-pins-not-kept-one";
+    PANELS_MESSAGES_PINS_NOT_KEPT_MANY = "panels-messages-pins-not-kept-many";
     PANELS_MESSAGES_UNNAMED_NET = "panels-messages-unnamed-net";
     PANELS_MESSAGES_LIST_MORE = "panels-messages-list-more";
     // Multi-channel sheets and the Compiled Design panel (#1279, #1308).
@@ -448,4 +455,63 @@ define_ids! {
     PANELS_COMPILED_DESIGN_NAMING_REFUSED = "panels-compiled-design-naming-refused";
     // sch-panels-tidy
     PANELS_CANVAS_FONT_SUMMARY = "panels-canvas-font-summary";
+    // harness-connector-properties
+    PANELS_HARNESS_ADD_ENTRY = "panels-harness-add-entry";
+    // components-panel-cx
+    PANELS_COMPONENTS_MATCH_VALUE = "panels-components-match-value";
+    PANELS_COMPONENTS_MATCH_MORE = "panels-components-match-more";
+    PANELS_COMPONENTS_MATCH_BY_NAME = "panels-components-match-by-name";
+    PANELS_COMPONENTS_MATCH_SEPARATOR = "panels-components-match-separator";
+    // pcb-panel-group
+    PANELS_LENGTH_MATCHING_EMPTY_TITLE = "panels-length-matching-empty-title";
+    PANELS_LENGTH_MATCHING_EMPTY_BODY = "panels-length-matching-empty-body";
+    // pcb-nets-modes
+    PANELS_PCB_MODE_DIFF_PAIRS = "panels-pcb-mode-diff-pairs";
+    PANELS_PCB_MODE_XSIGNALS = "panels-pcb-mode-xsignals";
+    PANELS_PCB_MODE_POLYGONS = "panels-pcb-mode-polygons";
+    PANELS_PCB_MODE_COUNT = "panels-pcb-mode-count";
+    PANELS_PCB_BOARD_VALUE = "panels-pcb-board-value";
+    PANELS_PCB_PAIRS_EMPTY = "panels-pcb-pairs-empty";
+    PANELS_PCB_PAIRS_SKEW = "panels-pcb-pairs-skew";
+    PANELS_PCB_PAIRS_POSITIVE = "panels-pcb-pairs-positive";
+    PANELS_PCB_PAIRS_NEGATIVE = "panels-pcb-pairs-negative";
+    PANELS_PCB_PAIRS_RULES = "panels-pcb-pairs-rules";
+    PANELS_PCB_PAIRS_SUMMARY = "panels-pcb-pairs-summary";
+    PANELS_PCB_PAIRS_DETAIL_POSITIVE = "panels-pcb-pairs-detail-positive";
+    PANELS_PCB_PAIRS_DETAIL_NEGATIVE = "panels-pcb-pairs-detail-negative";
+    PANELS_PCB_PAIRS_DETAIL_GAP_WIDTH = "panels-pcb-pairs-detail-gap-width";
+    PANELS_PCB_PAIRS_DETAIL_ROUTED = "panels-pcb-pairs-detail-routed";
+    PANELS_PCB_PAIRS_DETAIL_ROUTED_VALUE = "panels-pcb-pairs-detail-routed-value";
+    PANELS_PCB_PAIRS_DETAIL_SKEW = "panels-pcb-pairs-detail-skew";
+    PANELS_PCB_PAIR_OF_VALUES = "panels-pcb-pair-of-values";
+    PANELS_PCB_XSIGNALS_EMPTY = "panels-pcb-xsignals-empty";
+    PANELS_PCB_XSIGNALS_SUMMARY = "panels-pcb-xsignals-summary";
+    PANELS_PCB_POURS_OPEN_MANAGER = "panels-pcb-pours-open-manager";
+    PANELS_PCB_POURS_MANAGER_LATER = "panels-pcb-pours-manager-later";
+    PANELS_PCB_POURS_CHIP_ATTENTION = "panels-pcb-pours-chip-attention";
+    PANELS_PCB_POURS_POURED = "panels-pcb-pours-poured";
+    PANELS_PCB_POURS_SHELVED = "panels-pcb-pours-shelved";
+    PANELS_PCB_POURS_NO_NET = "panels-pcb-pours-no-net";
+    PANELS_PCB_POURS_DETAIL = "panels-pcb-pours-detail";
+    PANELS_PCB_POURS_EMPTY = "panels-pcb-pours-empty";
+    PANELS_PCB_POURS_NO_MATCH = "panels-pcb-pours-no-match";
+    PANELS_PCB_POURS_SUMMARY = "panels-pcb-pours-summary";
+    PANELS_PCB_CLASSES_SUMMARY = "panels-pcb-classes-summary";
+    PANELS_PCB_CLASSES_FIRST_WINS = "panels-pcb-classes-first-wins";
+    PANELS_PCB_CLASSES_RULE_SUMMARY = "panels-pcb-classes-rule-summary";
+    PANELS_PCB_CLASSES_VIA_SUMMARY = "panels-pcb-classes-via-summary";
+    PANELS_PCB_CLASSES_UNSET = "panels-pcb-classes-unset";
+    PANELS_PCB_CLASSES_NETS = "panels-pcb-classes-nets";
+    PANELS_PCB_CLASSES_NETS_PATTERNS = "panels-pcb-classes-nets-patterns";
+    PANELS_PCB_CLASSES_RULES = "panels-pcb-classes-rules";
+    PANELS_PCB_CLASSES_WIDTH_CLEARANCE = "panels-pcb-classes-width-clearance";
+    PANELS_PCB_CLASSES_VIA = "panels-pcb-classes-via";
+    PANELS_PCB_CLASSES_IMPEDANCE = "panels-pcb-classes-impedance";
+    PANELS_PCB_CLASSES_IMPEDANCE_TIP = "panels-pcb-classes-impedance-tip";
+    PANELS_PCB_CLASSES_MEMBERS = "panels-pcb-classes-members";
+    PANELS_PCB_CLASSES_NODES = "panels-pcb-classes-nodes";
+    PANELS_PCB_CLASSES_MATCHES = "panels-pcb-classes-matches";
+    PANELS_PCB_CLASSES_DIFF_PAIR = "panels-pcb-classes-diff-pair";
+    // quit-list-snxout-cap
+    PANELS_TAB_KIND_OUTPUT_JOB = "panels-tab-kind-output-job";
 }

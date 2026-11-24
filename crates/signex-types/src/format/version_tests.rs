@@ -43,13 +43,25 @@ fn snxpcb_older_minor_saves_as_current_newer_minor_is_read_only() {
         "{out}"
     );
 
-    let newer = SnxPcb::parse(&format!("format = \"snxpcb/1.10\"\n{PCB_ID}")).unwrap();
+    let newer = SnxPcb::parse(&format!("format = \"snxpcb/1.11\"\n{PCB_ID}")).unwrap();
     assert!(newer.is_from_newer_minor());
     let err = newer.write_string().unwrap_err();
-    assert!(err.to_string().contains("snxpcb/1.10"), "{err}");
+    assert!(err.to_string().contains("snxpcb/1.11"), "{err}");
     assert!(SnxPcb::new(newer.board.clone()).write_string().is_err());
 
     assert!(SnxPcb::parse(&format!("format = \"snxpcb/2.0\"\n{PCB_ID}")).is_err());
+}
+
+/// Mockup rows 176 and 177: `snxpcb/1.10` (stack materials) is this build's
+/// own token: it opens for editing, and it ranks above 1.9.
+#[test]
+fn snxpcb_1_10_is_current_and_opens_for_editing() {
+    assert_eq!(SNXPCB_VERSION.current, SNXPCB_FORMAT_V1_10);
+    assert!(SNXPCB_VERSION.readable.contains(&SNXPCB_FORMAT_V1_9));
+    let file = SnxPcb::parse(&format!("format = \"{SNXPCB_FORMAT_V1_10}\"\n{PCB_ID}")).unwrap();
+    assert!(!file.is_from_newer_minor());
+    assert!(snxpcb_opens_read_only("snxpcb/1.11"));
+    assert!(!snxpcb_opens_read_only(SNXPCB_FORMAT_V1_9));
 }
 
 fn pad(uuid: &str, number: &str) -> Pad {

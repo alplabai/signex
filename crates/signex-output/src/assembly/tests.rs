@@ -298,3 +298,41 @@ fn the_real_board_draws_both_sides_framed_on_its_edge_cuts() {
     assert_eq!(designators(&bottom), ["C3", "C4"]);
     assert_eq!(designators(&top).len(), 8);
 }
+
+/// #2868: the printed dimension follows its look: filled arrowheads are
+/// filled triangles, extension lines take their own width.
+#[test]
+fn a_dimensions_filled_arrows_and_extension_width_are_printed() {
+    use signex_types::pcb_dimension_style::ArrowStyle;
+    let mut board = board();
+    let style = &mut board.free.dimensions[0].style;
+    style.arrow_style = ArrowStyle::Filled;
+    style.extension_width = 0.3;
+    let drawing = assembly_drawing(&board, BoardSide::Top);
+    let marks: Vec<&AssemblyMark> = drawing
+        .marks
+        .iter()
+        .filter(|m| mark_ink(m) == AssemblyInk::Dimension)
+        .collect();
+    let fills: Vec<&Vec<Vec<Point>>> = marks
+        .iter()
+        .filter_map(|m| match m {
+            AssemblyMark::Fill { rings, .. } => Some(rings),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(fills.len(), 2, "one filled head at each end");
+    assert!(
+        fills
+            .iter()
+            .all(|rings| rings.len() == 1 && rings[0].len() == 3)
+    );
+    let widths: Vec<f64> = marks
+        .iter()
+        .filter_map(|m| match m {
+            AssemblyMark::Stroke { width_mm, .. } => Some(*width_mm),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(widths, [0.3, 0.3, 0.1], "two extensions, then the line");
+}

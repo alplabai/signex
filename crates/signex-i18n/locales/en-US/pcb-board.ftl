@@ -25,10 +25,8 @@ pcb-board-filter-presets = Presets
 pcb-board-filter-preset-add = Add Preset
 pcb-board-filter-preset-add-tip = Save the kinds that are on as a preset.
 pcb-board-filter-preset-full = At most { $limit } presets; delete one to add another.
-pcb-board-filter-preset-apply-tip = Turn on exactly the kinds this preset holds.
+pcb-board-filter-preset-apply-tip = Turn on exactly the kinds this preset holds and edit it with the chips; click again to stop editing.
 pcb-board-filter-preset-name = Preset name
-pcb-board-filter-preset-update = Save Chips
-pcb-board-filter-preset-update-tip = Store the kinds that are on in this preset.
 pcb-board-kind-components = Components
 pcb-board-kind-bodies = 3D Bodies
 pcb-board-kind-keepouts = Keepouts
@@ -70,8 +68,6 @@ pcb-board-snap-body-points = 3D Body Snap Points
 pcb-board-snap-texts = Texts
 pcb-board-snap-object-unavailable = Boards hold no 3D bodies yet.
 pcb-board-snap-distance = Distance
-# $factor is a multiple of the snap grid, such as 0.5.
-pcb-board-snap-distance-value = { $factor }x Snap Grid
 pcb-board-axis-range = Axis Range
 
 # The board illustration's size row (#2523): the size comes from the board

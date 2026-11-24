@@ -19,6 +19,8 @@ mod bars;
 #[cfg(test)]
 mod dismiss_tests;
 mod dock_zones;
+#[cfg(test)]
+mod filter_menu_tests;
 mod modals;
 mod net_hover;
 mod palette;
@@ -34,6 +36,8 @@ mod window_gate_tests;
 mod zoom_pill;
 #[cfg(test)]
 pub(super) use zoom_pill::pill_origin as zoom_pill_origin;
+#[cfg(test)]
+mod zoom_pill_window_tests;
 mod zoom_presets;
 
 impl Signex {
@@ -170,12 +174,16 @@ impl Signex {
         }
         let has_selection = !interaction.canvas_for_window(window_id).selected.is_empty();
         let has_net_colors = !ui.net_colors.is_empty();
+        let filter = crate::active_bar::SchematicFilterState {
+            filters: &interaction.selection_filters,
+            presets: &interaction.custom_filter_presets,
+            editing: self.edited_custom_filter(),
+        };
         let dropdown = crate::active_bar::view_dropdown(
             &self.ui_state.i18n,
             ab_menu,
             &document.panel_ctx.tokens,
-            &interaction.selection_filters,
-            &interaction.custom_filter_presets,
+            &filter,
             self.ui_state.effective_theme_id(),
             has_selection,
             has_net_colors,
@@ -318,8 +326,9 @@ impl Signex {
     }
 
     /// v0.18.10 — Altium-style grid picker popup. Floats at the cursor
-    /// when `G` is pressed in a footprint editor. Pushes dismiss then the
-    /// placed menu, only in the window it opened in.
+    /// when `G` is pressed in a footprint editor, above the status bar when
+    /// opened from its Grid caret. Pushes dismiss then the placed menu,
+    /// only in the window it opened in.
     pub(super) fn grid_picker_overlay(
         &self,
         window_id: iced::window::Id,
@@ -330,11 +339,13 @@ impl Signex {
         if picker.owner != self.overlay_owner(window_id) {
             return Vec::new();
         }
-        Self::menu_overlay(
-            Message::Ui(UiMsg::GridPickerClose),
-            self.view_grid_picker_menu(),
-            (picker.x, picker.y),
-        )
+        let close = Message::Ui(UiMsg::GridPickerClose);
+        let menu = self.view_grid_picker_menu();
+        if picker.opens_upward {
+            let menu = super::context_menu::AnchoredMenu::above(menu, (picker.x, picker.y));
+            return Self::anchored_layers(close, menu);
+        }
+        Self::menu_overlay(close, menu, (picker.x, picker.y))
     }
 
     /// Floating panels — one `Translate`-positioned widget per floating

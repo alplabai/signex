@@ -350,14 +350,19 @@ pub(crate) fn apply_symbol_primitive_edit(
         | SymbolEditorMsg::ToggleActiveBarMenu(_)
         | SymbolEditorMsg::CloseActiveBarMenu
         | SymbolEditorMsg::ActiveBarStub(_)
-        | SymbolEditorMsg::ToggleSelectionFilter(_) => apply_symbol_ui(editor, msg),
+        | SymbolEditorMsg::ToggleSelectionFilter(_)
+        | SymbolEditorMsg::PinTypePicked(_) => apply_symbol_ui(editor, msg),
 
         // ── Graphics placement ───────────────────────────────────
         SymbolEditorMsg::AddPin { x, y } => {
             push_undo(editor);
             let view = editor.view();
-            let idx =
-                crate::library::editor::symbol::state::add_pin(editor.primitive_mut(), x, y, view);
+            let pin_type = editor.pin_type;
+            let sym = editor.primitive_mut();
+            let idx = crate::library::editor::symbol::state::add_pin(sym, x, y, view);
+            if let Some(pin_type) = pin_type {
+                sym.pins[idx].electrical = pin_type;
+            }
             editor.selected = Some(SymbolSelection::Pin(idx));
             mark_dirty(editor);
         }

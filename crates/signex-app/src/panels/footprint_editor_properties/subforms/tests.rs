@@ -20,7 +20,9 @@ use signex_types::theme::{ThemeId, theme_tokens};
 use super::{cutout, keepout, pattern, sketch_pad, view_role_subform};
 use crate::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
-use crate::panels::{CollapsedSections, FootprintEditorPanelContext, PanelMsg, PanelPalette};
+use crate::panels::{
+    ArrayKindSummary, CollapsedSections, FootprintEditorPanelContext, PanelMsg, PanelPalette,
+};
 
 const PATH: &str = "role-subforms.snxfpt";
 
@@ -383,6 +385,89 @@ fn a_masked_or_unticked_instance_is_skipped() {
     assert_eq!(shown.kept(), Some(2));
 }
 
+/// Mockup row 126: the Numbering Mask shows the skipped pads' numbers, keeps
+/// typed text that skips the same pads, and refuses a number the pattern
+/// does not have.
+#[test]
+fn the_number_mask_shows_the_skipped_pads_and_refuses_unknown_numbers() {
+    use signex_bake::array::NumberMaskRefusal;
+    let ctx = grid_ctx_with(
+        NumberingScheme::default(),
+        "2",
+        Some(GridDepopulation {
+            mask_expr: String::new(),
+            suppressed_instances: vec![(1, 1)],
+        }),
+    );
+    let pattern = ctx.selected_array.as_ref().expect("a pattern");
+    assert_eq!(
+        pattern::shown_number_mask(pattern, None),
+        ("4".into(), None)
+    );
+    let typed = |text: &str| pattern::shown_number_mask(pattern, Some(&text.to_owned()));
+    assert_eq!(typed("4,"), ("4,".into(), None), "typing keeps its text");
+    assert_eq!(
+        typed("2"),
+        ("4".into(), None),
+        "text an undo left gives way"
+    );
+    assert_eq!(
+        typed("4,9"),
+        (
+            "4,9".into(),
+            Some(NumberMaskRefusal::NotInPattern("9".into()))
+        )
+    );
+    assert_eq!(
+        typed("4,1"),
+        ("4,1".into(), Some(NumberMaskRefusal::IsSource("1".into()))),
+        "the source pad is not skipped"
+    );
+}
+
+#[test]
+fn a_refused_number_mask_says_why_under_the_field() {
+    let mut source = None;
+    let sketch = sketch(|plane, s| {
+        let id = pad_point(plane, s, None);
+        s.arrays.push(Array {
+            id: ArrayId::new(),
+            kind: ArrayKind::Grid {
+                source: id,
+                nx_expr: "2".into(),
+                ny_expr: "2".into(),
+                dx_expr: "1.27mm".into(),
+                dy_expr: "2mm".into(),
+                depopulation: None,
+            },
+            numbering: NumberingScheme::default(),
+        });
+        source = Some(id);
+    });
+    let source = source.unwrap();
+    let mut ctx = ctx_with(sketch, source);
+    let array_id = ctx.selected_array.as_ref().expect("a pattern").array_id;
+    ctx.numeric_buffers.insert(
+        crate::panels::number_mask_buffer_key(array_id),
+        "A1,B4".into(),
+    );
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
+    let palette = PanelPalette::from_tokens(&tokens);
+    let collapsed = CollapsedSections::default();
+    let i18n = signex_i18n::I18n::en_us();
+    let form = view_role_subform(&ctx, source, palette, &tokens, &collapsed, &i18n)
+        .expect("a pattern form");
+    let texts: Vec<String> =
+        crate::layout_probe::lay_out_texts(form, iced::Size::new(260.0, 4000.0))
+            .into_iter()
+            .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect();
+    assert!(
+        texts.iter().any(|t| t == "No pad A1 in this pattern"),
+        "{texts:#?}"
+    );
+}
+
 #[test]
 fn a_count_that_does_not_evaluate_draws_the_source_only() {
     let ctx = grid_ctx_with(NumberingScheme::default(), "missing_parameter", None);
@@ -426,4 +511,61 @@ fn a_refused_sketch_pad_offset_shows_its_reason() {
     let key = sketch_pad_field_buffer_key(id, pad_field::HOLE_TOLERANCE_MINUS);
     ctx.numeric_buffers.insert(key, "0,0".into());
     assert_eq!(reasons(&ctx), 2, "each refused field says why");
+}
+
+/// A 2 × 2 hole pattern spaced by `dx` and `dy` on a 60 × 40 board sketch's
+/// size parameters.
+fn spaced_grid_ctx(dx: &str, dy: &str) -> FootprintEditorPanelContext {
+    let mut id = None;
+    let sketch = sketch(|plane, s| {
+        s.parameters.insert("board_w", "60mm");
+        s.parameters.insert("board_h", "40mm");
+        s.parameters.insert("hole_inset", "3.5mm");
+        let source = pad_point(plane, s, None);
+        s.arrays.push(Array {
+            id: ArrayId::new(),
+            kind: ArrayKind::Grid {
+                source,
+                nx_expr: "2".into(),
+                ny_expr: "2".into(),
+                dx_expr: dx.into(),
+                dy_expr: dy.into(),
+                depopulation: None,
+            },
+            numbering: NumberingScheme::default(),
+        });
+        id = Some(source);
+    });
+    ctx_with(sketch, id.unwrap())
+}
+
+fn spacing_note(ctx: &FootprintEditorPanelContext) -> Option<String> {
+    let pattern = ctx.selected_array.as_ref().expect("a pattern");
+    let ArrayKindSummary::Grid {
+        dx_expr, dy_expr, ..
+    } = &pattern.kind
+    else {
+        panic!("a grid: {:?}", pattern.kind);
+    };
+    let i18n = signex_i18n::I18n::en_us();
+    pattern::spacing_note(pattern, [dx_expr.as_str(), dy_expr.as_str()], &i18n)
+        .map(|note| note.into_string().replace(['\u{2068}', '\u{2069}'], ""))
+}
+
+/// Mockup row 179e: spacing written as expressions of the size parameters
+/// stays an expression and shows the spacing the bake walks under it; a
+/// plain spacing needs no line.
+#[test]
+fn a_spacing_bound_to_parameters_shows_the_values_it_resolves_to() {
+    let bound = spaced_grid_ctx("board_w - 2*hole_inset", "board_h - 2*hole_inset");
+    let pattern = bound.selected_array.as_ref().expect("a pattern");
+    let ArrayKindSummary::Grid { dx_expr, .. } = &pattern.kind else {
+        panic!("a grid");
+    };
+    assert_eq!(dx_expr, "board_w - 2*hole_inset", "the expression is kept");
+    assert_eq!(
+        spacing_note(&bound).as_deref(),
+        Some("Spacing 53.00 × 33.00 mm")
+    );
+    assert_eq!(spacing_note(&spaced_grid_ctx("5mm", "5mm")), None);
 }

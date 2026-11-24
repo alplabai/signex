@@ -18,7 +18,7 @@ preferences-wheel-mode-help = Zoom: the mouse wheel zooms the canvas. Scroll: th
 preferences-theme-heading = Theme
 
 # Line under the heading.
-preferences-theme-intro = Colours, density and canvas text. Changes preview live; Apply keeps them.
+preferences-theme-intro = Colors, density and canvas text. Changes preview live; Apply keeps them.
 
 # Section label over the theme cards, shown in capitals.
 preferences-theme-application = APPLICATION THEME
@@ -193,12 +193,20 @@ preferences-move-keeps-wires = Keep wires connected when moving
 preferences-move-keeps-wires-help = When on, moving, rotating or mirroring symbols, child sheets or sheet pins (drag, Move, Move By, align, rotate, mirror) drags the wires on their pins along, adding a bend where needed to keep them horizontal or vertical. A net check afterwards keeps this from changing connectivity beyond what a plain move, rotate or mirror would do; a pin that cannot be kept connected moves alone and is reported in the Messages panel. When off, only the selected items move or turn and attached wires stay where they were. Hold Alt through one drag to do the opposite for that drag only; the Drag with connections command (G in the Classic profile) drags the picked object with its wires whatever this says.
 preferences-net-hover = Show net info on hover
 preferences-net-hover-help = When on, resting the pointer on a wire, pin or label for a moment shows a card with the net's name, its net class and the pins on it with the sheet each is on. Turn it off if the card gets in the way while you edit.
+# Edge pan (#2872): the board, sheet, footprint and symbol canvases.
+preferences-edge-pan = Pan at the canvas edge
+preferences-edge-pan-help = When on, while a tool is armed or you drag or move something, holding the pointer near an edge of the canvas moves the view that way, faster the closer the pointer is to the edge. Moving the pointer onto a panel stops it; the tool stays armed.
+preferences-edge-pan-speed = Edge pan speed
+preferences-edge-pan-speed-help = How fast the view moves with the pointer at the very edge of the canvas.
+preferences-edge-pan-speed-slow = Slow
+preferences-edge-pan-speed-medium = Medium
+preferences-edge-pan-speed-fast = Fast
 preferences-drag-direction = Select by drag direction
 preferences-drag-direction-help = When on, dragging a selection box from left to right selects only what the box fully contains, and from right to left selects everything the box touches. When off, the Inside / Touching selection mode (Shift+S cycles it) decides for both directions; while on, that mode is not used for box selection.
 preferences-increment-step = Increment step
 preferences-increment-step-help = How far the trailing number of a text moves each time it is repeated: placing the label D0 again and again gives D1, D2, ... with a step of 1, and Paste Array offers the same step. A negative step counts down; a number at the start or middle of a text is left alone.
 preferences-paste-designators = Designators on paste
-preferences-paste-designators-help = What pasted parts are called. Keep leaves the designators of the copy as they were (duplicates stay until Annotate runs). Reset turns them into R?, U?, ... for Annotate to number. Next free number gives each part the next unused number of its prefix in the project. Applies to Paste, Smart Paste, Duplicate, rubber-stamp copy and Paste Array; the units of one part always stay one part.
+preferences-paste-designators-help = What pasted parts are called. Keep unless taken, the default, keeps each designator the project does not use yet and gives a taken one the next unused number of its prefix; R? stays R?. Keep leaves the designators of the copy as they were (duplicates stay until Annotate runs). Reset turns them into R?, U?, ... for Annotate to number. Next free number gives each part the next unused number of its prefix in the project. Applies to Paste, Smart Paste, Duplicate, rubber-stamp copy and Paste Array; the units of one part always stay one part.
 preferences-autosave = Autosave recovery copies
 preferences-autosave-help = When on, { -brand-name } keeps a recovery copy of each schematic, symbol and footprint with unsaved changes about once a minute. The copy is a separate file in the { -brand-name } config folder (recovery); your own file is never touched by it. The copy is removed when you save the document, close it without keeping the changes, or quit with Discard All, even if you turn this off first. Off by default.
 
@@ -206,6 +214,8 @@ preferences-autosave-help = When on, { -brand-name } keeps a recovery copy of ea
 preferences-annotate-undo = Annotate undo
 # $undo is the Undo shortcut, such as "Ctrl+Z". The two choices are named as
 # preferences-annotate-undo-project and preferences-annotate-undo-per-sheet read.
+# Each choice written exactly as its label reads is shown in bold; a choice
+# worded differently (an inflected form) stays plain.
 preferences-annotate-undo-help = How many undo steps one annotate run is. One step for the whole project reverts every sheet the run touched together, from whichever sheet { $undo } is pressed on. Per sheet undoes each sheet on its own. Applies to the next annotate run.
 
 ## Schematic ▸ Display
@@ -215,12 +225,24 @@ preferences-section-schematic-display = Schematic — Display
 preferences-symbol-body-fill = Fill symbol bodies
 preferences-symbol-body-fill-help = When on, the closed rectangles, polygons and circles that form a symbol's body are drawn filled: on the canvas, in the symbol previews, and in PDF, SVG and print. Pins, text and open lines are never filled, and power ports are not filled. A body shape the symbol fills itself keeps its own fill.
 # Label of the swatch: the colour symbol bodies are filled with.
-preferences-symbol-body-fill-colour = Fill colour
-preferences-symbol-body-fill-colour-help = A soft tint of the theme unless you pick a colour. Reset to Default goes back to the theme's tint.
+preferences-symbol-body-fill-colour = Fill color
+preferences-symbol-body-fill-colour-help = A soft tint of the theme unless you pick a color. Reset to Default goes back to the theme's tint.
+
+# prefs-rules-library
+# Beside the On / Off control of the rule whose severity the pin connection
+# matrix sets; in Rule Profiles it opens the matrix tab.
+preferences-rules-matrix-link = Severity set in the matrix
+## PCB ▸ PCB Defaults (#2868)
+# The page of what a new board dimension starts from.
+preferences-page-pcb-defaults = PCB Defaults
+preferences-group-pcb = PCB
+preferences-group-pcb-heading = PCB
+preferences-section-pcb-dimensions = PCB — New Dimensions
+preferences-pcb-dimensions-help = Each dimension you place starts from these. Its own Properties change it afterwards; dimensions already on a board keep their look.
 
 ## Default Component Classes
 preferences-classes-title = Default Component Classes
-preferences-classes-help = The classes a new library starts with. They appear in the class picker of New Component and Edit Component. A library's own list is edited in that library.
+preferences-classes-help = The classes a new library starts with. They appear in the class picker of New Component and Edit Component. This is a seed list for new libraries: removing a class here does not change existing libraries. A library's own list is edited in that library.
 preferences-classes-key = Key
 preferences-classes-label = Label
 preferences-classes-remove = Remove
@@ -527,3 +549,16 @@ preferences-classes-reset-confirm = { $count ->
    *[other] Replace the { $count } classes in this list
 } with the { $defaults } default classes?
 preferences-classes-reset-confirm-yes = Reset
+
+# board-3d-keys-screenshot
+# Where a shortcut applies: the board 3D view (mockup row 175).
+pref-keymap-context-board-3d = PCB 3D View
+# prefs-shell-pages
+## System ▸ General page (mockup row 147)
+preferences-page-general = General
+preferences-general-heading = General
+preferences-general-intro = Settings that cover every editor: recovery copies of unsaved documents and connections from agents.
+## Editing page (mockup row 147): the shortened net hover help; More… shows the whole text.
+preferences-net-hover-help-summary = Resting the pointer on a wire, pin or label shows a card with the net's name, net class and pins.
+## Rule Profiles page (mockup row 148): the action that asks before it deletes.
+preferences-profiles-delete-action = Delete…

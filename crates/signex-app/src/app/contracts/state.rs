@@ -31,6 +31,12 @@ pub enum ContextAction {
     /// A board menu row of a project's reuse block (#2410): the menu closes,
     /// then the event runs on the board of the window the menu was in.
     ReuseBlock(crate::app::board_reuse::ReuseBlockMsg),
+    /// In variant ▸ Show in Variant Manager (mockup row 62): the menu
+    /// closes, then the project's tab opens on its Variants section.
+    ShowInVariantManager(crate::app::ProjectId),
+    /// In variant ▸ New variant… (mockup row 62): the Variant Manager opens
+    /// and a variant from Base is added with its name open for typing.
+    NewVariant(crate::app::ProjectId),
 }
 
 /// Which click-to-open submenu is currently expanded inside the right-
@@ -63,6 +69,10 @@ pub enum ContextSubmenu {
     /// Project-tree library node → "Add New ›": a component, symbol library
     /// or footprint library in that library (mockup row 20).
     AddNewToLibrary,
+    /// "In variant: <name> ›": the selection in the project's active
+    /// variant (mockup row 62). Shown with a selection when the project has
+    /// a variant besides Base.
+    InVariant,
 }
 
 /// Widget id of the in-place editor, so opening it can focus it.
@@ -123,6 +133,12 @@ pub struct GridPickerState {
     pub target: std::path::PathBuf,
     /// The undocked window it opened in; `None` for the main window.
     pub owner: Option<iced::window::Id>,
+    /// The ladder step under the pointer, in mm; the preview draws it in
+    /// place of the active step (mockup row 63).
+    pub hovered_step_mm: Option<f64>,
+    /// The card's bottom, not its top, sits at (x, y): it was opened from
+    /// the status bar's Grid caret, above the bar (mockup row 63).
+    pub opens_upward: bool,
 }
 
 /// Grid Properties dialog draft (Ctrl+G in a footprint editor): the step
@@ -442,6 +458,9 @@ pub enum ProjectTreeAction {
     /// Open the "Remove from Project" modal (Delete / Exclude / Cancel)
     /// for this leaf.
     OpenRemoveDialog(signex_widgets::tree_view::TreeKey),
+    /// Show History on a leaf (mockup row 20): open the file and the History
+    /// panel, filtered to it (This file only).
+    ShowHistory(signex_widgets::tree_view::TreeKey),
     /// Close the entire project whose root is at this tree path. Closes
     /// every open tab backed by the project, drops the `LoadedProject`
     /// from the workspace, and promotes another project (or `None`) to
@@ -525,6 +544,7 @@ impl ProjectTreeAction {
             | RevealInExplorer(k)
             | OpenRenameDialog(k)
             | OpenRemoveDialog(k)
+            | ShowHistory(k)
             | CloseProject(k)
             | ValidateProject(k)
             | OpenProjectRenameDialog(k)
@@ -637,6 +657,15 @@ pub enum VersionControlScope {
     Library,
 }
 
+/// Who the first commit is by (mockup row 26): git is still being asked,
+/// git has an identity, or it has none and the dialog asks for one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommitAuthor {
+    Probing,
+    Resolved,
+    Missing { name: String, email: String },
+}
+
 /// State for the "Enable Version Control" confirm modal — opened
 /// from the project root context menu when the project directory
 /// has no `.git/` yet, or from a plain-files `.snxlib` node's
@@ -686,6 +715,8 @@ pub struct EnableVersionControlState {
     /// the dialog shows no rows yet and ignores edits and Confirm until
     /// `EnableVersionControlMsg::ItemsScanned` fills them.
     pub scanning: bool,
+    /// The commit author; Enable waits while it is probed or left blank.
+    pub author: CommitAuthor,
 }
 
 /// State for the "Remove from Project" modal. `Delete` removes the file
@@ -775,4 +806,10 @@ pub enum StatusBarRequest {
     /// Click on the Library Missing chip: reopens the dialog of a skipped
     /// library (mockup row 138).
     LibraryMissingChipClicked,
+    /// Click on the caret of a footprint's Grid read-out: opens the grid
+    /// step list (mockup row 63) for the footprint `window` shows. The bar
+    /// sends `window: None`; `Signex::status_bar_message` names it.
+    GridCaretClicked {
+        window: Option<iced::window::Id>,
+    },
 }

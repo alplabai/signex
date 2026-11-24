@@ -119,7 +119,7 @@ const PLAIN: &[(MessageId, &str)] = &[
     (ids::PROPERTIES_WIRE_WIDTH_LARGE, "Large"),
     (ids::PROPERTIES_WIRE_COLOR, "Color"),
     (ids::PROPERTIES_COLOR_DEFAULT, "Default"),
-    (ids::PROPERTIES_COLOR_PRESETS, "Preset Colours"),
+    (ids::PROPERTIES_COLOR_PRESETS, "Preset Colors"),
     (ids::PROPERTIES_COLOR_CUSTOM, "Custom\u{2026}"),
     (ids::PROPERTIES_COLOR_RESET, "Reset to Default"),
     (ids::PROPERTIES_UNIT_MM, "mm"),
@@ -162,7 +162,7 @@ const PLAIN: &[(MessageId, &str)] = &[
     ),
     (ids::PANELS_NET_CLASSES_SECTION, "Net Classes"),
     (ids::PANELS_NET_CLASSES_NAME, "Name"),
-    (ids::PANELS_NET_CLASSES_COLOR, "Colour"),
+    (ids::PANELS_NET_CLASSES_COLOR, "Color"),
     (ids::PANELS_NET_CLASSES_WIDTH, "Width (mm)"),
     (ids::PANELS_NET_CLASSES_LINE, "Line"),
     (ids::PANELS_NET_CLASSES_LINE_DEFAULT, "Default"),
@@ -843,7 +843,7 @@ fn the_net_class_field_rows_keep_their_names_and_order() {
         ..Default::default()
     }];
     let shown = texts(&ctx);
-    let fields = ["Name", "Colour", "Width (mm)", "Line", "Nets", "Patterns"];
+    let fields = ["Name", "Color", "Width (mm)", "Line", "Nets", "Patterns"];
     let rows: Vec<&str> = plain(&shown)
         .into_iter()
         .filter(|t| fields.contains(t))

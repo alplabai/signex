@@ -21,6 +21,8 @@ mod update;
 #[cfg(test)]
 mod filter_tests;
 #[cfg(test)]
+mod open_tests;
+#[cfg(test)]
 mod tests;
 
 pub use filter::{AssignFilter, TickedBar};

@@ -66,6 +66,8 @@ pub struct SelectionFilterFacts {
     pub key: Option<(PathBuf, u64)>,
     /// The Filter panel's inline preset rename: the preset and the name typed so far.
     pub rename: Option<(usize, String)>,
+    /// The schematic preset selected for editing (#2873).
+    pub editing: Option<usize>,
 }
 
 /// The board objects of each kind, by the kinds [`PickKind::of`] gives the

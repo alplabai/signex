@@ -145,24 +145,17 @@ pub(super) fn view<'a>(
         Some(props(SymbolPropsMsg::AddPinPressed)),
         Some(t!(i18n, ids::EDITORS_SYMPROPS_ADD_PIN_TIP)),
     );
-    // Until the Pin table document tab (mockup row 122b) lands, the table
-    // shows here.
-    let table_toggle = form.ghost(
-        t!(
-            i18n,
-            if ui.pin_table {
-                ids::EDITORS_SYMPROPS_PIN_TABLE_CLOSE
-            } else {
-                ids::EDITORS_SYMPROPS_PIN_TABLE_OPEN
-            }
-        ),
-        (!sym.pins.is_empty()).then_some(props(SymbolPropsMsg::PinTableToggled)),
+    // Bulk entry is the Pin table document tab (mockup row 122b). Open with
+    // no pins too: its Paste rows fills an empty symbol from a datasheet.
+    let open_table = form.ghost(
+        t!(i18n, ids::EDITORS_SYMPROPS_PIN_TABLE_OPEN),
+        Some(props(SymbolPropsMsg::EditPinsInTablePressed)),
         None,
     );
     let tools = container(
         column![
             row![filter, add].spacing(SP.s).align_y(Alignment::Center),
-            table_toggle,
+            open_table,
         ]
         .spacing(SP.xs),
     )
@@ -176,10 +169,6 @@ pub(super) fn view<'a>(
 
     let mut col: Vec<Element<'a, PanelMsg>> =
         vec![tools.boxed(), chips(sym, form), summary(sym, &issues, form)];
-    if ui.pin_table && !listed.is_empty() {
-        col.push(super::pin_table::view(&listed, form));
-        return col;
-    }
     col.push(header(form));
     if listed.is_empty() {
         col.push(empty(sym.pins.is_empty(), form));

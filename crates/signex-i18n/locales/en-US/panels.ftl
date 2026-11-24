@@ -40,8 +40,9 @@ panels-messages-level-trace = TRACE
 
 ## Components panel
 
-# Placeholder of the components filter field.
-panels-components-filter = Filter components…
+# Placeholder of the components search field; 100n and 0.1u are example
+# values the value-aware search finds (mockup row 52).
+panels-components-filter = Search, try 100n or 0.1u
 
 # Ghost button that opens the Add library menu.
 panels-components-add = Add
@@ -619,7 +620,7 @@ panels-list-region-window = window
 # The PCB panel's row in the panel list, named for its first mode.
 panels-list-row-nets = Nets
 # Foot of the panel list: where the tool documents went.
-panels-list-foot = Rules and the other tool documents open as tabs, from their menus or the command palette.
+panels-list-foot = Layer Stack, Rules and other tool documents open as tabs, from menus or the command palette.
 panels-erc-running = Running…
 panels-erc-no-findings-left = No findings left since the last run
 panels-erc-empty-hint = Run ERC to populate project-wide diagnostics
@@ -657,7 +658,7 @@ panels-net-classes-patterns-hint = VCC*, ?SDA
 panels-net-classes-section = Net Classes
 # Row labels of the selected net class.
 panels-net-classes-name = Name
-panels-net-classes-color = Colour
+panels-net-classes-color = Color
 panels-net-classes-width = Width (mm)
 panels-net-classes-line = Line
 # Line pick-list entries. Default follows the project's line style.
@@ -757,7 +758,7 @@ panels-drawing-color-auto = Auto
 ## Net Classes table (#2417): column titles and cells.
 
 panels-net-classes-column-name = Name
-panels-net-classes-column-color = Colour
+panels-net-classes-column-color = Color
 panels-net-classes-column-width = Width
 panels-net-classes-column-members = Members
 # Colour cell of a class with no colour of its own: the theme's wire colour.
@@ -903,6 +904,8 @@ panels-filter-no-presets = No presets yet. Save current keeps the kinds that are
 # A preset and the kinds it turns on; $name is the preset's, $kinds a list of kind names.
 panels-filter-preset-kinds = { $name }: { $kinds }
 panels-filter-preset-no-kinds = { $name }: no kinds
+# Shown while a preset is selected for editing: each kind chip click changes it; $name is the preset's.
+panels-filter-preset-editing = Editing { $name }
 
 ## Object List panel (#1259): every object of the sheet or the project, listed
 ## and selectable. The panel title is panels-kind-object-list.
@@ -1033,6 +1036,13 @@ panels-messages-filter-hint = Filter messages
 panels-messages-copy-tooltip = Copy the shown messages
 panels-messages-clear-tooltip = Clear the messages
 panels-messages-none-match = No messages match the filters.
+# find-messages
+# A Messages row's action: open the sheet the line names and select the object.
+panels-messages-show = Show
+# A schematic Net Inspector net row's hover action: draw the net bright on every sheet, or no longer.
+panels-net-inspector-highlight = Highlight
+# Logged when a Net Inspector row's Highlight names a net the project no longer has; $net is its name.
+panels-net-inspector-net-gone = Highlight another net; net { $net } is no longer in the project.
 # Tab + compact dock panel pair (#2523): the panel header's link that opens
 # the same view as a document tab.
 panels-paired-open-as-tab = Open as tab
@@ -1076,6 +1086,11 @@ panels-messages-pin-dot-refused-one = could not join { $pin } to the wires it en
 panels-messages-pin-dot-refused-many = could not join { $count } pins to wires of two nets they end on: { $names }
 # One entry of that list: a pin and the two nets.
 panels-messages-pin-dot-refused-entry = { $pin } ({ $through }, { $other })
+# "Keep wires" left a connected pin as a plain move: keeping it connected
+# would cross another net.
+panels-messages-pins-not-kept-one = could not keep { $name } connected without crossing another net
+# The same for several pins; $names lists the first few.
+panels-messages-pins-not-kept-many = could not keep { $count } pins connected without crossing another net: { $names }
 # Stands for a net nothing names.
 panels-messages-unnamed-net = an unnamed net
 # The end of a list cut after its first few entries.
@@ -1147,7 +1162,7 @@ panels-harness-type = Type
 panels-harness-definition = Definition
 # A link that opens the harness definitions view.
 panels-harness-definition-link = { $type } · { $count } entries · edit…
-panels-harness-colour = Colour
+panels-harness-colour = Color
 panels-harness-colour-default = harness default
 panels-harness-placement = Placement
 panels-harness-x = X
@@ -1321,3 +1336,122 @@ panels-compiled-design-naming-refused = Channel naming not changed: { $why }
 # sch-panels-tidy
 # The Canvas Font field (mockup row 40): $family is the font, $size its size in points.
 panels-canvas-font-summary = { $family } · { $size } pt
+# harness-connector-properties
+panels-harness-add-entry = Add entry
+# components-panel-cx
+# Match summary under the Components search: $value is a displayed value
+# such as 100 nF, $count the number of parts showing it.
+panels-components-match-value = { $value } { $count }
+# Match summary: $count more values than the line lists.
+panels-components-match-more = +{ $count } more
+# Match summary: $count parts the number matched by name or text only.
+panels-components-match-by-name = name or text { $count }
+# Match summary: the mark between two entries.
+panels-components-match-separator = ·
+
+# pcb-panel-group
+# Empty state of the compact Length Matching dock panel (mockup row 107).
+panels-length-matching-empty-title = No length-matching groups
+panels-length-matching-empty-body = This board has no length-matching groups yet. Their members show here, with their lengths, as you route.
+
+# pcb-nets-modes
+## The PCB panel's Differential Pairs, xSignals, Polygons and Net Classes
+## modes (mockup row 106).
+
+panels-pcb-mode-diff-pairs = Differential Pairs
+panels-pcb-mode-xsignals = xSignals
+panels-pcb-mode-polygons = Polygons
+# A mode dropdown entry: the mode's name and how many items it lists.
+panels-pcb-mode-count = { $mode } · { $count }
+# An unset rule: the board's own rule is in force.
+panels-pcb-board-value = board
+panels-pcb-pairs-empty = This board has no differential pairs. Name two nets with _P and _N (or + and -), or give a net class a pair gap and two nets.
+# $skew is a length in mm, already formatted.
+panels-pcb-pairs-skew = skew { $skew }
+# A pair's half: its net and routed length in mm, already formatted.
+panels-pcb-pairs-positive = P { $net } { $length }
+panels-pcb-pairs-negative = N { $net } { $length }
+# $gap and $width are lengths in mm or the word for the board's rule.
+panels-pcb-pairs-rules = gap { $gap } · width { $width }
+panels-pcb-pairs-summary =
+    { $count ->
+        [one] { $count } pair
+       *[other] { $count } pairs
+    }
+panels-pcb-pairs-detail-positive = Positive
+panels-pcb-pairs-detail-negative = Negative
+panels-pcb-pairs-detail-gap-width = Gap / Width
+panels-pcb-pairs-detail-routed = Routed
+# Routed length of each half, in mm, already formatted.
+panels-pcb-pairs-detail-routed-value = P { $positive } · N { $negative }
+panels-pcb-pairs-detail-skew = Skew
+# Two values of one detail row, as "0.175 / 0.265".
+panels-pcb-pair-of-values = { $first } / { $second }
+panels-pcb-xsignals-empty = This board has no xSignals yet.
+panels-pcb-xsignals-summary =
+    { $count ->
+        [one] { $count } xSignal
+       *[other] { $count } xSignals
+    }
+panels-pcb-pours-open-manager = Open Polygon Manager
+panels-pcb-pours-manager-later = The Polygon Manager tab is not available yet.
+# Chip over the pour list: the shelved pours.
+panels-pcb-pours-chip-attention = Needs attention
+panels-pcb-pours-poured = Poured
+panels-pcb-pours-shelved = Shelved
+panels-pcb-pours-no-net = No net
+# A pour's layer and its pour priority, a whole number.
+panels-pcb-pours-detail = { $layer } · priority { $priority }
+panels-pcb-pours-empty = This board has no polygon pours.
+panels-pcb-pours-no-match = No pours need attention.
+panels-pcb-pours-summary =
+    { $count ->
+        [one] { $count } pour
+       *[other] { $count } pours
+    }
+panels-pcb-classes-summary =
+    { $count ->
+        [one] { $count } class
+       *[other] { $count } classes
+    }
+panels-pcb-classes-first-wins = The first matching class wins.
+# A class's track width and clearance in mm, already formatted.
+panels-pcb-classes-rule-summary = { $width } / { $clearance }
+# The rules, then the via diameter and drill in mm, already formatted.
+panels-pcb-classes-via-summary = { $rules } · via { $diameter }/{ $drill }
+# An unset rule in a class's summary.
+panels-pcb-classes-unset = —
+panels-pcb-classes-nets =
+    { $count ->
+        [one] { $count } net
+       *[other] { $count } nets
+    }
+# Member nets and patterns of a class; $nets is a whole number.
+panels-pcb-classes-nets-patterns =
+    { $nets } + { $patterns ->
+        [one] { $patterns } pattern
+       *[other] { $patterns } patterns
+    }
+panels-pcb-classes-rules = Rules · { $class }
+panels-pcb-classes-width-clearance = Width / Clear.
+panels-pcb-classes-via = Via
+panels-pcb-classes-impedance = Impedance
+panels-pcb-classes-impedance-tip = A net class stores no impedance yet.
+panels-pcb-classes-members = Member nets
+panels-pcb-classes-nodes =
+    { $count ->
+        [one] { $count } node
+       *[other] { $count } nodes
+    }
+# A glob pattern's row: how many board nets it matches.
+panels-pcb-classes-matches =
+    { $count ->
+        [one] { $count } match
+       *[other] { $count } matches
+    }
+# The class detail's row of the diff-pair gap and width fields.
+panels-pcb-classes-diff-pair = Diff pair
+# quit-list-snxout-cap
+# Kind code of an Export Job (.snxout) document, as on its tab and in the
+# unsaved list of the Exit confirm.
+panels-tab-kind-output-job = OUT

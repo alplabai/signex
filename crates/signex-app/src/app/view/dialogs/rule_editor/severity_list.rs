@@ -176,7 +176,7 @@ pub(super) fn one_rule<M: Clone + 'static>(
         container(rule_name(editor, rule))
             .width(Length::Fill)
             .clip(true),
-        severity_control(editor, &r, rule, current),
+        control_cell(editor, &r, rule, current),
     ]
     .spacing(SP.m)
     .align_y(Alignment::Center)
@@ -277,13 +277,52 @@ fn rule_line<M: Clone + 'static>(
     row![
         dot,
         name,
-        severity_control(editor, r, rule_row.rule, rule_row.severity),
+        control_cell(editor, r, rule_row.rule, rule_row.severity),
     ]
     .spacing(SP.m)
     .align_y(Alignment::Center)
     .height(ROW_H)
     .padding([0.0, SP.m])
     .boxed()
+}
+
+/// A rule's severity control; an on/off-only rule's On / Off comes after
+/// its matrix link (mockup row 148).
+fn control_cell<M: Clone + 'static>(
+    editor: &RuleEditor<'_, M>,
+    r: &ResolvedTokens,
+    rule: RuleKind,
+    current: Severity,
+) -> Element<'static, M> {
+    let control = severity_control(editor, r, rule, current);
+    match super::matrix_link(rule) {
+        Some(label) => row![matrix_link(editor, r, label), control]
+            .spacing(SP.m)
+            .align_y(Alignment::Center)
+            .boxed(),
+        None => control,
+    }
+}
+
+/// The words that say the matrix sets a rule's severity: a link to the
+/// matrix half where the caller has one, else a caption (the matrix is
+/// beside the list).
+fn matrix_link<M: Clone + 'static>(
+    editor: &RuleEditor<'_, M>,
+    r: &ResolvedTokens,
+    label: signex_i18n::MessageId,
+) -> Element<'static, M> {
+    let words = text(t!(editor.i18n, label))
+        .size(TS.caption)
+        .wrapping(iced::widget::text::Wrapping::None);
+    let Some(open) = editor.on_open_matrix.clone() else {
+        return words.color(r.ink3).boxed();
+    };
+    button(words.color(ti(editor.tokens.accent)))
+        .padding(0)
+        .on_press(open)
+        .style(crate::styles::ghost_button(editor.tokens))
+        .boxed()
 }
 
 /// The fill and the label colour of a selected segment.

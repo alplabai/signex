@@ -20,7 +20,7 @@ use signex_widgets::text;
 pub use counts::{FilterEditor, KindCounts, SelectionFilterFacts, board_counts};
 
 use super::{PanelContext, PanelMsg, PcbBoardMsg, PcbBoardSummary, empty_state_card};
-use crate::active_bar::SelectionFilter;
+use crate::active_bar::{SelectionFilter, editing_line};
 use crate::styles::tokens::resolve;
 use crate::styles::{Spacing, TypeScale, ti};
 
@@ -62,41 +62,53 @@ fn board(msg: PcbBoardMsg) -> PanelMsg {
 /// saved presets on a schematic tab (mockup rows 40 and 55), or the empty card with
 /// no schematic or board tab.
 pub(super) fn filter_view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    let (editor, kinds, caption) = match (ctx.selection_filter.editor, ctx.pcb_board.as_ref()) {
-        (FilterEditor::Schematic, _) => (
-            ids::PANELS_FILTER_EDITOR_SCHEMATIC,
-            schematic_kinds(ctx),
-            ids::PANELS_FILTER_COUNTS_SHEET,
-        ),
-        (FilterEditor::Board, Some(summary)) => (
-            ids::PANELS_FILTER_EDITOR_BOARD,
-            board_kinds(ctx, summary),
-            ids::PANELS_FILTER_COUNTS_BOARD,
-        ),
-        _ => {
-            return empty_state_card(
-                &ctx.tokens,
-                t!(ctx.i18n, ids::PANELS_SELECTION_FILTER_TITLE),
-                t!(ctx.i18n, ids::PANELS_SELECTION_FILTER_BODY),
-                None,
-            );
-        }
-    };
+    let (editor, kinds, caption, editing) =
+        match (ctx.selection_filter.editor, ctx.pcb_board.as_ref()) {
+            (FilterEditor::Schematic, _) => (
+                ids::PANELS_FILTER_EDITOR_SCHEMATIC,
+                schematic_kinds(ctx),
+                ids::PANELS_FILTER_COUNTS_SHEET,
+                editing_line(
+                    &ctx.i18n,
+                    &ctx.custom_filter_presets,
+                    ctx.selection_filter.editing,
+                ),
+            ),
+            (FilterEditor::Board, Some(summary)) => (
+                ids::PANELS_FILTER_EDITOR_BOARD,
+                board_kinds(ctx, summary),
+                ids::PANELS_FILTER_COUNTS_BOARD,
+                editing_line(&ctx.i18n, &summary.presets, summary.preset_editing),
+            ),
+            _ => {
+                return empty_state_card(
+                    &ctx.tokens,
+                    t!(ctx.i18n, ids::PANELS_SELECTION_FILTER_TITLE),
+                    t!(ctx.i18n, ids::PANELS_SELECTION_FILTER_BODY),
+                    None,
+                );
+            }
+        };
     let muted = resolve(&ctx.tokens).ink3;
     let caption =
         container(text(t!(ctx.i18n, caption)).size(TS.caption).color(muted)).padding([SP.xs, SP.m]);
-    let panel = Column::new()
+    // While a preset is selected for editing the chips change it too
+    // (#2873): say which.
+    let mut column = Column::new()
         .spacing(SP.xs)
         .width(Length::Fill)
         .push(editor_header(ctx, editor))
-        .push(kinds)
-        .push(caption.boxed());
-    // The presets hold schematic kinds, so they show on a schematic tab only.
-    if ctx.selection_filter.editor == FilterEditor::Schematic {
-        panel.push(presets::section(ctx)).boxed()
-    } else {
-        panel.boxed()
+        .push(kinds);
+    if let Some(line) = editing {
+        let line = container(text(line).size(TS.caption).color(muted)).padding([SP.xs, SP.m]);
+        column = column.push(line.boxed());
     }
+    column = column.push(caption.boxed());
+    // The schematic presets section shows on a schematic tab only.
+    if ctx.selection_filter.editor == FilterEditor::Schematic {
+        column = column.push(presets::section(ctx));
+    }
+    column.boxed()
 }
 
 /// The editor's name in semibold and that the panel follows the active

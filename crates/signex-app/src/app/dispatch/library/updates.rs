@@ -14,6 +14,8 @@ use signex_types::schematic::{LibSymbol, LinkStamp};
 
 mod scan;
 mod selection;
+#[cfg(test)]
+mod skip_all_tests;
 use scan::{
     Instance, InstanceRow, PersonalUpdates, PlacedLibrarySymbol, blocker, bound_instances,
     modal_entry, personal_link,
@@ -24,10 +26,12 @@ use scan::{
 // ─────────────────────────────────────────────────────────────────────
 
 impl Signex {
-    /// User clicked Skip All — close the modal and record the path on
-    /// `skipped_updates_for` (nothing renders that set yet).
+    /// User clicked Skip All — close the modal, remember the offered
+    /// versions for the sheet so a later scan does not offer them again
+    /// (mockup row 135), and record the path on `skipped_updates_for`.
     pub(super) fn handle_library_updates_skip_all(&mut self) -> Task<Message> {
         if let Some(state) = self.library.library_updates.take() {
+            self.library.skipped_versions.remember(&state);
             self.library
                 .skipped_updates_for
                 .insert(state.schematic_path);
@@ -254,6 +258,14 @@ impl Signex {
         any_failed: bool,
         partial: bool,
     ) {
+        // Versions Skip All dismissed on this sheet are not offered again;
+        // they stay pending, like an unchecked entry.
+        let offered = team_entries.len();
+        let team_entries: Vec<_> = team_entries
+            .into_iter()
+            .filter(|e| !self.library.skipped_versions.is_skipped(&schematic_path, e))
+            .collect();
+        let any_failed = any_failed || team_entries.len() < offered;
         if !team_entries.is_empty() {
             // A partial (one-library) scan adds to the sheet's pending
             // modal rather than replacing the other libraries' entries;

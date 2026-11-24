@@ -170,7 +170,9 @@ impl PanelPosition {
             | PanelKind::History
             | PanelKind::NetInspector
             | PanelKind::Unions
-            | PanelKind::Annotations => PanelPosition::Right,
+            | PanelKind::Annotations
+            // Beside the board while routing (mockup row 107).
+            | PanelKind::LengthMatching => PanelPosition::Right,
         }
     }
 }

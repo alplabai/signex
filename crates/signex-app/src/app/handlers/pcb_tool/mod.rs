@@ -7,7 +7,8 @@
 //! colour and dimmed. Esc or a right-click ends the shape being drawn, and
 //! then the tool; a tab switch leaves it behind. Properties shows what the
 //! next click places, and Tab pauses placing to edit it (`form`, #2393).
-//! The Graphics tools draw on non-copper layers (`graphic`, #2424).
+//! The Graphics tools draw on every layer but the keep-outs (`graphic`,
+//! #2424, #2883).
 
 use std::path::PathBuf;
 
@@ -31,6 +32,7 @@ mod form;
 mod free;
 mod free_form;
 mod graphic;
+mod graphic_copper;
 mod outline_preview;
 mod pour_cut;
 mod quick;
@@ -51,9 +53,13 @@ mod area_form_tests;
 #[cfg(test)]
 mod area_tests;
 #[cfg(test)]
+mod dimension_defaults_tests;
+#[cfg(test)]
 mod form_tests;
 #[cfg(test)]
 mod free_tests;
+#[cfg(test)]
+mod graphic_copper_tests;
 #[cfg(test)]
 mod graphic_tests;
 #[cfg(test)]

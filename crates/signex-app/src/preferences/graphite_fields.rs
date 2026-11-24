@@ -16,8 +16,10 @@ pub(super) fn graphite_label(item: PrefNav) -> MessageId {
         PrefNav::Appearance => ids::PREFERENCES_PAGE_THEME,
         PrefNav::Language => ids::PREFERENCES_PAGE_LANGUAGE,
         PrefNav::Keyboard => ids::PREFERENCES_PAGE_KEYBOARD,
+        PrefNav::General => ids::PREFERENCES_PAGE_GENERAL,
         PrefNav::Editing => ids::PREFERENCES_PAGE_EDITING,
         PrefNav::SchematicDisplay => ids::PREFERENCES_PAGE_SCHEMATIC_DISPLAY,
+        PrefNav::PcbDefaults => ids::PREFERENCES_PAGE_PCB_DEFAULTS,
         PrefNav::Annotation => ids::PREFERENCES_PAGE_ANNOTATION,
         PrefNav::RuleProfiles => ids::PREFERENCES_PAGE_RULE_PROFILES,
         PrefNav::LibraryDistributors => ids::PREFERENCES_PAGE_DISTRIBUTORS,
@@ -32,6 +34,10 @@ pub(super) fn group_messages(item: PrefNav) -> (MessageId, MessageId) {
         "Schematic" => (
             ids::PREFERENCES_GROUP_SCHEMATIC,
             ids::PREFERENCES_GROUP_SCHEMATIC_HEADING,
+        ),
+        "PCB" => (
+            ids::PREFERENCES_GROUP_PCB,
+            ids::PREFERENCES_GROUP_PCB_HEADING,
         ),
         "Validation" => (
             ids::PREFERENCES_GROUP_VALIDATION,
@@ -57,26 +63,85 @@ fn former_names(item: PrefNav) -> &'static [&'static str] {
         PrefNav::ComponentClasses => &["Default Component Classes"],
         PrefNav::Language
         | PrefNav::Keyboard
+        | PrefNav::General
         | PrefNav::Annotation
         | PrefNav::SchematicDisplay
+        | PrefNav::PcbDefaults
         | PrefNav::RuleProfiles
         | PrefNav::LibraryDistributors => &[],
     }
 }
 
+/// The labels of the setting rows a page draws, so a search for a setting
+/// finds its page (mockup row 143). A row added to a page goes here too;
+/// a layout test in `app::view::chrome` checks each page draws its list.
+/// The table pages (shortcuts, profiles, distributors, classes) have none.
+pub(crate) fn setting_labels(item: PrefNav) -> &'static [MessageId] {
+    match item {
+        PrefNav::Appearance => &[
+            ids::PREFERENCES_APPEARANCE_UI_FONT,
+            ids::PREFERENCES_APPEARANCE_UI_SCALE,
+            ids::PREFERENCES_SELECTED_SEGMENT_LABEL,
+            ids::PREFERENCES_APPEARANCE_GRID_STYLE_LABEL,
+            ids::PREFERENCES_APPEARANCE_SYMBOL_GRID_LABEL,
+            ids::PREFERENCES_APPEARANCE_PIN_SELECTION_LABEL,
+            ids::PREFERENCES_APPEARANCE_GPU_RENDER_LABEL,
+            ids::PREFERENCES_APPEARANCE_ANTIALIASING,
+            ids::PREFERENCES_WHEEL_MODE_LABEL,
+            ids::PREFERENCES_APPEARANCE_ZOOM_SPEED,
+            ids::PREFERENCES_APPEARANCE_TRACKPAD_PAN,
+            ids::PREFERENCES_LAYER_SWITCHER_LABEL,
+            ids::PREFERENCES_APPEARANCE_WINDOW_BUTTONS,
+            ids::PREFERENCES_APPEARANCE_REMEMBER_GEOMETRY,
+        ],
+        PrefNav::Language => &[ids::PREFERENCES_LANGUAGE_INTERFACE],
+        PrefNav::General => &[
+            ids::PREFERENCES_AUTOSAVE,
+            ids::PREFERENCES_AGENT_CONNECTIONS_LABEL,
+        ],
+        PrefNav::Annotation => &[ids::PREFERENCES_ANNOTATE_UNDO],
+        PrefNav::Editing => &[
+            ids::PREFERENCES_MOVE_KEEPS_WIRES,
+            ids::PREFERENCES_DRAG_DIRECTION,
+            ids::PREFERENCES_NET_HOVER,
+            ids::PREFERENCES_APPEARANCE_FAST_GRID_1,
+            ids::PREFERENCES_APPEARANCE_FAST_GRID_2,
+            ids::PREFERENCES_INCREMENT_STEP,
+            ids::PREFERENCES_PASTE_DESIGNATORS,
+        ],
+        PrefNav::SchematicDisplay => &[
+            ids::PREFERENCES_SYMBOL_BODY_FILL,
+            ids::PREFERENCES_SYMBOL_BODY_FILL_COLOUR,
+        ],
+        PrefNav::Keyboard
+        | PrefNav::RuleProfiles
+        | PrefNav::LibraryDistributors
+        | PrefNav::ComponentClasses => &[],
+    }
+}
+
 /// Whether a nav row stays visible for the search `query`: the casemap fold
 /// of the UI language over the shown page name and group, the English page
-/// and group names, and the page's former English names. An empty query
+/// and group names, the page's former English names and its setting labels
+/// in the UI language and in English, as the page names are. An empty query
 /// shows every row.
 pub(super) fn nav_matches(i18n: &I18n, item: PrefNav, query: &str) -> bool {
     let q = i18n.fold_for_search(query.trim());
+    if q.is_empty() {
+        return true;
+    }
     let page = t!(i18n, graphite_label(item)).into_string();
     let group = t!(i18n, group_messages(item).0).into_string();
-    q.is_empty()
-        || [page.as_str(), group.as_str(), item.label(), item.group()]
-            .into_iter()
-            .chain(former_names(item).iter().copied())
-            .any(|name| i18n.fold_for_search(name).contains(&q))
+    let en = I18n::en_us();
+    let settings: Vec<String> = setting_labels(item)
+        .iter()
+        .flat_map(|&id| [t!(i18n, id).into_string(), t!(en, id).into_string()])
+        .collect();
+    [page.as_str(), group.as_str(), item.label(), item.group()]
+        .into_iter()
+        .chain(former_names(item).iter().copied())
+        .chain(settings.iter().map(String::as_str))
+        .any(|name| i18n.fold_for_search(name).contains(&q))
 }
 
 /// The "Search preferences" field above the nav: a bordered frame around a

@@ -291,6 +291,10 @@ fn applying_a_preset_makes_it_the_edited_one() {
     send(&mut app, SchFilterMsg::PresetApplied(2));
     assert_eq!(app.interaction_state.active_custom_filter_tab, 2);
     assert_eq!(app.document_state.panel_ctx.active_custom_filter_tab, 2);
+    assert_eq!(
+        app.document_state.panel_ctx.selection_filter.editing,
+        Some(2)
+    );
 }
 
 #[test]
@@ -331,9 +335,22 @@ fn the_presets_section_names_the_edited_preset_and_its_kinds() {
         });
     app.document_state.panel_ctx.custom_filter_presets =
         app.interaction_state.custom_filter_presets.clone();
+    // #2873 (Caner, 2026-11-24): the name row belongs to the preset selected
+    // for editing, so the preset is clicked first; it used to show for the
+    // Properties tab's preset without a click.
+    let idle = texts(PanelKind::Filter, &app.document_state.panel_ctx);
+    assert!(!idle.iter().any(|t| t == "Delete"), "{idle:?}");
+    send(&mut app, SchFilterMsg::PresetApplied(0));
     let shown = texts(PanelKind::Filter, &app.document_state.panel_ctx);
     // The section title is upper-cased like every collapsible section.
-    for label in ["PRESETS", "Save current", "Name", "Delete", "Wiring"] {
+    for label in [
+        "PRESETS",
+        "Save current",
+        "Name",
+        "Delete",
+        "Wiring",
+        "Editing Wiring",
+    ] {
         assert!(shown.iter().any(|t| t == label), "{label} in {shown:?}");
     }
     assert!(
@@ -484,5 +501,264 @@ fn an_off_kind_still_toggles_through_its_dashed_outline() {
             ))]
         ),
         "{wires:?}"
+    );
+}
+
+// ---- #2873: presets are edited in place ----
+
+/// The update result of `msg`; its prefs write is left unrun so the
+/// per-process prefs file stays as other tests expect it.
+fn update(app: &mut Signex, msg: Message) -> iced::Task<Message> {
+    app.update(msg)
+}
+
+fn sch(msg: SchFilterMsg) -> Message {
+    Message::Dock(DockMessage::Panel(PanelMsg::SchFilter(msg)))
+}
+
+fn bar(msg: crate::active_bar::ActiveBarMsg) -> Message {
+    Message::ActiveBar(msg)
+}
+
+fn set(kinds: &[SelectionFilter]) -> std::collections::HashSet<SelectionFilter> {
+    kinds.iter().copied().collect()
+}
+
+/// An app on the sheet with "Wiring" (Wires, Buses) and "Logic"
+/// (Components; not "Parts", a kind's label) saved, none selected, every
+/// kind on.
+fn app_with_wiring_and_parts() -> Signex {
+    let mut app = app_on_sheet();
+    app.interaction_state.custom_filter_presets = vec![
+        CustomFilterPreset::capture(
+            "Wiring".to_string(),
+            &set(&[SelectionFilter::Wires, SelectionFilter::Buses]),
+        ),
+        CustomFilterPreset::capture("Logic".to_string(), &set(&[SelectionFilter::Components])),
+    ];
+    app.refresh_panel_ctx();
+    app
+}
+
+fn preset_kinds(app: &Signex, idx: usize) -> Vec<SelectionFilter> {
+    app.interaction_state.custom_filter_presets[idx]
+        .filters
+        .clone()
+}
+
+/// Every way a preset chip is clicked: the Filter panel and the Active Bar
+/// dropdown.
+fn preset_clicks(idx: usize) -> [Message; 2] {
+    use crate::active_bar::ActiveBarMsg;
+    [
+        sch(SchFilterMsg::PresetApplied(idx)),
+        bar(ActiveBarMsg::ApplyCustomFilter(idx)),
+    ]
+}
+
+/// A click on a preset, from the panel or the dropdown, applies it and
+/// selects it for editing; the panel and the dropdown say "Editing <name>".
+#[test]
+fn a_preset_click_applies_it_and_selects_it_for_editing() {
+    for clicked in preset_clicks(1) {
+        let mut app = app_with_wiring_and_parts();
+        let _ = update(&mut app, clicked);
+        assert_eq!(
+            app.interaction_state.selection_filters,
+            set(&[SelectionFilter::Components])
+        );
+        let ctx = &app.document_state.panel_ctx;
+        assert_eq!(ctx.selection_filter.editing, Some(1));
+        let shown = texts(PanelKind::Filter, ctx);
+        assert!(shown.iter().any(|t| t == "Editing Logic"), "{shown:?}");
+        let filter = texts(PanelKind::Filter, ctx);
+        assert!(filter.iter().any(|t| t == "Editing Logic"), "{filter:?}");
+        let state = crate::active_bar::SchematicFilterState {
+            filters: &app.interaction_state.selection_filters,
+            presets: &app.interaction_state.custom_filter_presets,
+            editing: ctx.selection_filter.editing,
+        };
+        let dropdown = crate::active_bar::view_dropdown(
+            &app.ui_state.i18n,
+            crate::active_bar::ActiveBarMenu::Filter,
+            &ctx.tokens,
+            &state,
+            app.ui_state.effective_theme_id(),
+            false,
+            false,
+            &|_| String::new(),
+        );
+        let laid = crate::layout_probe::lay_out_texts(dropdown, WINDOW);
+        let dropdown: Vec<String> = laid
+            .into_iter()
+            .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect();
+        assert!(
+            dropdown.iter().any(|t| t == "Editing Logic"),
+            "{dropdown:?}"
+        );
+    }
+}
+
+/// While a preset is selected each chip click, from the panel or the
+/// dropdown, changes it at once with a prefs write, and the filter with it.
+#[test]
+fn a_chip_click_changes_the_selected_preset_and_the_filter() {
+    use crate::active_bar::ActiveBarMsg;
+    let mut app = app_with_wiring_and_parts();
+    let _ = update(&mut app, sch(SchFilterMsg::PresetApplied(0)));
+    let task = update(
+        &mut app,
+        sch(SchFilterMsg::KindToggled(SelectionFilter::Ports)),
+    );
+    assert!(task.units() >= 1, "the preset is saved, as a task");
+    let toggled = ActiveBarMsg::ToggleFilter(SelectionFilter::Buses);
+    let task = update(&mut app, bar(toggled));
+    assert!(task.units() >= 1, "the dropdown's chip saves it too");
+    let want = vec![SelectionFilter::Wires, SelectionFilter::Ports];
+    assert_eq!(preset_kinds(&app, 0), want);
+    assert_eq!(app.interaction_state.selection_filters, set(&want));
+    assert_eq!(
+        app.document_state.panel_ctx.custom_filter_presets[0].filters, want,
+        "the panels show the change"
+    );
+    assert_eq!(preset_kinds(&app, 1), vec![SelectionFilter::Components]);
+}
+
+/// All, None, the dropdown's All / None and All toggle, and a second click
+/// on the selected preset (panel or dropdown) leave editing; a chip then
+/// changes only the filter.
+#[test]
+fn all_none_or_a_second_click_leave_editing() {
+    use crate::active_bar::ActiveBarMsg;
+    let leave = [
+        sch(SchFilterMsg::AllPicked),
+        sch(SchFilterMsg::NonePicked),
+        bar(ActiveBarMsg::AllFiltersPicked),
+        bar(ActiveBarMsg::NoFiltersPicked),
+        bar(ActiveBarMsg::ToggleAllFilters),
+        sch(SchFilterMsg::PresetApplied(0)),
+        bar(ActiveBarMsg::ApplyCustomFilter(0)),
+    ];
+    for (at, left) in leave.into_iter().enumerate() {
+        let mut app = app_with_wiring_and_parts();
+        let _ = update(&mut app, sch(SchFilterMsg::PresetApplied(0)));
+        let label = format!("leave #{at}");
+        // The last two are the second click on the selected preset.
+        let second_click = at >= 5;
+        let before = app.interaction_state.selection_filters.clone();
+        let _ = update(&mut app, left);
+        assert_eq!(app.interaction_state.editing_custom_filter, None, "{label}");
+        assert_eq!(app.document_state.panel_ctx.selection_filter.editing, None);
+        if second_click {
+            assert_eq!(app.interaction_state.selection_filters, before, "{label}");
+        }
+        let shown = texts(PanelKind::Filter, &app.document_state.panel_ctx);
+        assert!(!shown.iter().any(|t| t.starts_with("Editing")), "{label}");
+        let had = app
+            .interaction_state
+            .selection_filters
+            .contains(&SelectionFilter::Ports);
+        let _ = update(
+            &mut app,
+            sch(SchFilterMsg::KindToggled(SelectionFilter::Ports)),
+        );
+        let has = app
+            .interaction_state
+            .selection_filters
+            .contains(&SelectionFilter::Ports);
+        assert_ne!(had, has, "{label}: the chip changes the filter");
+        let wiring = vec![SelectionFilter::Wires, SelectionFilter::Buses];
+        assert_eq!(preset_kinds(&app, 0), wiring, "{label}: not the preset");
+    }
+}
+
+/// The name field renames the selected preset and Delete removes it; a
+/// removal before it keeps the selection on its preset.
+#[test]
+fn the_name_field_renames_and_delete_removes_the_selected_preset() {
+    let mut app = app_with_wiring_and_parts();
+    let _ = update(&mut app, sch(SchFilterMsg::PresetApplied(1)));
+    let _ = update(&mut app, sch(SchFilterMsg::PresetRenameStarted(1)));
+    let _ = update(
+        &mut app,
+        sch(SchFilterMsg::PresetRenameTyped("Power".into())),
+    );
+    let _ = update(
+        &mut app,
+        sch(SchFilterMsg::PresetRenamed(1, "Power".into())),
+    );
+    assert_eq!(app.interaction_state.custom_filter_presets[1].name, "Power");
+    let _ = update(&mut app, sch(SchFilterMsg::PresetDeleted(0)));
+    assert_eq!(
+        app.document_state.panel_ctx.selection_filter.editing,
+        Some(0)
+    );
+    assert_eq!(app.interaction_state.custom_filter_presets[0].name, "Power");
+    let deleted = click(PanelKind::Filter, &app.document_state.panel_ctx, "Delete");
+    assert!(
+        matches!(
+            deleted.as_slice(),
+            [PanelMsg::SchFilter(SchFilterMsg::PresetDeleted(0))]
+        ),
+        "{deleted:?}"
+    );
+    let _ = update(&mut app, sch(SchFilterMsg::PresetDeleted(0)));
+    assert!(app.interaction_state.custom_filter_presets.is_empty());
+    assert_eq!(app.document_state.panel_ctx.selection_filter.editing, None);
+}
+
+/// Save current, from the panel or the dropdown, saves the kinds that are
+/// on as a new preset and selects it; the cap stays.
+#[test]
+fn save_current_saves_the_chips_and_selects_the_new_preset() {
+    use crate::active_bar::ActiveBarMsg;
+    let mut app = app_with_wiring_and_parts();
+    let _ = update(&mut app, sch(SchFilterMsg::NonePicked));
+    let _ = update(
+        &mut app,
+        sch(SchFilterMsg::KindToggled(SelectionFilter::Texts)),
+    );
+    let _ = update(&mut app, sch(SchFilterMsg::PresetSaved));
+    assert_eq!(preset_kinds(&app, 2), vec![SelectionFilter::Texts]);
+    assert_eq!(
+        app.document_state.panel_ctx.selection_filter.editing,
+        Some(2)
+    );
+    let _ = update(&mut app, bar(ActiveBarMsg::FilterPresetSavePicked));
+    assert_eq!(
+        app.document_state.panel_ctx.selection_filter.editing,
+        Some(3)
+    );
+    let _ = update(&mut app, sch(SchFilterMsg::PresetSaved));
+    assert_eq!(
+        app.interaction_state.custom_filter_presets.len(),
+        CUSTOM_FILTER_PRESET_LIMIT
+    );
+    assert_eq!(
+        app.document_state.panel_ctx.selection_filter.editing,
+        Some(3)
+    );
+}
+
+/// Document Options' member chip on the selected preset changes the filter
+/// too, so the next chip click does not undo it.
+#[test]
+fn a_document_options_member_chip_on_the_selected_preset_moves_the_filter() {
+    let mut app = app_with_wiring_and_parts();
+    let _ = update(&mut app, sch(SchFilterMsg::PresetApplied(0)));
+    let member = PanelMsg::ToggleCustomFilterPresetMember(0, SelectionFilter::Ports);
+    let _ = update(&mut app, Message::Dock(DockMessage::Panel(member)));
+    let want = set(&[
+        SelectionFilter::Wires,
+        SelectionFilter::Buses,
+        SelectionFilter::Ports,
+    ]);
+    assert_eq!(app.interaction_state.selection_filters, want);
+    let other = PanelMsg::ToggleCustomFilterPresetMember(1, SelectionFilter::Ports);
+    let _ = update(&mut app, Message::Dock(DockMessage::Panel(other)));
+    assert_eq!(
+        app.interaction_state.selection_filters, want,
+        "not preset 1"
     );
 }

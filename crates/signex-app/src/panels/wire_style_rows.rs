@@ -590,7 +590,7 @@ mod tests {
         let (texts, inputs) = color_row(WireColorPicker::Closed, None, 320.0);
         assert!(shown(&texts).contains(&"Color"), "{texts:?}");
         assert_eq!(shown(&inputs), ["Default"], "the placeholder of the box");
-        assert!(!shown(&texts).contains(&"Preset Colours"), "{texts:?}");
+        assert!(!shown(&texts).contains(&"Preset Colors"), "{texts:?}");
     }
 
     /// What is typed shows in the box until it is applied.

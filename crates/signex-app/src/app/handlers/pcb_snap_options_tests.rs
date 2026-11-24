@@ -1,17 +1,19 @@
-//! Caner, 2026-11-21: the board's Snap Options, from the real checkbox
-//! message to a real canvas drag and tool click, on a 0.1 mm grid. Every
-//! object sits off that grid, so landing on one can only be its snap.
+//! Caner, 2026-11-21 and 2026-11-24 (#2879): the board's Snap Options, from
+//! the real checkbox message to a real canvas drag and tool click, on a
+//! 0.1 mm grid. Every object sits off that grid, so landing on one can only
+//! be its snap.
 
 use std::path::{Path, PathBuf};
 
 use iced::widget::canvas;
 use iced::{Event, Rectangle, mouse};
+use pcb_geom::ClickMode;
 use serde_json::json;
 use signex_engine::pcb::part_place::PartToPlace;
 use signex_engine::pcb::snap::SnapObject;
 use signex_renderer::pcb::BoardObject;
 use signex_types::pcb::{PadNet, PadType, PcbBoard, Point};
-use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 use uuid::Uuid;
 
 use crate::app::command::CommandArgs;
@@ -19,8 +21,8 @@ use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::{EditMsg, Message, Signex, StatusBarRequest, UiMsg};
 use crate::dock::DockMessage;
 use crate::keymap::AppCommandId;
-use crate::panels::{PanelMsg, PcbBoardMsg};
-use crate::pcb_canvas::{PcbCanvasState, PcbCarry, SnapDistance, SnapScope};
+use crate::panels::{BoardField, PanelMsg, PcbBoardMsg};
+use crate::pcb_canvas::{PcbCanvasMsg, PcbCanvasState, PcbCarry, PcbSnapOptions, SnapScope};
 
 const U1: Uuid = Uuid::from_u128(0x10);
 const BOUNDS: Rectangle = Rectangle {
@@ -77,9 +79,11 @@ fn board(grid_mm: f64) -> PcbBoard {
             track(0x71, (60.03, 1.0), (60.03, 9.0)),
             track(0x72, (56.0, 5.03), (64.0, 5.03))
         ],
+        // Its edges run away from below (35.03, 40.03), so a pointer under
+        // that vertex is nearest the vertex itself, edges counting (#2879).
         "zones": [{"uuid": Uuid::from_u128(0x80), "layer": "TopCopper",
                    "outline": [{"x": 35.03, "y": 40.03}, {"x": 40.0, "y": 40.0},
-                               {"x": 40.0, "y": 45.0}]}],
+                               {"x": 40.0, "y": 35.0}]}],
         "texts": [{"uuid": Uuid::from_u128(0x90), "text": "REV",
                    "position": {"x": 5.03, "y": 45.03}, "layer": "TopSilkscreen"}]
     }))
@@ -103,12 +107,26 @@ struct Rig {
     _dir: tempfile::TempDir,
 }
 
-/// The board open with every object checkbox off, through the panel.
+/// The board open with every object checkbox and Axes off, through the
+/// panel: a test turns on what it pins. Axes has its own tests below.
 fn rig(grid_mm: f64) -> Rig {
     rig_on(board(grid_mm))
 }
 
 fn rig_on(board: PcbBoard) -> Rig {
+    let mut rig = open(board);
+    assert_eq!(rig.app.ui_state.pcb_snap, PcbSnapOptions::default());
+    for object in SnapObject::DEFAULT_ON {
+        rig.toggle(object);
+    }
+    assert!(rig.app.ui_state.pcb_snap.objects.is_empty());
+    rig.panel(PcbBoardMsg::SnapToAxesToggled);
+    assert!(!rig.app.ui_state.pcb_snap.to_axes);
+    rig
+}
+
+/// The board open with the Snap Options of a new session.
+fn open(board: PcbBoard) -> Rig {
     let dir = tempfile::tempdir().unwrap();
     let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
     app.ui_state.first_run_tour_open = false;
@@ -128,17 +146,12 @@ fn rig_on(board: PcbBoard) -> Rig {
     if let Some(message) = settled.and_then(|action| action.into_inner().0) {
         let _ = app.update(message);
     }
-    let mut rig = Rig {
+    Rig {
         app,
         path,
         state,
         _dir: dir,
-    };
-    for object in SnapObject::DEFAULT_ON {
-        rig.toggle(object);
     }
-    assert!(rig.app.ui_state.pcb_snap.objects.is_empty());
-    rig
 }
 
 impl Rig {
@@ -222,6 +235,40 @@ impl Rig {
             .unwrap()
             .position;
         let _ = self.app.update(Message::Edit(EditMsg::Undo));
+        at
+    }
+
+    /// A board click at `at`, as the canvas reports it.
+    fn clicked(&mut self, at: Point) {
+        let _ = self.app.update(Message::PcbCanvas(PcbCanvasMsg::Clicked {
+            at,
+            tolerance_mm: 0.05,
+            mode: ClickMode::Replace,
+        }));
+    }
+
+    /// Edit ▸ Move U1 from its origin to `to`; where its origin landed.
+    /// Undone after.
+    fn move_u1(&mut self, to: Point) -> Point {
+        self.run("move_object");
+        self.clicked(Point::new(10.0, 10.0));
+        let _ = self
+            .app
+            .update(Message::PcbCanvas(PcbCanvasMsg::PointerMoved {
+                at: to,
+                zoom_pct: 100.0,
+                tolerance_mm: 0.05,
+            }));
+        self.clicked(to);
+        let at = self
+            .board()
+            .footprints
+            .iter()
+            .find(|f| f.uuid == U1)
+            .unwrap()
+            .position;
+        let _ = self.app.update(Message::Edit(EditMsg::Undo));
+        self.app.clear_pcb_selection();
         at
     }
 
@@ -318,29 +365,45 @@ fn a_track_click_within_the_reach_of_a_pad_centre_lands_on_it() {
     assert!(ends, "{:?}", rig.board().segments);
 }
 
+/// Past both the 1 mm Snap Distance and 8 px (#2879; it was 12 px when the
+/// reach was a multiple of the grid).
 #[test]
 fn beyond_the_reach_nothing_pulls() {
     let mut rig = rig(0.1);
     rig.toggle(SnapObject::PadCenters);
-    let at = rig.drag_u1(Point::new(30.03, 30.03 + rig.mm(12.0)));
+    let gap = rig.mm(12.0).max(1.2);
+    let at = rig.drag_u1(Point::new(30.03, 30.03 + gap));
     assert!(on_grid(at, 0.1), "{at:?}");
 }
 
+/// Type `text` into the panel's `field` and press Enter, in mm.
+fn type_in(rig: &mut Rig, field: BoardField, text: &str) {
+    rig.app.ui_state.unit = signex_types::coord::Unit::Mm;
+    rig.panel(PcbBoardMsg::FieldTyped(field, text.into()));
+    rig.panel(PcbBoardMsg::FieldSubmitted(field));
+}
+
+/// Caner, 2026-11-24 (#2879): Snap Distance is a length, the same reach on
+/// a fine and a coarse grid; a shorter one lets go. It replaces the
+/// multiple of the grid (2026-11-21), whose test said a coarse grid kept a
+/// larger radius.
 #[test]
-fn a_coarse_grid_keeps_its_larger_radius() {
-    let mut rig = rig(2.54);
-    rig.toggle(SnapObject::PadCenters);
-    // Past 8 px, inside 0.5 x 2.54 mm.
-    let gap = rig.mm(12.0).min(1.2).max(rig.mm(8.0) + 0.01);
-    assert!(gap < 1.27, "this view keeps the test meaningful: {gap}");
-    let target = Point::new(30.03, 30.03);
-    let at = rig.drag_u1(Point::new(target.x, target.y + gap));
-    assert!(close(at, target), "{at:?}");
-    rig.panel(PcbBoardMsg::SnapDistancePicked(SnapDistance::Quarter));
-    let quarter = rig.mm(8.0).max(0.25 * 2.54);
-    if gap > quarter {
+fn the_snap_distance_is_a_length_whatever_the_grid() {
+    for grid in [0.1, 2.54] {
+        let mut rig = rig(grid);
+        rig.toggle(SnapObject::PadCenters);
+        let gap = 0.9;
+        assert!(rig.mm(8.0) < gap, "this view keeps the test meaningful");
+        let target = Point::new(30.03, 30.03);
         let at = rig.drag_u1(Point::new(target.x, target.y + gap));
-        assert!(!close(at, target), "a shorter Distance lets go: {at:?}");
+        assert!(close(at, target), "{grid}: {at:?}");
+        type_in(&mut rig, BoardField::SnapDistance, "0.5");
+        assert_eq!(rig.app.ui_state.pcb_snap.distance_mm, 0.5);
+        let at = rig.drag_u1(Point::new(target.x, target.y + gap));
+        assert!(
+            !close(at, target),
+            "{grid}: a shorter Distance lets go: {at:?}"
+        );
     }
 }
 
@@ -460,10 +523,12 @@ fn the_status_bar_snap_off_frees_every_path() {
     assert!(close(at, Point::new(30.03, 30.03)), "{at:?}");
 }
 
-/// The reach counts on the grid that applies: a 5 mm extra grid for parts
-/// widens a part's reach, not a via tool's.
+/// Caner, 2026-11-24 (#2879): the reach is the Snap Distance whatever grid
+/// applies, so a 5 mm extra grid for parts widens neither a part's reach
+/// nor a via tool's. It replaces the 2026-11-21 rule that the reach counted
+/// on the grid that applies (a part reached further than a via tool).
 #[test]
-fn the_catch_radius_uses_the_grid_that_applies() {
+fn the_catch_radius_does_not_follow_the_grid_that_applies() {
     let mut rig = rig(0.1);
     rig.toggle(SnapObject::PadCenters);
     let mut options = rig.board().options.clone();
@@ -482,14 +547,18 @@ fn the_catch_radius_uses_the_grid_that_applies() {
     rig.app
         .execute_board_commands(&path, vec![command], None)
         .expect("the grid");
-    let gap = rig.mm(20.0);
-    assert!(gap < 2.5, "inside 0.5 x 5 mm: {gap}");
+    // Past the 1 mm Snap Distance and 8 px, inside the old 0.5 x 5 mm.
+    let gap = rig.mm(12.0).max(1.5);
+    assert!(gap < 2.5, "this view keeps the test meaningful: {gap}");
     let target = Point::new(30.03, 30.03);
     let pointer = Point::new(target.x, target.y + gap);
     let at = rig.drag_u1(pointer);
-    assert!(close(at, target), "a part reaches it: {at:?}");
+    assert!(!close(at, target), "a part does not reach it: {at:?}");
     let at = rig.via_tool_at(pointer);
-    assert!(!close(at, target), "a via tool does not: {at:?}");
+    assert!(!close(at, target), "nor does a via tool: {at:?}");
+    let near = Point::new(target.x, target.y + 0.8);
+    assert!(close(rig.drag_u1(near), target), "within 1 mm a part does");
+    assert!(close(rig.via_tool_at(near), target), "and a via tool");
 }
 
 /// A dragged part does not snap to the track following its pad.
@@ -786,4 +855,111 @@ fn with_snap_off_a_duplicate_keeps_its_exact_offset() {
         .expect("the copy");
     let want = Point::new(30.03 + OFFSET, 30.03 + OFFSET);
     assert!(close(copy.position, want), "{:?}", copy.position);
+}
+
+/// Caner, 2026-11-24 (#2879): a new session snaps to every supported
+/// object (3D Body Snap Points stays off) with Axes on, a 1 mm Snap
+/// Distance and a 2 mm Axis Snap Range; a track line pulls a tool click.
+#[test]
+fn a_new_session_snaps_to_every_supported_object_and_to_axes() {
+    let defaults = PcbSnapOptions::default();
+    let supported: std::collections::BTreeSet<SnapObject> = SnapObject::ALL
+        .into_iter()
+        .filter(|object| object.is_supported())
+        .collect();
+    assert_eq!(defaults.objects, supported);
+    assert!(!defaults.objects.contains(&SnapObject::Body3dPoints));
+    assert!(defaults.to_grids && defaults.to_guides && defaults.to_axes);
+    assert_eq!(defaults.scope, SnapScope::AllLayers);
+    assert_eq!(defaults.distance_mm, 1.0);
+    assert_eq!(defaults.axis_range_mm, 2.0);
+
+    let mut rig = open(board(0.1));
+    let on_line = Point::new(42.53, 5.03);
+    let at = rig.via_tool_at(Point::new(on_line.x, on_line.y + rig.mm(4.0)));
+    assert!(close(at, on_line), "{at:?}");
+}
+
+/// Caner, 2026-11-24 (#2879): Current Layer snaps to every kind of object
+/// on the active layer, texts and regions included, and leaves out those on
+/// other layers (it used to see copper only).
+#[test]
+fn current_layer_snaps_to_every_kind_on_the_active_layer_only() {
+    let mut rig = rig(0.1);
+    rig.toggle(SnapObject::Texts);
+    rig.toggle(SnapObject::Regions);
+    rig.panel(PcbBoardMsg::SnapScopePicked(SnapScope::CurrentLayer));
+    let text = Point::new(5.03, 45.03);
+    let region = Point::new(35.03, 40.03);
+    let reach = rig.mm(4.0);
+    let below = |p: Point| Point::new(p.x, p.y + reach);
+    // Top copper is active: the top region pulls, the silkscreen text not.
+    let at = rig.drag_u1(below(region));
+    assert!(close(at, region), "{at:?}");
+    let at = rig.drag_u1(below(text));
+    assert!(!close(at, text), "{at:?}");
+    let silk = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
+    rig.app.edit_pcb_view(None, |view, _| view.set_active(silk));
+    let at = rig.drag_u1(below(text));
+    assert!(close(at, text), "the silkscreen is active: {at:?}");
+    let at = rig.drag_u1(below(region));
+    assert!(
+        !close(at, region),
+        "copper is off the current layer: {at:?}"
+    );
+}
+
+/// Caner, 2026-11-24 (#2879): Measure's points snap by the Snap Options.
+#[test]
+fn measure_snaps_its_points() {
+    let mut rig = rig(0.1);
+    let pad = Point::new(30.03, 30.03);
+    let pointer = Point::new(pad.x, pad.y + rig.mm(4.0));
+    let first = |rig: &mut Rig| {
+        rig.run("measure_distance");
+        rig.clicked(pointer);
+        let measure = rig.app.interaction_state.pcb_query.measure.as_ref();
+        let at = measure.and_then(|m| m.first).expect("a first point").at;
+        rig.app.interaction_state.pcb_query.measure = None;
+        at
+    };
+    let at = first(&mut rig);
+    assert!(!close(at, pad) && on_grid(at, 0.1), "off: {at:?}");
+    rig.toggle(SnapObject::PadCenters);
+    let at = first(&mut rig);
+    assert!(close(at, pad), "on: {at:?}");
+}
+
+/// Caner, 2026-11-24 (#2879): Edit ▸ Move snaps by the Snap Options.
+#[test]
+fn edit_move_snaps_onto_an_object() {
+    let mut rig = rig(0.1);
+    let pad = Point::new(30.03, 30.03);
+    let pointer = Point::new(pad.x, pad.y + rig.mm(4.0));
+    let at = rig.move_u1(pointer);
+    assert!(!close(at, pad) && on_grid(at, 0.1), "off: {at:?}");
+    rig.toggle(SnapObject::PadCenters);
+    let at = rig.move_u1(pointer);
+    assert!(close(at, pad), "on: {at:?}");
+}
+
+/// Caner, 2026-11-24 (#2879): with Axes on, a tool point out of the object
+/// reach lines up with a pad centre inside the 2 mm Axis Snap Range on the
+/// axis it is near, and keeps the grid on the other.
+#[test]
+fn axes_line_a_tool_point_up_with_a_pad_centre_in_range() {
+    let mut rig = rig(0.1);
+    rig.toggle(SnapObject::PadCenters);
+    assert!(rig.mm(8.0) < 1.5, "this view keeps the test meaningful");
+    let pad = Point::new(30.03, 30.03);
+    let pointer = Point::new(pad.x + 1.55, pad.y + 0.04);
+    let at = rig.via_tool_at(pointer);
+    assert!(on_grid(at, 0.1), "Axes off: {at:?}");
+    rig.panel(PcbBoardMsg::SnapToAxesToggled);
+    let at = rig.via_tool_at(pointer);
+    assert!((at.y - pad.y).abs() < 1e-6, "y lines up: {at:?}");
+    assert!((at.x - 31.6).abs() < 1e-6, "x stays on the grid: {at:?}");
+    let far = Point::new(pad.x + 2.55, pad.y + 0.04);
+    let at = rig.via_tool_at(far);
+    assert!(on_grid(at, 0.1), "past the range: {at:?}");
 }

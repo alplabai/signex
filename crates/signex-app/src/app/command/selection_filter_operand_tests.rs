@@ -304,7 +304,7 @@ fn the_net_classes_panel_shows_the_class_table() {
     ));
     for label in [
         "Name",
-        "Colour",
+        "Color",
         "Width",
         "Members",
         "Power",

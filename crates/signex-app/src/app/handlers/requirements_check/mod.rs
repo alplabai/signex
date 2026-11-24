@@ -36,6 +36,18 @@ impl Signex {
         &self,
         project: &LoadedProject,
     ) -> impl FnOnce() -> Result<CheckReport, String> + Send + 'static {
+        let job = self.requirements_measured_check_job(project);
+        move || Ok(job().0)
+    }
+
+    /// The check of `project`'s requirements as `requirements_check_job`,
+    /// with the board outline's width and height in mm as the run measured
+    /// them (`None`: no board was read, or it has no outline), for the
+    /// Requirements tab's Board size preview.
+    pub(crate) fn requirements_measured_check_job(
+        &self,
+        project: &LoadedProject,
+    ) -> impl FnOnce() -> (CheckReport, Option<(f64, f64)>) + Send + 'static {
         let data = &project.data;
         let needs = Needs::of(&data.requirements);
         let confined = self.headless_answers().is_some() || self.agent.serving;
@@ -103,7 +115,8 @@ impl Signex {
                 },
                 Some((path, Err(why))) => Board::Unreadable { path, why },
             };
-            Ok(signex_req::check_report(&facts))
+            let report = signex_req::check_report(&facts);
+            (report, signex_req::board_extent_mm(&facts.board))
         }
     }
 

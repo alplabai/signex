@@ -6,7 +6,9 @@ use signex_library::primitive::footprint::GeneratedFeatures;
 
 use super::super::*;
 use crate::app::FootprintDocument;
-use crate::library::editor::footprint::{PAD_CLEARANCE_BUFFER, SILK_LINE_WIDTH_BUFFER};
+use crate::library::editor::footprint::{
+    COURTYARD_LINE_WIDTH_BUFFER, PAD_CLEARANCE_BUFFER, SILK_LINE_WIDTH_BUFFER,
+};
 use crate::panels::FootprintFeatureEdit;
 
 /// The history key of a typed field, as `FootprintDocument::record_edit` takes it.
@@ -27,6 +29,19 @@ impl Signex {
 
 fn apply(editor: &mut FootprintDocument, edit: &FootprintFeatureEdit) {
     match edit {
+        FootprintFeatureEdit::CourtyardLineWidthTyped(text) => {
+            let key = ("generated_courtyard_line_width", 0);
+            typed(
+                editor,
+                COURTYARD_LINE_WIDTH_BUFFER,
+                key,
+                text,
+                |v| v > 0.0,
+                |g, v| {
+                    g.courtyard_line_width_mm = v;
+                },
+            );
+        }
         FootprintFeatureEdit::SilkOutlineToggled => {
             change(editor, None, |g| g.silk_outline = !g.silk_outline);
         }
@@ -174,6 +189,43 @@ mod tests {
                 Some(text)
             );
         }
+    }
+
+    /// Mockup row 124: a courtyard line width is one undo step on the
+    /// footprint; text that is not a positive length stays in the field.
+    #[test]
+    fn a_courtyard_line_width_is_one_undo_step_and_bad_text_is_refused() {
+        use crate::library::editor::footprint::COURTYARD_LINE_WIDTH_BUFFER;
+        use signex_library::primitive::footprint::DEFAULT_COURTYARD_LINE_WIDTH_MM;
+        let path = PathBuf::from("generated-courtyard.snxfpt");
+        let mut app = app_on_a_part(&path);
+        for text in ["abc", "0", "-0.1"] {
+            app.handle_fp_editor_generated_feature(&Edit::CourtyardLineWidthTyped(text.into()));
+            let editor = &app.document_state.footprint_editors[&path];
+            assert_eq!(
+                editor.primitive().generated.courtyard_line_width_mm,
+                DEFAULT_COURTYARD_LINE_WIDTH_MM,
+                "{text}"
+            );
+            assert_eq!(editor.history.undo_len(), 0, "{text}");
+            assert_eq!(
+                editor
+                    .state
+                    .numeric_buffers
+                    .get(COURTYARD_LINE_WIDTH_BUFFER)
+                    .map(String::as_str),
+                Some(text)
+            );
+        }
+        app.handle_fp_editor_generated_feature(&Edit::CourtyardLineWidthTyped("0.1524".into()));
+        let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
+        assert_eq!(editor.primitive().generated.courtyard_line_width_mm, 0.1524);
+        assert_eq!(editor.history.undo_len(), 1);
+        assert!(editor.undo());
+        assert_eq!(
+            editor.primitive().generated.courtyard_line_width_mm,
+            DEFAULT_COURTYARD_LINE_WIDTH_MM
+        );
     }
 
     #[test]

@@ -4,8 +4,8 @@ use signex_i18n::I18n;
 
 use crate::app::core::event::{Notice, NoticeBody, NoticeLevel};
 
-/// The Messages line of `notice`: the en-US rendering the tails logged before
-/// the seam (catalog ids come with #2644).
+/// The Messages line of `notice` in `i18n`'s language; in en-US, the line the
+/// tails logged before the seam.
 pub(crate) fn notice_line(i18n: &I18n, notice: &Notice) -> String {
     match &notice.body {
         NoticeBody::Engine(engine) => crate::app::engine_notices::notice_line(i18n, engine),

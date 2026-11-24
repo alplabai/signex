@@ -47,6 +47,9 @@ fn old_reason(need: Needs) -> &'static str {
         Needs::EditablePcb => "No PCB is open, or the board is read-only",
         Needs::MeasureTarget => "No schematic or PCB is in view",
         Needs::TurnedPcbView => "The board view is not rotated",
+        // New with the 3D view's keys (mockup row 175): it replaced no
+        // English literal.
+        Needs::Board3dView => "This needs the board's 3D view",
         Needs::Turn => "Nothing is selected or in hand to turn, or the selection is locked",
         Needs::MoveSelection => "Nothing is selected to move, or the selection is locked",
         Needs::MoveObject => "No schematic or PCB is open",
@@ -87,7 +90,7 @@ fn every_need() -> Vec<Needs> {
 #[test]
 fn every_reason_renders_the_english_it_replaced() {
     let needs = every_need();
-    assert_eq!(needs.len(), 47, "a need no catalog id reaches: {needs:?}");
+    assert_eq!(needs.len(), 48, "a need no catalog id reaches: {needs:?}");
     for need in needs {
         assert_eq!(
             Translatable::new(need.reason()).render_en_us(),

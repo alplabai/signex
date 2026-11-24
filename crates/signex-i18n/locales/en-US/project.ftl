@@ -156,7 +156,7 @@ project-variants-col-value = Value · Footprint
 project-variants-footprint = · { $footprint }
 project-variants-fitted = Fitted
 project-variants-not-fitted = Not fitted
-project-variants-legend = Cells that match Base stay quiet; only differences are coloured.
+project-variants-legend = Cells that match Base stay quiet; only differences are colored.
 project-variants-hidden-rows =
     { $hidden ->
         [one] { $differ } of { $total } parts differ in at least one variant. 1 row is hidden by Only rows that differ.
@@ -330,8 +330,8 @@ project-defaults-line-solid = Solid
 project-defaults-line-dashed = Dashed
 project-defaults-line-dotted = Dotted
 project-defaults-fill-none = No fill
-project-defaults-fill-outline = Outline colour
-project-defaults-fill-background = Background colour
+project-defaults-fill-outline = Outline color
+project-defaults-fill-background = Background color
 project-defaults-reset = Reset to built-in ({ $value })
 # A typed value the field refuses: the stored default stays. $min and $max are
 # millimetres.
@@ -352,3 +352,7 @@ project-preview-expand = Expand preview
 project-preview-close = Close
 project-preview-hint-values = Click a value on the drawing to edit it · Tab moves to the next · Esc closes
 project-preview-hint-sheet = Esc closes
+# dialog-polish
+# The result pill of a project variable's `=` expression that does not
+# evaluate (mockup row 30); the reason is in the Error line under the row.
+project-parameter-unresolved = ?

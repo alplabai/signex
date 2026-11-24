@@ -217,6 +217,29 @@ impl HarnessConnector {
             .unwrap_or(0)
     }
 
+    /// Slide entry `index` to the slot whose point lies nearest `to`; the
+    /// entries between close up, so the entry stays on the flat side, one
+    /// pitch from its neighbours (docs/DECISIONS.md, 2026-11-24). Whether
+    /// the order changed.
+    pub fn slide_entry(&mut self, index: usize, to: Point) -> bool {
+        if index >= self.entries.len() {
+            return false;
+        }
+        let slot = (0..self.entries.len())
+            .min_by(|&a, &b| {
+                let da = dist2(self.entry_point(a), to);
+                let db = dist2(self.entry_point(b), to);
+                da.total_cmp(&db)
+            })
+            .unwrap_or(index);
+        if slot == index {
+            return false;
+        }
+        let entry = self.entries.remove(index);
+        self.entries.insert(slot, entry);
+        true
+    }
+
     /// The connector after `map` moves every point of it (a rotation or a
     /// mirror about some centre). The tip and the body centre fix the new
     /// turn; a map that swaps the flat side's ends (a mirror along the

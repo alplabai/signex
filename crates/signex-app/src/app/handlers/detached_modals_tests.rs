@@ -67,6 +67,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 error: None,
                 working: false,
                 scanning: false,
+                author: crate::app::contracts::CommitAuthor::Resolved,
             })
         }
         ModalId::GridProperties => {

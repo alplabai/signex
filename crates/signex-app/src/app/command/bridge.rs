@@ -401,6 +401,15 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "toggle_origin_marker" => pcb_view(PcbViewMsg::OriginMarkerVisibilityToggled),
         "board_sketch" => Message::Pcb(PcbMsg::Sketch(crate::app::BoardSketchMsg::ModeToggled)),
         "view_board_3d" => Message::Pcb(PcbMsg::Board3d(crate::app::Board3dMsg::Toggled)),
+        // Mockup row 175: the 3D view toolbar's Flip, lighting and screenshot
+        // buttons; each does nothing while the board is flat.
+        "flip_board_3d" => Message::Pcb(PcbMsg::Board3d(crate::app::Board3dMsg::FlipRequested)),
+        "cycle_board_3d_lighting" => {
+            Message::Pcb(PcbMsg::Board3d(crate::app::Board3dMsg::LightingCycled))
+        }
+        "copy_board_3d_screenshot" => Message::Pcb(PcbMsg::Board3d(
+            crate::app::Board3dMsg::ScreenshotCopyRequested,
+        )),
         "place_board_via" => board_tool(BoardPlaceTool::Via),
         "place_board_track" => board_tool(BoardPlaceTool::Track),
         "place_board_fill" => board_tool(BoardPlaceTool::Fill),
@@ -503,6 +512,10 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }
         "toggle_auto_focus" => Message::Overlay(OverlayMsg::ToggleAutoFocus),
         "toggle_electrical_grid" => Message::Ui(UiMsg::ToggleSnapHotspots),
+        // #2879: Shift+E on a board steps the Snap Options' Snapping.
+        "cycle_board_snapping" => Message::Dock(crate::dock::DockMessage::Panel(
+            crate::panels::PanelMsg::PcbBoard(crate::panels::PcbBoardMsg::SnappingCycled),
+        )),
         "cross_probe" => Message::CrossProbe(CrossProbeMsg::ProbeRequested),
         "toggle_cross_select_mode" => Message::CrossProbe(CrossProbeMsg::CrossSelectModeToggled),
         // #1312: the Update PCB dialog for the document in view. Its headless
@@ -1015,6 +1028,77 @@ mod tests {
             core_to_message(&command, &CommandArgs::none()),
             Some(Message::Input(InputMsg::FootprintCourtyardOutlineRequested))
         ));
+    }
+
+    /// Mockup row 175: the 3D view toolbar's Flip, lighting and screenshot
+    /// buttons as commands reach the 3D view's own requests.
+    #[test]
+    fn the_board_3d_commands_reach_the_3d_view() {
+        use crate::app::Board3dMsg;
+
+        for (id, want) in [
+            ("flip_board_3d", Board3dMsg::FlipRequested),
+            ("cycle_board_3d_lighting", Board3dMsg::LightingCycled),
+            (
+                "copy_board_3d_screenshot",
+                Board3dMsg::ScreenshotCopyRequested,
+            ),
+        ] {
+            let command = AppCommandId::new(id).expect("a catalog id is valid");
+            assert!(is_dispatchable(&command), "{id}");
+            match core_to_message(&command, &CommandArgs::none()) {
+                Some(Message::Pcb(PcbMsg::Board3d(got))) => assert_eq!(got, want, "{id}"),
+                other => panic!("{id} resolved to {other:?}"),
+            }
+        }
+    }
+
+    /// Mockup row 175: on a board, `H` steps the 3D view's lighting and
+    /// Ctrl+Shift+C (Cmd+Shift+C on macOS) copies its screenshot, in both
+    /// built-in profiles; `F` stays Change Footprint on a flat board and
+    /// turns the board over while its 3D view is shown (the `board_3d`
+    /// context, Caner 2026-11-24).
+    #[test]
+    fn the_board_3d_keys_run_their_commands_on_a_board() {
+        use std::str::FromStr;
+
+        use crate::keymap::{
+            CompiledKeymap, KeyStroke, Platform, ShortcutContext, ShortcutProfileSet,
+        };
+
+        let on_a_board = [ShortcutContext::Global, ShortcutContext::Pcb];
+        let in_3d = [
+            ShortcutContext::Global,
+            ShortcutContext::Pcb,
+            ShortcutContext::Board3d,
+        ];
+        let set = ShortcutProfileSet::built_ins().expect("built-in profiles");
+        for profile in set.profiles() {
+            for (platform, copy) in [
+                (Platform::Windows, "Ctrl+Shift+C"),
+                (Platform::Linux, "Ctrl+Shift+C"),
+                (Platform::MacOs, "Cmd+Shift+C"),
+            ] {
+                let keymap = CompiledKeymap::compile_for(profile, platform);
+                for (contexts, key, want) in [
+                    (&on_a_board[..], "H", "cycle_board_3d_lighting"),
+                    (&on_a_board[..], copy, "copy_board_3d_screenshot"),
+                    (&on_a_board[..], "F", "change_footprint"),
+                    (&in_3d[..], "H", "cycle_board_3d_lighting"),
+                    (&in_3d[..], copy, "copy_board_3d_screenshot"),
+                    (&in_3d[..], "F", "flip_board_3d"),
+                ] {
+                    let stroke = KeyStroke::from_str(key).expect("a key");
+                    let got = keymap.lookup(&[stroke], contexts).command;
+                    assert_eq!(
+                        got.as_ref().map(AppCommandId::as_str),
+                        Some(want),
+                        "{} on {platform:?}: {key} in {contexts:?}",
+                        profile.id
+                    );
+                }
+            }
+        }
     }
 
     /// The pinned ids must still exist in the catalog, so the list cannot

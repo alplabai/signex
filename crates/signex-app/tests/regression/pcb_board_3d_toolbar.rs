@@ -106,13 +106,14 @@ fn left_and_right_look_from_their_sides() {
     assert_eq!(session!(f).active_preset, Some(ViewPreset::Left));
 }
 
-/// The view opens on Top; a preset is the active one until a turn by hand.
+/// The view opens on Iso (mockup row 175); a preset is the active one
+/// until a turn by hand.
 #[test]
 fn turning_by_hand_clears_the_active_preset() {
     let mut f = in_3d();
-    assert_eq!(session!(f).active_preset, Some(ViewPreset::Top));
-    f.view_3d(Board3dMsg::PresetPicked(ViewPreset::Iso));
     assert_eq!(session!(f).active_preset, Some(ViewPreset::Iso));
+    f.view_3d(Board3dMsg::PresetPicked(ViewPreset::Top));
+    assert_eq!(session!(f).active_preset, Some(ViewPreset::Top));
     drag(&mut f);
     assert_eq!(session!(f).active_preset, None, "a turn clears it");
     f.view_3d(Board3dMsg::PresetPicked(ViewPreset::Back));

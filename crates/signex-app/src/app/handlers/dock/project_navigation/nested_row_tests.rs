@@ -50,7 +50,9 @@ fn rename_remove_and_reveal_target_the_nested_file() {
     let (mut app, key) = nested_app();
 
     let renaming = app.handle_project_tree_action(ProjectTreeAction::OpenRenameDialog(key.clone()));
-    assert_eq!(renaming.units(), 0);
+    // Only the field's focus and select-all (mockup row 23), no other work.
+    let focus = app.focus_rename_field_once_open(crate::app::state::ModalId::RenameDialog);
+    assert_eq!(renaming.units(), focus.units());
     let rename = app.ui_state.rename_dialog.as_ref().expect("rename opens");
     assert_eq!(rename.target_path, leaf_path());
     assert_eq!(rename.buffer, "leaf.snxsch");

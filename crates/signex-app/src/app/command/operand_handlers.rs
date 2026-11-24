@@ -465,11 +465,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         ),
         "show_drc_violation" | "waive_drc_violation" | "unwaive_drc_violation" => Some(
             "this command needs the operands `document` and `id` — \
-             use the rows of the DRC Results panel",
+             use the rows of the DRC panel",
         ),
         "filter_drc_results" => Some(
             "`filter_drc_results` needs the operand `document` — \
-             use the filters of the DRC Results panel",
+             use the filters of the DRC panel",
         ),
         "add_net_class"
         | "rename_net_class"

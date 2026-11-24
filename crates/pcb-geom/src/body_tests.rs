@@ -112,6 +112,31 @@ fn the_courtyard_wins_over_the_pads_and_turns_with_the_footprint() {
     assert_eq!((half_w, half_h, rotation_deg), (nm(2.0), nm(1.0), 90.0));
 }
 
+/// The click body takes in half the courtyard stroke; the outline DRC
+/// measures does not.
+#[test]
+fn the_courtyard_outline_leaves_the_stroke_out() {
+    let mut drawn = courtyard_rect((1.0, -1.0), (5.0, 1.0));
+    drawn.width = 0.1;
+    let fp = footprint(Vec::new(), vec![drawn], 0.0, "TopCopper");
+    let half = |shape: Shape| match shape {
+        Shape::Rect { half_w, half_h, .. } => (half_w, half_h),
+        other => panic!("a rectangle, not {other:?}"),
+    };
+    assert_eq!(
+        half(courtyard_outline(&fp).unwrap().expect("a courtyard")),
+        (nm(2.0), nm(1.0))
+    );
+    assert_eq!(half(footprint_body(&fp).unwrap()), (nm(2.05), nm(1.05)));
+    let bare = footprint(
+        vec![pad(0.0, 0.0, 1.0, 1.0, 0.0)],
+        Vec::new(),
+        0.0,
+        "TopCopper",
+    );
+    assert!(courtyard_outline(&bare).unwrap().is_none());
+}
+
 #[test]
 fn a_bottom_footprint_mirrors_its_body() {
     let fp = footprint(

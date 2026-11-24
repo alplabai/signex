@@ -231,6 +231,8 @@ canonical_icon!(icon_chrome_window_min, "chrome/window_min.svg");
 // The status bar's Panels button and the open mark in its panel list.
 canonical_icon!(icon_chrome_check, "chrome/check.svg");
 canonical_icon!(icon_chrome_panels, "chrome/panels.svg");
+// The net colour chooser's Custom… button (mockup row 71).
+canonical_icon!(icon_chrome_palette, "chrome/palette.svg");
 // Library Browser header, uncommitted banner, ⋯ menu (`icon_chrome_more`,
 // above); component editor footer (mockup rows 118 and 128). Monochrome; the
 // view tints them with an ink token.
@@ -386,6 +388,8 @@ canonical_icon!(icon_pcb_quick_route, "pcb/quick_route.svg");
 canonical_icon!(icon_pcb_multi_route, "pcb/multi_route.svg");
 canonical_icon!(icon_pcb_length_tune, "pcb/length_tune.svg");
 canonical_icon!(icon_pcb_diff_pair_tune, "pcb/diff_pair_tune.svg");
+// Mockup row 108: the hatched area the copper-area tool rows share.
+canonical_icon!(icon_pcb_copper_area, "pcb/copper_area.svg");
 
 // ─── Sketch mode (footprint editor sketch active bar) ──────────────
 //
@@ -461,6 +465,7 @@ canonical_icon!(icon_menu_export, "menu/export.svg");
 canonical_icon!(icon_menu_file, "menu/file.svg");
 canonical_icon!(icon_menu_folder, "menu/folder.svg");
 canonical_icon!(icon_menu_git, "menu/git.svg");
+canonical_icon!(icon_menu_history, "menu/history.svg");
 canonical_icon!(icon_menu_layers, "menu/layers.svg");
 canonical_icon!(icon_menu_library, "menu/library.svg");
 canonical_icon!(icon_menu_more, "menu/more.svg");
@@ -542,7 +547,8 @@ mod tests {
     /// and are distinct drawings; #2389's routing and tuning glyphs too.
     #[test]
     fn board_tool_glyphs_follow_the_dropdown_rules() {
-        let glyphs: [&str; 9] = [
+        let glyphs: [&str; 10] = [
+            include_str!("../assets/icons/pcb/copper_area.svg"),
             include_str!("../assets/icons/pcb/dimension.svg"),
             include_str!("../assets/icons/pcb/keepout.svg"),
             include_str!("../assets/icons/pcb/pad.svg"),
@@ -628,7 +634,7 @@ mod tests {
     /// drawing.
     #[test]
     fn menu_glyphs_are_distinct_24px_strokes() {
-        let glyphs: [&str; 25] = [
+        let glyphs: [&str; 26] = [
             include_str!("../assets/icons/menu/board.svg"),
             include_str!("../assets/icons/menu/close.svg"),
             include_str!("../assets/icons/menu/cloud.svg"),
@@ -637,6 +643,7 @@ mod tests {
             include_str!("../assets/icons/menu/file.svg"),
             include_str!("../assets/icons/menu/folder.svg"),
             include_str!("../assets/icons/menu/git.svg"),
+            include_str!("../assets/icons/menu/history.svg"),
             include_str!("../assets/icons/menu/layers.svg"),
             include_str!("../assets/icons/menu/library.svg"),
             include_str!("../assets/icons/menu/more.svg"),

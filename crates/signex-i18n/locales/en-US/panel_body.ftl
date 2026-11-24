@@ -159,8 +159,26 @@ panels-components-details-no-parameters = No parameters.
 panels-stub-variants = Design variant management
 panels-stub-output-jobs = Manufacturing output config
 panels-stub-bom-studio = Bill of Materials management
-panels-stub-favorites = Favorite components and snippets
+panels-stub-favorites = Favorite components
 panels-stub-snippets = Reusable schematic snippets
 panels-stub-todo = Task and issue tracking
 panels-stub-wiki = Project documentation wiki
 panels-stub-library = Open a library from the Projects panel to browse it.
+
+# history-show-differences
+## History panel: the lines a commit changed in one file (mockup row 39)
+panels-history-diff-close = Close
+panels-history-diff-loading = Reading the differences…
+# $reason is why reading failed, as the version-control tool words it.
+panels-history-diff-failed = Differences could not be read: { $reason }
+# Lines added and removed; each count is a whole number.
+panels-history-diff-counts = +{ $added } −{ $removed }
+panels-history-diff-binary = Not a text file, so there are no lines to compare.
+panels-history-diff-no-lines = This commit changed no lines of this file.
+# $count is how many lines of the differences are listed.
+panels-history-diff-truncated = Only the first { $count } lines are shown.
+# Where a run of changes starts, in the file before and after the commit.
+panels-history-diff-hunk = Line { $old } before, line { $new } after
+# Marks in front of an added and a removed line.
+panels-history-diff-added-sign = +
+panels-history-diff-removed-sign = −

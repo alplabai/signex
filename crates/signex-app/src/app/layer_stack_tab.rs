@@ -30,22 +30,42 @@ fn tab_at(tabs: &[TabInfo], board: &Path, is_page: bool) -> Option<usize> {
 
 /// Move any Layer Stack tab left of its board to just after it, and return
 /// where the tab at `active` went.
-pub(crate) fn keep_pages_after_boards(tabs: &mut Vec<TabInfo>, mut active: usize) -> usize {
+pub(crate) fn keep_pages_after_boards(tabs: &mut Vec<TabInfo>, active: usize) -> usize {
+    keep_pages_after_owners(tabs, active, TabKind::is_layer_stack, |kind| {
+        matches!(kind, TabKind::Pcb)
+    })
+}
+
+/// Move any page tab (`is_page`) left of its owner's tab (`is_owner`, the
+/// same path) to just after it, and return where the tab at `active` went.
+/// The Layer Stack and Pin table tabs both keep their place this way.
+pub(crate) fn keep_pages_after_owners(
+    tabs: &mut Vec<TabInfo>,
+    mut active: usize,
+    is_page: fn(&TabKind) -> bool,
+    is_owner: fn(&TabKind) -> bool,
+) -> usize {
+    let at = |tabs: &[TabInfo], path: &Path, kind: fn(&TabKind) -> bool| {
+        tabs.iter()
+            .position(|tab| tab.path == path && kind(&tab.kind))
+    };
     let pages: Vec<PathBuf> = tabs
         .iter()
-        .filter(|tab| tab.kind.is_layer_stack())
+        .filter(|tab| is_page(&tab.kind))
         .map(|tab| tab.path.clone())
         .collect();
-    for board in pages {
-        let (Some(page), Some(owner)) = (tab_at(tabs, &board, true), tab_at(tabs, &board, false))
-        else {
+    for path in pages {
+        let (Some(page), Some(owner)) = (
+            at(tabs.as_slice(), &path, is_page),
+            at(tabs.as_slice(), &path, is_owner),
+        ) else {
             continue;
         };
         if page > owner {
             continue;
         }
         let tab = tabs.remove(page);
-        // The board moved one left, so its old index is just after it.
+        // The owner moved one left, so its old index is just after it.
         tabs.insert(owner, tab);
         active = if active == page {
             owner
@@ -145,9 +165,9 @@ impl Signex {
         }
     }
 
-    /// Close a Layer Stack tab. The board, its window and its unsaved work
-    /// are not touched.
-    pub(crate) fn close_layer_stack_tab(&mut self, idx: usize, keep_session: bool) {
+    /// Close a Layer Stack or Pin table tab. The board or symbol, its window
+    /// and its unsaved work are not touched.
+    pub(crate) fn close_document_page_tab(&mut self, idx: usize, keep_session: bool) {
         self.document_state.tabs.remove(idx);
         let len = self.document_state.tabs.len();
         let active = self.document_state.active_tab;

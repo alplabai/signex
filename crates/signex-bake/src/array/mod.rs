@@ -50,6 +50,9 @@ mod slots;
 mod walk;
 
 pub use instance_at::instance_at;
+pub use numbering::{
+    NumberMaskRefusal, instances_numbered, number_mask_entries, suppressed_numbers,
+};
 pub(crate) use placements::{
     InstanceBudget, PlacesRefused, SourcePlace, is_patterned, source_places,
 };

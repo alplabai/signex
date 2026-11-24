@@ -202,6 +202,7 @@ pub(crate) fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         // Library panel it stands for (mockup row 119).
         Library | SchLibrary | FootprintLibrary => "library",
         PcbNets => "pcb_nets",
+        LengthMatching => "length_matching",
         History => "history",
         NetInspector => "net_inspector",
         Unions => "unions",
@@ -239,6 +240,7 @@ pub(crate) fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         // The footprint editor's own Layers panel, merged into Layers (#2359).
         "footprint_layers" => Layers,
         "pcb_nets" => PcbNets,
+        "length_matching" => LengthMatching,
         "history" => History,
         "net_inspector" => NetInspector,
         "unions" => Unions,

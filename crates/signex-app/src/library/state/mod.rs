@@ -220,7 +220,17 @@ pub struct LibraryBrowserState {
     pub preview_error: Option<BrowserPreviewError>,
     /// The preview pane's ⋯ menu (Delete Selected) is open.
     pub more_menu_open: bool,
+    /// The column chooser at the right of the count line is open (mockup
+    /// row 118).
+    pub columns_menu_open: bool,
+    /// Columns turned on or off in the chooser, by sort key; any other
+    /// column keeps its default, see [`COLUMNS_HIDDEN_BY_DEFAULT`].
+    pub column_choice: std::collections::BTreeMap<String, bool>,
 }
+
+/// Sort keys of the grid columns the chooser starts with off: Rev and Tags
+/// (decided 2026-11-23, mockup row 118).
+pub const COLUMNS_HIDDEN_BY_DEFAULT: [&str; 2] = ["version", "parameters.tags"];
 
 /// Active sort key + direction for the Library Browser grid.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -254,7 +264,23 @@ impl LibraryBrowserState {
             preview: Default::default(),
             preview_error: None,
             more_menu_open: false,
+            columns_menu_open: false,
+            column_choice: std::collections::BTreeMap::new(),
         }
+    }
+
+    /// Whether the grid shows the column with sort key `key`.
+    pub fn column_shown(&self, key: &str) -> bool {
+        self.column_choice
+            .get(key)
+            .copied()
+            .unwrap_or(!COLUMNS_HIDDEN_BY_DEFAULT.contains(&key))
+    }
+
+    /// Turn the column with sort key `key` on when off, off when on.
+    pub fn toggle_column(&mut self, key: String) {
+        let shown = self.column_shown(&key);
+        self.column_choice.insert(key, !shown);
     }
 
     /// Toggle the sort: if `key` matches the current sort column, flip
@@ -600,8 +626,11 @@ pub struct LibraryState {
     pub queued_library_updates: Vec<super::updates_dialog::LibraryUpdatesState>,
     /// Set of schematic paths the user explicitly skipped updates on.
     /// Nothing renders this set yet (no status-bar indicator). Cleared
-    /// on apply / re-scan / close-tab.
+    /// on apply / close-tab, and on a re-scan with no drift and no
+    /// `skipped_versions` entry still pending.
     pub skipped_updates_for: std::collections::HashSet<PathBuf>,
+    /// The versions Skip All dismissed, per sheet; the scan leaves them out.
+    pub skipped_versions: super::updates_dialog::SkippedVersions,
     /// Session-scoped "Installed" libraries — opened via the
     /// Components Panel's "+ Add Library…" button (Stage 9 of
     /// `v0.9-snxlib-as-file-plan.md` §3 mount-source 2). Wiped on app
@@ -1080,11 +1109,16 @@ pub use crate::app::core::new_library_defaults::NewLibraryDefaults;
 pub use browser_preview::BrowserPreviewError;
 pub use id_precedence::IdClashNotice;
 pub use methods::*;
-pub use panel_kind::{LibraryPanelKind, LibraryPanelPick, LibraryPanelState, LibraryPanelTab};
+pub use panel_kind::{
+    LibraryPanelKind, LibraryPanelPick, LibraryPanelState, LibraryPanelTab, LibraryRowStyle,
+};
 pub use panel_rows::PanelRows;
 pub use picker_cache::{PickerEntry, PickerRows};
 pub use picker_preview::{PickerSelection, PrimitiveChoice, PrimitiveDrawing};
-pub use placed_part::{ChangePreview, DatasheetChoice, PickerMode};
+pub use placed_part::{
+    ChangeFilter, ChangeFilters, ChangePreview, ChangeScope, ChangeSession, CompareField,
+    CompareKind, CompareRow, DatasheetChoice, PickerMode, PinMatch, PlacedNow,
+};
 pub use preview::*;
 pub use preview_history::{EditScope, RowHistory};
 pub use refresh::{LibrarySnapshot, RefreshFinish, RefreshStart};

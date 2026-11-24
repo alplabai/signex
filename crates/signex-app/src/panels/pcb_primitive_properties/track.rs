@@ -215,3 +215,7 @@ fn layer_value<'a>(look: Look<'a>, f: &'a TrackFacts) -> Element<'a, PanelMsg> {
         .align_y(iced::Alignment::Center)
         .boxed()
 }
+
+#[cfg(test)]
+#[path = "track_tests.rs"]
+mod tests;

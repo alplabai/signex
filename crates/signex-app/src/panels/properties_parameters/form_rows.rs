@@ -494,10 +494,13 @@ pub fn form_label<'a, M: 'a>(label: signex_i18n::Localized) -> Element<'a, M> {
     .boxed()
 }
 
-/// Altium-style B/I/U/T (Bold / Italic / Underline / Strikethrough) row.
+/// B/I/U/T (Bold / Italic / Underline / Strikethrough) row. No text
+/// style is stored yet, so the buttons are disabled: drawn in `label_c`,
+/// with no press message, and a tooltip says why (decision of
+/// 2026-11-24, mockup rows 41 and 45).
 pub fn font_style_row<'a>(
-    _label_c: Color,
-    primary: Color,
+    i18n: &signex_i18n::I18n,
+    label_c: Color,
     input_bg: Color,
     input_bdr: Color,
 ) -> Element<'a, PanelMsg> {
@@ -506,7 +509,7 @@ pub fn font_style_row<'a>(
             // raw: a font-style glyph (B, I, U, T), drawn in its own style.
             text(raw(glyph.to_string()))
                 .size(TS.label)
-                .color(primary)
+                .color(label_c)
                 .font(iced::Font {
                     weight: style,
                     ..signex_widgets::ui_font::regular()
@@ -515,45 +518,65 @@ pub fn font_style_row<'a>(
         )
         .width(Length::Fill)
         .padding([SP.s, 6.0])
-        .on_press(PanelMsg::Noop)
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let hovered = matches!(status, iced::widget::button::Status::Hovered);
-            iced::widget::button::Style {
-                background: Some(Background::Color(if hovered {
-                    input_bdr
-                } else {
-                    input_bg
-                })),
+        .style(
+            move |_: &Theme, _: iced::widget::button::Status| iced::widget::button::Style {
+                background: Some(Background::Color(input_bg)),
                 border: Border {
                     width: 1.0,
                     radius: 2.0.into(),
                     color: input_bdr,
                     ..Border::default()
                 },
-                text_color: primary,
+                text_color: label_c,
                 ..iced::widget::button::Style::default()
-            }
-        })
+            },
+        )
         .boxed()
     };
-    container(
-        row![
-            btn("B", iced::font::Weight::Bold),
-            btn("I", iced::font::Weight::Normal),
-            btn("U", iced::font::Weight::Normal),
-            btn("T", iced::font::Weight::Normal),
-        ]
-        .spacing(SP.xs)
-        .width(Length::Fill),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
+    let buttons = row![
+        btn("B", iced::font::Weight::Bold),
+        btn("I", iced::font::Weight::Normal),
+        btn("U", iced::font::Weight::Normal),
+        btn("T", iced::font::Weight::Normal),
+    ]
+    .spacing(SP.xs)
     .width(Length::Fill)
-    .boxed()
+    .boxed();
+    let tipped = signex_widgets::tooltip(
+        buttons,
+        container(text(t!(i18n, ids::PROPERTIES_TEXT_STYLE_NOT_STORED)).size(TS.caption))
+            .padding([SP.xs, SP.s])
+            .style(form_look::value_tip),
+        signex_widgets::tooltip::Position::Bottom,
+    )
+    .boxed();
+    container(tipped)
+        .padding([2, PROPERTY_ROW_PAD_X])
+        .width(Length::Fill)
+        .boxed()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Decision of 2026-11-24 (mockup rows 41 and 45): no text style is
+    /// stored, so a press on B, I, U or T sends nothing, and the row's
+    /// tooltip says the style is not stored yet.
+    #[test]
+    fn the_text_style_buttons_are_disabled_until_the_style_is_stored() {
+        let en = signex_i18n::I18n::en_us();
+        for glyph in ["B", "I", "U", "T"] {
+            let row = font_style_row(&en, Color::BLACK, Color::WHITE, Color::BLACK);
+            let pressed =
+                crate::layout_probe::messages_on_click(row, iced::Size::new(320.0, 80.0), glyph);
+            assert!(pressed.is_empty(), "{glyph}: {pressed:?}");
+        }
+        assert_eq!(
+            t!(en, ids::PROPERTIES_TEXT_STYLE_NOT_STORED).to_string(),
+            "Bold, italic, underline and strikethrough are not stored yet."
+        );
+    }
 
     #[test]
     fn text_on_each_builtin_selection_is_the_expected_readable_colour() {

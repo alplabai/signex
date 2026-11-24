@@ -189,7 +189,11 @@ fn committed_wires_follow_the_chosen_corner_and_the_flip_persists() {
         wire_ends(&app)
     );
 
-    // The next segment keeps the flip.
+    // The second click ended that wire (docs/DECISIONS.md, 2026-11-24, Caner:
+    // the wire tool no longer continues a wire), so the next wire starts with
+    // its own first click and keeps the flip.
+    assert!(!app.interaction_state.wire_drawing);
+    click(&mut app, at(grid(10.0, 6.0)));
     click(&mut app, at(grid(14.0, 10.0)));
     assert!(
         has_wire(&app, grid(10.0, 6.0), grid(10.0, 10.0))
