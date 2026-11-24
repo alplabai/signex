@@ -45,6 +45,11 @@ pub(crate) fn parts_state(
         Some(Ok(table)) => table,
     };
     let allowed = states.join(", ");
+    let checked: usize = table
+        .rows
+        .iter()
+        .map(|row| part_count(&row.references))
+        .sum();
     let mut misses = Vec::new();
     for row in &table.rows {
         let designator = row.references.join(",");
@@ -63,7 +68,8 @@ pub(crate) fn parts_state(
             .with("library_row", json!(row.library_row))
             .with("state", json!(state))
             .with("allowed", json!(states))
-            .with("parts", json!(table.rows.len()))
+            .with("count", json!(part_count(&row.references)))
+            .with("parts", json!(checked))
             .about(format!("part:{designator}"));
         misses.push(miss);
     }
@@ -80,53 +86,102 @@ fn part_clause(designator: &str, library_row: Option<&str>, state: Option<&str>)
     }
 }
 
-/// The per-part findings of one `parts_state` run as one sentence: how many
-/// of the parts are outside the allowed states, then what each of them is
-/// (mockup row 38). `None` unless every finding is a per-part one.
-pub(crate) fn parts_sentence(findings: &[&Finding]) -> Option<String> {
+/// How many parts a BOM line holds: one per reference. A line with no
+/// reference still stands for one part.
+fn part_count(references: &[String]) -> usize {
+    references.len().max(1)
+}
+
+/// One BOM line a `parts_state` run found outside the allowed states.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartMiss {
+    /// The line's references, comma-joined as the BOM writes them.
+    pub designator: String,
+    /// How many parts the line holds.
+    pub count: usize,
+    pub problem: PartProblem,
+}
+
+/// Why a part has no allowed state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PartProblem {
+    /// It was placed from no library row.
+    Unplaced,
+    /// Its library row is in no open library.
+    NoLibrary,
+    /// Its library row is in this state.
+    State(String),
+}
+
+/// The per-part findings of one `parts_state` run, counted in parts, for
+/// the card's one sentence (mockup row 38).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartsShortfall {
+    /// Parts outside the allowed states.
+    pub missed: usize,
+    /// Parts checked.
+    pub of: usize,
+    pub allowed: Vec<String>,
+    pub lines: Vec<PartMiss>,
+}
+
+/// `findings` read as a [`PartsShortfall`]. `None` unless there is at
+/// least one finding and every one is a per-part `parts_state` finding.
+pub fn parts_shortfall(findings: &[&Finding]) -> Option<PartsShortfall> {
     let first = findings.first()?;
-    let clauses = findings
+    let lines = findings
         .iter()
-        .map(|finding| {
-            let evidence = &finding.evidence;
-            if evidence.get("kind").and_then(Value::as_str) != Some("parts_state") {
-                return None;
-            }
-            let designator = evidence.get("designator")?.as_str()?;
-            let library_row = evidence.get("library_row").and_then(Value::as_str);
-            let state = evidence.get("state").and_then(Value::as_str);
-            Some(part_clause(designator, library_row, state))
-        })
-        .collect::<Option<Vec<String>>>()?;
-    let allowed: Vec<&str> = first
+        .map(|finding| part_miss(&finding.evidence))
+        .collect::<Option<Vec<PartMiss>>>()?;
+    let allowed = first
         .evidence
         .get("allowed")
         .and_then(Value::as_array)
-        .map(|states| states.iter().filter_map(Value::as_str).collect())
+        .map(|states| {
+            states
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
         .unwrap_or_default();
-    let missed = clauses.len();
+    let missed = lines.iter().map(|line| line.count).sum();
     let of = first
         .evidence
         .get("parts")
         .and_then(Value::as_u64)
-        .map_or(missed, |parts| parts as usize)
+        .map_or(missed, |parts| usize::try_from(parts).unwrap_or(usize::MAX))
         .max(missed);
-    let verb = if missed == 1 { "is" } else { "are" };
-    Some(format!(
-        "{missed} of {of} parts {verb} not {}: {}.",
-        joined(&allowed, "or"),
-        joined(&clauses, "and"),
-    ))
+    Some(PartsShortfall {
+        missed,
+        of,
+        allowed,
+        lines,
+    })
 }
 
-/// `items` as a list read aloud: `a, b and c`.
-fn joined<S: AsRef<str>>(items: &[S], last: &str) -> String {
-    match items {
-        [] => String::new(),
-        [only] => only.as_ref().to_string(),
-        [head @ .., tail] => {
-            let head: Vec<&str> = head.iter().map(AsRef::as_ref).collect();
-            format!("{} {last} {}", head.join(", "), tail.as_ref())
-        }
+/// One per-part finding's evidence as a [`PartMiss`].
+fn part_miss(evidence: &Value) -> Option<PartMiss> {
+    if evidence.get("kind").and_then(Value::as_str) != Some("parts_state") {
+        return None;
     }
+    let designator = evidence.get("designator")?.as_str()?.to_string();
+    let count = evidence
+        .get("count")
+        .and_then(Value::as_u64)
+        .and_then(|count| usize::try_from(count).ok())
+        .unwrap_or(1)
+        .max(1);
+    let library_row = evidence.get("library_row").and_then(Value::as_str);
+    let state = evidence.get("state").and_then(Value::as_str);
+    let problem = match (library_row, state) {
+        (None, _) => PartProblem::Unplaced,
+        (Some(_), None) => PartProblem::NoLibrary,
+        (Some(_), Some(state)) => PartProblem::State(state.to_string()),
+    };
+    Some(PartMiss {
+        designator,
+        count,
+        problem,
+    })
 }

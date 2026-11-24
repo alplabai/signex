@@ -19,6 +19,7 @@ use super::super::super::look::{Glyph, err_box, icon_button, pill};
 use super::super::super::table::{SP, TS, problem};
 use super::super::words::{field_words, kind_words, problem_words};
 use super::super::{EntryKey, RequirementsMsg, RequirementsTabState, message};
+use super::findings::findings_sentence;
 use super::summary::summary_words;
 use super::{Choice, Verdict, findings_of, stored_text, verdict};
 use crate::app::Message;
@@ -287,7 +288,7 @@ impl Card<'_> {
             }
             col = col.push(line.boxed());
         }
-        if let Some(sentence) = signex_req::findings_sentence(findings) {
+        if let Some(sentence) = findings_sentence(findings, self.i18n) {
             col = col.push(self.evidence(sentence));
         }
         container(col)

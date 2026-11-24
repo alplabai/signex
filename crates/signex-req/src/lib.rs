@@ -12,7 +12,7 @@ mod bom;
 mod parts;
 mod runs;
 
-pub use parts::LIFECYCLE_STATES;
+pub use parts::{LIFECYCLE_STATES, PartMiss, PartProblem, PartsShortfall, parts_shortfall};
 
 use std::collections::{HashMap, HashSet};
 
@@ -293,43 +293,6 @@ fn evaluate(requirement: &Requirement, facts: &Facts) -> Vec<Miss> {
 /// entry's verdict up by this name.
 pub fn entry_rule(entry: &RequirementEntry, index: usize) -> String {
     format!("req::{}", entry_label(entry, index))
-}
-
-/// The findings a run filed under one requirement as one sentence, as its
-/// card reads them (mockup row 38): `parts_state`'s per-part findings
-/// counted and named, any others' messages joined. `None` for no findings.
-pub fn findings_sentence(findings: &[&Finding]) -> Option<String> {
-    if findings.is_empty() {
-        return None;
-    }
-    if let Some(sentence) = parts::parts_sentence(findings) {
-        return Some(sentence);
-    }
-    let clauses: Vec<String> = findings
-        .iter()
-        .enumerate()
-        .map(|(at, finding)| {
-            let clause = finding.message.trim().trim_end_matches('.');
-            if at == 0 {
-                clause.to_string()
-            } else {
-                mid_sentence(clause)
-            }
-        })
-        .collect();
-    Some(format!("{}.", clauses.join("; ")))
-}
-
-/// `clause` as it reads after a semicolon: an opening word in sentence case
-/// (`The`, `Net`) goes lower case; a name (`R2`, `DRC`) stays as written.
-fn mid_sentence(clause: &str) -> String {
-    let mut chars = clause.chars();
-    match (chars.next(), chars.next()) {
-        (Some(first), Some(second)) if first.is_uppercase() && second.is_lowercase() => {
-            first.to_lowercase().chain(clause.chars().skip(1)).collect()
-        }
-        _ => clause.to_string(),
-    }
 }
 
 /// How a finding names an entry: its id, else its place in the list (`#3`).

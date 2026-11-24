@@ -129,3 +129,61 @@ fn a_failed_card_reads_its_findings_as_one_sentence() {
         "no raw key: value evidence: {texts:#?}"
     );
 }
+
+/// `findings` read as the card's sentence, without Fluent's isolation marks.
+fn sentence(findings: &[Finding]) -> Option<String> {
+    let findings: Vec<&Finding> = findings.iter().collect();
+    super::findings::findings_sentence(&findings, signex_i18n::I18n::en_us_ref())
+        .map(|words| words.replace(['\u{2068}', '\u{2069}'], ""))
+}
+
+/// A finding of a `parts_state` run over 5 parts for one BOM line.
+fn line(designator: &str, count: usize, library_row: Option<&str>, state: Option<&str>) -> Finding {
+    let mut finding = part(designator, state.unwrap_or(""));
+    finding.evidence = json!({
+        "kind": "parts_state",
+        "designator": designator,
+        "count": count,
+        "library_row": library_row,
+        "state": state,
+        "allowed": ["released", "deprecated"],
+        "parts": 5,
+    });
+    finding
+}
+
+#[test]
+fn a_parts_sentence_counts_the_parts_of_a_grouped_line() {
+    let findings = [
+        line("C1,C2", 2, Some("lib/r2"), Some("draft")),
+        line("R3", 1, None, None),
+        line("R4", 1, Some("other/r9"), None),
+    ];
+    assert_eq!(
+        sentence(&findings).as_deref(),
+        Some(
+            "4 of 5 parts are not released or deprecated: C1,C2 are draft, R3 was not \
+             placed from a library row, and R4's library row is in no open library."
+        )
+    );
+    assert_eq!(
+        sentence(&[line("R3", 1, None, None)]).as_deref(),
+        Some("1 of 5 parts is not released or deprecated: R3 was not placed from a library row.")
+    );
+    assert_eq!(sentence(&[]), None);
+}
+
+#[test]
+fn other_findings_read_as_their_messages_joined() {
+    let mut track = part("x", "");
+    track.message = "Class USB sets a track width of 0.15 mm, under 0.2 mm".into();
+    track.evidence = json!({"kind": "net_class", "class": "USB"});
+    let mut net = track.clone();
+    net.message = "Net USB_DM is in no class, not USB".into();
+    assert_eq!(
+        sentence(&[track, net]).as_deref(),
+        Some(
+            "Class USB sets a track width of 0.15 mm, under 0.2 mm; net USB_DM is in no class, not USB."
+        )
+    );
+}

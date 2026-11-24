@@ -1,9 +1,10 @@
 //! The Requirements section's view (mockup row 38). Pure: the project
 //! and the section's state in, widgets out. Run checks sits in the section
 //! header; `summary` draws the counts row under it, `card` one card per
-//! entry.
+//! entry, `findings` a failed card's findings as one sentence.
 
 mod card;
+mod findings;
 mod summary;
 
 use iced::Element;
