@@ -16,6 +16,9 @@ const SP: Spacing = Spacing::DEFAULT;
 pub(crate) const DIALOG_HEADER_H: f32 = chrome_px(44.0 * 11.0 / 12.0);
 /// Header height of the Preferences dialog (52 px at the default base).
 pub(crate) const PREFERENCES_HEADER_H: f32 = chrome_px(52.0 * 11.0 / 12.0);
+/// Header height of a [`graphite_header_stacked`] dialog, the subtitle on a
+/// second line (52 px at the default base).
+pub(crate) const STACKED_HEADER_H: f32 = PREFERENCES_HEADER_H;
 
 /// The one modal scrim: the theme's scrim token.
 pub(crate) fn dialog_scrim(theme_tokens: &ThemeTokens) -> Color {
@@ -110,7 +113,7 @@ pub(crate) fn graphite_header_closing<'a, M: Clone + 'a>(
 }
 
 /// A Graphite header with the subtitle on a second line under the title, in
-/// the caption size (mockup row 81).
+/// the caption size (mockup rows 81, 82). `height` is [`STACKED_HEADER_H`].
 pub(crate) fn graphite_header_stacked<'a, M: Clone + 'a>(
     title: impl Into<String>,
     subtitle: String,

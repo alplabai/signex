@@ -60,12 +60,12 @@ impl Signex {
         )
         .into_string();
         let close = Some(ba(BackAnnotateMsg::CloseRequested));
-        let header = super::header::graphite_header_closing(
+        // Mockup row 82: the subtitle on a second line, as in Update PCB.
+        let header = super::header::graphite_header_stacked(
             s(i18n, ids::BACK_ANNOTATE_TITLE),
-            Some(subtitle),
-            None,
+            subtitle,
             close.clone(),
-            super::header::DIALOG_HEADER_H,
+            super::header::STACKED_HEADER_H,
             tokens,
         );
         let muted = tokens::muted_text(tokens);

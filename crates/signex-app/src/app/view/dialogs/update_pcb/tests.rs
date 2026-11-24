@@ -1,5 +1,6 @@
-//! The Update PCB dialog builds in every phase, and the mixed group box has
-//! the Graphite accent look (#1312).
+//! The Update PCB dialog builds in every phase, its marks are drawn glyphs
+//! and its ticks the solid-accent tri-state box (mockup rows 81, 82); the
+//! panels' mixed checkbox keeps the Graphite soft accent (#1312).
 
 use iced::Background;
 use signex_types::theme::{ThemeId, theme_tokens};
@@ -94,6 +95,8 @@ fn the_table_builds_with_problems_under_every_filter() {
     }
 }
 
+/// The panels' form_look mixed checkbox keeps the Graphite soft accent
+/// (#1312). This dialog's group box is `tick_box`, pinned below.
 #[test]
 fn a_mixed_group_box_is_drawn_on_the_soft_accent() {
     for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
@@ -442,4 +445,12 @@ fn back_annotate_ticks_a_validated_row_and_says_so_beside_the_pill() {
     assert_eq!(status, RowStatus::Applies);
     assert!(caption.is_none());
     assert_eq!(footer_left(&state, i18n, &t).len(), 2, "pill and verdict");
+}
+
+/// Mockup rows 81, 82: both dialogs stack the subtitle under the title, so
+/// their header is the taller one.
+#[test]
+fn the_stacked_header_is_taller_than_the_one_line_header() {
+    use super::super::header::{DIALOG_HEADER_H, STACKED_HEADER_H};
+    const { assert!(STACKED_HEADER_H > DIALOG_HEADER_H) };
 }

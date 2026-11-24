@@ -85,7 +85,7 @@ impl Signex {
             s(i18n, ids::UPDATE_PCB_TITLE),
             subtitle,
             Some(up(UpdatePcbMsg::CloseRequested)),
-            super::header::PREFERENCES_HEADER_H,
+            super::header::STACKED_HEADER_H,
             tokens,
         );
         let mut body = Column::new().spacing(SP.m).height(Length::Fill);
