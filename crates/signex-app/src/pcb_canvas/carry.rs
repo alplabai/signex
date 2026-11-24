@@ -71,6 +71,12 @@ pub struct PcbCarry {
     pub text: Option<(Uuid, BoardTextField)>,
     /// The vias a drag moves; `footprints` is then empty.
     pub vias: BTreeSet<Uuid>,
+    /// The other items a drag moves (#2870): tracks, free arcs and pads,
+    /// areas, strings, dimensions, drawings; `footprints` and `vias` are
+    /// then empty.
+    pub items: BTreeSet<Uuid>,
+    /// The rooms a drag moves with the parts in them (#2870).
+    pub rooms: BTreeSet<Uuid>,
     /// Tracks or copper arcs end on the carried `vias`, read when the drag
     /// starts.
     pub via_tracks: bool,
@@ -106,21 +112,30 @@ impl PcbCarry {
             part: None,
             text: None,
             vias: BTreeSet::new(),
+            items: BTreeSet::new(),
+            rooms: BTreeSet::new(),
             via_tracks: false,
             leaves_tracks: false,
         }
     }
 
-    /// The footprints and vias the carry takes.
+    /// The footprints, vias and other items the carry takes.
     pub fn carried(&self) -> BTreeSet<Uuid> {
-        self.footprints.union(&self.vias).copied().collect()
+        (self.footprints.iter())
+            .chain(&self.vias)
+            .chain(&self.items)
+            .copied()
+            .collect()
     }
 
     /// Whether this carry moves objects already on the board, which then
     /// move themselves in their real look. A paste or a part on the cursor
     /// does not exist yet and keeps its ghost.
     pub fn previews_on_board(&self) -> bool {
-        !self.footprints.is_empty() || !self.vias.is_empty() || self.text.is_some()
+        !self.footprints.is_empty()
+            || !self.vias.is_empty()
+            || !self.items.is_empty()
+            || self.text.is_some()
     }
 
     /// The ids of what moves with this carry on `board`: the footprints or
@@ -265,6 +280,41 @@ pub fn via_carry_delta(
     let target = Point::new(centre.x + raw.x, centre.y + raw.y);
     let what = GridUse::NonComponents;
     snapped_delta(board, skip, centre, target, on_grid, what, view)
+}
+
+/// The offset that takes carried objects (#2870) from `from` towards `to`,
+/// snapped as [`via_carry_delta`] snaps but for the one of their `points`
+/// (`carry_items::item_points`, a room's corners) nearest `from`, on the
+/// Non-Components grid.
+pub fn item_carry_delta(
+    board: &PcbBoard,
+    points: &[Point],
+    skip: &BTreeSet<Uuid>,
+    from: Point,
+    to: Point,
+    view: SnapView,
+) -> Point {
+    let raw = Point::new(to.x - from.x, to.y - from.y);
+    let distance = |p: &Point| (p.x - from.x).powi(2) + (p.y - from.y).powi(2);
+    let Some(anchor) = (points.iter().copied()).min_by(|a, b| distance(a).total_cmp(&distance(b)))
+    else {
+        return raw;
+    };
+    let on_grid = if view.options.to_grids {
+        grid_for(board, GridUse::NonComponents).snap_delta(anchor, raw)
+    } else {
+        raw
+    };
+    let target = Point::new(anchor.x + raw.x, anchor.y + raw.y);
+    snapped_delta(
+        board,
+        skip,
+        anchor,
+        target,
+        on_grid,
+        GridUse::NonComponents,
+        view,
+    )
 }
 
 /// `on_grid` refined by the object, guide and axis snaps at `to`, leaving
@@ -422,9 +472,16 @@ pub fn board_without(
     rest.segments = board
         .segments
         .iter()
-        .filter(|segment| !following.contains(&segment.uuid))
+        .filter(|segment| !following.contains(&segment.uuid) && !carried.contains(&segment.uuid))
         .cloned()
         .collect();
+    // The other objects a drag carries (#2870) leave their place too.
+    rest.zones.retain(|z| !carried.contains(&z.uuid));
+    rest.texts.retain(|t| !carried.contains(&t.uuid));
+    rest.graphics.retain(|g| !carried.contains(&g.uuid));
+    rest.free.arcs.retain(|a| !carried.contains(&a.uuid));
+    rest.free.pads.retain(|p| !carried.contains(&p.uuid));
+    rest.free.dimensions.retain(|d| !carried.contains(&d.uuid));
     rest
 }
 
@@ -532,6 +589,7 @@ pub fn board_after_move(
             moved.segments[ends.index] = segment;
         }
     }
+    super::carry_items::move_carried_items(board, carried, delta, &mut moved);
     moved
 }
 
@@ -568,7 +626,7 @@ pub fn carried_board(
         .iter()
         .filter_map(|ends| followed(board, ends, delta))
         .collect();
-    PcbBoard {
+    let mut preview = PcbBoard {
         uuid: board.uuid,
         version: board.version,
         generator: String::new(),
@@ -589,7 +647,10 @@ pub fn carried_board(
         rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
-    }
+    };
+    // A dragged track, area, string, dimension or drawing (#2870).
+    super::carry_items::add_carried_items(board, carried, delta, &mut preview);
+    preview
 }
 
 #[cfg(test)]

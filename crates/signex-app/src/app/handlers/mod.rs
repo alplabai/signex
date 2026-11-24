@@ -82,6 +82,9 @@ mod pcb_filter_presets;
 mod pcb_footprint_place;
 pub(crate) mod pcb_footprint_text;
 pub(crate) mod pcb_item_edits;
+mod pcb_item_move;
+#[cfg(test)]
+mod pcb_item_move_tests;
 pub(crate) mod pcb_layer_stack;
 pub(crate) mod pcb_layer_strip;
 mod pcb_layers_panel;

@@ -214,6 +214,13 @@ impl Signex {
                 self.carry_to(from, to);
                 return;
             }
+            // Any other object a click there picks (#2870).
+            if let Some(reach) = pick
+                && self.start_item_drag(&path, from, reach)
+            {
+                self.carry_to(from, to);
+                return;
+            }
             let mut footprints = match pick {
                 Some(reach) => self
                     .with_pcb_selection(|state, board| state.grab_for_drag(board, from, reach))
@@ -485,6 +492,11 @@ impl Signex {
                 return;
             };
             delta
+        } else if !carry.items.is_empty() || !carry.rooms.is_empty() {
+            let Some(delta) = self.item_drag_delta(carry, from, to) else {
+                return;
+            };
+            delta
         } else {
             let skip = carry.snap_skip(board);
             carry_delta(
@@ -520,6 +532,10 @@ impl Signex {
         }
         if !carry.vias.is_empty() {
             self.drop_via_carry(&carry, from, to);
+            return;
+        }
+        if !carry.items.is_empty() || !carry.rooms.is_empty() {
+            self.drop_item_carry(&carry, from, to);
             return;
         }
         if carry.footprints.is_empty() {
