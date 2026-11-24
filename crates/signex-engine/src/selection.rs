@@ -243,17 +243,7 @@ impl Engine {
                 ));
                 info.push(("DNP".into(), if symbol.dnp { "Yes" } else { "No" }.into()));
                 if symbol.is_power {
-                    // Mockup row 45: the net-name text's size and face, read
-                    // as `power_port_value_text` draws them.
-                    let value_text = symbol.val_text.as_ref();
-                    let size_mm = value_text.map_or(SCHEMATIC_TEXT_MM, |t| t.font_size);
-                    info.push((
-                        "Text Size".into(),
-                        format!("{}", (size_mm.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32),
-                    ));
-                    if let Some(family) = value_text.and_then(|t| t.font_family.as_ref()) {
-                        info.push(("Font Family".into(), family.clone()));
-                    }
+                    push_power_port_text_rows(symbol, &mut info);
                 }
                 let mut custom: Vec<(&String, &String)> = symbol.fields.iter().collect();
                 custom.sort_by(|a, b| a.0.cmp(b.0));
@@ -331,13 +321,7 @@ impl Engine {
                     ),
                 ));
                 info.push(("Rotation".into(), format!("{:.0}°", label.rotation)));
-                info.push((
-                    "Text Size".into(),
-                    format!(
-                        "{}",
-                        (label.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
-                    ),
-                ));
+                info.push(("Text Size".into(), text_size_pt(label.font_size)));
                 if let Some(family) = &label.font_family {
                     info.push(("Font Family".into(), family.clone()));
                 }
@@ -414,13 +398,7 @@ impl Engine {
                     ),
                 ));
                 info.push(("Rotation".into(), format!("{:.0}°", text_note.rotation)));
-                info.push((
-                    "Text Size".into(),
-                    format!(
-                        "{}",
-                        (text_note.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
-                    ),
-                ));
+                info.push(("Text Size".into(), text_size_pt(text_note.font_size)));
                 if let Some(family) = &text_note.font_family {
                     info.push(("Font Family".into(), family.clone()));
                 }
@@ -643,13 +621,7 @@ impl Engine {
                 ));
                 let effective_rot = (symbol.rotation + ref_text.rotation).rem_euclid(360.0);
                 info.push(("Rotation".into(), format!("{effective_rot:.0}°")));
-                info.push((
-                    "Text Size".into(),
-                    format!(
-                        "{}",
-                        (ref_text.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
-                    ),
-                ));
+                info.push(("Text Size".into(), text_size_pt(ref_text.font_size)));
                 if let Some(family) = &ref_text.font_family {
                     info.push(("Font Family".into(), family.clone()));
                 }
@@ -697,13 +669,7 @@ impl Engine {
                 ));
                 let effective_rot = (symbol.rotation + value_text.rotation).rem_euclid(360.0);
                 info.push(("Rotation".into(), format!("{effective_rot:.0}°")));
-                info.push((
-                    "Text Size".into(),
-                    format!(
-                        "{}",
-                        (value_text.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
-                    ),
-                ));
+                info.push(("Text Size".into(), text_size_pt(value_text.font_size)));
                 if let Some(family) = &value_text.font_family {
                     info.push(("Font Family".into(), family.clone()));
                 }
@@ -746,6 +712,22 @@ impl Engine {
             selected_kind: item.kind,
             info,
         })
+    }
+}
+
+/// A text height in mm as the whole points the Properties rows show.
+fn text_size_pt(mm: f64) -> String {
+    format!("{}", (mm.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32)
+}
+
+/// Mockup row 45: a power port's net-name text size and face, read as
+/// `power_port_value_text` draws them (10 pt when no value text is stored).
+fn push_power_port_text_rows(symbol: &Symbol, info: &mut Vec<(String, String)>) {
+    let value_text = symbol.val_text.as_ref();
+    let size_mm = value_text.map_or(SCHEMATIC_TEXT_MM, |t| t.font_size);
+    info.push(("Text Size".into(), text_size_pt(size_mm)));
+    if let Some(family) = value_text.and_then(|t| t.font_family.as_ref()) {
+        info.push(("Font Family".into(), family.clone()));
     }
 }
 
