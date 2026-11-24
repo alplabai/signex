@@ -209,8 +209,10 @@ fn a_symbol_tool_with_the_pointer_in_the_right_band_pans_the_symbol_right() {
     let (mut app, path) = symbol_app();
     let editor = &app.document_state.symbol_editors[&path];
     assert!(editor.edge_pan_armed(), "precondition: Add Pin is armed");
-    editor.edge_pan.observe(Some(RIGHT_BAND), SIZE);
     let before = editor.camera.offset;
+    app.interaction_state
+        .symbol_edge_pan
+        .observe(Some(RIGHT_BAND), SIZE);
 
     tick(&mut app);
 

@@ -24,6 +24,9 @@ pub struct InteractionState {
     /// swaps an undocked window's entry from `pcb_canvases` into this slot
     /// while it handles that window's event.
     pub pcb_canvas: PcbCanvas,
+    /// The edge pan link of the main window's symbol editor canvas (#2872):
+    /// view state, kept out of the symbol draft.
+    pub symbol_edge_pan: crate::canvas::EdgePanLink,
     /// PCB canvases owned by undocked PCB tab windows, so each window keeps
     /// its own camera, viewport and caches (#494). Populated and drained
     /// alongside `canvases`. Reads go through `pcb_canvas_for_window`.

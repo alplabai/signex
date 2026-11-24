@@ -819,6 +819,7 @@ impl Signex {
                 canvas: sch_canvas,
                 canvases: std::collections::HashMap::new(),
                 pcb_canvas,
+                symbol_edge_pan: Default::default(),
                 pcb_canvases: std::collections::HashMap::new(),
                 tile_panes: Default::default(),
                 pcb_selection: Default::default(),

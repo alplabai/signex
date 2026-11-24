@@ -76,6 +76,8 @@ impl Signex {
             EdgePanSurface::Symbol => {
                 if let Some(editor) = self.active_symbol_document_mut() {
                     editor.edge_panned(dx, dy, pointer.at);
+                    // The canvas replays the pointer at its next redraw.
+                    self.interaction_state.symbol_edge_pan.mark_view_moved();
                 }
                 Task::none()
             }
@@ -135,7 +137,9 @@ impl Signex {
         match surface {
             EdgePanSurface::Sheet => Some(&self.interaction_state.active_canvas().edge_pan),
             EdgePanSurface::Board => Some(&self.interaction_state.pcb_canvas.edge_pan),
-            EdgePanSurface::Symbol => self.active_symbol_document().map(|e| &e.edge_pan),
+            EdgePanSurface::Symbol => self
+                .active_symbol_document()
+                .map(|_| &self.interaction_state.symbol_edge_pan),
             EdgePanSurface::Footprint => self.active_footprint_editor().map(|e| &e.state.edge_pan),
         }
     }

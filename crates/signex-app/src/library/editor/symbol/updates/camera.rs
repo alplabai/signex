@@ -65,12 +65,10 @@ impl SymEditor {
     }
 
     /// An edge pan moved the view by `(dx, dy)` canvas pixels under the
-    /// pointer at `at`: the readout shows the symbol point now under it,
-    /// and the canvas replays the pointer at its next redraw.
+    /// pointer at `at`: the readout shows the symbol point now under it.
     pub(crate) fn edge_panned(&mut self, dx: f32, dy: f32, at: iced::Point) {
         self.camera.pan(dx, dy);
         self.canvas_cache.clear();
-        self.edge_pan.mark_view_moved();
         let world = self.camera.screen_to_world(at, iced::Rectangle::default());
         // Symbol y points up.
         self.cursor_mm = Some((f64::from(world.x), -f64::from(world.y)));
