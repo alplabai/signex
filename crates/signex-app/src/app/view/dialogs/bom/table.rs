@@ -17,6 +17,41 @@ use crate::styles::{ChromeMetrics, HAIRLINE, Spacing, TypeScale, ti};
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
+/// The catalog name of a standard column; `None` for a custom-field column,
+/// whose name is the field's own. Exported files keep `BomColumn::header`.
+pub(super) fn column_name(c: &BomColumn) -> Option<signex_i18n::MessageId> {
+    use signex_i18n::ids;
+    Some(match c {
+        BomColumn::Name => ids::BOM_COLUMN_NAME,
+        BomColumn::Designator => ids::BOM_COLUMN_DESIGNATOR,
+        BomColumn::LibRef => ids::BOM_COLUMN_LIB_REF,
+        BomColumn::Reference => ids::BOM_COLUMN_REFERENCE,
+        BomColumn::Qty => ids::BOM_COLUMN_QTY,
+        BomColumn::Value => ids::BOM_COLUMN_VALUE,
+        BomColumn::Footprint => ids::BOM_COLUMN_FOOTPRINT,
+        BomColumn::Description => ids::BOM_COLUMN_DESCRIPTION,
+        BomColumn::Custom(_) => return None,
+        BomColumn::UnitPrice => ids::BOM_COLUMN_UNIT_PRICE,
+        BomColumn::BuyQty => ids::BOM_COLUMN_BUY_QTY,
+        BomColumn::ExtendedPrice => ids::BOM_COLUMN_EXT_PRICE,
+        BomColumn::Currency => ids::BOM_COLUMN_CURRENCY,
+        BomColumn::Stock => ids::BOM_COLUMN_STOCK,
+        BomColumn::Distributor => ids::BOM_COLUMN_DISTRIBUTOR,
+        BomColumn::PriceAge => ids::BOM_COLUMN_PRICE_AGE,
+    })
+}
+
+/// The header text of a column in `i18n`'s language.
+pub(super) fn column_header(
+    c: &BomColumn,
+    i18n: &signex_i18n::I18n,
+) -> signex_widgets::Label<'static> {
+    match column_name(c) {
+        Some(id) => i18n.message(id, &[]).into(),
+        None => UserText::new(c.header()).into(),
+    }
+}
+
 /// Height of the header and of every line (rule included), as drawn: a
 /// field tall.
 const ROW_H: f32 = ChromeMetrics::DEFAULT.field;
@@ -316,12 +351,11 @@ impl Signex {
                 Some((s, asc)) if s == idx => Some(asc),
                 _ => None,
             };
-            // raw: the column name comes from signex-output (#2060).
             let mut label: Row<Element<'a, Message>> = Row::new()
                 .spacing(SP.xs)
                 .align_y(iced::Alignment::Center)
                 .push(
-                    text(raw(c.header().to_string()))
+                    text(column_header(c, self.ui_state.i18n.as_ref()))
                         .size(TS.body)
                         .font(medium)
                         .color(if sorted.is_some() { ink } else { r.ink3 })

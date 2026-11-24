@@ -32,6 +32,7 @@ fn pressed(key: Key, code: Code, repeat: bool) -> (bool, Option<FootprintEditorM
         zoom_step: 1.1,
         trackpad_pan: false,
         wheel_mode: Default::default(),
+        mirror_card: None,
     };
     let Some(action) = fpc.on_key_pressed(
         &key,

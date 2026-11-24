@@ -1,6 +1,6 @@
 //! The selection states of the footprint Properties body: a sketch entity
-//! (its role sub-form or its own header, then the Entity section) and a
-//! selected pad (the pad form).
+//! (the Slot header on a slot edge, its role sub-form or its own header,
+//! then the Entity section) and a selected pad (the pad form).
 
 use iced::widget::{Column, container};
 use iced::{Element, Length, Widget as _};
@@ -57,8 +57,9 @@ fn entity_status(entity: &FootprintSketchEntitySummary, i18n: &I18n) -> Localize
     }
 }
 
-/// A selected sketch entity: the role sub-form first when its role has one
-/// (it carries its own header and illustration), else the entity header;
+/// A selected sketch entity: the Slot header when it is a slot edge, then
+/// the role sub-form when its role has one (it carries its own header and
+/// illustration), else the entity header unless the Slot header stands;
 /// then the Entity section.
 pub(super) fn view_sketch_entity<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
@@ -73,8 +74,15 @@ pub(super) fn view_sketch_entity<'a>(
     let subform = fp.selected_sketch_entity_id.and_then(|id| {
         super::subforms::view_role_subform(fp, id, cx.palette, tokens, cx.collapsed, i18n)
     });
+    // An edge of a slot heads with the slot; the selection stays the edge
+    // (mockup row 179).
+    let slot = fp.board.as_ref().and_then(|board| board.selected_slot);
+    if let Some((length, width)) = slot {
+        col = col.push(slot_header(length, width, cx));
+    }
     col = match subform {
         Some(form) => col.push(form),
+        None if slot.is_some() => col,
         None => col.push(object_header(
             t!(i18n, ids::EDITORS_FP_PROPS_ENTITY_HEADING, "kind" => kind.as_str()),
             Some(entity_status(entity, i18n).into()),
@@ -94,6 +102,19 @@ pub(super) fn view_sketch_entity<'a>(
         return col;
     }
     entity_rows(col, cx, entity, kind)
+}
+
+/// "Slot" over "12.00 × 3.00 mm".
+fn slot_header<'a>(length: f64, width: f64, cx: Ctx<'a, '_>) -> Element<'a, PanelMsg> {
+    let size = t!(
+        cx.i18n, ids::SKETCH_BAKE_SLOT_SIZE,
+        "length" => format!("{length:.2}"), "width" => format!("{width:.2}")
+    );
+    object_header(
+        t!(cx.i18n, ids::BOARD_SKETCH_SLOT),
+        Some(size.into()),
+        cx.tokens,
+    )
 }
 
 fn entity_rows<'a>(
@@ -188,3 +209,7 @@ fn entity_rows<'a>(
     }
     col
 }
+
+#[cfg(test)]
+#[path = "selection_tests.rs"]
+mod tests;

@@ -3,9 +3,8 @@
 //! a pad's driving entity is selected. Both show that pad in Footprint
 //! mode. Nothing shows on a board sketch or without a pad to go to.
 
-use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{Space, button as button_widget, container};
-use iced::{Background, Border, Element, Length, Theme, Widget as _};
+use iced::widget::button as button_widget;
+use iced::{Background, Border, Element, Theme, Widget as _};
 use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text, theme_ext};
@@ -18,16 +17,16 @@ use crate::styles::tokens::{Overlay, composite_over, overlay, resolve};
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
-/// The link at the canvas's bottom centre, between the mode bar and the
-/// zoom pill; an empty layer when there is nothing to link to.
-pub fn overlay_link<'a>(
+/// The link button; `None` when there is nothing to link to. The mode bar's
+/// column (`sketch_exit::footprint_overlay`) stacks it first, so it sits just
+/// above the preview card while that is open and above the mode bar
+/// otherwise, left-aligned, never covering Bake (mockup row 192).
+pub fn link_button<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
-) -> Element<'a, LibraryMessage> {
-    let Some(offer) = editor.state.pad_link_offer() else {
-        return Space::new().boxed();
-    };
+) -> Option<Element<'a, LibraryMessage>> {
+    let offer = editor.state.pad_link_offer()?;
     let label = match offer {
         PadLinkOffer::BackToPad { pad_idx, .. } => {
             let designator = editor
@@ -74,11 +73,79 @@ pub fn overlay_link<'a>(
                 ..button_widget::Style::default()
             }
         });
-    container(link)
-        .padding(SP.xl)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .align_x(Horizontal::Center)
-        .align_y(Vertical::Bottom)
-        .boxed()
+    Some(link.boxed())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use iced::Rectangle;
+    use signex_library::{Footprint, FootprintFile, Pad};
+    use signex_sketch::id::SketchEntityId;
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    use super::*;
+    use crate::layout_probe::{find, lay_out_texts};
+    use crate::library::editor::footprint::EditorMode;
+
+    /// A footprint in sketch mode with pad 1's driving entity selected, so
+    /// the link offers Jump to pad.
+    fn jump_offer() -> FootprintDocument {
+        let entity = SketchEntityId::new();
+        let mut fp = Footprint::empty("link");
+        fp.pads.push(Pad {
+            number: "1".into(),
+            ..Pad::default()
+        });
+        let mut editor = FootprintDocument::new(
+            PathBuf::from("link.snxfpt"),
+            FootprintFile::from_footprint(fp),
+        );
+        editor.state.mode = EditorMode::Sketch;
+        if let Some(pad) = editor.state.pads.first_mut() {
+            pad.sketch_entity_id = Some(entity);
+        }
+        editor.state.selected_sketch = Some(entity);
+        editor
+    }
+
+    fn overlaps(a: Rectangle, b: Rectangle) -> bool {
+        a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
+    }
+
+    /// Mockup row 192: on a narrow canvas the link sits above the mode bar,
+    /// left-aligned with it, and covers neither Bake nor any other part of
+    /// the bar.
+    #[test]
+    fn the_link_sits_above_the_mode_bar_and_never_covers_bake() {
+        let editor = jump_offer();
+        assert!(matches!(
+            editor.state.pad_link_offer(),
+            Some(PadLinkOffer::JumpToPad { .. })
+        ));
+        let tokens = theme_tokens(ThemeId::GraphiteDark);
+        let i18n = I18n::en_us();
+        let overlay = super::super::sketch_exit::footprint_overlay(&editor, &tokens, &i18n);
+        let width = 480.0;
+        let texts = lay_out_texts(overlay, iced::Size::new(width, 360.0));
+        let word = |id: signex_i18n::MessageId| t!(i18n, id).into_string();
+        let link = find(&texts, &word(ids::SKETCH_TOOLS_JUMP_TO_PAD)).bounds;
+        let bake = find(&texts, &word(ids::EDITORS_SKETCH_BAKE)).bounds;
+        let title = find(&texts, &word(ids::EDITORS_SKETCH_MODE_TITLE)).bounds;
+        assert!(!overlaps(link, bake), "{link:?} covers Bake at {bake:?}");
+        assert!(
+            link.y + link.height <= title.y,
+            "{link:?} is not above the mode bar title {title:?}"
+        );
+        assert!(link.x < width / 2.0, "{link:?} is not left-aligned");
+        for laid in texts.iter().filter(|t| t.bounds != link) {
+            assert!(
+                !overlaps(link, laid.bounds),
+                "{link:?} covers {:?} at {:?}",
+                laid.text,
+                laid.bounds
+            );
+        }
+    }
 }

@@ -308,7 +308,12 @@ impl FootprintCanvas<'_> {
             // mockup row 192 — the driving profile of an Edit in Sketch from a pad.
             super::sketch::draw_pad_link_profile(frame, cstate, sketch, self.state);
             // mockup row 187 / mockup row 191 — Chamfer, Extend, Mirror and Linear Pattern ghosts.
-            super::sketch::draw_sketch_tool_ghosts(frame, cstate, sketch, self.state);
+            super::sketch::draw_sketch_tool_ghosts(
+                frame,
+                cstate,
+                (sketch, self.state),
+                self.mirror_card.as_ref(),
+            );
             // v0.22 Phase A6 — Inferred-constraint snap glyph on top.
             draw_sketch_snap_glyph(frame, cstate, self.state);
             // Values on the drawing, pattern glyphs, conflict badge (mockup row 187).

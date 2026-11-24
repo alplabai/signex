@@ -11,6 +11,8 @@ use super::*;
 use crate::app::state::PreviewState;
 
 mod bookmarks;
+#[cfg(test)]
+mod controls_tests;
 mod form;
 mod layers;
 mod page_setup;

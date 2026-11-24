@@ -1,10 +1,11 @@
 //! Footprint sketch tools — Mirror and Offset (carved from `sketch_tools::apply`, ADR-0001 D2).
 //! The pattern tools live in `pattern`.
 //!
-//! `apply` is a thin router; each `SketchTool` delegates to one named
-//! per-tool fn below. Bodies moved verbatim; the preamble locals they
-//! read (`flag`, `ctx.plane_id`, `ctx.resolved_id`, raw click
-//! `ctx.x_mm`/`ctx.y_mm`) arrive via [`ToolClickCtx`].
+//! Mirror runs once, on OK of the Mirror card ([`mirror`], mockup row
+//! 191); its clicks are the card's picks and never reach this module.
+//! `apply` routes the Offset click; the preamble locals it reads (`flag`,
+//! `ctx.plane_id`, raw click `ctx.x_mm`/`ctx.y_mm`) arrive via
+//! [`ToolClickCtx`].
 //!
 //! [`offset`] additionally splits by the source entity's kind
 //! (`offset_line` / `offset_circle` / `offset_arc`) — the three cases are
@@ -13,12 +14,20 @@
 //! conceptual boundary, not a fragmentation of one cohesive routine
 //! (ADR-0001 D2 per-gesture judgment call, #177).
 
+use std::collections::HashMap;
+
 use super::ToolClickCtx;
 use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
 use crate::library::editor::footprint::sketch_mode::SketchEdit;
+use crate::library::editor::footprint::sketch_mode::mirror_card::{MirrorObject, MirrorRequest};
 use crate::library::editor::footprint::state::{PlacementInputKind, SketchTool, ToolPending};
+use signex_sketch::SketchData;
+use signex_sketch::array::ArrayId;
+use signex_sketch::constraint::{Constraint, ConstraintKind};
 use signex_sketch::entity::{Entity, EntityKind};
-use signex_sketch::id::SketchEntityId;
+use signex_sketch::id::{ConstraintId, SketchEntityId};
+use signex_sketch::plane::PlaneId;
+use signex_sketch::sketch::{PatternCycle, PatternMirror};
 
 pub(super) fn apply(
     editor: &mut crate::app::FootprintDocument,
@@ -26,287 +35,175 @@ pub(super) fn apply(
     tool: SketchTool,
 ) {
     match tool {
-        SketchTool::Mirror => mirror(editor, ctx),
         SketchTool::Offset => offset(editor, ctx),
         _ => unreachable!("non-transform tool routed here"),
     }
 }
 
-/// Mirror's first click without a Line selected (mockup row 191): a click on a Line
-/// of the Centerline linetype takes it as the mirror line. It becomes the
-/// selection, so the next clicks mirror entities about it as with a
-/// selected Line. Returns whether the click was that pick.
-pub(super) fn take_centerline_as_mirror_line(
-    editor: &mut crate::app::FootprintDocument,
-    x_mm: f64,
-    y_mm: f64,
-) -> bool {
-    // With a pattern selected, Mirror keeps a live mirror of it (mockup row 191).
-    if super::mirror_pattern::mirror_selected_pattern(editor, x_mm, y_mm) {
-        return true;
-    }
-    let Some(sketch) = editor.primitive().sketch.as_ref() else {
-        return false;
-    };
-    let line_selected = editor.state.selected_sketch.is_some_and(|id| {
-        sketch
-            .entities
-            .iter()
-            .any(|e| e.id == id && matches!(e.kind, EntityKind::Line { .. }))
-    });
-    if line_selected {
-        return false;
-    }
-    let Some(centerline) = super::pick_line_where(sketch, x_mm, y_mm, |e| e.centerline) else {
-        return false;
-    };
-    editor.state.selected_sketch = Some(centerline);
-    editor.state.selected_sketch_secondary = None;
-    editor.state.selected_sketch_extra.clear();
+/// OK on the Mirror card (mockup row 191): reflect every object about the
+/// request's Line, in one undo step. Geometry gets fresh entities over
+/// mirrored copies of its Points, one copy per source Point even when
+/// objects share it; with Keep linked each pair gets a `SymmetricAboutLine`
+/// so the copy follows the source, without it the copy is free. A pattern
+/// gets a live mirror whatever Keep linked says. Mirrored Arcs flip
+/// `sweep_ccw`, as reflection inverts winding. The tool goes back to
+/// Select.
+pub(super) fn mirror(editor: &mut crate::app::FootprintDocument, request: &MirrorRequest) {
+    editor.state.active_tool = SketchTool::Select;
     editor.state.tool_pending = ToolPending::Idle;
-    true
+    let Some(sketch) = editor.primitive().sketch.as_ref() else {
+        return;
+    };
+    let Some(axis) = MirrorAxis::of(sketch, request.line) else {
+        super::mirror_pattern::refuse(editor, "Mirror: degenerate Line (zero length)".into());
+        return;
+    };
+    let flags = (editor.state.construction_mode, editor.state.centerline_mode);
+    let linked = super::mirror_pattern::link_patterns(editor, |sketch| {
+        mirror_into(sketch, request, &axis, flags)
+    });
+    if let Err(cycle) = linked {
+        super::mirror_pattern::refuse(editor, format!("Mirror: {cycle} — no mirror was added"));
+    }
 }
 
-// v0.22 Phase B1 + extension — Mirror tool. Pre-condition: a Line entity
-// must already be selected via the Select tool, or picked as a centerline
-// by `take_centerline_as_mirror_line`; clicks while no Line is selected
-// are no-ops with a warning surfaced via `solve_warnings`.
-//
-// The picked entity's geometry is reflected across the selected Line and
-// a fresh entity is minted referencing mirrored copies of every Point it
-// touches. Each mirrored Point pair gets a `SymmetricAboutLine`
-// constraint so the solver maintains symmetry through subsequent edits
-// (drag the source and the mirror tracks it parametrically).
-//
-// Scope: Points / Lines / Arcs / Circles. Mirrored Arcs flip `sweep_ccw`
-// because reflection inverts winding. Mirrored Circles re-use the source
-// radius (Circle's `radius` is a literal, not a referenced Point, so it
-// round-trips unchanged).
-fn mirror(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
-    use signex_sketch::constraint::{Constraint, ConstraintKind};
-    use signex_sketch::id::ConstraintId;
+/// The mirror line, read once before the sketch changes.
+struct MirrorAxis {
+    a: (f64, f64),
+    v: (f64, f64),
+    vv: f64,
+}
 
-    let line_id = match editor.state.selected_sketch {
-        Some(id) => id,
-        None => {
-            editor.state.solve_warnings.push(
-                        "Mirror: select a Line or click a centerline first (Select tool, click a Line, then click here to mirror)"
-                            .into(),
-                    );
-            editor.state.tool_pending = ToolPending::Idle;
-            editor.canvas_cache.clear();
-            return;
-        }
-    };
-
-    let sketch_ref = match editor.primitive().sketch.as_ref() {
-        Some(s) => s,
-        None => {
-            editor.state.tool_pending = ToolPending::Idle;
-            return;
-        }
-    };
-    let line_endpoints = sketch_ref
-        .entities
-        .iter()
-        .find(|e| e.id == line_id)
-        .and_then(|e| match e.kind {
-            EntityKind::Line { start, end } => Some((start, end)),
-            _ => None,
-        });
-    let (a_id, b_id) = match line_endpoints {
-        Some(p) => p,
-        None => {
-            editor.state.solve_warnings.push(
-                "Mirror: selection is not a Line — pick a Line entity or click a centerline first"
-                    .into(),
-            );
-            editor.state.tool_pending = ToolPending::Idle;
-            editor.canvas_cache.clear();
-            return;
-        }
-    };
-
-    let pos_of = |id: SketchEntityId| -> Option<(f64, f64)> {
-        sketch_ref
-            .entities
-            .iter()
-            .find(|e| e.id == id)
-            .and_then(|e| match e.kind {
-                EntityKind::Point { x, y } => Some((x, y)),
-                _ => None,
-            })
-    };
-    let kind_of = sketch_ref
-        .entities
-        .iter()
-        .find(|e| e.id == ctx.resolved_id)
-        .map(|e| e.kind.clone());
-    let kind_of = match kind_of {
-        Some(k) => k,
-        None => {
-            editor.state.tool_pending = ToolPending::Idle;
-            return;
-        }
-    };
-
-    let (ax, ay) = match pos_of(a_id) {
-        Some(p) => p,
-        None => return,
-    };
-    let (bx, by) = match pos_of(b_id) {
-        Some(p) => p,
-        None => return,
-    };
-    let vx = bx - ax;
-    let vy = by - ay;
-    let v_dot_v = vx * vx + vy * vy;
-    if v_dot_v <= 1e-12 {
-        editor
-            .state
-            .solve_warnings
-            .push("Mirror: degenerate Line (zero length)".into());
-        editor.state.tool_pending = ToolPending::Idle;
-        editor.canvas_cache.clear();
-        return;
+impl MirrorAxis {
+    fn of(sketch: &SketchData, line: SketchEntityId) -> Option<Self> {
+        let EntityKind::Line { start, end } = sketch.entities.iter().find(|e| e.id == line)?.kind
+        else {
+            return None;
+        };
+        let (a, b) = (point_at(sketch, start)?, point_at(sketch, end)?);
+        let v = (b.0 - a.0, b.1 - a.1);
+        let vv = v.0 * v.0 + v.1 * v.1;
+        (vv > 1e-12).then_some(Self { a, v, vv })
     }
-    let reflect = |px: f64, py: f64| -> (f64, f64) {
-        let t = ((px - ax) * vx + (py - ay) * vy) / v_dot_v;
-        let foot_x = ax + t * vx;
-        let foot_y = ay + t * vy;
-        (2.0 * foot_x - px, 2.0 * foot_y - py)
-    };
 
-    // Mirror a Point entity by ID: emits a new Point
-    // at the reflected position and a
-    // SymmetricAboutLine constraint linking source
-    // and mirror. Returns the new Point's ID.
-    // Captured by reference so the closure can be
-    // called repeatedly for chained-Point entities.
-    let mint_mirror_point = |editor: &mut crate::app::FootprintDocument,
-                             pt_id: SketchEntityId,
-                             pos: (f64, f64)|
-     -> SketchEntityId {
-        let (rx, ry) = reflect(pos.0, pos.1);
-        let new_id = SketchEntityId::new();
-        let new_entity = ctx.flag(Entity::new(
-            new_id,
-            ctx.plane_id,
-            EntityKind::Point { x: rx, y: ry },
-        ));
-        editor.with_parts(|state, primitive| {
-            apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(new_entity));
-        });
-        let constraint = Constraint {
-            id: ConstraintId::new(),
-            kind: ConstraintKind::SymmetricAboutLine {
-                p1: pt_id,
-                p2: new_id,
-                line: line_id,
+    fn reflect(&self, p: (f64, f64)) -> (f64, f64) {
+        let t = ((p.0 - self.a.0) * self.v.0 + (p.1 - self.a.1) * self.v.1) / self.vv;
+        let foot = (self.a.0 + t * self.v.0, self.a.1 + t * self.v.1);
+        (2.0 * foot.0 - p.0, 2.0 * foot.1 - p.1)
+    }
+}
+
+fn point_at(sketch: &SketchData, id: SketchEntityId) -> Option<(f64, f64)> {
+    match sketch.entities.iter().find(|e| e.id == id)?.kind {
+        EntityKind::Point { x, y } => Some((x, y)),
+        _ => None,
+    }
+}
+
+/// Write the mirror of `request` into `sketch`: pattern mirrors first, so
+/// a refused one leaves the copy untouched for the caller to drop.
+fn mirror_into(
+    sketch: &mut SketchData,
+    request: &MirrorRequest,
+    axis: &MirrorAxis,
+    flags: (bool, bool),
+) -> Result<(), PatternCycle> {
+    for object in &request.objects {
+        if let MirrorObject::Pattern(pattern) = *object {
+            sketch.add_pattern_mirror(PatternMirror {
+                id: ArrayId::new(),
+                pattern,
+                line: request.line,
+            })?;
+        }
+    }
+    let mut copy = PointCopies {
+        images: HashMap::new(),
+        request,
+        axis,
+        flags,
+    };
+    for object in &request.objects {
+        if let MirrorObject::Entity(id) = *object {
+            copy.entity(sketch, id);
+        }
+    }
+    Ok(())
+}
+
+/// The mirrored Points made so far, by source Point.
+struct PointCopies<'a> {
+    images: HashMap<SketchEntityId, SketchEntityId>,
+    request: &'a MirrorRequest,
+    axis: &'a MirrorAxis,
+    flags: (bool, bool),
+}
+
+impl PointCopies<'_> {
+    fn flagged(&self, plane: PlaneId, kind: EntityKind) -> Entity {
+        let mut entity = Entity::new(SketchEntityId::new(), plane, kind);
+        (entity.construction, entity.centerline) = self.flags;
+        entity
+    }
+
+    /// The copy of the Point `source`, made on first use.
+    fn point(&mut self, sketch: &mut SketchData, source: SketchEntityId) -> Option<SketchEntityId> {
+        if let Some(image) = self.images.get(&source) {
+            return Some(*image);
+        }
+        let plane = sketch.entities.iter().find(|e| e.id == source)?.plane;
+        let (x, y) = self.axis.reflect(point_at(sketch, source)?);
+        let image = self.flagged(plane, EntityKind::Point { x, y });
+        let image_id = image.id;
+        sketch.entities.push(image);
+        if self.request.keep_linked {
+            sketch.constraints.push(Constraint {
+                id: ConstraintId::new(),
+                kind: ConstraintKind::SymmetricAboutLine {
+                    p1: source,
+                    p2: image_id,
+                    line: self.request.line,
+                },
+            });
+        }
+        self.images.insert(source, image_id);
+        Some(image_id)
+    }
+
+    /// The copy of the entity `id`; a Point already copied is not copied
+    /// again.
+    fn entity(&mut self, sketch: &mut SketchData, id: SketchEntityId) -> Option<()> {
+        let source = sketch.entities.iter().find(|e| e.id == id)?;
+        let (plane, kind) = (source.plane, source.kind.clone());
+        let kind = match kind {
+            EntityKind::Point { .. } => {
+                self.point(sketch, id)?;
+                return Some(());
+            }
+            EntityKind::Line { start, end } => EntityKind::Line {
+                start: self.point(sketch, start)?,
+                end: self.point(sketch, end)?,
+            },
+            EntityKind::Arc {
+                center,
+                start,
+                end,
+                sweep_ccw,
+            } => EntityKind::Arc {
+                center: self.point(sketch, center)?,
+                start: self.point(sketch, start)?,
+                end: self.point(sketch, end)?,
+                sweep_ccw: !sweep_ccw,
+            },
+            EntityKind::Circle { center, radius } => EntityKind::Circle {
+                center: self.point(sketch, center)?,
+                radius,
             },
         };
-        editor.with_parts(|state, primitive| {
-            apply_sketch_edit_with_warnings(
-                state,
-                primitive,
-                SketchEdit::AddConstraint(constraint),
-            );
-        });
-        new_id
-    };
-
-    match kind_of {
-        EntityKind::Point { x, y } => {
-            mint_mirror_point(editor, ctx.resolved_id, (x, y));
-        }
-        EntityKind::Line { start, end } => {
-            let s_pos = match pos_of(start) {
-                Some(p) => p,
-                None => return,
-            };
-            let e_pos = match pos_of(end) {
-                Some(p) => p,
-                None => return,
-            };
-            let new_start = mint_mirror_point(editor, start, s_pos);
-            let new_end = mint_mirror_point(editor, end, e_pos);
-            let new_line_id = SketchEntityId::new();
-            let new_line = ctx.flag(Entity::new(
-                new_line_id,
-                ctx.plane_id,
-                EntityKind::Line {
-                    start: new_start,
-                    end: new_end,
-                },
-            ));
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(new_line));
-            });
-        }
-        EntityKind::Arc {
-            center,
-            start,
-            end,
-            sweep_ccw,
-        } => {
-            let c_pos = match pos_of(center) {
-                Some(p) => p,
-                None => return,
-            };
-            let s_pos = match pos_of(start) {
-                Some(p) => p,
-                None => return,
-            };
-            let e_pos = match pos_of(end) {
-                Some(p) => p,
-                None => return,
-            };
-            let new_center = mint_mirror_point(editor, center, c_pos);
-            let new_start = mint_mirror_point(editor, start, s_pos);
-            let new_end = mint_mirror_point(editor, end, e_pos);
-            // Reflection inverts winding — flip
-            // sweep_ccw so the mirrored arc traces
-            // the same arc on the other side.
-            let new_arc_id = SketchEntityId::new();
-            let new_arc = ctx.flag(Entity::new(
-                new_arc_id,
-                ctx.plane_id,
-                EntityKind::Arc {
-                    center: new_center,
-                    start: new_start,
-                    end: new_end,
-                    sweep_ccw: !sweep_ccw,
-                },
-            ));
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(new_arc));
-            });
-        }
-        EntityKind::Circle { center, radius } => {
-            let c_pos = match pos_of(center) {
-                Some(p) => p,
-                None => return,
-            };
-            let new_center = mint_mirror_point(editor, center, c_pos);
-            let new_circle_id = SketchEntityId::new();
-            let new_circle = ctx.flag(Entity::new(
-                new_circle_id,
-                ctx.plane_id,
-                EntityKind::Circle {
-                    center: new_center,
-                    radius,
-                },
-            ));
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(
-                    state,
-                    primitive,
-                    SketchEdit::add_entity(new_circle),
-                );
-            });
-        }
+        let copy = self.flagged(plane, kind);
+        sketch.entities.push(copy);
+        Some(())
     }
-    editor.state.tool_pending = ToolPending::Idle;
 }
 
 // v0.22 Phase B2 — Offset tool. Pre-condition: a Line / Arc / Circle is

@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use signex_app::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
 use signex_app::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
 use signex_app::library::editor::footprint::sketch_mode::SketchEdit;
+use signex_app::library::editor::footprint::sketch_mode::mirror_card::MirrorCardMsg;
 use signex_app::library::editor::footprint::sketch_mode::value_edit::SketchCanvasMsg;
 use signex_app::library::editor::footprint::{EditorMode, SketchTool};
 use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
@@ -192,7 +193,18 @@ fn mirror_with_a_pattern_selected_adds_a_live_mirror_that_follows_it() {
     select_pattern(&mut app, &path, row_id);
     let undo_before = editor(&app, &path).history.undo_len();
 
+    // The card takes the pattern as its object, then the clicked Line as
+    // the mirror line; OK writes the mirror (mockup row 191).
     click(&mut app, &path, 5.0, 0.0, None);
+    assert!(
+        sketch(&app, &path).pattern_mirrors.is_empty(),
+        "not before OK"
+    );
+    send(
+        &mut app,
+        &path,
+        FootprintEditorMsg::SketchMirrorCard(MirrorCardMsg::Confirmed),
+    );
 
     let sk = sketch(&app, &path);
     assert_eq!(sk.pattern_mirrors.len(), 1, "a live mirror, not copies");

@@ -280,6 +280,13 @@ clear of the DOF chips; a board floats it alone: "Footprint sketch ·
 plane Top · grid 0.05 mm" (a board reads "Board shape · …"), and the
 **Parameters** button, which opens or closes the table.
 
+Under the table's rows, a live bake preview (Caner, 2026-11-24) draws the
+edges that bake, a footprint's baked pads and the driving dimensions, from
+the current solve without solving again; it redraws on each keystroke.
+While an expression does not read, it keeps the last good bake, marked,
+and hides the pads, since their angles cannot be read, saying so. Live
+checks sits beside it, parameter errors first.
+
 **The table** is a card over the canvas with one row per parameter:
 
 - **Name**, **Expression**, **Value**, **Unit** (mm, deg or count, the unit
@@ -507,12 +514,16 @@ nothing is selected.
   Line is left as it is and a warning says so. Only a free end extends: an
   end that another entity shares, or that a constraint, a pattern or a pad
   names, is refused rather than torn off.
-- **Mirror** — with a Line selected, each click mirrors the entity under it
-  about that Line and keeps the copy linked with Symmetric constraints. With
-  no Line selected, a click on a Line of the Centerline linetype takes it as
-  the mirror line (it becomes the selection); the next clicks mirror about
-  it. Mirror is under "Needs a selection", so it is armed with something
-  selected.
+- **Mirror** — opens an options card (mockup row 191; Caner, 2026-11-24).
+  The selection becomes its Objects and a selected centerline its Mirror
+  line. Clicks pick: a centerline under the cursor fills an empty line
+  first; with Mirror line focused, a click takes any Line; other clicks add
+  or remove objects. Keep linked (on each time the card opens) keeps every
+  copy symmetric to its source; off makes free copies. A selected pattern is
+  always mirrored live. OK writes one undo step and returns to Select;
+  Cancel writes nothing. The ghost draws the line, the picks and the copies
+  OK will write. Mirror is under "Needs a selection", so it is armed with
+  something selected.
 - **Linear Pattern** — click the source. The pattern repeats it 4 times
   along X, at the dimension input as the pitch, else 5 mm; count and pitch
   are edited in the Pattern section. Rectangular Pattern (2 × 2 at 5 mm) and
@@ -521,7 +532,7 @@ nothing is selected.
 Chamfer, Extend and Mirror's centerline pick take an existing Line by its
 stroke (0.30 mm), so their clicks place no Point. Each tool shows a ghost
 while armed: the Line a click would take, where an extended end would stop,
-the cursor's mirror image, or where the pattern's instances would land.
+the Mirror card's copies, or where the pattern's instances would land.
 
 On a board the same rows are offered, and a board bake writes every instance
 ([PCB_SKETCH.md](PCB_SKETCH.md#patterned-board-items)).
@@ -573,16 +584,16 @@ another pattern, and a mirror of a pattern stays a pattern.
   instance `k` is number `s · inner slots + k` of the scheme (a grid counts
   its rows that many times wider). The inner pattern still bakes its own
   pads; the outer one bakes its other slots.
-- **A live mirror.** With a pattern selected, a Mirror click on a Line (or
-  with a Line selected) adds a `PatternMirror { id, pattern, line }` to
+- **A live mirror.** With a pattern among the Mirror card's objects, OK
+  adds a `PatternMirror { id, pattern, line }` to
   `SketchData::pattern_mirrors` instead of copying geometry, as one undo
   step. Every instance of the pattern is reflected about the solved Line on
   each bake, so the mirror follows the pattern: change the count and the
   mirror changes with it. Mirrored pads keep the pattern's numbering scheme
   and continue it (a row numbered 1 to 4 mirrors as 5 to 8); a pad's
   rotation is reflected too. Pad offsets and the shape itself are not
-  reflected (a trapezoid keeps its side). Without a pattern selected,
-  Mirror copies geometry as before.
+  reflected (a trapezoid keeps its side). Other objects are copied as
+  geometry.
 - **Chains and loops.** A mirror can be the source of another pattern or
   mirror. A link that would make a pattern repeat itself, directly or
   through other patterns and mirrors, is refused with a warning and leaves
@@ -694,8 +705,16 @@ conflicting mark fills in the danger colour.
 The cursor marks sketch mode draws in place of the OS cursor are light on
 that ground.
 
+A closed loop with a role shows the role's name at its top-left corner in
+the role's colour; a pad's loop shows none. Courtyard fills in the
+Courtyard Top colour; the other fills are unchanged (Caner, 2026-11-24).
+Jump to pad and Back to pad sit just above the mode bar, left-aligned, or
+just above the Bake preview card while it is open.
+
 A mirrored pattern draws a glyph by its mirror line, `⇔` and the mirrored
-pattern's glyph (`⇔ L×4`); a click selects it, and its menu has only
+pattern's glyph (`⇔ L×4`). A pattern glyph click with Select selects the
+pattern and its source and opens the pattern form. A mirror glyph click
+selects it, and its menu has only
 Delete mirror (one undo step; the pattern and the line stay). A pattern
 whose source is another pattern names it: `P×4 of L×4`.
 

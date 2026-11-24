@@ -51,6 +51,8 @@ bom-column-designator = Designator
 bom-column-value = Value
 bom-column-footprint = Footprint
 bom-column-lib-ref = LibRef
+# The legacy column that lists the designators, under its old name.
+bom-column-reference = Reference
 bom-column-qty = Qty
 bom-column-unit-price = Unit Price
 bom-column-buy-qty = Buy Qty
@@ -89,3 +91,9 @@ bom-price-total-unpriced = Total { $sums } · { $count ->
     [one] { $count } line without a cached price
    *[other] { $count } lines without a cached price
 }
+# Validation rule names on the Rules tab.
+bom-rule-missing-footprint = Missing footprint
+bom-rule-missing-mpn = Missing MPN
+bom-rule-duplicate-designator = Duplicate designator
+bom-rule-empty-or-zero-qty = Empty or zero quantity
+bom-rule-unit-field-conflict = Conflicting unit fields

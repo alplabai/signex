@@ -22,6 +22,8 @@ define_ids! {
     SKETCH_BAKE_ROLES_EMPTY = "sketch-bake-roles-empty";
     SKETCH_BAKE_ROLES_MASK = "sketch-bake-roles-mask";
     SKETCH_BAKE_ROLES_CENTERLINES = "sketch-bake-roles-centerlines";
+    SKETCH_BAKE_BAKE_AS = "sketch-bake-bake-as";
+    SKETCH_BAKE_SLOT_SIZE = "sketch-bake-slot-size";
     SKETCH_BAKE_OUTCOME_TITLE = "sketch-bake-outcome-title";
     SKETCH_BAKE_OUTCOME_WROTE = "sketch-bake-outcome-wrote";
     SKETCH_BAKE_OUTCOME_NOTHING = "sketch-bake-outcome-nothing";

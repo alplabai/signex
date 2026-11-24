@@ -13,6 +13,8 @@ mod class_styles;
 #[cfg(test)]
 mod current_page_tests;
 mod erc_report;
+#[cfg(test)]
+mod filter_names_tests;
 mod loose_bom;
 mod omitted;
 pub(crate) mod page_list;

@@ -268,8 +268,7 @@ fn columns_pane<'a>(
             Some((_, id)) => t!(i18n, *id).into(),
             None => match col {
                 BomColumn::Custom(key) => UserText::new(key.clone()).into(),
-                // raw: a column name from signex-output (#2060).
-                other => raw(other.header().to_string()),
+                other => super::table::column_header(other, i18n),
             },
         }
     };

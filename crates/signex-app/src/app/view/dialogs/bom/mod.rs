@@ -10,6 +10,8 @@ use signex_i18n::{ids, t};
 use super::widgets::{draggable_header, os_title_bar_slot};
 
 mod footer;
+#[cfg(test)]
+mod names_tests;
 mod rules;
 mod sidebar;
 mod table;
