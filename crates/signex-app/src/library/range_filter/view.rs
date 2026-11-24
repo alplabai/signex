@@ -109,6 +109,21 @@ pub(crate) fn range_filter_bar<'a, M: Clone + 'a>(
     Some(bar.boxed())
 }
 
+/// "Add range filter…" when no listed part has a measurement column: the
+/// same picker, disabled with nothing to pick, so the search row keeps its
+/// shape (mockup row 129).
+pub(crate) fn range_filter_add_unavailable<'a, M: Clone + 'a>(i18n: &I18n) -> Element<'a, M> {
+    pick_list(
+        None::<FilterColumn>,
+        Vec::<FilterColumn>::new(),
+        FilterColumn::to_string,
+    )
+    .graphite()
+    .placeholder_label(t!(i18n, ids::LIBRARY_RANGE_FILTER_ADD))
+    .padding(SP.s)
+    .boxed()
+}
+
 fn filter_row<'a, M: Clone + 'a>(
     key: &str,
     label: &str,

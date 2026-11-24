@@ -13,7 +13,7 @@
 //! │ R-0402-10K-1%    ● Released RC0402FR-07… 10 kΩ ±1%   │ [FOOTPRINT  ] │
 //! │ …                                                    │               │
 //! ├────────────────────────────────────────────────────┴───────────────┤
-//! │ Enter to place                              [ Cancel ] [ Place ]   │
+//! │ ↑↓ to move · Enter to place                 [ Cancel ] [ Place ]   │
 //! └────────────────────────────────────────────────────────────────────┘
 //! ```
 //!
@@ -21,6 +21,7 @@
 //! the Library Browser's drawings, read off-thread into
 //! `PickerState::preview`, so the footprint is checked before placing.
 
+use iced::widget::scrollable::RelativeOffset;
 use iced::widget::text::{Ellipsis, Wrapping};
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
@@ -35,7 +36,7 @@ use super::browser::tiles::{TileSource, footprint_tile, symbol_tile};
 use super::messages::{LibraryMessage, PickerMsg, PlacedPartMsg};
 use super::modal_chrome::{cancel_btn, footer_strip, header_with_note_closing, primary_btn_if};
 use super::placed_part::{change_preview_view, datasheet_choice_view};
-use super::range_filter::range_filter_bar;
+use super::range_filter::{range_filter_add_unavailable, range_filter_bar};
 use super::state::{PickerEntry, PickerMode, PickerState};
 use crate::library::editor::kit::{lifecycle_text, lifecycle_tone};
 use crate::panels::components_panel::details::ComponentDetails;
@@ -78,6 +79,20 @@ const DOT: f32 = 6.0;
 const SELECTED_BAR: f32 = 2.0;
 /// Height of a preview tile: three and a half part rows.
 const TILE_H: f32 = ROW_H * 3.5;
+/// The list's scrollable, so ↑ and ↓ keep the selected row in view.
+pub(crate) const LIST_ID: &str = "library-picker-list";
+
+/// The list's relative offset that shows row `index` of `count`: the
+/// row's proportional place, so the row lands inside the viewport
+/// whatever its height (first row at the top, last at the bottom).
+pub(crate) fn list_offset_showing(index: usize, count: usize) -> RelativeOffset {
+    let y = if count < 2 {
+        0.0
+    } else {
+        index.min(count - 1) as f32 / (count - 1) as f32
+    };
+    RelativeOffset { x: 0.0, y }
+}
 
 /// Draws the list `LibraryState::sync_view_caches_in` last built for the
 /// picker; `view` itself filters and clones nothing.
@@ -135,7 +150,8 @@ pub(crate) fn view<'a>(
         tokens,
     );
     // Range filters on the measurement columns (#1572): "Add range filter…"
-    // beside the search; active filters stack in the same column.
+    // beside the search; active filters stack in the same column. With no
+    // measurement column the control stays, disabled (mockup row 129).
     let range_bar = range_filter_bar(
         &picker.range_filters,
         rows.filter_columns(),
@@ -143,11 +159,11 @@ pub(crate) fn view<'a>(
         tokens,
         i18n,
         |msg| LibraryMessage::Picker(PickerMsg::RangeFilter(msg)),
-    );
-    let mut top = row![search].spacing(SP.m).align_y(iced::Alignment::Start);
-    if let Some(bar) = range_bar {
-        top = top.push(bar);
-    }
+    )
+    .unwrap_or_else(|| range_filter_add_unavailable(i18n));
+    let top = row![search, range_bar]
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Start);
     let top = container(top).padding(iced::Padding {
         top: SP.m + SP.xs,
         right: SP.xl,
@@ -166,6 +182,7 @@ pub(crate) fn view<'a>(
             list_col = list_col.push(part_row(entry, is_selected, i18n, tokens));
         }
         scrollable(list_col)
+            .id(LIST_ID)
             .height(Length::Fill)
             .width(Length::Fill)
             .boxed()
@@ -180,7 +197,7 @@ pub(crate) fn view<'a>(
         tokens,
     );
 
-    // Only the key that works is named: Enter in the search field.
+    // ↑ and ↓ move the selection; Enter in the search field commits it.
     let hint = text(t!(
         i18n,
         if changing {
@@ -543,6 +560,9 @@ fn part_row<'a>(
         })
         .boxed()
 }
+
+#[cfg(test)]
+mod search_row_tests;
 
 #[cfg(test)]
 mod tests {

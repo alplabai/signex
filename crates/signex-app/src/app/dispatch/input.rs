@@ -166,6 +166,8 @@ enum InputConsumer {
     DocumentSetup,
     /// Enter picks Place while a Components row menu is open (#2535).
     ComponentsRowMenu,
+    /// ↑ and ↓ move the Place Component picker's selection (mockup row 129).
+    LibraryPicker,
     /// Enter saves all in Close Project and is swallowed in Remove (#2262).
     ConfirmDefault,
     /// F1 toggles the keyboard-shortcuts sheet.
@@ -185,7 +187,7 @@ enum InputConsumer {
 /// Order is behaviour. It is ported verbatim from the `if` chain this
 /// module replaced, and it is NOT derived from `PAINT_ORDER` — see the
 /// module docs for the counterexample that rules that out.
-const CLAIM_ORDER: [InputConsumer; 13] = [
+const CLAIM_ORDER: [InputConsumer; 14] = [
     InputConsumer::KeymapRecorder,
     InputConsumer::CommandPalette,
     InputConsumer::RulePreview,
@@ -194,6 +196,7 @@ const CLAIM_ORDER: [InputConsumer; 13] = [
     InputConsumer::UpdatePcb,
     InputConsumer::DocumentSetup,
     InputConsumer::ComponentsRowMenu,
+    InputConsumer::LibraryPicker,
     InputConsumer::ConfirmDefault,
     InputConsumer::ShortcutsSheet,
     InputConsumer::TextEditTab,
@@ -398,6 +401,9 @@ impl Signex {
             InputConsumer::ComponentsRowMenu => {
                 self.claim_components_row_menu(target, window, event)
             }
+            InputConsumer::LibraryPicker => self
+                .picker_arrow_message(target, event)
+                .map_or(Claim::Pass, Claim::consume),
             InputConsumer::ConfirmDefault => self.claim_confirm_default(target, event),
             InputConsumer::ShortcutsSheet => self.claim_shortcuts_sheet(target, event),
             InputConsumer::TextEditTab => self.claim_text_edit_tab(target, window, event),
@@ -1001,6 +1007,7 @@ mod tests {
             InputConsumer::UpdatePcb,
             InputConsumer::DocumentSetup,
             InputConsumer::ComponentsRowMenu,
+            InputConsumer::LibraryPicker,
             InputConsumer::ConfirmDefault,
             InputConsumer::ShortcutsSheet,
             InputConsumer::TextEditTab,

@@ -528,6 +528,9 @@ pub enum PickerMsg {
     PanelComponentClicked(super::state::ComponentsPanelRowKey),
     FilterChanged(String),
     SelectComponent(uuid::Uuid),
+    /// ↑ (-1) or ↓ (+1) was pressed over the picker's list (mockup row
+    /// 129): the selection moves that many listed rows.
+    SelectionStepped(isize),
     PlaceSelected,
     /// A range filter on a parameter column of the picker's list.
     RangeFilter(RangeFilterMsg),

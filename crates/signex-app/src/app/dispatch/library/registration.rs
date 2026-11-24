@@ -431,6 +431,7 @@ impl Signex {
                 });
                 return self.start_picker_preview_load();
             }
+            PickerMsg::SelectionStepped(step) => return self.step_picker_selection(step),
             PickerMsg::PreviewLoaded {
                 key,
                 generation,
@@ -468,6 +469,37 @@ impl Signex {
             }
         }
         Task::none()
+    }
+
+    /// ↑ or ↓ over the picker's list (mockup row 129): select the listed row
+    /// `step` rows on, read its preview and scroll it into view. Only the
+    /// stages that show the list move.
+    fn step_picker_selection(&mut self, step: isize) -> Task<Message> {
+        use crate::library::state::PickerMode;
+        let Some(picker) = self.library.picker.as_mut() else {
+            return Task::none();
+        };
+        if !matches!(
+            picker.mode,
+            PickerMode::Place | PickerMode::ChangeComponent(_)
+        ) {
+            return Task::none();
+        }
+        let from = picker
+            .shown_selection()
+            .map(|(path, summary)| (path.as_path(), summary.row_id));
+        let Some((index, entry)) = picker.rows.stepped(from, step) else {
+            return Task::none();
+        };
+        let selected = (entry.path.to_path_buf(), entry.summary.clone());
+        let count = picker.rows.visible().len();
+        picker.selected = Some(selected);
+        let reveal = iced::widget::operation::scrollable::snap_to(
+            crate::library::picker::LIST_ID,
+            crate::library::picker::list_offset_showing(index, count),
+            iced::widget::operation::Animation::Instant,
+        );
+        Task::batch([self.start_picker_preview_load(), reveal])
     }
 
     /// Read the picker's selected row's symbol and footprint on a worker

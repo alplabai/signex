@@ -25,4 +25,7 @@ mod tests;
 
 pub(crate) use apply::retain_in_range;
 pub use draft::{BoundDraft, RangeFilterDraft, RangeFilters};
-pub(crate) use view::{FilterColumn, parameter_caption, parameter_label, range_filter_bar};
+pub(crate) use view::{
+    FilterColumn, parameter_caption, parameter_label, range_filter_add_unavailable,
+    range_filter_bar,
+};
