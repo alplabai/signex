@@ -42,6 +42,27 @@ impl EdgePanLink {
         self.pointer.set(at.map(|at| EdgePointer { at, size }));
     }
 
+    /// Record the pointer a canvas event over `bounds` reports: none once
+    /// the window loses the focus or the pointer leaves it, wherever the
+    /// cursor last was.
+    pub fn observe_event(&self, event: &Event, cursor: mouse::Cursor, bounds: iced::Rectangle) {
+        let gone = matches!(
+            event,
+            Event::Window(iced::window::Event::Unfocused) | Event::Mouse(mouse::Event::CursorLeft)
+        );
+        let at = if gone {
+            None
+        } else {
+            cursor.position_in(bounds)
+        };
+        self.observe(at, bounds.size());
+    }
+
+    /// Forget the pointer: the focus left or a dialog covers the canvas.
+    pub fn forget_pointer(&self) {
+        self.pointer.set(None);
+    }
+
     /// Where the pointer was at the canvas's last event.
     pub fn pointer(&self) -> Option<EdgePointer> {
         self.pointer.get()
@@ -204,5 +225,26 @@ mod tests {
         link.owe_pan(-2.0, 1.0);
         assert_eq!(link.take_owed_pan(), Some((-5.0, 1.0)));
         assert_eq!(link.take_owed_pan(), None);
+    }
+
+    /// The focus leaving or the pointer leaving the window drops the
+    /// pointer, though the cursor still reads where it last was.
+    #[test]
+    fn losing_the_focus_or_the_window_forgets_the_pointer() {
+        let link = EdgePanLink::default();
+        let bounds = iced::Rectangle::with_size(SIZE);
+        let cursor = mouse::Cursor::Available(Point::new(799.0, 300.0));
+        let moved = Event::Mouse(mouse::Event::CursorMoved {
+            position: Point::new(799.0, 300.0),
+        });
+        for gone in [
+            Event::Window(iced::window::Event::Unfocused),
+            Event::Mouse(mouse::Event::CursorLeft),
+        ] {
+            link.observe_event(&moved, cursor, bounds);
+            assert_eq!(link.pointer().map(|p| p.at), Some(Point::new(799.0, 300.0)));
+            link.observe_event(&gone, cursor, bounds);
+            assert_eq!(link.pointer(), None);
+        }
     }
 }

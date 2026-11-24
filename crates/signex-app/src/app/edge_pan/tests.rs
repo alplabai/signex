@@ -148,15 +148,7 @@ fn the_edge_pan_drafts_are_editing_page_drafts() {
 
 #[test]
 fn a_board_tool_with_the_pointer_in_the_right_band_pans_the_board_right_and_its_cursor_follows() {
-    let (mut app, _boot) = Signex::new();
-    let board = serde_json::from_value(serde_json::json!({
-        "uuid": uuid::Uuid::from_u128(1),
-        "footprints": []
-    }))
-    .expect("an empty board");
-    app.open_pcb_tab(PathBuf::from("edge.snxpcb"), "edge".into(), board);
-    app.arm_board_tool(BoardPlaceTool::Track);
-    assert!(app.interaction_state.pcb_tool.is_some(), "precondition");
+    let mut app = board_app();
     let canvas = &app.interaction_state.pcb_canvas;
     canvas.edge_pan.observe(Some(RIGHT_BAND), SIZE);
     let before = canvas.screen_to_world(RIGHT_BAND, iced::Rectangle::default());
@@ -181,10 +173,31 @@ fn a_board_tool_with_the_pointer_in_the_right_band_pans_the_board_right_and_its_
     );
 }
 
+/// An app with no first-run card over the canvas.
+fn bare_app() -> Signex {
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.first_run_tour_open = false;
+    app
+}
+
+/// An empty board tab, active, with Track armed.
+fn board_app() -> Signex {
+    let mut app = bare_app();
+    let board = serde_json::from_value(serde_json::json!({
+        "uuid": uuid::Uuid::from_u128(1),
+        "footprints": []
+    }))
+    .expect("an empty board");
+    app.open_pcb_tab(PathBuf::from("edge.snxpcb"), "edge".into(), board);
+    app.arm_board_tool(BoardPlaceTool::Track);
+    assert!(app.interaction_state.pcb_tool.is_some(), "precondition");
+    app
+}
+
 /// A symbol editor tab, active, through `Signex::update` armed with Add Pin.
 fn symbol_app() -> (Signex, PathBuf) {
     let path = PathBuf::from("edge.snxsym");
-    let (mut app, _boot) = Signex::new();
+    let mut app = bare_app();
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("s"));
     app.document_state
         .symbol_editors
@@ -228,10 +241,11 @@ fn a_symbol_tool_with_the_pointer_in_the_right_band_pans_the_symbol_right() {
     assert!((x - f64::from(under.x)).abs() < 1e-3);
 }
 
-#[test]
-fn a_footprint_tool_with_the_pointer_in_the_right_band_owes_its_canvas_a_pan_right() {
+/// A footprint editor tab, active, through `Signex::update` armed with Place
+/// Pad.
+fn footprint_app() -> (Signex, PathBuf) {
     let path = PathBuf::from("edge.snxfpt");
-    let (mut app, _boot) = Signex::new();
+    let mut app = bare_app();
     let file = signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("f"));
     app.document_state
         .footprint_editors
@@ -250,11 +264,19 @@ fn a_footprint_tool_with_the_pointer_in_the_right_band_owes_its_canvas_a_pan_rig
             crate::library::editor::footprint::PadsTool::PlacePad,
         )),
     }));
-    let editor = &app.document_state.footprint_editors[&path];
     assert!(
-        editor.state.edge_pan_armed(),
+        app.document_state.footprint_editors[&path]
+            .state
+            .edge_pan_armed(),
         "precondition: Place Pad is armed"
     );
+    (app, path)
+}
+
+#[test]
+fn a_footprint_tool_with_the_pointer_in_the_right_band_owes_its_canvas_a_pan_right() {
+    let (mut app, path) = footprint_app();
+    let editor = &app.document_state.footprint_editors[&path];
     editor.state.edge_pan.observe(Some(RIGHT_BAND), SIZE);
 
     tick(&mut app);
@@ -266,4 +288,80 @@ fn a_footprint_tool_with_the_pointer_in_the_right_band_owes_its_canvas_a_pan_rig
         .owed_pan();
     assert!(dx < 0.0, "the footprint is not owed a move left: {dx}");
     assert_eq!(dy, 0.0);
+}
+
+fn focus_lost(app: &mut Signex) {
+    let window = iced::window::Id::unique();
+    let _ = app.update(Message::Window(crate::app::WindowMsg::WindowUnfocused(
+        window,
+    )));
+}
+
+/// Alt+Tab with the pointer in the band: no tick pans any canvas until the
+/// canvas sees the pointer again (#2872).
+#[test]
+fn losing_the_focus_stops_the_panning_on_every_canvas() {
+    let mut sheet = sheet_with_pointer(Tool::Wire, Some(RIGHT_BAND));
+    assert!(sheet.edge_pan_motion().is_some(), "precondition: sheet");
+    focus_lost(&mut sheet);
+    assert!(sheet.edge_pan_motion().is_none(), "the sheet still pans");
+    let before = sheet_point(&sheet, RIGHT_BAND);
+    tick(&mut sheet);
+    assert_eq!(sheet_point(&sheet, RIGHT_BAND), before);
+
+    let mut board = board_app();
+    board
+        .interaction_state
+        .pcb_canvas
+        .edge_pan
+        .observe(Some(RIGHT_BAND), SIZE);
+    assert!(board.edge_pan_motion().is_some(), "precondition: board");
+    focus_lost(&mut board);
+    assert!(board.edge_pan_motion().is_none(), "the board still pans");
+
+    let (mut symbol, _) = symbol_app();
+    symbol
+        .interaction_state
+        .symbol_edge_pan
+        .observe(Some(RIGHT_BAND), SIZE);
+    assert!(symbol.edge_pan_motion().is_some(), "precondition: symbol");
+    focus_lost(&mut symbol);
+    assert!(symbol.edge_pan_motion().is_none(), "the symbol still pans");
+
+    let (mut footprint, path) = footprint_app();
+    footprint.document_state.footprint_editors[&path]
+        .state
+        .edge_pan
+        .observe(Some(RIGHT_BAND), SIZE);
+    assert!(
+        footprint.edge_pan_motion().is_some(),
+        "precondition: footprint"
+    );
+    focus_lost(&mut footprint);
+    assert!(
+        footprint.edge_pan_motion().is_none(),
+        "the footprint still pans"
+    );
+    tick(&mut footprint);
+    assert_eq!(
+        footprint.document_state.footprint_editors[&path]
+            .state
+            .edge_pan
+            .owed_pan(),
+        (0.0, 0.0)
+    );
+}
+
+/// A dialog a key opened over the canvas has the pointer: no tick pans,
+/// though the canvas last saw the pointer in the band (#2872).
+#[test]
+fn a_dialog_over_the_canvas_stops_the_panning() {
+    let mut app = sheet_with_pointer(Tool::Wire, Some(RIGHT_BAND));
+    app.ui_state.preferences_open = true;
+    let before = sheet_point(&app, RIGHT_BAND);
+    assert!(app.edge_pan_motion().is_none(), "the timer stops");
+
+    tick(&mut app);
+
+    assert_eq!(sheet_point(&app, RIGHT_BAND), before);
 }

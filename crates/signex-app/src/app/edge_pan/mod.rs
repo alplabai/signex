@@ -106,7 +106,29 @@ impl Signex {
         let pointer = self.edge_pan_link(surface)?.pointer()?;
         let band = band_px();
         let step = edge_step(pointer, band, prefs.speed.step_px(band))?;
+        // A dialog over the canvas has the pointer, even one a key opened
+        // with the pointer still in the band.
+        if self.dialogs_open_above_grid_snap_popover() > 0 {
+            return None;
+        }
         Some((surface, pointer, step))
+    }
+
+    /// The focus left a window: forget the pointer on every canvas the edge
+    /// pan reads, so no tick pans until a canvas sees the pointer again.
+    pub(crate) fn forget_edge_pan_pointers(&self) {
+        self.interaction_state
+            .active_canvas()
+            .edge_pan
+            .forget_pointer();
+        self.interaction_state.pcb_canvas.edge_pan.forget_pointer();
+        self.interaction_state.symbol_edge_pan.forget_pointer();
+        for editor in self.document_state.footprint_editors.values() {
+            editor.state.edge_pan.forget_pointer();
+        }
+        if let Some(editor) = self.board_sketch_editor() {
+            editor.state.edge_pan.forget_pointer();
+        }
     }
 
     /// The canvas the active document shows, when it is one that pans.
