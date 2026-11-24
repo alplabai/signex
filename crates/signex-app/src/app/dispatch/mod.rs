@@ -678,11 +678,18 @@ mod tests {
         let Some(PanelSite::Floating(idx)) = dock.locate(kind) else {
             panic!("Projects floats");
         };
-        dock.floating.remove(idx);
-        let id = iced::window::Id::unique();
-        app.ui_state
-            .windows
-            .insert(id, super::super::state::WindowKind::DetachedPanel(kind));
+        let _ = app.update(Message::Window(WindowMsg::DetachFloatingPanel(idx)));
+        let detached = app.ui_state.windows.iter().find_map(|(id, window)| {
+            matches!(
+                window,
+                super::super::state::WindowKind::DetachedPanel(PanelKind::Projects)
+            )
+            .then_some(*id)
+        });
+        let Some(id) = detached else {
+            panic!("Projects has a detached window");
+        };
+        assert!(app.document_state.dock.locate(kind).is_none());
         id
     }
 
