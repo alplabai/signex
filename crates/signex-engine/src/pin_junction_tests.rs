@@ -295,7 +295,9 @@ fn a_kept_pin_moved_onto_wires_of_two_nets_gets_no_dot_and_a_notice() {
     let warnings = engine.take_warnings();
     assert_eq!(
         warnings,
-        vec!["could not keep TP1 pin 1 connected without crossing another net".to_string()],
+        vec![EngineNotice::PinsNotKept {
+            pins: vec!["TP1 pin 1".to_string()]
+        }],
     );
     let notices = engine.take_notices();
     assert_eq!(notices.len(), 1, "{notices:?}");
