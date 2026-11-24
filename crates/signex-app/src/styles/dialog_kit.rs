@@ -325,6 +325,21 @@ pub const fn dense_footer_height() -> f32 {
     ChromeMetrics::DEFAULT.button + 2.0 * SP.l
 }
 
+/// Vertical padding of a dialog's footer band (10 px at the default base).
+const BAND_PAD_Y: f32 = SP.m + SP.xs;
+
+/// Padding of a [`dialog_footer_band`] under a [`dialog_section`] body:
+/// the band's own vertical padding, the body's side padding.
+pub fn dialog_band_padding() -> iced::Padding {
+    iced::Padding::from([BAND_PAD_Y, SP.l])
+}
+
+/// Height of a [`dialog_footer_band`] padded by [`dialog_band_padding`]:
+/// the dense button, the padding and the hairline above it.
+pub const fn dense_band_footer_height() -> f32 {
+    ChromeMetrics::DEFAULT.button + 2.0 * BAND_PAD_Y + 1.0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -364,6 +379,19 @@ mod tests {
         assert_eq!(
             dense_footer_height(),
             ChromeMetrics::DEFAULT.button + 2.0 * SP.l
+        );
+    }
+
+    /// The band footer is the dense button, its own padding and the
+    /// hairline, and its sides line up with the body's (mockup row 23).
+    #[test]
+    fn the_band_footer_height_follows_its_padding() {
+        let pad = dialog_band_padding();
+        assert_eq!(pad.left, SP.l);
+        assert_eq!(pad.right, SP.l);
+        assert_eq!(
+            dense_band_footer_height(),
+            ChromeMetrics::DEFAULT.button + pad.top + pad.bottom + 1.0
         );
     }
 

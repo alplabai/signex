@@ -147,11 +147,17 @@ fn note_block(lines: usize, padded: bool) -> f32 {
 
 /// What the Rename dialog adds over the layout its base height was measured
 /// on (mockup row 23): the path under the title, the "New name" label, the wider gap
-/// above the field, then the placing-symbol note, the name clash and the
-/// handler's error when they show.
-fn rename_growth(d: &crate::app::RenameDialogState) -> f32 {
+/// above the field, the body's bottom padding over the footer band and the
+/// band's own height over the plain footer, then the folder-kept note, the
+/// placing-symbol note, the name clash and the handler's error when they show.
+fn rename_growth(d: &crate::app::RenameDialogState, keeps_folder: bool) -> f32 {
+    use crate::styles::{dense_band_footer_height, dense_footer_height};
     let sp = crate::styles::Spacing::DEFAULT;
     let mut grow = caption_line() + sp.xs + 1.0 + body_line() + 4.0 + (sp.l - sp.m);
+    grow += sp.l + dense_band_footer_height() - dense_footer_height();
+    if keeps_folder {
+        grow += note_block(1, true);
+    }
     if !d.placing_symbols.is_empty() {
         grow += note_block(2, true);
     }
@@ -487,7 +493,7 @@ impl Signex {
             ModalId::RenameDialog => ui
                 .rename_dialog
                 .as_ref()
-                .map(|d| fixed.height + rename_growth(d)),
+                .map(|d| fixed.height + rename_growth(d, self.rename_keeps_folder(d))),
             ModalId::EnableVersionControl => ui
                 .enable_version_control
                 .as_ref()

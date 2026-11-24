@@ -325,7 +325,7 @@ impl Signex {
                 });
             }
             ProjectTreeAction::OpenRenameDialog(_) => {
-                self.open_rename_dialog(tree_path);
+                return self.open_rename_dialog(tree_path);
             }
             ProjectTreeAction::OpenRemoveDialog(_) => {
                 self.open_remove_dialog(tree_path);
@@ -337,7 +337,7 @@ impl Signex {
                 return self.run_validate_project(tree_path);
             }
             ProjectTreeAction::OpenProjectRenameDialog(_) => {
-                self.open_project_rename_dialog(tree_path);
+                return self.open_project_rename_dialog(tree_path);
             }
             ProjectTreeAction::OpenProjectOptions(_) => {
                 if let Some(&project_idx) = tree_path.first() {

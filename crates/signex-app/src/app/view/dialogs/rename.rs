@@ -12,8 +12,8 @@ use signex_widgets::{raw, text, text_input};
 use super::widgets::modal_title_header;
 use crate::app::path_ops::PlacingSymbol;
 use crate::styles::{
-    CalloutTone, DialogButtonKind, DialogIcon, dialog_body, dialog_button, dialog_callout,
-    dialog_field_label, dialog_footer, dialog_inline_error, dialog_intro_with,
+    CalloutTone, DialogButtonKind, DialogIcon, dialog_band_padding, dialog_button, dialog_callout,
+    dialog_field_label, dialog_footer_band, dialog_inline_error, dialog_intro_with, dialog_section,
 };
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -162,24 +162,13 @@ impl Signex {
             .name_clash
             .is_none()
             .then_some(Message::Rename(RenameMsg::Submit));
+        // The footer is a band under a hairline, so the body keeps its own
+        // bottom padding.
         let dialog = container(
             column![
                 header,
-                dialog_body(body),
-                dialog_footer(vec![
-                    dialog_button(
-                        t!(i18n, ids::DIALOG_BUTTON_CANCEL),
-                        DialogButtonKind::Cancel,
-                        Some(Message::Rename(RenameMsg::Close)),
-                        tokens
-                    ),
-                    dialog_button(
-                        t!(i18n, ids::DIALOG_RENAME_SUBMIT),
-                        DialogButtonKind::Primary,
-                        submit,
-                        tokens
-                    ),
-                ]),
+                dialog_section(body),
+                rename_footer(i18n, submit, tokens)
             ]
             .width(self.dialog_width(modal, super::sizes::RENAME)),
         )
@@ -196,12 +185,7 @@ impl Signex {
         i18n: &signex_i18n::I18n,
     ) -> Vec<signex_i18n::Localized> {
         let mut notes = Vec::new();
-        let keeps_folder = st.is_project_rename
-            && st
-                .tree_path
-                .first()
-                .is_some_and(|&idx| self.project_rename_keeps_folder(idx, &st.target_path));
-        if keeps_folder {
+        if self.rename_keeps_folder(st) {
             notes.push(t!(i18n, ids::DIALOG_RENAME_PROJECT_FOLDER_KEPT));
         }
         if !st.placing_symbols.is_empty() {
@@ -263,6 +247,34 @@ fn name_field<'a>(
     stack![input, suffix].boxed()
 }
 
+/// Cancel and Rename on the chrome band under a hairline (mockup row 23).
+/// `submit` is `None` while Rename is withheld.
+fn rename_footer<'a>(
+    i18n: &signex_i18n::I18n,
+    submit: Option<Message>,
+    tokens: &signex_types::theme::ThemeTokens,
+) -> Element<'a, Message> {
+    dialog_footer_band(
+        Vec::new(),
+        vec![
+            dialog_button(
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
+                DialogButtonKind::Cancel,
+                Some(Message::Rename(RenameMsg::Close)),
+                tokens,
+            ),
+            dialog_button(
+                t!(i18n, ids::DIALOG_RENAME_SUBMIT),
+                DialogButtonKind::Primary,
+                submit,
+                tokens,
+            ),
+        ],
+        dialog_band_padding(),
+        tokens,
+    )
+}
+
 /// The note naming the sheet symbols a rename re-points.
 fn placed_by_line(i18n: &signex_i18n::I18n, symbols: &[PlacingSymbol]) -> signex_i18n::Localized {
     let sheet_of = |s: &PlacingSymbol| {
@@ -321,7 +333,19 @@ mod tests {
         assert_eq!((none.stem.as_str(), none.suffix.as_str()), ("README", ""));
     }
 
+    const WINDOW: iced::Size = iced::Size::new(1200.0, 900.0);
+
     fn rename_texts(dir: &str, is_project_rename: bool) -> Vec<String> {
+        let app = rename_app(dir, is_project_rename);
+        crate::layout_probe::lay_out_texts(app.view_rename_dialog_body(), WINDOW)
+            .into_iter()
+            .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect()
+    }
+
+    /// A workspace of one project in `dir` with the Rename dialog open on
+    /// its project file or on `top.snxsch`, the new name "Renamed".
+    fn rename_app(dir: &str, is_project_rename: bool) -> crate::app::Signex {
         let mut app =
             crate::app::handlers::menu::export::tests::app_workspace(dir, &["top.snxsch"]);
         let target = std::path::PathBuf::from(dir).join(if is_project_rename {
@@ -339,13 +363,62 @@ mod tests {
             placing_symbols: Vec::new(),
             name_clash: None,
         }));
-        crate::layout_probe::lay_out_texts(
-            app.view_rename_dialog_body(),
-            iced::Size::new(1200.0, 900.0),
+        app
+    }
+
+    /// Mockup row 23: the buttons sit on a footer band under a hairline.
+    /// Down the dialog's left side, from under the name field to the
+    /// buttons' line, the body's fill gives way to another colour (the
+    /// hairline, then the band); a footer drawn on the body has none.
+    #[test]
+    fn the_buttons_sit_on_a_band_under_a_divider() {
+        use crate::layout_probe::{draw_pixels, find, lay_out_inputs, lay_out_texts};
+        let app = rename_app("/w/a", false);
+        let field = find(
+            &lay_out_inputs(app.view_rename_dialog_body(), WINDOW),
+            "Renamed",
         )
-        .into_iter()
-        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
-        .collect()
+        .bounds;
+        let button = find(
+            &lay_out_texts(app.view_rename_dialog_body(), WINDOW),
+            "Rename",
+        )
+        .bounds;
+        let pixels = draw_pixels(app.view_rename_dialog_body(), WINDOW);
+        let width = WINDOW.width as usize;
+        let x = (field.x + super::FIELD_PAD_X) as usize;
+        let at = |y: usize| -> [u8; 4] {
+            let i = (y * width + x) * 4;
+            [pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]]
+        };
+        let below_field = (field.y + field.height) as usize + 3;
+        let body = at(below_field);
+        let changes = (below_field..button.y as usize).find(|&y| at(y) != body);
+        let Some(rule) = changes else {
+            panic!("one fill from the field down to the buttons: no divider");
+        };
+        assert!((rule as f32) < button.y, "the divider is above the buttons");
+    }
+
+    /// The Rename window grows with the folder-kept note (mockup row 23), so
+    /// the note and the footer band below it are not cut off.
+    #[test]
+    fn the_window_grows_with_the_folder_kept_note() {
+        use crate::app::state::ModalId;
+        use crate::layout_probe::root_size;
+        let kept = rename_app("/w/a", true);
+        let follows = rename_app("/w/ProjectA", true);
+        let drawn = root_size(kept.view_rename_dialog_body(), WINDOW).height
+            - root_size(follows.view_rename_dialog_body(), WINDOW).height;
+        assert!(drawn > 0.0, "the note takes room");
+        let scale = kept.ui_state.ui_scale;
+        let window = (kept.modal_window_size(ModalId::RenameDialog).height
+            - follows.modal_window_size(ModalId::RenameDialog).height)
+            / scale;
+        assert!(
+            window + 2.0 >= drawn,
+            "the window grows {window} for {drawn} of content"
+        );
     }
 
     /// Mockup row 23: Rename Project says, from the catalog, that the folder

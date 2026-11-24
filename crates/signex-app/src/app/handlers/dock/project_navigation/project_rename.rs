@@ -263,6 +263,16 @@ impl Signex {
         folder_target(dir, stem, stem).is_none() || !self.project_folder_can_move(idx)
     }
 
+    /// Whether the Rename dialog `d` says the project folder is not renamed:
+    /// a project rename whose folder keeps its name. Its view and its window
+    /// height both ask this.
+    pub(crate) fn rename_keeps_folder(&self, d: &crate::app::RenameDialogState) -> bool {
+        d.is_project_rename
+            && d.tree_path
+                .first()
+                .is_some_and(|&idx| self.project_rename_keeps_folder(idx, &d.target_path))
+    }
+
     /// A library the app holds (mounted, Global, Installed, browser tab or
     /// mount in flight) that lies under the folder of the project at `idx`.
     /// The move does not re-key libraries, so one in there would be left
