@@ -49,8 +49,9 @@ pub fn bake_board_preview(
 mod tests {
     use signex_sketch::Solver;
     use signex_sketch::attr::BoardCutoutAttr;
+    use signex_sketch::constraint::{Constraint, ConstraintKind};
     use signex_sketch::entity::{Entity, EntityKind};
-    use signex_sketch::id::SketchEntityId;
+    use signex_sketch::id::{ConstraintId, SketchEntityId};
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
     use signex_types::sketch::board_attr::BoardSlotAttr;
 
@@ -158,6 +159,19 @@ mod tests {
         let mut s = Sketch::new();
         let edges = s.rect(0.0, 0.0, 40.0, 30.0);
         s.get(edges[0]).board_outline = true;
+        // A point no constraint names is frozen and read from the sketch, so
+        // constrain the edges: the solve then holds every corner.
+        for (i, &line) in edges.iter().enumerate() {
+            let kind = if i % 2 == 0 {
+                ConstraintKind::Horizontal { line }
+            } else {
+                ConstraintKind::Vertical { line }
+            };
+            s.data.constraints.push(Constraint {
+                id: ConstraintId::new(),
+                kind,
+            });
+        }
         let solve = s.solve();
         for entity in &mut s.data.entities {
             if let EntityKind::Point { x, .. } = &mut entity.kind {
