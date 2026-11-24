@@ -25,6 +25,8 @@ and Harness Entry, and the Active Bar's Harness group:
 - **Harness Entry** is one click on a connector: the entry goes to the nearest
   slot and takes the next definition entry the connector lacks, else
   `ENTRY_n`.
+- The **+** in the Entries header of a connector's Properties adds an entry
+  after the last, named the same way.
 
 Every placement and every Properties edit is one undo step. Moving, turning,
 mirroring, locking, deleting, copying and pasting work on connectors (with
