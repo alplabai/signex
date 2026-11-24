@@ -161,10 +161,12 @@ fn properties_show_the_board_not_footprint_fields() {
 #[test]
 fn entering_sketch_mode_again_does_not_repeat_the_hint() {
     let (mut app, _tmp) = sketching();
-    let hint =
-        signex_i18n::t!(app.ui_state.i18n, signex_i18n::ids::BOARD_SKETCH_ENTERED).into_string();
-    let said = crate::diagnostics::logged_count(&hint);
-    assert!(said >= 1, "the first entry says the hint");
+    assert!(
+        app.interaction_state.board_sketch_hint_said,
+        "the first entry says the hint"
+    );
+    // Lines this thread logs: other tests sharing the ring do not move it.
+    let said = crate::diagnostics::said_on_this_thread();
     for _ in 0..3 {
         let toggle = || Message::Pcb(PcbMsg::Sketch(BoardSketchMsg::ModeToggled));
         send(&mut app, toggle());
@@ -173,10 +175,11 @@ fn entering_sketch_mode_again_does_not_repeat_the_hint() {
         assert!(app.interaction_state.board_sketch.is_some(), "entered");
     }
     assert_eq!(
-        crate::diagnostics::logged_count(&hint),
+        crate::diagnostics::said_on_this_thread(),
         said,
-        "entering again says nothing new"
+        "leaving and entering again with no change says nothing new"
     );
+    assert!(app.interaction_state.board_sketch_hint_said);
 }
 
 /// The board in sketch mode with its origin at (5, 30).

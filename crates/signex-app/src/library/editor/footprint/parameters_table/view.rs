@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{Space, column, container, row, scrollable};
+use iced::widget::{Space, column, container, opaque, row, scrollable};
 use iced::{Alignment, Border, Color, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, ListKind, Localized, UserText, ids, t};
 use signex_sketch::parameter_refs::{
@@ -40,9 +40,12 @@ const ROWS_MAX_EM: f32 = 18.0;
 /// The panel's distance from the canvas top: under the mode switcher and
 /// the sketch info bar.
 pub const TOP_CLEARANCE_EM: f32 = 7.0;
-/// The panel's distance from the canvas bottom, in body heights: the
-/// sketch mode bar (Bake preview · Discard changes · Bake) stays in reach.
-pub(super) const BOTTOM_CLEARANCE_EM: f32 = 5.0;
+/// The panel's distance from the canvas bottom: the sketch mode bar
+/// (Bake preview · Discard changes · Bake) and a gap, so the bar stays in
+/// reach on both hosts.
+const fn bottom_clearance() -> f32 {
+    crate::library::editor::standalone::sketch_exit::mode_bar_reach() + SP.m
+}
 
 /// Builds the messages the card sends, for the editor at `path`.
 #[derive(Clone)]
@@ -130,15 +133,21 @@ pub fn overlay<'a>(
     card = card.push(super::preview_canvas::live_row(
         editor, problems, look, tokens, i18n,
     ));
-    let panel = container(card)
-        .padding(SP.l)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(crate::styles::card(tokens));
+    // Opaque: a press or a wheel on the panel never reaches the sketch
+    // canvas under it (an invisible click would draw or select there).
+    let panel = opaque(
+        container(card)
+            .padding(SP.l)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(crate::styles::card(tokens)),
+    )
+    .capture_scroll(true)
+    .boxed();
     container(column![
         Space::new().height(TS.body * TOP_CLEARANCE_EM),
         panel,
-        Space::new().height(TS.body * BOTTOM_CLEARANCE_EM),
+        Space::new().height(bottom_clearance()),
     ])
     .padding([0.0, SP.m])
     .width(Length::Fill)

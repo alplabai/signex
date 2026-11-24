@@ -23,7 +23,7 @@ use signex_types::sketch::SketchHost;
 use super::SketchParametersMsg;
 use super::checks::failed_lines;
 use super::preview::{BakePreview, Mm, PreviewPad, failing_parameters, of_editor};
-use super::preview_canvas::{arrow_head, label_rect};
+use super::preview_canvas::{arrow_head, dimension_label, label_rect};
 use super::view::problems_of;
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::state::{BoardBackdrop, EditorMode, EditorPad};
@@ -227,6 +227,115 @@ fn the_table_is_a_panel_across_the_canvas_with_the_preview_beside_live_checks() 
         checks.x - preview.x > window.width / 2.0,
         "the preview takes the wider share: {preview:?} {checks:?}"
     );
+}
+
+/// What reaches the layer under the table in [`table_over_a_probe`].
+#[derive(Debug, Clone, PartialEq)]
+enum Probe {
+    /// The canvas under the table saw the press or the wheel.
+    Below,
+    /// The table itself published something.
+    Table,
+}
+
+/// The open table over a layer that reports every press and wheel, as
+/// the sketch canvas under it would act on them.
+fn table_over_a_probe<'a>(
+    editor: &'a FootprintDocument,
+    tokens: &'a signex_types::theme::ThemeTokens,
+    i18n: &signex_i18n::I18n,
+) -> iced::Element<'a, Probe> {
+    use iced::Widget as _;
+    use iced::widget::{Space, Stack, mouse_area};
+    let below = mouse_area(
+        Space::new()
+            .width(iced::Length::Fill)
+            .height(iced::Length::Fill),
+    )
+    .on_press(Probe::Below)
+    .on_scroll(|_| Probe::Below);
+    Stack::new()
+        .width(iced::Length::Fill)
+        .height(iced::Length::Fill)
+        .push(below.boxed())
+        .push(super::view::overlay(editor, tokens, i18n).map(|_| Probe::Table))
+        .boxed()
+}
+
+/// Mockup row 189: the table panel is opaque. A press or a wheel on the
+/// live preview never reaches the sketch canvas under it (an invisible
+/// click would draw there), while the strip above the panel still does.
+#[test]
+fn a_press_or_wheel_on_the_table_never_reaches_the_canvas_under_it() {
+    use crate::layout_probe::{lay_out_texts, messages_on_click_at, messages_on_scroll_at};
+    use signex_types::theme::{ThemeId, theme_tokens};
+    let tokens = theme_tokens(ThemeId::GraphiteDark);
+    let i18n = signex_i18n::I18n::en_us();
+    let window = iced::Size::new(1600.0, 1000.0);
+    let body = crate::styles::TypeScale::DEFAULT.body;
+    for host in HOSTS {
+        let editor = editor_on(host, line_sketch());
+        let (e, t, i) = (&editor, &tokens, &i18n);
+        let probe = move || table_over_a_probe(e, t, i);
+        let texts = lay_out_texts(probe(), window);
+        let title = crate::layout_probe::find(&texts, "Live bake preview").bounds;
+        // Inside the drawing, under the preview card's title.
+        let on_preview = iced::Point::new(title.center_x(), title.y + body * 4.0);
+        let pressed = messages_on_click_at(probe(), window, None, on_preview);
+        assert!(!pressed.contains(&Probe::Below), "{host:?}: {pressed:?}");
+        let wheel = iced::mouse::ScrollDelta::Lines { x: 0.0, y: 1.0 };
+        let wheeled = messages_on_scroll_at(probe(), window, on_preview, wheel);
+        assert!(!wheeled.contains(&Probe::Below), "{host:?}: {wheeled:?}");
+        let above = iced::Point::new(window.width / 2.0, body);
+        let through = messages_on_click_at(probe(), window, None, above);
+        assert!(
+            through.contains(&Probe::Below),
+            "{host:?}: above the panel the canvas still hears the press: {through:?}"
+        );
+    }
+}
+
+/// The panel ends above the sketch mode bar: even laid over it, Bake
+/// still takes a click.
+#[test]
+fn the_sketch_mode_bar_stays_in_reach_under_the_open_table() {
+    use crate::library::editor::standalone::sketch_exit::footprint_overlay;
+    use crate::library::messages::{LibraryMessage, PrimitiveEdit};
+    use iced::Widget as _;
+    use signex_types::theme::{ThemeId, theme_tokens};
+    let editor = editor_on(SketchHost::Footprint, line_sketch());
+    let tokens = theme_tokens(ThemeId::GraphiteDark);
+    let i18n = signex_i18n::I18n::en_us();
+    let window = iced::Size::new(1600.0, 1000.0);
+    let both = iced::widget::Stack::new()
+        .width(iced::Length::Fill)
+        .height(iced::Length::Fill)
+        .push(footprint_overlay(&editor, &tokens, &i18n))
+        .push(super::view::overlay(&editor, &tokens, &i18n))
+        .boxed();
+    let clicked = crate::layout_probe::messages_on_click(both, window, "Bake");
+    assert!(
+        clicked.iter().any(|m| matches!(
+            m,
+            LibraryMessage::PrimitiveEditorEvent {
+                msg: PrimitiveEdit::Footprint(M::SketchBakeRequested),
+                ..
+            }
+        )),
+        "the table covers Bake"
+    );
+}
+
+/// A preview label is plain text: Fluent's bidi isolation marks would
+/// count as characters and widen its pill.
+#[test]
+fn a_preview_dimension_label_carries_no_isolation_marks() {
+    let i18n = signex_i18n::I18n::en_us();
+    let editor = editor_on(SketchHost::Footprint, line_sketch());
+    let preview = of_editor(&editor).expect("solved on entry");
+    let label = dimension_label(&preview.dimensions[0], &i18n);
+    assert!(label.starts_with("w = "), "named after w: {label:?}");
+    assert!(!label.contains(['\u{2068}', '\u{2069}']), "{label:?}");
 }
 
 #[test]

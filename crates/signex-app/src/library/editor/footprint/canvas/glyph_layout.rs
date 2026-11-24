@@ -229,26 +229,10 @@ impl Lookup<'_> {
         }
     }
 
-    /// A circle's or arc's centre and radius: the solved radius of a
-    /// circle, an arc's start distance.
-    fn round(&self, id: SketchEntityId) -> Option<((f64, f64), f64)> {
-        match self.kind(id)? {
-            EntityKind::Circle { center, radius } => {
-                let solved = self.state.last_solve.as_ref().and_then(|s| {
-                    signex_sketch::solver::state::circle_radius(
-                        id,
-                        &s.result.state,
-                        &s.result.index,
-                    )
-                });
-                Some((self.point(*center)?, solved.unwrap_or(*radius)))
-            }
-            EntityKind::Arc { center, start, .. } => {
-                let (c, s) = (self.point(*center)?, self.point(*start)?);
-                Some((c, (s.0 - c.0).hypot(s.1 - c.1)))
-            }
-            _ => None,
-        }
+    /// A circle's radius at the last solve, if there is one.
+    fn solved_radius(&self, id: SketchEntityId) -> Option<f64> {
+        let solve = self.state.last_solve.as_ref()?;
+        signex_sketch::solver::state::circle_radius(id, &solve.result.state, &solve.result.index)
     }
 
     /// Where an entity is drawn from: a point itself, a line's midpoint,
@@ -337,35 +321,16 @@ fn constraint_parts(kind: &ConstraintKind, l: &Lookup<'_>) -> (&'static str, Vec
     }
 }
 
-/// The dimension line of `kind` in world mm: between the two points, from
-/// a point to its foot on a line, or from a point to the nearest point of
-/// a circle. `None` for an angle (and anything not a distance).
+/// The dimension line of `kind` in world mm (see
+/// [`signex_sketch::solver::measure::dimension_span`]). `None` for an
+/// angle (and anything not a distance).
 fn dimension_span(kind: &ConstraintKind, l: &Lookup<'_>) -> Option<((f64, f64), (f64, f64))> {
-    match kind {
-        ConstraintKind::DistancePtPt { p1, p2, .. } => Some((l.point(*p1)?, l.point(*p2)?)),
-        ConstraintKind::DistancePtLine { point, line, .. } => {
-            let p = l.point(*point)?;
-            let (a, b) = l.line_ends(*line)?;
-            let (a, b) = (l.point(a)?, l.point(b)?);
-            let (dx, dy) = (b.0 - a.0, b.1 - a.1);
-            let len2 = dx * dx + dy * dy;
-            if len2 <= f64::EPSILON {
-                return None;
-            }
-            let t = ((p.0 - a.0) * dx + (p.1 - a.1) * dy) / len2;
-            Some((p, (a.0 + t * dx, a.1 + t * dy)))
-        }
-        ConstraintKind::DistancePtCircle { point, circle, .. } => {
-            let p = l.point(*point)?;
-            let (c, r) = l.round(*circle)?;
-            let d = (p.0 - c.0).hypot(p.1 - c.1);
-            if d <= f64::EPSILON {
-                return None;
-            }
-            Some((p, (c.0 + (p.0 - c.0) * r / d, c.1 + (p.1 - c.1) * r / d)))
-        }
-        _ => None,
-    }
+    signex_sketch::solver::measure::dimension_span(
+        kind,
+        l.sketch,
+        |id| l.point(id),
+        |id| l.solved_radius(id),
+    )
 }
 
 /// The text of a dimension's value glyph: what is being typed, the value a

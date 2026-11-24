@@ -355,13 +355,13 @@ impl Signex {
         // The board's own selection is hidden in the mode: no key may act
         // on it unseen.
         self.clear_pcb_selection();
-        // The hint is said once: Messages never repeats it (mockup row 187).
-        let hint = t!(self.ui_state.i18n, ids::BOARD_SKETCH_ENTERED).into_string();
-        if !crate::diagnostics::recent_entries()
-            .iter()
-            .any(|entry| entry.message == hint)
-        {
-            crate::diagnostics::log_info(hint);
+        // The hint is said once a session: Messages never repeats it
+        // (mockup row 187).
+        if !self.interaction_state.board_sketch_hint_said {
+            self.interaction_state.board_sketch_hint_said = true;
+            crate::diagnostics::log_info(
+                t!(self.ui_state.i18n, ids::BOARD_SKETCH_ENTERED).into_string(),
+            );
         }
     }
 

@@ -1,6 +1,6 @@
 //! The row under the parameters table (mockup row 189): the live bake
-//! preview card, with each driving dimension's line and `name · value`
-//! label, and beside it the narrower Live checks card. The row takes the
+//! preview card, with each driving dimension's line and `name = value
+//! unit` label, and beside it the narrower Live checks card. The row takes the
 //! panel's height left under the table. The preview is drawn fresh from
 //! the editor's state on every view, so each keystroke that re-solves
 //! redraws it; there is no cache to clear.
@@ -9,7 +9,7 @@ use iced::mouse;
 use iced::widget::canvas::{self, Frame, Geometry, Path, Stroke};
 use iced::widget::{column, container, row};
 use iced::{Border, Color, Element, Length, Point, Rectangle, Renderer, Theme, Widget as _};
-use signex_i18n::{I18n, Localized, ids, t};
+use signex_i18n::{Arg, I18n, Localized, ids, t};
 use signex_sketch::unit::Quantity;
 use signex_types::theme::ThemeTokens;
 
@@ -136,7 +136,7 @@ fn preview_card<'a>(
     let labels = preview
         .dimensions
         .iter()
-        .map(|d| dimension_label(d, i18n).into_string())
+        .map(|d| dimension_label(d, i18n))
         .collect();
     let r = crate::styles::tokens::resolve(tokens);
     let drawing = PreviewDrawing {
@@ -158,27 +158,28 @@ fn preview_card<'a>(
 }
 
 /// `name = value unit`, or the value alone when no parameter drives it.
-fn dimension_label(d: &super::preview::DrivingDimension, i18n: &I18n) -> Localized {
+/// Plain text, without bidi isolation marks: its pill is sized by
+/// character count.
+pub(super) fn dimension_label(d: &super::preview::DrivingDimension, i18n: &I18n) -> String {
     let quantity = if d.is_angle {
         Quantity::angle(d.value)
     } else {
         Quantity::length(d.value)
     };
     let (value, unit) = display_value(quantity);
-    let unit = t!(i18n, unit_id(unit)).into_string();
+    let unit = i18n.message_plain(unit_id(unit), &[]);
     match &d.name {
-        Some(name) => t!(
-            i18n,
+        Some(name) => i18n.message_plain(
             ids::SKETCH_PARAMETERS_PREVIEW_DIMENSION_NAMED,
-            "name" => name.as_str(),
-            "value" => value,
-            "unit" => unit
+            &[
+                ("name", Arg::from(name.as_str())),
+                ("value", Arg::from(value)),
+                ("unit", Arg::from(unit)),
+            ],
         ),
-        None => t!(
-            i18n,
+        None => i18n.message_plain(
             ids::SKETCH_PARAMETERS_PREVIEW_DIMENSION,
-            "value" => value,
-            "unit" => unit
+            &[("value", Arg::from(value)), ("unit", Arg::from(unit))],
         ),
     }
 }
@@ -265,39 +266,57 @@ impl canvas::Program<LibraryMessage> for PreviewDrawing {
             } else {
                 self.label
             };
-            if let Some((a, b)) = dimension.span {
-                let (a, b) = (at(a), at(b));
-                frame.stroke(&Path::line(a, b), stroke(color));
-                if a.distance(b) > 2.0 * TS.caption * ARROW_EM {
-                    for (tip, tail) in [(a, b), (b, a)] {
-                        let [p, q, r] = arrow_head(tip, tail);
-                        let head = Path::new(|path| {
-                            path.move_to(p);
-                            path.line_to(q);
-                            path.line_to(r);
-                            path.close();
-                        });
-                        frame.fill(&head, color);
-                    }
-                }
-            }
-            let centre = at(dimension.at);
-            let rect = label_rect(centre, label);
-            let pill =
-                Path::rounded_rectangle(rect.position(), rect.size(), Radii::GRAPHITE.card.into());
-            frame.fill(&pill, self.ground);
-            frame.stroke(&pill, stroke(color));
-            frame.fill_text(canvas::Text {
-                content: label.clone(),
-                position: centre,
-                color,
-                size: iced::Pixels(TS.caption),
-                align_x: iced::alignment::Horizontal::Center.into(),
-                align_y: iced::alignment::Vertical::Center,
-                ..canvas::Text::default()
-            });
+            let span = dimension.span.map(|(a, b)| (at(a), at(b)));
+            self.draw_dimension(&mut frame, span, at(dimension.at), label, color);
         }
         vec![frame.into_geometry()]
+    }
+}
+
+impl PreviewDrawing {
+    /// One driving dimension on screen: its line with an arrowhead at each
+    /// end (when there is room for both), and its label in a pill centred
+    /// on `centre`.
+    fn draw_dimension(
+        &self,
+        frame: &mut Frame,
+        span: Option<(Point, Point)>,
+        centre: Point,
+        label: &str,
+        color: Color,
+    ) {
+        let stroke = Stroke::default()
+            .with_width(TS.caption * STROKE_EM)
+            .with_color(color);
+        if let Some((a, b)) = span {
+            frame.stroke(&Path::line(a, b), stroke);
+            if a.distance(b) > 2.0 * TS.caption * ARROW_EM {
+                for (tip, tail) in [(a, b), (b, a)] {
+                    let [p, q, r] = arrow_head(tip, tail);
+                    let head = Path::new(|path| {
+                        path.move_to(p);
+                        path.line_to(q);
+                        path.line_to(r);
+                        path.close();
+                    });
+                    frame.fill(&head, color);
+                }
+            }
+        }
+        let rect = label_rect(centre, label);
+        let pill =
+            Path::rounded_rectangle(rect.position(), rect.size(), Radii::GRAPHITE.card.into());
+        frame.fill(&pill, self.ground);
+        frame.stroke(&pill, stroke);
+        frame.fill_text(canvas::Text {
+            content: label.to_owned(),
+            position: centre,
+            color,
+            size: iced::Pixels(TS.caption),
+            align_x: iced::alignment::Horizontal::Center.into(),
+            align_y: iced::alignment::Vertical::Center,
+            ..canvas::Text::default()
+        });
     }
 }
 

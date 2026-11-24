@@ -31,6 +31,15 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 const COUNT_LABEL_EM: f32 = 9.0;
 /// Widest the bake preview card grows, in body text heights.
 pub(crate) const PREVIEW_CARD_MAX_EM: f32 = 26.0;
+/// The mode bar's distance from the canvas edges, on both hosts.
+pub(crate) const MODE_BAR_INSET: f32 = SP.xl;
+
+/// How far the mode bar reaches up from the canvas bottom: its inset, its
+/// own padding and a row of dialog buttons. An overlay that ends this far
+/// up leaves the bar in reach.
+pub(crate) const fn mode_bar_reach() -> f32 {
+    MODE_BAR_INSET + 2.0 * SP.s + crate::styles::ChromeMetrics::DEFAULT.button
+}
 
 /// The messages the mode bar sends; the host decides what they mean.
 pub struct ModeBarMessages<M> {
@@ -443,7 +452,7 @@ pub fn footprint_overlay<'a>(
     }
     stack = stack.push(mode_bar(look, exit_state, msgs, tokens, i18n));
     container(stack)
-        .padding(SP.xl)
+        .padding(MODE_BAR_INSET)
         .width(Length::Fill)
         .height(Length::Fill)
         .align_x(Horizontal::Left)
