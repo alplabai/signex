@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use pcb_geom::PointNm;
-use signex_gerber::{FileFunction, ObjectKind, Package, Side};
+use signex_gerber::{FileFunction, Package, Side};
 
 use super::recent::RecentPackages;
 
@@ -117,6 +117,16 @@ pub fn is_drill(function: Option<&FileFunction>) -> bool {
     matches!(function, Some(FileFunction::Drill { .. }))
 }
 
+/// Whether a layer draws in the band above the copper whatever its list
+/// place (mockup row 193): the board outline, a drill file or a drawing.
+pub fn is_overlay(function: Option<&FileFunction>) -> bool {
+    matches!(
+        function,
+        Some(FileFunction::Profile { .. } | FileFunction::Drill { .. } | FileFunction::Other(_))
+            | None
+    )
+}
+
 /// A package on the tab.
 #[derive(Debug, Clone)]
 pub struct OpenPackage {
@@ -141,6 +151,11 @@ pub struct OpenPackage {
     /// The layer whose swatch row is open.
     pub colour_open: Option<usize>,
     pub grip: Option<GripDrag>,
+    /// Counts every change to what the board draws; the board view redraws
+    /// its cached picture when it moves.
+    pub revision: u64,
+    /// The box of every layer, found once at open.
+    bounds: Option<(PointNm, PointNm)>,
 }
 
 impl OpenPackage {
@@ -155,6 +170,7 @@ impl OpenPackage {
             .collect();
         Self {
             order: package.default_order(),
+            bounds: package_bounds(&package),
             package,
             paths,
             looks,
@@ -166,7 +182,53 @@ impl OpenPackage {
             camera: Camera::default(),
             colour_open: None,
             grip: None,
+            revision: 0,
         }
+    }
+
+    /// A layer row's name was pressed: Properties shows that layer.
+    pub fn pick_layer(&mut self, layer: usize) {
+        self.current = Some(layer);
+        self.selected = None;
+    }
+
+    /// A swatch opens its colour row, or closes it when it is open.
+    pub fn toggle_swatch(&mut self, layer: usize) {
+        self.colour_open = (self.colour_open != Some(layer)).then_some(layer);
+    }
+
+    pub fn press_grip(&mut self, from: usize) {
+        self.grip = Some(GripDrag { from, over: from });
+    }
+
+    pub fn enter_row(&mut self, over: usize) {
+        if let Some(grip) = self.grip.as_mut() {
+            grip.over = over;
+        }
+    }
+
+    /// The button was let go: a held row moves to the row last under the
+    /// pointer.
+    pub fn release_grip(&mut self) {
+        if let Some(grip) = self.grip.take() {
+            self.move_layer(grip.from, grip.over);
+        }
+    }
+
+    /// Highlight net takes the selected object's net, or lets it go.
+    pub fn toggle_net_highlight(&mut self) {
+        self.net = match self.net {
+            Some(_) => None,
+            None => self.selected_net().map(str::to_string),
+        };
+    }
+
+    /// A click on the board selects what is under it; a row still held
+    /// by a release missed elsewhere is let go.
+    pub fn click_at(&mut self, at: PointNm, tolerance: i64) {
+        self.selected = self.object_at(at, tolerance);
+        self.colour_open = None;
+        self.grip = None;
     }
 
     /// Move the row at `from` in the drawing order to `to`.
@@ -192,16 +254,21 @@ impl OpenPackage {
     }
 
     /// The layers bottom first, as they are drawn: the list order turned
-    /// over, each pair's places swapped while flipped, and with Drills on
-    /// the drill files last.
+    /// over, each pair's places swapped while flipped, the outline, drill
+    /// files and drawings above the copper (mockup row 193), and with
+    /// Drills on the drill files last.
     pub fn draw_order(&self) -> Vec<usize> {
         let mut order = self.order.clone();
         if self.flipped {
             self.swap_pairs(&mut order);
         }
         order.reverse();
+        let function = |layer: &usize| self.package.layers[*layer].function.as_ref();
+        let (overlay, stack): (Vec<usize>, Vec<usize>) = order
+            .into_iter()
+            .partition(|layer| is_overlay(function(layer)));
+        order = stack.into_iter().chain(overlay).collect();
         if self.drills_on_top {
-            let function = |layer: &usize| self.package.layers[*layer].function.as_ref();
             let (drills, rest): (Vec<usize>, Vec<usize>) = order
                 .into_iter()
                 .partition(|layer| is_drill(function(layer)));
@@ -275,17 +342,22 @@ impl OpenPackage {
 
     /// The box holding every layer, as (min, max).
     pub fn bounds(&self) -> Option<(PointNm, PointNm)> {
-        self.package
-            .layers
-            .iter()
-            .filter_map(|layer| layer.image.bounds())
-            .reduce(|a, b| {
-                (
-                    PointNm::new(a.0.x.min(b.0.x), a.0.y.min(b.0.y)),
-                    PointNm::new(a.1.x.max(b.1.x), a.1.y.max(b.1.y)),
-                )
-            })
+        self.bounds
     }
+}
+
+/// The box holding every layer of `package`, as (min, max).
+fn package_bounds(package: &Package) -> Option<(PointNm, PointNm)> {
+    package
+        .layers
+        .iter()
+        .filter_map(|layer| layer.image.bounds())
+        .reduce(|a, b| {
+            (
+                PointNm::new(a.0.x.min(b.0.x), a.0.y.min(b.0.y)),
+                PointNm::new(a.1.x.max(b.1.x), a.1.y.max(b.1.y)),
+            )
+        })
 }
 
 /// Whether `object` covers `at`: one of its shapes, or the points that
@@ -298,19 +370,10 @@ fn covers(object: &signex_gerber::Object, at: PointNm, tolerance: i64) -> bool {
             .any(|shape| shape.contains(at, tolerance));
     }
     let reach = i128::from(tolerance.max(0)).pow(2);
-    anchors(&object.kind)
+    object
+        .anchors()
         .into_iter()
         .any(|point| point.distance_sq(at) <= reach)
-}
-
-/// The points that place an object.
-pub fn anchors(kind: &ObjectKind) -> Vec<PointNm> {
-    match kind {
-        ObjectKind::Flash { at } => vec![*at],
-        ObjectKind::Line { from, to } | ObjectKind::Arc { from, to, .. } => vec![*from, *to],
-        ObjectKind::Region { outline } => outline.clone(),
-        ObjectKind::Hole { at, slot_to, .. } => std::iter::once(*at).chain(*slot_to).collect(),
-    }
 }
 
 /// The Gerber Viewer, app-wide: one tab at a time shows it.
@@ -344,6 +407,32 @@ impl GerberViewerState {
     /// Whether a toolbar tool that needs files can act.
     pub fn has_files(&self) -> bool {
         self.open.is_some()
+    }
+
+    /// Whether Esc on the tab has something to undo: the Open menu, a held
+    /// row or a selection.
+    pub fn has_escape(&self) -> bool {
+        self.open_menu
+            || self
+                .open
+                .as_ref()
+                .is_some_and(|open| open.grip.is_some() || open.selected.is_some())
+    }
+
+    /// Esc on the tab: the Open menu closes first, then a held row is let
+    /// go where it was, then the selection clears.
+    pub fn escape(&mut self) {
+        if self.open_menu {
+            self.open_menu = false;
+            return;
+        }
+        let Some(open) = self.open.as_mut() else {
+            return;
+        };
+        if open.grip.take().is_none() {
+            open.selected = None;
+        }
+        open.revision += 1;
     }
 
     /// Note a dropped file. `Some(paths)` once every hovered file landed:

@@ -228,8 +228,7 @@ impl Signex {
             .get(idx)
             .is_some_and(|tab| tab.kind.is_gerber_viewer())
         {
-            self.close_gerber_viewer_tab(idx, keep_session);
-            return Task::none();
+            return self.close_gerber_viewer_tab(idx, keep_session);
         }
         if let Some(tab) = self.document_state.tabs.get(idx) {
             let path = tab.path.clone();

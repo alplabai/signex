@@ -83,8 +83,14 @@ impl Signex {
         tab.path = path;
     }
 
-    /// Close the Gerber Viewer tab: the package goes, the recent list stays.
-    pub(crate) fn close_gerber_viewer_tab(&mut self, idx: usize, keep_session: bool) {
+    /// Close the Gerber Viewer tab: the package goes, the recent list stays
+    /// and is checked again, so a package moved meanwhile reads "Files not
+    /// found" the next time it shows.
+    pub(crate) fn close_gerber_viewer_tab(
+        &mut self,
+        idx: usize,
+        keep_session: bool,
+    ) -> iced::Task<Message> {
         self.document_state.tabs.remove(idx);
         let viewer = &mut self.document_state.gerber_viewer;
         viewer.open = None;
@@ -101,6 +107,7 @@ impl Signex {
             self.sync_active_tab();
         }
         self.refresh_panel_ctx();
+        self.check_recent_gerber_packages()
     }
 
     /// Whether the main window shows the Gerber Viewer tab.
@@ -114,7 +121,9 @@ impl Signex {
     }
 
     /// Ctrl+O (Cmd+O) on the tab opens its Open menu, as on the empty state
-    /// (mockup rows 193 and 193f), in place of File ▸ Open.
+    /// (mockup rows 193 and 193f), in place of File ▸ Open. Esc closes the
+    /// menu, lets go of a held row or clears the selection (mockup row
+    /// 193, "Keyboard"); with none of those it passes on.
     pub(crate) fn gerber_viewer_key(
         &self,
         window: iced::window::Id,
@@ -126,11 +135,20 @@ impl Signex {
         let shown = self
             .document_state
             .tab_shown_in_window(window, &self.ui_state)?;
+        if !shown.kind.is_gerber_viewer() {
+            return None;
+        }
+        if matches!(key.as_ref(), Key::Named(keyboard::key::Named::Escape)) && modifiers.is_empty()
+        {
+            // An overlay over the tab takes Esc first.
+            let ours = self.document_state.gerber_viewer.has_escape()
+                && self.escape_overlay_message().is_none();
+            return ours.then(|| Message::from(GerberViewerMsg::EscapePressed));
+        }
         let is_open_key = matches!(key.as_ref(), Key::Character(c) if c.eq_ignore_ascii_case(OPEN_KEY))
             && modifiers.command()
             && !modifiers.shift()
             && !modifiers.alt();
-        (shown.kind.is_gerber_viewer() && is_open_key)
-            .then(|| Message::from(GerberViewerMsg::OpenMenuToggled))
+        is_open_key.then(|| Message::from(GerberViewerMsg::OpenMenuToggled))
     }
 }

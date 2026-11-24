@@ -8,7 +8,7 @@ mod layers;
 mod properties;
 mod toolbar;
 
-use iced::widget::{Space, column, container, row, stack};
+use iced::widget::{Space, column, container, mouse_area, row, stack};
 use iced::{Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
@@ -70,10 +70,15 @@ pub(super) fn tab<'a>(
     let body = drop_frame(look, viewer, with_open_menu(look, viewer, body));
     let shell = DocTabShell::new(body, DocTabShellStyle::from_tokens(look.tokens, TS.body))
         .toolbar(toolbar::view(look, viewer));
-    match &viewer.open {
+    let shell = match &viewer.open {
         Some(open) => shell.footer(footer(look, open)).view(),
         None => shell.view(),
-    }
+    };
+    // A held layer row is let go wherever the button comes up on the tab;
+    // with no row held the release changes nothing.
+    mouse_area(shell)
+        .on_release(GerberViewerMsg::GripReleased)
+        .boxed()
 }
 
 /// Layers, board, Properties.
@@ -127,10 +132,17 @@ fn with_open_menu<'a>(
     let menu = container(items)
         .padding(SP.s)
         .style(crate::styles::card(look.tokens));
-    stack![body, container(menu).padding(SP.s).boxed()]
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .boxed()
+    // A press anywhere off the menu closes it.
+    let backdrop = mouse_area(Space::new().width(Length::Fill).height(Length::Fill))
+        .on_press(GerberViewerMsg::OpenMenuToggled);
+    stack![
+        body,
+        backdrop.boxed(),
+        container(menu).padding(SP.s).boxed()
+    ]
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .boxed()
 }
 
 fn menu_item<'a>(

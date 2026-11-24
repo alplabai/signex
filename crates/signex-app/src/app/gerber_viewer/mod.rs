@@ -32,6 +32,12 @@ pub use state::{
     Camera, GerberViewerState, GripDrag, LayerLook, LengthUnit, ObjectRef, OpenPackage,
 };
 
+/// Whether a file named `file_name` opens in the viewer from elsewhere: a
+/// Projects row (mockup row 193) or a drop on another tab.
+pub fn opens_by_name(file_name: &str) -> bool {
+    read::is_fabrication_name(std::path::Path::new(file_name))
+}
+
 impl From<GerberViewerMsg> for crate::app::Message {
     fn from(msg: GerberViewerMsg) -> Self {
         Self::GerberViewer(msg)
@@ -64,7 +70,8 @@ pub enum GerberViewerMsg {
     /// Which recent packages are still there, by their paths.
     RecentChecked {
         found: Vec<(Vec<PathBuf>, bool)>,
-        now: i64,
+        /// The clock when the check ran (`None`: the check failed).
+        now: Option<i64>,
     },
     /// Read `job` finished.
     PackageRead {
@@ -75,9 +82,15 @@ pub enum GerberViewerMsg {
     FileHovered(PathBuf),
     /// The drag left the window without a drop.
     FilesHoverLeft,
-    FileDropped(PathBuf),
-    /// The drops a window reported with no hover before them are in.
-    DropSettled,
+    /// A file landed on `window`.
+    FileDropped {
+        window: iced::window::Id,
+        path: PathBuf,
+    },
+    /// The drops `window` reported with no hover before them are in.
+    DropSettled {
+        window: iced::window::Id,
+    },
     /// A layer row's eye was pressed, by layer index.
     LayerVisibilityToggled(usize),
     /// A layer row's name was pressed.
@@ -92,8 +105,11 @@ pub enum GerberViewerMsg {
     GripPressed(usize),
     /// The pointer came over a row, by its place in the drawing order.
     RowEntered(usize),
-    /// The button was let go over the list.
+    /// The button was let go anywhere on the tab.
     GripReleased,
+    /// Esc on the tab: it closes the Open menu, else lets go of a held
+    /// row, else clears the selection.
+    EscapePressed,
     FlipToggled,
     DrillsToggled,
     UnitPicked(LengthUnit),

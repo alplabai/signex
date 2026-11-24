@@ -38,8 +38,9 @@ pub(super) fn view<'a>(look: Look<'a>, open: &'a OpenPackage) -> Element<'a, Ger
     for problem in &open.package.not_read {
         list = list.push(not_read_row(look, &problem.at.file));
     }
-    let list = mouse_area(scrollable(list.padding(SP.s)).height(Length::Fill))
-        .on_release(GerberViewerMsg::GripReleased);
+    // The grip's release is caught tab-wide (`view::tab`), so a release
+    // over the board or the toolbar ends the drag too.
+    let list = scrollable(list.padding(SP.s)).height(Length::Fill);
     container(list)
         .height(Length::Fill)
         .style(crate::styles::panel_region(look.tokens))

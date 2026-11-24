@@ -3,8 +3,12 @@
 //! draws at full strength and the far face darker; Highlight net dims what
 //! is not on the net; with Drills on, the holes draw over everything as
 //! rings. Wheel zooms at the pointer, a drag (left or middle button) pans,
-//! a left click selects. The camera lives in the slice state; the only
-//! canvas state is the press being dragged.
+//! a left click selects. The camera lives in the slice state; the canvas
+//! state is the press being dragged and the cached picture, drawn again
+//! only when the package's `revision` (or the size, or the look) moves.
+
+use std::cell::Cell;
+use std::sync::Arc;
 
 use iced::widget::canvas::{self, Canvas, Frame, LineDash, Path, Stroke};
 use iced::{Color, Element, Length, Point, Rectangle, Renderer, Size, Theme, Widget as _, mouse};
@@ -12,7 +16,7 @@ use pcb_geom::{PointNm, Shape};
 use signex_gerber::{FileFunction, Polarity};
 
 use super::GerberViewerMsg;
-use super::state::{Camera, OpenPackage, anchors, is_drill};
+use super::state::{Camera, OpenPackage, is_drill};
 
 /// The share of the canvas the fitted board takes.
 const FIT_SHARE: f64 = 0.9;
@@ -134,13 +138,46 @@ pub struct Press {
     moved: bool,
 }
 
-/// The canvas state: the press being held.
+/// What the cached picture was drawn from: the package (by its address),
+/// its revision and the colours and sizes the view was given.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct DrawKey {
+    package: usize,
+    revision: u64,
+    background: Color,
+    accent: Color,
+    slop: f32,
+}
+
+/// The canvas state: the press being held and the cached picture.
 #[derive(Debug, Default)]
 pub struct Gesture {
     press: Option<Press>,
+    board: canvas::Cache,
+    drawn: Cell<Option<DrawKey>>,
 }
 
 impl BoardView<'_> {
+    fn draw_key(&self) -> DrawKey {
+        DrawKey {
+            package: Arc::as_ptr(&self.open.package) as usize,
+            revision: self.open.revision,
+            background: self.background,
+            accent: self.accent,
+            slop: self.slop,
+        }
+    }
+
+    /// The whole board, bottom layer first, then the selection.
+    fn paint(&self, frame: &mut Frame, size: Size) {
+        frame.fill_rectangle(Point::ORIGIN, size, self.background);
+        if let Some(fit) = self.fit(size, self.open.camera) {
+            for layer in self.open.draw_order() {
+                self.draw_layer(frame, &fit, layer);
+            }
+            self.draw_selection(frame, &fit);
+        }
+    }
     fn fit(&self, size: Size, camera: Camera) -> Option<BoardFit> {
         let bounds = self.open.bounds()?;
         Some(BoardFit::of(bounds, camera, size, self.open.flipped))
@@ -235,21 +272,24 @@ impl canvas::Program<GerberViewerMsg> for BoardView<'_> {
 
     fn draw(
         &self,
-        _state: &Gesture,
+        state: &Gesture,
         renderer: &Renderer,
         _theme: &Theme,
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
-        frame.fill_rectangle(Point::ORIGIN, bounds.size(), self.background);
-        if let Some(fit) = self.fit(bounds.size(), self.open.camera) {
-            for layer in self.open.draw_order() {
-                self.draw_layer(&mut frame, &fit, layer);
-            }
-            self.draw_selection(&mut frame, &fit);
+        // The cache's own bookkeeping: cleared when what it shows moved.
+        let key = self.draw_key();
+        if state.drawn.get() != Some(key) {
+            state.board.clear();
+            state.drawn.set(Some(key));
         }
-        vec![frame.into_geometry()]
+        let size = bounds.size();
+        vec![
+            state
+                .board
+                .draw(renderer, size, |frame| self.paint(frame, size)),
+        ]
     }
 
     fn mouse_interaction(
@@ -298,7 +338,7 @@ impl BoardView<'_> {
                 },
             };
             if object.shapes.is_empty() {
-                self.draw_marker(frame, fit, &anchors(&object.kind), colour);
+                self.draw_marker(frame, fit, &object.anchors(), colour);
             }
             for shape in &object.shapes {
                 let path = shape_path(fit, shape);
@@ -356,7 +396,7 @@ impl BoardView<'_> {
             frame.stroke(&shape_path(fit, shape), stroke);
         }
         if object.shapes.is_empty() {
-            self.draw_marker(frame, fit, &anchors(&object.kind), self.accent);
+            self.draw_marker(frame, fit, &object.anchors(), self.accent);
         }
     }
 }

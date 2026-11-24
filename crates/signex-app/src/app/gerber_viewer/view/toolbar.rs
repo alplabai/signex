@@ -5,9 +5,13 @@
 //! net is selected.
 
 use iced::{Element, Widget as _};
-use signex_i18n::{MessageId, ids};
+use signex_i18n::{Localized, MessageId, ids, t};
 use signex_widgets::doc_tab_shell::Toolbar;
 use signex_widgets::{button, segmented, text};
+
+/// The Open menu's shortcut as the keymap spells it; shown as this OS
+/// writes it (Ctrl+O, or ⌘O on macOS).
+const OPEN_SHORTCUT: &str = "Mod+O";
 
 use super::{Look, SP, TS};
 use crate::app::gerber_viewer::GerberViewerMsg;
@@ -29,7 +33,11 @@ pub(super) fn view<'a>(
             ids::GERBER_VIEWER_OPEN,
             viewer.open_menu,
             Some(GerberViewerMsg::OpenMenuToggled),
-            ids::GERBER_VIEWER_OPEN_TIP,
+            t!(
+                look.i18n,
+                ids::GERBER_VIEWER_OPEN_TIP,
+                "key" => crate::keymap::shown_in(OPEN_SHORTCUT, look.i18n)
+            ),
         ))
         .separator()
         .push(needs_files(
@@ -72,17 +80,23 @@ fn needs_files<'a>(
     tip: MessageId,
 ) -> Element<'a, GerberViewerMsg> {
     if viewer.has_files() {
-        tool(look, label, on, Some(event), tip)
+        tool(look, label, on, Some(event), look.t(tip))
     } else {
-        tool(look, label, false, None, ids::GERBER_VIEWER_NEEDS_FILES)
+        needs_files_first(look, label)
     }
+}
+
+/// A tool greyed with "Open files first" (mockup row 193f).
+fn needs_files_first<'a>(look: Look<'a>, label: MessageId) -> Element<'a, GerberViewerMsg> {
+    let tip = look.t(ids::GERBER_VIEWER_NEEDS_FILES);
+    tool(look, label, false, None, tip)
 }
 
 /// Highlight net, or why it cannot work now.
 fn highlight_net<'a>(look: Look<'a>, viewer: &GerberViewerState) -> Element<'a, GerberViewerMsg> {
     let label = ids::GERBER_VIEWER_HIGHLIGHT_NET;
     let Some(open) = viewer.open.as_ref() else {
-        return tool(look, label, false, None, ids::GERBER_VIEWER_NEEDS_FILES);
+        return needs_files_first(look, label);
     };
     let on = open.net.is_some();
     let why_not = if !open.package.has_net_attributes() {
@@ -93,13 +107,13 @@ fn highlight_net<'a>(look: Look<'a>, viewer: &GerberViewerState) -> Element<'a, 
         None
     };
     match why_not {
-        Some(reason) => tool(look, label, false, None, reason),
+        Some(reason) => tool(look, label, false, None, look.t(reason)),
         None => tool(
             look,
             label,
             on,
             Some(GerberViewerMsg::NetHighlightToggled),
-            ids::GERBER_VIEWER_HIGHLIGHT_NET_TIP,
+            look.t(ids::GERBER_VIEWER_HIGHLIGHT_NET_TIP),
         ),
     }
 }
@@ -111,7 +125,7 @@ fn tool<'a>(
     label: MessageId,
     on: bool,
     on_press: Option<GerberViewerMsg>,
-    tip: MessageId,
+    tip: Localized,
 ) -> Element<'a, GerberViewerMsg> {
     let r = resolve(look.tokens);
     let ink = match (on_press.is_some(), on) {
@@ -125,7 +139,7 @@ fn tool<'a>(
         .on_press_maybe(on_press);
     hint_tooltip(
         face.boxed(),
-        look.t(tip),
+        tip,
         look.tokens,
         iced::widget::tooltip::Position::Bottom,
     )

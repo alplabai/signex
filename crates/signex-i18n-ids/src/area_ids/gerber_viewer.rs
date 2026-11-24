@@ -112,4 +112,6 @@ define_ids! {
     GERBER_VIEWER_FOOTER_LAYERS = "gerber-viewer-footer-layers";
     GERBER_VIEWER_FOOTER_PROBLEMS = "gerber-viewer-footer-problems";
     GERBER_VIEWER_FOOTER_NOTE = "gerber-viewer-footer-note";
+    GERBER_VIEWER_READ_UNOPENABLE = "gerber-viewer-read-unopenable";
+    GERBER_VIEWER_READ_TOO_LARGE = "gerber-viewer-read-too-large";
 }

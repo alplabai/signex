@@ -48,13 +48,13 @@ pub(super) fn held_escape_end(is_held: bool) -> Subscription<Message> {
 /// land. Captured events count: a widget under the pointer must not keep a
 /// drop from the app.
 pub(super) fn file_drops() -> Subscription<Message> {
-    iced::event::listen_with(|event, _status, _window| {
+    iced::event::listen_with(|event, _status, window| {
         let iced::Event::Window(event) = event else {
             return None;
         };
         let msg = match event {
             iced::window::Event::FileHovered(path) => GerberViewerMsg::FileHovered(path),
-            iced::window::Event::FileDropped(path) => GerberViewerMsg::FileDropped(path),
+            iced::window::Event::FileDropped(path) => GerberViewerMsg::FileDropped { window, path },
             iced::window::Event::FilesHoveredLeft => GerberViewerMsg::FilesHoverLeft,
             _ => return None,
         };

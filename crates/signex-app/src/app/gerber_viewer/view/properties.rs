@@ -15,7 +15,7 @@ use super::layers::layer_name;
 use super::toolbar::unit_label;
 use super::{Look, SP, TS};
 use crate::app::gerber_viewer::GerberViewerMsg;
-use crate::app::gerber_viewer::state::{GerberViewerState, LengthUnit, OpenPackage, anchors};
+use crate::app::gerber_viewer::state::{GerberViewerState, LengthUnit, OpenPackage};
 use crate::styles::ti;
 use crate::styles::tokens::resolve;
 
@@ -115,7 +115,7 @@ fn object_facts(
     ];
     facts.extend(aperture_facts(look, layer, object));
     facts.extend(attribute_facts(look, object));
-    if let Some(at) = anchors(&object.kind).first() {
+    if let Some(at) = object.anchors().first() {
         facts.push((ids::GERBER_VIEWER_PROP_POSITION, position(look, unit, *at)));
     }
     if let ObjectKind::Hole {

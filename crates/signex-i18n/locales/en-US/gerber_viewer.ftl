@@ -60,7 +60,7 @@ gerber-viewer-drop-files = { $count ->
 gerber-viewer-reading = Reading…
 gerber-viewer-read-failed = Gerber Viewer: the package could not be read ({ $why }).
 gerber-viewer-open = Open
-gerber-viewer-open-tip = Open a folder, a zip package or files (Ctrl+O)
+gerber-viewer-open-tip = Open a folder, a zip package or files ({ $key })
 gerber-viewer-flip = Flip
 gerber-viewer-flip-tip = Show the board from the bottom
 gerber-viewer-drills = Drills
@@ -140,3 +140,5 @@ gerber-viewer-footer-problems = { $count ->
    *[other] { $count } read problems in Messages
 }
 gerber-viewer-footer-note = Read only: the files are never changed.
+gerber-viewer-read-unopenable = Gerber Viewer: { $file }, line { $line }: the file cannot be opened ({ $why }); it is listed as Not read.
+gerber-viewer-read-too-large = Gerber Viewer: { $file }, line { $line }: the file is larger than { $limit } MiB; it is listed as Not read.

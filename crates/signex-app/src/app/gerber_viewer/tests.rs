@@ -10,9 +10,8 @@ use pcb_geom::PointNm;
 use signex_gerber::{Package, ReadFile, assemble, read_file};
 
 use super::canvas::BoardFit;
-use super::read::{PackageRead, read_paths, read_zip_from};
+use super::read::{PackageRead, is_fabrication_name, read_paths, read_zip_from};
 use super::state::{Camera, GerberViewerState, OpenPackage, default_colour};
-use super::view_update::is_fabrication_name;
 use super::{GerberViewerMsg, OpenKind};
 use crate::app::document::DocumentKey;
 use crate::app::{Message, Signex, TabKind};
@@ -220,11 +219,13 @@ fn a_drop_opens_once_every_hovered_file_has_landed() {
 #[test]
 fn a_drop_with_no_hover_settles_after_the_batch() {
     let (mut app, _task) = Signex::new();
-    let _ = app.update(Message::from(GerberViewerMsg::FileDropped(PathBuf::from(
-        "readme.txt",
-    ))));
+    let window = iced::window::Id::unique();
+    let _ = app.update(Message::from(GerberViewerMsg::FileDropped {
+        window,
+        path: PathBuf::from("readme.txt"),
+    }));
     assert_eq!(app.document_state.gerber_viewer.dropped.len(), 1);
-    let _ = app.update(Message::from(GerberViewerMsg::DropSettled));
+    let _ = app.update(Message::from(GerberViewerMsg::DropSettled { window }));
     assert!(app.document_state.gerber_viewer.dropped.is_empty());
     assert_eq!(
         app.gerber_viewer_tab(),
@@ -362,19 +363,179 @@ fn the_tab_holds_no_document_and_closing_it_keeps_recent() {
 /// failure in Messages and checks the recent packages.
 #[test]
 fn a_failed_read_keeps_the_empty_state() {
+    // Installs the logger first.
+    let said = crate::diagnostics::said_on_this_thread();
     let (mut app, _task) = Signex::new();
+    app.document_state
+        .gerber_viewer
+        .recent
+        .record(vec![PathBuf::from("/fab/earlier.zip")], 4, 1);
     let _ = app.update(Message::from(GerberViewerMsg::PathsOpened(vec![
         PathBuf::from("/x"),
     ])));
     let job = app.document_state.gerber_viewer.reading.unwrap();
+    let why = "gerber-viewer-failed-read-marker";
     let failed = GerberViewerMsg::PackageRead {
         job,
-        result: Err("gone".into()),
+        result: Err(why.into()),
     };
-    let _ = app.update(Message::from(failed));
+    let check = app.update(Message::from(failed));
+    assert!(check.units() > 0, "the recent packages are checked");
     let viewer = &app.document_state.gerber_viewer;
     assert!(viewer.open.is_none() && viewer.reading.is_none());
     assert!(!viewer.has_files(), "tools that need files stay greyed");
+    if crate::diagnostics::configured_level() < log::LevelFilter::Error {
+        eprintln!("skipped the Messages half: the log filter drops errors");
+        return;
+    }
+    assert!(crate::diagnostics::said_on_this_thread() > said);
+    let rows: Vec<_> = crate::diagnostics::recent_entries()
+        .into_iter()
+        .filter(|e| e.message.contains(why))
+        .collect();
+    assert_eq!(rows.len(), 1, "one Messages row: {rows:#?}");
+    assert_eq!(rows[0].level, crate::diagnostics::DiagnosticLevel::Error);
+}
+
+/// mockup row 193f: a package moved away reads "Files not found" before
+/// anyone clicks it. Opening the Open menu (and opening, failing a read or
+/// closing the tab) runs the check; its answer greys the row.
+#[test]
+fn a_moved_recent_package_is_marked_before_it_is_clicked() {
+    let dir = tempfile::tempdir().unwrap();
+    let kept = dir.path().join("kept.zip");
+    let moved = dir.path().join("moved.zip");
+    std::fs::write(&kept, b"").unwrap();
+    let (mut app, _task) = Signex::new();
+    let recent = &mut app.document_state.gerber_viewer.recent;
+    recent.record(vec![moved.clone()], 4, 1);
+    recent.record(vec![kept.clone()], 2, 2);
+    let check = app.update(Message::from(GerberViewerMsg::OpenMenuToggled));
+    assert!(check.units() > 0, "opening the menu checks the list");
+    let listed = app.document_state.gerber_viewer.recent.all_paths();
+    let found = super::update::recent_presence(listed);
+    let _ = app.update(Message::from(GerberViewerMsg::RecentChecked {
+        found,
+        now: Some(10),
+    }));
+    let viewer = &app.document_state.gerber_viewer;
+    let missing: Vec<_> = viewer
+        .recent
+        .entries()
+        .iter()
+        .map(|e| (e.paths[0].clone(), e.missing))
+        .collect();
+    assert_eq!(missing, vec![(kept, false), (moved, true)]);
+    assert_eq!(viewer.now, Some(10));
+    let _ = app.update(Message::from(GerberViewerMsg::RecentPressed(1)));
+    assert!(
+        app.document_state.gerber_viewer.reading.is_none(),
+        "a package not found does not open"
+    );
+}
+
+/// A failed check keeps the clock it had.
+#[test]
+fn a_failed_recent_check_keeps_the_last_clock() {
+    let (mut app, _task) = Signex::new();
+    app.document_state.gerber_viewer.now = Some(5);
+    let _ = app.update(Message::from(GerberViewerMsg::RecentChecked {
+        found: Vec::new(),
+        now: None,
+    }));
+    assert_eq!(app.document_state.gerber_viewer.now, Some(5));
+}
+
+/// mockup row 193: the outline, the drill files and the drawings draw
+/// above the copper whatever their place in the list.
+#[test]
+fn the_outline_drills_and_drawings_draw_above_the_copper() {
+    let mut files = two_layer_files();
+    files.push(("b-Edge.gbr", copper("Profile,NP", "", &[])));
+    files.push(("b-notes.gbr", copper("Other,Notes", "", &[])));
+    let package: Vec<ReadFile> = files
+        .iter()
+        .map(|(name, text)| read_file(name, text.as_bytes()))
+        .collect();
+    let mut open = OpenPackage::new(Arc::new(assemble(package)), vec![PathBuf::from("b")]);
+    let edge = layer_named(&open, "b-Edge.gbr");
+    let notes = layer_named(&open, "b-notes.gbr");
+    let top = layer_named(&open, "b-L1.gbr");
+    let bottom = layer_named(&open, "b-L2.gbr");
+    // Put the copper at the top of the list.
+    open.order = vec![top, bottom, edge, notes];
+    let drawn = open.draw_order();
+    let place = |layer| drawn.iter().position(|l| *l == layer).unwrap();
+    assert!(place(edge) > place(top) && place(edge) > place(bottom));
+    assert!(place(notes) > place(top) && place(notes) > place(bottom));
+    assert!(
+        place(top) > place(bottom),
+        "the copper keeps its list order"
+    );
+}
+
+/// A release anywhere on the tab ends a grip drag (the tab-wide release),
+/// and a click on the board lets go of a row whose release was missed.
+#[test]
+fn a_held_row_is_let_go_by_any_release_or_a_board_click() {
+    let (mut app, _task) = Signex::new();
+    app.document_state.gerber_viewer.open = Some(opened());
+    let _ = app.update(Message::from(GerberViewerMsg::GripPressed(0)));
+    let _ = app.update(Message::from(GerberViewerMsg::BoardClicked {
+        at: PointNm::new(90_000_000, 0),
+        tolerance: 0,
+    }));
+    let open = app.document_state.gerber_viewer.open.as_ref().unwrap();
+    assert_eq!(open.grip, None);
+    let revision = open.revision;
+    let _ = app.update(Message::from(GerberViewerMsg::RowEntered(1)));
+    let _ = app.update(Message::from(GerberViewerMsg::GripReleased));
+    let open = app.document_state.gerber_viewer.open.as_ref().unwrap();
+    assert_eq!(
+        open.revision, revision,
+        "with no row held, hover and release change nothing"
+    );
+}
+
+/// mockup row 193, "Keyboard": Esc closes the Open menu first, then lets
+/// go of a held row, then clears the selection; with none, it passes on.
+#[test]
+fn esc_on_the_tab_closes_the_menu_then_the_grip_then_the_selection() {
+    let mut viewer = GerberViewerState {
+        open: Some(opened()),
+        open_menu: true,
+        ..Default::default()
+    };
+    let open = viewer.open.as_mut().unwrap();
+    open.press_grip(0);
+    open.click_at(PointNm::new(0, 0), 0);
+    open.press_grip(0);
+    assert!(viewer.has_escape());
+    viewer.escape();
+    assert!(!viewer.open_menu);
+    let open = viewer.open.as_ref().unwrap();
+    assert!(open.grip.is_some() && open.selected.is_some());
+    viewer.escape();
+    let open = viewer.open.as_ref().unwrap();
+    assert!(open.grip.is_none() && open.selected.is_some());
+    let order = open.order.clone();
+    viewer.escape();
+    let open = viewer.open.as_ref().unwrap();
+    assert!(open.selected.is_none());
+    assert_eq!(open.order, order, "a row let go by Esc does not move");
+    assert!(!viewer.has_escape());
+}
+
+/// mockup row 193: Gerber, drill and package zip rows in Projects open the
+/// viewer, by the one name rule the drops use.
+#[test]
+fn gerber_drill_and_zip_rows_open_the_gerber_viewer() {
+    for name in ["board-L1.gbr", "board-PTH.DRL", "fab.zip"] {
+        assert!(super::opens_by_name(name), "{name}");
+    }
+    for name in ["board.snxpcb", "notes.txt", "gbr"] {
+        assert!(!super::opens_by_name(name), "{name}");
+    }
 }
 
 /// mockup row 193f: Ctrl+O on the tab opens the Open menu.

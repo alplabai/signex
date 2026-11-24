@@ -327,35 +327,3 @@ pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         super::projects_graphite::view(ctx)
     }
 }
-
-/// The extensions a double-click opens in the Gerber Viewer (mockup row
-/// 193): a Gerber image, a drill file or a fab package zip.
-const GERBER_VIEWER_EXTENSIONS: [&str; 3] = ["gbr", "drl", "zip"];
-
-/// Whether a double-click on the row `file_name` opens the Gerber Viewer.
-pub fn opens_in_gerber_viewer(file_name: &str) -> bool {
-    std::path::Path::new(file_name)
-        .extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| {
-            GERBER_VIEWER_EXTENSIONS
-                .iter()
-                .any(|known| known.eq_ignore_ascii_case(e))
-        })
-}
-
-#[cfg(test)]
-mod gerber_viewer_rows {
-    use super::opens_in_gerber_viewer;
-
-    /// mockup row 193: `.gbr`, `.drl` and package `.zip` rows open the viewer.
-    #[test]
-    fn gerber_drill_and_zip_rows_open_the_gerber_viewer() {
-        for name in ["board-L1.gbr", "board-PTH.DRL", "fab.zip"] {
-            assert!(opens_in_gerber_viewer(name), "{name}");
-        }
-        for name in ["board.snxpcb", "notes.txt", "gbr"] {
-            assert!(!opens_in_gerber_viewer(name), "{name}");
-        }
-    }
-}
