@@ -1137,3 +1137,7 @@ editors-mode-footprint = Footprint
 editors-mode-sketch = Sketch
 editors-mode-3d = 3D
 editors-mode-3d-tooltip = Show the 3D body; click again to go back
+# library-dialog-polish
+# The header of the symbol editor's Place Pin dropdown (mockup row 141): the
+# type picked under it stays for every following pin.
+editors-symbol-bar-pin-type = Pin type

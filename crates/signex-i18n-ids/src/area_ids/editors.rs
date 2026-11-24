@@ -468,4 +468,6 @@ define_ids! {
     EDITORS_MODE_SKETCH = "editors-mode-sketch";
     EDITORS_MODE_3D = "editors-mode-3d";
     EDITORS_MODE_3D_TOOLTIP = "editors-mode-3d-tooltip";
+    // library-dialog-polish
+    EDITORS_SYMBOL_BAR_PIN_TYPE = "editors-symbol-bar-pin-type";
 }

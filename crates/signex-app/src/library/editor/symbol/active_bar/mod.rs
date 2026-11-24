@@ -119,6 +119,7 @@ pub fn dropdown_overlay<'a>(
         menu,
         editor.selection_filter,
         editor.tool,
+        editor.pin_type,
         editor.path.clone(),
         theme_id,
         i18n,

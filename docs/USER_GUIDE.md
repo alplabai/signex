@@ -381,6 +381,12 @@ then, in the footprint editor, Shapes. In Sketch mode the footprint editor shows
 the sketch bar instead. A small corner triangle marks a button with a dropdown;
 right-click it to open the dropdown.
 
+In the symbol editor, the Place Pin dropdown lists pin types under **Pin
+type** (Input, Output, Passive, Bidirectional, Power input). Picking one arms
+Place Pin, and every pin you place after that gets that type until you pick
+another; the picked type shows checked. Pick the checked type again to go back
+to unclassified pins. Every type is still offered in the pin's Properties.
+
 Right-click a pad in the footprint editor for the selection menu: **Move
 Selection By…** (type an X and a Y offset in mm, then **Move**), **Align ▸**
 (the **Align…** dialog, which aligns or spaces the selection per axis, the

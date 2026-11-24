@@ -15,6 +15,7 @@
 use std::path::PathBuf;
 
 use signex_i18n::{I18n, ids, t};
+use signex_types::schematic::PinDirection;
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
@@ -58,6 +59,7 @@ pub fn entries(
     menu: SymActiveBarMenu,
     selection_filter: SymbolSelectionFilter,
     active_tool: SymbolTool,
+    pin_type: Option<PinDirection>,
     path: PathBuf,
     tid: ThemeId,
     i18n: &I18n,
@@ -68,7 +70,7 @@ pub fn entries(
         SymActiveBarMenu::Place => place_entries(path, tid),
         SymActiveBarMenu::Select => select_entries(path, tid),
         SymActiveBarMenu::Align => align_entries(path, tid),
-        SymActiveBarMenu::Pin => pin_entries(active_tool, path),
+        SymActiveBarMenu::Pin => pin_entries(active_tool, pin_type, path, i18n),
         SymActiveBarMenu::Text => text_entries(active_tool, path, tid),
         SymActiveBarMenu::Shapes => shapes_entries(active_tool, path, tid, i18n),
     }
@@ -321,12 +323,25 @@ fn align_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessag
     ]
 }
 
-fn pin_entries(active_tool: SymbolTool, path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
-    // SchLib has one Place Pin tool today; the variants (input /
-    // output / passive / etc.) mutate a pin AFTER placement via the
-    // Properties panel. Surface "Place Pin" as the only wired item;
-    // the variant rows are stubs that hint future flow.
-    vec![
+/// The pin types the Place Pin dropdown offers (mockup row 141); the
+/// Properties panel offers every `PinDirection`.
+const PIN_TYPES: [PinDirection; 5] = [
+    PinDirection::Input,
+    PinDirection::Output,
+    PinDirection::Passive,
+    PinDirection::Bidirectional,
+    PinDirection::PowerInput,
+];
+
+fn pin_entries(
+    active_tool: SymbolTool,
+    pin_type: Option<PinDirection>,
+    path: PathBuf,
+    i18n: &I18n,
+) -> Vec<DropdownEntry<LibraryMessage>> {
+    // A picked type is sticky: it stays for every following pin and shows
+    // checked (accepted 2026-11-24, mockup row 141).
+    let mut entries = vec![
         DropdownEntry::Item(
             DropdownItem::new(
                 "Place Pin",
@@ -338,13 +353,18 @@ fn pin_entries(active_tool: SymbolTool, path: PathBuf) -> Vec<DropdownEntry<Libr
             .checked(active_tool == SymbolTool::AddPin),
         ),
         DropdownEntry::Separator,
-        DropdownEntry::Header("Variants (set via Properties)".into()),
-        DropdownEntry::Item(stub("Input", path.clone())),
-        DropdownEntry::Item(stub("Output", path.clone())),
-        DropdownEntry::Item(stub("Passive", path.clone())),
-        DropdownEntry::Item(stub("Bidirectional", path.clone())),
-        DropdownEntry::Item(stub("Power", path)),
-    ]
+        DropdownEntry::Header(t!(i18n, ids::EDITORS_SYMBOL_BAR_PIN_TYPE).into_string()),
+    ];
+    entries.extend(PIN_TYPES.into_iter().map(|kind| {
+        DropdownEntry::Item(
+            DropdownItem::new(
+                kind.label(),
+                sym(path.clone(), SymbolEditorMsg::PinTypePicked(kind)),
+            )
+            .checked(pin_type == Some(kind)),
+        )
+    }));
+    entries
 }
 
 fn text_entries(
@@ -688,5 +708,51 @@ mod tests {
             item_msg(&entries, "Rectangle"),
             SymbolEditorMsg::SetTool(SymbolToolMsg::PlaceRectangle)
         ));
+    }
+
+    /// Mockup row 141 (accepted 2026-11-24): the Place Pin dropdown's types
+    /// sit under a "Pin type" header, each row picks its `PinDirection`, and
+    /// the sticky type shows checked.
+    #[test]
+    fn the_pin_menu_picks_a_sticky_pin_type_under_a_pin_type_header() {
+        let i18n = I18n::en_us();
+        let entries = pin_entries(
+            SymbolTool::AddPin,
+            Some(PinDirection::Output),
+            PathBuf::from("t.snxsym"),
+            &i18n,
+        );
+        let header = t!(i18n, ids::EDITORS_SYMBOL_BAR_PIN_TYPE).into_string();
+        assert_eq!(header, "Pin type");
+        assert!(
+            entries
+                .iter()
+                .any(|e| matches!(e, DropdownEntry::Header(h) if *h == header))
+        );
+        assert!(
+            !entries
+                .iter()
+                .any(|e| matches!(e, DropdownEntry::Header(h) if h.contains("Variants"))),
+            "the old hint header is gone"
+        );
+
+        for kind in PIN_TYPES {
+            assert!(
+                matches!(
+                    item_msg(&entries, kind.label()),
+                    SymbolEditorMsg::PinTypePicked(picked) if *picked == kind
+                ),
+                "{} picks its type",
+                kind.label()
+            );
+        }
+        let checked: Vec<&str> = entries
+            .iter()
+            .filter_map(|e| match e {
+                DropdownEntry::Item(item) if item.checked => Some(item.label.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(checked, ["Place Pin", "Output"]);
     }
 }
