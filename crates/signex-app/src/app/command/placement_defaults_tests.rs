@@ -89,11 +89,12 @@ fn a_click_places_what_the_persons_form_holds() {
 }
 
 /// A project sheet whose defaults differ from the built-in table and from
-/// the person's form, with that form open.
-fn project_app(form: PrePlacementKind) -> (Signex, String) {
-    let dir = std::env::temp_dir().join(format!("signex-2326-6p3-{}", uuid::Uuid::now_v7()));
-    let mut app = app_workspace(&dir.to_string_lossy(), &["root.snxsch"]);
-    let sheet = dir.join("root.snxsch");
+/// the person's form, with that form open. Keep the `TempDir` alive for the
+/// test; dropping it removes the project directory.
+fn project_app(form: PrePlacementKind) -> (Signex, String, tempfile::TempDir) {
+    let dir = tempfile::tempdir().expect("a temp project dir");
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &["root.snxsch"]);
+    let sheet = dir.path().join("root.snxsch");
     open_with(&mut app.document_state, &sheet, SchematicSheet::default());
     app.document_state.active_path = Some(sheet.clone());
     app.ui_state.snap_enabled = true;
@@ -104,7 +105,8 @@ fn project_app(form: PrePlacementKind) -> (Signex, String) {
     defaults.shape_fill = Some(FillType::Background);
     defaults.font_family = Some("Roboto".into());
     app.document_state.panel_ctx.pre_placement = Some(persons_form(form));
-    (app, format!("document={}", sheet.display()))
+    let document = format!("document={}", sheet.display());
+    (app, document, dir)
 }
 
 fn sheet(app: &Signex) -> &SchematicSheet {
@@ -116,7 +118,7 @@ fn sheet(app: &Signex) -> &SchematicSheet {
 /// defaults, not the person's form (the approved behaviour change).
 #[test]
 fn an_operand_run_takes_the_project_defaults_over_the_persons_form() {
-    let (mut app, document) = project_app(PrePlacementKind::Other);
+    let (mut app, document, _dir) = project_app(PrePlacementKind::Other);
     let defaults = app.document_state.active_schematic_defaults();
     let label_at = format!("at={}", at(8.0, 16.0));
     let outcome = run(
@@ -151,7 +153,7 @@ fn an_operand_run_takes_the_project_defaults_over_the_persons_form() {
         Some((defaults.shape_stroke_mm(0.0), defaults.shape_fill))
     );
 
-    let (mut app, document) = project_app(PrePlacementKind::Wire);
+    let (mut app, document, _dir) = project_app(PrePlacementKind::Wire);
     let (start, end) = (
         format!("start={}", at(0.0, 10.0)),
         format!("end={}", at(10.0, 10.0)),
@@ -172,7 +174,7 @@ fn an_operand_run_takes_the_project_defaults_over_the_persons_form() {
 /// (c) An agent run that names a form value as an operand places it.
 #[test]
 fn an_operand_run_places_the_values_its_operands_name() {
-    let (mut app, document) = project_app(PrePlacementKind::Other);
+    let (mut app, document, _dir) = project_app(PrePlacementKind::Other);
     let label_at = format!("at={}", at(8.0, 16.0));
     let outcome = run(
         &mut app,
