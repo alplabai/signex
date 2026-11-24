@@ -446,4 +446,6 @@ define_ids! {
     HARNESS_MSG_ENTRY_OFF_CONNECTOR = "panels-harness-msg-entry-off-connector";
     PANELS_COMPILED_DESIGN_MSG_NO_PROJECT = "panels-compiled-design-msg-no-project";
     PANELS_COMPILED_DESIGN_NAMING_REFUSED = "panels-compiled-design-naming-refused";
+    // harness-connector-properties
+    PANELS_HARNESS_ADD_ENTRY = "panels-harness-add-entry";
 }
