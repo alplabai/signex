@@ -153,6 +153,12 @@ fn mono() -> Font {
     crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
 }
 
+/// The inks of the reference, value and footprint cells: the reference in
+/// full ink, the value and footprint muted (mockup row 70).
+fn fixed_cell_inks(style: GridStyle) -> [Color; 3] {
+    [style.ink, style.muted_ink, style.muted_ink]
+}
+
 /// The face of a reference: mono at medium weight.
 fn reference_font() -> Font {
     Font {
@@ -178,10 +184,7 @@ fn header_text<'a>(words: &str, i18n: &I18n, style: GridStyle) -> Element<'a, Me
     // goes back to the widget as finished text.
     text(UserText::new(i18n.upper_for_display(words)))
         .size(TS.section)
-        .font(Font {
-            weight: iced::font::Weight::Medium,
-            ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
-        })
+        .font(styles::medium_font())
         .color(style.muted_ink)
         .wrapping(Wrapping::None)
         .boxed()
@@ -483,13 +486,14 @@ pub(super) fn view<'a>(
     let mut body_rows: Vec<Element<'a, Message>> = Vec::with_capacity(rows.len() * 2);
     let body_width = widths.value + widths.footprint + widths.params.iter().sum::<f32>();
     let editing = app.ui_state.parameter_table.editing_row;
+    let [reference_ink, value_ink, footprint_ink] = fixed_cell_inks(style);
     for &sym in rows {
         let fill = row_fill(editing == Some(sym.uuid), style);
         references.push(filled(
             read_only_cell(
                 &sym.reference,
                 widths.reference,
-                style.ink,
+                reference_ink,
                 reference_font(),
                 m,
             ),
@@ -497,8 +501,8 @@ pub(super) fn view<'a>(
         ));
         references.push(rule(style.line, Length::Fixed(widths.reference), true));
         let mut cells: Vec<Element<'a, Message>> = vec![
-            read_only_cell(&sym.value, widths.value, style.ink, mono(), m),
-            read_only_cell(&sym.footprint, widths.footprint, style.muted_ink, mono(), m),
+            read_only_cell(&sym.value, widths.value, value_ink, mono(), m),
+            read_only_cell(&sym.footprint, widths.footprint, footprint_ink, mono(), m),
         ];
         for (key, w) in keys.iter().zip(&widths.params) {
             cells.push(param_cell(app, sym, key, *w, style));
@@ -611,6 +615,18 @@ mod tests {
         assert_eq!(
             not_set.family,
             crate::fonts::iced_font_for_family(ui).family
+        );
+    }
+
+    /// Mockup row 70: the reference is drawn in full ink; the value and the
+    /// footprint are muted.
+    #[test]
+    fn the_value_and_footprint_are_muted_and_the_reference_full_ink() {
+        let style = graphite_style();
+        assert_ne!(style.ink, style.muted_ink);
+        assert_eq!(
+            fixed_cell_inks(style),
+            [style.ink, style.muted_ink, style.muted_ink]
         );
     }
 
