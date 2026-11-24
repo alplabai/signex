@@ -62,14 +62,18 @@ pub(super) fn group_button(
     };
     let menu = PcbBarMenu::Group(group);
     let has_menu = group.rows().len() > 1;
+    let toggle = || bar_message(PcbBarMsg::MenuToggled(menu));
     ActiveBarItem::Button(ActiveBarButton {
         icon,
         tooltip,
         enabled: true,
         selected: state.is_selected(group),
         on_press: Some(on_press),
-        on_right_press: has_menu.then(|| bar_message(PcbBarMsg::MenuToggled(menu))),
+        on_right_press: has_menu.then(toggle),
         dropdown_indicator: has_menu.then(|| ActiveBarIcon::Svg(ic::icon_chevron_45(tid))),
+        // Mockup row 108: a click on the corner chevron opens the dropdown
+        // too, so it is found without a right-click.
+        on_chevron_press: has_menu.then(toggle),
     })
 }
 

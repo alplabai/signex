@@ -348,6 +348,7 @@ fn dropdown_trigger_items(
             on_press,
             on_right_press,
             dropdown_indicator: Some(ActiveBarIcon::Svg(ic::icon_chevron_45(tid))),
+            on_chevron_press: None,
         })
     };
 

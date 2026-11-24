@@ -430,3 +430,10 @@ pcb-prim-dim-precision-step = { $decimals }
 pcb-prim-dim-drawing-note = { $layer } · text { $height }
 # The caption under a dimension's Layer row.
 pcb-prim-dim-layer-note = Any board layer, copper included. On copper a dimension is a drawing only: no copper, DRC or Gerber.
+# pcb-props-bar
+# A read-only fact on the String panel: the string's layer is on the bottom side, so it reads mirrored.
+pcb-prim-string-mirrored = Mirrored (bottom side)
+# The unit after a length field when the board shows mils.
+pcb-prim-unit-mil = mil
+# A dimension's measured value in mils; $value is the number to its precision.
+pcb-prim-dim-value-mil = { $value } mil

@@ -458,3 +458,76 @@ fn the_route_row_routes_from_a_pad_as_one_undo_step() {
     let board = app.document_state.pcb_board(&path).expect("board");
     assert!(board.segments.is_empty(), "one undo removes the route");
 }
+
+/// The messages a left click at `at` on `group`'s button publishes, the
+/// button drawn alone on a bar.
+fn clicked_on_group(app: &Signex, group: PcbBarGroup, at: iced::Point) -> Vec<Message> {
+    let tokens = signex_types::theme::theme_tokens(app.ui_state.effective_theme_id());
+    let item = ActiveBarItem::Button(group_button_of(app, group));
+    let bar = signex_widgets::active_bar::view(vec![item], &tokens);
+    crate::layout_probe::messages_on_click_at(bar, iced::Size::new(200.0, 100.0), None, at)
+}
+
+/// Mockup row 108 (Caner, 2026-11-24): a click on a group button's corner
+/// chevron opens its dropdown, a plain click still runs the row the group
+/// used last, and the right-click still opens the dropdown.
+#[test]
+fn a_click_on_the_chevron_opens_the_group_dropdown() {
+    let mut app = board_app();
+    let group = PcbBarGroup::CopperAreas;
+    let m = Metrics::GRAPHITE;
+    let corner = m.padding + m.btn - m.chevron / 2.0;
+    let centre = m.padding + m.btn / 2.0;
+    let button = group_button_of(&app, group);
+    let toggle = format!("{:?}", button.on_right_press.expect("a dropdown"));
+    let run = format!("{:?}", button.on_press.expect("a live row"));
+
+    let sent = clicked_on_group(&app, group, iced::Point::new(corner, corner));
+    let sent: Vec<String> = sent.iter().map(|m| format!("{m:?}")).collect();
+    assert_eq!(
+        sent,
+        [toggle.clone()],
+        "the chevron toggles, it does not run"
+    );
+    let sent = clicked_on_group(&app, group, iced::Point::new(centre, centre));
+    let sent: Vec<String> = sent.iter().map(|m| format!("{m:?}")).collect();
+    assert_eq!(sent, [run], "a plain click runs the last-used row");
+
+    let open = clicked_on_group(&app, group, iced::Point::new(corner, corner));
+    for message in open {
+        let _ = app.update(message);
+    }
+    assert_eq!(
+        app.interaction_state.pcb_bar_menu,
+        Some(PcbBarMenu::Group(group))
+    );
+    assert!(group_button_of(&app, group).selected, "drawn open");
+    let still = format!("{:?}", group_button_of(&app, group).on_right_press);
+    assert_eq!(still, format!("Some({toggle})"), "right-click unchanged");
+}
+
+/// A single-row group has no dropdown, so no chevron to click.
+#[test]
+fn a_group_without_a_dropdown_has_no_chevron_message() {
+    let app = board_app();
+    for group in PcbBarGroup::ALL {
+        let item = groups::group_button(
+            group,
+            &groups::GroupState {
+                open: None,
+                last: &app.ui_state.pcb_bar_last_tools,
+                armed: None,
+            },
+            app.ui_state.effective_theme_id(),
+            &app.ui_state.i18n,
+        );
+        let ActiveBarItem::Button(button) = item else {
+            panic!("{group:?} is a button");
+        };
+        assert_eq!(
+            button.on_chevron_press.is_some(),
+            button.dropdown_indicator.is_some(),
+            "{group:?}"
+        );
+    }
+}

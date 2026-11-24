@@ -417,3 +417,40 @@ fn a_precision_step_is_one_undo_step() {
     });
     assert_eq!(edited.free.dimensions[0].value_text(), "10.000mm");
 }
+
+/// Mockup row 101 (Caner, 2026-11-24): while the board shows mils, a length
+/// typed into a dimension field is read in mils and saved in mm, as one
+/// undo step; a number that names "mm" stays mm.
+#[test]
+fn a_dimension_length_typed_in_mils_is_saved_in_mm() {
+    let mut f = open_board();
+    f.app.ui_state.unit = signex_types::coord::Unit::Mil;
+    let drawing = board().free.dimensions[0].drawing().expect("a drawing");
+    let (a, b) = drawing.strokes[0];
+    click(&mut f, Point::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0));
+    let PcbPrimitiveFacts::Dimension(dimension) = facts(&f) else {
+        panic!("the dimension panel shows");
+    };
+    let target = dimension.common.target.clone();
+    let typed = |f: &mut Fixture, field: PrimitiveField, text: &str| {
+        send(
+            f,
+            panel(PcbPrimitiveMsg::FieldTyped {
+                target: target.clone(),
+                field,
+                text: text.into(),
+            }),
+        );
+        send(
+            f,
+            panel(PcbPrimitiveMsg::FieldSubmitted {
+                target: target.clone(),
+                field,
+            }),
+        );
+    };
+    let edited = assert_one_step(&mut f, |f| typed(f, PrimitiveField::LineWidth, "10"));
+    assert!((edited.free.dimensions[0].line_width - 0.254).abs() < 1e-9);
+    typed(&mut f, PrimitiveField::TextHeight, "2mm");
+    assert!((live(&f).free.dimensions[0].text_height - 2.0).abs() < 1e-9);
+}

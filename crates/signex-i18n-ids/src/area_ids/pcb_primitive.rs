@@ -322,4 +322,8 @@ define_ids! {
     PCB_PRIM_DIM_PRECISION_STEP = "pcb-prim-dim-precision-step";
     PCB_PRIM_DIM_DRAWING_NOTE = "pcb-prim-dim-drawing-note";
     PCB_PRIM_DIM_LAYER_NOTE = "pcb-prim-dim-layer-note";
+    // pcb-props-bar
+    PCB_PRIM_STRING_MIRRORED = "pcb-prim-string-mirrored";
+    PCB_PRIM_UNIT_MIL = "pcb-prim-unit-mil";
+    PCB_PRIM_DIM_VALUE_MIL = "pcb-prim-dim-value-mil";
 }

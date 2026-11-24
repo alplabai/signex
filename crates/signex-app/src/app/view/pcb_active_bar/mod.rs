@@ -223,6 +223,7 @@ fn menu_button(
         on_press,
         on_right_press: Some(bar_message(PcbBarMsg::MenuToggled(menu))),
         dropdown_indicator: Some(ActiveBarIcon::Svg(ic::icon_chevron_45(tid))),
+        on_chevron_press: None,
     })
 }
 
@@ -243,6 +244,7 @@ fn dropdown_button(
         on_press: Some(toggle.clone()),
         on_right_press: Some(toggle),
         dropdown_indicator: Some(ActiveBarIcon::Svg(ic::icon_chevron_45(tid))),
+        on_chevron_press: None,
     })
 }
 
