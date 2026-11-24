@@ -11,7 +11,9 @@ use uuid::Uuid;
 
 use super::part_sync::{Choice, Choices, ConflictView};
 
+mod skipped;
 mod view;
+pub use skipped::SkippedVersions;
 pub use view::view;
 
 #[cfg(test)]

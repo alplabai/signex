@@ -611,7 +611,11 @@ part and the library row changed a field, a line under the part shows
 **yours** and **library now**; choose **Keep mine** (the default) or **Use
 library value**, and answering ticks the part. **Update Selected Components**
 updates the ticked parts, each answer in the same **Undo** step as its part;
-**Skip All** and **Cancel** close without updating.
+**Skip All** and **Cancel** both close without updating. **Skip All** also
+remembers the offered versions for that sheet, so the dialog does not offer
+them again this session; a part is offered again once its library row moves to
+another version. **Cancel** remembers nothing, and the dialog asks again the
+next time the sheet is checked.
 
 **Copy and paste.** Select items and use **Edit ▸ Copy** or **Edit ▸ Cut**,
 then **Edit ▸ Paste**. The copy attaches to the cursor, centred on it and

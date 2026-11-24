@@ -602,6 +602,8 @@ pub struct LibraryState {
     /// Nothing renders this set yet (no status-bar indicator). Cleared
     /// on apply / re-scan / close-tab.
     pub skipped_updates_for: std::collections::HashSet<PathBuf>,
+    /// The versions Skip All dismissed, per sheet; the scan leaves them out.
+    pub skipped_versions: super::updates_dialog::SkippedVersions,
     /// Session-scoped "Installed" libraries — opened via the
     /// Components Panel's "+ Add Library…" button (Stage 9 of
     /// `v0.9-snxlib-as-file-plan.md` §3 mount-source 2). Wiped on app

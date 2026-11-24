@@ -97,10 +97,15 @@ review which updates to accept, with checkboxes pre-toggled by `BumpKind`:
 - `Major`: unchecked, with a warning (likely breaking).
 
 "Update Selected Components" rewrites the picked Symbols to the latest version
-and dirty-marks the schematic. "Skip All" leaves everything pinned and the
-dispatcher records the schematic in `LibraryState.skipped_updates_for`. Nothing
-renders that set yet; the user-visible trace of a refused or unreadable update
-is its line in the Messages panel.
+and dirty-marks the schematic. "Skip All" leaves everything pinned, records the
+schematic in `LibraryState.skipped_updates_for` and remembers each offered
+`(lib_id, version)` for that sheet in `LibraryState.skipped_versions`
+(`updates_dialog::SkippedVersions`, session state). A later scan of the sheet
+leaves those entries out and keeps the sheet pending; a part whose row moves to
+another version is offered again. "Cancel" closes the modal and remembers
+nothing, so the next scan asks again. Nothing renders `skipped_updates_for`
+yet; the user-visible trace of a refused or unreadable update is its line in
+the Messages panel.
 
 It is painted by `library_updates_overlay` via `collect_overlays`, which runs
 every frame; the builder's `library_updates.is_some()` guard is the only open
