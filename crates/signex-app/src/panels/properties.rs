@@ -100,6 +100,42 @@ fn shown_placement_form(ctx: &PanelContext) -> Option<&PrePlacementData> {
         .filter(|_| !ctx.annotation.is_placement_form_idle)
 }
 
+/// Properties with no sheet or board active. "Open a project" only while no
+/// project is open (#51): a page tab such as Rules belongs to the open
+/// project, so the dock names it instead (mockup row 89).
+fn view_no_document<'a>(
+    ctx: &'a PanelContext,
+    muted: Color,
+    primary: Color,
+) -> Element<'a, PanelMsg> {
+    let project = (ctx.projects.iter())
+        .find(|p| p.is_active)
+        .or_else(|| ctx.projects.first().filter(|_| ctx.projects.len() == 1));
+    let hint = if ctx.has_pcb || !ctx.projects.is_empty() {
+        ids::PANELS_PROPERTIES_NEEDS_SCHEMATIC
+    } else {
+        ids::PANELS_PROPERTIES_OPEN_PROJECT
+    };
+    let mut body = column![
+        text(t!(ctx.i18n, ids::PANELS_KIND_PROPERTIES))
+            .size(TS.label)
+            .color(primary),
+    ]
+    .spacing(SP.s)
+    .padding(SP.m);
+    if let Some(project) = project {
+        body = body.push(
+            text(signex_i18n::UserText::new(project.name.as_str()))
+                .size(TS.caption)
+                .color(muted),
+        );
+    }
+    body = body
+        .push(Space::new().height(SP.l))
+        .push(text(t!(ctx.i18n, hint)).size(TS.body).color(muted));
+    container(body).width(Length::Fill).boxed()
+}
+
 pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let palette = PanelPalette::from_tokens(&ctx.tokens);
     let PanelPalette {
@@ -161,28 +197,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         return super::pcb_board_properties::view(ctx, board);
     }
     if !ctx.has_schematic {
-        // Don't mislead the user into thinking nothing is loaded when
-        // they've just switched to a PCB tab — distinguish "no project
-        // yet" from "project open, but the active tab isn't a
-        // schematic". GitHub issue #51.
-        let hint = if ctx.has_pcb {
-            ids::PANELS_PROPERTIES_NEEDS_SCHEMATIC
-        } else {
-            ids::PANELS_PROPERTIES_OPEN_PROJECT
-        };
-        return container(
-            column![
-                text(t!(ctx.i18n, ids::PANELS_KIND_PROPERTIES))
-                    .size(TS.label)
-                    .color(primary),
-                Space::new().height(12.0),
-                text(t!(ctx.i18n, hint)).size(TS.body).color(muted),
-            ]
-            .spacing(SP.s)
-            .padding(SP.m),
-        )
-        .width(Length::Fill)
-        .boxed();
+        return view_no_document(ctx, muted, primary);
     }
 
     // An armed dimension tool shows its values all through placing, paused
