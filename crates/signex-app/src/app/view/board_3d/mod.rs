@@ -227,6 +227,26 @@ fn event(event: Board3dMsg) -> Message {
     Message::Pcb(PcbMsg::Board3d(event))
 }
 
+/// The keys the chrome names (mockup row 175: "Flip board (F)", "Copy to
+/// clipboard Ctrl+Shift+C", "press H for the next"): each command's
+/// shortcut label in the active keymap, empty when it has none.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct Board3dKeys {
+    flip: String,
+    lighting: String,
+    copy: String,
+}
+
+impl Board3dKeys {
+    fn of(keymap: &crate::keymap::CompiledKeymap) -> Self {
+        Self {
+            flip: keymap.shortcut_label_for_id("flip_board_3d"),
+            lighting: keymap.shortcut_label_for_id("cycle_board_3d_lighting"),
+            copy: keymap.shortcut_label_for_id("copy_board_3d_screenshot"),
+        }
+    }
+}
+
 impl Signex {
     /// The main window's body while its board is in the 3D view; `None`
     /// otherwise, and in every undocked window.
@@ -324,12 +344,14 @@ impl Signex {
             });
         let cube = cube_corner(i18n, session, &look);
 
-        let bar = toolbar::toolbar(i18n, session, &look);
+        let keys = Board3dKeys::of(&self.ui_state.active_keymap);
+        let bar = toolbar::toolbar(i18n, session, &keys, &look);
         // The popovers hang under their own buttons (the toolbar draws
         // them); with neither open, the lighting toast is centred under it.
         let popover_open = session.explode_open || session.shot_menu_open;
         let top: Element<'_, Message> = if !popover_open && session.lighting_toast.is_some() {
-            column![bar, overlays::lighting_toast(i18n, session.lighting, &look)]
+            let toast = overlays::lighting_toast(i18n, session.lighting, &keys.lighting, &look);
+            column![bar, toast]
                 .spacing(M.toast_gap)
                 .align_x(Alignment::Center)
                 .boxed()
@@ -388,7 +410,7 @@ mod tests {
         let tokens = theme_tokens(ThemeId::GraphiteLight);
         let look = Look::of(&tokens);
         let session = Board3dSession::open(Path::new("board.snxpcb"));
-        let bar = toolbar::toolbar(I18n::en_us_ref(), &session, &look);
+        let bar = toolbar::toolbar(I18n::en_us_ref(), &session, &Board3dKeys::default(), &look);
         let size = root_size(bar, Size::new(2000.0, 200.0));
         assert!(
             M.bar_top + size.height <= M.cube_top(),
@@ -396,5 +418,27 @@ mod tests {
             M.bar_top + size.height,
             M.cube_top()
         );
+    }
+
+    /// Mockup row 175: the chrome names the keys both built-in profiles
+    /// give Flip, the next lighting and the screenshot copy.
+    #[test]
+    fn the_chrome_names_the_bound_keys_of_flip_lighting_and_copy() {
+        use crate::keymap::{CompiledKeymap, Platform, ShortcutProfileSet};
+
+        let set = ShortcutProfileSet::built_ins().expect("built-in profiles");
+        for profile in set.profiles() {
+            let keymap = CompiledKeymap::compile_for(profile, Platform::Windows);
+            assert_eq!(
+                Board3dKeys::of(&keymap),
+                Board3dKeys {
+                    flip: "F".to_owned(),
+                    lighting: "H".to_owned(),
+                    copy: "Ctrl+Shift+C".to_owned(),
+                },
+                "{}",
+                profile.id
+            );
+        }
     }
 }

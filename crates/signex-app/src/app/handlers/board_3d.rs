@@ -42,10 +42,11 @@ impl Signex {
                     self.interaction_state.board_3d = None;
                 }
             }
-            // Its keys still reach the view while a screenshot hides the
-            // toolbar; a flip or a new lighting between the two passes of a
-            // transparent save would spoil the matte.
-            Board3dMsg::FlipRequested | Board3dMsg::LightingCycled
+            // Its keys and the pointer still reach the view while a
+            // screenshot hides the toolbar; a flip, a new lighting or a turn,
+            // slide, zoom or pick between the two passes of a transparent
+            // save would spoil the matte.
+            Board3dMsg::FlipRequested | Board3dMsg::LightingCycled | Board3dMsg::Pointer { .. }
                 if self.board_3d_is_capturing() => {}
             Board3dMsg::PresetPicked(preset) => {
                 self.with_board_3d_scene(|session, scene| session.set_preset(preset, scene));
@@ -190,6 +191,16 @@ impl Signex {
         let session = self.interaction_state.board_3d.as_ref()?;
         let shown = self.active_tab_path()?;
         (shown == session.board_path && self.has_active_pcb()).then_some(session)
+    }
+
+    /// Whether a key or command from `window` meets the 3D view (mockup row
+    /// 175): only the main window draws it, so the `board_3d` shortcut
+    /// context and the 3D view's command gate read this one answer.
+    pub(crate) fn board_3d_shown_in(&self, window: Option<iced::window::Id>) -> bool {
+        matches!(
+            self.input_target(window),
+            crate::app::dispatch::input::InputTarget::Main
+        ) && self.board_3d_in_view().is_some()
     }
 
     /// [`Self::board_3d_in_view`], mutable.

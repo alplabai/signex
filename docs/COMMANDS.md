@@ -386,7 +386,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `fabrication_outputs` | Generate the board's fabrication outputs | file | — | — |
 | `filter_drc_results` | Filter the DRC results by rule, layer and severity | pcb | — | — |
 | `find_similar_items` | Find similar items on a board | search | — | — |
-| `flip_board_3d` | Turn the board over in the 3D view | view | — | — |
+| `flip_board_3d` | Turn the board over in the 3D view | view | `F` | `F` |
 | `flip_board_view` | View the board from below, or from above again | view | — | — |
 | `flip_selection` | Flip selection to the other board side | modify | `L` | `L` |
 | `gloss_selected_routes` | Shorten the selected routes by cutting their corners where the clearance allows | pcb | — | — |

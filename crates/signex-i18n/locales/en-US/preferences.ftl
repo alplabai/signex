@@ -527,3 +527,7 @@ preferences-classes-reset-confirm = { $count ->
    *[other] Replace the { $count } classes in this list
 } with the { $defaults } default classes?
 preferences-classes-reset-confirm-yes = Reset
+
+# board-3d-keys-screenshot
+# Where a shortcut applies: the board 3D view (mockup row 175).
+pref-keymap-context-board-3d = PCB 3D View

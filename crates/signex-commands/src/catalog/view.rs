@@ -263,8 +263,9 @@ pub(super) const VIEW: &[CommandMetadata] = &[
     },
     // Mockup row 175: the 3D view toolbar's Flip, lighting and screenshot
     // buttons as commands. View state only; each does nothing while the
-    // board is flat. `H` and `Mod+Shift+C` on a board in both built-in
-    // profiles; Flip has no key (`F` is Change Footprint on a board).
+    // board is flat, where the app greys lighting and copy. `H` and
+    // `Mod+Shift+C` on a board in both built-in profiles; Flip is `F` in the
+    // `board_3d` context, so `F` stays Change Footprint on a flat board.
     CommandMetadata {
         id: "flip_board_3d",
         category: "view",

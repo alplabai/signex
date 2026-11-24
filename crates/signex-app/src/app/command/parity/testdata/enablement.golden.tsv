@@ -58,7 +58,7 @@ compare_board_with_schematic	PcbSync	a85dffe6af2a0327
 compile_project	ProjectSheet	b9cf07c7e6ca1a9f
 copy	CopyTarget	817202b19c108dea
 copy_attributes_or_add_vertex	-	f2929686b07ef725
-copy_board_3d_screenshot	Pcb	119d310e454dd5e4
+copy_board_3d_screenshot	Board3dView	67f23fb7bfc76e84
 create_rooms_from_sheets	PcbInProject	4d7499203ef7b0fd
 create_sheet_from_sheet_symbol	-	f2929686b07ef725
 create_sheet_symbol_from_sheet	Schematic	f8bd7a5cb84e915b
@@ -66,7 +66,7 @@ create_union	Schematic	f8bd7a5cb84e915b
 cross_probe	ProbeTarget	f444599bb1ec57ce
 cut	CutTarget	357034e47c47e0d1
 cycle_arc_mode	Pcb	119d310e454dd5e4
-cycle_board_3d_lighting	Pcb	119d310e454dd5e4
+cycle_board_3d_lighting	Board3dView	67f23fb7bfc76e84
 cycle_fast_grid	-	f2929686b07ef725
 cycle_route_mode	Pcb	119d310e454dd5e4
 cycle_selection_mode	-	f2929686b07ef725

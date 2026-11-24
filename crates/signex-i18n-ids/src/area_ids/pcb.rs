@@ -237,4 +237,6 @@ define_ids! {
     PCB_3D_SHOT_MATTE_RESIZED = "pcb-3d-shot-matte-resized";
     PCB_3D_SHOT_BUSY = "pcb-3d-shot-busy";
     PCB_3D_SHOT_INTERRUPTED = "pcb-3d-shot-interrupted";
+    PCB_3D_LIGHTING_NEXT_KEY = "pcb-3d-lighting-next-key";
+    PCB_3D_TOOLTIP_KEYED = "pcb-3d-tooltip-keyed";
 }

@@ -660,14 +660,23 @@ is written like Save PNG…; when the view changed size between the passes
 nothing is written and Messages says why. The mesh pipeline draws without
 multisampling, so edges come out hard; only a translucent surface with the
 backdrop behind it comes out partly transparent. While a capture is
-under way, Flip, the next lighting preset and a new screenshot are ignored,
+under way, Flip, the next lighting preset, a new screenshot and a drag,
+wheel or click on the view are ignored,
 and a save picked meanwhile is not written (Messages says so); a pass that
 comes back after the view was left is dropped with a Messages line.
 
 **Keys** (mockup row 175): on a board `H` is the next lighting preset and
-`Mod+Shift+C` copies a screenshot, in both built-in profiles. The commands
-(`cycle_board_3d_lighting`, `copy_board_3d_screenshot`, and `flip_board_3d`
-for Flip, which has no key) do nothing while the board is flat.
+`Mod+Shift+C` copies a screenshot, in both built-in profiles; on a flat
+board both commands (`cycle_board_3d_lighting`, `copy_board_3d_screenshot`)
+are greyed with the reason that they need the 3D view. `F` is Flip
+(`flip_board_3d`) in the `board_3d` shortcut context, live only while the
+main window shows the board in 3D, where it outranks the board's `F`
+(Change Footprint). Flip does nothing while the board is flat. The chrome
+names each key the active keymap binds, as the mockup draws them: the
+Flip, lighting and screenshot tooltips end in the key ("Flip board (F)"),
+the menu's Copy row shows its key as a cap, and the lighting toast ends in
+"· press H for the next" with the key as a cap; an unbound command shows
+no key.
 
 **Model-unread toast**: a part whose model could not be read adds its
 `pcb-3d-model-unread` line to Messages and also shows it as a dismissible

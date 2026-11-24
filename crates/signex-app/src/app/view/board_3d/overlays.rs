@@ -119,30 +119,41 @@ fn shot_menu_rows() -> [(Icon, MessageId, Board3dMsg); 3] {
     ]
 }
 
-/// The screenshot menu, one row per [`shot_menu_rows`]. The key column
-/// stays empty: the menu is drawn without the keymap.
-pub(super) fn shot_menu<'a>(i18n: &I18n, look: &Look) -> Element<'a, Message> {
+/// The screenshot menu, one row per [`shot_menu_rows`]. `copy_key` is the
+/// copy command's shortcut label (empty when unbound), shown on its row.
+pub(super) fn shot_menu<'a>(i18n: &I18n, copy_key: &str, look: &Look) -> Element<'a, Message> {
     let mut items = column![];
     for (glyph, name, press) in shot_menu_rows() {
-        items = items.push(menu_item(glyph, t!(i18n, name), press, look));
+        let key = menu_key(&press, copy_key);
+        items = items.push(menu_item(glyph, t!(i18n, name), key, press, look));
     }
     popover(items.boxed(), M.menu_pad, look)
+}
+
+/// The key a menu row shows (mockup row 175, "Copy to clipboard
+/// Ctrl+Shift+C"): the copy row's bound key; the save rows have none.
+fn menu_key(press: &Board3dMsg, copy_key: &str) -> Option<String> {
+    (matches!(press, Board3dMsg::ScreenshotCopyRequested) && !copy_key.is_empty())
+        .then(|| copy_key.to_owned())
 }
 
 fn menu_item<'a>(
     glyph: Icon,
     name: signex_i18n::Localized,
+    key: Option<String>,
     press: Board3dMsg,
     look: &Look,
 ) -> Element<'a, Message> {
     let hover = look.hover;
     let ink = look.text;
-    let content = row![
+    let mut content = row![
         icon(glyph, M.icon, look.r.ink3),
-        text(name).size(TS.body).color(ink),
-    ]
-    .spacing(M.button_pad)
-    .align_y(Alignment::Center);
+        text(name).size(TS.body).color(ink).width(Length::Fill),
+    ];
+    if let Some(key) = key {
+        content = content.push(key_cap(key, look));
+    }
+    let content = content.spacing(M.button_pad).align_y(Alignment::Center);
     button(
         container(content)
             .height(Length::Fill)
@@ -181,11 +192,37 @@ fn popover<'a>(body: Element<'a, Message>, pad: f32, look: &Look) -> Element<'a,
         .boxed()
 }
 
+/// A key as a cap (mockup row 175's key chips): the mono caption on the
+/// shared key-cap style.
+fn key_cap<'a>(key: String, look: &Look) -> Element<'a, Message> {
+    let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
+    container(text(key).size(TS.caption).font(mono))
+        .padding(Padding::from([0.0, M.bar_gap * 2.0]))
+        .style(crate::styles::key_cap_of(look.r))
+        .boxed()
+}
+
+/// The lighting toast's key line around the cap (mockup row 175, "· press
+/// H for the next"): the text before and after `{ $key }`, or `None` when
+/// the next-lighting command has no key.
+fn next_lighting_words(i18n: &I18n, next_key: &str) -> Option<(String, String)> {
+    if next_key.is_empty() {
+        return None;
+    }
+    // A marker no key label holds, split out so the key draws as a cap.
+    const MARK: &str = "\u{1}";
+    let line = i18n.message_plain(ids::PCB_3D_LIGHTING_NEXT_KEY, &[("key", MARK.into())]);
+    let (before, after) = line.split_once(MARK)?;
+    Some((before.trim_end().to_owned(), after.trim_start().to_owned()))
+}
+
 /// The lighting toast: the four swatches, the current one ringed, and its
-/// name with its place in the cycle.
+/// name with its place in the cycle, then the next-lighting key when it has
+/// one (`next_key`, empty when unbound).
 pub(super) fn lighting_toast<'a>(
     i18n: &I18n,
     current: LightingPreset,
+    next_key: &str,
     look: &Look,
 ) -> Element<'a, Message> {
     let mut swatches = row![].spacing(M.button_pad).align_y(Alignment::Center);
@@ -212,7 +249,17 @@ pub(super) fn lighting_toast<'a>(
     ))
     .size(TS.body)
     .color(look.text);
-    let content = row![swatches, row![name, place].spacing(M.bar_gap * 2.0)]
+    let mut words = row![name, place]
+        .spacing(M.bar_gap * 2.0)
+        .align_y(Alignment::Center);
+    if let Some((before, after)) = next_lighting_words(i18n, next_key) {
+        let word = |part: String| text(part).size(TS.body).color(look.text).boxed();
+        words = words
+            .push(word(before))
+            .push(key_cap(next_key.to_owned(), look))
+            .push(word(after));
+    }
+    let content = row![swatches, words]
         .spacing(M.button_pad)
         .align_y(Alignment::Center);
     container(content)
@@ -497,5 +544,29 @@ mod tests {
                 ),
             ]
         );
+    }
+
+    /// Mockup row 175: "Copy to clipboard Ctrl+Shift+C"; the save rows show
+    /// no key, nor does Copy when its command is unbound.
+    #[test]
+    fn only_the_copy_row_shows_its_key() {
+        let keys: Vec<Option<String>> = shot_menu_rows()
+            .iter()
+            .map(|(_, _, press)| menu_key(press, "Ctrl+Shift+C"))
+            .collect();
+        assert_eq!(keys, [Some("Ctrl+Shift+C".to_owned()), None, None]);
+        assert_eq!(menu_key(&Board3dMsg::ScreenshotCopyRequested, ""), None);
+    }
+
+    /// Mockup row 175: "Workshop · 2 of 4 · press H for the next", the key
+    /// drawn as a cap between the words; no words when lighting is unbound.
+    #[test]
+    fn the_lighting_toast_names_the_next_key() {
+        let i18n = I18n::en_us_ref();
+        assert_eq!(
+            next_lighting_words(i18n, "H"),
+            Some(("· press".to_owned(), "for the next".to_owned()))
+        );
+        assert_eq!(next_lighting_words(i18n, ""), None);
     }
 }

@@ -180,8 +180,24 @@ pub(super) const FACTS: &[(&str, &[Input], Set)] = {
         ("pcb.routes", &[Selection], |c, v| c.pcb.routes = v),
         ("pcb.hovered", &[Cursor], |c, v| c.pcb.hovered = v),
         ("pcb.net", &[Selection, Cursor], |c, v| c.pcb.net = v),
+        // Listed after the golden's facts: see `FACTS_OF_THE_GOLDEN`.
+        ("board_3d_shown", &[Window], |c, v| c.board_3d_shown = v),
     ]
 };
+
+/// How many of [`FACTS`] were listed when `enablement.golden.tsv` was
+/// written. Those draw from the first sample stream and any later fact
+/// from a second, so adding a fact leaves the golden row of every gate that
+/// does not read it as it was.
+const FACTS_OF_THE_GOLDEN: usize = 47;
+
+/// One xorshift step of `state`; the new state's low bit is a fact's value.
+fn next_bit(state: &mut u64) -> bool {
+    *state ^= *state << 13;
+    *state ^= *state >> 7;
+    *state ^= *state << 17;
+    *state & 1 == 1
+}
 
 /// Contexts the probe samples. A fact that decides a gate only while `w`
 /// other facts hold given values is pivotal in about `SAMPLES / 2^w` of
@@ -190,16 +206,19 @@ pub(super) const FACTS: &[(&str, &[Input], Set)] = {
 /// gate's source names, independently of what the probe found.
 const SAMPLES: usize = 1024;
 
-/// Random contexts, the same on every run (a fixed xorshift seed).
+/// Random contexts, the same on every run (fixed xorshift seeds).
 pub(super) fn samples() -> impl Iterator<Item = CommandContext> {
-    let mut state: u64 = 0x9E37_79B9_7F4A_7C15;
+    let mut first: u64 = 0x9E37_79B9_7F4A_7C15;
+    let mut later: u64 = 0xD1B5_4A32_D192_ED03;
     (0..SAMPLES).map(move |_| {
         let mut ctx = CommandContext::default();
-        for (_, _, set) in FACTS {
-            state ^= state << 13;
-            state ^= state >> 7;
-            state ^= state << 17;
-            set(&mut ctx, state & 1 == 1);
+        for (index, (_, _, set)) in FACTS.iter().enumerate() {
+            let stream = if index < FACTS_OF_THE_GOLDEN {
+                &mut first
+            } else {
+                &mut later
+            };
+            set(&mut ctx, next_bit(stream));
         }
         ctx
     })

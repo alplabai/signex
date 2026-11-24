@@ -659,4 +659,98 @@ mod tests {
         assert!(!target.exists(), "the pass over black is not written");
         assert_eq!(crate::diagnostics::logged_count(&interrupted), dropped + 1);
     }
+
+    /// A drag over the view between the two passes of a transparent save
+    /// is ignored, as the keys are, so both passes show the same view.
+    #[test]
+    fn a_pointer_gesture_is_ignored_while_a_screenshot_is_taken() {
+        let dir = tempfile::tempdir().expect("a folder");
+        let mut app = app_in_3d(dir.path());
+        let orbit = || Board3dMsg::Pointer {
+            viewport: [400.0, 300.0],
+            gesture: crate::app::Board3dGesture::Orbited { dx: 30.0, dy: 10.0 },
+        };
+        let before = session(&app).camera;
+        let _ = view_3d(&mut app, orbit());
+        let turned = session(&app).camera;
+        assert_ne!(turned, before, "an orbit turns the view");
+
+        let target = dir.path().join("board-3d.png");
+        let _ = view_3d(
+            &mut app,
+            Board3dMsg::ScreenshotTransparentSavePicked(Some(target)),
+        );
+        let _ = view_3d(&mut app, orbit());
+        assert_eq!(session(&app).camera, turned, "the capture keeps its view");
+    }
+
+    /// Mockup row 175 (Caner, 2026-11-24): while the board is shown in 3D
+    /// the `board_3d` context is live after `pcb`, so F turns the board
+    /// over; on a flat board it is not, and F stays Change Footprint.
+    #[test]
+    fn f_flips_the_board_in_the_3d_view_and_stays_change_footprint_when_flat() {
+        use std::str::FromStr;
+
+        use crate::keymap::{AppCommandId, KeyStroke, ShortcutContext};
+
+        let dir = tempfile::tempdir().expect("a folder");
+        let mut app = app_in_3d(dir.path());
+        let main = app.ui_state.main_window_id;
+        let f = KeyStroke::from_str("F").expect("a key");
+        assert_eq!(
+            app.shortcut_contexts(main),
+            [
+                ShortcutContext::Global,
+                ShortcutContext::Pcb,
+                ShortcutContext::Board3d
+            ]
+        );
+        let _ = app.update(Message::Ui(crate::app::UiMsg::KeymapStroke {
+            window: None,
+            stroke: f.clone(),
+        }));
+        assert!(session(&app).is_flipping(), "F turned the board over");
+
+        app.interaction_state.board_3d = None;
+        let flat = app.shortcut_contexts(main);
+        assert_eq!(flat, [ShortcutContext::Global, ShortcutContext::Pcb]);
+        let command = app.ui_state.active_keymap.lookup(&[f], &flat).command;
+        assert_eq!(
+            command.as_ref().map(AppCommandId::as_str),
+            Some("change_footprint")
+        );
+    }
+
+    /// Mockup row 175 (Caner, 2026-11-24): on a flat board the lighting and
+    /// copy commands (H, Ctrl+Shift+C) are greyed with the reason that they
+    /// need the 3D view; Flip keeps the board's gate.
+    #[test]
+    fn lighting_and_copy_are_greyed_on_a_flat_board_as_they_need_the_3d_view() {
+        use crate::app::command::enablement::disabled_reason;
+        use crate::app::command::is_enabled;
+        use crate::keymap::AppCommandId;
+
+        let dir = tempfile::tempdir().expect("a folder");
+        let mut app = app_in_3d(dir.path());
+        let id = |text: &str| AppCommandId::new(text).expect("a catalog id");
+        let in_3d = app.command_context(None);
+        for text in ["cycle_board_3d_lighting", "copy_board_3d_screenshot"] {
+            assert!(is_enabled(&id(text), &in_3d), "{text} in the 3D view");
+        }
+
+        app.interaction_state.board_3d = None;
+        let flat = app.command_context(None);
+        for text in ["cycle_board_3d_lighting", "copy_board_3d_screenshot"] {
+            assert_eq!(
+                disabled_reason(&id(text), &flat),
+                Some(ids::COMMAND_NEEDS_BOARD_3D_VIEW),
+                "{text} on a flat board"
+            );
+        }
+        assert!(is_enabled(&id("flip_board_3d"), &flat));
+        assert_eq!(
+            t!(I18n::en_us_ref(), ids::COMMAND_NEEDS_BOARD_3D_VIEW).into_string(),
+            "This needs the board's 3D view"
+        );
+    }
 }

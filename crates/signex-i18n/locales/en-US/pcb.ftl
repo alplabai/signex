@@ -623,3 +623,7 @@ pcb-3d-shot-save-transparent = Save with transparent backdrop…
 pcb-3d-shot-matte-resized = the 3D view changed size while it was captured
 pcb-3d-shot-busy = another screenshot of the 3D view was being taken
 pcb-3d-shot-interrupted = the 3D view was left before the screenshot was taken
+# The lighting toast's last words, $key the next-lighting key drawn as a cap
+# (mockup row 175), and a toolbar tooltip ($tip, "Flip board") with its key.
+pcb-3d-lighting-next-key = · press { $key } for the next
+pcb-3d-tooltip-keyed = { $tip } ({ $key })

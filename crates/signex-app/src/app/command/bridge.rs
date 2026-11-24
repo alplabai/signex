@@ -1050,7 +1050,9 @@ mod tests {
 
     /// Mockup row 175: on a board, `H` steps the 3D view's lighting and
     /// Ctrl+Shift+C (Cmd+Shift+C on macOS) copies its screenshot, in both
-    /// built-in profiles; `F` stays Change Footprint.
+    /// built-in profiles; `F` stays Change Footprint on a flat board and
+    /// turns the board over while its 3D view is shown (the `board_3d`
+    /// context, Caner 2026-11-24).
     #[test]
     fn the_board_3d_keys_run_their_commands_on_a_board() {
         use std::str::FromStr;
@@ -1060,6 +1062,11 @@ mod tests {
         };
 
         let on_a_board = [ShortcutContext::Global, ShortcutContext::Pcb];
+        let in_3d = [
+            ShortcutContext::Global,
+            ShortcutContext::Pcb,
+            ShortcutContext::Board3d,
+        ];
         let set = ShortcutProfileSet::built_ins().expect("built-in profiles");
         for profile in set.profiles() {
             for (platform, copy) in [
@@ -1068,17 +1075,20 @@ mod tests {
                 (Platform::MacOs, "Cmd+Shift+C"),
             ] {
                 let keymap = CompiledKeymap::compile_for(profile, platform);
-                for (key, want) in [
-                    ("H", "cycle_board_3d_lighting"),
-                    (copy, "copy_board_3d_screenshot"),
-                    ("F", "change_footprint"),
+                for (contexts, key, want) in [
+                    (&on_a_board[..], "H", "cycle_board_3d_lighting"),
+                    (&on_a_board[..], copy, "copy_board_3d_screenshot"),
+                    (&on_a_board[..], "F", "change_footprint"),
+                    (&in_3d[..], "H", "cycle_board_3d_lighting"),
+                    (&in_3d[..], copy, "copy_board_3d_screenshot"),
+                    (&in_3d[..], "F", "flip_board_3d"),
                 ] {
                     let stroke = KeyStroke::from_str(key).expect("a key");
-                    let got = keymap.lookup(&[stroke], &on_a_board).command;
+                    let got = keymap.lookup(&[stroke], contexts).command;
                     assert_eq!(
                         got.as_ref().map(AppCommandId::as_str),
                         Some(want),
-                        "{} on {platform:?}: {key}",
+                        "{} on {platform:?}: {key} in {contexts:?}",
                         profile.id
                     );
                 }
