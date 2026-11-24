@@ -1,6 +1,6 @@
 //! Ghost previews of the Modify tools that work on existing geometry
 //! (mockup row 187 / mockup row 191): the Line a Chamfer or Extend click would take, where an
-//! extended Line stops, the mirror image of the cursor, and the instances
+//! extended Line stops, the Mirror card's picks and copies, and the instances
 //! of a Linear Pattern; and the rubber band of the Slot and Polygon Create
 //! tools, from the geometry they will place. Drawn like the drawing tools'
 //! ghosts in `preview`: accent at low alpha, dashed.
@@ -14,6 +14,9 @@ use signex_sketch::geom::{Point2, extension_hit};
 use signex_sketch::id::SketchEntityId;
 
 use crate::library::editor::footprint::canvas::FootprintCanvasState;
+use crate::library::editor::footprint::sketch_mode::mirror_card::{
+    MirrorCard, MirrorField, MirrorObject,
+};
 use crate::library::editor::footprint::state::tool::{
     LINEAR_PATTERN_DEFAULT_COUNT, LINEAR_PATTERN_DEFAULT_SPACING_MM,
 };
@@ -100,24 +103,29 @@ impl Positions<'_> {
     }
 }
 
+/// `mirror_card` is the Mirror card the Mirror ghost draws (mockup row 191).
 pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_ghosts(
     frame: &mut canvas::Frame,
     cstate: &FootprintCanvasState,
-    sketch: &SketchData,
-    state: &FootprintEditorState,
+    (sketch, state): (&SketchData, &FootprintEditorState),
+    mirror_card: Option<&MirrorCard>,
 ) {
+    let at = Positions { sketch, state };
+    let tol = f64::from(HOVER_PX / cstate.scale.max(1.0));
+    // The card's picks and copies stay drawn with the cursor off the canvas.
+    if state.active_tool == SketchTool::Mirror {
+        MirrorGhost::plan(&at, mirror_card, state.cursor_mm, tol).draw(frame, cstate);
+        return;
+    }
     let Some(cursor) = state.cursor_mm else {
         return;
     };
     if state.placement_paused {
         return;
     }
-    let at = Positions { sketch, state };
-    let tol = f64::from(HOVER_PX / cstate.scale.max(1.0));
     match state.active_tool {
         SketchTool::Chamfer => chamfer_ghost(frame, cstate, &at, state, cursor, tol),
         SketchTool::Extend => extend_ghost(frame, cstate, &at, cursor, tol),
-        SketchTool::Mirror => mirror_ghost(frame, cstate, &at, state, cursor, tol),
         SketchTool::LinearPattern => linear_pattern_ghost(frame, cstate, state, cursor),
         SketchTool::Slot => slot_ghost(frame, cstate, &at, state, cursor),
         SketchTool::Polygon => polygon_ghost(frame, cstate, &at, state, cursor),
@@ -279,50 +287,169 @@ fn extend_ghost(
     }
 }
 
-/// Mirror: with a mirror Line selected, the cursor's mirror image; else the
-/// centerline under the cursor the first click would take.
-fn mirror_ghost(
-    frame: &mut canvas::Frame,
-    cstate: &FootprintCanvasState,
-    at: &Positions<'_>,
-    state: &FootprintEditorState,
-    cursor: (f64, f64),
-    tol: f64,
-) {
-    let mirror_line = state
-        .selected_sketch
-        .and_then(|id| at.line(id))
-        .and_then(|(s, e)| Some((at.of(s)?, at.of(e)?)));
-    let Some((a, b)) = mirror_line else {
-        if let Some(centerline) = at.line_near(cursor, tol, |e| e.centerline) {
-            stroke_line(frame, cstate, at, centerline, PICKED_PX);
+/// Mirror (mockup row 191): what the Mirror card's OK writes. The card's
+/// mirror line and picked objects are drawn wide, their copies dashed
+/// about the line, and the Line the next pick would take is drawn wide
+/// under the cursor. A picked pattern shows through its own instances.
+#[derive(Debug, Default, PartialEq)]
+struct MirrorGhost {
+    /// World polylines drawn wide: the hovered Line, the mirror line and
+    /// the picked Lines, Arcs and Circles.
+    wide: Vec<Vec<(f64, f64)>>,
+    /// Picked Points, ringed.
+    picked_points: Vec<(f64, f64)>,
+    /// The copies OK writes, as dashed world polylines.
+    copies: Vec<Vec<(f64, f64)>>,
+    /// Copied Points, crossed.
+    copied_points: Vec<(f64, f64)>,
+}
+
+/// A sketch entity as the Mirror ghost draws it.
+enum GhostShape {
+    Point((f64, f64)),
+    Polyline(Vec<(f64, f64)>),
+}
+
+/// Segments an Arc or Circle of the Mirror ghost is drawn with.
+const CURVE_SEGMENTS: u32 = 32;
+
+impl Positions<'_> {
+    fn shape(&self, id: SketchEntityId) -> Option<GhostShape> {
+        use std::f64::consts::TAU;
+        let entity = self.sketch.entities.iter().find(|e| e.id == id)?;
+        let sweep = |c: (f64, f64), r: f64, a0: f64, delta: f64| -> Vec<(f64, f64)> {
+            (0..=CURVE_SEGMENTS)
+                .map(|i| {
+                    let a = a0 + delta * f64::from(i) / f64::from(CURVE_SEGMENTS);
+                    (c.0 + r * a.cos(), c.1 + r * a.sin())
+                })
+                .collect()
+        };
+        Some(match entity.kind {
+            EntityKind::Point { .. } => GhostShape::Point(self.of(id)?),
+            EntityKind::Line { start, end } => {
+                GhostShape::Polyline(vec![self.of(start)?, self.of(end)?])
+            }
+            EntityKind::Circle { center, radius } => {
+                GhostShape::Polyline(sweep(self.of(center)?, radius, 0.0, TAU))
+            }
+            EntityKind::Arc {
+                center,
+                start,
+                end,
+                sweep_ccw,
+            } => {
+                // The sweep as `pad_link::arc_path` draws it.
+                let (c, s, e) = (self.of(center)?, self.of(start)?, self.of(end)?);
+                let r = (s.0 - c.0).hypot(s.1 - c.1);
+                let a0 = (s.1 - c.1).atan2(s.0 - c.0);
+                let delta = (e.1 - c.1).atan2(e.0 - c.0) - a0;
+                let delta = if sweep_ccw {
+                    delta.rem_euclid(TAU)
+                } else {
+                    -(-delta).rem_euclid(TAU)
+                };
+                GhostShape::Polyline(sweep(c, r, a0, delta))
+            }
+        })
+    }
+}
+
+impl MirrorGhost {
+    fn plan(
+        at: &Positions<'_>,
+        card: Option<&MirrorCard>,
+        cursor: Option<(f64, f64)>,
+        tol: f64,
+    ) -> Self {
+        let mut ghost = Self::default();
+        let Some(card) = card else {
+            return ghost;
+        };
+        // The Line a click takes now: any Line while the line field is
+        // focused, a centerline while the card has no line.
+        let hovered = cursor.and_then(|cursor| match (card.field, card.line) {
+            (MirrorField::Line, _) => at.line_near(cursor, tol, |_| true),
+            (MirrorField::Objects, None) => at.line_near(cursor, tol, |e| e.centerline),
+            (MirrorField::Objects, Some(_)) => None,
+        });
+        for id in hovered.into_iter().chain(card.line) {
+            if let Some(GhostShape::Polyline(path)) = at.shape(id) {
+                ghost.wide.push(path);
+            }
         }
-        return;
-    };
+        let line = card.line.and_then(|id| {
+            let (s, e) = at.line(id)?;
+            Some((at.of(s)?, at.of(e)?))
+        });
+        let reflect = line.and_then(|(a, b)| reflection(a, b));
+        for object in &card.objects {
+            let MirrorObject::Entity(id) = *object else {
+                continue;
+            };
+            match at.shape(id) {
+                Some(GhostShape::Point(p)) => {
+                    ghost.picked_points.push(p);
+                    if let Some(reflect) = &reflect {
+                        ghost.copied_points.push(reflect(p));
+                    }
+                }
+                Some(GhostShape::Polyline(path)) => {
+                    if let Some(reflect) = &reflect {
+                        ghost
+                            .copies
+                            .push(path.iter().map(|p| reflect(*p)).collect());
+                    }
+                    ghost.wide.push(path);
+                }
+                None => {}
+            }
+        }
+        ghost
+    }
+
+    fn draw(&self, frame: &mut canvas::Frame, cstate: &FootprintCanvasState) {
+        let screen = |p: &(f64, f64)| cstate.world_to_screen(*p);
+        for path in &self.wide {
+            let path = Path::new(|b| {
+                for (i, p) in path.iter().enumerate() {
+                    if i == 0 {
+                        b.move_to(screen(p));
+                    } else {
+                        b.line_to(screen(p));
+                    }
+                }
+            });
+            frame.stroke(&path, stroke(PICKED_PX));
+        }
+        for p in &self.picked_points {
+            frame.stroke(&Path::circle(screen(p), MARK_PX), stroke(PICKED_PX));
+        }
+        for path in &self.copies {
+            for pair in path.windows(2) {
+                dashed(frame, screen(&pair[0]), screen(&pair[1]));
+            }
+        }
+        for p in &self.copied_points {
+            let p = screen(p);
+            for (dx, dy) in [(MARK_PX, MARK_PX), (MARK_PX, -MARK_PX)] {
+                let from = Point::new(p.x - dx, p.y - dy);
+                let to = Point::new(p.x + dx, p.y + dy);
+                frame.stroke(&Path::line(from, to), stroke(GHOST_PX));
+            }
+        }
+    }
+}
+
+/// Reflection about the line through `a` and `b`; `None` when they meet.
+fn reflection(a: (f64, f64), b: (f64, f64)) -> Option<impl Fn((f64, f64)) -> (f64, f64)> {
     let (vx, vy) = (b.0 - a.0, b.1 - a.1);
     let vv = vx * vx + vy * vy;
-    if vv <= 1e-12 {
-        return;
-    }
-    let t = ((cursor.0 - a.0) * vx + (cursor.1 - a.1) * vy) / vv;
-    let foot = (a.0 + t * vx, a.1 + t * vy);
-    let image = (2.0 * foot.0 - cursor.0, 2.0 * foot.1 - cursor.1);
-    let p = cstate.world_to_screen(image);
-    dashed(frame, cstate.world_to_screen(cursor), p);
-    frame.stroke(
-        &Path::line(
-            Point::new(p.x - MARK_PX, p.y - MARK_PX),
-            Point::new(p.x + MARK_PX, p.y + MARK_PX),
-        ),
-        stroke(GHOST_PX),
-    );
-    frame.stroke(
-        &Path::line(
-            Point::new(p.x - MARK_PX, p.y + MARK_PX),
-            Point::new(p.x + MARK_PX, p.y - MARK_PX),
-        ),
-        stroke(GHOST_PX),
-    );
+    (vv > 1e-12).then_some(move |p: (f64, f64)| {
+        let t = ((p.0 - a.0) * vx + (p.1 - a.1) * vy) / vv;
+        let foot = (a.0 + t * vx, a.1 + t * vy);
+        (2.0 * foot.0 - p.0, 2.0 * foot.1 - p.1)
+    })
 }
 
 /// Linear Pattern: a mark where each further instance of a source at the
@@ -343,3 +470,7 @@ fn linear_pattern_ghost(
         frame.stroke(&Path::circle(p, MARK_PX), stroke(GHOST_PX));
     }
 }
+
+#[cfg(test)]
+#[path = "tool_ghosts_mirror_tests.rs"]
+mod mirror_tests;

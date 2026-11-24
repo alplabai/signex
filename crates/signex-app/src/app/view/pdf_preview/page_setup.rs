@@ -13,6 +13,7 @@ use signex_widgets::{segmented, text};
 use super::super::*;
 use super::form::{KEY_GAP, KEY_W, Look, NUM_W, SP, TS, caption, form_row, num_field, unit};
 use crate::app::state::PreviewState;
+use crate::choice::{Choice, chosen};
 
 /// Width of a margin's edge name in the two-by-two grid.
 const EDGE_W: f32 = 40.0;
@@ -31,17 +32,18 @@ impl Signex {
         let orientation = options.orientation;
         let is_custom = matches!(current_size, PageSize::Custom { .. });
 
+        let sizes = Choice::named(&PageSizeKind::ALL, page_size_label, i18n);
         let size_picker = pick_list(
-            Some(current_size.kind()),
-            PageSizeKind::ALL.to_vec(),
-            |kind: &PageSizeKind| kind.to_string(),
+            chosen(&sizes, &current_size.kind()),
+            sizes,
+            |c: &Choice<PageSizeKind>| c.label.clone(),
         )
         .graphite()
         .text_size(TS.body)
         .width(Length::Fill)
-        .on_select(move |kind: PageSizeKind| {
+        .on_select(move |c: Choice<PageSizeKind>| {
             Message::PrintPreview(PrintPreviewMsg::SetPageSize(
-                kind.select(current_size, orientation),
+                c.value.select(current_size, orientation),
             ))
         });
 
@@ -66,15 +68,18 @@ impl Signex {
             )
         };
 
+        let modes = Choice::named(&PdfScaleMode::ALL, scale_mode_label, i18n);
         let scale_picker = pick_list(
-            Some(options.scale.mode()),
-            PdfScaleMode::ALL.to_vec(),
-            |m: &PdfScaleMode| m.to_string(),
+            chosen(&modes, &options.scale.mode()),
+            modes,
+            |c: &Choice<PdfScaleMode>| c.label.clone(),
         )
         .graphite()
         .text_size(TS.body)
         .width(Length::Fill)
-        .on_select(|m| Message::PrintPreview(PrintPreviewMsg::SetScaleMode(m)));
+        .on_select(|c: Choice<PdfScaleMode>| {
+            Message::PrintPreview(PrintPreviewMsg::SetScaleMode(c.value))
+        });
         // The percent field takes input only for a Percent scale.
         let percent_input: Option<fn(String) -> PrintPreviewMsg> =
             matches!(options.scale, PdfScale::Percent(_))
@@ -214,5 +219,36 @@ impl Signex {
             }
             None => Space::new().height(0).boxed(),
         }
+    }
+}
+
+/// The catalog name of a page-size picker entry.
+pub(super) fn page_size_label(kind: PageSizeKind) -> signex_i18n::MessageId {
+    match kind {
+        PageSizeKind::IsoA0 => ids::PDF_PAGE_SIZE_ISO_A0,
+        PageSizeKind::IsoA1 => ids::PDF_PAGE_SIZE_ISO_A1,
+        PageSizeKind::IsoA2 => ids::PDF_PAGE_SIZE_ISO_A2,
+        PageSizeKind::IsoA3 => ids::PDF_PAGE_SIZE_ISO_A3,
+        PageSizeKind::IsoA4 => ids::PDF_PAGE_SIZE_ISO_A4,
+        PageSizeKind::IsoA5 => ids::PDF_PAGE_SIZE_ISO_A5,
+        PageSizeKind::IsoB5 => ids::PDF_PAGE_SIZE_ISO_B5,
+        PageSizeKind::AnsiA => ids::PDF_PAGE_SIZE_ANSI_A,
+        PageSizeKind::AnsiB => ids::PDF_PAGE_SIZE_ANSI_B,
+        PageSizeKind::AnsiC => ids::PDF_PAGE_SIZE_ANSI_C,
+        PageSizeKind::AnsiD => ids::PDF_PAGE_SIZE_ANSI_D,
+        PageSizeKind::AnsiE => ids::PDF_PAGE_SIZE_ANSI_E,
+        PageSizeKind::UsLetter => ids::PDF_PAGE_SIZE_US_LETTER,
+        PageSizeKind::UsLegal => ids::PDF_PAGE_SIZE_US_LEGAL,
+        PageSizeKind::Tabloid => ids::PDF_PAGE_SIZE_TABLOID,
+        PageSizeKind::Custom => ids::PROPERTIES_FORMAT_CUSTOM,
+    }
+}
+
+/// The catalog name of a scale picker entry.
+pub(super) fn scale_mode_label(mode: PdfScaleMode) -> signex_i18n::MessageId {
+    match mode {
+        PdfScaleMode::FitToPage => ids::PDF_SCALE_FIT,
+        PdfScaleMode::OneToOne => ids::PDF_SCALE_ONE_TO_ONE,
+        PdfScaleMode::Percent => ids::PDF_SCALE_MODE_PERCENT,
     }
 }

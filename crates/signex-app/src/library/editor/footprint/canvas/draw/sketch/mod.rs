@@ -23,6 +23,8 @@ mod fills;
 mod pad_link;
 mod pattern_instances;
 mod preview;
+// Role tags on baked loops (mockup row 190).
+mod role_tags;
 mod snap;
 mod tool_ghosts;
 // Values on the drawing, pattern glyphs and the conflict badge (mockup row 187).

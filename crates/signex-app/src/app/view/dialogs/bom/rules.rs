@@ -35,9 +35,8 @@ impl Signex {
             Column::new().push(section(i18n, ids::BOM_SECTION_RULES, None, true, tokens));
         for rule in BomRule::ALL {
             let on = preview.options.rule_options.is_enabled(rule);
-            // raw: the rule's name comes from signex-bom (#2060).
             pane = pane.push(check_row(
-                raw(rule.label()),
+                t!(i18n, rule_label(rule)),
                 on,
                 Message::BomPreview(BomPreviewMsg::SetRule(rule, !on)),
                 tokens,
@@ -96,6 +95,17 @@ impl Signex {
     }
 }
 
+/// The catalog name of a validation rule.
+pub(super) fn rule_label(rule: BomRule) -> signex_i18n::MessageId {
+    match rule {
+        BomRule::MissingFootprint => ids::BOM_RULE_MISSING_FOOTPRINT,
+        BomRule::MissingMpn => ids::BOM_RULE_MISSING_MPN,
+        BomRule::DuplicateDesignator => ids::BOM_RULE_DUPLICATE_DESIGNATOR,
+        BomRule::EmptyOrZeroQty => ids::BOM_RULE_EMPTY_OR_ZERO_QTY,
+        BomRule::UnitFieldConflict => ids::BOM_RULE_UNIT_FIELD_CONFLICT,
+    }
+}
+
 /// Colour of a severity's glyph and count: error, warning, or the muted ink
 /// for notes.
 fn severity_ink(severity: BomIssueSeverity, tokens: &ThemeTokens) -> Color {
@@ -151,13 +161,14 @@ fn issue_row<'a>(
         weight: iced::font::Weight::Semibold,
         ..super::super::graphite::mono()
     };
-    // raw: the rule's name comes from signex-bom (#2060).
     let title = row![
         text(UserText::new(issue.references.join(", ")))
             .size(TS.body)
             .font(mono)
             .color(ink),
-        text(raw(issue.rule.label())).size(TS.body).color(ink),
+        text(t!(i18n, rule_label(issue.rule)))
+            .size(TS.body)
+            .color(ink),
     ]
     .spacing(SP.s);
     let mut lines: Column<Element<'a, Message>> = Column::new().push(title.boxed());

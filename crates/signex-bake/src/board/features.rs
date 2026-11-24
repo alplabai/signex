@@ -47,10 +47,16 @@ pub(super) fn keepouts(ctx: &Context<'_>) -> Result<Vec<PcbKeepout>, BoardBakeEr
     Ok(out)
 }
 
-pub(super) fn cutouts(ctx: &Context<'_>) -> Result<Vec<PcbCutout>, BoardBakeError> {
+/// The board cutouts, and each one that is a slot with its uuid and size.
+pub(super) type CutoutsWithSlots = (Vec<PcbCutout>, Vec<(Uuid, slot::Slot)>);
+
+/// The cutouts, and each one that is a slot with its uuid and size, so the
+/// bake preview lists a slot once, as a slot.
+pub(super) fn cutouts_with_slots(ctx: &Context<'_>) -> Result<CutoutsWithSlots, BoardBakeError> {
     let eval = build_ctx(ctx.sketch, ctx.params);
     let mut loops = TracedLoops::default();
     let mut out = Vec::new();
+    let mut slots = Vec::new();
     for entity in ctx.tagged(|e| e.board_cutout.is_some()) {
         let Some(attr) = entity.board_cutout.as_ref() else {
             continue;
@@ -61,15 +67,22 @@ pub(super) fn cutouts(ctx: &Context<'_>) -> Result<Vec<PcbCutout>, BoardBakeErro
             continue;
         };
         // A slot's routed edge is its own radius (decision 2, 2026-11-20).
-        let edge_radius = if is_slot(ctx, entity) {
-            slot::check(ctx, entity.id)?.width / 2.0
+        let slot = if is_slot(ctx, entity) {
+            Some(slot::check(ctx, entity.id)?)
         } else {
-            opt_eval_mm(&attr.edge_radius_expr, &eval)
+            None
+        };
+        let edge_radius = match slot {
+            Some(slot) => slot.width / 2.0,
+            None => opt_eval_mm(&attr.edge_radius_expr, &eval)
                 .and_then(|r| finite(r.unwrap_or(0.0)))
-                .map_err(|message| expression(entity.id, "cutout edge radius", message))?
+                .map_err(|message| expression(entity.id, "cutout edge radius", message))?,
         };
         let kind = BakedKind::Cutouts;
         for place in boundary_places(ctx, entity, &polygon, kind, "cutout pattern")? {
+            if let Some(slot) = slot {
+                slots.push((place.uuid, slot));
+            }
             out.push(PcbCutout {
                 uuid: place.uuid,
                 boundary: place.ring(&polygon),
@@ -78,7 +91,7 @@ pub(super) fn cutouts(ctx: &Context<'_>) -> Result<Vec<PcbCutout>, BoardBakeErro
             });
         }
     }
-    Ok(out)
+    Ok((out, slots))
 }
 
 /// Whether the cutout seeded by `seed` is a Slot: the seed, or any edge of

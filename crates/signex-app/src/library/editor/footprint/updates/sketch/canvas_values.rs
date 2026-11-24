@@ -19,10 +19,10 @@ use crate::app::FootprintDocument;
 use crate::library::editor::footprint::sketch_conflict::mutate_solve_or_revert;
 use crate::library::editor::footprint::sketch_dispatch::{apply_sketch_edit, report_solve_failure};
 use crate::library::editor::footprint::sketch_mode::{SketchCanvasMsg, SketchEdit, value_edit};
-use crate::library::editor::footprint::state::FootprintEditorState;
 use crate::library::editor::footprint::state::sketch_overlay::{
     CanvasMenu, MenuTarget, PatternField, ValueEdit, ValueTarget,
 };
+use crate::library::editor::footprint::state::{FootprintEditorState, SketchTool};
 use crate::library::messages::FootprintEditorMsg;
 
 pub(in crate::library::editor::footprint::updates) fn apply(
@@ -288,6 +288,10 @@ fn request_parameter(editor: &mut FootprintDocument, id: ConstraintId) {
     );
 }
 
+/// A click on a pattern glyph (mockup row 179e): the pattern is selected
+/// and, with the Select tool, so is its source, which opens the pattern
+/// form in Properties. An armed tool keeps its selection (Mirror's line).
+/// A mirror has no form; its glyph only selects it.
 fn select_pattern(editor: &mut FootprintDocument, array: Option<ArrayId>) {
     let overlay = &mut editor.state.sketch_overlay;
     overlay.selected_pattern = array;
@@ -297,6 +301,26 @@ fn select_pattern(editor: &mut FootprintDocument, array: Option<ArrayId>) {
         .is_some_and(|e| matches!(e.target, ValueTarget::Pattern(a, _) if Some(a) != array));
     if editing_other_pattern {
         overlay.value_edit = None;
+    }
+    if !matches!(editor.state.active_tool, SketchTool::Select) {
+        return;
+    }
+    let source = array.and_then(|id| {
+        let sketch = sketch(editor)?;
+        sketch
+            .arrays
+            .iter()
+            .find(|a| a.id == id)
+            .map(|a| a.kind.source())
+    });
+    if let Some(source) = source {
+        super::ui::apply(
+            editor,
+            FootprintEditorMsg::SketchSelect {
+                id: Some(source),
+                shift: false,
+            },
+        );
     }
 }
 
@@ -693,6 +717,83 @@ mod tests {
             array_kind(&editor, linear),
             ArrayKind::Linear { count_expr, .. } if count_expr == "6"
         ));
+    }
+
+    /// Mockup row 179e: a glyph click selects the pattern and its source,
+    /// and records nothing.
+    #[test]
+    fn a_pattern_glyph_click_selects_its_source() {
+        let Fixture {
+            mut editor, linear, ..
+        } = fixture();
+        let undo_before = editor.history.undo_len();
+        send(&mut editor, SketchCanvasMsg::PatternSelected(Some(linear)));
+        let source = array_kind(&editor, linear).source();
+        assert_eq!(editor.state.sketch_overlay.selected_pattern, Some(linear));
+        assert_eq!(editor.state.selected_sketch, Some(source));
+        assert_eq!(editor.history.undo_len(), undo_before);
+        assert!(!editor.is_dirty());
+    }
+
+    /// An armed tool keeps its selection: the glyph only picks the pattern.
+    #[test]
+    fn a_pattern_glyph_click_with_a_tool_armed_keeps_the_selection() {
+        let Fixture {
+            mut editor, linear, ..
+        } = fixture();
+        editor.state.active_tool = SketchTool::Mirror;
+        send(&mut editor, SketchCanvasMsg::PatternSelected(Some(linear)));
+        assert_eq!(editor.state.sketch_overlay.selected_pattern, Some(linear));
+        assert_eq!(editor.state.selected_sketch, None);
+    }
+
+    /// Mockup row 179e: a glyph click opens that pattern's form in
+    /// Properties, even when its source also sources another pattern.
+    #[test]
+    fn a_pattern_glyph_click_opens_the_pattern_form() {
+        use crate::app::{Message, Signex, TabInfo, TabKind};
+        use crate::library::editor::footprint::EditorMode;
+        use crate::library::messages::{LibraryMessage, PrimitiveEdit};
+
+        let Fixture {
+            mut editor,
+            grid,
+            linear,
+            ..
+        } = fixture();
+        editor.state.mode = EditorMode::Sketch;
+        let path = editor.path.clone();
+        let (mut app, _task) = Signex::new();
+        app.document_state
+            .footprint_editors
+            .insert(path.clone(), editor);
+        app.document_state.tabs.push(TabInfo {
+            title: "values".into(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: TabKind::FootprintEditor(path.clone()),
+        });
+        app.document_state.active_tab = 0;
+        let form = |app: &mut Signex, array: ArrayId| {
+            drop(
+                app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+                    path: path.clone(),
+                    msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchCanvas(
+                        SketchCanvasMsg::PatternSelected(Some(array)),
+                    )),
+                })),
+            );
+            app.document_state
+                .panel_ctx
+                .footprint_editor
+                .as_deref()
+                .and_then(|ctx| ctx.selected_array.as_ref())
+                .map(|pattern| pattern.array_id)
+        };
+        // Both patterns repeat P2: each glyph opens its own form.
+        assert_eq!(form(&mut app, linear), Some(linear));
+        assert_eq!(form(&mut app, grid), Some(grid));
     }
 
     #[test]

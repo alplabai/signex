@@ -81,3 +81,13 @@ sketch-parameters-checks-title = Live checks
 sketch-parameters-checks-passed = No problems found.
 sketch-parameters-check-error = { $name }: { $reason }. The drawing uses the last good value ({ $value }).
 sketch-parameters-check-overlap = Pads { $first } and { $second } overlap.
+
+# The live bake preview beside Live checks: the current solve's bake with its
+# driving dimensions.
+sketch-parameters-preview-title = Live bake preview
+sketch-parameters-preview-last-good = An expression has an error: this is the last good bake.
+sketch-parameters-preview-none = Nothing is solved yet.
+sketch-parameters-preview-empty = Nothing to bake yet.
+sketch-parameters-preview-pads-hidden = Pads are hidden until the expression reads.
+sketch-parameters-preview-dimension = { $value } { $unit }
+sketch-parameters-preview-dimension-named = { $name } = { $value } { $unit }

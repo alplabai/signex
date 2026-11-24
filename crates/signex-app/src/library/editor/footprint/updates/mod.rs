@@ -303,6 +303,17 @@ pub(crate) fn apply_footprint_primitive_edit(
     editor: &mut crate::app::FootprintDocument,
     msg: FootprintEditorMsg,
 ) {
+    // The Mirror card's messages and picks are answered beside the editor
+    // (`mirror_card::route`, mockup row 191). One that reaches the editor
+    // writes nothing: a pick must not mint the click Point.
+    {
+        use crate::library::editor::footprint::sketch_mode::mirror_card;
+        if mirror_card::is_card_pick(editor, &msg)
+            || matches!(msg, FootprintEditorMsg::SketchMirrorCard(_))
+        {
+            return;
+        }
+    }
     // Role on a line or arc speaks for its closed profile (mockup row 190).
     let msg = sketch::profile_roles::route_role_pick(editor, msg);
 
@@ -462,7 +473,10 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         }
         FootprintEditorMsg::SketchToolClick { .. }
         | FootprintEditorMsg::SketchToolClickInferred { .. }
-        | FootprintEditorMsg::SketchPlacePointInferred { .. } => sketch::tools::apply(editor, msg),
+        | FootprintEditorMsg::SketchPlacePointInferred { .. }
+        | FootprintEditorMsg::SketchMirrorApplied(_) => sketch::tools::apply(editor, msg),
+        // Answered before the router (`mirror_card::route`).
+        FootprintEditorMsg::SketchMirrorCard(_) => {}
         FootprintEditorMsg::ToggleLayer(..)
         | FootprintEditorMsg::LayersShowAllClicked
         | FootprintEditorMsg::LayersTopSideOnlyClicked
@@ -741,6 +755,8 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         SketchAddFilletsRequested | SketchProfileRolePicked { .. } => false,
         // Opens a file dialog; the import records its own step.
         SketchImportDxfRequested => false,
+        // The Mirror card's own state; its OK is `SketchMirrorApplied`.
+        SketchMirrorCard(_) => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
         // need a history snapshot.

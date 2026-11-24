@@ -301,17 +301,12 @@ impl Signex {
         preview.column_drag_press_x = None;
         let options = preview.options.clone();
         let source = preview.source.clone();
-        let (ext, format_filter) = match options.format {
-            BomFormat::Csv => ("csv", ("CSV (.csv)", &["csv"][..])),
-            BomFormat::Xlsx => ("xlsx", ("Excel (.xlsx)", &["xlsx"][..])),
-            BomFormat::Html => ("html", ("HTML (.html)", &["html", "htm"][..])),
-        };
+        let (ext, format_filter) = bom_format_filter(options.format);
         let (filter_label, filter_exts) = format_filter;
         let target = self.save_target(Some(&source));
         let picker = self.ui_state.io.picker.clone();
         let default_name_owned = target.file_name("bom", "-bom", ext);
-        // The filter name is the BOM format's own label (#2060).
-        let filter_label_owned = filter_label.to_string();
+        let filter_label_owned = self.ui_state.i18n.message_plain(filter_label, &[]);
         let base = picker.dialog().title_in(
             &self.ui_state.i18n,
             signex_i18n::ids::FILE_DIALOG_EXPORT_BOM,
@@ -589,6 +584,22 @@ impl Signex {
                     .collect()
             })
             .unwrap_or_default()
+    }
+}
+
+/// The file extension a BOM format is saved under, and its save-dialog
+/// filter: the catalog name and the extensions it lists.
+pub(super) fn bom_format_filter(
+    format: BomFormat,
+) -> (
+    &'static str,
+    (signex_i18n::MessageId, &'static [&'static str]),
+) {
+    use signex_i18n::ids;
+    match format {
+        BomFormat::Csv => ("csv", (ids::FILE_FILTER_CSV_EXT, &["csv"])),
+        BomFormat::Xlsx => ("xlsx", (ids::FILE_FILTER_XLSX_EXT, &["xlsx"])),
+        BomFormat::Html => ("html", (ids::FILE_FILTER_HTML_EXT, &["html", "htm"])),
     }
 }
 

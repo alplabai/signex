@@ -55,4 +55,7 @@ define_ids! {
     FILE_FILTER_CSV_EXT = "file-filter-csv-ext";
     FILE_FILTER_STEP_EXT = "file-filter-step-ext";
     FILE_FILTER_TEXT_EXT = "file-filter-text-ext";
+    FILE_FILTER_XLSX_EXT = "file-filter-xlsx-ext";
+    FILE_FILTER_NETLIST_LISTING = "file-filter-netlist-listing";
+    FILE_FILTER_NETLIST_NET_TEXT = "file-filter-netlist-net-text";
 }

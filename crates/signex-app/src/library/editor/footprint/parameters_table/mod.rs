@@ -10,17 +10,23 @@
 //! - [`update`]: the table's own state transitions; the document edits
 //!   are `updates::sketch::parameters`.
 //! - [`view`]: the overlay card, with `import_view` (Import from another
-//!   footprint) and `checks` (the live checks under the rows).
+//!   footprint), and under the rows `preview_canvas`: the live bake
+//!   preview (`preview`, read from the current solve) beside `checks`
+//!   (Live checks).
 //!
 //! The domain (where a name is used, rename, delete, per-row values) is
 //! `signex_sketch::parameter_refs`.
 
 mod checks;
 mod import_view;
+mod preview;
+mod preview_canvas;
 pub mod state;
 pub mod update;
 pub mod view;
 
+#[cfg(test)]
+mod preview_tests;
 #[cfg(test)]
 mod tests;
 

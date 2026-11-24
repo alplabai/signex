@@ -259,3 +259,33 @@ fn find_mode_shows_no_replace_controls() {
     }
     assert!(!texts.iter().any(|t| t.contains('\u{2192}')));
 }
+
+/// #2060: every hit kind reads as the engine's `label` and follows the
+/// language.
+#[test]
+fn the_hit_kinds_keep_their_english() {
+    use super::results::{board_find_kind_label, find_kind_label};
+    use signex_engine::pcb::find::BoardFindKind;
+    let en = I18n::en_us();
+    let xa = I18n::new(&LanguagePref::Locale("en-XA".to_owned()));
+    let check = |id, english: &str| {
+        assert_eq!(en.message_plain(id, &[]), english);
+        assert_ne!(xa.message_plain(id, &[]), english);
+    };
+    for kind in [
+        FindKind::NetLabel,
+        FindKind::TextNote,
+        FindKind::Designator,
+        FindKind::Value,
+    ] {
+        check(find_kind_label(kind), kind.label());
+    }
+    for kind in [
+        BoardFindKind::Designator,
+        BoardFindKind::Value,
+        BoardFindKind::Footprint,
+        BoardFindKind::Net,
+    ] {
+        check(board_find_kind_label(kind), kind.label());
+    }
+}

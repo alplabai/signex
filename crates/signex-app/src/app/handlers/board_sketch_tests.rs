@@ -95,6 +95,7 @@ fn the_canvas_cursor_follows_the_pointer() {
             &session.editor,
             &app.document_state.panel_ctx.tokens,
             &app.ui_state.i18n,
+            None,
         )
         .map(Message::Library)
         .boxed();
