@@ -110,7 +110,10 @@ impl BakePreview {
         // each parameter's unit family from the sketch's table, which reads
         // none while a row fails: an angle would be read as a length. So a
         // last-good preview hides the pads rather than draw them wrong.
-        let pads_hidden = has_pads && !failing.is_empty();
+        // Gate on the same resolver the bake takes the units from.
+        let units_unread =
+            signex_sketch::parameter::resolve_quantities(&sketch.parameters).is_err();
+        let pads_hidden = has_pads && (units_unread || !failing.is_empty());
         let pads = if has_pads && !pads_hidden {
             baked_pads(sketch, solve)
                 .iter()
