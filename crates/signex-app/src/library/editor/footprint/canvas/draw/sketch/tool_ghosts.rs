@@ -8,11 +8,13 @@
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point};
 use signex_sketch::SketchData;
+use signex_sketch::array::ArrayId;
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::geom::shapes;
 use signex_sketch::geom::{Point2, extension_hit};
 use signex_sketch::id::SketchEntityId;
 
+use super::pattern_instances::{SourceSlots, source_slots};
 use crate::library::editor::footprint::canvas::FootprintCanvasState;
 use crate::library::editor::footprint::sketch_mode::mirror_card::{
     MirrorCard, MirrorField, MirrorObject,
@@ -290,7 +292,8 @@ fn extend_ghost(
 /// Mirror (mockup row 191): what the Mirror card's OK writes. The card's
 /// mirror line and picked objects are drawn wide, their copies dashed
 /// about the line, and the Line the next pick would take is drawn wide
-/// under the cursor. A picked pattern shows through its own instances.
+/// under the cursor. A picked pattern shows through its own instances, and
+/// its copy as every instance it bakes, mirrored.
 #[derive(Debug, Default, PartialEq)]
 struct MirrorGhost {
     /// World polylines drawn wide: the hovered Line, the mirror line and
@@ -313,25 +316,32 @@ enum GhostShape {
 /// Segments an Arc or Circle of the Mirror ghost is drawn with.
 const CURVE_SEGMENTS: u32 = 32;
 
+/// The arc of radius `r` about `c` from angle `a0` through `delta`.
+fn sweep(c: (f64, f64), r: f64, a0: f64, delta: f64) -> Vec<(f64, f64)> {
+    (0..=CURVE_SEGMENTS)
+        .map(|i| {
+            let a = a0 + delta * f64::from(i) / f64::from(CURVE_SEGMENTS);
+            (c.0 + r * a.cos(), c.1 + r * a.sin())
+        })
+        .collect()
+}
+
+/// The circle of radius `r` about `c`.
+fn circle_path(c: (f64, f64), r: f64) -> Vec<(f64, f64)> {
+    sweep(c, r, 0.0, std::f64::consts::TAU)
+}
+
 impl Positions<'_> {
     fn shape(&self, id: SketchEntityId) -> Option<GhostShape> {
         use std::f64::consts::TAU;
         let entity = self.sketch.entities.iter().find(|e| e.id == id)?;
-        let sweep = |c: (f64, f64), r: f64, a0: f64, delta: f64| -> Vec<(f64, f64)> {
-            (0..=CURVE_SEGMENTS)
-                .map(|i| {
-                    let a = a0 + delta * f64::from(i) / f64::from(CURVE_SEGMENTS);
-                    (c.0 + r * a.cos(), c.1 + r * a.sin())
-                })
-                .collect()
-        };
         Some(match entity.kind {
             EntityKind::Point { .. } => GhostShape::Point(self.of(id)?),
             EntityKind::Line { start, end } => {
                 GhostShape::Polyline(vec![self.of(start)?, self.of(end)?])
             }
             EntityKind::Circle { center, radius } => {
-                GhostShape::Polyline(sweep(self.of(center)?, radius, 0.0, TAU))
+                GhostShape::Polyline(circle_path(self.of(center)?, radius))
             }
             EntityKind::Arc {
                 center,
@@ -384,8 +394,14 @@ impl MirrorGhost {
         });
         let reflect = line.and_then(|(a, b)| reflection(a, b));
         for object in &card.objects {
-            let MirrorObject::Entity(id) = *object else {
-                continue;
+            let id = match *object {
+                MirrorObject::Entity(id) => id,
+                MirrorObject::Pattern(pattern) => {
+                    if let Some(reflect) = &reflect {
+                        ghost.pattern_copies(at, pattern, reflect);
+                    }
+                    continue;
+                }
             };
             match at.shape(id) {
                 Some(GhostShape::Point(p)) => {
@@ -406,6 +422,34 @@ impl MirrorGhost {
             }
         }
         ghost
+    }
+
+    /// The mirrored copy of a picked pattern: every instance it bakes,
+    /// reflected; a circle source as its circles, any other source as a
+    /// mark at each instance's anchor. A suppressed instance bakes nothing
+    /// and gets no copy.
+    fn pattern_copies(
+        &mut self,
+        at: &Positions<'_>,
+        pattern: ArrayId,
+        reflect: &impl Fn((f64, f64)) -> (f64, f64),
+    ) {
+        let Some(solve) = at.state.last_solve.as_ref() else {
+            return;
+        };
+        let Some(array) = at.sketch.arrays.iter().find(|a| a.id == pattern) else {
+            return;
+        };
+        let Some(SourceSlots { radius, slots }) = source_slots(array, at.sketch, solve) else {
+            return;
+        };
+        for slot in slots.iter().filter(|s| !s.suppressed) {
+            let image = reflect(slot.at);
+            match radius {
+                Some(r) => self.copies.push(circle_path(image, r)),
+                None => self.copied_points.push(image),
+            }
+        }
     }
 
     fn draw(&self, frame: &mut canvas::Frame, cstate: &FootprintCanvasState) {
