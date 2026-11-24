@@ -205,7 +205,8 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     {
         let locked = get("Locked") == "Yes";
         let item = SelectedItem::new(id, kind);
-        col = push_state_section(col, ctx, locked, PanelMsg::ToggleItemLocked(item), muted);
+        // The row kit's State section: the Locked box before its label.
+        col = super::rows::push_state_section(col, ctx, locked, PanelMsg::ToggleItemLocked(item));
     }
 
     col = push_status_bar(col, ctx, muted, border_c);
@@ -287,18 +288,6 @@ fn titled_header<'a>(
         .padding([SP.m, SP.l])
         .width(Length::Fill)
         .boxed()
-}
-
-/// The State section, last of every placed object: the Locked box before
-/// its label (mockup rows 47 and 48), the row kit's State section.
-pub(super) fn push_state_section<'a>(
-    col: Column<Element<'a, PanelMsg>>,
-    ctx: &'a PanelContext,
-    locked: bool,
-    toggled: PanelMsg,
-    _muted: Color,
-) -> Column<Element<'a, PanelMsg>> {
-    super::rows::push_state_section(col, ctx, locked, toggled)
 }
 
 /// The footer: "1 object selected".
