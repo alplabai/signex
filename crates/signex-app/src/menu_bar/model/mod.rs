@@ -41,6 +41,16 @@ pub struct MenuItem {
     pub state: ItemState,
     /// `Some` for a toggle row (a panel): whether its check mark shows.
     pub checked: Option<bool>,
+    /// A glyph in the check column, drawn while no check mark shows there.
+    pub icon: Option<MenuIcon>,
+}
+
+/// The glyph a row draws in its check column (mockup row 166). Plain data;
+/// the renderer picks the image, a native menu draws none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MenuIcon {
+    Save,
+    Reset,
 }
 
 /// A placeholder is a feature with no handler yet (greyed, its `reason` as

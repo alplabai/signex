@@ -67,10 +67,12 @@ command palette. A row of yours sends `MenuMessage::WorkspaceLayoutChosen`
 with the layout's id. The macOS system menu bar shows the same rows (the
 native menu takes the third level).
 
-Not drawn as in the mock: the menu model has no row icons, so Save Layout…
-and Reset carry no icon, and the active row's check mark is the menu's usual
-check, not an accent one. The mock's hover preview beside the menu is not
-possible in a menu; the thumbnails show in Manage Layouts.
+Save Layout… draws the save glyph and Reset the undo glyph in the check
+column (`MenuItem::icon`, mockup row 166); the native macOS menu draws no
+icon. Not drawn as in the mock: the active row's check mark is the menu's
+usual check, not an accent one; there is no hover preview beside the menu
+(2026-11-22 decision), the thumbnails show in Manage Layouts; and a layout
+of yours carries no "2 windows" tag, as extra windows are not stored yet.
 
 Applying is manual: Signex never switches layout by itself (for example when
 a board tab comes to the front).
