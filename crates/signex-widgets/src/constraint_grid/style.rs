@@ -2,7 +2,7 @@
 //! matrix. Colours come from theme tokens; every size derives from the
 //! text size, so the grid scales with the UI font.
 
-use iced::Color;
+use iced::{Color, Font};
 use signex_types::theme::ThemeTokens;
 
 use crate::Label;
@@ -16,6 +16,8 @@ pub struct GridStyle {
     pub ink: Color,
     /// An inherited or default value.
     pub muted_ink: Color,
+    /// A matrix fallback value, in the faintest ink as its legend sample.
+    pub faint_ink: Color,
     /// Header and group-header fill.
     pub header_fill: Color,
     /// Cell and row rules.
@@ -28,11 +30,20 @@ pub struct GridStyle {
     pub field_fill: Color,
     /// Edge of an editor whose text does not parse.
     pub error: Color,
-    /// Fill of an inert cell (the matrix's mirror half).
+    /// Fill of an inert table cell. The matrix's mirror half is hatched in
+    /// [`Self::line`] instead.
     pub inert_fill: Color,
+    /// The monospace face of matrix values; [`Font::MONOSPACE`] unless the
+    /// caller sets its own with [`Self::with_mono`].
+    pub mono: Font,
 }
 
 impl GridStyle {
+    /// The same style with `mono` as the face of matrix values.
+    pub fn with_mono(self, mono: Font) -> Self {
+        Self { mono, ..self }
+    }
+
     /// The grid's colours from `tokens`, with the extended chrome tokens
     /// where the theme sets them and the base tokens otherwise.
     pub fn from_tokens(tokens: &ThemeTokens, text_size: f32) -> Self {
@@ -44,6 +55,7 @@ impl GridStyle {
             text_size,
             ink: to_color(&tokens.text),
             muted_ink: pick(ext.ink3, tokens.text_secondary),
+            faint_ink: pick(ext.ink4, tokens.text_secondary),
             header_fill: pick(ext.sunken, tokens.toolbar_bg),
             line: pick(ext.line_soft, tokens.border),
             accent: pick(ext.accent_text, tokens.accent),
@@ -51,6 +63,7 @@ impl GridStyle {
             field_fill: pick(ext.field, tokens.panel_bg),
             error: to_color(&tokens.error),
             inert_fill: pick(ext.sunken, tokens.hover),
+            mono: Font::MONOSPACE,
         }
     }
 

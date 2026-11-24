@@ -423,3 +423,10 @@ rules-why-level-not-set = not set
 rules-why-extra-hierarchy = A lower row beats the rows above it; a constraint set sits between a row and its parent.
 rules-why-extra-layer = A layer value beats the class value on that layer; a net value still beats both.
 rules-why-extra-scoped = A scoped rule applies to whatever its scope matches; it beats the hierarchy there.
+
+# clearance-matrix
+# The class-pair drawing's note (column class first), the pair gap
+# caption before its value, and the scale bar's length.
+rules-preview-note-class-pair = { $a } ↔ { $b } · different nets
+rules-preview-cap-at-least = ≥
+rules-preview-scale-length = { $value } mm

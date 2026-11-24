@@ -12,7 +12,9 @@ use iced::{Alignment, Background, Border, Element, Length, Point, Theme, Widget 
 use signex_drc_dsl::table::matrix::{self, CellKey, OBJECT_PAIRS};
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::coord::Unit;
-use signex_widgets::constraint_grid::{GridMetrics, GridStyle, MatrixText, matrix_view};
+use signex_widgets::constraint_grid::{
+    GridMetrics, GridStyle, MatrixText, matrix_view, mirror_swatch,
+};
 use signex_widgets::{LengthFormat, button, text, text_input, tooltip};
 
 use super::{Frame, SP, TS, up, user};
@@ -106,19 +108,25 @@ fn cell_at(classes: &[String], m: GridMetrics, at: Point) -> Option<CellKey> {
     ))
 }
 
+/// The matrix's words; a fallback cell reads as the legend's sample.
+fn matrix_words(i18n: &I18n) -> MatrixText<'static> {
+    MatrixText {
+        clear: t!(i18n, ids::RULES_MATRIX_CLEAR_CELL).into(),
+        fallback: t!(i18n, ids::RULES_MATRIX_FALLBACK_TIP).into(),
+        fallback_value: ids::RULES_MATRIX_DEFAULT,
+    }
+}
+
 /// The class matrix, hover-tracked for the preview.
 fn grid<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
     let (i18n, tokens, id) = (frame.i18n, frame.tokens, frame.id);
-    let style = GridStyle::from_tokens(tokens, TS.body);
+    let style = GridStyle::from_tokens(tokens, TS.body).with_mono(mono());
     let values = ClassClearances {
         classes: &frame.classes,
         table: &frame.table,
         defaults: defaults(frame),
     };
-    let words = MatrixText {
-        clear: t!(i18n, ids::RULES_MATRIX_CLEAR_CELL).into(),
-        fallback: t!(i18n, ids::RULES_MATRIX_FALLBACK_TIP).into(),
-    };
+    let words = matrix_words(i18n);
     let format = LengthFormat::new(i18n, Unit::Mm);
     let cells = matrix_view(&frame.state.matrix, &values, format, &words, style).map(move |msg| {
         up(RulesTabMsg::MatrixActed {
@@ -147,21 +155,8 @@ fn legend<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
     let (i18n, tokens) = (frame.i18n, frame.tokens);
     let style = GridStyle::from_tokens(tokens, TS.body);
     let format = LengthFormat::new(i18n, Unit::Mm);
-    let faint = resolve(tokens).ink4;
     let muted = tokens::muted_text(tokens);
     let word = |id| text(t!(i18n, id)).size(TS.caption).color(muted).boxed();
-    let swatch = container(Space::new())
-        .width(TS.body)
-        .height(TS.body)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(style.inert_fill)),
-            border: Border {
-                width: 1.0,
-                color: style.line,
-                ..Border::default()
-            },
-            ..container::Style::default()
-        });
     let item = |sample: Element<'a, Message>, name: Element<'a, Message>| {
         Row::new()
             .spacing(SP.xs)
@@ -185,11 +180,14 @@ fn legend<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
             text(t!(i18n, ids::RULES_MATRIX_DEFAULT, "value" => format.number(0.15)))
                 .size(TS.caption)
                 .font(mono())
-                .color(faint)
+                .color(style.faint_ink)
                 .boxed(),
             word(ids::RULES_MATRIX_LEGEND_FALLBACK),
         ))
-        .push(item(swatch.boxed(), word(ids::RULES_MATRIX_LEGEND_MIRROR)))
+        .push(item(
+            mirror_swatch(TS.body, style),
+            word(ids::RULES_MATRIX_LEGEND_MIRROR),
+        ))
         .boxed()
 }
 

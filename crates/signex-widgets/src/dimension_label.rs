@@ -18,9 +18,11 @@
 //! drawing does not reach the overlay; route it as
 //! [`DimensionLabelMessage::PointerReleased`].
 
+use std::sync::OnceLock;
+
 use iced::alignment::{Horizontal, Vertical};
 use iced::keyboard::{Key, Modifiers, key::Named};
-use iced::widget::{Id, Row, Space, Stack, container, mouse_area, operation};
+use iced::widget::{Id, Row, Space, Stack, container, mouse_area, operation, svg};
 use iced::{
     Background, Border, Color, Element, Font, Length, Point, Rectangle, Task, Theme, Vector,
     Widget, mouse,
@@ -51,6 +53,17 @@ const HANDLE_HIT_EM: f32 = 0.5;
 const HANDLE_RING_EM: f32 = 0.2;
 /// Drag results keep nine decimals, which drops float noise.
 const NOISE_SCALE: f64 = 1e9;
+/// Side of the edit glyph after a label's value, in ems.
+const PEN_EM: f32 = 0.9;
+
+const PEN_ICON: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 9.5l1-3 4.5-4.5 2 2-4.5 4.5z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/></svg>"#;
+
+fn pen_handle() -> svg::Handle {
+    static HANDLE: OnceLock<svg::Handle> = OnceLock::new();
+    HANDLE
+        .get_or_init(|| svg::Handle::from_memory(PEN_ICON))
+        .clone()
+}
 
 /// Where a label sits relative to its anchor point.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -157,6 +170,8 @@ pub struct DimensionLabel<'a> {
     /// The drawing writes this label itself: the closed label is only a
     /// press target the size of its caption.
     pub is_bare: bool,
+    /// A pen glyph after the value says the label can be typed into.
+    pub has_edit_glyph: bool,
 }
 
 impl<'a> DimensionLabel<'a> {
@@ -174,7 +189,14 @@ impl<'a> DimensionLabel<'a> {
             limits: ValueLimits::default(),
             refused_ink: None,
             is_bare: false,
+            has_edit_glyph: false,
         }
+    }
+
+    /// Show the pen glyph after the value.
+    pub fn edit_glyph(mut self) -> Self {
+        self.has_edit_glyph = true;
+        self
     }
 
     pub fn refused_ink(mut self, color: Color) -> Self {
@@ -232,7 +254,17 @@ impl<'a> DimensionLabel<'a> {
         } else {
             self.value_text().chars().count()
         };
-        label_box(caption_chars, value_chars, text_size, self.at, self.anchor)
+        let mut bounds = label_box(caption_chars, value_chars, text_size, self.at, self.anchor);
+        if self.has_edit_glyph && !self.is_bare {
+            let extra = (GAP_EM + PEN_EM) * text_size;
+            bounds.x -= match self.anchor {
+                LabelAnchor::Start => 0.0,
+                LabelAnchor::Middle => extra / 2.0,
+                LabelAnchor::End => extra,
+            };
+            bounds.width += extra;
+        }
+        bounds
     }
 }
 
@@ -657,7 +689,8 @@ fn tag_view<'a>(
             .on_press(DimensionLabelMessage::LabelPressed(index));
         return Translate::new(target.boxed(), (bounds.x, bounds.y)).into();
     }
-    let mut content: Row<Element<'a, DimensionLabelMessage>> = Row::new().spacing(GAP_EM * size);
+    let mut content: Row<Element<'a, DimensionLabelMessage>> =
+        Row::new().spacing(GAP_EM * size).align_y(Vertical::Center);
     if let Some(caption) = &label.caption {
         content = content.push(
             text(caption.clone())
@@ -674,6 +707,17 @@ fn tag_view<'a>(
             .color(style.ink)
             .boxed(),
     );
+    if label.has_edit_glyph {
+        let ink = style.ink;
+        let pen = svg(pen_handle())
+            .width(PEN_EM * size)
+            .height(PEN_EM * size)
+            .style(move |_: &Theme, _| svg::Style {
+                color: Some(ink),
+                ..svg::Style::default()
+            });
+        content = content.push(pen.boxed());
+    }
     let s = style;
     let tag = container(content)
         .width(bounds.width)

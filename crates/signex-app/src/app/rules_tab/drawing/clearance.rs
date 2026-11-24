@@ -1,12 +1,13 @@
 //! Copper clearance: two objects of different nets at the gap, with the
-//! dashed clearance zone around the first and a gap arrow between them.
-//! The clearance rule, a class pair and an object pair all draw this.
+//! dashed clearance zone around the first, a gap arrow between them, a
+//! scale bar, and each object named in a chip under it (mockup rows 89 and
+//! 90). The clearance rule, a class pair and an object pair all draw this.
 
 use iced::{Point, Rectangle, Vector};
 use signex_drc_dsl::table::LimitField;
 use signex_i18n::{MessageId, ids};
 use signex_widgets::dimension_label::LabelAnchor;
-use signex_widgets::property_illustration::{Anchor, Tint};
+use signex_widgets::property_illustration::Tint;
 
 use super::scene::{BoardInk, Handle, NoteText, Scene, Values, grown, rect};
 
@@ -22,6 +23,8 @@ const CENTRE: Point = Point::new(320.0, 155.0);
 const LABEL_Y: f32 = 34.0;
 const NAME_Y: f32 = 284.0;
 const NAME_MARGIN: f32 = 60.0;
+/// The right end of the scale bar, beside the title.
+const SCALE_BAR_AT: Point = Point::new(620.0, 30.0);
 
 /// A copper object a clearance is measured from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +54,12 @@ impl Object {
             Object::Pour => ids::RULES_PREVIEW_OBJECT_POUR,
         }
     }
+}
+
+/// A pair drawing's title, its two objects: "Track ↔ Track".
+pub(super) fn pair_title(objects: [Object; 2]) -> NoteText {
+    let [a, b] = objects.map(|o| NoteText::Id(o.name()));
+    NoteText::Pair(ids::RULES_PREVIEW_PAIR, Box::new([a, b]))
 }
 
 /// Which side of the gap an object sits on.
@@ -169,15 +178,21 @@ pub(super) fn pair_scene(
         LabelAnchor::Middle,
         Some(handle),
     );
-    let note = ink.note;
-    for (x, object) in [(left_x, objects[0]), (right_x, objects[1])] {
+    scene.scale_bar(scale as f32, SCALE_BAR_AT);
+    name_chips(&mut scene, [(left_x, objects[0]), (right_x, objects[1])]);
+    scene
+}
+
+/// Each object's name in a chip at the foot of the drawing, under it.
+fn name_chips(scene: &mut Scene, named: [(f32, Object); 2]) {
+    let note = scene.ink.note;
+    for (x, object) in named {
         let at = Point::new(
             x.clamp(NAME_MARGIN, super::scene::VIEW_W - NAME_MARGIN),
             NAME_Y,
         );
-        scene.note(at, NoteText::Id(object.name()), Anchor::Middle, note);
+        scene.chip(at, NoteText::Id(object.name()), note);
     }
-    scene
 }
 
 /// A clearance rule: a track and a pad at its minimum clearance.
