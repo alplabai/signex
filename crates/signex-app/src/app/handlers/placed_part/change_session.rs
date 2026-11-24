@@ -195,12 +195,12 @@ pub(super) fn compare_rows(
     rows
 }
 
+/// Pin counts known without a read, and the drawings still to read.
+type PinReads = (Vec<(Uuid, usize)>, Vec<(Uuid, PrimitiveRef)>);
+
 /// The rows whose pin counts must be read: their drawings, deduplicated.
 /// Rows drawing the placed symbol take its count without a read.
-fn pin_reads(
-    libs: &[OpenLibrary],
-    placed: &PlacedNow,
-) -> (Vec<(Uuid, usize)>, Vec<(Uuid, PrimitiveRef)>) {
+fn pin_reads(libs: &[OpenLibrary], placed: &PlacedNow) -> PinReads {
     let (mut known, mut reads) = (Vec::new(), Vec::new());
     for row in libs.iter().flat_map(|l| l.tables.values().flatten()) {
         match placed.pins {
