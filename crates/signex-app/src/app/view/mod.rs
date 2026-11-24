@@ -306,9 +306,9 @@ impl Signex {
                 .style(crate::styles::chrome_separator(&document.panel_ctx.tokens))
                 .boxed(),
         );
-        // A board page tab stays on the main strip while its board is
+        // A document page tab stays on the main strip while its owner is
         // undocked, so it can be the strip's only tab.
-        let shows_page = is_main_window && document.tabs.iter().any(|t| t.kind.is_board_page());
+        let shows_page = is_main_window && document.tabs.iter().any(|t| t.kind.is_document_page());
         if !document.tabs.is_empty() && (!visible_paths.is_empty() || shows_page) {
             // Resolve "really dragging" — Some only after the
             // cursor has travelled past a 6 px threshold from
@@ -444,6 +444,9 @@ impl Signex {
 
     fn view_center(&self, window_id: iced::window::Id) -> Element<'_, Message> {
         let is_main = self.ui_state.main_window_id == Some(window_id);
+        if self.gerber_viewer_tab_in_window(is_main) {
+            return self.view_gerber_viewer_tab();
+        }
         if let Some(project_id) = self.project_tab_in_window(is_main) {
             return self.view_project_tab(project_id);
         }
@@ -455,6 +458,9 @@ impl Signex {
         }
         if self.polygon_manager_tab_in_window(is_main) {
             return self.view_polygon_manager_tab();
+        }
+        if let Some(symbol) = self.pin_table_tab_in_window(is_main) {
+            return self.view_pin_table_tab(symbol);
         }
 
         // Component Preview, symbol / footprint editor and Library Browser

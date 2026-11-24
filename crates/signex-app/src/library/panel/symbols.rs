@@ -1,19 +1,18 @@
 //! The Library panel's Symbols kind (mockup row 119, was the SCH Library
 //! panel, mockup row 120): the symbols of the `.snxsym` open in the symbol
-//! editor, the parts of the active symbol, and the warning of a Delete that
-//! hits a placed symbol.
+//! editor and the parts of the active symbol. A Delete that hits a placed
+//! symbol asks in a modal (`library::symbol_delete::view`).
 
 use iced::widget::{Column, column, container, row};
 use iced::{Alignment, Element, Length, Padding, Widget};
 use signex_i18n::{I18n, UserText, ids, t};
-use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, raw, text};
+use signex_widgets::{button, text};
 
 use super::KindView;
-use super::frame::{self, Crumb, RowMark, RowText, SP, TS, Tools, panel};
+use super::frame::{self, Crumb, RowDrawing, RowLook, RowMark, RowText, SP, TS, Tools, panel};
 use crate::dock::DockMessage;
 use crate::library::state::LibraryState;
-use crate::panels::{PanelContext, PanelMsg, SymbolDeleteWarning, SymbolEditorPanelContext};
+use crate::panels::{PanelContext, PanelMsg, SymbolEditorPanelContext};
 use crate::styles::ti;
 use crate::styles::tokens::resolve;
 
@@ -62,7 +61,12 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
     KindView {
         crumb,
         tools,
-        list: list(sym, &library.panel_search, ctx),
+        list: list(
+            sym,
+            &library.panel_search,
+            RowLook::of(library.library_panel.row_style, frame::thumb_look(ctx)),
+            ctx,
+        ),
     }
 }
 
@@ -79,6 +83,7 @@ fn shows(entry: &crate::panels::SymbolFileEntry, needle: &str, i18n: &I18n) -> b
 fn list<'a>(
     sym: &'a SymbolEditorPanelContext,
     filter: &str,
+    look: RowLook,
     ctx: &'a PanelContext,
 ) -> Element<'a, DockMessage> {
     let i18n = &*ctx.i18n;
@@ -100,7 +105,9 @@ fn list<'a>(
             RowText {
                 name: entry.name.clone(),
                 caption: Some(UserText::new(entry.description.clone()).into()),
+                drawing: RowDrawing::Symbol(entry.drawing.clone()),
             },
+            look,
             mark,
             0.0,
             panel(PanelMsg::SchLibrarySelectSymbol(entry.idx)),
@@ -124,9 +131,7 @@ fn list<'a>(
     if let Some(parts) = parts_section(sym, ctx) {
         body = body.push(parts);
     }
-    if let Some(warning) = sym.delete_warning.as_ref() {
-        body = body.push(delete_warning(warning, tokens, i18n));
-    }
+    // The in-use warning of a Delete is a modal of its own (mockup row 137).
     body.boxed()
 }
 
@@ -224,49 +229,6 @@ fn section_frame<'a>(col: Column<Element<'a, DockMessage>>) -> Element<'a, DockM
             bottom: 0.0,
             left: SP.s,
         })
-        .width(Length::Fill)
-        .boxed()
-}
-
-/// The in-use warning shown instead of deleting at once (#1845): names the
-/// rows and sheets, and lets the user delete anyway.
-fn delete_warning<'a>(
-    warning: &'a SymbolDeleteWarning,
-    tokens: &ThemeTokens,
-    i18n: &I18n,
-) -> Element<'a, DockMessage> {
-    let r = resolve(tokens);
-    let ink = ti(tokens.text);
-    let mut block: Column<Element<'a, DockMessage>> = Column::new()
-        .spacing(SP.xs)
-        .push(text(warning.heading(i18n)).size(TS.body).color(ink).boxed());
-    for line in &warning.lines {
-        block = block.push(
-            // raw: the in-use lines are worded in English by the delete check
-            // in `library::symbol_delete` (#2060).
-            text(raw(line.as_str()))
-                .size(TS.caption)
-                .color(r.ink3)
-                .boxed(),
-        );
-    }
-    block = block.push(
-        text(t!(i18n, ids::PANELS_SCH_LIBRARY_DELETE_WARNING_NOTE))
-            .size(TS.caption)
-            .color(r.ink3)
-            .boxed(),
-    );
-    let confirm = button(text(t!(i18n, ids::PANELS_SCH_LIBRARY_DELETE_ANYWAY)).size(TS.body))
-        .padding([SP.xs, SP.m])
-        .on_press(panel(PanelMsg::SchLibraryDeleteConfirmed(warning.idx)))
-        .style(crate::styles::danger_button(tokens));
-    let cancel = button(text(t!(i18n, ids::PANELS_SCH_LIBRARY_DELETE_CANCEL)).size(TS.body))
-        .padding([SP.xs, SP.m])
-        .on_press(panel(PanelMsg::SchLibraryDeleteCancelled))
-        .style(crate::styles::outline_button(tokens));
-    block = block.push(row![confirm.boxed(), cancel.boxed()].spacing(SP.m).boxed());
-    container(block)
-        .padding([SP.m, SP.m])
         .width(Length::Fill)
         .boxed()
 }

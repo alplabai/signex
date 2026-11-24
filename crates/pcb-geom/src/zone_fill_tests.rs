@@ -608,3 +608,37 @@ fn a_pour_with_no_fill_says_why() {
     assert!(fills.of(2).is_some());
     assert_eq!(fills.unfilled_pours().len(), 2);
 }
+
+/// #2883: a rectangle drawn on the pour's copper layer is copper of no net;
+/// the pour keeps its clearance from the rectangle's stroke. One on another
+/// layer is not cut.
+#[test]
+fn a_pour_keeps_its_clearance_from_a_copper_rectangle() {
+    let rectangle = |layer: &str| signex_types::pcb::BoardGraphic {
+        uuid: Uuid::from_u128(60),
+        graphic_type: "rect".into(),
+        layer: layer.into(),
+        width: 0.2,
+        start: Some(Point::new(-5.0, -5.0)),
+        end: Some(Point::new(5.0, 5.0)),
+        center: None,
+        radius: 0.0,
+        points: Vec::new(),
+        text: String::new(),
+        font_size: 0.0,
+    };
+    let filled = |b: &PcbBoard, x: f64| {
+        let p = PointNm::from_mm(Point::new(x, 0.0), "p").unwrap();
+        pieces(b).iter().any(|piece| piece.contains_point(p))
+    };
+    let mut b = board(Vec::new());
+    b.graphics.push(rectangle("TopCopper"));
+    // The stroke's outer edge is at x = 5.1; the clearance is 0.5.
+    assert!(!filled(&b, 5.0), "not on the stroke");
+    assert!(!filled(&b, 5.55), "not within the clearance");
+    assert!(filled(&b, 6.0), "filled beyond it");
+    assert!(twice_area(&pieces(&b)) < FULL);
+
+    b.graphics = vec![rectangle("BottomCopper")];
+    assert_eq!(twice_area(&pieces(&b)), FULL, "another layer is not cut");
+}

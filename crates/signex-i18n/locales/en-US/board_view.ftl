@@ -66,15 +66,15 @@ pcb-layers-pair = { $pair ->
    *[keepout] Keep-Out
 }
 # Tooltip of a layer's colour dot.
-pcb-layers-colour-tip = Pick this layer's colour, saved with the board
+pcb-layers-colour-tip = Pick this layer's color, saved with the board
 # The colour card under a dot: the caption of the palette swatches, the
 # caption of the hex field and the field's placeholder.
 pcb-layers-palette = Palette
-pcb-layers-colour = Colour
+pcb-layers-colour = Color
 pcb-layers-hex = #RRGGBB
 # The colour card's button that gives the layer the board palette's colour
 # again.
-pcb-layers-colour-palette = Palette colour
+pcb-layers-colour-palette = Palette color
 # The more menu's layer set header, and the tooltip of the Set dropdown.
 pcb-layers-sets = Layer Sets
 # Tooltip of the active layer dropdown.

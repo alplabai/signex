@@ -115,6 +115,36 @@ fn a_stack_edit_keeps_the_stackup_name() {
     assert_eq!(b.stackup.as_ref().unwrap().name.as_deref(), Some("4L"));
 }
 
+/// Mockup row 176: a whole stack sent without a finish (an agent's row
+/// list) keeps the board's finish; one sent with a finish replaces it.
+#[test]
+fn a_stack_edit_without_a_finish_keeps_the_boards_finish() {
+    use signex_types::pcb_stack::{BoardFinish, FinishColor, SurfaceFinish};
+    let mut b = board(2, "TopCopper");
+    let mut finished = LayerStack::derived(&b.layers, b.thickness);
+    let mut black = BoardFinish::default();
+    black.mask.color = FinishColor::Black;
+    finished.finish = Some(black.clone());
+    set(&mut b, finished).unwrap();
+
+    let mut rows_only = LayerStack::derived(&b.layers, b.thickness);
+    add_inner_below(&mut rows_only, 0);
+    assert_eq!(rows_only.finish, None);
+    set(&mut b, rows_only).unwrap();
+    let stored = b.stackup.as_ref().unwrap();
+    assert_eq!(stored.copper_count(), 3);
+    assert_eq!(stored.finish.as_ref(), Some(&black));
+
+    let mut replaced = stored.clone();
+    let osp = BoardFinish {
+        surface: SurfaceFinish::Osp,
+        ..BoardFinish::default()
+    };
+    replaced.finish = Some(osp.clone());
+    set(&mut b, replaced).unwrap();
+    assert_eq!(b.stackup.as_ref().unwrap().finish, Some(osp));
+}
+
 /// A name taken off a stack nobody edited leaves no stored stack, so the
 /// file goes back to what it was; an edited stack stays stored.
 #[test]

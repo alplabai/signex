@@ -298,6 +298,8 @@ fn history_target(app: &super::super::Signex) -> Option<std::path::PathBuf> {
 
 fn history_target_of(active: &crate::app::TabInfo) -> Option<std::path::PathBuf> {
     match &active.kind {
+        // Fabrication files are read, never written: nothing to restore.
+        crate::app::TabKind::GerberViewer => None,
         crate::app::TabKind::LibraryBrowser(p) => Some(p.clone()),
         crate::app::TabKind::ComponentEditor(_) => None,
         // A board page; its board's tab offers the board's history.
@@ -307,7 +309,8 @@ fn history_target_of(active: &crate::app::TabInfo) -> Option<std::path::PathBuf>
         // offered until the Project tab can reload it safely (#1084).
         crate::app::TabKind::Project(_)
         | crate::app::TabKind::Rules(_)
-        | crate::app::TabKind::LayerStack => None,
+        | crate::app::TabKind::LayerStack
+        | crate::app::TabKind::PinTable => None,
         _ => Some(active.path.clone()),
     }
 }

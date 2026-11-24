@@ -193,7 +193,7 @@ pub struct FootprintEditorPanelContext {
     pub selected_sketch_pad: Option<SketchPadAttrSummary>,
     /// The board attributes of the selected entity while a board is in
     /// sketch mode (#2234); `None` in a footprint editor.
-    pub board: Option<BoardSketchProps>,
+    pub board: Option<super::BoardSketchProps>,
     /// v0.17.0 — empty-canvas Snap Options. Surfaced on the
     /// Properties panel default branch (no selection) so the user
     /// can toggle each priority chain step.
@@ -450,6 +450,14 @@ pub enum ArrayParamField {
     /// arrays. Empty string clears the depopulation entirely (set
     /// `Option::None` on the array).
     MaskExpr,
+    /// The Numbering Mask (mockup row 126): the pad numbers a Grid or Polar
+    /// pattern skips, written to its suppressed instances.
+    NumberMask,
+}
+
+/// The `numeric_buffers` key of a pattern's Numbering Mask text.
+pub fn number_mask_buffer_key(array_id: signex_sketch::array::ArrayId) -> String {
+    format!("pattern.{}.number_mask", array_id.0)
 }
 
 /// v0.16.4 — discrete bit identifier for [`KeepoutSummary`] flags.
@@ -524,6 +532,9 @@ pub struct FootprintLibInternalRow {
     pub is_active: bool,
     /// Why Place cannot put this footprint on a board; `None` when it can.
     pub place_block: Option<super::FootprintPlaceBlock>,
+    /// The footprint's pads for a thumbnail row of the Library panel
+    /// (mockup row 119); built only while thumbnail rows are on.
+    pub tile: Option<std::sync::Arc<crate::library::panel::FootprintTile>>,
 }
 
 /// Editor mode mirror — kept in this crate so the panel doesn't need
@@ -552,6 +563,10 @@ pub struct FootprintSolveSummary {
     /// constraint order. Same row shape as `over_constraints`; the residual
     /// is ~0 and not shown.
     pub redundant_constraints: Vec<OverConstraintSummary>,
+    /// The free degrees of freedom of the solve, for the DOF card (mockup row 179).
+    pub dof: usize,
+    /// What still moves, one row each under the DOF card.
+    pub free_motions: Vec<super::FreeMotionSummary>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -736,60 +751,6 @@ pub struct FootprintSketchEntitySummary {
     /// entity kinds whose DOF state is implicitly the min of their
     /// endpoints'. Drives the "DOF" row in the Properties panel.
     pub dof_state: Option<signex_sketch::solver::dof::DofColor>,
-}
-
-/// The Board sections of the Properties panel in board sketch mode (#2234):
-/// the board's name and outline facts in place of the footprint fields
-/// (#2356), and what the selected entity becomes on the board. Keepouts and
-/// cutouts use the Role picker and its sub-forms, as in a footprint.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct BoardSketchProps {
-    /// The board's name, as the canvas chip shows it.
-    pub board_name: String,
-    /// Width and height of the board outline's extent in mm; `None`
-    /// without an outline.
-    pub board_size_mm: Option<(f64, f64)>,
-    /// The area the board outline encloses in mm².
-    pub board_area_mm2: Option<f64>,
-    /// The selected entity, if any.
-    pub selected: Option<signex_sketch::id::SketchEntityId>,
-    /// It is a line, arc or circle: it can be part of the outline.
-    pub is_edge: bool,
-    /// It is a circle: it can be a mounting hole.
-    pub is_circle: bool,
-    /// It is tagged as part of the board outline.
-    pub outline: bool,
-    /// Its mounting hole attributes, when it is one.
-    pub hole: Option<MountingHoleProps>,
-    /// The Outline checks lines of the current solve (mockup row 179d): Properties
-    /// lists them with nothing selected, the bake preview the failed ones.
-    pub outline_checks: Vec<crate::library::editor::footprint::CheckLine>,
-    /// The selected entity's Slot, Pour, Mechanical layer or Component
-    /// anchor rows (decision 2, 2026-11-20).
-    pub target: crate::panels::BoardTargetProps,
-    /// The size (length, width) in mm of the slot the selected edge belongs
-    /// to, whatever its role, for the Slot header (mockup row 179); `None`
-    /// when it is no slot edge.
-    pub selected_slot: Option<(f64, f64)>,
-    /// The project's router tool diameter in mm (mockup row 179d), for the Fab
-    /// profile group; `None` when its fab profile names none.
-    pub router_tool_diameter: Option<f64>,
-    /// The radius Add fillets applies; `None` when no failing corner can
-    /// take a fillet (mockup row 179d).
-    pub fillet_radius: Option<f64>,
-    /// The open bake preview, shown as the Bake panel (mockup row 179);
-    /// `None` while the preview is closed.
-    pub bake: Option<crate::panels::BoardBakePreview>,
-}
-
-/// A mounting hole's fields as the Properties panel edits them.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct MountingHoleProps {
-    /// The drill expression; empty means the circle's diameter.
-    pub drill: String,
-    pub plated: bool,
-    /// The net name; empty means no net.
-    pub net: String,
 }
 
 /// The sketch's solve state: the tone of its pill and the catalog message

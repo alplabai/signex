@@ -176,6 +176,8 @@ impl Signex {
                         y,
                         target,
                         owner,
+                        hovered_step_mm: None,
+                        opens_upward: false,
                     });
                 }
                 self.finish_update()
@@ -183,6 +185,26 @@ impl Signex {
             UiMsg::GridPickerClose => {
                 self.interaction_state.grid_picker = None;
                 self.finish_update()
+            }
+            // Hover only changes what the preview draws: no refresh owed.
+            UiMsg::GridPickerStepHovered(step_mm) => {
+                if let Some(picker) = self.interaction_state.grid_picker.as_mut()
+                    && step_mm > 0.0
+                    && step_mm.is_finite()
+                {
+                    picker.hovered_step_mm = Some(step_mm);
+                }
+                Task::none()
+            }
+            // A leave of a row no longer hovered (the next row's enter came
+            // first) keeps the newer hover.
+            UiMsg::GridPickerStepLeft(step_mm) => {
+                if let Some(picker) = self.interaction_state.grid_picker.as_mut()
+                    && picker.hovered_step_mm == Some(step_mm)
+                {
+                    picker.hovered_step_mm = None;
+                }
+                Task::none()
             }
             UiMsg::GridPickerSelect(step_mm) => {
                 let picker = self.interaction_state.grid_picker.take();
@@ -274,11 +296,24 @@ impl Signex {
                     None => Task::none(),
                 }
             }
-            // On a board the same key steps the Snapping mode (#2353).
-            UiMsg::ToggleSnapHotspots if self.has_active_pcb() => {
-                self.cycle_pcb_snapping();
-                self.finish_update()
+            // The caret opens the step list as the open_grid_picker key
+            // does in that window (an undocked one runs it on its
+            // footprint), then sets it above the bar.
+            UiMsg::StatusBar(StatusBarRequest::GridCaretClicked { window }) => {
+                let open = Message::Ui(UiMsg::GridPickerOpen);
+                let opened = match window {
+                    Some(window) if self.is_document_window(window) => {
+                        self.run_command_in_window(window, open)
+                    }
+                    _ => self.dispatch_update(open),
+                };
+                let (x, y) = self.grid_caret_anchor(window);
+                if let Some(picker) = self.interaction_state.grid_picker.as_mut() {
+                    (picker.x, picker.y, picker.opens_upward) = (x, y, true);
+                }
+                opened
             }
+            // On a board Shift+E is `cycle_board_snapping` (#2879).
             UiMsg::ToggleSnapHotspots => {
                 self.ui_state.snap_hotspots = !self.ui_state.snap_hotspots;
                 self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
@@ -680,6 +715,11 @@ impl Signex {
             // The Grid & Snap popover opens over the window that asked.
             (StatusBarRequest::GridReadoutRightClicked, _) => {
                 Message::Overlay(OverlayMsg::GridSnapPopoverToggled(window))
+            }
+            (StatusBarRequest::GridCaretClicked { .. }, _) => {
+                Message::Ui(UiMsg::StatusBar(StatusBarRequest::GridCaretClicked {
+                    window: Some(window),
+                }))
             }
             (StatusBarRequest::ToggleGrid, Some(path)) => {
                 symbol_edit(path, SymbolEditorMsg::ToggleGrid)

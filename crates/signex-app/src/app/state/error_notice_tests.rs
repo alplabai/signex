@@ -180,11 +180,14 @@ fn copy_text_is_the_heading_the_sentence_and_the_system_block() {
         .with_system("writing C:\\work\\power.snxsch: Access is denied. (os error 5)");
     assert_eq!(
         notice.copy_text(&en),
-        "Save Failed\n\nFailed to save active document\n\nwriting C:\\work\\power.snxsch: \
-         Access is denied. (os error 5)"
+        "Save Failed\n\nFailed to save active document Your edits are still open and \
+         unsaved.\n\nwriting C:\\work\\power.snxsch: Access is denied. (os error 5)"
     );
     let plain = ErrorNotice::save(verbatim("disk full"));
-    assert_eq!(plain.copy_text(&en), "Save Failed\n\ndisk full");
+    assert_eq!(
+        plain.copy_text(&en),
+        "Save Failed\n\ndisk full Your edits are still open and unsaved."
+    );
     assert_eq!(
         ErrorNotice::save(verbatim("x")).with_system("  ").system,
         None,
@@ -192,8 +195,51 @@ fn copy_text_is_the_heading_the_sentence_and_the_system_block() {
     );
 }
 
+/// Mockup row 11: a Save Failed card says, after its detail, that nothing
+/// was lost. The sentence comes from the catalog, Copy carries it, and the
+/// one line that leaves the screen does not. Other cards add nothing.
+#[test]
+fn a_save_failed_card_says_the_edits_are_still_open() {
+    let en = I18n::en_us();
+    let notice = ErrorNotice::save(verbatim("power.snxsch could not be written."));
+    assert_eq!(
+        notice.note,
+        Some(signex_i18n::ids::NOTICE_SAVE_FAILED_EDITS_KEPT)
+    );
+    let sentence = "power.snxsch could not be written. Your edits are still open and unsaved.";
+    assert_eq!(notice.sentence_text(&en), sentence);
+    assert_eq!(notice.copy_text(&en), format!("Save Failed\n\n{sentence}"));
+    assert_eq!(
+        notice.detail_line_en_us(),
+        "power.snxsch could not be written."
+    );
+    for other in [
+        ErrorNotice::export(verbatim("x")),
+        ErrorNotice::create(verbatim("x")),
+        ErrorNotice::disk_changed(PathBuf::from("/w/a.snxsch"), DiskDrift::Changed),
+    ] {
+        assert_eq!(other.note, None, "{:?}", other.title);
+        assert_eq!(other.sentence_text(&en), other.detail_text(&en));
+    }
+}
+
+/// A Save Failed card for a write that leaves no open edits (the global
+/// library list) keeps the heading and claims nothing about unsaved edits.
+#[test]
+fn a_save_failed_card_with_no_open_edits_has_no_note() {
+    let en = I18n::en_us();
+    let notice = ErrorNotice::save_with_no_open_edits(verbatim("global_libraries.toml: denied"));
+    assert_eq!(notice.title_text(&en), "Save Failed");
+    assert_eq!(notice.note, None);
+    assert_eq!(
+        notice.copy_text(&en),
+        "Save Failed\n\nglobal_libraries.toml: denied"
+    );
+}
+
 /// A failed save names the operation in the sentence and keeps the error
-/// chain (path and OS error) for the system block.
+/// chain for the system block, the path line over the OS error line
+/// (mockup row 11).
 #[test]
 fn a_failed_save_puts_the_error_chain_in_the_system_block() {
     let _ = crate::diagnostics::init_logging();
@@ -208,13 +254,39 @@ fn a_failed_save_puts_the_error_chain_in_the_system_block() {
     );
     assert_eq!(
         notice.system.as_ref().map(UserText::as_str),
-        Some("writing /w/a.snxsch: Access is denied. (os error 5)")
+        Some("writing /w/a.snxsch\nAccess is denied. (os error 5)")
     );
     // What leaves the screen (a signex-cli reason) is the one line the card
     // read before mockup row 11.
     assert_eq!(
         notice.detail_line_en_us(),
         "Failed to save active document: writing /w/a.snxsch: Access is denied. (os error 5)"
+    );
+}
+
+/// Mockup row 11: the system block puts each cause of the chain on its own
+/// line, outermost first; the copied text keeps the lines and the one line
+/// that leaves the screen joins them with a colon.
+#[test]
+fn the_system_block_puts_each_cause_on_its_own_line() {
+    let en = I18n::en_us();
+    let error = anyhow::anyhow!("Access is denied. (os error 5)")
+        .context("renaming the temporary file")
+        .context("writing C:\\work\\power.snxsch");
+    let notice = ErrorNotice::save(verbatim("Failed to save")).with_error_chain(&error);
+    let system = notice.system.as_ref().map(UserText::as_str);
+    assert_eq!(
+        system,
+        Some(
+            "writing C:\\work\\power.snxsch\nrenaming the temporary file\n\
+             Access is denied. (os error 5)"
+        )
+    );
+    assert!(notice.copy_text(&en).ends_with(system.unwrap_or_default()));
+    assert_eq!(
+        notice.detail_line_en_us(),
+        "Failed to save: writing C:\\work\\power.snxsch: renaming the temporary file: \
+         Access is denied. (os error 5)"
     );
 }
 

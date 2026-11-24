@@ -33,6 +33,8 @@ mod dimension_labels;
 mod pattern_glyphs;
 // The sketch palette on the board ground (mockup row 187, mockup row 188).
 mod sketch_ink;
+// The Import DXF preview draws in the same palette (mockup row 179c).
+pub(crate) use sketch_ink::SketchInk;
 
 /// The colour of selected sketch geometry, and of what draws as selected
 /// with it: the pad-link profile and the accent of a value on the drawing.

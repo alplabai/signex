@@ -65,6 +65,47 @@ The Via Types / Drill Pairs sub-tab lists what the board's vias make
 through the stack, smallest drill, aspect ratio and via count, and each type's
 drill, finished hole, pad, protection and use count. Neither table is stored.
 
+## Materials and finish {#materials}
+
+The Materials and Finish sub-tabs follow Stack and Via Types / Drill Pairs
+(mockup rows 176 and 177; decision 2026-11-24: "Built-in plus a user file;
+the board stores a copy of the values it uses so it opens the same
+anywhere").
+
+**Materials.** The library (`signex_types::material_library`) lists cores,
+prepregs, copper foils and solder masks with thickness, Dk and Df. The
+built-in entries are a generic list in the code. The person's own entries are
+one file in the config folder, `materials.snxmat` (token `snxmat/1`; a newer
+or missing token is refused). It is read in a task the first time Materials
+shows: a missing file is an empty library, a file that fails to read stays
+unwritten and the tab says why. Add material and Remove write the whole file
+atomically in a task, one write at a time. Use for selected layer copies the
+picked entry into the row selected in Stack, if the entry's kind fits the
+row (`MaterialKind::fits`), as one undo step (`StackEdit::UseMaterial`): a
+dielectric or mask row takes the name, thickness, Dk and Df, a copper row the
+thickness and the weight it makes. The board keeps the copy, not a link, so
+a changed or missing library changes no board.
+
+A row's Df is `loss_tangent` in `[[stackup.rows]]`, omitted at 0. The Stack
+table's Df column shows it on dielectric and mask rows and edits it with
+Enter (`StackEdit::SetLossTangent`); 0 clears it.
+
+**Finish.** The board's solder mask (type, colour, gloss, sides, thickness
+over laminate), silkscreen (colour, sides) and surface finish are
+`LayerStack::finish`, saved as `[stackup.finish]` with `.mask` and
+`.silkscreen` tables; a field left out takes its default. Until the first
+edit the page shows the defaults (ENIG, green glossy LPI mask on both sides,
+white silkscreen) and stores nothing. Each pick, and the thickness over
+laminate on Enter, is one undo step (`StackEdit::SetFinish`). The mask's
+thickness over copper and its Dk are the Solder Mask rows' and are edited in
+Stack. A `SetLayerStack` sent without a finish (an agent's row list) keeps
+the board's. Board materials lists each set of dielectric and mask values
+the rows store, once.
+
+A board with a finish or any row Df writes `snxpcb/1.10`; a board without
+either keeps its lower token, byte for byte (`docs/FORMAT_VERSIONS.md`).
+Sides are stored as fab data only: they do not add or remove stack rows.
+
 ## Per-layer sizes {#sizes}
 
 A via (`Via::layer_sizes`, a diameter) or pad (`Pad::layer_sizes`, an x/y

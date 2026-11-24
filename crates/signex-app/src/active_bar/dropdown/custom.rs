@@ -110,12 +110,23 @@ pub(crate) struct FilterChip<M> {
     pub why: Option<signex_i18n::Localized>,
 }
 
+/// One saved preset of a Selection Filter dropdown: its label, whether it
+/// is the one selected for editing (drawn lit, #2873), and the message a
+/// click sends.
+pub(crate) struct FilterPresetChip<M> {
+    pub label: String,
+    pub selected: bool,
+    pub msg: M,
+}
+
 /// What a Selection Filter dropdown shows and sends, for any editor: the
 /// schematic's categories or the board's kinds (#2383).
 pub(crate) struct FilterMenu<M> {
     pub chips: Vec<FilterChip<M>>,
-    /// The saved presets, by label, each with the message that applies it.
-    pub presets: Vec<(String, M)>,
+    /// The saved presets.
+    pub presets: Vec<FilterPresetChip<M>>,
+    /// "Editing <name>" while a preset is selected for editing (#2873).
+    pub editing: Option<signex_i18n::Localized>,
     /// How many categories are on, out of `chips.len()`.
     pub on: usize,
     pub all: M,
@@ -129,6 +140,44 @@ pub(crate) fn preset_label<K>(idx: usize, preset: &CustomFilterPreset<K>) -> Str
     } else {
         preset.name.clone()
     }
+}
+
+/// "Editing Wiring": the line every Selection Filter surface shows while a
+/// preset is selected for editing (#2873).
+pub(crate) fn preset_editing_line<K>(
+    i18n: &signex_i18n::I18n,
+    idx: usize,
+    preset: &CustomFilterPreset<K>,
+) -> signex_i18n::Localized {
+    let name = preset_label(idx, preset);
+    signex_i18n::t!(i18n, signex_i18n::ids::PANELS_FILTER_PRESET_EDITING, "name" => name)
+}
+
+/// The dropdown chips of `presets`, `editing` lit, each sending `clicked`.
+pub(crate) fn preset_chips<K, M>(
+    presets: &[CustomFilterPreset<K>],
+    editing: Option<usize>,
+    clicked: impl Fn(usize) -> M,
+) -> Vec<FilterPresetChip<M>> {
+    presets
+        .iter()
+        .enumerate()
+        .map(|(idx, preset)| FilterPresetChip {
+            label: preset_label(idx, preset),
+            selected: editing == Some(idx),
+            msg: clicked(idx),
+        })
+        .collect()
+}
+
+/// The "Editing <name>" line for `editing`, while that preset exists.
+pub(crate) fn editing_line<K>(
+    i18n: &signex_i18n::I18n,
+    presets: &[CustomFilterPreset<K>],
+    editing: Option<usize>,
+) -> Option<signex_i18n::Localized> {
+    let idx = editing?;
+    Some(preset_editing_line(i18n, idx, presets.get(idx)?))
 }
 
 /// Selection Filter menu: an irregular chip-wrap layout (All / None and the
@@ -151,8 +200,8 @@ pub(crate) fn filter_menu_view<M: Clone + 'static>(
     let scope = graphite::FilterScope::of(menu.on, menu.chips.len());
     let mut top: Vec<Element<'static, M>> =
         vec![graphite::all_none(tokens, scope, menu.all, menu.none)];
-    for (label, msg) in menu.presets {
-        top.push(graphite::chip(tokens, label, false, Some(msg), None));
+    for preset in menu.presets {
+        top.push(preset_chip(tokens, preset));
     }
     let kinds: Vec<Element<'static, M>> = menu
         .chips
@@ -160,12 +209,35 @@ pub(crate) fn filter_menu_view<M: Clone + 'static>(
         .map(|chip| graphite::chip(tokens, chip.label, chip.on, chip.msg, chip.why))
         .collect();
     let (top, kinds) = (one_line(top), lines_of(kinds, 6));
-    column![
-        container(top).padding([SP.s, SP.m]),
-        container(kinds).padding([SP.s, SP.m]),
-    ]
-    .spacing(SP.xs)
-    .boxed()
+    let mut lines = column![container(top).padding([SP.s, SP.m])].spacing(SP.xs);
+    if let Some(editing) = menu.editing {
+        let caption = container(editing_caption(tokens, editing)).padding([0.0, SP.m]);
+        lines = lines.push(caption.boxed());
+    }
+    lines
+        .push(container(kinds).padding([SP.s, SP.m]).boxed())
+        .boxed()
+}
+
+fn preset_chip<M: Clone + 'static>(
+    tokens: &ThemeTokens,
+    preset: FilterPresetChip<M>,
+) -> Element<'static, M> {
+    graphite::chip(
+        tokens,
+        preset.label,
+        preset.selected,
+        Some(preset.msg),
+        None,
+    )
+}
+
+fn editing_caption<M: 'static>(
+    tokens: &ThemeTokens,
+    line: signex_i18n::Localized,
+) -> Element<'static, M> {
+    let ink3 = crate::styles::tokens::resolve(tokens).ink3;
+    text(line).size(TS.caption).color(ink3).boxed()
 }
 
 fn one_line<M: 'static>(cells: Vec<Element<'static, M>>) -> Element<'static, M> {
@@ -188,10 +260,18 @@ fn lines_of<M: 'static>(cells: Vec<Element<'static, M>>, per_line: usize) -> Ele
     lines.boxed()
 }
 
+/// The schematic filter a dropdown edits: the kinds that are on, the saved
+/// presets and the one selected for editing (#2873).
+pub struct SchematicFilterState<'s> {
+    pub filters: &'s std::collections::HashSet<SelectionFilter>,
+    pub presets: &'s [CustomFilterPreset],
+    pub editing: Option<usize>,
+}
+
 /// The schematic's Selection Filter menu for the Active Bar dropdown.
 pub(crate) fn schematic_filter_menu<M>(
-    filters: &std::collections::HashSet<SelectionFilter>,
-    custom_presets: &[CustomFilterPreset],
+    i18n: &signex_i18n::I18n,
+    state: &SchematicFilterState<'_>,
     toggled: impl Fn(SelectionFilter) -> M,
     applied: impl Fn(usize) -> M,
     all: M,
@@ -201,20 +281,16 @@ pub(crate) fn schematic_filter_menu<M>(
         .iter()
         .map(|&filter| FilterChip {
             label: filter.label().to_string(),
-            on: filters.contains(&filter),
+            on: state.filters.contains(&filter),
             msg: Some(toggled(filter)),
             why: None,
         })
         .collect();
-    let presets = custom_presets
-        .iter()
-        .enumerate()
-        .map(|(idx, preset)| (preset_label(idx, preset), applied(idx)))
-        .collect();
     FilterMenu {
         chips,
-        presets,
-        on: filters.len(),
+        presets: preset_chips(state.presets, state.editing, applied),
+        editing: editing_line(i18n, state.presets, state.editing),
+        on: state.filters.len(),
         all,
         none,
     }
@@ -268,7 +344,7 @@ pub(super) fn titled_filter_menu_view<M: Clone + 'static>(
     let mut presets: Vec<Element<'static, M>> = menu
         .presets
         .into_iter()
-        .map(|(label, msg)| graphite::chip(tokens, label, false, Some(msg), None))
+        .map(|preset| preset_chip(tokens, preset))
         .collect();
     presets.push(graphite::chip(
         tokens,
@@ -284,18 +360,18 @@ pub(super) fn titled_filter_menu_view<M: Clone + 'static>(
             background: Some(iced::Background::Color(line)),
             ..container::Style::default()
         });
-    container(
-        column![
-            title,
-            wrapped(kinds),
-            rule,
-            text(chrome.presets_caption).size(TS.caption).color(ink3),
-            wrapped(presets),
-        ]
-        .spacing(SP.m),
-    )
-    .padding(SP.m)
-    .boxed()
+    let mut lines = column![
+        title,
+        wrapped(kinds),
+        rule,
+        text(chrome.presets_caption).size(TS.caption).color(ink3),
+        wrapped(presets),
+    ]
+    .spacing(SP.m);
+    if let Some(editing) = menu.editing {
+        lines = lines.push(editing_caption(tokens, editing));
+    }
+    container(lines).padding(SP.m).boxed()
 }
 
 /// The schematic's Selection Filter menu: the titled layout, with "Save
@@ -303,12 +379,11 @@ pub(super) fn titled_filter_menu_view<M: Clone + 'static>(
 pub(super) fn filter_entry(
     i18n: &signex_i18n::I18n,
     tokens: &ThemeTokens,
-    filters: &std::collections::HashSet<SelectionFilter>,
-    custom_presets: &[CustomFilterPreset],
+    state: &SchematicFilterState<'_>,
 ) -> DropdownEntry<ActiveBarMsg> {
     let menu = schematic_filter_menu(
-        filters,
-        custom_presets,
+        i18n,
+        state,
         ActiveBarMsg::ToggleFilter,
         ActiveBarMsg::ApplyCustomFilter,
         ActiveBarMsg::AllFiltersPicked,
@@ -318,7 +393,7 @@ pub(super) fn filter_entry(
         title: i18n.message(signex_i18n::ids::CHROME_ACTIVE_BAR_SELECTION_FILTER, &[]),
         presets_caption: i18n.message(signex_i18n::ids::PANELS_FILTER_PRESETS, &[]),
         save_label: i18n.message_plain(signex_i18n::ids::PANELS_FILTER_SAVE_CURRENT, &[]),
-        save: save_current_message(custom_presets),
+        save: save_current_message(state.presets),
     };
     DropdownEntry::Custom(titled_filter_menu_view(tokens, menu, chrome))
 }

@@ -25,7 +25,8 @@ pub(super) enum DigiKeyCard<'a> {
     Connecting,
     /// An account is connected: "Connected as …" and Disconnect.
     Connected(&'a str),
-    /// No client id was set at start: the error state, Connect disabled.
+    /// No client id at start, neither built in (a release build) nor from
+    /// the environment: the error state, Connect disabled (mockup row 149).
     NotConfigured,
     /// Nothing connected: "Not connected" and Connect via OAuth.
     NotConnected,

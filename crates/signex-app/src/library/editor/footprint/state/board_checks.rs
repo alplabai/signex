@@ -2,12 +2,14 @@
 //! preview list them. They are read from the editor's current solve each
 //! time the panel context is built, so every path that solves (a canvas
 //! edit, a Properties edit, undo, a solve landing from its task) shows them
-//! live. The inside-corner check uses the router tool diameter the board
-//! session copied from its project. An open profile offers Close gap on
-//! both hosts (mockup row 190). Rules: `docs/PCB_SKETCH.md`, "Outline checks".
+//! live. The inside-corner and min slot checks use the router tool diameter
+//! and min slot the board session copied from its project. An open profile
+//! offers Close gap on both hosts (mockup row 190). Rules:
+//! `docs/PCB_SKETCH.md`, "Outline checks".
 
 use signex_bake::board::{
-    CheckState, Finding, NotChecked, OutlineCheck, OutlineChecks, outline_checks_with_router,
+    CheckState, FabLimits, Finding, NotChecked, OutlineCheck, OutlineChecks,
+    outline_checks_with_fab,
 };
 use signex_bake::open_ends::{OpenEnd, bakes_a_profile, open_ends};
 use signex_i18n::{MessageId, Translatable, ids};
@@ -29,11 +31,13 @@ impl FootprintEditorState {
     /// no solve (it failed, or none ran yet).
     pub fn board_checks(&self, sketch: Option<&SketchData>) -> Option<OutlineChecks> {
         match (self.sketch_host(), sketch) {
-            (SketchHost::Board, Some(sketch)) => outline_checks_with_router(
-                sketch,
-                self.last_solve.as_ref(),
-                self.sketch_exit.router_tool_diameter,
-            ),
+            (SketchHost::Board, Some(sketch)) => {
+                let fab = FabLimits {
+                    router_tool_diameter: self.sketch_exit.router_tool_diameter,
+                    min_slot: self.sketch_exit.min_slot,
+                };
+                outline_checks_with_fab(sketch, self.last_solve.as_ref(), fab)
+            }
             _ => None,
         }
     }
@@ -144,6 +148,7 @@ fn stored_positions(sketch: &SketchData) -> FullSolveOutput {
         warnings: Vec::new(),
         redundancy_pending: false,
         jacobian: Vec::new(),
+        free_motions: Default::default(),
         params: Default::default(),
     }
 }
@@ -260,6 +265,7 @@ fn passed_id(check: OutlineCheck) -> MessageId {
         OutlineCheck::NoCrossing => ids::BOARD_SKETCH_CHECK_NO_CROSSING,
         OutlineCheck::OpeningsInside => ids::BOARD_SKETCH_CHECK_OPENINGS_INSIDE,
         OutlineCheck::InsideCorners => ids::BOARD_SKETCH_CHECK_CORNERS,
+        OutlineCheck::MinSlot => ids::BOARD_SKETCH_CHECK_MIN_SLOT,
     }
 }
 
@@ -269,6 +275,7 @@ fn name_id(check: OutlineCheck) -> MessageId {
         OutlineCheck::NoCrossing => ids::BOARD_SKETCH_CHECK_NAME_CROSSING,
         OutlineCheck::OpeningsInside => ids::BOARD_SKETCH_CHECK_NAME_OPENINGS,
         OutlineCheck::InsideCorners => ids::BOARD_SKETCH_CHECK_NAME_CORNERS,
+        OutlineCheck::MinSlot => ids::BOARD_SKETCH_CHECK_NAME_MIN_SLOT,
     }
 }
 
@@ -278,6 +285,7 @@ fn skipped_id(why: NotChecked) -> MessageId {
         NotChecked::NeedsClosedOutline => ids::BOARD_SKETCH_CHECK_SKIPPED_NOT_CLOSED,
         NotChecked::Unsolved => ids::BOARD_SKETCH_CHECK_SKIPPED_UNSOLVED,
         NotChecked::NoRouterTool => ids::BOARD_SKETCH_CHECK_SKIPPED_ROUTER,
+        NotChecked::NoMinSlot => ids::BOARD_SKETCH_CHECK_SKIPPED_MIN_SLOT,
     }
 }
 
@@ -324,6 +332,13 @@ fn failed_line(finding: &Finding) -> CheckLine {
             .arg("tool", mm(*tool_radius_mm, 2))
             .arg("x", mm(at.x, 2))
             .arg("y", mm(at.y, 2)),
+        Finding::NarrowSlot {
+            width_mm,
+            min_slot_mm,
+            ..
+        } => Translatable::new(ids::BOARD_SKETCH_CHECK_SLOT_NARROW)
+            .arg("width", mm(*width_mm, 2))
+            .arg("min", mm(*min_slot_mm, 2)),
     };
     let close_gap = match finding {
         Finding::OpenEnd {

@@ -1,7 +1,8 @@
 //! Edit Component modal (mockup row 130): the row editor the Library
 //! Browser's "Edit Details" opens. Identity and bindings on the left, the
 //! parameters on the right; Save waits while the draft has a problem (lib-07:
-//! an inline field error plus a footer summary). Update refuses that Save too.
+//! a field error outline, an error banner at the foot of the Parameters
+//! column, and a footer summary). Update refuses that Save too.
 //!
 //! The delete-row confirm (mockup row 137) lives here too, in `delete_confirm`.
 
@@ -9,6 +10,8 @@ mod bindings;
 mod checks;
 mod delete_confirm;
 mod identity;
+#[cfg(test)]
+mod layout_tests;
 
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Element, Length, Theme, Widget as _};
@@ -19,7 +22,8 @@ use signex_widgets::{text, theme_ext};
 
 use super::messages::{BrowserEditMsg, LibraryMessage};
 use super::modal_chrome::{
-    cancel_btn, footer_strip, header_with_note_closing, primary_btn_if, secondary_btn,
+    cancel_btn, footer_strip, header_with_note_closing, notice_banner, primary_btn_if,
+    secondary_btn,
 };
 use super::state::{EditRowModalState, LibraryState};
 
@@ -130,7 +134,7 @@ pub fn view<'a>(
         identity::view(
             edit,
             context.classes.clone(),
-            context.pn_conflict.as_deref(),
+            context.pn_conflict.is_some(),
             tokens,
             i18n,
             send.clone(),
@@ -183,14 +187,34 @@ pub fn view<'a>(
             background: Some(iced::Background::Color(line)),
             ..container::Style::default()
         });
+    // The Internal PN conflict is the error banner pinned to the foot of
+    // the Parameters column, under the scrolling parameters (mockup row 130).
+    let mut right_column = column![
+        scrollable(container(right).padding(COLUMN_PAD).width(Length::Fill))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .boxed()
+    ]
+    .width(Length::Fill)
+    .height(Length::Fill);
+    if let Some(table) = context.pn_conflict.as_deref() {
+        right_column = right_column.push(
+            container(pn_conflict_banner(edit, table, tokens, i18n))
+                .padding(iced::Padding {
+                    top: 0.0,
+                    right: COLUMN_PAD[1],
+                    bottom: COLUMN_PAD[0],
+                    left: COLUMN_PAD[1],
+                })
+                .boxed(),
+        );
+    }
     let body = row![
         scrollable(left)
             .width(Length::Fixed(LEFT_COLUMN_W))
             .height(Length::Fill),
         separator,
-        scrollable(container(right).padding(COLUMN_PAD).width(Length::Fill))
-            .width(Length::Fill)
-            .height(Length::Fill),
+        right_column,
     ]
     .width(Length::Fill)
     .height(Length::Fill);
@@ -226,6 +250,25 @@ pub fn view<'a>(
     .boxed()
 }
 
+/// The err banner (warn glyph, then the reason) for an Internal PN that
+/// another row in `table` already holds.
+fn pn_conflict_banner<'a>(
+    edit: &EditRowModalState,
+    table: &str,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, LibraryMessage> {
+    let reason = text(t!(
+        i18n,
+        ids::LIBRARY_EDIT_ROW_PN_CONFLICT,
+        "pn" => edit.draft.internal_pn.as_str().trim(),
+        "table" => table
+    ))
+    .size(TS.body)
+    .boxed();
+    notice_banner(crate::styles::PillTone::Err, reason, Vec::new(), tokens)
+}
+
 /// Save waits while the draft has a problem the modal can see; the
 /// backend's own refusal stays the backstop for the rest.
 fn save_enabled(context: &EditRowContext<'_>) -> bool {
@@ -244,21 +287,21 @@ fn class_label(context: &EditRowContext<'_>) -> Option<String> {
     )
 }
 
-/// "Reload saved version", offered once a save was refused because the row
-/// changed on the server; discarding the draft asks first, inline.
+/// "Reload saved version": a quiet action at the footer's left at all
+/// times, the conflict state included (mockup row 130). Discarding the
+/// draft asks first, inline.
 fn reload_control<'a>(
     edit: &EditRowModalState,
     tokens: &ThemeTokens,
     i18n: &I18n,
     send: &impl Fn(BrowserEditMsg) -> LibraryMessage,
 ) -> Element<'a, LibraryMessage> {
-    if !edit.stale_base {
-        return Space::new().width(0).boxed();
-    }
     if !edit.reload_confirming {
-        return secondary_btn(
+        return crate::styles::dialog_icon_button(
+            crate::icons::icon_chrome_refresh(signex_types::theme::ThemeId::GraphiteDark),
             t!(i18n, ids::LIBRARY_EDIT_ROW_RELOAD_SAVED),
-            send(BrowserEditMsg::ReloadRequested),
+            crate::styles::DialogButtonKind::Ghost,
+            Some(send(BrowserEditMsg::ReloadRequested)),
             tokens,
         );
     }

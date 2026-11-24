@@ -85,3 +85,6 @@ annotations-jump-design-unread = Some sheets of the design could not be read, so
 annotations-jump-net-reading = The project's nets are still being read. Click { $name } again in a moment.
 annotations-jump-net-unknown = { $name } is not a net of the design.
 annotations-jump-net-open-sheet = Open a sheet of this project, then click { $name } again.
+
+# annotations-panel
+annotations-new-needs-notebook = New annotation · open a notebook first

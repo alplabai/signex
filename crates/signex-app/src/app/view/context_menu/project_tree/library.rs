@@ -5,6 +5,7 @@
 use super::*;
 
 use super::super::items::{danger, submenu_launcher, with_icon};
+use super::kind_inks::{KindInks, kind_tinted};
 use crate::icons as ic;
 use crate::menu_bar::MenuMessage;
 use signex_types::theme::ThemeId;
@@ -13,18 +14,21 @@ use signex_widgets::tree_view::TreeKey;
 /// The library's Add New flyout. Component opens the New Component modal;
 /// Symbol Library and Footprint Library create files (a `.snxsym` holds many
 /// symbols). Footprint Library is hidden while the footprint editor is gated
-/// off, so the user never reaches a dead flow.
+/// off, so the user never reaches a dead flow. Every glyph takes the library
+/// ink of `inks`.
 pub(in crate::app::view::context_menu) fn library_add_new_entries(
     i18n: &I18n,
     tid: ThemeId,
+    inks: KindInks,
 ) -> Vec<DropdownEntry<Message>> {
     let row = |label, message: MenuMessage| {
-        dd_msg(
+        let entry = dd_msg(
             Some(ic::icon_menu_library(tid)),
             &text(i18n, label),
             "",
             Message::Menu(message),
-        )
+        );
+        kind_tinted(entry, inks.library)
     };
     let mut v = vec![
         row(

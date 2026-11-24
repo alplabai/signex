@@ -165,6 +165,28 @@ fn the_folder_follows_only_a_name_matching_the_old_stem() {
     assert_eq!(folder_target(&root.join("work"), "Foo", "Bar"), None);
 }
 
+/// Mockup row 23: the Rename dialog's "the project folder is not renamed"
+/// note follows Submit's own checks: a folder named after the project moves,
+/// one with another name stays, and so does one holding another project.
+#[test]
+fn the_dialog_says_the_folder_stays_exactly_when_submit_keeps_it() {
+    let follows = app_workspace("/w/ProjectA", &["top.snxsch"]);
+    assert!(!follows.project_rename_keeps_folder(0, Path::new("/w/ProjectA/ProjectA.snxprj")));
+
+    let other_name = app_workspace("/w/a", &["top.snxsch"]);
+    assert!(other_name.project_rename_keeps_folder(0, Path::new("/w/a/ProjectA.snxprj")));
+
+    let mut nested = app_workspace("/w/ProjectA", &["top.snxsch"]);
+    let mut inner = nested.document_state.projects[0].clone();
+    inner.id = nested.document_state.mint_project_id();
+    inner.path = PathBuf::from("/w/ProjectA/sub/Inner.snxprj");
+    nested.document_state.projects.push(inner);
+    assert!(
+        nested.project_rename_keeps_folder(0, Path::new("/w/ProjectA/ProjectA.snxprj")),
+        "another project inside keeps the folder where it is"
+    );
+}
+
 #[test]
 fn the_disk_move_renames_file_and_folder_and_keeps_the_contents() {
     let root = tempfile::tempdir().expect("tempdir");

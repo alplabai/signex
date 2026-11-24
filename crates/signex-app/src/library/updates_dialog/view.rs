@@ -12,7 +12,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{checkbox, radio, raw, text};
 use uuid::Uuid;
 
-use super::{BumpKind, ConflictChoice, LibraryUpdateEntry, LibraryUpdatesState};
+use super::{BumpKind, ConflictChoice, DriftRow, LibraryUpdateEntry, LibraryUpdatesState};
 use crate::library::messages::LibraryMessage;
 use crate::library::modal_chrome::{
     cancel_btn, footer_strip, header_with_note_closing, primary_btn_if, secondary_btn,
@@ -133,7 +133,8 @@ fn summary_line<'a>(
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    let message = t!(i18n, ids::LIBRARY_UPDATES_SUMMARY, "count" => state.entries.len());
+    // Counts table rows, as the pills do: "R10, R11" is one line.
+    let message = t!(i18n, ids::LIBRARY_UPDATES_SUMMARY, "count" => state.rows().len());
     let mut line = Row::<Element<'a, LibraryMessage>>::new()
         .spacing(SP.m)
         .align_y(Alignment::Center)
@@ -271,7 +272,7 @@ fn ruled(
     }
 }
 
-/// The bordered table: the heading row, then the entries (each followed by
+/// The bordered table: the heading row, then the rows (each followed by
 /// its conflict lines) in a list that scrolls past [`LIST_MAX_H`].
 fn drift_table<'a>(
     state: &'a LibraryUpdatesState,
@@ -279,8 +280,10 @@ fn drift_table<'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let mut rows: Vec<Element<'a, LibraryMessage>> = Vec::new();
-    for entry in &state.entries {
-        rows.push(entry_row(entry, i18n, tokens));
+    for drift in state.rows() {
+        rows.push(entry_row(&drift, i18n, tokens));
+        // A row with a conflict holds one entry (see `DriftRow`).
+        let entry = drift.lead();
         for conflict in &entry.conflicts {
             rows.push(conflict_row(entry.symbol_uuid, conflict, i18n, tokens));
         }
@@ -345,18 +348,19 @@ fn heading_row<'a>(
     .boxed()
 }
 
-/// One drifted part: its checkbox, the designator in bold mono with the
-/// Internal PN muted beside it, the library, "current → latest" in mono and
-/// the Change pill.
+/// One drifted part: its checkbox, the designators in bold mono with the
+/// Internal PN muted beside them, the library, "current → latest" in mono
+/// and the Change pill.
 fn entry_row<'a>(
-    entry: &'a LibraryUpdateEntry,
+    drift: &DriftRow<'a>,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let r = resolve(tokens);
     let ink = ti(tokens.text);
-    let symbol_uuid = entry.symbol_uuid;
-    let check = checkbox(entry.selected)
+    let entry: &'a LibraryUpdateEntry = drift.lead();
+    let symbol_uuid = drift.toggle_target().symbol_uuid;
+    let check = checkbox(drift.is_selected())
         .style(crate::panels::form_look::checkbox_style)
         .size(TS.heading)
         .on_toggle(move |_| LibraryMessage::LibraryUpdatesToggleSelection(symbol_uuid))
@@ -366,7 +370,7 @@ fn entry_row<'a>(
         .spacing(SP.s)
         .align_y(Alignment::Center)
         .push(
-            text(UserText::new(&entry.ref_des))
+            text(UserText::new(drift.ref_des()))
                 .size(TS.body)
                 .color(ink)
                 // Medium is the heaviest bundled mono face.

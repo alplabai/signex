@@ -49,11 +49,13 @@ pub fn kind_glyph(kind: &TabKind) -> signex_i18n::MessageId {
         TabKind::PolygonManager => ids::POLYGON_MANAGER_TAB_KIND,
         TabKind::SymbolEditor(_) => ids::PANELS_TAB_KIND_SYMBOL,
         TabKind::FootprintEditor(_) => ids::PANELS_TAB_KIND_FOOTPRINT,
+        TabKind::GerberViewer => ids::GERBER_VIEWER_TAB_KIND,
         TabKind::LibraryBrowser(_) => ids::PANELS_TAB_KIND_LIBRARY,
         TabKind::ComponentEditor(_) => ids::PANELS_TAB_KIND_COMPONENT,
         TabKind::Project(_) => ids::PANELS_TAB_KIND_PROJECT,
         TabKind::Rules(_) => ids::RULES_TAB_KIND,
         TabKind::LayerStack => ids::PCB_STACK_TAB_KIND,
+        TabKind::PinTable => ids::EDITORS_PIN_TABLE_TAB_KIND,
     }
 }
 

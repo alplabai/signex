@@ -80,8 +80,7 @@ impl Signex {
     }
 
     /// The active copper layer of the board in view; the top layer without
-    /// one, or while a non-copper layer is active. Object snapping on the
-    /// current layer reads it (#2353).
+    /// one, or while a non-copper layer is active.
     pub(crate) fn pcb_active_layer(&self) -> CopperLayer {
         self.active_tab_path()
             .and_then(|path| self.pcb_layer_view(&path).active().copper())

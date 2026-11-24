@@ -69,4 +69,7 @@ define_ids! {
     SKETCH_PARAMETERS_PREVIEW_PADS_HIDDEN = "sketch-parameters-preview-pads-hidden";
     SKETCH_PARAMETERS_PREVIEW_DIMENSION = "sketch-parameters-preview-dimension";
     SKETCH_PARAMETERS_PREVIEW_DIMENSION_NAMED = "sketch-parameters-preview-dimension-named";
+    // sketch-live-checks-card
+    SKETCH_PARAMETERS_CHECK_MASK_WEB = "sketch-parameters-check-mask-web";
+    SKETCH_PARAMETERS_CHECKS_GAP = "sketch-parameters-checks-gap";
 }

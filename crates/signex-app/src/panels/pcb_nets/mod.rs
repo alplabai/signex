@@ -1,11 +1,16 @@
-//! PCB panel (mockup row 106): one dock panel with a mode dropdown. Nets
-//! lists the board's nets with a filter, chips and a Class column over the
-//! selected net's detail; Net Classes is the board's class table; Polygons
-//! is the compact list of the Polygon Manager (`panels::polygons`). A pure
-//! view over data the panel context copies from the board.
+//! PCB panel (mockup row 106): one dock panel with a mode dropdown, each
+//! mode a list over the selected item's detail. Nets lists the board's nets
+//! with a filter, chips and a Class column; Net Classes the class table
+//! with the selected class's rules and members; Differential Pairs the
+//! pairs the router finds; xSignals the board's xSignals; Polygons the
+//! pours of the Polygon Manager. A pure view over data the panel context
+//! copies from the board, so a detached panel window (mockup row 8) shows
+//! the same mode as the docked one. The Polygons mode's Open Polygon
+//! Manager opens the board's Polygon Manager tab (`panels::polygons`).
 
 mod detail;
 mod model;
+mod modes;
 mod table;
 #[cfg(test)]
 mod tests;
@@ -18,8 +23,8 @@ use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::text;
 
 pub use model::{
-    PcbNetChip, PcbNetLayer, PcbNetPad, PcbNetRow, PcbNetsSummary, PcbPanelMode, PcbPanelMsg,
-    PcbPanelUi, highlight_toggle,
+    PcbDiffPairRow, PcbNetChip, PcbNetLayer, PcbNetPad, PcbNetRow, PcbNetsSummary, PcbPanelMode,
+    PcbPanelMsg, PcbPanelUi, PcbPourChip, PcbPourRow, highlight_toggle,
 };
 
 use super::{PanelContext, PanelMsg};
@@ -61,13 +66,24 @@ fn separator<'a>(ctx: &PanelContext) -> Element<'a, PanelMsg> {
         .boxed()
 }
 
+/// A mode's dropdown entry: its name and how many items it lists.
+fn mode_label(i18n: &signex_i18n::I18n, mode: PcbPanelMode, count: usize) -> String {
+    let name = t!(i18n, mode.message()).into_string();
+    t!(i18n, ids::PANELS_PCB_MODE_COUNT, "mode" => name, "count" => count).into_string()
+}
+
 /// The mode dropdown at the top of the panel, so a docked, floating and
 /// detached panel all carry it.
-fn mode_row<'a>(ctx: &'a PanelContext, current: PcbPanelMode) -> Element<'a, PanelMsg> {
+fn mode_row<'a>(
+    ctx: &'a PanelContext,
+    summary: &PcbNetsSummary,
+    current: PcbPanelMode,
+) -> Element<'a, PanelMsg> {
     let i18n = &*ctx.i18n;
+    let classes = board_classes(ctx);
     let choice = |mode: PcbPanelMode| ModeChoice {
         mode,
-        label: t!(i18n, mode.message()).into_string(),
+        label: mode_label(i18n, mode, mode.count(summary, classes)),
     };
     let options: Vec<ModeChoice> = PcbPanelMode::ALL.into_iter().map(choice).collect();
     container(
@@ -96,13 +112,17 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     };
     let body: Element<'a, PanelMsg> = match ctx.pcb_panel.mode {
         PcbPanelMode::Nets => table::nets_mode(ctx, summary),
-        PcbPanelMode::NetClasses => {
-            super::panel_scrollable(super::board_net_classes::view(ctx)).boxed()
-        }
-        PcbPanelMode::Polygons => super::polygons::panel_view(ctx),
+        PcbPanelMode::NetClasses => modes::classes_mode(ctx, summary),
+        PcbPanelMode::DiffPairs => modes::pairs_mode(ctx, summary),
+        PcbPanelMode::XSignals => modes::xsignals_mode(ctx),
+        PcbPanelMode::Polygons => modes::polygons_mode(ctx, summary),
     };
-    column![mode_row(ctx, ctx.pcb_panel.mode), separator(ctx), body]
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .boxed()
+    column![
+        mode_row(ctx, summary, ctx.pcb_panel.mode),
+        separator(ctx),
+        body
+    ]
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .boxed()
 }

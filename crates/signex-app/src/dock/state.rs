@@ -660,4 +660,23 @@ mod tests {
         assert_eq!(dock.active_tab(PanelPosition::Bottom), 0);
         assert!(dock.floating.is_empty());
     }
+
+    /// DECISIONS 2026-11-20 (h): a panel that left the dock from a region
+    /// other than its home is re-docked at home by `show_panel`, the call
+    /// Dock back and the detached window's close make (mockup row 8).
+    #[test]
+    fn show_panel_re_docks_at_home_not_the_region_it_left() {
+        let mut dock = DockArea::new();
+        dock.add_panel(PanelPosition::Bottom, PanelKind::Components);
+        dock.update(DockMessage::UndockPanel(PanelPosition::Bottom, 0));
+        dock.floating.clear();
+
+        dock.show_panel(PanelKind::Components);
+
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Left),
+            [PanelKind::Components]
+        );
+        assert!(dock.panel_kinds(PanelPosition::Bottom).is_empty());
+    }
 }

@@ -132,6 +132,7 @@ impl Signex {
             }
             Some(tab) if tab.kind.is_layer_stack() => Some(self.view_layer_stack_tab()),
             Some(tab) if tab.kind.is_polygon_manager() => Some(self.view_polygon_manager_tab()),
+            Some(tab) if tab.kind.is_pin_table() => Some(self.view_pin_table_tab(&tab.path)),
             Some(tab) => self
                 .view_library_tab(tab, window_id, true)
                 .or_else(|| {
@@ -184,6 +185,7 @@ impl Signex {
             wire_tool_active: false,
             placement: None,
             unions: self.union_view(Some(path)),
+            annotation_flags: self.annotation_flag_view(Some(path)),
             ..prefs
         };
         crate::canvas::SchematicSurface::new(crate::canvas::SchematicCanvas::new(slot, prefs))

@@ -5,8 +5,11 @@
 use std::path::Path;
 
 use signex_engine::{Command, DocumentPatch, Engine, EngineError};
+use signex_i18n_ids::ids;
 
-use super::notices::{engine_error_notice, engine_notice_events, skip_notice, warning_notice};
+use super::notices::{
+    engine_error_notice, engine_notice_events, locked_refusal, skip_notice, warning_notice,
+};
 use super::{ActiveSettlement, DocumentState, SheetEdit, SheetStep};
 use crate::app::core::event::{ChangeCause, CoreEvent, DocumentChanged};
 use crate::app::core::locked_items::locked_items_pruned;
@@ -54,7 +57,7 @@ impl DocumentState {
             Err(error) => {
                 let reason = error.to_string();
                 events.push(engine_error_notice(
-                    "Engine command execution failed",
+                    ids::NOTICE_EDIT_COMMAND_EXECUTION_FAILED,
                     error,
                 ));
                 return SheetEdit::failed(reason, events);
@@ -107,11 +110,11 @@ impl DocumentState {
             Ok(_) => SheetEdit::unchanged(events),
             Err(error) => {
                 let reason = error.to_string();
-                if matches!(error, EngineError::ItemLocked { .. }) {
+                if let EngineError::ItemLocked { references, action } = &error {
                     // Same level as the skip notice a batch raises.
-                    events.push(warning_notice(reason.clone()));
+                    events.push(warning_notice(locked_refusal(references, action)));
                 } else {
-                    events.push(engine_error_notice("Engine command failed", error));
+                    events.push(engine_error_notice(ids::NOTICE_EDIT_COMMAND_FAILED, error));
                 }
                 SheetEdit::failed(reason, events)
             }
@@ -124,9 +127,9 @@ impl DocumentState {
         let path = self.active_path.clone()?;
         let engine = self.engines.get_mut(&path)?;
         let (stepped, failure) = if undo {
-            (engine.undo(), "Engine undo failed")
+            (engine.undo(), ids::NOTICE_EDIT_UNDO_FAILED)
         } else {
-            (engine.redo(), "Engine redo failed")
+            (engine.redo(), ids::NOTICE_EDIT_REDO_FAILED)
         };
         let mut events = Vec::new();
         let patch = match stepped {
@@ -168,7 +171,7 @@ impl DocumentState {
             Ok(_) => return SheetEdit::unchanged(events),
             Err(error) => {
                 let reason = error.to_string();
-                events.push(engine_error_notice("Engine command failed", error));
+                events.push(engine_error_notice(ids::NOTICE_EDIT_COMMAND_FAILED, error));
                 return SheetEdit::failed(reason, events);
             }
         };
@@ -219,9 +222,9 @@ impl DocumentState {
             Err(error) => {
                 let reason = error.to_string();
                 let failure = if undo {
-                    "Engine undo failed"
+                    ids::NOTICE_EDIT_UNDO_FAILED
                 } else {
-                    "Engine redo failed"
+                    ids::NOTICE_EDIT_REDO_FAILED
                 };
                 events.push(engine_error_notice(failure, error));
                 return Self::step_refused(reason, events);

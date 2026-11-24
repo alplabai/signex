@@ -103,9 +103,14 @@ impl RangeFilterDraft {
 }
 
 /// The range filters of one surface, by parameter column key.
+///
+/// A complete filter shows as a compact chip (mockup row 118); one filter
+/// at a time has its editor open: the one just added or whose chip was
+/// pressed. A filter that is not complete keeps its editor.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct RangeFilters {
     drafts: BTreeMap<String, RangeFilterDraft>,
+    editing: Option<String>,
 }
 
 impl RangeFilters {
@@ -130,32 +135,63 @@ impl RangeFilters {
             .collect()
     }
 
+    /// Whether the filter on `key` draws as its chip: it is complete and
+    /// its editor is not open.
+    pub fn shows_as_chip(&self, key: &str) -> bool {
+        self.editing.as_deref() != Some(key)
+            && self.drafts.get(key).is_some_and(|d| d.filter().is_some())
+    }
+
     /// Apply one user action.
     pub fn apply(&mut self, msg: RangeFilterMsg) {
         match msg {
             RangeFilterMsg::ColumnPicked { key, unit } => {
                 self.drafts
-                    .entry(key)
+                    .entry(key.clone())
                     .or_insert_with(|| RangeFilterDraft::new(unit));
+                self.editing = Some(key);
+            }
+            RangeFilterMsg::ChipPressed { key } => self.open_editor(key),
+            RangeFilterMsg::EditingFinished { key } => {
+                // An unfinished filter keeps its editor; only a complete one
+                // folds into its chip, so it never collapses mid-typing.
+                let is_complete = self.drafts.get(&key).is_some_and(|d| d.filter().is_some());
+                if is_complete && self.editing.as_deref() == Some(key.as_str()) {
+                    self.editing = None;
+                }
             }
             RangeFilterMsg::OperatorPicked { key, op } => {
                 if let Some(d) = self.drafts.get_mut(&key) {
                     d.op = op;
                 }
+                self.open_editor(key);
             }
             RangeFilterMsg::NumberEdited { key, bound, text } => {
                 if let Some(d) = self.drafts.get_mut(&key) {
                     d.bound_mut(bound).edit(text);
                 }
+                self.open_editor(key);
             }
             RangeFilterMsg::PrefixPicked { key, bound, prefix } => {
                 if let Some(d) = self.drafts.get_mut(&key) {
                     d.bound_mut(bound).prefix = prefix;
                 }
+                self.open_editor(key);
             }
             RangeFilterMsg::Cleared { key } => {
+                if self.editing.as_deref() == Some(key.as_str()) {
+                    self.editing = None;
+                }
                 self.drafts.remove(&key);
             }
+        }
+    }
+
+    /// Make `key`'s filter the one with its editor open, so the user's
+    /// edit stays in an editor; any other complete filter shows its chip.
+    fn open_editor(&mut self, key: String) {
+        if self.drafts.contains_key(&key) {
+            self.editing = Some(key);
         }
     }
 }

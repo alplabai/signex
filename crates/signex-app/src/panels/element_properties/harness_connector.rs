@@ -1,10 +1,12 @@
 //! Properties of a selected harness connector (#1280), as mockup row 152
 //! draws it: a caption with the sheet and entry count; in the mismatch state
 //! a warn banner (with Rename and Go to buttons) and the Entries list right
-//! under the header, the mismatched row tinted; the Harness section (Type
-//! from the project's definitions, the Definition link, the one project
-//! colour); the Placement section (X / Y, Width, Entry pitch); the Entries
-//! list with the net each entry meets on this sheet; the compiled-name note.
+//! under the header, the mismatched row tinted; the read-only illustration
+//! with its Width and Entry pitch callouts; the Harness section (Type from
+//! the project's definitions, the Definition link, the one project colour);
+//! the Placement section (X / Y, Width, Entry pitch); the Entries list with
+//! the net each entry meets on this sheet and a + that adds an entry; the
+//! compiled-name note.
 //! The facts are gathered in `update` (`Signex::harness_panel_facts`); this
 //! is pure view. Design: `docs/SIGNAL_HARNESSES.md`.
 
@@ -121,6 +123,11 @@ pub enum HarnessPanelMsg {
         text: String,
     },
     NewTypeClicked,
+    /// The + of the Entries header: one more entry at the end of the
+    /// connector, one undo step.
+    AddEntryClicked {
+        connector: Uuid,
+    },
     /// A sheet entry's harness type; `None` makes it a plain entry again.
     SheetEntryTypePicked {
         pin: Uuid,
@@ -170,6 +177,12 @@ pub(super) fn push_harness_connector_sections<'a>(
         col = col.push(mismatch_banner(ctx, c.uuid, m));
         col = col.push(entries_list(ctx, c, st));
     }
+    let swatch = ctx.canvas_colors.harness_color();
+    let colour = Color::from_rgb8(swatch.r, swatch.g, swatch.b);
+    col = col.push(super::illustrations::show(
+        super::illustrations::harness_connector(c, &facts.entry_nets, colour, i18n),
+        ctx,
+    ));
     let uuid = c.uuid;
     let options: Vec<String> = facts.definitions.iter().map(|d| d.name.clone()).collect();
     let options = if options.contains(&c.harness_type) {
@@ -182,7 +195,6 @@ pub(super) fn push_harness_connector_sections<'a>(
     let current = c.harness_type.clone();
     let def_entries = signex_types::schematic::harness_definition(&facts.definitions, &current)
         .map_or(c.entries.len(), |d| d.entries.len());
-    let swatch = ctx.canvas_colors.harness_color();
     col = col.push(
         ctx.collapsible(
             "sel_harness",
@@ -393,13 +405,39 @@ fn entries_list<'a>(
             None => cell.boxed(),
         });
     }
-    ctx.collapsible(
+    ctx.collapsible_with_action(
         "sel_harness_entries",
         ids::PANELS_HARNESS_ENTRIES,
         &ctx.collapsed_sections,
+        add_entry_button(ctx, c.uuid),
         move || list,
     )
     .boxed()
+}
+
+/// The + of the Entries header (mockup row 152). A locked connector keeps
+/// it clickable; the engine refuses the edit.
+fn add_entry_button<'a>(ctx: &'a PanelContext, connector: Uuid) -> Element<'a, PanelMsg> {
+    let ink = crate::styles::ti(ctx.tokens.text);
+    let glyph = svg(crate::icons::icon_plus(ctx.theme_id))
+        .width(TS.body)
+        .height(TS.body)
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(ink),
+            ..svg::Style::default()
+        });
+    let add = signex_widgets::button(glyph)
+        .padding(SP.xs)
+        .style(crate::panels::form_look::ghost_button)
+        .on_press(PanelMsg::Harness(HarnessPanelMsg::AddEntryClicked {
+            connector,
+        }));
+    crate::panels::graphite::hint_tooltip(
+        add.boxed(),
+        t!(ctx.i18n, ids::PANELS_HARNESS_ADD_ENTRY),
+        &ctx.tokens,
+        iced::widget::tooltip::Position::Left,
+    )
 }
 
 /// `label | swatch caption`: the one project harness colour.
@@ -466,6 +504,148 @@ mod definition_link_tests {
                 [PanelMsg::Harness(HarnessPanelMsg::DefinitionsOpened)]
             ),
             "{pressed:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod add_entry_tests {
+    use super::*;
+    use crate::app::{EditMsg, Message, Signex, TabInfo, TabKind};
+    use signex_types::schematic::{HarnessEntry, Point, SchematicSheet};
+
+    const CONNECTOR: u128 = 1;
+    const DOCK: iced::Size = iced::Size::new(300.0, 400.0);
+
+    fn connector(names: &[&str]) -> HarnessConnector {
+        HarnessConnector {
+            uuid: Uuid::from_u128(CONNECTOR),
+            harness_type: "SPI_BUS".into(),
+            position: Point::new(10.0, 10.0),
+            width: 10.16,
+            entry_pitch: 2.54,
+            rotation: 0.0,
+            entries: names
+                .iter()
+                .enumerate()
+                .map(|(i, n)| HarnessEntry {
+                    uuid: Uuid::from_u128(10 + i as u128),
+                    name: (*n).into(),
+                })
+                .collect(),
+            locked: false,
+        }
+    }
+
+    fn app_with(c: HarnessConnector) -> Signex {
+        let path = std::path::PathBuf::from("harness.snxsch");
+        let mut sheet = SchematicSheet {
+            paper_size: "A4".to_string(),
+            ..Default::default()
+        };
+        sheet.harness.connectors.push(c);
+        let engine = signex_engine::Engine::new(sheet).expect("engine");
+        let (mut app, _boot) = Signex::new();
+        app.ui_state.first_run_tour_open = false;
+        app.document_state.engines.insert(path.clone(), engine);
+        app.document_state.tabs.push(TabInfo {
+            title: "harness".to_string(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: TabKind::Schematic,
+        });
+        app.document_state.active_tab = app.document_state.tabs.len() - 1;
+        app.document_state.active_path = Some(path);
+        app
+    }
+
+    fn names(app: &Signex) -> Vec<String> {
+        let engine = app.document_state.active_engine().expect("a sheet");
+        let c = engine
+            .document()
+            .harness
+            .connector(Uuid::from_u128(CONNECTOR));
+        c.expect("the connector")
+            .entries
+            .iter()
+            .map(|e| e.name.clone())
+            .collect()
+    }
+
+    fn add(app: &mut Signex) {
+        let msg = HarnessPanelMsg::AddEntryClicked {
+            connector: Uuid::from_u128(CONNECTOR),
+        };
+        let _ = app.update(Message::Dock(crate::dock::DockMessage::Panel(
+            PanelMsg::Harness(msg),
+        )));
+    }
+
+    /// Mockup row 152: each + adds one entry after the last, named as the
+    /// Harness Entry tool names one, and each is one undo step.
+    #[test]
+    fn each_plus_adds_one_entry_as_one_undo_step() {
+        let mut app = app_with(connector(&["SCK"]));
+        add(&mut app);
+        assert_eq!(names(&app), ["SCK", "ENTRY_1"]);
+        add(&mut app);
+        assert_eq!(names(&app), ["SCK", "ENTRY_1", "ENTRY_2"]);
+        let _ = app.update(Message::Edit(EditMsg::Undo));
+        assert_eq!(names(&app), ["SCK", "ENTRY_1"]);
+        let _ = app.update(Message::Edit(EditMsg::Undo));
+        assert_eq!(names(&app), ["SCK"]);
+    }
+
+    /// A locked connector keeps its entries: the engine refuses the edit.
+    #[test]
+    fn a_locked_connector_takes_no_entry() {
+        let mut app = app_with(HarnessConnector {
+            locked: true,
+            ..connector(&["SCK"])
+        });
+        add(&mut app);
+        assert_eq!(names(&app), ["SCK"]);
+    }
+
+    fn entries_section<'a>(ctx: &'a PanelContext, c: &HarnessConnector) -> Element<'a, PanelMsg> {
+        let st = PanelStyle {
+            muted: Color::BLACK,
+            primary: Color::BLACK,
+            border_c: Color::BLACK,
+            palette: crate::panels::palette::PanelPalette::from_tokens(&ctx.tokens),
+        };
+        entries_list(ctx, c, st)
+    }
+
+    /// Mockup row 152: the + sits at the right end of the Entries header and
+    /// adds an entry; the title still folds the section.
+    #[test]
+    fn the_entries_header_carries_a_plus_that_adds_an_entry() {
+        let (app, _boot) = Signex::new();
+        let ctx = &app.document_state.panel_ctx;
+        let c = connector(&["SCK", "MOSI"]);
+        let title = ctx
+            .i18n
+            .upper_for_display(&t!(ctx.i18n, ids::PANELS_HARNESS_ENTRIES).into_string());
+        let texts = crate::layout_probe::lay_out_texts(entries_section(ctx, &c), DOCK);
+        let at = crate::layout_probe::find(&texts, &title).bounds;
+        let side = crate::panels::form_look::SECTION_SIDE;
+        let plus = iced::Point::new(DOCK.width - side - SP.xs - TS.body / 2.0, at.center_y());
+        let pressed =
+            crate::layout_probe::messages_on_click_at(entries_section(ctx, &c), DOCK, None, plus);
+        assert!(
+            matches!(
+                pressed.as_slice(),
+                [PanelMsg::Harness(HarnessPanelMsg::AddEntryClicked { connector })]
+                    if *connector == c.uuid
+            ),
+            "{pressed:?}"
+        );
+        let folded = crate::layout_probe::messages_on_click(entries_section(ctx, &c), DOCK, &title);
+        assert!(
+            matches!(folded.as_slice(), [PanelMsg::ToggleSection(key)] if key == "sel_harness_entries"),
+            "{folded:?}"
         );
     }
 }

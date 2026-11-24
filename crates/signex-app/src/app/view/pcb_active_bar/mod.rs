@@ -99,6 +99,7 @@ impl Signex {
             ctx: &ctx,
             filter: &self.ui_state.pcb_pick_filter,
             presets: &self.ui_state.pcb_filter_presets,
+            editing: self.ui_state.pcb_filter_preset_editing,
             last: &self.ui_state.pcb_bar_last_tools,
         };
         let entries = pcb_bar_menu_entries(menu, &self.ui_state.i18n, tokens, tid, &sources);
@@ -205,7 +206,7 @@ fn command_button(command: &str, icon: ActiveBarIcon, tooltip: String) -> Active
 }
 
 /// A button that runs `command` on a click and opens `menu` on a
-/// right-click, chevron and all.
+/// right-click or a click on its chevron (mockup row 108).
 fn menu_button(
     command: &str,
     menu: PcbBarMenu,
@@ -215,14 +216,16 @@ fn menu_button(
     tid: ThemeId,
 ) -> ActiveBarItem<Message> {
     let on_press = run(command);
+    let toggle = bar_message(PcbBarMsg::MenuToggled(menu));
     ActiveBarItem::Button(ActiveBarButton {
         icon,
         tooltip,
         enabled: on_press.is_some(),
         selected: open == Some(menu),
         on_press,
-        on_right_press: Some(bar_message(PcbBarMsg::MenuToggled(menu))),
+        on_right_press: Some(toggle.clone()),
         dropdown_indicator: Some(ActiveBarIcon::Svg(ic::icon_chevron_45(tid))),
+        on_chevron_press: Some(toggle),
     })
 }
 
@@ -243,6 +246,7 @@ fn dropdown_button(
         on_press: Some(toggle.clone()),
         on_right_press: Some(toggle),
         dropdown_indicator: Some(ActiveBarIcon::Svg(ic::icon_chevron_45(tid))),
+        on_chevron_press: None,
     })
 }
 
@@ -308,7 +312,8 @@ pub(in crate::app::view) fn pcb_bar_items(
 
 /// The tool groups between the Align button and Board Sketch, a separator
 /// between each run: what goes on the board, the copper (routing, tuning,
-/// vias and pads, areas, drawing), then what annotates it (mockup row 108).
+/// vias and pads, areas), then what annotates it (mockup row 108). Copper
+/// lines and arcs are drawn with the Graphics tools (#2869).
 const BAR_GROUPS: [&[PcbBarGroup]; 3] = [
     &[PcbBarGroup::Components],
     &[
@@ -316,7 +321,6 @@ const BAR_GROUPS: [&[PcbBarGroup]; 3] = [
         PcbBarGroup::Tune,
         PcbBarGroup::ViaPad,
         PcbBarGroup::CopperAreas,
-        PcbBarGroup::CopperDrawing,
     ],
     &[
         PcbBarGroup::Dimensions,
@@ -326,7 +330,8 @@ const BAR_GROUPS: [&[PcbBarGroup]; 3] = [
 ];
 
 /// The bar icon of `tool`: the footprint editor's where one fits, the board
-/// tool glyphs for pad, via, dimension and keepout (mockup row 108).
+/// tool glyphs for pad, via, dimension and keepout, the hatched area for the
+/// copper-area tools (mockup row 108).
 fn tool_icon(tool: BoardPlaceTool, tid: ThemeId) -> ActiveBarIcon {
     use BoardPlaceTool as T;
     let svg = ActiveBarIcon::Svg;
@@ -340,11 +345,9 @@ fn tool_icon(tool: BoardPlaceTool, tid: ThemeId) -> ActiveBarIcon {
         T::MultiRoute => svg(ic::icon_pcb_multi_route(tid)),
         T::Track => svg(ic::icon_shape_line(tid)),
         T::Arc => svg(ic::icon_shape_arc(tid)),
-        T::Fill => svg(ic::icon_shape_rect(tid)),
-        T::SolidRegion => svg(ic::icon_shape_polygon(tid)),
-        T::PolygonPour => svg(ic::icon_dd_polygon(tid)),
-        T::PourCutout => svg(ic::icon_dd_cut(tid)),
-        T::SlicePour => svg(ic::icon_dd_line(tid)),
+        T::Fill | T::SolidRegion | T::PolygonPour | T::PourCutout | T::SlicePour => {
+            svg(ic::icon_pcb_copper_area(tid))
+        }
         T::TextString => svg(ic::icon_text(tid)),
         T::Dimension => svg(ic::icon_pcb_dimension(tid)),
         T::Keepout => svg(ic::icon_pcb_keepout(tid)),
@@ -409,6 +412,8 @@ pub(in crate::app::view) struct MenuSources<'a> {
     pub filter: &'a pcb_geom::PickFilter,
     /// The saved filter presets.
     pub presets: &'a [CustomFilterPreset<pcb_geom::PickKind>],
+    /// The preset selected for editing (#2873).
+    pub editing: Option<usize>,
     /// The row each tool group used last, drawn current in its dropdown.
     pub last: &'a PcbBarLastTools,
 }
@@ -424,7 +429,9 @@ pub(in crate::app::view) fn pcb_bar_menu_entries(
     src: &MenuSources<'_>,
 ) -> Vec<DropdownEntry<Message>> {
     match menu {
-        PcbBarMenu::Filter => return filter::entries(i18n, tokens, src.filter, src.presets),
+        PcbBarMenu::Filter => {
+            return filter::entries(i18n, tokens, src.filter, src.presets, src.editing);
+        }
         PcbBarMenu::Group(group) => return groups::entries(group, i18n, tid, src.ctx, src.last),
         PcbBarMenu::Align | PcbBarMenu::Move | PcbBarMenu::View => {}
     }

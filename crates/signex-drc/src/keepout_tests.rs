@@ -287,6 +287,46 @@ fn a_body_that_does_not_convert_inside_a_component_keepout_is_skipped_once() {
     assert!(run(&routing_only, &DrcRules::new(200_000)).is_clean());
 }
 
+/// A part with no pads whose courtyard spans x `from`..`from + 2` mm and
+/// y 24..26 mm, drawn at `width`.
+fn courtyard_part(from: f64, width: f64) -> signex_types::pcb::Footprint {
+    let mut fp = footprint(1, Vec::new());
+    let mut courtyard = broken_courtyard();
+    courtyard.width = width;
+    courtyard.start = Some(Point::new(from, 24.0));
+    courtyard.end = Some(Point::new(from + 2.0, 26.0));
+    fp.graphics.push(courtyard);
+    fp
+}
+
+fn component_hits(fp: signex_types::pcb::Footprint) -> Vec<(Vec<ItemRef>, i64)> {
+    let components = KeepoutKinds {
+        no_components: true,
+        ..KeepoutKinds::default()
+    };
+    let b = keep_out(
+        board(vec![fp], vec![], vec![]),
+        components,
+        &[CopperLayer::Top],
+    );
+    keepout_hits(&b)
+        .into_iter()
+        .map(|v| (v.items, v.measured_nm))
+        .collect()
+}
+
+/// DRC never counts the courtyard stroke (Caner, 2026-11-24): a component
+/// keepout finds the same parts at stroke 0 and 0.05.
+#[test]
+fn a_component_keepout_is_the_same_at_stroke_0_and_0_05() {
+    let thin = component_hits(courtyard_part(29.0, 0.0));
+    assert_eq!(thin.len(), 1, "the outline crosses the keepout's edge");
+    assert_eq!(component_hits(courtyard_part(29.0, 0.05)), thin);
+    // 0.01 mm right of the keepout; half a 0.05 mm stroke would reach in.
+    assert!(component_hits(courtyard_part(30.01, 0.0)).is_empty());
+    assert!(component_hits(courtyard_part(30.01, 0.05)).is_empty());
+}
+
 /// #2373: a keepout drawn on the board (a zone with the keepout fill) on
 /// the top keep-out layer keeps copper off the top layer, as a sketch
 /// keepout forbidding all copper does.

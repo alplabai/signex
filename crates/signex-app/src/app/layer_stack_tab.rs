@@ -36,16 +36,36 @@ fn tab_at(tabs: &[TabInfo], board: &Path, page: Option<&TabKind>) -> Option<usiz
 
 /// Move any board page tab left of its board to just after it, and return
 /// where the tab at `active` went.
-pub(crate) fn keep_pages_after_boards(tabs: &mut Vec<TabInfo>, mut active: usize) -> usize {
-    let pages: Vec<(PathBuf, TabKind)> = tabs
+pub(crate) fn keep_pages_after_boards(tabs: &mut Vec<TabInfo>, active: usize) -> usize {
+    // One pass per page kind: `keep_pages_after_owners` finds one page of
+    // its kind per path.
+    let is_board: fn(&TabKind) -> bool = |kind| matches!(kind, TabKind::Pcb);
+    let active = keep_pages_after_owners(tabs, active, TabKind::is_layer_stack, is_board);
+    keep_pages_after_owners(tabs, active, TabKind::is_polygon_manager, is_board)
+}
+
+/// Move any page tab (`is_page`) left of its owner's tab (`is_owner`, the
+/// same path) to just after it, and return where the tab at `active` went.
+/// The board pages and the Pin table tab all keep their place this way.
+pub(crate) fn keep_pages_after_owners(
+    tabs: &mut Vec<TabInfo>,
+    mut active: usize,
+    is_page: fn(&TabKind) -> bool,
+    is_owner: fn(&TabKind) -> bool,
+) -> usize {
+    let at = |tabs: &[TabInfo], path: &Path, kind: fn(&TabKind) -> bool| {
+        tabs.iter()
+            .position(|tab| tab.path == path && kind(&tab.kind))
+    };
+    let pages: Vec<PathBuf> = tabs
         .iter()
-        .filter(|tab| tab.kind.is_board_page())
-        .map(|tab| (tab.path.clone(), tab.kind.clone()))
+        .filter(|tab| is_page(&tab.kind))
+        .map(|tab| tab.path.clone())
         .collect();
-    for (board, kind) in pages {
+    for path in pages {
         let (Some(page), Some(owner)) = (
-            tab_at(tabs, &board, Some(&kind)),
-            tab_at(tabs, &board, None),
+            at(tabs.as_slice(), &path, is_page),
+            at(tabs.as_slice(), &path, is_owner),
         ) else {
             continue;
         };
@@ -53,7 +73,7 @@ pub(crate) fn keep_pages_after_boards(tabs: &mut Vec<TabInfo>, mut active: usize
             continue;
         }
         let tab = tabs.remove(page);
-        // The board moved one left, so its old index is just after it.
+        // The owner moved one left, so its old index is just after it.
         tabs.insert(owner, tab);
         active = if active == page {
             owner
@@ -168,9 +188,9 @@ impl Signex {
         }
     }
 
-    /// Close a board page tab. The board, its window and its unsaved work
-    /// are not touched.
-    pub(crate) fn close_board_page_tab(&mut self, idx: usize, keep_session: bool) {
+    /// Close a document page tab (a board page or a Pin table). The board or
+    /// symbol, its window and its unsaved work are not touched.
+    pub(crate) fn close_document_page_tab(&mut self, idx: usize, keep_session: bool) {
         self.document_state.tabs.remove(idx);
         let len = self.document_state.tabs.len();
         let active = self.document_state.active_tab;

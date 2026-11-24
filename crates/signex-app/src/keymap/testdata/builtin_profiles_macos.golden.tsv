@@ -100,7 +100,9 @@ signex_standard	bind	Pcb	1	command:board_sketch
 signex_standard	bind	Pcb	3	command:view_board_3d
 signex_standard	bind	Pcb	E O S	command:set_board_origin
 signex_standard	bind	Pcb	F	command:change_footprint
+signex_standard	bind	Pcb	H	command:cycle_board_3d_lighting
 signex_standard	bind	Pcb	L	command:flip_selection
+signex_standard	bind	Pcb	⇧⌘C	command:copy_board_3d_screenshot
 signex_standard	bind	Pcb	N	command:toggle_ratsnest
 signex_standard	bind	Pcb	P F	command:place_board_fill
 signex_standard	bind	Pcb	P G	command:place_board_polygon_pour
@@ -110,8 +112,10 @@ signex_standard	bind	Pcb	P T	command:place_board_track
 signex_standard	bind	Pcb	P V	command:place_board_via
 signex_standard	bind	Pcb	⇧*	command:next_signal_layer
 signex_standard	bind	Pcb	⇧+	command:next_layer
+signex_standard	bind	Pcb	⇧E	command:cycle_board_snapping
 signex_standard	bind	Pcb	⇧S	command:toggle_single_layer_mode
 signex_standard	bind	Pcb	T D	command:run_drc
+signex_standard	bind	Board3d	F	command:flip_board_3d
 signex_standard	bind	Footprint	1	command:footprint_mode_sketch
 signex_standard	bind	Footprint	2	command:footprint_mode_pads
 signex_standard	bind	Footprint	3	command:footprint_mode_view_3d
@@ -493,6 +497,9 @@ signex_standard	hint	-	-	reset_local_coordinates
 signex_standard	hint	-	⌃Q	cycle_unit
 signex_standard	hint	-	3	view_board_3d
 signex_standard	hint	-	-	flip_board_view
+signex_standard	hint	-	F	flip_board_3d
+signex_standard	hint	-	H	cycle_board_3d_lighting
+signex_standard	hint	-	⇧⌘C	copy_board_3d_screenshot
 signex_standard	hint	-	-	cycle_fast_grid
 signex_standard	hint	-	⇧G	cycle_snap_grid_backward
 signex_standard	hint	-	G	cycle_snap_grid_forward
@@ -503,6 +510,7 @@ signex_standard	hint	-	-	previous_grid
 signex_standard	hint	-	-	open_grid_picker
 signex_standard	hint	-	-	open_grid_properties
 signex_standard	hint	-	⇧E	toggle_electrical_grid
+signex_standard	hint	-	⇧E	cycle_board_snapping
 signex_standard	hint	-	⇧⌘G	toggle_visible_grid
 signex_standard	hint	-	-	open_library_browser
 signex_standard	hint	-	-	edit_library_symbol
@@ -639,12 +647,16 @@ classic	bind	Pcb	C	command:toggle_ratsnest
 classic	bind	Pcb	⌃M	command:measure_distance
 classic	bind	Pcb	F	command:change_footprint
 classic	bind	Pcb	F7	command:run_drc
+classic	bind	Pcb	H	command:cycle_board_3d_lighting
 classic	bind	Pcb	K	command:place_board_keepout
 classic	bind	Pcb	L	command:flip_selection
+classic	bind	Pcb	⇧⌘C	command:copy_board_3d_screenshot
 classic	bind	Pcb	⇧*	command:next_signal_layer
 classic	bind	Pcb	⇧+	command:next_layer
+classic	bind	Pcb	⇧E	command:cycle_board_snapping
 classic	bind	Pcb	⇧O	command:set_board_origin
 classic	bind	Pcb	⇧S	command:toggle_single_layer_mode
+classic	bind	Board3d	F	command:flip_board_3d
 classic	bind	Footprint	1	command:footprint_mode_sketch
 classic	bind	Footprint	2	command:footprint_mode_pads
 classic	bind	Footprint	3	command:footprint_mode_view_3d
@@ -1026,6 +1038,9 @@ classic	hint	-	SPACE	reset_local_coordinates
 classic	hint	-	⌃Q	cycle_unit
 classic	hint	-	3	view_board_3d
 classic	hint	-	-	flip_board_view
+classic	hint	-	F	flip_board_3d
+classic	hint	-	H	cycle_board_3d_lighting
+classic	hint	-	⇧⌘C	copy_board_3d_screenshot
 classic	hint	-	⌥4	cycle_fast_grid
 classic	hint	-	-	cycle_snap_grid_backward
 classic	hint	-	-	cycle_snap_grid_forward
@@ -1036,6 +1051,7 @@ classic	hint	-	⇧N	previous_grid
 classic	hint	-	-	open_grid_picker
 classic	hint	-	-	open_grid_properties
 classic	hint	-	-	toggle_electrical_grid
+classic	hint	-	⇧E	cycle_board_snapping
 classic	hint	-	⇧⌘G	toggle_visible_grid
 classic	hint	-	-	open_library_browser
 classic	hint	-	⇧⌘E	edit_library_symbol

@@ -45,11 +45,23 @@ pub struct LibraryPanelPick {
     pub tab: LibraryPanelTab,
 }
 
-/// The Library panel's own state: the kind pick and the Parts rows that
-/// match the filter.
+/// How the Library panel and the Library Browser draw their list rows
+/// (mockup rows 118 and 119): one line, or beside a preview thumbnail.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LibraryRowStyle {
+    #[default]
+    Compact,
+    Thumbnail,
+}
+
+/// The Library panel's own state: the kind pick, the row style and the
+/// Parts rows that match the filter.
 #[derive(Debug, Clone, Default)]
 pub struct LibraryPanelState {
     pub pick: Option<LibraryPanelPick>,
+    /// The row style, one choice for all three kinds and the Library
+    /// Browser; session only.
+    pub row_style: LibraryRowStyle,
     /// Parts rows matching `LibraryState::panel_search`, rebuilt by
     /// `update` (see `panel_rows`), never by `view`.
     pub rows: PanelRows,

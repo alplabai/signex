@@ -158,3 +158,21 @@ fn a_dimension_stands_off_through_its_third_click_on_the_given_layer() {
     assert_eq!(on_copper.offset, -2.0);
     assert!(new_dimension(id, p(1.0, 1.0), p(1.0, 1.0), p(4.0, 3.0), mech).is_none());
 }
+
+/// #2869: the Graphics Arc on copper, about its centre the way of
+/// increasing angle (clockwise on screen), ending on the circle.
+#[test]
+fn an_arc_about_its_centre_runs_clockwise_on_screen_and_ends_on_the_circle() {
+    let about = super::draw::arc_points_about;
+    // Centre (10, 10), start (15, 10), toward (10, 20): down on screen.
+    let (start, mid, end) = about(p(10.0, 10.0), p(15.0, 10.0), p(10.0, 20.0)).unwrap();
+    assert!(close(start, p(15.0, 10.0)));
+    assert!(close(end, p(10.0, 15.0)), "on the circle: {end:?}");
+    let half = std::f64::consts::FRAC_1_SQRT_2 * 5.0;
+    assert!(close(mid, p(10.0 + half, 10.0 + half)), "{mid:?}");
+    assert!(
+        about(p(0.0, 0.0), p(5.0, 0.0), p(9.0, 0.0)).is_none(),
+        "a full turn"
+    );
+    assert!(about(p(0.0, 0.0), p(0.0, 0.0), p(9.0, 0.0)).is_none());
+}

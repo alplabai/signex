@@ -69,6 +69,8 @@ impl Signex {
         }
         // A Create Sheet request from the Projects tree was waiting on it.
         self.resume_create_sheet(&path, true);
+        // So was a Show History from the Projects tree (mockup row 20).
+        let task = Task::batch([task, self.resume_tree_history(&path)]);
         // So was a sheet open, which records its placement and runs what it
         // asked for now.
         if current {
@@ -143,6 +145,7 @@ impl Signex {
     pub(crate) fn cancel_in_flight_reads(&mut self) {
         self.document_state.pending_opens.cancel_all();
         self.ui_state.pending_create_sheet = None;
+        self.ui_state.pending_tree_history = None;
         self.ui_state.pending_sheet_opens.clear();
         self.document_state.pending_restores.cancel_all_retaining();
     }

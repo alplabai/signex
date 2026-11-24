@@ -183,7 +183,7 @@ dialog-reprefix-question = Change designator prefixes?
 # $count is how many more changes are not listed (a whole number).
 dialog-reprefix-more = +{ $count } more
 
-## ERC severity chips: one label under each count.
+## ERC severity chips: one label before each count.
 dialog-erc-chip-errors = Errors
 dialog-erc-chip-warnings = Warnings
 dialog-erc-chip-info = Info
@@ -424,14 +424,15 @@ dialog-move-selection-preview = Preview
 dialog-move-selection-preview-more = +{ $count }
 
 ## Net colour palette (#2528)
-# Header subtitle. $count is how many nets the active sheet labels.
+# Header subtitle. $count is how many nets the active sheet names by a label
+# or a power port.
 dialog-net-color-count = { $count ->
     [one] { $count } net on this sheet
    *[other] { $count } nets on this sheet
 }
 dialog-net-color-filter = Filter nets
 # Footer link: removes every net colour of the active sheet in one undo step.
-dialog-net-color-clear-all = Clear all colours
+dialog-net-color-clear-all = Clear all colors
 dialog-net-color-row-hint = Click a row to choose
 # Row chooser: opens the custom colour picker for the row's net.
 dialog-net-color-custom = Custom…
@@ -443,7 +444,7 @@ dialog-net-color-hex = Hex
 dialog-net-color-old = Old
 dialog-net-color-new = New
 # Messages: Use Color was pressed after the active sheet changed. $net is the net name.
-dialog-net-color-sheet-changed = Net colour not changed: the picker was opened for { $net } on another sheet.
+dialog-net-color-sheet-changed = Net color not changed: the picker was opened for { $net } on another sheet.
 
 ## Annotate Schematics (#75)
 dialog-annotate-order-up-then-across-help = Columns bottom to top, then the next column to the right.
@@ -547,3 +548,23 @@ dialog-reprefix-skip-hand-edited =
         [one] { $count } hand-edited prefix
        *[other] { $count } hand-edited prefixes
     }
+
+# net-color-clear-toast
+# Net color palette toast after Clear all colors. $count is how many listed
+# nets (named by a label or a power port) lost their color (a whole number),
+# as the palette counts its rows; colors on nets with no name are cleared
+# too but not counted.
+dialog-net-color-toast-cleared =
+    { $count ->
+        [one] Cleared { $count } net color
+       *[other] Cleared { $count } net colors
+    }
+# The same toast when the colors cleared were on nets with no name.
+dialog-net-color-toast-cleared-unlabelled = Cleared the net colors of this sheet
+# Toast after Clear in a row's chooser. $net is the net name.
+dialog-net-color-toast-cleared-net = Cleared the color of { $net }
+# The toast's button. $undo is the Undo shortcut, such as "Ctrl+Z".
+dialog-net-color-toast-undo = Undo { $undo }
+# find-messages
+# Right of the Pin Connection Matrix heading while its cells take edits.
+dialog-rules-matrix-cycle-hint = Click a cell to cycle severity.

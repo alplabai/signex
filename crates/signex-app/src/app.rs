@@ -33,6 +33,7 @@ mod document;
 pub mod document_ids;
 pub mod document_read;
 mod documents;
+pub(crate) mod edge_pan;
 pub(crate) mod engine_notices;
 pub(crate) mod fab_outputs;
 // #1282: Design ▸ Differential Pair Classes….
@@ -42,6 +43,9 @@ pub use diff_pair_classes::{
 };
 pub(crate) mod file_extension;
 pub mod gerber_read;
+// Mockup rows 193 and 193f: the Gerber Viewer tab.
+pub mod gerber_viewer;
+pub use gerber_viewer::{GerberViewerMsg, GerberViewerState};
 mod handlers;
 #[cfg(test)]
 pub(crate) mod hierarchy_fixture;
@@ -56,6 +60,7 @@ mod parked_sheets;
 pub mod path_op_jobs;
 pub mod path_ops;
 pub(crate) mod pin_junction_repair;
+mod pin_table_tab;
 mod polygon_manager_tab;
 pub mod project_entry_disk;
 pub(crate) mod project_git;

@@ -34,8 +34,8 @@ impl Signex {
     pub(crate) fn leave_undocked_active_tab(&mut self, path: &std::path::Path) {
         let active = self.document_state.active_tab;
         let shown = self.document_state.tabs.get(active);
-        // A board page tab stays in main when its board leaves.
-        if shown.is_none_or(|tab| tab.path != path || tab.kind.is_board_page()) {
+        // A document page tab stays in main when its owner leaves.
+        if shown.is_none_or(|tab| tab.path != path || tab.kind.is_document_page()) {
             return;
         }
         let nearest = self

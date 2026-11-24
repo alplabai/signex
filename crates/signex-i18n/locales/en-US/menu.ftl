@@ -98,6 +98,9 @@ menu-tools-passive-calculator = Passive Network Calculator...
 menu-help-about = About { -brand-name }
 menu-help-documentation = Documentation
 menu-help-report-issue = Report an Issue
+# chrome-copy-help
+# Help menu row (mockup row 14): opens the first-run card again.
+menu-help-welcome-tips = Show Welcome Tips
 
 ## Native app menu and menu chrome (#2057)
 # The product name: a term, so a message names it as { -brand-name }.
@@ -342,3 +345,18 @@ ctx-fp-align-to-grid = Align To Grid
 # Symbol editor menu: rows acting on the selection.
 ctx-symbol-rotate-selection = Rotate Selection
 ctx-symbol-align-to-grid = Align To Grid
+# in-variant-context-row
+# Sheet menu row after Part Actions (mockup row 62); { $variant } is the
+# project's active variant.
+ctx-in-variant = In variant: { $variant }
+# Header of the In variant flyout; { $part } is the selected part's designator.
+ctx-in-variant-part = { $part } in { $variant }
+ctx-in-variant-alternate-part = Alternate part…
+ctx-in-variant-edit-value = Edit value for this variant…
+# Tooltip of the In variant rows that are not built yet.
+ctx-in-variant-planned = Planned: change a part's fit, part or value in one variant. The Variant Manager lists each part's fit today.
+ctx-in-variant-show-manager = Show in Variant Manager
+ctx-in-variant-new = New variant…
+# project-tree-history-rows
+# A document leaf's row that opens the History panel filtered to the file.
+ctx-tree-show-history = Show History

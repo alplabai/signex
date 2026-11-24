@@ -17,7 +17,7 @@ use crate::canvas::WheelMode;
 use crate::icons;
 use crate::keyboard_shortcuts_modal::key_cap;
 use crate::keymap::{CompiledKeymap, Modifiers, ModifiersExt, Platform};
-use crate::styles::{self, DialogButtonKind, Radii, TypeScale, ti};
+use crate::styles::{self, Radii, TypeScale, ti};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 
@@ -213,15 +213,28 @@ fn footer<'a>(i18n: &I18n, tokens: &ThemeTokens, mode: WheelMode) -> Element<'a,
     .align_y(Alignment::Center);
     styles::dialog_footer_band(
         vec![note.boxed()],
-        vec![styles::dialog_button(
-            t!(i18n, ids::DIALOG_TOUR_GOT_IT),
-            DialogButtonKind::Primary,
-            Some(Message::Overlay(OverlayMsg::DismissFirstRunTour)),
-            tokens,
-        )],
+        vec![got_it_button(i18n, tokens)],
         Padding::from([px(10.0), px(16.0)]),
         tokens,
     )
+}
+
+/// "Got it" on the theme's primary fill (the ink in the light theme), as
+/// the start screen's New project draws it (mockup row 14).
+fn got_it_button<'a>(i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
+    let ink = styles::tokens::resolve(tokens).primary_ink;
+    button(
+        text(t!(i18n, ids::DIALOG_TOUR_GOT_IT))
+            .size(TS.label)
+            .color(ink)
+            .height(Length::Fill)
+            .align_y(iced::alignment::Vertical::Center),
+    )
+    .padding([0.0, styles::Spacing::DEFAULT.l])
+    .height(Length::Fixed(styles::ChromeMetrics::DEFAULT.button))
+    .on_press(Message::Overlay(OverlayMsg::DismissFirstRunTour))
+    .style(styles::primary_button(tokens))
+    .boxed()
 }
 
 #[cfg(test)]
@@ -307,6 +320,30 @@ mod tests {
         let shown = texts(view(I18n::en_us_ref(), &tokens, &unbound));
         assert!(shown.iter().any(|t| t == "Find any command"));
         assert!(!shown.iter().any(|t| t == "Ctrl+K"));
+    }
+
+    /// Mockup row 14: Got it is filled with the theme's primary (the ink in
+    /// the light theme), not the accent, in both Graphite themes.
+    #[test]
+    fn got_it_is_drawn_on_the_primary_fill() {
+        use crate::layout_probe::{draw_pixels, find};
+        let i18n = I18n::en_us_ref();
+        let channel = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+        let rgb = |c: iced::Color| vec![channel(c.r), channel(c.g), channel(c.b)];
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let tokens = theme_tokens(id);
+            let card = || view(i18n, &tokens, &facts(WheelMode::Zoom));
+            let label = find(&lay_out_texts(card(), WINDOW), "Got it").bounds;
+            let pixels = draw_pixels(card(), WINDOW);
+            // Inside the button's side padding, level with the label.
+            let (x, y) = ((label.x - 3.0) as usize, label.center_y() as usize);
+            let at = (y * WINDOW.width as usize + x) * 4;
+            let drawn = pixels[at..at + 3].to_vec();
+            let near = |want: &[u8]| drawn.iter().zip(want).all(|(a, b)| a.abs_diff(*b) <= 3);
+            let r = styles::tokens::resolve(&tokens);
+            assert!(near(&rgb(r.primary)), "{id:?}: {drawn:?}");
+            assert!(!near(&rgb(styles::tokens::accent_fill(&tokens))), "{id:?}");
+        }
     }
 
     #[test]

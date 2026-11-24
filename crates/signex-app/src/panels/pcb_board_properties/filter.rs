@@ -90,8 +90,9 @@ pub(crate) fn kind_label(kind: PickKind) -> MessageId {
 }
 
 /// `All - On` (every kind on, or off when all are on), the 'Presets'
-/// caption, a chip per saved preset (#2383) that applies it and Add Preset;
-/// for the preset last applied or added, its name, Save Chips and Delete.
+/// caption, a chip per saved preset (#2383) that applies it and selects it
+/// for editing, and Add Preset; for the selected preset, "Editing <name>",
+/// its name and Delete (#2873).
 fn presets<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Element<'a, PanelMsg> {
     let msg = |m: PcbBoardMsg| Some(PanelMsg::PcbBoard(m));
     let all_on = form.chip(
@@ -115,12 +116,9 @@ fn presets<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Element<'a, PanelMsg
         } else {
             UserText::new(preset.name.clone()).into()
         };
-        let applied = PickKind::ALL
-            .into_iter()
-            .all(|kind| board.filter.is_on(kind) == preset.filters.contains(&kind));
         let chip = form.chip(
             label,
-            applied,
+            board.preset_editing == Some(idx),
             msg(PcbBoardMsg::FilterPresetApplied(idx)),
             None,
         );
@@ -143,27 +141,30 @@ fn presets<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Element<'a, PanelMsg
     let mut column = Column::new()
         .spacing(SP.s)
         .push(Element::from(wrap.push(add)));
-    let tab = board.preset_tab.min(board.presets.len().saturating_sub(1));
-    if let Some(preset) = board.presets.get(tab) {
+    let edited = board
+        .preset_editing
+        .and_then(|idx| Some((idx, board.presets.get(idx)?)));
+    if let Some((idx, preset)) = edited {
+        let editing = signex_widgets::text(crate::active_bar::preset_editing_line(
+            form.i18n, idx, preset,
+        ))
+        .size(TS.caption)
+        .color(form.faint());
+        column = column.push(editing.boxed());
         let name = text_input(
             form.t(ids::PCB_BOARD_FILTER_PRESET_NAME),
             preset.name.clone(),
         )
         .size(TS.body)
         .padding([SP.xs, SP.s])
-        .on_input(move |name| PanelMsg::PcbBoard(PcbBoardMsg::FilterPresetRenamed(tab, name)))
+        .on_input(move |name| PanelMsg::PcbBoard(PcbBoardMsg::FilterPresetRenamed(idx, name)))
         .style(form_look::text_input_style)
         .width(Length::Fill);
         let edit = row![
             name,
             form.action(
-                form.t(ids::PCB_BOARD_FILTER_PRESET_UPDATE),
-                msg(PcbBoardMsg::FilterPresetUpdated(tab)),
-                Some(form.t(ids::PCB_BOARD_FILTER_PRESET_UPDATE_TIP)),
-            ),
-            form.action(
                 form.t(ids::PCB_BOARD_DELETE),
-                msg(PcbBoardMsg::FilterPresetRemoved(tab)),
+                msg(PcbBoardMsg::FilterPresetRemoved(idx)),
                 None,
             ),
         ]

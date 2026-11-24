@@ -17,6 +17,7 @@ mod body;
 mod closed_path;
 mod connections;
 mod copper;
+mod drawn_copper;
 mod flip;
 mod free;
 #[cfg(test)]
@@ -60,13 +61,14 @@ mod units;
 mod zone_fill;
 
 pub use arrange::{arrange_in_box, pack_in_box, placed_extent};
-pub use body::{footprint_body, is_courtyard};
+pub use body::{checked_body, courtyard_outline, footprint_body, is_courtyard};
 pub use closed_path::{PathRefusal, closed_path};
 pub use connections::{ConnectionCounts, NetUnrouted, PadName, connection_counts};
 pub use copper::{
     CopperItem, collect_copper, copper_layers, layer_bit, layer_mask, net_at, pad_layers,
     pad_pieces, pieces_on, via_layers, via_pieces,
 };
+pub use drawn_copper::drawn_copper;
 pub use flip::flip_footprint;
 pub use free::{
     ARC_CHORD_ERROR_MM, arc_is_copper, arc_shapes, dimension_shapes, free_copper_on,

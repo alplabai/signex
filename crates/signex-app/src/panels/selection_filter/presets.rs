@@ -1,7 +1,8 @@
 //! SCH Filter's Presets section (Graphite mockup #56): a chip per saved preset (a click
-//! applies it and makes it the one edited below), Save current, and the
-//! edited preset's name, Delete and kinds. The list is the one the Active
-//! Bar dropdown and Properties show (`active_bar::presets`).
+//! applies it and selects it for editing, a second click ends editing),
+//! Save current, and, while one is selected, "Editing <name>", its name,
+//! Delete and kinds (#2873). The list is the one the Active Bar dropdown
+//! and Properties show (`active_bar::presets`).
 
 use iced::widget::{Column, Row, container};
 use iced::{Alignment, Element, Length, Widget as _};
@@ -11,7 +12,9 @@ use signex_widgets::chips::{ChipMetrics, ChipStyle, chip};
 use signex_widgets::{button, text, text_input};
 
 use super::SchFilterMsg;
-use crate::active_bar::{CUSTOM_FILTER_PRESET_LIMIT, CustomFilterPreset, preset_label};
+use crate::active_bar::{
+    CUSTOM_FILTER_PRESET_LIMIT, CustomFilterPreset, preset_editing_line, preset_label,
+};
 use crate::panels::form_look::{ghost_button, text_input_style, value_field_button};
 use crate::panels::graphite::hint_tooltip;
 use crate::panels::{PanelContext, PanelMsg};
@@ -51,13 +54,20 @@ fn body<'a>(ctx: &'a PanelContext) -> Column<Element<'a, PanelMsg>> {
             .boxed(),
     );
     let muted = resolve(&ctx.tokens).ink3;
-    let Some(preset) = presets.get(ctx.active_custom_filter_tab) else {
+    if presets.is_empty() {
         let none = text(t!(i18n, ids::PANELS_FILTER_NO_PRESETS))
             .size(TS.caption)
             .color(muted);
         return column.push(container(none).padding([SP.xs, SP.m]).boxed());
+    }
+    let edited = ctx.selection_filter.editing;
+    let Some((idx, preset)) = edited.and_then(|idx| Some((idx, presets.get(idx)?))) else {
+        return column;
     };
-    let idx = ctx.active_custom_filter_tab;
+    let editing = text(preset_editing_line(i18n, idx, preset))
+        .size(TS.caption)
+        .color(muted);
+    column = column.push(container(editing).padding([0.0, SP.m]).boxed());
     column = column.push(name_row(ctx, idx, preset));
     let kinds = text(kinds_line(i18n, idx, preset))
         .size(TS.caption)
@@ -65,8 +75,8 @@ fn body<'a>(ctx: &'a PanelContext) -> Column<Element<'a, PanelMsg>> {
     column.push(container(kinds).padding([0.0, SP.m]).boxed())
 }
 
-/// A chip per preset, the edited one lit, then Save current, inert at the
-/// limit with why on hover.
+/// A chip per preset, the one selected for editing lit, then Save current,
+/// inert at the limit with why on hover.
 fn chips<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let i18n = &*ctx.i18n;
     let style = chip_style(ctx);
@@ -77,7 +87,7 @@ fn chips<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         wrap = wrap.push(chip(
             UserText::new(preset_label(idx, preset)),
             None,
-            idx == ctx.active_custom_filter_tab,
+            ctx.selection_filter.editing == Some(idx),
             style,
             metrics,
             i18n,

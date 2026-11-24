@@ -5,11 +5,13 @@
 //! their fields set nothing here.
 
 use signex_engine::pcb::BoardCommandError;
-use signex_engine::pcb::primitive_edit::DIMENSION_MAX_PRECISION;
+use signex_engine::pcb::primitive_edit::{
+    DIMENSION_MAX_PRECISION, DimensionStyleEdit, apply_style,
+};
 use signex_i18n::{MessageId, ids, t};
 
 use crate::app::Signex;
-use crate::app::handlers::pcb_primitive::PrimitiveEdit;
+use crate::app::handlers::pcb_primitive::{PrimitiveEdit, dimension_style_edit};
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::panels::pcb_primitive_properties::PrimitiveField as F;
 
@@ -29,6 +31,12 @@ impl Signex {
         edit: &PrimitiveEdit,
         what: MessageId,
     ) {
+        if tool == BoardPlaceTool::Dimension
+            && let Some(style_edit) = dimension_style_edit(edit)
+        {
+            self.edit_dimension_tool_style(&style_edit, what);
+            return;
+        }
         if let PrimitiveEdit::Number(field, value) = edit
             && matches!(
                 field,
@@ -88,6 +96,23 @@ impl Signex {
             // The location and an arc's shape are the clicks'.
             _ => return,
         }
+        self.refresh_pcb_highlight();
+    }
+
+    /// A look edit in the Dimension tool's form (#2868), checked on the
+    /// dimension it places next as on a placed one, then kept for the
+    /// session.
+    fn edit_dimension_tool_style(&mut self, edit: &DimensionStyleEdit, what: MessageId) {
+        let Some(mut next) = self.next_board_dimension() else {
+            return;
+        };
+        if let Err(refusal) = apply_style(&mut next, edit) {
+            self.refuse_primitive_edit(what, refusal.to_string());
+            return;
+        }
+        let defaults = &mut self.interaction_state.pcb_tool_defaults;
+        defaults.dimension_style = Some(next.style);
+        defaults.dimension_text_at = Some(next.text_at);
         self.refresh_pcb_highlight();
     }
 

@@ -21,7 +21,7 @@ use signex_types::pcb_layer::CopperLayer;
 use signex_types::pcb_sketch::PcbKeepout;
 
 use pcb_geom::{
-    GeomError, ItemRef, PointNm, RectNm, Rejected, Shape, Side, footprint_body, layer_bit,
+    GeomError, ItemRef, PointNm, RectNm, Rejected, Shape, Side, checked_body, layer_bit,
     layer_mask, pad_pieces, pad_shape, track_shape, via_pieces, via_shape,
 };
 
@@ -162,7 +162,8 @@ impl<'a> Area<'a> {
                     Side::Bottom => CopperLayer::Bottom,
                 };
                 let item = ItemRef::Footprint(footprint.uuid);
-                match footprint_body(footprint) {
+                // The courtyard outline, its display stroke left out.
+                match checked_body(footprint) {
                     Ok(body) => self.meet(item, 0, 1 << layer_bit(side), &body, found),
                     // Once per footprint, however many keepouts needed it.
                     Err(error) if !out.bodies.iter().any(|r| r.item == item) => {

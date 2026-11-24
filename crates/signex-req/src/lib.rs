@@ -241,6 +241,16 @@ pub fn check_report(facts: &Facts) -> CheckReport {
     .with_rule_set(rule_set(facts))
 }
 
+/// The width and height in mm of the board outline's bounding box, as
+/// `board_size` measures it; `None` without a board read or an outline to
+/// measure.
+pub fn board_extent_mm(board: &Board) -> Option<(f64, f64)> {
+    match board {
+        Board::Read { board, .. } => board::outline_extent(board),
+        Board::NotListed | Board::Unreadable { .. } => None,
+    }
+}
+
 /// What `requirement` finds unmet.
 fn evaluate(requirement: &Requirement, facts: &Facts) -> Vec<Miss> {
     match &requirement.kind {

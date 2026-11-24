@@ -14,6 +14,7 @@ pub(crate) use child_sheet_path::{
 };
 mod break_wire_tool;
 mod clicked;
+pub(in crate::app::handlers) use clicked::WirePoint;
 mod descend;
 pub(crate) mod net_color_click;
 mod sheet_open;
@@ -21,7 +22,11 @@ mod sheet_open;
 pub(crate) mod sheet_open_tests;
 pub use sheet_open::{AfterOpen, PendingSheetOpen, SheetOpen};
 mod double_clicked;
+#[cfg(test)]
+mod drag_every_kind_tests;
 mod field_edit;
+#[cfg(test)]
+mod field_edit_click_away_tests;
 pub(crate) use field_edit::{editor_placeholder, next_part_field};
 pub(crate) mod fit_view;
 mod layout_drag;
@@ -89,6 +94,8 @@ mod wire_corner;
 mod wire_corner_tests;
 #[cfg(test)]
 mod wire_merge_tests;
+#[cfg(test)]
+mod wire_second_click_tests;
 #[cfg(test)]
 mod wire_undo_tests;
 
@@ -187,7 +194,7 @@ impl Signex {
                 }
             }
             CanvasEvent::Clicked { world_x, world_y } => {
-                return self.handle_canvas_clicked(world_x, world_y);
+                return self.handle_canvas_clicked(world_x, world_y, WirePoint::EndsWire);
             }
             CanvasEvent::MoveSelected {
                 dx,
@@ -339,6 +346,7 @@ impl Signex {
                 self.clear_active_camera_caches();
             }
             CanvasEvent::FitSelection => self.fit_selection(),
+            CanvasEvent::EdgePanTicked => return self.edge_pan_ticked(),
             CanvasEvent::RedrawRequested => {
                 self.clear_active_camera_caches();
                 if self.has_active_schematic() {

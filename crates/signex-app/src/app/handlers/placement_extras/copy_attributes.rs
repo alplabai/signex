@@ -99,8 +99,9 @@ impl Signex {
     }
 
     /// The add-vertex half (#1669): fix a corner of the run being drawn at
-    /// the point `at`, else the cursor, exactly as a canvas click there
-    /// does, so the run goes on from it. The inverse of `undo_last_segment`.
+    /// the point `at`, else the cursor, as a canvas click there places it,
+    /// and the run goes on from it, where a wire click would end the wire
+    /// (docs/DECISIONS.md, 2026-11-24). The inverse of `undo_last_segment`.
     fn add_vertex_while_drawing(&mut self, at: Option<(f64, f64)>) -> Task<Message> {
         if !matches!(
             self.interaction_state.current_tool,
@@ -117,7 +118,7 @@ impl Signex {
             );
             return Task::none();
         };
-        self.handle_canvas_clicked(x, y)
+        self.handle_canvas_clicked(x, y, crate::app::handlers::canvas::WirePoint::AddsVertex)
     }
 
     /// The object under the point `at`, else under the cursor, else the

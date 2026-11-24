@@ -56,9 +56,15 @@ pub(in crate::status_bar) fn layer_swatch<'a, M: 'a>(
         .boxed()
 }
 
-/// The chevron after the layer pill's name: it opens a popover.
+/// The chevron after the layer pill's name, or after a footprint's Grid
+/// read-out: it opens a popover.
 pub(in crate::status_bar) fn layer_chevron<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
     glyph(Glyph::Chevron, BAR_GLYPH, resolve(tokens).ink4)
+}
+
+/// The grid glyph before a Grid read-out, in the bar's muted ink.
+pub(in crate::status_bar) fn grid_glyph<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
+    glyph(Glyph::Grid, BAR_GLYPH, resolve(tokens).ink3)
 }
 
 /// The label of a counter, in the bar's caption size.
@@ -123,9 +129,8 @@ pub(in crate::status_bar) fn board_grid_readout<'a>(
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, StatusBarRequest> {
-    let muted = resolve(tokens).ink3;
     let face = row![
-        glyph(Glyph::Grid, BAR_GLYPH, muted),
+        grid_glyph(tokens),
         label(t!(i18n, ids::BOARD_STATUS_GRID), tokens),
         figure(value, tokens),
     ]

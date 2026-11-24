@@ -35,6 +35,7 @@ pub fn view_symbol<'a>(
     display: LibraryDisplaySettings,
     path: &'a std::path::Path,
     device_px_per_logical_px: f32,
+    edge_pan: Option<&'a crate::canvas::EdgePanLink>,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     // Active bar moved to the app-view layer (view_main_for) so it
@@ -42,7 +43,13 @@ pub fn view_symbol<'a>(
     // symbol::active_bar::{bar_items, dropdown_overlay}. The body here
     // renders just toolbar + canvas; the bar is layered on top there,
     // which is also where the theme id for its icons is resolved.
-    let canvas_widget = view_symbol_canvas(editor, panel_ctx, display, device_px_per_logical_px);
+    let canvas_widget = view_symbol_canvas(
+        editor,
+        panel_ctx,
+        display,
+        device_px_per_logical_px,
+        edge_pan,
+    );
 
     // No header strip and no footer: the global status bar carries X / Y,
     // zoom, grid and the editor's part / pins / hint segment
@@ -325,8 +332,12 @@ fn view_symbol_canvas<'a>(
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
     device_px_per_logical_px: f32,
+    edge_pan: Option<&'a crate::canvas::EdgePanLink>,
 ) -> Element<'a, LibraryMessage> {
-    let program = symbol_canvas(editor, panel_ctx, display, device_px_per_logical_px);
+    let mut program = symbol_canvas(editor, panel_ctx, display, device_px_per_logical_px);
+    if let Some(link) = edge_pan {
+        program = program.with_edge_pan(link);
+    }
     let path = editor.path.clone();
     iced::widget::Canvas::<_, sym_canvas::CanvasAction>::new(program)
         .width(Length::Fill)

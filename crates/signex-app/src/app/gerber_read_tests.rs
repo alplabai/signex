@@ -42,6 +42,10 @@ fn every_kind() -> Vec<ProblemKind> {
         ProblemKind::BadJobFile {
             why: "expected value".into(),
         },
+        ProblemKind::Unopenable {
+            why: "permission denied".into(),
+        },
+        ProblemKind::TooLarge { limit_mib: 256 },
     ]
 }
 
@@ -64,10 +68,12 @@ fn kind_number(kind: &ProblemKind) -> usize {
         ProblemKind::NotText => 14,
         ProblemKind::NotAFabricationFile => 15,
         ProblemKind::BadJobFile { .. } => 16,
+        ProblemKind::Unopenable { .. } => 17,
+        ProblemKind::TooLarge { .. } => 18,
     }
 }
 
-const KINDS: usize = 17;
+const KINDS: usize = 19;
 
 fn problem(file: &str, line: u32, kind: ProblemKind) -> ReadProblem {
     ReadProblem {

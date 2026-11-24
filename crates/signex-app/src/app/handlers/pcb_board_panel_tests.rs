@@ -239,21 +239,50 @@ fn a_grid_manager_edit_sets_the_snap_grid_as_one_undo_step() {
     assert_eq!(grid(&app), 1.27);
 }
 
+/// Caner, 2026-11-24 (#2879): on a board Shift+E is its own command,
+/// `cycle_board_snapping`, in every built-in profile; it replaces the
+/// reroute of `toggle_electrical_grid` (#2353), which now toggles hotspots
+/// wherever it runs.
 #[test]
 fn shift_e_on_a_board_steps_the_snapping_mode() {
+    use std::str::FromStr;
+
+    use crate::keymap::{CompiledKeymap, KeyStroke, Platform, ShortcutContext, ShortcutProfileSet};
     use crate::pcb_canvas::SnapScope;
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _path) = app_with_board(dir.path());
-    let toggle = || Message::Ui(crate::app::UiMsg::ToggleSnapHotspots);
+    let run = |app: &mut Signex, id: &str| {
+        let command = AppCommandId::new(id).expect("a catalog id");
+        let _ = app.update(Message::Menu(MenuMessage::Command(command)));
+    };
     let hotspots = app.ui_state.snap_hotspots;
-    let _ = app.update(toggle());
+    run(&mut app, "cycle_board_snapping");
     assert_eq!(app.ui_state.pcb_snap.scope, SnapScope::CurrentLayer);
-    let _ = app.update(toggle());
+    run(&mut app, "cycle_board_snapping");
     assert_eq!(app.ui_state.pcb_snap.scope, SnapScope::Off);
+    run(&mut app, "cycle_board_snapping");
+    assert_eq!(app.ui_state.pcb_snap.scope, SnapScope::AllLayers);
     assert_eq!(
         app.ui_state.snap_hotspots, hotspots,
         "the schematic setting stays"
     );
+    run(&mut app, "toggle_electrical_grid");
+    assert_eq!(app.ui_state.pcb_snap.scope, SnapScope::AllLayers);
+    assert_eq!(app.ui_state.snap_hotspots, !hotspots);
+
+    let on_a_board = [ShortcutContext::Global, ShortcutContext::Pcb];
+    let set = ShortcutProfileSet::built_ins().expect("built-in profiles");
+    for profile in set.profiles() {
+        let keymap = CompiledKeymap::compile_for(profile, Platform::Windows);
+        let shift_e = KeyStroke::from_str("Shift+E").expect("a key");
+        let got = keymap.lookup(&[shift_e], &on_a_board).command;
+        assert_eq!(
+            got.as_ref().map(AppCommandId::as_str),
+            Some("cycle_board_snapping"),
+            "{}",
+            profile.id
+        );
+    }
 }
 
 /// #2523: a hovered field row lights its callout through the panel's own

@@ -260,6 +260,49 @@ fn find_mode_shows_no_replace_controls() {
     assert!(!texts.iter().any(|t| t.contains('\u{2192}')));
 }
 
+/// Mockup row 67: Find mode's footer has Previous and Next, which step
+/// through the results as Find previous / next do; Replace mode has its
+/// own buttons instead, and with no result both are off.
+#[test]
+fn find_mode_steps_with_previous_and_next() {
+    use crate::find_replace::FindReplaceMsg;
+    use crate::layout_probe::messages_on_click;
+    let en = I18n::en_us();
+    let tokens = theme_tokens(ThemeId::GraphiteDark);
+    let window = iced::Size::new(1200.0, 900.0);
+    let mut state = sample();
+    state.replace_mode = false;
+    let texts = |state: &FindReplaceState| -> Vec<String> {
+        crate::layout_probe::lay_out_texts(super::view(state, &tokens, &en), window)
+            .into_iter()
+            .map(|t| plain(t.text))
+            .collect()
+    };
+    let shown = texts(&state);
+    assert!(shown.iter().any(|t| t == "Previous"), "{shown:?}");
+    assert!(shown.iter().any(|t| t == "Next"), "{shown:?}");
+    let next = messages_on_click(super::view(&state, &tokens, &en), window, "Next");
+    assert!(
+        matches!(next.as_slice(), [FindReplaceMsg::NextRequested]),
+        "{next:?}"
+    );
+    let previous = messages_on_click(super::view(&state, &tokens, &en), window, "Previous");
+    assert!(
+        matches!(previous.as_slice(), [FindReplaceMsg::PreviousRequested]),
+        "{previous:?}"
+    );
+    state.matches.clear();
+    state.selected_index = None;
+    let none = messages_on_click(super::view(&state, &tokens, &en), window, "Next");
+    assert!(none.is_empty(), "no result to step to: {none:?}");
+    state = sample();
+    let shown = texts(&state);
+    assert!(
+        !shown.iter().any(|t| t == "Previous" || t == "Next"),
+        "{shown:?}"
+    );
+}
+
 /// #2060: every hit kind reads as the engine's `label` and follows the
 /// language.
 #[test]
@@ -288,4 +331,33 @@ fn the_hit_kinds_keep_their_english() {
     ] {
         check(board_find_kind_label(kind), kind.label());
     }
+}
+
+/// Mockup row 67: in the main window the list ends after its last result
+/// and the footer follows, so the gap from the last row to the footer is
+/// the same for two results as for five.
+#[test]
+fn the_in_window_list_fits_its_results() {
+    let en = I18n::en_us();
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
+    let window = iced::Size::new(1200.0, 900.0);
+    let gap = |state: &FindReplaceState| -> f32 {
+        let texts = crate::layout_probe::lay_out_texts(super::view(state, &tokens, &en), window);
+        let last_row = texts
+            .iter()
+            .filter(|t| matches!(plain(&t.text).as_str(), "dcdc" | "mcu"))
+            .map(|t| t.bounds.y + t.bounds.height)
+            .fold(f32::MIN, f32::max);
+        let note = texts
+            .iter()
+            .find(|t| plain(&t.text) == "Replace All is one undo step")
+            .unwrap_or_else(|| panic!("{texts:#?}"));
+        note.bounds.y - last_row
+    };
+    let five = sample();
+    let mut two = sample();
+    two.matches.truncate(2);
+    let (gap_two, gap_five) = (gap(&two), gap(&five));
+    assert!(gap_two > 0.0, "{gap_two}");
+    assert!((gap_two - gap_five).abs() < 1.0, "{gap_two} vs {gap_five}");
 }

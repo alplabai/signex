@@ -189,15 +189,34 @@ impl Signex {
             &self.ui_state.i18n,
             &self.canvas_menu_context(window_id),
         ))];
-        entries.extend(canvas_menu_entries(
+        let variant = self.canvas_menu_variant(window_id);
+        entries.extend(canvas_menu_with_variant(
             &self.ui_state.i18n,
             tid,
             selection,
             active_submenu,
             project_key,
             &sc,
+            variant.as_ref(),
         ));
         super::placement::menu_card(entries, tokens, ui_font)
+    }
+
+    /// The variant the "In variant" row names (mockup row 62): the active
+    /// one of the project that owns the sheet `window_id` shows, when that
+    /// project has a variant besides Base. `None` hides the row.
+    pub(super) fn canvas_menu_variant(&self, window_id: iced::window::Id) -> Option<MenuVariant> {
+        let project = self
+            .document_state
+            .sheet_path_for_window(window_id, &self.ui_state)
+            .and_then(|path| self.document_state.document_project(path))?;
+        if project.data.variant_definitions.is_empty() {
+            return None;
+        }
+        Some(MenuVariant {
+            project_id: project.id,
+            name: project.data.active_variant_name().to_string(),
+        })
     }
 
     /// Whether the canvas menu opened in `window_id` was opened over an
@@ -275,7 +294,10 @@ impl Signex {
                 strip_tabs_to_the_right: !self.strip_tabs_right_of(ctx.tab_idx).is_empty(),
                 // A Project tab stays docked (#1202): an undocked window
                 // would take the main window's shortcuts.
-                undock_unavailable: already_undocked || tab.kind.is_project_page(),
+                // The Gerber Viewer draws in the main window only.
+                undock_unavailable: already_undocked
+                    || tab.kind.is_project_page()
+                    || tab.kind.is_gerber_viewer(),
                 has_file: crate::tab_bar::tab_file_path(tab).is_some(),
                 in_project: self.project_tree_key_of_file(&tab.path).is_some(),
                 close_shortcut: &close_shortcut,
@@ -407,6 +429,16 @@ pub(super) struct CanvasSelection {
     pub(super) net_highlighted: bool,
 }
 
+/// The project variant the selection menu's "In variant" row names
+/// (mockup row 62).
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct MenuVariant {
+    /// The project whose Variant Manager the flyout's rows open.
+    pub(super) project_id: crate::app::ProjectId,
+    /// The active variant's name, Base when none is.
+    pub(super) name: String,
+}
+
 /// What the canvas menu stands on, named by its muted first line.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum MenuContext {
@@ -448,13 +480,9 @@ pub(super) fn context_line(i18n: &I18n, context: &MenuContext) -> String {
     }
 }
 
-/// Pure sheet-menu data builder (Graphite mockup #62). Rows and their enable state come
-/// only from the passed selection flags, command facts and shortcut hints,
-/// so the menu's shape is unit-testable without a window. With nothing
-/// selected it is the short sheet menu; with a selection it opens on the
-/// selection's own rows. Which rows show follows the selection and what the
-/// right-click hit; whether a shown row is live follows the command's own
-/// rule (#2419).
+/// The sheet menu of a project with no variant besides Base, for the tests
+/// that pin its other rows.
+#[cfg(test)]
 pub(super) fn canvas_menu_entries(
     i18n: &I18n,
     tid: ThemeId,
@@ -463,12 +491,33 @@ pub(super) fn canvas_menu_entries(
     project_key: Option<signex_widgets::tree_view::TreeKey>,
     sc: &CanvasShortcuts,
 ) -> Vec<DropdownEntry<Message>> {
+    canvas_menu_with_variant(i18n, tid, selection, active_submenu, project_key, sc, None)
+}
+
+/// Pure sheet-menu data builder (Graphite mockup #62). Rows and their enable state come
+/// only from the passed selection flags, command facts and shortcut hints,
+/// so the menu's shape is unit-testable without a window. With nothing
+/// selected it is the short sheet menu; with a selection it opens on the
+/// selection's own rows. Which rows show follows the selection and what the
+/// right-click hit; whether a shown row is live follows the command's own
+/// rule (#2419). With `variant` the selection menu gains "In variant:
+/// <name> ›" after Part Actions (mockup row 62).
+pub(super) fn canvas_menu_with_variant(
+    i18n: &I18n,
+    tid: ThemeId,
+    selection: CanvasSelection,
+    active_submenu: Option<ContextSubmenu>,
+    project_key: Option<signex_widgets::tree_view::TreeKey>,
+    sc: &CanvasShortcuts,
+    variant: Option<&MenuVariant>,
+) -> Vec<DropdownEntry<Message>> {
     let rows = SheetRows {
         i18n,
         tid,
         sc,
         commands: selection.commands,
         active_submenu,
+        variant,
     };
     if selection.has_selection {
         rows.selection_menu(selection)
@@ -484,6 +533,8 @@ struct SheetRows<'a> {
     sc: &'a CanvasShortcuts,
     commands: CommandContext,
     active_submenu: Option<ContextSubmenu>,
+    /// The project's active variant; `None` hides the In variant row.
+    variant: Option<&'a MenuVariant>,
 }
 
 impl SheetRows<'_> {
@@ -646,6 +697,11 @@ impl SheetRows<'_> {
                 menu_ids::CTX_PART_ACTIONS,
                 ContextSubmenu::PartActions,
             ),
+        ]);
+        if let Some(variant) = self.variant {
+            v.push(self.in_variant_launcher(variant));
+        }
+        v.extend([
             self.launcher(
                 ic::icon_dd_sheet_actions(tid),
                 menu_ids::CTX_SHEET_ACTIONS,
@@ -670,6 +726,22 @@ impl SheetRows<'_> {
             self.planned_launcher(),
         ]);
         v
+    }
+
+    /// "In variant: <name> ›" (mockup row 62): the flyout names the active
+    /// variant, so the row says which variant its rows change.
+    fn in_variant_launcher(&self, variant: &MenuVariant) -> DropdownEntry<Message> {
+        let kind = ContextSubmenu::InVariant;
+        let label = self.i18n.message_plain(
+            menu_ids::CTX_IN_VARIANT,
+            &[("variant", variant.name.clone().into())],
+        );
+        submenu_launcher(
+            Some(ic::icon_dd_layers(self.tid)),
+            &label,
+            kind,
+            self.active_submenu == Some(kind),
+        )
     }
 
     /// Assign Net Class takes the net and the class as operands, which this

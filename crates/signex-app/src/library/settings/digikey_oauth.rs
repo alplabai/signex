@@ -17,10 +17,12 @@
 //! parallel async branch in `signex-library`.
 //!
 //! Configuration:
-//! - DigiKey client_id / client_secret are read from the environment
-//!   (`SIGNEX_DIGIKEY_CLIENT_ID` / `SIGNEX_DIGIKEY_CLIENT_SECRET`).
-//!   Unit tests use a wiremock server, so the constants are never
-//!   committed to source.
+//! - A release build carries a built-in client_id / client_secret, baked
+//!   at compile time from `SIGNEX_BUILTIN_DIGIKEY_CLIENT_ID` /
+//!   `SIGNEX_BUILTIN_DIGIKEY_CLIENT_SECRET` (empty in a dev build). The
+//!   environment's `SIGNEX_DIGIKEY_CLIENT_ID` / `SIGNEX_DIGIKEY_CLIENT_SECRET`
+//!   override it ([`client_credentials`], mockup row 149). Unit tests use a
+//!   wiremock server, so no credential is committed to source.
 //!
 //! Cancellation:
 //! - Setting the shared flag (`CancelHandle::cancel`, or the dispatcher's
@@ -42,6 +44,18 @@ use crate::ignore::IgnoreResult;
 pub const ENV_CLIENT_ID: &str = "SIGNEX_DIGIKEY_CLIENT_ID";
 /// Environment variable that holds the DigiKey OAuth client_secret.
 pub const ENV_CLIENT_SECRET: &str = "SIGNEX_DIGIKEY_CLIENT_SECRET";
+
+/// The built-in client_id of a release build: the build variable
+/// `SIGNEX_BUILTIN_DIGIKEY_CLIENT_ID` at compile time, empty when unset.
+const BUILTIN_CLIENT_ID: &str = match option_env!("SIGNEX_BUILTIN_DIGIKEY_CLIENT_ID") {
+    Some(id) => id,
+    None => "",
+};
+/// The built-in client_secret that goes with [`BUILTIN_CLIENT_ID`].
+const BUILTIN_CLIENT_SECRET: &str = match option_env!("SIGNEX_BUILTIN_DIGIKEY_CLIENT_SECRET") {
+    Some(secret) => secret,
+    None => "",
+};
 
 /// Outcome of the OAuth handshake. Returned via the iced `Task` that
 /// drives the flow.
@@ -628,13 +642,34 @@ fn hex_digit(b: u8) -> Option<u8> {
     }
 }
 
-/// Read environment-supplied DigiKey credentials. Returns empty
-/// strings when unset — the caller treats empty client_id as "not
-/// configured" and surfaces a clear failure.
-pub fn read_env_credentials() -> (String, String) {
-    let id = std::env::var(ENV_CLIENT_ID).unwrap_or_default();
-    let secret = std::env::var(ENV_CLIENT_SECRET).unwrap_or_default();
-    (id, secret)
+/// The DigiKey client_id and client_secret to connect with: the
+/// environment's pair when it sets a client id, else the built-in pair of a
+/// release build (mockup row 149). Both empty in a dev build started without
+/// the variables; the caller treats an empty client_id as "not configured"
+/// and surfaces a clear failure.
+pub fn client_credentials() -> (String, String) {
+    resolve_credentials(
+        std::env::var(ENV_CLIENT_ID).ok(),
+        std::env::var(ENV_CLIENT_SECRET).ok(),
+        (BUILTIN_CLIENT_ID, BUILTIN_CLIENT_SECRET),
+    )
+}
+
+/// The resolution order behind [`client_credentials`]: a set environment
+/// client id overrides the built-in pair, and brings the environment's
+/// secret with it (never the built-in one); otherwise the built-in pair,
+/// which counts only when it is whole: a built-in id without its secret
+/// would offer Connect and then fail the token exchange.
+fn resolve_credentials(
+    env_id: Option<String>,
+    env_secret: Option<String>,
+    built_in: (&str, &str),
+) -> (String, String) {
+    match env_id.filter(|id| client_id_configured(id)) {
+        Some(id) => (id, env_secret.unwrap_or_default()),
+        None if built_in.1.is_empty() => (String::new(), String::new()),
+        None => (built_in.0.to_owned(), built_in.1.to_owned()),
+    }
 }
 
 /// Whether a client id is usable: the one test the flow and the settings
@@ -643,10 +678,11 @@ pub fn client_id_configured(client_id: &str) -> bool {
     !client_id.is_empty()
 }
 
-/// Whether the environment carries a DigiKey client id. Blocking-free but
-/// an environment read: call it when the settings are made, never in a view.
-pub fn env_client_configured() -> bool {
-    client_id_configured(&read_env_credentials().0)
+/// Whether a DigiKey client id is present, from the environment or built
+/// in. Blocking-free but an environment read: call it when the settings are
+/// made, never in a view.
+pub fn client_configured() -> bool {
+    client_id_configured(&client_credentials().0)
 }
 
 /// Courtesy HTML page shown in the browser after the redirect.
@@ -834,6 +870,60 @@ mod tests {
             Outcome::Failed { reason } => assert!(reason.contains("client_id")),
             other => panic!("expected Failed, got {other:?}"),
         }
+    }
+
+    fn pair(id: &str, secret: &str) -> (String, String) {
+        (id.to_owned(), secret.to_owned())
+    }
+
+    /// Mockup row 149: a release build's built-in pair is used when the
+    /// environment sets no client id.
+    #[test]
+    fn the_built_in_pair_is_used_without_an_environment_client_id() {
+        let built_in = ("built-in-id", "built-in-secret");
+        assert_eq!(
+            resolve_credentials(None, None, built_in),
+            pair("built-in-id", "built-in-secret")
+        );
+        assert_eq!(
+            resolve_credentials(Some(String::new()), Some("env-secret".into()), built_in),
+            pair("built-in-id", "built-in-secret"),
+            "an empty environment id is no override, and its secret is not mixed in"
+        );
+    }
+
+    /// Mockup row 149: the environment's client id overrides the built-in
+    /// pair and brings its own secret, never the built-in one.
+    #[test]
+    fn an_environment_client_id_overrides_the_built_in_pair() {
+        let built_in = ("built-in-id", "built-in-secret");
+        assert_eq!(
+            resolve_credentials(Some("env-id".into()), Some("env-secret".into()), built_in),
+            pair("env-id", "env-secret")
+        );
+        assert_eq!(
+            resolve_credentials(Some("env-id".into()), None, built_in),
+            pair("env-id", ""),
+        );
+    }
+
+    /// Mockup row 149: with neither an environment id nor a built-in one
+    /// (a dev build), the id is empty: the card's error state.
+    #[test]
+    fn neither_an_environment_nor_a_built_in_id_is_not_configured() {
+        let (id, secret) = resolve_credentials(None, Some("env-secret".into()), ("", ""));
+        assert!(!client_id_configured(&id));
+        assert_eq!(secret, "");
+    }
+
+    /// Mockup row 149: a release build that baked the id but not its secret
+    /// is not configured, so the card never offers a Connect that the token
+    /// exchange would then refuse.
+    #[test]
+    fn a_built_in_id_without_its_secret_is_not_configured() {
+        let (id, secret) = resolve_credentials(None, None, ("built-in-id", ""));
+        assert!(!client_id_configured(&id), "{id}");
+        assert_eq!(secret, "");
     }
 
     const GOOD_REQUEST: &str = "GET /callback?code=the-code&state=the-state HTTP/1.1\r\n\r\n";

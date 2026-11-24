@@ -56,6 +56,12 @@ fn undo_mid_wire_resets_the_wire_in_progress() {
     click(&mut app, 150.0, 60.96);
     click(&mut app, 165.1, 60.96);
     assert_eq!(wires(&app).len(), 1, "one segment committed");
+    // The second click ended that wire (docs/DECISIONS.md, 2026-11-24,
+    // Caner: the wire tool no longer continues a wire). A new wire started
+    // on its end is the wire in progress the undo must not leave anchored.
+    assert!(!app.interaction_state.wire_drawing);
+    click(&mut app, 165.1, 60.96);
+    assert!(app.interaction_state.wire_drawing);
 
     let _ = app.update(Message::Edit(EditMsg::Undo));
     assert!(wires(&app).is_empty(), "undo removed the segment");

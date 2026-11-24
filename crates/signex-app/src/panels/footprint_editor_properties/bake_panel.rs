@@ -12,8 +12,8 @@ use signex_types::sketch::baked_kinds::BakedKind;
 use signex_widgets::text;
 
 use super::super::{
-    BakedOutline, BoardBakePreview, BoardBakeRefusal, BoardBakeRows, BoardSketchProps, PanelMsg,
-    SketchFixMsg,
+    BakedHole, BakedKeepout, BakedOutline, BoardBakePreview, BoardBakeRefusal, BoardBakeRows,
+    BoardSketchProps, PanelMsg, SketchFixMsg,
 };
 use super::body::{Ctx, caption, ghost, kv_row, mini_head, object_header};
 use super::sections::solve_pill;
@@ -129,10 +129,10 @@ fn push_writes<'a>(
     col.push(caption(t!(i18n, ids::SKETCH_BAKE_DRAWN), cx.tokens))
 }
 
-/// One `(label, value)` per thing Bake writes: the outline's size, each
-/// hole's drill and plating, each keepout's layers, each slot's size, each
-/// anchor's component, and a count for the other targets. A slot is listed
-/// once, as a slot.
+/// One `(label, value)` per thing Bake writes: the outline's size, the
+/// holes by drill and plating with their count, each keepout's layers and
+/// kinds, each slot's size, each anchor's component, and a count for the
+/// other targets. A slot is listed once, as a slot.
 pub(super) fn write_lines(rows: &BoardBakeRows, i18n: &I18n) -> Vec<(Localized, String)> {
     let target = |kind| t!(i18n, target_label_id(kind));
     let mm = |value: f64| format_check_mm(value, 2);
@@ -147,22 +147,18 @@ pub(super) fn write_lines(rows: &BoardBakeRows, i18n: &I18n) -> Vec<(Localized, 
         };
         lines.push((target(BakedKind::BoardOutline), value.into_string()));
     }
-    for hole in &rows.holes {
-        let id = if hole.plated {
-            ids::BOARD_SKETCH_BAKE_HOLE_PLATED
-        } else {
-            ids::BOARD_SKETCH_BAKE_HOLE_UNPLATED
+    for (hole, count) in hole_groups(&rows.holes) {
+        let id = match (hole.plated, count) {
+            (true, 1) => ids::BOARD_SKETCH_BAKE_HOLE_PLATED,
+            (false, 1) => ids::BOARD_SKETCH_BAKE_HOLE_UNPLATED,
+            (true, _) => ids::BOARD_SKETCH_BAKE_HOLES_PLATED,
+            (false, _) => ids::BOARD_SKETCH_BAKE_HOLES_UNPLATED,
         };
-        let value = t!(i18n, id, "drill" => mm(hole.drill_mm)).into_string();
+        let value = t!(i18n, id, "drill" => mm(hole.drill_mm), "count" => count).into_string();
         lines.push((t!(i18n, ids::BOARD_SKETCH_HOLE), value));
     }
-    for layers in &rows.keepouts {
-        let names: Vec<String> = layers
-            .iter()
-            .map(|&layer| crate::pcb_canvas::layer_style::layer_name(i18n, layer).into_string())
-            .collect();
-        let value = t!(i18n, ids::BOARD_SKETCH_BAKE_KEEPOUT_LAYERS, "layers" => names.join(", "));
-        lines.push((target(BakedKind::Keepouts), value.into_string()));
+    for keepout in &rows.keepouts {
+        lines.push((target(BakedKind::Keepouts), keepout_value(keepout, i18n)));
     }
     let count = |n: usize| t!(i18n, ids::EDITORS_SKETCH_BAKE_COUNT, "count" => n).into_string();
     if rows.cutouts > 0 {
@@ -189,6 +185,58 @@ pub(super) fn write_lines(rows: &BoardBakeRows, i18n: &I18n) -> Vec<(Localized, 
         lines.push((target(BakedKind::ComponentAnchors), value.into_string()));
     }
     lines
+}
+
+/// The holes by drill and plating, each with its count, in the order each
+/// first appears: "4 × Ø 3.20 mm · unplated" (mockup row 179).
+fn hole_groups(holes: &[BakedHole]) -> Vec<(BakedHole, usize)> {
+    let shown = |hole: &BakedHole| (hole.plated, format_check_mm(hole.drill_mm, 2));
+    let mut groups: Vec<(BakedHole, usize)> = Vec::new();
+    for hole in holes {
+        match groups
+            .iter_mut()
+            .find(|(seen, _)| shown(seen) == shown(hole))
+        {
+            Some((_, count)) => *count += 1,
+            None => groups.push((*hole, 1)),
+        }
+    }
+    groups
+}
+
+/// "On Top Layer · No copper, No routing": a keepout's layers and what it
+/// keeps out (mockup row 179).
+fn keepout_value(keepout: &BakedKeepout, i18n: &I18n) -> String {
+    let layers: Vec<String> = keepout
+        .layers
+        .iter()
+        .map(|&layer| crate::pcb_canvas::layer_style::layer_name(i18n, layer).into_string())
+        .collect();
+    let layers = layers.join(", ");
+    let forbids = keepout.forbids;
+    let kinds: Vec<String> = [
+        (forbids.no_copper, ids::EDITORS_ROLE_KEEPOUT_NO_COPPER),
+        (forbids.no_routing, ids::EDITORS_ROLE_KEEPOUT_NO_ROUTING),
+        (forbids.no_vias, ids::EDITORS_ROLE_KEEPOUT_NO_VIAS),
+        (forbids.no_pours, ids::EDITORS_ROLE_KEEPOUT_NO_POURS),
+        (
+            forbids.no_components,
+            ids::EDITORS_ROLE_KEEPOUT_NO_COMPONENTS,
+        ),
+        (forbids.no_drilling, ids::EDITORS_ROLE_KEEPOUT_NO_DRILLING),
+    ]
+    .into_iter()
+    .filter(|(on, _)| *on)
+    .map(|(_, id)| t!(i18n, id).into_string())
+    .collect();
+    if kinds.is_empty() {
+        return t!(i18n, ids::BOARD_SKETCH_BAKE_KEEPOUT_LAYERS, "layers" => layers).into_string();
+    }
+    t!(
+        i18n, ids::BOARD_SKETCH_BAKE_KEEPOUT_KINDS,
+        "layers" => layers, "kinds" => kinds.join(", ")
+    )
+    .into_string()
 }
 
 /// Why the sketch does not bake, selecting the entity it names, then the

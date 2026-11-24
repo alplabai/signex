@@ -11,7 +11,11 @@ use uuid::Uuid;
 
 use super::part_sync::{Choice, Choices, ConflictView};
 
+mod rows;
+mod skipped;
 mod view;
+use rows::DriftRow;
+pub use skipped::SkippedVersions;
 pub use view::view;
 
 #[cfg(test)]
@@ -23,11 +27,11 @@ mod tests;
 /// inference rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BumpKind {
-    /// Patch bump (`1.0.0 → 1.0.1`) — same major + minor; treated as
-    /// an opt-in default-on auto-update.
+    /// Patch bump (`1.0.0 → 1.0.1`) — same major + minor; checked by
+    /// default.
     Patch,
-    /// Minor bump (`1.0.0 → 1.1.0`) — same major; treated as
-    /// review-before-accepting (default off).
+    /// Minor bump (`1.0.0 → 1.1.0`) — same major, so compatible under
+    /// semver; checked by default.
     Minor,
     /// Major bump (`1.0.0 → 2.0.0`) or any version pair where parsing
     /// the components fails — treated as likely-breaking. Default off
@@ -40,9 +44,10 @@ impl BumpKind {
     pub const ALL: [Self; 3] = [Self::Major, Self::Minor, Self::Patch];
 
     /// Default checkbox state for the "Update Selected Components"
-    /// flow — patch-only is the safe default.
+    /// flow: patch and minor bumps are compatible under semver and start
+    /// checked; a major bump starts unchecked (mockup row 135).
     pub fn default_checked(self) -> bool {
-        matches!(self, BumpKind::Patch)
+        matches!(self, BumpKind::Patch | BumpKind::Minor)
     }
 }
 
@@ -153,8 +158,9 @@ pub struct LibraryUpdatesState {
     pub schematic_path: PathBuf,
     /// Drift rows, sorted by `ref_des`.
     pub entries: Vec<LibraryUpdateEntry>,
-    /// The open-time scan could not check or update some symbol: a later
-    /// Apply must not clear the sheet's pending-update flag.
+    /// The open-time scan could not check or update some symbol, or left
+    /// out a version Skip All dismissed: a later Apply must not clear the
+    /// sheet's pending-update flag.
     pub scan_failed: bool,
     /// [`signex_engine::Engine::instance_id`] of the sheet when scanned.
     pub engine_instance: u64,
@@ -168,7 +174,7 @@ impl LibraryUpdatesState {
         entries
             .sort_by(|a, b| signex_types::designator::compare_references(&a.ref_des, &b.ref_des));
         // Instances of one symbol share a copy, so they share a checkbox:
-        // default on only when every one of them is a safe (patch) bump.
+        // default on only when none of them is a major bump.
         let safe: Vec<bool> = entries
             .iter()
             .map(|e| {
@@ -248,10 +254,5 @@ impl LibraryUpdatesState {
     /// Number of entries the user has currently checked.
     pub fn selected_count(&self) -> usize {
         self.entries.iter().filter(|e| e.selected).count()
-    }
-
-    /// Number of entries of bump `kind`: the count on its summary pill.
-    pub fn count_of(&self, kind: BumpKind) -> usize {
-        self.entries.iter().filter(|e| e.bump_kind == kind).count()
     }
 }
