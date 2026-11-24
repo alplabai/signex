@@ -116,7 +116,10 @@ fn version_row<'a>(
     list_row(cells, LIST_TILE_ROW_H)
 }
 
-/// The one-line caption under a version's name; `mono` for a path.
+/// The one-line caption under a version's name; `mono` for a path. Where
+/// the estimate of [`saved_caption_chars`] still leaves it too wide, its
+/// middle gives way to an ellipsis, so the time at its end stays (mockup
+/// row 15).
 fn caption<'a>(
     label: impl Into<Label<'a>>,
     mono: bool,
@@ -125,7 +128,8 @@ fn caption<'a>(
     let line = text(label)
         .size(TS.caption)
         .color(crate::styles::tokens::resolve(tokens).ink4)
-        .wrapping(iced::widget::text::Wrapping::None);
+        .wrapping(iced::widget::text::Wrapping::None)
+        .ellipsis(iced::widget::text::Ellipsis::Middle);
     if mono {
         line.font(super::graphite::mono()).boxed()
     } else {

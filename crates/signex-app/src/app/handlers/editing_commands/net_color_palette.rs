@@ -138,17 +138,8 @@ pub(crate) fn hex_of(c: iced::Color) -> String {
 /// The colour a typed hex code names: six hex digits, `#` optional. `None`
 /// for anything else.
 pub(crate) fn parse_hex(text: &str) -> Option<iced::Color> {
-    let trimmed = text.trim();
-    let digits = trimmed.strip_prefix('#').unwrap_or(trimmed);
-    if digits.len() != 6 || !digits.chars().all(|c| c.is_ascii_hexdigit()) {
-        return None;
-    }
-    let v = u32::from_str_radix(digits, 16).ok()?;
-    Some(iced::Color::from_rgb8(
-        ((v >> 16) & 0xFF) as u8,
-        ((v >> 8) & 0xFF) as u8,
-        (v & 0xFF) as u8,
-    ))
+    let [r, g, b] = crate::panels::parse_typed_hex(text)?;
+    Some(iced::Color::from_rgb8(r, g, b))
 }
 
 /// The opaque document colour of an iced colour.

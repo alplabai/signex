@@ -7,6 +7,25 @@ use iced::Size;
 use crate::app::state::{ModalId, Signex};
 use crate::app::view::dialogs::DIALOG_TITLE_BAR_H;
 
+/// Room a dialog window leaves on each side of its monitor, for the OS
+/// taskbar, dock or menu bar: the app knows the monitor's size, not its
+/// work area.
+const MONITOR_RESERVE: f32 = 48.0;
+
+/// `size`, no larger than `monitor` less [`MONITOR_RESERVE`] on each side;
+/// `size` itself while the monitor is unknown. A clamped dialog scrolls its
+/// body.
+pub(crate) fn fit_to_monitor(size: Size, monitor: Option<Size>) -> Size {
+    let Some(monitor) = monitor.filter(|m| m.width.is_finite() && m.height.is_finite()) else {
+        return size;
+    };
+    let cap = |want: f32, room: f32| want.min((room - 2.0 * MONITOR_RESERVE).floor().max(1.0));
+    Size::new(
+        cap(size.width, monitor.width),
+        cap(size.height, monitor.height),
+    )
+}
+
 impl Signex {
     /// Whether a dialog window opened now draws its own title bar: while the
     /// main window draws its own chrome. Decided once per window, when it
@@ -21,7 +40,8 @@ impl Signex {
     }
 
     /// The size `modal`'s window should have: its content, plus the title
-    /// bar when the window draws its own.
+    /// bar when the window draws its own, fitted to the monitor
+    /// ([`fit_to_monitor`]).
     #[cfg(test)]
     pub(crate) fn dialog_window_size(&self, modal: ModalId, borderless: bool) -> Size {
         self.dialog_window_size_of(modal, None, borderless)
@@ -35,12 +55,14 @@ impl Signex {
         borderless: bool,
     ) -> Size {
         let content = self.modal_window_size_of(modal, owner);
-        if !borderless {
-            return content;
-        }
         // Whole logical px, so the window scales as the content does.
-        let bar = (DIALOG_TITLE_BAR_H.ceil() * self.ui_state.ui_scale).ceil();
-        Size::new(content.width, content.height + bar)
+        let bar = if borderless {
+            (DIALOG_TITLE_BAR_H.ceil() * self.ui_state.ui_scale).ceil()
+        } else {
+            0.0
+        };
+        let window = Size::new(content.width, content.height + bar);
+        fit_to_monitor(window, self.new_window_monitor_size())
     }
 
     /// Settings of a new window for `modal`, and whether it is borderless.
@@ -64,10 +86,11 @@ impl Signex {
         } else {
             0.0
         };
+        // Never above the size it opens at, which a small monitor caps.
         settings.min_size = settings.min_size.map(|m| {
             Size::new(
-                (m.width * self.ui_state.ui_scale).ceil(),
-                (m.height * self.ui_state.ui_scale).ceil() + bar,
+                ((m.width * self.ui_state.ui_scale).ceil()).min(size.width),
+                ((m.height * self.ui_state.ui_scale).ceil() + bar).min(size.height),
             )
         });
         settings.icon = crate::app::bootstrap::bundled_window_icon();
@@ -106,6 +129,58 @@ mod tests {
         app.document_state.panel_ctx.tokens =
             signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
         app
+    }
+
+    /// The New Project window's settings on a monitor of `monitor`, with
+    /// the size it opens at agreeing with the size it is kept at.
+    fn new_project_settings(monitor: Option<iced::Size>) -> iced::window::Settings {
+        let mut app = graphite_app();
+        app.ui_state.main_window_monitor_size = monitor;
+        let borderless = app.dialog_windows_borderless();
+        let (settings, _) = app.dialog_window_settings(ModalId::NewProject);
+        let kept = app.dialog_window_size(ModalId::NewProject, borderless);
+        assert_eq!(settings.size, kept, "opened and kept sizes agree");
+        settings
+    }
+
+    /// Decision 2026-11-24: on a small screen the New Project window opens
+    /// no larger than the screen, and can still be dragged to that size.
+    #[test]
+    fn the_new_project_window_fits_a_small_screen() {
+        for (w, h) in [(1366.0, 768.0), (1280.0, 720.0)] {
+            let settings = new_project_settings(Some(iced::Size::new(w, h)));
+            let size = settings.size;
+            assert!(size.width <= w && size.height <= h, "{size:?} on {w}x{h}");
+            assert!(size.height < 920.0, "clamped below the mockup height");
+            let min = settings.min_size.expect("a min size");
+            let fits = min.width <= size.width && min.height <= size.height;
+            assert!(fits, "{min:?}");
+        }
+    }
+
+    /// On a screen with room, the New Project window opens at the mockup
+    /// size (mockup row 21), as with no monitor known.
+    #[test]
+    fn on_a_large_screen_the_new_project_window_opens_at_the_mockup_size() {
+        let large = new_project_settings(Some(iced::Size::new(2560.0, 1440.0)));
+        let unknown = new_project_settings(None);
+        assert_eq!(large.size, unknown.size);
+        let app = graphite_app();
+        let (w, _) = crate::app::view::dialogs::NEW_PROJECT_SIZE;
+        assert_eq!(large.size.width, (w * app.ui_state.ui_scale).ceil());
+        let content = app.modal_window_size(ModalId::NewProject);
+        assert!(large.size.height >= content.height, "{large:?}");
+    }
+
+    #[test]
+    fn fit_to_monitor_caps_each_side_and_leaves_an_unknown_monitor_alone() {
+        let want = iced::Size::new(1040.0, 920.0);
+        assert_eq!(super::fit_to_monitor(want, None), want);
+        let fitted = super::fit_to_monitor(want, Some(iced::Size::new(1366.0, 768.0)));
+        assert_eq!(fitted.width, 1040.0);
+        assert_eq!(fitted.height, 768.0 - 2.0 * super::MONITOR_RESERVE);
+        let nan = Some(iced::Size::new(f32::NAN, 768.0));
+        assert_eq!(super::fit_to_monitor(want, nan), want);
     }
 
     /// The window of a dialog shows the Signex mark, whatever its frame.

@@ -102,7 +102,7 @@ paste-array-axis-x = X
 # Prefix inside the Y spacing field.
 paste-array-axis-y = Y
 paste-array-count-up = Count up label numbers
-paste-array-preview-caption = Preview · copy 1 is the original
+paste-array-preview-caption = Preview · copy 1 is the original · drag copy 2 or click a value
 # Tooltips of the preview's expand button.
 paste-array-preview-expand = Expand preview
 paste-array-preview-collapse = Collapse preview
@@ -112,6 +112,13 @@ paste-array-preview-more = +{ $count } more
 paste-array-preview-x = X { $value }
 # Spacing callout on the preview; $value is the length with its unit.
 paste-array-preview-y = Y { $value }
+# The Copies value drawn on the preview; $count counts the original.
+paste-array-preview-copies = { $count ->
+    [one] 1 copy
+   *[other] { $count } copies
+}
+# The step drawn under copy 2; $step is signed, such as "+1".
+paste-array-preview-step = { $step } per copy
 # Worked example; $from is a copied label and $to its texts in the first
 # copies, such as "D1, D2, D3".
 paste-array-hint-example = Copy k sits k spacings from the original; label numbers count up by k steps ({ $from } → { $to }).

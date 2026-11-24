@@ -31,6 +31,7 @@ mod program;
 mod style;
 
 pub use field::FieldId;
+pub use geometry::Fit;
 pub use hover::{IllustrationHover, IllustrationMsg};
 pub use illustration::{DEFAULT_HEIGHT_EM, Illustration, Part};
 pub use metrics::Metrics;

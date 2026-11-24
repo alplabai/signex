@@ -27,10 +27,11 @@ pub(in crate::app::view) enum Layer {
     Prepreg,
     Core,
     MaskBottom,
+    SilkBottom,
 }
 
 /// The rows of the stack-up for `copper` copper layers, top to bottom: silk,
-/// mask, the copper layers with a dielectric between each pair, mask.
+/// mask, the copper layers with a dielectric between each pair, mask, silk.
 pub(in crate::app::view) fn stack_rows(copper: u8) -> Vec<Layer> {
     let copper = copper.max(1);
     let mut rows = vec![Layer::Silk, Layer::Mask];
@@ -47,6 +48,7 @@ pub(in crate::app::view) fn stack_rows(copper: u8) -> Vec<Layer> {
         }
     }
     rows.push(Layer::MaskBottom);
+    rows.push(Layer::SilkBottom);
     rows
 }
 
@@ -134,6 +136,11 @@ fn layer_row<'a>(layer: Layer, copper: u8, i18n: &I18n, ink: Color) -> Element<'
             MATERIALS.mask,
             4.0,
             t!(i18n, ids::DIALOG_NEW_PROJECT_STACK_MASK_BOTTOM),
+        ),
+        Layer::SilkBottom => (
+            MATERIALS.silk,
+            3.0,
+            t!(i18n, ids::PCB_LAYER_SILKSCREEN_BOTTOM),
         ),
     };
     row![

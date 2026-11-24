@@ -324,6 +324,9 @@ define_ids! {
     RULES_CELL_NOT_APPLICABLE = "rules-cell-not-applicable";
     RULES_CELL_NOT_CHECKED = "rules-cell-not-checked";
     RULES_CELL_NOT_SET = "rules-cell-not-set";
+    RULES_CELL_ALWAYS_CHECKED = "rules-cell-always-checked";
+    RULES_CELL_NO = "rules-cell-no";
+    RULES_CELL_ON = "rules-cell-on";
     RULES_CHIP_INHERITED = "rules-chip-inherited";
     RULES_CHIP_OVERRIDDEN_ONLY = "rules-chip-overridden-only";
     RULES_FIND_PLACEHOLDER = "rules-find-placeholder";

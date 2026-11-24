@@ -371,7 +371,9 @@ fn shortcut_row<'a>(
         Row::new().spacing(px(8.0)).align_y(Alignment::Center).push(
             rich_text::<(), Message, Theme>(spans)
                 .size(TS.body)
-                .wrapping(iced::widget::text::Wrapping::Word)
+                // A word longer than the column breaks between glyphs
+                // rather than run under the key caps (mockup row 13).
+                .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
                 .width(Length::Fill)
                 .boxed(),
         );
@@ -577,6 +579,13 @@ mod tests {
         );
         sample.label = "Show valid shortcuts for the current interactive command".into();
         assert!(height(&sample) > ROW_H, "a long label takes a second line");
+        // One word with no break in it still wraps instead of running on
+        // one line under the key cap.
+        sample.label = "Show_valid_shortcuts_for_the_current_interactive_command".into();
+        assert!(
+            height(&sample) > ROW_H,
+            "an unbroken word takes a second line"
+        );
     }
 
     #[test]

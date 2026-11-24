@@ -476,7 +476,11 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ),
         ModalId::ParameterManager => iced::Size::new(900.0, 560.0),
         ModalId::Preferences => iced::Size::new(900.0, 620.0),
-        ModalId::NewProject => iced::Size::new(860.0, 700.0),
+        // One size for the window and the fallback card (mockup row 21).
+        ModalId::NewProject => {
+            let (w, h) = crate::app::view::dialogs::NEW_PROJECT_SIZE;
+            iced::Size::new(w, h)
+        }
         ModalId::FindReplace => iced::Size::new(440.0, 320.0),
         ModalId::RenameDialog => iced::Size::new(460.0, 151.0),
         ModalId::RemoveDialog => iced::Size::new(520.0, 221.0),

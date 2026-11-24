@@ -272,6 +272,78 @@ fn parts_state_names_each_part_outside_the_allowed_states() {
     assert_eq!(keys.len(), 3, "each part has a key of its own");
 }
 
+/// Mockup row 38: a failed `parts_state` card counts parts, not BOM lines,
+/// so a line grouping C1 and C2 counts twice on both sides of "of".
+#[test]
+fn a_parts_shortfall_counts_parts_not_bom_lines() {
+    let mut parts = facts(json!([
+        {"id": "parts", "kind": "parts_state", "states": ["released", "deprecated"]},
+    ]));
+    let released = library_row_key("lib", "r1");
+    let draft = library_row_key("lib", "r2");
+    parts.row_states = [
+        (released.clone(), "released".to_string()),
+        (draft.clone(), "draft".to_string()),
+    ]
+    .into_iter()
+    .collect();
+    parts.parts = Some(Ok(BomTable {
+        rows: vec![
+            row(&["R1"], 1, Some(&released), ""),
+            row(&["C1", "C2"], 2, Some(&draft), ""),
+            row(&["R3"], 1, None, ""),
+            row(&["R4"], 1, Some("other/r9"), ""),
+        ],
+        metadata: Default::default(),
+    }));
+    let report = check_report(&parts);
+    let found: Vec<&Finding> = report.findings.iter().collect();
+    let grouped = found
+        .iter()
+        .find(|f| f.evidence["designator"] == json!("C1,C2"))
+        .expect("the grouped line's finding");
+    assert_eq!(grouped.evidence["count"], json!(2));
+    assert_eq!(grouped.evidence["parts"], json!(5));
+    let miss = |designator: &str, count, problem| PartMiss {
+        designator: designator.into(),
+        count,
+        problem,
+    };
+    assert_eq!(
+        parts_shortfall(&found),
+        Some(PartsShortfall {
+            missed: 4,
+            of: 5,
+            allowed: vec!["released".into(), "deprecated".into()],
+            lines: vec![
+                miss("C1,C2", 2, PartProblem::State("draft".into())),
+                miss("R3", 1, PartProblem::Unplaced),
+                miss("R4", 1, PartProblem::NoLibrary),
+            ],
+        })
+    );
+    assert_eq!(parts_shortfall(&[]), None);
+}
+
+/// Findings that are not per-part ones are no parts shortfall; the card
+/// reads their messages instead.
+#[test]
+fn net_class_findings_are_no_parts_shortfall() {
+    let mut nets = facts(json!([
+        {"id": "usb", "kind": "net_class", "nets": "USB_*", "class": "USB",
+         "min_trace_width_mm": 0.2},
+    ]));
+    nets.board = read_board(board(10.0, 10.0, &["USB_DP", "USB_DM", "GND"]));
+    let mut usb = NetClass::named("USB");
+    usb.nets = vec!["USB_DP".into()];
+    usb.trace_width = 0.15;
+    nets.classes = vec![usb];
+    let report = check_report(&nets);
+    let found: Vec<&Finding> = report.findings.iter().collect();
+    assert_eq!(found.len(), 2, "two misses of one requirement");
+    assert_eq!(parts_shortfall(&found), None);
+}
+
 #[test]
 fn an_unknown_lifecycle_state_is_not_checked() {
     let mut facts = facts(json!([

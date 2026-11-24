@@ -23,6 +23,10 @@ static CLOSE: LazyLock<svg::Handle> = LazyLock::new(|| {
     svg::Handle::from_memory(include_bytes!("../../../../assets/icons/close.svg").as_slice())
 });
 
+/// Tallest the preview's change list grows, in body ems (about four rows),
+/// before it scrolls inside its card.
+const CHANGES_MAX_EM: f32 = 6.0;
+
 fn mono() -> iced::Font {
     crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
 }
@@ -286,6 +290,8 @@ fn change_row<'a>(frame: &Frame<'a>, change: &RowChange) -> Element<'a, Message>
 }
 
 /// "Applying <preset> changes:", one row per change, then Cancel / Apply.
+/// A long list scrolls inside the card so the card, Cancel and Apply stay
+/// in view (mockup row 91).
 fn preview_card<'a>(frame: &Frame<'a>, preview: &PresetPreview) -> Element<'a, Message> {
     let (i18n, tokens, id) = (frame.i18n, frame.tokens, frame.id);
     let label = match preview
@@ -310,17 +316,25 @@ fn preview_card<'a>(frame: &Frame<'a>, preview: &PresetPreview) -> Element<'a, M
                 .boxed(),
         );
     }
+    let mut changes: Column<Element<'a, Message>> = Column::new().spacing(SP.xs);
     for change in &preview.changes {
-        lines = lines.push(change_row(frame, change));
+        changes = changes.push(change_row(frame, change));
     }
     for other in &preview.other {
-        lines = lines.push(
+        changes = changes.push(
             text(user(other.clone()))
                 .size(TS.caption)
                 .color(tokens::muted_text(tokens))
                 .boxed(),
         );
     }
+    lines = lines.push(
+        scrollable(changes)
+            .direction(crate::styles::thin_vertical())
+            .style(crate::styles::scrollbar_style(tokens))
+            .height(Length::Fit.max(TS.body * CHANGES_MAX_EM))
+            .boxed(),
+    );
     let cancel = button(text(t!(i18n, ids::RULES_PRESET_CANCEL)).size(TS.caption))
         .padding([SP.xs, SP.m])
         .style(crate::styles::outline_button(tokens))
@@ -354,3 +368,7 @@ fn preview_card<'a>(frame: &Frame<'a>, preview: &PresetPreview) -> Element<'a, M
         })
         .boxed()
 }
+
+#[cfg(test)]
+#[path = "presets_tests.rs"]
+mod tests;

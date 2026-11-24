@@ -52,6 +52,17 @@ fn pick_monitor(source: Option<usize>, monitors: &[MonitorInfo]) -> Option<usize
         .or(Some(0))
 }
 
+/// The logical size of the monitor a window placed from `source` opens on,
+/// picked as [`pick_monitor`] picks it.
+#[must_use]
+pub fn monitor_size_for(
+    source: Option<&SourceWindow>,
+    monitors: &[MonitorInfo],
+) -> Option<(f32, f32)> {
+    let index = pick_monitor(source.and_then(|s| s.monitor_index), monitors)?;
+    Some(monitors[index].size)
+}
+
 /// Pick the monitor and a position for a window of `window_size`.
 ///
 /// The position is clamped to the monitor so the whole window is visible;

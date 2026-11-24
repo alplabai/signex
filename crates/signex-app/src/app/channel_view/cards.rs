@@ -6,7 +6,7 @@
 //! `docs/MULTI_CHANNEL.md`, "Not built yet").
 
 use iced::widget::{Column, Row, Space, column, container, row, scrollable};
-use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
+use iced::{Alignment, Background, Border, Element, Length, Padding, Theme, Widget as _};
 use signex_i18n::{UserText, ids, t};
 use signex_widgets::text;
 
@@ -22,6 +22,13 @@ const GAP: f32 = TS.body * 10.0 / 12.0;
 const BODY_ROWS: usize = 9;
 /// Gap between the designator lines of a card: 2 px at the 12 px body.
 const LINE_GAP: f32 = TS.body * 2.0 / 12.0;
+
+/// Height the floating Active Bar takes from the top of the canvas region:
+/// its top margin and its own height, read from the bar's layout.
+fn bar_clearance() -> f32 {
+    let metrics = signex_widgets::active_bar::Metrics::GRAPHITE;
+    crate::active_bar::bar_top_margin() + crate::active_bar::bar_height_for(&metrics)
+}
 
 pub(super) fn view<'a>(
     ctx: &'a PanelContext,
@@ -45,14 +52,22 @@ pub(super) fn view<'a>(
         }
         grid = grid.push(line.boxed());
     }
-    container(scrollable(container(grid).padding(GAP).width(Length::Fill)))
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(sunken)),
-            ..container::Style::default()
-        })
-        .boxed()
+    // The schematic's floating Active Bar sits over the top of this view;
+    // the grid starts under it so no card header is covered (mockup row 151).
+    let inset = Padding {
+        top: bar_clearance() + GAP,
+        ..Padding::new(GAP)
+    };
+    container(scrollable(
+        container(grid).padding(inset).width(Length::Fill),
+    ))
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .style(move |_: &Theme| container::Style {
+        background: Some(Background::Color(sunken)),
+        ..container::Style::default()
+    })
+    .boxed()
 }
 
 fn card<'a>(

@@ -35,34 +35,103 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         return page(vec![grid_preview::grid_preview(v, true)]);
     }
     let (t, i18n) = (v.panel_tokens, v.i18n);
-    let section = |id: MessageId| section_header(t!(i18n, id), None, t);
-    page(vec![
-        page_heading(
-            t!(i18n, ids::PREFERENCES_APPEARANCE_HEADING),
-            t!(i18n, ids::PREFERENCES_THEME_INTRO),
-            t,
-        ),
-        section(ids::PREFERENCES_APPEARANCE_SECTION_LOOK),
-        super::theme_cards::theme_cards(v.draft_theme, t, i18n),
-        font_row(v),
-        ui_scale_row(v),
-        selected_segment_row(v),
-        section(ids::PREFERENCES_APPEARANCE_SECTION_CANVAS),
-        grid_style_row(v),
-        grid_preview::grid_preview(v, false),
-        symbol_grid_row(v),
-        pin_selection_row(v),
-        gpu_render_row(v),
-        antialiasing_row(v),
-        section(ids::PREFERENCES_APPEARANCE_SECTION_NAVIGATION),
-        wheel_mode_row(v),
-        trackpad_pan_row(v),
-        zoom_speed_row(v),
-        layer_switcher_row(v),
-        section(ids::PREFERENCES_APPEARANCE_SECTION_WINDOW),
-        window_buttons_row(v),
-        remember_geometry_row(v),
-    ])
+    let mut items = vec![page_heading(
+        t!(i18n, ids::PREFERENCES_APPEARANCE_HEADING),
+        t!(i18n, ids::PREFERENCES_THEME_INTRO),
+        t,
+    )];
+    items.extend(PAGE_LAYOUT.iter().map(|&item| page_item(v, item)));
+    page(items)
+}
+
+/// One section heading of the Appearance page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Section {
+    Look,
+    Canvas,
+    Navigation,
+    Window,
+}
+
+impl Section {
+    fn label(self) -> MessageId {
+        match self {
+            Self::Look => ids::PREFERENCES_APPEARANCE_SECTION_LOOK,
+            Self::Canvas => ids::PREFERENCES_APPEARANCE_SECTION_CANVAS,
+            Self::Navigation => ids::PREFERENCES_APPEARANCE_SECTION_NAVIGATION,
+            Self::Window => ids::PREFERENCES_APPEARANCE_SECTION_WINDOW,
+        }
+    }
+}
+
+/// One entry below the page heading: a section heading or a setting.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PageItem {
+    Heading(Section),
+    ThemeCards,
+    Font,
+    UiScale,
+    SelectedSegment,
+    GridStyle,
+    GridPreview,
+    SymbolGrid,
+    PinSelection,
+    LayerSwitcher,
+    GpuRender,
+    Antialiasing,
+    WheelMode,
+    TrackpadPan,
+    ZoomSpeed,
+    WindowButtons,
+    RememberGeometry,
+}
+
+/// The page in mockup row 144 order. Layer switcher sits in Canvas, after
+/// Pin selection and before GPU Render.
+const PAGE_LAYOUT: &[PageItem] = &[
+    PageItem::Heading(Section::Look),
+    PageItem::ThemeCards,
+    PageItem::Font,
+    PageItem::UiScale,
+    PageItem::SelectedSegment,
+    PageItem::Heading(Section::Canvas),
+    PageItem::GridStyle,
+    PageItem::GridPreview,
+    PageItem::SymbolGrid,
+    PageItem::PinSelection,
+    PageItem::LayerSwitcher,
+    PageItem::GpuRender,
+    PageItem::Antialiasing,
+    PageItem::Heading(Section::Navigation),
+    PageItem::WheelMode,
+    PageItem::TrackpadPan,
+    PageItem::ZoomSpeed,
+    PageItem::Heading(Section::Window),
+    PageItem::WindowButtons,
+    PageItem::RememberGeometry,
+];
+
+fn page_item<'a>(v: PrefsView<'a>, item: PageItem) -> Element<'a, PrefMsg> {
+    let (t, i18n) = (v.panel_tokens, v.i18n);
+    match item {
+        PageItem::Heading(section) => section_header(t!(i18n, section.label()), None, t),
+        PageItem::ThemeCards => super::theme_cards::theme_cards(v.draft_theme, t, i18n),
+        PageItem::Font => font_row(v),
+        PageItem::UiScale => ui_scale_row(v),
+        PageItem::SelectedSegment => selected_segment_row(v),
+        PageItem::GridStyle => grid_style_row(v),
+        PageItem::GridPreview => grid_preview::grid_preview(v, false),
+        PageItem::SymbolGrid => symbol_grid_row(v),
+        PageItem::PinSelection => pin_selection_row(v),
+        PageItem::LayerSwitcher => layer_switcher_row(v),
+        PageItem::GpuRender => gpu_render_row(v),
+        PageItem::Antialiasing => antialiasing_row(v),
+        PageItem::WheelMode => wheel_mode_row(v),
+        PageItem::TrackpadPan => trackpad_pan_row(v),
+        PageItem::ZoomSpeed => zoom_speed_row(v),
+        PageItem::WindowButtons => window_buttons_row(v),
+        PageItem::RememberGeometry => remember_geometry_row(v),
+    }
 }
 
 /// The catalog name of a grid style.
@@ -479,6 +548,84 @@ mod tests {
         ] {
             assert!(help.contains(needle), "{needle:?} not in {help:?}");
         }
+    }
+
+    /// The settings under one section heading, in page order.
+    fn section_items(section: Section) -> Vec<PageItem> {
+        PAGE_LAYOUT
+            .iter()
+            .skip_while(|&&item| item != PageItem::Heading(section))
+            .skip(1)
+            .take_while(|item| !matches!(item, PageItem::Heading(_)))
+            .copied()
+            .collect()
+    }
+
+    /// Mockup row 144: Layer switcher is a Canvas row, after Pin selection
+    /// and before GPU Render; Navigation ends with Zoom speed.
+    #[test]
+    fn the_layer_switcher_sits_in_canvas_between_pin_selection_and_gpu_render() {
+        assert_eq!(
+            section_items(Section::Canvas),
+            vec![
+                PageItem::GridStyle,
+                PageItem::GridPreview,
+                PageItem::SymbolGrid,
+                PageItem::PinSelection,
+                PageItem::LayerSwitcher,
+                PageItem::GpuRender,
+                PageItem::Antialiasing,
+            ]
+        );
+        assert_eq!(
+            section_items(Section::Navigation),
+            vec![
+                PageItem::WheelMode,
+                PageItem::TrackpadPan,
+                PageItem::ZoomSpeed,
+            ]
+        );
+    }
+
+    /// Mockup row 144: the sections read Look, Canvas, Navigation, Window and
+    /// every setting appears once.
+    #[test]
+    fn the_appearance_sections_follow_the_mockup_order() {
+        let headings: Vec<Section> = PAGE_LAYOUT
+            .iter()
+            .filter_map(|item| match item {
+                PageItem::Heading(section) => Some(*section),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            headings,
+            vec![
+                Section::Look,
+                Section::Canvas,
+                Section::Navigation,
+                Section::Window,
+            ]
+        );
+        for (i, item) in PAGE_LAYOUT.iter().enumerate() {
+            assert!(
+                !PAGE_LAYOUT[i + 1..].contains(item),
+                "{item:?} appears twice"
+            );
+        }
+        assert_eq!(
+            section_items(Section::Look),
+            vec![
+                PageItem::ThemeCards,
+                PageItem::Font,
+                PageItem::UiScale,
+                PageItem::SelectedSegment,
+            ]
+        );
+        assert_eq!(
+            section_items(Section::Window),
+            vec![PageItem::WindowButtons, PageItem::RememberGeometry]
+        );
     }
 
     /// The grid style names read as the `Display` names the pickers showed.
