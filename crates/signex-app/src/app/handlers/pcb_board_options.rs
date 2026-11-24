@@ -99,8 +99,9 @@ impl Signex {
             return;
         };
         match field {
+            BoardField::SnapDistance if mm > 0.0 => self.ui_state.pcb_snap.distance_mm = mm,
             BoardField::AxisRange if mm > 0.0 => self.ui_state.pcb_snap.axis_range_mm = mm,
-            BoardField::AxisRange => {
+            BoardField::SnapDistance | BoardField::AxisRange => {
                 let why = t!(self.ui_state.i18n, ids::PCB_BOARD_GRID_INVALID).into_string();
                 self.say_pcb_options_refused(why);
             }

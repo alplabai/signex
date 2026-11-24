@@ -178,6 +178,16 @@ impl Context<'_> {
     }
 }
 
+/// The closed outline `sketch` bakes at `solve`, for Properties to read the
+/// board's size from the sketch (mockup row 179e). `None` when the sketch
+/// draws no single closed outline, or does not bake.
+pub fn sketch_outline(sketch: &SketchData, solve: &FullSolveOutput) -> Option<Vec<Point>> {
+    at_solve(sketch, solve, &solve.params, outline)
+        .ok()
+        .flatten()
+        .filter(|outline| outline.len() >= 3)
+}
+
 /// The outline: exactly one closed profile of the edges tagged
 /// `board_outline` (a loop of lines and arcs, or one circle). With none
 /// tagged, an empty outline if the sketch baked one before (it was

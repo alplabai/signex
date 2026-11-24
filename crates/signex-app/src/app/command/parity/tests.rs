@@ -114,6 +114,7 @@ fn every_context_fact_is_listed() {
         has_schematic: _,
         has_pcb: _,
         pcb_view_turned: _,
+        board_3d_shown: _,
         undocked_has_canvas: _,
         document_is_schematic: _,
         document_is_editor: _,
@@ -164,7 +165,7 @@ fn every_context_fact_is_listed() {
     } = CommandContext::default();
     let names: BTreeSet<&str> = FACTS.iter().map(|(name, _, _)| *name).collect();
     assert_eq!(names.len(), FACTS.len(), "a fact is listed twice");
-    assert_eq!(FACTS.len(), 30 + 17, "30 context facts and 17 board facts");
+    assert_eq!(FACTS.len(), 31 + 17, "31 context facts and 17 board facts");
 }
 
 /// No core row stands on its gate alone: every core route's handler was

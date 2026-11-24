@@ -12,6 +12,7 @@ use super::pages_view::controls::{
 use super::pages_view::{HelpTopic, PagesViewMsg, PreviewKind};
 use super::setting_row::{SettingRow, help_text, page, page_heading, section_header, setting_row};
 use super::{PrefMsg, PrefsView};
+use crate::app::edge_pan::EdgePanSpeed;
 use crate::choice::{Choice, chosen};
 use crate::paste_prefs::PasteDesignators;
 use crate::styles::{self, ti};
@@ -89,6 +90,13 @@ pub(super) fn content_editing<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         i18n,
     ));
     items.push(snap_labels::snap_preview(v, false));
+    items.push(toggle_row(
+        v,
+        ids::PREFERENCES_EDGE_PAN,
+        Help::Plain(ids::PREFERENCES_EDGE_PAN_HELP),
+        (v.draft_edge_pan.enabled, PrefMsg::DraftEdgePanEnabled),
+    ));
+    items.push(edge_pan_speed_row(v));
     items.push(section(ids::PREFERENCES_EDITING_SECTION_TEXT));
     items.push(increment_step_row(v));
     items.push(paste_designators_row(v));
@@ -212,6 +220,25 @@ fn increment_step_row<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         ids::PREFERENCES_INCREMENT_STEP,
         Help::Plain(ids::PREFERENCES_INCREMENT_STEP_HELP),
         control.boxed(),
+    )
+}
+
+/// How fast the view pans with the pointer at a canvas edge (#2872).
+fn edge_pan_speed_row<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+    let speeds = Choice::named(EdgePanSpeed::ALL, EdgePanSpeed::label, v.i18n);
+    let picker = pick_list(
+        chosen(&speeds, &v.draft_edge_pan.speed),
+        speeds,
+        |speed: &Choice<EdgePanSpeed>| speed.label.clone(),
+    )
+    .graphite()
+    .on_select(|speed: Choice<EdgePanSpeed>| PrefMsg::DraftEdgePanSpeed(speed.value))
+    .width(Length::Fill);
+    described(
+        v,
+        ids::PREFERENCES_EDGE_PAN_SPEED,
+        Help::Plain(ids::PREFERENCES_EDGE_PAN_SPEED_HELP),
+        picker.boxed(),
     )
 }
 

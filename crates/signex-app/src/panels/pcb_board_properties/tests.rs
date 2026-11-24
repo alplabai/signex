@@ -506,6 +506,44 @@ fn add_preset_and_run_drc_are_wired() {
     assert!(run.iter().any(|m| matches!(m, PanelMsg::RunDrc)), "{run:?}");
 }
 
+/// #2873: the name field and Delete belong to the preset selected for
+/// editing, under "Editing <name>"; with none selected neither shows, and
+/// Save Chips is gone.
+#[test]
+fn the_selected_preset_shows_editing_its_name_and_delete() {
+    use crate::active_bar::CustomFilterPreset;
+    let mut ctx = context(0);
+    open_all(&mut ctx);
+    if let Some(board) = ctx.pcb_board.as_mut() {
+        board.presets = vec![
+            CustomFilterPreset::of_kinds("Routing".into(), |k| k == PickKind::Tracks),
+            CustomFilterPreset::of_kinds("Vias".into(), |k| k == PickKind::Vias),
+        ];
+    }
+    let idle = texts(&ctx);
+    assert!(!idle.iter().any(|t| t.starts_with("Editing")), "{idle:?}");
+    let deletes = |shown: &[String]| shown.iter().filter(|t| *t == "Delete").count();
+    if let Some(board) = ctx.pcb_board.as_mut() {
+        board.preset_editing = Some(1);
+    }
+    let editing = texts(&ctx);
+    assert!(editing.iter().any(|t| t == "Editing Vias"), "{editing:?}");
+    assert_eq!(deletes(&editing), deletes(&idle) + 1, "the preset's Delete");
+    assert!(!editing.iter().any(|t| t == "Save Chips"), "{editing:?}");
+    let window = iced::Size::new(NARROW_DOCK, WINDOW.height);
+    let deleted = crate::layout_probe::messages_on_click(
+        super::super::properties::view_properties(&ctx),
+        window,
+        "Delete",
+    );
+    assert!(
+        deleted
+            .iter()
+            .any(|m| matches!(m, PanelMsg::PcbBoard(PcbBoardMsg::FilterPresetRemoved(1)))),
+        "{deleted:?}"
+    );
+}
+
 /// A context with one extra grid and one guide, as the managers test has.
 fn managed(ctx: &mut PanelContext) -> uuid::Uuid {
     use signex_types::pcb_options::{BoardGrid, BoardGuide, GuideKind, MARK_COLORS};

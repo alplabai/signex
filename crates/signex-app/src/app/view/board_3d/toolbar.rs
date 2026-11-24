@@ -14,7 +14,7 @@ use iced::{
     Alignment, Background, Border, Color, Element, Font, Length, Padding, Theme, Widget as _,
 };
 use signex_gfx::camera3d::{ViewPreset, ViewSide};
-use signex_i18n::{I18n, Localized, ids, t};
+use signex_i18n::{I18n, Localized, MessageId, Translatable, ids, t};
 use signex_widgets::active_bar_dropdown::tooltip_style;
 use signex_widgets::{Label, SegmentedStyle, button, segmented, text, theme_ext, tooltip};
 
@@ -23,17 +23,21 @@ use iced_aw::drop_down::Alignment as DropAlignment;
 
 use super::icons::{Icon, icon};
 use super::overlays::{explode_popover, shot_menu};
-use super::{Look, M, TS, backdrop_fill, card_style, event, lighting_name, preset_name, shadow};
+use super::{
+    Board3dKeys, Look, M, TS, backdrop_fill, card_style, event, lighting_name, preset_name, shadow,
+};
 use crate::app::state::Board3dSession;
 use crate::app::{Board3dMsg, Message};
 use crate::styles::{Radii, Spacing};
 
 const SP: Spacing = Spacing::DEFAULT;
 
-/// The toolbar of `session`'s view.
+/// The toolbar of `session`'s view; its tooltips and the screenshot menu
+/// name the `keys` bound to Flip, the lighting and the copy.
 pub(super) fn toolbar<'a>(
     i18n: &I18n,
     session: &Board3dSession,
+    keys: &Board3dKeys,
     look: &Look,
 ) -> Element<'a, Message> {
     let active = session.active_preset;
@@ -81,12 +85,12 @@ pub(super) fn toolbar<'a>(
         with_tip(reset, t!(i18n, ids::PCB_3D_RESET), look),
         with_tip(fit, t!(i18n, ids::PCB_3D_FIT), look),
         separator(look),
-        flip_button(i18n, session, look),
+        flip_button(i18n, session, &keys.flip, look),
         explode_button(i18n, session, look),
         separator(look),
-        lighting_button(i18n, session, look),
+        lighting_button(i18n, session, &keys.lighting, look),
         separator(look),
-        screenshot_buttons(i18n, session, look),
+        screenshot_buttons(i18n, session, &keys.copy, look),
     ]
     .spacing(M.bar_gap)
     .align_y(Alignment::Center);
@@ -124,8 +128,14 @@ fn mode_switch<'a>(i18n: &I18n, look: &Look) -> Element<'a, Message> {
     })
 }
 
-/// Flip: reads Bottom and is tinted while the bottom shows.
-fn flip_button<'a>(i18n: &I18n, session: &Board3dSession, look: &Look) -> Element<'a, Message> {
+/// Flip: reads Bottom and is tinted while the bottom shows; its tooltip
+/// names `key`.
+fn flip_button<'a>(
+    i18n: &I18n,
+    session: &Board3dSession,
+    key: &str,
+    look: &Look,
+) -> Element<'a, Message> {
     let flipped = session.side == ViewSide::Bottom;
     let (name, tip) = if flipped {
         (ids::PCB_3D_FLIPPED, ids::PCB_3D_FLIP_BACK_TOOLTIP)
@@ -134,7 +144,16 @@ fn flip_button<'a>(i18n: &I18n, session: &Board3dSession, look: &Look) -> Elemen
     };
     let content = icon_label(Icon::Flip, t!(i18n, name), flipped, look);
     let button = tool_button(content, flipped, Board3dMsg::FlipRequested, look);
-    with_tip(button, t!(i18n, tip), look)
+    with_tip(button, keyed_tip(i18n, tip, key), look)
+}
+
+/// `tip` with `key` after it, as the mockup writes "Flip board (F)"; `tip`
+/// alone when the command has no key.
+fn keyed_tip(i18n: &I18n, tip: MessageId, key: &str) -> Localized {
+    if key.is_empty() {
+        return t!(i18n, tip);
+    }
+    t!(i18n, ids::PCB_3D_TOOLTIP_KEYED, "tip" => Translatable::new(tip), "key" => key)
 }
 
 /// Explode: reads its amount and is tinted while its popover is open or
@@ -178,8 +197,13 @@ pub(super) fn explode_percent(session: &Board3dSession) -> u32 {
 }
 
 /// The lighting preset: its swatch, its name and a chevron; a click moves
-/// to the next one. Tinted while its toast shows.
-fn lighting_button<'a>(i18n: &I18n, session: &Board3dSession, look: &Look) -> Element<'a, Message> {
+/// to the next one. Tinted while its toast shows; its tooltip names `key`.
+fn lighting_button<'a>(
+    i18n: &I18n,
+    session: &Board3dSession,
+    key: &str,
+    look: &Look,
+) -> Element<'a, Message> {
     let on = session.lighting_toast.is_some();
     let ink = if on {
         look.r.accent_soft_ink
@@ -195,13 +219,17 @@ fn lighting_button<'a>(i18n: &I18n, session: &Board3dSession, look: &Look) -> El
     .align_y(Alignment::Center)
     .boxed();
     let button = tool_button(content, on, Board3dMsg::LightingCycled, look);
-    with_tip(button, t!(i18n, ids::PCB_3D_LIGHTING_TOOLTIP), look)
+    let tip = keyed_tip(i18n, ids::PCB_3D_LIGHTING_TOOLTIP, key);
+    with_tip(button, tip, look)
 }
 
-/// The screenshot button (a click copies) and its menu chevron.
+/// The screenshot button (a click copies) and its menu chevron; `copy_key`
+/// is the copy command's key, named in the tooltip and on the menu's Copy
+/// row (mockup row 175), empty when unbound.
 fn screenshot_buttons<'a>(
     i18n: &I18n,
     session: &Board3dSession,
+    copy_key: &str,
     look: &Look,
 ) -> Element<'a, Message> {
     let copy = tool_button(
@@ -222,13 +250,11 @@ fn screenshot_buttons<'a>(
         Board3dMsg::ScreenshotMenuToggled,
         look,
     );
-    let menu = anchored(menu, shot_menu(i18n, look), open);
-    row![
-        with_tip(copy, t!(i18n, ids::PCB_3D_SHOT_TOOLTIP), look),
-        menu
-    ]
-    .align_y(Alignment::Center)
-    .boxed()
+    let menu = anchored(menu, shot_menu(i18n, copy_key, look), open);
+    let tip = keyed_tip(i18n, ids::PCB_3D_SHOT_TOOLTIP, copy_key);
+    row![with_tip(copy, tip, look), menu]
+        .align_y(Alignment::Center)
+        .boxed()
 }
 
 /// The font size whose chevron box is the mockup's 12 px glyph.
@@ -351,4 +377,37 @@ fn separator<'a>(look: &Look) -> Element<'a, Message> {
     container(rule)
         .padding(Padding::from([0.0, M.sep_margin]))
         .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn plain(tip: Localized) -> String {
+        tip.into_string().replace(['\u{2068}', '\u{2069}'], "")
+    }
+
+    /// Mockup row 175: "Flip board (F)", "Next lighting preset (H)" and
+    /// "Copy a screenshot (Ctrl+Shift+C)"; a command with no key keeps its
+    /// plain tooltip.
+    #[test]
+    fn a_tooltip_names_its_key_when_the_command_has_one() {
+        let i18n = I18n::en_us_ref();
+        assert_eq!(
+            plain(keyed_tip(i18n, ids::PCB_3D_FLIP_TOOLTIP, "F")),
+            "Flip board (F)"
+        );
+        assert_eq!(
+            plain(keyed_tip(i18n, ids::PCB_3D_LIGHTING_TOOLTIP, "H")),
+            "Next lighting preset (H)"
+        );
+        assert_eq!(
+            plain(keyed_tip(i18n, ids::PCB_3D_SHOT_TOOLTIP, "Ctrl+Shift+C")),
+            "Copy a screenshot (Ctrl+Shift+C)"
+        );
+        assert_eq!(
+            plain(keyed_tip(i18n, ids::PCB_3D_FLIP_TOOLTIP, "")),
+            "Flip board"
+        );
+    }
 }

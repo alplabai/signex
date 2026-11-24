@@ -175,6 +175,14 @@ ground. Properties adds a Board section: Board outline for an edge,
 Mounting hole for a circle, and the hole's Drill (empty: the circle's
 diameter), Plated and Net.
 
+**Board sketch Properties order** (mockup row 179). With nothing selected
+the body reads: the header, Sketch DOF, Parameters, Bake as (one role
+picker per closed profile, the same rows as the Bake panel), then the
+board summary, the pad stack check, Snap Options, Grid Manager and Units,
+with Solve warnings last. Under a selection, the selection's section
+comes first, then Parameters and Bake as, then the Board and Snap Options
+sections. Each section shows once. A footprint sketch keeps its own order.
+
 **Nothing touches the board or the disk while editing.** Undo and Redo
 step the working copy while the mode is on. There is no auto-save.
 

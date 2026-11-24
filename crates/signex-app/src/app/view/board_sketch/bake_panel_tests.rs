@@ -300,7 +300,10 @@ fn the_panel_lists_each_real_value_and_a_slot_once() {
     assert!((drill_mm - 3.2).abs() < 1e-6 && plated, "{:?}", rows.holes);
     assert_eq!(
         rows.keepouts,
-        vec![vec![PcbLayer::Copper(CopperLayer::Top)]]
+        vec![crate::panels::BakedKeepout {
+            layers: vec![PcbLayer::Copper(CopperLayer::Top)],
+            forbids: KeepoutKinds::ALL_COPPER,
+        }]
     );
     assert_eq!(rows.slots.len(), 1, "the slot is listed once");
     let (length, width) = rows.slots[0];

@@ -31,6 +31,7 @@ use super::menus::{
     CanvasSelection, CanvasShortcuts, MenuVariant, canvas_menu_entries, canvas_menu_with_variant,
     unions_entries,
 };
+use super::project_tree::kind_inks::KindInks;
 use super::project_tree::library::library_add_new_entries;
 use super::project_tree::planned::planned_entries as project_planned_entries;
 use super::submenu::{
@@ -111,6 +112,7 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     ("Constraint File", "planned, tree-addressed"),
     ("VHDL File", "planned, tree-addressed"),
     ("Show Differences...", "planned, tree-addressed"),
+    ("Show History", "tree-addressed"),
     ("Collapse", "tree-addressed"),
     ("Expand", "tree-addressed"),
     ("Expand All", "tree-addressed"),
@@ -425,13 +427,17 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
         );
         // The project tree's flyouts (mockup row 20).
         let i18n = signex_i18n::I18n::en_us_ref();
+        let inks = KindInks::of(&app.document_state.panel_ctx.tokens);
         let tree_flyouts = [
             (
                 "add new to project flyout",
-                add_new_entries(i18n, TID, vec!["proj".to_string()]),
+                add_new_entries(i18n, TID, inks, vec!["proj".to_string()]),
             ),
             ("project planned flyout", project_planned_entries(i18n, TID)),
-            ("library add new flyout", library_add_new_entries(i18n, TID)),
+            (
+                "library add new flyout",
+                library_add_new_entries(i18n, TID, inks),
+            ),
         ];
         for (name, rows) in tree_flyouts {
             check_rows(name, &rows, &app, &app.command_context(None), &mut walk);

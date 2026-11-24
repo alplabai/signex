@@ -107,7 +107,10 @@ fn facts_named(body: &str, source: &str) -> BTreeSet<String> {
         for at in reads {
             let path: String = line[at..]
                 .chars()
-                .take_while(|c| c.is_ascii_lowercase() || *c == '_' || *c == '.')
+                // Digits too: a fact name such as `board_3d_shown` has them.
+                .take_while(|c| {
+                    c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '_' || *c == '.'
+                })
                 .collect();
             let mut parts = path.split('.');
             let first = parts.next().unwrap_or_default();
@@ -189,6 +192,9 @@ fn the_probe_finds_every_fact_a_gate_reads() {
     ] {
         assert!(turn.contains(fact), "Turn names {fact}: {turn:?}");
     }
+    // A fact name with digits is read whole.
+    let board_3d = needs_facts("Board3dView");
+    assert!(board_3d.contains("board_3d_shown"), "{board_3d:?}");
     for ((name, gate), named) in every_gate() {
         let missed = missed_by_the_probe(&gate, &named);
         assert!(

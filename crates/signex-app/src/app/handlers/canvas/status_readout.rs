@@ -111,6 +111,25 @@ impl Signex {
             .map(|editor| editor.path.clone())
     }
 
+    /// Whether `window_id` shows a footprint tab: its Grid read-out opens
+    /// the grid step list (mockup row 63).
+    pub(crate) fn status_shows_footprint(&self, window_id: iced::window::Id) -> bool {
+        matches!(self.status_surface(window_id), Surface::FootprintEditor(_))
+    }
+
+    /// Where the step list opened from the Grid caret of `window`'s bar
+    /// goes (the main window's when `None`): its left edge at the Grid
+    /// read-out, its bottom just above the status bar (mockup row 63).
+    pub(crate) fn grid_caret_anchor(&self, window: Option<iced::window::Id>) -> (f32, f32) {
+        let ui = &self.ui_state;
+        let (_, height) = window.map_or(ui.window_size, |window| ui.size_of_window(window));
+        let status_h = crate::status_bar::status_bar_height(&self.document_state.panel_ctx.tokens);
+        (
+            crate::status_bar::grid_readout_x(),
+            height - status_h - crate::status_bar::POPUP_GAP,
+        )
+    }
+
     /// The Document Options of the library holding the symbol at `path`;
     /// a lone file, outside any open library, gets the defaults.
     pub(crate) fn symbol_display(&self, path: &Path) -> LibraryDisplaySettings {

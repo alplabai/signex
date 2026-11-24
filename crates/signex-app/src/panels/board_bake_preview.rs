@@ -35,8 +35,7 @@ pub struct BoardBakeRows {
     /// `None`: the sketch draws no outline and the board keeps its own.
     pub outline: Option<BakedOutline>,
     pub holes: Vec<BakedHole>,
-    /// The layers of each keepout.
-    pub keepouts: Vec<Vec<PcbLayer>>,
+    pub keepouts: Vec<BakedKeepout>,
     /// Cutouts that are not slots; a slot is counted under `slots` only.
     pub cutouts: usize,
     /// Each slot's `(length, width)` in mm.
@@ -62,4 +61,11 @@ pub enum BakedOutline {
 pub struct BakedHole {
     pub drill_mm: f64,
     pub plated: bool,
+}
+
+/// A keepout Bake writes: its layers and what it keeps out (mockup row 179).
+#[derive(Debug, Clone, PartialEq)]
+pub struct BakedKeepout {
+    pub layers: Vec<PcbLayer>,
+    pub forbids: signex_types::sketch::attr::KeepoutKinds,
 }

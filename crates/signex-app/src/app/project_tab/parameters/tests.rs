@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use super::rename::{ParameterNameProblem, RenameNote, checked_rename, rename_note};
+use super::view::{Evaluation, evaluation, result_words};
 use super::{ParameterGroup, visible_parameters};
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::state::ProjectId;
@@ -374,4 +375,134 @@ fn the_section_renders_with_a_refused_rename_a_filter_and_a_folded_group() {
         },
     );
     let _ = app.view_project_tab(id);
+}
+
+/// Mockup row 30: an expression that evaluates shows its result (the green
+/// "Shows …" pill), one that does not gives the error row, and a literal
+/// value shows neither.
+#[test]
+fn an_expression_shows_its_result_or_its_error_and_a_literal_neither() {
+    let parameters: BTreeMap<String, String> = [
+        ("VOUT", "3.3V"),
+        ("VREF", "= VOUT / 2"),
+        ("IOUT_MAX", "= POUT / VOUT"),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v.to_string()))
+    .collect();
+    assert_eq!(
+        evaluation(&parameters, "VREF"),
+        Some(Evaluation::Shows("1.65V".to_string()))
+    );
+    assert!(matches!(
+        evaluation(&parameters, "IOUT_MAX"),
+        Some(Evaluation::Error(reason)) if !reason.is_empty()
+    ));
+    assert_eq!(evaluation(&parameters, "VOUT"), None);
+    assert_eq!(evaluation(&parameters, "MISSING"), None);
+}
+
+/// Mockup row 30: the result pill reads "Shows …" for an expression that
+/// evaluates and an error "?" for one that does not; a literal has none.
+#[test]
+fn the_result_pill_reads_shows_or_an_error_question_mark() {
+    use signex_i18n::{ids, t};
+    let i18n = signex_i18n::I18n::en_us();
+    let words = |evaluated: Option<Evaluation>| {
+        result_words(&i18n, evaluated.as_ref())
+            .map(|(words, is_error)| (words.to_string(), is_error))
+    };
+    let shows = t!(i18n, ids::PROJECT_PARAMETER_SHOWS, "value" => "1.65V".to_string());
+    assert_eq!(
+        words(Some(Evaluation::Shows("1.65V".to_string()))),
+        Some((shows.to_string(), false))
+    );
+    assert_eq!(
+        words(Some(Evaluation::Error("POUT is not defined".to_string()))),
+        Some(("?".to_string(), true))
+    );
+    assert_eq!(words(None), None);
+}
+
+/// The section draws the result pill, the error row and an error row that
+/// also carries a rename note.
+#[test]
+fn the_section_renders_a_result_pill_and_an_error_row() {
+    let (mut app, id) = app();
+    add_variable(&mut app, id, "VOUT", "3.3V");
+    add_variable(&mut app, id, "VREF", "= VOUT / 2");
+    add_variable(&mut app, id, "IOUT_MAX", "= POUT / VOUT");
+    send(
+        &mut app,
+        ProjectTabMsg::SectionSelected {
+            project_id: id,
+            section: ProjectSection::Parameters,
+        },
+    );
+    let _ = app.view_project_tab(id);
+    send(
+        &mut app,
+        ProjectTabMsg::ParameterRenameEdited {
+            project_id: id,
+            from: "IOUT_MAX".into(),
+            text: "IMAX".into(),
+        },
+    );
+    let _ = app.view_project_tab(id);
+}
+
+/// Mockup row 30 (Caner 2026-11-24): the project Title block lists the
+/// sheet's Author, Engineer, Organization and Address 1 to 4 too, so project
+/// and sheet parameters line up; their keys are title-block rows, never
+/// variables.
+#[test]
+fn the_project_title_block_has_the_sheets_address_and_people_fields() {
+    use TitleBlockField::*;
+    let extra = [
+        Author,
+        Engineer,
+        Organization,
+        Address1,
+        Address2,
+        Address3,
+        Address4,
+    ];
+    let parameters: BTreeMap<String, String> = extra
+        .iter()
+        .map(|field| (field.key().to_string(), format!("v-{}", field.key())))
+        .collect();
+    let all = visible_parameters(&parameters, "", english);
+    for field in extra {
+        assert!(all.title_block.contains(&field), "{field:?} is listed");
+    }
+    assert!(all.variables.is_empty(), "none of them is a variable");
+    assert_eq!(super::variable_count(&parameters), 0);
+    let by_value = visible_parameters(&parameters, "v-address3", english);
+    assert_eq!(by_value.title_block, [Address3]);
+    let en = signex_i18n::I18n::en_us();
+    for field in extra {
+        let shown = en.message_plain(super::field_words(field), &[]);
+        assert_eq!(shown, field.label(), "{field:?}");
+    }
+}
+
+/// Mockup row 30: an empty value reads "Not set" in the italic UI face; a
+/// set value or name is mono and upright; an empty name box keeps its
+/// placeholder in the plain UI face.
+#[test]
+fn an_empty_value_reads_not_set_in_italics() {
+    use super::view::inline_font;
+    use iced::font::Style;
+    let not_set = inline_font("", false).expect("a face for Not set");
+    assert_eq!(not_set.style, Style::Italic);
+    assert_eq!(
+        not_set.family,
+        crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT).family
+    );
+    let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
+    for (value, is_name) in [("3V3", false), ("VCC", true)] {
+        let set = inline_font(value, is_name).expect("a set box is mono");
+        assert_eq!((set.family, set.style), (mono.family, Style::Normal));
+    }
+    assert_eq!(inline_font("", true), None);
 }

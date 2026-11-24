@@ -67,5 +67,7 @@ define_ids! {
         PREF_KEYMAP_CLEAR = "pref-keymap-clear";
         PREF_KEYMAP_OK = "pref-keymap-ok";
         PREF_KEYMAP_CLAIMED = "pref-keymap-claimed";
+        // board-3d-keys-screenshot
+        PREF_KEYMAP_CONTEXT_BOARD_3D = "pref-keymap-context-board-3d";
     }
 }

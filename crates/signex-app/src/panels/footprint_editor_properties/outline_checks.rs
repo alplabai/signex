@@ -8,7 +8,7 @@
 
 use iced::widget::{Column, container, row};
 use iced::{Element, Length, Widget as _};
-use signex_i18n::{I18n, RenderTranslatable as _, ids, t};
+use signex_i18n::{I18n, Localized, RenderTranslatable as _, ids, t};
 use signex_widgets::{button, text};
 
 use crate::library::editor::footprint::{GapOffer, format_check_mm};
@@ -116,8 +116,31 @@ fn close_gap_row<'a>(
         .boxed()
 }
 
-/// The Fab profile group (mockup row 179d): the router tool and the min
-/// slot of the project's fab profile, or that it names none.
+/// The Fab profile group's lines (mockup row 179d): the profile the
+/// project's rules were seeded from, the router tool and the min slot, each
+/// or that the project names none.
+fn fab_profile_lines(board: &BoardSketchProps, i18n: &I18n) -> [Localized; 3] {
+    let profile = match board.fab_profile.as_ref() {
+        Some(name) => t!(i18n, ids::BOARD_SKETCH_FAB_PROFILE, "name" => name.clone()),
+        None => t!(i18n, ids::BOARD_SKETCH_FAB_PROFILE_NONE),
+    };
+    let router = match board.router_tool_diameter {
+        Some(diameter) => {
+            t!(i18n, ids::BOARD_SKETCH_FAB_ROUTER, "diameter" => format_check_mm(diameter, 2))
+        }
+        None => t!(i18n, ids::BOARD_SKETCH_FAB_ROUTER_NONE),
+    };
+    let min_slot = match board.min_slot {
+        Some(width) => {
+            t!(i18n, ids::BOARD_SKETCH_FAB_MIN_SLOT, "width" => format_check_mm(width, 2))
+        }
+        None => t!(i18n, ids::BOARD_SKETCH_FAB_MIN_SLOT_NONE),
+    };
+    [profile, router, min_slot]
+}
+
+/// The Fab profile group (mockup row 179d): the project's profile, its
+/// router tool and its min slot.
 fn view_fab_profile<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     board: &'a BoardSketchProps,
@@ -138,22 +161,10 @@ fn view_fab_profile<'a>(
     if is_section_collapsed(FAB_SECTION, collapsed_sections) {
         return col;
     }
-    let router = match board.router_tool_diameter {
-        Some(diameter) => {
-            t!(i18n, ids::BOARD_SKETCH_FAB_ROUTER, "diameter" => format_check_mm(diameter, 2))
-        }
-        None => t!(i18n, ids::BOARD_SKETCH_FAB_ROUTER_NONE),
-    };
-    let min_slot = match board.min_slot {
-        Some(width) => {
-            t!(i18n, ids::BOARD_SKETCH_FAB_MIN_SLOT, "width" => format_check_mm(width, 2))
-        }
-        None => t!(i18n, ids::BOARD_SKETCH_FAB_MIN_SLOT_NONE),
-    };
-    for line in [router, min_slot] {
+    for line in fab_profile_lines(board, i18n) {
         col = col.push(
             container(text(line).size(TS.caption).color(palette.primary))
-                .padding([SP.s, SP.m])
+                .padding([SP.xs, SP.m])
                 .width(Length::Fill)
                 .boxed(),
         );
@@ -267,5 +278,30 @@ mod tests {
                 .any(|t| t == "Slots: none narrower than the min slot"),
             "{texts:#?}"
         );
+    }
+
+    fn lines(board: &BoardSketchProps) -> Vec<String> {
+        fab_profile_lines(board, &I18n::en_us())
+            .into_iter()
+            .map(|line| line.into_string().replace(['\u{2068}', '\u{2069}'], ""))
+            .collect()
+    }
+
+    /// Mockup row 179d and DECISIONS 2026-11-23: the Fab profile group names
+    /// the project's profile above its router tool, and says when there is
+    /// none.
+    #[test]
+    fn the_fab_profile_group_names_the_profile_above_the_router_tool() {
+        let board = BoardSketchProps {
+            fab_profile: Some("Standard 4-layer".into()),
+            router_tool_diameter: Some(2.0),
+            ..BoardSketchProps::default()
+        };
+        let shown = lines(&board);
+        assert_eq!(shown[0], "Profile Standard 4-layer");
+        assert!(shown[1].starts_with("Router tool Ø 2.00"), "{shown:?}");
+        let none = lines(&BoardSketchProps::default());
+        assert_eq!(none[0], "Profile: the project's rules name none");
+        assert_eq!(none[1], "Router tool: the project's fab profile names none");
     }
 }

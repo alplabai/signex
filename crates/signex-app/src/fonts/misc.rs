@@ -313,6 +313,44 @@ pub fn write_net_hover_pref_at(path: &Path, enabled: bool) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Pan at the canvas edge (#2872)
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read "Pan at the canvas edge" and its speed. A missing or malformed key
+/// keeps its default (on, Medium).
+pub fn read_edge_pan_pref_from(
+    json: Option<&serde_json::Value>,
+) -> crate::app::edge_pan::EdgePanPrefs {
+    let defaults = crate::app::edge_pan::EdgePanPrefs::default();
+    crate::app::edge_pan::EdgePanPrefs {
+        enabled: json
+            .and_then(|json| json["edge_pan_enabled"].as_bool())
+            .unwrap_or(defaults.enabled),
+        speed: json
+            .and_then(|json| json["edge_pan_speed"].as_str())
+            .map(crate::app::edge_pan::EdgePanSpeed::from_token)
+            .unwrap_or(defaults.speed),
+    }
+}
+
+pub fn write_edge_pan_pref(prefs: crate::app::edge_pan::EdgePanPrefs) {
+    write_edge_pan_pref_at(&prefs_path(), prefs)
+}
+
+pub fn write_edge_pan_pref_at(path: &Path, prefs: crate::app::edge_pan::EdgePanPrefs) {
+    update_prefs_json(path, "edge_pan_enabled", |map| {
+        map.insert(
+            "edge_pan_enabled".to_string(),
+            serde_json::json!(prefs.enabled),
+        );
+        map.insert(
+            "edge_pan_speed".to_string(),
+            serde_json::json!(prefs.speed.token()),
+        );
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Fill symbol bodies
 // ──────────────────────────────────────────────────────────────────────────
 

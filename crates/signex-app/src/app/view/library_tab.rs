@@ -69,6 +69,13 @@ impl Signex {
             // Every editor opened from one library shares its grid, unit and
             // background, as the status bar does.
             let display = self.symbol_display(path);
+            // Only the active tab of the main window edge-pans (#2872).
+            let active = self
+                .document_state
+                .tabs
+                .get(self.document_state.active_tab)
+                .is_some_and(|shown| shown.path == tab.path);
+            let edge_pan = (in_main && active).then_some(&self.interaction_state.symbol_edge_pan);
             return Some(
                 crate::library::editor::standalone::view_symbol(
                     editor,
@@ -76,6 +83,7 @@ impl Signex {
                     display,
                     path,
                     self.ui_state.device_px_per_logical_px(window_id),
+                    edge_pan,
                 )
                 .map(Message::Library)
                 .boxed(),

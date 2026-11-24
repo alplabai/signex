@@ -1,7 +1,7 @@
 //! The filter panels' part of the panel context (Graphite mockup #55,
 //! Graphite mockup #56): the editor the Filter panel follows and its
 //! per-kind counts, taken once per document revision, and SCH Filter's
-//! preset rename, read from the Model.
+//! preset rename and edited preset, read from the Model.
 
 use super::super::*;
 use crate::panels::{FilterEditor, KindCounts, SelectionFilterFacts};
@@ -15,8 +15,17 @@ impl Signex {
             .unwrap_or_default();
         SelectionFilterFacts {
             rename: self.filter_preset_rename(),
+            editing: self.edited_custom_filter(),
             ..facts
         }
+    }
+
+    /// The schematic preset selected for editing, while it still exists.
+    pub(in crate::app) fn edited_custom_filter(&self) -> Option<usize> {
+        let presets = self.interaction_state.custom_filter_presets.len();
+        self.interaction_state
+            .editing_custom_filter
+            .filter(|idx| *idx < presets)
     }
 
     /// SCH Filter's preset rename, while its preset still exists.

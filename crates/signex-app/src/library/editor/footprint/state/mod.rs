@@ -319,6 +319,9 @@ pub struct FootprintEditorState {
     pub fit_pending: bool,
     /// The zoom pill's last `-` / `+` click, applied once by the canvas.
     pub zoom_request: ZoomRequest,
+    /// The pointer as the edge pan reads it, and the pan the widget-held
+    /// camera owes (#2872).
+    pub edge_pan: crate::canvas::EdgePanLink,
     /// Set when this editor edits a board sketch (#2234): the board drawn
     /// under the sketch. Which host the editor serves is read through
     /// `sketch_host()` (#2518), never from this field directly.
@@ -353,6 +356,16 @@ impl FootprintEditorState {
     /// The canvas zoom as a percentage, `100.0` at [`DEFAULT_PX_PER_MM`].
     pub fn zoom_percent(&self) -> f64 {
         f64::from(self.view_px_per_mm) / f64::from(DEFAULT_PX_PER_MM) * 100.0
+    }
+
+    /// A pad or sketch tool is armed, or a drag is in flight: the pointer
+    /// at a canvas edge pans the view (#2872).
+    pub fn edge_pan_armed(&self) -> bool {
+        let pads_tool =
+            matches!(self.mode, EditorMode::Normal) && self.pads_tool != PadsTool::Select;
+        let sketch_tool =
+            matches!(self.mode, EditorMode::Sketch) && self.active_tool != SketchTool::Select;
+        pads_tool || sketch_tool || self.edge_pan.is_dragging()
     }
 
     /// [`Self::from_footprint`] for a switch to another footprint of the
@@ -456,6 +469,7 @@ impl FootprintEditorState {
             context_menu: None,
             fit_pending: false,
             zoom_request: ZoomRequest::default(),
+            edge_pan: Default::default(),
             board_backdrop: None,
             properties_hover: Default::default(),
             sketch_exit: Default::default(),

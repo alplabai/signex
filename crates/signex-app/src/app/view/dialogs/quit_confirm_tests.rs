@@ -85,6 +85,29 @@ fn the_summary_counts_projects_and_libraries_once() {
     assert!(!QuitSummary::of(&groups, 0).has_rows);
 }
 
+/// Mockup row 16: a folder too long for its column is cut at its start
+/// with an ellipsis, so its own name shows. Two folders that differ only
+/// before the cut draw the same; two that differ at the end do not.
+#[test]
+fn a_long_folder_is_cut_at_its_start_so_its_name_shows() {
+    let width = super::META_MAX_W.ceil();
+    let window = iced::Size::new(width, (super::TS.caption * 4.0).ceil());
+    let shared = "c".repeat(width as usize);
+    let draw = |head: &str, name: &str| {
+        let folder = format!("/{}/{shared}/{name}", head.repeat(width as usize));
+        crate::layout_probe::draw_pixels(
+            super::meta_cell::<()>(&folder, iced::Color::WHITE),
+            window,
+        )
+    };
+    let a = draw("a", "sample");
+    let blank =
+        crate::layout_probe::draw_pixels(super::meta_cell::<()>("", iced::Color::WHITE), window);
+    assert_ne!(a, blank, "the folder draws");
+    assert_eq!(a, draw("b", "sample"), "the start of the folder is cut");
+    assert_ne!(a, draw("a", "samplf"), "the folder's own name shows");
+}
+
 fn dirty_app(paths: &[&str], rows: Vec<EditorAddress>) -> Signex {
     let (mut app, _boot) = Signex::new();
     app.ui_state.window_size = (1400.0, 900.0);
@@ -198,6 +221,57 @@ fn entries_are_classified_with_kind_and_folder() {
                 row_id.as_str(),
                 "power.snxlib"
             ),
+        ]
+    );
+}
+
+/// An unsaved Export Job is listed with its OUT kind cap and its folder
+/// (mockup row 16, OUT fab.snxout).
+#[test]
+fn an_unsaved_export_job_has_its_out_cap() {
+    let app = dirty_app(&["/w/a/fab.snxout"], Vec::new());
+    let st = app.ui_state.app_quit_confirm.clone().expect("open");
+    let entries = app.quit_entries(&st.dirty_paths, &st.dirty_rows);
+    let listed: Vec<(Option<signex_i18n::MessageId>, &str, String)> = entries
+        .iter()
+        .map(|e| (e.kind, e.name.as_str(), e.meta.clone()))
+        .collect();
+    let folder = std::path::Path::new("/w/a").display().to_string();
+    assert_eq!(
+        listed,
+        vec![(Some(ids::PANELS_TAB_KIND_OUTPUT_JOB), "fab.snxout", folder)]
+    );
+    let texts = lay_out_texts(
+        app.view_app_quit_confirm_body(),
+        iced::Size::new(500.0, 600.0),
+    );
+    assert!(
+        texts.iter().any(|t| t.text == "OUT"),
+        "the OUT cap is drawn"
+    );
+}
+
+/// An unsaved Export Job under a project's folder is listed under that
+/// project, as mockup row 16 draws it; one outside every project folder is
+/// under Other files (decision 2026-11-24: no `.snxprj` listing needed).
+#[test]
+fn an_export_job_under_the_project_folder_is_grouped_under_the_project() {
+    let mut app = dirty_app(
+        &[
+            "/w/a/top.snxsch",
+            "/w/a/outputs/fab.snxout",
+            "/x/loose.snxout",
+        ],
+        Vec::new(),
+    );
+    project(&mut app, "/w/a", "carrier", &["top.snxsch"]);
+    let st = app.ui_state.app_quit_confirm.clone().expect("open");
+    let groups = group_entries(app.quit_entries(&st.dirty_paths, &st.dirty_rows));
+    assert_eq!(
+        names(&groups),
+        vec![
+            (QuitGroupKey::Project(0), vec!["top.snxsch", "fab.snxout"]),
+            (QuitGroupKey::Other, vec!["loose.snxout"]),
         ]
     );
 }

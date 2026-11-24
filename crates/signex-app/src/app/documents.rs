@@ -329,6 +329,9 @@ pub struct SymbolDocument {
     pub active_bar_menu: Option<crate::library::editor::symbol::state::SymActiveBarMenu>,
     /// v0.13 — Pause flag for placement (TAB during Place Pin / etc.).
     pub placement_paused: bool,
+    /// The pin type picked in the Place Pin dropdown, stamped on every
+    /// following placed pin; `None` places unclassified pins (mockup row 141).
+    pub pin_type: Option<signex_types::schematic::PinDirection>,
     /// Undo / redo snapshots (each the whole `.snxsym` container, symbols
     /// shared structurally between steps) and the depth at which this draft
     /// last equalled its file, so Undo back to it reads clean (#1854).
@@ -457,6 +460,7 @@ impl SymbolDocument {
             selection_filter: Default::default(),
             active_bar_menu: None,
             placement_paused: false,
+            pin_type: None,
             history: crate::app::History::at_start(Self::HISTORY_DEPTH),
             history_generation: 0,
             last_edit_key: None,

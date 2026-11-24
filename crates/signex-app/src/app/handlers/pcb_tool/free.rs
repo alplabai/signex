@@ -289,7 +289,14 @@ impl Signex {
         let defaults = &self.interaction_state.pcb_tool_defaults;
         let drawn = self.own_board_tool().and_then(|s| {
             let clicks: Vec<Point> = s.points.iter().copied().chain([at]).collect();
-            draw::arc_points(defaults.arc_mode, &clicks)
+            match (s.tool, clicks.as_slice()) {
+                // The Graphics Arc on copper (#2869): centre, start, end.
+                (BoardPlaceTool::GraphicArc, &[centre, start, end]) => {
+                    draw::arc_points_about(centre, start, end)
+                }
+                (BoardPlaceTool::GraphicArc, _) => None,
+                _ => draw::arc_points(defaults.arc_mode, &clicks),
+            }
         });
         let stand_in = draw::arc_points(ArcMode::Edge, &[at, Point::new(at.x + 1.0, at.y)]);
         defaults.arc(board, Uuid::nil(), drawn.or(stand_in)?, layer)
