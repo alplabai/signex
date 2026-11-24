@@ -371,12 +371,14 @@ fn coming_back_from_another_board_shows_the_fills_again() {
     run_command(&mut app);
     let b = dir.path().join("other.snxpcb");
     app.open_pcb_tab(b.clone(), "other".into(), board());
-    show(&mut app, tab_of(&app, &b, false));
+    let at = tab_of(&app, &b, false);
+    show(&mut app, at);
     assert!(
         app.current_pour_fills(&a).is_none(),
         "the other board's canvas filled the other board"
     );
-    show(&mut app, tab_of(&app, &a, true));
+    let at = tab_of(&app, &a, true);
+    show(&mut app, at);
     let facts = app.document_state.panel_ctx.polygons.clone().expect("rows");
     assert_eq!(facts.board, a);
     assert!(

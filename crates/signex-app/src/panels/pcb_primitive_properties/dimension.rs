@@ -333,6 +333,7 @@ mod tests {
             value: Some("62.00mm".into()),
             layer: None,
             layers: Vec::new(),
+            style: Default::default(),
         }
     }
 

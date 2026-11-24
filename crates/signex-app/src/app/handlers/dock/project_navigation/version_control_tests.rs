@@ -716,5 +716,5 @@ fn the_typed_author_signs_the_first_commit_and_is_stored_in_the_repository() {
     assert_eq!(local.get_string("user.name").unwrap(), "Ada Lovelace");
     assert_eq!(local.get_string("user.email").unwrap(), "ada@example.org");
     let head = repo.head().unwrap().peel_to_commit().unwrap();
-    assert_eq!(head.author().name(), Some("Ada Lovelace"));
+    assert_eq!(head.author().name().ok(), Some("Ada Lovelace"));
 }
