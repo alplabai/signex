@@ -4,7 +4,7 @@
 //! values, Duplicate, Set as default).
 
 // The tab's view state is plain data, kept in the UI-free core (ADR-0006).
-pub use crate::app::core::variant_cell::{OverrideDraft, VariantCell, VariantManagerUi};
+pub use crate::app::core::variant_cell::{OverrideDraft, VariantCell};
 
 /// Messages of the Variant Manager tab, namespaced under
 /// `ProjectTabMsg::VariantManager`.
