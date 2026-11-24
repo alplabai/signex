@@ -463,6 +463,7 @@ canonical_icon!(icon_menu_export, "menu/export.svg");
 canonical_icon!(icon_menu_file, "menu/file.svg");
 canonical_icon!(icon_menu_folder, "menu/folder.svg");
 canonical_icon!(icon_menu_git, "menu/git.svg");
+canonical_icon!(icon_menu_history, "menu/history.svg");
 canonical_icon!(icon_menu_layers, "menu/layers.svg");
 canonical_icon!(icon_menu_library, "menu/library.svg");
 canonical_icon!(icon_menu_more, "menu/more.svg");
@@ -630,7 +631,7 @@ mod tests {
     /// drawing.
     #[test]
     fn menu_glyphs_are_distinct_24px_strokes() {
-        let glyphs: [&str; 25] = [
+        let glyphs: [&str; 26] = [
             include_str!("../assets/icons/menu/board.svg"),
             include_str!("../assets/icons/menu/close.svg"),
             include_str!("../assets/icons/menu/cloud.svg"),
@@ -639,6 +640,7 @@ mod tests {
             include_str!("../assets/icons/menu/file.svg"),
             include_str!("../assets/icons/menu/folder.svg"),
             include_str!("../assets/icons/menu/git.svg"),
+            include_str!("../assets/icons/menu/history.svg"),
             include_str!("../assets/icons/menu/layers.svg"),
             include_str!("../assets/icons/menu/library.svg"),
             include_str!("../assets/icons/menu/more.svg"),

@@ -354,3 +354,6 @@ ctx-in-variant-edit-value = Edit value for this variant…
 ctx-in-variant-planned = Planned: change a part's fit, part or value in one variant. The Variant Manager lists each part's fit today.
 ctx-in-variant-show-manager = Show in Variant Manager
 ctx-in-variant-new = New variant…
+# project-tree-history-rows
+# A document leaf's row that opens the History panel filtered to the file.
+ctx-tree-show-history = Show History
