@@ -22,8 +22,9 @@ use std::path::{Path, PathBuf};
 use signex_types::schematic::SchematicSheet;
 
 pub(crate) use crate::app::core::file_stamp::DiskStamps;
+use crate::app::core::unreadable_cause::UnreadableCause;
 use crate::app::state::scope::{CaseFold, path_key_with};
-use crate::app::state::{DocumentState, SheetUnreadable, UnreadableCause};
+use crate::app::state::{DocumentState, SheetUnreadable};
 use crate::library::closed_sheets::FileStamp;
 
 /// The sheets a project consists of, plus what could not be made sense of

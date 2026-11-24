@@ -68,11 +68,9 @@ pub(super) fn filter_view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 ids::PANELS_FILTER_EDITOR_SCHEMATIC,
                 schematic_kinds(ctx),
                 ids::PANELS_FILTER_COUNTS_SHEET,
-                editing_line(
-                    &ctx.i18n,
-                    &ctx.custom_filter_presets,
-                    ctx.selection_filter.editing,
-                ),
+                // The Presets section below names the edited preset with
+                // its name field and kinds, so the line shows once.
+                None,
             ),
             (FilterEditor::Board, Some(summary)) => (
                 ids::PANELS_FILTER_EDITOR_BOARD,

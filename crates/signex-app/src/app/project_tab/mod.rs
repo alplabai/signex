@@ -195,7 +195,7 @@ pub struct ProjectTabState {
     pub variant_parts_reading: bool,
     /// The Variant Manager tab's selected cell and typed value (mockup row
     /// 32).
-    pub variant_manager: VariantManagerUi,
+    pub variant_manager: crate::app::core::variant_cell::VariantManagerUi,
     /// The Requirements section's drafts, refusal and last run (#2339).
     pub requirements: RequirementsTabState,
     /// The Parameters filter as typed (mockup row 30).
