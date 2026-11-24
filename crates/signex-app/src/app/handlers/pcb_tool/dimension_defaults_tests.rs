@@ -35,6 +35,30 @@ fn custom() -> DimensionDefaults {
     }
 }
 
+/// Caner 2026-11-24: the project's own dimension defaults win over
+/// Preferences, which only seed new projects.
+#[test]
+fn a_new_dimension_starts_from_its_projects_dimension_defaults() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    app.ui_state.pcb_dimension_defaults = custom();
+    let mut project = DimensionDefaults::default();
+    project.style.arrow_style = ArrowStyle::None;
+    project.precision = 3;
+    app.document_state.projects[0]
+        .data
+        .project_defaults
+        .dimension = Some(project.clone());
+    assert_eq!(app.dimension_defaults_for(&path), project);
+    place(&mut app);
+    let placed = &board_of(&app, &path).free.dimensions[0];
+    assert_eq!(placed.style, project.style);
+    assert_eq!(placed.precision, 3);
+    assert_eq!(placed.value_text(), "5.000mm");
+}
+
+/// A project that stores no dimension defaults (one from before) follows
+/// Preferences.
 #[test]
 fn a_new_dimension_starts_from_the_pcb_defaults() {
     let dir = tempfile::tempdir().unwrap();

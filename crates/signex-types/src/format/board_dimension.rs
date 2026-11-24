@@ -19,7 +19,7 @@ use crate::pcb_dimension_style::{
     ArrowStyle, BoardFont, DimensionStyle, DimensionTextPosition, DimensionUnits,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(in crate::format) struct DimensionRaw {
     uuid: Uuid,
     start_x: i64,
@@ -112,6 +112,29 @@ pub(in crate::format) fn read(d: DimensionRaw) -> LinearDimension {
         style,
         text_at: Point::new(mm(d.text_along, 0.0), mm(d.text_across, 0.0)),
     }
+}
+
+/// Whether saving `d` writes any look key: its look differs, to the nm,
+/// from the look of its own text height and line width, or its Manual
+/// point is off the middle of the line. A dimension the file cannot hold
+/// (a number that is not finite) is refused on save and answers `false`.
+pub fn dimension_uses_style(d: &LinearDimension) -> bool {
+    let Ok(row) = write(d) else {
+        return false;
+    };
+    let plain = LinearDimension {
+        style: DimensionStyle::for_text_height(nm_to_mm(row.text_height), nm_to_mm(row.line_width)),
+        text_at: Point::new(0.0, 0.0),
+        ..d.clone()
+    };
+    write(&plain).ok().as_ref() != Some(&row)
+}
+
+/// Whether saving `board` writes a look key on any dimension (#2868): the
+/// board uses a dimension look a reader from before the settings would
+/// drop. A board where this is `false` saves exactly as it did before.
+pub fn board_uses_dimension_style(board: &crate::pcb::PcbBoard) -> bool {
+    board.free.dimensions.iter().any(dimension_uses_style)
 }
 
 /// `v` in nm, or `None` when it is `was` to the nm.

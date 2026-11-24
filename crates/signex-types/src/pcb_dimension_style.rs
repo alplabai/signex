@@ -174,6 +174,28 @@ pub struct DimensionDefaults {
     pub style: DimensionStyle,
 }
 
+impl DimensionDefaults {
+    /// Whether these are values a dimension's Properties could have set:
+    /// every number finite, the line width, text height and text width
+    /// above zero, no other length below zero, at most
+    /// `DIMENSION_MAX_PRECISION` decimals.
+    pub fn is_sound(&self) -> bool {
+        let s = &self.style;
+        let lengths = [
+            s.arrow_length,
+            s.arrow_width,
+            s.text_gap,
+            s.extension_offset,
+            s.extension_overshoot,
+            s.extension_width,
+        ];
+        let positive = [self.line_width, self.text_height, s.text_width];
+        self.precision <= crate::pcb_dimension::DIMENSION_MAX_PRECISION
+            && positive.iter().all(|v| v.is_finite() && *v > 0.0)
+            && lengths.iter().all(|v| v.is_finite() && *v >= 0.0)
+    }
+}
+
 impl Default for DimensionDefaults {
     fn default() -> Self {
         Self {

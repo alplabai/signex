@@ -299,6 +299,9 @@ pub(crate) struct RuleSeed {
     /// This machine's Annotate undo preference, stored in the new project as
     /// its own choice (#1692); `None` stores none.
     pub annotate_undo: Option<crate::annotate_undo::AnnotateUndo>,
+    /// Preferences ▸ PCB Defaults, stored in the new project as its own
+    /// dimension defaults (#2868); `None` stores none.
+    pub dimension: Option<signex_types::pcb_dimension_style::DimensionDefaults>,
 }
 
 /// Store a copy of the default rule profile in the new `.snxprj`, with its
@@ -337,6 +340,9 @@ fn seed_project_rules(
         data.rules = Some(rules);
         if let Some(choice) = seed.annotate_undo {
             data.set_annotate_undo(Some(choice));
+        }
+        if let Some(dimension) = &seed.dimension {
+            data.project_defaults.dimension = Some(dimension.clone());
         }
         data.document_id
             .get_or_insert_with(signex_types::document_id::DocumentId::new);
@@ -475,6 +481,7 @@ mod tests {
             selected: Some("Company".into()),
             pending: Vec::new(),
             annotate_undo: None,
+            dimension: None,
         };
 
         let written = write_new_project_files(&tmp.path().join("Seeded.snxprj"), &seed).unwrap();
@@ -513,6 +520,7 @@ mod tests {
             selected: None,
             pending: Vec::new(),
             annotate_undo: None,
+            dimension: None,
         };
         let written = write_new_project_files(&tmp.path().join("Plain.snxprj"), &seed).unwrap();
         let rules = signex_types::project::parse_project(&written)
@@ -540,6 +548,7 @@ mod tests {
             selected: Some("Missing".into()),
             pending: Vec::new(),
             annotate_undo: None,
+            dimension: None,
         };
         let written = write_new_project_files(&tmp.path().join("Fallback.snxprj"), &seed).unwrap();
         let rules = signex_types::project::parse_project(&written)
@@ -578,6 +587,7 @@ mod tests {
             selected: None,
             pending: queue.pending(),
             annotate_undo: None,
+            dimension: None,
         };
 
         let written = write_new_project_files(&tmp.path().join("Queued.snxprj"), &seed).unwrap();
@@ -725,6 +735,7 @@ mod tests {
             selected: None,
             pending: Vec::new(),
             annotate_undo: Some(crate::annotate_undo::AnnotateUndo::PerSheet),
+            dimension: None,
         };
         let written = write_new_project_files(&tmp.path().join("Seeded.snxprj"), &seed).unwrap();
         let data = signex_types::project::parse_project(&written).unwrap();
@@ -732,6 +743,37 @@ mod tests {
             data.annotate_undo(),
             Some(crate::annotate_undo::AnnotateUndo::PerSheet)
         );
+    }
+
+    /// #2868 (Caner 2026-11-24): a new project stores the Preferences
+    /// dimension defaults as its own, with or without a dialog setup.
+    #[test]
+    fn a_new_project_stores_the_preferences_dimension_defaults() {
+        use signex_types::pcb_dimension_style::{ArrowStyle, DimensionDefaults};
+        use signex_types::project::ProjectSetup;
+        let tmp = tempfile::tempdir().unwrap();
+        let mut dimension = DimensionDefaults::default();
+        dimension.style.arrow_style = ArrowStyle::Filled;
+        dimension.precision = 3;
+        let seed = RuleSeed {
+            dir: Some(tmp.path().join("no-library-yet")),
+            dimension: Some(dimension.clone()),
+            ..RuleSeed::default()
+        };
+        let plain = write_new_project_files(&tmp.path().join("Plain.snxprj"), &seed).unwrap();
+        let data = signex_types::project::parse_project(&plain).unwrap();
+        assert_eq!(data.project_defaults.dimension, Some(dimension.clone()));
+
+        let plan = NewProjectPlan {
+            layout: NewProjectLayout::NamedFolder,
+            setup: Some(ProjectSetup::default()),
+        };
+        let other = tempfile::tempdir().unwrap();
+        let chosen = other.path().join("Setup.snxprj");
+        let written = write_new_project_files_with(&chosen, &seed, &plan).unwrap();
+        let data = signex_types::project::parse_project(&written).unwrap();
+        assert_eq!(data.project_defaults.dimension, Some(dimension));
+        assert!(data.project_defaults.pcb.is_some(), "the setup is kept");
     }
 
     /// #2311: a fab tier picked in the setup adds its `fab_*` rules to the

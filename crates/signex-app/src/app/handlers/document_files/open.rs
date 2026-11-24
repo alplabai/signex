@@ -97,6 +97,8 @@ impl Signex {
                     selected: self.ui_state.default_rule_profile.clone(),
                     pending: self.pending_profile_writes(),
                     annotate_undo: Some(self.ui_state.annotate_undo),
+                    // #2868: the project keeps its own copy from now on.
+                    dimension: Some(self.ui_state.pcb_dimension_defaults.clone()),
                 };
                 Ok(iced::Task::perform(
                     super::super::dock::project_navigation::add_io::on_blocking_pool({

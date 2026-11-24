@@ -9,6 +9,8 @@
 //! What each places follows the values set in Properties (#2393,
 //! `BoardToolDefaults`).
 
+use std::path::Path;
+
 use signex_engine::pcb::BoardItem;
 use signex_engine::pcb::draw::{self, ArcMode};
 use signex_i18n::{MessageId, ids, t};
@@ -180,10 +182,10 @@ impl Signex {
         let Some(layer) = self.active_board_layer() else {
             return;
         };
+        let base = self.tool_dimension_defaults();
         let defaults = &self.interaction_state.pcb_tool_defaults;
         let points = (clicks[0], clicks[1], clicks[2]);
-        let base = &self.ui_state.pcb_dimension_defaults;
-        match defaults.dimension(base, Uuid::now_v7(), points, layer) {
+        match defaults.dimension(&base, Uuid::now_v7(), points, layer) {
             Some(dimension) => {
                 let name = t!(self.ui_state.i18n, ids::PCB_TOOL_DIMENSION).into_string();
                 let command = draw::place_item(BoardItem::Dimension(dimension));
@@ -252,9 +254,9 @@ impl Signex {
                     return;
                 };
                 let points = (clicks[0], end, through);
-                let base = &self.ui_state.pcb_dimension_defaults;
+                let base = self.dimension_defaults_for(&session.path);
                 preview.free.dimensions.extend(defaults.dimension(
-                    base,
+                    &base,
                     Uuid::nil(),
                     points,
                     layer,
@@ -338,7 +340,33 @@ impl Signex {
         let layer = self.active_board_layer()?;
         let end = Point::new(at.x + 10.0, at.y);
         let defaults = &self.interaction_state.pcb_tool_defaults;
-        let base = &self.ui_state.pcb_dimension_defaults;
-        defaults.dimension(base, Uuid::nil(), (at, end, at), layer)
+        defaults.dimension(
+            &self.tool_dimension_defaults(),
+            Uuid::nil(),
+            (at, end, at),
+            layer,
+        )
+    }
+
+    /// What a new dimension on the board at `board` starts from (#2868,
+    /// Caner 2026-11-24): its project's dimension defaults; Preferences ▸
+    /// PCB Defaults for a project that stores none or a board in no project.
+    pub(crate) fn dimension_defaults_for(&self, board: &Path) -> DimensionDefaults {
+        self.owning_project(board)
+            .and_then(|project| project.data.project_defaults.dimension.clone())
+            .unwrap_or_else(|| self.ui_state.pcb_dimension_defaults.clone())
+    }
+
+    /// [`Self::dimension_defaults_for`] the board the Dimension tool is
+    /// armed on, else the board in view.
+    fn tool_dimension_defaults(&self) -> DimensionDefaults {
+        let board = self
+            .own_board_tool()
+            .map(|session| session.path.clone())
+            .or_else(|| self.active_tab_path());
+        match board {
+            Some(board) => self.dimension_defaults_for(&board),
+            None => self.ui_state.pcb_dimension_defaults.clone(),
+        }
     }
 }

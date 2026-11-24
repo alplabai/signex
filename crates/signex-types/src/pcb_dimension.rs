@@ -18,6 +18,9 @@ use crate::schematic::Point;
 /// Decimals of the value a new dimension shows.
 pub const DIMENSION_DEFAULT_PRECISION: u8 = 2;
 
+/// The most decimals a dimension shows.
+pub const DIMENSION_MAX_PRECISION: u8 = 6;
+
 /// How many of `DimensionDrawing::strokes` are extension lines, first.
 pub const EXTENSION_STROKES: usize = 2;
 
