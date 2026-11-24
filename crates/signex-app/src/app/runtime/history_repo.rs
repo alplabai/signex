@@ -618,8 +618,11 @@ mod tests {
         app
     }
 
-    fn commit_press(app: &mut Signex, msg: HistoryCommitMsg) {
-        drop(app.handle_history_panel(HistoryPanelMsg::Commit(msg)));
+    /// Press a commit-strip control. The diff state is set synchronously; the
+    /// returned Task (a repository read, if any) is not run by these tests.
+    fn commit_press(app: &mut Signex, msg: HistoryCommitMsg) -> usize {
+        app.handle_history_panel(HistoryPanelMsg::Commit(msg))
+            .units()
     }
 
     fn open_diff(app: &Signex) -> Option<HistoryDiff> {
