@@ -31,6 +31,12 @@ pub enum ContextAction {
     /// A board menu row of a project's reuse block (#2410): the menu closes,
     /// then the event runs on the board of the window the menu was in.
     ReuseBlock(crate::app::board_reuse::ReuseBlockMsg),
+    /// In variant ▸ Show in Variant Manager (mockup row 62): the menu
+    /// closes, then the project's tab opens on its Variants section.
+    ShowInVariantManager(crate::app::ProjectId),
+    /// In variant ▸ New variant… (mockup row 62): the Variant Manager opens
+    /// and a variant from Base is added with its name open for typing.
+    NewVariant(crate::app::ProjectId),
 }
 
 /// Which click-to-open submenu is currently expanded inside the right-
@@ -63,6 +69,10 @@ pub enum ContextSubmenu {
     /// Project-tree library node → "Add New ›": a component, symbol library
     /// or footprint library in that library (mockup row 20).
     AddNewToLibrary,
+    /// "In variant: <name> ›": the selection in the project's active
+    /// variant (mockup row 62). Shown with a selection when the project has
+    /// a variant besides Base.
+    InVariant,
 }
 
 /// Widget id of the in-place editor, so opening it can focus it.

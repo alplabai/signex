@@ -60,4 +60,33 @@ impl Signex {
             },
         )))
     }
+
+    /// In variant ▸ (mockup row 62): the Variant Manager of `project_id`;
+    /// with `new_variant` a variant from Base is added there too, as its `+`
+    /// adds one. A project closed since the menu opened drops the pick.
+    pub(crate) fn open_variant_manager_of(
+        &mut self,
+        project_id: crate::app::state::ProjectId,
+        new_variant: bool,
+    ) -> iced::Task<Message> {
+        let Some(project_idx) = self
+            .document_state
+            .projects
+            .iter()
+            .position(|p| p.id == project_id)
+        else {
+            crate::diagnostics::log_warning(
+                "In variant: the project was closed; the pick was dropped",
+            );
+            return iced::Task::none();
+        };
+        let opened = self.open_variant_manager(project_idx);
+        if !new_variant {
+            return opened;
+        }
+        let added = self.update(Message::Project(ProjectMsg::Tab(
+            ProjectTabMsg::NewVariantRequested { project_id },
+        )));
+        iced::Task::batch([opened, added])
+    }
 }
