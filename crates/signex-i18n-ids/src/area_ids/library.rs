@@ -290,4 +290,6 @@ define_ids! {
     LIBRARY_BROWSER_READ_ONLY_NOTE = "library-browser-read-only-note";
     LIBRARY_BROWSER_PREVIEW_LOADING = "library-browser-preview-loading";
     LIBRARY_BROWSER_PREVIEW_UNREADABLE = "library-browser-preview-unreadable";
+    // symbol-delete-modal
+    LIBRARY_SYMBOL_DELETE_TITLE = "library-symbol-delete-title";
 }

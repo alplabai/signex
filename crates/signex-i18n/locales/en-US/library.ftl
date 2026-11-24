@@ -757,3 +757,7 @@ library-browser-read-only-note = This library ships with Signex and is not edita
 library-browser-preview-loading = Loading…
 # A preview tile whose drawing could not be read.
 library-browser-preview-unreadable = Could not be read
+
+# symbol-delete-modal
+# Title of the confirm a Delete of a symbol still in use opens (mockup row 137).
+library-symbol-delete-title = Delete Symbol?

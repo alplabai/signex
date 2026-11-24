@@ -727,6 +727,18 @@ impl Signex {
         self.library_overlay(crate::app::state::ModalId::LibraryRecovery)
     }
 
+    /// "Delete Symbol?" (mockup row 137): shown while the active symbol
+    /// editor holds a current in-use warning, the same one the Esc ladder reads.
+    pub(in crate::app::view) fn symbol_delete_confirm_overlay(
+        &self,
+    ) -> Option<Element<'_, Message>> {
+        let ctx = &self.document_state.panel_ctx;
+        let warning = ctx.symbol_editor.as_ref()?.delete_warning.as_ref()?;
+        let card = crate::library::symbol_delete::view(warning, &ctx.tokens, &self.ui_state.i18n)
+            .map(|msg| Message::Dock(crate::dock::DockMessage::Panel(msg)));
+        Some(self.library_scrim(card))
+    }
+
     /// Command palette dropdown (Ctrl+Shift+P). Painted last so it sits
     /// above every other modal layer; click-outside dismisses through the
     /// backdrop (`command_palette_backdrop`). Pushes the backdrop then the
