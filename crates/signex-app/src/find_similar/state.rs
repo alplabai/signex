@@ -120,6 +120,18 @@ pub struct ProjectMatches {
     pub unreadable: Vec<(PathBuf, String)>,
     /// How many sheets were searched, the open one included.
     pub sheets_searched: usize,
+    /// Every match counted in `elsewhere`, in the same order: Select lists
+    /// each in Messages with its sheet and object (mockup row 68).
+    pub listed: Vec<SimilarMatch>,
+}
+
+/// One match on another sheet of the project.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SimilarMatch {
+    pub sheet: PathBuf,
+    pub item: signex_types::schematic::SelectedItem,
+    /// The engine's description of the object (`Symbol R3`).
+    pub described: String,
 }
 
 #[derive(Debug, Clone)]

@@ -1,5 +1,7 @@
-//! The Graphics tools (#2424), on the active non-copper layer (not a
-//! keep-out), each drawing one undo step:
+//! The Graphics tools (#2424), on the active layer (not a keep-out), each
+//! drawing one undo step. Line and Arc on copper place tracks
+//! (`graphic_copper`); Full Circle, Rectangle and Text Frame on copper are
+//! drawings that count as copper of no net (Caner, 2026-11-24, #2883):
 //! - Line: a run; each click adds a line from the last point, a click on
 //!   the last point ends the run;
 //! - Arc: the centre, the start (its distance is the radius), the end;
@@ -25,8 +27,8 @@ use crate::app::handlers::pcb_primitive::{PrimitiveEdit, graphic_edit};
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::app::{PcbViewMsg, Signex};
 
-/// The layer a Graphics tool's form shows while the active layer cannot
-/// take a drawing.
+/// The layer a Graphics tool's form shows while the active layer (a
+/// keep-out) cannot take a drawing.
 const FALLBACK_LAYER: PcbLayer = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
 
 impl BoardToolDefaults {
@@ -112,11 +114,14 @@ impl Signex {
 
     /// A Graphics tool click at `at`: a point of the drawing, or the drawing
     /// itself once it has its points. Off a layer a drawing may go on, the
-    /// Messages panel says so and nothing changes.
+    /// Messages panel and the status bar say so and nothing changes.
     pub(super) fn graphic_clicked(&mut self, tool: BoardPlaceTool, at: Point) {
         let Some(kind) = tool.graphic_kind() else {
             return;
         };
+        if self.copper_graphic_clicked(tool, at) {
+            return;
+        }
         let name = t!(self.ui_state.i18n, tool.name()).into_string();
         let Some(layer) = self.active_graphic_layer() else {
             let note = t!(
@@ -124,7 +129,7 @@ impl Signex {
                 ids::PCB_TOOL_NEEDS_GRAPHIC_LAYER,
                 "tool" => name.as_str()
             );
-            crate::diagnostics::log_warning(note.into_string());
+            self.note_board_tool(note.into_string());
             return;
         };
         let Some(session) = self.own_board_tool() else {
@@ -182,6 +187,9 @@ impl Signex {
         cursor: Point,
         preview: &mut PcbBoard,
     ) {
+        if self.copper_graphic_preview(session, cursor, preview) {
+            return;
+        }
         let (Some(kind), Some(layer)) = (session.tool.graphic_kind(), self.active_graphic_layer())
         else {
             return;
@@ -197,7 +205,7 @@ impl Signex {
     /// The drawing the Graphics tool armed on the board in view places next,
     /// for its Properties form: its values on a stand-in shape at the
     /// pointer. The layer is the active one, or the top overlay while the
-    /// active one cannot take a drawing.
+    /// active one (a keep-out) cannot take a drawing.
     pub(crate) fn next_board_graphic(&self) -> Option<BoardGraphic> {
         let session = self.own_board_tool()?;
         let kind = session.tool.graphic_kind()?;

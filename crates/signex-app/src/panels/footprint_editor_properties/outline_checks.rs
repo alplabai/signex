@@ -8,7 +8,7 @@
 
 use iced::widget::{Column, container, row};
 use iced::{Element, Length, Widget as _};
-use signex_i18n::{I18n, RenderTranslatable as _, ids, t};
+use signex_i18n::{I18n, Localized, RenderTranslatable as _, ids, t};
 use signex_widgets::{button, text};
 
 use crate::library::editor::footprint::{GapOffer, format_check_mm};
@@ -116,8 +116,31 @@ fn close_gap_row<'a>(
         .boxed()
 }
 
-/// The Fab profile group (mockup row 179d): the router tool of the project's
-/// fab profile, or that it names none.
+/// The Fab profile group's lines (mockup row 179d): the profile the
+/// project's rules were seeded from, the router tool and the min slot, each
+/// or that the project names none.
+fn fab_profile_lines(board: &BoardSketchProps, i18n: &I18n) -> [Localized; 3] {
+    let profile = match board.fab_profile.as_ref() {
+        Some(name) => t!(i18n, ids::BOARD_SKETCH_FAB_PROFILE, "name" => name.clone()),
+        None => t!(i18n, ids::BOARD_SKETCH_FAB_PROFILE_NONE),
+    };
+    let router = match board.router_tool_diameter {
+        Some(diameter) => {
+            t!(i18n, ids::BOARD_SKETCH_FAB_ROUTER, "diameter" => format_check_mm(diameter, 2))
+        }
+        None => t!(i18n, ids::BOARD_SKETCH_FAB_ROUTER_NONE),
+    };
+    let min_slot = match board.min_slot {
+        Some(width) => {
+            t!(i18n, ids::BOARD_SKETCH_FAB_MIN_SLOT, "width" => format_check_mm(width, 2))
+        }
+        None => t!(i18n, ids::BOARD_SKETCH_FAB_MIN_SLOT_NONE),
+    };
+    [profile, router, min_slot]
+}
+
+/// The Fab profile group (mockup row 179d): the project's profile, its
+/// router tool and its min slot.
 fn view_fab_profile<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     board: &'a BoardSketchProps,
@@ -138,16 +161,147 @@ fn view_fab_profile<'a>(
     if is_section_collapsed(FAB_SECTION, collapsed_sections) {
         return col;
     }
-    let router = match board.router_tool_diameter {
-        Some(diameter) => {
-            t!(i18n, ids::BOARD_SKETCH_FAB_ROUTER, "diameter" => format_check_mm(diameter, 2))
+    for line in fab_profile_lines(board, i18n) {
+        col = col.push(
+            container(text(line).size(TS.caption).color(palette.primary))
+                .padding([SP.xs, SP.m])
+                .width(Length::Fill)
+                .boxed(),
+        );
+    }
+    col
+}
+
+#[cfg(test)]
+mod tests {
+    use iced::Widget as _;
+    use signex_bake::board::{CheckState, Finding, NotChecked, OutlineChecks};
+    use signex_sketch::id::SketchEntityId;
+
+    use super::*;
+    use crate::app::Signex;
+    use crate::layout_probe::lay_out_texts;
+    use crate::library::editor::footprint::check_lines;
+
+    const DOCK: iced::Size = iced::Size::new(300.0, 4000.0);
+
+    fn texts(board: &BoardSketchProps) -> Vec<String> {
+        let (app, _task) = Signex::new();
+        let ctx = &app.document_state.panel_ctx;
+        let i18n = I18n::en_us();
+        let palette = PanelPalette::from_tokens(&ctx.tokens);
+        let col = view_outline_checks(
+            Column::new(),
+            board,
+            palette,
+            &ctx.collapsed_sections,
+            &i18n,
+        );
+        lay_out_texts(col.boxed(), DOCK)
+            .into_iter()
+            .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect()
+    }
+
+    fn checks(min_slot: CheckState) -> OutlineChecks {
+        let no_outline = || CheckState::NotChecked(NotChecked::NoOutline);
+        OutlineChecks {
+            closed: no_outline(),
+            no_crossing: no_outline(),
+            openings_inside: no_outline(),
+            inside_corners: no_outline(),
+            min_slot,
         }
-        None => t!(i18n, ids::BOARD_SKETCH_FAB_ROUTER_NONE),
-    };
-    col.push(
-        container(text(router).size(TS.caption).color(palette.primary))
-            .padding([SP.s, SP.m])
-            .width(Length::Fill)
-            .boxed(),
-    )
+    }
+
+    #[test]
+    fn a_narrow_slot_is_listed_with_the_other_checks_and_the_fab_group_names_the_min_slot() {
+        let slot = SketchEntityId::new();
+        let found = Finding::NarrowSlot {
+            entity: slot,
+            width_mm: 0.6,
+            min_slot_mm: 0.8,
+        };
+        let lines = check_lines(Some(&checks(CheckState::Failed(vec![found]))));
+        assert_eq!(lines.len(), 5, "one line per check");
+        assert_eq!(lines[4].place, Some(slot), "a click selects the slot");
+        let board = BoardSketchProps {
+            outline_checks: lines,
+            router_tool_diameter: Some(2.0),
+            min_slot: Some(0.8),
+            ..BoardSketchProps::default()
+        };
+        let texts = texts(&board);
+        let has = |label: &str| texts.iter().any(|t| t == label);
+        assert!(has("Slot 0.60 mm wide < min slot 0.80 mm"), "{texts:#?}");
+        assert!(has("Router tool Ø 2.00 · from profile"), "{texts:#?}");
+        assert!(has("Min slot Ø 0.80 · from profile"), "{texts:#?}");
+        let router = texts.iter().position(|t| t.starts_with("Router tool"));
+        let min_slot = texts.iter().position(|t| t.starts_with("Min slot Ø"));
+        assert!(
+            router < min_slot,
+            "Min slot follows Router tool: {texts:#?}"
+        );
+    }
+
+    #[test]
+    fn without_a_min_slot_the_check_and_the_fab_group_say_so() {
+        let lines = check_lines(Some(&checks(CheckState::NotChecked(NotChecked::NoMinSlot))));
+        let board = BoardSketchProps {
+            outline_checks: lines,
+            ..BoardSketchProps::default()
+        };
+        let texts = texts(&board);
+        let has = |label: &str| texts.iter().any(|t| t == label);
+        assert!(
+            has("Min slot: not checked, the project's fab profile names no min slot"),
+            "{texts:#?}"
+        );
+        assert!(
+            has("Min slot: the project's fab profile names none"),
+            "{texts:#?}"
+        );
+    }
+
+    #[test]
+    fn a_passing_min_slot_check_reads_ok() {
+        let lines = check_lines(Some(&checks(CheckState::Passed)));
+        let board = BoardSketchProps {
+            outline_checks: lines,
+            min_slot: Some(0.5),
+            ..BoardSketchProps::default()
+        };
+        let texts = texts(&board);
+        assert!(
+            texts
+                .iter()
+                .any(|t| t == "Slots: none narrower than the min slot"),
+            "{texts:#?}"
+        );
+    }
+
+    fn lines(board: &BoardSketchProps) -> Vec<String> {
+        fab_profile_lines(board, &I18n::en_us())
+            .into_iter()
+            .map(|line| line.into_string().replace(['\u{2068}', '\u{2069}'], ""))
+            .collect()
+    }
+
+    /// Mockup row 179d and DECISIONS 2026-11-23: the Fab profile group names
+    /// the project's profile above its router tool, and says when there is
+    /// none.
+    #[test]
+    fn the_fab_profile_group_names_the_profile_above_the_router_tool() {
+        let board = BoardSketchProps {
+            fab_profile: Some("Standard 4-layer".into()),
+            router_tool_diameter: Some(2.0),
+            ..BoardSketchProps::default()
+        };
+        let shown = lines(&board);
+        assert_eq!(shown[0], "Profile Standard 4-layer");
+        assert!(shown[1].starts_with("Router tool Ø 2.00"), "{shown:?}");
+        let none = lines(&BoardSketchProps::default());
+        assert_eq!(none[0], "Profile: the project's rules name none");
+        assert_eq!(none[1], "Router tool: the project's fab profile names none");
+    }
 }

@@ -19,6 +19,7 @@ pub(crate) mod cursor;
 mod drag_layers;
 pub(crate) mod drag_preview;
 mod draw;
+pub(crate) mod edge_pan;
 mod erc_marker;
 mod fitted_view;
 mod ghost_split;
@@ -59,6 +60,7 @@ use iced::{Color, Rectangle, Renderer, Theme};
 
 pub use camera::{Camera, ScrollIntent};
 pub(crate) use draw::{AnnotationDraft, AnnotationDraftKind, HintInk};
+pub use edge_pan::{EdgePanLink, EdgePointer};
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
 pub use fitted_view::{FittedView, ResizeFollow, resize_follow};
 pub use graphite::{GraphiteCanvasInk, HALO_FILL_ALPHA};
@@ -307,6 +309,8 @@ pub struct CanvasSlot {
     /// Whether the move drag in flight keeps wires, written by the canvas
     /// after each event for the status bar; `None` outside a drag.
     pub move_behaviour: std::cell::Cell<Option<bool>>,
+    /// The pointer as the edge pan reads it, written on every event (#2872).
+    pub edge_pan: EdgePanLink,
     /// Test-only: draw the content as trunk did, in a frame of the canvas
     /// size through `content_cache`, as the reference of the pixel tests.
     #[cfg(test)]
@@ -393,6 +397,7 @@ impl CanvasSlot {
             measure: None,
             keep_connections_next: false,
             move_behaviour: std::cell::Cell::new(None),
+            edge_pan: EdgePanLink::default(),
             #[cfg(test)]
             trunk_content: std::cell::Cell::new(false),
             #[cfg(test)]
@@ -660,6 +665,8 @@ pub struct CanvasViewPrefs<'a> {
     pub power_port_pending: bool,
     /// The unions hidden on the sheet in view and their inks (mockup row 158).
     pub unions: crate::schematic_runtime::unions::UnionView<'a>,
+    /// The annotation flags of the sheet's design and their inks (mockup row 165).
+    pub annotation_flags: crate::schematic_runtime::annotation_flags::AnnotationFlagView<'a>,
     /// Device pixels per logical pixel in the window this canvas draws in
     /// (`UiState::device_px_per_logical_px`): the stroke floor and the
     /// hairline snap work on that grid (#1887).
@@ -903,6 +910,11 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
+        // An edge pan moved the view: the redraw replays the pointer (#2872).
+        let replayed = self.edge_pan.replayed(event, cursor);
+        let event = replayed.as_ref().unwrap_or(event);
+        self.edge_pan
+            .observe(cursor.position_in(bounds), bounds.size());
         let action = self.dispatch_event(state, event, bounds, cursor);
         if self.mode == ContentMode::GpuOverlay {
             return self.publish_drag(state, action);
@@ -967,6 +979,8 @@ pub enum CanvasEvent {
     CenterAtCursor,
     /// Redraw was asked for (`refresh_view`): drop the active canvas's caches.
     RedrawRequested,
+    /// The edge pan timer ticked (#2872): pan toward the edge the pointer is at.
+    EdgePanTicked,
     /// Left-click at world coordinates — triggers hit-testing or tool action.
     Clicked {
         world_x: f64,
@@ -1138,6 +1152,7 @@ mod tests {
                     &signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight),
                 ),
             },
+            annotation_flags: Default::default(),
             device_px_per_logical_px: 1.0,
         }
     }

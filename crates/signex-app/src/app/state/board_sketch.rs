@@ -251,7 +251,14 @@ fn bake_rows(bake: &BoardPreviewBake) -> BoardBakeRows {
                 plated: hole.plated,
             })
             .collect(),
-        keepouts: baked.keepouts.iter().map(|k| k.layers.clone()).collect(),
+        keepouts: baked
+            .keepouts
+            .iter()
+            .map(|k| crate::panels::BakedKeepout {
+                layers: k.layers.clone(),
+                forbids: k.forbids,
+            })
+            .collect(),
         cutouts: baked.cutouts.iter().filter(|c| !is_slot(c.uuid)).count(),
         slots: slots
             .iter()

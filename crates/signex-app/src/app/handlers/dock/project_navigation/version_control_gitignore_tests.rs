@@ -25,6 +25,7 @@ fn dialog_with_unticked_row(project_dir: &std::path::Path) -> Signex {
         error: None,
         working: false,
         scanning: false,
+        author: crate::app::contracts::CommitAuthor::Resolved,
     });
     app
 }

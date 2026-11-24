@@ -5,7 +5,7 @@ use std::sync::{Mutex, OnceLock};
 use anyhow::Result;
 use log::{Level, LevelFilter, Log, Metadata, Record, debug, error, info, warn};
 
-const MAX_DIAGNOSTIC_ENTRIES: usize = 200;
+pub(crate) const MAX_DIAGNOSTIC_ENTRIES: usize = 200;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiagnosticLevel {
@@ -50,6 +50,19 @@ pub struct DiagnosticEntry {
     pub at: chrono::DateTime<chrono::Utc>,
     /// The command the row offers as a link, with what it acts on.
     pub link: Option<MessageLink>,
+    /// The schematic sheet the line is about: the Document column and
+    /// filter read it, and the row's Show opens it (mockup row 86).
+    pub document: Option<std::path::PathBuf>,
+    /// The object on `document` the line is about; Show selects it.
+    pub object: Option<signex_types::schematic::SelectedItem>,
+}
+
+/// What a ring entry points at besides its text.
+#[derive(Debug, Clone, Default)]
+struct EntryTarget {
+    link: Option<MessageLink>,
+    document: Option<std::path::PathBuf>,
+    object: Option<signex_types::schematic::SelectedItem>,
 }
 
 /// A command a Messages row offers as a link, carrying the document it acts
@@ -92,14 +105,49 @@ pub fn log_warning_with_link(target: &str, message: impl AsRef<str>, link: Messa
     SAID_ON_THREAD.with(|said| said.set(said.get() + 1));
     let (code, message) = summarize_record(target, rendered);
     let entry = (DiagnosticLevel::Warning, code, message, chrono::Utc::now());
-    push_to_ring(entries(), &NEXT_ENTRY_ID, entry, Some(link));
+    let target = EntryTarget {
+        link: Some(link),
+        ..EntryTarget::default()
+    };
+    push_to_ring(entries(), &NEXT_ENTRY_ID, entry, target);
     eprintln!("[WARN] {rendered}");
+}
+
+/// An Info line logged under `target` about `object` on the sheet
+/// `document`: its Messages row names the sheet and offers Show (mockup
+/// row 86). It is held while an agent's edit list runs, as every Info line.
+pub fn log_info_at(
+    target: &str,
+    message: impl AsRef<str>,
+    document: std::path::PathBuf,
+    object: Option<signex_types::schematic::SelectedItem>,
+) {
+    let rendered = message.as_ref();
+    #[cfg(test)]
+    SAID_ON_THREAD.with(|said| said.set(said.get() + 1));
+    let (code, message) = summarize_record(target, rendered);
+    let at = chrono::Utc::now();
+    let target = EntryTarget {
+        document: Some(document),
+        object,
+        ..EntryTarget::default()
+    };
+    if hold_if_held(&code, &message, rendered, at, &target) {
+        return;
+    }
+    push_to_ring(
+        entries(),
+        &NEXT_ENTRY_ID,
+        (DiagnosticLevel::Info, code, message, at),
+        target,
+    );
+    eprintln!("[INFO] {rendered}");
 }
 
 /// Tell the user which locked objects an edit passed over.
 pub fn log_locked_skips(skipped: &[String]) {
-    if let Some(line) = crate::app::core::event::locked_skips_line(skipped) {
-        log_warning(line);
+    if let Some(line) = crate::app::core::event::locked_skips(skipped) {
+        log_warning(line.render(&signex_i18n::I18n::en_us()));
     }
 }
 
@@ -224,7 +272,9 @@ impl Log for SignexLogger {
         let rendered = format!("{}", record.args());
         let (code, message) = summarize_record(record.target(), &rendered);
         let at = chrono::Utc::now();
-        if record.level() == Level::Info && hold_if_held(&code, &message, &rendered, at) {
+        if record.level() == Level::Info
+            && hold_if_held(&code, &message, &rendered, at, &EntryTarget::default())
+        {
             return;
         }
         push_entry(DiagnosticLevel::from(record.level()), code, message, at);
@@ -244,6 +294,7 @@ struct HeldInfo {
     message: String,
     rendered: String,
     at: chrono::DateTime<chrono::Utc>,
+    target: EntryTarget,
 }
 
 thread_local! {
@@ -256,6 +307,7 @@ fn hold_if_held(
     message: &str,
     rendered: &str,
     at: chrono::DateTime<chrono::Utc>,
+    target: &EntryTarget,
 ) -> bool {
     HELD_INFO.with(|held| {
         held.borrow_mut()
@@ -266,6 +318,7 @@ fn hold_if_held(
                     message: message.to_string(),
                     rendered: rendered.to_string(),
                     at,
+                    target: target.clone(),
                 });
             })
             .is_some()
@@ -284,7 +337,8 @@ pub fn release_held_info(show: bool) {
         return;
     }
     for line in lines.unwrap_or_default() {
-        push_entry(DiagnosticLevel::Info, line.code, line.message, line.at);
+        let body = (DiagnosticLevel::Info, line.code, line.message, line.at);
+        push_to_ring(entries(), &NEXT_ENTRY_ID, body, line.target);
         eprintln!("[INFO] {}", line.rendered);
     }
 }
@@ -308,10 +362,11 @@ fn push_entry(
     message: String,
     at: chrono::DateTime<chrono::Utc>,
 ) {
-    push_to_ring(entries(), &NEXT_ENTRY_ID, (level, code, message, at), None);
+    let body = (level, code, message, at);
+    push_to_ring(entries(), &NEXT_ENTRY_ID, body, EntryTarget::default());
 }
 
-/// What a ring entry holds besides its id and link.
+/// What a ring entry holds besides its id and target.
 type EntryBody = (
     DiagnosticLevel,
     String,
@@ -325,7 +380,7 @@ fn push_to_ring(
     ring: &Mutex<VecDeque<DiagnosticEntry>>,
     next_id: &AtomicU64,
     (level, code, message, at): EntryBody,
-    link: Option<MessageLink>,
+    target: EntryTarget,
 ) {
     let mut entries = ring.lock().expect("diagnostics mutex poisoned");
     if entries.len() == MAX_DIAGNOSTIC_ENTRIES {
@@ -337,7 +392,9 @@ fn push_to_ring(
         code,
         message,
         at,
-        link,
+        link: target.link,
+        document: target.document,
+        object: target.object,
     });
 }
 
@@ -572,7 +629,7 @@ mod ring_order_tests {
                                 format!("ring-order {t}/{i}"),
                                 chrono::Utc::now(),
                             ),
-                            None,
+                            EntryTarget::default(),
                         );
                     }
                 });
@@ -591,5 +648,56 @@ mod ring_order_tests {
             ids.windows(2).all(|pair| pair[0] < pair[1]),
             "the ring must be in strictly increasing id order"
         );
+    }
+}
+
+#[cfg(test)]
+mod entry_target_tests {
+    use super::*;
+    use signex_types::schematic::{SelectedItem, SelectedKind};
+
+    fn logged(needle: &str) -> Vec<DiagnosticEntry> {
+        let _ = init_logging();
+        recent_entries()
+            .into_iter()
+            .filter(|e| e.message.contains(needle))
+            .collect()
+    }
+
+    /// Mockup row 86: a line about an object names its sheet and the object,
+    /// and an Info line held through an agent's edit list keeps both.
+    #[test]
+    fn a_line_about_an_object_keeps_its_sheet_and_object() {
+        let sheet = std::path::PathBuf::from("/w/p/power.snxsch");
+        let item = SelectedItem::new(uuid::Uuid::now_v7(), SelectedKind::Symbol);
+        let needle = format!("entry-target {}", item.uuid);
+        log_info_at("signex::find_similar", &needle, sheet.clone(), Some(item));
+        let found = logged(&needle);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].level, DiagnosticLevel::Info);
+        assert_eq!(found[0].document.as_deref(), Some(sheet.as_path()));
+        assert_eq!(found[0].object, Some(item));
+        assert_eq!(found[0].link, None);
+
+        let held = format!("held {needle}");
+        hold_info();
+        log_info_at("signex::find_similar", &held, sheet.clone(), Some(item));
+        assert!(logged(&held).is_empty(), "held while the list runs");
+        release_held_info(true);
+        let found = logged(&held);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].document.as_deref(), Some(sheet.as_path()));
+        assert_eq!(found[0].object, Some(item));
+    }
+
+    /// A plain log line names no document or object.
+    #[test]
+    fn a_plain_line_names_no_document() {
+        let needle = format!("plain-line {}", uuid::Uuid::now_v7());
+        let _ = init_logging();
+        log_warning(&needle);
+        let found = logged(&needle);
+        assert_eq!(found.len(), 1);
+        assert_eq!((found[0].document.clone(), found[0].object), (None, None));
     }
 }

@@ -185,7 +185,8 @@ impl Signex {
     }
 
     /// Filter on the left with the fields it searches; the new parameter
-    /// name and Add column on the right, as one group.
+    /// name and Add column on the right, as one group that folds under the
+    /// filter when the dialog is narrow.
     fn view_parameter_toolbar(&self) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
@@ -237,24 +238,33 @@ impl Signex {
         .padding([SP.s, SP.m])
         .size(TS.body)
         .width(Length::Fixed(TS.body * NEW_KEY_WIDTH_EM));
-        let add = styles::dialog_button(
+        // Mockup row 70: "+ Add column".
+        let add = styles::dialog_icon_button(
+            crate::icons::icon_plus(self.ui_state.effective_theme_id()),
             t!(i18n, ids::DIALOG_PARAMETER_MANAGER_ADD_COLUMN),
             DialogButtonKind::Secondary,
             Some(Message::ParameterManager(ParameterManagerMsg::ColumnAdded)),
             tokens,
         );
-        let bar = container(
-            row![
-                filter,
-                hint,
-                Space::new().width(Length::Fill),
-                row![new_key, add].spacing(SP.s).align_y(Alignment::Center),
-            ]
+        // Mockup row 70: the toolbar wraps at narrow widths. The filter group
+        // and the Add group share one line while both fit, the Add group at
+        // the right; else the Add group folds under the filter, and the hint
+        // folds under the filter before the filter overflows. FitRow tops its
+        // cells, so a strut as tall as the Add button centres the filter on
+        // the Add group's line.
+        let strut = Space::new().height(Length::Fixed(styles::ChromeMetrics::DEFAULT.button));
+        let filter = row![strut, filter].align_y(Alignment::Center);
+        let search = row![filter, hint]
             .spacing(SP.m)
-            .align_y(Alignment::Center),
-        )
-        .padding([SP.m, SP.l])
-        .width(Length::Fill);
+            .align_y(Alignment::Center)
+            .wrap()
+            .vertical_spacing(SP.s);
+        let add_column = container(row![new_key, add].spacing(SP.s).align_y(Alignment::Center))
+            .align_x(iced::alignment::Horizontal::Right);
+        let groups = signex_widgets::FitRow::new(vec![search.boxed(), add_column.boxed()])
+            .spacing(SP.m)
+            .fill(true);
+        let bar = container(groups).padding([SP.m, SP.l]).width(Length::Fill);
         column![bar, table::rule(r.line_soft, Length::Fill, true)].boxed()
     }
 
@@ -330,6 +340,79 @@ fn empty_area(content: Element<'_, Message>) -> Element<'_, Message> {
         .height(Length::Fill)
         .center_x(Length::Fill)
         .boxed()
+}
+
+#[cfg(test)]
+mod toolbar_tests {
+    use super::{FILTER_WIDTH_EM, NEW_KEY_WIDTH_EM, SP, TS};
+    use crate::app::Signex;
+    use crate::layout_probe::{find, lay_out_inputs};
+    use iced::{Rectangle, Size};
+
+    /// The filter box ("R1" typed) and the new-key box ("MPN" typed) of the
+    /// real toolbar laid out `width` wide.
+    fn filter_and_new_key(width: f32) -> (Rectangle, Rectangle) {
+        let (mut app, _task) = Signex::new();
+        app.ui_state.parameter_table.filter = "R1".to_string();
+        app.ui_state.parameter_table.new_key = "MPN".to_string();
+        let window = Size::new(width, TS.body * 40.0);
+        let inputs = lay_out_inputs(app.view_parameter_toolbar(), window);
+        (find(&inputs, "R1").bounds, find(&inputs, "MPN").bounds)
+    }
+
+    /// Mockup row 70: the filter and the new key share one line, centred
+    /// on it, while both fit; when the toolbar is narrow the new key folds
+    /// under the filter instead of running past the toolbar's edge.
+    #[test]
+    fn the_toolbar_groups_fold_instead_of_overflowing() {
+        let (filter, key) = filter_and_new_key(TS.body * 100.0);
+        assert!(key.x > filter.x + filter.width, "{filter:?} {key:?}");
+        assert!(
+            (filter.center_y() - key.center_y()).abs() < 1.0,
+            "one line, centred: {filter:?} {key:?}"
+        );
+        let narrow = 2.0 * SP.l + TS.body * (FILTER_WIDTH_EM + NEW_KEY_WIDTH_EM / 2.0) + SP.m;
+        let (filter, key) = filter_and_new_key(narrow);
+        assert!(key.y >= filter.y + filter.height, "{filter:?} {key:?}");
+        assert!(key.x + key.width <= narrow, "{key:?} within {narrow}");
+    }
+
+    /// Mockup row 70: "+ Add column". Between the new-key box and the
+    /// button's label, the plus glyph is drawn in the label's ink.
+    #[test]
+    fn add_column_leads_with_a_plus_glyph() {
+        use crate::layout_probe::{draw_pixels, lay_out_texts};
+        use signex_types::theme::{ThemeId, theme_tokens};
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let (mut app, _task) = Signex::new();
+            app.document_state.panel_ctx.tokens = theme_tokens(id);
+            app.ui_state.parameter_table.new_key = "MPN".to_string();
+            let window = Size::new(TS.body * 100.0, TS.body * 10.0);
+            let key = find(&lay_out_inputs(app.view_parameter_toolbar(), window), "MPN").bounds;
+            let texts = lay_out_texts(app.view_parameter_toolbar(), window);
+            let label = find(&texts, "Add column").bounds;
+            let pixels = draw_pixels(app.view_parameter_toolbar(), window);
+            let ink = crate::styles::ti(app.document_state.panel_ctx.tokens.text).into_rgba8();
+            let from = (key.x + key.width + SP.s + SP.xs) as usize;
+            let rows = label.y as usize..(label.y + label.height) as usize;
+            let glyph = rows.into_iter().any(|y| {
+                (from..label.x as usize).any(|x| {
+                    let i = (y * window.width as usize + x) * 4;
+                    (0..3).all(|c| pixels[i + c].abs_diff(ink[c]) <= 48)
+                })
+            });
+            assert!(glyph, "{id:?}: no plus glyph before the Add column label");
+        }
+    }
+
+    /// The folding toolbar builds with a filter and a new key typed.
+    #[test]
+    fn the_toolbar_builds() {
+        let (mut app, _task) = Signex::new();
+        app.ui_state.parameter_table.filter = "R1".to_string();
+        app.ui_state.parameter_table.new_key = "MPN".to_string();
+        let _ = app.view_parameter_toolbar();
+    }
 }
 
 #[cfg(test)]

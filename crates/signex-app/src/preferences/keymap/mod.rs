@@ -254,6 +254,7 @@ fn context_label(i18n: &I18n, context: crate::keymap::ShortcutContext) -> Locali
                 sids::PREF_KEYMAP_CONTEXT_COMMAND_PALETTE
             }
             crate::keymap::ShortcutContext::Placement => sids::PREF_KEYMAP_CONTEXT_PLACEMENT,
+            crate::keymap::ShortcutContext::Board3d => sids::PREF_KEYMAP_CONTEXT_BOARD_3D,
         },
         &[],
     )

@@ -1,9 +1,11 @@
-//! The Messages lines the schematic edit tails raise, as core notices. Each
-//! renders byte-identical to the line the tail logged before the seam.
+//! The Messages lines the schematic edit tails raise, as core notices with
+//! catalog ids (#2644). Each renders in en-US byte-identical to the line the
+//! tail logged before the seam.
 
-use signex_engine::Engine;
+use signex_engine::{Engine, EngineError};
+use signex_i18n_ids::{MessageId, Translatable, ids};
 
-use crate::app::core::event::{CoreEvent, Notice, NoticeLevel, engine_notices, locked_skips_line};
+use crate::app::core::event::{CoreEvent, Notice, NoticeLevel, engine_notices, locked_skips};
 
 /// [`engine_notices`] as events.
 pub(super) fn engine_notice_events(engine: &mut Engine) -> impl Iterator<Item = CoreEvent> + use<> {
@@ -12,16 +14,28 @@ pub(super) fn engine_notice_events(engine: &mut Engine) -> impl Iterator<Item = 
 
 /// The skip line for `skipped`, when an edit passed over a locked object.
 pub(super) fn skip_notice(skipped: &[String]) -> Option<CoreEvent> {
-    locked_skips_line(skipped).map(|line| Notice::legacy_english(NoticeLevel::Warning, line).into())
+    locked_skips(skipped).map(warning_notice)
 }
 
-/// `context: <error and its causes>`, the form `diagnostics::log_error` gives.
-pub(super) fn engine_error_notice(context: &str, error: signex_engine::EngineError) -> CoreEvent {
-    let error = anyhow::Error::new(error);
-    Notice::legacy_english(NoticeLevel::Error, format!("{context}: {error:#}")).into()
+/// `<failure>: <error and its causes>`, the form `diagnostics::log_error`
+/// gives; `failure` is a catalog line ending in `{ $error }`.
+pub(super) fn engine_error_notice(failure: MessageId, error: EngineError) -> CoreEvent {
+    let error = format!("{:#}", anyhow::Error::new(error));
+    let text = Translatable::new(failure).arg("error", error);
+    Notice::new(NoticeLevel::Error, text).into()
 }
 
-/// A plain warning line.
-pub(super) fn warning_notice(text: impl Into<String>) -> CoreEvent {
-    Notice::legacy_english(NoticeLevel::Warning, text).into()
+/// A warning line.
+pub(super) fn warning_notice(text: Translatable) -> CoreEvent {
+    Notice::new(NoticeLevel::Warning, text).into()
+}
+
+/// The line of an edit refused because `references` are locked: the words
+/// of `EngineError::ItemLocked`.
+pub(super) fn locked_refusal(references: &[String], action: &str) -> Translatable {
+    match references {
+        [one] => Translatable::new(ids::NOTICE_EDIT_ITEM_LOCKED_ONE).arg("name", one.as_str()),
+        many => Translatable::new(ids::NOTICE_EDIT_ITEM_LOCKED_MANY).arg("names", many.join(", ")),
+    }
+    .arg("action", action)
 }

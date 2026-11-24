@@ -30,7 +30,9 @@ impl Signex {
                 "Fix invalid keyboard shortcuts before saving.".to_string();
         }
         let fast_grid_invalid = self.ui_state.refuse_invalid_fast_grid_drafts();
-        if keymap_invalid || fast_grid_invalid {
+        // #2868: a PCB Defaults field holding text it refuses shows why.
+        let pcb_defaults_invalid = !self.ui_state.preferences_pcb_defaults.refused.is_empty();
+        if keymap_invalid || fast_grid_invalid || pcb_defaults_invalid {
             self.recompute_preferences_dirty();
             return true;
         }

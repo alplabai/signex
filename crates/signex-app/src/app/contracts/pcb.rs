@@ -427,6 +427,10 @@ pub enum Board3dMsg {
     ScreenshotSaveRequested,
     /// The save dialog answered; `None` is a cancel.
     ScreenshotSavePicked(Option<std::path::PathBuf>),
+    /// Save with transparent backdrop… in the screenshot menu: ask where.
+    ScreenshotTransparentSaveRequested,
+    /// The transparent save's dialog answered; `None` is a cancel.
+    ScreenshotTransparentSavePicked(Option<std::path::PathBuf>),
     /// The view was captured, cropped to the view; `None` when the window
     /// had nothing to show. `save_to` is the PNG to write; `None` copies it
     /// to the clipboard.

@@ -129,3 +129,148 @@ board-sketch-bake-anchor = Moves { $reference }
 board-sketch-bake-nothing = Bake writes nothing to the board.
 board-sketch-bake-unsolved = The sketch does not bake: it is not solved.
 board-sketch-bake-close-hint = Bake preview on the mode bar closes this panel.
+# dxf-import-check-step
+# The Import DXF profile check and result (mockup row 179c).
+board-sketch-dxf-next = Next: check profiles
+board-sketch-dxf-problems = { $problems ->
+        [one] 1 problem
+       *[other] { $problems } problems
+    } in { $profiles ->
+        [one] 1 profile
+       *[other] { $profiles } profiles
+    }
+board-sketch-dxf-no-problems = No problems in { $profiles ->
+        [one] 1 profile
+       *[other] { $profiles } profiles
+    }
+# $profile is the target the profile lands as, such as Board outline.
+board-sketch-dxf-gap = { $profile } open: gap { $gap } mm at ({ $x }, { $y })
+board-sketch-dxf-open-end = { $profile } open at ({ $x }, { $y }): no end within { $tolerance } mm
+board-sketch-dxf-overlap = { $count } overlapping segments at ({ $x }, { $y })
+board-sketch-dxf-circles-closed = { $count ->
+        [one] 1 circle closed
+       *[other] { $count } circles closed
+    }
+board-sketch-dxf-heal-under = Heal under
+board-sketch-dxf-heal = Heal and merge
+board-sketch-dxf-as-is = Import as is
+board-sketch-dxf-result-title = Imported: { $outlines ->
+        [one] 1 outline
+       *[other] { $outlines } outlines
+    }, { $holes ->
+        [one] 1 hole
+       *[other] { $holes } holes
+    }
+board-sketch-dxf-result-others = and { $others ->
+        [one] 1 other profile
+       *[other] { $others } other profiles
+    }
+board-sketch-dxf-result-healed = { $healed ->
+        [one] 1 gap closed
+       *[other] { $healed } gaps closed
+    } (end points merged), { $merged ->
+        [one] 1 overlapping segment
+       *[other] { $merged } overlapping segments
+    } merged into one line.
+board-sketch-dxf-result-as-is = Imported as drawn: no gap closed, no overlap merged.
+board-sketch-dxf-result-constraints = { $constraints ->
+        [one] 1 constraint added
+       *[other] { $constraints } constraints added
+    }; DOF { $dof } left.
+board-sketch-dxf-result-unlinked = The DXF is not linked: a later change to the file does not reach this sketch.
+board-sketch-dxf-done = Done
+# Marks on the preview of the drawing.
+board-sketch-dxf-mark-gap = gap { $gap } mm
+board-sketch-dxf-mark-overlap = { $count } overlapping segments
+# The layer caption under the preview; $list joins the layer entries.
+board-sketch-dxf-layers = layer { $list }
+board-sketch-dxf-layer-target = { $layer } → { $target }
+board-sketch-dxf-layer-skipped = { $layer } ignored
+# min-slot
+# The min slot outline check (mockup row 179d): every Slot opening at least as
+# wide as the fab routes.
+board-sketch-check-min-slot = Slots: none narrower than the min slot
+board-sketch-check-name-min-slot = Min slot
+board-sketch-check-skipped-min-slot = { $check }: not checked, the project's fab profile names no min slot
+# A slot narrower than the min slot; $width and $min in millimetres.
+board-sketch-check-slot-narrow = Slot { $width } mm wide < min slot { $min } mm
+# The Fab profile group's min slot row; $width in millimetres.
+board-sketch-fab-min-slot = Min slot Ø { $width } · from profile
+board-sketch-fab-min-slot-none = Min slot: the project's fab profile names none
+
+# board-sketch-properties
+# The DOF card of the Sketch solve section (mockup row 179). $dof is the
+# sketch's free degrees of freedom, $count a whole number, $ms milliseconds.
+sketch-dof-number = { $dof }
+sketch-dof-number-over = −{ $count }
+sketch-dof-under = Under-constrained · { $dof } DOF
+sketch-dof-full = Fully constrained
+sketch-dof-over =
+    { $count ->
+        [one] Over-constrained · { $count } conflict
+       *[other] Over-constrained · { $count } conflicts
+    }
+sketch-dof-solved =
+    { $count ->
+        [one] { $count } constraint · solved in { $ms } ms
+       *[other] { $count } constraints · solved in { $ms } ms
+    }
+sketch-dof-kept =
+    { $count ->
+        [one] { $count } constraint · last good solve kept
+       *[other] { $count } constraints · last good solve kept
+    }
+# A free motion of the sketch; $count is how many points or radii it moves,
+# $angle its direction in degrees from X.
+sketch-dof-slide-x =
+    { $count ->
+        [one] One point slides along X
+       *[other] { $count } points slide along X
+    }
+sketch-dof-slide-y =
+    { $count ->
+        [one] One point slides along Y
+       *[other] { $count } points slide along Y
+    }
+sketch-dof-slide-angle =
+    { $count ->
+        [one] One point slides at { $angle }°
+       *[other] { $count } points slide at { $angle }°
+    }
+sketch-dof-any =
+    { $count ->
+        [one] One point moves in any direction
+       *[other] { $count } points move in any direction
+    }
+sketch-dof-reshape =
+    { $count ->
+        [one] One entity can change shape
+       *[other] { $count } entities can change shape
+    }
+# Selects what a free motion moves.
+sketch-dof-show = Show
+# Bake panel rows (mockup row 179). $count holes of one drill and plating;
+# $drill is the diameter in millimetres.
+board-sketch-bake-holes-plated = { $count } × Ø { $drill } mm · plated
+board-sketch-bake-holes-unplated = { $count } × Ø { $drill } mm · unplated
+# A keepout; $layers lists its layers, $kinds what it keeps out.
+board-sketch-bake-keepout-kinds = On { $layers } · { $kinds }
+# The Size row of a rectangular board (mockup row 179e); $width and $height
+# are lengths in $unit.
+board-sketch-size-value = { $width } × { $height } { $unit }
+# A pattern's spacing as its expressions resolve (mockup row 179e); $dx and
+# $dy are millimetres.
+sketch-pattern-spacing-value = Spacing { $dx } × { $dy } mm
+# The Sketch solve section title on a board (mockup row 179): $dof free
+# degrees of freedom, $count conflicts.
+sketch-dof-section = Sketch DOF
+sketch-dof-section-under = Sketch: { $dof } DOF
+sketch-dof-section-over =
+    { $count ->
+        [one] Sketch DOF: { $count } conflict
+       *[other] Sketch DOF: { $count } conflicts
+    }
+# The Fab profile group's profile row (mockup row 179d); $name is the rule
+# profile the project's rules were seeded from.
+board-sketch-fab-profile = Profile { $name }
+board-sketch-fab-profile-none = Profile: the project's rules name none

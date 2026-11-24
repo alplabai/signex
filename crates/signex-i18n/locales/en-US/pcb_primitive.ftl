@@ -379,6 +379,14 @@ pcb-prim-solder-tented = Solder mask: Tented
 ## #2523: the pour, string and dimension panels and their illustrations.
 # The unit after an area field.
 pcb-prim-unit-mm2 = mm²
+# pcb-props-bar
+# A read-only fact on the String panel: the string's layer is on the bottom side, so it reads mirrored.
+pcb-prim-string-mirrored = Mirrored (bottom side)
+# The unit after a length field when the board shows mils.
+pcb-prim-unit-mil = mil
+# A dimension's measured value in mils; $value is the number to its precision.
+pcb-prim-dim-value-mil = { $value } mil
+## #2523, continued.
 pcb-prim-pour-fill-mode = Fill Mode
 pcb-prim-pour-fill-solid = Solid
 pcb-prim-pour-fill-hatched = Hatched
@@ -426,7 +434,49 @@ pcb-prim-string-drawing-origin = Position X/Y
 pcb-prim-dim-style = Style
 # A decimals step of the Precision control.
 pcb-prim-dim-precision-step = { $decimals }
-# $layer is the layer's name, $height the text height in mm.
+# $layer is the layer's name, $height the text height in the board's Units.
 pcb-prim-dim-drawing-note = { $layer } · text { $height }
 # The caption under a dimension's Layer row.
 pcb-prim-dim-layer-note = Any board layer, copper included. On copper a dimension is a drawing only: no copper, DRC or Gerber.
+## A dimension's look (#2868): its Arrows, Text, Extension Lines, and Units and Format sections.
+pcb-prim-dim-arrows = Arrows
+pcb-prim-dim-arrow-style = Arrow Style
+pcb-prim-dim-arrow-filled = Filled
+pcb-prim-dim-arrow-open = Open
+pcb-prim-dim-arrow-none = None
+pcb-prim-dim-arrow-length = Arrow Length
+pcb-prim-dim-arrow-width = Arrow Width
+pcb-prim-dim-text = Text
+pcb-prim-dim-font = Font
+# The monospace board face and the proportional interface face.
+pcb-prim-dim-font-mono = Mono
+pcb-prim-dim-font-sans = Sans
+pcb-prim-dim-bold = Bold
+pcb-prim-dim-italic = Italic
+# The width of one character of the value.
+pcb-prim-dim-text-width = Text Width
+pcb-prim-dim-text-position = Text Position
+pcb-prim-dim-text-above = Above
+pcb-prim-dim-text-inline = Inline
+pcb-prim-dim-text-manual = Manual
+# Between the value and the dimension line.
+pcb-prim-dim-text-gap = Text Gap
+# Where a Manual value sits, from the middle of the dimension line.
+pcb-prim-dim-text-at = Text Point
+pcb-prim-dim-along = Along
+pcb-prim-dim-across = Across
+pcb-prim-dim-extensions = Extension Lines
+# Between the measured point and the start of its extension line.
+pcb-prim-dim-ext-offset = Extension Offset
+# How far an extension line runs past the dimension line.
+pcb-prim-dim-ext-overshoot = Overshoot
+pcb-prim-dim-ext-width = Extension Width
+pcb-prim-dim-units = Units and Format
+pcb-prim-dim-unit = Unit
+pcb-prim-dim-unit-mm = mm
+pcb-prim-dim-unit-mil = mil
+pcb-prim-dim-unit-in = in
+pcb-prim-dim-show-unit = Show unit
+pcb-prim-dim-prefix = Prefix
+pcb-prim-dim-suffix = Suffix
+pcb-prim-dim-trailing-zeros = Trailing zeros

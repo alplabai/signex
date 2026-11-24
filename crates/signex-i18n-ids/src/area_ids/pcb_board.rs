@@ -21,8 +21,6 @@ define_ids! {
     PCB_BOARD_FILTER_PRESET_FULL = "pcb-board-filter-preset-full";
     PCB_BOARD_FILTER_PRESET_APPLY_TIP = "pcb-board-filter-preset-apply-tip";
     PCB_BOARD_FILTER_PRESET_NAME = "pcb-board-filter-preset-name";
-    PCB_BOARD_FILTER_PRESET_UPDATE = "pcb-board-filter-preset-update";
-    PCB_BOARD_FILTER_PRESET_UPDATE_TIP = "pcb-board-filter-preset-update-tip";
     PCB_BOARD_KIND_COMPONENTS = "pcb-board-kind-components";
     PCB_BOARD_KIND_BODIES = "pcb-board-kind-bodies";
     PCB_BOARD_KIND_KEEPOUTS = "pcb-board-kind-keepouts";
@@ -60,7 +58,6 @@ define_ids! {
     PCB_BOARD_SNAP_TEXTS = "pcb-board-snap-texts";
     PCB_BOARD_SNAP_OBJECT_UNAVAILABLE = "pcb-board-snap-object-unavailable";
     PCB_BOARD_SNAP_DISTANCE = "pcb-board-snap-distance";
-    PCB_BOARD_SNAP_DISTANCE_VALUE = "pcb-board-snap-distance-value";
     PCB_BOARD_AXIS_RANGE = "pcb-board-axis-range";
     PCB_BOARD_SNAP_TO = "pcb-board-snap-to";
     PCB_BOARD_SIZE_READOUT = "pcb-board-size-readout";

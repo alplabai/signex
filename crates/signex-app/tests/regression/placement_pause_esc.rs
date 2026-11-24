@@ -63,8 +63,9 @@ fn tab_edit_esc_then_the_next_wire_places_with_the_original_values() {
     assert_eq!(placed[0].stroke_width, 0.0, "the default width, not Large");
     assert_eq!(placed[0].color, None, "the theme colour, not red");
 
-    // No longer paused: Esc ends the wire in progress and the tool.
-    esc(&mut app);
+    // No longer paused, and the second click ended the wire
+    // (docs/DECISIONS.md, 2026-11-24, Caner): one Esc leaves the tool.
+    assert!(!app.interaction_state.wire_drawing);
     esc(&mut app);
     assert_eq!(app.interaction_state.current_tool, Tool::Select);
 }

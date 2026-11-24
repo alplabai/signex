@@ -63,19 +63,20 @@ pub fn view_footprint<'a>(
     // drawing area extends edge-to-edge behind it instead of being
     // clipped under the bar's bottom. Mirrors Fusion 360 / Altium.
     // The editor bar (mockup row 187): Footprint / Sketch switch, 3D toggle and, in
-    // sketch mode, the sketch info caption and Parameters.
-    let mode_switcher = crate::library::editor::footprint::pads_active_bar::mode_switcher_overlay(
-        editor,
-        tokens,
-        i18n,
-        super::sketch_info_bar::editor_bar_items(editor, tokens, i18n),
-    );
+    // sketch mode, the sketch info caption and Parameters. Beside the DOF
+    // chips it shares their row under the Active Bar (#2882).
+    use crate::library::editor::footprint::pads_active_bar;
+    let trailing = super::sketch_info_bar::editor_bar_items(editor, tokens, i18n);
+    let chrome = move || {
+        let bar = pads_active_bar::mode_switcher_bar(editor, tokens, i18n, trailing);
+        super::dof_chip::chrome_row(editor, tokens, i18n, bar)
+    };
     // v0.18.11.1 — canvas-overlay multi-footprint tab strip removed.
     // The Footprint Library left-dock panel (v0.18.8) renders the
     // same list (internal `file.footprints[i]`) with proper
     // Place/Add/Delete/Edit buttons, so the redundant on-canvas
-    // chip was just visual noise. Keep `mode_switcher` (the editor
-    // bar) at top-right since it has no panel equivalent.
+    // chip was just visual noise. Keep the editor bar at top-right
+    // since it has no panel equivalent.
 
     // v0.18.14 — single unified active bar carries mode-keyed
     // tools (left half) + the eight Selection Filter pills (right
@@ -95,11 +96,10 @@ pub fn view_footprint<'a>(
     let body = match editor.state.mode {
         // The sketch mode bar: Bake preview · Discard changes · Bake (#2518).
         EditorMode::Sketch => stack
-            .push(super::dof_chip::overlay(editor, tokens, i18n))
             .push(super::dof_chip::zoom_pill_overlay(editor, tokens))
             .push(super::sketch_exit::footprint_overlay(editor, tokens, i18n))
             .push(super::bake_legend::overlay(editor, tokens, i18n))
-            .push(mode_switcher)
+            .push(chrome())
             .push(
                 crate::library::editor::footprint::parameters_table::view::overlay(
                     editor, tokens, i18n,
@@ -115,14 +115,18 @@ pub fn view_footprint<'a>(
             .push(mirror_overlay(editor, mirror_card, tokens, i18n))
             .boxed(),
         EditorMode::Normal => stack
-            .push(super::dof_chip::overlay(editor, tokens, i18n))
             .push(super::dof_chip::zoom_pill_overlay(editor, tokens))
-            .push(mode_switcher)
+            .push(chrome())
             .push(
                 crate::library::editor::footprint::pad_scope_prompt::overlay(editor, tokens, i18n),
             )
             .boxed(),
-        EditorMode::View3d => stack.push(mode_switcher).boxed(),
+        // No chips in 3D: the editor bar alone, with no sketch items.
+        EditorMode::View3d => stack
+            .push(pads_active_bar::mode_switcher_overlay(
+                editor, tokens, i18n, None,
+            ))
+            .boxed(),
     };
     // The strip stands in for the Layers panel where the panel cannot
     // reach this editor (see the caller).

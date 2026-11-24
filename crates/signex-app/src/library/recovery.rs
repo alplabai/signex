@@ -708,6 +708,22 @@ mod tests {
         );
     }
 
+    /// Mockup row 138: the Library Missing caption names what Skip for now
+    /// leaves behind, the embedded copies and the status-bar chip.
+    #[test]
+    fn the_skip_caption_says_a_library_missing_chip_stays_in_the_status_bar() {
+        let i18n = I18n::en_us();
+        let shown = caption(&all_dialogs()[0], &i18n)
+            .into_string()
+            .replace(['\u{2068}', '\u{2069}'], "");
+        assert_eq!(
+            shown,
+            "Skip for now opens the project anyway: parts from power-ics keep their \
+             embedded copies, and a \"Library Missing\" chip stays in the status bar \
+             until the library is located."
+        );
+    }
+
     /// Every case draws from tokens alone in every built-in theme, in the
     /// main window and in its own.
     #[test]

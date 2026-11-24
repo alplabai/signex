@@ -1,7 +1,8 @@
 //! The Import DXF dialog of a board sketch (#2794, mockup row 179c): the file
-//! as read, with the units, scale and layer targets the user picks. Nothing
-//! here touches the sketch: Import builds the geometry from these choices and
-//! Cancel drops them.
+//! as read, with the units, scale and layer targets the user picks, then the
+//! profile check, then what landed. Nothing here touches the sketch: Heal and
+//! merge or Import as is builds the geometry from these choices and Cancel
+//! drops them.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -9,7 +10,10 @@ use std::sync::Arc;
 use signex_engine::pcb::dxf::{
     DxfEdge, DxfEdgeShape, DxfLayerRow, DxfSource, DxfUnits, dxf_edges, dxf_layer_rows,
 };
-use signex_sketch::import::{ImportCheck, ImportPiece, ImportShape, SketchImport, build_import};
+use signex_sketch::import::{
+    ImportCheck, ImportPiece, ImportShape, ProfileReport, SketchImport, build_import,
+    build_import_as_is, check_profiles, merge_overlaps,
+};
 use signex_sketch::plane::PlaneId;
 use signex_types::pcb::Point;
 use signex_types::pcb_origin::BoardOrigin;
@@ -33,10 +37,51 @@ pub static DXF_LAYER_TARGETS: [DxfLayerTarget; 6] = [
 pub enum SketchDxfMsg {
     UnitsPicked(DxfUnits),
     ScaleEdited(String),
-    TargetPicked { row: usize, target: DxfLayerTarget },
+    TargetPicked {
+        row: usize,
+        target: DxfLayerTarget,
+    },
     JoinToggled(bool),
-    Confirmed,
+    /// Next: check profiles.
+    CheckRequested,
+    /// Heal and merge, or Import as is, on the check.
+    Confirmed(DxfImportMode),
+    /// Done on the result.
+    Dismissed,
     Cancelled,
+}
+
+/// How an import treats what the profile check found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DxfImportMode {
+    /// Close gaps under the heal tolerance and fold overlapping lines.
+    HealAndMerge,
+    /// Keep the drawing as it is.
+    AsIs,
+}
+
+/// What an import landed, for the result card.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SketchDxfResult {
+    pub mode: DxfImportMode,
+    /// Board outline profiles.
+    pub outlines: usize,
+    /// Mounting holes.
+    pub holes: usize,
+    /// Every other profile.
+    pub others: usize,
+    pub check: ImportCheck,
+}
+
+/// Where the dialog is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SketchDxfStep {
+    /// Units, scale and a target per layer.
+    Mapping,
+    /// The profile check, with Heal and merge and Import as is.
+    Checking,
+    /// The geometry landed; Done closes the card.
+    Imported(SketchDxfResult),
 }
 
 /// Why the dialog's choices cannot be imported as they stand.
@@ -63,10 +108,16 @@ pub struct SketchDxfDialog {
     pub targets: Vec<DxfLayerTarget>,
     /// Join ends under the heal tolerance and add H / V.
     pub join: bool,
-    /// What Import would make with these choices, or why it cannot.
+    /// What Heal and merge would make with these choices, or why it cannot.
     pub check: Result<ImportCheck, SketchDxfProblem>,
+    pub step: SketchDxfStep,
+    /// The pieces of these choices as drawn, for the preview; after Heal
+    /// and merge, the pieces that landed.
+    pub pieces: Vec<ImportPiece>,
+    /// The profile check of `pieces` as drawn.
+    pub report: ProfileReport,
+    pub origin: BoardOrigin,
     source: Arc<DxfSource>,
-    origin: BoardOrigin,
 }
 
 impl SketchDxfDialog {
@@ -88,15 +139,23 @@ impl SketchDxfDialog {
             targets,
             join: true,
             check: Ok(ImportCheck::default()),
-            source,
+            step: SketchDxfStep::Mapping,
+            pieces: Vec::new(),
+            report: ProfileReport::default(),
             origin,
+            source,
         };
         dialog.refresh_check();
         dialog
     }
 
-    /// Apply a choice. `Confirmed` and `Cancelled` are the handler's.
+    /// Apply a choice. Mapping choices apply only while mapping; Next moves
+    /// to the check when the choices can import. `Confirmed`, `Dismissed`
+    /// and `Cancelled` are the handler's.
     pub fn apply(&mut self, event: SketchDxfMsg) {
+        if self.step != SketchDxfStep::Mapping {
+            return;
+        }
         match event {
             SketchDxfMsg::UnitsPicked(units) => self.units = units,
             SketchDxfMsg::ScaleEdited(scale) => self.scale = scale,
@@ -106,17 +165,82 @@ impl SketchDxfDialog {
                 }
             }
             SketchDxfMsg::JoinToggled(join) => self.join = join,
-            SketchDxfMsg::Confirmed | SketchDxfMsg::Cancelled => return,
+            SketchDxfMsg::CheckRequested => {
+                if self.check.is_ok() {
+                    self.step = SketchDxfStep::Checking;
+                }
+                return;
+            }
+            SketchDxfMsg::Confirmed(_) | SketchDxfMsg::Dismissed | SketchDxfMsg::Cancelled => {
+                return;
+            }
         }
         self.refresh_check();
     }
 
     fn refresh_check(&mut self) {
-        self.check = self.build(PlaneId::new()).map(|import| import.check);
+        match self.pieces() {
+            Ok(pieces) => {
+                self.report = check_profiles(&pieces);
+                self.check = Ok(build_import(&pieces, PlaneId::new(), self.join).check);
+                self.pieces = pieces;
+            }
+            Err(problem) => {
+                self.report = ProfileReport::default();
+                self.pieces.clear();
+                self.check = Err(problem);
+            }
+        }
     }
 
-    /// The sketch geometry of the current choices, on `plane`.
+    /// The sketch geometry of the current choices, on `plane`, healed and
+    /// merged.
+    #[cfg(test)]
     pub fn build(&self, plane: PlaneId) -> Result<SketchImport, SketchDxfProblem> {
+        self.build_as(plane, DxfImportMode::HealAndMerge)
+    }
+
+    /// The sketch geometry of the current choices, on `plane`, in `mode`.
+    pub fn build_as(
+        &self,
+        plane: PlaneId,
+        mode: DxfImportMode,
+    ) -> Result<SketchImport, SketchDxfProblem> {
+        let pieces = self.pieces()?;
+        Ok(match mode {
+            DxfImportMode::HealAndMerge => build_import(&pieces, plane, self.join),
+            DxfImportMode::AsIs => build_import_as_is(&pieces, plane, self.join),
+        })
+    }
+
+    /// What `import`, built in `mode`, makes.
+    pub fn result_of(mode: DxfImportMode, import: &SketchImport) -> SketchDxfResult {
+        let count = |role| {
+            let tag = role_tag(role);
+            import.profiles.iter().filter(|t| **t == tag).count()
+        };
+        let outlines = count(SketchRole::BoardOutline);
+        let holes = count(SketchRole::MountingHole);
+        SketchDxfResult {
+            mode,
+            outlines,
+            holes,
+            others: import.profiles.len() - outlines - holes,
+            check: import.check,
+        }
+    }
+
+    /// The import landed: the card shows `result`, and the preview what
+    /// landed.
+    pub fn land(&mut self, result: SketchDxfResult) {
+        if result.mode == DxfImportMode::HealAndMerge {
+            self.pieces = merge_overlaps(&self.pieces).0;
+        }
+        self.step = SketchDxfStep::Imported(result);
+    }
+
+    /// The pieces of the current choices as drawn.
+    fn pieces(&self) -> Result<Vec<ImportPiece>, SketchDxfProblem> {
         let scale = self
             .scale
             .trim()
@@ -142,7 +266,7 @@ impl SketchDxfDialog {
         if pieces.is_empty() {
             return Err(SketchDxfProblem::NothingPicked);
         }
-        Ok(build_import(&pieces, plane, self.join))
+        Ok(pieces)
     }
 
     /// What `edge` becomes; `None` on a skipped layer. A board has one
@@ -356,5 +480,42 @@ mod tests {
             })
             .fold(f64::MIN, f64::max);
         assert!((far - 508.0).abs() < 1e-9, "10 in x 2 = 508 mm: {far}");
+    }
+
+    #[test]
+    fn next_moves_to_the_check_only_when_the_choices_import() {
+        let mut d = dialog(false);
+        d.apply(SketchDxfMsg::ScaleEdited("0".into()));
+        d.apply(SketchDxfMsg::CheckRequested);
+        assert_eq!(d.step, SketchDxfStep::Mapping);
+        d.apply(SketchDxfMsg::ScaleEdited("1".into()));
+        d.apply(SketchDxfMsg::CheckRequested);
+        assert_eq!(d.step, SketchDxfStep::Checking);
+        d.apply(SketchDxfMsg::ScaleEdited("3".into()));
+        assert_eq!(d.scale, "1", "the check holds the mapping still");
+    }
+
+    #[test]
+    fn the_check_reports_the_profiles_as_drawn() {
+        let d = dialog(false);
+        assert_eq!(d.report.profiles.len(), 2, "the square and the hole");
+        assert_eq!(d.report.problems(), 0);
+        assert_eq!(d.report.circles, 1);
+        assert_eq!(d.pieces.len(), 5);
+    }
+
+    #[test]
+    fn landing_counts_the_outline_and_the_holes() {
+        let mut d = dialog(false);
+        let import = d.build(PlaneId::new()).expect("it builds");
+        d.land(SketchDxfDialog::result_of(
+            DxfImportMode::HealAndMerge,
+            &import,
+        ));
+        let SketchDxfStep::Imported(result) = d.step else {
+            panic!("{:?}", d.step);
+        };
+        assert_eq!((result.outlines, result.holes, result.others), (1, 1, 0));
+        assert_eq!(result.check.constraints, 4);
     }
 }

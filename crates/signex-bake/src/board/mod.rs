@@ -16,6 +16,7 @@ mod fillets;
 mod geometry;
 mod inside_corners;
 mod items;
+mod min_slot;
 mod patterned;
 mod preview;
 mod slot;
@@ -26,8 +27,9 @@ mod pattern_tests;
 mod tests;
 
 pub use checks::{
-    CheckState, Finding, NotChecked, OutlineCheck, OutlineChecks, outline_checks,
-    outline_checks_after, outline_checks_with, outline_checks_with_router,
+    CheckState, FabLimits, Finding, NotChecked, OutlineCheck, OutlineChecks, outline_checks,
+    outline_checks_after, outline_checks_with, outline_checks_with_fab, outline_checks_with_limits,
+    outline_checks_with_router,
 };
 pub use error::BoardBakeError;
 pub use fillets::{FilletReport, add_fillets, fillet_targets};
@@ -174,6 +176,16 @@ impl Context<'_> {
             .iter()
             .filter(move |e| !e.bake_skipped() && tagged(e))
     }
+}
+
+/// The closed outline `sketch` bakes at `solve`, for Properties to read the
+/// board's size from the sketch (mockup row 179e). `None` when the sketch
+/// draws no single closed outline, or does not bake.
+pub fn sketch_outline(sketch: &SketchData, solve: &FullSolveOutput) -> Option<Vec<Point>> {
+    at_solve(sketch, solve, &solve.params, outline)
+        .ok()
+        .flatten()
+        .filter(|outline| outline.len() >= 3)
 }
 
 /// The outline: exactly one closed profile of the edges tagged

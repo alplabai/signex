@@ -7,6 +7,8 @@
 use iced::widget::{Column, container};
 use iced::{Element, Length, Widget as _};
 use signex_i18n::{I18n, ids, t};
+use signex_types::coord::Unit;
+use signex_types::measure::length_field_text;
 use signex_widgets::text;
 
 use super::super::{
@@ -41,9 +43,10 @@ pub(super) fn view_board_summary<'a>(
     board: &'a BoardSketchProps,
     palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
+    unit: Unit,
     i18n: &I18n,
 ) -> Column<Element<'a, PanelMsg>> {
-    let col = view_board_facts(col, fp, board, palette, collapsed_sections, i18n);
+    let col = view_board_facts(col, fp, board, palette, collapsed_sections, unit, i18n);
     outline_checks::view_outline_checks(col, board, palette, collapsed_sections, i18n)
 }
 
@@ -53,6 +56,7 @@ fn view_board_facts<'a>(
     board: &'a BoardSketchProps,
     palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
+    unit: Unit,
     i18n: &I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     col = col.push(
@@ -68,16 +72,9 @@ fn view_board_facts<'a>(
     if is_section_collapsed("fp_board", collapsed_sections) {
         return col;
     }
-    let size = match board.board_size_mm {
-        Some((w, h)) => t!(
-            i18n, ids::PCB_PROPERTIES_SIZE_VALUE,
-            "width" => format!("{w:.2}"), "height" => format!("{h:.2}")
-        ),
-        None => t!(i18n, ids::PCB_PROPERTIES_NO_OUTLINE),
-    };
     let mut rows = vec![
         (ids::BOARD_SKETCH_NAME, board.board_name.clone()),
-        (ids::PCB_PROPERTIES_SIZE, size.into_string()),
+        (ids::PCB_PROPERTIES_SIZE, size_value(board, unit, i18n)),
     ];
     if let Some(area) = board.board_area_mm2 {
         let area = t!(i18n, ids::BOARD_SKETCH_AREA_VALUE, "area" => format!("{area:.2}"));
@@ -100,6 +97,35 @@ fn view_board_facts<'a>(
         ));
     }
     col
+}
+
+/// The Size row's value, worded as Board Properties words it: "W × H" for a
+/// rectangle, "Bounding box W × H" for any other outline, in the shown unit,
+/// with "· from board shape" while the sketch's closed outline sets it
+/// (mockup row 179e), or that there is no outline.
+fn size_value(board: &BoardSketchProps, unit: Unit, i18n: &I18n) -> String {
+    let Some((w, h)) = board.board_size_mm else {
+        return t!(i18n, ids::PCB_PROPERTIES_NO_OUTLINE).into_string();
+    };
+    let unit = crate::panels::pcb_board_properties::shown_unit(unit);
+    let id = if board.outline_is_rectangle {
+        ids::BOARD_SKETCH_SIZE_VALUE
+    } else {
+        ids::PCB_BOARD_SIZE_BOUNDING
+    };
+    let size = t!(
+        i18n,
+        id,
+        "width" => length_field_text(w, unit),
+        "height" => length_field_text(h, unit),
+        "unit" => unit.to_string()
+    )
+    .into_string();
+    if !board.size_from_shape {
+        return size;
+    }
+    let source = t!(i18n, ids::PCB_BOARD_SIZE_SOURCE).into_string();
+    format!("{size} {source}")
 }
 
 pub(super) fn view_board_section<'a>(
@@ -177,4 +203,66 @@ pub(super) fn view_board_section<'a>(
         .width(Length::Fill)
         .boxed(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use signex_i18n::I18n;
+    use signex_types::coord::Unit;
+
+    use super::size_value;
+    use crate::panels::BoardSketchProps;
+
+    fn size_in(board: &BoardSketchProps, unit: Unit) -> String {
+        size_value(board, unit, &I18n::en_us()).replace(['\u{2068}', '\u{2069}'], "")
+    }
+
+    fn size(board: &BoardSketchProps) -> String {
+        size_in(board, Unit::Mm)
+    }
+
+    /// Mockup row 179e: the sketch's closed outline sets the size, read-only
+    /// "from board shape", even before Bake gives the board an outline.
+    #[test]
+    fn the_size_reads_from_the_board_shape_while_the_sketch_owns_the_outline() {
+        let shape = BoardSketchProps {
+            board_size_mm: Some((60.0, 40.0)),
+            size_from_shape: true,
+            outline_is_rectangle: true,
+            ..BoardSketchProps::default()
+        };
+        assert_eq!(size(&shape), "60.000 × 40.000 mm · from board shape");
+        let board = BoardSketchProps {
+            size_from_shape: false,
+            ..shape.clone()
+        };
+        assert_eq!(size(&board), "60.000 × 40.000 mm");
+        assert_eq!(size(&BoardSketchProps::default()), "No outline");
+    }
+
+    /// The Size row words a shape as Board Properties does: an outline that
+    /// is no rectangle reads as its bounding box, in the shown unit, with the
+    /// same "· from board shape" source text.
+    #[test]
+    fn the_size_follows_the_board_properties_wording_and_unit() {
+        let shape = BoardSketchProps {
+            board_size_mm: Some((60.0, 40.0)),
+            size_from_shape: true,
+            outline_is_rectangle: false,
+            ..BoardSketchProps::default()
+        };
+        assert_eq!(
+            size(&shape),
+            "Bounding box 60.000 × 40.000 mm · from board shape"
+        );
+        let rectangle = BoardSketchProps {
+            board_size_mm: Some((25.4, 12.7)),
+            outline_is_rectangle: true,
+            ..shape
+        };
+        assert_eq!(
+            size_in(&rectangle, Unit::Mil),
+            "1000.00 × 500.00 mil · from board shape"
+        );
+    }
 }

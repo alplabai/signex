@@ -13,7 +13,7 @@ use signex_widgets::active_bar_dropdown::DropdownEntry;
 
 use super::dropdown_button;
 use crate::active_bar::{
-    CustomFilterPreset, FilterChip, FilterMenu, filter_menu_entry, preset_label,
+    CustomFilterPreset, FilterChip, FilterMenu, editing_line, filter_menu_entry, preset_chips,
 };
 use crate::app::{Message, PcbBarMenu};
 use crate::dock::DockMessage;
@@ -43,11 +43,14 @@ fn panel(msg: PcbBoardMsg) -> Message {
 /// The board's Selection Filter menu: the schematic's dropdown
 /// (`active_bar::filter_menu_entry`) with the board's kinds and presets.
 /// A kind the board editor cannot pick is an inert chip with why on hover.
+/// The preset chips light the one selected for editing, with "Editing
+/// <name>" under them (#2873).
 pub(crate) fn entries(
     i18n: &I18n,
     tokens: &ThemeTokens,
     filter: &PickFilter,
     presets: &[CustomFilterPreset<PickKind>],
+    editing: Option<usize>,
 ) -> Vec<DropdownEntry<Message>> {
     let why = t!(i18n, ids::PCB_BOARD_FILTER_UNAVAILABLE);
     let chips = PickKind::ALL
@@ -62,17 +65,12 @@ pub(crate) fn entries(
             }
         })
         .collect();
-    let presets = presets
-        .iter()
-        .enumerate()
-        .map(|(idx, preset)| {
-            let applied = panel(PcbBoardMsg::FilterPresetApplied(idx));
-            (preset_label(idx, preset), applied)
-        })
-        .collect();
     let menu = FilterMenu {
         chips,
-        presets,
+        presets: preset_chips(presets, editing, |idx| {
+            panel(PcbBoardMsg::FilterPresetApplied(idx))
+        }),
+        editing: editing_line(i18n, presets, editing),
         on: filter.on_kinds().count(),
         all: panel(PcbBoardMsg::FilterAllSet(true)),
         none: panel(PcbBoardMsg::FilterAllSet(false)),

@@ -16,7 +16,7 @@ use super::*;
 use crate::app::{FootprintDocument, Message, Signex, SymbolDocument, TabInfo, TabKind};
 use crate::layout_probe::{lay_out_texts, messages_on_click};
 use crate::library::messages::{LibraryMessage, PickerMsg};
-use crate::library::state::OpenLibrary;
+use crate::library::state::{LibraryRowStyle, OpenLibrary};
 use crate::panels::PanelMsg;
 
 const WINDOW: iced::Size = iced::Size::new(300.0, 640.0);
@@ -403,5 +403,177 @@ fn a_file_is_named_by_the_open_library_that_holds_it() {
     assert_eq!(
         frame::library_name_of(Path::new("/libs/passives/symbols/opamps.snxsym"), &state),
         Some("passives".into())
+    );
+}
+
+fn style_picked(style: LibraryRowStyle) -> Message {
+    Message::Library(LibraryMessage::Picker(PickerMsg::PanelRowStylePicked(
+        style,
+    )))
+}
+
+/// Where a press lands on the switch: the centre of its Compact or its
+/// Thumbnail button, on the toolbar line of `Edit`. The switch sits just
+/// before Delete, which ends the toolbar.
+fn switch_point(app: &Signex, style: LibraryRowStyle) -> iced::Point {
+    let cm = crate::styles::ChromeMetrics::DEFAULT;
+    let edit = lay_out_texts(view(&app.library, &app.document_state.panel_ctx), WINDOW)
+        .into_iter()
+        .find(|t| t.text == "Edit")
+        .expect("Edit tool");
+    let side = super::row_style::SWITCH_BUTTON;
+    let thumbs = WINDOW.width - frame::SP.m - cm.row - frame::SP.s - side / 2.0;
+    let x = match style {
+        LibraryRowStyle::Compact => thumbs - side,
+        LibraryRowStyle::Thumbnail => thumbs,
+    };
+    iced::Point::new(x, edit.bounds.center_y())
+}
+
+/// Mockup row 119: the toolbar has the two-button row-style switch before
+/// Delete, and each button picks its style.
+#[test]
+fn the_row_style_switch_before_delete_picks_each_style() {
+    let app = app_with_one_footprint();
+    for style in [LibraryRowStyle::Compact, LibraryRowStyle::Thumbnail] {
+        let sent = crate::layout_probe::messages_on_click_at(
+            view(&app.library, &app.document_state.panel_ctx),
+            WINDOW,
+            None,
+            switch_point(&app, style),
+        );
+        assert!(
+            sent.iter().any(|m| matches!(
+                m,
+                DockMessage::Library(LibraryMessage::Picker(PickerMsg::PanelRowStylePicked(s)))
+                    if *s == style
+            )),
+            "{style:?}: {sent:?}"
+        );
+    }
+}
+
+/// The laid-out bounds of the last text `label` in the panel: the list row,
+/// which comes after a breadcrumb naming the same footprint.
+fn bounds_of(app: &Signex, label: &str) -> iced::Rectangle {
+    lay_out_texts(view(&app.library, &app.document_state.panel_ctx), WINDOW)
+        .into_iter()
+        .rev()
+        .find(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == label)
+        .unwrap_or_else(|| panic!("{label} not laid out"))
+        .bounds
+}
+
+/// Mockup rows 118 and 119 (decided 2026-11-23): compact rows are the
+/// default; the thumbnail style puts a tile before the name and the caption
+/// under it, and the one choice holds for the symbols kind too.
+#[test]
+fn the_thumbnail_style_is_one_choice_for_every_kind() {
+    let mut app = app_with_one_footprint();
+    assert_eq!(
+        app.library.library_panel.row_style,
+        LibraryRowStyle::Compact
+    );
+    let name = bounds_of(&app, "SOIC-8");
+    let pads = bounds_of(&app, "8 pads");
+    assert!(
+        (name.center_y() - pads.center_y()).abs() < 1.0,
+        "compact: one line"
+    );
+    assert!(pads.x > name.x, "compact: the caption at the right end");
+
+    let _task = app.update(style_picked(LibraryRowStyle::Thumbnail));
+    assert_eq!(
+        app.library.library_panel.row_style,
+        LibraryRowStyle::Thumbnail
+    );
+    let thumb_name = bounds_of(&app, "SOIC-8");
+    let thumb_pads = bounds_of(&app, "8 pads");
+    assert!(thumb_name.x > name.x, "the tile comes before the name");
+    assert!(
+        thumb_pads.y >= thumb_name.y + thumb_name.height - 1.0,
+        "the caption sits under the name: {thumb_name:?} {thumb_pads:?}"
+    );
+    assert!((thumb_pads.x - thumb_name.x).abs() < 1.0);
+
+    // The symbols kind shows the same style.
+    let mut compact = app_with_one_symbol();
+    let compact_x = bounds_of(&compact, "+3V3").x;
+    open_symbol(&mut app, "power.snxsym", "+3V3");
+    assert_eq!(app.library_panel_kind(), LibraryPanelKind::Symbols);
+    assert!(bounds_of(&app, "+3V3").x > compact_x);
+
+    let _task = compact.update(style_picked(LibraryRowStyle::Thumbnail));
+    let _task = compact.update(style_picked(LibraryRowStyle::Compact));
+    assert!((bounds_of(&compact, "+3V3").x - compact_x).abs() < 1.0);
+}
+
+/// Mockup row 119: a thumbnail row shows the item's own drawing, not one
+/// picture per kind. While thumbnail rows are on, each footprint row carries
+/// that footprint's pads and each symbol row that symbol's body; compact
+/// rows build neither.
+#[test]
+fn thumbnail_rows_carry_each_items_own_drawing() {
+    let mut app = app_with_one_footprint();
+    let tile_of = |app: &Signex| {
+        app.document_state
+            .panel_ctx
+            .footprint_editor
+            .as_ref()
+            .expect("footprint context")
+            .internal_footprints[0]
+            .tile
+            .clone()
+    };
+    assert!(tile_of(&app).is_none(), "compact rows build no tile");
+    let _task = app.update(style_picked(LibraryRowStyle::Thumbnail));
+    let tile = tile_of(&app).expect("thumbnail rows draw the pads");
+    assert_eq!(tile.pads().len(), 8, "SOIC-8's own eight pads");
+    assert_eq!(tile.pads()[0].center, (1.0, 0.0));
+
+    let mut sym = app_with_one_symbol();
+    let drawing_of = |app: &Signex| {
+        app.document_state
+            .panel_ctx
+            .symbol_editor
+            .as_ref()
+            .expect("symbol context")
+            .symbols_in_file[0]
+            .drawing
+            .clone()
+    };
+    assert!(drawing_of(&sym).is_none());
+    let _task = sym.update(style_picked(LibraryRowStyle::Thumbnail));
+    assert!(drawing_of(&sym).is_some(), "the symbol's own body");
+    let _task = sym.update(style_picked(LibraryRowStyle::Compact));
+    assert!(drawing_of(&sym).is_none());
+}
+
+/// Mockup row 119: a part's thumbnail is its symbol, read off-thread into
+/// the shared cache. The panel asks for the rows of its open libraries only
+/// while thumbnail rows are on.
+#[test]
+fn thumbnail_parts_rows_ask_for_their_symbols() {
+    let (mut app, _boot) = Signex::new();
+    app.library.open_libraries.push(passives());
+    app.library.touch_data();
+    app.library.sync_view_caches();
+    app.library.panel_expanded.insert(PathBuf::from(LIB_ROOT));
+    assert!(wanted_thumbnails(&app.library).is_empty(), "compact rows");
+
+    app.library.library_panel.row_style = LibraryRowStyle::Thumbnail;
+    let wanted = wanted_thumbnails(&app.library);
+    let lib = &app.library.open_libraries[0];
+    for table in ["res", "cap"] {
+        assert!(
+            wanted.contains(&lib.tables[table][0].symbol_ref),
+            "{table}: {wanted:?}"
+        );
+    }
+
+    app.library.panel_expanded.clear();
+    assert!(
+        wanted_thumbnails(&app.library).is_empty(),
+        "a closed library lists no rows"
     );
 }

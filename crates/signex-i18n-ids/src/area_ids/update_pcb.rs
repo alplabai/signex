@@ -73,4 +73,6 @@ define_ids! {
     PCB_REANNOTATE_ARROW = "pcb-reannotate-arrow";
     PCB_REANNOTATE_FOOTER_NOTE = "pcb-reannotate-footer-note";
     PCB_REANNOTATE_EXECUTE_COUNT = "pcb-reannotate-execute-count";
+    // chrome-copy-help
+    PCB_REANNOTATE_BACK_ANNOTATE = "pcb-reannotate-back-annotate";
 }

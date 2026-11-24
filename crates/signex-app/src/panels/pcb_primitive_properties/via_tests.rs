@@ -164,6 +164,84 @@ fn the_type_name_is_a_sunken_value() {
     }
 }
 
+/// Mockup row 96 (#2808): Name, Span and Drill Pair are the type's, read
+/// only: each value sits in a sunken box, takes no typing, and is tagged
+/// "from type" on its row.
+#[test]
+fn name_span_and_drill_pair_are_sunken_read_only_and_from_type() {
+    use super::super::LayerChoice;
+    let ctx = context();
+    let mut f = via(ViaType::Through, false);
+    f.span = Some("Thru 1:2".to_string());
+    f.span_ends = (
+        Some(LayerChoice {
+            layer: CopperLayer::Top,
+            label: "Top Layer".to_string(),
+        }),
+        Some(LayerChoice {
+            layer: CopperLayer::Bottom,
+            label: "Bottom Layer".to_string(),
+        }),
+    );
+    f.drill_pair = Some("Top Layer - Bottom Layer".to_string());
+    let span = plain(
+        &t!(ctx.i18n, ids::PCB_PRIM_SPAN_ENDS, "from" => "Top Layer".to_string(), "to" => "Bottom Layer".to_string())
+            .into_string(),
+    );
+    let section = || definition(Look::of(&ctx), &f).expect("the definition");
+    let texts: Vec<LaidOutText> = lay_out_texts(section(), WINDOW)
+        .into_iter()
+        .map(|t| LaidOutText {
+            text: plain(&t.text),
+            ..t
+        })
+        .collect();
+    let inputs = crate::layout_probe::lay_out_inputs(section(), WINDOW);
+    let pixels = crate::layout_probe::draw_pixels(section(), WINDOW);
+    let sunken = crate::panels::form_look::FormLook::of(&iced::Theme::Dark).sunken;
+    let from_type = said(&ctx, ids::PCB_PRIM_FROM_TYPE);
+    let on_row = |at: &iced::Rectangle, label: &iced::Rectangle| {
+        (at.center_y() - label.center_y()).abs() < label.height
+    };
+    for (id, value) in [
+        (ids::PCB_PRIM_VIA_NAME, "Thru 1:2"),
+        (ids::PCB_PRIM_SPAN, span.as_str()),
+        (ids::PCB_PRIM_DRILL_PAIR, "Top Layer - Bottom Layer"),
+    ] {
+        let name = said(&ctx, id);
+        let label = crate::layout_probe::find(&texts, &name).bounds;
+        let shown = crate::layout_probe::find(&texts, value).bounds;
+        assert!(on_row(&shown, &label), "{name}: {shown:?} vs {label:?}");
+        let tags = texts
+            .iter()
+            .filter(|t| t.text == from_type && on_row(&t.bounds, &label))
+            .count();
+        assert_eq!(tags, 1, "{name} is tagged {from_type}");
+        assert!(
+            !inputs.iter().any(|i| on_row(&i.bounds, &label)),
+            "{name} takes no typing: {inputs:?}"
+        );
+        let at =
+            ((shown.center_y() as usize) * WINDOW.width as usize + (shown.x - 2.0) as usize) * 4;
+        for (got, want) in pixels[at..at + 3]
+            .iter()
+            .zip([sunken.r, sunken.g, sunken.b])
+        {
+            let want = (want * 255.0).round() as i32;
+            assert!(
+                (i32::from(*got) - want).abs() <= 3,
+                "{name}: {got} is not {want}"
+            );
+        }
+    }
+    let tags = texts.iter().filter(|t| t.text == from_type).count();
+    assert_eq!(tags, 3, "only the type's rows are tagged");
+}
+
+fn plain(text: &str) -> String {
+    text.replace(['\u{2068}', '\u{2069}'], "")
+}
+
 /// Caner, 2026-11-21: no Override switch; the row's note follows the value.
 #[test]
 fn the_via_stack_has_no_override_switch_and_a_changed_size_loses_from_type() {

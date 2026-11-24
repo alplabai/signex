@@ -125,10 +125,11 @@ impl Signex {
         )
     }
 
-    /// An Active Bar flyout `card` at the absolute `at`, as one overlay layer
-    /// over [`Self::flyout_dismiss_layer`]. A right press on the card sends
-    /// `on_card_right_press` and leaves the flyout open. The layer dims the
-    /// window in the shared menu scrim, as every menu does.
+    /// An Active Bar flyout `card` at the absolute `at`, pulled in only as far
+    /// as needed to stay inside the window (mockup row 61), as one overlay
+    /// layer over [`Self::flyout_dismiss_layer`]. A right press on the card
+    /// sends `on_card_right_press` and leaves the flyout open. The layer dims
+    /// the window in the shared menu scrim, as every menu does.
     pub(in crate::app::view) fn flyout_and_place<'a>(
         on_dismiss: Message,
         on_right_press: Message,
@@ -149,7 +150,7 @@ impl Signex {
                     on_right_press,
                     scrim,
                 ))
-                .push(signex_widgets::Translate::new(card, at).boxed())
+                .push(crate::app::view::AnchoredMenu::new(card, at).boxed())
                 .boxed(),
         ]
     }

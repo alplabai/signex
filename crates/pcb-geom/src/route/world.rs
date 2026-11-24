@@ -1,5 +1,6 @@
 //! The copper and keepouts a new route is checked against (#2389): the
-//! board's netted copper in an R-tree, and the keepouts that forbid tracks
+//! board's copper in an R-tree (drawings and strings on copper as copper of
+//! no net, #2883), and the keepouts that forbid tracks
 //! or vias. A keepout forbids what the design rule check says it forbids
 //! (`signex_drc`, keepout check): tracks for `no_routing` or `no_copper`,
 //! vias for `no_vias`, `no_copper` or `no_drilling`, the last on every
@@ -13,6 +14,7 @@ use signex_types::pcb_sketch::PcbKeepout;
 use uuid::Uuid;
 
 use crate::copper::{CopperItem, collect_copper, layer_bit};
+use crate::drawn_copper::drawn_copper;
 use crate::index::{ItemRef, envelope_of};
 use crate::rect::RectNm;
 use crate::shape::Shape;
@@ -155,13 +157,15 @@ impl<'a> RouteWorld<'a> {
         Self::with_reach(board, rule, 0)
     }
 
-    /// The netted copper of `board` (`collect_copper`) and its keepouts,
+    /// The netted copper of `board` (`collect_copper`), its drawings and
+    /// strings on copper (`drawn_copper`, no net, #2883) and its keepouts,
     /// the board sketch's and those drawn as zones. The broad phase looks
     /// `reach` nm round new copper, or further when an item asks more of an
     /// item like itself; `reach` is the widest clearance the rules can ask
     /// of any pair, as the design rule check reads it.
     pub fn with_reach(board: &PcbBoard, rule: &'a ClearanceRule<'a>, reach: i64) -> Self {
-        let items = collect_copper(board);
+        let mut items = collect_copper(board);
+        items.extend(drawn_copper(board));
         let slots = items
             .iter()
             .enumerate()

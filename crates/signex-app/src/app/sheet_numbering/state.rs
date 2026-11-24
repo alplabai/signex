@@ -228,11 +228,26 @@ impl SheetNumberingState {
         number == row.position && (!row.manual || self.clear_manual || number != row.number)
     }
 
-    /// The clashes, gaps and numbers above the count that hold Apply back.
+    /// The clashes and numbers above the count that hold Apply back. A gap
+    /// only warns (mockup row 78, Caner 2026-11-24): see `warnings`.
     pub(crate) fn blocking_issues(&self) -> Vec<NumberingIssue> {
         self.issues()
             .into_iter()
-            .filter(|issue| !matches!(issue, NumberingIssue::InvalidOverride { .. }))
+            .filter(|issue| {
+                !matches!(
+                    issue,
+                    NumberingIssue::InvalidOverride { .. } | NumberingIssue::Gap { .. }
+                )
+            })
+            .collect()
+    }
+
+    /// The gaps among the numbers as typed: shown as a warning, never
+    /// holding Apply back.
+    pub(crate) fn warnings(&self) -> Vec<NumberingIssue> {
+        self.issues()
+            .into_iter()
+            .filter(|issue| matches!(issue, NumberingIssue::Gap { .. }))
             .collect()
     }
 
@@ -273,8 +288,8 @@ impl SheetNumberingState {
     }
 
     /// Apply is offered: the read is in, no Apply is waiting on the disk,
-    /// every number is valid, no clash, gap or number above the page count
-    /// stands, and one number changes.
+    /// every number is valid, no clash or number above the page count
+    /// stands, and one number changes. A gap does not hold it back.
     pub fn can_apply(&self) -> bool {
         self.read.is_some()
             && !self.checking

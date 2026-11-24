@@ -84,6 +84,8 @@ struct OpenOverlays {
     library_updates_open: bool,
     library_primitive_picker_open: bool,
     close_library_confirm_open: bool,
+    /// "Delete Symbol?" (mockup row 137): the active symbol editor's warning.
+    symbol_delete_open: bool,
     /// `None` while no library-recovery dialog is open. `RecoveryDialog`
     /// (`crate::library::recovery`) itself carries a `PathBuf` (and, for
     /// the broken-binding case, a `String`/`Uuid`), so it can't be
@@ -212,6 +214,7 @@ impl OpenOverlays {
             || self.remove_open
             || self.annotate_reset_confirm_open
             || self.close_library_confirm_open
+            || self.symbol_delete_open
             || self.delete_confirm.is_some()
             || self.recovery_kind.is_some()
             || self.autosave_recovery_open
@@ -311,7 +314,8 @@ impl OpenOverlays {
             | OverlayId::PanelList
             | OverlayId::DockDragZone
             | OverlayId::ComponentsRowDragLabel
-            | OverlayId::FloatingPanels => None,
+            | OverlayId::FloatingPanels
+            | OverlayId::DockDropTargetLabel => None,
 
             // ── Dialogs ─────────────────────────────────────────────
             OverlayId::Preferences => self
@@ -523,6 +527,11 @@ impl OpenOverlays {
                         crate::library::recovery::BrokenBindingChoice::Cancel,
                     ),
                 ),
+            }),
+            OverlayId::SymbolDeleteConfirm => self.symbol_delete_open.then(|| {
+                Message::Dock(crate::dock::DockMessage::Panel(
+                    crate::panels::PanelMsg::SchLibraryDeleteCancelled,
+                ))
             }),
 
             // ── Painted last ────────────────────────────────────────
@@ -802,6 +811,13 @@ impl Signex {
             library_primitive_picker_open: self.library.primitive_picker.is_some()
                 && !modal_detached(crate::app::state::ModalId::LibraryPrimitivePicker),
             close_library_confirm_open: self.library.close_library_confirm.is_some(),
+            // The same read `symbol_delete_confirm_overlay` paints from.
+            symbol_delete_open: self
+                .document_state
+                .panel_ctx
+                .symbol_editor
+                .as_ref()
+                .is_some_and(|ctx| ctx.delete_warning.is_some()),
             recovery_kind: self
                 .library
                 .recovery
@@ -1122,6 +1138,7 @@ impl Signex {
             window_subscriptions::window_focus(),
             window_subscriptions::native_menu_failures(),
             window_subscriptions::quit_requests(),
+            window_subscriptions::file_drops(),
             window_subscriptions::net_color_chooser_presses(
                 self.ui_state.net_color_palette.chooser.is_some(),
             ),
@@ -1146,6 +1163,7 @@ impl Signex {
             net_hover_tick,
             library_poll,
             autosave_tick,
+            self.edge_pan_subscription(),
             // Frames only while the 3D view's flip turns or a screenshot waits.
             self.board_3d_subscription(),
             // None unless started with SIGNEX_BENCH_PAN_ZOOM (#2472).
@@ -1466,6 +1484,12 @@ mod tests {
                     crate::library::messages::CloseLibraryChoice::Cancel
                 )
             ))
+        ));
+        assert!(matches!(
+            only(|o| o.symbol_delete_open = true),
+            Some(Message::Dock(crate::dock::DockMessage::Panel(
+                crate::panels::PanelMsg::SchLibraryDeleteCancelled
+            )))
         ));
         assert!(matches!(
             only(|o| o.library_picker_open = true),
@@ -1987,6 +2011,7 @@ mod tests {
             library_updates_open,
             library_primitive_picker_open,
             close_library_confirm_open,
+            symbol_delete_open,
             recovery_kind,
             error_notice_open,
             error_notice_detached,
@@ -2093,6 +2118,7 @@ mod tests {
             ("close_library_confirm_open", |o| {
                 o.close_library_confirm_open = true
             }),
+            ("symbol_delete_open", |o| o.symbol_delete_open = true),
             ("library_picker_open", |o| o.library_picker_open = true),
             ("recovery_kind", |o| {
                 o.recovery_kind = Some(RecoveryKind::LibraryMissing)

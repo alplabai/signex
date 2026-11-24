@@ -5,6 +5,7 @@
 use pcb_geom::BoardTextField;
 use signex_types::designator::{DesignatorStandard, display_reference};
 use signex_types::pcb::Footprint;
+use signex_types::pcb_dimension_style::BoardFont;
 use signex_types::pcb_layer::PcbLayer;
 use signex_types::schematic::HAlign;
 
@@ -32,6 +33,36 @@ pub struct FootprintTextInput {
     /// A footprint's designator, which the project's designator standard
     /// may show differently from the stored text (#1416).
     pub designator: bool,
+    /// The face, weight, slant and width of its glyphs.
+    pub face: TextFace,
+}
+
+/// How a text's glyphs are drawn (#2868): a dimension's value picks these,
+/// every other board text is drawn plain.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextFace {
+    pub font: BoardFont,
+    pub bold: bool,
+    pub italic: bool,
+    /// The glyphs' width over the face's own at the text's height: 1 draws
+    /// them as designed.
+    pub stretch: f32,
+}
+
+impl TextFace {
+    /// The monospace face, upright, regular, as designed.
+    pub const PLAIN: Self = Self {
+        font: BoardFont::Mono,
+        bold: false,
+        italic: false,
+        stretch: 1.0,
+    };
+}
+
+impl Default for TextFace {
+    fn default() -> Self {
+        Self::PLAIN
+    }
 }
 
 /// The designator and comment texts of `footprint` that `view` shows: not
@@ -54,6 +85,7 @@ pub(super) fn footprint_texts(
                 layer: text.layer,
                 justify: text.justify,
                 designator: text.field == BoardTextField::Designator,
+                face: TextFace::PLAIN,
             }
         })
         .collect()

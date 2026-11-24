@@ -26,6 +26,7 @@ mod bake_panel;
 mod board;
 mod body;
 mod conflicts;
+mod dof_card;
 mod illustration;
 mod managers;
 mod pad;

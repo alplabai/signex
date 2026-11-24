@@ -175,3 +175,32 @@ fn same_value_power_flags_on_different_rails_do_not_short_them() {
 
     assert_eq!(netlist.nets.len(), 2, "{netlist:?}");
 }
+
+#[test]
+fn name_carrying_tips_leave_out_a_contact_only_pin_of_a_named_port() {
+    // A two-pin GND port: pin 1 is wired, pin 2 touches a VCC port's tip with
+    // nothing else there, so only pin 1 names GND. The port still counts as a
+    // name carrier by symbol; by tip, pin 2 is left out.
+    let mut sheet = empty_sheet();
+    add_one_pin(&mut sheet, "P", PinDirection::PowerInput);
+    add_lib(
+        &mut sheet,
+        "P2",
+        vec![
+            lib_pin("1", pt(0.0, 0.0), PinDirection::PowerInput),
+            lib_pin("2", pt(5.0, 0.0), PinDirection::PowerInput),
+        ],
+    );
+    sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    place_power(&mut sheet, "#PWR1", "P2", "GND", pt(10.0, 0.0));
+    place_power(&mut sheet, "#PWR2", "P", "VCC", pt(15.0, 0.0));
+
+    let tips: Vec<(Key, &str)> = name_carrying_tips(&sheet)
+        .into_iter()
+        .map(|(tip, value)| (pt_key(&tip), value))
+        .collect();
+
+    assert_eq!(tips, vec![(pt_key(&pt(10.0, 0.0)), "GND")]);
+    let gnd_port = sheet.symbols[0].uuid;
+    assert_eq!(name_carrying_ports(&sheet), vec![(gnd_port, "GND")]);
+}

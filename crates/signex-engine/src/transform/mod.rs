@@ -601,8 +601,19 @@ impl Engine {
                 .wire_mut(item.uuid)
                 .map(|w| w.translate(dx, dy))
                 .is_some(),
-            // An entry sits in a slot of its connector; it moves with it.
-            SelectedKind::HarnessEntry => false,
+            // An entry slides along its connector's flat side to the nearest
+            // slot (docs/DECISIONS.md, 2026-11-24).
+            SelectedKind::HarnessEntry => self
+                .document
+                .harness
+                .entry_owner_mut(item.uuid)
+                .is_some_and(|(connector, index)| {
+                    let at = connector.entry_point(index);
+                    connector.slide_entry(
+                        index,
+                        signex_types::schematic::Point::new(at.x + dx, at.y + dy),
+                    )
+                }),
             SelectedKind::Directive => self
                 .document
                 .directives

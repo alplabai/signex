@@ -63,6 +63,20 @@ impl ClassesViewState {
         self.new_row = self.new_row.map(|row| rules::follow_move(row, from, to));
     }
 
+    /// The key row `index` takes when its label becomes `label`: the row Add
+    /// Class appended keeps a key generated from its label (lower snake
+    /// case) until the key is typed by hand (mockup row 150). `None` keeps
+    /// the key as it is.
+    pub fn generated_key(
+        &self,
+        index: usize,
+        entry: &crate::fonts::ComponentClassEntry,
+        label: &str,
+    ) -> Option<String> {
+        (self.new_row == Some(index) && rules::key_follows_label(entry))
+            .then(|| rules::key_from_label(label))
+    }
+
     /// Row `index` was removed: indices after it shift up by one.
     pub fn row_removed(&mut self, index: usize) {
         self.dragging = None;
@@ -73,12 +87,15 @@ impl ClassesViewState {
     }
 }
 
-/// Messages of the Component Classes page's own view state. Key and label
-/// edits stay on `PrefMsg::ComponentClassEditKey` / `EditLabel`.
+/// Messages of the Component Classes page's own view state. Key edits stay
+/// on `PrefMsg::ComponentClassEditKey`; a label edit comes here first, so
+/// the new row's generated key can follow it.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClassesViewMsg {
     /// The filter text changed.
     FilterChanged(String),
+    /// The label of row `index` was edited.
+    LabelEdited { index: usize, label: String },
     /// "+ Add Class" was pressed: a row is appended and its key focused.
     AddRequested,
     /// "Reset to Defaults…" was pressed: the confirmation shows.
@@ -247,4 +264,38 @@ fn reset_confirmation<'a>(count: usize, tokens: &ThemeTokens, i18n: &I18n) -> El
         ..container::Style::default()
     })
     .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Mockup row 150: the help says the list only seeds new libraries, so
+    /// removing a class here leaves existing libraries as they are.
+    #[test]
+    fn the_help_says_the_list_is_a_seed_for_new_libraries() {
+        let help = I18n::en_us_ref().message_plain(ids::PREFERENCES_CLASSES_HELP, &[]);
+        assert!(help.contains("seed list for new libraries"), "{help}");
+        assert!(
+            help.contains("removing a class here does not change existing libraries"),
+            "{help}"
+        );
+    }
+
+    #[test]
+    fn only_the_added_row_generates_its_key() {
+        let view = ClassesViewState {
+            new_row: Some(1),
+            ..ClassesViewState::default()
+        };
+        let blank = crate::fonts::ComponentClassEntry {
+            key: String::new(),
+            label: String::new(),
+        };
+        assert_eq!(
+            view.generated_key(1, &blank, "Hall sensor"),
+            Some("hall_sensor".to_owned())
+        );
+        assert_eq!(view.generated_key(0, &blank, "Hall sensor"), None);
+    }
 }

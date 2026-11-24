@@ -761,3 +761,100 @@ library-browser-preview-unreadable = Could not be read
 # library-copy-recovery
 # Copy to Library footer primary: copy the stock primitive into the selected library ($library is its name).
 library-stock-copy-copy-to = Copy to { $library }
+# library-browser-columns-and-row-style
+# Tooltip of the column button at the right of the count line, and the
+# heading of the chooser it opens.
+library-browser-columns = Columns
+# Tooltip of the Library panel button that shows one-line rows.
+library-panel-rows-compact = Compact rows
+# Tooltip of the Library panel button that shows rows with a preview thumbnail.
+library-panel-rows-thumbnail = Rows with preview thumbnail
+# range-filter-chip
+# Chip of an applied range filter: column, operator (≥ ≤ =), number with its prefix, unit. "Value ≥ 1k Ω".
+library-range-filter-chip = { $column } { $op } { $value } { $unit }
+# Chip of an applied between filter: column, low, high, unit. "Resistance 1k – 100k Ω".
+library-range-filter-chip-between = { $column } { $low } – { $high } { $unit }
+# Tooltip of a range filter chip.
+library-range-filter-chip-tip = Edit this filter
+# Tooltip of the × on a range filter chip.
+library-range-filter-remove-tip = Remove this filter
+# Button that folds a finished range filter editor into its chip.
+library-range-filter-done = Done
+
+# symbol-delete-modal
+# Title of the confirm a Delete of a symbol still in use opens (mockup row 137).
+library-symbol-delete-title = Delete Symbol?
+# picker-and-change-component
+# Change Component header note: $reference is the part's designator, $sheet the sheet's file name.
+library-change-component-note = { $reference } · { $sheet }
+# Placeholder of Change Component's search field.
+library-change-component-search = Search parts
+# Filter chip: only parts drawn with the placed part's symbol.
+library-change-component-same-symbol = Same symbol
+# Filter chip: only parts with the placed part's value (its class's value parameter).
+library-change-component-same-value = Same value
+# Filter chip: only parts a distributor last reported in stock.
+library-change-component-in-stock = In stock
+# Tag of a listed part with as many pins as the placed part.
+library-change-component-pins-same = same pins
+# Tag of a listed part with another pin count; $row and $placed are whole numbers.
+library-change-component-pins-differ = { $row ->
+        [one] { $row } pin
+       *[other] { $row } pins
+    }, not { $placed }
+# Tooltip of that tag; $reference is the placed part's designator.
+library-change-component-pins-differ-tip = Pins do not match: { $row ->
+        [one] { $row } pin
+       *[other] { $row } pins
+    }, { $reference } has { $placed }
+# Card heading: the part placed now.
+library-change-component-placed-now = Placed now
+# Card heading: the picked part that replaces it.
+library-change-component-replace-with = Replace with
+# Shown beside the list until a part is picked; $reference is the placed part's designator.
+library-change-component-pick-prompt = Pick a part in the list to compare it with { $reference }.
+# Section heading of the Now / After table.
+library-change-component-parameters = Parameters
+# Column headings of the Now / After table.
+library-change-component-column-parameter = Parameter
+library-change-component-column-now = Now
+library-change-component-column-after = After
+library-change-component-column-keep = Keep now
+# Keep now cell of a row the new part gives the same value.
+library-change-component-same = same
+# After cell of a user parameter the new part does not have.
+library-change-component-not-in-part = not in part
+# Caption after a user parameter's name.
+library-change-component-user = user
+# Names of the part-data rows of the table.
+library-change-component-value = Value
+library-change-component-footprint = Footprint
+library-change-component-datasheet = Datasheet
+# Section heading: what the change keeps.
+library-change-component-kept = Kept
+# What the change keeps; $matched and $total are whole numbers of pins.
+library-change-component-kept-summary = Designator { $reference } · position and rotation · pins matched by number, { $matched } of { $total }
+# Section heading of the scope choice.
+library-change-component-apply-to = Apply to
+# Scope choice: only the part the change started on.
+library-change-component-scope-this = Only { $reference } on this sheet
+# Primary button; $count is the whole number of parts changed.
+library-change-component-apply = { $count ->
+        [one] Change { $count } part
+       *[other] Change { $count } parts
+    }
+# Primary button when the change loses connections or data.
+library-change-component-apply-anyway = { $count ->
+        [one] Change { $count } part anyway
+       *[other] Change { $count } parts anyway
+    }
+# Footer caption of Change Component.
+library-change-component-footer = One undo step. The PCB footprint changes on Update PCB.
+# Change Component warnings; $unit is a whole number, $pins a comma-separated list of pin numbers.
+library-change-component-warn-unit = The new part has no drawing for unit { $unit }.
+library-change-component-warn-dangling = Connected pins with no match, their wires will dangle: { $pins }
+library-change-component-warn-moved = Connected pins that sit elsewhere on the new part, their wires will no longer reach them: { $pins }
+library-change-component-warn-gained = New pins landing on a wire they were not mapped to: { $pins }
+# range-filter-chip glyph
+# The × that removes an applied range filter chip.
+library-range-filter-remove = ✕

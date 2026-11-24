@@ -105,7 +105,10 @@ impl Signex {
     }
 
     /// Enable Version Control…: the project tree's dialog for this project.
-    pub(super) fn open_version_control_from_tab(&mut self, project_id: ProjectId) {
+    pub(super) fn open_version_control_from_tab(
+        &mut self,
+        project_id: ProjectId,
+    ) -> iced::Task<crate::app::Message> {
         match self
             .document_state
             .projects
@@ -113,9 +116,12 @@ impl Signex {
             .position(|p| p.id == project_id)
         {
             Some(idx) => self.open_enable_version_control_dialog(vec![idx]),
-            None => crate::diagnostics::log_warning(
-                "Project tab: the project was closed; nothing to put under version control",
-            ),
+            None => {
+                crate::diagnostics::log_warning(
+                    "Project tab: the project was closed; nothing to put under version control",
+                );
+                iced::Task::none()
+            }
         }
     }
 }

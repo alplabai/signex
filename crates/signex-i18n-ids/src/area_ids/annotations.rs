@@ -57,4 +57,6 @@ define_ids! {
     ANNOTATIONS_JUMP_NET_READING = "annotations-jump-net-reading";
     ANNOTATIONS_JUMP_NET_UNKNOWN = "annotations-jump-net-unknown";
     ANNOTATIONS_JUMP_NET_OPEN_SHEET = "annotations-jump-net-open-sheet";
+    // annotations-panel
+    ANNOTATIONS_NEW_NEEDS_NOTEBOOK = "annotations-new-needs-notebook";
 }

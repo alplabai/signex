@@ -36,6 +36,15 @@ pub(super) fn app_with_board(dir: &Path) -> (Signex, PathBuf) {
     (app, path)
 }
 
+/// #2879 turned every object kind and axis snapping on by default, with a
+/// reach of at least 8 px (2.67 mm at this rig's 3 px/mm): a click near the
+/// net-3 track lands on its line, off the grid. For a test about a tool,
+/// not about the snaps, the grid alone holds the clicks.
+pub(super) fn grid_only(app: &mut Signex) {
+    app.ui_state.pcb_snap.objects.clear();
+    app.ui_state.pcb_snap.to_axes = false;
+}
+
 pub(super) fn live(app: &Signex, path: &Path) -> String {
     serde_json::to_string(app.document_state.pcb_board(path).expect("board")).unwrap()
 }
@@ -85,6 +94,7 @@ pub(super) fn has_ghost(app: &Signex) -> bool {
 fn via_places_on_the_grid_on_the_net_under_it_one_step_per_click() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
+    grid_only(&mut app);
     let before = live(&app, &path);
     run(&mut app, "place_board_via");
     assert!(app.interaction_state.pcb_tool.is_some(), "Via is armed");

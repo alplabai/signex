@@ -182,7 +182,7 @@ properties-wire-width-large = Large
 properties-wire-color = Color
 # Colour swatch caption: no colour of its own.
 properties-color-default = Default
-properties-color-presets = Preset Colours
+properties-color-presets = Preset Colors
 properties-color-custom = Custom…
 properties-color-reset = Reset to Default
 
@@ -284,10 +284,10 @@ properties-annotation-style = Style
 properties-annotation-style-solid = Solid
 properties-annotation-style-dash = Dash
 properties-annotation-style-dot = Dot
-properties-annotation-colour = Colour
+properties-annotation-colour = Color
 # A drawing with no colour of its own takes the sheet's drawing colour.
-properties-annotation-colour-sheet = Sheet drawing colour
-properties-annotation-colour-own = Own colour
+properties-annotation-colour-sheet = Sheet drawing color
+properties-annotation-colour-own = Own color
 properties-annotation-ends = Ends
 properties-annotation-ends-none = None
 properties-annotation-ends-start = Start
@@ -368,7 +368,7 @@ properties-table-borders-all = All
 properties-table-borders-outer = Outer
 properties-table-borders-none = None
 properties-table-header-fill = Header fill
-properties-table-header-colour = Colour
+properties-table-header-colour = Color
 properties-table-header-colour-note = sheet style · info tint
 properties-table-source-missing = The part is not on this sheet any more; the rows stay as they were.
 # A column checkbox whose column has no title yet. $index counts from 1.
@@ -671,7 +671,7 @@ properties-drawing-width = Width
 properties-section-appearance = Appearance
 properties-fill-solid = Solid
 properties-fill-none-tip = No fill: only the border is drawn.
-properties-fill-outline-tip = Filled with the border colour.
+properties-fill-outline-tip = Filled with the border color.
 properties-fill-solid-tip = Filled with the sheet background, so it hides what is behind it.
 # Directive and No-ERC Properties (mockup row 49). Rule names come from the ERC
 # engine in English.
@@ -774,3 +774,16 @@ properties-count-harness-wires = { $count ->
     [one] 1 signal harness
    *[other] { $count } signal harnesses
 }
+
+# dialog-polish
+# Hint on a title-block row whose own value overrides the project's (mockup
+# row 30). $value is the project's value, shown as typed.
+properties-parameters-overrides-project = project: { $value }
+properties-parameters-overrides-project-tip = This sheet's value overrides the project's ({ $value })
+# power-port-font-rows
+# Tooltip of the disabled Bold / Italic / Underline / Strikethrough buttons.
+properties-text-style-not-stored = Bold, italic, underline and strikethrough are not stored yet.
+# Style leader of the power-port illustration. $style is the style's name.
+properties-power-illustration-style = Style · { $style }
+# Font Size callout of the power-port illustration. $size is the size in points.
+properties-power-illustration-font-size = Font Size { $size }

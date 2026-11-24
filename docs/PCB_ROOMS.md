@@ -123,7 +123,8 @@ The planner is pure (`plan_rooms_from_sheets`):
 `builtin::part_outside_room` ("Part outside its room"), error by default and
 overridable like the other built-in rules. Only rooms with Keep parts inside
 are checked, so a board without such rooms gets the report it got before. A
-member part whose body box (`pcb_geom::footprint_body`) is not inside the
+member part whose body box (`pcb_geom::checked_body`: the courtyard outline
+without its display stroke, else the pads) is not inside the
 room's outline shrunk by its margin is a finding; `measured_nm` is how far
 the body reaches past that line, `required_nm` the margin, and the items are
 the footprint and the room. Its check-report message names them:

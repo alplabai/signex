@@ -207,6 +207,30 @@ fn building_the_app_takes_no_preference_write_slot() {
     assert_eq!(crate::fonts::pref_slots_taken_on_this_thread(), before);
 }
 
+/// Mockup row 14: Help ▸ Show Welcome Tips opens the same single card again,
+/// with no work of its own, and its close button closes and saves as on
+/// first launch.
+#[test]
+fn help_show_welcome_tips_reopens_the_one_card() {
+    let (mut app, _task) = Signex::new();
+    app.ui_state.first_run_tour_open = false;
+    let task = app.update(Message::Menu(crate::menu_bar::MenuMessage::OpenWelcomeTips));
+    assert!(app.ui_state.first_run_tour_open, "the row left it closed");
+    assert!(!has_work(&task), "opening the card is no IO");
+
+    let main = main_window(&mut app);
+    let shown = crate::layout_probe::lay_out_texts(app.view(main), iced::Size::new(1400.0, 900.0));
+    let cards = shown
+        .iter()
+        .filter(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == "Welcome to Signex")
+        .count();
+    assert_eq!(cards, 1, "one card, the first-run one");
+
+    let task = app.update(Message::Overlay(OverlayMsg::DismissFirstRunTour));
+    assert!(!app.ui_state.first_run_tour_open);
+    assert!(has_work(&task), "the close button saved nothing");
+}
+
 #[test]
 fn a_launch_with_the_pref_set_does_not_open_the_card() {
     let prefs = serde_json::json!({ "first_run_tour_dismissed": true });

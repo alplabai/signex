@@ -433,6 +433,36 @@ fn primitive_label(
         .unwrap_or_default()
 }
 
+/// The Footprint field (mockup row 118): the `.snxfpt` file name, e.g.
+/// `R_0402_1005.snxfpt`. The name comes from the browsed library's listing,
+/// else from the listing of the open library the footprint lives in, so a
+/// footprint bound from another library does not show as its uuid file.
+/// Empty for an unbound footprint.
+fn footprint_label(
+    row: &ComponentRow,
+    names: &PrimitiveNames<'_>,
+    library_state: &LibraryState,
+) -> String {
+    let Some(fp) = row
+        .footprint_ref
+        .as_ref()
+        .filter(|_| !row.is_footprint_unbound())
+    else {
+        return String::new();
+    };
+    let listed = names
+        .footprint(fp)
+        .map(str::to_string)
+        .or_else(|| library_state.footprint_name(fp));
+    primitive_label(
+        Some(fp),
+        "footprints",
+        "snxfpt",
+        listed.as_deref(),
+        library_state,
+    )
+}
+
 /// Class, Manufacturer, MPN, Revision, Symbol, Footprint, Updated, then
 /// the row's parameters.
 fn field_list<'a>(
@@ -460,20 +490,7 @@ fn field_list<'a>(
             library_state,
         )
     };
-    let footprint = row
-        .footprint_ref
-        .as_ref()
-        .filter(|_| !row.is_footprint_unbound())
-        .map(|fp| {
-            primitive_label(
-                Some(fp),
-                "footprints",
-                "snxfpt",
-                names.footprint(fp),
-                library_state,
-            )
-        })
-        .unwrap_or_default();
+    let footprint = footprint_label(row, names, library_state);
     let cell = |kind: ColumnKind| kind.cell_value_named(row, names);
     let fields = [
         (
@@ -616,5 +633,127 @@ mod tests {
         let ro = actions(path, "R", row_id, true);
         assert!(ro.edit.is_none() && ro.pick_symbol.is_none() && ro.pick_footprint.is_none());
         assert!(ro.more.is_none() && ro.delete.is_none());
+    }
+
+    fn library(
+        root: &str,
+        id: uuid::Uuid,
+        footprints: Vec<signex_library::PrimitiveSummary>,
+    ) -> OpenLibrary {
+        OpenLibrary {
+            root: std::path::PathBuf::from(root),
+            display_name: String::new(),
+            library_id: id,
+            tables: Default::default(),
+            cached_components: Vec::new(),
+            cached_symbols: Vec::new(),
+            cached_footprints: footprints,
+            cached_sims: Vec::new(),
+            cached_classes: Vec::new(),
+            observed_stamp: None,
+            dangling: Default::default(),
+            pricing: Default::default(),
+            own_edit_stamp: None,
+            display: Default::default(),
+        }
+    }
+
+    /// A stock footprint listed under its name, stored as `<uuid>.snxfpt`.
+    fn stock_footprint(id: uuid::Uuid) -> signex_library::PrimitiveSummary {
+        signex_library::PrimitiveSummary {
+            uuid: id,
+            name: "R_0402_1005".into(),
+            kind: signex_library::PrimitiveKind::Footprint,
+            used_by_count: 0,
+            file: Some(std::path::PathBuf::from(format!(
+                "/tmp/fp/footprints/{id}.snxfpt"
+            ))),
+        }
+    }
+
+    fn row_bound_to(footprint: Option<signex_library::PrimitiveRef>) -> ComponentRow {
+        use signex_library::{
+            ComponentClass, DatasheetRef, InternalPn, ManufacturerPart, ParamMap, PlmReserved,
+            PrimitiveRef,
+        };
+        let now = chrono::Utc::now();
+        ComponentRow {
+            alternate_symbols: Vec::new(),
+            row_id: uuid::Uuid::now_v7(),
+            internal_pn: InternalPn::new("R1"),
+            class: ComponentClass::generic(),
+            datasheet: DatasheetRef::default(),
+            datasheet_label: String::new(),
+            description: String::new(),
+            more_datasheets: Vec::new(),
+            state: LifecycleState::Draft,
+            symbol_ref: PrimitiveRef::new(uuid::Uuid::nil(), uuid::Uuid::nil()),
+            footprint_ref: footprint,
+            alternate_footprints: Vec::new(),
+            sim_ref: None,
+            pin_map_overrides: Vec::new(),
+            primary_mpn: ManufacturerPart::draft("Acme", "MPN"),
+            alternates: Vec::new(),
+            supply: Vec::new(),
+            parameters: ParamMap::new(),
+            plm: PlmReserved::default(),
+            version: "0.0.1".into(),
+            released: false,
+            symbol_version: String::new(),
+            footprint_version: String::new(),
+            sim_version: String::new(),
+            created: now,
+            updated: now,
+            content_hash: [0u8; 32],
+            server_revision: None,
+        }
+    }
+
+    /// Mockup row 118: the Footprint field shows the `.snxfpt` file name,
+    /// not the uuid the stock file is stored under.
+    #[test]
+    fn the_footprint_field_shows_the_file_name_of_a_footprint_in_the_browsed_library() {
+        let (lib_id, fp_id) = (uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
+        let mut state = LibraryState::default();
+        state.open_libraries.push(library(
+            "/tmp/fp/Parts.snxlib",
+            lib_id,
+            vec![stock_footprint(fp_id)],
+        ));
+        let row = row_bound_to(Some(signex_library::PrimitiveRef::new(lib_id, fp_id)));
+        let names = PrimitiveNames::of(&state.open_libraries[0]);
+        assert_eq!(footprint_label(&row, &names, &state), "R_0402_1005.snxfpt");
+    }
+
+    /// Mockup row 118: a footprint bound from another open library is named
+    /// from that library's listing, not shown as `<uuid>.snxfpt`.
+    #[test]
+    fn the_footprint_field_names_a_footprint_from_another_open_library() {
+        let (parts_id, fp_lib_id, fp_id) = (
+            uuid::Uuid::now_v7(),
+            uuid::Uuid::now_v7(),
+            uuid::Uuid::now_v7(),
+        );
+        let mut state = LibraryState::default();
+        state
+            .open_libraries
+            .push(library("/tmp/parts/Parts.snxlib", parts_id, Vec::new()));
+        state.open_libraries.push(library(
+            "/tmp/fp/Footprints.snxlib",
+            fp_lib_id,
+            vec![stock_footprint(fp_id)],
+        ));
+        let row = row_bound_to(Some(signex_library::PrimitiveRef::new(fp_lib_id, fp_id)));
+        let names = PrimitiveNames::of(&state.open_libraries[0]);
+        let shown = footprint_label(&row, &names, &state);
+        assert_eq!(shown, "R_0402_1005.snxfpt");
+        assert!(!shown.contains(&fp_id.to_string()));
+    }
+
+    #[test]
+    fn an_unbound_footprint_leaves_the_field_empty() {
+        let state = LibraryState::default();
+        let row = row_bound_to(None);
+        assert_eq!(footprint_label(&row, &PrimitiveNames::none(), &state), "");
     }
 }

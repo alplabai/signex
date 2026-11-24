@@ -256,15 +256,14 @@ impl PcbLayer {
         )
     }
 
-    /// A layer that takes board text and dimensions (#2373): an overlay, a
-    /// mechanical or a documentation layer. Never copper: copper text would
-    /// be copper the copper list, the design rule check and the ratsnest
-    /// never read.
+    /// A layer that takes a board string (#2373): a copper, overlay,
+    /// mechanical or documentation layer. Copper text is copper of no net
+    /// along its glyphs (Caner, 2026-11-24, #2883). A dimension takes any
+    /// layer.
     pub fn takes_text(self) -> bool {
         match self {
             Self::Technical(t) => self.is_overlay() || t.is_documentation(),
-            Self::Mechanical(_) => true,
-            Self::Copper(_) => false,
+            Self::Mechanical(_) | Self::Copper(_) => true,
         }
     }
 

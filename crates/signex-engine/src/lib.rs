@@ -288,9 +288,9 @@ pub struct Engine {
     /// Fixed for this engine's lifetime and unique across engines: tells a
     /// reopened sheet from the one an off-thread job started on.
     instance: u64,
-    /// Notices raised by the last commands (rubber-band pins that could
-    /// not be kept connected); the app drains them into the Messages panel.
-    warnings: Vec<String>,
+    /// The pin notices of the last commands ([`EngineNotice::PinsNotKept`]),
+    /// drained apart from `notices` so they keep coming first.
+    warnings: Vec<EngineNotice>,
     /// Notices raised by the last commands as data (see [`EngineNotice`]);
     /// the app words them through its catalog.
     notices: Vec<EngineNotice>,
@@ -606,10 +606,10 @@ impl Engine {
         std::mem::take(&mut self.unkept_pins)
     }
 
-    /// Drain the notices raised since the last call. While a transaction is
-    /// open they are held: they are shown after its commit, and dropped by its
-    /// rollback.
-    pub fn take_warnings(&mut self) -> Vec<String> {
+    /// Drain the pin notices raised since the last call. While a transaction
+    /// is open they are held: they are shown after its commit, and dropped by
+    /// its rollback.
+    pub fn take_warnings(&mut self) -> Vec<EngineNotice> {
         if self.transaction.is_some() {
             return Vec::new();
         }

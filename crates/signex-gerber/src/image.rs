@@ -158,8 +158,9 @@ impl Object {
         }
     }
 
-    /// The points that place the object, for bounds when it has no shape.
-    fn anchors(&self) -> Vec<PointNm> {
+    /// The points that place the object, for bounds and markers when it
+    /// has no shape.
+    pub fn anchors(&self) -> Vec<PointNm> {
         match self.kind {
             ObjectKind::Flash { at } => vec![at],
             ObjectKind::Line { from, to } | ObjectKind::Arc { from, to, .. } => vec![from, to],

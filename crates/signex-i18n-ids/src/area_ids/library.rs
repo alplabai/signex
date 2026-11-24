@@ -292,4 +292,52 @@ define_ids! {
     LIBRARY_BROWSER_PREVIEW_UNREADABLE = "library-browser-preview-unreadable";
     // library-copy-recovery
     LIBRARY_STOCK_COPY_COPY_TO = "library-stock-copy-copy-to";
+    // library-browser-columns-and-row-style
+    LIBRARY_BROWSER_COLUMNS = "library-browser-columns";
+    LIBRARY_PANEL_ROWS_COMPACT = "library-panel-rows-compact";
+    LIBRARY_PANEL_ROWS_THUMBNAIL = "library-panel-rows-thumbnail";
+    // range-filter-chip
+    LIBRARY_RANGE_FILTER_CHIP = "library-range-filter-chip";
+    LIBRARY_RANGE_FILTER_CHIP_BETWEEN = "library-range-filter-chip-between";
+    LIBRARY_RANGE_FILTER_CHIP_TIP = "library-range-filter-chip-tip";
+    LIBRARY_RANGE_FILTER_REMOVE_TIP = "library-range-filter-remove-tip";
+    LIBRARY_RANGE_FILTER_DONE = "library-range-filter-done";
+    // symbol-delete-modal
+    LIBRARY_SYMBOL_DELETE_TITLE = "library-symbol-delete-title";
+    // picker-and-change-component
+    LIBRARY_CHANGE_COMPONENT_NOTE = "library-change-component-note";
+    LIBRARY_CHANGE_COMPONENT_SEARCH = "library-change-component-search";
+    LIBRARY_CHANGE_COMPONENT_SAME_SYMBOL = "library-change-component-same-symbol";
+    LIBRARY_CHANGE_COMPONENT_SAME_VALUE = "library-change-component-same-value";
+    LIBRARY_CHANGE_COMPONENT_IN_STOCK = "library-change-component-in-stock";
+    LIBRARY_CHANGE_COMPONENT_PINS_SAME = "library-change-component-pins-same";
+    LIBRARY_CHANGE_COMPONENT_PINS_DIFFER = "library-change-component-pins-differ";
+    LIBRARY_CHANGE_COMPONENT_PINS_DIFFER_TIP = "library-change-component-pins-differ-tip";
+    LIBRARY_CHANGE_COMPONENT_PLACED_NOW = "library-change-component-placed-now";
+    LIBRARY_CHANGE_COMPONENT_REPLACE_WITH = "library-change-component-replace-with";
+    LIBRARY_CHANGE_COMPONENT_PICK_PROMPT = "library-change-component-pick-prompt";
+    LIBRARY_CHANGE_COMPONENT_PARAMETERS = "library-change-component-parameters";
+    LIBRARY_CHANGE_COMPONENT_COLUMN_PARAMETER = "library-change-component-column-parameter";
+    LIBRARY_CHANGE_COMPONENT_COLUMN_NOW = "library-change-component-column-now";
+    LIBRARY_CHANGE_COMPONENT_COLUMN_AFTER = "library-change-component-column-after";
+    LIBRARY_CHANGE_COMPONENT_COLUMN_KEEP = "library-change-component-column-keep";
+    LIBRARY_CHANGE_COMPONENT_SAME = "library-change-component-same";
+    LIBRARY_CHANGE_COMPONENT_NOT_IN_PART = "library-change-component-not-in-part";
+    LIBRARY_CHANGE_COMPONENT_USER = "library-change-component-user";
+    LIBRARY_CHANGE_COMPONENT_VALUE = "library-change-component-value";
+    LIBRARY_CHANGE_COMPONENT_FOOTPRINT = "library-change-component-footprint";
+    LIBRARY_CHANGE_COMPONENT_DATASHEET = "library-change-component-datasheet";
+    LIBRARY_CHANGE_COMPONENT_KEPT = "library-change-component-kept";
+    LIBRARY_CHANGE_COMPONENT_KEPT_SUMMARY = "library-change-component-kept-summary";
+    LIBRARY_CHANGE_COMPONENT_APPLY_TO = "library-change-component-apply-to";
+    LIBRARY_CHANGE_COMPONENT_SCOPE_THIS = "library-change-component-scope-this";
+    LIBRARY_CHANGE_COMPONENT_APPLY = "library-change-component-apply";
+    LIBRARY_CHANGE_COMPONENT_APPLY_ANYWAY = "library-change-component-apply-anyway";
+    LIBRARY_CHANGE_COMPONENT_FOOTER = "library-change-component-footer";
+    LIBRARY_CHANGE_COMPONENT_WARN_UNIT = "library-change-component-warn-unit";
+    LIBRARY_CHANGE_COMPONENT_WARN_DANGLING = "library-change-component-warn-dangling";
+    LIBRARY_CHANGE_COMPONENT_WARN_MOVED = "library-change-component-warn-moved";
+    LIBRARY_CHANGE_COMPONENT_WARN_GAINED = "library-change-component-warn-gained";
+    // range-filter-chip glyph
+    LIBRARY_RANGE_FILTER_REMOVE = "library-range-filter-remove";
 }

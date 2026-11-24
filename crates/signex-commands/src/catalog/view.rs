@@ -261,4 +261,39 @@ pub(super) const VIEW: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // Mockup row 175: the 3D view toolbar's Flip, lighting and screenshot
+    // buttons as commands. View state only; each does nothing while the
+    // board is flat, where the app greys lighting and copy. `H` and
+    // `Mod+Shift+C` on a board in both built-in profiles; Flip is `F` in the
+    // `board_3d` context, so `F` stays Change Footprint on a flat board.
+    CommandMetadata {
+        id: "flip_board_3d",
+        category: "view",
+        label: command_ids::CMD_FLIP_BOARD_3D,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "cycle_board_3d_lighting",
+        category: "view",
+        label: command_ids::CMD_CYCLE_BOARD_3D_LIGHTING,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "copy_board_3d_screenshot",
+        category: "view",
+        label: command_ids::CMD_COPY_BOARD_3D_SCREENSHOT,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
 ];
