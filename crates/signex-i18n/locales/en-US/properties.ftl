@@ -779,4 +779,4 @@ properties-count-harness-wires = { $count ->
 # Hint on a title-block row whose own value overrides the project's (mockup
 # row 30). $value is the project's value, shown as typed.
 properties-parameters-overrides-project = project: { $value }
-properties-parameters-overrides-project-tip = This sheet's value overrides the project's
+properties-parameters-overrides-project-tip = This sheet's value overrides the project's ({ $value })

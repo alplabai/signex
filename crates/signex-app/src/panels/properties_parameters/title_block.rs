@@ -237,13 +237,45 @@ fn project_pill<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     )
 }
 
-/// The "project: B" pill of a row whose own value overrides the project's.
+/// Widest the "project: B" pill gets, in body ems, so a long project value
+/// never squeezes the field beside it in a narrow dock.
+const OVERRIDES_PILL_MAX_EMS: f32 = 7.0;
+
+/// The "project: B" pill of a row whose own value overrides the project's:
+/// one line cut with an ellipsis, the whole value in its hint.
 fn overrides_pill<'a>(ctx: &'a PanelContext, value: &str) -> Element<'a, PanelMsg> {
+    use iced::widget::text::{Ellipsis, Wrapping};
     use signex_i18n::{ids, t};
-    source_pill(
-        ctx,
-        t!(ctx.i18n, ids::PROPERTIES_PARAMETERS_OVERRIDES_PROJECT, "value" => value),
-        t!(ctx.i18n, ids::PROPERTIES_PARAMETERS_OVERRIDES_PROJECT_TIP),
+    use signex_widgets::chips::ChipMetrics;
+    let r = crate::styles::tokens::resolve(&ctx.tokens);
+    let metrics = ChipMetrics::from_text_size(TS.body);
+    let words = t!(ctx.i18n, ids::PROPERTIES_PARAMETERS_OVERRIDES_PROJECT, "value" => value);
+    let label = signex_widgets::text(words)
+        .size(metrics.caption_size)
+        .color(r.ink3)
+        .wrapping(Wrapping::None)
+        .ellipsis(Ellipsis::End);
+    let fill = r.sunken;
+    let radius = ChipMetrics::pill_radius(metrics.kind_height);
+    let pill = container(label)
+        .height(metrics.kind_height)
+        .max_width(TS.body * OVERRIDES_PILL_MAX_EMS)
+        .padding([0.0, metrics.pad_h])
+        .align_y(iced::alignment::Vertical::Center)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(fill)),
+            border: Border {
+                radius: radius.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        });
+    let tip = t!(ctx.i18n, ids::PROPERTIES_PARAMETERS_OVERRIDES_PROJECT_TIP, "value" => value);
+    crate::panels::graphite::hint_tooltip(
+        pill.boxed(),
+        tip,
+        &ctx.tokens,
+        iced::widget::tooltip::Position::Left,
     )
 }
 
@@ -411,7 +443,8 @@ mod tests {
         assert_eq!(overridden_project_value(other, &sheet, &project), None);
     }
 
-    /// The override pill reads "project: B" with its hint.
+    /// The override pill reads "project: B"; its hint carries the whole
+    /// value, since a long one is cut in the pill.
     #[test]
     fn the_override_pill_reads_project_and_the_value() {
         use signex_i18n::{Arg, ids};
@@ -421,7 +454,10 @@ mod tests {
             &[("value", Arg::from("B"))],
         );
         assert_eq!(label, "project: B");
-        let tip = en.message_plain(ids::PROPERTIES_PARAMETERS_OVERRIDES_PROJECT_TIP, &[]);
-        assert_eq!(tip, "This sheet's value overrides the project's");
+        let tip = en.message_plain(
+            ids::PROPERTIES_PARAMETERS_OVERRIDES_PROJECT_TIP,
+            &[("value", Arg::from("B"))],
+        );
+        assert_eq!(tip, "This sheet's value overrides the project's (B)");
     }
 }
