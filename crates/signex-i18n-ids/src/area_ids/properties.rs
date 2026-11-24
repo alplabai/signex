@@ -505,4 +505,7 @@ define_ids! {
     PROPERTIES_COUNT_HARNESS_CONNECTORS = "properties-count-harness-connectors";
     PROPERTIES_COUNT_HARNESS_ENTRIES = "properties-count-harness-entries";
     PROPERTIES_COUNT_HARNESS_WIRES = "properties-count-harness-wires";
+    // dialog-polish
+    PROPERTIES_PARAMETERS_OVERRIDES_PROJECT = "properties-parameters-overrides-project";
+    PROPERTIES_PARAMETERS_OVERRIDES_PROJECT_TIP = "properties-parameters-overrides-project-tip";
 }
