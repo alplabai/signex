@@ -33,6 +33,9 @@ mod unknown;
 mod user_profile;
 #[cfg(test)]
 mod user_profile_tests;
+mod variant_settings;
+#[cfg(test)]
+mod variant_settings_tests;
 mod variants;
 #[cfg(test)]
 mod variants_tests;
@@ -82,6 +85,7 @@ pub use user_profile::{
     USER_PROFILE_ID_PREFIX, UserProfile, add_user_profile, check_profile_name, find_user_profile,
     new_profile_id, resolve_profile, save_user_profile, user_profiles_from_value,
 };
+pub use variant_settings::{FOOTPRINT_PARAMETER, VALUE_PARAMETER, VariantPart, VariantSettings};
 pub use variants::{BASE_VARIANT, MAX_VARIANT_NAME_CHARS, VariantProblem, is_base_variant};
 
 /// Reads a stored `document_id`; a value that is not one reads as absent, so
@@ -246,6 +250,11 @@ pub struct ProjectData {
     /// Currently selected variant if known from project context.
     #[serde(default)]
     pub active_variant: Option<String>,
+    /// The default variant and what each variant changes on its parts
+    /// (mockup row 32). Skipped on save when nothing is set; an old build
+    /// keeps the key in `unknown`. No format token changes.
+    #[serde(default, skip_serializing_if = "VariantSettings::is_empty")]
+    pub variant_settings: VariantSettings,
     /// Component libraries referenced by this project. Project-open
     /// auto-mounts every entry; the project tree renders each as a
     /// `Libraries ▸ <name>.snxlib` node. `#[serde(default)]` so old
@@ -587,6 +596,7 @@ mod tests {
             sheets: vec![],
             variant_definitions: vec![],
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: vec![],
             enable_git: false,
             net_classes: Vec::new(),
@@ -626,6 +636,7 @@ mod tests {
             sheets: vec![],
             variant_definitions: vec![],
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: vec![],
             enable_git: false,
             net_classes: Vec::new(),
@@ -801,9 +812,15 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         let design = value
             .as_object_mut()
             .and_then(|map| map.remove(schematic_design::SCHEMATIC_DESIGN_KEY));
+        let variants = value
+            .as_object_mut()
+            .and_then(|map| map.remove(variant_settings::VARIANT_SETTINGS_KEY));
         let mut data = serde_json::from_value::<ProjectData>(value).map_err(corrupt)?;
         if let Some(raw) = requirements {
             requirements::take_requirements(&mut data, raw);
+        }
+        if let Some(raw) = variants {
+            variant_settings::take_variant_settings(&mut data, raw);
         }
         if let Some(raw) = design {
             schematic_design::take_schematic_design(&mut data, raw);
@@ -869,6 +886,7 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         sheets,
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         net_classes: Vec::new(),
@@ -957,6 +975,13 @@ pub fn encode_project(data: &ProjectData) -> Result<Vec<u8>, serde_json::Error> 
             schematic_design::SCHEMATIC_DESIGN_KEY.into(),
             serde_json::to_value(&data.schematic_design)?,
         );
+    }
+    // An unreadable variant settings section stays as it was too.
+    if data.has_unreadable_variant_settings() {
+        stamped.remove(variant_settings::VARIANT_SETTINGS_KEY);
+        if let Some(kept) = data.unknown.get(variant_settings::VARIANT_SETTINGS_KEY) {
+            stamped.insert(variant_settings::VARIANT_SETTINGS_KEY.into(), kept.clone());
+        }
     }
     serde_json::to_vec_pretty(&Value::Object(stamped))
 }

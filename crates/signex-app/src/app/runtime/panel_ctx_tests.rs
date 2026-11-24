@@ -91,6 +91,7 @@ fn project_tree_is_reused_until_the_projects_change() {
             sheets: Vec::new(),
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -144,6 +145,7 @@ fn fs_request_names_the_git_marker_of_project_and_library_dirs() {
             sheets: Vec::new(),
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: vec![LibraryEntry {
                 path: PathBuf::from("lib/L.snxlib"),
                 kind: LibraryEntryKind::ProjectLocal,
