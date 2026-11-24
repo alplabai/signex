@@ -1,7 +1,8 @@
 //! The Roles section of a footprint sketch (mockup row 190): one row per
 //! closed profile with its role, what bakes without an entity, and the way
 //! to preview or run the bake. Rules: `docs/FOOTPRINT_SKETCH.md`, "Roles".
-//! A board sketch's Bake panel reuses the rows as Bake as (mockup row 179).
+//! A board sketch reuses the rows as Bake as, in its Bake panel and in its
+//! Properties body (mockup row 179).
 
 use iced::widget::{Column, container, row};
 use iced::{Element, Length, Widget as _};
@@ -43,7 +44,8 @@ pub(super) fn view_roles<'a>(
         .push(bake_buttons(cx))
 }
 
-/// The Bake as section of a board sketch's Bake panel (mockup row 179):
+/// The Bake as section of a board sketch, in its Bake panel and its
+/// Properties body (mockup row 179):
 /// the footprint's profile list with the board's roles, without its Bake
 /// buttons, mask and centerline lines. Nothing on a footprint.
 pub(super) fn view_board_bake_as<'a>(
