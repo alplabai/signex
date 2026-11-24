@@ -592,7 +592,8 @@ set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
   them as the drag wiring mode of that name does. It is the edit a drag of
   the same distance commits, with the same rubber band and guard. A contact
   the guard cannot keep is left as a plain move; the answer adds
-  `moved_wires` and `removed_wires` (wire ids) and `fallbacks`, one
+  `moved_wires` (ids of wires whose ends changed and of wires the move
+  added), `removed_wires` (ids of wires it removed) and `fallbacks`, one
   `{"kind", "names", "message"}` per notice (`pins_not_kept` names the pins,
   `grip_end_left` carries `at` instead of `names`, `message` is the Messages
   line). A sheet entry stays on its symbol's

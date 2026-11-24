@@ -137,25 +137,23 @@ const MODES: [(DragWiringMode, &str); 4] = [
 const DX: f64 = 2.54;
 const DY: f64 = 5.08;
 
-/// Each wiring mode: the agent's move leaves the same sheet as the drag
-/// commit with that mode, wires follow and the nets keep their shape.
-#[test]
-fn an_agent_move_bends_wires_as_the_drag_commit_does_in_every_mode() {
-    let sheet = sample();
-    let id = u1(&sheet);
-    let before = nets(&sheet);
+/// Each wiring mode: the agent's move of `id` by `(dx, dy)` leaves the same
+/// sheet as the drag commit with that mode, wires follow and the nets keep
+/// their shape. The agent's sheets, in `MODES` order.
+fn every_mode_as_the_drag(sheet: &SchematicSheet, id: Uuid, dx: f64, dy: f64) -> Vec<Shape> {
+    let before = nets(sheet);
     let mut shapes = Vec::new();
     for (mode, word) in MODES {
         let (mut gui, _g) = app_with(sheet.clone());
         gui.ui_state.move_keeps_wires = true;
         gui.interaction_state.drag_wiring = mode;
-        drag(&mut gui, id, DX, DY);
+        drag(&mut gui, id, dx, dy);
         let (mut agent, _a) = app_with(sheet.clone());
         let wiring = format!("wiring={word}");
-        let answer = agent_move(&mut agent, id, DX, DY, &[&wiring]);
+        let answer = agent_move(&mut agent, id, dx, dy, &[&wiring]);
 
         assert_eq!(shape(doc(&agent)), shape(doc(&gui)), "{word}");
-        assert_ne!(shape(doc(&agent)).wires, shape(&sheet).wires, "{word}");
+        assert_ne!(shape(doc(&agent)).wires, shape(sheet).wires, "{word}");
         assert_eq!(nets(doc(&agent)), before, "{word}: the net shape");
         assert!(
             !answer["moved_wires"].as_array().expect("list").is_empty(),
@@ -164,10 +162,34 @@ fn an_agent_move_bends_wires_as_the_drag_commit_does_in_every_mode() {
         assert_eq!(answer["fallbacks"], serde_json::json!([]), "{word}");
         shapes.push(shape(doc(&agent)));
     }
+    shapes
+}
+
+#[test]
+fn an_agent_move_bends_wires_as_the_drag_commit_does_in_every_mode() {
+    let sheet = sample();
+    let shapes = every_mode_as_the_drag(&sheet, u1(&sheet), DX, DY);
     assert!(
         shapes.iter().any(|s| *s != shapes[0]),
         "the modes bend the same move differently"
     );
+}
+
+/// R1 with a vertical wire into pin 1 and a horizontal one into pin 2:
+/// `auto` keeps each wire's own axis, so it bends unlike every fixed mode
+/// and each `wiring` word is pinned to its own sheet.
+#[test]
+fn each_wiring_word_gives_its_own_sheet() {
+    let (sheet, r1) = resistor_with(vec![
+        wire((45.0, 30.0), (45.0, 50.0)),
+        wire((55.0, 50.0), (70.0, 50.0)),
+    ]);
+    let shapes = every_mode_as_the_drag(&sheet, r1, 10.0, -10.0);
+    for (i, (_, a)) in MODES.iter().enumerate() {
+        for (j, (_, b)) in MODES.iter().enumerate().skip(i + 1) {
+            assert_ne!(shapes[i], shapes[j], "{a} and {b} bend alike");
+        }
+    }
 }
 
 /// `keep_wires=false` is a plain move, as the drag with the preference off.
@@ -268,6 +290,15 @@ fn wire(a: (f64, f64), b: (f64, f64)) -> Wire {
 /// foreign wire ends on both corners a 10 mm drop could take: the engine's
 /// "every route collides" case.
 fn blocked_resistor() -> (SchematicSheet, Uuid) {
+    resistor_with(vec![
+        wire((30.0, 50.0), (45.0, 50.0)),
+        wire((45.0, 55.0), (45.0, 58.0)),
+        wire((30.0, 55.0), (30.0, 58.0)),
+    ])
+}
+
+/// R1 at (50, 50), pins at (45, 50) and (55, 50), with `wires`.
+fn resistor_with(wires: Vec<Wire>) -> (SchematicSheet, Uuid) {
     let mut sheet = SchematicSheet {
         uuid: Uuid::now_v7(),
         paper_size: "A4".into(),
@@ -303,11 +334,7 @@ fn blocked_resistor() -> (SchematicSheet, Uuid) {
         position: Point::new(50.0, 50.0),
         ..Default::default()
     });
-    sheet.wires = vec![
-        wire((30.0, 50.0), (45.0, 50.0)),
-        wire((45.0, 55.0), (45.0, 58.0)),
-        wire((30.0, 55.0), (30.0, 58.0)),
-    ];
+    sheet.wires = wires;
     (sheet, r1)
 }
 
