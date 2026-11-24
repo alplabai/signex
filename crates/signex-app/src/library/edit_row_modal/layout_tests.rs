@@ -1,6 +1,7 @@
 //! Layout probes of the Edit Component modal at its card size (mockup row
 //! 130): the quiet Reload at the footer's left, and a left column whose
-//! binding cards fit without scrolling, the Internal PN conflict included.
+//! binding cards fit without scrolling, the Internal PN conflict included,
+//! with the conflict reason as the Parameters column's foot banner.
 
 use std::path::{Path, PathBuf};
 
@@ -10,7 +11,7 @@ use signex_types::theme::{ThemeId, theme_tokens};
 
 use super::super::messages::{BrowserEditMsg, LibraryMessage};
 use super::super::state::{EditRowModalState, EditorAddress};
-use super::{Binding, COLUMN_PAD, EditRowContext, view};
+use super::{Binding, COLUMN_PAD, EditRowContext, LEFT_COLUMN_W, view};
 use crate::layout_probe::{LaidOutText, lay_out_texts, messages_on_click};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -24,6 +25,7 @@ const CARD: Size = Size::new(
 
 const RELOAD: &str = "Reload saved version";
 const PICK_FOOTPRINT: &str = "Pick Footprint\u{2026}";
+const CONFLICT_REASON: &str = "Internal PN \u{201C}U1\u{201D} is already used in components.";
 
 fn modal() -> (PathBuf, EditRowModalState) {
     let row = crate::library::component_preview::test_row();
@@ -171,7 +173,8 @@ fn the_reload_confirm_replaces_the_action_inline() {
 
 /// Mockup row 130: the binding cards fit the left column, each line on one
 /// line, with and without the Internal PN conflict; the conflict reason is
-/// one line across the row instead of three in the PN cell.
+/// the error banner at the foot of the Parameters column, never in the left
+/// column.
 #[test]
 fn the_binding_cards_fit_the_left_column() {
     let (path, edit) = modal();
@@ -211,11 +214,33 @@ fn the_binding_cards_fit_the_left_column() {
             "the Footprint card ends above the footer, no scroll (conflict {conflict}): \
              card bottom {card_bottom}, footer top {footer_top}"
         );
-        if conflict {
-            one_line(
-                "Internal PN \u{201C}U1\u{201D} is already used in components.",
-                TS.caption,
-            );
+        let left_edge = LEFT_COLUMN_W;
+        assert!(
+            texts
+                .iter()
+                .filter(|t| t.bounds.x < left_edge)
+                .all(|t| !t.text.contains(CONFLICT_REASON)),
+            "the left column holds no conflict text (conflict {conflict}): {texts:#?}"
+        );
+        let banner = texts.iter().find(|t| t.text == CONFLICT_REASON);
+        if !conflict {
+            assert!(banner.is_none(), "no banner without a conflict: {texts:#?}");
+            continue;
         }
+        let banner = banner.unwrap_or_else(|| panic!("no conflict banner: {texts:#?}"));
+        assert!(
+            banner.bounds.x >= left_edge,
+            "the banner sits in the Parameters column: {banner:#?}"
+        );
+        assert!(
+            banner.bounds.height < 2.0 * TS.body,
+            "the banner reason sits on one line: {banner:#?}"
+        );
+        let banner_bottom = banner.bounds.y + banner.bounds.height;
+        assert!(
+            banner_bottom <= footer_top + 0.5 && footer_top - banner_bottom < 4.0 * TS.body,
+            "the banner is pinned to the foot of the column, above the footer: \
+             banner bottom {banner_bottom}, footer top {footer_top}"
+        );
     }
 }

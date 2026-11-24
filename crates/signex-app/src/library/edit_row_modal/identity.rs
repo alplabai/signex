@@ -103,13 +103,14 @@ fn input<'a>(
     }
 }
 
-/// The Identity fields, top to bottom. `pn_conflict` is the table of
-/// another row that already holds the draft's Internal PN: the field gets
-/// the error outline and the reason under it.
+/// The Identity fields, top to bottom. `conflicting` when another row
+/// already holds the draft's Internal PN: the field gets the error outline;
+/// the reason is the banner at the foot of the Parameters column (mockup
+/// row 130).
 pub(super) fn view<'a>(
     edit: &'a EditRowModalState,
     classes: Vec<crate::fonts::ComponentClassEntry>,
-    pn_conflict: Option<&str>,
+    conflicting: bool,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
     send: impl Fn(BrowserEditMsg) -> LibraryMessage + Clone + 'a,
@@ -117,7 +118,6 @@ pub(super) fn view<'a>(
     let gap = SP.m;
 
     let error = theme_ext::error_color(tokens);
-    let conflicting = pn_conflict.is_some();
     let pn_input = input(
         t!(i18n, ids::LIBRARY_EDIT_ROW_INTERNAL_PN),
         edit.draft.internal_pn.as_str(),
@@ -139,21 +139,6 @@ pub(super) fn view<'a>(
         pn_input.boxed(),
         tokens,
     );
-    // The reason spans the whole row under the field: squeezed into the
-    // Internal PN cell it wrapped onto three lines and pushed the binding
-    // cards out of the column (mockup row 130).
-    let conflict_line = pn_conflict.map(|table| {
-        text(t!(
-            i18n,
-            ids::LIBRARY_EDIT_ROW_PN_CONFLICT,
-            "pn" => edit.draft.internal_pn.as_str().trim(),
-            "table" => table
-        ))
-        .size(TS.caption)
-        .color(error)
-        .width(Length::Fill)
-        .boxed()
-    });
 
     let class_picks: Vec<ClassPick> = classes
         .iter()
@@ -191,7 +176,7 @@ pub(super) fn view<'a>(
         .width(Length::Fill)
         .padding(SP.s + SP.xs);
 
-    let pn_class_state_row = row![
+    let pn_class_state = row![
         pn_cell.width(Length::FillPortion(PN_SHARE)),
         labelled(
             t!(i18n, ids::LIBRARY_EDIT_ROW_CLASS),
@@ -207,13 +192,6 @@ pub(super) fn view<'a>(
         .width(Length::FillPortion(PICK_SHARE)),
     ]
     .spacing(gap);
-    let mut pn_class_state: Column<Element<'a, LibraryMessage>> =
-        column![pn_class_state_row.boxed()]
-            .spacing(SP.xs + SP.xs)
-            .width(Length::Fill);
-    if let Some(line) = conflict_line {
-        pn_class_state = pn_class_state.push(line);
-    }
 
     let mfr_mpn = row![
         labelled(
