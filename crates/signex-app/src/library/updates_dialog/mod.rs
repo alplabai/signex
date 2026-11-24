@@ -23,11 +23,11 @@ mod tests;
 /// inference rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BumpKind {
-    /// Patch bump (`1.0.0 → 1.0.1`) — same major + minor; treated as
-    /// an opt-in default-on auto-update.
+    /// Patch bump (`1.0.0 → 1.0.1`) — same major + minor; checked by
+    /// default.
     Patch,
-    /// Minor bump (`1.0.0 → 1.1.0`) — same major; treated as
-    /// review-before-accepting (default off).
+    /// Minor bump (`1.0.0 → 1.1.0`) — same major, so compatible under
+    /// semver; checked by default.
     Minor,
     /// Major bump (`1.0.0 → 2.0.0`) or any version pair where parsing
     /// the components fails — treated as likely-breaking. Default off
@@ -40,9 +40,10 @@ impl BumpKind {
     pub const ALL: [Self; 3] = [Self::Major, Self::Minor, Self::Patch];
 
     /// Default checkbox state for the "Update Selected Components"
-    /// flow — patch-only is the safe default.
+    /// flow: patch and minor bumps are compatible under semver and start
+    /// checked; a major bump starts unchecked (mockup row 135).
     pub fn default_checked(self) -> bool {
-        matches!(self, BumpKind::Patch)
+        matches!(self, BumpKind::Patch | BumpKind::Minor)
     }
 }
 
@@ -168,7 +169,7 @@ impl LibraryUpdatesState {
         entries
             .sort_by(|a, b| signex_types::designator::compare_references(&a.ref_des, &b.ref_des));
         // Instances of one symbol share a copy, so they share a checkbox:
-        // default on only when every one of them is a safe (patch) bump.
+        // default on only when none of them is a major bump.
         let safe: Vec<bool> = entries
             .iter()
             .map(|e| {

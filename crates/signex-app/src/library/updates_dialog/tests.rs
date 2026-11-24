@@ -18,16 +18,18 @@ fn classify_bump_distinguishes_three_buckets() {
     assert_eq!(classify_bump("1", "2"), BumpKind::Major);
 }
 
-/// Default checkbox follows the bump kind: patch on, others off.
+/// Mockup row 135 (accepted 2026-11-24): patch and minor bumps start
+/// checked, since a minor bump is compatible under semver; a major bump
+/// starts unchecked.
 #[test]
-fn default_checked_only_patches() {
+fn default_checked_patches_and_minors_not_majors() {
     assert!(BumpKind::Patch.default_checked());
-    assert!(!BumpKind::Minor.default_checked());
+    assert!(BumpKind::Minor.default_checked());
     assert!(!BumpKind::Major.default_checked());
 }
 
-/// `LibraryUpdatesState::new` sorts by `ref_des` and applies the
-/// patch-default-checked rule.
+/// `LibraryUpdatesState::new` sorts by `ref_des` and pre-checks every
+/// entry but the major bumps.
 #[test]
 fn new_sorts_by_ref_des_and_pre_checks_patches() {
     let path = PathBuf::from("/tmp/x.standard_sch");
@@ -66,13 +68,13 @@ fn new_sorts_by_ref_des_and_pre_checks_patches() {
     // between R1 and R2 the way `str::cmp` would place it.
     let order: Vec<&str> = state.entries.iter().map(|e| e.ref_des.as_str()).collect();
     assert_eq!(order, vec!["C2", "R1", "R2", "R10", "U3"]);
-    // Only patches are pre-checked.
-    assert!(!state.entries[0].selected); // minor
+    // Patches and minors are pre-checked, the major is not.
+    assert!(state.entries[0].selected); // minor
     assert!(state.entries[1].selected); // patch
     assert!(state.entries[2].selected); // patch
     assert!(state.entries[3].selected); // patch
     assert!(!state.entries[4].selected); // major
-    assert_eq!(state.selected_count(), 3);
+    assert_eq!(state.selected_count(), 4);
 }
 
 /// `toggle` flips the checkbox for a matching `symbol_uuid` and
@@ -111,7 +113,7 @@ fn toggle_flips_only_matching_uuid() {
 }
 
 /// Instances sharing a `lib_id` share one embedded copy: one checkbox
-/// for the group, default on only if every member is a patch bump.
+/// for the group, default on only if no member is a major bump.
 #[test]
 fn instances_of_one_lib_id_are_selected_together() {
     let mk = |refdes: &str, lib_id: &str, kind: BumpKind| LibraryUpdateEntry {

@@ -92,8 +92,8 @@ just a `tracing::info` line and a dirty mark on the schematic.
 In **Team** workflow mode the dispatcher opens the modal so the user can
 review which updates to accept, with checkboxes pre-toggled by `BumpKind`:
 
-- `Patch`: checked by default (compatible auto-update);
-- `Minor`: unchecked by default (review before accepting);
+- `Patch`: checked by default (compatible under semver);
+- `Minor`: checked by default (compatible under semver);
 - `Major`: unchecked, with a warning (likely breaking).
 
 "Update Selected Components" rewrites the picked Symbols to the latest version
