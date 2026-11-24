@@ -95,6 +95,7 @@ pub use state::{
     SketchCanvasText, SketchOverlay, SnapOptions, SnappingMode, check_lines, pad_field,
     pad_field_buffer_key, sketch_pad_field_buffer_key,
 };
+pub use state::{InstanceOverrides, PadAttribute};
 pub(crate) use updates::hold_patterned_pad_edit;
 
 #[cfg(test)]

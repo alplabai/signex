@@ -519,4 +519,13 @@ define_ids! {
     PROPERTIES_DRAWING_SAMPLE_WIRE = "properties-drawing-sample-wire";
     PROPERTIES_TEXT_NOTE_ILLUSTRATION_SIZE = "properties-text-note-illustration-size";
     PROPERTIES_TEXT_NOTE_ILLUSTRATION_JUSTIFY = "properties-text-note-illustration-justify";
+    // m7/sketch-pad-source
+    PROPERTIES_FP_PAD_SCOPE_TITLE = "properties-fp-pad-scope-title";
+    PROPERTIES_FP_PAD_SCOPE_FROM = "properties-fp-pad-scope-from";
+    PROPERTIES_FP_PAD_SCOPE_ATTRIBUTE = "properties-fp-pad-scope-attribute";
+    PROPERTIES_FP_PAD_SCOPE_SCOPE = "properties-fp-pad-scope-scope";
+    PROPERTIES_FP_PAD_SCOPE_SOURCE = "properties-fp-pad-scope-source";
+    PROPERTIES_FP_PAD_SCOPE_NUMBERING = "properties-fp-pad-scope-numbering";
+    PROPERTIES_FP_PAD_SCOPE_THIS_PAD = "properties-fp-pad-scope-this-pad";
+    PROPERTIES_FP_PAD_SCOPE_PASTE = "properties-fp-pad-scope-paste";
 }

@@ -116,6 +116,10 @@ pub fn view_footprint<'a>(
             .boxed(),
         EditorMode::Normal => stack
             .push(super::dof_chip::zoom_pill_overlay(editor, tokens))
+            // Edit in Sketch on a selected pad (mockup row 192).
+            .push(super::pad_link::edit_in_sketch_overlay(
+                editor, tokens, i18n,
+            ))
             .push(chrome())
             .push(
                 crate::library::editor::footprint::pad_scope_prompt::overlay(editor, tokens, i18n),

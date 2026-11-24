@@ -1,11 +1,14 @@
-//! The floating pad link on the footprint sketch canvas (mockup row 192):
-//! "◂ Back to pad N" after Edit in Sketch from a pad, "Jump to pad ▸" while
-//! a pad's driving entity is selected. Both show that pad in Footprint
-//! mode. Nothing shows on a board sketch or without a pad to go to.
+//! The floating pad links on the footprint canvas (mockup row 192). On the
+//! sketch canvas: "◂ Back to pad N" after Edit in Sketch from a pad, "Jump
+//! to pad ▸" while a pad's driving entity is selected; both show that pad
+//! in Footprint mode. On the Footprint canvas: "Edit in Sketch ▸" while a
+//! selected pad has sketch geometry behind it. Nothing shows on a board
+//! sketch or without a pad to go to.
 
-use iced::widget::button as button_widget;
-use iced::{Background, Border, Element, Theme, Widget as _};
-use signex_i18n::{I18n, ids, t};
+use iced::alignment::{Horizontal, Vertical};
+use iced::widget::{Space, button as button_widget, container};
+use iced::{Background, Border, Element, Length, Theme, Widget as _};
+use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text, theme_ext};
 
@@ -39,6 +42,44 @@ pub fn link_button<'a>(
         }
         PadLinkOffer::JumpToPad { .. } => t!(i18n, ids::SKETCH_TOOLS_JUMP_TO_PAD),
     };
+    let msg = PadLinkMsg::PadLinkPressed {
+        entity: offer.entity(),
+    };
+    Some(floating_link(editor, label, msg, tokens))
+}
+
+/// The Footprint-mode overlay with the floating "Edit in Sketch ▸" link at
+/// the canvas's bottom left while a selected pad has sketch geometry behind
+/// it (mockup row 192); empty otherwise.
+pub fn edit_in_sketch_overlay<'a>(
+    editor: &'a FootprintDocument,
+    tokens: &'a ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, LibraryMessage> {
+    let offer = editor
+        .state
+        .edit_in_sketch_offer(editor.primitive().sketch.as_ref());
+    let Some(pad_idx) = offer else {
+        return Space::new().boxed();
+    };
+    let label = t!(i18n, ids::EDITORS_FP_PAD_EDIT_IN_SKETCH);
+    let msg = PadLinkMsg::EditInSketchPressed { pad_idx };
+    container(floating_link(editor, label, msg, tokens))
+        .padding(SP.xl)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_x(Horizontal::Left)
+        .align_y(Vertical::Bottom)
+        .boxed()
+}
+
+/// A floating link button rimmed in the selection colour that sends `msg`.
+fn floating_link<'a>(
+    editor: &'a FootprintDocument,
+    label: Localized,
+    msg: PadLinkMsg,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, LibraryMessage> {
     let ink = theme_ext::text_primary(tokens);
     let rest = resolve(tokens).raised;
     let hover = composite_over(overlay(tokens, Overlay::Hover), rest);
@@ -49,11 +90,7 @@ pub fn link_button<'a>(
         .padding([SP.xs, SP.l])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: editor.path.clone(),
-            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::PadLink(
-                PadLinkMsg::PadLinkPressed {
-                    entity: offer.entity(),
-                },
-            )),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::PadLink(msg)),
         })
         .style(move |_: &Theme, status: button_widget::Status| {
             let fill = match status {
@@ -73,7 +110,7 @@ pub fn link_button<'a>(
                 ..button_widget::Style::default()
             }
         });
-    Some(link.boxed())
+    link.boxed()
 }
 
 #[cfg(test)]
@@ -108,6 +145,69 @@ mod tests {
         }
         editor.state.selected_sketch = Some(entity);
         editor
+    }
+
+    /// A footprint in Footprint mode whose pad 1 a sketch point drives,
+    /// selected when `selected`.
+    fn driven_pad(selected: bool) -> FootprintDocument {
+        let mut fp = Footprint::empty("link");
+        fp.pads.push(Pad {
+            number: "1".into(),
+            ..Pad::default()
+        });
+        fp.sketch = Some(signex_sketch::SketchData::default());
+        let mut editor = FootprintDocument::new(
+            PathBuf::from("link.snxfpt"),
+            FootprintFile::from_footprint(fp),
+        );
+        editor.state.mode = EditorMode::Normal;
+        if let Some(pad) = editor.state.pads.first_mut() {
+            pad.sketch_entity_id = Some(SketchEntityId::new());
+        }
+        editor.state.selected_pad = selected.then_some(0);
+        editor
+    }
+
+    /// Mockup row 192: a selected pad the sketch drives shows a floating
+    /// "Edit in Sketch ▸" on the Footprint canvas, at its bottom left, and
+    /// a click on it asks for that pad's sketch.
+    #[test]
+    fn the_footprint_canvas_offers_edit_in_sketch_for_a_selected_driven_pad() {
+        let tokens = theme_tokens(ThemeId::GraphiteDark);
+        let i18n = I18n::en_us();
+        let label = t!(i18n, ids::EDITORS_FP_PAD_EDIT_IN_SKETCH).into_string();
+        let window = iced::Size::new(480.0, 360.0);
+
+        let unselected = driven_pad(false);
+        let texts = lay_out_texts(edit_in_sketch_overlay(&unselected, &tokens, &i18n), window);
+        assert!(texts.iter().all(|t| t.text != label), "{texts:?}");
+
+        let editor = driven_pad(true);
+        let texts = lay_out_texts(edit_in_sketch_overlay(&editor, &tokens, &i18n), window);
+        let link = find(&texts, &label).bounds;
+        assert!(link.x < window.width / 2.0, "{link:?} is not at the left");
+        assert!(
+            link.y > window.height / 2.0,
+            "{link:?} is not at the bottom"
+        );
+
+        let sent = crate::layout_probe::messages_on_click(
+            edit_in_sketch_overlay(&editor, &tokens, &i18n),
+            window,
+            &label,
+        );
+        assert!(
+            sent.iter().any(|m| matches!(
+                m,
+                LibraryMessage::PrimitiveEditorEvent {
+                    msg: PrimitiveEdit::Footprint(FootprintEditorMsg::PadLink(
+                        PadLinkMsg::EditInSketchPressed { pad_idx: 0 }
+                    )),
+                    ..
+                }
+            )),
+            "a click sends Edit in Sketch for pad 1: {sent:?}"
+        );
     }
 
     fn overlaps(a: Rectangle, b: Rectangle) -> bool {

@@ -1,6 +1,8 @@
-//! The driving-profile highlight of an Edit in Sketch from a pad (mockup row 192):
-//! the pad's entity and its profile in the selection colour, with a soft
-//! halo so it reads over the selection stroke itself.
+//! The driving-profile highlight of the pad link (mockup row 192): after an
+//! Edit in Sketch, or with a pad's entity selected, the entity, its profile
+//! and the outline of the pad it drives in the selection colour, with a
+//! soft halo so it reads over the selection stroke itself; the pattern
+//! instance the focus came from is outlined dashed.
 
 use iced::Color;
 use iced::widget::canvas::{self, Path, Stroke};
@@ -29,17 +31,14 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_pad_link_profile
     sketch: &signex_sketch::SketchData,
     state: &FootprintEditorState,
 ) {
-    let Some(focus) = state.live_pad_link() else {
+    let Some((entity, outlines)) = state.pad_link_highlight() else {
         return;
     };
     // The profile is the source's, also when the focus is one of its instances.
     let corners = state
-        .pad_driven_by(focus.entity)
+        .pad_driven_by(entity)
         .and_then(|idx| state.pads.get(idx))
         .and_then(|pad| pad.corner_entity_ids);
-    if let Some(outline) = state.pad_link_instance_outline() {
-        draw_instance_outline(frame, cstate, outline);
-    }
     let pos = |id: SketchEntityId| -> Option<(f64, f64)> {
         if let Some(solve) = state.last_solve.as_ref()
             && let Some(p) = signex_sketch::solver::state::point_xy(
@@ -69,7 +68,15 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_pad_link_profile
                 .with_color(SELECTION),
         );
     };
-    for id in driving_profile(sketch, focus.entity, corners) {
+    for outline in &outlines {
+        let path = outline_path(cstate, outline.corners);
+        if outline.is_instance {
+            stroke_instance(frame, &path);
+        } else {
+            paint(frame, &path);
+        }
+    }
+    for id in driving_profile(sketch, entity, corners) {
         let Some(entity) = sketch.entities.iter().find(|e| e.id == id) else {
             continue;
         };
@@ -112,21 +119,21 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_pad_link_profile
     }
 }
 
-/// The pattern instance the focus came from, outlined dashed (mockup row 192).
-fn draw_instance_outline(
-    frame: &mut canvas::Frame,
-    cstate: &FootprintCanvasState,
-    corners: [(f64, f64); 4],
-) {
-    let outline = Path::new(|builder| {
+/// A pad outline through its four corners, in screen space.
+fn outline_path(cstate: &FootprintCanvasState, corners: [(f64, f64); 4]) -> Path {
+    Path::new(|builder| {
         builder.move_to(cstate.world_to_screen(corners[0]));
         for corner in &corners[1..] {
             builder.line_to(cstate.world_to_screen(*corner));
         }
         builder.close();
-    });
+    })
+}
+
+/// The pattern instance the focus came from, outlined dashed (mockup row 192).
+fn stroke_instance(frame: &mut canvas::Frame, outline: &Path) {
     frame.stroke(
-        &outline,
+        outline,
         Stroke {
             line_dash: canvas::LineDash {
                 segments: &INSTANCE_DASH,

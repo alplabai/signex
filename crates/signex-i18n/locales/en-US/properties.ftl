@@ -806,3 +806,14 @@ properties-text-note-illustration-size = { $size } { $unit }
 # Under the Position callout of the text note drawing. $h and $v are the
 # Justify H and Justify V segment names.
 properties-text-note-illustration-justify = Justify { $h } / { $v }
+# m7/sketch-pad-source
+# Attribute scope of a patterned pad (mockup row 192, item D1). $source and
+# $instance name the sketch geometry and the pattern instance behind it.
+properties-fp-pad-scope-title = Attribute scope
+properties-fp-pad-scope-from = From sketch: { $source } · { $instance }
+properties-fp-pad-scope-attribute = Attribute
+properties-fp-pad-scope-scope = Scope
+properties-fp-pad-scope-source = Pattern source
+properties-fp-pad-scope-numbering = Numbering
+properties-fp-pad-scope-this-pad = This pad
+properties-fp-pad-scope-paste = Paste

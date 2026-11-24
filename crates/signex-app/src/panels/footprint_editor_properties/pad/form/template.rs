@@ -4,7 +4,7 @@
 
 use iced::widget::{Column, Row, container, pick_list};
 use iced::{Alignment, Element, Length, Widget as _};
-use signex_i18n::{UserText, ids, t};
+use signex_i18n::{I18n, UserText, ids, t};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{Label, text};
 
@@ -95,6 +95,16 @@ fn pick_msg(target: PadEditTarget, choice: TemplateChoice) -> PanelMsg {
     }
 }
 
+/// The tag after the dropdown: the template's library, or "Library" for a
+/// template with none and for "(custom)" (mockup row 125).
+fn library_affix<'a>(current: &TemplateChoice, i18n: &I18n) -> Label<'a> {
+    if current.library.is_empty() {
+        t!(i18n, ids::EDITORS_PAD_TEMPLATE_LIBRARY).into()
+    } else {
+        UserText::new(current.library.clone()).into()
+    }
+}
+
 /// The Template row, and Name and Library while the name is the pad's own.
 pub(super) fn push<'a>(
     col: Column<Element<'a, PanelMsg>>,
@@ -120,19 +130,17 @@ pub(super) fn push<'a>(
     .on_select(move |choice| pick_msg(target, choice))
     .padding([SP.xs, SP.m])
     .width(Length::Fill);
-    let mut control = Row::<Element<'a, PanelMsg>>::new()
+    let control = Row::<Element<'a, PanelMsg>>::new()
         .spacing(SP.s)
         .align_y(Alignment::Center)
         .width(field_w)
-        .push(dropdown.boxed());
-    if !offered.current.is_custom() {
-        let tag: Label<'a> = if offered.current.library.is_empty() {
-            t!(i18n, ids::EDITORS_PAD_TEMPLATE_LIBRARY).into()
-        } else {
-            UserText::new(offered.current.library.clone()).into()
-        };
-        control = control.push(text(tag).size(TS.caption).color(muted).boxed());
-    }
+        .push(dropdown.boxed())
+        .push(
+            text(library_affix(&offered.current, i18n))
+                .size(TS.caption)
+                .color(muted)
+                .boxed(),
+        );
     let line = Row::<Element<'a, PanelMsg>>::new()
         .spacing(SP.s)
         .align_y(Alignment::Center)
@@ -208,6 +216,25 @@ mod tests {
         let pads = [pad("rr155x60", "Lib"), pad("rr155x60", "Lib")];
         assert!(choices(&pads, Some(0), "rr155x60", "Lib").is_shared);
         assert!(choices(&pads, None, "rr155x60", "Lib").is_shared);
+    }
+
+    /// Mockup row 125: "(custom)" carries the "Library" tag too; a named
+    /// template carries its library's name.
+    #[test]
+    fn the_dropdown_always_carries_a_library_tag() {
+        let i18n = I18n::en_us();
+        let tag = |choice: &TemplateChoice| library_affix(choice, &i18n).as_str().to_string();
+        assert_eq!(tag(&TemplateChoice::custom()), "Library");
+        let unfiled = TemplateChoice {
+            template: "rr155x60".into(),
+            library: String::new(),
+        };
+        assert_eq!(tag(&unfiled), "Library");
+        let filed = TemplateChoice {
+            template: "rr155x60".into(),
+            library: "Lib".into(),
+        };
+        assert_eq!(tag(&filed), "Lib");
     }
 
     /// Picking a row sets the name and its library in one message.
