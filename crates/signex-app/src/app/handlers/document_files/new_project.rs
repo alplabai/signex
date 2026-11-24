@@ -305,7 +305,7 @@ pub(crate) struct RuleSeed {
 /// provenance. The project already exists, so a failure here is reported and
 /// the project is left as created: it then uses the machine's rules until
 /// the user stores some. A fab tier picked in the setup adds its `fab_*`
-/// rules to the copy (#2311).
+/// rules (#2311) and its min slot (mockup row 179d) to the copy.
 fn seed_project_rules(
     project_path: &Path,
     seed: &RuleSeed,
@@ -321,6 +321,7 @@ fn seed_project_rules(
     let (mut rules, mut notes) =
         crate::rule_profiles::rules_for_new_project(seed.dir.as_deref(), seed.selected.as_deref());
     if let Some(tier) = tier {
+        rules.set_min_slot(Some(tier.capabilities().min_slot));
         match signex_drc_dsl::table::presets::with_tier(&rules.drc, tier) {
             Ok(drc) => rules.drc = drc,
             Err(why) => notes.push(format!(
@@ -817,5 +818,45 @@ mod tests {
             write_new_project_files_with(&tmp.path().join("Plain.snxprj"), &seed, &plain).unwrap();
         let data = signex_types::project::parse_project(&written).unwrap();
         assert_eq!(data.router_tool_diameter(), None);
+    }
+
+    /// mockup row 179d: a fab tier picked in the setup stores its min slot
+    /// with the rules, at rules schema 2; no tier stores none.
+    #[test]
+    fn a_new_project_with_a_fab_tier_stores_its_min_slot_with_the_rules() {
+        use signex_types::project::{FabTemplate, ProjectSetup, RULES_SCHEMA_V2};
+        let tmp = tempfile::tempdir().unwrap();
+        let seed = RuleSeed {
+            dir: Some(tmp.path().join("no-library-yet")),
+            ..RuleSeed::default()
+        };
+        for (tier, min_slot) in [
+            (FabTemplate::Standard, 0.8),
+            (FabTemplate::Advanced, 0.6),
+            (FabTemplate::Hdi, 0.5),
+        ] {
+            let mut setup = ProjectSetup::default();
+            setup.apply_fab(tier);
+            let plan = NewProjectPlan {
+                layout: NewProjectLayout::NamedFolder,
+                setup: Some(setup),
+            };
+            let name = format!("Slot{tier:?}.snxprj");
+            let written =
+                write_new_project_files_with(&tmp.path().join(name), &seed, &plan).unwrap();
+            let data = signex_types::project::parse_project(&written).unwrap();
+            let rules = data.rules.expect("rules stored");
+            assert_eq!(rules.min_slot(), Some(min_slot), "{tier:?}");
+            assert_eq!(rules.schema, Some(RULES_SCHEMA_V2), "{tier:?}");
+        }
+        let plain = NewProjectPlan {
+            layout: NewProjectLayout::NamedFolder,
+            setup: Some(ProjectSetup::default()),
+        };
+        let written =
+            write_new_project_files_with(&tmp.path().join("SlotPlain.snxprj"), &seed, &plain)
+                .unwrap();
+        let data = signex_types::project::parse_project(&written).unwrap();
+        assert_eq!(data.rules.and_then(|rules| rules.min_slot()), None);
     }
 }

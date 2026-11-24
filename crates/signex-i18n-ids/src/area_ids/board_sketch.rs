@@ -77,4 +77,11 @@ define_ids! {
     BOARD_SKETCH_BAKE_NOTHING = "board-sketch-bake-nothing";
     BOARD_SKETCH_BAKE_UNSOLVED = "board-sketch-bake-unsolved";
     BOARD_SKETCH_BAKE_CLOSE_HINT = "board-sketch-bake-close-hint";
+    // min-slot
+    BOARD_SKETCH_CHECK_MIN_SLOT = "board-sketch-check-min-slot";
+    BOARD_SKETCH_CHECK_NAME_MIN_SLOT = "board-sketch-check-name-min-slot";
+    BOARD_SKETCH_CHECK_SKIPPED_MIN_SLOT = "board-sketch-check-skipped-min-slot";
+    BOARD_SKETCH_CHECK_SLOT_NARROW = "board-sketch-check-slot-narrow";
+    BOARD_SKETCH_FAB_MIN_SLOT = "board-sketch-fab-min-slot";
+    BOARD_SKETCH_FAB_MIN_SLOT_NONE = "board-sketch-fab-min-slot-none";
 }

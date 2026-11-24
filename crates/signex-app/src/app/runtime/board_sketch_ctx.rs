@@ -66,6 +66,7 @@ pub(super) fn board_sketch_props(editor: &FootprintDocument) -> Option<BoardSket
         // Read here, where every path that solves ends up, so they are live.
         outline_checks: check_lines(checks.as_ref()),
         router_tool_diameter: editor.state.sketch_exit.router_tool_diameter,
+        min_slot: editor.state.sketch_exit.min_slot,
         fillet_radius,
         ..BoardSketchProps::default()
     };

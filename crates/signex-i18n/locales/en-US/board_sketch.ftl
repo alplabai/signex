@@ -129,3 +129,14 @@ board-sketch-bake-anchor = Moves { $reference }
 board-sketch-bake-nothing = Bake writes nothing to the board.
 board-sketch-bake-unsolved = The sketch does not bake: it is not solved.
 board-sketch-bake-close-hint = Bake preview on the mode bar closes this panel.
+# min-slot
+# The min slot outline check (mockup row 179d): every Slot opening at least as
+# wide as the fab routes.
+board-sketch-check-min-slot = Slots: none narrower than the min slot
+board-sketch-check-name-min-slot = Min slot
+board-sketch-check-skipped-min-slot = { $check }: not checked, the project's fab profile names no min slot
+# A slot narrower than the min slot; $width and $min in millimetres.
+board-sketch-check-slot-narrow = Slot { $width } mm wide < min slot { $min } mm
+# The Fab profile group's min slot row; $width in millimetres.
+board-sketch-fab-min-slot = Min slot Ø { $width } · from profile
+board-sketch-fab-min-slot-none = Min slot: the project's fab profile names none
