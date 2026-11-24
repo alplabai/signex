@@ -260,6 +260,8 @@ fn the_filter_matches_designators_and_values_with_wildcards() {
         source_value: "10k".to_string(),
         footprint: String::new(),
         fitted: vec![true],
+        parameters: Vec::new(),
+        overridden: vec![false],
     };
     assert!(row.matches(""));
     assert!(row.matches("  , "));

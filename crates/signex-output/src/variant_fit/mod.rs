@@ -8,9 +8,14 @@
 //! then the same keys as custom properties), else fitted unless the part is
 //! marked DNP. Fitted outranks DNP when both are set; a unit that is not
 //! fitted makes its part not fitted. Base is the part without any override.
+//! Above all of these, the project's own variant settings (`.snxprj`
+//! `variant_settings`, mockup row 32) decide, applied in [`settings`].
 
 mod fields;
 mod matrix;
+mod settings;
+#[cfg(test)]
+mod settings_tests;
 #[cfg(test)]
 mod tests;
 
@@ -24,6 +29,8 @@ pub(crate) use fields::{
     resolve_base_variant_fitted,
 };
 pub use matrix::{VariantMatrix, VariantRow, variant_matrix};
+pub(crate) use settings::apply_parameters;
+pub use settings::project_fit;
 
 /// Whether the part made of `units` (its placed units, at least one) is
 /// fitted in `variant`; `None` or Base's name is Base. The fit
