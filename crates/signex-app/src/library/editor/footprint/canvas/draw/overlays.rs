@@ -9,6 +9,7 @@ use iced::{Color, Point, Radians, Vector};
 
 use super::super::{DRAG_THRESHOLD_PX, FootprintCanvas, FootprintCanvasState};
 use super::cursor_ink::CursorInk;
+use super::sketch::draw_sketch_values;
 use super::sketch::{
     draw_dof_direction_arrows, draw_sketch_overlay, draw_sketch_snap_glyph,
     draw_sketch_tool_preview,
@@ -38,7 +39,7 @@ impl FootprintCanvas<'_> {
             let p = cstate.world_to_screen((cx, cy));
             let half = 7.0_f32;
             let arm = 4.5_f32;
-            let ink = CursorInk::for_sketch_on(self.bg_color);
+            let ink = CursorInk::sketch();
             let square_path = Path::rectangle(
                 Point::new(p.x - half, p.y - half),
                 iced::Size::new(half * 2.0, half * 2.0),
@@ -59,10 +60,10 @@ impl FootprintCanvas<'_> {
         }
     }
 
-    /// v0.27 — Select-tool cursor mark: a "+" at the raw cursor, in an
-    /// ink that reads on the ground ([`CursorInk`], #2356),
-    /// replaced by a rotated double-headed arrow when hovering a
-    /// sketch Line (the resize cue at the exact line angle).
+    /// v0.27 — Select-tool cursor mark: a rotated double-headed arrow when
+    /// hovering a sketch Line (the resize cue at the exact line angle), in
+    /// an ink that reads on the ground ([`CursorInk`], #2356). Elsewhere
+    /// the idle Select shows the OS arrow and draws nothing.
     pub(in crate::library::editor::footprint::canvas) fn draw_select_cursor_mark(
         &self,
         frame: &mut canvas::Frame,
@@ -78,9 +79,7 @@ impl FootprintCanvas<'_> {
             && !context_menu_open
             && let Some(p) = cursor_screen
         {
-            let arm = 5.0_f32;
-            let ink = CursorInk::for_sketch_on(self.bg_color);
-            let stroke = Stroke::default().with_width(1.0).with_color(ink.mark);
+            let ink = CursorInk::sketch();
 
             // Hit-test the cursor against sketch Lines to find the one
             // we'd resize on drag (same tolerance as the hover test).
@@ -190,15 +189,6 @@ impl FootprintCanvas<'_> {
                     inner.fill(&right_head, ink.mark);
                     inner.fill(&left_head, ink.mark);
                 });
-            } else {
-                frame.stroke(
-                    &Path::line(Point::new(p.x - arm, p.y), Point::new(p.x + arm, p.y)),
-                    stroke,
-                );
-                frame.stroke(
-                    &Path::line(Point::new(p.x, p.y - arm), Point::new(p.x, p.y + arm)),
-                    stroke,
-                );
             }
         }
     }
@@ -310,11 +300,31 @@ impl FootprintCanvas<'_> {
         ) && let Some(sketch) = self.sketch
         {
             draw_sketch_overlay(frame, cstate, sketch, self.state, conflict_colour);
+            // mockup row 179e — the instances a circle pattern places.
+            super::sketch::draw_pattern_instances(frame, cstate, sketch, self.state);
             // v0.22 Phase E2 — DOF direction-arrow overlay.
             draw_dof_direction_arrows(frame, cstate, sketch, self.state);
             draw_sketch_tool_preview(frame, cstate, sketch, self.state);
+            // mockup row 192 — the driving profile of an Edit in Sketch from a pad.
+            super::sketch::draw_pad_link_profile(frame, cstate, sketch, self.state);
+            // mockup row 187 / mockup row 191 — Chamfer, Extend, Mirror and Linear Pattern ghosts.
+            super::sketch::draw_sketch_tool_ghosts(frame, cstate, sketch, self.state);
             // v0.22 Phase A6 — Inferred-constraint snap glyph on top.
             draw_sketch_snap_glyph(frame, cstate, self.state);
+            // Values on the drawing, pattern glyphs, conflict badge (mockup row 187).
+            draw_sketch_values(frame, cstate, sketch, self.state, conflict_colour);
+            // The badge's words name the snap target (mockup row 188).
+            super::sketch::draw_sketch_snap_badge(frame, cstate, sketch, self.state);
+        }
+        // mockup row 190 — the bake preview, over the sketch it faints.
+        self.draw_bake_preview(frame, cstate);
+        // mockup rows 179d, 190 — the failing places, over the preview's veil.
+        if matches!(
+            self.state.mode,
+            crate::library::editor::footprint::state::EditorMode::Sketch
+        ) && let Some(sketch) = self.sketch
+        {
+            super::sketch::draw_failure_marks(frame, cstate, sketch, self.state, conflict_colour);
         }
     }
 }

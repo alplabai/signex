@@ -48,6 +48,7 @@ impl Signex {
                 self.ui_state
                     .profile_manager
                     .apply_listing((*listing).clone());
+                self.keep_unsaved_machine_rules_shown();
                 Task::none()
             }
             ProfilesMsg::Selected(name) => {
@@ -56,8 +57,11 @@ impl Signex {
                 manager.selected = Some(name);
                 manager.confirm_delete = None;
                 manager.confirm_reset = None;
+                manager.name_prompt = None;
+                manager.open_rule = None;
                 Task::none()
             }
+            ProfilesMsg::Page(page) => self.handle_profile_page(page),
             ProfilesMsg::SeverityChanged(rule, severity) => {
                 self.edit_selected_profile(RuleEdit::Severity(rule, severity))
             }
@@ -65,12 +69,8 @@ impl Signex {
                 // The level the click moves the cell to, from what the screen
                 // shows, so the file ends up exactly there.
                 let target = self.ui_state.profile_manager.selected_profile().map(|l| {
-                    signex_erc::project_rules::resolve(&l.profile.erc)
-                        .pin_matrix
-                        .get(&(row, col))
-                        .copied()
-                        .unwrap_or_else(|| signex_erc::pin_matrix::baseline_cell(row, col))
-                        .cycled()
+                    let resolved = signex_erc::project_rules::resolve(&l.profile.erc);
+                    signex_erc::pin_matrix::pair_cell(&resolved.pin_matrix, row, col).cycled()
                 });
                 match target {
                     Some(target) => self.edit_selected_profile(RuleEdit::PinCell(row, col, target)),
@@ -94,6 +94,14 @@ impl Signex {
                     return Task::none();
                 }
                 self.edit_selected_profile(RuleEdit::ResetToShipped)
+            }
+            ProfilesMsg::ChangedOnlyToggled(on) => {
+                self.ui_state.profile_manager.rule_list.changed_only = on;
+                Task::none()
+            }
+            ProfilesMsg::RuleFilterChanged(query) => {
+                self.ui_state.profile_manager.rule_list.query = query;
+                Task::none()
             }
             ProfilesMsg::NameInputChanged(name) => {
                 self.ui_state.profile_manager.name_input = name;
@@ -228,7 +236,7 @@ impl Signex {
         + 'static,
     ) -> Task<Message> {
         let name = self.ui_state.profile_manager.name_input.trim().to_string();
-        let manager = self.ui_state.profile_manager.clone();
+        let manager = (*self.ui_state.profile_manager).clone();
         self.library_action(move |dir| work(dir, &manager, &name))
     }
 
@@ -298,8 +306,11 @@ impl Signex {
                         (text, None)
                     }
                 };
-                self.ui_state.profile_manager.status = Some((false, text));
-                self.ui_state.profile_manager.selected = selected;
+                let manager = &mut self.ui_state.profile_manager;
+                manager.status = Some((false, text));
+                manager.selected = selected;
+                manager.name_prompt = None;
+                manager.open_rule = None;
             }
         }
         Task::batch(follow)

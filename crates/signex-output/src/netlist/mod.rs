@@ -3,10 +3,10 @@
 //! The exporter reads the authoritative [`Netlist`](signex_types::net::Netlist)
 //! off [`ExportContext`] (ADR-0002 D7) — derived once by the app through
 //! `signex_net::build_project_netlist` — so emitters never re-derive
-//! connectivity. Two formats: the Protel `.NET` file for downstream PCB tools
-//! (default, see [`protel`]) and a plain debug/diff listing.
+//! connectivity. Two formats: the `.NET` text file for downstream PCB tools
+//! (default, see [`net_text`]) and a plain debug/diff listing.
 
-mod protel;
+mod net_text;
 
 use std::fmt::Write as _;
 
@@ -21,9 +21,9 @@ pub struct NetlistExporter;
 pub enum NetlistFormat {
     /// Plain `# Signex netlist` text dump — a debug/diff aid, read by no PCB tool.
     Listing,
-    /// Protel `.NET`: `[ ... ]` component blocks and `( ... )` net blocks.
+    /// `.NET` text: `[ ... ]` component blocks and `( ... )` net blocks.
     #[default]
-    Protel,
+    NetText,
 }
 
 impl NetlistFormat {
@@ -31,7 +31,7 @@ impl NetlistFormat {
     pub fn label(self) -> &'static str {
         match self {
             Self::Listing => "Signex Netlist Listing",
-            Self::Protel => "Protel Netlist",
+            Self::NetText => "Netlist (.NET)",
         }
     }
 
@@ -39,7 +39,7 @@ impl NetlistFormat {
     pub fn extension(self) -> &'static str {
         match self {
             Self::Listing => "txt",
-            Self::Protel => "NET",
+            Self::NetText => "NET",
         }
     }
 
@@ -52,11 +52,11 @@ impl NetlistFormat {
 
 #[derive(Debug, Clone, Default)]
 pub struct NetlistOptions {
-    /// Which emitter runs; defaults to [`NetlistFormat::Protel`].
+    /// Which emitter runs; defaults to [`NetlistFormat::NetText`].
     pub format: NetlistFormat,
     /// When `Some`, the [`NetlistFormat::Listing`] output is prefixed with an
     /// INCOMPLETE-netlist header comment block — one comment line per string,
-    /// naming the pages this export does not cover (#431). The Protel format
+    /// naming the pages this export does not cover (#431). The `.NET` format
     /// has no comment syntax, so it ignores this field and always writes a
     /// clean netlist; the app reports the omission through the Messages panel
     /// and the export dialog instead. `None` (the default) emits the listing
@@ -76,15 +76,15 @@ pub enum NetlistError {
     )]
     NoNetlist,
     #[error(
-        "the Protel netlist cannot be written: designator(s) {0} are held by more than one part — run \"Reset Duplicate Schematic Designators...\" and export again"
+        "the .NET netlist cannot be written: designator(s) {0} are held by more than one part — run \"Reset Duplicate Schematic Designators...\" and export again"
     )]
     DuplicateDesignators(String),
     #[error(
-        "the Protel netlist cannot be written: designator(s) {0} are unannotated — run \"Annotate Schematics...\" and export again"
+        "the .NET netlist cannot be written: designator(s) {0} are unannotated — run \"Annotate Schematics...\" and export again"
     )]
     UnannotatedDesignators(String),
     #[error(
-        "the Protel netlist cannot be written: {0} part(s) have a blank designator — run \"Annotate Schematics...\" (or give each part a designator) and export again"
+        "the .NET netlist cannot be written: {0} part(s) have a blank designator — run \"Annotate Schematics...\" (or give each part a designator) and export again"
     )]
     BlankDesignators(usize),
 }
@@ -103,7 +103,7 @@ impl Exporter for NetlistExporter {
         let note = opts.incomplete_note.as_deref();
         let bytes = match opts.format {
             NetlistFormat::Listing => render_listing(netlist, note),
-            NetlistFormat::Protel => protel::emit(ctx, netlist)?,
+            NetlistFormat::NetText => net_text::emit(ctx, netlist)?,
         };
         Ok(NetlistOutput { bytes })
     }
@@ -168,7 +168,7 @@ fn escape_quoted(name: &str) -> String {
 /// A plain, deterministic net listing: one `net <id> "<name>"` line per net (in
 /// the netlist's stable id order) followed by its `reference.pin` terminals (in
 /// the order the derivation already sorted them). A stable, contract-driven
-/// debug dump; not read by PCB tools (that is the Protel format).
+/// debug dump; not read by PCB tools (that is the `.NET` format).
 ///
 /// When `incomplete_note` is `Some`, an INCOMPLETE header comment block (see
 /// [`incomplete_header`]) is prepended before the banner (#431); when `None`
@@ -214,10 +214,16 @@ mod tests {
     }
 
     #[test]
-    fn protel_is_the_default_format() {
-        assert_eq!(NetlistOptions::default().format, NetlistFormat::Protel);
-        assert_eq!(NetlistFormat::Protel.extension(), "NET");
-        assert_eq!(NetlistFormat::Protel.file_name("amp"), "amp.NET");
+    fn net_text_is_the_default_format() {
+        assert_eq!(NetlistOptions::default().format, NetlistFormat::NetText);
+        assert_eq!(NetlistFormat::NetText.extension(), "NET");
+        assert_eq!(NetlistFormat::NetText.file_name("amp"), "amp.NET");
+    }
+
+    /// #2588: the save dialog names the format by what it is.
+    #[test]
+    fn the_save_dialog_filter_is_the_neutral_format_name() {
+        assert_eq!(NetlistFormat::NetText.label(), "Netlist (.NET)");
     }
 
     fn ctx_with(netlist: Option<Netlist>) -> ExportContext {

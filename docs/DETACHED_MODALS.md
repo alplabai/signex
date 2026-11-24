@@ -73,7 +73,7 @@ window.
   annotate reset, Re-prefix confirm, Create Sheet, close-library, library
   delete; and the small dialogs: About, Grid Properties, Custom Selection
   Filter, Enable Version Control, custom net colour, library picker, primitive
-  picker, document options, library options, Copy to Library) open with `resizable: false` and `minimizable:
+  picker, document options, New Library, Copy to Library) open with `resizable: false` and `minimizable:
   false`. iced 0.14 maps `resizable` to winit's maximise / zoom button (so the
   macOS green button is disabled) and `minimizable` to the minimise button;
   iced exposes no separate fullscreen switch, so fullscreen is off only as a
@@ -141,20 +141,20 @@ Confirm and warning dialogs lock the main window; tool windows do not.
 | Dialog | Class | OS close means | Tests |
 |---|---|---|---|
 | New Project (resizable, `ModalId::NewProject`) | locking | Cancel (writes nothing; waits while Create is writing, and the window returns if it vanishes then). Enter creates in the window; the name field is focused once the window opens; header slot empty, body scrolls, footer pinned | `detached_new_project_tests`, `detached_modals` generic loops |
-| Rename, Remove | locking | Cancel | `detached_modals` |
+| Rename, Remove | locking | Cancel. In Remove, Enter does nothing; only the footer button carries out the selected card (#2262) | `detached_modals`, `remove_choice_tests` |
 | Annotate reset confirm | locking | Cancel | `detached_modal_os_close` |
 | Re-prefix confirm | locking | Cancel (`AnnotateMsg::ReprefixCancelled`; changes nothing) | `reprefix_standard` |
 | Create Sheet | locking | Later (writes nothing) | `child_sheet_create_tests` |
 | Error notice | locking | dismiss (OK) | `detached_confirm_tests`, `detached_modals` |
 | Netlist-incomplete prompt | locking | Cancel (writes nothing) | `detached_confirm_tests` (close mapping) |
 | Autosave recovery | locking | Decide later (copy kept; the offer returns if its window vanishes) | `detached_modals`, `detached_confirm_tests` |
-| Project-close confirm | locking | Cancel (never Discard) | `detached_modals`, `detached_confirm_tests` |
+| Project-close confirm | locking | Cancel (never Discard). Enter is Save All (#2262) | `detached_modals`, `detached_confirm_tests`, `remove_choice_tests` |
 | App-quit confirm | locking | Cancel (never Discard or exit) | `detached_confirm_tests`, `tests/regression/project.rs` |
 | Close-library confirm | locking | Cancel (drafts untouched) | `detached_modals` |
 | Library delete confirm (per browser) | locking | Cancel for THAT browser; nothing deleted | `detached_library_tests` |
 | Library recovery | locking | Cancel (never a decision that deletes or rebinds; returns if its window vanishes, twice at most, then stays in the window) | `detached_library_tests`, `detached_confirm_tests` |
 | Copy to Library (opening a stock symbol or footprint) | tool | Cancel; the stock original is never changed | `detached_modals` |
-| Library picker, primitive picker, document options, create options, updates, custom net colour | tool | Cancel, no write | `detached_modals` generic loops, `detached_library_tests` (net colour) |
+| Library picker, primitive picker, document options, New Library (create options), updates, custom net colour | tool | Cancel, no write | `detached_modals` generic loops, `detached_library_tests` (net colour) |
 | Library edit row (per browser) | tool | Cancel for THAT browser | same code path as delete confirm; no edit-row fixture |
 | Find / Replace, Grid Properties, Custom Selection Filter, Enable Version Control, About, Shortcuts, Calculator | tool | close | `detached_modals` |
 

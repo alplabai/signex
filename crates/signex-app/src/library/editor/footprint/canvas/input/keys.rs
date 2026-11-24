@@ -39,6 +39,9 @@ impl FootprintCanvas<'_> {
         typed_char: Option<char>,
         repeat: bool,
     ) -> Option<canvas::Action<LibraryMessage>> {
+        if let Some(a) = self.key_canvas_overlay(key, modifiers, typed_char) {
+            return Some(a);
+        }
         // Letters match on any layout (#2095): Cyrillic `с` is `c`.
         let letter = crate::keymap::shortcut_char(key, physical);
         if let Some(a) = self.key_clipboard(letter, modifiers) {
@@ -48,6 +51,51 @@ impl FootprintCanvas<'_> {
             return Some(a);
         }
         self.key_sketch_input(key, modifiers, typed_char)
+    }
+
+    /// The sketch canvas's overlays take the keyboard first (mockup row 187, mockup row 188):
+    /// a value edited on the drawing takes Enter (apply), Esc (cancel),
+    /// Backspace and typed characters, and swallows other plain keys so a
+    /// Delete or a tool letter does not act on the sketch underneath. An
+    /// open menu, else a selected pattern, closes on Esc. Keys with Ctrl,
+    /// Alt or the logo key, and every key outside Sketch mode, pass through.
+    fn key_canvas_overlay(
+        &self,
+        key: &keyboard::Key,
+        modifiers: &keyboard::Modifiers,
+        typed_char: Option<char>,
+    ) -> Option<canvas::Action<LibraryMessage>> {
+        use crate::library::editor::footprint::sketch_mode::SketchCanvasMsg;
+        use crate::library::editor::footprint::state::EditorMode;
+        use keyboard::key::Named;
+        let overlay = &self.state.sketch_overlay;
+        if self.state.mode != EditorMode::Sketch
+            || modifiers.command()
+            || modifiers.alt()
+            || modifiers.logo()
+        {
+            return None;
+        }
+        let escape = matches!(key, keyboard::Key::Named(Named::Escape));
+        let msg = if overlay.value_edit.is_some() {
+            match key {
+                keyboard::Key::Named(Named::Enter) => SketchCanvasMsg::ValueCommitted,
+                keyboard::Key::Named(Named::Escape) => SketchCanvasMsg::ValueEditCancelled,
+                keyboard::Key::Named(Named::Backspace) => SketchCanvasMsg::ValueErased,
+                _ => match typed_char.filter(|c| !c.is_control()) {
+                    Some(ch) => SketchCanvasMsg::ValueTyped(ch),
+                    None => return Some(canvas::Action::capture()),
+                },
+            }
+        } else if escape && overlay.menu.is_some() {
+            SketchCanvasMsg::MenuClosed
+        } else if escape && overlay.selected_pattern.is_some() {
+            SketchCanvasMsg::PatternSelected(None)
+        } else {
+            return None;
+        };
+        self.cache.clear();
+        Some(canvas::Action::publish(self.sketch_canvas_event(msg)).and_capture())
     }
 
     /// v0.26-F — Ctrl+X / Ctrl+C / Ctrl+V clipboard shortcuts.

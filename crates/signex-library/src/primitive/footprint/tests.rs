@@ -72,6 +72,7 @@ fn footprint_json_roundtrip_with_body3d() {
         default_designator: String::new(),
         component_type: ComponentType::Standard,
         height_mm: None,
+        generated: GeneratedFeatures::default(),
     };
     let json = serde_json::to_string(&fp).unwrap();
     let back: Footprint = serde_json::from_str(&json).unwrap();
@@ -399,8 +400,8 @@ updated = "2026-05-04T00:00:00Z"
 footprints = []
 "#;
     match FootprintFile::from_toml_str(bad) {
-        Err(FootprintFileError::UnsupportedFormat { got }) => {
-            assert_eq!(got, "snxfpt/99");
+        Err(FootprintFileError::UnsupportedFormat(reason)) => {
+            assert_eq!(reason.found(), Some("snxfpt/99"));
         }
         other => panic!("expected UnsupportedFormat, got {other:?}"),
     }

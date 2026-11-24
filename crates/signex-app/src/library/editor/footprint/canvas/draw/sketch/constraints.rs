@@ -1,27 +1,81 @@
-//! Constraint-glyph overlay — each constraint's Unicode glyph rendered
-//! at the centroid of the entities it touches, tinted red when the
-//! constraint is over-constrained.
+//! Constraint-mark overlay: each relation's mark (H, V, ∥, ⊥, =, ◡, ⇔, ⌖
+//! …) in a small upright pill by the entities it touches, the coincident
+//! mark as a dot (mockup row 187, mockup row 188). A conflicting or over-constrained mark
+//! fills in the conflict colour. Dimensions draw their value instead
+//! (`dimension_labels`); both read their place from
+//! [`crate::library::editor::footprint::canvas::glyph_layout`].
 
-use iced::widget::canvas;
-use iced::{Color, Point, Radians, Vector};
+use iced::widget::canvas::{self, Path, Stroke};
+use iced::{Color, Point, Size};
 
-use crate::library::editor::footprint::canvas::FootprintCanvasState;
+use super::sketch_ink::SketchInk;
+use crate::library::editor::footprint::canvas::glyph_layout::{
+    COINCIDENT_MARK, Glyph, GlyphFace, MARK_TEXT,
+};
 use crate::library::editor::footprint::state::FootprintEditorState;
 
-/// v0.13.2 Phase 6.6 — render constraint glyphs above the sketch
-/// entities. Each constraint's centroid (geometric mean of the
-/// entities it touches) gets a small Unicode glyph; over-constrained
-/// constraints render in red.
+/// Corner radius of a mark's pill, in mark text heights (the mockups' 3 px
+/// on an 11 px mark).
+const PILL_RADIUS_EM: f32 = 0.27;
+/// Radius of the coincident dot, in mark text heights.
+const DOT_RADIUS_EM: f32 = 0.3;
+/// Alpha of a mark the hovered conflict row is not about.
+const DIMMED_ALPHA: f32 = 0.3;
+
+/// How one mark is painted.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct MarkPaint {
+    fill: Color,
+    border: Color,
+    text: Color,
+}
+
+/// The paint of a mark: in conflict it fills with `conflict_colour` and
+/// its text takes the pill colour; while a conflict row is hovered, every
+/// other mark dims.
+fn mark_paint(
+    ink: &SketchInk,
+    conflict_colour: Color,
+    conflicting: bool,
+    dimmed: bool,
+) -> MarkPaint {
+    let paint = if conflicting {
+        MarkPaint {
+            fill: conflict_colour,
+            border: conflict_colour,
+            text: ink.pill,
+        }
+    } else {
+        MarkPaint {
+            fill: ink.pill,
+            border: ink.pill_border,
+            text: ink.label,
+        }
+    };
+    if !dimmed {
+        return paint;
+    }
+    let dim = |c: Color| Color {
+        a: c.a * DIMMED_ALPHA,
+        ..c
+    };
+    MarkPaint {
+        fill: dim(paint.fill),
+        border: dim(paint.border),
+        text: dim(paint.text),
+    }
+}
+
+/// Render the constraint marks laid out in `glyphs` under the sketch
+/// entities; conflicting and over-constrained ones in `conflict_colour`.
 pub(super) fn draw_constraint_icons(
     frame: &mut canvas::Frame,
-    cstate: &FootprintCanvasState,
-    sketch: &signex_sketch::SketchData,
+    glyphs: &[Glyph],
     state: &FootprintEditorState,
+    ink: &SketchInk,
     conflict_colour: Color,
 ) {
-    use signex_sketch::constraint::ConstraintKind;
-    use signex_sketch::entity::EntityKind;
-    use signex_sketch::id::{ConstraintId, SketchEntityId};
+    use signex_sketch::id::ConstraintId;
 
     let over_set: std::collections::HashSet<ConstraintId> = state
         .last_solve
@@ -29,329 +83,70 @@ pub(super) fn draw_constraint_icons(
         .map(|s| s.over_constraints.iter().copied().collect())
         .unwrap_or_default();
 
-    let point_world_local = |id: SketchEntityId| -> Option<(f64, f64)> {
-        if let Some(solve) = state.last_solve.as_ref()
-            && let Some(p) = signex_sketch::solver::state::point_xy(
-                id,
-                &solve.result.state,
-                &solve.result.index,
-                sketch,
-            )
-        {
-            return Some(p);
-        }
-        sketch
-            .entities
-            .iter()
-            .find(|e| e.id == id)
-            .and_then(|e| match e.kind {
-                EntityKind::Point { x, y } => Some((x, y)),
-                _ => None,
-            })
-    };
-    let line_endpoints_local = |id: SketchEntityId| -> Option<(SketchEntityId, SketchEntityId)> {
-        sketch
-            .entities
-            .iter()
-            .find(|e| e.id == id)
-            .and_then(|e| match e.kind {
-                EntityKind::Line { start, end } => Some((start, end)),
-                _ => None,
-            })
-    };
-    fn arc_refs_local(
-        sketch: &signex_sketch::SketchData,
-        id: signex_sketch::id::SketchEntityId,
-    ) -> Option<(
-        signex_sketch::id::SketchEntityId,
-        signex_sketch::id::SketchEntityId,
-        signex_sketch::id::SketchEntityId,
-        bool,
-    )> {
-        sketch
-            .entities
-            .iter()
-            .find(|e| e.id == id)
-            .and_then(|e| match e.kind {
-                signex_sketch::entity::EntityKind::Arc {
-                    center,
-                    start,
-                    end,
-                    sweep_ccw,
-                } => Some((center, start, end, sweep_ccw)),
-                _ => None,
-            })
-    }
-    fn circle_center_local(
-        sketch: &signex_sketch::SketchData,
-        id: signex_sketch::id::SketchEntityId,
-    ) -> Option<signex_sketch::id::SketchEntityId> {
-        sketch
-            .entities
-            .iter()
-            .find(|e| e.id == id)
-            .and_then(|e| match e.kind {
-                signex_sketch::entity::EntityKind::Circle { center, .. } => Some(center),
-                _ => None,
-            })
-    }
-
-    for c in &sketch.constraints {
-        // v0.27 — `primary_line` carries the two endpoint IDs of the
-        // line whose direction the glyph should track. Set for every
-        // line-anchored constraint so the H / V / // / ⊥ / = glyph
-        // rotates with the line during a drag instead of staying
-        // upright while the geometry rotates underneath it.
-        let (glyph, points, primary_line): (
-            &str,
-            Vec<SketchEntityId>,
-            Option<(SketchEntityId, SketchEntityId)>,
-        ) = match &c.kind {
-            ConstraintKind::Coincident { p1, p2 } => ("=", vec![*p1, *p2], Some((*p1, *p2))),
-            ConstraintKind::PointOnLine { point, line } => {
-                let mut v = vec![*point];
-                let lp = line_endpoints_local(*line);
-                if let Some((s, e)) = lp {
-                    v.push(s);
-                    v.push(e);
-                }
-                ("|", v, lp)
-            }
-            ConstraintKind::Horizontal { line } => {
-                let lp = line_endpoints_local(*line);
-                let mut v = Vec::new();
-                if let Some((s, e)) = lp {
-                    v.push(s);
-                    v.push(e);
-                }
-                ("H", v, lp)
-            }
-            ConstraintKind::Vertical { line } => {
-                let lp = line_endpoints_local(*line);
-                let mut v = Vec::new();
-                if let Some((s, e)) = lp {
-                    v.push(s);
-                    v.push(e);
-                }
-                ("V", v, lp)
-            }
-            ConstraintKind::Parallel { l1, l2 } => {
-                let lp = line_endpoints_local(*l1);
-                let mut v = Vec::new();
-                if let Some((s, e)) = lp {
-                    v.extend([s, e]);
-                }
-                if let Some((s, e)) = line_endpoints_local(*l2) {
-                    v.extend([s, e]);
-                }
-                ("//", v, lp)
-            }
-            ConstraintKind::Perpendicular { l1, l2 } => {
-                let lp = line_endpoints_local(*l1);
-                let mut v = Vec::new();
-                if let Some((s, e)) = lp {
-                    v.extend([s, e]);
-                }
-                if let Some((s, e)) = line_endpoints_local(*l2) {
-                    v.extend([s, e]);
-                }
-                ("L", v, lp)
-            }
-            ConstraintKind::DistancePtPt { p1, p2, .. } => ("D", vec![*p1, *p2], None),
-            ConstraintKind::DistancePtLine { point, line, .. } => {
-                let mut v = vec![*point];
-                if let Some((s, e)) = line_endpoints_local(*line) {
-                    v.push(s);
-                    v.push(e);
-                }
-                ("d", v, None)
-            }
-            ConstraintKind::DistancePtCircle { point, circle, .. } => {
-                let mut v = vec![*point];
-                if let Some(c) = circle_center_local(sketch, *circle) {
-                    v.push(c);
-                } else if let Some((c, _, _, _)) = arc_refs_local(sketch, *circle) {
-                    v.push(c);
-                }
-                ("\u{29bf}", v, None) // ⦿ "DistancePtCircle"
-            }
-            ConstraintKind::Fixed { point } => ("\u{1F512}", vec![*point], None),
-            // v0.13.3 — remaining constraint glyphs.
-            ConstraintKind::PointOnArc { point, arc } => {
-                let mut v = vec![*point];
-                if let Some((c, s, e, _)) = arc_refs_local(sketch, *arc) {
-                    v.extend([c, s, e]);
-                }
-                ("\u{2192}", v, None) // → "PointOnArc"
-            }
-            ConstraintKind::Angle { l1, l2, .. } => {
-                let mut v = Vec::new();
-                if let Some((s, e)) = line_endpoints_local(*l1) {
-                    v.extend([s, e]);
-                }
-                if let Some((s, e)) = line_endpoints_local(*l2) {
-                    v.extend([s, e]);
-                }
-                ("A", v, None)
-            }
-            ConstraintKind::EqualLength { l1, l2 } => {
-                let lp = line_endpoints_local(*l1);
-                let mut v = Vec::new();
-                if let Some((s, e)) = lp {
-                    v.extend([s, e]);
-                }
-                if let Some((s, e)) = line_endpoints_local(*l2) {
-                    v.extend([s, e]);
-                }
-                ("=L", v, lp)
-            }
-            ConstraintKind::EqualRadius { e1, e2 } => {
-                let mut v = Vec::new();
-                if let Some((c, _, _, _)) = arc_refs_local(sketch, *e1) {
-                    v.push(c);
-                }
-                if let Some((c, _, _, _)) = arc_refs_local(sketch, *e2) {
-                    v.push(c);
-                }
-                if v.is_empty() {
-                    if let Some(c) = circle_center_local(sketch, *e1) {
-                        v.push(c);
-                    }
-                    if let Some(c) = circle_center_local(sketch, *e2) {
-                        v.push(c);
-                    }
-                }
-                ("=R", v, None)
-            }
-            ConstraintKind::TangentLineArc { line, arc } => {
-                let lp = line_endpoints_local(*line);
-                let mut v = Vec::new();
-                if let Some((s, e)) = lp {
-                    v.extend([s, e]);
-                }
-                if let Some((c, _, _, _)) = arc_refs_local(sketch, *arc) {
-                    v.push(c);
-                }
-                ("T", v, lp)
-            }
-            ConstraintKind::TangentArcArc { a1, a2, .. } => {
-                let mut v = Vec::new();
-                if let Some((c, _, _, _)) = arc_refs_local(sketch, *a1) {
-                    v.push(c);
-                }
-                if let Some((c, _, _, _)) = arc_refs_local(sketch, *a2) {
-                    v.push(c);
-                }
-                ("TT", v, None)
-            }
-            ConstraintKind::SymmetricAboutLine { p1, p2, line } => {
-                let lp = line_endpoints_local(*line);
-                let mut v = vec![*p1, *p2];
-                if let Some((s, e)) = lp {
-                    v.extend([s, e]);
-                }
-                ("\u{29C7}", v, lp) // ⧇ "Symmetric"
-            }
-            ConstraintKind::SymmetricAboutPoint { p1, p2, center } => {
-                ("\u{29C7}", vec![*p1, *p2, *center], Some((*p1, *p2)))
-            }
-            ConstraintKind::Midpoint { point, line } => {
-                let lp = line_endpoints_local(*line);
-                let mut v = vec![*point];
-                if let Some((s, e)) = lp {
-                    v.extend([s, e]);
-                }
-                ("M", v, lp)
-            }
+    for glyph in glyphs {
+        let (GlyphFace::Mark { text }, Some(id)) = (&glyph.face, glyph.constraint()) else {
+            continue;
         };
-        if glyph.is_empty() || points.is_empty() {
-            continue;
-        }
-        let mut sum_x = 0.0_f64;
-        let mut sum_y = 0.0_f64;
-        let mut n = 0;
-        for id in &points {
-            if let Some((x, y)) = point_world_local(*id) {
-                sum_x += x;
-                sum_y += y;
-                n += 1;
-            }
-        }
-        if n == 0 {
-            continue;
-        }
-        let centroid = (sum_x / n as f64, sum_y / n as f64);
-        let p = cstate.world_to_screen(centroid);
-        // v0.23 — per-row precision in the Conflicts list. When the
-        // user hovers a specific row, only that constraint renders
-        // at full red; every other glyph (including other
-        // over-constraints) dims so the offender stands out alone.
-        // When no row is hovered, fall back to the v0.22 set-wide
-        // isolation (the whole over-constraint set lights up).
+        // A hovered Conflicts row isolates its constraint: it alone shows
+        // in the conflict colour and every other mark dims. With no row
+        // hovered the whole over-constrained set shows. A rejected edit's
+        // conflict always shows.
         let hover = state.conflicts_row_hovered;
-        let is_over = over_set.contains(&c.id);
-        let is_conflict = state.conflict.contains_constraint(c.id);
-        let colour = match (hover, is_over) {
-            // A rejected edit's conflict always shows in the error colour.
-            _ if is_conflict => conflict_colour,
-            // Specific row hovered + this is the row → full red.
-            (Some(h), _) if h == c.id => Color::from_rgba(0.85, 0.10, 0.10, 1.00),
-            // Specific row hovered + this is NOT the row → dimmed.
-            (Some(_), _) => Color::from_rgba(0.40, 0.40, 0.40, 0.30),
-            // No row hover + over-constrained → red (set-wide focus).
-            (None, true) => Color::from_rgba(0.85, 0.10, 0.10, 1.00),
-            // v0.27 — non-over-constrained constraint glyph at dark
-            // grey so it reads against both the dark Pads-mode
-            // canvas and the white Sketch-mode canvas without
-            // washing out on either.
-            (None, false) => Color::from_rgba(0.30, 0.30, 0.30, 0.95),
-        };
-        // v0.27 — rotate the glyph along its primary line so an H,
-        // V, //, ⊥, =, =L etc. follows the line's current direction
-        // during a drag. Without this the glyph reads upright while
-        // the geometry rotates underneath, which looks decoupled.
-        // For non-line-anchored constraints (Fixed, distance values,
-        // tangent-arc-arc, etc.) `primary_line` is None and the
-        // glyph stays upright.
-        let rotation = primary_line.and_then(|(a_id, b_id)| {
-            let a = point_world_local(a_id)?;
-            let b = point_world_local(b_id)?;
-            let a_screen = cstate.world_to_screen(a);
-            let b_screen = cstate.world_to_screen(b);
-            let dx = b_screen.x - a_screen.x;
-            let dy = b_screen.y - a_screen.y;
-            if dx.hypot(dy) <= 1.0 {
-                return None;
-            }
-            // v0.27 — track the raw line angle. Earlier revisions
-            // clamped to [-π/2, π/2] to keep the glyph upright, but
-            // that decoupled the glyph orientation from a freely
-            // rotating line and read as "limited". Now the glyph
-            // follows the line through a full 360°.
-            Some(dy.atan2(dx))
-        });
-        let text = canvas::Text {
-            content: glyph.to_string(),
-            // Glyph centred on its draw position when rotated; when
-            // upright we keep the legacy +6 / -6 nudge so the
-            // existing constraint cluster doesn't jump.
-            position: if rotation.is_some() {
-                Point::new(0.0, -10.0)
-            } else {
-                Point::new(p.x + 6.0, p.y - 6.0)
-            },
-            color: colour,
-            size: iced::Pixels(11.0),
-            ..canvas::Text::default()
-        };
-        if let Some(angle) = rotation {
-            frame.with_save(|inner| {
-                inner.translate(Vector::new(p.x, p.y));
-                inner.rotate(Radians(angle));
-                inner.fill_text(text);
-            });
-        } else {
-            frame.fill_text(text);
+        let rejected = state.conflict.contains_constraint(id);
+        let conflicting = rejected || hover.map_or(over_set.contains(&id), |h| h == id);
+        let dimmed = !rejected && hover.is_some_and(|h| h != id);
+        let paint = mark_paint(ink, conflict_colour, conflicting, dimmed);
+        let rect = glyph.rect;
+        let centre = Point::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+        if *text == COINCIDENT_MARK {
+            let colour = if conflicting { paint.fill } else { paint.text };
+            frame.fill(&Path::circle(centre, MARK_TEXT * DOT_RADIUS_EM), colour);
+            continue;
         }
+        let pill = Path::rounded_rectangle(
+            Point::new(rect.x, rect.y),
+            Size::new(rect.width, rect.height),
+            (MARK_TEXT * PILL_RADIUS_EM).into(),
+        );
+        frame.fill(&pill, paint.fill);
+        frame.stroke(
+            &pill,
+            Stroke::default().with_width(1.0).with_color(paint.border),
+        );
+        frame.fill_text(canvas::Text {
+            content: (*text).to_string(),
+            position: centre,
+            color: paint.text,
+            size: iced::Pixels(MARK_TEXT),
+            font: iced::Font {
+                weight: iced::font::Weight::Semibold,
+                ..iced::Font::MONOSPACE
+            },
+            align_x: iced::alignment::Horizontal::Center.into(),
+            align_y: iced::alignment::Vertical::Center,
+            ..canvas::Text::default()
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_mark_at_rest_is_a_pill_in_the_label_ink_and_a_conflict_fills_red() {
+        let red = Color::from_rgb(1.0, 0.0, 0.0);
+        let ink = SketchInk::board();
+        let rest = mark_paint(&ink, red, false, false);
+        assert_eq!(rest.fill, ink.pill);
+        assert_eq!(rest.border, ink.pill_border);
+        assert_eq!(rest.text, ink.label);
+
+        let clash = mark_paint(&ink, red, true, false);
+        assert_eq!(clash.fill, red, "a conflict fills in the conflict colour");
+        assert_eq!(clash.text, ink.pill);
+
+        let dimmed = mark_paint(&ink, red, false, true);
+        assert!(dimmed.text.a < rest.text.a, "the other marks dim");
     }
 }

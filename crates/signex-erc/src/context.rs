@@ -7,8 +7,10 @@ use std::sync::Arc;
 
 use signex_net::{ConnectedPoints, SheetConnectivity, best_net_name_of, pt_key};
 use signex_types::schematic::{InstancePath, SchematicSheet};
-use signex_types::schematic::{LabelType, PinDirection, Point, pin_tips};
+use signex_types::schematic::{LabelType, PinDirection, Point, no_erc_rules_suppress, pin_tips};
 use uuid::Uuid;
+
+pub use crate::harness_snapshot::ErcHarness;
 
 // ---------------------------------------------------------------------------
 // Paper size
@@ -93,7 +95,8 @@ pub struct ErcSymbol {
     pub footprint: String,
     /// `false` for a part that is not placed on the board (no footprint due).
     pub on_board: bool,
-    /// Units the library symbol defines ([`LibSymbol::unit_count`]).
+    /// Units the library symbol defines ([`LibSymbol::unit_count`], at least
+    /// 1); 0 for a part with no library body, whose units are not known.
     ///
     /// [`LibSymbol::unit_count`]: signex_types::schematic::LibSymbol::unit_count
     pub unit_count: u32,
@@ -130,6 +133,11 @@ impl ErcNetPin {
 }
 
 impl ErcSymbol {
+    /// Whether the sheet holds this symbol's library body.
+    pub fn has_library_body(&self) -> bool {
+        self.unit_count > 0
+    }
+
     /// The designator of each placement of this symbol, see
     /// [`placement_designators`].
     pub fn placement_designators(&self) -> Vec<&str> {
@@ -144,15 +152,18 @@ impl ErcSymbol {
     }
 }
 
-/// True when one of the No-ERC directive `positions` sits at `p`, compared in
-/// the 1 µm key space (`pt_key`). The one test both the per-sheet context and
-/// the project-wide units pass use.
+/// True when one of the No-ERC `directives` (position and rule list) sits at
+/// `p` and silences `rule_id`, compared in the 1 µm key space (`pt_key`). The
+/// one test the per-sheet context and the project-wide passes use.
 pub(crate) fn no_erc_directive_at<'a>(
-    positions: impl IntoIterator<Item = &'a Point>,
+    directives: impl IntoIterator<Item = (&'a Point, &'a [String])>,
     p: &Point,
+    rule_id: &str,
 ) -> bool {
     let k = pt_key(p);
-    positions.into_iter().any(|d| pt_key(d) == k)
+    directives
+        .into_iter()
+        .any(|(at, rules)| pt_key(at) == k && no_erc_rules_suppress(rules, rule_id))
 }
 
 /// The designator of each placement of `symbol`: its instance entries'
@@ -212,10 +223,13 @@ pub struct ErcNoConnect {
     pub position: Point,
 }
 
-/// A No-ERC directive: suppresses every diagnostic located at its point.
-#[derive(Debug, Clone, Copy)]
+/// A No-ERC directive: suppresses the diagnostics of its rules located at its
+/// point; no rules means every rule (#1699).
+#[derive(Debug, Clone)]
 pub struct ErcNoErcDirective {
     pub position: Point,
+    /// ERC rule ids it silences; empty silences every rule.
+    pub rules: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -336,13 +350,22 @@ pub struct ErcContext {
     /// Lets cross-sheet rules count a file once however many parents
     /// reference it.
     pub key: Option<signex_net::SheetKey>,
+    /// The sheet's signal harnesses (#1280).
+    pub harness: ErcHarness,
 }
 
 impl ErcContext {
-    /// True when a No-ERC directive sits at `p`, compared in the 1 µm key
-    /// space (`pt_key`) like every other point test in this crate.
-    pub fn has_no_erc_directive_at(&self, p: &Point) -> bool {
-        no_erc_directive_at(self.no_erc_directives.iter().map(|d| &d.position), p)
+    /// True when a No-ERC directive that silences `rule_id` sits at `p`,
+    /// compared in the 1 µm key space (`pt_key`) like every other point test in
+    /// this crate.
+    pub fn has_no_erc_directive_at(&self, p: &Point, rule_id: &str) -> bool {
+        no_erc_directive_at(
+            self.no_erc_directives
+                .iter()
+                .map(|d| (&d.position, d.rules.as_slice())),
+            p,
+            rule_id,
+        )
     }
 
     pub fn from_snapshot(snapshot: &SchematicSheet) -> Self {
@@ -432,6 +455,7 @@ impl ErcContext {
             .iter()
             .map(|d| ErcNoErcDirective {
                 position: d.position,
+                rules: d.rules.clone(),
             })
             .collect();
 
@@ -467,6 +491,11 @@ impl ErcContext {
             })
             .collect();
 
+        // A part's value as ERC reads it: an `=` value evaluated on its sheet
+        // (#1986); a power port's net name never is.
+        let sheet_variables = signex_types::variables::TextTable(&snapshot.variables);
+        let variables: [&dyn signex_types::variables::Resolver; 1] = [&sheet_variables];
+
         // --- Step 2: symbols with pre-computed pin connectivity -----------
         // Pins are projected first, then gated below. Pin-to-pin contact is not
         // a connection (ADR-0002 D5.1); the `PinsTouchNotConnected` rule
@@ -474,45 +503,7 @@ impl ErcContext {
         let mut symbols: Vec<ErcSymbol> = snapshot
             .symbols
             .iter()
-            .filter_map(|sym| {
-                let lib_sym = snapshot.resolve_lib_symbol(sym)?;
-                let pins = pin_tips(&lib_sym, sym)
-                    .map(|(lp, world)| ErcPin {
-                        world_pos: Point::new(world.x, world.y),
-                        local_pos: lp.pin.position,
-                        number: if lp.pin.number.is_empty() {
-                            lp.pin.name.clone()
-                        } else {
-                            lp.pin.number.clone()
-                        },
-                        electrical_type: lp.pin.direction,
-                        required: !matches!(
-                            lp.pin.direction,
-                            PinDirection::Unclassified | PinDirection::DoNotConnect
-                        ),
-                        connected: false,
-                    })
-                    .collect();
-
-                Some(ErcSymbol {
-                    uuid: sym.uuid,
-                    reference: sym.reference.clone(),
-                    instance_designators: sym
-                        .valid_instance_entries()
-                        .map(|(_, r)| r.to_string())
-                        .collect(),
-                    lib_id: sym.lib_id.clone(),
-                    unit: sym.unit,
-                    value: sym.value.clone(),
-                    footprint: sym.footprint.clone(),
-                    on_board: sym.on_board,
-                    unit_count: lib_sym.unit_count(),
-                    position: sym.position,
-                    is_power: sym.is_power,
-                    pins,
-                    attrs: sym.fields.clone(),
-                })
-            })
+            .map(|sym| project_symbol(snapshot, sym, &variables))
             .collect();
 
         // The one shared gate (`signex_net::ConnectedPoints`) — the same
@@ -555,6 +546,7 @@ impl ErcContext {
             nets,
             children,
             key: None,
+            harness: ErcHarness::from_sheet(snapshot),
         }
     }
 }
@@ -562,6 +554,55 @@ impl ErcContext {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/// One placed symbol as the rules read it. A part with no library body keeps
+/// its fields but has no pins and a `unit_count` of 0: neither is known, and
+/// `PartWithoutLibraryBody` reports it.
+fn project_symbol(
+    snapshot: &SchematicSheet,
+    sym: &signex_types::schematic::Symbol,
+    variables: &[&dyn signex_types::variables::Resolver],
+) -> ErcSymbol {
+    let lib_sym = snapshot.resolve_lib_symbol(sym);
+    let lib = lib_sym.as_deref();
+    let pins: Vec<ErcPin> = lib.map_or_else(Vec::new, |lib| {
+        pin_tips(lib, sym)
+            .map(|(lp, world)| ErcPin {
+                world_pos: Point::new(world.x, world.y),
+                local_pos: lp.pin.position,
+                number: if lp.pin.number.is_empty() {
+                    lp.pin.name.clone()
+                } else {
+                    lp.pin.number.clone()
+                },
+                electrical_type: lp.pin.direction,
+                required: !matches!(
+                    lp.pin.direction,
+                    PinDirection::Unclassified | PinDirection::DoNotConnect
+                ),
+                connected: false,
+            })
+            .collect()
+    });
+    ErcSymbol {
+        uuid: sym.uuid,
+        reference: sym.reference.clone(),
+        instance_designators: sym
+            .valid_instance_entries()
+            .map(|(_, r)| r.to_string())
+            .collect(),
+        lib_id: sym.lib_id.clone(),
+        unit: sym.unit,
+        value: signex_types::part_fields::evaluated_value(&snapshot.symbols, sym, variables, false),
+        footprint: sym.footprint.clone(),
+        on_board: sym.on_board,
+        unit_count: lib.map_or(0, |lib| lib.unit_count()),
+        position: sym.position,
+        is_power: sym.is_power,
+        pins,
+        attrs: sym.fields.clone(),
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Net summaries for the DSL

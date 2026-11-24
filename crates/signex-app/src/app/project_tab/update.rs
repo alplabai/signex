@@ -19,13 +19,60 @@ impl Signex {
             ProjectTabMsg::Requirements { project_id, msg } => {
                 return self.dispatch_requirements(project_id, msg);
             }
+            ProjectTabMsg::AddSchematicRequested { project_id } => {
+                return self.add_schematic_from_tab(project_id);
+            }
+            ProjectTabMsg::ErcDialogRequested { project_id } => {
+                return self.open_erc_from_tab(project_id);
+            }
+            ProjectTabMsg::VariantPartsReadRequested { project_id } => {
+                return self.read_variant_parts(project_id, true);
+            }
+            ProjectTabMsg::PreviewActed { project_id, msg } => {
+                return self.act_on_project_preview(project_id, msg);
+            }
+            ProjectTabMsg::LibraryLocateRequested {
+                project_id,
+                missing,
+            } => return self.pick_located_library(project_id, missing),
+            ProjectTabMsg::LibraryLocatePicked {
+                project_id,
+                missing,
+                picked,
+            } => return self.finish_library_locate(project_id, &missing, picked),
             _ => {}
         }
+        // Showing the Variants section reads its parts; a variant edit that
+        // changed the columns reads them again (#1293).
+        let parts_read = match &msg {
+            ProjectTabMsg::SectionSelected {
+                project_id,
+                section: ProjectSection::Variants,
+            } => Some((*project_id, true)),
+            ProjectTabMsg::NewVariantRequested { project_id }
+            | ProjectTabMsg::VariantRenameSubmitted { project_id }
+            | ProjectTabMsg::VariantRemoved { project_id, .. } => Some((*project_id, false)),
+            _ => None,
+        };
+        // Showing Version control reads the branch and last commit.
+        let repo_read = match &msg {
+            ProjectTabMsg::SectionSelected {
+                project_id,
+                section: ProjectSection::VersionControl,
+            } => Some(*project_id),
+            _ => None,
+        };
         self.apply_project_tab_message(msg);
-        iced::Task::none()
+        if let Some(project_id) = repo_read {
+            return self.read_project_repo(project_id);
+        }
+        match parts_read {
+            Some((project_id, force)) => self.read_variant_parts(project_id, force),
+            None => iced::Task::none(),
+        }
     }
 
-    fn apply_project_tab_message(&mut self, msg: ProjectTabMsg) {
+    pub(super) fn apply_project_tab_message(&mut self, msg: ProjectTabMsg) {
         match msg {
             ProjectTabMsg::SectionSelected {
                 project_id,
@@ -53,6 +100,9 @@ impl Signex {
                     ProjectGeneralCommand::SetParameter { name, value },
                 );
             }
+            ProjectTabMsg::ParameterSubmitted { project_id } => {
+                self.report_project_variable_issues(project_id);
+            }
             ProjectTabMsg::ParameterRemoved { project_id, name } => {
                 self.close_general_run(project_id);
                 self.apply_project_general(
@@ -79,6 +129,19 @@ impl Signex {
                     .document_state
                     .project_by_id(project_id)
                     .is_none_or(|p| p.data.parameters.contains_key(&name));
+                // A parameter is a variable (#1987): `${NAME}` and an
+                // expression can only name an identifier.
+                if !name.is_empty() && !signex_types::variables::is_variable_name(&name) {
+                    crate::diagnostics::log_warning(format!(
+                        "Parameter '{name}' was not added: a name is letters, digits and _, \
+                         and does not start with a digit."
+                    ));
+                    // The refused name stays typed, to be corrected.
+                    if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+                        tab.new_parameter_name = name;
+                    }
+                    return;
+                }
                 if !name.is_empty() && !exists {
                     self.apply_project_general(
                         project_id,
@@ -89,6 +152,20 @@ impl Signex {
                     );
                     self.close_general_run(project_id);
                 }
+            }
+            ProjectTabMsg::ParameterFilterEdited { project_id, text } => {
+                self.edit_parameter_filter(project_id, text);
+            }
+            ProjectTabMsg::ParameterGroupToggled { project_id, group } => {
+                self.toggle_parameter_group(project_id, group);
+            }
+            ProjectTabMsg::ParameterRenameEdited {
+                project_id,
+                from,
+                text,
+            } => self.edit_parameter_rename(project_id, from, text),
+            ProjectTabMsg::ParameterRenameSubmitted { project_id } => {
+                self.submit_parameter_rename(project_id);
             }
             ProjectTabMsg::SchematicDefaultEdited {
                 project_id,
@@ -149,17 +226,27 @@ impl Signex {
             ProjectTabMsg::RenameRequested { project_id } => {
                 self.open_project_rename_from_tab(project_id);
             }
+            ProjectTabMsg::ExploreRequested { project_id } => {
+                self.explore_project_folder(project_id);
+            }
             // Routed by `dispatch_project_tab_message`, which returns their task.
-            ProjectTabMsg::SetupEdited { .. } | ProjectTabMsg::Requirements { .. } => {}
+            ProjectTabMsg::SetupEdited { .. }
+            | ProjectTabMsg::Requirements { .. }
+            | ProjectTabMsg::PreviewActed { .. }
+            | ProjectTabMsg::VariantPartsReadRequested { .. } => {}
+            // Routed by `dispatch_project_tab_message`: they open a dialog.
+            ProjectTabMsg::AddSchematicRequested { .. }
+            | ProjectTabMsg::ErcDialogRequested { .. }
+            | ProjectTabMsg::LibraryLocateRequested { .. }
+            | ProjectTabMsg::LibraryLocatePicked { .. } => {}
+            ProjectTabMsg::RowDragged { project_id, msg } => {
+                self.act_on_row_drag(project_id, msg);
+            }
             ProjectTabMsg::SheetMoved {
                 project_id,
                 filename,
                 step,
             } => self.move_project_sheet(project_id, filename, step),
-            ProjectTabMsg::NewVariantNameEdited { project_id, text } => {
-                self.edit_new_variant_name(project_id, text);
-            }
-            ProjectTabMsg::VariantAdded { project_id } => self.add_typed_variant(project_id),
             ProjectTabMsg::VariantRenameEdited {
                 project_id,
                 from,
@@ -174,6 +261,29 @@ impl Signex {
             ProjectTabMsg::ActiveVariantPicked { project_id, name } => {
                 self.pick_active_variant(project_id, name);
             }
+            ProjectTabMsg::NewVariantRequested { project_id } => self.add_new_variant(project_id),
+            ProjectTabMsg::VariantSelected { project_id, name } => {
+                self.select_variant(project_id, name);
+            }
+            ProjectTabMsg::VariantRenameStarted { project_id, name } => {
+                self.start_variant_rename(project_id, name);
+            }
+            ProjectTabMsg::VariantFilterEdited { project_id, text } => {
+                if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+                    tab.variant_filter = text;
+                }
+            }
+            ProjectTabMsg::VariantDifferingToggled { project_id } => {
+                if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+                    tab.variants_only_differ = !tab.variants_only_differ;
+                }
+            }
+            ProjectTabMsg::VariantPartsRead {
+                project_id,
+                generation,
+                epoch,
+                parts,
+            } => self.install_variant_parts(project_id, generation, epoch, parts),
             ProjectTabMsg::LibraryMoved {
                 project_id,
                 path,
@@ -192,6 +302,24 @@ impl Signex {
                 self.open_version_control_from_tab(project_id);
             }
         }
+    }
+
+    /// True when the project's `schematic_design` section is unreadable, so
+    /// an edit of it is refused; Messages says why (DECISIONS 2026-11-23).
+    pub(crate) fn refuse_schematic_design_edit(&mut self, project_id: ProjectId) -> bool {
+        let unreadable = self
+            .document_state
+            .project_by_id(project_id)
+            .is_some_and(|project| project.data.has_unreadable_schematic_design());
+        if unreadable {
+            let line = signex_i18n::t!(
+                self.ui_state.i18n,
+                signex_i18n::ids::DIALOG_SCHEMATIC_DESIGN_UNREADABLE
+            );
+            crate::diagnostics::log_warning(line.into_string());
+            self.sync_diagnostics_panel_ctx();
+        }
+        unreadable
     }
 
     /// Apply one section edit (#1689-#1693) to the project's data as one
@@ -218,12 +346,12 @@ impl Signex {
         {
             return Ok(false);
         }
-        tab.rules_step_newest = false;
         document.sync_project_history_dirty(project_id, true);
         // The list order is a title block's Sheet N of M: redraw the sheets.
         let pages_moved = matches!(
             command,
             signex_engine::ProjectSectionCommand::MoveSheet { .. }
+                | signex_engine::ProjectSectionCommand::PlaceSheet { .. }
         );
         self.after_project_general_change(pages_moved);
         Ok(true)
@@ -253,8 +381,12 @@ impl Signex {
     }
 
     fn select_project_section(&mut self, project_id: ProjectId, section: ProjectSection) {
+        // A preview's open label and window belong to the section left.
+        self.ui_state.project_preview = super::ProjectPreviewUi::default();
+        self.ui_state.project_git.close_switcher();
         if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
             tab.section = section;
+            tab.row_drag = None;
             // A section switch ends the typing run: the next edit is its own
             // undo step.
             tab.general_history.close_run();
@@ -263,6 +395,8 @@ impl Signex {
             tab.journal_lines_draft = None;
             tab.variant_rename = None;
             tab.variant_problem = None;
+            tab.parameter_rename = None;
+            tab.parameter_rename_refused = false;
             tab.requirements.clear_drafts();
         }
     }
@@ -286,7 +420,6 @@ impl Signex {
         let tab = document.project_tabs.entry(project_id).or_default();
         let defaults_before = project.data.schematic_defaults.clone();
         if tab.general_history.apply(&mut project.data, command) {
-            tab.rules_step_newest = false;
             let defaults_moved = project.data.schematic_defaults != defaults_before;
             document.sync_project_history_dirty(project_id, true);
             self.after_project_general_change(defaults_moved);
@@ -344,6 +477,8 @@ impl Signex {
         tab.journal_lines_draft = None;
         tab.variant_rename = None;
         tab.variant_problem = None;
+        tab.parameter_rename = None;
+        tab.parameter_rename_refused = false;
         // Requirement drafts are by id: only a stepped entry's go (#2547).
         tab.requirements
             .follow_step(&requirements_before, &project.data.requirements);
@@ -355,6 +490,21 @@ impl Signex {
             }
             self.after_project_general_change(defaults_moved);
         }
+        // A label opened on the old value must not write over the step.
+        self.ui_state.project_preview.close_labels();
         moved
+    }
+}
+
+impl Signex {
+    /// Write the project variables whose `=` expression does not evaluate
+    /// (a cycle, an unknown name) to Messages (#1987).
+    fn report_project_variable_issues(&self, project_id: ProjectId) {
+        let Some(project) = self.document_state.project_by_id(project_id) else {
+            return;
+        };
+        for issue in signex_types::variables::project_variable_issues(&project.data.parameters) {
+            crate::diagnostics::log_warning(format!("{}: {issue}", project.data.name));
+        }
     }
 }

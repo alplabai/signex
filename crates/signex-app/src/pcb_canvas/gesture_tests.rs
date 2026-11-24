@@ -283,6 +283,7 @@ fn a_press_on_a_grabbed_footprint_drags_it_instead_of_a_box() {
         from,
         to,
         tolerance_mm,
+        leaves_tracks: false,
     };
     assert_eq!(msg, Some(dragged));
     assert!(rig.canvas.marquee.get().is_none(), "no box is drawn");
@@ -378,6 +379,73 @@ fn a_click_on_a_grabbed_footprint_or_a_modified_press_still_selects() {
     rig.press(100.0, 80.0);
     rig.move_to(160.0, 140.0);
     assert!(rig.canvas.marquee.get().is_some(), "Shift starts a box");
+}
+
+/// Caner, 2026-11-21: Ctrl on a footprint still drags it, leaving its
+/// tracks until the drop, even once Ctrl is let go; the next drag starts
+/// unlatched, and a Ctrl click without a drag still toggles.
+#[test]
+fn a_ctrl_drag_on_a_footprint_leaves_the_tracks_until_the_drop() {
+    let mut rig = rig();
+    grabbing(&mut rig);
+    rig.mods(Modifiers::CTRL);
+    rig.press(100.0, 80.0);
+    let msg = rig.move_to(160.0, 140.0);
+    assert!(
+        matches!(
+            msg,
+            Some(PcbCanvasMsg::FootprintDragged {
+                leaves_tracks: true,
+                ..
+            })
+        ),
+        "{msg:?}"
+    );
+    assert!(rig.canvas.marquee.get().is_none(), "no box is drawn");
+
+    let released = Event::Keyboard(KeyEvent::ModifiersChanged(Modifiers::empty()));
+    let msg = rig.send(released, at(160.0, 140.0));
+    let to = rig.world(160.0, 140.0);
+    assert!(
+        matches!(
+            msg,
+            Some(PcbCanvasMsg::FootprintDragged {
+                leaves_tracks: true,
+                to: t,
+                ..
+            }) if t == to
+        ),
+        "{msg:?}"
+    );
+    rig.release(160.0, 140.0);
+
+    rig.press(100.0, 80.0);
+    let msg = rig.move_to(160.0, 140.0);
+    assert!(
+        matches!(
+            msg,
+            Some(PcbCanvasMsg::FootprintDragged {
+                leaves_tracks: false,
+                ..
+            })
+        ),
+        "the next drag is unlatched: {msg:?}"
+    );
+    rig.release(160.0, 140.0);
+
+    rig.mods(Modifiers::CTRL);
+    rig.press(100.0, 80.0);
+    let msg = rig.release(101.0, 80.0).expect("a click");
+    assert!(
+        matches!(
+            msg,
+            PcbCanvasMsg::Clicked {
+                mode: ClickMode::Toggle,
+                ..
+            }
+        ),
+        "{msg:?}"
+    );
 }
 
 #[test]
@@ -481,5 +549,27 @@ fn losing_the_focus_forgets_held_modifiers() {
     assert!(
         matches!(msg, Some(PcbCanvasMsg::FootprintDragged { .. })),
         "{msg:?}"
+    );
+}
+
+/// Two plain clicks close together in quick succession are a
+/// double-click; a third click starts afresh.
+#[test]
+fn a_second_quick_click_nearby_is_a_double_click() {
+    let mut rig = rig();
+    rig.press(100.0, 80.0);
+    let first = rig.release(100.0, 80.0).expect("a click");
+    assert!(matches!(first, PcbCanvasMsg::Clicked { .. }), "{first:?}");
+    rig.press(101.0, 80.0);
+    let second = rig.release(101.0, 80.0).expect("a double-click");
+    assert!(
+        matches!(second, PcbCanvasMsg::DoubleClicked { .. }),
+        "{second:?}"
+    );
+    rig.press(101.0, 80.0);
+    let third = rig.release(101.0, 80.0).expect("a click");
+    assert!(
+        matches!(third, PcbCanvasMsg::Clicked { .. }),
+        "a third click starts afresh: {third:?}"
     );
 }

@@ -33,6 +33,24 @@ fn a_child_sheet_name_typed_in_a_window_lands_in_that_windows_properties() {
     );
 }
 
+/// The part's ⋯ menu toggled in an undocked Properties window opens in that
+/// window's panel state, not the main window's.
+#[test]
+fn a_part_menu_toggled_in_a_window_opens_in_that_windows_properties() {
+    let mut f = fixture();
+    f.app.refresh_panel_ctx();
+    let id = uuid::Uuid::from_u128(11);
+    let toggled = typed_in_window(
+        &f,
+        crate::panels::PanelMsg::Part(crate::panels::PartPanelMsg::MenuToggled(id)),
+    );
+    assert!(is_scoped(&toggled, f.window));
+    let _ = f.app.update(toggled);
+    let window = &f.app.document_state.window_panel_ctx[&f.window];
+    assert_eq!(window.part_panel.menu_for, Some(id));
+    assert_eq!(f.app.document_state.panel_ctx.part_panel.menu_for, None);
+}
+
 #[test]
 fn a_child_sheet_name_committed_in_a_window_lands_in_that_windows_engine() {
     let mut f = fixture();
@@ -84,6 +102,19 @@ fn every_properties_message_that_writes_the_shown_sheet_or_its_context_is_scoped
         P::ResetChildSheetStyle(id),
         P::UpdateSymbolFromLibrary(id),
         P::PlacedPartAction(PlacedPartAction::EditSymbol),
+        // The part's ⋯ menu and Browse… act on the window's own sheet.
+        P::Part(crate::panels::PartPanelMsg::MenuActionPicked(
+            PlacedPartAction::EditSymbol,
+        )),
+        P::SelectionForm(crate::panels::SelectionFormMsg::SheetFileBrowseClicked(id)),
+        P::SelectionForm(crate::panels::SelectionFormMsg::SheetFileBrowsed(id, None)),
+        // The ⋯ menu toggle and the illustration hover are window state.
+        P::Part(crate::panels::PartPanelMsg::MenuToggled(id)),
+        P::Illustration(
+            signex_widgets::property_illustration::IllustrationMsg::FieldLeft(
+                signex_widgets::property_illustration::FieldId::new("x"),
+            ),
+        ),
         P::SetPrePlacementText(String::new()),
         P::SetPrePlacementDesignator(String::new()),
         P::SetPrePlacementRotation(0.0),
@@ -93,6 +124,10 @@ fn every_properties_message_that_writes_the_shown_sheet_or_its_context_is_scoped
         P::TogglePrePlacementItalic,
         P::TogglePrePlacementUnderline,
         P::ConfirmPrePlacement,
+        P::PrePlacementPosition(crate::panels::PrePlacementPositionMsg::FieldTyped(
+            crate::panels::PositionField::X,
+            String::new(),
+        )),
         P::Navigator(TreeMsg::Toggle(vec!["x".into()])),
         // #1312 review: a board window's footprint fields.
         P::PcbFootprintText(crate::panels::PcbFootprintTextMsg::Typed {

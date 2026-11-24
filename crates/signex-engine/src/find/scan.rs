@@ -1,18 +1,21 @@
 //! The pure hit scanner.
 
-use super::{DesignatorScope, FindHit, FindKind};
+use super::{DesignatorScope, FindHit, FindKind, FindQuery};
 use crate::TextTarget;
 use signex_types::schematic::{SchematicSheet, SelectedItem, SelectedKind};
 
-/// Every occurrence, ignoring case under the rule in `fold`, of `needle` in `sheet`'s labels, notes,
-/// designators (at `scope`'s placements) and values, in that order. An empty
-/// needle finds nothing.
-pub fn scan_sheet(sheet: &SchematicSheet, needle: &str, scope: &DesignatorScope) -> Vec<FindHit> {
-    let needle = super::fold::folded(needle.trim());
-    if needle.is_empty() {
+/// Every item of `sheet` whose text `query` matches under its options:
+/// labels, notes, designators (at `scope`'s placements) and values, in that
+/// order. An empty query finds nothing.
+pub fn scan_sheet(
+    sheet: &SchematicSheet,
+    query: &FindQuery,
+    scope: &DesignatorScope,
+) -> Vec<FindHit> {
+    if query.is_empty() {
         return Vec::new();
     }
-    let contains = |text: &str| super::fold::contains_folded(text, &needle);
+    let contains = |text: &str| query.is_match(text);
     let mut hits = Vec::new();
 
     for label in sheet.labels.iter().filter(|l| contains(&l.text)) {
@@ -84,4 +87,37 @@ pub fn scan_sheet(sheet: &SchematicSheet, needle: &str, scope: &DesignatorScope)
         }
     }
     hits
+}
+
+/// The designator of the part a Value hit belongs to, at `scope`'s
+/// placements (`R5`, or `R5, R105` for a sheet placed twice). `None` for any
+/// other hit and for a power port, whose designator is never drawn.
+pub fn value_part_name(
+    sheet: &SchematicSheet,
+    hit: &FindHit,
+    scope: &DesignatorScope,
+) -> Option<String> {
+    if hit.kind != FindKind::Value {
+        return None;
+    }
+    let symbol = sheet
+        .symbols
+        .iter()
+        .find(|s| s.uuid == hit.item.uuid && !s.is_power)?;
+    let read: Vec<&str> = if scope.placements.is_empty() {
+        vec![symbol.reference.as_str()]
+    } else {
+        scope
+            .placements
+            .iter()
+            .map(|p| symbol.designator_in(p))
+            .collect()
+    };
+    let mut names: Vec<&str> = Vec::new();
+    for name in read.into_iter().map(str::trim) {
+        if !name.is_empty() && !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    (!names.is_empty()).then(|| names.join(", "))
 }

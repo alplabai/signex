@@ -19,6 +19,7 @@ fn item_anchor_is_the_position_of_a_point_item_and_the_midpoint_of_a_run() {
         uuid: bus_id,
         start: Point::new(2.0, 2.0),
         end: Point::new(4.0, 8.0),
+        ..Default::default()
     });
     sheet.no_connects.push(NoConnect {
         uuid: no_connect_id,

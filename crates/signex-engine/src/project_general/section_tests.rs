@@ -91,6 +91,35 @@ fn a_move_at_the_end_records_nothing() {
     assert!(!history.can_undo());
 }
 
+/// Mockup rows 31 and 33: a drop is one step, however far the row moved.
+#[test]
+fn a_dropped_row_is_one_undo_step() {
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    let dropped = apply(
+        &mut history,
+        &mut data,
+        ProjectSectionCommand::PlaceSheet {
+            filename: "a.snxsch".into(),
+            to: 2,
+        },
+    );
+    assert_eq!(dropped, Ok(true));
+    assert_eq!(data.sheet_order(), ["b.snxsch", "c.snxsch", "a.snxsch"]);
+    assert!(history.undo(&mut data));
+    assert_eq!(data.sheet_order(), ["a.snxsch", "b.snxsch", "c.snxsch"]);
+    assert!(!history.can_undo());
+    let same = apply(
+        &mut history,
+        &mut data,
+        ProjectSectionCommand::PlaceLibrary {
+            path: PathBuf::from("x.snxlib"),
+            to: 0,
+        },
+    );
+    assert_eq!(same, Ok(false), "a drop on its own place records nothing");
+}
+
 #[test]
 fn variant_edits_are_steps_and_a_refused_one_records_nothing() {
     let mut data = project();
@@ -177,6 +206,36 @@ fn a_section_command_round_trips_as_json() {
     assert_eq!(back, command);
 }
 
+/// DECISIONS 2026-11-23 (#2750): every edit of an unreadable
+/// `schematic_design` section changes nothing and records no undo step.
+#[test]
+fn an_unreadable_schematic_design_section_refuses_every_edit() {
+    let text = br#"{"name":"P","dir":"","schematic_root":null,"pcb_file":null,"schematic_design":"garbled"}"#;
+    let mut data = signex_types::project::parse_project_bytes(Path::new("P.snxprj"), text).unwrap();
+    assert!(data.has_unreadable_schematic_design());
+    let mut history = ProjectGeneralHistory::default();
+    let naming = signex_types::project::ChannelNaming {
+        designator_format: "${Designator}${Channel}".into(),
+        net_format: "${Channel}_${Net}".into(),
+    };
+    let set_naming = ProjectSectionCommand::SetChannelNaming { naming };
+    assert_eq!(apply(&mut history, &mut data, set_naming), Ok(false));
+    let definition = signex_types::schematic::HarnessDefinition {
+        name: "UART".into(),
+        description: String::new(),
+        entries: Vec::new(),
+    };
+    let set_definitions = ProjectSectionCommand::SetHarnessDefinitions {
+        definitions: vec![definition],
+    };
+    assert_eq!(apply(&mut history, &mut data, set_definitions), Ok(false));
+    let classes = vec![signex_types::diff_pair_class::DiffPairClass::named("USB")];
+    let set_classes = ProjectGeneralCommand::SetDiffPairClasses(classes);
+    assert!(!history.apply(&mut data, set_classes));
+    assert!(data.schematic_design.is_default());
+    assert!(!history.can_undo());
+}
+
 #[test]
 fn clearing_the_annotate_choice_over_an_unreadable_section_records_nothing() {
     let text = br#"{"name":"P","dir":"","schematic_root":null,"pcb_file":null,"annotation":{"designator_standard":"iso9999"}}"#;
@@ -239,4 +298,31 @@ fn a_requirement_edit_is_one_undo_step_and_a_refused_one_records_nothing() {
     assert!(history.redo(&mut data));
     assert!(history.redo(&mut data));
     assert_eq!(data.requirements, after_set);
+}
+
+/// #1280: a harness definitions edit is one undo step of the project's
+/// history, and the undo puts the old list back.
+#[test]
+fn a_harness_definitions_edit_is_one_undo_step() {
+    use signex_types::schematic::{HarnessDefinition, HarnessDefinitionEntry};
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    let spi = HarnessDefinition {
+        name: "SPI_BUS".into(),
+        description: "Sensor SPI, mode 0".into(),
+        entries: ["SCK", "MOSI"]
+            .iter()
+            .map(|n| HarnessDefinitionEntry {
+                name: (*n).into(),
+                harness: None,
+            })
+            .collect(),
+    };
+    let set = ProjectSectionCommand::SetHarnessDefinitions {
+        definitions: vec![spi.clone()],
+    };
+    assert_eq!(apply(&mut history, &mut data, set), Ok(true));
+    assert_eq!(data.schematic_design.harness_definitions, [spi]);
+    assert!(history.undo(&mut data));
+    assert!(data.schematic_design.harness_definitions.is_empty());
 }

@@ -38,6 +38,7 @@ fn payload() -> PlacementPayload {
         uuid: source(3),
         start: Point::new(0.0, 30.0),
         end: Point::new(20.0, 30.0),
+        ..Default::default()
     });
     f.bus_entries.push(BusEntry {
         uuid: source(4),
@@ -347,7 +348,9 @@ fn every_placing_command_refuses_an_id_in_use() {
         Command::PlaceNoConnect {
             no_connect: point.clone(),
         },
-        Command::PlaceNoErcDirective { directive: point },
+        Command::PlaceNoErcDirective {
+            directive: signex_types::schematic::NoErcDirective::new(point.uuid, point.position),
+        },
         Command::PlaceLabel {
             label: Label {
                 uuid: taken,

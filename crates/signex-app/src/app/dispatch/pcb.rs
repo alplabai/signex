@@ -49,17 +49,21 @@ impl Signex {
             PcbMsg::FabOutputs(msg) => self.dispatch_fab_outputs_message(msg),
             PcbMsg::Panel(msg) => self.dispatch_board_panel_message(msg),
             PcbMsg::BackAnnotate(msg) => self.dispatch_back_annotate_message(msg),
+            PcbMsg::CompareBoard(msg) => self.dispatch_compare_board_message(msg),
             PcbMsg::Output(msg) => self.dispatch_board_output_message(msg),
             PcbMsg::Bar(event) => self.handle_pcb_bar(event),
             PcbMsg::PlaceToolPicked(tool) => {
                 self.arm_board_tool(tool);
+                // Properties shows what the next click places.
+                let form = self.raise_board_tool_form();
                 // From the bar, Place, a key or the palette alike, the
                 // tool's bar group shows it next (#2392).
                 let group = crate::app::pcb_bar_groups::PcbBarGroup::of_tool(tool);
-                match (group, tool.command()) {
+                let remembered = match (group, tool.command()) {
                     (Some(group), Some(command)) => self.remember_pcb_bar_row(group, command),
                     _ => Task::none(),
-                }
+                };
+                Task::batch([form, remembered])
             }
             PcbMsg::RouteModeStepped => {
                 self.step_route_mode();
@@ -76,6 +80,8 @@ impl Signex {
             PcbMsg::FootprintSwap(event) => self.handle_footprint_swap(event),
             PcbMsg::DxfImport(event) => self.handle_dxf_import(event),
             PcbMsg::PartSwap(event) => self.handle_part_swap(event),
+            PcbMsg::Room(event) => self.handle_room(event),
+            PcbMsg::CreateRooms(event) => self.handle_create_rooms(event),
             PcbMsg::ReuseBlock(event) => self.handle_reuse_block(event),
             PcbMsg::LayerTabMenu(event) => self.handle_layer_tab_menu(event),
             PcbMsg::LayerSetMenu(event) => self.handle_layer_set_menu(event),
@@ -85,14 +91,15 @@ impl Signex {
                 self.lock_pcb_selection(locked);
                 Task::none()
             }
+            PcbMsg::Origin(event) => {
+                self.handle_board_origin(event);
+                Task::none()
+            }
             PcbMsg::Net(event) => {
                 self.handle_board_net(event);
                 Task::none()
             }
-            PcbMsg::Tools(event) => {
-                self.handle_board_tools(event);
-                Task::none()
-            }
+            PcbMsg::Tools(event) => self.handle_board_tools(event),
             PcbMsg::Tune(event) => {
                 self.handle_tune(event);
                 Task::none()
@@ -111,6 +118,20 @@ impl Signex {
             }
             PcbBarMsg::MenuDismissed => {
                 *open = None;
+                Task::none()
+            }
+            PcbBarMsg::MenuRightPressed(menu) => {
+                *open = (*open != Some(menu)).then_some(menu);
+                self.set_swallow_right_release(true);
+                Task::none()
+            }
+            PcbBarMsg::FlyoutRightPressed => {
+                *open = None;
+                self.set_swallow_right_release(true);
+                Task::none()
+            }
+            PcbBarMsg::RightPressTaken => {
+                self.set_swallow_right_release(true);
                 Task::none()
             }
             PcbBarMsg::CommandPicked(command) => {

@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 
 use signex_types::net::NetId;
-use signex_types::schematic::{InstancePath, LabelType, Point};
+use signex_types::schematic::{InstancePath, LabelType, Point, SelectedKind};
 use uuid::Uuid;
 
 use super::{Analysis, L2, Occ, SheetKey};
@@ -64,6 +64,17 @@ impl NetMember {
     /// the wiring.
     pub fn is_steppable(&self) -> bool {
         !matches!(self.kind, NetMemberKind::Wire | NetMemberKind::Junction)
+    }
+
+    /// The selection kind this member is picked as on its sheet.
+    pub fn selected_kind(&self) -> SelectedKind {
+        match self.kind {
+            NetMemberKind::Wire => SelectedKind::Wire,
+            NetMemberKind::Junction => SelectedKind::Junction,
+            NetMemberKind::Pin { .. } | NetMemberKind::PowerPort => SelectedKind::Symbol,
+            NetMemberKind::Label(_) => SelectedKind::Label,
+            NetMemberKind::SheetPin { .. } => SelectedKind::SheetPin,
+        }
     }
 }
 

@@ -201,6 +201,7 @@ fn free_drawings(board: &PcbBoard, view: Option<&PcbLayerView>, out: &mut Drawin
             mirrored: false,
             layer,
             justify: HAlign::Center,
+            designator: false,
         });
     }
 }
@@ -269,6 +270,7 @@ fn text_graphic(
         mirrored: at.mirrored,
         layer,
         justify: HAlign::Center,
+        designator: false,
     })
 }
 
@@ -287,6 +289,7 @@ fn frame_lines(graphic: &BoardGraphic, layer: PcbLayer) -> Vec<FootprintTextInpu
             mirrored: line.placement.mirrored,
             layer,
             justify: HAlign::Center,
+            designator: false,
         })
         .collect()
 }
@@ -304,6 +307,7 @@ fn board_text(text: &BoardText, layer: PcbLayer) -> Option<FootprintTextInput> {
         mirrored: at.mirrored,
         layer,
         justify: HAlign::Center,
+        designator: false,
     })
 }
 
@@ -369,7 +373,7 @@ pub(super) fn emit(graphics: &[GraphicInput], theme: &ResolvedTheme, scene: &mut
 
 /// The points along an arc, at most `ARC_CHORD_DEG` apart, both ends
 /// included.
-pub(super) fn arc_points(
+pub(crate) fn arc_points(
     center: [f32; 2],
     radius: f32,
     start_deg: f32,

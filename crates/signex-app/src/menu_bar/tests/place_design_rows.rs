@@ -280,7 +280,7 @@ fn design_rows_without_a_schematic_are_greyed() {
         "Tools/Annotation/Force Annotate All Schematics",
         "Project/Electrical Rules Check",
         "Design/Parameter Manager...",
-        "Reports/Bill of Materials…",
+        "Tools/Reports/Bill of Materials…",
     ] {
         assert!(!row_is_live(&app, path), "{path}");
     }
@@ -495,6 +495,8 @@ fn place_on_a_board_lists_the_boards_tools() {
             "String",
             "Dimension",
             "Keepout",
+            // #2457
+            "Room",
             "Board Sketch",
         ]
     );

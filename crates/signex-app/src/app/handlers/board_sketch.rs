@@ -16,6 +16,7 @@ use signex_i18n::{Translatable, ids, t};
 
 use crate::app::state::{BoardSketchSession, ErrorNotice};
 use crate::app::{BoardSketchMsg, FootprintDocument, Message, PcbMsg, Signex};
+use crate::library::editor::footprint::SketchOverlay;
 use crate::library::editor::footprint::sketch_redundancy_task::dispatch_redundancy;
 use crate::library::editor::footprint::sketch_solve_task::dispatch_pending;
 use crate::library::editor::footprint::{SketchTool, ToolPending, apply_footprint_primitive_edit};
@@ -24,27 +25,120 @@ use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit
 impl Signex {
     pub(crate) fn handle_board_sketch(&mut self, event: BoardSketchMsg) -> Task<Message> {
         match event {
+            // The toggle while "Discard changes?" is open answers Keep
+            // editing, as Esc does; it never applies the sketch.
+            BoardSketchMsg::ModeToggled
+                if self
+                    .board_sketch_in_view()
+                    .is_some_and(|s| s.editor.state.sketch_exit.confirming_discard) =>
+            {
+                return self.handle_board_sketch(BoardSketchMsg::DiscardCancelled);
+            }
             BoardSketchMsg::ModeToggled if self.board_sketch_in_view().is_some() => {
                 self.leave_board_sketch();
             }
             BoardSketchMsg::ModeToggled => self.enter_board_sketch(),
-            BoardSketchMsg::LeaveRequested => {
+            BoardSketchMsg::BakeRequested => {
                 self.leave_board_sketch();
             }
-            BoardSketchMsg::ApplyRequested => {
-                let changed = self
-                    .interaction_state
-                    .board_sketch
-                    .as_ref()
-                    .is_some_and(BoardSketchSession::has_changes);
-                if changed {
-                    self.commit_board_sketch();
+            BoardSketchMsg::BakePreviewToggled => {
+                if let Some(session) = self.interaction_state.board_sketch.as_mut() {
+                    let exit = &mut session.editor.state.sketch_exit;
+                    exit.preview = !exit.preview;
+                }
+                self.refresh_board_sketch_preview();
+            }
+            BoardSketchMsg::DiscardRequested => self.request_board_sketch_discard(),
+            BoardSketchMsg::DiscardConfirmed => self.interaction_state.board_sketch = None,
+            BoardSketchMsg::DiscardCancelled => {
+                if let Some(session) = self.interaction_state.board_sketch.as_mut() {
+                    session.editor.state.sketch_exit.confirming_discard = false;
                 }
             }
-            BoardSketchMsg::DiscardRequested => self.interaction_state.board_sketch = None,
         }
         self.refresh_panel_ctx();
         Task::none()
+    }
+
+    /// Discard changes: leave at once when the board already has what the
+    /// copy holds, else ask first (#2518). Nothing is written either way.
+    fn request_board_sketch_discard(&mut self) {
+        let Some(session) = self.interaction_state.board_sketch.as_mut() else {
+            return;
+        };
+        if session.has_changes() {
+            session.editor.state.sketch_exit.confirming_discard = true;
+        } else {
+            self.interaction_state.board_sketch = None;
+        }
+    }
+
+    /// Re-bake the open bake preview of the board sketch against its
+    /// board's nets and components; a closed preview drops its result.
+    pub(super) fn refresh_board_sketch_preview(&mut self) {
+        self.sync_board_sketch_router();
+        let Some(session) = self.interaction_state.board_sketch.as_mut() else {
+            return;
+        };
+        let board = self.document_state.pcb_board(&session.board_path);
+        session.refresh_preview(board);
+    }
+
+    /// The board target rows of the selected entity of the board sketch in
+    /// view (decision 2); none without one.
+    pub(crate) fn board_sketch_target(&self) -> crate::panels::BoardTargetProps {
+        self.board_sketch_in_view()
+            .and_then(|session| {
+                let board = self.document_state.pcb_board(&session.board_path)?;
+                Some(session.target_props(board))
+            })
+            .unwrap_or_default()
+    }
+
+    /// Copy the router tool diameter of the board's project into the sketch
+    /// session, for its inside-corner check (mockup row 179d): on entry, on every
+    /// sketch edit and when a fab tier or profile sets it. Memory only.
+    pub(crate) fn sync_board_sketch_router(&mut self) {
+        let Some(path) = self
+            .interaction_state
+            .board_sketch
+            .as_ref()
+            .map(|session| session.board_path.clone())
+        else {
+            return;
+        };
+        let ds = &self.document_state;
+        let diameter = ds
+            .document_project(&path)
+            .or_else(|| ds.project_for_path(&path))
+            .and_then(|project| project.data.router_tool_diameter());
+        if let Some(session) = self.interaction_state.board_sketch.as_mut() {
+            session.editor.state.sketch_exit.router_tool_diameter = diameter;
+        }
+    }
+
+    /// Bring the sketch's origin marker and readouts in line with its board:
+    /// on entry and whenever the board or its view changes.
+    pub(crate) fn sync_board_sketch_origin(&mut self) {
+        let Some(path) = self
+            .interaction_state
+            .board_sketch
+            .as_ref()
+            .map(|session| session.board_path.clone())
+        else {
+            return;
+        };
+        let Some(origin) = self
+            .document_state
+            .pcb_board(&path)
+            .map(|board| board.options.origin)
+        else {
+            return;
+        };
+        let hidden = !self.pcb_layer_view(&path).origin_marker_visible();
+        if let Some(session) = self.interaction_state.board_sketch.as_mut() {
+            session.follow_board_origin(origin, hidden);
+        }
     }
 
     /// The sketch mode of the board the main window shows, if it is on.
@@ -73,9 +167,11 @@ impl Signex {
         self.board_sketch_in_view().map(|session| &*session.editor)
     }
 
-    /// [`Self::board_sketch_editor`], mutable.
+    /// [`Self::board_sketch_editor`], to edit: `None` while the Import DXF
+    /// card holds the sketch.
     pub(crate) fn board_sketch_editor_mut(&mut self) -> Option<&mut FootprintDocument> {
         self.board_sketch_in_view_mut()
+            .filter(|session| session.dxf_dialog.is_none())
             .map(|session| &mut *session.editor)
     }
 
@@ -248,6 +344,8 @@ impl Signex {
         };
         let session = BoardSketchSession::open(&path, board);
         self.interaction_state.board_sketch = Some(session);
+        self.sync_board_sketch_router();
+        self.sync_board_sketch_origin();
         // The board's own selection is hidden in the mode: no key may act
         // on it unseen.
         self.clear_pcb_selection();
@@ -281,14 +379,19 @@ impl Signex {
             self.refuse_board_sketch(reason);
             return false;
         };
-        let baked = match signex_bake::bake_board(&sketch, &board.nets) {
-            Ok(baked) => baked,
+        let (command, locked) = match board_sketch_command(sketch, board) {
+            Ok(made) => made,
             Err(error) => {
                 self.refuse_board_sketch(error.to_string());
                 return false;
             }
         };
-        let command = BoardCommand::set_board_sketch(sketch, baked);
+        // Messages stays en-US whatever the UI language.
+        for reference in locked {
+            let locked = Translatable::new(ids::BOARD_SKETCH_ANCHOR_LOCKED)
+                .arg("reference", reference.as_str());
+            crate::diagnostics::log_warning(locked.render_en_us());
+        }
         if let Err(error) = self.execute_board_commands(&path, vec![command], None) {
             self.refuse_board_sketch(error.to_string());
             return false;
@@ -339,6 +442,23 @@ impl Signex {
     /// Apply one sketch editor message to the working copy, as the
     /// footprint editor applies it to a footprint tab.
     pub(crate) fn apply_board_sketch_edit(&mut self, msg: FootprintEditorMsg) -> Task<Message> {
+        // The Import DXF card holds the sketch; only the answer of a solve
+        // already running still lands, or that solve would never finish.
+        let held = self
+            .interaction_state
+            .board_sketch
+            .as_ref()
+            .is_some_and(|session| session.dxf_dialog.is_some());
+        let answer = matches!(
+            msg,
+            FootprintEditorMsg::SketchSolved { .. } | FootprintEditorMsg::RedundancyChecked { .. }
+        );
+        if held && !answer {
+            return Task::none();
+        }
+        if matches!(msg, FootprintEditorMsg::SketchImportDxfRequested) {
+            return self.request_sketch_dxf_file();
+        }
         let Some(session) = self.interaction_state.board_sketch.as_mut() else {
             return Task::none();
         };
@@ -346,46 +466,64 @@ impl Signex {
         apply_footprint_primitive_edit(&mut session.editor, msg);
         let solve = dispatch_pending(&mut session.editor, &path).map(Message::Library);
         let redundancy = dispatch_redundancy(&mut session.editor, &path).map(Message::Library);
+        self.refresh_board_sketch_preview();
         self.refresh_panel_ctx();
         Task::batch([solve, redundancy])
     }
 
-    /// What Esc does on a board in sketch mode: cancel the tool, gesture or
-    /// menu in flight first, then leave the mode.
+    /// What Esc does on a board in sketch mode: answer an open discard
+    /// question with Keep editing, cancel the tool, gesture, menu, canvas
+    /// overlay or parameters table in flight, then Discard changes, which
+    /// asks first when there are changes. Esc never applies the sketch to
+    /// the board (#2518).
     pub(crate) fn board_sketch_escape(&self) -> Option<Message> {
         let session = self.board_sketch_in_view()?;
         let state = &session.editor.state;
+        let sketch = |event| Some(Message::Pcb(PcbMsg::Sketch(event)));
+        if session.dxf_dialog.is_some() {
+            return Some(super::pcb_dxf_sketch::dialog_cancelled());
+        }
+        if state.sketch_exit.confirming_discard {
+            return sketch(BoardSketchMsg::DiscardCancelled);
+        }
         let busy = state.active_tool != SketchTool::Select
             || !matches!(state.tool_pending, ToolPending::Idle)
             || state.context_menu.is_some()
-            || state.active_bar_menu.is_some();
-        Some(if busy {
-            Message::Library(LibraryMessage::PrimitiveEditorEvent {
+            || state.active_bar_menu.is_some()
+            || state.parameters_table.is_some()
+            || state.sketch_overlay != SketchOverlay::default();
+        if busy {
+            return Some(Message::Library(LibraryMessage::PrimitiveEditorEvent {
                 path: session.board_path.clone(),
                 msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToolEscape),
-            })
-        } else {
-            Message::Pcb(PcbMsg::Sketch(BoardSketchMsg::LeaveRequested))
-        })
+            }));
+        }
+        sketch(BoardSketchMsg::DiscardRequested)
     }
 
     /// `(can_undo, can_redo)` of the working copy when the board at `path`
     /// is in sketch mode: Undo steps the sketch, not the board, until the
-    /// mode is left.
+    /// mode is left. Neither while the Import DXF card holds the sketch.
     pub(crate) fn board_sketch_history(&self, path: &Path) -> Option<(bool, bool)> {
         let session = self.interaction_state.board_sketch.as_ref()?;
         let history = &session.editor.history;
-        (session.board_path == path).then(|| (history.can_undo(), history.can_redo()))
+        let free = session.dxf_dialog.is_none();
+        (session.board_path == path)
+            .then(|| (free && history.can_undo(), free && history.can_redo()))
     }
 
     /// Step the working copy's history when the board at `path` is in
-    /// sketch mode; `None` when it is not.
+    /// sketch mode; `None` when it is not. `Some(false)` while the Import
+    /// DXF card holds the sketch, so the step cannot fall to the board.
     pub(crate) fn step_board_sketch_history(&mut self, path: &Path, undo: bool) -> Option<bool> {
         let session = self
             .interaction_state
             .board_sketch
             .as_mut()
             .filter(|session| session.board_path == path)?;
+        if session.dxf_dialog.is_some() {
+            return Some(false);
+        }
         let moved = if undo {
             session.editor.undo()
         } else {
@@ -393,12 +531,43 @@ impl Signex {
         };
         if moved {
             session.editor.canvas_cache.clear();
+            self.refresh_board_sketch_preview();
             self.refresh_panel_ctx();
         }
         Some(moved)
     }
 }
 
+/// The board command that commits `sketch` to `board`, with the designators
+/// of the locked components an anchor leaves in place. A sketch that has
+/// owned no pour, mechanical drawing or anchor, before or now, takes the
+/// plain sketch command as it always did (decision 2, 2026-11-20).
+fn board_sketch_command(
+    sketch: signex_sketch::SketchData,
+    board: &signex_types::pcb::PcbBoard,
+) -> Result<(BoardCommand, Vec<String>), signex_bake::BoardBakeError> {
+    let owned_before = board
+        .sketch
+        .as_ref()
+        .is_some_and(|stored| stored.sketch.owns_board_items());
+    if !(sketch.owns_board_items() || owned_before) {
+        let baked = signex_bake::bake_board(&sketch, &board.nets)?;
+        return Ok((BoardCommand::set_board_sketch(sketch, baked), Vec::new()));
+    }
+    let (baked, items) = signex_bake::board::bake_board_with_items(&sketch, board)?;
+    let locked = items
+        .locked_anchors(&board.footprints)
+        .into_iter()
+        .map(|anchor| anchor.reference.clone())
+        .collect();
+    let command = BoardCommand::set_board_sketch_with_items(sketch, baked, items);
+    Ok((command, locked))
+}
+
 #[cfg(test)]
 #[path = "board_sketch_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "board_sketch_parameter_tests.rs"]
+mod parameter_tests;

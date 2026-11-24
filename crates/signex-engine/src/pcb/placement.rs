@@ -6,7 +6,8 @@
 
 use std::collections::BTreeSet;
 
-use signex_types::pcb::{Footprint, PCB_GRID_MM, PcbBoard, Point};
+use pcb_geom::{ARC_FOLLOW_MAX_GROWTH, ArcFollowFault};
+use signex_types::pcb::{Footprint, PCB_GRID_MM, PcbBoard, Point, Via};
 use signex_types::pcb_options::{GridSpec, GridUse};
 use uuid::Uuid;
 
@@ -34,6 +35,10 @@ pub enum PlacementRefusal {
     NothingSelected,
     #[error("{} is locked", .0.join(", "))]
     Locked(Vec<String>),
+    #[error("arc {0} would collapse onto its other end")]
+    ArcCollapses(Uuid),
+    #[error("arc {0} would grow to more than {1} times its radius")]
+    ArcGrows(Uuid, f64),
     #[error(transparent)]
     Command(#[from] BoardCommandError),
 }
@@ -132,17 +137,10 @@ pub fn move_commands(
     ids: &BTreeSet<Uuid>,
     delta: Point,
 ) -> Result<Vec<BoardCommand>, PlacementRefusal> {
-    let footprints = editable_footprints(board, ids)?;
-    if delta.x == 0.0 && delta.y == 0.0 {
-        return Ok(Vec::new());
+    let mut commands = move_footprints_only(board, ids, delta)?;
+    if commands.is_empty() {
+        return Ok(commands);
     }
-    let mut commands: Vec<BoardCommand> = footprints
-        .iter()
-        .map(|fp| BoardCommand::MoveFootprint {
-            footprint: fp.uuid,
-            to: Point::new(fp.position.x + delta.x, fp.position.y + delta.y),
-        })
-        .collect();
     let tracks: Vec<BoardItem> = pcb_geom::tracks_on_pads(board, ids)
         .iter()
         .map(|ends| BoardItem::Segment(ends.follow(&board.segments[ends.index], delta)))
@@ -153,6 +151,104 @@ pub fn move_commands(
     Ok(commands)
 }
 
+/// Move every footprint in `ids` by `delta` and leave the tracks on their
+/// pads where they are (a Ctrl drag): their ends no longer touch the pads.
+pub fn move_footprints_only(
+    board: &PcbBoard,
+    ids: &BTreeSet<Uuid>,
+    delta: Point,
+) -> Result<Vec<BoardCommand>, PlacementRefusal> {
+    let footprints = editable_footprints(board, ids)?;
+    if delta.x == 0.0 && delta.y == 0.0 {
+        return Ok(Vec::new());
+    }
+    Ok(footprints
+        .iter()
+        .map(|fp| BoardCommand::MoveFootprint {
+            footprint: fp.uuid,
+            to: Point::new(fp.position.x + delta.x, fp.position.y + delta.y),
+        })
+        .collect())
+}
+
+/// The vias `ids` names, refusing an unknown, a locked or no via.
+pub fn editable_vias<'a>(
+    board: &'a PcbBoard,
+    ids: &BTreeSet<Uuid>,
+) -> Result<Vec<&'a Via>, PlacementRefusal> {
+    if ids.is_empty() {
+        return Err(PlacementRefusal::NothingSelected);
+    }
+    let mut found = Vec::with_capacity(ids.len());
+    for &id in ids {
+        let via = board
+            .vias
+            .iter()
+            .find(|via| via.uuid == id)
+            .ok_or(BoardCommandError::ItemNotFound(BoardItemId::Via(id)))?;
+        found.push(via);
+    }
+    let locked = super::lock::locked_names(board, ids.iter().map(|&id| BoardItemId::Via(id)));
+    if locked.is_empty() {
+        Ok(found)
+    } else {
+        Err(PlacementRefusal::Locked(locked))
+    }
+}
+
+/// Move every via in `ids` by `delta`, keeping its net. The track and copper
+/// arc ends on it move with it (`pcb_geom::tracks_on_vias`, `arcs_on_vias`),
+/// in the same command, so the move stays one undo step. Refused whole when
+/// a following arc would collapse or grow past its limit.
+pub fn move_vias(
+    board: &PcbBoard,
+    ids: &BTreeSet<Uuid>,
+    delta: Point,
+) -> Result<Vec<BoardCommand>, PlacementRefusal> {
+    let mut commands = move_vias_only(board, ids, delta)?;
+    if let Some(BoardCommand::ReplaceItems { items }) = commands.first_mut() {
+        items.extend(
+            pcb_geom::tracks_on_vias(board, ids)
+                .iter()
+                .map(|ends| BoardItem::Segment(ends.follow(&board.segments[ends.index], delta))),
+        );
+        for ends in pcb_geom::arcs_on_vias(board, ids) {
+            let moved = ends
+                .checked_follow(&board.free.arcs[ends.index], delta)
+                .map_err(|fault| match fault {
+                    ArcFollowFault::Collapses => PlacementRefusal::ArcCollapses(ends.arc),
+                    ArcFollowFault::GrowsTooMuch => {
+                        PlacementRefusal::ArcGrows(ends.arc, ARC_FOLLOW_MAX_GROWTH)
+                    }
+                })?;
+            items.push(BoardItem::Arc(moved));
+        }
+    }
+    Ok(commands)
+}
+
+/// Move every via in `ids` by `delta` and leave the tracks on them where they
+/// are (a Ctrl drag): their ends no longer touch the vias.
+pub fn move_vias_only(
+    board: &PcbBoard,
+    ids: &BTreeSet<Uuid>,
+    delta: Point,
+) -> Result<Vec<BoardCommand>, PlacementRefusal> {
+    let vias = editable_vias(board, ids)?;
+    if delta.x == 0.0 && delta.y == 0.0 {
+        return Ok(Vec::new());
+    }
+    let items = vias
+        .into_iter()
+        .map(|via| {
+            let mut moved = via.clone();
+            moved.position = Point::new(via.position.x + delta.x, via.position.y + delta.y);
+            BoardItem::Via(moved)
+        })
+        .collect();
+    Ok(vec![BoardCommand::ReplaceItems { items }])
+}
+
 /// Turn or mirror the footprints in `ids`. One footprint turns about its
 /// own origin; several turn about the centre of their origins, put on the
 /// grid, and move with it.
@@ -161,8 +257,19 @@ pub fn transform_commands(
     ids: &BTreeSet<Uuid>,
     transform: PlacementTransform,
 ) -> Result<Vec<BoardCommand>, PlacementRefusal> {
+    transform_commands_with(board, ids, transform, true)
+}
+
+/// [`transform_commands`], the group's centre put on the grid only when
+/// `on_grid`: with snapping off it is the exact centre of their origins.
+pub fn transform_commands_with(
+    board: &PcbBoard,
+    ids: &BTreeSet<Uuid>,
+    transform: PlacementTransform,
+    on_grid: bool,
+) -> Result<Vec<BoardCommand>, PlacementRefusal> {
     let footprints = editable_footprints(board, ids)?;
-    let pivot = pivot(&footprints, grid_step_mm(board));
+    let pivot = pivot(&footprints, on_grid.then(|| grid_step_mm(board)));
     let mut commands = Vec::new();
     for fp in footprints {
         let id = fp.uuid;
@@ -229,8 +336,9 @@ pub fn delete_commands(
 }
 
 /// Where a group turns: one footprint's origin, else the centre of the
-/// origins' bounds snapped to the grid, so on-grid parts stay on the grid.
-fn pivot(footprints: &[&Footprint], grid_mm: f64) -> Point {
+/// origins' bounds, snapped to `grid_mm` when given so on-grid parts stay on
+/// the grid.
+fn pivot(footprints: &[&Footprint], grid_mm: Option<f64>) -> Point {
     if let [only] = footprints {
         return only.position;
     }
@@ -243,6 +351,9 @@ fn pivot(footprints: &[&Footprint], grid_mm: f64) -> Point {
         hi = Point::new(hi.x.max(fp.position.x), hi.y.max(fp.position.y));
     }
     let centre = Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
+    let Some(grid_mm) = grid_mm else {
+        return centre;
+    };
     let snapped = snap_delta(Point::new(0.0, 0.0), centre, grid_mm);
     if snapped.x.is_finite() && snapped.y.is_finite() {
         snapped

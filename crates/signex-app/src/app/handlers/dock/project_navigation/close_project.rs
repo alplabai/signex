@@ -10,14 +10,17 @@ use crate::app::state::volume_case::directory_ignores_case;
 use signex_i18n::RenderTranslatable;
 
 impl Signex {
-    /// Commit the pending title-block drafts of the sheets that belong to
-    /// `project_id`, before a gate reads which of them are unsaved (#2027).
+    /// Commit the pending drafts (title-block fields, sheet variables, typed
+    /// note text) of the sheets that belong to `project_id`, before a gate
+    /// reads which of them are unsaved (#2027).
     pub(crate) fn commit_drafts_of_project(&mut self, project_id: ProjectId) {
         let owned: Vec<std::path::PathBuf> = self
             .document_state
             .drafts
             .title_block_sheets()
             .into_iter()
+            .chain(self.document_state.drafts.sheet_variable_sheets())
+            .chain(self.typed_note_sheets())
             .filter(|sheet| {
                 self.document_state
                     .document_project(sheet)
@@ -222,7 +225,7 @@ impl Signex {
     ///
     /// `kept` are dirty documents another open project claims: their tabs
     /// stay open (re-homed to no project) and their engines are never swept.
-    pub(super) fn execute_close_project(
+    pub(crate) fn execute_close_project(
         &mut self,
         project_id: ProjectId,
         sheet_refs: &SheetRefs,
@@ -357,6 +360,7 @@ impl Signex {
         // else None when the workspace is empty.
         self.document_state.note_documents_changed();
         self.cancel_replace_job("the project was closed");
+        self.forget_switch_requests_of(target_id);
         self.document_state.projects.retain(|p| p.id != target_id);
         let projects = &self.document_state.projects;
         self.library.forget_missing_libraries_of(target_id, |path| {
@@ -456,7 +460,9 @@ impl Signex {
         self.save_held_path(&target)?;
         if !decided {
             // The spellings may be two files: the others were not written.
-            return match self.unsaved_spellings(&held, &target) {
+            let kept = self.unsaved_spellings(&held, &target);
+            self.release_saved_sheet(&target);
+            return match kept {
                 Some((_, message)) => Err(anyhow::Error::new(SpellingsKept(message))),
                 None => Ok(()),
             };
@@ -464,6 +470,9 @@ impl Signex {
         let key = path_key_with(path, fold);
         self.document_state
             .mark_documents_clean_where(|p| path_key_with(p, fold) == key);
+        for spelling in &held {
+            self.release_saved_sheet(spelling);
+        }
         Ok(())
     }
 
@@ -1137,7 +1146,9 @@ mod tests {
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                schematic_design: Default::default(),
                 fab_outputs: None,
+                router_tool_diameter: None,
                 requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),

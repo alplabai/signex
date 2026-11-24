@@ -141,49 +141,35 @@ impl Signex {
         // v0.18.20 — bare "Add" button defaults to a vertical
         // guide at world X = 0; users can flip via the row's
         // axis label and edit the position field afterwards.
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            editor
-                .state
-                .guides
-                .push(crate::library::editor::footprint::state::Guide {
-                    axis: crate::library::editor::footprint::state::GuideAxis::Vertical,
-                    position_mm: 0.0,
-                    enabled: true,
-                });
-            editor.canvas_cache.clear();
-        }
-        self.refresh_panel_ctx();
-        true
+        self.add_fp_editor_guide(crate::library::editor::footprint::state::GuideAxis::Vertical)
     }
 
     pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_guide_add_vertical(
         &mut self,
     ) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            editor
-                .state
-                .guides
-                .push(crate::library::editor::footprint::state::Guide {
-                    axis: crate::library::editor::footprint::state::GuideAxis::Vertical,
-                    position_mm: 0.0,
-                    enabled: true,
-                });
-            editor.canvas_cache.clear();
-        }
-        self.refresh_panel_ctx();
-        true
+        self.add_fp_editor_guide(crate::library::editor::footprint::state::GuideAxis::Vertical)
     }
 
     pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_guide_add_horizontal(
         &mut self,
     ) -> bool {
+        self.add_fp_editor_guide(crate::library::editor::footprint::state::GuideAxis::Horizontal)
+    }
+
+    /// A new guide on `axis` at the position that reads 0: the footprint's
+    /// zero, or on a board sketch the board origin.
+    fn add_fp_editor_guide(
+        &mut self,
+        axis: crate::library::editor::footprint::state::GuideAxis,
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
+            let position_mm = editor.state.guide_model_mm(axis, 0.0);
             editor
                 .state
                 .guides
                 .push(crate::library::editor::footprint::state::Guide {
-                    axis: crate::library::editor::footprint::state::GuideAxis::Horizontal,
-                    position_mm: 0.0,
+                    axis,
+                    position_mm,
                     enabled: true,
                 });
             editor.canvas_cache.clear();
@@ -230,9 +216,10 @@ impl Signex {
         let idx = *idx;
         if let Some(parsed) = crate::numeric_field::parse_field_f64(raw) {
             if let Some(editor) = self.active_footprint_editor_mut()
-                && let Some(g) = editor.state.guides.get_mut(idx)
+                && let Some(axis) = editor.state.guides.get(idx).map(|g| g.axis)
             {
-                g.position_mm = parsed;
+                let position_mm = editor.state.guide_model_mm(axis, parsed);
+                editor.state.guides[idx].position_mm = position_mm;
                 editor.canvas_cache.clear();
             }
             self.refresh_panel_ctx();

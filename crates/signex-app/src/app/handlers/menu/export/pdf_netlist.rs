@@ -61,6 +61,9 @@ impl Signex {
                     return Task::none();
                 }
             };
+        if self.refused_for_channel_naming(&issues) {
+            return Task::none();
+        }
         // Class styles are not something the user picked in the modal: they
         // follow the netlist this export just derived, so a sheet that is
         // not open in a tab is styled like one that is.
@@ -91,20 +94,7 @@ impl Signex {
             self.refuse_export(signex_i18n::ids::NOTICE_PDF_NO_FILES);
             return Task::none();
         }
-        // Apply the variant override the user picked in the modal.
-        // The PDF renderer reads `active_variant` out of
-        // `metadata.custom_fields` for title-block substitution; this
-        // keeps the PDF in sync with the modal's variant picker even
-        // when the project's active variant is something else.
-        if let Some(variant) = &options.variant {
-            if variant.eq_ignore_ascii_case("Base") {
-                ctx.metadata.custom_fields.remove("active_variant");
-            } else {
-                ctx.metadata
-                    .custom_fields
-                    .insert("active_variant".to_string(), variant.clone());
-            }
-        }
+        super::apply_printed_variant(&mut ctx.metadata, &mut options.variant);
 
         // Building the PDF and writing it both run off the UI thread.
         self.export_pdf(ctx, options, save_path, source)
@@ -113,6 +103,9 @@ impl Signex {
     pub(crate) fn handle_export_netlist_requested(&mut self) -> Option<Task<Message>> {
         let anchor = self.document_state.active_path.clone();
         self.commit_drafts_in_scope_of(anchor.as_deref());
+        if let Some(anchor) = anchor.as_deref() {
+            self.report_part_field_issues_in_scope_of(anchor);
+        }
         if !self.document_state.has_active_engine() {
             log::warn!("Netlist export: no active schematic");
             return Some(Task::none());
@@ -177,6 +170,9 @@ impl Signex {
                     return Task::none();
                 }
             };
+        if self.refused_for_channel_naming(&issues) {
+            return Task::none();
+        }
         super::log_stitch_issues(&source, &ctx, &issues);
 
         // Not a hole the user can accept: the file would be wrong, not partial.
@@ -196,7 +192,7 @@ impl Signex {
         // #431: instead of a dead-end error, raise a two-choice prompt — the
         // refusal stays the default (nothing written until the user acts), but
         // "Export anyway (incomplete)" writes the partial `.net` and reports
-        // the omission to the Messages panel (Protel has no comment syntax, so
+        // the omission to the Messages panel (`.NET` has no comment syntax, so
         // the file itself stays clean). See
         // `handle_netlist_export_anyway`.
         if issues.netlist_is_incomplete() {
@@ -210,6 +206,7 @@ impl Signex {
                     save_path,
                     messages: issues.messages(),
                     ctx,
+                    omitted: issues.omitted_pages(),
                 });
             return Task::none();
         }
@@ -244,7 +241,7 @@ impl Signex {
     /// #431 — "Export anyway (incomplete)". The user explicitly chose to ship
     /// the partial netlist. Re-derives the export scope, writes the
     /// best-available (root-reachable) netlist to the pending path, then clears
-    /// the prompt. Protel has no comment syntax, so the file is a clean,
+    /// the prompt. `.NET` has no comment syntax, so the file is a clean,
     /// valid netlist; the omission is reported as a warning (the omitted pages,
     /// one per line) in the Messages panel and the log, so a partial `.net`
     /// never reaches disk without the user having been told.

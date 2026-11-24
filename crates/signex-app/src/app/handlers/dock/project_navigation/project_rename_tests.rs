@@ -41,14 +41,16 @@ pub(super) fn submit_rename(
     project_file: &Path,
     new_stem: &str,
 ) -> iced::Task<Message> {
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: project_file.to_path_buf(),
         tree_path: vec![0],
         buffer: new_stem.to_string(),
         error: None,
         is_project_rename: true,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     app.update(Message::Rename(RenameMsg::Submit))
 }
 
@@ -769,7 +771,7 @@ fn a_double_failure_updates_open_recent_and_queues_the_rename_commit() {
 }
 
 #[test]
-fn a_folder_rename_keeps_the_project_tab_titled_by_its_snxprj_file_name() {
+fn a_folder_rename_retitles_the_project_tab_by_the_new_project_name() {
     let root = tempfile::tempdir().expect("tempdir");
     let mut fx = fixture(root.path(), "Oscar", false);
     fx.app.open_project_tab(0);
@@ -786,5 +788,5 @@ fn a_folder_rename_keeps_the_project_tab_titled_by_its_snxprj_file_name() {
         .find(|t| t.kind.as_project().is_some())
         .expect("project tab");
     assert_eq!(tab.path, new_file);
-    assert_eq!(tab.title, "Motor.snxprj");
+    assert_eq!(tab.title, "Motor — Project");
 }

@@ -27,7 +27,7 @@ use signex_types::coord::Unit;
 use signex_types::theme::ThemeId;
 
 /// Default UI font family name. Used when no preference file is found.
-pub const DEFAULT_UI_FONT: &str = "Inter";
+pub const DEFAULT_UI_FONT: &str = signex_widgets::ui_font::DEFAULT_FAMILY;
 
 /// Bundled monospace family for chrome-only mono text (shortcuts, values).
 /// Not a canvas font: `signex_types::font::BUNDLED_DEFAULT_FAMILY` stays Iosevka.
@@ -935,8 +935,11 @@ mod designator_standard_tests {
         for (key, _) in DEFAULT_COMPONENT_CLASSES {
             for standard in DesignatorStandard::ALL {
                 let letters = class_prefix(standard, key);
-                let unnamed = *key == "generic"
-                    || (standard == DesignatorStandard::Iec81346_2 && IEC_UNNAMED.contains(key));
+                let iec = matches!(
+                    standard,
+                    DesignatorStandard::Iec81346_2 | DesignatorStandard::Iec81346_2Full
+                );
+                let unnamed = *key == "generic" || (iec && IEC_UNNAMED.contains(key));
                 if unnamed {
                     assert_eq!(letters, None, "{key} under {standard}");
                 } else {

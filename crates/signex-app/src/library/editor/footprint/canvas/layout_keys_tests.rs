@@ -27,6 +27,7 @@ fn published(logical: &str, code: Code) -> Option<FootprintEditorMsg> {
         sketch: None,
         silk_f: &[],
         silk_b: &[],
+        generated_silk: &[],
         zoom_step: 1.1,
         trackpad_pan: false,
         wheel_mode: Default::default(),

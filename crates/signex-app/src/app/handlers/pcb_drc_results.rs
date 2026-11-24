@@ -8,6 +8,7 @@ use std::path::Path;
 
 use iced::Task;
 use serde_json::{Value, json};
+use signex_drc_dsl::table::catalog::Domain;
 use signex_engine::pcb::BoardCommand;
 use signex_i18n::{ids, t};
 use signex_types::format::pcb_layer_token;
@@ -16,16 +17,35 @@ use signex_types::pcb_options::{BoardOptions, DrcWaiver};
 
 use crate::app::state::pcb_edit::CheckedStep;
 use crate::app::{Message, Signex};
-use crate::panels::{DrcFilter, DrcFilterChoice, DrcPanelMsg, DrcRow, DrcWaiveDraft};
+use crate::panels::{DrcFilter, DrcFilterChoice, DrcPanelMsg, DrcRow, DrcWaiveDraft, UserIdentity};
+
+/// What a DRC waiver says: why it is accepted, and who accepted it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct DrcWaiverText {
+    pub note: String,
+    pub author: String,
+}
+
+impl From<&str> for DrcWaiverText {
+    /// A note with no author (a command that names none).
+    fn from(note: &str) -> Self {
+        Self {
+            note: note.to_string(),
+            author: String::new(),
+        }
+    }
+}
 
 impl Signex {
-    /// A DRC results panel event, on the board in view.
+    /// A DRC panel event, on the board in view.
     pub(crate) fn handle_drc_panel(&mut self, msg: DrcPanelMsg) -> Task<Message> {
         let Some(path) = self.active_tab_path() else {
             return Task::none();
         };
+        let mut follow = Task::none();
         let refused = match msg {
             DrcPanelMsg::RowPicked(key) => {
+                self.ui_state.validation_panels.drc.selected = Some(key.clone());
                 if let Err(why) = self.show_drc_violation(&path, &key) {
                     let line = t!(self.ui_state.i18n, ids::DRC_PANEL_SHOW_REFUSED, "why" => why);
                     crate::diagnostics::log_warning(line.into_string());
@@ -45,46 +65,182 @@ impl Signex {
                 self.interaction_state.pcb_drc.filter.show_waived = on;
                 None
             }
+            DrcPanelMsg::RuleOpened(rule) => {
+                follow = self.open_drc_rule(&rule);
+                None
+            }
+            DrcPanelMsg::BaseRuleOpened(rule) => {
+                follow = self.open_rules_at(rule.domain(), None);
+                None
+            }
+            DrcPanelMsg::MessagesShown => {
+                follow = self.show_panel(crate::panels::PanelKind::Messages);
+                None
+            }
             DrcPanelMsg::WaiveStarted(key) => {
-                self.interaction_state.pcb_drc.waive_draft = Some(DrcWaiveDraft {
-                    key,
-                    note: String::new(),
-                });
+                follow = self.start_drc_waiver(key);
                 None
             }
-            DrcPanelMsg::NoteEdited(note) => {
+            DrcPanelMsg::ReasonActed(action) => {
                 if let Some(draft) = self.interaction_state.pcb_drc.waive_draft.as_mut() {
-                    draft.note = note;
+                    draft.blank &= !action.is_edit();
+                    draft.reason.perform(action);
                 }
                 None
             }
-            DrcPanelMsg::WaiveConfirmed => {
-                match self.interaction_state.pcb_drc.waive_draft.clone() {
-                    // The note stays in the panel until the waiver is stored.
-                    Some(draft) => {
-                        let refused = self
-                            .set_drc_waiver(&path, &draft.key, Some(draft.note))
-                            .err();
-                        if refused.is_none() {
-                            self.interaction_state.pcb_drc.waive_draft = None;
-                        }
-                        refused
-                    }
-                    None => None,
-                }
-            }
+            DrcPanelMsg::WaiveConfirmed => self.confirm_drc_waiver(&path),
             DrcPanelMsg::WaiveCancelled => {
                 self.interaction_state.pcb_drc.waive_draft = None;
                 None
             }
             DrcPanelMsg::Unwaived(key) => self.set_drc_waiver(&path, &key, None).err(),
+            view_event @ (DrcPanelMsg::TileToggled(_)
+            | DrcPanelMsg::TileCleared
+            | DrcPanelMsg::GroupToggled(_)
+            | DrcPanelMsg::BaseRulesToggled
+            | DrcPanelMsg::RowEntered(_)
+            | DrcPanelMsg::RowLeft(_)) => {
+                apply_drc_view(&mut self.ui_state.validation_panels.drc, view_event);
+                None
+            }
         };
         if let Some(why) = refused {
             let line = t!(self.ui_state.i18n, ids::DRC_PANEL_REFUSED, "why" => why);
             crate::diagnostics::log_warning(line.into_string());
         }
         self.refresh_panel_ctx();
-        Task::none()
+        follow
+    }
+
+    /// Open the Reason form for `key`, its row selected; the author is the
+    /// cached git identity (asked for once). Waive on the row whose form is
+    /// already open keeps what was typed.
+    fn start_drc_waiver(&mut self, key: String) -> Task<Message> {
+        self.ui_state.validation_panels.drc.selected = Some(key.clone());
+        let drafts = &self.interaction_state.pcb_drc.waive_draft;
+        if drafts.as_ref().is_some_and(|d| d.key == key) {
+            return Task::none();
+        }
+        let ask = self.ask_user_identity();
+        let identity = &self.ui_state.validation_panels.identity;
+        self.interaction_state.pcb_drc.waive_draft = Some(DrcWaiveDraft {
+            key,
+            author: identity.author(),
+            awaits_identity: matches!(identity, UserIdentity::Asking),
+            ..DrcWaiveDraft::default()
+        });
+        ask
+    }
+
+    /// Store the form's waiver; the reason is required (mockup row 88).
+    /// The form stays open until the waiver is stored.
+    fn confirm_drc_waiver(&mut self, path: &Path) -> Option<String> {
+        let draft = self.interaction_state.pcb_drc.waive_draft.clone()?;
+        if draft.awaits_identity {
+            return None;
+        }
+        if draft.reason.is_empty() {
+            if let Some(open) = self.interaction_state.pcb_drc.waive_draft.as_mut() {
+                open.blank = true;
+            }
+            return None;
+        }
+        let text = DrcWaiverText {
+            note: draft.reason.text(),
+            author: draft.author.clone(),
+        };
+        let refused = self.set_drc_waiver(path, &draft.key, Some(text)).err();
+        if refused.is_none() {
+            self.interaction_state.pcb_drc.waive_draft = None;
+        }
+        refused
+    }
+
+    /// Open the Rules tab of the board's project on `domain`, with `rule`
+    /// (a written rule's name) selected.
+    fn open_rules_at(&mut self, domain: Domain, rule: Option<String>) -> Task<Message> {
+        let Some(project_id) = self.rules_project_for(None) else {
+            crate::diagnostics::log_info("Rules: no project is open");
+            return Task::none();
+        };
+        // A window cannot open a tab inside its swap: its board named the
+        // project, and the tab opens on the main window.
+        if self.interaction_state.acting_window.is_some() {
+            let open = crate::app::RulesTabMsg::OpenedAt {
+                project_id,
+                domain,
+                rule,
+            };
+            return Task::done(Message::Project(crate::app::ProjectMsg::Rules(open)));
+        }
+        self.open_rules_on(project_id, domain, rule)
+    }
+
+    /// [`Self::open_rules_at`] for a known project. One closed meanwhile
+    /// opens nothing.
+    pub(crate) fn open_rules_on(
+        &mut self,
+        project_id: crate::app::state::ProjectId,
+        domain: Domain,
+        rule: Option<String>,
+    ) -> Task<Message> {
+        if self.document_state.project_by_id(project_id).is_none() {
+            crate::diagnostics::log_info("Rules: that project is no longer open");
+            return Task::none();
+        }
+        self.open_rules_tab(project_id);
+        let task = self.dispatch_rules_tab_message(crate::app::RulesTabMsg::DomainPicked {
+            project_id,
+            domain,
+        });
+        match rule {
+            Some(rule) => Task::batch([task, self.select_rules_rule(project_id, rule)]),
+            None => task,
+        }
+    }
+
+    /// A group's Rule link: the domain of what its rows break, and the rule
+    /// itself selected when it is a written one.
+    fn open_drc_rule(&mut self, rule: &str) -> Task<Message> {
+        let kind = self
+            .pcb_drc_panel()
+            .and_then(|panel| panel.rows.into_iter().find(|row| row.rule == rule))
+            .map(|row| row.kind);
+        let domain = kind.map_or(Domain::Clearance, rules_domain_of);
+        let name = rule
+            .strip_prefix(signex_drc_dsl::table::RULE_ID_PREFIX)
+            .map(str::to_string);
+        self.open_rules_at(domain, name)
+    }
+
+    /// Before the first run: which base rules the project's rule text
+    /// writes, and the clearance the run will use (#87): the board's own,
+    /// read as a run reads it, else the default.
+    pub(crate) fn fill_drc_idle(
+        &self,
+        panel: &mut crate::panels::DrcPanel,
+        pcb: &signex_types::pcb::PcbBoard,
+    ) {
+        panel.checked_clearance_mm = signex_drc::DrcRules::for_board(pcb, &[])
+            .ok()
+            .map(|rules| signex_drc::findings::mm(rules.clearance).to_string());
+        if let Some((text, _)) = self
+            .rules_project_for(None)
+            .and_then(|id| self.rules_text_of(id))
+        {
+            let table = signex_drc_dsl::table::table(&text);
+            panel.written_base_rules = crate::panels::BaseRule::ALL
+                .into_iter()
+                .filter(|rule| rule.is_written_in(&table))
+                .collect();
+        }
+        let set = pcb.setup.as_ref().map_or(0.0, |setup| setup.clearance);
+        if !set.is_finite() || set <= 0.0 {
+            panel.default_clearance_mm = Some(format!("{:.1}", signex_drc::DEFAULT_CLEARANCE_MM));
+            panel.written_clearance = panel
+                .written_base_rules
+                .contains(&crate::panels::BaseRule::Clearance);
+        }
     }
 
     /// Why `board` cannot be acted on from the DRC results: it must be the
@@ -137,17 +293,22 @@ impl Signex {
         }))
     }
 
-    /// Waive the last run's violation `key` on `board` with `note`, or take
-    /// its waiver back (`None`): one board undo step. The report stays
-    /// current, since a waiver changes nothing the check reads. A waiver is
-    /// refused on a stale run: it would fingerprint geometry the run never
-    /// checked (#2307).
+    /// Waive the last run's violation `key` on `board` with `waiver`'s note
+    /// and author, or take its waiver back (`None`): one board undo step.
+    /// The report stays current, since a waiver changes nothing the check
+    /// reads. A waiver is refused on a stale run: it would fingerprint
+    /// geometry the run never checked (#2307).
     pub(crate) fn set_drc_waiver(
         &mut self,
         board: &Path,
         key: &str,
-        note: Option<String>,
+        waiver: Option<DrcWaiverText>,
     ) -> Result<Value, String> {
+        let author = waiver
+            .as_ref()
+            .map(|w| w.author.trim().to_string())
+            .unwrap_or_default();
+        let note = waiver.map(|w| w.note);
         let revision = self
             .document_state
             .pcb_revisions
@@ -194,6 +355,7 @@ impl Signex {
                     rule: signex_drc::rule_id(v).to_string(),
                     note: note.clone(),
                     fingerprint: signex_drc::fingerprint(v, engine.board()),
+                    author: author.clone(),
                 });
             }
             None if options.drc_waivers.len() == had => {
@@ -228,6 +390,7 @@ impl Signex {
             "id": key,
             "waived": note.is_some(),
             "note": note,
+            "author": note.as_ref().map(|_| author),
         }))
     }
 
@@ -310,6 +473,53 @@ impl Signex {
     }
 }
 
+/// A tile, group heading, base-rule heading or row hover of the DRC panel:
+/// view state only (#88).
+fn apply_drc_view(view: &mut crate::panels::DrcView, msg: DrcPanelMsg) {
+    match msg {
+        DrcPanelMsg::TileToggled(category) => {
+            view.category = (view.category != Some(category)).then_some(category);
+        }
+        DrcPanelMsg::TileCleared => view.category = None,
+        DrcPanelMsg::GroupToggled(rule) => {
+            if !view.collapsed.remove(&rule) {
+                view.collapsed.insert(rule);
+            }
+        }
+        DrcPanelMsg::BaseRulesToggled => view.base_rules_closed = !view.base_rules_closed,
+        DrcPanelMsg::RowEntered(key) => view.hovered = Some(key),
+        DrcPanelMsg::RowLeft(key) => {
+            if view.hovered.as_deref() == Some(key.as_str()) {
+                view.hovered = None;
+            }
+        }
+        // Not view state: `handle_drc_panel` routes these itself.
+        DrcPanelMsg::RowPicked(_)
+        | DrcPanelMsg::FilterPicked(_)
+        | DrcPanelMsg::WaivedShownToggled(_)
+        | DrcPanelMsg::RuleOpened(_)
+        | DrcPanelMsg::BaseRuleOpened(_)
+        | DrcPanelMsg::MessagesShown
+        | DrcPanelMsg::WaiveStarted(_)
+        | DrcPanelMsg::ReasonActed(_)
+        | DrcPanelMsg::WaiveConfirmed
+        | DrcPanelMsg::WaiveCancelled
+        | DrcPanelMsg::Unwaived(_) => {}
+    }
+}
+
+/// The Rules tab domain that holds the rule a violation kind breaks: the
+/// catalog domain holding most of the limits it checks (ties to the
+/// first's); Clearance for a kind no written limit sets (an unconnected
+/// link, a keepout). A part outside its room opens Placement: its rule is
+/// set on the room, not in the Rules tab (#2457; Caner, 2026-11-21).
+pub(crate) fn rules_domain_of(kind: signex_drc::ViolationKind) -> Domain {
+    if matches!(kind, signex_drc::ViolationKind::PartOutsideRoom) {
+        return Domain::Placement;
+    }
+    signex_drc_dsl::table::catalog::domain_of_limits(kind.limits()).unwrap_or(Domain::Clearance)
+}
+
 /// One shown row: its key, rule, severity, nets, place, layers and waiver.
 fn row_json(row: &DrcRow) -> Value {
     let layers: Vec<String> = row
@@ -329,4 +539,29 @@ fn row_json(row: &DrcRow) -> Value {
         "objects": row.objects,
         "waiver": row.waiver,
     })
+}
+
+#[cfg(test)]
+mod domain_tests {
+    use super::rules_domain_of;
+    use signex_drc::ViolationKind;
+    use signex_drc_dsl::table::catalog::Domain;
+
+    /// Keep parts inside is set on the room, not in the Rules tab, so its
+    /// finding opens the Rules tab at Placement, where courtyard overlap is,
+    /// and not the Clearance fallback (Caner, 2026-11-21).
+    #[test]
+    fn a_part_outside_its_room_opens_the_rules_at_placement() {
+        assert_eq!(
+            rules_domain_of(ViolationKind::PartOutsideRoom),
+            Domain::Placement
+        );
+        assert_ne!(
+            signex_drc_dsl::table::catalog::domain_of_limits(
+                ViolationKind::PartOutsideRoom.limits()
+            ),
+            Some(Domain::Placement),
+            "the special case is needed: no Rules-tab limit leads there"
+        );
+    }
 }

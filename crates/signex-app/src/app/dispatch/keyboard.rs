@@ -15,6 +15,10 @@ impl Signex {
             // state (#557 phase 1) — the subscription no longer decides
             // anything.
             InputMsg::KeyInput { window, event } => self.handle_key_input(window, event),
+            InputMsg::HeldEscapeEnded => {
+                self.interaction_state.annotation_tool.is_resume_esc_held = false;
+                Task::none()
+            }
             InputMsg::FootprintModeShortcut(target) => self.update_active_footprint_editor(
                 crate::library::messages::FootprintEditorMsg::SetMode(target),
             ),

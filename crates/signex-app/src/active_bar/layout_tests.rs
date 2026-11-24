@@ -5,7 +5,6 @@
 use super::layout::{BarSlot, SCHEMATIC_BAR_SLOTS, bar_slots, slot_rects};
 use super::*;
 use crate::app::Tool;
-use signex_types::corner::CornerMode;
 use signex_widgets::active_bar::{ActiveBarItem, Metrics, slot_offsets};
 
 use signex_types::theme::ThemeTokens;
@@ -20,34 +19,48 @@ fn themes() -> [(ThemeTokens, ThemeId); 2] {
 }
 
 fn drawn_items(tool: Tool, tokens: &ThemeTokens, tid: ThemeId) -> Vec<ActiveBarItem<ActiveBarMsg>> {
-    bar_items(
-        tool,
-        CornerMode::Ortho90,
-        &std::collections::HashMap::new(),
-        tokens,
-        tid,
-        false,
-        false,
-        &signex_i18n::I18n::en_us(),
-    )
+    super::bar::test_items(tool, tokens, tid)
 }
 
-/// The view's item list and the slot table must describe the same bar.
+/// The view's item list and the slot table must describe the same bar: a
+/// trigger opens its menu. No group is planned since the harness tools
+/// landed (#1280).
 #[test]
 fn bar_items_follow_the_slot_table() {
     for (tokens, tid) in themes() {
-        let slots: Vec<BarSlot> = drawn_items(Tool::Select, &tokens, tid)
+        let items = drawn_items(Tool::Select, &tokens, tid);
+        assert_eq!(items.len(), SCHEMATIC_BAR_SLOTS.len(), "{tid:?}");
+        for (i, (item, slot)) in items.iter().zip(SCHEMATIC_BAR_SLOTS).enumerate() {
+            match (item, slot) {
+                (ActiveBarItem::Separator, BarSlot::Separator) => {}
+                (ActiveBarItem::Button(b), BarSlot::Trigger(menu)) => assert!(
+                    matches!(b.on_right_press, Some(ActiveBarMsg::ToggleMenu(m)) if m == menu),
+                    "{tid:?} slot {i} opens {menu:?}"
+                ),
+                _ => panic!("{tid:?} slot {i} is not {slot:?}"),
+            }
+        }
+    }
+}
+
+/// Every button that opens a menu carries the corner triangle; the groups
+/// sit in Select / Place / Annotate order behind three separators.
+#[test]
+fn every_menu_button_has_a_corner_triangle_and_three_separators_split_the_groups() {
+    for (tokens, tid) in themes() {
+        let items = drawn_items(Tool::Select, &tokens, tid);
+        let separators = items
             .iter()
-            .map(|item| match item {
-                ActiveBarItem::Separator => BarSlot::Separator,
-                ActiveBarItem::Button(b) => match b.on_right_press {
-                    Some(ActiveBarMsg::ToggleMenu(menu)) => BarSlot::Trigger(menu),
-                    _ => panic!("bar button without a dropdown trigger"),
-                },
-                ActiveBarItem::Custom { .. } => panic!("unexpected custom slot"),
-            })
-            .collect();
-        assert_eq!(slots, SCHEMATIC_BAR_SLOTS, "{tid:?}");
+            .filter(|i| matches!(i, ActiveBarItem::Separator))
+            .count();
+        assert_eq!(separators, 3, "{tid:?}");
+        for item in &items {
+            if let ActiveBarItem::Button(b) = item
+                && b.on_right_press.is_some()
+            {
+                assert!(b.dropdown_indicator.is_some(), "{}", b.tooltip);
+            }
+        }
     }
 }
 

@@ -53,6 +53,33 @@ fn the_fixture_shows_the_zoom_pill() {
     );
 }
 
+/// A window locked by a detached dialog keeps the wheel from what is under it.
+#[test]
+fn a_locked_window_keeps_the_wheel_from_the_canvas() {
+    let (app, _) = app();
+    let under = iced::widget::mouse_area(
+        iced::widget::Space::new()
+            .width(iced::Length::Fill)
+            .height(iced::Length::Fill),
+    )
+    .on_scroll(|_| Message::CanvasEvent(CanvasEvent::ViewMoved));
+    let view = iced::widget::Stack::new()
+        .width(iced::Length::Fill)
+        .height(iced::Length::Fill)
+        .push(under.boxed())
+        .push(app.locked_window_layer());
+    let messages = messages_on_scroll_at(
+        view.boxed(),
+        WINDOW,
+        Point::new(WINDOW.width / 2.0, WINDOW.height / 2.0),
+        ScrollDelta::Lines { x: 0.0, y: 1.0 },
+    );
+    assert!(
+        !moved_view(&messages),
+        "the wheel went through the lock: {messages:?}"
+    );
+}
+
 #[test]
 fn a_mouse_wheel_over_the_canvas_zooms_it() {
     let (app, main) = app();
@@ -249,4 +276,167 @@ fn in_scroll_mode_ctrl_wheel_zooms() {
         ScrollDelta::Lines { x: 0.0, y: 1.0 },
     );
     assert!(camera(&app).2 > before.2);
+}
+
+// The zoom pill's presets (Graphite mockup #64).
+
+fn pill_rect(app: &Signex) -> iced::Rectangle {
+    let (w, h) = crate::canvas::zoom_pill::pill_size();
+    let (x, y) = overlays::zoom_pill_origin(app.canvas_bounds());
+    iced::Rectangle::new(Point::new(x, y), Size::new(w, h))
+}
+
+/// Centre of the laid-out text `label` that `area` holds.
+fn text_centre_in(
+    app: &Signex,
+    main: iced::window::Id,
+    label: &str,
+    area: iced::Rectangle,
+) -> Point {
+    let texts = lay_out_texts(app.view(main), WINDOW);
+    texts
+        .iter()
+        .find(|t| t.text == label && area.contains(t.bounds.center()))
+        .unwrap_or_else(|| panic!("no {label:?} in {area:?}: {texts:#?}"))
+        .bounds
+        .center()
+}
+
+/// The window above the pill, where the preset menu opens.
+fn above_the_pill(app: &Signex) -> iced::Rectangle {
+    let pill = pill_rect(app);
+    iced::Rectangle::new(Point::ORIGIN, Size::new(WINDOW.width, pill.y))
+}
+
+fn click_at(app: &Signex, main: iced::window::Id, at: Point) -> Vec<Message> {
+    crate::layout_probe::messages_on_click_at(app.view(main), WINDOW, None, at)
+}
+
+fn open_presets(app: &mut Signex) {
+    let _ = app.update(Message::Ui(UiMsg::ZoomPresetsToggled));
+    assert!(app.interaction_state.zoom_presets_open);
+}
+
+/// The pill keeps its size and corner; the hairline is inside its width.
+#[test]
+fn the_pill_keeps_its_corner_and_holds_fit() {
+    let (app, main) = app();
+    let pill = pill_rect(&app);
+    let canvas = app.canvas_bounds();
+    assert_eq!(pill.x + pill.width, canvas.x + canvas.width - 12.0);
+    assert_eq!(pill.y + pill.height, canvas.y + canvas.height - 12.0);
+    let fit = text_centre_in(&app, main, "Fit", pill);
+    assert!(pill.contains(fit));
+}
+
+/// A click on the percentage opens the presets.
+#[test]
+fn clicking_the_percentage_opens_the_presets() {
+    let (app, main) = app();
+    let pill = pill_rect(&app);
+    let texts = lay_out_texts(app.view(main), WINDOW);
+    let readout = texts
+        .iter()
+        .find(|t| t.text.ends_with('%') && pill.contains(t.bounds.center()))
+        .expect("the pill's percentage");
+    let messages = click_at(&app, main, readout.bounds.center());
+    assert!(
+        messages
+            .iter()
+            .any(|m| matches!(m, Message::Ui(UiMsg::ZoomPresetsToggled))),
+        "{messages:?}"
+    );
+}
+
+/// The menu opens above the pill; picking 200% doubles the 100% scale about
+/// the canvas centre and closes the menu.
+#[test]
+fn picking_200_percent_doubles_the_100_percent_scale() {
+    let (mut app, main) = app();
+    let _ = app.update(Message::Ui(UiMsg::ZoomPresetPicked(100)));
+    let at_100 = camera(&app).2;
+    open_presets(&mut app);
+    let row = text_centre_in(&app, main, "200%", above_the_pill(&app));
+    for message in click_at(&app, main, row) {
+        let _ = app.update(message);
+    }
+    let at_200 = camera(&app).2;
+    assert!((at_200 / at_100 - 2.0).abs() < 1e-4, "{at_100} -> {at_200}");
+    assert!(
+        !app.interaction_state.zoom_presets_open,
+        "the pick left the menu open"
+    );
+}
+
+/// Esc closes the menu and leaves the camera alone.
+#[test]
+fn esc_closes_the_presets() {
+    let (mut app, _main) = app();
+    open_presets(&mut app);
+    let before = camera(&app);
+    let _ = app.update(Message::Input(crate::app::InputMsg::EscapePressed {
+        window: None,
+    }));
+    assert!(!app.interaction_state.zoom_presets_open);
+    assert_eq!(camera(&app), before);
+}
+
+/// A click on the canvas beside the menu closes it and goes no further.
+#[test]
+fn an_outside_click_closes_the_presets() {
+    let (mut app, main) = app();
+    open_presets(&mut app);
+    let messages = click_at(&app, main, canvas_centre(&app));
+    assert!(
+        messages
+            .iter()
+            .any(|m| matches!(m, Message::Ui(UiMsg::ZoomPresetsDismissed))),
+        "{messages:?}"
+    );
+    assert!(
+        !messages
+            .iter()
+            .any(|m| matches!(m, Message::CanvasEvent(CanvasEvent::Clicked { .. }))),
+        "the click went through to the canvas: {messages:?}"
+    );
+}
+
+/// With nothing selected Fit Selection is greyed: a click on it runs nothing.
+#[test]
+fn fit_selection_does_nothing_without_a_selection() {
+    let (mut app, main) = app();
+    app.interaction_state.active_canvas_mut().selected.clear();
+    open_presets(&mut app);
+    let row = text_centre_in(&app, main, "Fit Selection", above_the_pill(&app));
+    let messages = click_at(&app, main, row);
+    assert!(
+        !messages
+            .iter()
+            .any(|m| matches!(m, Message::Ui(UiMsg::ZoomPresetCommandPicked(_)))),
+        "{messages:?}"
+    );
+}
+
+/// The menu belongs to the sheet it opened over: switching to another tab
+/// closes it, so it does not hang over the next sheet's pill.
+#[test]
+fn a_tab_switch_closes_the_presets() {
+    let (mut app, _main) = app();
+    let other = std::path::PathBuf::from("other.snxsch");
+    let engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default())
+        .expect("engine");
+    app.document_state.engines.insert(other.clone(), engine);
+    app.document_state.tabs.push(TabInfo {
+        title: "other".to_string(),
+        path: other,
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    open_presets(&mut app);
+    let _ = app.step_document_tab(true);
+    assert!(
+        !app.interaction_state.zoom_presets_open,
+        "the menu stayed open over the next tab"
+    );
 }

@@ -19,8 +19,8 @@ pub struct EditSpec {
 }
 
 /// The text of an operand given as JSON: a string, a number, a boolean,
-/// `[x, y]` for a point, or a list of objects (the `edits` of `apply_edits`)
-/// as compact JSON.
+/// `[x, y]` for a point, a list of uuid strings for `ids`, or a list of
+/// objects (the `edits` of `apply_edits`) as compact JSON.
 pub fn operand_text(name: &str, value: &Value) -> Result<String, String> {
     if name.contains('=') {
         return Err(format!("operand name `{name}` must not contain `=`"));
@@ -35,6 +35,12 @@ pub fn operand_text(name: &str, value: &Value) -> Result<String, String> {
         Value::Array(items) if name == "documents" && items.iter().all(Value::is_string) => {
             Ok(value.to_string())
         }
+        // The targets `ids` (#2326) as a JSON list reads as its comma form.
+        Value::Array(items) if name == "ids" && items.iter().all(Value::is_string) => Ok(items
+            .iter()
+            .filter_map(Value::as_str)
+            .collect::<Vec<_>>()
+            .join(",")),
         Value::Array(point) => match point.as_slice() {
             [Value::Number(x), Value::Number(y)] => Ok(format!("{x},{y}")),
             _ => Err(format!("operand `{name}` must be [x, y] when it is a list")),
@@ -210,6 +216,10 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     ("add_teardrops", BOARD_EDIT),
     ("remove_teardrops", BOARD_EDIT),
     ("gloss_selected_routes", BOARD_EDIT),
+    // Layer colours are saved with the board (2026-11-18): a board step.
+    ("set_layer_color", BOARD_EDIT),
+    ("reset_layer_colors", BOARD_EDIT),
+    ("reset_board_origin", BOARD_EDIT),
     ("board_shape_from_selection", BOARD_EDIT),
     ("keepout_from_selection", BOARD_EDIT),
     ("arrange_in_box", BOARD_EDIT),
@@ -425,6 +435,17 @@ mod tests {
         assert!(parse_documents("{}").is_err());
     }
 
+    /// `ids` as a JSON list of uuids is the comma text the targets parser
+    /// reads; a list holding anything else keeps the point rule's reason.
+    #[test]
+    fn ids_as_a_list_of_strings_reads_as_comma_text() {
+        let list = json!(["a", "b"]);
+        assert_eq!(operand_text("ids", &list).unwrap(), "a,b");
+        assert_eq!(operand_text("ids", &json!([])).unwrap(), "");
+        assert!(operand_text("ids", &json!(["a", 1])).is_err());
+        assert!(operand_text("summary", &list).is_err());
+    }
+
     #[test]
     fn a_list_round_trips_with_every_operand_as_text() {
         let list = r##"[{"id":"place_junction","args":{"at":[5.08,0]}},{"id":"color_net","args":{"color":"#336699","at":"5,0"}},{"id":"clear_all_net_colors"}]"##;
@@ -488,6 +509,7 @@ mod tests {
             "draw_rectangle",
             "draw_wire",
             "edit_blanket",
+            "edit_no_erc_rules",
             "place_blanket",
             "place_bus",
             "place_compile_mask",
@@ -500,16 +522,22 @@ mod tests {
             "place_net_label",
             "place_no_connect",
             "place_no_erc",
+            "place_parameter_set",
             "place_power_symbol",
             "place_sheet_entry",
             "place_sheet_symbol",
             "place_text",
             "place_text_string",
             "place_wire",
+            // The sheet's bare pin touches get their dots.
+            "repair_pin_junctions",
             "set_object_position",
             "set_object_rotation",
             "set_sheet_symbol_size",
+            "set_sheet_variable",
             "set_symbol_parameter",
+            // #1276: `to_sheet` is refused inside a list (it edits the child).
+            "sync_sheet_entries",
             "sync_sheet_pins",
         ];
         let mut found = editable_ids();
@@ -535,6 +563,11 @@ mod tests {
             ("toggle_properties_panel", "not runnable headless"),
             ("place_design_block", "takes a file path"),
             ("import_graphics", "takes a file path"),
+            ("create_sheet_symbol_from_sheet", "takes a file path"),
+            ("set_layer_color", "edits a board"),
+            ("reset_layer_colors", "edits a board"),
+            ("reset_board_origin", "edits a board"),
+            ("set_board_origin", "not runnable headless"),
         ] {
             let reason = edit_refusal(&id(command)).unwrap_or_else(|| panic!("{command}"));
             assert!(reason.contains(needle), "{command}: {reason}");

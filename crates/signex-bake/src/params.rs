@@ -7,12 +7,11 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use signex_expr::{ExprNode, Quantity, UnitFamily};
 use signex_sketch::SketchError;
-use signex_sketch::expr::ast::ExprNode;
 use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::parameter::resolve_quantities;
 use signex_sketch::sketch::SketchData;
-use signex_sketch::unit::{Quantity, UnitFamily};
 
 /// One literal per canonical parameter, in the unit family the sketch's
 /// parameter table declares for it. A parameter the table does not resolve
@@ -36,7 +35,9 @@ pub(crate) fn params_ast(
             let quantity = match families.get(name) {
                 Some(UnitFamily::Angle) => Quantity::angle(value),
                 Some(UnitFamily::Count) => Quantity::count(value),
-                Some(UnitFamily::Length) | None => Quantity::length(value),
+                // A resolved sketch parameter is never derived (the sketch
+                // boundary refuses it); read one as a length.
+                Some(UnitFamily::Length | UnitFamily::Derived) | None => Quantity::length(value),
             };
             (name.clone(), ExprNode::Literal(quantity))
         })

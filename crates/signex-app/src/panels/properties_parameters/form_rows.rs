@@ -50,22 +50,6 @@ pub fn thin_sep<'a, M: 'a>(border_c: Color) -> Element<'a, M> {
         .boxed()
 }
 
-/// Section header: bold label + separator line.
-pub fn section_hdr<'a, M: 'a>(
-    title: signex_i18n::Localized,
-    text_c: Color,
-    border_c: Color,
-) -> Element<'a, M> {
-    column![
-        container(text(title).size(TS.label).color(text_c))
-            .padding([6.0, SP.m])
-            .width(Length::Fill),
-        thin_sep(border_c),
-    ]
-    .spacing(0)
-    .boxed()
-}
-
 /// `field` with its whole `value` in a tooltip, so a value the field cuts
 /// off can still be read (#2468). An empty value gets no tooltip.
 pub fn with_value_tip<'a, M: 'a>(field: Element<'a, M>, value: &str) -> Element<'a, M> {
@@ -74,20 +58,23 @@ pub fn with_value_tip<'a, M: 'a>(field: Element<'a, M>, value: &str) -> Element<
     }
     signex_widgets::tooltip(
         field,
-        container(
-            text(signex_i18n::UserText::new(value.to_string()))
-                .size(TS.body)
-                .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+        iced::widget::container(
+            container(
+                text(signex_i18n::UserText::new(value.to_string()))
+                    .size(TS.body)
+                    .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+            )
+            .padding([SP.xs, SP.s]),
         )
-        .padding([SP.xs, SP.s]),
+        .padding([SP.xs, SP.s])
+        .style(form_look::value_tip),
         iced::widget::tooltip::Position::Bottom,
     )
-    .style(form_look::value_tip)
     .boxed()
 }
 
-/// Form row: label | styled input-like value display. A value too long for
-/// the field ends in an ellipsis and shows whole in a tooltip (#2468).
+/// Form row: label | a read-only value on the sunken fill. A value too long
+/// for the field ends in an ellipsis and shows whole in a tooltip (#2468).
 pub fn form_input_row<'a, M: 'a>(
     label: impl Into<signex_widgets::Label<'a>>,
     value: &str,
@@ -95,17 +82,6 @@ pub fn form_input_row<'a, M: 'a>(
     input_bg: Color,
 ) -> Element<'a, M> {
     value_row(label, value, label_c, input_bg, true)
-}
-
-/// [`form_input_row`] without the value tooltip, for a row that carries a
-/// tooltip of its own.
-pub fn form_input_row_untipped<'a, M: 'a>(
-    label: impl Into<signex_widgets::Label<'a>>,
-    value: &str,
-    label_c: Color,
-    input_bg: Color,
-) -> Element<'a, M> {
-    value_row(label, value, label_c, input_bg, false)
 }
 
 fn value_row<'a, M: 'a>(
@@ -132,19 +108,7 @@ fn value_row<'a, M: 'a>(
     )
     .padding([3, 6])
     .width(Length::Fill)
-    .style(move |theme: &Theme| {
-        let (bg, bdr, radius) = form_look::value_box(theme);
-        container::Style {
-            background: Some(Background::Color(bg)),
-            border: Border {
-                width: 1.0,
-                radius: radius.into(),
-                color: bdr,
-                ..Border::default()
-            },
-            ..container::Style::default()
-        }
-    })
+    .style(form_look::read_only_value)
     .boxed();
     let field = if tip {
         with_value_tip(field, value)
@@ -164,14 +128,11 @@ fn value_row<'a, M: 'a>(
     .boxed()
 }
 
-/// A typed mm value clamped to 1..=MAX_PAGE_EDGE_MM. Refused or half-typed
-/// text keeps `current`: `clamp` passes NaN through, so a typed `nan` would
-/// otherwise reach the canvas paper size (#828). The sheet-size model then
-/// raises it to the smallest custom edge.
-pub fn typed_mm(text: &str, current: f32) -> f32 {
-    crate::numeric_field::parse_field_f64(text)
-        .map_or(current, |v| v as f32)
-        .clamp(1.0, signex_types::schematic::MAX_PAGE_EDGE_MM as f32)
+/// A typed custom page edge in mm. `None` is refused: not a finite number
+/// (#828), or outside the edges a custom page can have (#2792).
+pub fn typed_mm(text: &str) -> Option<f64> {
+    use signex_types::schematic::{MAX_PAGE_EDGE_MM, MIN_CUSTOM_EDGE_MM};
+    crate::numeric_field::typed_in_range(text, MIN_CUSTOM_EDGE_MM..=MAX_PAGE_EDGE_MM)
 }
 
 /// Which custom paper edge a draft belongs to.
@@ -183,44 +144,12 @@ pub enum PaperEdge {
 
 /// A half-typed custom paper edge, tied to the sheet it was typed on. It is
 /// committed as one undoable edit on Enter, so partial input such as the `4`
-/// of `400` is never clamped to the minimum edge mid-typing.
+/// of `400` is never applied mid-typing.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PaperEdgeDraft {
     pub sheet: std::path::PathBuf,
     pub edge: PaperEdge,
     pub text: String,
-}
-
-/// Form row: label | floating-point mm text_input (no spinner buttons).
-/// Shows `draft` while one is being typed, else the model `value`; typing
-/// only reports the text, and Enter commits it.
-pub fn form_mm_edit_row<'a>(
-    label: signex_i18n::Localized,
-    value: f32,
-    draft: Option<&str>,
-    edge: PaperEdge,
-    label_c: Color,
-    _input_bg: Color,
-    _input_border: Color,
-) -> Element<'a, PanelMsg> {
-    let text_value = draft.map_or_else(|| format!("{value:.1}"), str::to_string);
-    container(
-        row![
-            property_label(label, label_c),
-            signex_widgets::text_input(signex_i18n::UserText::new(String::new()), text_value)
-                .on_input(move |s| PanelMsg::CustomPaperEdgeTyping(edge, s))
-                .on_submit(PanelMsg::CommitCustomPaperEdge(edge))
-                .size(TS.body)
-                .padding([3, 6])
-                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-                .style(form_look::text_input_style),
-        ]
-        .spacing(SP.m)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .boxed()
 }
 
 /// Form row: label | pick_list (dropdown).
@@ -282,55 +211,6 @@ where
     .boxed()
 }
 
-/// The quarter turns a rotation pick list offers, in degrees.
-const ROTATION_STEPS: [f64; 4] = [0.0, 90.0, 180.0, 270.0];
-
-/// A rotation pick-list choice: `degrees`, named "{n} Degrees" with the
-/// number as `{:.0}` writes it.
-pub(crate) fn rotation_choice(
-    i18n: &signex_i18n::I18n,
-    degrees: f64,
-) -> crate::choice::Choice<f64> {
-    crate::choice::Choice {
-        value: degrees,
-        label: i18n.message_plain(
-            ids::PANELS_PLACED_DEGREES,
-            &[("degrees", format!("{degrees:.0}").into())],
-        ),
-    }
-}
-
-/// The step whose `{:.0}` name `current` shares (89.9999 is the 90 entry),
-/// as the string-matched list highlighted it; else `current` itself.
-fn shown_rotation_step(current: f64) -> f64 {
-    let shown = format!("{current:.0}");
-    ROTATION_STEPS
-        .into_iter()
-        .find(|step| format!("{step:.0}") == shown)
-        .unwrap_or(current)
-}
-
-/// Form row: the Rotation pick list over [`ROTATION_STEPS`], showing
-/// `current` even when it is not a quarter turn; picking reports degrees.
-pub fn form_rotation_row<'a>(
-    i18n: &signex_i18n::I18n,
-    current: f64,
-    on_change: impl Fn(f64) -> PanelMsg + 'a,
-    label_c: Color,
-) -> Element<'a, PanelMsg> {
-    let choices = ROTATION_STEPS
-        .iter()
-        .map(|&degrees| rotation_choice(i18n, degrees))
-        .collect();
-    form_choice_row(
-        t!(i18n, ids::PANELS_PLACED_ROTATION),
-        choices,
-        rotation_choice(i18n, shown_rotation_step(current)),
-        on_change,
-        label_c,
-    )
-}
-
 /// Checkbox form row: label, then the checkbox.
 pub fn form_check_row<'a>(
     label: impl Into<signex_widgets::Label<'a>>,
@@ -357,86 +237,6 @@ pub fn form_check_row<'a>(
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .boxed()
-}
-
-/// Altium-style grid row: [Label] [checkbox toggle] [pick_list] [shortcut hint]
-/// Used for both "Visible Grid" (eye/visible toggle) and "Snap Grid" (snap enable toggle).
-/// Labels and values are shown in the current `unit` (mm or mil).
-#[expect(
-    clippy::too_many_arguments,
-    reason = "a generic form-row builder: label, value, bounds, styling and the message constructor are all independent"
-)]
-pub fn form_grid_row(
-    label: signex_i18n::Localized,
-    current_mm: f32,
-    unit: Unit,
-    has_checkbox: bool,
-    on_size: impl Fn(f32) -> PanelMsg + 'static,
-    label_c: Color,
-    active: bool,
-    on_toggle: PanelMsg,
-) -> Element<'static, PanelMsg> {
-    use crate::canvas::grid::{GRID_SIZE_LABELS, GRID_SIZE_LABELS_MIL, GRID_SIZES_MM};
-
-    let labels: &'static [&'static str] = if unit == Unit::Mil {
-        GRID_SIZE_LABELS_MIL
-    } else {
-        GRID_SIZE_LABELS
-    };
-
-    let selected: Option<&'static str> = GRID_SIZES_MM
-        .iter()
-        .zip(labels.iter())
-        .find(|(sz, _)| (**sz - current_mm).abs() < 1e-4)
-        .map(|(_, lbl)| *lbl);
-
-    // raw: grid pitches with their unit symbol (mm, mil), not language.
-    let pick = iced::widget::pick_list(selected, labels, |l: &&'static str| (*l).to_string())
-        .graphite()
-        .on_select(move |lbl: &'static str| {
-            // Map label back to mm value (labels and GRID_SIZES_MM are parallel arrays)
-            let mm = GRID_SIZE_LABELS
-                .iter()
-                .chain(GRID_SIZE_LABELS_MIL.iter())
-                .zip(GRID_SIZES_MM.iter().chain(GRID_SIZES_MM.iter()))
-                .find(|(l, _)| **l == lbl)
-                .map(|(_, v)| *v)
-                .unwrap_or(2.54);
-            on_size(mm)
-        })
-        .width(Length::Fill);
-
-    let label_widget = property_label(label, label_c);
-
-    let content: Element<PanelMsg> = if has_checkbox {
-        // Snap Grid row: checkbox before pick_list
-        row![
-            label_widget,
-            signex_widgets::checkbox(active)
-                .on_toggle(move |_| on_toggle.clone())
-                .size(TS.label)
-                .spacing(SP.s)
-                .style(form_look::checkbox_style),
-            container(pick).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
-        ]
-        .spacing(SP.s)
-        .align_y(iced::Alignment::Center)
-        .boxed()
-    } else {
-        // Visible Grid row: no checkbox
-        row![
-            label_widget,
-            container(pick).width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-        ]
-        .spacing(SP.s)
-        .align_y(iced::Alignment::Center)
-        .boxed()
-    };
-
-    container(content)
-        .padding([2, PROPERTY_ROW_PAD_X])
-        .width(Length::Fill)
-        .boxed()
 }
 
 /// Form row: checkbox with a keyboard shortcut hint on the right.
@@ -626,12 +426,24 @@ pub fn form_edit_row<'a>(
     label_c: Color,
     on_input: impl Fn(String) -> PanelMsg + 'a,
 ) -> Element<'a, PanelMsg> {
+    form_edit_row_refusable(label, value, label_c, None, on_input)
+}
+
+/// [`form_edit_row`] whose box is outlined in `refused` while it holds text
+/// the field refused.
+pub fn form_edit_row_refusable<'a>(
+    label: impl Into<signex_widgets::Label<'a>>,
+    value: &str,
+    label_c: Color,
+    refused: Option<Color>,
+    on_input: impl Fn(String) -> PanelMsg + 'a,
+) -> Element<'a, PanelMsg> {
     let input =
         signex_widgets::text_input(signex_i18n::UserText::new(String::new()), value.to_string())
             .on_input(on_input)
             .size(TS.body)
             .padding(SP.s)
-            .style(form_look::text_input_style)
+            .style(form_look::refusable_input_style(refused))
             .width(Length::Fill)
             .boxed();
     container(
@@ -683,7 +495,7 @@ pub fn font_style_row<'a>(
                 .color(primary)
                 .font(iced::Font {
                     weight: style,
-                    ..iced::Font::DEFAULT
+                    ..signex_widgets::ui_font::regular()
                 })
                 .align_x(iced::alignment::Horizontal::Center),
         )
@@ -779,21 +591,28 @@ mod tests {
         assert_eq!(text_on(Color::from_rgb(0.99, 0.96, 0.89)), Color::BLACK);
     }
 
-    /// #828 — `f32::clamp(NaN)` is NaN, so a typed `nan` must be refused
-    /// before the clamp, not by it.
+    /// #828 — a typed `nan` must never reach the canvas paper size.
     #[test]
     fn typed_mm_keeps_the_current_value_on_refused_or_half_typed_text() {
         for bad in ["nan", "NaN", "inf", "-inf", "1e999", "", "-", "1,5"] {
-            assert_eq!(typed_mm(bad, 297.0), 297.0, "{bad:?}");
+            assert_eq!(typed_mm(bad), None, "{bad:?}");
         }
     }
 
     #[test]
     fn typed_mm_clamps_a_finite_value() {
-        assert_eq!(typed_mm(" 210 ", 297.0), 210.0);
-        assert_eq!(typed_mm("0", 297.0), 1.0);
-        assert_eq!(typed_mm("9000", 297.0), 5080.0);
-        // Finite as f64 but infinite as f32: the clamp still bounds it.
-        assert_eq!(typed_mm("1e300", 297.0), 5080.0);
+        assert_eq!(typed_mm(" 210 "), Some(210.0));
+        assert_eq!(typed_mm("0"), None);
+        assert_eq!(typed_mm("9000"), None);
+        // Finite as f64 but infinite as f32: still outside the range.
+        assert_eq!(typed_mm("1e300"), None);
+    }
+
+    #[test]
+    fn typed_mm_takes_both_ends_of_the_custom_range() {
+        assert_eq!(typed_mm("10"), Some(10.0));
+        assert_eq!(typed_mm("5080"), Some(5080.0));
+        assert_eq!(typed_mm("9.99"), None);
+        assert_eq!(typed_mm("5080.1"), None);
     }
 }

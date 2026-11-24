@@ -4,6 +4,7 @@
 //! with operands, as a headless run does.
 
 use serde_json::{Value, json};
+use signex_i18n::RenderTranslatable;
 use signex_types::schematic::{Point, SelectedItem, SelectedKind};
 
 use super::interaction_snapshot_tests::interaction_snapshot;
@@ -58,7 +59,7 @@ fn applied(app: &mut Signex, file: &str, edits: Value) -> Value {
 
 fn refusal(outcome: CommandOutcome) -> String {
     match outcome {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("not refused: {other:?}"),
     }
 }

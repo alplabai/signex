@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use signex_types::project::{
-    AnnotateUndo, ListMove, ProjectData, RequirementEntry, VariantProblem,
+    AnnotateUndo, ChannelNaming, ListMove, ProjectData, RequirementEntry, VariantProblem,
 };
 
 /// One edit of a Project tab section. Plain data, so a script can emit it.
@@ -17,6 +17,12 @@ pub enum ProjectSectionCommand {
     MoveSheet {
         filename: String,
         step: ListMove,
+    },
+    /// Drop a sheet at page index `to` (mockup row 31): one step, however
+    /// far it moved.
+    PlaceSheet {
+        filename: String,
+        to: usize,
     },
     /// Add a variant after the others (#1690).
     AddVariant {
@@ -38,6 +44,11 @@ pub enum ProjectSectionCommand {
         path: PathBuf,
         step: ListMove,
     },
+    /// Drop a library at list index `to` (mockup row 33).
+    PlaceLibrary {
+        path: PathBuf,
+        to: usize,
+    },
     /// The project's annotate undo choice; `None` follows Preferences
     /// (#1692). Clearing it over an unreadable section changes nothing.
     SetAnnotateUndo {
@@ -46,6 +57,16 @@ pub enum ProjectSectionCommand {
     /// Commit every save to the project's repository (#1693).
     SetVersionControl {
         on: bool,
+    },
+    /// How channels of a repeated sheet name designators and local nets
+    /// (#1279).
+    SetChannelNaming {
+        naming: ChannelNaming,
+    },
+    /// Replace the project's signal harness definitions (#1280), as the
+    /// harness definitions view edits them.
+    SetHarnessDefinitions {
+        definitions: Vec<signex_types::schematic::HarnessDefinition>,
     },
 }
 
@@ -57,6 +78,9 @@ impl ProjectSectionCommand {
             Self::MoveSheet { filename, step } => {
                 data.move_sheet(filename, *step);
             }
+            Self::PlaceSheet { filename, to } => {
+                data.place_sheet(filename, *to);
+            }
             Self::AddVariant { name } => data.add_variant(name)?,
             Self::RenameVariant { from, to } => data.rename_variant(from, to)?,
             Self::RemoveVariant { name } => data.remove_variant(name)?,
@@ -64,12 +88,28 @@ impl ProjectSectionCommand {
             Self::MoveLibrary { path, step } => {
                 data.move_library(path, *step);
             }
+            Self::PlaceLibrary { path, to } => {
+                data.place_library(path, *to);
+            }
             Self::SetAnnotateUndo { choice } => {
                 if !(choice.is_none() && data.has_unreadable_annotation()) {
                     data.set_annotate_undo(*choice);
                 }
             }
             Self::SetVersionControl { on } => data.enable_git = *on,
+            // An unreadable section is never replaced (DECISIONS 2026-11-23).
+            Self::SetChannelNaming { naming } => {
+                if !data.has_unreadable_schematic_design() {
+                    data.schematic_design.channel_naming = naming.clone();
+                }
+            }
+            Self::SetHarnessDefinitions { definitions } => {
+                if !data.has_unreadable_schematic_design() {
+                    data.schematic_design
+                        .harness_definitions
+                        .clone_from(definitions);
+                }
+            }
         }
         Ok(())
     }
@@ -87,6 +127,9 @@ pub(super) struct SectionsSnapshot {
     enable_git: bool,
     /// The Requirements section (#2339): the whole list; only it writes it.
     requirements: Vec<RequirementEntry>,
+    channel_naming: ChannelNaming,
+    /// The harness definitions (#1280); only the definitions view writes them.
+    harness_definitions: Vec<signex_types::schematic::HarnessDefinition>,
 }
 
 impl SectionsSnapshot {
@@ -98,6 +141,8 @@ impl SectionsSnapshot {
             active_variant: data.active_variant.clone(),
             enable_git: data.enable_git,
             requirements: data.requirements.clone(),
+            channel_naming: data.schematic_design.channel_naming.clone(),
+            harness_definitions: data.schematic_design.harness_definitions.clone(),
         }
     }
 
@@ -108,5 +153,7 @@ impl SectionsSnapshot {
         data.active_variant = self.active_variant;
         data.enable_git = self.enable_git;
         data.requirements = self.requirements;
+        data.schematic_design.channel_naming = self.channel_naming;
+        data.schematic_design.harness_definitions = self.harness_definitions;
     }
 }

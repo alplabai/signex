@@ -20,12 +20,7 @@ use crate::app::{Message, Signex};
 pub(super) type Ran = (CommandOutcome, Task<Message>);
 
 pub(super) fn refused(reason: impl Into<String>) -> Ran {
-    (
-        CommandOutcome::Disabled {
-            reason: reason.into(),
-        },
-        Task::none(),
-    )
+    (CommandOutcome::disabled(reason), Task::none())
 }
 
 pub(super) fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {

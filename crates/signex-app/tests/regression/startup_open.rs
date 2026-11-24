@@ -15,7 +15,8 @@ use std::fs;
 use tempfile::TempDir;
 
 fn dispatch_startup(app: &mut Signex, args: &[&std::path::Path], cwd: &std::path::Path) {
-    let paths = document_paths(args.iter().map(|a| OsString::from(a.as_os_str())), cwd);
+    let paths = document_paths(args.iter().map(|a| OsString::from(a.as_os_str())), Ok(cwd))
+        .expect("the paths resolve");
     for message in Signex::startup_open_messages(paths) {
         let _ = app.update(message);
     }

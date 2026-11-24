@@ -6,6 +6,7 @@ use iced::widget::{Space, column, container, row};
 use iced::{Border, Element, Length, Widget};
 use signex_i18n::{I18n, MessageId, UserText, ids, t};
 use signex_sketch::solver::dof::DofColor;
+use signex_types::sketch::SketchHost;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::{Label, text};
@@ -18,7 +19,7 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// What the last solve says about the sketch, or why there is nothing to say.
-fn dof_state(editor: &FootprintDocument) -> (PillTone, MessageId) {
+pub(crate) fn dof_state(editor: &FootprintDocument) -> (PillTone, MessageId) {
     if editor.primitive().sketch.is_none() {
         return (PillTone::Neutral, ids::EDITORS_SKETCH_NONE);
     }
@@ -90,7 +91,7 @@ pub fn overlay<'a>(
     let dof = pill(t!(i18n, label).into(), dot, fill, ink, line);
 
     // A board sketch has no pads: its pill names the board only (#2234).
-    let info: Label<'static> = if editor.state.board_backdrop.is_some() {
+    let info: Label<'static> = if editor.state.sketch_host() == SketchHost::Board {
         UserText::new(editor.primitive().name.as_str()).into()
     } else {
         t!(

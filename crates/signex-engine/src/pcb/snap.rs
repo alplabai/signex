@@ -4,7 +4,9 @@
 
 use std::collections::BTreeSet;
 
+use pcb_geom::PickKind;
 use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb_layer::PcbLayer;
 use signex_types::pcb_options::{BoardGuide, GuideKind};
 use uuid::Uuid;
 
@@ -64,10 +66,45 @@ pub struct SnapQuery<'a> {
     /// bits; `u32::MAX` for every layer. Texts and graphics count only on
     /// every layer, the board shape on any.
     pub layers: u32,
-    /// Footprints whose pads and origins are left out: the carried ones.
+    /// Footprints whose pads and origins are left out, and vias, tracks and
+    /// arcs whose points are: the carried ones and those following them.
     pub skip: &'a BTreeSet<Uuid>,
     /// How far from the pointer a point may be, mm.
     pub radius_mm: f64,
+    /// The layers the view shows: a hidden layer gives no points.
+    pub shown: ShownLayers<'a>,
+    /// While a route runs, its net: copper of another net gives no points,
+    /// and no part origin does. Copper of no net (0) and objects without a
+    /// net still do.
+    pub net: Option<u32>,
+}
+
+/// What the board view shows, as object snapping reads it.
+#[derive(Debug, Clone, Copy)]
+pub struct ShownLayers<'a> {
+    /// The copper layers shown, as `pcb_geom::layer_bit` bits.
+    pub copper: u32,
+    /// The other layers it hides.
+    pub hidden: &'a [PcbLayer],
+    /// The Multi-Layer row is off: no vias or through-hole pads.
+    pub through_hidden: bool,
+    /// The kinds of object the view hides.
+    pub hidden_kinds: &'a [PickKind],
+}
+
+impl ShownLayers<'_> {
+    /// Every layer and kind shown.
+    pub const ALL: ShownLayers<'static> = ShownLayers {
+        copper: u32::MAX,
+        hidden: &[],
+        through_hidden: false,
+        hidden_kinds: &[],
+    };
+
+    /// Whether objects of `kind` are shown.
+    pub(super) fn shows(&self, kind: PickKind) -> bool {
+        !self.hidden_kinds.contains(&kind)
+    }
 }
 
 fn usable(radius: f64) -> bool {

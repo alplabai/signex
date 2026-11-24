@@ -94,7 +94,9 @@ pub(crate) fn fixture() -> Fixture {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -118,14 +120,16 @@ pub(crate) fn fixture() -> Fixture {
 }
 
 pub(crate) fn submit_rename(app: &mut Signex, target: &Path, buffer: &str) {
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0, 1],
         buffer: buffer.to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     crate::settle_support::settle(app, Message::Rename(RenameMsg::Submit));
 }
 
@@ -504,14 +508,16 @@ fn extension_check_is_case_sensitive_and_ignores_dots_in_the_stem() {
 fn opening_an_unopened_rewrite_parent_during_the_rename_is_refused() {
     let _ = signex_app::diagnostics::init_logging();
     let mut f = fixture();
-    f.app.ui_state.rename_dialog = Some(RenameDialogState {
+    f.app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: f.child.clone(),
         tree_path: vec![0, 1],
         buffer: "renamed.snxsch".to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     let rename = f.app.update(Message::Rename(RenameMsg::Submit));
 
     let open = f

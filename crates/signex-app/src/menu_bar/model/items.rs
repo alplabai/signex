@@ -101,6 +101,12 @@ pub(super) fn unavailable(ctx: &MenuContext, label: MessageId) -> MenuEntry {
     plain(text(ctx, label), ItemState::Unavailable)
 }
 
+/// A section caption over the rows below it: no command, no hover, no
+/// click (2026-11-20 decision).
+pub(super) fn header(ctx: &MenuContext, label: MessageId) -> MenuEntry {
+    plain(text(ctx, label), ItemState::Header)
+}
+
 /// A placement tool row (#2415): gated by its command like
 /// [`cmd_item_gated`], or greyed with the planned tooltip while the command
 /// is a planned placeholder (#1249), so the row and the Active Bar agree.

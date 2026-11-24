@@ -5,6 +5,7 @@ use crate::sketch::attr::{
     BoardCutoutAttr, CourtyardAttr, KeepoutAttr, MaskExcludeAttr, MaskOpeningAttr,
     MountingHoleAttr, PadAttr, PasteApertureAttr, PourAttr, SilkAttr, VScoreHintAttr,
 };
+use crate::sketch::board_attr::{BoardSlotAttr, ComponentAnchorAttr, MechanicalAttr};
 use crate::sketch::id::SketchEntityId;
 use crate::sketch::plane::PlaneId;
 
@@ -64,6 +65,19 @@ pub struct Entity {
     /// This circle is a mounting hole.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mounting_hole: Option<MountingHoleAttr>,
+
+    // ─── Board targets of decision 2 (2026-11-20) ───
+    // A board pour is `pour`. Each is written only while set, so a sketch
+    // without them keeps its bytes.
+    /// This cutout must be a slot (set with `board_cutout`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board_slot: Option<BoardSlotAttr>,
+    /// This edge is a drawing on a mechanical layer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mechanical: Option<MechanicalAttr>,
+    /// This point is where a placed component's origin goes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub component_anchor: Option<ComponentAnchorAttr>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -117,6 +131,9 @@ impl Entity {
             v_score: None,
             board_outline: false,
             mounting_hole: None,
+            board_slot: None,
+            mechanical: None,
+            component_anchor: None,
         }
     }
 

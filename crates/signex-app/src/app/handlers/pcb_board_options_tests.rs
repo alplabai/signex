@@ -385,3 +385,39 @@ fn grid_cards_add_move_and_edit_as_undo_steps() {
     assert_eq!(options(&app, &path).grids.len(), 1);
     assert_eq!(app.ui_state.pcb_board_panel.grid_menu, None);
 }
+
+/// 2026-11-18: a layer colour is board data: set from the Layers panel's
+/// chip, it is one undo step that marks the board changed; Reset all layer
+/// colours is another; undo brings each back.
+#[test]
+fn a_layer_colour_is_saved_with_the_board_as_an_undo_step() {
+    use crate::app::PcbViewMsg;
+    use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let silk = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
+    assert_eq!(app.document_state.dirty_document_count(), 0);
+    let set = PcbViewMsg::LayerColourSet {
+        layer: silk,
+        colour: Some([255, 255, 0]),
+    };
+    let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::PcbLayers(set))));
+    let yellow = signex_types::theme::Color::new(255, 255, 0, 0xFF);
+    assert_eq!(options(&app, &path).layer_color(silk), Some(yellow));
+    assert_eq!(app.document_state.dirty_document_count(), 1);
+    assert_eq!(
+        app.document_state.panel_ctx.pcb_layers.colour(silk),
+        iced::Color::from_rgb8(255, 255, 0),
+        "the panel reads the board's colour"
+    );
+
+    let reset = PcbViewMsg::LayerColoursReset;
+    let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::PcbLayers(
+        reset,
+    ))));
+    assert!(options(&app, &path).layer_colors.is_empty());
+    undo(&mut app);
+    assert_eq!(options(&app, &path).layer_color(silk), Some(yellow));
+    undo(&mut app);
+    assert!(options(&app, &path).layer_colors.is_empty());
+}

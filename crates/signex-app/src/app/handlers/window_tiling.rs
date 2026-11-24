@@ -1,4 +1,4 @@
-//! Window ▸ Tile Horizontally / Tile Vertically (#2247): the main window and
+//! View ▸ Window ▸ Tile Horizontally / Tile Vertically (#2247): the main window and
 //! every undocked document window, arranged side by side or stacked on the
 //! main window's monitor.
 //!

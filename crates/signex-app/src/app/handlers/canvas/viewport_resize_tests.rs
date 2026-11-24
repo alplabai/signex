@@ -315,3 +315,25 @@ fn minimising_and_restoring_an_undocked_window_leaves_its_camera() {
     assert_eq!(slot.live_camera(), before);
     assert_eq!(slot.viewport_size(), UNDOCKED_VIEW);
 }
+
+/// A minimised main window's 0x0 is not stored: the window size and the
+/// canvas viewport keep their real values, so the restore lays nothing out
+/// again and no frame is drawn for an empty window size.
+#[test]
+fn a_minimised_main_window_keeps_its_size_and_viewport() {
+    let (mut app, main) = app();
+    let viewport = app.interaction_state.active_canvas().viewport_size();
+
+    resize(&mut app, main, MINIMISED);
+
+    assert_eq!(
+        app.ui_state.window_size, WINDOW,
+        "the empty size was stored"
+    );
+    assert_eq!(
+        app.interaction_state.active_canvas().viewport_size(),
+        viewport,
+        "the canvas viewport followed the empty size"
+    );
+    assert_eq!(app.canvas_bounds().size(), viewport);
+}

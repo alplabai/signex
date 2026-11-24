@@ -26,7 +26,7 @@ const SP: Spacing = Spacing::DEFAULT;
 
 /// 12-colour preset palette shared by every `color_field`. Rendered as
 /// a 6×2 grid; ported verbatim from the former child-sheet colour row.
-const PRESETS: [(&str, [u8; 3]); 12] = [
+pub(super) const PRESETS: [(&str, [u8; 3]); 12] = [
     ("Black", [0x00, 0x00, 0x00]),
     ("Dark Gray", [0x40, 0x40, 0x40]),
     ("Gray", [0x80, 0x80, 0x80]),

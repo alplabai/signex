@@ -9,9 +9,12 @@
 pub mod array;
 pub mod attr;
 pub mod baked_kinds;
+pub mod board_attr;
 pub mod constraint;
 pub mod data;
+pub mod driven;
 pub mod entity;
+pub mod host;
 pub mod id;
 pub(crate) mod layer_serde;
 pub mod parameter;
@@ -19,6 +22,13 @@ pub mod plane;
 
 pub use attr::LinkedRadius;
 pub use data::SketchData;
+pub use host::{RoleShape, SketchAction, SketchHost, SketchRole};
 
 #[cfg(test)]
 mod board_tests;
+pub mod format_level;
+pub mod pad_override;
+pub mod pattern_instance;
+pub mod pattern_links;
+#[cfg(test)]
+mod pattern_links_tests;

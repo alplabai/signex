@@ -6,9 +6,11 @@ pub(crate) const EN_US: &str = "en-US";
 /// that are hardcoded or that overflow.
 pub(crate) const EN_XA: &str = "en-XA";
 
-pub(crate) const EN_US_SOURCES: [&str; 44] = [
+pub(crate) const EN_US_SOURCES: [&str; 59] = [
     include_str!("../locales/en-US/back_annotate.ftl"),
+    include_str!("../locales/en-US/compare_board.ftl"),
     include_str!("../locales/en-US/board_query.ftl"),
+    include_str!("../locales/en-US/board_status.ftl"),
     include_str!("../locales/en-US/board_view.ftl"),
     include_str!("../locales/en-US/board_sketch.ftl"),
     include_str!("../locales/en-US/board-checks.ftl"),
@@ -31,6 +33,7 @@ pub(crate) const EN_US_SOURCES: [&str; 44] = [
     include_str!("../locales/en-US/document-setup.ftl"),
     include_str!("../locales/en-US/project.ftl"),
     include_str!("../locales/en-US/sheet-numbering.ftl"),
+    include_str!("../locales/en-US/sheet_sync.ftl"),
     include_str!("../locales/en-US/library.ftl"),
     include_str!("../locales/en-US/editors.ftl"),
     include_str!("../locales/en-US/panels.ftl"),
@@ -51,6 +54,18 @@ pub(crate) const EN_US_SOURCES: [&str; 44] = [
     include_str!("../locales/en-US/board_panel.ftl"),
     include_str!("../locales/en-US/panel_body.ftl"),
     include_str!("../locales/en-US/requirements.ftl"),
+    include_str!("../locales/en-US/command_needs.ftl"),
+    include_str!("../locales/en-US/gerber_viewer.ftl"),
+    include_str!("../locales/en-US/passive_calculator.ftl"),
+    include_str!("../locales/en-US/command_log.ftl"),
+    include_str!("../locales/en-US/annotations.ftl"),
+    include_str!("../locales/en-US/rooms.ftl"),
+    include_str!("../locales/en-US/workspace_layouts.ftl"),
+    include_str!("../locales/en-US/sketch_parameters.ftl"),
+    include_str!("../locales/en-US/sketch_canvas.ftl"),
+    include_str!("../locales/en-US/sketch_snap.ftl"),
+    include_str!("../locales/en-US/sketch_bake.ftl"),
+    include_str!("../locales/en-US/sketch_tools.ftl"),
 ];
 
 /// Every locale negotiation may pick, in language-code order.

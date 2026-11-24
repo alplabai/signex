@@ -16,7 +16,17 @@ pub(super) fn apply_symbol_ui(editor: &mut SymEditor, msg: SymbolEditorMsg) {
                 SymbolToolMsg::PlaceArc => SymbolTool::PlaceArc,
                 SymbolToolMsg::PlaceText => SymbolTool::PlaceText,
                 SymbolToolMsg::PlacePolygon => SymbolTool::PlacePolygon,
+                SymbolToolMsg::PlaceBezier => SymbolTool::PlaceBezier,
+                SymbolToolMsg::PlacePie => SymbolTool::PlacePie,
+                SymbolToolMsg::PlaceEllipticalArc => SymbolTool::PlaceEllipticalArc,
+                SymbolToolMsg::PlaceRoundRectangle => SymbolTool::PlaceRoundRectangle,
             };
+            // A Bezier needs all four clicks: leaving the tool drops the
+            // partial curve rather than placing one.
+            if editor.tool == SymbolTool::PlaceBezier && new_tool != SymbolTool::PlaceBezier {
+                editor.polygon_vertices.clear();
+                editor.canvas_cache.clear();
+            }
             // Footprint parity ("leaving Place Polygon commits (>= 3
             // vertices) / discards it (< 3)"): flush the in-flight
             // stash HERE, synchronously, in the same handler that
@@ -32,6 +42,11 @@ pub(super) fn apply_symbol_ui(editor: &mut SymEditor, msg: SymbolEditorMsg) {
             {
                 commit_or_discard_polygon(editor);
             }
+            // Any real change ends the half-placed gesture on the canvas.
+            if editor.tool != new_tool {
+                editor.tool_epoch = editor.tool_epoch.wrapping_add(1);
+                editor.canvas_cache.clear();
+            }
             editor.tool = new_tool;
             editor.active_bar_menu = None;
         }
@@ -45,9 +60,7 @@ pub(super) fn apply_symbol_ui(editor: &mut SymEditor, msg: SymbolEditorMsg) {
             editor.active_bar_menu = None;
         }
         SymbolEditorMsg::ActiveBarStub(label) => {
-            crate::diagnostics::log_info(format!(
-                "Symbol active bar: {label} — coming soon (SchLib Altium parity)"
-            ));
+            crate::diagnostics::log_info(unbuilt_row_note(label));
             editor.active_bar_menu = None;
         }
         SymbolEditorMsg::ToggleSelectionFilter(kind) => {
@@ -56,6 +69,11 @@ pub(super) fn apply_symbol_ui(editor: &mut SymEditor, msg: SymbolEditorMsg) {
         }
         _ => {}
     }
+}
+
+/// The Messages line of an active bar row with no tool yet.
+fn unbuilt_row_note(label: &str) -> String {
+    format!("Symbol active bar: {label} — coming soon")
 }
 
 #[cfg(test)]
@@ -71,6 +89,14 @@ mod tests {
             PathBuf::from(format!("{name}.snxsym")),
             SymbolFile::from_symbol(Symbol::empty(name)),
         )
+    }
+
+    #[test]
+    fn an_unbuilt_row_says_only_that_it_is_coming() {
+        assert_eq!(
+            unbuilt_row_note("Bezier"),
+            "Symbol active bar: Bezier — coming soon"
+        );
     }
 
     /// Footprint parity: switching the tool away from `PlacePolygon`

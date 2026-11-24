@@ -3,6 +3,8 @@
 //! focus, the selection, the tool, a drag, a text edit, the wire being drawn,
 //! the palette.
 
+use signex_i18n::RenderTranslatable;
+
 use super::interaction_snapshot_tests::interaction_snapshot;
 use super::queries::tests::{WIRE_A, answer, app_with, path, sheet, uid};
 use super::{CommandArgs, CommandOutcome};
@@ -26,7 +28,7 @@ fn run(app: &mut Signex, name: &str, operands: &[&str]) -> CommandOutcome {
 
 fn refusal(app: &mut Signex, name: &str, operands: &[&str]) -> String {
     match run(app, name, operands) {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("{name} {operands:?} was not refused: {other:?}"),
     }
 }
@@ -96,6 +98,7 @@ fn a_command_by_id_does_not_depend_on_what_the_active_tab_can_do() {
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uid(500),
@@ -311,6 +314,7 @@ fn a_document_that_cannot_take_the_command_is_refused_with_the_reason() {
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uid(500),
@@ -440,16 +444,22 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "draw_rectangle",
         "place_blanket",
         "edit_blanket",
+        "edit_no_erc_rules",
         "place_compile_mask",
         "place_diff_pair",
+        "place_parameter_set",
         "place_component",
         "place_sheet_symbol",
         "place_sheet_entry",
         "sync_sheet_pins",
+        "create_sheet_symbol_from_sheet",
+        "sync_sheet_entries",
         "set_object_position",
         "set_object_rotation",
         "set_sheet_symbol_size",
         "set_symbol_parameter",
+        "set_sheet_variable",
+        "repair_pin_junctions",
         "place_design_block",
         "import_graphics",
     ];
@@ -556,6 +566,9 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "set_layer_visible",
                     "set_active_layer",
                     "set_layer_color",
+                    // Headless forms of the Reset rows, on the named board.
+                    "reset_layer_colors",
+                    "reset_board_origin",
                     "show_used_layers_only",
                     "set_object_visible",
                     "set_object_transparency",

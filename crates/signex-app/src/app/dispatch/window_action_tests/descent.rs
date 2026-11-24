@@ -61,6 +61,32 @@ fn a_double_click_on_a_sheet_symbol_in_a_window_descends_on_the_main_window() {
     );
 }
 
+/// #2847: a double-click on a symbol whose file is missing logs the Open
+/// Sheet reason and opens nothing.
+#[test]
+fn a_double_click_on_a_symbol_with_a_missing_file_opens_nothing() {
+    let _ = crate::diagnostics::init_logging();
+    let mut d = descent_fixture(false);
+    std::fs::remove_file(&d.child).unwrap();
+    let before = d.app.document_state.active_path.clone();
+    let task = d.app.update(Message::CanvasEventInWindow {
+        window_id: d.window,
+        event: crate::canvas::CanvasEvent::DoubleClicked {
+            world_x: 5.0,
+            world_y: 5.0,
+            screen_x: 0.0,
+            screen_y: 0.0,
+        },
+    });
+    crate::app::path_ops::settle_task(&mut d.app, task);
+    assert_eq!(d.app.document_state.active_path, before);
+    assert!(d.app.ui_state.pending_sheet_opens.is_empty());
+    assert!(d.app.ui_state.create_child_sheet_confirm.is_none());
+    let reason = signex_i18n::I18n::en_us_ref()
+        .message_plain(signex_i18n::ids::PROPERTIES_SHEET_OPEN_MISSING, &[]);
+    assert!(said(&format!("{reason} ({})", d.child.display())));
+}
+
 #[test]
 fn focus_open_sheet_refuses_inside_a_window_swap_and_says_so() {
     let _ = crate::diagnostics::init_logging();

@@ -5,6 +5,8 @@ use signex_output::{BoardLayerSet, BoardPrintOptions};
 
 use super::tests::{app_with_board, output, run};
 use super::{BoardOutputDialog, BoardOutputMsg};
+use signex_i18n::RenderTranslatable;
+
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::menu::export::settle;
 use crate::app::{Message, Signex};
@@ -148,7 +150,7 @@ fn the_cli_writes_the_named_sides_into_the_folder() {
         &[&document, &path, "sides=inner"],
     );
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("side")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("side")),
         "{outcome:?}"
     );
 }
@@ -234,4 +236,51 @@ fn an_export_over_existing_drawings_says_it_replaced_them() {
     assert!(logged(format!("Replaced {}", top.display())));
     let bottom = dir.path().join("board-assembly-bottom.svg");
     assert!(logged(format!("Wrote {}", bottom.display())));
+}
+
+/// #1416: under the full class codes the assembly drawings, from Outputs and
+/// from the agent command, print the designators as shown (signed), as Fab
+/// Outputs does.
+#[test]
+fn the_assembly_drawings_print_the_shown_designators() {
+    use signex_output::AssemblySvgOptions;
+    use signex_types::designator::DesignatorStandard;
+    use signex_types::pcb_layer::BoardSide;
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_with_board(dir.path());
+    app.document_state.projects[0]
+        .data
+        .set_designator_standard(Some(DesignatorStandard::Iec81346_2Full));
+    let shown = app
+        .document_state
+        .pcb_board_shown(&board)
+        .expect("open")
+        .footprints
+        .iter()
+        .map(|f| f.reference.clone())
+        .find(|reference| reference.ends_with("C1"))
+        .expect("C1");
+    assert_ne!(shown, "C1", "the standard signs the designator");
+    let label = format!(">{shown}</text>");
+
+    let document = format!("document={}", board.display());
+    let (outcome, _) = headless(
+        &mut app,
+        "board_assembly_drawing",
+        &[&document, "side=bottom"],
+    );
+    let answer = answered(outcome);
+    let svg = answer["svg"].as_str().expect("svg");
+    assert!(svg.contains(&label), "agent drawing: {svg}");
+    assert!(!svg.contains(">C1</text>"), "no unsigned designator");
+
+    let files = app
+        .assembly_svgs_of(
+            &board,
+            &[BoardSide::Bottom],
+            AssemblySvgOptions::default(),
+            dir.path(),
+        )
+        .expect("open board");
+    assert!(files[0].svg.contains(&label), "Outputs drawing");
 }

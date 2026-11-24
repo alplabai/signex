@@ -56,6 +56,7 @@ fn zone(n: u128, net: u32, fill: &str, layer: &str, rect: (f64, f64, f64, f64)) 
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
         unknown: Default::default(),
     }
 }
@@ -84,6 +85,7 @@ fn board(pads: Vec<Pad>) -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -352,6 +354,34 @@ fn pours_of_one_net_overlap() {
     assert_eq!(twice_area(&fills.of(1).expect("filled").pieces), FULL);
 }
 
+/// #2523: a shelved pour has no fill and does not clear other pours; once
+/// unshelved it fills and clears again.
+#[test]
+fn a_shelved_pour_has_no_fill_and_does_not_clear_other_pours() {
+    let mut b = board(Vec::new());
+    b.zones
+        .push(zone(2, 2, POUR_FILL, "TopCopper", (0.0, -10.0, 20.0, 10.0)));
+    b.zones[1].priority = 5;
+    b.zones[1].shelved = true;
+    let fills = zone_fills(&b);
+    assert!(fills.of(1).is_none(), "a shelved pour holds no copper");
+    assert_eq!(
+        twice_area(&fills.of(0).expect("filled").pieces),
+        FULL,
+        "the other pour fills its whole outline"
+    );
+
+    b.zones[1].shelved = false;
+    let fills = zone_fills(&b);
+    assert_eq!(fills.of(1).expect("filled again").pieces.len(), 1);
+    assert!(twice_area(&fills.of(0).expect("filled").pieces) < FULL);
+
+    // Shelving the only pour leaves nothing to fill.
+    let mut alone = board(Vec::new());
+    alone.zones[0].shelved = true;
+    assert!(zone_fills(&alone).is_empty());
+}
+
 /// #2216: a pour on another layer does not clear this one.
 #[test]
 fn a_pour_on_another_layer_is_not_cleared() {
@@ -539,4 +569,22 @@ fn an_island_on_a_free_pad_or_arc_of_the_net_is_kept() {
         .arcs
         .push(free_arc(10, 1, (-3.0, 9.3), (0.0, 9.5), (3.0, 9.3)));
     assert_eq!(pieces(&b).len(), 2, "the GND free arc keeps the strip");
+}
+
+/// A pour with no fill says why (maintainer 2026-11-18).
+#[test]
+fn a_pour_with_no_fill_says_why() {
+    let mut b = board(Vec::new());
+    b.zones = vec![
+        zone(1, 1, POUR_FILL, "TopSilkscreen", (0.0, 0.0, 5.0, 5.0)),
+        zone(2, 1, POUR_FILL, "TopCopper", (0.0, 0.0, 5.0, 0.0)),
+        zone(3, 1, POUR_FILL, "TopCopper", (0.0, 0.0, 5.0, 5.0)),
+    ];
+    b.zones[1].outline.truncate(2);
+    let fills = zone_fills(&b);
+    assert_eq!(fills.unfilled(0), Some(Unfilled::NoCopperLayer));
+    assert_eq!(fills.unfilled(1), Some(Unfilled::Outline));
+    assert_eq!(fills.unfilled(2), None, "the third one fills");
+    assert!(fills.of(2).is_some());
+    assert_eq!(fills.unfilled_pours().len(), 2);
 }

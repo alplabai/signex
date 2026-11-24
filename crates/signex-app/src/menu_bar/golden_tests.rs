@@ -65,6 +65,9 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
                 footprints: 1,
                 pad_pair: false,
                 one_footprint: true,
+                routes: false,
+                hovered: false,
+                net: false,
             },
             ..base
         }),
@@ -215,6 +218,7 @@ fn golden_mod_fallbacks_are_the_standard_set_and_show_apple_symbols_on_macos() {
             "open_document",
             "save_document",
             "save_document_as",
+            "save_all",
             "print",
             "undo",
             "cut",
@@ -289,12 +293,17 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("new_pcb_document", "NewPcb"),
     ("new_schematic_sheet", "NewSchematic"),
     ("update_pcb_from_schematic", "UpdatePcb"),
+    // #2462: Project ▸ Compare Board with Schematic…, fixture name only.
+    ("compare_board_with_schematic", "CompareBoardWithSchematic"),
     // #2234: Design ▸ Board Sketch.
     ("board_sketch", "BoardSketch"),
     // #2388: File ▸ Fabrication Outputs.
     ("fabrication_outputs", "FabricationOutputs"),
     // #2401: Design ▸ Layer Stack Manager.
     ("board_layer_stack", "BoardLayerStack"),
+    // #2457: Design ▸ Rooms and Place ▸ Room on a board.
+    ("create_rooms_from_sheets", "CreateRoomsFromSheets"),
+    ("place_board_room", "PlaceBoardRoom"),
     // #2373: Place on a board, fixture names only.
     ("place_board_via", "PlaceBoardVia"),
     ("place_board_track", "PlaceBoardTrack"),
@@ -326,6 +335,7 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("close_active_document", "CloseDocument"),
     ("save_document", "Save"),
     ("save_document_as", "SaveAs"),
+    ("save_all", "SaveAll"),
     ("print", "Print"),
     ("undo", "Undo"),
     ("redo", "Redo"),
@@ -361,6 +371,10 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     // #2394: fixture names only.
     ("toggle_layer_numbers", "ToggleLayerNumbers"),
     ("flip_board_view", "FlipBoardView"),
+    // 2026-11-18: Edit ▸ Origin, fixture names only.
+    ("set_board_origin", "SetBoardOrigin"),
+    ("reset_board_origin", "ResetBoardOrigin"),
+    ("snap_board_origin_to_corner", "SnapBoardOriginToCorner"),
     ("view_rotate", "RotateView"),
     ("view_rotate_ccw", "RotateViewCounterClockwise"),
     ("view_rotate_180", "RotateView180"),
@@ -381,6 +395,14 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("tile_windows_vertically", "TileVertically"),
     // #2249: fixture name only.
     ("untile_documents", "UntileDocuments"),
+    // Mockup row 166: View ▸ Window ▸ Layouts, fixture names only.
+    ("apply_layout_schematic", "ApplyLayoutSchematic"),
+    ("apply_layout_board", "ApplyLayoutBoard"),
+    ("apply_layout_review", "ApplyLayoutReview"),
+    ("apply_layout_notebook", "ApplyLayoutNotebook"),
+    ("save_workspace_layout", "SaveWorkspaceLayout"),
+    ("manage_workspace_layouts", "ManageWorkspaceLayouts"),
+    ("reset_workspace_layout", "ResetWorkspaceLayout"),
     ("next_grid", "CycleGrid"),
     ("open_erc_dialog", "OpenErcDialog"),
     ("run_drc", "RunDrc"),
@@ -408,7 +430,10 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("open_rules", "OpenRules"),
     // #2248 / #1269: fixture names only.
     ("assign_footprints", "AssignFootprints"),
+    ("repair_pin_junctions", "RepairPinJunctions"),
     ("open_net_inspector", "OpenNetInspector"),
+    // #1308: fixture name only.
+    ("open_compiled_design", "OpenCompiledDesign"),
     // #2408, #2409: fixture names only.
     ("stitch_vias", "StitchVias"),
     ("add_teardrops", "AddTeardrops"),
@@ -443,10 +468,30 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     // #1667: fixture names only.
     ("place_design_block", "PlaceDesignBlock"),
     ("import_graphics", "ImportGraphics"),
+    // #1276: fixture names only.
+    (
+        "create_sheet_symbol_from_sheet",
+        "CreateSheetSymbolFromSheet",
+    ),
+    ("sync_sheet_entries", "SyncSheetEntries"),
     // #2420: the directive tools, fixture names only.
     ("place_blanket", "PlaceBlanket"),
     ("place_compile_mask", "PlaceCompileMask"),
     ("place_diff_pair", "PlaceDiffPair"),
+    // #1267, #1300: the Bezier, table and dimension tools, and the contents
+    // sheet, fixture names only.
+    ("draw_bezier", "DrawBezier"),
+    ("place_table", "PlaceTable"),
+    ("place_linear_dimension", "PlaceLinearDimension"),
+    ("place_aligned_dimension", "PlaceAlignedDimension"),
+    ("add_table_of_contents", "AddTableOfContents"),
+    // #1280: the harness tools, fixture names only.
+    ("place_signal_harness", "PlaceSignalHarness"),
+    ("place_harness_connector", "PlaceHarnessConnector"),
+    ("place_harness_entry", "PlaceHarnessEntry"),
+    // #1489, #1282: Net Parameters goes live; the diff-pair class dialog.
+    ("place_parameter_set", "PlaceParameterSet"),
+    ("open_diff_pair_classes", "OpenDiffPairClasses"),
 ];
 
 fn action_name(action: &MenuMessage) -> String {
@@ -476,6 +521,7 @@ fn flatten(menu: &Menu, parent: Option<&str>, out: &mut Vec<(String, char)>) {
                     ItemState::Placeholder { .. } | ItemState::Unavailable => {
                         ("stub", "-".to_string())
                     }
+                    ItemState::Header => ("header", "-".to_string()),
                     ItemState::Live { action, .. } => ("item", action_name(action)),
                 };
                 let (id, text) = item
@@ -645,11 +691,12 @@ fn model_shortcuts_follow_the_active_keymap() {
     // #2415 / #2416: Place ▸ Bus Entry, Port, Off Sheet Connector, Sheet
     // Symbol, No Connect and Generic No ERC, Edit ▸ Find Similar Objects,
     // View ▸ Net Inspector and Tools ▸ Cross Probe add nine.
-    // Window ▸ Tile Horizontally, Tile Vertically and Untile (#2249), Design ▸
+    // View ▸ Window ▸ Tile Horizontally, Tile Vertically and Untile (#2249), Design ▸
     // Board Sketch, Tools ▸ Design Rule Check, Edit ▸ Flip Selection, View ▸
     // Toggle Ratsnest and 3D Board (#2390, #2403, #2405) and Place ▸ Compile
-    // Mask (#2420) add nine.
-    assert_eq!(checked, 58, "the default profile labels 58 menu rows");
+    // Mask (#2420) add nine. Edit ▸ Origin ▸ Set adds `E O S` (2026-11-18).
+    // File ▸ Save All adds `Mod+Alt+S` (#2844).
+    assert_eq!(checked, 60, "the default profile labels 60 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {
@@ -676,7 +723,7 @@ fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {
 }
 
 /// The chrome clamps its search bar with this width; it is derived from the
-/// model's root titles and must follow the root titles (52 label chars, 10 roots).
+/// model's root titles and must follow the root titles (39 label chars, 8 roots).
 #[test]
 fn approx_menu_bar_width_is_unchanged() {
     let titles: Vec<String> = menu_bar_model(&MenuContext::default())
@@ -688,13 +735,96 @@ fn approx_menu_bar_width_is_unchanged() {
     assert_eq!(
         super::model::ROOT_TITLES,
         [
-            "File", "Edit", "View", "Project", "Place", "Design", "Tools", "Reports", "Window",
-            "Help"
+            "File", "Edit", "View", "Project", "Place", "Design", "Tools", "Help"
         ]
     );
     assert_eq!(
         super::approx_menu_bar_width(&signex_i18n::I18n::en_us()),
-        622.0
+        500.5
+    );
+}
+
+/// The entry titles of `menu`, `---` for a separator and `title>` for a
+/// submenu.
+fn entry_titles(menu: &Menu) -> Vec<String> {
+    menu.entries
+        .iter()
+        .map(|entry| match entry {
+            MenuEntry::Item(item) => item.label.clone(),
+            MenuEntry::Submenu(sub) => format!("{}>", sub.title),
+            MenuEntry::Separator => "---".to_owned(),
+        })
+        .collect()
+}
+
+/// #2524 and the 2026-11-19 decisions: Reports is the submenu right under
+/// Tools ▸ Annotation, and Window the last entry of View after a separator,
+/// with every old root row in it in the old order.
+#[test]
+fn reports_and_window_are_submenus_of_tools_and_view() {
+    let model = menu_bar_model(&MenuContext::default());
+    let root = |title: &str| {
+        model
+            .menus
+            .iter()
+            .find(|menu| menu.title == title)
+            .unwrap_or_else(|| panic!("no root {title}"))
+    };
+    let submenu = |menu: &Menu, title: &str| {
+        menu.entries
+            .iter()
+            .find_map(|entry| match entry {
+                MenuEntry::Submenu(sub) if sub.title == title => Some(sub.clone()),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("no submenu {title} in {}", menu.title))
+    };
+    let tools = entry_titles(root("Tools"));
+    assert_eq!(tools[..3], ["Annotation>", "Reports>", "---"]);
+    let view = entry_titles(root("View"));
+    assert_eq!(view[view.len() - 2..], ["---", "Window>"]);
+    assert_eq!(
+        entry_titles(&submenu(root("Tools"), "Reports")),
+        [
+            "Bill of Materials…",
+            "Netlist (.NET)...",
+            "ERC Report…",
+            "---",
+            "Board Bill of Materials…",
+            "Board Netlist…",
+            "Net Lengths…",
+            "Component Report…",
+            "Export Report as CSV…",
+            "Assembly Drawings as SVG…",
+        ]
+    );
+    assert_eq!(
+        entry_titles(&submenu(root("View"), "Window")),
+        [
+            "Tile Horizontally",
+            "Tile Vertically",
+            "Untile",
+            "---",
+            // Mockup row 166: the Layouts submenu joins the old Window rows.
+            "Layouts>",
+            "Close All Documents",
+        ]
+    );
+    // Mockup row 166: View ▸ Window ▸ Layouts with no layouts of your own and no
+    // edited built-in.
+    let window = submenu(root("View"), "Window");
+    assert_eq!(
+        entry_titles(&submenu(&window, "Layouts")),
+        [
+            "BUILT-IN",
+            "Schematic",
+            "Layout",
+            "Review",
+            "Notebook",
+            "---",
+            "Save Layout…",
+            "Manage Layouts…",
+        ]
     );
 }
 

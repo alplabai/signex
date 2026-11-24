@@ -24,8 +24,6 @@ const SEGMENT_FRAME_RADIUS: f32 = 8.0;
 const SEGMENT_HOVER_ALPHA: f32 = 0.08;
 /// Corner radius of a checkbox box.
 const CHECKBOX_RADIUS: f32 = 4.0;
-/// Width of the themed scrollbar.
-const SCROLLER_RADIUS: f32 = 4.0;
 
 /// The colours a Graphite form control draws with.
 #[derive(Debug, Clone, Copy)]
@@ -48,12 +46,7 @@ impl FormLook {
     /// The look of `theme`: Light for the Graphite Light theme, Dark for
     /// every other.
     pub fn of(theme: &Theme) -> Self {
-        let id = if theme.to_string().starts_with("Graphite Light") {
-            ThemeId::GraphiteLight
-        } else {
-            ThemeId::GraphiteDark
-        };
-        let tokens = theme_tokens(id);
+        let tokens = theme_tokens(Self::theme_id(theme));
         let r = resolve(&tokens);
         Self {
             field: r.field,
@@ -70,6 +63,16 @@ impl FormLook {
             primary_ink: r.primary_ink,
         }
     }
+
+    /// The Graphite theme `theme` stands for: Light for the Graphite Light
+    /// theme, Dark for every other.
+    fn theme_id(theme: &Theme) -> ThemeId {
+        if theme.to_string().starts_with("Graphite Light") {
+            ThemeId::GraphiteLight
+        } else {
+            ThemeId::GraphiteDark
+        }
+    }
 }
 
 /// Fill, border colour and radius of a read-only value box: Graphite's
@@ -77,6 +80,19 @@ impl FormLook {
 pub(in crate::panels) fn value_box(theme: &Theme) -> (Color, Color, f32) {
     let l = FormLook::of(theme);
     (l.field, l.line, PROPERTY_FIELD_RADIUS)
+}
+
+/// A value the panel only reports: the sunken fill with no border, so it
+/// cannot be taken for a field (mockup rows 42, 43, 45 and 50).
+pub(in crate::panels) fn read_only_value(theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(FormLook::of(theme).sunken)),
+        border: Border {
+            radius: PROPERTY_FIELD_RADIUS.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    }
 }
 
 /// The tooltip that shows a field's whole value: a raised card with the
@@ -116,6 +132,49 @@ pub(crate) fn text_input_style(theme: &Theme, status: text_input::Status) -> tex
         value: l.ink,
         selection: Color { a: 0.4, ..l.accent },
     }
+}
+
+/// [`text_input_style`] for a value that reads inline in a list: no fill or
+/// outline until the box is hovered or focused.
+pub(crate) fn inline_value_input_style(
+    theme: &Theme,
+    status: text_input::Status,
+) -> text_input::Style {
+    let mut style = text_input_style(theme, status);
+    if !matches!(
+        status,
+        text_input::Status::Hovered | text_input::Status::Focused { .. }
+    ) {
+        style.background = Background::Color(Color::TRANSPARENT);
+        style.border.color = Color::TRANSPARENT;
+    }
+    style
+}
+
+/// [`text_input_style`] with the outline in `error` while the box holds text
+/// it refuses (#2767).
+pub(crate) fn refusable_input_style(
+    error: Option<Color>,
+) -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
+    move |theme, status| {
+        let mut style = text_input_style(theme, status);
+        if let Some(error) = error {
+            style.border.color = error;
+        }
+        style
+    }
+}
+
+/// [`text_input_style`] that greys while the field takes no input: the sunken
+/// fill with faint ink (mockup row 111).
+pub(crate) fn greyable_input_style(theme: &Theme, status: text_input::Status) -> text_input::Style {
+    let mut style = text_input_style(theme, status);
+    if matches!(status, text_input::Status::Disabled) {
+        let l = FormLook::of(theme);
+        style.background = Background::Color(l.sunken);
+        style.value = l.ink4;
+    }
+    style
 }
 
 /// `checkbox` style for a form toggle.
@@ -158,27 +217,14 @@ pub(crate) fn mixed_checkbox_style(theme: &Theme, status: checkbox::Status) -> c
     }
 }
 
-/// `scrollable` style of a dock panel: a thin neutral scroller.
+/// `scrollable` style of a dock panel: the thin Graphite scrollbar
+/// ([`crate::styles::scrollbar_style`]) in the colours of `theme`.
 pub(in crate::panels) fn scrollbar_style(
     theme: &Theme,
     status: scrollable::Status,
 ) -> scrollable::Style {
-    let mut style = scrollable::default(theme, status);
-    let l = FormLook::of(theme);
-    let idle = matches!(status, scrollable::Status::Active { .. });
-    let scroller = || scrollable::Scroller {
-        background: Background::Color(if idle { l.line_strong } else { l.ink4 }),
-        border: Border {
-            radius: SCROLLER_RADIUS.into(),
-            ..Border::default()
-        },
-    };
-    for rail in [&mut style.vertical_rail, &mut style.horizontal_rail] {
-        rail.background = None;
-        rail.border = Border::default();
-        rail.scroller = scroller();
-    }
-    style
+    let tokens = theme_tokens(FormLook::theme_id(theme));
+    crate::styles::scrollbar_style(&tokens)(theme, status)
 }
 
 /// Frame of a segmented control: sunken fill, radius 8, 2 px inset.

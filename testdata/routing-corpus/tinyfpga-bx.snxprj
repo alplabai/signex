@@ -1,0 +1,38 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "tinyfpga-bx",
+  "net_classes": [
+    {
+      "clearance": 0.1,
+      "name": "large",
+      "trace_width": 0.15,
+      "via_diameter": 0.6,
+      "via_drill": 0.3
+    },
+    {
+      "clearance": 0.2,
+      "name": "xlarge",
+      "trace_width": 0.2,
+      "via_diameter": 0.5,
+      "via_drill": 0.2
+    },
+    {
+      "clearance": 0.1,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.1,
+      "via_diameter": 0.5,
+      "via_drill": 0.2
+    }
+  ],
+  "pcb_file": "tinyfpga-bx.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

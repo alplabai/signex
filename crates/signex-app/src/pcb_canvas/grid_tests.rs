@@ -190,3 +190,79 @@ fn every_fifth_line_from_the_origin_is_major() {
     // -10 is the low edge (kept), 10 the high edge (dropped).
     assert_eq!(majors, vec![-10.0, -5.0, 0.0, 5.0]);
 }
+
+/// Caner, 2026-11-21: on an off-grid origin a point placement snaps to lies
+/// on a drawn line of each axis, and line 0, a major line, is the origin's.
+#[test]
+fn a_snapped_point_lies_on_a_drawn_line_of_an_off_grid_origin() {
+    use signex_engine::pcb::placement::grid_for;
+    use signex_types::pcb::Point as BoardPoint;
+    use signex_types::pcb_options::{BoardOrigin, GridUse};
+    let mut board = signex_types::project::SetupProfile::Standard
+        .pcb(2)
+        .new_board();
+    board.options.origin = BoardOrigin::new(BoardPoint::new(5.3, 20.7));
+    let spec = grid_for(&board, GridUse::NonComponents);
+    let snapped = spec.snap(BoardPoint::new(12.2, 13.1));
+    let (px, py) = (snapped.x as f32, snapped.y as f32);
+    let origin = crate::pcb_canvas::BoardMarks::of(&board).origin;
+    let region = [[0.0, 0.0], [40.0, 0.0], [40.0, 25.0], [0.0, 25.0]];
+    let view = ([-5.0, -5.0], [45.0, 30.0]);
+    let mut lines = Vec::new();
+    let mut scratch = Vec::new();
+    each_segment_from(
+        origin,
+        &region,
+        view,
+        spec.step_mm as f32,
+        &mut scratch,
+        |i, a, b| lines.push((i, a, b)),
+    );
+    let close = |a: f32, b: f32| (a - b).abs() < 1e-3;
+    let vertical = |x: f32| lines.iter().find(|(_, a, b)| a.x == b.x && close(a.x, x));
+    let horizontal = |y: f32| lines.iter().find(|(_, a, b)| a.y == b.y && close(a.y, y));
+    assert!(vertical(px).is_some(), "no drawn line at x = {px}");
+    assert!(horizontal(py).is_some(), "no drawn line at y = {py}");
+    let (index, _, _) = vertical(5.3).expect("a line through the origin");
+    assert_eq!(*index, 0, "counted from the origin, so major");
+    let (index, _, _) = horizontal(20.7).expect("a line through the origin");
+    assert_eq!(*index, 0);
+}
+
+#[test]
+fn a_grid_at_a_zero_origin_is_the_plain_grid() {
+    let region = [[-3.0, -2.0], [17.0, -2.0], [17.0, 11.0], [-3.0, 11.0]];
+    let view = ([-5.0, -5.0], [20.0, 12.0]);
+    let mut from_origin = Vec::new();
+    let mut scratch = Vec::new();
+    each_segment_from([0.0, 0.0], &region, view, 1.27, &mut scratch, |i, a, b| {
+        from_origin.push((i, [a.x, a.y], [b.x, b.y]));
+    });
+    assert_eq!(from_origin, segments(&region, view, 1.27));
+    assert!(!from_origin.is_empty());
+}
+
+/// #2384, 2026-11-18: a new board's origin marker sits at the board area's
+/// bottom-left corner on screen (Y up), not at its top-left.
+#[test]
+fn a_new_board_marks_its_origin_at_the_area_bottom_left_on_screen() {
+    let board = signex_types::project::SetupProfile::Standard
+        .pcb(2)
+        .new_board();
+    let marks = crate::pcb_canvas::BoardMarks::of(&board);
+    let camera = crate::pcb_canvas::BoardCamera::default();
+    let screen = |p: [f32; 2]| camera.world_to_screen(Point::new(p[0], p[1]));
+    let marker = screen(marks.origin);
+    let corners: Vec<Point> = board_region(None).iter().map(|p| screen(*p)).collect();
+    let left = corners.iter().map(|c| c.x).fold(f32::INFINITY, f32::min);
+    let bottom = corners
+        .iter()
+        .map(|c| c.y)
+        .fold(f32::NEG_INFINITY, f32::max);
+    assert_eq!((marker.x, marker.y), (left, bottom));
+    let top = corners.iter().map(|c| c.y).fold(f32::INFINITY, f32::min);
+    assert!(
+        bottom > top,
+        "screen y grows down: the bottom edge is below"
+    );
+}

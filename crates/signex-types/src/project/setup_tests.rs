@@ -23,7 +23,9 @@ fn blank_project() -> ProjectData {
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
         fab_outputs: None,
+        router_tool_diameter: None,
         requirements: Default::default(),
         unknown: Default::default(),
     }
@@ -42,39 +44,123 @@ fn the_profiles_carry_the_approved_values() {
             d.via_drill_mm,
         )
     };
-    assert_eq!(row(SetupProfile::Hobby), (2, 1.6, 0.2, 0.25, 0.6, 0.3));
+    // The canonical tier table (#2537, XF-06) on each tier's default layers.
     assert_eq!(row(SetupProfile::Standard), (4, 1.6, 0.15, 0.2, 0.5, 0.25));
-    assert_eq!(row(SetupProfile::Hdi), (6, 1.2, 0.1, 0.1, 0.3, 0.15));
+    assert_eq!(row(SetupProfile::Advanced), (6, 1.6, 0.1, 0.125, 0.4, 0.2));
+    assert_eq!(row(SetupProfile::Hdi), (8, 1.6, 0.075, 0.075, 0.25, 0.1));
     assert_eq!(SetupProfile::Custom.pcb(11).copper_layers, 11);
+    assert_eq!(
+        SetupProfile::Custom.rules_on(4),
+        SetupProfile::Standard.rules_on(4),
+        "Custom starts from Standard"
+    );
+    for tier in SetupProfile::TIERS {
+        let fab = tier.fab_template().expect("a tier is a fab class");
+        assert_eq!(SetupProfile::from_fab(fab), tier);
+        assert!(tier.pcb(4).problems().is_empty(), "{tier:?}");
+    }
+    assert_eq!(SetupProfile::Custom.fab_template(), None);
+    assert_eq!(SetupProfile::from_token("hobby"), None, "no legacy token");
     assert_eq!(ProjectSetup::default().profile, SetupProfile::Standard);
 }
 
+/// #2537: a tier card's rules pass that tier's own fab floor, so a new
+/// board's default vias and tracks do not fail its `fab_*` rules.
 #[test]
-fn the_stepper_switches_to_custom_and_clamps() {
+fn every_tier_card_passes_its_own_fab_limits() {
+    const EPS: f64 = 1e-9;
+    for tier in SetupProfile::TIERS {
+        let fab = tier.fab_template().expect("a tier is a fab class");
+        let c: FabCapabilities = fab.capabilities();
+        let d = tier.rules_on(tier.default_layers());
+        let annular = (d.via_diameter_mm - d.via_drill_mm) / 2.0;
+        assert!(d.clearance_mm + EPS >= c.clearance, "{tier:?} clearance");
+        assert!(d.track_width_mm + EPS >= c.track_width, "{tier:?} track");
+        assert!(d.via_diameter_mm + EPS >= c.via_diameter, "{tier:?} via");
+        assert!(d.via_drill_mm + EPS >= c.via_drill, "{tier:?} drill");
+        assert!(d.via_drill_mm + EPS >= c.hole, "{tier:?} hole");
+        assert!(annular + EPS >= c.annular_ring, "{tier:?} annular ring");
+    }
+}
+
+#[test]
+fn the_layer_count_is_its_own_choice_and_keeps_the_tier() {
     let mut setup = ProjectSetup::default();
     setup.set_layers(40);
     assert_eq!(
         (setup.profile, setup.pcb.copper_layers),
-        (SetupProfile::Custom, 32)
+        (SetupProfile::Standard, 32),
+        "a layer count does not switch to Custom (#2537)"
     );
     setup.set_layers(0);
     assert_eq!(setup.pcb.copper_layers, 1);
-    setup.pick_profile(SetupProfile::Hdi);
+    setup.pick_profile(SetupProfile::Hdi, &[]);
     assert_eq!(
         (setup.profile, setup.pcb.copper_layers),
-        (SetupProfile::Hdi, 6)
+        (SetupProfile::Hdi, 8)
+    );
+    assert_eq!(setup.pcb.clearance_mm, 0.075);
+}
+
+/// #2537: each card has its own stepper, 2 to 32 in steps of 2; stepping a
+/// card picks it on the new count and keeps the tier's rules.
+#[test]
+fn a_card_stepper_moves_by_two_and_picks_its_card() {
+    assert_eq!(stepped_layers(4, 2), 6);
+    assert_eq!(stepped_layers(4, -2), 2);
+    assert_eq!(stepped_layers(2, -2), 2);
+    assert_eq!(stepped_layers(32, 2), 32);
+    assert_eq!(
+        stepped_layers(5, 1),
+        6,
+        "an odd count steps to the even one"
+    );
+    assert_eq!(stepped_layers(3, -1), 2);
+    let mut setup = ProjectSetup::default();
+    setup.step_card_layers(SetupProfile::Advanced, 2, &[]);
+    assert_eq!(
+        (
+            setup.profile,
+            setup.pcb.copper_layers,
+            setup.pcb.track_width_mm
+        ),
+        (SetupProfile::Advanced, 8, 0.125)
+    );
+    assert_eq!(setup.card_layers(SetupProfile::Advanced, &[]), 8);
+    assert_eq!(setup.card_layers(SetupProfile::Hdi, &[]), 8);
+    assert_eq!(setup.card_layers(SetupProfile::Standard, &[]), 4);
+    // Another card and back: each card keeps its own count.
+    setup.pick_profile(SetupProfile::Standard, &[]);
+    assert_eq!(setup.pcb.copper_layers, 4);
+    setup.pick_profile(SetupProfile::Advanced, &[]);
+    assert_eq!(setup.pcb.copper_layers, 8);
+    for _ in 0..20 {
+        setup.step_card_layers(SetupProfile::Custom, -2, &[]);
+    }
+    assert_eq!(
+        (setup.profile, setup.pcb.copper_layers),
+        (SetupProfile::Custom, MIN_STEPPED_LAYERS)
     );
 }
 
 #[test]
-fn a_fab_class_fills_the_rules_and_a_profile_pick_clears_it() {
+fn a_fab_class_picks_its_tier_on_the_layers_shown_and_a_card_pick_clears_it() {
     let mut setup = ProjectSetup::default();
     setup.apply_fab(FabTemplate::Advanced);
     assert_eq!(setup.fab, Some(FabTemplate::Advanced));
-    assert_eq!(setup.pcb.clearance_mm, 0.1);
+    assert_eq!(
+        setup.profile,
+        SetupProfile::Advanced,
+        "the field mirrors the card"
+    );
+    assert_eq!(
+        (setup.pcb.clearance_mm, setup.pcb.track_width_mm),
+        (0.1, 0.125),
+        "the canonical tier table"
+    );
     assert_eq!(setup.pcb.copper_layers, 4, "layers are not part of a class");
-    setup.pick_profile(SetupProfile::Hobby);
-    assert_eq!((setup.fab, setup.pcb.clearance_mm), (None, 0.2));
+    setup.pick_profile(SetupProfile::Standard, &[]);
+    assert_eq!((setup.fab, setup.pcb.clearance_mm), (None, 0.15));
 }
 
 #[test]
@@ -98,12 +184,16 @@ fn rule_values_are_validated_with_a_reason() {
 
 #[test]
 fn overrides_apply_on_the_profile_and_refuse_bad_input_by_key() {
-    let mut setup = ProjectSetup::from_profile(SetupProfile::Hobby);
+    let mut setup = ProjectSetup::from_profile(SetupProfile::Advanced);
     setup
-        .apply_overrides("layers=6, clearance=0.12,sheet=A4,designators=din40719_2")
+        .apply_overrides("layers=10, clearance=0.12,sheet=A4,designators=din40719_2")
         .unwrap();
-    assert_eq!(setup.pcb.copper_layers, 6);
-    assert_eq!(setup.profile, SetupProfile::Custom);
+    assert_eq!(setup.pcb.copper_layers, 10);
+    assert_eq!(
+        setup.profile,
+        SetupProfile::Advanced,
+        "layers keep the tier"
+    );
     assert_eq!(setup.pcb.clearance_mm, 0.12);
     assert_eq!(setup.sheet.paper_size, "A4");
     assert_eq!(
@@ -190,21 +280,21 @@ fn project_defaults_are_written_only_when_set_and_round_trip() {
     let bytes = encode_project(&data).unwrap();
     let back = parse_project_bytes(std::path::Path::new("P.snxprj"), &bytes).unwrap();
     assert_eq!(back.project_defaults, data.project_defaults);
-    assert_eq!(back.project_defaults.pcb.unwrap().copper_layers, 6);
+    assert_eq!(back.project_defaults.pcb.unwrap().copper_layers, 8);
 }
 
 #[test]
 fn a_new_board_inherits_the_rules_and_the_layer_stack() {
     let mut data = blank_project();
     assert!(data.new_board().is_none(), "no defaults, no override");
-    let mut setup = ProjectSetup::from_profile(SetupProfile::Hobby);
+    let mut setup = ProjectSetup::from_profile(SetupProfile::Advanced);
     setup.set_layers(4);
     data.project_defaults = setup.defaults();
     let board = data.new_board().unwrap();
     let rules = board.setup.as_ref().unwrap();
     assert_eq!(
         (rules.clearance, rules.trace_width, rules.via_drill),
-        (0.2, 0.25, 0.3)
+        (0.1, 0.125, 0.2)
     );
     let copper: Vec<_> = board
         .layers
@@ -243,20 +333,38 @@ fn the_sheet_line_reads_like_the_preview() {
     assert_eq!(ProjectSetup::default().sheet_line(), "A3 landscape");
 }
 
+/// New projects start on A3; the A4 in mockup row 21 is a sample value.
+#[test]
+fn a_new_setup_defaults_to_a3() {
+    assert_eq!(ProjectSetup::default().sheet.paper_size, "A3");
+}
+
 #[test]
 fn a_stored_setup_reads_back_as_the_profile_it_matches() {
     let hdi = ProjectSetup::from_profile(SetupProfile::Hdi);
     let back = ProjectSetup::from_stored(&hdi.defaults(), None);
     assert_eq!(back.profile, SetupProfile::Hdi);
     assert_eq!(back.pcb, hdi.pcb);
-    let mut custom = ProjectSetup::default();
-    custom.set_layers(10);
+    // A tier on another layer count is still that tier (#2537).
+    let mut ten = ProjectSetup::default();
+    ten.set_layers(10);
+    let back = ProjectSetup::from_stored(&ten.defaults(), None);
+    assert_eq!(
+        (back.profile, back.card_layers(SetupProfile::Standard, &[])),
+        (SetupProfile::Standard, 10)
+    );
+    let mut custom = ten;
+    custom.pcb.clearance_mm = 0.13;
     let back = ProjectSetup::from_stored(
         &custom.defaults(),
         Some(crate::designator::DesignatorStandard::Iec81346_2),
     );
     assert_eq!(
-        (back.profile, back.pcb.copper_layers, back.custom_layers()),
+        (
+            back.profile,
+            back.pcb.copper_layers,
+            back.card_layers(SetupProfile::Custom, &[])
+        ),
         (SetupProfile::Custom, 10, 10)
     );
     assert_eq!(

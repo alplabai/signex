@@ -81,7 +81,7 @@ pub(super) fn arc_facts(
     common: PrimitiveCommon,
     arcs: &[&TrackArc],
     i18n: &I18n,
-    mode: Option<String>,
+    mode: Option<signex_engine::pcb::draw::ArcMode>,
 ) -> ArcFacts {
     let origin = board.options.origin;
     let spans: Vec<Option<ArcSpan>> = arcs.iter().map(|a| ArcSpan::of(a)).collect();
@@ -148,7 +148,8 @@ pub(super) fn dimension_facts(
         precision: shared(dimensions.iter().map(|d| d.precision)),
         value: shared(dimensions.iter().map(|d| d.value_text())),
         layer: layer_choice(shared(dimensions.iter().map(|d| d.layer.as_str())), i18n),
-        layers: layer_choices(board, i18n, PcbLayer::takes_text),
+        // Any layer, copper included (Caner, 2026-11-21).
+        layers: layer_choices(board, i18n, |_| true),
         common,
     }
 }

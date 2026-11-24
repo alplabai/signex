@@ -67,7 +67,7 @@ pub(super) const PLACEMENT: &[CommandMetadata] = &[
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
         flags: CommandFlags::MUTATES,
-        operands: operands::AT,
+        operands: operands::NO_ERC,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -109,7 +109,8 @@ pub(super) const PLACEMENT: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_PARAMETER_SET),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::NET_PARAMETERS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

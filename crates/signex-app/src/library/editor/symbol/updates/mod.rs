@@ -138,6 +138,12 @@ fn push_graphic(
 /// `apply_symbol_ui`'s `SetTool` arm for why that flush has to be
 /// synchronous rather than deferred to a later event.
 pub(super) fn commit_or_discard_polygon(editor: &mut SymEditor) {
+    // The Bezier gesture shares the stash; its clicks are never a polygon.
+    if editor.tool == crate::library::editor::symbol::canvas::SymbolTool::PlaceBezier {
+        editor.polygon_vertices.clear();
+        editor.canvas_cache.clear();
+        return;
+    }
     let vertices = normalize_polygon_ring(std::mem::take(&mut editor.polygon_vertices));
     if vertices.len() >= 3 {
         push_graphic(
@@ -150,6 +156,33 @@ pub(super) fn commit_or_discard_polygon(editor: &mut SymEditor) {
         // repaint so the ghost preview disappears.
         editor.canvas_cache.clear();
     }
+}
+
+/// Two arc angles this close (degrees) sweep nothing.
+const ARC_SAME_ANGLE_DEG: f64 = 1e-6;
+
+/// One click of the Bezier gesture. The fourth takes the stash and places
+/// the curve as a single undo step; four clicks on one point place nothing,
+/// as a degenerate polygon does.
+fn bezier_click(editor: &mut SymEditor, x: f64, y: f64) {
+    editor.polygon_vertices.push((x, y));
+    let &[a, b, c, d] = editor.polygon_vertices.as_slice() else {
+        editor.canvas_cache.clear();
+        return;
+    };
+    editor.polygon_vertices.clear();
+    let points = [a, b, c, d].map(|(x, y)| [x, y]);
+    let eps_sq =
+        signex_library::CHAIN_ENDPOINT_EPSILON_MM * signex_library::CHAIN_ENDPOINT_EPSILON_MM;
+    if points.iter().all(|&p| dist_sq(p, points[0]) <= eps_sq) {
+        editor.canvas_cache.clear();
+        return;
+    }
+    push_graphic(
+        editor,
+        signex_library::SymbolGraphicKind::Bezier { points },
+        0.15,
+    );
 }
 
 /// Perpendicular-distance threshold (mm) below which a click-collected
@@ -386,6 +419,66 @@ pub(crate) fn apply_symbol_primitive_edit(
         SymbolEditorMsg::ArcSweepRejected => {
             editor.status_message = Some("Arc sweep must be less than a full turn.".to_string());
         }
+        SymbolEditorMsg::AddPie {
+            cx,
+            cy,
+            radius,
+            start_deg,
+            end_deg,
+        } => {
+            let (start_deg, end_deg) = normalize_arc_commit_deg(start_deg, end_deg);
+            push_graphic(
+                editor,
+                signex_library::SymbolGraphicKind::Pie {
+                    center: [cx, cy],
+                    radius,
+                    start_deg,
+                    end_deg,
+                },
+                0.15,
+            );
+        }
+        SymbolEditorMsg::AddEllipticalArc {
+            cx,
+            cy,
+            radius_x,
+            radius_y,
+            start_deg,
+            end_deg,
+        } => {
+            let (start_deg, end_deg) = normalize_arc_commit_deg(start_deg, end_deg);
+            // An end click on the start angle sweeps nothing: place nothing.
+            if (end_deg - start_deg).abs() > ARC_SAME_ANGLE_DEG {
+                push_graphic(
+                    editor,
+                    signex_library::SymbolGraphicKind::EllipticalArc {
+                        center: [cx, cy],
+                        radius_x,
+                        radius_y,
+                        start_deg,
+                        end_deg,
+                    },
+                    0.15,
+                );
+            }
+        }
+        SymbolEditorMsg::AddRoundRectangle {
+            from_x,
+            from_y,
+            to_x,
+            to_y,
+        } => {
+            // Two clicks on one point have no shape to place.
+            let (from, to) = ([from_x, from_y], [to_x, to_y]);
+            if dist_sq(from, to).sqrt() > signex_library::CHAIN_ENDPOINT_EPSILON_MM {
+                push_graphic(
+                    editor,
+                    signex_library::SymbolGraphicKind::round_rectangle(from, to),
+                    0.15,
+                );
+            }
+        }
+        SymbolEditorMsg::BezierClick { x, y } => bezier_click(editor, x, y),
         SymbolEditorMsg::AddText { x, y } => {
             push_graphic(
                 editor,
@@ -502,6 +595,7 @@ fn context_submenu_msg_to_state(
     use crate::library::editor::symbol::state::SymbolContextSubmenu;
     match msg {
         SymbolContextSubmenuMsg::Place => SymbolContextSubmenu::Place,
+        SymbolContextSubmenuMsg::Align => SymbolContextSubmenu::Align,
     }
 }
 
@@ -581,6 +675,14 @@ fn symbol_bbox(sym: &signex_library::Symbol) -> (f64, f64, f64, f64) {
                     include_rect(&mut bounds, v[0], v[1], v[0], v[1]);
                 }
             }
+            kind @ (SymbolGraphicKind::Bezier { .. }
+            | SymbolGraphicKind::Pie { .. }
+            | SymbolGraphicKind::EllipticalArc { .. }
+            | SymbolGraphicKind::RoundRectangle { .. }) => {
+                for v in kind.flattened_outline() {
+                    include_rect(&mut bounds, v[0], v[1], v[0], v[1]);
+                }
+            }
         }
     }
 
@@ -602,6 +704,8 @@ fn graphic_handle_msg_to_state(
         GraphicHandleMsg::ArcEnd => GraphicHandle::ArcEnd,
         GraphicHandleMsg::TextAnchor => GraphicHandle::TextAnchor,
         GraphicHandleMsg::PolygonVertex(i) => GraphicHandle::PolygonVertex(i),
+        GraphicHandleMsg::BezierPoint(i) => GraphicHandle::BezierPoint(i),
+        GraphicHandleMsg::EllipseRadius(i) => GraphicHandle::EllipseRadius(i),
     }
 }
 
@@ -615,6 +719,9 @@ fn rotate_pivot_msg_to_state(
         SymbolRotatePivotMsg::GeometryCenter => GraphicRotationPivotMode::GeometryCenter,
     }
 }
+
+#[cfg(test)]
+mod curve_tool_tests;
 
 #[cfg(test)]
 mod tests {

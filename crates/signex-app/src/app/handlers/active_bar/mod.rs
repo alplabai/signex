@@ -21,7 +21,10 @@ impl Signex {
 
         match msg {
             ActiveBarMsg::ScopedToWindow(window, inner) => {
-                let opens_menu = matches!(*inner, ActiveBarMsg::ToggleMenu(_));
+                let opens_menu = matches!(
+                    *inner,
+                    ActiveBarMsg::ToggleMenu(_) | ActiveBarMsg::MenuRightPressed(_)
+                );
                 // The owner is recorded inside the closure, so a message the
                 // window drops (it is closing) never re-homes an open dropdown.
                 self.run_in_window_document(window, |app| {
@@ -42,12 +45,41 @@ impl Signex {
                 self.interaction_state.active_bar_menu = None;
                 Task::none()
             }
+            ActiveBarMsg::MenuRightPressed(menu) => {
+                self.set_swallow_right_release(true);
+                self.handle_active_bar_message(ActiveBarMsg::ToggleMenu(menu))
+            }
+            ActiveBarMsg::FlyoutRightPressed => {
+                self.set_swallow_right_release(true);
+                self.handle_active_bar_message(ActiveBarMsg::CloseMenus)
+            }
+            ActiveBarMsg::RightPressTaken => {
+                self.set_swallow_right_release(true);
+                Task::none()
+            }
+            ActiveBarMsg::RightReleaseSwallowed => {
+                self.set_swallow_right_release(false);
+                Task::none()
+            }
             ActiveBarMsg::ToggleFilter(filter) => self.handle_active_bar_filter_toggle(filter),
             ActiveBarMsg::ToggleAllFilters => self.handle_active_bar_all_filters_toggle(),
             ActiveBarMsg::AllFiltersPicked => self.set_all_selection_filters(true),
             ActiveBarMsg::NoFiltersPicked => self.set_all_selection_filters(false),
             ActiveBarMsg::ApplyCustomFilter(idx) => self.handle_apply_custom_filter_preset(idx),
+            ActiveBarMsg::FilterPresetSavePicked => self.handle_save_current_filter_preset(),
+            ActiveBarMsg::CornerModePicked(mode) => {
+                self.interaction_state.corner_rule.mode = mode;
+                Task::none()
+            }
             ActiveBarMsg::Action(action) => self.handle_active_bar_action(action),
+        }
+    }
+
+    /// Hold back the next right release from every canvas, or stop.
+    pub(crate) fn set_swallow_right_release(&mut self, swallow: bool) {
+        self.interaction_state.swallow_right_release = swallow;
+        for canvas in self.interaction_state.all_pcb_canvases_mut() {
+            canvas.set_swallow_right_release(swallow);
         }
     }
 
@@ -77,7 +109,8 @@ impl Signex {
             | ActiveBarAction::PlacePowerBar
             | ActiveBarAction::PlacePowerCircle
             | ActiveBarAction::PlacePowerSignalGND
-            | ActiveBarAction::PlacePowerEarth => Some("power"),
+            | ActiveBarAction::PlacePowerEarth
+            | ActiveBarAction::PlacePowerChassis => Some("power"),
             ActiveBarAction::PlaceTextString
             | ActiveBarAction::PlaceTextFrame
             | ActiveBarAction::PlaceNote => Some("text"),
@@ -90,6 +123,9 @@ impl Signex {
             | ActiveBarAction::DrawRoundRectangle
             | ActiveBarAction::DrawPolygon
             | ActiveBarAction::DrawBezier
+            | ActiveBarAction::DrawTable
+            | ActiveBarAction::PlaceLinearDimension
+            | ActiveBarAction::PlaceAlignedDimension
             | ActiveBarAction::PlaceGraphic => Some("shapes"),
             ActiveBarAction::PlaceSignalHarness
             | ActiveBarAction::PlaceHarnessConnector

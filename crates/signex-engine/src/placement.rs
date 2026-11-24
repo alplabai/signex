@@ -123,6 +123,9 @@ impl PlacementPayload {
         f.no_connects
             .iter_mut()
             .for_each(|n| shift(&mut n.position));
+        f.no_erc_directives
+            .iter_mut()
+            .for_each(|d| shift(&mut d.position));
         f.labels.iter_mut().for_each(|l| shift(&mut l.position));
         f.text_notes.iter_mut().for_each(|t| shift(&mut t.position));
         for d in &mut f.drawings {
@@ -130,6 +133,7 @@ impl PlacementPayload {
                 shift(p);
             }
         }
+        crate::clipboard_harness::shift_harness(&mut f.harness, dx, dy);
         Self::new(f)
     }
 
@@ -200,6 +204,7 @@ impl PlacementPayload {
         f.bus_entries.iter().for_each(|e| add(&e.position));
         f.junctions.iter().for_each(|j| add(&j.position));
         f.no_connects.iter().for_each(|n| add(&n.position));
+        f.no_erc_directives.iter().for_each(|d| add(&d.position));
         f.labels.iter().for_each(|l| add(&l.position));
         f.text_notes.iter().for_each(|t| add(&t.position));
         f.drawings
@@ -211,6 +216,7 @@ impl PlacementPayload {
             _ => None,
         });
         out.extend(radii);
+        out.extend(crate::clipboard_harness::harness_coordinates(&f.harness));
         out
     }
 
@@ -241,6 +247,10 @@ impl PlacementPayload {
                 f.no_connects.iter().map(|s| s.uuid).collect(),
             ),
             uuids(
+                SelectedKind::NoErcDirective,
+                f.no_erc_directives.iter().map(|s| s.uuid).collect(),
+            ),
+            uuids(
                 SelectedKind::Label,
                 f.labels.iter().map(|s| s.uuid).collect(),
             ),
@@ -252,6 +262,7 @@ impl PlacementPayload {
                 SelectedKind::Drawing,
                 f.drawings.iter().map(SchDrawing::uuid).collect(),
             ),
+            crate::clipboard_harness::harness_items(&f.harness),
         ]
         .concat()
     }
@@ -337,6 +348,10 @@ impl PlacementPayload {
             no_connect.uuid = ids.next_id();
             Command::PlaceNoConnect { no_connect }
         }));
+        commands.extend(f.no_erc_directives.iter().cloned().map(|mut directive| {
+            directive.uuid = ids.next_id();
+            Command::PlaceNoErcDirective { directive }
+        }));
         commands.extend(f.labels.iter().cloned().map(|mut label| {
             label.uuid = ids.next_id();
             Command::PlaceLabel { label }
@@ -349,6 +364,9 @@ impl PlacementPayload {
             drawing.set_uuid(ids.next_id());
             Command::PlaceSchDrawing { drawing }
         }));
+        commands.extend(crate::clipboard_harness::harness_place_commands(
+            &f.harness, ids,
+        ));
         commands
     }
 }
@@ -365,10 +383,21 @@ pub(crate) fn drawing_points(d: &SchDrawing) -> Vec<Point> {
             start, mid, end, ..
         } => vec![*start, *mid, *end],
         SchDrawing::Polyline { points, .. } => points.clone(),
+        SchDrawing::Bezier(b) => b.points().to_vec(),
+        SchDrawing::Dimension(d) => {
+            let line = d.line();
+            vec![d.from, d.to, line[0], line[1]]
+        }
+        SchDrawing::Table(t) => {
+            let (lo, hi) = t.bounds();
+            vec![lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)]
+        }
     }
 }
 
-/// [`drawing_points`], to move them.
+/// The points that move drawing `d`: [`drawing_points`] for the classic
+/// shapes; a dimension's two measured points (its offset is relative) and a
+/// table's corner.
 fn drawing_points_mut(d: &mut SchDrawing) -> Vec<&mut Point> {
     match d {
         SchDrawing::Line { start, end, .. } | SchDrawing::Rect { start, end, .. } => {
@@ -379,6 +408,9 @@ fn drawing_points_mut(d: &mut SchDrawing) -> Vec<&mut Point> {
             start, mid, end, ..
         } => vec![start, mid, end],
         SchDrawing::Polyline { points, .. } => points.iter_mut().collect(),
+        SchDrawing::Bezier(b) => b.points_mut().into_iter().collect(),
+        SchDrawing::Dimension(d) => vec![&mut d.from, &mut d.to],
+        SchDrawing::Table(t) => vec![&mut t.position],
     }
 }
 
@@ -405,6 +437,9 @@ fn take_locks(sheet: &mut SchematicSheet) -> std::collections::HashSet<Uuid> {
         d.set_locked(false);
         locked.insert(d.uuid());
     }
+    locked.extend(crate::clipboard_harness::take_harness_locks(
+        &mut sheet.harness,
+    ));
     locked
 }
 
@@ -429,6 +464,7 @@ fn restore_locks(sheet: &mut SchematicSheet, locked: &std::collections::HashSet<
     for d in &mut sheet.drawings {
         d.set_locked(locked.contains(&d.uuid()));
     }
+    crate::clipboard_harness::restore_harness_locks(&mut sheet.harness, locked);
 }
 
 #[cfg(test)]

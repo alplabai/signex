@@ -133,13 +133,20 @@ impl PinMatrix {
     /// unordered, so the `(a, b)` cell wins and the mirrored `(b, a)` cell is
     /// the fallback when only that one was overridden.
     pub fn pair_severity(&self, a: PinAxis, b: PinAxis) -> Severity {
-        let (r, c) = (a.index() as u8, b.index() as u8);
-        self.overrides
-            .get(&(r, c))
-            .or_else(|| self.overrides.get(&(c, r)))
-            .copied()
-            .unwrap_or_else(|| baseline_cell(r, c))
+        pair_cell(&self.overrides, a.index() as u8, b.index() as u8)
     }
+}
+
+/// The severity of the unordered pair `(row, col)` under `overrides`: the
+/// `(row, col)` cell, else the mirrored `(col, row)` cell (a hand-edited
+/// file may hold only that one), else the baseline. What the check uses,
+/// so what a rule editor shows and cycles from.
+pub fn pair_cell(overrides: &HashMap<(u8, u8), Severity>, row: u8, col: u8) -> Severity {
+    overrides
+        .get(&(row, col))
+        .or_else(|| overrides.get(&(col, row)))
+        .copied()
+        .unwrap_or_else(|| baseline_cell(row, col))
 }
 
 /// The factory severity of one cell; `Off` outside the grid.
@@ -156,6 +163,9 @@ pub fn baseline_cell(row: u8, col: u8) -> Severity {
 #[derive(Debug, Clone, Default)]
 pub struct ErcConfig {
     pub pin_matrix: PinMatrix,
+    /// The project's signal harness definitions (#1280); empty skips the
+    /// check of connector entries against their type's definition.
+    pub harness_definitions: Vec<signex_types::schematic::HarnessDefinition>,
 }
 
 impl ErcConfig {
@@ -163,7 +173,18 @@ impl ErcConfig {
     pub fn with_pin_matrix_overrides(overrides: &HashMap<(u8, u8), Severity>) -> Self {
         Self {
             pin_matrix: PinMatrix::with_overrides(overrides),
+            harness_definitions: Vec::new(),
         }
+    }
+
+    /// This config with the project's harness definitions.
+    #[must_use]
+    pub fn with_harness_definitions(
+        mut self,
+        definitions: &[signex_types::schematic::HarnessDefinition],
+    ) -> Self {
+        self.harness_definitions = definitions.to_vec();
+        self
     }
 }
 

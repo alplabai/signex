@@ -236,6 +236,7 @@ fn rows_built_by_view(state: &LibraryState, root: &PathBuf) -> usize {
         &state.library_browsers[root],
         &tokens,
         &signex_i18n::I18n::en_us(),
+        crate::library::browser::PreviewLook::for_tests(),
     ));
     ROWS_BUILT.with(|c| c.get())
 }

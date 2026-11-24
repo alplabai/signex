@@ -37,7 +37,7 @@ fn segment(n: u128, y: f64, layer: &str) -> Segment {
     }
 }
 
-/// Top Layer, Top Overlay, Bottom Layer, in that order, a track on each
+/// Top Layer, Top Silkscreen, Bottom Layer, in that order, a track on each
 /// copper layer.
 fn board() -> PcbBoard {
     let layer = |id: u8, name: &str, kind: &str| LayerDef {
@@ -49,6 +49,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::now_v7(),
@@ -102,6 +103,16 @@ fn press(app: &mut Signex, window: iced::window::Id, keys: &str) {
     }));
 }
 
+/// Hide the mechanical kind (3D body, assembly, fab, courtyard, the board
+/// outline...), whose tabs come before the silkscreen in the panel's order.
+fn hide_mechanical(app: &mut Signex) {
+    let event = crate::app::PcbViewMsg::LayerKindVisibilitySet {
+        kind: signex_renderer::pcb::LayerKind::Mechanical,
+        visible: false,
+    };
+    let _ = app.update(Message::Pcb(PcbMsg::View(event)));
+}
+
 fn pill(app: &Signex, window: iced::window::Id) -> Option<String> {
     app.status_active_layer(window)
         .map(|(_, name)| name.into_string())
@@ -132,12 +143,15 @@ fn a_tab_click_sets_the_active_layer_and_the_status_readout() {
     assert_eq!(snapshot.traces.last().map(|t| t.p0[1]), Some(5.0));
 
     // A non-copper tab is a layer like any other.
-    let sent = messages_on_click(app.view(main), WINDOW, "Top Overlay");
+    // The tabs before the silkscreen in the panel's order go with their
+    // layers, so the Top Silkscreen tab is on screen.
+    hide_mechanical(&mut app);
+    let sent = messages_on_click(app.view(main), WINDOW, "Top Silkscreen");
     for msg in sent {
         let _ = app.update(msg);
     }
     assert_eq!(app.pcb_layer_view(&path).active(), OVERLAY);
-    assert_eq!(pill(&app, main).as_deref(), Some("Top Overlay"));
+    assert_eq!(pill(&app, main).as_deref(), Some("Top Silkscreen"));
 }
 
 #[test]
@@ -145,7 +159,7 @@ fn plus_steps_to_the_next_layer_and_star_to_the_next_signal_layer() {
     let (mut app, path, main) = open();
     press(&mut app, main, "+");
     assert_eq!(app.pcb_layer_view(&path).active(), OVERLAY, "board order");
-    assert_eq!(pill(&app, main).as_deref(), Some("Top Overlay"));
+    assert_eq!(pill(&app, main).as_deref(), Some("Top Silkscreen"));
     press(&mut app, main, "+");
     assert_eq!(app.pcb_layer_view(&path).active(), BOTTOM);
     press(&mut app, main, "-");
@@ -198,7 +212,7 @@ fn the_layers_panel_on_a_board_tab_lists_and_drives_the_board_layers() {
         "Top Layer",
         "Bottom Layer",
         "COMPONENT LAYER PAIRS",
-        "Overlay",
+        "Silkscreen",
     ] {
         assert!(texts.iter().any(|t| t.text == label), "{label} listed");
     }
@@ -234,10 +248,15 @@ fn last_text_at(app: &Signex, window: iced::window::Id, label: &str) -> iced::Po
         .center()
 }
 
-/// Right-click the tab of `label` and run what it sends. The same name may
-/// also show in a panel or the status bar; the tab is the one whose
-/// right-click opens its menu, owned by `window` (`None` for the main one).
-fn right_click_tab(app: &mut Signex, window: iced::window::Id, label: &str) {
+/// Where the tab of `label` is and what a right-click on it sends, if
+/// `window` shows that tab. The same name may also show in a panel or the
+/// status bar; the tab is the one whose right-click opens its menu, owned by
+/// `window` (`None` for the main one).
+fn tab_right_click(
+    app: &Signex,
+    window: iced::window::Id,
+    label: &str,
+) -> Option<(iced::Point, Vec<Message>)> {
     let press = iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
         iced::mouse::Button::Right,
     ));
@@ -251,7 +270,7 @@ fn right_click_tab(app: &mut Signex, window: iced::window::Id, label: &str) {
             })) if *opened_in == owner
         )
     };
-    let (at, sent) = lay_out_texts(app.view(window), WINDOW)
+    lay_out_texts(app.view(window), WINDOW)
         .into_iter()
         .filter(|t| t.text == label)
         .map(|t| t.bounds.center())
@@ -262,6 +281,11 @@ fn right_click_tab(app: &mut Signex, window: iced::window::Id, label: &str) {
             )
         })
         .find(|(_, sent)| sent.iter().any(opens))
+}
+
+/// Right-click the tab of `label` and run what it sends.
+fn right_click_tab(app: &mut Signex, window: iced::window::Id, label: &str) {
+    let (at, sent) = tab_right_click(app, window, label)
         .unwrap_or_else(|| panic!("no tab {label:?} opens a menu on a right-click"));
     // The pointer subscription keeps this; the menu opens where it is.
     app.interaction_state.last_mouse_pos = (at.x, at.y);
@@ -304,21 +328,83 @@ fn a_tab_right_click_opens_a_menu_whose_rows_change_visibility() {
             .len()
     };
     assert_eq!(traces(&app), 1, "the bottom track is no longer drawn");
+    // mockup row 104: a hidden layer has no tab.
+    assert!(tab_right_click(&app, main, "Bottom Layer").is_none());
 
-    right_click_tab(&mut app, main, "Top Overlay");
+    hide_mechanical(&mut app);
+    right_click_tab(&mut app, main, "Top Silkscreen");
     pick_row(&mut app, main, "Show only this layer");
     let view = app.pcb_layer_view(&path);
     assert_eq!(view.active(), OVERLAY);
     assert!(!view.is_hidden(OVERLAY));
     assert!(view.is_hidden(TOP) && view.is_hidden(BOTTOM));
     assert_eq!(traces(&app), 0, "no copper is drawn");
-    assert_eq!(pill(&app, main).as_deref(), Some("Top Overlay"));
+    assert_eq!(pill(&app, main).as_deref(), Some("Top Silkscreen"));
 
-    right_click_tab(&mut app, main, "Top Layer");
+    // Every other layer is hidden, so only its own tab is left: the Top
+    // Layer has no tab.
+    assert!(tab_right_click(&app, main, "Top Layer").is_none());
+    right_click_tab(&mut app, main, "Top Silkscreen");
     pick_row(&mut app, main, "Show all layers");
     assert!(app.interaction_state.pcb_layer_tab_menu.is_none());
     assert!(!app.pcb_layer_view(&path).has_hidden());
     assert_eq!(traces(&app), 2);
+    // Every layer is visible again, so every layer has its tab back; the
+    // mechanical tabs, before the silkscreen in the panel's order, go again
+    // to bring the Top Silkscreen tab on screen.
+    for label in ["Top Layer", "Bottom Layer"] {
+        assert!(tab_right_click(&app, main, label).is_some(), "{label} tab");
+    }
+    hide_mechanical(&mut app);
+    assert!(tab_right_click(&app, main, "Top Silkscreen").is_some());
+}
+
+/// The Tab names switch and the Show layer numbers row of the drawn tab
+/// menu: a click on the Short cell sets the short names and closes the
+/// menu; a click on Show layer numbers flips the numbers and closes it.
+#[test]
+fn the_tab_names_switch_and_the_numbers_row_change_the_strip() {
+    let (mut app, _path, main) = open();
+    let bounds = app.canvas_bounds();
+    app.interaction_state.pcb_canvas.resolve_pending_fit(bounds);
+    assert_eq!(
+        app.ui_state.layer_strip.name_style,
+        crate::layer_strip_prefs::LayerNameStyle::Long
+    );
+
+    right_click_tab(&mut app, main, "Bottom Layer");
+    pick_row(&mut app, main, "Short");
+    assert_eq!(
+        app.ui_state.layer_strip.name_style,
+        crate::layer_strip_prefs::LayerNameStyle::Short
+    );
+    assert!(app.interaction_state.pcb_layer_tab_menu.is_none());
+
+    let numbers = app.ui_state.layer_strip.show_numbers;
+    right_click_tab(&mut app, main, "BL");
+    pick_row(&mut app, main, "Show layer numbers");
+    assert_eq!(app.ui_state.layer_strip.show_numbers, !numbers);
+    assert!(app.interaction_state.pcb_layer_tab_menu.is_none());
+}
+
+/// mockup row 104: hiding a layer from the Layers panel takes its tab out of the
+/// strip; Show all layers in a tab menu brings it back.
+#[test]
+fn a_hidden_layer_has_no_tab_and_show_all_layers_brings_it_back() {
+    let (mut app, path, main) = open();
+    let bounds = app.canvas_bounds();
+    app.interaction_state.pcb_canvas.resolve_pending_fit(bounds);
+    assert!(tab_right_click(&app, main, "Bottom Layer").is_some());
+    let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::PcbLayers(
+        crate::app::PcbViewMsg::LayerVisibilityToggled(BOTTOM),
+    ))));
+    assert!(app.pcb_layer_view(&path).is_hidden(BOTTOM));
+    assert!(tab_right_click(&app, main, "Bottom Layer").is_none());
+
+    right_click_tab(&mut app, main, "Top Layer");
+    pick_row(&mut app, main, "Show all layers");
+    assert!(!app.pcb_layer_view(&path).has_hidden());
+    assert!(tab_right_click(&app, main, "Bottom Layer").is_some());
 }
 
 #[test]
@@ -376,6 +462,26 @@ fn undocked() -> (Signex, PathBuf, PathBuf, iced::window::Id) {
     app.interaction_state.pcb_canvases.insert(window, canvas);
     app.interaction_state.pcb_canvas.resolve_pending_fit(bounds);
     (app, main_path, path, window)
+}
+
+/// The right-release hold set or cleared from an undocked window reaches the
+/// main canvas too, which sits in a local while that window's handler runs.
+#[test]
+fn the_right_release_hold_stays_in_step_across_an_undocked_window() {
+    use crate::active_bar::ActiveBarMsg;
+    let (mut app, _main_path, _path, window) = undocked();
+    let scoped = |inner| Message::ActiveBar(ActiveBarMsg::ScopedToWindow(window, Box::new(inner)));
+    let holds = |app: &Signex| {
+        (
+            app.interaction_state.swallow_right_release,
+            app.interaction_state.pcb_canvas.swallows_right_release(),
+            app.interaction_state.pcb_canvases[&window].swallows_right_release(),
+        )
+    };
+    let _ = app.update(scoped(ActiveBarMsg::RightPressTaken));
+    assert_eq!(holds(&app), (true, true, true));
+    let _ = app.update(scoped(ActiveBarMsg::RightReleaseSwallowed));
+    assert_eq!(holds(&app), (false, false, false));
 }
 
 /// #2379 review: a pick in an undocked window's tab menu changes that

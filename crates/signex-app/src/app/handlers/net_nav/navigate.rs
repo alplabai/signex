@@ -17,13 +17,7 @@ use crate::app::handlers::canvas::{AfterOpen, SheetOpen};
 
 /// The selection kind a net member is picked as on its sheet.
 pub(super) fn selected_kind_of(member: &NetMember) -> SelectedKind {
-    match member.kind {
-        NetMemberKind::Wire => SelectedKind::Wire,
-        NetMemberKind::Junction => SelectedKind::Junction,
-        NetMemberKind::Pin { .. } | NetMemberKind::PowerPort => SelectedKind::Symbol,
-        NetMemberKind::Label(_) => SelectedKind::Label,
-        NetMemberKind::SheetPin { .. } => SelectedKind::SheetPin,
-    }
+    member.selected_kind()
 }
 
 /// A member in words, for the Messages panel: `R1.2`, a label's text, a sheet

@@ -255,6 +255,35 @@ fn switch(app: &mut Signex, symbol: uuid::Uuid, reference: &PrimitiveRef) {
     )));
 }
 
+/// Mockup row 51: two parts of one row list that row's footprints, and a
+/// pick builds both with it as one undo step.
+#[test]
+fn a_multi_selection_picks_a_footprint_its_rows_share() {
+    use signex_app::panels::MultiEditMsg;
+    let mut app = app_with_stock();
+    let key = key_of(&app, "STOCK-R");
+    select(&mut app, &key);
+    let (alt, alt_name) = alternates(&app).remove(0);
+    place_selected(&mut app, &key);
+    place_selected(&mut app, &key);
+    let _ = app.update(Message::Input(signex_app::app::InputMsg::EscapePressed {
+        window: None,
+    }));
+    assert_eq!(doc(&app).symbols.len(), 2);
+    let before = doc(&app).symbols[0].footprint.clone();
+    crate::field_edit_support::select_everything(&mut app);
+    let choices = &app.document_state.panel_ctx.multi_footprint_choices;
+    assert_eq!(choices.len(), 7, "{choices:?}");
+    assert!(choices.iter().any(|c| c.binding == binding_key(&alt)));
+
+    let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::MultiEdit(
+        MultiEditMsg::FootprintPicked(binding_key(&alt)),
+    ))));
+    assert!(doc(&app).symbols.iter().all(|s| s.footprint == alt_name));
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert!(doc(&app).symbols.iter().all(|s| s.footprint == before));
+}
+
 #[test]
 fn a_placed_part_switches_footprint_as_one_undo_step() {
     let mut app = app_with_stock();

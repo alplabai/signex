@@ -15,7 +15,7 @@ use rstar::{AABB, RTree, RTreeObject};
 use signex_types::pcb::PcbBoard;
 
 use crate::area_touch::{areas_meet, shape_meets_area};
-use crate::copper::{collect_copper, layer_mask};
+use crate::copper::{CopperItem, collect_copper, layer_mask};
 use crate::index::{BoardIndex, ItemRef, RectSelect};
 use crate::mst::{Edge, euclidean_mst, spanning_forest};
 use crate::region::Polygon;
@@ -48,9 +48,46 @@ pub fn ratsnest(board: &PcbBoard) -> Vec<RatLine> {
 /// [`ratsnest`] with the pours' copper taken from `fills`, which must be
 /// [`zone_fills`] of this same board.
 pub fn ratsnest_with_fills(board: &PcbBoard, fills: &ZoneFills) -> Vec<RatLine> {
+    let Some((nodes, mut islands)) = copper_islands(board, fills) else {
+        return Vec::new();
+    };
+    // Per net: island root -> the pad centres of that island.
+    let mut nets: BTreeMap<u32, BTreeMap<usize, Vec<PointNm>>> = BTreeMap::new();
+    for (i, node) in nodes.iter().enumerate() {
+        if let Some(center) = node.pad_center {
+            let root = islands.find(i);
+            nets.entry(node.net)
+                .or_default()
+                .entry(root)
+                .or_default()
+                .push(center);
+        }
+    }
+    let mut lines = Vec::new();
+    for (net, by_root) in nets {
+        let groups: Vec<Vec<PointNm>> = by_root.into_values().collect();
+        for (a, b) in join_islands(&groups) {
+            lines.push(RatLine {
+                net,
+                from: a.min(b),
+                to: a.max(b),
+            });
+        }
+    }
+    lines.sort_unstable();
+    lines
+}
+
+/// The board's copper items and which of them touch: one union-find set per
+/// island (the zone pieces are sets after the items). `None` for a board
+/// with no copper.
+pub(crate) fn copper_islands(
+    board: &PcbBoard,
+    fills: &ZoneFills,
+) -> Option<(Vec<CopperItem>, UnionFind)> {
     let nodes = collect_copper(board);
     if nodes.is_empty() {
-        return Vec::new();
+        return None;
     }
     let index = BoardIndex::build(board);
     // Every node of an identity: an arc's chords share one (#2373).
@@ -122,31 +159,7 @@ pub fn ratsnest_with_fills(board: &PcbBoard, fills: &ZoneFills) -> Vec<RatLine> 
             }
         }
     }
-    // Per net: island root -> the pad centres of that island.
-    let mut nets: BTreeMap<u32, BTreeMap<usize, Vec<PointNm>>> = BTreeMap::new();
-    for (i, node) in nodes.iter().enumerate() {
-        if let Some(center) = node.pad_center {
-            let root = islands.find(i);
-            nets.entry(node.net)
-                .or_default()
-                .entry(root)
-                .or_default()
-                .push(center);
-        }
-    }
-    let mut lines = Vec::new();
-    for (net, by_root) in nets {
-        let groups: Vec<Vec<PointNm>> = by_root.into_values().collect();
-        for (a, b) in join_islands(&groups) {
-            lines.push(RatLine {
-                net,
-                from: a.min(b),
-                to: a.max(b),
-            });
-        }
-    }
-    lines.sort_unstable();
-    lines
+    Some((nodes, islands))
 }
 
 /// The pad-to-pad links that join `groups` (one list of pad centres per

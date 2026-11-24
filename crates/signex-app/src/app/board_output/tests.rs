@@ -9,6 +9,8 @@ use signex_types::pcb::PcbBoard;
 use uuid::Uuid;
 
 use super::{BoardOutputDialog, BoardOutputMsg};
+use signex_i18n::RenderTranslatable;
+
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::menu::export::settle;
 use crate::app::handlers::menu::export::tests::app_workspace;
@@ -195,11 +197,10 @@ fn the_report_rows_are_greyed_and_refused_without_a_board() {
     let (mut app, _task) = Signex::new();
     let command = AppCommandId::new("board_report_bom").unwrap();
     let (outcome, _) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
-    assert_eq!(
-        outcome,
-        CommandOutcome::Disabled {
-            reason: "No PCB is open".to_string()
-        }
+    assert!(
+        matches!(&outcome, CommandOutcome::Disabled { reason }
+            if reason.render_en_us() == "No PCB is open"),
+        "{outcome:?}"
     );
     assert!(app.ui_state.board_output.dialog.is_none());
 }
@@ -280,7 +281,7 @@ fn a_report_without_its_board_is_refused_headless() {
     assert!(CommandArgs::parse_operands(&command, &[]).is_err());
     let (outcome, _) = app.run_headless_command_in_test(&command, CommandArgs::none());
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("document")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("document")),
         "{outcome:?}"
     );
 }
@@ -311,7 +312,7 @@ fn the_cli_writes_a_report_as_csv() {
         &[&document, "kind=gerber", &path],
     );
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("`kind`")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("`kind`")),
         "{outcome:?}"
     );
 }

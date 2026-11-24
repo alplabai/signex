@@ -410,8 +410,9 @@ fn template_renders_substituted_text_in_title_block() {
 fn no_outlines_emitted_when_every_bookmark_toggle_is_off() {
     let ctx = sample_ctx(1);
     let opts = PdfOptions {
-        include_component_parameters: false,
         generate_nets_info: false,
+        bookmark_sheets: false,
+        bookmark_parts: false,
         ..Default::default()
     };
     let out = PdfExporter.export(&ctx, &opts).expect("export");
@@ -510,10 +511,7 @@ fn outlines_emitted_when_components_toggle_is_on() {
     let mut ctx = sample_ctx(1);
     ctx.sheets[0].schematic = sheet;
 
-    let opts = PdfOptions {
-        include_component_parameters: true,
-        ..Default::default()
-    };
+    let opts = PdfOptions::default();
     let out = PdfExporter.export(&ctx, &opts).expect("export");
     let bytes = String::from_utf8_lossy(&out.bytes);
     assert!(

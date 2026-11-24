@@ -165,36 +165,32 @@ pub fn multi_layer_colour() -> Color {
     Color { r, g, b, a }
 }
 
-/// How much darker the board's edge is than its mask in 3D.
-const BOARD_3D_EDGE_SHADE: f32 = 0.55;
 /// How strongly a selected part is washed in the selection colour in 3D.
 const BOARD_3D_HIGHLIGHT_ALPHA: f32 = 0.45;
 
-/// The colours of the board 3D view (#2390), from this palette: the solder
-/// mask over the faces (opaque), its darker shade on the edge, the copper
-/// and Multi-Layer colours, and the 3D Body layer for a part with no colour
-/// of its own.
+/// Green solder mask, slightly translucent. The board stores no mask colour.
+const BOARD_3D_MASK: [f32; 4] = [0.05, 0.32, 0.16, 0.88];
+/// FR-4 laminate.
+const BOARD_3D_SUBSTRATE: [f32; 4] = [0.63, 0.58, 0.40, 1.0];
+/// Bare copper.
+const BOARD_3D_COPPER: [f32; 4] = [0.80, 0.50, 0.27, 1.0];
+/// Gold surface finish. The board stores no finish.
+const BOARD_3D_FINISH: [f32; 4] = [0.90, 0.73, 0.33, 1.0];
+/// White silkscreen ink.
+const BOARD_3D_SILK: [f32; 4] = [0.95, 0.95, 0.92, 1.0];
+/// A moulded part body with no colour of its own.
+const BOARD_3D_BODY: [f32; 4] = [0.16, 0.16, 0.18, 1.0];
+
+/// The physical materials of the board 3D view (#2390). They do not follow
+/// the flat view's layer palette: see `docs/RENDERING_RULES.md`, "board-3d".
 pub fn board_3d_colors() -> signex_renderer::board3d::Board3dColors {
-    let rgba = |c: Color| [c.r, c.g, c.b, c.a];
-    let mask = Color {
-        a: 1.0,
-        ..board_layer_colour(PcbLayer::Technical(TechnicalLayer::SolderMaskTop))
-    };
-    let edge = Color {
-        r: mask.r * BOARD_3D_EDGE_SHADE,
-        g: mask.g * BOARD_3D_EDGE_SHADE,
-        b: mask.b * BOARD_3D_EDGE_SHADE,
-        a: 1.0,
-    };
     signex_renderer::board3d::Board3dColors {
-        mask: rgba(mask),
-        edge: rgba(edge),
-        top_copper: rgba(board_layer_colour(PcbLayer::Copper(CopperLayer::Top))),
-        bottom_copper: rgba(board_layer_colour(PcbLayer::Copper(CopperLayer::Bottom))),
-        multi_layer: rgba(multi_layer_colour()),
-        body: rgba(board_layer_colour(PcbLayer::Technical(
-            TechnicalLayer::Body3dTop,
-        ))),
+        mask: BOARD_3D_MASK,
+        substrate: BOARD_3D_SUBSTRATE,
+        copper: BOARD_3D_COPPER,
+        finish: BOARD_3D_FINISH,
+        silk: BOARD_3D_SILK,
+        body: BOARD_3D_BODY,
     }
 }
 
@@ -205,17 +201,28 @@ pub fn board_3d_highlight() -> [f32; 4] {
     [r, g, b, BOARD_3D_HIGHLIGHT_ALPHA]
 }
 
-/// The board 3D view's background: the board canvas's.
-pub fn board_3d_background() -> Color {
-    let c = crate::styles::board_canvas_colors().background;
-    Color::from_rgba8(c.r, c.g, c.b, f32::from(c.a) / 255.0)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use signex_renderer::pcb::{BOARD_OUTLINE, copper_slot};
-    use signex_types::theme::Color as ThemeColor;
+    use signex_types::theme::{Color as ThemeColor, pair_bottom};
+
+    /// The 3D board is drawn in materials: no flat-view layer colour.
+    #[test]
+    fn no_3d_material_is_a_flat_view_layer_colour() {
+        let c = board_3d_colors();
+        let materials = [c.mask, c.substrate, c.copper, c.finish, c.silk, c.body];
+        for layer in PcbLayer::all() {
+            let flat = board_layer_colour(layer);
+            for material in materials {
+                assert_ne!(
+                    [material[0], material[1], material[2]],
+                    [flat.r, flat.g, flat.b],
+                    "{layer:?}"
+                );
+            }
+        }
+    }
 
     /// Every layer has a catalog name: none falls back to its message id.
     #[test]
@@ -231,16 +238,16 @@ mod tests {
         );
     }
 
-    /// The Altium name of every layer kind (decided 2026-11-10). Courtyard,
-    /// Fab, Assembly, 3D Body, Fiducial and Designator keep descriptive
-    /// names; the edge is the Board Outline row.
-    fn altium_name(layer: PcbLayer) -> String {
+    /// The house name of every layer kind (decided 2026-11-10; Silkscreen
+    /// since 2026-11-18). Courtyard, Fab, Assembly, 3D Body, Fiducial and
+    /// Designator keep descriptive names; the edge is the Board Outline row.
+    fn house_name(layer: PcbLayer) -> String {
         use TechnicalLayer as T;
         let technical = |t: TechnicalLayer| match t {
             T::EdgeCuts => "Board Outline",
             T::Margin => "Margin",
-            T::SilkscreenTop => "Top Overlay",
-            T::SilkscreenBottom => "Bottom Overlay",
+            T::SilkscreenTop => "Top Silkscreen",
+            T::SilkscreenBottom => "Bottom Silkscreen",
             T::SolderMaskTop => "Top Solder",
             T::SolderMaskBottom => "Bottom Solder",
             T::PasteTop => "Top Paste",
@@ -277,7 +284,7 @@ mod tests {
     }
 
     #[test]
-    fn every_layer_kind_has_its_altium_name() {
+    fn every_layer_kind_has_its_house_name() {
         let i18n = I18n::en_us();
         let mut seen = std::collections::HashSet::new();
         for layer in PcbLayer::all() {
@@ -287,7 +294,7 @@ mod tests {
                 .chars()
                 .filter(|c| !matches!(c, '\u{2068}' | '\u{2069}'))
                 .collect();
-            assert_eq!(name, altium_name(layer), "{layer:?}");
+            assert_eq!(name, house_name(layer), "{layer:?}");
             assert!(seen.insert(name.clone()), "two layers named {name}");
         }
         assert_eq!(
@@ -344,6 +351,7 @@ mod tests {
             drill_mm: 0.0,
             dimmed: false,
             ink: CopperInk::Layer(ink),
+            shown_on: None,
         };
         let snapshot = PcbSnapshot {
             traces: vec![TraceInput {
@@ -381,7 +389,8 @@ mod tests {
         );
     }
 
-    /// A via and a through-hole pad as drawn are the Multi-Layer swatch.
+    /// A via and a through-hole pad showing no active copper layer are the
+    /// Multi-Layer swatch.
     #[test]
     fn through_items_match_the_multi_layer_swatch() {
         use signex_gfx::scene::{DirtyFlags, Scene};
@@ -397,6 +406,7 @@ mod tests {
                 net: 1,
                 dimmed: false,
                 ink: CopperInk::MultiLayer,
+                shown_on: None,
             }],
             pads: vec![PadInput {
                 center: [0.5, 0.5],
@@ -406,6 +416,7 @@ mod tests {
                 drill_mm: 0.5,
                 dimmed: false,
                 ink: CopperInk::MultiLayer,
+                shown_on: None,
             }],
             ..PcbSnapshot::default()
         };
@@ -445,10 +456,15 @@ mod tests {
         let light = theme_tokens(ThemeId::GraphiteLight);
         let dark = theme_tokens(ThemeId::GraphiteDark);
         let keepout = theme.color(ColorSlot::Keepout);
-        for t in [TechnicalLayer::KeepoutTop, TechnicalLayer::KeepoutBottom] {
-            let s = layer_colour(PcbLayer::Technical(t), &light);
-            assert_eq!([s.r, s.g, s.b, s.a], keepout, "{t:?}");
-        }
+        let keepout_top = layer_colour(PcbLayer::Technical(TechnicalLayer::KeepoutTop), &light);
+        assert_eq!(
+            [keepout_top.r, keepout_top.g, keepout_top.b, keepout_top.a],
+            keepout
+        );
+        // 2026-11-18: the bottom of a pair is its top, darker.
+        let keepout_bottom = PcbLayer::Technical(TechnicalLayer::KeepoutBottom);
+        let s = layer_colour(keepout_bottom, &light);
+        assert!(luminance(s) < luminance(keepout_top));
         let top = layer_colour(PcbLayer::Copper(CopperLayer::Top), &light);
         assert_eq!(rgba(top), palette_rgba(colors.top_copper));
         let bottom = layer_colour(PcbLayer::Copper(CopperLayer::Bottom), &light);
@@ -477,6 +493,9 @@ mod tests {
                 colors.silkscreen,
                 colors.solder_mask,
                 colors.paste,
+                pair_bottom(colors.silkscreen),
+                pair_bottom(colors.solder_mask),
+                pair_bottom(colors.paste),
                 t.dimensions,
                 t.notes,
                 t.drill_drawing,
@@ -487,7 +506,7 @@ mod tests {
             ]
             .map(palette_rgba),
         );
-        for layer in PcbLayer::all() {
+        for layer in PcbLayer::all().filter(|&l| l != keepout_bottom) {
             let swatch = layer_colour(layer, &light);
             assert!(palette.contains(&rgba(swatch)), "{layer:?}: {swatch:?}");
             assert_eq!(swatch, layer_colour(layer, &dark), "{layer:?}");
@@ -579,26 +598,22 @@ mod tests {
         }
     }
 
-    /// One related pair per kind: the top layer is the brighter.
+    /// Every Top/Bottom pair (2026-11-18), silkscreen, solder, paste and
+    /// keep-out included: the bottom is darker, in the top's hue.
     #[test]
     fn a_top_technical_layer_is_brighter_than_its_bottom() {
         let tokens = dark_tokens();
-        for top in
-            listed_technical().filter(|t| t.side() == Some(signex_types::pcb_layer::BoardSide::Top))
-        {
-            if matches!(
-                top,
-                TechnicalLayer::SilkscreenTop
-                    | TechnicalLayer::SolderMaskTop
-                    | TechnicalLayer::PasteTop
-            ) {
-                continue;
-            }
+        let tops = TechnicalLayer::ALL
+            .into_iter()
+            .filter(|t| t.side() == Some(signex_types::pcb_layer::BoardSide::Top));
+        for top in tops {
             let t = layer_colour(PcbLayer::Technical(top), &tokens);
             let b = layer_colour(PcbLayer::Technical(top.flipped()), &tokens);
             assert!(luminance(t) > luminance(b), "{top:?}");
+            // A grey (the silkscreen) has no hue to keep.
+            let grey = t.r == t.g && t.g == t.b;
             assert!(
-                (hue_degrees(t) - hue_degrees(b)).abs() < 10.0,
+                grey || (hue_degrees(t) - hue_degrees(b)).abs() < 10.0,
                 "{top:?} pair is not one hue"
             );
         }

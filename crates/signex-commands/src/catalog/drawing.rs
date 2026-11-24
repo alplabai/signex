@@ -108,6 +108,38 @@ pub(super) const DRAWING: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
+    // #1300: a typed table, one click.
+    CommandMetadata {
+        id: "place_table",
+        category: "place",
+        label: command_ids::CMD_PLACE_TABLE,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_TABLE),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    // #1267: dimensions; Linear is horizontal or vertical by the drag.
+    CommandMetadata {
+        id: "place_linear_dimension",
+        category: "place",
+        label: command_ids::CMD_PLACE_LINEAR_DIMENSION,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_LINEAR_DIMENSION),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_aligned_dimension",
+        category: "place",
+        label: command_ids::CMD_PLACE_ALIGNED_DIMENSION,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_ALIGNED_DIMENSION),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "import_graphics",
         category: "place",
@@ -128,6 +160,17 @@ pub(super) const DRAWING: &[CommandMetadata] = &[
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
         flags: CommandFlags::MUTATES,
         operands: operands::EDIT_BLANKET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "edit_no_erc_rules",
+        category: "place",
+        label: command_ids::CMD_EDIT_NO_ERC_RULES,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::EDIT_NO_ERC_RULES,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

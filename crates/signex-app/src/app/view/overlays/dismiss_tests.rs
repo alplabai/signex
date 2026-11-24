@@ -80,6 +80,10 @@ fn prompt_app() -> Signex {
             current_sheet: None,
             netlist_placements: Vec::new(),
         },
+        omitted: vec![crate::app::state::OmittedPage {
+            file: "two.snxsch".to_owned(),
+            reason: crate::app::state::OmittedReason::FileMissing { placed_by: None },
+        }],
     });
     app
 }
@@ -151,4 +155,48 @@ fn a_press_outside_the_net_colour_picker_closes_it() {
         OUTSIDE,
     );
     assert!(messages.iter().any(is_picker_close), "{messages:?}");
+}
+
+/// The middle of the window, on a centred card.
+const ON_THE_CARD: iced::Point = iced::Point::new(WINDOW.width / 2.0, WINDOW.height / 2.0);
+
+fn is_about_close(m: &Message) -> bool {
+    matches!(m, Message::Overlay(OverlayMsg::CloseAbout))
+}
+
+fn is_shortcuts_close(m: &Message) -> bool {
+    matches!(m, Message::Overlay(OverlayMsg::CloseKeyboardShortcuts))
+}
+
+/// #2757: About closes on a press on its dimmed layer, not on its card.
+#[test]
+fn a_press_outside_about_closes_it_and_one_on_the_card_does_not() {
+    let mut app = app();
+    app.ui_state.about_open = true;
+    let outside = messages_on_click_at(guarded(app.about_overlay()), WINDOW, None, OUTSIDE);
+    assert!(outside.iter().any(is_about_close), "{outside:?}");
+    let on_card = messages_on_click_at(guarded(app.about_overlay()), WINDOW, None, ON_THE_CARD);
+    assert!(!on_card.iter().any(is_about_close), "{on_card:?}");
+}
+
+/// #2757: Keyboard Shortcuts closes on a press on its dimmed layer, not on
+/// its card.
+#[test]
+fn a_press_outside_the_shortcuts_closes_them_and_one_on_the_card_does_not() {
+    let mut app = app();
+    app.ui_state.keyboard_shortcuts_open = true;
+    let outside = messages_on_click_at(
+        guarded(app.keyboard_shortcuts_overlay()),
+        WINDOW,
+        None,
+        OUTSIDE,
+    );
+    assert!(outside.iter().any(is_shortcuts_close), "{outside:?}");
+    let on_card = messages_on_click_at(
+        guarded(app.keyboard_shortcuts_overlay()),
+        WINDOW,
+        None,
+        ON_THE_CARD,
+    );
+    assert!(!on_card.iter().any(is_shortcuts_close), "{on_card:?}");
 }

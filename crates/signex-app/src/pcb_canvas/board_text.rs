@@ -11,7 +11,7 @@ use iced::{Color, Point, Radians, Rectangle, Renderer, Size, Theme, Vector, alig
 use signex_gfx::primitive::text::{
     LINE_HEIGHT_EM, TextRaster, TextSizePolicy, text_px, text_raster,
 };
-use signex_renderer::pcb::{BoardPaint, FootprintTextInput};
+use signex_renderer::pcb::{BoardPaint, DIMMED_ALPHA, FootprintTextInput};
 use signex_types::pcb_layer::PcbLayer;
 use signex_types::schematic::HAlign;
 
@@ -197,9 +197,22 @@ fn colour_of(colours: &mut Vec<(PcbLayer, Color)>, paint: &BoardPaint, layer: Pc
     if let Some(&(_, colour)) = colours.iter().find(|(l, _)| *l == layer) {
         return colour;
     }
-    let colour = painted_layer_colour(paint, layer);
+    let colour = text_colour(paint, layer);
     colours.push((layer, colour));
     colour
+}
+
+/// A text's colour on `layer`, faint under Show only unrouted (#2821).
+fn text_colour(paint: &BoardPaint, layer: PcbLayer) -> Color {
+    let colour = painted_layer_colour(paint, layer);
+    if paint.is_board_dimmed() {
+        Color {
+            a: colour.a * DIMMED_ALPHA,
+            ..colour
+        }
+    } else {
+        colour
+    }
 }
 
 #[cfg(test)]

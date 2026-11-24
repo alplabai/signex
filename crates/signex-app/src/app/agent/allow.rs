@@ -31,7 +31,10 @@ pub(in crate::app) fn is_window_layout(command: &AppCommandId) -> bool {
 pub(super) fn refusal(command: &AppCommandId) -> Option<String> {
     let id = command.as_str();
     let Some(meta) = metadata_for(command) else {
-        return Some(format!("unknown command `{id}`"));
+        return Some(format!(
+            "unknown command `{id}`{}",
+            crate::keymap::did_you_mean(id)
+        ));
     };
     if PERSON_ONLY.contains(&id) {
         return Some(format!(
@@ -149,6 +152,9 @@ mod tests {
                 "rename_net_class",
                 // #2216: each pour's fill of the named board, as JSON.
                 "repour_all",
+                // The Reset rows of the board menus, on the named board.
+                "reset_board_origin",
+                "reset_layer_colors",
                 "resolve",
                 "revert",
                 "rules_add",

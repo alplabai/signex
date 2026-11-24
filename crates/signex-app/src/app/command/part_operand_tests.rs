@@ -4,6 +4,8 @@
 
 use std::path::PathBuf;
 
+use signex_i18n::RenderTranslatable;
+
 use serde_json::{Value, json};
 use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
 use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
@@ -158,7 +160,7 @@ fn answered(outcome: CommandOutcome) -> Value {
 
 fn refusal(outcome: CommandOutcome) -> String {
     match outcome {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("not refused: {other:?}"),
     }
 }
@@ -524,4 +526,33 @@ fn a_library_named_by_a_relative_or_dotted_path_is_found() {
         assert_eq!(found, Ok(lib.id), "{named}");
     }
     assert!(app.open_library_named("other/lib.snxlib").is_err());
+}
+
+/// #1416: in a project on EN IEC 81346-2 full class codes, `designator=-U7`,
+/// the designator as it is shown, places the part as the stored `U7`.
+#[test]
+fn a_designator_given_with_the_sign_is_stored_without_it() {
+    use crate::app::handlers::menu::export::tests::app_workspace;
+    use signex_types::designator::DesignatorStandard;
+    let lib = library();
+    let mut app = app(&lib);
+    let sheet = sheet_path();
+    let dir = sheet
+        .parent()
+        .expect("a folder")
+        .to_string_lossy()
+        .to_string();
+    let mut project = app_workspace(&dir, &["parts.snxsch"])
+        .document_state
+        .projects
+        .remove(0);
+    project.id = app.document_state.mint_project_id();
+    project
+        .data
+        .set_designator_standard(Some(DesignatorStandard::Iec81346_2Full));
+    app.document_state.projects.push(project);
+
+    let answer = answered(place(&mut app, &lib, grid(8.0, 16.0), &["designator=-U7"]));
+    assert_eq!(answer["designator"], "U7");
+    assert_eq!(symbols(&app)[0].reference, "U7");
 }

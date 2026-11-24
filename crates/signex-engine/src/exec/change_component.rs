@@ -31,6 +31,44 @@ pub struct ComponentReplacement {
     pub fields: Vec<(String, String)>,
 }
 
+impl ComponentReplacement {
+    /// The parameters of the part `symbol_id` belongs to that the new part
+    /// does not supply: the user's own and override parameters, which the
+    /// swap may keep. Everything the new part supplies is library-owned and
+    /// always replaced (DECISIONS 2026-11-19). Sorted, each once.
+    #[must_use]
+    pub fn user_parameters(&self, doc: &SchematicSheet, symbol_id: Uuid) -> Vec<String> {
+        let mut names: Vec<String> = placed_units(doc, symbol_id)
+            .iter()
+            .flat_map(|unit| unit.fields.keys())
+            .filter(|key| !self.fields.iter().any(|(own, _)| own == *key))
+            .cloned()
+            .collect();
+        names.sort();
+        names.dedup();
+        names
+    }
+
+    /// This replacement keeping exactly the user parameters named in `kept`
+    /// (Change Component's "Keep now" boxes): every other user parameter of
+    /// the part is cleared by the swap. Library-owned data is replaced
+    /// either way.
+    #[must_use]
+    pub fn keeping_parameters(
+        mut self,
+        doc: &SchematicSheet,
+        symbol_id: Uuid,
+        kept: &[String],
+    ) -> Self {
+        for name in self.user_parameters(doc, symbol_id) {
+            if !kept.contains(&name) {
+                self.fields.push((name, String::new()));
+            }
+        }
+        self
+    }
+}
+
 /// What swapping a placed symbol for another drawing does to its pins.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ComponentChangePreview {

@@ -788,3 +788,48 @@ fn the_preview_open_editor_button_opens_a_writable_symbol() {
     assert!(w.app.library.stock_copy.is_none());
     assert!(w.app.document_state.error_notice.is_none());
 }
+
+/// Mockup row 134: one click copies. With two writable libraries listed, a click on
+/// the second copies into it at once and the first stays untouched (the
+/// select-then-confirm flow of mockup row 134 is undecided, so one-click is kept).
+#[test]
+fn a_click_on_a_library_copies_into_it_at_once() {
+    let mut w = world();
+    let stock_r = w.stock_r();
+    let two = w.tmp.path().join("two/Two.snxlib");
+    new_library(&two, "Two");
+    w.app.library.open_library(two.clone()).expect("mount two");
+    let writable: Vec<PathBuf> = w
+        .app
+        .library
+        .writable_libraries()
+        .iter()
+        .map(|(root, _)| root.to_path_buf())
+        .collect();
+    assert_eq!(writable.len(), 2, "{writable:?}");
+    assert!(writable.contains(&w.target) && writable.contains(&two));
+    let (first, other) = (writable[0].clone(), writable[1].clone());
+    let dir_of = |lib: &Path| lib.parent().unwrap().to_path_buf();
+    let (first_before, other_before) = (bytes_of(&dir_of(&first)), bytes_of(&dir_of(&other)));
+
+    w.open(&stock_r);
+    assert!(w.app.library.stock_copy.is_some(), "the dialog opens");
+    assert!(w.editor_paths().is_empty(), "nothing opens before a click");
+    assert_eq!(
+        bytes_of(&dir_of(&other)),
+        other_before,
+        "nothing written yet"
+    );
+
+    w.pick(&other);
+
+    let copy = dir_of(&other).join("symbols/R.snxsym");
+    assert!(copy.is_file(), "the copy goes to the clicked library");
+    assert_eq!(w.editor_paths(), vec![copy]);
+    assert_eq!(
+        bytes_of(&dir_of(&first)),
+        first_before,
+        "the library not clicked stays untouched"
+    );
+    assert!(w.app.library.stock_copy.is_none());
+}

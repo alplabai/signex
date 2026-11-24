@@ -55,7 +55,9 @@ fn app_with_project(dir: &Path) -> Signex {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -321,6 +323,7 @@ fn a_board_and_a_project_with_no_id_are_given_one() {
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::nil(),
@@ -452,7 +455,7 @@ fn an_unreadable_sheet_is_named_and_the_read_is_refused() {
     .unwrap();
     let outcome = app.run_query_headless(&command, &args).unwrap().0;
     assert!(
-        matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if reason.contains("could not be read")),
+        matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("could not be read")),
         "{outcome:?}"
     );
     assert!(
@@ -469,6 +472,7 @@ fn an_unloaded_board_is_read_from_its_file() {
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uid(77),
@@ -847,7 +851,7 @@ fn a_query_is_refused_in_the_gui_and_not_a_palette_row() {
             None,
         );
         assert!(
-            matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if reason.contains("agents and the CLI")),
+            matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("agents and the CLI")),
             "{name}: {outcome:?}"
         );
         assert_eq!(task.units(), 0);
@@ -1001,6 +1005,7 @@ fn board_with(id: uuid::Uuid, thickness: f64) -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: id,

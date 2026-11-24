@@ -552,13 +552,14 @@ fn overlapping_pairs(engine: &Engine) -> usize {
     n
 }
 
-/// A route along a locked wire is not a route, so the pass cannot keep R1's
-/// pin on W1 here: it falls back to a plain move for that pin and says so.
-/// Nothing is stacked on L, no dot is added, and L is untouched. The
-/// trimmed-remainder control is in `overlap::tests`.
+/// A route along a locked wire is not a route, so W1 cannot follow R1's pin
+/// here. The pin lands inside L, and a pin end inside a wire joins it through
+/// a dot (2026-11-18), so R1 stays on its net: nothing is stacked on L, L is
+/// untouched, and the one new dot is the pin's. The trimmed-remainder
+/// control is in `overlap::tests`.
 #[test]
-fn a_wire_dragged_onto_a_locked_one_falls_back_to_a_plain_move() {
-    let (mut engine, r1, _) = wire_lands_on_a_locked_one(70.0);
+fn a_pin_dragged_onto_a_locked_wire_joins_it_through_a_dot() {
+    let (mut engine, r1, before) = wire_lands_on_a_locked_one(70.0);
     let wires_before = engine.document().wires.clone();
     engine
         .execute(Command::MoveSelection {
@@ -571,14 +572,12 @@ fn a_wire_dragged_onto_a_locked_one_falls_back_to_a_plain_move() {
         .unwrap();
     let doc = engine.document();
     assert_eq!(doc.wires, wires_before, "no wire was rerouted or trimmed");
-    assert!(doc.junctions.is_empty(), "no dot was added");
+    let dots: Vec<Point> = doc.junctions.iter().map(|j| j.position).collect();
+    assert_eq!(dots, vec![Point::new(30.0, 55.0)], "the pin's dot on L");
     assert_eq!(overlapping_pairs(&engine), 0);
     assert_eq!(doc.symbols[0].position, Point::new(35.0, 55.0), "R1 moved");
-    let warnings = engine.take_warnings();
-    assert!(
-        warnings.iter().any(|w| w.contains("could not keep")),
-        "the detached pin is reported: {warnings:?}"
-    );
+    let shape = crate::rubber_band_tests::net_shape(doc);
+    assert_eq!(shape, before, "R1 keeps its net");
 }
 
 /// A dot left at the pin would outlive it: after R1 moved on, a wire crossing
@@ -630,6 +629,7 @@ fn bus_with_a_locked_wire_on_an_entry() -> (Engine, SelectedItem) {
         uuid: bus,
         start: Point::new(0.0, 0.0),
         end: Point::new(0.0, 50.0),
+        ..Default::default()
     });
     sheet.bus_entries.push(BusEntry {
         uuid: Uuid::now_v7(),

@@ -122,11 +122,16 @@ impl Signex {
                 }
             }
             Ok((report, net_names)) => {
+                // The clock is read here, once: the status bar and its DRC
+                // popover say how long ago this was (#2460).
+                let now = std::time::SystemTime::now();
                 if self.interaction_state.pcb_drc.finish(
                     generation,
                     report.clone(),
                     net_names.clone(),
+                    now,
                 ) {
+                    self.ui_state.board_status.now = Some(now);
                     if loose {
                         // As `check_drc` words it in its report's warnings.
                         crate::diagnostics::log_warning(super::LOOSE_BOARD_WARNING);
@@ -185,16 +190,29 @@ impl Signex {
     pub(crate) fn pcb_drc_panel(&self) -> Option<crate::panels::DrcPanel> {
         let path = self.active_tab_path()?;
         let pcb = self.active_pcb()?;
+        Some(self.pcb_drc_panel_for(&path, pcb))
+    }
+
+    /// [`Self::pcb_drc_panel`] of the open board at `path`, wherever it is
+    /// shown: the DRC popover of an undocked board window reads it (#2460).
+    pub(crate) fn pcb_drc_panel_for(
+        &self,
+        path: &std::path::Path,
+        pcb: &signex_types::pcb::PcbBoard,
+    ) -> crate::panels::DrcPanel {
+        let path = path.to_path_buf();
         let waivers = &pcb.options.drc_waivers;
         let drc = &self.interaction_state.pcb_drc;
         let mut panel = crate::panels::DrcPanel {
             running: drc.is_running_for(&path),
             filter: drc.filter.clone(),
+            view: self.ui_state.validation_panels.drc.clone(),
             waive_draft: drc.waive_draft.clone(),
             ..Default::default()
         };
         let Some(done) = drc.done_for(&path) else {
-            return Some(panel);
+            self.fill_drc_idle(&mut panel, pcb);
+            return panel;
         };
         let revision = self
             .document_state
@@ -209,6 +227,7 @@ impl Signex {
             panel.default_clearance_mm =
                 Some(format!("{:.1}", pcb_geom::nm_to_mm(report.rules.clearance)));
         }
+        panel.checked_clearance_mm = Some(findings::mm(report.rules.clearance).to_string());
         panel.written_clearance = report.rules.sets_written_clearance();
         panel.rules_not_applied = report.rules.rules_not_applied;
         panel.rule_text_unparsed = report.rules.texts_not_applied > 0;
@@ -265,7 +284,7 @@ impl Signex {
                 }
             })
             .collect();
-        Some(panel)
+        panel
     }
 
     /// A violation row was clicked: select its items on the canvas.

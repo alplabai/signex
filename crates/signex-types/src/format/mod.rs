@@ -29,6 +29,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
+#[cfg(test)]
+use crate::format_version::FormatVersion;
+use crate::format_version::FormatVersionError;
 use crate::pcb::{PcbBoard, Zone};
 use crate::schematic::SchematicSheet;
 
@@ -44,10 +47,14 @@ mod pad_shape_cells;
 mod page_extras;
 mod pcb_cells;
 mod pcb_footprints;
+mod pcb_rooms;
 mod pcb_row_columns;
 mod pcb_rows;
+mod pcb_token;
 mod pcb_uuid_repair;
+mod refinement_extras;
 mod sch_rows;
+mod sch_token;
 mod stackup;
 mod text_extents_extras;
 mod text_size_repair;
@@ -56,7 +63,6 @@ mod units;
 mod unknown;
 mod unknown_columns;
 mod uuid_repair;
-mod version;
 mod wire_color_repair;
 
 #[cfg(test)]
@@ -64,11 +70,17 @@ mod board_free_tests;
 #[cfg(test)]
 mod board_options_tests;
 #[cfg(test)]
+mod board_pattern_token_tests;
+#[cfg(test)]
+mod board_sketch_targets_tests;
+#[cfg(test)]
 mod board_sketch_tests;
 #[cfg(test)]
 mod body_style_tests;
 #[cfg(test)]
 mod bus_entry_tests;
+#[cfg(test)]
+mod bus_style_tests;
 #[cfg(test)]
 mod directive_tests;
 #[cfg(test)]
@@ -84,9 +96,13 @@ mod library_link_tests;
 #[cfg(test)]
 mod net_colors_tests;
 #[cfg(test)]
+mod no_erc_tests;
+#[cfg(test)]
 mod non_finite_tests;
 #[cfg(test)]
 mod object_lock_tests;
+#[cfg(test)]
+mod part_field_expression_tests;
 #[cfg(test)]
 mod pcb_component_tests;
 #[cfg(test)]
@@ -100,15 +116,21 @@ mod pcb_lock_name_tests;
 #[cfg(test)]
 mod pcb_pad_shape_tests;
 #[cfg(test)]
+mod pcb_rooms_tests;
+#[cfg(test)]
 mod pcb_route_attrs_tests;
 #[cfg(test)]
 mod pcb_stack_tests;
 #[cfg(test)]
 mod pcb_uuid_repair_tests;
 #[cfg(test)]
+mod refinement_tests;
+#[cfg(test)]
 mod sheet_frame_tests;
 #[cfg(test)]
 mod sheet_page_tests;
+#[cfg(test)]
+mod sheet_variables_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
@@ -123,6 +145,8 @@ mod unknown_value_type_tests;
 mod version_tests;
 #[cfg(test)]
 mod wire_color_tests;
+#[cfg(test)]
+mod zone_shelved_tests;
 
 // Public API re-exports — preserve the `format::…` import paths that
 // signex-app / signex-engine / signex-output rely on.
@@ -131,7 +155,16 @@ pub use load_repair::{RepairedObject, SheetLoadRepair};
 pub use pcb_rows::{
     PcbFootprintRow, PcbPadRow, PcbTrackRow, PcbViaRow, parse_pcb_layer, pcb_layer_token,
 };
+pub use pcb_token::{
+    SNXPCB_FORMAT_BOARD_SKETCH_TARGETS, SNXPCB_FORMAT_LAYER_COLORS, SNXPCB_FORMAT_ROOMS,
+    SNXPCB_FORMAT_V1, SNXPCB_FORMAT_V1_8, SNXPCB_FORMAT_V1_9, SNXPCB_VERSION,
+    snxpcb_opens_read_only, snxpcb_read, snxpcb_refuse_save, snxpcb_token,
+};
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
+pub use sch_token::{
+    SNXSCH_FORMAT_BUS_STYLE, SNXSCH_FORMAT_NO_ERC_RULES, SNXSCH_FORMAT_REFINEMENT,
+    SNXSCH_FORMAT_V1, SNXSCH_VERSION, snxsch_token,
+};
 pub use text_size_repair::MAX_TEXT_SIZE_MM;
 pub use tsv::{parse_tsv_block, write_tsv_block};
 pub use units::{NonFiniteField, mm_as_stored_nm};
@@ -152,31 +185,7 @@ use sch_rows::{
 };
 use tsv::{parse_optional_block, write_tsv_section};
 
-// ---------------------------------------------------------------------------
-// Format version tokens
-// ---------------------------------------------------------------------------
-
-/// Current `.snxsch` format version. The token is `<kind>/<major>[.<minor>]`;
-/// see `version.rs` for the load/save policy. A major bump is a wire-format
-/// break: older Signex versions refuse to open the file.
-///
-/// 1.1 (#2209): `lib_symbols` is keyed by body ref (`<lib_id>#<hash>`) and a
-/// symbol names its body in `body_ref`. A 1.0 build reads that table by
-/// `lib_id` and would show parts without pins, so 1.0 builds open 1.1 files
-/// read-only (`is_newer_minor`) instead.
-pub const SNXSCH_FORMAT_V1: &str = "snxsch/1.1";
-
-/// Current `.snxpcb` format version. 1.1: pads are keyed to their footprint
-/// by uuid (1.0 keyed by reference designator) and the stackup carries
-/// `layer_types`. 1.2: the stackup carries `layer_ids`. 1.3: pads may
-/// carry a `rotation` column (their own turn), `trapezoid` and `custom` pad
-/// shapes are gone, and an unknown shape token or a roundrect ratio outside
-/// `0..=0.5` is a load error. 1.4: the `trapezoid` and `custom` pad shapes
-/// return with their parameters in the optional `trapezoid_delta` and
-/// `custom_outline` pad columns, and a parameter that cannot make copper is
-/// a load error. Builds that predate the policy refuse 1.1 outright; a build
-/// opens a file one minor newer than itself read-only.
-pub const SNXPCB_FORMAT_V1: &str = "snxpcb/1.4";
+// The format version tokens are in `pcb_token` and `sch_token`.
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -190,16 +199,8 @@ pub enum FormatError {
     TomlDeserialize(#[from] toml::de::Error),
     #[error("non-finite number (nan/inf) at `{path}`; fix the value to open this file")]
     NonFiniteNumber { path: String },
-    #[error(
-        "unsupported format version {found:?}: this build reads {expected:?} \
-         (same major version, any minor)"
-    )]
-    UnsupportedVersion { found: String, expected: String },
-    #[error(
-        "this file was written by a newer Signex ({found}); saving it with this build \
-         ({current}) would lose data -- open it in the newer version"
-    )]
-    NewerMinorReadOnly { found: String, current: String },
+    #[error(transparent)]
+    Version(#[from] FormatVersionError),
     #[error(
         "footprints {first:?} and {second:?} share uuid {uuid}; pads are keyed by footprint \
          uuid, so their pads cannot be told apart"
@@ -321,6 +322,9 @@ pub enum FormatError {
     NonFiniteTomlField { path: String },
     #[error("TSV block {block:?}: TSV body is empty — at minimum a header row is required")]
     TsvEmpty { block: String },
+    /// A table keyed by object uuid holds a key that is not one.
+    #[error("[{table}] key {key:?} is not a uuid; fix or remove the entry to open this file")]
+    KeyNotAUuid { table: &'static str, key: String },
 }
 
 impl From<crate::numeric::TomlFiniteError> for FormatError {
@@ -424,22 +428,22 @@ impl SnxSchematic {
 
     /// True when the file was written by a newer minor version than this
     /// build knows: it loaded for viewing but `write_string` refuses to
-    /// save it (unknown content would be lost); the caller should warn. See `version.rs`.
+    /// save it (unknown content would be lost); the caller should warn.
     pub fn is_from_newer_minor(&self) -> bool {
-        version::is_newer_minor(&self.format, SNXSCH_FORMAT_V1) || self.sheet.is_read_only()
+        SNXSCH_VERSION.is_newer_minor(&self.format) || self.sheet.is_read_only()
     }
 
     /// Serialise to a TOML+TSV string for writing to disk.
     pub fn write_string(&self) -> Result<String, FormatError> {
-        version::refuse_save(&self.format, SNXSCH_FORMAT_V1)?;
+        SNXSCH_VERSION.refuse_save(&self.format)?;
         if let Some(src) = &self.sheet.unknown.newer_minor_source {
-            version::refuse_save(src, SNXSCH_FORMAT_V1)?;
+            SNXSCH_VERSION.refuse_save(src)?;
         }
         let mut out = String::new();
 
         // Manifest header — emit as a small TOML document.
         let manifest = SchManifest {
-            format: SNXSCH_FORMAT_V1.to_string(),
+            format: snxsch_token(&self.sheet).to_string(),
             schematic_id: self.sheet.uuid,
             version: self.sheet.version,
             generator: self.sheet.generator.clone(),
@@ -553,7 +557,7 @@ impl SnxSchematic {
         // manifest header + bulk blocks + extras.
         let raw: SchRaw = parse_finite(input)?;
 
-        version::check(&raw.format, SNXSCH_FORMAT_V1)?;
+        let format = SNXSCH_VERSION.read(raw.format.as_deref())?;
 
         // Stage 2: parse each TSV block into adapter rows.
         let component_rows =
@@ -602,6 +606,8 @@ impl SnxSchematic {
                  they are measured again on the next save"
             );
         }
+        let entry_types =
+            refinement_extras::entry_types_from_read(sheet_extras.harness_entry_types)?;
         let mut sheet = SchematicSheet {
             uuid: raw.schematic_id,
             version: raw.version,
@@ -644,7 +650,14 @@ impl SnxSchematic {
                 .collect(),
             no_erc_directives: sheet_extras.no_erc_directives,
             directives: sheet_extras.directives,
+            harness: crate::schematic::SheetHarness {
+                connectors: sheet_extras.harness_connectors,
+                wires: sheet_extras.harness_wires,
+                entry_types,
+            },
+            unions: sheet_extras.unions,
             title_block: sheet_extras.title_block.into_iter().collect(),
+            variables: sheet_extras.variables,
             lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),
             text_widths: Default::default(),
             text_extents,
@@ -665,15 +678,19 @@ impl SnxSchematic {
                 page: sheet_extras.page.unknown,
                 sheets: raw.sheets.unknown,
                 extras_root: extras.unknown,
-                newer_minor_source: version::is_newer_minor(&raw.format, SNXSCH_FORMAT_V1)
-                    .then(|| raw.format.clone()),
+                newer_minor_source: SNXSCH_VERSION
+                    .is_newer_minor(&format)
+                    .then(|| format.clone()),
                 load_repairs: Vec::new(),
+                source_hash: None,
             },
         };
         sheet.upgrade_unversioned_bodies();
         let body_repairs = sheet.repair_dangling_body_refs();
         sheet.unknown.load_repairs = uuid_repair::repair_duplicate_uuids(&mut sheet);
         sheet.unknown.load_repairs.splice(0..0, body_repairs);
+        let dangling = refinement_extras::drop_dangling_references(&mut sheet);
+        sheet.unknown.load_repairs.extend(dangling);
         let size_repairs = text_size_repair::clamp_oversize_text(&mut sheet);
         sheet.unknown.load_repairs.extend(size_repairs);
         sheet
@@ -681,10 +698,7 @@ impl SnxSchematic {
             .load_repairs
             .extend(wire_color_repair::unreadable_wire_colors(&sheet));
 
-        Ok(SnxSchematic {
-            format: raw.format,
-            sheet,
-        })
+        Ok(SnxSchematic { format, sheet })
     }
 }
 
@@ -729,7 +743,8 @@ struct SchSheetsRaw {
 
 #[derive(Debug, Clone, Deserialize)]
 struct SchRaw {
-    format: String,
+    #[serde(default)]
+    format: Option<String>,
     schematic_id: Uuid,
     #[serde(default)]
     version: u32,
@@ -777,24 +792,25 @@ impl SnxPcb {
     }
 
     /// True when the file was written by a newer minor version than this
-    /// build knows: it loaded for viewing but `write_string` refuses to
-    /// save it (unknown content would be lost); the caller should warn. See `version.rs`.
+    /// build knows, or carries the rooms token: it loaded for viewing but
+    /// `write_string` refuses to save it (unknown content would be lost);
+    /// the caller should warn.
     pub fn is_from_newer_minor(&self) -> bool {
-        version::is_newer_minor(&self.format, SNXPCB_FORMAT_V1)
+        snxpcb_opens_read_only(&self.format)
     }
 
     /// Serialise to a TOML+TSV string for writing to disk.
     pub fn write_string(&self) -> Result<String, FormatError> {
-        version::refuse_save(&self.format, SNXPCB_FORMAT_V1)?;
+        snxpcb_refuse_save(&self.format)?;
         if let Some(src) = &self.board.unknown.newer_minor_source {
-            version::refuse_save(src, SNXPCB_FORMAT_V1)?;
+            snxpcb_refuse_save(src)?;
         }
         pcb_footprints::check_unique_footprint_uuids(&self.board.footprints)?;
         let mut out = String::new();
 
         // Manifest header.
         let manifest = PcbManifest {
-            format: SNXPCB_FORMAT_V1.to_string(),
+            format: snxpcb_token(&self.board).to_string(),
             pcb_id: self.board.uuid,
             version: self.board.version,
             generator: self.board.generator.clone(),
@@ -885,6 +901,7 @@ impl SnxPcb {
         board_sketch::write(&mut out, &self.board)?;
         board_options::write(&mut out, &self.board)?;
         board_free::write(&mut out, &self.board)?;
+        pcb_rooms::write(&mut out, &self.board)?;
 
         // Footprint extras / pad extras / board extras — wrap in a
         // single `[extras]` tree so toml's serializer produces the
@@ -947,7 +964,7 @@ impl SnxPcb {
     pub fn parse(input: &str) -> Result<Self, FormatError> {
         let raw: PcbRaw = parse_finite(input)?;
 
-        version::check(&raw.format, SNXPCB_FORMAT_V1)?;
+        let format = snxpcb_read(raw.format.as_deref())?;
 
         let footprint_rows = parse_optional_block::<PcbFootprintRow>("footprints", raw.footprints)?;
         let pad_rows = parse_optional_block::<PcbPadRow>("pads", raw.pads)?;
@@ -976,7 +993,7 @@ impl SnxPcb {
         let mut stack = None;
         let (layers, setup, stackup_unknown) = match raw.stackup {
             Some(s) => {
-                let read = stackup::read(s)?;
+                let read = stackup::read(s, raw.thickness)?;
                 stackup_display_names = read.display_names;
                 stack = read.stackup;
                 (read.layers, read.setup, read.unknown)
@@ -1009,6 +1026,7 @@ impl SnxPcb {
             free: board_free::read(raw.free)?,
             sketch,
             stackup: stack,
+            rooms: pcb_rooms::read(raw.rooms)?,
             options: board_options::read(raw.board_options)?,
             unknown: BoardUnknown {
                 manifest: raw.unknown,
@@ -1018,17 +1036,13 @@ impl SnxPcb {
                 extras: board_extras.unknown,
                 extras_root: extras.unknown,
                 board_sketch: board_sketch_unknown,
-                newer_minor_source: version::is_newer_minor(&raw.format, SNXPCB_FORMAT_V1)
-                    .then(|| raw.format.clone()),
+                newer_minor_source: snxpcb_opens_read_only(&format).then(|| format.clone()),
                 load_repairs: Vec::new(),
             },
         };
         board.unknown.load_repairs = pcb_uuid_repair::repair_duplicate_uuids(&mut board);
 
-        Ok(SnxPcb {
-            format: raw.format,
-            board,
-        })
+        Ok(SnxPcb { format, board })
     }
 }
 
@@ -1049,7 +1063,8 @@ struct PcbManifest {
 
 #[derive(Debug, Clone, Deserialize)]
 struct PcbRaw {
-    format: String,
+    #[serde(default)]
+    format: Option<String>,
     pcb_id: Uuid,
     #[serde(default)]
     version: u32,
@@ -1079,6 +1094,9 @@ struct PcbRaw {
     board_options: Option<board_options::BoardOptionsRaw>,
     #[serde(default)]
     free: Option<board_free::FreeRaw>,
+    /// Rooms (#2457), `format::pcb_rooms`.
+    #[serde(default)]
+    rooms: Option<Vec<pcb_rooms::RoomRaw>>,
     /// Foreign manifest keys; carried onto the board so they survive
     /// the codec wrapper being discarded.
     #[serde(flatten)]

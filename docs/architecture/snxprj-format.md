@@ -218,8 +218,12 @@ without bumping the `snxprj/1` token. It is deliberately not a child of
 "annotation": { "designator_standard": "din40719_2" }
 ```
 
-- `designator_standard` is one of `ieee315`, `din40719_2`, `iec81346_2`; absent
-  means the library symbol's own designator letters decide. The section is
+- `designator_standard` is one of `ieee315`, `din40719_2`, `iec81346_2`,
+  `iec81346_2_full` (#1416); absent means the library symbol's own designator
+  letters decide. Under `iec81346_2_full` a reference is stored without the
+  product-aspect sign (`QAC1`); display and export add it (`-QAC1`). A build
+  that does not know a value keeps the section unchanged and applies none. The
+  section is
   omitted entirely when nothing is set, so an untouched project re-saves
   byte-identical.
 - Placement derives the reference prefix from the part's component class under
@@ -299,6 +303,55 @@ the Project tab's Schematic defaults section, added without bumping the
   (`selection_workflow.rs`), so it follows a later default change while other
   shapes keep the value they were placed with.
 
+## Schematic Refinement settings (`schematic_design`)
+
+`ProjectData.schematic_design` (`SchematicDesignSettings`) is an optional
+top-level object holding the project-wide Schematic Refinement settings,
+added without bumping the `snxprj/1` token.
+
+```json
+"schematic_design": {
+  "channel_naming": { "designator_format": "${Designator}_${Channel}", "net_format": "${Channel}_${Net}" },
+  "diff_pair_classes": [
+    { "gap_mm": 0.175, "impedance_ohm": 90.0, "impedance_tolerance_pct": 10.0, "name": "USB", "width_mm": 0.265 }
+  ],
+  "harness_definitions": [
+    { "entries": [ { "name": "TX" }, { "name": "RX" } ], "name": "UART" },
+    { "entries": [ { "name": "SWDIO" }, { "name": "SWCLK" }, { "harness": "UART", "name": "UART" } ], "name": "DEBUG" }
+  ]
+}
+```
+
+- `channel_naming` (#1267): how a repeated channel names its parts and nets.
+  `${Channel}`, `${Designator}` and `${Net}` stand for the channel name and the
+  name on the channel sheet. Defaults `${Channel}_${Designator}` and
+  `${Net}_${Channel}`; omitted at the defaults.
+- `harness_definitions` (#1279): each harness type (`name`, an optional
+  `description`) and its `entries` in order. An entry with `harness` is a
+  nested harness of that type; without it, a signal.
+- `diff_pair_classes` (#1282): `name` plus optional `impedance_ohm`,
+  `impedance_tolerance_pct`, `width_mm` and `gap_mm`; `pair_by_suffix` is
+  written only when `false`. Keys a newer build wrote inside a class are kept
+  (`unknown`, as for net classes). A Differential Pair or Net Parameters
+  directive on a sheet names a class by `name`.
+- Each list is omitted when empty, and the whole key when every setting is
+  at its default, so a project that never set one re-saves byte-identical.
+- Why no new token: the key is additive. A build that predates it keeps it in
+  the unknown-key bag and writes it back unchanged
+  (`project::schematic_design_tests`).
+- A section this build cannot read (another shape, a wrong-typed value) opens
+  the project, is not applied, and is written back verbatim. It is never
+  replaced: channel naming, harness definitions and differential pair classes
+  cannot be edited while it is unreadable, and those surfaces show a banner
+  saying why (DECISIONS 2026-11-23, #2750, superseding replace-on-Set). A
+  missing `channel_naming` field takes its default rather than making the
+  section unreadable.
+- Known gap: keys a newer build adds directly under `schematic_design`,
+  inside `channel_naming` or inside a harness definition are not kept (only a
+  diff-pair class has an unknown-key bag); a newer build that adds such keys
+  should treat it as a format change.
+- Corpus: `crates/signex-types/tests/corpus/project/schematic-design.snxprj`.
+
 ## Description (`description`) and the name (#1202)
 
 `ProjectData.description` is an optional free-text string, edited in the
@@ -312,6 +365,16 @@ renames the file, through the same flow as the project tree's Rename; saving
 never renames anything
 (`docs/superpowers/specs/2026-10-26-project-tab-shell-design.md`).
 
+## Router tool diameter (`router_tool_diameter`)
+
+`ProjectData.router_tool_diameter` is an optional top-level number, the
+diameter in mm of the bit that cuts the board outline (mockup row 179d; see
+`docs/DRC_RULES.md`, "Fab profiles"). It is a declared field, not a key kept
+in the unknown-key bag. It is omitted when absent, so a project without one
+saves byte-identical; a value that is not a positive number reads as absent
+and is dropped on the next save. No format token changes: a build that
+predates the field keeps the key as an unknown key.
+
 ## Known gaps (open questions)
 
 - **Unknown keys and the version token (#788, fixed).** `ProjectData`,
@@ -320,7 +383,8 @@ never renames anything
   is written back on save. Every save stamps `"format": "snxprj/1"`. A file
   with no token predates it and loads as version 1. A file with any other
   token (a newer `snxprj/2`, or garbage) is refused with
-  `ProjectError::UnsupportedFormat` and is never rewritten: a newer version may
+  `ProjectError::UnsupportedFormat` (the shared policy in
+  `docs/FORMAT_VERSIONS.md`) and is never rewritten: a newer version may
   change the meaning of existing keys, which the bag cannot preserve, so
   opening read-write would risk silent degradation. This matches the
   `.snxsch` / `.snxpcb` behaviour on a mismatched `format` token.

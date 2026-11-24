@@ -98,7 +98,7 @@ impl Scene3d {
     }
 
     /// A quad from each edge of the closed `ring` between `z0` and `z1`.
-    fn append_walls(&mut self, ring: &[[f32; 2]], z0: f32, z1: f32, color: [f32; 4]) {
+    pub fn append_walls(&mut self, ring: &[[f32; 2]], z0: f32, z1: f32, color: [f32; 4]) {
         let mut positions = Vec::with_capacity(ring.len() * 4);
         let mut triangles = Vec::with_capacity(ring.len() * 2);
         for (i, a) in ring.iter().enumerate() {

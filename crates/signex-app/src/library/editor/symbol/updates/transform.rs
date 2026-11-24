@@ -6,7 +6,11 @@ use crate::library::messages::SymbolEditorMsg;
 pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMsg) {
     match msg {
         SymbolEditorMsg::RotateSelected { clockwise, pivot } => {
-            push_undo(editor);
+            // Recorded only when something turned: with nothing selected,
+            // or a selection Rotate does not act on, it is no edit (mockup
+            // row 141) and Redo survives.
+            let snapshot = editor.snapshot();
+            let before = editor.primitive().clone();
             let selected = editor.selected.clone();
             let pivot_mode = rotate_pivot_msg_to_state(pivot);
             crate::library::editor::symbol::state::rotate_selected_with_pivot(
@@ -15,7 +19,10 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMs
                 clockwise,
                 pivot_mode,
             );
-            mark_dirty(editor);
+            if *editor.primitive() != before {
+                editor.commit_history(snapshot);
+                mark_dirty(editor);
+            }
         }
         SymbolEditorMsg::AlignSelectedToGrid => {
             // #426/#477 — mirrors the footprint editor's
@@ -93,6 +100,32 @@ mod tests {
     use crate::library::editor::symbol::state::SymbolSelection;
     use signex_library::{Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind};
     use std::path::PathBuf;
+
+    /// Mockup row 141: Rotate that turns nothing leaves the document clean,
+    /// records no undo step and keeps Redo.
+    #[test]
+    fn rotate_that_turns_nothing_is_no_edit() {
+        use crate::library::messages::SymbolRotatePivotMsg;
+        for selected in [None, Some(SymbolSelection::All)] {
+            let file = SymbolFile::from_symbol(Symbol::empty("T"));
+            let mut editor = SymbolDocument::new(PathBuf::from("t.snxsym"), file);
+            let spare = editor.snapshot();
+            editor.history.redo_steps_mut().push(spare);
+            editor.selected = selected;
+
+            apply_symbol_transform(
+                &mut editor,
+                SymbolEditorMsg::RotateSelected {
+                    clockwise: false,
+                    pivot: SymbolRotatePivotMsg::WorldOrigin,
+                },
+            );
+
+            assert!(!editor.is_dirty());
+            assert!(!editor.history.can_undo());
+            assert_eq!(editor.history.redo_len(), 1, "Redo survives");
+        }
+    }
 
     /// Deleting the selected graphic must close a fill picker that was
     /// open on it, so the transient picker state can't reopen on a

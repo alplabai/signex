@@ -13,21 +13,22 @@
 
 use pcb_geom::CopperItem;
 use signex_drc::DrcRules;
-use signex_engine::pcb::draw::TrackStyle;
+use signex_engine::pcb::draw::{self, TrackStyle};
 use signex_engine::pcb::placement::grid_step_mm;
 use signex_engine::pcb::route::{
     BusMember, BusStyle, LegRequest, PREVIEW_BUDGET, RouteDraft, RouteMode, RouteRefusal,
-    RouteRules, RoutedLeg, SEARCH_BUDGET, draft_fits, route_leg,
+    RouteRules, RoutedLeg, SEARCH_BUDGET, draft_fits, join_pads, route_leg,
 };
 use signex_i18n::{MessageId, ids, t};
 use signex_types::corner::CornerRule;
 use signex_types::net_class::{NetClass, first_matching_class};
-use signex_types::pcb::{PcbBoard, Point, Via};
+use signex_types::pcb::{PCB_GRID_MM, PcbBoard, Point, Segment, Via};
 use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
 use super::BoardToolSession;
-use super::route::next_leg_style;
+use super::route::{next_leg_style, start_on_copper};
+use super::route_end::{joined_line, leg_end, router_line, with_end_via};
 use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::app::state::pcb_edit::CheckedStep;
@@ -47,6 +48,12 @@ pub struct RouterState {
     /// The nets a Differential Pair or Multi-Route route runs side by side
     /// (`side_by_side.rs`); `None` for a one-net route.
     pub bus: Option<BusRoute>,
+    /// Pads of no net the route ends on, `(footprint, pad, net)`: each
+    /// joins the route's net when it lands (maintainer 2026-11-18).
+    pub joined: Vec<(Uuid, Uuid, u32)>,
+    /// What each pad of `joined` says once the route lands: the status bar
+    /// says it at the click, Messages when the net is given.
+    pub joined_lines: Vec<String>,
 }
 
 /// The nets of a pair or bus route and the tracks they run in. The centre
@@ -55,6 +62,8 @@ pub struct RouterState {
 pub struct BusRoute {
     pub members: Vec<BusMember>,
     pub style: BusStyle,
+    /// The vias that take members starting off the active layer to it.
+    pub start_vias: Vec<Via>,
 }
 
 /// The leg on the pointer and what it was routed from: routed again only
@@ -63,6 +72,13 @@ pub struct BusRoute {
 pub struct RouterPreview {
     pub key: PreviewKey,
     pub leg: Option<RoutedLeg>,
+    /// Why no leg was routed to the pointer, for the status bar; the
+    /// straight legs it was aimed along are drawn in `aimed` instead of
+    /// nothing.
+    pub refused: Option<String>,
+    pub aimed: Vec<Segment>,
+    /// The via at the leg's end that reaches a pad off its layer.
+    pub end_via: Option<Via>,
 }
 
 /// What the leg on the pointer depends on.
@@ -106,7 +122,7 @@ impl Signex {
             self.start_route(at, layer);
             return;
         };
-        if at == anchor {
+        if self.clicks_run_end(at, anchor) {
             // A second click on the route's end finishes it.
             self.end_route_shape();
             return;
@@ -116,7 +132,7 @@ impl Signex {
                 router.refused = true;
             }
             let line = t!(self.ui_state.i18n, ids::PCB_ROUTE_STALE, "why" => why);
-            crate::diagnostics::log_warning(line.into_string());
+            self.note_board_tool(line.into_string());
             return;
         }
         let Some((board, session)) = self.active_pcb().zip(self.own_board_tool()) else {
@@ -128,6 +144,23 @@ impl Signex {
         let defaults = &self.interaction_state.pcb_tool_defaults;
         let classes = self.board_net_classes(&session.path);
         let (style, via) = next_leg_style(board, session, defaults, anchor, at, layer, classes);
+        let i18n = &self.ui_state.i18n;
+        let end = match leg_end(
+            i18n,
+            board,
+            defaults,
+            &router.rules,
+            at,
+            via.as_ref(),
+            style,
+        ) {
+            Ok(end) => end,
+            Err(line) => {
+                self.note_board_tool(line);
+                return;
+            }
+        };
+        let style = end.style;
         let leg = LegRequest {
             from: anchor,
             to: at,
@@ -135,26 +168,37 @@ impl Signex {
             via: via.map(|via| rule_via(via, &router.rules)),
         };
         let interaction = &self.interaction_state;
-        let modes = (
-            interaction.corner_rule,
-            interaction.route_mode,
-            SEARCH_BUDGET,
-        );
-        match route_on(board, router, leg, modes, Uuid::now_v7) {
-            Ok(leg) => {
-                if let Some(session) = self.own_board_tool_mut() {
-                    session.points.push(at);
-                    session.route = Some(style);
-                    if let Some(router) = session.router.as_mut() {
-                        router.draft.add(leg);
-                        router.refused = false;
-                    }
-                }
-            }
+        let corner = interaction.corner_rule;
+        let modes = (corner, interaction.route_mode, SEARCH_BUDGET);
+        let routed = route_on(board, router, leg, modes, Uuid::now_v7)
+            .and_then(|leg| with_end_via(board, router, leg, end.via, corner));
+        let joined = end.joins.map(|pad| {
+            let line = joined_line(i18n, board, &pad, style.net);
+            ((pad.footprint, pad.pad, style.net), line)
+        });
+        let legs = match routed {
+            Ok(legs) => legs,
             Err(refusal) => {
                 let line = t!(self.ui_state.i18n, refusal_line(refusal));
-                crate::diagnostics::log_warning(line.into_string());
+                self.note_board_tool(line.into_string());
+                return;
             }
+        };
+        if let Some(session) = self.own_board_tool_mut() {
+            session.points.push(at);
+            session.route = Some(style);
+            if let Some(router) = session.router.as_mut() {
+                for leg in legs {
+                    router.draft.add(leg);
+                }
+                router.refused = false;
+                router.joined.extend(joined.as_ref().map(|(join, _)| *join));
+                router
+                    .joined_lines
+                    .extend(joined.as_ref().map(|(_, line)| line.clone()));
+            }
+            // The status bar says which pad took the route's net.
+            session.note = joined.map(|(_, line)| line);
         }
     }
 
@@ -181,7 +225,8 @@ impl Signex {
         // The Properties form's width and net come first (#2393); a width
         // set there replaces the net class's, and the rules still bound it.
         let defaults = &self.interaction_state.pcb_tool_defaults;
-        let mut style = defaults.track_style(board, at, layer);
+        let style = defaults.track_style(board, at, layer);
+        let mut style = start_on_copper(board, defaults, at, style);
         let classes: &[NetClass] = if defaults.track_width_mm.is_some() {
             &[]
         } else {
@@ -198,6 +243,8 @@ impl Signex {
                 refused: false,
                 preview: None,
                 bus: None,
+                joined: Vec::new(),
+                joined_lines: Vec::new(),
             });
         }
     }
@@ -228,6 +275,12 @@ impl Signex {
             Ok(()) => {
                 if let Some(router) = self.drawn_router_mut() {
                     router.draft = RouteDraft::default();
+                    router.joined.clear();
+                    // A pad that took the route's net is said in Messages
+                    // too: the net is now the pad's, not the status bar's.
+                    for line in std::mem::take(&mut router.joined_lines) {
+                        crate::diagnostics::log_info(line);
+                    }
                 }
                 return RouteEnd::Landed;
             }
@@ -239,6 +292,8 @@ impl Signex {
             crate::diagnostics::log_warning(line.into_string());
             if let Some(router) = self.drawn_router_mut() {
                 router.draft = RouteDraft::default();
+                router.joined.clear();
+                router.joined_lines.clear();
             }
             return RouteEnd::Discarded;
         }
@@ -261,7 +316,15 @@ impl Signex {
             return Ok(());
         };
         let path = session.path.clone();
-        let commands = router.draft.commands();
+        let mut commands = router.draft.commands();
+        if !router.joined.is_empty() {
+            // The pads of no net it ends on join its net in the same step.
+            let board = self.document_state.pcb_board(&path);
+            let Some(join) = board.and_then(|board| join_pads(board, &router.joined)) else {
+                return Err(t!(self.ui_state.i18n, ids::PCB_ROUTE_JOIN_GONE).into_string());
+            };
+            commands.push(join);
+        }
         let expected_revision = router.revision;
         let label = t!(self.ui_state.i18n, session.tool.name()).into_string();
         let step = CheckedStep {
@@ -352,9 +415,9 @@ impl Signex {
         if held {
             return;
         }
-        let leg = self.preview_leg(key);
+        let preview = self.preview_leg(key);
         if let Some(router) = self.own_router_mut() {
-            router.preview = Some(RouterPreview { key, leg });
+            router.preview = Some(preview);
         }
     }
 
@@ -379,26 +442,69 @@ impl Signex {
         })
     }
 
-    fn preview_leg(&self, key: PreviewKey) -> Option<RoutedLeg> {
+    /// The leg on the pointer; when there is none, why, and the straight
+    /// legs it was aimed along, so the preview never just vanishes.
+    fn preview_leg(&self, key: PreviewKey) -> RouterPreview {
+        let mut out = RouterPreview {
+            key,
+            leg: None,
+            refused: None,
+            aimed: Vec::new(),
+            end_via: None,
+        };
         if key.cursor == key.anchor {
-            return None;
+            return out;
         }
-        let session = self.own_board_tool()?;
-        let router = session.router.as_ref()?;
-        let board = self.document_state.pcb_board(&session.path)?;
+        let Some(session) = self.own_board_tool() else {
+            return out;
+        };
+        let (Some(router), Some(board)) = (
+            session.router.as_ref(),
+            self.document_state.pcb_board(&session.path),
+        ) else {
+            return out;
+        };
         let defaults = &self.interaction_state.pcb_tool_defaults;
         let classes = self.board_net_classes(&session.path);
         let (style, via) = next_leg_style(
             board, session, defaults, key.anchor, key.cursor, key.layer, classes,
         );
-        let leg = LegRequest {
-            from: key.anchor,
-            to: key.cursor,
+        let i18n = &self.ui_state.i18n;
+        let why = match leg_end(
+            i18n,
+            board,
+            defaults,
+            &router.rules,
+            key.cursor,
+            via.as_ref(),
             style,
-            via: via.map(|via| rule_via(via, &router.rules)),
+        ) {
+            Err(line) => line,
+            Ok(end) => {
+                let leg = LegRequest {
+                    from: key.anchor,
+                    to: key.cursor,
+                    style: end.style,
+                    via: via.map(|via| rule_via(via, &router.rules)),
+                };
+                let modes = (key.corner, key.mode, PREVIEW_BUDGET);
+                match route_on(board, router, leg, modes, Uuid::nil) {
+                    Ok(leg) => {
+                        out.leg = Some(leg);
+                        out.end_via = end.via;
+                        return out;
+                    }
+                    Err(RouteRefusal::Blocked) => {
+                        let why = t!(i18n, ids::PCB_ROUTE_AIM_BLOCKED).into_string();
+                        router_line(i18n, why)
+                    }
+                    Err(refusal) => t!(i18n, refusal_line(refusal)).into_string(),
+                }
+            }
         };
-        let modes = (key.corner, key.mode, PREVIEW_BUDGET);
-        route_on(board, router, leg, modes, Uuid::nil).ok()
+        out.aimed = draw::track_run(key.anchor, key.cursor, key.corner, style, Uuid::nil);
+        out.refused = Some(why);
+        out
     }
 
     /// The route so far and the leg the next click adds (routed by
@@ -416,16 +522,45 @@ impl Signex {
         }
         draw_into(&router.draft, preview);
         let key = self.router_preview_key();
-        let next = router
-            .preview
-            .as_ref()
-            .filter(|held| Some(held.key) == key)
-            .and_then(|held| held.leg.clone());
-        if let Some(leg) = next {
+        let Some(held) = router.preview.as_ref() else {
+            return;
+        };
+        if Some(held.key) != key {
+            return;
+        }
+        // A leg with no way is drawn by the highlight layer, in the DRC
+        // error colour (`router_blocked_shapes`).
+        if let Some(leg) = held.leg.clone() {
             let mut next = RouteDraft::default();
             next.add(leg);
             draw_into(&next, preview);
+            preview.vias.extend(held.end_via.iter().cloned());
         }
+    }
+
+    /// The held preview of the leg on the pointer, while it is current.
+    fn current_router_preview(&self) -> Option<&RouterPreview> {
+        let key = self.router_preview_key()?;
+        let router = self.own_board_tool()?.router.as_ref()?;
+        router.preview.as_ref().filter(|held| held.key == key)
+    }
+
+    /// Why the leg on the pointer has no way, while it has none: the status
+    /// bar says it.
+    pub(super) fn router_preview_refusal(&self) -> Option<&str> {
+        self.current_router_preview()?.refused.as_deref()
+    }
+
+    /// The leg on the pointer that has no way, as it was aimed: drawn in the
+    /// DRC error colour.
+    pub(crate) fn router_blocked_shapes(&self) -> Vec<pcb_geom::Shape> {
+        let Some(held) = self.current_router_preview() else {
+            return Vec::new();
+        };
+        held.aimed
+            .iter()
+            .filter_map(|track| pcb_geom::track_shape(track).ok())
+            .collect()
     }
 }
 
@@ -445,10 +580,17 @@ fn route_on(
         reach: rules.widest_clearance(),
         corner,
         mode,
-        grid_mm: grid_step_mm(board),
+        grid_mm: search_grid_mm(board),
         budget,
     };
     route_leg(board, &router.draft, leg, &route, ids)
+}
+
+/// The step a route's walkaround searches on: the board's grid, but never
+/// coarser than the default, so a coarse view grid cannot close a gap the
+/// route fits through. The route's ends stay where snap put them.
+pub(super) fn search_grid_mm(board: &PcbBoard) -> f64 {
+    grid_step_mm(board).min(PCB_GRID_MM)
 }
 
 /// The rules a pair or bus leg is routed by on `board`: `rules`'s
@@ -464,7 +606,7 @@ pub(super) fn walk_rules<'a>(
         reach: rules.widest_clearance(),
         corner,
         mode: RouteMode::Walkaround,
-        grid_mm: grid_step_mm(board),
+        grid_mm: search_grid_mm(board),
         budget: SEARCH_BUDGET,
     }
 }

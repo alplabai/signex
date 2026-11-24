@@ -30,11 +30,15 @@ impl SchematicCanvas<'_> {
         &self,
         state: &mut CanvasState,
     ) -> Option<canvas::Action<Message>> {
+        if state.bezier_drag.take().is_some() {
+            return Some(canvas::Action::capture());
+        }
         if state.is_floating() {
             state.clear_move();
             return Some(canvas::Action::capture());
         }
         if state.move_dragging || state.click_on_selected {
+            state.wire_grip = None;
             state.move_dragging = false;
             state.click_on_selected = false;
             state.move_origin = None;

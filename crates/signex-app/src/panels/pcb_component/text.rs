@@ -1,6 +1,8 @@
 //! The Designator and Comment rows (#1312, #2354): the text a single
 //! component's fields carry, typed as a draft until Enter, and the eye that
-//! shows or hides each text on the board.
+//! shows or hides each text on the board. With several components the
+//! Comment is one field for all of them ("Different comments" while they
+//! differ) and the Designator says it is edited one at a time.
 
 use std::path::PathBuf;
 
@@ -11,7 +13,7 @@ use signex_i18n::{I18n, Localized, ids, t};
 use uuid::Uuid;
 
 use super::rows::{self, Form};
-use super::{ComponentField, PcbComponentFacts, PcbComponentMsg, Shared};
+use super::{ComponentField, DESIGNATOR_FIELD, PcbComponentFacts, PcbComponentMsg, Shared};
 use crate::panels::PanelMsg;
 use crate::styles::Spacing;
 
@@ -92,13 +94,26 @@ pub(super) fn text_row<'a>(
         (Some(fp), _) => single_input(fp, field),
         // One Comment for every selected component (#2369).
         (None, FootprintTextField::Value) => {
-            super::general::draft_input(facts, ComponentField::Comment, shared.same().cloned())
+            let differ = (*shared == Shared::Mixed)
+                .then(|| t!(form.ctx.i18n, ids::PCB_COMPONENT_COMMENTS_DIFFER));
+            super::general::draft_input_with(
+                facts,
+                ComponentField::Comment,
+                shared.same().cloned(),
+                differ,
+            )
         }
         // Designators are one per component.
-        (None, FootprintTextField::Designator) => form.with_tip(
-            rows::input(shared.same().cloned().unwrap_or_default(), None),
+        (None, FootprintTextField::Designator) if facts.footprints.len() > 1 => form.with_tip(
+            rows::read_only_caption(
+                form,
+                t!(form.ctx.i18n, ids::PCB_COMPONENT_ONE_AT_A_TIME_SHORT),
+            ),
             ids::PCB_COMPONENT_ONE_AT_A_TIME,
         ),
+        (None, FootprintTextField::Designator) => {
+            rows::input(shared.same().cloned().unwrap_or_default(), None)
+        }
     };
     let toggled = (facts.is_editable() && shown.is_some()).then(|| {
         PanelMsg::PcbComponent(PcbComponentMsg::TextShownToggled {
@@ -114,7 +129,10 @@ pub(super) fn text_row<'a>(
         .spacing(SP.xs)
         .align_y(iced::Alignment::Center)
         .boxed();
-    Some(rows::row(form, label, control))
+    Some(match field {
+        FootprintTextField::Designator => rows::linked_row(form, label, DESIGNATOR_FIELD, control),
+        FootprintTextField::Value => rows::row(form, label, control),
+    })
 }
 
 /// The note under the Comment row when several components with different
@@ -167,14 +185,18 @@ fn single_input<'a>(fp: &'a PcbFootprintFacts, field: FootprintTextField) -> Ele
 
 /// The lines under the Properties rows of one component: why its text is
 /// read-only, a designator other footprints share, and how to apply a draft.
+/// An editable designator has no standing note: a mismatch with the schematic
+/// shows as the callout in Schematic Reference Information.
 pub(super) fn notes(fp: &PcbFootprintFacts, i18n: &I18n) -> Vec<(Localized, bool)> {
     let mut lines = Vec::new();
     let why = match fp.editability {
-        FootprintEditability::Editable => ids::PCB_DESIGNATOR_UPDATE_PCB_NOTE,
-        FootprintEditability::Locked => ids::PCB_FOOTPRINT_LOCKED,
-        FootprintEditability::ReadOnly => ids::PCB_FOOTPRINT_READ_ONLY,
+        FootprintEditability::Editable => None,
+        FootprintEditability::Locked => Some(ids::PCB_FOOTPRINT_LOCKED),
+        FootprintEditability::ReadOnly => Some(ids::PCB_FOOTPRINT_READ_ONLY),
     };
-    lines.push((t!(i18n, why), false));
+    if let Some(why) = why {
+        lines.push((t!(i18n, why), false));
+    }
     if fp.also_on > 0 {
         lines.push((
             t!(

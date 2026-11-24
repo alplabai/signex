@@ -10,9 +10,10 @@
 //! shapes what a command writes or answers) is settings. A translated
 //! refusal, log line or undo label is not a read of the locale.
 
+use super::forms::Form::Translator;
 use super::forms::Form::{self, ActiveBar, Bridge, BridgeContextMenu, HeadlessWithoutOperands};
 use super::forms::Form::{AgentWindowLayout, Check, CloseInWindow, HeadlessNewDocument};
-use super::forms::Form::{Operand, Query, StillRunsRefusal, StillRunsUnavailable};
+use super::forms::Form::{Operand, Query, SplitCore, StillRunsRefusal, StillRunsUnavailable};
 use super::inputs::Input::{self, *};
 
 /// `(ids, form, inputs)`: each id's row of `form` reads `inputs` too.
@@ -21,6 +22,18 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // A project without rules runs with the machine's ERC overrides
     // (`erc_rule_settings`).
     (&["run_erc"], Bridge, &[RenderCache, Settings]),
+    // The active document's project: its sheets to compile or to list.
+    (
+        &["compile_project", "add_table_of_contents"],
+        Bridge,
+        &[ActiveDocument],
+    ),
+    // The canvas selection and the union picked in the Unions panel (mockup row 158).
+    (
+        &["add_to_union", "remove_from_union", "break_union"],
+        Bridge,
+        &[ActiveDocument, Selection],
+    ),
     (
         &[
             "select_all",
@@ -421,6 +434,27 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         &[Settings],
     ),
     (&["open_document"], Operand, &[]),
+    // Headless with no `document`: they act on the sheet in view (#2522).
+    (
+        &["create_sheet_symbol_from_sheet", "repair_pin_junctions"],
+        HeadlessWithoutOperands,
+        &[ActiveDocument],
+    ),
+    // The `at` point is checked against the grid (#2522).
+    (&["create_sheet_symbol_from_sheet"], Operand, &[ToolState]),
+    // The target sheet comes from `document` (#2522): nothing implicit.
+    (
+        &[
+            "edit_no_erc_rules",
+            "repair_pin_junctions",
+            "set_sheet_variable",
+            "sync_sheet_entries",
+        ],
+        Operand,
+        &[],
+    ),
+    // The named board only (#2522): nothing implicit.
+    (&["reset_board_origin", "reset_layer_colors"], Operand, &[]),
     (
         &["new_pcb_document", "new_schematic_sheet"],
         HeadlessWithoutOperands,
@@ -451,13 +485,9 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     ),
     (&["unselect_all"], Bridge, &[Selection]),
     // The placement handlers: a point must be where a click lands (grid,
-    // and for a wire the electrical grid on the sheet in view); what the
-    // operands leave out comes from the pre-placement form.
-    (
-        &["place_wire", "draw_wire"],
-        Operand,
-        &[ToolState, RenderCache],
-    ),
+    // and for a wire the electrical grid of the edited sheet's engine, #2542);
+    // what the operands leave out comes from the pre-placement form.
+    (&["place_wire", "draw_wire"], Operand, &[ToolState]),
     (&["place_bus", "draw_bus"], Operand, &[ToolState]),
     (
         &[
@@ -484,6 +514,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "edit_blanket",
             "place_compile_mask",
             "place_diff_pair",
+            "place_parameter_set",
             "place_component",
             "place_sheet_symbol",
             "place_sheet_entry",
@@ -663,6 +694,26 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Bridge,
         &[Window],
     ),
+    // Workspace layouts live in prefs.json (settings). Apply and Reset also
+    // read which panels are open, detached or floating (`arrange_dock`).
+    (
+        &[
+            "apply_layout_schematic",
+            "apply_layout_board",
+            "apply_layout_review",
+            "apply_layout_notebook",
+            "reset_workspace_layout",
+        ],
+        Bridge,
+        &[Window, Settings],
+    ),
+    // The dialogs open on the saved list: Save's first free name, Manage's
+    // active or first own layout.
+    (
+        &["save_workspace_layout", "manage_workspace_layouts"],
+        Bridge,
+        &[Settings],
+    ),
     // Dialogs, pickers and panels that open on nothing implicit, and the
     // tools that are only armed.
     (
@@ -673,6 +724,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "find_text",
             "find_and_replace",
             "open_command_palette",
+            "open_compiled_design",
             "open_grid_properties",
             "open_net_color_palette",
             "open_net_inspector",
@@ -688,23 +740,122 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         &[],
     ),
     (&["open_project_options"], BridgeContextMenu, &[]),
+    // Board edits from the menu (#2551): the board in view, as their gate
+    // says, and its selection where the tool reads it.
+    (
+        &[
+            "panelize_board",
+            "remove_board_panel",
+            "repair_pin_junctions",
+            "repour_all",
+            "reset_board_origin",
+            "reset_layer_colors",
+        ],
+        Bridge,
+        &[],
+    ),
+    (
+        &[
+            "lock_board_items",
+            "unlock_board_items",
+            "repour_selected",
+            "remove_teardrops",
+        ],
+        Bridge,
+        &[Selection],
+    ),
+    // `handle_board_tools` and `handle_tune`: the selection's nets and
+    // tracks, the clearances from `board_design_rules` (machine rules
+    // without project rules).
+    (
+        &[
+            "add_teardrops",
+            "stitch_vias",
+            "tune_diff_pair",
+            "tune_net_length",
+        ],
+        Bridge,
+        &[Selection, Settings],
+    ),
+    // The translators read the board in view and its selection
+    // (`translated_targets`, `save_selection_as_block`,
+    // `swap_selected_pads`); the clearances are the operand handler's.
+    (
+        &[
+            "board_shape_from_selection",
+            "gloss_selected_routes",
+            "keepout_from_selection",
+            "save_board_reuse_block",
+            "swap_gates",
+            "swap_pins",
+        ],
+        Translator,
+        &[Selection],
+    ),
+    // The origin moves to the outline corner nearest the pointer.
+    (&["snap_board_origin_to_corner"], Bridge, &[Cursor]),
+    // The person's own step: no "person busy" refusal; an inline text edit
+    // closes, a reaction to the step (rule 4 on #2326).
+    (&["undo", "redo"], Bridge, &[]),
+    // As the operand row: owed work and drafts are core-bound.
+    (&["save_document"], Bridge, &[]),
+    // Every tab closes as `close_tab` does: its title-block drafts commit and
+    // a board sketch settles first.
+    (&["close_all_documents"], Bridge, &[InProgressEdit]),
+    // `save_all_dirty` commits the title-block drafts and settles a board
+    // sketch, whose refused bake holds the save.
+    (&["save_all"], Bridge, &[InProgressEdit]),
+    // The core command after a split router (#2326 kill-check decisions 3
+    // and "homes"): the router resolves what is in hand; the targets, Move
+    // Keeps Wires and the grid reach the command as operands.
+    (
+        &[
+            "rotate_clockwise",
+            "rotate_counterclockwise",
+            "mirror_x",
+            "mirror_y",
+            "rotate_selection",
+            "rotate_selection_cw",
+            "flip_selected_x",
+            "flip_selected_y",
+        ],
+        SplitCore,
+        &[ActiveDocument, Selection, ToolState],
+    ),
+    (&["flip_selection"], SplitCore, &[ActiveDocument, Selection]),
+    // The GUI reads the clipboard and the landing point; the core places
+    // the fragment at a point, new ids as operands.
+    (
+        &["smart_paste", "paste_special"],
+        SplitCore,
+        &[ActiveDocument, Clipboard, ToolState],
+    ),
+    // Cut: the GUI copies, the core deletes the targets.
+    (&["cut"], SplitCore, &[ActiveDocument, Selection]),
+    // Duplicate on a board pastes the copy beside it.
+    (
+        &["duplicate"],
+        SplitCore,
+        &[ActiveDocument, Selection, ToolState],
+    ),
+    // Enter on a polyline: its points are the operand.
+    (
+        &["placement_accept"],
+        SplitCore,
+        &[ActiveDocument, ToolState],
+    ),
     // Planned Active Bar tools: they only say they are not built yet.
     (PLANNED, ActiveBar, &[]),
     (PLANNED, StillRunsUnavailable, &[]),
 ];
 
 const PLANNED: &[&str] = &[
-    "draw_bezier",
     "draw_ellipse",
     "draw_elliptical_arc",
     "draw_round_rectangle",
     "place_device_sheet_symbol",
     "place_graphic",
-    "place_harness_connector",
-    "place_harness_entry",
-    "place_parameter_set",
     "place_reuse_block",
-    "place_signal_harness",
 ];
 
 /// The hand annotation of `(id, form)`, if any.

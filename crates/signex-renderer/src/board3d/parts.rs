@@ -110,7 +110,7 @@ fn append_body(
     stand: &Stand,
     footprint: &Footprint,
     body: &BodyExtrusion,
-    layer_color: [f32; 4],
+    plain_color: [f32; 4],
 ) {
     let ring: Option<Vec<[f32; 2]>> = match body.outline.as_deref() {
         Some(outline) if outline.len() >= 3 => outline.iter().map(|&p| stand.xy(p)).collect(),
@@ -119,7 +119,7 @@ fn append_body(
     let Some(ring) = ring else {
         return;
     };
-    let (top, sides) = body.colors.unwrap_or((layer_color, layer_color));
+    let (top, sides) = body.colors.unwrap_or((plain_color, plain_color));
     let height = if body.height_mm.is_finite() && body.height_mm > 0.0 {
         body.height_mm
     } else {

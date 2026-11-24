@@ -129,8 +129,8 @@ fn the_erc_and_drc_hash_form_is_pinned() {
 
 #[test]
 fn a_newer_schema_is_refused() {
-    let err = RuleProfile::from_json_bytes(br#"{"schema": 2, "name": "x"}"#).unwrap_err();
-    assert!(matches!(err, RuleProfileError::UnsupportedSchema(2)));
+    let err = RuleProfile::from_json_bytes(br#"{"schema": 3, "name": "x"}"#).unwrap_err();
+    assert!(matches!(err, RuleProfileError::UnsupportedSchema(3)));
     assert!(RuleProfile::from_json_bytes(b"[1]").is_err());
 }
 

@@ -30,6 +30,7 @@ Contents:
 12. [File types](#12-file-types)
 13. [Keyboard shortcuts](#13-keyboard-shortcuts)
 14. [Where to get help](#14-where-to-get-help)
+15. [Preferences](#15-preferences)
 
 For the whole flow in one pass, see the
 [walkthrough](#walkthrough-a-saved-schematic-with-a-wired-symbol).
@@ -54,33 +55,67 @@ candidate such as `v1.0.0-rc.1` (or `v26.11.0-rc.1`) is a GitHub pre-release: ge
 
 ## 2. First launch
 
-Start Signex. With no document open you see a start screen with four
-buttons:
+Start Signex. With no document open you see the start screen. Its left
+column has:
 
-- **New Project**
-- **Open Project…** (with its keyboard shortcut shown next to it)
-- **Open Sample Project**
-- **Keyboard Shortcuts (F1)**
+- **New project**
+- **Open…** (with its keyboard shortcut shown next to it)
+- **Home**, **Projects** and **Libraries**, the three pages of the start
+  screen. **Projects** and **Libraries** show how many there are.
+- **Parts search**, greyed: it is not available yet.
+- **Keyboard Shortcuts**, with its key (`F1`) at the right.
+- A **Libraries** card at the bottom, which opens the Libraries page.
+
+**Home** has the **Sample project** card (press it or its **Open** button to
+open the bundled example), your pinned projects and up to five recent
+projects. When there are more, **Show all** opens the Projects page. Each
+project row shows a small preview of the project, its path and when you last
+opened it ("today 09:12", "yesterday" or a date; "—" when it is not known).
+Hover a row for **Pin** or **Unpin**; right-click it for the same actions.
+
+**Projects** lists every pinned and recent project. Type in **Filter by name
+or folder** to narrow the list, and use **All**, **Pinned** or **Missing** to
+pick which projects show. **Libraries** lists the libraries loaded for every
+project, with their scope and number of components; **Open** opens a library
+in the Library Browser (the Stock library opens read-only), **Add library…**
+adds a global library, and **Open Library Browser** opens the browser.
+
+When a project is open but no document is shown, the centre says so and
+offers **New sheet**, **New PCB** and **Project Options…**. A project with no
+documents yet says that instead.
 
 ![The start screen on first launch, with the Welcome to Signex card in the bottom-right corner](../assets/screenshots/guide-first-run.png)
 
 On your very first launch a small card titled **Welcome to Signex** also
-appears in the bottom-right corner of the window. It lists the three gestures
-you need immediately:
+appears in the bottom-right corner of the window. It lists what you need
+immediately, each with its gesture or key:
 
-- Right-click + drag to pan
-- Scroll to zoom
-- F1 for keyboard shortcuts
+- **Pan**: right-drag
+- **Zoom**: the mouse wheel (with the wheel set to Scroll, Ctrl + wheel, or
+  Cmd + wheel on macOS)
+- **Find any command**: the command palette key (`Ctrl+K` in the default
+  profile)
+- **All keyboard shortcuts**: `F1`
 
-Close it with the ✕ in its corner or with `Esc`. It is a reminder only; nothing
-else changes when you dismiss it.
+Its footer says what the mouse wheel is set to; **change** opens
+**Preferences ▸ Appearance**, where the Mouse wheel setting is, and leaves the
+card open. Close it with **Got it**, the ✕ in its corner or `Esc`. It is a
+reminder only; nothing else changes when you dismiss it, and it does not come
+back.
 
-`F1` (or **Help ▸ Keyboard Shortcuts**) opens a reference of every binding in
-the active shortcut profile.
+`F1` (or **Help ▸ Keyboard Shortcuts**) opens a reference of every working
+binding in the active shortcut profile, grouped by category in two columns.
+Type in the filter field to find a shortcut by its action or its key; the
+match is highlighted and the count under the list says how many match. The
+**Schematic / PCB / All** switch picks which editor's shortcuts are listed; it
+starts on the editor you are in (on **All** in a footprint or library
+editor, or with no editor open). **Edit in Preferences…** closes the sheet
+and opens **Preferences ▸ Keyboard Shortcuts**. `F1` again, **Close** or
+`Esc` closes it.
 
 ## 3. Create a project
 
-Choose **File ▸ New Project** (or press **New Project** on the start screen).
+Choose **File ▸ New Project** (or press **New project** on the start screen).
 
 The **New Project** dialog opens. Nothing is written until you press
 **Create project**.
@@ -93,10 +128,12 @@ The **New Project** dialog opens. Nothing is written until you press
 - **Create "<name>" folder** (on by default) puts the project in a new folder
   `<location>/<name>/`. Turn it off to create the project directly in a
   folder you already made.
-- **Start from a profile** sets the board rules and the sheet defaults:
-  **Hobby 2-layer**, **Standard 4-layer** (the default), **HDI 6-layer** or
-  **Custom**. **Customize settings** opens the values behind the profile:
-  the manufacturer rule template (or **Import rules…**), copper layers, board
+- **Start from a profile** sets the board rules: the fab tiers
+  **Standard** (the default), **Advanced** and **HDI**, or **Custom**. The
+  copper layer count is a separate stepper on each card. Hover a card and
+  press the pencil to edit a built-in profile; **Reset to default** in its
+  menu brings the shipped values back. **Customize settings** opens the values
+  behind the profile: the **Fab tier** (or **Import rules…**), copper layers, board
   thickness, clearance, track width, via size and drill, and the schematic's
   sheet size, orientation, title block and designators. The **Preview** shows
   the stack-up and sheet you will get. You can change all of it later in
@@ -137,10 +174,24 @@ that cannot be fully read is refused too. Such a repository would commit
 every file in the folder. Move the project into its own folder first. A
 project that already lives in a shared folder still opens normally.
 
+The dialog lists the project's files and library folders, all ticked; untick
+one to keep it out of the repository (it goes into `.gitignore`), or click
+**Select all** to tick every row again. **First commit message** is the
+subject of the repository's first commit, "Initial version of" and the
+project's name until you change it; **Enable** waits while it is blank.
+**Commit every save** (on by default) commits each later save of a project
+file. Turn it off to create the repository without that: saves are then not
+committed until you turn it on in the Project tab's Version control section.
+
+**Rename** shows the file's name without its extension, which stays as it is.
+Renaming a sheet that sheet symbols of the same project place says so, and
+those symbols are pointed at the new name. A name another file of the folder
+already has is shown at once, and **Rename** waits for a different one.
+
 To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 
-> **Sample project.** **Help ▸ Open Sample Project** (or the button on the
-> start screen) opens a small bundled design, a linear regulator. Signex copies
+> **Sample project.** **Help ▸ Open Sample Project** (or the **Sample project**
+> card on the start screen's Home page) opens a small bundled design, a linear regulator. Signex copies
 > it into your per-user configuration folder the first time, so your edits to it
 > are kept. A copy that is already there is never overwritten, so one opened
 > before an update keeps its old layout until you delete its folder under the
@@ -148,24 +199,210 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 
 ## 4. Canvas basics
 
-- **Pan:** hold the right mouse button and drag. The middle button also pans.
+- **Pan:** hold the right mouse button and drag.
   A right-click without dragging opens the context menu, unless you are in the
   middle of drawing a wire, where it cancels the wire.
-- **Zoom:** scroll the mouse wheel. Zoom is centred on the pointer.
+- **Zoom:** scroll the mouse wheel. Zoom is centred on the pointer. Or hold the
+  middle mouse button (the wheel button) and drag: up zooms in, down zooms out,
+  about the point you pressed. A tool you have armed stays armed. In the 3D
+  view the middle button still slides the view.
 - **Fit the sheet:** **View ▸ Fit All**.
-- **Grid:** the status bar at the bottom shows the grid size and whether
-  snapping is on (**Snap**) or off (**Free**). Click the grid value to show or
-  hide the grid, and click **Snap/Free** to switch snapping. **View ▸ Toggle
-  Grid** does the same as the grid click. Placed objects snap to the grid
-  while snapping is on.
+- **Grid:** the status bar at the bottom shows the grid size with its unit
+  (**Grid 1.270 mm**) and whether snapping is on (**Snap on**) or off
+  (**Snap off**). Click the grid value to show or hide the grid, and click the
+  Snap pill to switch snapping. **View ▸ Toggle Grid** does the same as the
+  grid click. Placed objects snap to the grid while snapping is on. On a
+  board the grid value opens the **Grid** popover instead; see the board
+  counters below.
+  Right-click the grid value on a schematic to open **Grid & Snap**: Visible
+  Grid, Snap Grid and Snap to Hotspots, each with its switch, and a Pitch for
+  the two grids. These are the settings of **Properties ▸ Document Options ▸
+  General**, so a change in one place shows in the other. The small drawing at
+  the top shows what the settings do and redraws as you change them. It
+  closes when you press Esc, click outside it, switch to another document or
+  open any dialog, an error card, a print or BOM preview, the netlist prompt,
+  the net colour picker and the command palette included, and does not come
+  back after it.
+- **Status bar:** at the left, the cursor's X and Y followed by the unit
+  (click the unit to step through mm, mil, in and um), then the grid and snap,
+  then the active tool and what it is doing. At the right, the selection
+  (click it to open Properties), the zoom and the **Panels** button. The
+  Panels list groups the panels under Project, Inspect, Verify, Library and
+  PCB; an open panel has a check and says where it is (left, right, bottom,
+  floating or window). Click a panel to open it, or to bring an open one
+  forward.
+- **Cursor:** on every canvas the pointer is the normal arrow while nothing
+  is being placed or drawn. It turns into a crosshair while a placement,
+  drawing or routing tool or Measure is active, and back to the arrow when
+  `Esc` ends the tool. Dragging and resize handles show their own cursors.
+- **Board counters:** on a board the status bar also shows how far the
+  board is: **Routed** (routed connections of all, with a bar and the
+  percent), **Unrouted**, **DRC** (the violations of the last **Run DRC** and
+  how long ago it ran, or *not run yet*) and **Selected**, which takes the
+  place of the selection summary. A count of zero shows as a grey 0. Each of
+  them is a button that opens a popover above it. The active layer pill is
+  a plain label under the **Strip** layer switcher; under **Dropdown**
+  (**Preferences ▸ Appearance ▸ Layer switcher**) the layer tabs are hidden
+  and a click on the pill lists the visible layers by group, with the layer
+  sets above them. A click on the grid value still shows or hides the grid;
+  right-click it or the pill to open its popover. Esc or a click elsewhere
+  closes a popover:
+  - **Active layer:** the board's shown layers; click one to make it the
+    active layer. **Layers panel** opens the panel. The `+` and `-` keys
+    (**View ▸ Next Layer** and **Previous Layer**) step the layer too.
+  - **Grid:** pick 0.100, 0.250, 0.500 or 1.270 mm, or type any pitch in mm
+    into **Custom…** and press Enter (a pitch of 0 or less is refused and
+    shows red). **Snap to grid** switches snapping; **Grids…** opens the
+    board's grid settings in Properties.
+  - **Unrouted connections:** each net with what it still has to join, for
+    example `C1-1 → U1-2`, and *pour will connect* when a pour of that net is
+    on the board (those connections count as unrouted until the pour reaches
+    the pads). **Zoom** shows the net's connections; **Route next** zooms to
+    the first one and starts Interactive Routing. **Show only unrouted** dims
+    the board except its unrouted connection lines; it changes nothing in the
+    document and turns off when the board closes.
+  - **DRC:** when the last check ran and how many edits the board has had
+    since, its violations with a **Zoom** each, **Run DRC** and **Open
+    Messages**.
+  - **Selection:** the selected objects with a **Zoom** each, then
+    **Properties**, **Select in schematic** (for a board in a project) and
+    **Clear**.
 
-**View ▸ Cycle Grid Size** steps the grid of the schematic. In the Altium
+  In a board's own window the counters and popovers are that board's.
+
+**View ▸ Cycle Grid Size** steps the grid of the schematic. In the Signex Standard
 profile `G` (forward) acts only in the footprint editor, while `Shift+G` steps
 the grid backward on a schematic too. In the Classic profile `N` / `Shift+N`
 cycle it on a schematic. The menu item runs `next_grid`, so it works on a
 schematic and a PCB in either profile. **View ▸ Zoom In** and **Zoom Out**
-zoom about the centre of the view. `PageUp` / `PageDown` (Altium profile) or
+zoom about the centre of the view. `PageUp` / `PageDown` (Signex Standard profile) or
 `F1` / `F2` (Classic profile) and the scroll wheel zoom about the pointer.
+
+**Fast grids.** The Fast grid 1 and Fast grid 2 commands snap to two grids
+you choose in **Tools ▸ Preferences… ▸ Editing ▸ Grid** (1.27 mm and 2.54 mm
+out of the box). Each field shows the grid in mil as you type, and a value
+that cannot be a grid (not a number above zero, or finer than 1 nm) is marked
+on its row with the reason; Save refuses it until you fix it. The snap preview
+under the fields draws Fast grid 1 as dots and Fast grid 2 as rings. Click a
+pitch on the drawing to type it (Enter commits, Tab moves to the other pitch,
+Esc cancels), or drag its handle; the field follows, and the other way round.
+
+**How the canvas looks.** **Tools ▸ Preferences… ▸ Appearance** holds the
+theme (Graphite Light or Graphite Dark), the UI font, the interface scale,
+**Selected option** (how the picked option of an Off / On / Mono style switch
+looks in the dark theme: Neutral, the default, or Accent), the grid style of the schematic and of the symbol editor (dots, lines or
+small crosses, shown side by side in the grid preview), the symbol editor's
+default grid, pin selection, the GPU render and anti-aliasing, the mouse
+wheel (Zoom or Scroll), two-finger scroll panning and zoom speed. A setting
+marked **Restart** applies the next time Signex starts.
+
+### Tabs and panels
+
+- **Document tabs:** right-click a tab for Close, Close All Other Documents,
+  Close Tabs to the Right, Close All Documents, Open In New Window, Copy Path
+  (the file's path on the clipboard) and Reveal in Projects (selects the file
+  in the Projects panel). Close Tabs to the Right closes only the tabs after
+  it on the strip; a tab open in its own window stays open. When the tabs no
+  longer fit, the strip ends in a
+  **+N** button; it lists the hidden tabs, and picking one brings it to the
+  front.
+- **Panel tabs:** right-click a panel's tab to float it (**Undock / Float**),
+  move it to another dock, or close it. While you drag a floating panel, the
+  docks it can go into are outlined and the one it would land in is filled.
+- **A panel in its own window:** drag a floating panel out of the main window.
+  Its title strip shows the panel and the document in view; **Dock back** (or
+  closing the window) puts the panel back in its dock.
+- **Workspace layouts:** **View ▸ Window ▸ Layouts** arranges the panels for
+  a kind of work in one step: **Schematic**, **Layout** (board work),
+  **Review** or **Notebook**, or a layout of your own. Your open documents
+  stay as they are; only the panels move. **Save Layout…** names the
+  arrangement on screen (giving one of your names again replaces that
+  layout), and **Manage Layouts…** renames, duplicates, deletes (with Undo),
+  reorders by dragging a row's grip, imports and exports your layouts.
+  **Update from current** there changes a built-in to your arrangement, and
+  **Reset** in the menu brings it back. Layouts are kept in your preferences,
+  not in the project. Details: [WORKSPACE_LAYOUTS.md](WORKSPACE_LAYOUTS.md).
+
+### The Command Log
+
+**View ▸ Command Log** opens a panel at the bottom that lists every command
+you ran in this session, newest last: from a menu, a key, a tool, the command
+palette or a context menu, and every command `signex-cli` or an agent sent to
+this window. Each row shows the time, where it came from (GUI, CLI or Agent),
+the command, its arguments, the result and how long it took. A failed command
+is tinted red; an undone one is struck through.
+
+- Type in the search field to find a command by name, id or argument; the
+  GUI, CLI and Agent socket chips and the **All / Failed / Undone** switch
+  narrow the list.
+- Click a row to see its arguments, the full error of a failed command
+  (**Copy error** copies it), and the command as a `signex-cli run` line
+  (**Copy as CLI**). **Replay** runs it again on the items it acted on and
+  leaves your selection as it was. If one of those items is gone or its
+  document is closed, Replay says what is missing and changes nothing;
+  **Jump to** shows the part, net or point it named.
+- Zoom, pan and selection commands are hidden until **More ▸ Show view
+  commands** is on.
+- **Pause logging**, **Save log as…** (a `.jsonl` file), **Clear** and
+  **More** are at the right end of the filter bar. The log is kept for this
+  session only; nothing is written to disk unless you save it. Details:
+  `docs/COMMAND_LOG.md`.
+
+### Annotations
+
+**View ▸ Annotations** opens a panel that lists the notes, calculations,
+measurements, issues and decisions written in the project's Design Notebook
+files (`.snxnbk` files in the project's `notebook/` folder). A block is
+written like this:
+
+```text
+#annotation(kind: "issue", status: "open", date: "2026-11-17")[
+  U3 runs warm at 300 mA; check the copper under #component("U3").
+]
+```
+
+- The rows are grouped by file, newest first. Filter them by kind (the
+  chips), by part, status and date, or type in the search field.
+- Click a row to see the block as written. Click a part chip such as **U3**
+  to open its sheet with the part selected; an amber chip names a part the
+  design no longer has. A net chip highlights that net.
+- The panel reads the files when it opens and when you open a project;
+  press the refresh button beside the search field after editing a file.
+  Anything it cannot read is listed in the Messages panel with the file and
+  the line.
+
+The full grammar is in [NOTEBOOK_ANNOTATIONS.md](NOTEBOOK_ANNOTATIONS.md).
+
+### The footprint and symbol editors
+
+The floating bar over a footprint or a symbol is grouped: the selection tools
+(Selection Filter, Snap, Move, Select, Align) first, then the placement tools,
+then, in the footprint editor, Shapes. In Sketch mode the footprint editor shows
+the sketch bar instead. A small corner triangle marks a button with a dropdown;
+right-click it to open the dropdown.
+
+Right-click a pad in the footprint editor for the selection menu: **Move
+Selection By…** (type an X and a Y offset in mm, then **Move**), **Align ▸**
+(the **Align…** dialog, which aligns or spaces the selection per axis, the
+single align and distribute operations, and **Align To Grid**), **Rotate
+Selection** (`Space`), **Flip Selection** (`X`), **Rectangular Pattern…**,
+**Edit Sketch**, Properties, Pad Actions, Cut, Copy, Paste (while a pad is
+on the clipboard), Find Similar, and **Delete** last. In the symbol editor the menu starts with **Place ▸**, then
+**Rotate Selection** and **Align ▸ Align To Grid**, then Join into Polygon,
+Select All, Deselect All, Fit to Window and **Delete**.
+
+`Ctrl+G` in the footprint editor opens **Grid Properties**. Set the **Step**
+(both axes, in mm), the **Multiplier** (1, 2, 5 or 10; the coarse spacing shows
+beside it), and how the fine and the coarse grid draw (**Lines**, **Dots** or
+**Hidden**). The preview at the top draws the grids as you set them, with a pad
+for scale; click the step or the coarse label on it to type a new value and
+press `Enter` or click elsewhere, or `Esc` to leave it. Text that is not a
+length is outlined red and the preview says why; `Enter` and **OK** wait until
+it is fixed or `Esc` closes the label. Typing in the **Step** field or picking
+a **Multiplier** closes an open label without using its text. The button in
+its corner draws it taller. **OK** applies; a step that is not a number above
+zero is refused and the dialog stays open. **Cancel** closes the dialog and
+discards the changes.
 
 ## 5. Place a symbol
 
@@ -189,12 +426,36 @@ panel header asks where to add a library (**Project**, **Installed** or
 library. Type in **Filter components…** to narrow the components. Clicking a
 part row opens its Component Preview tab.
 
+**The Library panel.** One panel browses what the open libraries hold. Its
+chips switch between **Symbols** (the symbols of the `.snxsym` open in the
+symbol editor), **Footprints** (the footprints of the `.snxfpt` open in the
+footprint editor) and **Parts** (the rows of every open library), each with
+its count. It opens on the kind of the editor tab in front: Symbols in the
+symbol editor, Footprints in the footprint editor, Parts anywhere else; a chip
+you click holds while that tab stays in front. Under the chips sit the
+breadcrumb (library, file and count), one filter and the toolbar: **Place**,
+**Add**, **Edit** and, at the right end, **Delete**. In Parts the filter
+matches part numbers, MPNs and manufacturers and opens each library with a
+match, and the toolbar acts on the highlighted row (a greyed tool has nothing
+it can do there). The folder button in the panel's title bar is **Open
+Library…**. The **SCH Library** and **Footprint Library** rows of the panel
+list open this panel in Symbols or Footprints.
+
 The stock library is read-only. Opening one of its **symbols** or
 **footprints** for editing does not open the original: the first time, a
-**Copy to Library** dialog asks which writable library receives a copy (or
-**New Library…** creates one), remembers the choice, and opens the copy for
-editing under the stock name. The stock original is never changed. If no
+**Copy to Library** dialog lists the writable libraries. A click on a library
+copies into it at once (or **New Library…** creates one); Signex remembers the
+choice and opens the copy for editing under the stock name. The stock original is never changed. If no
 writable library is open, the dialog says so and offers **New Library…**.
+
+**Pick Symbol** (and Pick Footprint, Pick Sim Model) binds a primitive to a
+component row. The list is grouped: each open library, then each library that
+holds one of the project's symbol files but is not open ("In library …
+(not open)"), then "Not in a library". A click on a row picks it. A symbol of
+a library that is not open asks **Link without copying** (the library opens
+and the row points at its symbol, so the link breaks if that library is not
+open) or **Copy into** the row's library. A symbol in no library can only be
+copied; the original file stays as it is. **Cancel** goes back to the list.
 
 **Typed values and the range filter.** A measurement such as a resistance or a
 capacitance is a number, an SI prefix and a unit, each chosen separately: you
@@ -203,19 +464,54 @@ fixed by the part's template or picked from a list. You do not type the unit,
 and `4k7` or `4.7uF` in the number field is refused with a message. The
 Library Browser opens the **Edit Component Details** modal for a measurement
 cell, and the component editor's **Parameters** tab edits the same way. In the
+modal the number and its prefix list form one field; a unit this version does
+not know is shown as written and kept. Parameters that come from the class
+template are marked **template** and cannot be removed there; your own
+parameters keep their **✕**. If the **Internal PN** you type is already used by
+another component in the library, the field turns red, says which table has
+it, and the footer counts the problem; **Save** waits until the PN is unique.
+A save the library refuses shows its reason in the same footer spot. In the
 Library Browser and in the **Place Component** picker, **Add range filter…**
 filters a measurement column with an operator (`≥`, `≤`, `=` or `between`), a
 number and a prefix, compared in base units, so 4.7 kΩ and 4700 Ω match. Rows
 whose cell is not a measurement in that unit are left out, and the filter says
 how many ("N excluded: not a measurement in Ω."). **✕** removes the filter.
 
+**The Library Browser tab.** The header line shows the library with its
+component and table counts, the search field, the **Show** lifecycle filter
+and **Add Component**. Saved changes that git does not hold yet show in a
+warning banner under it with **Commit now**. The left column lists the open libraries and the
+library's tables (**+ Class** adds a table). The grid's narrow **Sym** and
+**Fpt** columns mark a row with an amber dot when it has no symbol or
+footprint bound (a red dot when the bound one is missing; clicking an amber
+dot opens the picker). Selecting a row opens its preview on the right: the
+symbol and footprint drawings, **Edit Details**, **Pick Symbol…**,
+**Pick Footprint…** and, under **⋯**, **Delete Selected** (which asks first).
+In a narrow window the tab scrolls sideways.
+
+**The component editor.** Opening a row shows its internal PN, version and
+location, with the tabs General, Parameters, Supply, Datasheet, Simulation,
+Pin Map and Alternates. General shows the symbol and the footprint (each with
+**Change…**) beside the pin-to-pad table; clicking a pad cell overrides the
+pad that pin lands on. The footer has **Reload saved version**, **Release…**
+(not available yet), **Save & Close**, **Cancel** and **Save** (`Ctrl+S`).
+While a typed value does not parse, the header says how many fields do not
+parse (click it to jump to the first one), the field is outlined with its
+error under it, and **Save** stays disabled with a tooltip naming the field.
+A component of a read-only library shows a read-only footer with **Copy to
+Library…**, disabled until copying a component to another library exists.
+
 To place a part, open a schematic sheet, then either:
 
 - choose **Place ▸ Component…** (or **File ▸ Library ▸ Place Component…**,
   `P` then `P` in the default profile (`A` in Classic), or the Active Bar's
   **Part** button, which all open the same picker), select a part and press
-  **Place**; or
+  **Place**, or press `Enter` in the search field; or
 - press **Place** at the end of a part's row in the Components panel.
+
+The picker's header counts the open libraries and their parts. Its search
+field and **Add range filter…** share the top row, and the list shows each
+part's internal PN, lifecycle state, MPN and description.
 
 The part attaches to the cursor and follows it on the grid. While it is
 attached:
@@ -223,9 +519,19 @@ attached:
 - **Rotate and mirror** it with the keys that rotate and mirror a selection
   (section 13: `Space` rotates in the default profile; `X` and `Y` mirror). They
   turn the part on the cursor, not whatever is selected on the sheet.
-- Press `Tab` to open the pre-placement properties in the Properties panel:
-  the value, the designator and the rotation. Placement pauses until you press
-  **Resume**.
+- Press `Tab` to pause placement and open the pre-placement properties in the
+  Properties panel: the value, the designator and the rotation. **Resume**,
+  `Enter` or the form's **OK** goes on placing with your edits. `Esc` goes on
+  placing without them: the part keeps the values it had when you pressed
+  `Tab`, and stays on the cursor. A second `Esc` lets go of it.
+- The Position X and Y in that form follow the cursor. Type a position (in
+  the panel's unit; Y counts from the sheet's page origin) and press **OK** or
+  `Enter`: the next object is placed there without a click. A field that is
+  not a number is outlined and **OK** places nothing until it is fixed or
+  cleared. `Esc` drops a typed position with the other edits and places
+  nothing. The wire tool takes a Start and an End and places one straight
+  wire between them. A typed position is used once; the object after it
+  starts from the cursor again. Every placement tool has this form.
 - Click to place it. One click is one **Undo** step. The part stays on the
   cursor, and each further click places another copy with the next free
   designator (R1, R2, R3...). A designator typed in the `Tab` form is used for
@@ -265,6 +571,24 @@ pins it to the body shown. Updating a library symbol from its library never
 silently drops a placed symbol's Alternate choice: the update is refused when
 it would disturb a wired pin, and otherwise the choice is kept.
 
+With nothing selected, the symbol editor's **Properties** panel has two tabs.
+**Symbol** shows a drawing of the current part and the symbol's name, UUID,
+parts (the part stepper and the **Body** choice), Mirrored, the local colours
+and the Reference field. **Pins** lists every pin with its number, name, type
+and part: type in the filter to find a pin by number or name, pick a part
+chip to list one part, and **+ Pin** arms the Add Pin tool. A row whose number
+is empty or used twice shows the number in red; a pin with no name reads
+*no name*. Click a row to select that pin: Properties shows its fields, under
+a drawing of the pin whose labels light up as you point at the fields.
+**‹ Pins** clears the selection and goes back to the list. Pin names and the
+Hidden flag are edited in the pin's fields, or for many pins at once with
+**Edit pins in table…**, which turns the list into a table (number, name,
+electrical type, part, hidden, length, orientation) where each name is typed
+in place and **Shown / Hidden** toggles; **Back to the pin list** returns.
+A selected rectangle has a
+**Width / Height** pair next to its Start and End corners; changing it moves
+the End corner.
+
 **Datasheets.** A part's Component Preview tab has a **Datasheet** tab that
 holds one or more documents: a datasheet per manufacturer, an errata, an
 application note. Each document is a URL or a pinned PDF, with an optional
@@ -273,6 +597,21 @@ label. **Add document** appends one; **Make primary**, **Up**, **Down** and
 the one the schematic treats as the part's datasheet. Selecting a placed part
 lists all of its documents in the Properties panel. A document left empty is
 not saved.
+
+**Library updates.** When a schematic opens and some of its placed parts are
+older than their library rows, a library in the Personal workflow updates them
+silently, except a part with a conflict (below). Otherwise **Library Updates
+Available** opens, with a pill per change size (major, minor, patch) beside the
+count. Its table lists each part: the designator and Internal PN, the library,
+the version change (`1.4.2 → 2.0.0`) and a **Major**, **Minor** or **Patch**
+pill. Patch changes start ticked, minor and major changes unticked. Parts that
+share one library symbol share one tick. The checkbox in the table heading
+ticks every row, or clears them all when every row is ticked. When both your
+part and the library row changed a field, a line under the part shows
+**yours** and **library now**; choose **Keep mine** (the default) or **Use
+library value**, and answering ticks the part. **Update Selected Components**
+updates the ticked parts, each answer in the same **Undo** step as its part;
+**Skip All** and **Cancel** close without updating.
 
 **Copy and paste.** Select items and use **Edit ▸ Copy** or **Edit ▸ Cut**,
 then **Edit ▸ Paste**. The copy attaches to the cursor, centred on it and
@@ -289,9 +628,42 @@ copy carries the library symbols its parts use, so it can be pasted into another
 sheet; if that sheet already holds a different version of one of those symbols,
 Signex says so in the Messages panel and the pasted parts use the sheet's
 version. A group of more than 60 items follows the cursor as an outline.
-**Edit ▸ Paste Special** skips the cursor and places the copy at once, to the
-right of the sheet's content. A sheet written by a newer Signex is read-only in
-this build, so nothing is pasted into it.
+**Edit ▸ Paste Special** (`Ctrl+Shift+V`) opens the **Smart Paste** dialog:
+place one copy at an offset (in mm) or an array of copies with a step, give the
+parts the next free designators or keep theirs unless the project already
+uses one (a taken designator takes the next free number), and keep the
+net labels (the pasted nets join the originals) or rewrite them with a pattern
+such as `${Net}_${n}`; power nets are never rewritten. The pattern needs `${n}`
+for several copies and `${Net}` for several signal nets. If a rewritten name
+already exists in the project, the dialog names it and **Paste** stays off until
+you change the pattern or **Start n at**, so nets never join by accident. The
+drawing on the right shows where the copies land, and you can drag the first copy to set the
+offset. **Paste** puts every copy on the cursor; one click places them all as
+one **Undo** step, and `Esc` cancels. A sheet written by a newer Signex is
+read-only in this build, so nothing is pasted into it.
+
+### Unions
+
+A union is a named group of objects on one sheet. Select the objects and press
+`Ctrl+G` (or right-click ▸ **Unions ▸ Create Union…**), type a name and any
+tags, and press **Create**. On the sheet a union shows as a dashed outline with
+its name on a tab; clicking any member selects the whole union. The **Unions**
+panel (**View ▸ Unions**) lists the unions of the sheet or of the whole
+project, filtered by name or `#tag`; each row selects, locks or hides its
+union. A locked union's members cannot be moved, turned, edited or deleted
+until you unlock it. Hiding fades the members on the canvas only: printing and
+exporting are unchanged, and hiding is not an undo step. Details:
+[SCHEMATIC_UNIONS.md](SCHEMATIC_UNIONS.md).
+
+**Paste array** (from the command palette, `Ctrl+Shift+P`) places many copies
+of what you copied in a row or grid. Set **Copies** (up to 1000) and the X and
+Y **Spacing**, typed in the display unit; copy *k* sits *k* spacings from the
+copied original. Under **Numbering**, **Count up label numbers** moves the
+numbers in labels by the **Text increment step** per copy, and **Designators**
+chooses what the copies' parts are numbered, as the **Designators on paste**
+preference does. The preview draws the first copies on the sheet grid, with the
+spacing marked. **OK** places every copy as one **Undo** step. The dialog closes
+if you switch to another sheet.
 
 ## 6. Wire
 
@@ -310,7 +682,26 @@ Wires connect pins and each other.
 Wires snap to the grid while snapping is on. The status bar shows the active
 tool.
 
+A wire you start on the end or the middle of another wire takes that wire's
+colour and width, so a red wire carries on red. A wire that only ends on it
+keeps its own look, and a wire started on a plain wire stays plain.
+
 Once you have placed parts (section 5), connect the wires to their pins.
+
+A pin end placed or moved onto the middle of a wire joins it: Signex adds a
+junction dot there. It adds none where the dot would join two of the part's
+own pins, or where wires of different nets meet (overlapping, crossing, or
+one ending there with no dot); in that case Messages names the pin and both
+nets. A sheet saved by an older Signex or
+another tool may have pins that touch a wire with no dot, which are not
+connected. Signex leaves them as they are when it opens the sheet, and
+Messages says how many there are. Choose **Tools ▸ Repair Pin Junctions** for
+the sheet in view, or the link on that Messages row for the sheet it names, to
+add their dots in one undo step.
+
+Where two wires end on the same pin end, a part's or a power port's, Signex
+adds a junction dot too, as it does where wires meet in a T. One wire on a pin
+gets no dot.
 
 ![A resistor R1 with a wire from its lower pin to the net label SENSE](../assets/screenshots/guide-wired-symbol.png)
 
@@ -331,7 +722,7 @@ or sheet entry and run **Go to net partner on another sheet** from the command
 palette; run it again to cycle through the other ends. The highlight commands
 keep a net bright on every sheet while the rest fades, and step through its pins
 and labels. Resting the pointer on a wire, pin or label shows its net, class and
-pins (Preferences ▸ Schematic ▸ Editing turns it off). See
+pins (Preferences ▸ Editing ▸ Show net info on hover turns it off). See
 [NET_NAVIGATION.md](NET_NAVIGATION.md).
 
 1. Choose **Place ▸ Net Label**, or press `P` then `N` in the default profile
@@ -350,6 +741,24 @@ Classic profile has `U` for the designator, `V` for the value and `F` for the
 footprint. A part's footprint has no text on the sheet, so its editor opens at
 the part. A command with nothing to act on says so in the Messages panel.
 
+### Editing a wire or a text note in Properties
+
+Select one wire or bus and its **Location** shows **Start** and **End**, each
+an X / Y row in the panel's unit (Y counts from the sheet's page origin), and
+the **Length** they make. Type a value and press `Enter`: Start moves only the
+start point and End moves only the end point. The other end stays where it is,
+wires attached at the moved end do not follow, and a straight wire may turn.
+Each value is one undo step, and Length follows. A new end on another wire
+gets a junction, as a drawn wire does.
+
+Select one text note and its **Text** box takes several lines (`Enter` starts
+a new line). What you type is applied as one undo step when the box loses
+focus (`Esc`, or a click outside it), on `Ctrl+Enter`, or when you select
+something else. Moving the pointer out of the box applies nothing. Typed text
+is never lost: a save, a tab switch or closing the tab applies it to its own
+sheet first. **Rotation** (0°, 90°, 180°, 270°) and **Justify H** / **Justify
+V** are switches; a click sets the value at once, one undo step each.
+
 ### Editing several objects at once
 
 With more than one object selected, Properties lists the fields they share, a
@@ -357,7 +766,9 @@ group each for parts, labels and wires. A value the objects disagree on reads
 `<mixed>`. Type a new value and press `Enter` (or flip a checkbox) to set it on
 every object of that group in one undo step. Parts offer value, footprint, DNP,
 In BOM, On board and their custom parameters; labels size, justification and
-rotation (0, 90, 180 or 270); wires width. Label text is not edited in bulk,
+rotation (0, 90, 180 or 270); wires width, picked from the Smallest, Small,
+Medium and Large presets or typed as an Exact Width in the panel's unit. Label
+text is not edited in bulk,
 because giving labels one name would merge their nets. Value, footprint and
 parameter edits skip locked parts and the Messages panel says which; DNP, In BOM
 and On board apply to locked parts too. An empty parameter value removes that
@@ -409,6 +820,21 @@ its entry wires labelled. A group (`{SDA SCL}`) joins only a group with the same
 content. Still to come: a bus joined to another bus by geometry across sheets,
 and bus-aware rendering of the pin (see #1049).
 
+### Net colours
+
+The net colour palette (`F5` in the default profile, or **Net Color...** in the
+sheet's right-click menu) lists every net label name on the active sheet,
+coloured nets first, then by name. Type in **Filter nets** to narrow the list.
+Click a row to open its chooser: a swatch colours the wires and junctions of
+that net, **Clear** takes the colour off, and **Custom…** opens the colour
+picker (swatches, R / G / B, **Hex**, and the old and new colour side by side).
+**Use Color** colours the net on the sheet the picker was opened from; if
+another sheet is active by then, nothing changes and the Messages panel says
+so. **Clear all colours** at the foot of the palette clears the active sheet
+only. Each colour change is one **Undo** step and is saved with the sheet. A
+sheet written by a newer Signex is read-only in this build and keeps its
+colours.
+
 ## 8. Annotate
 
 Annotation gives every symbol a unique reference designator such as `R1`, `R2`.
@@ -425,14 +851,27 @@ annotate (section 5).
 
 By default a placed part takes its reference letters from the library symbol
 (`U?`, `R?`). A project can instead follow a designator standard: right-click
-the project in the Projects panel, choose **Project Options...** and pick a
-**Designator standard** (IEEE 315, DIN 40719-2 or EN IEC 81346-2). New parts
-then get the standard's letters for their component class, for example a diode
-is `D` under IEEE 315 and `V` under DIN 40719-2. Power ports and flags keep
-their `#` references, and a class the standard does not name (such as Generic,
-or a crystal under EN IEC 81346-2) uses the symbol's own letters. EN IEC
-81346-2 uses its single-letter main classes. The letters and the pages of the
-standards they come from are listed in
+the project in the Projects panel and choose **Project Options...** (or press
+the gear on the project's card at the top of the panel), then pick a
+**Designator standard** (IEEE 315, DIN 40719-2, EN IEC 81346-2 or EN IEC
+81346-2 (full codes)). New parts then get the standard's letters for their
+component class, for example a diode is `D` under IEEE 315 and `V` under DIN
+40719-2. Power ports and flags keep their `#` references, and a class the
+standard does not name (such as Generic, or a crystal under EN IEC 81346-2)
+uses the symbol's own letters. EN IEC 81346-2 uses its single-letter main
+classes. EN IEC 81346-2 (full codes) uses the three-letter class codes, for
+example `QAC` for a transistor, and each code is numbered on its own
+(`QAC1`, `QAC2`). The project stores `QAC1`; the schematic and PCB canvases,
+the BOM, the netlist, the PDF and the board and fabrication outputs
+(IPC-2581, ODB++ and the board STEP model included) show it with the
+product-aspect sign, `-QAC1`. The IPC-D-356 test netlist is the exception: it
+writes `QAC1`, because its 6-character field would cut `-QAC100` into
+`-QAC10`. Typing `-QAC9` as a reference stores `QAC9`. A spreadsheet program
+may read a pick-and-place or BOM CSV cell that starts with `-` as a formula;
+import the file as text, or set the designator column to text, to keep
+`-QAC1`. The codes for display (`PH`), sensor (`B`) and battery (`GBA`) are
+provisional and may change. The letters and the pages of the standards they
+come from are listed in
 `docs/architecture/designator-standards.md`. Editing a reference by hand always
 wins, and **Library designator** switches the project back to the default.
 The choice is saved in the project file when you save the project.
@@ -448,7 +887,8 @@ as one undo step: **Ctrl+Z** on any sheet the run changed undoes it on all of
 them (the Messages panel names those sheets; on a sheet the run did not change,
 Ctrl+Z undoes your previous edit instead). Sheets that are not open are loaded
 in memory and stay unsaved like any edited sheet: nothing is written to disk
-until you save, and undo reverts them too. If a sheet cannot be read, the run stops
+until you save, and undo reverts them too. Once such a sheet is saved, undo of the
+run is refused for every sheet and the Messages panel names it. If a sheet cannot be read, the run stops
 before anything changes and the Messages panel names that sheet; fix it and
 press the button again. If one sheet cannot be converted while numbering, the
 whole run is undone and cannot be redone.
@@ -485,25 +925,45 @@ multi-sheet columns and the parameter-matching checkboxes).
 
 ### Find and Replace
 
-**Edit ▸ Find** (`Ctrl+F`) and **Find and Replace** (`Ctrl+H` in the Altium
+**Edit ▸ Find** (`Ctrl+F`) and **Find and Replace** (`Ctrl+H` in the Signex Standard
 profile) search the text of labels, text notes, designators and values. The
-**Scope** row chooses how far the search reaches:
+**Find / Replace** switch in the dialog's header changes between the two in
+place. The pill inside the Find field counts the matches. The three toggles
+beside it choose how the text matches:
+
+- **Match case** (`Aa`): upper and lower case differ. Off, case is ignored.
+- **Whole word** (`ab`), on by default: a match may not touch a letter, digit
+  or `_` on either side, so `VOUT` does not find `VOUT_3V3` or `VOUT_SENSE`.
+  Turn it off to find text inside longer names.
+- **Regular expression** (`.*`): the Find text is a regular expression, and
+  the replacement may use its groups (`$1`, `${name}`). An invalid expression
+  marks the field and finds nothing. An expression is used as typed, spaces
+  included; plain Find text drops the spaces at its ends.
+
+The **Scope** switch chooses how far the search reaches:
 
 - **Sheet** searches the active sheet only.
 - **Project** searches every sheet of the project, including sheets you have
-  not opened. Results are grouped under the sheet they are on. A sheet that
-  cannot be read, or that was written by a newer Signex and is read-only in
-  this build, is not searched; the dialog says so and the Messages panel names
-  it.
+  not opened. A sheet that cannot be read, or that was written by a newer
+  Signex and is read-only in this build, is not searched; a warning line under
+  the results says so and the Messages panel names it.
 
-Click a result to open its sheet and zoom to the item. `F3` steps to the next
-result and `Shift+F3` to the previous one (in both profiles), wrapping at the
-ends. A sheet placed more than once shows one designator result per placement,
-labelled "placement 2 of 3".
+Results are grouped by kind (Net Label, Text Note, Designator, Value), each
+with its matches highlighted and its sheet in the right-hand column. Click a
+result to open its sheet and zoom to the item; the footer reads "Match 2 of 5".
+`F3` steps to the next result and `Shift+F3` to the previous one (in both
+profiles), wrapping at the ends. A sheet placed more than once shows one
+designator result per placement, labelled "placement 2 of 3".
+
+In Replace mode every result has an include box, all set at first, and shows
+what it becomes (`VOUT → VOUT_3V3`). The primary button counts the included
+results ("Replace 1 of 5") and replaces only those; a cleared row stays as it
+is. Changing the Find text, a toggle or the scope sets every box again.
+**Replace Current** replaces the selected result.
 
 **Replace Current** and **Replace All** replace only the matched text, not the
-whole field, and match without regard to case. In **Project** scope a Replace
-All is one undo step: `Ctrl+Z` on any of the changed sheets reverts every one of
+whole field. A Replace All is one undo step; in **Project** scope `Ctrl+Z` on
+any of the changed sheets reverts every one of
 them together. If one of those sheets was edited afterwards, the undo is
 refused and the Messages panel names the sheet; undo the newer edit first.
 
@@ -515,6 +975,18 @@ press Replace, never from the search results, so an edit made after the search
 is not overwritten with stale text. If you open, save or close a document, or close the
 project, while a project Replace is still reading the sheets, it is cancelled with a
 Messages line and changes nothing; run it again.
+
+### Find Similar Objects
+
+**Edit ▸ Find Similar Objects...** (`Shift+F`, or the right-click menu) starts
+from the object under the cursor, or the one selected object. The dialog lists
+its properties with the object's value for each, and a **Same** / **Any**
+choice: **Kind** starts at Same and the rest at Any, so at first every object
+of the same kind matches. A placed part reads as **Part**. **Current sheet**
+counts the matches on the sheet; **Whole project** also counts them on the
+project's other sheets, including closed ones. **Select N** selects the matches
+on the dialog's own sheet; matches elsewhere are only counted. Opened on a
+board, it searches that board.
 
 ### Search everywhere
 
@@ -542,6 +1014,14 @@ a sheet that has since been renamed or deleted, the Messages panel says it
 could not be opened and nothing else is opened in its place; if the symbol is
 gone but the sheet is still there, the sheet opens and the Messages panel says
 the item is no longer on it.
+
+The palette opens in the title bar's search field: you type in the field
+itself, its key cap reads `Esc` while the palette is open, and the results hang
+just under it. A typed query lists the group with the best match first (a net
+name puts **NETS** first); with nothing typed, commands come first. The footer
+says how many rows matched. On a narrow window the field becomes a square
+search button beside the theme toggle; click it, or press the palette's
+shortcut, and type in the box at the top of the results.
 
 ## 9. Run ERC
 
@@ -600,6 +1080,23 @@ greyed out when no schematic is open.
 Edits are held in memory until you save. Undo is `Ctrl+Z` and redo is
 `Ctrl+Y` or `Ctrl+Shift+Z`.
 
+**Closing a project with unsaved edits.** **Close Project** lists every
+unsaved document of the project with what it is (Schematic, PCB, Project
+settings, Library, Component). **Save All** (or `Enter`) saves them and closes
+the project; **Discard All**, alone at the left, drops the edits; **Cancel**
+(or `Esc`) keeps everything open. A document another open project may use
+stays open, and the dialog says so. While a sheet cannot be read, Discard All
+is not offered and the dialog says why.
+
+**Removing a file from the project.** Right-click a file in the Projects panel
+and choose **Remove from Project**. Pick a card, then press the button:
+**Exclude** keeps the file on disk (and in Git, when the project folder is a
+repository) and only takes it off the project's list; **Delete file** also
+deletes it from disk for good. Exclude is selected when the dialog opens;
+`Enter` does nothing here, only the button acts. A choice that does not apply (the file
+is placed by another sheet, it is a shared library, or it is not a page of the
+project) is not shown, and a note says why.
+
 **Library saves are different.** A component library (`.snxlib`) is a git
 repository, and each library save writes the file and then commits it. If the
 write succeeds but git refuses the commit, the change is still saved. The
@@ -611,11 +1108,17 @@ The next successful commit records the pending files too.
 **Where a new library goes.** **New Library…** suggests
 `<project folder>/<project>-lib/<project>-lib.snxlib`: a folder of its own, made
 when the library is created, so that a library with version control gets its own
-repository and never touches the project's. If you tick **Enable version
-control (Git)** and pick the project folder itself while the project is already
-under version control, **Create Library** is refused with the reason, the
-dialog stays open, and nothing is written. Choose a folder of its own, or turn
-version control off for the library. A library with version control off at the
+repository and never touches the project's. After you pick the path, the
+**New Library** dialog shows it and asks whether the library gets version
+control (**Enable version control (Git)**, off by default) and, with Git on,
+**Use Git LFS for binary 3D models** (greyed while Git is off). If you turn on
+version control and pick the project folder itself while the project is already
+under version control, **Create Library** is refused: the dialog stays open with
+the reason in a red banner, **Create Library** is greyed, and nothing is
+written. **Choose another location…** in the banner closes the dialog and opens
+the save-as picker again (the version-control switches start off again there),
+or turn version control off to create the library where it is. A library with
+version control off at the
 new subfolder default is not committed by the project's own repository: its
 edits stay untracked by Signex in the project repo.
 
@@ -626,27 +1129,52 @@ is nothing to lose at save time. Messages says once per opened sheet which file
 was not changed. Open the file in the newer Signex to edit it.
 
 ## 11. Export PDF and BOM
-The PDF is under **File ▸ Export**; the BOM, netlist and ERC report are under **Reports**. Both need a schematic open.
+The PDF is under **File ▸ Export**; the BOM, netlist and ERC report are under **Tools ▸ Reports**. Both need a schematic open.
 Both exports are under **File ▸ Export** and need a schematic open.
 
 **PDF**
 
 1. Choose **File ▸ Export ▸ PDF…** (or press `Ctrl+P`).
-2. A preview window opens with **Preview** and **Settings** tabs. Choose colour
-   or gray, which pages, and the other options.
-3. Press **Export PDF**. A save dialog titled **Export PDF** opens in the
+2. The **Export PDF** window opens on one screen: the sheets as thumbnails on
+   the left, the page in the middle, the settings on the right. Tick the sheets
+   to print under **Sheets** (an unticked sheet's thumbnail is dimmed), choose
+   the pages, the page setup and the colour under **Output**, and the variant.
+   **Watermark** prints DRAFT, CONFIDENTIAL or your own text over the pages
+   (off by default; the preview shows it), **PDF Layers** lets a PDF reader
+   switch groups such as wires or parts on and off, and **Bookmarks** adds one
+   bookmark per sheet, per part or per net. The rarely changed sections start
+   folded and show a summary.
+3. Press **Export PDF…**. A save dialog titled **Export PDF** opens in the
    project's folder with the name `<project or document>.pdf` (`schematic.pdf`
    only when neither is known). Choose where to save. When the file is written,
    the footer of the export window names the written file (a long path is
-   shortened in the middle; the Messages panel has the full path). Changing a setting
-   brings the page count back.
+   shortened in the middle; the Messages panel has the full path) and
+   **Cancel** becomes **Close**. Changing a setting brings the page count back.
 
 **BOM (bill of materials)**
 
-1. Choose **Reports ▸ Bill of Materials…**.
-2. A preview of the table opens. Adjust the options and press **Export…**.
-3. In the save dialog, name the file. The format can be CSV (`.csv`), Excel
-   (`.xlsx`) or HTML (`.html`).
+1. Choose **Tools ▸ Reports ▸ Bill of Materials…** or **File ▸ Export ▸
+   Export BOM…**.
+2. The Bill of Materials dialog opens on the table. The toolbar holds the
+   **Filter lines** field, the **Variant** picker, the **Grouped** /
+   **Ungrouped** / **Flat** switch and, when validation finds something, a
+   chip such as **2 warnings** that opens the **Rules** tab. The filter only
+   hides lines on screen; the file always lists every line. Click a column
+   head to sort, drag it to move the column, or drag the line between two
+   heads to resize. Lines a validation rule flags are tinted, with a mark in
+   the line-number column.
+3. The Properties side bar has three tabs. **General**: **Include not-fitted
+   (DNP), excluded-from-BOM and off-board parts** lists the parts a BOM
+   leaves out (DNP parts and parts the variant marks not fitted, parts
+   excluded from the BOM and parts not on the board) instead of leaving them
+   out, and **Format** picks CSV, XLSX or
+   HTML. **Columns**: the ticked columns are exported, in the order shown;
+   drag a ticked column by its grip to move it. **Rules**: the validation
+   rules and the issues they found; click an issue to select its line.
+4. The footer shows how many lines are shown, how many parts the BOM lists
+   and, with a price column, the total. Press **Export CSV…** (or **Export
+   XLSX…** / **Export HTML…**) and name the file in the save dialog, or
+   **Cancel**. Issues never stop the export.
 
 A schematic without placed parts produces an empty BOM.
 
@@ -655,7 +1183,11 @@ it, and **Save As** in the document's own folder. With no project open, or for
 the bundled Sample Project (which lives in the app's config folder), the export
 and New Project dialogs leave the folder to the operating system.
 
-The Reports menu also offers **Netlist (Protel .NET)…** and **ERC Report…**.
+**Tools ▸ Reports** also offers **Netlist (.NET)…** and **ERC Report…**.
+When some pages cannot go into the netlist (a missing or unreadable sheet file,
+a sheet cycle), the netlist export stops and lists them with the reason.
+**Cancel**, the default, writes nothing; **Export anyway (incomplete)** writes
+the partial netlist and reports the omitted pages in the Messages panel.
 The ERC report writes the results of the newest ERC run and does not run ERC
 itself: run it first (section 9), or the menu says so and writes nothing. It
 lists the rows the ERC panel shows, and when you have edited the sheet since the
@@ -669,19 +1201,96 @@ known), and the extension you choose sets the format: `.html`, `.pdf`, `.json`, 
 
 The title block of every sheet is filled from **project parameters**. Open the
 project's **Project** tab (project tree, **Project Options**) and choose
-**Parameters**: title, document number, revision, date, company, drawn by,
-checked by and approved by apply to every sheet, and **Custom parameters** adds
-your own name/value pairs. Edits there are undoable with `Ctrl+Z` and are saved
-to the `.snxprj` with `Ctrl+S`.
+**Parameters**: the **Title block** group (title, document number, revision,
+date, company, drawn by, checked by, approved by, author, engineer,
+organization and address 1 to 4) applies to every sheet, and
+the **Variables** group holds your own name/value pairs (the project
+variables). A name is letters, digits and `_`, not starting with a digit. Add
+one with the Name field and **Add** at the end of the list, remove one with ×
+on its row, and rename one by typing over its name and pressing Enter. A value
+that is an `=` expression shows what it evaluates to, or why it does not, under
+its row. A rename changes only
+the project's name for the value: sheet text that uses the old name as a special
+string, and a sheet value with the old name, keep it and stop showing the
+project value until you change them, which the row warns about before you press
+Enter. The filter above the
+list finds a row by its name or value, and a group's header folds it shut.
+Edits there are undoable with `Ctrl+Z` and are saved to the `.snxprj` with
+`Ctrl+S`.
 
-A sheet can override a value: in the sheet's **Properties** panel, **Title
-Block** section, type the value for that sheet. The label shows `(project)`
-while the field is empty and takes the project's value, and `(overrides
-project)` while the sheet has its own. Clear the field to fall back to the
-project's value.
+A sheet's own parameters are in one list: click an empty spot of the sheet so
+the **Properties** panel shows **Document Options**, and open its
+**Parameters** tab. Each row shows its current value. Type in **Filter
+parameters** to show only the rows whose name holds that text; the **All**,
+**Parameters** and **Rules** chips carry their counts (a sheet has no rules
+yet, so **Rules** shows an empty card). Click a group's header to fold it.
 
-Any text note, and the title block, can use these special strings. They
-resolve the same way on the canvas, in the PDF and in the SVG page:
+- The **Title block** group: **Title**, **Document No.**, **Revision**,
+  **Date**, **Company**, **Drawn By**, **Checked By**, **Approved By**,
+  **Author**, **Engineer**, **Organization** and **Address 1** to
+  **Address 4**. Type a value and press `Enter` to apply it; each applied
+  field is one undo step, and the title block on the sheet shows it. A field
+  you leave empty is not saved and reads *Not set*. While the sheet leaves a
+  field empty and the project has a value, the row shows the project's value
+  greyed with a **project** pill; typing a value overrides it for this sheet.
+  Clear the field to fall back to the project's value.
+- An empty **Date** with no project value shows today's date, greyed, and
+  its name says `(today)`; nothing is saved for it, so it always shows the
+  current day. Type a date to store it.
+- The **Built-in** group is read-only: **Document Name**, **Sheet Name**,
+  **Sheet Number**, **Sheet Count**, **Project Name**, **Current Time**,
+  **Current Date**, **Time**, **Document Full Path** and **Modified Date**.
+  The clock rows show the time the panel was last refreshed, to the minute;
+  **Modified Date** is the date the sheet's file was last read from disk or
+  saved. A row with no value is empty.
+
+Every row name is also a special string you can type in any text, note or
+title block: `${Title}`, `${CompanyName}`, `${DrawnBy}`, `${Author}`,
+`${Address1}`, `${CurrentDate}`, `${CurrentTime}` (or `${Time}`),
+`${ModifiedDate}`, `${DocumentFullPathAndName}`, `${DocumentName}` and
+so on. The names are matched exactly, before any variable of the same name.
+
+A sheet has its own variables too, in the **Sheet variables** group of the
+same tab. Type a name, press **Add variable**, type the value and press
+`Enter`; the ✕ button deletes a variable. A sheet variable replaces the
+project variable of the same name on that sheet only; it is saved in the
+`.snxsch`.
+
+A value that starts with `=` is an expression: `= VCC / 2` with `VCC` set to
+`3.3V` shows `1.65V`. An expression may use other variables, units and the
+functions of the footprint parameters. The value you typed is what is saved;
+the result is what is drawn; in the Parameters list it shows in a pill beside
+the field. A value that does not evaluate (an unknown name, or two variables
+that refer to each other) is drawn as typed, shows `?` in the pill and its
+error under the field, and is reported in the **Messages** panel when you
+press `Enter`. To start a plain value with `=`, type `==`.
+
+A part's value and its fields take expressions too. A bare name is the
+part's own field first (`= Rbase * 2`), then a variable; `R1.Value` is the
+value of part R1 on the same sheet. The sheet, PDF and SVG show the result
+with its unit (`20kΩ`), and so do the BOM, the netlist export, ERC and the
+Net Inspector: the BOM lists and groups parts by that result. The
+**Properties** panel shows the expression in the **Value** row and the
+result, or the error, under it.
+
+A reference follows its part. When annotation renumbers R1, when you reset
+the designators and annotate again, or when you change or swap a designator
+by hand, `= R1.Value` is rewritten to the part's new designator in the same
+undo step. While a part has no number (`R?`), or shares its designator with
+another part, the reference shows it by an internal id (`_u…`) until it is
+numbered again.
+
+Under the EN IEC 81346-2 full-codes standard the leading `-` of a designator
+is only how it is shown: write `= QAC1.Value`, not `= -QAC1.Value`, which is
+an error. An expression that cannot be calculated is drawn and exported as
+typed and listed in **Messages** when you save the sheet (also by Save All
+or a save before closing) and when you export a BOM or a netlist.
+
+Any text note, the title block and a part's value can use these special
+strings. They resolve the same way on the canvas, in the PDF and in the SVG
+page; the field itself keeps the string. A text note that starts with `=` is
+an expression too. A power port's value is a net name and is never resolved,
+and neither are net labels, ports and sheet entries:
 
 | String | Value |
 |---|---|
@@ -695,7 +1304,7 @@ resolve the same way on the canvas, in the PDF and in the SVG page:
 | `${COMMENT1}` to `${COMMENT4}` | the four comment lines |
 | `${SHEETNUMBER}`, `${SHEETCOUNT}` | this sheet's number and the sheet count |
 | `${SHEETNAME}`, `${FILENAME}` | the sheet's name and file name |
-| `${NAME}` | a custom parameter called `NAME` (case matters) |
+| `${NAME}` | the variable `NAME`: the sheet's, else the project's (an exact match first, then one in any letter case) |
 
 An unknown string prints as empty text. The standard title block prints the
 title, document number, revision, sheet, date, company, file name and the
@@ -705,7 +1314,7 @@ Drawn / Checked / Approved row.
 
 This is sections 3 to 11 as one run, from an empty window to a saved sheet and
 a PDF. Each step names the section with the detail. The shortcuts are those of
-the default Altium profile; the menu path always works.
+the default Signex Standard profile; the menu path always works.
 
 1. **Create the project.** Choose **File ▸ New Project**, name it in the
    save dialog, and keep the `.snxprj` ending (section 3). Signex creates a
@@ -733,7 +1342,7 @@ the default Altium profile; the menu path always works.
    writes the sheet to its `.snxsch` file. Close the tab and reopen it with
    **File ▸ Open Recent** to check that the wires and labels came back.
 9. **Export a PDF.** Press `Ctrl+P` or choose **File ▸ Export ▸ PDF…**, check
-   the preview, press **Export PDF** and pick where to save (section 11).
+   the preview, press **Export PDF…** and pick where to save (section 11).
 
 **Place ▸ Sheet Entry** selects the same **Sheet Entry** tool as the Active
 Bar's sheet-symbol menu. **Place ▸ Power Port**, **Text** and **No Connect**
@@ -763,10 +1372,10 @@ Before you start, every part needs a footprint and a unique designator:
    Document**. The dialog **Update PCB from Schematic** opens.
 2. A project with no board yet shows **This project has no board yet.** and a
    **Create PCB** button. Press it.
-3. The **New PCB** dialog opens with the project's setup: the profile cards,
-   **Manufacturer rule template**, **Copper layers**, **Clearance**, **Track
-   width**, **Via size**, **Via drill**, **Board thickness** and a preview of
-   the stack-up. Change what you need and press **Create PCB**.
+3. The **New PCB** dialog opens with the project's setup: a **From project
+   setup** row (**Use another profile…** shows the profile cards), then
+   **Copper layers**, **Clearance**, **Track width**, **Via size**, **Via
+   drill**, **Board thickness** and a preview of the stack-up. Change what you need and press **Create PCB**.
 4. The board is created as `<project name>.snxpcb` next to the `.snxprj`, and
    the Update PCB list is read for it. A new board lists only adds: one row
    per part (**Components**), per net (**Nets**) and per pad that gets a net
@@ -806,6 +1415,23 @@ the next update. To carry board changes to the schematic instead, use
 **Design ▸ Update Schematics** (or **Tools ▸ Annotation ▸ Back Annotate
 Schematics…**).
 
+### Compare the board with the schematic
+
+To see every difference both ways and pick a side per row, use **Project ▸
+Compare Board with Schematic…** (or **Compare with Schematic** in the
+right-click menu of an object on the board). The report groups the differences: Missing on
+board, Extra on board, Net differences, Footprint mismatches and Value
+changes. Click a chip to show one kind. Each row has **Update PCB** (the
+schematic wins), **Update schematic** (the board wins) or **Skip**; a choice
+that is greyed says why in its tooltip. Extra parts on the board and
+footprint mismatches start skipped, since they are often deliberate board
+edits. **Set shown rows** sets every shown row at once.
+
+The **Schematic** and **Board** links show the object in that editor and
+keep the report open. **Apply** asks first when it would remove something
+from the board, then makes one undo step on the board and one on the
+schematic. **Export report…** saves the report as text.
+
 More detail: [UPDATE_PCB.md](UPDATE_PCB.md).
 
 ## Board 2. Outline, layer stack and the Layers panel
@@ -834,12 +1460,34 @@ mounting holes (tick **Mounting hole** on a circle, then set **Drill**,
 cannot be turned into a board shape, for example an open loop, the reason is
 shown and the board stays as it was.
 
+A keepout or cutout selected in a sketch (on a board or in the footprint
+editor) shows its own form in Properties, with a drawing at the top. A
+keepout's **Layer** picks **Top Layer** or **Bottom Layer**, and its
+**Keepout kinds** say what it blocks; the drawing names each blocked kind.
+A cutout goes through the board unless **Limit depth (pocket)** is ticked.
+
+To drive sizes by name, press **Parameters** in the bar at the canvas's top
+right: the table lists each parameter with its expression, value, unit and
+what uses it. Type an expression to re-solve the drawing; use a row's **⋯**
+to rename or delete a parameter. **Make parameter** on a dimension names its
+value. The footprint sketch has the same table
+([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#parameters)).
+
 Two other ways to get an outline:
 
 - **File ▸ Import ▸ DXF as Board Outline…** reads the outline from a DXF
   file.
 - Select closed lines on the board and choose **Tools ▸ Board Shape from
   Selection**.
+
+**The board origin**
+
+Coordinates on a board count from its origin, with X to the right and Y up.
+A new board starts at the bottom-left corner of its area. **Edit ▸ Origin**
+moves it: **Set** (`E O S`, or `Shift+O` with the Classic keys) puts it
+where you click next, **Reset** puts it at the bottom-left of the board
+outline, and **Snap to Outline Corner** puts it at the outline corner
+nearest the pointer. Each is one undo step and is saved with the board.
 
 **The layer stack**
 
@@ -860,24 +1508,48 @@ above them.
 
 **Layer tabs and the Layers panel**
 
-The tabs under the board list its layers. Click a tab to make that layer
-active; new tracks, pours and text go on the active layer. `+` and `-` step
-to the next and previous layer, `*` to the next signal layer. A right-click
-on a tab hides, highlights or shows layers, and its **Layer stack...** row
-opens the Layer Stack panel.
+The tabs under the board list every layer the Layers panel shows; a hidden
+layer has no tab and gets it back when you show it again. When the tabs do
+not fit, scroll the strip sideways. Click a tab to make that layer active;
+new tracks, pours and text go on the active layer, and its tab has the
+accent bar along the top. `+` and `-` step to the next and previous layer,
+`*` to the next signal layer. A right-click on a tab hides, highlights or
+shows layers, sets the layer's colour (**Layer colour...**, saved with the
+board), sets the tab names (Short, Medium or Long) and the layer numbers,
+and its **Layer stack...** row opens the Layer Stack panel. The button at
+the left end of the tabs picks a layer set.
 
 **View ▸ Layers** opens the **Layers** panel. Its **Layers & Colors** tab
-has an eye per layer to show or hide it and a colour chip to change its
-colour in this view. **Used On** lists only the layers the board uses, and
-**Layer Sets** switches between sets of layers. The **View Options** tab
-shows or hides each kind of object and switches 3D and **Single Layer Mode**.
-These are view settings; they never change the board file.
+has an eye per layer to show or hide it, and an eye per section for all the
+layers it lists (a search or Used On leaves the others alone). Click a
+layer's colour dot to pick a colour from the board palette or type a hex
+value such as `#C8A02C`; the colour is saved with the board, one undo step.
+**Used On**, beside the search field, lists only the layers the board uses.
+The **Active** row shows the active layer, and its **Set** dropdown switches
+between sets of layers. The **⋯** button beside the search field saves and
+deletes sets, flips the view to the bottom side and opens the layer stack.
+The **View Options** tab shows or hides each kind of object and switches 3D
+and **Single Layer Mode**. The layer colours are part of the board: a
+colour picked in the colour card or typed in its hex field is one undo
+step, marks the board changed and is saved in the board file. The other
+settings on both tabs are view settings; they never change the board file.
 
 <!-- screenshot: the Layers panel, Layers & Colors tab, on a four-layer board -->
 
 Other view rows: **View ▸ Toggle Ratsnest** (`N`), **View ▸ Single Layer
 Mode** (`Shift+S`), **View ▸ Flip Board View** to look from below, and
 **View ▸ 3D View** (`3`) to see the board in 3D.
+
+In 3D, drag to turn the board, right-drag to slide it, use the wheel to
+zoom and click a part to select it. The toolbar at the top of the view
+switches back with **2D**, looks from **Top**, **Iso**, **Front**,
+**Left**, **Right** or **Back**, resets the camera
+and fits the board. **Flip** turns the board over to show its bottom side;
+**Explode** opens a slider that moves the copper, mask and parts apart. The
+lighting button steps through four lighting presets (Studio, Workshop,
+Outdoor, Dark), which also set the backdrop. The camera button copies a
+screenshot of the view to the clipboard; its arrow opens **Save PNG…**.
+None of this changes the board file.
 
 More detail: [PCB_SKETCH.md](PCB_SKETCH.md) and
 [PCB_LAYER_STACK.md](PCB_LAYER_STACK.md).
@@ -894,7 +1566,11 @@ Parts come from the schematic through Update PCB. **Place ▸ Component** on a
 board is greyed with the reason "not available on boards yet".
 
 - **Move:** drag a footprint, or select it and choose **Edit ▸ Move ▸
-  Move**. Tracks joined to its pads come along. The move is one undo step.
+  Move**. Tracks joined to its pads come along. Hold `Ctrl` (`Cmd` on macOS)
+  while you drag to move the part alone: its tracks stay where they are, so
+  their ends no longer reach the pads and DRC and the ratsnest show the open
+  connections. Press or release `Ctrl` during the drag to switch; the status
+  bar says which. The move is one undo step.
 - **Turn:** `Space` turns the selection 90° counter-clockwise, `Shift+Space`
   clockwise.
 - **Other side:** `L` (**Edit ▸ Move ▸ Flip Selection**) puts the part on the
@@ -914,13 +1590,29 @@ board is greyed with the reason "not available on boards yet".
 board. Run **Design ▸ Update Schematics** afterwards to carry the new names
 to the schematic; otherwise the next Update PCB renames them back.
 
+**Rooms** group the parts of each sheet:
+
+- **Design ▸ Rooms ▸ Create Rooms from Sheets…** makes one room per sheet
+  (`name_CH1`, `name_CH2`, … for a sheet placed several times), shows them
+  on a preview, and on **Create** draws them and moves the parts that Update
+  PCB left beside the board into their rooms. One undo takes it all back.
+- **Place ▸ Room** draws a room by two corners.
+- Select a room to edit it in **Properties**: name, sheet, side, position and
+  size. Moving a room moves its parts. **Keep parts inside** makes a part
+  outside the room, or inside its margin, a DRC error; **Pull parts into
+  room** moves them back in.
+
+More: [PCB_ROOMS.md](PCB_ROOMS.md).
+
 ## Board 4. Route and pour copper
 
 **Route a connection**
 
 1. Make the layer you want active (a layer tab, `+` or `-`).
 2. Choose **Place ▸ Interactive Routing**.
-3. Click on a pad. The route takes the pad's net.
+3. Click on a pad. The route takes the pad's net. While you route, the
+   ratsnest line of that net runs from the route's end to the nearest pad
+   it still has to reach.
 4. Click to add each leg. The route keeps the clearance the design rules ask
    from other nets and finds its way around copper in the way. `Space` flips
    the bend; `Shift+Space` steps the corner mode (90°, 45°, any angle).
@@ -931,6 +1623,11 @@ to the schematic; otherwise the next Update PCB renames them back.
 
 The width comes from the net's class (**Design ▸ Net Classes**), else the
 board's setup.
+
+Press `Tab` while routing, or while any board tool is armed, to pause it and
+edit its values in **Properties**. The route on the cursor stays where it was
+and the Placement Paused banner shows, as on a sheet. **Resume**, `Enter` or
+`Tab` goes on with your edits; `Esc` goes on without them.
 
 <!-- screenshot: Interactive Routing between two pads, the route preview on the cursor -->
 
@@ -950,14 +1647,18 @@ locked track, a pad or a via is never pushed; the route walks around it.
 - **Multi-Route** routes the selected nets side by side as a bus.
 - **Quick Route** routes straight from the first click to the second.
 - **Via** (`P V`) places a through via per click.
+- **Pad** places a free pad per click on the active layer: with Top Layer or
+  Bottom Layer active it is a surface pad on that side, with its solder mask
+  and paste; with any other layer active it is a through-hole pad.
 
 **Copper pours**
 
 1. Make the copper layer active.
 2. Choose **Place ▸ Polygon Pour** (`P G`).
 3. Click the corners. Start on a pad or track of the net you want, for
-   example `GND`; the pour takes the net under its first corner. Click the
-   first corner again to close the shape.
+   example `GND`; the pour takes the net under its first corner. From the
+   first corner a line follows the cursor; from the second the closed shape
+   does. Click the first corner again to close the shape.
 4. The pour fills its area and keeps clear of other nets' copper.
 
 Select a pour to change its net, clearance, priority and island removal in
@@ -974,16 +1675,16 @@ More detail: [PCB_TOOLS.md](PCB_TOOLS.md).
 
 **Pick a fab tier**
 
-The rules start from a manufacturing tier, chosen in **Manufacturer rule
-template** in the New Project or **New PCB** dialog: **Standard fab**,
-**Advanced fab** or **HDI fab**. The tier writes seven `fab_*` rules (the
+The rules start from a manufacturing tier, chosen in **Fab tier** in the
+New Project or **New PCB** dialog: **Standard**,
+**Advanced** or **HDI**; the field mirrors the picked profile card. The tier writes seven `fab_*` rules (the
 floor of what the board house can build) into the project's rules:
 
 | Tier | Clearance | Track | Via / drill | Hole | Edge |
 |---|---|---|---|---|---|
 | Standard | 0.15 mm | 0.15 mm | 0.5 / 0.25 mm | 0.25 mm | 0.3 mm |
 | Advanced | 0.1 mm | 0.1 mm | 0.4 / 0.2 mm | 0.2 mm | 0.25 mm |
-| HDI | 0.075 mm | 0.075 mm | 0.3 / 0.15 mm | 0.1 mm | 0.2 mm |
+| HDI | 0.075 mm | 0.075 mm | 0.25 / 0.1 mm | 0.1 mm | 0.2 mm |
 
 These are generic process classes, not one maker's numbers. Check them
 against your board house's published limits.
@@ -1034,41 +1735,53 @@ Run DRC until it is clean, save the board, then make the files.
 
 **Gerber, drill, pick-and-place and the whole-job files**
 
-1. Choose **File ▸ Fabrication Outputs…** (or the Active Bar's
-   **Fabrication Outputs** button).
-2. Under **Files**, tick what to write. All are ticked at first:
-   - **Gerber RS-274X with X2 attributes: copper, legend, solder mask, paste
-     and board profile**
-   - **Excellon drill: plated and non-plated holes, slots and a drill table**
-   - **Pick and place (CSV)**
-   - **IPC-D-356 test netlist**
-3. Check **File name** (the board's name) and **Output folder** (a
-   `fabrication` folder beside the board; **Browse…** picks another).
-4. Press **Generate**. The dialog lists what was written.
+1. Choose **File ▸ Fabrication Outputs…**.
+2. Tick what to write. The kinds come in four groups, each counting its
+   ticks:
+   - **Fabrication**: **Gerber RS-274X**, **Excellon drill** and the
+     **IPC-D-356 test netlist**
+   - **Single-file job**: **IPC-2581 revision C** and the **ODB++ job**
+     (tick **As a folder instead of one archive** under it for the folder
+     form; it is greyed until ODB++ is ticked)
+   - **Assembly**: **Pick and place (CSV)**, **Assembly drawing (PDF)** and
+     **Assembly drawings (SVG)**
+   - **3D**: the **STEP model of the board and its parts**
+
+   The footer counts the kinds ticked. Your ticks are saved with the
+   project.
+3. Under **Destination**, check **File name** (the board's name) and
+   **Output folder** (a `fabrication` folder beside the board; **Browse…**
+   picks another). The line under them shows how the files are named.
+4. Press **Generate**. A green banner says how many files were written and
+   where; **Open folder** shows them. Notes follow: what the files leave
+   out, and in red any older files in the folder that are not part of this
+   set. **Generate again** runs it once more; **Close** closes the dialog.
 
 <!-- screenshot: the Fabrication Outputs dialog after Generate -->
 
-Every run also writes the IPC-2581 file `<name>-ipc2581.xml`, the ODB++
-archive `<name>-odb.tar` and the Gerber job file `<name>-job.gbrjob`. Send
-the board house either the Gerber and drill files or one of the IPC-2581 and
-ODB++ files, whichever it asks for. The pick-and-place file is
-`<name>-centroid.csv`; it goes to the assembler.
+With a fabrication file ticked, Generate also writes the Gerber job file
+`<name>-job.gbrjob`. Send the board house either the Gerber and drill files
+or one of the IPC-2581 and ODB++ files, whichever it asks for. The
+pick-and-place file is `<name>-centroid.csv`; it goes to the assembler.
 
 Generate writes the board as it is in memory, unsaved edits included, and
 replaces files of the same name. It never deletes: older files of the same
 name that this run did not write are listed, so you can remove them before
 you send the folder. Without a board outline nothing is written (Board 2).
-With a panel (**Tools ▸ Panelize Board**) a **Whole panel** box writes the
-whole panel.
+With a panel (**Tools ▸ Panelize Board**) a blue banner at the top holds the
+**Whole panel** box, which writes the whole panel.
 
 **Assembly drawings**
 
-- **Reports ▸ Assembly Drawings as SVG…** asks for a folder and writes
+- **Tools ▸ Reports ▸ Assembly Drawings as SVG…** asks for a folder and writes
   `<board>-assembly-top.svg` and `<board>-assembly-bottom.svg`.
 - For a PDF, choose **File ▸ Export ▸ PDF…** on the board. In **Board Print
   / PDF**, tick **Assembly Drawing, Top** and **Assembly Drawing, Bottom**
   under **Layer Sets** and press **Export PDF…**. The same dialog prints the
-  copper and mechanical layers.
+  copper and mechanical layers. The **Page plan** on the right shows a card
+  for each page as you change the options; with no set ticked, Export PDF…
+  is greyed. **Mirror the Bottom Side** is greyed until a bottom set is
+  ticked.
 
 **STEP model**
 
@@ -1078,9 +1791,12 @@ its holes and cutouts; each part is the body the 3D view shows.
 
 **Board reports**
 
-**Reports ▸ Board Bill of Materials…**, **Board Netlist…**, **Net Lengths…**
+**Tools ▸ Reports ▸ Board Bill of Materials…**, **Board Netlist…**, **Net Lengths…**
 and **Component Report…** show the board's tables; **Export Report as CSV…**
-saves the one in view.
+saves the one in view. In **Board Reports**, switch tables at the top, type
+in **Filter rows** to narrow the rows, and click a column heading to sort by
+it (click again to turn the order round). The filter and the sort only
+change what you see: **Export CSV…** always saves every row.
 
 More detail: [FABRICATION_OUTPUTS.md](FABRICATION_OUTPUTS.md) and
 [BOARD_OUTPUT.md](BOARD_OUTPUT.md).
@@ -1095,10 +1811,11 @@ More detail: [FABRICATION_OUTPUTS.md](FABRICATION_OUTPUTS.md) and
 | `.snxlib` | A component library. It is a folder, not a single file. |
 | `.snxsym` | A schematic symbol, edited in the symbol editor. |
 | `.snxfpt` | A PCB footprint, edited in the footprint editor. |
+| `.snxnbk` | A Design Notebook file in the project's `notebook/` folder; the Annotations panel lists its annotation blocks. |
 
 ## 13. Keyboard shortcuts
 
-Signex ships two shortcut profiles, **Altium** and **Classic**. Altium is
+Signex ships two shortcut profiles, **Signex Standard** and **Classic**. Signex Standard is
 the default. Change the profile, or edit any binding, in **Tools ▸
 Preferences…** (`Ctrl+,`) under the keyboard shortcuts page.
 
@@ -1106,7 +1823,7 @@ A binding written with spaces, such as `P W`, is a sequence: press `P`, release
 it, then press `W`. A binding written with `+`, such as `Ctrl+S`, is pressed
 together.
 
-Shortcuts used in this guide, in the default Altium profile:
+Shortcuts used in this guide, in the default Signex Standard profile:
 
 | Action | Shortcut |
 |---|---|
@@ -1150,3 +1867,109 @@ label. The complete lists are in the
 - Report a bug or request a feature in the
   [issue tracker](https://github.com/alplabai/signex/issues). **Help ▸ Report
   an Issue** opens it from inside the application.
+
+## 15. Preferences
+
+<!-- Preferences: the dialog (shell), Language and Annotation pages. -->
+
+**Tools ▸ Preferences…** (`Ctrl+,`) opens the Preferences dialog in its own
+window. The pages are listed on the left in four groups: **System**
+(Appearance, Language, Keyboard shortcuts), **Schematic** (Annotation,
+Editing), **Validation** (Rule Profiles) and **Library** (Distributor APIs,
+Component Classes). The search field above the list filters it by page or group
+name; the former names Theme and Graphical editing still find their pages.
+
+A change is not kept until you press **Apply** (the dialog stays open) or
+**OK** (it closes). **Cancel** drops every change. While a change is not
+applied, the footer shows **Unsaved changes** and the page it is on gets a dot
+in the list. Rule Profiles is the exception: its edits are saved to the profile
+file at once.
+
+If your preferences file cannot be read, a red banner under the title names the
+file and the reason. Until it is fixed, appearance, ERC severities, component
+classes and panel layout show their defaults and are not saved; the file itself
+is not changed. **Start a fresh preferences file** moves the unreadable file
+aside and starts a new one; **Open folder** shows the folder that holds it, so
+you can repair it by hand.
+
+**Language** sets the language of menus, panels, dialogs and messages. **Follow
+the system** uses your operating system's language and names the one it
+picks. The preview under the list shows the menu titles, three buttons and a
+message in the language you chose. The language changes in every window when
+you press Apply or OK; there is no restart. Text on the canvas (designators,
+values, net names) is your own and is never translated, and numbers always use a
+point. Developer builds also list the pseudo-locale (en-XA), which brackets and
+lengthens every string to show text that cannot be translated yet or that is cut
+off.
+
+**Annotation** sets how many undo steps one annotate run is: **One step for the
+whole project** (one Undo reverts every sheet the run changed) or **Per sheet**
+(each sheet is undone on its own). It applies to the next annotate run. What a
+pasted part is called is set on Editing (Designators on paste); the Annotation
+page links to it.
+
+<!-- Preferences: Keyboard shortcuts page (mockup row 145); belongs with section 13. -->
+### Editing keyboard shortcuts
+
+**Tools ▸ Preferences… ▸ Keyboard shortcuts** shows the active profile's
+bindings in one table sorted by command. Pick a profile in the Profile list
+(each entry says how many bindings it has); **Create** makes an editable copy
+of it, **Delete** removes a custom profile, and **Import…** / **Export…** read
+and write a profile file.
+
+When two commands share the same keys, a warning banner names them; **Show**
+lists only the clashing rows. The chips next to the search field narrow the
+table to one context (Global, Schematic, PCB, Footprint, Library) or to the
+conflicts.
+
+In a custom profile, point at a row and press **Edit**. Press the keys you want
+(Esc counts as a key), then **OK**; **Clear** starts over, **Stop** ends the
+recording and **Cancel** closes without a change. The new keys are saved when
+you press **Apply** or **OK** in Preferences.
+
+<!-- Preferences: Distributor APIs and Component Classes pages -->
+## Preferences: Distributor APIs
+
+**Preferences ▸ Library ▸ Distributor APIs** holds the accounts Signex uses to
+fetch prices, stock and part data. Keys and tokens are kept in the OS keyring,
+never in a project file. Each distributor has a card with its state:
+
+- **DigiKey** shows *Connected as …* once connected. **Connect via OAuth**
+  opens your browser to sign in and stores the refresh token in the keyring;
+  **Cancel** stops a sign-in that is still waiting. **Disconnect** removes the
+  stored token and forgets the account; if the keyring refuses, the card says
+  why and the message is also in the Messages panel. When Signex was started
+  without `SIGNEX_DIGIKEY_CLIENT_ID` the card shows *Not configured* and
+  Connect stays off until Signex is started with that variable (and
+  `SIGNEX_DIGIKEY_CLIENT_SECRET`) set.
+- **Mouser** takes an API key. **Test** checks it with one lookup and, if it
+  works, saves it in the keyring; the card then shows *Key verified*. Editing
+  the key makes it *Not tested* again.
+- **LCSC, JLCPCB** need no key.
+
+**Order of Preference**, beside the cards, decides which distributor's adapter
+is tried first when you paste a distributor URL into the Supply tab. Drag a
+row by its handle to move it; the order is saved at once to the
+`distributors.toml` file named under the list.
+
+## Preferences: Component Classes
+
+**Preferences ▸ Library ▸ Component Classes** lists the classes a new library
+starts with. They appear in the class picker of New Component and Edit
+Component; a library's own list is edited in that library.
+
+- The **Key** is what a part stores; the **Label** is what pickers show. Click
+  a cell to edit it.
+- **+ Add Class** adds a row at the bottom, marked *new*, with its key ready
+  to type.
+- Drag a row by its handle to change the order the picker shows. The filter
+  field only hides rows; it does not change the order.
+- Point at a row and press **×** to remove it.
+- A key that is empty or used by another row is marked in red with the
+  reason. Save keeps one class per key: when two rows share a key, the lower
+  row's label is kept.
+- **Reset to Defaults…** asks before it replaces the list with the default
+  classes.
+
+Nothing on this page is kept until you save Preferences; discarding drops the
+changes.

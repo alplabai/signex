@@ -15,7 +15,7 @@ use signex_types::schematic::{
 use uuid::Uuid;
 
 use super::part_swap::SwapRequest;
-use crate::app::command::{CommandArgs, CommandOutcome};
+use crate::app::command::{CommandArgs, CommandOutcome, translator};
 use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
@@ -142,7 +142,7 @@ fn board() -> PcbBoard {
     board
 }
 
-fn app_with_part(dir: &Path) -> (Signex, PathBuf, PathBuf) {
+pub(crate) fn app_with_part(dir: &Path) -> (Signex, PathBuf, PathBuf) {
     app_with(dir, board())
 }
 
@@ -294,7 +294,7 @@ fn pins_outside_one_swap_group_are_refused_and_nothing_changes() {
     );
 
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("pin swap group")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("pin swap group")),
         "{outcome:?}"
     );
     assert_eq!(
@@ -319,7 +319,7 @@ fn a_component_with_pin_swapping_off_is_refused_with_the_switch_named() {
     );
 
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("Pin Swapping")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("Pin Swapping")),
         "{outcome:?}"
     );
 }
@@ -359,4 +359,212 @@ fn swap_gates_on_pads_of_two_gates_trades_the_gates_and_one_gate_is_refused() {
         .map(|s| (s.uuid, s.unit))
         .collect();
     assert_eq!(units, [(UNIT_A, 2), (UNIT_B, 1)]);
+}
+
+fn units_on(app: &Signex, sheet: &Path) -> Vec<(Uuid, u32)> {
+    live_sheet(app, sheet)
+        .symbols
+        .iter()
+        .map(|s| (s.uuid, s.unit))
+        .collect()
+}
+
+/// `command` from the board menu on the pads at x = `a` and `b` leaves the
+/// board and the sheet as its operand handler does with `operands`, and
+/// goes through that handler (#2326 slice 6 translator).
+fn menu_swap_matches_operands(command: &str, a: f64, b: f64, operands: &[&str]) {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut menu, board, sheet) = app_with_part(dir.path());
+    click(&mut menu, a, 10.0, ClickMode::Replace);
+    click(&mut menu, b, 10.0, ClickMode::Add);
+    run(&mut menu, command);
+    assert!(
+        translator::ran(command),
+        "{command} ran its operand handler"
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board_b, sheet_b) = app_with_part(dir.path());
+    let document = format!("document={}", board_b.display());
+    let mut texts = vec![document.as_str(), "designator=U1"];
+    texts.extend_from_slice(operands);
+    let outcome = headless(&mut app, command, &texts);
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+    assert_eq!(pad_nets(&menu, &board), pad_nets(&app, &board_b));
+    assert_ne!(
+        pad_nets(&menu, &board),
+        nets(&[("1", "A"), ("2", "B"), ("3", "C"), ("4", "D")]),
+        "{command} changed the board"
+    );
+    assert_eq!(
+        live_sheet(&menu, &sheet).wires,
+        live_sheet(&app, &sheet_b).wires
+    );
+    assert_eq!(units_on(&menu, &sheet), units_on(&app, &sheet_b));
+}
+
+#[test]
+fn swap_pins_from_the_menu_is_its_operand_handler_on_the_two_pads() {
+    menu_swap_matches_operands("swap_pins", 7.0, 9.0, &["pins=1,2"]);
+}
+
+#[test]
+fn swap_gates_from_the_menu_is_its_operand_handler_on_the_gates_of_the_two_pads() {
+    menu_swap_matches_operands("swap_gates", 7.0, 11.0, &["units=1,2"]);
+}
+
+/// Pads of one gate are refused from the menu in the words they always
+/// were, before the handler is asked.
+#[test]
+fn swap_gates_from_the_menu_on_one_gate_is_refused_as_before() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board, _) = app_with_part(dir.path());
+    click(&mut app, 7.0, 10.0, ClickMode::Replace);
+    click(&mut app, 9.0, 10.0, ClickMode::Add);
+    let mark = crate::diagnostics::newest_entry_id();
+    run(&mut app, "swap_gates");
+    let said = crate::diagnostics::entries_since(mark).entries;
+    assert!(
+        said.iter().any(|e| e.message.contains("are on one gate")),
+        "{said:?}"
+    );
+    assert_eq!(
+        pad_nets(&app, &board),
+        nets(&[("1", "A"), ("2", "B"), ("3", "C"), ("4", "D")])
+    );
+}
+
+/// U1 and a second, unlinked component also named U1 at y = 40.
+fn board_with_a_twin() -> PcbBoard {
+    let mut twin = board();
+    let mut other = twin.footprints[0].clone();
+    other.uuid = Uuid::from_u128(0xf1);
+    other.position.y = 40.0;
+    other.schematic_link = None;
+    for (n, pad) in other.pads.iter_mut().enumerate() {
+        pad.uuid = Uuid::from_u128(0x21 + n as u128);
+    }
+    twin.footprints.push(other);
+    twin
+}
+
+/// The menu names the clicked component by uuid (#2326 slice 6), so a
+/// designator another component shares, or one stored as "U1 ", does not
+/// stop the swap: it acts on the clicked component, as before the translator.
+fn menu_swap_acts_on_the_clicked_component(board: PcbBoard) {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path, sheet) = app_with(dir.path(), board);
+    let one = tip(&live_sheet(&app, &sheet), UNIT_A, "1");
+    click(&mut app, 7.0, 10.0, ClickMode::Replace);
+    click(&mut app, 9.0, 10.0, ClickMode::Add);
+    run(&mut app, "swap_pins");
+    assert!(translator::ran("swap_pins"));
+    assert_eq!(
+        pad_nets(&app, &path),
+        nets(&[("1", "B"), ("2", "A"), ("3", "C"), ("4", "D")]),
+        "the clicked component's pads traded nets"
+    );
+    assert_eq!(
+        wire_start(&app, &sheet, 0x102),
+        one,
+        "and its sheet followed"
+    );
+}
+
+#[test]
+fn swap_pins_from_the_menu_on_a_shared_designator_swaps_the_clicked_component() {
+    let twin = board_with_a_twin();
+    menu_swap_acts_on_the_clicked_component(twin.clone());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path, _) = app_with(dir.path(), twin);
+    let other = app.document_state.pcb_board(&path).unwrap().footprints[1].clone();
+    click(&mut app, 7.0, 10.0, ClickMode::Replace);
+    click(&mut app, 9.0, 10.0, ClickMode::Add);
+    run(&mut app, "swap_pins");
+    assert_eq!(
+        app.document_state.pcb_board(&path).unwrap().footprints[1],
+        other,
+        "the other U1 is left as it was"
+    );
+}
+
+#[test]
+fn swap_pins_from_the_menu_on_a_reference_with_spaces_swaps_the_clicked_component() {
+    let mut spaced = board();
+    spaced.footprints[0].reference = "U1 ".into();
+    menu_swap_acts_on_the_clicked_component(spaced);
+}
+
+/// An agent names the component by uuid where its designator is shared.
+#[test]
+fn an_agent_swaps_pins_of_the_component_its_uuid_names() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board, _) = app_with(dir.path(), board_with_a_twin());
+    let document = format!("document={}", board.display());
+    let ids = format!("ids={FP}");
+
+    let outcome = headless(&mut app, "swap_pins", &[&document, &ids, "pins=1,2"]);
+
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+    assert_eq!(
+        pad_nets(&app, &board),
+        nets(&[("1", "B"), ("2", "A"), ("3", "C"), ("4", "D")])
+    );
+}
+
+/// A refusal of the operands reaches Messages in the menu's words.
+#[test]
+fn a_menu_swap_refused_by_its_operands_says_why_in_messages() {
+    use signex_engine::pcb::pad_swap::SwapKind;
+    use signex_i18n::{Translatable, ids};
+    let dir = tempfile::tempdir().unwrap();
+    let (app, _, _) = app_with_part(dir.path());
+    let unknown = Uuid::from_u128(0xdead_2326);
+    let refused = CommandOutcome::Disabled {
+        reason: Translatable::new(ids::BOARD_TARGET_UNKNOWN).arg("id", unknown.to_string()),
+    };
+    let said = crate::diagnostics::logged_count(&unknown.to_string());
+    app.say_part_swap_refusal(SwapKind::Pins, &refused);
+    assert_eq!(
+        crate::diagnostics::logged_count(&unknown.to_string()),
+        said + 1
+    );
+}
+
+/// Pad and pin 1 numbered "1 ": the menu sends the pad numbers as they are,
+/// so it swaps them as before the translator, where an agent's `pins` is
+/// trimmed.
+#[test]
+fn swap_pins_from_the_menu_on_a_pad_number_with_a_space_swaps_them() {
+    let mut spaced = board();
+    spaced.footprints[0].pads[0].number = "1 ".into();
+    let mut part = sheet();
+    if let Some(lib) = part.lib_symbols.get_mut("DUAL") {
+        lib.pins[0].pin.number = "1 ".into();
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &[SHEET]);
+    app.ui_state.first_run_tour_open = false;
+    let sheet_path = dir.path().join(SHEET);
+    open_with(&mut app.document_state, &sheet_path, part);
+    app.document_state.projects[0].data.pcb_file = Some("board.snxpcb".into());
+    let path = dir.path().join("board.snxpcb");
+    app.open_pcb_tab(path.clone(), "board".into(), spaced);
+
+    click(&mut app, 7.0, 10.0, ClickMode::Replace);
+    click(&mut app, 9.0, 10.0, ClickMode::Add);
+    run(&mut app, "swap_pins");
+
+    assert!(translator::ran("swap_pins"));
+    assert_eq!(
+        pad_nets(&app, &path),
+        nets(&[("1 ", "B"), ("2", "A"), ("3", "C"), ("4", "D")])
+    );
 }

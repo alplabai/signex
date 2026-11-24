@@ -1,6 +1,7 @@
 //! The words of the Update PCB dialog: a group's heading, a row's action,
-//! object, detail and whole sentence, why a row is blocked (short and in
-//! full) and a note, each from the catalog.
+//! detail and whole sentence, why a row is blocked (short and in full) and
+//! a note, each from the catalog. A row's object is the model's
+//! (`app/update_pcb/table.rs`), since the filter field searches it.
 
 use signex_engine::pcb::eco::{ChangeReason, EcoBlock, EcoChange, EcoNote};
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
@@ -19,18 +20,12 @@ pub(super) fn group_id(group: TableGroup) -> MessageId {
     }
 }
 
-/// The icon and word of an action.
-pub(super) fn action(action: RowAction) -> (MessageId, MessageId) {
+/// The word of an action, for its pill.
+pub(super) fn action(action: RowAction) -> MessageId {
     match action {
-        RowAction::Add => (ids::UPDATE_PCB_ACTION_ADD_ICON, ids::UPDATE_PCB_ACTION_ADD),
-        RowAction::Change => (
-            ids::UPDATE_PCB_ACTION_CHANGE_ICON,
-            ids::UPDATE_PCB_ACTION_CHANGE,
-        ),
-        RowAction::Remove => (
-            ids::UPDATE_PCB_ACTION_REMOVE_ICON,
-            ids::UPDATE_PCB_ACTION_REMOVE,
-        ),
+        RowAction::Add => ids::UPDATE_PCB_ACTION_ADD,
+        RowAction::Change => ids::UPDATE_PCB_ACTION_CHANGE,
+        RowAction::Remove => ids::UPDATE_PCB_ACTION_REMOVE,
     }
 }
 
@@ -38,25 +33,6 @@ fn net_name(i18n: &I18n, net: &Option<PadNet>) -> String {
     match net {
         Some(net) => net.name.clone(),
         None => t!(i18n, ids::UPDATE_PCB_NO_NET).into_string(),
-    }
-}
-
-/// What a row is about: a designator, a net, or a pad as `R1.2`.
-pub(super) fn object(change: &EcoChange) -> String {
-    match change {
-        EcoChange::AddFootprint { footprint } => footprint.reference.clone(),
-        EcoChange::RemoveFootprint { reference, .. }
-        | EcoChange::ChangeFootprint { reference, .. }
-        | EcoChange::SetValue { reference, .. }
-        | EcoChange::Link { reference, .. } => reference.clone(),
-        EcoChange::SetDesignator { from, .. } => from.clone(),
-        EcoChange::AddNet { name, .. } | EcoChange::RemoveNet { name, .. } => name.clone(),
-        EcoChange::RenameNet { from, .. } => from.clone(),
-        EcoChange::PadNet {
-            reference,
-            pad_number,
-            ..
-        } => format!("{reference}.{pad_number}"),
     }
 }
 
@@ -207,8 +183,8 @@ pub(super) fn change(i18n: &I18n, change: &EcoChange) -> Localized {
     }
 }
 
-/// Why a row cannot be ticked.
-pub(super) fn blocked(i18n: &I18n, why: &EcoBlock) -> Localized {
+/// Why a row cannot be ticked. Compare Board with Schematic says it too.
+pub(in crate::app::view::dialogs) fn blocked(i18n: &I18n, why: &EcoBlock) -> Localized {
     match why {
         EcoBlock::MissingFootprint(error) => t!(
             i18n,
@@ -231,16 +207,8 @@ pub(super) fn blocked(i18n: &I18n, why: &EcoBlock) -> Localized {
     }
 }
 
-/// Whether a blocked row is fixed by annotating the schematic.
-pub(super) fn needs_annotate(why: &EcoBlock) -> bool {
-    matches!(
-        why,
-        EcoBlock::NeedsAnnotation | EcoBlock::DuplicateDesignator(_)
-    )
-}
-
-/// One note under the rows.
-pub(super) fn note(i18n: &I18n, note: &EcoNote) -> Localized {
+/// One note of the Notes group. Compare Board with Schematic shows it too.
+pub(in crate::app::view::dialogs) fn note(i18n: &I18n, note: &EcoNote) -> Localized {
     match note {
         EcoNote::UnreadableSheet(_) => t!(i18n, ids::UPDATE_PCB_NOTE_UNREADABLE_SHEET),
         EcoNote::PadLosesLock {

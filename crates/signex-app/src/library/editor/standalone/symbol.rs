@@ -312,9 +312,11 @@ pub(crate) fn symbol_canvas<'a>(
     .with_graphite(tokens)
     .with_selection_filter(editor.selection_filter)
     .with_view_pending(editor.pending_view.is_some())
+    .with_tool_epoch(editor.tool_epoch)
     .with_measured_size(editor.viewport)
     .with_trackpad_pan(editor.trackpad_pan)
     .with_wheel_mode(editor.wheel_mode)
+    .with_zoom_step(editor.zoom_step)
     .with_device_px_per_logical_px(device_px_per_logical_px)
 }
 
@@ -377,6 +379,46 @@ pub(crate) fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -
             end_deg,
         },
         CanvasAction::ArcSweepRejected => SymbolEditorMsg::ArcSweepRejected,
+        CanvasAction::AddPie {
+            cx,
+            cy,
+            radius,
+            start_deg,
+            end_deg,
+        } => SymbolEditorMsg::AddPie {
+            cx,
+            cy,
+            radius,
+            start_deg,
+            end_deg,
+        },
+        CanvasAction::AddEllipticalArc {
+            cx,
+            cy,
+            radius_x,
+            radius_y,
+            start_deg,
+            end_deg,
+        } => SymbolEditorMsg::AddEllipticalArc {
+            cx,
+            cy,
+            radius_x,
+            radius_y,
+            start_deg,
+            end_deg,
+        },
+        CanvasAction::AddRoundRectangle {
+            from_x,
+            from_y,
+            to_x,
+            to_y,
+        } => SymbolEditorMsg::AddRoundRectangle {
+            from_x,
+            from_y,
+            to_x,
+            to_y,
+        },
+        CanvasAction::BezierClick { x, y } => SymbolEditorMsg::BezierClick { x, y },
         CanvasAction::AddText { x, y } => SymbolEditorMsg::AddText { x, y },
         CanvasAction::PolygonClick { x, y } => SymbolEditorMsg::PolygonClick { x, y },
         CanvasAction::PolygonCommit => SymbolEditorMsg::PolygonCommit,
@@ -454,6 +496,8 @@ fn graphic_handle_to_msg(handle: sym_state::GraphicHandle) -> GraphicHandleMsg {
         GraphicHandle::ArcEnd => GraphicHandleMsg::ArcEnd,
         GraphicHandle::TextAnchor => GraphicHandleMsg::TextAnchor,
         GraphicHandle::PolygonVertex(i) => GraphicHandleMsg::PolygonVertex(i),
+        GraphicHandle::BezierPoint(i) => GraphicHandleMsg::BezierPoint(i),
+        GraphicHandle::EllipseRadius(i) => GraphicHandleMsg::EllipseRadius(i),
     }
 }
 

@@ -43,10 +43,10 @@ fn snxpcb_older_minor_saves_as_current_newer_minor_is_read_only() {
         "{out}"
     );
 
-    let newer = SnxPcb::parse(&format!("format = \"snxpcb/1.9\"\n{PCB_ID}")).unwrap();
+    let newer = SnxPcb::parse(&format!("format = \"snxpcb/1.10\"\n{PCB_ID}")).unwrap();
     assert!(newer.is_from_newer_minor());
     let err = newer.write_string().unwrap_err();
-    assert!(err.to_string().contains("snxpcb/1.9"), "{err}");
+    assert!(err.to_string().contains("snxpcb/1.10"), "{err}");
     assert!(SnxPcb::new(newer.board.clone()).write_string().is_err());
 
     assert!(SnxPcb::parse(&format!("format = \"snxpcb/2.0\"\n{PCB_ID}")).is_err());
@@ -196,8 +196,58 @@ fn snxsch_1_1_loads_and_the_old_token_upgrades_on_save() {
     assert!(!old.is_from_newer_minor());
     let out = old.write_string().unwrap();
     assert!(out.starts_with("format = \"snxsch/1.1\""), "{out}");
-    assert!(version::is_newer_minor("snxsch/1.1", "snxsch/1"));
-    assert!(version::refuse_save("snxsch/1.1", "snxsch/1").is_err());
+    let one_zero = FormatVersion {
+        current: "snxsch/1",
+        readable: &["snxsch/1"],
+        ..SNXSCH_VERSION
+    };
+    assert!(one_zero.is_newer_minor("snxsch/1.1"));
+    assert!(one_zero.refuse_save("snxsch/1.1").is_err());
+}
+
+/// #2207: every `.snxsch` / `.snxpcb` token this build reads loads, a save
+/// writes the current one (`snxsch/1.1` for a sheet without No-ERC rule
+/// lists, `snxsch/1.2` and `1.3` included), a newer major is refused naming it, and a
+/// file with no token is refused.
+#[test]
+fn every_readable_token_loads_and_saves_as_current() {
+    for token in SNXSCH_VERSION.readable {
+        let file = SnxSchematic::parse(&format!("format = \"{token}\"\n{SCH_ID}")).unwrap();
+        assert!(!file.is_from_newer_minor(), "{token}");
+        let out = file.write_string().unwrap();
+        assert!(
+            out.starts_with(&format!("format = \"{SNXSCH_FORMAT_V1}\"")),
+            "{out}"
+        );
+    }
+    for token in SNXPCB_VERSION.readable {
+        let file = SnxPcb::parse(&format!("format = \"{token}\"\n{PCB_ID}")).unwrap();
+        assert!(!file.is_from_newer_minor(), "{token}");
+        let out = file.write_string().unwrap();
+        assert!(
+            out.starts_with(&format!("format = \"{SNXPCB_FORMAT_V1}\"")),
+            "{out}"
+        );
+    }
+    let err = SnxPcb::parse(&format!("format = \"snxpcb/2\"\n{PCB_ID}")).unwrap_err();
+    assert!(err.to_string().contains("snxpcb/2"), "{err}");
+    assert!(err.to_string().contains("newer Signex"), "{err}");
+    let err = SnxSchematic::parse(SCH_ID).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            FormatError::Version(FormatVersionError::Missing { .. })
+        ),
+        "{err:?}"
+    );
+    let err = SnxPcb::parse(PCB_ID).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            FormatError::Version(FormatVersionError::Missing { .. })
+        ),
+        "{err:?}"
+    );
 }
 
 /// #2172 guard: the sheet's and the board's own uuid is the first stored key
@@ -218,4 +268,43 @@ fn a_sheet_and_a_board_keep_their_uuid_across_write_and_parse() {
     let text = SnxPcb::new(board).write_string().unwrap();
     assert!(text.contains(&format!("pcb_id = \"{board_id}\"")));
     assert_eq!(SnxPcb::parse(&text).unwrap().board.uuid, board_id);
+}
+
+/// Schematic Refinement content writes `snxsch/1.3`: this build reads and
+/// edits a 1.3 file, a 1.5 file opens read-only and every save of it is
+/// refused, and a build that knew only 1.2 sees 1.3 as a newer minor.
+#[test]
+fn snxsch_1_3_is_read_and_1_5_opens_read_only() {
+    assert_eq!(SNXSCH_VERSION.current, SNXSCH_FORMAT_BUS_STYLE);
+    assert!(SNXSCH_VERSION.readable.contains(&"snxsch/1.3"));
+    let file = SnxSchematic::parse(&format!("format = \"snxsch/1.3\"\n{SCH_ID}")).unwrap();
+    assert!(!file.is_from_newer_minor());
+    assert!(!file.sheet.is_read_only());
+    // Nothing of 1.3 in it, so a save writes the lowest token again.
+    let out = file.write_string().unwrap();
+    assert!(out.starts_with("format = \"snxsch/1.1\""), "{out}");
+
+    let newer = SnxSchematic::parse(&format!("format = \"snxsch/1.5\"\n{SCH_ID}")).unwrap();
+    assert!(newer.is_from_newer_minor());
+    assert!(newer.sheet.is_read_only());
+    let err = newer.write_string().unwrap_err();
+    assert!(err.to_string().contains("snxsch/1.5"), "{err}");
+    assert!(
+        SnxSchematic::new(newer.sheet.clone())
+            .write_string()
+            .is_err(),
+        "re-wrapped, the source is remembered"
+    );
+
+    let one_two = FormatVersion {
+        current: SNXSCH_FORMAT_NO_ERC_RULES,
+        readable: &["snxsch/1", SNXSCH_FORMAT_V1, SNXSCH_FORMAT_NO_ERC_RULES],
+        ..SNXSCH_VERSION
+    };
+    assert_eq!(
+        one_two.read(Some(SNXSCH_FORMAT_REFINEMENT)).as_deref(),
+        Ok(SNXSCH_FORMAT_REFINEMENT)
+    );
+    assert!(one_two.is_newer_minor(SNXSCH_FORMAT_REFINEMENT));
+    assert!(one_two.refuse_save(SNXSCH_FORMAT_REFINEMENT).is_err());
 }

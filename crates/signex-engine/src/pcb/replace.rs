@@ -233,7 +233,8 @@ fn check_text(old: &BoardText, new: &BoardText) -> Result<(), BoardCommandError>
 }
 
 /// A dimension's line width and text height are positive numbers; a
-/// changed layer takes text.
+/// changed layer is any layer the board names, copper included (Caner,
+/// 2026-11-21).
 fn check_dimension(old: &LinearDimension, new: &LinearDimension) -> Result<(), BoardCommandError> {
     if new.line_width != old.line_width {
         check_positive(new.line_width, "dimension line width")?;
@@ -241,7 +242,10 @@ fn check_dimension(old: &LinearDimension, new: &LinearDimension) -> Result<(), B
     if new.text_height != old.text_height {
         check_positive(new.text_height, "dimension text height")?;
     }
-    check_text_layer(&old.layer, &new.layer)
+    if new.layer != old.layer && parse_pcb_layer(&new.layer).is_none() {
+        return Err(BoardCommandError::UnknownLayer(new.layer.clone()));
+    }
+    Ok(())
 }
 
 fn check_text_layer(old: &str, new: &str) -> Result<(), BoardCommandError> {

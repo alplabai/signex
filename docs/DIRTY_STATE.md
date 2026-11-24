@@ -58,7 +58,9 @@ copy, an in-memory rewrite) can never look clean. It is set only where the
 content is known to equal the file: `Engine::open`, `open_schematic_tab`
 (a sheet read from disk), a History restore, and a landed save whose
 revision still matches (`Engine::mark_saved`, called from
-`mark_document_clean` and `finish_save_as`). After every history step
+`mark_document_clean` and from the Save As revision check in
+`apply_saved_as_to_active`, run through `rekey_active_schematic`). After
+every history step
 (edit, undo, redo; `sync_history_dirty`) the sheet is dirty unless
 `Engine::is_at_save_point()` holds, so undoing the only edit since the save
 is clean again and Redo is dirty again.
@@ -88,8 +90,9 @@ when no history step can reproduce the file any more:
   group step;
 - a save whose snapshot the document had already moved past (an edit, or
   an Undo back to an older state, while the write ran): `mark_saved` and
-  `finish_save_as` see a different revision, forget the point and leave the
-  sheet dirty, even if the Undo had cleared it meanwhile.
+  the Save As revision check in `apply_saved_as_to_active` see a different
+  revision, forget the point and leave the sheet dirty, even if the Undo had
+  cleared it meanwhile.
 
 Who sets the save point (#1854):
 
@@ -97,13 +100,14 @@ Who sets the save point (#1854):
   `Engine::mark_saved`. Where the engine at the path is gone or is not known
   to equal the file, `clear_document_dirty` clears the marks and leaves the
   save point alone: Discard All, an undo that drops a parked engine, a
-  rolled back re-prefix, and the Save As old key and the unopened-sheet
-  Annotate write (no engine at that key). A re-prefix rollback whose
+  rolled back re-prefix or reset, and the Save As old key (no engine at
+  that key). A rollback whose
   `discard_undo_group_top` fails or finds the run is not on top leaves that
   sheet dirty and says so in Messages.
 - A sheet read from disk or restored is marked saved only when the engine
-  was just installed (`install_active_engine` / `install_schematic_at`
-  return whether it was); a failed install cannot mark the older engine.
+  was just installed (`DocumentState::install_active` /
+  `replace_engine_at` in `app/state/document_load/` say whether it was); a
+  failed install cannot mark the older engine.
 - History-recorded edits outside the mark paths go through
   `mark_history_edit_dirty`: the non-active sheets of a project-wide Replace
   and a recorded library update on a parked sheet, so undo back to the save

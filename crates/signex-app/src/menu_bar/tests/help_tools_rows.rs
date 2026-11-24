@@ -109,12 +109,16 @@ fn part_rows_are_greyed_outside_a_symbol_editor() {
 /// or footprint editor inside an open library, the one case its handler acts in.
 #[test]
 fn document_options_is_greyed_outside_a_library_editor() {
-    for app in [
-        bare_app(),
-        one_symbol_selected(),
-        symbol_editor_app(),
-        footprint_editor_app(),
-    ] {
+    // One app at a time: four `Signex` values at once overflow the test
+    // thread's stack.
+    let apps: [fn() -> Signex; 4] = [
+        bare_app,
+        one_symbol_selected,
+        symbol_editor_app,
+        footprint_editor_app,
+    ];
+    for make in apps {
+        let app = make();
         assert!(!row_is_live(&app, "Tools/Document Options..."));
     }
 }
@@ -216,8 +220,8 @@ fn up_hierarchy_is_greyed_on_a_top_level_sheet() {
 fn stub_rows_are_not_live() {
     let app = one_symbol_selected();
     for path in [
-        "Window/Tile Horizontally",
-        "Window/Tile Vertically",
+        "View/Window/Tile Horizontally",
+        "View/Window/Tile Vertically",
         "Tools/Annotation/Back Annotate Schematics...",
         "Tools/Annotation/Number Schematic Sheets...",
     ] {
@@ -246,4 +250,18 @@ fn assign_footprints_and_net_inspector_are_live() {
     let (bare, _) = crate::app::Signex::new();
     assert!(!row_is_live(&bare, "Tools/Assign Footprints"));
     assert!(row_is_live(&bare, "View/Net Inspector"));
+}
+
+/// Tools ▸ Repair Pin Junctions (2026-11-19): greyed with no sheet in view;
+/// on a sheet with a bare pin touch it adds the dot.
+#[test]
+fn repair_pin_junctions_is_a_live_tools_row() {
+    const ROW: &str = "Tools/Repair Pin Junctions";
+    let (bare, _) = crate::app::Signex::new();
+    assert!(!row_is_live(&bare, ROW));
+    let mut app = app_with(crate::app::pin_junction_repair::tests::sheet_with_bare_tap());
+    assert!(row_is_live(&app, ROW));
+    assert!(doc(&app).junctions.is_empty());
+    let _ = click(&mut app, ROW);
+    assert_eq!(doc(&app).junctions.len(), 1, "the bare touch got its dot");
 }

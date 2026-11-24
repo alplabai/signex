@@ -1,370 +1,378 @@
-//! BOM preview — the Properties sidebar (General / Columns tabs) plus the
-//! grouping / format / toggle / variant / column control rows it consumes.
-//! Extracted from `dialogs/bom.rs` (ADR-0001, issue #164) as pure code
-//! motion — the child-push order inside every row/column is preserved
-//! byte-for-byte, so the rendered sidebar is pixel-identical.
+//! BOM dialog — the Properties sidebar: the General / Columns / Rules
+//! switch over the active pane. General holds the export settings (the
+//! not-fitted option and the format); Columns picks and orders the
+//! exported columns; Rules is in `rules`.
 
 use super::super::*;
-use iced::widget::{Column, Space, column, container, row, scrollable};
+use iced::widget::{Column, Row, Space, column, container, mouse_area, row, scrollable};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
-use signex_i18n::{UserText, ids, t};
-use signex_widgets::{Label, button, raw, text};
+use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
+use signex_output::{BomColumn, BomFormat};
+use signex_types::theme::ThemeTokens;
+use signex_widgets::{Label, SegmentedStyle, button, raw, segmented, text};
 
-use super::super::widgets::section_header;
+use super::super::graphite_annotate::checkbox_pip;
+use crate::app::state::{BomPreviewState, BomSidebarTab};
+use crate::styles::tokens::resolve;
+use crate::styles::{ChromeMetrics, HAIRLINE, Radii, Spacing, TypeScale, ti};
 
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
+
+/// Height of a checkbox row: a list row.
+const CHECK_ROW_H: f32 = ChromeMetrics::DEFAULT.row;
+/// Height of a Columns-tab row, as drawn.
+const COLUMN_ROW_H: f32 = 28.0;
+/// Width of the key column of the Export Options form, as drawn.
+const FORM_KEY_W: f32 = 56.0;
+/// Gap above a section heading, as drawn (the first one sits closer).
+const SECTION_GAP: f32 = SP.xl + SP.s;
+
+/// The standard columns the Columns tab offers, in its order.
+static COLUMN_OPTIONS: [(BomColumn, MessageId); 14] = [
+    (BomColumn::Name, ids::BOM_COLUMN_NAME),
+    (BomColumn::Description, ids::BOM_COLUMN_DESCRIPTION),
+    (BomColumn::Designator, ids::BOM_COLUMN_DESIGNATOR),
+    (BomColumn::Value, ids::BOM_COLUMN_VALUE),
+    (BomColumn::Footprint, ids::BOM_COLUMN_FOOTPRINT),
+    (BomColumn::LibRef, ids::BOM_COLUMN_LIB_REF),
+    (BomColumn::Qty, ids::BOM_COLUMN_QTY),
+    // Cached library prices (#1023).
+    (BomColumn::UnitPrice, ids::BOM_COLUMN_UNIT_PRICE),
+    (BomColumn::BuyQty, ids::BOM_COLUMN_BUY_QTY),
+    (BomColumn::ExtendedPrice, ids::BOM_COLUMN_EXT_PRICE),
+    (BomColumn::Currency, ids::BOM_COLUMN_CURRENCY),
+    (BomColumn::Stock, ids::BOM_COLUMN_STOCK),
+    (BomColumn::Distributor, ids::BOM_COLUMN_DISTRIBUTOR),
+    (BomColumn::PriceAge, ids::BOM_COLUMN_PRICE_AGE),
+];
+
+/// Segmented-control colours of the sidebar.
+pub(super) fn segmented_style(tokens: &ThemeTokens) -> SegmentedStyle {
+    let r = resolve(tokens);
+    r.segmented(TS.body).fill_width(true)
+}
+
+/// An uppercase section heading with a soft rule under it, and an optional
+/// trailing count pill. `first` sits closer to what is above it.
+pub(super) fn section<'a>(
+    i18n: &I18n,
+    label: MessageId,
+    pill: Option<Element<'a, Message>>,
+    first: bool,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let r = resolve(tokens);
+    let words = t!(i18n, label).into_string();
+    // raw: catalog text already rendered, then upper-cased for the locale.
+    let mut line: Row<Element<'a, Message>> = Row::new().align_y(iced::Alignment::Center).push(
+        text(raw(i18n.upper_for_display(&words)))
+            .size(TS.section)
+            .style(crate::styles::section_label(tokens))
+            .width(Length::Fill)
+            .boxed(),
+    );
+    if let Some(pill) = pill {
+        line = line.push(pill);
+    }
+    column![
+        Space::new().height(if first { SP.m } else { SECTION_GAP }),
+        line,
+        Space::new().height(SP.s),
+        container(Space::new())
+            .width(Length::Fill)
+            .height(HAIRLINE)
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(r.line_soft)),
+                ..container::Style::default()
+            }),
+        Space::new().height(SP.xs),
+    ]
+    .boxed()
+}
+
+/// A checkbox row: the box and its words, the whole row clickable.
+pub(super) fn check_row<'a>(
+    label: impl Into<Label<'a>>,
+    on: bool,
+    on_press: Message,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let ink = ti(tokens.text);
+    button(
+        row![
+            checkbox_pip(tokens, on),
+            text(label).size(TS.body).color(ink).width(Length::Fill),
+        ]
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Center),
+    )
+    .on_press(on_press)
+    .padding(0)
+    .width(Length::Fill)
+    .height(CHECK_ROW_H)
+    .style(move |_: &Theme, _: button::Status| button::Style {
+        text_color: ink,
+        ..button::Style::default()
+    })
+    .boxed()
+}
+
+/// A bordered list of rows (the drawn `cardlist`).
+pub(super) fn card_list<'a>(
+    rows: Vec<Element<'a, Message>>,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let edge = ti(tokens.border);
+    container(Column::with_children(rows))
+        .width(Length::Fill)
+        .clip(true)
+        .style(move |_: &Theme| container::Style {
+            border: Border {
+                width: HAIRLINE,
+                color: edge,
+                radius: Radii::GRAPHITE.button.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// A muted caption line.
+pub(super) fn caption<'a>(words: Localized, tokens: &ThemeTokens) -> Element<'a, Message> {
+    text(words)
+        .size(TS.caption)
+        .color(resolve(tokens).ink4)
+        .boxed()
+}
 
 impl Signex {
-    /// Build the Properties sidebar column (tab strip + active pane) for the
-    /// active preview. Returns the sidebar `column` the modal drops into its
-    /// main row.
+    /// The Properties sidebar: the tab switch over the active pane.
     pub(super) fn bom_sidebar(&self) -> Element<'_, Message> {
-        use signex_output::{BomColumn, BomFormat, BomGrouping};
         let Some(ref preview) = self.document_state.bom_preview else {
             return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
-        let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
-        // Pill style mirrors the main-app right-side Properties
-        // panel: subtle theme-border at rest, theme-accent border
-        // when active (orange on Altium Dark, cyan on Alp Lab,
-        // etc.). Active fill is the same accent at 15 % alpha so
-        // the pill reads as "selected" without being a hard solid
-        // fill that fights the theme.
-        let accent_c = crate::styles::ti(tokens.accent);
-        let hover_c = crate::styles::tokens::hover_overlay(tokens);
-        let field_c = crate::styles::tokens::resolve(tokens).field;
         let i18n = self.ui_state.i18n.as_ref();
-        let row_pill = |label: Label<'static>, on: bool, msg: Message| -> Element<'_, Message> {
-            button(text(label).size(TS.body).color(text_c))
-                .padding([SP.s, 10.0])
-                .on_press(msg)
-                .style(move |_: &Theme, status: button::Status| {
-                    let bg = match (on, status) {
-                        (true, _) => Color {
-                            a: 0.15,
-                            ..accent_c
-                        },
-                        (false, button::Status::Hovered | button::Status::Pressed) => hover_c,
-                        _ => field_c,
-                    };
-                    let border_color = if on { accent_c } else { border_c };
-                    button::Style {
-                        background: Some(Background::Color(bg)),
-                        border: Border {
-                            width: 1.0,
-                            radius: 3.0.into(),
-                            color: border_color,
-                            ..Border::default()
-                        },
-                        text_color: text_c,
-                        ..button::Style::default()
-                    }
-                })
-                .boxed()
-        };
-
-        let grouping_row: Element<'_, Message> = row![
-            text(t!(i18n, ids::BOM_GROUPING))
-                .size(TS.body)
-                .color(text_muted),
-            Space::new().width(8),
-            row_pill(
-                t!(i18n, ids::BOM_GROUPING_GROUPED).into(),
-                preview.options.grouping == BomGrouping::Grouped,
-                Message::BomPreview(BomPreviewMsg::SetGrouping(BomGrouping::Grouped)),
+        let tabs: [(BomSidebarTab, Label<'static>); 3] = [
+            (
+                BomSidebarTab::General,
+                t!(i18n, ids::BOM_TAB_GENERAL).into(),
             ),
-            Space::new().width(4),
-            row_pill(
-                t!(i18n, ids::BOM_GROUPING_UNGROUPED).into(),
-                preview.options.grouping == BomGrouping::Ungrouped,
-                Message::BomPreview(BomPreviewMsg::SetGrouping(BomGrouping::Ungrouped)),
+            (
+                BomSidebarTab::Columns,
+                t!(i18n, ids::BOM_TAB_COLUMNS).into(),
             ),
-            Space::new().width(4),
-            row_pill(
-                t!(i18n, ids::BOM_GROUPING_FLAT).into(),
-                preview.options.grouping == BomGrouping::Flat,
-                Message::BomPreview(BomPreviewMsg::SetGrouping(BomGrouping::Flat)),
-            ),
-        ]
-        .align_y(iced::Alignment::Center)
-        .boxed();
-
-        let format_row: Element<'_, Message> = row![
-            text(t!(i18n, ids::BOM_FORMAT))
-                .size(TS.body)
-                .color(text_muted),
-            Space::new().width(8),
-            row_pill(
-                t!(i18n, ids::BOM_FORMAT_CSV).into(),
-                preview.options.format == BomFormat::Csv,
-                Message::BomPreview(BomPreviewMsg::SetFormat(BomFormat::Csv)),
-            ),
-            Space::new().width(4),
-            row_pill(
-                t!(i18n, ids::BOM_FORMAT_XLSX).into(),
-                preview.options.format == BomFormat::Xlsx,
-                Message::BomPreview(BomPreviewMsg::SetFormat(BomFormat::Xlsx)),
-            ),
-            Space::new().width(4),
-            row_pill(
-                t!(i18n, ids::BOM_FORMAT_HTML).into(),
-                preview.options.format == BomFormat::Html,
-                Message::BomPreview(BomPreviewMsg::SetFormat(BomFormat::Html)),
-            ),
-        ]
-        .align_y(iced::Alignment::Center)
-        .boxed();
-
-        let toggle_row: Element<'_, Message> = row![
-            row_pill(
-                t!(i18n, ids::BOM_INCLUDE_DNP).into(),
-                preview.options.include_dnp,
-                Message::BomPreview(BomPreviewMsg::SetIncludeDnp(!preview.options.include_dnp)),
-            ),
-            Space::new().width(4),
-            row_pill(
-                t!(i18n, ids::BOM_INCLUDE_NOT_FITTED).into(),
-                preview.options.include_not_fitted,
-                Message::BomPreview(BomPreviewMsg::SetIncludeNotFitted(
-                    !preview.options.include_not_fitted
-                )),
-            ),
-        ]
-        .align_y(iced::Alignment::Center)
-        .boxed();
-
-        // Variant picker — only shown when the active project
-        // declares variants. "Base" is the no-override view.
-        let variant_row: Element<'_, Message> = if preview.variants.is_empty() {
-            Space::new().boxed()
-        } else {
-            // "Base" is compared as text below; a variant can be named so.
-            let active_label = preview
-                .options
-                .active_variant
-                .clone()
-                .unwrap_or_else(|| "Base".to_string());
-            let mut r = row![
-                text(t!(i18n, ids::BOM_VARIANT))
-                    .size(TS.body)
-                    .color(text_muted),
-                Space::new().width(8),
-                row_pill(
-                    t!(i18n, ids::BOM_VARIANT_BASE).into(),
-                    preview.options.active_variant.is_none(),
-                    Message::BomPreview(BomPreviewMsg::SetVariant(None)),
-                ),
-            ]
-            .align_y(iced::Alignment::Center);
-            for variant in &preview.variants {
-                let is_active = active_label.as_str() == variant.as_str();
-                r = r.push(Space::new().width(4).boxed());
-                r = r.push(row_pill(
-                    UserText::new(variant.clone()).into(),
-                    is_active,
-                    Message::BomPreview(BomPreviewMsg::SetVariant(Some(variant.clone()))),
-                ));
-            }
-            r.boxed()
-        };
-        // Column picker — toggles for the standard column set + any
-        // custom-field column discovered in the rolled-up rows. The
-        // toggle state mirrors `preview.options.columns`; clicking
-        // adds/removes from that Vec via `handle_bom_preview_toggle_column`.
-        let mut custom_keys: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-        for r in &preview.table.rows {
-            for k in r.custom.keys() {
-                custom_keys.insert(k.clone());
-            }
-        }
-        let column_options: Vec<(BomColumn, signex_i18n::MessageId)> = vec![
-            (BomColumn::Name, ids::BOM_COLUMN_NAME),
-            (BomColumn::Description, ids::BOM_COLUMN_DESCRIPTION),
-            (BomColumn::Designator, ids::BOM_COLUMN_DESIGNATOR),
-            (BomColumn::Value, ids::BOM_COLUMN_VALUE),
-            (BomColumn::Footprint, ids::BOM_COLUMN_FOOTPRINT),
-            (BomColumn::LibRef, ids::BOM_COLUMN_LIB_REF),
-            (BomColumn::Qty, ids::BOM_COLUMN_QTY),
-            // Cached library prices (#1023).
-            (BomColumn::UnitPrice, ids::BOM_COLUMN_UNIT_PRICE),
-            (BomColumn::BuyQty, ids::BOM_COLUMN_BUY_QTY),
-            (BomColumn::ExtendedPrice, ids::BOM_COLUMN_EXT_PRICE),
-            (BomColumn::Currency, ids::BOM_COLUMN_CURRENCY),
-            (BomColumn::Stock, ids::BOM_COLUMN_STOCK),
-            (BomColumn::Distributor, ids::BOM_COLUMN_DISTRIBUTOR),
-            (BomColumn::PriceAge, ids::BOM_COLUMN_PRICE_AGE),
+            (BomSidebarTab::Rules, t!(i18n, ids::BOM_TAB_RULES).into()),
         ];
-        // Properties sidebar — General / Columns tabs, collapsible
-        // sections inside.
-        use crate::app::state::BomSidebarTab;
-        let sidebar_tab = preview.sidebar_tab;
-        let tab_pill =
-            |label: signex_i18n::MessageId, target: BomSidebarTab| -> Element<'_, Message> {
-                let on = sidebar_tab == target;
-                button(text(t!(i18n, label)).size(TS.body).color(text_c))
-                    .padding([SP.s, SP.l])
-                    .on_press(Message::BomPreview(BomPreviewMsg::SetSidebarTab(target)))
-                    .style(move |_: &iced::Theme, status: button::Status| {
-                        let bg = match (on, status) {
-                            (true, _) => iced::Color {
-                                a: 0.15,
-                                ..accent_c
-                            },
-                            (false, button::Status::Hovered) => hover_c,
-                            _ => iced::Color::TRANSPARENT,
-                        };
-                        let border_color = if on { accent_c } else { border_c };
-                        button::Style {
-                            background: Some(iced::Background::Color(bg)),
-                            border: iced::Border {
-                                width: 1.0,
-                                radius: 3.0.into(),
-                                color: border_color,
-                                ..iced::Border::default()
-                            },
-                            text_color: text_c,
-                            ..button::Style::default()
-                        }
-                    })
-                    .boxed()
-            };
-
-        let general_pane: Element<'_, Message> = column![
-            section_header(t!(i18n, ids::BOM_SECTION_ITEMS), text_muted),
-            container(
-                column![
-                    grouping_row,
-                    Space::new().height(6),
-                    toggle_row,
-                    Space::new().height(6),
-                    variant_row,
-                ]
-                .spacing(0),
-            )
-            .padding([SP.m, SP.l]),
-            Space::new().height(8),
-            section_header(t!(i18n, ids::BOM_SECTION_EXPORT), text_muted),
-            container(column![format_row].spacing(0),).padding([SP.m, SP.l]),
+        let words = t!(i18n, ids::BOM_PROPERTIES).into_string();
+        // raw: catalog text already rendered, then upper-cased for the locale.
+        let heading = text(raw(i18n.upper_for_display(&words)))
+            .size(TS.section)
+            .style(crate::styles::section_label(tokens));
+        let top = column![
+            heading,
+            segmented(tabs, preview.sidebar_tab, segmented_style(tokens), |tab| {
+                Message::BomPreview(BomPreviewMsg::SetSidebarTab(tab))
+            }),
         ]
-        .spacing(0)
-        .boxed();
-
-        // Columns tab — vertical list with a tick checkbox per row,
-        // mirroring Altium's Columns table. Same standard column
-        // set + any custom-field column discovered in the rolled
-        // rows. Each row is clickable and toggles via
-        // `Message::BomPreview(BomPreviewMsg::ToggleColumn)` — the existing handler
-        // already does add/remove on the Vec.
-        let mut col_list: Column<Element<'_, Message>> = Column::new().spacing(0);
-        col_list = col_list.push(section_header(
-            t!(i18n, ids::BOM_SECTION_COLUMNS),
-            text_muted,
-        ));
-        let mut list_items: Column<Element<'_, Message>> = Column::new().spacing(0);
-        let render_col_row =
-            |col: BomColumn, label: Label<'static>, on: bool| -> Element<'_, Message> {
-                let pip_bg = if on {
-                    Color::from_rgb(0.00, 0.47, 0.84)
-                } else {
-                    field_c
-                };
-                // raw: a tick glyph (or a blank of the same size), not language.
-                let inner = if on {
-                    text(raw("\u{2713}")).size(TS.caption).color(Color::WHITE)
-                } else {
-                    text(raw(" ")).size(TS.caption)
-                };
-                let pip = container(inner)
-                    .width(14)
-                    .height(14)
-                    .align_x(iced::alignment::Horizontal::Center)
-                    .align_y(iced::alignment::Vertical::Center)
-                    .style(move |_: &Theme| container::Style {
-                        background: Some(Background::Color(pip_bg)),
-                        border: Border {
-                            width: 1.0,
-                            radius: 2.0.into(),
-                            color: border_c,
-                            ..Border::default()
-                        },
-                        ..container::Style::default()
-                    });
-                button(
-                    row![
-                        pip,
-                        Space::new().width(8),
-                        text(label).size(TS.body).color(text_c),
-                        Space::new().width(Length::Fill),
-                    ]
-                    .align_y(iced::Alignment::Center),
-                )
-                .on_press(Message::BomPreview(BomPreviewMsg::ToggleColumn(col)))
-                .padding([3.0, SP.l])
-                .width(Length::Fill)
-                .style(move |_: &Theme, status: button::Status| {
-                    let bg = match status {
-                        button::Status::Hovered | button::Status::Pressed => {
-                            Some(Background::Color(hover_c))
-                        }
-                        _ => None,
-                    };
-                    button::Style {
-                        background: bg,
-                        border: Border::default(),
-                        text_color: text_c,
-                        ..button::Style::default()
-                    }
-                })
-                .boxed()
-            };
-        for (col, label) in &column_options {
-            let on = preview.options.columns.iter().any(|c| c == col);
-            list_items = list_items.push(render_col_row(col.clone(), t!(i18n, *label).into(), on));
-        }
-        for key in &custom_keys {
-            let col = BomColumn::Custom(key.clone());
-            let on = preview.options.columns.iter().any(|c| c == &col);
-            list_items =
-                list_items.push(render_col_row(col, UserText::new(key.clone()).into(), on));
-        }
-        col_list = col_list.push(container(list_items).padding([SP.s, 0.0]).boxed());
-        let columns_pane: Element<'_, Message> = col_list.boxed();
-
-        let sidebar_body: Element<'_, Message> = match sidebar_tab {
-            BomSidebarTab::General => general_pane,
-            BomSidebarTab::Columns => columns_pane,
+        .spacing(SP.s)
+        .padding(iced::Padding {
+            top: 10.0,
+            right: SP.l,
+            bottom: SP.s,
+            left: SP.l,
+        });
+        let pane: Element<'_, Message> = match preview.sidebar_tab {
+            BomSidebarTab::General => general_pane(preview, i18n, tokens),
+            BomSidebarTab::Columns => columns_pane(preview, i18n, tokens),
             BomSidebarTab::Rules => self.bom_rules_pane(),
         };
-        let sidebar = column![
-            container(
-                text(t!(i18n, ids::BOM_PROPERTIES))
-                    .size(TS.title)
-                    .color(text_c)
-            )
-            .padding([10.0, SP.l])
-            .width(Length::Fill),
-            container(
-                row![
-                    tab_pill(ids::BOM_TAB_GENERAL, BomSidebarTab::General),
-                    Space::new().width(4),
-                    tab_pill(ids::BOM_TAB_COLUMNS, BomSidebarTab::Columns),
-                    Space::new().width(4),
-                    tab_pill(ids::BOM_TAB_RULES, BomSidebarTab::Rules),
-                ]
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([0.0, SP.l]),
-            Space::new().height(8),
-            scrollable(sidebar_body)
-                .width(Length::Fill)
-                .height(Length::Fill),
+        column![
+            top,
+            scrollable(container(pane).padding(iced::Padding {
+                top: 0.0,
+                right: SP.l,
+                bottom: SP.l,
+                left: SP.l,
+            }))
+            .direction(crate::styles::thin_vertical())
+            .style(crate::styles::scrollbar_style(tokens))
+            .width(Length::Fill)
+            .height(Length::Fill),
         ]
-        .spacing(0);
-        sidebar.boxed()
+        .spacing(0)
+        .boxed()
+    }
+}
+
+/// General: BOM Items (the one not-fitted option) and Export Options (the
+/// format).
+fn general_pane<'a>(
+    preview: &BomPreviewState,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let include = preview.includes_not_fitted();
+    let formats: [(BomFormat, Label<'static>); 3] = [
+        (BomFormat::Csv, t!(i18n, ids::BOM_FORMAT_CSV).into()),
+        (BomFormat::Xlsx, t!(i18n, ids::BOM_FORMAT_XLSX).into()),
+        (BomFormat::Html, t!(i18n, ids::BOM_FORMAT_HTML).into()),
+    ];
+    let format_row = row![
+        text(t!(i18n, ids::BOM_FORMAT))
+            .size(TS.body)
+            .color(resolve(tokens).ink3)
+            .width(FORM_KEY_W),
+        segmented(
+            formats,
+            preview.options.format,
+            segmented_style(tokens),
+            |f| Message::BomPreview(BomPreviewMsg::SetFormat(f)),
+        ),
+    ]
+    .spacing(SP.m)
+    .align_y(iced::Alignment::Center);
+    column![
+        section(i18n, ids::BOM_SECTION_ITEMS, None, true, tokens),
+        check_row(
+            t!(i18n, ids::BOM_INCLUDE_NOT_FITTED),
+            include,
+            Message::BomPreview(BomPreviewMsg::NotFittedIncludedToggled(!include)),
+            tokens,
+        ),
+        section(i18n, ids::BOM_SECTION_EXPORT, None, false, tokens),
+        format_row,
+    ]
+    .spacing(0)
+    .boxed()
+}
+
+/// Columns: the exported (ticked) columns in their order, then the others;
+/// a ticked row's grip drags it to a new place, a click ticks or clears it.
+fn columns_pane<'a>(
+    preview: &BomPreviewState,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let r = resolve(tokens);
+    let ink = ti(tokens.text);
+    // Custom-field columns found in the rolled-up rows.
+    let mut custom_keys: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+    for row in &preview.table.rows {
+        custom_keys.extend(row.custom.keys().map(String::as_str));
+    }
+    let name_of = |col: &BomColumn| -> Label<'static> {
+        match COLUMN_OPTIONS.iter().find(|(c, _)| c == col) {
+            Some((_, id)) => t!(i18n, *id).into(),
+            None => match col {
+                BomColumn::Custom(key) => UserText::new(key.clone()).into(),
+                // raw: a column name from signex-output (#2060).
+                other => raw(other.header().to_string()),
+            },
+        }
+    };
+    let mut rows: Vec<Element<'a, Message>> = Vec::new();
+    for (idx, col) in preview.options.columns.iter().enumerate() {
+        rows.push(column_row(
+            preview,
+            name_of(col),
+            Some(idx),
+            col.clone(),
+            ink,
+            tokens,
+        ));
+    }
+    let unticked = COLUMN_OPTIONS
+        .iter()
+        .map(|(col, _)| col.clone())
+        .chain(
+            custom_keys
+                .iter()
+                .map(|k| BomColumn::Custom((*k).to_owned())),
+        )
+        .filter(|col| !preview.options.columns.contains(col));
+    for col in unticked {
+        rows.push(column_row(
+            preview,
+            name_of(&col),
+            None,
+            col,
+            r.ink4,
+            tokens,
+        ));
+    }
+    column![
+        Space::new().height(SP.m),
+        caption(t!(i18n, ids::BOM_COLUMNS_HINT), tokens),
+        Space::new().height(SP.s),
+        card_list(rows, tokens),
+    ]
+    .spacing(0)
+    .boxed()
+}
+
+/// One Columns-tab row. `slot` is the column's place among the exported
+/// ones (`None`: not exported). A press on the grip arms the same drag the
+/// header uses; releasing over another exported row drops it there.
+fn column_row<'a>(
+    preview: &BomPreviewState,
+    name: Label<'static>,
+    slot: Option<usize>,
+    col: BomColumn,
+    ink: Color,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let r = resolve(tokens);
+    let grip: Element<'a, Message> = match slot {
+        Some(idx) => mouse_area(
+            // raw: a grip glyph, not language.
+            text(raw("\u{283F}")).size(TS.body).color(r.ink4),
+        )
+        .on_press(Message::BomPreview(BomPreviewMsg::ColumnDragStart(idx)))
+        .interaction(iced::mouse::Interaction::Grab)
+        .boxed(),
+        None => Space::new().width(TS.body).boxed(),
+    };
+    let tick = button(
+        row![
+            checkbox_pip(tokens, slot.is_some()),
+            text(name).size(TS.body).color(ink).width(Length::Fill),
+        ]
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Center),
+    )
+    .on_press(Message::BomPreview(BomPreviewMsg::ToggleColumn(col)))
+    .padding(0)
+    .width(Length::Fill)
+    .style(move |_: &Theme, _: button::Status| button::Style {
+        text_color: ink,
+        ..button::Style::default()
+    });
+    let line = r.line_soft;
+    let body = container(
+        row![grip, tick]
+            .spacing(SP.m)
+            .align_y(iced::Alignment::Center),
+    )
+    .padding([0.0, SP.m])
+    .width(Length::Fill)
+    .height(COLUMN_ROW_H)
+    .align_y(iced::alignment::Vertical::Center);
+    let rule = container(Space::new())
+        .width(Length::Fill)
+        .height(HAIRLINE)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(line)),
+            ..container::Style::default()
+        });
+    let item = column![body, rule];
+    match (slot, preview.column_drag) {
+        // A drag is armed: an exported row takes the dragged column.
+        (Some(idx), Some(_)) => mouse_area(item)
+            .on_release(Message::BomPreview(BomPreviewMsg::ColumnDragDrop(idx)))
+            .boxed(),
+        _ => item.boxed(),
     }
 }

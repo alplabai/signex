@@ -3,17 +3,72 @@
 //! set in the Properties form while placing kept as the tool's.
 
 use signex_types::format::parse_pcb_layer;
-use signex_types::pcb::{PadShape, Point};
-use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
+use signex_types::pcb::{PadShape, PadType, Point};
+use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 
 use super::form_tests::{enter, form, panel, tab, typed};
 use super::tests::{app_with_board, board_of, click, escape, hover, live, run, undo};
 use crate::app::pcb_tools::BoardPlaceTool;
+use crate::app::{Message, PcbMsg, PcbViewMsg, Signex};
 use crate::panels::PcbPrimitiveMsg;
 use crate::panels::pcb_primitive_properties::{PcbPrimitiveFacts, PrimitiveField, PrimitiveTarget};
 
 fn close(a: f64, b: f64) -> bool {
     (a - b).abs() < 1e-6
+}
+
+fn make_active(app: &mut Signex, layer: PcbLayer) {
+    let _ = app.update(Message::Pcb(PcbMsg::View(PcbViewMsg::ActiveLayerPicked(
+        layer,
+    ))));
+}
+
+/// Caner 2026-11-21: a pad goes on the active layer. Top or Bottom copper
+/// gives a surface pad of that side (its mask and paste, no hole); a layer
+/// that is not copper (the Multi-Layer case) keeps the through-hole pad.
+#[test]
+fn a_placed_pad_takes_the_active_layer() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let silk = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
+    for (layer, at) in [
+        (PcbLayer::Copper(CopperLayer::Top), 4.0),
+        (PcbLayer::Copper(CopperLayer::Bottom), 6.0),
+        (silk, 8.0),
+    ] {
+        make_active(&mut app, layer);
+        run(&mut app, "place_board_pad");
+        hover(&mut app, at, 3.0);
+        let ghost = app.board_tool_preview().expect("a preview");
+        click(&mut app, at, 3.0);
+        let placed = board_of(&app, &path).free.pads.last().expect("a pad");
+        assert_eq!(
+            &ghost.free.pads[0].layers, &placed.layers,
+            "the ghost agrees"
+        );
+        let copper: Vec<_> = placed
+            .layers
+            .iter()
+            .filter_map(|t| parse_pcb_layer(t))
+            .filter(|l| l.is_copper())
+            .collect();
+        if layer.is_copper() {
+            assert_eq!(placed.pad_type, PadType::Smd, "{layer:?}");
+            assert!(placed.drill.is_none(), "{layer:?}");
+            assert_eq!(copper, [layer]);
+        } else {
+            assert_eq!(placed.pad_type, PadType::Thru);
+            assert_eq!(placed.drill.as_ref().map(|d| d.diameter), Some(0.8));
+            assert_eq!(copper.len(), 2, "top and bottom copper");
+        }
+    }
+    let [top, bottom, _] = &board_of(&app, &path).free.pads[..] else {
+        panic!("three pads");
+    };
+    assert!(top.layers.iter().any(|t| t == "TopSolderMask"));
+    assert!(top.layers.iter().any(|t| t == "TopPaste"));
+    assert!(bottom.layers.iter().any(|t| t == "BottomSolderMask"));
+    assert!(bottom.layers.iter().any(|t| t == "BottomPaste"));
 }
 
 #[test]
@@ -43,7 +98,7 @@ fn a_pad_lands_on_the_grid_on_the_net_under_it_one_step_per_click() {
     assert_eq!(pads[0].position, Point::new(4.0, 0.0), "on the 1 mm grid");
     assert_eq!(pads[0].net.as_ref().map(|n| n.number), Some(3));
     assert_eq!(pads[0].net.as_ref().map(|n| n.name.as_str()), Some("GND"));
-    assert_eq!(pads[0].drill.as_ref().map(|d| d.diameter), Some(0.8));
+    assert_eq!(pads[0].pad_type, PadType::Smd, "Top Layer is active");
 
     click(&mut app, 7.4, 6.2);
     assert_eq!(
@@ -106,7 +161,7 @@ fn cycle_arc_mode_draws_by_edge_on_the_net_under_the_start() {
 }
 
 #[test]
-fn a_dimension_measures_its_two_points_and_stands_off_at_the_third() {
+fn a_dimension_measures_its_two_points_and_stands_off_at_the_third_on_the_active_layer() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
     let before = live(&app, &path);
@@ -121,11 +176,43 @@ fn a_dimension_measures_its_two_points_and_stands_off_at_the_third() {
     assert!(close(dims[0].offset.abs(), 2.0), "{}", dims[0].offset);
     assert_eq!(
         parse_pcb_layer(&dims[0].layer),
-        Some(PcbLayer::Technical(TechnicalLayer::Dimensions)),
-        "copper takes no dimension, so it goes on the Dimensions layer"
+        Some(PcbLayer::Copper(CopperLayer::Top)),
+        "the active layer, Top Layer by default (Caner 2026-11-21)"
     );
     undo(&mut app);
     assert_eq!(live(&app, &path), before, "one undo step");
+}
+
+/// Caner 2026-11-21: a dimension goes on the active layer, copper
+/// included; the preview agrees.
+#[test]
+fn a_dimension_placed_with_top_layer_active_is_on_top_layer() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let mech = PcbLayer::Mechanical(signex_types::pcb_layer::MechanicalLayer::new(1).unwrap());
+    for layer in [
+        PcbLayer::Copper(CopperLayer::Top),
+        PcbLayer::Copper(CopperLayer::Bottom),
+        mech,
+    ] {
+        make_active(&mut app, layer);
+        run(&mut app, "place_board_dimension");
+        click(&mut app, 1.0, 3.0);
+        hover(&mut app, 6.0, 3.0);
+        let ghost = app.board_tool_preview().expect("a preview");
+        assert_eq!(
+            parse_pcb_layer(&ghost.free.dimensions[0].layer),
+            Some(layer)
+        );
+        click(&mut app, 6.0, 3.0);
+        click(&mut app, 6.0, 5.0);
+        let placed = board_of(&app, &path)
+            .free
+            .dimensions
+            .last()
+            .expect("placed");
+        assert_eq!(parse_pcb_layer(&placed.layer), Some(layer), "{layer:?}");
+    }
 }
 
 #[test]
@@ -164,6 +251,8 @@ fn arming_pad_shows_its_form_and_tab_sets_the_size_for_every_next_pad() {
 fn a_hole_wider_than_the_pad_is_refused_and_esc_keeps_the_previous_values() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
+    // Off copper the pad is through-hole, so it has a hole to refuse.
+    make_active(&mut app, PcbLayer::Technical(TechnicalLayer::SilkscreenTop));
     run(&mut app, "place_board_pad");
     tab(&mut app);
     typed(&mut app, &path, PrimitiveField::HoleSize, "3.0");

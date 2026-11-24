@@ -32,6 +32,11 @@ pub enum PadsTool {
     PlaceVia,
 }
 
+/// Instances a new Linear Pattern makes; edited in the Pattern sub-form.
+pub const LINEAR_PATTERN_DEFAULT_COUNT: u32 = 4;
+/// Pitch of a new Linear Pattern along X when no dimension is typed.
+pub const LINEAR_PATTERN_DEFAULT_SPACING_MM: f64 = 5.0;
+
 /// Sketch-mode drawing tool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SketchTool {
@@ -89,6 +94,41 @@ pub enum SketchTool {
     /// placement tool: it never mints geometry, it only re-arms the
     /// endpoint drag. Arc / circle endpoints are out of scope.
     DragTrackEnd,
+    /// Chamfer two Lines meeting at a corner: click the first Line, then
+    /// the second; both are cut back by the chamfer distance and a Line
+    /// joins the cut ends. See docs/FOOTPRINT_SKETCH.md, "Modify tools".
+    Chamfer,
+    /// Extend a Line: click near one end and it grows to the nearest
+    /// entity it reaches, the inverse of Trim.
+    Extend,
+    /// Linear Pattern: click the source, a one-row `ArrayKind::Linear`.
+    LinearPattern,
+    /// Slot: click one end's centre, then the other's (the dimension input
+    /// is the centre distance), then a third click sets the half width.
+    Slot,
+    /// Regular polygon: click the centre, then the first vertex; the
+    /// dimension input is the side count (empty is 6).
+    Polygon,
+}
+
+impl SketchTool {
+    /// The tools that place new geometry, from the Create menu. Holding
+    /// Ctrl while one is armed places without inference (mockup row 188).
+    pub fn is_drawing(self) -> bool {
+        matches!(
+            self,
+            Self::Point
+                | Self::Line
+                | Self::Rectangle
+                | Self::RoundedRectangle
+                | Self::Circle
+                | Self::Arc
+                | Self::EdgeArc
+                | Self::TangentArc
+                | Self::Slot
+                | Self::Polygon
+        )
+    }
 }
 
 /// Transient per-tool gesture state. The canvas Program reads + writes
@@ -150,5 +190,22 @@ pub enum ToolPending {
     /// Fillet, first Line picked. Awaiting second Line.
     FilletFirst {
         line: signex_sketch::id::SketchEntityId,
+    },
+    /// Chamfer, first Line picked. Awaiting the second Line.
+    ChamferFirst {
+        line: signex_sketch::id::SketchEntityId,
+    },
+    /// Slot, the first centre placed; awaiting the second.
+    SlotFirst {
+        a: signex_sketch::id::SketchEntityId,
+    },
+    /// Slot, both centres placed; the next click sets the half width.
+    SlotSecond {
+        a: signex_sketch::id::SketchEntityId,
+        b: signex_sketch::id::SketchEntityId,
+    },
+    /// Polygon, the centre placed; the next click is the first vertex.
+    PolygonCentre {
+        centre: signex_sketch::id::SketchEntityId,
     },
 }

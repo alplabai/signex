@@ -44,6 +44,7 @@ pub(crate) struct SceneInputs {
     styling: Option<wire_style::OwnedWireStyling>,
     designators: Option<HashMap<uuid::Uuid, String>>,
     defaults: signex_types::schematic::SchematicDefaults,
+    designator_standard: Option<signex_types::designator::DesignatorStandard>,
 }
 
 struct Entry {
@@ -195,6 +196,7 @@ impl SceneInputs {
             styling: overrides.wire_styling.map(WireStyling::to_owned_styling),
             designators: overrides.designators.cloned(),
             defaults: overrides.defaults,
+            designator_standard: overrides.designator_standard,
         }
     }
 
@@ -215,6 +217,7 @@ impl SceneInputs {
             && self.styling_matches(overrides.wire_styling)
             && self.designators.as_ref() == overrides.designators
             && self.defaults == overrides.defaults
+            && self.designator_standard == overrides.designator_standard
     }
 
     /// Like [`Self::fits`] but a pan of a pixel does not fit: for geometry

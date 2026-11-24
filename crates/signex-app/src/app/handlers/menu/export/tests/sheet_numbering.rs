@@ -7,7 +7,7 @@ use signex_output::{PageRange, PdfOptions, PreviewOptions, PreviewRasterizer};
 use signex_types::schematic::SheetInstance;
 use uuid::Uuid;
 
-use super::protel_hierarchy::placed_app;
+use super::net_text_hierarchy::placed_app;
 use super::{open_with, pdf_request_all_sheets, sheet_with_net};
 use crate::app::handlers::menu::export::{
     build_export_scope, build_page_scope, isolate_undeclared_current,

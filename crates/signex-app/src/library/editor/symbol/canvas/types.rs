@@ -59,6 +59,38 @@ pub enum CanvasAction {
     /// are left untouched so the third click is effectively ignored
     /// and the user can keep dragging toward a valid sweep.
     ArcSweepRejected,
+    /// Place a pie wedge: the three-click Arc gesture, closed to its center.
+    AddPie {
+        cx: f64,
+        cy: f64,
+        radius: f64,
+        start_deg: f64,
+        end_deg: f64,
+    },
+    /// Place an elliptical arc; emitted on the fifth click. Angles are
+    /// geometric and may be a raw clockwise drag, normalised on commit.
+    AddEllipticalArc {
+        cx: f64,
+        cy: f64,
+        radius_x: f64,
+        radius_y: f64,
+        start_deg: f64,
+        end_deg: f64,
+    },
+    /// Place a round rectangle on two opposite corners (second click).
+    AddRoundRectangle {
+        from_x: f64,
+        from_y: f64,
+        to_x: f64,
+        to_y: f64,
+    },
+    /// One click of the four-click Bezier gesture (start, C1, C2, end),
+    /// collected in `SymbolDocument::polygon_vertices`; the fourth places
+    /// the curve. Esc / right-click cancel through `PolygonCancel`.
+    BezierClick {
+        x: f64,
+        y: f64,
+    },
     /// Stamp a default text label "Text" anchored at `(x, y)`.
     AddText {
         x: f64,
@@ -106,8 +138,8 @@ pub enum CanvasAction {
     },
     DeleteSelected,
     // ── View / camera ──
-    /// Pan the camera by `(dx, dy)` screen pixels. Fired by right-
-    /// or middle-button drag.
+    /// Pan the camera by `(dx, dy)` screen pixels. Fired by a right-button
+    /// drag.
     Pan {
         dx: f32,
         dy: f32,
@@ -120,7 +152,7 @@ pub enum CanvasAction {
         delta: f32,
     },
     /// Zoom centred on `(sx, sy)` by an absolute scale `factor` (a trackpad
-    /// pinch). Greater than 1 zooms in.
+    /// pinch or a middle-button drag). Greater than 1 zooms in.
     ZoomFactor {
         sx: f32,
         sy: f32,
@@ -179,9 +211,8 @@ pub enum RotatePivotMode {
 
 /// Canvas tools — Altium-style `Tool` enum scoped to this surface.
 /// Mirrors the SchLib Place menu: Pin / Line / Rectangle / Ellipse
-/// (Circle) / Arc / Text / Polygon are the working tools;
-/// `RoundRectangle` / `Bezier` / `Image` etc. live on the Active Bar
-/// as stubs, not built yet.
+/// (Circle) / Arc / Text / Polygon / Bezier / Pie / Elliptical Arc /
+/// Round Rectangle are the working tools (#2838).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolTool {
     Select,
@@ -196,6 +227,14 @@ pub enum SymbolTool {
     /// documented on `CanvasAction::PolygonClick` / `PolygonCommit` /
     /// `PolygonCancel`.
     PlacePolygon,
+    /// Four clicks: start, C1, C2, end.
+    PlaceBezier,
+    /// The Arc gesture (center, radius + start, end), closed to the center.
+    PlacePie,
+    /// Five clicks: center, X radius, Y radius, start, end.
+    PlaceEllipticalArc,
+    /// The Rectangle's two clicks, with the default corner radius.
+    PlaceRoundRectangle,
 }
 
 impl SymbolTool {
@@ -209,6 +248,10 @@ impl SymbolTool {
             SymbolTool::PlaceArc => "Arc",
             SymbolTool::PlaceText => "Text",
             SymbolTool::PlacePolygon => "Polygon",
+            SymbolTool::PlaceBezier => "Bezier",
+            SymbolTool::PlacePie => "Pie Chart",
+            SymbolTool::PlaceEllipticalArc => "Elliptical Arc",
+            SymbolTool::PlaceRoundRectangle => "Round Rectangle",
         }
     }
 }
@@ -236,8 +279,13 @@ pub struct CanvasState {
     /// compute delta-based `MoveAll` events since there is no single
     /// anchor to absolute-position against.
     pub last_drag_world_pos: Option<(f64, f64)>,
-    /// True while the user holds right- or middle-button to pan.
+    /// True while the user holds the right button to pan.
     pub panning: bool,
+    /// The middle-button drag zooming the view, while it is held.
+    pub middle_zoom: Option<crate::canvas::middle_zoom::MiddleZoom>,
+    /// A zoom was published: the next redraw re-tracks the pointer at the
+    /// new camera, so a tool's preview stays under it.
+    pub middle_zoom_follow: bool,
     /// Last cursor screen position during a pan, used to compute
     /// per-frame deltas.
     pub last_pan_pos: Option<iced::Point>,
@@ -247,7 +295,7 @@ pub struct CanvasState {
     /// `last_pan_pos` (which moves every frame). Cleared on release /
     /// cursor-left.
     pub secondary_press_pos: Option<iced::Point>,
-    /// Set the first time a right/middle-button drag's CUMULATIVE
+    /// Set the first time a right-button drag's CUMULATIVE
     /// displacement from `secondary_press_pos` crosses the pan motion
     /// threshold (mirrors the footprint canvas's `pan_moved`). A
     /// right-release with this still `false` opens the context menu
@@ -302,6 +350,8 @@ pub struct CanvasState {
     /// per-widget-slot state that could in principle be stale right
     /// after a tab switch; it never drives a commit by itself.
     pub polygon_cursor: Option<(f64, f64)>,
+    /// The Elliptical Arc clicks so far.
+    pub ellipse: super::input::ellipse::EllipseGesture,
     /// Timestamp of the last `PlacePolygon` left-click — paired with
     /// `polygon_last_click_pos` to detect the close-by-double-click
     /// gesture (300 ms, same snapped vertex) without appending a
@@ -323,4 +373,32 @@ pub struct CanvasState {
     /// `AddPin` press seen, release pending: the pin is placed where
     /// the button is released, so press-drag-release positions it.
     pub pin_armed: bool,
+    /// The `SymbolDocument::tool_epoch` these gestures belong to.
+    pub gesture_epoch: u64,
+}
+
+impl CanvasState {
+    /// Drop every half-placed gesture when the document's tool changed.
+    pub fn sync_tool_epoch(&mut self, epoch: u64) {
+        if self.gesture_epoch == epoch {
+            return;
+        }
+        self.gesture_epoch = epoch;
+        self.line_from = None;
+        self.line_cursor = None;
+        self.rect_from = None;
+        self.rect_cursor = None;
+        self.circle_center = None;
+        self.circle_cursor = None;
+        self.arc_center = None;
+        self.arc_radius_start = None;
+        self.arc_cursor = None;
+        self.arc_end_deg_unwrapped = None;
+        self.polygon_cursor = None;
+        self.polygon_last_click_time = None;
+        self.polygon_last_click_pos = None;
+        self.ellipse = Default::default();
+        self.pin_cursor = None;
+        self.pin_armed = false;
+    }
 }

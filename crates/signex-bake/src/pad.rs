@@ -38,6 +38,9 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use signex_expr::ExprNode;
+use signex_expr::UnitFamily;
+use signex_expr::parse;
 use signex_library::primitive::footprint::{
     ChamferedCorners as LibChamferedCorners, Drill as LibDrill, LayerId, Pad as LibPad,
     PadKind as LibPadKind, PadShape as LibPadShape, Polygon as LibPolygon,
@@ -47,14 +50,11 @@ use signex_sketch::attr::{
     ChamferedCorners as SkChamferedCorners, CustomPadShape, PadAttr, PadKind, PadShape, PadSide,
     PasteAperturePattern,
 };
-use signex_sketch::expr::ast::ExprNode;
 use signex_sketch::expr::eval::{EvalContext, eval};
-use signex_sketch::expr::parse::parse;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::solver::state::point_xy;
-use signex_sketch::unit::UnitFamily;
 use signex_types::pcb::Point;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 use signex_types::pcb_pad_shape::trapezoid_corners;

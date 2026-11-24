@@ -223,6 +223,9 @@ pub(super) fn pick_unit(
         .entry(key.to_string())
         .or_insert_with(|| (String::new(), String::new()));
     entry.1 = unit;
+    if let Some(prefix) = modal.param_prefix.get_mut(key) {
+        *prefix = prefix_shown_with(&entry.1, *prefix);
+    }
     let before = modal
         .draft
         .parameters
@@ -240,6 +243,12 @@ pub(super) fn pick_unit(
     {
         modal.note = Some(note);
     }
+}
+
+/// The prefix a row keeps after a pick of `unit`. One the unit cannot show
+/// is dropped, so it cannot scale the number on a later pick.
+fn prefix_shown_with(unit: &str, prefix: SiPrefix) -> SiPrefix {
+    Unit::from_alias(unit.trim()).map_or(SiPrefix::One, |known| effective_prefix(&known, prefix))
 }
 
 /// What is wrong with the number the user has typed so far, if it is

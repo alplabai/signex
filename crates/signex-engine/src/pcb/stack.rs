@@ -15,7 +15,7 @@ use signex_types::format::{parse_pcb_layer, pcb_layer_token};
 use signex_types::pcb::{LayerDef, PcbBoard, Point};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::{
-    LayerSizes, LayerStack, MAX_COPPER_LAYERS, board_copper_layers, copper_at,
+    LayerSizes, LayerStack, MAX_COPPER_LAYERS, board_copper_layers, clean_stack_name, copper_at,
 };
 use uuid::Uuid;
 
@@ -68,6 +68,8 @@ pub(super) fn set(
         origins,
         removed,
     } = plan(board, &mut stack)?;
+    // The name has its own command: a stack edit never changes it.
+    stack.name = board.stackup.as_ref().and_then(|s| s.name.clone());
     let layers = copper_defs(&board.layers, &stack, &origins)?;
     let snapshot = StackSnapshot {
         stackup: board.stackup.clone(),
@@ -85,6 +87,28 @@ pub(super) fn set(
         board.thickness = total;
     }
     board.stackup = Some(stack);
+    Ok(applied(snapshot))
+}
+
+/// Name the stackup (mockup row 105), trimmed; blank takes the name away.
+/// The rows, layer list and thickness stay. A board without a stored stack
+/// stores the one it shows, and a stack that is then just the derived one
+/// without a name is stored no longer, so the file goes back to what it was.
+pub(super) fn set_name(
+    board: &mut PcbBoard,
+    name: Option<String>,
+) -> Result<Applied, BoardCommandError> {
+    let snapshot = StackSnapshot {
+        stackup: board.stackup.clone(),
+        layers: board.layers.clone(),
+        thickness: board.thickness,
+        renames: Vec::new(),
+        sizes: Vec::new(),
+    };
+    let derived = LayerStack::derived(&board.layers, board.thickness);
+    let mut stack = board.stackup.take().unwrap_or_else(|| derived.clone());
+    stack.name = name.as_deref().and_then(clean_stack_name);
+    board.stackup = (stack != derived).then_some(stack);
     Ok(applied(snapshot))
 }
 
@@ -205,6 +229,24 @@ fn plan(board: &PcbBoard, stack: &mut LayerStack) -> Result<Plan, BoardCommandEr
 
 fn token(layer: CopperLayer) -> String {
     pcb_layer_token(PcbLayer::Copper(layer))
+}
+
+/// The copper layers `stack` would take off `board`; none when the board
+/// refuses the stack.
+pub(super) fn removed_copper(board: &PcbBoard, stack: &LayerStack) -> Vec<String> {
+    let mut stack = stack.clone();
+    plan(board, &mut stack).map_or_else(|_| Vec::new(), |plan| plan.removed)
+}
+
+/// Whether a via or pad holds a per-layer size on one of `removed`.
+pub(super) fn holds_sizes_on(board: &PcbBoard, removed: &[String]) -> bool {
+    let on_via =
+        |via: &signex_types::pcb::Via| without_removed(via.layer_sizes.as_ref(), removed).is_some();
+    let on_pad =
+        |pad: &signex_types::pcb::Pad| without_removed(pad.layer_sizes.as_ref(), removed).is_some();
+    board.vias.iter().any(on_via)
+        || board.free.pads.iter().any(on_pad)
+        || (board.footprints.iter()).any(|fp| fp.pads.iter().any(on_pad))
 }
 
 /// Refuse to drop `layer` while anything is on it.

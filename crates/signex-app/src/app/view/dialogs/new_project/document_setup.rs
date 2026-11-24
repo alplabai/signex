@@ -7,7 +7,7 @@ use iced::{Element, Length, Widget as _};
 use signex_i18n::{I18n, ids, t};
 use signex_widgets::text;
 
-use super::{SP, TS, cards, customize, preview, s, user_cards};
+use super::{SP, TS, board_rules, cards, customize, preview, s, summary, user_cards};
 use crate::app::new_project::NewProjectMsg;
 use crate::app::{DocumentSetupMsg, DocumentSetupState, Message, SetupKind, Signex};
 use crate::styles::{DialogButtonKind, dialog_button, dialog_footer_split, ti, tokens};
@@ -28,17 +28,24 @@ fn design_size(kind: SetupKind) -> (f32, f32) {
     }
 }
 
-/// The intro line: which project the document goes into, and that every
-/// value stays editable.
+/// The intro's words: a board of a project with no saved setup is asked for
+/// a profile instead of being told it starts from one (mockup row 22).
+pub(super) fn intro_id(kind: SetupKind, has_saved_setup: bool) -> signex_i18n::MessageId {
+    match (kind, has_saved_setup) {
+        (SetupKind::Pcb, true) => ids::SETUP_PCB_INTRO,
+        (SetupKind::Pcb, false) => ids::SETUP_PCB_INTRO_NO_SETUP,
+        (SetupKind::Sheet, _) => ids::SETUP_SHEET_INTRO,
+    }
+}
+
+/// The intro line: which project the document goes into, and what it starts
+/// from.
 fn intro<'a>(
     state: &DocumentSetupState,
     i18n: &I18n,
     tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, Message> {
-    let id = match state.kind {
-        SetupKind::Pcb => ids::SETUP_PCB_INTRO,
-        SetupKind::Sheet => ids::SETUP_SHEET_INTRO,
-    };
+    let id = intro_id(state.kind, state.shows_project_summary());
     text(t!(i18n, id, "project" => state.project_name.as_str()))
         .size(TS.body)
         .color(ti(tokens.text_secondary))
@@ -78,36 +85,57 @@ impl Signex {
             tokens,
         );
         // A sheet takes only the user's profiles: the built-ins differ in
-        // board rules alone.
-        let (profiles, fields) = match state.kind {
+        // board rules alone. A project with a saved setup folds the cards
+        // behind its summary row (#2538), and the Fab tier field leaves with
+        // them (F06).
+        let summary_shown = state.shows_project_summary();
+        let (choices, fields) = match state.kind {
             SetupKind::Pcb => (
-                cards::profiles(draft, users, i18n, tokens),
-                customize::pcb_rules(draft, i18n, tokens),
+                if summary_shown {
+                    cards::choices(draft, users, i18n, tokens)
+                } else {
+                    cards::profiles(draft, users, i18n, tokens)
+                },
+                customize::pcb_rules(draft, !summary_shown, i18n, tokens),
             ),
             SetupKind::Sheet => (
-                user_cards::section(draft, users, i18n, tokens),
+                user_cards::section(draft, users, user_cards::Caption::Sheet, i18n, tokens),
                 customize::schematic(draft, i18n, tokens),
             ),
         };
-        let left = scrollable(
-            container(
-                column![
-                    intro(state, i18n, tokens),
-                    profiles.map(edit),
-                    fields.map(edit),
-                ]
-                .spacing(SP.xl),
-            )
-            .padding([SP.xl + SP.s, SP.xl + SP.m]),
-        )
-        .width(Length::Fill);
-        let body: Element<'a, Message> = match state.kind {
-            SetupKind::Pcb => row![
-                left,
-                preview::pane(draft, ids::SETUP_PCB_PREVIEW_NOTE, i18n, tokens).map(edit)
+        let mut col = column![intro(state, i18n, tokens)].spacing(SP.xl);
+        if let Some(project_setup) = state.project_setup.as_ref() {
+            let open = state.other_profile_open;
+            let mut block = column![
+                summary::row_view(project_setup, state.kind, open, users, i18n, tokens).map(ds)
             ]
-            .height(Length::Fill)
-            .boxed(),
+            .spacing(SP.m + SP.xs);
+            if open {
+                block = block.push(choices.map(edit).boxed());
+            }
+            col = col.push(block.boxed());
+        } else {
+            col = col.push(choices.map(edit).boxed());
+        }
+        col = col.push(fields.map(edit).boxed());
+        let left =
+            scrollable(container(col).padding([SP.xl + SP.s, SP.xl + SP.m])).width(Length::Fill);
+        let body: Element<'a, Message> = match state.kind {
+            SetupKind::Pcb => super::with_larger_preview(
+                row![
+                    left,
+                    preview::pane(draft, ids::SETUP_PCB_PREVIEW_NOTE, None, i18n, tokens).map(edit)
+                ]
+                .height(Length::Fill)
+                .boxed(),
+                board_rules::expanded_layer(
+                    draft,
+                    &self.document_state.panel_ctx.canvas_colors,
+                    i18n,
+                    tokens,
+                )
+                .map(|layer| iced::Widget::boxed(layer.map(edit))),
+            ),
             SetupKind::Sheet => container(left).height(Length::Fill).boxed(),
         };
         let hint = text(t!(i18n, ids::DIALOG_NEW_PROJECT_FOOTER_HINT))

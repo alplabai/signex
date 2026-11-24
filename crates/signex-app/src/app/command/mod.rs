@@ -24,6 +24,7 @@ mod board_operands;
 mod board_view_operand_tests;
 mod board_view_operands;
 pub(crate) mod bridge;
+mod component_operand;
 #[cfg(test)]
 mod directive_operand_tests;
 mod directive_operands;
@@ -50,13 +51,20 @@ mod hierarchy_operands;
 #[cfg(test)]
 pub(in crate::app) mod interaction_snapshot_tests;
 mod layer_strip_operands;
+mod need_context;
 mod needs;
+#[cfg(test)]
+mod needs_reason_tests;
+/// The enablement gate, for the hostile-operand test's not-reached set.
+#[cfg(test)]
+pub(crate) use needs::needs as enablement_gate;
+#[cfg(test)]
+mod no_erc_operand_tests;
 mod opened;
 #[cfg(test)]
 mod operand_handler_tests;
 mod operand_handlers;
 mod operands;
-mod outcome;
 #[cfg(test)]
 mod parity;
 #[cfg(test)]
@@ -75,6 +83,10 @@ mod placement_operands;
 mod project_name_tests;
 mod project_names;
 pub(crate) mod queries;
+#[cfg(test)]
+mod repair_reset_operand_tests;
+mod repair_reset_operands;
+mod replay;
 mod routing;
 #[cfg(test)]
 mod selection_filter_operand_tests;
@@ -85,11 +97,19 @@ mod sheet_entry_ref_tests;
 mod sheet_symbol_check_tests;
 mod sheet_symbol_checks;
 #[cfg(test)]
+mod sheet_sync_operand_tests;
+mod sheet_sync_operands;
+#[cfg(test)]
+mod sheet_variable_operand_tests;
+pub(crate) mod translator;
+#[cfg(test)]
 mod undo_agreement_tests;
 mod window_document;
 #[cfg(test)]
 mod wire_run_tests;
 mod wire_runs;
+#[cfg(test)]
+mod wire_snap_sheet_tests;
 
 pub use agent_edits::{
     EditSpec, MAX_EDITS, edit_list_text, edit_refusal, operand_text, parse_documents,
@@ -98,17 +118,19 @@ pub use agent_edits::{
 pub use args::CommandArgs;
 pub(crate) use args::InvocationContext;
 use bridge::core_to_message;
+pub(crate) use component_operand::component_by_uuid;
 pub use edit_reads::{EditReads, ReadsLoaded};
 pub(crate) use enablement::CommandContext;
 pub(crate) use enablement::is_enabled;
 pub(crate) use opened::answers_with_the_new_document;
 pub(crate) use operand_handlers::runs_headless_without_operands;
-pub(crate) use operands::missing_headless_operand;
 pub use operands::{OperandError, OperandValue};
-pub use outcome::CommandOutcome;
+pub(crate) use operands::{missing_headless_operand, parse_targets};
 pub(crate) use placed_operands::PlacedRefusal;
+pub use signex_commands::CommandOutcome;
 
 use iced::Task;
+use signex_i18n::RenderTranslatable;
 
 use super::*;
 
@@ -134,6 +156,7 @@ impl Signex {
         // Only the missing-operand refusal is said here; every other command
         // reports (or stays silent) exactly as before.
         if let CommandOutcome::Disabled { reason } = outcome
+            && let reason = reason.render_en_us()
             && operand_handlers::needs_operands_reason(command) == Some(reason.as_str())
         {
             crate::diagnostics::log_info(format!(
@@ -156,8 +179,9 @@ impl Signex {
         let (outcome, task) = self.dispatch_command_reporting(command, CommandArgs::none(), window);
         if let CommandOutcome::Disabled { reason } = outcome {
             crate::diagnostics::log_info(format!(
-                "Menu: {} did nothing: {reason}",
-                command.as_str()
+                "Menu: {} did nothing: {}",
+                command.as_str(),
+                reason.render_en_us()
             ));
         }
         task
@@ -186,7 +210,30 @@ impl Signex {
     /// ([`enablement::explains_when_unavailable`]): that one still runs, and
     /// is reported as `Disabled` too, so a caller is never told `Ran` for a
     /// command that had nothing to act on.
+    ///
+    /// Every call adds one Command Log row (#2458); a call made while
+    /// another runs (an undocked window's undo, an agent request) does not.
     pub(crate) fn dispatch_command_reporting(
+        &mut self,
+        command: &crate::keymap::AppCommandId,
+        args: CommandArgs,
+        window: Option<iced::window::Id>,
+    ) -> (CommandOutcome, Task<Message>) {
+        let mut operands = crate::app::handlers::command_log::operands_of(&args);
+        let targets = self.command_targets(command, args.has_operands(), window);
+        if let Some(targets) = &targets {
+            operands.insert(
+                crate::app::core::command_log::RECORDED_TARGETS.to_string(),
+                targets.to_operand(),
+            );
+        }
+        self.logged_command_on(command, operands, targets, window, |app| {
+            app.dispatch_command_unlogged(command, args, window)
+        })
+    }
+
+    /// [`Self::dispatch_command_reporting`] without the Command Log row.
+    fn dispatch_command_unlogged(
         &mut self,
         command: &crate::keymap::AppCommandId,
         args: CommandArgs,
@@ -262,12 +309,14 @@ impl Signex {
         }
         let context = self.command_context(window);
         let unmet = enablement::disabled_reason(command, &context);
-        if unmet.is_some()
+        if let Some(reason) = unmet
             && !enablement::explains_when_unavailable(command)
             && !enablement::explains_refusal_in(command, &context)
         {
             return (
-                CommandOutcome::disabled(unmet.unwrap_or_default()),
+                CommandOutcome::Disabled {
+                    reason: reason.into(),
+                },
                 Task::none(),
             );
         }
@@ -280,7 +329,9 @@ impl Signex {
             core_to_message(command, &args)
         };
         let outcome = match (unmet, &resolved) {
-            (Some(reason), _) => CommandOutcome::disabled(reason),
+            (Some(reason), _) => CommandOutcome::Disabled {
+                reason: reason.into(),
+            },
             (None, Some(_)) => CommandOutcome::Ran,
             (None, None) if crate::keymap::metadata_for(command).is_some() => {
                 CommandOutcome::NoBridgeArm
@@ -425,11 +476,10 @@ mod tests {
         let command = AppCommandId::new("place_wire").unwrap();
         let (outcome, task) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
 
-        assert_eq!(
-            outcome,
-            CommandOutcome::Disabled {
-                reason: "No schematic is open".to_string()
-            }
+        assert!(
+            matches!(&outcome, CommandOutcome::Disabled { reason }
+                if reason.render_en_us() == "No schematic is open"),
+            "{outcome:?}"
         );
         assert_eq!(task.units(), 0);
         assert_eq!(app.interaction_state.current_tool, Tool::Select);
@@ -442,19 +492,18 @@ mod tests {
         let _ = crate::diagnostics::init_logging();
         let (mut app, _task) = Signex::new();
 
-        let command = AppCommandId::new("place_signal_harness").unwrap();
+        let command = AppCommandId::new("place_device_sheet_symbol").unwrap();
         let (outcome, _task) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
 
-        assert_eq!(
-            outcome,
-            CommandOutcome::Disabled {
-                reason: "Planned, not available yet".to_string()
-            }
+        assert!(
+            matches!(&outcome, CommandOutcome::Disabled { reason }
+                if reason.render_en_us() == "Planned, not available yet"),
+            "{outcome:?}"
         );
         assert!(
             crate::diagnostics::recent_entries().iter().any(|e| e
                 .message
-                .starts_with("Planned, not available yet: Signal Harness")),
+                .starts_with("Planned, not available yet: Device Sheet Symbol")),
             "the handler ran and explained"
         );
     }

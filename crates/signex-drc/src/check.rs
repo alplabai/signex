@@ -28,9 +28,17 @@ pub fn run(board: &PcbBoard, rules: &DrcRules) -> DrcReport {
     violations.extend(super::silk::violations(board, rules));
     violations.extend(super::mask::violations(board, rules));
     violations.extend(super::courtyard::violations(board, rules));
+    let (outside_rooms, unmeasured) = super::rooms::violations(board);
+    violations.extend(outside_rooms);
     violations.sort_unstable();
     let mut skipped = index.rejected().to_vec();
     skipped.extend(keepouts.bodies);
+    // A body the keepout check could not convert either is listed once.
+    let unlisted: Vec<_> = unmeasured
+        .into_iter()
+        .filter(|r| !skipped.iter().any(|s| s.item == r.item))
+        .collect();
+    skipped.extend(unlisted);
     DrcReport {
         rules: rules.clone(),
         violations,

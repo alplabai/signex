@@ -5,7 +5,7 @@
 
 use signex_app::app::{FileMsg, Message, Signex};
 use signex_app::menu_bar::MenuMessage;
-use signex_app::start_screen::{self, Action, Surface};
+use signex_app::start_screen::{self, Action, StartPage, StartScreenMsg, Surface};
 
 fn surface_of(app: &Signex) -> Surface {
     Surface::select(app.document_state.active_project.is_some())
@@ -91,6 +91,35 @@ fn a_recent_entry_opens_its_project_through_real_update() {
         app.document_state.projects.iter().any(|p| p.path == prj),
         "the recent entry must open the project"
     );
+    // Mockup row 1: the open is stamped for the Start screen's time column.
+    let recent = &app.ui_state.recent_projects;
+    let first = recent.entries().first().expect("the project is recorded");
+    assert!(recent.opened_at(first).is_some(), "no last-opened time");
+}
+
+/// Mockup row 1: the Start screen's page and filters go back to Home, unfiltered,
+/// once a project opens, so the next visit starts on Home.
+#[test]
+fn opening_a_project_sends_the_start_screen_back_home() {
+    let (mut app, _t) = Signex::new();
+    for msg in [
+        StartScreenMsg::PageSelected(StartPage::Libraries),
+        StartScreenMsg::LibraryFilterChanged("passives".to_owned()),
+    ] {
+        let _ = app.update(start_screen::message(msg));
+    }
+    assert_eq!(app.ui_state.start_screen.page, StartPage::Libraries);
+    assert!(!app.ui_state.start_screen.is_home());
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let prj = dir.path().join("Home.snxprj");
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::NewProject(Some(prj))));
+    assert!(app.document_state.active_project.is_some());
+    assert!(
+        app.ui_state.start_screen.is_home(),
+        "{:?}",
+        app.ui_state.start_screen
+    );
 }
 
 #[test]
@@ -145,4 +174,48 @@ fn shortcuts_modal_cache_is_built_on_open_and_rebuilt_on_keymap_change() {
     );
     app.ui_state.set_keymap_profiles(profiles);
     assert_eq!(app.ui_state.shortcut_sections, Some(expected));
+}
+
+/// The Projects row moves the Start screen to the Projects page and Home
+/// moves it back (#2270 left both rows without a message; mockup row 1 pages).
+#[test]
+fn projects_and_home_rows_pick_their_section() {
+    let (mut app, _t) = Signex::new();
+    assert_eq!(app.ui_state.start_screen.page, StartPage::Home);
+    let _ = app.update(start_screen::message(StartScreenMsg::PageSelected(
+        StartPage::Projects,
+    )));
+    assert_eq!(app.ui_state.start_screen.page, StartPage::Projects);
+    let _ = app.update(start_screen::message(StartScreenMsg::PageSelected(
+        StartPage::Home,
+    )));
+    assert_eq!(app.ui_state.start_screen.page, StartPage::Home);
+}
+
+/// With no library open, the Libraries row opens the Libraries page, which
+/// offers Add library… and Open Library Browser (mockup row 1).
+#[test]
+fn libraries_row_without_an_open_library_opens_the_libraries_page() {
+    let (mut app, _t) = Signex::new();
+    app.library.open_libraries.clear();
+    let _ = app.update(start_screen::message(StartScreenMsg::PageSelected(
+        StartPage::Libraries,
+    )));
+    assert_eq!(app.ui_state.start_screen.page, StartPage::Libraries);
+}
+
+/// The picked page is forgotten once the Start screen goes away, so it
+/// shows Home again when it comes back.
+#[test]
+fn the_section_returns_to_home_when_the_start_screen_goes_away() {
+    let (mut app, _t) = Signex::new();
+    let _ = app.update(start_screen::message(StartScreenMsg::PageSelected(
+        StartPage::Projects,
+    )));
+    let dir = tempfile::tempdir().expect("tempdir");
+    let prj = dir.path().join("Start.snxprj");
+    std::fs::write(&prj, b"").expect("create project");
+    let _ = app.update(Message::File(FileMsg::Opened(Some(prj))));
+    assert!(app.document_state.active_project.is_some());
+    assert_eq!(app.ui_state.start_screen.page, StartPage::Home);
 }

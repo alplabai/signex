@@ -9,7 +9,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, button, raw, text};
 
 use super::dialog_buttons::{dialog_border, dialog_button_style, dialog_label_color};
-use super::{ChromeMetrics, RADIUS, Spacing, TypeScale, ti, tokens};
+use super::{ChromeMetrics, RADIUS, Spacing, TypeScale, chrome_px, ti, tokens};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -31,6 +31,9 @@ pub enum DialogButtonKind {
     Secondary,
     /// Destructive actions: a subtle `error` tint, border and label.
     Danger,
+    /// The one destructive action a dialog exists for (Delete): the solid
+    /// `error` fill with a label that reads on it.
+    DangerSolid,
     /// The accent fill, for a call to action beside a `Primary`.
     Accent,
     /// A quiet action with no fill or visible border at rest ("Decide
@@ -148,6 +151,54 @@ pub fn dialog_button<'a, M: Clone + 'a>(
     }
 }
 
+/// Side of the glyph in front of a [`dialog_icon_button`] label (14 px at
+/// the default base).
+const BUTTON_GLYPH: f32 = chrome_px(14.0 * 11.0 / 12.0);
+/// Gap between that glyph and the label (5 px at the default base).
+const BUTTON_GLYPH_GAP: f32 = chrome_px(5.0 * 11.0 / 12.0);
+
+/// [`dialog_button`] with `glyph` (a monochrome SVG, drawn in the label's
+/// colour) in front of its label, the button widened by the glyph.
+pub fn dialog_icon_button<'a, M: Clone + 'a>(
+    glyph: iced::widget::svg::Handle,
+    label: impl Into<Label<'a>>,
+    kind: DialogButtonKind,
+    on_press: Option<M>,
+    tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    let kind = kind.resolved();
+    let disabled = on_press.is_none();
+    let color = label_color(kind, disabled, tokens);
+    let label: Label<'a> = label.into();
+    let (height, size, width) = button_metrics(label.as_str());
+    let icon = super::tinted_glyph(glyph, BUTTON_GLYPH, color);
+    let face = container(
+        row![
+            icon,
+            text(label)
+                .size(size)
+                .color(color)
+                .wrapping(iced::widget::text::Wrapping::None),
+        ]
+        .spacing(BUTTON_GLYPH_GAP)
+        .align_y(Alignment::Center),
+    )
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .align_x(iced::alignment::Horizontal::Center)
+    .align_y(iced::alignment::Vertical::Center);
+    let btn = button(face)
+        .padding(0)
+        .width(Length::Fixed(width + BUTTON_GLYPH + BUTTON_GLYPH_GAP))
+        .height(Length::Fixed(height))
+        .on_press_maybe(on_press);
+    if disabled {
+        btn.style(disabled_button(tokens)).boxed()
+    } else {
+        btn.style(dialog_button_style(kind, tokens)).boxed()
+    }
+}
+
 /// Horizontal label padding of a dialog button, the same for every role.
 const DENSE_PAD: f32 = 14.0 * 12.0 / 11.0;
 
@@ -203,11 +254,62 @@ pub fn dialog_footer_split<'a, M: 'a>(
     extras: Vec<Element<'a, M>>,
     buttons: Vec<Element<'a, M>>,
 ) -> Element<'a, M> {
-    let extras = row(extras).spacing(SP.s).align_y(Alignment::Center);
-    let buttons = row(buttons).spacing(SP.s).align_y(Alignment::Center);
-    container(row![extras, Space::new().width(Length::Fill), buttons].align_y(Alignment::Center))
+    container(footer_line(extras, buttons, SP.s))
         .padding(SP.l)
         .width(Length::Fill)
+        .boxed()
+}
+
+/// Gap between the items of a [`dialog_footer_band`] (8 px at the default
+/// base).
+const BAND_GAP: f32 = chrome_px(8.0 * 11.0 / 12.0);
+
+/// `extras` at the left end, `buttons` at the right, `gap` between items.
+fn footer_line<'a, M: 'a>(
+    extras: Vec<Element<'a, M>>,
+    buttons: Vec<Element<'a, M>>,
+    gap: f32,
+) -> iced::widget::Row<Element<'a, M>> {
+    let extras = row(extras).spacing(gap).align_y(Alignment::Center);
+    let buttons = row(buttons).spacing(gap).align_y(Alignment::Center);
+    row![extras, Space::new().width(Length::Fill), buttons].align_y(Alignment::Center)
+}
+
+/// [`dialog_footer_split`] on a band: the chrome fill under a hairline,
+/// padded by `padding` (the Help cards). In the main window its lower
+/// corners follow the card's; in a dialog window it is flat.
+pub fn dialog_footer_band<'a, M: 'a>(
+    extras: Vec<Element<'a, M>>,
+    buttons: Vec<Element<'a, M>>,
+    padding: iced::Padding,
+    theme_tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    let fill = ti(theme_tokens.toolbar_bg);
+    let rule = tokens::resolve(theme_tokens).line_soft;
+    let corner = super::Radii::GRAPHITE.dialog;
+    container(footer_line(extras, buttons, BAND_GAP))
+        .padding(padding)
+        .width(Length::Fill)
+        .style(move |theme: &Theme| {
+            let radius = if super::is_dialog_window(theme) {
+                iced::border::Radius::default()
+            } else {
+                iced::border::Radius::default()
+                    .bottom_left(corner)
+                    .bottom_right(corner)
+            };
+            let mut border = Border {
+                color: rule,
+                radius,
+                ..Border::default()
+            };
+            border.top = iced::border::Side::default().width(1.0);
+            container::Style {
+                background: Some(iced::Background::Color(fill)),
+                border,
+                ..container::Style::default()
+            }
+        })
         .boxed()
 }
 
@@ -239,6 +341,7 @@ mod tests {
                 DialogButtonKind::Primary,
                 DialogButtonKind::Secondary,
                 DialogButtonKind::Danger,
+                DialogButtonKind::DangerSolid,
                 DialogButtonKind::Accent,
                 DialogButtonKind::Ghost,
                 DialogButtonKind::Cancel,
@@ -275,6 +378,7 @@ mod tests {
             DialogButtonKind::Primary,
             DialogButtonKind::Secondary,
             DialogButtonKind::Danger,
+            DialogButtonKind::DangerSolid,
             DialogButtonKind::Accent,
             DialogButtonKind::Ghost,
         ] {
@@ -349,6 +453,7 @@ mod tests {
             DialogButtonKind::Primary,
             DialogButtonKind::Secondary,
             DialogButtonKind::Danger,
+            DialogButtonKind::DangerSolid,
             DialogButtonKind::Accent,
             DialogButtonKind::Ghost,
             DialogButtonKind::Cancel,
@@ -396,6 +501,7 @@ mod tests {
                 DialogButtonKind::Primary,
                 DialogButtonKind::Secondary,
                 DialogButtonKind::Danger,
+                DialogButtonKind::DangerSolid,
                 DialogButtonKind::Accent,
                 DialogButtonKind::Ghost,
             ] {

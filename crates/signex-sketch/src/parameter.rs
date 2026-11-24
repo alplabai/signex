@@ -6,31 +6,23 @@
 //!
 //! 1. Parse each source string into an [`ExprNode`].
 //! 2. Walk the AST to discover [`ExprNode::Ref`] dependencies.
-//! 3. Topologically sort the parameter graph; reject cycles.
+//! 3. Topologically sort the parameter graph; reject cycles
+//!    ([`signex_expr::dependency_order`]).
 //! 4. Evaluate in topo order, accumulating already-resolved
 //!    parameters as `Literal(Quantity)` ASTs in the eval context so
 //!    later expressions resolve cleanly.
-//!
-//! Cycle detection uses an iterative DFS with `Visiting` / `Visited`
-//! colours (Tarjan-style). No third-party graph or solver source
-//! consulted.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
+
+use signex_expr::{LiteralContext, dependency_order, expression_body, is_reserved_constant};
 
 use crate::expr::ExprError;
 use crate::expr::ast::ExprNode;
 use crate::expr::eval::{EvalContext, eval};
-use crate::expr::parse::parse;
+use crate::expr::parse::parse_with;
 use crate::unit::{Quantity, UnitFamily};
 
 pub use signex_types::sketch::parameter::ParameterTable;
-
-/// Strip the optional Altium-style leading `=` and surrounding
-/// whitespace from a parameter source string.
-fn strip_eq_prefix(src: &str) -> &str {
-    let s = src.trim();
-    s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s)
-}
 
 /// Resolve every parameter to a canonical-unit [`Quantity`]: millimetres
 /// for `Length`, radians for `Angle`, a plain number for `Count`. Unlike
@@ -40,18 +32,22 @@ fn strip_eq_prefix(src: &str) -> &str {
 /// a cycle through `name`. Other parse / eval errors propagate as
 /// the corresponding [`ExprError`] variant.
 pub fn resolve_quantities(table: &ParameterTable) -> Result<HashMap<String, Quantity>, ExprError> {
-    // 1. Parse every parameter source string into an AST.
+    // 1. Parse every parameter source string into an AST. A name the parser
+    //    reads as a constant (`pi`) could never be referenced, so it is
+    //    refused; a prefix-only literal (`10m`, `4k7`) is refused by the
+    //    `Geometry` context instead of baking as a count of millimetres.
     let mut asts: BTreeMap<String, ExprNode> = BTreeMap::new();
     for (name, src) in table.iter() {
-        let body = strip_eq_prefix(src);
-        let ast = parse(body)?;
+        if is_reserved_constant(name) {
+            return Err(ExprError::ReservedName(name.clone()));
+        }
+        let body = expression_body(src);
+        let ast = parse_with(body, LiteralContext::Geometry)?;
         asts.insert(name.clone(), ast);
     }
 
-    // 2. Topologically sort by dependency. Iterative DFS with three
-    //    colours: White (unseen), Gray (on the recursion stack),
-    //    Black (finished). Gray-revisit signals a cycle.
-    let order = topo_sort(&asts)?;
+    // 2. Topologically sort by dependency; a cycle is an error.
+    let order = dependency_order(&asts)?;
 
     // 3. Evaluate in topo order. Each freshly-resolved value is
     //    re-injected into the eval context as a Literal(Quantity)
@@ -72,6 +68,13 @@ pub fn resolve_quantities(table: &ParameterTable) -> Result<HashMap<String, Quan
             UnitFamily::Length => Quantity::length(q.as_mm()?),
             UnitFamily::Angle => Quantity::angle(q.as_rad()?),
             UnitFamily::Count => Quantity::count(q.as_count()?),
+            // `eval` already refuses these at the sketch boundary.
+            UnitFamily::Derived => {
+                return Err(ExprError::WrongFamily {
+                    expected: UnitFamily::Length,
+                    got: UnitFamily::Derived,
+                });
+            }
         };
         out.insert(name, canonical);
     }
@@ -91,123 +94,19 @@ pub fn resolve(table: &ParameterTable) -> Result<HashMap<String, f64>, ExprError
         .collect())
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Color {
-    White,
-    Gray,
-    Black,
-}
-
-/// Iterative DFS topological sort. Returns parameter names in an
-/// order where every dependency precedes its dependants. Errors with
-/// [`ExprError::Cycle`] if a cycle is found.
-fn topo_sort(asts: &BTreeMap<String, ExprNode>) -> Result<Vec<String>, ExprError> {
-    let mut color: HashMap<&str, Color> = asts.keys().map(|k| (k.as_str(), Color::White)).collect();
-    let mut order: Vec<String> = Vec::with_capacity(asts.len());
-
-    // We walk every parameter in BTreeMap order so the resolution is
-    // deterministic across runs.
-    for root in asts.keys() {
-        if color.get(root.as_str()).copied() != Some(Color::White) {
-            continue;
-        }
-        // Stack frame: (param_name, child_iter_index, deps_vec)
-        let mut stack: Vec<(String, usize, Vec<String>)> = Vec::new();
-        let root_deps = collect_deps(asts, root);
-        color.insert(root.as_str(), Color::Gray);
-        stack.push((root.clone(), 0, root_deps));
-
-        while let Some(top) = stack.last_mut() {
-            if top.1 >= top.2.len() {
-                // All children processed → mark Black, emit, pop.
-                let name = top.0.clone();
-                color.insert(name_borrow(&name, asts), Color::Black);
-                order.push(name);
-                stack.pop();
-                continue;
-            }
-            let dep_name = top.2[top.1].clone();
-            top.1 += 1;
-
-            // Skip refs that aren't parameters in this table — they
-            // might be ArrayIndex variables or unbound; the evaluator
-            // will surface a clearer error when they're encountered.
-            if !asts.contains_key(&dep_name) {
-                continue;
-            }
-
-            match color.get(dep_name.as_str()).copied() {
-                Some(Color::White) => {
-                    let dep_deps = collect_deps(asts, &dep_name);
-                    color.insert(name_borrow(&dep_name, asts), Color::Gray);
-                    stack.push((dep_name, 0, dep_deps));
-                }
-                Some(Color::Gray) => {
-                    return Err(ExprError::Cycle(dep_name));
-                }
-                Some(Color::Black) => {
-                    // Already finished; nothing to do.
-                }
-                None => {
-                    // Should not happen — every param key is in the map.
-                }
-            }
-        }
-    }
-
-    Ok(order)
-}
-
-/// Borrow a `&str` view of `name` whose lifetime matches `asts`'s
-/// keys, so we can use it as a `HashMap<&str, _>` key.
-fn name_borrow<'a>(name: &str, asts: &'a BTreeMap<String, ExprNode>) -> &'a str {
-    asts.get_key_value(name)
-        .map(|(k, _)| k.as_str())
-        .expect("name must be a param in the table")
-}
-
-/// Collect every [`ExprNode::Ref`] name reachable from `name`'s AST.
-fn collect_deps(asts: &BTreeMap<String, ExprNode>, name: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    if let Some(root) = asts.get(name) {
-        gather_refs(root, &mut out);
-    }
-    out
-}
-
-/// Walk an AST and append every distinct `Ref(name)` name to `out`.
-fn gather_refs(node: &ExprNode, out: &mut Vec<String>) {
-    fn rec(node: &ExprNode, seen: &mut HashSet<String>, out: &mut Vec<String>) {
-        match node {
-            ExprNode::Literal(_) | ExprNode::ArrayIndex(_) => {}
-            ExprNode::Ref(name) => {
-                if seen.insert(name.clone()) {
-                    out.push(name.clone());
-                }
-            }
-            ExprNode::Binary(_, l, r) => {
-                rec(l, seen, out);
-                rec(r, seen, out);
-            }
-            ExprNode::Unary(_, inner) => rec(inner, seen, out),
-            ExprNode::Ternary(c, t, e) => {
-                rec(c, seen, out);
-                rec(t, seen, out);
-                rec(e, seen, out);
-            }
-            ExprNode::Lookup { key, keys, values } => {
-                rec(key, seen, out);
-                for k in keys {
-                    rec(k, seen, out);
-                }
-                for v in values {
-                    rec(v, seen, out);
-                }
-            }
-        }
-    }
-    let mut seen = HashSet::new();
-    rec(node, &mut seen, out);
+/// Evaluate one expression `src` (an optional leading `=`) against the
+/// resolved parameter `table`, keeping its unit family.
+pub fn eval_with_parameters(src: &str, table: &ParameterTable) -> Result<Quantity, ExprError> {
+    let ast = parse_with(expression_body(src), LiteralContext::General)?;
+    let params = resolve_quantities(table)?
+        .into_iter()
+        .map(|(name, q)| (name, ExprNode::Literal(q)))
+        .collect();
+    let ctx = EvalContext {
+        params,
+        array_index: None,
+    };
+    eval(&ast, &ctx)
 }
 
 #[cfg(test)]
@@ -314,5 +213,74 @@ mod tests {
         let t = ParameterTable::default();
         let r = resolve(&t).unwrap();
         assert!(r.is_empty());
+    }
+
+    #[test]
+    fn a_parameter_named_after_a_reserved_constant_is_refused() {
+        // `= pi * 2` would read the constant, never this value.
+        let mut t = ParameterTable::new();
+        t.insert("pi", "3mm");
+        t.insert("w", "= pi * 2");
+        let err = resolve(&t).unwrap_err();
+        assert_eq!(err, ExprError::ReservedName("pi".to_string()));
+        assert!(err.to_string().contains("reserved constant"));
+    }
+
+    #[test]
+    fn pi_still_reads_as_the_constant_in_a_parameter() {
+        let mut t = ParameterTable::new();
+        t.insert("turn", "= 2 * pi");
+        let r = resolve(&t).unwrap();
+        assert!(approx_eq(*r.get("turn").unwrap(), std::f64::consts::TAU));
+    }
+
+    #[test]
+    fn prefix_only_literals_are_refused_in_a_parameter() {
+        for literal in ["10m", "1u", "4k7", "2n", "= 10m + 1mm"] {
+            let mut t = ParameterTable::new();
+            t.insert("a", literal);
+            assert!(
+                matches!(resolve(&t), Err(ExprError::BadQuantity(_))),
+                "{literal} must be refused"
+            );
+        }
+    }
+
+    #[test]
+    fn literals_with_a_unit_still_resolve_in_a_parameter() {
+        let mut t = ParameterTable::new();
+        t.insert("a", "10mm");
+        t.insert("b", "250um");
+        t.insert("c", "= a + 0.5mm");
+        let r = resolve(&t).unwrap();
+        assert!(approx_eq(*r.get("a").unwrap(), 10.0));
+        assert!(approx_eq(*r.get("b").unwrap(), 0.25));
+        assert!(approx_eq(*r.get("c").unwrap(), 10.5));
+    }
+
+    /// One expression reads the resolved table and keeps its unit family;
+    /// the leading `=` is optional. An unknown name, or a table that does
+    /// not resolve, is an error rather than a number.
+    #[test]
+    fn eval_with_parameters_reads_the_table_and_keeps_the_unit_family() {
+        let mut t = ParameterTable::new();
+        t.insert("pitch", "0.5mm");
+        t.insert("n", "4");
+        let length = eval_with_parameters("pitch * (n - 1)", &t).unwrap();
+        assert_eq!(length.unit.family(), UnitFamily::Length);
+        assert!(approx_eq(length.value, 1.5));
+        let with_eq = eval_with_parameters("= pitch * 2", &t).unwrap();
+        assert!(approx_eq(with_eq.value, 1.0));
+        let count = eval_with_parameters("n", &t).unwrap();
+        assert_eq!(count.unit.family(), UnitFamily::Count);
+        assert!(matches!(
+            eval_with_parameters("missing + 1mm", &t),
+            Err(ExprError::Unknown(_))
+        ));
+        t.insert("a", "= a + 1mm");
+        assert!(matches!(
+            eval_with_parameters("pitch", &t),
+            Err(ExprError::Cycle(_))
+        ));
     }
 }

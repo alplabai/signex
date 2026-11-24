@@ -23,12 +23,15 @@ pub struct Highlight {
     /// Bodies of selected footprints, outlined with a faint fill.
     pub bodies: Vec<Shape>,
     pub hover_body: Option<Shape>,
-    /// Where a footprint drag or Move would put what it carries (#2240).
+    /// Where a paste would put its copy: something not on the board yet. An
+    /// object already on the board moves itself and has no ghost.
     pub ghost: Vec<Shape>,
     /// The copper of the highlighted board net (#2403).
     pub net: Vec<Shape>,
     /// The Measure ruler, in board mm (#2403).
     pub measure: Option<(signex_types::pcb::Point, signex_types::pcb::Point)>,
+    /// A route's leg aimed where it has no way, in the DRC error colour.
+    pub blocked: Vec<Shape>,
 }
 
 /// Paints [`PcbCanvas`]'s highlight and marquee; takes no input.
@@ -81,6 +84,10 @@ impl canvas::Program<Message> for HighlightLayer<'_> {
         }
         for shape in &canvas.highlight.net {
             paint(&mut frame, shape, &camera, view, accent, 0.3, 1.0);
+        }
+        let error = crate::render_config::to_iced(&canvas.canvas_colors.drc_error);
+        for shape in &canvas.highlight.blocked {
+            paint(&mut frame, shape, &camera, view, error, 0.6, 1.5);
         }
         if let Some((from, to)) = canvas.highlight.measure {
             paint_ruler(&mut frame, &camera, from, to, accent);

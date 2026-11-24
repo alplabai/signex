@@ -1,7 +1,7 @@
 //! Undo history memory: unchanged collections are shared between entries and
 //! restoring a snapshot reproduces the sheet exactly.
 
-use signex_types::schematic::{Junction, Point, Wire};
+use signex_types::schematic::{ChildSheet, FillType, Junction, Point, Wire};
 
 use crate::test_support::test_sheet;
 use crate::{Command, Engine};
@@ -29,6 +29,68 @@ fn junction(i: usize) -> Junction {
 
 fn state(engine: &Engine) -> String {
     format!("{:?}", engine.document())
+}
+
+fn engine_with_sheet_symbol(id: uuid::Uuid, designator: &str) -> Engine {
+    let mut sheet = test_sheet();
+    sheet.child_sheets.push(ChildSheet {
+        uuid: id,
+        name: designator.to_string(),
+        filename: "child.snxsch".to_string(),
+        position: Point::new(20.0, 20.0),
+        size: (40.64, 43.18),
+        stroke_width: 0.0,
+        fill: FillType::None,
+        stroke_color: None,
+        fill_color: None,
+        fields_autoplaced: false,
+        pins: Vec::new(),
+        instances: Vec::new(),
+    });
+    Engine::new(sheet).unwrap()
+}
+
+fn rename(engine: &mut Engine, id: uuid::Uuid, designator: &str) {
+    let command = Command::ModifyChildSheet {
+        sheet_id: id,
+        name: Some(designator.to_string()),
+        filename: None,
+    };
+    assert!(engine.execute(command).unwrap().changed);
+}
+
+#[test]
+fn the_earlier_plain_sheet_name_is_the_newest_one_before_the_repeats() {
+    let id = uuid::Uuid::now_v7();
+    let mut engine = engine_with_sheet_symbol(id, "first");
+    rename(&mut engine, id, "buck_channel");
+    rename(&mut engine, id, "Repeat(CH, 1, 4)");
+    rename(&mut engine, id, "Repeat(CH, 1, 6)");
+
+    assert_eq!(engine.earlier_plain_sheet_name(id), Some("buck_channel"));
+}
+
+#[test]
+fn the_earlier_plain_sheet_name_survives_undoing_a_later_step() {
+    let id = uuid::Uuid::now_v7();
+    let mut engine = engine_with_sheet_symbol(id, "buck_channel");
+    rename(&mut engine, id, "Repeat(CH, 1, 4)");
+    rename(&mut engine, id, "buck_channel");
+    engine.undo().unwrap();
+
+    assert_eq!(engine.document().child_sheets[0].name, "Repeat(CH, 1, 4)");
+    assert_eq!(engine.earlier_plain_sheet_name(id), Some("buck_channel"));
+}
+
+#[test]
+fn a_sheet_opened_repeated_has_no_earlier_plain_name() {
+    let id = uuid::Uuid::now_v7();
+    let mut engine = engine_with_sheet_symbol(id, "Repeat(CH, 1, 4)");
+    assert_eq!(engine.earlier_plain_sheet_name(id), None);
+
+    rename(&mut engine, id, "Repeat(CH, 1, 6)");
+
+    assert_eq!(engine.earlier_plain_sheet_name(id), None);
 }
 
 #[test]

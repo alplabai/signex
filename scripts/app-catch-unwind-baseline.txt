@@ -1,0 +1,4 @@
+# Production catch_unwind calls under crates/signex-app/src/app, counted by
+# scripts/check_app_catch_unwind.sh (#2651). It may only fall: lower it in the
+# change that removes a call, never raise it.
+1

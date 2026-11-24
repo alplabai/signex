@@ -135,6 +135,75 @@ fn parameters_are_set_cleared_removed_and_undone() {
     assert!(!data.parameters.contains_key("rev"));
 }
 
+fn rename_parameter(from: &str, to: &str) -> ProjectGeneralCommand {
+    ProjectGeneralCommand::RenameParameter {
+        from: from.to_string(),
+        to: to.to_string(),
+    }
+}
+
+#[test]
+fn a_rename_moves_the_value_as_one_step_and_undo_restores_the_old_key() {
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    assert!(history.apply(&mut data, set_parameter("VIN", "12V")));
+    // The rename does not join the open typing run of the value.
+    assert!(history.apply(&mut data, rename_parameter("VIN", "VSUPPLY")));
+    assert_eq!(
+        data.parameters.get("VSUPPLY").map(String::as_str),
+        Some("12V")
+    );
+    assert!(!data.parameters.contains_key("VIN"));
+    // Typing after the rename is a step of its own too.
+    assert!(history.apply(&mut data, set_parameter("VSUPPLY", "24V")));
+
+    assert!(history.undo(&mut data));
+    assert_eq!(
+        data.parameters.get("VSUPPLY").map(String::as_str),
+        Some("12V")
+    );
+    assert!(history.undo(&mut data), "the rename is one step");
+    assert_eq!(data.parameters.get("VIN").map(String::as_str), Some("12V"));
+    assert!(!data.parameters.contains_key("VSUPPLY"));
+    assert!(history.undo(&mut data));
+    assert!(data.parameters.is_empty());
+    assert!(!history.can_undo());
+
+    assert!(history.redo(&mut data));
+    assert!(history.redo(&mut data));
+    assert_eq!(
+        data.parameters.get("VSUPPLY").map(String::as_str),
+        Some("12V")
+    );
+}
+
+#[test]
+fn a_rename_that_changes_nothing_records_nothing() {
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    // One typing run: one step.
+    history.apply(&mut data, set_parameter("VIN", "12V"));
+    history.apply(&mut data, set_parameter("VOUT", "3V3"));
+    let before = data.parameters.clone();
+    for (from, to) in [
+        ("VIN", "VIN"),
+        ("MISSING", "OTHER"),
+        ("VIN", ""),
+        ("VIN", "VOUT"),
+    ] {
+        assert!(
+            !history.apply(&mut data, rename_parameter(from, to)),
+            "{from} -> {to}"
+        );
+    }
+    assert_eq!(data.parameters, before, "the values are untouched");
+    let mut n = 0;
+    while history.undo(&mut data) {
+        n += 1;
+    }
+    assert_eq!(n, 1, "no step was recorded");
+}
+
 fn pick(standard: Option<DesignatorStandard>) -> ProjectGeneralCommand {
     ProjectGeneralCommand::SetDesignatorStandard(standard)
 }
@@ -380,19 +449,19 @@ fn each_project_setup_pick_is_its_own_step_and_typing_one_field_is_one() {
     };
     let mut data = project();
     let mut history = ProjectGeneralHistory::default();
-    let hobby = ProjectSetup::from_profile(SetupProfile::Hobby);
+    let advanced = ProjectSetup::from_profile(SetupProfile::Advanced);
     let hdi = ProjectSetup::from_profile(SetupProfile::Hdi);
-    assert!(history.apply(&mut data, pick(&hobby)));
+    assert!(history.apply(&mut data, pick(&advanced)));
     assert!(history.apply(&mut data, pick(&hdi)));
     assert!(history.undo(&mut data));
     assert_eq!(
         data.project_defaults,
-        hobby.defaults(),
-        "Ctrl+Z returns Hobby"
+        advanced.defaults(),
+        "Ctrl+Z returns Advanced"
     );
 
     // Typing in one rule field is one step; a pick after it is another.
-    let mut typed = hobby.clone();
+    let mut typed = advanced.clone();
     for clearance in [0.3, 0.31, 0.315] {
         typed.pcb.clearance_mm = clearance;
         history.apply(
@@ -410,7 +479,7 @@ fn each_project_setup_pick_is_its_own_step_and_typing_one_field_is_one() {
     assert!(history.undo(&mut data));
     assert_eq!(
         data.project_defaults,
-        hobby.defaults(),
+        advanced.defaults(),
         "the typing was one step"
     );
 }

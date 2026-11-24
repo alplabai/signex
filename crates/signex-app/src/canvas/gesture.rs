@@ -15,6 +15,8 @@ impl CanvasEvent {
                 | Self::BoxSelect { .. }
                 | Self::MoveSelected { .. }
                 | Self::MovePicked { .. }
+                | Self::WireEndDragged { .. }
+                | Self::BezierPointsDragged { .. }
                 | Self::ViewMoved
         )
     }

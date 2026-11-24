@@ -272,7 +272,7 @@ fn a_loose_board_has_no_net_classes() {
     app.document_state.projects[0].data.pcb_file = None;
     let refused = run(&mut app, "add_net_class", &[&document(&path)]);
     assert!(
-        matches!(&refused, CommandOutcome::Disabled { reason } if reason.contains("no open project")),
+        matches!(&refused, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("no open project")),
         "{refused:?}"
     );
 }

@@ -83,7 +83,9 @@ fn fixture() -> Fixture {
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
         fab_outputs: None,
+        router_tool_diameter: None,
         requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
@@ -152,14 +154,16 @@ fn prepare_replace(app: &mut Signex) -> Vec<Message> {
 }
 
 fn start_rename(app: &mut Signex, target: &Path) -> iced::Task<Message> {
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0, 1],
         buffer: "moved.snxsch".to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     app.update(Message::Rename(RenameMsg::Submit))
 }
 
@@ -172,6 +176,7 @@ fn start_delete(app: &mut Signex, target: &Path) -> iced::Task<Message> {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::DeleteFile,

@@ -6,7 +6,10 @@
 //! key acts on the board in view and its selection; the same command with
 //! operands (`operands.rs`) acts on the board an agent names. Both build the
 //! edit in `signex_engine::pcb::board_tools` and run it here as one undo
-//! step through the board's mutation gateway. Copper keeps the clearance the
+//! step through the board's mutation gateway. Gloss, Board Shape, Keepout
+//! and Arrange in Box go one step further: the GUI fills in the board and
+//! the items the person picked and runs the operand handler itself
+//! (`command::translator`, ADR-0006 slice 6). Copper keeps the clearance the
 //! board, its project's net classes and the written DRC rules ask for.
 //! Behaviour:
 //! `docs/PCB_TOOLS.md`, "Board Tools".
@@ -17,11 +20,12 @@ mod operands;
 use std::collections::BTreeSet;
 use std::path::Path;
 
+use iced::Task;
 use pcb_geom::ItemRef;
 use signex_drc::DrcRules;
 use signex_engine::pcb::board_tools::{
     StitchArea, ToolEdit, ToolRefusal, ToolReport, add_teardrops, default_stitch_pitch_mm,
-    gloss_tracks, keepout_from_selection, outline_from_tracks, remove_teardrops,
+    remove_teardrops,
 };
 use signex_i18n::{ids, t};
 use signex_types::pcb::PcbBoard;
@@ -33,7 +37,8 @@ pub(crate) use operands::{
     gloss_by_operands, keepout_by_operands, remove_teardrops_by_operands, stitch_by_operands,
 };
 
-use crate::app::{BoardToolsMsg, Signex};
+use crate::app::command::{CommandOutcome, OperandValue, translator};
+use crate::app::{BoardToolsMsg, Message, Signex};
 
 /// The catalog command of each tool, for its name in Messages.
 fn command_of(event: BoardToolsMsg) -> &'static str {
@@ -101,7 +106,8 @@ impl Picked {
                 ItemRef::Text(_)
                 | ItemRef::Dimension(_)
                 | ItemRef::Graphic { .. }
-                | ItemRef::FootprintText { .. } => {}
+                | ItemRef::FootprintText { .. }
+                | ItemRef::Room(_) => {}
             }
         }
         picked.nets.remove(&0);
@@ -138,29 +144,69 @@ fn lays_copper(event: BoardToolsMsg) -> bool {
     )
 }
 
+/// The items of the selection a translated tool acts on, as its `ids`;
+/// `None` for a tool the GUI runs itself. Only what the menu row acted on
+/// before the translator is passed, so the handler's all-or-nothing check
+/// never refuses a selection the row accepted: the tracks of the board for
+/// Gloss and Board Shape; for a keepout the zones of the board when any is
+/// selected (the lines are then left out, as before), else the tracks.
+fn translated_targets(
+    event: BoardToolsMsg,
+    board: &PcbBoard,
+    picked: &Picked,
+) -> Option<Vec<Uuid>> {
+    let tracks = || {
+        let on_board = |id: &&Uuid| board.segments.iter().any(|s| s.uuid == **id);
+        picked.tracks.iter().filter(on_board).copied().collect()
+    };
+    match event {
+        BoardToolsMsg::GlossRequested | BoardToolsMsg::BoardShapeRequested => Some(tracks()),
+        BoardToolsMsg::KeepoutRequested => {
+            let on_board = |id: &&Uuid| board.zones.iter().any(|z| z.uuid == **id);
+            let zones: Vec<Uuid> = picked.zones.iter().filter(on_board).copied().collect();
+            Some(if zones.is_empty() { tracks() } else { zones })
+        }
+        BoardToolsMsg::StitchRequested
+        | BoardToolsMsg::TeardropsAddRequested
+        | BoardToolsMsg::TeardropsRemoveRequested
+        | BoardToolsMsg::ArrangeRequested => None,
+    }
+}
+
+/// `ids` for `items`; none when nothing is named, as a caller leaves it out.
+fn targets_operand(items: Vec<Uuid>) -> Vec<(&'static str, OperandValue)> {
+    if items.is_empty() {
+        return Vec::new();
+    }
+    vec![("ids", OperandValue::Targets(items))]
+}
+
 impl Signex {
     /// A board Tools command ran on the board in view.
-    pub(crate) fn handle_board_tools(&mut self, event: BoardToolsMsg) {
+    pub(crate) fn handle_board_tools(&mut self, event: BoardToolsMsg) -> Task<Message> {
         if event == BoardToolsMsg::ArrangeRequested {
             self.arm_arrange_box();
-            return;
+            return Task::none();
         }
         let Some(path) = self.active_tab_path().filter(|_| self.has_active_pcb()) else {
-            return;
+            return Task::none();
         };
         let items = self
             .with_pcb_selection(|sel, _| sel.selection().items().collect::<Vec<_>>())
             .unwrap_or_default();
         let Some(board) = self.document_state.pcb_board(&path) else {
-            return;
+            return Task::none();
         };
         let picked = Picked::of(board, &items);
+        if let Some(ids) = translated_targets(event, board, &picked) {
+            return self.run_translated_tool(command_of(event), &path, targets_operand(ids));
+        }
         let rules = match clearance_rules(self, &path, board) {
             Ok(rules) => Some(rules),
             Err(refusal) if lays_copper(event) => {
                 let ran = self.run_board_tool(&path, Err(refusal));
                 self.say_board_tool(command_of(event), &ran);
-                return;
+                return Task::none();
             }
             Err(_) => None,
         };
@@ -170,15 +216,50 @@ impl Signex {
             BoardToolsMsg::StitchRequested => stitch_selection(board, &picked, gap),
             BoardToolsMsg::TeardropsAddRequested => add_teardrops(board, nets, gap, Uuid::now_v7),
             BoardToolsMsg::TeardropsRemoveRequested => remove_teardrops(board, nets),
-            BoardToolsMsg::GlossRequested => gloss_tracks(board, &picked.tracks, gap),
-            BoardToolsMsg::BoardShapeRequested => outline_from_tracks(board, &picked.tracks),
-            BoardToolsMsg::KeepoutRequested => {
-                keepout_from_selection(board, &picked.zones, &picked.tracks, Uuid::now_v7())
-            }
-            BoardToolsMsg::ArrangeRequested => return,
+            // Translated above; Arrange arms its box.
+            BoardToolsMsg::GlossRequested
+            | BoardToolsMsg::BoardShapeRequested
+            | BoardToolsMsg::KeepoutRequested
+            | BoardToolsMsg::ArrangeRequested => return Task::none(),
         };
         let ran = self.run_board_tool(&path, built);
         self.say_board_tool(command_of(event), &ran);
+        Task::none()
+    }
+
+    /// Run the board tool `command` through its operand handler on the board
+    /// at `path`, with `operands` filled in from the board in view, and say
+    /// in Messages what it did or why not, as the menu row always has.
+    pub(crate) fn run_translated_tool(
+        &mut self,
+        command: &'static str,
+        path: &Path,
+        operands: Vec<(&'static str, OperandValue)>,
+    ) -> Task<Message> {
+        let (outcome, task) = translator::run(self, command, path, operands);
+        let ran = match outcome {
+            CommandOutcome::Answered(answer) => {
+                match serde_json::from_value::<ToolReport>(answer) {
+                    Ok(report) => Ok(report),
+                    // The edit has landed, so it is never said as a refusal.
+                    // The handler builds the report from `ToolReport`, so
+                    // this cannot fail outside a bug.
+                    Err(error) => {
+                        debug_assert!(false, "{command}: unreadable report: {error}");
+                        return task;
+                    }
+                }
+            }
+            CommandOutcome::Disabled { reason } => Err(reason.render(&self.ui_state.i18n)),
+            // A board tool reads nothing first, so it never waits; were it
+            // to, the read runs it again (`translator::run` leaves no other).
+            other => {
+                debug_assert!(false, "{command}: a board tool waited: {other:?}");
+                return task;
+            }
+        };
+        self.say_board_tool(command, &ran);
+        task
     }
 
     /// Run a built tool edit on the board at `path` as one undo step. What it
@@ -295,3 +376,7 @@ fn stitch_selection<F: Fn(u32, u32) -> i64 + Copy>(
 mod copper_tests;
 #[cfg(test)]
 mod placement_tests;
+#[cfg(test)]
+mod targets_tests;
+#[cfg(test)]
+mod translator_tests;

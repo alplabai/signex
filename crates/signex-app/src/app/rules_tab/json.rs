@@ -10,7 +10,7 @@ use signex_types::pcb::PcbBoard;
 use signex_types::project::DrcRuleSet;
 use signex_types::violation::Severity;
 
-use super::RulesDomain;
+use super::grid::domain_of;
 
 /// `nm` as mm, without float noise.
 pub(crate) fn mm(nm: i64) -> f64 {
@@ -62,7 +62,7 @@ pub(crate) fn row_json(row: &RuleRow, src: &str, layer: Option<&DrcRuleSet>) -> 
         "enabled": row.enabled,
         "applied": row.applied,
         "kind": row.kind.map(|k| k.keyword()),
-        "domain": row.kind.map(|k| RulesDomain::of(k).as_str()),
+        "domain": domain_of(row).map(|d| d.as_str()),
         "scope": scope_text(&row.scope),
         "layer": row.layer,
         "pair": row.pair.as_ref().map(|[a, b]| format!("{a}-{b}")),

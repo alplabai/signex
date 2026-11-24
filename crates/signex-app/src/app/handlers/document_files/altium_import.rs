@@ -192,7 +192,7 @@ mod tests {
         app.document_state.altium_import_running = Some(running.clone());
 
         let _ = app.update(Message::Ui(crate::app::UiMsg::StatusBar(
-            crate::app::StatusBarRequest::CancelAltiumImport,
+            crate::app::StatusBarRequest::CancelBoardImport,
         )));
 
         assert!(running.cancel.load(std::sync::atomic::Ordering::Relaxed));

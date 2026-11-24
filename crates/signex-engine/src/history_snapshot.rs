@@ -12,8 +12,8 @@
 use std::sync::Arc;
 
 use signex_types::schematic::{
-    Bus, BusEntry, ChildSheet, Junction, Label, NoConnect, SchDirective, SchDrawing,
-    SchematicSheet, Symbol, TextNote, Wire,
+    Bus, BusEntry, ChildSheet, Junction, Label, NoConnect, NoErcDirective, SchDirective,
+    SchDrawing, SchUnion, SchematicSheet, Symbol, TextNote, Wire,
 };
 
 macro_rules! shared_collections {
@@ -71,8 +71,16 @@ shared_collections! {
     buses: Bus,
     bus_entries: BusEntry,
     drawings: SchDrawing,
-    no_erc_directives: NoConnect,
+    no_erc_directives: NoErcDirective,
     directives: SchDirective,
+    unions: SchUnion,
+}
+
+impl SheetSnapshot {
+    /// The sheet symbol `id` as this snapshot holds it.
+    pub(super) fn child_sheet(&self, id: uuid::Uuid) -> Option<&ChildSheet> {
+        self.child_sheets.iter().find(|cs| cs.uuid == id)
+    }
 }
 
 fn share_or_wrap<T: PartialEq>(items: Vec<T>, previous: Option<&Arc<Vec<T>>>) -> Arc<Vec<T>> {

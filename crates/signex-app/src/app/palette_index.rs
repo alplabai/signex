@@ -80,6 +80,8 @@ pub(crate) struct IndexInputs {
     project_dir: Option<PathBuf>,
     fold: CaseFold,
     stamp: u64,
+    /// The active project's saved channel naming.
+    naming: signex_types::project::ChannelNaming,
 }
 
 /// Hash of what the index reads: which project it is of (root, declared
@@ -95,6 +97,10 @@ pub fn index_stamp(documents: &DocumentState) -> u64 {
     )
     .hash(&mut h);
     documents.documents_epoch.hash(&mut h);
+    if let Some(project) = documents.active_document_project() {
+        let naming = &project.data.schematic_design.channel_naming;
+        (&naming.designator_format, &naming.net_format).hash(&mut h);
+    }
     let mut engines: Vec<_> = documents.engines.iter().collect();
     engines.sort_by(|a, b| a.0.cmp(b.0));
     for (path, engine) in engines {
@@ -161,7 +167,13 @@ pub(crate) fn build_index(inputs: IndexInputs) -> ProjectSearchIndex {
             }
         }
     }
-    index.nets = index_nets(&set, &hierarchy, &index.designators, inputs.project_dir);
+    index.nets = index_nets(
+        &set,
+        &hierarchy,
+        &index.designators,
+        inputs.project_dir,
+        &inputs.naming,
+    );
     index
 }
 
@@ -176,8 +188,10 @@ fn index_nets(
     hierarchy: &super::sheet_hierarchy::SheetHierarchy,
     designators: &[IndexedDesignator],
     project_dir: Option<PathBuf>,
+    naming: &signex_types::project::ChannelNaming,
 ) -> Vec<IndexedNet> {
-    let Some(netlist) = super::stitched_netlist::netlist_of_set(set, project_dir).netlist else {
+    let Some(netlist) = super::stitched_netlist::netlist_of_set(set, project_dir, naming).netlist
+    else {
         return Vec::new();
     };
     let mut by_symbol: HashMap<(Uuid, InstancePath), &PathBuf> = HashMap::new();
@@ -285,6 +299,10 @@ impl Signex {
             project_dir: ds.active_document_project().map(|p| p.dir().to_path_buf()),
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
             stamp,
+            naming: ds
+                .active_document_project()
+                .map(|p| p.data.schematic_design.channel_naming.clone())
+                .unwrap_or_default(),
         })
     }
 

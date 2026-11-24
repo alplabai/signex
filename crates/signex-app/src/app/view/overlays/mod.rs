@@ -1,6 +1,6 @@
-//! Floating overlay builders — the symbol hover tooltip, the chrome-strip
-//! command-palette dropdown, and the shared click-outside-to-dismiss
-//! layer.
+//! Floating overlay builders — the hover cards (`symbol_hover`,
+//! `net_hover`), the chrome-strip command-palette dropdown, and the shared
+//! click-outside-to-dismiss layer.
 //!
 //! Extracted verbatim from `view/mod.rs` (ADR-0001, issue #164) as pure
 //! code motion — no behaviour change. These are methods of the same
@@ -15,26 +15,26 @@ use super::*;
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
-/// Width of the command palette card in an undocked window.
-const WINDOW_PALETTE_WIDTH: f32 = 480.0;
-/// Width of the Graphite palette card under the chrome strip (the mock's
-/// 640 px); independent of the search field's own width.
-const GRAPHITE_PALETTE_WIDTH: f32 = 640.0;
-
 mod bars;
 #[cfg(test)]
 mod dismiss_tests;
+mod dock_zones;
 mod modals;
 mod net_hover;
 mod palette;
 #[cfg(test)]
 mod palette_scrim_tests;
+mod panel_list;
+mod placement_paused;
 pub(super) mod read_only_badge;
+mod symbol_hover;
+mod text_edit;
 #[cfg(test)]
 mod window_gate_tests;
 mod zoom_pill;
 #[cfg(test)]
 pub(super) use zoom_pill::pill_origin as zoom_pill_origin;
+mod zoom_presets;
 
 impl Signex {
     /// The canvas rectangle in window coordinates, from the live dock sizes.
@@ -93,272 +93,6 @@ impl Signex {
         )
     }
 
-    /// Hover tooltip card showing the placed symbol's designator,
-    /// value, footprint, and library id. Only paints after the cursor
-    /// has dwelled on a Symbol hit for >= 250 ms — gates impulsive
-    /// motion from popping the card. Returns None when the gate
-    /// hasn't tripped, when no schematic is active, or when the
-    /// uuid no longer resolves (e.g. the symbol was deleted while
-    /// the dwell timer was running).
-    pub(super) fn view_hover_tooltip(
-        &self,
-        window_id: iced::window::Id,
-    ) -> Option<Element<'_, Message>> {
-        use signex_i18n::{Localized, ids, t};
-        use signex_widgets::text;
-
-        if self.interaction_state.editing_text.is_some() {
-            return None;
-        }
-        // A net card (a wire, pin or label, #1270) takes the place of the
-        // symbol card while the pointer rests on a pin.
-        if let Some(card) = &self.document_state.net_nav.hover.card {
-            return Some(self.view_net_hover_card(card, window_id));
-        }
-        let interaction = &self.interaction_state;
-        let uuid = interaction.hover_symbol_uuid?;
-        let started = interaction.hover_started_at?;
-        if started.elapsed() < std::time::Duration::from_millis(700) {
-            return None;
-        }
-        let (sx, sy) = interaction.hover_screen_pos?;
-        let active_path = self.document_state.active_path.as_ref()?;
-        let engine = self.document_state.engines.get(active_path)?;
-        let symbol = engine.document().symbols.iter().find(|s| s.uuid == uuid)?;
-
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
-        let muted_c = crate::styles::ti(tokens.text_secondary);
-        // Match the schematic's own font (Iosevka by default; whatever
-        // the user picked under Preferences ▸ Canvas Font) so the
-        // tooltip reads as "this is data from the canvas" rather than
-        // floating Roboto chrome. We reuse the app's `IOSEVKA` font
-        // constant for canvas text so the lookup
-        // hits the embedded TTF (not whatever the system fontconfig
-        // falls back to for `Family::Name`).
-        let canvas_font_name: &str = &self.document_state.panel_ctx.canvas_font_name;
-        let canvas_font = crate::fonts::canvas_iced_font(canvas_font_name);
-
-        // Single row style — label in a fixed gutter, value fills the
-        // remaining card width and wraps onto further lines on its
-        // own when the payload is long. Keeps the rhythm uniform
-        // across short (Designator / Value) and long (Footprint /
-        // Library) fields without an inline-vs-stacked split.
-        let i18n = &self.ui_state.i18n;
-        let mut fields: Vec<(Localized, String)> = Vec::with_capacity(4);
-        let label = |id: signex_i18n::MessageId| t!(i18n, id);
-        fields.push((
-            label(ids::OVERLAY_SYMBOL_CARD_DESIGNATOR),
-            self.shown_designator(symbol).to_string(),
-        ));
-        fields.push((
-            label(ids::OVERLAY_SYMBOL_CARD_VALUE),
-            crate::library::part_label::card_value(&symbol.value).to_owned(),
-        ));
-        if !symbol.footprint.is_empty() {
-            fields.push((
-                label(ids::OVERLAY_SYMBOL_CARD_FOOTPRINT),
-                symbol.footprint.clone(),
-            ));
-        }
-        if !symbol.lib_id.is_empty() {
-            fields.push((
-                label(ids::OVERLAY_SYMBOL_CARD_LIBRARY),
-                self.library
-                    .drift
-                    .display_name(&symbol.lib_id, &self.library.open_libraries),
-            ));
-        }
-        let (label_w, card_w) = symbol_card_widths(&fields, canvas_font_name);
-        // Below the cap the card shrinks to its text; at the cap it holds
-        // the cap and long values wrap.
-        let at_cap = card_w >= SYMBOL_CARD_MAX_W;
-        let fill_or_shrink = if at_cap { Length::Fill } else { Length::Shrink };
-        let field = |label: Localized, value: String| -> Element<'_, Message> {
-            iced::widget::row![
-                text(label)
-                    .font(canvas_font)
-                    .size(TS.body)
-                    .color(muted_c)
-                    .width(label_w),
-                // The symbol's own field value (design data).
-                text(signex_i18n::UserText::new(value))
-                    .font(canvas_font)
-                    .size(TS.label)
-                    .color(text_c)
-                    .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
-                    .width(fill_or_shrink),
-            ]
-            .spacing(SP.s)
-            .width(fill_or_shrink)
-            .align_y(iced::Alignment::Start)
-            .boxed()
-        };
-
-        let rows: Vec<Element<'_, Message>> = fields
-            .into_iter()
-            .map(|(label, value)| field(label, value))
-            .collect();
-
-        let rows_len = rows.len();
-        let card = hover_card(
-            rows,
-            3.0,
-            if at_cap {
-                Length::Fixed(card_w)
-            } else {
-                Length::Shrink
-            },
-            &self.document_state.panel_ctx.tokens,
-        );
-
-        // Below-right of the cursor, flipped or clamped to stay on the
-        // canvas (not the Properties panel beside it). Rows wrap, so the
-        // height budgets a few lines each plus the card padding; iced lays
-        // the card out at its true size.
-        const ESTIMATED_ROW_H: f32 = 28.0;
-        let estimated_h = 16.0 + ESTIMATED_ROW_H * rows_len as f32;
-        let (x, y) =
-            canvas_region::place_card((sx, sy), (card_w, estimated_h), self.card_bounds(window_id));
-        Some(signex_widgets::Translate::new(card, (x, y)).boxed())
-    }
-
-    /// Result list for the chrome-strip command palette. Anchored
-    /// below the chrome strip; scoring + ranking happens in the
-    /// `command_palette` module so this view stays a thin renderer.
-    pub(super) fn view_command_palette_dropdown(&self) -> Element<'_, Message> {
-        use crate::app::command_palette::MAX_RESULTS;
-        use iced::widget::{Space, column, container, scrollable};
-        use iced::{Background, Border, Color};
-        use signex_i18n::{ids, t};
-        use signex_widgets::{text, text_input};
-
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let i18n = &*self.ui_state.i18n;
-        let text_c = crate::styles::ti(tokens.text);
-        let muted_c = crate::styles::ti(tokens.text_secondary);
-
-        // Ranked in `update` (`refresh_command_palette_results`), read here.
-        let results = &self.ui_state.command_palette.results;
-        let total = self.ui_state.command_palette.total_matches;
-        let selected = self
-            .ui_state
-            .command_palette
-            .selected_index
-            .min(total.saturating_sub(1));
-
-        let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(MAX_RESULTS.min(total));
-        for (display_idx, entry) in results.iter().enumerate() {
-            let is_active = display_idx == selected;
-            // `results` is already grouped (see `group_for_display`), so a
-            // header goes wherever the source changes.
-            if display_idx == 0 || results[display_idx - 1].source != entry.source {
-                let count = results.iter().filter(|e| e.source == entry.source).count();
-                rows.push(palette::group_header(
-                    &self.ui_state.i18n,
-                    tokens,
-                    entry.source,
-                    count,
-                ));
-            }
-            rows.push(palette::result_row(
-                &self.ui_state.i18n,
-                tokens,
-                entry,
-                &self.ui_state.command_palette.query,
-                is_active,
-                Message::CommandPalette(CommandPaletteMsg::Select(display_idx)),
-            ));
-        }
-
-        let body: Element<'_, Message> = if total == 0 {
-            container(
-                text(t!(i18n, ids::OVERLAY_PALETTE_NO_RESULTS))
-                    .size(TS.label)
-                    .color(muted_c),
-            )
-            .padding([SP.l, 14.0])
-            .width(Length::Fill)
-            .boxed()
-        } else {
-            let list = column(rows).spacing(SP.xs).padding(SP.s);
-            // Bound the list so the 360 px card keeps room for the search
-            // row above and the hint footer below.
-            let list_cap = 360.0 - 2.0 * (TS.body * 1.6 + 2.0 * SP.l);
-            scrollable(list)
-                .height(Length::Fit.max(list_cap))
-                .style(palette::scrollbar_style(tokens))
-                .boxed()
-        };
-
-        // Footer with the hint line, and a note when there are more matches
-        // than we render.
-        let footer: Element<'_, Message> = if total > 0 {
-            let more = (total > MAX_RESULTS).then(|| {
-                t!(i18n, ids::OVERLAY_PALETTE_MORE_RESULTS, "count" => (total - MAX_RESULTS) as i64)
-            });
-            palette::hint_footer(i18n, tokens, results.get(selected), more)
-        } else {
-            Space::new().height(0).boxed()
-        };
-
-        // Card width and x come from the same geometry the chrome strip
-        // lays the input out with, so the dropdown reads as an extension
-        // of the input rather than a floating popup that happens to be
-        // nearby — including after a resize shrinks the bar.
-        let in_window = self.ui_state.command_palette.window.is_some();
-        // An undocked window has no chrome bar: its palette carries the
-        // text input at the top of the card.
-        let (card_x, card_w) = if in_window {
-            (16.0, WINDOW_PALETTE_WIDTH)
-        } else {
-            let (x, _) = self.chrome_search_bar_geometry();
-            chrome_palette_card(x, self.ui_state.window_size.0)
-        };
-        let ink4 = crate::styles::tokens::resolve(tokens).ink4;
-        let window_input: Option<Element<'_, Message>> =
-            self.ui_state.command_palette.window.map(|window| {
-                text_input(
-                    t!(i18n, ids::OVERLAY_PALETTE_WINDOW_SEARCH),
-                    &self.ui_state.command_palette.query,
-                )
-                .id(crate::app::command_palette::COMMAND_PALETTE_WINDOW_INPUT_ID.clone())
-                .on_input(move |q| {
-                    Message::CommandPalette(CommandPaletteMsg::QueryTypedInWindow(window, q))
-                })
-                .on_submit(Message::CommandPalette(CommandPaletteMsg::ExecuteSelected))
-                .size(TS.body)
-                .width(Length::Fill)
-                .padding(0)
-                .style(move |_: &iced::Theme, _| iced::widget::text_input::Style {
-                    background: Background::Color(Color::TRANSPARENT),
-                    border: Border::default(),
-                    placeholder: ink4,
-                    value: text_c,
-                    selection: Color { a: 0.4, ..text_c },
-                })
-                .boxed()
-            });
-        let input = palette::search_row(
-            i18n,
-            tokens,
-            &self.ui_state.command_palette.query,
-            window_input,
-        );
-        let card = container(column![input, body, footer])
-            .width(card_w)
-            .height(Length::Fit.max(360.0))
-            .padding(0)
-            .style(crate::styles::modal_card(tokens));
-
-        let y = if in_window {
-            16.0
-        } else {
-            crate::menu_bar::MENU_BAR_HEIGHT + 4.0
-        };
-        signex_widgets::Translate::new(card.boxed(), (card_x, y)).boxed()
-    }
-
     pub(super) fn dismiss_layer(on_press: Message) -> Element<'static, Message> {
         Self::dismiss_layer_tinted(
             on_press,
@@ -403,6 +137,20 @@ impl Signex {
         .boxed()
     }
 
+    /// The click-outside layer of an Active Bar flyout, on either bar. Unlike
+    /// [`Self::dismiss_layer`] it takes a right press too and sends
+    /// `on_right_press`, which also holds that press's release off the
+    /// canvas, so an armed tool stays armed.
+    pub(super) fn flyout_dismiss_layer(
+        on_dismiss: Message,
+        on_right_press: Message,
+        scrim: iced::Color,
+    ) -> Element<'static, Message> {
+        iced::widget::mouse_area(Self::dismiss_layer_tinted(on_dismiss, scrim))
+            .on_right_press(on_right_press)
+            .boxed()
+    }
+
     /// Active-bar dropdown menu (Place / Align / filter presets etc.).
     /// Absolute-positioned with `Translate` so the column can auto-size
     /// to its widest label. Pushes the dismiss layer then the dropdown.
@@ -431,6 +179,7 @@ impl Signex {
             self.ui_state.effective_theme_id(),
             has_selection,
             has_net_colors,
+            &|id| self.keymap_shortcut_label(id),
         )
         .map(Message::ActiveBar)
         .boxed();
@@ -445,8 +194,10 @@ impl Signex {
         let (ww, _) = ui.size_of_window(window_id);
         let adjusted_x =
             x_off + crate::active_bar::bar_left_in_window(interaction.current_tool, ww, &metrics);
-        Self::dismiss_and_place(
+        Self::flyout_and_place(
             Message::ActiveBar(crate::active_bar::ActiveBarMsg::CloseMenus),
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::FlyoutRightPressed),
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::RightPressTaken),
             dropdown,
             (adjusted_x, ab_y),
         )
@@ -492,6 +243,12 @@ impl Signex {
     ) -> Vec<Element<'_, Message>> {
         let interaction = &self.interaction_state;
         let Some(tab_ctx) = interaction.tab_context_menu.as_ref() else {
+            // The tab strip's "+N" menu shares this slot; the menus are
+            // exclusive (`close_all_context_menus`).
+            let overflow = self.tab_overflow_menu_overlay(window_id);
+            if !overflow.is_empty() {
+                return overflow;
+            }
             return self.dock_tab_context_menu_overlay();
         };
         // Only the main window's tab strip opens this menu, so only the main
@@ -518,8 +275,9 @@ impl Signex {
         )
     }
 
-    /// Projects-panel tree right-click menu (+ its AddNewToProject
-    /// submenu). Pushes dismiss, then the placed menu and its flyout.
+    /// Projects-panel tree right-click menu (+ its Add New to Project,
+    /// Planned or library Add New flyout). Pushes dismiss, then the placed
+    /// menu and its flyout.
     pub(super) fn project_tree_context_menu_overlay(
         &self,
         window_id: iced::window::Id,
@@ -532,14 +290,28 @@ impl Signex {
         if !self.overlay_belongs_to(tree_ctx.window, window_id) {
             return Vec::new();
         }
+        if tree_ctx.add_new_only {
+            return Self::menu_overlay(
+                Message::ContextMenu(ContextMenuMsg::CloseProjectTree),
+                self.view_context_submenu(ContextSubmenu::AddNewToProject, window_id),
+                (tree_ctx.x, tree_ctx.y),
+            );
+        }
         let card = self.view_project_tree_context_menu(tree_ctx);
         let mut menu =
             super::context_menu::AnchoredMenu::new(card.element, (tree_ctx.x, tree_ctx.y));
-        // Only AddNewToProject opens from this menu.
-        if let (Some(ContextSubmenu::AddNewToProject), Some(offset)) =
-            (interaction.context_submenu, card.flyout_offset)
+        // Only the tree's own flyouts open from this menu; the offset is
+        // there only while one of its launchers is open.
+        if let (
+            Some(
+                kind @ (ContextSubmenu::AddNewToProject
+                | ContextSubmenu::ProjectPlanned
+                | ContextSubmenu::AddNewToLibrary),
+            ),
+            Some(offset),
+        ) = (interaction.context_submenu, card.flyout_offset)
         {
-            let submenu = self.view_context_submenu(ContextSubmenu::AddNewToProject, window_id);
+            let submenu = self.view_context_submenu(kind, window_id);
             menu = menu.flyout(Self::submenu_panel(submenu), offset);
         }
         Self::anchored_layers(Message::ContextMenu(ContextMenuMsg::CloseProjectTree), menu)
@@ -547,11 +319,17 @@ impl Signex {
 
     /// v0.18.10 — Altium-style grid picker popup. Floats at the cursor
     /// when `G` is pressed in a footprint editor. Pushes dismiss then the
-    /// placed menu.
-    pub(super) fn grid_picker_overlay(&self) -> Vec<Element<'_, Message>> {
+    /// placed menu, only in the window it opened in.
+    pub(super) fn grid_picker_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         let Some(picker) = self.interaction_state.grid_picker.as_ref() else {
             return Vec::new();
         };
+        if picker.owner != self.overlay_owner(window_id) {
+            return Vec::new();
+        }
         Self::menu_overlay(
             Message::Ui(UiMsg::GridPickerClose),
             self.view_grid_picker_menu(),
@@ -559,48 +337,9 @@ impl Signex {
         )
     }
 
-    /// Dock drop preview — paints the region the dragged floating panel
-    /// docks into if released now (`DockArea::drop_preview`).
-    pub(super) fn dock_drag_zone_overlay(&self) -> Option<Element<'_, Message>> {
-        use iced::widget::{column, container, row};
-
-        let ui = &self.ui_state;
-        let document = &self.document_state;
-        let position = document.dock.drop_preview?;
-        let geometry = document.dock.drop_geometry(
-            ui.window_size,
-            (ui.left_width, ui.right_width, ui.bottom_height),
-        );
-        let depth = geometry.preview_depth(position);
-        let zone_style = crate::styles::dock_zone_highlight(&document.panel_ctx.tokens);
-        let zone = |width: Length, height: Length| {
-            container(iced::widget::Space::new())
-                .width(width)
-                .height(height)
-                .style(zone_style)
-        };
-        Some(match position {
-            crate::dock::PanelPosition::Left => zone(depth.into(), Length::Fill).boxed(),
-            crate::dock::PanelPosition::Right => row![
-                iced::widget::Space::new().width(Length::Fill),
-                zone(depth.into(), Length::Fill),
-            ]
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .boxed(),
-            crate::dock::PanelPosition::Bottom => column![
-                iced::widget::Space::new().height(Length::Fill),
-                zone(Length::Fill, depth.into()),
-            ]
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .boxed(),
-        })
-    }
-
     /// Floating panels — one `Translate`-positioned widget per floating
-    /// panel. No clamp: panels follow Altium behaviour and may be
-    /// dragged anywhere, even past the window edge (the OS clips).
+    /// panel. No clamp: a panel may be dragged anywhere, even past the
+    /// window edge (the OS clips).
     pub(super) fn floating_panels_overlay(
         &self,
         window_id: iced::window::Id,
@@ -642,81 +381,4 @@ pub(super) fn scroll_guard<'a>(element: Element<'a, Message>) -> Element<'a, Mes
         .on_scroll(|_| Message::noop())
         .interaction(iced::mouse::Interaction::Idle)
         .boxed()
-}
-
-/// The card both hover cards draw: `rows` on the panel background with a 1 px
-/// border, padded `8 14 8 10`. `width` is `Shrink` to fit the text, or fixed
-/// at the cap.
-fn hover_card<'a>(
-    rows: Vec<Element<'a, Message>>,
-    spacing: f32,
-    width: Length,
-    tokens: &signex_types::theme::ThemeTokens,
-) -> Element<'a, Message> {
-    let panel_bg = crate::styles::ti(tokens.panel_bg);
-    let border_c = crate::styles::ti(tokens.border);
-    container(column(rows).spacing(spacing))
-        .padding(iced::Padding {
-            top: 8.0,
-            right: 14.0,
-            bottom: 8.0,
-            left: 10.0,
-        })
-        .width(width)
-        .style(move |_: &iced::Theme| container::Style {
-            background: Some(iced::Background::Color(panel_bg)),
-            border: iced::Border {
-                color: border_c,
-                width: 1.0,
-                radius: 4.0.into(),
-                ..iced::Border::default()
-            },
-            ..container::Style::default()
-        })
-        .boxed()
-}
-
-/// Widest the symbol hover card grows; below that it fits its text and the
-/// values wrap (#2100).
-const SYMBOL_CARD_MAX_W: f32 = 320.0;
-/// Left (10) plus right (14) padding, plus the 1 px border on each side.
-const SYMBOL_CARD_PAD_W: f32 = 26.0;
-
-/// Label column and card width for the symbol hover card `fields`: the
-/// longest label, the gap and the longest value, at most
-/// [`SYMBOL_CARD_MAX_W`].
-fn symbol_card_widths(fields: &[(signex_i18n::Localized, String)], family: &str) -> (f32, f32) {
-    let family = signex_types::font::nonblank_family(family);
-    let width =
-        |text: &str, size: f32| signex_types::font::estimate_text_width_px(text, size, family);
-    let label_w = fields
-        .iter()
-        .map(|(label, _)| width(&label.to_string(), TS.body))
-        .fold(0.0, f32::max)
-        .ceil();
-    let value_w = fields
-        .iter()
-        .map(|(_, value)| width(value, TS.label))
-        .fold(0.0, f32::max);
-    let card_w = (label_w + SP.s + value_w + SYMBOL_CARD_PAD_W)
-        .ceil()
-        .min(SYMBOL_CARD_MAX_W);
-    (label_w, card_w)
-}
-
-/// The x and width of the palette card under the chrome strip, its left
-/// edge at the search field's `search_x` unless that would run it off the
-/// right of a `window_w` wide window.
-fn chrome_palette_card(search_x: f32, window_w: f32) -> (f32, f32) {
-    let w = GRAPHITE_PALETTE_WIDTH.min((window_w - 32.0).max(WINDOW_PALETTE_WIDTH));
-    (search_x.min((window_w - w - 16.0).max(16.0)), w)
-}
-
-#[cfg(test)]
-mod palette_width_tests {
-    /// The palette card is 640 px wide (maintainer, 2026-11-10).
-    #[test]
-    fn the_chrome_palette_card_is_640_px_wide() {
-        assert_eq!(super::chrome_palette_card(400.0, 1600.0), (400.0, 640.0));
-    }
 }

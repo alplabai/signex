@@ -12,7 +12,9 @@ mod update;
 pub(crate) use command::{new_pcb_document, new_schematic_sheet};
 
 use signex_types::designator::DesignatorStandard;
-use signex_types::project::SheetDefaults;
+use signex_types::project::{
+    ProjectData, ProjectDefaults, ProjectSetup, ResolvedSetup, SheetDefaults, UserProfile,
+};
 
 use crate::app::new_project::{NewProjectMsg, NewProjectState};
 use crate::app::state::ProjectId;
@@ -39,9 +41,30 @@ pub struct DocumentSetupState {
     pub(crate) designators_picked: bool,
     /// The user picked a saved profile card in this dialog.
     pub(crate) profile_picked: bool,
+    /// The setup the project saved, when it saved one (#2538): the cards
+    /// are folded behind one summary row of it.
+    pub(crate) project_setup: Option<ProjectSetup>,
+    /// "Use another profile..." unfolded the cards under the summary row.
+    pub(crate) other_profile_open: bool,
 }
 
 impl DocumentSetupState {
+    /// The summary row of the project's saved setup shows (#2538).
+    pub fn shows_project_summary(&self) -> bool {
+        self.project_setup.is_some()
+    }
+
+    /// The profile cards (or, for a sheet, Your profiles) show: the project
+    /// saved no setup, or "Use another profile..." unfolded them.
+    pub fn shows_cards(&self) -> bool {
+        self.project_setup.is_none() || self.other_profile_open
+    }
+
+    /// Whether Create is available, as the footer button shows it.
+    pub fn create_enabled(&self) -> bool {
+        self.can_create()
+    }
+
     /// Create is available: every shown value is valid.
     pub(crate) fn can_create(&self) -> bool {
         match self.kind {
@@ -94,6 +117,9 @@ pub enum DocumentSetupMsg {
     },
     /// An edit of the shared setup draft (cards, fields, Save as profile).
     Setup(NewProjectMsg),
+    /// The summary row's "Use another profile..." unfolded the cards, or
+    /// "Keep project setup" folded them and took the project's setup back.
+    OtherProfileToggled,
     SubmitRequested,
     CancelRequested,
 }
@@ -102,4 +128,30 @@ impl From<DocumentSetupMsg> for crate::app::Message {
     fn from(msg: DocumentSetupMsg) -> Self {
         Self::Project(crate::app::ProjectMsg::DocumentSetup(msg))
     }
+}
+
+/// The setup a new document of the project `data` starts from. A project
+/// that stores no sheet defaults and names no saved profile gets the blank
+/// sheet Add New always made (A4), not the New Project default.
+pub(crate) fn new_document_setup(data: &ProjectData, users: &[UserProfile]) -> ResolvedSetup {
+    let mut resolved =
+        ProjectSetup::for_project(&data.project_defaults, data.designator_standard(), users);
+    if data.project_defaults.sheet.is_none() && resolved.setup.user_profile.is_none() {
+        let blank = crate::app::handlers::document_files::blank_schematic_sheet_for_new_doc();
+        resolved.setup.sheet = SheetDefaults {
+            paper_size: blank.paper_size,
+            show_title_block: blank.frame.show_title_block,
+        };
+    }
+    resolved
+}
+
+/// Whether `defaults` hold a saved setup for a `kind` document: a named
+/// profile, or the part that document takes (#2538).
+pub(crate) fn has_saved_setup(defaults: &ProjectDefaults, kind: SetupKind) -> bool {
+    defaults.profile.is_some()
+        || match kind {
+            SetupKind::Pcb => defaults.pcb.is_some(),
+            SetupKind::Sheet => defaults.sheet.is_some(),
+        }
 }

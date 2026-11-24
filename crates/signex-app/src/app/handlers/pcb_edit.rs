@@ -22,9 +22,21 @@ impl Signex {
         commands: Vec<BoardCommand>,
         checked: Option<CheckedStep<'_>>,
     ) -> Result<Vec<BoardPatch>, BoardEditError> {
-        let patches = self.document_state.execute_board(path, commands, checked)?;
-        if !patches.is_empty() {
+        let recorded = self.board_edit_to_record(path, &commands);
+        let patches = match self.document_state.execute_board(path, commands, checked) {
+            Ok(patches) => patches,
+            Err(error) => {
+                self.ui_state.command_replay.forget_board_marks();
+                return Err(error);
+            }
+        };
+        if patches.is_empty() {
+            self.ui_state.command_replay.forget_board_marks();
+        } else {
             self.after_board_change(path);
+            if let Some(record) = recorded {
+                self.note_board_edit(path, record);
+            }
         }
         Ok(patches)
     }
@@ -101,6 +113,9 @@ impl Signex {
             canvas.clear_bg_cache();
             canvas.clear_content_cache();
             self.sync_panel_ctx_from_visible_document();
+            self.refresh_pcb_layers_panel();
+            self.document_state.panel_ctx.pcb_nets = self.pcb_nets_summary();
+            self.document_state.panel_ctx.layer_stack = self.layer_stack_facts();
         } else {
             self.repaint_undocked_boards(path);
         }
@@ -109,6 +124,10 @@ impl Signex {
         self.document_state.panel_ctx.pcb_drc = self.pcb_drc_panel();
         // The undocked windows' selections follow the new geometry too (#2240).
         self.refresh_undocked_pcb_highlights(path);
+        // So do the panels of a window showing this board (net table, Layer
+        // Stack): each keeps its own context. No-op inside a window's swap,
+        // where the branch above already refreshed that window's context.
+        self.refresh_window_panel_ctxs(None);
     }
 
     /// Give each undocked window, and the unfocused tile pane (#2249), that

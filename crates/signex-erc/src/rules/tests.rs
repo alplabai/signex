@@ -143,6 +143,7 @@ fn ctx(
         nets: Vec::new(),
         children: HashMap::new(),
         key: None,
+        harness: Default::default(),
     }
 }
 
@@ -1101,6 +1102,7 @@ fn multiple_names_is_suppressed_by_a_no_erc_on_any_of_the_names() {
     assert_eq!(run_multiple_names(&c).len(), 1);
     c.no_erc_directives.push(crate::context::ErcNoErcDirective {
         position: Point::new(0.0, 0.0),
+        rules: Vec::new(),
     });
     assert!(run_multiple_names(&c).is_empty());
 }

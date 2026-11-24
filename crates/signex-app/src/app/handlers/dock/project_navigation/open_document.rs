@@ -40,7 +40,7 @@ impl Signex {
     /// the leaf label against the project dir; otherwise the assembled
     /// path doesn't exist and downstream remove / open paths bail
     /// silently.
-    pub(super) fn tree_path_to_file_path(&self, tree_path: &[usize]) -> Option<std::path::PathBuf> {
+    pub(crate) fn tree_path_to_file_path(&self, tree_path: &[usize]) -> Option<std::path::PathBuf> {
         let node = signex_widgets::tree_view::get_node(
             self.document_state.panel_ctx.project_tree.as_slice(),
             tree_path,

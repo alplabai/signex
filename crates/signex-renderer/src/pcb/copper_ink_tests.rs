@@ -103,24 +103,162 @@ fn copper_off_the_active_layer_keeps_its_colour_but_dims() {
     assert!((dimmed[0].fill_color[3] - DIMMED_ALPHA).abs() < 1e-6);
 }
 
+/// Caner (2026-11-21): vias and through-hole pads show the copper of the
+/// active layer, and follow it.
 #[test]
-fn through_items_stay_multi_layer_whichever_layer_is_active() {
+fn through_items_take_the_colour_of_the_active_copper_layer() {
     let layers = canvas_colors(ThemeId::GraphiteDark).board_layer_colors();
-    let multi = palette_rgba(layers.multi_layer);
-    for active in [CopperLayer::Top, CopperLayer::Bottom] {
+    for (active, colour) in [
+        (CopperLayer::Top, palette_rgba(layers.top_copper)),
+        (CopperLayer::Bottom, palette_rgba(layers.bottom_copper)),
+    ] {
         let mut view = PcbLayerView::default();
         view.set_active(active);
         let scene = scene_of(&PcbSnapshot::from_board_with_view(&board(), &view));
         let via = scene.circles.iter().find(|c| !c.is_filled()).expect("via");
-        assert_eq!(via.color, multi, "{active:?}");
+        assert_eq!(via.color, colour, "{active:?}");
         assert!(
             scene
                 .top_polygons
                 .iter()
-                .any(|p| p.fill_color == multi && p.vertices.iter().any(|v| v[0] > 15.0)),
+                .any(|p| p.fill_color == colour && p.vertices.iter().any(|v| v[0] > 15.0)),
             "the THT pad (x 16 mm), {active:?}"
         );
     }
+}
+
+/// A non-copper active layer leaves vias and through-hole pads neutral, and
+/// their own ink stays the Multi-Layer whatever is active.
+#[test]
+fn through_items_stay_neutral_on_a_non_copper_active_layer() {
+    use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
+    let layers = canvas_colors(ThemeId::GraphiteDark).board_layer_colors();
+    let multi = palette_rgba(layers.multi_layer);
+    let mut view = PcbLayerView::default();
+    view.set_active(PcbLayer::Technical(TechnicalLayer::SilkscreenTop));
+    let snapshot = PcbSnapshot::from_board_with_view(&board(), &view);
+    assert_eq!(snapshot.vias[0].shown_on, None);
+    assert_eq!(snapshot.vias[0].ink, CopperInk::MultiLayer);
+    let scene = scene_of(&snapshot);
+    let via = scene.circles.iter().find(|c| !c.is_filled()).expect("via");
+    assert_eq!(via.color[..3], multi[..3]);
+    let through = snapshot
+        .pads
+        .iter()
+        .find(|p| p.pad_type == PadType::Thru)
+        .expect("the THT pad");
+    assert_eq!(through.shown_on, None);
+}
+
+/// A via with no copper on the active layer keeps the neutral colour.
+#[test]
+fn a_via_off_the_active_layer_stays_neutral() {
+    let layers = canvas_colors(ThemeId::GraphiteDark).board_layer_colors();
+    let multi = palette_rgba(layers.multi_layer);
+    let mut board = board();
+    board.vias[0].layers = vec!["TopCopper".to_owned()];
+    let mut view = PcbLayerView::default();
+    view.set_active(CopperLayer::Bottom);
+    let snapshot = PcbSnapshot::from_board_with_view(&board, &view);
+    assert_eq!(snapshot.vias[0].shown_on, None);
+    let scene = scene_of(&snapshot);
+    let via = scene.circles.iter().find(|c| !c.is_filled()).expect("via");
+    assert_eq!(via.color[..3], multi[..3]);
+}
+
+/// The ring and the pad take the active layer's own size with its colour.
+#[test]
+fn through_items_take_the_size_of_the_active_layer() {
+    use signex_types::pcb::{LayerSizes, Point};
+    let mut board = board();
+    board.vias[0].layer_sizes = Some(LayerSizes::TopMiddleBottom {
+        top: 0.8,
+        middle: 0.5,
+        bottom: 0.6,
+    });
+    board.footprints[0].pads[2].layer_sizes = Some(LayerSizes::TopMiddleBottom {
+        top: Point::new(1.8, 1.8),
+        middle: Point::new(1.5, 1.5),
+        bottom: Point::new(2.4, 2.4),
+    });
+    let mut view = PcbLayerView::default();
+    for (active, ring, pad) in [
+        (CopperLayer::Top, 0.8, 1.8),
+        (CopperLayer::Bottom, 0.6, 2.4),
+    ] {
+        view.set_active(active);
+        let snapshot = PcbSnapshot::from_board_with_view(&board, &view);
+        assert_eq!(snapshot.vias[0].diameter_mm, ring, "{active:?}");
+        assert_eq!(snapshot.vias[0].shown_on, Some(active));
+        let through = snapshot
+            .pads
+            .iter()
+            .find(|p| p.pad_type == PadType::Thru)
+            .expect("the THT pad");
+        assert_eq!(through.size_mm, [pad, pad], "{active:?}");
+        assert_eq!(through.shown_on, Some(active));
+    }
+}
+
+/// A blind via or a surface pad takes a per-layer size only on a layer it
+/// reaches, as its colour does.
+#[test]
+fn a_via_or_pad_off_the_active_layer_keeps_its_own_size() {
+    use signex_types::pcb::{LayerSizes, Point};
+    let mut board = board();
+    board.vias[0].layers = vec!["TopCopper".into(), "Inner1Copper".into()];
+    board.vias[0].layer_sizes = Some(LayerSizes::TopMiddleBottom {
+        top: 0.7,
+        middle: 0.5,
+        bottom: 0.3,
+    });
+    board.footprints[0].pads[1].layer_sizes = Some(LayerSizes::TopMiddleBottom {
+        top: Point::new(2.0, 2.0),
+        middle: Point::new(1.5, 1.5),
+        bottom: Point::new(0.8, 0.4),
+    });
+    // The bottom SMD pad, at (13, 10).
+    let bottom_pad = |snapshot: &PcbSnapshot| {
+        let pad = snapshot.pads.iter().find(|p| p.center == [13.0, 10.0]);
+        pad.expect("the bottom pad").size_mm
+    };
+    let mut view = PcbLayerView::default();
+
+    view.set_active(CopperLayer::Bottom);
+    let snapshot = PcbSnapshot::from_board_with_view(&board, &view);
+    assert_eq!(snapshot.vias[0].diameter_mm, 0.8, "off the via's span");
+    assert_eq!(snapshot.vias[0].shown_on, None);
+    assert_eq!(bottom_pad(&snapshot), [0.8, 0.4], "on the pad's layer");
+
+    view.set_active(CopperLayer::Top);
+    let snapshot = PcbSnapshot::from_board_with_view(&board, &view);
+    assert_eq!(snapshot.vias[0].diameter_mm, 0.7, "in the via's span");
+    assert_eq!(bottom_pad(&snapshot), [1.0, 0.6], "off the pad's layer");
+}
+
+/// An SMD pad keeps its own layer's colour with another layer active.
+#[test]
+fn an_smd_pad_keeps_its_own_colour() {
+    let layers = canvas_colors(ThemeId::GraphiteDark).board_layer_colors();
+    let top = palette_rgba(layers.top_copper);
+    let mut view = PcbLayerView::default();
+    view.set_active(CopperLayer::Bottom);
+    let snapshot = PcbSnapshot::from_board_with_view(&board(), &view);
+    assert!(
+        snapshot
+            .pads
+            .iter()
+            .filter(|p| p.pad_type == PadType::Smd)
+            .all(|p| p.shown_on.is_none())
+    );
+    let scene = scene_of(&snapshot);
+    assert!(
+        scene
+            .top_polygons
+            .iter()
+            .any(|p| p.fill_color[..3] == top[..3]),
+        "the top SMD pad, dimmed in its own colour"
+    );
 }
 
 #[test]

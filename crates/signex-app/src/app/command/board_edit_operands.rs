@@ -61,14 +61,11 @@ fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
     }
 }
 
-/// `ids`: uuids, comma separated.
-fn uuids(args: &CommandArgs) -> Result<Vec<Uuid>, String> {
-    let list = text(args, "ids").ok_or("the operand `ids` is needed")?;
-    list.split(',')
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(|s| Uuid::parse_str(s).map_err(|_| format!("`{s}` is not a uuid")))
-        .collect()
+/// `ids`: the items, as the operand parser read them.
+fn uuids(args: &CommandArgs) -> Result<Vec<Uuid>, &'static str> {
+    args.targets("ids")
+        .map(<[Uuid]>::to_vec)
+        .ok_or("the operand `ids` is needed")
 }
 
 fn board<'a>(app: &'a Signex, path: &std::path::Path) -> Option<&'a PcbBoard> {
@@ -86,7 +83,10 @@ pub(super) fn set_layer_stack(app: &mut Signex, args: &CommandArgs) -> Ran {
         return refused("`set_layer_stack` needs the operand `stack`");
     };
     let stack = serde_json::from_str::<LayerStack>(raw).or_else(|_| {
-        serde_json::from_str::<Vec<StackLayer>>(raw).map(|layers| LayerStack { layers })
+        serde_json::from_str::<Vec<StackLayer>>(raw).map(|layers| LayerStack {
+            layers,
+            ..LayerStack::default()
+        })
     });
     let stack = match stack {
         Ok(stack) => stack,

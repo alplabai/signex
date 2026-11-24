@@ -3,7 +3,9 @@
 # removing a line removes a command and needs a maintainer decision.
 add_board_graphic
 add_net_class
+add_table_of_contents
 add_teardrops
+add_to_union
 align_bottom
 align_horizontal_centers
 align_left
@@ -14,6 +16,10 @@ align_vertical_centers
 annotate_schematic
 annotate_schematic_quietly
 apply_edits
+apply_layout_board
+apply_layout_notebook
+apply_layout_review
+apply_layout_schematic
 apply_selection_filter_preset
 arrange_in_box
 assign_board_net_class
@@ -30,6 +36,7 @@ board_report_net_length
 board_report_netlist
 board_shape_from_selection
 board_sketch
+break_union
 break_wire
 bring_drawings_forward
 bring_drawings_to_front
@@ -49,9 +56,14 @@ clear_net_highlighting
 close_active_document
 close_all_documents
 color_net
+compare_board_with_schematic
+compile_project
 copy
 copy_attributes_or_add_vertex
+create_rooms_from_sheets
 create_sheet_from_sheet_symbol
+create_sheet_symbol_from_sheet
+create_union
 cross_probe
 cut
 cycle_arc_mode
@@ -88,7 +100,9 @@ draw_wire
 duplicate
 edit_blanket
 edit_footprint_field
+edit_layer_color
 edit_library_symbol
+edit_no_erc_rules
 edit_object_properties
 edit_reference_designator
 edit_selected_object_properties
@@ -136,6 +150,7 @@ lasso_select
 leave_sheet
 list_documents
 lock_board_items
+manage_workspace_layouts
 measure_board
 measure_distance
 mirror_x
@@ -158,13 +173,16 @@ next_signal_layer
 number_schematic_sheets
 open_child_sheet
 open_command_palette
+open_compiled_design
 open_components_panel
 open_datasheet
+open_diff_pair_classes
 open_document
 open_drc_panel
 open_erc_dialog
 open_grid_picker
 open_grid_properties
+open_harness_definitions
 open_library_browser
 open_net_classes
 open_net_classes_panel
@@ -180,6 +198,7 @@ panelize_board
 paste
 paste_array
 paste_special
+place_aligned_dimension
 place_blanket
 place_board_arc
 place_board_circle
@@ -197,6 +216,7 @@ place_board_quick_route
 place_board_rectangle
 place_board_region
 place_board_reuse_block
+place_board_room
 place_board_route
 place_board_slice_pour
 place_board_string
@@ -216,6 +236,7 @@ place_harness_connector
 place_harness_entry
 place_hierarchical_label
 place_junction
+place_linear_dimension
 place_local_net_label
 place_net_label
 place_no_connect
@@ -230,6 +251,7 @@ place_sheet_entry
 place_sheet_symbol
 place_signal_harness
 place_symbol
+place_table
 place_text
 place_text_frame
 place_text_string
@@ -264,15 +286,20 @@ reannotate_board
 redo
 refresh_view
 remove_board_panel
+remove_from_union
 remove_last_vertex
 remove_teardrops
 rename_net_class
+repair_pin_junctions
 repeat_last_item
 report_manager_bom
 repour_all
 repour_selected
+reset_board_origin
+reset_layer_colors
 reset_local_coordinates
 reset_schematic_designators
+reset_workspace_layout
 resolve
 revert
 rotate_clockwise
@@ -298,10 +325,12 @@ rules_set_create
 rules_set_edit
 run_drc
 run_erc
+save_all
 save_board_reuse_block
 save_document
 save_document_as
 save_layer_set
+save_workspace_layout
 select_all
 select_board_net
 select_connection
@@ -313,6 +342,7 @@ send_to_back
 send_to_back_of
 set_active_layer
 set_board_graphic
+set_board_origin
 set_board_panel
 set_footprint_text
 set_layer_color
@@ -328,6 +358,7 @@ set_object_visible
 set_pad_shape
 set_selection_filters
 set_sheet_symbol_size
+set_sheet_variable
 set_symbol_parameter
 set_via_span
 sheet_navigation_back
@@ -341,10 +372,12 @@ show_layer_group
 show_layer_set
 show_used_layers_only
 smart_paste
+snap_board_origin_to_corner
 stitch_vias
 swap_gates
 swap_pins
 switch_segment_posture
+sync_sheet_entries
 sync_sheet_pins
 tile_windows_horizontally
 tile_windows_vertically

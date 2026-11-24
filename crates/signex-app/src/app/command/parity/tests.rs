@@ -4,10 +4,10 @@ use std::collections::BTreeSet;
 
 use super::super::CommandContext;
 use super::annotations::ANNOTATIONS;
-use super::forms::{Form, Owner, owner_of};
+use super::forms::{Form, Owner};
 use super::inputs::{FACTS, Input};
+use super::owners::{OwnerBasis, WRITES, owner};
 use super::{Basis, HEADER, rows, table_text};
-use crate::keymap::HeadlessUse;
 
 const GOLDEN: &str = include_str!("testdata/parity.golden.tsv");
 const MISMATCH_NOTE: &str = "The parity table follows the routing code, so it changes whenever a route, \
@@ -57,7 +57,7 @@ fn every_row_has_implicit_inputs_from_the_vocabulary() {
         unreviewed.join("\n")
     );
     let words: BTreeSet<&str> = Input::ALL.iter().map(|input| input.word()).collect();
-    let bases = [Basis::Handler, Basis::Routing, Basis::Gate].map(Basis::name);
+    let bases = [Basis::Handler, Basis::Routing, Basis::Gate, Basis::Declared].map(Basis::name);
     for line in GOLDEN.lines().skip(1) {
         let cells: Vec<&str> = line.split('\t').collect();
         assert_eq!(cells.len(), 6, "row `{line}` has six cells");
@@ -156,12 +156,15 @@ fn every_context_fact_is_listed() {
                 footprints: _,
                 pad_pair: _,
                 one_footprint: _,
+                routes: _,
+                hovered: _,
+                net: _,
             },
         turn_in_hand: _,
     } = CommandContext::default();
     let names: BTreeSet<&str> = FACTS.iter().map(|(name, _, _)| *name).collect();
     assert_eq!(names.len(), FACTS.len(), "a fact is listed twice");
-    assert_eq!(FACTS.len(), 30 + 14, "30 context facts and 14 board facts");
+    assert_eq!(FACTS.len(), 30 + 17, "30 context facts and 17 board facts");
 }
 
 /// No core row stands on its gate alone: every core route's handler was
@@ -178,6 +181,22 @@ fn no_core_row_is_gate_only() {
         "core rows whose handler was not read; annotate them in parity/annotations.rs:\n{}",
         unread.join("\n")
     );
+}
+
+/// `declared` stands for no handler read, so only the core command behind a
+/// split router, which has no handler yet, may carry it; every such row
+/// does, so its inputs are never passed off as read.
+#[test]
+fn only_a_split_core_row_is_declared() {
+    for row in rows() {
+        assert_eq!(
+            row.basis == Basis::Declared,
+            row.form == Form::SplitCore,
+            "{} {}",
+            row.id,
+            row.form.name()
+        );
+    }
 }
 
 /// The kill list as the golden spells it: core rows that read in-progress
@@ -199,46 +218,21 @@ fn the_kill_list_is_in_progress_edit_or_render_cache_only() {
 }
 
 /// The kill list, pinned: a row joining it or dropping off it is a
-/// maintainer decision (ADR-0006 slice C, #2504), not a regenerate.
+/// maintainer decision (ADR-0006 slice C, #2504), not a regenerate. Since
+/// #2551 it holds the D-writes that read X (the render cache) or an S value
+/// in progress; the turn, paste and select rows left it as GUI or split
+/// routers, and the two close routes joined it as D-writes.
 const KILL_LIST: &[(&str, &str)] = &[
     ("assign_net_class", "operand_handler"),
+    ("close_active_document", "bridge"),
     ("close_active_document", "operand_handler"),
-    ("draw_wire", "operand_handler"),
-    ("flip_selected_x", "active_bar"),
-    ("flip_selected_x", "refusal_needs"),
-    ("flip_selected_x", "disabled_still_runs_refusal"),
-    ("flip_selected_y", "active_bar"),
-    ("flip_selected_y", "refusal_needs"),
-    ("flip_selected_y", "disabled_still_runs_refusal"),
-    ("mirror_x", "bridge"),
-    ("mirror_x", "refusal_needs"),
-    ("mirror_x", "disabled_still_runs_refusal"),
-    ("mirror_y", "bridge"),
-    ("mirror_y", "refusal_needs"),
-    ("mirror_y", "disabled_still_runs_refusal"),
-    ("paste_special", "bridge"),
-    ("paste_special", "disabled_still_runs_refusal"),
-    ("place_wire", "operand_handler"),
+    ("close_all_documents", "bridge"),
     ("project_add_requirement", "operand_handler"),
     ("project_remove_requirement", "operand_handler"),
     ("redo", "operand_handler"),
     ("revert", "operand_handler"),
-    ("rotate_clockwise", "bridge"),
-    ("rotate_clockwise", "refusal_needs"),
-    ("rotate_clockwise", "disabled_still_runs_refusal"),
-    ("rotate_counterclockwise", "bridge"),
-    ("rotate_counterclockwise", "refusal_needs"),
-    ("rotate_counterclockwise", "disabled_still_runs_refusal"),
-    ("rotate_selection", "active_bar"),
-    ("rotate_selection", "refusal_needs"),
-    ("rotate_selection", "disabled_still_runs_refusal"),
-    ("rotate_selection_cw", "active_bar"),
-    ("rotate_selection_cw", "refusal_needs"),
-    ("rotate_selection_cw", "disabled_still_runs_refusal"),
     ("run_erc", "bridge"),
-    ("select_all", "bridge"),
-    ("smart_paste", "bridge"),
-    ("smart_paste", "disabled_still_runs_refusal"),
+    ("save_all", "bridge"),
     ("undo", "operand_handler"),
 ];
 
@@ -263,25 +257,78 @@ fn the_kill_list_is_the_pinned_one() {
     );
 }
 
-/// An id the catalog has not decided reads `undecided` on every form.
+/// Every row's owner has a basis: the form says what it writes, the handler
+/// is annotated in `parity/owners.rs`, or the row takes the owner of the
+/// route it stands in front of (#2551).
 #[test]
-fn an_undecided_id_is_undecided_on_every_form() {
-    for form in [
-        Form::Bridge,
-        Form::Operand,
-        Form::HeadlessRefusal,
-        Form::InWindow,
-    ] {
-        for skips in [false, true] {
-            assert_eq!(owner_of(None, form, skips), Owner::Undecided);
+fn every_row_has_an_owner_basis() {
+    let unowned: Vec<String> = rows()
+        .iter()
+        .filter(|row| row.owner_basis.is_none())
+        .map(|row| format!("{}\t{}", row.id, row.form.name()))
+        .collect();
+    assert!(
+        unowned.is_empty(),
+        "rows whose owner has no basis; read what the handler writes and annotate it in parity/owners.rs:\n{}",
+        unowned.join("\n")
+    );
+}
+
+/// A writes annotation names rows that exist, and no row twice.
+#[test]
+fn every_writes_annotation_names_its_rows_once() {
+    let rows = rows();
+    for (ids, surface, _) in WRITES {
+        for id in *ids {
+            assert!(
+                rows.iter()
+                    .any(|row| row.id == *id && surface.covers(row.form)),
+                "the writes of `{id}` name no row"
+            );
         }
     }
+    for row in &rows {
+        let entries = WRITES
+            .iter()
+            .filter(|(ids, surface, _)| ids.contains(&row.id) && surface.covers(row.form))
+            .count();
+        assert!(
+            entries <= 1,
+            "`{}` {} is annotated {entries} times",
+            row.id,
+            row.form.name()
+        );
+    }
+}
+
+/// The owner follows what the route writes, never who can call it today:
+/// an id with no writes annotation and no form that says it has no owner;
+/// a tool the bridge only arms is the adapter's; a refusal takes the owner
+/// of the route behind it; a split router has a core command row.
+#[test]
+fn the_owner_follows_what_the_route_writes() {
+    assert_eq!(owner("no_such_id", Form::Bridge, &[], false), None);
+    assert_eq!(owner("no_such_id", Form::Operand, &[], false), None);
     assert_eq!(
-        owner_of(Some(HeadlessUse::Runs), Form::Bridge, true),
-        Owner::Gui
+        owner("no_such_id", Form::Bridge, &[], true),
+        Some((Owner::Gui, OwnerBasis::Form))
     );
     assert_eq!(
-        owner_of(Some(HeadlessUse::Runs), Form::Bridge, false),
-        Owner::Core
+        owner("view_rotate", Form::Operand, &[], false),
+        Some((Owner::Gui, OwnerBasis::Annotated))
     );
+    assert_eq!(
+        owner("rotate_clockwise", Form::Needs, &[Form::Bridge], false),
+        Some((Owner::Split, OwnerBasis::Inherited))
+    );
+    let rows = rows();
+    for row in rows.iter().filter(|row| row.owner == Owner::Split) {
+        assert!(
+            rows.iter()
+                .any(|core| core.id == row.id && core.form == Form::SplitCore),
+            "the split row {} {} has no core command row",
+            row.id,
+            row.form.name()
+        );
+    }
 }

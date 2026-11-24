@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use signex_engine::pcb::eco::{
-    BackChangeList, BackInput, BackPart, EcoPart, design_eco_parts, diff_schematic,
+    BackChangeList, BackInput, BackPart, EcoPart, design_eco_parts_named, diff_schematic,
 };
 use signex_types::pcb::PcbBoard;
 use signex_types::schematic::{InstancePath, SchematicSheet};
@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 use crate::app::design_read::{DesignGraph, LibraryRows, Resolver};
 use crate::app::project_sheets::{DiskStamps, ProjectSheetPlan};
+use crate::app::saved_channel_naming::SavedChannelNaming;
 
 /// Where one part lives: the sheet file its placement reads, and whether
 /// that file is placed only once in the project.
@@ -53,6 +54,8 @@ pub(crate) struct BackRequest {
     pub open_revisions: Vec<(PathBuf, u64)>,
     /// The list before a Refresh, whose ticks the new one keeps.
     pub previous: Option<BackChangeList>,
+    /// The project's saved channel naming.
+    pub naming: SavedChannelNaming,
 }
 
 /// Read the design and diff it against the board. `Err` says why there is
@@ -60,6 +63,10 @@ pub(crate) struct BackRequest {
 pub(crate) fn compute(request: BackRequest) -> Result<BackRead, String> {
     let (set, mut stamps) = request.plan.assemble_stamped();
     let design = DesignGraph::read(&set, &request.project_dir)?;
+    let naming = request
+        .naming
+        .for_design(&design.project())
+        .map_err(|refused| refused.to_string())?;
     let placed = design.placed();
     let mut placements: HashMap<&PathBuf, usize> = HashMap::new();
     for (_, _, file) in &placed {
@@ -70,7 +77,9 @@ pub(crate) fn compute(request: BackRequest) -> Result<BackRead, String> {
         .map(|(path, sheet, _)| (path.clone(), *sheet))
         .collect();
     let resolver = Resolver::open(&request.libraries);
-    let eco_parts = design_eco_parts(&sheets, |_, symbol| resolver.resolve(symbol));
+    let channels = signex_net::ChannelDesignators::of_project(&design.project(), naming);
+    let eco_parts =
+        design_eco_parts_named(&sheets, &channels, |_, symbol| resolver.resolve(symbol));
     let mut files = HashMap::new();
     let parts: Vec<BackPart> = eco_parts
         .into_iter()
@@ -95,6 +104,7 @@ pub(crate) fn compute(request: BackRequest) -> Result<BackRead, String> {
         parts: &parts,
         unreadable: &design.unreadable,
     });
+    list.block_channel_designators(|sheet| channels.is_channel(sheet));
     if let Some(previous) = &request.previous {
         list.keep_choices_from(previous);
     }

@@ -103,6 +103,47 @@ fn read_only_repair_notice(path: &std::path::Path) -> crate::app::state::ErrorNo
     )
 }
 
+impl Signex {
+    /// File name of the project that lists the library the open Library
+    /// Missing dialog is about; the dialog's header shows it.
+    pub(crate) fn recovery_project_file(&self) -> Option<String> {
+        let owner = self.library.missing.open_owner()?;
+        let project = self.document_state.project_by_id(owner)?;
+        project
+            .path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+    }
+}
+
+impl Signex {
+    /// The skipped libraries the status bar chip counts (mockup row 138):
+    /// an open project still lists them and they are still not mounted, so
+    /// locating or removing one clears it with no extra bookkeeping.
+    pub(crate) fn skipped_missing_libraries(&self) -> Vec<std::path::PathBuf> {
+        let skipped = self.library.missing.skipped();
+        if skipped.is_empty() {
+            return Vec::new();
+        }
+        let listed = self.open_project_library_paths();
+        skipped
+            .iter()
+            .filter(|path| listed.contains(path) && self.library.library_at(path).is_none())
+            .cloned()
+            .collect()
+    }
+
+    /// The chip was clicked: raise the first skipped library's dialog.
+    pub(crate) fn reopen_skipped_library(&mut self) {
+        let Some(path) = self.skipped_missing_libraries().into_iter().next() else {
+            return;
+        };
+        if let Some(owner) = self.owning_project_of_library(&path) {
+            self.library.raise_missing_library(&path, owner);
+        }
+    }
+}
+
 /// Handle the user's choice from the *Library missing* recovery dialog.
 pub(super) fn handle_recovery_library_missing(
     app: &mut Signex,
@@ -110,6 +151,9 @@ pub(super) fn handle_recovery_library_missing(
 ) -> Task<Message> {
     match choice {
         LibraryMissingChoice::Cancel => {
+            if let Some(RecoveryDialog::LibraryMissing { path }) = app.library.recovery.clone() {
+                app.library.missing.skip(&path);
+            }
             app.library.finish_recovery();
             Task::none()
         }
@@ -216,6 +260,25 @@ pub(super) fn handle_recovery_library_missing_locate_result(
     task
 }
 
+impl Signex {
+    /// Locate… on a Project tab's Missing library row (mockup row 33): mount
+    /// `picked` and, only once it has mounted, repoint the entries that
+    /// listed `missing`. A Library Missing dialog for it has nothing left to
+    /// ask. A pick that does not open raises its own dialog or error card.
+    pub(crate) fn repoint_missing_library(
+        &mut self,
+        missing: &std::path::Path,
+        picked: std::path::PathBuf,
+    ) -> Task<Message> {
+        let task = self.open_library_at_as(picked.clone(), true);
+        if self.library.library_at(&picked).is_some() {
+            relocate_project_entries(self, missing, &picked);
+            self.library.forget_missing_library(missing);
+        }
+        task
+    }
+}
+
 /// Point every project entry that listed `old` at `new`, and mark those
 /// projects dirty. Unsaved until the user saves the project.
 fn relocate_project_entries(app: &mut Signex, old: &std::path::Path, new: &std::path::Path) {
@@ -311,10 +374,12 @@ pub(super) fn handle_recovery_git_missing(
     choice: GitMissingChoice,
 ) -> Task<Message> {
     match choice {
-        GitMissingChoice::Cancel | GitMissingChoice::Skip => {
+        // The close (x, Esc) leaves the library unopened.
+        GitMissingChoice::Cancel => {
             app.library.finish_recovery();
             Task::none()
         }
+        GitMissingChoice::Skip => open_without_history(app),
         GitMissingChoice::ReInit => {
             let path = match app.library.recovery.as_ref() {
                 Some(RecoveryDialog::GitMissing { path, .. }) => path.clone(),
@@ -362,24 +427,91 @@ pub(super) fn handle_recovery_git_missing(
         }
         GitMissingChoice::RestoreFromRemote => {
             // v0.9 leaves this disabled — the manifest doesn't carry a
-            // remote yet. Treat as Cancel.
+            // remote yet. Closes the dialog.
             app.library.finish_recovery();
             Task::none()
         }
     }
 }
 
-/// Handle the user's choice from the *Broken primitive binding* dialog.
-///
-/// v0.9 stub: the dispatch path that detects broken bindings hasn't
-/// landed yet (Stage 12+ wires the row-load checks). The handler
-/// therefore only knows how to close the dialog; the actual rebind /
-/// remove-row flows queue behind the detection plumbing. The dialog
-/// surface itself ships now so the overlay layer is in place.
+/// Skip for now on *Git missing*: close the dialog and open the library
+/// read-only until its history is restored (Caner, 2026-11-20; mockup row
+/// 138). The mount is prepared off the UI thread and lands as
+/// `MountFinished`, like any browser open.
+fn open_without_history(app: &mut Signex) -> Task<Message> {
+    use crate::library::mount::{MountIntent, MountRequest};
+    let path = match app.library.recovery.as_ref() {
+        Some(RecoveryDialog::GitMissing { path, .. }) => Some(path.clone()),
+        _ => None,
+    };
+    app.library.finish_recovery();
+    let Some(path) = path else {
+        return Task::none();
+    };
+    match app
+        .library
+        .request_mount(&path, MountIntent::OpenBrowserTab)
+    {
+        MountRequest::AlreadyMounted => app.finish_open_library_browser(path),
+        // An open of this path is already preparing; it lands on its own.
+        MountRequest::InFlight => Task::none(),
+        MountRequest::Spawn => {
+            let spawn_path = path.clone();
+            Task::perform(
+                crate::library::mount::prepare_mount_without_history_off_thread(spawn_path),
+                move |prepared| {
+                    Message::Library(LibraryMessage::MountFinished {
+                        path: path.clone(),
+                        prepared,
+                    })
+                },
+            )
+        }
+    }
+}
+
+/// Handle the user's choice from the *Broken primitive binding* dialog
+/// (mockup row 138). Re-bind and Remove row go back through the router, so
+/// they meet the same read-only and library-rename refusals as the Browser's
+/// own Pick and Delete.
 pub(super) fn handle_recovery_broken_binding(
     app: &mut Signex,
-    _choice: BrokenBindingChoice,
+    choice: BrokenBindingChoice,
 ) -> Task<Message> {
+    let binding = match app.library.recovery.as_ref() {
+        Some(RecoveryDialog::BrokenPrimitiveBinding {
+            library_path,
+            table,
+            row_id,
+            kind,
+            ..
+        }) => Some((
+            library_path.clone(),
+            table.clone(),
+            RowId::from_uuid(*row_id),
+            *kind,
+        )),
+        _ => None,
+    };
     app.library.finish_recovery();
-    Task::none()
+    let Some((library_path, table, row_id, kind)) = binding else {
+        return Task::none();
+    };
+    let next = match choice {
+        BrokenBindingChoice::Cancel => return Task::none(),
+        BrokenBindingChoice::Rebind => LibraryMessage::OpenPrimitivePicker {
+            kind,
+            target: PrimitivePickerTarget::BrowserRow(EditorAddress::new(
+                library_path,
+                table,
+                row_id,
+            )),
+        },
+        BrokenBindingChoice::RemoveRow => LibraryMessage::BrowserDeleteRowConfirm {
+            library_path,
+            table,
+            row_id,
+        },
+    };
+    Task::done(Message::Library(next))
 }

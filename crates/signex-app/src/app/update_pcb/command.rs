@@ -10,12 +10,7 @@ use crate::app::{Message, Signex};
 type Ran = (CommandOutcome, Task<Message>);
 
 fn refused(reason: impl Into<String>) -> Ran {
-    (
-        CommandOutcome::Disabled {
-            reason: reason.into(),
-        },
-        Task::none(),
-    )
+    (CommandOutcome::disabled(reason), Task::none())
 }
 
 pub(crate) fn update_pcb_from_schematic(app: &mut Signex, args: &CommandArgs) -> Ran {

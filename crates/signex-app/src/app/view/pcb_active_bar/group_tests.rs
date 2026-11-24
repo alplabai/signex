@@ -1,6 +1,6 @@
 //! The PCB Active Bar's tool groups (#2392), driven through `Signex::update`.
 
-use super::tests::{bar_of, board_app, button_for, buttons, rows, runs};
+use super::tests::{bar_of, board_app, button_for, buttons, entries, rows, runs};
 use super::*;
 use crate::app::pcb_bar_groups::PcbBarRow;
 
@@ -268,6 +268,7 @@ fn the_copper_areas_group_lists_the_pour_rows() {
             Some("place_board_region"),
             Some("place_board_fill"),
             Some("place_board_keepout"),
+            Some("place_board_room"),
             Some("repour_selected"),
             Some("repour_all"),
         ]
@@ -277,7 +278,7 @@ fn the_copper_areas_group_lists_the_pour_rows() {
         .filter(|row| !row.disabled)
         .map(|row| row.label)
         .collect();
-    assert_eq!(labels.len(), 8, "every row is live: {labels:?}");
+    assert_eq!(labels.len(), 9, "every row is live: {labels:?}");
     assert!(labels.iter().any(|l| l == "Pour Cutout"), "{labels:?}");
     assert!(labels.iter().any(|l| l == "Repour All"), "{labels:?}");
     let _ = pick_from_group(
@@ -286,4 +287,174 @@ fn the_copper_areas_group_lists_the_pour_rows() {
         "place_board_pour_cutout",
     );
     assert_eq!(armed(&app), Some(BoardPlaceTool::PourCutout));
+}
+
+/// The shape of a dropdown entry: `H` heading, `-` separator, `*` the
+/// current row, `.` another row.
+fn shape(entries: &[DropdownEntry<Message>]) -> String {
+    entries
+        .iter()
+        .map(|entry| match entry {
+            DropdownEntry::Header(_) => 'H',
+            DropdownEntry::Separator => '-',
+            DropdownEntry::Item(item) if item.selected => '*',
+            DropdownEntry::Item(_) => '.',
+            DropdownEntry::Custom(_) => '?',
+        })
+        .collect()
+}
+
+/// mockup row 108: a group's dropdown opens with its name as a heading, in capitals,
+/// then its rows; every group with a dropdown has one.
+#[test]
+fn a_group_dropdown_is_headed_by_the_group_name() {
+    let app = board_app();
+    let cases = [
+        (PcbBarGroup::Components, "COMPONENTS"),
+        (PcbBarGroup::Route, "ROUTE"),
+        (PcbBarGroup::Tune, "TUNE"),
+        (PcbBarGroup::ViaPad, "VIA / PAD"),
+        (PcbBarGroup::CopperAreas, "COPPER AREAS"),
+        (PcbBarGroup::CopperDrawing, "COPPER DRAWING"),
+        (PcbBarGroup::Graphics, "GRAPHICS"),
+    ];
+    for (group, heading) in cases {
+        let menu = entries(&app, PcbBarMenu::Group(group));
+        let Some(DropdownEntry::Header(text)) = menu.first() else {
+            panic!("{group:?} opens with a heading");
+        };
+        assert_eq!(text.replace(['\u{2068}', '\u{2069}'], ""), heading);
+        let headers = menu
+            .iter()
+            .filter(|entry| matches!(entry, DropdownEntry::Header(_)))
+            .count();
+        assert_eq!(headers, 1, "{group:?}");
+    }
+}
+
+/// mockup row 108: the commands of a group (Repour, Change Footprint) sit below a
+/// separator after its tools; a group of tools only, or of commands only,
+/// has none.
+#[test]
+fn a_group_dropdown_puts_its_commands_below_a_separator() {
+    let app = board_app();
+    let areas = entries(&app, PcbBarMenu::Group(PcbBarGroup::CopperAreas));
+    // The Room tool joins the pour rows (#2457, Caner 2026-11-20).
+    assert_eq!(shape(&areas), "H*......-..", "Polygon Pour is current");
+    let DropdownEntry::Item(first_command) = &areas[9] else {
+        panic!("a row after the separator");
+    };
+    assert_eq!(first_command.command_id, Some("repour_selected"));
+    let parts = entries(&app, PcbBarMenu::Group(PcbBarGroup::Components));
+    assert_eq!(
+        shape(&parts),
+        "H.-*",
+        "Change Footprint is what the button shows while Component cannot run"
+    );
+    for group in [PcbBarGroup::Route, PcbBarGroup::Tune, PcbBarGroup::Graphics] {
+        let menu = entries(&app, PcbBarMenu::Group(group));
+        assert!(!shape(&menu).contains('-'), "{group:?}: {}", shape(&menu));
+    }
+}
+
+/// mockup row 108: the row the group's button shows is drawn current in its dropdown,
+/// and follows the last tool used.
+#[test]
+fn the_last_used_row_is_current_in_its_dropdown() {
+    let mut app = board_app();
+    let current = |app: &Signex, group: PcbBarGroup| -> Vec<Option<&'static str>> {
+        rows(app, PcbBarMenu::Group(group))
+            .into_iter()
+            .filter(|row| row.selected)
+            .map(|row| row.command_id)
+            .collect()
+    };
+    assert_eq!(
+        current(&app, PcbBarGroup::CopperDrawing),
+        [Some("place_board_track")]
+    );
+    let _ = pick_from_group(&mut app, PcbBarGroup::CopperDrawing, "place_board_arc");
+    assert_eq!(
+        current(&app, PcbBarGroup::CopperDrawing),
+        [Some("place_board_arc")]
+    );
+    let _ = pick_from_group(&mut app, PcbBarGroup::CopperAreas, "place_board_keepout");
+    assert_eq!(
+        current(&app, PcbBarGroup::CopperAreas),
+        [Some("place_board_keepout")]
+    );
+    assert!(runs(
+        &group_button_of(&app, PcbBarGroup::CopperAreas),
+        "place_board_keepout"
+    ));
+}
+
+/// A click on the canvas of the board in view at (`x`, `y`) mm.
+fn canvas_click(app: &mut Signex, x: f64, y: f64) {
+    let _ = app.update(Message::PcbCanvas(
+        crate::pcb_canvas::PcbCanvasMsg::Clicked {
+            at: signex_types::pcb::Point::new(x, y),
+            tolerance_mm: 0.05,
+            mode: pcb_geom::ClickMode::Replace,
+        },
+    ));
+}
+
+/// The pointer moved over the canvas to (`x`, `y`) mm.
+fn canvas_hover(app: &mut Signex, x: f64, y: f64) {
+    let _ = app.update(Message::PcbCanvas(
+        crate::pcb_canvas::PcbCanvasMsg::PointerMoved {
+            at: signex_types::pcb::Point::new(x, y),
+            zoom_pct: 100.0,
+            tolerance_mm: 0.05,
+        },
+    ));
+}
+
+/// The maintainer's report (2026-11-18): Interactive Routing picked from
+/// the Route dropdown routes from a pad. The click on the pad starts the
+/// route on its net, the leg follows the pointer, a click adds it and Esc
+/// lands it as one undo step on the pad's net and layer.
+#[test]
+fn the_route_row_routes_from_a_pad_as_one_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let board: signex_types::pcb::PcbBoard = serde_json::from_value(serde_json::json!({
+        "uuid": uuid::Uuid::from_u128(1),
+        "setup": {"grid_size": 0.5, "trace_width": 0.25, "clearance": 0.2},
+        "nets": [{"number": 1, "name": "A"}],
+        "footprints": [{
+            "uuid": uuid::Uuid::from_u128(2), "reference": "U1", "value": "",
+            "footprint_id": "Pad", "layer": "TopCopper", "rotation": 0.0,
+            "position": {"x": 0.0, "y": 0.0},
+            "pads": [{
+                "uuid": uuid::Uuid::from_u128(3), "number": "1", "pad_type": "smd",
+                "shape": "circle", "position": {"x": 0.0, "y": 0.0},
+                "size": {"x": 1.0, "y": 1.0}, "drill": null, "layers": ["TopCopper"],
+                "net": {"number": 1, "name": "A"}
+            }]
+        }]
+    }))
+    .unwrap();
+    let workspace = dir.path().to_string_lossy();
+    let mut app = crate::app::handlers::menu::export::tests::app_workspace(&workspace, &[]);
+    app.ui_state.pcb_bar_last_tools = PcbBarLastTools::default();
+    let path = dir.path().join("board.snxpcb");
+    app.open_pcb_tab(path.clone(), "board".into(), board);
+
+    let _ = pick_from_group(&mut app, PcbBarGroup::Route, "place_board_route");
+    assert_eq!(armed(&app), Some(BoardPlaceTool::InteractiveRouting));
+    assert!(app.board_tool_status().is_some(), "the status bar says so");
+    canvas_click(&mut app, 0.0, 0.0);
+    canvas_hover(&mut app, 5.0, 3.0);
+    assert!(app.interaction_state.pcb_canvas.has_part_ghost());
+    canvas_click(&mut app, 5.0, 3.0);
+    app.clear_pcb_selection();
+
+    let tracks = &app.document_state.pcb_board(&path).expect("board").segments;
+    assert!(!tracks.is_empty(), "the route landed");
+    let on_pad_net = |t: &signex_types::pcb::Segment| t.net == 1 && t.layer == "TopCopper";
+    assert!(tracks.iter().all(on_pad_net), "{tracks:?}");
+    let _ = app.update(Message::Edit(crate::app::EditMsg::Undo));
+    let board = app.document_state.pcb_board(&path).expect("board");
+    assert!(board.segments.is_empty(), "one undo removes the route");
 }

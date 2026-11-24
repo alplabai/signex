@@ -69,6 +69,15 @@ impl Signex {
                     return self.dispatch_command(&id, args, menu.window);
                 }
             }
+            LayerTabMenuMsg::ColourEditRequested(layer) => {
+                self.interaction_state.pcb_layer_tab_menu = None;
+                let active = self
+                    .active_tab_path()
+                    .map(|p| self.pcb_layer_view(&p).active());
+                if let Some(layer) = layer.or(active) {
+                    return self.open_layer_colour(layer);
+                }
+            }
         }
         Task::none()
     }
@@ -80,10 +89,13 @@ impl Signex {
             LayerSetMenuMsg::Opened { window } => {
                 self.close_all_context_menus();
                 self.clear_canvas_hover();
-                let (x, y) = self.interaction_state.last_mouse_pos;
+                // The set button is the strip's first control, so the card
+                // sits on the strip's top edge at its left end.
+                let area = self.canvas_bounds_in(window);
+                let strip_top = area.y + area.height - crate::app::view::pcb_strip::STRIP_HEIGHT;
                 self.interaction_state.pcb_layer_set_menu = Some(LayerSetMenu {
-                    x,
-                    y,
+                    x: area.x,
+                    y: strip_top,
                     window,
                     card: LayerSetCard::Sets,
                 });

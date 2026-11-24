@@ -7,10 +7,12 @@
 //! revision, so it is one undo step and refused once the board moved on.
 
 mod command;
-mod design;
+pub(crate) mod design;
 mod execute;
 mod fix;
 mod new_pcb;
+// #1489: the rules the schematic's Net Parameters directives ask for.
+pub(crate) mod rules_from_schematic;
 mod state;
 pub(crate) mod table;
 mod target;
@@ -95,10 +97,18 @@ pub enum UpdatePcbMsg {
         group: TableGroup,
         folded: bool,
     },
-    /// A summary chip was clicked: list only its rows, or every row again
-    /// when it was the chip in force.
+    /// A summary tile was clicked: list only its rows, or every row again
+    /// when it was the tile in force.
     FilterChipClicked(RowFilter),
+    /// The Problems tile set (`true`) or cleared as a toggle: the
+    /// headless and test form of a Problems tile click.
     ProblemsOnlyToggled(bool),
+    /// The filter field's text changed: list only the rows it names.
+    FilterQueryChanged(String),
+    /// Clear filter: no tile and no filter text.
+    FilterCleared,
+    /// The Notes group's heading was clicked: fold or open it.
+    NotesFolded(bool),
     /// A row was clicked: Space now ticks it.
     RowFocused(EcoKey),
     /// Space: tick or untick the focused row.

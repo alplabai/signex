@@ -106,6 +106,43 @@ fn power_ports_and_field_items_are_left_out() {
     assert_eq!(group.value, Shared::Same("1k".into()));
 }
 
+/// #2847: power ports are counted on their own, outside the Parts group, and
+/// a Parts edit still skips them.
+#[test]
+fn power_ports_are_counted_apart_and_parts_edits_skip_them() {
+    let mut sheet = test_sheet();
+    let mut power = symbol("#PWR1", "GND");
+    power.is_power = true;
+    let port = power.uuid;
+    sheet.symbols = vec![power, symbol("R1", "1k"), symbol("R2", "2k")];
+    sheet.labels = vec![label("A", 1.27)];
+    let items = pick(&sheet);
+    let groups = selection_groups(&sheet, &items);
+    assert_eq!(groups.power_ports, 1);
+    assert_eq!(groups.symbols.as_ref().unwrap().count, 2);
+    assert_eq!(groups.counted(), 4);
+    let commands = edit_commands(&sheet, &items, &MultiEdit::SymbolDnp(true));
+    assert_eq!(commands.len(), 2);
+    assert!(
+        !commands
+            .iter()
+            .any(|c| matches!(c, Command::SetSymbolDnp { symbol_id, .. } if *symbol_id == port))
+    );
+}
+
+/// With only power ports nothing has a field to edit, so the form keeps its
+/// nothing-shared card.
+#[test]
+fn power_ports_alone_leave_the_groups_empty() {
+    let mut sheet = test_sheet();
+    let mut power = symbol("#PWR1", "GND");
+    power.is_power = true;
+    sheet.symbols = vec![power];
+    let groups = selection_groups(&sheet, &pick(&sheet));
+    assert!(groups.is_empty());
+    assert_eq!(groups.power_ports, 1);
+}
+
 #[test]
 fn label_and_wire_groups_compare_lengths_with_a_tolerance() {
     let mut sheet = test_sheet();

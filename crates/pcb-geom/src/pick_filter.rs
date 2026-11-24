@@ -62,6 +62,7 @@ impl PickKind {
             ItemRef::FreePad(_) => PickKind::Pads,
             // A dimension has no kind of its own in the filter (#2373).
             ItemRef::Dimension(_) => PickKind::Other,
+            ItemRef::Room(_) => PickKind::Rooms,
         }
     }
 
@@ -103,6 +104,7 @@ impl PickKind {
                 | PickKind::Texts
                 | PickKind::Other
                 | PickKind::Polygons
+                | PickKind::Rooms
         )
     }
 }
@@ -224,6 +226,7 @@ mod tests {
             min_thickness: 0.0,
             min_island_area: 0.0,
             remove_dead_islands: false,
+            shelved: false,
             unknown: Default::default(),
         }
     }
@@ -262,10 +265,12 @@ mod tests {
             PickKind::Fills,
             PickKind::Regions,
             PickKind::Polygons,
+            // #2457: rooms are held by the selection index.
+            PickKind::Rooms,
         ] {
             assert!(kind.is_pickable(), "{kind:?}");
         }
-        assert!(!PickKind::Rooms.is_pickable());
+        assert!(!PickKind::Bodies3d.is_pickable());
     }
 
     #[test]

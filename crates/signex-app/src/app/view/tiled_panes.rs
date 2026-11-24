@@ -1,4 +1,4 @@
-//! Window ▸ Tile in the main window (#2249): every docked document in a
+//! View ▸ Window ▸ Tile in the main window (#2249): every docked document in a
 //! pane, side by side or stacked. The focused pane is the active tab's full
 //! editor; every other pane draws its document and takes a press as "focus
 //! this one", so its first click never lands on the wrong document. Pane
@@ -130,6 +130,7 @@ impl Signex {
             Some(tab) if tab.kind.as_rules().is_some() => {
                 tab.kind.as_rules().map(|id| self.view_rules_tab(id))
             }
+            Some(tab) if tab.kind.is_layer_stack() => Some(self.view_layer_stack_tab()),
             Some(tab) => self
                 .view_library_tab(tab, window_id, true)
                 .or_else(|| {
@@ -169,6 +170,7 @@ impl Signex {
         let class_styles = &self.ui_state.net_class_styles;
         let prefs = crate::canvas::CanvasViewPrefs {
             schematic_defaults: self.document_state.schematic_defaults_for(path),
+            designator_standard: self.document_state.designator_standard_for(path),
             wire_color_overrides: self
                 .document_state
                 .engines
@@ -180,6 +182,7 @@ impl Signex {
             wire_class_revision: class_styles.revision_in(shown.as_ref()),
             wire_tool_active: false,
             placement: None,
+            unions: self.union_view(Some(path)),
             ..prefs
         };
         crate::canvas::SchematicSurface::new(crate::canvas::SchematicCanvas::new(slot, prefs))

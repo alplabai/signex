@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock, Weak};
 
 use signex_types::net::Netlist;
+use signex_types::project::ChannelNaming;
 
 use super::project_sheets::{OpenSheets, ProjectSheetSet, stitch_issue_message};
 use super::state::ProjectId;
@@ -55,7 +56,7 @@ pub(crate) fn stitched_project_netlist_from(
     project_dir: Option<PathBuf>,
 ) -> Stitched {
     let set = super::project_sheets::assemble_project_sheets_from(open, pages, root, fold);
-    netlist_of_set(&set, project_dir)
+    netlist_of_set(&set, project_dir, &ChannelNaming::default())
 }
 
 /// The project netlist rooted at `root` and an index of what sits on each net
@@ -68,9 +69,10 @@ pub(crate) fn stitched_index_from(
     root: &Path,
     fold: CaseFold,
     project_dir: Option<PathBuf>,
+    naming: &ChannelNaming,
 ) -> Stitched {
     let set = super::project_sheets::assemble_project_sheets_from(open, pages, root, fold);
-    stitch_set(&set, project_dir, true)
+    stitch_set(&set, project_dir, true, naming)
 }
 
 /// One project's stitch, computed by whichever of the net-class style job and
@@ -121,8 +123,12 @@ fn unreadable_message(path: &Path, why: &str) -> String {
 
 /// The stitched netlist of an already assembled sheet set, so a caller that
 /// needs the set for other things reads the disk once.
-pub(crate) fn netlist_of_set(set: &ProjectSheetSet, project_dir: Option<PathBuf>) -> Stitched {
-    stitch_set(set, project_dir, false)
+pub(crate) fn netlist_of_set(
+    set: &ProjectSheetSet,
+    project_dir: Option<PathBuf>,
+    naming: &ChannelNaming,
+) -> Stitched {
+    stitch_set(set, project_dir, false, naming)
 }
 
 #[cfg(test)]
@@ -131,7 +137,12 @@ thread_local! {
     pub(crate) static STITCH_RUNS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-fn stitch_set(set: &ProjectSheetSet, project_dir: Option<PathBuf>, want_index: bool) -> Stitched {
+fn stitch_set(
+    set: &ProjectSheetSet,
+    project_dir: Option<PathBuf>,
+    want_index: bool,
+    naming: &ChannelNaming,
+) -> Stitched {
     #[cfg(test)]
     STITCH_RUNS.with(|runs| runs.set(runs.get() + 1));
     let mut warnings: Vec<String> = set
@@ -169,10 +180,13 @@ fn stitch_set(set: &ProjectSheetSet, project_dir: Option<PathBuf>, want_index: b
         roots: &roots,
     };
     let (result, index) = if want_index {
-        let (result, index) = signex_net::build_project_netlist_indexed(&project);
+        let (result, index) = signex_net::build_project_netlist_indexed_named(&project, naming);
         (result, Some(index))
     } else {
-        (signex_net::build_project_netlist(&project), None)
+        (
+            signex_net::build_project_netlist_named(&project, naming),
+            None,
+        )
     };
     warnings.extend(graph.issues.iter().map(stitch_issue_message));
     warnings.extend(result.issues.iter().map(stitch_issue_message));

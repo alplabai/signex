@@ -68,6 +68,30 @@ pub(super) const HIERARCHY: &[CommandMetadata] = &[
         operands: operands::SYNC_SHEET,
         ..CommandMetadata::DEFAULT
     },
+    // #1276: bottom-up hierarchy. In a window they pick a file or show a
+    // preview first; with operands they run at once.
+    CommandMetadata {
+        id: "create_sheet_symbol_from_sheet",
+        category: "design",
+        label: command_ids::CMD_CREATE_SHEET_SYMBOL_FROM_SHEET,
+        menu_label: Some(command_ids::CMD_MENU_CREATE_SHEET_SYMBOL_FROM_SHEET),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::SHEET_SYMBOL_FROM_SHEET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "sync_sheet_entries",
+        category: "design",
+        label: command_ids::CMD_SYNC_SHEET_ENTRIES,
+        menu_label: Some(command_ids::CMD_MENU_SYNC_SHEET_ENTRIES),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresSelection,
+        flags: CommandFlags::MUTATES,
+        operands: operands::SYNC_SHEET_ENTRIES,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "number_schematic_sheets",
         category: "design",
@@ -77,6 +101,18 @@ pub(super) const HIERARCHY: &[CommandMetadata] = &[
         // A project sheet, not the active tab, is what it needs: the root
         // sheet stands in with no document open, so the gate is
         // `Needs::ProjectSheet` (`app/command/needs.rs`).
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // Compile the project for the Compiled Design panel and the channel
+    // tabs of repeated sheets (#1279, #1308); gated like the sheet numbers.
+    CommandMetadata {
+        id: "compile_project",
+        category: "design",
+        label: command_ids::CMD_COMPILE_PROJECT,
+        menu_label: Some(command_ids::CMD_MENU_COMPILE_PROJECT),
+        group: CommandGroup::Schematic,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
@@ -160,6 +196,17 @@ pub(super) const HIERARCHY: &[CommandMetadata] = &[
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
         flags: CommandFlags::MUTATES,
         operands: operands::SHEET_SYMBOL_SIZE,
+        ..CommandMetadata::DEFAULT
+    },
+    // #1300: writes contents.snxsch and adds it to the project.
+    CommandMetadata {
+        id: "add_table_of_contents",
+        category: "design",
+        label: command_ids::CMD_ADD_TABLE_OF_CONTENTS,
+        menu_label: Some(command_ids::CMD_MENU_ADD_TABLE_OF_CONTENTS),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
 ];

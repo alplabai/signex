@@ -52,7 +52,7 @@ fn a_snxfpt_1_file_reads_and_its_next_save_writes_1_1() {
 
 #[test]
 fn a_newer_snxfpt_format_is_refused_by_name() {
-    for newer in ["snxfpt/1.2", "snxfpt/2"] {
+    for newer in ["snxfpt/1.4", "snxfpt/2"] {
         match FootprintFile::from_toml_str(&file_text(newer)) {
             Err(error @ FootprintFileError::UnsupportedFormat { .. }) => {
                 let message = error.to_string();
@@ -61,6 +61,29 @@ fn a_newer_snxfpt_format_is_refused_by_name() {
             }
             other => panic!("{newer}: expected UnsupportedFormat, got {other:?}"),
         }
+    }
+}
+
+/// #2207: a file with no token, or a garbled one, is refused, never read
+/// as some version.
+#[test]
+fn a_missing_or_garbled_snxfpt_token_is_refused() {
+    let tokenless = file_text("snxfpt/1").replacen("format = \"snxfpt/1\"\n", "", 1);
+    assert!(!tokenless.contains("format"), "{tokenless}");
+    match FootprintFile::from_toml_str(&tokenless) {
+        Err(FootprintFileError::UnsupportedFormat(reason)) => {
+            assert_eq!(reason.found(), None, "{reason}");
+        }
+        other => panic!("expected UnsupportedFormat, got {other:?}"),
+    }
+    for garbled in ["snxfpt/x", "snxsym/v1", "snxfpt/1.01", ""] {
+        assert!(
+            matches!(
+                FootprintFile::from_toml_str(&file_text(garbled)),
+                Err(FootprintFileError::UnsupportedFormat(_))
+            ),
+            "{garbled}"
+        );
     }
 }
 

@@ -11,18 +11,18 @@ use super::*;
 pub struct SymbolEditorPanelContext {
     /// File path of the open `.snxsym` (used as the tab key).
     pub path: std::path::PathBuf,
-    /// The active symbol's `name` field (Altium "Design Item ID").
+    /// The active symbol's `name` field (the Symbol name row).
     pub symbol_name: String,
-    /// Altium "Designator" (e.g. `U?`).
+    /// The designator template (e.g. `U?`), the Reference field.
     pub symbol_designator: String,
-    /// Altium "Comment" (e.g. `*` or a fixed value).
+    /// The comment passthrough (e.g. `*` or a fixed value).
     pub symbol_comment: String,
     /// Free-text description.
     pub symbol_description: String,
-    /// Altium "Component Type" — `Standard / Mechanical / Graphical
+    /// The component type — `Standard / Mechanical / Graphical
     /// / Net Tie / Standard (No BOM) / Jumper`.
     pub symbol_component_type: signex_library::ComponentType,
-    /// Altium "Mirrored" toggle.
+    /// The Graphical ▸ Mirrored toggle.
     pub symbol_mirrored: bool,
     /// Optional per-symbol Local Colors override (Fills / Lines /
     /// Pins). `None` = inherit from sheet palette.
@@ -67,20 +67,146 @@ pub struct SymbolEditorPanelContext {
     /// in-tab toolbar's right arrow.
     pub active_max_part: u8,
     /// Whether any pin on the active symbol carries `part_number == 0`
-    /// (Altium "Part Zero" — shared across every part). Drives the
+    /// (the shared part, on every part). Drives the
     /// optional "Part 0 (shared)" tree-expander row.
     pub active_has_part_zero: bool,
-    /// Per-`.snxlib` display settings (sheet color, grid, unit) —
-    /// rendered on the Properties panel's "None" branch as Altium
-    /// Document Options. Resolved by `runtime.rs` from the
+    /// The body (normal or alternate) the editor shows.
+    pub active_body: signex_types::schematic::BodyStyle,
+    /// The Parts section's Applies to row (mockup row 123).
+    pub body_scope: crate::library::editor::symbol::BodyScopeRow,
+    /// The shapes and pins of the part and body the editor shows, for the
+    /// Symbol tab's illustration.
+    pub part_drawing: PartDrawing,
+    /// The Properties panel's own state for this editor: tab, Pins filter,
+    /// part chip and illustration hover (mockup rows 122 and 123).
+    pub props: crate::library::editor::symbol::SymbolPropsUi,
+    /// Per-`.snxlib` display settings (sheet color, grid, unit),
+    /// resolved by `runtime.rs` from the
     /// containing library; falls back to defaults for lone-file
     /// edits.
     pub display: SymbolDisplayOptions,
 }
 
-/// Sheet / grid / unit + library identity surfaced on the
-/// Properties panel as Altium "Document Options" when nothing is
-/// selected on the symbol canvas. Mirrors
+/// What the Symbol tab's illustration draws: the shapes and pins of the
+/// part and body the editor shows, in symbol mm (y up).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PartDrawing {
+    pub shapes: Vec<PartShape>,
+    /// Indices into [`SymbolEditorPanelContext::pins`].
+    pub pins: Vec<usize>,
+}
+
+impl SymbolEditorPanelContext {
+    /// The shapes and pins of `sym` the editor shows: those `shows_graphic`
+    /// and `shows_pin` keep (the editor's part and body view).
+    pub fn part_drawing_of(
+        sym: &signex_library::Symbol,
+        shows_graphic: impl Fn(&signex_library::SymbolGraphic) -> bool,
+        shows_pin: impl Fn(&signex_library::SymbolPin) -> bool,
+    ) -> PartDrawing {
+        use signex_library::SymbolGraphicKind as K;
+        let shapes = sym
+            .graphics
+            .iter()
+            .enumerate()
+            .filter(|(_, g)| shows_graphic(g))
+            .filter_map(|(idx, g)| {
+                let filled = g.fill.is_some();
+                Some(match &g.kind {
+                    K::Rectangle { from, to } => PartShape::Rectangle {
+                        from: *from,
+                        to: *to,
+                        filled,
+                    },
+                    K::Line { from, to } => PartShape::Line {
+                        from: *from,
+                        to: *to,
+                    },
+                    K::Circle { center, radius } => PartShape::Circle {
+                        center: *center,
+                        radius: *radius,
+                        filled,
+                    },
+                    K::Arc {
+                        center,
+                        radius,
+                        start_deg,
+                        end_deg,
+                    } => PartShape::Arc {
+                        center: *center,
+                        radius: *radius,
+                        start_deg: *start_deg,
+                        end_deg: *end_deg,
+                    },
+                    K::Polygon { vertices } => PartShape::Polygon {
+                        idx,
+                        vertices: vertices.clone(),
+                        filled,
+                    },
+                    kind @ (K::Bezier { .. }
+                    | K::Pie { .. }
+                    | K::EllipticalArc { .. }
+                    | K::RoundRectangle { .. }) => PartShape::Outline {
+                        points: kind.flattened_outline(),
+                        is_closed: matches!(kind, K::Pie { .. } | K::RoundRectangle { .. }),
+                        filled,
+                    },
+                    K::Text { .. } => return None,
+                })
+            })
+            .collect();
+        let pins = sym
+            .pins
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| shows_pin(p))
+            .map(|(idx, _)| idx)
+            .collect();
+        PartDrawing { shapes, pins }
+    }
+}
+
+/// One shape of a [`PartDrawing`]; text is left out.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PartShape {
+    Rectangle {
+        from: [f64; 2],
+        to: [f64; 2],
+        filled: bool,
+    },
+    Line {
+        from: [f64; 2],
+        to: [f64; 2],
+    },
+    Circle {
+        center: [f64; 2],
+        radius: f64,
+        filled: bool,
+    },
+    Arc {
+        center: [f64; 2],
+        radius: f64,
+        start_deg: f64,
+        end_deg: f64,
+    },
+    Polygon {
+        /// Index of the graphic, so the selected polygon's illustration can
+        /// find its vertices.
+        idx: usize,
+        vertices: Vec<[f64; 2]>,
+        filled: bool,
+    },
+    /// A flattened Bezier or elliptical arc (open), pie or round rectangle
+    /// (closed).
+    Outline {
+        points: Vec<[f64; 2]>,
+        is_closed: bool,
+        filled: bool,
+    },
+}
+
+/// Sheet / grid / unit + library identity of the library holding the
+/// symbol. Mirrors
 /// [`crate::library::state::LibraryDisplaySettings`] but lives in
 /// the panels crate so view code doesn't pull
 /// `crate::library::state` directly.
@@ -125,8 +251,7 @@ pub struct SymbolFileEntry {
 
 /// Extended pin fields surfaced on the Properties panel — flows
 /// alongside [`SymbolPinSummary`] so the panel doesn't have to
-/// reach back into the editor state to read them. Mirrors the
-/// Altium SchLib Pin Properties layout.
+/// reach back into the editor state to read them.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SymbolPinDetails {
     pub description: String,
@@ -141,7 +266,7 @@ pub struct SymbolPinDetails {
     pub outside_symbol: signex_library::PinSymbolKind,
     pub hidden: bool,
     pub locked: bool,
-    /// Multi-part scoping: 1 = single-part default, 0 = "Part Zero"
+    /// Multi-part scoping: 1 = single-part default, 0 = the shared part
     /// (pin appears on every part), 2..N = scoped to that part.
     pub part_number: u8,
 }
@@ -222,6 +347,29 @@ pub enum GraphicKindSummary {
     Polygon {
         vertex_count: usize,
     },
+    /// `[start, c1, c2, end]`.
+    Bezier {
+        points: [[f64; 2]; 4],
+    },
+    Pie {
+        center: [f64; 2],
+        radius: f64,
+        start_deg: f64,
+        end_deg: f64,
+    },
+    EllipticalArc {
+        center: [f64; 2],
+        radius_x: f64,
+        radius_y: f64,
+        start_deg: f64,
+        end_deg: f64,
+    },
+    /// `corner_radius` is the drawn one, clamped to half the short side.
+    RoundRectangle {
+        from: [f64; 2],
+        to: [f64; 2],
+        corner_radius: f64,
+    },
 }
 
 /// Identifier for one numeric field on a graphic — carried by
@@ -238,16 +386,26 @@ pub enum GraphicFieldId {
     ToX,
     /// `Rectangle`/`Line` `to.y`.
     ToY,
-    /// `Circle`/`Arc` `center.x`.
+    /// `Circle`/`Arc`/`Pie` `center.x`.
     CenterX,
-    /// `Circle`/`Arc` `center.y`.
+    /// `Circle`/`Arc`/`Pie` `center.y`.
     CenterY,
-    /// `Circle`/`Arc` `radius`.
+    /// `Circle`/`Arc`/`Pie` `radius`.
     Radius,
-    /// `Arc` `start_deg`.
+    /// `Arc`/`Pie` `start_deg`.
     StartDeg,
-    /// `Arc` `end_deg`.
+    /// `Arc`/`Pie` `end_deg`.
     EndDeg,
+    /// `Bezier` point `0..=3` (start, C1, C2, end), x.
+    BezierX(u8),
+    /// `Bezier` point `0..=3`, y.
+    BezierY(u8),
+    /// `EllipticalArc` `radius_x`.
+    RadiusX,
+    /// `EllipticalArc` `radius_y`.
+    RadiusY,
+    /// `RoundRectangle` `corner_radius`, clamped to half the short side.
+    CornerRadius,
     /// `Text` `position.x`.
     PositionX,
     /// `Text` `position.y`.
@@ -256,6 +414,11 @@ pub enum GraphicFieldId {
     TextSize,
     /// All variants — `SymbolGraphic.stroke_width`.
     StrokeWidth,
+    /// `Rectangle` width, `|to.x - from.x|`: written as `to.x`, keeping the
+    /// side `to` is on (`state::rect_end_for_extent`).
+    Width,
+    /// `Rectangle` height, `|to.y - from.y|`: written as `to.y`.
+    Height,
 }
 
 /// What the SCH Library panel shows before a Delete of a symbol that is

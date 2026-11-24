@@ -271,3 +271,96 @@ fn a_member_that_left_its_net_is_said_and_nothing_moves() {
         "the Messages line names the net"
     );
 }
+
+/// Graphite mockup #58: By Component lists the project's parts from the same net index; an
+/// expanded part lists every pin with its net and pin name, an unwired pin
+/// on no net. `U1` is put on sheet `a` with pin 1 `VIN` on the `VCC` wire
+/// and pin 2 `EN` left open.
+#[test]
+fn switching_to_by_component_and_expanding_a_part_lists_its_pins() {
+    use signex_app::panels::net_inspector::NetInspectorTab;
+    use signex_types::schematic::{
+        LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, Symbol,
+    };
+
+    let tmp = TempDir::new().unwrap();
+    let (mut app, a, _b) = open_project(tmp.path());
+    let pin = |number: &str, name: &str, y: f64| LibPin {
+        unit: 0,
+        body_style: 1,
+        pin: Pin {
+            direction: PinDirection::Passive,
+            shape_style: PinShapeStyle::Plain,
+            position: Point::new(0.0, y),
+            rotation: 0.0,
+            length: 0.0,
+            name: name.into(),
+            number: number.into(),
+            visible: true,
+            name_visible: true,
+            number_visible: true,
+        },
+    };
+    let engine = app.document_state.engines.get_mut(&a).expect("a is open");
+    let mut sheet = engine.document().clone();
+    sheet.lib_symbols.insert(
+        "Reg:LDO".into(),
+        LibSymbol {
+            id: "Reg:LDO".into(),
+            reference: "U".into(),
+            value: String::new(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            description: String::new(),
+            keywords: String::new(),
+            fp_filters: String::new(),
+            in_bom: true,
+            on_board: true,
+            in_pos_files: true,
+            duplicate_pin_numbers_are_jumpers: false,
+            graphics: Vec::new(),
+            pins: vec![pin("1", "VIN", 0.0), pin("2", "EN", 10.0)],
+            show_pin_numbers: true,
+            show_pin_names: true,
+            pin_name_offset: 0.0,
+        },
+    );
+    sheet.symbols.push(Symbol {
+        uuid: uuid::Uuid::now_v7(),
+        lib_id: "Reg:LDO".into(),
+        reference: "U1".into(),
+        value: "LDO".into(),
+        footprint: "SOT-23".into(),
+        position: Point::new(0.0, 0.0),
+        ..Default::default()
+    });
+    engine.set_document(sheet);
+
+    settle(&mut app, crate::menu_support::menu_row(COMMAND));
+    inspector(
+        &mut app,
+        NetInspectorMsg::TabSelected(NetInspectorTab::ByComponent),
+    );
+    inspector(&mut app, NetInspectorMsg::ComponentToggled("U1".into()));
+
+    let view = &app.document_state.panel_ctx.net_inspector;
+    assert_eq!(view.tab, NetInspectorTab::ByComponent);
+    assert_eq!(view.component_total, 1);
+    let u1 = &view.components[0];
+    assert_eq!(
+        (
+            u1.designator.as_str(),
+            u1.value.as_str(),
+            u1.footprint.as_str(),
+            u1.pins
+        ),
+        ("U1", "LDO", "SOT-23", 2)
+    );
+    assert!(u1.expanded);
+    let pins: Vec<(&str, Option<&str>, &str)> = u1
+        .pin_rows
+        .iter()
+        .map(|p| (p.pin.as_str(), p.net.as_deref(), p.name.as_str()))
+        .collect();
+    assert_eq!(pins, [("1", Some("VCC"), "VIN"), ("2", None, "EN")]);
+}

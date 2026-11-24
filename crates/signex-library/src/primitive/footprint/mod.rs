@@ -17,8 +17,12 @@ use uuid::Uuid;
 
 use crate::param::ParamMap;
 
+mod format_token;
+#[cfg(test)]
+mod format_token_tests;
 #[cfg(test)]
 mod format_version_tests;
+mod generated;
 mod load_repair;
 mod mount_style;
 mod pad;
@@ -30,6 +34,8 @@ mod silk_marker;
 #[cfg(test)]
 mod tests;
 
+use format_token::{FOOTPRINT_FILE_VERSION, SNXFPT_FORMAT_V1_1};
+pub use generated::{DEFAULT_PAD_CLEARANCE_MM, DEFAULT_SILK_LINE_WIDTH_MM, GeneratedFeatures};
 pub use load_repair::LoadRepair;
 pub use mount_style::MountStyle;
 pub use pad::*;
@@ -462,6 +468,9 @@ pub struct Footprint {
     pub component_type: ComponentType,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub height_mm: Option<f64>,
+    /// Generated silkscreen, pin 1 and assembly features (`snxfpt/1.3`).
+    #[serde(default, skip_serializing_if = "GeneratedFeatures::is_default")]
+    pub generated: GeneratedFeatures,
 }
 
 /// v0.21 — Altium-parity component type. Drives whether the part
@@ -541,8 +550,8 @@ pub const FOOTPRINT_SCHEMA_VERSION: u32 = 3;
 /// inline TOML since they're variant-shaped or sparse.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FootprintFile {
-    /// The format token the file was read with; a save always writes
-    /// [`FOOTPRINT_FILE_FORMAT_TOKEN`].
+    /// The format token the file was read with; a save writes
+    /// [`FootprintFile::format_token`].
     #[serde(default = "default_footprint_format")]
     pub format: String,
     /// File-level UUID — distinct from any contained footprint's uuid.
@@ -563,17 +572,9 @@ pub struct FootprintFile {
     pub updated: DateTime<Utc>,
 }
 
-/// Current `.snxfpt` format, written on every save (the `.snxpcb` policy).
-/// 1.1 (#2242): a pad may carry the `trapezoid:<dx>,<dy>` shape token.
-const FOOTPRINT_FILE_FORMAT_TOKEN: &str = "snxfpt/1.1";
-
-/// Every format this build reads. A newer one is refused by name: an older
-/// build cannot tell which of its shapes it would misread.
-const FOOTPRINT_FILE_FORMATS_READ: [&str; 2] = ["snxfpt/1", FOOTPRINT_FILE_FORMAT_TOKEN];
-
 /// Base column layout for the per-footprint `pads_tsv` block; these
 /// lead every header. Reordering them is a wire-format break — bump
-/// [`FOOTPRINT_FILE_FORMAT_TOKEN`]. The remaining `Pad` fields are
+/// the `.snxfpt` token (`format_token`). The remaining `Pad` fields are
 /// optional trailing columns, see `pad_columns`.
 const PAD_TSV_COLUMNS: &[&str] = &[
     "number",
@@ -597,7 +598,7 @@ const PAD_TSV_COLUMNS: &[&str] = &[
 const PADS_TSV_PLACEHOLDER_PREFIX: &str = "__SIGNEX_PADS_TSV_a1b2c3d4_";
 
 fn default_footprint_format() -> String {
-    FOOTPRINT_FILE_FORMAT_TOKEN.to_string()
+    SNXFPT_FORMAT_V1_1.to_string()
 }
 
 /// On-disk wire shape. Mirrors [`FootprintFile`] but each
@@ -605,7 +606,8 @@ fn default_footprint_format() -> String {
 /// carrying the TSV-encoded payload.
 #[derive(Serialize, Deserialize)]
 struct FootprintFileWire {
-    format: String,
+    #[serde(default)]
+    format: Option<String>,
     file_uuid: Uuid,
     #[serde(default)]
     display_name: String,
@@ -673,6 +675,8 @@ struct FootprintWire {
     component_type: ComponentType,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     height_mm: Option<f64>,
+    #[serde(default, skip_serializing_if = "GeneratedFeatures::is_default")]
+    generated: GeneratedFeatures,
     // FootprintWire (per-footprint) wire fields below; the
     // FootprintFile (file-level) wire ends here.
 }
@@ -711,14 +715,12 @@ impl FootprintFile {
         Self::from_toml_str(text)
     }
 
-    /// Parse the TOML+TSV wire format. The format-token check pins us
-    /// to [`FOOTPRINT_FILE_FORMATS_READ`]; any other token surfaces
+    /// Parse the TOML+TSV wire format. The format token is checked by
+    /// [`FOOTPRINT_FILE_VERSION`]; a refused one surfaces
     /// [`FootprintFileError::UnsupportedFormat`].
     pub fn from_toml_str(text: &str) -> Result<Self, FootprintFileError> {
         let wire: FootprintFileWire = signex_types::numeric::parse_toml_finite(text)?;
-        if !FOOTPRINT_FILE_FORMATS_READ.contains(&wire.format.as_str()) {
-            return Err(FootprintFileError::UnsupportedFormat { got: wire.format });
-        }
+        let format = FOOTPRINT_FILE_VERSION.read(wire.format.as_deref())?;
         let mut footprints = Vec::with_capacity(wire.footprints.len());
         for fw in wire.footprints {
             let pads = pads_from_tsv(&fw.pads_tsv)?;
@@ -753,12 +755,13 @@ impl FootprintFile {
                 default_designator: fw.default_designator,
                 component_type: fw.component_type,
                 height_mm: fw.height_mm,
+                generated: fw.generated,
             };
             footprint.repair_stored_sketch();
             footprints.push(footprint);
         }
         Ok(FootprintFile {
-            format: wire.format,
+            format,
             file_uuid: wire.file_uuid,
             display_name: wire.display_name,
             copied_from: wire.copied_from,
@@ -806,10 +809,11 @@ impl FootprintFile {
                 default_designator: fp.default_designator.clone(),
                 component_type: fp.component_type,
                 height_mm: fp.height_mm,
+                generated: fp.generated.clone(),
             });
         }
         let wire = FootprintFileWire {
-            format: FOOTPRINT_FILE_FORMAT_TOKEN.to_string(),
+            format: Some(self.format_token().to_string()),
             file_uuid: self.file_uuid,
             display_name: self.display_name.clone(),
             copied_from: self.copied_from,
@@ -879,6 +883,7 @@ impl Footprint {
             default_designator: String::new(),
             component_type: ComponentType::Standard,
             height_mm: None,
+            generated: GeneratedFeatures::default(),
         }
     }
 }

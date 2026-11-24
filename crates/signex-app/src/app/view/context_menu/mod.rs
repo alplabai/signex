@@ -5,16 +5,21 @@
 //! sibling `overlays` module.
 
 mod anchored;
+// The sketch canvas menu opens through it too (mockup row 188).
+pub(crate) use anchored::AnchoredMenu;
 mod backdrop;
+mod board_menu;
 mod board_part_rows;
 mod components_row;
 mod dock_tab;
 mod grid_picker;
+mod grid_preview;
 mod items;
 mod layer_set;
 mod layer_tab;
 mod menus;
 mod placement;
+pub(in crate::app::view) use placement::clamp_menu_origin;
 mod project_tree;
 mod start_row;
 mod submenu;
@@ -23,7 +28,5 @@ mod submenu;
 mod catalog_agreement_tests;
 #[cfg(test)]
 mod tests;
-
-pub(super) use anchored::AnchoredMenu;
 
 use super::*;

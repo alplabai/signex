@@ -10,6 +10,7 @@ mod odb;
 mod odb_eda;
 mod origin;
 mod panel;
+mod reference_sign;
 mod same_net;
 
 use std::path::PathBuf;
@@ -241,6 +242,7 @@ fn zone(layer: &str) -> Zone {
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
         unknown: Default::default(),
     }
 }

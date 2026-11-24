@@ -49,6 +49,15 @@ impl ProjectFsFacts {
         self.exists.get(path) == Some(&false)
     }
 
+    /// A file the project lists reads as missing (the tree's `(missing)`,
+    /// the Sheets section's pill) only when the probe found it absent and no
+    /// open (`is_open`) or unsaved (`is_dirty`) document holds it: a
+    /// document created this session is not on disk until it is saved
+    /// (#2350). The one rule both readers share.
+    pub fn is_listed_file_missing(&self, path: &Path, is_open: bool, is_dirty: bool) -> bool {
+        self.is_missing(path) && !is_open && !is_dirty
+    }
+
     /// The modification time the last probe saw for `path`, if it exists.
     pub fn modified(&self, path: &Path) -> Option<std::time::SystemTime> {
         self.mtimes.get(path).copied()

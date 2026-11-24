@@ -22,21 +22,27 @@ use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::pcb_canvas::{carried_board, snap_point};
 
+/// With Snap off, how near the run's last point (screen px) a click counts
+/// as on it and ends the run.
+const END_RUN_PX: f64 = 2.0;
+
 mod area;
 mod form;
 mod free;
 mod free_form;
 mod graphic;
+mod outline_preview;
 mod pour_cut;
 mod quick;
 mod route;
+mod route_end;
+mod route_rats;
 mod router;
 mod side_by_side;
 mod string;
 
 pub(crate) use form::has_form;
 pub use form::{BoardToolDefaults, PlacementPause};
-pub(crate) use free::arc_mode_name;
 pub(crate) use free_form::precision_of;
 pub use router::RouterState;
 
@@ -51,9 +57,17 @@ mod free_tests;
 #[cfg(test)]
 mod graphic_tests;
 #[cfg(test)]
+mod layer_tests;
+#[cfg(test)]
+mod outline_preview_tests;
+#[cfg(test)]
+mod pause_tests;
+#[cfg(test)]
 mod pour_cut_tests;
 #[cfg(test)]
 mod pour_tests;
+#[cfg(test)]
+mod route_rats_tests;
 #[cfg(test)]
 mod route_tests;
 #[cfg(test)]
@@ -86,6 +100,9 @@ pub struct BoardToolSession {
     /// Tab paused placing for the values to be edited in Properties (#2393);
     /// what Esc puts back.
     pub paused: Option<PlacementPause>,
+    /// Why the last click added nothing, for the status bar; the next click
+    /// clears it.
+    pub note: Option<String>,
 }
 
 impl BoardToolSession {
@@ -139,8 +156,10 @@ impl Signex {
             route: None,
             router: None,
             paused: None,
+            note: None,
         });
         crate::diagnostics::log_info(self.board_tool_hint(tool));
+        self.sync_route_ratsnest();
         self.refresh_pcb_highlight();
     }
 
@@ -189,6 +208,7 @@ impl Signex {
     pub(crate) fn release_board_tool(&mut self) {
         self.finish_board_route(true);
         self.interaction_state.pcb_tool = None;
+        self.sync_route_ratsnest();
     }
 
     /// Esc or a right-click: undo the edits of a pause and go on placing,
@@ -207,6 +227,7 @@ impl Signex {
         } else {
             self.end_route_shape();
         }
+        self.sync_route_ratsnest();
         true
     }
 
@@ -217,6 +238,7 @@ impl Signex {
             session.route = None;
             session.router = None;
         }
+        self.sync_route_ratsnest();
         self.refresh_pcb_highlight();
     }
 
@@ -240,14 +262,91 @@ impl Signex {
         layer
     }
 
-    /// Where a tool click at `at` lands on the board in view.
-    fn board_tool_point(&self, board: &PcbBoard, at: Point) -> Point {
-        snap_point(board, at, &self.ui_state.pcb_snap, self.pcb_active_layer())
+    /// Say why a click added nothing: in the Messages panel, and in the
+    /// status bar until the next click.
+    pub(super) fn note_board_tool(&mut self, line: String) {
+        crate::diagnostics::log_warning(&line);
+        if let Some(session) = self.own_board_tool_mut() {
+            session.note = Some(line);
+        }
     }
 
-    /// The pointer moved over the board: what the next click adds follows.
+    /// What the status bar says while a tool is armed on the board this
+    /// window shows: paused, why the leg on the pointer or the last click
+    /// adds nothing, that the tool needs a copper layer, or how to use it.
+    pub(crate) fn board_tool_status(&self) -> Option<String> {
+        let session = self.own_board_tool()?;
+        let i18n = &self.ui_state.i18n;
+        let name = t!(i18n, session.tool.name()).into_string();
+        if session.paused.is_some() {
+            return Some(t!(i18n, ids::PCB_TOOL_PAUSED, "tool" => name).into_string());
+        }
+        if let Some(why) = self.router_preview_refusal() {
+            return Some(why.to_string());
+        }
+        if let Some(note) = &session.note {
+            return Some(note.clone());
+        }
+        if draws_on_copper(session.tool) && self.active_copper_layer().is_none() {
+            let note = t!(i18n, ids::PCB_TOOL_NEEDS_COPPER, "tool" => name.as_str());
+            return Some(note.into_string());
+        }
+        // Mid-route the corner rule is said instead (`corner_status`).
+        (!session.is_routing()).then(|| self.board_tool_hint(session.tool))
+    }
+
+    /// Whether a click at `at` is on the run's last point `anchor`, which
+    /// ends the run. With Snap off a hand's click never repeats a point
+    /// exactly, so [`END_RUN_PX`] of the screen counts as on it.
+    fn clicks_run_end(&self, at: Point, anchor: Point) -> bool {
+        if at == anchor {
+            return true;
+        }
+        !self.ui_state.snap_enabled
+            && (at.x - anchor.x).hypot(at.y - anchor.y) * self.pcb_snap_view().px_per_mm
+                <= END_RUN_PX
+    }
+
+    /// Where a tool click at `at` lands on the board in view. A running
+    /// pair or multi-track route places its centre line, which runs between
+    /// its tracks: an object point would put one member on that object, so
+    /// only the grid, guides and axes hold it. A running single route with
+    /// a net snaps to that net only; one with no net snaps to any pad and
+    /// takes its net (Caner, 2026-11-21). Its first click still finds its
+    /// net from whatever is there.
+    fn board_tool_point(&self, board: &PcbBoard, at: Point) -> Point {
+        let mut view = self.pcb_snap_view();
+        if let Some(session) = self
+            .own_board_tool()
+            .filter(|session| !session.points.is_empty())
+        {
+            match session.tool {
+                BoardPlaceTool::DiffPairRouting | BoardPlaceTool::MultiRoute => {
+                    view = view.without_objects();
+                }
+                BoardPlaceTool::Track
+                | BoardPlaceTool::InteractiveRouting
+                | BoardPlaceTool::QuickRoute => {
+                    view.net = session
+                        .route
+                        .as_ref()
+                        .map(|style| style.net)
+                        .filter(|net| *net != 0);
+                }
+                _ => {}
+            }
+        }
+        snap_point(board, at, view)
+    }
+
+    /// The pointer moved over the board: what the next click adds follows,
+    /// unless Tab paused the tool, which holds it where it was.
     pub(crate) fn board_tool_followed(&mut self, at: Point) {
-        let Some(board) = self.own_board_tool().and(self.active_pcb()) else {
+        let Some(board) = self
+            .own_board_tool()
+            .filter(|s| s.paused.is_none())
+            .and(self.active_pcb())
+        else {
             return;
         };
         let at = self.board_tool_point(board, at);
@@ -269,6 +368,9 @@ impl Signex {
             // A paused tool places nothing; the net pick of its form still
             // takes the click.
             return self.interaction_state.pcb_primitive.net_pick.is_none();
+        }
+        if let Some(session) = self.own_board_tool_mut() {
+            session.note = None;
         }
         let Some(board) = self.active_pcb() else {
             return false;
@@ -306,21 +408,48 @@ impl Signex {
             | BoardPlaceTool::FullCircle
             | BoardPlaceTool::Rectangle
             | BoardPlaceTool::TextFrame => self.graphic_clicked(tool, at),
+            // #2457: the first click is a corner; the second places the room
+            // and ends the tool, so Properties shows the new room.
+            BoardPlaceTool::Room => {
+                let first = self
+                    .own_board_tool()
+                    .and_then(|s| s.points.first().copied());
+                match first {
+                    None => {
+                        if let Some(session) = self.own_board_tool_mut() {
+                            session.points.push(at);
+                        }
+                    }
+                    Some(first) => {
+                        if self.place_drawn_room(first, at) {
+                            self.end_board_tool();
+                            return true;
+                        }
+                    }
+                }
+            }
             _ => return false,
         }
         if let Some(session) = self.own_board_tool_mut() {
             session.cursor = Some(at);
         }
+        self.sync_route_ratsnest();
         self.refresh_pcb_highlight();
         true
     }
 
     /// What the canvas draws on the cursor for the tool armed on the board
-    /// in view: the board holding only what the next click adds.
+    /// in view: the board holding only what the next click adds, and the
+    /// routed net's ratsnest line from the route's end (`route_rats`).
     pub(crate) fn board_tool_ghost(&self) -> Option<PcbSnapshot> {
         let session = self.own_board_tool()?;
         let preview = self.board_tool_preview()?;
-        Some(self.pcb_snapshot_for(&session.path, &preview))
+        let line = self.route_ratsnest_line(session, &preview);
+        let snapshot = self.pcb_ghost_snapshot_for(&session.path, &preview);
+        Some(match line {
+            Some(line) => snapshot.with_ratsnest(&[line], &Default::default()),
+            None => snapshot,
+        })
     }
 
     /// The board holding only what the next click of the tool armed on the
@@ -364,4 +493,21 @@ impl Signex {
         }
         Some(preview)
     }
+}
+
+/// Whether `tool` draws on the active copper layer only.
+fn draws_on_copper(tool: BoardPlaceTool) -> bool {
+    matches!(
+        tool,
+        BoardPlaceTool::Track
+            | BoardPlaceTool::InteractiveRouting
+            | BoardPlaceTool::DiffPairRouting
+            | BoardPlaceTool::QuickRoute
+            | BoardPlaceTool::MultiRoute
+            | BoardPlaceTool::Fill
+            | BoardPlaceTool::SolidRegion
+            | BoardPlaceTool::PolygonPour
+            | BoardPlaceTool::PourCutout
+            | BoardPlaceTool::SlicePour
+    )
 }

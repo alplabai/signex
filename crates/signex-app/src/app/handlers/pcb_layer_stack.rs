@@ -10,34 +10,43 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use signex_engine::pcb::BoardCommand;
+use signex_engine::pcb::drill_pairs::{drill_pairs, via_type_counts};
 use signex_engine::pcb::stack_edit::{StackEdit, edit_stack};
-use signex_i18n::{ids, t};
+use signex_engine::pcb::via_types::{ViaTypeDef, via_types};
+use signex_i18n::{I18n, ids, t};
 use signex_types::format::parse_pcb_layer;
-use signex_types::pcb::PcbBoard;
-use signex_types::pcb_stack::LayerStack;
+use signex_types::pcb::{PcbBoard, ViaType};
+use signex_types::pcb_stack::{LayerStack, clean_stack_name};
 
-use crate::app::Signex;
 use crate::app::state::pcb_edit::CheckedStep;
-use crate::panels::layer_stack::kind_label;
+use crate::app::{Signex, TabKind};
+use crate::panels::layer_stack::{DrillPairRow, StackSubTab, StackUnit, ViaTypeRow, kind_label};
 use crate::panels::pcb_primitive_properties::parse_number;
 use crate::panels::{LayerStackFacts, LayerStackMsg, StackField};
 use crate::pcb_canvas::layer_style;
 
-/// The manager's own state: the selected row and unapplied cell text, for
-/// the board they were made on.
+/// The manager's own state: the selected row, unapplied cell text and the
+/// sub-tab, for the board they were made on, and the unit lengths read in.
+/// View state: nothing here is saved.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct LayerStackPanel {
     pub board: Option<PathBuf>,
     pub selected: Option<usize>,
     pub drafts: BTreeMap<(usize, StackField), String>,
+    /// The stackup name as typed, until Enter.
+    pub name_draft: Option<String>,
+    pub unit: StackUnit,
+    pub sub_tab: StackSubTab,
 }
 
 impl LayerStackPanel {
-    /// Start over for `board` when the state was made for another one.
+    /// Start over for `board` when the state was made for another one. The
+    /// unit is the person's choice and carries over.
     fn follow(&mut self, board: &Path) {
         if self.board.as_deref() != Some(board) {
             *self = Self {
                 board: Some(board.to_path_buf()),
+                unit: self.unit,
                 ..Self::default()
             };
         }
@@ -100,6 +109,34 @@ impl Signex {
                     self.interaction_state.pcb_layer_stack.selected = Some(moved);
                 }
             }
+            M::StackupNameTyped { board, text } => {
+                let panel = &mut self.interaction_state.pcb_layer_stack;
+                panel.follow(board);
+                panel.name_draft = Some(text.clone());
+            }
+            M::StackupNameSubmitted { board } => {
+                let panel = &mut self.interaction_state.pcb_layer_stack;
+                let typed = (panel.board.as_deref() == Some(board.as_path()))
+                    .then(|| panel.name_draft.take())
+                    .flatten();
+                if let Some(text) = typed {
+                    self.submit_stackup_name(board, &text);
+                }
+            }
+            M::UnitPicked { board, unit } => {
+                let panel = &mut self.interaction_state.pcb_layer_stack;
+                panel.follow(board);
+                panel.unit = *unit;
+                // A typed length was in the old unit.
+                panel
+                    .drafts
+                    .retain(|(_, field), _| *field != StackField::Thickness);
+            }
+            M::SubTabPicked { board, tab } => {
+                let panel = &mut self.interaction_state.pcb_layer_stack;
+                panel.follow(board);
+                panel.sub_tab = *tab;
+            }
         }
         self.document_state.panel_ctx.layer_stack = self.layer_stack_facts();
     }
@@ -123,7 +160,13 @@ impl Signex {
                 row,
                 text: text.to_string(),
             }),
-            StackField::Thickness => number().map(|mm| StackEdit::SetThickness { row, mm }),
+            StackField::Thickness => {
+                let unit = self.interaction_state.pcb_layer_stack.unit;
+                number().map(|value| StackEdit::SetThickness {
+                    row,
+                    mm: unit.to_mm(value),
+                })
+            }
             StackField::DielectricConstant => {
                 number().map(|value| StackEdit::SetDielectricConstant { row, value })
             }
@@ -137,6 +180,24 @@ impl Signex {
                 let why = t!(self.ui_state.i18n, ids::PCB_STACK_NOT_A_NUMBER, "text" => text);
                 self.refuse_stack_edit(why.into_string());
             }
+        }
+    }
+
+    /// Enter in the stackup name: one undo step, none when it is unchanged.
+    fn submit_stackup_name(&mut self, board: &Path, text: &str) {
+        let name = clean_stack_name(text);
+        let current = self
+            .document_state
+            .pcb_board(board)
+            .and_then(|b| b.stackup.as_ref())
+            .and_then(|stack| stack.name.clone());
+        if name == current {
+            return;
+        }
+        let label = t!(self.ui_state.i18n, ids::PCB_STACK_EDIT).into_string();
+        let command = BoardCommand::SetStackupName { name };
+        if let Err(why) = self.run_board_step(board, vec![command], &label) {
+            self.refuse_stack_edit(why);
         }
     }
 
@@ -213,34 +274,24 @@ impl Signex {
         crate::diagnostics::log_warning(line.into_string());
     }
 
-    /// The manager's facts for the board in view; `None` without one.
+    /// The manager's facts for the board in view, on its PCB tab or its
+    /// Layer Stack tab; `None` without one.
     pub(crate) fn layer_stack_facts(&self) -> Option<LayerStackFacts> {
-        let path = self.active_tab_path()?;
-        let board = self.active_pcb()?;
+        let docs = &self.document_state;
+        let tab = docs.tabs.get(docs.active_tab)?;
+        if !matches!(tab.kind, TabKind::Pcb | TabKind::LayerStack) {
+            return None;
+        }
+        let path = tab.path.clone();
+        let board = docs.pcb_board(&path)?;
         let stack = shown_stack(board);
         let i18n = &*self.ui_state.i18n;
-        let names = stack
-            .layers
-            .iter()
-            .map(|layer| {
-                if !layer.name.is_empty() {
-                    return layer.name.clone();
-                }
-                let copper = parse_pcb_layer(&layer.layer).and_then(|l| l.copper());
-                match copper {
-                    Some(c) if layer.kind.is_copper() => {
-                        layer_style::copper_name(i18n, c).into_string()
-                    }
-                    _ => kind_label(i18n, layer.kind).into_string(),
-                }
-            })
-            .collect();
+        let names = row_names(i18n, &stack);
         let panel = &self.interaction_state.pcb_layer_stack;
         let ours = panel.board.as_deref() == Some(path.as_path());
         Some(LayerStackFacts {
             stored: board.stackup.is_some(),
             read_only: board.unknown.newer_minor_source.is_some(),
-            names,
             selected: panel
                 .selected
                 .filter(|row| ours && *row < stack.layers.len()),
@@ -249,10 +300,123 @@ impl Signex {
             } else {
                 BTreeMap::new()
             },
+            name_draft: panel.name_draft.clone().filter(|_| ours),
+            unit: panel.unit,
+            sub_tab: if ours {
+                panel.sub_tab
+            } else {
+                StackSubTab::default()
+            },
+            drill_pairs: drill_pair_rows(i18n, board, &stack, &names),
+            via_types: via_type_rows(i18n, board),
+            has_project: tab.project_id.is_some(),
+            names,
             stack,
             board: path,
         })
     }
+}
+
+/// The name each row shows: its own, else its copper layer's or kind's.
+fn row_names(i18n: &I18n, stack: &LayerStack) -> Vec<String> {
+    stack
+        .layers
+        .iter()
+        .map(|layer| {
+            if !layer.name.is_empty() {
+                return layer.name.clone();
+            }
+            let copper = parse_pcb_layer(&layer.layer).and_then(|l| l.copper());
+            match copper {
+                Some(c) if layer.kind.is_copper() => {
+                    layer_style::copper_name(i18n, c).into_string()
+                }
+                _ => kind_label(i18n, layer.kind).into_string(),
+            }
+        })
+        .collect()
+}
+
+fn via_kind_word(i18n: &I18n, kind: ViaType) -> String {
+    let id = match kind {
+        ViaType::Through => ids::PCB_PRIM_VIA_KIND_THROUGH,
+        ViaType::Blind => ids::PCB_PRIM_VIA_KIND_BLIND,
+        ViaType::Micro => ids::PCB_PRIM_VIA_KIND_MICRO,
+    };
+    t!(i18n, id).into_string()
+}
+
+/// A drill pair's name, "Through 1–4".
+fn pair_name(i18n: &I18n, kind: ViaType, (from, to): (usize, usize)) -> String {
+    let word = via_kind_word(i18n, kind);
+    t!(i18n, ids::PCB_PRIM_VIA_DRILL_PAIR, "kind" => word, "from" => from, "to" => to).into_string()
+}
+
+/// The Drill pairs table: `names` gives each copper end its row's name.
+fn drill_pair_rows(
+    i18n: &I18n,
+    board: &PcbBoard,
+    stack: &LayerStack,
+    names: &[String],
+) -> Vec<DrillPairRow> {
+    let copper: Vec<&String> = stack
+        .layers
+        .iter()
+        .zip(names)
+        .filter(|(layer, _)| layer.kind.is_copper())
+        .map(|(_, name)| name)
+        .collect();
+    let end = |place: usize| {
+        place
+            .checked_sub(1)
+            .and_then(|index| copper.get(index))
+            .map_or_else(String::new, |name| (*name).clone())
+    };
+    drill_pairs(board, stack)
+        .into_iter()
+        .map(|pair| DrillPairRow {
+            name: pair_name(i18n, pair.kind, pair.span),
+            from: end(pair.span.0),
+            to: end(pair.span.1),
+            kind: via_kind_word(i18n, pair.kind),
+            span: pair.span,
+            depth_mm: pair.depth_mm,
+            min_drill_mm: pair.min_drill,
+            aspect_ratio: pair.aspect_ratio(),
+            vias: pair.vias,
+        })
+        .collect()
+}
+
+/// The Via types table, from the types the Via panel picks.
+fn via_type_rows(i18n: &I18n, board: &PcbBoard) -> Vec<ViaTypeRow> {
+    let types = via_types(board);
+    let counts = via_type_counts(board, &types);
+    types
+        .iter()
+        .zip(counts)
+        .map(|(def, used)| {
+            let protection = def.protection.class().code().map_or_else(
+                || t!(i18n, ids::PCB_STACK_NONE).into_string(),
+                str::to_string,
+            );
+            let (from, to) = def.span;
+            let span = match def.kind {
+                ViaType::Through => ids::PCB_PRIM_VIA_SPAN_THROUGH,
+                ViaType::Blind => ids::PCB_PRIM_VIA_SPAN_BLIND,
+                ViaType::Micro => ids::PCB_PRIM_VIA_SPAN_MICRO,
+            };
+            ViaTypeRow {
+                name: t!(i18n, span, "from" => from, "to" => to).into_string(),
+                pair: pair_name(i18n, def.kind, def.span),
+                drill_mm: def.drill,
+                finished_mm: ViaTypeDef::finished_hole(def.drill),
+                pad_mm: def.diameter,
+                protection,
+                used,
+            }
+        })
+        .collect()
 }
 
 /// The stack a board shows: its stored one, else the one its layers make.

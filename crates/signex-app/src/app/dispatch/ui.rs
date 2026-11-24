@@ -46,6 +46,19 @@ impl Signex {
                     app.apply_history_loaded(generation, path, result)
                 })
             }
+            UiMsg::HistoryRepo {
+                window: None,
+                event,
+            } => self.apply_history_repo_event(event),
+            UiMsg::HistoryRepo {
+                window: Some(window),
+                event,
+            } => {
+                if !self.is_document_window(window) {
+                    return Task::none();
+                }
+                self.run_in_window(window, false, |app| app.apply_history_repo_event(event))
+            }
             UiMsg::ThemeChanged(id) => {
                 self.ui_state.theme_id = id;
                 self.ui_state.preferences_draft_theme = id;
@@ -148,24 +161,22 @@ impl Signex {
                 // v0.18.10 — only mount the picker when the active
                 // tab is a Footprint editor; the schematic / PCB
                 // grid systems aren't wired through this picker yet.
-                let active_tab_kind = self
-                    .document_state
-                    .tabs
-                    .get(self.document_state.active_tab)
-                    .map(|t| t.kind.clone());
-                let footprint_active = matches!(
-                    active_tab_kind,
-                    Some(crate::app::TabKind::FootprintEditor(_))
-                );
+                let footprint = self.active_footprint_editor_path();
                 tracing::info!(
                     target: "signex::ui",
-                    footprint_active = footprint_active,
+                    footprint_active = footprint.is_some(),
                     last_mouse_pos = ?self.interaction_state.last_mouse_pos,
                     "GridPickerOpen received",
                 );
-                if footprint_active {
+                if let Some(target) = footprint {
                     let (x, y) = self.interaction_state.last_mouse_pos;
-                    self.interaction_state.grid_picker = Some(crate::app::GridPickerState { x, y });
+                    let owner = self.interaction_state.acting_window;
+                    self.interaction_state.grid_picker = Some(crate::app::GridPickerState {
+                        x,
+                        y,
+                        target,
+                        owner,
+                    });
                 }
                 self.finish_update()
             }
@@ -174,8 +185,15 @@ impl Signex {
                 self.finish_update()
             }
             UiMsg::GridPickerSelect(step_mm) => {
-                self.interaction_state.grid_picker = None;
-                if let Some(editor) = self.active_footprint_editor_mut()
+                let picker = self.interaction_state.grid_picker.take();
+                let target = picker
+                    .map(|picker| picker.target)
+                    .or_else(|| self.footprint_dialog_target());
+                let editor = match target.as_deref() {
+                    Some(target) => self.footprint_editor_at_mut(target),
+                    None => None,
+                };
+                if let Some(editor) = editor
                     && step_mm > 0.0
                     && step_mm.is_finite()
                 {
@@ -213,10 +231,21 @@ impl Signex {
             UiMsg::StatusBar(StatusBarRequest::OpenPropertiesForSelection) => {
                 self.handle_menu_message(MenuMessage::OpenPropertiesPanel)
             }
-            UiMsg::StatusBar(StatusBarRequest::ActiveLayerStepRequested) => self
-                .dispatch_pcb_message(PcbMsg::View(PcbViewMsg::ActiveLayerStepped {
-                    forward: true,
-                })),
+            // The board counters and their popovers (#2460); a bare click is
+            // the main window's.
+            UiMsg::StatusBar(StatusBarRequest::BoardCounterClicked { window, counter }) => {
+                match window.or(self.ui_state.main_window_id) {
+                    Some(window) => self.board_counter_clicked(window, counter),
+                    None => Task::none(),
+                }
+            }
+            UiMsg::StatusBar(StatusBarRequest::BoardPopover(event)) => {
+                self.board_popover_event(event)
+            }
+            UiMsg::StatusBar(StatusBarRequest::BoardClockTicked) => {
+                self.ui_state.board_status.now = Some(std::time::SystemTime::now());
+                Task::none()
+            }
             // `status_bar_message` routes these to the window's board; a bare
             // one acts on the main window's.
             UiMsg::StatusBar(StatusBarRequest::ViewAngleClicked) => {
@@ -227,9 +256,23 @@ impl Signex {
             ),
             UiMsg::StatusBar(StatusBarRequest::ViewAngleSubmitted) => self
                 .dispatch_pcb_message(PcbMsg::ViewRotation(ViewRotationMsg::AngleEntrySubmitted)),
-            UiMsg::StatusBar(StatusBarRequest::CancelAltiumImport) => {
+            UiMsg::StatusBar(StatusBarRequest::CancelBoardImport) => {
                 self.handle_altium_import_cancel();
                 Task::none()
+            }
+            UiMsg::StatusBar(StatusBarRequest::LibraryMissingChipClicked) => {
+                self.reopen_skipped_library();
+                Task::none()
+            }
+            // `status_bar_message` names the window; a bare one is the main
+            // window's.
+            UiMsg::StatusBar(StatusBarRequest::GridReadoutRightClicked) => {
+                match self.ui_state.main_window_id {
+                    Some(main) => {
+                        self.dispatch_overlay_message(OverlayMsg::GridSnapPopoverToggled(main))
+                    }
+                    None => Task::none(),
+                }
             }
             // On a board the same key steps the Snapping mode (#2353).
             UiMsg::ToggleSnapHotspots if self.has_active_pcb() => {
@@ -256,6 +299,30 @@ impl Signex {
                 Task::none()
             }
             UiMsg::NetNav(msg) => self.dispatch_net_nav_message(msg),
+            UiMsg::ZoomPresetsToggled => {
+                self.interaction_state.zoom_presets_open =
+                    !self.interaction_state.zoom_presets_open;
+                Task::none()
+            }
+            UiMsg::ZoomPresetsDismissed => {
+                self.interaction_state.zoom_presets_open = false;
+                Task::none()
+            }
+            UiMsg::ZoomPresetPicked(percent) => {
+                self.interaction_state.zoom_presets_open = false;
+                if self.has_active_schematic() {
+                    let canvas = self.interaction_state.active_canvas_mut();
+                    if canvas.zoom_to_percent_about_centre(percent) {
+                        canvas.clear_bg_cache();
+                        canvas.clear_content_cache();
+                    }
+                }
+                Task::none()
+            }
+            UiMsg::ZoomPresetCommandPicked(command) => {
+                self.interaction_state.zoom_presets_open = false;
+                self.run_menu_command(&command, None)
+            }
         }
     }
 
@@ -268,23 +335,13 @@ impl Signex {
     ) -> Task<Message> {
         match msg {
             SelectionFilterMsg::OpenCustom => {
-                if let Some(editor) = self.active_footprint_editor() {
-                    let f = editor.state.selection_filter;
-                    self.ui_state.selection_filter_custom =
-                        Some(crate::app::SelectionFilterCustomState {
-                            pads: f.pads,
-                            tracks: f.tracks,
-                            arcs: f.arcs,
-                            pours: f.pours,
-                            bodies_3d: f.bodies_3d,
-                            keepouts: f.keepouts,
-                            cutouts: f.cutouts,
-                            texts: f.texts,
-                            vias: f.vias,
-                            regions: f.regions,
-                            fills: f.fills,
-                            other: f.other,
-                        });
+                let filter = self
+                    .active_footprint_editor()
+                    .map(|editor| editor.state.selection_filter);
+                if let (Some(filter), Some(target)) = (filter, self.footprint_dialog_target()) {
+                    self.ui_state.selection_filter_custom = Some(Box::new(
+                        crate::app::SelectionFilterCustomState::from_filter(filter, target),
+                    ));
                 }
                 self.finish_update()
             }
@@ -293,48 +350,106 @@ impl Signex {
                 self.finish_update()
             }
             SelectionFilterMsg::ToggleCustomKind(kind) => {
-                use crate::library::editor::footprint::state::SelectionFilterKind as K;
                 if let Some(state) = self.ui_state.selection_filter_custom.as_mut() {
-                    match kind {
-                        K::Pads => state.pads = !state.pads,
-                        K::Tracks => state.tracks = !state.tracks,
-                        K::Arcs => state.arcs = !state.arcs,
-                        K::Pours => state.pours = !state.pours,
-                        K::Bodies3d => state.bodies_3d = !state.bodies_3d,
-                        K::Keepouts => state.keepouts = !state.keepouts,
-                        K::Cutouts => state.cutouts = !state.cutouts,
-                        K::Texts => state.texts = !state.texts,
-                        K::Vias => state.vias = !state.vias,
-                        K::Regions => state.regions = !state.regions,
-                        K::Fills => state.fills = !state.fills,
-                        K::Other => state.other = !state.other,
-                    }
+                    state.toggle(kind);
+                }
+                self.finish_update()
+            }
+            SelectionFilterMsg::CustomKindsAllSet(on) => {
+                if let Some(state) = self.ui_state.selection_filter_custom.as_mut() {
+                    state.set_all_shown(on);
+                }
+                self.finish_update()
+            }
+            SelectionFilterMsg::CustomPresetNameEdited(name) => {
+                if let Some(state) = self.ui_state.selection_filter_custom.as_mut() {
+                    state.preset_name = name;
                 }
                 self.finish_update()
             }
             SelectionFilterMsg::ApplyCustom => {
-                let draft = self.ui_state.selection_filter_custom.take();
-                if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
-                    editor.state.selection_filter =
-                        crate::library::editor::footprint::state::SelectionFilter {
-                            pads: d.pads,
-                            tracks: d.tracks,
-                            arcs: d.arcs,
-                            pours: d.pours,
-                            bodies_3d: d.bodies_3d,
-                            keepouts: d.keepouts,
-                            cutouts: d.cutouts,
-                            texts: d.texts,
-                            vias: d.vias,
-                            regions: d.regions,
-                            fills: d.fills,
-                            other: d.other,
-                        };
-                    editor.canvas_cache.clear();
-                }
+                let save = self.apply_custom_selection_filter();
                 self.refresh_panel_ctx();
-                self.finish_update()
+                Task::batch([save, self.finish_update()])
             }
+        }
+    }
+
+    /// Apply: the draft becomes the filter of the document it was opened on
+    /// (closed by now: nothing applies, and Messages says so) and is
+    /// saved as a preset under its typed name, or "Filter N" when none is
+    /// typed. The filter always applies; no preset is added when one already
+    /// holds the same kinds, or at the preset limit (a typed name dropped
+    /// there is said in Messages). The `prefs.json` write rides the ordered
+    /// background writer.
+    fn apply_custom_selection_filter(&mut self) -> Task<Message> {
+        use crate::library::editor::footprint::filter_presets::{capture_preset, existing_twin};
+        use signex_i18n::{ids, t};
+        let Some(draft) = self.ui_state.selection_filter_custom.take() else {
+            return Task::none();
+        };
+        let presets = self.interaction_state.footprint_filter_presets.clone();
+        let typed = !draft.preset_name.trim().is_empty();
+        let name = draft.preset_name_or_numbered(presets.len());
+        let Some(editor) = self.footprint_editor_at_mut(&draft.target) else {
+            crate::diagnostics::log_warning(format!(
+                "Selection filter not applied: {} is no longer open for editing.",
+                draft.target.display()
+            ));
+            return Task::none();
+        };
+        editor.state.selection_filter = draft.to_filter();
+        editor.canvas_cache.clear();
+        let preset = capture_preset(&editor.state, name);
+        let i18n = &self.ui_state.i18n;
+        if let Some(twin) = existing_twin(&presets, &preset, typed) {
+            crate::diagnostics::log_info(
+                t!(i18n, ids::DIALOG_SELECTION_FILTER_PRESET_EXISTS, "name" => twin.name.as_str())
+                    .into_string(),
+            );
+            return Task::none();
+        }
+        let limit = crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT;
+        if presets.len() >= limit {
+            if typed {
+                crate::diagnostics::log_warning(
+                    t!(i18n, ids::DIALOG_SELECTION_FILTER_PRESET_FULL,
+                        "name" => preset.name.as_str(), "limit" => limit)
+                    .into_string(),
+                );
+            }
+            return Task::none();
+        }
+        let mut next = presets;
+        next.push(preset);
+        self.interaction_state.footprint_filter_presets = next.clone();
+        crate::fonts::background_pref_write("footprint_filter_presets", move || {
+            crate::fonts::write_footprint_filter_presets(&next)
+        })
+    }
+
+    /// Open Grid Properties on `target`, seeded from its current step. No-op
+    /// for anything but a footprint (the modal would have nothing to drive).
+    fn open_grid_properties_on(&mut self, target: Option<std::path::PathBuf>) {
+        let editor_snap = target
+            .as_deref()
+            .and_then(|target| self.footprint_editor_at(target))
+            .map(|e| e.state.snap_options);
+        tracing::info!(
+            target: "signex::ui",
+            has_snap = editor_snap.is_some(),
+            "GridPropertiesOpen received",
+        );
+        if let (Some(opts), Some(target)) = (editor_snap, target) {
+            let step = opts.grid_step_mm;
+            self.ui_state.grid_properties = Some(Box::new(crate::app::GridPropertiesState {
+                step_mm: format!("{step:.4}"),
+                fine_display: opts.fine_grid_display,
+                coarse_display: opts.coarse_grid_display,
+                multiplier: opts.coarse_multiplier,
+                target,
+                ..crate::app::GridPropertiesState::default()
+            }));
         }
     }
 
@@ -344,25 +459,18 @@ impl Signex {
         msg: GridPropertiesMsg,
     ) -> Task<Message> {
         match msg {
+            // The command: the footprint in view of the window it ran in.
+            // An open picker closes behind it and lends it nothing.
             GridPropertiesMsg::Open => {
-                // Pre-populate from the active footprint editor's
-                // current step. No-op for non-footprint tabs (the
-                // modal would have nothing to drive).
-                let editor_snap = self.active_footprint_editor().map(|e| e.state.snap_options);
-                tracing::info!(
-                    target: "signex::ui",
-                    has_snap = editor_snap.is_some(),
-                    "GridPropertiesOpen received",
-                );
-                if let Some(opts) = editor_snap {
-                    let step = opts.grid_step_mm;
-                    self.ui_state.grid_properties = Some(crate::app::GridPropertiesState {
-                        step_mm: format!("{step:.4}"),
-                        fine_display: opts.fine_grid_display,
-                        coarse_display: opts.coarse_grid_display,
-                        multiplier: opts.coarse_multiplier,
-                    });
-                }
+                self.interaction_state.grid_picker = None;
+                let target = self.footprint_dialog_target();
+                self.open_grid_properties_on(target);
+                self.finish_update()
+            }
+            // The picker's own row: the footprint the picker was for.
+            GridPropertiesMsg::OpenFromPicker => {
+                let picked = self.interaction_state.grid_picker.take();
+                self.open_grid_properties_on(picked.map(|picker| picker.target));
                 self.finish_update()
             }
             GridPropertiesMsg::SetFineDisplay(d) => {
@@ -379,21 +487,70 @@ impl Signex {
             }
             GridPropertiesMsg::SetMultiplier(m) => {
                 if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.drop_open_label();
                     state.multiplier = m.max(1);
                 }
                 self.finish_update()
             }
             GridPropertiesMsg::Close => {
+                // Esc with a preview label open closes the label only.
+                if let Some(state) = self.ui_state.grid_properties.as_mut()
+                    && state.preview_labels.editing_index().is_some()
+                {
+                    state.drop_open_label();
+                    return self.finish_update();
+                }
                 self.ui_state.grid_properties = None;
                 self.finish_update()
             }
+            GridPropertiesMsg::CancelPressed => {
+                self.ui_state.grid_properties = None;
+                self.finish_update()
+            }
+            GridPropertiesMsg::PreviewExpandToggled => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.preview_expanded = !state.preview_expanded;
+                }
+                self.finish_update()
+            }
+            GridPropertiesMsg::PreviewLabelEdited(event) => {
+                let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
+                let focus = match self.ui_state.grid_properties.as_mut() {
+                    Some(state) => {
+                        if state.label_edited(event, &i18n) {
+                            state.preview_labels.focus_input()
+                        } else {
+                            Task::none()
+                        }
+                    }
+                    None => Task::none(),
+                };
+                Task::batch([focus, self.finish_update()])
+            }
             GridPropertiesMsg::SetStep(value) => {
                 if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.drop_open_label();
                     state.step_mm = value;
                 }
                 self.finish_update()
             }
             GridPropertiesMsg::Apply => {
+                // A preview label still open commits its draft first, as
+                // Enter (or the blur of a click on OK) would. Text that is
+                // not a length refuses OK: the dialog stays open with the
+                // label outlined red until it is fixed or Esc closes it.
+                let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
+                if let Some(state) = self.ui_state.grid_properties.as_mut()
+                    && state.preview_labels.editing_index().is_some()
+                {
+                    if state.open_label_refused(&i18n) {
+                        return self.finish_update();
+                    }
+                    let _ = state.label_edited(
+                        signex_widgets::dimension_label::DimensionLabelMessage::DraftSubmitted,
+                        &i18n,
+                    );
+                }
                 // `SnapOptions` stores one grid step for both axes, so the
                 // dialog has a single Step field.
                 let draft = self.ui_state.grid_properties.clone();
@@ -414,7 +571,11 @@ impl Signex {
                     }
                     None => None,
                 };
-                if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
+                let editor = match &draft {
+                    Some(d) => self.footprint_editor_at_mut(&d.target),
+                    None => None,
+                };
+                if let (Some(d), Some(editor)) = (&draft, editor) {
                     let opts = &mut editor.state.snap_options;
                     if let Some(step) = step {
                         opts.grid_step_mm = step;
@@ -435,6 +596,11 @@ impl Signex {
                         row.coarse_multiplier = opts.coarse_multiplier;
                     }
                     editor.canvas_cache.clear();
+                } else if let Some(d) = &draft {
+                    crate::diagnostics::log_warning(format!(
+                        "Grid not applied: {} is no longer open for editing.",
+                        d.target.display()
+                    ));
                 }
                 self.ui_state.grid_properties = None;
                 self.refresh_panel_ctx();
@@ -475,8 +641,9 @@ impl Signex {
         })
     }
 
-    /// A click on the status bar of `window`. The layer pill steps the
-    /// board that window shows, the one it names (#2272). On a symbol tab
+    /// A click on the status bar of `window`. A board counter or the layer
+    /// pill opens its popover over that window, for the board it shows
+    /// (#2272, #2460). On a symbol tab
     /// (`symbol`, from [`Self::status_symbol_path`]) the Grid and unit
     /// buttons toggle that symbol's library settings, the ones the bar shows.
     pub fn status_bar_message(
@@ -495,10 +662,12 @@ impl Signex {
         let view_angle =
             |window, event| Message::Pcb(PcbMsg::ViewRotationInWindow { window, event });
         match (request, symbol) {
-            (StatusBarRequest::ActiveLayerStepRequested, _) => Message::Pcb(PcbMsg::ViewInWindow {
-                window,
-                event: PcbViewMsg::ActiveLayerStepped { forward: true },
-            }),
+            (StatusBarRequest::BoardCounterClicked { counter, .. }, _) => {
+                Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardCounterClicked {
+                    window: Some(window),
+                    counter,
+                }))
+            }
             (StatusBarRequest::ViewAngleClicked, _) => {
                 view_angle(window, ViewRotationMsg::AngleEntryToggled)
             }
@@ -507,6 +676,10 @@ impl Signex {
             }
             (StatusBarRequest::ViewAngleSubmitted, _) => {
                 view_angle(window, ViewRotationMsg::AngleEntrySubmitted)
+            }
+            // The Grid & Snap popover opens over the window that asked.
+            (StatusBarRequest::GridReadoutRightClicked, _) => {
+                Message::Overlay(OverlayMsg::GridSnapPopoverToggled(window))
             }
             (StatusBarRequest::ToggleGrid, Some(path)) => {
                 symbol_edit(path, SymbolEditorMsg::ToggleGrid)
@@ -646,6 +819,7 @@ impl Signex {
         // that a panicking handler may leave `self` in a partially
         // mutated state, which is fine as long as the swap itself
         // unwinds deterministically below.
+        let main_work = self.main_canvas_work();
         let saved_acting = self.interaction_state.acting_window.replace(window_id);
         let task_result = catch_unwind(AssertUnwindSafe(|| {
             if fresh_ctx {
@@ -657,7 +831,8 @@ impl Signex {
         std::mem::swap(&mut self.document_state.panel_ctx, &mut swapped_ctx);
         std::mem::swap(&mut self.document_state.history, &mut swapped_history);
         // The handler may have closed the window (Close Document): its
-        // context and canvas are then dropped, not put back.
+        // context and canvas are then dropped, not put back; its typed note
+        // boxes are still owed to their sheets (#2649).
         let window_alive = self.ui_state.windows.contains_key(&window_id);
         if window_alive {
             self.document_state
@@ -666,6 +841,8 @@ impl Signex {
             self.document_state
                 .window_panel_ctx
                 .insert(window_id, swapped_ctx);
+        } else {
+            self.owe_note_drafts_of(swapped_ctx);
         }
 
         // Always-run cleanup (runs on success, error return, or panic
@@ -684,6 +861,12 @@ impl Signex {
             if window_alive {
                 self.interaction_state.pcb_canvases.insert(window_id, pcb);
             }
+            // The main canvas sat in a local while the handler ran, out of
+            // reach of a change to the right-release hold.
+            let swallow = self.interaction_state.swallow_right_release;
+            self.interaction_state
+                .pcb_canvas
+                .set_swallow_right_release(swallow);
         }
         if let Some(mut selection) = swapped_pcb_selection {
             std::mem::swap(&mut self.interaction_state.pcb_selection, &mut selection);
@@ -725,6 +908,8 @@ impl Signex {
             (path, _) => path,
         };
         self.document_state.active_path = saved_active_path;
+        // What the handler ended of main's, while main's slot sat in a local.
+        self.end_main_canvas_work(&main_work);
         if main_shows_target && revision_before != revision_after {
             self.refresh_main_canvas_from_engine(&target_path);
         }

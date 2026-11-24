@@ -70,6 +70,7 @@ context = "global"
 
 [keyboard_shortcuts.sections.bindings]
 "Ctrl+Q" = "cycle_unit"
+"Mod+Alt+S" = "save_all"
 "Mod+S" = "save_document"
 "Mod+Shift+A" = "unselect_all"
 "Mod+Shift+E" = "edit_library_symbol"
@@ -166,7 +167,7 @@ context = "global"
 "Shift+F" = "find_similar_objects"
 "Shift+I" = "open_net_inspector"
 
-# #2249: Window > Tile Horizontally, Tile Vertically and Untile.
+# #2249: View > Window > Tile Horizontally, Tile Vertically and Untile.
 [[keyboard_shortcuts.sections]]
 context = "global"
 
@@ -183,7 +184,8 @@ context = "global"
 # leaves the board sketch, `L` flips the selection or the part on the cursor
 # to the other side, `C` shows or hides the ratsnest, `F` changes the
 # footprint, `K` draws a keepout, `F7` runs the design rule check and
-# `Ctrl+M` measures.
+# `Ctrl+M` measures. `Shift+O` sets the board origin (Edit ▸ Origin ▸ Set,
+# 2026-11-18; `E` alone is taken, so `E O S` cannot be a sequence here).
 [[keyboard_shortcuts.sections]]
 context = "pcb"
 
@@ -201,6 +203,7 @@ context = "pcb"
 "F7" = "run_drc"
 "K" = "place_board_keepout"
 "L" = "flip_selection"
+"Shift+O" = "set_board_origin"
 "Shift+S" = "toggle_single_layer_mode"
 
 [[keyboard_shortcuts.sections]]

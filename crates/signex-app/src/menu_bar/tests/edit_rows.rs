@@ -105,12 +105,25 @@ fn paste_puts_the_copy_on_the_cursor() {
     );
 }
 
+/// Mockup row 155: Paste Special opens the Smart Paste dialog (it used to place the
+/// copy at once). Its Paste puts the copy on the cursor; a click places it
+/// with the next free designator, and nothing else moves.
 #[test]
-fn paste_special_places_the_copy_at_once() {
+fn paste_special_opens_the_smart_paste_dialog() {
     let (mut app, text) = app_that_copied();
     let before = probe(&app);
     let task = click(&mut app, "Edit/Paste Special");
     settle_answering_clipboard(&mut app, task, &text);
+    assert!(
+        app.ui_state.smart_paste.is_some(),
+        "the dialog did not open"
+    );
+    assert_eq!(probe(&app), before, "nothing lands before Paste");
+    let _ = app.update(Message::Edit(crate::app::EditMsg::SmartPasteDialog(
+        crate::smart_paste::SmartPasteMsg::PasteConfirmed,
+    )));
+    assert!(probe(&app).placement, "the copy is on the cursor");
+    let _ = app.handle_placement_click(40.64, 40.64);
     let after = probe(&app);
     assert_eq!(after.symbols, 2, "the copy was not placed");
     assert!(!after.placement);
@@ -122,6 +135,7 @@ fn paste_special_places_the_copy_at_once() {
             refs: vec!["R1".into(), "R2".into()],
             can_undo: true,
             dirty: true,
+            tool: after.tool.clone(),
             ..before
         }
     );

@@ -146,7 +146,7 @@ fn a_board_without_an_outline_is_not_panelized() {
 fn the_properties_panel_section_edits_each_setting_as_an_undo_step() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with(dir.path(), true);
-    properties(&mut app, PcbBoardMsg::PanelizeClicked);
+    run(&mut app, "panelize_board");
     assert_eq!(panel(&app, &path), Some(BoardPanel::default()));
 
     type_in(&mut app, PanelField::Columns, "3");

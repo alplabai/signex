@@ -4,6 +4,8 @@
 
 use super::tests::{app_with_board, output};
 use super::{BoardOutputMsg, BoardStepBuilt};
+use signex_i18n::RenderTranslatable;
+
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::menu::export::settle;
 use crate::app::{Message, Signex};
@@ -111,7 +113,7 @@ fn the_cli_refuses_an_unknown_schema() {
     let path = format!("path={}", dir.path().join("x.step").display());
     let (outcome, task) = headless(&mut app, &[&document, &path, "schema=iges"]);
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("ap214")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("ap214")),
         "{outcome:?}"
     );
     assert_eq!(task.units(), 0);

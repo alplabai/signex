@@ -139,6 +139,16 @@ impl Signex {
                 });
                 Task::none()
             }
+            // Enter in an open Rename field renames; it never creates.
+            M::SubmitRequested
+                if self
+                    .ui_state
+                    .new_project
+                    .as_ref()
+                    .is_some_and(|s| s.renaming.is_some()) =>
+            {
+                self.dispatch_new_project_message(M::ProfileRenameConfirmed)
+            }
             M::SubmitRequested => self.create_project_from_dialog(),
             // While Create writes, Cancel and Esc wait: the project would be
             // created and opened anyway.
@@ -158,6 +168,12 @@ impl Signex {
                 self.ui_state.new_project = None;
                 Task::none()
             }
+            M::Preview(preview) => match self.ui_state.new_project.as_mut() {
+                Some(state) => state
+                    .act_on_preview(preview)
+                    .map(|msg| Message::from(M::Preview(msg))),
+                None => Task::none(),
+            },
             setup => {
                 let ui = &mut self.ui_state;
                 let Some(state) = ui.new_project.as_mut() else {

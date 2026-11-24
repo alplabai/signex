@@ -17,7 +17,9 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use iced::widget::canvas;
-use signex_types::schematic::{ChildSheet, SchDrawing, SchematicSheet, SelectedItem, SelectedKind};
+use signex_types::schematic::{
+    ChildSheet, Point, SchDrawing, SchematicSheet, SelectedItem, SelectedKind,
+};
 use uuid::Uuid;
 
 use crate::schematic_runtime::{ContentSceneCache, SceneInputs, SceneOverrides, ScreenTransform};
@@ -101,6 +103,13 @@ fn filtered(snap: &SchematicSheet, keep: &dyn Fn(Uuid) -> bool) -> SchematicShee
             signex_types::schematic::SchDirective::uuid,
             keep,
         ),
+        // #1280: connectors (with their entries) and harness wires by id;
+        // the typed sheet entries follow their sheet symbols.
+        harness: signex_types::schematic::SheetHarness {
+            connectors: keep_where(&snap.harness.connectors, |c| c.uuid, keep),
+            wires: keep_where(&snap.harness.wires, |w| w.uuid, keep),
+            entry_types: snap.harness.entry_types.clone(),
+        },
         ..SchematicSheet::default()
     }
 }
@@ -184,8 +193,29 @@ pub(super) fn split_ghost(
     kind!(directives, signex_types::schematic::SchDirective::uuid);
     kind!(
         no_erc_directives,
-        |d: &signex_types::schematic::NoConnect| d.uuid
+        |d: &signex_types::schematic::NoErcDirective| d.uuid
     );
+    // #1280: harness connectors and wires move like any item.
+    diff_kind(
+        &base.harness.connectors,
+        &ghost.harness.connectors,
+        |c: &signex_types::schematic::HarnessConnector| c.uuid,
+        selected,
+        &mut skip,
+        &mut moving.harness.connectors,
+    );
+    diff_kind(
+        &base.harness.wires,
+        &ghost.harness.wires,
+        |w: &signex_types::schematic::HarnessWire| w.uuid,
+        selected,
+        &mut skip,
+        &mut moving.harness.wires,
+    );
+    moving
+        .harness
+        .entry_types
+        .clone_from(&ghost.harness.entry_types);
     DragFrame {
         moving: Rc::new(moving),
         skip: Rc::new(skip),
@@ -200,6 +230,9 @@ pub(super) struct Session {
     pub ids: Rc<HashSet<Uuid>>,
     /// Those items, unshifted; each frame shifts a copy of just these.
     pub lifted: SchematicSheet,
+    /// Where something joins a lifted wire mid-span (a dot or a sheet pin),
+    /// unshifted: the drag carries these too, so they get a marker.
+    pub contacts: Vec<Point>,
 }
 
 /// What the static geometry was drawn for.
@@ -253,6 +286,7 @@ impl DragLayers {
                 revision,
                 selection: selection.to_vec(),
                 lifted: sheet_only(snap, &ids),
+                contacts: signex_engine::wire_contact_points(snap, selection),
                 ids: Rc::new(ids),
             });
         }
@@ -262,6 +296,14 @@ impl DragLayers {
     /// The lifted items of the current drag, if one is under way.
     pub fn lifted(&self) -> Option<&SchematicSheet> {
         self.session.as_ref().map(|s| &s.lifted)
+    }
+
+    /// The mid-span contacts of the lifted wires, unshifted.
+    pub fn contacts(&self) -> &[Point] {
+        match &self.session {
+            Some(session) => &session.contacts,
+            None => &[],
+        }
     }
 
     /// Rekey the retained static geometry for `view`, `revision` and `skip`,
@@ -373,6 +415,12 @@ impl DragLayers {
     #[cfg(test)]
     pub fn builds(&self) -> u32 {
         self.builds
+    }
+
+    /// How many times the GPU static layer's scene was built.
+    #[cfg(test)]
+    pub fn static_scene_builds(&self) -> u32 {
+        self.static_scene.builds()
     }
 }
 
@@ -583,6 +631,7 @@ mod tests {
                 designators: None,
                 special_strings: None,
                 defaults: Default::default(),
+                designator_standard: None,
             },
         )
     }
@@ -621,6 +670,22 @@ mod tests {
 
         assert_eq!(new, bags(&old));
         assert!(!new[0].is_empty() && !new[1].is_empty() && !new[3].is_empty());
+    }
+
+    /// A dot on a dragged wire's span is a connection the drag carries, so
+    /// the drag marks it like the wire's ends; a dot on a still wire is not.
+    #[test]
+    fn a_dragged_wire_marks_the_joins_on_its_span() {
+        let (sheet, selection) = mixed_sheet();
+        let mut layers = DragLayers::default();
+        let contacts = layers.session_for(&sheet, 1, &selection).contacts.clone();
+        assert_eq!(contacts, vec![Point::new(5.0, 0.0)]);
+
+        // With only the wire selected the dot still rides on its span.
+        let wire_only = vec![selection[1]];
+        let contacts = layers.session_for(&sheet, 2, &wire_only).contacts.clone();
+        assert_eq!(contacts, vec![Point::new(5.0, 0.0)]);
+        assert_eq!(layers.contacts(), [Point::new(5.0, 0.0)]);
     }
 
     #[test]

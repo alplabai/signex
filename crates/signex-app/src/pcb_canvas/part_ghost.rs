@@ -16,12 +16,22 @@ use super::tessellate::paint_scene;
 const GHOST_ALPHA: f32 = 0.5;
 
 impl PcbCanvas {
-    /// Show `ghost`, the part on the cursor, or nothing for `None`.
+    /// Show `ghost`, the part on the cursor, dimmed, or nothing for `None`.
     pub fn set_part_ghost(&mut self, ghost: Option<&PcbSnapshot>) {
+        self.set_ghost(ghost, GHOST_ALPHA);
+    }
+
+    /// Show `ghost` at its full colour: a route being drawn is copper as
+    /// bright as what is on the board, never dimmer.
+    pub fn set_route_ghost(&mut self, ghost: Option<&PcbSnapshot>) {
+        self.set_ghost(ghost, 1.0);
+    }
+
+    fn set_ghost(&mut self, ghost: Option<&PcbSnapshot>, alpha: f32) {
         self.part_ghost = ghost.map(|snapshot| {
             let mut scene = self.build_scene(snapshot);
-            dim(&mut scene, GHOST_ALPHA);
-            Arc::new(scene)
+            dim(&mut scene, alpha);
+            (Arc::new(scene), alpha)
         });
     }
 
@@ -30,9 +40,14 @@ impl PcbCanvas {
         self.part_ghost.is_some()
     }
 
+    /// The share of its colour the ghost on the cursor keeps.
+    pub fn ghost_alpha(&self) -> Option<f32> {
+        self.part_ghost.as_ref().map(|(_, alpha)| *alpha)
+    }
+
     /// Paint the part on the cursor onto `frame`.
     pub(super) fn paint_part_ghost(&self, frame: &mut canvas::Frame) {
-        if let Some(scene) = &self.part_ghost {
+        if let Some((scene, _)) = &self.part_ghost {
             paint_scene(frame, scene, &self.camera_ref());
         }
     }

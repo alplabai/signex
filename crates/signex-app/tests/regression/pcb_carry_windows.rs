@@ -1,19 +1,22 @@
 //! #2271 review — a footprint drag ends when its window loses focus or
 //! closes, a locked footprint refuses at the start of a drag, and the
-//! status-bar layer pill of a board window steps that window's board
-//! (#2272).
+//! layer step and the status-bar layer pill of a board window act on that
+//! window's board (#2272): a right-click on the pill opens the Active layer
+//! popover there (#2460).
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use pcb_geom::ClickMode;
 use signex_app::app::{
-    ContextMenuMsg, FileMsg, Message, PcbMsg, Signex, StatusBarRequest, TabDocument, WindowMsg,
+    ContextMenuMsg, FileMsg, Message, PcbMsg, PcbViewMsg, Signex, StatusBarRequest, TabDocument,
+    UiMsg, WindowMsg,
 };
 use signex_app::diagnostics;
 use signex_app::keymap::AppCommandId;
 use signex_app::menu_bar::MenuMessage;
 use signex_app::pcb_canvas::{CarryKind, PcbCanvasMsg};
+use signex_app::status_bar::{BoardCounter, BoardPopoverEvent, BoardPopoverKind};
 use signex_app::tab_bar::TabMessage;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{Footprint, LayerDef, Pad, PadShape, PadType, PcbBoard, Point};
@@ -77,6 +80,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::now_v7(),
         version: 1,
@@ -198,6 +202,7 @@ fn drag_to(x: f64) -> PcbCanvasMsg {
         from: Point::new(10.0, 10.0),
         to: Point::new(x, 10.0),
         tolerance_mm: 0.05,
+        leaves_tracks: false,
     }
 }
 
@@ -224,8 +229,9 @@ fn main_drag(rig: &mut Rig) {
     send(&mut rig.app, Message::PcbCanvas(click(10.0, 10.0)));
     send(&mut rig.app, Message::PcbCanvas(drag_to(15.0)));
     assert_eq!(carry_kind(&rig.app), Some(CarryKind::Drag));
-    let ghost = &rig.app.interaction_state.pcb_canvas.highlight().ghost;
-    assert!(!ghost.is_empty(), "the drag is previewed");
+    let canvas = &rig.app.interaction_state.pcb_canvas;
+    assert!(canvas.previews_drag(), "the drag is previewed");
+    assert!(canvas.highlight().ghost.is_empty(), "with no ghost");
 }
 
 /// A drag of U1 in the board window, in progress.
@@ -242,8 +248,10 @@ fn focus_loss_mid_drag_ends_it_and_the_right_click_opens_the_board_menu() {
     main_drag(&mut rig);
     unfocus(&mut rig.app, rig.main);
     assert_eq!(carry_kind(&rig.app), None, "the drag ended");
-    let ghost = &rig.app.interaction_state.pcb_canvas.highlight().ghost;
-    assert!(ghost.is_empty(), "no ghost is left painted");
+    assert!(
+        !rig.app.interaction_state.pcb_canvas.previews_drag(),
+        "no preview is left painted"
+    );
     assert_eq!(board_text(&rig.app, &rig.b), before, "nothing moved");
     send(
         &mut rig.app,
@@ -261,18 +269,13 @@ fn focus_loss_ends_only_the_drag_of_the_window_that_lost_it() {
     let window = undock_a(&mut rig);
     let before = board_text(&rig.app, &rig.a);
     window_drag(&mut rig, window);
-    let ghost = |app: &Signex| {
-        app.interaction_state.pcb_canvases[&window]
-            .highlight()
-            .ghost
-            .len()
-    };
-    assert!(ghost(&rig.app) > 0, "the window previews its drag");
+    let previews = |app: &Signex| app.interaction_state.pcb_canvases[&window].previews_drag();
+    assert!(previews(&rig.app), "the window previews its drag");
     unfocus(&mut rig.app, rig.main);
     assert_eq!(carry_kind(&rig.app), Some(CarryKind::Drag), "main lost it");
     unfocus(&mut rig.app, window);
     assert_eq!(carry_kind(&rig.app), None);
-    assert_eq!(ghost(&rig.app), 0, "the window's ghost is gone");
+    assert!(!previews(&rig.app), "the window's preview is gone");
     assert_eq!(board_text(&rig.app, &rig.a), before, "nothing moved");
 }
 
@@ -330,11 +333,14 @@ fn a_locked_footprint_refuses_the_drag_at_its_start_once() {
         from,
         to: Point::new(x, 10.0),
         tolerance_mm: 0.05,
+        leaves_tracks: false,
     };
     send(&mut rig.app, Message::PcbCanvas(dragged(32.0)));
     assert_eq!(refusals_since(since), 1, "refused as the drag starts");
-    let ghost = &rig.app.interaction_state.pcb_canvas.highlight().ghost;
-    assert!(ghost.is_empty(), "the locked part is not previewed");
+    assert!(
+        !rig.app.interaction_state.pcb_canvas.previews_drag(),
+        "the locked part is not previewed"
+    );
     send(&mut rig.app, Message::PcbCanvas(dragged(34.0)));
     let dropped = PcbCanvasMsg::FootprintDropped { from, to };
     send(&mut rig.app, Message::PcbCanvas(dropped));
@@ -347,26 +353,40 @@ fn active_layer(app: &Signex, path: &Path) -> Option<PcbLayer> {
     app.ui_state.pcb_layer_views.get(path).map(|v| v.active())
 }
 
+/// The open board popover: its window and kind.
+fn open_popover(app: &Signex) -> Option<(iced::window::Id, BoardPopoverKind)> {
+    let popover = app.ui_state.board_status.popover.as_ref()?;
+    Some((popover.window, popover.kind))
+}
+
+fn pick_layer(app: &mut Signex, layer: PcbLayer) {
+    let event = BoardPopoverEvent::LayerPicked(layer);
+    send(
+        app,
+        Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(event))),
+    );
+}
+
 #[test]
-fn the_layer_pill_of_a_board_window_steps_that_windows_board() {
+fn the_layer_step_of_a_board_window_steps_that_windows_board() {
     let mut rig = rig();
     let window = undock_a(&mut rig);
     let b_before = active_layer(&rig.app, &rig.b);
-    let pill = StatusBarRequest::ActiveLayerStepRequested;
-    send(
-        &mut rig.app,
-        Signex::status_bar_message(window, None, pill.clone()),
-    );
+    let step = |window| {
+        Message::Pcb(PcbMsg::ViewInWindow {
+            window,
+            event: PcbViewMsg::ActiveLayerStepped { forward: true },
+        })
+    };
+    send(&mut rig.app, step(window));
     assert_eq!(
         active_layer(&rig.app, &rig.a),
         Some(PcbLayer::Copper(CopperLayer::Bottom))
     );
     assert_eq!(active_layer(&rig.app, &rig.b), b_before, "B untouched");
 
-    send(
-        &mut rig.app,
-        Signex::status_bar_message(rig.main, None, pill),
-    );
+    let main = rig.main;
+    send(&mut rig.app, step(main));
     assert_eq!(
         active_layer(&rig.app, &rig.b),
         Some(PcbLayer::Copper(CopperLayer::Bottom))
@@ -374,6 +394,55 @@ fn the_layer_pill_of_a_board_window_steps_that_windows_board() {
     assert_eq!(
         active_layer(&rig.app, &rig.a),
         Some(PcbLayer::Copper(CopperLayer::Bottom)),
-        "the main pill leaves A"
+        "the main window's step leaves A"
+    );
+}
+
+/// #2460: a right-click on the pill of a board window opens the Active
+/// layer popover over that window, and a row of it sets that window's board
+/// (#2272 kept: the other board is untouched).
+#[test]
+fn the_layer_pill_of_a_board_window_opens_the_popover_and_a_row_sets_that_board() {
+    let mut rig = rig();
+    let window = undock_a(&mut rig);
+    let a_before = active_layer(&rig.app, &rig.a);
+    let b_before = active_layer(&rig.app, &rig.b);
+    let pill = StatusBarRequest::BoardCounterClicked {
+        window: None,
+        counter: BoardCounter::Layer,
+    };
+    send(
+        &mut rig.app,
+        Signex::status_bar_message(window, None, pill.clone()),
+    );
+    assert_eq!(
+        open_popover(&rig.app),
+        Some((window, BoardPopoverKind::Layer))
+    );
+    assert_eq!(
+        active_layer(&rig.app, &rig.a),
+        a_before,
+        "opening the popover steps nothing"
+    );
+    let bottom = PcbLayer::Copper(CopperLayer::Bottom);
+    pick_layer(&mut rig.app, bottom);
+    assert_eq!(active_layer(&rig.app, &rig.a), Some(bottom));
+    assert_eq!(active_layer(&rig.app, &rig.b), b_before, "B untouched");
+
+    send(
+        &mut rig.app,
+        Signex::status_bar_message(rig.main, None, pill),
+    );
+    assert_eq!(
+        open_popover(&rig.app),
+        Some((rig.main, BoardPopoverKind::Layer)),
+        "the main pill moves the popover to the main window"
+    );
+    pick_layer(&mut rig.app, bottom);
+    assert_eq!(active_layer(&rig.app, &rig.b), Some(bottom));
+    assert_eq!(
+        active_layer(&rig.app, &rig.a),
+        Some(bottom),
+        "the main popover leaves A"
     );
 }

@@ -260,7 +260,11 @@ fn find_similar_on_a_board_selects_the_footprints_of_the_same_value() {
         .as_ref()
         .expect("the dialog opened");
     assert!(state.board);
-    assert_eq!(state.seed_label, "Footprint R1");
+    let en = signex_i18n::I18n::en_us();
+    assert_eq!(
+        crate::find_similar::shown_seed(&state.seed_label, &en),
+        "Footprint R1"
+    );
     let similar = |msg| Message::Selection(SelectionRequest::FindSimilar(msg));
     let _ = app.update(similar(FindSimilarMsg::PropertySet(
         signex_engine::SimilarProperty::Value,
@@ -454,6 +458,10 @@ fn a_read_only_board_greys_its_editing_commands() {
         "delete_selection",
         "cut",
         "change_footprint",
+        // Layer colours are saved with the board.
+        "set_layer_color",
+        "edit_layer_color",
+        "reset_layer_colors",
     ] {
         assert!(!is_enabled(&command(id), &ctx), "{id} on a read-only board");
     }
@@ -462,6 +470,7 @@ fn a_read_only_board_greys_its_editing_commands() {
         "select_board_net",
         "measure_distance",
         "toggle_ratsnest",
+        "set_layer_visible",
     ] {
         assert!(is_enabled(&command(id), &ctx), "{id} only reads the board");
     }
@@ -579,9 +588,7 @@ fn select_and_highlight_net_take_a_net_by_name() {
     );
     assert_eq!(
         outcome,
-        CommandOutcome::Disabled {
-            reason: "the board has no net named `NOPE`".into()
-        }
+        CommandOutcome::disabled("the board has no net named `NOPE`")
     );
     assert_eq!(selected(&app).len(), 2, "the selection is kept");
 }
@@ -616,4 +623,19 @@ fn find_results_of_a_board_out_of_view_are_searched_again() {
     let _ = app.update(find(FindReplaceMsg::ReplaceAll));
     assert_eq!(footprint(&app, &second, R1).value, "4k7");
     assert_eq!(footprint(&app, &first, R1).value, "10k");
+}
+
+/// #2326: `ids` is a targets list, so an item named twice is one item, and
+/// edge to edge needs two.
+#[test]
+fn measuring_one_item_named_twice_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), board());
+    let ids = format!("ids={V1},{V1}");
+    let reason = crate::app::command::queries::tests::refusal(
+        &mut app,
+        "measure_board",
+        &[document(&path).as_str(), ids.as_str()],
+    );
+    assert_eq!(reason, "`ids` names two items, comma separated");
 }

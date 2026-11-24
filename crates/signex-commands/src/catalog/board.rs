@@ -193,4 +193,27 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
+    // #2457: Place ▸ Room draws a room by two corners; one undo step.
+    CommandMetadata {
+        id: "place_board_room",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_ROOM,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_ROOM),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2457: Design ▸ Rooms ▸ Create Rooms from Sheets opens its dialog;
+    // Create runs as one undo step. Greyed without a project.
+    CommandMetadata {
+        id: "create_rooms_from_sheets",
+        category: "design",
+        label: command_ids::CMD_CREATE_ROOMS_FROM_SHEETS,
+        menu_label: Some(command_ids::CMD_MENU_CREATE_ROOMS_FROM_SHEETS),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
 ];

@@ -76,6 +76,7 @@ fn a_held_shift_space_bends_an_undocked_track_run_once() {
         route: None,
         router: None,
         paused: None,
+        note: None,
     });
     assert!(
         rig.app.is_routing_board_track_in(Some(window)),

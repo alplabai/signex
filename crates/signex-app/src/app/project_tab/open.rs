@@ -1,14 +1,7 @@
 //! Open or focus a project's Project tab.
 
-use crate::app::{Signex, TabInfo, TabKind};
-
-/// The Project tab's title: the `.snxprj` file name, so it never reads
-/// like the root sheet's tab, which shows the same stem.
-pub(crate) fn project_tab_title(path: &std::path::Path) -> String {
-    path.file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| path.display().to_string())
-}
+use super::{ProjectSection, ProjectTabMsg};
+use crate::app::{Message, ProjectMsg, Signex, TabInfo, TabKind};
 
 impl Signex {
     /// Project Options (project tree): focus the project's tab, or open it.
@@ -30,13 +23,17 @@ impl Signex {
         let idx = match existing {
             Some(idx) => idx,
             None => {
+                let kind = TabKind::Project(id);
+                // A page tab: "<project> — Project" (docs/PROJECT_TAB.md,
+                // "Page tabs").
+                let title = self.page_tab_title(&kind).unwrap_or_default();
                 self.document_state.project_tabs.entry(id).or_default();
                 self.document_state.tabs.push(TabInfo {
-                    title: project_tab_title(&path),
+                    title,
                     path,
                     cached_document: None,
                     project_id: Some(id),
-                    kind: TabKind::Project(id),
+                    kind,
                 });
                 self.document_state.tabs.len() - 1
             }
@@ -46,5 +43,21 @@ impl Signex {
             self.document_state.active_tab = idx;
             self.sync_active_tab();
         }
+    }
+
+    /// Variant Manager (project tree, mockup row 20): the project's tab on
+    /// its Variants section, through the message the section list sends, so
+    /// the variant parts are read.
+    pub(crate) fn open_variant_manager(&mut self, project_idx: usize) -> iced::Task<Message> {
+        self.open_project_tab(project_idx);
+        let Some(project_id) = self.document_state.projects.get(project_idx).map(|p| p.id) else {
+            return iced::Task::none();
+        };
+        self.update(Message::Project(ProjectMsg::Tab(
+            ProjectTabMsg::SectionSelected {
+                project_id,
+                section: ProjectSection::Variants,
+            },
+        )))
     }
 }

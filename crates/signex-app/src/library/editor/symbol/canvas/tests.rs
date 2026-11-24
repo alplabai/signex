@@ -79,7 +79,8 @@ impl Rig {
             Color::BLACK,
         )
         .with_selection_filter(editor.selection_filter)
-        .with_view_pending(editor.pending_view.is_some());
+        .with_view_pending(editor.pending_view.is_some())
+        .with_tool_epoch(editor.tool_epoch);
         let action = canvas::Program::update(&canvas, &mut self.cstate, &event, BOUNDS, cursor);
         let claimed = action.is_some();
         if let Some((Some(published), _, _)) = action.map(canvas::Action::into_inner) {
@@ -374,8 +375,8 @@ fn the_hover_cursor_agrees_with_the_press_over_a_pin_on_a_handle() {
 
     assert_eq!(
         shown,
-        mouse::Interaction::Crosshair,
-        "a press here grabs the pin, so no resize cursor"
+        mouse::Interaction::Idle,
+        "a press here grabs the pin, so no resize cursor: the idle arrow"
     );
 }
 
@@ -1074,3 +1075,6 @@ fn a_one_pin_power_input_symbol_follows_the_power_port_rule() {
     let (_, snap) = snapshot_of(&Rig::new(symbol));
     assert_eq!(snap.pin_texts.len(), 4, "both pins keep number and name");
 }
+
+#[path = "curve_gesture_tests.rs"]
+mod curve_gesture;

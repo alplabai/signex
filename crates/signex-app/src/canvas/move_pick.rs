@@ -89,6 +89,7 @@ impl CanvasState {
         self.move_current = None;
         self.move_float = None;
         self.select_drag_start = None;
+        self.wire_grip = None;
     }
 }
 
@@ -176,7 +177,7 @@ impl SchematicCanvas<'_> {
                     &self.designators,
                     wx,
                     wy,
-                    self.prefs.wire_widths(),
+                    self.wire_widths(),
                 )
                 .filter(|h| crate::app::passes_filter(h, snapshot, self.prefs.selection_filters))
             });
@@ -252,9 +253,12 @@ pub(in crate::canvas) mod tests {
             drawings: Vec::new(),
             no_erc_directives: Vec::new(),
             directives: Vec::new(),
+            harness: Default::default(),
+            unions: Vec::new(),
             title_block: Default::default(),
             text_widths: Default::default(),
             text_extents: Default::default(),
+            variables: Default::default(),
             lib_symbols: Default::default(),
             net_colors: Default::default(),
             drawing_placements: Default::default(),

@@ -24,7 +24,7 @@ mod view;
 mod tests;
 
 pub use view::view;
-pub(crate) use view::{intro_texts, previous_note};
+pub(crate) use view::{EMPTY_CARD_PAD_Y, intro_texts, list_height, previous_note};
 
 /// Which primitive kind a stock file holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -102,7 +102,8 @@ pub enum CopyTarget {
 /// Events of the "Copy to Library" dialog and its copy.
 #[derive(Debug, Clone)]
 pub enum StockCopyMsg {
-    /// The user chose a mounted writable library in the dialog.
+    /// The user clicked a mounted writable library in the dialog: the copy
+    /// goes there at once.
     TargetPicked(PathBuf),
     /// The user asked to create a new library to copy into.
     NewLibraryRequested,

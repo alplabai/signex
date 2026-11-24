@@ -1,22 +1,23 @@
 //! Graphite controls of the Preferences dialog: the nav search field, the
-//! mock's page names and the font pick-list.
+//! mock's page names and the pane scroller style.
 //! Legacy themes never reach these helpers.
 
 use super::{PrefMsg, PrefNav, SP, TS};
 use crate::styles::{self, ti, tokens};
-use iced::widget::{container, pick_list, scrollable};
+use iced::widget::{container, scrollable};
 use iced::{Background, Border, Color, Element, Length, Padding, Theme, Widget as _};
 use signex_i18n::{I18n, MessageId, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::text_input;
 
 /// The page name on Graphite: the mock's wording for the pages it names.
 pub(super) fn graphite_label(item: PrefNav) -> MessageId {
     match item {
         PrefNav::Appearance => ids::PREFERENCES_PAGE_THEME,
+        PrefNav::Language => ids::PREFERENCES_PAGE_LANGUAGE,
         PrefNav::Keyboard => ids::PREFERENCES_PAGE_KEYBOARD,
         PrefNav::Editing => ids::PREFERENCES_PAGE_EDITING,
+        PrefNav::SchematicDisplay => ids::PREFERENCES_PAGE_SCHEMATIC_DISPLAY,
         PrefNav::Annotation => ids::PREFERENCES_PAGE_ANNOTATION,
         PrefNav::RuleProfiles => ids::PREFERENCES_PAGE_RULE_PROFILES,
         PrefNav::LibraryDistributors => ids::PREFERENCES_PAGE_DISTRIBUTORS,
@@ -47,9 +48,26 @@ pub(super) fn group_messages(item: PrefNav) -> (MessageId, MessageId) {
     }
 }
 
+/// The English names a page went by before the mockup row 143 regroup, so a search
+/// for them still finds it.
+fn former_names(item: PrefNav) -> &'static [&'static str] {
+    match item {
+        PrefNav::Appearance => &["Theme"],
+        PrefNav::Editing => &["Graphical editing"],
+        PrefNav::ComponentClasses => &["Default Component Classes"],
+        PrefNav::Language
+        | PrefNav::Keyboard
+        | PrefNav::Annotation
+        | PrefNav::SchematicDisplay
+        | PrefNav::RuleProfiles
+        | PrefNav::LibraryDistributors => &[],
+    }
+}
+
 /// Whether a nav row stays visible for the search `query`: the casemap fold
-/// of the UI language over the shown page name and group, and the English
-/// page and group names. An empty query shows every row.
+/// of the UI language over the shown page name and group, the English page
+/// and group names, and the page's former English names. An empty query
+/// shows every row.
 pub(super) fn nav_matches(i18n: &I18n, item: PrefNav, query: &str) -> bool {
     let q = i18n.fold_for_search(query.trim());
     let page = t!(i18n, graphite_label(item)).into_string();
@@ -57,6 +75,7 @@ pub(super) fn nav_matches(i18n: &I18n, item: PrefNav, query: &str) -> bool {
     q.is_empty()
         || [page.as_str(), group.as_str(), item.label(), item.group()]
             .into_iter()
+            .chain(former_names(item).iter().copied())
             .any(|name| i18n.fold_for_search(name).contains(&q))
 }
 
@@ -81,21 +100,6 @@ pub(super) fn nav_search<'a>(query: &'a str, t: &ThemeTokens, i18n: &I18n) -> El
         .padding([SP.s, SP.m])
         .width(Length::Fill)
         .style(styles::field(t, false))
-        .boxed()
-}
-
-/// The UI-font pick-list drawn as a Graphite field (field fill, hairline,
-/// control radius; the menu is a raised card).
-pub(super) fn font_pick_list<'a>(
-    current: String,
-    families: &'a [String],
-    _t: &ThemeTokens,
-) -> Element<'a, PrefMsg> {
-    pick_list(Some(current), families, |s: &String| s.clone())
-        .graphite()
-        .on_select(PrefMsg::DraftFont)
-        .padding([SP.s, SP.m])
-        .width(200)
         .boxed()
 }
 
@@ -138,6 +142,21 @@ mod tests {
         assert!(nav_matches(&en, PrefNav::Appearance, "appear"));
         assert!(nav_matches(&en, PrefNav::Annotation, "schem"));
         assert!(!nav_matches(&en, PrefNav::Annotation, "theme"));
+    }
+
+    /// Mockup row 143: the regrouped pages keep answering to their former names, and
+    /// the mock's "an" search finds the new Language page.
+    #[test]
+    fn search_finds_the_former_page_names_and_language() {
+        let en = I18n::en_us();
+        assert!(nav_matches(&en, PrefNav::Editing, "graphical"));
+        assert!(nav_matches(
+            &en,
+            PrefNav::ComponentClasses,
+            "default component"
+        ));
+        assert!(nav_matches(&en, PrefNav::Language, "an"));
+        assert!(!nav_matches(&en, PrefNav::Editing, "theme"));
     }
 
     #[test]

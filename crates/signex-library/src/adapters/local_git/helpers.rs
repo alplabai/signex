@@ -413,25 +413,23 @@ pub(super) fn check_pn_change(
     check_pn_unique(lf, internal_pn, Some(row_id))
 }
 
-/// Refuse a part number another row already holds. A blank PN is a draft
-/// the user has not filled in yet, so it never conflicts. `except_row_id`
-/// names the row being edited, which may keep its own PN. Both sides are
-/// compared trimmed, so `"PN-A "` clashes with `"PN-A"`; the comparison
-/// stays case-sensitive because part numbers can be case-significant.
+/// Refuse a part number another row already holds, by
+/// [`InternalPn::clashes`]. `except_row_id` names the row being edited,
+/// which may keep its own PN.
 pub(super) fn check_pn_unique(
     lf: &LibraryFile,
     internal_pn: &str,
     except_row_id: Option<&str>,
 ) -> Result<(), LibraryError> {
-    let wanted = internal_pn.trim();
-    if wanted.is_empty() {
-        return Ok(());
-    }
     for (name, table) in &lf.tables {
         for stored in &table.rows {
             let own = except_row_id.is_some()
                 && stored.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == except_row_id;
-            if !own && stored.cells.get("internal_pn").map(|s| s.trim()) == Some(wanted) {
+            let clashes = stored
+                .cells
+                .get("internal_pn")
+                .is_some_and(|s| InternalPn::clashes(internal_pn, s));
+            if !own && clashes {
                 return Err(LibraryError::Conflict(format!(
                     "internal_pn {internal_pn:?} already exists in table {name:?}"
                 )));

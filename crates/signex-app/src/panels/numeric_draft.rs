@@ -5,8 +5,9 @@
 //! is being typed in, the raw text is kept as a draft and shown as-is;
 //! every keystroke that already parses as a finite number is applied to
 //! the model right away, and Enter drops the draft so the box shows the
-//! stored value again (which reverts text that never parsed, and shows a
-//! clamped or wrapped value, e.g. a pin length of `0` stored as `0.1`).
+//! stored value again (a wrapped arc angle, say). Text the field refuses
+//! (#2767: letters, a pin length under 0.1) changes nothing and stays in
+//! the box, outlined, through Enter.
 //!
 //! A draft belongs to an owner: the tab, the symbol and the exact field
 //! (including which pin or graphic is selected) it was typed into. It is
@@ -14,8 +15,8 @@
 //! the one the model held right after the draft's own last keystroke. A
 //! tab or selection switch, undo/redo, a canvas drag, or any other edit
 //! that moves the stored value from outside the box ends the draft. The
-//! setter's clamp does not: the stored value read back after the keystroke
-//! is what the draft is compared to, so `0` -> `0.1` keeps showing `0`.
+//! setter's own wrap does not: the stored value read back after the
+//! keystroke is what the draft is compared to.
 //!
 //! iced 0.14's `text_input` has no blur event, so there is no focus-lost
 //! hook. A draft ends on Enter, on typing in another numeric box (there is
@@ -33,6 +34,9 @@ use super::{
     GraphicFieldId, GraphicKindSummary, GraphicSummary, PanelMsg, PrePlacementData,
     SymbolEditorPanelContext, SymbolEditorSelection,
 };
+
+/// The shortest pin, smallest radius and smallest text size a symbol stores.
+const MIN_SYMBOL_LENGTH_MM: f64 = 0.1;
 
 /// Which numeric box a draft belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,6 +65,42 @@ impl NumericFieldKey {
                 PanelMsg::SymEditorSetGraphicField { idx, field, value }
             }
         }
+    }
+
+    /// Whether this field can store `value` (#2792). A width may be zero (the
+    /// default width); a pin length, radius or text size needs at least
+    /// 0.1 mm.
+    pub fn accepts(self, value: f64) -> bool {
+        use GraphicFieldId as F;
+        value.is_finite()
+            && match self {
+                Self::ShapeWidth
+                | Self::Graphic {
+                    field: F::StrokeWidth,
+                    ..
+                } => value >= 0.0,
+                Self::PinLength(_)
+                | Self::Graphic {
+                    field: F::Radius | F::RadiusX | F::RadiusY | F::TextSize,
+                    ..
+                } => value >= MIN_SYMBOL_LENGTH_MM,
+                Self::Graphic {
+                    field: F::CornerRadius,
+                    ..
+                } => value >= 0.0,
+                Self::PinX(_) | Self::PinY(_) | Self::Graphic { .. } => true,
+            }
+    }
+
+    /// Whether the box shows `text` as invalid.
+    pub fn refuses(self, text: &str) -> bool {
+        let reads = signex_types::numeric::parse_finite_f64(text).is_ok_and(|v| self.accepts(v));
+        crate::numeric_field::text_refused(text, reads)
+    }
+
+    /// Whether `draft` is this box's and holds text it refuses.
+    pub fn refused_in(self, draft: Option<&NumericDraft>) -> bool {
+        draft.is_some_and(|d| d.key == self && self.refuses(&d.text))
     }
 }
 
@@ -110,22 +150,57 @@ pub fn field_state(
 /// The scalar a graphic's numeric box shows, `None` when the field does
 /// not apply to that kind of graphic.
 fn graphic_scalar(g: &GraphicSummary, field: GraphicFieldId) -> Option<f64> {
+    use crate::library::editor::symbol::rect_extent;
     use GraphicFieldId as F;
     use GraphicKindSummary as K;
     match (&g.kind, field) {
         (_, F::StrokeWidth) => Some(g.stroke_width),
+        (K::EllipticalArc { .. } | K::RoundRectangle { .. }, _) => curve_scalar(&g.kind, field),
         (K::Rectangle { from, .. } | K::Line { from, .. }, F::FromX) => Some(from[0]),
         (K::Rectangle { from, .. } | K::Line { from, .. }, F::FromY) => Some(from[1]),
         (K::Rectangle { to, .. } | K::Line { to, .. }, F::ToX) => Some(to[0]),
         (K::Rectangle { to, .. } | K::Line { to, .. }, F::ToY) => Some(to[1]),
-        (K::Circle { center, .. } | K::Arc { center, .. }, F::CenterX) => Some(center[0]),
-        (K::Circle { center, .. } | K::Arc { center, .. }, F::CenterY) => Some(center[1]),
-        (K::Circle { radius, .. } | K::Arc { radius, .. }, F::Radius) => Some(*radius),
-        (K::Arc { start_deg, .. }, F::StartDeg) => Some(*start_deg),
-        (K::Arc { end_deg, .. }, F::EndDeg) => Some(*end_deg),
+        (K::Rectangle { from, to }, F::Width) => Some(rect_extent(from[0], to[0])),
+        (K::Rectangle { from, to }, F::Height) => Some(rect_extent(from[1], to[1])),
+        (K::Circle { center, .. } | K::Arc { center, .. } | K::Pie { center, .. }, F::CenterX) => {
+            Some(center[0])
+        }
+        (K::Circle { center, .. } | K::Arc { center, .. } | K::Pie { center, .. }, F::CenterY) => {
+            Some(center[1])
+        }
+        (K::Circle { radius, .. } | K::Arc { radius, .. } | K::Pie { radius, .. }, F::Radius) => {
+            Some(*radius)
+        }
+        (K::Arc { start_deg, .. } | K::Pie { start_deg, .. }, F::StartDeg) => Some(*start_deg),
+        (K::Arc { end_deg, .. } | K::Pie { end_deg, .. }, F::EndDeg) => Some(*end_deg),
+        (K::Bezier { points }, F::BezierX(i)) => points.get(usize::from(i)).map(|p| p[0]),
+        (K::Bezier { points }, F::BezierY(i)) => points.get(usize::from(i)).map(|p| p[1]),
         (K::Text { position, .. }, F::PositionX) => Some(position[0]),
         (K::Text { position, .. }, F::PositionY) => Some(position[1]),
         (K::Text { size, .. }, F::TextSize) => Some(*size),
+        _ => None,
+    }
+}
+
+/// [`graphic_scalar`] for an elliptical arc or round rectangle.
+fn curve_scalar(kind: &GraphicKindSummary, field: GraphicFieldId) -> Option<f64> {
+    use crate::library::editor::symbol::rect_extent;
+    use GraphicFieldId as F;
+    use GraphicKindSummary as K;
+    match (kind, field) {
+        (K::EllipticalArc { center, .. }, F::CenterX) => Some(center[0]),
+        (K::EllipticalArc { center, .. }, F::CenterY) => Some(center[1]),
+        (K::EllipticalArc { radius_x, .. }, F::RadiusX) => Some(*radius_x),
+        (K::EllipticalArc { radius_y, .. }, F::RadiusY) => Some(*radius_y),
+        (K::EllipticalArc { start_deg, .. }, F::StartDeg) => Some(*start_deg),
+        (K::EllipticalArc { end_deg, .. }, F::EndDeg) => Some(*end_deg),
+        (K::RoundRectangle { from, .. }, F::FromX) => Some(from[0]),
+        (K::RoundRectangle { from, .. }, F::FromY) => Some(from[1]),
+        (K::RoundRectangle { to, .. }, F::ToX) => Some(to[0]),
+        (K::RoundRectangle { to, .. }, F::ToY) => Some(to[1]),
+        (K::RoundRectangle { from, to, .. }, F::Width) => Some(rect_extent(from[0], to[0])),
+        (K::RoundRectangle { from, to, .. }, F::Height) => Some(rect_extent(from[1], to[1])),
+        (K::RoundRectangle { corner_radius, .. }, F::CornerRadius) => Some(*corner_radius),
         _ => None,
     }
 }
@@ -137,9 +212,9 @@ pub struct NumericDraft {
     pub key: NumericFieldKey,
     pub owner: NumericOwner,
     pub text: String,
-    /// The stored value read back right after this keystroke was applied
-    /// (post-clamp). A different stored value later means something other
-    /// than the box moved it.
+    /// The stored value read back right after this keystroke was applied.
+    /// A different stored value later means something other than the box
+    /// moved it.
     pub applied: f64,
 }
 
@@ -203,6 +278,40 @@ mod tests {
             "2.540"
         );
         assert_eq!(shown_text(None, NumericFieldKey::PinX(0), 2.54), "2.540");
+    }
+
+    #[test]
+    fn each_field_accepts_only_what_it_can_store() {
+        use GraphicFieldId as F;
+        let graphic = |field| NumericFieldKey::Graphic { idx: 0, field };
+        for key in [NumericFieldKey::ShapeWidth, graphic(F::StrokeWidth)] {
+            assert!(key.accepts(0.0), "{key:?} takes zero");
+            assert!(!key.accepts(-0.1), "{key:?}");
+        }
+        for key in [
+            NumericFieldKey::PinLength(0),
+            graphic(F::Radius),
+            graphic(F::TextSize),
+        ] {
+            assert!(key.accepts(0.1), "{key:?} takes the minimum");
+            assert!(!key.accepts(0.09), "{key:?}");
+            assert!(!key.accepts(0.0), "{key:?}");
+        }
+        assert!(NumericFieldKey::PinX(0).accepts(-5.0));
+        assert!(graphic(F::StartDeg).accepts(-60.0));
+        assert!(!NumericFieldKey::PinX(0).accepts(f64::NAN));
+    }
+
+    #[test]
+    fn only_the_boxs_own_refused_text_is_marked() {
+        let len = NumericFieldKey::PinLength(0);
+        let bad = draft(len, "0", 2.54);
+        assert!(len.refused_in(Some(&bad)));
+        assert!(!NumericFieldKey::PinLength(1).refused_in(Some(&bad)));
+        assert!(!len.refused_in(None));
+        for text in ["", "-", "0.5"] {
+            assert!(!len.refused_in(Some(&draft(len, text, 2.54))), "{text:?}");
+        }
     }
 
     #[test]

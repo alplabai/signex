@@ -16,13 +16,16 @@ pub use storage::{
     read_backup_profiles_at, save_profile_set, save_profile_set_at,
 };
 
+#[cfg(test)]
+pub(super) use schema::RENAMED_PROFILE_ID;
 use schema::validate_profile_id;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use crate::keymap::ShortcutBinding;
 
-const ALTIUM_PROFILE_TOML: &str = include_str!("../../../assets/keyboard-shortcuts/altium.toml");
+const SIGNEX_STANDARD_PROFILE_TOML: &str =
+    include_str!("../../../assets/keyboard-shortcuts/signex_standard.toml");
 const CLASSIC_PROFILE_TOML: &str = include_str!("../../../assets/keyboard-shortcuts/classic.toml");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -66,14 +69,14 @@ impl ShortcutProfile {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BuiltInProfile {
-    Altium,
+    SignexStandard,
     Classic,
 }
 
 impl BuiltInProfile {
     pub fn id(&self) -> &'static str {
         match self {
-            Self::Altium => "altium",
+            Self::SignexStandard => "signex_standard",
             Self::Classic => "classic",
         }
     }
@@ -88,10 +91,10 @@ pub struct ShortcutProfileSet {
 impl ShortcutProfileSet {
     pub fn built_ins() -> Result<Self, ProfileLoadError> {
         let profiles = [
-            TomlShortcutProfile::parse(ALTIUM_PROFILE_TOML)?.into_profile()?,
+            TomlShortcutProfile::parse(SIGNEX_STANDARD_PROFILE_TOML)?.into_profile()?,
             TomlShortcutProfile::parse(CLASSIC_PROFILE_TOML)?.into_profile()?,
         ];
-        Self::new(profiles, BuiltInProfile::Altium.id())
+        Self::new(profiles, BuiltInProfile::SignexStandard.id())
     }
 
     pub fn new(
@@ -131,8 +134,14 @@ impl ShortcutProfileSet {
         &self.active_profile_id
     }
 
+    /// The default profile first, then the others by id.
     pub fn profiles(&self) -> impl Iterator<Item = &ShortcutProfile> {
-        self.profiles.values()
+        let default = BuiltInProfile::SignexStandard.id();
+        self.profiles.get(default).into_iter().chain(
+            self.profiles
+                .values()
+                .filter(move |profile| profile.id != default),
+        )
     }
 
     pub fn profile(&self, id: &str) -> Option<&ShortcutProfile> {
@@ -177,7 +186,7 @@ impl ShortcutProfileSet {
         }
         self.profiles.remove(id);
         if self.active_profile_id == id {
-            self.active_profile_id = BuiltInProfile::Altium.id().to_string();
+            self.active_profile_id = BuiltInProfile::SignexStandard.id().to_string();
         }
         Ok(())
     }

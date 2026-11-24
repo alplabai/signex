@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use signex_app::app::{
-    BomPreviewMsg, FileMsg, Message, PrintPreviewMsg, ProjectMsg, Signex, UiMsg,
+    BomPreviewMsg, FileMsg, Message, PdfOptionMsg, PrintPreviewMsg, ProjectMsg, Signex, UiMsg,
 };
 use signex_app::config_root::set_config_root_override;
 use signex_app::dock::DockMessage;
@@ -173,6 +173,14 @@ fn run_flow(tag: &str, work: &Path) -> Outputs {
         })
         .expect("the fixture has a finding to waive");
     let panel = |msg| Message::Dock(DockMessage::Panel(PanelMsg::ErcWaiver(msg)));
+    // The author is the git identity (mockup row 88), known before the form
+    // opens so this machine's git config never reaches the file.
+    send(
+        &mut app,
+        Message::Dock(DockMessage::Panel(PanelMsg::WaiverIdentityResolved(Some(
+            "Tester".into(),
+        )))),
+    );
     send(
         &mut app,
         panel(ErcWaiverMsg::Started {
@@ -183,11 +191,11 @@ fn run_flow(tag: &str, work: &Path) -> Outputs {
     );
     send(
         &mut app,
-        panel(ErcWaiverMsg::ReasonChanged("by design".into())),
-    );
-    send(
-        &mut app,
-        panel(ErcWaiverMsg::AuthorChanged("Tester".into())),
+        panel(ErcWaiverMsg::ReasonActed(
+            iced::widget::text_editor::Action::Edit(iced::widget::text_editor::Edit::Paste(
+                std::sync::Arc::new("by design".to_string()),
+            )),
+        )),
     );
     send(&mut app, panel(ErcWaiverMsg::Confirmed));
 
@@ -244,6 +252,22 @@ fn run_flow(tag: &str, work: &Path) -> Outputs {
         Message::PrintPreview(PrintPreviewMsg::Export),
     );
     out.insert("pdf", read(&pdf));
+
+    // The watermark and its revision line ("Rev A · <date>") are PDF text
+    // too: fixed English in every UI language.
+    for message in [
+        PdfOptionMsg::WatermarkToggled(true),
+        PdfOptionMsg::WatermarkRevisionToggled(true),
+    ] {
+        send(&mut app, Message::from(message));
+    }
+    let stamped = work.join("stamped.pdf");
+    send_answered(
+        &mut app,
+        &stamped,
+        Message::PrintPreview(PrintPreviewMsg::Export),
+    );
+    out.insert("pdf (watermark + revision line)", read(&stamped));
     out
 }
 
@@ -270,6 +294,10 @@ fn files_are_byte_identical_in_every_ui_language() {
     );
     assert!(has("erc report html", "angling"), "findings reported");
     assert!(baseline["pdf"].starts_with(b"%PDF"), "a PDF");
+    assert_ne!(
+        baseline["pdf (watermark + revision line)"], baseline["pdf"],
+        "the watermark is printed"
+    );
     for tag in &LOCALES[1..] {
         let other = run_flow(tag, &work);
         for (name, bytes) in &baseline {

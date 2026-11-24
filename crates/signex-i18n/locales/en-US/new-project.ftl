@@ -20,31 +20,51 @@ dialog-new-project-profile-heading = Start from a profile
 
 dialog-new-project-profile-hint = Sets board rules and sheet defaults. You can change everything later.
 
-dialog-new-project-profile-hobby-name = Hobby 2-layer
+# Fab tier cards (#2537): the tier sets the rules; the copper layer count is
+# its own stepper on each card.
+dialog-new-project-profile-standard-name = Standard
 
-dialog-new-project-profile-hobby-blurb = Cheap prototypes from any fab.
+dialog-new-project-profile-standard-blurb = Most fabs at standard pricing.
 
-dialog-new-project-profile-standard-name = Standard 4-layer
+dialog-new-project-profile-advanced-name = Advanced
 
-dialog-new-project-profile-standard-blurb = Mixed-signal boards, solid ground plane.
+dialog-new-project-profile-advanced-blurb = Tighter rules for denser boards.
 
-dialog-new-project-profile-hdi-name = HDI 6-layer
+dialog-new-project-profile-hdi-name = HDI
 
-dialog-new-project-profile-hdi-blurb = Fine-pitch BGAs, tight routing.
+dialog-new-project-profile-hdi-blurb = Fine-pitch BGAs, laser microvias.
 
 dialog-new-project-profile-custom-name = Custom
 
-dialog-new-project-profile-custom-blurb = Any layer count and your own rules.
+dialog-new-project-profile-custom-blurb = Your own rules from scratch.
 
-# First line of a profile card; values in mm.
-dialog-new-project-summary-clearance = { $clearance } mm clearance
+# The rule line of a tier card; values in mm.
+dialog-new-project-card-specs = { $clearance } mm clearance · { $track } mm tracks · { $via }/{ $drill } vias
 
-# Second line of a profile card.
-dialog-new-project-summary-tracks = { $track } mm tracks · { $via }/{ $drill } vias
-
-dialog-new-project-summary-custom-layers = { $layers } copper layers
-
+# The rule line of the Custom card.
 dialog-new-project-summary-custom-note = set every value yourself
+
+# Tag on a built-in card the user edited (#2536).
+dialog-new-project-card-edited = edited
+
+# A card's pencil button and the menu row that opens the profile editor.
+dialog-new-project-card-edit = Edit profile…
+
+# Header of an edited built-in's menu; $name is the card name.
+dialog-new-project-card-menu-header = { $name } (built-in, edited)
+
+dialog-new-project-card-duplicate = Duplicate as my profile
+
+dialog-new-project-card-reset = Reset to default
+
+# Caption at the foot of an edited built-in's menu.
+dialog-new-project-card-override-note = Your edits are kept as an override with the same id. Reset to default drops them.
+
+# Bar over the fields while a profile is edited; $name is the profile name.
+dialog-new-project-edit-bar = Editing { $name }. Change the values below, then save the profile.
+
+# The edit bar's button that stores the values as the profile.
+dialog-new-project-edit-save = Save profile
 
 dialog-new-project-customize = Customize settings
 
@@ -56,13 +76,8 @@ dialog-new-project-pcb-heading = PCB RULES
 # Section label.
 dialog-new-project-sheet-heading = SCHEMATIC
 
-dialog-new-project-fab-label = Manufacturer rule template
-
-dialog-new-project-fab-standard = Standard fab
-
-dialog-new-project-fab-advanced = Advanced fab
-
-dialog-new-project-fab-hdi = HDI fab
+# The field that mirrors the picked card (#2537).
+dialog-new-project-fab-label = Fab tier
 
 dialog-new-project-fab-import = Import rules…
 
@@ -95,9 +110,6 @@ dialog-new-project-sch-title-block-none = None
 
 dialog-new-project-sch-designators = Designators
 
-# A sheet size in the picker.
-dialog-new-project-sheet-landscape = { $size } landscape
-
 dialog-new-project-preview-heading = PREVIEW
 
 # Bold start of the board line.
@@ -111,7 +123,23 @@ dialog-new-project-preview-sheet = { $paper } sheet
 
 dialog-new-project-preview-note = New schematics and PCBs in this project start from these settings. Edit them any time in Project Options.
 
-dialog-new-project-stack-silk-top = Top Overlay
+# The board rules drawing (mockup rows 21 and 22).
+dialog-new-project-preview-rules = BOARD RULES
+dialog-new-project-preview-rules-hint = click a value to edit
+# Under the drawing; both values such as 0.15.
+dialog-new-project-preview-rules-line = { $clearance } mm clearance · { $track } mm tracks
+dialog-new-project-preview-sheet-heading = SHEET
+dialog-new-project-preview-expand = Larger view
+dialog-new-project-preview-close = Close
+# On the drawing while the drill is not smaller than the via.
+dialog-new-project-preview-drill-error = drill ≥ via size
+# Captions of the values on the drawing. Engineering shorthand.
+dialog-new-project-rule-cap-width = w
+dialog-new-project-rule-cap-clearance = clr
+dialog-new-project-rule-cap-drill = drill
+dialog-new-project-rule-cap-via = ⌀
+
+dialog-new-project-stack-silk-top = Top Silkscreen
 
 dialog-new-project-stack-mask-top = Top Solder
 

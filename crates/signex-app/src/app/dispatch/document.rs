@@ -93,6 +93,11 @@ impl Signex {
             EditMsg::PasteArrayRequested => self.request_paste(PasteIntent::Array),
             EditMsg::PasteTextRead { request, text } => self.handle_paste_text_read(request, text),
             EditMsg::PasteCountersSeeded { request, seed } => {
+                // An open Paste Array dialog's read is not a waiting paste.
+                if request.intent != PasteIntent::ArraySeed {
+                    let path = request.path.as_deref();
+                    self.ui_state.command_replay.note_paste_answered(path);
+                }
                 self.handle_paste_counters_seeded(request, &seed)
             }
             EditMsg::PasteArray(msg) => self.handle_paste_array_message(msg),
@@ -107,6 +112,14 @@ impl Signex {
                 self.finish_update()
             }
             EditMsg::Extras(msg) => self.dispatch_placement_extras(msg),
+            EditMsg::SheetSync(msg) => self.dispatch_sheet_sync(msg),
+            EditMsg::RailRename(msg) => self.dispatch_rail_rename(msg),
+            EditMsg::Tables(msg) => self.dispatch_tables(msg),
+            EditMsg::Unions(msg) => {
+                let task = self.handle_unions_message(msg);
+                Task::batch([task, self.finish_update()])
+            }
+            EditMsg::SmartPasteDialog(msg) => self.handle_smart_paste_message(msg),
         }
     }
 
@@ -194,6 +207,15 @@ impl Signex {
                 };
                 iced::Task::batch([task, self.finish_update()])
             }
+            FileMsg::DiskConflictSaveAsPicked {
+                conflicted,
+                picked,
+                same_on_disk,
+            } => {
+                let task =
+                    self.handle_disk_conflict_save_as_picked(conflicted, *picked, same_on_disk);
+                iced::Task::batch([task, self.finish_update()])
+            }
             FileMsg::SaveAsProjectPatched(done) => {
                 self.handle_save_as_project_patched(*done);
                 self.finish_update()
@@ -240,6 +262,7 @@ impl Signex {
             } => {
                 // #478 review — same in-flight guard clear as above.
                 self.document_state.pending_opens.remove_untracked(&path);
+                let reopened_stack = self.ui_state.project_git.take_reopened_stack(&path);
                 if self.is_open_result_superseded(&path, &result) {
                     if result.is_ok() {
                         self.attach_parked_tab_for_superseded_open(&path, title);
@@ -258,6 +281,9 @@ impl Signex {
                         self.open_pcb_tab(path.clone(), title, *board);
                         if let Some(disk) = disk {
                             self.record_disk_read(&path, disk);
+                        }
+                        if let Some(takes_focus) = reopened_stack {
+                            self.restore_layer_stack_tab(path.clone(), takes_focus);
                         }
                     }
                     Err(message) => self.report_open_failure(message),
@@ -313,13 +339,21 @@ impl Signex {
                 let task = self.handle_export_written(*outcome);
                 iced::Task::batch([task, self.finish_update()])
             }
+            ExportMsg::BomWritten { source, outcome } => {
+                let task = self.handle_bom_written(source, *outcome);
+                iced::Task::batch([task, self.finish_update()])
+            }
         }
     }
 
     /// BOM-preview modal message handler (namespaced family, ADR-0001 D3).
     pub(crate) fn dispatch_bom_preview_message(&mut self, msg: BomPreviewMsg) -> Task<Message> {
-        // Pure pointer/UI-state messages cannot change the row order; every
-        // other message (and any future one) re-sorts after it ran.
+        if self.bom_edit_waits_for_save(&msg) {
+            return Task::none();
+        }
+        // Pure pointer/UI-state messages cannot change the rows on screen;
+        // every other message (and any future one) re-sorts, re-filters and
+        // re-flags after it ran.
         let reorders = !matches!(
             msg,
             BomPreviewMsg::ColumnHoverEnter(_)
@@ -328,14 +362,12 @@ impl Signex {
                 | BomPreviewMsg::ColumnResizeStart(_)
                 | BomPreviewMsg::ColumnResizeEnd
                 | BomPreviewMsg::SetSidebarTab(_)
+                | BomPreviewMsg::RowSelected(_)
+                | BomPreviewMsg::BodyScrolled(_)
         );
         let task = self.dispatch_bom_preview_message_inner(msg);
         if reorders && let Some(p) = self.document_state.bom_preview.as_mut() {
-            p.row_order = crate::app::view::dialogs::sorted_row_order(
-                &p.table.rows,
-                &p.options.columns,
-                p.sort,
-            );
+            p.refresh_rows();
         }
         task
     }
@@ -350,13 +382,29 @@ impl Signex {
                 self.handle_bom_preview_set_format(f);
                 self.finish_update()
             }
-            BomPreviewMsg::SetIncludeDnp(b) => {
-                self.handle_bom_preview_set_include_dnp(b);
+            BomPreviewMsg::NotFittedIncludedToggled(include) => {
+                self.handle_bom_preview_include_not_fitted(include);
                 self.finish_update()
             }
-            BomPreviewMsg::SetIncludeNotFitted(b) => {
-                self.handle_bom_preview_set_include_not_fitted(b);
+            BomPreviewMsg::FilterChanged(text) => {
+                if let Some(p) = self.document_state.bom_preview.as_mut() {
+                    p.filter = text;
+                }
                 self.finish_update()
+            }
+            BomPreviewMsg::RowSelected(row) => {
+                if let Some(p) = self.document_state.bom_preview.as_mut() {
+                    p.selected_row = Some(row);
+                }
+                self.finish_update()
+            }
+            BomPreviewMsg::IssueSelected(issue) => {
+                let task = self.handle_bom_preview_issue_selected(issue);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            BomPreviewMsg::BodyScrolled(x) => {
+                let task = self.handle_bom_preview_body_scrolled(x);
+                iced::Task::batch([task, self.finish_update()])
             }
             BomPreviewMsg::SetRule(rule, enabled) => {
                 self.handle_bom_preview_set_rule(rule, enabled);
@@ -538,8 +586,18 @@ impl Signex {
                 let task = self.handle_print_preview_close();
                 iced::Task::batch([task, self.finish_update()])
             }
-            PrintPreviewMsg::SetTab(tab) => {
-                self.handle_print_preview_set_tab(tab);
+            PrintPreviewMsg::SectionToggled(section) => {
+                self.handle_print_preview_section_toggled(section);
+                self.finish_update()
+            }
+            PrintPreviewMsg::ZoomFitPressed => {
+                self.handle_print_preview_zoom_fit();
+                self.finish_update()
+            }
+            // Watermark, PDF Layers and Bookmarks (#1298): no re-render, the
+            // preview draws the watermark over the page.
+            PrintPreviewMsg::PdfOption(msg) => {
+                self.handle_print_preview_pdf_option(msg);
                 self.finish_update()
             }
             PrintPreviewMsg::PanStart => {
@@ -563,8 +621,8 @@ impl Signex {
                 Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetVariant(v) => {
-                self.handle_print_preview_set_variant(v);
-                self.finish_update()
+                let task = self.handle_print_preview_set_variant(v);
+                Task::batch([task, self.finish_update()])
             }
             // Visual toggles (No-ERC Markers, No-Connect Markers, Notes) — affect what
             // the SVG renderer emits, so we mutate `pdf_options`
@@ -692,12 +750,6 @@ impl Signex {
             PrintPreviewMsg::SetBookmarkPorts(v) => {
                 if let Some(p) = self.document_state.preview.as_mut() {
                     p.pdf_options.bookmark_ports = v;
-                }
-                self.finish_update()
-            }
-            PrintPreviewMsg::SetIncludeComponentParameters(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
-                    p.pdf_options.include_component_parameters = v;
                 }
                 self.finish_update()
             }

@@ -214,6 +214,18 @@ impl SheetHierarchy {
         out
     }
 
+    /// Every sheet symbol the walk met, as (uuid, designator), closed parents
+    /// included.
+    pub fn sheet_symbols(&self) -> Vec<(Uuid, &str)> {
+        fn walk<'a>(node: &'a SheetNode, out: &mut Vec<(Uuid, &'a str)>) {
+            out.extend(node.placed_as.map(|uuid| (uuid, node.name.as_str())));
+            node.children.iter().for_each(|child| walk(child, out));
+        }
+        let mut out = Vec::new();
+        self.top_level().for_each(|node| walk(node, &mut out));
+        out
+    }
+
     /// Whether the walk saw the whole hierarchy: every node is a loaded
     /// sheet, none Missing, Unreadable, Rejected, a Cycle or Truncated. Only
     /// then is [`placements_of`](Self::placements_of) every placement there
@@ -281,6 +293,33 @@ impl SheetHierarchy {
             .filter(|(placement, _)| !placement.chain().is_empty())
             .map(|(_, node)| normalised_key(&node.path, self.fold))
             .collect()
+    }
+
+    /// The keys (under `fold`) of the sheets above any placement of the sheet
+    /// at `path`: the sheets a new sheet symbol on it must not place, or the
+    /// hierarchy would loop.
+    pub fn sheets_above(&self, path: &Path, fold: CaseFold) -> HashSet<String> {
+        fn walk(
+            node: &SheetNode,
+            path: &Path,
+            fold: CaseFold,
+            chain: &mut Vec<String>,
+            out: &mut HashSet<String>,
+        ) {
+            if node.kind == SheetNodeKind::Present && node.is_at(path, fold) {
+                out.extend(chain.iter().cloned());
+            }
+            chain.push(normalised_key(&node.path, fold));
+            for child in &node.children {
+                walk(child, path, fold, chain, out);
+            }
+            chain.pop();
+        }
+        let mut out = HashSet::new();
+        for node in self.top_level() {
+            walk(node, path, fold, &mut Vec::new(), &mut out);
+        }
+        out
     }
 
     /// The sheet file an occurrence path stands for. The root chain names the

@@ -16,6 +16,19 @@ use iced::Task;
 use crate::app::{FileMsg, Message, Signex, TabKind};
 use crate::persist::{DocumentSaveDone, SaveOutcome};
 
+/// How a schematic write is compared with its file before it lands.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DiskCheck {
+    /// Refuse when the file changed or is gone (Ctrl+S). A Save As to a new
+    /// target has no baseline, so nothing is compared.
+    Compare,
+    /// Refuse when the file changed or its folder is gone; write it when only
+    /// the file is gone.
+    CompareWritingMissing,
+    /// Write without comparing.
+    Skip,
+}
+
 impl Signex {
     /// Snapshot the engine behind `save_as_from` (or `target` for a plain
     /// save) and return the task that writes it to `target`.
@@ -24,7 +37,7 @@ impl Signex {
         target: PathBuf,
         save_as_from: Option<PathBuf>,
     ) -> Result<Task<Message>> {
-        self.begin_schematic_save_checked(target, save_as_from, true)
+        self.begin_schematic_save_checked(target, save_as_from, DiskCheck::Compare)
     }
 
     /// A plain save the user chose to run over a changed file: this one write
@@ -33,14 +46,24 @@ impl Signex {
         &mut self,
         target: PathBuf,
     ) -> Result<Task<Message>> {
-        self.begin_schematic_save_checked(target, None, false)
+        self.begin_schematic_save_checked(target, None, DiskCheck::Skip)
+    }
+
+    /// File ▸ Save As onto the sheet's own file: a plain save compared with
+    /// disk like Ctrl+S, except that a file deleted or moved away is written,
+    /// as Save As always did.
+    pub(crate) fn begin_schematic_save_onto_own_file(
+        &mut self,
+        target: PathBuf,
+    ) -> Result<Task<Message>> {
+        self.begin_schematic_save_checked(target, None, DiskCheck::CompareWritingMissing)
     }
 
     fn begin_schematic_save_checked(
         &mut self,
         target: PathBuf,
         save_as_from: Option<PathBuf>,
-        compare_with_disk: bool,
+        check: DiskCheck,
     ) -> Result<Task<Message>> {
         let source = save_as_from.clone().unwrap_or_else(|| target.clone());
         // A rename or delete still moving either file would recreate it or
@@ -78,14 +101,17 @@ impl Signex {
             .into_bytes();
         // A plain save is compared with what the file held when the sheet was
         // loaded or last saved; a Save As target was confirmed by the dialog.
-        let expected = (compare_with_disk && save_as_from.is_none())
+        let expected = (check != DiskCheck::Skip && save_as_from.is_none())
             .then(|| self.document_state.document_saves.baseline(&target))
             .flatten();
-        let job = self
+        let mut job = self
             .document_state
             .document_saves
             .begin(target.clone(), bytes)
             .expecting(expected);
+        if check == DiskCheck::CompareWritingMissing {
+            job = job.writing_a_missing_file();
+        }
         let hold = self.document_state.autosave.hold_for_save();
         Ok(Self::spawn_document_write(
             job,
@@ -268,6 +294,9 @@ impl Signex {
                 let rekeyed = self.document_state.engines.contains_key(&path)
                     && !self.document_state.engines.contains_key(&from);
                 if rekeyed {
+                    // The document left `from`; a failure recorded for it
+                    // (a save refused over a changed file) is not its own now.
+                    self.document_state.document_saves.clear_failure(&from);
                     self.adopt_saved_copy_id(&path, &saved, owner);
                 }
             }
@@ -280,7 +309,44 @@ impl Signex {
             .map(|key| self.autosave_after_save(key))
             .collect();
         tasks.push(project_write);
+        tasks.push(self.refresh_project_thumbnail(&path));
         Task::batch(tasks)
+    }
+
+    /// The Start screen preview of the project that owns the document just
+    /// saved at `saved` (mockup row 1): the project's board when it has one and
+    /// that board was saved, else its root sheet when that is loaded. The
+    /// render is kept at once and written to the cache in a task; any other
+    /// save leaves the preview as it is.
+    pub(crate) fn refresh_project_thumbnail(&mut self, saved: &std::path::Path) -> Task<Message> {
+        let Some(project) = self.owning_project(saved) else {
+            return Task::none();
+        };
+        let fold = project.case_fold;
+        let same = |a: &std::path::Path, b: &std::path::Path| {
+            crate::app::state::scope::path_key_with(a, fold)
+                == crate::app::state::scope::path_key_with(b, fold)
+        };
+        let thumbnail = match Self::project_board(project) {
+            // The first board in project order: a project names one board.
+            Some(board_path) if same(saved, board_path.as_path()) => self
+                .document_state
+                .pcb_board(saved)
+                .map(crate::project_thumbnail::snapshot::board),
+            Some(_) => None,
+            None => crate::app::project_sheets::project_root_sheet_path(project).and_then(|root| {
+                self.document_state
+                    .engines
+                    .iter()
+                    .find(|(path, _)| same(path.as_path(), root.as_path()))
+                    .map(|(_, engine)| crate::project_thumbnail::snapshot::sheet(engine.document()))
+            }),
+        };
+        let project_path = project.path.clone();
+        match thumbnail {
+            Some(thumbnail) => self.keep_project_thumbnail(project_path, thumbnail),
+            None => Task::none(),
+        }
     }
 
     /// A Save As landed and the engine now stands for the new file: it takes
@@ -358,6 +424,9 @@ impl Signex {
         crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
         // The file on disk now differs from what any earlier read saw.
         self.document_state.note_documents_changed();
+        // Whatever revision this was, the file no longer holds what the run
+        // that parked the sheet read: an undo cannot read clean (#2760).
+        self.document_state.forget_parked_mark(path);
         // No engine backs `path` any more (renamed or closed meanwhile): the
         // bytes landed, but there is nothing to mark clean or to commit
         // under a name that no longer describes the document.
@@ -415,7 +484,8 @@ impl Signex {
     fn finish_clean_save(&mut self, path: &std::path::Path, saved: crate::app::state::CommitBytes) {
         self.document_state.mark_document_clean(path);
         // The tab closed mid-save and parked the engine because it was
-        // dirty; now it is clean nothing needs it.
+        // dirty; now it is clean nothing needs it. A group undo that needed
+        // it is then refused whole (#2760).
         if !self.document_is_held_open(path) {
             self.document_state.remove_engine(path);
             self.document_state.document_saves.forget_disk_records(path);
@@ -429,9 +499,18 @@ impl Signex {
 
     pub(crate) fn document_is_held_open(&self, path: &std::path::Path) -> bool {
         self.document_state.tabs.iter().any(|tab| tab.path == path)
-            || self.ui_state.windows.values().any(|kind| {
-                matches!(kind, crate::app::state::WindowKind::UndockedTab { path: p, .. } if p == path)
+            || self.undocked_sheet_paths().contains(path)
+    }
+
+    /// The documents an undocked window shows: with the tabs, what holds a
+    /// document open.
+    pub(crate) fn undocked_sheet_paths(&self) -> std::collections::HashSet<PathBuf> {
+        (self.ui_state.windows.values())
+            .filter_map(|kind| match kind {
+                crate::app::state::WindowKind::UndockedTab { path, .. } => Some(path.clone()),
+                _ => None,
             })
+            .collect()
     }
 
     /// Save As landed: re-key and retitle the tab, but only if it is still
@@ -488,10 +567,21 @@ impl Signex {
         // The project that listed the sheet, found while the engine is still
         // keyed by the old path.
         let owner = self.document_state.document_project(from).map(|p| p.id);
-        let renamed = self.with_active_schematic_session_mut(|session| {
-            session.finish_save_as(to.clone(), revision);
+        // Saved only if the document has not changed since the snapshot
+        // taken at `revision`.
+        let renamed = self.rekey_active_schematic(to.clone(), |engine| {
+            if engine.revision() == revision {
+                engine.mark_saved();
+                false
+            } else {
+                // The new file holds a snapshot the document has moved past (an
+                // undo back to an older state counts), so no undo or redo step
+                // reproduces it and the document is not saved.
+                engine.forget_save_point();
+                true
+            }
         });
-        if renamed.is_some() {
+        if renamed {
             crate::diagnostics::log_info(format!("[save-as] Wrote {}", to.display()));
             return self.follow_save_as_in_project(owner, from, &to);
         }
@@ -505,4 +595,71 @@ impl Signex {
 pub(crate) fn is_pcb_path(path: &std::path::Path) -> bool {
     use crate::app::file_extension::has_extension;
     has_extension(path, "snxpcb") || has_extension(path, "standard_pcb")
+}
+
+/// The project preview a save rebuilds (mockup row 1).
+#[cfg(test)]
+mod thumbnail_tests {
+    use std::path::PathBuf;
+
+    use signex_types::schematic::SchematicSheet;
+
+    use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
+    use crate::project_thumbnail::tests::small_sheet;
+    use crate::project_thumbnail::{Ink, ThumbnailKind};
+
+    fn project_path() -> PathBuf {
+        PathBuf::from("/w/thumb/ProjectA.snxprj")
+    }
+
+    #[test]
+    fn saving_a_sheet_of_a_project_without_a_board_renders_its_root_sheet() {
+        let mut app = app_workspace("/w/thumb", &["Top.snxsch", "Sub.snxsch"]);
+        let root = PathBuf::from("/w/thumb/Top.snxsch");
+        let sub = PathBuf::from("/w/thumb/Sub.snxsch");
+        open_with(&mut app.document_state, &root, small_sheet());
+        open_with(&mut app.document_state, &sub, SchematicSheet::default());
+        let _task = app.refresh_project_thumbnail(&sub);
+        let kept = app
+            .ui_state
+            .project_thumbnails
+            .get(&project_path())
+            .expect("rendered");
+        assert_eq!(kept.kind, ThumbnailKind::Sheet);
+        let wires = kept.primitives.iter().filter(|p| p.ink == Ink::Wire);
+        assert_eq!(
+            wires.count(),
+            1,
+            "the root sheet's wire, not the empty sub-sheet"
+        );
+        assert!(kept.primitives.iter().any(|p| p.ink == Ink::PowerPort));
+    }
+
+    #[test]
+    fn a_sheet_save_leaves_the_preview_of_a_project_with_a_board() {
+        let mut app = app_workspace("/w/thumb", &["Top.snxsch"]);
+        app.document_state.projects[0].data.pcb_file = Some("Board.snxpcb".to_string());
+        let root = PathBuf::from("/w/thumb/Top.snxsch");
+        open_with(&mut app.document_state, &root, small_sheet());
+        let _task = app.refresh_project_thumbnail(&root);
+        assert!(app.ui_state.project_thumbnails.is_empty());
+    }
+
+    #[test]
+    fn a_root_sheet_that_is_not_loaded_renders_nothing() {
+        let mut app = app_workspace("/w/thumb", &["Top.snxsch", "Sub.snxsch"]);
+        let sub = PathBuf::from("/w/thumb/Sub.snxsch");
+        open_with(&mut app.document_state, &sub, small_sheet());
+        let _task = app.refresh_project_thumbnail(&sub);
+        assert!(app.ui_state.project_thumbnails.is_empty());
+    }
+
+    #[test]
+    fn a_loose_sheet_renders_nothing() {
+        let mut app = app_workspace("/w/thumb", &["Top.snxsch"]);
+        let loose = PathBuf::from("/w/elsewhere/Loose.snxsch");
+        open_with(&mut app.document_state, &loose, small_sheet());
+        let _task = app.refresh_project_thumbnail(&loose);
+        assert!(app.ui_state.project_thumbnails.is_empty());
+    }
 }

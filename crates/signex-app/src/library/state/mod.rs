@@ -211,6 +211,15 @@ pub struct LibraryBrowserState {
     /// Where the grid is scrolled to, as reported by its scrollable. The
     /// grid builds only the rows in this window (#1355).
     pub grid_scroll: super::browser::GridScroll,
+    /// The selected row's symbol and footprint drawings for the preview
+    /// pane (mockup row 118), read off-thread with the Components panel's
+    /// loader.
+    pub preview: crate::panels::components_panel::details::DetailsState,
+    /// Why the last preview read of the selected row gave no drawing;
+    /// cleared when a new read starts.
+    pub preview_error: Option<BrowserPreviewError>,
+    /// The preview pane's ⋯ menu (Delete Selected) is open.
+    pub more_menu_open: bool,
 }
 
 /// Active sort key + direction for the Library Browser grid.
@@ -242,6 +251,9 @@ impl LibraryBrowserState {
             rename_saving: false,
             view_cache: None,
             grid_scroll: super::browser::GridScroll::default(),
+            preview: Default::default(),
+            preview_error: None,
+            more_menu_open: false,
         }
     }
 
@@ -286,6 +298,8 @@ pub struct EditRowModalState {
     /// parameter without an entry (or with a unit that takes no prefix)
     /// has none.
     pub param_prefix: HashMap<String, signex_types::quantity::SiPrefix>,
+    /// The parameter whose unit menu is open, if any.
+    pub unit_menu_open: Option<String>,
     /// Live edit buffer for the comma-separated tags row (Stage 18).
     /// Persisted to `parameters["tags"]` as `ParamValue::Text` on Save.
     /// Seeded from the existing `parameters["tags"]` value at modal open.
@@ -370,6 +384,7 @@ impl EditRowModalState {
             draft,
             param_buf,
             param_prefix,
+            unit_menu_open: None,
             tags_buf,
             error: None,
             note: None,
@@ -408,6 +423,8 @@ pub struct PrimitivePickerState {
     pub copying: bool,
     /// The unmounted `.snxlib` the picker asked to open and is waiting on.
     pub opening_library: Option<std::path::PathBuf>,
+    /// The highlighted row and its preview (mockup row 131).
+    pub selection: PickerSelection,
 }
 
 /// The pick a copy of a loose symbol was made for (#1841).
@@ -456,6 +473,9 @@ pub enum PrimitivePickerTarget {
         footprints: Vec<Uuid>,
         suggested: Vec<signex_library::PrimitiveRef>,
     },
+    /// Import from another footprint (mockup row 189): the sketch editor at
+    /// `editor` lists the picked footprint's parameters. Reads only.
+    SketchParameters { editor: std::path::PathBuf },
 }
 
 impl PrimitivePickerTarget {
@@ -466,7 +486,9 @@ impl PrimitivePickerTarget {
             | Self::EditRowModal(a)
             | Self::BrowserRow(a)
             | Self::PreviewAlternate(a) => Some(a),
-            Self::DesignPart { .. } | Self::BoardFootprint { .. } => None,
+            Self::DesignPart { .. }
+            | Self::BoardFootprint { .. }
+            | Self::SketchParameters { .. } => None,
         }
     }
 
@@ -520,6 +542,9 @@ pub struct LibraryState {
     /// The Library panel's last component click, for the double-click
     /// window that opens the component.
     pub panel_last_click: crate::double_click::DoubleClick<ComponentsPanelRowKey>,
+    /// The Library panel's kind pick and filtered Parts rows (mockup row
+    /// 119).
+    pub library_panel: LibraryPanelState,
     /// "Close Library — Unsaved Drafts" modal state — `None` while closed.
     pub close_library_confirm: Option<CloseLibraryConfirmState>,
     /// `(label, reason)` of each Save-All row whose off-thread datasheet
@@ -555,7 +580,7 @@ pub struct LibraryState {
     pub recovery: Option<super::recovery::RecoveryDialog>,
     /// Library Missing dialogs queued behind `recovery` (#1897).
     pub missing: missing_queue::MissingLibraries,
-    /// "Library Options" modal state — `None` while closed. Opens
+    /// New Library dialog state — `None` while closed. Opens
     /// after the user picks a `.snxlib` save target in the New Library
     /// Save-As dialog (Stage 11 of `v0.9-snxlib-as-file-plan.md`). The
     /// modal lets the user opt into Git LFS for binary 3D models
@@ -667,6 +692,9 @@ pub struct LibraryState {
     pub owed_cascades: owed_cascades::OwedCascades,
     /// Libraries whose close waits for their writes to finish.
     pub closing: std::collections::HashSet<PathBuf>,
+    /// Libraries mounted read-only because their Git history is missing
+    /// (Skip for now on Git Repository Missing), until it is restored.
+    pub history_missing: std::collections::HashSet<PathBuf>,
     /// Libraries unmounted since the last `finish_update`, which drains
     /// this to close their Library Browser and Component Preview tabs.
     pub unmounted: Vec<PathBuf>,
@@ -721,6 +749,11 @@ pub struct LibraryState {
     /// Stock files whose copy is being written, so a second open of the
     /// same file does not start a second copy.
     pub stock_copies_in_flight: std::collections::HashSet<PathBuf>,
+    /// The Properties panel state of each symbol editor (mockup rows 122
+    /// and 123): its tab, Pins filter, part chip and illustration hover, by
+    /// `.snxsym` path. Session only; an entry outlives its tab so a
+    /// reopened file shows the same tab.
+    pub symbol_props: HashMap<PathBuf, crate::library::editor::symbol::state::SymbolPropsUi>,
 }
 
 /// Three mount sources surfaced as collapsible sections inside the
@@ -801,9 +834,34 @@ impl ComponentsMountSource {
     ];
 }
 
+/// How the Components panel draws its part rows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ComponentsRowStyle {
+    /// One line, the part name only; the description is a tooltip.
+    #[default]
+    Compact,
+    /// Taller rows with a symbol thumbnail and a one-line description.
+    Previews,
+}
+
+impl ComponentsRowStyle {
+    /// The style a saved "Previews" switch stands for.
+    pub fn from_previews(previews: bool) -> Self {
+        if previews {
+            Self::Previews
+        } else {
+            Self::Compact
+        }
+    }
+
+    /// Whether the "Previews" switch is on.
+    pub fn shows_previews(self) -> bool {
+        self == Self::Previews
+    }
+}
+
 /// Source filter, collapse and filter state for the Components Panel.
-/// Session-scoped (not persisted): the panel keeps no other preference on
-/// disk either.
+/// Session-scoped except [`Self::row_style`], which `prefs.json` keeps.
 #[derive(Debug, Clone)]
 pub struct ComponentsPanelState {
     /// The source chip selected under the search box; `None` is "All".
@@ -825,6 +883,14 @@ pub struct ComponentsPanelState {
     pub selected: Option<ComponentsPanelRowKey>,
     /// Height of the list above the details section; the divider drags it.
     pub list_height: f32,
+    /// The pointer is over the divider.
+    pub split_hovered: bool,
+    /// The divider is being dragged.
+    pub split_dragging: bool,
+    /// Zoom and pan of the card's Symbol and Footprint previews.
+    pub preview_views: crate::panels::components_panel::details::preview_view::PreviewViews,
+    /// The Mouse wheel preference, mirrored by `sync_zoom_step`.
+    pub wheel_mode: crate::canvas::WheelMode,
     /// The selected row's details, or the load that is filling them.
     pub details: crate::panels::components_panel::details::DetailsState,
     /// The footprint picked in the details view, with the row it was picked
@@ -843,6 +909,12 @@ pub struct ComponentsPanelState {
     /// A row dropped on the canvas: the placement epoch its read runs under
     /// and the world point (mm) to commit the part at once it arrives.
     pub pending_drop: Option<(u64, (f64, f64))>,
+    /// Compact or Previews rows; the "Previews" switch next to Add.
+    pub row_style: ComponentsRowStyle,
+    /// Parts placed from this panel this session, most recent first.
+    pub recent: crate::panels::components_panel::recent::RecentlyPlaced,
+    /// Row symbol thumbnails read so far, by symbol reference.
+    pub thumbs: crate::panels::components_panel::thumbs::SymbolThumbs,
 }
 
 impl Default for ComponentsPanelState {
@@ -855,12 +927,19 @@ impl Default for ComponentsPanelState {
             rows: PanelRows::default(),
             selected: None,
             list_height: crate::panels::components_panel::split::DEFAULT_LIST_HEIGHT,
+            split_hovered: false,
+            split_dragging: false,
+            preview_views: Default::default(),
+            wheel_mode: Default::default(),
             details: Default::default(),
             footprint_pick: None,
             drag: None,
             row_menu: None,
             hovered: None,
             pending_drop: None,
+            row_style: ComponentsRowStyle::default(),
+            recent: Default::default(),
+            thumbs: Default::default(),
         }
     }
 }
@@ -895,6 +974,8 @@ pub enum ComponentsRowAction {
     Place,
     /// Open the row's Component Preview tab for editing.
     Open,
+    /// Copy the row's internal part number to the clipboard.
+    CopyPartNumber,
 }
 
 /// The row context menu: the row it acts on and where it opened.
@@ -918,7 +999,7 @@ pub struct DocumentOptionsModalState {
     pub draft: LibraryDisplaySettings,
 }
 
-/// State for the "Library Options" modal that pops up between the
+/// State for the New Library dialog that pops up between the
 /// Save-As dialog (where the user picked the `.snxlib` filename) and
 /// the actual `LocalGitAdapter::init` call. Carries the project the
 /// library should attach to + the chosen `.snxlib` path so the
@@ -946,25 +1027,35 @@ pub struct LibraryCreateOptionsState {
     /// Only meaningful when `enable_git` is also true; the modal
     /// greys it out otherwise.
     pub use_lfs: bool,
-    /// Why the last Create press was refused (the library folder is the
-    /// root of a repository with history, so it cannot get its own). The
-    /// modal stays open and shows it; cleared when version control is
-    /// toggled.
+    /// Why the last Create press was refused: a library is already at the
+    /// path, the file name is not usable, the path is already waiting to be
+    /// created, or its folder is the root of a repository with history. The
+    /// modal stays open and shows it; toggling version control clears only
+    /// the repository refusal.
     pub refusal: Option<String>,
+    /// The refusal is a library already at the path: it survives the
+    /// version-control toggle and the banner offers to open that library.
+    pub existing_library: bool,
+    /// The refusal is the path itself (an unusable name, or already waiting
+    /// to be created): it survives the version-control toggle too.
+    pub path_refused: bool,
 }
 
+mod browser_preview;
 mod closing;
 mod id_precedence;
 mod methods;
 mod missing_queue;
 mod new_library_defaults;
 pub mod owed_cascades;
+mod panel_kind;
 mod panel_rows;
 #[cfg(test)]
 mod panel_rows_tests;
 mod picker_cache;
 #[cfg(test)]
 mod picker_cache_tests;
+mod picker_preview;
 mod placed_part;
 mod preview;
 mod preview_history;
@@ -981,10 +1072,13 @@ mod uncommitted;
 mod under_folder;
 
 pub use crate::app::core::new_library_defaults::NewLibraryDefaults;
+pub use browser_preview::BrowserPreviewError;
 pub use id_precedence::IdClashNotice;
 pub use methods::*;
+pub use panel_kind::{LibraryPanelKind, LibraryPanelPick, LibraryPanelState, LibraryPanelTab};
 pub use panel_rows::PanelRows;
 pub use picker_cache::{PickerEntry, PickerRows};
+pub use picker_preview::{PickerSelection, PrimitiveChoice, PrimitiveDrawing};
 pub use placed_part::{ChangePreview, DatasheetChoice, PickerMode};
 pub use preview::*;
 pub use preview_history::{EditScope, RowHistory};

@@ -4,13 +4,17 @@
 //! Nothing here does IO: the caller reads the file. Design note:
 //! `docs/BOARD_IMPORT_AND_REUSE.md`, "DXF import".
 
+mod edges;
 mod parse;
 mod shapes;
 
 #[cfg(test)]
 mod tests;
 
-pub use parse::{DxfDrawing, DxfEntity, parse_dxf};
+pub use edges::{
+    DxfEdge, DxfEdgeShape, DxfLayerRow, DxfSource, DxfUnits, dxf_edges, dxf_layer_rows,
+};
+pub use parse::{DxfDrawing, DxfEntity, parse_dxf, parse_dxf_raw};
 pub use shapes::{board_graphics, board_outline};
 
 use serde::Serialize;

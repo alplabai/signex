@@ -58,6 +58,10 @@ impl Signex {
         if self.rotate_placement(clockwise) {
             return;
         }
+        // Space flips the side of a dimension under way (mockup row 157).
+        if !clockwise && self.flip_dimension_side() {
+            return;
+        }
         if self.interaction_state.current_tool == Tool::BusEntry {
             let quarter_turns = if clockwise { -1 } else { 1 };
             self.set_pending_bus_entry_size(|size| BusEntry::rotated_size(size, quarter_turns));

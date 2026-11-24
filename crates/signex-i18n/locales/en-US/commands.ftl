@@ -126,6 +126,7 @@ cmd-save-document = Save document
 cmd-menu-save-document = Save
 cmd-save-document-as = Save as
 cmd-menu-save-document-as = Save As...
+cmd-save-all = Save all unsaved documents
 cmd-select-all = Select all
 cmd-menu-select-all = Select All
 cmd-select-expand-connection = Select / expand connection
@@ -143,13 +144,28 @@ cmd-tile-windows-vertically = Tile windows side by side
 cmd-menu-tile-windows-vertically = Tile Vertically
 cmd-untile-documents = Untile documents
 cmd-menu-untile-documents = Untile
+# Workspace layouts (mockup row 166): View ▸ Window ▸ Layouts.
+cmd-apply-layout-schematic = Workspace layout: Schematic
+cmd-menu-apply-layout-schematic = Schematic
+cmd-apply-layout-board = Workspace layout: Layout
+cmd-menu-apply-layout-board = Layout
+cmd-apply-layout-review = Workspace layout: Review
+cmd-menu-apply-layout-review = Review
+cmd-apply-layout-notebook = Workspace layout: Notebook
+cmd-menu-apply-layout-notebook = Notebook
+cmd-save-workspace-layout = Save the panel arrangement as a workspace layout
+cmd-menu-save-workspace-layout = Save Layout…
+cmd-manage-workspace-layouts = Manage workspace layouts
+cmd-menu-manage-workspace-layouts = Manage Layouts…
+cmd-reset-workspace-layout = Reset the edited built-in workspace layout
+cmd-menu-reset-workspace-layout = Reset Layout
 cmd-toggle-cross-select-mode = Toggle Cross Select Mode
 cmd-menu-toggle-cross-select-mode = Cross Select Mode
 cmd-toggle-electrical-grid = Toggle electrical grid
 cmd-toggle-floating-panels = Toggle floating panels
 cmd-toggle-properties-panel = Toggle Properties panel
 cmd-toggle-schematic-filter-panel = Toggle schematic filter panel
-cmd-toggle-schematic-list-panel = Toggle schematic list panel
+cmd-toggle-schematic-list-panel = Toggle Object List panel
 cmd-toggle-search-panel = Show/hide search panel
 cmd-toggle-selection = Add/remove object from selection
 # Verb: add the picked object to the selection, or remove it when it is in.
@@ -231,6 +247,8 @@ cmd-run-erc = Run electrical rules check
 cmd-menu-run-erc = Electrical Rules Check
 cmd-open-erc-dialog = Open electrical rules check dialog
 cmd-menu-open-erc-dialog = Electrical Rules Check
+cmd-repair-pin-junctions = Add a junction where a pin end touches a wire
+cmd-menu-repair-pin-junctions = Repair Pin Junctions
 cmd-open-parameter-manager = Open Parameter Manager
 cmd-menu-open-parameter-manager = Parameter Manager...
 cmd-open-rules = Open the design rules of the project
@@ -246,9 +264,9 @@ cmd-rules-explain = Explain the value a DRC finding asks for
 cmd-rules-conflicts = List shadowed and conflicting design rules
 cmd-rules-matrix-get = Read the class-to-class clearance matrix
 cmd-rules-matrix-set = Set a cell of the class-to-class clearance matrix
-cmd-rules-set-create = Create a named rule set
-cmd-rules-set-edit = Change the limits of a named rule set
-cmd-rules-set-apply = Apply a named rule set to a class or net
+cmd-rules-set-create = Create a constraint set
+cmd-rules-set-edit = Change the limits of a constraint set
+cmd-rules-set-apply = Apply a constraint set to a class or net
 cmd-rules-preset-diff = Show what a rules preset would change
 cmd-rules-preset-apply = Apply a rules preset
 cmd-panelize-board = Array the board into a manufacturing panel
@@ -278,11 +296,17 @@ cmd-sheet-navigation-back = Sheet navigation back
 cmd-sheet-navigation-forward = Sheet navigation forward
 cmd-sync-sheet-pins = Sync the selected sheet symbol's pins with its child sheet
 cmd-menu-sync-sheet-pins = Sync Sheet Pins
+cmd-create-sheet-symbol-from-sheet = Create a sheet symbol from a sheet file, with an entry for every port
+cmd-menu-create-sheet-symbol-from-sheet = Create Sheet Symbol From Sheet...
+cmd-sync-sheet-entries = Synchronize the selected sheet symbol's entries and its sheet's ports, with a preview
+cmd-menu-sync-sheet-entries = Synchronize Sheet Entries and Ports...
 cmd-change-component = Change the selected part's component
 cmd-menu-change-component = Change Component…
 cmd-open-project-options = Open Project Options for the active project
 cmd-menu-open-project-options = Project Options...
 cmd-update-pcb-from-schematic = Update PCB from schematic
+cmd-compare-board-with-schematic = Compare board with schematic
+cmd-menu-compare-board-with-schematic = Compare Board with Schematic…
 cmd-back-annotate-schematics = Back-annotate the board's designators and values to the schematic
 cmd-menu-back-annotate-schematics = Back Annotate Schematics...
 cmd-open-selection-filter = Open the selection filter of the sheet
@@ -366,14 +390,16 @@ cmd-place-port = Place port
 cmd-menu-place-port = Port
 cmd-place-off-sheet-connector = Place off sheet connector
 cmd-menu-place-off-sheet-connector = Off Sheet Connector
-cmd-place-parameter-set = Place parameter set
-cmd-menu-place-parameter-set = Parameter Set
+cmd-place-parameter-set = Place net parameters
+# Noun: a directive flag on one wire that sets its net's class and rules.
+cmd-menu-place-parameter-set = Net Parameters
 cmd-place-diff-pair = Place diff pair
 cmd-menu-place-diff-pair = Differential Pair
-cmd-place-blanket = Place blanket
+cmd-place-blanket = Place net blanket
 # Noun: a directive that covers an area of the sheet.
-cmd-menu-place-blanket = Blanket
-cmd-edit-blanket = Edit blanket parameters
+cmd-menu-place-blanket = Net Blanket
+cmd-edit-blanket = Edit net blanket parameters
+cmd-edit-no-erc-rules = Edit No ERC rules
 cmd-place-text-string = Place text string
 cmd-menu-place-text-string = Text String
 cmd-place-text-frame = Place text frame
@@ -415,6 +441,7 @@ cmd-set-object-position = Set the position of a placed object
 cmd-set-object-rotation = Set the rotation of a placed part or label
 cmd-set-sheet-symbol-size = Set the size of a sheet symbol
 cmd-set-symbol-parameter = Set a parameter of a placed part
+cmd-set-sheet-variable = Set a sheet variable
 cmd-menu-assign-net-class = Assign Net Class...
 cmd-place-component = Place component
 # Noun: a component placed on the sheet.
@@ -442,6 +469,12 @@ cmd-toggle-ratsnest = Show or hide the ratsnest
 cmd-menu-toggle-ratsnest = Toggle Ratsnest
 cmd-toggle-origin-marker = Show or hide the board origin marker
 cmd-menu-toggle-origin-marker = Toggle Origin Marker
+cmd-set-board-origin = Set the board origin at a clicked point
+cmd-menu-set-board-origin = Set
+cmd-reset-board-origin = Move the board origin to the bottom-left of the board outline
+cmd-menu-reset-board-origin = Reset
+cmd-snap-board-origin-to-corner = Move the board origin to the outline corner nearest the pointer
+cmd-menu-snap-board-origin-to-corner = Snap to Outline Corner
 cmd-next-layer = Make the next layer of the board active
 cmd-menu-next-layer = Next Layer
 cmd-prev-layer = Make the previous layer of the board active
@@ -485,8 +518,12 @@ cmd-set-layer-visible = Show or hide one layer of the board view
 cmd-menu-set-layer-visible = Set Layer Visible
 cmd-set-active-layer = Make one layer the active layer
 cmd-menu-set-active-layer = Set Active Layer
-cmd-set-layer-color = Give one layer its own colour in the board view, or the palette colour again
+cmd-set-layer-color = Give one layer its own colour, saved with the board, or the palette colour again
 cmd-menu-set-layer-color = Set Layer Color
+cmd-edit-layer-color = Open the colour picker of one layer in the Layers panel
+cmd-menu-edit-layer-color = Layer Colour...
+cmd-reset-layer-colors = Give every layer the board palette colour again
+cmd-menu-reset-layer-colors = Reset All Layer Colours
 cmd-show-used-layers-only = List only the layers the board uses in the Layers panel
 cmd-menu-show-used-layers-only = Show Used Layers Only
 cmd-set-object-visible = Show or hide one kind of object in the board view
@@ -564,7 +601,7 @@ cmd-place-board-pad = Place a free pad on the board
 cmd-menu-place-board-pad = Pad
 cmd-place-board-arc = Draw an arc on the active layer
 cmd-menu-place-board-arc = Arc
-cmd-place-board-string = Place a string on the active overlay, mechanical or documentation layer
+cmd-place-board-string = Place a string on the active silkscreen, mechanical or documentation layer
 cmd-menu-place-board-string = String
 cmd-place-board-dimension = Place a linear dimension on the board
 cmd-menu-place-board-dimension = Dimension
@@ -627,6 +664,11 @@ cmd-save-board-reuse-block = Save the selected placed and routed parts as a reus
 cmd-menu-save-board-reuse-block = Save as Reuse Block
 cmd-place-board-reuse-block = Place a reuse block on the channel of the selected component
 cmd-menu-place-board-reuse-block = Place Reuse Block
+# Rooms (#2457).
+cmd-place-board-room = Draw a room by two corners: an area for the parts of one sheet
+cmd-menu-place-board-room = Room
+cmd-create-rooms-from-sheets = Make a room for each sheet of the project and move its parts into it
+cmd-menu-create-rooms-from-sheets = Create Rooms from Sheets...
 cmd-footprint-mode-pads = Switch footprint editor to Pads mode
 cmd-footprint-mode-sketch = Switch footprint editor to Sketch mode
 cmd-footprint-mode-view-3d = Switch footprint editor to 3D View mode
@@ -656,3 +698,38 @@ cmd-category-uncategorized = Uncategorized
 
 # The placeholder label of a command row that has none (never shown for a catalog command).
 cmd-unnamed = Unnamed command
+
+## Bezier, dimension and table drawings (#1267, #1300).
+cmd-place-table = Place table
+cmd-menu-place-table = Table
+cmd-place-linear-dimension = Place linear dimension
+cmd-menu-place-linear-dimension = Linear
+cmd-place-aligned-dimension = Place aligned dimension
+cmd-menu-place-aligned-dimension = Aligned
+cmd-add-table-of-contents = Add table of contents sheet
+cmd-menu-add-table-of-contents = Add Table of Contents Sheet
+
+## Multi-channel sheets and the Compiled Design panel (#1279, #1308).
+
+cmd-compile-project = Compile the project
+cmd-menu-compile-project = Compile Project
+cmd-open-compiled-design = Open Compiled Design panel
+cmd-menu-open-compiled-design = Compiled Design
+
+## Signal harnesses (#1280).
+
+cmd-open-harness-definitions = Open the harness definitions
+
+## Differential pair classes (#1282).
+cmd-open-diff-pair-classes = Open the project's differential pair classes
+cmd-menu-open-diff-pair-classes = Differential Pair Classes…
+
+## Named unions (mockup row 158).
+cmd-create-union = Create a union from the selection
+cmd-menu-create-union = Create Union…
+cmd-add-to-union = Add the selection to the selected union
+cmd-menu-add-to-union = Add Selection to Union
+cmd-remove-from-union = Remove the selection from its union
+cmd-menu-remove-from-union = Remove Selection from Union
+cmd-break-union = Break the selected union
+cmd-menu-break-union = Break Union

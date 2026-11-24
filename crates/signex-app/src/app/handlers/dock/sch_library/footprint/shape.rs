@@ -10,6 +10,7 @@
 use super::super::*;
 
 use crate::app::FootprintDocument;
+use crate::library::editor::footprint::SnapOptions;
 
 /// The active footprint's sketch entity `id`, if it has a sketch and
 /// the entity exists.
@@ -214,25 +215,45 @@ impl Signex {
         true
     }
 
-    /// v0.13 — Altium "Snap Distance" setter.
+    /// Snap Distance setter.
     pub(crate) fn handle_fp_set_snap_distance(&mut self, raw: String) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut()
-            && let Some(v) = crate::numeric_field::parse_field_f64(&raw)
-        {
-            editor.state.snap_options.snap_distance_mm = v.clamp(0.001, 100.0);
-            editor.canvas_cache.clear();
-        }
-        self.refresh_panel_ctx();
-        true
+        self.fp_set_snap_reach(SnapOptions::DISTANCE_BUFFER, &raw, |opts, v| {
+            opts.snap_distance_mm = v
+        })
     }
 
-    /// v0.13 — Altium "Axis Snap Range" setter.
+    /// Axis Snap Range setter.
     pub(crate) fn handle_fp_set_axis_snap_range(&mut self, raw: String) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut()
-            && let Some(v) = crate::numeric_field::parse_field_f64(&raw)
-        {
-            editor.state.snap_options.axis_snap_range_mm = v.clamp(0.001, 100.0);
-            editor.canvas_cache.clear();
+        self.fp_set_snap_reach(SnapOptions::AXIS_RANGE_BUFFER, &raw, |opts, v| {
+            opts.axis_snap_range_mm = v
+        })
+    }
+
+    /// A snap reach typed in its box. A value in range is stored; anything
+    /// else changes nothing and stays in the box under `buffer` (#2792).
+    fn fp_set_snap_reach(
+        &mut self,
+        buffer: &str,
+        raw: &str,
+        store: impl FnOnce(&mut SnapOptions, f64),
+    ) -> bool {
+        // `parse_field_f64` reports a `nan` / `inf` to Messages.
+        let typed = crate::numeric_field::parse_field_f64(raw)
+            .filter(|value| SnapOptions::REACH_RANGE_MM.contains(value));
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            match typed {
+                Some(value) => {
+                    editor.state.numeric_buffers.remove(buffer);
+                    store(&mut editor.state.snap_options, value);
+                    editor.canvas_cache.clear();
+                }
+                None => {
+                    editor
+                        .state
+                        .numeric_buffers
+                        .insert(buffer.to_owned(), raw.to_owned());
+                }
+            }
         }
         self.refresh_panel_ctx();
         true
@@ -396,6 +417,7 @@ impl Signex {
                     NumberingSchemeKindUi::LinearIncrement => NumberingScheme::LinearIncrement {
                         start_expr: "1".into(),
                         step_expr: "1".into(),
+                        sweep: Default::default(),
                     },
                     NumberingSchemeKindUi::BgaRowCol => NumberingScheme::BgaRowCol {
                         skip_letters: true,
@@ -406,6 +428,34 @@ impl Signex {
                         NumberingScheme::Explicit { names: Vec::new() }
                     }
                 };
+                rebuild_sketch(editor);
+                true
+            });
+        }
+        self.refresh_panel_ctx();
+        true
+    }
+
+    /// The Sweep of a grid numbered 1, 2, 3 (mockup row 126), one undo step.
+    /// Any other scheme has no sweep and the edit is a no-op.
+    pub(crate) fn fp_editor_set_array_sweep(
+        &mut self,
+        array_id: signex_sketch::array::ArrayId,
+        value: signex_sketch::array::GridSweep,
+    ) -> bool {
+        use signex_sketch::array::NumberingScheme;
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.record_edit(None, |editor| {
+                let Some(array) = sketch_array_mut(editor, array_id) else {
+                    return false;
+                };
+                let NumberingScheme::LinearIncrement { sweep, .. } = &mut array.numbering else {
+                    return false;
+                };
+                if *sweep == value {
+                    return false;
+                }
+                *sweep = value;
                 rebuild_sketch(editor);
                 true
             });
@@ -549,14 +599,9 @@ impl Signex {
 
     /// v0.23 — Toggle a single `(i, j)` instance in an array's
     /// per-instance suppression list. `value=true` enables the
-    /// instance (removes the entry); `value=false` suppresses it
-    /// (adds the entry, deduplicated). Polar arrays set `j = 0`.
-    ///
-    /// When the suppression list grows from empty, the array gains a
-    /// fresh `GridDepopulation { mask_expr: "", suppressed_instances }`.
-    /// When the list returns to empty AND the existing `mask_expr` is
-    /// blank, the depopulation is removed entirely so the array
-    /// returns to its parametric-only state.
+    /// instance; `value=false` suppresses it. Polar arrays set `j = 0`.
+    /// The list itself is kept by `ArrayKind::set_instance_suppressed`,
+    /// the one helper the canvas instance click uses too.
     pub(crate) fn fp_editor_toggle_array_instance(
         &mut self,
         array_id: signex_sketch::array::ArrayId,
@@ -564,45 +609,42 @@ impl Signex {
         j: u32,
         value: bool,
     ) -> bool {
-        use signex_sketch::array::{ArrayKind, GridDepopulation};
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.record_edit(None, |editor| {
                 let Some(array) = sketch_array_mut(editor, array_id) else {
                     return false;
                 };
-                let depop_slot: &mut Option<GridDepopulation> = match &mut array.kind {
-                    ArrayKind::Grid { depopulation, .. } => depopulation,
-                    ArrayKind::Polar { depopulation, .. } => depopulation,
-                    ArrayKind::Linear { .. } => return false,
-                };
-                if value {
-                    // Re-enable the instance — drop matching entries.
-                    if let Some(d) = depop_slot.as_mut() {
-                        d.suppressed_instances
-                            .retain(|(si, sj)| !(*si == i && *sj == j));
-                        if d.mask_expr.trim().is_empty() && d.suppressed_instances.is_empty() {
-                            *depop_slot = None;
-                        }
-                    }
-                } else {
-                    // Suppress the instance — append if absent.
-                    let d = depop_slot.get_or_insert_with(|| GridDepopulation {
-                        mask_expr: String::new(),
-                        suppressed_instances: Vec::new(),
-                    });
-                    if !d
-                        .suppressed_instances
-                        .iter()
-                        .any(|(si, sj)| *si == i && *sj == j)
-                    {
-                        d.suppressed_instances.push((i, j));
-                    }
+                if !array.kind.has_suppression_model() {
+                    return false;
                 }
+                array.kind.set_instance_suppressed(i, j, !value);
                 rebuild_sketch(editor);
                 true
             });
         }
         self.refresh_panel_ctx();
         true
+    }
+
+    /// Properties' conflict row Remove: delete that constraint from the
+    /// editor in view, as the canvas constraint menu's Delete does (one
+    /// undo step, then a solve).
+    pub(crate) fn fp_editor_remove_conflicting_constraint(
+        &mut self,
+        constraint: signex_sketch::id::ConstraintId,
+    ) -> iced::Task<crate::app::Message> {
+        use crate::library::editor::footprint::sketch_mode::SketchCanvasMsg;
+        use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+        let Some(path) = self.active_footprint_editor().map(|e| e.path.clone()) else {
+            return iced::Task::none();
+        };
+        self.update(crate::app::Message::Library(
+            LibraryMessage::PrimitiveEditorEvent {
+                path,
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchCanvas(
+                    SketchCanvasMsg::ConstraintDeleted(constraint),
+                )),
+            },
+        ))
     }
 }

@@ -21,9 +21,12 @@ pub(super) fn empty_snapshot() -> SchematicRenderSnapshot {
         drawings: Vec::new(),
         no_erc_directives: Vec::new(),
         directives: Vec::new(),
+        harness: Default::default(),
+        unions: Vec::new(),
         title_block: HashMap::new(),
         text_widths: Default::default(),
         text_extents: Default::default(),
+        variables: Default::default(),
         lib_symbols: Default::default(),
         net_colors: HashMap::new(),
         drawing_placements: Default::default(),
@@ -68,6 +71,7 @@ fn hit_test_picks_the_right_wire_and_bus_among_many() {
         uuid: bus_uuid,
         start: Point::new(50.0, 0.0),
         end: Point::new(60.0, 0.0),
+        ..Default::default()
     });
 
     for (i, uuid) in wires.iter().enumerate() {
@@ -678,6 +682,30 @@ fn font_family_change_refreshes_the_cached_sheet_default_font() {
     doc.font_family = Some("Roboto".into());
     cache.update_from_sheet(&doc, invalidation, 3, 4);
     assert_eq!(cache.snapshot().font_family.as_deref(), Some("Roboto"));
+}
+
+/// A sheet-variable edit rides the PAPER patch (engine `SetSheetVariable`), so
+/// the partial copy must refresh the variables with the title block, or special
+/// strings keep resolving to the old value.
+#[test]
+fn a_sheet_variable_edit_refreshes_the_cached_variables() {
+    let mut doc = empty_snapshot();
+    doc.variables.insert("REV".into(), "A".into());
+    let mut cache = SchematicRenderCache::from_sheet_at(&doc, 1);
+
+    let invalidation = RenderInvalidation::from(signex_engine::DocumentPatch::PAPER);
+
+    doc.variables.insert("REV".into(), "B".into());
+    cache.update_from_sheet(&doc, invalidation, 1, 2);
+    assert_eq!(
+        cache.snapshot().variables.get("REV").map(String::as_str),
+        Some("B"),
+        "the cache must follow the engine's sheet variables"
+    );
+
+    doc.variables.remove("REV");
+    cache.update_from_sheet(&doc, invalidation, 2, 3);
+    assert!(cache.snapshot().variables.is_empty());
 }
 
 #[test]

@@ -43,6 +43,7 @@ use signex_types::pcb_layer::PcbLayer;
 use signex_types::zone_keepout::KEEPOUT_FILL;
 use thiserror::Error;
 
+pub use frame::FabFrame;
 pub use notes::FabNote;
 
 use layers::{CopperStack, FabLayer, file_function, file_polarity, file_suffix};
@@ -62,6 +63,10 @@ pub struct FabOptions {
     /// The ODB++ job (#2485), and whether it is a folder or one archive;
     /// `None` writes none.
     pub odb: Option<OdbForm>,
+    /// The designator standard the board's designators are shown under
+    /// (`show_board_references`, #1416); the test netlist writes them
+    /// stored. `None`: as they are.
+    pub designator_standard: Option<signex_types::designator::DesignatorStandard>,
 }
 
 /// How the ODB++ job is written.
@@ -86,6 +91,7 @@ impl FabOptions {
             test_netlist: true,
             ipc2581: true,
             odb: Some(OdbForm::Archive),
+            designator_standard: None,
         }
     }
 
@@ -246,7 +252,13 @@ pub fn generate(
         files.push(FabFile {
             name: format!("{name}-netlist.ipc"),
             kind: FabFileKind::TestNetlist,
-            contents: ipc356::write_ipc356(board, &stack, name, &mut ipc_skipped),
+            contents: ipc356::write_ipc356(
+                board,
+                &stack,
+                name,
+                options.designator_standard,
+                &mut ipc_skipped,
+            ),
         });
         skipped = skipped.max(ipc_skipped);
     }
@@ -282,11 +294,12 @@ pub fn generate(
         contents: job,
     });
     tally.skipped = skipped;
-    // A keepout (#2373) is a zone on a copper layer with no copper to fill.
+    // A keepout (#2373) is a zone on a copper layer with no copper to fill,
+    // and a shelved pour (#2523) holds none by choice.
     let copper_zones = board
         .zones
         .iter()
-        .filter(|z| z.fill_type != KEEPOUT_FILL)
+        .filter(|z| z.fill_type != KEEPOUT_FILL && !z.is_shelved_pour())
         .filter(|z| z.pcb_layer().is_some_and(PcbLayer::is_copper))
         .count();
     let pours = options.gerber || options.ipc2581 || options.odb.is_some();

@@ -489,6 +489,7 @@ fn waived_now(b: &PcbBoard) -> PcbBoard {
             rule: rule_id(&v).into(),
             note: "accepted".into(),
             fingerprint: fingerprint(&v, &b),
+            author: String::new(),
         });
     b
 }
