@@ -743,12 +743,14 @@ The cursor marks sketch mode draws in place of the OS cursor are light on
 that ground.
 
 A closed loop with a role shows the role's name just right of its
-top-right corner, outside the loop, in the role's colour; a pad's loop
-shows none. Courtyard fills in the Courtyard Top colour; the other fills
-are unchanged (Caner, 2026-11-24). A selected loop with a role keeps its
-role's colour, stronger, so the selection does not hide the role (mockup
-row 190). Jump to pad and Back to pad sit just above the mode bar,
-left-aligned; the Bake preview card is in Properties.
+top-right corner, outside the loop, in the role's colour (Caner,
+2026-11-24, mockup row 190); a pad's loop shows none. Courtyard fills in
+the Courtyard Top colour; the other fills are unchanged (Caner,
+2026-11-24). A selected loop with a role keeps its role's colour,
+stronger, so the selection does not hide the role (mockup row 190). Jump
+to pad and Back to pad sit just above the mode bar, left-aligned, also
+while the bake preview is open, because the Bake preview card is in
+Properties (Caner, 2026-11-24, mockup row 190).
 
 A mirrored pattern draws a glyph by its mirror line, `⇔` and the mirrored
 pattern's glyph (`⇔ L×4`). A pattern glyph click with Select selects the
