@@ -1012,3 +1012,65 @@ fn the_properties_panel_draws_no_english_under_en_xa() {
     });
     assert_eq!(same_in_en_xa(part), ["Probe"]);
 }
+
+/// A panel context with no sheet or board active, and an open project named
+/// `name` when one is given: a page tab such as Rules is in front.
+fn page_tab_in_front(name: Option<&str>) -> PanelContext {
+    let (mut app, _boot) = crate::app::Signex::new();
+    let mut ctx = app.document_state.panel_ctx.clone();
+    ctx.has_schematic = false;
+    ctx.has_pcb = false;
+    ctx.pcb_board = None;
+    ctx.projects = name
+        .map(|name| crate::panels::ProjectPanelInfo {
+            id: app.document_state.mint_project_id(),
+            case_fold: Default::default(),
+            name: name.to_owned(),
+            project_file: Some(format!("{name}.snxsch")),
+            project_file_open: false,
+            project_file_dirty: false,
+            project_file_active: false,
+            project_file_missing: false,
+            pcb_file: None,
+            pcb_file_open: false,
+            pcb_file_dirty: false,
+            pcb_file_active: false,
+            pcb_file_missing: false,
+            sheets: Vec::new(),
+            libraries: Vec::new(),
+            is_active: true,
+            is_dirty: false,
+            version_control: false,
+        })
+        .into_iter()
+        .collect();
+    ctx
+}
+
+/// Mockup row 89: the Rules tab belongs to the open project, so Properties
+/// names that project and never asks to open one; with no project open it
+/// still does (#51).
+#[test]
+fn a_page_tab_of_an_open_project_does_not_ask_to_open_a_project() {
+    let open = plain_texts(&page_tab_in_front(Some("linear-regulator")));
+    assert!(
+        !open.iter().any(|t| t == "Open a project"),
+        "Open a project shown with a project open: {open:?}"
+    );
+    assert!(
+        open.iter().any(|t| t == "linear-regulator"),
+        "the open project is not named: {open:?}"
+    );
+    assert!(
+        open.iter()
+            .any(|t| t == "Properties are available when a schematic is active"),
+        "{open:?}"
+    );
+    let none = plain_texts(&page_tab_in_front(None));
+    assert!(none.iter().any(|t| t == "Open a project"), "{none:?}");
+    assert!(!none.iter().any(|t| t == "linear-regulator"), "{none:?}");
+}
+
+fn plain_texts(ctx: &PanelContext) -> Vec<String> {
+    texts(ctx).into_iter().map(|t| t.text).collect()
+}
