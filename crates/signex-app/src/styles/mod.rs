@@ -24,6 +24,7 @@ pub mod scrollbar;
 pub mod tokens;
 pub mod typography;
 
+pub use dialog_kit::{dense_band_footer_height, dialog_band_padding};
 pub use disabled::{DISABLED_OPACITY, dimmed, dimmed_button, read_only_field, read_only_row};
 pub use graphite::{
     PillTone, card, field, floating_shadow, key_cap, pill, pill_colors, resize_handle_edge,
@@ -33,8 +34,6 @@ pub use graphite_buttons::{ghost_button, primary_button};
 pub use metrics::ChromeMetrics;
 pub use radii::Radii;
 pub use scrollbar::{scrollbar_colors, scrollbar_style, thin_both, thin_scrollbar, thin_vertical};
-// The footer band of the Rename dialog (mockup row 23).
-pub use dialog_kit::{dense_band_footer_height, dialog_band_padding};
 
 pub use buttons::{
     accent_button, danger_button, hover_row, outline_button, subtle_button, subtle_button_with_rest,

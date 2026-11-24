@@ -397,7 +397,18 @@ mod tests {
         let Some(rule) = changes else {
             panic!("one fill from the field down to the buttons: no divider");
         };
-        assert!((rule as f32) < button.y, "the divider is above the buttons");
+        // Past the hairline (and any edge blending), one band fill other
+        // than the body's runs down to the buttons' line.
+        let band_from = rule + 2;
+        assert!(
+            (band_from as f32) < button.y,
+            "a band sits above the buttons"
+        );
+        let band = at(band_from);
+        assert_ne!(band, body, "the band is not the body's fill");
+        for y in band_from..button.y as usize {
+            assert_eq!(at(y), band, "one band fill down to the buttons (row {y})");
+        }
     }
 
     /// The Rename window grows with the folder-kept note (mockup row 23), so

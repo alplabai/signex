@@ -335,9 +335,10 @@ pub fn dialog_band_padding() -> iced::Padding {
 }
 
 /// Height of a [`dialog_footer_band`] padded by [`dialog_band_padding`]:
-/// the dense button, the padding and the hairline above it.
+/// the dense button and the padding. The hairline is the container's top
+/// border, drawn inside the padded bounds, so it takes no layout room.
 pub const fn dense_band_footer_height() -> f32 {
-    ChromeMetrics::DEFAULT.button + 2.0 * BAND_PAD_Y + 1.0
+    ChromeMetrics::DEFAULT.button + 2.0 * BAND_PAD_Y
 }
 
 #[cfg(test)]
@@ -382,8 +383,9 @@ mod tests {
         );
     }
 
-    /// The band footer is the dense button, its own padding and the
-    /// hairline, and its sides line up with the body's (mockup row 23).
+    /// The band footer is the dense button and its own padding (its
+    /// hairline border takes no layout room), and its sides line up with
+    /// the body's (mockup row 23).
     #[test]
     fn the_band_footer_height_follows_its_padding() {
         let pad = dialog_band_padding();
@@ -391,7 +393,7 @@ mod tests {
         assert_eq!(pad.right, SP.l);
         assert_eq!(
             dense_band_footer_height(),
-            ChromeMetrics::DEFAULT.button + pad.top + pad.bottom + 1.0
+            ChromeMetrics::DEFAULT.button + pad.top + pad.bottom
         );
     }
 
