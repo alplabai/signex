@@ -107,7 +107,7 @@ pub(super) fn view_toolbar<'a>(
         Space::new().width(Length::Fill).boxed(),
         column_card(&chooser, tokens, i18n),
     ];
-    column![bar, container(card).padding([SP.xs, SP.l]).boxed()]
+    iced::widget::column![bar, container(card).padding([SP.xs, SP.l]).boxed()]
         .width(Length::Fill)
         .boxed()
 }
@@ -158,7 +158,7 @@ fn column_card<'a>(
     let r = crate::styles::tokens::resolve(tokens);
     let ink = theme_ext::text_primary(tokens);
     let hover = crate::styles::tokens::overlay(tokens, crate::styles::tokens::Overlay::Hover);
-    let mut list: Column<Element<'a, LibraryMessage>> = column![
+    let mut list: Column<Element<'a, LibraryMessage>> = iced::widget::column![
         container(
             text(t!(i18n, ids::LIBRARY_BROWSER_COLUMNS))
                 .size(TS.caption)

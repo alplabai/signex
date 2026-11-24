@@ -735,7 +735,8 @@ impl Signex {
         let ctx = &self.document_state.panel_ctx;
         let warning = ctx.symbol_editor.as_ref()?.delete_warning.as_ref()?;
         let card = crate::library::symbol_delete::view(warning, &ctx.tokens, &self.ui_state.i18n)
-            .map(|msg| Message::Dock(crate::dock::DockMessage::Panel(msg)));
+            .map(|msg| Message::Dock(crate::dock::DockMessage::Panel(msg)))
+            .boxed();
         Some(self.library_scrim(card))
     }
 
