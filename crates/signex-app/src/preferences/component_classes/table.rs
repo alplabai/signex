@@ -407,3 +407,89 @@ fn cell_input_style(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::layout_probe::{lay_out_inputs, lay_out_texts};
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    /// The seed list with one row added at the bottom.
+    fn seed_plus(key: &str, label: &str) -> Vec<ComponentClassEntry> {
+        let mut classes: Vec<ComponentClassEntry> = crate::fonts::DEFAULT_COMPONENT_CLASSES
+            .iter()
+            .map(|(key, label)| ComponentClassEntry {
+                key: (*key).to_owned(),
+                label: (*label).to_owned(),
+            })
+            .collect();
+        classes.push(ComponentClassEntry {
+            key: key.to_owned(),
+            label: label.to_owned(),
+        });
+        classes
+    }
+
+    /// Mockup row 150: the row Add Class appended sits at the bottom with
+    /// its "new" pill, and the key clash typed into it is explained on a
+    /// line drawn under that row.
+    #[test]
+    fn the_added_row_with_a_clashing_key_draws_its_error_under_it() {
+        let classes = seed_plus("resistor", "Hall sensor");
+        let view = ClassesViewState {
+            new_row: Some(classes.len() - 1),
+            ..ClassesViewState::default()
+        };
+        let tokens = theme_tokens(ThemeId::GraphiteLight);
+        let i18n = I18n::en_us_ref();
+        let window = iced::Size::new(980.0, 4000.0);
+        let draw = || table(&classes, &view, true, &tokens, i18n);
+        let texts = lay_out_texts(draw(), window);
+        let error = texts
+            .iter()
+            .find(|t| t.text.contains("is already used by"))
+            .expect("the duplicate key is explained inline");
+        assert!(error.text.contains("Resistor"), "{}", error.text);
+        let pill = i18n.message_plain(ids::PREFERENCES_CLASSES_NEW, &[]);
+        assert!(texts.iter().any(|t| t.text == pill), "the new pill shows");
+
+        let inputs = lay_out_inputs(draw(), window);
+        let field_y = |label: &str| {
+            inputs
+                .iter()
+                .find(|t| t.text == label)
+                .unwrap_or_else(|| panic!("a field showing {label}"))
+                .bounds
+                .y
+        };
+        let last_seed = crate::fonts::DEFAULT_COMPONENT_CLASSES
+            .last()
+            .map(|(_, label)| *label)
+            .expect("a seed list");
+        let added_y = field_y("Hall sensor");
+        assert!(added_y > field_y(last_seed), "the added row is last");
+        assert!(error.bounds.y > added_y, "the error line is under it");
+    }
+
+    /// Mockup row 150: a clashing key tints its row in the error tint, even
+    /// on the added row; the added row without an issue keeps the accent
+    /// tint.
+    #[test]
+    fn a_clashing_row_takes_the_error_tint_and_a_clean_added_row_the_accent() {
+        let tokens = theme_tokens(ThemeId::GraphiteLight);
+        let r = resolve(&tokens);
+        let view = ClassesViewState::default();
+        let look = |issue, is_new| RowLook {
+            index: 0,
+            issue,
+            is_new,
+            view: &view,
+        };
+        let clash = Some(ClassKeyIssue::Duplicate { first: 0 });
+        let tint = look(clash, true).fill(&tokens).expect("an error tint");
+        let soft = r.err_soft;
+        assert_eq!((tint.r, tint.g, tint.b), (soft.r, soft.g, soft.b));
+        assert_eq!(look(None, true).fill(&tokens), Some(r.accent_soft));
+        assert_eq!(look(None, false).fill(&tokens), None);
+    }
+}
