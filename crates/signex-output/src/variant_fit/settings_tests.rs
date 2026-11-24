@@ -67,6 +67,7 @@ fn lite() -> VariantSettings {
                 ..VariantPart::default()
             },
         ],
+        ..VariantSettings::default()
     }
 }
 
@@ -135,6 +136,69 @@ fn the_bom_takes_the_same_fit_and_values_as_the_matrix() {
     let mut values: Vec<String> = base.rows.iter().map(|row| row.value.clone()).collect();
     values.sort();
     assert_eq!(values, ["10k", "1k", "31.6k"]);
+}
+
+/// A setting stays on its placed part when a re-annotation renumbers it, in
+/// the matrix and the BOM alike; the part that takes the old designator
+/// keeps what its sheets say.
+#[test]
+fn a_setting_follows_its_part_through_a_re_annotation() {
+    let r5 = part("R5", "10k", &[]);
+    let settings = VariantSettings {
+        parts: vec![VariantPart {
+            variant: "Lite".into(),
+            designator: "R5".into(),
+            part: Some(signex_types::pcb::SymbolLink::new(
+                InstancePath::root(),
+                [r5.uuid],
+            )),
+            fitted: Some(false),
+            parameters: [(VALUE_PARAMETER.to_string(), "47k".to_string())].into(),
+            ..VariantPart::default()
+        }],
+        ..VariantSettings::default()
+    };
+    // Re-annotated: the part set as R5 is R7 now, and another part is R5.
+    let renumbered = Symbol {
+        reference: "R7".into(),
+        ..r5
+    };
+    let ctx = context(vec![part("R5", "1k", &[]), renumbered], settings.clone());
+    let shown = variant_matrix(&ctx, &["Lite".to_string()]).with_settings(&settings);
+    let cells: Vec<(&str, &[bool], &[bool])> = shown
+        .rows
+        .iter()
+        .map(|row| {
+            (
+                row.designator.as_str(),
+                row.fitted.as_slice(),
+                row.overridden.as_slice(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        cells,
+        [
+            ("R5", &[true, true][..], &[false, false][..]),
+            ("R7", &[true, false][..], &[false, false][..]),
+        ],
+        "a part that is not fitted shows no value of its own"
+    );
+
+    let lite = rollup(
+        &ctx,
+        &BomOptions {
+            active_variant: Some("Lite".into()),
+            ..BomOptions::default()
+        },
+    );
+    let fitted: Vec<(Vec<String>, String)> = lite
+        .rows
+        .iter()
+        .filter(|row| row.fitted_qty > 0)
+        .map(|row| (row.references.clone(), row.value.clone()))
+        .collect();
+    assert_eq!(fitted, [(vec!["R5".to_string()], "1k".to_string())]);
 }
 
 #[test]

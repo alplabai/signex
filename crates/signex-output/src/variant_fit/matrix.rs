@@ -25,6 +25,9 @@ pub struct VariantMatrix {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariantRow {
     pub designator: String,
+    /// The placed part (`settings::part_link`): what the project's variant
+    /// settings find it by.
+    pub link: Option<signex_types::pcb::SymbolLink>,
     /// The value the BOM lists: an `=` value evaluated on its sheet.
     pub value: String,
     /// The value as written, which the parts filter also matches.
@@ -154,6 +157,10 @@ pub fn variant_matrix(ctx: &ExportContext, variants: &[String]) -> VariantMatrix
             let units: Vec<&Symbol> = part.iter().map(|&member| placed[member].0).collect();
             VariantRow {
                 designator: placed[part[0]].1.to_string(),
+                link: super::part_link(
+                    part.iter()
+                        .map(|&member| (&shown[member].path, placed[member].0.uuid)),
+                ),
                 value: first_set(units.iter().map(|unit| unit.value.as_str())),
                 source_value: first_set(
                     part.iter()

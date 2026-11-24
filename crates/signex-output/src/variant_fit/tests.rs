@@ -256,6 +256,7 @@ fn a_project_with_base_only_has_one_column() {
 fn the_filter_matches_designators_and_values_with_wildcards() {
     let row = VariantRow {
         designator: "U12".to_string(),
+        link: None,
         value: "10k".to_string(),
         source_value: "10k".to_string(),
         footprint: String::new(),
