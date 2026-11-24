@@ -240,6 +240,13 @@ fn dropdown_min_width(menu: ActiveBarMenu) -> Option<f32> {
     })
 }
 
+/// The Selection Filter card's pinned width (mockup row 61), for the
+/// overlay's placement tests.
+#[cfg(test)]
+pub(crate) fn filter_card_width() -> f32 {
+    dropdown_min_width(ActiveBarMenu::Filter).unwrap_or_default()
+}
+
 /// Horizontal offset (in px) to align dropdown below a given button index.
 pub fn dropdown_x_offset(menu: ActiveBarMenu, m: &signex_widgets::active_bar::Metrics) -> f32 {
     super::layout::trigger_left(menu, m)
