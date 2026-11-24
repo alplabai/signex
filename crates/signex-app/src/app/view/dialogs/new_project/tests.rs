@@ -220,7 +220,7 @@ fn the_drawn_stack_up_ends_with_the_bottom_silkscreen() {
 fn the_preview_column_holds_the_drawing_and_its_caption() {
     use super::{PREVIEW_W, SP, TS};
     use crate::app::new_project::preview::VIEW_W;
-    assert!(VIEW_W + 2.0 * SP.xl <= PREVIEW_W, "{VIEW_W} in {PREVIEW_W}");
+    const { assert!(VIEW_W + 2.0 * SP.xl <= PREVIEW_W) };
     let (mut app, _t) = crate::app::Signex::new();
     let _ = app.update(crate::app::Message::Menu(
         crate::menu_bar::MenuMessage::NewProject,
