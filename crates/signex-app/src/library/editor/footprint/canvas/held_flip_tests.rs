@@ -28,6 +28,7 @@ fn pressed(key: Key, code: Code, repeat: bool) -> (bool, Option<FootprintEditorM
         sketch: None,
         silk_f: &[],
         silk_b: &[],
+        generated_silk: &[],
         zoom_step: 1.1,
         trackpad_pan: false,
         wheel_mode: Default::default(),
