@@ -133,6 +133,7 @@ fn add_git_project(app: &mut Signex, dir: &Path) {
                 sheets: Vec::new(),
                 variant_definitions: Vec::new(),
                 active_variant: None,
+                variant_settings: Default::default(),
                 libraries: Vec::new(),
                 enable_git: true,
                 net_classes: Vec::new(),

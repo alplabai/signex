@@ -122,6 +122,7 @@ fn run_erc(root: SchematicSheet, child: SchematicSheet, active: Active) -> Vec<V
         sheets: vec![entry("root.snxsch"), entry("child.snxsch")],
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         rules: Default::default(),

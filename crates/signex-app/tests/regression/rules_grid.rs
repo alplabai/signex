@@ -21,6 +21,7 @@ fn project(app: &mut Signex, dir: &std::path::Path) -> signex_app::app::ProjectI
         sheets: Vec::new(),
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         net_classes: Vec::new(),

@@ -69,6 +69,10 @@ pub enum TabKind {
     /// is the board's path, which Save writes; the board stays in its own
     /// PCB tab, and this tab always sits after it (`app/layer_stack_tab`).
     LayerStack,
+    /// The project's Variant Manager as a page tab (mockup row 32). Tab
+    /// state lives in the project's [`crate::app::ProjectTabState`];
+    /// `TabInfo.path` is the `.snxprj` path, which Save writes.
+    VariantManager(super::state::ProjectId),
     /// A symbol's Pin table as a page tab (mockup row 122b). `TabInfo.path`
     /// is the `.snxsym` path, which Save writes; it sits after the symbol's
     /// own tab (`app/pin_table_tab`).
@@ -150,6 +154,14 @@ impl TabKind {
         matches!(self, TabKind::LayerStack)
     }
 
+    /// `Some(id)` if this tab is a project's Variant Manager tab.
+    pub fn as_variant_manager(&self) -> Option<super::state::ProjectId> {
+        match self {
+            TabKind::VariantManager(id) => Some(*id),
+            _ => None,
+        }
+    }
+
     /// A symbol's Pin table tab.
     pub fn is_pin_table(&self) -> bool {
         matches!(self, TabKind::PinTable)
@@ -163,8 +175,9 @@ impl TabKind {
         self.is_board_page() || self.is_pin_table()
     }
 
-    /// A page tab, not a drawing: the Project, Rules, Layer Stack and Pin
-    /// table tabs. None is undocked or restored from History.
+    /// A page tab, not a drawing: the Project, Rules, Layer Stack, Pin
+    /// table and Variant Manager tabs. None is undocked or restored from
+    /// History.
     pub fn is_project_page(&self) -> bool {
         // Mockup row 178: the Polygon Manager is a page of its board.
         if self.is_polygon_manager() {
@@ -172,7 +185,11 @@ impl TabKind {
         }
         matches!(
             self,
-            TabKind::Project(_) | TabKind::Rules(_) | TabKind::LayerStack | TabKind::PinTable
+            TabKind::Project(_)
+                | TabKind::Rules(_)
+                | TabKind::LayerStack
+                | TabKind::PinTable
+                | TabKind::VariantManager(_)
         )
     }
 }

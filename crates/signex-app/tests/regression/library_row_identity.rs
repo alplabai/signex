@@ -51,6 +51,7 @@ fn app_with_libraries(
             sheets: Vec::new(),
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries,
             enable_git: false,
             net_classes: Vec::new(),

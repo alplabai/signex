@@ -24,6 +24,7 @@ fn project(id: u32, dir: &str, locals: &[&str]) -> LoadedProject {
             sheets: Vec::new(),
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: locals
                 .iter()
                 .map(|path| LibraryEntry {

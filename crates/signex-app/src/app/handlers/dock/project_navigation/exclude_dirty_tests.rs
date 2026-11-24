@@ -452,6 +452,7 @@ fn save_all_ignores_a_project_with_an_empty_dir() {
             sheets: Vec::new(),
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),

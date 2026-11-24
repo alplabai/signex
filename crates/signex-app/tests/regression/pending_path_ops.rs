@@ -58,6 +58,7 @@ fn fixture(dirty: bool) -> Fixture {
             sheets: vec![sheet_entry("Power.snxsch")],
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             rules: Default::default(),

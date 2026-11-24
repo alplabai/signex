@@ -5,8 +5,10 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use signex_types::pcb::SymbolLink;
 use signex_types::project::{
-    AnnotateUndo, ChannelNaming, ListMove, ProjectData, RequirementEntry, VariantProblem,
+    AnnotateUndo, ChannelNaming, ListMove, PlacedPart, ProjectData, RequirementEntry, SheetFit,
+    VariantProblem, VariantSettings,
 };
 
 /// One edit of a Project tab section. Plain data, so a script can emit it.
@@ -38,6 +40,38 @@ pub enum ProjectSectionCommand {
     /// `None` makes Base the active variant.
     SetActiveVariant {
         name: Option<String>,
+    },
+    /// Add `name` as a copy of `from` (mockup row 32). `sheet_fits` is each
+    /// part's fit in `from` as its sheets say, where it differs from Base.
+    DuplicateVariant {
+        from: String,
+        name: String,
+        #[serde(default)]
+        sheet_fits: Vec<SheetFit>,
+    },
+    /// `None` makes Base the default variant (mockup row 32).
+    SetDefaultVariant {
+        name: Option<String>,
+    },
+    /// A part's fit in a variant; `None` follows the sheets (mockup row 32).
+    /// `part` is the placed part, which keeps the setting on it through a
+    /// re-annotation.
+    SetVariantPartFit {
+        variant: String,
+        designator: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        part: Option<SymbolLink>,
+        fitted: Option<bool>,
+    },
+    /// A part's parameter value in a variant; `None` is its own value again
+    /// (mockup row 32).
+    SetVariantPartParameter {
+        variant: String,
+        designator: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        part: Option<SymbolLink>,
+        parameter: String,
+        value: Option<String>,
     },
     /// Move a library one step up or down the list (#1691).
     MoveLibrary {
@@ -85,6 +119,34 @@ impl ProjectSectionCommand {
             Self::RenameVariant { from, to } => data.rename_variant(from, to)?,
             Self::RemoveVariant { name } => data.remove_variant(name)?,
             Self::SetActiveVariant { name } => data.set_active_variant(name.as_deref())?,
+            Self::DuplicateVariant {
+                from,
+                name,
+                sheet_fits,
+            } => data.duplicate_variant(from, name, sheet_fits)?,
+            Self::SetDefaultVariant { name } => data.set_default_variant(name.as_deref())?,
+            Self::SetVariantPartFit {
+                variant,
+                designator,
+                part,
+                fitted,
+            } => data.set_variant_part_fit(
+                variant,
+                PlacedPart::new(designator, part.as_ref()),
+                *fitted,
+            )?,
+            Self::SetVariantPartParameter {
+                variant,
+                designator,
+                part,
+                parameter,
+                value,
+            } => data.set_variant_part_parameter(
+                variant,
+                PlacedPart::new(designator, part.as_ref()),
+                parameter,
+                value.as_deref(),
+            )?,
             Self::MoveLibrary { path, step } => {
                 data.move_library(path, *step);
             }
@@ -124,6 +186,8 @@ pub(super) struct SectionsSnapshot {
     library_order: Vec<PathBuf>,
     variants: Vec<String>,
     active_variant: Option<String>,
+    /// The default variant and what each variant changes on its parts.
+    variant_settings: VariantSettings,
     enable_git: bool,
     /// The Requirements section (#2339): the whole list; only it writes it.
     requirements: Vec<RequirementEntry>,
@@ -139,6 +203,7 @@ impl SectionsSnapshot {
             library_order: data.library_order(),
             variants: data.variant_definitions.clone(),
             active_variant: data.active_variant.clone(),
+            variant_settings: data.variant_settings.clone(),
             enable_git: data.enable_git,
             requirements: data.requirements.clone(),
             channel_naming: data.schematic_design.channel_naming.clone(),
@@ -151,6 +216,7 @@ impl SectionsSnapshot {
         data.restore_library_order(&self.library_order);
         data.variant_definitions = self.variants;
         data.active_variant = self.active_variant;
+        data.variant_settings = self.variant_settings;
         data.enable_git = self.enable_git;
         data.requirements = self.requirements;
         data.schematic_design.channel_naming = self.channel_naming;

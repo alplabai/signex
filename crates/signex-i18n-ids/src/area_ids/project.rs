@@ -270,6 +270,37 @@ define_ids! {
     PROJECT_PREVIEW_CLOSE = "project-preview-close";
     PROJECT_PREVIEW_HINT_VALUES = "project-preview-hint-values";
     PROJECT_PREVIEW_HINT_SHEET = "project-preview-hint-sheet";
+    // variant-manager
+    VARIANT_MANAGER_TAB_TITLE = "variant-manager-tab-title";
+    VARIANT_MANAGER_TAB_KIND = "variant-manager-tab-kind";
+    VARIANT_MANAGER_SETTINGS = "variant-manager-settings";
+    VARIANT_MANAGER_COMPARE = "variant-manager-compare";
+    VARIANT_MANAGER_OPEN_BOM = "variant-manager-open-bom";
+    VARIANT_MANAGER_NOT_BUILT = "variant-manager-not-built";
+    VARIANT_MANAGER_DUPLICATE = "variant-manager-duplicate";
+    VARIANT_MANAGER_SET_DEFAULT = "variant-manager-set-default";
+    VARIANT_MANAGER_DEFAULT = "variant-manager-default";
+    VARIANT_MANAGER_DEFAULT_STAR = "variant-manager-default-star";
+    VARIANT_MANAGER_COPY_NAME = "variant-manager-copy-name";
+    VARIANT_MANAGER_COPY_NAME_N = "variant-manager-copy-name-n";
+    VARIANT_MANAGER_DETAIL_IN = "variant-manager-detail-in";
+    VARIANT_MANAGER_DETAIL_EMPTY = "variant-manager-detail-empty";
+    VARIANT_MANAGER_FITTING = "variant-manager-fitting";
+    VARIANT_MANAGER_ALTERNATE = "variant-manager-alternate";
+    VARIANT_MANAGER_AS_ON_SHEETS = "variant-manager-as-on-sheets";
+    VARIANT_MANAGER_BASE_FITTING = "variant-manager-base-fitting";
+    VARIANT_MANAGER_OVERRIDES = "variant-manager-overrides";
+    VARIANT_MANAGER_COL_PARAMETER = "variant-manager-col-parameter";
+    VARIANT_MANAGER_SAME_AS_BASE = "variant-manager-same-as-base";
+    VARIANT_MANAGER_RESET = "variant-manager-reset";
+    VARIANT_MANAGER_OVERRIDES_OFF = "variant-manager-overrides-off";
+    VARIANT_MANAGER_OTHER_VARIANTS = "variant-manager-other-variants";
+    VARIANT_MANAGER_OVERRIDE_VALUE = "variant-manager-override-value";
+    VARIANT_MANAGER_OVERRIDE_FOOTPRINT = "variant-manager-override-footprint";
+    VARIANT_MANAGER_OVERRIDE_FIELD = "variant-manager-override-field";
+    VARIANT_MANAGER_PARAMETER_VALUE = "variant-manager-parameter-value";
+    VARIANT_MANAGER_PARAMETER_FOOTPRINT = "variant-manager-parameter-footprint";
+    VARIANT_MANAGER_SETTINGS_UNREADABLE = "variant-manager-settings-unreadable";
     // dialog-polish
     PROJECT_PARAMETER_UNRESOLVED = "project-parameter-unresolved";
 }

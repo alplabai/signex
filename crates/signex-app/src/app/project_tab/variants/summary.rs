@@ -59,6 +59,13 @@ pub(super) fn card<'a>(
     ]
     .spacing(SP.s)
     .align_y(Alignment::Center);
+    if m.is_default(variant) {
+        head = head.push(pill(
+            t!(m.i18n, ids::VARIANT_MANAGER_DEFAULT),
+            PillTone::Neutral,
+            m.tokens,
+        ));
+    }
     if is_active {
         head = head.push(pill(
             t!(m.i18n, ids::PROJECT_VARIANTS_ACTIVE),

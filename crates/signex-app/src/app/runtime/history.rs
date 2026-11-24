@@ -310,7 +310,8 @@ fn history_target_of(active: &crate::app::TabInfo) -> Option<std::path::PathBuf>
         crate::app::TabKind::Project(_)
         | crate::app::TabKind::Rules(_)
         | crate::app::TabKind::LayerStack
-        | crate::app::TabKind::PinTable => None,
+        | crate::app::TabKind::PinTable
+        | crate::app::TabKind::VariantManager(_) => None,
         _ => Some(active.path.clone()),
     }
 }
