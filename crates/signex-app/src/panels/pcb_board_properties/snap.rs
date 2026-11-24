@@ -7,11 +7,11 @@ use iced::widget::{Column, Row, Space, container, responsive};
 use iced::{Element, Length, Size, Widget as _};
 use iced_aw::Wrap;
 use signex_engine::pcb::snap::SnapObject;
-use signex_i18n::{LocalNumber, Localized, MessageId, ids, t};
+use signex_i18n::{Localized, MessageId, ids};
 
 use super::chrome::{Form, Head, Segment, Shown};
 use super::{BoardField, PanelMsg, PcbBoardMsg, PcbBoardSummary, SP, fields};
-use crate::pcb_canvas::{SnapDistance, SnapScope};
+use crate::pcb_canvas::SnapScope;
 use crate::styles::TypeScale;
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -91,11 +91,16 @@ pub(super) fn section<'a>(
     .height(Length::Shrink);
     rows.push(form.row(&refs, grid.boxed()));
 
+    // A length in the board's unit (#2879), as Axis Snap Range is.
     let distance = form.t(ids::PCB_BOARD_SNAP_DISTANCE);
-    rows.push(form.row(
-        &[&distance],
-        form.field(&distance, distance_pick(form, snap.distance)),
-    ));
+    let reach = fields::length(
+        form,
+        board,
+        BoardField::SnapDistance,
+        distance.clone(),
+        snap.distance_mm,
+    );
+    rows.push(form.row(&[&distance], form.field(&distance, reach)));
 
     let axis = form.t(ids::PCB_BOARD_AXIS_RANGE);
     let range = fields::length(
@@ -162,38 +167,6 @@ fn object_grid<'a>(form: &Form<'a>, board: &PcbBoardSummary, width: f32) -> Elem
         .padding([SP.xs, SP.l])
         .width(Length::Fill)
         .boxed()
-}
-
-/// One Snap Distance choice as the dropdown lists it.
-#[derive(Debug, Clone, PartialEq)]
-struct DistanceChoice {
-    distance: SnapDistance,
-    label: String,
-}
-
-fn distance_pick<'a>(form: &Form<'a>, current: SnapDistance) -> Element<'a, PanelMsg> {
-    use signex_widgets::dropdown_style::GraphiteDropdown as _;
-    let choice = |distance: SnapDistance| DistanceChoice {
-        distance,
-        label: distance_label(form, distance).into_string(),
-    };
-    let options: Vec<DistanceChoice> = SnapDistance::ALL.into_iter().map(choice).collect();
-    iced::widget::pick_list(Some(choice(current)), options, |c: &DistanceChoice| {
-        c.label.clone()
-    })
-    .graphite()
-    .on_select(|c: DistanceChoice| PanelMsg::PcbBoard(PcbBoardMsg::SnapDistancePicked(c.distance)))
-    .padding([SP.xs, SP.s])
-    .width(Length::Fill)
-    .boxed()
-}
-
-fn distance_label(form: &Form<'_>, distance: SnapDistance) -> Localized {
-    t!(
-        form.i18n,
-        ids::PCB_BOARD_SNAP_DISTANCE_VALUE,
-        "factor" => LocalNumber(distance.factor())
-    )
 }
 
 fn scope_label(scope: SnapScope) -> MessageId {

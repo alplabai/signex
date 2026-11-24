@@ -82,8 +82,8 @@ fn each_group_opens_its_dropdown_and_a_row_arms_its_tool() {
         (PcbBarGroup::ViaPad, BoardPlaceTool::Via),
         (PcbBarGroup::CopperAreas, BoardPlaceTool::Fill),
         (PcbBarGroup::CopperAreas, BoardPlaceTool::Keepout),
-        (PcbBarGroup::CopperDrawing, BoardPlaceTool::Track),
         // #2424: the Graphics group.
+        (PcbBarGroup::Graphics, BoardPlaceTool::Line),
         (PcbBarGroup::Graphics, BoardPlaceTool::GraphicArc),
         (PcbBarGroup::Graphics, BoardPlaceTool::TextFrame),
     ];
@@ -225,7 +225,7 @@ fn a_tool_run_from_place_becomes_its_groups_button() {
 #[test]
 fn a_group_remembers_its_last_tool_after_a_restart() {
     let mut app = board_app();
-    let task = pick_from_group(&mut app, PcbBarGroup::CopperDrawing, "place_board_track");
+    let task = pick_from_group(&mut app, PcbBarGroup::Graphics, "place_board_line");
     run_task(task);
     let task = pick_from_group(&mut app, PcbBarGroup::ViaPad, "place_board_via");
     run_task(task);
@@ -315,7 +315,6 @@ fn a_group_dropdown_is_headed_by_the_group_name() {
         (PcbBarGroup::Tune, "TUNE"),
         (PcbBarGroup::ViaPad, "VIA / PAD"),
         (PcbBarGroup::CopperAreas, "COPPER AREAS"),
-        (PcbBarGroup::CopperDrawing, "COPPER DRAWING"),
         (PcbBarGroup::Graphics, "GRAPHICS"),
     ];
     for (group, heading) in cases {
@@ -370,13 +369,13 @@ fn the_last_used_row_is_current_in_its_dropdown() {
             .collect()
     };
     assert_eq!(
-        current(&app, PcbBarGroup::CopperDrawing),
-        [Some("place_board_track")]
+        current(&app, PcbBarGroup::Graphics),
+        [Some("place_board_line")]
     );
-    let _ = pick_from_group(&mut app, PcbBarGroup::CopperDrawing, "place_board_arc");
+    let _ = pick_from_group(&mut app, PcbBarGroup::Graphics, "place_board_graphic_arc");
     assert_eq!(
-        current(&app, PcbBarGroup::CopperDrawing),
-        [Some("place_board_arc")]
+        current(&app, PcbBarGroup::Graphics),
+        [Some("place_board_graphic_arc")]
     );
     let _ = pick_from_group(&mut app, PcbBarGroup::CopperAreas, "place_board_keepout");
     assert_eq!(

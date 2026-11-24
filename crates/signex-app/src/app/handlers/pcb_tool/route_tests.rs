@@ -6,7 +6,9 @@
 use signex_types::pcb::Point;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
-use super::tests::{app_with_board, board_of, click, escape, has_ghost, hover, live, run, undo};
+use super::tests::{
+    app_with_board, board_of, click, escape, grid_only, has_ghost, hover, live, run, undo,
+};
 use crate::app::{Message, PcbMsg, PcbViewMsg};
 
 fn legs(app: &crate::app::Signex, path: &std::path::Path) -> Vec<(Point, Point)> {
@@ -22,6 +24,7 @@ fn legs(app: &crate::app::Signex, path: &std::path::Path) -> Vec<(Point, Point)>
 fn a_track_run_starts_on_the_net_under_it_and_adds_its_legs_per_click() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
+    grid_only(&mut app);
     let before = live(&app, &path);
     run(&mut app, "place_board_track");
     click(&mut app, 2.1, 0.2);

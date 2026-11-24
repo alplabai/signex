@@ -2,7 +2,9 @@
 //! user saves, applies with one click and keeps across restarts. One
 //! mechanism for every editor that has a selection filter: the schematic
 //! keys it on [`SelectionFilter`], the board on [`pcb_geom::PickKind`]
-//! (#2383). Each list is persisted under its own `prefs.json` key.
+//! (#2383). Each list is persisted under its own `prefs.json` key. A click
+//! on a preset applies it and selects it for editing: while it is selected,
+//! each chip click changes it in place (#2873).
 
 use std::collections::HashSet;
 use std::hash::Hash;
@@ -62,30 +64,59 @@ impl<K: PresetKind> CustomFilterPreset<K> {
 }
 
 /// Add a preset holding the kinds `on` turns on, named after its place
-/// ("Filter 2"), and make it the active tab. `false` at the limit.
+/// ("Filter 2"). Its index, or `None` at the limit.
 pub fn add<K: PresetKind>(
     presets: &mut Vec<CustomFilterPreset<K>>,
-    tab: &mut usize,
     on: impl Fn(K) -> bool,
-) -> bool {
+) -> Option<usize> {
     if presets.len() >= CUSTOM_FILTER_PRESET_LIMIT {
-        return false;
+        return None;
     }
     let name = format!("Filter {}", presets.len() + 1);
     presets.push(CustomFilterPreset::of_kinds(name, on));
-    *tab = presets.len() - 1;
-    true
+    Some(presets.len() - 1)
 }
 
-/// Remove preset `idx`, keeping the active tab in range. `false` for an
-/// index past the end.
-pub fn remove<K>(presets: &mut Vec<CustomFilterPreset<K>>, tab: &mut usize, idx: usize) -> bool {
+/// Remove preset `idx`. `false` for an index past the end.
+pub fn remove<K>(presets: &mut Vec<CustomFilterPreset<K>>, idx: usize) -> bool {
     if idx >= presets.len() {
         return false;
     }
     presets.remove(idx);
-    *tab = (*tab).min(presets.len().saturating_sub(1));
     true
+}
+
+/// What a click on a preset did (#2873).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PresetClick {
+    /// The preset is now the one edited: its kinds become the filter.
+    Selected,
+    /// It was the one edited: editing ends and the filter stays.
+    Released,
+}
+
+/// A click on preset `idx` of `len`: it becomes the edited preset, or, if
+/// it already was, editing ends. `None` for an index past the end.
+pub fn click(editing: &mut Option<usize>, idx: usize, len: usize) -> Option<PresetClick> {
+    if idx >= len {
+        return None;
+    }
+    if *editing == Some(idx) {
+        *editing = None;
+        return Some(PresetClick::Released);
+    }
+    *editing = Some(idx);
+    Some(PresetClick::Selected)
+}
+
+/// The edited preset once preset `removed` is gone: none if it was that
+/// one, one place down if it came after it.
+pub fn edited_after_removal(editing: Option<usize>, removed: usize) -> Option<usize> {
+    match editing {
+        Some(idx) if idx == removed => None,
+        Some(idx) if idx > removed => Some(idx - 1),
+        other => other,
+    }
 }
 
 /// Rename preset `idx`. `false` for an index past the end.
@@ -141,23 +172,41 @@ mod tests {
     #[test]
     fn the_board_kinds_use_the_same_preset_list() {
         let mut presets: Vec<CustomFilterPreset<PickKind>> = Vec::new();
-        let mut tab = 0;
-        for _ in 0..CUSTOM_FILTER_PRESET_LIMIT {
-            assert!(add(&mut presets, &mut tab, |k| k == PickKind::Vias));
+        for n in 0..CUSTOM_FILTER_PRESET_LIMIT {
+            assert_eq!(add(&mut presets, |k| k == PickKind::Vias), Some(n));
         }
-        assert!(!add(&mut presets, &mut tab, |_| true), "the limit holds");
-        assert_eq!(tab, CUSTOM_FILTER_PRESET_LIMIT - 1);
+        assert_eq!(add(&mut presets, |_| true), None, "the limit holds");
         assert!(toggle_member(&mut presets, 0, PickKind::Components));
         assert_eq!(
             presets[0].filters,
             vec![PickKind::Components, PickKind::Vias]
         );
-        assert!(remove(&mut presets, &mut tab, 3));
-        assert_eq!((presets.len(), tab), (3, 2));
+        assert!(remove(&mut presets, 3));
+        assert!(!remove(&mut presets, 3), "past the end");
+        assert_eq!(presets.len(), 3);
         let json = serde_json::to_string(&presets[0]).expect("serialises");
         assert_eq!(
             json,
             r#"{"name":"Filter 1","filters":["Components","Vias"]}"#
         );
+    }
+
+    /// #2873: a click selects a preset for editing, a second click on it
+    /// ends editing, and a removal keeps the edited index on its preset.
+    #[test]
+    fn a_click_selects_a_preset_and_a_second_click_releases_it() {
+        let mut editing = None;
+        assert_eq!(click(&mut editing, 1, 3), Some(PresetClick::Selected));
+        assert_eq!(editing, Some(1));
+        assert_eq!(click(&mut editing, 2, 3), Some(PresetClick::Selected));
+        assert_eq!(click(&mut editing, 2, 3), Some(PresetClick::Released));
+        assert_eq!(editing, None);
+        assert_eq!(click(&mut editing, 3, 3), None, "past the end");
+        assert_eq!(editing, None);
+
+        assert_eq!(edited_after_removal(Some(2), 2), None);
+        assert_eq!(edited_after_removal(Some(2), 0), Some(1));
+        assert_eq!(edited_after_removal(Some(1), 2), Some(1));
+        assert_eq!(edited_after_removal(None, 0), None);
     }
 }

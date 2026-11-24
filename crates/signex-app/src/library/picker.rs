@@ -23,7 +23,7 @@ use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
-use signex_widgets::{button, text, text_input};
+use signex_widgets::{button, text};
 
 use super::messages::{LibraryMessage, PickerMsg};
 use super::modal_chrome::{cancel_btn, footer_strip, header_with_note_closing, primary_btn_if};
@@ -112,7 +112,7 @@ pub fn view<'a>(
 
     // Enter in the search field commits the selected row while the list
     // shows it (mockup row 129).
-    let search = search_field(
+    let search = crate::styles::dialog_search_field(
         t!(i18n, ids::LIBRARY_PICKER_SEARCH),
         &picker.filter,
         |s| LibraryMessage::Picker(PickerMsg::FilterChanged(s)),
@@ -198,55 +198,6 @@ pub fn view<'a>(
 /// The chrome mono face of part numbers and file names.
 pub(crate) fn mono() -> iced::Font {
     crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
-}
-
-/// A dialog's search / filter field: the search glyph, then the input, on
-/// the field frame. Shared by the component and primitive pickers.
-pub(crate) fn search_field<'a, M: Clone + 'a>(
-    placeholder: Localized,
-    value: &'a str,
-    on_input: impl Fn(String) -> M + 'a,
-    on_submit: Option<M>,
-    tokens: &ThemeTokens,
-) -> Element<'a, M> {
-    let r = crate::styles::tokens::resolve(tokens);
-    let (ink, placeholder_ink, glyph_ink) = (crate::styles::ti(tokens.text), r.ink4, r.ink4);
-    let selection = Color {
-        a: 0.4,
-        ..crate::styles::ti(tokens.accent)
-    };
-    let input = text_input(placeholder, value)
-        .on_input(on_input)
-        .on_submit_maybe(on_submit)
-        .padding([SP.xs, SP.s])
-        .size(TS.body)
-        .width(Length::Fill)
-        .style(move |_: &Theme, _| iced::widget::text_input::Style {
-            background: Background::Color(Color::TRANSPARENT),
-            border: Border::default(),
-            placeholder: placeholder_ink,
-            value: ink,
-            selection,
-        });
-    let glyph = iced::widget::svg(crate::icons::icon_chrome_search(
-        signex_types::theme::ThemeId::GraphiteDark,
-    ))
-    .width(TS.body)
-    .height(TS.body)
-    .style(move |_: &Theme, _| iced::widget::svg::Style {
-        color: Some(glyph_ink),
-        ..Default::default()
-    });
-    container(
-        row![glyph, input]
-            .spacing(SP.s)
-            .align_y(iced::Alignment::Center),
-    )
-    .padding([0.0, SP.m])
-    .width(Length::Fill)
-    .center_y(Length::Fixed(METRICS.field))
-    .style(crate::styles::field(tokens, false))
-    .boxed()
 }
 
 /// The centred empty-result card (`.empty`): muted text in a hairline frame.
@@ -559,7 +510,7 @@ mod tests {
             ] {
                 let _ = lifecycle_cell(state, i18n, &tokens);
             }
-            let _ = search_field(
+            let _ = crate::styles::dialog_search_field(
                 t!(i18n, ids::LIBRARY_PICKER_SEARCH),
                 "",
                 |s| LibraryMessage::Picker(PickerMsg::FilterChanged(s)),

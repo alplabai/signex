@@ -260,6 +260,16 @@ pub fn name_carrying_ports(sheet: &SchematicSheet) -> Vec<(Uuid, &str)> {
         .collect()
 }
 
+/// The power-port pin tips that name a net, as `(tip, value)`:
+/// [`joinable_power_ports`] by tip, so a contact-only pin of a multi-pin port
+/// is left out, as [`build_netlist`] leaves it out.
+pub fn name_carrying_tips(sheet: &SchematicSheet) -> Vec<(Point, &str)> {
+    joinable_power_ports(sheet)
+        .into_iter()
+        .map(|(tip, value, _)| (tip, value))
+        .collect()
+}
+
 /// For each power-port symbol (`is_power && !value.is_empty()`) on the sheet,
 /// the net root each connected pin lands on, tagged with the port's `value`
 /// (its global net name). Power ports are implicit global name carriers — ERC

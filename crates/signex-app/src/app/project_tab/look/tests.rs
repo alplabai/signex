@@ -76,6 +76,7 @@ fn every_piece_builds_on_both_themes() {
         let _ = card(None, note(), &t);
         let _ = pill(words(), PillTone::Neutral, Some(Glyph::Lock), &t);
         let _ = pill(words(), PillTone::Err, None, &t);
+        let _ = panel_pill(words(), PillTone::Err, &t);
         let _ = info_line(note(), &t);
         let _ = warn_line(Glyph::Warn, note(), Some(note()), &t);
         let _ = err_box(note(), &t);

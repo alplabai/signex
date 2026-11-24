@@ -159,6 +159,7 @@ define_ids! {
         CMD_TOGGLE_CROSS_SELECT_MODE = "cmd-toggle-cross-select-mode";
         CMD_MENU_TOGGLE_CROSS_SELECT_MODE = "cmd-menu-toggle-cross-select-mode";
         CMD_TOGGLE_ELECTRICAL_GRID = "cmd-toggle-electrical-grid";
+        CMD_CYCLE_BOARD_SNAPPING = "cmd-cycle-board-snapping";
         CMD_TOGGLE_FLOATING_PANELS = "cmd-toggle-floating-panels";
         CMD_TOGGLE_PROPERTIES_PANEL = "cmd-toggle-properties-panel";
         CMD_TOGGLE_SCHEMATIC_FILTER_PANEL = "cmd-toggle-schematic-filter-panel";
@@ -698,5 +699,9 @@ define_ids! {
         CMD_MENU_REMOVE_FROM_UNION = "cmd-menu-remove-from-union";
         CMD_BREAK_UNION = "cmd-break-union";
         CMD_MENU_BREAK_UNION = "cmd-menu-break-union";
+        // board-3d-keys-screenshot
+        CMD_FLIP_BOARD_3D = "cmd-flip-board-3d";
+        CMD_CYCLE_BOARD_3D_LIGHTING = "cmd-cycle-board-3d-lighting";
+        CMD_COPY_BOARD_3D_SCREENSHOT = "cmd-copy-board-3d-screenshot";
     }
 }

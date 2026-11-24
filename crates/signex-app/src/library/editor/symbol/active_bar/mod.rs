@@ -71,15 +71,16 @@ pub fn bar_items(
 /// Align); the rest are the placement group.
 const SELECTION_TRIGGERS: usize = 5;
 
-/// The selection filter's categories, in the order of its dropdown chips.
-const FILTER_KINDS: [SymbolFilterKind; 7] = [
+/// The selection filter's real categories, in the order of its dropdown
+/// chips. Other gates no selection, so the tooltip leaves it out (mockup
+/// row 141).
+const FILTER_KINDS: [SymbolFilterKind; 6] = [
     SymbolFilterKind::Pins,
     SymbolFilterKind::Drawings,
     SymbolFilterKind::Texts,
     SymbolFilterKind::Designators,
     SymbolFilterKind::Values,
     SymbolFilterKind::Parameters,
-    SymbolFilterKind::Other,
 ];
 
 /// Tooltip of the selection-filter trigger: the categories it filters.
@@ -118,6 +119,7 @@ pub fn dropdown_overlay<'a>(
         menu,
         editor.selection_filter,
         editor.tool,
+        editor.pin_type,
         editor.path.clone(),
         theme_id,
         i18n,
@@ -357,9 +359,11 @@ mod tests {
         let tooltip = filter_tooltip(&i18n).replace(['\u{2068}', '\u{2069}'], "");
         assert_eq!(
             tooltip,
-            "Selection Filter: Pins, Drawings, Texts, Designators, Values, Parameters, Other \
+            "Selection Filter: Pins, Drawings, Texts, Designators, Values, Parameters \
              (left or right click for menu)"
         );
+        // Mockup row 141: only the real categories, so no Other.
+        assert!(!FILTER_KINDS.contains(&SymbolFilterKind::Other));
         for kind in FILTER_KINDS {
             let name = t!(i18n, ids::EDITORS_SYMBOL_BAR_FILTER_KIND, "kind" => kind.label());
             assert_eq!(name.into_string(), kind.label(), "en-US names the category");

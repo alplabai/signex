@@ -62,6 +62,8 @@ pub(crate) enum OverlayId {
     DockDragZone,
     ComponentsRowDragLabel,
     FloatingPanels,
+    /// The dock drop target's name, above the dragged panel (mockup row 8).
+    DockDropTargetLabel,
 
     // Right-click menus and pickers: above the floating panels, so a menu
     // opened from one is not drawn under it (#2376).
@@ -177,7 +179,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 82] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 83] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -195,6 +197,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 82] = [
     OverlayId::DockDragZone,
     OverlayId::ComponentsRowDragLabel,
     OverlayId::FloatingPanels,
+    OverlayId::DockDropTargetLabel,
     // Every right-click menu and picker paints above the floating panels, so
     // one opened from a floating panel is on top and takes the clicks (#2376).
     OverlayId::FootprintContextMenu,
@@ -310,7 +313,9 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         // The hover tooltip follows the cursor and paints nothing the
         // user aims at. Capturing there would kill wheel-zoom over the
         // canvas whenever a tooltip happened to be showing.
-        OverlayId::HoverTooltip | OverlayId::ComponentsRowDragLabel => false,
+        OverlayId::HoverTooltip
+        | OverlayId::ComponentsRowDragLabel
+        | OverlayId::DockDropTargetLabel => false,
         // Its layer is window-sized (the pill is placed by `Translate`), so a
         // guard around the layer would swallow every wheel in the window:
         // no panel would scroll. The pill guards its own bounds instead.
@@ -591,6 +596,7 @@ impl Signex {
                 layers.extend(self.components_row_drag_label_overlay(window_id))
             }
             OverlayId::FloatingPanels => layers.extend(self.floating_panels_overlay(window_id)),
+            OverlayId::DockDropTargetLabel => layers.extend(self.dock_drop_target_label_overlay()),
             OverlayId::Preferences => layers.extend(self.preferences_overlay()),
             OverlayId::FindReplace => layers.extend(self.find_replace_overlay(window_id)),
             OverlayId::FindSimilar => layers.extend(self.find_similar_overlay()),

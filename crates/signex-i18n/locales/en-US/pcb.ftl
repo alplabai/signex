@@ -165,7 +165,6 @@ pcb-bar-group =
         [tune] Tune
         [via_pad] Via / Pad
         [copper_areas] Copper Areas
-        [copper_drawing] Copper Drawing
         [dimensions] Dimensions
         [text] Text
        *[graphics] Graphics
@@ -511,7 +510,9 @@ pcb-3d-shot-clipboard-occupied = another program holds the clipboard
 pcb-3d-shot-clipboard-format = the clipboard does not take images
 pcb-3d-shot-clipboard-conversion = the image could not be converted for the clipboard
 pcb-3d-shot-saved = A screenshot of the 3D view was saved to { $path }.
-pcb-3d-shot-save-failed = The screenshot of the 3D view could not be saved to { $path }: { $why }
+# The reason comes before the path: Messages cuts a line at 160 bytes, and a
+# long path must not cut the reason off.
+pcb-3d-shot-save-failed = The screenshot of the 3D view could not be saved ({ $why }): { $path }
 pcb-3d-shot-empty = The 3D view could not be captured: the window had nothing to show.
 # View cube faces, top side up and turned over.
 pcb-3d-cube-top = TOP
@@ -612,3 +613,18 @@ pcb-reannotate-show-in-order = Show already in order
 pcb-reannotate-arrow = →
 pcb-reannotate-footer-note = One undo step; save the board to keep it.
 pcb-reannotate-execute-count = Execute { $count }
+
+# board-3d-keys-screenshot
+# The screenshot menu's transparent save (mockup row 175), and why a
+# screenshot was not written or copied ($why of pcb-3d-shot-save-failed and
+# pcb-3d-shot-copy-failed): the view changed size between the two captures
+# of a transparent save, another screenshot was being taken, or the view was
+# left before the capture came back.
+pcb-3d-shot-save-transparent = Save with transparent backdrop…
+pcb-3d-shot-matte-resized = the 3D view changed size while it was captured
+pcb-3d-shot-busy = another screenshot of the 3D view was being taken
+pcb-3d-shot-interrupted = the 3D view was left before the screenshot was taken
+# The lighting toast's last words, $key the next-lighting key drawn as a cap
+# (mockup row 175), and a toolbar tooltip ($tip, "Flip board") with its key.
+pcb-3d-lighting-next-key = · press { $key } for the next
+pcb-3d-tooltip-keyed = { $tip } ({ $key })

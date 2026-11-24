@@ -369,7 +369,7 @@ dialog-title-library-updates = Library Updates Available
 dialog-title-close-library = Close Library
 dialog-title-delete-component = Delete Component
 dialog-title-library-recovery = Library Recovery
-dialog-title-net-color-custom = Custom Net Colour
+dialog-title-net-color-custom = Custom Net Color
 # $path is the parent sheet's file.
 dialog-create-child-sheet-not-focused = The sheet's File field was not updated: { $path } could not be focused
 

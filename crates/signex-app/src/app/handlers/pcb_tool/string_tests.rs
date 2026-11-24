@@ -19,6 +19,7 @@ fn arm_string(app: &mut Signex, path: &Path) {
         path: path.to_path_buf(),
         window: app.interaction_state.acting_window,
         points: Vec::new(),
+        points_on_copper: false,
         cursor: None,
         route: None,
         router: None,

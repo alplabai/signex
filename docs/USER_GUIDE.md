@@ -202,6 +202,11 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 - **Pan:** hold the right mouse button and drag.
   A right-click without dragging opens the context menu, unless you are in the
   middle of drawing a wire, where it cancels the wire.
+- **Pan at the edge:** while a tool is armed or you drag or move something,
+  hold the pointer near an edge of the canvas and the view moves that way,
+  faster the closer you are to the edge; what you are placing or dragging
+  stays under the pointer. Move onto a panel to stop; the tool stays armed.
+  **Preferences ▸ Editing** turns it off and sets its speed.
 - **Zoom:** scroll the mouse wheel. Zoom is centred on the pointer. Or hold the
   middle mouse button (the wheel button) and drag: up zooms in, down zooms out,
   about the point you pressed. A tool you have armed stays armed. In the 3D
@@ -380,6 +385,12 @@ The floating bar over a footprint or a symbol is grouped: the selection tools
 then, in the footprint editor, Shapes. In Sketch mode the footprint editor shows
 the sketch bar instead. A small corner triangle marks a button with a dropdown;
 right-click it to open the dropdown.
+
+In the symbol editor, the Place Pin dropdown lists pin types under **Pin
+type** (Input, Output, Passive, Bidirectional, Power input). Picking one arms
+Place Pin, and every pin you place after that gets that type until you pick
+another; the picked type shows checked. Pick the checked type again to go back
+to unclassified pins. Every type is still offered in the pin's Properties.
 
 Right-click a pad in the footprint editor for the selection menu: **Move
 Selection By…** (type an X and a Y offset in mm, then **Move**), **Align ▸**
@@ -609,14 +620,20 @@ silently, except a part with a conflict (below). Otherwise **Library Updates
 Available** opens, with a pill per change size (major, minor, patch) beside the
 count. Its table lists each part: the designator and Internal PN, the library,
 the version change (`1.4.2 → 2.0.0`) and a **Major**, **Minor** or **Patch**
-pill. Patch changes start ticked, minor and major changes unticked. Parts that
-share one library symbol share one tick. The checkbox in the table heading
+pill. Instances of one part at the same version change share one row that
+lists every designator (`R10, R11`), unless a field conflicts. Patch and minor
+changes start ticked, major changes unticked. Parts that share one library
+symbol share one tick. The checkbox in the table heading
 ticks every row, or clears them all when every row is ticked. When both your
 part and the library row changed a field, a line under the part shows
 **yours** and **library now**; choose **Keep mine** (the default) or **Use
 library value**, and answering ticks the part. **Update Selected Components**
 updates the ticked parts, each answer in the same **Undo** step as its part;
-**Skip All** and **Cancel** close without updating.
+**Skip All** and **Cancel** both close without updating. **Skip All** also
+remembers the offered versions for that sheet, so the dialog does not offer
+them again this session; a part is offered again once its library row moves to
+another version. **Cancel** remembers nothing, and the dialog asks again the
+next time the sheet is checked.
 
 **Copy and paste.** Select items and use **Edit ▸ Copy** or **Edit ▸ Cut**,
 then **Edit ▸ Paste**. The copy attaches to the cursor, centred on it and
@@ -679,10 +696,13 @@ Wires connect pins and each other.
    `W`, one after the other, or press `Ctrl+W`. With the Classic profile press
    `W`.
 2. Click on the sheet to start a wire.
-3. Click again to end the segment. Each click commits a segment and starts the
-   next from the same point.
-4. Double-click to stop drawing. `Esc` or a right-click cancels the wire you
-   are drawing.
+3. Click again to end it. The second click places the wire, with the corner
+   the wiring mode gives it (for example an L that goes horizontal first, or
+   one straight leg), and connects it. One **Undo** removes the whole wire.
+4. The tool stays on with no wire in progress: the next click starts a new
+   wire. To fix a corner and carry on drawing the same wire, press the add
+   vertex key (`Insert`, `Alt+I` on macOS) instead of clicking.
+5. `Esc` or a right-click cancels the wire you are drawing.
 
 Wires snap to the grid while snapping is on. The status bar shows the active
 tool.
@@ -828,15 +848,21 @@ and bus-aware rendering of the pin (see #1049).
 ### Net colours
 
 The net colour palette (`F5` in the default profile, or **Net Color...** in the
-sheet's right-click menu) lists every net label name on the active sheet,
-coloured nets first, then by name. Type in **Filter nets** to narrow the list.
+sheet's right-click menu) lists every net on the active sheet named by a net
+label or a power port (a supply net such as `+3V3` with no label is listed
+too; a power flag names no net), coloured nets first, then by name. It opens
+centred, not at the pointer; the Active Bar's Net Color menu colours the net
+under the pointer. Type in **Filter nets** to narrow the list.
 Click a row to open its chooser: a swatch colours the wires and junctions of
 that net, **Clear** takes the colour off, and **Custom…** opens the colour
 picker (swatches, R / G / B, **Hex**, and the old and new colour side by side).
 **Use Color** colours the net on the sheet the picker was opened from; if
 another sheet is active by then, nothing changes and the Messages panel says
-so. **Clear all colours** at the foot of the palette clears the active sheet
-only. Each colour change is one **Undo** step and is saved with the sheet. A
+so. **Clear all colors** at the foot of the palette clears the active sheet
+only. After **Clear** or **Clear all colors**, a toast in the palette says
+what was cleared; its **Undo** takes the clear back while it is still the
+sheet's newest edit, and the toast closes after a few seconds. Each colour
+change is one **Undo** step and is saved with the sheet. A
 sheet written by a newer Signex is read-only in this build and keeps its
 colours.
 

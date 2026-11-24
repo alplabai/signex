@@ -30,8 +30,9 @@ pub struct UiState {
     /// The board filter's saved presets (#2383), the schematic's mechanism
     /// keyed on board kinds; kept in `prefs.json`.
     pub pcb_filter_presets: Vec<crate::active_bar::CustomFilterPreset<pcb_geom::PickKind>>,
-    /// The preset the board panel edits.
-    pub pcb_filter_preset_tab: usize,
+    /// The preset selected for editing: chip clicks change it in place
+    /// (#2873). `None`: chips change only the filter.
+    pub pcb_filter_preset_editing: Option<usize>,
     /// How carried board items snap (#2353), one for the editor. Session only.
     pub pcb_snap: crate::pcb_canvas::PcbSnapOptions,
     /// The row each PCB Active Bar group last ran (#2392), kept in
@@ -204,6 +205,10 @@ pub struct UiState {
     pub net_hover_enabled: bool,
     /// Draft mirror of [`Self::net_hover_enabled`] for the Preferences dialog.
     pub preferences_draft_net_hover_enabled: bool,
+    /// Saved "Pan at the canvas edge" preference and its speed (#2872).
+    pub edge_pan: crate::app::edge_pan::EdgePanPrefs,
+    /// Draft mirror of [`Self::edge_pan`] for the Preferences dialog.
+    pub preferences_draft_edge_pan: crate::app::edge_pan::EdgePanPrefs,
     /// Saved "Fill symbol bodies" preference: the body shapes a symbol
     /// leaves unfilled draw filled, in the theme tint unless the user chose
     /// a colour. On by default.
@@ -475,6 +480,9 @@ pub struct UiState {
     /// A Create Sheet request from the Projects tree waiting for its parent
     /// sheet to open: `(parent sheet, missing child file)` (#1618).
     pub pending_create_sheet: Option<(std::path::PathBuf, std::path::PathBuf)>,
+    /// A Show History from the Projects tree waiting for its file to open
+    /// (mockup row 20).
+    pub pending_tree_history: Option<std::path::PathBuf>,
     /// "Exit Signex — Unsaved Edits" confirmation modal. `Some` while
     /// the user is being asked to save / discard / cancel an app-exit
     /// request that touches a dirty document. Cleared on any of the
@@ -690,7 +698,8 @@ pub struct UiState {
     pub parameter_manager_open: bool,
     /// Parameter Manager table: the new-column name, the row filter and the
     /// sheet of the last cell edit. Cell text itself is never held here.
-    pub parameter_table: crate::app::state::ParameterTableState,
+    /// Boxed: a closed table costs one pointer (#2412).
+    pub parameter_table: Box<crate::app::state::ParameterTableState>,
     /// Active "pick a reference item" mode for z-order operations
     /// (BringToFrontOf / SendToBackOf). When Some, the next canvas click
     /// resolves the reference uuid and submits the Reorder command.
@@ -893,6 +902,7 @@ mod tests {
             ("sheet_sync", field_size(|ui| &ui.sheet_sync)),
             ("profile_manager", field_size(|ui| &ui.profile_manager)),
             ("erc_rule_list", field_size(|ui| &ui.erc_rule_list)),
+            ("parameter_table", field_size(|ui| &ui.parameter_table)),
             (
                 "board_output.dialog",
                 field_size(|ui| &ui.board_output.dialog),

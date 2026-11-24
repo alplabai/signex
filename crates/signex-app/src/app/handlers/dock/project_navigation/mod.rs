@@ -72,6 +72,9 @@ mod sheet_symbols_named_tests;
 pub(crate) mod sheet_users;
 #[cfg(test)]
 mod subdir_entry_tests;
+mod tree_history;
+#[cfg(test)]
+mod tree_history_tests;
 #[cfg(test)]
 mod tree_key_tests;
 mod version_control;
@@ -329,6 +332,9 @@ impl Signex {
             }
             ProjectTreeAction::OpenRemoveDialog(_) => {
                 self.open_remove_dialog(tree_path);
+            }
+            ProjectTreeAction::ShowHistory(_) => {
+                return self.show_tree_row_history(&tree_path);
             }
             ProjectTreeAction::CloseProject(_) => {
                 return self.close_project_at_tree_path(&tree_path);

@@ -45,6 +45,12 @@ fn graphic_form(app: &Signex) -> GraphicFacts {
 fn each_graphics_tool_draws_one_undo_step_per_drawing() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
+    // #2879 turned object and axis snapping on by default: (1, 2) lies on
+    // the axis of the net-3 track's end 2 mm away and would land on y = 0.
+    // This test is about the drawings, not the snaps, so the grid alone
+    // holds the clicks, as the drag rigs do.
+    app.ui_state.pcb_snap.objects.clear();
+    app.ui_state.pcb_snap.to_axes = false;
     let before = live(&app, &path);
     pick_layer(&mut app, OVERLAY);
 

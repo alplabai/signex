@@ -148,6 +148,7 @@ fn stored_positions(sketch: &SketchData) -> FullSolveOutput {
         warnings: Vec::new(),
         redundancy_pending: false,
         jacobian: Vec::new(),
+        free_motions: Default::default(),
         params: Default::default(),
     }
 }

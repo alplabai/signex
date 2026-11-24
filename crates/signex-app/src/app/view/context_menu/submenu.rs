@@ -16,6 +16,7 @@ use super::items::{
     dd_planned_because, dd_planned_pill, dd_ruled, tag_command, text,
 };
 use super::menus::CanvasSelection;
+use super::project_tree::kind_inks::{KindInks, kind_tinted};
 use crate::active_bar::ActiveBarAction as A;
 use crate::app::command::active_bar::id_for_action;
 use crate::icons as ic;
@@ -477,77 +478,83 @@ pub(super) fn sheet_actions_entries(
 /// project (resolved as `target`), grouped as in the tree menu (mockup row 20): the
 /// design documents (Schematic, PCB), the libraries, then the project files
 /// whose tabs are not built yet (Design Notebook, Export Job) as planned rows.
+/// The live rows' glyphs take their file kind's `inks`.
 pub(super) fn add_new_entries(
     i18n: &I18n,
     tid: ThemeId,
+    inks: KindInks,
     target: signex_widgets::tree_view::TreeKey,
 ) -> Vec<DropdownEntry<Message>> {
     use crate::app::ProjectTreeAction as P;
     let tree = |action: P| Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(action));
+    let library = |label, message| {
+        let row = dd_msg(
+            Some(ic::icon_menu_library(tid)),
+            &text(i18n, label),
+            "",
+            message,
+        );
+        kind_tinted(row, inks.library)
+    };
     let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(13);
 
-    v.push(dd_msg(
-        Some(ic::icon_menu_sheet(tid)),
-        &text(i18n, menu_ids::CTX_ADD_SCHEMATIC),
-        "",
-        tree(P::AddNewSchematic(target.clone())),
+    v.push(kind_tinted(
+        dd_msg(
+            Some(ic::icon_menu_sheet(tid)),
+            &text(i18n, menu_ids::CTX_ADD_SCHEMATIC),
+            "",
+            tree(P::AddNewSchematic(target.clone())),
+        ),
+        inks.schematic,
     ));
     // The project's one board, opened unsaved (#1312).
-    v.push(dd_msg(
-        Some(ic::icon_menu_board(tid)),
-        &text(i18n, menu_ids::CTX_ADD_PCB),
-        "",
-        tree(P::AddNewPcb(target.clone())),
+    v.push(kind_tinted(
+        dd_msg(
+            Some(ic::icon_menu_board(tid)),
+            &text(i18n, menu_ids::CTX_ADD_PCB),
+            "",
+            tree(P::AddNewPcb(target.clone())),
+        ),
+        inks.pcb,
     ));
     v.push(DropdownEntry::Separator);
     // A component library (the part table), wired through the menu bridge.
-    v.push(dd_msg(
-        Some(ic::icon_menu_library(tid)),
-        &text(i18n, menu_ids::CTX_ADD_COMPONENT_LIBRARY),
-        "",
+    v.push(library(
+        menu_ids::CTX_ADD_COMPONENT_LIBRARY,
         Message::Menu(crate::menu_bar::MenuMessage::AddComponentLibrary),
     ));
     // A `.snxsym` is a project document of its own: Save-As in the project
     // folder.
-    v.push(dd_msg(
-        Some(ic::icon_menu_library(tid)),
-        &text(i18n, menu_ids::CTX_ADD_SYMBOL_LIBRARY),
-        "",
+    v.push(library(
+        menu_ids::CTX_ADD_SYMBOL_LIBRARY,
         tree(P::AddProjectSymbolLibrary(target.clone())),
     ));
     // Hidden while the footprint editor is gated off for release.
     if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
-        v.push(dd_msg(
-            Some(ic::icon_menu_library(tid)),
-            &text(i18n, menu_ids::CTX_ADD_PCB_LIBRARY),
-            "",
+        v.push(library(
+            menu_ids::CTX_ADD_PCB_LIBRARY,
             tree(P::AddProjectFootprintLibrary(target)),
         ));
     }
-    v.push(DropdownEntry::Separator);
-    v.push(dd_planned_pill(
-        i18n,
-        Some(ic::icon_menu_notebook(tid)),
-        &text(i18n, menu_ids::CTX_ADD_DESIGN_NOTEBOOK),
-    ));
-    v.push(dd_planned_pill(
-        i18n,
-        Some(ic::icon_menu_export(tid)),
-        &text(i18n, menu_ids::CTX_ADD_OUTPUT_JOB),
-    ));
-    v.push(DropdownEntry::Separator);
-    v.push(dd_planned_pill(
-        i18n,
-        Some(ic::icon_menu_file(tid)),
-        &text(i18n, menu_ids::CTX_ADD_CONSTRAINT_FILE),
-    ));
-    v.push(dd_planned_pill(
-        i18n,
-        Some(ic::icon_menu_file(tid)),
-        &text(i18n, menu_ids::CTX_ADD_VHDL_FILE),
-    ));
-
+    v.extend(add_new_planned_entries(i18n, tid));
     v
+}
+
+/// The planned tail of Add New to Project: Design Notebook and Export Job,
+/// then Constraint File and VHDL File, each greyed with the pill.
+fn add_new_planned_entries(i18n: &I18n, tid: ThemeId) -> [DropdownEntry<Message>; 6] {
+    let planned = |icon, label| dd_planned_pill(i18n, Some(icon), &text(i18n, label));
+    [
+        DropdownEntry::Separator,
+        planned(
+            ic::icon_menu_notebook(tid),
+            menu_ids::CTX_ADD_DESIGN_NOTEBOOK,
+        ),
+        planned(ic::icon_menu_export(tid), menu_ids::CTX_ADD_OUTPUT_JOB),
+        DropdownEntry::Separator,
+        planned(ic::icon_menu_file(tid), menu_ids::CTX_ADD_CONSTRAINT_FILE),
+        planned(ic::icon_menu_file(tid), menu_ids::CTX_ADD_VHDL_FILE),
+    ]
 }
 
 impl Signex {
@@ -597,14 +604,18 @@ impl Signex {
                     .as_ref()
                     .and_then(|m| m.key.clone())
                     .unwrap_or_default();
-                add_new_entries(i18n, tid, target)
+                add_new_entries(i18n, tid, KindInks::of(tokens), target)
             }
             ContextSubmenu::Planned => planned_entries(i18n, tid),
             ContextSubmenu::ProjectPlanned => {
                 super::project_tree::planned::planned_entries(i18n, tid)
             }
             ContextSubmenu::AddNewToLibrary => {
-                super::project_tree::library::library_add_new_entries(i18n, tid)
+                super::project_tree::library::library_add_new_entries(
+                    i18n,
+                    tid,
+                    KindInks::of(tokens),
+                )
             }
             ContextSubmenu::InVariant => match self.canvas_menu_variant(window_id) {
                 Some(variant) => {

@@ -14,6 +14,7 @@ mod buttons;
 mod dialog_buttons;
 mod dialog_kit;
 mod dialog_parts;
+mod dialog_search;
 mod dialog_shell;
 pub mod disabled;
 mod graphite;
@@ -26,8 +27,8 @@ pub mod typography;
 
 pub use disabled::{DISABLED_OPACITY, dimmed, dimmed_button, read_only_field, read_only_row};
 pub use graphite::{
-    PillTone, card, field, floating_shadow, key_cap, pill, pill_colors, resize_handle_edge,
-    section_label,
+    PillTone, card, field, floating_shadow, key_cap, key_cap_of, pill, pill_colors,
+    resize_handle_edge, section_label,
 };
 pub use graphite_buttons::{ghost_button, primary_button};
 pub use metrics::ChromeMetrics;
@@ -48,6 +49,7 @@ pub use dialog_parts::{
     dialog_inline_error, dialog_row, dialog_rows, dialog_section_label, dirty_dot, file_kind_icon,
     violet_pair,
 };
+pub use dialog_search::dialog_search_field;
 pub use dialog_shell::{
     DIALOG_ICON_TILE, DIALOG_INTRO_EXTRA, DialogIcon, dialog_glyph, dialog_icon_tile, dialog_intro,
     dialog_intro_with, tinted_glyph,

@@ -84,6 +84,7 @@ impl Default for LibraryState {
             library_updates: None,
             queued_library_updates: Vec::new(),
             skipped_updates_for: std::collections::HashSet::new(),
+            skipped_versions: Default::default(),
             installed_libraries: Vec::new(),
             global_libraries: Vec::new(),
             stock_library: None,

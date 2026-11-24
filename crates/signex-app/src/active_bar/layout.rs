@@ -107,6 +107,12 @@ pub(crate) fn bar_top_margin() -> f32 {
     BAR_TOP_MARGIN_PX
 }
 
+/// Canvas-local y where the Graphite bar's band ends: its top margin plus
+/// its height. Canvas chrome that must never sit under the bar starts here.
+pub(crate) fn bar_band_bottom() -> f32 {
+    BAR_TOP_MARGIN_PX + bar_height_for(&Metrics::GRAPHITE)
+}
+
 /// Extra drop of the symbol editor's floating bar so it sits below the
 /// editor's own toolbar strip (one text line, button padding, strip padding
 /// and the column gap) instead of covering its centre controls.

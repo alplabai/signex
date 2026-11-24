@@ -203,11 +203,19 @@ fn a_guide_pulls_a_move_while_guides_are_on() {
     assert!(near(moved, 15.24, 20.32), "{moved:?}");
 }
 
+/// Caner, 2026-11-24 (#2879): Axes starts on, and every supported object
+/// does; Pad Centers alone is kept here so the pad's centre, not one of its
+/// corners, is what lines up.
 #[test]
 fn axes_line_a_move_up_with_a_pad_in_range() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
-    panel(&mut app, PcbBoardMsg::SnapToAxesToggled);
+    assert!(app.ui_state.pcb_snap.to_axes, "Axes starts on");
+    for object in signex_engine::pcb::snap::SnapObject::DEFAULT_ON {
+        if object != signex_engine::pcb::snap::SnapObject::PadCenters {
+            panel(&mut app, PcbBoardMsg::SnapObjectToggled(object));
+        }
+    }
     type_in(&mut app, BoardField::AxisRange, "15");
     assert_eq!(app.ui_state.pcb_snap.axis_range_mm, 15.0);
     // U2's pad is at (30, 30): 0.4 mm off its column, 10 mm away.
@@ -218,6 +226,23 @@ fn axes_line_a_move_up_with_a_pad_in_range() {
     panel(&mut app, PcbBoardMsg::SnapToAxesToggled);
     let moved = move_u1_to(&mut app, &path, 30.4, 20.0);
     assert!(near(moved, 30.48, 20.32), "{moved:?}");
+}
+
+/// Caner, 2026-11-24 (#2879): Snap Distance is a length typed in the
+/// board's unit, 1 mm by default; a value not above zero is refused.
+#[test]
+fn snap_distance_is_a_length_field() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _path) = app_with_board(dir.path());
+    assert_eq!(app.ui_state.pcb_snap.distance_mm, 1.0);
+    assert_eq!(app.ui_state.pcb_snap.axis_range_mm, 2.0);
+    type_in(&mut app, BoardField::SnapDistance, "0.25");
+    assert_eq!(app.ui_state.pcb_snap.distance_mm, 0.25);
+    type_in(&mut app, BoardField::SnapDistance, "0");
+    assert_eq!(app.ui_state.pcb_snap.distance_mm, 0.25, "refused");
+    app.ui_state.unit = signex_types::coord::Unit::Mil;
+    type_in(&mut app, BoardField::SnapDistance, "20");
+    assert!((app.ui_state.pcb_snap.distance_mm - 0.508).abs() < 1e-9);
 }
 
 #[test]

@@ -541,7 +541,10 @@ text (`pcb-tool-string-text`, "String"), or the text, height and turn set in
 its placement form; the string carries no net. A layer takes a string when
 `PcbLayer::takes_text` holds: the two overlay layers, the mechanical layers
 and the documentation layers (Dimensions among them). On any other layer a
-click places nothing and the Messages panel names the layers that do.
+click places nothing and the Messages panel and the status bar name the
+layers that do. Copper text is not placed yet (#2869): the design rule
+check, pour fill and router read no board text, so copper text would be
+copper they do not keep clear.
 Copper text would be copper that the copper list, the design rule check and
 the ratsnest never read. The canvas draws it (#2387); a click or box picks
 it (`pcb_geom::ItemRef::Text`, the selection filter's Texts kind).
@@ -629,8 +632,17 @@ draws a board drawing (`PcbBoard::graphics`, kinds in
 
 - **Layer.** Any non-copper layer but the two keep-out layers, whose areas
   the design rule check reads as rules: overlay, solder mask, paste, fab,
-  assembly, courtyard, mechanical, documentation, the board outline. On
-  another layer a click adds nothing and the Messages panel says so.
+  assembly, courtyard, mechanical, documentation, the board outline.
+  On copper (Caner, 2026-11-24, #2869) Line and Arc place copper:
+  Line a run of straight tracks, any angle, on the net of the pad, via or
+  track under its first click; Arc a track arc on the net under its start.
+  They are tracks for the copper list, DRC and Gerber, and take the Track
+  and Arc tools' width and net, which Properties shows while copper is
+  active. Full Circle, Rectangle and Text Frame are not placed on copper yet:
+  the design rule check, pour fill and router read no board drawing, so a
+  copper shape would be copper nothing keeps clear. On those layers and the
+  keep-outs a click adds nothing and the Messages panel and the status bar
+  say so.
 - **Line.** The first click starts a run; each later click adds a line from
   the run's end, any angle. A click on the run's end, Esc or a right-click
   ends the run.
@@ -805,9 +817,11 @@ the Tune rows are the length tuning commands of #2389 (palette, no menu row).
   View dropdown draw each turn with an arrow that turns the same way; the
   half turn uses the clockwise arrow and Reset View Rotation has no icon.
   The clockwise arrow's direction comes from the #2503 icon fix.
-- **Separators.** Components stands alone; Route, Tune, Via / Pad, Copper
-  Areas and Copper Drawing form one run; Dimensions, Text and Graphics the
-  next (mockup row 108).
+- **Separators.** Components stands alone; Route, Tune, Via / Pad and
+  Copper Areas form one run; Dimensions, Text and Graphics the next (mockup
+  row 108). There is no Copper Drawing group (#2869): the Graphics Line and
+  Arc draw a track and a track arc on copper, and Track and the copper Arc
+  tool stay in Place on a board.
 - **No live row.** A group whose rows are all greyed is one greyed button
   with that reason as its tooltip and no dropdown.
 - **Last used.** A tool armed from the group's dropdown, Place, a key or the

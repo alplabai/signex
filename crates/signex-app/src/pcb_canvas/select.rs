@@ -15,6 +15,10 @@ use uuid::Uuid;
 
 use super::highlight::Highlight;
 
+#[path = "select_drag.rs"]
+mod drag;
+pub use drag::{DraggedItems, DraggedSelection};
+
 #[derive(Debug, Default)]
 pub struct PcbSelectionState {
     selection: Selection,
@@ -35,6 +39,9 @@ pub struct PcbSelectionState {
     /// The kinds a click, a box or the hover may pick (#2353). The index
     /// keeps every kind, so a selection made another way is not filtered.
     filter: PickFilter,
+    /// What a press grabs, built once per index build and filter
+    /// (`drag::GrabCache`), not on every paint.
+    grab_cache: Option<drag::GrabCache>,
 }
 
 /// What a drag or Move is carrying: it is drawn where it is going, so
@@ -336,7 +343,7 @@ impl PcbSelectionState {
         &mut self,
         board: &PcbBoard,
         carry: Option<&super::PcbCarry>,
-    ) -> (Highlight, Vec<pcb_geom::Shape>) {
+    ) -> (Highlight, std::sync::Arc<[pcb_geom::Shape]>) {
         let moving = carry
             .filter(|c| c.anchor.is_some() && c.previews_on_board())
             .map_or_else(MovingItems::default, |c| {
@@ -360,20 +367,9 @@ impl PcbSelectionState {
         // A Move, a paste or a Place waits for clicks: nothing is grabbed.
         let waiting = carry.is_some_and(super::PcbCarry::waits_for_clicks);
         let grab = if waiting {
-            Vec::new()
+            Vec::new().into()
         } else {
-            let mut grab = self.shapes_of_footprints(board, |_| true);
-            // A designator or comment is grabbed to move on its own (#2368),
-            // unless the filter turns texts off: a press there then starts a
-            // box, as before texts were picked.
-            if self.filter.is_on(pcb_geom::PickKind::Texts) {
-                grab.extend(self.shapes_of(|item| matches!(item, ItemRef::FootprintText { .. })));
-            }
-            // A via is grabbed unless the filter turns vias off.
-            if self.filter.is_on(pcb_geom::PickKind::Vias) {
-                grab.extend(self.shapes_of(|item| matches!(item, ItemRef::Via(_))));
-            }
-            grab
+            self.grab_shapes(board)
         };
         // Only what is not on the board yet has a ghost: a paste.
         if let Some(carry) = carry.filter(|c| c.anchor.is_some())
@@ -482,21 +478,17 @@ impl PcbSelectionState {
         {
             return None;
         }
-        let vias: Option<BTreeSet<Uuid>> = self
-            .selection
-            .items()
-            .map(|item| match item {
+        // A selected via carries the selection it belongs to, whatever else
+        // is in it (#2870: the drag then widens to the rest).
+        if self.selection.contains(item) {
+            let vias = self.selection.items().filter_map(|item| match item {
                 ItemRef::Via(via) => Some(via),
                 _ => None,
-            })
-            .collect();
-        match vias.filter(|vias| vias.contains(&id)) {
-            Some(vias) => Some(vias),
-            None => {
-                self.selection.apply_click(Some(item), ClickMode::Replace);
-                Some(BTreeSet::from([id]))
-            }
+            });
+            return Some(vias.collect());
         }
+        self.selection.apply_click(Some(item), ClickMode::Replace);
+        Some(BTreeSet::from([id]))
     }
 
     /// The shapes of the indexed items `keep` accepts; the index must be

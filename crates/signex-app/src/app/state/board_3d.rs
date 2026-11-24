@@ -18,6 +18,8 @@ use signex_renderer::pcb::PcbLayerView;
 use signex_types::part::FootprintSourceRef;
 use signex_types::pcb::PcbBoard;
 
+use crate::app::Board3dShot;
+
 /// Viewport shape assumed until the view reports its size.
 const ASSUMED_VIEWPORT: [f32; 2] = [1200.0, 800.0];
 
@@ -47,10 +49,37 @@ struct FlipTween {
 
 /// A screenshot waiting for a frame drawn without the toolbar. `save_to`
 /// is the PNG to write (`None` copies it); `asked` once the capture ran.
+/// A transparent one is captured twice, over black then over white
+/// (`over_black` holds the first), and the two passes give each pixel's
+/// coverage.
 #[derive(Clone, Debug)]
 struct Capture {
     save_to: Option<PathBuf>,
     asked: bool,
+    transparent: bool,
+    over_black: Option<Arc<Board3dShot>>,
+}
+
+/// The flat backdrop a transparent screenshot's pass is drawn over, in
+/// place of the lighting preset's gradient.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MatteBackdrop {
+    Black,
+    White,
+}
+
+/// What a captured frame completes.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CaptureResult {
+    /// The pass over black was kept; the next frame is captured over white.
+    Pending,
+    /// The screenshot as captured, or nothing when the window had none.
+    Plain(Option<Arc<Board3dShot>>),
+    /// A transparent screenshot's two passes.
+    Matte {
+        black: Arc<Board3dShot>,
+        white: Arc<Board3dShot>,
+    },
 }
 
 /// One board in the 3D view.
@@ -101,16 +130,19 @@ pub struct Board3dSession {
 }
 
 impl Board3dSession {
-    /// The 3D view of the board at `board_path`, from straight above; the
-    /// caller frames it.
+    /// The 3D view of the board at `board_path`, from Iso on the top side
+    /// (mockup row 175); the caller frames it.
     pub fn open(board_path: &Path) -> Self {
+        let side = ViewSide::default();
+        let mut camera = OrbitCamera::default();
+        camera.set_preset_on(ViewPreset::Iso, side);
         Self {
             board_path: board_path.to_path_buf(),
-            camera: OrbitCamera::default(),
+            camera,
             viewport: ASSUMED_VIEWPORT,
             origin: [0.0, 0.0],
-            side: ViewSide::default(),
-            active_preset: Some(ViewPreset::Top),
+            side,
+            active_preset: Some(ViewPreset::Iso),
             explode: Explode::ASSEMBLED,
             explode_open: false,
             lighting: LightingPreset::default(),
@@ -279,7 +311,58 @@ impl Board3dSession {
         self.capture = Some(Capture {
             save_to,
             asked: false,
+            transparent: false,
+            over_black: None,
         });
+    }
+
+    /// Start a screenshot with a transparent backdrop, written to `save_to`
+    /// (mockup row 175): like [`Self::begin_capture`], over black and then
+    /// over white.
+    pub fn begin_transparent_capture(&mut self, save_to: PathBuf) {
+        self.begin_capture(Some(save_to));
+        if let Some(capture) = self.capture.as_mut() {
+            capture.transparent = true;
+        }
+    }
+
+    /// The flat backdrop the view is drawn over while a transparent
+    /// screenshot is taken; `None` draws the lighting preset's.
+    pub fn matte_backdrop(&self) -> Option<MatteBackdrop> {
+        let capture = self.capture.as_ref().filter(|c| c.transparent)?;
+        Some(if capture.over_black.is_some() {
+            MatteBackdrop::White
+        } else {
+            MatteBackdrop::Black
+        })
+    }
+
+    /// A capture came back as `shot`. The pass over black of a transparent
+    /// screenshot is kept and the next frame is captured again; otherwise
+    /// the capture ends, the overlays show again, and what to copy or write
+    /// is returned. A pass that caught nothing ends the capture with
+    /// `Plain(None)`.
+    pub fn finish_pass(&mut self, shot: Option<Arc<Board3dShot>>) -> CaptureResult {
+        if let Some(capture) = self.capture.as_mut().filter(|c| c.transparent)
+            && let Some(caught) = shot.as_ref()
+        {
+            match capture.over_black.take() {
+                None => {
+                    capture.over_black = Some(Arc::clone(caught));
+                    capture.asked = false;
+                    return CaptureResult::Pending;
+                }
+                Some(black) => {
+                    self.capture = None;
+                    return CaptureResult::Matte {
+                        black,
+                        white: Arc::clone(caught),
+                    };
+                }
+            }
+        }
+        self.capture = None;
+        CaptureResult::Plain(shot)
     }
 
     /// The capture a frame should run now, marked as run: `Some(save_to)`.
@@ -287,6 +370,14 @@ impl Board3dSession {
         let capture = self.capture.as_mut().filter(|c| !c.asked)?;
         capture.asked = true;
         Some(capture.save_to.clone())
+    }
+
+    /// A capture for `save_to` was taken and its pass is awaited. A pass
+    /// that arrives when this is false belongs to a capture that ended.
+    pub fn awaits_pass(&self, save_to: Option<&Path>) -> bool {
+        self.capture
+            .as_ref()
+            .is_some_and(|c| c.asked && c.save_to.as_deref() == save_to)
     }
 
     /// The screenshot came back, or will not: the overlays show again.
@@ -373,5 +464,26 @@ impl Board3dSession {
     /// The model read for `source`, if any.
     pub fn model(&self, source: &FootprintSourceRef) -> Option<&ComponentModel> {
         self.models.get(source)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Mockup row 175: the view opens on Iso, the tinted preset, looking
+    /// from Iso at the top side.
+    #[test]
+    fn a_new_view_opens_on_iso() {
+        let session = Board3dSession::open(Path::new("board.snxpcb"));
+        assert_eq!(session.active_preset, Some(ViewPreset::Iso));
+        assert_eq!(session.side, ViewSide::Top);
+        let mut iso = OrbitCamera::default();
+        iso.set_preset(ViewPreset::Iso);
+        assert_eq!(
+            (session.camera.yaw_deg, session.camera.pitch_deg),
+            (iso.yaw_deg, iso.pitch_deg)
+        );
+        assert_ne!(session.camera.pitch_deg, OrbitCamera::default().pitch_deg);
     }
 }

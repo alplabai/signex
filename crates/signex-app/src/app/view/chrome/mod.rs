@@ -84,6 +84,7 @@ impl Signex {
             draft_annotate_undo: ui.preferences_draft_annotate_undo,
             draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
             draft_net_hover_enabled: ui.preferences_draft_net_hover_enabled,
+            draft_edge_pan: ui.preferences_draft_edge_pan,
             draft_symbol_body_fill: ui.preferences_draft_symbol_body_fill,
             body_fill_palette_open: ui.preferences_body_fill_palette_open,
             body_fill_picker_open: ui.preferences_body_fill_picker_open,

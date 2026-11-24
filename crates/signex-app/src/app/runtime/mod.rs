@@ -43,11 +43,12 @@ thread_local! {
 
 impl Signex {
     /// Copy the UI-state grid/unit/snap fields, SCH Filter's preset rename
-    /// and the recent projects into the panel context. Runs on the
-    /// idle-cursor DragMove path, so the recent list is compared first and
-    /// cloned only when it changed.
+    /// and edited preset and the recent projects into the panel context.
+    /// Runs on the idle-cursor DragMove path, so the recent list is
+    /// compared first and cloned only when it changed.
     pub(in crate::app) fn sync_panel_ctx_mirrors(&mut self) {
         self.document_state.panel_ctx.selection_filter.rename = self.filter_preset_rename();
+        self.document_state.panel_ctx.selection_filter.editing = self.edited_custom_filter();
         let recent = crate::start_screen::visible_recent(self.ui_state.recent_projects.entries());
         if self.document_state.panel_ctx.recent_projects.as_slice() != recent {
             self.document_state.panel_ctx.recent_projects = recent.to_vec();
