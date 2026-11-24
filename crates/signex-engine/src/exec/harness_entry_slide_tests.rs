@@ -85,15 +85,15 @@ fn slide(engine: &mut Engine, entry: u128, dy: f64, keep_wires: bool) -> Command
 #[test]
 fn a_moved_entry_slides_down_the_side_and_keeps_its_wire() {
     let mut engine = engine();
-    let depth = engine.undo_depth();
     let done = slide(&mut engine, 100, 5.08, true);
     assert!(done.changed);
     assert_eq!(names(&engine), ["MOSI", "MISO", "SCK"]);
     // Each signal wire still ends on the entry it was wired to.
     assert_eq!(wired_names(&engine), ["SCK", "MOSI", "MISO"]);
-    assert_eq!(engine.undo_depth(), depth + 1, "one undo step");
 
+    // A fresh engine: one undo empties its history, so the move was one step.
     engine.undo().unwrap();
+    assert!(!engine.can_undo(), "one undo step");
     assert_eq!(names(&engine), ["SCK", "MOSI", "MISO"]);
     assert_eq!(wired_names(&engine), ["SCK", "MOSI", "MISO"]);
 }
@@ -108,10 +108,9 @@ fn a_slide_past_the_top_stops_at_the_first_slot() {
 #[test]
 fn a_small_move_leaves_the_entry_in_its_slot() {
     let mut engine = engine();
-    let depth = engine.undo_depth();
     let done = slide(&mut engine, 101, 0.5, true);
     assert!(!done.changed, "nothing moved, nothing recorded");
-    assert_eq!(engine.undo_depth(), depth);
+    assert!(!engine.can_undo());
 }
 
 #[test]
