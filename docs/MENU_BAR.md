@@ -250,6 +250,12 @@ how many pours, pieces of copper and removed islands they came to; Repour
 Selected reports the selected pours and says so when none is selected.
 Rules in `docs/PCB_TOOLS.md`, "Repour".
 
+Tools ▸ Polygon Manager..., after them, runs `polygon_manager` (mockup row
+178): it opens the board's Polygon Manager tab, or focuses the one that is
+open, greyed while no PCB is open. The board menu offers the same row on a
+polygon pour, and the PCB panel's Polygons mode links to it. See
+`docs/PCB_POLYGON_MANAGER.md`.
+
 ## Tools ▸ Panelize Board and Remove Panel {#tools-panelize-board}
 
 Tools ▸ Panelize Board runs `panelize_board` (#2410) and Tools ▸ Remove
