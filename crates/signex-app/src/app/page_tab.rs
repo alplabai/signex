@@ -39,7 +39,7 @@ pub(crate) fn page_name(kind: &TabKind) -> Option<MessageId> {
 }
 
 /// The project a page tab shows a page of. A Layer Stack tab shows a page of
-/// its board, which may have no project: `Signex::layer_stack_title` names it.
+/// its board, which may have no project: `Signex::board_page_title` names it.
 pub(crate) fn page_project(kind: &TabKind) -> Option<ProjectId> {
     page_name(kind)?;
     kind.as_project()

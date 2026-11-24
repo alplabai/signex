@@ -30,6 +30,7 @@ use signex_widgets::active_bar_dropdown::DropdownEntry;
 
 /// The board canvas menu for the facts of the menu's window `ctx` and the
 /// project's reuse `blocks`, off a polygon pour.
+#[cfg(test)]
 pub(in crate::app::view::context_menu) fn pcb_canvas_menu_with_blocks(
     i18n: &I18n,
     tid: ThemeId,

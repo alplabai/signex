@@ -68,13 +68,13 @@ impl BoardFit {
         if self.flipped { -1.0 } else { 1.0 }
     }
 
-    pub fn to_screen(&self, p: PointNm) -> Point {
+    pub fn to_screen(self, p: PointNm) -> Point {
         let x = self.mid.0 + self.sign() * (p.x as f64 - self.centre.0) * self.scale;
         let y = self.mid.1 - (p.y as f64 - self.centre.1) * self.scale;
         Point::new(x as f32, y as f32)
     }
 
-    pub fn to_world(&self, p: Point) -> (f64, f64) {
+    pub fn to_world(self, p: Point) -> (f64, f64) {
         (
             self.centre.0 + self.sign() * (f64::from(p.x) - self.mid.0) / self.scale,
             self.centre.1 - (f64::from(p.y) - self.mid.1) / self.scale,

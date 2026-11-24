@@ -101,12 +101,6 @@ impl Signex {
         (matches!(tab.kind, TabKind::Pcb) || tab.kind.is_board_page()).then(|| tab.path.clone())
     }
 
-    /// `<project> — Layer Stack`; a board with no project goes by its file
-    /// name.
-    pub(crate) fn layer_stack_title(&self, board: &Path, project: Option<ProjectId>) -> String {
-        self.board_page_title(board, project, ids::PCB_STACK_TITLE)
-    }
-
     /// `<project> — <page>` for a page of `board`; a board with no project
     /// goes by its file name.
     pub(crate) fn board_page_title(

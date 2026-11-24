@@ -11,9 +11,9 @@ use crate::panels::pcb_primitive_properties::{DimensionStyleFacts, PrimitiveFiel
 
 /// What `dimensions` share of their look.
 pub(super) fn style_facts(dimensions: &[&LinearDimension]) -> DimensionStyleFacts {
-    let each = |f: &dyn Fn(&LinearDimension) -> f64| shared(dimensions.iter().map(|d| f(*d)));
-    let pick = |f: &dyn Fn(&LinearDimension) -> bool| shared(dimensions.iter().map(|d| f(*d)));
-    let words = |f: &dyn Fn(&LinearDimension) -> String| shared(dimensions.iter().map(|d| f(*d)));
+    let each = |f: &dyn Fn(&LinearDimension) -> f64| shared(dimensions.iter().map(|d| f(d)));
+    let pick = |f: &dyn Fn(&LinearDimension) -> bool| shared(dimensions.iter().map(|d| f(d)));
+    let words = |f: &dyn Fn(&LinearDimension) -> String| shared(dimensions.iter().map(|d| f(d)));
     DimensionStyleFacts {
         arrow_style: shared(dimensions.iter().map(|d| d.style.arrow_style)),
         arrow_length: each(&|d| d.style.arrow_length),
