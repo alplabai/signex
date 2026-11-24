@@ -930,7 +930,3 @@ mod board_sketch_router;
 // the 3D toggle that returns to the mode it came from.
 #[path = "regression/editor_mode_switch.rs"]
 mod editor_mode_switch;
-// decision-pins: the 2026-11-24 keep-as-is decisions (mockup rows 2, 58, 64, 65, 67,
-// 75, 80 and 103), pinned through the real messages and views.
-#[path = "regression/decision_pins.rs"]
-mod decision_pins;

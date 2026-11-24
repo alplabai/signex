@@ -9,6 +9,8 @@
 mod board;
 mod by_component;
 mod by_net;
+#[cfg(test)]
+mod member_cap_tests;
 mod model;
 
 use iced::widget::{Space, column, container, row, scrollable};

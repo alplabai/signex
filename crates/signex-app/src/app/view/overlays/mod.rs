@@ -34,6 +34,8 @@ mod window_gate_tests;
 mod zoom_pill;
 #[cfg(test)]
 pub(super) use zoom_pill::pill_origin as zoom_pill_origin;
+#[cfg(test)]
+mod zoom_pill_window_tests;
 mod zoom_presets;
 
 impl Signex {
