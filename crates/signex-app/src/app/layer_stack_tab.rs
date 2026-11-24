@@ -11,7 +11,7 @@
 use std::path::{Path, PathBuf};
 
 use iced::{Element, Widget as _};
-use signex_i18n::{MessageId, ids};
+use signex_i18n::MessageId;
 
 use crate::app::state::{ProjectId, WindowKind};
 use crate::app::{Message, Signex, TabInfo, TabKind, page_tab};
