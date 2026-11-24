@@ -471,6 +471,11 @@ fn number_mask_row<'a>(
                 ids::EDITORS_ROLE_PATTERN_NUMBER_MASK_UNKNOWN,
                 "number" => number.as_str()
             ),
+            NumberMaskRefusal::IsSource(number) => t!(
+                i18n,
+                ids::EDITORS_ROLE_PATTERN_NUMBER_MASK_SOURCE,
+                "number" => number.as_str()
+            ),
             NumberMaskRefusal::Unresolved => {
                 t!(i18n, ids::EDITORS_ROLE_PATTERN_NUMBER_MASK_UNRESOLVED)
             }

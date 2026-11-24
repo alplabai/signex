@@ -405,7 +405,7 @@ fn the_number_mask_shows_the_skipped_pads_and_refuses_unknown_numbers() {
     let typed = |text: &str| pattern::shown_number_mask(pattern, Some(&text.to_owned()));
     assert_eq!(typed("4,"), ("4,".into(), None), "typing keeps its text");
     assert_eq!(
-        typed("1"),
+        typed("2"),
         ("4".into(), None),
         "text an undo left gives way"
     );
@@ -415,6 +415,11 @@ fn the_number_mask_shows_the_skipped_pads_and_refuses_unknown_numbers() {
             "4,9".into(),
             Some(NumberMaskRefusal::NotInPattern("9".into()))
         )
+    );
+    assert_eq!(
+        typed("4,1"),
+        ("4,1".into(), Some(NumberMaskRefusal::IsSource("1".into()))),
+        "the source pad is not skipped"
     );
 }
 

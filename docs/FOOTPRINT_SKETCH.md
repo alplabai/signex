@@ -399,12 +399,13 @@ Properties pattern form ticks, kept by one helper on the array type
 (`ArrayKind::set_instance_suppressed`). A linear pattern has no
 suppression list, so its instances do not toggle. The pattern form's
 Numbering Mask (mockup row 126, #2845) edits the same list by pad number
-(`4,5`, `A1,B4`; commas or spaces): it shows the numbers of the suppressed
+(`4,5`, `A2,B4`; commas or spaces): it shows the numbers of the suppressed
 instances, and a typed list replaces the list in one undo step
 (`signex_bake::array::instances_numbered`, `ArrayKind::set_suppressed_instances`).
 A number the pattern does not have is refused and the text stays in the field;
 on a linear pattern the field is greyed. The source's own slot is
-not offered: it is the source pad.
+not offered: it is the source pad. The canvas draws no ring on it, and the
+Mask refuses the source pad's number the same way.
 
 ## Conflicts {#conflicts}
 

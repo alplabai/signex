@@ -472,4 +472,5 @@ define_ids! {
     EDITORS_ROLE_PATTERN_NUMBER_MASK_HINT = "editors-role-pattern-number-mask-hint";
     EDITORS_ROLE_PATTERN_NUMBER_MASK_UNKNOWN = "editors-role-pattern-number-mask-unknown";
     EDITORS_ROLE_PATTERN_NUMBER_MASK_UNRESOLVED = "editors-role-pattern-number-mask-unresolved";
+    EDITORS_ROLE_PATTERN_NUMBER_MASK_SOURCE = "editors-role-pattern-number-mask-source";
 }

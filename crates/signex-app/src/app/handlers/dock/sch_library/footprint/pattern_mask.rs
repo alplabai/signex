@@ -191,6 +191,20 @@ mod tests {
         );
     }
 
+    /// The source pad's number ("1") is refused: slot (0, 0) is never
+    /// written, so the source pad stays baked and drawn.
+    #[test]
+    fn the_source_pads_number_changes_nothing() {
+        let path = PathBuf::from("number-mask-source.snxfpt");
+        let (mut app, array_id) = app_on_a_grid(&path);
+        app.fp_editor_set_array_number_mask(array_id, "1".into());
+        assert!(suppressed(&app, &path, array_id).is_empty());
+        app.fp_editor_set_array_number_mask(array_id, "4,1".into());
+        assert!(suppressed(&app, &path, array_id).is_empty());
+        let editor = &app.document_state.footprint_editors[&path];
+        assert_eq!(editor.history.undo_len(), 0);
+    }
+
     #[test]
     fn clearing_the_mask_brings_the_pads_back() {
         let path = PathBuf::from("number-mask-clear.snxfpt");

@@ -1142,3 +1142,4 @@ editors-mode-3d-tooltip = Show the 3D body; click again to go back
 editors-role-pattern-number-mask-hint = skip, e.g. 4,5 or A1,B4
 editors-role-pattern-number-mask-unknown = No pad { $number } in this pattern
 editors-role-pattern-number-mask-unresolved = The pattern's pads are not known yet
+editors-role-pattern-number-mask-source = Pad { $number } is the source pad and is not skipped

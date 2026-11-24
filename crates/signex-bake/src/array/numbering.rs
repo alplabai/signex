@@ -213,7 +213,14 @@ pub enum NumberMaskRefusal {
     Unresolved,
     /// No instance of the pattern has this number.
     NotInPattern(String),
+    /// The number is the source pad's own. The source is not skipped here,
+    /// as the canvas slot rings do not offer it.
+    IsSource(String),
 }
+
+/// The source pad's own instance: a Grid's cell (0, 0), a Polar's
+/// instance 0.
+const SOURCE_INSTANCE: (u32, u32) = (0, 0);
 
 /// The pad numbers a Numbering Mask lists, split at commas and spaces.
 pub fn number_mask_entries(text: &str) -> Vec<&str> {
@@ -223,7 +230,8 @@ pub fn number_mask_entries(text: &str) -> Vec<&str> {
 }
 
 /// The instances `(i, j)` a Numbering Mask skips: each instance whose number
-/// it lists, letters matched in either case. A blank mask skips none.
+/// it lists, letters matched in either case. A blank mask skips none; the
+/// source pad's own number is refused.
 pub fn instances_numbered(
     preview: &ArrayPreview,
     mask: &str,
@@ -241,6 +249,9 @@ pub fn instances_numbered(
         for instance in all.iter().filter(|c| c.number.eq_ignore_ascii_case(entry)) {
             is_found = true;
             let cell = (instance.i as u32, instance.j as u32);
+            if cell == SOURCE_INSTANCE {
+                return Err(NumberMaskRefusal::IsSource(entry.to_owned()));
+            }
             if !cells.contains(&cell) {
                 cells.push(cell);
             }
@@ -290,14 +301,14 @@ mod tests {
         ])
     }
 
-    /// Mockup row 126: the mask lists pad numbers ("4,5" or "A1,B4"), split at
+    /// Mockup row 126: the mask lists pad numbers ("4,5" or "A2,B4"), split at
     /// commas and spaces, and skips the instances carrying them.
     #[test]
     fn a_number_mask_skips_the_listed_pads() {
         assert_eq!(number_mask_entries(" A1, b2 ,,"), ["A1", "b2"]);
         assert_eq!(
-            instances_numbered(&bga(), "A1, b2"),
-            Ok(vec![(0, 0), (1, 1)])
+            instances_numbered(&bga(), "A2, b2"),
+            Ok(vec![(1, 0), (1, 1)])
         );
         assert_eq!(instances_numbered(&bga(), "B1 B1"), Ok(vec![(0, 1)]));
         assert_eq!(instances_numbered(&bga(), "  "), Ok(Vec::new()));
@@ -311,7 +322,7 @@ mod tests {
     #[test]
     fn a_number_the_pattern_does_not_have_is_refused() {
         assert_eq!(
-            instances_numbered(&bga(), "A1,B4"),
+            instances_numbered(&bga(), "A2,B4"),
             Err(NumberMaskRefusal::NotInPattern("B4".into()))
         );
         assert_eq!(
@@ -321,6 +332,20 @@ mod tests {
         assert_eq!(
             instances_numbered(&ArrayPreview::TooMany(900), ""),
             Ok(Vec::new())
+        );
+    }
+
+    /// The source pad's own number is refused: the mask never writes the
+    /// source slot (0, 0), as the canvas slot rings never offer it.
+    #[test]
+    fn the_source_pads_number_is_refused() {
+        assert_eq!(
+            instances_numbered(&bga(), "a1"),
+            Err(NumberMaskRefusal::IsSource("a1".into()))
+        );
+        assert_eq!(
+            instances_numbered(&bga(), "B2, A1"),
+            Err(NumberMaskRefusal::IsSource("A1".into()))
         );
     }
 
