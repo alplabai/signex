@@ -64,6 +64,7 @@ impl Signex {
     pub(crate) fn handle_paste_array_message(&mut self, msg: PasteArrayMsg) -> Task<Message> {
         self.close_paste_array_if_sheet_changed();
         let mut seeding = Task::none();
+        let mut focus = Task::none();
         let preferred_step = self.ui_state.increment_step;
         if let Some(state) = self.ui_state.paste_array.as_mut() {
             match msg {
@@ -76,6 +77,19 @@ impl Signex {
                 PasteArrayMsg::PreviewExpandToggled => {
                     state.preview_expanded = !state.preview_expanded;
                 }
+                PasteArrayMsg::PreviewCopyGrabbed { at, scale } => state.grab_copy_two(at, scale),
+                PasteArrayMsg::PreviewCopyDragged(at) => state.drag_copy_two(at),
+                PasteArrayMsg::PreviewCopyDropped => state.preview_drag = None,
+                PasteArrayMsg::PreviewValueClicked(field) => {
+                    state.start_preview_edit(field);
+                    focus = iced::widget::operation::focus(iced::widget::Id::new(
+                        crate::paste_array::PREVIEW_EDIT_INPUT_ID,
+                    ));
+                }
+                PasteArrayMsg::PreviewEditSubmitted => state.finish_preview_edit(),
+                // Esc ends a value typed on the drawing before it closes the
+                // dialog; Cancel and the X always close.
+                PasteArrayMsg::EscapePressed if state.cancel_preview_edit() => {}
                 PasteArrayMsg::DesignatorsChosen(mode) => {
                     state.designators = mode;
                     if mode.reads_project() {
@@ -83,10 +97,12 @@ impl Signex {
                     }
                 }
                 PasteArrayMsg::ApplyPressed => self.apply_paste_array(),
-                PasteArrayMsg::Closed => self.ui_state.paste_array = None,
+                PasteArrayMsg::EscapePressed | PasteArrayMsg::Closed => {
+                    self.ui_state.paste_array = None;
+                }
             }
         }
-        Task::batch([seeding, self.finish_update()])
+        Task::batch([seeding, focus, self.finish_update()])
     }
 
     /// Read the project's numbers for a dialog that just chose Next free;
@@ -198,5 +214,105 @@ impl Signex {
             commands.extend(copy.place_commands(at, &mut signex_types::object_id::UuidV7Ids)?);
         }
         Ok(commands)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::app::{EditMsg, Message, Signex};
+    use crate::paste_array::{PasteArrayField, PasteArrayMsg, PasteArrayState};
+    use crate::paste_prefs::PasteDesignators;
+    use signex_types::coord::Unit;
+
+    /// An app with the dialog open on the active sheet, 10 mm apart.
+    fn open_dialog() -> Signex {
+        let _ = crate::diagnostics::init_logging();
+        let (mut app, _task) = Signex::new();
+        let origin = app.document_state.active_path.clone();
+        let dialog =
+            PasteArrayState::new(Unit::Mm, 10.0, 0.0, 1, PasteDesignators::Keep, 3, origin);
+        app.ui_state.paste_array = Some(Box::new(dialog));
+        app
+    }
+
+    fn send(app: &mut Signex, msg: PasteArrayMsg) {
+        let _ = app.update(Message::Edit(EditMsg::PasteArray(msg)));
+    }
+
+    fn dialog(app: &Signex) -> &PasteArrayState {
+        app.ui_state
+            .paste_array
+            .as_deref()
+            .expect("the dialog is open")
+    }
+
+    /// Mockup row 69: a drag of copy 2 on the preview sets the spacing.
+    #[test]
+    fn dragging_copy_two_sets_the_spacing() {
+        let mut app = open_dialog();
+        // Pressed at 10 px per mm, moved 2.7 mm right and 2.54 mm down.
+        send(
+            &mut app,
+            PasteArrayMsg::PreviewCopyGrabbed {
+                at: (100.0, 50.0),
+                scale: 10.0,
+            },
+        );
+        send(&mut app, PasteArrayMsg::PreviewCopyDragged((127.0, 75.4)));
+        send(&mut app, PasteArrayMsg::PreviewCopyDropped);
+        let state = dialog(&app);
+        assert_eq!(state.preview_drag, None);
+        let input = state.input().unwrap();
+        assert!((input.dx_mm - 12.7).abs() < 1e-9, "{}", input.dx_mm);
+        assert!((input.dy_mm - 2.54).abs() < 1e-9, "{}", input.dy_mm);
+    }
+
+    /// Mockup row 69: a value clicked on the drawing is typed there; Esc
+    /// puts it back and leaves the dialog open, a second Esc closes it.
+    #[test]
+    fn esc_ends_a_value_typed_on_the_drawing_before_it_closes() {
+        let mut app = open_dialog();
+        send(
+            &mut app,
+            PasteArrayMsg::PreviewValueClicked(PasteArrayField::Copies),
+        );
+        send(&mut app, PasteArrayMsg::CountChanged("6".into()));
+        assert_eq!(dialog(&app).count, "6");
+        send(&mut app, PasteArrayMsg::EscapePressed);
+        assert_eq!(dialog(&app).count, "2");
+        assert!(dialog(&app).preview_edit.is_none());
+        send(&mut app, PasteArrayMsg::EscapePressed);
+        assert!(app.ui_state.paste_array.is_none());
+
+        let mut app = open_dialog();
+        send(
+            &mut app,
+            PasteArrayMsg::PreviewValueClicked(PasteArrayField::Step),
+        );
+        send(&mut app, PasteArrayMsg::StepChanged("4".into()));
+        send(&mut app, PasteArrayMsg::PreviewEditSubmitted);
+        let state = dialog(&app);
+        assert_eq!(
+            (state.step.as_str(), state.preview_edit.is_none()),
+            ("4", true)
+        );
+    }
+
+    /// Mockup row 69: Esc on the drawing ends only the inline edit; Cancel
+    /// and the header X close the dialog on the first press, edit or not.
+    #[test]
+    fn cancel_closes_at_once_with_a_value_typed_on_the_drawing() {
+        let mut app = open_dialog();
+        send(
+            &mut app,
+            PasteArrayMsg::PreviewValueClicked(PasteArrayField::Copies),
+        );
+        send(&mut app, PasteArrayMsg::CountChanged("6".into()));
+        send(&mut app, PasteArrayMsg::Closed);
+        assert!(app.ui_state.paste_array.is_none());
+
+        let mut app = open_dialog();
+        send(&mut app, PasteArrayMsg::EscapePressed);
+        assert!(app.ui_state.paste_array.is_none(), "no edit open");
     }
 }

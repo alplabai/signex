@@ -82,8 +82,16 @@ pub(in crate::app::view) fn read_only_badge<'a>(
         .height(Length::Fill)
         .align_x(iced::alignment::Horizontal::Right)
         .align_y(iced::alignment::Vertical::Top)
-        .padding(SP.m)
+        .padding(iced::Padding::ZERO.top(badge_top()).right(SP.m))
         .boxed()
+}
+
+/// Canvas-local y of the badge's top edge: under the Active Bar, which the
+/// overlay layer centres on the whole window and so can reach the canvas's
+/// right corner when a dock narrows the canvas (mockup row 74).
+fn badge_top() -> f32 {
+    let metrics = signex_widgets::active_bar::Metrics::GRAPHITE;
+    crate::active_bar::bar_top_margin() + crate::active_bar::bar_height_for(&metrics) + SP.m
 }
 
 /// Why the sheet is read-only and what to do about it.
@@ -113,6 +121,35 @@ fn read_only_tip<'a>(tokens: &ThemeTokens, i18n: &signex_i18n::I18n) -> Element<
 
 #[cfg(test)]
 mod tests {
+    use super::read_only_badge;
+
+    /// Mockup row 74: the Active Bar spans canvas-local y from its top
+    /// margin to its bottom edge and is centred on the window, so with a
+    /// dock open its right end reaches the badge's corner. The whole pill,
+    /// lock and first letter included, must sit below the bar.
+    #[test]
+    fn the_badge_sits_below_the_active_bar() {
+        let (app, _boot) = crate::app::Signex::new();
+        let i18n = signex_i18n::I18n::en_us();
+        let label = i18n.message_plain(signex_i18n::ids::OVERLAY_READ_ONLY_BADGE, &[]);
+        let badge = read_only_badge(&app.document_state.panel_ctx.tokens, &i18n);
+        let texts = crate::layout_probe::lay_out_texts(badge, iced::Size::new(900.0, 500.0));
+        let text = crate::layout_probe::find(&texts, &label);
+        let metrics = signex_widgets::active_bar::Metrics::GRAPHITE;
+        let bar_bottom =
+            crate::active_bar::bar_top_margin() + crate::active_bar::bar_height_for(&metrics);
+        assert!(
+            text.bounds.y >= bar_bottom,
+            "badge text top {} is inside the Active Bar (bottom {bar_bottom})",
+            text.bounds.y
+        );
+        assert!(
+            text.bounds.x + text.bounds.width <= 900.0,
+            "the badge stays on the canvas: {:?}",
+            text.bounds
+        );
+    }
+
     #[test]
     fn the_tooltip_says_why_and_what_to_do() {
         let tip = signex_i18n::I18n::en_us_ref()

@@ -183,4 +183,80 @@ mod tests {
         );
         assert!(filtered(&en, &nodes, &en.fold_for_search("pcb")).is_empty());
     }
+
+    /// A two-sheet project whose channel sheet sits under its top sheet, as
+    /// `build_project_tree` shapes a hierarchy.
+    fn two_sheet_project() -> Vec<TreeNode> {
+        let channel = TreeNode::leaf("channel.snxsch", TreeIcon::SnxSchematic);
+        let top = TreeNode::branch("top.snxsch", TreeIcon::SnxSchematic, vec![channel]);
+        let source = TreeNode::branch(super::super::SOURCE, TreeIcon::Folder, vec![top]);
+        vec![TreeNode::branch("dcdc-buck", TreeIcon::Folder, vec![source]).with_key("dcdc-buck")]
+    }
+
+    fn grouped(roots: &[TreeNode]) -> Vec<TreeNode> {
+        super::super::regroup(roots, &super::super::ProjectsView::default())
+    }
+
+    /// Mockup row 19: a filtered sheet row keeps its page position, counted
+    /// over the whole hierarchy, not over the rows the filter left.
+    #[test]
+    fn filtered_sheet_rows_keep_their_page_position() {
+        let en = I18n::en_us();
+        let shown = filtered(&en, &grouped(&two_sheet_project()), "channel");
+        let top = &shown[0].children[0].children[0];
+        assert_eq!(top.label, "top.snxsch");
+        assert_eq!(top.meta.as_deref(), Some("1/2"));
+        assert_eq!(top.children[0].meta.as_deref(), Some("2/2"));
+    }
+
+    /// The flat tree of mockup row 5 numbers its sheets the same way, and a
+    /// lone sheet shows no position.
+    #[test]
+    fn flat_sheets_are_numbered_and_a_lone_sheet_is_not() {
+        let flat = |names: &[&str]| {
+            let kids = names
+                .iter()
+                .map(|n| TreeNode::leaf(*n, TreeIcon::SnxSchematic))
+                .collect();
+            let source = TreeNode::branch(super::super::SOURCE, TreeIcon::Folder, kids);
+            grouped(&[TreeNode::branch("p", TreeIcon::Folder, vec![source]).with_key("p")])
+        };
+        let two = flat(&["a.snxsch", "b.snxsch"]);
+        let metas: Vec<_> = two[0].children[0]
+            .children
+            .iter()
+            .map(|n| n.meta.as_deref())
+            .collect();
+        assert_eq!(metas, [Some("1/2"), Some("2/2")]);
+        let one = flat(&["a.snxsch"]);
+        assert_eq!(one[0].children[0].children[0].meta, None);
+    }
+
+    /// The panel draws both positions right-aligned on their rows while
+    /// the filter shows only the channel sheet and its parent.
+    #[test]
+    fn the_filtered_panel_draws_right_aligned_positions() {
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.project_tree = two_sheet_project();
+        ctx.projects_view.filter = "channel".to_string();
+        let shown = crate::layout_probe::lay_out_texts(
+            super::super::view(&ctx),
+            iced::Size::new(360.0, 900.0),
+        );
+        let find = |s: &str| {
+            shown
+                .iter()
+                .find(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == s)
+                .unwrap_or_else(|| panic!("{s} is not drawn"))
+                .bounds
+        };
+        let (top, channel) = (find("top.snxsch"), find("channel.snxsch"));
+        let (first, second) = (find("1/2"), find("2/2"));
+        assert!(first.x > top.x + top.width && second.x > channel.x + channel.width);
+        assert!((first.center_y() - top.center_y()).abs() < top.height);
+        assert!((second.center_y() - channel.center_y()).abs() < channel.height);
+        let right = |r: iced::Rectangle| r.x + r.width;
+        assert!((right(first) - right(second)).abs() < 0.5);
+    }
 }

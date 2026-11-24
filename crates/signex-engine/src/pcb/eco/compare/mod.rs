@@ -324,10 +324,15 @@ impl CompareReport {
         let Some(index) = self.rows.iter().position(|r| &r.id() == id) else {
             return false;
         };
-        self.set_direction_at(index, direction)
+        let footprint_changed = self.set_direction_unfolded(index, direction);
+        rows::tick_folded(&mut self.eco);
+        footprint_changed
     }
 
-    fn set_direction_at(&mut self, index: usize, direction: Direction) -> bool {
+    /// [`Self::set_direction`] for the row at `index`, leaving the folded
+    /// rows' ticks to the caller: one [`rows::tick_folded`] after a batch,
+    /// not one per row.
+    fn set_direction_unfolded(&mut self, index: usize, direction: Direction) -> bool {
         let row = &mut self.rows[index];
         if !row.allows(direction) || row.direction == direction {
             return false;
@@ -352,9 +357,10 @@ impl CompareReport {
         let mut footprint_changed = false;
         for index in 0..self.rows.len() {
             if kind.is_none_or(|k| self.rows[index].kind == k) {
-                footprint_changed |= self.set_direction_at(index, direction);
+                footprint_changed |= self.set_direction_unfolded(index, direction);
             }
         }
+        rows::tick_folded(&mut self.eco);
         footprint_changed
     }
 
@@ -418,6 +424,7 @@ impl CompareReport {
                 back.set_on(key, true);
             }
         }
+        rows::tick_folded(&mut eco);
         (eco, back)
     }
 
@@ -453,9 +460,10 @@ impl CompareReport {
             };
             if same_pcb && same_back {
                 let direction = old.direction;
-                self.set_direction_at(index, direction);
+                self.set_direction_unfolded(index, direction);
             }
         }
+        rows::tick_folded(&mut self.eco);
     }
 
     /// Recompute the net rows for the footprint directions chosen now,

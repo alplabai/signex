@@ -11,27 +11,37 @@ use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_footer}
 use iced::{Point, Rectangle, Size};
 use signex_i18n::{Arg, UserText, ids, t};
 use signex_types::coord::Unit;
-use signex_types::schematic::{SchematicSheet, SelectedItem, SelectedKind, Symbol};
+use signex_types::schematic::{
+    Point as SheetPoint, SchematicDefaults, SchematicSheet, SelectedItem, SelectedKind, Symbol,
+    SymbolPrimitive, arc_polyline, lower_placed_symbol,
+};
 use signex_widgets::LengthFormat;
 use signex_widgets::property_illustration::{
     Anchor, Callout, Illustration, IllustrationHover, Ink, Paint, Part, Primitive, Style,
-    TextLabel, TextRole, Tint,
+    TextLabel, TextRole, Tint, Weight,
 };
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
-/// Preview geometry, in the illustration's own view units: the selection's
-/// box, the longest offset drawn, and the room kept for the callouts.
-const BOX_W: f32 = 60.0;
-const BOX_H: f32 = 34.0;
-const SPAN: f32 = 80.0;
+/// Preview geometry, in the illustration's own view units: the span the
+/// selection and its move are fitted to, the room kept for the callouts,
+/// how far a name sits above its object and the moved selection's frame pad.
+const SPAN: f32 = 140.0;
 const MARGIN: f32 = 26.0;
 const CALLOUT_GAP: f32 = 12.0;
-/// How many of the selection's names the preview draws, and how long each.
-const NAMES_SHOWN: usize = 2;
+const NAME_LIFT: f32 = 6.0;
+const FRAME_PAD: f32 = 4.0;
+/// How long a drawn name is at most.
 const NAME_MAX_CHARS: usize = 8;
+/// Sheet sizes, in mm, of the marks with no body to lower: a junction dot,
+/// half a no-connect cross, half the stand-in box of a part with no library
+/// body. The fitted span covers at least this many grid steps.
+const JUNCTION_RADIUS_MM: f64 = 0.5;
+const NO_CONNECT_HALF_MM: f64 = 0.635;
+const MISSING_BODY_HALF_MM: f64 = 1.27;
+const MIN_SPAN_STEPS: f64 = 4.0;
 
 impl Signex {
     /// The Move Selection dialog: the two offsets, the preview, the help
@@ -99,21 +109,19 @@ impl Signex {
         let i18n = &self.ui_state.i18n;
         let fmt = LengthFormat::new(i18n, self.ui_state.unit);
         let grid_mm = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
-        let names = self.document_state.active_engine().and_then(|engine| {
-            preview_names(
-                engine.document(),
-                &self.interaction_state.active_canvas().selected,
-                |symbol| self.shown_designator(symbol).to_owned(),
-                |count| {
-                    i18n.message_plain(
-                        ids::DIALOG_MOVE_SELECTION_PREVIEW_MORE,
-                        &[("count", Arg::from(count))],
-                    )
-                },
-            )
-        });
+        let art = self
+            .document_state
+            .active_engine()
+            .map(|engine| {
+                selection_art(
+                    engine.document(),
+                    &self.interaction_state.active_canvas().selected,
+                    |symbol| self.shown_designator(symbol).to_owned(),
+                )
+            })
+            .unwrap_or_default();
         let drawing = signex_widgets::property_illustration::property_illustration(
-            move_preview(dx_mm, dy_mm, grid_mm, names, &fmt),
+            move_preview(dx_mm, dy_mm, grid_mm, &art, &fmt),
             &IllustrationHover::default(),
             tokens,
             TS.caption,
@@ -216,33 +224,179 @@ fn offset_field<'a>(
     .boxed()
 }
 
-/// What the preview calls the selection: its first named parts and labels,
-/// then how many other items it holds (`R3, VOUT +1`). `None` with no name.
-fn preview_names(
+/// One piece of the selection's line art, in sheet mm (y down).
+#[derive(Debug, Clone, PartialEq)]
+enum Art {
+    /// A part outline or pin, or a wire or bus (`is_wire`), through `points`.
+    Path {
+        points: Vec<SheetPoint>,
+        is_closed: bool,
+        is_wire: bool,
+    },
+    /// A part's circle or a junction dot.
+    Circle { center: SheetPoint, radius: f64 },
+    /// A part's designator over its body, or a net label's text (`is_net`).
+    Name {
+        at: SheetPoint,
+        text: String,
+        is_net: bool,
+    },
+}
+
+/// The line art of each selected object, once per object (mockup row 66):
+/// parts with their designators, wires, buses, junctions, no-connects and
+/// net labels. Other kinds draw nothing.
+fn selection_art(
     sheet: &SchematicSheet,
     selected: &[SelectedItem],
     designator: impl Fn(&Symbol) -> String,
-    more: impl Fn(usize) -> String,
-) -> Option<String> {
+) -> Vec<Art> {
     let mut seen = std::collections::HashSet::new();
-    let mut names: Vec<String> = Vec::new();
+    let mut art = Vec::new();
     for item in selected.iter().filter(|item| seen.insert(item.uuid)) {
-        if names.len() < NAMES_SHOWN
-            && let Some(name) = item_name(sheet, item, &designator)
-        {
-            names.push(name.chars().take(NAME_MAX_CHARS).collect());
+        item_art(sheet, item, &designator, &mut art);
+    }
+    art
+}
+
+/// The art of one selected object, appended to `out`.
+fn item_art(
+    sheet: &SchematicSheet,
+    item: &SelectedItem,
+    designator: &impl Fn(&Symbol) -> String,
+    out: &mut Vec<Art>,
+) {
+    let wire = |a: SheetPoint, b: SheetPoint| Art::Path {
+        points: vec![a, b],
+        is_closed: false,
+        is_wire: true,
+    };
+    let id = item.uuid;
+    match item.kind {
+        SelectedKind::Symbol | SelectedKind::SymbolRefField | SelectedKind::SymbolValField => {
+            if let Some(symbol) = sheet.symbols.iter().find(|s| s.uuid == id) {
+                let name = item_name(sheet, item, designator);
+                symbol_art(sheet, symbol, name, out);
+            }
+        }
+        SelectedKind::Wire => {
+            if let Some(w) = sheet.wires.iter().find(|w| w.uuid == id) {
+                out.push(wire(w.start, w.end));
+            }
+        }
+        SelectedKind::Bus => {
+            if let Some(b) = sheet.buses.iter().find(|b| b.uuid == id) {
+                out.push(wire(b.start, b.end));
+            }
+        }
+        SelectedKind::Junction => {
+            if let Some(j) = sheet.junctions.iter().find(|j| j.uuid == id) {
+                out.push(Art::Circle {
+                    center: j.position,
+                    radius: JUNCTION_RADIUS_MM,
+                });
+            }
+        }
+        SelectedKind::NoConnect => {
+            if let Some(nc) = sheet.no_connects.iter().find(|nc| nc.uuid == id) {
+                let (p, h) = (nc.position, NO_CONNECT_HALF_MM);
+                for s in [-1.0, 1.0] {
+                    out.push(Art::Path {
+                        points: vec![
+                            SheetPoint::new(p.x - h, p.y - s * h),
+                            SheetPoint::new(p.x + h, p.y + s * h),
+                        ],
+                        is_closed: false,
+                        is_wire: false,
+                    });
+                }
+            }
+        }
+        SelectedKind::Label => {
+            let label = sheet.labels.iter().find(|l| l.uuid == id);
+            if let (Some(label), Some(text)) = (label, item_name(sheet, item, designator)) {
+                out.push(Art::Name {
+                    at: label.position,
+                    text: shorten(&text),
+                    is_net: true,
+                });
+            }
+        }
+        _ => {}
+    }
+}
+
+/// A part's lowered body and pins, and its name centred over them. A part
+/// with no library body draws a small stand-in box at its place.
+fn symbol_art(sheet: &SchematicSheet, symbol: &Symbol, name: Option<String>, out: &mut Vec<Art>) {
+    let first = out.len();
+    let lowered = lower_placed_symbol(sheet.body_of(symbol), symbol, &SchematicDefaults::BUILT_IN);
+    for primitive in &lowered {
+        let path = |points: Vec<SheetPoint>, is_closed: bool| Art::Path {
+            points,
+            is_closed,
+            is_wire: false,
+        };
+        out.push(match primitive {
+            SymbolPrimitive::Path { points, closed, .. } => path(points.clone(), *closed),
+            SymbolPrimitive::Circle { center, radius, .. } => Art::Circle {
+                center: *center,
+                radius: *radius,
+            },
+            SymbolPrimitive::Arc {
+                start, mid, end, ..
+            } => path(arc_polyline(*start, *mid, *end), false),
+            SymbolPrimitive::Pin { tip, body, .. } => path(vec![*tip, *body], false),
+            SymbolPrimitive::Text { .. } => continue,
+        });
+    }
+    if art_bounds(&out[first..]).is_none() {
+        let (p, h) = (symbol.position, MISSING_BODY_HALF_MM);
+        out.push(Art::Path {
+            points: vec![
+                SheetPoint::new(p.x - h, p.y - h),
+                SheetPoint::new(p.x + h, p.y - h),
+                SheetPoint::new(p.x + h, p.y + h),
+                SheetPoint::new(p.x - h, p.y + h),
+            ],
+            is_closed: true,
+            is_wire: false,
+        });
+    }
+    if let (Some(text), Some((lo, hi))) = (name, art_bounds(&out[first..])) {
+        out.push(Art::Name {
+            at: SheetPoint::new((lo.x + hi.x) / 2.0, lo.y),
+            text: shorten(&text),
+            is_net: false,
+        });
+    }
+}
+
+/// `text` cut to the longest name the preview draws.
+fn shorten(text: &str) -> String {
+    text.chars().take(NAME_MAX_CHARS).collect()
+}
+
+/// The sheet box `art` covers, corners `(min, max)`; `None` for no art.
+fn art_bounds(art: &[Art]) -> Option<(SheetPoint, SheetPoint)> {
+    let mut points = Vec::new();
+    for piece in art {
+        match piece {
+            Art::Path { points: p, .. } => points.extend_from_slice(p),
+            Art::Circle { center, radius } => {
+                points.push(SheetPoint::new(center.x - radius, center.y - radius));
+                points.push(SheetPoint::new(center.x + radius, center.y + radius));
+            }
+            Art::Name { at, .. } => points.push(*at),
         }
     }
-    if names.is_empty() {
-        return None;
-    }
-    let others = seen.len() - names.len();
-    let list = names.join(", ");
-    Some(if others > 0 {
-        format!("{list} {}", more(others))
-    } else {
-        list
-    })
+    let first = *points.first()?;
+    Some(points.iter().fold((first, first), |(lo, hi), p| {
+        (
+            SheetPoint::new(lo.x.min(p.x), lo.y.min(p.y)),
+            SheetPoint::new(hi.x.max(p.x), hi.y.max(p.y)),
+        )
+    }))
 }
 
 /// A part's shown designator (a power port's net name) or a label's text.
@@ -272,106 +426,190 @@ fn item_name(
     (!name.is_empty()).then(|| name.to_owned())
 }
 
-/// The preview: on the sheet grid, the selection's box as a dashed ghost at
-/// its place and drawn with its names at its new place, with a ΔX and a ΔY
-/// callout. Read-only line art. A positive ΔY draws upward; the callout
-/// shows the value as typed.
+/// The preview: on the sheet grid, each selected object drawn as a dashed
+/// ghost at its place and drawn with its name at its new place, the moved
+/// copy framed, with a ΔX and a ΔY callout (mockup row 66). Read-only line
+/// art. With no art (nothing drawable selected) a stand-in box moves. A
+/// positive ΔY draws upward; the callout shows the value as typed.
 fn move_preview(
     dx_mm: f64,
     dy_mm: f64,
     grid_mm: f64,
-    names: Option<String>,
+    art: &[Art],
     fmt: &LengthFormat<'_>,
 ) -> Illustration {
-    let largest = dx_mm.abs().max(dy_mm.abs());
-    let k = if largest > 0.0 {
-        SPAN / largest as f32
+    let step = if grid_mm.is_finite() && grid_mm > 0.0 {
+        grid_mm
     } else {
-        0.0
+        1.0
     };
-    let (dx, dy) = (dx_mm as f32 * k, stored_dy(dy_mm) as f32 * k);
-    let (min_x, max_x) = (dx.min(0.0), (dx + BOX_W).max(BOX_W));
-    let (min_y, max_y) = (dy.min(0.0), (dy + BOX_H).max(BOX_H));
-    let origin = Point::new(MARGIN - min_x, MARGIN - min_y);
-    let (view_w, view_h) = (max_x - min_x + 2.0 * MARGIN, max_y - min_y + 2.0 * MARGIN);
-    // With nothing to scale by, the grid is drawn at a quarter of the span.
-    let pitch = if k > 0.0 {
-        grid_mm * f64::from(k)
+    let stand_in: Vec<Art>;
+    let art = if art.is_empty() {
+        stand_in = stand_in_art(dx_mm, dy_mm, step);
+        &stand_in[..]
     } else {
-        f64::from(SPAN) / 4.0
+        art
     };
-    let body = |x: f32, y: f32| Primitive::RoundedRect {
-        rect: Rectangle::new(
-            Point::new(origin.x + x, origin.y + y),
-            Size::new(BOX_W, BOX_H),
-        ),
-        radius: 3.0,
+    let shift = SheetPoint::new(dx_mm, stored_dy(dy_mm));
+    let (lo, hi) = art_bounds(art).unwrap_or((SheetPoint::ZERO, SheetPoint::ZERO));
+    let (min_x, max_x) = (lo.x.min(lo.x + shift.x), hi.x.max(hi.x + shift.x));
+    let (min_y, max_y) = (lo.y.min(lo.y + shift.y), hi.y.max(hi.y + shift.y));
+    let span = (max_x - min_x)
+        .max(max_y - min_y)
+        .max(step * MIN_SPAN_STEPS);
+    let k = f64::from(SPAN) / span;
+    let view = |p: SheetPoint| {
+        Point::new(
+            MARGIN + ((p.x - min_x) * k) as f32,
+            MARGIN + ((p.y - min_y) * k) as f32,
+        )
     };
-    let mut drawing = Illustration::new(view_w, view_h)
+    let view_w = ((max_x - min_x) * k) as f32 + 2.0 * MARGIN;
+    let view_h = ((max_y - min_y) * k) as f32 + 2.0 * MARGIN;
+    let sheet_origin = view(SheetPoint::ZERO);
+    let drawing = Illustration::new(view_w, view_h)
         .height_em(PREVIEW_EM)
         .parts(crate::paste_array::preview_grid(
-            pitch,
-            f64::from(origin.x),
-            f64::from(origin.y),
+            step * k,
+            f64::from(sheet_origin.x),
+            f64::from(sheet_origin.y),
             f64::from(view_w),
             f64::from(view_h),
         ))
-        .part(Part::new(body(0.0, 0.0), Style::dashed()));
-    if largest != 0.0 {
-        drawing = drawing
-            .part(Part::new(
-                body(dx, dy),
-                Style::edge().with_fill(Paint::Ink(Ink::Accent), Tint::Light),
-            ))
-            .parts(offset_callouts(
-                origin,
-                (dx, dy),
-                (dx_mm, dy_mm),
-                (min_y - CALLOUT_GAP, max_x + CALLOUT_GAP),
-                fmt,
-            ));
+        .parts(art.iter().map(|piece| art_part(piece, &view, k, true)));
+    if dx_mm == 0.0 && dy_mm == 0.0 {
+        return drawing;
     }
-    if let Some(names) = names {
-        let at = Point::new(origin.x + dx + BOX_W / 2.0, origin.y + dy + BOX_H / 2.0);
-        drawing = drawing.part(Part::label(
-            TextLabel {
-                at,
-                text: UserText::new(names).into(),
-                anchor: Anchor::Middle,
-                role: TextRole::Mono,
-            },
-            Ink::Secondary,
-        ));
-    }
+    let moved = |p: SheetPoint| view(SheetPoint::new(p.x + shift.x, p.y + shift.y));
+    let (frame_lo, frame_hi) = (moved(lo), moved(hi));
+    let frame = Primitive::RoundedRect {
+        rect: Rectangle::new(
+            Point::new(frame_lo.x - FRAME_PAD, frame_lo.y - FRAME_PAD),
+            Size::new(
+                frame_hi.x - frame_lo.x + 2.0 * FRAME_PAD,
+                frame_hi.y - frame_lo.y + 2.0 * FRAME_PAD,
+            ),
+        ),
+        radius: FRAME_PAD / 2.0,
+    };
+    let frame_style = Style::dashed()
+        .with_stroke_paint(Paint::Ink(Ink::Accent))
+        .with_fill(Paint::Ink(Ink::Accent), Tint::Wash);
+    let (dx, dy) = ((shift.x * k) as f32, (shift.y * k) as f32);
     drawing
+        .part(Part::new(frame, frame_style))
+        .parts(art.iter().map(|piece| art_part(piece, &moved, k, false)))
+        .parts(offset_callouts(
+            view(SheetPoint::new(lo.x, hi.y)),
+            view(SheetPoint::new(hi.x, lo.y)),
+            (dx, dy),
+            (dx_mm, dy_mm),
+            (
+                view(SheetPoint::new(0.0, max_y)).y + CALLOUT_GAP,
+                view(SheetPoint::new(max_x, 0.0)).x + CALLOUT_GAP,
+            ),
+            fmt,
+        ))
 }
 
-/// The ΔX callout along `top` and the ΔY callout along `right`, in view
-/// units from `origin`; an axis that does not move has none.
+/// What moves when nothing drawable is selected: a box sized from the
+/// offset, so the move still reads.
+fn stand_in_art(dx_mm: f64, dy_mm: f64, step: f64) -> Vec<Art> {
+    let w = (dx_mm.abs().max(dy_mm.abs()) * 0.75).max(step * 3.0);
+    let h = w * 0.55;
+    vec![Art::Path {
+        points: vec![
+            SheetPoint::new(0.0, 0.0),
+            SheetPoint::new(w, 0.0),
+            SheetPoint::new(w, h),
+            SheetPoint::new(0.0, h),
+        ],
+        is_closed: true,
+        is_wire: false,
+    }]
+}
+
+/// One piece of art as a drawn part at `at`'s place, `k` view units per mm.
+/// A ghost is dashed in the construction ink; the moved copy draws parts in
+/// the edge ink and wires and net names in the accent.
+fn art_part(piece: &Art, at: &impl Fn(SheetPoint) -> Point, k: f64, is_ghost: bool) -> Part {
+    let stroke = |is_wire: bool| match (is_ghost, is_wire) {
+        (true, _) => Style::dashed(),
+        (false, true) => Style::outline(Ink::Accent, Weight::Regular),
+        (false, false) => Style::edge(),
+    };
+    match piece {
+        Art::Path {
+            points,
+            is_closed,
+            is_wire,
+        } => Part::new(
+            Primitive::Polyline {
+                points: points.iter().map(|p| at(*p)).collect(),
+                is_closed: *is_closed,
+            },
+            stroke(*is_wire),
+        ),
+        Art::Circle { center, radius } => Part::new(
+            Primitive::Circle {
+                center: at(*center),
+                radius: (radius * k) as f32,
+            },
+            stroke(false),
+        ),
+        Art::Name {
+            at: place,
+            text,
+            is_net,
+        } => {
+            let p = at(*place);
+            let ink = match (is_ghost, is_net) {
+                (true, _) => Ink::Faint,
+                (false, true) => Ink::Accent,
+                (false, false) => Ink::Secondary,
+            };
+            Part::label(
+                TextLabel {
+                    at: Point::new(p.x, p.y - NAME_LIFT),
+                    text: UserText::new(text.clone()).into(),
+                    anchor: Anchor::Middle,
+                    role: TextRole::Mono,
+                },
+                ink,
+            )
+        }
+    }
+}
+
+/// The ΔX callout along `bottom` from the selection's lower-left corner
+/// `x_from`, and the ΔY callout along `right` from its upper-right corner
+/// `y_from`, in view units; an axis that does not move has none.
 fn offset_callouts(
-    origin: Point,
+    x_from: Point,
+    y_from: Point,
     (dx, dy): (f32, f32),
     (dx_mm, dy_mm): (f64, f64),
-    (top, right): (f32, f32),
+    (bottom, right): (f32, f32),
     fmt: &LengthFormat<'_>,
 ) -> Vec<Part> {
-    let at = |x: f32, y: f32| Point::new(origin.x + x, origin.y + y);
     let label = |mm: f64| UserText::new(format!("{} {}", fmt.number(mm), fmt.unit));
     let mut parts = Vec::new();
     if dx != 0.0 {
+        let (from, to) = (x_from.x, x_from.x + dx);
         parts.push(Part::callout(
-            Callout::new(at(0.0, top), at(dx, top))
+            Callout::new(Point::new(from, bottom), Point::new(to, bottom))
                 .label(label(dx_mm))
-                .extension(at(0.0, 0.0), at(0.0, top))
-                .extension(at(dx, dy), at(dx, top)),
+                .extension(x_from, Point::new(from, bottom))
+                .extension(Point::new(to, x_from.y + dy), Point::new(to, bottom)),
         ));
     }
     if dy != 0.0 {
+        let (from, to) = (y_from.y, y_from.y + dy);
         parts.push(Part::callout(
-            Callout::new(at(right, 0.0), at(right, dy))
+            Callout::new(Point::new(right, from), Point::new(right, to))
                 .label(label(dy_mm))
-                .extension(at(BOX_W, 0.0), at(right, 0.0))
-                .extension(at(dx + BOX_W, dy), at(right, dy)),
+                .extension(y_from, Point::new(right, from))
+                .extension(Point::new(y_from.x + dx, to), Point::new(right, to)),
         ));
     }
     parts
@@ -420,40 +658,105 @@ mod tests {
         }
     }
 
-    /// Mockup row 66: the preview names the selection, once per object,
-    /// and counts what it does not name.
-    #[test]
-    fn the_preview_names_the_selection_and_counts_the_rest() {
-        use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Symbol};
+    /// A sheet with part R3 (no library body), net label VOUT and a
+    /// no-connect, and the selection of all three plus R3's designator and a
+    /// wire the sheet no longer holds.
+    fn sheet_and_selection() -> (signex_types::schematic::SchematicSheet, Vec<SelectedItem>) {
+        use signex_types::schematic::{Label, LabelType, NoConnect, Point, SchematicSheet, Symbol};
         let id = uuid::Uuid::from_u128;
         let sheet = SchematicSheet {
             symbols: vec![Symbol {
                 uuid: id(1),
                 reference: "R3".into(),
+                position: Point::new(10.16, 5.08),
                 ..Default::default()
             }],
             labels: vec![Label {
                 uuid: id(2),
-                ..Label::new("VOUT", Point::new(0.0, 0.0), LabelType::Net)
+                ..Label::new("VOUT", Point::new(20.32, 5.08), LabelType::Net)
+            }],
+            no_connects: vec![NoConnect {
+                uuid: id(4),
+                position: Point::new(25.4, 7.62),
             }],
             ..Default::default()
         };
-        let selected = [
+        let selected = vec![
             SelectedItem::new(id(1), SelectedKind::Symbol),
             SelectedItem::new(id(1), SelectedKind::SymbolRefField),
             SelectedItem::new(id(2), SelectedKind::Label),
             SelectedItem::new(id(3), SelectedKind::Wire),
+            SelectedItem::new(id(4), SelectedKind::NoConnect),
         ];
-        let name = |items: &[SelectedItem]| {
-            super::preview_names(&sheet, items, |s| s.reference.clone(), |n| format!("+{n}"))
+        (sheet, selected)
+    }
+
+    /// Mockup row 66: the preview draws each selected object, once per
+    /// object, each with its own name; no summary of the selection.
+    #[test]
+    fn the_preview_draws_each_selected_object_once_with_its_name() {
+        use super::Art;
+        let (sheet, selected) = sheet_and_selection();
+        let art = super::selection_art(&sheet, &selected, |s| s.reference.clone());
+        let names: Vec<(&str, bool)> = art
+            .iter()
+            .filter_map(|piece| match piece {
+                Art::Name { text, is_net, .. } => Some((text.as_str(), *is_net)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(names, [("R3", false), ("VOUT", true)]);
+        let paths = art
+            .iter()
+            .filter(|piece| matches!(piece, Art::Path { .. }))
+            .count();
+        assert_eq!(paths, 3, "R3's stand-in box and the two no-connect strokes");
+        let only_wire = super::selection_art(&sheet, &selected[3..4], |s| s.reference.clone());
+        assert!(only_wire.is_empty(), "a wire the sheet lost draws nothing");
+    }
+
+    /// Mockup row 66 (#2847): every object is drawn twice, a dashed ghost at
+    /// its place and a solid copy at its new place, each copy with its name;
+    /// one frame marks the moved copy. With no offset only the ghosts draw.
+    #[test]
+    fn the_preview_draws_a_ghost_and_a_moved_copy_of_each_object() {
+        use signex_widgets::property_illustration::Primitive;
+        let en = signex_i18n::I18n::en_us();
+        let fmt = signex_widgets::LengthFormat::new(&en, signex_types::coord::Unit::Mm);
+        let (sheet, selected) = sheet_and_selection();
+        let art = super::selection_art(&sheet, &selected, |s| s.reference.clone());
+        let polylines = |ill: &super::Illustration, dashed: bool| {
+            ill.visible_parts()
+                .filter(|p| matches!(p.primitive, Primitive::Polyline { .. }))
+                .filter(|p| p.style.stroke.is_some_and(|s| s.is_dashed == dashed))
+                .count()
         };
-        assert_eq!(name(&selected).as_deref(), Some("R3, VOUT +1"));
-        assert_eq!(name(&selected[..1]).as_deref(), Some("R3"));
-        assert_eq!(name(&selected[3..]), None, "a wire has no name");
+        let labels = |ill: &super::Illustration, text: &str| {
+            ill.visible_parts()
+                .filter(|p| matches!(&p.primitive, Primitive::Label(l) if l.text.as_str() == text))
+                .count()
+        };
+        let frames = |ill: &super::Illustration| {
+            ill.visible_parts()
+                .filter(|p| matches!(p.primitive, Primitive::RoundedRect { .. }))
+                .count()
+        };
+        let moved = super::move_preview(5.08, -2.54, 1.27, &art, &fmt);
+        assert_eq!(polylines(&moved, true), 3, "a ghost per drawn stroke");
+        assert_eq!(polylines(&moved, false), 3, "a moved copy per drawn stroke");
+        assert_eq!(labels(&moved, "R3"), 2);
+        assert_eq!(labels(&moved, "VOUT"), 2);
+        assert_eq!(frames(&moved), 1, "the moved copy is framed");
+        let still = super::move_preview(0.0, 0.0, 1.27, &art, &fmt);
+        assert_eq!(polylines(&still, true), 3);
+        assert_eq!(polylines(&still, false), 0, "nothing moves");
+        assert_eq!(labels(&still, "R3"), 1);
+        assert_eq!(frames(&still), 0);
     }
 
     /// Mockup row 66: the drawing has the sheet grid and the name on the
-    /// moved box, and with no offset still shows the grid and the ghost.
+    /// moved object, and with no offset (and nothing drawable selected)
+    /// still shows the grid and the ghost.
     #[test]
     fn the_preview_draws_the_grid_and_the_names() {
         use signex_widgets::property_illustration::Primitive;
@@ -464,16 +767,24 @@ mod tests {
                 .filter(|p| matches!(p.primitive, Primitive::Line { .. }))
                 .count()
         };
-        let moved = super::move_preview(5.08, 2.54, 1.27, Some("R3".into()), &fmt);
+        let (sheet, selected) = sheet_and_selection();
+        let art = super::selection_art(&sheet, &selected[..1], |s| s.reference.clone());
+        let moved = super::move_preview(5.08, 2.54, 1.27, &art, &fmt);
         assert!(lines(&moved) > 0, "the sheet grid is drawn");
         assert!(moved.visible_parts().any(|p| match &p.primitive {
             Primitive::Label(l) => l.text.as_str() == "R3",
             _ => false,
         }));
-        let still = super::move_preview(0.0, 0.0, 1.27, None, &fmt);
+        let still = super::move_preview(0.0, 0.0, 1.27, &[], &fmt);
         assert!(
             lines(&still) > 0,
             "the grid shows before an offset is typed"
+        );
+        assert!(
+            still
+                .visible_parts()
+                .any(|p| matches!(p.primitive, Primitive::Polyline { .. })),
+            "a stand-in ghost shows with nothing drawable selected"
         );
     }
 

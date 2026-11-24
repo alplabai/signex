@@ -9,7 +9,9 @@ use signex_types::pcb_stack::StackLayerKind;
 use signex_widgets::PickListPlaceholder as _;
 use signex_widgets::doc_tab_shell::Toolbar;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
-use signex_widgets::{ToggleSwitchStyle, button, segmented, text, text_input, toggle_switch};
+use signex_widgets::{
+    Label, ToggleSwitchStyle, button, segmented, text, text_input, toggle_switch,
+};
 
 use super::{
     KindChoice, LayerStackFacts, LayerStackMsg, SP, StackUnit, TS, form_look, kind_label, msg,
@@ -243,13 +245,28 @@ fn units<'a>(ctx: &'a PanelContext, facts: &LayerStackFacts) -> Element<'a, Pane
     )
 }
 
-/// Fab profile: a link to the project's Rules, where it is set.
+/// Fab profile: a link naming the project's profile that opens its Rules,
+/// where it is set. Inert on a board with no project.
 fn fab_profile<'a>(ctx: &'a PanelContext, facts: &LayerStackFacts) -> Element<'a, PanelMsg> {
-    let link = action(
-        ctx,
-        ids::PCB_STACK_FAB_OPEN,
-        facts.has_project.then_some(PanelMsg::OpenRules),
-        ids::PCB_STACK_FAB_TIP,
+    let name: Label<'a> = match (&facts.fab_profile, facts.has_project) {
+        (Some(name), true) => UserText::new(name.clone()).into(),
+        (None, true) => t!(ctx.i18n, ids::PCB_STACK_FAB_NONE).into(),
+        (_, false) => t!(ctx.i18n, ids::PCB_STACK_FAB_NO_PROJECT).into(),
+    };
+    let tip = if facts.has_project {
+        ids::PCB_STACK_FAB_TIP
+    } else {
+        ids::PCB_STACK_FAB_NO_PROJECT_TIP
+    };
+    let face = button(text(name).size(TS.dense).color(ti(ctx.tokens.accent)))
+        .padding([SP.xs, SP.s])
+        .style(form_look::ghost_button)
+        .on_press_maybe(facts.has_project.then_some(PanelMsg::OpenRules));
+    let link = hint_tooltip(
+        face.boxed(),
+        t!(ctx.i18n, tip),
+        &ctx.tokens,
+        iced::widget::tooltip::Position::Bottom,
     );
     row![
         text(t!(ctx.i18n, ids::PCB_STACK_FAB_PROFILE))

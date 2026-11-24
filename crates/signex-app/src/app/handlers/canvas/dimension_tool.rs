@@ -26,17 +26,22 @@ pub(crate) fn ends_held_resume_esc(event: &iced::Event) -> bool {
     }
 }
 
-/// The form showing `points` and the values the next dimension takes.
+/// The form showing `points` and the values the next dimension takes. With
+/// From clicked, To shows `cursor` (the snapped pointer) until it is clicked.
 fn dimension_form(
     tool: Tool,
     style: &DimensionToolStyle,
     points: &[Point],
+    cursor: Option<Point>,
     is_paused: bool,
 ) -> Box<DimensionToolForm> {
     let from = points.first().copied();
     let to = points.get(1).copied();
+    let following = from.and(cursor).filter(|_| to.is_none());
     let shown_from = from.unwrap_or(Point::new(0.0, 0.0));
-    let shown_to = to.unwrap_or(Point::new(shown_from.x + SAMPLE_SPAN_MM, shown_from.y));
+    let shown_to = to
+        .or(following)
+        .unwrap_or(Point::new(shown_from.x + SAMPLE_SPAN_MM, shown_from.y));
     let is_aligned = tool == Tool::AlignedDimension;
     let direction = style.direction.unwrap_or(if is_aligned {
         DimensionDirection::Aligned
@@ -59,6 +64,7 @@ fn dimension_form(
         is_aligned,
         has_from: from.is_some(),
         has_to: to.is_some(),
+        is_to_following: following.is_some(),
         is_paused,
     })
 }
@@ -72,7 +78,7 @@ fn form_without_points(
 ) -> Box<DimensionToolForm> {
     let mut settings = style.clone();
     settings.end_dimension();
-    dimension_form(tool, &settings, &[], is_paused)
+    dimension_form(tool, &settings, &[], None, is_paused)
 }
 
 impl Signex {
@@ -94,12 +100,32 @@ impl Signex {
         if state.is_dimension_held_elsewhere() && !state.is_sheet_pause_elsewhere() {
             return Some(form_without_points(tool, &annotation.dimension, is_paused));
         }
+        // Paused, nothing follows the pointer, as on the canvas.
+        let cursor = (!is_paused).then(|| {
+            let (x, y) = self.snap_to_grid(self.ui_state.cursor_x, self.ui_state.cursor_y);
+            Point::new(x, y)
+        });
         Some(dimension_form(
             tool,
             &annotation.dimension,
             &annotation.points,
+            cursor,
             is_paused,
         ))
+    }
+
+    /// The pointer moved: while To follows it, Properties shows the span
+    /// the next click would place (mockup row 157).
+    pub(crate) fn dimension_tool_cursor_moved(&mut self) {
+        if self.armed_dimension_tool().is_none()
+            || self.interaction_state.annotation_tool.points.len() != 1
+        {
+            return;
+        }
+        let form = self.dimension_tool_form();
+        if self.document_state.panel_ctx.annotation.dimension_tool != form {
+            self.document_state.panel_ctx.annotation.dimension_tool = form;
+        }
     }
 
     /// The form for windows that do not hold the unpaused dimension under

@@ -6,7 +6,7 @@ use iced::widget::{container, mouse_area, svg};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::tree_view::{TreeIcon, TreeMsg};
+use signex_widgets::tree_view::{TreeIcon, TreeMsg, TreeNode};
 use signex_widgets::{button, text};
 
 use super::super::graphite::hint_tooltip;
@@ -33,6 +33,27 @@ const DIRTY_DOT: f32 = TS.caption / 2.0;
 
 fn count_sheets(sheets: &[SheetInfo]) -> usize {
     sheets.iter().map(|s| 1 + count_sheets(&s.children)).sum()
+}
+
+/// Give each sheet row of the Schematics group its page position, "1/2" and
+/// "2/2", in tree order with child sheets after their parent, so the total
+/// is the card's sheet count. The row keeps it when the filter hides its
+/// neighbours; a lone sheet gets none (mockup rows 5 and 19).
+pub(super) fn number_sheets(rows: &mut [TreeNode]) {
+    fn count(rows: &[TreeNode]) -> usize {
+        rows.iter().map(|row| 1 + count(&row.children)).sum()
+    }
+    fn walk(rows: &mut [TreeNode], next: &mut usize, total: usize) {
+        for row in rows {
+            *next += 1;
+            row.meta = Some(format!("{next}/{total}"));
+            walk(&mut row.children, next, total);
+        }
+    }
+    let total = count(rows);
+    if total > 1 {
+        walk(rows, &mut 0, total);
+    }
 }
 
 /// "3 sheets · 1 board · 2 libraries": the counts the project really has.

@@ -2,6 +2,8 @@
 //! joined to it, then the Back Annotate rows nothing pairs with, each with
 //! its default direction.
 
+use std::collections::HashSet;
+
 use signex_net::cross_probe::PartOccurrence;
 use signex_types::pcb::PadNet;
 
@@ -15,10 +17,11 @@ use crate::pcb::eco::change::{EcoChange, EcoChangeList, EcoKey, EcoRow};
 /// The report of `eco` and `back`, read from the same board and design,
 /// with the default directions.
 pub fn compare(eco: &EcoChangeList, back: &BackChangeList) -> CompareReport {
+    let needed = needed_keys(eco);
     let mut rows: Vec<(CompareRow, bool)> = eco
         .rows
         .iter()
-        .filter(|row| !only_locks_pad(row, eco))
+        .filter(|row| !only_locks_pad(row, &needed) && !reads_same(row, &needed))
         .map(eco_row)
         .collect();
     for back_row in &back.rows {
@@ -48,9 +51,70 @@ pub fn compare(eco: &EcoChangeList, back: &BackChangeList) -> CompareReport {
 /// A pad row whose net stays exactly as it is and only gains its lock: not
 /// a difference between board and schematic (mockup row 162). One that
 /// another row needs stays, or that row could never be applied.
-fn only_locks_pad(row: &EcoRow, eco: &EcoChangeList) -> bool {
+fn only_locks_pad(row: &EcoRow, needed: &HashSet<EcoKey>) -> bool {
     matches!(&row.change, EcoChange::PadNet { from, to, .. } if from == to)
-        && !eco.rows.iter().any(|other| other.needs.contains(&row.key))
+        && !needed.contains(&row.key)
+}
+
+/// Every key some row needs, built once per call so each row's check is a
+/// lookup, not a scan of the list.
+fn needed_keys(eco: &EcoChangeList) -> HashSet<EcoKey> {
+    eco.rows
+        .iter()
+        .flat_map(|row| row.needs.iter().cloned())
+        .collect()
+}
+
+/// A pad row whose two sides read the same net name (U1 pin 3 +5V / +5V)
+/// tied to other rows: not drawn (mockup row 162), its tick follows those
+/// rows ([`tick_folded`]). One tied to nothing stays drawn, as no other row
+/// would carry its change. A blocked one stays drawn too: its reason is the
+/// only place the user sees why a row that needs it waits.
+fn reads_same(row: &EcoRow, needed: &HashSet<EcoKey>) -> bool {
+    matches!(&row.change, EcoChange::PadNet { from, to, .. } if net_name(from) == net_name(to))
+        && row.blocked.is_none()
+        && (needed.contains(&row.key) || !row.needs.is_empty())
+}
+
+/// Tick each pad row [`reads_same`] keeps out of the report as the rows
+/// around it say: on while a ticked row needs it, or while every row it
+/// needs is ticked; off otherwise.
+pub(super) fn tick_folded(eco: &mut EcoChangeList) {
+    let needed = needed_keys(eco);
+    let folded: Vec<usize> = (0..eco.rows.len())
+        .filter(|&i| !only_locks_pad(&eco.rows[i], &needed) && reads_same(&eco.rows[i], &needed))
+        .collect();
+    // Folded rows are never blocked (`reads_same`), so `on` is set directly.
+    for &i in &folded {
+        eco.rows[i].on = false;
+    }
+    let ticked = eco.rows.iter().filter(|row| row.on);
+    let mut on: HashSet<EcoKey> = ticked.clone().map(|row| row.key.clone()).collect();
+    let mut needed_by_on: HashSet<EcoKey> =
+        ticked.flat_map(|row| row.needs.iter().cloned()).collect();
+    // A pass that changes anything ticks one more folded row, so this ends
+    // within `folded.len()` passes.
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for &i in &folded {
+            let row = &eco.rows[i];
+            if !follows(row, &on, &needed_by_on) {
+                continue;
+            }
+            on.insert(row.key.clone());
+            needed_by_on.extend(row.needs.iter().cloned());
+            eco.rows[i].on = true;
+            changed = true;
+        }
+    }
+}
+
+/// An unticked folded row that a ticked row needs, or whose every need is
+/// ticked.
+fn follows(row: &EcoRow, on: &HashSet<EcoKey>, needed_by_on: &HashSet<EcoKey>) -> bool {
+    let needs_met = !row.needs.is_empty() && row.needs.iter().all(|key| on.contains(key));
+    !row.on && (needed_by_on.contains(&row.key) || needs_met)
 }
 
 /// Destructive and board-originated rows, and rows Update PCB starts

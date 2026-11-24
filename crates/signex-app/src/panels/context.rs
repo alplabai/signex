@@ -248,6 +248,9 @@ pub struct PanelContext {
     pub drafts: super::PanelDrafts,
     /// Raw text of the plain numeric box being typed in.
     pub numeric_draft: Option<super::NumericDraft>,
+    /// Text typed in a colour row's hex field, until Enter, leaving the
+    /// field or Esc (mockup row 46).
+    pub color_hex_draft: Option<super::ColorHexDraft>,
     /// The sheet `title_block` and the shown drafts belong to.
     pub title_block_sheet: Option<std::path::PathBuf>,
     /// Which sections are collapsed (by section name key).

@@ -111,7 +111,7 @@ pub fn dropdown_overlay<'a>(
 ) -> Option<iced::Element<'a, LibraryMessage>> {
     use iced::Length;
     use iced::Widget as _;
-    use iced::widget::{Space, Stack, container, mouse_area};
+    use iced::widget::{Stack, container, mouse_area};
 
     let menu = editor.active_bar_menu?;
     let entries = dropdowns::entries(
@@ -137,15 +137,13 @@ pub fn dropdown_overlay<'a>(
         .padding([top_padding_px, 10])
         .center_x(Length::Fill)
         .align_y(iced::alignment::Vertical::Top);
-    let backstop = mouse_area(
-        container(Space::new())
-            .width(Length::Fill)
-            .height(Length::Fill),
-    )
-    .on_press(LibraryMessage::PrimitiveEditorEvent {
-        path: editor.path.clone(),
-        msg: PrimitiveEdit::Symbol(SymbolEditorMsg::CloseActiveBarMenu),
-    });
+    // Dimmed as every menu dims the window behind it (mockup rows 53, 61).
+    let backstop = mouse_area(crate::app::view::menu_scrim_fill()).on_press(
+        LibraryMessage::PrimitiveEditorEvent {
+            path: editor.path.clone(),
+            msg: PrimitiveEdit::Symbol(SymbolEditorMsg::CloseActiveBarMenu),
+        },
+    );
 
     Some(
         Stack::new()

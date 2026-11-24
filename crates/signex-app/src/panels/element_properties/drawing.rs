@@ -498,6 +498,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
     let mut appearance = vec![drawing_stroke_color_row(
         current_color(ctx.selected_drawing.as_ref()),
         ctx.wire_color_picker,
+        drawing_hex(ctx),
         &ctx.i18n,
     )];
     if has_fill {
@@ -537,12 +538,24 @@ fn current_color(drawing: Option<&SchDrawing>) -> Option<StrokeColor> {
     })
 }
 
-/// The stroke colour field (mockup row 48): a swatch reading Auto (the
-/// theme's drawing colour) or the code, opening the shared preset popover.
-/// Each pick is one undoable edit.
+/// The hex box of the selected drawing's Color row. With no drawing id the
+/// nil id stands in: the row then edits nothing anyway.
+fn drawing_hex(ctx: &PanelContext) -> crate::panels::HexEntry {
+    let id = ctx.selected_uuid.unwrap_or_else(uuid::Uuid::nil);
+    crate::panels::HexEntry::of(
+        crate::panels::ColorRowKey::DrawingStroke(id),
+        ctx.color_hex_draft.as_ref(),
+    )
+}
+
+/// The stroke colour field (mockup row 48): a swatch, the code or Auto (the
+/// theme's drawing colour) in a hex box that takes a typed code, and the
+/// chevron opening the shared preset popover. Each pick is one undoable
+/// edit.
 fn drawing_stroke_color_row<'a>(
     current: Option<StrokeColor>,
     picker: crate::panels::WireColorPicker,
+    hex: crate::panels::HexEntry,
     i18n: &I18n,
 ) -> Element<'a, PanelMsg> {
     use crate::panels::wire_style_rows::{PopoverColorRow, popover_color_row_named};
@@ -555,6 +568,7 @@ fn drawing_stroke_color_row<'a>(
             label: t!(i18n, ids::PANELS_DRAWING_COLOR),
             current: current.map(|c| [c.r, c.g, c.b, c.a]),
             picker,
+            hex,
             on_toggle: PanelMsg::ToggleWireColorPicker,
             on_advanced: PanelMsg::OpenWireColorAdvancedPicker,
             on_cancel: PanelMsg::CancelWireColorPicker,
@@ -673,14 +687,35 @@ mod tests {
         assert!(at.windows(2).all(|w| w[0] < w[1]), "{shown:?}");
     }
 
-    /// Mockup row 48: Color is one field reading Auto; its presets stay in
-    /// the popover until it is opened.
+    /// Mockup rows 46 and 48: Color is one field whose hex box reads Auto,
+    /// beside its label; its presets stay in the popover until it is opened.
     #[test]
     fn the_color_row_is_one_field_reading_auto() {
-        let shown = texts("Rectangle", &[("Position", "1, 2"), ("Border", "0.2")]);
-        let at = order(&shown, &["Color", "Auto"]);
-        assert!(at[0] < at[1], "{shown:?}");
-        assert!(!shown.iter().any(|t| t == "Preset Colours"), "{shown:?}");
+        let info = [
+            ("Type", "Rectangle"),
+            ("Position", "1, 2"),
+            ("Border", "0.2"),
+        ];
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.selection_info = (info.iter())
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        let size = iced::Size::new(400.0, 3000.0);
+        let view = || view_drawing_properties(&ctx, Color::WHITE, Color::WHITE, Color::BLACK);
+        let texts = crate::layout_probe::lay_out_texts(view(), size);
+        let boxes = crate::layout_probe::lay_out_inputs(view(), size);
+        let label = crate::layout_probe::find(&texts, "Color").bounds;
+        let auto = crate::layout_probe::find(&boxes, "Auto").bounds;
+        assert!(auto.x > label.x, "{label:?} {auto:?}");
+        assert!(
+            (auto.center_y() - label.center_y()).abs() < label.height,
+            "the box sits beside its label: {label:?} {auto:?}"
+        );
+        assert!(
+            !texts.iter().any(|t| t.text == "Preset Colours"),
+            "{texts:?}"
+        );
     }
 
     /// Mockup row 48: an arc keeps Center, Radius, Angles (Start / End on one row)

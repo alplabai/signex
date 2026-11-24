@@ -27,15 +27,41 @@ pcb-stack-enter-hint = Press Enter to apply a typed value.
 pcb-stack-sub-stack = Stack
 pcb-stack-sub-drills = Via Types / Drill Pairs
 
-## Columns. $unit is mm, µm or mil.
+## Columns (mockup row 105). $unit is mm, µm or mil.
+# The copper place of a row, 1 at the top.
+pcb-stack-col-number = #
 pcb-stack-col-name = Name
 pcb-stack-col-type = Type
 pcb-stack-col-material = Material
 pcb-stack-col-thickness = Thickness ({ $unit })
-pcb-stack-col-er = Er
 pcb-stack-col-weight = Weight (oz)
+pcb-stack-col-dk = Dk
+pcb-stack-col-dk-tip = Dielectric constant of the layer.
+pcb-stack-col-df = Df
+pcb-stack-col-df-tip = Loss tangent of the layer. The stack does not store one yet.
+pcb-stack-col-net = Net
+pcb-stack-col-net-tip = The nets poured on a plane layer.
+pcb-stack-col-copper = Cu %
+pcb-stack-col-copper-tip = Copper coverage of the layer. It is not measured yet.
+pcb-stack-col-items = Items
+pcb-stack-col-items-tip = Items on the layer. A layer with items on it cannot be removed.
+pcb-stack-col-drill-pairs = Drill pairs
+pcb-stack-col-drill-pairs-tip = Drill pairs that start or end on this layer.
 # A cell that does not apply to the row's kind.
 pcb-stack-none = —
+# The Net cell of a signal layer.
+pcb-stack-net-signal = signal
+# A drill pair's copper places, as in "1–4".
+pcb-stack-span = { $from }–{ $to }
+
+## Under the table: the drill pair legend and the layer pairs.
+pcb-stack-no-drill-pairs = No drill pairs: the board has no vias yet.
+pcb-stack-edit-hint = Click a row's number to select it, a cell to edit it. Enter applies the typed value.
+pcb-stack-layer-pairs = Layer pairs
+pcb-stack-layer-pairs-hint = signal → reference plane
+# $signal and $plane are layer names.
+pcb-stack-layer-pair = { $signal } → { $plane }
+pcb-stack-no-plane = No plane layer to reference.
 
 ## Row kinds.
 pcb-stack-kind-signal = Signal
@@ -67,8 +93,11 @@ pcb-stack-unit-mm = mm
 pcb-stack-unit-um = µm
 pcb-stack-unit-mil = mil
 pcb-stack-fab-profile = Fab profile
-pcb-stack-fab-open = Open Rules
-pcb-stack-fab-tip = The fab profile is set in the project's Rules.
+# The Fab profile link when the project names no profile.
+pcb-stack-fab-none = None set
+pcb-stack-fab-no-project = No project
+pcb-stack-fab-tip = The project's fab profile. Click to open the project's Rules, where it is set.
+pcb-stack-fab-no-project-tip = A fab profile belongs to a project; this board is not in one.
 
 ## Cross-section and preview.
 pcb-stack-section = Cross-section

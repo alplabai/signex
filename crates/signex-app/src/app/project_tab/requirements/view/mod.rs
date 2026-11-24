@@ -1,9 +1,10 @@
 //! The Requirements section's view (mockup row 38). Pure: the project
 //! and the section's state in, widgets out. Run checks sits in the section
 //! header; `summary` draws the counts row under it, `card` one card per
-//! entry.
+//! entry, `findings` a failed card's findings as one sentence.
 
 mod card;
+mod findings;
 mod summary;
 
 use iced::Element;
@@ -50,28 +51,31 @@ pub(in crate::app::project_tab::requirements) enum Verdict {
     Off,
 }
 
-/// How entry `index` came out of `report` (`None`: no run yet). A
-/// requirement turned off is Off whether or not a run happened.
+/// How entry `index` came out of `report` (`None`: no finished run, so
+/// every requirement switched on is Not checked). A requirement turned off
+/// is Off whether or not a run happened.
 pub(in crate::app::project_tab::requirements) fn verdict(
     report: Option<&CheckReport>,
     entry: &RequirementEntry,
     index: usize,
-) -> Option<Verdict> {
+) -> Verdict {
     if entry
         .requirement()
         .is_some_and(|requirement| !requirement.enabled)
     {
-        return Some(Verdict::Off);
+        return Verdict::Off;
     }
-    let report = report?;
+    let Some(report) = report else {
+        return Verdict::NotChecked;
+    };
     let rule = signex_req::entry_rule(entry, index);
-    Some(if report.findings.iter().any(|f| f.rule == rule) {
+    if report.findings.iter().any(|f| f.rule == rule) {
         Verdict::Failed
     } else if report.passed.contains(&rule) {
         Verdict::Passed
     } else {
         Verdict::NotChecked
-    })
+    }
 }
 
 /// The findings the last run filed under entry `index`.
@@ -99,7 +103,7 @@ pub(in crate::app::project_tab) fn view<'a>(
     let report = last.and_then(|run| run.report.as_ref().ok());
     let editable = !project.data.has_unreadable_requirements();
     let mut body = vec![summary::summary_row(
-        project_id, entries, last, editable, i18n, tokens,
+        project_id, entries, last, report, editable, i18n, tokens,
     )];
     if editable && let Some((None, refused)) = tab.and_then(|tab| tab.problem.as_ref()) {
         body.push(problem(problem_words(refused, i18n), tokens));
@@ -176,3 +180,6 @@ fn plain(value: &Value) -> String {
         other => other.to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests;

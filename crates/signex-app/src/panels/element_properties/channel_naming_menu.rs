@@ -104,11 +104,7 @@ fn format_field<'a>(
         NamingTarget::Nets => view.naming.net_format.as_str(),
     };
     let is_open = view.menu.target == Some(target);
-    let edge = if is_open {
-        ti(tokens.accent)
-    } else {
-        res.line_soft
-    };
+    let look = format_field_look(tokens, is_open);
     let field = signex_widgets::button(
         row![
             text(UserText::new(format))
@@ -123,16 +119,7 @@ fn format_field<'a>(
     .width(Length::Fill)
     .padding([SP.xs, SP.s])
     .on_press(msg(CompiledDesignMsg::NamingMenuToggled(target)))
-    .style(move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(Background::Color(res.field)),
-        border: Border {
-            color: edge,
-            width: 1.0,
-            radius: Radii::GRAPHITE.control.into(),
-            ..Border::default()
-        },
-        ..iced::widget::button::Style::default()
-    });
+    .style(move |_: &Theme, _| look);
     container(
         row![
             text(t!(
@@ -150,6 +137,32 @@ fn format_field<'a>(
     .padding([SP.s, SP.m])
     .width(Length::Fill)
     .boxed()
+}
+
+/// The face of a format field: the field fill, the text ink on it (the
+/// button default is black, unreadable on the dark field, #2846) and an
+/// accent edge while its menu is open.
+fn format_field_look(
+    tokens: &signex_types::theme::ThemeTokens,
+    is_open: bool,
+) -> iced::widget::button::Style {
+    let res = resolve(tokens);
+    let edge = if is_open {
+        ti(tokens.accent)
+    } else {
+        res.line_soft
+    };
+    iced::widget::button::Style {
+        background: Some(Background::Color(res.field)),
+        text_color: ti(tokens.text),
+        border: Border {
+            color: edge,
+            width: 1.0,
+            radius: Radii::GRAPHITE.control.into(),
+            ..Border::default()
+        },
+        ..iced::widget::button::Style::default()
+    }
 }
 
 /// The open menu: title, a radio row per preset with its example, Custom
@@ -309,5 +322,29 @@ fn format_error(ctx: &PanelContext, error: &ChannelFormatError) -> signex_i18n::
             t!(i18n, ids::PROPERTIES_CHANNEL_NAMING_ERROR_NO_CHANNEL)
         }
         ChannelFormatError::NoBaseToken => t!(i18n, ids::PROPERTIES_CHANNEL_NAMING_ERROR_NO_BASE),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::styles::tokens::contrast_ratio;
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    /// #2846, mockup row 151: the Designators and Local nets values read on
+    /// their field in both themes, closed and open.
+    #[test]
+    fn the_format_values_read_on_their_field_in_both_themes() {
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let tokens = theme_tokens(id);
+            for is_open in [false, true] {
+                let look = format_field_look(&tokens, is_open);
+                let Some(Background::Color(fill)) = look.background else {
+                    panic!("{id:?}: the field has a solid fill");
+                };
+                let ratio = contrast_ratio(look.text_color, fill);
+                assert!(ratio >= 4.5, "{id:?} open={is_open}: contrast {ratio}");
+            }
+        }
     }
 }

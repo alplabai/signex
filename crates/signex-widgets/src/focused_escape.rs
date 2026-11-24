@@ -16,6 +16,7 @@ where
 {
     content: Element<'a, Message, Theme, Renderer>,
     on_escape: Message,
+    is_ahead_of_blur: bool,
 }
 
 impl<'a, Message, Theme, Renderer> FocusedEscape<'a, Message, Theme, Renderer>
@@ -25,7 +26,18 @@ where
     /// Wrap `content`; `on_escape` is sent for an Esc press it has the focus
     /// for, and not for that press's repeats.
     pub fn new(content: Element<'a, Message, Theme, Renderer>, on_escape: Message) -> Self {
-        Self { content, on_escape }
+        Self {
+            content,
+            on_escape,
+            is_ahead_of_blur: false,
+        }
+    }
+
+    /// Send `on_escape` before the box sees the key, so it arrives ahead of
+    /// the box's own blur message: for a box that commits when left.
+    pub fn ahead_of_blur(mut self) -> Self {
+        self.is_ahead_of_blur = true;
+        self
     }
 }
 
@@ -128,10 +140,15 @@ where
             shell.capture_event();
             return;
         }
+        if holds_focus.0 && self.is_ahead_of_blur {
+            shell.publish(self.on_escape.clone());
+        }
         self.content
             .update(tree, event, layout, cursor, renderer, shell, viewport);
         if holds_focus.0 {
-            shell.publish(self.on_escape.clone());
+            if !self.is_ahead_of_blur {
+                shell.publish(self.on_escape.clone());
+            }
             shell.capture_event();
         }
     }

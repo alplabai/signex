@@ -34,6 +34,13 @@ mod window_hierarchies;
 #[cfg(test)]
 mod window_placement_tests;
 
+#[cfg(test)]
+thread_local! {
+    /// Test probe: how many times this thread ran `finish_update`.
+    pub(crate) static FINISH_UPDATES: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
+
 impl Signex {
     /// Copy the UI-state grid/unit/snap fields, SCH Filter's preset rename
     /// and the recent projects into the panel context. Runs on the
@@ -91,6 +98,8 @@ impl Signex {
     }
 
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
+        #[cfg(test)]
+        FINISH_UPDATES.with(|n| n.set(n.get() + 1));
         self.refresh_placement_reference();
         self.drop_start_row_menu_off_screen();
         self.sync_panel_ctx_mirrors();

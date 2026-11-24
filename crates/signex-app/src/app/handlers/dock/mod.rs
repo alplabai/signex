@@ -5,6 +5,9 @@ use crate::dock::DockMessage;
 use super::super::*;
 
 mod child_sheet_identity;
+mod color_hex;
+#[cfg(test)]
+mod color_hex_tests;
 mod doc_grid;
 #[cfg(test)]
 mod doc_grid_tests;
@@ -114,6 +117,10 @@ impl Signex {
             if let crate::panels::PanelMsg::History(history_msg) = panel_msg {
                 let task = self.handle_history_panel(history_msg.clone());
                 return Task::batch([task, self.finish_update()]);
+            }
+            if let crate::panels::PanelMsg::ColorHex(hex_msg) = panel_msg {
+                // Finishes the update itself, once, also for an applied pick.
+                return self.handle_color_hex(hex_msg.clone());
             }
             if let Some(task) = self.handle_dock_panel_control_message(panel_msg) {
                 return Task::batch([task, self.finish_update()]);

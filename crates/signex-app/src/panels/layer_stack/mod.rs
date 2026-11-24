@@ -203,6 +203,15 @@ pub struct ViaTypeRow {
     pub used: usize,
 }
 
+/// What sits on the board layer of one copper row.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct CopperUse {
+    /// Items on the layer, as Remove counts them.
+    pub items: usize,
+    /// The nets of the pours on the layer, sorted, each once.
+    pub nets: Vec<String>,
+}
+
 /// What the manager shows of the board in view.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LayerStackFacts {
@@ -225,6 +234,10 @@ pub struct LayerStackFacts {
     pub via_types: Vec<ViaTypeRow>,
     /// The board belongs to a project, whose Rules hold the fab profile.
     pub has_project: bool,
+    /// Per row, what sits on a copper row's layer; `None` on other rows.
+    pub copper_use: Vec<Option<CopperUse>>,
+    /// The project's fab profile, as named; `None` when it names none.
+    pub fab_profile: Option<String>,
 }
 
 /// A copper kind in a row's Type dropdown.
@@ -257,6 +270,51 @@ fn msg(m: LayerStackMsg) -> PanelMsg {
     PanelMsg::LayerStack(m)
 }
 
+/// The 1-based copper place of each row, top to bottom (the # column and a
+/// drill pair's span count it); `None` on a row that is not copper.
+fn copper_places(stack: &LayerStack) -> Vec<Option<usize>> {
+    let mut place = 0;
+    stack
+        .layers
+        .iter()
+        .map(|layer| {
+            layer.kind.is_copper().then(|| {
+                place += 1;
+                place
+            })
+        })
+        .collect()
+}
+
+/// The spans of the drill pairs that start or end at the copper `place`.
+fn spans_at(pairs: &[DrillPairRow], place: usize) -> Vec<(usize, usize)> {
+    pairs
+        .iter()
+        .map(|pair| pair.span)
+        .filter(|&(from, to)| from == place || to == place)
+        .collect()
+}
+
+/// Each signal row with the plane row nearest it in the stack, the upper
+/// one on a tie; `None` when the stack has no plane.
+fn layer_pairs(stack: &LayerStack) -> Vec<(usize, Option<usize>)> {
+    let rows_of = |kind| {
+        stack
+            .layers
+            .iter()
+            .enumerate()
+            .filter(move |(_, layer)| layer.kind == kind)
+            .map(|(row, _)| row)
+    };
+    let planes: Vec<usize> = rows_of(StackLayerKind::Plane).collect();
+    rows_of(StackLayerKind::Signal)
+        .map(|row| {
+            let nearest = planes.iter().copied().min_by_key(|p| p.abs_diff(row));
+            (row, nearest)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -267,6 +325,79 @@ mod tests {
             let back = unit.to_mm(unit.from_mm(0.035));
             assert!((back - 0.035).abs() < 1e-12, "{unit:?}");
         }
+    }
+
+    /// Mask, Top signal, dielectric, GND plane, dielectric, plane, dielectric,
+    /// Bottom signal, mask: the mockup's four copper layers.
+    fn four_layer() -> LayerStack {
+        use StackLayerKind::{Dielectric, Plane, Signal, SolderMask};
+        let kinds = [
+            SolderMask, Signal, Dielectric, Plane, Dielectric, Plane, Dielectric, Signal,
+            SolderMask,
+        ];
+        LayerStack {
+            name: None,
+            layers: kinds
+                .into_iter()
+                .map(signex_types::pcb_stack::StackLayer::new)
+                .collect(),
+        }
+    }
+
+    fn pair(span: (usize, usize)) -> DrillPairRow {
+        DrillPairRow {
+            name: String::new(),
+            from: String::new(),
+            to: String::new(),
+            kind: String::new(),
+            span,
+            depth_mm: None,
+            min_drill_mm: None,
+            aspect_ratio: None,
+            vias: 0,
+        }
+    }
+
+    #[test]
+    fn copper_rows_are_numbered_top_to_bottom_and_others_are_not() {
+        let places = copper_places(&four_layer());
+        assert_eq!(
+            places,
+            [
+                None,
+                Some(1),
+                None,
+                Some(2),
+                None,
+                Some(3),
+                None,
+                Some(4),
+                None
+            ]
+        );
+    }
+
+    #[test]
+    fn a_copper_place_lists_the_pairs_that_start_or_end_on_it() {
+        let pairs = [pair((1, 4)), pair((1, 2)), pair((2, 3))];
+        assert_eq!(spans_at(&pairs, 1), [(1, 4), (1, 2)]);
+        assert_eq!(spans_at(&pairs, 2), [(1, 2), (2, 3)]);
+        assert_eq!(spans_at(&pairs, 4), [(1, 4)]);
+        assert!(spans_at(&pairs[..1], 2).is_empty(), "a pair passing by");
+    }
+
+    #[test]
+    fn each_signal_layer_pairs_with_its_nearest_plane() {
+        let pairs = layer_pairs(&four_layer());
+        assert_eq!(pairs, [(1, Some(3)), (7, Some(5))]);
+    }
+
+    #[test]
+    fn a_stack_without_a_plane_pairs_with_nothing() {
+        let stack = LayerStack::derived(&[], 1.6);
+        let pairs = layer_pairs(&stack);
+        assert!(!pairs.is_empty());
+        assert!(pairs.iter().all(|(_, plane)| plane.is_none()), "{pairs:?}");
     }
 
     #[test]

@@ -205,6 +205,7 @@ fn the_footer_stays_inside_the_window_at_any_size() {
     // narrowest and shortest windows are that minimum.
     let min = super::erc::modal_min_size(ModalId::NewProject).expect("a min size");
     for (w, h) in [
+        // A window dragged smaller than it opens.
         (860.0, 700.0),
         (860.0, 420.0),
         (min.width, min.height),
@@ -218,6 +219,62 @@ fn the_footer_stays_inside_the_window_at_any_size() {
             assert!(
                 b.height > 0.0 && b.y >= 0.0 && b.y + b.height <= h && b.x + b.width <= w,
                 "{label:?} outside {w}x{h}: {b:?}"
+            );
+        }
+    }
+}
+
+/// Mockup row 21: the window opens at the mockup size, the same size as the
+/// fallback card, and at it the cards' blurbs stay on one line and the
+/// preview caption stays inside the window.
+#[test]
+fn the_window_opens_at_the_mockup_size_with_one_line_blurbs() {
+    let (app, _main) = app_with_dialog();
+    let window = app.detached_window_of(ModalId::NewProject).expect("window");
+    let size = super::erc::modal_size(ModalId::NewProject);
+    let (w, h) = crate::app::view::dialogs::NEW_PROJECT_SIZE;
+    assert_eq!((size.width, size.height), (w, h), "window and card agree");
+    assert_eq!((w, h), (1040.0, 920.0), "mockup row 21");
+    let texts = lay_out_texts(app.view(window), size);
+    let body = crate::styles::TypeScale::DEFAULT.body;
+    for blurb in [
+        "Tighter rules for denser boards.",
+        "Fine-pitch BGAs, laser microvias.",
+    ] {
+        let b = find(&texts, blurb).bounds;
+        assert!(b.height > 0.0 && b.height < 1.8 * body, "{blurb}: {b:?}");
+        assert!(b.x + b.width <= size.width, "{blurb}: {b:?}");
+    }
+    let caption = crate::styles::TypeScale::DEFAULT.caption;
+    let hint = find(&texts, "click a value to edit").bounds;
+    let edge = size.width - crate::styles::Spacing::DEFAULT.xl;
+    assert!(hint.x + hint.width <= edge + 0.5, "{hint:?} past {edge}");
+    assert!(hint.height > 0.0 && hint.height < 1.8 * caption, "{hint:?}");
+}
+
+/// Decision 2026-11-24: on a 1366 x 768 or 1280 x 720 screen the window
+/// opens inside the screen, and at that size the body scrolls while the
+/// footer's buttons stay in view.
+#[test]
+fn on_a_small_screen_the_window_fits_and_keeps_its_buttons() {
+    for (w, h) in [(1366.0, 768.0), (1280.0, 720.0)] {
+        let (mut app, _task) = Signex::new();
+        app.ui_state.main_window_monitor_size = Some(iced::Size::new(w, h));
+        app.ui_state.main_window_id = Some(iced::window::Id::unique());
+        app.ui_state.main_window_opened = true;
+        app.ui_state.first_run_tour_open = false;
+        let _ = app.update(Message::Menu(MenuMessage::NewProject));
+        let _ = app.sync_detached_modals();
+        let window = app.detached_window_of(ModalId::NewProject).expect("window");
+        let borderless = app.dialog_window_is_borderless(window);
+        let size = app.dialog_window_size(ModalId::NewProject, borderless);
+        assert!(size.width <= w && size.height <= h, "{size:?} on {w}x{h}");
+        let texts = lay_out_texts(app.view(window), size);
+        for label in ["Cancel", "Create project"] {
+            let b = find(&texts, label).bounds;
+            assert!(
+                b.height > 0.0 && b.y >= 0.0 && b.y + b.height <= size.height,
+                "{label:?} outside {size:?}: {b:?}"
             );
         }
     }

@@ -11,14 +11,67 @@ use signex_types::schematic::{
 
 /// How near (screen px) a press must land to a handle to take it.
 const HANDLE_HIT_PX: f32 = 6.0;
-/// Half the side of a square handle and the radius of a round one, screen px.
-const HANDLE_HALF_PX: f32 = 3.5;
-/// The handle outline and the control lines, screen px.
-const HANDLE_LINE_PX: f32 = 1.0;
+/// Half the side of a square end handle, screen px.
+const SQUARE_HALF_PX: f32 = 4.0;
+/// The radius of a round control handle, screen px.
+const ROUND_RADIUS_PX: f32 = 4.5;
+/// The handle outline, screen px.
+const HANDLE_LINE_PX: f32 = 1.2;
+/// The dashed control lines, screen px.
+const CONTROL_LINE_PX: f32 = 0.9;
 /// The dash of a control line, screen px.
-const CONTROL_DASH_PX: [f32; 2] = [3.0, 3.0];
+const CONTROL_DASH_PX: [f32; 2] = [3.0, 2.0];
 /// The control lines, each from an end to its control point.
 const CONTROL_LINES: [(usize, usize); 2] = [(0, 1), (3, 2)];
+
+/// The shape of a handle: square on an end, round on a control point.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::canvas) enum HandleShape {
+    Square,
+    Round,
+}
+
+/// One handle as it is drawn.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(in crate::canvas) struct HandleMark {
+    pub at: iced::Point,
+    pub shape: HandleShape,
+    /// The held handle is filled with the accent; the others are hollow.
+    pub filled: bool,
+}
+
+/// The handles of a curve whose points sit at `screen`, `held` filled.
+pub(in crate::canvas) fn handle_marks(
+    screen: [iced::Point; 4],
+    held: Option<usize>,
+) -> [HandleMark; 4] {
+    let mut i = 0;
+    screen.map(|at| {
+        let mark = HandleMark {
+            at,
+            shape: if matches!(i, 1 | 2) {
+                HandleShape::Round
+            } else {
+                HandleShape::Square
+            },
+            filled: held == Some(i),
+        };
+        i += 1;
+        mark
+    })
+}
+
+impl HandleMark {
+    fn path(self) -> canvas::Path {
+        match self.shape {
+            HandleShape::Round => canvas::Path::circle(self.at, ROUND_RADIUS_PX),
+            HandleShape::Square => canvas::Path::rectangle(
+                iced::Point::new(self.at.x - SQUARE_HALF_PX, self.at.y - SQUARE_HALF_PX),
+                iced::Size::new(2.0 * SQUARE_HALF_PX, 2.0 * SQUARE_HALF_PX),
+            ),
+        }
+    }
+}
 
 /// A handle drag in flight.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -66,6 +119,16 @@ pub(in crate::canvas) fn dragged_points(
         );
     }
     points
+}
+
+/// The selected, unlocked Beziers that show resting handles: every one but
+/// the curve a drag in flight holds, which the drag draws itself.
+pub(in crate::canvas) fn resting_beziers<'s>(
+    sheet: &'s SchematicSheet,
+    selected: &'s [signex_types::schematic::SelectedItem],
+    dragged: Option<uuid::Uuid>,
+) -> impl Iterator<Item = &'s SchBezier> {
+    selected_beziers(sheet, selected).filter(move |b| Some(b.uuid) != dragged)
 }
 
 /// The unlocked Beziers among `selected`.
@@ -151,16 +214,40 @@ impl SchematicCanvas<'_> {
         Some(canvas::Action::publish(Message::CanvasEvent(event)).and_capture())
     }
 
-    /// The handles of every selected, unlocked Bezier.
+    /// The handles of every selected, unlocked Bezier, drawn on the overlay
+    /// each frame so a drag never leaves the held curve's old handles behind.
+    /// `sheet` is the sheet as this frame draws it: shifted during a move.
     pub(in crate::canvas) fn draw_bezier_handles(
         &self,
         frame: &mut canvas::Frame,
-        snapshot: &SchematicSheet,
+        state: &CanvasState,
+        sheet: Option<&SchematicSheet>,
         bounds: Rectangle,
     ) {
-        for bezier in selected_beziers(snapshot, &self.selected) {
-            self.draw_handles(frame, bezier.points(), None, bounds);
+        for points in self.resting_handle_points(sheet, state) {
+            self.draw_handles(frame, points, None, bounds);
         }
+    }
+
+    /// The sheet points of the resting handles in `sheet`, one row a curve.
+    pub(in crate::canvas) fn resting_handle_points(
+        &self,
+        sheet: Option<&SchematicSheet>,
+        state: &CanvasState,
+    ) -> Vec<[SheetPoint; 4]> {
+        let Some(sheet) = sheet else {
+            return Vec::new();
+        };
+        let dragged = state.bezier_drag.map(|drag| drag.drawing);
+        resting_beziers(sheet, &self.selected, dragged)
+            .map(SchBezier::points)
+            .collect()
+    }
+
+    /// The ink of the handles, the control lines and the dragged curve: the
+    /// theme accent, as the selection halo.
+    pub(in crate::canvas) fn handle_ink(&self) -> iced::Color {
+        self.prefs.graphite.accent
     }
 
     /// The curve and its handles as the drag in flight has them.
@@ -183,7 +270,7 @@ impl SchematicCanvas<'_> {
             return;
         };
         [bezier.start, bezier.c1, bezier.c2, bezier.end] = drag.points;
-        let ink = crate::render_config::to_iced(&self.prefs.canvas_colors.selection);
+        let ink = self.handle_ink();
         let curve = canvas::Path::new(|path| {
             for (i, p) in bezier.flatten().into_iter().enumerate() {
                 let at = self.sheet_to_screen(p, bounds);
@@ -202,7 +289,7 @@ impl SchematicCanvas<'_> {
     }
 
     /// Dashed control lines, then square end and round control handles.
-    /// Handles are hollow; the `held` one is filled.
+    /// Handles are hollow on the paper; the `held` one is filled.
     fn draw_handles(
         &self,
         frame: &mut canvas::Frame,
@@ -210,7 +297,7 @@ impl SchematicCanvas<'_> {
         held: Option<usize>,
         bounds: Rectangle,
     ) {
-        let ink = crate::render_config::to_iced(&self.prefs.canvas_colors.selection);
+        let ink = self.handle_ink();
         let paper = crate::render_config::to_iced(&self.prefs.canvas_colors.paper);
         let screen = points.map(|p| self.sheet_to_screen(p, bounds));
         let outline = canvas::Stroke::default()
@@ -221,21 +308,16 @@ impl SchematicCanvas<'_> {
                 segments: &CONTROL_DASH_PX,
                 offset: 0,
             },
-            ..outline
+            ..canvas::Stroke::default()
+                .with_color(ink)
+                .with_width(CONTROL_LINE_PX)
         };
         for (end, control) in CONTROL_LINES {
             frame.stroke(&canvas::Path::line(screen[end], screen[control]), dashed);
         }
-        for (i, at) in screen.into_iter().enumerate() {
-            let handle = if matches!(i, 1 | 2) {
-                canvas::Path::circle(at, HANDLE_HALF_PX)
-            } else {
-                canvas::Path::rectangle(
-                    iced::Point::new(at.x - HANDLE_HALF_PX, at.y - HANDLE_HALF_PX),
-                    iced::Size::new(2.0 * HANDLE_HALF_PX, 2.0 * HANDLE_HALF_PX),
-                )
-            };
-            frame.fill(&handle, if held == Some(i) { ink } else { paper });
+        for mark in handle_marks(screen, held) {
+            let handle = mark.path();
+            frame.fill(&handle, if mark.filled { ink } else { paper });
             frame.stroke(&handle, outline);
         }
     }
