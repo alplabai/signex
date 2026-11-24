@@ -378,7 +378,7 @@ impl PcbSelectionState {
                 grab.extend(self.shapes_of(|item| matches!(item, ItemRef::Via(_))));
             }
             // Every other selectable object drags too (#2870).
-            grab.extend(self.item_grab_shapes());
+            grab.extend(self.item_grab_shapes(board));
             grab
         };
         // Only what is not on the board yet has a ghost: a paste.

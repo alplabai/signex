@@ -57,6 +57,9 @@ fn board() -> PcbBoard {
         "uuid": id(1),
         "setup": {"grid_size": 0.5},
         "segments": [{"uuid": id(0x10), "start": pt(0.0, 0.0), "end": pt(4.0, 0.0),
+                      "width": 0.25, "layer": "TopCopper", "net": 0},
+                     // A track over the pour, for the press precedence.
+                     {"uuid": id(0x11), "start": pt(21.0, 44.0), "end": pt(25.0, 44.0),
                       "width": 0.25, "layer": "TopCopper", "net": 0}],
         "free": {
             "arcs": [{"uuid": id(0x20), "start": pt(10.0, 0.0), "mid": pt(12.0, -2.0),
@@ -236,4 +239,83 @@ fn a_room_moves_by_dragging_its_edge() {
     assert_eq!((b.x_mm, b.y_mm), (45.0, 50.0), "the room moved by the drag");
     let _ = r.app.update(Message::Edit(EditMsg::Undo));
     assert_eq!(live(&r.app, &r.path), before, "one undo step");
+}
+
+fn moved_by_drag(r: &mut Rig, item: BoardItemId, from: Point) -> bool {
+    let expected = moved_item(r.board(), item, DELTA).expect("on the board");
+    r.drag(from, Point::new(from.x + DELTA.x, from.y + DELTA.y));
+    moved_item(r.board(), item, Point::new(0.0, 0.0)) == Some(expected)
+}
+
+/// Caner, 2026-11-24: a press anywhere inside a pour, fill, solid region,
+/// keepout or room drags it, as one undo step.
+#[test]
+fn a_press_inside_an_area_or_room_drags_it() {
+    let cases = [
+        ("fill", BoardItemId::Zone(id(0x60)), Point::new(2.0, 42.0)),
+        (
+            "solid region",
+            BoardItemId::Zone(id(0x61)),
+            Point::new(12.0, 41.0),
+        ),
+        (
+            "polygon pour",
+            BoardItemId::Zone(id(0x62)),
+            Point::new(23.0, 42.0),
+        ),
+        (
+            "keepout",
+            BoardItemId::Zone(id(0x63)),
+            Point::new(32.0, 42.0),
+        ),
+    ];
+    let mut r = rig();
+    let before = live(&r.app, &r.path);
+    for (kind, item, inside) in cases {
+        assert!(
+            moved_by_drag(&mut r, item, inside),
+            "{kind} dragged from inside"
+        );
+        let _ = r.app.update(Message::Edit(EditMsg::Undo));
+        assert_eq!(live(&r.app, &r.path), before, "{kind}: one undo step");
+    }
+    r.drag(Point::new(43.0, 53.0), Point::new(48.0, 53.0));
+    let room = r.board().rooms.iter().find(|room| room.uuid == ROOM);
+    let b = room.and_then(|room| room.outline.bounds()).expect("a box");
+    assert_eq!(
+        (b.x_mm, b.y_mm),
+        (45.0, 50.0),
+        "the room dragged from inside"
+    );
+}
+
+/// An object on top of an area wins the press: the track over the pour
+/// moves and the pour stays.
+#[test]
+fn a_press_on_a_track_over_a_pour_drags_the_track() {
+    let mut r = rig();
+    let pour = moved_item(r.board(), BoardItemId::Zone(id(0x62)), Point::new(0.0, 0.0));
+    let track = BoardItemId::Segment(id(0x11));
+    assert!(
+        moved_by_drag(&mut r, track, Point::new(23.0, 44.0)),
+        "the track moved"
+    );
+    let after = moved_item(r.board(), BoardItemId::Zone(id(0x62)), Point::new(0.0, 0.0));
+    assert_eq!(after, pour, "the pour under it stays");
+}
+
+/// A press on empty board starts a box: nothing moves and the box selects
+/// what it encloses.
+#[test]
+fn a_press_on_empty_board_starts_a_box() {
+    let mut r = rig();
+    let before = live(&r.app, &r.path);
+    r.drag(Point::new(17.0, 7.0), Point::new(27.0, 13.0));
+    assert_eq!(live(&r.app, &r.path), before, "nothing moved");
+    assert!(r.app.interaction_state.pcb_carry.is_none(), "no drag");
+    let selection = r.app.interaction_state.pcb_selection.selection();
+    assert!(
+        selection.contains(pcb_geom::ItemRef::Text(id(0x40))),
+        "the box selected the string inside it"
+    );
 }
