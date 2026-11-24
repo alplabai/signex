@@ -225,7 +225,8 @@ pub fn view<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<
 
 /// The header (mockup rows 95-102): the kind, its count pill (a pad's
 /// "{component}-{pad}", "Next to place" while placing), a Shelved pill for
-/// a shelved pour, the lock icon; under it the search, or while placing the
+/// a shelved pour, the lock icon; under it a dimension's Value card (mockup
+/// row 101), then the search, or while placing the
 /// placing callout; and for a locked item the warn callout with Unlock.
 fn header<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<'a, PanelMsg> {
     let look = rows::Look::of(ctx);

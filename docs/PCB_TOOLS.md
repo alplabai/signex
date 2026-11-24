@@ -819,7 +819,11 @@ the Tune rows are the length tuning commands of #2389 (palette, no menu row).
 - **Glyphs.** Every button is an SVG glyph drawn in the bar's ink: Via, Pad,
   Dimension and Keepout use the board tool glyphs of their dropdown rows
   (`assets/icons/pcb/`), the via a ring around its drill hole and the pad a
-  rounded SMD pad with its centre (mockup row 108). The View button and the
+  rounded SMD pad with its centre (mockup row 108). In Copper Areas, Polygon
+  Pour, Pour Cutout, Slice Pour, Solid Region and Fill share one hatched-area
+  glyph (`pcb/copper_area.svg`), on their rows and on the group button while
+  it shows one of them; Keepout keeps `pcb/keepout.svg` and Room
+  keeps its own glyphs (mockup row 108). The View button and the
   View dropdown draw each turn with an arrow that turns the same way; the
   half turn uses the clockwise arrow and Reset View Rotation has no icon.
   The clockwise arrow's direction comes from the #2503 icon fix.
