@@ -90,16 +90,18 @@ fn board() -> PcbBoard {
         ]
     }))
     .unwrap();
+    // Inside the copper extent Fit frames: Fit reads no room, so a room
+    // past the copper would sit off the test canvas.
     board.rooms.push(Room {
         uuid: ROOM,
         name: "R1".into(),
         source: None,
         layer: RoomLayer::Top,
         outline: RoomOutline::Rect {
-            x_mm: 40.0,
-            y_mm: 50.0,
-            w_mm: 6.0,
-            h_mm: 6.0,
+            x_mm: 38.0,
+            y_mm: 34.0,
+            w_mm: 5.0,
+            h_mm: 5.0,
         },
         colour: "#336699".into(),
         keep_parts_inside: false,
@@ -228,7 +230,7 @@ fn every_board_object_kind_moves_by_dragging_it() {
 fn a_room_moves_by_dragging_its_edge() {
     let mut r = rig();
     let before = live(&r.app, &r.path);
-    r.drag(Point::new(43.0, 50.0), Point::new(48.0, 50.0));
+    r.drag(Point::new(40.0, 34.0), Point::new(45.0, 34.0));
     let room = r
         .board()
         .rooms
@@ -236,7 +238,7 @@ fn a_room_moves_by_dragging_its_edge() {
         .find(|room| room.uuid == ROOM)
         .unwrap();
     let b = room.outline.bounds().expect("a box");
-    assert_eq!((b.x_mm, b.y_mm), (45.0, 50.0), "the room moved by the drag");
+    assert_eq!((b.x_mm, b.y_mm), (43.0, 34.0), "the room moved by the drag");
     let _ = r.app.update(Message::Edit(EditMsg::Undo));
     assert_eq!(live(&r.app, &r.path), before, "one undo step");
 }
@@ -279,12 +281,12 @@ fn a_press_inside_an_area_or_room_drags_it() {
         let _ = r.app.update(Message::Edit(EditMsg::Undo));
         assert_eq!(live(&r.app, &r.path), before, "{kind}: one undo step");
     }
-    r.drag(Point::new(43.0, 53.0), Point::new(48.0, 53.0));
+    r.drag(Point::new(40.0, 37.0), Point::new(45.0, 37.0));
     let room = r.board().rooms.iter().find(|room| room.uuid == ROOM);
     let b = room.and_then(|room| room.outline.bounds()).expect("a box");
     assert_eq!(
         (b.x_mm, b.y_mm),
-        (45.0, 50.0),
+        (43.0, 34.0),
         "the room dragged from inside"
     );
 }
