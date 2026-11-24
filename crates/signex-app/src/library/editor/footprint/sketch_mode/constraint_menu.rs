@@ -11,8 +11,8 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{Space, container, mouse_area, stack};
-use iced::{Element, Length, Widget as _};
+use iced::widget::{Space, mouse_area, stack};
+use iced::{Element, Widget as _};
 use signex_i18n::{Arg, I18n, MessageId, ids, t};
 use signex_sketch::SketchData;
 use signex_sketch::array::{ArrayId, ArrayKind};
@@ -426,13 +426,10 @@ pub fn overlay<'a>(
         editor.path.clone(),
         FootprintEditorMsg::SketchCanvas(SketchCanvasMsg::MenuClosed),
     );
-    let backstop = mouse_area(
-        container(Space::new())
-            .width(Length::Fill)
-            .height(Length::Fill),
-    )
-    .on_press(close.clone())
-    .on_right_press(close);
+    // Dimmed as every menu dims what lies behind it (mockup rows 53, 61).
+    let backstop = mouse_area(crate::app::view::menu_scrim_fill())
+        .on_press(close.clone())
+        .on_right_press(close);
     let anchored = crate::app::view::AnchoredMenu::new(card, (menu.x, menu.y));
     stack![backstop, anchored.boxed()].boxed()
 }
