@@ -196,4 +196,8 @@ define_ids! {
     PREFERENCES_SYMBOL_BODY_FILL_HELP = "preferences-symbol-body-fill-help";
     PREFERENCES_SYMBOL_BODY_FILL_COLOUR = "preferences-symbol-body-fill-colour";
     PREFERENCES_SYMBOL_BODY_FILL_COLOUR_HELP = "preferences-symbol-body-fill-colour-help";
+    // prefs-shell-pages
+    PREFERENCES_PAGE_GENERAL = "preferences-page-general";
+    PREFERENCES_GENERAL_HEADING = "preferences-general-heading";
+    PREFERENCES_GENERAL_INTRO = "preferences-general-intro";
 }

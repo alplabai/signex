@@ -2,7 +2,8 @@
 //! subtitle, the broken-file banner across the full width, a 216 px page
 //! list with an accent dot on every page holding unsaved changes, and the
 //! footer: a note, Cancel, Apply and OK. Cancel, Apply and OK are the
-//! discard, save and save-and-close actions. Restore defaults has no backend
+//! discard, save and save-and-close actions; on Rule Profiles, whose edits
+//! save at once, Cancel reads Close (mockup row 148). Restore defaults has no backend
 //! yet, so it is not drawn.
 
 use super::graphite_fields::{graphite_label, group_messages, nav_matches, nav_search};
@@ -14,7 +15,7 @@ use crate::styles::{
 };
 use iced::widget::{Column, Space, column, container, row, scrollable};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
-use signex_i18n::{I18n, ids, t};
+use signex_i18n::{I18n, MessageId, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text, tooltip};
 
@@ -247,6 +248,16 @@ pub(super) fn footer_note(nav: PrefNav, dirty: bool) -> FooterNote {
     }
 }
 
+/// The footer's discard button: Close on Rule Profiles, whose edits are
+/// already in their files, so nothing is left for Cancel to undo (mockup
+/// row 148); Cancel on every other page. Both send the same message.
+pub(super) fn dismiss_label(nav: PrefNav) -> MessageId {
+    match nav {
+        PrefNav::RuleProfiles => ids::DIALOG_BUTTON_CLOSE,
+        _ => ids::DIALOG_BUTTON_CANCEL,
+    }
+}
+
 /// Footer: the note, Cancel, Apply and OK at the right on the chrome fill.
 /// Apply needs unsaved changes; OK saves them and closes, or only closes
 /// when there are none.
@@ -293,7 +304,7 @@ fn graphite_footer<'a>(v: &PrefsView<'a>) -> Element<'a, PrefMsg> {
             Space::new().width(Length::Fill),
             note,
             dialog_button(
-                t!(v.i18n, ids::DIALOG_BUTTON_CANCEL),
+                t!(v.i18n, dismiss_label(v.nav)),
                 DialogButtonKind::Cancel,
                 Some(PrefMsg::DiscardAndClose),
                 t
@@ -359,6 +370,22 @@ mod tests {
             footer_note(PrefNav::RuleProfiles, true),
             FooterNote::Unsaved
         );
+    }
+
+    /// Mockup row 148: Rule Profiles edits save at once, so the footer
+    /// offers Close there and Cancel on the draft pages.
+    #[test]
+    fn the_rule_profiles_footer_says_close_in_place_of_cancel() {
+        let en = I18n::en_us();
+        assert_eq!(
+            t!(en, dismiss_label(PrefNav::RuleProfiles)).into_string(),
+            "Close"
+        );
+        for &nav in PrefNav::ALL {
+            if nav != PrefNav::RuleProfiles {
+                assert_eq!(dismiss_label(nav), ids::DIALOG_BUTTON_CANCEL, "{nav:?}");
+            }
+        }
     }
 
     #[test]

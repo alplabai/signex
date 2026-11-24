@@ -32,6 +32,7 @@ mod profiles;
 mod schematic_display;
 mod setting_row;
 mod shell;
+mod system_general;
 mod theme_cards;
 mod widgets;
 
@@ -68,6 +69,9 @@ pub enum PrefNav {
     Appearance,
     /// The interface language (mockup row 144a).
     Language,
+    /// Settings that cover every editor: autosave of recovery copies and
+    /// agent connections (mockup row 147).
+    General,
     /// Schematic annotation settings (the undo scope of an annotate run).
     Annotation,
     /// Schematic editing behaviour (rubber-banding wires on move).
@@ -96,6 +100,7 @@ impl PrefNav {
         PrefNav::Appearance,
         PrefNav::Language,
         PrefNav::Keyboard,
+        PrefNav::General,
         PrefNav::Annotation,
         PrefNav::Editing,
         PrefNav::SchematicDisplay,
@@ -113,6 +118,7 @@ impl PrefNav {
             PrefNav::Editing => "Editing",
             PrefNav::SchematicDisplay => "Display",
             PrefNav::Keyboard => "Keyboard Shortcuts",
+            PrefNav::General => "General",
             PrefNav::RuleProfiles => "Rule Profiles",
             PrefNav::LibraryDistributors => "Distributor APIs",
             PrefNav::ComponentClasses => "Component Classes",
@@ -127,6 +133,7 @@ impl PrefNav {
             PrefNav::Editing => "Schematic",
             PrefNav::SchematicDisplay => "Schematic",
             PrefNav::Keyboard => "System",
+            PrefNav::General => "System",
             PrefNav::RuleProfiles => "Validation",
             PrefNav::LibraryDistributors => "Library",
             PrefNav::ComponentClasses => "Library",
@@ -497,6 +504,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         PrefNav::Appearance => content_appearance(v),
         PrefNav::Language => content_language(v),
         PrefNav::Keyboard => content_keyboard_shortcuts(v),
+        PrefNav::General => system_general::content_general(v),
         PrefNav::Annotation => content_annotation(v),
         PrefNav::Editing => content_editing(v),
         PrefNav::SchematicDisplay => content_schematic_display(DisplayPage {

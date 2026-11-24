@@ -198,7 +198,7 @@ preferences-drag-direction-help = When on, dragging a selection box from left to
 preferences-increment-step = Increment step
 preferences-increment-step-help = How far the trailing number of a text moves each time it is repeated: placing the label D0 again and again gives D1, D2, ... with a step of 1, and Paste Array offers the same step. A negative step counts down; a number at the start or middle of a text is left alone.
 preferences-paste-designators = Designators on paste
-preferences-paste-designators-help = What pasted parts are called. Keep leaves the designators of the copy as they were (duplicates stay until Annotate runs). Reset turns them into R?, U?, ... for Annotate to number. Next free number gives each part the next unused number of its prefix in the project. Applies to Paste, Smart Paste, Duplicate, rubber-stamp copy and Paste Array; the units of one part always stay one part.
+preferences-paste-designators-help = What pasted parts are called. Keep unless taken, the default, keeps each designator the project does not use yet and gives a taken one the next unused number of its prefix; R? stays R?. Keep leaves the designators of the copy as they were (duplicates stay until Annotate runs). Reset turns them into R?, U?, ... for Annotate to number. Next free number gives each part the next unused number of its prefix in the project. Applies to Paste, Smart Paste, Duplicate, rubber-stamp copy and Paste Array; the units of one part always stay one part.
 preferences-autosave = Autosave recovery copies
 preferences-autosave-help = When on, { -brand-name } keeps a recovery copy of each schematic, symbol and footprint with unsaved changes about once a minute. The copy is a separate file in the { -brand-name } config folder (recovery); your own file is never touched by it. The copy is removed when you save the document, close it without keeping the changes, or quit with Discard All, even if you turn this off first. Off by default.
 
@@ -527,3 +527,9 @@ preferences-classes-reset-confirm = { $count ->
    *[other] Replace the { $count } classes in this list
 } with the { $defaults } default classes?
 preferences-classes-reset-confirm-yes = Reset
+
+# prefs-shell-pages
+## System ▸ General page (mockup row 147)
+preferences-page-general = General
+preferences-general-heading = General
+preferences-general-intro = Settings that cover every editor: recovery copies of unsaved documents and connections from agents.
