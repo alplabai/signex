@@ -1,4 +1,4 @@
-//! The Graphite ERC dialog (#2413): the severity tile counts, the "Profile"
+//! The Graphite ERC dialog (#2413): the severity chip counts, the "Profile"
 //! menu rows and their messages, and the machine-rules notice text (#2413).
 
 use signex_erc::{RuleKind, Severity};
