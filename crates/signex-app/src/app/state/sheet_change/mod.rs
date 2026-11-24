@@ -12,6 +12,8 @@ mod group;
 #[cfg(test)]
 mod group_tests;
 mod notices;
+#[cfg(test)]
+mod notices_tests;
 mod run;
 #[cfg(test)]
 mod run_tests;
@@ -24,7 +26,8 @@ use signex_engine::DocumentPatch;
 
 use super::DocumentState;
 use crate::app::core::event::{
-    ChangeCause, CoreEvent, DocumentChanged, Notice, NoticeLevel, read_only_refusal_message,
+    ChangeCause, CoreEvent, DocumentChanged, Notice, NoticeLevel, read_only_refusal,
+    read_only_refusal_message,
 };
 use crate::app::core::mutation_outcome::MutationOutcome;
 
@@ -146,7 +149,7 @@ impl DocumentState {
         let notice = self
             .read_only_refusal_noted
             .insert(instance)
-            .then(|| Notice::legacy_english(NoticeLevel::Warning, reason.clone()));
+            .then(|| Notice::new(NoticeLevel::Warning, read_only_refusal(Some(path), token)));
         Some(ReadOnlyRefusal { reason, notice })
     }
 

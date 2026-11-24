@@ -98,8 +98,8 @@ pub fn log_warning_with_link(target: &str, message: impl AsRef<str>, link: Messa
 
 /// Tell the user which locked objects an edit passed over.
 pub fn log_locked_skips(skipped: &[String]) {
-    if let Some(line) = crate::app::core::event::locked_skips_line(skipped) {
-        log_warning(line);
+    if let Some(line) = crate::app::core::event::locked_skips(skipped) {
+        log_warning(line.render(&signex_i18n::I18n::en_us()));
     }
 }
 

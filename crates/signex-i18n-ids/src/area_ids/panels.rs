@@ -294,6 +294,8 @@ define_ids! {
     PANELS_MESSAGES_PIN_DOT_REFUSED_ONE = "panels-messages-pin-dot-refused-one";
     PANELS_MESSAGES_PIN_DOT_REFUSED_MANY = "panels-messages-pin-dot-refused-many";
     PANELS_MESSAGES_PIN_DOT_REFUSED_ENTRY = "panels-messages-pin-dot-refused-entry";
+    PANELS_MESSAGES_PINS_NOT_KEPT_ONE = "panels-messages-pins-not-kept-one";
+    PANELS_MESSAGES_PINS_NOT_KEPT_MANY = "panels-messages-pins-not-kept-many";
     PANELS_MESSAGES_UNNAMED_NET = "panels-messages-unnamed-net";
     PANELS_MESSAGES_LIST_MORE = "panels-messages-list-more";
     // Multi-channel sheets and the Compiled Design panel (#1279, #1308).

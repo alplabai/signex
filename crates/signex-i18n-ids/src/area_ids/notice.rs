@@ -117,4 +117,21 @@ define_ids! {
     NOTICE_PREVIEW_RENDER_FAILED = "notice-preview-render-failed";
     NOTICE_LINK_NOT_OPENED = "notice-link-not-opened";
     NOTICE_LINK_LAUNCH_INCOMPLETE = "notice-link-launch-incomplete";
+    NOTICE_EDIT_LOCKED_SKIPPED = "notice-edit-locked-skipped";
+    NOTICE_EDIT_READ_ONLY = "notice-edit-read-only";
+    NOTICE_EDIT_THIS_SHEET = "notice-edit-this-sheet";
+    NOTICE_EDIT_ITEM_LOCKED_ONE = "notice-edit-item-locked-one";
+    NOTICE_EDIT_ITEM_LOCKED_MANY = "notice-edit-item-locked-many";
+    NOTICE_EDIT_COMMAND_EXECUTION_FAILED = "notice-edit-command-execution-failed";
+    NOTICE_EDIT_COMMAND_FAILED = "notice-edit-command-failed";
+    NOTICE_EDIT_UNDO_FAILED = "notice-edit-undo-failed";
+    NOTICE_EDIT_REDO_FAILED = "notice-edit-redo-failed";
+    NOTICE_EDIT_GROUP_STEP_FAILED = "notice-edit-group-step-failed";
+    NOTICE_EDIT_GROUP_REDO_DROPPED = "notice-edit-group-redo-dropped";
+    NOTICE_EDIT_GROUP_UNDO_BLOCKED = "notice-edit-group-undo-blocked";
+    NOTICE_EDIT_GROUP_REDO_BLOCKED = "notice-edit-group-redo-blocked";
+    NOTICE_EDIT_GROUP_UNDO_OUT_OF_REACH = "notice-edit-group-undo-out-of-reach";
+    NOTICE_EDIT_GROUP_REDO_OUT_OF_REACH = "notice-edit-group-redo-out-of-reach";
+    NOTICE_LOAD_NOT_INSTALLED = "notice-load-not-installed";
+    NOTICE_LOAD_RESTORE_ENGINE_FAILED = "notice-load-restore-engine-failed";
 }

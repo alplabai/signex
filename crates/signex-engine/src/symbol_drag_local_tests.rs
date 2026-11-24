@@ -34,7 +34,7 @@ struct Outcome {
     sheet: String,
     held: Vec<String>,
     result: Option<Result<CommandResult, String>>,
-    warnings: Vec<String>,
+    warnings: Vec<crate::EngineNotice>,
     unkept_pins: Vec<String>,
     /// Each guard check's answer, in order: whether the nets were as asked,
     /// and the tips blamed when not.
