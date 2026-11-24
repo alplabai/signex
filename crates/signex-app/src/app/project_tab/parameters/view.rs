@@ -548,9 +548,8 @@ impl Rows<'_> {
             .boxed()
     }
 
-    /// A name or value box drawn as plain text until hovered or focused. A
-    /// set value is mono; an empty one shows its placeholder in the UI face
-    /// (the bundled UI face has no italic, so it stays upright).
+    /// A name or value box drawn as plain text until hovered or focused, in
+    /// the face [`inline_font`] picks.
     fn inline_input<'a>(&self, value: &str, is_name: bool) -> input::TextInput<'a, Message> {
         let look = self.look;
         let placeholder = if is_name {
@@ -563,11 +562,26 @@ impl Rows<'_> {
             .size(TS.body)
             .padding([SP.xs, SP.s])
             .width(Length::Fill);
-        if value.is_empty() {
-            field
-        } else {
-            field.font(mono())
+        match inline_font(value, is_name) {
+            Some(font) => field.font(font),
+            None => field,
         }
+    }
+}
+
+/// The face of an inline box: a set value or name is mono; an empty value
+/// reads "Not set" in the italic UI face (mockup row 30); an empty name
+/// keeps its placeholder in the UI face.
+pub(super) fn inline_font(value: &str, is_name: bool) -> Option<Font> {
+    if !value.is_empty() {
+        Some(mono())
+    } else if is_name {
+        None
+    } else {
+        Some(Font {
+            style: iced::font::Style::Italic,
+            ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
+        })
     }
 }
 

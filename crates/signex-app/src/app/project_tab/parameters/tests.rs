@@ -485,3 +485,24 @@ fn the_project_title_block_has_the_sheets_address_and_people_fields() {
         assert_eq!(shown, field.label(), "{field:?}");
     }
 }
+
+/// Mockup row 30: an empty value reads "Not set" in the italic UI face; a
+/// set value or name is mono and upright; an empty name box keeps its
+/// placeholder in the plain UI face.
+#[test]
+fn an_empty_value_reads_not_set_in_italics() {
+    use super::view::inline_font;
+    use iced::font::Style;
+    let not_set = inline_font("", false).expect("a face for Not set");
+    assert_eq!(not_set.style, Style::Italic);
+    assert_eq!(
+        not_set.family,
+        crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT).family
+    );
+    let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
+    for (value, is_name) in [("3V3", false), ("VCC", true)] {
+        let set = inline_font(value, is_name).expect("a set box is mono");
+        assert_eq!((set.family, set.style), (mono.family, Style::Normal));
+    }
+    assert_eq!(inline_font("", true), None);
+}
