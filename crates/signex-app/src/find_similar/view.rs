@@ -144,11 +144,24 @@ fn value_cell<'a>(value: &str, tokens: &ThemeTokens, i18n: &I18n) -> Element<'a,
     }
 }
 
-/// One property row: name, seed value, Same / Any. A Same row gets the
-/// accent-soft fill.
+/// The corners a row fill takes: square between the table's rules, and the
+/// table's own bottom corners on the last row, 1 px tighter inside its border.
+fn row_corners(is_last: bool) -> iced::border::Radius {
+    let radius = Radii::GRAPHITE.button - 1.0;
+    let corners = iced::border::Radius::default();
+    if is_last {
+        corners.bottom_left(radius).bottom_right(radius)
+    } else {
+        corners
+    }
+}
+
+/// One property row: name, seed value, Same / Any, laid out by
+/// `styles::dialog_row`. A Same row gets the accent-soft fill.
 fn property_row<'a>(
     v: &SimilarValue,
     same: bool,
+    is_last: bool,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, FindSimilarMsg> {
@@ -162,33 +175,36 @@ fn property_row<'a>(
         segmented_look(tokens, TS.caption),
         move |same| FindSimilarMsg::PropertySet(property, same),
     );
-    let line = row![
+    let line = styles::dialog_row(vec![
         text(t!(i18n, property_label(v.property)))
             .size(TS.body)
             .color(ti(tokens.text))
-            .width(PROPERTY_W),
-        container(value_cell(&row_value(v, i18n), tokens, i18n)).width(Length::Fill),
-        container(choice).width(MATCH_W),
-    ]
-    .align_y(Alignment::Center)
-    .spacing(SP.m);
+            .width(PROPERTY_W)
+            .boxed(),
+        container(value_cell(&row_value(v, i18n), tokens, i18n))
+            .width(Length::Fill)
+            .boxed(),
+        container(choice).width(MATCH_W).boxed(),
+    ]);
     let fill = same.then_some(tokens::resolve(tokens).accent_soft);
-    // Square: the row sits between the table's rules.
+    let radius = row_corners(is_last);
     container(line)
-        .padding([SP.xs, SP.m])
         .width(Length::Fill)
         .style(move |_: &Theme| container::Style {
             background: fill.map(Background::Color),
+            border: Border {
+                radius,
+                ..Border::default()
+            },
             ..container::Style::default()
         })
         .boxed()
 }
 
-/// The column heads on the sunken band, in capitals for the message
-/// language, laid out like the rows under them (mockup row 68).
+/// The column heads on the list's head band (`styles::dialog_head_row`), in
+/// capitals for the message language, over the row columns (mockup row 68).
 fn table_head<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, FindSimilarMsg> {
-    let r = tokens::resolve(tokens);
-    let (fill, faint) = (r.sunken, r.ink3);
+    let faint = tokens::resolve(tokens).ink3;
     let head = |id| {
         let words = t!(i18n, id).into_string();
         // raw: catalog text already rendered, then upper-cased for the locale.
@@ -198,29 +214,16 @@ fn table_head<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, FindSimilarM
             .color(faint)
             .wrapping(iced::widget::text::Wrapping::None)
     };
-    let cells = row![
-        head(ids::FIND_SIMILAR_COL_PROPERTY).width(PROPERTY_W),
-        head(ids::FIND_SIMILAR_COL_SEED).width(Length::Fill),
-        head(ids::FIND_SIMILAR_COL_MATCH).width(MATCH_W),
-    ]
-    .spacing(SP.m)
-    .align_y(Alignment::Center);
-    // Inside the table's 1 px border, so its corners sit 1 px tighter.
-    let radius = Radii::GRAPHITE.button - 1.0;
-    container(cells)
-        .padding([SP.xs, SP.m])
-        .width(Length::Fill)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(fill)),
-            border: Border {
-                radius: iced::border::Radius::default()
-                    .top_left(radius)
-                    .top_right(radius),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        })
-        .boxed()
+    styles::dialog_head_row(
+        vec![
+            head(ids::FIND_SIMILAR_COL_PROPERTY)
+                .width(PROPERTY_W)
+                .boxed(),
+            head(ids::FIND_SIMILAR_COL_SEED).width(Length::Fill).boxed(),
+            head(ids::FIND_SIMILAR_COL_MATCH).width(MATCH_W).boxed(),
+        ],
+        tokens,
+    )
 }
 
 /// The property table: a bordered list, the head band, a rule under every
@@ -230,10 +233,15 @@ fn table<'a>(
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, FindSimilarMsg> {
+    let last = state.values.len().saturating_sub(1);
     let rows: Vec<Element<'a, FindSimilarMsg>> = state
         .values
         .iter()
-        .map(|v| property_row(v, state.same.contains(&v.property), tokens, i18n))
+        .enumerate()
+        .map(|(i, v)| {
+            let same = state.same.contains(&v.property);
+            property_row(v, same, i == last, tokens, i18n)
+        })
         .collect();
     styles::dialog_rows(Some(table_head(tokens, i18n)), rows, None, tokens)
 }
@@ -580,6 +588,28 @@ mod tests {
             changes >= 4,
             "two rules, each an edge in and out: {changes}"
         );
+    }
+
+    /// Mockup row 68: a Same fill on the last row keeps the table's rounded
+    /// bottom corner, so the corner pixel is not the row fill.
+    #[test]
+    fn a_same_last_row_keeps_the_table_corner_round() {
+        let en = I18n::en_us();
+        let tokens = theme_tokens(ThemeId::GraphiteLight);
+        let mut state = FindSimilarState::new("Symbol R3".into(), four_values(), None);
+        state.same.insert(SimilarProperty::LibraryPart);
+        let window = iced::Size::new(DIALOG_W, 600.0);
+        let height = crate::layout_probe::root_size(table(&state, &tokens, &en), window).height;
+        let texts = crate::layout_probe::lay_out_texts(table(&state, &tokens, &en), window);
+        let last = en.message_plain(property_label(SimilarProperty::LibraryPart), &[]);
+        let last = crate::layout_probe::find(&texts, &last).bounds;
+        let pixels = crate::layout_probe::draw_pixels(table(&state, &tokens, &en), window);
+        // In the row's left padding, level with its label: the Same fill.
+        let fill = pixel(&pixels, window.width, SP.m / 2.0 + 1.0, last.center_y());
+        // The row's own bottom-left pixel, just inside the 1 px border.
+        let corner = pixel(&pixels, window.width, 1.5, height - 2.5);
+        assert_ne!(fill, [0, 0, 0, 0], "the last row is filled");
+        assert_ne!(corner, fill, "the fill is cut at the rounded corner");
     }
 
     /// Mockup row 68: the footer is a band under a rule, so its top line is
