@@ -109,6 +109,41 @@ pub fn placed_item(sheet: &SchematicSheet, id: uuid::Uuid) -> Option<SelectedIte
         .find(|item| placed_geometry(sheet, item).is_some())
 }
 
+/// Every kind an object of a sheet is selected as, the two symbol fields
+/// left out: a field carries its symbol's uuid, so a uuid alone names the
+/// symbol.
+const OBJECT_KINDS: [SelectedKind; 16] = [
+    SelectedKind::Symbol,
+    SelectedKind::Wire,
+    SelectedKind::Bus,
+    SelectedKind::BusEntry,
+    SelectedKind::Junction,
+    SelectedKind::NoConnect,
+    SelectedKind::NoErcDirective,
+    SelectedKind::Label,
+    SelectedKind::SheetPin,
+    SelectedKind::TextNote,
+    SelectedKind::ChildSheet,
+    SelectedKind::Drawing,
+    SelectedKind::Directive,
+    SelectedKind::HarnessConnector,
+    SelectedKind::HarnessEntry,
+    SelectedKind::HarnessWire,
+];
+
+impl crate::Engine {
+    /// The object of the sheet `id` names, of any kind a selection holds:
+    /// what a command naming its items by uuid acts on (#2326). A symbol's
+    /// uuid names the symbol, never one of its fields.
+    #[must_use]
+    pub fn item_by_uuid(&self, id: uuid::Uuid) -> Option<SelectedItem> {
+        OBJECT_KINDS
+            .into_iter()
+            .map(|kind| SelectedItem::new(id, kind))
+            .find(|item| self.contains_selected_item(item))
+    }
+}
+
 /// The move that puts `item`'s position at `to`: one `MoveSelection` by the
 /// difference, so wires on a part's pins follow it with `keep_wires` as a
 /// drag does. A sheet entry stays on its symbol's border, as when dragged.
@@ -362,6 +397,26 @@ mod tests {
             mirror_x,
             ..Default::default()
         }
+    }
+
+    /// A uuid names its object whatever the kind; a part's uuid is the part,
+    /// never its designator or value field; an unknown uuid names nothing.
+    #[test]
+    fn a_uuid_names_its_object_and_a_part_uuid_never_a_field() {
+        let s = part(0.0, false);
+        let w = wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0));
+        let (part_id, wire_id) = (s.uuid, w.uuid);
+        let engine = Engine::new(SchematicSheet {
+            symbols: vec![s],
+            wires: vec![w],
+            ..Default::default()
+        })
+        .expect("engine");
+        let found = engine.item_by_uuid(part_id).expect("the part");
+        assert_eq!(found.kind, SelectedKind::Symbol);
+        let found = engine.item_by_uuid(wire_id).expect("the wire");
+        assert_eq!(found, SelectedItem::new(wire_id, SelectedKind::Wire));
+        assert_eq!(engine.item_by_uuid(uuid::Uuid::now_v7()), None);
     }
 
     #[test]

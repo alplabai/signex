@@ -242,6 +242,15 @@ pub(super) const WRITES: &[(&[&str], Surface, Writes)] = &[
         Settings,
     ),
     (OPERAND_DOCUMENT, Operand, Document),
+    // Declared exception (#2326 slice 6.P2b): on a footprint editor tab the
+    // Delete translator row deletes in the editor itself, a GUI route that
+    // writes the footprint until slice S-L moves the editors onto the core.
+    // Every other tab translates into the operand handler.
+    (
+        &["delete_selection"],
+        Surface::Only(Form::Translator),
+        Document,
+    ),
 ];
 
 /// Menu routes that write a document, a project or check results.
@@ -259,14 +268,11 @@ const MENU_DOCUMENT: &[&str] = &[
     "annotate_schematic_quietly",
     "autoplace_fields",
     "break_union",
-    "bring_drawings_forward",
-    "bring_drawings_to_front",
     "bring_to_front",
     "clear_all_net_colors",
     "close_active_document",
     "close_all_documents",
     "compile_project",
-    "delete_selection",
     "distribute_horizontally",
     "distribute_vertically",
     "footprint_recompute_courtyard_outline",
@@ -287,8 +293,6 @@ const MENU_DOCUMENT: &[&str] = &[
     "run_erc",
     "save_all",
     "save_document",
-    "send_drawings_backward",
-    "send_drawings_to_back",
     "send_to_back",
     "snap_board_origin_to_corner",
     "stitch_vias",
@@ -551,11 +555,14 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "board_report_net_length",
     "board_report_netlist",
     "board_shape_from_selection",
+    "bring_drawings_forward",
+    "bring_drawings_to_front",
     "clear_all_net_colors",
     "close_active_document",
     "color_net",
     "create_sheet_symbol_from_sheet",
     "delete_net_class",
+    "delete_selection",
     "draw_bus",
     "draw_graphic_line",
     "draw_line",
@@ -634,6 +641,8 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "save_board_reuse_block",
     "save_document",
     "save_document_as",
+    "send_drawings_backward",
+    "send_drawings_to_back",
     "set_board_graphic",
     "set_board_panel",
     "set_footprint_text",

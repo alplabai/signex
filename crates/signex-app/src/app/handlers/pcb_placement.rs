@@ -17,6 +17,7 @@ use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_options::GridUse;
 use uuid::Uuid;
 
+use crate::app::command::{CommandOutcome, OperandValue, translator};
 use crate::app::{Message, Signex};
 use crate::pcb_canvas::{CarryKind, PcbCarry, SnapView, carry_delta};
 
@@ -55,23 +56,35 @@ impl Signex {
     }
 
     /// Delete the board selection when the active tab is a PCB: its
-    /// footprints (a selected pad's included), tracks, vias and drawn areas.
-    pub(crate) fn delete_pcb_selection(&mut self) -> bool {
+    /// footprints (a selected pad's included), tracks, vias and drawn areas,
+    /// through the command's operand handler (`command::translator`). An
+    /// empty selection runs too, so its refusal is said as before. `None`
+    /// when the tab is no PCB.
+    pub(crate) fn delete_pcb_selection(&mut self) -> Option<Task<Message>> {
         if !self.has_active_pcb() {
-            return false;
+            return None;
         }
         let items = self
             .with_pcb_selection(|state, _| deletable_items(state.selection()))
             .unwrap_or_default();
-        let Some(board) = self.active_pcb() else {
-            return false;
+        self.active_pcb()?;
+        let Some(path) = self.active_tab_path() else {
+            return Some(Task::none());
         };
-        let built = placement::delete_commands(board, items);
-        if self.run_placement("Delete", built) {
-            self.interaction_state.pcb_selection.clear_selection();
-            self.refresh_pcb_highlight();
+        let ids = items.into_iter().map(BoardItemId::uuid).collect();
+        let operands = vec![("ids", OperandValue::Targets(ids))];
+        let (outcome, task) = translator::run(self, "delete_selection", &path, operands);
+        match outcome {
+            CommandOutcome::Answered(answer) if answer["changed"].as_bool() == Some(true) => {
+                self.interaction_state.pcb_selection.clear_selection();
+                self.refresh_pcb_highlight();
+            }
+            CommandOutcome::Disabled { reason } => {
+                refuse("Delete", &reason.render(&self.ui_state.i18n));
+            }
+            _ => {}
         }
-        true
+        Some(task)
     }
 
     /// Edit ▸ Move on a board: the selected footprints follow the pointer
@@ -750,6 +763,6 @@ pub(crate) fn deletable_items(selection: &pcb_geom::Selection) -> Vec<BoardItemI
     items
 }
 
-pub(super) fn refuse(what: &str, refusal: &PlacementRefusal) {
+pub(super) fn refuse(what: &str, refusal: &dyn std::fmt::Display) {
     crate::diagnostics::log_warning(format!("{what}: {refusal}; nothing changed"));
 }

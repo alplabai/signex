@@ -602,6 +602,12 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     // #2389: length tuning on the named board.
                     "tune_net_length",
                     "tune_diff_pair",
+                    // #2326 slice 6.P2b: the drawing order and Delete by uuid.
+                    "bring_drawings_forward",
+                    "bring_drawings_to_front",
+                    "send_drawings_backward",
+                    "send_drawings_to_back",
+                    "delete_selection",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"

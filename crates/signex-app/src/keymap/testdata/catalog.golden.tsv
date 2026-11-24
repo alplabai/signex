@@ -53,7 +53,7 @@ paste_array	edit	Paste array	-	General	-	-	Always	gui_only,mutates_doc,undoable	
 paste_special	edit	Paste special	-	General	-	-	Always	mutates_doc,undoable	-
 smart_paste	edit	Smart Paste	Paste Special	General	-	-	Always	mutates_doc,undoable	-
 duplicate	edit	Duplicate	-	General	-	-	RequiresSelection	mutates_doc,undoable	-
-delete_selection	edit	Delete selection	Delete	General	-	-	RequiresSelection	mutates_doc,undoable	-
+delete_selection	edit	Delete selection	Delete	General	-	-	RequiresSelection	mutates_doc,undoable	document:document,ids:targets
 rubber_stamp_copy	edit	Rubber-stamp copy / repeated paste	-	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 edit_object_properties	edit	Edit properties of object under cursor	-	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 edit_selected_object_properties	edit	Properties / edit selected object	Properties...	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
@@ -73,10 +73,10 @@ create_union	edit	Create a union from the selection	Create Union…	Schematic	-	
 add_to_union	edit	Add the selection to the selected union	Add Selection to Union	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 remove_from_union	edit	Remove the selection from its union	Remove Selection from Union	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 break_union	edit	Break the selected union	Break Union	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
-bring_drawings_forward	edit	Bring drawings forward	Bring Forward	General	-	-	RequiresSelection	mutates_doc,undoable	-
-bring_drawings_to_front	edit	Bring drawings to front	Bring to Front	General	-	-	RequiresSelection	mutates_doc,undoable	-
-send_drawings_backward	edit	Send drawings backward	Send Backward	General	-	-	RequiresSelection	mutates_doc,undoable	-
-send_drawings_to_back	edit	Send drawings to back	Send to Back	General	-	-	RequiresSelection	mutates_doc,undoable	-
+bring_drawings_forward	edit	Bring drawings forward	Bring Forward	General	-	-	RequiresSelection	mutates_doc,undoable	document:document,ids:targets
+bring_drawings_to_front	edit	Bring drawings to front	Bring to Front	General	-	-	RequiresSelection	mutates_doc,undoable	document:document,ids:targets
+send_drawings_backward	edit	Send drawings backward	Send Backward	General	-	-	RequiresSelection	mutates_doc,undoable	document:document,ids:targets
+send_drawings_to_back	edit	Send drawings to back	Send to Back	General	-	-	RequiresSelection	mutates_doc,undoable	document:document,ids:targets
 move_to_front	modify	Move to front	Move To Front	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
 bring_to_front	modify	Bring to front	Bring To Front	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
 send_to_back	modify	Send to back	Send To Back	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-

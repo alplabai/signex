@@ -952,6 +952,14 @@ pub const BOARD_ITEMS: &[Operand] = &[
     required("document", OperandKind::Document),
     required("ids", OperandKind::Targets),
 ];
+/// The drawing order commands (#1583) and `delete_selection` (#2326): items
+/// of the named sheet (for a delete, of the sheet or board) by uuid, comma
+/// separated. The person's menu row, key and palette fill both in from the
+/// document in view and its selection.
+pub const DOCUMENT_ITEMS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("ids", OperandKind::Targets),
+];
 /// `set_via_span` (#2407): vias by uuid and the two copper layers they join,
 /// `TopCopper,Inner2Copper`.
 pub const SET_VIA_SPAN: &[Operand] = &[
