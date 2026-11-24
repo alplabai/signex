@@ -42,6 +42,11 @@ impl Signex {
                     self.interaction_state.board_3d = None;
                 }
             }
+            // Its keys still reach the view while a screenshot hides the
+            // toolbar; a flip or a new lighting between the two passes of a
+            // transparent save would spoil the matte.
+            Board3dMsg::FlipRequested | Board3dMsg::LightingCycled
+                if self.board_3d_is_capturing() => {}
             Board3dMsg::PresetPicked(preset) => {
                 self.with_board_3d_scene(|session, scene| session.set_preset(preset, scene));
             }
@@ -80,19 +85,17 @@ impl Signex {
                 session.explode_open = false;
                 session.shot_menu_open = false;
             }),
-            Board3dMsg::ScreenshotCopyRequested => {
-                self.edit_board_3d(|session| session.begin_capture(None));
-            }
+            Board3dMsg::ScreenshotCopyRequested => self.start_board_3d_capture(None, false),
             Board3dMsg::ScreenshotSaveRequested => return self.ask_board_3d_png(false),
             Board3dMsg::ScreenshotSavePicked(path) => {
                 if let Some(path) = path {
-                    self.edit_board_3d(|session| session.begin_capture(Some(path)));
+                    self.start_board_3d_capture(Some(path), false);
                 }
             }
             Board3dMsg::ScreenshotTransparentSaveRequested => return self.ask_board_3d_png(true),
             Board3dMsg::ScreenshotTransparentSavePicked(path) => {
                 if let Some(path) = path {
-                    self.edit_board_3d(|session| session.begin_transparent_capture(path));
+                    self.start_board_3d_capture(Some(path), true);
                 }
             }
             Board3dMsg::ScreenshotTaken { save_to, shot } => {

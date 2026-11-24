@@ -15,7 +15,7 @@ fn in_catalog(text: &str) -> bool {
 }
 
 /// How many catalog ids start with `cycle_` or `toggle_`.
-const CYCLE_AND_TOGGLE_IDS: usize = 25;
+const CYCLE_AND_TOGGLE_IDS: usize = 26;
 
 #[test]
 fn every_cycle_and_toggle_id_in_the_catalog_runs_once() {
@@ -39,6 +39,22 @@ fn the_named_run_once_and_rotate_ids_are_catalog_ids() {
 #[test]
 fn flips_mirrors_and_add_vertex_run_once_everywhere() {
     for text in RUN_ONCE {
+        for ctx in [NO_RUN, RUN] {
+            assert!(!runs_on_key_repeat(&id(text), ctx), "{text} {ctx:?}");
+        }
+    }
+}
+
+/// Mockup row 175: a held H steps the lighting once, and a held
+/// Ctrl+Shift+C copies one screenshot of the board 3D view.
+#[test]
+fn the_board_3d_keys_run_once_while_held() {
+    for text in [
+        "flip_board_3d",
+        "cycle_board_3d_lighting",
+        "copy_board_3d_screenshot",
+    ] {
+        assert!(in_catalog(text), "{text}");
         for ctx in [NO_RUN, RUN] {
             assert!(!runs_on_key_repeat(&id(text), ctx), "{text} {ctx:?}");
         }

@@ -369,6 +369,14 @@ impl Board3dSession {
         Some(capture.save_to.clone())
     }
 
+    /// A capture for `save_to` was taken and its pass is awaited. A pass
+    /// that arrives when this is false belongs to a capture that ended.
+    pub fn awaits_pass(&self, save_to: Option<&Path>) -> bool {
+        self.capture
+            .as_ref()
+            .is_some_and(|c| c.asked && c.save_to.as_deref() == save_to)
+    }
+
     /// The screenshot came back, or will not: the overlays show again.
     pub fn end_capture(&mut self) {
         self.capture = None;

@@ -657,7 +657,12 @@ backdrop. A pixel the same in both is opaque; where white came through, its
 share is the backdrop's, so the coverage is one less that share and the
 colour is the black pass divided by the coverage (straight alpha). The PNG
 is written like Save PNG…; when the view changed size between the passes
-nothing is written and Messages says why.
+nothing is written and Messages says why. The mesh pipeline draws without
+multisampling, so edges come out hard; only a translucent surface with the
+backdrop behind it comes out partly transparent. While a capture is
+under way, Flip, the next lighting preset and a new screenshot are ignored,
+and a save picked meanwhile is not written (Messages says so); a pass that
+comes back after the view was left is dropped with a Messages line.
 
 **Keys** (mockup row 175): on a board `H` is the next lighting preset and
 `Mod+Shift+C` copies a screenshot, in both built-in profiles. The commands

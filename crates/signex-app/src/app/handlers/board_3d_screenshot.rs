@@ -12,7 +12,7 @@ use iced::{Rectangle, Task};
 use signex_i18n::{I18n, ids, t};
 
 use super::board_3d::board_3d_message;
-use crate::app::state::CaptureResult;
+use crate::app::state::{Board3dSession, CaptureResult};
 use crate::app::{Board3dMsg, Board3dShot, Message, Signex};
 
 impl Signex {
@@ -53,6 +53,49 @@ impl Signex {
         )
     }
 
+    /// Start a screenshot of the 3D view in view: copied when `save_to` is
+    /// `None`, else written there, over a transparent backdrop when
+    /// `transparent`. One under way runs to its end; a save asked for
+    /// meanwhile is not written, and Messages says why.
+    pub(super) fn start_board_3d_capture(&mut self, save_to: Option<PathBuf>, transparent: bool) {
+        if self.board_3d_is_capturing() {
+            if let Some(path) = save_to.as_deref() {
+                let why = t!(self.ui_state.i18n, ids::PCB_3D_SHOT_BUSY).into_string();
+                self.report_board_3d_save(path, Some(why.as_str()));
+            }
+            return;
+        }
+        let Some(session) = self.board_3d_in_view_mut() else {
+            return;
+        };
+        match save_to {
+            Some(path) if transparent => session.begin_transparent_capture(path),
+            save_to => session.begin_capture(save_to),
+        }
+    }
+
+    /// A screenshot of the 3D view is under way.
+    pub(super) fn board_3d_is_capturing(&self) -> bool {
+        self.interaction_state
+            .board_3d
+            .as_ref()
+            .is_some_and(Board3dSession::is_capturing)
+    }
+
+    /// A pass came back for a capture that ended, as when the view was left
+    /// between its frames: nothing is copied or written, and Messages says
+    /// why.
+    fn report_board_3d_interrupted(&self, save_to: Option<&Path>) {
+        let i18n = &self.ui_state.i18n;
+        let why = t!(i18n, ids::PCB_3D_SHOT_INTERRUPTED).into_string();
+        match save_to {
+            Some(path) => self.report_board_3d_save(path, Some(why.as_str())),
+            None => crate::diagnostics::log_warning(
+                t!(i18n, ids::PCB_3D_SHOT_COPY_FAILED, "why" => why).into_string(),
+            ),
+        }
+    }
+
     /// A frame was drawn: the screenshot waiting for it, if any, is taken
     /// now, from the main window, and cropped to the view.
     pub(super) fn capture_board_3d(&mut self) -> Task<Message> {
@@ -86,11 +129,16 @@ impl Signex {
         save_to: Option<PathBuf>,
         shot: Option<Arc<Board3dShot>>,
     ) -> Task<Message> {
-        let result = match self.interaction_state.board_3d.as_mut() {
-            Some(session) => session.finish_pass(shot),
-            None => CaptureResult::Plain(shot),
+        let awaited = self
+            .interaction_state
+            .board_3d
+            .as_ref()
+            .is_some_and(|session| session.awaits_pass(save_to.as_deref()));
+        let Some(session) = self.interaction_state.board_3d.as_mut().filter(|_| awaited) else {
+            self.report_board_3d_interrupted(save_to.as_deref());
+            return Task::none();
         };
-        let shot = match result {
+        let shot = match session.finish_pass(shot) {
             CaptureResult::Pending => return Task::none(),
             CaptureResult::Plain(shot) => shot,
             CaptureResult::Matte { black, white } => match matte(&black, &white) {
@@ -392,7 +440,7 @@ mod tests {
     /// passes; the lighting backdrop shows again after.
     #[test]
     fn a_transparent_save_captures_over_black_then_over_white() {
-        use crate::app::state::{Board3dSession, MatteBackdrop};
+        use crate::app::state::MatteBackdrop;
 
         let target = PathBuf::from("board-3d.png");
         let mut session = Board3dSession::open(Path::new("board.snxpcb"));
@@ -423,8 +471,6 @@ mod tests {
     /// shot; a transparent pass that caught nothing ends the capture too.
     #[test]
     fn a_plain_capture_and_an_empty_pass_end_on_their_shot() {
-        use crate::app::state::Board3dSession;
-
         let mut session = Board3dSession::open(Path::new("board.snxpcb"));
         session.begin_capture(None);
         assert_eq!(session.matte_backdrop(), None);
@@ -438,5 +484,179 @@ mod tests {
         session.begin_transparent_capture(PathBuf::from("board-3d.png"));
         assert_eq!(session.finish_pass(None), CaptureResult::Plain(None));
         assert!(!session.is_capturing());
+    }
+
+    /// A board open in the main window and shown in 3D.
+    fn app_in_3d(dir: &Path) -> Signex {
+        use crate::app::handlers::menu::export::tests::app_workspace;
+
+        let mut app = app_workspace(&dir.to_string_lossy(), &[]);
+        app.ui_state.first_run_tour_open = false;
+        app.ui_state.main_window_id = Some(iced::window::Id::unique());
+        let path = dir.join("board.snxpcb");
+        let board: signex_types::pcb::PcbBoard =
+            serde_json::from_value(serde_json::json!({"uuid": uuid::Uuid::from_u128(1)}))
+                .expect("a board");
+        app.open_pcb_tab(path.clone(), "board".into(), board);
+        app.interaction_state.board_3d = Some(Board3dSession::open(&path));
+        app
+    }
+
+    fn view_3d(app: &mut Signex, event: Board3dMsg) -> Task<Message> {
+        app.update(board_3d_message(event))
+    }
+
+    fn session(app: &Signex) -> &Board3dSession {
+        app.interaction_state.board_3d.as_ref().expect("in 3D")
+    }
+
+    /// A frame is drawn; the window capture it asks for is left unanswered,
+    /// as the test hands the pass back itself.
+    fn frame(app: &mut Signex) {
+        let _ = view_3d(app, Board3dMsg::AnimationTicked(std::time::Instant::now()));
+    }
+
+    /// Run `task` and feed what it says back through `update`.
+    fn drive(app: &mut Signex, task: Task<Message>) {
+        use iced::futures::StreamExt as _;
+
+        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+            return;
+        };
+        let runtime = tokio::runtime::Runtime::new().expect("a runtime");
+        let messages = runtime.block_on(async {
+            let mut out = Vec::new();
+            while let Some(action) = stream.next().await {
+                if let iced_runtime::Action::Output(message) = action {
+                    out.push(message);
+                }
+            }
+            out
+        });
+        for message in messages {
+            let follow_up = app.update(message);
+            drive(app, follow_up);
+        }
+    }
+
+    fn pass(app: &mut Signex, save_to: &Path, pixels: &[[u8; 4]]) {
+        let task = view_3d(
+            app,
+            Board3dMsg::ScreenshotTaken {
+                save_to: Some(save_to.to_path_buf()),
+                shot: Some(Arc::new(row_shot(pixels))),
+            },
+        );
+        drive(app, task);
+    }
+
+    fn reason(id: signex_i18n::MessageId) -> String {
+        t!(I18n::en_us_ref(), id).into_string()
+    }
+
+    /// Mockup row 175, Save with transparent backdrop, through `update`:
+    /// the picked path starts a capture over black, the next frame captures
+    /// over white, and the matted PNG is written there.
+    #[test]
+    fn a_transparent_save_through_update_writes_the_matted_png() {
+        use crate::app::state::MatteBackdrop;
+
+        let dir = tempfile::tempdir().expect("a folder");
+        let mut app = app_in_3d(dir.path());
+        let target = dir.path().join("board-3d.png");
+        let _ = view_3d(
+            &mut app,
+            Board3dMsg::ScreenshotTransparentSavePicked(Some(target.clone())),
+        );
+        assert_eq!(session(&app).matte_backdrop(), Some(MatteBackdrop::Black));
+        frame(&mut app);
+        assert!(!session(&app).needs_frames(), "the first pass was taken");
+
+        pass(&mut app, &target, &[[10, 20, 30, 255], [0, 0, 0, 255]]);
+        assert!(!target.exists(), "the pass over black is not written");
+        assert_eq!(session(&app).matte_backdrop(), Some(MatteBackdrop::White));
+        assert!(session(&app).needs_frames(), "the next frame is captured");
+        frame(&mut app);
+
+        pass(
+            &mut app,
+            &target,
+            &[[10, 20, 30, 255], [255, 255, 255, 255]],
+        );
+        let png = image::open(&target).expect("the PNG is written").to_rgba8();
+        assert_eq!(png.dimensions(), (2, 1));
+        assert_eq!(png.into_raw(), [[10, 20, 30, 255], [0, 0, 0, 0]].concat());
+        assert!(!session(&app).is_capturing(), "the chrome shows again");
+    }
+
+    /// The view changed size between the two passes: nothing is written,
+    /// and Messages says why.
+    #[test]
+    fn a_resized_transparent_save_writes_nothing_and_says_why() {
+        let resized = reason(ids::PCB_3D_SHOT_MATTE_RESIZED);
+        let dir = tempfile::tempdir().expect("a folder");
+        let mut app = app_in_3d(dir.path());
+        let target = dir.path().join("board-3d.png");
+        let _ = view_3d(
+            &mut app,
+            Board3dMsg::ScreenshotTransparentSavePicked(Some(target.clone())),
+        );
+        frame(&mut app);
+        pass(&mut app, &target, &[[0, 0, 0, 255]]);
+        frame(&mut app);
+
+        let before = crate::diagnostics::logged_count(&resized);
+        pass(
+            &mut app,
+            &target,
+            &[[255, 255, 255, 255], [255, 255, 255, 255]],
+        );
+        assert!(!target.exists());
+        assert_eq!(crate::diagnostics::logged_count(&resized), before + 1);
+        assert!(!session(&app).is_capturing());
+    }
+
+    /// While a transparent save is under way, the copy key, H and Flip do
+    /// nothing and a save picked meanwhile is refused with a line; a pass
+    /// that comes back after the view was left is not written.
+    #[test]
+    fn a_transparent_save_is_not_cut_short_or_written_from_a_stale_pass() {
+        use crate::app::state::MatteBackdrop;
+
+        let busy = reason(ids::PCB_3D_SHOT_BUSY);
+        let interrupted = reason(ids::PCB_3D_SHOT_INTERRUPTED);
+        let dir = tempfile::tempdir().expect("a folder");
+        let mut app = app_in_3d(dir.path());
+        let target = dir.path().join("board-3d.png");
+        let _ = view_3d(
+            &mut app,
+            Board3dMsg::ScreenshotTransparentSavePicked(Some(target.clone())),
+        );
+        frame(&mut app);
+
+        let lighting = session(&app).lighting;
+        let _ = view_3d(&mut app, Board3dMsg::ScreenshotCopyRequested);
+        let _ = view_3d(&mut app, Board3dMsg::LightingCycled);
+        let _ = view_3d(&mut app, Board3dMsg::FlipRequested);
+        assert_eq!(session(&app).matte_backdrop(), Some(MatteBackdrop::Black));
+        assert_eq!(session(&app).lighting, lighting);
+        assert_eq!(session(&app).lighting_toast, None);
+        assert!(!session(&app).is_flipping());
+
+        let other = dir.path().join("other.png");
+        let refused = crate::diagnostics::logged_count(&busy);
+        let _ = view_3d(&mut app, Board3dMsg::ScreenshotSavePicked(Some(other)));
+        assert_eq!(crate::diagnostics::logged_count(&busy), refused + 1);
+        assert!(
+            session(&app).awaits_pass(Some(&target)),
+            "the transparent save keeps its capture"
+        );
+
+        let _ = view_3d(&mut app, Board3dMsg::Toggled);
+        assert!(app.interaction_state.board_3d.is_none(), "the view is left");
+        let dropped = crate::diagnostics::logged_count(&interrupted);
+        pass(&mut app, &target, &[[0, 0, 0, 255]]);
+        assert!(!target.exists(), "the pass over black is not written");
+        assert_eq!(crate::diagnostics::logged_count(&interrupted), dropped + 1);
     }
 }
