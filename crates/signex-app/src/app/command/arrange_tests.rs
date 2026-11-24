@@ -166,6 +166,16 @@ fn each_order_step_runs_its_operand_handler() {
     }
 }
 
+/// A selected drawing the sheet no longer holds (an agent deleted it) is
+/// left out: the drawing still on the sheet moves, as before the translator.
+#[test]
+fn a_selected_drawing_the_sheet_lost_is_left_out() {
+    let mut app = app_with_drawings();
+    select(&mut app, vec![drawing(2), drawing(999)]);
+    run(&mut app, "bring_drawings_forward");
+    assert_eq!(order(&app), [1, 3, 2, 4]);
+}
+
 #[test]
 fn forward_and_backward_step_one_place() {
     let mut app = app_with_drawings();

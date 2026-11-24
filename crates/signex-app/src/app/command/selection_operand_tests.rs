@@ -171,31 +171,53 @@ fn a_uuid_that_names_nothing_refuses_the_whole_delete() {
 /// undo step: the old path, still Cut's, is the reference.
 #[test]
 fn the_menu_delete_on_a_sheet_acts_as_the_direct_engine_path() {
-    let selection = vec![
+    let selection = [
         SelectedItem::new(id(WIRE), SelectedKind::Wire),
         SelectedItem::new(id(LOCKED_PART), SelectedKind::SymbolRefField),
         SelectedItem::new(id(PART), SelectedKind::SymbolValField),
     ];
-    let run = |translated: bool| {
-        let dir = tempfile::tempdir().unwrap();
-        let (mut app, _, b) = two_sheets(dir.path());
-        app.interaction_state.active_canvas_mut().selected = selection.clone();
-        let named = crate::diagnostics::logged_count(LOCKED_REF);
-        if translated {
-            let _ = app.update(Message::Edit(EditMsg::DeleteSelected));
-            assert!(translator::ran("delete_selection"));
-        } else {
-            app.handle_selection_delete_requested();
-        }
-        let said = crate::diagnostics::logged_count(LOCKED_REF) - named;
-        let left = serde_json::to_string(sheet_at(&app, &b)).unwrap();
-        let selected = app.interaction_state.active_canvas().selected.clone();
-        let steps = app.document_state.engines[&b].undo_position();
-        (left, selected, steps, said)
-    };
-    let menu = run(true);
-    assert_eq!(menu, run(false));
+    let menu = sheet_delete(&selection, true);
+    assert_eq!(menu, sheet_delete(&selection, false));
     assert!(menu.1.is_empty() && menu.2 == 1 && menu.3 == 1, "{menu:?}");
+}
+
+/// A selected object the sheet no longer holds (an agent deleted it) is
+/// left out: the menu's Delete still deletes the wire and clears the
+/// selection, as the direct engine path did.
+#[test]
+fn the_menu_delete_leaves_out_a_selected_object_the_sheet_lost() {
+    let selection = [
+        SelectedItem::new(id(WIRE), SelectedKind::Wire),
+        SelectedItem::new(id(999), SelectedKind::Wire),
+    ];
+    let menu = sheet_delete(&selection, true);
+    assert_eq!(menu, sheet_delete(&selection, false));
+    assert!(!menu.0.contains(&id(WIRE).to_string()), "the wire went");
+    assert!(menu.1.is_empty() && menu.2 == 1, "{menu:?}");
+}
+
+/// Delete `selection` on sheet `b` by the menu (`translated`) or the direct
+/// engine path: the sheet after, the selection after, the undo steps and
+/// how often Messages named the locked part.
+fn sheet_delete(
+    selection: &[SelectedItem],
+    translated: bool,
+) -> (String, Vec<SelectedItem>, usize, usize) {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _, b) = two_sheets(dir.path());
+    app.interaction_state.active_canvas_mut().selected = selection.to_vec();
+    let named = crate::diagnostics::logged_count(LOCKED_REF);
+    if translated {
+        let _ = app.update(Message::Edit(EditMsg::DeleteSelected));
+        assert!(translator::ran("delete_selection"));
+    } else {
+        app.handle_selection_delete_requested();
+    }
+    let said = crate::diagnostics::logged_count(LOCKED_REF) - named;
+    let left = serde_json::to_string(sheet_at(&app, &b)).unwrap();
+    let selected = app.interaction_state.active_canvas().selected.clone();
+    let steps = app.document_state.engines[&b].undo_position();
+    (left, selected, steps, said)
 }
 
 /// A board designator no other test logs.
@@ -288,4 +310,23 @@ fn a_board_uuid_that_is_no_item_refuses_the_delete() {
     let why = refusal(by_operands(&mut app, "delete_selection", &path, &[1, 16]));
     assert!(why.contains("names nothing on the board"), "{why}");
     assert_eq!(live(&app, &path), before);
+}
+
+/// A board edit drops what it removed from the person's selection, so the
+/// menu's Delete never names a uuid the board lost (its
+/// `board-target-unknown` refusal stays the CLI's and the agent's).
+#[test]
+fn a_board_edit_drops_what_it_removed_from_the_selection() {
+    use signex_engine::pcb::{BoardCommand, BoardItemId};
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    app.select_pcb_items(&[ItemRef::Footprint(id(1)), ItemRef::Footprint(id(2))]);
+    let removed = BoardCommand::DeleteItems {
+        items: vec![BoardItemId::Footprint(id(1))],
+    };
+    app.execute_board_commands(&path, vec![removed], None)
+        .expect("the footprint goes");
+    let selection = app.interaction_state.pcb_selection.selection();
+    let left: Vec<ItemRef> = selection.items().collect();
+    assert_eq!(left, [ItemRef::Footprint(id(2))]);
 }
