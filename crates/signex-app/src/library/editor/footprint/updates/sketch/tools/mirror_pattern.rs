@@ -2,64 +2,24 @@
 //! 10, Caner 2026-11-20). Mirror keeps a live mirror of the pattern, a
 //! pattern object of its own, rather than copies of geometry; a pattern
 //! tool makes the new array repeat every instance of the selected pattern.
+//! Mirror's pattern objects come from the Mirror card (`transform::mirror`).
 //! A link that would loop is refused with a warning and changes nothing.
-//! The tool click is already one undo step (the dispatcher's edit attempt);
-//! a refusal is recorded as a rejection so it leaves none.
+//! The tool click or the card's OK is already one undo step (the
+//! dispatcher's edit attempt); a refusal is recorded as a rejection so it
+//! leaves none.
 
 use signex_sketch::array::ArrayId;
-use signex_sketch::entity::EntityKind;
-use signex_sketch::sketch::{PatternCycle, PatternMirror, SketchData};
+use signex_sketch::sketch::{PatternCycle, SketchData};
 
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::sketch_conflict::mutate_solve_or_revert;
 use crate::library::editor::footprint::sketch_dispatch::report_solve_failure;
-use crate::library::editor::footprint::state::ToolPending;
 
 /// The selected pattern, when the sketch still has it.
 pub(super) fn selected_pattern(editor: &FootprintDocument) -> Option<ArrayId> {
     let pattern = editor.state.sketch_overlay.selected_pattern?;
     let sketch = editor.primitive().sketch.as_ref()?;
     sketch.is_pattern(pattern).then_some(pattern)
-}
-
-/// A Mirror click while a pattern is selected: the Line under the click,
-/// else the selected Line, becomes the mirror line of a live mirror of the
-/// pattern. Returns whether the click was taken; `false` leaves it to the
-/// plain Mirror.
-pub(super) fn mirror_selected_pattern(
-    editor: &mut FootprintDocument,
-    x_mm: f64,
-    y_mm: f64,
-) -> bool {
-    let Some(pattern) = selected_pattern(editor) else {
-        return false;
-    };
-    editor.state.tool_pending = ToolPending::Idle;
-    let line = editor.primitive().sketch.as_ref().and_then(|sketch| {
-        let selected_line = editor.state.selected_sketch.filter(|id| {
-            sketch
-                .entities
-                .iter()
-                .any(|e| e.id == *id && matches!(e.kind, EntityKind::Line { .. }))
-        });
-        super::pick_line_at(sketch, x_mm, y_mm).or(selected_line)
-    });
-    let Some(line) = line else {
-        refuse(
-            editor,
-            "Mirror: click the Line to mirror the selected pattern about".into(),
-        );
-        return true;
-    };
-    let mirror = PatternMirror {
-        id: ArrayId::new(),
-        pattern,
-        line,
-    };
-    if let Err(cycle) = link_patterns(editor, |sketch| sketch.add_pattern_mirror(mirror)) {
-        refuse(editor, format!("Mirror: {cycle} — no mirror was added"));
-    }
-    true
 }
 
 /// Run `link` on the sketch, then solve and bake. A refused link changes

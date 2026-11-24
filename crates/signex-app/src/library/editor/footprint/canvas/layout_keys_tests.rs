@@ -31,12 +31,14 @@ fn published(logical: &str, code: Code) -> Option<FootprintEditorMsg> {
         zoom_step: 1.1,
         trackpad_pan: false,
         wheel_mode: Default::default(),
+        mirror_card: None,
     };
     let action = fpc.on_key_pressed(
         &Key::Character(logical.into()),
         Physical::Code(code),
         &keyboard::Modifiers::COMMAND,
         None,
+        false,
     )?;
     match action.into_inner().0? {
         LibraryMessage::EditorEvent {

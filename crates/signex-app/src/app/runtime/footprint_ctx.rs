@@ -445,11 +445,13 @@ pub(super) fn build_footprint_editor_panel_ctx(
         let sketch = editor.primitive().sketch.as_ref()?;
         use crate::library::editor::footprint::state::ToolPending;
         use signex_sketch::array::{ArrayKind, NumberingScheme};
-        let array = sketch.arrays.iter().find(|a| match &a.kind {
-            ArrayKind::Linear { source, .. }
-            | ArrayKind::Grid { source, .. }
-            | ArrayKind::Polar { source, .. } => *source == sel_id,
-        })?;
+        // The pattern whose glyph was clicked wins among those of this
+        // source (mockup row 179e), else the first.
+        let picked = editor.state.sketch_overlay.selected_pattern;
+        let of_source = || sketch.arrays.iter().filter(|a| a.kind.source() == sel_id);
+        let array = of_source()
+            .find(|a| Some(a.id) == picked)
+            .or_else(|| of_source().next())?;
         let kind = match &array.kind {
             ArrayKind::Linear {
                 count_expr,
@@ -704,6 +706,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
         board: super::board_sketch_ctx::board_sketch_props(editor).map(|board| {
             crate::panels::BoardSketchProps {
                 target: app.board_sketch_target(),
+                bake: app.board_sketch_bake_preview(),
                 ..board
             }
         }),

@@ -11,6 +11,7 @@ pub mod exit;
 pub mod linetype;
 pub mod menus;
 pub mod messages;
+pub mod mirror_card;
 pub mod roles;
 pub mod value_edit;
 

@@ -246,6 +246,7 @@ mod drag_track_end {
             zoom_step: 1.1,
             trackpad_pan: false,
             wheel_mode: Default::default(),
+            mirror_card: None,
         }
     }
 
@@ -529,6 +530,7 @@ mod wheel_zoom {
             zoom_step: step,
             trackpad_pan: false,
             wheel_mode: Default::default(),
+            mirror_card: None,
         };
         let mut cstate = FootprintCanvasState::default();
         let before = cstate.scale;
@@ -568,6 +570,7 @@ mod wheel_zoom {
             zoom_step: 1.1,
             trackpad_pan: false,
             wheel_mode: crate::canvas::WheelMode::Scroll,
+            mirror_card: None,
         };
         let mut cstate = FootprintCanvasState::default();
         if shift {
@@ -662,6 +665,7 @@ mod initial_fit {
             zoom_step: 1.1,
             trackpad_pan: false,
             wheel_mode: Default::default(),
+            mirror_card: None,
         };
         let mut cstate = FootprintCanvasState::default();
         let event = Event::Window(window::Event::RedrawRequested(std::time::Instant::now()));
@@ -708,6 +712,7 @@ mod initial_fit {
             zoom_step: 1.1,
             trackpad_pan: false,
             wheel_mode: Default::default(),
+            mirror_card: None,
         };
         let mut cstate = FootprintCanvasState::default();
         let message = fpc

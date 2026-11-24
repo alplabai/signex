@@ -30,6 +30,8 @@ mod preview_model;
 #[cfg(test)]
 mod chrome_fit_tests;
 #[cfg(test)]
+mod held_flip_tests;
+#[cfg(test)]
 mod layout_keys_tests;
 #[cfg(test)]
 mod middle_zoom_tests;
@@ -302,6 +304,10 @@ pub struct FootprintCanvas<'a> {
     pub trackpad_pan: bool,
     /// Preferences "Mouse wheel", synced with `trackpad_pan`.
     pub wheel_mode: crate::canvas::WheelMode,
+    /// The Mirror card the Mirror ghost draws (mockup row 191); `None`
+    /// while Mirror is not armed.
+    pub mirror_card:
+        Option<crate::library::editor::footprint::sketch_mode::mirror_card::MirrorCard>,
 }
 
 impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
@@ -364,12 +370,14 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 physical_key,
                 modifiers,
                 text,
+                repeat,
                 ..
             }) => self.on_key_pressed(
                 key,
                 *physical_key,
                 modifiers,
                 text.as_ref().and_then(|s| s.chars().next()),
+                *repeat,
             ),
             _ => None,
         }
