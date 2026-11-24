@@ -382,7 +382,6 @@ properties-table-toc-no-project = Add Table of Contents Sheet: the sheet belongs
 properties-table-toc-written = Contents sheet written: { $file }
 properties-table-toc-exists = Add Table of Contents Sheet: { $file } is there already and was kept
 properties-table-toc-failed = Add Table of Contents Sheet: { $file } was not written: { $why }
-properties-table-toc-not-serialised = Add Table of Contents Sheet: the contents sheet could not be written as text
 # The word after the project's name in the contents sheet's heading
 # ("dcdc-buck · Contents"). No placeable: the heading is sheet text, so it
 # must not carry the bidi isolation marks a placeable gets.
