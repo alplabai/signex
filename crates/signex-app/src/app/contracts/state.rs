@@ -442,6 +442,9 @@ pub enum ProjectTreeAction {
     /// Open the "Remove from Project" modal (Delete / Exclude / Cancel)
     /// for this leaf.
     OpenRemoveDialog(signex_widgets::tree_view::TreeKey),
+    /// Show History on a leaf (mockup row 20): open the file and the History
+    /// panel, filtered to it (This file only).
+    ShowHistory(signex_widgets::tree_view::TreeKey),
     /// Close the entire project whose root is at this tree path. Closes
     /// every open tab backed by the project, drops the `LoadedProject`
     /// from the workspace, and promotes another project (or `None`) to
@@ -525,6 +528,7 @@ impl ProjectTreeAction {
             | RevealInExplorer(k)
             | OpenRenameDialog(k)
             | OpenRemoveDialog(k)
+            | ShowHistory(k)
             | CloseProject(k)
             | ValidateProject(k)
             | OpenProjectRenameDialog(k)

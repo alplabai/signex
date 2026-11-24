@@ -230,5 +230,7 @@ define_ids! {
         CTX_FP_ALIGN_TO_GRID = "ctx-fp-align-to-grid";
         CTX_SYMBOL_ROTATE_SELECTION = "ctx-symbol-rotate-selection";
         CTX_SYMBOL_ALIGN_TO_GRID = "ctx-symbol-align-to-grid";
+        // project-tree-history-rows
+        CTX_TREE_SHOW_HISTORY = "ctx-tree-show-history";
     }
 }

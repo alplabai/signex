@@ -287,6 +287,7 @@ fn the_document_leaf_menu_ends_with_a_live_danger_remove_row() {
             SEP,
             "Print...",
             "Show Differences...",
+            "Show History",
             SEP,
             "Remove from Project...",
         ]
@@ -318,6 +319,57 @@ fn the_document_leaf_menu_ends_with_a_live_danger_remove_row() {
     };
     assert_eq!(flagged(|it| it.strong), 1);
     assert_eq!(flagged(|it| it.danger), 1);
+}
+
+/// Mockup row 20: Show History is a live row with an icon and no pill; it
+/// names the clicked leaf.
+#[test]
+fn the_document_leaf_show_history_row_is_live() {
+    let app = app_with_tree();
+    let key = key_of(&app.document_state.panel_ctx.project_tree, &[0, 0, 0]).expect("the leaf");
+    let rows = rows_at(&app, &[0, 0, 0]);
+    let row = item(&rows, "Show History");
+    assert!(!row.disabled && !row.strong && !row.danger);
+    assert!(row.icon.is_some());
+    assert_eq!(badge_of(row), None);
+    assert!(matches!(
+        &row.on_press,
+        Some(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+            ProjectTreeAction::ShowHistory(k)
+        ))) if *k == key
+    ));
+}
+
+/// Mockup row 20: Show History opens the History panel filtered to the file
+/// (This file only on); a second pick keeps the filter on, it is no toggle.
+#[test]
+fn show_history_opens_the_history_panel_with_this_file_only() {
+    use crate::panels::PanelKind;
+    let mut app = app_with_tree();
+    let _ = app.document_state.dock.close_panel(PanelKind::History);
+    assert!(!app.is_panel_open(PanelKind::History));
+    let rows = rows_at(&app, &[0, 0, 0]);
+    let press = item(&rows, "Show History")
+        .on_press
+        .clone()
+        .expect("a live row");
+    let _ = app.update(press.clone());
+    assert!(app.is_panel_open(PanelKind::History));
+    assert!(app.document_state.history.ui.filter.this_file_only);
+    let shown = &app.document_state.panel_ctx.history;
+    assert!(shown.ui.filter.this_file_only, "the panel reads it");
+    let _ = app.update(press);
+    assert!(app.document_state.history.ui.filter.this_file_only);
+}
+
+/// Mockup row 20: Show History runs on the main window like the other leaf
+/// rows and names its row, so a rebuilt tree cannot retarget it.
+#[test]
+fn show_history_targets_its_row_on_the_main_window() {
+    let key: signex_widgets::tree_view::TreeKey = vec!["proj".into(), "a.snxsch".into()];
+    let action = ProjectTreeAction::ShowHistory(key.clone());
+    assert_eq!(action.row_key(), Some(&key));
+    assert!(!action.changes_only_the_shown_tree());
 }
 
 /// A library: one Add New launcher instead of three flat rows, then

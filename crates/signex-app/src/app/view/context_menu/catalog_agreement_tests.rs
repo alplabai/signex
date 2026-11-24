@@ -99,6 +99,7 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     ("Constraint File", "planned, tree-addressed"),
     ("VHDL File", "planned, tree-addressed"),
     ("Show Differences...", "planned, tree-addressed"),
+    ("Show History", "tree-addressed"),
     ("Collapse", "tree-addressed"),
     ("Expand", "tree-addressed"),
     ("Expand All", "tree-addressed"),

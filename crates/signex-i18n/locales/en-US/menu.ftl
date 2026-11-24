@@ -342,3 +342,6 @@ ctx-fp-align-to-grid = Align To Grid
 # Symbol editor menu: rows acting on the selection.
 ctx-symbol-rotate-selection = Rotate Selection
 ctx-symbol-align-to-grid = Align To Grid
+# project-tree-history-rows
+# A document leaf's row that opens the History panel filtered to the file.
+ctx-tree-show-history = Show History

@@ -1,6 +1,6 @@
 //! A document leaf's rows (mockup row 20): Open (the double-click row, strong),
-//! Explore, Rename..., then Print... and Show Differences..., then Remove
-//! from Project... last, in the danger ink.
+//! Explore, Rename..., then Print..., Show Differences... and Show History,
+//! then Remove from Project... last, in the danger ink.
 
 use super::*;
 
@@ -62,6 +62,13 @@ impl Signex {
                 i18n,
                 Some(ic::icon_menu_diff(tid)),
                 &text(i18n, menu_ids::CTX_TREE_SHOW_DIFFERENCES),
+            ),
+            // Opens the History panel filtered to this file.
+            dd_msg(
+                Some(ic::icon_menu_history(tid)),
+                &text(i18n, menu_ids::CTX_TREE_SHOW_HISTORY),
+                "",
+                act(A::ShowHistory(key.clone())),
             ),
             DropdownEntry::Separator,
             // Opens the Remove dialog (Delete / Exclude / Cancel).
