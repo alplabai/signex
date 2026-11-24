@@ -7,6 +7,7 @@ use signex_sketch::array::NumberingScheme;
 use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::id::SketchEntityId;
 
+use super::preview::ArrayPreview;
 use crate::eval_util::strip_eq_prefix;
 
 /// Resolve the pad number for the i-th instance of a linear array.
@@ -204,10 +205,149 @@ pub(super) fn derive_swept_pad_number(
     derive_pad_number_2d(numbering, i, j, nx, ctx, warnings, source)
 }
 
+/// Why a pattern's Numbering Mask text is not taken (mockup row 126).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NumberMaskRefusal {
+    /// The pattern's instances are not known: a count, spacing or mask does
+    /// not evaluate, or there are more than the preview walks.
+    Unresolved,
+    /// No instance of the pattern has this number.
+    NotInPattern(String),
+    /// The number is the source pad's own. The source is not skipped here,
+    /// as the canvas slot rings do not offer it.
+    IsSource(String),
+}
+
+/// The source pad's own instance: a Grid's cell (0, 0), a Polar's
+/// instance 0.
+const SOURCE_INSTANCE: (u32, u32) = (0, 0);
+
+/// The pad numbers a Numbering Mask lists, split at commas and spaces.
+pub fn number_mask_entries(text: &str) -> Vec<&str> {
+    text.split(|c: char| c == ',' || c.is_whitespace())
+        .filter(|entry| !entry.is_empty())
+        .collect()
+}
+
+/// The instances `(i, j)` a Numbering Mask skips: each instance whose number
+/// it lists, letters matched in either case. A blank mask skips none; the
+/// source pad's own number is refused.
+pub fn instances_numbered(
+    preview: &ArrayPreview,
+    mask: &str,
+) -> Result<Vec<(u32, u32)>, NumberMaskRefusal> {
+    let entries = number_mask_entries(mask);
+    if entries.is_empty() {
+        return Ok(Vec::new());
+    }
+    let ArrayPreview::Instances(all) = preview else {
+        return Err(NumberMaskRefusal::Unresolved);
+    };
+    let mut cells = Vec::new();
+    for entry in entries {
+        let mut is_found = false;
+        for instance in all.iter().filter(|c| c.number.eq_ignore_ascii_case(entry)) {
+            is_found = true;
+            let cell = (instance.i as u32, instance.j as u32);
+            if cell == SOURCE_INSTANCE {
+                return Err(NumberMaskRefusal::IsSource(entry.to_owned()));
+            }
+            if !cells.contains(&cell) {
+                cells.push(cell);
+            }
+        }
+        if !is_found {
+            return Err(NumberMaskRefusal::NotInPattern(entry.to_owned()));
+        }
+    }
+    Ok(cells)
+}
+
+/// The numbers of the instances on `suppressed`, in the pattern's order:
+/// what the Numbering Mask shows.
+pub fn suppressed_numbers(preview: &ArrayPreview, suppressed: &[(u32, u32)]) -> Vec<String> {
+    let ArrayPreview::Instances(all) = preview else {
+        return Vec::new();
+    };
+    all.iter()
+        .filter(|c| suppressed.contains(&(c.i as u32, c.j as u32)))
+        .map(|c| c.number.clone())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
+    use super::super::preview::InstancePreview;
     use super::*;
     use std::collections::BTreeMap;
+
+    fn instance(i: usize, j: usize, number: &str) -> InstancePreview {
+        InstancePreview {
+            i,
+            j,
+            offset_mm: [i as f64, j as f64],
+            number: number.into(),
+            is_skipped: false,
+        }
+    }
+
+    /// A 2 × 2 grid numbered A1, A2, B1, B2.
+    fn bga() -> ArrayPreview {
+        ArrayPreview::Instances(vec![
+            instance(0, 0, "A1"),
+            instance(1, 0, "A2"),
+            instance(0, 1, "B1"),
+            instance(1, 1, "B2"),
+        ])
+    }
+
+    /// Mockup row 126: the mask lists pad numbers ("4,5" or "A2,B4"), split at
+    /// commas and spaces, and skips the instances carrying them.
+    #[test]
+    fn a_number_mask_skips_the_listed_pads() {
+        assert_eq!(number_mask_entries(" A1, b2 ,,"), ["A1", "b2"]);
+        assert_eq!(
+            instances_numbered(&bga(), "A2, b2"),
+            Ok(vec![(1, 0), (1, 1)])
+        );
+        assert_eq!(instances_numbered(&bga(), "B1 B1"), Ok(vec![(0, 1)]));
+        assert_eq!(instances_numbered(&bga(), "  "), Ok(Vec::new()));
+        assert_eq!(
+            suppressed_numbers(&bga(), &[(1, 1), (0, 0)]),
+            ["A1", "B2"],
+            "in the pattern's order"
+        );
+    }
+
+    #[test]
+    fn a_number_the_pattern_does_not_have_is_refused() {
+        assert_eq!(
+            instances_numbered(&bga(), "A2,B4"),
+            Err(NumberMaskRefusal::NotInPattern("B4".into()))
+        );
+        assert_eq!(
+            instances_numbered(&ArrayPreview::Unresolved, "1"),
+            Err(NumberMaskRefusal::Unresolved)
+        );
+        assert_eq!(
+            instances_numbered(&ArrayPreview::TooMany(900), ""),
+            Ok(Vec::new())
+        );
+    }
+
+    /// The source pad's own number is refused: the mask never writes the
+    /// source slot (0, 0), as the canvas slot rings never offer it.
+    #[test]
+    fn the_source_pads_number_is_refused() {
+        assert_eq!(
+            instances_numbered(&bga(), "a1"),
+            Err(NumberMaskRefusal::IsSource("a1".into()))
+        );
+        assert_eq!(
+            instances_numbered(&bga(), "B2, A1"),
+            Err(NumberMaskRefusal::IsSource("A1".into()))
+        );
+    }
 
     /// Mockup row 126: a 2 × 4 grid in each sweep, read column by column.
     #[test]

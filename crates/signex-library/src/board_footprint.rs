@@ -56,7 +56,10 @@ pub(crate) fn board_footprint(
         }
     }
     if !footprint.courtyard.points.is_empty() {
-        graphics.push(courtyard(&footprint.courtyard.points));
+        graphics.push(courtyard(
+            &footprint.courtyard.points,
+            footprint.generated.courtyard_line_width_mm,
+        ));
     }
     Ok(top_side_footprint(footprint, pads, graphics))
 }
@@ -492,10 +495,11 @@ fn arc(
     }
 }
 
-fn courtyard(points: &[[f64; 2]]) -> pcb::FpGraphic {
+/// The courtyard outline, stroked at the footprint's courtyard line width.
+fn courtyard(points: &[[f64; 2]], width: f64) -> pcb::FpGraphic {
     pcb::FpGraphic {
         points: points.iter().copied().map(point).collect(),
-        ..graphic("poly", TechnicalLayer::CourtyardTop, 0.0)
+        ..graphic("poly", TechnicalLayer::CourtyardTop, width)
     }
 }
 

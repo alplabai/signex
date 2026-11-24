@@ -205,6 +205,30 @@ fn the_generated_features_show_their_fields_and_body_size() {
     assert!(top_of(&texts, "Silkscreen outline") < top_of(&texts, "Assembly outline"));
 }
 
+/// Mockup row 124: the courtyard has Expansion and Line width; with the
+/// courtyard switched off both are greyed and inert.
+#[test]
+fn the_courtyard_shows_its_line_width_and_greys_it_when_off() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.generated.silk_outline = false;
+    fp.auto_fit_courtyard = true;
+    let on = texts(&app, &fp);
+    let widths: Vec<f32> = on
+        .iter()
+        .filter(|t| t.text == "Line width")
+        .map(|t| t.bounds.y)
+        .collect();
+    assert_eq!(widths.len(), 1, "only the courtyard's is live: {on:#?}");
+    assert!(top_of(&on, "Expansion") < widths[0]);
+    assert!(widths[0] < top_of(&on, "Silkscreen outline"));
+
+    fp.auto_fit_courtyard = false;
+    let off = texts(&app, &fp);
+    assert!(!has(&off, "Line width"), "{off:#?}");
+    assert!(!has(&off, "Expansion"), "{off:#?}");
+}
+
 #[test]
 fn a_generated_outline_without_a_body_says_what_it_needs() {
     let app = app_with_eight_pads();

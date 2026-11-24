@@ -242,6 +242,7 @@ fn generated_file() -> FootprintFile {
     let stamp = DateTime::<Utc>::from_timestamp(1_790_000_000, 0).unwrap();
     let mut fp = Footprint::with_identity("GENERATED", Uuid::from_u128(9), stamp);
     fp.generated = GeneratedFeatures {
+        courtyard_line_width_mm: DEFAULT_COURTYARD_LINE_WIDTH_MM,
         silk_outline: true,
         silk_line_width_mm: 0.15,
         pad_clearance_mm: 0.25,
@@ -277,6 +278,36 @@ fn a_footprint_whose_features_go_back_to_default_saves_as_1_1() {
     let text = file.to_toml_string().expect("serialise");
     assert!(text.starts_with("format = \"snxfpt/1.1\"\n"), "{text}");
     assert!(!text.contains("generated"), "{text}");
+}
+
+/// Mockup row 124: a courtyard line width off its default is a generated
+/// feature, written as 1.3 and read back unchanged.
+#[test]
+fn a_courtyard_line_width_round_trips_as_snxfpt_1_3() {
+    let stamp = DateTime::<Utc>::from_timestamp(1_790_000_000, 0).unwrap();
+    let mut fp = Footprint::with_identity("COURTYARD", Uuid::from_u128(11), stamp);
+    fp.generated.courtyard_line_width_mm = 0.1524;
+    let file = FootprintFile::with_identity(fp, Uuid::from_u128(12), stamp);
+    let text = file.to_toml_string().expect("serialise");
+    assert!(text.starts_with("format = \"snxfpt/1.3\"\n"), "{text}");
+    assert!(text.contains("courtyard_line_width_mm = 0.1524"), "{text}");
+    let back = FootprintFile::from_toml_str(&text).expect("1.3 reads");
+    assert_eq!(back.footprints[0].generated.courtyard_line_width_mm, 0.1524);
+    assert_eq!(back.to_toml_string().expect("serialise"), text);
+}
+
+#[test]
+fn a_default_courtyard_line_width_keeps_the_lower_token() {
+    let stamp = DateTime::<Utc>::from_timestamp(1_790_000_000, 0).unwrap();
+    let fp = Footprint::with_identity("COURTYARD", Uuid::from_u128(13), stamp);
+    assert_eq!(
+        fp.generated.courtyard_line_width_mm,
+        DEFAULT_COURTYARD_LINE_WIDTH_MM
+    );
+    let file = FootprintFile::with_identity(fp, Uuid::from_u128(14), stamp);
+    let text = file.to_toml_string().expect("serialise");
+    assert!(text.starts_with("format = \"snxfpt/1.1\"\n"), "{text}");
+    assert!(!text.contains("courtyard_line_width_mm"), "{text}");
 }
 
 #[test]
