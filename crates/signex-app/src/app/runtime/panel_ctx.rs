@@ -772,6 +772,7 @@ impl Signex {
             annotations: std::sync::Arc::clone(&self.document_state.panel_ctx.annotations),
             pcb_board: self.pcb_board_summary().map(Box::new),
             layer_stack: self.layer_stack_facts(),
+            polygons: self.polygon_facts(),
             selection_count,
             selected_uuid,
             selected_kind,

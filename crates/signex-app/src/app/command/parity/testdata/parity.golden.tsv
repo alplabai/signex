@@ -987,6 +987,10 @@ placement_accept	split_core_command	the core command after the router	core	activ
 placement_properties	bridge	Tool(PrePlacementTab)	gui	tool state	handler
 placement_properties	in_window_rewrite	document_window	gui	window	routing
 placement_properties	headless_refusal	headless_refusal	gui	none	routing
+polygon_manager	bridge	Dock(Panel(PcbPanel(Polygons(ManagerOpened))))	gui	active document	gate
+polygon_manager	in_window_rewrite	document_window	gui	window	routing
+polygon_manager	refusal_needs	Pcb	gui	active document	routing
+polygon_manager	headless_refusal	headless_refusal	gui	none	routing
 prev_layer	bridge	Pcb(View(ActiveLayerStepped { forward: false }))	gui	active document	gate
 prev_layer	in_window_rewrite	board_view_in_window|document_window	gui	window	routing
 prev_layer	refusal_needs	Pcb	gui	active document	routing

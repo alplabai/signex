@@ -173,13 +173,14 @@ impl Signex {
         let context = self.command_context(Some(window_id));
         if context.pcb.shown {
             let blocks = self.reuse_block_names_in_window(Some(window_id));
-            let entries = pcb_canvas_menu_with_blocks(
+            let entries = super::board_menu::board_canvas_menu(
                 &self.ui_state.i18n,
                 tid,
                 &context,
                 active_submenu,
                 &sc,
                 &blocks,
+                self.board_menu_on_pour(Some(window_id)),
             );
             return super::placement::menu_card(entries, tokens, ui_font);
         }

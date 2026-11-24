@@ -257,6 +257,7 @@ place_wire	Schematic	f8bd7a5cb84e915b
 place_wire_to_bus_entry	-	f2929686b07ef725
 placement_accept	-	f2929686b07ef725
 placement_properties	-	f2929686b07ef725
+polygon_manager	Pcb	119d310e454dd5e4
 prev_layer	Pcb	119d310e454dd5e4
 previous_document_tab	-	f2929686b07ef725
 previous_grid	-	f2929686b07ef725

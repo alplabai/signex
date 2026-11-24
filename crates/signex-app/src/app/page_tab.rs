@@ -24,6 +24,7 @@ pub(crate) fn page_name(kind: &TabKind) -> Option<MessageId> {
         TabKind::Project(_) => Some(ids::CHROME_PAGE_TAB_PROJECT),
         TabKind::Rules(_) => Some(ids::RULES_TAB_TITLE),
         TabKind::LayerStack => Some(ids::PCB_STACK_TITLE),
+        TabKind::PolygonManager => Some(ids::POLYGON_MANAGER_PAGE),
         TabKind::Schematic
         | TabKind::Pcb
         | TabKind::ComponentEditor(_)
@@ -93,9 +94,8 @@ impl Signex {
             .filter_map(|(i, tab)| {
                 self.page_tab_title(&tab.kind)
                     .or_else(|| {
-                        tab.kind
-                            .is_layer_stack()
-                            .then(|| self.layer_stack_title(&tab.path, tab.project_id))
+                        let page = page_name(&tab.kind).filter(|_| tab.kind.is_board_page())?;
+                        Some(self.board_page_title(&tab.path, tab.project_id, page))
                     })
                     .map(|title| (i, title))
             })

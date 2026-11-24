@@ -116,6 +116,7 @@ impl Signex {
             self.refresh_pcb_layers_panel();
             self.document_state.panel_ctx.pcb_nets = self.pcb_nets_summary();
             self.document_state.panel_ctx.layer_stack = self.layer_stack_facts();
+            self.refresh_polygon_facts();
         } else {
             self.repaint_undocked_boards(path);
         }

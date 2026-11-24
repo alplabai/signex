@@ -209,15 +209,16 @@ impl Signex {
     }
 
     fn close_tab(&mut self, idx: usize, park_dirty: bool, keep_session: bool) -> Task<Message> {
-        // A Layer Stack tab shares its board's path but holds no document:
-        // nothing below, which acts on that path, may run for it.
+        // A board page tab (Layer Stack, Polygon Manager) shares its board's
+        // path but holds no document: nothing below, which acts on that
+        // path, may run for it.
         if self
             .document_state
             .tabs
             .get(idx)
-            .is_some_and(|tab| tab.kind.is_layer_stack())
+            .is_some_and(|tab| tab.kind.is_board_page())
         {
-            self.close_layer_stack_tab(idx, keep_session);
+            self.close_board_page_tab(idx, keep_session);
             return Task::none();
         }
         if let Some(tab) = self.document_state.tabs.get(idx) {
@@ -363,7 +364,7 @@ impl Signex {
             self.document_state.mark_document_clean(p);
         }
         if matches!(closing_kind, crate::app::TabKind::Pcb) {
-            self.drop_layer_stack_tab_of(&closing_path);
+            self.drop_board_pages_of(&closing_path);
             self.park_or_drop_closing_pcb(idx, park_dirty);
         }
         // Library Browser tabs — drop the per-browser state on close.
@@ -518,10 +519,10 @@ impl Signex {
         let Some(tab) = self.document_state.tabs.get(idx) else {
             return Vec::new();
         };
-        // A Layer Stack tab stays on the main strip while its board is
+        // A board page tab stays on the main strip while its board is
         // undocked.
         let left_main =
-            |tab: &TabInfo| !tab.kind.is_layer_stack() && self.tab_is_undocked(&tab.path);
+            |tab: &TabInfo| !tab.kind.is_board_page() && self.tab_is_undocked(&tab.path);
         if left_main(tab) {
             return Vec::new();
         }

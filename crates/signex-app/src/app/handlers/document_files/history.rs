@@ -783,7 +783,8 @@ fn restore_kind_of(kind: &crate::app::TabKind) -> Option<RestoreKind> {
         }
         crate::app::TabKind::Project(_)
         | crate::app::TabKind::Rules(_)
-        | crate::app::TabKind::LayerStack => None,
+        | crate::app::TabKind::LayerStack
+        | crate::app::TabKind::PolygonManager => None,
     }
 }
 

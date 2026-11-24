@@ -183,16 +183,22 @@ pub enum PcbPanelMode {
     #[default]
     Nets,
     NetClasses,
+    /// The board's polygon pours, the compact half of the Polygon Manager
+    /// (mockup rows 106 and 178).
+    Polygons,
 }
 
 impl PcbPanelMode {
-    /// The modes the dropdown offers, in its order.
-    pub const ALL: [Self; 2] = [Self::Nets, Self::NetClasses];
+    /// The modes the dropdown offers, in its order. Differential Pairs and
+    /// xSignals, between Net Classes and Polygons in mockup row 106, are not
+    /// built yet.
+    pub const ALL: [Self; 3] = [Self::Nets, Self::NetClasses, Self::Polygons];
 
     pub fn message(self) -> MessageId {
         match self {
             Self::Nets => ids::PANELS_PCB_MODE_NETS,
             Self::NetClasses => ids::PANELS_PCB_MODE_NET_CLASSES,
+            Self::Polygons => ids::POLYGON_MANAGER_PAGE,
         }
     }
 }
@@ -214,6 +220,9 @@ pub enum PcbPanelMsg {
     ChipPicked(PcbNetChip),
     /// A net row was clicked: it is selected, or no longer when it was.
     NetClicked(String),
+    /// The Polygons mode and the Polygon Manager tab, which share
+    /// [`PcbPanelUi::polygons`] (mockup row 178).
+    Polygons(crate::panels::PolygonMsg),
 }
 
 /// The panel's own state, kept across context rebuilds.
@@ -224,11 +233,15 @@ pub struct PcbPanelUi {
     pub chip: PcbNetChip,
     /// The net whose detail shows, by name.
     pub selected: Option<String>,
+    /// The Polygon Manager's view state, read by its tab and by this
+    /// panel's Polygons mode.
+    pub polygons: crate::panels::PolygonsUi,
 }
 
 impl PcbPanelUi {
     pub fn apply(&mut self, msg: PcbPanelMsg) {
         match msg {
+            PcbPanelMsg::Polygons(event) => self.polygons.apply(&event),
             PcbPanelMsg::ModePicked(mode) => self.mode = mode,
             PcbPanelMsg::FilterChanged(filter) => self.filter = filter,
             PcbPanelMsg::ChipPicked(chip) => self.chip = chip,

@@ -124,8 +124,8 @@ pub struct TabMarks<'p> {
 }
 
 /// The tabs `tabs` shows in a window whose `visible_paths` they are in, in
-/// strip order. A Layer Stack tab shares its board's path but lives on the
-/// main strip only, wherever its board is.
+/// strip order. A board page tab (Layer Stack, Polygon Manager) shares its
+/// board's path but lives on the main strip only, wherever its board is.
 pub(crate) fn visible_tab_indices(
     tabs: &[TabInfo],
     visible_paths: &std::collections::HashSet<std::path::PathBuf>,
@@ -134,7 +134,7 @@ pub(crate) fn visible_tab_indices(
     tabs.iter()
         .enumerate()
         .filter_map(|(i, tab)| {
-            let shown = if tab.kind.is_layer_stack() {
+            let shown = if tab.kind.is_board_page() {
                 is_main
             } else {
                 visible_paths.contains(&tab.path)

@@ -137,7 +137,7 @@ impl Signex {
     }
 
     /// The pours selected on the board at `path`.
-    fn selected_pours(&self, path: &Path) -> BTreeSet<Uuid> {
+    pub(crate) fn selected_pours(&self, path: &Path) -> BTreeSet<Uuid> {
         let selection = &self.interaction_state.pcb_selection;
         if selection.document() != Some(path) {
             return BTreeSet::new();

@@ -444,6 +444,13 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "board_layer_stack" => {
             Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::LayerStack))
         }
+        // Mockup row 178: the Polygon Manager tab, the message its PCB
+        // panel link sends too.
+        "polygon_manager" => Message::Dock(crate::dock::DockMessage::Panel(
+            crate::panels::PanelMsg::PcbPanel(crate::panels::PcbPanelMsg::Polygons(
+                crate::panels::PolygonMsg::ManagerOpened,
+            )),
+        )),
         "lock_board_items" => Message::Pcb(PcbMsg::LockRequested { locked: true }),
         "unlock_board_items" => Message::Pcb(PcbMsg::LockRequested { locked: false }),
         // #2403: the net `net` names, else that of the board selection or

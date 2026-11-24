@@ -228,6 +228,7 @@ Tools/Net Classes	item	Net Classes	-	-	OpenNetClassesPanel	01100000	cmd:open_net
 Tools/Re-Annotate Board...	item	Re-Annotate Board...	-	-	ReannotateBoard	01100000	cmd:reannotate_board
 Tools/Repour Selected	item	Repour Selected	-	-	RepourSelected	01100000	cmd:repour_selected
 Tools/Repour All	item	Repour All	-	-	RepourAll	01100000	cmd:repour_all
+Tools/Polygon Manager...	item	Polygon Manager...	-	-	PolygonManager	01100000	cmd:polygon_manager
 Tools/---	separator	-	-	-	-	-	-
 Tools/Via Stitching	item	Via Stitching	-	-	StitchVias	01100000	cmd:stitch_vias
 Tools/Add Teardrops	item	Add Teardrops	-	-	AddTeardrops	01100000	cmd:add_teardrops

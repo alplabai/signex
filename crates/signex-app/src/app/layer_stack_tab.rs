@@ -1,44 +1,52 @@
 //! A board's Layer Stack as a page tab (mockup row 105, DECISIONS
-//! 2026-11-18). One tab per board, next to its PCB tab. The tab's path is the
-//! board's (docs/PROJECT_TAB.md, "Page tabs"), so it shows the board's dirty
-//! dot and Save writes the board.
+//! 2026-11-18), and the rules every page of a board keeps (the Polygon
+//! Manager, mockup row 178, is the other). One tab of each kind per board,
+//! next to its PCB tab. The tab's path is the board's (docs/PROJECT_TAB.md,
+//! "Page tabs"), so it shows the board's dirty dot and Save writes the board.
 //!
-//! The tab holds no document. Lookups by path take the first tab, so the Layer
-//! Stack tab always sits after its board's: every path lookup then finds the
+//! A page tab holds no document. Lookups by path take the first tab, so a
+//! page always sits after its board's: every path lookup then finds the
 //! board. Opening, dragging and closing keep that order.
 
 use std::path::{Path, PathBuf};
 
 use iced::{Element, Widget as _};
-use signex_i18n::ids;
+use signex_i18n::{MessageId, ids};
 
 use crate::app::state::{ProjectId, WindowKind};
 use crate::app::{Message, Signex, TabInfo, TabKind, page_tab};
 use crate::dock::DockMessage;
 
-/// The index of the tab of `kind` for `board`.
-fn tab_at(tabs: &[TabInfo], board: &Path, is_page: bool) -> Option<usize> {
+/// Whether `kind` is the same kind of tab as `page`.
+fn same_kind(kind: &TabKind, page: &TabKind) -> bool {
+    std::mem::discriminant(kind) == std::mem::discriminant(page)
+}
+
+/// The index of `board`'s tab of the kind `page`, or of its PCB tab when
+/// `page` is `None`.
+fn tab_at(tabs: &[TabInfo], board: &Path, page: Option<&TabKind>) -> Option<usize> {
     tabs.iter().position(|tab| {
         tab.path == board
-            && if is_page {
-                tab.kind.is_layer_stack()
-            } else {
-                matches!(tab.kind, TabKind::Pcb)
+            && match page {
+                Some(page) => same_kind(&tab.kind, page),
+                None => matches!(tab.kind, TabKind::Pcb),
             }
     })
 }
 
-/// Move any Layer Stack tab left of its board to just after it, and return
+/// Move any board page tab left of its board to just after it, and return
 /// where the tab at `active` went.
 pub(crate) fn keep_pages_after_boards(tabs: &mut Vec<TabInfo>, mut active: usize) -> usize {
-    let pages: Vec<PathBuf> = tabs
+    let pages: Vec<(PathBuf, TabKind)> = tabs
         .iter()
-        .filter(|tab| tab.kind.is_layer_stack())
-        .map(|tab| tab.path.clone())
+        .filter(|tab| tab.kind.is_board_page())
+        .map(|tab| (tab.path.clone(), tab.kind.clone()))
         .collect();
-    for board in pages {
-        let (Some(page), Some(owner)) = (tab_at(tabs, &board, true), tab_at(tabs, &board, false))
-        else {
+    for (board, kind) in pages {
+        let (Some(page), Some(owner)) = (
+            tab_at(tabs, &board, Some(&kind)),
+            tab_at(tabs, &board, None),
+        ) else {
             continue;
         };
         if page > owner {
@@ -59,9 +67,9 @@ pub(crate) fn keep_pages_after_boards(tabs: &mut Vec<TabInfo>, mut active: usize
 }
 
 impl Signex {
-    /// The board the Layer Stack command acts on: an undocked window's own
-    /// board, else the active tab's.
-    fn layer_stack_board(&self) -> Option<PathBuf> {
+    /// The board a page command acts on: an undocked window's own board,
+    /// else the active tab's (its PCB tab or one of its pages).
+    pub(crate) fn page_board(&self) -> Option<PathBuf> {
         let docs = &self.document_state;
         if let Some(window) = self.interaction_state.acting_window
             && let Some(WindowKind::UndockedTab { path, .. }) = self.ui_state.windows.get(&window)
@@ -70,12 +78,23 @@ impl Signex {
             return Some(path.clone());
         }
         let tab = docs.tabs.get(docs.active_tab)?;
-        matches!(tab.kind, TabKind::Pcb | TabKind::LayerStack).then(|| tab.path.clone())
+        (matches!(tab.kind, TabKind::Pcb) || tab.kind.is_board_page()).then(|| tab.path.clone())
     }
 
     /// `<project> — Layer Stack`; a board with no project goes by its file
     /// name.
     pub(crate) fn layer_stack_title(&self, board: &Path, project: Option<ProjectId>) -> String {
+        self.board_page_title(board, project, ids::PCB_STACK_TITLE)
+    }
+
+    /// `<project> — <page>` for a page of `board`; a board with no project
+    /// goes by its file name.
+    pub(crate) fn board_page_title(
+        &self,
+        board: &Path,
+        project: Option<ProjectId>,
+        page: MessageId,
+    ) -> String {
         let name = project
             .and_then(|id| self.document_state.project_by_id(id))
             .map(page_tab::project_display_name)
@@ -85,30 +104,34 @@ impl Signex {
                     .map(|stem| stem.to_string_lossy().into_owned())
             })
             .unwrap_or_default();
-        page_tab::page_title(&self.ui_state.i18n, &name, ids::PCB_STACK_TITLE)
+        page_tab::page_title(&self.ui_state.i18n, &name, page)
     }
 
     /// Focus the Layer Stack tab of the board in view, or open it right after
     /// the board's tab. Every Layer Stack entry point lands here.
     pub(crate) fn open_layer_stack_tab(&mut self) {
-        let Some(board) = self.layer_stack_board() else {
-            return;
-        };
-        if let Some(idx) = self.ensure_layer_stack_tab(board) {
-            self.focus_layer_stack_tab(idx);
-        }
+        self.open_board_page_tab(TabKind::LayerStack);
     }
 
-    /// `board`'s Layer Stack tab, added right after the board's when missing.
+    /// Focus the `page` tab of the board in view, or open it right after the
+    /// board's tab. `None` without a board.
+    pub(crate) fn open_board_page_tab(&mut self, page: TabKind) -> Option<PathBuf> {
+        let board = self.page_board()?;
+        let idx = self.ensure_board_page_tab(board.clone(), page)?;
+        self.focus_board_page_tab(idx);
+        Some(board)
+    }
+
+    /// `board`'s `page` tab, added right after the board's when missing.
     /// `None` when the board has no tab.
-    fn ensure_layer_stack_tab(&mut self, board: PathBuf) -> Option<usize> {
+    fn ensure_board_page_tab(&mut self, board: PathBuf, page: TabKind) -> Option<usize> {
         let tabs = &self.document_state.tabs;
-        let owner = tab_at(tabs, &board, false)?;
-        if let Some(idx) = tab_at(tabs, &board, true) {
+        let owner = tab_at(tabs, &board, None)?;
+        if let Some(idx) = tab_at(tabs, &board, Some(&page)) {
             return Some(idx);
         }
         let project_id = tabs[owner].project_id;
-        let title = self.layer_stack_title(&board, project_id);
+        let title = self.board_page_title(&board, project_id, page_tab::page_name(&page)?);
         let at = owner + 1;
         self.document_state.tabs.insert(
             at,
@@ -117,7 +140,7 @@ impl Signex {
                 path: board,
                 cached_document: None,
                 project_id,
-                kind: TabKind::LayerStack,
+                kind: page,
             },
         );
         // The tab went in before any tab after the board.
@@ -127,7 +150,7 @@ impl Signex {
         Some(at)
     }
 
-    fn focus_layer_stack_tab(&mut self, idx: usize) {
+    fn focus_board_page_tab(&mut self, idx: usize) {
         if idx != self.document_state.active_tab {
             self.park_active_schematic_session();
             self.document_state.active_tab = idx;
@@ -138,16 +161,16 @@ impl Signex {
     /// Bring back a Layer Stack tab a branch switch's reopen closed, once its
     /// board has a tab again.
     pub(crate) fn restore_layer_stack_tab(&mut self, board: PathBuf, takes_focus: bool) {
-        if let Some(idx) = self.ensure_layer_stack_tab(board)
+        if let Some(idx) = self.ensure_board_page_tab(board, TabKind::LayerStack)
             && takes_focus
         {
-            self.focus_layer_stack_tab(idx);
+            self.focus_board_page_tab(idx);
         }
     }
 
-    /// Close a Layer Stack tab. The board, its window and its unsaved work
+    /// Close a board page tab. The board, its window and its unsaved work
     /// are not touched.
-    pub(crate) fn close_layer_stack_tab(&mut self, idx: usize, keep_session: bool) {
+    pub(crate) fn close_board_page_tab(&mut self, idx: usize, keep_session: bool) {
         self.document_state.tabs.remove(idx);
         let len = self.document_state.tabs.len();
         let active = self.document_state.active_tab;
@@ -162,16 +185,19 @@ impl Signex {
         self.refresh_panel_ctx();
     }
 
-    /// Drop `board`'s Layer Stack tab while its PCB tab closes. The tab sits
-    /// after the board's, so the board's index stays valid.
-    pub(crate) fn drop_layer_stack_tab_of(&mut self, board: &Path) {
+    /// Drop `board`'s page tabs while its PCB tab closes. The pages sit after
+    /// the board's, so the board's index stays valid.
+    pub(crate) fn drop_board_pages_of(&mut self, board: &Path) {
         let docs = &mut self.document_state;
-        let Some(page) = tab_at(&docs.tabs, board, true) else {
-            return;
-        };
-        docs.tabs.remove(page);
-        if docs.active_tab > page {
-            docs.active_tab -= 1;
+        while let Some(page) = docs
+            .tabs
+            .iter()
+            .position(|tab| tab.path == board && tab.kind.is_board_page())
+        {
+            docs.tabs.remove(page);
+            if docs.active_tab > page {
+                docs.active_tab -= 1;
+            }
         }
         docs.active_tab = docs.active_tab.min(docs.tabs.len().saturating_sub(1));
     }

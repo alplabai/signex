@@ -139,6 +139,9 @@ pub struct PanelContext {
     pub pcb_board: Option<Box<super::PcbBoardSummary>>,
     /// The active PCB tab's layer stack, for the Layer Stack manager (#2401).
     pub layer_stack: Option<super::LayerStackFacts>,
+    /// The pours of the board in view, for the Polygon Manager tab and the
+    /// PCB panel's Polygons mode (mockup row 178).
+    pub polygons: Option<super::PolygonFacts>,
     // Selection info for Properties panel
     /// How many items are currently selected.
     pub selection_count: usize,

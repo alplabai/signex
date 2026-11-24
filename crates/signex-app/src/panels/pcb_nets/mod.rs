@@ -1,6 +1,7 @@
 //! PCB panel (mockup row 106): one dock panel with a mode dropdown. Nets
 //! lists the board's nets with a filter, chips and a Class column over the
-//! selected net's detail; Net Classes is the board's class table. A pure
+//! selected net's detail; Net Classes is the board's class table; Polygons
+//! is the compact list of the Polygon Manager (`panels::polygons`). A pure
 //! view over data the panel context copies from the board.
 
 mod detail;
@@ -98,6 +99,7 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         PcbPanelMode::NetClasses => {
             super::panel_scrollable(super::board_net_classes::view(ctx)).boxed()
         }
+        PcbPanelMode::Polygons => super::polygons::panel_view(ctx),
     };
     column![mode_row(ctx, ctx.pcb_panel.mode), separator(ctx), body]
         .width(Length::Fill)

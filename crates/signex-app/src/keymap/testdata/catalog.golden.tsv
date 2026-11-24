@@ -267,6 +267,7 @@ place_board_pour_cutout	place	Cut an area out of the polygon pours on the active
 place_board_slice_pour	place	Slice the polygon pours on the active copper layer along a line	Slice Pour	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 repour_selected	pcb	Fill the selected polygon pours again and report their copper	Repour Selected	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 repour_all	pcb	Fill every polygon pour of the board again and report their copper	Repour All	PCB	-	-	RequiresDocument(Pcb)	-	document:document
+polygon_manager	pcb	Open the Polygon Manager of the board	Polygon Manager...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 board_shape_from_selection	design	Make the selected closed lines the board outline	Board Shape from Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets
 keepout_from_selection	design	Turn the selected area or closed lines into a keepout on its layer	Keepout from Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets
 panelize_board	pcb	Array the board into a manufacturing panel	Panelize Board	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document
