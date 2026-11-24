@@ -168,6 +168,8 @@ pub(super) use properties_parameters::{
     net_params_tabs, seg_btn, thin_sep,
 };
 use properties_parameters::{view_properties_general, view_properties_parameters};
+/// The Pin table document tab's body (mockup row 122b).
+pub(crate) use symbol_editor_properties::view_pin_table;
 use symbol_editor_properties::view_symbol_editor_properties;
 
 // -- Re-exports: keep the `crate::panels::*` public surface stable and the

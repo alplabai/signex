@@ -19,11 +19,9 @@ pub(super) fn build_symbol_editor_panel_ctx(
         SymbolFileEntry, SymbolPinDetails, SymbolPinSummary,
     };
 
+    // A Pin table tab shows its symbol's pins, and Properties stays on it.
     let active = app.document_state.tabs.get(app.document_state.active_tab)?;
-    let path = match &active.kind {
-        crate::app::TabKind::SymbolEditor(p) => p.clone(),
-        _ => return None,
-    };
+    let path = active.symbol_document()?.clone();
     let editor = app.document_state.symbol_editors.get(&path)?;
     let sym = editor.primitive();
 
