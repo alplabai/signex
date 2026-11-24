@@ -1112,7 +1112,10 @@ pub use panel_kind::{
 pub use panel_rows::PanelRows;
 pub use picker_cache::{PickerEntry, PickerRows};
 pub use picker_preview::{PickerSelection, PrimitiveChoice, PrimitiveDrawing};
-pub use placed_part::{ChangePreview, DatasheetChoice, PickerMode};
+pub use placed_part::{
+    ChangeFilter, ChangeFilters, ChangePreview, ChangeScope, ChangeSession, CompareField,
+    CompareKind, CompareRow, DatasheetChoice, PickerMode, PinMatch, PlacedNow,
+};
 pub use preview::*;
 pub use preview_history::{EditScope, RowHistory};
 pub use refresh::{LibrarySnapshot, RefreshFinish, RefreshStart};

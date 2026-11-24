@@ -16,6 +16,8 @@ mod board_output;
 mod board_reannotate;
 mod bom;
 pub(in crate::app) use bom::{default_column_width as bom_default_column_width, sorted_row_order};
+// Mockup row 155: Change Component, drawn in the component picker modal.
+pub(crate) mod change_component;
 mod close_project;
 mod compare_board;
 mod confirms;
