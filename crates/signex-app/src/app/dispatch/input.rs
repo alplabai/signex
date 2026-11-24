@@ -383,7 +383,8 @@ impl Signex {
                 }
                 let key = self
                     .rules_drawing_key(window, event)
-                    .or_else(|| self.project_preview_key(window, event));
+                    .or_else(|| self.project_preview_key(window, event))
+                    .or_else(|| self.gerber_viewer_key(window, event));
                 match (target, key) {
                     (InputTarget::Main | InputTarget::UndockedTab, Some(message)) => {
                         Claim::consume(message)

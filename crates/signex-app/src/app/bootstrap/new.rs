@@ -809,6 +809,7 @@ impl Signex {
                 project_writes: Vec::new(),
                 moved_project_dirs: Vec::new(),
                 deferred_git_commits: Vec::new(),
+                gerber_viewer: Default::default(),
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,

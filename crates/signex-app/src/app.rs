@@ -42,6 +42,9 @@ pub use diff_pair_classes::{
 };
 pub(crate) mod file_extension;
 pub mod gerber_read;
+// Mockup rows 193 and 193f: the Gerber Viewer tab.
+pub mod gerber_viewer;
+pub use gerber_viewer::{GerberViewerMsg, GerberViewerState};
 mod handlers;
 #[cfg(test)]
 pub(crate) mod hierarchy_fixture;

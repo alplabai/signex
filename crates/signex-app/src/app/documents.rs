@@ -33,6 +33,11 @@ pub struct ComponentEditorTab {
 pub enum TabKind {
     Schematic,
     Pcb,
+    /// The Gerber Viewer (mockup rows 193 and 193f), one tab at a time, on
+    /// the main window only. State lives in
+    /// [`crate::app::DocumentState::gerber_viewer`]; `TabInfo.path` is the
+    /// package's first path, read only, never saved.
+    GerberViewer,
     ComponentEditor(ComponentEditorTab),
     /// `.snxsym` opened as a main-window document tab. Editor state
     /// lives in [`crate::app::DocumentState::symbol_editors`] keyed by
@@ -64,6 +69,12 @@ pub enum TabKind {
 }
 
 impl TabKind {
+    /// The Gerber Viewer tab: no document, never undocked, nothing to
+    /// save or restore from History.
+    pub fn is_gerber_viewer(&self) -> bool {
+        matches!(self, TabKind::GerberViewer)
+    }
+
     pub fn is_component_editor(&self) -> bool {
         matches!(self, TabKind::ComponentEditor(_))
     }

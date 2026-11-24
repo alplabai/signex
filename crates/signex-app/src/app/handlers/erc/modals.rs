@@ -88,6 +88,11 @@ impl Signex {
             );
             return Task::none();
         }
+        // The Gerber Viewer draws in the main window only (mockup row 193).
+        if tab.kind.is_gerber_viewer() {
+            self.ui_state.tab_dragging = None;
+            return Task::none();
+        }
         let path = tab.path.clone();
         // Component Preview tabs undock to a window with
         // `WindowKind::ComponentEditor` so the editor view dispatch

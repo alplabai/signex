@@ -1122,6 +1122,7 @@ impl Signex {
             window_subscriptions::window_focus(),
             window_subscriptions::native_menu_failures(),
             window_subscriptions::quit_requests(),
+            window_subscriptions::file_drops(),
             window_subscriptions::net_color_chooser_presses(
                 self.ui_state.net_color_palette.chooser.is_some(),
             ),

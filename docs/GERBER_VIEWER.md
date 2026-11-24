@@ -7,8 +7,8 @@ second tool. The viewer is read-only: it never changes or writes a file.
 
 The reading lives in the UI-free domain crate `signex-gerber`. It opens no
 file and reads no clock: each reader takes a file name and its bytes. The
-viewer itself is a document tab on the shared tab shell, which is still to
-come.
+viewer itself is a document tab on the shared tab shell (`app/gerber_viewer`,
+see "The viewer tab").
 
 ## What is read
 
@@ -241,3 +241,60 @@ fabrication data as information. The rows are logged under the target
 `signex::gerber_viewer`, whose Messages code is `SIGNEX-GERBER_VIEWER`.
 The Messages panel's Source column has no Gerber Viewer entry yet and
 shows App; the sentence itself names the viewer.
+
+## The viewer tab
+
+`signex_app::app::gerber_viewer` (mockup rows 193 and 193f) is the tab. One
+Gerber Viewer tab is open at a time, in the main window only. It holds no
+document, so nothing saves, undoes or restores from History through it,
+and it does not undock. Its path is the package's first
+path and its title the package's name ("Gerber Viewer" with nothing open).
+Its state is `DocumentState::gerber_viewer`; closing the tab drops the
+package and keeps the recent list.
+
+- **Open paths.** A double-click on a `.gbr`, `.drl` or `.zip` row in
+  Projects; files dropped on any window (the `file_drops` subscription);
+  the tab's Open menu (the toolbar's Open, or Ctrl+O while the tab is
+  shown) with Open folder…, Open zip package…, Open files… and the recent
+  packages. A drop opens on the tab whatever it holds; elsewhere it opens
+  only when a file is named like fabrication data (a Gerber, drill or job
+  extension, or `.zip`). The drops of one gesture open as one package: the
+  window reports each hovered file, and the read starts when the last of
+  them lands (with no hover report, after the batch of drops).
+- **Reading.** Every read runs on a worker (`read.rs`): a folder gives its
+  files (not its subfolders), a zip its entries, read in memory and never
+  unpacked to disk, any other path itself. A file over 256 MiB is refused.
+  A read a later open superseded is dropped. Read problems go to Messages
+  as above; a package that cannot be read at all is one Messages error.
+- **Layer list.** One row per file in drawing order, the top of the list
+  drawing on top: a grip (drag to reorder), an eye, a swatch (opens a row
+  of colours), the name, the file name and a badge, X2 (hover for the file
+  function), job or name. Copper reads L1..Ln by position. Files that are
+  not fabrication data close the list as Not read.
+- **Board view.** The file frame, x right and y up, mirrored while flipped.
+  The near face draws at full strength, the far face and inner copper
+  darker. Flip also swaps each pair's drawing order. Drills draws the holes
+  last as rings, a non-plated hole's ring dashed. Highlight net dims what
+  is not on the selected object's X2 net; it is greyed with its reason when
+  the files carry no X2 nets or nothing on a net is selected. A clear
+  object draws in the background colour. Wheel zooms at the pointer, a
+  drag (left or middle button) pans, a left click selects the topmost
+  visible object.
+- **Properties.** Read only: type, layer, file and line, D-code (T-code for
+  a hole), aperture definition and X2 aperture function, X2 net, pin and
+  component, position, hole size and polarity, in mm or mil. With nothing
+  selected, the layer last clicked: file function, units, object count and
+  creator.
+- **Empty state.** Open folder… (primary), Open zip package…, Open files…,
+  the accepted files in one line, and the last three of the recent
+  packages. While files are dragged over a window the frame turns to the
+  accent and names how many will open. Tools that need files are greyed
+  with "Open files first".
+- **Recent packages.** App-wide, ten kept, the empty state shows three
+  (maintainer, 2026-11-24). A package whose files are gone stays listed,
+  greyed, with "Files not found"; the check runs on a worker. The list is
+  kept for the session; it is not written to the preferences yet.
+- **Not in this change.** File ▸ Open Gerber / Drill and Tools ▸ Gerber
+  Viewer (the menu rows and catalog ids come next), Measure, Compare,
+  in-tab Messages, the From this project link, the layer right-click menu,
+  pair hover, Alt+↑ / Alt+↓, Reload and the cursor read-out.
