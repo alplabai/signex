@@ -197,3 +197,80 @@ board-sketch-check-slot-narrow = Slot { $width } mm wide < min slot { $min } mm
 # The Fab profile group's min slot row; $width in millimetres.
 board-sketch-fab-min-slot = Min slot Ø { $width } · from profile
 board-sketch-fab-min-slot-none = Min slot: the project's fab profile names none
+
+# board-sketch-properties
+# The DOF card of the Sketch solve section (mockup row 179). $dof is the
+# sketch's free degrees of freedom, $count a whole number, $ms milliseconds.
+sketch-dof-number = { $dof }
+sketch-dof-number-over = −{ $count }
+sketch-dof-under = Under-constrained · { $dof } DOF
+sketch-dof-full = Fully constrained
+sketch-dof-over =
+    { $count ->
+        [one] Over-constrained · { $count } conflict
+       *[other] Over-constrained · { $count } conflicts
+    }
+sketch-dof-solved =
+    { $count ->
+        [one] { $count } constraint · solved in { $ms } ms
+       *[other] { $count } constraints · solved in { $ms } ms
+    }
+sketch-dof-kept =
+    { $count ->
+        [one] { $count } constraint · last good solve kept
+       *[other] { $count } constraints · last good solve kept
+    }
+# A free motion of the sketch; $count is how many points or radii it moves,
+# $angle its direction in degrees from X.
+sketch-dof-slide-x =
+    { $count ->
+        [one] One point slides along X
+       *[other] { $count } points slide along X
+    }
+sketch-dof-slide-y =
+    { $count ->
+        [one] One point slides along Y
+       *[other] { $count } points slide along Y
+    }
+sketch-dof-slide-angle =
+    { $count ->
+        [one] One point slides at { $angle }°
+       *[other] { $count } points slide at { $angle }°
+    }
+sketch-dof-any =
+    { $count ->
+        [one] One point moves in any direction
+       *[other] { $count } points move in any direction
+    }
+sketch-dof-reshape =
+    { $count ->
+        [one] One entity can change shape
+       *[other] { $count } entities can change shape
+    }
+# Selects what a free motion moves.
+sketch-dof-show = Show
+# Bake panel rows (mockup row 179). $count holes of one drill and plating;
+# $drill is the diameter in millimetres.
+board-sketch-bake-holes-plated = { $count } × Ø { $drill } mm · plated
+board-sketch-bake-holes-unplated = { $count } × Ø { $drill } mm · unplated
+# A keepout; $layers lists its layers, $kinds what it keeps out.
+board-sketch-bake-keepout-kinds = On { $layers } · { $kinds }
+# The Size row of a rectangular board (mockup row 179e); $width and $height
+# are lengths in $unit.
+board-sketch-size-value = { $width } × { $height } { $unit }
+# A pattern's spacing as its expressions resolve (mockup row 179e); $dx and
+# $dy are millimetres.
+sketch-pattern-spacing-value = Spacing { $dx } × { $dy } mm
+# The Sketch solve section title on a board (mockup row 179): $dof free
+# degrees of freedom, $count conflicts.
+sketch-dof-section = Sketch DOF
+sketch-dof-section-under = Sketch: { $dof } DOF
+sketch-dof-section-over =
+    { $count ->
+        [one] Sketch DOF: { $count } conflict
+       *[other] Sketch DOF: { $count } conflicts
+    }
+# The Fab profile group's profile row (mockup row 179d); $name is the rule
+# profile the project's rules were seeded from.
+board-sketch-fab-profile = Profile { $name }
+board-sketch-fab-profile-none = Profile: the project's rules name none

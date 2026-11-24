@@ -55,13 +55,23 @@ fn kind_badge(node: &TreeNode) -> Option<(&'static str, BadgeTone)> {
     if ext(".snxout") {
         return Some(("OUT", BadgeTone::Neutral));
     }
-    match node.icon {
-        TreeIcon::SnxSchematic | TreeIcon::Schematic | TreeIcon::Sheet => {
-            Some(("SCH", BadgeTone::Info))
-        }
-        TreeIcon::SnxPcb | TreeIcon::Pcb => Some(("PCB", BadgeTone::Ok)),
+    let tag = match node.icon {
+        TreeIcon::SnxSchematic | TreeIcon::Schematic | TreeIcon::Sheet => "SCH",
+        TreeIcon::SnxPcb | TreeIcon::Pcb => "PCB",
+        TreeIcon::SnxLibrary | TreeIcon::SnxSymbol | TreeIcon::SnxFootprint => "LIB",
+        _ => return None,
+    };
+    Some((tag, kind_tone(node.icon)?))
+}
+
+/// Tag tone of a document kind: schematic info, board ok, library violet.
+/// The Add New flyouts tint their glyphs from this too (mockup row 20).
+pub(crate) fn kind_tone(icon: TreeIcon) -> Option<BadgeTone> {
+    match icon {
+        TreeIcon::SnxSchematic | TreeIcon::Schematic | TreeIcon::Sheet => Some(BadgeTone::Info),
+        TreeIcon::SnxPcb | TreeIcon::Pcb => Some(BadgeTone::Ok),
         TreeIcon::SnxLibrary | TreeIcon::SnxSymbol | TreeIcon::SnxFootprint => {
-            Some(("LIB", BadgeTone::Violet))
+            Some(BadgeTone::Violet)
         }
         _ => None,
     }

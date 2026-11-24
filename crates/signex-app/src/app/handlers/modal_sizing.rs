@@ -63,8 +63,6 @@ pub(crate) fn banner_height(card_w: f32, pad: f32, text: &str) -> f32 {
 const REFUSAL_BANNER: f32 = 60.0;
 /// Characters a line of the New Library refusal banner holds.
 const REFUSAL_LINE_CHARS: usize = 80;
-/// Height of one row of the Close Project list (`dialog_row`).
-pub(crate) const DIALOG_ROW_HEIGHT: f32 = 30.0;
 /// The most the Close Project list grows to before it scrolls.
 pub(crate) const CLOSE_LIST_MAX_HEIGHT: f32 = 180.0;
 /// A one-line info or warning callout and the gap above it.
@@ -235,13 +233,15 @@ fn body_growth(width: f32, text: &str) -> f32 {
 }
 
 impl Signex {
-    /// Window height of the Close Project confirm: its rows up to the list
-    /// cap, then a callout each for the kept documents and the reason
-    /// Discard All is withheld.
+    /// Window height of the Close Project confirm: its grouped list (the
+    /// Exit confirm's, headings and rows) up to the list cap, then a callout
+    /// each for the kept documents and the reason Discard All is withheld.
     fn close_confirm_height(&self, c: &crate::app::ProjectCloseConfirmState, width: f32) -> f32 {
+        use crate::app::view::dialogs::graphite_list::{LIST_ROW_H, list_box_height};
         let column = width - 2.0 * crate::styles::Spacing::DEFAULT.l - CALLOUT_INSET;
-        let rows = (c.dirty_paths.len() + c.dirty_rows.len()) as f32 * DIALOG_ROW_HEIGHT;
-        let mut height = LIST_DIALOG_BASE + rows.min(CLOSE_LIST_MAX_HEIGHT);
+        let (groups, rows) = self.unsaved_list_shape(&c.dirty_paths, &c.dirty_rows);
+        let list = list_box_height(groups, rows, LIST_ROW_H);
+        let mut height = LIST_DIALOG_BASE + list.min(CLOSE_LIST_MAX_HEIGHT);
         if !c.kept_paths.is_empty() {
             let names: Vec<String> = c
                 .kept_paths

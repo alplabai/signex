@@ -1,15 +1,19 @@
-//! The sketch sections: Sketch solve (a DOF pill in the header; entity and
-//! constraint counts, the last solve's iterations, residual and time, the
-//! redundant and conflicting constraints), Parameters and Solve warnings.
+//! The sketch sections: Sketch solve (a DOF pill in the header; the DOF card
+//! with the free motions, entity and constraint counts, the last solve's
+//! iterations, residual and time, the redundant and conflicting
+//! constraints; a board drops the constraint count and time rows the card
+//! shows), Parameters and Solve warnings.
 //! The nothing-selected body shows them, and so does Sketch mode under a
-//! selection.
+//! selection. A board sketch leads with the solve section, titled Sketch DOF,
+//! right under its object header, and shows Parameters and Bake as under it
+//! or under the selection's section (mockup row 179).
 
 use iced::widget::{Column, container, row};
 use iced::{Element, Length, Widget as _};
-use signex_i18n::{UserText, ids, t};
+use signex_i18n::{Localized, UserText, ids, t};
 use signex_widgets::{raw, text, text_input};
 
-use super::super::PanelMsg;
+use super::super::{FootprintModeKind, PanelMsg};
 use super::body::{Ctx, caption, is_open, kv_row, pill, section};
 use super::conflicts;
 use crate::panels::form_look;
@@ -33,6 +37,59 @@ pub(super) fn view_sketch_sections<'a>(
     let col = solve_section(col, cx);
     let col = parameters_section(col, cx);
     warnings_section(col, cx)
+}
+
+/// A board sketch in Sketch mode puts the Sketch DOF section right under
+/// its object header (mockup row 179, m179-slot); a footprint keeps it with
+/// the other sketch sections.
+pub(super) fn leads_with_solve(cx: Ctx<'_, '_>) -> bool {
+    cx.fp.board.is_some() && cx.fp.mode_kind == FootprintModeKind::Sketch
+}
+
+/// The Sketch solve section alone, for a body that leads with it.
+pub(super) fn view_sketch_solve_section<'a>(
+    col: Column<Element<'a, PanelMsg>>,
+    cx: Ctx<'a, '_>,
+) -> Column<Element<'a, PanelMsg>> {
+    solve_section(col, cx)
+}
+
+/// A board sketch's Parameters and Bake as, right under its Sketch DOF
+/// section or under the selection's section (mockup row 179).
+pub(super) fn view_board_parameters_and_bake_as<'a>(
+    col: Column<Element<'a, PanelMsg>>,
+    cx: Ctx<'a, '_>,
+) -> Column<Element<'a, PanelMsg>> {
+    let col = parameters_section(col, cx);
+    super::roles::view_board_bake_as(col, cx)
+}
+
+/// The Solve warnings section alone, for a board body that showed its
+/// Parameters near the top.
+pub(super) fn view_sketch_warnings<'a>(
+    col: Column<Element<'a, PanelMsg>>,
+    cx: Ctx<'a, '_>,
+) -> Column<Element<'a, PanelMsg>> {
+    warnings_section(col, cx)
+}
+
+/// The solve section's title: "Sketch solve" on a footprint; on a board the
+/// mockup's "Sketch DOF", "Sketch: 2 DOF" or "Sketch DOF: 1 conflict"
+/// (mockup row 179).
+fn solve_title(cx: Ctx<'_, '_>) -> Localized {
+    let i18n = cx.i18n;
+    if cx.fp.board.is_none() {
+        return t!(i18n, ids::EDITORS_FP_PROPS_SECTION_SOLVE);
+    }
+    match cx.fp.last_solve.as_ref() {
+        Some(solve) if solve.over_constraint_count > 0 => t!(
+            i18n, ids::SKETCH_DOF_SECTION_OVER, "count" => solve.over_constraint_count
+        ),
+        Some(solve) if solve.dof > 0 => {
+            t!(i18n, ids::SKETCH_DOF_SECTION_UNDER, "dof" => solve.dof)
+        }
+        _ => t!(i18n, ids::SKETCH_DOF_SECTION),
+    }
 }
 
 /// The "+N more" caption under a cut list.
@@ -62,7 +119,7 @@ fn solve_section<'a>(
     let Ctx {
         fp, tokens, i18n, ..
     } = cx;
-    let title = t!(i18n, ids::EDITORS_FP_PROPS_SECTION_SOLVE);
+    let title = solve_title(cx);
     let header = section(
         SOLVE_KEY,
         &title,
@@ -75,15 +132,24 @@ fn solve_section<'a>(
     if !is_open(SOLVE_KEY, cx.collapsed) {
         return col;
     }
+    // The DOF card and the free motions lead (mockup row 179).
+    if let Some(solve) = fp.last_solve.as_ref() {
+        col = super::dof_card::push_dof_card(col, cx, solve);
+    }
+    // On a board the card already shows the constraint count, and the solve
+    // time when it reports no conflicts, so those rows go (mockup row 179).
+    let card_counts = fp.board.is_some() && fp.last_solve.is_some();
     let kv = |id: signex_i18n::MessageId, value: String| kv_row(&t!(i18n, id), value, tokens, i18n);
     col = col.push(kv(
         ids::EDITORS_FP_PROPS_ENTITIES,
         i18n.count(fp.sketch_entity_count as i64),
     ));
-    col = col.push(kv(
-        ids::EDITORS_FP_PROPS_CONSTRAINTS,
-        i18n.count(fp.sketch_constraint_count as i64),
-    ));
+    if !card_counts {
+        col = col.push(kv(
+            ids::EDITORS_FP_PROPS_CONSTRAINTS,
+            i18n.count(fp.sketch_constraint_count as i64),
+        ));
+    }
     let Some(solve) = fp.last_solve.as_ref() else {
         col = col.push(caption(t!(i18n, ids::EDITORS_FP_PROPS_NOT_SOLVED), tokens));
         return conflict_rows(col, cx);
@@ -96,10 +162,14 @@ fn solve_section<'a>(
         ids::EDITORS_FP_PROPS_RESIDUAL,
         format!("{:.3e}", solve.final_residual_norm),
     ));
-    col = col.push(kv(
-        ids::EDITORS_FP_PROPS_ELAPSED,
-        t!(i18n, ids::EDITORS_FP_PROPS_ELAPSED_VALUE, "ms" => solve.elapsed_ms).into_string(),
-    ));
+    // A card with conflicts says "last good solve kept", with no time.
+    let card_shows_time = card_counts && solve.over_constraint_count == 0;
+    if !card_shows_time {
+        col = col.push(kv(
+            ids::EDITORS_FP_PROPS_ELAPSED,
+            t!(i18n, ids::EDITORS_FP_PROPS_ELAPSED_VALUE, "ms" => solve.elapsed_ms).into_string(),
+        ));
+    }
     col = col.push(kv(
         ids::EDITORS_FP_PROPS_OVER_CONSTRAINED,
         i18n.count(solve.over_constraint_count as i64),

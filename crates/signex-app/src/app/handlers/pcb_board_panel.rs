@@ -33,36 +33,28 @@ impl Signex {
             }
             PcbBoardMsg::GridStepTyped(text) => view.grid_draft = Some(text.clone()),
             PcbBoardMsg::GridStepSubmitted => self.apply_pcb_grid_step(),
-            PcbBoardMsg::FilterKindToggled(kind) => {
-                self.ui_state.pcb_pick_filter.toggle(*kind);
-                self.refresh_pcb_highlight();
-            }
+            PcbBoardMsg::FilterKindToggled(kind) => task = self.toggle_pcb_filter_kind(*kind),
             PcbBoardMsg::FilterAllToggled => {
-                let filter = &mut self.ui_state.pcb_pick_filter;
-                let all = filter.is_all_on();
-                filter.set_all(!all);
-                self.refresh_pcb_highlight();
+                let all = self.ui_state.pcb_pick_filter.is_all_on();
+                self.set_all_pcb_filter_kinds(!all);
             }
-            PcbBoardMsg::FilterAllSet(on) => {
-                self.ui_state.pcb_pick_filter.set_all(*on);
-                self.refresh_pcb_highlight();
-            }
+            PcbBoardMsg::FilterAllSet(on) => self.set_all_pcb_filter_kinds(*on),
             PcbBoardMsg::FilterPresetAdded => task = self.add_pcb_filter_preset(),
-            PcbBoardMsg::FilterPresetApplied(idx) => self.apply_pcb_filter_preset(*idx),
+            PcbBoardMsg::FilterPresetApplied(idx) => self.click_pcb_filter_preset(*idx),
             PcbBoardMsg::FilterPresetRenamed(idx, name) => {
                 task = self.rename_pcb_filter_preset(*idx, name.clone());
             }
-            PcbBoardMsg::FilterPresetUpdated(idx) => task = self.update_pcb_filter_preset(*idx),
             PcbBoardMsg::FilterPresetRemoved(idx) => task = self.remove_pcb_filter_preset(*idx),
             PcbBoardMsg::SnapToGridsToggled => {
                 let snap = &mut self.ui_state.pcb_snap;
                 snap.to_grids = !snap.to_grids;
             }
             PcbBoardMsg::SnapScopePicked(scope) => self.ui_state.pcb_snap.scope = *scope,
-            PcbBoardMsg::SnapObjectToggled(object) => self.ui_state.pcb_snap.toggle_object(*object),
-            PcbBoardMsg::SnapDistancePicked(distance) => {
-                self.ui_state.pcb_snap.distance = *distance;
+            PcbBoardMsg::SnappingCycled => {
+                let snap = &mut self.ui_state.pcb_snap;
+                snap.scope = snap.scope.next();
             }
+            PcbBoardMsg::SnapObjectToggled(object) => self.ui_state.pcb_snap.toggle_object(*object),
             PcbBoardMsg::SnapToGuidesToggled => {
                 let snap = &mut self.ui_state.pcb_snap;
                 snap.to_guides = !snap.to_guides;
@@ -163,14 +155,6 @@ impl Signex {
         }
         self.sync_pcb_board_summary();
         task
-    }
-
-    /// Shift+E on a board: step Snapping through All Layers, Current Layer
-    /// and Off.
-    pub(crate) fn cycle_pcb_snapping(&mut self) {
-        let snap = &mut self.ui_state.pcb_snap;
-        snap.scope = snap.scope.next();
-        self.sync_pcb_board_summary();
     }
 
     /// Select the board's components on `side`, as a Board Information count

@@ -295,6 +295,11 @@
     "category": "interactive"
   },
   {
+    "id": "copy_board_3d_screenshot",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "create_rooms_from_sheets",
     "group": "Pcb",
     "category": "design"
@@ -328,6 +333,16 @@
     "id": "cycle_arc_mode",
     "group": "Pcb",
     "category": "pcb"
+  },
+  {
+    "id": "cycle_board_3d_lighting",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "cycle_board_snapping",
+    "group": "Pcb",
+    "category": "view"
   },
   {
     "id": "cycle_fast_grid",
@@ -618,6 +633,11 @@
     "id": "find_text",
     "group": "General",
     "category": "search"
+  },
+  {
+    "id": "flip_board_3d",
+    "group": "Pcb",
+    "category": "view"
   },
   {
     "id": "flip_board_view",

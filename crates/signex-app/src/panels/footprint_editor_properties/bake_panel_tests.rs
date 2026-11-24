@@ -4,8 +4,10 @@
 use signex_i18n::I18n;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
+use signex_types::sketch::attr::KeepoutKinds;
+
 use super::write_lines;
-use crate::panels::{BakedHole, BakedOutline, BoardBakeRows};
+use crate::panels::{BakedHole, BakedKeepout, BakedOutline, BoardBakeRows};
 
 fn lines(rows: &BoardBakeRows) -> Vec<(String, String)> {
     let plain = |s: String| s.replace(['\u{2068}', '\u{2069}'], "");
@@ -33,10 +35,13 @@ fn each_row_is_a_real_value() {
                 plated: false,
             },
         ],
-        keepouts: vec![vec![
-            PcbLayer::Copper(CopperLayer::Top),
-            PcbLayer::Copper(CopperLayer::Bottom),
-        ]],
+        keepouts: vec![BakedKeepout {
+            layers: vec![
+                PcbLayer::Copper(CopperLayer::Top),
+                PcbLayer::Copper(CopperLayer::Bottom),
+            ],
+            forbids: KeepoutKinds::default(),
+        }],
         cutouts: 1,
         slots: vec![(12.0, 3.0)],
         v_scores: 0,
@@ -55,6 +60,45 @@ fn each_row_is_a_real_value() {
             pair("Slot", "12.00 × 3.00 · routed"),
             pair("Pours", "2"),
             pair("Anchors", "Moves U1"),
+        ]
+    );
+}
+
+/// Mockup row 179: "Holes 4 × Ø3.20 NPTH" and "Keepouts · Top · copper,
+/// routing, pours": like holes are one row with their count, and a keepout
+/// names what it keeps out.
+#[test]
+fn like_holes_share_a_row_and_a_keepout_names_its_kinds() {
+    let unplated = BakedHole {
+        drill_mm: 3.2,
+        plated: false,
+    };
+    let rows = BoardBakeRows {
+        holes: vec![
+            unplated,
+            BakedHole {
+                drill_mm: 2.5,
+                plated: true,
+            },
+            unplated,
+            unplated,
+            unplated,
+        ],
+        keepouts: vec![BakedKeepout {
+            layers: vec![PcbLayer::Copper(CopperLayer::Top)],
+            forbids: KeepoutKinds::ALL_COPPER,
+        }],
+        ..BoardBakeRows::default()
+    };
+    assert_eq!(
+        lines(&rows),
+        vec![
+            pair("Mounting hole", "4 × Ø 3.20 mm · unplated"),
+            pair("Mounting hole", "Ø 2.50 mm · plated"),
+            pair(
+                "Keepouts",
+                "On Top Layer · No copper, No routing, No vias, No pours"
+            ),
         ]
     );
 }

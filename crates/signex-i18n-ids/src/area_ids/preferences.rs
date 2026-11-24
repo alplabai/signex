@@ -6,6 +6,13 @@ define_ids! {
     PREFERENCES_MOVE_KEEPS_WIRES_HELP = "preferences-move-keeps-wires-help";
     PREFERENCES_NET_HOVER = "preferences-net-hover";
     PREFERENCES_NET_HOVER_HELP = "preferences-net-hover-help";
+    PREFERENCES_EDGE_PAN = "preferences-edge-pan";
+    PREFERENCES_EDGE_PAN_HELP = "preferences-edge-pan-help";
+    PREFERENCES_EDGE_PAN_SPEED = "preferences-edge-pan-speed";
+    PREFERENCES_EDGE_PAN_SPEED_HELP = "preferences-edge-pan-speed-help";
+    PREFERENCES_EDGE_PAN_SPEED_SLOW = "preferences-edge-pan-speed-slow";
+    PREFERENCES_EDGE_PAN_SPEED_MEDIUM = "preferences-edge-pan-speed-medium";
+    PREFERENCES_EDGE_PAN_SPEED_FAST = "preferences-edge-pan-speed-fast";
     PREFERENCES_DRAG_DIRECTION = "preferences-drag-direction";
     PREFERENCES_DRAG_DIRECTION_HELP = "preferences-drag-direction-help";
     PREFERENCES_INCREMENT_STEP = "preferences-increment-step";

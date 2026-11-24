@@ -60,6 +60,7 @@ compare_board_with_schematic
 compile_project
 copy
 copy_attributes_or_add_vertex
+copy_board_3d_screenshot
 create_rooms_from_sheets
 create_sheet_from_sheet_symbol
 create_sheet_symbol_from_sheet
@@ -67,6 +68,8 @@ create_union
 cross_probe
 cut
 cycle_arc_mode
+cycle_board_3d_lighting
+cycle_board_snapping
 cycle_fast_grid
 cycle_route_mode
 cycle_selection_mode
@@ -125,6 +128,7 @@ find_previous
 find_similar_items
 find_similar_objects
 find_text
+flip_board_3d
 flip_board_view
 flip_selected_x
 flip_selected_y

@@ -321,6 +321,17 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<LibraryMessage>> {
+        // The camera lives here, so an edge pan is owed to it; the redraw
+        // after it replays the pointer (#2872).
+        let link = &self.state.edge_pan;
+        if let Some((dx, dy)) = link.take_owed_pan() {
+            cstate.pan_by(iced::Vector::new(dx, dy));
+            self.cache.clear();
+        }
+        let replayed = link.replayed(event, cursor);
+        let event = replayed.as_ref().unwrap_or(event);
+        link.observe_event(event, cursor, bounds);
+        link.set_dragging(cstate.drag.is_some_and(|drag| drag.moved));
         if let Some(action) = self.end_middle_zoom_on(cstate, event) {
             return Some(action);
         }

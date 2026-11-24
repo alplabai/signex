@@ -43,6 +43,9 @@ mod font_family_tests;
 #[cfg(test)]
 mod footprint_binding_tests;
 mod harness;
+mod harness_entry_slide;
+#[cfg(test)]
+mod harness_entry_slide_tests;
 #[cfg(test)]
 mod harness_tests;
 #[cfg(test)]

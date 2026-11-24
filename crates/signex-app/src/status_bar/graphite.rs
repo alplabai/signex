@@ -382,6 +382,29 @@ pub(super) fn mono_button(
         .on_press(request)
 }
 
+/// A footprint editor's Grid read-out (mockup row 63): the grid glyph and
+/// the read-out, a click on them shows or hides the grid; then the caret,
+/// a click on it opens the grid step list.
+pub(super) fn footprint_grid_readout<'a>(
+    label: Text<'static>,
+    tokens: &ThemeTokens,
+) -> Element<'a, StatusBarRequest> {
+    let face = row![super::board::grid_glyph(tokens), label.boxed()]
+        .spacing(SP.xs)
+        .align_y(iced::Alignment::Center);
+    let toggle = button(face)
+        .padding([1.0, SP.s])
+        .style(button::text)
+        .on_press(StatusBarRequest::ToggleGrid);
+    let caret = button(super::board::layer_chevron(tokens))
+        .padding([1.0, SP.xs])
+        .style(button::text)
+        .on_press(StatusBarRequest::GridCaretClicked { window: None });
+    row![toggle.boxed(), caret.boxed()]
+        .align_y(iced::Alignment::Center)
+        .boxed()
+}
+
 /// The board view's angle (#2316): a caption and the value, a click opens a
 /// value field in its place; Enter applies a number.
 pub(super) fn view_angle<'a>(
@@ -607,6 +630,74 @@ mod tests {
                 + 2.0 * CLUSTER_GAP
                 + 2.0 * BAR_GAP
                 + HAIRLINE
+        );
+    }
+
+    /// A footprint's "Grid 1.000 mm" read-out, in the bar's muted ink.
+    fn footprint_label(i18n: &I18n, tokens: &ThemeTokens) -> Text<'static> {
+        mono_message(grid_text(i18n, true, 1.0, Unit::Mm), resolve(tokens).ink3)
+    }
+
+    /// Where the read-out's text lands in `element`.
+    fn grid_text_bounds(element: Element<'_, StatusBarRequest>) -> iced::Rectangle {
+        crate::layout_probe::lay_out_texts(element, iced::Size::new(400.0, 40.0))
+            .into_iter()
+            .find(|t| t.text.contains("Grid"))
+            .expect("the Grid read-out is drawn")
+            .bounds
+    }
+
+    /// Mockup row 63: a footprint's Grid read-out has room for the grid
+    /// glyph before its text and the caret after it; the plain read-out
+    /// starts its text at the button's padding.
+    #[test]
+    fn the_footprint_grid_read_out_has_a_glyph_and_a_caret() {
+        let i18n = I18n::en_us();
+        let t = theme_tokens(ThemeId::GraphiteLight);
+        let window = iced::Size::new(400.0, 40.0);
+        let text = grid_text_bounds(footprint_grid_readout(footprint_label(&i18n, &t), &t));
+        assert!(
+            text.x >= SP.s + TS.body,
+            "no glyph before the text: {text:?}"
+        );
+        let width = crate::layout_probe::root_size(
+            footprint_grid_readout(footprint_label(&i18n, &t), &t),
+            window,
+        )
+        .width;
+        assert!(
+            width >= text.x + text.width + SP.s + TS.body,
+            "no caret after the text: {width} for {text:?}"
+        );
+        let plain = grid_text_bounds(
+            mono_button(footprint_label(&i18n, &t), StatusBarRequest::ToggleGrid).boxed(),
+        );
+        assert!(plain.x < SP.s + TS.body, "{plain:?}");
+    }
+
+    /// Mockup row 63: the caret opens the step list; the read-out itself
+    /// still shows or hides the grid.
+    #[test]
+    fn the_caret_opens_the_step_list_and_the_read_out_toggles_the_grid() {
+        let i18n = I18n::en_us();
+        let t = theme_tokens(ThemeId::GraphiteDark);
+        let window = iced::Size::new(400.0, 40.0);
+        let readout = || footprint_grid_readout(footprint_label(&i18n, &t), &t);
+        let size = crate::layout_probe::root_size(readout(), window);
+        let caret = iced::Point::new(size.width - SP.xs - TS.body / 2.0, size.height / 2.0);
+        let on_caret = crate::layout_probe::messages_on_click_at(readout(), window, None, caret);
+        assert!(
+            matches!(
+                on_caret.as_slice(),
+                [StatusBarRequest::GridCaretClicked { window: None }]
+            ),
+            "{on_caret:?}"
+        );
+        let text = grid_text_bounds(readout()).center();
+        let on_text = crate::layout_probe::messages_on_click_at(readout(), window, None, text);
+        assert!(
+            matches!(on_text.as_slice(), [StatusBarRequest::ToggleGrid]),
+            "{on_text:?}"
         );
     }
 }

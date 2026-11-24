@@ -15,6 +15,7 @@ use signex_i18n::{I18n, menu_ids};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 use signex_widgets::tree_view::TreeIcon;
 
+pub(super) mod kind_inks;
 mod leaf;
 pub(super) mod library;
 pub(super) mod planned;

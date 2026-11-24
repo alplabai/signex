@@ -282,14 +282,20 @@ fn the_palette_runs_the_view_and_the_bar_leaves_it() {
     assert!(!f.in_3d());
 }
 
-/// The view opens looking straight down at the board, framed on it.
+/// The view opens looking from Iso at the board, framed on it (mockup
+/// row 175).
 #[test]
-fn the_view_opens_from_above_framed_on_the_board() {
+fn the_view_opens_on_iso_framed_on_the_board() {
     let mut f = open_board();
     f.menu("view_board_3d");
     sized(&mut f);
     let camera = f.camera();
-    assert_eq!(camera.pitch_deg, 90.0);
+    let mut iso = OrbitCamera::default();
+    iso.set_preset(ViewPreset::Iso);
+    assert_eq!(
+        (camera.yaw_deg, camera.pitch_deg),
+        (iso.yaw_deg, iso.pitch_deg)
+    );
     for (x, y) in [(0.0, 0.0), (40.0, 30.0)] {
         let at = f.screen(x, y, 1.6);
         assert!(BOUNDS.contains(at), "corner ({x}, {y}) at {at:?}");

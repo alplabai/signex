@@ -147,6 +147,22 @@ fn folder_of(path: &Path) -> String {
         .unwrap_or_default()
 }
 
+/// A row's muted folder or library at the right, on one line. One too wide
+/// for its column is cut at the start with an ellipsis, so the folder's own
+/// name stays in view (mockup row 16).
+fn meta_cell<'a, M: 'a>(meta: &str, muted: iced::Color) -> Element<'a, M> {
+    container(
+        text(UserText::new(meta.to_owned()))
+            .size(TS.caption)
+            .color(muted)
+            .wrapping(iced::widget::text::Wrapping::None)
+            .ellipsis(iced::widget::text::Ellipsis::Start),
+    )
+    .width(Length::Fit.max(META_MAX_W))
+    .clip(true)
+    .boxed()
+}
+
 /// The file name of `path`, or the whole path when it has none.
 fn file_name_of(path: &Path) -> String {
     path.file_name()
@@ -157,7 +173,8 @@ fn file_name_of(path: &Path) -> String {
 impl Signex {
     /// Every entry of the quit confirm, classified: drafts and rows under the
     /// libraries, a file under the open project that owns it (its sheets,
-    /// its board, the project file itself), any other file under Other.
+    /// its board, the Export Jobs in its folder, the project file itself),
+    /// any other file under Other.
     pub(super) fn quit_entries(&self, paths: &[PathBuf], rows: &[EditorAddress]) -> Vec<QuitEntry> {
         let roots = self.draft_library_roots();
         let drafts: std::collections::HashSet<PathBuf> =
@@ -193,7 +210,8 @@ impl Signex {
     }
 
     /// A file: under the open project that owns it (its sheets, its board,
-    /// the project file itself), else under Other.
+    /// the Export Jobs in its folder, the project file itself), else under
+    /// Other.
     fn quit_file_entry(&self, path: &Path) -> QuitEntry {
         let projects = &self.document_state.projects;
         let owner = self
@@ -235,7 +253,17 @@ impl Signex {
     /// `(group headings, rows)` of the quit confirm's list, for its window
     /// height (`modal_sizing`).
     pub(crate) fn quit_list_shape(&self, st: &crate::app::AppQuitConfirmState) -> (usize, usize) {
-        let groups = group_entries(self.quit_entries(&st.dirty_paths, &st.dirty_rows));
+        self.unsaved_list_shape(&st.dirty_paths, &st.dirty_rows)
+    }
+
+    /// `(group headings, rows)` of the grouped unsaved list of `paths` and
+    /// `rows`, as the Exit and the Close Project confirm show it.
+    pub(crate) fn unsaved_list_shape(
+        &self,
+        paths: &[PathBuf],
+        rows: &[EditorAddress],
+    ) -> (usize, usize) {
+        let groups = group_entries(self.quit_entries(paths, rows));
         let rows = groups.iter().map(|group| group.entries.len()).sum();
         (groups.len(), rows)
     }
@@ -255,8 +283,13 @@ impl Signex {
         }
     }
 
-    /// The list box: each group's heading, then its rows.
-    fn quit_list<'a>(&self, groups: &[QuitGroup], tokens: &ThemeTokens) -> Element<'a, Message> {
+    /// The list box: each group's heading, then its rows. The Close Project
+    /// confirm shows its unsaved list this way too (mockup row 16).
+    pub(super) fn unsaved_list<'a>(
+        &self,
+        groups: &[QuitGroup],
+        tokens: &ThemeTokens,
+    ) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
         let ink = crate::styles::ti(tokens.text);
         let muted = crate::styles::tokens::resolve(tokens).ink4;
@@ -284,17 +317,7 @@ impl Signex {
                     .clip(true)
                     .boxed(),
                 );
-                cells.push(
-                    container(
-                        text(UserText::new(entry.meta.clone()))
-                            .size(TS.caption)
-                            .color(muted)
-                            .wrapping(iced::widget::text::Wrapping::None),
-                    )
-                    .width(Length::Fit.max(META_MAX_W))
-                    .clip(true)
-                    .boxed(),
-                );
+                cells.push(meta_cell(&entry.meta, muted));
                 items.push(list_row(cells, LIST_ROW_H));
             }
         }
@@ -360,7 +383,7 @@ impl Signex {
             ));
         }
         body = body.push(
-            container(self.quit_list(&groups, tokens))
+            container(self.unsaved_list(&groups, tokens))
                 .height(Length::Fit.max(
                     crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT
                         + crate::app::handlers::modal_sizing::LIST_BOX_CHROME,

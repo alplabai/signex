@@ -250,7 +250,7 @@ impl Signex {
         let interaction = &mut self.interaction_state;
         let canvas = &mut interaction.pcb_canvas;
         canvas.set_highlight(highlight);
-        canvas.set_grab(if tool_armed { Vec::new() } else { grab });
+        canvas.set_grab(if tool_armed { Vec::new().into() } else { grab });
         canvas.set_clicks_only(clicks_only);
         if whole {
             canvas.set_route_ghost(ghost.as_ref());
@@ -324,7 +324,7 @@ impl Signex {
             let clicks_only = tool_armed || carry.is_some_and(PcbCarry::waits_for_clicks);
             if let Some(canvas) = interaction.pcb_canvases.get_mut(&id) {
                 canvas.set_highlight(highlight);
-                canvas.set_grab(if tool_armed { Vec::new() } else { grab });
+                canvas.set_grab(if tool_armed { Vec::new().into() } else { grab });
                 canvas.set_clicks_only(clicks_only);
                 let own = ghost.as_ref().filter(|(owner, _)| *owner == id);
                 canvas.set_part_ghost(own.map(|(_, snapshot)| snapshot));

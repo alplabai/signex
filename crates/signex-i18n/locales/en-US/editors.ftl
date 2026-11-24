@@ -1239,3 +1239,7 @@ editors-pin-table-field-description = Description
 editors-pin-table-field-ignore = Ignore
 # Messages panel: a bulk length that was not written. $value is what was typed.
 editors-pin-table-length-refused = Pin length { $value } was not applied: a pin cannot have that length.
+# library-dialog-polish
+# The header of the symbol editor's Place Pin dropdown (mockup row 141): the
+# type picked under it stays for every following pin.
+editors-symbol-bar-pin-type = Pin type

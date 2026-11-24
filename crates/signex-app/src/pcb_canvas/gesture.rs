@@ -25,6 +25,9 @@ const DOUBLE_CLICK_MAX_PX: f32 = 5.0;
 pub(super) struct Gesture {
     modifiers: Modifiers,
     press: Option<iced::Point>,
+    /// The board point under the press: it stays put while an edge pan
+    /// moves the view under a held button (#2872).
+    press_at: Option<Point>,
     /// The press has passed the drag threshold and owns the canvas marquee,
     /// or (with `carrying`) drags the selected footprints.
     dragging: bool,
@@ -83,6 +86,7 @@ impl Gesture {
                 self.press = Some(pos);
                 self.clicks_only = canvas.is_clicks_only();
                 let at = canvas.screen_to_world(pos, bounds);
+                self.press_at = Some(at);
                 // Ctrl alone still drags, leaving the tracks; Shift (or
                 // Ctrl+Shift) draws a box from a footprint too.
                 self.carrying = !self.clicks_only
@@ -133,7 +137,7 @@ impl Gesture {
                 }
                 self.dragging = true;
                 canvas.marquee.set(Some((
-                    canvas.screen_to_world(press, bounds),
+                    pressed_at(self.press_at, canvas, press, bounds),
                     canvas.screen_to_world(pos, bounds),
                 )));
                 // The readout keeps following the pointer while the box grows.
@@ -142,6 +146,7 @@ impl Gesture {
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                 let press = self.press?;
+                let pressed = pressed_at(self.press_at, canvas, press, bounds);
                 let carried = self.carrying && self.dragging;
                 let clicks_only = self.clicks_only;
                 let cancelled = if carried {
@@ -159,15 +164,14 @@ impl Gesture {
                     .unwrap_or(press);
                 let msg = if carried {
                     PcbCanvasMsg::FootprintDropped {
-                        from: canvas.screen_to_world(press, bounds),
+                        from: pressed,
                         to: canvas.screen_to_world(pos, bounds),
                     }
                 } else if !clicks_only && past_threshold(press, pos) {
                     // Seen from below (#2394) the box is judged mirrored.
-                    let (from, to, deg) = canvas.camera_ref().box_frame(
-                        canvas.screen_to_world(press, bounds),
-                        canvas.screen_to_world(pos, bounds),
-                    );
+                    let (from, to, deg) = canvas
+                        .camera_ref()
+                        .box_frame(pressed, canvas.screen_to_world(pos, bounds));
                     PcbCanvasMsg::BoxSelected {
                         from,
                         to,
@@ -176,12 +180,12 @@ impl Gesture {
                     }
                 } else if self.modifiers.is_empty() && self.second_click(press) {
                     PcbCanvasMsg::DoubleClicked {
-                        at: canvas.screen_to_world(press, bounds),
+                        at: tool_click_at(clicks_only, pressed, canvas, press, pos, bounds),
                         tolerance_mm: hover_reach_mm(canvas.scale()),
                     }
                 } else {
                     PcbCanvasMsg::Clicked {
-                        at: canvas.screen_to_world(press, bounds),
+                        at: tool_click_at(clicks_only, pressed, canvas, press, pos, bounds),
                         tolerance_mm: hover_reach_mm(canvas.scale()),
                         mode: click_mode(self.modifiers),
                     }
@@ -226,7 +230,7 @@ impl Gesture {
         bounds: Rectangle,
     ) -> PcbCanvasMsg {
         PcbCanvasMsg::FootprintDragged {
-            from: canvas.screen_to_world(press, bounds),
+            from: pressed_at(self.press_at, canvas, press, bounds),
             to: canvas.screen_to_world(pos, bounds),
             tolerance_mm: hover_reach_mm(canvas.scale()),
             leaves_tracks: self.leaves_tracks,
@@ -235,6 +239,7 @@ impl Gesture {
 
     fn drop_press(&mut self, canvas: &PcbCanvas) {
         self.press = None;
+        self.press_at = None;
         self.dragging = false;
         self.carrying = false;
         self.leaves_tracks = false;
@@ -258,6 +263,36 @@ pub(super) fn pointer_moved(
         at: canvas.screen_to_world(pos, bounds),
         zoom_pct,
         tolerance_mm: hover_reach_mm(scale),
+    }
+}
+
+/// The board point the press at `press` (canvas pixels) landed on: the one
+/// kept at the press, else `press` under the live camera.
+fn pressed_at(
+    kept: Option<Point>,
+    canvas: &PcbCanvas,
+    press: iced::Point,
+    bounds: Rectangle,
+) -> Point {
+    kept.unwrap_or_else(|| canvas.screen_to_world(press, bounds))
+}
+
+/// Where a click released at `pos` lands. A tool's click (`clicks_only`)
+/// lands where its ghost is: under the pointer once the view moved under
+/// the held press, as an edge pan does (#2872). Otherwise at `pressed`.
+fn tool_click_at(
+    clicks_only: bool,
+    pressed: Point,
+    canvas: &PcbCanvas,
+    press: iced::Point,
+    pos: iced::Point,
+    bounds: Rectangle,
+) -> Point {
+    let view_moved = canvas.screen_to_world(press, bounds) != pressed;
+    if clicks_only && view_moved {
+        canvas.screen_to_world(pos, bounds)
+    } else {
+        pressed
     }
 }
 

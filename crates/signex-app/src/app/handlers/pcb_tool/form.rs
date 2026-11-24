@@ -324,6 +324,8 @@ impl Signex {
             return;
         };
         let (tool, window) = (session.tool, session.window);
+        // A Graphics Line or Arc on copper sets the Track or Arc values.
+        let tool = self.placing_tool(tool);
         if tool.graphic_kind().is_some() {
             self.edit_graphic_tool_value(edit, what);
             return;

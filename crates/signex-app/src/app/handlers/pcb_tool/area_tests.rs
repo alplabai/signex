@@ -4,13 +4,15 @@
 use signex_types::pcb::Point;
 
 use super::tests::{
-    app_with_board, board_of, click, escape, has_ghost, hover, live, right_click, run, undo,
+    app_with_board, board_of, click, escape, grid_only, has_ghost, hover, live, right_click, run,
+    undo,
 };
 
 #[test]
 fn fill_is_the_rectangle_between_two_clicks_in_one_step() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
+    grid_only(&mut app);
     let before = live(&app, &path);
     run(&mut app, "place_board_fill");
     click(&mut app, 1.1, 0.1);
@@ -98,6 +100,7 @@ fn a_keepout_is_drawn_on_a_keep_out_layer_and_read_as_one() {
 
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
+    grid_only(&mut app);
     let before = live(&app, &path);
     make_active(&mut app, PcbLayer::Technical(TechnicalLayer::SilkscreenTop));
     run(&mut app, "place_board_keepout");
@@ -126,6 +129,7 @@ fn a_keepout_is_drawn_on_a_keep_out_layer_and_read_as_one() {
 fn a_polygon_pour_fills_clear_of_other_nets_and_is_drawn_as_its_fill() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
+    grid_only(&mut app);
     let before = live(&app, &path);
     run(&mut app, "place_board_polygon_pour");
     assert!(

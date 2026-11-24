@@ -11,7 +11,9 @@
 //! 1. Compute the QR factorisation of the Jacobian J (m × n).
 //! 2. The numerical rank `r = rank(J, tol)` tells us how many of the
 //!    `n` state variables are pinned by the constraint set. Effective
-//!    free DoF = `n − r`.
+//!    free DoF = `n − r`. The row reduction in
+//!    [`crate::solver::free_motion`] only lists the free motions for the
+//!    Properties DOF card; it never sets a colour.
 //! 3. For per-entity colouring, apply a coarse global rule: if the
 //!    rank equals `n`, every non-fixed Point is fully constrained
 //!    (black); otherwise every non-fixed Point has free DoF (blue).

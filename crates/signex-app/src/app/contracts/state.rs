@@ -133,6 +133,12 @@ pub struct GridPickerState {
     pub target: std::path::PathBuf,
     /// The undocked window it opened in; `None` for the main window.
     pub owner: Option<iced::window::Id>,
+    /// The ladder step under the pointer, in mm; the preview draws it in
+    /// place of the active step (mockup row 63).
+    pub hovered_step_mm: Option<f64>,
+    /// The card's bottom, not its top, sits at (x, y): it was opened from
+    /// the status bar's Grid caret, above the bar (mockup row 63).
+    pub opens_upward: bool,
 }
 
 /// Grid Properties dialog draft (Ctrl+G in a footprint editor): the step
@@ -452,6 +458,9 @@ pub enum ProjectTreeAction {
     /// Open the "Remove from Project" modal (Delete / Exclude / Cancel)
     /// for this leaf.
     OpenRemoveDialog(signex_widgets::tree_view::TreeKey),
+    /// Show History on a leaf (mockup row 20): open the file and the History
+    /// panel, filtered to it (This file only).
+    ShowHistory(signex_widgets::tree_view::TreeKey),
     /// Close the entire project whose root is at this tree path. Closes
     /// every open tab backed by the project, drops the `LoadedProject`
     /// from the workspace, and promotes another project (or `None`) to
@@ -535,6 +544,7 @@ impl ProjectTreeAction {
             | RevealInExplorer(k)
             | OpenRenameDialog(k)
             | OpenRemoveDialog(k)
+            | ShowHistory(k)
             | CloseProject(k)
             | ValidateProject(k)
             | OpenProjectRenameDialog(k)
@@ -785,4 +795,10 @@ pub enum StatusBarRequest {
     /// Click on the Library Missing chip: reopens the dialog of a skipped
     /// library (mockup row 138).
     LibraryMissingChipClicked,
+    /// Click on the caret of a footprint's Grid read-out: opens the grid
+    /// step list (mockup row 63) for the footprint `window` shows. The bar
+    /// sends `window: None`; `Signex::status_bar_message` names it.
+    GridCaretClicked {
+        window: Option<iced::window::Id>,
+    },
 }

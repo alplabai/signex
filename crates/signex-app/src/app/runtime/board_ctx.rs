@@ -103,7 +103,7 @@ impl Signex {
             hidden_nets: ratsnest.hidden_net_count(&tab.path),
             filter: self.ui_state.pcb_pick_filter.clone(),
             presets: self.ui_state.pcb_filter_presets.clone(),
-            preset_tab: self.ui_state.pcb_filter_preset_tab,
+            preset_editing: self.ui_state.pcb_filter_preset_editing,
             snap: self.ui_state.pcb_snap.clone(),
             fast_grids_mm: self.ui_state.fast_grids_mm,
             view: self.ui_state.pcb_board_panel.clone(),

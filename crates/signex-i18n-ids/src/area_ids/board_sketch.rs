@@ -107,4 +107,28 @@ define_ids! {
     BOARD_SKETCH_CHECK_SLOT_NARROW = "board-sketch-check-slot-narrow";
     BOARD_SKETCH_FAB_MIN_SLOT = "board-sketch-fab-min-slot";
     BOARD_SKETCH_FAB_MIN_SLOT_NONE = "board-sketch-fab-min-slot-none";
+    // board-sketch-properties
+    SKETCH_DOF_NUMBER = "sketch-dof-number";
+    SKETCH_DOF_NUMBER_OVER = "sketch-dof-number-over";
+    SKETCH_DOF_UNDER = "sketch-dof-under";
+    SKETCH_DOF_FULL = "sketch-dof-full";
+    SKETCH_DOF_OVER = "sketch-dof-over";
+    SKETCH_DOF_SOLVED = "sketch-dof-solved";
+    SKETCH_DOF_KEPT = "sketch-dof-kept";
+    SKETCH_DOF_SLIDE_X = "sketch-dof-slide-x";
+    SKETCH_DOF_SLIDE_Y = "sketch-dof-slide-y";
+    SKETCH_DOF_SLIDE_ANGLE = "sketch-dof-slide-angle";
+    SKETCH_DOF_ANY = "sketch-dof-any";
+    SKETCH_DOF_RESHAPE = "sketch-dof-reshape";
+    SKETCH_DOF_SHOW = "sketch-dof-show";
+    BOARD_SKETCH_BAKE_HOLES_PLATED = "board-sketch-bake-holes-plated";
+    BOARD_SKETCH_BAKE_HOLES_UNPLATED = "board-sketch-bake-holes-unplated";
+    BOARD_SKETCH_BAKE_KEEPOUT_KINDS = "board-sketch-bake-keepout-kinds";
+    BOARD_SKETCH_SIZE_VALUE = "board-sketch-size-value";
+    SKETCH_PATTERN_SPACING_VALUE = "sketch-pattern-spacing-value";
+    SKETCH_DOF_SECTION = "sketch-dof-section";
+    SKETCH_DOF_SECTION_UNDER = "sketch-dof-section-under";
+    SKETCH_DOF_SECTION_OVER = "sketch-dof-section-over";
+    BOARD_SKETCH_FAB_PROFILE = "board-sketch-fab-profile";
+    BOARD_SKETCH_FAB_PROFILE_NONE = "board-sketch-fab-profile-none";
 }

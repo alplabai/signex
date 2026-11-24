@@ -31,11 +31,14 @@ pub use filter::SelectionFilter;
 // paths (overlays/mod.rs) resolve unchanged after the folder split.
 #[cfg(test)]
 pub(crate) use dropdown::filter_card_width;
-pub(crate) use dropdown::{FilterChip, FilterMenu, filter_menu_entry, preset_label};
-pub use dropdown::{dropdown_x_offset, view_dropdown};
+pub(crate) use dropdown::{
+    FilterChip, FilterMenu, editing_line, filter_menu_entry, preset_chips, preset_editing_line,
+    preset_label,
+};
+pub use dropdown::{SchematicFilterState, dropdown_x_offset, view_dropdown};
 pub(crate) use layout::{
-    BAR_DROPDOWN_GAP_PX, bar_height_for, bar_left_in_window, bar_top_margin, bar_width_for,
-    bar_zone_height_for, menu_at, shows_draw_mode_pill, symbol_editor_bar_drop,
+    BAR_DROPDOWN_GAP_PX, bar_band_bottom, bar_height_for, bar_left_in_window, bar_top_margin,
+    bar_width_for, bar_zone_height_for, menu_at, shows_draw_mode_pill, symbol_editor_bar_drop,
 };
 pub use planned::{PLANNED_TOOLS, is_planned, planned_name, refusal_line};
 
@@ -83,9 +86,9 @@ pub enum ActiveBarMsg {
     AllFiltersPicked,
     /// The None cell was picked: every category off.
     NoFiltersPicked,
-    /// Replace the active filter set with the user-defined preset at
-    /// `index` (0..N). No-op if the index is out of range or the slot is
-    /// empty. Source: shortcut buttons in the Filter dropdown.
+    /// A preset chip of the Filter dropdown was clicked: the preset at
+    /// `index` becomes the filter and the edited preset, or, if it already
+    /// was the edited one, editing ends (#2873). No-op past the end.
     ApplyCustomFilter(usize),
     /// "Save current" in the Filter dropdown was picked: the active filter
     /// set becomes a new preset, while there is room for one.

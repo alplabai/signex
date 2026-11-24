@@ -21,6 +21,9 @@ const RUN_ONCE: &[&str] = &[
     "previous_grid",
     "view_board_3d",
     "flip_board_view",
+    // The board 3D view's Flip and screenshot copy (mockup row 175).
+    "flip_board_3d",
+    "copy_board_3d_screenshot",
     "flip_selection",
     "flip_selected_x",
     "flip_selected_y",

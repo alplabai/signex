@@ -526,4 +526,6 @@ define_ids! {
     EDITORS_PIN_TABLE_FIELD_DESCRIPTION = "editors-pin-table-field-description";
     EDITORS_PIN_TABLE_FIELD_IGNORE = "editors-pin-table-field-ignore";
     EDITORS_PIN_TABLE_LENGTH_REFUSED = "editors-pin-table-length-refused";
+    // library-dialog-polish
+    EDITORS_SYMBOL_BAR_PIN_TYPE = "editors-symbol-bar-pin-type";
 }

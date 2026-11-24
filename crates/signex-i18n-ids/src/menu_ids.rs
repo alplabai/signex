@@ -238,5 +238,7 @@ define_ids! {
         CTX_IN_VARIANT_PLANNED = "ctx-in-variant-planned";
         CTX_IN_VARIANT_SHOW_MANAGER = "ctx-in-variant-show-manager";
         CTX_IN_VARIANT_NEW = "ctx-in-variant-new";
+        // project-tree-history-rows
+        CTX_TREE_SHOW_HISTORY = "ctx-tree-show-history";
     }
 }
