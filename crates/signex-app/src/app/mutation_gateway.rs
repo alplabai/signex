@@ -118,12 +118,13 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> (MutationOutcome, Option<String>) {
-        self.apply_engine_command_recording(
+        let (outcome, refusal, _) = self.apply_engine_command_recording(
             command,
             true,
             clear_overlay_cache,
             update_selection_info,
-        )
+        );
+        (outcome, refusal)
     }
 
     /// [`Self::apply_engine_command_reporting`] for load-time maintenance:
@@ -133,7 +134,23 @@ impl Signex {
         &mut self,
         command: signex_engine::Command,
     ) -> (MutationOutcome, Option<String>) {
-        self.apply_engine_command_recording(command, false, true, true)
+        let (outcome, refusal, _) = self.apply_engine_command_recording(command, false, true, true);
+        (outcome, refusal)
+    }
+
+    /// [`Self::apply_engine_command_reporting`] that also hands back the
+    /// engine notices the command raised (a pin the rubber band could not
+    /// keep), for a caller that answers with them (#2552). They still go to
+    /// Messages.
+    pub(crate) fn apply_engine_command_noting(
+        &mut self,
+        command: signex_engine::Command,
+    ) -> (
+        MutationOutcome,
+        Option<String>,
+        Vec<signex_engine::EngineNotice>,
+    ) {
+        self.apply_engine_command_recording(command, true, true, true)
     }
 
     fn apply_engine_command_recording(
@@ -142,9 +159,13 @@ impl Signex {
         record_history: bool,
         clear_overlay_cache: bool,
         update_selection_info: bool,
-    ) -> (MutationOutcome, Option<String>) {
+    ) -> (
+        MutationOutcome,
+        Option<String>,
+        Vec<signex_engine::EngineNotice>,
+    ) {
         if let Some(reason) = self.refuse_if_channel_view() {
-            return (MutationOutcome::Failed, Some(reason));
+            return (MutationOutcome::Failed, Some(reason), Vec::new());
         }
         let recorded = record_history
             .then(|| self.sheet_edit_to_record(std::slice::from_ref(&command)))
@@ -152,13 +173,15 @@ impl Signex {
         let edit = self
             .document_state
             .execute_on_edit_path(command, record_history);
-        let done = self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info);
-        if done.0 == MutationOutcome::Changed
+        let notices = engine_notices_of(&edit.events);
+        let (outcome, refusal) =
+            self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info);
+        if outcome == MutationOutcome::Changed
             && let Some(commands) = recorded
         {
             self.note_sheet_edit(commands);
         }
-        done
+        (outcome, refusal, notices)
     }
 
     /// Mark the active document as having unsaved edits, without running a
@@ -286,6 +309,21 @@ impl Signex {
             self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info);
         outcome == MutationOutcome::Changed
     }
+}
+
+/// The engine's own notices among an edit's events, in order.
+fn engine_notices_of(events: &[super::core::event::CoreEvent]) -> Vec<signex_engine::EngineNotice> {
+    use super::core::event::{CoreEvent, NoticeBody};
+    events
+        .iter()
+        .filter_map(|event| match event {
+            CoreEvent::Notice(notice) => match &notice.body {
+                NoticeBody::Engine(engine) => Some(engine.clone()),
+                NoticeBody::Text(_) => None,
+            },
+            CoreEvent::DocumentChanged(_) => None,
+        })
+        .collect()
 }
 
 #[cfg(test)]
