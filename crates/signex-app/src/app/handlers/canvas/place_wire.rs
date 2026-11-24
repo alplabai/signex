@@ -1,6 +1,6 @@
 //! Wire, bus and bus-entry commits as plain-value methods (#1930). The
-//! click handler keeps the drawing state (first click anchors, each next
-//! click commits from the last anchor); these place what one commit adds.
+//! click handler keeps the drawing state (first click anchors, the next
+//! click commits from it); these place what one commit adds.
 
 use signex_types::corner::CornerRule;
 use signex_types::schematic::{Bus, BusEntry, Point, Wire};

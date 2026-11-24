@@ -14,6 +14,7 @@ pub(crate) use child_sheet_path::{
 };
 mod break_wire_tool;
 mod clicked;
+pub(in crate::app::handlers) use clicked::WirePoint;
 mod descend;
 pub(crate) mod net_color_click;
 mod sheet_open;
@@ -89,6 +90,8 @@ mod wire_corner;
 mod wire_corner_tests;
 #[cfg(test)]
 mod wire_merge_tests;
+#[cfg(test)]
+mod wire_second_click_tests;
 #[cfg(test)]
 mod wire_undo_tests;
 
@@ -187,7 +190,7 @@ impl Signex {
                 }
             }
             CanvasEvent::Clicked { world_x, world_y } => {
-                return self.handle_canvas_clicked(world_x, world_y);
+                return self.handle_canvas_clicked(world_x, world_y, WirePoint::EndsWire);
             }
             CanvasEvent::MoveSelected {
                 dx,
