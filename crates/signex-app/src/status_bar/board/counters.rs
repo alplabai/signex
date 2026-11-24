@@ -129,9 +129,8 @@ pub(in crate::status_bar) fn board_grid_readout<'a>(
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, StatusBarRequest> {
-    let muted = resolve(tokens).ink3;
     let face = row![
-        glyph(Glyph::Grid, BAR_GLYPH, muted),
+        grid_glyph(tokens),
         label(t!(i18n, ids::BOARD_STATUS_GRID), tokens),
         figure(value, tokens),
     ]
