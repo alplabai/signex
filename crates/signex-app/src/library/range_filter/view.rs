@@ -222,11 +222,11 @@ fn filter_chip<'a, M: Clone + 'a>(
             .size(metrics.caption_size)
             .color(ink),
     )
-        .padding(0)
-        .style(flat)
-        .on_press(wrap(RangeFilterMsg::Cleared {
-            key: key.to_string(),
-        }));
+    .padding(0)
+    .style(flat)
+    .on_press(wrap(RangeFilterMsg::Cleared {
+        key: key.to_string(),
+    }));
     let content: Row<Element<'a, M>> = row![
         chip_tooltip(open.boxed(), tip.boxed(), tokens),
         chip_tooltip(

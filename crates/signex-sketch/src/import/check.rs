@@ -98,13 +98,16 @@ pub fn check_profiles(pieces: &[ImportPiece]) -> ProfileReport {
     }
 }
 
+/// An open end left unpaired: where it is and its tag.
+type LoneEnd = ((f64, f64), usize);
+
 /// Pair each open end with the nearest unpaired open end of its tag within
 /// the heal tolerance; the ends left over stay open.
 fn pair_open_ends(
     at: &[(f64, f64)],
     tag: &[usize],
     open: &[usize],
-) -> (Vec<ImportGap>, Vec<((f64, f64), usize)>) {
+) -> (Vec<ImportGap>, Vec<LoneEnd>) {
     let mut paired = vec![false; open.len()];
     let (mut gaps, mut lone) = (Vec::new(), Vec::new());
     for k in 0..open.len() {
