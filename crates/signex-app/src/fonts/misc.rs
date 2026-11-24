@@ -331,6 +331,25 @@ pub fn write_symbol_body_fill_pref_at(path: &Path, fill: crate::symbol_fill_pref
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// PCB Defaults: what a new board dimension starts from (#2868)
+// ──────────────────────────────────────────────────────────────────────────
+
+pub fn write_pcb_dimension_defaults_pref(
+    defaults: &signex_types::pcb_dimension_style::DimensionDefaults,
+) {
+    write_pcb_dimension_defaults_pref_at(&prefs_path(), defaults)
+}
+
+pub fn write_pcb_dimension_defaults_pref_at(
+    path: &Path,
+    defaults: &signex_types::pcb_dimension_style::DimensionDefaults,
+) {
+    update_prefs_json(path, crate::pcb_defaults_prefs::KEY, |prefs| {
+        crate::pcb_defaults_prefs::write_into(defaults, prefs);
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Trackpad two-finger pan / remember window geometry
 // ──────────────────────────────────────────────────────────────────────────
 

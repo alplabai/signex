@@ -21,6 +21,7 @@
 mod arc;
 mod board_text;
 mod dimension;
+mod dimension_style;
 mod drawing;
 mod facts;
 mod graphic;
@@ -40,6 +41,7 @@ use std::path::PathBuf;
 use iced::widget::{Space, column, container, row, svg};
 use iced::{Element, Length, Padding, Theme, Widget as _};
 use signex_engine::pcb::draw::ArcMode;
+use signex_engine::pcb::primitive_edit::DimensionStyleEdit;
 use signex_i18n::{Localized, MessageId, ids, t};
 use signex_types::pcb::PadShape;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
@@ -49,10 +51,10 @@ use signex_widgets::{button, text, text_input, tooltip};
 
 pub use facts::ViaTypeChoice;
 pub use facts::{
-    ArcFacts, AreaLayerChoice, DimensionFacts, Editability, GraphicFacts, LayerChoice,
-    LayerSizeRow, MaskSideFacts, NetChoice, NetInfo, PadFacts, PcbPrimitiveFacts, PrimitiveCommon,
-    PrimitiveField, PrimitiveFlag, PrimitiveTarget, ShapeChoice, TextFacts, TrackFacts, ViaFacts,
-    ZoneFacts, ZoneKind, shared,
+    ArcFacts, AreaLayerChoice, DimensionFacts, DimensionStyleFacts, Editability, GraphicFacts,
+    LayerChoice, LayerSizeRow, MaskSideFacts, NetChoice, NetInfo, PadFacts, PcbPrimitiveFacts,
+    PrimitiveCommon, PrimitiveField, PrimitiveFlag, PrimitiveTarget, ShapeChoice, TextFacts,
+    TrackFacts, ViaFacts, ZoneFacts, ZoneKind, shared,
 };
 pub use linked::{EndChoice, end_choices, ends_tip};
 pub use via::ViaMsg;
@@ -174,6 +176,12 @@ pub enum PcbPrimitiveMsg {
         target: PrimitiveTarget,
         field: PrimitiveField,
         value: f64,
+    },
+    /// A dimension's arrow style, font, bold, italic, text position, unit,
+    /// unit suffix or trailing zeros was picked (#2868): one undo step.
+    DimensionStylePicked {
+        target: PrimitiveTarget,
+        edit: DimensionStyleEdit,
     },
     /// The armed Arc tool's Placement was picked: how the next arc is drawn.
     ArcModePicked(ArcMode),

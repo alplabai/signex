@@ -220,6 +220,14 @@ preferences-symbol-body-fill-help = When on, the closed rectangles, polygons and
 preferences-symbol-body-fill-colour = Fill colour
 preferences-symbol-body-fill-colour-help = A soft tint of the theme unless you pick a colour. Reset to Default goes back to the theme's tint.
 
+## PCB ▸ PCB Defaults (#2868)
+# The page of what a new board dimension starts from.
+preferences-page-pcb-defaults = PCB Defaults
+preferences-group-pcb = PCB
+preferences-group-pcb-heading = PCB
+preferences-section-pcb-dimensions = PCB — New Dimensions
+preferences-pcb-dimensions-help = Each dimension you place starts from these. Its own Properties change it afterwards; dimensions already on a board keep their look.
+
 ## Default Component Classes
 preferences-classes-title = Default Component Classes
 preferences-classes-help = The classes a new library starts with. They appear in the class picker of New Component and Edit Component. A library's own list is edited in that library.

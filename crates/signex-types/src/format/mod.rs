@@ -35,6 +35,7 @@ use crate::format_version::FormatVersionError;
 use crate::pcb::{PcbBoard, Zone};
 use crate::schematic::SchematicSheet;
 
+mod board_dimension;
 mod board_free;
 mod board_options;
 mod board_panel;
@@ -65,6 +66,8 @@ mod unknown_columns;
 mod uuid_repair;
 mod wire_color_repair;
 
+#[cfg(test)]
+mod board_dimension_tests;
 #[cfg(test)]
 mod board_free_tests;
 #[cfg(test)]
