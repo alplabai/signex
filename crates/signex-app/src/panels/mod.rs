@@ -184,7 +184,9 @@ pub use footprint_context::{
     MountingHoleProps, NumberingSchemeKindUi, OverConstraintSummary, PadShapeParamSummary,
     PourSummary, RejectedConflictSummary, SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
-pub use footprint_context::{PATTERN_PREVIEW_MAX_INSTANCES, SketchStateSummary};
+pub use footprint_context::{
+    PATTERN_PREVIEW_MAX_INSTANCES, SketchStateSummary, number_mask_buffer_key,
+};
 pub use footprint_outline::{OutlineSegment, PadOutlineSummary, segments as outline_segments};
 pub use footprint_place_block::FootprintPlaceBlock;
 pub use illustration::{HoverSubject, PanelIllustrationHover};

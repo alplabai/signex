@@ -468,4 +468,8 @@ define_ids! {
     EDITORS_MODE_SKETCH = "editors-mode-sketch";
     EDITORS_MODE_3D = "editors-mode-3d";
     EDITORS_MODE_3D_TOOLTIP = "editors-mode-3d-tooltip";
+    // footprint-format-fields
+    EDITORS_ROLE_PATTERN_NUMBER_MASK_HINT = "editors-role-pattern-number-mask-hint";
+    EDITORS_ROLE_PATTERN_NUMBER_MASK_UNKNOWN = "editors-role-pattern-number-mask-unknown";
+    EDITORS_ROLE_PATTERN_NUMBER_MASK_UNRESOLVED = "editors-role-pattern-number-mask-unresolved";
 }

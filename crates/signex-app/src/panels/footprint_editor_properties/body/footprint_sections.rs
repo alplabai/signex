@@ -137,8 +137,36 @@ pub(super) fn units_row<'a>(cx: Ctx<'a, '_>) -> Element<'a, PanelMsg> {
     )
 }
 
+/// The courtyard's Line width (mockup row 124): refused text stays in the
+/// field with its reason; greyed with the courtyard switch.
+fn courtyard_line_width_row<'a>(cx: Ctx<'a, '_>) -> Element<'a, PanelMsg> {
+    use super::super::pad::{Shown, number_input, with_refusals};
+    use crate::library::editor::footprint::COURTYARD_LINE_WIDTH_BUFFER;
+    use crate::panels::FootprintFeatureEdit;
+    let stored = cx.fp.generated.courtyard_line_width_mm;
+    let text = super::generated_sections::live_text(
+        cx.fp.numeric_buffers.get(COURTYARD_LINE_WIDTH_BUFFER),
+        stored,
+        |v| v > 0.0,
+    );
+    let width = Shown::from_buffer(text, stored.to_string(), true, |_| true);
+    let row = super::super::rows::control_row(
+        &t!(cx.i18n, ids::EDITORS_FP_PROPS_LINE_WIDTH).into_string(),
+        number_input(
+            &width,
+            |v| {
+                PanelMsg::FpEditorGeneratedFeature(FootprintFeatureEdit::CourtyardLineWidthTyped(v))
+            },
+            cx.tokens,
+        ),
+        cx.palette.muted,
+    );
+    with_refusals(row, &[width.refusal], cx.tokens, cx.i18n)
+}
+
 /// Courtyard & Silkscreen: the generated courtyard as an enable header,
-/// its size at the header's right and its fixed expansion below.
+/// its size at the header's right, its fixed expansion and its line width
+/// below.
 fn courtyard_section<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     cx: Ctx<'a, '_>,
@@ -171,12 +199,10 @@ fn courtyard_section<'a>(
         cx.palette.muted,
         cx.palette.input_bg,
     );
-    let body = Column::new().width(Length::Fill).push(linked_field(
-        expansion,
-        fields::EXPANSION,
-        hover,
-        tokens,
-    ));
+    let body = Column::new()
+        .width(Length::Fill)
+        .push(linked_field(expansion, fields::EXPANSION, hover, tokens))
+        .push(courtyard_line_width_row(cx));
     let courtyard = EnableSection::new(
         t!(i18n, ids::EDITORS_FP_PROPS_COURTYARD),
         fp.auto_fit_courtyard,

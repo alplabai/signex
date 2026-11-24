@@ -450,6 +450,14 @@ pub enum ArrayParamField {
     /// arrays. Empty string clears the depopulation entirely (set
     /// `Option::None` on the array).
     MaskExpr,
+    /// The Numbering Mask (mockup row 126): the pad numbers a Grid or Polar
+    /// pattern skips, written to its suppressed instances.
+    NumberMask,
+}
+
+/// The `numeric_buffers` key of a pattern's Numbering Mask text.
+pub fn number_mask_buffer_key(array_id: signex_sketch::array::ArrayId) -> String {
+    format!("pattern.{}.number_mask", array_id.0)
 }
 
 /// v0.16.4 — discrete bit identifier for [`KeepoutSummary`] flags.
