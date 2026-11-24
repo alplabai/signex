@@ -192,11 +192,10 @@ fn menu_icon(row: PcbBarRow, tid: ThemeId) -> svg::Handle {
         T::MultiRoute => ic::icon_pcb_multi_route(tid),
         T::Track => ic::icon_dd_line(tid),
         T::Arc => ic::icon_dd_arc(tid),
-        T::Fill => ic::icon_dd_rect(tid),
-        T::SolidRegion => ic::icon_shape_polygon(tid),
-        T::PolygonPour => ic::icon_dd_polygon(tid),
-        T::PourCutout => ic::icon_dd_cut(tid),
-        T::SlicePour => ic::icon_dd_line(tid),
+        // Mockup row 108: the copper-area rows share the hatched area.
+        T::Fill | T::SolidRegion | T::PolygonPour | T::PourCutout | T::SlicePour => {
+            ic::icon_pcb_copper_area(tid)
+        }
         T::TextString => ic::icon_dd_text_string(tid),
         T::Dimension => ic::icon_pcb_dimension(tid),
         T::Keepout => ic::icon_pcb_keepout(tid),

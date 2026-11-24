@@ -571,3 +571,42 @@ fn a_click_on_the_move_or_view_chevron_opens_its_dropdown() {
         assert_eq!(app.interaction_state.pcb_bar_menu, Some(menu));
     }
 }
+
+/// Mockup row 108: the copper-area tool rows share one hatched-area glyph,
+/// and the group button showing one of them draws it too. Keepout keeps its
+/// board tool glyph (decision of 2026-11-19, mockup row 108) and Room its
+/// rectangle.
+#[test]
+fn the_copper_area_rows_share_the_hatched_area_glyph() {
+    let mut app = board_app();
+    let tid = app.ui_state.effective_theme_id();
+    let area = ic::icon_pcb_copper_area(tid);
+    let icon_of = |app: &Signex, command: &str| {
+        rows(app, PcbBarMenu::Group(PcbBarGroup::CopperAreas))
+            .into_iter()
+            .find(|row| row.command_id == Some(command))
+            .unwrap_or_else(|| panic!("a {command} row"))
+            .icon
+    };
+    let tools = [
+        "place_board_polygon_pour",
+        "place_board_pour_cutout",
+        "place_board_slice_pour",
+        "place_board_region",
+        "place_board_fill",
+    ];
+    for command in tools {
+        assert_eq!(icon_of(&app, command), Some(area.clone()), "{command}");
+    }
+    let keepout = icon_of(&app, "place_board_keepout");
+    assert_eq!(keepout, Some(ic::icon_pcb_keepout(tid)));
+    assert_ne!(icon_of(&app, "place_board_room"), Some(area.clone()));
+    for command in tools {
+        let _ = pick_from_group(&mut app, PcbBarGroup::CopperAreas, command);
+        let button = group_button_of(&app, PcbBarGroup::CopperAreas);
+        let ActiveBarIcon::Svg(handle) = &button.icon else {
+            panic!("{command}: an SVG icon");
+        };
+        assert_eq!(handle, &area, "{command}: the button");
+    }
+}

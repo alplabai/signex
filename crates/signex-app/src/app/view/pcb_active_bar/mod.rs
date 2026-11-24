@@ -329,7 +329,8 @@ const BAR_GROUPS: [&[PcbBarGroup]; 3] = [
 ];
 
 /// The bar icon of `tool`: the footprint editor's where one fits, the board
-/// tool glyphs for pad, via, dimension and keepout (mockup row 108).
+/// tool glyphs for pad, via, dimension and keepout, the hatched area for the
+/// copper-area tools (mockup row 108).
 fn tool_icon(tool: BoardPlaceTool, tid: ThemeId) -> ActiveBarIcon {
     use BoardPlaceTool as T;
     let svg = ActiveBarIcon::Svg;
@@ -343,11 +344,9 @@ fn tool_icon(tool: BoardPlaceTool, tid: ThemeId) -> ActiveBarIcon {
         T::MultiRoute => svg(ic::icon_pcb_multi_route(tid)),
         T::Track => svg(ic::icon_shape_line(tid)),
         T::Arc => svg(ic::icon_shape_arc(tid)),
-        T::Fill => svg(ic::icon_shape_rect(tid)),
-        T::SolidRegion => svg(ic::icon_shape_polygon(tid)),
-        T::PolygonPour => svg(ic::icon_dd_polygon(tid)),
-        T::PourCutout => svg(ic::icon_dd_cut(tid)),
-        T::SlicePour => svg(ic::icon_dd_line(tid)),
+        T::Fill | T::SolidRegion | T::PolygonPour | T::PourCutout | T::SlicePour => {
+            svg(ic::icon_pcb_copper_area(tid))
+        }
         T::TextString => svg(ic::icon_text(tid)),
         T::Dimension => svg(ic::icon_pcb_dimension(tid)),
         T::Keepout => svg(ic::icon_pcb_keepout(tid)),
