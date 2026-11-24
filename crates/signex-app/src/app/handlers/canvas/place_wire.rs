@@ -10,6 +10,10 @@ use super::super::super::*;
 /// A wire's width in mm (0.0 = the default) and colour (`None` = the theme's).
 type WireStyle = (f64, Option<signex_types::theme::Color>);
 
+/// The style of a wire placed without the Tab form: the project's default
+/// width and the theme's colour. An agent or CLI run always places it (#2326).
+pub(crate) const DEFAULT_WIRE_STYLE: WireStyle = (0.0, None);
+
 /// The style a new wire takes: each override of the wire it starts on wins
 /// over `base` (the Tab form's or the default); a field the start wire does
 /// not override keeps `base` (docs/DECISIONS.md, 2026-11-21).
@@ -113,7 +117,7 @@ impl Signex {
             Some(pp) if pp.kind == crate::panels::PrePlacementKind::Wire => {
                 (pp.wire_width.stroke_mm(), pp.wire_color)
             }
-            _ => (0.0, None),
+            _ => DEFAULT_WIRE_STYLE,
         }
     }
 

@@ -51,7 +51,7 @@ mod place_point;
 pub(crate) use place_point::{junction_command, no_connect_command, power_commands};
 mod place_text;
 mod place_wire;
-pub(crate) use place_wire::{bus_commands, wire_commands};
+pub(crate) use place_wire::{DEFAULT_WIRE_STYLE, bus_commands, wire_commands};
 mod shape_tool;
 #[cfg(test)]
 mod shape_tool_tests;
@@ -98,10 +98,7 @@ mod wire_undo_tests;
 pub(crate) fn pre_placement_shape(
     doc: &super::super::state::DocumentState,
 ) -> (f64, signex_types::schematic::FillType) {
-    // An unset width is written as the project's shape default (#2026), so
-    // the placed shape shows the width it draws at.
-    let defaults = doc.active_schematic_defaults();
-    let default_mm = defaults.shape_stroke_mm(0.0);
+    let (default_mm, default_fill) = default_shape(doc);
     doc.panel_ctx
         .pre_placement
         .as_ref()
@@ -113,7 +110,18 @@ pub(crate) fn pre_placement_shape(
             };
             (w, pp.shape_fill)
         })
-        .unwrap_or((default_mm, defaults.shape_fill))
+        .unwrap_or((default_mm, default_fill))
+}
+
+/// The project's shape width and fill on the sheet the edit targets: what a
+/// shape placed without the form takes (an agent or CLI run, #2326). An unset
+/// width is written as the project's shape default (#2026), so the placed
+/// shape shows the width it draws at.
+pub(crate) fn default_shape(
+    doc: &super::super::state::DocumentState,
+) -> (f64, signex_types::schematic::FillType) {
+    let defaults = doc.active_schematic_defaults();
+    (defaults.shape_stroke_mm(0.0), defaults.shape_fill)
 }
 
 impl Signex {

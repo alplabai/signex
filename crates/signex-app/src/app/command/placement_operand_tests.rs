@@ -35,6 +35,19 @@ fn form(kind: PrePlacementKind, text: &str, rotation: f64) -> PrePlacementData {
     pre
 }
 
+/// The form a person whose click matches an operand run holds: the operands'
+/// text and rotation, and the project defaults for the rest (#2326), the
+/// justification included.
+fn defaults_form(app: &Signex, text: &str, rotation: f64) -> PrePlacementData {
+    let kind = PrePlacementKind::Other;
+    let mut pre =
+        app.document_state
+            .new_pre_placement("tool".into(), kind, text.into(), (0.0, 0.0));
+    pre.rotation = rotation;
+    pre.justify_v = signex_types::schematic::VAlign::Bottom;
+    pre
+}
+
 /// One placement id: its operands, and what a click run needs set first.
 struct Case {
     id: &'static str,
@@ -132,13 +145,13 @@ fn clicked(case: &Case) -> Signex {
     let mut app = app_with_tool(crate::app::Tool::Select);
     arm(&mut app, case.id);
     if let Some((text, rotation)) = case.form {
-        let pre = form(PrePlacementKind::Other, text, rotation);
+        let pre = defaults_form(&app, text, rotation);
         app.document_state.panel_ctx.pre_placement = Some(pre);
     } else if matches!(
         case.id,
         "draw_line" | "draw_graphic_line" | "draw_rectangle"
     ) {
-        app.document_state.panel_ctx.pre_placement = Some(form(PrePlacementKind::Other, "", 0.0));
+        app.document_state.panel_ctx.pre_placement = Some(defaults_form(&app, "", 0.0));
     }
     if let Some((net, lib)) = case.power {
         app.interaction_state.pending_power = Some((net.into(), lib.into()));
@@ -149,8 +162,10 @@ fn clicked(case: &Case) -> Signex {
     app
 }
 
-/// An app with the same form but not the operands' text: a run with operands
-/// must take the operands over the form.
+/// An app whose form holds other values than the operands and the project
+/// defaults (text, rotation, width, fill, justification): a run with operands
+/// must take the operands, and the defaults for the rest, over the form
+/// (#2326).
 fn operand_app(case: &Case) -> Signex {
     let mut app = app_with_tool(crate::app::Tool::Select);
     if case.form.is_some() {
