@@ -225,6 +225,16 @@ impl Signex {
             self.close_document_page_tab(idx, keep_session);
             return Task::none();
         }
+        // The Gerber Viewer holds no document either; its path is its
+        // package's, which no engine or draft is keyed by.
+        if self
+            .document_state
+            .tabs
+            .get(idx)
+            .is_some_and(|tab| tab.kind.is_gerber_viewer())
+        {
+            return self.close_gerber_viewer_tab(idx, keep_session);
+        }
         if let Some(tab) = self.document_state.tabs.get(idx) {
             let path = tab.path.clone();
             if park_dirty && !keep_session {

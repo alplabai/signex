@@ -293,7 +293,10 @@ impl Signex {
                 strip_tabs_to_the_right: !self.strip_tabs_right_of(ctx.tab_idx).is_empty(),
                 // A Project tab stays docked (#1202): an undocked window
                 // would take the main window's shortcuts.
-                undock_unavailable: already_undocked || tab.kind.is_project_page(),
+                // The Gerber Viewer draws in the main window only.
+                undock_unavailable: already_undocked
+                    || tab.kind.is_project_page()
+                    || tab.kind.is_gerber_viewer(),
                 has_file: crate::tab_bar::tab_file_path(tab).is_some(),
                 in_project: self.project_tree_key_of_file(&tab.path).is_some(),
                 close_shortcut: &close_shortcut,

@@ -160,6 +160,13 @@ impl Signex {
         if let Some(missing) = self.missing_child_sheet_at(path) {
             return self.offer_create_child_sheet(&missing);
         }
+        // mockup row 193: a Gerber, drill or package zip row opens the viewer.
+        if crate::app::gerber_viewer::opens_by_name(&label) {
+            return match self.tree_path_to_file_path(path) {
+                Some(file) => self.open_gerber_paths(vec![file]),
+                None => Task::none(),
+            };
+        }
         match self.open_project_tree_document(path, label) {
             Ok(task) => task,
             Err(error) => {
@@ -412,7 +419,7 @@ fn tree_row_opens(node: &signex_widgets::tree_view::TreeNode) -> bool {
             | TreeIcon::SnxSimulation
             | TreeIcon::SnxLibrary
             | TreeIcon::SnxSymbol
-    )
+    ) || crate::app::gerber_viewer::opens_by_name(&node.label)
 }
 
 fn set_expanded_recursive(nodes: &mut [signex_widgets::tree_view::TreeNode], expanded: bool) {
