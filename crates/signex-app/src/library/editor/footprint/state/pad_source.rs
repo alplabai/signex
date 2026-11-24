@@ -5,9 +5,10 @@
 
 use signex_sketch::SketchData;
 use signex_sketch::array::{ArrayId, ArrayKind};
-use signex_sketch::attr::PadStackOverrides;
+use signex_sketch::attr::{PadAttr, PadStackOverrides};
 use signex_sketch::entity::EntityKind;
 use signex_sketch::id::SketchEntityId;
+use signex_sketch::sketch::PadAttrOverride;
 use signex_types::sketch::SketchHost;
 
 use super::pad_link::{PadLinkOffer, driving_profile};
@@ -33,41 +34,53 @@ pub struct PadInstance {
     pub overrides: InstanceOverrides,
 }
 
-/// A pad attribute as the Attribute scope table lists it (mockup row 192,
+/// A pad attribute as the attribute scope table lists it (mockup row 192,
 /// item D1): shared by the pattern's source, or overridden on one instance.
+/// The net is not listed: the board netlist assigns it, not the library.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PadAttribute {
     Designator,
+    Paste,
     Locked,
     ElectricalType,
     Template,
     Features,
     Testpoint,
-    Paste,
     SolderMask,
+    Shape,
+    Hole,
+    CopperOffset,
+    Rotation,
+    ThermalRelief,
 }
 
 impl PadAttribute {
-    /// Every attribute, in the table's order.
-    pub const ALL: [Self; 8] = [
+    /// Every attribute, in the table's order: mockup row 192's eight, then
+    /// the rest an instance override can hold.
+    pub const ALL: [Self; 13] = [
         Self::Designator,
+        Self::Paste,
         Self::Locked,
         Self::ElectricalType,
         Self::Template,
         Self::Features,
         Self::Testpoint,
-        Self::Paste,
         Self::SolderMask,
+        Self::Shape,
+        Self::Hole,
+        Self::CopperOffset,
+        Self::Rotation,
+        Self::ThermalRelief,
     ];
 
-    const fn bit(self) -> u8 {
-        1 << self as u8
+    const fn bit(self) -> u16 {
+        1 << self as u16
     }
 }
 
 /// The set of [`PadAttribute`]s one pattern instance overrides.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct InstanceOverrides(u8);
+pub struct InstanceOverrides(u16);
 
 impl InstanceOverrides {
     /// Whether the instance holds `attr` apart from its source.
@@ -113,10 +126,7 @@ impl FootprintEditorState {
     ) -> Option<PadSketchSource> {
         let sketch = sketch?;
         let pad = self.pads.get(pad_idx)?;
-        let key = self
-            .last_solve
-            .as_ref()
-            .and_then(|solve| signex_bake::instance_at(sketch, solve, pad.position_mm));
+        let key = self.pattern_key_at(sketch, pad.position_mm);
         let entity = pad
             .sketch_entity_id
             .or_else(|| sketch.innermost_source(key?.0))?;
@@ -178,13 +188,29 @@ impl FootprintEditorState {
 
     /// The pad the floating Edit in Sketch link on the Footprint canvas
     /// offers (mockup row 192): the selected pad, when sketch geometry
-    /// drives it. A board sketch has no pads.
+    /// drives it. A board sketch has no pads. Asked from `view` every frame,
+    /// so it skips the profile walk and the override diff.
     pub fn edit_in_sketch_offer(&self, sketch: Option<&SketchData>) -> Option<usize> {
         if self.mode != EditorMode::Normal || self.sketch_host() == SketchHost::Board {
             return None;
         }
-        let idx = self.selected_pad?;
-        self.pad_sketch_source(sketch, idx).map(|_| idx)
+        let (sketch, idx) = (sketch?, self.selected_pad?);
+        let pad = self.pads.get(idx)?;
+        let is_driven = pad.sketch_entity_id.is_some()
+            || self
+                .pattern_key_at(sketch, pad.position_mm)
+                .is_some_and(|(pattern, _, _)| sketch.innermost_source(pattern).is_some());
+        is_driven.then_some(idx)
+    }
+
+    /// The pattern instance that lands at `position_mm` in the last solve.
+    fn pattern_key_at(
+        &self,
+        sketch: &SketchData,
+        position_mm: (f64, f64),
+    ) -> Option<(ArrayId, u32, u32)> {
+        let solve = self.last_solve.as_ref()?;
+        signex_bake::instance_at(sketch, solve, position_mm)
     }
 }
 
@@ -200,29 +226,30 @@ fn instance_overrides(sketch: &SketchData, key: (ArrayId, u32, u32)) -> Instance
         .entities
         .iter()
         .find(|e| Some(e.id) == source)
-        .and_then(|e| e.pad.clone())
-        .unwrap_or_default();
-    let paste = |s: &PadStackOverrides| {
-        (
-            s.paste_top_expr.clone(),
-            s.paste_top_pct,
-            s.paste_bottom_expr.clone(),
-            s.paste_bottom_pct,
-            s.paste_top_enabled,
-            s.paste_bottom_enabled,
-        )
-    };
-    let mask = |s: &PadStackOverrides| {
-        (
-            s.mask_top_expr.clone(),
-            s.mask_bottom_expr.clone(),
-            s.mask_top_tented,
-            s.mask_bottom_tented,
-        )
-    };
+        .and_then(|e| e.pad.as_ref());
+    match base {
+        Some(base) => overrides_between(held, base),
+        None => overrides_between(held, &PadAttr::default()),
+    }
+}
+
+/// The attributes `held` sets apart from the source pad `base`. The stack
+/// is stored whole, so its parts count only where they differ from `base`.
+fn overrides_between(held: &PadAttrOverride, base: &PadAttr) -> InstanceOverrides {
     let stack = held.stack.as_ref();
+    let stack_differs = |differs: fn(&PadStackOverrides, &PadStackOverrides) -> bool| {
+        stack.is_some_and(|s| differs(s, &base.stack))
+    };
+    let hole = held.drill.is_some()
+        || held.hole_tolerance_plus_mm.is_some()
+        || held.hole_tolerance_minus_mm.is_some()
+        || held.hole_rotation_deg.is_some();
     InstanceOverrides::default()
         .with(PadAttribute::Designator, held.number.is_some())
+        .with(
+            PadAttribute::Paste,
+            held.paste_margin_expr.is_some() || stack_differs(|a, b| paste_of(a) != paste_of(b)),
+        )
         .with(PadAttribute::Locked, held.locked.is_some())
         .with(PadAttribute::ElectricalType, held.electrical_type.is_some())
         .with(
@@ -235,14 +262,55 @@ fn instance_overrides(sketch: &SketchData, key: (ArrayId, u32, u32)) -> Instance
         )
         .with(PadAttribute::Testpoint, held.testpoint.is_some())
         .with(
-            PadAttribute::Paste,
-            held.paste_margin_expr.is_some()
-                || stack.is_some_and(|s| paste(s) != paste(&base.stack)),
+            PadAttribute::SolderMask,
+            held.mask_margin_expr.is_some() || stack_differs(|a, b| mask_of(a) != mask_of(b)),
         )
         .with(
-            PadAttribute::SolderMask,
-            held.mask_margin_expr.is_some() || stack.is_some_and(|s| mask(s) != mask(&base.stack)),
+            PadAttribute::Shape,
+            held.shape.is_some()
+                || stack_differs(|a, b| a.corner_radius_pct != b.corner_radius_pct),
         )
+        .with(PadAttribute::Hole, hole)
+        .with(
+            PadAttribute::CopperOffset,
+            held.copper_offset_x_mm.is_some() || held.copper_offset_y_mm.is_some(),
+        )
+        .with(PadAttribute::Rotation, held.rotation_expr.is_some())
+        .with(
+            PadAttribute::ThermalRelief,
+            stack_differs(|a, b| a.thermal_relief != b.thermal_relief),
+        )
+}
+
+/// The stack fields the Paste attribute covers.
+type PasteFields<'a> = (
+    &'a Option<String>,
+    Option<f64>,
+    &'a Option<String>,
+    Option<f64>,
+    bool,
+    bool,
+);
+
+fn paste_of(s: &PadStackOverrides) -> PasteFields<'_> {
+    (
+        &s.paste_top_expr,
+        s.paste_top_pct,
+        &s.paste_bottom_expr,
+        s.paste_bottom_pct,
+        s.paste_top_enabled,
+        s.paste_bottom_enabled,
+    )
+}
+
+/// The stack fields the Solder mask attribute covers.
+fn mask_of(s: &PadStackOverrides) -> (&Option<String>, &Option<String>, bool, bool) {
+    (
+        &s.mask_top_expr,
+        &s.mask_bottom_expr,
+        s.mask_top_tented,
+        s.mask_bottom_tented,
+    )
 }
 
 #[cfg(test)]
@@ -250,12 +318,12 @@ mod tests {
     use signex_library::{Footprint, Pad};
     use signex_sketch::Solver;
     use signex_sketch::array::{Array, ArrayId, NumberingScheme};
-    use signex_sketch::attr::{ElectricalType, PadAttr};
+    use signex_sketch::attr::{ElectricalType, PadAttr, PadShape};
     use signex_sketch::entity::Entity;
     use signex_sketch::id::SketchEntityId;
     use signex_sketch::parameter::resolve;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-    use signex_types::sketch::pad_override::PadAttrOverride;
+    use signex_types::sketch::pad_override::{OverrideValue, PadAttrOverride};
 
     use super::*;
 
@@ -360,8 +428,55 @@ mod tests {
             .collect();
         assert_eq!(
             overridden,
-            [PadAttribute::ElectricalType, PadAttribute::Paste]
+            [PadAttribute::Paste, PadAttribute::ElectricalType]
         );
+    }
+
+    /// An instance whose only override is its shape, hole or thermal relief
+    /// reads that attribute as its own, not as the pattern source's.
+    #[test]
+    fn a_shape_hole_or_thermal_override_marks_that_attribute() {
+        let (mut state, mut sketch, _) = patterned();
+        state.pads[0].position_mm = (5.0, 0.0);
+        state.pads[0].sketch_entity_id = None;
+        let pattern = sketch.arrays[0].id;
+        let mut stack = PadAttr::default().stack;
+        stack.thermal_relief = !stack.thermal_relief;
+        let cases = [
+            (
+                PadAttrOverride {
+                    shape: Some(PadShape::Rect),
+                    ..PadAttrOverride::default()
+                },
+                PadAttribute::Shape,
+            ),
+            (
+                PadAttrOverride {
+                    hole_rotation_deg: Some(OverrideValue::Set(45.0)),
+                    ..PadAttrOverride::default()
+                },
+                PadAttribute::Hole,
+            ),
+            (
+                PadAttrOverride {
+                    stack: Some(stack),
+                    ..PadAttrOverride::default()
+                },
+                PadAttribute::ThermalRelief,
+            ),
+        ];
+        for (held, want) in cases {
+            sketch.set_override(pattern, 2, 0, held);
+            let instance = state
+                .pad_sketch_source(Some(&sketch), 0)
+                .and_then(|source| source.instance)
+                .expect("an instance");
+            let overridden: Vec<PadAttribute> = PadAttribute::ALL
+                .into_iter()
+                .filter(|attr| instance.overrides.contains(*attr))
+                .collect();
+            assert_eq!(overridden, [want]);
+        }
     }
 
     #[test]

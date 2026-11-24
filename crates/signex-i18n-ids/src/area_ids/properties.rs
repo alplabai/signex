@@ -526,6 +526,5 @@ define_ids! {
     PROPERTIES_FP_PAD_SCOPE_SCOPE = "properties-fp-pad-scope-scope";
     PROPERTIES_FP_PAD_SCOPE_SOURCE = "properties-fp-pad-scope-source";
     PROPERTIES_FP_PAD_SCOPE_NUMBERING = "properties-fp-pad-scope-numbering";
-    PROPERTIES_FP_PAD_SCOPE_THIS_PAD = "properties-fp-pad-scope-this-pad";
     PROPERTIES_FP_PAD_SCOPE_PASTE = "properties-fp-pad-scope-paste";
 }

@@ -558,28 +558,44 @@ A pad made in the sketch keeps the id of the entity that drives it
 (`EditorPad::sketch_entity_id`).
 
 - **Edit in Sketch** on a pad switches to sketch mode with that entity
-  selected and focused (`FootprintEditorState::pad_link`). The canvas draws
-  the driving profile in the selection colour: the entity, the Lines of the
-  pad outline, and the closed loop it lies in. A floating link at the
-  canvas's bottom centre reads **◂ Back to pad N** and returns to the pads
-  view with that pad selected.
+  selected and focused (`FootprintEditorState::pad_link`). The pad header
+  carries it inline on the "N of M pads" line (mockup row 125). In Footprint
+  mode a selected pad with sketch geometry behind it also gets a floating
+  **Edit in Sketch ▸** link at the canvas's bottom left
+  (`FootprintEditorState::edit_in_sketch_offer`, mockup row 192).
+- The sketch canvas draws the driving profile in the selection colour: the
+  entity, the Lines of the pad outline, and the closed loop it lies in. It
+  also outlines the pad that entity drives, with the same halo
+  (`FootprintEditorState::pad_link_highlight`). A floating link reads
+  **◂ Back to pad N** and returns to the pads view with that pad selected.
 - With a pad's driving entity selected in sketch mode and no focus, the
-  link reads **Jump to pad ▸** and does the same.
+  link reads **Jump to pad ▸** and does the same; the profile and the pad
+  outline are highlighted then too.
 - The focus ends when the mode changes or the selection moves to another
-  entity. The link changes the mode and the selection only, so it records
-  no undo step and does not mark the document changed. A board sketch has no pads
-  and shows no link.
-
-- A pad with sketch geometry behind it shows a read-only **Driven by sketch**
-  section in Properties (mockup row 192, item D5): its source (a pad point or
-  a profile of N edges), its pattern instance, found from its position by
-  `signex_bake::instance_at`, and its size.
+  entity. The links change the mode and the selection only, so they record
+  no undo step and do not mark the document changed. A board sketch has no
+  pads and shows no link.
 
 - Edit in Sketch on a pattern instance focuses the pattern's source, found
-  by `signex_bake::instance_at`, and outlines that instance dashed (mockup
-  row 192). Back to pad returns to the instance.
+  by `signex_bake::instance_at`. The source's pad is outlined solid and the
+  instance dashed (mockup row 192). Back to pad returns to the instance.
 
-Not done yet: locking the pad's Size fields to "from sketch".
+- A patterned pad's Properties show the **Pad attributes ↔ sketch** table
+  under the header (mockup row 192, item D1). A caption names the source
+  (a pad point or a profile of N edges) and the pattern instance. Each row
+  is one attribute and its scope: **Numbering** for the designator,
+  **Pattern source** for an attribute every instance shares, **This pad**
+  for one the instance's override holds (`PadInstance::overrides`, from
+  `SketchData::override_for`). The stack is stored whole in an override, so
+  paste, mask, corner radius and thermal relief count as overridden only
+  where they differ from the source pad. The net is not listed: the board
+  netlist assigns it. A pad no pattern places shows no section here; the
+  former Source / Instance / Size block is gone (mockup row 125).
+
+Not done yet: locking the pad's Size fields to "from sketch"; the table's
+Pad N and Sketch value columns; the "drives pad N" label and the source
+pad's corner handles on the sketch canvas; placing the floating Edit in
+Sketch link next to the selected pad.
 
 ## Pattern links {#pattern-links}
 

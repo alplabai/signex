@@ -39,35 +39,6 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_pad_link_profile
         .pad_driven_by(entity)
         .and_then(|idx| state.pads.get(idx))
         .and_then(|pad| pad.corner_entity_ids);
-    let pos = |id: SketchEntityId| -> Option<(f64, f64)> {
-        if let Some(solve) = state.last_solve.as_ref()
-            && let Some(p) = signex_sketch::solver::state::point_xy(
-                id,
-                &solve.result.state,
-                &solve.result.index,
-                sketch,
-            )
-        {
-            return Some(p);
-        }
-        sketch
-            .entities
-            .iter()
-            .find(|e| e.id == id)
-            .and_then(|e| match e.kind {
-                EntityKind::Point { x, y } => Some((x, y)),
-                _ => None,
-            })
-    };
-    let paint = |frame: &mut canvas::Frame, path: &Path| {
-        frame.stroke(path, Stroke::default().with_width(HALO_PX).with_color(HALO));
-        frame.stroke(
-            path,
-            Stroke::default()
-                .with_width(STROKE_PX)
-                .with_color(SELECTION),
-        );
-    };
     for outline in &outlines {
         let path = outline_path(cstate, outline.corners);
         if outline.is_instance {
@@ -76,46 +47,83 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_pad_link_profile
             paint(frame, &path);
         }
     }
+    let pos = |id: SketchEntityId| point_xy(state, sketch, id);
     for id in driving_profile(sketch, entity, corners) {
-        let Some(entity) = sketch.entities.iter().find(|e| e.id == id) else {
-            continue;
-        };
-        match entity.kind {
-            EntityKind::Point { .. } => {
-                if let Some(p) = pos(id) {
-                    paint(
-                        frame,
-                        &Path::circle(cstate.world_to_screen(p), POINT_RING_PX),
-                    );
-                }
-            }
-            EntityKind::Line { start, end } => {
-                if let (Some(a), Some(b)) = (pos(start), pos(end)) {
-                    paint(
-                        frame,
-                        &Path::line(cstate.world_to_screen(a), cstate.world_to_screen(b)),
-                    );
-                }
-            }
-            EntityKind::Circle { center, radius } => {
-                if let Some(c) = pos(center) {
-                    paint(
-                        frame,
-                        &Path::circle(cstate.world_to_screen(c), radius as f32 * cstate.scale),
-                    );
-                }
-            }
-            EntityKind::Arc {
-                center,
-                start,
-                end,
-                sweep_ccw,
-            } => {
-                if let (Some(c), Some(s), Some(e)) = (pos(center), pos(start), pos(end)) {
-                    paint(frame, &arc_path(cstate, c, s, e, sweep_ccw));
-                }
-            }
+        let path = sketch
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| entity_path(cstate, &e.kind, id, pos));
+        if let Some(path) = path {
+            paint(frame, &path);
         }
+    }
+}
+
+/// The halo and selection stroke of a highlighted path.
+fn paint(frame: &mut canvas::Frame, path: &Path) {
+    frame.stroke(path, Stroke::default().with_width(HALO_PX).with_color(HALO));
+    frame.stroke(
+        path,
+        Stroke::default()
+            .with_width(STROKE_PX)
+            .with_color(SELECTION),
+    );
+}
+
+/// Where point `id` lies: from the last solve, else its stored place.
+fn point_xy(
+    state: &FootprintEditorState,
+    sketch: &signex_sketch::SketchData,
+    id: SketchEntityId,
+) -> Option<(f64, f64)> {
+    if let Some(solve) = state.last_solve.as_ref()
+        && let Some(p) = signex_sketch::solver::state::point_xy(
+            id,
+            &solve.result.state,
+            &solve.result.index,
+            sketch,
+        )
+    {
+        return Some(p);
+    }
+    sketch
+        .entities
+        .iter()
+        .find(|e| e.id == id)
+        .and_then(|e| match e.kind {
+            EntityKind::Point { x, y } => Some((x, y)),
+            _ => None,
+        })
+}
+
+/// The screen path of profile entity `id` of `kind`; `None` while one of
+/// its points has no place.
+fn entity_path(
+    cstate: &FootprintCanvasState,
+    kind: &EntityKind,
+    id: SketchEntityId,
+    pos: impl Fn(SketchEntityId) -> Option<(f64, f64)>,
+) -> Option<Path> {
+    let screen = |id| pos(id).map(|p| cstate.world_to_screen(p));
+    match *kind {
+        EntityKind::Point { .. } => Some(Path::circle(screen(id)?, POINT_RING_PX)),
+        EntityKind::Line { start, end } => Some(Path::line(screen(start)?, screen(end)?)),
+        EntityKind::Circle { center, radius } => {
+            Some(Path::circle(screen(center)?, radius as f32 * cstate.scale))
+        }
+        EntityKind::Arc {
+            center,
+            start,
+            end,
+            sweep_ccw,
+        } => Some(arc_path(
+            cstate,
+            pos(center)?,
+            pos(start)?,
+            pos(end)?,
+            sweep_ccw,
+        )),
     }
 }
 

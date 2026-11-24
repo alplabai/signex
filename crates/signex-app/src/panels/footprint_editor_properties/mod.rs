@@ -61,7 +61,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
             col = bake_outcome::view_bake_outcome(col, outcome, pad, palette, tokens, i18n);
         }
         col = col.push(pad::view_pad_header(fp, target, tokens, i18n));
-        if let Some(section) = pad::view_driven_by(fp, target, palette, i18n) {
+        if let Some(section) = pad::view_driven_by(fp, target, palette, tokens, i18n) {
             col = col.push(section);
         }
         return scrolled(pad::view_pad_form(

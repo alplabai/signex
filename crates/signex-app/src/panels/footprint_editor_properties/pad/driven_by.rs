@@ -1,5 +1,5 @@
 //! What drives a baked pad, in its Properties. A patterned pad shows the
-//! Attribute scope section (mockup row 192, item D1): where it comes from in
+//! "Pad attributes ↔ sketch" section (mockup row 192, item D1): where it comes from in
 //! the sketch, then each attribute with its scope, shared by the pattern's
 //! source or overridden on this one instance. A pad no pattern places shows
 //! nothing here; its header carries "Edit in Sketch ▸" (mockup row 125).
@@ -7,6 +7,7 @@
 use iced::widget::{Column, Row, container};
 use iced::{Color, Element, Length, Widget as _};
 use signex_i18n::{I18n, ids, t};
+use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, text};
 
 use super::super::super::{FootprintEditorPanelContext, PanelMsg, PanelPalette};
@@ -14,6 +15,7 @@ use super::form::PadEditTarget;
 use crate::library::editor::footprint::{
     PadAttribute, PadInstance, PadPatternKind, PadSketchSource,
 };
+use crate::styles::tokens::resolve;
 use crate::styles::{Spacing, TypeScale};
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -94,6 +96,11 @@ fn attribute_label(attr: PadAttribute) -> signex_i18n::MessageId {
         PadAttribute::Testpoint => ids::EDITORS_PAD_TESTPOINT,
         PadAttribute::Paste => ids::PROPERTIES_FP_PAD_SCOPE_PASTE,
         PadAttribute::SolderMask => ids::EDITORS_FP_PAD_CALLOUT_SOLDER_MASK,
+        PadAttribute::Shape => ids::EDITORS_PAD_SHAPE,
+        PadAttribute::Hole => ids::EDITORS_PAD_HOLE_DETAILS,
+        PadAttribute::CopperOffset => ids::EDITORS_FP_PAD_COPPER_OFFSET,
+        PadAttribute::Rotation => ids::EDITORS_PAD_ROTATION,
+        PadAttribute::ThermalRelief => ids::EDITORS_PAD_THERMAL_RELIEF,
     }
 }
 
@@ -101,7 +108,7 @@ fn scope_label(scope: Scope) -> signex_i18n::MessageId {
     match scope {
         Scope::Source => ids::PROPERTIES_FP_PAD_SCOPE_SOURCE,
         Scope::Numbering => ids::PROPERTIES_FP_PAD_SCOPE_NUMBERING,
-        Scope::ThisPad => ids::PROPERTIES_FP_PAD_SCOPE_THIS_PAD,
+        Scope::ThisPad => ids::EDITORS_PAD_SCOPE_THIS_PAD,
     }
 }
 
@@ -111,83 +118,102 @@ pub(in crate::panels::footprint_editor_properties) fn view_driven_by<'a>(
     fp: &'a FootprintEditorPanelContext,
     target: PadEditTarget,
     palette: PanelPalette,
+    tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Option<Element<'a, PanelMsg>> {
     let PadEditTarget::Selected(idx) = target else {
         return None;
     };
     let pad = fp.selected_pad.as_ref().filter(|pad| pad.idx == idx)?;
-    scope_section(pad.sketch_source?, palette, i18n)
+    let inks = ScopeInks {
+        label: palette.muted,
+        value: palette.primary,
+        // An override stands out in the accent text colour, as the header's
+        // Edit in Sketch link does (mockup row 192).
+        this_pad: resolve(tokens).accent_text,
+    };
+    scope_section(pad.sketch_source?, inks, i18n)
 }
 
-/// The Attribute scope section of a pad `source` drives; `None` unless a
-/// pattern places it.
+/// The text colours of the scope section.
+#[derive(Debug, Clone, Copy)]
+struct ScopeInks {
+    label: Color,
+    value: Color,
+    this_pad: Color,
+}
+
+/// The "Pad attributes ↔ sketch" section of a pad `source` drives; `None`
+/// unless a pattern places it.
 fn scope_section<'a>(
     source: PadSketchSource,
-    palette: PanelPalette,
+    inks: ScopeInks,
     i18n: &I18n,
 ) -> Option<Element<'a, PanelMsg>> {
     let instance = source.instance?;
-    let caption = |content: Label<'a>, ink: Color| -> Element<'a, PanelMsg> {
-        container(text(content).size(TS.caption).color(ink))
-            .padding([SP.xs, SP.m])
-            .width(Length::Fill)
-            .boxed()
-    };
-    let cells = |left: Label<'a>, right: Label<'a>, ink: Color| -> Element<'a, PanelMsg> {
-        let row: Row<Element<'a, PanelMsg>> = Row::new()
-            .spacing(SP.s)
-            .push(
-                text(left)
-                    .size(TS.caption)
-                    .color(palette.muted)
-                    .width(Length::FillPortion(ATTRIBUTE_PORTION))
-                    .boxed(),
-            )
-            .push(
-                text(right)
-                    .size(TS.caption)
-                    .color(ink)
-                    .width(Length::FillPortion(SCOPE_PORTION))
-                    .boxed(),
-            );
-        container(row)
-            .padding([SP.xs / 2.0, SP.m])
-            .width(Length::Fill)
-            .boxed()
-    };
     let from = t!(
         i18n,
         ids::PROPERTIES_FP_PAD_SCOPE_FROM,
         "source" => source_text(source, i18n),
         "instance" => instance_text(Some(instance), i18n)
     );
+    let title = t!(i18n, ids::PROPERTIES_FP_PAD_SCOPE_TITLE);
     let mut section: Column<Element<'a, PanelMsg>> = Column::new()
         .width(Length::Fill)
-        .push(caption(
-            t!(i18n, ids::PROPERTIES_FP_PAD_SCOPE_TITLE).into(),
-            palette.muted,
-        ))
-        .push(caption(from.into(), palette.primary))
+        .push(caption(title.into(), inks.label))
+        .push(caption(from.into(), inks.value))
         .push(cells(
             t!(i18n, ids::PROPERTIES_FP_PAD_SCOPE_ATTRIBUTE).into(),
             t!(i18n, ids::PROPERTIES_FP_PAD_SCOPE_SCOPE).into(),
-            palette.muted,
+            inks.label,
+            inks.label,
         ));
     for (attr, scope) in scope_rows(instance) {
-        // An override stands out in the accent, as in mockup row 192.
         let ink = if scope == Scope::ThisPad {
-            palette.accent
+            inks.this_pad
         } else {
-            palette.primary
+            inks.value
         };
         section = section.push(cells(
             t!(i18n, attribute_label(attr)).into(),
             t!(i18n, scope_label(scope)).into(),
+            inks.label,
             ink,
         ));
     }
     Some(section.boxed())
+}
+
+/// One caption line of the section.
+fn caption<'a>(content: Label<'a>, ink: Color) -> Element<'a, PanelMsg> {
+    container(text(content).size(TS.caption).color(ink))
+        .padding([SP.xs, SP.m])
+        .width(Length::Fill)
+        .boxed()
+}
+
+/// One table row: the attribute in `label_ink`, its scope in `scope_ink`.
+fn cells<'a>(
+    attribute: Label<'a>,
+    scope: Label<'a>,
+    label_ink: Color,
+    scope_ink: Color,
+) -> Element<'a, PanelMsg> {
+    let cell = |content: Label<'a>, ink: Color, portion: u16| {
+        text(content)
+            .size(TS.caption)
+            .color(ink)
+            .width(Length::FillPortion(portion))
+            .boxed()
+    };
+    let row: Row<Element<'a, PanelMsg>> = Row::new()
+        .spacing(SP.s)
+        .push(cell(attribute, label_ink, ATTRIBUTE_PORTION))
+        .push(cell(scope, scope_ink, SCOPE_PORTION));
+    container(row)
+        .padding([SP.xs / 2.0, SP.m])
+        .width(Length::Fill)
+        .boxed()
 }
 
 #[cfg(test)]
@@ -272,11 +298,40 @@ mod tests {
         assert_eq!(held, [PadAttribute::Designator, PadAttribute::Paste]);
     }
 
+    /// Mockup row 192, item D1: the table opens with the mockup's eight
+    /// rows in its order.
+    #[test]
+    fn the_table_opens_with_the_mockup_rows_in_order() {
+        let i18n = I18n::en_us();
+        let labels: Vec<String> = PadAttribute::ALL[..8]
+            .iter()
+            .map(|attr| plain(t!(i18n, attribute_label(*attr)).into_string()))
+            .collect();
+        assert_eq!(
+            labels,
+            [
+                "Designator",
+                "Paste",
+                "Locked",
+                "Electrical Type",
+                "Template",
+                "Pad Features",
+                "Testpoint",
+                "Solder mask",
+            ]
+        );
+    }
+
     fn laid_out(source: PadSketchSource) -> Vec<String> {
         let tokens = theme_tokens(ThemeId::GraphiteDark);
         let palette = PanelPalette::from_tokens(&tokens);
+        let inks = ScopeInks {
+            label: palette.muted,
+            value: palette.primary,
+            this_pad: resolve(&tokens).accent_text,
+        };
         let i18n = I18n::en_us();
-        let Some(section) = scope_section(source, palette, &i18n) else {
+        let Some(section) = scope_section(source, inks, &i18n) else {
             return Vec::new();
         };
         crate::layout_probe::lay_out_texts(section, iced::Size::new(260.0, 600.0))
@@ -306,7 +361,7 @@ mod tests {
             instance: Some(linear(3, overrides)),
         });
         for shown in [
-            "Attribute scope",
+            "Pad attributes ↔ sketch",
             "From sketch: Profile of 4 edges · Linear pattern, instance 3",
             "Attribute",
             "Scope",
@@ -317,6 +372,8 @@ mod tests {
             "Paste",
             "This pad",
             "Solder mask",
+            "Shape",
+            "Thermal relief",
         ] {
             assert!(texts.iter().any(|t| t == shown), "{shown:?}: {texts:?}");
         }
