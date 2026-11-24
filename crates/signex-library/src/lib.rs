@@ -250,11 +250,7 @@ pub fn enable_project_version_control_as(
     author: Option<(&str, &str)>,
 ) -> Result<(), adapter::LibraryError> {
     use adapter::LibraryError;
-    let message = if message.trim().is_empty() {
-        DEFAULT_FIRST_COMMIT_MESSAGE
-    } else {
-        message
-    };
+    let message = first_commit_subject(message);
 
     // Before anything touches disk: never `git init` a home / shared user
     // folder, a filesystem root or a folder holding other projects (#1205).
@@ -292,6 +288,16 @@ pub fn enable_project_version_control_as(
         return Err(with_rollback_notes(e, notes));
     }
     Ok(())
+}
+
+/// `message`, or [`DEFAULT_FIRST_COMMIT_MESSAGE`] when it is blank.
+#[cfg(feature = "local-git")]
+fn first_commit_subject(message: &str) -> &str {
+    if message.trim().is_empty() {
+        DEFAULT_FIRST_COMMIT_MESSAGE
+    } else {
+        message
+    }
 }
 
 /// Refuse a folder that already has an entry named `.git` (even a dangling

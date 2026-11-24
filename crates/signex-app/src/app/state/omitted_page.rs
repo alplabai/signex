@@ -23,9 +23,12 @@ pub enum OmittedReason {
     /// The file exists but could not be read. `cause` is the sheet reader's,
     /// `None` when the set that listed the sheet did not carry one.
     Unreadable { cause: Option<UnreadableCause> },
-    /// The stitcher's sheet cycle: `parent` re-enters this sheet.
+    /// The stitcher's sheet cycle: `parent` re-enters this sheet. It is the
+    /// stitcher's parent path as is: the chain of sheet-symbol names from the
+    /// root (`U_power/U_loop`), or the root's own key.
     SheetCycle { parent: String },
-    /// The stitcher's key collision: this sheet and `kept` are one path on
-    /// this file system, and only `kept` is in the netlist.
+    /// The stitcher's key collision: this sheet and `kept` (the whole path of
+    /// the sheet that stays) are one path on this file system, and only
+    /// `kept` is in the netlist.
     KeyCollision { kept: String },
 }

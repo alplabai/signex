@@ -71,14 +71,15 @@ impl ExportIssues {
             } => Some(OmittedPage {
                 file: filename.clone(),
                 reason: OmittedReason::SheetCycle {
-                    parent: file_name(Path::new(parent_path)),
+                    parent: parent_path.clone(),
                 },
             }),
+            // `kept` stays whole: two collisions with the same file names in
+            // different folders are two rows, and a `..`-spelled pair still
+            // reads as two paths.
             I::SheetKeyCollision { kept, dropped, .. } => Some(OmittedPage {
                 file: file_name(Path::new(dropped)),
-                reason: OmittedReason::KeyCollision {
-                    kept: file_name(Path::new(kept)),
-                },
+                reason: OmittedReason::KeyCollision { kept: kept.clone() },
             }),
             _ => None,
         }

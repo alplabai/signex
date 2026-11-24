@@ -251,15 +251,15 @@ mod tests {
         );
         assert_eq!(
             said(OmittedReason::SheetCycle {
-                parent: "a.snxsch".into()
+                parent: "U_power/U_loop".into()
             }),
-            "sheet cycle · re-entered from a.snxsch"
+            "sheet cycle · re-entered from U_power/U_loop"
         );
         assert_eq!(
             said(OmittedReason::KeyCollision {
-                kept: "x.snxsch".into()
+                kept: "/p/x.snxsch".into()
             }),
-            "same path as x.snxsch on this file system"
+            "same path as /p/x.snxsch on this file system"
         );
         let causes = [
             UnreadableCause::NotARegularFile,

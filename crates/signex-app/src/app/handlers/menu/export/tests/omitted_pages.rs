@@ -34,8 +34,9 @@ fn every_hole_is_one_row_and_a_complete_netlist_problem_is_none() {
                 sheet_name: "U_usb".into(),
                 filename: "usb.snxsch".into(),
             },
+            // A non-root parent: the stitcher names it by its symbol chain.
             signex_net::StitchIssue::SheetCycle {
-                parent_path: "a.snxsch".into(),
+                parent_path: "U_power/U_loop".into(),
                 filename: "loop.snxsch".into(),
             },
             signex_net::StitchIssue::SheetKeyCollision {
@@ -84,13 +85,39 @@ fn every_hole_is_one_row_and_a_complete_netlist_problem_is_none() {
     assert_eq!(
         rows[3].reason,
         OmittedReason::SheetCycle {
-            parent: "a.snxsch".into()
-        }
+            parent: "U_power/U_loop".into()
+        },
+        "the whole chain, not its last name"
     );
     assert_eq!(
         rows[4].reason,
         OmittedReason::KeyCollision {
-            kept: "x.snxsch".into()
+            kept: "/p/x.snxsch".into()
+        }
+    );
+}
+
+/// Two collisions with the same file names in different folders are two
+/// rows: the kept sheet's whole path tells them apart.
+#[test]
+fn collisions_in_two_folders_are_two_rows() {
+    let collision = |dir: &str| signex_net::StitchIssue::SheetKeyCollision {
+        key: format!("{dir}/x.snxsch"),
+        kept: format!("/p/{dir}/x.snxsch"),
+        dropped: format!("/p/{dir}/X.snxsch"),
+    };
+    let issues = ExportIssues {
+        stitch: vec![collision("a"), collision("b")],
+        ..ExportIssues::default()
+    };
+
+    let rows = issues.omitted_pages();
+
+    assert_eq!(rows.len(), 2, "{rows:#?}");
+    assert_eq!(
+        rows[1].reason,
+        OmittedReason::KeyCollision {
+            kept: "/p/b/x.snxsch".into()
         }
     );
 }

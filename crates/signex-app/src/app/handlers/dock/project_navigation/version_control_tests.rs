@@ -18,6 +18,7 @@ fn open_dialog_on(project_dir: &std::path::Path) -> Signex {
         error: None,
         working: false,
         scanning: false,
+        author: crate::app::contracts::CommitAuthor::Resolved,
     });
     app
 }
@@ -362,7 +363,7 @@ fn the_dialog_opens_with_a_first_commit_message_and_commit_every_save_on() {
         .project_fs
         .facts
         .set_exists(crate::app::state::project_fs::git_marker(tmp.path()), false);
-    app.open_enable_version_control_dialog(vec![0]);
+    let _probe = app.open_enable_version_control_dialog(vec![0]);
     let st = dialog(&app);
     assert_eq!(st.commit_message, "Initial version of demo");
     assert!(st.commit_every_save);
@@ -640,6 +641,42 @@ fn a_missing_author_withholds_enable_until_both_fields_are_filled() {
 
     assert_eq!(task.units(), 1, "the run starts");
     assert!(dialog(&app).working);
+}
+
+/// Mockup row 26: a typed author git would refuse withholds Enable, checked
+/// by the repo-config writer's own `parse_author`.
+#[test]
+fn an_author_git_would_refuse_withholds_enable() {
+    let typed = |name: &str, email: &str| {
+        crate::app::contracts::CommitAuthor::Missing {
+            name: name.into(),
+            email: email.into(),
+        }
+        .typed()
+    };
+    for (name, email) in [
+        ("Ada <L", "ada@example.org"),
+        ("Ada", "ada lovelace@example.org"),
+        ("Ada", "a<b"),
+        ("Ada", "ada@example.org>"),
+        ("   ", "ada@example.org"),
+    ] {
+        assert_eq!(typed(name, email), None, "{name:?} / {email:?}");
+    }
+    assert_eq!(
+        typed("  Ada Lovelace ", " ada@example.org "),
+        Some(("Ada Lovelace".into(), "ada@example.org".into())),
+        "trimmed"
+    );
+
+    let tmp = tempfile::TempDir::new().unwrap();
+    let mut app = open_dialog_on(tmp.path());
+    app.ui_state.enable_version_control.as_mut().unwrap().author =
+        crate::app::contracts::CommitAuthor::Missing {
+            name: "Ada".into(),
+            email: "ada lovelace@example.org".into(),
+        };
+    assert_eq!(app.handle_enable_version_control_confirm().units(), 0);
 }
 
 /// Mockup row 26 (the 2026-11-22 repo-config writer): the typed author signs

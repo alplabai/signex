@@ -16,13 +16,18 @@ impl CommitAuthor {
         }
     }
 
-    /// The typed name and email, trimmed; `None` unless both are filled.
+    /// The typed name and email, trimmed; `None` unless both are filled and
+    /// git would accept them. Checked by the repo-config writer's own
+    /// `parse_author`, so the dialog and the History panel agree.
     pub(crate) fn typed(&self) -> Option<(String, String)> {
         let Self::Missing { name, email } = self else {
             return None;
         };
         let (name, email) = (name.trim(), email.trim());
-        (!name.is_empty() && !email.is_empty()).then(|| (name.to_owned(), email.to_owned()))
+        signex_library::adapters::local_git::project_repo::parse_author(&format!(
+            "{name} <{email}>"
+        ))
+        .filter(|(n, e)| n == name && e == email)
     }
 }
 
@@ -38,6 +43,21 @@ fn probe_commit_author(project_dir: std::path::PathBuf) -> Task<Message> {
             Message::EnableVersionControl(crate::app::EnableVersionControlMsg::AuthorProbed {
                 project_dir: project_dir.clone(),
                 has_identity: joined.unwrap_or(false),
+            })
+        },
+    )
+}
+
+/// Read which entries the library folder holds, off the UI thread; see
+/// `ItemsScanned`.
+fn scan_library_items(project_dir: std::path::PathBuf) -> Task<Message> {
+    let scan_dir = project_dir.clone();
+    Task::perform(
+        crate::app::path_op_jobs::run_blocking(move || collect_track_items_for_library(&scan_dir)),
+        move |joined| {
+            Message::EnableVersionControl(crate::app::EnableVersionControlMsg::ItemsScanned {
+                project_dir: project_dir.clone(),
+                result: joined,
             })
         },
     )
@@ -201,7 +221,7 @@ impl Signex {
             .unwrap_or("library")
             .to_string();
         let commit_message = self.first_commit_message(&library_name);
-        let (scan_dir, project_dir) = (root_dir.clone(), root_dir.clone());
+        let project_dir = root_dir.clone();
         // `project_path` is purely informational; point it at a
         // `library.toml` (whether it exists yet or not) inside the
         // library so the modal can mirror the project-scope pattern.
@@ -221,19 +241,10 @@ impl Signex {
             scanning: true,
             author: CommitAuthor::Probing,
         });
-        let probe = probe_commit_author(project_dir.clone());
-        let scan = Task::perform(
-            crate::app::path_op_jobs::run_blocking(move || {
-                collect_track_items_for_library(&scan_dir)
-            }),
-            move |joined| {
-                Message::EnableVersionControl(crate::app::EnableVersionControlMsg::ItemsScanned {
-                    project_dir: project_dir.clone(),
-                    result: joined,
-                })
-            },
-        );
-        Task::batch([scan, probe])
+        Task::batch([
+            scan_library_items(project_dir.clone()),
+            probe_commit_author(project_dir),
+        ])
     }
 
     /// The row list of a library-scope dialog arrived. Dropped when the dialog
@@ -312,37 +323,20 @@ impl Signex {
             .then(|| state.project_path.file_stem())
             .flatten()
             .map(|s| s.to_string_lossy().into_owned());
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    enable_version_control_blocking(
-                        scope,
-                        &dir,
-                        project_stem.as_deref(),
-                        use_lfs,
-                        gitignore.as_deref(),
-                        keep_journals,
-                        FirstCommit {
-                            message: &message,
-                            author: author.as_ref().map(|(n, e)| (n.as_str(), e.as_str())),
-                        },
-                    )
-                })
-                .await
-                .unwrap_or_else(|e| {
-                    crate::app::EnableVersionControlOutcome::InitFailed(format!(
-                        "the version-control worker stopped: {e}"
-                    ))
-                })
-            },
-            move |outcome| {
-                Message::EnableVersionControl(crate::app::EnableVersionControlMsg::Finished {
-                    scope,
-                    project_dir: project_dir.clone(),
-                    outcome,
-                })
-            },
-        )
+        run_off_thread(scope, project_dir, move || {
+            enable_version_control_blocking(
+                scope,
+                &dir,
+                project_stem.as_deref(),
+                use_lfs,
+                gitignore.as_deref(),
+                keep_journals,
+                FirstCommit {
+                    message: &message,
+                    author: author.as_ref().map(|(n, e)| (n.as_str(), e.as_str())),
+                },
+            )
+        })
     }
 
     /// `.git` now exists under `dir`: record it at once so the menu and the
@@ -491,6 +485,31 @@ impl Signex {
             ));
         }
     }
+}
+
+/// Run `job` on the blocking pool and report its outcome as `Finished` for
+/// `project_dir`.
+fn run_off_thread(
+    scope: crate::app::VersionControlScope,
+    project_dir: std::path::PathBuf,
+    job: impl FnOnce() -> crate::app::EnableVersionControlOutcome + Send + 'static,
+) -> Task<Message> {
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(job).await.unwrap_or_else(|e| {
+                crate::app::EnableVersionControlOutcome::InitFailed(format!(
+                    "the version-control worker stopped: {e}"
+                ))
+            })
+        },
+        move |outcome| {
+            Message::EnableVersionControl(crate::app::EnableVersionControlMsg::Finished {
+                scope,
+                project_dir: project_dir.clone(),
+                outcome,
+            })
+        },
+    )
 }
 
 /// The first commit: its subject, and the author the dialog asked for when

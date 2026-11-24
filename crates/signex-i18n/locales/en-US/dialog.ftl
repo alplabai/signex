@@ -519,7 +519,7 @@ dialog-netlist-omitted-read-failed = unreadable (could not be read)
 dialog-netlist-omitted-newer-format = unreadable (newer format)
 dialog-netlist-omitted-not-a-sheet = unreadable (not a sheet file)
 dialog-netlist-omitted-refused = not read (refused)
-# $parent is the file of the sheet that places this one again.
+# $parent is the sheet that places this one again: its chain of sheet-symbol names from the root (U_power/U_loop), or the root sheet's path.
 dialog-netlist-omitted-sheet-cycle = sheet cycle · re-entered from { $parent }
-# $kept is the file this one cannot be told from; only it is in the netlist.
+# $kept is the whole path of the file this one cannot be told from; only it is in the netlist.
 dialog-netlist-omitted-key-collision = same path as { $kept } on this file system

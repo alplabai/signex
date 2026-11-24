@@ -74,7 +74,11 @@ fn author_fields<'a>(
             .padding([SP.s, SP.m])
             .width(Length::Fill);
         if !st.working {
-            input = input.on_input(move |s| Message::EnableVersionControl(on(s)));
+            input = input
+                .on_input(move |s| Message::EnableVersionControl(on(s)))
+                .on_submit(Message::EnableVersionControl(
+                    EnableVersionControlMsg::Confirm,
+                ));
         }
         input.boxed()
     };
