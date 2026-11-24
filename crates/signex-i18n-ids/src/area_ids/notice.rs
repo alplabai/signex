@@ -117,4 +117,6 @@ define_ids! {
     NOTICE_PREVIEW_RENDER_FAILED = "notice-preview-render-failed";
     NOTICE_LINK_NOT_OPENED = "notice-link-not-opened";
     NOTICE_LINK_LAUNCH_INCOMPLETE = "notice-link-launch-incomplete";
+    // chrome-copy-help
+    NOTICE_SAVE_FAILED_EDITS_KEPT = "notice-save-failed-edits-kept";
 }

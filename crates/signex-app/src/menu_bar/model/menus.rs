@@ -730,5 +730,11 @@ pub(super) fn help(ctx: &MenuContext) -> Vec<MenuEntry> {
         item(ctx, ids::START_OPEN_SAMPLE, MenuMessage::OpenSampleProject),
         SEP,
         cmd_item(ctx, cmd("show_current_command_hotkeys", "F1")),
+        // Mockup row 14: the first-run card again, from Help.
+        item(
+            ctx,
+            menu_ids::MENU_HELP_WELCOME_TIPS,
+            MenuMessage::OpenWelcomeTips,
+        ),
     ]
 }

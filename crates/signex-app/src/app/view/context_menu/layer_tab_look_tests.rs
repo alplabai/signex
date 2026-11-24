@@ -82,9 +82,9 @@ fn the_menu_lists_every_row_of_the_tab_menu() {
         [
             "Hide Bottom Layer",
             "Highlight Bottom Layer",
-            "Layer colour...",
-            "Reset layer colour",
-            "Reset all layer colours",
+            "Layer color...",
+            "Reset layer color",
+            "Reset all layer colors",
             "Show only this layer",
             "Show all layers",
             "Hide layers",

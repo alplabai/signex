@@ -431,7 +431,7 @@ dialog-net-color-count = { $count ->
 }
 dialog-net-color-filter = Filter nets
 # Footer link: removes every net colour of the active sheet in one undo step.
-dialog-net-color-clear-all = Clear all colours
+dialog-net-color-clear-all = Clear all colors
 dialog-net-color-row-hint = Click a row to choose
 # Row chooser: opens the custom colour picker for the row's net.
 dialog-net-color-custom = Custom…
@@ -443,7 +443,7 @@ dialog-net-color-hex = Hex
 dialog-net-color-old = Old
 dialog-net-color-new = New
 # Messages: Use Color was pressed after the active sheet changed. $net is the net name.
-dialog-net-color-sheet-changed = Net colour not changed: the picker was opened for { $net } on another sheet.
+dialog-net-color-sheet-changed = Net color not changed: the picker was opened for { $net } on another sheet.
 
 ## Annotate Schematics (#75)
 dialog-annotate-order-up-then-across-help = Columns bottom to top, then the next column to the right.

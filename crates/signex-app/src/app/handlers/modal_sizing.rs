@@ -337,7 +337,7 @@ impl Signex {
                 const CAPTION_LINE: f32 = 15.0;
                 const CHOICE_ROW_GAP: f32 = 3.0;
                 let i18n = &self.ui_state.i18n;
-                let detail = n.detail_text(i18n);
+                let detail = n.sentence_text(i18n);
                 let mut height =
                     BASE + (wrapped_lines(&detail, 64) as f32 * MESSAGE_LINE).min(MESSAGE_MAX);
                 if let Some(system) = &n.system {

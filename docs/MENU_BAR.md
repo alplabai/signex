@@ -173,11 +173,12 @@ greyed while no PCB is open. The command is also in the command palette and
 as the Run DRC button of the Messages panel. On a board the key is `T D` in
 the default profile and `F7` in Classic.
 
-## Tools ▸ DRC Results and Tools ▸ Net Classes {#tools-drc-results}
+## Tools ▸ DRC and Tools ▸ Net Classes {#tools-drc-results}
 
-Right after Design Rule Check, Tools ▸ DRC Results (`open_drc_panel`, #2399)
-and Tools ▸ Net Classes (`open_net_classes_panel`, #2400) open the board's
-DRC results panel and the Net Classes panel. DRC Results is greyed while no
+Right after Design Rule Check, Tools ▸ DRC (`open_drc_panel`, #2399; named
+like the ERC panel since mockup row 87) and Tools ▸ Net Classes
+(`open_net_classes_panel`, #2400) open the board's DRC panel and the Net
+Classes panel. DRC is greyed while no
 PCB is open. Net Classes is an alias of Design ▸ Net Classes
 (`open_net_classes`), live on a sheet or a board: see
 [Design ▸ Net Classes](#find-similar-filter-net-classes). No keymap preset

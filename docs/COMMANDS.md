@@ -376,7 +376,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `cycle_route_mode` | Switch Interactive Routing between walking around and pushing other nets' tracks | pcb | — | — |
 | `delete_layer_set` | Delete a saved layer set | view | — | — |
 | `delete_net_class` | Delete a net class | design | — | — |
-| `edit_layer_color` | Open the colour picker of one layer in the Layers panel | view | — | — |
+| `edit_layer_color` | Open the color picker of one layer in the Layers panel | view | — | — |
 | `export_assembly_svg` | Write the board's top and bottom assembly drawings as SVG files | reports | — | — |
 | `export_board_pdf` | Print the board's layers to a PDF file | reports | — | — |
 | `export_board_report` | Export a board report as a CSV file | reports | — | — |
@@ -434,7 +434,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `repour_all` | Fill every polygon pour of the board again and report their copper | pcb | — | — |
 | `repour_selected` | Fill the selected polygon pours again and report their copper | pcb | — | — |
 | `reset_board_origin` | Move the board origin to the bottom-left of the board outline | edit | — | — |
-| `reset_layer_colors` | Give every layer the board palette colour again | view | — | — |
+| `reset_layer_colors` | Give every layer the board palette color again | view | — | — |
 | `rules_add` | Add a design rule | design | — | — |
 | `rules_conflicts` | List shadowed and conflicting design rules | validation | — | — |
 | `rules_effective` | Show the rule value that governs a net | validation | — | — |
@@ -460,12 +460,12 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `set_board_origin` | Set the board origin at a clicked point | edit | `E O S` | `Shift+O` |
 | `set_board_panel` | Change a setting of the board's panel | pcb | — | — |
 | `set_footprint_text` | Set the place, angle, height or justification of a component's designator or comment | edit | — | — |
-| `set_layer_color` | Give one layer its own colour, saved with the board, or the palette colour again | view | — | — |
+| `set_layer_color` | Give one layer its own color, saved with the board, or the palette color again | view | — | — |
 | `set_layer_sizes` | Set the per-layer copper sizes of vias or pads | modify | — | — |
 | `set_layer_stack` | Replace the layer stack of a board | design | — | — |
 | `set_layer_tab_names` | Name the layer tabs short, medium or long | view | — | — |
 | `set_layer_visible` | Show or hide one layer of the board view | view | — | — |
-| `set_net_class_rules` | Set the colour and board rules of a net class | design | — | — |
+| `set_net_class_rules` | Set the color and board rules of a net class | design | — | — |
 | `set_object_transparency` | Set how transparent one kind of object is drawn | view | — | — |
 | `set_object_visible` | Show or hide one kind of object in the board view | view | — | — |
 | `set_pad_shape` | Set the copper shape of pads, with a trapezoid's delta or a custom outline | modify | — | — |

@@ -18,7 +18,7 @@ preferences-wheel-mode-help = Zoom: the mouse wheel zooms the canvas. Scroll: th
 preferences-theme-heading = Theme
 
 # Line under the heading.
-preferences-theme-intro = Colours, density and canvas text. Changes preview live; Apply keeps them.
+preferences-theme-intro = Colors, density and canvas text. Changes preview live; Apply keeps them.
 
 # Section label over the theme cards, shown in capitals.
 preferences-theme-application = APPLICATION THEME
@@ -215,8 +215,8 @@ preferences-section-schematic-display = Schematic — Display
 preferences-symbol-body-fill = Fill symbol bodies
 preferences-symbol-body-fill-help = When on, the closed rectangles, polygons and circles that form a symbol's body are drawn filled: on the canvas, in the symbol previews, and in PDF, SVG and print. Pins, text and open lines are never filled, and power ports are not filled. A body shape the symbol fills itself keeps its own fill.
 # Label of the swatch: the colour symbol bodies are filled with.
-preferences-symbol-body-fill-colour = Fill colour
-preferences-symbol-body-fill-colour-help = A soft tint of the theme unless you pick a colour. Reset to Default goes back to the theme's tint.
+preferences-symbol-body-fill-colour = Fill color
+preferences-symbol-body-fill-colour-help = A soft tint of the theme unless you pick a color. Reset to Default goes back to the theme's tint.
 
 ## Default Component Classes
 preferences-classes-title = Default Component Classes

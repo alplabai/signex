@@ -230,7 +230,7 @@ repair_pin_junctions	validation	Add a junction where a pin end touches a wire	Re
 run_drc	pcb	Run the design rule check on the board	Design Rule Check	PCB	-	-	RequiresDocument(Pcb)	runs_headless	-
 check_drc	validation	Check design rules	-	General	-	-	Always	-	document:document,baseline:text?
 check_requirements	validation	Check project requirements	-	General	-	-	Always	-	document:document,baseline:text?
-open_drc_panel	pcb	Open the DRC results panel	DRC Results	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+open_drc_panel	pcb	Open the DRC results panel	DRC	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 show_drc_violation	pcb	Select a DRC violation and centre the view on it	-	PCB	-	-	RequiresDocument(Pcb)	-	document:document,id:text
 waive_drc_violation	pcb	Waive a DRC violation with a note	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text,text:text?,author:text?
 unwaive_drc_violation	pcb	Take back the waiver of a DRC violation	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text
@@ -298,9 +298,9 @@ set_layer_sizes	modify	Set the per-layer copper sizes of vias or pads	-	PCB	-	-	
 set_pad_shape	modify	Set the copper shape of pads, with a trapezoid's delta or a custom outline	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets,shape:text,delta:text?,corners:text?
 set_layer_visible	view	Show or hide one layer of the board view	Set Layer Visible	PCB	-	-	RequiresDocument(Pcb)	-	layer:text,on:bool,document:document
 set_active_layer	view	Make one layer the active layer	Set Active Layer	PCB	-	-	RequiresDocument(Pcb)	-	layer:text,document:document
-set_layer_color	view	Give one layer its own colour, saved with the board, or the palette colour again	Set Layer Color	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	layer:text,color:color?,document:document
-edit_layer_color	view	Open the colour picker of one layer in the Layers panel	Layer Colour...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
-reset_layer_colors	view	Give every layer the board palette colour again	Reset All Layer Colours	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document
+set_layer_color	view	Give one layer its own color, saved with the board, or the palette color again	Set Layer Color	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	layer:text,color:color?,document:document
+edit_layer_color	view	Open the color picker of one layer in the Layers panel	Layer Color...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+reset_layer_colors	view	Give every layer the board palette color again	Reset All Layer Colors	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document
 show_used_layers_only	view	List only the layers the board uses in the Layers panel	Show Used Layers Only	PCB	-	-	RequiresDocument(Pcb)	-	on:bool,document:document
 set_object_visible	view	Show or hide one kind of object in the board view	Set Object Visible	PCB	-	-	RequiresDocument(Pcb)	-	kind:text,on:bool,document:document
 set_object_transparency	view	Set how transparent one kind of object is drawn	Set Object Transparency	PCB	-	-	RequiresDocument(Pcb)	-	kind:text,value:text,document:document
@@ -324,7 +324,7 @@ open_diff_pair_classes	design	Open the project's differential pair classes	Diffe
 add_net_class	design	Add a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,name:text?
 rename_net_class	design	Rename a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,class:text,name:text
 delete_net_class	design	Delete a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,class:text
-set_net_class_rules	design	Set the colour and board rules of a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,class:text,color:color?,width:text?,clearance:text?,via_diameter:text?,via_drill:text?,diff_pair_gap:text?,diff_pair_width:text?
+set_net_class_rules	design	Set the color and board rules of a net class-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,class:text,color:color?,width:text?,clearance:text?,via_diameter:text?,via_drill:text?,diff_pair_gap:text?,diff_pair_width:text?
 assign_board_net_class	design	Put a board net in a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,net_name:text,class:text?
 select_board_net	select	Select every track, via and pad of a board net	Select Net	PCB	-	-	RequiresDocument(Pcb)	-	net:text?
 highlight_board_net	select	Highlight a board net	Highlight Net	PCB	-	-	RequiresDocument(Pcb)	-	net:text?

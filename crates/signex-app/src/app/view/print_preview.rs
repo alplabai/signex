@@ -42,9 +42,13 @@ impl Signex {
         let footer = self.error_notice_footer(choices);
 
         let ink = crate::styles::ti(tokens.text);
-        let sentence = signex_widgets::text(notice.detail.localized(i18n))
-            .size(TS.body)
-            .color(ink);
+        let line = |label: Localized| signex_widgets::text(label).size(TS.body).color(ink);
+        let mut sentence: iced::widget::Column<Element<'_, Message>> =
+            iced::widget::Column::new().push_boxed(line(notice.detail.localized(i18n)));
+        // A failed save adds that the edits are still open (mockup row 11).
+        if let Some(note) = notice.note() {
+            sentence = sentence.push_boxed(line(t!(i18n, note)));
+        }
         let mut content: iced::widget::Column<Element<'_, Message>> = iced::widget::Column::new()
             .spacing(NOTICE_BODY_GAP)
             .push_boxed(

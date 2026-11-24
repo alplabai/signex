@@ -180,16 +180,47 @@ fn copy_text_is_the_heading_the_sentence_and_the_system_block() {
         .with_system("writing C:\\work\\power.snxsch: Access is denied. (os error 5)");
     assert_eq!(
         notice.copy_text(&en),
-        "Save Failed\n\nFailed to save active document\n\nwriting C:\\work\\power.snxsch: \
-         Access is denied. (os error 5)"
+        "Save Failed\n\nFailed to save active document Your edits are still open and \
+         unsaved.\n\nwriting C:\\work\\power.snxsch: Access is denied. (os error 5)"
     );
     let plain = ErrorNotice::save(verbatim("disk full"));
-    assert_eq!(plain.copy_text(&en), "Save Failed\n\ndisk full");
+    assert_eq!(
+        plain.copy_text(&en),
+        "Save Failed\n\ndisk full Your edits are still open and unsaved."
+    );
     assert_eq!(
         ErrorNotice::save(verbatim("x")).with_system("  ").system,
         None,
         "a blank system part shows no block"
     );
+}
+
+/// Mockup row 11: a Save Failed card says, after its detail, that nothing
+/// was lost. The sentence comes from the catalog, Copy carries it, and the
+/// one line that leaves the screen does not. Other cards add nothing.
+#[test]
+fn a_save_failed_card_says_the_edits_are_still_open() {
+    let en = I18n::en_us();
+    let notice = ErrorNotice::save(verbatim("power.snxsch could not be written."));
+    assert_eq!(
+        notice.note(),
+        Some(signex_i18n::ids::NOTICE_SAVE_FAILED_EDITS_KEPT)
+    );
+    let sentence = "power.snxsch could not be written. Your edits are still open and unsaved.";
+    assert_eq!(notice.sentence_text(&en), sentence);
+    assert_eq!(notice.copy_text(&en), format!("Save Failed\n\n{sentence}"));
+    assert_eq!(
+        notice.detail_line_en_us(),
+        "power.snxsch could not be written."
+    );
+    for other in [
+        ErrorNotice::export(verbatim("x")),
+        ErrorNotice::create(verbatim("x")),
+        ErrorNotice::disk_changed(PathBuf::from("/w/a.snxsch"), DiskDrift::Changed),
+    ] {
+        assert_eq!(other.note(), None, "{:?}", other.title);
+        assert_eq!(other.sentence_text(&en), other.detail_text(&en));
+    }
 }
 
 /// A failed save names the operation in the sentence and keeps the error

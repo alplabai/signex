@@ -101,7 +101,7 @@ Its footer says what the mouse wheel is set to; **change** opens
 **Preferences ▸ Appearance**, where the Mouse wheel setting is, and leaves the
 card open. Close it with **Got it**, the ✕ in its corner or `Esc`. It is a
 reminder only; nothing else changes when you dismiss it, and it does not come
-back.
+back on its own. **Help ▸ Show Welcome Tips** opens it again.
 
 `F1` (or **Help ▸ Keyboard Shortcuts**) opens a reference of every working
 binding in the active shortcut profile, grouped by category in two columns.
@@ -830,7 +830,7 @@ that net, **Clear** takes the colour off, and **Custom…** opens the colour
 picker (swatches, R / G / B, **Hex**, and the old and new colour side by side).
 **Use Color** colours the net on the sheet the picker was opened from; if
 another sheet is active by then, nothing changes and the Messages panel says
-so. **Clear all colours** at the foot of the palette clears the active sheet
+so. **Clear all colors** at the foot of the palette clears the active sheet
 only. Each colour change is one **Undo** step and is saved with the sheet. A
 sheet written by a newer Signex is read-only in this build and keeps its
 colours.
@@ -1514,7 +1514,7 @@ not fit, scroll the strip sideways. Click a tab to make that layer active;
 new tracks, pours and text go on the active layer, and its tab has the
 accent bar along the top. `+` and `-` step to the next and previous layer,
 `*` to the next signal layer. A right-click on a tab hides, highlights or
-shows layers, sets the layer's colour (**Layer colour...**, saved with the
+shows layers, sets the layer's colour (**Layer color...**, saved with the
 board), sets the tab names (Short, Medium or Long) and the layer numbers,
 and its **Layer stack...** row opens the Layer Stack panel. The button at
 the left end of the tabs picks a layer set.
@@ -1716,7 +1716,7 @@ adds one and **Add net** puts nets in it.
 
 1. With the board in view, choose **Tools ▸ Design Rule Check** (`T D`), or
    press **Run DRC** in the Messages panel.
-2. Choose **Tools ▸ DRC Results** to open the results, grouped by rule.
+2. Choose **Tools ▸ DRC** to open the results, grouped by rule.
 3. Click a row: its objects are selected and the view centres on them.
 4. Fix the board and run DRC again. Results go stale when the board changes.
 

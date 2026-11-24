@@ -277,3 +277,7 @@ notice-link-not-opened = Could not open { $url } in a browser: { $error }
 # The browser was started but the launch did not finish. $url is the web
 # address; $error is the system's reason, in English.
 notice-link-launch-incomplete = The browser launch for { $url } did not complete: { $error }
+
+# chrome-copy-help
+# After the detail of a Save Failed card (mockup row 11): nothing was lost.
+notice-save-failed-edits-kept = Your edits are still open and unsaved.

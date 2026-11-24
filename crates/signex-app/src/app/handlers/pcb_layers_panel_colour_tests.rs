@@ -129,7 +129,7 @@ fn a_swatch_and_palette_colour_are_board_undo_steps() {
     // The swatch closed the card; open it again for Palette colour.
     layers(&mut app, LayersPanelMsg::ColourChipToggled(BOTTOM));
     let ctx = app.document_state.panel_ctx.clone();
-    let sent = messages_on_click(view_panel(PanelKind::Layers, &ctx), PANEL, "Palette colour");
+    let sent = messages_on_click(view_panel(PanelKind::Layers, &ctx), PANEL, "Palette color");
     assert!(
         matches!(
             sent.as_slice(),

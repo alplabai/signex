@@ -521,3 +521,46 @@ fn kept_text(kept: &Kept, i18n: &I18n) -> Localized {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use signex_engine::pcb::designators::{ReannotateOptions, ReannotatePlan};
+
+    use crate::app::{BoardReannotateState, Signex};
+
+    const WINDOW: iced::Size = iced::Size::new(1400.0, 900.0);
+
+    /// Mockup row 83: the title matches the Tools menu row, Re-Annotate
+    /// Board, and the subtitle keeps the word Positional before the board.
+    #[test]
+    fn the_title_is_the_menu_name_and_the_subtitle_keeps_positional() {
+        let (mut app, _boot) = Signex::new();
+        app.ui_state.i18n = signex_i18n::I18n::en_us();
+        app.ui_state.board_reannotate = Some(BoardReannotateState {
+            board: "dcdc-4ch.snxpcb".into(),
+            board_name: "dcdc-4ch.snxpcb".into(),
+            options: ReannotateOptions::default(),
+            plan: ReannotatePlan::default(),
+            revision: 1,
+            problem: None,
+            in_order: Vec::new(),
+            show_in_order: false,
+        });
+        let shown: Vec<String> =
+            crate::layout_probe::lay_out_texts(app.view_board_reannotate_card(), WINDOW)
+                .into_iter()
+                .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+                .collect();
+        assert!(shown.iter().any(|t| t == "Re-Annotate Board"), "{shown:?}");
+        assert!(
+            shown
+                .iter()
+                .any(|t| t == "Positional \u{00B7} dcdc-4ch.snxpcb"),
+            "{shown:?}"
+        );
+        assert!(
+            !shown.iter().any(|t| t == "Positional Re-Annotate"),
+            "{shown:?}"
+        );
+    }
+}

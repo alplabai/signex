@@ -104,6 +104,24 @@ impl ErrorNotice {
         self.detail.render(i18n)
     }
 
+    /// The sentence the card adds after the detail, if any: a failed save
+    /// says the edits are still open and unsaved (mockup row 11). It is the
+    /// card's own words, so it stays out of [`Self::detail_line_en_us`].
+    pub fn note(&self) -> Option<MessageId> {
+        (self.title.id() == Some(ids::NOTICE_SAVE_FAILED))
+            .then_some(ids::NOTICE_SAVE_FAILED_EDITS_KEPT)
+    }
+
+    /// The detail and the card's note after it, one space apart: the
+    /// readable sentence as the card shows it.
+    pub fn sentence_text(&self, i18n: &I18n) -> String {
+        let detail = self.detail_text(i18n);
+        match self.note() {
+            Some(note) => format!("{detail} {}", i18n.message_plain(note, &[])),
+            None => detail,
+        }
+    }
+
     /// The sentence and, after a colon, the system part, as one en-US line:
     /// the text that leaves the screen (a CLI reason), as the card read
     /// before the system part had its own block.
@@ -125,9 +143,10 @@ impl ErrorNotice {
     }
 
     /// What the card's Copy button puts on the clipboard for a bug report:
-    /// the heading, the sentence and the system part, a blank line apart.
+    /// the heading, the sentence (with its note) and the system part, a
+    /// blank line apart.
     pub fn copy_text(&self, i18n: &I18n) -> String {
-        let mut parts = vec![self.title_text(i18n), self.detail_text(i18n)];
+        let mut parts = vec![self.title_text(i18n), self.sentence_text(i18n)];
         if let Some(system) = &self.system {
             parts.push(system.as_str().to_owned());
         }
