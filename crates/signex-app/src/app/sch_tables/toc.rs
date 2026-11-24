@@ -67,7 +67,8 @@ pub(crate) fn contents_sheet(
 enum StartRows {
     /// The last compile's pages, one per channel.
     Compiled(Vec<super::rows::ContentsEntry>),
-    /// Before any compile: the pages the project lists. The title blocks of
+    /// Before any compile: the pages the project lists, with the sheet
+    /// numbers the Navigator shows for them. The title blocks of
     /// the sheets that are not open are read with the write, off the update
     /// thread.
     Declared(Vec<super::rows::DeclaredPage>),
@@ -138,10 +139,7 @@ impl Signex {
             .and_then(|root| root.parent().map(std::path::Path::to_path_buf))
             .unwrap_or_else(|| project.dir().to_path_buf());
         let path = dir.join(CONTENTS_FILE);
-        let start = match self.contents_now(project_id, &dir) {
-            Some(entries) => StartRows::Compiled(entries),
-            None => StartRows::Declared(self.declared_pages(project_id, &dir)),
-        };
+        let start = self.start_rows(project_id, &dir);
         let word = t!(i18n, ids::TABLE_TOC_HEADING).into_string();
         let target = path.clone();
         Task::perform(
@@ -196,6 +194,19 @@ impl Signex {
         }
     }
 
+    /// The rows `project`'s contents sheet in `dir` starts with: the last
+    /// compile's pages, or before any compile the pages the project lists.
+    fn start_rows(
+        &self,
+        project: crate::app::state::ProjectId,
+        dir: &std::path::Path,
+    ) -> StartRows {
+        match self.contents_now(project, dir) {
+            Some(entries) => StartRows::Compiled(entries),
+            None => StartRows::Declared(self.declared_pages(project, dir)),
+        }
+    }
+
     /// The contents rows `project`'s last compile gives, one per channel,
     /// their links relative to `dir`, where the contents sheet goes.
     fn contents_now(
@@ -207,8 +218,9 @@ impl Signex {
             .map(|pages| pages.pages(true))
     }
 
-    /// The pages `project` lists, in its order, each linked from `dir` and
-    /// with the title block of its open tab when it has one.
+    /// The pages `project` lists, in its order, each linked from `dir`, with
+    /// the title block of its open tab when it has one and its page number
+    /// when the Navigator shows this project.
     fn declared_pages(
         &self,
         project: crate::app::state::ProjectId,
@@ -218,6 +230,7 @@ impl Signex {
             return Vec::new();
         };
         let fold = crate::app::state::project_case::fold_of(Some(loaded));
+        let root = crate::app::project_sheets::project_root_sheet_path(loaded);
         let project_dir = loaded.dir();
         loaded
             .data
@@ -233,10 +246,34 @@ impl Signex {
                         .engines
                         .get(&path)
                         .map(|engine| signex_net::SheetTitle::of(engine.document())),
+                    number: self.navigator_number(root.as_deref(), &path, fold),
                     path,
                 }
             })
             .collect()
+    }
+
+    /// The page number of the sheet at `path` in the sheet numbering the
+    /// Navigator shows (its first placement's), when the Navigator shows the
+    /// project whose root sheet is `root`.
+    fn navigator_number(
+        &self,
+        root: Option<&std::path::Path>,
+        path: &std::path::Path,
+        fold: crate::app::state::scope::CaseFold,
+    ) -> Option<usize> {
+        let navigator = &self.document_state.panel_ctx.navigator;
+        let shown_root = navigator.hierarchy.as_ref()?.root.as_ref()?;
+        if !shown_root.is_at(root?, fold) {
+            return None;
+        }
+        let key = crate::app::sheet_hierarchy::normalised_key(path, fold);
+        navigator
+            .numbers
+            .iter()
+            .filter(|((sheet, _), _)| *sheet == key)
+            .map(|(_, &number)| number)
+            .min()
     }
 }
 
@@ -323,6 +360,7 @@ mod tests {
             path: PathBuf::from(format!("/p/{name}.snxsch")),
             file: format!("{name}.snxsch"),
             title,
+            number: None,
         };
         let start = StartRows::Declared(vec![
             page("top", Some(title("Top level", "B"))),
@@ -394,5 +432,130 @@ mod tests {
             [("top.snxsch", Some("Top level")), ("power.snxsch", None)]
         );
         assert_eq!(pages[1].path, PathBuf::from("/w/toc-declared/power.snxsch"));
+    }
+
+    /// Before a compile the rows carry the project's sheet numbers: the
+    /// numbered pages by number, the rest after them in the project's order.
+    #[test]
+    fn the_declared_rows_follow_the_projects_sheet_numbers() {
+        let page = |name: &str, number: Option<usize>| DeclaredPage {
+            name: name.to_string(),
+            path: PathBuf::from(format!("/p/{name}.snxsch")),
+            file: format!("{name}.snxsch"),
+            title: Some(SheetTitle::default()),
+            number,
+        };
+        let start = StartRows::Declared(vec![
+            page("notes", None),
+            page("power", Some(3)),
+            page("top", Some(1)),
+            page("spare", None),
+        ]);
+
+        let t = written_table(start, &|_: &Path| -> Option<SheetTitle> { None });
+
+        let pages: Vec<Vec<String>> = drawn_cells(&t)
+            .into_iter()
+            .map(|row| row[..2].to_vec())
+            .collect();
+        assert_eq!(
+            pages,
+            [["1", "top"], ["3", "power"], ["4", "notes"], ["5", "spare"]]
+        );
+    }
+
+    /// The sheet the Navigator shows for `root`, with the page numbers of
+    /// `numbers` (one per placement).
+    fn navigator_showing(app: &mut Signex, root: &str, numbers: &[(&str, u128, usize)]) {
+        use crate::app::sheet_hierarchy::{
+            SheetHierarchy, SheetNode, SheetNodeKind, normalised_key,
+        };
+        use signex_types::schematic::InstancePath;
+        let fold = crate::app::state::project_case::fold_of(app.document_state.projects.first());
+        let navigator = &mut app.document_state.panel_ctx.navigator;
+        navigator.hierarchy = Some(SheetHierarchy {
+            fold,
+            root: Some(SheetNode {
+                name: "top".to_string(),
+                filename: "top.snxsch".to_string(),
+                placed_as: None,
+                path: PathBuf::from(root),
+                kind: SheetNodeKind::Present,
+                detail: None,
+                children: Vec::new(),
+            }),
+            loose: Vec::new(),
+        });
+        navigator.numbers = numbers
+            .iter()
+            .map(|&(path, step, number)| {
+                let at = InstancePath::from_chain(vec![uuid::Uuid::from_u128(step)]);
+                ((normalised_key(Path::new(path), fold), at), number)
+            })
+            .collect();
+    }
+
+    /// The declared pages take the Navigator's sheet numbers (a sheet placed
+    /// twice takes its first page), and none from another project's.
+    #[test]
+    fn the_declared_pages_take_the_navigators_page_numbers() {
+        use crate::app::handlers::menu::export::tests::app_workspace;
+        let mut app = app_workspace(
+            "/w/toc-numbers",
+            &["top.snxsch", "reg.snxsch", "notes.snxsch"],
+        );
+        let project = app.document_state.projects[0].id;
+        let numbers = [
+            ("/w/toc-numbers/top.snxsch", 0, 1),
+            ("/w/toc-numbers/reg.snxsch", 1, 3),
+            ("/w/toc-numbers/reg.snxsch", 2, 2),
+        ];
+        let numbers_of = |app: &Signex| {
+            app.declared_pages(project, Path::new("/w/toc-numbers"))
+                .iter()
+                .map(|p| p.number)
+                .collect::<Vec<_>>()
+        };
+
+        navigator_showing(&mut app, "/w/toc-numbers/top.snxsch", &numbers);
+        assert_eq!(numbers_of(&app), [Some(1), Some(2), None]);
+
+        navigator_showing(&mut app, "/w/other/top.snxsch", &numbers);
+        assert_eq!(numbers_of(&app), [None, None, None]);
+    }
+
+    /// Mockup row 156: with no compile the sheet starts with the listed
+    /// pages, with one it starts with the compiled pages.
+    #[test]
+    fn the_contents_sheet_starts_from_the_compile_only_when_there_is_one() {
+        use crate::app::handlers::menu::export::tests::app_workspace;
+        let mut app = app_workspace("/w/toc-start", &["top.snxsch", "power.snxsch"]);
+        let project = app.document_state.projects[0].id;
+        let dir = Path::new("/w/toc-start");
+
+        let StartRows::Declared(pages) = app.start_rows(project, dir) else {
+            panic!("no compile yet: the listed pages");
+        };
+        assert_eq!(
+            pages.iter().map(|p| p.file.as_str()).collect::<Vec<_>>(),
+            ["top.snxsch", "power.snxsch"]
+        );
+
+        app.document_state.compiled_design.results.insert(
+            project,
+            crate::app::core::compiled_design::CompiledResult {
+                design: std::sync::Arc::new(signex_net::CompiledDesign::default()),
+                paths: Default::default(),
+                compiled_at: "12:41".to_string(),
+                stale: Default::default(),
+                has_unread_sheets: false,
+                unread_paths: Vec::new(),
+                bare_links_missing: Vec::new(),
+            },
+        );
+        assert!(
+            matches!(app.start_rows(project, dir), StartRows::Compiled(_)),
+            "after a compile: the compiled pages"
+        );
     }
 }

@@ -207,19 +207,33 @@ pub(crate) struct DeclaredPage {
     pub file: String,
     /// The title block of the open sheet; `None` reads it from the file.
     pub title: Option<signex_net::SheetTitle>,
+    /// The page's number in the project's sheet numbering, when known.
+    pub number: Option<usize>,
 }
 
-/// The contents entries of `pages`, in the project's order. A page that is
-/// not open takes its title block from `read` (blank when it cannot be
-/// read). The next compile replaces them with the compiled hierarchy.
+/// The contents entries of `pages`: the numbered pages by their number, then
+/// the rest in the project's order, numbered after the highest known number.
+/// A page that is not open takes its title block from `read` (blank when it
+/// cannot be read). The next compile replaces them with the compiled
+/// hierarchy.
 pub(crate) fn declared_contents(
     pages: &[DeclaredPage],
     read: &dyn Fn(&Path) -> Option<signex_net::SheetTitle>,
 ) -> Vec<ContentsEntry> {
-    pages
+    let mut order: Vec<&DeclaredPage> = pages.iter().collect();
+    order.sort_by_key(|page| (page.number.is_none(), page.number));
+    let mut next = pages
         .iter()
-        .enumerate()
-        .map(|(i, page)| {
+        .filter_map(|page| page.number)
+        .max()
+        .unwrap_or(0);
+    order
+        .into_iter()
+        .map(|page| {
+            let number = page.number.unwrap_or_else(|| {
+                next += 1;
+                next
+            });
             let title = page
                 .title
                 .clone()
@@ -233,7 +247,7 @@ pub(crate) fn declared_contents(
                 page.name.clone()
             };
             ContentsEntry {
-                page: i + 1,
+                page: number,
                 sheet,
                 title: title.title,
                 revision: title.revision,

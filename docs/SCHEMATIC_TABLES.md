@@ -73,9 +73,14 @@ Project ▸ Add Table of Contents Sheet (`add_table_of_contents`) writes
 `contents.snxsch` next to the project's root sheet: a heading
 (`<project> · Contents`) and a Project sheets table, filled from the last
 compile when there is one. Before any compile the table lists the pages the
-project lists, in its order, each with its title block (an open sheet's tab,
-else the file read with the write, off the update thread), so the new sheet
-draws its rows at once (mockup row 156); the next compile replaces them with
+project lists, each with its title block (an open sheet's tab, else the file
+read with the write, off the update thread), so the new sheet draws its rows
+at once (mockup row 156). Their page numbers are the project's sheet numbering
+as the Navigator shows it (a sheet placed twice takes its first page), and the
+rows go in that order. When the Navigator shows another project, or a page has
+no number there, that page follows in the project's order, numbered after the
+highest known page, so until the next compile its number can differ from the
+sheet's own. The next compile replaces them with
 the compiled hierarchy, one row per channel. The write is atomic and refuses a file that is
 already there: the name is claimed with a create-new open first, so a file
 made there in the meantime is never overwritten. The new sheet is then added to the project the way Add
