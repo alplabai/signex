@@ -14,7 +14,9 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text};
 
 use super::KindView;
-use super::frame::{self, Crumb, INDENT_1, INDENT_2, RowMark, RowText, SP, TS, Tools};
+use super::frame::{
+    self, Crumb, INDENT_1, INDENT_2, RowDrawing, RowLook, RowMark, RowText, SP, TS, Tools,
+};
 use crate::dock::DockMessage;
 use crate::library::messages::{LibraryMessage, PickerMsg};
 use crate::library::state::{ComponentsPanelRowKey, LibraryState, OpenLibrary};
@@ -109,6 +111,7 @@ fn list<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Element<'a, Doc
     let tokens = &ctx.tokens;
     let filtering = !library.panel_search.trim().is_empty();
     let rows = &library.library_panel.rows;
+    let look = RowLook::of(library.library_panel.row_style, frame::thumb_look(ctx));
     let mut col: Column<Element<'a, DockMessage>> = Column::new().spacing(0).width(Length::Fill);
     let mut shown = 0;
     for lib in &library.open_libraries {
@@ -119,7 +122,7 @@ fn list<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Element<'a, Doc
         let expanded = filtering || library.panel_expanded.contains(&lib.root);
         col = col.push(library_row(lib, expanded, tokens, i18n));
         if expanded {
-            col = col.push(tables(lib, library, filtering, tokens, i18n));
+            col = col.push(tables(lib, library, filtering, look, tokens, i18n));
         }
     }
     if shown == 0 && filtering {
@@ -196,6 +199,7 @@ fn tables<'a>(
     lib: &'a OpenLibrary,
     library: &'a LibraryState,
     filtering: bool,
+    look: RowLook,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, DockMessage> {
@@ -268,7 +272,15 @@ fn tables<'a>(
                 RowText {
                     name: part.internal_pn.as_str().to_owned(),
                     caption: Some(UserText::new(part.description.clone()).into()),
+                    drawing: RowDrawing::Part(
+                        library
+                            .components_panel
+                            .thumbs
+                            .get(&part.symbol_ref)
+                            .cloned(),
+                    ),
                 },
+                look,
                 mark,
                 INDENT_2,
                 lib_msg(PickerMsg::PanelComponentClicked(key)),

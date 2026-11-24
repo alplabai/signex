@@ -230,5 +230,13 @@ define_ids! {
         CTX_FP_ALIGN_TO_GRID = "ctx-fp-align-to-grid";
         CTX_SYMBOL_ROTATE_SELECTION = "ctx-symbol-rotate-selection";
         CTX_SYMBOL_ALIGN_TO_GRID = "ctx-symbol-align-to-grid";
+        // in-variant-context-row
+        CTX_IN_VARIANT = "ctx-in-variant";
+        CTX_IN_VARIANT_PART = "ctx-in-variant-part";
+        CTX_IN_VARIANT_ALTERNATE_PART = "ctx-in-variant-alternate-part";
+        CTX_IN_VARIANT_EDIT_VALUE = "ctx-in-variant-edit-value";
+        CTX_IN_VARIANT_PLANNED = "ctx-in-variant-planned";
+        CTX_IN_VARIANT_SHOW_MANAGER = "ctx-in-variant-show-manager";
+        CTX_IN_VARIANT_NEW = "ctx-in-variant-new";
     }
 }

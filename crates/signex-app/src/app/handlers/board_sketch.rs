@@ -76,7 +76,7 @@ impl Signex {
     /// Re-bake the open bake preview of the board sketch against its
     /// board's nets and components; a closed preview drops its result.
     pub(super) fn refresh_board_sketch_preview(&mut self) {
-        self.sync_board_sketch_router();
+        self.sync_board_sketch_fab();
         let Some(session) = self.interaction_state.board_sketch.as_mut() else {
             return;
         };
@@ -95,10 +95,11 @@ impl Signex {
             .unwrap_or_default()
     }
 
-    /// Copy the router tool diameter of the board's project into the sketch
-    /// session, for its inside-corner check (mockup row 179d): on entry, on every
-    /// sketch edit and when a fab tier or profile sets it. Memory only.
-    pub(crate) fn sync_board_sketch_router(&mut self) {
+    /// Copy the router tool diameter and the min slot of the board's project
+    /// into the sketch session, for its inside-corner and min slot checks
+    /// (mockup row 179d): on entry, on every sketch edit and when a fab tier
+    /// or profile sets them. Memory only.
+    pub(crate) fn sync_board_sketch_fab(&mut self) {
         let Some(path) = self
             .interaction_state
             .board_sketch
@@ -108,12 +109,17 @@ impl Signex {
             return;
         };
         let ds = &self.document_state;
-        let diameter = ds
+        let project = ds
             .document_project(&path)
-            .or_else(|| ds.project_for_path(&path))
-            .and_then(|project| project.data.router_tool_diameter());
+            .or_else(|| ds.project_for_path(&path));
+        let diameter = project.and_then(|project| project.data.router_tool_diameter());
+        let min_slot = project
+            .and_then(|project| project.data.rules.as_ref())
+            .and_then(|rules| rules.min_slot());
         if let Some(session) = self.interaction_state.board_sketch.as_mut() {
-            session.editor.state.sketch_exit.router_tool_diameter = diameter;
+            let exit = &mut session.editor.state.sketch_exit;
+            exit.router_tool_diameter = diameter;
+            exit.min_slot = min_slot;
         }
     }
 
@@ -344,7 +350,7 @@ impl Signex {
         };
         let session = BoardSketchSession::open(&path, board);
         self.interaction_state.board_sketch = Some(session);
-        self.sync_board_sketch_router();
+        self.sync_board_sketch_fab();
         self.sync_board_sketch_origin();
         // The board's own selection is hidden in the mode: no key may act
         // on it unseen.

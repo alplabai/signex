@@ -9,20 +9,36 @@ use super::keyed::keyed;
 use super::layout::{self, Slot};
 use super::look;
 use super::size_sensor::sense_height;
-use super::window::{BROWSER_ROW_HEIGHT, grid_scroll_id, library_key, visible_rows};
+use super::window::{
+    BROWSER_ROW_HEIGHT, BROWSER_THUMB_ROW_HEIGHT, grid_scroll_id, library_key, visible_rows_at,
+};
 use super::*;
 use crate::library::dangling::DanglingSweep;
+use crate::panels::components_panel::thumbs::{SymbolThumbs, ThumbLook};
 use iced::widget::column;
 use signex_library::RefSlot;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
+/// Width of the tile column of thumbnail rows.
+const TILE_SLOT_W: f32 = crate::library::panel::THUMB_TILE_W + 2.0 * layout::CELL_PAD_X;
+
 /// The read-only caches the grid cells draw from.
 pub(super) struct GridCaches<'a> {
     pub(super) dangling: &'a DanglingSweep,
     pub(super) prices: &'a super::price::PriceView<'a>,
     pub(super) names: super::names::PrimitiveNames<'a>,
+    /// Thumbnail rows (mockup rows 118 and 119); `None` draws compact rows.
+    pub(super) thumbs: Option<RowThumbs<'a>>,
+}
+
+/// What the tiles of thumbnail rows draw: each row's symbol, from the
+/// shared read-off-thread cache, in the schematic canvas look.
+#[derive(Clone, Copy)]
+pub(super) struct RowThumbs<'a> {
+    pub(super) symbols: &'a SymbolThumbs,
+    pub(super) look: ThumbLook,
 }
 
 #[allow(
@@ -44,7 +60,13 @@ pub(super) fn view_grid<'a>(
         dangling,
         prices,
         names,
+        thumbs,
     } = caches;
+    let row_h = if thumbs.is_some() {
+        BROWSER_THUMB_ROW_HEIGHT
+    } else {
+        BROWSER_ROW_HEIGHT
+    };
     let muted = theme_ext::text_secondary(tokens);
     let _text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);
@@ -53,7 +75,7 @@ pub(super) fn view_grid<'a>(
     let lib_pb: std::path::PathBuf = library_path.to_path_buf();
 
     // One slot list drives header and rows, so widths and order agree.
-    let compact = layout::graphite_columns(columns);
+    let compact = layout::graphite_columns(columns, |kind| browser.column_shown(&kind.sort_key()));
     let columns = compact.as_slice();
     let slots = layout::slots(columns, true);
     let fit = |s: String, w: f32| layout::ellipsize(s, w, BROWSER_TEXT_SIZE);
@@ -62,6 +84,9 @@ pub(super) fn view_grid<'a>(
     let header_row = {
         let mut r: iced::widget::Row<Element<'a, LibraryMessage>> =
             iced::widget::Row::new().spacing(0);
+        if thumbs.is_some() {
+            r = r.push(Space::new().width(Length::Fixed(TILE_SLOT_W)).boxed());
+        }
         let active_sort = browser.sort_by.as_ref();
         for slot in &slots {
             let c = match slot {
@@ -87,14 +112,7 @@ pub(super) fn view_grid<'a>(
             // appended to the label. Other columns render plain so the
             // user can spot the sort target at a glance.
             let column_key = c.kind.sort_key();
-            let caption = match &c.kind {
-                ColumnKind::Parameter(_) => {
-                    crate::library::range_filter::parameter_caption(i18n, &c.label)
-                }
-                ColumnKind::Symbol => t!(i18n, ids::LIBRARY_BROWSER_COLUMN_SYM).to_string(),
-                ColumnKind::Footprint => t!(i18n, ids::LIBRARY_BROWSER_COLUMN_FPT).to_string(),
-                _ => c.label.clone(),
-            };
+            let caption = c.caption(i18n);
             let label_text = match active_sort {
                 Some(s) if s.key == column_key => {
                     let arrow = if s.descending { "▼" } else { "▲" };
@@ -174,11 +192,11 @@ pub(super) fn view_grid<'a>(
         // Window: only the rows near the viewport get widgets; spacers of
         // the exact skipped height stand in for the rest (#1355).
         let scroll = browser.grid_scroll;
-        let window = visible_rows(scroll, rows.len());
+        let window = visible_rows_at(scroll, rows.len(), row_h);
         if window.start > 0 {
             col = col.push(
                 Space::new()
-                    .height(Length::Fixed(window.start as f32 * BROWSER_ROW_HEIGHT))
+                    .height(Length::Fixed(window.start as f32 * row_h))
                     .boxed(),
             );
         }
@@ -202,6 +220,26 @@ pub(super) fn view_grid<'a>(
             // The Lifecycle pill carries the state; no leading dot repeats it.
             let mut data_row: iced::widget::Row<Element<'a, LibraryMessage>> =
                 iced::widget::Row::new().spacing(0);
+            // A thumbnail row starts with the part's symbol; its cells sit
+            // on the row's middle.
+            if let Some(thumbs) = thumbs {
+                let drawing = crate::library::panel::RowDrawing::Part(
+                    thumbs.symbols.get(&r.symbol_ref).cloned(),
+                );
+                data_row = data_row
+                    .height(Length::Fill)
+                    .align_y(iced::Alignment::Center)
+                    .push(
+                        container(crate::library::panel::row_tile(
+                            drawing,
+                            thumbs.look,
+                            tokens,
+                        ))
+                        .width(Length::Fixed(TILE_SLOT_W))
+                        .center_x(Length::Fixed(TILE_SLOT_W))
+                        .boxed(),
+                    );
+            }
             for slot in &slots {
                 let c = match slot {
                     Slot::Column(c) => *c,
@@ -451,7 +489,7 @@ pub(super) fn view_grid<'a>(
             let row_container = container(data_row)
                 .padding([0.0, SP.s])
                 .width(Length::Fill)
-                .height(Length::Fixed(BROWSER_ROW_HEIGHT))
+                .height(Length::Fixed(row_h))
                 .style(move |_: &Theme| iced::widget::container::Style {
                     background: bg_color,
                     border: row_border,
@@ -473,9 +511,7 @@ pub(super) fn view_grid<'a>(
         if window.end < rows.len() {
             col = col.push(
                 Space::new()
-                    .height(Length::Fixed(
-                        (rows.len() - window.end) as f32 * BROWSER_ROW_HEIGHT,
-                    ))
+                    .height(Length::Fixed((rows.len() - window.end) as f32 * row_h))
                     .boxed(),
             );
         }

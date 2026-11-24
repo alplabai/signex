@@ -137,8 +137,36 @@ pub(super) fn units_row<'a>(cx: Ctx<'a, '_>) -> Element<'a, PanelMsg> {
     )
 }
 
+/// The courtyard's Line width (mockup row 124): refused text stays in the
+/// field with its reason; live whether or not the courtyard is auto-fit.
+fn courtyard_line_width_row<'a>(cx: Ctx<'a, '_>) -> Element<'a, PanelMsg> {
+    use super::super::pad::{Shown, number_input, with_refusals};
+    use crate::library::editor::footprint::COURTYARD_LINE_WIDTH_BUFFER;
+    use crate::panels::FootprintFeatureEdit;
+    let stored = cx.fp.generated.courtyard_line_width_mm;
+    let text = super::generated_sections::live_text(
+        cx.fp.numeric_buffers.get(COURTYARD_LINE_WIDTH_BUFFER),
+        stored,
+        |v| v > 0.0,
+    );
+    let width = Shown::from_buffer(text, stored.to_string(), true, |_| true);
+    let row = super::super::rows::control_row(
+        &t!(cx.i18n, ids::EDITORS_FP_PROPS_LINE_WIDTH).into_string(),
+        number_input(
+            &width,
+            |v| {
+                PanelMsg::FpEditorGeneratedFeature(FootprintFeatureEdit::CourtyardLineWidthTyped(v))
+            },
+            cx.tokens,
+        ),
+        cx.palette.muted,
+    );
+    with_refusals(row, &[width.refusal], cx.tokens, cx.i18n)
+}
+
 /// Courtyard & Silkscreen: the generated courtyard as an enable header,
-/// its size at the header's right and its fixed expansion below.
+/// its size at the header's right and its fixed expansion below; then the
+/// courtyard line width, live with the switch off.
 fn courtyard_section<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     cx: Ctx<'a, '_>,
@@ -183,9 +211,26 @@ fn courtyard_section<'a>(
     )
     .on_toggle(|_| PanelMsg::FpEditorToggleAutoFitCourtyard)
     .view(enable_section_style(tokens), body.boxed());
-    let Some([x0, y0, x1, y1]) = fp.courtyard_extent_mm else {
-        return col.push(courtyard);
+    // The line width strokes a hand-drawn courtyard too, so it stays live
+    // under the switch (maintainer decision 2026-11-24).
+    let header = match fp.courtyard_extent_mm {
+        Some(extent) => courtyard_with_size(courtyard, extent, cx),
+        None => courtyard,
     };
+    col.push(header).push(courtyard_line_width_row(cx))
+}
+
+/// The courtyard section with its size on the header line.
+fn courtyard_with_size<'a>(
+    courtyard: Element<'a, PanelMsg>,
+    [x0, y0, x1, y1]: [f64; 4],
+    cx: Ctx<'a, '_>,
+) -> Element<'a, PanelMsg> {
+    use super::super::illustration::linked_field;
+    let Ctx {
+        fp, tokens, i18n, ..
+    } = cx;
+    let hover = &fp.illustration_hover;
     let size = t!(
         i18n,
         ids::EDITORS_FP_PROPS_COURTYARD_SIZE,
@@ -204,5 +249,5 @@ fn courtyard_section<'a>(
         })
         .width(Length::Fill)
         .align_x(iced::alignment::Horizontal::Right);
-    col.push(stack![courtyard, size].width(Length::Fill).boxed())
+    stack![courtyard, size].width(Length::Fill).boxed()
 }

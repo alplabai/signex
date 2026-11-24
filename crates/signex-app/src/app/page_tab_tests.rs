@@ -72,6 +72,7 @@ fn page_kinds_are_exactly_the_project_pages() {
     for kind in [
         TabKind::Project(id),
         TabKind::Rules(id),
+        TabKind::PinTable,
         TabKind::Schematic,
         TabKind::Pcb,
         TabKind::LibraryBrowser(PathBuf::new()),

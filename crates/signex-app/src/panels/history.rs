@@ -21,13 +21,15 @@ use signex_widgets::{button, text};
 use super::{PanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale};
 
+mod diff_view;
 mod model;
 mod repo_view;
 
 pub use model::{
-    HistoryBranchScope, HistoryCommitMsg, HistoryFilter, HistoryFilterMsg, HistoryPanelMsg,
-    HistoryRepoEvent, HistoryRepoView, HistorySwitcherMsg, HistoryUi, RefPrompt, RefPromptKind,
-    can_create_branch, changed_files, document_to_show, visible_commits,
+    HistoryBranchScope, HistoryCommitMsg, HistoryDiff, HistoryFilter, HistoryFilterMsg,
+    HistoryPanelMsg, HistoryRepoEvent, HistoryRepoView, HistorySwitcherMsg, HistoryUi, RefPrompt,
+    RefPromptKind, can_create_branch, changed_files, document_to_show, file_to_diff,
+    visible_commits,
 };
 
 /// Default type / spacing scales; equal to the old literals at the default size.

@@ -4,6 +4,7 @@
 /// values carry the field's text; a refused one stays in the field.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FootprintFeatureEdit {
+    CourtyardLineWidthTyped(String),
     SilkOutlineToggled,
     SilkLineWidthTyped(String),
     PadClearanceTyped(String),

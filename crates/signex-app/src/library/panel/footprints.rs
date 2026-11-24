@@ -8,7 +8,7 @@ use iced::{Element, Length, Widget};
 use signex_i18n::{ids, t};
 
 use super::KindView;
-use super::frame::{self, Crumb, RowMark, RowText, SP, Tools, panel};
+use super::frame::{self, Crumb, RowDrawing, RowLook, RowMark, RowText, SP, Tools, panel};
 use crate::dock::DockMessage;
 use crate::library::state::LibraryState;
 use crate::panels::{FootprintEditorPanelContext, FootprintLibInternalRow, PanelContext, PanelMsg};
@@ -70,7 +70,12 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
     KindView {
         crumb,
         tools,
-        list: list(fp, &library.panel_search, ctx),
+        list: list(
+            fp,
+            &library.panel_search,
+            RowLook::of(library.library_panel.row_style, frame::thumb_look(ctx)),
+            ctx,
+        ),
     }
 }
 
@@ -99,6 +104,7 @@ fn shows(row: &FootprintLibInternalRow, needle: &str, i18n: &signex_i18n::I18n) 
 fn list<'a>(
     fp: &'a FootprintEditorPanelContext,
     filter: &str,
+    look: RowLook,
     ctx: &'a PanelContext,
 ) -> Element<'a, DockMessage> {
     let i18n = &*ctx.i18n;
@@ -122,7 +128,9 @@ fn list<'a>(
             RowText {
                 name: row.name.clone(),
                 caption: Some(t!(i18n, ids::LIBRARY_PANEL_PADS, "count" => row.pad_count).into()),
+                drawing: RowDrawing::Footprint(row.tile.clone()),
             },
+            look,
             mark,
             0.0,
             panel(PanelMsg::FpLibrarySelectInternal(idx)),

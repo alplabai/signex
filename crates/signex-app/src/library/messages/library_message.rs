@@ -686,6 +686,16 @@ pub enum LibraryMessage {
     BrowserMoreMenuToggled {
         library_path: PathBuf,
     },
+    /// The column button at the right of the count line was pressed: the
+    /// column chooser opened or closed (mockup row 118).
+    BrowserColumnsMenuToggled {
+        library_path: PathBuf,
+    },
+    /// A column was turned on or off in the chooser, by its sort key.
+    BrowserColumnToggled {
+        library_path: PathBuf,
+        column_key: String,
+    },
 }
 
 /// The drawing a placed symbol is switched to, read off-thread: the

@@ -77,4 +77,34 @@ define_ids! {
     BOARD_SKETCH_BAKE_NOTHING = "board-sketch-bake-nothing";
     BOARD_SKETCH_BAKE_UNSOLVED = "board-sketch-bake-unsolved";
     BOARD_SKETCH_BAKE_CLOSE_HINT = "board-sketch-bake-close-hint";
+    // dxf-import-check-step
+    BOARD_SKETCH_DXF_NEXT = "board-sketch-dxf-next";
+    BOARD_SKETCH_DXF_PROBLEMS = "board-sketch-dxf-problems";
+    BOARD_SKETCH_DXF_NO_PROBLEMS = "board-sketch-dxf-no-problems";
+    BOARD_SKETCH_DXF_GAP = "board-sketch-dxf-gap";
+    BOARD_SKETCH_DXF_OPEN_END = "board-sketch-dxf-open-end";
+    BOARD_SKETCH_DXF_OVERLAP = "board-sketch-dxf-overlap";
+    BOARD_SKETCH_DXF_CIRCLES_CLOSED = "board-sketch-dxf-circles-closed";
+    BOARD_SKETCH_DXF_HEAL_UNDER = "board-sketch-dxf-heal-under";
+    BOARD_SKETCH_DXF_HEAL = "board-sketch-dxf-heal";
+    BOARD_SKETCH_DXF_AS_IS = "board-sketch-dxf-as-is";
+    BOARD_SKETCH_DXF_RESULT_TITLE = "board-sketch-dxf-result-title";
+    BOARD_SKETCH_DXF_RESULT_OTHERS = "board-sketch-dxf-result-others";
+    BOARD_SKETCH_DXF_RESULT_HEALED = "board-sketch-dxf-result-healed";
+    BOARD_SKETCH_DXF_RESULT_AS_IS = "board-sketch-dxf-result-as-is";
+    BOARD_SKETCH_DXF_RESULT_CONSTRAINTS = "board-sketch-dxf-result-constraints";
+    BOARD_SKETCH_DXF_RESULT_UNLINKED = "board-sketch-dxf-result-unlinked";
+    BOARD_SKETCH_DXF_DONE = "board-sketch-dxf-done";
+    BOARD_SKETCH_DXF_MARK_GAP = "board-sketch-dxf-mark-gap";
+    BOARD_SKETCH_DXF_MARK_OVERLAP = "board-sketch-dxf-mark-overlap";
+    BOARD_SKETCH_DXF_LAYERS = "board-sketch-dxf-layers";
+    BOARD_SKETCH_DXF_LAYER_TARGET = "board-sketch-dxf-layer-target";
+    BOARD_SKETCH_DXF_LAYER_SKIPPED = "board-sketch-dxf-layer-skipped";
+    // min-slot
+    BOARD_SKETCH_CHECK_MIN_SLOT = "board-sketch-check-min-slot";
+    BOARD_SKETCH_CHECK_NAME_MIN_SLOT = "board-sketch-check-name-min-slot";
+    BOARD_SKETCH_CHECK_SKIPPED_MIN_SLOT = "board-sketch-check-skipped-min-slot";
+    BOARD_SKETCH_CHECK_SLOT_NARROW = "board-sketch-check-slot-narrow";
+    BOARD_SKETCH_FAB_MIN_SLOT = "board-sketch-fab-min-slot";
+    BOARD_SKETCH_FAB_MIN_SLOT_NONE = "board-sketch-fab-min-slot-none";
 }

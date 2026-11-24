@@ -27,12 +27,15 @@ use crate::app::command::{CommandArgs, CommandContext, InvocationContext, bridge
 use crate::keymap::{AppCommandId, CatalogTextExt};
 use std::collections::BTreeSet;
 
-use super::menus::{CanvasSelection, CanvasShortcuts, canvas_menu_entries, unions_entries};
+use super::menus::{
+    CanvasSelection, CanvasShortcuts, MenuVariant, canvas_menu_entries, canvas_menu_with_variant,
+    unions_entries,
+};
 use super::project_tree::library::library_add_new_entries;
 use super::project_tree::planned::planned_entries as project_planned_entries;
 use super::submenu::{
-    add_new_entries, align_entries, arrange_entries, part_actions_entries, place_entries,
-    planned_entries, sheet_actions_entries,
+    add_new_entries, align_entries, arrange_entries, in_variant_entries, part_actions_entries,
+    place_entries, planned_entries, sheet_actions_entries,
 };
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
@@ -63,6 +66,15 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     ("Comment...", "planned, no behaviour"),
     ("Pin Mapping...", "planned, no behaviour"),
     ("Supplier Links...", "planned, no behaviour"),
+    // Canvas: the In variant flyout (mockup row 62). The per-variant edits
+    // are not built; the last two open the project's Variant Manager, which
+    // the palette cannot name.
+    ("Fitted", "planned, no behaviour"),
+    ("Not fitted", "planned, no behaviour"),
+    ("Alternate part…", "planned, no behaviour"),
+    ("Edit value for this variant…", "planned, no behaviour"),
+    ("Show in Variant Manager", "project-addressed"),
+    ("New variant…", "project-addressed"),
     // Project tree: every action is addressed by a tree key or path the
     // palette cannot supply.
     (
@@ -304,6 +316,27 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
         for bits in 0..16u8 {
             let (app, selection, derived_key) = app_in_selection(profile, bits);
             let ctx = app.command_context(None);
+            // Mockup row 62: a project with a variant adds In variant ›.
+            let variant = MenuVariant {
+                project_id: app.document_state.projects[0].id,
+                name: "Lite".to_string(),
+            };
+            let rows = canvas_menu_with_variant(
+                signex_i18n::I18n::en_us_ref(),
+                TID,
+                selection,
+                None,
+                derived_key.clone(),
+                &sc,
+                Some(&variant),
+            );
+            check_rows(
+                &format!("canvas with a variant {profile} {selection:?}"),
+                &rows,
+                &app,
+                &ctx,
+                &mut walk,
+            );
             // A right-click on an object adds Find Similar and Highlight
             // Net; a net highlight adds Clear Filter (Graphite mockup #62).
             for (hit_object, net_highlighted) in [(false, false), (true, true)] {
@@ -341,6 +374,8 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
                 ),
                 // Mockup row 158: the Unions flyout.
                 ("unions", unions_entries(i18n, selection, &hint)),
+                // Mockup row 62: the In variant flyout.
+                ("in variant", in_variant_entries(i18n, &variant, Some("R1"))),
             ];
             for (name, rows) in flyouts {
                 check_rows(

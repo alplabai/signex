@@ -115,4 +115,15 @@ define_ids! {
     PANELS_STUB_TODO = "panels-stub-todo";
     PANELS_STUB_WIKI = "panels-stub-wiki";
     PANELS_STUB_LIBRARY = "panels-stub-library";
+    // history-show-differences
+    PANELS_HISTORY_DIFF_CLOSE = "panels-history-diff-close";
+    PANELS_HISTORY_DIFF_LOADING = "panels-history-diff-loading";
+    PANELS_HISTORY_DIFF_FAILED = "panels-history-diff-failed";
+    PANELS_HISTORY_DIFF_COUNTS = "panels-history-diff-counts";
+    PANELS_HISTORY_DIFF_BINARY = "panels-history-diff-binary";
+    PANELS_HISTORY_DIFF_NO_LINES = "panels-history-diff-no-lines";
+    PANELS_HISTORY_DIFF_TRUNCATED = "panels-history-diff-truncated";
+    PANELS_HISTORY_DIFF_HUNK = "panels-history-diff-hunk";
+    PANELS_HISTORY_DIFF_ADDED_SIGN = "panels-history-diff-added-sign";
+    PANELS_HISTORY_DIFF_REMOVED_SIGN = "panels-history-diff-removed-sign";
 }

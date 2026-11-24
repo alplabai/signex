@@ -13,13 +13,14 @@ use signex_widgets::branch_switcher::{
     branch_popover, chip_name,
 };
 use signex_widgets::chips::{ChipMetrics, ChipStyle, chip};
-use signex_widgets::history_graph::{commit_detail, more_button, small_button};
+use signex_widgets::history_graph::{commit_detail_picking, more_button, small_button};
 use signex_widgets::theme_ext::TypeScale as GraphScale;
 use signex_widgets::{HistoryGraph, HistoryGraphStyle, Label, button, text, text_input, tooltip};
 
+use super::diff_view;
 use super::model::{
     HistoryBranchScope, HistoryCommitMsg, HistoryFilterMsg, HistoryPanelMsg, HistoryRepoView,
-    HistorySwitcherMsg, RefPromptKind, can_create_branch, document_to_show,
+    HistorySwitcherMsg, RefPromptKind, can_create_branch, document_to_show, file_to_diff,
 };
 use crate::panels::click_away::click_away_backdrop;
 use crate::panels::{PanelContext, PanelMsg, form_look, panel_scrollable};
@@ -261,8 +262,9 @@ fn graph<'a>(ctx: &'a PanelContext, s: &HistoryGraphStyle) -> Element<'a, PanelM
     graph.view()
 }
 
-/// The buttons of the strip: Show on board / sheet, Restore (or its confirm
-/// pair) when the commit holds the file, and the more button.
+/// The buttons of the strip: Show differences…, Show on board / sheet,
+/// Restore (or its confirm pair) when the commit holds the file, and the
+/// more button.
 fn detail_actions<'a>(
     ctx: &'a PanelContext,
     repo: &'a HistoryRepoView,
@@ -271,13 +273,22 @@ fn detail_actions<'a>(
 ) -> Vec<Element<'a, PanelMsg>> {
     let state = &ctx.history;
     let i18n: &I18n = &ctx.i18n;
+    let differences = file_to_diff(
+        &state.ui.files,
+        state.ui.picked_file.as_deref(),
+        &repo.tracked,
+    )
+    .map(|_| commit_msg(HistoryCommitMsg::ShowDifferencesPressed));
     let show = document_to_show(&state.ui.files, &repo.tracked)
         .map(|path| commit_msg(HistoryCommitMsg::ShowDocumentPressed(path)));
-    let mut actions = vec![small_button(
-        s,
-        t!(i18n, ids::PANELS_HISTORY_SHOW_ON_BOARD),
-        show,
-    )];
+    let mut actions = vec![
+        small_button(
+            s,
+            t!(i18n, ids::PANELS_HISTORY_SHOW_DIFFERENCES),
+            differences,
+        ),
+        small_button(s, t!(i18n, ids::PANELS_HISTORY_SHOW_ON_BOARD), show),
+    ];
     if repo.restorable.contains(sha) {
         let restore = Some(PanelMsg::HistoryRestoreClicked {
             sha: sha.to_owned(),
@@ -374,10 +385,26 @@ fn detail<'a>(
     let sha = state.ui.selected.as_deref()?;
     let commit = repo.commits.iter().find(|c| c.sha == sha)?;
     let actions = detail_actions(ctx, repo, sha, s);
-    let strip = commit_detail(s, &ctx.i18n, commit, &state.ui.files, actions);
+    let picked = file_to_diff(
+        &state.ui.files,
+        state.ui.picked_file.as_deref(),
+        &repo.tracked,
+    );
+    let strip = commit_detail_picking(
+        s,
+        &ctx.i18n,
+        commit,
+        &state.ui.files,
+        picked.as_deref(),
+        |path| commit_msg(HistoryCommitMsg::FilePicked(path)),
+        actions,
+    );
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().width(Length::Fill).push(strip);
     if let Some(more) = more_row(ctx, s) {
         col = col.push(more);
+    }
+    if let Some(diff) = state.ui.diff.as_ref().filter(|d| d.sha == sha) {
+        col = col.push(diff_view::view(ctx, diff, s));
     }
     Some(col.boxed())
 }

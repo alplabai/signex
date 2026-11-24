@@ -35,7 +35,10 @@ mod silk_marker;
 mod tests;
 
 use format_token::{FOOTPRINT_FILE_VERSION, SNXFPT_FORMAT_V1_1};
-pub use generated::{DEFAULT_PAD_CLEARANCE_MM, DEFAULT_SILK_LINE_WIDTH_MM, GeneratedFeatures};
+pub use generated::{
+    DEFAULT_COURTYARD_LINE_WIDTH_MM, DEFAULT_PAD_CLEARANCE_MM, DEFAULT_SILK_LINE_WIDTH_MM,
+    GeneratedFeatures,
+};
 pub use load_repair::LoadRepair;
 pub use mount_style::MountStyle;
 pub use pad::*;

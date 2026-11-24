@@ -399,6 +399,81 @@ mod tests {
         assert_eq!(clearance_checked(&DrcPanel::default()), "0.2");
     }
 
+    const DOCK: iced::Size = iced::Size::new(300.0, 1200.0);
+
+    /// A panel context whose DRC panel has not run and reads `clearance`.
+    fn idle_ctx(clearance: &str) -> (PanelContext, DrcPanel) {
+        let (app, _boot) = crate::app::Signex::new();
+        let drc = DrcPanel {
+            default_clearance_mm: Some(clearance.into()),
+            ..DrcPanel::default()
+        };
+        (app.document_state.panel_ctx.clone(), drc)
+    }
+
+    fn laid_out(element: Element<'_, PanelMsg>) -> Vec<crate::layout_probe::LaidOutText> {
+        crate::layout_probe::lay_out_texts(element, DOCK)
+            .into_iter()
+            .map(|t| crate::layout_probe::LaidOutText {
+                text: t.text.replace(['\u{2068}', '\u{2069}'], ""),
+                ..t
+            })
+            .collect()
+    }
+
+    /// Mockup row 87 (#2810): under the idle hint, an info banner states the
+    /// clearance DRC checks with and carries "Set it in Rules" after it,
+    /// both inside the dock.
+    #[test]
+    fn the_idle_top_ends_with_the_default_clearance_banner_and_its_link() {
+        let (ctx, drc) = idle_ctx("0.2");
+        let shown = laid_out(idle_top(&ctx, &drc));
+        let find = |label: &str| crate::layout_probe::find(&shown, label).bounds;
+        let hint = find(&t!(ctx.i18n, ids::DRC_IDLE).into_string());
+        let words = find("No clearance rule set on this board; checked with 0.2 mm.");
+        let set = find("Set it in Rules");
+        assert!(words.y > hint.y + hint.height, "{words:?} under {hint:?}");
+        assert!(set.y >= words.y, "the link follows the words: {set:?}");
+        for at in [words, set] {
+            assert!(at.x >= 0.0 && at.x + at.width <= DOCK.width, "{at:?}");
+        }
+        assert_eq!(
+            shown.last().map(|t| t.text.as_str()),
+            Some("Set it in Rules"),
+            "{shown:?}"
+        );
+
+        let without = DrcPanel::default();
+        let shown = laid_out(idle_top(&ctx, &without));
+        assert!(
+            !shown.iter().any(|t| t.text == "Set it in Rules"),
+            "{shown:?}"
+        );
+    }
+
+    /// Mockup row 87: "Set it in Rules" opens the Rules tab on Clearance.
+    #[test]
+    fn set_it_in_rules_opens_the_clearance_rule() {
+        let (ctx, drc) = idle_ctx("0.2");
+        let banner = default_clearance(&ctx, &drc).expect("the banner");
+        let sent = crate::layout_probe::messages_on_click(banner, DOCK, "Set it in Rules");
+        let opened: Vec<&super::super::DrcPanelMsg> = sent
+            .iter()
+            .filter_map(|m| match m {
+                PanelMsg::Drc(msg) => Some(msg),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            opened,
+            [&super::super::DrcPanelMsg::BaseRuleOpened(
+                BaseRule::Clearance
+            )],
+            "{sent:?}"
+        );
+        assert_eq!(sent.len(), 1, "{sent:?}");
+    }
+
     #[test]
     fn the_idle_list_shows_each_rule_with_its_state() {
         let (app, _boot) = crate::app::Signex::new();

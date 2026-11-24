@@ -450,6 +450,14 @@ pub enum ArrayParamField {
     /// arrays. Empty string clears the depopulation entirely (set
     /// `Option::None` on the array).
     MaskExpr,
+    /// The Numbering Mask (mockup row 126): the pad numbers a Grid or Polar
+    /// pattern skips, written to its suppressed instances.
+    NumberMask,
+}
+
+/// The `numeric_buffers` key of a pattern's Numbering Mask text.
+pub fn number_mask_buffer_key(array_id: signex_sketch::array::ArrayId) -> String {
+    format!("pattern.{}.number_mask", array_id.0)
 }
 
 /// v0.16.4 — discrete bit identifier for [`KeepoutSummary`] flags.
@@ -524,6 +532,9 @@ pub struct FootprintLibInternalRow {
     pub is_active: bool,
     /// Why Place cannot put this footprint on a board; `None` when it can.
     pub place_block: Option<super::FootprintPlaceBlock>,
+    /// The footprint's pads for a thumbnail row of the Library panel
+    /// (mockup row 119); built only while thumbnail rows are on.
+    pub tile: Option<std::sync::Arc<crate::library::panel::FootprintTile>>,
 }
 
 /// Editor mode mirror — kept in this crate so the panel doesn't need
@@ -774,6 +785,9 @@ pub struct BoardSketchProps {
     /// The project's router tool diameter in mm (mockup row 179d), for the Fab
     /// profile group; `None` when its fab profile names none.
     pub router_tool_diameter: Option<f64>,
+    /// The project's min slot in mm (mockup row 179d), for the Fab profile
+    /// group; `None` when its fab profile names none.
+    pub min_slot: Option<f64>,
     /// The radius Add fillets applies; `None` when no failing corner can
     /// take a fillet (mockup row 179d).
     pub fillet_radius: Option<f64>,

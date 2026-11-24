@@ -270,6 +270,9 @@ impl Signex {
             HarnessPanelMsg::SheetEntryTypePicked { pin, harness_type } => {
                 self.set_harness_entry_type(pin, harness_type);
             }
+            HarnessPanelMsg::AddEntryClicked { connector } => {
+                self.add_harness_entry(connector);
+            }
         }
         self.refresh_harness_panel();
         // A rebuild for an earlier change must not take the refused text.
@@ -322,6 +325,34 @@ impl Signex {
         }
         self.update_harness_connector(c);
         None
+    }
+
+    /// The + of the Entries header: one entry after the last, named as the
+    /// Harness Entry tool names one, as one undo step of its own.
+    fn add_harness_entry(&mut self, id: uuid::Uuid) -> bool {
+        let definitions = self.harness_definitions_in_view();
+        let Some((entry, index)) = self.document_state.edit_engine().and_then(|e| {
+            let c = e.document().harness.connector(id)?;
+            let entry = signex_types::schematic::HarnessEntry {
+                uuid: uuid::Uuid::now_v7(),
+                name: signex_types::schematic::next_entry_name(c, &definitions),
+            };
+            Some((entry, c.entries.len()))
+        }) else {
+            return false;
+        };
+        self.end_directive_edit_run();
+        let done = self.apply_engine_command(
+            signex_engine::Command::PlaceHarnessEntry {
+                connector_id: id,
+                entry,
+                index,
+            },
+            false,
+            true,
+        );
+        self.end_directive_edit_run();
+        done
     }
 
     /// Apply `edit` to the project's definitions as one step of the project's

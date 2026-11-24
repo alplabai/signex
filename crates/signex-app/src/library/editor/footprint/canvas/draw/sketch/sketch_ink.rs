@@ -16,7 +16,7 @@ use crate::render_config::to_iced;
 
 /// Colours of the sketch overlay.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) struct SketchInk {
+pub(crate) struct SketchInk {
     /// Under-constrained geometry.
     pub under: Color,
     /// Fully constrained geometry.
@@ -59,7 +59,7 @@ impl SketchInk {
     /// shared sketcher block's `C` palette). The pills take the Graphite
     /// Dark chrome tokens, the ground the board is painted in; the
     /// constraint-state hues and the label ink are the mockup's own.
-    pub(super) fn board() -> Self {
+    pub(crate) fn board() -> Self {
         let chrome = theme_tokens(ThemeId::GraphiteDark);
         let token =
             |slot: Option<signex_types::theme::Color>, fallback| to_iced(&slot.unwrap_or(fallback));

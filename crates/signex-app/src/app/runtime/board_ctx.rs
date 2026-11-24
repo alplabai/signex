@@ -51,11 +51,13 @@ impl Signex {
         ctx.pcb_layers = panel;
     }
 
-    /// The PCB panel's nets of the active board, with the unrouted counts
-    /// once the ratsnest holds this revision's.
+    /// The PCB panel's nets of the active board, with its differential
+    /// pairs and the unrouted counts once the ratsnest holds this revision's.
     pub(crate) fn pcb_nets_summary(&self) -> Option<crate::panels::PcbNetsSummary> {
-        let summary = crate::panels::PcbNetsSummary::of(self.active_pcb_snapshot()?);
+        let board = self.active_pcb_snapshot()?;
         let path = self.active_tab_path()?;
+        let summary = crate::panels::PcbNetsSummary::of(board)
+            .with_pairs(board, self.board_net_classes(&path));
         let revision = self.board_revision(&path);
         let ratsnest = &self.interaction_state.pcb_ratsnest;
         Some(match ratsnest.counts_for(&path, revision) {

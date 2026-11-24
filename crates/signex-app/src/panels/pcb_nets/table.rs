@@ -1,5 +1,6 @@
 //! The Nets mode of the PCB panel (mockup row 106): filter, chips, the
-//! Net / Class / Nodes / Length table and, under it, the selected net.
+//! Net / Class / Nodes / Length table and, under it, the selected net; and
+//! the page every mode shares (list, detail, foot).
 
 use iced::alignment::Horizontal;
 use iced::widget::{Column, Row, column, container, row, scrollable};
@@ -23,7 +24,7 @@ const LENGTH_W: f32 = TS.body * 4.5;
 const LIST_PORTION: u16 = 3;
 const DETAIL_PORTION: u16 = 2;
 
-fn chip_style(tokens: &ThemeTokens) -> ChipStyle {
+pub(super) fn chip_style(tokens: &ThemeTokens) -> ChipStyle {
     let r = resolve(tokens);
     ChipStyle {
         fill: r.field,
@@ -181,6 +182,18 @@ fn net_row<'a>(ctx: &'a PanelContext, net: &'a PcbNetRow) -> Element<'a, PanelMs
         .boxed()
 }
 
+/// A note in a list's place: why it is empty.
+pub(super) fn note<'a>(ctx: &PanelContext, id: MessageId) -> Element<'a, PanelMsg> {
+    container(
+        text(t!(&*ctx.i18n, id))
+            .size(TS.body)
+            .color(resolve(&ctx.tokens).ink3),
+    )
+    .padding([SP.m, SP.l])
+    .width(Length::Fill)
+    .boxed()
+}
+
 /// The rows, or why there are none.
 fn rows<'a>(ctx: &'a PanelContext, summary: &'a PcbNetsSummary) -> Column<Element<'a, PanelMsg>> {
     let i18n = &*ctx.i18n;
@@ -192,15 +205,7 @@ fn rows<'a>(ctx: &'a PanelContext, summary: &'a PcbNetsSummary) -> Column<Elemen
         } else {
             ids::PANELS_PCB_NETS_NO_MATCH
         };
-        list = list.push(
-            container(
-                text(t!(i18n, id))
-                    .size(TS.body)
-                    .color(resolve(&ctx.tokens).ink3),
-            )
-            .padding([SP.m, SP.l])
-            .boxed(),
-        );
+        list = list.push(note(ctx, id));
     }
     for net in shown {
         list = list.push(net_row(ctx, net));
@@ -209,20 +214,63 @@ fn rows<'a>(ctx: &'a PanelContext, summary: &'a PcbNetsSummary) -> Column<Elemen
     list
 }
 
-fn footer<'a>(ctx: &'a PanelContext, summary: &PcbNetsSummary) -> Element<'a, PanelMsg> {
+/// A mode's foot line: its counts.
+pub(super) fn foot<'a>(ctx: &PanelContext, label: Label<'a>) -> Element<'a, PanelMsg> {
     container(
-        text(t!(
-            &*ctx.i18n,
-            ids::PANELS_PCB_NETS_SUMMARY,
-            "nets" => summary.nets.len(),
-            "pads" => summary.pads
-        ))
-        .size(TS.caption)
-        .color(resolve(&ctx.tokens).ink3),
+        text(label)
+            .size(TS.caption)
+            .color(resolve(&ctx.tokens).ink3),
     )
     .padding([SP.m, SP.l])
     .width(Length::Fill)
     .boxed()
+}
+
+fn footer<'a>(ctx: &'a PanelContext, summary: &PcbNetsSummary) -> Element<'a, PanelMsg> {
+    let counts = t!(
+        &*ctx.i18n,
+        ids::PANELS_PCB_NETS_SUMMARY,
+        "nets" => summary.nets.len(),
+        "pads" => summary.pads
+    );
+    foot(ctx, counts.into())
+}
+
+/// A mode's page: `head` over the scrolling `list`, the selected item's
+/// `detail` under it, and the `foot`.
+pub(super) fn page<'a>(
+    ctx: &PanelContext,
+    head: Vec<Element<'a, PanelMsg>>,
+    list: Column<Element<'a, PanelMsg>>,
+    detail: Option<Element<'a, PanelMsg>>,
+    foot: Element<'a, PanelMsg>,
+) -> Element<'a, PanelMsg> {
+    let list_height = if detail.is_some() {
+        Length::FillPortion(LIST_PORTION)
+    } else {
+        Length::Fill
+    };
+    let list = scrollable(list)
+        .width(Length::Fill)
+        .height(list_height)
+        .style(crate::panels::form_look::scrollbar_style)
+        .boxed();
+    let mut page: Column<Element<'a, PanelMsg>> =
+        Column::new().width(Length::Fill).height(Length::Fill);
+    for part in head {
+        page = page.push(part);
+    }
+    page = page.push(list);
+    if let Some(detail) = detail {
+        page = page.push(separator(ctx));
+        page = page.push(
+            container(detail)
+                .width(Length::Fill)
+                .height(Length::FillPortion(DETAIL_PORTION))
+                .boxed(),
+        );
+    }
+    page.push(separator(ctx)).push(foot).boxed()
 }
 
 /// The whole mode: list on top, the selected net's detail below it.
@@ -230,28 +278,10 @@ pub(super) fn nets_mode<'a>(
     ctx: &'a PanelContext,
     summary: &'a PcbNetsSummary,
 ) -> Element<'a, PanelMsg> {
-    let selected = ctx.pcb_panel.selected_net(summary);
-    let list_height = if selected.is_some() {
-        Length::FillPortion(LIST_PORTION)
-    } else {
-        Length::Fill
-    };
-    let list = scrollable(rows(ctx, summary))
-        .width(Length::Fill)
-        .height(list_height)
-        .style(crate::panels::form_look::scrollbar_style);
-    let mut page: Column<Element<'a, PanelMsg>> =
-        column![top(ctx, summary), header(ctx), separator(ctx), list,]
-            .width(Length::Fill)
-            .height(Length::Fill);
-    if let Some(net) = selected {
-        page = page.push(separator(ctx));
-        page = page.push(
-            container(super::detail::view(ctx, net))
-                .width(Length::Fill)
-                .height(Length::FillPortion(DETAIL_PORTION))
-                .boxed(),
-        );
-    }
-    page.push(separator(ctx)).push(footer(ctx, summary)).boxed()
+    let detail = ctx
+        .pcb_panel
+        .selected_net(summary)
+        .map(|net| super::detail::view(ctx, net));
+    let head = vec![top(ctx, summary), header(ctx), separator(ctx)];
+    page(ctx, head, rows(ctx, summary), detail, footer(ctx, summary))
 }

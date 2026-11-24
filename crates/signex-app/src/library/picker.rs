@@ -25,9 +25,9 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::{button, text, text_input};
 
-use super::messages::{LibraryMessage, PickerMsg, PlacedPartMsg};
+use super::messages::{LibraryMessage, PickerMsg};
 use super::modal_chrome::{cancel_btn, footer_strip, header_with_note_closing, primary_btn_if};
-use super::placed_part::{change_preview_view, datasheet_choice_view};
+use super::placed_part::datasheet_choice_view;
 use super::range_filter::range_filter_bar;
 use super::state::{PickerEntry, PickerMode, PickerState};
 use crate::library::editor::kit::{lifecycle_text, lifecycle_tone};
@@ -75,24 +75,22 @@ pub fn view<'a>(
     i18n: &'a I18n,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
-    // Change Component and Open Datasheet reuse this modal: their later
-    // stages draw their own card.
+    // Change Component (one dialog, mockup row 155) and Open Datasheet reuse
+    // this modal with their own card.
     match &picker.mode {
-        PickerMode::ChangePreview(change) => {
-            return change_preview_view(change, tokens, i18n, windowed);
+        PickerMode::ChangeComponent(_) | PickerMode::ChangePreview(_) => {
+            if let Some(card) =
+                crate::app::view::dialogs::change_component::view(picker, tokens, i18n, windowed)
+            {
+                return card;
+            }
         }
         PickerMode::Datasheets(choice) => {
             return datasheet_choice_view(choice, tokens, i18n, windowed);
         }
-        PickerMode::Place | PickerMode::ChangeComponent(_) => {}
+        PickerMode::Place => {}
     }
-    let changing = matches!(picker.mode, PickerMode::ChangeComponent(_));
-    // Place in the Place stage; Next (on to the pin preview) when changing.
-    let commit = if changing {
-        LibraryMessage::PlacedPart(PlacedPartMsg::ChangePartPicked)
-    } else {
-        LibraryMessage::Picker(PickerMsg::PlaceSelected)
-    };
+    let commit = LibraryMessage::Picker(PickerMsg::PlaceSelected);
     let selected = picker.shown_selection().is_some();
     let rows = &picker.rows;
     let r = crate::styles::tokens::resolve(tokens);
@@ -166,17 +164,10 @@ pub fn view<'a>(
         });
 
     // Only the key that works is named: Enter in the search field.
-    let hint = text(t!(
-        i18n,
-        if changing {
-            ids::LIBRARY_PICKER_HINT_NEXT
-        } else {
-            ids::LIBRARY_PICKER_HINT_PLACE
-        }
-    ))
-    .size(TS.caption)
-    .color(r.ink4)
-    .boxed();
+    let hint = text(t!(i18n, ids::LIBRARY_PICKER_HINT_PLACE))
+        .size(TS.caption)
+        .color(r.ink4)
+        .boxed();
     let footer = footer_strip(
         vec![hint],
         vec![
@@ -185,19 +176,7 @@ pub fn view<'a>(
                 LibraryMessage::ClosePicker,
                 tokens,
             ),
-            primary_btn_if(
-                t!(
-                    i18n,
-                    if changing {
-                        ids::LIBRARY_PICKER_NEXT
-                    } else {
-                        ids::DIALOG_BUTTON_PLACE
-                    }
-                ),
-                commit,
-                selected,
-                tokens,
-            ),
+            primary_btn_if(t!(i18n, ids::DIALOG_BUTTON_PLACE), commit, selected, tokens),
         ],
         tokens,
     );
@@ -503,6 +482,62 @@ mod tests {
         };
         let long = "Polarized capacitor with a long description";
         assert!((height(long) - height("C")).abs() < 0.5);
+    }
+
+    /// Mockup row 129: in the laid-out dialog, a part whose PN and
+    /// description are far wider than their columns keeps both on one line
+    /// inside the row height (the ellipsis ends them).
+    #[test]
+    fn a_long_part_row_stays_one_line_in_the_dialog() {
+        use crate::layout_probe::lay_out_texts;
+        use crate::library::state::{LibraryState, OpenLibrary};
+        let pn = "STOCK-C_Polarized_Radial_D10.0mm_P5.00mm_Long";
+        let description = "Polarized capacitor, radial, 10 mm diameter, 5 mm pitch, long leads";
+        let mut state = LibraryState::default();
+        state.open_libraries.push(OpenLibrary {
+            root: std::path::PathBuf::from("/libs/stock.snxlib"),
+            display_name: "stock".into(),
+            library_id: uuid::Uuid::from_u128(1),
+            tables: std::collections::HashMap::new(),
+            cached_components: vec![signex_library::ComponentSummary {
+                row_id: uuid::Uuid::from_u128(2),
+                internal_pn: signex_library::InternalPn::new(pn),
+                mpn: "UVR1H101MPD".into(),
+                state: signex_library::LifecycleState::Released,
+                description: description.into(),
+            }],
+            cached_symbols: Vec::new(),
+            cached_footprints: Vec::new(),
+            cached_sims: Vec::new(),
+            cached_classes: Vec::new(),
+            observed_stamp: None,
+            dangling: Default::default(),
+            own_edit_stamp: None,
+            display: Default::default(),
+            pricing: Default::default(),
+        });
+        state.touch_data();
+        state.picker = Some(PickerState::default());
+        state.sync_view_caches();
+        let tokens = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
+        let card = view(
+            state.picker.as_ref().unwrap(),
+            &tokens,
+            I18n::en_us_ref(),
+            false,
+        );
+        let texts = lay_out_texts(card, iced::Size::new(PICKER_W, PICKER_H));
+        for value in [pn, description] {
+            let cell = texts
+                .iter()
+                .find(|t| t.text == value)
+                .unwrap_or_else(|| panic!("{value:?} is drawn"));
+            assert!(
+                cell.bounds.height < ROW_H,
+                "{value:?} wraps: {}",
+                cell.bounds.height
+            );
+        }
     }
 
     /// The table head, the empty card, the state cells and the search field
