@@ -439,6 +439,38 @@ fn a_board_sketch_leads_with_the_sketch_dof_section() {
     assert!(!has(&texts, "SKETCH SOLVE"), "{texts:#?}");
 }
 
+/// Mockup row 179: on a board the DOF card carries the constraint count and
+/// the solve time, so the Sketch DOF section drops those two rows and keeps
+/// the others. The footprint host keeps them (see
+/// the_sketch_sections_show_the_solve_statistics_and_parameters).
+#[test]
+fn a_board_sketch_dof_section_does_not_repeat_the_card_counts() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.mode_kind = FootprintModeKind::Sketch;
+    fp.sketch_host = signex_types::sketch::SketchHost::Board;
+    fp.board = Some(crate::panels::BoardSketchProps::default());
+    fp.sketch_constraint_count = 46;
+    fp.last_solve = Some(FootprintSolveSummary {
+        iterations: 6,
+        elapsed_ms: 3,
+        final_residual_norm: 0.0,
+        over_constraint_count: 0,
+        over_constraints: Vec::new(),
+        redundant_constraints: Vec::new(),
+        dof: 2,
+        free_motions: Vec::new(),
+    });
+    let texts = texts(&app, &fp);
+    assert!(has(&texts, "46 constraints · solved in 3 ms"), "{texts:#?}");
+    for gone in ["CONSTRAINTS", "ELAPSED", "3 ms"] {
+        assert!(!has(&texts, gone), "{gone:?} repeats the card: {texts:#?}");
+    }
+    for kept in ["ENTITIES", "ITERATIONS", "RESIDUAL"] {
+        assert!(has(&texts, kept), "{kept:?} missing: {texts:#?}");
+    }
+}
+
 /// Mockup row 179e: the Parameters list stays under a selected entity's
 /// form in Sketch mode, so a pattern's spacing and the parameters it names
 /// sit together.

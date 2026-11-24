@@ -1,7 +1,8 @@
 //! The sketch sections: Sketch solve (a DOF pill in the header; the DOF card
 //! with the free motions, entity and constraint counts, the last solve's
 //! iterations, residual and time, the redundant and conflicting
-//! constraints), Parameters and Solve warnings.
+//! constraints; a board drops the constraint count and time rows the card
+//! shows), Parameters and Solve warnings.
 //! The nothing-selected body shows them, and so does Sketch mode under a
 //! selection. A board sketch leads with the solve section, titled Sketch DOF,
 //! right under its object header (mockup row 179).
@@ -123,15 +124,20 @@ fn solve_section<'a>(
     if let Some(solve) = fp.last_solve.as_ref() {
         col = super::dof_card::push_dof_card(col, cx, solve);
     }
+    // On a board the card already shows the constraint count and the solve
+    // time, so their rows go (mockup row 179).
+    let card_counts = fp.board.is_some() && fp.last_solve.is_some();
     let kv = |id: signex_i18n::MessageId, value: String| kv_row(&t!(i18n, id), value, tokens, i18n);
     col = col.push(kv(
         ids::EDITORS_FP_PROPS_ENTITIES,
         i18n.count(fp.sketch_entity_count as i64),
     ));
-    col = col.push(kv(
-        ids::EDITORS_FP_PROPS_CONSTRAINTS,
-        i18n.count(fp.sketch_constraint_count as i64),
-    ));
+    if !card_counts {
+        col = col.push(kv(
+            ids::EDITORS_FP_PROPS_CONSTRAINTS,
+            i18n.count(fp.sketch_constraint_count as i64),
+        ));
+    }
     let Some(solve) = fp.last_solve.as_ref() else {
         col = col.push(caption(t!(i18n, ids::EDITORS_FP_PROPS_NOT_SOLVED), tokens));
         return conflict_rows(col, cx);
@@ -144,10 +150,12 @@ fn solve_section<'a>(
         ids::EDITORS_FP_PROPS_RESIDUAL,
         format!("{:.3e}", solve.final_residual_norm),
     ));
-    col = col.push(kv(
-        ids::EDITORS_FP_PROPS_ELAPSED,
-        t!(i18n, ids::EDITORS_FP_PROPS_ELAPSED_VALUE, "ms" => solve.elapsed_ms).into_string(),
-    ));
+    if !card_counts {
+        col = col.push(kv(
+            ids::EDITORS_FP_PROPS_ELAPSED,
+            t!(i18n, ids::EDITORS_FP_PROPS_ELAPSED_VALUE, "ms" => solve.elapsed_ms).into_string(),
+        ));
+    }
     col = col.push(kv(
         ids::EDITORS_FP_PROPS_OVER_CONSTRAINED,
         i18n.count(solve.over_constraint_count as i64),
