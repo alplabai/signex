@@ -406,11 +406,13 @@ impl SchematicCanvas<'_> {
         // travels with the dragged items instead of staying behind.
         // ERC markers live on this layer too, so it must draw whenever there
         // is a marker, not only while something is selected (#1333).
-        // Locked objects carry a padlock, so they need the layer too (#1250, #1573).
+        // Locked objects carry a padlock, so they need the layer too (#1250, #1573),
+        // and so do the annotation flags (mockup row 165).
         if let Some(snapshot) = effective_snapshot
             && (self.selection_layer_needed()
                 || crate::schematic_runtime::lock_indicator::has_locked_item(snapshot)
-                || crate::schematic_runtime::unions::has_unions(snapshot))
+                || crate::schematic_runtime::unions::has_unions(snapshot)
+                || self.prefs.annotation_flags.has_flags())
         {
             // During a drag we can't rely on overlay_cache — it must redraw
             // with the shifted positions every frame.
@@ -482,8 +484,8 @@ impl SchematicCanvas<'_> {
     }
 
     /// What the selection layer draws over the halos: the clicked pin, the end
-    /// grips of selected wires, the padlocks of locked items and the ERC
-    /// markers.
+    /// grips of selected wires, the padlocks of locked items, the annotation
+    /// flags and the ERC markers.
     pub(in crate::canvas) fn draw_selection_extras(
         &self,
         frame: &mut canvas::Frame,
@@ -511,6 +513,14 @@ impl SchematicCanvas<'_> {
             &self.prefs.canvas_colors,
             &self.designators,
             self.wire_widths(),
+        );
+        crate::schematic_runtime::annotation_flags::draw_annotation_flags(
+            frame,
+            snapshot,
+            &self.prefs.annotation_flags,
+            transform,
+            &self.prefs.canvas_colors,
+            &self.designators,
         );
         let erc_overlay: Vec<crate::schematic_runtime::overlay::ErcMarker> = self
             .erc_markers
