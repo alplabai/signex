@@ -216,7 +216,7 @@ fn the_comparison_shows_both_parts_the_table_kept_and_apply_to() {
         "Change 1 part".into(),
         "One undo step. The PCB footprint changes on Update PCB.".into(),
     ] {
-        assert!(shown.iter().any(|t| *t == label), "{label:?} in {shown:#?}");
+        assert!(shown.contains(&label), "{label:?} in {shown:#?}");
     }
 }
 
