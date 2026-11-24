@@ -428,3 +428,38 @@ fn the_section_renders_a_result_pill_and_an_error_row() {
     );
     let _ = app.view_project_tab(id);
 }
+
+/// Mockup row 30 (Caner 2026-11-24): the project Title block lists the
+/// sheet's Author, Engineer, Organization and Address 1 to 4 too, so project
+/// and sheet parameters line up; their keys are title-block rows, never
+/// variables.
+#[test]
+fn the_project_title_block_has_the_sheets_address_and_people_fields() {
+    use TitleBlockField::*;
+    let extra = [
+        Author,
+        Engineer,
+        Organization,
+        Address1,
+        Address2,
+        Address3,
+        Address4,
+    ];
+    let parameters: BTreeMap<String, String> = extra
+        .iter()
+        .map(|field| (field.key().to_string(), format!("v-{}", field.key())))
+        .collect();
+    let all = visible_parameters(&parameters, "", english);
+    for field in extra {
+        assert!(all.title_block.contains(&field), "{field:?} is listed");
+    }
+    assert!(all.variables.is_empty(), "none of them is a variable");
+    assert_eq!(super::variable_count(&parameters), 0);
+    let by_value = visible_parameters(&parameters, "v-address3", english);
+    assert_eq!(by_value.title_block, [Address3]);
+    let en = signex_i18n::I18n::en_us();
+    for field in extra {
+        let shown = en.message_plain(super::field_words(field), &[]);
+        assert_eq!(shown, field.label(), "{field:?}");
+    }
+}
