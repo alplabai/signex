@@ -565,11 +565,7 @@ mod tests {
     }
 
     fn anchor_grid(h: signex_types::schematic::HAlign) -> Block {
-        let (app, _task) = crate::app::Signex::new();
-        let ctx = &app.document_state.panel_ctx;
-        let palette = crate::panels::palette::PanelPalette::from_tokens(&ctx.tokens);
-        let grid =
-            crate::panels::justification_grid(uuid::Uuid::nil(), 0.0, h, palette, ctx.theme_id);
+        let grid = crate::panels::justification_grid(uuid::Uuid::nil(), 0.0, h);
         let (w, hgt) = (120_usize, 120_usize);
         let data = crate::layout_probe::draw_pixels(grid, iced::Size::new(w as f32, hgt as f32));
         let lit = |x: usize, y: usize| data[(y * w + x) * 4..(y * w + x) * 4 + 3] != [0, 0, 0];

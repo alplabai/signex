@@ -527,3 +527,95 @@ fn moving_the_pointer_in_and_out_while_typing_is_one_undo_step() {
     let engine = app.document_state.active_engine().expect("engine");
     assert!(!engine.can_undo(), "the whole edit was one undo step");
 }
+
+/// The texts of the Properties view of `item` as laid out in a 400 px
+/// panel, bidi isolation marks dropped, after `adjust` has set what the
+/// test needs on the panel context.
+fn laid_out(
+    app: &mut Signex,
+    item: SelectedItem,
+    adjust: impl FnOnce(&mut crate::panels::PanelContext),
+) -> Vec<crate::layout_probe::LaidOutText> {
+    app.interaction_state.active_canvas_mut().selected = vec![item];
+    app.update_selection_info();
+    let mut ctx = app.document_state.panel_ctx.clone();
+    ctx.unit = Unit::Mm;
+    ctx.paper_size = "A4".into();
+    adjust(&mut ctx);
+    let view = super::view_selected_element_properties(
+        &ctx,
+        iced::Color::WHITE,
+        iced::Color::WHITE,
+        iced::Color::BLACK,
+    );
+    crate::layout_probe::lay_out_texts(view, iced::Size::new(400.0, 4000.0))
+        .into_iter()
+        .map(|mut t| {
+            t.text = t.text.replace(['\u{2068}', '\u{2069}'], "");
+            t
+        })
+        .collect()
+}
+
+/// The bounds of the last text that reads `label`: a row's own text, after
+/// any illustration callout of the same name.
+fn row_text(texts: &[crate::layout_probe::LaidOutText], label: &str) -> iced::Rectangle {
+    texts
+        .iter()
+        .rev()
+        .find(|t| t.text == label)
+        .unwrap_or_else(|| panic!("no text {label:?}: {texts:#?}"))
+        .bounds
+}
+
+/// Mockup row 44: Justification is a row like every other, its name in the
+/// label column on the grid's own line with the anchor word beside the
+/// grid, not a heading on a line above the grid.
+#[test]
+fn the_justification_name_sits_on_the_grids_row() {
+    let (_dir, mut app) = app(false);
+    let label = SelectedItem::new(Uuid::from_u128(LABEL), SelectedKind::Label);
+    let texts = laid_out(&mut app, label, |_| {});
+    let name = row_text(&texts, "Justification");
+    let word = row_text(&texts, "Bottom left");
+    assert!(
+        (name.center_y() - word.center_y()).abs() < name.height / 2.0,
+        "one line: name {name:?}, word {word:?}"
+    );
+    assert!(
+        name.x + name.width <= word.x,
+        "the name is left of the grid and its word: {name:?}, {word:?}"
+    );
+    let net_name = row_text(&texts, "Net Name");
+    assert!(
+        (name.x - net_name.x).abs() < 1.0,
+        "the name is in the label column: {name:?}, {net_name:?}"
+    );
+}
+
+/// Mockup row 44: with project classes to pick from, Net Class is the row
+/// straight under Net Name, before Font.
+#[test]
+fn net_class_is_the_row_straight_under_net_name() {
+    let (_dir, mut app) = app(false);
+    let label = SelectedItem::new(Uuid::from_u128(LABEL), SelectedKind::Label);
+    let texts = laid_out(&mut app, label, |ctx| {
+        ctx.net_classes.label = Some(crate::panels::LabelClassPick {
+            project: crate::app::ProjectId::test_id(1),
+            net: "NET".into(),
+            classes: vec![signex_types::net_class::NetClass {
+                name: "HighSpeed".into(),
+                nets: vec!["NET".into()],
+                ..Default::default()
+            }],
+        });
+    });
+    let net_name = row_text(&texts, "Net Name");
+    let mut column: Vec<&crate::layout_probe::LaidOutText> = texts
+        .iter()
+        .filter(|t| (t.bounds.x - net_name.x).abs() < 1.0 && t.bounds.y >= net_name.y)
+        .collect();
+    column.sort_by(|a, b| a.bounds.y.total_cmp(&b.bounds.y));
+    let names: Vec<&str> = column.iter().take(3).map(|t| t.text.as_str()).collect();
+    assert_eq!(names, ["Net Name", "Net Class", "Font"], "{texts:#?}");
+}

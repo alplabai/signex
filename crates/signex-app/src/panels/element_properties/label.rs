@@ -5,7 +5,9 @@
 
 use super::super::*;
 use super::font_row::font_family_row;
-use super::rows::{PanelStyle, h_align_from_row, info_row, justify_h_row, rotation_degrees};
+use super::rows::{
+    PanelStyle, h_align_from_row, info_row, justify_h_row, labelled_row, rotation_degrees,
+};
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
 use signex_i18n::{ids, t};
@@ -125,21 +127,21 @@ pub(super) fn push_label_sections<'a>(
                 if port {
                     return c;
                 }
-                // The 3x3 grid, with the word that names its anchor beside it.
+                // Justification is a row (mockup row 44): its name in the
+                // label column, the 3x3 dot grid with the word that names its
+                // anchor beside it.
                 let anchor = t!(i18n, crate::panels::label_anchor(rotation_deg, justify_h));
-                c = c.push(form_label(t!(i18n, ids::PANELS_PROPERTIES_JUSTIFICATION)));
-                c.push(
-                    container(
-                        row![
-                            justification_grid(id, rotation_deg, justify_h, palette, ctx.theme_id),
-                            text(anchor).size(TS.body).color(muted),
-                        ]
-                        .spacing(SP.m)
-                        .align_y(iced::Alignment::Center),
-                    )
-                    .padding([SP.s, SP.m])
-                    .boxed(),
-                )
+                let grid = row![
+                    justification_grid(id, rotation_deg, justify_h),
+                    text(anchor).size(TS.caption).color(muted),
+                ]
+                .spacing(SP.m)
+                .align_y(iced::Alignment::Center)
+                .boxed();
+                c.push(labelled_row(
+                    t!(i18n, ids::PANELS_PROPERTIES_JUSTIFICATION),
+                    grid,
+                ))
             },
         )
         .boxed(),

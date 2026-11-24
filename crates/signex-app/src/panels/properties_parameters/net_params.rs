@@ -1,7 +1,7 @@
 //! The Net Parameters chrome of a power port (the All / Parameters / Rules /
-//! Classes tabs, the empty card and its Add button) plus the two 3x3
-//! justification-grid pickers. Moved from the former single-file
-//! `properties_parameters` module.
+//! Classes tabs, the empty card and its Add button) plus the 3x3
+//! justification-grid picker of a net label. Moved from the former
+//! single-file `properties_parameters` module.
 
 use super::super::*;
 use crate::styles::{Spacing, TypeScale};
@@ -154,73 +154,63 @@ fn cell_direction(row: usize, column: usize, current: LabelDir) -> LabelDir {
     }
 }
 
-/// The 3x3 justification picker of a selected label, with SVG arrow icons.
-/// The one lit cell is the anchor the word beside the grid names.
+/// Side of a justification cell (22 px at a 12 px body, mockup row 44).
+const JUSTIFY_CELL_EM: f32 = 22.0 / 12.0;
+/// Side of the dot in a cell that is not the anchor (6 px at 12 px).
+const JUSTIFY_DOT_EM: f32 = 6.0 / 12.0;
+/// Side of the accent dot in the anchor's cell (8 px at 12 px).
+const JUSTIFY_LIT_DOT_EM: f32 = 8.0 / 12.0;
+
+/// One cell of the justification grid: a dot, raised with an accent dot when
+/// it is the anchor. A press picks `on_press`.
+fn justification_cell(active: bool, on_press: PanelMsg) -> Element<'static, PanelMsg> {
+    use crate::panels::form_look::{FormLook, segment_cell};
+    let dot_em = if active {
+        JUSTIFY_LIT_DOT_EM
+    } else {
+        JUSTIFY_DOT_EM
+    };
+    let side = TS.body * dot_em;
+    let dot = container(iced::widget::Space::new())
+        .width(side)
+        .height(side)
+        .style(move |theme: &Theme| {
+            let look = FormLook::of(theme);
+            container::Style {
+                background: Some(Background::Color(if active {
+                    look.accent
+                } else {
+                    look.line_strong
+                })),
+                border: Border {
+                    radius: (side / 2.0).into(),
+                    ..Border::default()
+                },
+                ..container::Style::default()
+            }
+        });
+    let cell = TS.body * JUSTIFY_CELL_EM;
+    signex_widgets::button(container(dot).center(Length::Fill))
+        .width(cell)
+        .height(cell)
+        .padding(0)
+        .on_press(on_press)
+        .style(move |theme: &Theme, status: iced::widget::button::Status| {
+            let hovered = matches!(status, iced::widget::button::Status::Hovered);
+            segment_cell(theme, active, hovered && !active)
+        })
+        .boxed()
+}
+
+/// The 3x3 justification picker of a selected label (mockup row 44): a
+/// sunken grid of dots. The one raised cell with the accent dot is the
+/// anchor the word beside the grid names.
 pub fn justification_grid(
     id: uuid::Uuid,
     rotation_deg: f64,
     h: signex_types::schematic::HAlign,
-    palette: PanelPalette,
-    theme: signex_types::theme::ThemeId,
 ) -> Element<'static, PanelMsg> {
     use signex_types::schematic::HAlign;
-    let PanelPalette {
-        input_bg,
-        input_bdr,
-        primary,
-        ..
-    } = palette;
-
-    // A compact 24 x 24 px anchor cell.
-    const CELL_SIZE: f32 = 24.0;
-    let cell = |handle: iced::widget::svg::Handle,
-                active: bool,
-                on_press: PanelMsg|
-     -> Element<'static, PanelMsg> {
-        let bg_active = input_bdr;
-        let fg_active = Color::WHITE;
-        let fg_inactive = primary;
-        let svg_widget =
-            iced::widget::svg(handle)
-                .width(12.0)
-                .height(12.0)
-                .style(move |_: &Theme, _| iced::widget::svg::Style {
-                    color: Some(if active { fg_active } else { fg_inactive }),
-                    ..Default::default()
-                });
-        signex_widgets::button(
-            container(svg_widget)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center(Length::Fill),
-        )
-        .width(CELL_SIZE)
-        .height(CELL_SIZE)
-        .padding(0)
-        .on_press(on_press)
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let hovered = matches!(status, iced::widget::button::Status::Hovered);
-            let bg = if active {
-                bg_active
-            } else if hovered {
-                input_bdr
-            } else {
-                input_bg
-            };
-            iced::widget::button::Style {
-                background: Some(Background::Color(bg)),
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: input_bdr,
-                    ..Border::default()
-                },
-                text_color: if active { fg_active } else { fg_inactive },
-                ..iced::widget::button::Style::default()
-            }
-        })
-        .boxed()
-    };
     let current_dir = label_direction(rotation_deg, h);
 
     let to_msg = |dir: LabelDir| -> PanelMsg {
@@ -233,33 +223,19 @@ pub fn justification_grid(
     };
 
     let lit = anchor_cell(current_dir);
-    let icons = [
-        [
-            crate::icons::icon_justify_tl(theme),
-            crate::icons::icon_justify_t(theme),
-            crate::icons::icon_justify_tr(theme),
-        ],
-        [
-            crate::icons::icon_justify_l(theme),
-            crate::icons::icon_justify_c(theme),
-            crate::icons::icon_justify_r(theme),
-        ],
-        [
-            crate::icons::icon_justify_bl(theme),
-            crate::icons::icon_justify_b(theme),
-            crate::icons::icon_justify_br(theme),
-        ],
-    ];
     let mut grid = Column::<Element<'static, PanelMsg>>::new().spacing(SP.xs);
-    for (r, line) in icons.into_iter().enumerate() {
+    for r in 0..3 {
         let mut cells = iced::widget::Row::<Element<'static, PanelMsg>>::new().spacing(SP.xs);
-        for (c, icon) in line.into_iter().enumerate() {
+        for c in 0..3 {
             let picks = to_msg(cell_direction(r, c, current_dir));
-            cells = cells.push(cell(icon, (r, c) == lit, picks));
+            cells = cells.push(justification_cell((r, c) == lit, picks));
         }
         grid = grid.push(cells.boxed());
     }
-    grid.boxed()
+    container(grid)
+        .padding(SP.xs)
+        .style(crate::panels::form_look::segmented_frame)
+        .boxed()
 }
 
 #[cfg(test)]
