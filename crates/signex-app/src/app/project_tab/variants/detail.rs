@@ -7,7 +7,7 @@
 //! draws one placed part.
 
 use iced::widget::{Column, Row, Space, column, container, row, scrollable};
-use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
+use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_i18n::{MessageId, UserText, ids, t};
 use signex_output::{VariantMatrix, VariantRow};
 use signex_types::project::{FOOTPRINT_PARAMETER, VALUE_PARAMETER};
@@ -20,8 +20,8 @@ use super::super::look::{ButtonKind, Glyph, field_label, icon_button, text_butto
 use super::super::table::{SP, TS, note};
 use super::{Manager, VariantCell, VariantManagerMsg, mono, semibold};
 use crate::app::Message;
+use crate::styles::ti;
 use crate::styles::tokens::resolve;
-use crate::styles::{Radii, ti};
 
 /// Width of the pane, in `body`-size characters.
 const PANE_EMS: f32 = 300.0 / 12.0;
@@ -76,7 +76,7 @@ fn cell_view<'a>(
             t!(m.i18n, ids::VARIANT_MANAGER_FITTING, "variant" => m.name(cell.variant.as_deref())),
             m.tokens
         ),
-        fitting(m, cell, fitted),
+        fitting(m, cell, part, fitted),
         field_label(t!(m.i18n, ids::VARIANT_MANAGER_OVERRIDES), m.tokens),
         overrides(m, cell, part, fitted),
         field_label(
@@ -89,31 +89,18 @@ fn cell_view<'a>(
     .boxed()
 }
 
-/// "R5 in Lite" and the part's value and footprint as the sheets give them.
+/// "R5 in Lite", one catalog message so a language can order its words, and
+/// the part's value and footprint as the sheets give them.
 fn heading<'a>(m: &Manager<'_>, cell: &VariantCell, part: &VariantRow) -> Element<'a, Message> {
     let r = resolve(m.tokens);
-    let name = text(UserText::new(m.name(cell.variant.as_deref())))
-        .size(TS.caption)
-        .color(r.accent_soft_ink);
-    let fill = r.accent_soft;
-    let variant = container(name)
-        .padding([0.0, SP.m * 0.75])
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(fill)),
-            border: Border::default().rounded(Radii::GRAPHITE.small),
-            ..container::Style::default()
-        });
-    let title = row![
-        text(UserText::new(part.designator.clone()))
-            .size(TS.title)
-            .font(semibold()),
-        text(t!(m.i18n, ids::VARIANT_MANAGER_DETAIL_IN))
-            .size(TS.caption)
-            .color(r.ink3),
-        variant,
-    ]
-    .spacing(SP.s)
-    .align_y(Alignment::Center);
+    let title = text(t!(
+        m.i18n,
+        ids::VARIANT_MANAGER_DETAIL_IN,
+        "designator" => part.designator.as_str(),
+        "variant" => m.name(cell.variant.as_deref()),
+    ))
+    .size(TS.title)
+    .font(semibold());
     let mut facts: Row<Element<'a, Message>> = row![
         text(UserText::new(part.value.clone()))
             .size(TS.caption)
@@ -136,8 +123,14 @@ fn heading<'a>(m: &Manager<'_>, cell: &VariantCell, part: &VariantRow) -> Elemen
 /// Fitted / Not fitted for a variant's cell, Alternate (not built yet), and
 /// As on the sheets while the cell sets a fit of its own. Base's cell shows
 /// its fit greyed: Base is what the sheets say.
-fn fitting<'a>(m: &Manager<'_>, cell: &VariantCell, fitted: bool) -> Element<'a, Message> {
-    let style = resolve(m.tokens).segmented(TS.body);
+fn fitting<'a>(
+    m: &Manager<'_>,
+    cell: &VariantCell,
+    part: &VariantRow,
+    fitted: bool,
+) -> Element<'a, Message> {
+    let r = resolve(m.tokens);
+    let style = r.segmented(TS.body);
     let options = [
         (true, t!(m.i18n, ids::PROJECT_VARIANTS_FITTED).into()),
         (false, t!(m.i18n, ids::PROJECT_VARIANTS_NOT_FITTED).into()),
@@ -148,8 +141,14 @@ fn fitting<'a>(m: &Manager<'_>, cell: &VariantCell, fitted: bool) -> Element<'a,
         } else {
             ids::VARIANT_MANAGER_BASE_FITTING
         };
+        let grey = Color {
+            a: crate::styles::DISABLED_OPACITY,
+            ..r.ink4
+        };
+        let mut greyed = style.resting_ink(grey);
+        greyed.active_ink = grey;
         return column![
-            segmented_disabled(options, fitted, style),
+            segmented_disabled(options, fitted, greyed),
             note(t!(m.i18n, words), m.tokens),
         ]
         .spacing(SP.s)
@@ -168,9 +167,8 @@ fn fitting<'a>(m: &Manager<'_>, cell: &VariantCell, fitted: bool) -> Element<'a,
         .spacing(SP.s)
         .align_y(Alignment::Center);
     let own = m
-        .settings
-        .part(cell.variant.as_deref(), &cell.designator)
-        .is_some_and(|part| part.fitted.is_some());
+        .own(cell.variant.as_deref(), part)
+        .is_some_and(|own| own.fitted.is_some());
     if own {
         line = line.push(text_button(
             None,
@@ -210,11 +208,42 @@ fn overrides<'a>(
     if !fitted {
         return note(t!(m.i18n, ids::VARIANT_MANAGER_OVERRIDES_OFF), m.tokens);
     }
-    let mut rows: Column<Element<'a, Message>> = Column::new().spacing(SP.xs);
+    let mut rows: Column<Element<'a, Message>> =
+        Column::new().spacing(SP.xs).push(override_header(m, cell));
     for (parameter, base) in parameter_rows(m, cell, part) {
-        rows = rows.push(override_row(m, cell, &parameter, &base));
+        rows = rows.push(override_row(m, cell, part, &parameter, &base));
     }
     rows.boxed()
+}
+
+/// The override table's column names: Parameter, Base and the variant.
+fn override_header<'a>(m: &Manager<'_>, cell: &VariantCell) -> Element<'a, Message> {
+    let ink = resolve(m.tokens).ink4;
+    let column = Length::Fixed(TS.body * OVERRIDE_COL_EMS);
+    let mut line: Row<Element<'a, Message>> = row![
+        container(
+            text(t!(m.i18n, ids::VARIANT_MANAGER_COL_PARAMETER))
+                .size(TS.caption)
+                .color(ink)
+        )
+        .width(column),
+        container(
+            text(t!(m.i18n, ids::PROJECT_VARIANTS_BASE))
+                .size(TS.caption)
+                .color(ink)
+        )
+        .width(column),
+    ]
+    .spacing(SP.s);
+    if let Some(variant) = cell.variant.as_deref() {
+        line = line.push(
+            text(UserText::new(variant.to_string()))
+                .size(TS.caption)
+                .color(ink)
+                .boxed(),
+        );
+    }
+    line.boxed()
 }
 
 /// Value, Footprint, then every field the part or the variant sets, each
@@ -225,7 +254,7 @@ fn parameter_rows(m: &Manager<'_>, cell: &VariantCell, part: &VariantRow) -> Vec
         (FOOTPRINT_PARAMETER.to_string(), part.footprint.clone()),
     ];
     rows.extend(part.parameters.iter().cloned());
-    if let Some(own) = m.settings.part(cell.variant.as_deref(), &cell.designator) {
+    if let Some(own) = m.own(cell.variant.as_deref(), part) {
         for name in own.parameters.keys() {
             if !rows.iter().any(|(listed, _)| listed == name) {
                 rows.push((name.clone(), String::new()));
@@ -239,6 +268,7 @@ fn parameter_rows(m: &Manager<'_>, cell: &VariantCell, part: &VariantRow) -> Vec
 fn override_row<'a>(
     m: &Manager<'_>,
     cell: &VariantCell,
+    part: &VariantRow,
     parameter: &str,
     base: &str,
 ) -> Element<'a, Message> {
@@ -258,7 +288,7 @@ fn override_row<'a>(
     row![
         container(label).width(column).clip(true),
         container(base_face).width(column).clip(true),
-        own_value(m, cell, parameter),
+        own_value(m, cell, part, parameter),
     ]
     .spacing(SP.s)
     .align_y(Alignment::Center)
@@ -277,14 +307,18 @@ fn catalog_name(parameter: &str) -> Option<MessageId> {
 /// The variant's own value for `parameter`: a box for a variant's cell (the
 /// text being typed, else the value set, else "same as Base"), with the
 /// reset arrow while a value is set; Base's own value for Base.
-fn own_value<'a>(m: &Manager<'_>, cell: &VariantCell, parameter: &str) -> Element<'a, Message> {
+fn own_value<'a>(
+    m: &Manager<'_>,
+    cell: &VariantCell,
+    part: &VariantRow,
+    parameter: &str,
+) -> Element<'a, Message> {
     if cell.variant.is_none() {
         return Space::new().boxed();
     }
     let set = m
-        .settings
-        .part(cell.variant.as_deref(), &cell.designator)
-        .and_then(|part| part.parameters.get(parameter))
+        .own(cell.variant.as_deref(), part)
+        .and_then(|own| own.parameters.get(parameter))
         .cloned();
     let typed = m
         .tab
@@ -371,8 +405,7 @@ fn others<'a>(
 
 /// The value `variant` shows for `part`: its own, else the sheets'.
 fn shown_value(m: &Manager<'_>, variant: Option<&str>, part: &VariantRow) -> String {
-    m.settings
-        .part(variant, &part.designator)
+    m.own(variant, part)
         .and_then(|own| own.parameters.get(VALUE_PARAMETER))
         .cloned()
         .unwrap_or_else(|| part.value.clone())

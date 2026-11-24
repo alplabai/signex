@@ -262,7 +262,7 @@ fn variant_cell<'a>(
     let Some(column) = m.column(variant) else {
         return body_cell(Space::new().boxed(), Length::Fill, None);
     };
-    let face = match own_value(m, part, variant) {
+    let face = match own_value(m, part, variant, column) {
         Some((value, kind)) => value_pill(m, value, kind),
         None => cell_pill(
             m,
@@ -308,13 +308,18 @@ fn variant_cell<'a>(
 
 /// The value `variant` gives `part` instead of its own, shown in its cell:
 /// the value first, then the footprint, then a field; with the kind of
-/// value it replaces. Base and a cell without one have none.
+/// value it replaces. Base, a cell without one and a part not fitted in
+/// `column` (it shows Not fitted) have none.
 fn own_value<'s>(
     m: &'s Manager<'_>,
     part: &VariantRow,
     variant: Option<&str>,
+    column: usize,
 ) -> Option<(&'s str, signex_i18n::MessageId)> {
-    let set = &m.settings.part(variant, &part.designator)?.parameters;
+    if !part.is_overridden_at(column) {
+        return None;
+    }
+    let set = &m.own(variant, part)?.parameters;
     if let Some(value) = set.get(VALUE_PARAMETER) {
         return Some((value, ids::VARIANT_MANAGER_OVERRIDE_VALUE));
     }

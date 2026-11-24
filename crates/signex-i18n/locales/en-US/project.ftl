@@ -371,8 +371,8 @@ variant-manager-default-star = The default variant
 # The name Duplicate gives the copy; $n counts from 2 when the first is taken.
 variant-manager-copy-name = { $name } copy
 variant-manager-copy-name-n = { $name } copy { $n }
-# Right pane: the selected cell, "R5 in Lite".
-variant-manager-detail-in = in
+# Right pane heading: the selected cell's part in its variant, "R5 in Lite".
+variant-manager-detail-in = { $designator } in { $variant }
 variant-manager-detail-empty = Click a cell in the matrix to see that part in that variant.
 variant-manager-fitting = Fitting in { $variant }
 variant-manager-alternate = Alternate...

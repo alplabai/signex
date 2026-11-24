@@ -4,7 +4,7 @@
 //! variant with the fits its sheets give it; Set as default moves the star.
 //! Every edit is one undo step of the project's General history.
 
-use signex_types::project::VALUE_PARAMETER;
+use signex_types::project::{FOOTPRINT_PARAMETER, VALUE_PARAMETER};
 use signex_types::schematic::{SchematicSheet, Symbol};
 use uuid::Uuid;
 
@@ -385,4 +385,123 @@ fn a_copy_takes_the_first_free_copy_name() {
         super::cells::copy_name(&project, "Base", i18n).as_deref(),
         Some("Base copy")
     );
+}
+
+/// Picking the fit the sheets already give a cell that sets none of its own
+/// stores nothing, records no undo step and leaves the file clean.
+#[test]
+fn picking_the_fit_the_sheets_give_records_nothing() {
+    let (mut app, id, _dir) = app();
+    open_manager(&mut app, id);
+    let _ = manage(
+        &mut app,
+        id,
+        VariantManagerMsg::FitPicked {
+            cell: cell(Some("Lite"), "R2"),
+            fitted: Some(false),
+        },
+    );
+    assert!(data(&app).variant_settings.is_empty());
+    assert!(!app.project_tab_history_available(id).0);
+    assert!(
+        !app.document_state
+            .is_document_dirty(&app.document_state.projects[0].path)
+    );
+}
+
+/// A part given a value of its own in a variant and then left out there
+/// shows Not fitted in its cell, not the value.
+#[test]
+fn a_not_fitted_cell_shows_no_value_of_its_own() {
+    let (mut app, id, _dir) = app();
+    open_manager(&mut app, id);
+    let r1 = cell(Some("Lite"), "R1");
+    let _ = manage(&mut app, id, VariantManagerMsg::CellSelected(r1.clone()));
+    let _ = manage(
+        &mut app,
+        id,
+        VariantManagerMsg::OverrideEdited {
+            parameter: VALUE_PARAMETER.into(),
+            text: "47k".into(),
+        },
+    );
+    let _ = manage(
+        &mut app,
+        id,
+        VariantManagerMsg::OverrideSubmitted { cell: r1.clone() },
+    );
+    assert!(shown(&app, id).rows[0].is_overridden_at(1));
+    let _ = manage(
+        &mut app,
+        id,
+        VariantManagerMsg::FitPicked {
+            cell: r1,
+            fitted: Some(false),
+        },
+    );
+    let matrix = shown(&app, id);
+    assert_eq!(matrix.rows[0].fitted, [true, false]);
+    assert!(!matrix.rows[0].is_overridden_at(1), "Not fitted, no value");
+    assert!(matrix.rows[0].differs_at(1));
+    let _ = app.view_variant_manager_tab(id);
+}
+
+/// What is typed for one parameter is stored when the typing moves to
+/// another parameter or another cell, as Enter stores it.
+#[test]
+fn typing_in_another_parameter_stores_the_first() {
+    let (mut app, id, _dir) = app();
+    open_manager(&mut app, id);
+    let _ = manage(
+        &mut app,
+        id,
+        VariantManagerMsg::CellSelected(cell(Some("Lite"), "R1")),
+    );
+    for (parameter, text) in [(VALUE_PARAMETER, "4k7"), (FOOTPRINT_PARAMETER, "R_0805")] {
+        let _ = manage(
+            &mut app,
+            id,
+            VariantManagerMsg::OverrideEdited {
+                parameter: parameter.into(),
+                text: text.into(),
+            },
+        );
+    }
+    let own = |app: &Signex| data(app).variant_settings.part(Some("Lite"), "R1").cloned();
+    let first = own(&app).expect("the value is stored");
+    assert_eq!(first.parameters[VALUE_PARAMETER], "4k7");
+    assert!(
+        !first.parameters.contains_key(FOOTPRINT_PARAMETER),
+        "the footprint is still being typed"
+    );
+    let _ = manage(
+        &mut app,
+        id,
+        VariantManagerMsg::CellSelected(cell(Some("Lite"), "R2")),
+    );
+    let both = own(&app).expect("R1's values");
+    assert_eq!(both.parameters[FOOTPRINT_PARAMETER], "R_0805");
+    assert_eq!(
+        app.document_state.project_tabs[&id].variant_manager.draft,
+        None
+    );
+}
+
+/// A cell edit stores the placed part the parts read lists, which keeps the
+/// setting on that part through a re-annotation.
+#[test]
+fn a_cell_edit_names_the_placed_part() {
+    let (mut app, id, _dir) = app();
+    open_manager(&mut app, id);
+    let _ = manage(
+        &mut app,
+        id,
+        VariantManagerMsg::FitPicked {
+            cell: cell(Some("Lite"), "R1"),
+            fitted: Some(false),
+        },
+    );
+    let read = shown(&app, id).rows[0].link.clone();
+    assert!(read.is_some(), "the read names R1's placed part");
+    assert_eq!(data(&app).variant_settings.parts[0].part, read);
 }

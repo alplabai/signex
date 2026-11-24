@@ -33,9 +33,10 @@ use iced::font::Weight;
 use iced::widget::{Column, column, container, row, svg};
 use iced::{Background, Border, Color, Element, Font, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, ids, t};
-use signex_output::VariantMatrix;
-use signex_types::project::{VariantSettings, is_base_variant};
+use signex_output::{VariantMatrix, VariantRow};
+use signex_types::project::{PlacedPart, VariantPart, VariantSettings, is_base_variant};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::doc_tab_shell::{DocTabShell, DocTabShellStyle};
 use signex_widgets::text;
 
 use super::ProjectTabState;
@@ -85,6 +86,8 @@ struct Manager<'v> {
     parts: Parts<'v>,
     /// The parts read with the project's variant settings laid over it.
     shown: Option<VariantMatrix>,
+    /// The selected cell, while its variant and part are still there.
+    cell: Option<&'v VariantCell>,
     /// The project's variant settings, live.
     settings: &'v VariantSettings,
     /// The settings section could not be read: nothing in it can change.
@@ -136,6 +139,13 @@ impl<'v> Manager<'v> {
             Parts::Read(matrix) => Some(matrix.with_settings(settings)),
             _ => None,
         };
+        let cell = tab
+            .and_then(|tab| tab.variant_manager.cell.as_ref())
+            .filter(|cell| {
+                shown
+                    .as_ref()
+                    .is_some_and(|matrix| cell_is_read(matrix, cell))
+            });
         Self {
             project_id: project.id,
             definitions,
@@ -145,6 +155,7 @@ impl<'v> Manager<'v> {
             tab,
             parts,
             shown,
+            cell,
             settings,
             settings_locked: project.data.has_unreadable_variant_settings(),
             stale,
@@ -165,14 +176,12 @@ impl<'v> Manager<'v> {
 
     /// The selected cell, while its variant and part are still there.
     fn cell(&self) -> Option<&'v VariantCell> {
-        let cell = self.tab?.variant_manager.cell.as_ref()?;
-        let matrix = self.matrix()?;
-        matrix.column(cell.variant.as_deref())?;
-        matrix
-            .rows
-            .iter()
-            .any(|row| row.designator == cell.designator)
-            .then_some(cell)
+        self.cell
+    }
+
+    /// What `variant` changes on `part` in the project's settings.
+    fn own(&self, variant: Option<&str>, part: &VariantRow) -> Option<&'v VariantPart> {
+        self.settings.part(variant, placed(part))
     }
 
     /// The matrix column of `variant` (`None` is Base), when it was read.
@@ -197,6 +206,20 @@ impl<'v> Manager<'v> {
     fn is_active(&self, variant: Option<&str>) -> bool {
         variant == self.active
     }
+}
+
+/// Whether `matrix` has a column for `cell`'s variant and a row for its part.
+fn cell_is_read(matrix: &VariantMatrix, cell: &VariantCell) -> bool {
+    matrix.column(cell.variant.as_deref()).is_some()
+        && matrix
+            .rows
+            .iter()
+            .any(|row| row.designator == cell.designator)
+}
+
+/// `row`'s part as the variant settings find it.
+fn placed(row: &VariantRow) -> PlacedPart<'_> {
+    PlacedPart::new(&row.designator, row.link.as_ref())
 }
 
 /// Whether `matrix`, the read `tab` keeps, still holds: read at the sheet
@@ -225,7 +248,8 @@ fn read_for(matrix: &VariantMatrix, definitions: &[String]) -> bool {
 
 /// The Variants section of the Project tab: its title and help over the
 /// Variant Manager. The section list opens the Variant Manager tab instead
-/// of showing it, so this draws only for a section state set elsewhere.
+/// of showing it, so this draws only for a section state set elsewhere; it
+/// stays so that state never draws an empty page.
 pub(super) fn view<'a>(
     project: &LoadedProject,
     tab: Option<&ProjectTabState>,
@@ -246,9 +270,10 @@ pub(super) fn view<'a>(
     .boxed()
 }
 
-/// The Variant Manager: the top bar, the list, the centre and the selected
-/// cell's pane, and the status line, in one framed panel.
-fn frame<'a>(
+/// The Variant Manager in the shared document-tab shell (DECISIONS
+/// 2026-11-18): the top bar as its toolbar; the list, the centre and the
+/// selected cell's pane as its body; the status line as its footer.
+fn shell<'a>(
     project: &LoadedProject,
     tab: Option<&ProjectTabState>,
     sheet_epoch: u64,
@@ -261,27 +286,40 @@ fn frame<'a>(
     } else {
         row![list::view(&manager), main(&manager), detail::view(&manager)]
     };
+    DocTabShell::new(
+        body.height(Length::Fill).boxed(),
+        DocTabShellStyle::from_tokens(tokens, TS.body),
+    )
+    .toolbar(bar::toolbar(&manager))
+    .footer(bar::footer(&manager))
+    .view()
+}
+
+/// The shell in one framed panel, as the Project tab's section shows it.
+fn frame<'a>(
+    project: &LoadedProject,
+    tab: Option<&ProjectTabState>,
+    sheet_epoch: u64,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
     let line = ti(tokens.border);
     let panel = ti(tokens.panel_bg);
-    container(column![
-        bar::top(&manager),
-        body.height(Length::Fill),
-        bar::status(&manager)
-    ])
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .clip(true)
-    .style(move |_: &Theme| container::Style {
-        background: Some(Background::Color(panel)),
-        border: Border {
-            width: 1.0,
-            color: line,
-            radius: Radii::GRAPHITE.card.into(),
-            ..Border::default()
-        },
-        ..container::Style::default()
-    })
-    .boxed()
+    container(shell(project, tab, sheet_epoch, i18n, tokens))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .clip(true)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(panel)),
+            border: Border {
+                width: 1.0,
+                color: line,
+                radius: Radii::GRAPHITE.card.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
 }
 
 /// The centre: the summary cards over the matrix, or where the read stands.

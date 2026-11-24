@@ -2,13 +2,14 @@
 //! parameter values in a variant, Duplicate and Set as default. Each goes
 //! through an engine section command and is one undo step of the General
 //! history; a refused one shows its reason and records nothing. Selecting a
-//! cell is view state only.
-
-use std::collections::BTreeMap;
+//! cell is view state only. A cell edit names the placed part from the parts
+//! read, so the setting stays on it through a re-annotation.
 
 use signex_engine::ProjectSectionCommand;
 use signex_i18n::{I18n, ids};
-use signex_types::project::{BASE_VARIANT, ProjectData, is_base_variant};
+use signex_output::VariantMatrix;
+use signex_types::pcb::SymbolLink;
+use signex_types::project::{BASE_VARIANT, PlacedPart, ProjectData, SheetFit, is_base_variant};
 
 use super::super::{ProjectTabState, VariantRenameDraft};
 use super::manager::{OverrideDraft, VariantCell, VariantManagerMsg};
@@ -23,23 +24,22 @@ impl Signex {
     ) -> iced::Task<Message> {
         match msg {
             VariantManagerMsg::CellSelected(cell) => {
+                self.store_variant_draft(project_id);
                 if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
                     tab.variant_manager.cell = Some(cell);
                     tab.variant_manager.draft = None;
                 }
             }
             VariantManagerMsg::FitPicked { cell, fitted } => {
-                let Some(variant) = cell.variant else {
-                    return iced::Task::none();
-                };
-                let command = ProjectSectionCommand::SetVariantPartFit {
-                    variant,
-                    designator: cell.designator,
-                    fitted,
-                };
-                self.apply_variant_manager_edit(project_id, &command);
+                self.pick_variant_fit(project_id, cell, fitted);
             }
             VariantManagerMsg::OverrideEdited { parameter, text } => {
+                let moved_on = self
+                    .variant_draft(project_id)
+                    .is_some_and(|draft| draft.parameter != parameter);
+                if moved_on {
+                    self.store_variant_draft(project_id);
+                }
                 if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
                     tab.variant_manager.draft = Some(OverrideDraft { parameter, text });
                 }
@@ -76,6 +76,95 @@ impl Signex {
         matches!(outcome, Ok(true))
     }
 
+    /// The parts read of the project's tab, whether or not it still holds.
+    fn variant_read(&self, project_id: ProjectId) -> Option<&VariantMatrix> {
+        let tab = self.document_state.project_tabs.get(&project_id)?;
+        tab.variant_parts.as_deref()?.as_ref().ok()
+    }
+
+    /// The placed part the parts read lists under `designator`.
+    fn variant_part_link(&self, project_id: ProjectId, designator: &str) -> Option<SymbolLink> {
+        let matrix = self.variant_read(project_id)?;
+        let row = matrix
+            .rows
+            .iter()
+            .find(|row| row.designator == designator)?;
+        row.link.clone()
+    }
+
+    fn variant_draft(&self, project_id: ProjectId) -> Option<&OverrideDraft> {
+        let tab = self.document_state.project_tabs.get(&project_id)?;
+        tab.variant_manager.draft.as_ref()
+    }
+
+    /// The Fitting switch. Picking the fit the sheets already give a cell
+    /// that sets none of its own changes nothing and records nothing.
+    fn pick_variant_fit(&mut self, project_id: ProjectId, cell: VariantCell, fitted: Option<bool>) {
+        let Some(variant) = cell.variant.clone() else {
+            return;
+        };
+        let part = self.variant_part_link(project_id, &cell.designator);
+        if let Some(picked) = fitted
+            && self.repeats_sheet_fit(project_id, &cell, part.as_ref(), picked)
+        {
+            return;
+        }
+        let command = ProjectSectionCommand::SetVariantPartFit {
+            variant,
+            designator: cell.designator,
+            part,
+            fitted,
+        };
+        self.apply_variant_manager_edit(project_id, &command);
+    }
+
+    /// Whether `cell` sets no fit of its own and its sheets fit it as
+    /// `picked` already.
+    fn repeats_sheet_fit(
+        &self,
+        project_id: ProjectId,
+        cell: &VariantCell,
+        part: Option<&SymbolLink>,
+        picked: bool,
+    ) -> bool {
+        let Some(project) = self.document_state.project_by_id(project_id) else {
+            return false;
+        };
+        let placed = PlacedPart::new(&cell.designator, part);
+        let settings = &project.data.variant_settings;
+        if settings
+            .part(cell.variant.as_deref(), placed)
+            .is_some_and(|own| own.fitted.is_some())
+        {
+            return false;
+        }
+        let Some(matrix) = self.variant_read(project_id) else {
+            return false;
+        };
+        let sheets = matrix.column(cell.variant.as_deref()).and_then(|column| {
+            let row = matrix
+                .rows
+                .iter()
+                .find(|row| row.designator == cell.designator)?;
+            row.fitted.get(column).copied()
+        });
+        sheets == Some(picked)
+    }
+
+    /// Typing moved on to another parameter or another cell: what was typed
+    /// is stored, as Enter stores it.
+    fn store_variant_draft(&mut self, project_id: ProjectId) {
+        let cell = self
+            .document_state
+            .project_tabs
+            .get(&project_id)
+            .filter(|tab| tab.variant_manager.draft.is_some())
+            .and_then(|tab| tab.variant_manager.cell.clone());
+        if let Some(cell) = cell {
+            self.submit_variant_override(project_id, cell);
+        }
+    }
+
     /// Enter in a parameter value: store what was typed; an empty value is
     /// the Base value again.
     fn submit_variant_override(&mut self, project_id: ProjectId, cell: VariantCell) {
@@ -103,6 +192,7 @@ impl Signex {
         };
         let command = ProjectSectionCommand::SetVariantPartParameter {
             variant,
+            part: self.variant_part_link(project_id, &cell.designator),
             designator: cell.designator,
             parameter,
             value,
@@ -155,13 +245,13 @@ fn sheet_fits_of(
     project: &crate::app::state::LoadedProject,
     sheet_epoch: u64,
     from: &Option<String>,
-) -> Option<BTreeMap<String, bool>> {
+) -> Option<Vec<SheetFit>> {
     let matrix = tab.variant_parts.as_deref()?.as_ref().ok()?;
     if !super::read_holds(tab, matrix, project, sheet_epoch) {
         return None;
     }
     let Some(column) = matrix.column(from.as_deref()) else {
-        return Some(BTreeMap::new());
+        return Some(Vec::new());
     };
     Some(
         matrix
@@ -172,7 +262,11 @@ fn sheet_fits_of(
                     .get(column)
                     .is_some_and(|&f| f != row.base_fitted())
             })
-            .map(|row| (row.designator.clone(), !row.base_fitted()))
+            .map(|row| SheetFit {
+                designator: row.designator.clone(),
+                part: row.link.clone(),
+                fitted: !row.base_fitted(),
+            })
             .collect(),
     )
 }

@@ -10,7 +10,8 @@ pub struct VariantCell {
     pub designator: String,
 }
 
-/// A parameter value typed for the selected cell, kept until Enter.
+/// A parameter value typed for the selected cell, kept until Enter or until
+/// the typing moves to another parameter or cell, which store it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OverrideDraft {
     pub parameter: String,

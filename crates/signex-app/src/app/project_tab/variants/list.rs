@@ -12,6 +12,7 @@ use signex_i18n::{ids, t};
 use signex_widgets::{button, text, text_input};
 
 use super::super::general::tab_message;
+use super::super::look::with_tip;
 use super::super::table::{SP, TS, problem};
 use super::super::{ProjectTabMsg, VariantRenameDraft};
 use super::edits::problem_words;
@@ -206,16 +207,11 @@ fn default_star<'a>(m: &Manager<'_>, variant: Option<&str>) -> Element<'a, Messa
         return Space::new().width(TS.body).height(TS.body).boxed();
     }
     let star = glyph(GLYPH_STAR, TS.body, resolve(m.tokens).accent_text);
-    let tip = container(
-        text(t!(m.i18n, ids::VARIANT_MANAGER_DEFAULT_STAR))
-            .size(TS.caption)
-            .color(ti(m.tokens.text)),
+    with_tip(
+        star,
+        t!(m.i18n, ids::VARIANT_MANAGER_DEFAULT_STAR),
+        m.tokens,
     )
-    .padding([SP.xs, SP.s])
-    .style(crate::styles::context_menu(m.tokens));
-    signex_widgets::tooltip(star, tip, iced::widget::tooltip::Position::Top)
-        .gap(SP.xs)
-        .boxed()
 }
 
 /// "N / M fitted · reference" for Base, "N / M fitted · K changes" for a

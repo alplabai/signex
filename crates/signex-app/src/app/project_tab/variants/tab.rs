@@ -4,7 +4,8 @@
 
 use iced::widget::container;
 use iced::{Element, Length, Widget as _};
-use signex_widgets::{raw, text};
+use signex_i18n::{ids, t};
+use signex_widgets::text;
 
 use crate::app::state::ProjectId;
 use crate::app::{Message, Signex, TabInfo, TabKind};
@@ -76,7 +77,7 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let Some(project) = self.document_state.project_by_id(project_id) else {
             return container(
-                text(raw("This project is no longer open."))
+                text(t!(self.ui_state.i18n, ids::RULES_NO_PROJECT))
                     .size(TypeScale::default().title)
                     .color(crate::styles::ti(tokens.text_secondary)),
             )
@@ -85,7 +86,7 @@ impl Signex {
             .boxed();
         };
         let tab = self.document_state.project_tabs.get(&project_id);
-        let body = super::frame(
+        let body = super::shell(
             project,
             tab,
             self.document_state.sheet_edit_epoch,
@@ -95,7 +96,6 @@ impl Signex {
         container(body)
             .width(Length::Fill)
             .height(Length::Fill)
-            .padding(super::super::table::SP.l)
             .style(crate::styles::panel_region(tokens))
             .boxed()
     }
