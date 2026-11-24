@@ -7,20 +7,22 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use signex_bake::BoardBakeError;
+use signex_bake::board::BoardPreviewBake;
 use signex_library::{Footprint, FootprintFile};
 use signex_sketch::SketchData;
-use signex_types::pcb::PcbBoard;
+use signex_types::pcb::{PcbBoard, Point};
 use signex_types::pcb_layer::{CopperLayer, MechanicalLayer, PcbLayer};
 use signex_types::pcb_origin::BoardOrigin;
-use signex_types::pcb_sketch::BakedBoard;
 use signex_types::sketch::SketchHost;
-use signex_types::sketch::board_attr::SketchBoardItems;
 
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-use crate::library::editor::footprint::sketch_mode::{BakePreview, SketchEdit};
+use crate::library::editor::footprint::sketch_mode::SketchEdit;
 use crate::library::editor::footprint::{BoardBackdrop, EditorMode};
-use crate::panels::{BoardTargetProps, ComponentChoice, LayerChoice};
+use crate::panels::{
+    BakedHole, BakedOutline, BoardBakePreview, BoardBakeRefusal, BoardBakeRows, BoardTargetProps,
+    ComponentChoice, LayerChoice,
+};
 
 /// One board in sketch mode. The sketch is edited by the footprint
 /// editor's sketch tool, hosted on a footprint that exists only here: its
@@ -34,10 +36,11 @@ pub struct BoardSketchSession {
     /// Why the last commit was refused, shown in the mode's bar until the
     /// next commit; rendered in the language of the moment it is shown.
     pub refusal: Option<signex_i18n::Translatable>,
-    /// What a bake of the copy writes, while the bake preview is open.
-    pub preview: Option<BakePreview>,
+    /// What a bake of the copy writes, while the bake preview is open: the
+    /// Properties Bake panel shows it (mockup row 179).
+    pub preview: Option<BoardBakePreview>,
     /// Why the open preview's bake refuses, with the entity it names: the
-    /// preview card selects it on a click (mockup row 190).
+    /// Bake panel selects it on a click (mockup row 190).
     pub preview_error: Option<BoardBakeError>,
     /// The open Import DXF dialog (mockup row 179c); the sketch is unchanged
     /// until its Import.
@@ -112,16 +115,41 @@ impl BoardSketchSession {
 
     /// Bake the copy for the preview against `board` (its nets and placed
     /// components), when the preview is open; close it otherwise. Pure: the
-    /// board is not touched. The bake also goes to the canvas, which draws
-    /// it (mockup row 190).
+    /// board is not touched. It bakes at the editor's current solve and
+    /// never solves again; an unsolved sketch does not bake. The bake also
+    /// goes to the canvas, which draws it (mockup row 190).
     pub fn refresh_preview(&mut self, board: Option<&PcbBoard>) {
         let open = self.editor.state.sketch_exit.preview;
-        let bake = open.then(|| preview_bake(&self.working_sketch(), board));
         let drawn = self.editor.state.sketch_exit.board_result.is_some();
-        self.preview = bake.as_ref().map(board_preview);
-        self.preview_error = bake.as_ref().and_then(|bake| bake.as_ref().err().cloned());
-        let (baked, items) = match bake {
-            Some(Ok((baked, items))) => (Some(Arc::new(baked)), Some(Arc::new(items))),
+        let editor = &self.editor;
+        let sketch = editor.primitive().sketch.as_ref();
+        // Outer `None`: closed; inner `None`: open but not solved.
+        let bake = open.then(|| {
+            let solve = editor.state.last_solve.as_ref()?;
+            Some(signex_bake::board::bake_board_preview(
+                sketch?, solve, board,
+            ))
+        });
+        self.preview = bake.as_ref().map(|bake| match bake {
+            Some(Ok(bake)) => BoardBakePreview::Writes(bake_rows(bake)),
+            Some(Err(error)) => BoardBakePreview::Refused(BoardBakeRefusal {
+                reason: Some(error.to_string()),
+                place: error.place(),
+                gap: matches!(error, BoardBakeError::OpenProfile { .. })
+                    .then(|| editor.state.gap_offer(sketch))
+                    .flatten(),
+            }),
+            None => BoardBakePreview::Refused(BoardBakeRefusal {
+                reason: None,
+                place: None,
+                gap: None,
+            }),
+        });
+        self.preview_error = bake
+            .as_ref()
+            .and_then(|bake| bake.as_ref()?.as_ref().err().cloned());
+        let (baked, items) = match bake.flatten() {
+            Some(Ok(bake)) => (Some(Arc::new(bake.baked)), Some(Arc::new(bake.items))),
             _ => (None, None),
         };
         self.editor.state.sketch_exit.board_result = baked;
@@ -204,34 +232,52 @@ impl BoardSketchSession {
     }
 }
 
-type PreviewBake = Result<(BakedBoard, SketchBoardItems), BoardBakeError>;
-
-/// The preview's bake: with the board, its pours, drawings and anchors
-/// too; without one (it is closing), the sketch's own geometry.
-fn preview_bake(sketch: &SketchData, board: Option<&PcbBoard>) -> PreviewBake {
-    match board {
-        Some(board) => signex_bake::board::bake_board_with_items(sketch, board),
-        None => signex_bake::bake_board(sketch, &[]).map(|baked| (baked, Default::default())),
+/// The values a board bake writes (mockup row 179). A slot is one of the
+/// cutouts; it is listed as a slot and not counted as a cutout too.
+fn bake_rows(bake: &BoardPreviewBake) -> BoardBakeRows {
+    let BoardPreviewBake {
+        baked,
+        items,
+        slots,
+    } = bake;
+    let is_slot = |uuid| slots.iter().any(|(slot, _)| *slot == uuid);
+    BoardBakeRows {
+        outline: baked.outline.as_deref().map(outline_extent),
+        holes: baked
+            .holes
+            .iter()
+            .map(|hole| BakedHole {
+                drill_mm: hole.drill,
+                plated: hole.plated,
+            })
+            .collect(),
+        keepouts: baked.keepouts.iter().map(|k| k.layers.clone()).collect(),
+        cutouts: baked.cutouts.iter().filter(|c| !is_slot(c.uuid)).count(),
+        slots: slots
+            .iter()
+            .map(|(_, slot)| (slot.length, slot.width))
+            .collect(),
+        v_scores: baked.v_scores.len(),
+        pours: items.zones.len(),
+        mechanical: items.graphics.len(),
+        anchors: items.anchors.iter().map(|a| a.reference.clone()).collect(),
     }
 }
 
-/// What a board bake writes: a count per board target, or why the bake
-/// refuses.
-fn board_preview(bake: &PreviewBake) -> BakePreview {
-    use signex_bake::board::{baked_count, baked_item_count};
-    match bake {
-        Ok((baked, items)) => BakePreview::Counts(
-            SketchHost::Board
-                .bake_targets()
-                .iter()
-                .filter_map(|&kind| {
-                    let count = baked_count(baked, kind).or_else(|| baked_item_count(items, kind));
-                    count.map(|n| (kind, n))
-                })
-                .collect(),
-        ),
-        Err(error) => BakePreview::Refused(error.to_string()),
-    }
+/// The extent of a baked outline; an empty one removes the board's.
+fn outline_extent(points: &[Point]) -> BakedOutline {
+    let Some((first, rest)) = points.split_first() else {
+        return BakedOutline::Removed;
+    };
+    let (lo, hi) = rest
+        .iter()
+        .fold(((first.x, first.y), (first.x, first.y)), |(lo, hi), p| {
+            (
+                (lo.0.min(p.x), lo.1.min(p.y)),
+                (hi.0.max(p.x), hi.1.max(p.y)),
+            )
+        });
+    BakedOutline::Size(hi.0 - lo.0, hi.1 - lo.1)
 }
 
 /// The copper layers a board pour may take: the board's own, by its names,

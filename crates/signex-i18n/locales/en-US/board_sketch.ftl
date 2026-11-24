@@ -111,3 +111,21 @@ board-sketch-dxf-import = Import
 board-sketch-dxf-cancel = Cancel
 board-sketch-dxf-imported = Imported { $edges } edges from { $file } into the sketch: { $healed } gaps healed, { $open } open ends.
 board-sketch-dxf-rejected = { $file } was not imported: the sketch could not solve with it.
+# The Properties Bake panel of a board sketch while the bake preview is open
+# (mockup row 179). $board is the board's name.
+board-sketch-bake-title = Bake preview
+board-sketch-bake-status = { $board } is unchanged until Bake
+board-sketch-bake-solve = Solve
+# An outline's extent; $width and $height are millimetres.
+board-sketch-bake-size = { $width } × { $height } mm
+board-sketch-bake-outline-removed = Removed from the board
+# A mounting hole; $drill is its diameter in millimetres.
+board-sketch-bake-hole-plated = Ø { $drill } mm · plated
+board-sketch-bake-hole-unplated = Ø { $drill } mm · unplated
+# A keepout; $layers lists the layers it applies to.
+board-sketch-bake-keepout-layers = On { $layers }
+# A component anchor; $reference is the designator it moves.
+board-sketch-bake-anchor = Moves { $reference }
+board-sketch-bake-nothing = Bake writes nothing to the board.
+board-sketch-bake-unsolved = The sketch does not bake: it is not solved.
+board-sketch-bake-close-hint = Bake preview on the mode bar closes this panel.

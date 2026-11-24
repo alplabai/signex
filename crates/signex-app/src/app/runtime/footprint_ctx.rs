@@ -704,6 +704,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
         board: super::board_sketch_ctx::board_sketch_props(editor).map(|board| {
             crate::panels::BoardSketchProps {
                 target: app.board_sketch_target(),
+                bake: app.board_sketch_bake_preview(),
                 ..board
             }
         }),

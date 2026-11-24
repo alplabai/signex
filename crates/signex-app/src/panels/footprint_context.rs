@@ -773,6 +773,9 @@ pub struct BoardSketchProps {
     /// The radius Add fillets applies; `None` when no failing corner can
     /// take a fillet (mockup row 179d).
     pub fillet_radius: Option<f64>,
+    /// The open bake preview, shown as the Bake panel (mockup row 179);
+    /// `None` while the preview is closed.
+    pub bake: Option<crate::panels::BoardBakePreview>,
 }
 
 /// A mounting hole's fields as the Properties panel edits them.
