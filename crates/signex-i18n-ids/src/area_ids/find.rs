@@ -74,4 +74,11 @@ define_ids! {
     PASTE_ARRAY_ITEMS = "paste-array-items";
     PASTE_ARRAY_PASTE = "paste-array-paste";
     PASTE_ARRAY_PASTE_NONE = "paste-array-paste-none";
+    FIND_KIND_NET_LABEL = "find-kind-net-label";
+    FIND_KIND_TEXT_NOTE = "find-kind-text-note";
+    FIND_SIMILAR_PROP_KIND = "find-similar-prop-kind";
+    FIND_SIMILAR_PROP_LIBRARY_PART = "find-similar-prop-library-part";
+    FIND_SIMILAR_PROP_DESIGNATOR_PREFIX = "find-similar-prop-designator-prefix";
+    FIND_SIMILAR_PROP_NET_NAME = "find-similar-prop-net-name";
+    FIND_SIMILAR_PROP_LABEL_TYPE = "find-similar-prop-label-type";
 }

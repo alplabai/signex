@@ -7,8 +7,9 @@ use std::ops::Range;
 
 use iced::widget::{Row, Space, column, container, row, scrollable};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget};
+use signex_engine::pcb::find::BoardFindKind;
 use signex_engine::{FindKind, FindQuery};
-use signex_i18n::{I18n, UserText, ids, t};
+use signex_i18n::{I18n, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, checkbox, raw, text};
 
@@ -41,9 +42,31 @@ pub(super) struct ResultRow {
 /// The results of one kind, in list order.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct ResultGroup {
-    /// The kind's name, as signex-engine words it (#2060).
+    /// The kind as signex-engine words it: the group's key.
     pub kind: &'static str,
+    /// The kind's catalog name, shown in the group header (#2060).
+    pub name: MessageId,
     pub rows: Vec<ResultRow>,
+}
+
+/// The catalog name of a sheet hit's kind.
+pub(super) fn find_kind_label(kind: FindKind) -> MessageId {
+    match kind {
+        FindKind::NetLabel => ids::FIND_KIND_NET_LABEL,
+        FindKind::TextNote => ids::FIND_KIND_TEXT_NOTE,
+        FindKind::Designator => ids::PROPERTIES_DESIGNATOR,
+        FindKind::Value => ids::PROPERTIES_VALUE,
+    }
+}
+
+/// The catalog name of a board hit's kind.
+pub(super) fn board_find_kind_label(kind: BoardFindKind) -> MessageId {
+    match kind {
+        BoardFindKind::Designator => ids::PROPERTIES_DESIGNATOR,
+        BoardFindKind::Value => ids::PROPERTIES_VALUE,
+        BoardFindKind::Footprint => ids::PROPERTIES_FOOTPRINT,
+        BoardFindKind::Net => ids::PROPERTIES_NET,
+    }
 }
 
 fn file_stem(path: Option<&std::path::Path>) -> String {
@@ -52,11 +75,12 @@ fn file_stem(path: Option<&std::path::Path>) -> String {
 }
 
 /// Push `row` into the group of `kind`, opening one on its first result.
-fn push(groups: &mut Vec<ResultGroup>, kind: &'static str, row: ResultRow) {
+fn push(groups: &mut Vec<ResultGroup>, kind: &'static str, name: MessageId, row: ResultRow) {
     match groups.iter_mut().find(|g| g.kind == kind) {
         Some(group) => group.rows.push(row),
         None => groups.push(ResultGroup {
             kind,
+            name,
             rows: vec![row],
         }),
     }
@@ -76,7 +100,12 @@ pub(super) fn groups(state: &FindReplaceState) -> Vec<ResultGroup> {
                 sheet: sheet.clone(),
                 mono: true,
             };
-            push(&mut groups, hit.kind.label(), row);
+            push(
+                &mut groups,
+                hit.kind.label(),
+                board_find_kind_label(hit.kind),
+                row,
+            );
         }
         return groups;
     }
@@ -88,7 +117,12 @@ pub(super) fn groups(state: &FindReplaceState) -> Vec<ResultGroup> {
             sheet: file_stem(found.sheet.as_deref()),
             mono: found.hit.kind != FindKind::TextNote,
         };
-        push(&mut groups, found.hit.kind.label(), row);
+        push(
+            &mut groups,
+            found.hit.kind.label(),
+            find_kind_label(found.hit.kind),
+            row,
+        );
     }
     groups
 }
@@ -175,8 +209,7 @@ fn group_header<'a>(
     let fill = r.sunken;
     container(
         row![
-            // raw: the kind is named by signex-engine (#2060).
-            text(raw(group.kind)).size(TS.caption).color(r.ink3),
+            text(t!(i18n, group.name)).size(TS.caption).color(r.ink3),
             text(t!(i18n, ids::FIND_GROUP_COUNT, "count" => group.rows.len()))
                 .size(TS.caption)
                 .color(r.ink3)
