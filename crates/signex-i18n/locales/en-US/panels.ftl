@@ -619,7 +619,7 @@ panels-list-region-window = window
 # The PCB panel's row in the panel list, named for its first mode.
 panels-list-row-nets = Nets
 # Foot of the panel list: where the tool documents went.
-panels-list-foot = Rules and the other tool documents open as tabs, from their menus or the command palette.
+panels-list-foot = Layer Stack, Rules and the other tool documents open as tabs, from their menus or the command palette.
 panels-erc-running = Running…
 panels-erc-no-findings-left = No findings left since the last run
 panels-erc-empty-hint = Run ERC to populate project-wide diagnostics
@@ -1317,3 +1317,8 @@ panels-harness-msg-entry-off-connector = Harness entry not placed: click on a ha
 panels-compiled-design-msg-no-project = Compile project: open a sheet of a project first; a sheet outside a project has no compiled design.
 # $why says why the project refused the edit.
 panels-compiled-design-naming-refused = Channel naming not changed: { $why }
+
+# pcb-panel-group
+# Empty state of the compact Length Matching dock panel (mockup row 107).
+panels-length-matching-empty-title = No length-matching groups
+panels-length-matching-empty-body = This board has no length-matching groups yet. Their members show here, with their lengths, as you route.

@@ -294,6 +294,9 @@ pub enum PanelKind {
     FootprintLibrary,
     /// PCB editor net table: nets with pad counts and routed length.
     PcbNets,
+    /// The compact Length Matching panel beside the board (mockup rows 7
+    /// and 107): the board's length-matching groups while routing.
+    LengthMatching,
     /// VSCode-style per-file Git history. Right-dock surface that
     /// follows the active tab and shows the file's last 50 commits
     /// via `signex_widgets::history_pane`.
@@ -340,6 +343,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::SchLibrary,
     PanelKind::FootprintLibrary,
     PanelKind::PcbNets,
+    PanelKind::LengthMatching,
     PanelKind::History,
     PanelKind::NetInspector,
     PanelKind::CompiledDesign,
@@ -370,7 +374,11 @@ impl PanelKind {
     pub fn needs_pcb(self) -> bool {
         matches!(
             self,
-            PanelKind::Drc | PanelKind::LayerStack | PanelKind::Layers | PanelKind::PcbNets
+            PanelKind::Drc
+                | PanelKind::LayerStack
+                | PanelKind::Layers
+                | PanelKind::PcbNets
+                | PanelKind::LengthMatching
         )
     }
 
@@ -415,6 +423,7 @@ impl PanelKind {
             PanelKind::SchLibrary => ids::PANELS_KIND_SCH_LIBRARY,
             PanelKind::FootprintLibrary => ids::PANELS_KIND_FOOTPRINT_LIBRARY,
             PanelKind::PcbNets => ids::PANELS_KIND_PCB_NETS,
+            PanelKind::LengthMatching => ids::PANELS_PAIRED_LENGTH_MATCHING,
             PanelKind::History => ids::PANELS_KIND_HISTORY,
             PanelKind::NetInspector => ids::PANELS_KIND_NET_INSPECTOR,
             PanelKind::CompiledDesign => ids::PANELS_KIND_COMPILED_DESIGN,
@@ -459,6 +468,7 @@ impl PanelKind {
             PanelKind::SchLibrary => "SCH Library",
             PanelKind::FootprintLibrary => "Footprint Library",
             PanelKind::PcbNets => "PCB",
+            PanelKind::LengthMatching => "Length Matching",
             PanelKind::History => "History",
             PanelKind::NetInspector => "Net Inspector",
             PanelKind::CompiledDesign => "Compiled Design",
@@ -602,6 +612,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         }
         // Its list and detail scroll on their own.
         PanelKind::PcbNets => return pcb_nets::view(ctx),
+        PanelKind::LengthMatching => paired::length_matching_view(ctx),
         PanelKind::History => return history::view_history(ctx),
         PanelKind::NetInspector => return net_inspector::view(ctx),
         PanelKind::CompiledDesign => return compiled_design::view(ctx),
