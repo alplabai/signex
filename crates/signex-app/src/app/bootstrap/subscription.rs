@@ -332,7 +332,7 @@ impl OpenOverlays {
             }),
             OverlayId::PasteArray => self.paste_array_open.then(|| {
                 Message::Edit(crate::app::EditMsg::PasteArray(
-                    crate::paste_array::PasteArrayMsg::Closed,
+                    crate::paste_array::PasteArrayMsg::EscapePressed,
                 ))
             }),
             OverlayId::UnionPopover => self.union_popover_open.then(|| {
@@ -1348,7 +1348,7 @@ mod tests {
         assert!(matches!(
             only(|o| o.paste_array_open = true),
             Some(Message::Edit(crate::app::EditMsg::PasteArray(
-                crate::paste_array::PasteArrayMsg::Closed
+                crate::paste_array::PasteArrayMsg::EscapePressed
             )))
         ));
         assert!(matches!(

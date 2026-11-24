@@ -141,6 +141,63 @@ fn a_long_saved_path_keeps_its_file_name_and_time() {
     assert!(line.chars().count() <= saved_caption_chars(540.0), "{line}");
 }
 
+/// Mockup row 15: in a window narrower than the card the character estimate
+/// assumes, the saved line still ends before the "newer" pill, and the pill
+/// stays inside the window.
+#[test]
+fn a_long_saved_path_in_a_narrow_window_leaves_the_pill_clear() {
+    let path = format!("/home/user/{}/power.snxsch", "deep/folder/".repeat(12));
+    let long = RecoveryOffer {
+        path: path.into(),
+        ..offer(true)
+    };
+    let (app, _boot) = Signex::new();
+    let window = iced::Size::new(360.0, 600.0);
+    let texts = lay_out_texts(app.view_autosave_recovery_window(&long), window);
+    let pill = find(&texts, "newer").bounds;
+    let line = texts
+        .iter()
+        .find(|t| plain(&t.text).contains("power.snxsch · "))
+        .expect("the saved row")
+        .bounds;
+    assert!(
+        line.x + line.width <= pill.x + 0.5,
+        "{line:?} under {pill:?}"
+    );
+    assert!(pill.x + pill.width <= window.width + 0.5, "{pill:?}");
+}
+
+/// Mockup row 15: a caption wider than its row gives up its middle to an
+/// ellipsis and is never drawn past the row's edge.
+#[test]
+fn a_caption_wider_than_its_row_is_cut_inside_it() {
+    use iced::widget::{Space, container, row};
+    use iced::{Element, Length, Widget as _};
+    use signex_i18n::UserText;
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    const ROOM: f32 = 120.0;
+    let tokens = theme_tokens(ThemeId::GraphiteDark);
+    let window = iced::Size::new(4.0 * ROOM, 60.0);
+    let label = "/home/user/deep/folder/deep/folder/power.snxsch · 14:02";
+    let cell =
+        container(super::caption(UserText::new(label), true, &tokens)).width(Length::Fixed(ROOM));
+    let line: Element<'_, crate::app::Message> =
+        row![cell, Space::new().width(Length::Fill)].boxed();
+    let pixels = crate::layout_probe::draw_pixels(line, window);
+    let width = window.width as usize;
+    let inked = |xs: std::ops::Range<usize>| {
+        pixels
+            .chunks_exact(4)
+            .enumerate()
+            .filter(|(i, px)| xs.contains(&(i % width)) && px[..3].iter().any(|c| *c > 24))
+            .count()
+    };
+    let room = ROOM as usize;
+    assert!(inked(0..room) > 0, "the caption is drawn");
+    assert_eq!(inked(room + 1..width), 0, "drawn past its row");
+}
+
 /// The footer order is unchanged by the redraw: Restore, then Discard, at
 /// the left; Decide later alone at the right. The mockup row 15 split is an open
 /// maintainer question.

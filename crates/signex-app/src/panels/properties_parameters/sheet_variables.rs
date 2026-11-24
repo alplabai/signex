@@ -7,7 +7,7 @@
 //! row shows its result in a pill, or an inline error under the row (#2531).
 
 use super::super::*;
-use super::graphite_table::ParameterRow;
+use super::graphite_table::{ParameterRow, inline_value_input};
 use crate::styles::{Spacing, TypeScale, ti};
 use iced::Widget;
 use signex_i18n::{ids, t};
@@ -93,19 +93,17 @@ pub(super) fn sheet_variable_rows<'a>(
             .and_then(|s| ctx.drafts.sheet_variable_text(s, Some(name.as_str())))
             .unwrap_or_else(|| stored.clone());
         let key = name.clone();
-        let placeholder = signex_i18n::UserText::new(String::new());
-        let input = signex_widgets::text_input(placeholder, value)
+        // An empty value reads "Not set", inline, as a title-block value
+        // does (mockup row 40).
+        let placeholder = t!(i18n, ids::PROPERTIES_PARAMETERS_NOT_SET).into();
+        let input = inline_value_input(placeholder, value, stored.is_empty())
             .on_input(move |text| {
                 msg(SheetVariableMsg::ValueTyped {
                     name: key.clone(),
                     text,
                 })
             })
-            .on_submit(msg(SheetVariableMsg::ValueSubmitted(name.clone())))
-            .size(TS.body)
-            .padding(SP.xs)
-            .style(crate::panels::form_look::text_input_style)
-            .width(Length::Fill);
+            .on_submit(msg(SheetVariableMsg::ValueSubmitted(name.clone())));
         let result = variable_result(ctx, name);
         let mut field = row![input].spacing(SP.xs).align_y(iced::Alignment::Center);
         match &result {

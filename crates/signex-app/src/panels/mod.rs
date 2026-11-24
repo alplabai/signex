@@ -36,6 +36,8 @@ mod sketch_fix;
 pub use sketch_fix::SketchFixMsg;
 mod board_net_classes;
 mod color_field;
+mod color_hex;
+pub use color_hex::{ColorHexDraft, ColorHexMsg, ColorRowKey, HexEntry, parse_typed_hex};
 pub mod command_log;
 pub use command_log::{CommandLogMsg, CommandLogState};
 mod context;

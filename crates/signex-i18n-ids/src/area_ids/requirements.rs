@@ -23,6 +23,12 @@ define_ids! {
     REQUIREMENTS_PASSED_COUNT = "requirements-passed-count";
     REQUIREMENTS_FAILED_COUNT = "requirements-failed-count";
     REQUIREMENTS_NOT_CHECKED_COUNT = "requirements-not-checked-count";
+    REQUIREMENTS_PARTS_UNMET = "requirements-parts-unmet";
+    REQUIREMENTS_PART_UNPLACED = "requirements-part-unplaced";
+    REQUIREMENTS_PART_NO_LIBRARY = "requirements-part-no-library";
+    REQUIREMENTS_PART_STATE = "requirements-part-state";
+    REQUIREMENTS_FINDINGS = "requirements-findings";
+    REQUIREMENTS_FINDINGS_NEXT = "requirements-findings-next";
     REQUIREMENTS_EXPAND = "requirements-expand";
     REQUIREMENTS_COLLAPSE = "requirements-collapse";
     REQUIREMENTS_SUMMARY_CLEAN = "requirements-summary-clean";

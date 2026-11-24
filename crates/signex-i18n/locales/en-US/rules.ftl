@@ -377,6 +377,11 @@ rules-cell-from-default = The built-in default
 rules-cell-not-applicable = Does not apply to this row
 rules-cell-not-checked = Not checked yet
 rules-cell-not-set = Not set
+rules-cell-always-checked = Run DRC always checks this
+# The fixed values of All in Short-circuit (Allowed) and Un-routed net
+# (Check).
+rules-cell-no = No
+rules-cell-on = On
 
 # The filter chips and the find box.
 rules-chip-inherited = Show inherited values

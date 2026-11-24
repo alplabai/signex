@@ -130,7 +130,7 @@ impl Signex {
         let dismiss = Self::flyout_dismiss_layer(
             bar_message(PcbBarMsg::MenuDismissed),
             bar_message(PcbBarMsg::FlyoutRightPressed),
-            iced::Color::TRANSPARENT,
+            crate::app::view::menu_scrim(),
         );
         stack![
             dismiss,

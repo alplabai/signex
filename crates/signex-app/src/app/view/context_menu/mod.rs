@@ -20,6 +20,8 @@ mod layer_tab;
 mod menus;
 mod placement;
 pub(in crate::app::view) use placement::clamp_menu_origin;
+// The editors' Active Bar and sketch menus dim the window with it too.
+pub(crate) use placement::{menu_scrim, menu_scrim_fill};
 mod project_tree;
 mod start_row;
 mod submenu;

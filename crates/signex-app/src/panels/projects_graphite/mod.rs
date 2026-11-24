@@ -144,11 +144,8 @@ fn regroup(roots: &[TreeNode], view: &ProjectsView) -> Vec<TreeNode> {
                     if kids.is_empty() {
                         continue;
                     }
-                    if name == SCHEMATICS && kids.len() > 1 {
-                        let total = kids.len();
-                        for (i, kid) in kids.iter_mut().enumerate() {
-                            kid.meta = Some(format!("{}/{total}", i + 1));
-                        }
+                    if name == SCHEMATICS {
+                        card::number_sheets(&mut kids);
                     }
                     let mut group = TreeNode::branch(name, TreeIcon::Folder, kids).with_key(name);
                     group.expanded = !view.collapsed.contains(&group_path(&root.key, name));

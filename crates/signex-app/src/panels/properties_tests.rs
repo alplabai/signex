@@ -396,15 +396,19 @@ fn the_sheet_symbol_colour_rows_open_their_own_pickers() {
         instances: Vec::new(),
     });
     let shown = texts(&ctx);
+    let boxes =
+        crate::layout_probe::lay_out_inputs(view_panel(PanelKind::Properties, &ctx), WINDOW);
     let click = |label: &str| {
         let at = shown
             .iter()
             .find(|t| t.text == label)
             .unwrap_or_else(|| panic!("{label:?} missing from {shown:#?}"));
-        let swatch = iced::Point::new(
-            at.bounds.x + 96.0 + 30.0,
-            at.bounds.y + at.bounds.height / 2.0,
-        );
+        // The swatch left of the row's hex box (mockup row 46).
+        let hex_box = boxes
+            .iter()
+            .find(|b| (b.bounds.center_y() - at.bounds.center_y()).abs() < at.bounds.height)
+            .unwrap_or_else(|| panic!("no hex box beside {label:?}: {boxes:#?}"));
+        let (swatch, _chevron) = crate::panels::wire_style_rows::toggle_points(hex_box.bounds);
         crate::layout_probe::messages_on_click_at(
             view_panel(PanelKind::Properties, &ctx),
             WINDOW,
@@ -1011,4 +1015,66 @@ fn the_properties_panel_draws_no_english_under_en_xa() {
         status: crate::panels::FootprintCardStatus::Loading,
     });
     assert_eq!(same_in_en_xa(part), ["Probe"]);
+}
+
+/// A panel context with no sheet or board active, and an open project named
+/// `name` when one is given: a page tab such as Rules is in front.
+fn page_tab_in_front(name: Option<&str>) -> PanelContext {
+    let (mut app, _boot) = crate::app::Signex::new();
+    let mut ctx = app.document_state.panel_ctx.clone();
+    ctx.has_schematic = false;
+    ctx.has_pcb = false;
+    ctx.pcb_board = None;
+    ctx.projects = name
+        .map(|name| crate::panels::ProjectPanelInfo {
+            id: app.document_state.mint_project_id(),
+            case_fold: Default::default(),
+            name: name.to_owned(),
+            project_file: Some(format!("{name}.snxsch")),
+            project_file_open: false,
+            project_file_dirty: false,
+            project_file_active: false,
+            project_file_missing: false,
+            pcb_file: None,
+            pcb_file_open: false,
+            pcb_file_dirty: false,
+            pcb_file_active: false,
+            pcb_file_missing: false,
+            sheets: Vec::new(),
+            libraries: Vec::new(),
+            is_active: true,
+            is_dirty: false,
+            version_control: false,
+        })
+        .into_iter()
+        .collect();
+    ctx
+}
+
+/// Mockup row 89: the Rules tab belongs to the open project, so Properties
+/// names that project and never asks to open one; with no project open it
+/// still does (#51).
+#[test]
+fn a_page_tab_of_an_open_project_does_not_ask_to_open_a_project() {
+    let open = plain_texts(&page_tab_in_front(Some("linear-regulator")));
+    assert!(
+        !open.iter().any(|t| t == "Open a project"),
+        "Open a project shown with a project open: {open:?}"
+    );
+    assert!(
+        open.iter().any(|t| t == "linear-regulator"),
+        "the open project is not named: {open:?}"
+    );
+    assert!(
+        open.iter()
+            .any(|t| t == "Properties are available when a schematic is active"),
+        "{open:?}"
+    );
+    let none = plain_texts(&page_tab_in_front(None));
+    assert!(none.iter().any(|t| t == "Open a project"), "{none:?}");
+    assert!(!none.iter().any(|t| t == "linear-regulator"), "{none:?}");
+}
+
+fn plain_texts(ctx: &PanelContext) -> Vec<String> {
+    texts(ctx).into_iter().map(|t| t.text).collect()
 }

@@ -98,6 +98,16 @@ window.
   `detached_wrap_tests` give each of the three a long name on Graphite and on
   a legacy theme and fail if the footer leaves the window. The error notice
   and the netlist prompt scroll a long message instead of growing the window.
+- **Monitor cap** (decision 2026-11-24). Every dialog window
+  (`dialog_window_size_of`, so the size it opens at and the size a content
+  resize asks for agree) is no larger than the monitor it opens on, less
+  `MONITOR_RESERVE` (48 logical px) on each side for the taskbar, dock or menu
+  bar: iced reports a monitor's size, not its work area. The monitor is the
+  one the window is placed on (`new_window_monitor_size`), else the main
+  window's; with neither read yet the window opens at its full size. A
+  window's `min_size` never exceeds the size it opens at. New Project
+  (1040 x 920, mockup row 21) is the dialog this caps on a 1366 x 768 or
+  1280 x 720 screen; its body scrolls and the footer stays in view.
 
 ## Dialog surface in a window
 

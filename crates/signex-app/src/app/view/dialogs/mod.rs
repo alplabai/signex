@@ -45,6 +45,7 @@ mod rule_editor;
 mod sheet_numbering;
 mod sheet_sync;
 mod sizes;
+pub(crate) use sizes::NEW_PROJECT as NEW_PROJECT_SIZE;
 mod title_bar;
 mod update_pcb;
 mod version_control;

@@ -21,8 +21,8 @@ pub(crate) use updates::fit_to_viewport;
 /// rows 122 and 123), and the rectangle Width / Height rule its form and the graphic
 /// edit share: the slice's surface for the panel and the dock handler.
 pub use state::{
-    BodyScope, BodyScopeRow, PartChip, PartStep, SymbolPropsMsg, SymbolPropsTab, SymbolPropsUi,
-    SymbolSelection, rect_end_for_extent, rect_extent,
+    BodyScope, BodyScopeRow, PartChip, PartStep, SymActiveBarMenu, SymbolPropsMsg, SymbolPropsTab,
+    SymbolPropsUi, SymbolSelection, rect_end_for_extent, rect_extent,
 };
 /// The Pin table document tab's state, messages and edits (mockup row 122b).
 pub use state::{

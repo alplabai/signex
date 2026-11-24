@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use signex_types::coord::Unit;
 use signex_widgets::property_illustration::{IllustrationHover, IllustrationMsg};
 
+use super::preview::PreviewDrag;
 use crate::paste_prefs::PasteDesignators;
 use signex_types::measure::{length_field_text, parse_length_field_mm};
 use signex_types::text_increment::{STEP_MAX, STEP_MIN};
@@ -58,6 +59,10 @@ pub struct PasteArrayState {
     pub hover: IllustrationHover,
     /// The preview is drawn at its taller size.
     pub preview_expanded: bool,
+    /// Copy 2 is held on the preview.
+    pub preview_drag: Option<PreviewDrag>,
+    /// The value being typed on the preview, and its text from before.
+    pub preview_edit: Option<(PasteArrayField, String)>,
 }
 
 /// A dialog whose fields all parse.
@@ -116,7 +121,70 @@ impl PasteArrayState {
             grid_mm: 0.0,
             hover: IllustrationHover::default(),
             preview_expanded: false,
+            preview_drag: None,
+            preview_edit: None,
         }
+    }
+
+    /// The text of `field`: the preview edits the same text as the field.
+    pub fn field_text_mut(&mut self, field: PasteArrayField) -> &mut String {
+        match field {
+            PasteArrayField::Copies => &mut self.count,
+            PasteArrayField::XSpacing => &mut self.x_spacing,
+            PasteArrayField::YSpacing => &mut self.y_spacing,
+            PasteArrayField::Step => &mut self.step,
+        }
+    }
+
+    /// Copy 2 was pressed at `at`, in pixels in a drawing of `scale` pixels
+    /// per mm. A dialog whose spacing does not parse has no copy 2 to hold.
+    pub fn grab_copy_two(&mut self, at: (f64, f64), scale: f64) {
+        self.preview_drag = self.input().ok().map(|input| PreviewDrag {
+            press: at,
+            scale,
+            start: (input.dx_mm, input.dy_mm),
+        });
+    }
+
+    /// The held copy 2 moved to `at`, in pixels in the drawing: the spacing
+    /// follows, snapped to the drag step, in the dialog's unit.
+    pub fn drag_copy_two(&mut self, at: (f64, f64)) {
+        let Some(drag) = self.preview_drag else {
+            return;
+        };
+        let (dx, dy) = super::preview::dragged_spacing(drag, at);
+        self.x_spacing = length_field_text(dx, self.unit);
+        self.y_spacing = length_field_text(dy, self.unit);
+    }
+
+    /// A click on a drawn value: it is typed on the drawing. A click on the
+    /// value already being typed keeps its text from before; another value's
+    /// open edit keeps what was typed.
+    pub fn start_preview_edit(&mut self, field: PasteArrayField) {
+        if self
+            .preview_edit
+            .as_ref()
+            .is_some_and(|(open, _)| *open == field)
+        {
+            return;
+        }
+        let before = self.field_text_mut(field).clone();
+        self.preview_edit = Some((field, before));
+    }
+
+    /// Enter on the drawing: the typed value stays.
+    pub fn finish_preview_edit(&mut self) {
+        self.preview_edit = None;
+    }
+
+    /// Esc on the drawing: the value from before the edit comes back.
+    /// Returns whether an edit was open.
+    pub fn cancel_preview_edit(&mut self) -> bool {
+        let Some((field, before)) = self.preview_edit.take() else {
+            return false;
+        };
+        *self.field_text_mut(field) = before;
+        true
     }
 
     /// The new copies the typed Copies places, when it is a whole number from
@@ -238,8 +306,26 @@ pub enum PasteArrayMsg {
     PreviewHovered(IllustrationMsg),
     /// The preview's expand button was pressed.
     PreviewExpandToggled,
+    /// Copy 2 was pressed on the preview at `at`, in pixels in the drawing,
+    /// which drew `scale` pixels per mm.
+    PreviewCopyGrabbed {
+        at: (f64, f64),
+        scale: f64,
+    },
+    /// The held copy 2 was dragged to this point, in pixels in the drawing.
+    PreviewCopyDragged((f64, f64)),
+    /// The held copy 2 was let go.
+    PreviewCopyDropped,
+    /// A value drawn on the preview was clicked, to be typed there.
+    PreviewValueClicked(PasteArrayField),
+    /// Enter in the value typed on the preview.
+    PreviewEditSubmitted,
     /// OK: place the array.
     ApplyPressed,
+    /// Esc with the dialog on top: it puts back a value typed on the drawing,
+    /// or closes the dialog when none is open.
+    EscapePressed,
+    /// Cancel or the header X: the dialog closes.
     Closed,
 }
 
@@ -374,6 +460,65 @@ mod tests {
         s.set_count_up(false, 2);
         s.set_count_up(true, 0);
         assert_eq!(s.step, "1", "a 0 preference turns on with 1");
+    }
+
+    /// Mockup row 69: dragging copy 2 writes the spacing fields, snapped to
+    /// 1.27 mm and in the dialog's unit; the drop ends the drag.
+    #[test]
+    fn dragging_copy_two_sets_the_spacing_fields() {
+        let mut s = state();
+        // Pressed at 10 px per mm with copy 2 at 10 mm, moved 5 mm right and
+        // 2.5 mm down.
+        s.grab_copy_two((110.0, 5.0), 10.0);
+        assert_eq!(
+            s.preview_drag,
+            Some(PreviewDrag {
+                press: (110.0, 5.0),
+                scale: 10.0,
+                start: (10.0, 0.0),
+            })
+        );
+        s.drag_copy_two((160.0, 30.0));
+        let input = s.input().unwrap();
+        assert!((input.dx_mm - 15.24).abs() < 1e-9, "{}", input.dx_mm);
+        assert!((input.dy_mm - 2.54).abs() < 1e-9, "{}", input.dy_mm);
+        s.preview_drag = None;
+        s.drag_copy_two((40.0, 40.0));
+        assert!(
+            (s.input().unwrap().dx_mm - 15.24).abs() < 1e-9,
+            "no drag held"
+        );
+
+        let mut mil =
+            PasteArrayState::new(Unit::Mil, 2.54, 0.0, 1, PasteDesignators::Keep, 3, None);
+        mil.grab_copy_two((25.4, 0.0), 10.0);
+        mil.drag_copy_two((50.8, 0.0));
+        assert_eq!(mil.x_spacing, length_field_text(5.08, Unit::Mil));
+
+        let mut bad = state();
+        bad.x_spacing = "x".to_owned();
+        bad.grab_copy_two((1.0, 1.0), 10.0);
+        assert_eq!(bad.preview_drag, None, "no copy 2 to hold");
+    }
+
+    /// Mockup row 69: a value typed on the drawing is the field's own text;
+    /// Enter keeps it, Esc puts the old one back.
+    #[test]
+    fn a_value_typed_on_the_drawing_is_the_fields_text() {
+        let mut s = state();
+        s.start_preview_edit(PasteArrayField::Copies);
+        *s.field_text_mut(PasteArrayField::Copies) = "6".to_owned();
+        assert_eq!(s.count, "6", "the field follows");
+        s.start_preview_edit(PasteArrayField::Copies);
+        assert!(s.cancel_preview_edit());
+        assert_eq!(s.count, "2", "Esc restores the text from before");
+        assert!(!s.cancel_preview_edit(), "nothing open");
+
+        s.start_preview_edit(PasteArrayField::Step);
+        s.step = "3".to_owned();
+        s.finish_preview_edit();
+        assert_eq!((s.step.as_str(), s.preview_edit.is_none()), ("3", true));
+        assert!(!s.cancel_preview_edit(), "Enter closed it");
     }
 
     #[test]

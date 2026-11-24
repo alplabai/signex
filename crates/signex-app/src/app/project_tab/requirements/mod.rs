@@ -79,7 +79,9 @@ pub(super) fn failed_count(
     state
         .and_then(|state| state.last_run.as_deref())
         .and_then(|run| run.report.as_ref().ok())
-        .map_or(0, |report| view::outcome_counts(report, entries).failed)
+        .map_or(0, |report| {
+            view::outcome_counts(Some(report), entries).failed
+        })
 }
 
 impl RequirementsTabState {

@@ -12,7 +12,7 @@ mod bom;
 mod parts;
 mod runs;
 
-pub use parts::LIFECYCLE_STATES;
+pub use parts::{LIFECYCLE_STATES, PartMiss, PartProblem, PartsShortfall, parts_shortfall};
 
 use std::collections::{HashMap, HashSet};
 

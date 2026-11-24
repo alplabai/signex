@@ -505,7 +505,6 @@ impl SchematicCanvas<'_> {
         );
         self.draw_focused_pin(frame, snapshot, bounds);
         self.draw_wire_grips(frame, snapshot, bounds);
-        self.draw_bezier_handles(frame, snapshot, bounds);
         crate::schematic_runtime::lock_indicator::draw_lock_indicators(
             frame,
             snapshot,

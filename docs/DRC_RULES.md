@@ -292,7 +292,14 @@ same undo step.
   All only.
 - **Inheritance.** A cell resolves down the hierarchy: the row's own rule,
   else a constraint set applied to the row, else its parent (a net's class,
-  then All), else the fab tier default. A value of the row's own is bold
+  then All), else the fab tier default. A clearance cell no rule sets shows,
+  muted, the clearance Run DRC checks with anyway: the open board's setup
+  clearance (0.2 mm when it sets none or no board is open), raised for a class's nets by the
+  class's own clearance; All shows it even while inherited values are
+  hidden. Every other All cell is empty until a fab tier is picked, then
+  shows the tier's floor, also while inherited values are hidden.
+  Short-circuit (Allowed) and Un-routed net (Check) show the fixed No and
+  On on All, since Run DRC always checks them. A value of the row's own is bold
   with ↺, which drops that value only; an inherited value is muted; a value
   a constraint set wrote has a blue edge, and the row carries a ⧉ chip
   naming the set. The tooltip names where the value comes from. Show
@@ -437,8 +444,9 @@ profile" does. Each tier is a card with its clearance, width, drill and
 annular minimums, read from the tier table (`FabTemplate::capabilities`).
 Picking one gives it the accent and lists the rules it adds, changes and
 removes (spacing alone is not a change), each with its limits old → new,
-and the other lines; Apply in that card stores it as one undo step, and is
-refused when the rules changed since the list was made.
+and the other lines; a long list scrolls in the card, so Cancel and Apply
+at the card's foot stay in view. Apply in that card stores it as one undo
+step, and is refused when the rules changed since the list was made.
 
 ## Fab profiles
 

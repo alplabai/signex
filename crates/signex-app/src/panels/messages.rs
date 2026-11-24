@@ -1157,6 +1157,8 @@ pub enum PanelMsg {
     /// The Position, Rotation, Size and Parameters rows of one placed
     /// object (#2418).
     PlacedEdit(super::PlacedEditMsg),
+    /// The hex field of a colour row (mockup row 46).
+    ColorHex(super::ColorHexMsg),
     /// The harness Properties and the harness definitions view (#1280).
     Harness(super::HarnessPanelMsg),
     Illustration(signex_widgets::property_illustration::IllustrationMsg),

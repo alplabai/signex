@@ -370,9 +370,9 @@ fn the_section_renders_every_kind_an_unreadable_entry_drafts_and_a_run() {
     let report = state.last_run.as_ref().unwrap().report.as_ref().unwrap();
     let entries = &app.document_state.projects[0].data.requirements;
     let verdict = super::view::verdict(Some(report), &entries[1], 1);
-    assert_eq!(verdict, Some(Verdict::Passed));
+    assert_eq!(verdict, Verdict::Passed);
     assert!(!is_open(verdict, false, false), "a passed card is closed");
-    let counts = outcome_counts(report, entries);
+    let counts = outcome_counts(Some(report), entries);
     assert_eq!(counts.off, 1, "the turned-off entry counts as Off");
     assert!(counts.passed >= 1);
     let total = counts.passed + counts.failed + counts.not_checked + counts.off;
@@ -444,7 +444,7 @@ fn the_counts_put_a_turned_off_entry_under_off_not_under_not_checked() {
     // `e` is off even though the report names it: the switch wins.
     let report = report(&["req::a", "req::e"], &["req::b", "req::c"]);
     assert_eq!(
-        outcome_counts(&report, &entries),
+        outcome_counts(Some(&report), &entries),
         OutcomeCounts {
             passed: 1,
             failed: 1,
@@ -454,10 +454,24 @@ fn the_counts_put_a_turned_off_entry_under_off_not_under_not_checked() {
     );
     assert_eq!(
         super::view::verdict(None, &entries[2], 2),
-        Some(Verdict::Off),
+        Verdict::Off,
         "a turned-off entry reads Off before any run"
     );
-    assert_eq!(super::view::verdict(None, &entries[0], 0), None);
+    assert_eq!(
+        super::view::verdict(None, &entries[0], 0),
+        Verdict::NotChecked,
+        "an entry switched on reads Not checked before any run"
+    );
+    assert_eq!(
+        outcome_counts(None, &entries),
+        OutcomeCounts {
+            passed: 0,
+            failed: 0,
+            not_checked: 3,
+            off: 2,
+        },
+        "before any run the entries switched on count as not checked"
+    );
 }
 
 /// An entry with no id is filed under its place in the list, `req::#1`
@@ -474,11 +488,11 @@ fn an_entry_with_no_id_reads_its_verdict_by_its_place() {
     .collect();
     let report = report(&["req::#1"], &["req::#2", "req::c"]);
     let verdict = |index: usize| super::view::verdict(Some(&report), &entries[index], index);
-    assert_eq!(verdict(0), Some(Verdict::Failed));
-    assert_eq!(verdict(1), Some(Verdict::Passed));
-    assert_eq!(verdict(2), Some(Verdict::Passed));
+    assert_eq!(verdict(0), Verdict::Failed);
+    assert_eq!(verdict(1), Verdict::Passed);
+    assert_eq!(verdict(2), Verdict::Passed);
     assert_eq!(
-        outcome_counts(&report, &entries),
+        outcome_counts(Some(&report), &entries),
         OutcomeCounts {
             passed: 2,
             failed: 1,
@@ -490,23 +504,18 @@ fn an_entry_with_no_id_reads_its_verdict_by_its_place() {
 
 #[test]
 fn a_passed_card_is_closed_every_other_open_and_a_flip_inverts_it() {
-    assert!(!is_open(Some(Verdict::Passed), false, false));
-    for open in [
-        Some(Verdict::Failed),
-        Some(Verdict::NotChecked),
-        Some(Verdict::Off),
-        None,
-    ] {
+    assert!(!is_open(Verdict::Passed, false, false));
+    for open in [Verdict::Failed, Verdict::NotChecked, Verdict::Off] {
         assert!(is_open(open, false, false), "{open:?} opens");
         assert!(!is_open(open, false, true), "{open:?} closes when flipped");
     }
-    assert!(is_open(Some(Verdict::Passed), false, true), "flipped open");
+    assert!(is_open(Verdict::Passed, false, true), "flipped open");
     assert!(
-        is_open(Some(Verdict::Passed), true, false),
+        is_open(Verdict::Passed, true, false),
         "a draft or a refusal opens a passed card"
     );
     assert!(
-        is_open(Some(Verdict::Failed), true, true),
+        is_open(Verdict::Failed, true, true),
         "a draft or a refusal keeps a flipped card open"
     );
 }

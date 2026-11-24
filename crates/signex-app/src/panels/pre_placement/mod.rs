@@ -349,6 +349,10 @@ fn properties<'a>(
     }
     if pp.kind == PrePlacementKind::Wire {
         let (width, color, picker) = (pp.wire_width, pp.wire_color, ctx.wire_color_picker);
+        let hex = super::HexEntry::of(
+            super::ColorRowKey::PrePlacementWire,
+            ctx.color_hex_draft.as_ref(),
+        );
         return ctx
             .collapsible(
                 "preplace_wire",
@@ -367,6 +371,7 @@ fn properties<'a>(
                             color,
                             picker,
                             std::rc::Rc::new(PanelMsg::SetPrePlacementWireColor),
+                            hex.clone(),
                             palette.muted,
                             palette.border,
                             i18n,

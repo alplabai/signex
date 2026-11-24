@@ -38,44 +38,48 @@ pub(in crate::app::project_tab::requirements) struct OutcomeCounts {
     pub off: usize,
 }
 
-/// Count the entries by how they came out of `report`.
+/// Count the entries by how they came out of `report` (`None`: no finished
+/// run, so every entry switched on counts as not checked).
 pub(in crate::app::project_tab::requirements) fn outcome_counts(
-    report: &CheckReport,
+    report: Option<&CheckReport>,
     entries: &[RequirementEntry],
 ) -> OutcomeCounts {
     let mut counts = OutcomeCounts::default();
     for (index, entry) in entries.iter().enumerate() {
-        match verdict(Some(report), entry, index) {
-            Some(Verdict::Passed) => counts.passed += 1,
-            Some(Verdict::Failed) => counts.failed += 1,
-            Some(Verdict::Off) => counts.off += 1,
-            Some(Verdict::NotChecked) | None => counts.not_checked += 1,
+        match verdict(report, entry, index) {
+            Verdict::Passed => counts.passed += 1,
+            Verdict::Failed => counts.failed += 1,
+            Verdict::Off => counts.off += 1,
+            Verdict::NotChecked => counts.not_checked += 1,
         }
     }
     counts
 }
 
-/// The row under the section header: after a run its counts, then when it
-/// finished, then the Add picker (left out when the list cannot be edited).
+/// The row under the section header: the counts (Passed and Failed after a
+/// finished run, Not checked whenever there are any, before the first run
+/// too), then when the last run finished, then the Add picker (left out
+/// when the list cannot be edited). `report` is `last`'s, when it finished.
 pub(super) fn summary_row<'a>(
     project_id: ProjectId,
     entries: &[RequirementEntry],
     last: Option<&RequirementsRun>,
+    report: Option<&CheckReport>,
     editable: bool,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let mut line: Row<Element<'a, Message>> = Row::new().spacing(SP.m).align_y(Alignment::Center);
-    if let Some(Ok(report)) = last.map(|run| &run.report) {
-        let counts = outcome_counts(report, entries);
+    let counts = outcome_counts(report, entries);
+    if report.is_some() {
         let passed = t!(i18n, ids::REQUIREMENTS_PASSED_COUNT, "count" => counts.passed);
         line = line.push(pill(passed, PillTone::Ok, None, tokens));
         let failed = t!(i18n, ids::REQUIREMENTS_FAILED_COUNT, "count" => counts.failed);
         line = line.push(pill(failed, PillTone::Err, None, tokens));
-        if counts.not_checked > 0 {
-            let open = t!(i18n, ids::REQUIREMENTS_NOT_CHECKED_COUNT, "count" => counts.not_checked);
-            line = line.push(pill(open, PillTone::Neutral, None, tokens));
-        }
+    }
+    if counts.not_checked > 0 {
+        let open = t!(i18n, ids::REQUIREMENTS_NOT_CHECKED_COUNT, "count" => counts.not_checked);
+        line = line.push(pill(open, PillTone::Neutral, None, tokens));
     }
     line = line.push(Space::new().width(Length::Fill).boxed());
     let when = match last {

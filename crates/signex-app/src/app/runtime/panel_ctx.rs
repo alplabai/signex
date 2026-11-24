@@ -669,6 +669,10 @@ impl Signex {
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
         let part_panel = self.document_state.panel_ctx.part_panel.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
+        // A typed hex code lives only while its row is on screen.
+        let has_tab_form = pre_placement.is_some();
+        let color_hex_draft = (self.document_state.panel_ctx.color_hex_draft.clone())
+            .filter(|draft| draft.key.is_shown_for(selected_uuid, has_tab_form));
         let page_format_mode = self.document_state.panel_ctx.page_format_mode;
         let erc_diagnostics = self.build_erc_diagnostic_entries();
         let erc_waivers = self.erc_waiver_entries();
@@ -805,6 +809,7 @@ impl Signex {
             builtin_parameters,
             drafts,
             numeric_draft,
+            color_hex_draft,
             title_block_sheet,
             collapsed_sections,
             part_panel,
