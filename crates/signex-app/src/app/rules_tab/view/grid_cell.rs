@@ -23,7 +23,7 @@ use signex_widgets::{button, text, text_input, tooltip};
 use super::table::act;
 use super::{Frame, TS, user};
 use crate::app::Message;
-use crate::app::rules_tab::grid::{CellShow, RowRef};
+use crate::app::rules_tab::grid::{CellShow, RowRef, mm_text};
 use crate::styles::HAIRLINE;
 
 /// Border width of the selected cell's ring and a set value's edge.
@@ -249,7 +249,7 @@ fn face<'a>(
         // All keeps its base value in view, as a value of its own would.
         CellShow::Empty => match builtin_clearance(frame, at) {
             Some(mm) if is_all || !hide_inherited => (
-                format!("{mm}mm"),
+                mm_text(mm),
                 style.muted_ink,
                 signex_widgets::ui_font::regular(),
             ),

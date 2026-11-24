@@ -12,20 +12,33 @@ use std::path::{Path, PathBuf};
 
 /// A saved sheet with one rectangle, selected, with no colour of its own.
 fn app() -> (Signex, PathBuf, uuid::Uuid) {
-    let rect = SchDrawing::Rect {
-        uuid: uuid::Uuid::now_v7(),
-        start: Point::new(10.0, 10.0),
-        end: Point::new(30.0, 20.0),
-        width: 0.2,
-        fill: FillType::None,
-        stroke_color: None,
-        locked: false,
-    };
-    let id = rect.uuid();
+    let (app, path, ids) = app_with_rects(1);
+    (app, path, ids[0])
+}
+
+/// A saved sheet with `count` rectangles without a colour of their own, the
+/// first one selected.
+fn app_with_rects(count: usize) -> (Signex, PathBuf, Vec<uuid::Uuid>) {
+    let drawings: Vec<SchDrawing> = (0..count)
+        .map(|i| {
+            let x = 10.0 + 40.0 * i as f64;
+            SchDrawing::Rect {
+                uuid: uuid::Uuid::now_v7(),
+                start: Point::new(x, 10.0),
+                end: Point::new(x + 20.0, 20.0),
+                width: 0.2,
+                fill: FillType::None,
+                stroke_color: None,
+                locked: false,
+            }
+        })
+        .collect();
+    let ids: Vec<uuid::Uuid> = drawings.iter().map(SchDrawing::uuid).collect();
+    let id = ids[0];
     let sheet = SchematicSheet {
         uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
-        drawings: vec![rect],
+        drawings,
         ..Default::default()
     };
     let path = PathBuf::from("color-hex.snxsch");
@@ -51,7 +64,7 @@ fn app() -> (Signex, PathBuf, uuid::Uuid) {
     app.interaction_state.active_canvas_mut().selected =
         vec![SelectedItem::new(id, SelectedKind::Drawing)];
     app.update_selection_info();
-    (app, path, id)
+    (app, path, ids)
 }
 
 fn panel(app: &mut Signex, msg: PanelMsg) {
@@ -59,8 +72,13 @@ fn panel(app: &mut Signex, msg: PanelMsg) {
 }
 
 fn stroke(app: &Signex) -> Option<StrokeColor> {
+    stroke_of(app, 0)
+}
+
+/// The colour of the sheet's `index`th rectangle.
+fn stroke_of(app: &Signex, index: usize) -> Option<StrokeColor> {
     let engine = app.document_state.active_engine().expect("engine");
-    match &engine.document().drawings[0] {
+    match &engine.document().drawings[index] {
         SchDrawing::Rect { stroke_color, .. } => *stroke_color,
         other => panic!("not a rectangle: {other:?}"),
     }
@@ -152,4 +170,55 @@ fn a_draft_does_not_follow_another_selection() {
     app.update_selection_info();
     app.refresh_panel_ctx();
     assert_eq!(app.document_state.panel_ctx.color_hex_draft, None);
+}
+
+#[test]
+fn a_blur_after_another_selection_colours_nothing() {
+    let (mut app, path, ids) = app_with_rects(2);
+    typed(&mut app, ids[0], "#123456");
+    let blur = enter(&app, ids[0]);
+    // The other drawing is selected before the blur lands; the panel has
+    // not been rebuilt yet, so the draft is still held.
+    app.interaction_state.active_canvas_mut().selected =
+        vec![SelectedItem::new(ids[1], SelectedKind::Drawing)];
+    app.update_selection_info();
+    assert!(app.document_state.panel_ctx.color_hex_draft.is_some());
+    panel(&mut app, blur);
+    assert_eq!(stroke_of(&app, 1), None, "the other keeps its colour");
+    assert_eq!(stroke_of(&app, 0), None);
+    assert_eq!(app.document_state.panel_ctx.color_hex_draft, None);
+    assert!(!can_undo(&app, &path), "no undo step");
+}
+
+/// How often this thread ran `finish_update`.
+fn finish_updates() -> usize {
+    crate::app::runtime::FINISH_UPDATES.with(std::cell::Cell::get)
+}
+
+#[test]
+fn a_hex_message_finishes_the_update_once() {
+    let (mut app, _path, id) = app();
+    let key = ColorRowKey::DrawingStroke(id);
+    let before = finish_updates();
+    let typed = PanelMsg::ColorHex(ColorHexMsg::Typed(key, "#123456".into()));
+    let _ = app.handle_dock_message(DockMessage::Panel(typed));
+    assert_eq!(finish_updates() - before, 1, "a keystroke");
+    let left = enter(&app, id);
+    let pick = match &left {
+        PanelMsg::ColorHex(ColorHexMsg::Left {
+            apply: Some(pick), ..
+        }) => (**pick).clone(),
+        other => panic!("no pick to apply: {other:?}"),
+    };
+    let before = finish_updates();
+    let _ = app.handle_dock_message(DockMessage::Panel(left));
+    assert!(stroke(&app).is_some(), "the pick applied");
+    let via_hex = finish_updates() - before;
+    // The same pick from the row's popover, on a fresh sheet.
+    let (mut direct, _path, _id) = self::app();
+    let before = finish_updates();
+    let _ = direct.handle_dock_message(DockMessage::Panel(pick));
+    assert!(stroke(&direct).is_some(), "the popover's pick applied");
+    let alone = finish_updates() - before;
+    assert_eq!(via_hex, alone, "the hex field adds no second finish");
 }

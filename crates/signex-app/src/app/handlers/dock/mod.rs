@@ -119,8 +119,8 @@ impl Signex {
                 return Task::batch([task, self.finish_update()]);
             }
             if let crate::panels::PanelMsg::ColorHex(hex_msg) = panel_msg {
-                let task = self.handle_color_hex(hex_msg.clone());
-                return Task::batch([task, self.finish_update()]);
+                // Finishes the update itself, once, also for an applied pick.
+                return self.handle_color_hex(hex_msg.clone());
             }
             if let Some(task) = self.handle_dock_panel_control_message(panel_msg) {
                 return Task::batch([task, self.finish_update()]);

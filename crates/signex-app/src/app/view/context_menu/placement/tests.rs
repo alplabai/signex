@@ -328,8 +328,12 @@ fn corner(window: iced::Size) -> iced::Point {
     iced::Point::new(4.0, window.height - 4.0)
 }
 
+/// How many menus [`app_with_menu`] opens.
+const APP_MENUS: usize = 4;
+
 /// The app with the canvas menu, a Components row menu or the schematic
-/// Active Bar's Align menu open at (100, 100) in `window`.
+/// Active Bar's Align menu open at (100, 100) in `window`, or the board
+/// Active Bar's Selection Filter flyout.
 fn app_with_menu(which: usize, window: iced::Size) -> (Signex, iced::window::Id) {
     use crate::library::state::{ComponentsPanelRowKey, ComponentsRowMenu};
     let (mut app, main) = graphite_app();
@@ -348,7 +352,8 @@ fn app_with_menu(which: usize, window: iced::Size) -> (Signex, iced::window::Id)
                 window: None,
             });
         }
-        _ => app.interaction_state.active_bar_menu = Some(crate::active_bar::ActiveBarMenu::Align),
+        2 => app.interaction_state.active_bar_menu = Some(crate::active_bar::ActiveBarMenu::Align),
+        _ => app.interaction_state.pcb_bar_menu = Some(crate::app::PcbBarMenu::Filter),
     }
     (app, main)
 }
@@ -358,16 +363,18 @@ fn menu_layers(app: &Signex, which: usize, main: iced::window::Id) -> Vec<Elemen
     match which {
         0 => app.context_menu_overlay(main),
         1 => app.components_row_context_menu_overlay(main),
-        _ => app.active_bar_menu_overlay(main),
+        2 => app.active_bar_menu_overlay(main),
+        _ => vec![app.pcb_active_bar(true)],
     }
 }
 
 /// Mockup rows 53 and 61: the schematic canvas menu, a panel row menu and
-/// an Active Bar menu all dim the window behind them, in one scrim.
+/// the schematic and board Active Bar menus all dim the window behind
+/// them, in one scrim.
 #[test]
 fn every_menu_dims_the_window_behind_it_alike() {
     let window = iced::Size::new(1400.0, 900.0);
-    let dims: Vec<[u8; 3]> = (0..3)
+    let dims: Vec<[u8; 3]> = (0..APP_MENUS)
         .map(|which| {
             let (app, main) = app_with_menu(which, window);
             let layers = menu_layers(&app, which, main);
@@ -392,7 +399,7 @@ fn every_menu_dims_the_window_behind_it_alike() {
 #[test]
 fn a_press_on_the_scrim_closes_each_menu() {
     let window = iced::Size::new(1400.0, 900.0);
-    let closed: [fn(&Message) -> bool; 3] = [
+    let closed: [fn(&Message) -> bool; APP_MENUS] = [
         |m| matches!(m, Message::ContextMenu(ContextMenuMsg::Close)),
         |m| {
             matches!(
@@ -408,6 +415,14 @@ fn a_press_on_the_scrim_closes_each_menu() {
                 Message::ActiveBar(crate::active_bar::ActiveBarMsg::CloseMenus)
             )
         },
+        |m| {
+            matches!(
+                m,
+                Message::Pcb(crate::app::PcbMsg::Bar(
+                    crate::app::PcbBarMsg::MenuDismissed
+                ))
+            )
+        },
     ];
     for (which, is_close) in closed.iter().enumerate() {
         let (app, main) = app_with_menu(which, window);
@@ -420,6 +435,154 @@ fn a_press_on_the_scrim_closes_each_menu() {
         assert!(
             messages.iter().any(is_close),
             "menu {which}: a scrim press sent {messages:?}"
+        );
+    }
+}
+
+/// How many menus [`in_canvas_menu`] opens.
+const IN_CANVAS_MENUS: usize = 3;
+
+/// The editors the in-canvas menus open over: a footprint and a symbol with
+/// their Active Bar's Selection Filter open, and a footprint sketch with a
+/// dimension's menu open at (100, 100).
+struct Editors {
+    footprint: crate::app::FootprintDocument,
+    symbol: crate::app::SymbolDocument,
+    sketch: crate::app::FootprintDocument,
+}
+
+fn editors() -> Editors {
+    use crate::library::editor::footprint::{CanvasMenu, FpActiveBarMenu, MenuTarget};
+    use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
+    use signex_sketch::id::{ConstraintId, SketchEntityId};
+    let footprint_doc = |name: &str| {
+        let path = std::path::PathBuf::from(format!("{name}.snxfpt"));
+        let footprint = signex_library::Footprint::empty(name);
+        let file = signex_library::FootprintFile::from_footprint(footprint);
+        crate::app::FootprintDocument::new(path, file)
+    };
+    let mut footprint = footprint_doc("menu");
+    footprint.state.active_bar_menu = Some(FpActiveBarMenu::Filter);
+    let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("menu"));
+    let mut symbol = crate::app::SymbolDocument::new("menu.snxsym".into(), file);
+    symbol.active_bar_menu = Some(crate::library::editor::symbol::state::SymActiveBarMenu::Filter);
+    let mut sketch = footprint_doc("sketch");
+    let id = ConstraintId::new();
+    let kind = ConstraintKind::DistancePtPt {
+        p1: SketchEntityId::new(),
+        p2: SketchEntityId::new(),
+        target: DimTarget::Literal(1.0),
+    };
+    sketch.primitive_mut().sketch = Some(signex_sketch::SketchData {
+        constraints: vec![Constraint { id, kind }],
+        ..signex_sketch::SketchData::default()
+    });
+    sketch.state.sketch_overlay.menu = Some(CanvasMenu {
+        target: MenuTarget::Constraint(id),
+        x: 100.0,
+        y: 100.0,
+    });
+    Editors {
+        footprint,
+        symbol,
+        sketch,
+    }
+}
+
+/// The footprint editor's or the symbol editor's Active Bar dropdown, or
+/// the sketch constraint menu, laid over a canvas of `canvas`.
+fn in_canvas_menu<'a>(
+    editors: &'a Editors,
+    tokens: &'a signex_types::theme::ThemeTokens,
+    which: usize,
+    canvas: iced::Size,
+) -> Element<'a, Message> {
+    use crate::library::editor::footprint::unified_active_bar::{BarSpan, dropdown_overlay};
+    let theme = ThemeId::GraphiteLight;
+    let i18n = signex_i18n::I18n::en_us_ref();
+    let span = BarSpan {
+        x: 0.0,
+        width: canvas.width,
+        window_width: canvas.width,
+    };
+    let overlay = match which {
+        0 => dropdown_overlay(&editors.footprint, theme, tokens, &[], 40, span, i18n),
+        1 => crate::library::editor::symbol::active_bar::dropdown_overlay(
+            &editors.symbol,
+            theme,
+            tokens,
+            40,
+            i18n,
+        ),
+        _ => Some(
+            crate::library::editor::footprint::sketch_mode::constraint_menu::overlay(
+                &editors.sketch,
+                tokens,
+                i18n,
+                "Inter",
+            ),
+        ),
+    };
+    overlay
+        .unwrap_or_else(|| panic!("in-canvas menu {which} is not open"))
+        .map(Message::Library)
+        .boxed()
+}
+
+/// Mockup rows 53 and 61: the footprint and symbol editors' Active Bar
+/// dropdowns and the sketch constraint menu dim the canvas under them in
+/// the scrim every other menu draws.
+#[test]
+fn every_in_canvas_menu_dims_the_canvas_under_it_alike() {
+    let canvas = iced::Size::new(1400.0, 900.0);
+    let (app, main) = app_with_menu(0, canvas);
+    let shared = corner_over_white(menu_layers(&app, 0, main), canvas);
+    let editors = editors();
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
+    for which in 0..IN_CANVAS_MENUS {
+        let rgb = corner_over_white(
+            vec![in_canvas_menu(&editors, &tokens, which, canvas)],
+            canvas,
+        );
+        assert!(
+            rgb.iter().all(|&c| c < 200),
+            "in-canvas menu {which} leaves the canvas undimmed: {rgb:?}"
+        );
+        assert_eq!(rgb, shared, "in-canvas menu {which} dims differently");
+    }
+}
+
+/// A press on the scrim closes each in-canvas menu with its own close
+/// message.
+#[test]
+fn a_press_on_the_scrim_closes_each_in_canvas_menu() {
+    use crate::library::editor::footprint::sketch_mode::SketchCanvasMsg;
+    use crate::library::messages::{
+        FootprintEditorMsg as Fp, LibraryMessage, PrimitiveEdit, SymbolEditorMsg as Sym,
+    };
+    let canvas = iced::Size::new(1400.0, 900.0);
+    let closed: [fn(&PrimitiveEdit) -> bool; IN_CANVAS_MENUS] = [
+        |m| matches!(m, PrimitiveEdit::Footprint(Fp::CloseActiveBarMenu)),
+        |m| matches!(m, PrimitiveEdit::Symbol(Sym::CloseActiveBarMenu)),
+        |m| {
+            matches!(
+                m,
+                PrimitiveEdit::Footprint(Fp::SketchCanvas(SketchCanvasMsg::MenuClosed))
+            )
+        },
+    ];
+    let editors = editors();
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
+    for (which, is_close) in closed.iter().enumerate() {
+        let layer = in_canvas_menu(&editors, &tokens, which, canvas);
+        let messages = messages_on_click_at(stacked(vec![layer]), canvas, None, corner(canvas));
+        let closes = |m: &Message| match m {
+            Message::Library(LibraryMessage::PrimitiveEditorEvent { msg, .. }) => is_close(msg),
+            _ => false,
+        };
+        assert!(
+            messages.iter().any(closes),
+            "in-canvas menu {which}: a scrim press sent {messages:?}"
         );
     }
 }

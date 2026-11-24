@@ -173,6 +173,19 @@ fn an_unwritten_clearance_shows_the_boards_clearance_raised_by_its_class() {
 }
 
 #[test]
+fn an_unwritten_clearance_shows_a_noisy_float_trimmed() {
+    let dir = tempfile::tempdir().unwrap();
+    let (app, id) = rules_tab_with(&dir, Some(board(0.1 + 0.2)));
+    let texts = laid_out(&app, id);
+    assert!(
+        !on_row(&texts, "All", "0.3mm").is_empty(),
+        "0.1 + 0.2 shows as 0.3mm"
+    );
+    let noisy = texts.iter().find(|t| t.text.starts_with("0.3000"));
+    assert!(noisy.is_none(), "{noisy:?}");
+}
+
+#[test]
 fn with_no_board_open_an_unwritten_clearance_shows_the_checks_default() {
     let dir = tempfile::tempdir().unwrap();
     let (app, id) = rules_tab_with(&dir, None);

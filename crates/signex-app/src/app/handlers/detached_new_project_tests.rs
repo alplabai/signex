@@ -251,3 +251,31 @@ fn the_window_opens_at_the_mockup_size_with_one_line_blurbs() {
     assert!(hint.x + hint.width <= edge + 0.5, "{hint:?} past {edge}");
     assert!(hint.height > 0.0 && hint.height < 1.8 * caption, "{hint:?}");
 }
+
+/// Decision 2026-11-24: on a 1366 x 768 or 1280 x 720 screen the window
+/// opens inside the screen, and at that size the body scrolls while the
+/// footer's buttons stay in view.
+#[test]
+fn on_a_small_screen_the_window_fits_and_keeps_its_buttons() {
+    for (w, h) in [(1366.0, 768.0), (1280.0, 720.0)] {
+        let (mut app, _task) = Signex::new();
+        app.ui_state.main_window_monitor_size = Some(iced::Size::new(w, h));
+        app.ui_state.main_window_id = Some(iced::window::Id::unique());
+        app.ui_state.main_window_opened = true;
+        app.ui_state.first_run_tour_open = false;
+        let _ = app.update(Message::Menu(MenuMessage::NewProject));
+        let _ = app.sync_detached_modals();
+        let window = app.detached_window_of(ModalId::NewProject).expect("window");
+        let borderless = app.dialog_window_is_borderless(window);
+        let size = app.dialog_window_size(ModalId::NewProject, borderless);
+        assert!(size.width <= w && size.height <= h, "{size:?} on {w}x{h}");
+        let texts = lay_out_texts(app.view(window), size);
+        for label in ["Cancel", "Create project"] {
+            let b = find(&texts, label).bounds;
+            assert!(
+                b.height > 0.0 && b.y >= 0.0 && b.y + b.height <= size.height,
+                "{label:?} outside {size:?}: {b:?}"
+            );
+        }
+    }
+}
