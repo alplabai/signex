@@ -100,7 +100,9 @@ impl ErrorNotice {
     }
 
     /// `self` with `error`'s chain as its system part, one cause per line:
-    /// the path line over the OS error line (mockup row 11).
+    /// the path line over the OS error line (mockup row 11). A middle
+    /// context (a rename step) keeps its own line: it says where the save
+    /// broke.
     #[must_use]
     pub fn with_error_chain(self, error: &anyhow::Error) -> Self {
         let lines: Vec<String> = error.chain().map(ToString::to_string).collect();

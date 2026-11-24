@@ -366,8 +366,9 @@ fn bottom_side<'a>(
             t!(i18n, ids::PCB_REANNOTATE_BOTTOM_WITH).into(),
         ),
     ];
-    // The column is narrower than both segments side by side, so the
-    // control stacks them, each the column's width.
+    // The control stacks the two choices only because BOTTOM_W is narrower
+    // than both labels side by side; SegmentedStyle has no column count, so
+    // a locale with short labels would put them in one row.
     let control = segmented(options, bottom, style.fill_width(true), |picked| {
         ra(BoardReannotateMsg::BottomPicked(picked))
     });
