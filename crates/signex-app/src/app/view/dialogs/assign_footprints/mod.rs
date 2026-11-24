@@ -3,6 +3,8 @@
 //! each, and a read-only footprint preview column. Draft and rules:
 //! `app/assign_footprints/`.
 
+#[cfg(test)]
+mod look_tests;
 mod preview;
 mod table;
 
