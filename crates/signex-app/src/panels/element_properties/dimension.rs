@@ -20,6 +20,27 @@ use crate::choice::Choice;
 const FROM_KEY: &str = "dimension.from";
 const TO_KEY: &str = "dimension.to";
 
+/// What a point row of the form holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Shown {
+    /// Not clicked yet: blank.
+    Blank,
+    /// The pointer while placing (mockup row 157): shown, not editable.
+    Following,
+    /// A real point: editable.
+    Clicked,
+}
+
+impl Shown {
+    fn of(is_clicked: bool, is_following: bool) -> Self {
+        match (is_clicked, is_following) {
+            (true, _) => Self::Clicked,
+            (false, true) => Self::Following,
+            (false, false) => Self::Blank,
+        }
+    }
+}
+
 pub(super) fn view_dimension_properties<'a>(
     ctx: &'a PanelContext,
     drawing: &SchDrawing,
@@ -35,11 +56,12 @@ pub(super) fn view_dimension_properties<'a>(
         rows.t(title),
         signex_i18n::UserText::new(d.label()),
     );
-    body(&rows, header, d, (true, true), false)
+    body(&rows, header, d, (Shown::Clicked, Shown::Clicked), false)
 }
 
 /// The armed tool's form (mockup row 157): the same rows, editing what the
-/// next dimension is placed with. A point not clicked yet shows blank.
+/// next dimension is placed with. A point not clicked yet shows blank, or
+/// the pointer while To follows it.
 pub(super) fn view_dimension_tool<'a>(
     ctx: &'a PanelContext,
     form: &DimensionToolForm,
@@ -60,18 +82,21 @@ pub(super) fn view_dimension_tool<'a>(
         &rows,
         header,
         d,
-        (form.has_from, form.has_to),
+        (
+            Shown::of(form.has_from, false),
+            Shown::of(form.has_to, form.is_to_following),
+        ),
         form.is_paused,
     )
 }
 
-/// Header, illustration, Measure and Text; `clicked` says whether From and
-/// To hold real points.
+/// Header, illustration, Measure and Text; `shown` says what From and To
+/// hold.
 fn body<'a>(
     rows: &Rows<'a>,
     header: Element<'a, PanelMsg>,
     d: &SchDimension,
-    clicked: (bool, bool),
+    shown: (Shown, Shown),
     is_paused: bool,
 ) -> Element<'a, PanelMsg> {
     Column::new()
@@ -82,12 +107,12 @@ fn body<'a>(
         .push(rows.section(
             "dimension_measure",
             ids::PROPERTIES_DIMENSION_SECTION_MEASURE,
-            measure_rows(rows, d, clicked),
+            measure_rows(rows, d, shown),
         ))
         .push(rows.section(
             super::annotation::DIMENSION_TEXT_SECTION,
             ids::PROPERTIES_DIMENSION_SECTION_TEXT,
-            text_rows(rows, d, clicked.1, is_paused),
+            text_rows(rows, d, shown.1 == Shown::Clicked, is_paused),
         ))
         .boxed()
 }
@@ -97,10 +122,13 @@ fn point_row<'a>(
     label: signex_i18n::MessageId,
     second: bool,
     p: signex_types::schematic::Point,
-    is_clicked: bool,
+    shown: Shown,
 ) -> Element<'a, PanelMsg> {
-    if !is_clicked {
-        return rows.blank_point(rows.t(label));
+    let at = (p.x, rows.ctx.shown_y(p.y));
+    match shown {
+        Shown::Blank => return rows.blank_point(rows.t(label)),
+        Shown::Following => return rows.read_only_point(rows.t(label), Some(at)),
+        Shown::Clicked => {}
     }
     rows.point(
         rows.t(label),
@@ -108,33 +136,27 @@ fn point_row<'a>(
             AnnotationField::DimensionPoint(second, Axis::X),
             AnnotationField::DimensionPoint(second, Axis::Y),
         ),
-        (p.x, rows.ctx.shown_y(p.y)),
+        at,
     )
 }
 
 fn measure_rows<'a>(
     rows: &Rows<'a>,
     d: &SchDimension,
-    (has_from, has_to): (bool, bool),
+    (from, to): (Shown, Shown),
 ) -> Vec<Element<'a, PanelMsg>> {
     let mm = rows
         .ctx
         .i18n
         .message_plain(ids::PROPERTIES_ANNOTATION_MM, &[]);
-    let length = if has_to {
+    let length = if to != Shown::Blank {
         format!("{:.3} {mm}", d.measured_mm())
     } else {
         mm.to_string()
     };
     vec![
-        point_row(
-            rows,
-            ids::PROPERTIES_DIMENSION_FROM,
-            false,
-            d.from,
-            has_from,
-        ),
-        point_row(rows, ids::PROPERTIES_DIMENSION_TO, true, d.to, has_to),
+        point_row(rows, ids::PROPERTIES_DIMENSION_FROM, false, d.from, from),
+        point_row(rows, ids::PROPERTIES_DIMENSION_TO, true, d.to, to),
         rows.field(
             rows.t(ids::PROPERTIES_DIMENSION_LENGTH),
             rows.value(signex_i18n::UserText::new(length)),

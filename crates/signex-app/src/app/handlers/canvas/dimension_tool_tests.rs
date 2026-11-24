@@ -85,6 +85,78 @@ fn the_form_follows_the_clicks_and_leaves_with_the_tool() {
     assert!(app.annotation_panel_state().dimension_tool.is_none());
 }
 
+fn pointer_at(app: &mut Signex, (x, y): (f32, f32)) {
+    let _ = app.update(Message::CanvasEvent(crate::canvas::CanvasEvent::CursorAt {
+        x,
+        y,
+        zoom_pct: 100.0,
+    }));
+}
+
+fn shown_form(app: &Signex) -> crate::panels::DimensionToolForm {
+    *app.document_state
+        .panel_ctx
+        .annotation
+        .dimension_tool
+        .clone()
+        .expect("the tool's form")
+}
+
+#[test]
+fn to_and_length_follow_the_pointer_after_the_first_click() {
+    let mut app = armed(Tool::LinearDimension);
+    click(&mut app, (0.0, 0.0));
+    pointer_at(&mut app, (12.7, 0.0));
+    let form = shown_form(&app);
+    assert!(form.is_to_following && !form.has_to);
+    assert!((form.dimension.to.x - 12.7).abs() < 1e-3);
+    assert!((form.dimension.measured_mm() - 12.7).abs() < 1e-3);
+
+    pointer_at(&mut app, (25.4, 0.0));
+    let form = shown_form(&app);
+    assert!((form.dimension.measured_mm() - 25.4).abs() < 1e-3);
+
+    click(&mut app, (25.4, 0.0));
+    let form = shown_form(&app);
+    assert!(form.has_to && !form.is_to_following);
+}
+
+#[test]
+fn nothing_follows_the_pointer_before_the_first_click_or_while_paused() {
+    let mut app = armed(Tool::LinearDimension);
+    pointer_at(&mut app, (12.7, 0.0));
+    assert!(!shown_form(&app).is_to_following);
+
+    click(&mut app, (0.0, 0.0));
+    tab(&mut app);
+    pointer_at(&mut app, (25.4, 0.0));
+    let form = shown_form(&app);
+    assert!(form.is_paused && !form.is_to_following);
+}
+
+#[test]
+fn the_panel_shows_the_followed_to_and_its_length() {
+    let mut app = armed(Tool::LinearDimension);
+    click(&mut app, (0.0, 0.0));
+    app.document_state.panel_ctx.has_schematic = true;
+    let size = iced::Size::new(300.0, 1000.0);
+    let texts = |app: &Signex| {
+        let view = crate::panels::view_properties(&app.document_state.panel_ctx);
+        crate::layout_probe::lay_out_texts(view, size)
+    };
+    let shows_length = |app: &Signex| texts(app).iter().any(|t| t.text.contains("12.700"));
+    assert!(!shows_length(&app), "no length before the pointer moves");
+
+    pointer_at(&mut app, (12.7, 0.0));
+    assert!(shows_length(&app), "the length follows the pointer");
+    let view = crate::panels::view_properties(&app.document_state.panel_ctx);
+    let inputs = crate::layout_probe::lay_out_inputs(view, size);
+    assert!(
+        inputs.iter().any(|i| i.text == "12.70"),
+        "To shows the pointer: {inputs:?}"
+    );
+}
+
 #[test]
 fn a_form_edit_sets_the_next_dimension_and_leaves_the_sheet_alone() {
     let mut app = armed(Tool::LinearDimension);
