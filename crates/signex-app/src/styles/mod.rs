@@ -33,15 +33,16 @@ pub use graphite_buttons::{ghost_button, primary_button};
 pub use metrics::ChromeMetrics;
 pub use radii::Radii;
 pub use scrollbar::{scrollbar_colors, scrollbar_style, thin_both, thin_scrollbar, thin_vertical};
+// The footer band of the Rename dialog (mockup row 23).
+pub use dialog_kit::{dense_band_footer_height, dialog_band_padding};
 
 pub use buttons::{
     accent_button, danger_button, hover_row, outline_button, subtle_button, subtle_button_with_rest,
 };
 pub use dialog_kit::{
-    DialogButtonKind, dense_band_footer_height, dense_footer_height, dialog_band_padding,
-    dialog_body, dialog_button, dialog_footer, dialog_footer_band, dialog_footer_height,
-    dialog_footer_split, dialog_hint, dialog_icon_button, dialog_list, dialog_message,
-    dialog_section,
+    DialogButtonKind, dense_footer_height, dialog_body, dialog_button, dialog_footer,
+    dialog_footer_band, dialog_footer_height, dialog_footer_split, dialog_hint, dialog_icon_button,
+    dialog_list, dialog_message, dialog_section,
 };
 pub(crate) use dialog_parts::medium_font;
 pub use dialog_parts::{
