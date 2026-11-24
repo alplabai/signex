@@ -6,10 +6,10 @@
 
 use std::sync::LazyLock;
 
-use iced::widget::{Row, Space, TextInput, column, container, svg, text_input};
+use iced::widget::{Row, Space, TextInput, column, container, stack, svg};
 use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, UserText};
-use signex_types::theme::ThemeTokens;
+use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::enable_section::dependents_veil;
 use signex_widgets::inert::unless_read_only_veiled;
 use signex_widgets::{CheckboxLabel as _, Label, SegmentedStyle, checkbox, text};
@@ -31,14 +31,15 @@ const GLYPH_INFO: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="
 const GLYPH_OK: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>"##;
 const GLYPH_WARN: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg>"##;
 
-const GLYPH_FOLDER: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></svg>"##;
-const GLYPH_SEARCH: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>"##;
+/// The three glyphs parsed once: info, ok, warning.
+static GLYPHS: LazyLock<[svg::Handle; 3]> =
+    LazyLock::new(|| [GLYPH_INFO, GLYPH_OK, GLYPH_WARN].map(svg::Handle::from_memory));
 
-/// The glyphs parsed once: info, ok, warning, then the field glyphs folder
-/// and search.
-static GLYPHS: LazyLock<[svg::Handle; 5]> = LazyLock::new(|| {
-    [GLYPH_INFO, GLYPH_OK, GLYPH_WARN, GLYPH_FOLDER, GLYPH_SEARCH].map(svg::Handle::from_memory)
-});
+/// Inset of a form field's text from its outline (6 px at the 11 px base).
+const FIELD_PAD: f32 = SP.s + SP.xs;
+/// Where the text of a glyph-led field starts: the inset, the glyph, then
+/// the field's gap.
+pub(in crate::app::view::dialogs) const GLYPH_TEXT_INSET: f32 = FIELD_PAD + GLYPH + SP.s;
 
 /// The glyph that leads a text field: what the field holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,55 +51,81 @@ pub(in crate::app::view::dialogs) enum FieldGlyph {
 }
 
 impl FieldGlyph {
-    fn handle(self) -> svg::Handle {
+    /// The icon set's glyph, the one other folder and filter fields draw.
+    fn handle(self, theme: ThemeId) -> svg::Handle {
         match self {
-            FieldGlyph::Folder => GLYPHS[3].clone(),
-            FieldGlyph::Search => GLYPHS[4].clone(),
+            FieldGlyph::Folder => crate::icons::icon_menu_folder(theme),
+            FieldGlyph::Search => crate::icons::icon_chrome_search(theme),
         }
     }
 }
 
-/// `input` on a form field with `glyph` before it, inside the field's
-/// outline (mockup rows 115 and 117). The input draws no box of its own;
-/// the field takes the form input's fill and outline.
+/// `input` as a form field with `glyph` inside its outline, before the
+/// text (mockup rows 115 and 117). The input keeps the form look, so it
+/// still lights on hover and focus; the glyph lies over its left padding
+/// and takes no pointer, so a click on it reaches the input.
 pub(in crate::app::view::dialogs) fn glyph_field<'a>(
     glyph: FieldGlyph,
     input: TextInput<'a, Message>,
+    theme: ThemeId,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let ink = tokens::resolve(tokens).ink4;
-    let icon = svg(glyph.handle())
+    let icon = svg(glyph.handle(theme))
         .width(Length::Fixed(GLYPH))
         .height(Length::Fixed(GLYPH))
         .style(move |_: &Theme, _| svg::Style {
             color: Some(ink),
             ..Default::default()
         });
-    let input = input.style(|theme: &Theme, status| text_input::Style {
-        background: Background::Color(Color::TRANSPARENT),
-        border: Border::default(),
-        ..text_input_style(theme, status)
-    });
-    let line: Row<Element<'a, Message>> = Row::new()
-        .spacing(SP.s)
-        .align_y(Alignment::Center)
-        .push(icon.boxed())
-        .push(input.boxed());
-    container(line)
+    let input = input
+        .style(text_input_style)
         .padding(Padding {
-            left: SP.s + SP.xs,
+            left: GLYPH_TEXT_INSET,
+            ..Padding::new(FIELD_PAD)
+        })
+        .width(Length::Fill);
+    let over = container(icon)
+        .padding(Padding {
+            left: FIELD_PAD,
             ..Padding::ZERO
         })
-        .width(Length::Fill)
-        .style(|theme: &Theme| {
-            let look = text_input_style(theme, text_input::Status::Active);
-            container::Style {
-                background: Some(look.background),
-                border: look.border,
-                ..container::Style::default()
-            }
-        })
-        .boxed()
+        .center_y(Length::Fill);
+    stack![input, over].width(Length::Fill).boxed()
+}
+
+/// Where the glyph of a glyph-led field sits in `field`, the input's box.
+#[cfg(test)]
+pub(in crate::app::view::dialogs) fn field_glyph_bounds(field: iced::Rectangle) -> iced::Rectangle {
+    iced::Rectangle {
+        x: field.x + FIELD_PAD,
+        y: field.y + (field.height - GLYPH) / 2.0,
+        width: GLYPH,
+        height: GLYPH,
+    }
+}
+
+/// A left click, then `typed` keyed in: what a user does to start typing
+/// in a field.
+#[cfg(test)]
+pub(in crate::app::view::dialogs) fn click_then_type(typed: &str) -> Vec<iced::Event> {
+    use iced::keyboard::{Event as Key, Key as Logical, Location, Modifiers, key};
+    use iced::mouse::{Button, Event as Mouse};
+    let key = Logical::Character(typed.into());
+    let press = Key::KeyPressed {
+        key: key.clone(),
+        modified_key: key,
+        physical_key: key::Physical::Unidentified(key::NativeCode::Unidentified),
+        location: Location::Standard,
+        modifiers: Modifiers::default(),
+        text: Some(typed.into()),
+        repeat: false,
+    };
+    vec![
+        iced::Event::Mouse(Mouse::ButtonPressed(Button::Left)),
+        iced::Event::Mouse(Mouse::ButtonReleased(Button::Left)),
+        iced::Event::Keyboard(press),
+    ]
 }
 
 /// The glyph of `tone`: a circled i for information, a circled tick for

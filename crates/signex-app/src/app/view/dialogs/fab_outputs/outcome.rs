@@ -6,7 +6,7 @@
 use iced::widget::{Column, Row, column, container, row};
 use iced::{Alignment, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, ids, t};
-use signex_types::theme::ThemeTokens;
+use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::{button, text, text_input};
 
 use super::{SP, TS, fo, kit};
@@ -53,6 +53,7 @@ fn form_line<'a>(
 /// The file name, the output folder with Browse…, and the naming example.
 pub(super) fn destination<'a>(
     state: &'a FabOutputsState,
+    theme: ThemeId,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
@@ -70,9 +71,8 @@ pub(super) fn destination<'a>(
         text_input(t!(i18n, ids::FAB_OUTPUTS_FOLDER), &state.folder)
             .on_input(|v| fo(FabOutputsMsg::FolderEdited(v)))
             .font(mono)
-            .size(TS.body)
-            .padding(SP.s + SP.xs)
-            .width(Length::Fill),
+            .size(TS.body),
+        theme,
         tokens,
     );
     let browse = small_button(

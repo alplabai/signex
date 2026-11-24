@@ -9,7 +9,7 @@ use signex_i18n::{I18n, LocalNumber, Localized, MessageId, UserText, ids, t};
 use signex_output::{BoardReportKind, ReportCell, ReportSide};
 use signex_types::coord::Unit;
 use signex_types::measure::length_field_text;
-use signex_types::theme::ThemeTokens;
+use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::{Label, segmented, text, text_input};
 
 use super::{SP, TS, kit, out};
@@ -85,6 +85,7 @@ pub(super) fn cell_text(cell: &ReportCell, unit: Unit, i18n: &I18n) -> Label<'st
 pub(super) fn parts<'a>(
     state: &'a BoardReportsState,
     unit: Unit,
+    theme: ThemeId,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Parts<'a> {
@@ -102,7 +103,7 @@ pub(super) fn parts<'a>(
     );
     let shown = &state.shown;
     let body = column![
-        toolbar(state, shown.len(), i18n, tokens),
+        toolbar(state, shown.len(), theme, i18n, tokens),
         kit::rule(tokens::resolve(tokens).line_soft),
         super::reports_table::table(state, shown, unit, i18n, tokens),
     ]
@@ -136,6 +137,7 @@ pub(super) fn parts<'a>(
 fn toolbar<'a>(
     state: &'a BoardReportsState,
     shown: usize,
+    theme: ThemeId,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
@@ -145,7 +147,7 @@ fn toolbar<'a>(
         kit::segmented_style(tokens).fill_width(true),
         |kind| out(BoardOutputMsg::ReportPicked(kind)),
     );
-    let filter = filter_field(state, i18n, tokens);
+    let filter = filter_field(state, theme, i18n, tokens);
     let total = state.report.rows.len();
     let count = if shown == total {
         t!(i18n, ids::BOARD_REPORTS_ROWS, "count" => total)
@@ -173,13 +175,12 @@ fn toolbar<'a>(
 /// The Filter rows field, led by a magnifier inside it (mockup row 117).
 pub(super) fn filter_field<'a>(
     state: &'a BoardReportsState,
+    theme: ThemeId,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let input = text_input(t!(i18n, ids::BOARD_REPORTS_FILTER), &state.filter)
         .on_input(|v| out(BoardOutputMsg::ReportFilterEdited(v)))
-        .size(TS.body)
-        .padding(SP.s + SP.xs)
-        .width(Length::Fill);
-    kit::glyph_field(kit::FieldGlyph::Search, input, tokens)
+        .size(TS.body);
+    kit::glyph_field(kit::FieldGlyph::Search, input, theme, tokens)
 }

@@ -11,7 +11,7 @@ mod tests;
 use iced::widget::{Column, Space, column, container, scrollable};
 use iced::{Element, Length, Widget as _};
 use signex_i18n::{I18n, ids, t};
-use signex_types::theme::ThemeTokens;
+use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::text;
 
 use super::board_output::kit;
@@ -52,8 +52,9 @@ impl Signex {
             tokens,
         );
         let ticked = self.fab_output_kinds(state);
+        let theme = self.ui_state.effective_theme_id();
         let body = scrollable(
-            container(body(state, &ticked, i18n, tokens)).padding([SP.l, SP.xl + SP.xs]),
+            container(body(state, &ticked, theme, i18n, tokens)).padding([SP.l, SP.xl + SP.xs]),
         )
         .direction(crate::styles::thin_vertical())
         .height(Length::Fill);
@@ -73,6 +74,7 @@ impl Signex {
 fn body<'a>(
     state: &'a FabOutputsState,
     ticked: &FabOutputKinds,
+    theme: ThemeId,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
@@ -100,7 +102,7 @@ fn body<'a>(
         col = col.push(kit::banner(PillTone::Info, whole, None, tokens));
     }
     col = col.push(kinds::grid(ticked, i18n, tokens));
-    col = col.push(outcome::destination(state, i18n, tokens));
+    col = col.push(outcome::destination(state, theme, i18n, tokens));
     if let Some(result) = outcome::result(state, i18n, tokens) {
         col = col.push(result);
     }

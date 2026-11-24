@@ -289,4 +289,32 @@ mod tests {
             "errors first"
         );
     }
+
+    /// Mockup row 112 on screen: the warnings chip draws its glyph before
+    /// its words, so the words start a glyph and more in from the chip's
+    /// edge, not at its side padding.
+    #[test]
+    fn the_warnings_chip_draws_its_glyph_before_its_words() {
+        use signex_output::{BomIssueSeverity, BomRule, BomValidationIssue};
+        let i18n = I18n::en_us();
+        let tokens = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
+        let report = BomValidationReport {
+            issues: vec![BomValidationIssue {
+                rule: BomRule::MissingMpn,
+                severity: BomIssueSeverity::Warning,
+                message: String::new(),
+                references: vec!["J2".to_owned()],
+            }],
+        };
+        let chips = issue_chips(&report, ThemeId::GraphiteLight, &tokens, &i18n);
+        let [chip] = <[_; 1]>::try_from(chips).unwrap_or_else(|_| panic!("one chip"));
+        let words = t!(i18n, ids::BOM_CHIP_WARNINGS, "count" => 1usize).into_string();
+        let laid = crate::layout_probe::lay_out_texts(chip, iced::Size::new(400.0, 100.0));
+        let label = crate::layout_probe::find(&laid, &words).bounds;
+        let metrics = ChipMetrics::from_text_size(TS.body);
+        assert!(
+            label.x >= metrics.pad_h + metrics.text_size,
+            "the glyph comes first: {label:?}"
+        );
+    }
 }
