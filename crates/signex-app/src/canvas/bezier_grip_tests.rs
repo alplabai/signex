@@ -228,3 +228,40 @@ fn a_press_on_a_handle_moves_its_curve_off_the_resting_handles() {
     let sheet = slot.active_snapshot().expect("the sheet is loaded");
     assert_eq!(resting_beziers(sheet, &slot.selected, dragged).count(), 0);
 }
+
+#[test]
+fn a_move_drag_draws_the_handles_at_the_shifted_points() {
+    let slot = slot_with(false, true);
+    let all: std::collections::HashSet<_> = crate::active_bar::SelectionFilter::ALL
+        .iter()
+        .copied()
+        .collect();
+    let overrides = std::collections::HashMap::new();
+    let view = SchematicCanvas::new(&slot, test_prefs(&overrides, &all));
+    let mut state = CanvasState::default();
+    state.start_floating_move(
+        (25.0, 20.0),
+        slot.move_epoch,
+        slot.selected.clone(),
+        slot.selected.clone(),
+        Default::default(),
+    );
+    state.move_current = Some((45.0, 30.0));
+    let (dx, dy) = view.drag_delta(&state).expect("a move is under way");
+    assert!(dx != 0.0 || dy != 0.0, "the move shifts the curve");
+    let frame = view
+        .drag_frame(&state, Some((dx, dy)))
+        .expect("the move draws a shifted sheet");
+
+    let expected = bezier(false)
+        .points()
+        .map(|p| SheetPoint::new(p.x + dx, p.y + dy));
+    let drawn = view.resting_handle_points(Some(&frame.moving), &state);
+    assert_eq!(drawn.len(), 1, "one selected curve, one set of handles");
+    for (at, want) in drawn[0].iter().zip(expected) {
+        assert!(
+            (at.x - want.x).abs() < 1e-9 && (at.y - want.y).abs() < 1e-9,
+            "handle at {at:?}, the shifted curve has it at {want:?}"
+        );
+    }
+}

@@ -216,19 +216,32 @@ impl SchematicCanvas<'_> {
 
     /// The handles of every selected, unlocked Bezier, drawn on the overlay
     /// each frame so a drag never leaves the held curve's old handles behind.
+    /// `sheet` is the sheet as this frame draws it: shifted during a move.
     pub(in crate::canvas) fn draw_bezier_handles(
         &self,
         frame: &mut canvas::Frame,
         state: &CanvasState,
+        sheet: Option<&SchematicSheet>,
         bounds: Rectangle,
     ) {
-        let Some(sheet) = self.active_snapshot() else {
-            return;
+        for points in self.resting_handle_points(sheet, state) {
+            self.draw_handles(frame, points, None, bounds);
+        }
+    }
+
+    /// The sheet points of the resting handles in `sheet`, one row a curve.
+    pub(in crate::canvas) fn resting_handle_points(
+        &self,
+        sheet: Option<&SchematicSheet>,
+        state: &CanvasState,
+    ) -> Vec<[SheetPoint; 4]> {
+        let Some(sheet) = sheet else {
+            return Vec::new();
         };
         let dragged = state.bezier_drag.map(|drag| drag.drawing);
-        for bezier in resting_beziers(sheet, &self.selected, dragged) {
-            self.draw_handles(frame, bezier.points(), None, bounds);
-        }
+        resting_beziers(sheet, &self.selected, dragged)
+            .map(SchBezier::points)
+            .collect()
     }
 
     /// The ink of the handles, the control lines and the dragged curve: the
