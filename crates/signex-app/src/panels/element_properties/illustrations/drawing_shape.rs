@@ -589,7 +589,10 @@ mod tests {
 
     /// Mockup row 48: the Placement name sits left of the box, off its
     /// outline, with room for the whole name at the panel's caption size
-    /// (the label fitter's character estimate).
+    /// (the label fitter's character estimate). The name's width is in
+    /// pixels and its anchor in view units, so this pins the room only at a
+    /// view drawn about 1:1 (a dock about `VIEW_W` wide); a narrower dock
+    /// leaves the name to the label fitter.
     #[test]
     fn the_placement_name_stays_off_the_box() {
         let caption = crate::styles::TypeScale::DEFAULT.caption;

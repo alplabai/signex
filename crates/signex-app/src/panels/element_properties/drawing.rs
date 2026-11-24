@@ -124,6 +124,21 @@ fn refused_ink(field: DrawingFieldId, ctx: &PanelContext) -> Option<Color> {
         .map(|_| crate::styles::ti(ctx.tokens.error))
 }
 
+/// The width a tag longer than one letter (Start, End) adds to its field's
+/// left inset, past the one letter `field_insets` leaves room for.
+fn long_tag_extra(axis: &Label<'_>) -> f32 {
+    let extra = axis.as_str().chars().count().saturating_sub(1);
+    extra as f32 * AXIS_ADVANCE_EM * TS.caption
+}
+
+/// The narrowest field of a pair tagged `a` and `b`: `PAIR_FIELD_MIN` plus
+/// the room the longer tag takes past one letter, so a pair that cannot fit
+/// its value past a Start or End tag stacks instead of clipping the value.
+fn pair_floor(i18n: &I18n, a: MessageId, b: MessageId) -> f32 {
+    let extra = |id: MessageId| long_tag_extra(&Label::from(t!(i18n, id)));
+    PAIR_FIELD_MIN + extra(a).max(extra(b))
+}
+
 /// One drawing field: the box with its axis tag (when it has one) at the
 /// left and its unit at the right, inside it (mockup row 48). A value the
 /// box can store previews while typed and commits on Enter or on leaving
@@ -138,11 +153,7 @@ fn field_box<'a>(
     let axis = axis.map(|id| Label::from(t!(ctx.i18n, id)));
     let unit = Label::from(t!(ctx.i18n, unit));
     let (left, right) = field_insets(axis.is_some(), true);
-    // A tag longer than one letter (Start, End) widens the inset by the rest.
-    let extra = axis
-        .as_ref()
-        .map_or(0, |a| a.as_str().chars().count().saturating_sub(1));
-    let left = left + extra as f32 * AXIS_ADVANCE_EM * TS.caption;
+    let left = left + axis.as_ref().map_or(0.0, long_tag_extra);
     let input = signex_widgets::text_input(
         signex_i18n::UserText::new(String::new()),
         shown(field, stored, ctx),
@@ -191,7 +202,7 @@ fn pair<'a>(
     let both = pair_line(
         field_box(ctx, Some(ax_a), field_a, a, unit),
         field_box(ctx, Some(ax_b), field_b, b, unit),
-        PAIR_FIELD_MIN,
+        pair_floor(&ctx.i18n, ax_a, ax_b),
     );
     hover_linked(ctx, link, control_row(t!(ctx.i18n, label), both, muted))
 }
@@ -777,5 +788,23 @@ mod tests {
             assert!(inside(tag, value), "{tag} outside {value}: {texts:?}");
         }
         assert!(inside("mm", "0.200"), "the Border unit: {texts:?}");
+    }
+
+    /// Mockup row 48: a pair tagged Start / End keeps the value's room past
+    /// its longer tag, so it stacks where an X / Y pair still fits; an X / Y
+    /// pair keeps the one-letter floor.
+    #[test]
+    fn a_long_tagged_pair_keeps_room_for_its_value() {
+        let i18n = I18n::en_us();
+        let xy = pair_floor(&i18n, ids::PROPERTIES_AXIS_X, ids::PROPERTIES_AXIS_Y);
+        assert_eq!(xy, PAIR_FIELD_MIN);
+        let angles = pair_floor(
+            &i18n,
+            ids::PROPERTIES_ANGLE_START,
+            ids::PROPERTIES_ANGLE_END,
+        );
+        let start = long_tag_extra(&Label::from(t!(i18n, ids::PROPERTIES_ANGLE_START)));
+        assert!(start > 0.0, "Start is longer than one letter");
+        assert_eq!(angles, PAIR_FIELD_MIN + start);
     }
 }
