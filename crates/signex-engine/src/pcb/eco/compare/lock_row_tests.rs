@@ -110,13 +110,47 @@ fn an_equal_named_pad_row_that_needs_a_row_is_not_drawn_and_follows_it() {
     assert!(is_on(report.eco(), &pad_key(0x10)));
 }
 
-/// A folded row that is blocked stays unticked, whatever needs it.
+/// A blocked equal-named row another row needs stays drawn with its
+/// reason and unticked: it is the only place the user sees why the row
+/// that needs it waits.
 #[test]
-fn a_blocked_folded_row_stays_unticked() {
+fn a_blocked_needed_row_stays_drawn_with_its_reason() {
     let lock = pad_row(0x10, net(1, "GND"), net(1, "GND"), true).blocked(EcoBlock::PartNotRead);
     let needing = pad_row(0x20, net(2, "VIN"), net(1, "GND"), false).needing(vec![pad_key(0x10)]);
     let report = report(vec![lock, needing]);
-    assert_eq!(report.rows.len(), 1);
+    assert_eq!(report.rows.len(), 2, "{:?}", report.rows);
+    let blocker = report
+        .rows
+        .iter()
+        .find(|row| row.pcb == Some(pad_key(0x10)))
+        .expect("the blocked row is drawn");
+    assert_eq!(blocker.pcb_blocked, Some(EcoBlock::PartNotRead));
     assert!(!is_on(report.eco(), &pad_key(0x10)));
-    assert!(report.waits(&report.rows[0]), "the needing row waits");
+    let waiting = report
+        .rows
+        .iter()
+        .find(|row| row.pcb == Some(pad_key(0x20)))
+        .expect("the needing row is drawn");
+    assert!(report.waits(waiting), "the needing row waits");
+}
+
+/// Set shown rows ticks the folded rows once for the whole batch, with the
+/// same result as choosing each row in turn.
+#[test]
+fn set_shown_ticks_a_chain_of_folded_rows() {
+    let needed = pad_row(0x30, net(3, "VIN"), net(1, "+5V"), false);
+    let first = pad_row(0x10, net(2, "+5V"), net(1, "+5V"), false).needing(vec![pad_key(0x30)]);
+    let second = pad_row(0x20, net(4, "+5V"), net(1, "+5V"), false).needing(vec![pad_key(0x10)]);
+    let mut report = report(vec![second, first, needed]);
+    assert_eq!(report.rows.len(), 1, "{:?}", report.rows);
+    assert!(is_on(report.eco(), &pad_key(0x20)), "chain follows");
+
+    report.set_shown(None, Direction::Skip);
+    for n in [0x10, 0x20, 0x30] {
+        assert!(!is_on(report.eco(), &pad_key(n)), "{n:#x} skipped");
+    }
+    report.set_shown(None, Direction::UpdatePcb);
+    for n in [0x10, 0x20, 0x30] {
+        assert!(is_on(report.eco(), &pad_key(n)), "{n:#x} ticked");
+    }
 }

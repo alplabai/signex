@@ -171,8 +171,9 @@ the report leaves it out and its Apply does not set that lock; Update PCB
 still lists it. A pad row whose two sides read the same net name and that
 other rows need, or that needs other rows, is not drawn either (mockup row
 162): it is applied while a ticked row needs it, or while every row it needs
-is ticked. A pad moving between two net numbers of one name with no row tied
-to it is a real move and stays listed.
+is ticked. A blocked one stays drawn with its reason, so the row that needs
+it shows why it waits. A pad moving between two net numbers of one name with
+no row tied to it is a real move and stays listed.
 
 ### Directions
 
