@@ -3,13 +3,15 @@
 //! asking first when there are edits. The footprint editor mounts
 //! [`footprint_overlay`]; the board sketch view builds the same bar with
 //! its own messages through [`mode_bar`]. The card lists why a sketch does
-//! not bake and what fails, with its place (mockup row 190).
+//! not bake and what fails, with its place (mockup row 190); a footprint's
+//! card sits in Properties ([`FootprintBakeCard`]), so it covers no canvas.
 
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Space, column, container, row};
 use iced::{Border, Element, Length, Widget as _};
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::sketch::baked_kinds::BakedKind;
+use signex_types::sketch::{SketchHost, SketchRole};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{text, theme_ext};
 
@@ -17,8 +19,8 @@ use crate::app::FootprintDocument;
 use crate::library::editor::footprint::sketch_dispatch::current_role_of;
 use crate::library::editor::footprint::sketch_mode::roles::role_label;
 use crate::library::editor::footprint::sketch_mode::{BakePreview, SketchExit};
-use crate::library::editor::footprint::state::CheckStatus;
 use crate::library::editor::footprint::state::board_checks::{GapOffer, mm, open_end_text};
+use crate::library::editor::footprint::state::{CheckStatus, EditorMode};
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::styles::{DialogButtonKind, dialog_button};
 use signex_bake::open_ends::{OpenEnd, warning_names_end};
@@ -386,10 +388,11 @@ pub fn preview_card<'a, M: Clone + 'a>(
         card = card.push(caption(ids::SKETCH_BAKE_SELECT_HINT));
     }
     card = card.push(caption(ids::EDITORS_SKETCH_BAKE_NEVER));
-    // Capped so the failing place on the canvas stays visible (mockup row 179d).
+    // Fills the Properties column, capped so long lines wrap (mockup row 179d).
     container(card)
         .padding([SP.s, SP.m])
-        .width(Length::Fixed(TS.body * PREVIEW_CARD_MAX_EM))
+        .width(Length::Fill)
+        .max_width(TS.body * PREVIEW_CARD_MAX_EM)
         .style(crate::styles::modal_card(tokens))
         .boxed()
 }
@@ -415,8 +418,9 @@ fn gap_line<'a, M: Clone + 'a>(
     line.boxed()
 }
 
-/// The footprint editor's mode bar, with the preview card above it when
-/// open, at the canvas's bottom left. Empty outside sketch mode.
+/// The footprint editor's mode bar at the canvas's bottom left. The open
+/// bake preview's card is in Properties, not over the canvas (mockup row
+/// 190). Empty outside sketch mode.
 pub fn footprint_overlay<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
@@ -440,15 +444,9 @@ pub fn footprint_overlay<'a>(
         bake: Some(fp(FootprintEditorMsg::SketchBakeRequested)),
     };
     let mut stack = column![].spacing(SP.m);
-    // Jump to pad / Back to pad sit just above the preview card while it
-    // is open, else directly above the mode bar (Caner, 2026-11-24).
+    // Jump to pad / Back to pad sit directly above the mode bar.
     if let Some(link) = super::pad_link::link_button(editor, tokens, i18n) {
         stack = stack.push(link);
-    }
-    if exit_state.preview {
-        let preview = BakePreview::of_footprint_editor(editor);
-        let issues = footprint_issues(editor, &fp, i18n);
-        stack = stack.push(preview_card(&preview, issues, tokens, i18n));
     }
     stack = stack.push(mode_bar(look, exit_state, msgs, tokens, i18n));
     container(stack)
@@ -460,65 +458,100 @@ pub fn footprint_overlay<'a>(
         .boxed()
 }
 
-/// What a footprint's preview card lists. It bakes on every solve, so what
-/// the last bake left out is in the sketch warnings, with refused tool
-/// clicks and solver notes. The open profile the gap line names is said
-/// there once, not again as a warning (mockup row 190).
-fn footprint_issues(
-    editor: &FootprintDocument,
-    fp: &impl Fn(FootprintEditorMsg) -> LibraryMessage,
-    i18n: &I18n,
-) -> PreviewIssues<LibraryMessage> {
-    let open_end = editor
-        .state
-        .first_open_end(editor.primitive().sketch.as_ref());
-    let lines = editor
-        .state
-        .solve_warnings
-        .iter()
-        .filter(|warning| {
-            !open_end
+/// A footprint's open bake preview (mockup row 190): what Bake writes or
+/// why it does not, and what else the card lists, read from the editor into
+/// the Properties panel context. Properties shows the card, so it covers no
+/// canvas.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FootprintBakeCard {
+    pub preview: BakePreview,
+    /// The first open profile end, with the role of its first edge.
+    pub open_end: Option<(OpenEnd, Option<SketchRole>)>,
+    /// Whether the sketch is solved: Close gap needs a solve.
+    pub solved: bool,
+    /// The sketch warnings, less the one the open end's line already says.
+    pub warnings: Vec<String>,
+}
+
+impl FootprintBakeCard {
+    /// The card of `editor`; `None` unless its footprint sketch has the bake
+    /// preview open. A board sketch has its own Bake panel.
+    pub fn of(editor: &FootprintDocument) -> Option<Self> {
+        let state = &editor.state;
+        if !state.sketch_exit.preview
+            || state.mode != EditorMode::Sketch
+            || state.sketch_host() != SketchHost::Footprint
+        {
+            return None;
+        }
+        let sketch = editor.primitive().sketch.as_ref();
+        let open_end = state.first_open_end(sketch);
+        let warnings = state
+            .solve_warnings
+            .iter()
+            .filter(|warning| {
+                !open_end
+                    .as_ref()
+                    .is_some_and(|end| warning_names_end(warning, end))
+            })
+            .cloned()
+            .collect();
+        let open_end = open_end.map(|end| {
+            let object = end.edges.first().and_then(|id| {
+                let entity = sketch?.entities.iter().find(|e| e.id == *id)?;
+                Some(current_role_of(entity).on_host(SketchHost::Footprint))
+            });
+            (end, object)
+        });
+        Some(Self {
+            preview: BakePreview::of_footprint_editor(editor),
+            open_end,
+            solved: state.last_solve.is_some(),
+            warnings,
+        })
+    }
+
+    /// What the card lists besides its counts. A footprint bakes on every
+    /// solve, so what the last bake left out is in the sketch warnings, with
+    /// refused tool clicks and solver notes; the open profile the gap line
+    /// names is said there once. `close` makes Close gap's message.
+    pub fn issues<M>(
+        &self,
+        i18n: &I18n,
+        close: impl FnOnce(SketchEntityId, SketchEntityId) -> M,
+    ) -> PreviewIssues<M> {
+        let lines = self
+            .warnings
+            .iter()
+            .map(|warning| {
+                let line = t!(i18n, ids::SKETCH_BAKE_WARNING, "warning" => warning.as_str());
+                (CheckStatus::Failed, line, None)
+            })
+            .collect();
+        PreviewIssues {
+            refusal_select: None,
+            heading: ids::SKETCH_BAKE_WARNINGS,
+            lines,
+            caption: None,
+            gap: self
+                .open_end
                 .as_ref()
-                .is_some_and(|end| warning_names_end(warning, end))
-        })
-        .map(|warning| {
-            let line = t!(i18n, ids::SKETCH_BAKE_WARNING, "warning" => warning.as_str());
-            (CheckStatus::Failed, line, None)
-        })
-        .collect();
-    PreviewIssues {
-        refusal_select: None,
-        heading: ids::SKETCH_BAKE_WARNINGS,
-        lines,
-        caption: None,
-        gap: open_end
-            .as_ref()
-            .and_then(|end| named_gap_line(editor, end, fp, i18n)),
+                .and_then(|(end, object)| named_gap_line(end, *object, self.solved, i18n, close)),
+        }
     }
 }
 
 /// The open-profile line: the object and its place, then whether the gap
 /// heals, with Close gap's message when it does.
-fn named_gap_line(
-    editor: &FootprintDocument,
+fn named_gap_line<M>(
     end: &OpenEnd,
-    fp: &impl Fn(FootprintEditorMsg) -> LibraryMessage,
+    object: Option<SketchRole>,
+    solved: bool,
     i18n: &I18n,
-) -> Option<GapLine<LibraryMessage>> {
-    let solved = editor.state.last_solve.is_some();
-    let line = GapLine::of_open_end(end, solved, i18n, |keep, merge| {
-        fp(FootprintEditorMsg::SketchCloseGapRequested { keep, merge })
-    })?;
-    let host = editor.state.sketch_host();
-    let object = end.edges.first().and_then(|id| {
-        let sketch = editor.primitive().sketch.as_ref()?;
-        let entity = sketch.entities.iter().find(|e| e.id == *id)?;
-        Some(role_label(
-            current_role_of(entity).on_host(host),
-            host,
-            i18n,
-        ))
-    });
+    close: impl FnOnce(SketchEntityId, SketchEntityId) -> M,
+) -> Option<GapLine<M>> {
+    let line = GapLine::of_open_end(end, solved, i18n, close)?;
+    let object = object.map(|role| role_label(role, SketchHost::Footprint, i18n));
     let (Some(object), Some(at), Some(_)) = (object, end.at, end.gap_mm) else {
         return Some(line);
     };
@@ -618,25 +651,35 @@ mod tests {
         editor
     }
 
-    /// Caner 2026-11-24: with the Bake preview card open, Jump to pad sits
-    /// just above the card and covers none of its text or the mode bar's.
+    /// Caner 2026-11-24, mockup row 190: with the Bake preview open, the
+    /// card is in Properties, not over the canvas; Jump to pad sits just
+    /// above the mode bar and covers none of its text.
     #[test]
-    fn the_pad_link_sits_above_the_open_preview_card() {
+    fn the_pad_link_sits_above_the_mode_bar_with_the_preview_open() {
         let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
         let i18n = I18n::en_us();
         let mut editor = editor_offering_jump_to_pad();
         editor.state.sketch_exit.preview = true;
+        assert!(
+            FootprintBakeCard::of(&editor).is_some(),
+            "Properties shows the card"
+        );
 
         let overlay = footprint_overlay(&editor, &tokens, &i18n);
         let texts = crate::layout_probe::lay_out_texts(overlay, iced::Size::new(1200.0, 800.0));
 
         let jump = i18n.message_plain(ids::SKETCH_TOOLS_JUMP_TO_PAD, &[]);
         let heading = i18n.message_plain(ids::EDITORS_SKETCH_BAKE_RESULT, &[]);
-        let link = crate::layout_probe::find(&texts, &jump).bounds;
-        let card_top = crate::layout_probe::find(&texts, &heading).bounds.y;
+        let title = i18n.message_plain(ids::EDITORS_SKETCH_MODE_TITLE, &[]);
         assert!(
-            link.y + link.height <= card_top,
-            "the link {link:?} reaches below the card heading at {card_top}"
+            texts.iter().all(|t| t.text != heading),
+            "the canvas still shows the card"
+        );
+        let link = crate::layout_probe::find(&texts, &jump).bounds;
+        let bar_top = crate::layout_probe::find(&texts, &title).bounds.y;
+        assert!(
+            link.y + link.height <= bar_top,
+            "the link {link:?} reaches below the mode bar title at {bar_top}"
         );
         for other in texts.iter().filter(|t| t.text != jump) {
             assert!(

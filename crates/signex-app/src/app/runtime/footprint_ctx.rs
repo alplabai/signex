@@ -673,6 +673,9 @@ pub(super) fn build_footprint_editor_panel_ctx(
         selected_sketch_is_point,
         bake_outcome: crate::library::editor::footprint::sketch_mode::exit::shown_outcome(editor)
             .cloned(),
+        footprint_bake: crate::library::editor::standalone::sketch_exit::FootprintBakeCard::of(
+            editor,
+        ),
         profile_roles,
         centerline_count,
         placement_active,

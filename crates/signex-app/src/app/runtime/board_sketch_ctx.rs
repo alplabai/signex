@@ -13,8 +13,9 @@ use crate::panels::{BoardSketchProps, MountingHoleProps};
 use signex_types::pcb::Point;
 
 /// The role rows and centerline count of a sketch in Sketch mode: the Roles
-/// section of a footprint (mockup row 190), the Bake as list of a board's
-/// Bake panel (mockup row 179); nothing outside the mode.
+/// section of a footprint (mockup row 190), also under its Bake outcome, and
+/// the Bake as list of a board's Bake panel (mockup row 179); nothing else
+/// outside the mode.
 pub(super) fn sketch_role_rows(
     editor: &FootprintDocument,
 ) -> (
@@ -30,8 +31,10 @@ pub(super) fn sketch_role_rows(
     let sketch = editor.primitive().sketch.as_ref();
     let centerlines =
         |s: &signex_sketch::SketchData| s.entities.iter().filter(|e| e.centerline).count();
+    let baked = crate::library::editor::footprint::sketch_mode::exit::shown_outcome(editor);
+    let shows_roles = editor.state.mode == EditorMode::Sketch || baked.is_some();
     match sketch {
-        Some(s) if editor.state.mode == EditorMode::Sketch && host == SketchHost::Footprint => {
+        Some(s) if shows_roles && host == SketchHost::Footprint => {
             (profile_role_rows(s, host), centerlines(s))
         }
         Some(s) if editor.state.mode == EditorMode::Sketch && host == SketchHost::Board => (

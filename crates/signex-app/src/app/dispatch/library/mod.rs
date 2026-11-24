@@ -156,6 +156,9 @@ impl Signex {
             self.sync_diagnostics_panel_ctx();
             // A part-number keystroke in the preview retitles its tab.
             self.sync_component_tab_titles();
+            // The sketch canvas's words (role tags, units) for an editor the
+            // message opened or changed; a comparison once they are current.
+            self.sync_sketch_canvas_text();
             return task;
         }
         let finished = self.finish_update();

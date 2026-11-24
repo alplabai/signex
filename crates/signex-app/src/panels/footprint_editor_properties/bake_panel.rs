@@ -4,6 +4,8 @@
 //! failed outline checks. A line that names a place selects it on a click;
 //! a click on the canvas only highlights. The mode bar's Bake preview
 //! button closes the panel. See `docs/PCB_SKETCH.md`, "Sketch mode".
+//! A footprint sketch's open preview has its Bake panel here too (mockup
+//! row 190), so the preview card covers no canvas.
 
 use iced::widget::{Column, container, row};
 use iced::{Element, Length, Widget as _};
@@ -15,14 +17,58 @@ use super::super::{
     BakedHole, BakedKeepout, BakedOutline, BoardBakePreview, BoardBakeRefusal, BoardBakeRows,
     BoardSketchProps, PanelMsg, SketchFixMsg,
 };
-use super::body::{Ctx, caption, ghost, kv_row, mini_head, object_header};
+use super::body::{Ctx, caption, ghost, is_open, kv_row, mini_head, object_header, section};
 use super::sections::solve_pill;
 use crate::library::editor::footprint::{CheckStatus, GapOffer, format_check_mm};
-use crate::library::editor::standalone::sketch_exit::{status_line, target_label_id};
+use crate::library::editor::standalone::sketch_exit::{
+    FootprintBakeCard, preview_card, status_line, target_label_id,
+};
 use crate::styles::{Spacing, TypeScale};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
+
+/// The footprint Bake panel's preview section.
+const FOOTPRINT_PREVIEW_KEY: &str = "fp_bake_preview";
+
+/// The Bake panel of a footprint sketch (mockup row 190): the Roles
+/// section, the preview card (what Bake writes or why it does not, Close
+/// gap, the sketch warnings), then Back to sketch and Bake. The canvas
+/// draws the result meanwhile.
+pub(super) fn view_footprint_bake_panel<'a>(
+    mut col: Column<Element<'a, PanelMsg>>,
+    cx: Ctx<'a, '_>,
+    card: &FootprintBakeCard,
+) -> Column<Element<'a, PanelMsg>> {
+    let (tokens, i18n) = (cx.tokens, cx.i18n);
+    col = col.push(object_header(
+        t!(i18n, ids::EDITORS_SKETCH_BAKE),
+        None,
+        tokens,
+    ));
+    col = super::roles::view_roles(col, cx);
+    let title = t!(i18n, ids::EDITORS_SKETCH_BAKE_PREVIEW);
+    col = col.push(section(
+        FOOTPRINT_PREVIEW_KEY,
+        &title,
+        None,
+        cx.collapsed,
+        tokens,
+        i18n,
+    ));
+    if is_open(FOOTPRINT_PREVIEW_KEY, cx.collapsed) {
+        let issues = card.issues(i18n, |keep, merge| {
+            PanelMsg::SketchFix(SketchFixMsg::CloseGapClicked { keep, merge })
+        });
+        col = col.push(
+            container(preview_card(&card.preview, issues, tokens, i18n))
+                .padding([SP.xs, SP.m])
+                .width(Length::Fill)
+                .boxed(),
+        );
+    }
+    col.push(super::roles::bake_buttons(cx))
+}
 
 /// The panel's head, the solve state, what Bake writes or why it does not,
 /// and the failed outline checks.

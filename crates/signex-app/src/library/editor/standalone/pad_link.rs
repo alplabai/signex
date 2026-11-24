@@ -22,8 +22,8 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// The link button; `None` when there is nothing to link to. The mode bar's
 /// column (`sketch_exit::footprint_overlay`) stacks it first, so it sits just
-/// above the preview card while that is open and above the mode bar
-/// otherwise, left-aligned, never covering Bake (mockup row 192).
+/// above the mode bar, left-aligned, never covering Bake (mockup row 192).
+/// The open bake preview's card is in Properties (mockup row 190).
 pub fn link_button<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,

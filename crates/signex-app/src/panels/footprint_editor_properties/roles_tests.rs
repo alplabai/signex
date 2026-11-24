@@ -128,3 +128,152 @@ fn the_footprint_roles_section_keeps_its_bake_buttons_and_no_bake_as() {
     let board = bake_as_texts(&app, &fp);
     assert!(board.is_empty(), "no Bake as on a footprint: {board:#?}");
 }
+
+/// Where a laid-out text is, by its words.
+fn at(texts: &[LaidOutText], label: &str) -> iced::Rectangle {
+    texts
+        .iter()
+        .find(|t| t.text == label)
+        .unwrap_or_else(|| panic!("{label:?} missing: {texts:#?}"))
+        .bounds
+}
+
+/// Mockup row 190: with the bake preview open, Properties holds the Bake
+/// panel: the Roles section, the preview card (what Bake writes), then Back
+/// to sketch and Bake last. The card is not drawn over the canvas.
+#[test]
+fn an_open_footprint_preview_shows_its_card_in_properties() {
+    use crate::library::editor::footprint::sketch_mode::BakePreview;
+    use crate::library::editor::standalone::sketch_exit::FootprintBakeCard;
+    use signex_types::sketch::baked_kinds::BakedKind;
+
+    let app = app();
+    let mut fp = sketch_ctx(&app, SketchHost::Footprint);
+    fp.footprint_bake = Some(FootprintBakeCard {
+        preview: BakePreview::Counts(vec![(BakedKind::Courtyard, 1)]),
+        open_end: None,
+        solved: true,
+        warnings: Vec::new(),
+    });
+    let i18n = I18n::en_us();
+    let ctx = &app.document_state.panel_ctx;
+    let col = super::super::body::view_body(
+        &fp,
+        PanelPalette::from_tokens(&ctx.tokens),
+        &ctx.tokens,
+        &ctx.collapsed_sections,
+        signex_types::coord::Unit::Mm,
+        &i18n,
+    );
+    let texts = cleaned(lay_out_texts(col.boxed(), DOCK));
+    for label in [
+        "ROLES",
+        "Profile 1 · 4 edges",
+        "BAKE PREVIEW",
+        "Bake result",
+        "Back to sketch",
+        "Bake",
+    ] {
+        assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
+    }
+    // The panel's title is "Bake" too; the button is the last one.
+    let result = at(&texts, "Bake result");
+    let bake = texts
+        .iter()
+        .rev()
+        .find(|t| t.text == "Bake")
+        .expect("the Bake button")
+        .bounds;
+    assert!(
+        bake.y > result.y,
+        "Bake {bake:?} is not under the card {result:?}"
+    );
+    assert!(
+        at(&texts, "Profile 1 · 4 edges").y < result.y,
+        "Roles is not above the card"
+    );
+}
+
+/// The Properties context after a Bake of the fixture's two profiles: Pads
+/// mode, Baked · 8 pads.
+fn baked_ctx(app: &Signex) -> FootprintEditorPanelContext {
+    use crate::library::editor::footprint::sketch_mode::BakeOutcome;
+    use signex_types::sketch::baked_kinds::BakedKind;
+
+    let mut fp = sketch_ctx(app, SketchHost::Footprint);
+    fp.mode_kind = FootprintModeKind::Pads;
+    fp.bake_outcome = Some(BakeOutcome {
+        name: "QFN-16".into(),
+        written: vec![(BakedKind::Pads, 8), (BakedKind::Courtyard, 1)],
+        pads: 8,
+    });
+    fp
+}
+
+/// The outcome's texts, laid out with `collapsed` as the panel's set.
+fn outcome_texts(
+    app: &Signex,
+    fp: &FootprintEditorPanelContext,
+    collapsed: &crate::panels::CollapsedSections,
+) -> Vec<LaidOutText> {
+    let i18n = I18n::en_us();
+    let mut cx = cx(app, fp, &i18n);
+    cx.collapsed = collapsed;
+    let outcome = fp.bake_outcome.as_ref().expect("an outcome");
+    let col = super::super::bake_outcome::view_bake_outcome(Column::new(), cx, outcome);
+    cleaned(lay_out_texts(col.boxed(), DOCK))
+}
+
+/// Mockup row 190, the baked state: a Pads ↔ Sketch section that explains
+/// the links and says "No pad selected." until a pad is clicked, then the
+/// Roles and Bake result sections, closed, then Edit in Sketch.
+#[test]
+fn after_bake_the_pad_links_explain_themselves_and_roles_and_result_start_closed() {
+    let app = app();
+    let fp = baked_ctx(&app);
+    let texts = outcome_texts(&app, &fp, &Default::default());
+    for label in [
+        "Baked · 8 pads",
+        "PADS ↔ SKETCH",
+        "Each pad keeps a link to the sketch entity that made it. Click a pad on the canvas.",
+        "No pad selected.",
+        "ROLES",
+        "BAKE RESULT",
+        "Edit in Sketch ▸",
+    ] {
+        assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
+    }
+    let (link, roles, result) = (
+        at(&texts, "PADS ↔ SKETCH"),
+        at(&texts, "ROLES"),
+        at(&texts, "BAKE RESULT"),
+    );
+    assert!(link.y < roles.y && roles.y < result.y, "{texts:#?}");
+    assert!(
+        !has(&texts, "Profile 1 · 4 edges"),
+        "Roles is open: {texts:#?}"
+    );
+    assert!(
+        !has(&texts, "Click a pad"),
+        "the old one-row link: {texts:#?}"
+    );
+}
+
+/// Opened, Roles lists each profile with the role it baked as and Bake
+/// result each target with its count.
+#[test]
+fn the_opened_outcome_sections_list_roles_and_counts() {
+    let app = app();
+    let fp = baked_ctx(&app);
+    let open: crate::panels::CollapsedSections = [
+        super::super::bake_outcome::ROLES_KEY,
+        super::super::bake_outcome::RESULT_KEY,
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect();
+    let texts = outcome_texts(&app, &fp, &open);
+    for label in ["Profile 1 · 4 edges", "Profile 2 · 4 edges", "8", "1"] {
+        assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
+    }
+}

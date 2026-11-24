@@ -98,7 +98,11 @@ pub struct FootprintEditorPanelContext {
     /// What the last Bake wrote, until a non-pad object, a multi-selection,
     /// an edit or an empty click ends it (mockup row 190).
     pub bake_outcome: Option<crate::library::editor::footprint::sketch_mode::BakeOutcome>,
-    /// The Roles section's rows, in a footprint sketch (mockup row 190).
+    /// A footprint sketch's open bake preview, which Properties shows in
+    /// place of the canvas card (mockup row 190).
+    pub footprint_bake: Option<crate::library::editor::standalone::sketch_exit::FootprintBakeCard>,
+    /// The Roles section's rows, in a footprint sketch and after its Bake
+    /// (mockup row 190).
     pub profile_roles: Vec<crate::library::editor::footprint::sketch_mode::roles::ProfileRoleRow>,
     /// How many centerlines the sketch has; they never bake.
     pub centerline_count: usize,

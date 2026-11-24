@@ -246,14 +246,20 @@ control stays in reach:
   `board_layer_colour`), with the sketch faint on top. The pads, silk and
   courtyard are the editor's own (the footprint bakes on every solve); the
   other fields are baked from the same solve when the canvas redraws
-  (`canvas/draw/sketch/bake_overlay.rs`). The card also lists the last
+  (`canvas/draw/sketch/bake_overlay.rs`). The card is in Properties, not
+  over the canvas: while the preview is open Properties shows the Bake
+  panel, whatever is selected: the Roles section, the card, then Back to
+  sketch and Bake (mockup row 190). The card also lists the last
   bake's warnings, the features it left out; they name no entity, so a
   click on them does nothing. One gap is one line, naming the object and
-  its place, and the canvas rings it.
+  its place, and the canvas rings it. Bake stays clickable with an error:
+  the click stays in sketch mode and shows the open ends.
 
 After **Bake**, Properties shows the outcome: `Baked · N pads`, what was
-written, a **Pads ↔ Sketch** row and Edit in Sketch (mockup row 190). Clicking
-one pad keeps the panel and fills the row with that pad and its sketch source.
+written, a **Pads ↔ Sketch** section, the Roles and Bake result sections
+closed below it, and Edit in Sketch (mockup row 190). Pads ↔ Sketch says
+what the links are and "No pad selected." until a pad is clicked; clicking
+one pad keeps the panel and names that pad and its sketch source.
 A non-pad object, a multi-selection, an edit or an empty click ends the panel,
 and it does not come back on Undo or Redo.
 
@@ -734,11 +740,13 @@ conflicting mark fills in the danger colour.
 The cursor marks sketch mode draws in place of the OS cursor are light on
 that ground.
 
-A closed loop with a role shows the role's name at its top-left corner in
-the role's colour; a pad's loop shows none. Courtyard fills in the
-Courtyard Top colour; the other fills are unchanged (Caner, 2026-11-24).
-Jump to pad and Back to pad sit just above the mode bar, left-aligned, or
-just above the Bake preview card while it is open.
+A closed loop with a role shows the role's name just right of its
+top-right corner, outside the loop, in the role's colour; a pad's loop
+shows none. Courtyard fills in the Courtyard Top colour; the other fills
+are unchanged (Caner, 2026-11-24). A selected loop with a role keeps its
+role's colour, stronger, so the selection does not hide the role (mockup
+row 190). Jump to pad and Back to pad sit just above the mode bar,
+left-aligned; the Bake preview card is in Properties.
 
 A mirrored pattern draws a glyph by its mirror line, `⇔` and the mirrored
 pattern's glyph (`⇔ L×4`). A pattern glyph click with Select selects the
