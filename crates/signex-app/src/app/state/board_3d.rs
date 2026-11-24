@@ -130,16 +130,19 @@ pub struct Board3dSession {
 }
 
 impl Board3dSession {
-    /// The 3D view of the board at `board_path`, from straight above; the
-    /// caller frames it.
+    /// The 3D view of the board at `board_path`, from Iso on the top side
+    /// (mockup row 175); the caller frames it.
     pub fn open(board_path: &Path) -> Self {
+        let side = ViewSide::default();
+        let mut camera = OrbitCamera::default();
+        camera.set_preset_on(ViewPreset::Iso, side);
         Self {
             board_path: board_path.to_path_buf(),
-            camera: OrbitCamera::default(),
+            camera,
             viewport: ASSUMED_VIEWPORT,
             origin: [0.0, 0.0],
-            side: ViewSide::default(),
-            active_preset: Some(ViewPreset::Top),
+            side,
+            active_preset: Some(ViewPreset::Iso),
             explode: Explode::ASSEMBLED,
             explode_open: false,
             lighting: LightingPreset::default(),
@@ -461,5 +464,26 @@ impl Board3dSession {
     /// The model read for `source`, if any.
     pub fn model(&self, source: &FootprintSourceRef) -> Option<&ComponentModel> {
         self.models.get(source)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Mockup row 175: the view opens on Iso, the tinted preset, looking
+    /// from Iso at the top side.
+    #[test]
+    fn a_new_view_opens_on_iso() {
+        let session = Board3dSession::open(Path::new("board.snxpcb"));
+        assert_eq!(session.active_preset, Some(ViewPreset::Iso));
+        assert_eq!(session.side, ViewSide::Top);
+        let mut iso = OrbitCamera::default();
+        iso.set_preset(ViewPreset::Iso);
+        assert_eq!(
+            (session.camera.yaw_deg, session.camera.pitch_deg),
+            (iso.yaw_deg, iso.pitch_deg)
+        );
+        assert_ne!(session.camera.pitch_deg, OrbitCamera::default().pitch_deg);
     }
 }

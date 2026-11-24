@@ -515,6 +515,18 @@ pub(super) fn hint<'a>(i18n: &I18n) -> Element<'a, Message> {
 mod tests {
     use super::*;
 
+    /// Mockup row 175: "Iso · 60.0 × 40.0 × 1.6 mm · 18 bodies"; a view
+    /// just opened names Iso in its status pill.
+    #[test]
+    fn a_new_view_names_iso_in_the_status_pill() {
+        let i18n = I18n::en_us_ref();
+        let session = Board3dSession::open(std::path::Path::new("board.snxpcb"));
+        let line = size_line(i18n, &session, &BoardScene3d::default())
+            .into_string()
+            .replace(['\u{2068}', '\u{2069}'], "");
+        assert!(line.starts_with("Iso · "), "{line}");
+    }
+
     #[test]
     fn a_long_designator_list_says_how_many_more() {
         let i18n = I18n::en_us_ref();

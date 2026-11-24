@@ -262,7 +262,7 @@ impl Signex {
         true
     }
 
-    /// Show the board in view in 3D, framed from above, and read its parts'
+    /// Show the board in view in 3D, framed from Iso, and read its parts'
     /// models. Sketch mode of that board is left first (its changes
     /// applied); a refused apply keeps the board flat.
     fn enter_board_3d(&mut self) -> Task<Message> {
