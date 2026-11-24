@@ -904,6 +904,8 @@ panels-filter-no-presets = No presets yet. Save current keeps the kinds that are
 # A preset and the kinds it turns on; $name is the preset's, $kinds a list of kind names.
 panels-filter-preset-kinds = { $name }: { $kinds }
 panels-filter-preset-no-kinds = { $name }: no kinds
+# Shown while a preset is selected for editing: each kind chip click changes it; $name is the preset's.
+panels-filter-preset-editing = Editing { $name }
 
 ## Object List panel (#1259): every object of the sheet or the project, listed
 ## and selectable. The panel title is panels-kind-object-list.

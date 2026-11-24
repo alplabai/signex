@@ -335,6 +335,7 @@ pub(super) fn entries(app: &Signex, menu: PcbBarMenu) -> Vec<DropdownEntry<Messa
         ctx: &ctx,
         filter: &app.ui_state.pcb_pick_filter,
         presets: &app.ui_state.pcb_filter_presets,
+        editing: app.ui_state.pcb_filter_preset_editing,
         last: &app.ui_state.pcb_bar_last_tools,
     };
     pcb_bar_menu_entries(
@@ -487,6 +488,7 @@ fn the_selection_filter_is_the_schematic_dropdown_with_the_board_kinds() {
         crate::active_bar::FilterMenu {
             chips: Vec::new(),
             presets: Vec::new(),
+            editing: None,
             on: 0,
             all: (),
             none: (),
@@ -539,10 +541,20 @@ fn a_saved_preset_is_a_chip_of_the_filter_dropdown() {
     let _ = app.update(bar_message(PcbBarMsg::MenuToggled(PcbBarMenu::Filter)));
     let texts = grid_texts(filter_grid(&app));
     assert_eq!(texts[2], "Filter 1", "presets follow All / None: {texts:?}");
+    assert!(!texts.iter().any(|t| t.starts_with("Editing")), "{texts:?}");
     let applied = crate::layout_probe::messages_on_click(filter_grid(&app), WINDOW, "Filter 1");
     let _ = app.update(applied[0].clone());
     let on: Vec<PickKind> = app.ui_state.pcb_pick_filter.on_kinds().collect();
     assert_eq!(on, vec![PickKind::Vias]);
+    // #2873: the click selects the preset for editing, and the dropdown
+    // says so; a second click on it ends editing.
+    let texts = grid_texts(filter_grid(&app));
+    assert!(texts.iter().any(|t| t == "Editing Filter 1"), "{texts:?}");
+    let again = crate::layout_probe::messages_on_click(filter_grid(&app), WINDOW, "Filter 1");
+    let _ = app.update(again[0].clone());
+    assert_eq!(app.ui_state.pcb_filter_preset_editing, None);
+    let texts = grid_texts(filter_grid(&app));
+    assert!(!texts.iter().any(|t| t.starts_with("Editing")), "{texts:?}");
 }
 
 /// mockup row 108: the Selection Filter button carries a badge with the number of

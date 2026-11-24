@@ -239,7 +239,12 @@ mod tests {
                 .iter()
                 .copied()
                 .collect();
-            let entry = super::super::custom::filter_entry(i18n, &t, &filters, &[]);
+            let state = super::super::SchematicFilterState {
+                filters: &filters,
+                presets: &[],
+                editing: None,
+            };
+            let entry = super::super::custom::filter_entry(i18n, &t, &state);
             assert!(matches!(entry, DropdownEntry::Custom(_)));
             let rows = super::super::custom::net_color_entries(i18n, id, false, true);
             let swatches = rows
