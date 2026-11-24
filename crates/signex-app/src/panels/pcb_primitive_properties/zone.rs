@@ -262,22 +262,24 @@ fn pour<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Option<Element<'a, PanelMsg>> {
     s.finish()
 }
 
-/// Fill Mode: Solid, the only fill there is; Hatched greyed. No None
-/// (mockup row 99): the outline-only state is Shelve.
+/// Fill Mode (mockup row 99): Solid, the only fill there is; Hatched and
+/// None greyed, since a pour with no copper is a shelved one.
 fn fill_mode<'a>(look: Look<'a>) -> Element<'a, PanelMsg> {
-    let modes = segments(vec![
-        Segment {
-            label: look.t(ids::PCB_PRIM_POUR_FILL_SOLID),
-            is_on: true,
+    let modes = segments(
+        [
+            (ids::PCB_PRIM_POUR_FILL_SOLID, true),
+            (ids::PCB_PRIM_POUR_FILL_HATCHED, false),
+            (ids::PCB_PRIM_NONE, false),
+        ]
+        .into_iter()
+        .map(|(id, is_on)| Segment {
+            label: look.t(id),
+            is_on,
             msg: None,
-        },
-        Segment {
-            label: look.t(ids::PCB_PRIM_POUR_FILL_HATCHED),
-            is_on: false,
-            msg: None,
-        },
-    ]);
-    with_tip(look, modes, ids::PCB_PRIM_POUR_HATCHED_TIP)
+        })
+        .collect(),
+    );
+    with_tip(look, modes, ids::PCB_PRIM_POUR_FILL_MODE_TIP)
 }
 
 /// The Thermal Relief subsection: the stored switch and Spoke / Gap, read
@@ -356,11 +358,11 @@ fn corners<'a>(
 }
 
 /// Corner Size, greyed while Corners is Sharp, the only corner the fill
-/// makes (mockup row 99). The board stores no size, so it is blank.
+/// makes (mockup row 99). It shows the size a sharp corner has: 0.
 fn corner_size_value<'a>(look: Look<'a>) -> Element<'a, PanelMsg> {
     veiled(
         look.tokens(),
-        sunken_value(look, UserText::new(String::new())),
+        sunken_value(look, UserText::new(format_number(0.0))),
     )
 }
 
@@ -720,5 +722,88 @@ mod tests {
         let greyed = draw_pixels(corner_size_value(look), window);
         let plain = draw_pixels(sunken_value(look, UserText::new(String::new())), window);
         assert_ne!(greyed, plain, "the veil dims the sunken value");
+    }
+
+    fn context() -> PanelContext {
+        let (app, _boot) = crate::app::Signex::new();
+        app.document_state.panel_ctx.clone()
+    }
+
+    fn plain(text: &str) -> String {
+        text.replace(['\u{2068}', '\u{2069}'], "")
+    }
+
+    fn said(ctx: &PanelContext, id: MessageId) -> String {
+        plain(&t!(ctx.i18n, id).into_string())
+    }
+
+    /// Mockup row 99: Fill Mode offers Solid, Hatched and None.
+    #[test]
+    fn fill_mode_offers_solid_hatched_and_none() {
+        let ctx = context();
+        let shown: Vec<String> = crate::layout_probe::lay_out_texts(
+            fill_mode(Look::of(&ctx)),
+            iced::Size::new(300.0, 60.0),
+        )
+        .into_iter()
+        .map(|t| plain(&t.text))
+        .collect();
+        let want = [
+            ids::PCB_PRIM_POUR_FILL_SOLID,
+            ids::PCB_PRIM_POUR_FILL_HATCHED,
+            ids::PCB_PRIM_NONE,
+        ]
+        .map(|id| said(&ctx, id));
+        assert_eq!(shown, want);
+    }
+
+    /// Mockup row 99: a keepout's Keeps Out row sits right under Layer; a
+    /// pour has none.
+    #[test]
+    fn a_keepout_lists_keeps_out_right_under_layer() {
+        let ctx = context();
+        let texts = |f: &ZoneFacts| -> Vec<String> {
+            let section = properties(Look::of(&ctx), f).expect("the properties");
+            crate::layout_probe::lay_out_texts(section, iced::Size::new(300.0, 600.0))
+                .into_iter()
+                .map(|t| plain(&t.text))
+                .collect()
+        };
+        let (layer, keeps_out) = (
+            said(&ctx, ids::PCB_PRIM_LAYER),
+            said(&ctx, ids::PCB_PRIM_KEEPOUT_KINDS),
+        );
+        let mut keepout = pour(None);
+        keepout.kind = Some(ZoneKind::Keepout);
+        keepout.is_copper = false;
+        keepout.is_pour = false;
+        let shown = texts(&keepout);
+        let at = shown.iter().position(|t| *t == layer).expect("Layer");
+        assert_eq!(shown.get(at + 1), Some(&keeps_out), "{shown:?}");
+        assert!(!texts(&pour(Some(false))).contains(&keeps_out));
+    }
+
+    /// Mockup row 99: the greyed Corner Size still shows its value, the
+    /// size a Sharp corner has, under the veil.
+    #[test]
+    fn the_greyed_corner_size_shows_its_value() {
+        use crate::layout_probe::draw_pixels;
+        let ctx = context();
+        let look = Look::of(&ctx);
+        let window = iced::Size::new(120.0, 30.0);
+        let shown = draw_pixels(corner_size_value(look), window);
+        let blank = draw_pixels(
+            veiled(
+                look.tokens(),
+                sunken_value(look, UserText::new(String::new())),
+            ),
+            window,
+        );
+        assert_ne!(shown, blank, "the greyed field draws its value");
+        let unveiled = draw_pixels(
+            sunken_value(look, UserText::new(format_number(0.0))),
+            window,
+        );
+        assert_ne!(shown, unveiled, "the value is greyed");
     }
 }

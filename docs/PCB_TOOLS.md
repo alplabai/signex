@@ -46,8 +46,11 @@ A via whose diameter or drill already differs from its type shows Override
 on, its own values in bold with a reset arrow each; a reset arrow puts one
 back, and Override off puts both back in one undo step. A small
 illustration shows the via on the chosen layer and a cross-section of L1
-(Top) to Ln (Bottom); Protection names its IPC-4761 type and keeps Tented
-Top and Bottom editable per via. A microvia type lists Stacked / Staggered
+(Top) to Ln (Bottom); Protection names its IPC-4761 type on a chip in its
+header and keeps Tented Top and Bottom editable per via. The closed Via
+Type field shows the type's span glyph (the copper layers, with a bar over
+the ones it spans), its name and diameter / drill; Position, Diameter,
+Drill and Finished Hole read in mm. A microvia type lists Stacked / Staggered
 greyed under "Not stored yet". The form of the via about to be placed keeps
 Diameter and Drill editable.
 
@@ -464,14 +467,15 @@ pour as a zone left unfilled.
 A placed pour is picked inside its outline (`PickKind::Polygons`, the
 Polygons chip of the selection filter) and opens the area panel (#2523): its
 illustration, Net Information, then Net, Layer and the Pour section: Fill
-Mode (Solid; Hatched is greyed, not supported yet), Clearance, Minimum
-Width, Thermal Relief (the stored switch with Spoke / Gap, read only and
-greyed, since the fill draws no spokes), Corners and Corner Size (Sharp;
-greyed, not stored yet), Priority (a whole number from 0), Remove Islands
-(below an area in mm²), Remove Dead Copper, and the Copper card. Each edit
-is one undo step. `min_island_area` and `remove_dead_islands` are written to
-the file only when set. Fill Mode has no None: the outline-only state is
-Shelve.
+Mode (Solid; Hatched and None are greyed: Hatched is not supported yet, and
+a pour with no copper is a shelved one, so None is not a mode of its own),
+Clearance, Minimum Width, Thermal Relief (the stored switch with Spoke /
+Gap, read only and greyed, since the fill draws no spokes), Corners and
+Corner Size (Sharp, size 0; greyed, not stored yet), Priority (a whole
+number from 0), Remove Islands (below an area in mm²), Remove Dead Copper,
+and the Copper card (mockup row 99). Each edit is one undo step.
+`min_island_area` and `remove_dead_islands` are written to the file only
+when set.
 
 The Copper card shows the copper the fill holds (area and pieces, read from
 the fills the app holds), or "shelved · no copper". Its buttons:
