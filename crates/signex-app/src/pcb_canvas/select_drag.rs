@@ -3,6 +3,7 @@
 //! press-drag-release as it moves by Edit ▸ Move.
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use pcb_geom::{ClickMode, ItemRef};
 use signex_types::pcb::{PcbBoard, Point};
@@ -69,7 +70,77 @@ pub(super) fn is_dragged_item(item: ItemRef) -> bool {
     !probe.is_empty()
 }
 
+/// What a press grabs, kept until the index is rebuilt (a board, view or
+/// document change) or the selection filter changes, so a paint on every
+/// pointer step does not rebuild it.
+#[derive(Debug)]
+pub(super) struct GrabCache {
+    index_build: u32,
+    filter: pcb_geom::PickFilter,
+    shapes: Arc<[pcb_geom::Shape]>,
+}
+
+/// The whole selection a drag carries (#2870): its footprints (a selected
+/// pad stands for its part), vias, and other items and rooms.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DraggedSelection {
+    pub footprints: BTreeSet<Uuid>,
+    pub vias: BTreeSet<Uuid>,
+    pub rest: DraggedItems,
+}
+
 impl PcbSelectionState {
+    /// What a press grabs to drag: every footprint, the designators and
+    /// comments and the vias the filter lets a click pick, and every other
+    /// object ([`Self::item_grab_shapes`]). Built once per index build and
+    /// filter.
+    pub(super) fn grab_shapes(&mut self, board: &PcbBoard) -> Arc<[pcb_geom::Shape]> {
+        self.ensure_index(board);
+        if let Some(cache) = &self.grab_cache
+            && cache.index_build == self.index_builds
+            && cache.filter == self.filter
+        {
+            return Arc::clone(&cache.shapes);
+        }
+        let mut grab = self.shapes_of_footprints(board, |_| true);
+        // A designator or comment is grabbed to move on its own (#2368),
+        // unless the filter turns texts off: a press there then starts a
+        // box, as before texts were picked.
+        if self.filter.is_on(pcb_geom::PickKind::Texts) {
+            grab.extend(self.shapes_of(|item| matches!(item, ItemRef::FootprintText { .. })));
+        }
+        // A via is grabbed unless the filter turns vias off.
+        if self.filter.is_on(pcb_geom::PickKind::Vias) {
+            grab.extend(self.shapes_of(|item| matches!(item, ItemRef::Via(_))));
+        }
+        // Every other selectable object drags too (#2870).
+        grab.extend(self.item_grab_shapes(board));
+        let shapes: Arc<[pcb_geom::Shape]> = grab.into();
+        self.grab_cache = Some(GrabCache {
+            index_build: self.index_builds,
+            filter: self.filter.clone(),
+            shapes: Arc::clone(&shapes),
+        });
+        shapes
+    }
+
+    /// Everything selected, as a drag carries it.
+    pub fn selection_for_drag(&self) -> DraggedSelection {
+        let mut dragged = DraggedSelection {
+            footprints: self.selection.footprints(),
+            ..Default::default()
+        };
+        for item in self.selection.items() {
+            match item {
+                ItemRef::Via(id) => {
+                    dragged.vias.insert(id);
+                }
+                other => dragged.rest.add(other),
+            }
+        }
+        dragged
+    }
+
     /// The shapes of every object a press grabs to drag through
     /// [`DraggedItems`] that the selection filter lets a click pick: their
     /// strokes and edges, and the inside of each area and room (Caner,

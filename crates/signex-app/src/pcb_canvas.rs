@@ -160,7 +160,7 @@ pub struct PcbCanvas {
     marquee: std::cell::Cell<Option<(signex_types::pcb::Point, signex_types::pcb::Point)>>,
     /// The body and pads of every footprint, set by the app: a press on one
     /// drags it instead of starting a box (#2240, #2358).
-    grab: Vec<pcb_geom::Shape>,
+    grab: Arc<[pcb_geom::Shape]>,
     /// A footprint drag is live; Esc clears it and the gesture quits.
     carry: std::cell::Cell<bool>,
     /// A tool, Move, paste or part on the cursor waits for clicks: every
@@ -225,7 +225,7 @@ impl PcbCanvas {
             rooms_overlay: RoomsOverlay::default(),
             highlight: Highlight::default(),
             marquee: std::cell::Cell::new(None),
-            grab: Vec::new(),
+            grab: Vec::new().into(),
             carry: std::cell::Cell::new(false),
             clicks_only: false,
             swallow_right_release: false,
@@ -246,9 +246,10 @@ impl PcbCanvas {
         &self.highlight
     }
 
-    /// What a press grabs to drag a footprint.
-    pub fn set_grab(&mut self, grab: Vec<pcb_geom::Shape>) {
-        self.grab = grab;
+    /// What a press grabs to drag an object; shared with the selection's
+    /// cache, so setting it on every paint copies no shape.
+    pub fn set_grab(&mut self, grab: impl Into<Arc<[pcb_geom::Shape]>>) {
+        self.grab = grab.into();
     }
 
     /// Make every press a click (a tool or a carry waits for clicks), or

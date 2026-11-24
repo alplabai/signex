@@ -118,6 +118,7 @@ impl Signex {
         let Some(kind) = tool.graphic_kind() else {
             return;
         };
+        self.drop_run_across_copper();
         if self.copper_graphic_clicked(tool, at) {
             return;
         }
@@ -186,7 +187,10 @@ impl Signex {
         cursor: Point,
         preview: &mut PcbBoard,
     ) {
-        if self.copper_graphic_preview(session, cursor, preview) {
+        // Points left from the other side of the copper line start nothing:
+        // the next click drops them.
+        if self.run_crosses_copper(session) || self.copper_graphic_preview(session, cursor, preview)
+        {
             return;
         }
         let (Some(kind), Some(layer)) = (session.tool.graphic_kind(), self.active_graphic_layer())
