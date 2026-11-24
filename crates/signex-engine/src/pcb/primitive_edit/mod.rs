@@ -69,7 +69,7 @@ pub enum PrimitiveEditRefusal {
     NoLength,
     #[error("the value must be above zero")]
     NotPositive,
-    #[error("a drawing goes on a non-copper layer other than a keep-out")]
+    #[error("a drawing goes on any layer but a keep-out")]
     GraphicLayerNotAllowed,
     /// A trapezoid or custom pad the edit would leave with no copper (#2242).
     #[error("{0}")]

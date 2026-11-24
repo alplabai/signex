@@ -92,7 +92,7 @@ pub enum BoardCommandError {
     UnknownLayer(String),
     #[error("{field} must not be below zero")]
     Negative { field: &'static str },
-    #[error("{0} cannot hold a board drawing: drawings go on non-copper layers, not keep-outs")]
+    #[error("{0} cannot hold a board drawing: drawings go on any layer but a keep-out")]
     NotGraphicLayer(String),
     #[error("net {0} is not in the board's net table")]
     UnknownNet(u32),

@@ -539,15 +539,13 @@ cursor) is drawn as its outline alone.
 (`PCB_DEFAULT_TEXT_SIZE_MM`) and unturned, reading the catalog's new-string
 text (`pcb-tool-string-text`, "String"), or the text, height and turn set in
 its placement form; the string carries no net. A layer takes a string when
-`PcbLayer::takes_text` holds: the two overlay layers, the mechanical layers
-and the documentation layers (Dimensions among them). On any other layer a
-click places nothing and the Messages panel and the status bar name the
-layers that do. Copper text is not placed yet (#2869): the design rule
-check, pour fill and router read no board text, so copper text would be
-copper they do not keep clear.
-Copper text would be copper that the copper list, the design rule check and
-the ratsnest never read. The canvas draws it (#2387); a click or box picks
-it (`pcb_geom::ItemRef::Text`, the selection filter's Texts kind).
+`PcbLayer::takes_text` holds: the copper layers, the two overlay layers, the
+mechanical layers and the documentation layers (Dimensions among them). On
+any other layer a click places nothing and the Messages panel and the
+status bar name the layers that do. A string on copper is real copper text
+with no net (Caner, 2026-11-24, #2883): see "Copper of no net" under
+[Graphics](#graphics). The canvas draws it (#2387); a click or box picks it
+(`pcb_geom::ItemRef::Text`, the selection filter's Texts kind).
 
 The String panel (#2523) shows the illustration (the text box with its
 Text Height and its Position X/Y origin; the rotation is not drawn), then
@@ -630,19 +628,30 @@ draws a board drawing (`PcbBoard::graphics`, kinds in
 `signex_types::pcb_graphic`) on the active layer, built by
 `signex_engine::pcb::graphic`, one undo step each.
 
-- **Layer.** Any non-copper layer but the two keep-out layers, whose areas
-  the design rule check reads as rules: overlay, solder mask, paste, fab,
-  assembly, courtyard, mechanical, documentation, the board outline.
-  On copper (Caner, 2026-11-24, #2869) Line and Arc place copper:
+- **Layer.** Any layer but the two keep-out layers, whose areas the design
+  rule check reads as rules: copper, overlay, solder mask, paste, fab,
+  assembly, courtyard, mechanical, documentation, the board outline. On a
+  keep-out a click adds nothing and the Messages panel and the status bar
+  say so. On copper (Caner, 2026-11-24, #2869) Line and Arc place copper:
   Line a run of straight tracks, any angle, on the net of the pad, via or
   track under its first click; Arc a track arc on the net under its start.
   They are tracks for the copper list, DRC and Gerber, and take the Track
   and Arc tools' width and net, which Properties shows while copper is
-  active. Full Circle, Rectangle and Text Frame are not placed on copper yet:
-  the design rule check, pour fill and router read no board drawing, so a
-  copper shape would be copper nothing keeps clear. On those layers and the
-  keep-outs a click adds nothing and the Messages panel and the status bar
-  say so.
+  active. Full Circle, Rectangle and Text Frame on copper (Caner,
+  2026-11-24, #2883) place a drawing whose stroked outline is copper with
+  no net (a text frame's text too); Properties shows the drawing.
+- **Copper of no net (#2883).** A drawing on copper (along its stroke, a
+  text frame's lines included) and a string on copper (along its glyph
+  strokes, in the board stroke font) are copper of no net, listed once by
+  `pcb_geom::drawn_copper` (curves within `ARC_CHORD_ERROR_MM`). The design
+  rule check measures them against every net's copper (a short or a
+  clearance finding naming the drawing or string, net 0); two pieces of no
+  net are never a pair. A pour keeps its clearance from them, unless the
+  pour has no net, as for any other net. The interactive router, via
+  stitching, teardrops and gloss keep clear of them. The Gerber writes them
+  on the copper image as `Conductor` with no net (was `NonConductor`). They
+  join no net: the ratsnest, a new track's net and the edge clearance
+  check do not read them.
 - **Line.** The first click starts a run; each later click adds a line from
   the run's end, any angle. A click on the run's end, Esc or a right-click
   ends the run.
@@ -680,9 +689,8 @@ draws a board drawing (`PcbBoard::graphics`, kinds in
 - **Output.** Saved in `.snxpcb` (`[[extras.board.graphics]]`, each with its
   `uuid`; a text frame's `text` and `font_size`), drawn by the board
   renderer, printed by Board Print (#2402), and drawn into the fabrication
-  layer's Gerber (#2388) when the layer is one (overlay, mask, paste, the
-  board outline); a text frame's text waits there for the stroke font, as
-  board texts do.
+  layer's Gerber (#2388) when the layer is one (copper, overlay, mask,
+  paste, the board outline), with its text frame's text in the stroke font.
 - **Agents.** `add_board_graphic` (`document`, `kind`: `line`, `arc`,
   `circle`, `rectangle` or `text_frame`; `start` and `end`, an arc's or
   circle's centre `at`; optional `layer` and `text`) and `set_board_graphic`

@@ -7,7 +7,8 @@
 //! colour and dimmed. Esc or a right-click ends the shape being drawn, and
 //! then the tool; a tab switch leaves it behind. Properties shows what the
 //! next click places, and Tab pauses placing to edit it (`form`, #2393).
-//! The Graphics tools draw on non-copper layers (`graphic`, #2424).
+//! The Graphics tools draw on every layer but the keep-outs (`graphic`,
+//! #2424, #2883).
 
 use std::path::PathBuf;
 

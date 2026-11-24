@@ -261,6 +261,15 @@ pub(super) fn graphic_function(layer: FabLayer) -> Function {
     }
 }
 
+/// What a board drawing or string marks on `layer`: conductor of no net on
+/// copper (#2883), as the design rule check reads it; else a drawing.
+pub(super) fn board_drawing_function(layer: FabLayer) -> Function {
+    match layer {
+        FabLayer::Copper(_) => Function::Conductor,
+        _ => graphic_function(layer),
+    }
+}
+
 fn pad_function(pad: &Pad) -> Function {
     match pad.pad_type {
         PadType::Smd => Function::SmdPad,
@@ -563,7 +572,7 @@ fn board_graphics(images: &mut Images, board: &PcbBoard, frame: FabFrame, tally:
         let pen = Pen {
             to_fab: &board_to_fab,
             arc_ccw_without_mid: false,
-            function: graphic_function(layer),
+            function: board_drawing_function(layer),
             width_override: (layer == FabLayer::Profile).then_some(PROFILE_WIDTH_NM),
         };
         // A text frame's box; its lines are written by `fab::text`. A board

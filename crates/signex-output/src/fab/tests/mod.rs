@@ -3,6 +3,7 @@
 //! snapshot to refresh: read it first. Regenerate with
 //! `UPDATE_GOLDEN=1 cargo test -p signex-output fab`.
 
+mod copper_drawings;
 pub(crate) mod fixture;
 mod ipc2581;
 mod layer_sizes;
