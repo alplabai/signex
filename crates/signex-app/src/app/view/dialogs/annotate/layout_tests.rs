@@ -63,6 +63,29 @@ fn changes_and_all_sit_side_by_side_on_one_line() {
     }
 }
 
+/// The mockup packs the switch, filter and Re-prefix to the right after a
+/// spacer, so Re-prefix ends where the column (and the note under the
+/// table, as wide as the column) ends.
+#[test]
+fn the_list_header_controls_pack_to_the_right_edge() {
+    for window in WINDOWS {
+        let texts = laid_out(window);
+        let reprefix = find(&texts, |t| t == "Re-prefix to standard", "Re-prefix").bounds;
+        let note = find(
+            &texts,
+            |t| t.starts_with("Re-prefix to standard is"),
+            "Re-prefix note",
+        )
+        .bounds;
+        let (button_end, column_end) = (reprefix.x + reprefix.width, note.x + note.width);
+        assert!(
+            (button_end - column_end).abs() < 1.0,
+            "at {window:?} Re-prefix ends at {button_end}, the column at {column_end} \
+             ({reprefix:?} / {note:?})"
+        );
+    }
+}
+
 #[test]
 fn the_summary_banner_leads_with_its_glyph() {
     for window in WINDOWS {
@@ -106,7 +129,10 @@ fn fixed_options_is_an_uppercase_label_with_its_pill_at_the_right() {
         let texts = laid_out(window);
         let label = find(&texts, |t| t == "FIXED OPTIONS", "FIXED OPTIONS").bounds;
         let pill = find(&texts, |t| t == "read-only", "read-only").bounds;
-        assert!((label.y + label.height / 2.0 - (pill.y + pill.height / 2.0)).abs() < TS.body);
+        assert!(
+            (label.y + label.height / 2.0 - (pill.y + pill.height / 2.0)).abs() < TS.body,
+            "at {window:?} the pill ({pill:?}) is not on the label's ({label:?}) line"
+        );
         assert!(
             pill.x - (label.x + label.width) >= OPTIONS_COL_W / 3.0,
             "at {window:?} the pill ({pill:?}) hugs the label ({label:?}) instead of \
