@@ -113,6 +113,28 @@ pub(crate) fn setting_labels(item: PrefNav) -> &'static [MessageId] {
             ids::PREFERENCES_SYMBOL_BODY_FILL,
             ids::PREFERENCES_SYMBOL_BODY_FILL_COLOUR,
         ],
+        PrefNav::PcbDefaults => &[
+            ids::PCB_PRIM_LINE_WIDTH,
+            ids::PCB_PRIM_TEXT_HEIGHT,
+            ids::PCB_PRIM_PRECISION,
+            ids::PCB_PRIM_DIM_ARROW_STYLE,
+            ids::PCB_PRIM_DIM_ARROW_LENGTH,
+            ids::PCB_PRIM_DIM_ARROW_WIDTH,
+            ids::PCB_PRIM_DIM_FONT,
+            ids::PCB_PRIM_DIM_BOLD,
+            ids::PCB_PRIM_DIM_ITALIC,
+            ids::PCB_PRIM_DIM_TEXT_WIDTH,
+            ids::PCB_PRIM_DIM_TEXT_POSITION,
+            ids::PCB_PRIM_DIM_TEXT_GAP,
+            ids::PCB_PRIM_DIM_EXT_OFFSET,
+            ids::PCB_PRIM_DIM_EXT_OVERSHOOT,
+            ids::PCB_PRIM_DIM_EXT_WIDTH,
+            ids::PCB_PRIM_DIM_UNIT,
+            ids::PCB_PRIM_DIM_SHOW_UNIT,
+            ids::PCB_PRIM_DIM_PREFIX,
+            ids::PCB_PRIM_DIM_SUFFIX,
+            ids::PCB_PRIM_DIM_TRAILING_ZEROS,
+        ],
         PrefNav::Keyboard
         | PrefNav::RuleProfiles
         | PrefNav::LibraryDistributors

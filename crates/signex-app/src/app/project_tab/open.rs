@@ -1,6 +1,7 @@
 //! Open or focus a project's Project tab, or its Variant Manager tab.
 
-use crate::app::{Message, Signex, TabInfo, TabKind};
+use crate::app::project_tab::ProjectTabMsg;
+use crate::app::{Message, ProjectMsg, Signex, TabInfo, TabKind};
 
 impl Signex {
     /// Project Options (project tree): focus the project's tab, or open it.

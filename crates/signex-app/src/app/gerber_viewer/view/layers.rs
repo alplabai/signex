@@ -162,6 +162,7 @@ fn chip<'a>(
                 color: line,
                 width: crate::styles::HAIRLINE,
                 radius: (side / 4.0).into(),
+                ..Border::default()
             },
             ..Default::default()
         })

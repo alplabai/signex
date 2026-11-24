@@ -24,6 +24,7 @@ use signex_i18n::{I18n, MessageId, menu_ids};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
+#[cfg(test)]
 pub(super) use super::board_menu::pcb_canvas_menu_with_blocks;
 
 /// Command ids whose keyboard hint the canvas menu shows.

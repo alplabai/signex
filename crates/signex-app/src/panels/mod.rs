@@ -2,7 +2,7 @@
 
 use iced::widget::{Column, Space, container, row, scrollable, svg};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
-use iced_aw::{NumberInput, Wrap};
+use iced_aw::NumberInput;
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;

@@ -54,7 +54,9 @@ impl Signex {
             tokens: &self.document_state.panel_ctx.tokens,
             i18n: &self.ui_state.i18n,
         };
-        tab(look, &self.document_state.gerber_viewer).map(Message::GerberViewer)
+        tab(look, &self.document_state.gerber_viewer)
+            .map(Message::GerberViewer)
+            .into()
     }
 }
 
@@ -188,6 +190,7 @@ fn drop_frame<'a>(
                     color: accent,
                     width: HAIRLINE * 2.0,
                     radius: SP.xs.into(),
+                    ..Border::default()
                 },
                 background: Some(Background::Color(iced::Color { a: 0.06, ..accent })),
                 ..Default::default()
