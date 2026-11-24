@@ -2,10 +2,11 @@
 //! open libraries' names; every colour comes from theme tokens.
 //!
 //! Select, then confirm (mockup row 134): the writable libraries are radio
-//! rows with the library used last preselected, and the footer's primary
-//! "Copy to <library>" copies into the selected one. New Library… is a
-//! quiet action at the footer's left. With no writable library a card says
-//! so, and New Library… is the primary.
+//! rows, one preselected when the dialog opens (see
+//! [`LibraryState::stock_copy_choice`]), and the footer's primary "Copy to
+//! <library>" copies into the selected one. New Library… is a quiet action
+//! at the footer's left. With no writable library a card says so, and New
+//! Library… is the primary.
 
 use std::path::{Path, PathBuf};
 
@@ -22,7 +23,7 @@ use crate::library::modal_chrome::{footer_strip, header, notice_banner};
 use crate::library::state::LibraryState;
 use crate::styles::{
     DialogButtonKind, DialogIcon, HAIRLINE, PillTone, Radii, Spacing, TypeScale, dialog_button,
-    dialog_intro, ti, tokens,
+    dialog_icon_button, dialog_intro, ti, tokens,
 };
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -138,9 +139,31 @@ pub(crate) fn footer_label(action: &FooterAction, i18n: &I18n) -> Localized {
         FooterAction::NewLibrary => t!(i18n, ids::LIBRARY_STOCK_COPY_NEW_LIBRARY),
         FooterAction::Cancel => t!(i18n, ids::DIALOG_BUTTON_CANCEL),
         FooterAction::CopyTo(_, name) => {
-            t!(i18n, ids::LIBRARY_STOCK_COPY_COPY_TO, "library" => name.clone())
+            t!(i18n, ids::LIBRARY_STOCK_COPY_COPY_TO, "library" => shown_library_name(name))
         }
     }
+}
+
+/// The longest library name "Copy to <library>" shows. The dialog buttons
+/// are as wide as their labels, so a longer name would push the primary
+/// past the card; at this length New Library…, Cancel and the primary fit
+/// [`CARD_W`] (pinned by the long-name layout test).
+pub(crate) const COPY_TO_NAME_MAX_CHARS: usize = 20;
+
+/// `name` as the primary shows it: cut in the middle to
+/// [`COPY_TO_NAME_MAX_CHARS`] when longer, keeping its start and its end.
+/// The library row above shows the full name.
+pub(crate) fn shown_library_name(name: &str) -> String {
+    let chars: Vec<char> = name.chars().collect();
+    if chars.len() <= COPY_TO_NAME_MAX_CHARS {
+        return name.to_owned();
+    }
+    let tail = (COPY_TO_NAME_MAX_CHARS - 1) / 2;
+    let head = COPY_TO_NAME_MAX_CHARS - 1 - tail;
+    let mut shown: String = chars[..head].iter().collect();
+    shown.push('…');
+    shown.extend(&chars[chars.len() - tail..]);
+    shown
 }
 
 pub fn view<'a>(
@@ -215,22 +238,29 @@ fn body<'a>(
     body.boxed()
 }
 
-/// Cancel, then the one primary, at the right; New Library… at the left
-/// while it is not the primary.
+/// Cancel, then the one primary, at the right; New Library… at the left,
+/// with the plus glyph, while it is not the primary (mockup row 134).
 fn footer<'a>(plan: &FooterPlan, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
-    let buttons = |side: &[(FooterAction, DialogButtonKind)]| -> Vec<Element<'a, LibraryMessage>> {
+    let buttons = |side: &[(FooterAction, DialogButtonKind)],
+                   glyph: bool|
+     -> Vec<Element<'a, LibraryMessage>> {
         side.iter()
             .map(|(action, kind)| {
-                dialog_button(
-                    footer_label(action, i18n),
-                    *kind,
-                    Some(footer_message(action)),
-                    tokens,
-                )
+                let (label, message) = (footer_label(action, i18n), Some(footer_message(action)));
+                if glyph {
+                    let plus = crate::icons::icon_plus(crate::about_modal::GLYPH_THEME);
+                    dialog_icon_button(plus, label, *kind, message, tokens)
+                } else {
+                    dialog_button(label, *kind, message, tokens)
+                }
             })
             .collect()
     };
-    footer_strip(buttons(&plan.left), buttons(&plan.right), tokens)
+    footer_strip(
+        buttons(&plan.left, true),
+        buttons(&plan.right, false),
+        tokens,
+    )
 }
 
 /// The card shown when no open library can take the copy.

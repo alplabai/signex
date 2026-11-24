@@ -77,9 +77,14 @@ impl LibraryState {
     }
 
     /// The writable library the Copy to Library dialog copies into when
-    /// confirmed, as `(.snxlib path, name)`: the row the user `selected`
-    /// while it can still take the copy, else the library used last, else
-    /// the first writable one (mockup row 134). `None` when none is open.
+    /// confirmed, as `(.snxlib path, name)`: the row `selected` while it
+    /// can still take the copy, else the library used last, else the first
+    /// writable one (mockup row 134). `None` when none is open.
+    ///
+    /// The dialog fixes `selected` to this choice when it opens, so the
+    /// radio never moves by itself. It opens only when the library used
+    /// last cannot take the copy (else the copy starts at once), so in
+    /// practice the preselect is the first writable library.
     pub fn stock_copy_choice(&self, selected: Option<&Path>) -> Option<(&Path, &str)> {
         let writable = self.writable_libraries();
         let listed = |want: &Path| writable.iter().copied().find(|(root, _)| *root == want);

@@ -88,8 +88,9 @@ pub struct StockCopyState {
     pub previous_unavailable: Option<PathBuf>,
     /// The last attempt's failure, shown in the dialog.
     pub error: Option<String>,
-    /// The library row the user selected; `None` keeps the preselect
-    /// ([`crate::library::state::LibraryState::stock_copy_choice`]).
+    /// The selected library row: the preselect when the dialog opens, then
+    /// the row the user clicks. `None` (no writable library at open) falls
+    /// back to [`crate::library::state::LibraryState::stock_copy_choice`].
     pub selected: Option<PathBuf>,
 }
 

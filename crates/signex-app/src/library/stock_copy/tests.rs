@@ -131,47 +131,110 @@ fn the_footer_is_cancel_and_one_copy_to_primary_with_new_library_at_the_left() {
     );
 }
 
-/// Mockup row 134 (update): selecting a row only moves the selection, and
-/// nothing is copied; the footer's Copy to <library> then starts the copy
-/// into the selected library and closes the dialog.
+/// What a click on the footer's "Copy to `name`" of the dialog as `view`
+/// draws it in the main window sends.
+fn click_copy_to(app: &crate::app::Signex, root: &Path, name: &str) -> Vec<LibraryMessage> {
+    let i18n = signex_i18n::I18n::en_us();
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
+    let state = app.library.stock_copy.as_ref().expect("the dialog is open");
+    let label = footer_label(
+        &FooterAction::CopyTo(root.to_path_buf(), name.into()),
+        &i18n,
+    );
+    crate::layout_probe::messages_on_click(
+        view(&app.library, state, &tokens, &i18n, false),
+        iced::Size::new(view::CARD_W, 2000.0),
+        &label.into_string(),
+    )
+}
+
+/// Mockup row 134 (update): the dialog opens with the first writable
+/// library preselected; selecting a row only moves the selection, and
+/// nothing is copied; the drawn footer's Copy to <library> then closes
+/// the dialog and copies into the selected library.
 #[test]
 fn selecting_a_library_copies_nothing_until_the_copy_is_confirmed() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _boot) = crate::app::Signex::new();
     app.library.stock_copy_target = None;
     let (_one, two) = mount_two(dir.path(), &mut app.library);
-    let two_dir = two.parent().expect("dir").to_path_buf();
-    app.library.stock_copy = Some(dialog_state());
+    let first = app.library.writable_libraries()[0].0.to_path_buf();
+    assert_ne!(first, two, "the selection must move off the preselect");
+    let source = PathBuf::from("/stock/symbols/R.snxsym");
+    drop(app.request_stock_copy(source.clone(), StockPrimitiveKind::Symbol));
+    let open = app.library.stock_copy.as_ref().expect("the dialog opens");
+    assert_eq!(open.selected.as_deref(), Some(first.as_path()));
+
     let stock = |msg| crate::app::Message::Library(LibraryMessage::StockCopy(msg));
-
     drop(app.update(stock(StockCopyMsg::TargetSelected(two.clone()))));
-
     let open = app
         .library
         .stock_copy
         .as_ref()
         .expect("the dialog stays open");
     assert_eq!(open.selected.as_deref(), Some(two.as_path()));
-    assert_eq!(
-        app.library.stock_copy_choice(open.selected.as_deref()),
-        Some((two.as_path(), "Two"))
-    );
     assert!(app.library.stock_copies_in_flight.is_empty(), "no copy yet");
-    assert!(!two_dir.join("symbols/R.snxsym").exists());
 
-    let plan = footer_plan(app.library.stock_copy_choice(open.selected.as_deref()));
-    let (confirm, _) = plan.right.last().expect("primary").clone();
-    drop(app.update(crate::app::Message::Library(footer_message(&confirm))));
-
+    let mut clicked = click_copy_to(&app, &two, "Two");
+    assert_eq!(clicked.len(), 1, "{clicked:?}");
+    let confirm = clicked.remove(0);
+    assert!(
+        matches!(&confirm, LibraryMessage::StockCopy(StockCopyMsg::TargetPicked(root)) if *root == two),
+        "{confirm:?}"
+    );
+    let task = app.update(crate::app::Message::Library(confirm));
     assert!(
         app.library.stock_copy.is_none(),
         "confirming closes the dialog"
     );
+    assert!(app.library.stock_copies_in_flight.contains(&source));
+
+    let outputs = crate::task_driver::TaskDriver::new()
+        .outputs(task)
+        .expect("the copy ran");
+    let library = outputs.iter().find_map(|message| match message {
+        crate::app::Message::Library(LibraryMessage::StockCopy(StockCopyMsg::CopyFinished(
+            outcome,
+        ))) => Some(outcome.library.clone()),
+        _ => None,
+    });
+    assert_eq!(library, Some(two), "the copy went to the selected library");
+}
+
+/// Mockup row 134 (layout): a long library name is cut in the middle in
+/// the primary, so New Library…, Cancel and "Copy to <library>" stay
+/// inside the card.
+#[test]
+fn a_long_library_name_keeps_the_copy_to_primary_inside_the_card() {
+    let long = format!("{}-end", "a-very-long-library-name".repeat(4));
+    let shown = view::shown_library_name(&long);
+    assert_eq!(shown.chars().count(), view::COPY_TO_NAME_MAX_CHARS);
     assert!(
-        app.library
-            .stock_copies_in_flight
-            .contains(Path::new("/stock/symbols/R.snxsym")),
-        "the copy into the selected library has started"
+        shown.starts_with("a-very-lo") && shown.ends_with("name-end"),
+        "{shown}"
+    );
+    assert_eq!(view::shown_library_name("passives"), "passives");
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("long/Long.snxlib");
+    new_library(&path, &long);
+    let mut library = LibraryState::default();
+    library.open_library(path.clone()).expect("mount");
+    let mut state = dialog_state();
+    state.selected = Some(path.clone());
+    let i18n = signex_i18n::I18n::en_us();
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
+    let label = footer_label(&FooterAction::CopyTo(path, long), &i18n).into_string();
+    let texts = crate::layout_probe::lay_out_texts(
+        view(&library, &state, &tokens, &i18n, false),
+        iced::Size::new(2.0 * view::CARD_W, 2000.0),
+    );
+    let primary = crate::layout_probe::find(&texts, &label).bounds;
+    assert!(
+        primary.x + primary.width <= view::CARD_W,
+        "the primary ends at {}, the card at {}",
+        primary.x + primary.width,
+        view::CARD_W
     );
 }
 
