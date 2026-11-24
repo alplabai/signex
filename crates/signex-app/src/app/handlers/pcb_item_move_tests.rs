@@ -24,6 +24,7 @@ const BOUNDS: Rectangle = Rectangle {
     height: 1200.0,
 };
 const ROOM: Uuid = Uuid::from_u128(0x90);
+const U1: Uuid = Uuid::from_u128(0x70);
 const DELTA: Point = Point { x: 5.0, y: 0.0 };
 
 fn id(n: u128) -> Uuid {
@@ -87,7 +88,16 @@ fn board() -> PcbBoard {
             zone(0x61, "solid", &[(10.0, 40.0), (14.0, 40.0), (12.0, 44.0)]),
             zone(0x62, "pour", &[(20.0, 40.0), (26.0, 40.0), (26.0, 46.0), (20.0, 46.0)]),
             zone(0x63, "keepout", &[(30.0, 40.0), (34.0, 40.0), (34.0, 44.0), (30.0, 44.0)])
-        ]
+        ],
+        // A part beside the pour, for a drag of a mixed selection.
+        "footprints": [{
+            "uuid": U1, "reference": "U1", "position": pt(28.0, 48.0),
+            "rotation": 0.0, "layer": "TopCopper", "locked": false,
+            "pads": [{"uuid": id(0x71), "number": "1", "pad_type": "smd",
+                      "shape": "rect", "position": pt(0.0, 0.0),
+                      "size": {"x": 1.0, "y": 1.0}, "drill": null,
+                      "layers": ["TopCopper"]}]
+        }]
     }))
     .unwrap();
     // Inside the copper extent Fit frames: Fit reads no room, so a room
@@ -320,4 +330,84 @@ fn a_press_on_empty_board_starts_a_box() {
         selection.contains(pcb_geom::ItemRef::Text(id(0x40))),
         "the box selected the string inside it"
     );
+}
+
+fn u1_position(r: &Rig) -> Point {
+    let fp = r.board().footprints.iter().find(|fp| fp.uuid == U1);
+    fp.expect("U1").position
+}
+
+/// Box-select U1 with the pour (and the track inside it), then drag from
+/// `press`: everything selected moves by one offset as one undo step.
+fn drag_mixed_selection_from(press: Point) {
+    let mut r = rig();
+    let before = live(&r.app, &r.path);
+    r.drag(Point::new(19.0, 39.0), Point::new(29.5, 49.5));
+    let selection = r.app.interaction_state.pcb_selection.selection().clone();
+    assert!(selection.footprints().contains(&U1), "the box took U1");
+    assert!(
+        selection.items().any(|i| matches!(i,
+            pcb_geom::ItemRef::Zone { zone, .. } if zone == id(0x62))),
+        "and the pour"
+    );
+    let pour = BoardItemId::Zone(id(0x62));
+    let track = BoardItemId::Segment(id(0x11));
+    let (pour_to, track_to) = (
+        moved_item(r.board(), pour, DELTA).unwrap(),
+        moved_item(r.board(), track, DELTA).unwrap(),
+    );
+    let u1_to = Point::new(u1_position(&r).x + DELTA.x, u1_position(&r).y);
+    r.drag(press, Point::new(press.x + DELTA.x, press.y + DELTA.y));
+    let zero = Point::new(0.0, 0.0);
+    assert_eq!(
+        moved_item(r.board(), pour, zero),
+        Some(pour_to),
+        "the pour moved"
+    );
+    assert_eq!(
+        moved_item(r.board(), track, zero),
+        Some(track_to),
+        "the track moved"
+    );
+    assert_eq!(u1_position(&r), u1_to, "U1 moved with them");
+    let _ = r.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(live(&r.app, &r.path), before, "one undo step");
+}
+
+/// #2870: a press on the pour of a mixed selection carries the part too.
+#[test]
+fn a_press_on_a_selected_pour_drags_the_whole_selection() {
+    drag_mixed_selection_from(Point::new(23.0, 42.0));
+}
+
+/// #2870: a press on the part of a mixed selection carries the pour too.
+#[test]
+fn a_press_on_a_selected_part_drags_the_whole_selection() {
+    drag_mixed_selection_from(Point::new(28.0, 48.0));
+}
+
+/// The grab list is built once per board, view and filter, not on every
+/// paint: a second paint shares the first one's shapes.
+#[test]
+fn the_grab_list_is_reused_until_the_board_or_filter_changes() {
+    let mut r = rig();
+    let grab = |r: &mut Rig| {
+        r.app
+            .with_pcb_selection(|sel, board| sel.paint(board, None).1)
+            .expect("a board")
+    };
+    let first = grab(&mut r);
+    assert!(!first.is_empty());
+    assert!(std::sync::Arc::ptr_eq(&first, &grab(&mut r)), "reused");
+    let mut filter = pcb_geom::PickFilter::default();
+    filter.toggle(pcb_geom::PickKind::Polygons);
+    r.app
+        .with_pcb_selection(|sel, _| sel.set_filter(&filter))
+        .expect("a board");
+    let filtered = grab(&mut r);
+    assert!(
+        !std::sync::Arc::ptr_eq(&first, &filtered),
+        "a filter change rebuilds"
+    );
+    assert!(filtered.len() < first.len(), "the pour's shapes are gone");
 }

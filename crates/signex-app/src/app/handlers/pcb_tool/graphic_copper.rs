@@ -52,6 +52,27 @@ impl Signex {
         true
     }
 
+    /// Whether the points of the shape being drawn were placed on the other
+    /// side of the copper line than the active layer is now.
+    pub(super) fn run_crosses_copper(&self, session: &BoardToolSession) -> bool {
+        !session.points.is_empty()
+            && session.points_on_copper != self.active_copper_layer().is_some()
+    }
+
+    /// Before a Graphics click: a run begun on copper is a track, one begun
+    /// off it a drawing, so a flip of the active layer between them drops
+    /// the points placed so far and the click starts a new shape.
+    pub(super) fn drop_run_across_copper(&mut self) {
+        let on_copper = self.active_copper_layer().is_some();
+        if let Some(session) = self.own_board_tool_mut() {
+            if !session.points.is_empty() && session.points_on_copper != on_copper {
+                session.points.clear();
+                session.route = None;
+            }
+            session.points_on_copper = on_copper;
+        }
+    }
+
     fn set_copper_run(&mut self, points: Vec<Point>, style: Option<TrackStyle>) {
         if let Some(session) = self.own_board_tool_mut() {
             session.points = points;

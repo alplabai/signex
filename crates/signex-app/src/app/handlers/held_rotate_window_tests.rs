@@ -72,6 +72,7 @@ fn a_held_shift_space_bends_an_undocked_track_run_once() {
         path: rig.a.clone(),
         window: Some(window),
         points: vec![signex_types::pcb::Point::new(12.0, 10.0)],
+        points_on_copper: true,
         cursor: None,
         route: None,
         router: None,

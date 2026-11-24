@@ -208,16 +208,13 @@ impl Signex {
                 self.carry_to(from, to);
                 return;
             }
+            // A via or any other object a click there picks (#2870); a press
+            // on a member of the selection carries all of it.
             if let Some(reach) = pick
-                && self.start_via_drag(&path, from, reach)
+                && (self.start_via_drag(&path, from, reach)
+                    || self.start_item_drag(&path, from, reach))
             {
-                self.carry_to(from, to);
-                return;
-            }
-            // Any other object a click there picks (#2870).
-            if let Some(reach) = pick
-                && self.start_item_drag(&path, from, reach)
-            {
+                self.widen_drag_to_selection();
                 self.carry_to(from, to);
                 return;
             }
@@ -241,6 +238,9 @@ impl Signex {
             let mut carry = PcbCarry::new(CarryKind::Drag, path, window, footprints);
             carry.anchor = Some(from);
             self.interaction_state.pcb_carry = Some(carry);
+            if pick.is_some() {
+                self.widen_drag_to_selection();
+            }
             self.refresh_pcb_highlight();
         }
         self.carry_to(from, to);
@@ -491,6 +491,11 @@ impl Signex {
         let delta = if carry.text.is_some() {
             // A text follows the pointer exactly (#2368).
             Point::new(to.x - from.x, to.y - from.y)
+        } else if carry.is_mixed() {
+            let Some(delta) = self.mixed_drag_delta(carry, from, to) else {
+                return;
+            };
+            delta
         } else if !carry.vias.is_empty() {
             let Some(delta) = self.via_preview_delta(carry, from, to) else {
                 return;
@@ -532,6 +537,10 @@ impl Signex {
         if carry.text.is_some() {
             self.end_pcb_carry();
             self.drop_text_carry(&carry);
+            return;
+        }
+        if carry.is_mixed() {
+            self.drop_mixed_carry(&carry, from, to);
             return;
         }
         if !carry.vias.is_empty() {
