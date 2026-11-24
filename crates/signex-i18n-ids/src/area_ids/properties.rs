@@ -508,4 +508,8 @@ define_ids! {
     // dialog-polish
     PROPERTIES_PARAMETERS_OVERRIDES_PROJECT = "properties-parameters-overrides-project";
     PROPERTIES_PARAMETERS_OVERRIDES_PROJECT_TIP = "properties-parameters-overrides-project-tip";
+    // power-port-font-rows
+    PROPERTIES_TEXT_STYLE_NOT_STORED = "properties-text-style-not-stored";
+    PROPERTIES_POWER_ILLUSTRATION_STYLE = "properties-power-illustration-style";
+    PROPERTIES_POWER_ILLUSTRATION_FONT_SIZE = "properties-power-illustration-font-size";
 }

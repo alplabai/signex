@@ -780,3 +780,10 @@ properties-count-harness-wires = { $count ->
 # row 30). $value is the project's value, shown as typed.
 properties-parameters-overrides-project = project: { $value }
 properties-parameters-overrides-project-tip = This sheet's value overrides the project's ({ $value })
+# power-port-font-rows
+# Tooltip of the disabled Bold / Italic / Underline / Strikethrough buttons.
+properties-text-style-not-stored = Bold, italic, underline and strikethrough are not stored yet.
+# Style leader of the power-port illustration. $style is the style's name.
+properties-power-illustration-style = Style · { $style }
+# Font Size callout of the power-port illustration. $size is the size in points.
+properties-power-illustration-font-size = Font Size { $size }

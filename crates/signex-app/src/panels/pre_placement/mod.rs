@@ -308,7 +308,7 @@ fn properties<'a>(
                     .push(rows::field(
                         look,
                         t!(i18n, ids::PROPERTIES_FONT_SIZE),
-                        font_size_row(size_pt, palette),
+                        font_size_row(i18n, size_pt, palette),
                     ))
                     .push(rows::field(
                         look,
@@ -396,7 +396,7 @@ fn text_entry<'a>(value: String, on_input: fn(String) -> PanelMsg) -> Element<'a
 }
 
 /// Font Size and the B / I / U / T buttons on one row.
-fn font_size_row<'a>(size_pt: u32, palette: PanelPalette) -> Element<'a, PanelMsg> {
+fn font_size_row<'a>(i18n: &I18n, size_pt: u32, palette: PanelPalette) -> Element<'a, PanelMsg> {
     let sizes: Vec<String> = FONT_SIZES_PT.iter().map(u32::to_string).collect();
     row![
         iced::widget::pick_list(Some(size_pt.to_string()), sizes, |s: &String| s.clone())
@@ -405,8 +405,8 @@ fn font_size_row<'a>(size_pt: u32, palette: PanelPalette) -> Element<'a, PanelMs
             .padding([SP.xs, SP.s])
             .width(Length::FillPortion(2)),
         container(font_style_row(
+            i18n,
             palette.muted,
-            palette.primary,
             palette.input_bg,
             palette.input_bdr,
         ))
