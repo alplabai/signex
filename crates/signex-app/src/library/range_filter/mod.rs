@@ -1,7 +1,8 @@
 //! Range filter on a measurement column, for the library browser and the
 //! Place Component picker (#1572, phase 4).
 //!
-//! Users never type a prefix or unit here, as in the editors: an operator
+//! Users never type a prefix or unit here (unlike the editors, which read
+//! a trailing `k` / `M` / `u`, mockup row 139): an operator
 //! picker (`≥ ≤ = between`), a number field (digits, a sign and a decimal
 //! point only), an SI-prefix picker, and the unit fixed to the column's.
 //! `between` has two number-and-prefix pairs.

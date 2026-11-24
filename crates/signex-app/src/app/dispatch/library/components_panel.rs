@@ -146,28 +146,13 @@ impl Signex {
             .components_panel
             .details
             .begin(key.clone(), stamp);
-        let read_key = key.clone();
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    crate::panels::components_panel::details::load::load_details(
-                        &read_key,
-                        own.as_ref(),
-                        &libraries,
-                    )
-                    .map_err(|e| e.to_string())
-                })
-                .await
-                .unwrap_or_else(|e| Err(format!("details worker failed: {e}")))
-            },
-            move |result| {
-                Message::Library(LibraryMessage::ComponentsPanelDetailsLoaded {
-                    key: key.clone(),
-                    generation,
-                    result: result.map(Box::new),
-                })
-            },
-        )
+        details_read_task(key, own, libraries, "details worker", move |key, result| {
+            Message::Library(LibraryMessage::ComponentsPanelDetailsLoaded {
+                key,
+                generation,
+                result,
+            })
+        })
     }
 
     /// Reload the details when the row they show was saved since they were
@@ -621,6 +606,39 @@ impl Signex {
         self.record_components_placement(key);
         self.handle_place_library_component_with(library_path, table, row_id, footprint)
     }
+}
+
+/// Read `key`'s details on a worker (the Components panel's and the
+/// component picker's preview read); the result lands as `wrap(key,
+/// result)`. `worker` names the read when the worker itself fails.
+pub(super) fn details_read_task(
+    key: crate::library::state::ComponentsPanelRowKey,
+    own: std::sync::Arc<dyn signex_library::LibraryAdapter>,
+    libraries: crate::panels::components_panel::details::load::MountedAdapters,
+    worker: &'static str,
+    wrap: impl Fn(
+        crate::library::state::ComponentsPanelRowKey,
+        Result<Box<crate::panels::components_panel::details::ComponentDetails>, String>,
+    ) -> Message
+    + Send
+    + 'static,
+) -> Task<Message> {
+    let read_key = key.clone();
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(move || {
+                crate::panels::components_panel::details::load::load_details(
+                    &read_key,
+                    own.as_ref(),
+                    &libraries,
+                )
+                .map_err(|e| e.to_string())
+            })
+            .await
+            .unwrap_or_else(|e| Err(format!("{worker} failed: {e}")))
+        },
+        move |result| wrap(key.clone(), result.map(Box::new)),
+    )
 }
 
 #[cfg(test)]

@@ -36,6 +36,7 @@ mod price;
 mod sidebar;
 mod size_sensor;
 mod sort;
+pub(crate) mod tiles;
 mod toolbar;
 mod tree;
 mod uncommitted;

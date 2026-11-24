@@ -31,12 +31,13 @@ use signex_widgets::theme_ext;
 use signex_widgets::{button, text, text_input};
 
 use super::browser::PreviewLook;
+use super::browser::tiles::{TileSource, footprint_tile, symbol_tile};
 use super::messages::{LibraryMessage, PickerMsg, PlacedPartMsg};
 use super::modal_chrome::{cancel_btn, footer_strip, header_with_note_closing, primary_btn_if};
 use super::placed_part::{change_preview_view, datasheet_choice_view};
 use super::range_filter::range_filter_bar;
 use super::state::{PickerEntry, PickerMode, PickerState};
-use crate::library::editor::kit::{self, lifecycle_text, lifecycle_tone};
+use crate::library::editor::kit::{lifecycle_text, lifecycle_tone};
 use crate::panels::components_panel::details::ComponentDetails;
 use crate::styles::{ChromeMetrics, Radii};
 
@@ -80,7 +81,7 @@ const TILE_H: f32 = ROW_H * 3.5;
 
 /// Draws the list `LibraryState::sync_view_caches_in` last built for the
 /// picker; `view` itself filters and clones nothing.
-pub fn view<'a>(
+pub(crate) fn view<'a>(
     picker: &'a PickerState,
     tokens: &'a ThemeTokens,
     i18n: &'a I18n,
@@ -276,106 +277,31 @@ fn preview_loading(picker: &PickerState) -> bool {
     !current || picker.preview.in_flight()
 }
 
-/// A tile's text in place of a drawing: amber for an unbound footprint,
-/// muted while loading or when the read failed.
-fn tile_note<'a>(
-    message: Localized,
-    warn: bool,
-    tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let ink = if warn {
-        theme_ext::warning_color(tokens)
-    } else {
-        crate::styles::tokens::resolve(tokens).ink4
-    };
-    text(message)
-        .size(TS.caption)
-        .color(ink)
-        .align_x(iced::alignment::Horizontal::Center)
-        .boxed()
-}
-
-/// What a tile without a drawing says: nothing with no row selected.
-fn missing_drawing<'a>(
-    picker: &PickerState,
-    tokens: &ThemeTokens,
-    i18n: &I18n,
-) -> Element<'a, LibraryMessage> {
-    if picker.selected.is_none() {
-        return Space::new().boxed();
-    }
-    let id = if preview_loading(picker) {
-        ids::LIBRARY_BROWSER_PREVIEW_LOADING
-    } else {
-        ids::LIBRARY_BROWSER_PREVIEW_UNREADABLE
-    };
-    tile_note(t!(i18n, id), false, tokens)
-}
-
-/// The selected row's symbol, drawn as the Library Browser preview does.
-fn symbol_tile<'a>(
-    picker: &'a PickerState,
-    look: PreviewLook,
-    tokens: &'a ThemeTokens,
-    i18n: &I18n,
-) -> Element<'a, LibraryMessage> {
-    let content = match selected_details(picker).and_then(|d| d.symbol.as_ref()) {
-        Some(symbol) => crate::panels::components_panel::details::symbol_canvas::symbol_preview(
-            symbol.clone(),
-            look.canvas_colors,
-            look.grid,
-            TILE_H - 2.0 * crate::styles::HAIRLINE,
-            look.device_px_per_logical_px,
-        )
-        .map(|()| LibraryMessage::Noop)
-        .boxed(),
-        None => missing_drawing(picker, tokens, i18n),
-    };
-    let tag = Some(t!(i18n, ids::LIBRARY_PREVIEW_SYMBOL));
-    kit::preview_tile(content, TILE_H, None, tag, tokens)
-}
-
-/// The selected row's default footprint on the board ground.
-fn footprint_tile<'a>(
-    picker: &'a PickerState,
-    tokens: &'a ThemeTokens,
-    i18n: &I18n,
-) -> Element<'a, LibraryMessage> {
+/// What the shared tiles draw for the selected row; `None` with nothing
+/// selected. Until the row's read lands, neither side counts as unbound.
+fn tile_source(picker: &PickerState) -> Option<TileSource<'_>> {
+    picker.selected.as_ref()?;
     let details = selected_details(picker);
-    let content = match (details, details.and_then(|d| d.footprint.as_ref())) {
-        (Some(d), _) if !d.has_footprint_ref => tile_note(
-            t!(i18n, ids::LIBRARY_BROWSER_NO_FOOTPRINT_BOUND),
-            true,
-            tokens,
-        ),
-        (_, Some(model)) => {
-            let program =
-                crate::panels::components_panel::details::footprint_canvas::FootprintPreview::new(
-                    model,
-                )
-                .with_theme_tokens(tokens);
-            iced::widget::canvas(program)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .boxed()
-        }
-        _ => missing_drawing(picker, tokens, i18n),
-    };
-    let ground = crate::library::editor::footprint::graphite_look_for(tokens).bg;
-    let tag = Some(t!(i18n, ids::LIBRARY_PREVIEW_FOOTPRINT));
-    kit::preview_tile(content, TILE_H, Some(ground), tag, tokens)
+    Some(TileSource {
+        details,
+        loading: preview_loading(picker),
+        symbol_unbound: details.is_some_and(|d| d.symbol_unbound),
+        footprint_unbound: details.is_some_and(|d| d.footprint_unbound),
+    })
 }
 
-/// The preview column: the symbol tile over the footprint tile.
+/// The preview column: the symbol tile over the footprint tile, drawn as
+/// the Library Browser's preview pane draws them.
 fn preview_column<'a>(
     picker: &'a PickerState,
     look: PreviewLook,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
+    let source = tile_source(picker);
     column![
-        symbol_tile(picker, look, tokens, i18n),
-        footprint_tile(picker, tokens, i18n),
+        symbol_tile(source.as_ref(), look, TILE_H, tokens, i18n),
+        footprint_tile(source.as_ref(), TILE_H, tokens, i18n),
     ]
     .spacing(SP.s)
     .padding(SP.m)
@@ -700,7 +626,7 @@ mod tests {
         (picker, key)
     }
 
-    fn details(has_footprint_ref: bool) -> Box<ComponentDetails> {
+    fn details(symbol_unbound: bool, footprint_unbound: bool) -> Box<ComponentDetails> {
         Box::new(ComponentDetails {
             internal_pn: "R-0402-10K-1%".into(),
             class: String::new(),
@@ -709,7 +635,9 @@ mod tests {
             manufacturer: String::new(),
             mpn: String::new(),
             description: String::new(),
-            has_footprint_ref,
+            has_footprint_ref: !footprint_unbound,
+            symbol_unbound,
+            footprint_unbound,
             symbol: None,
             footprint: None,
             default_footprint: None,
@@ -746,10 +674,14 @@ mod tests {
         );
         assert!((size.width - 880.0).abs() < 0.5, "{size:?}");
         let texts = laid_out(&PickerState::default());
+        // The column starts 250 px from the card's right edge; a tag sits
+        // inside the column's padding, the tile's hairline and its own
+        // padding.
+        let tag_x = 880.0 - 250.0 + SP.m + crate::styles::HAIRLINE + SP.m;
         for tag in ["SYMBOL", "FOOTPRINT"] {
             let bounds = crate::layout_probe::find(&texts, tag).bounds;
-            assert!(bounds.x >= PICKER_W - PREVIEW_W, "{tag} at {bounds:?}");
-            assert!(bounds.x + bounds.width <= PICKER_W, "{tag} at {bounds:?}");
+            assert!((bounds.x - tag_x).abs() < 0.5, "{tag} at {bounds:?}");
+            assert!(bounds.x + bounds.width <= 880.0, "{tag} at {bounds:?}");
         }
         // The symbol tile is above the footprint tile.
         let symbol = crate::layout_probe::find(&texts, "SYMBOL").bounds;
@@ -768,11 +700,33 @@ mod tests {
         assert_eq!(loading, 2);
 
         let generation = picker.preview.generation;
-        assert!(picker.preview.finish(&key, generation, Ok(details(false))));
+        assert!(
+            picker
+                .preview
+                .finish(&key, generation, Ok(details(false, true)))
+        );
         let texts = laid_out(&picker);
         assert!(texts.iter().any(|t| t.text == "No footprint bound"));
         assert!(texts.iter().any(|t| t.text == "Could not be read"));
         assert!(!texts.iter().any(|t| t.text == "Loading…"));
+    }
+
+    /// The picker says what the Library Browser says: an unbound symbol
+    /// (a nil reference included, decided by the row) reads "No symbol
+    /// bound", and a bound footprint that could not be read says so.
+    #[test]
+    fn an_unbound_symbol_reads_as_in_the_library_browser() {
+        let (mut picker, key) = selected_picker();
+        let generation = picker.preview.generation;
+        assert!(
+            picker
+                .preview
+                .finish(&key, generation, Ok(details(true, false)))
+        );
+        let texts = laid_out(&picker);
+        assert!(texts.iter().any(|t| t.text == "No symbol bound"));
+        assert!(texts.iter().any(|t| t.text == "Could not be read"));
+        assert!(!texts.iter().any(|t| t.text == "No footprint bound"));
     }
 
     /// Nothing selected: the tiles show only their tags.

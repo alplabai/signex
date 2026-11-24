@@ -436,10 +436,14 @@ impl Signex {
                 generation,
                 result,
             } => {
-                if let Err(why) = &result {
+                // A stale read (older generation or another row) is dropped
+                // unlogged.
+                let why = result.as_ref().err().cloned();
+                if picker.preview.finish(&key, generation, result)
+                    && let Some(why) = why
+                {
                     crate::diagnostics::log_warning(format!("Picker preview not read: {why}"));
                 }
-                picker.preview.finish(&key, generation, result);
             }
             // The Place button exists in the Place stage only.
             PickerMsg::PlaceSelected
@@ -470,21 +474,8 @@ impl Signex {
     /// for the preview column (mockup row 129); the result lands as
     /// `PickerMsg::PreviewLoaded`. A read that is still current is kept.
     fn start_picker_preview_load(&mut self) -> Task<Message> {
-        let Some((path, summary)) = self
-            .library
-            .picker
-            .as_ref()
-            .and_then(|p| p.selected.clone())
-        else {
+        let Some(key) = self.picker_preview_key() else {
             return Task::none();
-        };
-        let Some(table) = self.library.table_of_row(&path, summary.row_id) else {
-            return Task::none();
-        };
-        let key = crate::library::state::ComponentsPanelRowKey {
-            library_path: path,
-            table,
-            row_id: signex_library::RowId::from_uuid(summary.row_id),
         };
         let stamp = self.components_row_stamp(&key);
         let libraries = self.library.shared_adapters();
@@ -496,34 +487,47 @@ impl Signex {
             return Task::none();
         }
         let generation = picker.preview.begin(key.clone(), stamp);
-        let Some(own) = own else {
-            let why = format!("its library {} is not open", key.library_path.display());
+        // A read that cannot start is recorded as failed, so the tiles do
+        // not wait on it.
+        let Some(own) = own.filter(|_| !key.table.is_empty()) else {
+            let why = if key.table.is_empty() {
+                "the part is no longer listed in its library".to_string()
+            } else {
+                format!("its library {} is not open", key.library_path.display())
+            };
             crate::diagnostics::log_warning(format!("Picker preview not read: {why}"));
             picker.preview.finish(&key, generation, Err(why));
             return Task::none();
         };
-        let read_key = key.clone();
-        Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || {
-                    crate::panels::components_panel::details::load::load_details(
-                        &read_key,
-                        own.as_ref(),
-                        &libraries,
-                    )
-                    .map_err(|e| e.to_string())
-                })
-                .await
-                .unwrap_or_else(|e| Err(format!("preview worker failed: {e}")))
-            },
-            move |result| {
+        super::components_panel::details_read_task(
+            key,
+            own,
+            libraries,
+            "preview worker",
+            move |key, result| {
                 Message::Library(LibraryMessage::Picker(PickerMsg::PreviewLoaded {
-                    key: key.clone(),
+                    key,
                     generation,
-                    result: result.map(Box::new),
+                    result,
                 }))
             },
         )
+    }
+
+    /// The preview key of the picker's selected row. A row whose table is
+    /// no longer known keeps an empty table, so its read still lands (as
+    /// failed) on the row the tiles show.
+    fn picker_preview_key(&self) -> Option<crate::library::state::ComponentsPanelRowKey> {
+        let (path, summary) = self.library.picker.as_ref()?.selected.clone()?;
+        let table = self
+            .library
+            .table_of_row(&path, summary.row_id)
+            .unwrap_or_default();
+        Some(crate::library::state::ComponentsPanelRowKey {
+            library_path: path,
+            table,
+            row_id: signex_library::RowId::from_uuid(summary.row_id),
+        })
     }
 
     /// F34 — Save-As dialog confirmed for a new symbol library file
