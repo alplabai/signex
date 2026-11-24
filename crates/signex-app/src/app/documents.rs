@@ -61,6 +61,10 @@ pub enum TabKind {
     /// is the board's path, which Save writes; the board stays in its own
     /// PCB tab, and this tab always sits after it (`app/layer_stack_tab`).
     LayerStack,
+    /// The project's Variant Manager as a page tab (mockup row 32). Tab
+    /// state lives in the project's [`crate::app::ProjectTabState`];
+    /// `TabInfo.path` is the `.snxprj` path, which Save writes.
+    VariantManager(super::state::ProjectId),
 }
 
 impl TabKind {
@@ -121,12 +125,23 @@ impl TabKind {
         matches!(self, TabKind::LayerStack)
     }
 
-    /// A page tab, not a drawing: the Project, Rules and Layer Stack tabs.
-    /// None is undocked or restored from History.
+    /// `Some(id)` if this tab is a project's Variant Manager tab.
+    pub fn as_variant_manager(&self) -> Option<super::state::ProjectId> {
+        match self {
+            TabKind::VariantManager(id) => Some(*id),
+            _ => None,
+        }
+    }
+
+    /// A page tab, not a drawing: the Project, Rules, Layer Stack and
+    /// Variant Manager tabs. None is undocked or restored from History.
     pub fn is_project_page(&self) -> bool {
         matches!(
             self,
-            TabKind::Project(_) | TabKind::Rules(_) | TabKind::LayerStack
+            TabKind::Project(_)
+                | TabKind::Rules(_)
+                | TabKind::LayerStack
+                | TabKind::VariantManager(_)
         )
     }
 }

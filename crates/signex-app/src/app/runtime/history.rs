@@ -305,7 +305,8 @@ fn history_target_of(active: &crate::app::TabInfo) -> Option<std::path::PathBuf>
         // offered until the Project tab can reload it safely (#1084).
         crate::app::TabKind::Project(_)
         | crate::app::TabKind::Rules(_)
-        | crate::app::TabKind::LayerStack => None,
+        | crate::app::TabKind::LayerStack
+        | crate::app::TabKind::VariantManager(_) => None,
         _ => Some(active.path.clone()),
     }
 }

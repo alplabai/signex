@@ -352,3 +352,43 @@ project-preview-expand = Expand preview
 project-preview-close = Close
 project-preview-hint-values = Click a value on the drawing to edit it · Tab moves to the next · Esc closes
 project-preview-hint-sheet = Esc closes
+# variant-manager
+# The Variant Manager document tab (mockup row 32): its page name in
+# "<project> — Variants" and its short kind code in the tab strip.
+variant-manager-tab-title = Variants
+variant-manager-tab-kind = VAR
+variant-manager-settings = Settings...
+variant-manager-compare = Compare variants...
+variant-manager-open-bom = Open in BOM Studio
+# Tooltip of a top bar button whose surface is not built yet.
+variant-manager-not-built = Not built yet
+variant-manager-duplicate = Duplicate
+variant-manager-set-default = Set as default
+# Pill on the default variant's row and card.
+variant-manager-default = default
+# Tooltip of the star that marks the default variant.
+variant-manager-default-star = The default variant
+# The name Duplicate gives the copy; $n counts from 2 when the first is taken.
+variant-manager-copy-name = { $name } copy
+variant-manager-copy-name-n = { $name } copy { $n }
+# Right pane: the selected cell, "R5 in Lite".
+variant-manager-detail-in = in
+variant-manager-detail-empty = Click a cell in the matrix to see that part in that variant.
+variant-manager-fitting = Fitting in { $variant }
+variant-manager-alternate = Alternate...
+# Back to the fit the sheets give the part in this variant.
+variant-manager-as-on-sheets = As on the sheets
+variant-manager-base-fitting = Base fits what the sheets say: change it on the sheets.
+variant-manager-overrides = Parameter overrides
+variant-manager-col-parameter = Parameter
+variant-manager-same-as-base = same as Base
+variant-manager-reset = Back to the Base value
+variant-manager-overrides-off = A part that is not fitted has no values to override.
+variant-manager-other-variants = { $designator } in other variants
+# A matrix cell with a value of its own: the kind of value it replaces.
+variant-manager-override-value = value
+variant-manager-override-footprint = footprint
+variant-manager-override-field = override
+variant-manager-parameter-value = Value
+variant-manager-parameter-footprint = Footprint
+variant-manager-settings-unreadable = The project's variant settings could not be read. They are kept as they are and cannot be changed.

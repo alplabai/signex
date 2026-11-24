@@ -3,13 +3,14 @@
 
 use iced::widget::{Row, Space, container, pick_list, row};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
-use signex_i18n::{ids, t};
+use signex_i18n::{MessageId, ids, t};
 use signex_widgets::chips::{ChipMetrics, ChipStyle, chip};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{button, text, text_input};
 
 use super::super::ProjectTabMsg;
 use super::super::general::tab_message;
+use super::super::look::{ButtonKind, text_button};
 use super::super::table::{SP, TS};
 use super::Manager;
 use crate::app::Message;
@@ -26,8 +27,9 @@ const RULE_EMS: f32 = 20.0 / 12.0;
 /// Height of the status line, in `body`-size characters.
 const STATUS_EMS: f32 = 30.0 / 12.0;
 
-/// Caption, Active variant select, rule, parts filter, Only rows that differ.
-/// Settings, Compare variants and Open in BOM Studio have no surface yet.
+/// Caption, Active variant select, rule, parts filter, Only rows that differ,
+/// then Settings, Compare variants and Open in BOM Studio at the end, greyed
+/// with a "not built yet" tooltip: none of their surfaces exists yet.
 pub(super) fn top<'a>(m: &Manager<'_>) -> Element<'a, Message> {
     let project_id = m.project_id;
     let r = resolve(m.tokens);
@@ -86,7 +88,7 @@ pub(super) fn top<'a>(m: &Manager<'_>) -> Element<'a, Message> {
         })),
     );
     let line = r.line_soft;
-    let bar = row![
+    let mut bar = row![
         text(t!(m.i18n, ids::PROJECT_VARIANTS_ACTIVE_CAPTION))
             .size(TS.caption)
             .color(r.ink3),
@@ -94,10 +96,38 @@ pub(super) fn top<'a>(m: &Manager<'_>) -> Element<'a, Message> {
         rule(line),
         filter,
         differ,
+        Space::new().width(Length::Fill),
     ]
     .spacing(SP.m)
     .align_y(Alignment::Center);
+    if !m.definitions.is_empty() {
+        for id in NOT_BUILT {
+            bar = bar.push(not_built(m, id));
+        }
+    }
     strip(bar, false, Length::Shrink, m)
+}
+
+/// The top bar actions whose surfaces are not built yet (mockup row 32).
+pub(super) const NOT_BUILT: [MessageId; 3] = [
+    ids::VARIANT_MANAGER_SETTINGS,
+    ids::VARIANT_MANAGER_COMPARE,
+    ids::VARIANT_MANAGER_OPEN_BOM,
+];
+
+/// A greyed top bar button with the "not built yet" tooltip.
+fn not_built<'a>(m: &Manager<'_>, id: MessageId) -> Element<'a, Message> {
+    let face = text_button(None, t!(m.i18n, id), None, ButtonKind::Outline, m.tokens);
+    let tip = container(
+        text(t!(m.i18n, ids::VARIANT_MANAGER_NOT_BUILT))
+            .size(TS.caption)
+            .color(ti(m.tokens.text)),
+    )
+    .padding([SP.xs, SP.s])
+    .style(crate::styles::context_menu(m.tokens));
+    signex_widgets::tooltip(face, tip, iced::widget::tooltip::Position::Bottom)
+        .gap(SP.xs)
+        .boxed()
 }
 
 /// The status line: parts, variants and cells that differ from Base, and a

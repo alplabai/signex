@@ -1,7 +1,6 @@
-//! Open or focus a project's Project tab.
+//! Open or focus a project's Project tab, or its Variant Manager tab.
 
-use super::{ProjectSection, ProjectTabMsg};
-use crate::app::{Message, ProjectMsg, Signex, TabInfo, TabKind};
+use crate::app::{Message, Signex, TabInfo, TabKind};
 
 impl Signex {
     /// Project Options (project tree): focus the project's tab, or open it.
@@ -45,19 +44,15 @@ impl Signex {
         }
     }
 
-    /// Variant Manager (project tree, mockup row 20): the project's tab on
-    /// its Variants section, through the message the section list sends, so
-    /// the variant parts are read.
+    /// Variant Manager (project tree, mockup row 20): the project's Variant
+    /// Manager tab (mockup row 32), opened or focused, its parts read.
     pub(crate) fn open_variant_manager(&mut self, project_idx: usize) -> iced::Task<Message> {
-        self.open_project_tab(project_idx);
         let Some(project_id) = self.document_state.projects.get(project_idx).map(|p| p.id) else {
+            crate::diagnostics::log_warning(format!(
+                "Variant Manager: no project at tree index {project_idx}"
+            ));
             return iced::Task::none();
         };
-        self.update(Message::Project(ProjectMsg::Tab(
-            ProjectTabMsg::SectionSelected {
-                project_id,
-                section: ProjectSection::Variants,
-            },
-        )))
+        self.open_variant_manager_tab(project_id)
     }
 }

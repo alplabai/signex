@@ -24,6 +24,7 @@ pub(crate) fn page_name(kind: &TabKind) -> Option<MessageId> {
         TabKind::Project(_) => Some(ids::CHROME_PAGE_TAB_PROJECT),
         TabKind::Rules(_) => Some(ids::RULES_TAB_TITLE),
         TabKind::LayerStack => Some(ids::PCB_STACK_TITLE),
+        TabKind::VariantManager(_) => Some(ids::VARIANT_MANAGER_TAB_TITLE),
         TabKind::Schematic
         | TabKind::Pcb
         | TabKind::ComponentEditor(_)
@@ -37,7 +38,9 @@ pub(crate) fn page_name(kind: &TabKind) -> Option<MessageId> {
 /// its board, which may have no project: `Signex::layer_stack_title` names it.
 pub(crate) fn page_project(kind: &TabKind) -> Option<ProjectId> {
     page_name(kind)?;
-    kind.as_project().or_else(|| kind.as_rules())
+    kind.as_project()
+        .or_else(|| kind.as_rules())
+        .or_else(|| kind.as_variant_manager())
 }
 
 /// `<project> — <page>` in the language of `i18n`, without bidi marks so

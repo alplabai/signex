@@ -450,6 +450,9 @@ impl Signex {
         if let Some(project_id) = self.rules_tab_in_window(is_main) {
             return self.view_rules_tab(project_id);
         }
+        if let Some(project_id) = self.variant_manager_tab_in_window(is_main) {
+            return self.view_variant_manager_tab(project_id);
+        }
         if self.layer_stack_tab_in_window(is_main) {
             return self.view_layer_stack_tab();
         }

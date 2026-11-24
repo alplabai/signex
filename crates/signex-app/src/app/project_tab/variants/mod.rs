@@ -1,20 +1,31 @@
-//! Variants section of the Project tab in the Variant Manager layout (#1690,
-//! #1293): a top bar (active variant, parts filter, Only rows that differ),
-//! the variant list with the selected variant's actions, a summary card per
-//! variant and the parts by variants matrix, read off the UI thread from the
-//! project's sheets. Every variant edit is one step of the General history; a
-//! refused one shows its reason and changes nothing. The matrix is read-only
-//! here. See `docs/PROJECT_TAB.md`, "Variants".
+//! The Variant Manager (#1690, #1293, mockup row 32), a document tab of its
+//! project (`tab`): a top bar (active variant, parts filter, Only rows that
+//! differ, the actions not built yet), the variant list with the selected
+//! variant's actions, a summary card per variant, the parts by variants
+//! matrix, read off the UI thread from the project's sheets, and the
+//! selected cell's part on the right. The project's variant settings are
+//! laid over the read as it is shown, so an edit shows at once. Every edit
+//! is one step of the General history; a refused one shows its reason and
+//! changes nothing. See `docs/PROJECT_TAB.md`, "Variants".
 
 mod bar;
+mod cells;
+mod detail;
 mod edits;
 mod empty;
 mod list;
+mod manager;
+#[cfg(test)]
+mod manager_tests;
 mod matrix;
 mod read;
 mod summary;
+mod tab;
 #[cfg(test)]
 mod tests;
+
+use manager::VariantCell;
+pub use manager::{VariantManagerMsg, VariantManagerUi};
 
 use crate::app::core::parts_read_error::PartsReadError;
 
@@ -23,7 +34,7 @@ use iced::widget::{Column, column, container, row, svg};
 use iced::{Background, Border, Color, Element, Font, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_output::VariantMatrix;
-use signex_types::project::is_base_variant;
+use signex_types::project::{VariantSettings, is_base_variant};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::text;
 
@@ -68,8 +79,16 @@ struct Manager<'v> {
     active: Option<&'v str>,
     /// The variant selected in the list; `None` is Base.
     selected: Option<&'v str>,
+    /// The default variant's definition; `None` is Base.
+    default: Option<&'v str>,
     tab: Option<&'v ProjectTabState>,
     parts: Parts<'v>,
+    /// The parts read with the project's variant settings laid over it.
+    shown: Option<VariantMatrix>,
+    /// The project's variant settings, live.
+    settings: &'v VariantSettings,
+    /// The settings section could not be read: nothing in it can change.
+    settings_locked: bool,
     /// The parts were read before the latest sheet edit, or for other
     /// variant names than the project has now.
     stale: bool,
@@ -112,24 +131,48 @@ impl<'v> Manager<'v> {
             (Parts::Read(matrix), Some(tab)) => !read_holds(tab, matrix, project, sheet_epoch),
             _ => false,
         };
+        let settings = &project.data.variant_settings;
+        let shown = match parts {
+            Parts::Read(matrix) => Some(matrix.with_settings(settings)),
+            _ => None,
+        };
         Self {
             project_id: project.id,
             definitions,
             active,
             selected,
+            default: project.data.default_variant(),
             tab,
             parts,
+            shown,
+            settings,
+            settings_locked: project.data.has_unreadable_variant_settings(),
             stale,
             i18n,
             tokens,
         }
     }
 
-    fn matrix(&self) -> Option<&'v VariantMatrix> {
-        match self.parts {
-            Parts::Read(matrix) => Some(matrix),
-            _ => None,
-        }
+    /// The parts read with the variant settings applied, as every view
+    /// shows them.
+    fn matrix(&self) -> Option<&VariantMatrix> {
+        self.shown.as_ref()
+    }
+
+    fn is_default(&self, variant: Option<&str>) -> bool {
+        variant == self.default
+    }
+
+    /// The selected cell, while its variant and part are still there.
+    fn cell(&self) -> Option<&'v VariantCell> {
+        let cell = self.tab?.variant_manager.cell.as_ref()?;
+        let matrix = self.matrix()?;
+        matrix.column(cell.variant.as_deref())?;
+        matrix
+            .rows
+            .iter()
+            .any(|row| row.designator == cell.designator)
+            .then_some(cell)
     }
 
     /// The matrix column of `variant` (`None` is Base), when it was read.
@@ -180,8 +223,9 @@ fn read_for(matrix: &VariantMatrix, definitions: &[String]) -> bool {
             .all(|(read, defined)| read.eq_ignore_ascii_case(defined))
 }
 
-/// The section: its title and help, then the Variant Manager filling the
-/// rest of the tab.
+/// The Variants section of the Project tab: its title and help over the
+/// Variant Manager. The section list opens the Variant Manager tab instead
+/// of showing it, so this draws only for a section state set elsewhere.
 pub(super) fn view<'a>(
     project: &LoadedProject,
     tab: Option<&ProjectTabState>,
@@ -189,39 +233,54 @@ pub(super) fn view<'a>(
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
-    let manager = Manager::new(project, tab, sheet_epoch, i18n, tokens);
-    let centre = if manager.definitions.is_empty() {
-        empty::view(&manager)
-    } else {
-        main(&manager)
-    };
-    let body = row![list::view(&manager), centre].height(Length::Fill);
-    let line = ti(tokens.border);
-    let panel = ti(tokens.panel_bg);
-    let frame = container(column![bar::top(&manager), body, bar::status(&manager)])
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .clip(true)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(panel)),
-            border: Border {
-                width: 1.0,
-                color: line,
-                radius: Radii::GRAPHITE.card.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        });
     column![
         text(t!(i18n, ids::PROJECT_SECTION_VARIANTS))
             .size(TS.heading)
             .color(ti(tokens.text)),
         note(t!(i18n, ids::PROJECT_VARIANTS_HELP), tokens),
-        frame,
+        frame(project, tab, sheet_epoch, i18n, tokens),
     ]
     .spacing(SP.l)
     .padding(SP.xl)
     .height(Length::Fill)
+    .boxed()
+}
+
+/// The Variant Manager: the top bar, the list, the centre and the selected
+/// cell's pane, and the status line, in one framed panel.
+fn frame<'a>(
+    project: &LoadedProject,
+    tab: Option<&ProjectTabState>,
+    sheet_epoch: u64,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let manager = Manager::new(project, tab, sheet_epoch, i18n, tokens);
+    let body = if manager.definitions.is_empty() {
+        row![list::view(&manager), empty::view(&manager)]
+    } else {
+        row![list::view(&manager), main(&manager), detail::view(&manager)]
+    };
+    let line = ti(tokens.border);
+    let panel = ti(tokens.panel_bg);
+    container(column![
+        bar::top(&manager),
+        body.height(Length::Fill),
+        bar::status(&manager)
+    ])
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .clip(true)
+    .style(move |_: &Theme| container::Style {
+        background: Some(Background::Color(panel)),
+        border: Border {
+            width: 1.0,
+            color: line,
+            radius: Radii::GRAPHITE.card.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    })
     .boxed()
 }
 
@@ -232,10 +291,10 @@ fn main<'a>(m: &Manager<'_>) -> Element<'a, Message> {
         .padding(SP.l)
         .width(Length::Fill)
         .height(Length::Fill);
-    col = col.push(match m.parts {
-        Parts::Reading => note(t!(m.i18n, ids::PROJECT_VARIANTS_READING), m.tokens),
-        Parts::Failed(why) => problem(read_failed(m.i18n, why), m.tokens),
-        Parts::Read(matrix) => matrix::view(m, matrix),
+    col = col.push(match (m.parts, m.matrix()) {
+        (Parts::Failed(why), _) => problem(read_failed(m.i18n, why), m.tokens),
+        (_, Some(matrix)) => matrix::view(m, matrix),
+        (_, None) => note(t!(m.i18n, ids::PROJECT_VARIANTS_READING), m.tokens),
     });
     col.boxed()
 }
@@ -263,6 +322,7 @@ fn glyph<'a>(bytes: &'static [u8], size: f32, color: Color) -> Element<'a, Messa
         .boxed()
 }
 
+const GLYPH_STAR: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M8 2.2l1.75 3.6 3.95.55-2.85 2.75.7 3.9L8 11.15 4.45 13l.7-3.9L2.3 6.35l3.95-.55z" fill="currentColor"/></svg>"#;
 const GLYPH_PLUS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>"#;
 const GLYPH_CHECK: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4 8.4l2.6 2.6L12 5.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>"#;
 const GLYPH_CROSS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M5.2 5.2l5.6 5.6M10.8 5.2l-5.6 5.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>"#;

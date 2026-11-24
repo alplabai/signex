@@ -28,6 +28,14 @@ impl Signex {
             ProjectTabMsg::VariantPartsReadRequested { project_id } => {
                 return self.read_variant_parts(project_id, true);
             }
+            // The Variants row opens the Variant Manager tab (mockup row 32).
+            ProjectTabMsg::SectionSelected {
+                project_id,
+                section: ProjectSection::Variants,
+            } => return self.open_variant_manager_tab(project_id),
+            ProjectTabMsg::VariantManager { project_id, msg } => {
+                return self.dispatch_variant_manager(project_id, msg);
+            }
             ProjectTabMsg::PreviewActed { project_id, msg } => {
                 return self.act_on_project_preview(project_id, msg);
             }
@@ -42,13 +50,9 @@ impl Signex {
             } => return self.finish_library_locate(project_id, &missing, picked),
             _ => {}
         }
-        // Showing the Variants section reads its parts; a variant edit that
-        // changed the columns reads them again (#1293).
+        // A variant edit that changed the columns reads the parts again
+        // (#1293).
         let parts_read = match &msg {
-            ProjectTabMsg::SectionSelected {
-                project_id,
-                section: ProjectSection::Variants,
-            } => Some((*project_id, true)),
             ProjectTabMsg::NewVariantRequested { project_id }
             | ProjectTabMsg::VariantRenameSubmitted { project_id }
             | ProjectTabMsg::VariantRemoved { project_id, .. } => Some((*project_id, false)),
@@ -233,7 +237,8 @@ impl Signex {
             ProjectTabMsg::SetupEdited { .. }
             | ProjectTabMsg::Requirements { .. }
             | ProjectTabMsg::PreviewActed { .. }
-            | ProjectTabMsg::VariantPartsReadRequested { .. } => {}
+            | ProjectTabMsg::VariantPartsReadRequested { .. }
+            | ProjectTabMsg::VariantManager { .. } => {}
             // Routed by `dispatch_project_tab_message`: they open a dialog.
             ProjectTabMsg::AddSchematicRequested { .. }
             | ProjectTabMsg::ErcDialogRequested { .. }

@@ -11,8 +11,8 @@ use std::sync::Arc;
 use iced::Task;
 use signex_output::{ExportContext, ProjectMetadata, VariantMatrix};
 
+use super::super::ProjectTabMsg;
 use super::super::general::tab_message;
-use super::super::{ProjectSection, ProjectTabMsg};
 use crate::app::core::parts_read_error::PartsReadError;
 use crate::app::handlers::menu::export::export_metadata_with;
 use crate::app::handlers::menu::export::placements::{
@@ -43,16 +43,17 @@ struct PartsRead {
 }
 
 impl Signex {
-    /// Read the project's parts for the Variants section. Without `force`,
-    /// only while the section is shown and when the last read no longer
-    /// holds (another sheet edit count, other variant names or other
-    /// project parameters). A closed project reads nothing.
+    /// Read the project's parts for the Variant Manager. Without `force`,
+    /// only while its tab is open and when the last read no longer holds
+    /// (another sheet edit count, other variant names or other project
+    /// parameters). A closed project reads nothing.
     pub(in crate::app::project_tab) fn read_variant_parts(
         &mut self,
         project_id: ProjectId,
         force: bool,
     ) -> Task<Message> {
         let epoch = self.document_state.sheet_edit_epoch;
+        let shown = self.variant_manager_is_open(project_id);
         let Some(project) = self.document_state.project_by_id(project_id) else {
             return Task::none();
         };
@@ -61,7 +62,7 @@ impl Signex {
             .project_tabs
             .get(&project_id)
             .is_none_or(|tab| {
-                tab.section != ProjectSection::Variants
+                !shown
                     || tab.variant_parts.as_deref().is_some_and(|parts| {
                         parts
                             .as_ref()

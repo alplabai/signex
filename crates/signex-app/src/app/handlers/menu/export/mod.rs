@@ -364,6 +364,7 @@ pub(crate) fn export_metadata_with(
     if let Some(project) = owning_project {
         base.custom_fields
             .insert("project_name".to_string(), project.data.name.clone());
+        base.variant_settings = project.data.variant_settings.clone();
     }
     base.for_sheet(title_block)
 }

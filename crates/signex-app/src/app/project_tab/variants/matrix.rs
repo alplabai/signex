@@ -1,17 +1,24 @@
 //! The Variant Manager's parts matrix (#1293): Part, Value · Footprint, then
 //! a column per variant (Base first, the active one marked). A cell that
-//! matches Base stays quiet; a difference is coloured. Read-only: changing a
-//! cell has no surface yet. The parts filter and Only rows that differ hide
-//! rows; every remaining row is listed.
+//! matches Base stays quiet; a difference is coloured, and a cell with a
+//! parameter value of its own shows that value (mockup row 32). A click on
+//! a cell selects it and the right pane edits it. The parts filter and Only
+//! rows that differ hide rows; every remaining row is listed.
 
-use iced::widget::{Column, Row, Space, column, container, row, scrollable};
+use iced::widget::{Column, Row, Space, column, container, mouse_area, row, scrollable};
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_i18n::{Localized, ids, t};
 use signex_output::{VariantMatrix, VariantRow};
+use signex_types::project::{FOOTPRINT_PARAMETER, VALUE_PARAMETER};
 use signex_widgets::text;
 
+use super::super::ProjectTabMsg;
+use super::super::general::tab_message;
 use super::super::table::{SP, TS};
-use super::{GLYPH_CHECK, GLYPH_CROSS, Manager, glyph, medium, mono, pill, tint_over_panel};
+use super::{
+    GLYPH_CHECK, GLYPH_CROSS, Manager, VariantCell, VariantManagerMsg, glyph, medium, mono, pill,
+    tint_over_panel,
+};
 use crate::app::Message;
 use crate::styles::tokens::resolve;
 use crate::styles::{PillTone, Radii, ti};
@@ -230,19 +237,8 @@ fn part_row<'a>(m: &Manager<'_>, part: &VariantRow) -> Element<'a, Message> {
         body_cell(designator.boxed(), Length::Fixed(TS.body * PART_EMS), None),
         body_cell(value.boxed(), Length::Fixed(TS.body * VALUE_EMS), None),
     ];
-    let active_fill = tint_over_panel(r.accent_soft, ACTIVE_FILL, m.tokens);
     for variant in m.variants() {
-        let face = match m.column(variant) {
-            Some(column) => cell_pill(
-                m,
-                part.differs_at(column),
-                !part.fitted.get(column).copied().unwrap_or(true),
-                false,
-            ),
-            None => Space::new().boxed(),
-        };
-        let fill = m.is_active(variant).then_some(active_fill);
-        line = line.push(body_cell(face, Length::Fill, fill));
+        line = line.push(variant_cell(m, part, variant));
     }
     let side = iced::border::Side::default().width(1.0).color(r.line_soft);
     container(line.align_y(Alignment::Center))
@@ -250,6 +246,115 @@ fn part_row<'a>(m: &Manager<'_>, part: &VariantRow) -> Element<'a, Message> {
         .height(Length::Fixed(TS.body * ROW_EMS))
         .style(move |_: &Theme| container::Style {
             border: Border::default().bottom(side),
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// `part` in `variant`'s column: its state, on the active column's fill,
+/// outlined in the accent while selected; a click selects it.
+fn variant_cell<'a>(
+    m: &Manager<'_>,
+    part: &VariantRow,
+    variant: Option<&str>,
+) -> Element<'a, Message> {
+    let r = resolve(m.tokens);
+    let Some(column) = m.column(variant) else {
+        return body_cell(Space::new().boxed(), Length::Fill, None);
+    };
+    let face = match own_value(m, part, variant) {
+        Some((value, kind)) => value_pill(m, value, kind),
+        None => cell_pill(
+            m,
+            part.differs_at(column),
+            !part.fitted.get(column).copied().unwrap_or(true),
+            false,
+        ),
+    };
+    let fill = m
+        .is_active(variant)
+        .then(|| tint_over_panel(r.accent_soft, ACTIVE_FILL, m.tokens));
+    let cell = VariantCell {
+        variant: variant.map(str::to_string),
+        designator: part.designator.clone(),
+    };
+    let is_selected = m.cell() == Some(&cell);
+    let edge = if is_selected {
+        r.accent_text
+    } else {
+        Color::TRANSPARENT
+    };
+    let boxed = container(body_cell(face, Length::Fill, fill))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            border: Border {
+                width: ACTIVE_RULE,
+                color: edge,
+                radius: Radii::GRAPHITE.small.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        });
+    let project_id = m.project_id;
+    mouse_area(boxed)
+        .on_press(tab_message(ProjectTabMsg::VariantManager {
+            project_id,
+            msg: VariantManagerMsg::CellSelected(cell),
+        }))
+        .interaction(iced::mouse::Interaction::Pointer)
+        .boxed()
+}
+
+/// The value `variant` gives `part` instead of its own, shown in its cell:
+/// the value first, then the footprint, then a field; with the kind of
+/// value it replaces. Base and a cell without one have none.
+fn own_value<'s>(
+    m: &'s Manager<'_>,
+    part: &VariantRow,
+    variant: Option<&str>,
+) -> Option<(&'s str, signex_i18n::MessageId)> {
+    let set = &m.settings.part(variant, &part.designator)?.parameters;
+    if let Some(value) = set.get(VALUE_PARAMETER) {
+        return Some((value, ids::VARIANT_MANAGER_OVERRIDE_VALUE));
+    }
+    if let Some(value) = set.get(FOOTPRINT_PARAMETER) {
+        return Some((value, ids::VARIANT_MANAGER_OVERRIDE_FOOTPRINT));
+    }
+    let (_, value) = set.iter().next()?;
+    Some((value, ids::VARIANT_MANAGER_OVERRIDE_FIELD))
+}
+
+/// A cell with a value of its own: the value in the mono face and, after
+/// it, the kind of value it replaces, on the accent tint.
+fn value_pill<'a>(
+    m: &Manager<'_>,
+    value: &str,
+    kind: signex_i18n::MessageId,
+) -> Element<'a, Message> {
+    let r = resolve(m.tokens);
+    let face = row![
+        text(signex_i18n::UserText::new(value.to_string()))
+            .size(TS.caption)
+            .font(mono())
+            .color(r.accent_soft_ink)
+            .wrapping(iced::widget::text::Wrapping::None),
+        text(t!(m.i18n, kind)).size(TS.caption).color(r.ink4),
+    ]
+    .spacing(SP.xs)
+    .align_y(Alignment::Center);
+    let fill = r.accent_soft;
+    container(face)
+        .height(Length::Fixed(TS.body * CELL_EMS))
+        .padding([0.0, SP.m * 0.75])
+        .align_y(iced::alignment::Vertical::Center)
+        .clip(true)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(fill)),
+            border: Border {
+                radius: Radii::GRAPHITE.small.into(),
+                ..Border::default()
+            },
             ..container::Style::default()
         })
         .boxed()

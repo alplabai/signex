@@ -1,9 +1,10 @@
 //! The Variant Manager's variant list (#1293): Base, then each definition
 //! with its fitted count and changes against Base. A click selects (the
 //! selection is not the active variant), a double-click on a definition
-//! opens its name for typing, `+` adds "Variant N". Under the list, the
-//! selected variant's Rename and Delete, and the reason a variant edit was
-//! refused.
+//! opens its name for typing, `+` adds "Variant N". The default variant
+//! carries a star and the default pill (mockup row 32). Under the list, the
+//! selected variant's Duplicate, Rename, Set as default and Delete, and the
+//! reason a variant edit was refused.
 
 use iced::widget::{Column, Space, column, container, mouse_area, row, scrollable};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
@@ -14,7 +15,7 @@ use super::super::general::tab_message;
 use super::super::table::{SP, TS, problem};
 use super::super::{ProjectTabMsg, VariantRenameDraft};
 use super::edits::problem_words;
-use super::{GLYPH_PLUS, Manager, glyph, medium, pill, semibold};
+use super::{GLYPH_PLUS, GLYPH_STAR, Manager, VariantManagerMsg, glyph, medium, pill, semibold};
 use crate::app::Message;
 use crate::styles::tokens::resolve;
 use crate::styles::{PillTone, Radii, ti};
@@ -151,7 +152,16 @@ fn variant_row<'a>(m: &Manager<'_>, variant: Option<&str>) -> Element<'a, Messag
                 .boxed(),
         );
     }
-    let mut line = row![lines].spacing(SP.m).align_y(Alignment::Center);
+    let mut line = row![default_star(m, variant), lines]
+        .spacing(SP.m)
+        .align_y(Alignment::Center);
+    if m.is_default(variant) {
+        line = line.push(pill(
+            t!(m.i18n, ids::VARIANT_MANAGER_DEFAULT),
+            PillTone::Neutral,
+            m.tokens,
+        ));
+    }
     if m.is_active(variant) {
         line = line.push(pill(
             t!(m.i18n, ids::PROJECT_VARIANTS_ACTIVE),
@@ -189,6 +199,25 @@ fn variant_row<'a>(m: &Manager<'_>, variant: Option<&str>) -> Element<'a, Messag
     area.boxed()
 }
 
+/// The star of the default variant; the same room, empty, on every other
+/// row so the names line up.
+fn default_star<'a>(m: &Manager<'_>, variant: Option<&str>) -> Element<'a, Message> {
+    if !m.is_default(variant) {
+        return Space::new().width(TS.body).height(TS.body).boxed();
+    }
+    let star = glyph(GLYPH_STAR, TS.body, resolve(m.tokens).accent_text);
+    let tip = container(
+        text(t!(m.i18n, ids::VARIANT_MANAGER_DEFAULT_STAR))
+            .size(TS.caption)
+            .color(ti(m.tokens.text)),
+    )
+    .padding([SP.xs, SP.s])
+    .style(crate::styles::context_menu(m.tokens));
+    signex_widgets::tooltip(star, tip, iced::widget::tooltip::Position::Top)
+        .gap(SP.xs)
+        .boxed()
+}
+
 /// "N / M fitted · reference" for Base, "N / M fitted · K changes" for a
 /// definition; nothing until the parts are read for it.
 fn fit_line(m: &Manager<'_>, variant: Option<&str>) -> Option<signex_i18n::Localized> {
@@ -213,39 +242,13 @@ fn fit_line(m: &Manager<'_>, variant: Option<&str>) -> Option<signex_i18n::Local
     })
 }
 
-/// The selected variant's Rename and Delete; Base has neither.
+/// The selected variant's Duplicate, Rename, Set as default and Delete.
+/// Base is duplicated and made the default, never renamed or deleted.
+/// Duplicate waits for a parts read that holds, so the copy carries every
+/// fit the sheets give the source.
 fn actions<'a>(m: &Manager<'_>) -> Element<'a, Message> {
     let r = resolve(m.tokens);
-    let project_id = m.project_id;
-    let rename = m.selected.map(|name| {
-        tab_message(ProjectTabMsg::VariantRenameStarted {
-            project_id,
-            name: name.to_string(),
-        })
-    });
-    let delete = m.selected.map(|name| {
-        tab_message(ProjectTabMsg::VariantRemoved {
-            project_id,
-            name: name.to_string(),
-        })
-    });
-    let small = |words: signex_i18n::Localized,
-                 on_press: Option<Message>,
-                 danger: bool|
-     -> Element<'a, Message> {
-        let face = text(words).size(TS.caption);
-        let face = if danger {
-            face.color(ti(m.tokens.error))
-        } else {
-            face
-        };
-        button(face)
-            .width(Length::Fill)
-            .padding([SP.xs, SP.m])
-            .style(crate::styles::outline_button(m.tokens))
-            .on_press_maybe(on_press)
-            .boxed()
-    };
+    let presses = ActionPresses::of(m);
     let line_side = iced::border::Side::default().width(1.0).color(r.line_soft);
     let col = column![
         text(t!(
@@ -256,8 +259,18 @@ fn actions<'a>(m: &Manager<'_>) -> Element<'a, Message> {
         .size(TS.caption)
         .color(r.ink3),
         row![
-            small(t!(m.i18n, ids::PROJECT_VARIANTS_RENAME), rename, false),
-            small(t!(m.i18n, ids::PROJECT_VARIANTS_DELETE), delete, true),
+            small_button(m, ids::VARIANT_MANAGER_DUPLICATE, presses.duplicate, false),
+            small_button(m, ids::PROJECT_VARIANTS_RENAME, presses.rename, false),
+        ]
+        .spacing(SP.xs),
+        row![
+            small_button(
+                m,
+                ids::VARIANT_MANAGER_SET_DEFAULT,
+                presses.make_default,
+                false
+            ),
+            small_button(m, ids::PROJECT_VARIANTS_DELETE, presses.delete, true),
         ]
         .spacing(SP.xs),
         text(t!(m.i18n, ids::PROJECT_VARIANTS_BASE_NOTE))
@@ -272,5 +285,62 @@ fn actions<'a>(m: &Manager<'_>) -> Element<'a, Message> {
             border: Border::default().top(line_side),
             ..container::Style::default()
         })
+        .boxed()
+}
+
+/// What each action of the selected variant sends; `None` greys it.
+struct ActionPresses {
+    duplicate: Option<Message>,
+    rename: Option<Message>,
+    make_default: Option<Message>,
+    delete: Option<Message>,
+}
+
+impl ActionPresses {
+    fn of(m: &Manager<'_>) -> Self {
+        let project_id = m.project_id;
+        let manager =
+            |msg: VariantManagerMsg| tab_message(ProjectTabMsg::VariantManager { project_id, msg });
+        let selected = m.selected.map(str::to_string);
+        let can_copy = m.matrix().is_some() && !m.stale && !m.settings_locked;
+        let can_default = !m.is_default(m.selected) && !m.settings_locked;
+        Self {
+            duplicate: can_copy.then(|| {
+                manager(VariantManagerMsg::DuplicateRequested {
+                    from: selected.clone(),
+                })
+            }),
+            make_default: can_default.then(|| {
+                manager(VariantManagerMsg::DefaultPicked {
+                    name: selected.clone(),
+                })
+            }),
+            rename: selected
+                .clone()
+                .map(|name| tab_message(ProjectTabMsg::VariantRenameStarted { project_id, name })),
+            delete: selected
+                .map(|name| tab_message(ProjectTabMsg::VariantRemoved { project_id, name })),
+        }
+    }
+}
+
+/// One outlined action button of the list's foot; a `danger` one is red.
+fn small_button<'a>(
+    m: &Manager<'_>,
+    words: signex_i18n::MessageId,
+    on_press: Option<Message>,
+    danger: bool,
+) -> Element<'a, Message> {
+    let face = text(t!(m.i18n, words)).size(TS.caption);
+    let face = if danger {
+        face.color(ti(m.tokens.error))
+    } else {
+        face
+    };
+    button(face)
+        .width(Length::Fill)
+        .padding([SP.xs, SP.m])
+        .style(crate::styles::outline_button(m.tokens))
+        .on_press_maybe(on_press)
         .boxed()
 }
