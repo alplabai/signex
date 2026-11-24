@@ -1,6 +1,6 @@
 use signex_types::schematic::{
-    Bus, Junction, Label, NoConnect, NoErcDirective, Point, SCHEMATIC_PT_TO_MM, SchDrawing,
-    SelectedItem, SelectedKind, Symbol, TextNote, Wire, circumcircle,
+    Bus, Junction, Label, NoConnect, NoErcDirective, Point, SCHEMATIC_PT_TO_MM, SCHEMATIC_TEXT_MM,
+    SchDrawing, SelectedItem, SelectedKind, Symbol, TextNote, Wire, circumcircle,
 };
 
 use super::Engine;
@@ -242,6 +242,19 @@ impl Engine {
                     if symbol.locked { "Yes" } else { "No" }.into(),
                 ));
                 info.push(("DNP".into(), if symbol.dnp { "Yes" } else { "No" }.into()));
+                if symbol.is_power {
+                    // Mockup row 45: the net-name text's size and face, read
+                    // as `power_port_value_text` draws them.
+                    let value_text = symbol.val_text.as_ref();
+                    let size_mm = value_text.map_or(SCHEMATIC_TEXT_MM, |t| t.font_size);
+                    info.push((
+                        "Text Size".into(),
+                        format!("{}", (size_mm.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32),
+                    ));
+                    if let Some(family) = value_text.and_then(|t| t.font_family.as_ref()) {
+                        info.push(("Font Family".into(), family.clone()));
+                    }
+                }
                 let mut custom: Vec<(&String, &String)> = symbol.fields.iter().collect();
                 custom.sort_by(|a, b| a.0.cmp(b.0));
                 for (name, value) in custom {
@@ -928,5 +941,58 @@ mod tests {
         };
         assert_eq!(get(info_keys::JUSTIFY_H), Some("Left"));
         assert_eq!(get(info_keys::JUSTIFY_V), Some("Top"));
+    }
+
+    fn power_port_rows(
+        val_text: Option<signex_types::schematic::TextProp>,
+    ) -> Vec<(String, String)> {
+        let id = uuid::Uuid::now_v7();
+        let port = Symbol {
+            uuid: id,
+            lib_id: "power:bar".into(),
+            value: "+3V3".into(),
+            is_power: true,
+            val_text,
+            ..Symbol::default()
+        };
+        let engine = Engine::new(signex_types::schematic::SchematicSheet {
+            symbols: vec![port],
+            ..Default::default()
+        })
+        .expect("engine");
+        engine
+            .describe_single_selection(&[SelectedItem::new(id, SelectedKind::Symbol)])
+            .expect("details")
+            .info
+    }
+
+    /// Mockup row 45: a power port reports its net-name text's size in
+    /// points and its own font family, the rows a net label reports.
+    #[test]
+    fn a_power_port_reports_its_text_size_and_font_family() {
+        use signex_types::schematic::{HAlign, TextProp, VAlign};
+        let rows = power_port_rows(Some(TextProp {
+            position: Point::new(0.0, 0.0),
+            rotation: 0.0,
+            font_size: 14.0 * SCHEMATIC_PT_TO_MM,
+            font_family: Some("Iosevka".into()),
+            justify_h: HAlign::Center,
+            justify_v: VAlign::Bottom,
+            hidden: false,
+        }));
+        let get = |key: &str| rows.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str());
+        assert_eq!(get("Text Size"), Some("14"));
+        assert_eq!(get("Font Family"), Some("Iosevka"));
+    }
+
+    /// A power port with no stored value text draws it at the schematic
+    /// text size and inherits the sheet's family, so it reports that size
+    /// and no family of its own.
+    #[test]
+    fn a_power_port_without_value_text_reports_the_drawn_default() {
+        let rows = power_port_rows(None);
+        let get = |key: &str| rows.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str());
+        assert_eq!(get("Text Size"), Some("10"));
+        assert_eq!(get("Font Family"), None);
     }
 }

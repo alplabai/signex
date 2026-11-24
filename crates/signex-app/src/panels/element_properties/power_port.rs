@@ -61,6 +61,15 @@ pub(super) fn signal_flags_open(power_net: bool) -> bool {
     !power_net
 }
 
+/// The font the port's net name is stored with (mockup row 45): its own
+/// family (`None` inherits the sheet default) and its size in points. A
+/// port reporting no size reads the 10 pt the canvas draws by default.
+pub(super) fn stored_font(info: &[(String, String)]) -> (Option<String>, u32) {
+    let family = Some(info_row(info, "Font Family")).filter(|family| !family.is_empty());
+    let size_pt = info_row(info, "Text Size").parse().unwrap_or(10);
+    (family, size_pt)
+}
+
 /// The message a pick of `style` sends. A ground body hangs below its
 /// connection point and every other style rises above it, so the port turns
 /// by 180° when the direction flips and keeps its visual orientation.
@@ -103,6 +112,7 @@ pub(super) fn push_power_port_sections<'a>(
     };
     let rotation = rotation_degrees(&get("Rotation"));
     let locked = get("Locked") == "Yes";
+    let (font_family, font_size_pt) = stored_font(&ctx.selection_info);
     let i18n: &'a signex_i18n::I18n = &ctx.i18n;
 
     // The glyph and name in the power colour, from the canvas palette.
@@ -139,7 +149,7 @@ pub(super) fn push_power_port_sections<'a>(
                 );
                 c = c.push(font_family_row(
                     t!(i18n, ids::PROPERTIES_FONT),
-                    None,
+                    font_family.as_deref(),
                     muted,
                     move |family| {
                         PanelMsg::EditTextFontFamily(
@@ -151,7 +161,7 @@ pub(super) fn push_power_port_sections<'a>(
                 ));
                 c.push(super::label::font_size_row(
                     i18n,
-                    10,
+                    font_size_pt,
                     move |pt| PanelMsg::EditSymbolValueFontSizePt(id, pt),
                     st,
                 ))
@@ -427,6 +437,65 @@ mod tests {
     fn power_net_closes_the_signal_flags() {
         assert!(!signal_flags_open(true));
         assert!(signal_flags_open(false));
+    }
+
+    fn rows(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        (pairs.iter())
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    /// Mockup row 45: the Font and Font Size rows read the port's stored
+    /// family and size; a port with neither reads Default and 10 pt.
+    #[test]
+    fn the_font_rows_read_the_ports_stored_font() {
+        let stored = rows(&[("Font Family", "Iosevka"), ("Text Size", "14")]);
+        assert_eq!(stored_font(&stored), (Some("Iosevka".to_string()), 14));
+        assert_eq!(stored_font(&rows(&[("Type", "Power Port")])), (None, 10));
+    }
+
+    /// Mockup row 45: the drawn panel shows the stored family beside Font
+    /// and the stored size beside Font Size.
+    #[test]
+    fn the_panel_shows_the_ports_font_and_size() {
+        use signex_types::schematic::SelectedKind;
+        let (app, _task) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.selected_kind = Some(SelectedKind::Symbol);
+        ctx.selected_uuid = Some(uuid::Uuid::now_v7());
+        ctx.selection_info = rows(&[
+            ("Type", "Power Port"),
+            ("Value", "+3V3"),
+            ("Library ID", "power:bar"),
+            ("Text Size", "36"),
+            ("Font Family", "Signex Probe Sans"),
+        ]);
+        let view = super::super::view_selected_element_properties(
+            &ctx,
+            iced::Color::WHITE,
+            iced::Color::WHITE,
+            iced::Color::BLACK,
+        );
+        let shown: Vec<(String, iced::Rectangle)> =
+            crate::layout_probe::lay_out_texts(view, iced::Size::new(400.0, 4000.0))
+                .into_iter()
+                .map(|t| (t.text.replace(['\u{2068}', '\u{2069}'], ""), t.bounds))
+                .collect();
+        // The first text right of `label` on its row.
+        let beside = |label: &str| {
+            let (_, at) = shown.iter().find(|(t, _)| t == label)?;
+            let middle = |b: &iced::Rectangle| b.y + b.height / 2.0;
+            (shown.iter())
+                .filter(|(_, b)| (middle(b) - middle(at)).abs() < 4.0 && b.x > at.x)
+                .min_by(|a, b| a.1.x.total_cmp(&b.1.x))
+                .map(|(t, _)| t.clone())
+        };
+        assert_eq!(
+            beside("Font").as_deref(),
+            Some("Signex Probe Sans"),
+            "{shown:?}"
+        );
+        assert_eq!(beside("Font Size").as_deref(), Some("36"), "{shown:?}");
     }
 
     /// Picking a hanging style for a rising port turns it by 180°.
