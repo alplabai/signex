@@ -29,8 +29,8 @@ use crate::styles::HAIRLINE;
 const RING_EM: f32 = 1.5 / 12.0;
 
 /// The clearance Run DRC checks a pair with while no rule asks more: the
-/// open board's setup clearance (0.2 mm when it sets none), raised for a
-/// net class's nets by the class's own clearance.
+/// open board's setup clearance (0.2 mm when it sets none or no board is
+/// open), raised for a net class's nets by the class's own clearance.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct BuiltinClearance {
     board_mm: f64,
@@ -42,15 +42,25 @@ impl BuiltinClearance {
     /// refuses the board too).
     pub(crate) fn of(board: &PcbBoard, classes: &[NetClass]) -> Option<Self> {
         let rules = signex_drc::DrcRules::for_board(board, &[]).ok()?;
+        Some(Self::with_base(
+            crate::app::rules_tab::json::mm(rules.clearance),
+            classes,
+        ))
+    }
+
+    /// With no board open: the check's default, which a board that sets no
+    /// setup clearance is checked with.
+    pub(crate) fn without_board(classes: &[NetClass]) -> Self {
+        Self::with_base(signex_drc::DEFAULT_CLEARANCE_MM, classes)
+    }
+
+    fn with_base(board_mm: f64, classes: &[NetClass]) -> Self {
         let classes = classes
             .iter()
             .filter(|class| class.clearance.is_finite() && class.clearance > 0.0)
             .map(|class| (class.name.clone(), class.clearance))
             .collect();
-        Some(Self {
-            board_mm: crate::app::rules_tab::json::mm(rules.clearance),
-            classes,
-        })
+        Self { board_mm, classes }
     }
 
     /// For `row`, whose parents are `parents` (nearest first); `None` for
@@ -72,8 +82,8 @@ impl BuiltinClearance {
     }
 }
 
-/// What an empty clearance cell checks with anyway, from the open board;
-/// `None` for any other column or with no board open.
+/// What an empty clearance cell checks with anyway; `None` for any other
+/// column or a board whose setup clearance is not usable.
 fn builtin_clearance(frame: &Frame, at: CellRef) -> Option<f64> {
     let grid = frame.grid();
     let column = grid.column(at.column)?;

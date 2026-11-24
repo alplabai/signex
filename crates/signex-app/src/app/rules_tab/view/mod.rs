@@ -68,7 +68,8 @@ pub(super) struct Frame<'a> {
     pub layer: Option<&'a DrcRuleSet>,
     /// The project's constraint sets.
     pub sets: BTreeMap<String, NamedRuleSet>,
-    /// What an empty clearance cell checks with; `None` with no board open.
+    /// What an empty clearance cell checks with; `None` when the open
+    /// board's setup clearance is not usable.
     pub builtin_clearance: Option<grid_cell::BuiltinClearance>,
 }
 
@@ -301,9 +302,10 @@ impl Signex {
             .map(|p| p.data.net_classes.as_slice())
             .unwrap_or_default();
         let classes = net_classes.iter().map(|c| c.name.clone()).collect();
-        let builtin_clearance = board
-            .as_ref()
-            .and_then(|(_, board)| grid_cell::BuiltinClearance::of(board, net_classes));
+        let builtin_clearance = match board.as_ref() {
+            Some((_, board)) => grid_cell::BuiltinClearance::of(board, net_classes),
+            None => Some(grid_cell::BuiltinClearance::without_board(net_classes)),
+        };
         Frame {
             id,
             i18n,

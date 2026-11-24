@@ -49,13 +49,20 @@ fn classes() -> Vec<NetClass> {
 /// A project that stores no rules, on a machine with none, its board open
 /// and its Rules tab on Clearance.
 fn machine_rules_tab(dir: &tempfile::TempDir) -> (Signex, ProjectId) {
+    rules_tab_with(dir, Some(board(0.3)))
+}
+
+/// As [`machine_rules_tab`], with `open` as the open board, or none.
+fn rules_tab_with(dir: &tempfile::TempDir, open: Option<PcbBoard>) -> (Signex, ProjectId) {
     let mut app = app_workspace(&dir.path().to_string_lossy(), &["top.snxsch"]);
     app.ui_state.machine_drc_rules = DrcRuleSet::default();
     let project = &mut app.document_state.projects[0].data;
     project.pcb_file = Some("board.snxpcb".into());
     project.net_classes = classes();
     project.rules = None;
-    app.open_pcb_tab(dir.path().join("board.snxpcb"), "board".into(), board(0.3));
+    if let Some(open) = open {
+        app.open_pcb_tab(dir.path().join("board.snxpcb"), "board".into(), open);
+    }
     let id = app.document_state.projects[0].id;
     let _ = app.update(Message::Menu(crate::menu_bar::MenuMessage::command(
         "open_rules",
@@ -108,6 +115,30 @@ fn an_unwritten_clearance_shows_the_boards_clearance_raised_by_its_class() {
     );
     assert!(
         !on_row(&texts, "LV", "0.3mm").is_empty(),
+        "LV asks nothing more"
+    );
+}
+
+#[test]
+fn with_no_board_open_an_unwritten_clearance_shows_the_checks_default() {
+    let dir = tempfile::tempdir().unwrap();
+    let (app, id) = rules_tab_with(&dir, None);
+    assert!(
+        app.rules_board(id).is_none(),
+        "only the schematic and Rules tabs are open"
+    );
+    let texts = laid_out(&app, id);
+    let default = format!("{}mm", signex_drc::DEFAULT_CLEARANCE_MM);
+    assert!(
+        !on_row(&texts, "All", &default).is_empty(),
+        "All shows the check's default"
+    );
+    assert!(
+        !on_row(&texts, "HV", "0.5mm").is_empty(),
+        "HV's own 0.5 mm still raises it"
+    );
+    assert!(
+        !on_row(&texts, "LV", &default).is_empty(),
         "LV asks nothing more"
     );
 }

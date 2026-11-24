@@ -294,7 +294,7 @@ same undo step.
   else a constraint set applied to the row, else its parent (a net's class,
   then All), else the fab tier default. A clearance cell no rule sets shows,
   muted, the clearance Run DRC checks with anyway: the open board's setup
-  clearance (0.2 mm when it sets none), raised for a class's nets by the
+  clearance (0.2 mm when it sets none or no board is open), raised for a class's nets by the
   class's own clearance; All shows it even while inherited values are
   hidden. A value of the row's own is bold
   with ↺, which drops that value only; an inherited value is muted; a value
@@ -441,9 +441,9 @@ profile" does. Each tier is a card with its clearance, width, drill and
 annular minimums, read from the tier table (`FabTemplate::capabilities`).
 Picking one gives it the accent and lists the rules it adds, changes and
 removes (spacing alone is not a change), each with its limits old → new,
-and the other lines. Cancel and Apply stay pinned at the panel's foot while
-the list scrolls; Apply stores it as one undo step, and is refused when the
-rules changed since the list was made.
+and the other lines; a long list scrolls in the card, so Cancel and Apply
+at the card's foot stay in view. Apply in that card stores it as one undo
+step, and is refused when the rules changed since the list was made.
 
 ## Fab profiles
 
