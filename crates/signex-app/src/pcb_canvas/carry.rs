@@ -304,15 +304,7 @@ pub fn item_carry_delta(
         raw
     };
     let target = Point::new(anchor.x + raw.x, anchor.y + raw.y);
-    snapped_delta(
-        board,
-        skip,
-        anchor,
-        target,
-        on_grid,
-        GridUse::NonComponents,
-        view,
-    )
+    snapped_delta(board, skip, anchor, target, on_grid, view)
 }
 
 /// `on_grid` refined by the object, guide and axis snaps at `to`, leaving
