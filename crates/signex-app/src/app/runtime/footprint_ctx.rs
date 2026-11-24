@@ -418,6 +418,9 @@ pub(super) fn build_footprint_editor_panel_ctx(
     // parity). The `is_active` flag mirrors `editor.active_idx`;
     // panel rendering uses it to highlight the currently-edited
     // sibling.
+    // Thumbnail rows of the Library panel draw each footprint's pads.
+    let tiles =
+        app.library.library_panel.row_style == crate::library::state::LibraryRowStyle::Thumbnail;
     let internal_footprints: Vec<crate::panels::FootprintLibInternalRow> = editor
         .file
         .footprints
@@ -428,6 +431,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
             pad_count: fp.pads.len(),
             is_active: i == editor.active_idx,
             place_block: app.footprint_place_block(i),
+            tile: tiles.then(|| std::sync::Arc::new(crate::library::panel::FootprintTile::of(fp))),
         })
         .collect();
     let internal_selected_idx = editor.panel_selected_idx;

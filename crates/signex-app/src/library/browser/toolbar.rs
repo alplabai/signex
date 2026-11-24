@@ -1,7 +1,8 @@
 //! Library Browser — the grid toolbar row (mockup row 118): the range
-//! filters and "Add range filter…" at the left, "N of M shown · sorted by <column>" and
-//! the column button at the right. The button opens the column chooser
-//! (Rev and Tags start off, decided 2026-11-23).
+//! filters and "Add range filter…" at the left, "N of M shown · sorted by <column>",
+//! the compact / thumbnail row switch and the column button at the right.
+//! The button opens the column chooser (Rev and Tags start off, decided
+//! 2026-11-23); the switch is the Library panel's, one preference for both.
 
 use super::columns::{ColumnKind, GridColumn};
 use super::*;
@@ -60,6 +61,7 @@ pub(super) fn view_toolbar<'a>(
     range_bar: Option<Element<'a, LibraryMessage>>,
     count: &ShownCount,
     chooser: ColumnChooser<'_>,
+    row_style: crate::library::state::LibraryRowStyle,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
@@ -74,6 +76,14 @@ pub(super) fn view_toolbar<'a>(
             .color(r.ink4)
             .wrapping(iced::widget::text::Wrapping::None)
             .boxed(),
+        crate::library::panel::row_style_switch(
+            row_style,
+            |style| LibraryMessage::Picker(
+                crate::library::messages::PickerMsg::PanelRowStylePicked(style)
+            ),
+            tokens,
+            i18n,
+        ),
         column_button(&chooser, tokens, i18n),
     ]
     .spacing(SP.m)
@@ -212,6 +222,7 @@ fn column_card<'a>(
 mod tests {
     use super::*;
     use crate::layout_probe::{lay_out_texts, messages_on_click, messages_on_click_at};
+    use crate::library::state::LibraryRowStyle;
 
     const WINDOW: iced::Size = iced::Size::new(900.0, 400.0);
 
@@ -266,6 +277,15 @@ mod tests {
         browser: &'a LibraryBrowserState,
         tokens: &'a ThemeTokens,
     ) -> Element<'a, LibraryMessage> {
+        styled_toolbar(columns, browser, LibraryRowStyle::Compact, tokens)
+    }
+
+    fn styled_toolbar<'a>(
+        columns: &'a [GridColumn],
+        browser: &'a LibraryBrowserState,
+        style: LibraryRowStyle,
+        tokens: &'a ThemeTokens,
+    ) -> Element<'a, LibraryMessage> {
         view_toolbar(
             None,
             &COUNT,
@@ -274,9 +294,50 @@ mod tests {
                 columns,
                 browser,
             },
+            style,
             tokens,
             signex_i18n::I18n::en_us_ref(),
         )
+    }
+
+    /// Mockup rows 118 and 119 (decided 2026-11-23): the count line has the
+    /// compact / thumbnail switch just before the column button, and each
+    /// button sends the Library panel's own row-style pick, so the Browser
+    /// and the panel share one preference.
+    #[test]
+    fn the_row_style_switch_before_the_column_button_sends_the_shared_pick() {
+        use crate::library::messages::PickerMsg;
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteDark);
+        let cols = columns();
+        let browser = LibraryBrowserState::new("lib.snxlib".into());
+        let count_y = lay_out_texts(toolbar(&cols, &browser, &tokens), WINDOW)
+            .into_iter()
+            .find(|t| t.text.contains("3 of 9 shown"))
+            .expect("count line")
+            .bounds
+            .center_y();
+        let side = crate::library::panel::ROW_STYLE_SWITCH_BUTTON;
+        let thumbs_x = WINDOW.width - SP.l - COLUMN_BUTTON - SP.m - side / 2.0;
+        for (style, x) in [
+            (LibraryRowStyle::Thumbnail, thumbs_x),
+            (LibraryRowStyle::Compact, thumbs_x - side),
+        ] {
+            for shown in [LibraryRowStyle::Compact, LibraryRowStyle::Thumbnail] {
+                let sent = messages_on_click_at(
+                    styled_toolbar(&cols, &browser, shown, &tokens),
+                    WINDOW,
+                    None,
+                    iced::Point::new(x, count_y),
+                );
+                assert!(
+                    sent.iter().any(|m| matches!(
+                        m,
+                        LibraryMessage::Picker(PickerMsg::PanelRowStylePicked(s)) if *s == style
+                    )),
+                    "{style:?} with {shown:?} shown: {sent:?}"
+                );
+            }
+        }
     }
 
     fn texts(element: Element<'_, LibraryMessage>) -> Vec<String> {

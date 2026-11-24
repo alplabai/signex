@@ -57,6 +57,9 @@ pub(super) fn build_symbol_editor_panel_ctx(
         })
         .collect();
 
+    // Thumbnail rows of the Library panel draw each symbol's body.
+    let drawings =
+        app.library.library_panel.row_style == crate::library::state::LibraryRowStyle::Thumbnail;
     let symbols_in_file: Vec<SymbolFileEntry> = editor
         .file
         .symbols
@@ -68,6 +71,7 @@ pub(super) fn build_symbol_editor_panel_ctx(
             uuid: s.uuid,
             pin_count: s.pins.len(),
             description: s.description.clone(),
+            drawing: drawings.then(|| std::sync::Arc::new(s.to_lib_symbol(s.uuid.to_string()))),
         })
         .collect();
 

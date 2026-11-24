@@ -10,9 +10,9 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
 
 use super::KindView;
-use super::frame::{self, Crumb, RowLook, RowMark, RowText, SP, TS, Tools, panel};
+use super::frame::{self, Crumb, RowDrawing, RowLook, RowMark, RowText, SP, TS, Tools, panel};
 use crate::dock::DockMessage;
-use crate::library::state::{LibraryPanelKind, LibraryState};
+use crate::library::state::LibraryState;
 use crate::panels::{PanelContext, PanelMsg, SymbolDeleteWarning, SymbolEditorPanelContext};
 use crate::styles::ti;
 use crate::styles::tokens::resolve;
@@ -65,7 +65,7 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
         list: list(
             sym,
             &library.panel_search,
-            RowLook::of(library.library_panel.row_style, LibraryPanelKind::Symbols),
+            RowLook::of(library.library_panel.row_style, frame::thumb_look(ctx)),
             ctx,
         ),
     }
@@ -106,6 +106,7 @@ fn list<'a>(
             RowText {
                 name: entry.name.clone(),
                 caption: Some(UserText::new(entry.description.clone()).into()),
+                drawing: RowDrawing::Symbol(entry.drawing.clone()),
             },
             look,
             mark,

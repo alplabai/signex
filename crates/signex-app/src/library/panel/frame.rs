@@ -11,7 +11,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::chips::{ChipMetrics, ChipStyle, chip};
 use signex_widgets::{button, text, text_input};
 
-pub(super) use super::row_style::RowLook;
+pub(super) use super::row_style::{RowDrawing, RowLook, thumb_look};
 use crate::dock::DockMessage;
 use crate::library::messages::{LibraryMessage, PickerMsg};
 use crate::library::state::{LibraryPanelKind, LibraryRowStyle};
@@ -323,7 +323,14 @@ pub(super) fn toolbar<'a>(
         tool_button(PLUS, t!(i18n, ids::LIBRARY_PANEL_ADD), add, tokens),
         tool_button(EDIT, t!(i18n, ids::LIBRARY_PANEL_EDIT), edit, tokens),
         Space::new().width(Length::Fill).boxed(),
-        super::row_style::switch(row_style, tokens, i18n),
+        super::row_style::switch(
+            row_style,
+            |style| lib(LibraryMessage::Picker(PickerMsg::PanelRowStylePicked(
+                style
+            ))),
+            tokens,
+            i18n,
+        ),
         delete_button(delete, delete_tip, tokens),
     ]
     .spacing(SP.s)
@@ -431,14 +438,16 @@ pub(super) enum RowMark {
 /// Alpha of the selection fill on a highlighted, not active, row.
 const HIGHLIGHT_ALPHA: f32 = 0.4;
 
-/// A list row's text: its mono name and the caption at its right end.
+/// A list row's text: its mono name and the caption at its right end, and
+/// what its thumbnail tile draws.
 pub(super) struct RowText<'a> {
     pub name: String,
     pub caption: Option<signex_widgets::Label<'a>>,
+    pub drawing: RowDrawing,
 }
 
 /// One list row. Compact: a mono name and a caption at the right end. A
-/// thumbnail row: the kind's tile, then the name over the caption.
+/// thumbnail row: the row's own drawing, then the name over the caption.
 pub(super) fn list_row<'a>(
     row_text: RowText<'a>,
     look: RowLook,
@@ -447,7 +456,11 @@ pub(super) fn list_row<'a>(
     on_press: DockMessage,
     tokens: &ThemeTokens,
 ) -> Element<'a, DockMessage> {
-    let RowText { name, caption } = row_text;
+    let RowText {
+        name,
+        caption,
+        drawing,
+    } = row_text;
     let r = resolve(tokens);
     let ink = ti(tokens.text);
     let selection = ti(tokens.selection);
@@ -481,7 +494,7 @@ pub(super) fn list_row<'a>(
             }
             (line, ROW_H)
         }
-        RowLook::Thumbnail(kind) => {
+        RowLook::Thumbnail(tile_look) => {
             let mut lines: iced::widget::Column<Element<'a, DockMessage>> =
                 iced::widget::Column::new().width(Length::Fill).push(name);
             if let Some(caption) = caption {
@@ -490,7 +503,7 @@ pub(super) fn list_row<'a>(
             let line = Row::new()
                 .spacing(SP.m)
                 .align_y(Alignment::Center)
-                .push(super::row_style::tile(kind, tokens))
+                .push(super::row_style::tile(drawing, tile_look, tokens))
                 .push(lines.boxed());
             (line, super::row_style::THUMB_ROW_H)
         }

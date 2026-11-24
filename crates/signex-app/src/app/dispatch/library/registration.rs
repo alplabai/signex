@@ -395,7 +395,12 @@ impl Signex {
                 return Task::none();
             }
             PickerMsg::PanelRowStylePicked(style) => {
-                self.library.library_panel.row_style = style;
+                if self.library.library_panel.row_style != style {
+                    self.library.library_panel.row_style = style;
+                    // The editor contexts carry the symbol and footprint
+                    // drawings only while thumbnail rows are on.
+                    self.refresh_panel_ctx();
+                }
                 return Task::none();
             }
             _ => {}

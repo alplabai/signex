@@ -8,9 +8,9 @@ use iced::{Element, Length, Widget};
 use signex_i18n::{ids, t};
 
 use super::KindView;
-use super::frame::{self, Crumb, RowLook, RowMark, RowText, SP, Tools, panel};
+use super::frame::{self, Crumb, RowDrawing, RowLook, RowMark, RowText, SP, Tools, panel};
 use crate::dock::DockMessage;
-use crate::library::state::{LibraryPanelKind, LibraryState};
+use crate::library::state::LibraryState;
 use crate::panels::{FootprintEditorPanelContext, FootprintLibInternalRow, PanelContext, PanelMsg};
 
 pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> KindView<'a> {
@@ -73,10 +73,7 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
         list: list(
             fp,
             &library.panel_search,
-            RowLook::of(
-                library.library_panel.row_style,
-                LibraryPanelKind::Footprints,
-            ),
+            RowLook::of(library.library_panel.row_style, frame::thumb_look(ctx)),
             ctx,
         ),
     }
@@ -131,6 +128,7 @@ fn list<'a>(
             RowText {
                 name: row.name.clone(),
                 caption: Some(t!(i18n, ids::LIBRARY_PANEL_PADS, "count" => row.pad_count).into()),
+                drawing: RowDrawing::Footprint(row.tile.clone()),
             },
             look,
             mark,

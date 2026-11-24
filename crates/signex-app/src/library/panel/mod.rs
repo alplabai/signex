@@ -11,6 +11,7 @@
 //! button in the dock title bar.
 
 mod empty;
+mod footprint_tile;
 mod footprints;
 mod frame;
 mod parts;
@@ -18,6 +19,14 @@ mod row_style;
 mod symbols;
 #[cfg(test)]
 mod tests;
+
+pub use footprint_tile::FootprintTile;
+#[cfg(test)]
+pub(crate) use row_style::SWITCH_BUTTON as ROW_STYLE_SWITCH_BUTTON;
+pub(crate) use row_style::{
+    RowDrawing, TILE_H as THUMB_TILE_H, TILE_W as THUMB_TILE_W, switch as row_style_switch,
+    tile as row_tile,
+};
 
 use iced::widget::{Column, column};
 use iced::{Element, Length, Widget};
@@ -73,6 +82,34 @@ pub fn kind_counts(library: &LibraryState, ctx: &PanelContext) -> KindCounts {
             .map(|lib| lib.total_rows())
             .sum(),
     }
+}
+
+/// Most Parts rows per library whose symbol drawings are asked for; a row
+/// further down shows the kind's glyph.
+pub(crate) const MAX_THUMB_ROWS_PER_LIBRARY: usize = 200;
+
+/// The symbols of the Parts rows the panel lists in thumbnail rows: the
+/// rows of every expanded library (every library while filtering). Empty in
+/// compact rows, so nothing is read for them.
+pub(crate) fn wanted_thumbnails(library: &LibraryState) -> Vec<signex_library::PrimitiveRef> {
+    if library.library_panel.row_style != crate::library::state::LibraryRowStyle::Thumbnail {
+        return Vec::new();
+    }
+    let filtering = !library.panel_search.trim().is_empty();
+    library
+        .open_libraries
+        .iter()
+        .filter(|lib| filtering || library.panel_expanded.contains(&lib.root))
+        .flat_map(|lib| {
+            library
+                .library_panel
+                .rows
+                .visible_rows(&lib.root, MAX_THUMB_ROWS_PER_LIBRARY)
+                .filter_map(move |(table, index)| {
+                    Some(lib.tables.get(table)?.get(index)?.symbol_ref)
+                })
+        })
+        .collect()
 }
 
 /// Nothing to browse: no library open and no symbol or footprint editor.

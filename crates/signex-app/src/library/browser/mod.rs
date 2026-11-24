@@ -3,7 +3,8 @@
 //!
 //! Layout: the header line (library, search, lifecycle filter, Add
 //! Component) and the uncommitted banner across the top; under them the
-//! 210 px sidebar (libraries, tables), the grid with its toolbar row, and
+//! 210 px sidebar (libraries, tables), the grid with its toolbar row (its
+//! row-style switch is the Library panel's one preference), and
 //! the 300 px preview pane of the selected row, whose ⋯ menu holds Delete
 //! Selected. `app/view/library_tab.rs` keeps the tab at least
 //! [`MIN_BROWSER_W`] wide, scrolling it sideways in a narrower window.
@@ -48,7 +49,9 @@ use header::view_header;
 use uncommitted::view_uncommitted_banner;
 pub use view_cache::BrowserViewCache;
 use view_cache::active_table;
-pub use window::{GridScroll, grid_scroll_id, reveal_row_offset, visible_rows};
+pub use window::{
+    GridScroll, grid_scroll_id, reveal_row_offset, reveal_row_offset_at, row_height, visible_rows,
+};
 pub(crate) use window::{OVERSCAN_ROWS, visible_range};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -207,6 +210,16 @@ pub(crate) fn view<'a>(
         &cache.main_currency,
     );
 
+    // The row style is the Library panel's: one preference for both.
+    let row_style = library_state.library_panel.row_style;
+    let thumbs =
+        (row_style == super::state::LibraryRowStyle::Thumbnail).then_some(grid::RowThumbs {
+            symbols: &library_state.components_panel.thumbs,
+            look: crate::panels::components_panel::thumbs::ThumbLook {
+                colors: look.canvas_colors,
+                device_px_per_logical_px: look.device_px_per_logical_px,
+            },
+        });
     let grid = view_grid(
         library_path,
         active_table,
@@ -217,6 +230,7 @@ pub(crate) fn view<'a>(
             dangling: &lib.dangling,
             prices: &prices,
             names: names::PrimitiveNames::of(lib),
+            thumbs,
         },
         tokens,
         i18n,
@@ -243,7 +257,7 @@ pub(crate) fn view<'a>(
         columns: &cache.columns,
         browser,
     };
-    let toolbar = toolbar::view_toolbar(range_bar, &count, chooser, tokens, i18n);
+    let toolbar = toolbar::view_toolbar(range_bar, &count, chooser, row_style, tokens, i18n);
     let grid_area = column![toolbar, grid]
         .spacing(0)
         .width(Length::Fill)

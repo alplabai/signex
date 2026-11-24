@@ -524,6 +524,9 @@ pub struct FootprintLibInternalRow {
     pub is_active: bool,
     /// Why Place cannot put this footprint on a board; `None` when it can.
     pub place_block: Option<super::FootprintPlaceBlock>,
+    /// The footprint's pads for a thumbnail row of the Library panel
+    /// (mockup row 119); built only while thumbnail rows are on.
+    pub tile: Option<std::sync::Arc<crate::library::panel::FootprintTile>>,
 }
 
 /// Editor mode mirror — kept in this crate so the panel doesn't need
