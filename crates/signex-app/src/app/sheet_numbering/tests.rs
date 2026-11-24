@@ -115,18 +115,55 @@ fn clashes_and_gaps_are_reported_from_the_typed_numbers() {
     assert!(!rows[0].clash);
 }
 
+/// Mockup row 78 (Caner 2026-11-24): a gap only warns; the high number it
+/// comes with is what holds Apply back.
 #[test]
-fn a_gap_holds_apply_back() {
+fn a_gap_only_warns_and_its_high_number_holds_apply_back() {
+    use signex_net::NumberingIssue;
     let mut state = shown();
-    // 1, 2, 5 as read: 3 is missing and 5 is above the count.
+    // 1, 2, 4 as typed: 3 is missing and 4 is above the count.
     state.edit(2, "4".into());
+    let is_gap = |issue: &NumberingIssue| matches!(issue, NumberingIssue::Gap { .. });
+    assert!(state.issues().iter().any(is_gap));
+    assert!(state.warnings().iter().any(is_gap), "the gap warns");
+    let blocking = state.blocking_issues();
+    assert!(!blocking.iter().any(is_gap), "the gap does not block");
     assert!(
-        state
-            .issues()
+        blocking
             .iter()
-            .any(|issue| matches!(issue, signex_net::NumberingIssue::Gap { .. }))
+            .any(|issue| matches!(issue, NumberingIssue::OutOfRange { number: 4, .. }))
     );
     assert!(!state.can_apply());
+}
+
+/// Mockup row 78: a clash blocks while the gap beside it only warns.
+#[test]
+fn a_clash_blocks_and_its_gap_only_warns() {
+    use signex_net::NumberingIssue;
+    let mut state = shown();
+    // 1, 1, 2 as typed: 1 clashes and 3 is missing.
+    state.edit(1, "1".into());
+    state.edit(2, "2".into());
+    assert_eq!(
+        state.warnings(),
+        vec![NumberingIssue::Gap { missing: vec![3] }]
+    );
+    let blocking = state.blocking_issues();
+    assert!(
+        blocking
+            .iter()
+            .all(|issue| matches!(issue, NumberingIssue::Clash { number: 1, .. }))
+    );
+    assert_eq!(blocking.len(), 1);
+    assert!(!state.can_apply());
+}
+
+/// Clean numbers leave no warning.
+#[test]
+fn clean_numbers_warn_of_nothing() {
+    let mut state = shown();
+    state.edit(2, "3".into());
+    assert!(state.warnings().is_empty());
 }
 
 #[test]

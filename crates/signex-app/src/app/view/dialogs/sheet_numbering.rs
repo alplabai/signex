@@ -1,6 +1,7 @@
 //! The Number Schematic Sheets dialog (#2247, Graphite #78): the project's
 //! pages in hierarchy order, each with a number field, an error banner over
-//! clashes, gaps and high numbers with Auto-number as the fix, and Apply.
+//! clashes and high numbers with Auto-number as the fix, a warning line for
+//! a gap, and Apply.
 //! Draft and rules: `app/sheet_numbering/`.
 
 use iced::widget::{Column, Row, Space, column, container, scrollable, svg};
@@ -176,6 +177,10 @@ fn body<'a>(
     if !lines.is_empty() {
         col = col.push(error_banner(state, lines, i18n, tokens));
     }
+    // A gap only warns (mockup row 78): a warning line that holds nothing back.
+    for line in warning_lines(state, i18n) {
+        col = col.push(text(line).size(TS.body).color(ti(tokens.warning)).boxed());
+    }
     if let Some(problem) = state.error.as_ref() {
         col = col.push(
             text(problem_text(problem, i18n))
@@ -231,7 +236,7 @@ fn problem_text(problem: &NumberingProblem, i18n: &I18n) -> Localized {
 }
 
 /// What holds Apply back: a typed number that is not a sheet number, then
-/// the clashes, gaps and numbers above the page count.
+/// the clashes and numbers above the page count.
 fn banner_lines(state: &SheetNumberingState, i18n: &I18n) -> Vec<Localized> {
     let mut lines = Vec::new();
     if state.has_invalid() {
@@ -243,14 +248,6 @@ fn banner_lines(state: &SheetNumberingState, i18n: &I18n) -> Vec<Localized> {
             NumberingIssue::Clash { number, .. } => {
                 t!(i18n, ids::DIALOG_SHEET_NUMBERING_CLASH, "number" => number)
             }
-            NumberingIssue::Gap { missing } => {
-                let list: Vec<String> = missing.iter().map(usize::to_string).collect();
-                t!(
-                    i18n,
-                    ids::DIALOG_SHEET_NUMBERING_GAP,
-                    "numbers" => list.join(", ")
-                )
-            }
             NumberingIssue::OutOfRange { page, number } => t!(
                 i18n,
                 ids::DIALOG_SHEET_NUMBERING_OUT_OF_RANGE,
@@ -258,12 +255,31 @@ fn banner_lines(state: &SheetNumberingState, i18n: &I18n) -> Vec<Localized> {
                 "number" => number,
                 "count" => rows.len()
             ),
-            // `blocking_issues` leaves these out; typed numbers are checked
-            // by `has_invalid` above.
-            NumberingIssue::InvalidOverride { .. } => continue,
+            // `blocking_issues` leaves these out: typed numbers are checked
+            // by `has_invalid` above, and a gap is a warning.
+            NumberingIssue::InvalidOverride { .. } | NumberingIssue::Gap { .. } => continue,
         });
     }
     lines
+}
+
+/// What only warns: the numbers no page prints.
+fn warning_lines(state: &SheetNumberingState, i18n: &I18n) -> Vec<Localized> {
+    state
+        .warnings()
+        .into_iter()
+        .filter_map(|issue| match issue {
+            NumberingIssue::Gap { missing } => {
+                let list: Vec<String> = missing.iter().map(usize::to_string).collect();
+                Some(t!(
+                    i18n,
+                    ids::DIALOG_SHEET_NUMBERING_GAP,
+                    "numbers" => list.join(", ")
+                ))
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 /// The err-soft banner: the error glyph, the lines, and Auto-number as the

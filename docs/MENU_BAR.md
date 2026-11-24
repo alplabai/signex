@@ -801,9 +801,10 @@ with its file and its number.
   symbol to hold a number and keeps its position; it is shown read-only.
 - Auto-number (footer left, and as the fix in the error banner) puts every
   page back at its position and clears the hand numbers. A number that is not
-  a whole number from 1, a clash, a gap or a number above the page count greys
-  Apply (Graphite #78): the clashing rows take the error fill and a red field,
-  and an error banner names the clash, gap or high number. An automatic number
+  a whole number from 1, a clash or a number above the page count greys
+  Apply (mockup row 78): the clashing rows take the error fill and a red field,
+  and an error banner names the clash or high number. A gap only warns, as a
+  warning line under the table (Caner 2026-11-24). An automatic number
   (one that follows the hierarchy order) is drawn in faint ink, a typed one in
   full ink. Export still only warns.
 - Apply writes each changed number into the `ChildSheet.instances` entry of
