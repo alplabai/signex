@@ -126,14 +126,14 @@ pub enum PinMatch {
     },
 }
 
-/// Which placed parts the change applies to.
+/// Which placed parts the change applies to. Mockup row 155 also draws
+/// the same part in every channel and every part of the same MPN in the
+/// project; those wait on a maintainer decision.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ChangeScope {
     /// The part the change started on.
     #[default]
     ThisPart,
-    /// Every part of the same library part on the sheet.
-    SameOnSheet,
 }
 
 /// The replacement part, read and checked against the sheet, and what the
@@ -149,9 +149,6 @@ pub struct ChangePreview {
     /// Every other user parameter is kept.
     pub dropped: Vec<String>,
     pub scope: ChangeScope,
-    /// The other parts on the sheet with the same library part, each named
-    /// by its first unit's symbol.
-    pub same_parts: Vec<Uuid>,
 }
 
 impl ChangePreview {
@@ -159,7 +156,6 @@ impl ChangePreview {
     pub fn part_count(&self) -> usize {
         match self.scope {
             ChangeScope::ThisPart => 1,
-            ChangeScope::SameOnSheet => 1 + self.same_parts.len(),
         }
     }
 }

@@ -9,11 +9,10 @@ use signex_engine::{
     Command, ComponentChangePreview, ComponentReplacement, change_component_preview,
     placed_unit_ids,
 };
-use signex_i18n::{Arg, ids};
 use signex_types::schematic::{Symbol, normalized_lib_id};
 use uuid::Uuid;
 
-use super::change_session::{compare_rows, same_parts};
+use super::change_session::compare_rows;
 use super::{PlacedPart, part_name};
 use crate::app::contracts::Message;
 use crate::app::project_sheets::{project_pages, resolve_child_reference_quiet};
@@ -205,7 +204,6 @@ impl Signex {
             preview: shown,
             dropped,
             scope,
-            same_parts: shown_parts,
             ..
         } = *change;
         let (target, reference) = (session.target.clone(), session.reference.clone());
@@ -225,19 +223,16 @@ impl Signex {
             return Task::none();
         }
         let fresh = change_component_preview(doc, target.symbol_id, &replacement);
-        let fresh_parts = same_parts(doc, target.symbol_id);
-        let parts_moved = scope == ChangeScope::SameOnSheet && fresh_parts != shown_parts;
-        if fresh != shown || parts_moved {
+        if fresh != shown {
             crate::diagnostics::log_warning(format!(
                 "Review the changed pins and confirm again: the sheet changed since the preview of {reference}."
             ));
             self.show_preview(session, resolved, fresh, dropped, scope);
             return Task::none();
         }
-        let mut parts = vec![target.symbol_id];
-        if scope == ChangeScope::SameOnSheet {
-            parts.extend(fresh_parts);
-        }
+        let parts = match scope {
+            ChangeScope::ThisPart => [target.symbol_id],
+        };
         let plan = match self.change_plan(&target, &parts, &replacement, &dropped) {
             Ok(plan) => plan,
             Err(advice) => {
@@ -247,7 +242,6 @@ impl Signex {
             }
         };
         self.library.picker = None;
-        let count = plan.len();
         let (commands, checks): (Vec<Command>, Vec<(String, ComponentChangePreview)>) = plan
             .into_iter()
             .map(|(command, name, preview)| (command, (name, preview)))
@@ -256,15 +250,10 @@ impl Signex {
         if !self.apply_engine_commands(commands, true, true) {
             return Task::none();
         }
-        let part = resolved.internal_pn.as_str();
-        if count == 1 {
-            crate::diagnostics::log_info(format!("{reference} now uses {part}."));
-        } else {
-            crate::diagnostics::log_info(self.ui_state.i18n.message_plain(
-                ids::LIBRARY_CHANGE_COMPONENT_DONE_MANY,
-                &[("count", Arg::from(count)), ("part", Arg::from(part))],
-            ));
-        }
+        crate::diagnostics::log_info(format!(
+            "{reference} now uses {}.",
+            resolved.internal_pn.as_str()
+        ));
         for (name, preview) in &checks {
             if let Some(line) = lost_connections_line(name, preview) {
                 crate::diagnostics::log_warning(line);
@@ -323,7 +312,7 @@ impl Signex {
 
     /// Show the comparison of the placed part with `resolved`: the Now /
     /// After table, the user parameters' Keep now boxes (`dropped` cleared)
-    /// and the other parts Apply to can reach.
+    /// and the Apply to choice.
     fn show_preview(
         &mut self,
         session: ChangeSession,
@@ -342,13 +331,7 @@ impl Signex {
         let replacement = replacement_of(&resolved);
         let user = replacement.user_parameters(doc, symbol_id);
         let rows = compare_rows(symbol, &replacement, &user);
-        let same_parts = same_parts(doc, symbol_id);
         let dropped = dropped.into_iter().filter(|d| user.contains(d)).collect();
-        let scope = if same_parts.is_empty() {
-            ChangeScope::ThisPart
-        } else {
-            scope
-        };
         if let Some(picker) = self.library.picker.as_mut() {
             picker.mode = PickerMode::ChangePreview(Box::new(ChangePreview {
                 session,
@@ -357,7 +340,6 @@ impl Signex {
                 rows,
                 dropped,
                 scope,
-                same_parts,
             }));
         }
     }

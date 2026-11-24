@@ -317,11 +317,9 @@ define_ids! {
     LIBRARY_CHANGE_COMPONENT_KEPT_SUMMARY = "library-change-component-kept-summary";
     LIBRARY_CHANGE_COMPONENT_APPLY_TO = "library-change-component-apply-to";
     LIBRARY_CHANGE_COMPONENT_SCOPE_THIS = "library-change-component-scope-this";
-    LIBRARY_CHANGE_COMPONENT_SCOPE_SHEET = "library-change-component-scope-sheet";
     LIBRARY_CHANGE_COMPONENT_APPLY = "library-change-component-apply";
     LIBRARY_CHANGE_COMPONENT_APPLY_ANYWAY = "library-change-component-apply-anyway";
     LIBRARY_CHANGE_COMPONENT_FOOTER = "library-change-component-footer";
-    LIBRARY_CHANGE_COMPONENT_DONE_MANY = "library-change-component-done-many";
     LIBRARY_CHANGE_COMPONENT_WARN_UNIT = "library-change-component-warn-unit";
     LIBRARY_CHANGE_COMPONENT_WARN_DANGLING = "library-change-component-warn-dangling";
     LIBRARY_CHANGE_COMPONENT_WARN_MOVED = "library-change-component-warn-moved";

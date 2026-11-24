@@ -15,7 +15,7 @@ use signex_types::schematic::{
 };
 use uuid::Uuid;
 
-use super::{compare_rows, distinct_pins, hidden_rows, placed_now, same_parts};
+use super::{compare_rows, distinct_pins, hidden_rows, placed_now};
 use crate::app::{EditMsg, Message, Signex};
 use crate::library::PickerState;
 use crate::library::messages::{
@@ -294,13 +294,6 @@ fn the_table_marks_same_replaced_and_user_rows() {
 }
 
 #[test]
-fn the_sheet_scope_reaches_each_other_part_of_the_same_row_once() {
-    let doc = sheet();
-    assert_eq!(same_parts(&doc, Uuid::from_u128(1)), [Uuid::from_u128(2)]);
-    assert!(same_parts(&doc, Uuid::from_u128(3)).is_empty());
-}
-
-#[test]
 fn the_placed_part_is_named_by_its_mpn_and_counts_its_pins() {
     let doc = sheet();
     let placed = placed_now(
@@ -403,7 +396,6 @@ fn the_read_part_shows_its_comparison_in_the_same_dialog() {
     read_new_part(&mut app, &target);
     let change = preview_of(&app);
     assert_eq!(change.session.reference, "R5");
-    assert_eq!(change.same_parts, [Uuid::from_u128(2)]);
     assert_eq!(change.scope, ChangeScope::ThisPart);
     assert!(
         change.dropped.is_empty(),
@@ -425,28 +417,32 @@ fn keep_now_toggles_a_user_parameter_and_never_library_data() {
 }
 
 #[test]
-fn change_n_parts_swaps_every_part_of_the_scope_in_one_undo_step() {
+fn change_swaps_only_the_reviewed_part_in_one_undo_step() {
     let (mut app, target) = app_changing_r5();
     read_new_part(&mut app, &target);
     send(&mut app, PlacedPartMsg::ChangeKeepToggled("Tag".into()));
-    send(
-        &mut app,
-        PlacedPartMsg::ChangeScopePicked(ChangeScope::SameOnSheet),
-    );
-    assert_eq!(preview_of(&app).part_count(), 2);
+    assert_eq!(preview_of(&app).part_count(), 1);
+    let r6_before = app.document_state.engines[&PathBuf::from(SHEET)]
+        .document()
+        .symbols[1]
+        .clone();
 
     send(&mut app, PlacedPartMsg::ChangeConfirmed);
 
     let doc = app.document_state.engines[&PathBuf::from(SHEET)].document();
-    for symbol in &doc.symbols[..2] {
-        assert_eq!(symbol.footprint, "R_0603", "{} changed", symbol.reference);
-        assert_eq!(symbol.row_id, Some(NEW_ROW));
-        assert_eq!(
-            symbol.fields.get("Note").map(String::as_str),
-            Some("FB divider")
-        );
-        assert_eq!(symbol.fields.get("Tag"), None, "an unticked box clears it");
-    }
+    let r5 = &doc.symbols[0];
+    assert_eq!(r5.footprint, "R_0603", "R5 changed");
+    assert_eq!(r5.row_id, Some(NEW_ROW));
+    assert_eq!(
+        r5.fields.get("Note").map(String::as_str),
+        Some("FB divider")
+    );
+    assert_eq!(r5.fields.get("Tag"), None, "an unticked box clears it");
+    // R6 is placed from the same row but was never reviewed: its pins and
+    // parameters stay as they were.
+    assert_eq!(doc.symbols[1].footprint, r6_before.footprint);
+    assert_eq!(doc.symbols[1].row_id, r6_before.row_id);
+    assert_eq!(doc.symbols[1].fields, r6_before.fields);
     assert_eq!(
         doc.symbols[2].footprint, "R_0402",
         "another row's part stays"
@@ -457,7 +453,7 @@ fn change_n_parts_swaps_every_part_of_the_scope_in_one_undo_step() {
     let doc = app.document_state.engines[&PathBuf::from(SHEET)].document();
     assert!(
         doc.symbols.iter().all(|s| s.footprint == "R_0402"),
-        "one undo restores both parts"
+        "one undo restores the part"
     );
 }
 
@@ -546,17 +542,14 @@ fn pin_counts_of_another_change_are_dropped() {
 }
 
 #[test]
-fn the_sheet_scope_is_not_offered_without_other_parts() {
+fn apply_to_stays_on_this_part_with_another_part_of_the_same_row_on_the_sheet() {
     let (mut app, target) = app_changing_r5();
     read_new_part(&mut app, &target);
-    if let Some(picker) = app.library.picker.as_mut()
-        && let PickerMode::ChangePreview(change) = &mut picker.mode
-    {
-        change.same_parts.clear();
-    }
     send(
         &mut app,
-        PlacedPartMsg::ChangeScopePicked(ChangeScope::SameOnSheet),
+        PlacedPartMsg::ChangeScopePicked(ChangeScope::ThisPart),
     );
-    assert_eq!(preview_of(&app).scope, ChangeScope::ThisPart);
+    let change = preview_of(&app);
+    assert_eq!(change.scope, ChangeScope::ThisPart);
+    assert_eq!(change.part_count(), 1, "R6 is not reached");
 }

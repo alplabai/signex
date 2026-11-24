@@ -102,7 +102,7 @@ fn resolved() -> ResolvedPlacement {
     }
 }
 
-/// The state with SAME picked and compared, the sheet scope chosen.
+/// The state with SAME picked and compared.
 fn compared() -> LibraryState {
     let mut state = state();
     let picker = state.picker.as_mut().unwrap();
@@ -140,8 +140,7 @@ fn compared() -> LibraryState {
             ),
         ],
         dropped: Vec::new(),
-        scope: ChangeScope::SameOnSheet,
-        same_parts: vec![Uuid::from_u128(2)],
+        scope: ChangeScope::ThisPart,
     }));
     state
 }
@@ -213,11 +212,23 @@ fn the_comparison_shows_both_parts_the_table_kept_and_apply_to() {
         upper(ids::LIBRARY_CHANGE_COMPONENT_PARAMETERS),
         upper(ids::LIBRARY_CHANGE_COMPONENT_KEPT),
         upper(ids::LIBRARY_CHANGE_COMPONENT_APPLY_TO),
-        "Change 2 parts".into(),
+        "Only R5 on this sheet".into(),
+        "Change 1 part".into(),
         "One undo step. The PCB footprint changes on Update PCB.".into(),
     ] {
         assert!(shown.iter().any(|t| *t == label), "{label:?} in {shown:#?}");
     }
+}
+
+#[test]
+fn apply_to_offers_only_this_part_until_the_drawn_scopes_are_decided() {
+    let shown = texts(&compared());
+    assert!(
+        !shown
+            .iter()
+            .any(|t| t.starts_with("Every ") || t.contains(" in all ")),
+        "no scope beyond Only R5 in {shown:#?}"
+    );
 }
 
 #[test]
@@ -226,7 +237,7 @@ fn change_confirms_only_while_the_list_shows_the_compared_part() {
     let label = i18n
         .message(
             ids::LIBRARY_CHANGE_COMPONENT_APPLY,
-            &[("count", Arg::from(2_usize))],
+            &[("count", Arg::from(1_usize))],
         )
         .into_string();
     let state = compared();

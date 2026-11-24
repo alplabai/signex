@@ -360,8 +360,8 @@ fn kept<'a>(
     .boxed()
 }
 
-/// Only this part, or every part of the same library part on the sheet
-/// (offered only when the sheet holds others).
+/// The Apply to choice: only this part. The channel and same-MPN scopes of
+/// mockup row 155 wait on a maintainer decision.
 fn scope<'a>(
     session: &ChangeSession,
     change: &ChangePreview,
@@ -376,7 +376,7 @@ fn scope<'a>(
         .text_size(TS.body)
         .boxed()
     };
-    let mut choices = column![option(
+    column![option(
         t!(
             i18n,
             ids::LIBRARY_CHANGE_COMPONENT_SCOPE_THIS,
@@ -384,17 +384,6 @@ fn scope<'a>(
         ),
         ChangeScope::ThisPart,
     )]
-    .spacing(SP.xs);
-    if !change.same_parts.is_empty() {
-        choices = choices.push(option(
-            t!(
-                i18n,
-                ids::LIBRARY_CHANGE_COMPONENT_SCOPE_SHEET,
-                "part" => session.placed.part.as_str(),
-                "count" => 1 + change.same_parts.len()
-            ),
-            ChangeScope::SameOnSheet,
-        ));
-    }
-    choices.boxed()
+    .spacing(SP.xs)
+    .boxed()
 }

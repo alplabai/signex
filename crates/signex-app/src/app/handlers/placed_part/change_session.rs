@@ -1,14 +1,13 @@
 //! Change Component's one dialog (mockup row 155): what the list compares
 //! rows with, the Same symbol / Same value chips, the pin counts of the
-//! listed rows (read off the update thread), the Now / After table and the
-//! other parts an Apply to choice reaches. Pure helpers, then the handlers
-//! of the dialog's own messages.
+//! listed rows (read off the update thread) and the Now / After table.
+//! Pure helpers, then the handlers of the dialog's own messages.
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use iced::Task;
-use signex_engine::{ComponentReplacement, placed_unit_ids};
+use signex_engine::ComponentReplacement;
 use signex_library::{ComponentRow, PrimitiveRef, RowPricing, TemplateRegistry, current_pricing};
 use signex_types::schematic::{LibSymbol, SchematicSheet, Symbol, normalized_lib_id, pin_key};
 use uuid::Uuid;
@@ -194,36 +193,6 @@ pub(super) fn compare_rows(
         });
     }
     rows
-}
-
-/// Whether `a` is a placement of the same library part as `b`: the same
-/// library row, or, for parts with none, the same drawing and value.
-fn same_library_part(a: &Symbol, b: &Symbol) -> bool {
-    match (a.row_id, b.row_id) {
-        (Some(x), Some(y)) => x == y && a.library_id == b.library_id,
-        (None, None) => {
-            normalized_lib_id(&a.lib_id) == normalized_lib_id(&b.lib_id) && a.value == b.value
-        }
-        _ => false,
-    }
-}
-
-/// The other parts on the sheet placed from the same library part as
-/// `symbol_id`, each once (by its first unit), in sheet order.
-pub(super) fn same_parts(doc: &SchematicSheet, symbol_id: Uuid) -> Vec<Uuid> {
-    let Some(target) = doc.symbols.iter().find(|s| s.uuid == symbol_id) else {
-        return Vec::new();
-    };
-    let mut seen: HashSet<Uuid> = placed_unit_ids(doc, symbol_id).into_iter().collect();
-    let mut parts = Vec::new();
-    for symbol in &doc.symbols {
-        if symbol.is_power || seen.contains(&symbol.uuid) || !same_library_part(symbol, target) {
-            continue;
-        }
-        seen.extend(placed_unit_ids(doc, symbol.uuid));
-        parts.push(symbol.uuid);
-    }
-    parts
 }
 
 /// The rows whose pin counts must be read: their drawings, deduplicated.
@@ -421,7 +390,6 @@ impl Signex {
     pub(super) fn pick_change_scope(&mut self, scope: ChangeScope) -> Task<Message> {
         if let Some(picker) = self.library.picker.as_mut()
             && let PickerMode::ChangePreview(change) = &mut picker.mode
-            && (scope == ChangeScope::ThisPart || !change.same_parts.is_empty())
         {
             change.scope = scope;
         }

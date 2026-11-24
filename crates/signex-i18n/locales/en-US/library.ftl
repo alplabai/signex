@@ -811,11 +811,6 @@ library-change-component-kept-summary = Designator { $reference } · position an
 library-change-component-apply-to = Apply to
 # Scope choice: only the part the change started on.
 library-change-component-scope-this = Only { $reference } on this sheet
-# Scope choice: every part of the same library part on the sheet; $count is a whole number.
-library-change-component-scope-sheet = Every { $part } on this sheet ({ $count ->
-        [one] { $count } part
-       *[other] { $count } parts
-    })
 # Primary button; $count is the whole number of parts changed.
 library-change-component-apply = { $count ->
         [one] Change { $count } part
@@ -828,8 +823,6 @@ library-change-component-apply-anyway = { $count ->
     }
 # Footer caption of Change Component.
 library-change-component-footer = One undo step. The PCB footprint changes on Update PCB.
-# Messages line after several parts changed; $count is a whole number, $part the new part number.
-library-change-component-done-many = { $count } parts now use { $part }.
 # Change Component warnings; $unit is a whole number, $pins a comma-separated list of pin numbers.
 library-change-component-warn-unit = The new part has no drawing for unit { $unit }.
 library-change-component-warn-dangling = Connected pins with no match, their wires will dangle: { $pins }
