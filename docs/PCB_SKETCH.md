@@ -192,18 +192,24 @@ Bake**.
 - **Discard changes** ends the mode without committing. When the copy
   differs from what the board last took it asks first ("Keep editing" or
   "Discard changes"). It never writes.
-- **Bake preview** opens a card with what Bake would write, a count per
-  board target, or why the sketch does not bake; "Back to sketch" closes
-  it. It writes nothing. While it is open the canvas draws the result
+- **Bake preview** opens the Bake panel in Properties (Caner, 2026-11-24).
+  It lists what Bake writes, baked at the current solve without solving
+  again: outline size, each hole's drill and plating, each keepout's
+  layers, each slot's size, each anchor's component, and counts for the
+  rest. Targets that get nothing are not listed. It also shows the solve
+  state, a Bake as role picker for each closed profile (one undo step per
+  pick), or why the sketch does not bake, with Close gap. A click on the
+  canvas only highlights; the panel stays. The mode bar's Bake preview
+  button closes it. It writes nothing. While it is open the canvas draws the result
   (Graphite mockup row 190): a veil in the ground colour, then the baked outline over the
   board area, cutouts and mounting holes as openings, keepouts outlined
   and faintly filled, V-scores dashed, all in the theme slots of
   [Drawing the board](#drawing-the-board), with the sketch faint on top.
   The bake runs in `BoardSketchSession::refresh_preview` and the canvas
   reads it from `SketchExit::board_result`; a refused bake draws nothing.
-  When the sketch does not bake, the card names why, and a click on the
+  When the sketch does not bake, the panel names why, and a click on the
   reason selects the entity the refusal names
-  (`BoardBakeError::place`). The card also lists the failed
+  (`BoardBakeError::place`). The panel also lists the failed
   [outline checks](#outline-checks), each selecting its place; they warn
   only.
 

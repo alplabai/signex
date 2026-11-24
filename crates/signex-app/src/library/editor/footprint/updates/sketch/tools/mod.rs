@@ -9,11 +9,13 @@
 //! [`resolve_click_point`] (snap/mint the click into an entity id), and
 //! [`try_consume_repick_polar_center`] (the Pattern re-pick intercept) —
 //! then dispatches to the per-tool sub-modules. Bodies moved verbatim.
-//! Clicks that pick an existing Line by its stroke (Chamfer, Extend,
-//! Mirror's centerline pick) go first, through [`try_stroke_pick`], and
-//! mint no click Point. The Slot's width click and the Polygon's vertex
-//! click mint none either ([`slot_polygon::try_closing_click`]). A click
-//! that took an inference snap lands its constraint ([`inference`]).
+//! Clicks that pick an existing Line by its stroke (Chamfer, Extend) go
+//! first, through [`try_stroke_pick`], and mint no click Point; nor does a
+//! Mirror click, which is a pick for the Mirror card. The card's OK
+//! arrives here as `SketchMirrorApplied` ([`transform::mirror`]). The
+//! Slot's width click and the Polygon's vertex click mint none either
+//! ([`slot_polygon::try_closing_click`]). A click that took an inference
+//! snap lands its constraint ([`inference`]).
 
 mod chamfer_extend;
 mod draw;
@@ -253,6 +255,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
             y_mm,
             inference,
         } => inference::place_point(editor, (x_mm, y_mm), inference),
+        FootprintEditorMsg::SketchMirrorApplied(request) => transform::mirror(editor, &request),
         _ => unreachable!("non-tool-click state machine sketch variant routed to sketch_tools.rs"),
     }
 }
@@ -369,7 +372,9 @@ fn handle_tool_click(
         | SketchTool::EdgeArc
         | SketchTool::TangentArc => draw::apply(editor, &ctx, tool),
         SketchTool::Slot | SketchTool::Polygon => slot_polygon::apply(editor, &ctx, tool),
-        SketchTool::Mirror | SketchTool::Offset => transform::apply(editor, &ctx, tool),
+        // Mirror is stopped in `try_stroke_pick`, before any Point is minted.
+        SketchTool::Mirror => {}
+        SketchTool::Offset => transform::apply(editor, &ctx, tool),
         SketchTool::LinearPattern | SketchTool::RectPattern | SketchTool::CircularPattern => {
             pattern::apply(editor, &ctx, tool)
         }
@@ -402,9 +407,10 @@ fn handle_tool_click(
     editor.mark_dirty();
 }
 
-/// The clicks that pick an existing Line by its stroke: Chamfer, Extend,
-/// and Mirror's centerline pick (mockup row 191). `Some(changed)` when the click was
-/// one of them, `None` to go on to the Point-minting tools.
+/// The clicks that pick an existing Line by its stroke: Chamfer and Extend.
+/// A Mirror click is the Mirror card's pick (mockup row 191) and changes
+/// nothing here. `Some(changed)` when the click was one of them, `None` to
+/// go on to the Point-minting tools.
 fn try_stroke_pick(
     editor: &mut crate::app::FootprintDocument,
     x_mm: f64,
@@ -416,9 +422,7 @@ fn try_stroke_pick(
         tool @ (SketchTool::Chamfer | SketchTool::Extend) => {
             Some(chamfer_extend::apply(editor, tool, (x_mm, y_mm)))
         }
-        SketchTool::Mirror if transform::take_centerline_as_mirror_line(editor, x_mm, y_mm) => {
-            Some(false)
-        }
+        SketchTool::Mirror => Some(false),
         _ => None,
     }
 }

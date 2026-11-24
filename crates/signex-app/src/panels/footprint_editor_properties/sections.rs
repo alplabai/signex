@@ -43,6 +43,18 @@ pub(super) fn more_rows<'a>(cx: Ctx<'a, '_>, count: usize) -> Element<'a, PanelM
     )
 }
 
+/// The sketch's solve state as a pill: the Sketch solve header and the
+/// board's Bake panel show it.
+pub(super) fn solve_pill<'a>(cx: Ctx<'a, '_>) -> Element<'a, PanelMsg> {
+    let state = cx.fp.sketch_state;
+    let dof = if state.tone == PillTone::Ok {
+        t!(cx.i18n, ids::EDITORS_FP_PROPS_DOF_ZERO)
+    } else {
+        t!(cx.i18n, state.label)
+    };
+    pill(dof, state.tone, cx.tokens)
+}
+
 fn solve_section<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     cx: Ctx<'a, '_>,
@@ -50,17 +62,11 @@ fn solve_section<'a>(
     let Ctx {
         fp, tokens, i18n, ..
     } = cx;
-    let state = fp.sketch_state;
-    let dof = if state.tone == PillTone::Ok {
-        t!(i18n, ids::EDITORS_FP_PROPS_DOF_ZERO)
-    } else {
-        t!(i18n, state.label)
-    };
     let title = t!(i18n, ids::EDITORS_FP_PROPS_SECTION_SOLVE);
     let header = section(
         SOLVE_KEY,
         &title,
-        Some(pill(dof, state.tone, tokens)),
+        Some(solve_pill(cx)),
         cx.collapsed,
         tokens,
         i18n,

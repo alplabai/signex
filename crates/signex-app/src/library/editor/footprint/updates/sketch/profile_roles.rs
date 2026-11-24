@@ -322,6 +322,61 @@ mod tests {
         assert!(editor.primitive().pads.is_empty());
     }
 
+    /// A board sketch editor over the rectangle and slot fixture, solved.
+    fn board() -> (
+        FootprintDocument,
+        crate::library::editor::footprint::sketch_mode::roles::fixtures::RectAndSlot,
+    ) {
+        use crate::library::editor::footprint::BoardBackdrop;
+        use crate::library::editor::footprint::sketch_mode::roles::fixtures::rect_and_slot;
+        let f = rect_and_slot();
+        let mut fp = Footprint::empty("board");
+        fp.sketch = Some(f.sketch.clone());
+        let mut editor =
+            FootprintDocument::new(PathBuf::from("b.snxpcb"), FootprintFile::from_footprint(fp));
+        editor.state.board_backdrop = Some(std::sync::Arc::new(BoardBackdrop::default()));
+        editor.state.last_solve = Some(f.solve.clone());
+        (editor, f)
+    }
+
+    /// DECISIONS 2026-11-24, mockup row 179: a Bake as pick on a board
+    /// tags every edge of the profile, in one undo step.
+    #[test]
+    fn a_board_bake_as_pick_tags_the_profile_in_one_undo_step() {
+        let (mut editor, f) = board();
+        let before = editor.primitive().sketch.clone();
+        let steps = editor.history.undo_len();
+
+        pick(&mut editor, f.rect[0], RoleTag::Keepout);
+
+        let sketch = editor.primitive().sketch.as_ref().unwrap();
+        for id in &f.rect {
+            let edge = sketch.entities.iter().find(|e| e.id == *id).unwrap();
+            assert!(edge.keepout.is_some(), "{id:?} is a keepout");
+        }
+        for id in &f.slot {
+            let edge = sketch.entities.iter().find(|e| e.id == *id).unwrap();
+            assert!(edge.keepout.is_none(), "the slot keeps its role");
+        }
+        assert_eq!(editor.history.undo_len(), steps + 1, "one undo step");
+        assert!(editor.undo());
+        assert_eq!(editor.primitive().sketch, before);
+    }
+
+    #[test]
+    fn slot_picked_on_a_board_slot_profile_tags_all_four_edges() {
+        let (mut editor, f) = board();
+
+        pick(&mut editor, f.slot[1], RoleTag::Slot);
+
+        let sketch = editor.primitive().sketch.as_ref().unwrap();
+        for id in &f.slot {
+            let edge = sketch.entities.iter().find(|e| e.id == *id).unwrap();
+            assert!(edge.board_slot.is_some(), "{id:?} is a slot edge");
+        }
+        assert!(editor.primitive().pads.is_empty(), "a board mints no pad");
+    }
+
     /// DECISIONS 2026-11-22, mockup row 190: a Point stays a simple pad.
     #[test]
     fn a_point_still_takes_the_pad_role_as_a_simple_pad() {

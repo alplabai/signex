@@ -8,6 +8,8 @@
 //! - A silk graphic: the silk form, then Snap Options.
 //! - A board sketch with nothing selected: the board summary and the
 //!   sections the board showed before (#2234; its redesign is mockup row 110).
+//! - A board sketch with its bake preview open: the Bake panel (mockup row
+//!   179), above any selection.
 //!
 //! Un-scrolled: the parent wraps the column in the scrollable.
 
@@ -29,9 +31,9 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::Label;
 
 use super::super::{
-    BoardSketchProps, CollapsedSections, FootprintEditorPanelContext, FootprintModeKind,
-    FootprintPadSummary, FootprintSelectedSilkSummary, FootprintSketchEntitySummary, PanelMsg,
-    PanelPalette,
+    BoardBakePreview, BoardSketchProps, CollapsedSections, FootprintEditorPanelContext,
+    FootprintModeKind, FootprintPadSummary, FootprintSelectedSilkSummary,
+    FootprintSketchEntitySummary, PanelMsg, PanelPalette,
 };
 use crate::styles::PillTone;
 
@@ -70,6 +72,9 @@ pub(super) struct Ctx<'a, 'i> {
 /// Which body the panel shows.
 #[derive(Debug, Clone, Copy)]
 enum BodyState<'a> {
+    /// A board sketch with its bake preview open (mockup row 179): the Bake
+    /// panel, whatever is selected; a selection only highlights on the canvas.
+    Bake(&'a BoardSketchProps, &'a BoardBakePreview),
     SketchEntity(&'a FootprintSketchEntitySummary),
     SelectedPad(&'a FootprintPadSummary),
     Silk(&'a FootprintSelectedSilkSummary),
@@ -78,6 +83,12 @@ enum BodyState<'a> {
 }
 
 fn body_state(fp: &FootprintEditorPanelContext) -> BodyState<'_> {
+    if fp.mode_kind == FootprintModeKind::Sketch
+        && let Some(board) = fp.board.as_ref()
+        && let Some(preview) = board.bake.as_ref()
+    {
+        return BodyState::Bake(board, preview);
+    }
     if fp.mode_kind == FootprintModeKind::Sketch
         && let Some(entity) = fp.selected_sketch_entity.as_ref()
     {
@@ -129,6 +140,12 @@ pub(super) fn view_body<'a>(
         None => col,
     };
     match body_state(fp) {
+        BodyState::Bake(board, preview) => {
+            let col = super::bake_panel::view_bake_panel(col, cx, board, preview);
+            // Bake as: one role picker per closed profile (mockup row 179).
+            let col = super::roles::view_board_bake_as(col, cx);
+            super::bake_panel::view_bake_panel_tail(col, cx)
+        }
         BodyState::SketchEntity(entity) => {
             let col = super::selection::view_sketch_entity(col, cx, entity);
             selection_tail(col, cx)

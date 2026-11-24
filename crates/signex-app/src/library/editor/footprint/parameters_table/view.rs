@@ -1,7 +1,8 @@
 //! The parameters table card (mockup row 189): Name · Expression · Value · Unit ·
 //! Used by, a row menu, the autocomplete under the row being typed, the
-//! in-use delete prompt, and Add parameter. An overlay at the canvas's top
-//! right, under the sketch info bar; empty while closed.
+//! in-use delete prompt, and Add parameter; under the rows, the live bake
+//! preview beside Live checks (`preview_canvas`). An overlay at the canvas's
+//! top right, under the sketch info bar; empty while closed.
 
 use std::path::PathBuf;
 
@@ -32,8 +33,10 @@ const VALUE_EM: f32 = 6.0;
 const UNIT_EM: f32 = 4.0;
 const MENU_EM: f32 = 2.0;
 /// The card's width and the tallest its row list grows, in body heights.
-const CARD_EM: f32 = 56.0;
-const ROWS_MAX_EM: f32 = 30.0;
+/// Wide enough for the bake preview and Live checks side by side under
+/// the rows; the rows scroll sooner so the whole card stays on the canvas.
+const CARD_EM: f32 = 72.0;
+const ROWS_MAX_EM: f32 = 18.0;
 /// The card's distance from the canvas top: under the mode switcher and the
 /// sketch info bar.
 pub const TOP_CLEARANCE_EM: f32 = 7.0;
@@ -64,10 +67,10 @@ struct Row {
 pub(super) struct Look {
     pub(super) ink: Color,
     pub(super) muted: Color,
-    name: Color,
+    pub(super) name: Color,
     pub(super) error: Color,
     focus: Color,
-    line: Color,
+    pub(super) line: Color,
 }
 
 impl Look {
@@ -108,10 +111,7 @@ pub fn overlay<'a>(
         ));
     }
 
-    let problems = rows
-        .iter()
-        .filter_map(|row| problem_line(row, table, i18n))
-        .collect();
+    let problems = problem_lines(&rows, table, i18n);
     let mut card = column![
         header(&send, look, tokens, i18n),
         column_titles(look, i18n),
@@ -122,11 +122,8 @@ pub fn overlay<'a>(
     if let Some(import) = &table.import {
         card = card.push(super::import_view::panel(import, &send, look, tokens, i18n));
     }
-    card = card.push(super::checks::section(
-        problems,
-        &editor.state.pads,
-        look,
-        i18n,
+    card = card.push(super::preview_canvas::live_row(
+        editor, problems, look, tokens, i18n,
     ));
     let card = container(card)
         .padding(SP.l)
@@ -141,6 +138,24 @@ pub fn overlay<'a>(
     .height(Length::Fill)
     .align_x(iced::alignment::Horizontal::Right)
     .boxed()
+}
+
+/// The Live checks line of every row in error, in row order.
+fn problem_lines(rows: &[Row], table: &ParametersTableState, i18n: &I18n) -> Vec<Localized> {
+    rows.iter()
+        .filter_map(|row| problem_line(row, table, i18n))
+        .collect()
+}
+
+/// The Live checks lines of `editor`'s rows in error, as the card lists
+/// them.
+#[cfg(test)]
+pub(super) fn problems_of(
+    editor: &FootprintDocument,
+    table: &ParametersTableState,
+    i18n: &I18n,
+) -> Vec<Localized> {
+    problem_lines(&rows_of(editor), table, i18n)
 }
 
 fn rows_of(editor: &FootprintDocument) -> Vec<Row> {
@@ -583,7 +598,7 @@ fn autocomplete<'a>(
     popup(list.boxed(), tokens)
 }
 
-fn unit_id(unit: DisplayUnit) -> signex_i18n::MessageId {
+pub(super) fn unit_id(unit: DisplayUnit) -> signex_i18n::MessageId {
     match unit {
         DisplayUnit::Mm => ids::SKETCH_PARAMETERS_UNIT_MM,
         DisplayUnit::Deg => ids::SKETCH_PARAMETERS_UNIT_DEG,
