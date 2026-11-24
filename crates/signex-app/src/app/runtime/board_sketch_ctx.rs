@@ -78,7 +78,8 @@ pub(super) fn board_sketch_props(editor: &FootprintDocument) -> Option<BoardSket
         selected,
         is_edge: !matches!(entity.kind, EntityKind::Point { .. }),
         is_circle: matches!(entity.kind, EntityKind::Circle { .. }),
-        selected_slot: edge_slot_size(sketch, editor.state.last_solve.as_ref(), entity.id),
+        selected_slot: sketch
+            .and_then(|s| edge_slot_size(s, editor.state.last_solve.as_ref(), entity.id)),
         outline: entity.board_outline,
         hole: entity.mounting_hole.as_ref().map(|hole| MountingHoleProps {
             drill: hole.drill_expr.clone().unwrap_or_default(),

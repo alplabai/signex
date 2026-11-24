@@ -133,7 +133,8 @@ fn preview_card<'a>(
     card.push(
         canvas::Canvas::new(drawing)
             .width(Length::Fill)
-            .height(Length::Fill),
+            .height(Length::Fill)
+            .boxed(),
     )
     .boxed()
 }
