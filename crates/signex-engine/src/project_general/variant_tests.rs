@@ -2,9 +2,7 @@
 //! changed cell, override, duplicate and default is one undo step of the
 //! General history; a refused one records nothing.
 
-use std::collections::BTreeMap;
-
-use signex_types::project::{ProjectData, VALUE_PARAMETER, VariantProblem};
+use signex_types::project::{ProjectData, SheetFit, VALUE_PARAMETER, VariantProblem};
 
 use super::*;
 
@@ -28,6 +26,7 @@ fn fit(variant: &str, designator: &str, fitted: Option<bool>) -> ProjectSectionC
     ProjectSectionCommand::SetVariantPartFit {
         variant: variant.into(),
         designator: designator.into(),
+        part: None,
         fitted,
     }
 }
@@ -43,6 +42,7 @@ fn each_cell_change_is_one_undo_step() {
     let value = ProjectSectionCommand::SetVariantPartParameter {
         variant: "Lite".into(),
         designator: "R5".into(),
+        part: None,
         parameter: VALUE_PARAMETER.into(),
         value: Some("47k".into()),
     };
@@ -95,7 +95,11 @@ fn a_duplicate_and_a_default_are_steps_and_undo_puts_both_back() {
     let duplicate = ProjectSectionCommand::DuplicateVariant {
         from: "Lite".into(),
         name: "Lite copy".into(),
-        sheet_fits: BTreeMap::from([("D3".to_string(), false)]),
+        sheet_fits: vec![SheetFit {
+            designator: "D3".into(),
+            part: None,
+            fitted: false,
+        }],
     };
     assert_eq!(apply(&mut history, &mut data, duplicate), Ok(true));
     assert_eq!(data.variant_definitions, ["Lite", "Pro", "Lite copy"]);
@@ -141,7 +145,7 @@ fn a_variant_command_reads_back_from_its_json() {
     let command = ProjectSectionCommand::DuplicateVariant {
         from: "Lite".into(),
         name: "Lite copy".into(),
-        sheet_fits: BTreeMap::new(),
+        sheet_fits: Vec::new(),
     };
     let json = serde_json::to_value(&command).unwrap();
     assert_eq!(json["edit"], "duplicate_variant");
@@ -150,4 +154,30 @@ fn a_variant_command_reads_back_from_its_json() {
     )
     .unwrap();
     assert_eq!(back, command);
+}
+
+/// A cell edit names its placed part: the setting is stored on it, the
+/// command reads back from its JSON with the link, and undo takes it away.
+#[test]
+fn a_cell_edit_on_a_placed_part_keeps_the_link() {
+    use signex_types::pcb::SymbolLink;
+    use signex_types::schematic::InstancePath;
+
+    let link = SymbolLink::new(InstancePath::root(), [uuid::Uuid::now_v7()]);
+    let command = ProjectSectionCommand::SetVariantPartFit {
+        variant: "Lite".into(),
+        designator: "R5".into(),
+        part: Some(link.clone()),
+        fitted: Some(false),
+    };
+    let json = serde_json::to_value(&command).unwrap();
+    let back: ProjectSectionCommand = serde_json::from_value(json).unwrap();
+    assert_eq!(back, command);
+
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    assert_eq!(apply(&mut history, &mut data, command), Ok(true));
+    assert_eq!(data.variant_settings.parts[0].part.as_ref(), Some(&link));
+    assert!(history.undo(&mut data));
+    assert!(data.variant_settings.is_empty());
 }

@@ -85,7 +85,9 @@ pub use user_profile::{
     USER_PROFILE_ID_PREFIX, UserProfile, add_user_profile, check_profile_name, find_user_profile,
     new_profile_id, resolve_profile, save_user_profile, user_profiles_from_value,
 };
-pub use variant_settings::{FOOTPRINT_PARAMETER, VALUE_PARAMETER, VariantPart, VariantSettings};
+pub use variant_settings::{
+    FOOTPRINT_PARAMETER, PlacedPart, SheetFit, VALUE_PARAMETER, VariantPart, VariantSettings,
+};
 pub use variants::{BASE_VARIANT, MAX_VARIANT_NAME_CHARS, VariantProblem, is_base_variant};
 
 /// Reads a stored `document_id`; a value that is not one reads as absent, so

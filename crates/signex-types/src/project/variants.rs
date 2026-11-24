@@ -105,8 +105,11 @@ impl ProjectData {
         Ok(())
     }
 
-    /// Rename a variant; the active variant follows its new name.
+    /// Rename a variant; the active variant follows its new name. Refused
+    /// while the variant settings are unreadable: the kept section would
+    /// still name the old variant.
     pub fn rename_variant(&mut self, from: &str, to: &str) -> Result<(), VariantProblem> {
+        self.check_settings_readable()?;
         let index = self
             .variant_index(from)
             .ok_or_else(|| VariantProblem::Unknown(from.trim().to_string()))?;
@@ -124,7 +127,9 @@ impl ProjectData {
     }
 
     /// Remove a variant; when it was the active one, Base becomes active.
+    /// Refused while the variant settings are unreadable, as a rename is.
     pub fn remove_variant(&mut self, name: &str) -> Result<(), VariantProblem> {
+        self.check_settings_readable()?;
         let index = self
             .variant_index(name)
             .ok_or_else(|| VariantProblem::Unknown(name.trim().to_string()))?;

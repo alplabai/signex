@@ -2,13 +2,13 @@
 //! Version control edits (#1689-#1693). Each is one step on the project's
 //! General history; the checks that refuse one live in `signex-types`.
 
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use signex_types::pcb::SymbolLink;
 use signex_types::project::{
-    AnnotateUndo, ChannelNaming, ListMove, ProjectData, RequirementEntry, VariantProblem,
-    VariantSettings,
+    AnnotateUndo, ChannelNaming, ListMove, PlacedPart, ProjectData, RequirementEntry, SheetFit,
+    VariantProblem, VariantSettings,
 };
 
 /// One edit of a Project tab section. Plain data, so a script can emit it.
@@ -47,16 +47,20 @@ pub enum ProjectSectionCommand {
         from: String,
         name: String,
         #[serde(default)]
-        sheet_fits: BTreeMap<String, bool>,
+        sheet_fits: Vec<SheetFit>,
     },
     /// `None` makes Base the default variant (mockup row 32).
     SetDefaultVariant {
         name: Option<String>,
     },
     /// A part's fit in a variant; `None` follows the sheets (mockup row 32).
+    /// `part` is the placed part, which keeps the setting on it through a
+    /// re-annotation.
     SetVariantPartFit {
         variant: String,
         designator: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        part: Option<SymbolLink>,
         fitted: Option<bool>,
     },
     /// A part's parameter value in a variant; `None` is its own value again
@@ -64,6 +68,8 @@ pub enum ProjectSectionCommand {
     SetVariantPartParameter {
         variant: String,
         designator: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        part: Option<SymbolLink>,
         parameter: String,
         value: Option<String>,
     },
@@ -122,16 +128,25 @@ impl ProjectSectionCommand {
             Self::SetVariantPartFit {
                 variant,
                 designator,
+                part,
                 fitted,
-            } => data.set_variant_part_fit(variant, designator, *fitted)?,
+            } => data.set_variant_part_fit(
+                variant,
+                PlacedPart::new(designator, part.as_ref()),
+                *fitted,
+            )?,
             Self::SetVariantPartParameter {
                 variant,
                 designator,
+                part,
                 parameter,
                 value,
-            } => {
-                data.set_variant_part_parameter(variant, designator, parameter, value.as_deref())?
-            }
+            } => data.set_variant_part_parameter(
+                variant,
+                PlacedPart::new(designator, part.as_ref()),
+                parameter,
+                value.as_deref(),
+            )?,
             Self::MoveLibrary { path, step } => {
                 data.move_library(path, *step);
             }

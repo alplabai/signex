@@ -28,6 +28,19 @@ fn saved_json(path: &Path) -> Value {
     serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
 }
 
+fn sheet_fit(designator: &str, fitted: bool) -> SheetFit {
+    SheetFit {
+        designator: designator.into(),
+        part: None,
+        fitted,
+    }
+}
+
+/// The placed part made of `unit` on the root sheet.
+fn link(unit: Uuid) -> crate::pcb::SymbolLink {
+    crate::pcb::SymbolLink::new(crate::schematic::InstancePath::root(), [unit])
+}
+
 #[test]
 fn a_fit_and_a_value_are_set_per_variant_and_cleared_back_to_the_sheets() {
     let mut data = project();
@@ -111,7 +124,7 @@ fn a_duplicate_copies_the_settings_and_the_sheet_fits_it_does_not_set() {
     data.set_variant_part_fit("Lite", "U3", Some(true)).unwrap();
     data.set_variant_part_parameter("Lite", "R5", VALUE_PARAMETER, Some("47k"))
         .unwrap();
-    let sheet_fits = BTreeMap::from([("U3".to_string(), false), ("D3".to_string(), false)]);
+    let sheet_fits = [sheet_fit("U3", false), sheet_fit("D3", false)];
     data.duplicate_variant("Lite", "Lite copy", &sheet_fits)
         .unwrap();
     assert_eq!(data.variant_definitions, ["Lite", "Pro", "Lite copy"]);
@@ -131,11 +144,10 @@ fn a_duplicate_copies_the_settings_and_the_sheet_fits_it_does_not_set() {
     assert!(data.variant_settings.part(Some("Lite"), "D3").is_none());
 
     assert_eq!(
-        data.duplicate_variant("Lite", "pro", &BTreeMap::new()),
+        data.duplicate_variant("Lite", "pro", &[]),
         Err(VariantProblem::Taken("Pro".into()))
     );
-    data.duplicate_variant("Base", "Plain", &BTreeMap::new())
-        .unwrap();
+    data.duplicate_variant("Base", "Plain", &[]).unwrap();
     assert!(
         data.variant_settings
             .parts
@@ -237,4 +249,104 @@ fn a_build_without_the_key_keeps_it_through_its_unknown_bag() {
     let old: BeforeVariantSettings = serde_json::from_value(written.clone()).unwrap();
     let rewritten = serde_json::to_value(&old).unwrap();
     assert_eq!(rewritten["variant_settings"], written["variant_settings"]);
+}
+
+/// A newer build's keys inside the section and inside a part entry survive
+/// this build's save byte-identical (#788), and an edit that clears what
+/// this build knows of an entry keeps the entry for them.
+#[test]
+fn a_newer_builds_keys_in_the_settings_survive_a_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let section = json!({
+        "default": "Lite",
+        "layout": {"columns": 3},
+        "parts": [
+            {"variant": "Lite", "designator": "R1", "fitted": false, "alternate": {"lib_id": "Device:R_Small"}}
+        ]
+    });
+    let mut body = bare();
+    body["variant_definitions"] = json!(["Lite"]);
+    body["variant_settings"] = section.clone();
+    let path = write_raw(dir.path(), &body);
+    let mut data = parse_project(&path).unwrap();
+    assert!(!data.has_unreadable_variant_settings());
+    write_project(&path, &data).unwrap();
+    let first = std::fs::read(&path).unwrap();
+    assert_eq!(saved_json(&path)["variant_settings"], section);
+    write_project(&path, &parse_project(&path).unwrap()).unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), first, "byte-identical");
+
+    data.set_variant_part_fit("Lite", "R1", None).unwrap();
+    let entry = data.variant_settings.part(Some("Lite"), "R1").unwrap();
+    assert_eq!(entry.fitted, None);
+    assert!(entry.unknown.get("alternate").is_some(), "kept for its key");
+}
+
+/// An entry set on a placed part stays on it when a re-annotation gives it
+/// another designator, and never lands on the part that takes its old one.
+#[test]
+fn an_entry_stays_on_its_part_through_a_new_designator() {
+    let mut data = project();
+    let r5 = link(Uuid::now_v7());
+    let other = link(Uuid::now_v7());
+    data.set_variant_part_fit("Lite", PlacedPart::new("R5", Some(&r5)), Some(false))
+        .unwrap();
+
+    // Re-annotated: the part is R7 now and another part took R5.
+    let settings = &data.variant_settings;
+    let moved = settings.part(Some("Lite"), PlacedPart::new("R7", Some(&r5)));
+    assert_eq!(moved.unwrap().fitted, Some(false));
+    assert!(
+        settings
+            .part(Some("Lite"), PlacedPart::new("R5", Some(&other)))
+            .is_none()
+    );
+
+    // An edit under the new designator changes the same entry and renames it.
+    data.set_variant_part_parameter(
+        "Lite",
+        PlacedPart::new("R7", Some(&r5)),
+        VALUE_PARAMETER,
+        Some("47k"),
+    )
+    .unwrap();
+    let parts = &data.variant_settings.parts;
+    assert_eq!(parts.len(), 1);
+    assert_eq!(parts[0].designator, "R7");
+    assert_eq!(parts[0].fitted, Some(false));
+    assert_eq!(parts[0].part.as_ref(), Some(&r5));
+
+    // The link round-trips through the file's JSON.
+    let json = serde_json::to_value(&data.variant_settings).unwrap();
+    assert_eq!(
+        json["parts"][0]["part"],
+        json!({"sheet": [], "units": [r5.units[0].to_string()]})
+    );
+    let back: VariantSettings = serde_json::from_value(json).unwrap();
+    assert_eq!(back, data.variant_settings);
+}
+
+/// While the section is unreadable a rename or a removal is refused too:
+/// the kept section would still name the old variant.
+#[test]
+fn an_unreadable_section_refuses_a_rename_and_a_removal() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut body = bare();
+    body["variant_definitions"] = json!(["Lite"]);
+    body["variant_settings"] = json!("yes");
+    let path = write_raw(dir.path(), &body);
+    let mut data = parse_project(&path).unwrap();
+    assert_eq!(
+        data.rename_variant("Lite", "Lite2"),
+        Err(VariantProblem::SettingsUnreadable)
+    );
+    assert_eq!(
+        data.remove_variant("Lite"),
+        Err(VariantProblem::SettingsUnreadable)
+    );
+    assert_eq!(
+        data.duplicate_variant("Lite", "Lite copy", &[]),
+        Err(VariantProblem::SettingsUnreadable)
+    );
+    assert_eq!(data.variant_definitions, ["Lite"]);
 }
