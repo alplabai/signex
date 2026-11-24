@@ -1,5 +1,6 @@
-//! The live checks under the parameters table (mockup row 189): parameters
-//! in error, and pads that overlap, re-read on every solve.
+//! The Live checks card beside the bake preview, under the parameters table
+//! (mockup row 189): parameters in error, and pads that overlap, re-read on
+//! every solve.
 
 use iced::widget::{column, scrollable};
 use iced::{Element, Length, Widget as _};
@@ -53,14 +54,13 @@ pub(super) fn overlapping_pads(pads: &[EditorPad]) -> Vec<(String, String)> {
     out
 }
 
-/// The Live checks heading and its lines: `problems` (parameters in error)
-/// first, then the overlapping pads; one passed line when there is nothing.
-pub(super) fn section<'a>(
+/// The failed checks in the order Live checks lists them: `problems`
+/// (parameters in error) first, then the overlapping pads.
+pub(super) fn failed_lines(
     problems: Vec<Localized>,
     pads: &[EditorPad],
-    look: Look,
     i18n: &I18n,
-) -> Element<'a, LibraryMessage> {
+) -> Vec<Localized> {
     let overlaps = overlapping_pads(pads).into_iter().map(|(first, second)| {
         t!(
             i18n,
@@ -69,7 +69,18 @@ pub(super) fn section<'a>(
             "second" => second
         )
     });
-    let failed: Vec<Localized> = problems.into_iter().chain(overlaps).collect();
+    problems.into_iter().chain(overlaps).collect()
+}
+
+/// The Live checks heading and its lines ([`failed_lines`]); one passed
+/// line when there is nothing.
+pub(super) fn section<'a>(
+    problems: Vec<Localized>,
+    pads: &[EditorPad],
+    look: Look,
+    i18n: &I18n,
+) -> Element<'a, LibraryMessage> {
+    let failed = failed_lines(problems, pads, i18n);
     let mut lines = column![].spacing(SP.xs);
     if failed.is_empty() {
         lines = lines.push(status_line::<LibraryMessage>(
