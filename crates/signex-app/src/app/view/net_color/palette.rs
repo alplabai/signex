@@ -1,5 +1,6 @@
 //! The F5 net colour palette body (#71, #2528): a filter, one row per net
-//! label (the swatch in a fixed column, the name in mono, coloured nets
+//! named by a label or a power port (the swatch in a fixed column, the name
+//! in mono, coloured nets
 //! first), a chooser floating beside the clicked row, and the Clear all
 //! footer. The window's title bar carries the title and the net count.
 
@@ -355,8 +356,9 @@ mod tests {
         assert_eq!(y_of_net(&app, "C"), closed);
     }
 
-    /// Mockup row 71: after Clear all colours the palette shows "Cleared 1
-    /// net colour" with an Undo naming its shortcut.
+    /// Mockup row 71: after Clear all colors the palette shows "Cleared 1
+    /// net color" (en-US spelling, decision of 2026-11-24) with an Undo
+    /// naming its shortcut.
     #[test]
     fn clear_all_shows_the_toast_with_undo_and_its_shortcut() {
         let (mut app, _task) = Signex::new();
@@ -389,9 +391,43 @@ mod tests {
         .map(|laid| laid.text.replace(['\u{2068}', '\u{2069}'], ""))
         .collect();
         assert!(
-            texts.iter().any(|t| t == "Cleared 1 net colour"),
+            texts.iter().any(|t| t == "Cleared 1 net color"),
             "{texts:?}"
         );
         assert!(texts.contains(&undo), "{texts:?}");
+    }
+
+    /// Mockup row 71, decisions of 2026-11-24: a sheet whose only net is
+    /// named by a power port lists it (no empty card), and the footer reads
+    /// "Clear all colors".
+    #[test]
+    fn a_power_port_net_has_a_row_and_the_footer_spells_color() {
+        let (mut app, _task) = Signex::new();
+        let mut sheet = SchematicSheet::default();
+        sheet.wires.push(signex_types::schematic::Wire {
+            uuid: uuid::Uuid::now_v7(),
+            start: Point::new(0.0, 0.0),
+            end: Point::new(10.0, 0.0),
+            ..Default::default()
+        });
+        sheet.symbols.push(signex_types::schematic::Symbol {
+            uuid: uuid::Uuid::now_v7(),
+            lib_id: "power:+5V".into(),
+            value: "+5V".into(),
+            is_power: true,
+            ..Default::default()
+        });
+        add_sheet_with(&mut app, std::path::Path::new("power.snxsch"), sheet);
+        assert_eq!(app.palette_net_count(), 1);
+
+        let texts: Vec<String> = lay_out_texts(
+            app.view_net_color_palette_body(),
+            iced::Size::new(360.0, 400.0),
+        )
+        .into_iter()
+        .map(|laid| laid.text)
+        .collect();
+        assert!(texts.iter().any(|t| t == "+5V"), "{texts:?}");
+        assert!(texts.iter().any(|t| t == "Clear all colors"), "{texts:?}");
     }
 }

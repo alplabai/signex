@@ -2,16 +2,18 @@
 //! message handler, the rows the palette lists and the picker's Hex field.
 //!
 //! A palette colour is an edit of the active sheet like a pen click: the
-//! wires and junctions of the net under each of its labels take the colour
-//! through [`Signex::commit_net_colors`], one undo step per pick.
+//! wires and junctions of the net under each of its labels and power ports
+//! take the colour through [`Signex::commit_net_colors`], one undo step per
+//! pick.
 
 use super::super::super::*;
 use crate::app::handlers::canvas::net_color_click::{net_elements_in, wire_at};
 use crate::app::mutation_gateway::MutationOutcome;
 use crate::app::state::{NetColorToast, NetColorsCleared};
 use signex_i18n::{ids, t};
-use signex_types::schematic::{Label, LabelType, SchematicSheet};
+use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, pin_tips};
 use signex_types::theme::Color;
+use std::collections::BTreeMap;
 
 /// The colours of a palette row's chooser.
 pub(crate) const CHOOSER_COLORS: [(u8, u8, u8); 10] = [
@@ -47,39 +49,66 @@ fn is_net_label(label: &Label) -> bool {
     )
 }
 
-/// The net label texts of `sheet` (net, global and hierarchical), each once,
-/// by name.
-pub(crate) fn net_label_names(sheet: &SchematicSheet) -> Vec<String> {
-    sheet
-        .labels
-        .iter()
-        .filter(|l| is_net_label(l))
-        .map(|l| l.text.clone())
-        .collect::<std::collections::BTreeSet<_>>()
-        .into_iter()
-        .collect()
+/// The points that name each net of `sheet`, by name: its net labels
+/// (net, global and hierarchical) and the pin tips of the power ports that
+/// name a net (`signex_net::name_carrying_ports`, so a power flag does not).
+/// A net named only by a power port is listed too (mockup row 71).
+fn net_name_anchors(sheet: &SchematicSheet) -> BTreeMap<String, Vec<Point>> {
+    let mut anchors: BTreeMap<String, Vec<Point>> = BTreeMap::new();
+    for label in sheet.labels.iter().filter(|l| is_net_label(l)) {
+        anchors
+            .entry(label.text.clone())
+            .or_default()
+            .push(label.position);
+    }
+    let ports: BTreeMap<uuid::Uuid, &str> =
+        signex_net::name_carrying_ports(sheet).into_iter().collect();
+    for sym in &sheet.symbols {
+        let Some(net) = ports.get(&sym.uuid) else {
+            continue;
+        };
+        let Some(lib) = sheet.resolve_lib_symbol(sym) else {
+            continue;
+        };
+        let tips = anchors.entry((*net).to_owned()).or_default();
+        tips.extend(pin_tips(&lib, sym).map(|(_, tip)| tip));
+    }
+    anchors
 }
 
-/// The colour `net` shows on `sheet`: the colour of a wire under one of its
-/// labels. A colour covers the whole net, so one wire tells.
-pub(crate) fn net_color_on(sheet: &SchematicSheet, net: &str) -> Option<Color> {
-    sheet
-        .labels
+/// The anchors of `net` in `anchors`, none when the sheet does not name it.
+fn anchors_of<'a>(anchors: &'a BTreeMap<String, Vec<Point>>, net: &str) -> &'a [Point] {
+    anchors.get(net).map(Vec::as_slice).unwrap_or_default()
+}
+
+/// The colour of the net through the first of `points` that sits on a
+/// coloured wire. A colour covers the whole net, so one wire tells.
+fn color_at(sheet: &SchematicSheet, points: &[Point]) -> Option<Color> {
+    points
         .iter()
-        .filter(|l| is_net_label(l) && l.text == net)
-        .filter_map(|l| wire_at(sheet, l.position.x, l.position.y))
+        .filter_map(|p| wire_at(sheet, p.x, p.y))
         .find_map(|wire| sheet.net_colors.get(&wire).copied())
 }
 
-/// The wires and junctions of every net a label named `net` sits on.
+/// The net names the palette lists for `sheet`: its net label texts and its
+/// power ports' nets, each once, by name.
+pub(crate) fn palette_net_names(sheet: &SchematicSheet) -> Vec<String> {
+    net_name_anchors(sheet).into_keys().collect()
+}
+
+/// The colour `net` shows on `sheet`: the colour of a wire under one of its
+/// labels or power ports.
+pub(crate) fn net_color_on(sheet: &SchematicSheet, net: &str) -> Option<Color> {
+    color_at(sheet, anchors_of(&net_name_anchors(sheet), net))
+}
+
+/// The wires and junctions of every net a label or power port named `net`
+/// sits on.
 pub(crate) fn net_label_elements(sheet: &SchematicSheet, net: &str) -> Vec<uuid::Uuid> {
     let mut ids: Vec<uuid::Uuid> = Vec::new();
-    for label in sheet
-        .labels
-        .iter()
-        .filter(|l| is_net_label(l) && l.text == net)
-    {
-        for id in net_elements_in(sheet, label.position.x, label.position.y) {
+    let anchors = net_name_anchors(sheet);
+    for p in anchors_of(&anchors, net) {
+        for id in net_elements_in(sheet, p.x, p.y) {
             if !ids.contains(&id) {
                 ids.push(id);
             }
@@ -92,11 +121,11 @@ pub(crate) fn net_label_elements(sheet: &SchematicSheet, net: &str) -> Vec<uuid:
 /// case), coloured nets first, then by name.
 pub(crate) fn palette_rows(sheet: &SchematicSheet, filter: &str) -> Vec<PaletteRow> {
     let needle = filter.trim().to_lowercase();
-    let mut rows: Vec<PaletteRow> = net_label_names(sheet)
+    let mut rows: Vec<PaletteRow> = net_name_anchors(sheet)
         .into_iter()
-        .filter(|net| needle.is_empty() || net.to_lowercase().contains(&needle))
-        .map(|net| PaletteRow {
-            color: net_color_on(sheet, &net),
+        .filter(|(net, _)| needle.is_empty() || net.to_lowercase().contains(&needle))
+        .map(|(net, points)| PaletteRow {
+            color: color_at(sheet, &points),
             net,
         })
         .collect();
@@ -177,11 +206,11 @@ impl Signex {
             .unwrap_or_default()
     }
 
-    /// How many nets the active sheet labels, filter or not.
+    /// How many nets the active sheet lists, filter or not.
     pub(crate) fn palette_net_count(&self) -> usize {
         self.document_state
             .active_engine()
-            .map_or(0, |engine| net_label_names(engine.document()).len())
+            .map_or(0, |engine| palette_net_names(engine.document()).len())
     }
 
     /// Per-net colour override + F5-palette handler (namespaced family,
@@ -329,13 +358,13 @@ impl Signex {
         Task::batch([rerun, self.finish_update()])
     }
 
-    /// How many labelled nets show a colour on the active sheet.
+    /// How many listed nets (labelled or named by a power port) show a
+    /// colour on the active sheet.
     fn coloured_palette_nets(&self) -> usize {
         self.document_state.active_engine().map_or(0, |engine| {
-            let sheet = engine.document();
-            net_label_names(sheet)
+            palette_rows(engine.document(), "")
                 .iter()
-                .filter(|net| net_color_on(sheet, net).is_some())
+                .filter(|row| row.color.is_some())
                 .count()
         })
     }

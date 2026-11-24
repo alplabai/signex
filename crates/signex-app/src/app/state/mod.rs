@@ -218,9 +218,11 @@ pub struct NetColorToast {
 /// What a palette toast says was cleared.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NetColorsCleared {
-    /// Clear all colours took the colour off this many labelled nets.
+    /// Clear all colours took the colour off this many listed nets (named by
+    /// a label or a power port).
     Nets(usize),
-    /// Clear all colours took colours off nets that carry no label.
+    /// Clear all colours took colours off nets that no label or power port
+    /// names.
     Unlabelled,
     /// A row chooser's Clear took the colour off this net.
     Net(String),

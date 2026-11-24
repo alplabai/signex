@@ -823,15 +823,18 @@ and bus-aware rendering of the pin (see #1049).
 ### Net colours
 
 The net colour palette (`F5` in the default profile, or **Net Color...** in the
-sheet's right-click menu) lists every net label name on the active sheet,
-coloured nets first, then by name. Type in **Filter nets** to narrow the list.
+sheet's right-click menu) lists every net on the active sheet named by a net
+label or a power port (a supply net such as `+3V3` with no label is listed
+too; a power flag names no net), coloured nets first, then by name. It opens
+centred, not at the pointer; the Active Bar's Net Color menu colours the net
+under the pointer. Type in **Filter nets** to narrow the list.
 Click a row to open its chooser: a swatch colours the wires and junctions of
 that net, **Clear** takes the colour off, and **Custom…** opens the colour
 picker (swatches, R / G / B, **Hex**, and the old and new colour side by side).
 **Use Color** colours the net on the sheet the picker was opened from; if
 another sheet is active by then, nothing changes and the Messages panel says
-so. **Clear all colours** at the foot of the palette clears the active sheet
-only. After **Clear** or **Clear all colours**, a toast in the palette says
+so. **Clear all colors** at the foot of the palette clears the active sheet
+only. After **Clear** or **Clear all colors**, a toast in the palette says
 what was cleared; its **Undo** takes the clear back while it is still the
 sheet's newest edit, and the toast closes after a few seconds. Each colour
 change is one **Undo** step and is saved with the sheet. A

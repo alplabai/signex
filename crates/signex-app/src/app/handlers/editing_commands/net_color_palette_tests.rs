@@ -2,10 +2,10 @@
 //! picker's Hex field.
 
 use super::net_color_driver::{activate, add_sheet_with, color, colour_of, paint};
-use super::net_color_palette::{hex_of, net_label_names, palette_rows, parse_hex};
-use crate::app::state::NetColorsCleared;
+use super::net_color_palette::{hex_of, palette_net_names, palette_rows, parse_hex};
+use crate::app::state::{ModalId, NetColorsCleared};
 use crate::app::{Message, NetColorMsg, Signex};
-use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Wire};
+use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Symbol, Wire};
 use std::path::{Path, PathBuf};
 
 /// A wire per net, each with its label at the wire's left end, and one
@@ -80,7 +80,7 @@ fn a_name_on_several_labels_is_listed_once() {
     sheet
         .labels
         .push(Label::new("A", Point::new(10.0, 0.0), LabelType::Net));
-    assert_eq!(net_label_names(&sheet), ["A", "FLOATING"]);
+    assert_eq!(palette_net_names(&sheet), ["A", "FLOATING"]);
 }
 
 #[test]
@@ -406,4 +406,81 @@ fn only_the_shown_toasts_timeout_hides_it() {
     assert_eq!(cleared(&app), Some(NetColorsCleared::Net("B".into())));
     send(&mut app, NetColorMsg::ToastExpired(second));
     assert_eq!(cleared(&app), None);
+}
+
+// Mockup row 71, decision of 2026-11-24: a net named only by a power port is
+// listed and coloured like a labelled one; a power flag names no net.
+
+/// [`sheet_with_nets`] plus a wire whose left end holds a power port of
+/// `net` and whose right end holds a power flag.
+fn sheet_with_power_net(nets: &[&str], net: &str) -> SchematicSheet {
+    let mut sheet = sheet_with_nets(nets);
+    let y = 10.0 * nets.len() as f64;
+    sheet.wires.push(Wire {
+        uuid: uuid::Uuid::now_v7(),
+        start: Point::new(0.0, y),
+        end: Point::new(10.0, y),
+        ..Default::default()
+    });
+    let port = |lib_id: &str, value: &str, x: f64| Symbol {
+        uuid: uuid::Uuid::now_v7(),
+        lib_id: lib_id.into(),
+        value: value.into(),
+        position: Point::new(x, y),
+        is_power: true,
+        ..Symbol::default()
+    };
+    sheet.symbols.push(port(&format!("power:{net}"), net, 0.0));
+    sheet.symbols.push(port("power:PWR_FLAG", "PWR_FLAG", 10.0));
+    sheet
+}
+
+#[test]
+fn a_net_named_only_by_a_power_port_is_listed() {
+    let sheet = sheet_with_power_net(&["A"], "+3V3");
+    assert_eq!(palette_net_names(&sheet), ["+3V3", "A", "FLOATING"]);
+    let rows = palette_rows(&sheet, "3v3");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].net, "+3V3");
+    assert_eq!(rows[0].color, None);
+}
+
+#[test]
+fn a_power_net_row_colours_and_clears_its_wires() {
+    let (mut app, _task) = Signex::new();
+    let path = PathBuf::from("power.snxsch");
+    add_sheet_with(&mut app, &path, sheet_with_power_net(&["A"], "GND"));
+    let power_wire = wires_of(&app, &path)[1];
+    send(
+        &mut app,
+        NetColorMsg::Set {
+            net: "GND".into(),
+            color: Some(color(70)),
+        },
+    );
+    assert_eq!(colour_of(&app, power_wire), Some(color(70)));
+    assert_eq!(app.palette_rows()[0].net, "GND", "coloured first");
+    assert_eq!(app.palette_rows()[0].color, Some(color(70)));
+
+    send(&mut app, NetColorMsg::ClearedAll);
+    assert_eq!(colour_of(&app, power_wire), None);
+    assert_eq!(
+        cleared(&app),
+        Some(NetColorsCleared::Nets(1)),
+        "the power net is counted as a listed net"
+    );
+}
+
+// Mockup row 71, decision of 2026-11-24: the palette stays a centred modal,
+// not a popover at the pointer.
+
+#[test]
+fn the_palette_opens_centred_not_at_the_pointer() {
+    let (app, _task) = Signex::new();
+    let (settings, _) = app.dialog_window_settings(ModalId::NetColorPalette);
+    assert!(
+        matches!(settings.position, iced::window::Position::Centered),
+        "{:?}",
+        settings.position
+    );
 }
