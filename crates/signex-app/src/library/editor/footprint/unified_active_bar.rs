@@ -246,9 +246,8 @@ pub fn dropdown_overlay<'a>(
     span: BarSpan,
     i18n: &signex_i18n::I18n,
 ) -> Option<iced::Element<'a, LibraryMessage>> {
-    use iced::Length;
     use iced::Widget as _;
-    use iced::widget::{Space, container, mouse_area, stack};
+    use iced::widget::{mouse_area, stack};
 
     let menu = editor.state.active_bar_menu?;
 
@@ -295,15 +294,13 @@ pub fn dropdown_overlay<'a>(
 
     let panel_anchor = signex_widgets::Translate::new(panel, (abs_x, top_padding_px as f32));
 
-    let backstop = mouse_area(
-        container(Space::new())
-            .width(Length::Fill)
-            .height(Length::Fill),
-    )
-    .on_press(LibraryMessage::PrimitiveEditorEvent {
-        path: editor.path.clone(),
-        msg: PrimitiveEdit::Footprint(FootprintEditorMsg::CloseActiveBarMenu),
-    });
+    // Dimmed as every menu dims the window behind it (mockup rows 53, 61).
+    let backstop = mouse_area(crate::app::view::menu_scrim_fill()).on_press(
+        LibraryMessage::PrimitiveEditorEvent {
+            path: editor.path.clone(),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::CloseActiveBarMenu),
+        },
+    );
 
     Some(stack![backstop, panel_anchor].boxed())
 }

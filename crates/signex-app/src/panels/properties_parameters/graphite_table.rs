@@ -40,6 +40,29 @@ pub(super) fn read_only_value<'a>(tokens: &ThemeTokens, value: String) -> Elemen
     .boxed()
 }
 
+/// An editable value cell that reads inline (mockup row 40): no box until
+/// hover or focus, and while it is empty it shows `placeholder`, in muted
+/// italic when `is_unset` says no value stands behind it ("Not set").
+pub(super) fn inline_value_input<'a>(
+    placeholder: Label<'a>,
+    value: String,
+    is_unset: bool,
+) -> iced::widget::TextInput<'a, PanelMsg> {
+    let reads_not_set = is_unset && value.is_empty();
+    let input = signex_widgets::text_input(placeholder, value)
+        .size(TS.body)
+        .padding(SP.xs)
+        .style(crate::panels::form_look::inline_value_input_style)
+        .width(Length::Fill);
+    if !reads_not_set {
+        return input;
+    }
+    input.font(iced::Font {
+        style: iced::font::Style::Italic,
+        ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
+    })
+}
+
 /// The header of a Parameters group: chevron, name, row count and an
 /// optional note at the right ("read-only"); a press folds the group.
 pub(super) fn group_header<'a>(

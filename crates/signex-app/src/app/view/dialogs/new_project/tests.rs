@@ -175,7 +175,7 @@ fn the_stack_up_has_a_copper_layer_per_count_and_a_dielectric_between() {
         assert_eq!(coppers, usize::from(copper), "{copper} layers");
         assert_eq!(between, usize::from(copper) - 1, "{copper} layers");
         assert_eq!(rows.first(), Some(&Layer::Silk));
-        assert_eq!(rows.last(), Some(&Layer::MaskBottom));
+        assert_eq!(rows.last(), Some(&Layer::SilkBottom));
     }
     assert_eq!(
         stack_rows(4),
@@ -190,8 +190,146 @@ fn the_stack_up_has_a_copper_layer_per_count_and_a_dielectric_between() {
             Layer::Prepreg,
             Layer::BottomCopper,
             Layer::MaskBottom,
+            Layer::SilkBottom,
         ]
     );
+}
+
+/// Mockup row 21: the drawn stack-up ends with Bottom Silkscreen, under
+/// Bottom Solder.
+#[test]
+fn the_drawn_stack_up_ends_with_the_bottom_silkscreen() {
+    let (mut app, _t) = crate::app::Signex::new();
+    let _ = app.update(crate::app::Message::Menu(
+        crate::menu_bar::MenuMessage::NewProject,
+    ));
+    let state = app.ui_state.new_project.as_ref().unwrap();
+    let card = super::preview::stack_card(state, app.ui_state.i18n.as_ref());
+    let texts = crate::layout_probe::lay_out_texts(card, iced::Size::new(400.0, 2000.0));
+    let names: Vec<String> = texts.into_iter().map(|t| t.text).collect();
+    let n = names.len();
+    assert!(n >= 2, "{names:?}");
+    assert_eq!(names[n - 2], "Bottom Solder", "{names:?}");
+    assert_eq!(names[n - 1], "Bottom Silkscreen", "{names:?}");
+}
+
+/// Mockup row 21: the preview column holds the board rules drawing and its
+/// padding, so the drawing, its expand button and the head's caption are
+/// not cut at the right.
+#[test]
+fn the_preview_column_holds_the_drawing_and_its_caption() {
+    use super::{PREVIEW_W, SP, TS};
+    use crate::app::new_project::preview::VIEW_W;
+    const { assert!(VIEW_W + 2.0 * SP.xl <= PREVIEW_W) };
+    let (mut app, _t) = crate::app::Signex::new();
+    let _ = app.update(crate::app::Message::Menu(
+        crate::menu_bar::MenuMessage::NewProject,
+    ));
+    let state = app.ui_state.new_project.as_ref().unwrap();
+    let pane = super::preview::pane(
+        state,
+        signex_i18n::ids::DIALOG_NEW_PROJECT_PREVIEW_NOTE,
+        Some(&app.document_state.panel_ctx.canvas_colors),
+        app.ui_state.i18n.as_ref(),
+        &app.document_state.panel_ctx.tokens,
+    );
+    let texts = crate::layout_probe::lay_out_texts(pane, iced::Size::new(PREVIEW_W, 3000.0));
+    let hint = crate::layout_probe::find(&texts, "click a value to edit").bounds;
+    assert!(hint.x + hint.width <= PREVIEW_W - SP.xl + 0.5, "{hint:?}");
+    assert!(hint.height < 1.8 * TS.caption, "{hint:?}");
+}
+
+/// The width a dialog of `dialog_w` leaves its left column, the cards' room.
+fn left_column_w(dialog_w: f32) -> f32 {
+    use super::{PREVIEW_W, SP};
+    dialog_w - PREVIEW_W - 2.0 * (SP.xl + SP.m)
+}
+
+/// Mockup rows 21 and 22: at the New Project and New PCB widths the cards
+/// sit two to a row with each blurb on one line.
+#[test]
+fn at_the_dialog_widths_each_card_blurb_stays_on_one_line() {
+    use crate::app::SetupKind;
+    let (mut app, _t) = crate::app::Signex::new();
+    let _ = app.update(crate::app::Message::Menu(
+        crate::menu_bar::MenuMessage::NewProject,
+    ));
+    let state = app.ui_state.new_project.as_ref().expect("dialog open");
+    let i18n = app.ui_state.i18n.as_ref();
+    let tokens = &app.document_state.panel_ctx.tokens;
+    let body = crate::styles::TypeScale::DEFAULT.body;
+    let widths = [
+        super::super::sizes::NEW_PROJECT.0,
+        super::document_setup::design_size(SetupKind::Pcb).0,
+    ];
+    for dialog_w in widths {
+        let room = left_column_w(dialog_w);
+        let grid = super::cards::tier_grid(state, &[], i18n, tokens);
+        let texts = crate::layout_probe::lay_out_texts(grid, iced::Size::new(room, 1200.0));
+        for blurb in [
+            "Tighter rules for denser boards.",
+            "Fine-pitch BGAs, laser microvias.",
+        ] {
+            let at = crate::layout_probe::find(&texts, blurb).bounds;
+            assert!(at.height < 1.8 * body, "{dialog_w}: {blurb}: {at:?}");
+            assert!(at.x + at.width <= room + 0.5, "{dialog_w}: {blurb}: {at:?}");
+        }
+    }
+}
+
+/// #2804, mockup row 22: a card title too long for its card is cut with an
+/// ellipsis inside the card instead of running past its edge.
+#[test]
+fn a_card_title_stays_inside_a_narrow_card() {
+    let (mut app, _t) = crate::app::Signex::new();
+    let _ = app.update(crate::app::Message::Menu(
+        crate::menu_bar::MenuMessage::NewProject,
+    ));
+    let state = app.ui_state.new_project.as_ref().expect("dialog open");
+    let label = crate::styles::TypeScale::DEFAULT.label;
+    // Too narrow for "Standard" beside the glyph, the pencil and the disc.
+    const ROOM: f32 = 200.0;
+    for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let t = theme_tokens(id);
+        let grid = super::cards::tier_grid(state, &[], app.ui_state.i18n.as_ref(), &t);
+        let texts = crate::layout_probe::lay_out_texts(grid, iced::Size::new(ROOM, 1200.0));
+        let left = crate::layout_probe::find(&texts, "Standard").bounds;
+        let right = crate::layout_probe::find(&texts, "Advanced").bounds;
+        assert!(left.x + left.width <= ROOM / 2.0, "{id:?}: {left:?}");
+        assert!(right.x + right.width <= ROOM + 0.5, "{id:?}: {right:?}");
+        assert!(left.height < 1.8 * label, "{id:?}: {left:?}");
+    }
+}
+
+/// DECISIONS 2026-11-23: a new project keeps A3 as its default sheet; the
+/// A4 in mockup row 21 is a sample value. The preview says so too.
+#[test]
+fn a_new_project_previews_an_a3_landscape_sheet() {
+    let (mut app, _t) = crate::app::Signex::new();
+    let _ = app.update(crate::app::Message::Menu(
+        crate::menu_bar::MenuMessage::NewProject,
+    ));
+    let state = app.ui_state.new_project.as_ref().unwrap();
+    assert_eq!(state.setup.sheet.paper_size, "A3");
+    let pane = super::preview::pane(
+        state,
+        signex_i18n::ids::DIALOG_NEW_PROJECT_PREVIEW_NOTE,
+        Some(&app.document_state.panel_ctx.canvas_colors),
+        app.ui_state.i18n.as_ref(),
+        &app.document_state.panel_ctx.tokens,
+    );
+    let texts: Vec<String> =
+        crate::layout_probe::lay_out_texts(pane, iced::Size::new(super::PREVIEW_W, 3000.0))
+            .into_iter()
+            .map(|t| {
+                t.text
+                    .chars()
+                    .filter(|c| !matches!(c, '\u{2068}' | '\u{2069}'))
+                    .collect()
+            })
+            .collect();
+    assert!(texts.iter().any(|t| t == "A3 landscape sheet"), "{texts:?}");
+    assert!(!texts.iter().any(|t| t.contains("A4")), "{texts:?}");
 }
 
 #[test]

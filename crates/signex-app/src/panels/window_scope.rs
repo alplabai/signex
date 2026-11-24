@@ -389,6 +389,7 @@ impl PanelMsg {
             | Self::MultiEdit { .. }
             | Self::SelectionForm { .. }
             | Self::PlacedEdit { .. }
+            | Self::ColorHex { .. }
             | Self::Harness { .. }
             | Self::Illustration { .. }
             | Self::DocumentOptions { .. }

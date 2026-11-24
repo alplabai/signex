@@ -286,6 +286,62 @@ fn the_filter_chips_count_the_rows_the_filter_leaves() {
     assert_eq!(vin.count(ParametersFilter::Parameters), 1);
 }
 
+/// What the value input on the row named `name` shows in the laid-out
+/// Parameters tab: its value, or its placeholder while empty.
+fn shown_in_row(app: &mut Signex, name: &str) -> String {
+    use crate::layout_probe::{lay_out_inputs, lay_out_texts};
+    use iced::{Size, Widget};
+    app.refresh_panel_ctx();
+    let ctx = &app.document_state.panel_ctx;
+    let window = Size::new(320.0, 4000.0);
+    let view = || super::view_properties_parameters(ctx, iced::Color::BLACK).boxed();
+    let texts = lay_out_texts(view(), window);
+    let label = texts
+        .iter()
+        .find(|t| t.text.contains(name))
+        .unwrap_or_else(|| panic!("no row {name:?}: {texts:#?}"));
+    let row = label.bounds;
+    let inputs = lay_out_inputs(view(), window);
+    let on_row = |y: f32| y >= row.y - 1.0 && y <= row.y + row.height + 1.0;
+    inputs
+        .iter()
+        .find(|input| on_row(input.bounds.center().y))
+        .unwrap_or_else(|| panic!("no input on the row {name:?}: {inputs:#?}"))
+        .text
+        .clone()
+}
+
+/// Mockup row 40: a sheet variable added with no value reads "Not set" in
+/// its row, as an unset title-block value does; a typed value replaces it.
+#[test]
+fn an_empty_sheet_variable_reads_not_set() {
+    use crate::panels::SheetVariableMsg;
+    let (mut app, _path, _recorder) = app_on_sheet();
+    panel(&mut app, PanelMsg::PropertiesTab(1));
+    let variables = |app: &mut Signex, m: SheetVariableMsg| panel(app, PanelMsg::SheetVariables(m));
+    variables(&mut app, SheetVariableMsg::NewNameTyped("VIN".into()));
+    variables(&mut app, SheetVariableMsg::Added);
+    app.refresh_panel_ctx();
+    let stored = app.document_state.panel_ctx.sheet_variables.get("VIN");
+    assert_eq!(stored.map(String::as_str), Some(""), "added with no value");
+    let not_set = signex_i18n::I18n::en_us()
+        .message_plain(signex_i18n::ids::PROPERTIES_PARAMETERS_NOT_SET, &[]);
+    assert_eq!(shown_in_row(&mut app, "VIN"), not_set);
+    assert_eq!(
+        shown_in_row(&mut app, "Checked By"),
+        not_set,
+        "as a title-block value"
+    );
+
+    let typed = SheetVariableMsg::ValueTyped {
+        name: "VIN".into(),
+        text: "12V".into(),
+    };
+    variables(&mut app, typed);
+    variables(&mut app, SheetVariableMsg::ValueSubmitted("VIN".into()));
+    assert_eq!(shown_in_row(&mut app, "VIN"), "12V");
+}
+
 /// #2531: the Built-in group lists the sheet's names and numbers first.
 #[test]
 fn the_built_in_group_opens_with_the_sheets_names_and_numbers() {

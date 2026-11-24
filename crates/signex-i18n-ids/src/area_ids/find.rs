@@ -67,6 +67,8 @@ define_ids! {
     PASTE_ARRAY_PREVIEW_MORE = "paste-array-preview-more";
     PASTE_ARRAY_PREVIEW_X = "paste-array-preview-x";
     PASTE_ARRAY_PREVIEW_Y = "paste-array-preview-y";
+    PASTE_ARRAY_PREVIEW_COPIES = "paste-array-preview-copies";
+    PASTE_ARRAY_PREVIEW_STEP = "paste-array-preview-step";
     PASTE_ARRAY_HINT_EXAMPLE = "paste-array-hint-example";
     PASTE_ARRAY_HINT_SAME = "paste-array-hint-same";
     PASTE_ARRAY_ITEMS = "paste-array-items";

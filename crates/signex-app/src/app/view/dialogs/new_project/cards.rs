@@ -208,15 +208,17 @@ fn tier_card<'a>(
             .font(bold)
             .color(ti(tokens.text))
             .wrapping(iced::widget::text::Wrapping::None)
+            .ellipsis(iced::widget::text::Ellipsis::End)
     ]
     .spacing(SP.s)
     .align_y(Alignment::Center);
     if edited {
         title = title.push(edited_pill(i18n, tokens));
     }
+    // The title takes the room the pencil and the disc leave and is cut
+    // with an ellipsis there, so it never runs past the card (#2804).
     let head = row![
-        title,
-        Space::new().width(Length::Fill),
+        title.width(Length::Fill),
         pencil(state, profile, edited, tokens),
         check_disc(picked, tokens),
     ]

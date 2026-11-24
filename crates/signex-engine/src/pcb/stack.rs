@@ -251,6 +251,23 @@ pub(super) fn holds_sizes_on(board: &PcbBoard, removed: &[String]) -> bool {
 
 /// Refuse to drop `layer` while anything is on it.
 fn check_empty(board: &PcbBoard, layer: &str) -> Result<(), BoardCommandError> {
+    if keepout_names(board, layer) {
+        return Err(BoardCommandError::KeepoutOnLayer(layer.to_string()));
+    }
+    let items = items_on_layer(board, layer);
+    if items > 0 {
+        return Err(BoardCommandError::LayerInUse {
+            layer: layer.to_string(),
+            items,
+        });
+    }
+    Ok(())
+}
+
+/// How many items sit on the board layer `layer`: tracks, vias and pads
+/// listing it, pours, texts, graphics, footprints and free primitives. The
+/// count Remove refuses on and the Layer Stack's Items column shows.
+pub fn items_on_layer(board: &PcbBoard, layer: &str) -> usize {
     let on = |name: &String| name == layer;
     let mut items = board.segments.iter().filter(|s| on(&s.layer)).count();
     items += board
@@ -270,16 +287,7 @@ fn check_empty(board: &PcbBoard, layer: &str) -> Result<(), BoardCommandError> {
     items += free.arcs.iter().filter(|a| on(&a.layer)).count();
     items += free.pads.iter().filter(|p| p.layers.iter().any(on)).count();
     items += free.dimensions.iter().filter(|d| on(&d.layer)).count();
-    if keepout_names(board, layer) {
-        return Err(BoardCommandError::KeepoutOnLayer(layer.to_string()));
-    }
-    if items > 0 {
-        return Err(BoardCommandError::LayerInUse {
-            layer: layer.to_string(),
-            items,
-        });
-    }
-    Ok(())
+    items
 }
 
 /// Whether a board-sketch keepout covers the copper layer `layer`.

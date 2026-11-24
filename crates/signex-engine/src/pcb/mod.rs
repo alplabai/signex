@@ -82,4 +82,4 @@ pub use footprint_content::FootprintText;
 pub use items::{BoardItem, BoardItemId, RemovedItem};
 pub use replace::FootprintPad;
 pub use replay_guard::BoardReplayGuard;
-pub use stack::{ItemLayerSizes, StackSnapshot};
+pub use stack::{ItemLayerSizes, StackSnapshot, items_on_layer};

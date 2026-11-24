@@ -398,23 +398,37 @@ impl Signex {
         anchor: Anchor,
         fallback: iced::window::Position,
     ) -> iced::window::Position {
+        window_placement::position_for(
+            self.new_window_source().as_ref(),
+            (size.width, size.height),
+            &self.ui_state.window_geometry.monitors,
+            anchor,
+            fallback,
+        )
+    }
+
+    /// The logical size of the monitor a new window opens on (the one
+    /// [`Self::new_window_position`] picks), else of the main window's
+    /// monitor; `None` before either has been read.
+    pub(crate) fn new_window_monitor_size(&self) -> Option<iced::Size> {
+        let monitors = &self.ui_state.window_geometry.monitors;
+        window_placement::monitor_size_for(self.new_window_source().as_ref(), monitors)
+            .map(|(w, h)| iced::Size::new(w, h))
+            .or(self.ui_state.main_window_monitor_size)
+    }
+
+    /// The window a new one is placed from: the focused one, else the main
+    /// window, as last read.
+    fn new_window_source(&self) -> Option<SourceWindow> {
         let tracker = &self.ui_state.window_geometry;
-        let source = self
-            .ui_state
+        self.ui_state
             .focused_window
             .and_then(|id| tracker.source(id))
             .or_else(|| {
                 self.ui_state
                     .main_window_id
                     .and_then(|id| tracker.source(id))
-            });
-        window_placement::position_for(
-            source.as_ref(),
-            (size.width, size.height),
-            &tracker.monitors,
-            anchor,
-            fallback,
-        )
+            })
     }
 }
 

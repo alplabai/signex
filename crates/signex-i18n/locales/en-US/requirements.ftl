@@ -19,6 +19,30 @@ requirements-off = Off
 requirements-passed-count = { $count } Passed
 requirements-failed-count = { $count } Failed
 requirements-not-checked-count = { $count } Not checked
+# A failed parts_state card: $missed of $of parts, $allowed the allowed
+# states as a list, $lines one requirements-part-* clause per BOM line.
+requirements-parts-unmet = { $missed } of { $of } { $of ->
+        [one] part
+       *[other] parts
+    } { $missed ->
+        [one] is
+       *[other] are
+    } not { $allowed }: { $lines }.
+requirements-part-unplaced = { $parts } { $count ->
+        [one] was
+       *[other] were
+    } not placed from a library row
+requirements-part-no-library = { $count ->
+        [one] { $parts }'s library row is
+       *[other] the library row of { $parts } is
+    } in no open library
+requirements-part-state = { $parts } { $count ->
+        [one] is
+       *[other] are
+    } { $state }
+# Any other failed card: its findings' messages, joined.
+requirements-findings = { $findings }.
+requirements-findings-next = { $head }; { $next }
 requirements-expand = Expand
 requirements-collapse = Collapse
 requirements-summary-clean = 0 errors or warnings

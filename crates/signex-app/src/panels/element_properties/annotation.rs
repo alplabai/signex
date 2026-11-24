@@ -131,6 +131,8 @@ pub struct DimensionToolForm {
     pub is_aligned: bool,
     pub has_from: bool,
     pub has_to: bool,
+    /// From is clicked and To follows the pointer until the second click.
+    pub is_to_following: bool,
     /// Tab paused the tool: the Override box takes typing while it is off.
     pub is_paused: bool,
 }
@@ -373,10 +375,20 @@ impl<'a> Rows<'a> {
 
     /// A point with nothing to edit yet: two empty boxes that take no text.
     pub fn blank_point(&self, label: Localized) -> Element<'a, PanelMsg> {
-        let cell = |prefix: MessageId| -> Element<'a, PanelMsg> {
+        self.read_only_point(label, None)
+    }
+
+    /// A point in two boxes that take no text; `None` leaves them blank.
+    pub fn read_only_point(
+        &self,
+        label: Localized,
+        at: Option<(f64, f64)>,
+    ) -> Element<'a, PanelMsg> {
+        let shown = |v: Option<f64>| v.map(|v| format!("{v:.2}")).unwrap_or_default();
+        let cell = |prefix: MessageId, value: String| -> Element<'a, PanelMsg> {
             row![
                 text(self.t(prefix)).size(TS.caption).color(self.faint()),
-                text_input(signex_i18n::UserText::new(String::new()), String::new())
+                text_input(signex_i18n::UserText::new(String::new()), value)
                     .size(TS.body)
                     .padding([SP.xs, SP.s])
                     .style(form_look::refusable_input_style(None))
@@ -388,8 +400,14 @@ impl<'a> Rows<'a> {
             .boxed()
         };
         let pair = row![
-            cell(signex_i18n::ids::PROPERTIES_ANNOTATION_X),
-            cell(signex_i18n::ids::PROPERTIES_ANNOTATION_Y),
+            cell(
+                signex_i18n::ids::PROPERTIES_ANNOTATION_X,
+                shown(at.map(|p| p.0))
+            ),
+            cell(
+                signex_i18n::ids::PROPERTIES_ANNOTATION_Y,
+                shown(at.map(|p| p.1))
+            ),
         ]
         .spacing(SP.s)
         .width(Length::Fill);

@@ -111,7 +111,7 @@ impl SchematicCanvas<'_> {
 
             // Layer 4: overlay (cursor HUD, previews, drag guides)
             let overlay_probe = crate::frame_probe::span("canvas.overlay");
-            layers.push(self.draw_overlay(state, renderer, bounds, cursor));
+            layers.push(self.draw_overlay(state, snapshot, renderer, bounds, cursor));
             drop(overlay_probe);
             return SurfaceLayers {
                 layers,
@@ -156,7 +156,7 @@ impl SchematicCanvas<'_> {
 
         // Layer 4: overlay (cursor HUD, previews, drag guides)
         let overlay_probe = crate::frame_probe::span("canvas.drag_overlay");
-        layers.push(self.draw_overlay(state, renderer, bounds, cursor));
+        layers.push(self.draw_overlay(state, moving, renderer, bounds, cursor));
         drop(overlay_probe);
 
         SurfaceLayers {

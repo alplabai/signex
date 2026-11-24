@@ -5,10 +5,11 @@
 //! with the reason as its tooltip, and a caption names what the chosen
 //! direction does.
 
+use iced::Widget as _;
 use iced::font::{Style as FontStyle, Weight};
+use iced::widget::text::{Ellipsis, Wrapping};
 use iced::widget::{Column, Row, Space, container, row, scrollable, tooltip as tip};
 use iced::{Alignment, Background, Border, Color, Element, Font, Length, Shadow, Theme, Vector};
-use iced::{Widget as _, widget::text::Wrapping};
 use signex_engine::pcb::eco::{
     BackBlock, CompareAction, CompareKind, CompareObject, CompareReport, CompareRow, CompareValue,
     Direction, Unavailable,
@@ -454,13 +455,20 @@ fn action_cell<'a>(
     };
     action_line(
         direction_control(row, live, i18n, tokens),
-        text(caption)
-            .size(TS.caption)
-            .color(r.ink4)
-            .wrapping(Wrapping::None)
-            .boxed(),
+        action_caption(caption, r.ink4),
         SegmentedMetrics::from_text_size(TS.caption).track_height,
     )
+}
+
+/// The caption beside the direction control: one line, cut with an ellipsis
+/// where even its own line is narrower than it (mockup row 162).
+fn action_caption<'a>(label: impl Into<Label<'a>>, ink: Color) -> Element<'a, Message> {
+    text(label)
+        .size(TS.caption)
+        .color(ink)
+        .wrapping(Wrapping::None)
+        .ellipsis(Ellipsis::End)
+        .boxed()
 }
 
 /// The control, then its caption centred on the `track` height; a caption
@@ -589,15 +597,15 @@ fn hint<'a>(label: Localized, tokens: &ThemeTokens) -> Element<'a, Message> {
 
 #[cfg(test)]
 mod tests {
-    use iced::widget::Space;
-    use iced::{Element, Length, Size, Widget as _};
+    use iced::widget::{Space, container, row};
+    use iced::{Color, Element, Length, Size, Widget as _};
     use signex_engine::pcb::eco::{BackBlock, Unavailable};
     use signex_i18n::{I18n, UserText};
     use signex_widgets::text;
 
-    use super::{TS, action_line, unavailable_text};
+    use super::{TS, action_caption, action_line, unavailable_text};
     use crate::app::Message;
-    use crate::layout_probe::{find, lay_out_texts};
+    use crate::layout_probe::{draw_pixels, find, lay_out_texts};
 
     /// Mockup row 162: the Action caption stays beside the control while
     /// it fits, and takes its own line, inside the cell, when it does not.
@@ -618,6 +626,36 @@ mod tests {
         let folded = caption_at(300.0);
         assert!(folded.y >= TRACK, "own line: {folded:?}");
         assert!(folded.x + folded.width <= 300.0, "inside: {folded:?}");
+    }
+
+    /// Mockup row 162: a caption wider than even its own line ends in an
+    /// ellipsis inside the cell instead of running past its edge.
+    #[test]
+    fn an_action_caption_wider_than_its_line_is_cut_inside_it() {
+        const LABEL: &str = "Take board designator";
+        const ROOM: f32 = 60.0;
+        let window = Size::new(4.0 * ROOM, 60.0);
+        let caption = container(action_caption(UserText::new(LABEL), Color::WHITE))
+            .width(Length::Fixed(ROOM));
+        let line: Element<'_, Message> = row![caption, Space::new().width(Length::Fill)].boxed();
+        let pixels = draw_pixels(line, window);
+        let room = ROOM as usize;
+        assert!(inked(&pixels, window, 0..room) > 0, "the caption is drawn");
+        assert_eq!(
+            inked(&pixels, window, room + 1..window.width as usize),
+            0,
+            "drawn past its line"
+        );
+    }
+
+    /// Pixels in the columns `xs` lighter than the black backdrop.
+    fn inked(pixels: &[u8], window: Size, xs: std::ops::Range<usize>) -> usize {
+        let width = window.width as usize;
+        pixels
+            .chunks_exact(4)
+            .enumerate()
+            .filter(|(i, px)| xs.contains(&(i % width)) && px[..3].iter().any(|c| *c > 64))
+            .count()
     }
 
     #[test]

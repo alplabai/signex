@@ -104,24 +104,15 @@ fn tab<'a>(
     is_on: bool,
     on_press: Message,
 ) -> Element<'a, Message> {
-    let tokens = &ctx.tokens;
-    let res = resolve(tokens);
-    let (soft, hover, accent) = (res.accent_soft, ti(tokens.hover), ti(tokens.accent));
+    let tokens = ctx.tokens;
+    let accent = ti(tokens.accent);
     let button = signex_widgets::button(label)
         .padding(Padding::from([0.0, metrics.tab_pad_h]))
         .height(metrics.tab_height)
         .on_press(on_press)
         .style(move |_: &Theme, status: iced::widget::button::Status| {
             let hovered = matches!(status, iced::widget::button::Status::Hovered);
-            let fill = match (is_on, hovered) {
-                (true, _) => Some(Background::Color(soft)),
-                (false, true) => Some(Background::Color(hover)),
-                (false, false) => None,
-            };
-            iced::widget::button::Style {
-                background: fill,
-                ..iced::widget::button::Style::default()
-            }
+            tab_look(&tokens, is_on, hovered)
         });
     if !is_on {
         return button.boxed();
@@ -141,4 +132,65 @@ fn tab<'a>(
     .height(Length::Fill)
     .align_y(iced::alignment::Vertical::Bottom);
     iced::widget::stack![button, underline].boxed()
+}
+
+/// A tab's fill and ink: the chosen tab is accent-soft with its ink, an off
+/// tab is unfilled (hover fill under the pointer) in the secondary text
+/// token, so its label reads on the strip in either theme (mockup row 151).
+fn tab_look(
+    tokens: &signex_types::theme::ThemeTokens,
+    is_on: bool,
+    hovered: bool,
+) -> iced::widget::button::Style {
+    let res = resolve(tokens);
+    let (background, text_color) = match (is_on, hovered) {
+        (true, _) => (
+            Some(Background::Color(res.accent_soft)),
+            res.accent_soft_ink,
+        ),
+        (false, true) => (
+            Some(Background::Color(ti(tokens.hover))),
+            ti(tokens.text_secondary),
+        ),
+        (false, false) => (None, ti(tokens.text_secondary)),
+    };
+    iced::widget::button::Style {
+        background,
+        text_color,
+        ..iced::widget::button::Style::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    use super::*;
+
+    /// mockup row 151: off tabs use the secondary text token, at rest and
+    /// under the pointer; the chosen tab uses the accent-soft ink.
+    #[test]
+    fn tab_labels_take_their_ink_from_the_theme() {
+        for theme in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let tokens = theme_tokens(theme);
+            let secondary = ti(tokens.text_secondary);
+            assert_eq!(
+                tab_look(&tokens, false, false).text_color,
+                secondary,
+                "{theme:?}"
+            );
+            assert_eq!(
+                tab_look(&tokens, false, true).text_color,
+                secondary,
+                "{theme:?}"
+            );
+            let on = tab_look(&tokens, true, false);
+            assert_eq!(on.text_color, resolve(&tokens).accent_soft_ink, "{theme:?}");
+            assert_eq!(
+                on.background,
+                Some(Background::Color(resolve(&tokens).accent_soft)),
+                "{theme:?}"
+            );
+        }
+    }
 }
