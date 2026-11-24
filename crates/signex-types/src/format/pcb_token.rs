@@ -46,8 +46,16 @@ pub const SNXPCB_FORMAT_V1_8: &str = "snxpcb/1.8";
 /// byte for byte.
 pub const SNXPCB_FORMAT_V1_9: &str = "snxpcb/1.9";
 
+/// Written when the stackup carries a finish (`[stackup.finish]`) or a row
+/// carries a loss tangent from the material library (mockup rows 176 and
+/// 177, 2026-11-24): a build that knows only 1.9 would drop the row's Df on
+/// save, so it opens 1.10 read-only. A board with neither keeps its token,
+/// byte for byte.
+pub const SNXPCB_FORMAT_V1_10: &str = "snxpcb/1.10";
+
 /// The token a save of `board` writes, from its content, highest need
-/// first: a shelved pour needs [`SNXPCB_FORMAT_V1_9`], a stackup name, a
+/// first: stack materials need [`SNXPCB_FORMAT_V1_10`], a shelved pour
+/// [`SNXPCB_FORMAT_V1_9`], a stackup name, a
 /// patterned baked target or a numbering sweep [`SNXPCB_FORMAT_V1_8`], the
 /// board sketch targets [`SNXPCB_FORMAT_BOARD_SKETCH_TARGETS`], rooms
 /// [`SNXPCB_FORMAT_ROOMS`], layer colours [`SNXPCB_FORMAT_LAYER_COLORS`],
@@ -57,7 +65,13 @@ pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
     let sketch = board.sketch.as_ref().map(|stored| &stored.sketch);
     let patterned = sketch.is_some_and(|s| s.repeats_baked_target() || s.has_numbering_sweep());
     let targets = sketch.is_some_and(|s| s.carries_board_targets() || s.needs_format_1_2());
-    if board.zones.iter().any(|zone| zone.is_shelved_pour()) {
+    let materials = board
+        .stackup
+        .as_ref()
+        .is_some_and(|s| s.has_materials_data());
+    if materials {
+        SNXPCB_FORMAT_V1_10
+    } else if board.zones.iter().any(|zone| zone.is_shelved_pour()) {
         SNXPCB_FORMAT_V1_9
     } else if patterned || board.stackup.as_ref().is_some_and(|s| s.name.is_some()) {
         SNXPCB_FORMAT_V1_8
@@ -75,7 +89,7 @@ pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
 /// `.snxpcb` version policy: a newer minor opens read-only. A save writes
 /// the lowest token its content needs ([`snxpcb_token`]).
 pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
-    current: SNXPCB_FORMAT_V1_9,
+    current: SNXPCB_FORMAT_V1_10,
     readable: &[
         "snxpcb/1",
         "snxpcb/1.1",
@@ -87,6 +101,7 @@ pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
         SNXPCB_FORMAT_BOARD_SKETCH_TARGETS,
         SNXPCB_FORMAT_V1_8,
         SNXPCB_FORMAT_V1_9,
+        SNXPCB_FORMAT_V1_10,
     ],
     newer_minor: NewerMinor::ReadOnly,
     missing: MissingToken::Refused,
