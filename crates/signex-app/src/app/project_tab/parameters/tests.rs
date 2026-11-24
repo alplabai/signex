@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use super::rename::{ParameterNameProblem, RenameNote, checked_rename, rename_note};
+use super::view::{Evaluation, evaluation};
 use super::{ParameterGroup, visible_parameters};
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::state::ProjectId;
@@ -371,6 +372,58 @@ fn the_section_renders_with_a_refused_rename_a_filter_and_a_folded_group() {
         ProjectTabMsg::ParameterGroupToggled {
             project_id: id,
             group: ParameterGroup::Variables,
+        },
+    );
+    let _ = app.view_project_tab(id);
+}
+
+/// Mockup row 30: an expression that evaluates shows its result (the green
+/// "Shows …" pill), one that does not gives the error row, and a literal
+/// value shows neither.
+#[test]
+fn an_expression_shows_its_result_or_its_error_and_a_literal_neither() {
+    let parameters: BTreeMap<String, String> = [
+        ("VOUT", "3.3V"),
+        ("VREF", "= VOUT / 2"),
+        ("IOUT_MAX", "= POUT / VOUT"),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v.to_string()))
+    .collect();
+    assert_eq!(
+        evaluation(&parameters, "VREF"),
+        Some(Evaluation::Shows("1.65V".to_string()))
+    );
+    assert!(matches!(
+        evaluation(&parameters, "IOUT_MAX"),
+        Some(Evaluation::Error(reason)) if !reason.is_empty()
+    ));
+    assert_eq!(evaluation(&parameters, "VOUT"), None);
+    assert_eq!(evaluation(&parameters, "MISSING"), None);
+}
+
+/// The section draws the result pill, the error row and an error row that
+/// also carries a rename note.
+#[test]
+fn the_section_renders_a_result_pill_and_an_error_row() {
+    let (mut app, id) = app();
+    add_variable(&mut app, id, "VOUT", "3.3V");
+    add_variable(&mut app, id, "VREF", "= VOUT / 2");
+    add_variable(&mut app, id, "IOUT_MAX", "= POUT / VOUT");
+    send(
+        &mut app,
+        ProjectTabMsg::SectionSelected {
+            project_id: id,
+            section: ProjectSection::Parameters,
+        },
+    );
+    let _ = app.view_project_tab(id);
+    send(
+        &mut app,
+        ProjectTabMsg::ParameterRenameEdited {
+            project_id: id,
+            from: "IOUT_MAX".into(),
+            text: "IMAX".into(),
         },
     );
     let _ = app.view_project_tab(id);
