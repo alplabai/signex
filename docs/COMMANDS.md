@@ -182,6 +182,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `rotate_clockwise` | Rotate clockwise by 90 degrees | modify | `Shift+Space` | `Shift+R` |
 | `rotate_counterclockwise` | Rotate counterclockwise by 90 degrees | modify | `Space` | `R` |
 | `rubber_stamp_copy` | Rubber-stamp copy / repeated paste | edit | `Mod+R` | — |
+| `save_all` | Save all unsaved documents | file | `Mod+Alt+S` | `Mod+Alt+S` |
 | `save_document` | Save document | file | `Mod+S` | `Mod+S` |
 | `save_document_as` | Save as | file | `Mod+Shift+S` | `Mod+Shift+S` |
 | `save_workspace_layout` | Save the panel arrangement as a workspace layout | window | — | — |

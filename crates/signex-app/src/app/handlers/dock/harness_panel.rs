@@ -219,7 +219,7 @@ impl Signex {
                         .map(|cs| (cs.uuid, cs.filename.clone()))
                 });
                 if let Some((symbol, file)) = target {
-                    task = self.descend_through_sheet_symbol(symbol, &file);
+                    task = self.open_sheet_through_symbol(symbol, &file);
                 }
             }
             HarnessPanelMsg::DefinitionsOpened => {

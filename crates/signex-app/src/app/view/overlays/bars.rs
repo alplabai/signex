@@ -221,17 +221,23 @@ impl Signex {
             tokens,
             &self.ui_state.i18n,
         );
-        let bar = signex_widgets::active_bar::view(bar_items, tokens)
-            .map(Message::Library)
-            .boxed();
+        use crate::library::editor::footprint::unified_active_bar as footprint_bar;
+        let span = self.footprint_bar_span(window_id);
+        let run = footprint_bar::scrolling_slots(editor);
+        let left = footprint_bar::bar_left_in(&bar_items, run.clone(), span);
+        let bar = signex_widgets::active_bar::view_within(
+            bar_items,
+            run,
+            footprint_bar::bar_max_width(span.width),
+            tokens,
+        )
+        .map(Message::Library)
+        .boxed();
+        // Translated, not padded: padding would limit a bar wider than the
+        // canvas and squeeze its last slots to nothing.
         out.push(
-            column![
-                iced::widget::Space::new().height(y_offset + bar_margin),
-                container(super::scroll_guard(bar))
-                    .width(Length::Fill)
-                    .align_x(iced::alignment::Horizontal::Center),
-            ]
-            .boxed(),
+            signex_widgets::Translate::new(super::scroll_guard(bar), (left, y_offset + bar_margin))
+                .boxed(),
         );
         // Position the dropdown panel directly below the bar's bottom
         // edge (see the schematic mount for the 42 px derivation).
@@ -243,13 +249,29 @@ impl Signex {
                 tokens,
                 footprint_presets,
                 dropdown_top,
-                self.ui_state.window_size.0,
+                span,
                 &self.ui_state.i18n,
             )
         {
             out.push(super::scroll_guard(overlay.map(Message::Library).boxed()));
         }
         out
+    }
+
+    /// The canvas between the docks of `window_id`, where the footprint
+    /// Active Bar fits and centres: the window's own layout when undocked,
+    /// the focused pane when the main window is tiled.
+    pub(in crate::app::view) fn footprint_bar_span(
+        &self,
+        window_id: iced::window::Id,
+    ) -> crate::library::editor::footprint::unified_active_bar::BarSpan {
+        let undocked = (self.ui_state.main_window_id != Some(window_id)).then_some(window_id);
+        let canvas = self.canvas_bounds_in(undocked);
+        crate::library::editor::footprint::unified_active_bar::BarSpan {
+            x: canvas.x,
+            width: canvas.width,
+            window_width: self.ui_state.size_of_window(window_id).0,
+        }
     }
 
     /// v0.26 — right-click context menu overlay for the footprint

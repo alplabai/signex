@@ -2,12 +2,14 @@
 //! and the rules that decide whether Create is available. Pure data; the
 //! disk check of the target lives in `target.rs`.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use signex_types::project::{
     PcbField, PcbValueError, ProfileNameProblem, ProjectSetup, SetupProfile, UserProfile,
 };
 use signex_types::schematic::SheetSize;
+
+pub(crate) use crate::app::handlers::document_files::new_project::project_file_in;
 
 use super::target::{TargetProblem, TargetStatus};
 use super::{NewProjectMsg, ProfileTarget};
@@ -207,8 +209,8 @@ impl NewProjectState {
     }
 
     /// The `.snxprj` Create would write: with the folder,
-    /// `<loc>/<name>/<name>.snxprj`, without it `<loc>/<name>.snxprj`.
-    #[cfg(test)]
+    /// `<loc>/<name>/<name>.snxprj`, without it `<loc>/<name>.snxprj`. `None`
+    /// while the name is unusable or the location is empty.
     pub(crate) fn project_file(&self) -> Option<PathBuf> {
         let name = check_name(&self.name).ok()?;
         let location = self.location_path()?;
@@ -461,16 +463,6 @@ impl NewProjectState {
         state.setup = setup;
         state.refresh_drafts();
         state
-    }
-}
-
-/// `<loc>/<name>/<name>.snxprj` or `<loc>/<name>.snxprj`.
-pub(crate) fn project_file_in(location: &Path, name: &str, make_folder: bool) -> PathBuf {
-    let file = format!("{name}.snxprj");
-    if make_folder {
-        location.join(name).join(file)
-    } else {
-        location.join(file)
     }
 }
 

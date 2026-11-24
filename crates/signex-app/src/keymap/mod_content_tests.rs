@@ -10,7 +10,8 @@ use std::str::FromStr;
 type Row = (ShortcutContext, String, String);
 
 /// The approved platform-standard set: `(key, shift)` chords that are `Mod`.
-const STANDARD: [(&str, bool); 26] = [
+const STANDARD: [(&str, bool); 27] = [
+    ("alt+s", false),
     ("n", false),
     ("o", false),
     ("s", false),
@@ -58,7 +59,7 @@ fn macos_moves_exactly_the_approved_standard_set() {
     for (id, moved, extra) in [
         (
             "signex_standard",
-            19,
+            20,
             vec![
                 "\u{2325}I",
                 "\u{2325}\u{2318}F",
@@ -67,7 +68,7 @@ fn macos_moves_exactly_the_approved_standard_set() {
                 "\u{21e7}TAB",
             ],
         ),
-        ("classic", 22, vec!["\u{21e7}\u{2318}Z"]),
+        ("classic", 23, vec!["\u{21e7}\u{2318}Z"]),
     ] {
         let win = rows(Platform::Windows, id);
         let mac = rows(Platform::MacOs, id);

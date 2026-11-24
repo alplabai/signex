@@ -218,6 +218,20 @@ fn fields<'a>(
         .labelled(make_folder_label(state, i18n))
         .text_size(TS.label)
         .on_toggle(|on| np(NewProjectMsg::MakeFolderToggled(on)));
+    // Two equal columns, so the path sits under Location and a long name
+    // in the checkbox label cannot squeeze it away.
+    let path: Element<'a, Message> = match project_path_line(state, i18n) {
+        Some(line) => text(line)
+            .size(TS.body)
+            .color(tokens::muted_text(tokens))
+            .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+            .width(Length::FillPortion(1))
+            .boxed(),
+        None => Space::new().width(Length::FillPortion(1)).boxed(),
+    };
+    let folder_row = row![container(make_folder).width(Length::FillPortion(1)), path]
+        .spacing(SP.l + SP.s)
+        .align_y(Alignment::Center);
     let mut col = column![
         row![
             column![
@@ -234,7 +248,7 @@ fn fields<'a>(
             .width(Length::FillPortion(1)),
         ]
         .spacing(SP.l + SP.s),
-        make_folder,
+        folder_row,
     ]
     .spacing(SP.m);
     if let Some(why) = &state.create_error {
@@ -269,12 +283,22 @@ pub(crate) fn make_folder_label(state: &NewProjectState, i18n: &I18n) -> Localiz
     }
 }
 
-/// The inline reason Create is off. A blank name is not nagged about.
+/// The line beside the folder checkbox: the `.snxprj` Create would write, or
+/// the request for a name. `None` when the reason line already says what is
+/// wrong (an invalid name, an empty location).
+fn project_path_line(state: &NewProjectState, i18n: &I18n) -> Option<Label<'static>> {
+    if state.name_problem() == Some(NameProblem::Empty) {
+        return Some(t!(i18n, ids::DIALOG_NEW_PROJECT_ERR_NAME_EMPTY).into());
+    }
+    let path = state.project_file()?;
+    Some(UserText::new(path.display().to_string()).into())
+}
+
+/// The inline reason Create is off. An empty name is asked for on the path
+/// line instead, so it is not said twice.
 fn blocker_text(state: &NewProjectState, i18n: &I18n) -> Option<Label<'static>> {
     Some(match state.blocked_by()? {
-        Blocker::Name(NameProblem::Empty) => {
-            t!(i18n, ids::DIALOG_NEW_PROJECT_ERR_NAME_EMPTY).into()
-        }
+        Blocker::Name(NameProblem::Empty) => return None,
         Blocker::Name(NameProblem::Invalid) => {
             t!(i18n, ids::DIALOG_NEW_PROJECT_ERR_NAME_INVALID).into()
         }

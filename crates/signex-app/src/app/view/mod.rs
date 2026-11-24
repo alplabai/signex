@@ -723,6 +723,8 @@ mod dock_layout_tests;
 #[cfg(test)]
 mod editor_bar_wheel_tests;
 #[cfg(test)]
+mod footprint_bar_span_tests;
+#[cfg(test)]
 mod hover_through_tests;
 #[cfg(test)]
 mod menu_dismiss_tests;

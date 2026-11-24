@@ -263,6 +263,76 @@ fn the_folder_label_follows_the_typed_name_and_is_neutral_when_empty() {
     assert_eq!(label(&app), "Create a folder named after the project");
 }
 
+/// The texts of the name, location and folder block, as laid out.
+fn field_texts(app: &crate::app::Signex) -> Vec<String> {
+    let state = app.ui_state.new_project.as_ref().unwrap();
+    let tokens = &app.document_state.panel_ctx.tokens;
+    crate::layout_probe::lay_out_texts(
+        super::fields(state, &app.ui_state.i18n, tokens),
+        iced::Size::new(900.0, 400.0),
+    )
+    .into_iter()
+    .map(|t| t.text.to_string())
+    .collect()
+}
+
+/// Mockup row 21: the line follows the name, the location and the checkbox.
+#[test]
+fn the_path_line_follows_the_name_location_and_folder_choice() {
+    use crate::app::Message;
+    use crate::app::new_project::NewProjectMsg;
+    let (mut app, _t) = crate::app::Signex::new();
+    let _ = app.update(Message::Menu(crate::menu_bar::MenuMessage::NewProject));
+    let work = std::path::Path::new("/work");
+    let _ = app.update(Message::from(NewProjectMsg::LocationEdited(
+        work.display().to_string(),
+    )));
+    edit_name(&mut app, " Motor ");
+    let nested = work.join("Motor").join("Motor.snxprj");
+    let flat = work.join("Motor.snxprj");
+    let texts = field_texts(&app);
+    assert!(texts.contains(&nested.display().to_string()), "{texts:?}");
+    assert!(!texts.contains(&flat.display().to_string()), "{texts:?}");
+
+    let _ = app.update(Message::from(NewProjectMsg::MakeFolderToggled(false)));
+    let texts = field_texts(&app);
+    assert!(texts.contains(&flat.display().to_string()), "{texts:?}");
+    assert!(!texts.contains(&nested.display().to_string()), "{texts:?}");
+
+    let other = std::path::Path::new("/other");
+    let _ = app.update(Message::from(NewProjectMsg::LocationEdited(
+        other.display().to_string(),
+    )));
+    edit_name(&mut app, "Pump");
+    let moved = other.join("Pump.snxprj");
+    let texts = field_texts(&app);
+    assert!(texts.contains(&moved.display().to_string()), "{texts:?}");
+}
+
+/// An empty name is asked for once, no path is shown and Create stays off.
+#[test]
+fn an_empty_name_asks_for_a_name_once_and_create_stays_off() {
+    use crate::app::Message;
+    use crate::app::new_project::{NewProjectMsg, TargetStatus};
+    let (mut app, _t) = crate::app::Signex::new();
+    let _ = app.update(Message::Menu(crate::menu_bar::MenuMessage::NewProject));
+    let _ = app.update(Message::from(NewProjectMsg::LocationEdited("/work".into())));
+    for empty in ["", "   "] {
+        edit_name(&mut app, empty);
+        // Even a target reported clear does not switch Create on.
+        app.ui_state.new_project.as_mut().unwrap().target = TargetStatus::Clear;
+        let ask = signex_i18n::t!(
+            app.ui_state.i18n,
+            signex_i18n::ids::DIALOG_NEW_PROJECT_ERR_NAME_EMPTY
+        )
+        .into_string();
+        let texts = field_texts(&app);
+        assert_eq!(texts.iter().filter(|t| **t == ask).count(), 1, "{texts:?}");
+        assert!(!texts.iter().any(|t| t.contains(".snxprj")), "{texts:?}");
+        assert!(!app.ui_state.new_project.as_ref().unwrap().can_create());
+    }
+}
+
 #[test]
 fn a_taken_target_shows_its_translated_reason() {
     use crate::app::new_project::{TargetProblem, TargetStatus};

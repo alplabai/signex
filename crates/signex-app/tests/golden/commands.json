@@ -1620,6 +1620,11 @@
     "category": "validation"
   },
   {
+    "id": "save_all",
+    "group": "General",
+    "category": "file"
+  },
+  {
     "id": "save_board_reuse_block",
     "group": "Pcb",
     "category": "design"

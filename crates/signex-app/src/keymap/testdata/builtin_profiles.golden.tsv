@@ -6,6 +6,7 @@ signex_standard	bind	Global	Mod+C	command:copy
 signex_standard	bind	Global	Mod+D	command:duplicate
 signex_standard	bind	Global	Mod+N	command:new_document
 signex_standard	bind	Global	Ctrl+Q	command:cycle_unit
+signex_standard	bind	Global	Mod+Alt+S	command:save_all
 signex_standard	bind	Global	Mod+R	command:rubber_stamp_copy
 signex_standard	bind	Global	Mod+Shift+S	command:save_document_as
 signex_standard	bind	Global	Mod+Shift+V	command:smart_paste
@@ -121,6 +122,7 @@ signex_standard	hint	-	-	new_pcb_document
 signex_standard	hint	-	Ctrl+O	open_document
 signex_standard	hint	-	Ctrl+S	save_document
 signex_standard	hint	-	Ctrl+Shift+S	save_document_as
+signex_standard	hint	-	Ctrl+Alt+S	save_all
 signex_standard	hint	-	-	revert
 signex_standard	hint	-	Ctrl+F4	close_active_document
 signex_standard	hint	-	-	close_all_documents
@@ -560,6 +562,7 @@ classic	bind	Global	Mod+N	command:new_document
 classic	bind	Global	Mod+O	command:open_document
 classic	bind	Global	Mod+P	command:print
 classic	bind	Global	Ctrl+Q	command:cycle_unit
+classic	bind	Global	Mod+Alt+S	command:save_all
 classic	bind	Global	Mod+S	command:save_document
 classic	bind	Global	Mod+Shift+A	command:unselect_all
 classic	bind	Global	Mod+Shift+E	command:edit_library_symbol
@@ -651,6 +654,7 @@ classic	hint	-	-	new_pcb_document
 classic	hint	-	Ctrl+O	open_document
 classic	hint	-	Ctrl+S	save_document
 classic	hint	-	Ctrl+Shift+S	save_document_as
+classic	hint	-	Ctrl+Alt+S	save_all
 classic	hint	-	-	revert
 classic	hint	-	-	close_active_document
 classic	hint	-	-	close_all_documents

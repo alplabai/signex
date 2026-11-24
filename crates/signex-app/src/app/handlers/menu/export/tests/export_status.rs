@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::protel_hierarchy::placed_app;
+use super::net_text_hierarchy::placed_app;
 use crate::app::contracts::ExportWriteOutcome;
 use crate::app::handlers::menu::export::settle;
 use crate::app::handlers::menu::export::write::export_status_line;

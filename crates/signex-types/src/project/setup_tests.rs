@@ -333,6 +333,12 @@ fn the_sheet_line_reads_like_the_preview() {
     assert_eq!(ProjectSetup::default().sheet_line(), "A3 landscape");
 }
 
+/// New projects start on A3; the A4 in mockup row 21 is a sample value.
+#[test]
+fn a_new_setup_defaults_to_a3() {
+    assert_eq!(ProjectSetup::default().sheet.paper_size, "A3");
+}
+
 #[test]
 fn a_stored_setup_reads_back_as_the_profile_it_matches() {
     let hdi = ProjectSetup::from_profile(SetupProfile::Hdi);

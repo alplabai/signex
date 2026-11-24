@@ -94,11 +94,23 @@ pub struct SelectionGroups {
     pub symbols: Option<SymbolGroup>,
     pub labels: Option<LabelGroup>,
     pub wires: Option<WireGroup>,
+    /// Selected power ports. They are counted on their own and no group edit
+    /// reaches them.
+    pub power_ports: usize,
 }
 
 impl SelectionGroups {
+    /// Whether no group has a field to edit. Power ports have none here.
     pub fn is_empty(&self) -> bool {
         self.symbols.is_none() && self.labels.is_none() && self.wires.is_none()
+    }
+
+    /// The objects the form counts: parts, power ports, labels and wires.
+    pub fn counted(&self) -> usize {
+        self.symbols.as_ref().map_or(0, |g| g.count)
+            + self.power_ports
+            + self.labels.as_ref().map_or(0, |g| g.count)
+            + self.wires.as_ref().map_or(0, |g| g.count)
     }
 }
 
@@ -179,7 +191,14 @@ pub fn selection_groups(sheet: &SchematicSheet, items: &[SelectedItem]) -> Selec
         .iter()
         .filter(|w| wire_ids.contains(&w.uuid))
         .collect();
+    let symbol_ids = ids_of(items, SelectedKind::Symbol);
+    let power_ports = sheet
+        .symbols
+        .iter()
+        .filter(|s| s.is_power && symbol_ids.contains(&s.uuid))
+        .count();
     SelectionGroups {
+        power_ports,
         symbols: symbol_group(&selected_symbols(sheet, items)),
         labels: (!labels.is_empty()).then(|| LabelGroup {
             count: labels.len(),

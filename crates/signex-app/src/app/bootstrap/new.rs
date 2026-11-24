@@ -725,6 +725,7 @@ impl Signex {
                     selected_drawing_placement: Default::default(),
                     annotation: Default::default(),
                     selected_child_sheet: None,
+                    selected_child_sheet_file: None,
                     directive_panel: None,
                     child_sheet_border_picker_open: false,
                     wire_color_picker: Default::default(),

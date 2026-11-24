@@ -20,7 +20,7 @@ fn count_up_off_places_copies_that_keep_the_label_text() {
     let _ = app.update(Message::Edit(EditMsg::Copy));
     open_array(&mut app);
 
-    dialog(&mut app, PasteArrayMsg::CountChanged("3".to_owned()));
+    dialog(&mut app, PasteArrayMsg::CountChanged("4".to_owned()));
     dialog(&mut app, PasteArrayMsg::CountUpToggled(false));
     let state = app
         .ui_state

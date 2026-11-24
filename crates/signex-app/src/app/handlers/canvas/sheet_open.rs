@@ -63,6 +63,8 @@ pub struct SheetOpen {
     /// The sheet symbol the file belongs to: a file found missing offers to
     /// create it for this symbol (#1275).
     pub create_for: Option<Uuid>,
+    /// Open Sheet: a file found missing logs why and opens nothing (#2847).
+    pub refuse_missing: bool,
 }
 
 impl SheetOpen {
@@ -71,6 +73,7 @@ impl SheetOpen {
             placement: PlacementOnOpen::Keep,
             then: AfterOpen::Nothing,
             create_for: None,
+            refuse_missing: false,
         }
     }
 
@@ -421,6 +424,10 @@ impl Signex {
                 path.display()
             )),
             _ => {}
+        }
+        if missing && descent.open.refuse_missing {
+            super::descend::log_missing_sheet_refused(path);
+            return Task::none();
         }
         let Some(symbol) = descent.open.create_for.filter(|_| missing) else {
             return Task::none();

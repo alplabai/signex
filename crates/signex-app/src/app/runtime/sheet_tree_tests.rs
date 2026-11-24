@@ -155,6 +155,30 @@ fn a_symbol_without_a_file_is_a_missing_row_under_its_parent() {
     assert_eq!(top.children[0].key, "sub/ghost.snxsch");
 }
 
+/// #2847: two symbols place `debug.snxsch` from different folders and only
+/// one file exists. The missing check tells them apart by resolved path.
+#[test]
+fn a_missing_file_does_not_mark_its_namesake_in_another_folder() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    write_sheet(
+        tmp.path(),
+        "top.snxsch",
+        &["a/debug.snxsch", "b/debug.snxsch"],
+    );
+    std::fs::create_dir(tmp.path().join("a")).expect("folder");
+    write_sheet(&tmp.path().join("a"), "debug.snxsch", &[]);
+    let dir = tmp.path().to_string_lossy().into_owned();
+    let mut app = app_workspace(&dir, &["top.snxsch"]);
+    settle(&mut app, false);
+    settle(&mut app, true);
+
+    let projects = &app.document_state.panel_ctx.projects;
+    let healthy = tmp.path().join("a").join("debug.snxsch");
+    let absent = tmp.path().join("b").join("debug.snxsch");
+    assert!(!crate::panels::sheet_file_missing(projects, &healthy));
+    assert!(crate::panels::sheet_file_missing(projects, &absent));
+}
+
 #[test]
 fn a_missing_row_follows_the_file_being_created_and_stops_offering_create() {
     let tmp = tempfile::tempdir().expect("tempdir");

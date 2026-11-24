@@ -69,6 +69,108 @@ pub fn bar_items(
     items
 }
 
+/// The slots that scroll in a window too narrow for the bar: the sketch
+/// bar's constraint strip; no other bar has a run.
+pub fn scrolling_slots(editor: &FootprintDocument) -> std::ops::Range<usize> {
+    if editor.state.mode == EditorMode::Sketch {
+        crate::library::editor::footprint::sketch_mode::active_bar::CONSTRAINT_SLOTS
+    } else {
+        0..0
+    }
+}
+
+/// The widest the bar may draw in a canvas `canvas_width` wide.
+pub fn bar_max_width(canvas_width: f32) -> f32 {
+    canvas_width - 2.0 * signex_widgets::active_bar::Metrics::GRAPHITE.padding
+}
+
+/// Gap kept between a dropdown panel and the canvas's right edge.
+const PANEL_EDGE_MARGIN: f32 = 4.0;
+
+/// The horizontal run of the canvas between the docks, in window
+/// coordinates, and the window it sits in. The bar centres on the canvas;
+/// one wider than the canvas stays whole and is kept inside the window.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BarSpan {
+    pub x: f32,
+    pub width: f32,
+    pub window_width: f32,
+}
+
+impl BarSpan {
+    /// Window x of a bar `bar_width` wide: centred on the canvas, then
+    /// moved as little as keeps it inside the window.
+    fn bar_left(self, bar_width: f32) -> f32 {
+        let centred = self.x + (self.width - bar_width) / 2.0;
+        centred.min(self.window_width - bar_width).max(0.0)
+    }
+
+    /// This span grown to cover `bar`, so a dropdown of a bar wider than
+    /// the canvas can stay under its trigger.
+    fn covering(self, bar: &PlacedBar) -> Self {
+        let left = self.x.min(bar.left);
+        let right = (self.x + self.width).max(bar.left + bar.width);
+        Self {
+            x: left,
+            width: right - left,
+            ..self
+        }
+    }
+
+    /// Window x of a dropdown panel under a trigger at `trigger_x`, moved
+    /// left when it would pass the span's right edge, and kept in the window.
+    fn panel_x(self, trigger_x: f32, panel_width: f32) -> f32 {
+        let right = self.x + self.width;
+        let x = if trigger_x + panel_width + PANEL_EDGE_MARGIN > right {
+            (right - panel_width - PANEL_EDGE_MARGIN).max(self.x)
+        } else {
+            trigger_x
+        };
+        x.min(self.window_width - panel_width - PANEL_EDGE_MARGIN)
+            .max(0.0)
+    }
+}
+
+/// Window x of the bar `items` draw in `span`, with the slots of `run`
+/// scrolling when it does not fit the canvas.
+pub fn bar_left_in(
+    items: &[ActiveBarItem<LibraryMessage>],
+    run: std::ops::Range<usize>,
+    span: BarSpan,
+) -> f32 {
+    let metrics = signex_widgets::active_bar::Metrics::GRAPHITE;
+    let max_width = bar_max_width(span.width);
+    let (_, width) =
+        signex_widgets::active_bar::slot_offsets_within(items, run, max_width, &metrics);
+    span.bar_left(width)
+}
+
+/// The bar as drawn in a [`BarSpan`], in window coordinates.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PlacedBar {
+    pub left: f32,
+    pub width: f32,
+    /// Window x of the menu's trigger; `None` when the bar has none.
+    pub trigger_x: Option<f32>,
+}
+
+/// Where the bar and `menu`'s trigger land in `span`, with the slots of
+/// `run` scrolling when the bar does not fit.
+pub fn place_bar(
+    items: &[ActiveBarItem<LibraryMessage>],
+    menu: FpActiveBarMenu,
+    run: std::ops::Range<usize>,
+    span: BarSpan,
+) -> PlacedBar {
+    let (offset, width) = menu_trigger_geometry_within(items, menu, run, bar_max_width(span.width));
+    let left = span.bar_left(width);
+    PlacedBar {
+        left,
+        width,
+        trigger_x: offset.map(|offset| left + offset),
+    }
+}
+
 /// Where `menu`'s trigger button sits: its left edge in px from the
 /// bar's own left edge, plus the bar's total width. `None` when the
 /// current bar has no trigger for that menu (the two sketch group
@@ -84,12 +186,18 @@ pub fn bar_items(
 /// menu trigger publishes `ToggleActiveBarMenu(menu)` on right-press,
 /// while the left-press action varies (Place / Select / Text arm a tool
 /// instead). Nothing else on the bar sends that message.
-fn menu_trigger_geometry(
+///
+/// Measured as drawn inside `max_width`, with the slots of `run` scrolling
+/// when the bar does not fit.
+fn menu_trigger_geometry_within(
     items: &[ActiveBarItem<LibraryMessage>],
     menu: FpActiveBarMenu,
+    run: std::ops::Range<usize>,
+    max_width: f32,
 ) -> (Option<f32>, f32) {
     let metrics = signex_widgets::active_bar::Metrics::GRAPHITE;
-    let (offsets, total) = signex_widgets::active_bar::slot_offsets(items, &metrics);
+    let (offsets, total) =
+        signex_widgets::active_bar::slot_offsets_within(items, run, max_width, &metrics);
     let opens = |item: &ActiveBarItem<LibraryMessage>| -> bool {
         let ActiveBarItem::Button(b) = item else {
             return false;
@@ -103,6 +211,15 @@ fn menu_trigger_geometry(
         )
     };
     (items.iter().position(opens).map(|i| offsets[i]), total)
+}
+
+/// The geometry of the whole bar, unconstrained by a window.
+#[cfg(test)]
+fn menu_trigger_geometry(
+    items: &[ActiveBarItem<LibraryMessage>],
+    menu: FpActiveBarMenu,
+) -> (Option<f32>, f32) {
+    menu_trigger_geometry_within(items, menu, 0..0, f32::INFINITY)
 }
 
 /// Build the dropdown overlay (panel + click-outside backstop) for
@@ -119,15 +236,14 @@ fn menu_trigger_geometry(
 /// the panel touches the bar's bottom edge regardless of whether the
 /// tab strip is showing.
 ///
-/// `window_width` is the current window's pixel width — needed to
-/// compute the bar's left edge when iced centre-aligns it.
+/// `span` is the canvas between the docks, where the bar is centred.
 pub fn dropdown_overlay<'a>(
     editor: &'a FootprintDocument,
     theme_id: ThemeId,
     tokens: &'a ThemeTokens,
     footprint_filter_presets: &[crate::active_bar::FootprintFilterPreset],
     top_padding_px: u16,
-    window_width: f32,
+    span: BarSpan,
     i18n: &signex_i18n::I18n,
 ) -> Option<iced::Element<'a, LibraryMessage>> {
     use iced::Length;
@@ -160,28 +276,22 @@ pub fn dropdown_overlay<'a>(
     };
     let panel = signex_widgets::active_bar_dropdown::view(entries, tokens, width_hint);
 
-    // v0.26-H — the panel lands under its own trigger button:
-    //   bar_left + <that button's offset within the bar>
-    // where bar_left = (window_width - bar_width) / 2, since the
-    // mounting site centre-aligns the bar. Both come from measuring
-    // the items this same bar just built. Clamp the panel's right edge
-    // inside the viewport so a near-rightmost button still keeps it
-    // fully visible.
-    let (trigger_x, bar_w) =
-        menu_trigger_geometry(&bar_items(editor, theme_id, tokens, i18n), menu);
+    // v0.26-H — the panel lands under its own trigger button, measured
+    // from the items this same bar just built, and stays on the canvas
+    // so a near-rightmost button still keeps it fully visible.
+    let placed = place_bar(
+        &bar_items(editor, theme_id, tokens, i18n),
+        menu,
+        scrolling_slots(editor),
+        span,
+    );
     // No trigger on the current bar means nothing to anchor to — a
     // stale menu key from a mode switch. Draw nothing rather than
     // park a panel over an unrelated button.
-    let trigger_x = trigger_x?;
-    let bar_left = ((window_width - bar_w) / 2.0).max(0.0);
-    let panel_w = width_hint.unwrap_or(220.0);
-    let raw_x = bar_left + trigger_x;
-    let edge_margin: f32 = 4.0;
-    let abs_x = if raw_x + panel_w + edge_margin > window_width {
-        (window_width - panel_w - edge_margin).max(0.0)
-    } else {
-        raw_x
-    };
+    let trigger_x = placed.trigger_x?;
+    let abs_x = span
+        .covering(&placed)
+        .panel_x(trigger_x, width_hint.unwrap_or(220.0));
 
     let panel_anchor = signex_widgets::Translate::new(panel, (abs_x, top_padding_px as f32));
 
@@ -438,6 +548,26 @@ mod tests {
                 "Create: Line, Rectangle, Rounded Rectangle, Circle, Arc, Tangent Arc, Edge Arc, Point",
                 "Modify: Fillet, Trim, Mirror, Offset, patterns, Make Pad from Profile",
                 "|",
+                "Fix point in place (needs 1 Point)",
+                "Coincident (needs 2 Points)",
+                "Distance between Points (needs 2 Points + dim input)",
+                "Horizontal (needs 1 Line)",
+                "Vertical (needs 1 Line)",
+                "Parallel (needs 2 Lines)",
+                "Perpendicular (needs 2 Lines)",
+                "Equal length (needs 2 Lines)",
+                "Point on line (needs 1 Point + 1 Line)",
+                "Midpoint (needs 1 Point + 1 Line)",
+                "Tangent (needs 1 Line + 1 Arc)",
+                "Tangent (needs 2 Arcs)",
+                "Angle between Lines (needs 2 Lines + dim input, degrees)",
+                "Equal radius (needs 2 Circles/Arcs)",
+                "Point on arc (needs 1 Point + 1 Arc)",
+                "Distance Point↔Line (needs 1 Point + 1 Line + dim input)",
+                "Distance Point↔Circle (needs 1 Point + 1 Circle/Arc + dim input)",
+                "Symmetric about line (needs 2 Points + 1 Line in selection)",
+                "Symmetric about point (needs 3 Points: 2 + a centre)",
+                "|",
                 "custom",
                 "|",
                 "custom",
@@ -490,6 +620,148 @@ mod tests {
         // the build rather than waiting for a test run.
         const { assert!(DIM_INPUT_W > Metrics::GRAPHITE.btn) };
         const { assert!(LINETYPE_W > Metrics::GRAPHITE.btn) };
+    }
+
+    /// #2843: in an 800 px window the full sketch bar does not fit. The
+    /// strip scrolls, so Snap ▾ past it stays inside the window, and its
+    /// dropdown anchors to where it is drawn.
+    #[test]
+    fn a_narrow_window_keeps_the_triggers_past_the_strip_in_reach() {
+        use crate::library::editor::footprint::state::EditorMode;
+        use signex_types::theme::ThemeId;
+
+        const NARROW: f32 = 800.0;
+        let tid = ThemeId::DEFAULT;
+        let tokens = signex_types::theme::theme_tokens(tid);
+        let m = Metrics::GRAPHITE;
+        let editor = editor_in(EditorMode::Sketch);
+        let items = bar_items(&editor, tid, &tokens, &signex_i18n::I18n::en_us());
+        let (_, full) = menu_trigger_geometry(&items, FpActiveBarMenu::Snap);
+        assert!(full > NARROW, "the full bar is {full} px wide");
+
+        let run = scrolling_slots(&editor);
+        let max = bar_max_width(NARROW);
+        let (snap, fitted) =
+            menu_trigger_geometry_within(&items, FpActiveBarMenu::Snap, run.clone(), max);
+        let snap = snap.expect("Snap trigger");
+        assert!(fitted <= max, "{fitted} fits {max}");
+        assert!(snap + m.btn <= fitted, "Snap at {snap} is inside {fitted}");
+        let (create, _) =
+            menu_trigger_geometry_within(&items, FpActiveBarMenu::SketchCreate, run, max);
+        assert_eq!(
+            create,
+            menu_trigger_geometry(&items, FpActiveBarMenu::SketchCreate).0
+        );
+    }
+
+    /// #2843: a dropdown stays on the canvas, not merely in the window.
+    #[test]
+    fn a_dropdown_panel_stays_between_the_docks() {
+        let span = BarSpan {
+            x: 245.0,
+            width: 816.0,
+            window_width: 4096.0,
+        };
+        let right = span.x + span.width;
+        assert_eq!(span.panel_x(300.0, 260.0), 300.0, "room: under its trigger");
+        assert_eq!(
+            span.panel_x(right - 30.0, 260.0),
+            right - 260.0 - PANEL_EDGE_MARGIN
+        );
+        assert_eq!(span.panel_x(300.0, 2000.0), span.x, "wider than the canvas");
+    }
+
+    /// #2843: a bar wider than the canvas stays whole, centred on the canvas
+    /// until a window edge stops it.
+    #[test]
+    fn a_bar_wider_than_the_canvas_is_kept_inside_the_window() {
+        let at = |x| BarSpan {
+            x,
+            width: 100.0,
+            window_width: 500.0,
+        };
+        assert_eq!(at(200.0).bar_left(300.0), 100.0, "centred");
+        assert_eq!(at(0.0).bar_left(300.0), 0.0, "left window edge");
+        assert_eq!(at(400.0).bar_left(300.0), 200.0, "right window edge");
+    }
+
+    /// A dropdown of such a bar stays under a trigger past the canvas.
+    #[test]
+    fn a_dropdown_follows_a_trigger_past_the_canvas() {
+        let span = BarSpan {
+            x: 400.0,
+            width: 100.0,
+            window_width: 1000.0,
+        };
+        let bar = PlacedBar {
+            left: 300.0,
+            width: 400.0,
+            trigger_x: Some(600.0),
+        };
+        assert_eq!(span.covering(&bar).panel_x(420.0, 200.0), 420.0);
+        assert_eq!(
+            span.covering(&bar).panel_x(600.0, 200.0),
+            700.0 - 200.0 - PANEL_EDGE_MARGIN
+        );
+    }
+
+    /// #2843: a press on the lowest row of a strip button reaches the
+    /// button; the rail sits below it, and the bar keeps its height.
+    #[test]
+    fn a_press_on_the_bottom_row_of_a_scrolling_button_reaches_it() {
+        use signex_widgets::active_bar::{slot_offsets_within, view_within};
+
+        const FIRST_IN_RUN: u8 = 10;
+        const RUN: std::ops::Range<usize> = 2..12;
+        fn bar() -> Vec<ActiveBarItem<u8>> {
+            let button = |message| {
+                ActiveBarItem::Button(ActiveBarButton {
+                    on_press: Some(message),
+                    ..ActiveBarButton::default()
+                })
+            };
+            let mut items = vec![button(0), ActiveBarItem::Separator];
+            items.extend((0..10).map(|i| button(FIRST_IN_RUN + i)));
+            items.extend([ActiveBarItem::Separator, button(99)]);
+            items
+        }
+
+        let tokens = signex_types::theme::theme_tokens(ThemeId::DEFAULT);
+        let m = Metrics::GRAPHITE;
+        let (_, full) = signex_widgets::active_bar::slot_offsets(&bar(), &m);
+        let max = full - 100.0;
+        let window = iced::Size::new(full, 2.0 * m.bar_height());
+        let (offsets, _) = slot_offsets_within(&bar(), RUN, max, &m);
+        let x = offsets[RUN.start] + m.btn / 2.0;
+        let click = |y: f32| {
+            crate::layout_probe::messages_on_click_at(
+                view_within(bar(), RUN, max, &tokens),
+                window,
+                None,
+                iced::Point::new(x, y),
+            )
+        };
+
+        let button_bottom = m.padding + m.btn;
+        assert_eq!(click(button_bottom - 0.5), [FIRST_IN_RUN]);
+        assert!(
+            click(button_bottom + m.padding / 2.0).is_empty(),
+            "the rail"
+        );
+
+        let scrolling = view_within(bar(), RUN, max, &tokens);
+        let fitting = view_within(bar(), RUN, full, &tokens);
+        assert_eq!(
+            crate::layout_probe::root_size(scrolling, window).height,
+            crate::layout_probe::root_size(fitting, window).height,
+        );
+    }
+
+    /// Only the sketch bar has a scrolling run.
+    #[test]
+    fn the_pads_bar_has_no_scrolling_run() {
+        use crate::library::editor::footprint::state::EditorMode;
+        assert!(scrolling_slots(&editor_in(EditorMode::Normal)).is_empty());
     }
 
     /// Outside Sketch mode each trigger sits in the group its tag names:

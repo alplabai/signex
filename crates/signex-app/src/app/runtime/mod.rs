@@ -299,6 +299,7 @@ impl Signex {
         self.document_state.panel_ctx.selected_drawing = None;
         self.document_state.panel_ctx.selected_drawing_placement = Default::default();
         self.document_state.panel_ctx.selected_child_sheet = None;
+        self.document_state.panel_ctx.selected_child_sheet_file = None;
         self.document_state.panel_ctx.selected_wire_style = None;
         self.document_state.panel_ctx.multi_draft = None;
         self.document_state.panel_ctx.multi_groups = match self.document_state.active_engine() {
@@ -501,12 +502,16 @@ impl Signex {
                 details.selected_kind,
                 signex_types::schematic::SelectedKind::ChildSheet
             ) {
-                self.document_state.panel_ctx.selected_child_sheet = engine
+                let sheet = engine
                     .document()
                     .child_sheets
                     .iter()
                     .find(|cs| cs.uuid == details.selected_uuid)
                     .cloned();
+                self.document_state.panel_ctx.selected_child_sheet_file = sheet
+                    .as_ref()
+                    .and_then(|sheet| Self::child_sheet_file(&path, &sheet.filename));
+                self.document_state.panel_ctx.selected_child_sheet = sheet;
             }
         }
         self.document_state.panel_ctx.footprint_card = self.resolve_footprint_card();

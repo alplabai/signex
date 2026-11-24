@@ -52,6 +52,7 @@ pub(crate) use body_row::{
     BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,
 };
 pub(super) use channel_view::channel_view_properties;
+pub(crate) use child_sheet::sheet_file_missing;
 pub(super) use child_sheet::view_child_sheet_properties;
 pub use directive::BlanketEdit;
 // #1281, #1489: the Net Parameters and Net Blanket surfaces.

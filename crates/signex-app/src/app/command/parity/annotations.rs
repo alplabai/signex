@@ -802,6 +802,9 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // Every tab closes as `close_tab` does: its title-block drafts commit and
     // a board sketch settles first.
     (&["close_all_documents"], Bridge, &[InProgressEdit]),
+    // `save_all_dirty` commits the title-block drafts and settles a board
+    // sketch, whose refused bake holds the save.
+    (&["save_all"], Bridge, &[InProgressEdit]),
     // The core command after a split router (#2326 kill-check decisions 3
     // and "homes"): the router resolves what is in hand; the targets, Move
     // Keeps Wires and the grid reach the command as operands.

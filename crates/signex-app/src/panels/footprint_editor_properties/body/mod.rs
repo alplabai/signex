@@ -118,7 +118,14 @@ pub(super) fn view_body<'a>(
     };
     let col = Column::new().spacing(0).width(Length::Fill);
     let col = match fp.bake_outcome.as_ref() {
-        Some(outcome) => super::bake_outcome::view_bake_outcome(col, outcome, tokens, i18n),
+        Some(outcome) => super::bake_outcome::view_bake_outcome(
+            col,
+            outcome,
+            fp.selected_pad.as_ref(),
+            palette,
+            tokens,
+            i18n,
+        ),
         None => col,
     };
     match body_state(fp) {

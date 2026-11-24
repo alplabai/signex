@@ -166,7 +166,10 @@ board backdrop) and nothing else. The host decides:
 
 Both hosts show the same Active Bar: Select | Create ▾ | Modify ▾ |
 constraint strip | dimension input | Linetype (Normal / Construction /
-Centerline segments) | Snap ▾. Create holds Point. The canvas draws the
+Centerline segments) | Snap ▾. The strip always shows all 19 buttons, greying
+what the selection cannot take, and scrolls sideways on a canvas too narrow
+for the bar ([Leaving sketch mode](FOOTPRINT_SKETCH.md#leaving-sketch-mode)).
+Create holds Point. The canvas draws the
 board (outline, tracks, vias) faint under the sketch, on the dark board
 ground. Properties adds a Board section: Board outline for an edge,
 Mounting hole for a circle, and the hole's Drill (empty: the circle's

@@ -1209,6 +1209,10 @@ run_drc	refusal_needs	Pcb	core	active document	routing
 run_erc	bridge	Erc(Run)	core	active document,render cache,settings	handler
 run_erc	in_window_rewrite	document_window	gui	window	routing
 run_erc	refusal_needs	Sheets	core	active document	routing
+save_all	bridge	Menu(SaveAll)	core	active document,in-progress edit	handler
+save_all	in_window_rewrite	document_window	gui	window	routing
+save_all	refusal_needs	UnsavedWork	core	active document	routing
+save_all	headless_refusal	headless_refusal	core	none	routing
 save_board_reuse_block	translator	Pcb(ReuseBlock(SaveRequested))	gui	active document,selection	handler
 save_board_reuse_block	operand_handler	run_operands: named document	core	origin	handler
 save_board_reuse_block	in_window_rewrite	document_window	gui	window	routing

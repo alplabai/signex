@@ -7,10 +7,14 @@ use crate::paste_prefs::PasteDesignators;
 use signex_types::measure::{length_field_text, parse_length_field_mm};
 use signex_types::text_increment::{STEP_MAX, STEP_MIN};
 
-/// Most copies one Paste Array places.
+/// The largest Copies value. Copies counts the original, so this places one
+/// fewer new copy.
 pub const MAX_COPIES: u32 = 1000;
 
-/// Most items (copies times the items in one copy) one Paste Array places.
+/// The smallest Copies value: the original and one new copy.
+const MIN_COPIES: u32 = 2;
+
+/// Most items (new copies times the items in one copy) one Paste Array places.
 pub const MAX_PLACED_ITEMS: usize = 100_000;
 
 /// No array reaches further than this from where it was copied, so a typo
@@ -24,6 +28,7 @@ const COUNT_UP_FALLBACK_STEP: i32 = 1;
 /// The open dialog: what is typed, as typed.
 #[derive(Debug, Clone)]
 pub struct PasteArrayState {
+    /// The Copies field: positions in the array, the original included.
     pub count: String,
     pub x_spacing: String,
     pub y_spacing: String,
@@ -58,11 +63,19 @@ pub struct PasteArrayState {
 /// A dialog whose fields all parse.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PasteArrayInput {
-    pub count: u32,
+    /// New copies to place: the Copies field less the original.
+    pub new_copies: u32,
     pub dx_mm: f64,
     pub dy_mm: f64,
     pub step: i32,
     pub designators: PasteDesignators,
+}
+
+impl PasteArrayInput {
+    /// Positions the preview draws, the original included.
+    pub fn positions(&self) -> u32 {
+        self.new_copies + 1
+    }
 }
 
 /// The field a refusal is about; it is drawn red with the reason.
@@ -75,8 +88,9 @@ pub enum PasteArrayField {
 }
 
 impl PasteArrayState {
-    /// A fresh dialog: 2 copies, `dx_mm` / `dy_mm` apart, counting by `step`,
-    /// of a copy holding `items_per_copy` items.
+    /// A fresh dialog: Copies 2 (the original and one new copy), `dx_mm` /
+    /// `dy_mm` apart, counting by `step`, of a copy holding `items_per_copy`
+    /// items.
     pub fn new(
         unit: Unit,
         dx_mm: f64,
@@ -105,19 +119,21 @@ impl PasteArrayState {
         }
     }
 
-    /// The copies typed, when they are a whole number from 1 to
-    /// [`MAX_COPIES`].
-    pub fn copies(&self) -> Option<u32> {
+    /// The new copies the typed Copies places, when it is a whole number from
+    /// 2 to [`MAX_COPIES`]. Copies counts the original, so 1 places nothing.
+    pub fn new_copies(&self) -> Option<u32> {
         self.count
             .trim()
             .parse::<u32>()
             .ok()
-            .filter(|n| (1..=MAX_COPIES).contains(n))
+            .filter(|n| (MIN_COPIES..=MAX_COPIES).contains(n))
+            .map(|positions| positions - 1)
     }
 
-    /// How many items the paste places: copies times the items in one copy.
+    /// How many items the paste places: new copies times the items in one
+    /// copy.
     pub fn placed_items(&self) -> Option<usize> {
-        self.copies()
+        self.new_copies()
             .map(|n| (n as usize).saturating_mul(self.items_per_copy))
     }
 
@@ -154,31 +170,33 @@ impl PasteArrayState {
 
     /// [`Self::input`] with the field the refusal is about.
     pub fn check(&self) -> Result<PasteArrayInput, (PasteArrayField, String)> {
-        let count = self.copies().ok_or_else(|| {
+        let new_copies = self.new_copies().ok_or_else(|| {
             (
                 PasteArrayField::Copies,
-                format!("Copies must be a whole number from 1 to {MAX_COPIES}."),
+                format!(
+                    "Copies must be a whole number from {MIN_COPIES} to {MAX_COPIES}; it counts the original, so 1 places nothing."
+                ),
             )
         })?;
-        if (count as usize).saturating_mul(self.items_per_copy) > MAX_PLACED_ITEMS {
+        if (new_copies as usize).saturating_mul(self.items_per_copy) > MAX_PLACED_ITEMS {
             return Err((
                 PasteArrayField::Copies,
                 format!(
-                    "{count} copies of {} items is over the limit of {MAX_PLACED_ITEMS} items; use fewer copies.",
+                    "{new_copies} new copies of {} items is over the limit of {MAX_PLACED_ITEMS} items; use fewer copies.",
                     self.items_per_copy
                 ),
             ));
         }
         let spacing = |text: &str, axis: &str, field: PasteArrayField| {
             parse_length_field_mm(text, self.unit)
-                .filter(|mm| (mm * f64::from(count)).abs() <= MAX_EXTENT_MM)
+                .filter(|mm| (mm * f64::from(new_copies)).abs() <= MAX_EXTENT_MM)
                 .ok_or_else(|| {
                     (
                         field,
                         format!(
                             "{axis} spacing must be a number in {} (at most {} for the whole array).",
                             self.unit,
-                            length_field_text(MAX_EXTENT_MM / f64::from(count), self.unit),
+                            length_field_text(MAX_EXTENT_MM / f64::from(new_copies), self.unit),
                         ),
                     )
                 })
@@ -198,7 +216,7 @@ impl PasteArrayState {
                 )
             })?;
         Ok(PasteArrayInput {
-            count,
+            new_copies,
             dx_mm,
             dy_mm,
             step,
@@ -239,7 +257,7 @@ mod tests {
         assert_eq!(
             input,
             PasteArrayInput {
-                count: 2,
+                new_copies: 1,
                 dx_mm: 10.0,
                 dy_mm: 0.0,
                 step: 1,
@@ -250,13 +268,13 @@ mod tests {
 
     #[test]
     fn the_count_is_a_whole_number_in_range() {
-        for bad in ["0", "1001", "-1", "2.5", "", "x"] {
+        for bad in ["0", "1", "1001", "-1", "2.5", "", "x"] {
             let mut s = state();
             s.count = bad.to_owned();
             assert!(s.input().unwrap_err().contains("Copies"), "{bad:?}");
             assert_eq!(s.invalid_field(), Some(PasteArrayField::Copies), "{bad:?}");
         }
-        for good in ["1", "1000", " 7 "] {
+        for good in ["2", "1000", " 7 "] {
             let mut s = state();
             s.count = good.to_owned();
             assert!(s.input().is_ok(), "{good:?}");
@@ -270,11 +288,38 @@ mod tests {
         s.count = "1000".to_owned();
         assert!(s.input().unwrap_err().contains("100000 items"));
         assert_eq!(s.invalid_field(), Some(PasteArrayField::Copies));
-        s.count = "990".to_owned();
-        assert!(s.input().is_ok(), "99 990 items is within the cap");
-        s.items_per_copy = 100;
-        s.count = "1000".to_owned();
+        s.count = "991".to_owned();
+        assert!(s.input().is_ok(), "990 new copies, 99 990 items");
+        s.count = "992".to_owned();
+        assert!(s.input().is_err(), "991 new copies, 100 091 items");
+        s.items_per_copy = 200;
+        s.count = "501".to_owned();
         assert!(s.input().is_ok(), "exactly the cap is allowed");
+        s.count = "502".to_owned();
+        assert!(s.input().is_err(), "one new copy over the cap");
+    }
+
+    /// #2847: the furthest copy sits Copies - 1 spacings from the original.
+    #[test]
+    fn the_extent_limit_counts_the_new_copies() {
+        let mut s = state();
+        s.count = "3".to_owned();
+        s.x_spacing = "500000".to_owned();
+        assert!(s.input().is_ok(), "2 spacings reach exactly the limit");
+        s.x_spacing = "500001".to_owned();
+        assert_eq!(s.invalid_field(), Some(PasteArrayField::XSpacing));
+    }
+
+    /// #2847: Copies = 4 is four positions and three new copies.
+    #[test]
+    fn copies_counts_the_original() {
+        let mut s = state();
+        s.count = "4".to_owned();
+        let input = s.input().unwrap();
+        assert_eq!((input.new_copies, input.positions()), (3, 4));
+        s.count = "1".to_owned();
+        assert_eq!(s.new_copies(), None, "1 places nothing");
+        assert!(s.input().unwrap_err().contains("1 places nothing"));
     }
 
     #[test]
@@ -332,11 +377,13 @@ mod tests {
     }
 
     #[test]
-    fn the_placed_items_are_copies_times_items_per_copy() {
+    fn the_placed_items_are_new_copies_times_items_per_copy() {
         let mut s = state();
         s.count = "4".to_owned();
-        assert_eq!(s.placed_items(), Some(12));
+        assert_eq!(s.placed_items(), Some(9));
         s.count = "1001".to_owned();
+        assert_eq!(s.placed_items(), None);
+        s.count = "1".to_owned();
         assert_eq!(s.placed_items(), None);
     }
 }

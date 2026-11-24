@@ -43,29 +43,38 @@ pub struct SketchExit {
     /// Why the last Bake found the sketch unsolvable. Footprint host only.
     solve_refusal: Option<SolveRefusal>,
     /// What the last Bake wrote, for Properties (mockup row 190).
-    outcome: Option<BakeOutcome>,
+    outcome: Option<Box<RecordedOutcome>>,
 }
 
-/// What a footprint Bake wrote. Properties shows it until the selection
-/// changes, or until the counts it states are no longer true.
+/// What a footprint Bake wrote. Properties shows it until a non-pad object,
+/// a multi-selection, an edit or an empty click ends it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BakeOutcome {
     pub name: String,
     /// Each target the bake wrote something to, with its count.
     pub written: Vec<(BakedKind, usize)>,
     pub pads: usize,
-    selection: SelectionAtBake,
 }
 
-/// The pad, silk and sketch selection when Bake finished.
-type SelectionAtBake = (
+/// A shown outcome and what it holds for.
+#[derive(Debug, Clone)]
+struct RecordedOutcome {
+    shown: BakeOutcome,
+    /// The selection the outcome last held for; a pad click moves it.
+    selection: PanelSelection,
+    /// The footprint and pads the bake left; any difference is an edit.
+    baked: Entry,
+}
+
+/// The pad, silk and sketch selection.
+type PanelSelection = (
     Option<usize>,
     Vec<usize>,
     Option<usize>,
     Option<signex_sketch::id::SketchEntityId>,
 );
 
-fn selection_now(editor: &FootprintDocument) -> SelectionAtBake {
+fn selection_now(editor: &FootprintDocument) -> PanelSelection {
     let state = &editor.state;
     (
         state.selected_pad,
@@ -87,29 +96,56 @@ pub fn record_outcome(editor: &mut FootprintDocument) {
     if editor.state.sketch_host() != signex_types::sketch::SketchHost::Footprint {
         return;
     }
-    let outcome = BakeOutcome {
-        name: editor.primitive().name.clone(),
-        written: written_counts(editor.primitive()),
-        pads: editor.primitive().pads.len(),
+    let recorded = RecordedOutcome {
+        shown: BakeOutcome {
+            name: editor.primitive().name.clone(),
+            written: written_counts(editor.primitive()),
+            pads: editor.primitive().pads.len(),
+        },
         selection: selection_now(editor),
+        baked: Entry {
+            footprint: editor.primitive().clone(),
+            pads: editor.state.pads.clone(),
+        },
     };
-    editor.state.sketch_exit.outcome = Some(outcome);
+    editor.state.sketch_exit.outcome = Some(Box::new(recorded));
 }
 
-/// The outcome Properties shows: none once the selection moved or the
-/// footprint no longer holds what it states.
+/// Whether `now` is one pad and nothing else new: the sketch selection a
+/// pad click leaves alone stays what it was.
+fn is_one_pad(now: &PanelSelection, held: &PanelSelection) -> bool {
+    now.0.is_some() && now.1.is_empty() && now.2.is_none() && now.3 == held.3
+}
+
+/// The outcome Properties shows: none once the selection left the held one
+/// for anything but one pad, or the footprint or its pads were edited.
 pub fn shown_outcome(editor: &FootprintDocument) -> Option<&BakeOutcome> {
-    editor.state.sketch_exit.outcome.as_ref().filter(|outcome| {
-        outcome.selection == selection_now(editor)
-            && outcome.written == written_counts(editor.primitive())
-    })
+    let recorded = editor.state.sketch_exit.outcome.as_deref()?;
+    let now = selection_now(editor);
+    let holds = (now == recorded.selection || is_one_pad(&now, &recorded.selection))
+        && recorded.baked.footprint == *editor.primitive()
+        && recorded.baked.pads == editor.state.pads;
+    holds.then_some(&recorded.shown)
 }
 
-/// Forget an outcome that no longer shows, so it cannot come back.
+/// Forget an outcome that no longer shows, so it cannot come back, and
+/// hold a shown one for the current selection, so leaving a clicked pad
+/// for nothing ends it.
 pub fn settle_outcome(editor: &mut FootprintDocument) {
     if shown_outcome(editor).is_none() {
         editor.state.sketch_exit.outcome = None;
+        return;
     }
+    let now = selection_now(editor);
+    if let Some(recorded) = editor.state.sketch_exit.outcome.as_mut() {
+        recorded.selection = now;
+    }
+}
+
+/// An empty click ends the outcome even when nothing was selected, which
+/// leaves the selection as it was.
+pub fn end_outcome(editor: &mut FootprintDocument) {
+    editor.state.sketch_exit.outcome = None;
 }
 
 /// A solver's refusal, for the sketch generation it was found on: an edit

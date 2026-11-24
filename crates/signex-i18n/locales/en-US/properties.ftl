@@ -630,6 +630,8 @@ properties-degrees-short = { $degrees }°
 # Sheet symbol Properties (mockup row 46). "Open Sheet" does what double-clicking the
 # symbol does.
 properties-sheet-open = Open Sheet
+# Why Open Sheet is disabled, in Properties, the context menu and the log.
+properties-sheet-open-missing = The sheet file is missing, so there is nothing to open.
 properties-sheet-browse = Browse…
 # Title of the file dialog that picks the file a sheet symbol points at.
 properties-sheet-browse-title = Choose the sheet file
@@ -685,6 +687,13 @@ properties-rule-no-match = No rule matches “{ $query }”.
 # Multi-selection Properties (mockup row 51): the kind chips and sections.
 properties-kind-all = All
 properties-kind-parts = Parts
+properties-kind-power-ports = Power Ports
+# Shown with the Power Ports chip on: a port's value is its net name.
+properties-multi-power-note = Power ports have no fields to edit together, because a port's name is its net.
+properties-count-power-ports = { $count ->
+    [one] 1 power port
+   *[other] { $count } power ports
+}
 properties-kind-labels = Labels
 properties-kind-wires = Wires
 # $count is how many labels a click sets.

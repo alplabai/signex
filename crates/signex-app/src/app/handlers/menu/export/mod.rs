@@ -145,7 +145,7 @@ impl ExportIssues {
     }
 
     /// The refusal text when one child file is placed more than once and its
-    /// parts keep one shared designator. The Protel file keys every terminal
+    /// parts keep one shared designator. The `.NET` file keys every terminal
     /// on the designator alone, so the two physical parts would collapse into
     /// a single `[ ... ]` block with that part's pin listed in two nets.
     ///
@@ -182,7 +182,7 @@ impl ExportIssues {
             concat!(
                 "Netlist export refused: a sheet file is placed more than once and its ",
                 "designator(s) {} are shared by every placement, so two parts would merge ",
-                "into one in the Protel file. Give each placement its own designators ",
+                "into one in the .NET file. Give each placement its own designators ",
                 "(or use a separate sheet file per instance) and export again.",
             ),
             shared.into_iter().collect::<Vec<_>>().join(", ")
@@ -407,7 +407,7 @@ fn build_export_scope(
 
 /// [`build_export_scope`] without `ExportContext::netlist_sheets`, for the
 /// paths that never read it (PDF, print preview). Skips the per-sheet
-/// copy that only the Protel netlist needs.
+/// copy that only the `.NET` netlist needs.
 fn build_page_scope(
     document_state: &crate::app::state::DocumentState,
 ) -> Option<(ExportContext, ExportIssues)> {
@@ -595,7 +595,7 @@ fn build_scope(
         if with_netlist_sheets {
             // Placements come from the same occurrence walk the netlist just
             // used: the BOM multiplies a child by how often it is placed
-            // (#730) and the Protel file resolves designators per placement.
+            // (#730) and the `.NET` file resolves designators per placement.
             // A sheet the walk never reaches has none and counts zero.
             let mut keyed: Vec<_> = graph.sheets.into_iter().collect();
             keyed.sort_by(|a, b| a.0.cmp(&b.0));

@@ -108,7 +108,7 @@ Force Annotate All Schematics (Shift+Alt+A), Back Annotate Schematics... (see
 - Bill of Materials... (the one BOM dialog). File ▸ Export ▸ Export BOM…
   opens the same dialog. This row keeps its name until BOM Studio (mockup
   row 113) takes the Reports row.
-- Netlist (Protel .NET)...
+- Netlist (.NET)...
 - ERC Report...
 
 Then, after a separator, the board's reports (#2404), greyed without a board
@@ -237,8 +237,9 @@ same command is in the command palette; no keymap preset binds it.
 or in Properties, is not carried to the schematic: the next Update PCB lists
 a rename back to the schematic's designator, ticked like every other row,
 because the command picks the direction (`DECISIONS.md`, 2026-11-10). Use
-[Back Annotate](#back-annotate) to keep them. The dialog and the Properties
-section say so under their fields.
+[Back Annotate](#back-annotate) to keep them. The dialog says so under its
+fields. Properties has no standing note: it warns through the designator
+mismatch callout, with its Update PCB button (`DECISIONS.md`, 2026-11-23).
 
 ## Tools ▸ Repour Selected, Repour All {#tools-repour}
 
@@ -490,9 +491,12 @@ draft) is greyed when no tab is open. Project ▸ Close Project (the project tre
 Project for the active project, behind its unsaved-changes gate) is greyed when
 no project is open. Save All writes every unsaved document and Component
 Preview row through the same Save All flow the close and quit prompts use
-(`SaveAllNext::Nothing`: no close, no quit afterwards). It is greyed when
-nothing is unsaved (`CommandContext::has_dirty_documents`), has no shortcut
-(the catalog has no `save_all` command), and reports "Save All: saved N
+(`SaveAllNext::Nothing`: no close, no quit afterwards). It runs the `save_all`
+command, bound to `Mod+Alt+S` in both keyboard profiles (Ctrl+Alt+S on Windows
+and Linux, Cmd+Alt+S on macOS; Save As keeps `Mod+Shift+S`). On a layout where
+AltGr+S types a character, that key types it and Save All is reached from the
+File menu. The row and the key are off when nothing is unsaved
+(`CommandContext::has_dirty_documents`). It reports "Save All: saved N
 item(s)" or the failures in the Messages panel.
 
 ## Place ▸ Sheet Entry, Tools ▸ Library Editor, View ▸ Window ▸ Close All Documents {#tools-library-editor}
@@ -900,7 +904,10 @@ selected. Copy Attributes copies the object at the point the menu was opened
 over, else the selected part. Sheet Actions holds Open Child Sheet, Create Sheet
 From Sheet Symbol, Sync Sheet Pins and Synchronize Sheet Entries and Ports...,
 live with a sheet symbol selected, then Create Sheet Symbol From Sheet... and
-Number Schematic Sheets (#1276).
+Number Schematic Sheets (#1276). When the symbol's file is missing, Open Child
+Sheet is disabled with the reason, a double-click or the harness panel's Go to
+logs the same reason and opens nothing, and Create Sheet From Sheet Symbol makes
+the file (#2847).
 
 Unions (mockup row 158) holds Create Union… (`create_union`, live with a selection,
 `Ctrl+G` in the default profile), Add Selection to Union (`add_to_union`, the

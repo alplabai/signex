@@ -31,6 +31,9 @@ pub struct SheetInfo {
     /// its parent references (#1618). With `missing` it is a symbol whose
     /// file does not exist: activating it offers to create the sheet.
     pub is_child_reference: bool,
+    /// The comparison key of a child reference's resolved file, under its
+    /// project's case rule; empty on a top-level page row.
+    pub file_key: String,
     /// True when the sheet is one of the `.snxprj` pages. A nested row that is
     /// not has no project entry to exclude or rename.
     pub in_project_list: bool,
@@ -46,6 +49,8 @@ pub struct SheetInfo {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProjectPanelInfo {
     pub id: crate::app::ProjectId,
+    /// The project's case rule, which the rows' `file_key` was folded by.
+    pub case_fold: crate::app::CaseFold,
     /// Display name (project stem — "MyBoard" from "MyBoard.snxprj").
     pub name: String,
     /// Root schematic filename shown as the "project file" under each

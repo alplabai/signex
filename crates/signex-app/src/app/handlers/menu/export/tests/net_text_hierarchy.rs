@@ -1,4 +1,4 @@
-//! The Protel `.NET` deliverable on a hierarchical project (#354), driven from
+//! The `.NET` text deliverable on a hierarchical project (#354), driven from
 //! the real export scope rather than a hand-built context: every designator a
 //! net block names must have a component block, even when it lives on a child
 //! sheet that is not a printed page, and a child placed twice is refused.
@@ -94,13 +94,13 @@ fn a_child_placed_twice_is_refused_and_nothing_is_written() {
     let (ctx, issues) = build_export_scope(&app.document_state).expect("scope");
     let refusal = issues
         .shared_reference_refusal(&ctx)
-        .expect("the shared designator must be a refusal for the Protel file");
+        .expect("the shared designator must be a refusal for the .NET file");
     assert!(
         refusal.contains("R1") && refusal.contains("child.snxsch"),
         "{refusal}"
     );
 
-    let out = std::env::temp_dir().join(format!("signex-protel-twice-{}.NET", Uuid::now_v7()));
+    let out = std::env::temp_dir().join(format!("signex-netlist-twice-{}.NET", Uuid::now_v7()));
     let task = app.handle_export_netlist_finished(
         app.document_state.active_path.clone().expect("active"),
         Ok(out.clone()),
@@ -162,7 +162,7 @@ fn a_child_holding_only_power_ports_placed_twice_is_not_refused() {
         );
         assert_eq!(refusal_of(&app), None, "{leaf_ref}");
 
-        let out = std::env::temp_dir().join(format!("signex-protel-pwr-{}.NET", Uuid::now_v7()));
+        let out = std::env::temp_dir().join(format!("signex-netlist-pwr-{}.NET", Uuid::now_v7()));
         let task = app.handle_export_netlist_finished(
             app.document_state.active_path.clone().expect("active"),
             Ok(out.clone()),
@@ -213,7 +213,7 @@ fn a_child_placed_by_two_different_parents_is_refused_and_nothing_is_written() {
         "{refusal}"
     );
 
-    let out = std::env::temp_dir().join(format!("signex-protel-parents-{}.NET", Uuid::now_v7()));
+    let out = std::env::temp_dir().join(format!("signex-netlist-parents-{}.NET", Uuid::now_v7()));
     let task = app.handle_export_netlist_finished(
         app.document_state.active_path.clone().expect("active"),
         Ok(out.clone()),
@@ -434,7 +434,7 @@ fn a_failed_note_walk_reaches_the_messages_panel() {
 #[test]
 fn a_blank_root_entry_does_not_blank_the_designator_in_the_net_file() {
     // A default `[[instances]]` entry (empty path and reference) on a root
-    // symbol must not make the Protel export refuse on a blank designator.
+    // symbol must not make the `.NET` export refuse on a blank designator.
     let mut app = hierarchical_app();
     let top = PathBuf::from("/w/h").join("top.snxsch");
     let mut sheet = sheet_with_net("R_TOP", "TOP_NET", &["child.snxsch"]);

@@ -200,8 +200,9 @@ fn one_selected_footprint_shows_its_designator_value_and_name() {
         "{texts:?}"
     );
     assert!(!texts.iter().any(|t| t.contains("Enter")), "{texts:?}");
+    // 2026-11-23: no always-on note; a mismatch shows as the callout.
     assert!(
-        texts
+        !texts
             .iter()
             .any(|t| t.starts_with("Update PCB renames parts back")),
         "{texts:?}"

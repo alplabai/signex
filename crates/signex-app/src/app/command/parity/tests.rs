@@ -232,6 +232,7 @@ const KILL_LIST: &[(&str, &str)] = &[
     ("redo", "operand_handler"),
     ("revert", "operand_handler"),
     ("run_erc", "bridge"),
+    ("save_all", "bridge"),
     ("undo", "operand_handler"),
 ];
 

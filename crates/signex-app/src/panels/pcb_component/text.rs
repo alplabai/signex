@@ -185,14 +185,18 @@ fn single_input<'a>(fp: &'a PcbFootprintFacts, field: FootprintTextField) -> Ele
 
 /// The lines under the Properties rows of one component: why its text is
 /// read-only, a designator other footprints share, and how to apply a draft.
+/// An editable designator has no standing note: a mismatch with the schematic
+/// shows as the callout in Schematic Reference Information.
 pub(super) fn notes(fp: &PcbFootprintFacts, i18n: &I18n) -> Vec<(Localized, bool)> {
     let mut lines = Vec::new();
     let why = match fp.editability {
-        FootprintEditability::Editable => ids::PCB_DESIGNATOR_UPDATE_PCB_NOTE,
-        FootprintEditability::Locked => ids::PCB_FOOTPRINT_LOCKED,
-        FootprintEditability::ReadOnly => ids::PCB_FOOTPRINT_READ_ONLY,
+        FootprintEditability::Editable => None,
+        FootprintEditability::Locked => Some(ids::PCB_FOOTPRINT_LOCKED),
+        FootprintEditability::ReadOnly => Some(ids::PCB_FOOTPRINT_READ_ONLY),
     };
-    lines.push((t!(i18n, why), false));
+    if let Some(why) = why {
+        lines.push((t!(i18n, why), false));
+    }
     if fp.also_on > 0 {
         lines.push((
             t!(

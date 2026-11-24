@@ -36,6 +36,7 @@ fn groups() -> SelectionGroups {
             count: 2,
             width_mm: Shared::Same(0.15),
         }),
+        power_ports: 0,
     }
 }
 
@@ -151,6 +152,7 @@ fn the_nothing_shared_card_lists_the_selected_kinds() {
 #[test]
 fn the_footer_counts_part_fields_as_one_kind() {
     let mut ctx = mixed_ctx();
+    ctx.multi_groups = SelectionGroups::default();
     let mut selected = items(SelectedKind::SymbolRefField, 1);
     selected.extend(items(SelectedKind::SymbolValField, 2));
     ctx.selection_form.kinds = SelectionKinds::of(&selected);
@@ -159,6 +161,65 @@ fn the_footer_counts_part_fields_as_one_kind() {
         .to_string()
         .replace(['\u{2068}', '\u{2069}'], "");
     assert_eq!(footer, "3 selected: 3 part fields");
+}
+
+fn plain_footer(ctx: &PanelContext) -> String {
+    footer_text(ctx)
+        .to_string()
+        .replace(['\u{2068}', '\u{2069}'], "")
+}
+
+/// #2847: 9 parts and 2 power ports with 3 labels, 2 wires and a junction.
+/// All is the chip sum and the footer says the same; the junction is not
+/// counted and the Parts section counts only what a Parts edit changes.
+#[test]
+fn all_is_the_chip_sum_and_power_ports_have_their_own_chip() {
+    let mut ctx = mixed_ctx();
+    ctx.multi_groups.power_ports = 2;
+    ctx.selection_count = 17;
+    let mut selected = items(SelectedKind::Symbol, 11);
+    selected.extend(items(SelectedKind::Label, 3));
+    selected.extend(items(SelectedKind::Wire, 2));
+    selected.extend(items(SelectedKind::Junction, 1));
+    ctx.selection_form.kinds = SelectionKinds::of(&selected);
+    assert_eq!(ctx.multi_groups.counted(), 16);
+    assert_eq!(
+        plain_footer(&ctx),
+        "16 selected: 9 parts, 2 power ports, 3 labels, 2 wires"
+    );
+    let texts = shown_texts(&ctx);
+    assert!(has(&texts, "16 objects selected"), "{texts:?}");
+    assert!(has(&texts, "Power Ports"), "{texts:?}");
+    assert!(!has(&texts, "17 objects selected"), "{texts:?}");
+}
+
+/// #2847: the power port chip shows no Parts fields, and says why.
+#[test]
+fn the_power_port_chip_hides_the_parts_section() {
+    let mut ctx = mixed_ctx();
+    ctx.multi_groups.power_ports = 2;
+    ctx.selection_form.kind_filter = Some(MultiKind::PowerPorts);
+    let texts = shown_texts(&ctx);
+    assert!(!has(&texts, "PARTS"), "{texts:?}");
+    let note = I18n::en_us().message_plain(ids::PROPERTIES_MULTI_POWER_NOTE, &[]);
+    assert!(has(&texts, &note), "{texts:?}");
+}
+
+/// #2847: only power ports and nothing editable: the card names them as
+/// power ports, never as parts.
+#[test]
+fn a_selection_of_only_power_ports_is_not_called_parts() {
+    let mut ctx = mixed_ctx();
+    ctx.multi_groups = SelectionGroups {
+        power_ports: 2,
+        ..SelectionGroups::default()
+    };
+    ctx.selection_count = 3;
+    let mut selected = items(SelectedKind::Symbol, 2);
+    selected.extend(items(SelectedKind::Junction, 1));
+    ctx.selection_form.kinds = SelectionKinds::of(&selected);
+    assert_eq!(kinds_text(&ctx), "2 power ports, 1 junction");
+    assert_eq!(plain_footer(&ctx), "3 selected: 2 power ports, 1 junction");
 }
 
 /// The catalog says what the English literals said (#2059), and the new

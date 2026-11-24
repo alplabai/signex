@@ -121,7 +121,7 @@ impl Signex {
     }
 
     /// OK: place every copy as ONE engine batch, so one undo takes the whole
-    /// array back. Copy `k` (1 to count) sits `k` spacings from the original
+    /// array back. New copy `k` (1 to `new_copies`) sits `k` spacings from the original
     /// and its label numbers have moved `k` steps; designators follow the
     /// "Designators on paste" preference, numbered in turn across the copies.
     fn apply_paste_array(&mut self) {
@@ -168,7 +168,7 @@ impl Signex {
             self.ui_state.paste_array = None;
             crate::diagnostics::log_info(format!(
                 "Paste Array: placed {} copies as one undo step.",
-                input.count
+                input.new_copies
             ));
         } else {
             crate::diagnostics::log_warning(
@@ -188,7 +188,7 @@ impl Signex {
         // The bodies are registered once; the per-copy clones carry none.
         let mut commands = payload.register_commands();
         let bare = payload.without_bodies();
-        for k in 1..=input.count {
+        for k in 1..=input.new_copies {
             let steps = i64::from(k) * i64::from(input.step);
             let copy = numbering.apply(&bare.with_labels_stepped(steps));
             let at = Point::new(

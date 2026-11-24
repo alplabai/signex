@@ -218,6 +218,7 @@ fn golden_mod_fallbacks_are_the_standard_set_and_show_apple_symbols_on_macos() {
             "open_document",
             "save_document",
             "save_document_as",
+            "save_all",
             "print",
             "undo",
             "cut",
@@ -334,6 +335,7 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("close_active_document", "CloseDocument"),
     ("save_document", "Save"),
     ("save_document_as", "SaveAs"),
+    ("save_all", "SaveAll"),
     ("print", "Print"),
     ("undo", "Undo"),
     ("redo", "Redo"),
@@ -693,7 +695,8 @@ fn model_shortcuts_follow_the_active_keymap() {
     // Board Sketch, Tools ▸ Design Rule Check, Edit ▸ Flip Selection, View ▸
     // Toggle Ratsnest and 3D Board (#2390, #2403, #2405) and Place ▸ Compile
     // Mask (#2420) add nine. Edit ▸ Origin ▸ Set adds `E O S` (2026-11-18).
-    assert_eq!(checked, 59, "the default profile labels 59 menu rows");
+    // File ▸ Save All adds `Mod+Alt+S` (#2844).
+    assert_eq!(checked, 60, "the default profile labels 60 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {
@@ -784,7 +787,7 @@ fn reports_and_window_are_submenus_of_tools_and_view() {
         entry_titles(&submenu(root("Tools"), "Reports")),
         [
             "Bill of Materials…",
-            "Netlist (Protel .NET)...",
+            "Netlist (.NET)...",
             "ERC Report…",
             "---",
             "Board Bill of Materials…",
