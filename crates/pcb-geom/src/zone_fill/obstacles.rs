@@ -1,6 +1,7 @@
 //! What a pour's fill keeps clear of (#2216): other nets' copper on its
-//! layer grown by the clearance, keepouts, and the fills of other nets'
-//! pours filled before it.
+//! layer grown by the clearance (drawings and strings on copper, of no net,
+//! included: #2883), keepouts, and the fills of other nets' pours filled
+//! before it.
 
 use signex_types::pcb::{PcbBoard, Zone};
 use signex_types::pcb_free::free_pad_frame;
@@ -8,6 +9,7 @@ use signex_types::pcb_layer::PcbLayer;
 
 use super::{ZoneFill, ring_nm, zone_area};
 use crate::copper::{layer_mask, pad_pieces, pieces_on, via_pieces};
+use crate::drawn_copper::drawn_copper;
 use crate::free::arc_shapes;
 use crate::index::track_shape;
 use crate::rect::RectNm;
@@ -91,6 +93,12 @@ impl Obstacles<'_> {
             if on_layer(&arc.layer) && self.clears(arc.net) {
                 let shapes = arc_shapes(arc).unwrap_or_default();
                 out.extend(shapes.into_iter().filter_map(|s| self.grown(s)));
+            }
+        }
+        // Drawings and strings on copper (#2883): copper of no net.
+        for drawn in drawn_copper(self.board) {
+            if drawn.layers & self.layers != 0 && self.clears(drawn.net) {
+                out.extend(self.grown(drawn.shape));
             }
         }
         for via in &self.board.vias {

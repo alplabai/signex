@@ -102,8 +102,11 @@ fn the_value_reads_to_the_dimension_precision() {
     assert_eq!(d.value_text(), "5mm");
 }
 
+/// Was `text_and_dimensions_go_on_overlay_mechanical_and_documentation_layers`
+/// with copper refused; a string goes on copper since Caner's 2026-11-24
+/// decision (#2883).
 #[test]
-fn text_and_dimensions_go_on_overlay_mechanical_and_documentation_layers() {
+fn text_goes_on_copper_overlay_mechanical_and_documentation_layers() {
     use crate::pcb_layer::{CopperLayer, MechanicalLayer, PcbLayer, TechnicalLayer};
     let takes = |l: PcbLayer| l.takes_text();
     assert!(takes(PcbLayer::Technical(TechnicalLayer::SilkscreenTop)));
@@ -111,6 +114,6 @@ fn text_and_dimensions_go_on_overlay_mechanical_and_documentation_layers() {
     assert!(takes(PcbLayer::Mechanical(
         MechanicalLayer::new(1).unwrap()
     )));
-    assert!(!takes(PcbLayer::Copper(CopperLayer::Top)));
+    assert!(takes(PcbLayer::Copper(CopperLayer::Top)));
     assert!(!takes(PcbLayer::Technical(TechnicalLayer::SolderMaskTop)));
 }

@@ -1,8 +1,9 @@
 //! #2869 — the Graphics tools armed from the PCB Active Bar, through
 //! `Signex::update`: Line and Arc on copper place a track and a track arc on
 //! the net they start on; on an overlay every Graphics tool places one
-//! drawing. Full Circle, Rectangle and Text Frame place nothing on copper
-//! yet and say why. One undo step each; the tool stays armed.
+//! drawing. Full Circle, Rectangle and Text Frame on copper place a drawing
+//! that is copper of no net (#2883). One undo step each; the tool stays
+//! armed.
 
 use std::path::{Path, PathBuf};
 
@@ -173,28 +174,55 @@ fn on_an_overlay_each_graphics_tool_places_one_drawing() {
     }
 }
 
-/// Full Circle, Rectangle and Text Frame on copper place nothing yet: the
-/// design rule check and pour fill read no board drawing. The status bar
-/// says why and the tool stays armed.
+/// Was `copper_shapes_place_nothing_yet_and_say_why` (nothing placed, a
+/// status-bar refusal). Since Caner's 2026-11-24 decision (#2883) Full
+/// Circle, Rectangle and Text Frame on copper place one drawing on that
+/// copper layer, with no net and no track, as one undo step; no refusal
+/// shows and the tool stays armed.
 #[test]
-fn copper_shapes_place_nothing_yet_and_say_why() {
-    let cases: [(BoardPlaceTool, &[(f64, f64)]); 3] = [
-        (BoardPlaceTool::FullCircle, &[(20.0, 20.0), (23.0, 20.0)]),
-        (BoardPlaceTool::Rectangle, &[(30.0, 30.0), (34.0, 33.0)]),
-        (BoardPlaceTool::TextFrame, &[(40.0, 40.0), (50.0, 45.0)]),
+fn copper_shapes_place_one_copper_drawing_each() {
+    let cases: [DrawCase; 3] = [
+        (
+            BoardPlaceTool::FullCircle,
+            &[(20.0, 20.0), (23.0, 20.0)],
+            "circle",
+        ),
+        (
+            BoardPlaceTool::Rectangle,
+            &[(30.0, 30.0), (34.0, 33.0)],
+            "rect",
+        ),
+        (
+            BoardPlaceTool::TextFrame,
+            &[(40.0, 40.0), (50.0, 45.0)],
+            "text_frame",
+        ),
     ];
-    for (tool, points) in cases {
+    for (tool, points, kind) in cases {
         let dir = tempfile::tempdir().unwrap();
         let (mut app, path) = app_with_pad(dir.path());
         let before = live(&app, &path);
         arm_on(&mut app, TOP, tool);
-        clicks(&mut app, points);
-        assert_eq!(live(&app, &path), before, "{tool:?}: nothing on copper");
-        let why = app.board_tool_status().expect("a status line");
         assert!(
-            why.contains("make a non-copper layer other than a keep-out active"),
-            "{tool:?}: {why}"
+            matches!(form(&app), PcbPrimitiveFacts::Graphic(_)),
+            "{tool:?}: Properties shows the drawing it places"
+        );
+        clicks(&mut app, points);
+        let board = board_of(&app, &path);
+        assert_eq!(board.graphics.len(), 1, "{tool:?}: one drawing");
+        let drawing = &board.graphics[0];
+        assert_eq!(
+            (drawing.graphic_type.as_str(), drawing.layer.as_str()),
+            (kind, "TopCopper")
+        );
+        assert!(board.segments.is_empty() && board.free.arcs.is_empty());
+        let status = app.board_tool_status().unwrap_or_default();
+        assert!(
+            !status.contains("keep-out"),
+            "{tool:?}: no refusal: {status}"
         );
         assert_eq!(armed(&app), Some(tool));
+        undo(&mut app);
+        assert_eq!(live(&app, &path), before, "{tool:?}: one undo step");
     }
 }

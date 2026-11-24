@@ -260,8 +260,7 @@ pub fn place_zone(zone: Zone) -> BoardCommand {
 
 /// A board string (#2373) reading `text` at `at` on `layer`, at the PCB
 /// default size and unturned. `None` on a layer that takes no text
-/// (`PcbLayer::takes_text`): copper text would be copper the copper list,
-/// DRC and ratsnest never read.
+/// (`PcbLayer::takes_text`); on copper it is copper of no net (#2883).
 pub fn new_text(
     id: Uuid,
     at: Point,
