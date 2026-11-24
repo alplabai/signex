@@ -262,24 +262,22 @@ fn pour<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Option<Element<'a, PanelMsg>> {
     s.finish()
 }
 
-/// Fill Mode (mockup row 99): Solid, the only fill there is; Hatched and
-/// None greyed, since a pour with no copper is a shelved one.
+/// Fill Mode: Solid, the only fill there is; Hatched greyed. No None
+/// (mockup row 99): the outline-only state is Shelve.
 fn fill_mode<'a>(look: Look<'a>) -> Element<'a, PanelMsg> {
-    let modes = segments(
-        [
-            (ids::PCB_PRIM_POUR_FILL_SOLID, true),
-            (ids::PCB_PRIM_POUR_FILL_HATCHED, false),
-            (ids::PCB_PRIM_NONE, false),
-        ]
-        .into_iter()
-        .map(|(id, is_on)| Segment {
-            label: look.t(id),
-            is_on,
+    let modes = segments(vec![
+        Segment {
+            label: look.t(ids::PCB_PRIM_POUR_FILL_SOLID),
+            is_on: true,
             msg: None,
-        })
-        .collect(),
-    );
-    with_tip(look, modes, ids::PCB_PRIM_POUR_FILL_MODE_TIP)
+        },
+        Segment {
+            label: look.t(ids::PCB_PRIM_POUR_FILL_HATCHED),
+            is_on: false,
+            msg: None,
+        },
+    ]);
+    with_tip(look, modes, ids::PCB_PRIM_POUR_HATCHED_TIP)
 }
 
 /// The Thermal Relief subsection: the stored switch and Spoke / Gap, read
@@ -737,9 +735,10 @@ mod tests {
         plain(&t!(ctx.i18n, id).into_string())
     }
 
-    /// Mockup row 99: Fill Mode offers Solid, Hatched and None.
+    /// Fill Mode offers Solid and Hatched and no None (docs/DECISIONS.md
+    /// 2026-11-19, #2523: the outline-only state is Shelve).
     #[test]
-    fn fill_mode_offers_solid_hatched_and_none() {
+    fn fill_mode_offers_solid_and_hatched_and_no_none() {
         let ctx = context();
         let shown: Vec<String> = crate::layout_probe::lay_out_texts(
             fill_mode(Look::of(&ctx)),
@@ -751,7 +750,6 @@ mod tests {
         let want = [
             ids::PCB_PRIM_POUR_FILL_SOLID,
             ids::PCB_PRIM_POUR_FILL_HATCHED,
-            ids::PCB_PRIM_NONE,
         ]
         .map(|id| said(&ctx, id));
         assert_eq!(shown, want);

@@ -467,15 +467,14 @@ pour as a zone left unfilled.
 A placed pour is picked inside its outline (`PickKind::Polygons`, the
 Polygons chip of the selection filter) and opens the area panel (#2523): its
 illustration, Net Information, then Net, Layer and the Pour section: Fill
-Mode (Solid; Hatched and None are greyed: Hatched is not supported yet, and
-a pour with no copper is a shelved one, so None is not a mode of its own),
-Clearance, Minimum Width, Thermal Relief (the stored switch with Spoke /
-Gap, read only and greyed, since the fill draws no spokes), Corners and
-Corner Size (Sharp, size 0; greyed, not stored yet), Priority (a whole
-number from 0), Remove Islands (below an area in mm²), Remove Dead Copper,
-and the Copper card (mockup row 99). Each edit is one undo step.
-`min_island_area` and `remove_dead_islands` are written to the file only
-when set.
+Mode (Solid; Hatched is greyed, not supported yet), Clearance, Minimum
+Width, Thermal Relief (the stored switch with Spoke / Gap, read only and
+greyed, since the fill draws no spokes), Corners and Corner Size (Sharp,
+size 0; greyed, not stored yet), Priority (a whole number from 0), Remove
+Islands (below an area in mm²), Remove Dead Copper, and the Copper card.
+Each edit is one undo step. `min_island_area` and `remove_dead_islands` are
+written to the file only when set. Fill Mode has no None: the outline-only
+state is Shelve.
 
 The Copper card shows the copper the fill holds (area and pieces, read from
 the fills the app holds), or "shelved · no copper". Its buttons:

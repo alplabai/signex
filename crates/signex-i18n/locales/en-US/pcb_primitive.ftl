@@ -433,4 +433,3 @@ pcb-prim-dim-layer-note = Any board layer, copper included. On copper a dimensio
 # m7/pcb-props-via-zone
 # The closed Via Type field's sizes; $diameter and $drill are in mm.
 pcb-prim-via-type-sizes = { $diameter }/{ $drill }
-pcb-prim-pour-fill-mode-tip = Solid is the only fill there is. Hatched is not supported yet, and a pour with no copper is a shelved one: use Shelve on the Copper card.

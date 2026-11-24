@@ -324,5 +324,4 @@ define_ids! {
     PCB_PRIM_DIM_LAYER_NOTE = "pcb-prim-dim-layer-note";
     // m7/pcb-props-via-zone
     PCB_PRIM_VIA_TYPE_SIZES = "pcb-prim-via-type-sizes";
-    PCB_PRIM_POUR_FILL_MODE_TIP = "pcb-prim-pour-fill-mode-tip";
 }
