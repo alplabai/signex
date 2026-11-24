@@ -13,7 +13,7 @@ use signex_types::pcb_dimension_style::{
     ArrowStyle, BoardFont, DimensionTextPosition, DimensionUnits,
 };
 use signex_types::pcb_graphic::BoardGraphicKind;
-use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+use signex_types::pcb_layer::{BoardSide, CopperLayer, PcbLayer};
 use signex_types::pcb_stack::StackMode;
 use signex_types::pcb_via_protection::ViaProtection;
 
@@ -471,6 +471,17 @@ pub struct TextFacts {
     pub layer: Option<AreaLayerChoice>,
     /// The layers that take text.
     pub layers: Vec<AreaLayerChoice>,
+}
+
+impl TextFacts {
+    /// Whether the strings read mirrored on the board: they share a layer
+    /// on the bottom side, the rule `pcb_geom::board_text_placement` draws
+    /// them by (mockup row 100).
+    pub fn is_mirrored(&self) -> bool {
+        self.layer
+            .as_ref()
+            .is_some_and(|choice| choice.layer.side() == Some(BoardSide::Bottom))
+    }
 }
 
 /// Linear dimensions (#2373).

@@ -47,7 +47,8 @@ use crate::app::Signex;
 use crate::app::state::pcb_edit::CheckedStep;
 use crate::panels::PcbPrimitiveMsg;
 use crate::panels::pcb_primitive_properties::{
-    PrimitiveField, PrimitiveFlag, PrimitiveTarget, parse_number,
+    PrimitiveField, PrimitiveFlag, PrimitiveTarget, is_dimension_length, parse_number,
+    typed_length_mm,
 };
 
 /// The panel's own state: drafts, search, Show More and the net pick.
@@ -104,9 +105,15 @@ impl PcbPrimitivePanel {
     /// Forget the drafts typed on `board` (its undo or redo moved them).
     pub(crate) fn drop_drafts_of(&mut self, board: &Path) {
         if self.draft_target.as_ref().is_some_and(|t| t.board == board) {
-            self.draft_target = None;
-            self.drafts.clear();
+            self.drop_drafts();
         }
+    }
+
+    /// Forget every draft: a length typed in the old Units must not be read
+    /// in the new ones (mockup row 101).
+    pub(crate) fn drop_drafts(&mut self) {
+        self.draft_target = None;
+        self.drafts.clear();
     }
 }
 
@@ -325,7 +332,7 @@ impl Signex {
         } else if field.is_text() {
             PrimitiveEdit::Designator(text.to_string())
         } else {
-            match parse_number(text) {
+            match self.typed_number(target, field, text) {
                 Some(value) if field == PrimitiveField::TuneLength => {
                     self.tune_track_length(target, value);
                     return;
@@ -342,6 +349,28 @@ impl Signex {
             }
         };
         self.apply_primitive_edit(target, edit, what);
+    }
+
+    /// A number typed into `field`, in mm or degrees; a dimension's lengths
+    /// are typed in the board's Units, as its panel shows them (mockup row
+    /// 101).
+    fn typed_number(
+        &self,
+        target: &PrimitiveTarget,
+        field: PrimitiveField,
+        text: &str,
+    ) -> Option<f64> {
+        let is_dimension = match target.items.first() {
+            Some(item) => matches!(item, ItemRef::Dimension(_)),
+            None => self.interaction_state.pcb_tool.as_ref().is_some_and(|s| {
+                matches!(s.tool, crate::app::pcb_tools::BoardPlaceTool::Dimension)
+            }),
+        };
+        if is_dimension && is_dimension_length(field) {
+            typed_length_mm(text, self.ui_state.unit)
+        } else {
+            parse_number(text)
+        }
     }
 
     /// Run `edit` on the target's items as one labelled step, or say why not.

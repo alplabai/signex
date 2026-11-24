@@ -149,6 +149,7 @@ fn group_button(
         on_press: Some(left),
         dropdown_indicator: Some(ActiveBarIcon::Svg(ic::icon_chevron_45(s.tid))),
         on_right_press: Some(ActiveBarMsg::ToggleMenu(menu)),
+        on_chevron_press: None,
     })
 }
 

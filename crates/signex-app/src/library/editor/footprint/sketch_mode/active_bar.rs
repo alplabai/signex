@@ -130,6 +130,7 @@ pub fn items<'a>(
             on_press: Some(toggle.clone()),
             on_right_press: Some(toggle),
             dropdown_indicator: Some(ActiveBarIcon::Svg(icons::icon_chevron_45(theme_id))),
+            on_chevron_press: None,
         })
     };
 
@@ -353,6 +354,7 @@ fn snap_trigger(
         on_press: Some(toggle.clone()),
         on_right_press: Some(toggle),
         dropdown_indicator: Some(ActiveBarIcon::Svg(icons::icon_chevron_45(theme_id))),
+        on_chevron_press: None,
     })
 }
 

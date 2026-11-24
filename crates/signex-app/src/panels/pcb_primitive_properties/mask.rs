@@ -265,10 +265,18 @@ pub(super) fn via_mask_section<'a>(
     s.finish()
 }
 
-/// A small caption heading the rows of one side or group.
+/// A small caption heading the rows of one side or group: a step smaller
+/// and fainter than the row labels, with room above it (the mockup's
+/// subhead, rows 97 and 101), so it reads as a heading and not as a row.
 pub(super) fn subhead<'a>(look: Look<'a>, id: MessageId) -> Element<'a, PanelMsg> {
-    column![text(look.t(id)).size(TS.dense).color(look.muted)]
-        .padding([SP.xs, super::rows::PAD_X])
+    let faint = crate::styles::tokens::resolve(look.tokens()).ink4;
+    column![text(look.t(id)).size(TS.caption).color(faint)]
+        .padding(iced::Padding {
+            top: SP.s,
+            right: super::rows::PAD_X,
+            bottom: SP.xs,
+            left: super::rows::PAD_X,
+        })
         .width(Length::Fill)
         .boxed()
 }

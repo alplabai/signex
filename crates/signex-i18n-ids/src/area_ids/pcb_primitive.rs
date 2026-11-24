@@ -280,6 +280,11 @@ define_ids! {
     PCB_PRIM_SOLDER_TENTED = "pcb-prim-solder-tented";
     // #2523: the pour, string and dimension panels and their illustrations.
     PCB_PRIM_UNIT_MM2 = "pcb-prim-unit-mm2";
+    // pcb-props-bar
+    PCB_PRIM_STRING_MIRRORED = "pcb-prim-string-mirrored";
+    PCB_PRIM_UNIT_MIL = "pcb-prim-unit-mil";
+    PCB_PRIM_DIM_VALUE_MIL = "pcb-prim-dim-value-mil";
+    // #2523, continued.
     PCB_PRIM_POUR_FILL_MODE = "pcb-prim-pour-fill-mode";
     PCB_PRIM_POUR_FILL_SOLID = "pcb-prim-pour-fill-solid";
     PCB_PRIM_POUR_FILL_HATCHED = "pcb-prim-pour-fill-hatched";
