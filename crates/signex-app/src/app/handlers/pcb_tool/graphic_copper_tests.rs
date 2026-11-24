@@ -119,9 +119,12 @@ fn an_arc_on_copper_is_a_track_arc_on_the_net_under_its_start() {
 
 /// On the overlay each Graphics tool places one drawing of its kind, with
 /// the width its form shows, as one undo step.
+/// A tool, its clicks and the drawing kind it should place.
+type DrawCase = (BoardPlaceTool, &'static [(f64, f64)], &'static str);
+
 #[test]
 fn on_an_overlay_each_graphics_tool_places_one_drawing() {
-    let cases: [(BoardPlaceTool, &[(f64, f64)], &str); 5] = [
+    let cases: [DrawCase; 5] = [
         (BoardPlaceTool::Line, &[(1.0, 2.0), (5.0, 2.0)], "line"),
         (
             BoardPlaceTool::GraphicArc,
