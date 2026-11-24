@@ -56,7 +56,7 @@ impl Signex {
         };
         tab(look, &self.document_state.gerber_viewer)
             .map(Message::GerberViewer)
-            .into()
+            .boxed()
     }
 }
 
