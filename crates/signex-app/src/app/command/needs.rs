@@ -72,6 +72,9 @@ pub(crate) enum Needs {
     MeasureTarget,
     /// Reset View Rotation: a board in view that is turned (#2316).
     TurnedPcbView,
+    /// The 3D view's lighting and screenshot copy (mockup row 175): a board
+    /// shown in 3D in the window.
+    Board3dView,
     /// Rotate and mirror: on a board, an unlocked footprint selected
     /// (#2240); on a sheet, a selection or something in hand.
     Turn,
@@ -201,6 +204,7 @@ impl Needs {
             | Self::ParentSheet
             | Self::FitTarget
             | Self::TurnedPcbView
+            | Self::Board3dView
             | Self::Turn
             | Self::MoveSelection
             | Self::SimilarSeed
@@ -251,6 +255,7 @@ impl Needs {
             Self::ParentSheet => ctx.has_parent_sheet,
             Self::FitTarget => core.has_schematic || core.has_pcb || ctx.undocked_has_canvas,
             Self::TurnedPcbView => core.has_pcb && ctx.pcb_view_turned,
+            Self::Board3dView => core.has_pcb && ctx.board_3d_shown,
             // On a sheet, rotate also turns a part on the cursor with
             // nothing selected; on a board too (#2364).
             // Split into core and in-hand parts in slice 6 (#2326 kill-check decision 3).
@@ -339,6 +344,7 @@ impl Needs {
             Self::EditablePcb => ids::COMMAND_NEEDS_EDITABLE_PCB,
             Self::MeasureTarget => ids::COMMAND_NEEDS_MEASURE_TARGET,
             Self::TurnedPcbView => ids::COMMAND_NEEDS_TURNED_PCB_VIEW,
+            Self::Board3dView => ids::COMMAND_NEEDS_BOARD_3D_VIEW,
             Self::Turn => ids::COMMAND_NEEDS_TURN,
             Self::MoveSelection => ids::COMMAND_NEEDS_MOVE_SELECTION,
             Self::SimilarSeed => ids::COMMAND_NEEDS_SIMILAR_SEED,
@@ -612,6 +618,9 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "select_board_net"
         | "highlight_board_net"
         | "view_board_3d"
+        // Mockup row 175: the 3D view's Flip (its F is live in the 3D view
+        // only, through the `board_3d` shortcut context).
+        | "flip_board_3d"
         | "next_layer"
         | "prev_layer"
         | "next_signal_layer"
@@ -640,6 +649,9 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "set_object_transparency" => Needs::Pcb,
         // At 0° Reset has nothing to do, so it is greyed.
         "view_rotate_reset" => Needs::TurnedPcbView,
+        // Mockup row 175 (Caner, 2026-11-24): on a flat board H and
+        // Ctrl+Shift+C are greyed, as they need the 3D view.
+        "cycle_board_3d_lighting" | "copy_board_3d_screenshot" => Needs::Board3dView,
         "open_library_browser" => Needs::Library,
         "number_schematic_sheets" => Needs::ProjectSheet,
         "compile_project" => Needs::ProjectSheet,

@@ -54,7 +54,7 @@ impl ShortcutScope {
                 Self::Schematic | Self::All => true,
                 Self::Pcb => false,
             },
-            ShortcutContext::Pcb => match self {
+            ShortcutContext::Pcb | ShortcutContext::Board3d => match self {
                 Self::Pcb | Self::All => true,
                 Self::Schematic => false,
             },

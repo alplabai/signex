@@ -42,6 +42,12 @@ impl Signex {
                     self.interaction_state.board_3d = None;
                 }
             }
+            // Its keys and the pointer still reach the view while a
+            // screenshot hides the toolbar; a flip, a new lighting or a turn,
+            // slide, zoom or pick between the two passes of a transparent
+            // save would spoil the matte.
+            Board3dMsg::FlipRequested | Board3dMsg::LightingCycled | Board3dMsg::Pointer { .. }
+                if self.board_3d_is_capturing() => {}
             Board3dMsg::PresetPicked(preset) => {
                 self.with_board_3d_scene(|session, scene| session.set_preset(preset, scene));
             }
@@ -80,13 +86,17 @@ impl Signex {
                 session.explode_open = false;
                 session.shot_menu_open = false;
             }),
-            Board3dMsg::ScreenshotCopyRequested => {
-                self.edit_board_3d(|session| session.begin_capture(None));
-            }
-            Board3dMsg::ScreenshotSaveRequested => return self.ask_board_3d_png(),
+            Board3dMsg::ScreenshotCopyRequested => self.start_board_3d_capture(None, false),
+            Board3dMsg::ScreenshotSaveRequested => return self.ask_board_3d_png(false),
             Board3dMsg::ScreenshotSavePicked(path) => {
                 if let Some(path) = path {
-                    self.edit_board_3d(|session| session.begin_capture(Some(path)));
+                    self.start_board_3d_capture(Some(path), false);
+                }
+            }
+            Board3dMsg::ScreenshotTransparentSaveRequested => return self.ask_board_3d_png(true),
+            Board3dMsg::ScreenshotTransparentSavePicked(path) => {
+                if let Some(path) = path {
+                    self.start_board_3d_capture(Some(path), true);
                 }
             }
             Board3dMsg::ScreenshotTaken { save_to, shot } => {
@@ -183,6 +193,16 @@ impl Signex {
         (shown == session.board_path && self.has_active_pcb()).then_some(session)
     }
 
+    /// Whether a key or command from `window` meets the 3D view (mockup row
+    /// 175): only the main window draws it, so the `board_3d` shortcut
+    /// context and the 3D view's command gate read this one answer.
+    pub(crate) fn board_3d_shown_in(&self, window: Option<iced::window::Id>) -> bool {
+        matches!(
+            self.input_target(window),
+            crate::app::dispatch::input::InputTarget::Main
+        ) && self.board_3d_in_view().is_some()
+    }
+
     /// [`Self::board_3d_in_view`], mutable.
     pub(crate) fn board_3d_in_view_mut(&mut self) -> Option<&mut Board3dSession> {
         let shown = self.active_tab_path()?;
@@ -242,7 +262,7 @@ impl Signex {
         true
     }
 
-    /// Show the board in view in 3D, framed from above, and read its parts'
+    /// Show the board in view in 3D, framed from Iso, and read its parts'
     /// models. Sketch mode of that board is left first (its changes
     /// applied); a refused apply keeps the board flat.
     fn enter_board_3d(&mut self) -> Task<Message> {

@@ -201,6 +201,10 @@ copy_attributes_or_add_vertex	bridge	Edit(Extras(CopyAttributesRequested { at: N
 copy_attributes_or_add_vertex	bridge_context_menu	Edit(Extras(CopyAttributesRequested { at: Some((1.0, 2.0)) }))	gui	active document,selection,tool state,in-progress edit	handler
 copy_attributes_or_add_vertex	in_window_rewrite	document_window	gui	window	routing
 copy_attributes_or_add_vertex	headless_refusal	headless_refusal	gui	none	routing
+copy_board_3d_screenshot	bridge	Pcb(Board3d(ScreenshotCopyRequested))	gui	active document,window	gate
+copy_board_3d_screenshot	in_window_rewrite	document_window	gui	window	routing
+copy_board_3d_screenshot	refusal_needs	Board3dView	gui	active document,window	routing
+copy_board_3d_screenshot	headless_refusal	headless_refusal	gui	none	routing
 create_rooms_from_sheets	bridge	Pcb(CreateRooms(Requested))	gui	active document	gate
 create_rooms_from_sheets	in_window_rewrite	document_window	gui	window	routing
 create_rooms_from_sheets	refusal_needs	PcbInProject	gui	active document	routing
@@ -230,6 +234,10 @@ cycle_arc_mode	bridge	Pcb(ArcModeStepped)	gui	active document	gate
 cycle_arc_mode	in_window_rewrite	document_window	gui	window	routing
 cycle_arc_mode	refusal_needs	Pcb	gui	active document	routing
 cycle_arc_mode	headless_refusal	headless_refusal	gui	none	routing
+cycle_board_3d_lighting	bridge	Pcb(Board3d(LightingCycled))	gui	active document,window	gate
+cycle_board_3d_lighting	in_window_rewrite	document_window	gui	window	routing
+cycle_board_3d_lighting	refusal_needs	Board3dView	gui	active document,window	routing
+cycle_board_3d_lighting	headless_refusal	headless_refusal	gui	none	routing
 cycle_fast_grid	bridge	Ui(FastGridCycled)	gui	tool state	handler
 cycle_fast_grid	in_window_rewrite	document_window	gui	window	routing
 cycle_fast_grid	headless_refusal	headless_refusal	gui	none	routing
@@ -441,6 +449,10 @@ find_similar_objects	headless_refusal	headless_refusal	gui	none	routing
 find_text	bridge	Overlay(OpenFind)	gui	none	handler
 find_text	in_window_rewrite	document_window	gui	window	routing
 find_text	headless_refusal	headless_refusal	gui	none	routing
+flip_board_3d	bridge	Pcb(Board3d(FlipRequested))	gui	active document	gate
+flip_board_3d	in_window_rewrite	document_window	gui	window	routing
+flip_board_3d	refusal_needs	Pcb	gui	active document	routing
+flip_board_3d	headless_refusal	headless_refusal	gui	none	routing
 flip_board_view	bridge	Pcb(View(BoardFlipToggled))	gui	active document	gate
 flip_board_view	in_window_rewrite	board_view_in_window|document_window	gui	window	routing
 flip_board_view	refusal_needs	Pcb	gui	active document	routing

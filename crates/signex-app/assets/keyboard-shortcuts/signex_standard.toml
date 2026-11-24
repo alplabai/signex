@@ -218,6 +218,9 @@ context = "schematic"
 # to the other side, `N` shows or hides the ratsnest, `F` changes the
 # footprint, `P K` draws a keepout and `T D` runs the design rule check.
 # `E O S` sets the board origin (Edit ▸ Origin ▸ Set, 2026-11-18).
+# Mockup row 175: in the 3D view `H` steps to the next lighting preset and
+# `Mod+Shift+C` copies a screenshot of the view; both are greyed on a flat
+# board.
 [[keyboard_shortcuts.sections]]
 context = "pcb"
 
@@ -231,7 +234,9 @@ context = "pcb"
 "3" = "view_board_3d"
 "E O S" = "set_board_origin"
 "F" = "change_footprint"
+"H" = "cycle_board_3d_lighting"
 "L" = "flip_selection"
+"Mod+Shift+C" = "copy_board_3d_screenshot"
 "N" = "toggle_ratsnest"
 "P F" = "place_board_fill"
 "P G" = "place_board_polygon_pour"
@@ -241,6 +246,15 @@ context = "pcb"
 "P V" = "place_board_via"
 "Shift+S" = "toggle_single_layer_mode"
 "T D" = "run_drc"
+
+# The board 3D view (mockup row 175): live only while the board is shown in
+# 3D, where it outranks the board's own keys, so `F` turns the board over
+# there and stays Change Footprint on a flat board.
+[[keyboard_shortcuts.sections]]
+context = "board_3d"
+
+[keyboard_shortcuts.sections.bindings]
+"F" = "flip_board_3d"
 
 [[keyboard_shortcuts.sections]]
 context = "footprint"

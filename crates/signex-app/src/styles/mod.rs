@@ -26,8 +26,8 @@ pub mod typography;
 
 pub use disabled::{DISABLED_OPACITY, dimmed, dimmed_button, read_only_field, read_only_row};
 pub use graphite::{
-    PillTone, card, field, floating_shadow, key_cap, pill, pill_colors, resize_handle_edge,
-    section_label,
+    PillTone, card, field, floating_shadow, key_cap, key_cap_of, pill, pill_colors,
+    resize_handle_edge, section_label,
 };
 pub use graphite_buttons::{ghost_button, primary_button};
 pub use metrics::ChromeMetrics;
