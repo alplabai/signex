@@ -467,7 +467,7 @@ fn move_preview(
     let view_w = ((max_x - min_x) * k) as f32 + 2.0 * MARGIN;
     let view_h = ((max_y - min_y) * k) as f32 + 2.0 * MARGIN;
     let sheet_origin = view(SheetPoint::ZERO);
-    let mut drawing = Illustration::new(view_w, view_h)
+    let drawing = Illustration::new(view_w, view_h)
         .height_em(PREVIEW_EM)
         .parts(crate::paste_array::preview_grid(
             step * k,

@@ -127,12 +127,13 @@ fn view_no_document<'a>(
         body = body.push(
             text(signex_i18n::UserText::new(project.name.as_str()))
                 .size(TS.caption)
-                .color(muted),
+                .color(muted)
+                .boxed(),
         );
     }
     body = body
-        .push(Space::new().height(SP.l))
-        .push(text(t!(ctx.i18n, hint)).size(TS.body).color(muted));
+        .push(Space::new().height(SP.l).boxed())
+        .push(text(t!(ctx.i18n, hint)).size(TS.body).color(muted).boxed());
     container(body).width(Length::Fill).boxed()
 }
 

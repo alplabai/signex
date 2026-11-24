@@ -127,7 +127,7 @@ pub(super) fn heading<'a>(
 /// hint while a cell holds a draft.
 fn notes<'a>(ctx: &'a PanelContext, facts: &'a LayerStackFacts) -> Element<'a, PanelMsg> {
     let muted = resolve(&ctx.tokens).ink3;
-    let note = |id| text(t!(ctx.i18n, id)).size(TS.dense).color(muted);
+    let note = |id| text(t!(ctx.i18n, id)).size(TS.dense).color(muted).boxed();
     let mut col = column![legend(ctx, facts), layer_pairs(ctx, facts)].spacing(SP.s);
     if facts.read_only {
         col = col.push(note(ids::PCB_STACK_READ_ONLY));

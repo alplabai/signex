@@ -313,7 +313,7 @@ fn mask_rows<'a>(look: Look<'a>, unit: Option<MessageId>) -> Element<'a, PanelMs
         .spacing(SP.s)
         .align_y(iced::Alignment::Center);
     if let Some(unit) = unit {
-        expansion = expansion.push(text(look.t(unit)).size(TS.body).color(look.muted));
+        expansion = expansion.push(text(look.t(unit)).size(TS.body).color(look.muted).boxed());
     }
     rows_column(vec![
         labelled(
