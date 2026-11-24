@@ -477,13 +477,10 @@ impl FootprintBakeCard {
     /// The card of `editor`; `None` unless its footprint sketch has the bake
     /// preview open. A board sketch has its own Bake panel.
     pub fn of(editor: &FootprintDocument) -> Option<Self> {
-        let state = &editor.state;
-        if !state.sketch_exit.preview
-            || state.mode != EditorMode::Sketch
-            || state.sketch_host() != SketchHost::Footprint
-        {
+        if !Self::is_shown(editor) {
             return None;
         }
+        let state = &editor.state;
         let sketch = editor.primitive().sketch.as_ref();
         let open_end = state.first_open_end(sketch);
         let warnings = state
@@ -509,6 +506,15 @@ impl FootprintBakeCard {
             solved: state.last_solve.is_some(),
             warnings,
         })
+    }
+
+    /// Whether `editor` has a card: its footprint sketch has the bake
+    /// preview open.
+    pub fn is_shown(editor: &FootprintDocument) -> bool {
+        let state = &editor.state;
+        state.sketch_exit.preview
+            && state.mode == EditorMode::Sketch
+            && state.sketch_host() == SketchHost::Footprint
     }
 
     /// What the card lists besides its counts. A footprint bakes on every
@@ -689,5 +695,41 @@ mod tests {
                 other.bounds
             );
         }
+    }
+
+    /// Mockup row 190: the card is in Properties, so opening the preview (a
+    /// refused Bake opens it too) brings a closed Properties to the front.
+    #[test]
+    fn opening_the_preview_brings_properties_forward() {
+        use crate::app::{Message, Signex, TabInfo, TabKind};
+        use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+        use crate::panels::PanelKind;
+
+        let editor = editor_offering_jump_to_pad();
+        let path = editor.path.clone();
+        let (mut app, _task) = Signex::new();
+        app.document_state
+            .footprint_editors
+            .insert(path.clone(), editor);
+        app.document_state.tabs.push(TabInfo {
+            title: "t".into(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: TabKind::FootprintEditor(path.clone()),
+        });
+        app.document_state.active_tab = app.document_state.tabs.len() - 1;
+        app.document_state.dock.close_panel(PanelKind::Properties);
+        assert!(!app.is_panel_open(PanelKind::Properties));
+
+        let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+            path,
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchBakePreviewToggled),
+        }));
+
+        assert!(
+            app.document_state.dock.is_frontmost(PanelKind::Properties),
+            "the card opened where it cannot be seen"
+        );
     }
 }

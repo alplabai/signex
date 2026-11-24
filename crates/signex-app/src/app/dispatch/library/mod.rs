@@ -141,14 +141,23 @@ impl Signex {
                 }
         );
         let shown_row = self.shown_browser_row();
+        let bake_card_was_shown = self.footprint_bake_card_shown();
         let task = self.route_library_message(msg);
         // Properties and its Pick buttons act on the row in the panel context
         // (mockup row 127), so any change of selection rebuilds it.
         if self.shown_browser_row() != shown_row {
             self.refresh_panel_ctx();
         }
+        // The footprint Bake card is in Properties (mockup row 190): when the
+        // preview opens, a refused Bake included, Properties comes forward.
+        let reveal = if !bake_card_was_shown && self.footprint_bake_card_shown() {
+            self.show_panel(crate::panels::PanelKind::Properties)
+        } else {
+            Task::none()
+        };
         let task = Task::batch([
             task,
+            reveal,
             self.refresh_components_details_if_stale(),
             self.refresh_browser_previews(),
         ]);
@@ -165,6 +174,13 @@ impl Signex {
         // After the view caches are current, so the rows asked for are the
         // rows the panel now lists.
         Task::batch([task, finished, self.request_components_thumbnails()])
+    }
+
+    /// Whether the footprint editor in view shows its Bake card.
+    fn footprint_bake_card_shown(&self) -> bool {
+        self.active_footprint_editor().is_some_and(
+            crate::library::editor::standalone::sketch_exit::FootprintBakeCard::is_shown,
+        )
     }
 
     fn route_library_message(&mut self, msg: LibraryMessage) -> Task<Message> {

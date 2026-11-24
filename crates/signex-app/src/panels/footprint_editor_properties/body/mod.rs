@@ -44,7 +44,7 @@ use crate::styles::PillTone;
 
 pub(super) use header::{
     banner, caption, check_cell, check_grid, full_width_segment, gated, ghost, is_open, kv_row,
-    mini_head, object_header, pill, rule, section,
+    link, mini_head, object_header, pill, rule, section, section_shown, section_toggle,
 };
 
 /// The field ids that link the illustrations to their rows.

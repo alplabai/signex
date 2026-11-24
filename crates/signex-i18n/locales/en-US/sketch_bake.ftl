@@ -79,3 +79,7 @@ sketch-bake-legend-courtyard = Courtyard
 # and the line shown until a pad is clicked.
 sketch-bake-outcome-link-caption = Each pad keeps a link to the sketch entity that made it. Click a pad on the canvas.
 sketch-bake-outcome-link-empty = No pad selected.
+# The clicked pad's row: the pad, the sketch entity it came from, and the
+# link that shows that entity in Sketch mode.
+sketch-bake-outcome-link-from = Pad { $number } ← { $source }
+sketch-bake-outcome-show-in-sketch = Show in Sketch

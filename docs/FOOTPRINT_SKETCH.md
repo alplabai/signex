@@ -253,13 +253,15 @@ control stays in reach:
   bake's warnings, the features it left out; they name no entity, so a
   click on them does nothing. One gap is one line, naming the object and
   its place, and the canvas rings it. Bake stays clickable with an error:
-  the click stays in sketch mode and shows the open ends.
+  the click stays in sketch mode and shows the open ends. Opening the
+  preview, a refused Bake included, brings Properties to the front.
 
 After **Bake**, Properties shows the outcome: `Baked · N pads`, what was
 written, a **Pads ↔ Sketch** section, the Roles and Bake result sections
 closed below it, and Edit in Sketch (mockup row 190). Pads ↔ Sketch says
 what the links are and "No pad selected." until a pad is clicked; clicking
-one pad keeps the panel and names that pad and its sketch source.
+one pad keeps the panel and shows "Pad N ← source" with Show in Sketch,
+which opens that source in Sketch mode with Back to pad (mockup row 192).
 A non-pad object, a multi-selection, an edit or an empty click ends the panel,
 and it does not come back on Undo or Redo.
 

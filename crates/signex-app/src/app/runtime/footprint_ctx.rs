@@ -3,6 +3,8 @@ use super::footprint_summaries::{
     build_redundant_constraint_summaries, build_rejected_conflict_summaries,
     build_sketch_entity_summary, footprint_pad_kind_label, footprint_pad_shape_label,
 };
+use crate::library::editor::footprint::sketch_mode::exit::shown_outcome;
+use crate::library::editor::standalone::sketch_exit::FootprintBakeCard;
 
 /// v0.14.2 — project the active `.snxfpt` editor's data into a
 /// panel-side snapshot. Mirrors `build_symbol_editor_panel_ctx`.
@@ -671,11 +673,8 @@ pub(super) fn build_footprint_editor_panel_ctx(
         selected_sketch_role,
         sketch_host: editor.state.sketch_host(),
         selected_sketch_is_point,
-        bake_outcome: crate::library::editor::footprint::sketch_mode::exit::shown_outcome(editor)
-            .cloned(),
-        footprint_bake: crate::library::editor::standalone::sketch_exit::FootprintBakeCard::of(
-            editor,
-        ),
+        bake_outcome: shown_outcome(editor).cloned(),
+        footprint_bake: FootprintBakeCard::of(editor),
         profile_roles,
         centerline_count,
         placement_active,

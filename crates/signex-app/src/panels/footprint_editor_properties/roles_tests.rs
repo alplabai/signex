@@ -273,7 +273,47 @@ fn the_opened_outcome_sections_list_roles_and_counts() {
     .map(String::from)
     .collect();
     let texts = outcome_texts(&app, &fp, &open);
-    for label in ["Profile 1 · 4 edges", "Profile 2 · 4 edges", "8", "1"] {
+    for label in ["Profile 1 · 4 edges", "Profile 2 · 4 edges"] {
         assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
     }
+    for (key, count) in [("PADS", "8"), ("COURTYARD", "1")] {
+        let key_at = at(&texts, key);
+        let on_its_row = texts.iter().any(|t| {
+            t.text == count
+                && t.bounds.x > key_at.x
+                && t.bounds.y < key_at.y + key_at.height
+                && key_at.y < t.bounds.y + t.bounds.height
+        });
+        assert!(
+            on_its_row,
+            "{count:?} is not on the {key:?} row: {texts:#?}"
+        );
+    }
+}
+
+/// Mockup row 190, the baked state with a pad clicked: "Pad 3 ← <source>"
+/// and Show in Sketch on one row, without the section title repeated.
+#[test]
+fn a_clicked_pad_names_its_source_with_show_in_sketch_on_its_row() {
+    use crate::library::editor::footprint::PadSketchSource;
+
+    let app = app();
+    let fp = baked_ctx(&app);
+    let i18n = I18n::en_us();
+    let source = PadSketchSource {
+        edges: 4,
+        instance: None,
+    };
+    let line = super::super::bake_outcome::pad_link_row(2, "3", Some(source), cx(&app, &fp, &i18n));
+    let texts = cleaned(lay_out_texts(line, DOCK));
+    let pad = at(&texts, "Pad 3 ← Profile of 4 edges");
+    let show = at(&texts, "Show in Sketch");
+    assert!(
+        show.x > pad.x && show.y < pad.y + pad.height && pad.y < show.y + show.height,
+        "Show in Sketch is not on the pad's row: {texts:#?}"
+    );
+    assert!(
+        !texts.iter().any(|t| t.text.starts_with("Pads ↔ Sketch")),
+        "the section title is repeated on the row: {texts:#?}"
+    );
 }

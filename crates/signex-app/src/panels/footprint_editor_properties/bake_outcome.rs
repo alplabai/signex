@@ -4,21 +4,23 @@
 //! the way back to the sketch. See `docs/FOOTPRINT_SKETCH.md`, "Leaving
 //! sketch mode".
 
-use iced::widget::{Column, container, row};
-use iced::{Element, Length, Theme, Widget as _};
+use iced::widget::{Column, Row, container};
+use iced::{Element, Length, Widget as _};
 use signex_i18n::{I18n, Localized, ids, t};
-use signex_widgets::{button, raw, text};
+use signex_widgets::text;
 
 use super::super::{PanelMsg, SketchFixMsg};
-use super::body::{Ctx, banner, caption, ghost, is_open, kv_row, object_header, section};
+use super::body::{
+    Ctx, banner, caption, ghost, is_open, kv_row, link, object_header, section, section_shown,
+    section_toggle,
+};
 use super::pad::source_text;
 use super::rows::value_row;
 use crate::library::editor::footprint::PadSketchSource;
 use crate::library::editor::footprint::sketch_mode::BakeOutcome;
 use crate::library::editor::footprint::sketch_mode::roles::role_label;
 use crate::library::editor::standalone::sketch_exit::target_label_id;
-use crate::styles::tokens::resolve;
-use crate::styles::{PillTone, Spacing, TypeScale};
+use crate::styles::{PillTone, Spacing, TypeScale, ti};
 
 const SP: Spacing = Spacing::DEFAULT;
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -75,20 +77,42 @@ fn link_section<'a>(
         tokens,
     ));
     match cx.fp.selected_pad.as_ref() {
-        Some(pad) => {
-            let link = link_text(Some((pad.number.as_str(), pad.sketch_source)), i18n);
-            col.push(value_row(
-                &t!(i18n, ids::SKETCH_BAKE_OUTCOME_LINK).into_string(),
-                &link,
-                cx.palette.muted,
-                cx.palette.input_bg,
-            ))
-        }
-        None => col.push(caption(
-            t!(i18n, ids::SKETCH_BAKE_OUTCOME_LINK_EMPTY),
-            tokens,
-        )),
+        Some(pad) => col.push(pad_link_row(pad.idx, &pad.number, pad.sketch_source, cx)),
+        None => col.push(caption(link_text(None, i18n), tokens)),
     }
+}
+
+/// The clicked pad's row: "Pad 3 ← Profile of 4 edges", then Show in Sketch,
+/// which opens that pad's source in Sketch mode (mockup row 192). A pad
+/// without a source has nothing to show.
+pub(super) fn pad_link_row<'a>(
+    pad_idx: usize,
+    number: &str,
+    source: Option<PadSketchSource>,
+    cx: Ctx<'a, '_>,
+) -> Element<'a, PanelMsg> {
+    let (tokens, i18n) = (cx.tokens, cx.i18n);
+    let mut line = Row::new()
+        .push(
+            text(link_text(Some((number, source)), i18n))
+                .size(TS.caption)
+                .color(ti(tokens.text))
+                .width(Length::Fill)
+                .boxed(),
+        )
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center);
+    if source.is_some() {
+        line = line.push(link(
+            t!(i18n, ids::SKETCH_BAKE_OUTCOME_SHOW_IN_SKETCH),
+            PanelMsg::FpEditorEditPadInSketch { pad_idx },
+            tokens,
+        ));
+    }
+    container(line)
+        .padding([SP.xs, SP.m])
+        .width(Length::Fill)
+        .boxed()
 }
 
 /// Roles, closed: each closed profile and the role it baked as.
@@ -97,12 +121,14 @@ fn roles_section<'a>(
     cx: Ctx<'a, '_>,
 ) -> Column<Element<'a, PanelMsg>> {
     let i18n = cx.i18n;
-    let open = cx.collapsed.contains(ROLES_KEY);
-    col = col.push(closed_section(
+    let open = section_shown(ROLES_KEY, cx.collapsed, false);
+    col = col.push(section_toggle(
         ROLES_KEY,
         &t!(i18n, ids::SKETCH_BAKE_ROLES),
+        None,
         open,
-        cx,
+        cx.tokens,
+        i18n,
     ));
     if !open {
         return col;
@@ -130,9 +156,11 @@ fn result_section<'a>(
     outcome: &BakeOutcome,
 ) -> Column<Element<'a, PanelMsg>> {
     let i18n = cx.i18n;
-    let open = cx.collapsed.contains(RESULT_KEY);
+    let open = section_shown(RESULT_KEY, cx.collapsed, false);
     let title = t!(i18n, ids::EDITORS_SKETCH_BAKE_RESULT);
-    col = col.push(closed_section(RESULT_KEY, &title, open, cx));
+    col = col.push(section_toggle(
+        RESULT_KEY, &title, None, open, cx.tokens, i18n,
+    ));
     if !open {
         return col;
     }
@@ -148,55 +176,18 @@ fn result_section<'a>(
     col
 }
 
-/// The header of a section that starts closed: the chevron follows `open`,
-/// and a click toggles `key` as every section header does.
-fn closed_section<'a>(
-    key: &str,
-    title: &Localized,
-    open: bool,
-    cx: Ctx<'a, '_>,
-) -> Element<'a, PanelMsg> {
-    let ink = resolve(cx.tokens);
-    let label = row![
-        signex_widgets::chevron::chevron(open, TS.section, ink.ink4),
-        // raw: the catalog title, upper-cased for the locale.
-        text(raw(cx.i18n.upper_for_display(&title.to_string())))
-            .size(TS.section)
-            .color(ink.ink3)
-            .wrapping(iced::widget::text::Wrapping::None),
-    ]
-    .spacing(SP.xs)
-    .align_y(iced::Alignment::Center);
-    let toggle = button(label)
-        .padding([SP.s, SP.xs])
-        .width(Length::Fill)
-        .on_press(PanelMsg::ToggleSection(key.to_string()))
-        .style(|_: &Theme, _| button::Style::default());
-    container(toggle)
-        .padding(iced::Padding {
-            top: SP.xs,
-            right: SP.m,
-            bottom: 0.0,
-            left: SP.xs,
-        })
-        .width(Length::Fill)
-        .boxed()
-}
-
-/// The Pads ↔ Sketch row's value: the clicked pad's number and source.
-fn link_text(pad: Option<(&str, Option<PadSketchSource>)>, i18n: &I18n) -> String {
+/// The Pads ↔ Sketch line: the clicked pad's number and source, or "No pad
+/// selected." before a click.
+fn link_text(pad: Option<(&str, Option<PadSketchSource>)>, i18n: &I18n) -> Localized {
     match pad {
-        None => t!(i18n, ids::SKETCH_BAKE_OUTCOME_LINK_HINT).into_string(),
-        Some((number, None)) => {
-            t!(i18n, ids::SKETCH_BAKE_OUTCOME_LINK_NONE, "number" => number).into_string()
-        }
+        None => t!(i18n, ids::SKETCH_BAKE_OUTCOME_LINK_EMPTY),
+        Some((number, None)) => t!(i18n, ids::SKETCH_BAKE_OUTCOME_LINK_NONE, "number" => number),
         Some((number, Some(source))) => t!(
             i18n,
-            ids::SKETCH_BAKE_OUTCOME_LINK_PAD,
+            ids::SKETCH_BAKE_OUTCOME_LINK_FROM,
             "number" => number,
             "source" => source_text(source, i18n)
-        )
-        .into_string(),
+        ),
     }
 }
 
@@ -234,16 +225,16 @@ fn wrote_line(outcome: &BakeOutcome, i18n: &I18n) -> Localized {
 mod tests {
     use super::*;
 
-    fn plain(s: String) -> String {
-        s.replace(['\u{2068}', '\u{2069}'], "")
+    fn plain(s: Localized) -> String {
+        s.into_string().replace(['\u{2068}', '\u{2069}'], "")
     }
 
     /// DECISIONS 2026-11-23 (#2835): the row waits for a click, then names
-    /// the clicked pad and what drives it.
+    /// the clicked pad and what drives it, as mockup row 190 writes it.
     #[test]
     fn the_link_row_fills_from_the_clicked_pad() {
         let i18n = I18n::en_us();
-        assert_eq!(plain(link_text(None, &i18n)), "Click a pad");
+        assert_eq!(plain(link_text(None, &i18n)), "No pad selected.");
         assert_eq!(
             plain(link_text(Some(("3", None)), &i18n)),
             "Pad 3 · no sketch source"
@@ -254,7 +245,7 @@ mod tests {
         };
         assert_eq!(
             plain(link_text(Some(("1", Some(point))), &i18n)),
-            "Pad 1 · Pad point"
+            "Pad 1 ← Pad point"
         );
         let profile = PadSketchSource {
             edges: 4,
@@ -262,7 +253,7 @@ mod tests {
         };
         assert_eq!(
             plain(link_text(Some(("A2", Some(profile))), &i18n)),
-            "Pad A2 · Profile of 4 edges"
+            "Pad A2 ← Profile of 4 edges"
         );
     }
 }
