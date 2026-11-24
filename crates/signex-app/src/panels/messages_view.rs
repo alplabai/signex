@@ -11,9 +11,9 @@ use std::path::PathBuf;
 use iced::widget::{Row, column, pick_list};
 use signex_i18n::{I18n, MessageId, UserText, ids, t};
 use signex_types::schematic::SelectedItem;
-use signex_widgets::chips::{ChipMetrics, ChipStyle, FilterSet, filter_chips};
+use signex_widgets::chips::{ChipMetrics, ChipStyle, ChipTone, chip, tag_chip};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
-use signex_widgets::{Label, text_input};
+use signex_widgets::text_input;
 
 use super::messages_row::{MessageSource, clock_time, document_name, named_documents};
 use super::*;
@@ -208,6 +208,103 @@ fn chip_style(tokens: &ThemeTokens) -> ChipStyle {
     }
 }
 
+/// The tone of a level: the row's CLASS pill and the level chip's tag.
+fn level_tone(level: DiagnosticLevel) -> PillTone {
+    match level {
+        DiagnosticLevel::Error => PillTone::Err,
+        DiagnosticLevel::Warning => PillTone::Warn,
+        DiagnosticLevel::Info => PillTone::Info,
+        DiagnosticLevel::Debug | DiagnosticLevel::Trace => PillTone::Neutral,
+    }
+}
+
+/// Fill and ink of a level chip's tag, from the level's pill tone.
+pub(crate) fn level_tag_tone(tokens: &ThemeTokens, level: DiagnosticLevel) -> ChipTone {
+    let (fill, ink) = crate::styles::pill_colors(tokens, level_tone(level));
+    ChipTone { fill, ink }
+}
+
+/// All, then ERROR, WARN and INFO as mono tags in their level's tone, each
+/// with its count (mockup row 86).
+fn level_chips<'a>(ctx: &'a PanelContext, visible: &[&DiagnosticEntry]) -> Element<'a, PanelMsg> {
+    let i18n: &'a I18n = &ctx.i18n;
+    let picked = ctx.validation.messages.level;
+    let style = chip_style(&ctx.tokens);
+    let metrics = ChipMetrics::from_text_size(TS.body);
+    let [all, errors, warnings, infos] = level_counts(visible);
+    let press = |level| Some(messages_msg(MessagesPanelMsg::LevelPicked(level)));
+    let mut chips: Row<Element<'a, PanelMsg>> = Row::new().spacing(metrics.row_gap).push(chip(
+        t!(i18n, ids::PANELS_MESSAGES_LEVEL_ALL),
+        Some(all),
+        picked == MessageLevel::All,
+        style,
+        metrics,
+        i18n,
+        press(MessageLevel::All),
+    ));
+    for (level, diagnostic, count) in [
+        (MessageLevel::Error, DiagnosticLevel::Error, errors),
+        (MessageLevel::Warning, DiagnosticLevel::Warning, warnings),
+        (MessageLevel::Info, DiagnosticLevel::Info, infos),
+    ] {
+        chips = chips.push(tag_chip(
+            t!(i18n, level_id(diagnostic)),
+            level_tag_tone(&ctx.tokens, diagnostic),
+            None,
+            Some(count),
+            picked == level,
+            style,
+            metrics,
+            i18n,
+            press(level),
+        ));
+    }
+    chips.wrap().vertical_spacing(metrics.row_gap).boxed()
+}
+
+/// The filter field: the search glyph and a borderless input in one field
+/// frame (mockup row 86).
+fn filter_field<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    let tokens = &ctx.tokens;
+    let r = resolve(tokens);
+    let ink4 = r.ink4;
+    let ink = crate::styles::ti(tokens.text);
+    let accent = crate::styles::ti(tokens.accent);
+    let glyph = iced::widget::svg(crate::icons::icon_chrome_search(ctx.theme_id))
+        .width(TS.body)
+        .height(TS.body)
+        .style(move |_: &Theme, _| iced::widget::svg::Style {
+            color: Some(ink4),
+            ..iced::widget::svg::Style::default()
+        });
+    let input = text_input(
+        t!(ctx.i18n, ids::PANELS_MESSAGES_FILTER_HINT),
+        &ctx.validation.messages.query,
+    )
+    .on_input(|q| messages_msg(MessagesPanelMsg::QueryEdited(q)))
+    .size(TS.body)
+    .padding(iced::Padding::ZERO)
+    .width(Length::Fill)
+    .style(move |_: &Theme, _| iced::widget::text_input::Style {
+        background: Background::Color(iced::Color::TRANSPARENT),
+        border: iced::Border::default(),
+        placeholder: ink4,
+        value: ink,
+        selection: iced::Color { a: 0.4, ..accent },
+    });
+    let field_height = crate::styles::ChromeMetrics::DEFAULT.field;
+    container(
+        row![glyph.boxed(), input.boxed()]
+            .spacing(SP.s)
+            .align_y(iced::Alignment::Center),
+    )
+    .padding([0.0, SP.m])
+    .width(Length::Fixed(TS.body * FILTER_FIELD_EM))
+    .center_y(field_height)
+    .style(crate::styles::field(tokens, false))
+    .boxed()
+}
+
 /// One entry of the Source or Document dropdown; `None` is "all".
 #[derive(Debug, Clone, PartialEq)]
 enum MessagesChoice {
@@ -230,36 +327,6 @@ fn choice_label(i18n: &I18n, choice: &MessagesChoice) -> String {
 fn toolbar<'a>(ctx: &'a PanelContext, visible: &[&DiagnosticEntry]) -> Element<'a, PanelMsg> {
     let i18n: &'a I18n = &ctx.i18n;
     let view = &ctx.validation.messages;
-    let [all, errors, warnings, infos] = level_counts(visible);
-    let chips = filter_chips(
-        [
-            (
-                MessageLevel::All,
-                Label::from(t!(i18n, ids::PANELS_MESSAGES_LEVEL_ALL)),
-                Some(all),
-            ),
-            (
-                MessageLevel::Error,
-                Label::from(t!(i18n, ids::PANELS_MESSAGES_LEVEL_ERROR)),
-                Some(errors),
-            ),
-            (
-                MessageLevel::Warning,
-                Label::from(t!(i18n, ids::PANELS_MESSAGES_LEVEL_WARNING)),
-                Some(warnings),
-            ),
-            (
-                MessageLevel::Info,
-                Label::from(t!(i18n, ids::PANELS_MESSAGES_LEVEL_INFO)),
-                Some(infos),
-            ),
-        ],
-        &FilterSet::new([view.level]),
-        chip_style(&ctx.tokens),
-        ChipMetrics::from_text_size(TS.body),
-        i18n,
-        |level| messages_msg(MessagesPanelMsg::LevelPicked(level)),
-    );
     let mut sources = vec![MessagesChoice::Source(None)];
     let mut present: Vec<MessageSource> = visible
         .iter()
@@ -284,12 +351,6 @@ fn toolbar<'a>(ctx: &'a PanelContext, visible: &[&DiagnosticEntry]) -> Element<'
             })
             .boxed()
     };
-    let filter = text_input(t!(i18n, ids::PANELS_MESSAGES_FILTER_HINT), &view.query)
-        .on_input(|q| messages_msg(MessagesPanelMsg::QueryEdited(q)))
-        .size(TS.body)
-        .padding(SP.s)
-        .style(super::form_look::text_input_style)
-        .width(Length::Fixed(TS.body * FILTER_FIELD_EM));
     let line = resolve(&ctx.tokens).line_strong;
     let rule = container(Space::new())
         .width(Length::Fixed(crate::styles::HAIRLINE))
@@ -299,12 +360,12 @@ fn toolbar<'a>(ctx: &'a PanelContext, visible: &[&DiagnosticEntry]) -> Element<'
             ..container::Style::default()
         });
     row![
-        chips,
+        level_chips(ctx, visible),
         rule,
         dropdown(MessagesChoice::Source(view.source), sources),
         dropdown(MessagesChoice::Document(view.document.clone()), documents),
         Space::new().width(Length::Fill).height(Length::Shrink),
-        filter,
+        filter_field(ctx),
     ]
     .spacing(SP.s)
     .padding([SP.s, SP.m])
@@ -358,15 +419,9 @@ fn level_pill<'a>(
     i18n: &I18n,
     level: DiagnosticLevel,
 ) -> Element<'a, PanelMsg> {
-    let tone = match level {
-        DiagnosticLevel::Error => PillTone::Err,
-        DiagnosticLevel::Warning => PillTone::Warn,
-        DiagnosticLevel::Info => PillTone::Info,
-        DiagnosticLevel::Debug | DiagnosticLevel::Trace => PillTone::Neutral,
-    };
     container(text(t!(i18n, level_id(level))).size(TS.caption))
         .padding([0.0, SP.s])
-        .style(crate::styles::pill(tokens, tone))
+        .style(crate::styles::pill(tokens, level_tone(level)))
         .boxed()
 }
 

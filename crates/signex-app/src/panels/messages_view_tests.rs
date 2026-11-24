@@ -316,3 +316,65 @@ fn an_empty_log_shows_the_centred_empty_state() {
         "{shown:?}"
     );
 }
+
+/// Mockup row 86: ERROR, WARN and INFO are tags in their level's tone (the
+/// row pill's colours), not the neutral chip ink.
+#[test]
+fn each_level_chip_tag_takes_its_level_tone() {
+    let (app, _boot) = crate::app::Signex::new();
+    let tokens = &app.document_state.panel_ctx.tokens;
+    for (level, tone) in [
+        (DiagnosticLevel::Error, PillTone::Err),
+        (DiagnosticLevel::Warning, PillTone::Warn),
+        (DiagnosticLevel::Info, PillTone::Info),
+    ] {
+        let (fill, ink) = crate::styles::pill_colors(tokens, tone);
+        assert_eq!(level_tag_tone(tokens, level), ChipTone { fill, ink });
+        assert_ne!(ink, chip_style(tokens).ink, "{level:?}");
+    }
+    let ink = |level| level_tag_tone(tokens, level).ink;
+    assert_ne!(ink(DiagnosticLevel::Error), ink(DiagnosticLevel::Warning));
+    assert_ne!(ink(DiagnosticLevel::Warning), ink(DiagnosticLevel::Info));
+}
+
+/// Mockup row 86: a level chip is its tag and its count, the tag drawn at
+/// the smaller badge size, on one line with the count.
+#[test]
+fn the_level_chips_draw_a_tag_and_a_count_each() {
+    let (app, _boot) = crate::app::Signex::new();
+    let mut ctx = app.document_state.panel_ctx.clone();
+    ctx.diagnostics = log();
+    ctx.diagnostics_level = "info".into();
+    let entries = ctx.diagnostics.clone();
+    let shown = visible(&entries, &ctx.validation.messages, false);
+    let texts = lay_out_texts(level_chips(&ctx, &shown), iced::Size::new(1200.0, 200.0));
+    let words: Vec<String> = texts.iter().map(|t| plain(&t.text)).collect();
+    assert_eq!(
+        words,
+        ["All", "4", "ERROR", "1", "WARN", "1", "INFO", "2"],
+        "{texts:#?}"
+    );
+    let (all, error, count) = (&texts[0].bounds, &texts[2].bounds, &texts[3].bounds);
+    assert!(error.height < all.height, "{error:?} vs {all:?}");
+    assert!(
+        count.x >= error.x + error.width,
+        "{count:?} after {error:?}"
+    );
+    let centre = |b: &iced::Rectangle| b.y + b.height / 2.0;
+    assert!((centre(error) - centre(count)).abs() < 2.0, "{texts:#?}");
+}
+
+/// Mockup row 86: the filter field leads with the search glyph, so its
+/// input starts after the field padding and one glyph.
+#[test]
+fn the_filter_field_leads_with_the_search_glyph() {
+    let (app, _boot) = crate::app::Signex::new();
+    let ctx = app.document_state.panel_ctx.clone();
+    let inputs =
+        crate::layout_probe::lay_out_inputs(filter_field(&ctx), iced::Size::new(600.0, 100.0));
+    let input = inputs
+        .iter()
+        .find(|i| plain(&i.text) == "Filter messages")
+        .unwrap_or_else(|| panic!("{inputs:#?}"));
+    assert!(input.bounds.x >= SP.m + TS.body, "{input:#?}");
+}
