@@ -138,4 +138,13 @@ define_ids! {
     PDF_PAGE_SIZE_US_LEGAL = "pdf-page-size-us-legal";
     PDF_PAGE_SIZE_TABLOID = "pdf-page-size-tabloid";
     PDF_SCALE_MODE_PERCENT = "pdf-scale-mode-percent";
+    // m7/pdf-export-preview
+    PDF_PAPER_SIZE_A0 = "pdf-paper-size-a0";
+    PDF_PAPER_SIZE_A1 = "pdf-paper-size-a1";
+    PDF_PAPER_SIZE_A2 = "pdf-paper-size-a2";
+    PDF_PAPER_SIZE_A3 = "pdf-paper-size-a3";
+    PDF_PAPER_SIZE_A4 = "pdf-paper-size-a4";
+    PDF_PAPER_SIZE_A5 = "pdf-paper-size-a5";
+    PDF_PAPER_SIZE_B5 = "pdf-paper-size-b5";
+    PDF_SECTION_NEW = "pdf-section-new";
 }

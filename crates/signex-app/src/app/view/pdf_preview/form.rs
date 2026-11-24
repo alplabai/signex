@@ -10,6 +10,7 @@ use signex_i18n::{MessageId, t};
 use signex_output::PdfOptions;
 use signex_widgets::enable_section::dependents_veil;
 use signex_widgets::inert::Inert;
+use signex_widgets::toggle_switch::{ToggleSwitchStyle, toggle_switch};
 use signex_widgets::{CheckboxLabel as _, Label, SegmentedStyle, checkbox, text, text_input};
 
 use super::super::*;
@@ -34,10 +35,14 @@ const SECTION_H: f32 = 26.0;
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Look {
     pub ink: Color,
+    pub ink2: Color,
     pub ink3: Color,
     pub ink4: Color,
     pub accent_text: Color,
     pub accent: Color,
+    pub on_accent: Color,
+    pub info: Color,
+    pub info_soft: Color,
     pub panel: Color,
     pub sunken: Color,
     pub segment: SegmentedStyle,
@@ -50,10 +55,14 @@ impl Look {
         let r = crate::styles::tokens::resolve(tokens);
         Self {
             ink: crate::styles::ti(tokens.text),
+            ink2: crate::styles::ti(tokens.text_secondary),
             ink3: r.ink3,
             ink4: r.ink4,
             accent_text: r.accent_text,
             accent: crate::styles::ti(tokens.accent),
+            on_accent: crate::styles::tokens::on_accent(tokens),
+            info: r.info,
+            info_soft: r.info_soft,
             panel: crate::styles::ti(tokens.panel_bg),
             sunken: r.sunken,
             segment: r.segmented(TS.body),
@@ -165,6 +174,78 @@ pub(super) fn gated<'a>(
         Some(veil) => Inert::new(body, veil).boxed(),
         None => body,
     }
+}
+
+/// A section headed by its enable switch (mockup row 168): a toggle switch
+/// and its label, a press on either sending `flip`; while it is off, `body`
+/// is greyed and takes no input, and keeps its values.
+pub(super) fn switch_section<'a>(
+    label: impl Into<Label<'a>>,
+    is_on: bool,
+    flip: Message,
+    body: Element<'a, Message>,
+    look: &Look,
+) -> Element<'a, Message> {
+    let switch = toggle_switch(
+        is_on,
+        ToggleSwitchStyle::new(look.accent, look.line_strong, look.on_accent),
+        Some(flip.clone()),
+    );
+    let name = iced::widget::mouse_area(
+        text(label)
+            .size(TS.body)
+            .color(look.ink2)
+            .font(iced::Font {
+                weight: iced::font::Weight::Medium,
+                ..signex_widgets::ui_font::regular()
+            })
+            .boxed(),
+    )
+    .on_press(flip)
+    .interaction(iced::mouse::Interaction::Pointer);
+    column![
+        row![switch, name.boxed()]
+            .spacing(SP.m)
+            .align_y(iced::Alignment::Center),
+        gated(body, is_on, look),
+    ]
+    .spacing(SP.s)
+    .width(Length::Fill)
+    .boxed()
+}
+
+/// The sections mockup row 168 adds carry a NEW pill on their heading.
+fn is_new(section: PdfSection) -> bool {
+    matches!(
+        section,
+        PdfSection::Watermark | PdfSection::PdfLayers | PdfSection::Bookmarks
+    )
+}
+
+/// The NEW pill: the catalog word in capitals on the soft info fill.
+fn new_pill<'a>(i18n: &signex_i18n::I18n, look: &Look) -> Element<'a, Message> {
+    let word = i18n.upper_for_display(&i18n.message_plain(signex_i18n::ids::PDF_SECTION_NEW, &[]));
+    let fill = look.info_soft;
+    container(
+        // raw: the catalog word, upper-cased for the locale.
+        text(signex_widgets::raw(word))
+            .size(TS.badge)
+            .color(look.info)
+            .font(iced::Font {
+                weight: iced::font::Weight::Semibold,
+                ..signex_widgets::ui_font::regular()
+            }),
+    )
+    .padding([0.0, SP.s])
+    .style(move |_: &iced::Theme| container::Style {
+        background: Some(fill.into()),
+        border: iced::Border {
+            radius: crate::styles::Radii::GRAPHITE.pill.into(),
+            ..iced::Border::default()
+        },
+        ..container::Style::default()
+    })
+    .boxed()
 }
 
 /// A numeric field; read-only when `on_input` is `None`.
@@ -353,8 +434,9 @@ impl Signex {
         col.boxed()
     }
 
-    /// A section header: the chevron, the upper-case title and, at the right
-    /// end, the summary caption. A click folds or unfolds the section.
+    /// A section header: the chevron, the upper-case title (with the NEW
+    /// pill after it on a new section) and, at the right end, the summary
+    /// caption. A click folds or unfolds the section.
     pub(in crate::app::view) fn pdf_section_header<'a>(
         &'a self,
         section: PdfSection,
@@ -365,6 +447,7 @@ impl Signex {
         let i18n = self.ui_state.i18n.as_ref();
         let look = Look::of(&self.document_state.panel_ctx.tokens);
         let title = i18n.upper_for_display(&i18n.message_plain(title, &[]));
+        let is_new = is_new(section);
         let mut line = row![
             signex_widgets::chevron::chevron(is_open, TS.section, look.ink4),
             // raw: the catalog title, upper-cased for the locale.
@@ -375,12 +458,17 @@ impl Signex {
                     weight: iced::font::Weight::Medium,
                     ..signex_widgets::ui_font::regular()
                 })
-                .width(Length::Fill)
+                .width(if is_new { Length::Shrink } else { Length::Fill })
                 .wrapping(iced::widget::text::Wrapping::None)
                 .ellipsis(iced::widget::text::Ellipsis::End),
         ]
         .spacing(SP.xs)
         .align_y(iced::Alignment::Center);
+        if is_new {
+            line = line
+                .push(new_pill(i18n, &look))
+                .push(Space::new().width(Length::Fill).boxed());
+        }
         if let Some(summary) = summary {
             line = line.push(text(summary).size(TS.caption).color(look.ink4).boxed());
         }

@@ -1,17 +1,18 @@
 //! The Watermark section of the Export PDF dialog (#1298, mockup row 168):
-//! "Print a watermark" heads it; switched off, its fields grey out and the
-//! preview drops the watermark, and the settings stay for when it is on
+//! the "Print a watermark" switch heads it; off, its fields grey out and
+//! the preview drops the watermark, and the settings stay for when it is on
 //! again.
 
 use iced::Widget as _;
 use iced::widget::{Space, column, container, row, slider};
 use signex_i18n::{ids, t};
 use signex_output::WatermarkPages;
-use signex_widgets::enable_section::EnableSection;
 use signex_widgets::{Label, raw, segmented, text, text_input};
 
 use super::super::*;
-use super::form::{Look, NUM_W, SP, TS, check_with_help, form_row, num_field, unit};
+use super::form::{
+    Look, NUM_W, SP, TS, check_with_help, form_row, num_field, switch_section, unit,
+};
 use crate::app::state::{ANGLE_PRESETS, PreviewState, WatermarkPreset};
 
 /// Side of the colour swatch.
@@ -174,12 +175,13 @@ impl Signex {
         .spacing(SP.s + SP.xs)
         .width(Length::Fill);
 
-        EnableSection::new(t!(i18n, ids::PDF_WATERMARK_SWITCH), draft.is_on)
-            .on_toggle(|on| Message::from(PdfOptionMsg::WatermarkToggled(on)))
-            .view(
-                crate::panels::enable_section::enable_section_style(tokens),
-                fields.boxed(),
-            )
+        switch_section(
+            t!(i18n, ids::PDF_WATERMARK_SWITCH),
+            draft.is_on,
+            Message::from(PdfOptionMsg::WatermarkToggled(!draft.is_on)),
+            fields.boxed(),
+            &look,
+        )
     }
 }
 
