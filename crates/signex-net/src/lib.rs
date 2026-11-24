@@ -31,8 +31,8 @@ pub use diff_pair_classes::{
 
 mod net_class;
 pub use net_class::{
-    assign_net_classes, element_class_styles, element_net_names, placement_class_styles,
-    placement_net_names, wire_at_point,
+    assign_net_classes, element_class_styles, element_net_names, netlist_has_net,
+    placement_class_styles, placement_net_names, wire_at_point,
 };
 
 mod build;

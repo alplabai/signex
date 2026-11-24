@@ -221,9 +221,10 @@ fn the_kill_list_is_in_progress_edit_or_render_cache_only() {
 /// maintainer decision (ADR-0006 slice C, #2504), not a regenerate. Since
 /// #2551 it holds the D-writes that read X (the render cache) or an S value
 /// in progress; the turn, paste and select rows left it as GUI or split
-/// routers, and the two close routes joined it as D-writes.
+/// routers, and the two close routes joined it as D-writes. `assign_net_class`
+/// left it when it stopped reading the GUI's style cache (#2549, Hakan
+/// 2026-11-19).
 const KILL_LIST: &[(&str, &str)] = &[
-    ("assign_net_class", "operand_handler"),
     ("close_active_document", "bridge"),
     ("close_active_document", "operand_handler"),
     ("close_all_documents", "bridge"),

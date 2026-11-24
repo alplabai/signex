@@ -213,7 +213,11 @@ The last three are open to agents by the maintainer's decision (#1924):
   caller.
 - `assign_net_class` runs by document as in the headless run: the project's
   class table changes, and the pick is one step on that sheet's undo timeline
-  (#2171), after the person's own steps.
+  (#2171), after the person's own steps. It takes any net of the project
+  netlist stitched from the documents, a net named only by a label and every
+  name of a shared wire included, never the canvas's style cache; a project
+  with closed sheets is read off the UI thread first, as for an edit that
+  reads the disk (#2549).
 
 The board net-class commands (`add_net_class`, `rename_net_class`,
 `delete_net_class`, `set_net_class_rules`, `assign_board_net_class`) are

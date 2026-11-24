@@ -164,6 +164,31 @@ impl Signex {
             ),
         }))
     }
+
+    /// Whether the netlist of the project `sheet` belongs to, stitched from
+    /// its documents (open sheets live, closed ones as read first) with the
+    /// naming the net-class styles use, has a net named `net` (#2549). `Err`
+    /// when the closed sheets were not read yet: `run_operands` reads them
+    /// and runs the command again.
+    pub(crate) fn project_has_net(
+        &self,
+        sheet: &std::path::Path,
+        net: &str,
+    ) -> Result<bool, String> {
+        let project = self
+            .document_state
+            .document_project(sheet)
+            .ok_or("the sheet belongs to no project")?;
+        let set = self.edit_project_set(sheet)?;
+        let stitched = crate::app::stitched_netlist::netlist_of_set(
+            &set,
+            Some(project.dir().to_path_buf()),
+            &project.data.schematic_design.channel_naming,
+        );
+        Ok(stitched
+            .netlist
+            .is_some_and(|netlist| signex_net::netlist_has_net(&netlist, net)))
+    }
 }
 
 /// The first change that needs `allow_merge`.

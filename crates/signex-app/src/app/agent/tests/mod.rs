@@ -168,6 +168,42 @@ pub(super) fn call(app: &mut Signex, id: &str, args: Value) -> Value {
     ask(app, text)
 }
 
+/// Open the child `power.snxsch` the fixture's sheets place, so the whole
+/// project is in memory and a check that reads the project runs at once
+/// instead of waiting for its closed sheets (#2549). The person stays on the
+/// tab they were on.
+pub(super) fn open_the_child(app: &mut Signex) {
+    let person = app.document_state.active_path.clone().expect("a sheet");
+    let child = path("power.snxsch");
+    let sheet = signex_types::schematic::SchematicSheet {
+        uuid: uid(SHEET_B + 50),
+        ..Default::default()
+    };
+    fixture::add_sheet_with(app, &child, sheet);
+    app.document_state.mark_document_clean(&child);
+    fixture::activate(app, &person);
+}
+
+/// [`call`] for a command that may wait for its reads (#2199): the task it
+/// leaves is driven to its end, then the reply is read.
+pub(super) fn call_settled(app: &mut Signex, id: &str, args: Value) -> Value {
+    let (reply, mut answer) = AgentReply::channel();
+    let call = AgentCall {
+        pid: Some(4242),
+        input: Input::Line(line(app, id, args)),
+        reply,
+    };
+    let task = app.update(Message::Agent(AgentMsg::Request(call)));
+    crate::task_driver::TaskDriver::new()
+        .settle(app, task)
+        .expect("the request settled");
+    let line = answer
+        .try_recv()
+        .expect("the app did not drop the reply")
+        .expect("the app answered");
+    serde_json::from_str(&line).expect("a reply is JSON")
+}
+
 /// [`call`] from process `pid`.
 pub(super) fn call_as(app: &mut Signex, pid: u32, id: &str, args: Value) -> Value {
     let text = line(app, id, args);

@@ -6,16 +6,20 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
+use serde_json::{Value, json};
+use signex_i18n::RenderTranslatable;
 use signex_types::net_class::NetClass;
 use signex_types::schematic::{
     Label, LabelType, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, SchematicSheet,
     Symbol, Wire,
 };
 
-use super::{SHEET_A, app_in};
+use super::{SHEET_A, app_in, call_settled};
 use crate::app::Signex;
 use crate::app::command::queries::tests::uid;
+use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::editing_commands::net_color_driver as fixture;
+use crate::keymap::AppCommandId;
 
 const LONELY: &str = "LONELY";
 const CHILD_WIRE: u128 = 900;
@@ -160,4 +164,111 @@ fn the_gui_cache_knows_fewer_nets_than_the_project_netlist() {
         "the cache keeps one name of the shared wire: {unknown:?}"
     );
     assert_eq!(unknown.len(), 2, "{unknown:?}");
+}
+
+/// The agent's `assign_net_class` of `net` into `Power` on sheet `a`.
+fn agents_pick(app: &mut Signex, dir: &Path, net: &str) -> Value {
+    let document = dir.join("a.snxsch").display().to_string();
+    call_settled(
+        app,
+        "assign_net_class",
+        json!({"document": document, "net_name": net, "class": "Power"}),
+    )
+}
+
+/// The same pick run in the app's own process (the GUI's dispatch of the id).
+fn persons_pick(app: &mut Signex, dir: &Path, net: &str) -> CommandOutcome {
+    let id = AppCommandId::new("assign_net_class").unwrap();
+    let document = format!("document={}", dir.join("a.snxsch").display());
+    let net = format!("net_name={net}");
+    let args = CommandArgs::parse_operands(&id, &[&document, &net, "class=Power"]).unwrap();
+    app.run_operands_settled(&id, &args).0
+}
+
+fn members(app: &Signex) -> Vec<String> {
+    app.document_state.projects[0].data.net_classes[0]
+        .nets
+        .clone()
+}
+
+/// Decision (Hakan, 2026-11-19): any net of the project netlist is taken, a
+/// net only a label names and the second name of a shared wire included,
+/// with no style resolve run at all.
+#[test]
+fn a_label_only_net_and_every_name_of_a_shared_wire_are_assignable() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_with_label_only_and_shared_nets(dir.path());
+    let names = netlist_names(&mut app, dir.path());
+    let mut wanted: Vec<String> = names.iter().filter(|n| n.ends_with('X')).cloned().collect();
+    wanted.push(LONELY.into());
+
+    for net in &wanted {
+        let reply = agents_pick(&mut app, dir.path(), net);
+        assert_eq!(reply["status"], "ran", "{net}: {reply}");
+    }
+
+    let mut held = members(&app);
+    held.sort();
+    wanted.sort();
+    assert_eq!(held, wanted);
+}
+
+/// The pick no longer races the background resolve of the canvas styles: right
+/// after a load, before any resolve, a net of the documents is taken.
+#[test]
+fn an_assignment_right_after_a_load_does_not_wait_for_the_style_resolve() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_in(dir.path());
+    app.document_state.projects[0].data.net_classes = vec![NetClass::named("Power")];
+    let project = app.document_state.projects[0].id;
+    assert!(
+        !app.ui_state.net_class_styles.knows_net(project, "VCC"),
+        "the styles are not resolved yet"
+    );
+
+    let reply = agents_pick(&mut app, dir.path(), "VCC");
+
+    assert_eq!(reply["status"], "ran", "{reply}");
+    assert_eq!(members(&app), ["VCC"]);
+}
+
+/// A name no document gives a net is still refused, with that reason only.
+#[test]
+fn a_net_in_no_document_is_refused_with_its_reason() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_with_label_only_and_shared_nets(dir.path());
+    app.settle_net_class_styles_blocking();
+
+    let reply = agents_pick(&mut app, dir.path(), "NOPE");
+
+    assert_eq!(reply["status"], "refused", "{reply}");
+    assert_eq!(
+        reply["reason"], "\"NOPE\" is not a net of the project netlist",
+        "{reply}"
+    );
+    assert!(members(&app).is_empty());
+}
+
+/// One command id, one behaviour: the GUI's run and the agent's answer the
+/// same for a label-only net, a net in no document and a wired one.
+#[test]
+fn the_gui_and_the_agent_give_the_same_answer() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut gui = app_with_label_only_and_shared_nets(dir.path());
+    let mut agent = app_with_label_only_and_shared_nets(dir.path());
+
+    for net in [LONELY, "NOPE", "VCC"] {
+        let reply = agents_pick(&mut agent, dir.path(), net);
+        let (status, reason) = match persons_pick(&mut gui, dir.path(), net) {
+            CommandOutcome::Ran => ("ran", Value::Null),
+            CommandOutcome::Disabled { reason } => ("refused", json!(reason.render_en_us())),
+            other => panic!("{net}: {other:?}"),
+        };
+        assert_eq!(reply["status"], status, "{net}: {reply}");
+        if status == "refused" {
+            assert_eq!(reply["reason"], reason, "{net}");
+        }
+    }
+    assert_eq!(members(&gui), members(&agent));
+    assert_eq!(members(&gui), [LONELY, "VCC"]);
 }
