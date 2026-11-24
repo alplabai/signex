@@ -386,6 +386,62 @@ mod tests {
         assert!(app.grid_preview_of().is_none());
     }
 
+    /// The ladder marks no row as off the 2.54 mm pin pitch: a metric row
+    /// is its plain label, whatever step is active, and the preview's
+    /// rings show the miss instead (mockup row 63, accepted 2026-11-24).
+    #[test]
+    fn the_ladder_leaves_off_pitch_marking_to_the_preview() {
+        let i18n = I18n::en_us_ref();
+        for active in [None, Some(1.27), Some(1.0)] {
+            let rows = grid_picker_entries(i18n, active);
+            let items = items(&rows);
+            for rung in METRIC {
+                let label = text(i18n, rung.label);
+                let item = items
+                    .iter()
+                    .find(|item| item.label == label)
+                    .expect("metric row");
+                assert!(item.caption.is_none(), "{label}");
+                assert!(item.badge.is_none(), "{label}");
+                assert!(item.tooltip.is_none(), "{label}");
+                assert!(item.icon.is_none() && item.swatch.is_none(), "{label}");
+                assert!(!item.disabled, "{label}");
+                assert!(
+                    !super::super::grid_preview::pins_on_grid(rung.step_mm),
+                    "{label}: the preview rings mark it off the pitch"
+                );
+            }
+        }
+    }
+
+    /// Both ladders are listed whatever unit the active step is in; there
+    /// is no More row hiding the other one (mockup row 63, accepted
+    /// 2026-11-24).
+    #[test]
+    fn both_ladders_show_whatever_the_active_unit() {
+        let i18n = I18n::en_us_ref();
+        for active in [None, Some(1.27), Some(1.0)] {
+            let rows = grid_picker_entries(i18n, active);
+            let heads: Vec<&str> = rows
+                .iter()
+                .filter_map(|row| match row {
+                    DropdownEntry::Header(h) => Some(h.as_str()),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(heads, ["Imperial", "Metric"], "{active:?}");
+            let items = items(&rows);
+            let steps = items
+                .iter()
+                .filter(|item| {
+                    matches!(item.on_press, Some(Message::Ui(UiMsg::GridPickerSelect(_))))
+                })
+                .count();
+            assert_eq!(steps, IMPERIAL.len() + METRIC.len(), "{active:?}");
+            assert!(items.iter().all(|item| !item.submenu), "{active:?}");
+        }
+    }
+
     /// A hover with the picker closed opens nothing.
     #[test]
     fn a_hover_with_the_picker_closed_does_nothing() {
