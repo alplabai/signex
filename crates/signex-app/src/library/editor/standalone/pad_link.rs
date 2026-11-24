@@ -3,10 +3,8 @@
 //! a pad's driving entity is selected. Both show that pad in Footprint
 //! mode. Nothing shows on a board sketch or without a pad to go to.
 
-use iced::alignment::{Horizontal, Vertical};
-use iced::widget::text::LineHeight;
-use iced::widget::{Space, button as button_widget, container};
-use iced::{Background, Border, Element, Length, Padding, Pixels, Theme, Widget as _};
+use iced::widget::button as button_widget;
+use iced::{Background, Border, Element, Theme, Widget as _};
 use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text, theme_ext};
@@ -19,32 +17,10 @@ use crate::styles::tokens::{Overlay, composite_over, overlay, resolve};
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
-/// The link directly above the mode bar, left-aligned with it, so it never
-/// covers Bake (mockup row 192); an empty layer when there is nothing to
-/// link to.
-pub fn overlay_link<'a>(
-    editor: &'a FootprintDocument,
-    tokens: &'a ThemeTokens,
-    i18n: &I18n,
-) -> Element<'a, LibraryMessage> {
-    let Some(link) = link_button(editor, tokens, i18n) else {
-        return Space::new().boxed();
-    };
-    container(link)
-        .padding(Padding {
-            bottom: SP.xl + mode_bar_height() + SP.m,
-            ..Padding::new(SP.xl)
-        })
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .align_x(Horizontal::Left)
-        .align_y(Vertical::Bottom)
-        .boxed()
-}
-
-/// The link button itself, unplaced; `None` when there is nothing to link
-/// to. The mode bar's column (`sketch_exit::footprint_overlay`) can stack
-/// it first, so it sits just above the preview card while that is open.
+/// The link button; `None` when there is nothing to link to. The mode bar's
+/// column (`sketch_exit::footprint_overlay`) stacks it first, so it sits just
+/// above the preview card while that is open and above the mode bar
+/// otherwise, left-aligned, never covering Bake (mockup row 192).
 pub fn link_button<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
@@ -100,20 +76,11 @@ pub fn link_button<'a>(
     Some(link.boxed())
 }
 
-/// Height of the sketch mode bar (`sketch_exit::mode_bar`) under the link:
-/// its buttons or its title line, whichever is taller, inside the bar's
-/// padding.
-fn mode_bar_height() -> f32 {
-    let title = LineHeight::default().to_absolute(Pixels(TS.body)).0;
-    crate::styles::ChromeMetrics::DEFAULT.button.max(title) + 2.0 * SP.s
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
 
     use iced::Rectangle;
-    use iced::widget::Stack;
     use signex_library::{Footprint, FootprintFile, Pad};
     use signex_sketch::id::SketchEntityId;
     use signex_types::theme::{ThemeId, theme_tokens};
@@ -159,15 +126,9 @@ mod tests {
         ));
         let tokens = theme_tokens(ThemeId::GraphiteDark);
         let i18n = I18n::en_us();
-        let layers = Stack::new()
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .push(super::super::sketch_exit::footprint_overlay(
-                &editor, &tokens, &i18n,
-            ))
-            .push(overlay_link(&editor, &tokens, &i18n));
+        let overlay = super::super::sketch_exit::footprint_overlay(&editor, &tokens, &i18n);
         let width = 480.0;
-        let texts = lay_out_texts(layers.boxed(), iced::Size::new(width, 360.0));
+        let texts = lay_out_texts(overlay, iced::Size::new(width, 360.0));
         let word = |id: signex_i18n::MessageId| t!(i18n, id).into_string();
         let link = find(&texts, &word(ids::SKETCH_TOOLS_JUMP_TO_PAD)).bounds;
         let bake = find(&texts, &word(ids::EDITORS_SKETCH_BAKE)).bounds;
