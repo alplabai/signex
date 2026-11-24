@@ -569,8 +569,8 @@ fn row_text(texts: &[crate::layout_probe::LaidOutText], label: &str) -> iced::Re
 }
 
 /// Mockup row 44: Justification is a row like every other, its name in the
-/// label column on the grid's own line with the anchor word beside the
-/// grid, not a heading on a line above the grid.
+/// label column at the top of the grid (`.fr.top`), with the anchor word
+/// centred beside the grid, not a heading on a line above the grid.
 #[test]
 fn the_justification_name_sits_on_the_grids_row() {
     let (_dir, mut app) = app(false);
@@ -578,9 +578,15 @@ fn the_justification_name_sits_on_the_grids_row() {
     let texts = laid_out(&mut app, label, |_| {});
     let name = row_text(&texts, "Justification");
     let word = row_text(&texts, "Bottom left");
+    // The grid is three cells and four gaps high; the word is centred on it.
+    let body = crate::styles::TypeScale::DEFAULT.body;
+    let gap = crate::styles::Spacing::DEFAULT.xs / 2.0;
+    let grid_h = body * crate::panels::form_look::ANCHOR_CELL_EM * 3.0 + gap * 4.0;
+    let grid_top = word.center_y() - grid_h / 2.0;
+    let name_top = grid_top + body * super::rows::TOP_LABEL_INSET_EM;
     assert!(
-        (name.center_y() - word.center_y()).abs() < name.height / 2.0,
-        "one line: name {name:?}, word {word:?}"
+        (name.y - name_top).abs() < name.height / 2.0,
+        "the name is at the grid's top: name {name:?}, word {word:?}, grid top {grid_top}"
     );
     assert!(
         name.x + name.width <= word.x,

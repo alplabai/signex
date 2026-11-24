@@ -154,54 +154,6 @@ fn cell_direction(row: usize, column: usize, current: LabelDir) -> LabelDir {
     }
 }
 
-/// Side of a justification cell (22 px at a 12 px body, mockup row 44).
-const JUSTIFY_CELL_EM: f32 = 22.0 / 12.0;
-/// Side of the dot in a cell that is not the anchor (6 px at 12 px).
-const JUSTIFY_DOT_EM: f32 = 6.0 / 12.0;
-/// Side of the accent dot in the anchor's cell (8 px at 12 px).
-const JUSTIFY_LIT_DOT_EM: f32 = 8.0 / 12.0;
-
-/// One cell of the justification grid: a dot, raised with an accent dot when
-/// it is the anchor. A press picks `on_press`.
-fn justification_cell(active: bool, on_press: PanelMsg) -> Element<'static, PanelMsg> {
-    use crate::panels::form_look::{FormLook, segment_cell};
-    let dot_em = if active {
-        JUSTIFY_LIT_DOT_EM
-    } else {
-        JUSTIFY_DOT_EM
-    };
-    let side = TS.body * dot_em;
-    let dot = container(iced::widget::Space::new())
-        .width(side)
-        .height(side)
-        .style(move |theme: &Theme| {
-            let look = FormLook::of(theme);
-            container::Style {
-                background: Some(Background::Color(if active {
-                    look.accent
-                } else {
-                    look.line_strong
-                })),
-                border: Border {
-                    radius: (side / 2.0).into(),
-                    ..Border::default()
-                },
-                ..container::Style::default()
-            }
-        });
-    let cell = TS.body * JUSTIFY_CELL_EM;
-    signex_widgets::button(container(dot).center(Length::Fill))
-        .width(cell)
-        .height(cell)
-        .padding(0)
-        .on_press(on_press)
-        .style(move |theme: &Theme, status: iced::widget::button::Status| {
-            let hovered = matches!(status, iced::widget::button::Status::Hovered);
-            segment_cell(theme, active, hovered && !active)
-        })
-        .boxed()
-}
-
 /// The 3x3 justification picker of a selected label (mockup row 44): a
 /// sunken grid of dots. The one raised cell with the accent dot is the
 /// anchor the word beside the grid names.
@@ -223,19 +175,9 @@ pub fn justification_grid(
     };
 
     let lit = anchor_cell(current_dir);
-    let mut grid = Column::<Element<'static, PanelMsg>>::new().spacing(SP.xs);
-    for r in 0..3 {
-        let mut cells = iced::widget::Row::<Element<'static, PanelMsg>>::new().spacing(SP.xs);
-        for c in 0..3 {
-            let picks = to_msg(cell_direction(r, c, current_dir));
-            cells = cells.push(justification_cell((r, c) == lit, picks));
-        }
-        grid = grid.push(cells.boxed());
-    }
-    container(grid)
-        .padding(SP.xs)
-        .style(crate::panels::form_look::segmented_frame)
-        .boxed()
+    crate::panels::form_look::anchor_grid(std::array::from_fn(|r| {
+        std::array::from_fn(|c| ((r, c) == lit, to_msg(cell_direction(r, c, current_dir))))
+    }))
 }
 
 #[cfg(test)]

@@ -264,6 +264,87 @@ pub(in crate::panels) fn segment_cell(theme: &Theme, active: bool, hovered: bool
     }
 }
 
+/// A justification cell and its dot, as ratios of the body text size
+/// (22 px, 6 px and 8 px at a 12 px body, mockup row 44).
+pub(in crate::panels) const ANCHOR_CELL_EM: f32 = 22.0 / 12.0;
+const ANCHOR_DOT_EM: f32 = 6.0 / 12.0;
+const ANCHOR_DOT_ON_EM: f32 = 8.0 / 12.0;
+
+/// The 3 x 3 justification grid (mockup row 44): a sunken frame of dot
+/// cells, `cells` row by row as (is the anchor, what a press sends). The
+/// anchor's cell is raised with a shadow and an accent dot.
+pub(in crate::panels) fn anchor_grid(
+    cells: [[(bool, PanelMsg); 3]; 3],
+) -> Element<'static, PanelMsg> {
+    let gap = crate::styles::Spacing::DEFAULT.xs / 2.0;
+    let mut grid = Column::<Element<'static, PanelMsg>>::new().spacing(gap);
+    for line in cells {
+        let mut cells_row = iced::widget::Row::<Element<'static, PanelMsg>>::new().spacing(gap);
+        for (on, press) in line {
+            cells_row = cells_row.push(anchor_cell(on, press));
+        }
+        grid = grid.push(cells_row.boxed());
+    }
+    container(grid)
+        .padding(gap)
+        .style(|theme: &Theme| container::Style {
+            background: Some(Background::Color(FormLook::of(theme).sunken)),
+            border: Border {
+                radius: crate::styles::Radii::GRAPHITE.control.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// One cell of [`anchor_grid`]: a line dot, or the raised, shadowed cell
+/// with the larger accent dot when `on`.
+fn anchor_cell(on: bool, press: PanelMsg) -> Element<'static, PanelMsg> {
+    let dot = TS.body * if on { ANCHOR_DOT_ON_EM } else { ANCHOR_DOT_EM };
+    let side = TS.body * ANCHOR_CELL_EM;
+    let mark = container(Space::new())
+        .width(dot)
+        .height(dot)
+        .style(move |theme: &Theme| {
+            let l = FormLook::of(theme);
+            container::Style {
+                background: Some(Background::Color(if on { l.accent } else { l.line_strong })),
+                border: Border {
+                    radius: (dot / 2.0).into(),
+                    ..Border::default()
+                },
+                ..container::Style::default()
+            }
+        });
+    button(container(mark).center(Length::Fill))
+        .width(side)
+        .height(side)
+        .padding(0)
+        .on_press(press)
+        .style(move |theme: &Theme, _| {
+            let shadow = if on {
+                iced::Shadow {
+                    color: resolve(&theme_tokens(FormLook::theme_id(theme))).shadow,
+                    offset: iced::Vector::new(0.0, 1.0),
+                    blur_radius: 2.0,
+                }
+            } else {
+                iced::Shadow::default()
+            };
+            button::Style {
+                background: on.then(|| Background::Color(FormLook::of(theme).raised)),
+                border: Border {
+                    radius: crate::styles::Radii::GRAPHITE.small.into(),
+                    ..Border::default()
+                },
+                shadow,
+                ..button::Style::default()
+            }
+        })
+        .boxed()
+}
+
 /// Ghost button: transparent, hairline, radius 7.
 pub(crate) fn ghost_button(theme: &Theme, status: button::Status) -> button::Style {
     let l = FormLook::of(theme);

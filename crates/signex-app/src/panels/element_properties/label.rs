@@ -6,7 +6,7 @@
 use super::super::*;
 use super::font_row::font_family_row;
 use super::rows::{
-    PanelStyle, h_align_from_row, info_row, justify_h_row, labelled_row, rotation_degrees,
+    PanelStyle, h_align_from_row, info_row, justify_h_row, labelled_row_top, rotation_degrees,
 };
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
@@ -128,8 +128,8 @@ pub(super) fn push_label_sections<'a>(
                     return c;
                 }
                 // Justification is a row (mockup row 44): its name in the
-                // label column, the 3x3 dot grid with the word that names its
-                // anchor beside it.
+                // label column at the grid's top, the 3x3 dot grid with the
+                // word that names its anchor beside it.
                 let anchor = t!(i18n, crate::panels::label_anchor(rotation_deg, justify_h));
                 let grid = row![
                     justification_grid(id, rotation_deg, justify_h),
@@ -138,7 +138,7 @@ pub(super) fn push_label_sections<'a>(
                 .spacing(SP.m)
                 .align_y(iced::Alignment::Center)
                 .boxed();
-                c.push(labelled_row(
+                c.push(labelled_row_top(
                     t!(i18n, ids::PANELS_PROPERTIES_JUSTIFICATION),
                     grid,
                 ))
