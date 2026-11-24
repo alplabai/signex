@@ -275,7 +275,7 @@ impl Signex {
                             ModalId::ParameterManager => {
                                 self.end_parameter_edit_runs();
                                 self.ui_state.parameter_manager_open = false;
-                                self.ui_state.parameter_table = Default::default();
+                                *self.ui_state.parameter_table = Default::default();
                             }
                             ModalId::RenameDialog => self.ui_state.rename_dialog = None,
                             ModalId::RemoveDialog => self.ui_state.remove_dialog = None,

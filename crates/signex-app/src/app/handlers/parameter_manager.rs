@@ -32,7 +32,7 @@ impl Signex {
                 // Already open: keep the filter, the half-typed column name
                 // and the session.
                 if !self.ui_state.parameter_manager_open {
-                    self.ui_state.parameter_table = Default::default();
+                    *self.ui_state.parameter_table = Default::default();
                 }
                 self.ui_state.parameter_manager_open = true;
                 self.handle_detach_modal(ModalId::ParameterManager)
@@ -254,7 +254,7 @@ impl Signex {
     pub(crate) fn close_parameter_manager(&mut self) -> Task<Message> {
         self.end_parameter_edit_runs();
         self.ui_state.parameter_manager_open = false;
-        self.ui_state.parameter_table = Default::default();
+        *self.ui_state.parameter_table = Default::default();
         self.close_detached_modal(ModalId::ParameterManager)
     }
 }
