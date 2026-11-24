@@ -21,6 +21,11 @@ use crate::icons;
 use crate::library::editor::footprint::state::{EditorMode, PadsTool};
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
+/// Height of one control of an editor bar: a mode segment, and the
+/// caption bar's buttons (mockup rows 187 and 179, `.seg > span` and
+/// `.btn.sm`: 22 px).
+pub(crate) const EDITOR_BAR_CONTROL_HEIGHT: f32 = crate::styles::chrome_px(22.0 * 11.0 / 12.0);
+
 /// The footprint editor bar (Graphite mockup row 187): the two-state
 /// Footprint / Sketch switch at its left, the 3D toggle beside it, then
 /// `trailing` (the sketch info caption and Parameters in Sketch mode). It
@@ -38,8 +43,7 @@ pub fn mode_switcher_overlay<'a>(
     use iced::widget::{Space, button as button_style, container as container_style};
     use iced::{Alignment, Background, Shadow, Vector};
 
-    // Height of one segment (mockup row 187 `.seg > span`: 22 px).
-    const SEGMENT_H: f32 = crate::styles::chrome_px(22.0 * 11.0 / 12.0);
+    const SEGMENT_H: f32 = EDITOR_BAR_CONTROL_HEIGHT;
 
     // One segment: the lit one on the field fill with ink, a small shadow
     // and medium weight, the other in ink3 on the sunken track.
@@ -175,10 +179,8 @@ pub fn mode_switcher_overlay<'a>(
             },
             ..container_style::Style::default()
         });
-    let below_active_bar = crate::active_bar::bar_top_margin()
-        + crate::active_bar::bar_height_for(&signex_widgets::active_bar::Metrics::GRAPHITE);
     container(iced::widget::column![
-        Space::new().height(below_active_bar),
+        Space::new().height(crate::active_bar::bar_band_bottom()),
         bar
     ])
     .padding([0.0, sp.m])

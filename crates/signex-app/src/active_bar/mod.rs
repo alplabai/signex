@@ -37,8 +37,8 @@ pub(crate) use dropdown::{
 };
 pub use dropdown::{SchematicFilterState, dropdown_x_offset, view_dropdown};
 pub(crate) use layout::{
-    BAR_DROPDOWN_GAP_PX, bar_height_for, bar_left_in_window, bar_top_margin, bar_width_for,
-    bar_zone_height_for, menu_at, shows_draw_mode_pill, symbol_editor_bar_drop,
+    BAR_DROPDOWN_GAP_PX, bar_band_bottom, bar_height_for, bar_left_in_window, bar_top_margin,
+    bar_width_for, bar_zone_height_for, menu_at, shows_draw_mode_pill, symbol_editor_bar_drop,
 };
 pub use planned::{PLANNED_TOOLS, is_planned, planned_name, refusal_line};
 
