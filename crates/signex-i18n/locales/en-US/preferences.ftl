@@ -206,6 +206,8 @@ preferences-autosave-help = When on, { -brand-name } keeps a recovery copy of ea
 preferences-annotate-undo = Annotate undo
 # $undo is the Undo shortcut, such as "Ctrl+Z". The two choices are named as
 # preferences-annotate-undo-project and preferences-annotate-undo-per-sheet read.
+# Each choice written exactly as its label reads is shown in bold; a choice
+# worded differently (an inflected form) stays plain.
 preferences-annotate-undo-help = How many undo steps one annotate run is. One step for the whole project reverts every sheet the run touched together, from whichever sheet { $undo } is pressed on. Per sheet undoes each sheet on its own. Applies to the next annotate run.
 
 ## Schematic ▸ Display
