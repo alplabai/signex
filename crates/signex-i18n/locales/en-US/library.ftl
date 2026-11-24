@@ -757,3 +757,11 @@ library-browser-read-only-note = This library ships with Signex and is not edita
 library-browser-preview-loading = Loading…
 # A preview tile whose drawing could not be read.
 library-browser-preview-unreadable = Could not be read
+# library-browser-columns-and-row-style
+# Tooltip of the column button at the right of the count line, and the
+# heading of the chooser it opens.
+library-browser-columns = Columns
+# Tooltip of the Library panel button that shows one-line rows.
+library-panel-rows-compact = Compact rows
+# Tooltip of the Library panel button that shows rows with a preview thumbnail.
+library-panel-rows-thumbnail = Rows with preview thumbnail

@@ -4,7 +4,8 @@
 //!
 //! Top to bottom, the same in every kind: the kind chips with their
 //! counts, the breadcrumb, the filter, the toolbar (Place, Add, Edit, and
-//! Delete at the right end), then the kind's list. The panel opens on the
+//! the row-style switch and Delete at the right end), then the kind's list
+//! in compact or thumbnail rows. The panel opens on the
 //! kind of the active editor tab; a chip pick holds while that tab stays
 //! active (see `library::state::panel_kind`). Open Library… is the folder
 //! button in the dock title bar.
@@ -13,6 +14,7 @@ mod empty;
 mod footprints;
 mod frame;
 mod parts;
+mod row_style;
 mod symbols;
 #[cfg(test)]
 mod tests;
@@ -119,7 +121,7 @@ pub fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Element<'a,
         frame::kind_chips(kind, kind_counts(library, ctx), !nothing_open, tokens, i18n),
         frame::crumb(shown.crumb, tokens, i18n),
         frame::filter_field(&library.panel_search, placeholder, !nothing_open, tokens),
-        frame::toolbar(shown.tools, tokens, i18n),
+        frame::toolbar(shown.tools, library.library_panel.row_style, tokens, i18n),
     ]
     .width(Length::Fill);
     column![

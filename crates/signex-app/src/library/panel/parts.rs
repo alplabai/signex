@@ -14,10 +14,10 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text};
 
 use super::KindView;
-use super::frame::{self, Crumb, INDENT_1, INDENT_2, RowMark, RowText, SP, TS, Tools};
+use super::frame::{self, Crumb, INDENT_1, INDENT_2, RowLook, RowMark, RowText, SP, TS, Tools};
 use crate::dock::DockMessage;
 use crate::library::messages::{LibraryMessage, PickerMsg};
-use crate::library::state::{ComponentsPanelRowKey, LibraryState, OpenLibrary};
+use crate::library::state::{ComponentsPanelRowKey, LibraryPanelKind, LibraryState, OpenLibrary};
 use crate::panels::PanelContext;
 use crate::styles::ti;
 use crate::styles::tokens::resolve;
@@ -269,6 +269,7 @@ fn tables<'a>(
                     name: part.internal_pn.as_str().to_owned(),
                     caption: Some(UserText::new(part.description.clone()).into()),
                 },
+                RowLook::of(library.library_panel.row_style, LibraryPanelKind::Parts),
                 mark,
                 INDENT_2,
                 lib_msg(PickerMsg::PanelComponentClicked(key)),

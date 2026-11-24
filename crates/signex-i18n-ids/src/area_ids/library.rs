@@ -290,4 +290,8 @@ define_ids! {
     LIBRARY_BROWSER_READ_ONLY_NOTE = "library-browser-read-only-note";
     LIBRARY_BROWSER_PREVIEW_LOADING = "library-browser-preview-loading";
     LIBRARY_BROWSER_PREVIEW_UNREADABLE = "library-browser-preview-unreadable";
+    // library-browser-columns-and-row-style
+    LIBRARY_BROWSER_COLUMNS = "library-browser-columns";
+    LIBRARY_PANEL_ROWS_COMPACT = "library-panel-rows-compact";
+    LIBRARY_PANEL_ROWS_THUMBNAIL = "library-panel-rows-thumbnail";
 }

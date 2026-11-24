@@ -10,9 +10,9 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
 
 use super::KindView;
-use super::frame::{self, Crumb, RowMark, RowText, SP, TS, Tools, panel};
+use super::frame::{self, Crumb, RowLook, RowMark, RowText, SP, TS, Tools, panel};
 use crate::dock::DockMessage;
-use crate::library::state::LibraryState;
+use crate::library::state::{LibraryPanelKind, LibraryState};
 use crate::panels::{PanelContext, PanelMsg, SymbolDeleteWarning, SymbolEditorPanelContext};
 use crate::styles::ti;
 use crate::styles::tokens::resolve;
@@ -62,7 +62,12 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
     KindView {
         crumb,
         tools,
-        list: list(sym, &library.panel_search, ctx),
+        list: list(
+            sym,
+            &library.panel_search,
+            RowLook::of(library.library_panel.row_style, LibraryPanelKind::Symbols),
+            ctx,
+        ),
     }
 }
 
@@ -79,6 +84,7 @@ fn shows(entry: &crate::panels::SymbolFileEntry, needle: &str, i18n: &I18n) -> b
 fn list<'a>(
     sym: &'a SymbolEditorPanelContext,
     filter: &str,
+    look: RowLook,
     ctx: &'a PanelContext,
 ) -> Element<'a, DockMessage> {
     let i18n = &*ctx.i18n;
@@ -101,6 +107,7 @@ fn list<'a>(
                 name: entry.name.clone(),
                 caption: Some(UserText::new(entry.description.clone()).into()),
             },
+            look,
             mark,
             0.0,
             panel(PanelMsg::SchLibrarySelectSymbol(entry.idx)),

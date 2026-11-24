@@ -238,7 +238,12 @@ pub(crate) fn view<'a>(
             }
         },
     );
-    let toolbar = toolbar::view_toolbar(range_bar, &count, tokens, i18n);
+    let chooser = toolbar::ColumnChooser {
+        library_path,
+        columns: &cache.columns,
+        browser,
+    };
+    let toolbar = toolbar::view_toolbar(range_bar, &count, chooser, tokens, i18n);
     let grid_area = column![toolbar, grid]
         .spacing(0)
         .width(Length::Fill)

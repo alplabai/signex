@@ -11,9 +11,10 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::chips::{ChipMetrics, ChipStyle, chip};
 use signex_widgets::{button, text, text_input};
 
+pub(super) use super::row_style::RowLook;
 use crate::dock::DockMessage;
 use crate::library::messages::{LibraryMessage, PickerMsg};
-use crate::library::state::LibraryPanelKind;
+use crate::library::state::{LibraryPanelKind, LibraryRowStyle};
 use crate::panels::graphite::hint_tooltip;
 use crate::styles::tokens::{Overlay, composite_over, overlay, resolve};
 use crate::styles::{ChromeMetrics, Radii, Spacing, TypeScale, dimmed, dimmed_button, ti};
@@ -295,10 +296,11 @@ pub(super) struct Tools {
     pub delete_blocked: Option<signex_i18n::MessageId>,
 }
 
-/// The toolbar: Place, Add and Edit at the left, Delete as an icon at
-/// the right end.
+/// The toolbar: Place, Add and Edit at the left, the row-style switch and
+/// Delete as an icon at the right end.
 pub(super) fn toolbar<'a>(
     tools: Tools,
+    row_style: LibraryRowStyle,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, DockMessage> {
@@ -321,6 +323,7 @@ pub(super) fn toolbar<'a>(
         tool_button(PLUS, t!(i18n, ids::LIBRARY_PANEL_ADD), add, tokens),
         tool_button(EDIT, t!(i18n, ids::LIBRARY_PANEL_EDIT), edit, tokens),
         Space::new().width(Length::Fill).boxed(),
+        super::row_style::switch(row_style, tokens, i18n),
         delete_button(delete, delete_tip, tokens),
     ]
     .spacing(SP.s)
@@ -434,9 +437,11 @@ pub(super) struct RowText<'a> {
     pub caption: Option<signex_widgets::Label<'a>>,
 }
 
-/// One compact list row: a mono name and a caption at the right end.
+/// One list row. Compact: a mono name and a caption at the right end. A
+/// thumbnail row: the kind's tile, then the name over the caption.
 pub(super) fn list_row<'a>(
     row_text: RowText<'a>,
+    look: RowLook,
     mark: RowMark,
     indent: f32,
     on_press: DockMessage,
@@ -447,28 +452,49 @@ pub(super) fn list_row<'a>(
     let ink = ti(tokens.text);
     let selection = ti(tokens.selection);
     let hover = overlay(tokens, Overlay::Hover);
-    let mut line: Row<Element<'a, DockMessage>> =
-        Row::new().spacing(SP.m).align_y(Alignment::Center).push(
-            text(UserText::new(name))
-                .size(TS.body)
-                .font(mono())
-                .color(ink)
+    let name: Element<'a, DockMessage> = text(UserText::new(name))
+        .size(TS.body)
+        .font(mono())
+        .color(ink)
+        .wrapping(Wrapping::None)
+        .ellipsis(Ellipsis::End)
+        .width(Length::Fill)
+        .boxed();
+    let caption: Option<Element<'a, DockMessage>> = caption
+        .filter(|c| !c.as_str().trim().is_empty())
+        .map(|label| {
+            text(label)
+                .size(TS.caption)
+                .color(r.ink4)
                 .wrapping(Wrapping::None)
                 .ellipsis(Ellipsis::End)
-                .width(Length::Fill)
-                .boxed(),
-        );
-    let meta = |label: signex_widgets::Label<'a>| -> Element<'a, DockMessage> {
-        text(label)
-            .size(TS.caption)
-            .color(r.ink4)
-            .wrapping(Wrapping::None)
-            .ellipsis(Ellipsis::End)
-            .boxed()
+                .boxed()
+        });
+    let (line, height): (Row<Element<'a, DockMessage>>, f32) = match look {
+        RowLook::Compact => {
+            let mut line = Row::new()
+                .spacing(SP.m)
+                .align_y(Alignment::Center)
+                .push(name);
+            if let Some(caption) = caption {
+                line = line.push(caption);
+            }
+            (line, ROW_H)
+        }
+        RowLook::Thumbnail(kind) => {
+            let mut lines: iced::widget::Column<Element<'a, DockMessage>> =
+                iced::widget::Column::new().width(Length::Fill).push(name);
+            if let Some(caption) = caption {
+                lines = lines.push(caption);
+            }
+            let line = Row::new()
+                .spacing(SP.m)
+                .align_y(Alignment::Center)
+                .push(super::row_style::tile(kind, tokens))
+                .push(lines.boxed());
+            (line, super::row_style::THUMB_ROW_H)
+        }
     };
-    if let Some(caption) = caption.filter(|c| !c.as_str().trim().is_empty()) {
-        line = line.push(meta(caption));
-    }
     button(line)
         .padding(Padding {
             top: 0.0,
@@ -476,7 +502,7 @@ pub(super) fn list_row<'a>(
             bottom: 0.0,
             left: SP.m + indent,
         })
-        .height(ROW_H)
+        .height(height)
         .width(Length::Fill)
         .on_press(on_press)
         .style(move |_: &Theme, status: button::Status| button::Style {

@@ -53,7 +53,7 @@ pub(super) fn view_grid<'a>(
     let lib_pb: std::path::PathBuf = library_path.to_path_buf();
 
     // One slot list drives header and rows, so widths and order agree.
-    let compact = layout::graphite_columns(columns);
+    let compact = layout::graphite_columns(columns, |kind| browser.column_shown(&kind.sort_key()));
     let columns = compact.as_slice();
     let slots = layout::slots(columns, true);
     let fit = |s: String, w: f32| layout::ellipsize(s, w, BROWSER_TEXT_SIZE);
@@ -87,14 +87,7 @@ pub(super) fn view_grid<'a>(
             // appended to the label. Other columns render plain so the
             // user can spot the sort target at a glance.
             let column_key = c.kind.sort_key();
-            let caption = match &c.kind {
-                ColumnKind::Parameter(_) => {
-                    crate::library::range_filter::parameter_caption(i18n, &c.label)
-                }
-                ColumnKind::Symbol => t!(i18n, ids::LIBRARY_BROWSER_COLUMN_SYM).to_string(),
-                ColumnKind::Footprint => t!(i18n, ids::LIBRARY_BROWSER_COLUMN_FPT).to_string(),
-                _ => c.label.clone(),
-            };
+            let caption = c.caption(i18n);
             let label_text = match active_sort {
                 Some(s) if s.key == column_key => {
                     let arrow = if s.descending { "▼" } else { "▲" };
