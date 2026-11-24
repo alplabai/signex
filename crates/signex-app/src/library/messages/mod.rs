@@ -533,6 +533,13 @@ pub enum PickerMsg {
     RangeFilter(RangeFilterMsg),
     /// A kind chip of the Library panel was pressed (mockup row 119).
     PanelKindPicked(super::state::LibraryPanelKind),
+    /// The selected row's symbol and footprint read for the preview
+    /// column finished (mockup row 129); an older read is dropped.
+    PreviewLoaded {
+        key: super::state::ComponentsPanelRowKey,
+        generation: u64,
+        result: Result<Box<crate::panels::components_panel::details::ComponentDetails>, String>,
+    },
 }
 
 /// Edit Component Details modal sub-message tree — keeps

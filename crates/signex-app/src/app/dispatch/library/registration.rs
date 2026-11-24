@@ -429,6 +429,17 @@ impl Signex {
                         .find(|c| c.row_id == row_id)
                         .map(|summary| (lib.root.clone(), summary.clone()))
                 });
+                return self.start_picker_preview_load();
+            }
+            PickerMsg::PreviewLoaded {
+                key,
+                generation,
+                result,
+            } => {
+                if let Err(why) = &result {
+                    crate::diagnostics::log_warning(format!("Picker preview not read: {why}"));
+                }
+                picker.preview.finish(&key, generation, result);
             }
             // The Place button exists in the Place stage only.
             PickerMsg::PlaceSelected
@@ -453,6 +464,66 @@ impl Signex {
             }
         }
         Task::none()
+    }
+
+    /// Read the picker's selected row's symbol and footprint on a worker
+    /// for the preview column (mockup row 129); the result lands as
+    /// `PickerMsg::PreviewLoaded`. A read that is still current is kept.
+    fn start_picker_preview_load(&mut self) -> Task<Message> {
+        let Some((path, summary)) = self
+            .library
+            .picker
+            .as_ref()
+            .and_then(|p| p.selected.clone())
+        else {
+            return Task::none();
+        };
+        let Some(table) = self.library.table_of_row(&path, summary.row_id) else {
+            return Task::none();
+        };
+        let key = crate::library::state::ComponentsPanelRowKey {
+            library_path: path,
+            table,
+            row_id: signex_library::RowId::from_uuid(summary.row_id),
+        };
+        let stamp = self.components_row_stamp(&key);
+        let libraries = self.library.shared_adapters();
+        let own = self.library.shared_adapter_at(&key.library_path);
+        let Some(picker) = self.library.picker.as_mut() else {
+            return Task::none();
+        };
+        if picker.preview.is_fresh(&key, stamp) {
+            return Task::none();
+        }
+        let generation = picker.preview.begin(key.clone(), stamp);
+        let Some(own) = own else {
+            let why = format!("its library {} is not open", key.library_path.display());
+            crate::diagnostics::log_warning(format!("Picker preview not read: {why}"));
+            picker.preview.finish(&key, generation, Err(why));
+            return Task::none();
+        };
+        let read_key = key.clone();
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || {
+                    crate::panels::components_panel::details::load::load_details(
+                        &read_key,
+                        own.as_ref(),
+                        &libraries,
+                    )
+                    .map_err(|e| e.to_string())
+                })
+                .await
+                .unwrap_or_else(|e| Err(format!("preview worker failed: {e}")))
+            },
+            move |result| {
+                Message::Library(LibraryMessage::Picker(PickerMsg::PreviewLoaded {
+                    key: key.clone(),
+                    generation,
+                    result: result.map(Box::new),
+                }))
+            },
+        )
     }
 
     /// F34 — Save-As dialog confirmed for a new symbol library file

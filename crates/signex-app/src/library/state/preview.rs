@@ -13,6 +13,9 @@ pub struct PickerState {
     pub rows: PickerRows,
     /// What the modal is for; see [`PickerMode`].
     pub mode: super::placed_part::PickerMode,
+    /// The selected row's symbol and footprint, read off-thread for the
+    /// preview column (mockup row 129).
+    pub preview: crate::panels::components_panel::details::DetailsState,
 }
 
 impl PickerState {
