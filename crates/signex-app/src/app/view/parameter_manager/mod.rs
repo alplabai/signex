@@ -238,7 +238,9 @@ impl Signex {
         .padding([SP.s, SP.m])
         .size(TS.body)
         .width(Length::Fixed(TS.body * NEW_KEY_WIDTH_EM));
-        let add = styles::dialog_button(
+        // Mockup row 70: "+ Add column".
+        let add = styles::dialog_icon_button(
+            crate::icons::icon_plus(self.ui_state.effective_theme_id()),
             t!(i18n, ids::DIALOG_PARAMETER_MANAGER_ADD_COLUMN),
             DialogButtonKind::Secondary,
             Some(Message::ParameterManager(ParameterManagerMsg::ColumnAdded)),
@@ -373,6 +375,34 @@ mod toolbar_tests {
         let (filter, key) = filter_and_new_key(narrow);
         assert!(key.y >= filter.y + filter.height, "{filter:?} {key:?}");
         assert!(key.x + key.width <= narrow, "{key:?} within {narrow}");
+    }
+
+    /// Mockup row 70: "+ Add column". Between the new-key box and the
+    /// button's label, the plus glyph is drawn in the label's ink.
+    #[test]
+    fn add_column_leads_with_a_plus_glyph() {
+        use crate::layout_probe::{draw_pixels, lay_out_texts};
+        use signex_types::theme::{ThemeId, theme_tokens};
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let (mut app, _task) = Signex::new();
+            app.document_state.panel_ctx.tokens = theme_tokens(id);
+            app.ui_state.parameter_table.new_key = "MPN".to_string();
+            let window = Size::new(TS.body * 100.0, TS.body * 10.0);
+            let key = find(&lay_out_inputs(app.view_parameter_toolbar(), window), "MPN").bounds;
+            let texts = lay_out_texts(app.view_parameter_toolbar(), window);
+            let label = find(&texts, "Add column").bounds;
+            let pixels = draw_pixels(app.view_parameter_toolbar(), window);
+            let ink = crate::styles::ti(app.document_state.panel_ctx.tokens.text).into_rgba8();
+            let from = (key.x + key.width + SP.s + SP.xs) as usize;
+            let rows = label.y as usize..(label.y + label.height) as usize;
+            let glyph = rows.into_iter().any(|y| {
+                (from..label.x as usize).any(|x| {
+                    let i = (y * window.width as usize + x) * 4;
+                    (0..3).all(|c| pixels[i + c].abs_diff(ink[c]) <= 48)
+                })
+            });
+            assert!(glyph, "{id:?}: no plus glyph before the Add column label");
+        }
     }
 
     /// The folding toolbar builds with a filter and a new key typed.

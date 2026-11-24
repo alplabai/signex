@@ -12,8 +12,8 @@ use iced::alignment::Vertical;
 use iced::widget::scrollable::{self, Scroll, Scrollbar, Source};
 use iced::widget::text::Wrapping;
 use iced::widget::{Space, column, container, mouse_area, row};
-use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
-use signex_i18n::{UserText, ids, t};
+use iced::{Alignment, Background, Border, Color, Element, Font, Length, Theme, Widget as _};
+use signex_i18n::{I18n, UserText, ids, t};
 use signex_types::schematic::Symbol;
 use signex_widgets::constraint_grid::{GridMetrics, GridStyle};
 use signex_widgets::theme_ext::HAIRLINE;
@@ -125,11 +125,18 @@ fn scrolled(pane: ParameterTablePane, scroll: Scroll) -> Message {
     })
 }
 
-/// A cell that shows `value` and cannot be edited.
-fn read_only_cell<'a>(value: &str, width: f32, ink: Color, m: GridMetrics) -> Element<'a, Message> {
+/// A cell that shows `value` in `font` and cannot be edited.
+fn read_only_cell<'a>(
+    value: &str,
+    width: f32,
+    ink: Color,
+    font: Font,
+    m: GridMetrics,
+) -> Element<'a, Message> {
     container(
         text(UserText::new(value.to_string()))
             .size(TS.body)
+            .font(font)
             .color(ink)
             .wrapping(Wrapping::None),
     )
@@ -141,24 +148,74 @@ fn read_only_cell<'a>(value: &str, width: f32, ink: Color, m: GridMetrics) -> El
     .boxed()
 }
 
+/// The mono face of the cell values (mockup row 70).
+fn mono() -> Font {
+    crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
+}
+
+/// The face of a reference: mono at medium weight.
+fn reference_font() -> Font {
+    Font {
+        weight: iced::font::Weight::Medium,
+        ..mono()
+    }
+}
+
+/// The face of a parameter cell: mono for a value, the italic UI face of
+/// `family` for an empty cell's "Not set".
+fn param_cell_font(value: &str, family: &str) -> Font {
+    if value.is_empty() {
+        not_set_font(family)
+    } else {
+        mono()
+    }
+}
+
+/// A column title as the header shows it: upper-cased for the locale, at
+/// the section size and medium weight, in the muted ink (mockup row 70).
+fn header_text<'a>(words: &str, i18n: &I18n, style: GridStyle) -> Element<'a, Message> {
+    // The title is catalog text or a parameter name, already rendered; it
+    // goes back to the widget as finished text.
+    text(UserText::new(i18n.upper_for_display(words)))
+        .size(TS.section)
+        .font(Font {
+            weight: iced::font::Weight::Medium,
+            ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
+        })
+        .color(style.muted_ink)
+        .wrapping(Wrapping::None)
+        .boxed()
+}
+
 /// A header caption cell.
-fn header_cell<'a>(
-    label: impl Into<signex_widgets::Label<'a>>,
-    width: f32,
-    style: GridStyle,
-) -> Element<'a, Message> {
-    container(
-        text(label)
-            .size(TS.caption)
-            .color(style.muted_ink)
-            .wrapping(Wrapping::None),
-    )
-    .padding([0.0, style.metrics().pad])
-    .width(Length::Fixed(width))
-    .height(Length::Fixed(style.metrics().row_height))
-    .align_y(Vertical::Center)
-    .clip(true)
-    .boxed()
+fn header_cell<'a>(words: &str, i18n: &I18n, width: f32, style: GridStyle) -> Element<'a, Message> {
+    container(header_text(words, i18n, style))
+        .padding([0.0, style.metrics().pad])
+        .width(Length::Fixed(width))
+        .height(Length::Fixed(style.metrics().row_height))
+        .align_y(Vertical::Center)
+        .clip(true)
+        .boxed()
+}
+
+/// The fill of a row: the accent tint while one of its cells has the
+/// focus (the row being edited), else none.
+fn row_fill(is_editing: bool, style: GridStyle) -> Color {
+    if is_editing {
+        style.accent_soft
+    } else {
+        Color::TRANSPARENT
+    }
+}
+
+/// `content` on the fill `color`.
+fn filled<'a>(content: Element<'a, Message>, color: Color) -> Element<'a, Message> {
+    container(content)
+        .style(move |_: &Theme| container::Style {
+            background: (color.a > 0.0).then_some(Background::Color(color)),
+            ..container::Style::default()
+        })
+        .boxed()
 }
 
 /// A text input that reads as text until it is hovered or focused.
@@ -212,14 +269,8 @@ fn param_header<'a>(
     let tokens = &app.document_state.panel_ctx.tokens;
     let m = style.metrics();
     let is_hovered = app.ui_state.parameter_table.hovered_column.as_deref() == Some(key);
-    let mut content = row![
-        text(UserText::new(key.to_string()))
-            .size(TS.caption)
-            .color(style.muted_ink)
-            .wrapping(Wrapping::None)
-            .width(Length::Fill),
-    ]
-    .align_y(Alignment::Center);
+    let mut content = row![container(header_text(key, i18n, style)).width(Length::Fill)]
+        .align_y(Alignment::Center);
     if is_hovered {
         let (ink, hot) = (style.ink, style.accent_soft);
         // raw: a remove glyph, not language.
@@ -300,7 +351,13 @@ fn param_cell<'a>(
         .is_some_and(|before| before.as_deref() != sym.fields.get(key).map(String::as_str));
     let symbol_uuid = sym.uuid;
     let edit_key = key.to_string();
-    let mut input = text_input(
+    let focus = move |is_focused| {
+        Message::ParameterManager(ParameterManagerMsg::CellFocused {
+            symbol_uuid,
+            is_focused,
+        })
+    };
+    let input = text_input(
         t!(app.ui_state.i18n, ids::DIALOG_PARAMETER_MANAGER_NOT_SET),
         shown,
     )
@@ -314,29 +371,37 @@ fn param_cell<'a>(
     .on_submit(Message::ParameterManager(
         ParameterManagerMsg::CellSubmitted,
     ))
+    .on_focus(focus(true))
+    .on_blur(focus(false))
     .padding([styles::Spacing::DEFAULT.xs, m.pad - CHANGED_MARK])
     .size(TS.body)
+    .font(param_cell_font(
+        shown,
+        &app.document_state.panel_ctx.ui_font_name,
+    ))
     .width(Length::Fill)
     .style(inline_cell_style(style));
-    if shown.is_empty() {
-        input = input.font(not_set_font(&app.document_state.panel_ctx.ui_font_name));
-    }
-    let mark_color = if is_changed {
+    container(row![changed_mark(is_changed, style), input].align_y(Alignment::Center))
+        .width(Length::Fixed(width))
+        .height(Length::Fixed(m.row_height))
+        .align_y(Vertical::Center)
+        .boxed()
+}
+
+/// The 2 px accent mark left of a changed cell; clear on an unchanged one.
+fn changed_mark<'a>(is_changed: bool, style: GridStyle) -> Element<'a, Message> {
+    let color = if is_changed {
         style.accent
     } else {
         Color::TRANSPARENT
     };
-    let mark = container(Space::new())
+    container(Space::new())
         .width(Length::Fixed(CHANGED_MARK))
-        .height(Length::Fixed(m.row_height))
+        .height(Length::Fixed(style.metrics().row_height))
         .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(mark_color)),
+            background: Some(Background::Color(color)),
             ..container::Style::default()
-        });
-    container(row![mark, input].align_y(Alignment::Center))
-        .width(Length::Fixed(width))
-        .height(Length::Fixed(m.row_height))
-        .align_y(Vertical::Center)
+        })
         .boxed()
 }
 
@@ -362,23 +427,15 @@ pub(super) fn view<'a>(
     let m = style.metrics();
 
     let titles = [
-        t!(i18n, ids::DIALOG_PARAMETER_MANAGER_COLUMN_REFERENCE),
-        t!(i18n, ids::DIALOG_PARAMETER_MANAGER_COLUMN_VALUE),
-        t!(i18n, ids::DIALOG_PARAMETER_MANAGER_COLUMN_FOOTPRINT),
-    ];
+        ids::DIALOG_PARAMETER_MANAGER_COLUMN_REFERENCE,
+        ids::DIALOG_PARAMETER_MANAGER_COLUMN_VALUE,
+        ids::DIALOG_PARAMETER_MANAGER_COLUMN_FOOTPRINT,
+    ]
+    .map(|id| t!(i18n, id).to_string());
     let fixed = [
-        longest(
-            &titles[0].to_string(),
-            rows.iter().map(|s| s.reference.as_str()),
-        ),
-        longest(
-            &titles[1].to_string(),
-            rows.iter().map(|s| s.value.as_str()),
-        ),
-        longest(
-            &titles[2].to_string(),
-            rows.iter().map(|s| s.footprint.as_str()),
-        ),
+        longest(&titles[0], rows.iter().map(|s| s.reference.as_str())),
+        longest(&titles[1], rows.iter().map(|s| s.value.as_str())),
+        longest(&titles[2], rows.iter().map(|s| s.footprint.as_str())),
     ];
     let params: Vec<usize> = keys
         .iter()
@@ -395,8 +452,8 @@ pub(super) fn view<'a>(
 
     // The header row right of Reference: scrolls sideways with the body.
     let mut header_cells: Vec<Element<'a, Message>> = vec![
-        header_cell(value_title, widths.value, style),
-        header_cell(footprint_title, widths.footprint, style),
+        header_cell(&value_title, i18n, widths.value, style),
+        header_cell(&footprint_title, i18n, widths.footprint, style),
     ];
     for (key, w) in keys.iter().zip(&widths.params) {
         header_cells.push(param_header(app, key, *w, style));
@@ -409,7 +466,7 @@ pub(super) fn view<'a>(
     let header_fill = style.header_fill;
     let header = container(
         row![
-            header_cell(reference_title, widths.reference, style),
+            header_cell(&reference_title, i18n, widths.reference, style),
             rule(style.line, Length::Fixed(m.row_height), false),
             header_scroll,
         ]
@@ -425,22 +482,28 @@ pub(super) fn view<'a>(
     let mut references: Vec<Element<'a, Message>> = Vec::with_capacity(rows.len() * 2);
     let mut body_rows: Vec<Element<'a, Message>> = Vec::with_capacity(rows.len() * 2);
     let body_width = widths.value + widths.footprint + widths.params.iter().sum::<f32>();
+    let editing = app.ui_state.parameter_table.editing_row;
     for &sym in rows {
-        references.push(read_only_cell(
-            &sym.reference,
-            widths.reference,
-            style.ink,
-            m,
+        let fill = row_fill(editing == Some(sym.uuid), style);
+        references.push(filled(
+            read_only_cell(
+                &sym.reference,
+                widths.reference,
+                style.ink,
+                reference_font(),
+                m,
+            ),
+            fill,
         ));
         references.push(rule(style.line, Length::Fixed(widths.reference), true));
         let mut cells: Vec<Element<'a, Message>> = vec![
-            read_only_cell(&sym.value, widths.value, style.ink, m),
-            read_only_cell(&sym.footprint, widths.footprint, style.muted_ink, m),
+            read_only_cell(&sym.value, widths.value, style.ink, mono(), m),
+            read_only_cell(&sym.footprint, widths.footprint, style.muted_ink, mono(), m),
         ];
         for (key, w) in keys.iter().zip(&widths.params) {
             cells.push(param_cell(app, sym, key, *w, style));
         }
-        body_rows.push(row(cells).align_y(Alignment::Center).boxed());
+        body_rows.push(filled(row(cells).align_y(Alignment::Center).boxed(), fill));
         body_rows.push(rule(style.line, Length::Fixed(body_width), true));
     }
     let reference_scroll = iced::widget::scrollable(column(references))
@@ -507,5 +570,68 @@ mod tests {
         assert_eq!(w.reference, REFERENCE_EM.1 * SIZE);
         assert_eq!(w.value, VALUE_EM.0 * SIZE);
         assert_eq!(w.footprint, FOOTPRINT_EM.1 * SIZE);
+    }
+
+    fn graphite_style() -> GridStyle {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        GridStyle::from_tokens(&tokens, TS.body)
+    }
+
+    /// Mockup row 70: the column titles read in capitals, catalog title and
+    /// parameter name alike.
+    #[test]
+    fn the_column_titles_read_in_capitals() {
+        let en = I18n::en_us();
+        let style = graphite_style();
+        let window = iced::Size::new(TS.body * 20.0, TS.body * 4.0);
+        let reference = t!(en, ids::DIALOG_PARAMETER_MANAGER_COLUMN_REFERENCE).to_string();
+        for words in [reference.as_str(), "Tolerance"] {
+            let cell = header_cell(words, &en, TS.body * 12.0, style);
+            let texts = crate::layout_probe::lay_out_texts(cell, window);
+            let shown: Vec<&str> = texts.iter().map(|t| t.text.as_str()).collect();
+            assert_eq!(shown, [en.upper_for_display(words)], "{words}");
+        }
+    }
+
+    /// Mockup row 70: references, values, footprints and parameter values
+    /// are mono, the reference at medium weight; an empty cell's "Not set"
+    /// stays in the italic UI face.
+    #[test]
+    fn cell_values_are_mono_and_not_set_is_the_italic_ui_face() {
+        let ui = crate::fonts::DEFAULT_UI_FONT;
+        assert_eq!(
+            mono(),
+            crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
+        );
+        assert_eq!(reference_font().family, mono().family);
+        assert_eq!(reference_font().weight, iced::font::Weight::Medium);
+        assert_eq!(param_cell_font("1%", ui), mono());
+        let not_set = param_cell_font("", ui);
+        assert_eq!(not_set.style, iced::font::Style::Italic);
+        assert_eq!(
+            not_set.family,
+            crate::fonts::iced_font_for_family(ui).family
+        );
+    }
+
+    /// Mockup row 70: the row being edited is drawn on the accent tint; the
+    /// other rows have no fill.
+    #[test]
+    fn the_row_being_edited_is_tinted() {
+        let style = graphite_style();
+        assert_eq!(row_fill(true, style), style.accent_soft);
+        assert_eq!(row_fill(false, style), Color::TRANSPARENT);
+        let m = style.metrics();
+        let window = iced::Size::new(TS.body * 10.0, m.row_height);
+        let drawn = |is_editing: bool| {
+            let cell = read_only_cell("R3", window.width, style.ink, reference_font(), m);
+            let pixels =
+                crate::layout_probe::draw_pixels(filled(cell, row_fill(is_editing, style)), window);
+            // The right end of the cell, clear of its text.
+            let (w, y) = (window.width as usize, window.height as usize / 2);
+            let i = (y * w + w - 2) * 4;
+            [pixels[i], pixels[i + 1], pixels[i + 2]]
+        };
+        assert_ne!(drawn(true), drawn(false));
     }
 }
