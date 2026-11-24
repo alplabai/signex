@@ -29,10 +29,10 @@ pub use filter::SelectionFilter;
 
 // Re-exported so `crate::active_bar::view_dropdown` / `dropdown_x_offset`
 // paths (overlays/mod.rs) resolve unchanged after the folder split.
-pub(crate) use dropdown::{FilterChip, FilterMenu, filter_menu_entry, preset_label};
-pub use dropdown::{dropdown_x_offset, view_dropdown};
 #[cfg(test)]
 pub(crate) use dropdown::filter_card_width;
+pub(crate) use dropdown::{FilterChip, FilterMenu, filter_menu_entry, preset_label};
+pub use dropdown::{dropdown_x_offset, view_dropdown};
 pub(crate) use layout::{
     BAR_DROPDOWN_GAP_PX, bar_height_for, bar_left_in_window, bar_top_margin, bar_width_for,
     bar_zone_height_for, menu_at, shows_draw_mode_pill, symbol_editor_bar_drop,
