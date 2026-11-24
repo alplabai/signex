@@ -12,11 +12,27 @@ pub struct DriftRow<'a> {
 }
 
 impl<'a> DriftRow<'a> {
-    /// The first entry: every cell but the designators reads from it, and
-    /// its checkbox stands for the row (the entries share a `lib_id`, so
-    /// they share a checkbox).
+    /// The first entry: every cell but the designators reads from it.
     pub fn lead(&self) -> &'a LibraryUpdateEntry {
         self.entries[0]
+    }
+
+    /// The row's checkbox shows ticked only when every entry is ticked, so
+    /// members that disagree (a rescan adds one with the default tick) show
+    /// as unticked rather than hiding a ticked instance.
+    pub fn is_selected(&self) -> bool {
+        self.entries.iter().all(|e| e.selected)
+    }
+
+    /// The entry the row's checkbox click toggles: an unticked one when the
+    /// row shows unticked, so the click ticks every entry sharing its
+    /// `lib_id`; else the lead, so the click clears them.
+    pub fn toggle_target(&self) -> &'a LibraryUpdateEntry {
+        self.entries
+            .iter()
+            .copied()
+            .find(|e| !e.selected)
+            .unwrap_or(self.lead())
     }
 
     /// The designators of the row, comma-separated.

@@ -231,8 +231,8 @@ fn set_all_ticks_or_clears_every_entry() {
     let mut state = mixed_state();
     let sel =
         |s: &LibraryUpdatesState| -> Vec<bool> { s.entries.iter().map(|e| e.selected).collect() };
-    // Sorted C4, L1, R2, R3, U3: the three patches start ticked.
-    assert_eq!(sel(&state), vec![true, false, true, true, false]);
+    // Sorted C4, L1, R2, R3, U3: the patches and the minor start ticked.
+    assert_eq!(sel(&state), vec![true, true, true, true, false]);
     assert!(!state.all_selected());
 
     state.set_all(true);
@@ -279,6 +279,29 @@ fn same_version_instances_of_one_part_share_a_row() {
     let shared = &rows[2];
     assert_eq!(shared.entries.len(), 2);
     assert_eq!(shared.lead().ref_des, "R2");
+}
+
+/// A shared row whose members disagree (the user unticked R2, then a
+/// rescan added R3 with the default tick) shows unticked, and its click
+/// ticks both; once both are ticked, the click clears both.
+#[test]
+fn a_shared_row_with_mixed_ticks_shows_unticked_and_its_click_ticks_all() {
+    let mut state = mixed_state();
+    state.entries[2].selected = false; // R2
+    assert!(state.entries[3].selected); // R3
+    let rows = state.rows();
+    assert_eq!(rows[2].ref_des(), "R2, R3");
+    assert!(!rows[2].is_selected());
+    let target = rows[2].toggle_target().symbol_uuid;
+    assert_eq!(target, state.entries[2].symbol_uuid);
+    state.toggle(target);
+    assert!(state.entries[2].selected && state.entries[3].selected);
+    let rows = state.rows();
+    assert!(rows[2].is_selected());
+    let target = rows[2].toggle_target().symbol_uuid;
+    state.toggle(target);
+    assert!(!state.entries[2].selected && !state.entries[3].selected);
+    assert!(!state.rows()[2].is_selected());
 }
 
 /// Instances that would draw a different line stay apart: another version

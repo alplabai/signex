@@ -359,8 +359,8 @@ fn entry_row<'a>(
     let r = resolve(tokens);
     let ink = ti(tokens.text);
     let entry: &'a LibraryUpdateEntry = drift.lead();
-    let symbol_uuid = entry.symbol_uuid;
-    let check = checkbox(entry.selected)
+    let symbol_uuid = drift.toggle_target().symbol_uuid;
+    let check = checkbox(drift.is_selected())
         .style(crate::panels::form_look::checkbox_style)
         .size(TS.heading)
         .on_toggle(move |_| LibraryMessage::LibraryUpdatesToggleSelection(symbol_uuid))

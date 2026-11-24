@@ -97,9 +97,11 @@ review which updates to accept, with checkboxes pre-toggled by `BumpKind`:
 - `Major`: unchecked, with a warning (likely breaking).
 
 Instances of one part that would draw the same line but for the designator
-(same `lib_id`, row, Internal PN and version pair) and carry no conflict share
-one table row listing every designator ("R10, R11"); the grouping is
-`LibraryUpdatesState::rows` in `updates_dialog/rows.rs`. A part with a conflict
+(same `lib_id`, library, row, Internal PN and version pair) and carry no
+conflict share one table row listing every designator ("R10, R11"); the
+grouping is `LibraryUpdatesState::rows` in `updates_dialog/rows.rs`. The row's
+checkbox shows ticked only when every member is ticked, and a click on a
+row with mixed ticks ticks them all. A part with a conflict
 keeps its own row, since its answers are per instance. The summary count and
 the per-kind pills count table rows; "Update Selected Components (n)" still
 counts instances.
