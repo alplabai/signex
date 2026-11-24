@@ -658,7 +658,7 @@ panels-net-classes-patterns-hint = VCC*, ?SDA
 panels-net-classes-section = Net Classes
 # Row labels of the selected net class.
 panels-net-classes-name = Name
-panels-net-classes-color = Colour
+panels-net-classes-color = Color
 panels-net-classes-width = Width (mm)
 panels-net-classes-line = Line
 # Line pick-list entries. Default follows the project's line style.
@@ -758,7 +758,7 @@ panels-drawing-color-auto = Auto
 ## Net Classes table (#2417): column titles and cells.
 
 panels-net-classes-column-name = Name
-panels-net-classes-column-color = Colour
+panels-net-classes-column-color = Color
 panels-net-classes-column-width = Width
 panels-net-classes-column-members = Members
 # Colour cell of a class with no colour of its own: the theme's wire colour.
@@ -1155,7 +1155,7 @@ panels-harness-type = Type
 panels-harness-definition = Definition
 # A link that opens the harness definitions view.
 panels-harness-definition-link = { $type } · { $count } entries · edit…
-panels-harness-colour = Colour
+panels-harness-colour = Color
 panels-harness-colour-default = harness default
 panels-harness-placement = Placement
 panels-harness-x = X

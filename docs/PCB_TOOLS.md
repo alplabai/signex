@@ -947,8 +947,8 @@ whether or not a row has an icon:
 
 - Hide <layer> (eye crossed out) and Highlight <layer> (every other layer is
   drawn dimmed; picking it again ends the highlight).
-- Layer colour..., Reset layer colour and Reset all layer colours
-  (2026-11-18), with the net colour menu's glyphs. Layer colour... opens the
+- Layer color..., Reset layer color and Reset all layer colors
+  (2026-11-18), with the net colour menu's glyphs. Layer color... opens the
   Layers panel on Layers & Colors with that layer's colour card open under
   its row; it is greyed for the keep-out and mechanical layers, which have no
   colour row yet. A colour is saved with the board
@@ -1096,8 +1096,8 @@ A click on a layer's name makes it the active layer. A click on a colour
 dot opens the colour card under the row, and the open dot gets an accent
 ring: the 24 colours of the board palette (the open layer's colour is
 ringed), a hex field (`#RRGGBB`) that recolours the layer as soon as it reads
-as a colour, and, while the layer has its own colour, Palette colour, which
-gives it the palette's again. A swatch or Palette colour closes the card, as
+as a colour, and, while the layer has its own colour, Palette color, which
+gives it the palette's again. A swatch or Palette color closes the card, as
 does the card's close button, a second click on the dot or a switch to
 another board. An undo, a redo or a reset while the card is open puts the
 layer's colour back in the hex field; a half-typed colour stays. The colour is an

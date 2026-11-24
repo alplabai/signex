@@ -13,11 +13,11 @@ pcb-layer-tab-show-only = Show only this layer
 # The layer's colour, saved with the board: opens the Layers panel's
 # colour picker for the layer; greyed with the reason for a layer whose
 # colour the board cannot change yet.
-pcb-layer-tab-colour = Layer colour...
-pcb-layer-tab-colour-unavailable = This layer's colour cannot be changed yet.
+pcb-layer-tab-colour = Layer color...
+pcb-layer-tab-colour-unavailable = This layer's color cannot be changed yet.
 # Give the layer, or every layer, the board palette colour again.
-pcb-layer-tab-colour-reset = Reset layer colour
-pcb-layer-tab-colour-reset-all = Reset all layer colours
+pcb-layer-tab-colour-reset = Reset layer color
+pcb-layer-tab-colour-reset-all = Reset all layer colors
 # Edit ▸ Origin ▸ Set waits for a click on the board.
 pcb-origin-set-hint = Origin: click on the board to set the origin there. Esc cancels
 # Edit ▸ Origin ▸ Snap to Outline Corner before the pointer was on the board.
@@ -389,9 +389,9 @@ pcb-footprint-duplicate = { $count ->
 pcb-footprint-enter-hint = Press Enter to apply the change.
 
 # Tools > Re-Annotate Board (#1312): the Positional Re-Annotate dialog.
-pcb-reannotate-title = Positional Re-Annotate
+pcb-reannotate-title = Re-Annotate Board
 # Under the title. $board is the board document's name.
-pcb-reannotate-subtitle = { $board }
+pcb-reannotate-subtitle = Positional · { $board }
 pcb-reannotate-intro = Numbers the board's parts by where they sit, from 1 within each prefix. Prefixes stay; locked footprints keep their designators.
 # The walk order and its two choices (each card's hint is below them).
 pcb-reannotate-order = Order
@@ -420,9 +420,9 @@ pcb-reannotate-stale = The board changed, so the list was made again. Check it, 
 pcb-reannotate-refused = Nothing was changed: { $why }
 pcb-reannotate-cancel = Cancel
 pcb-reannotate-execute = Execute
-# Under the Designator field and in the Re-Annotate dialog: the board's
-# designators are not carried to the schematic by Update PCB.
-pcb-designator-update-pcb-note = Update PCB renames parts back to the schematic's designators; use Back Annotate to keep them.
+# The Re-Annotate dialog's banner: the board's designators are not carried
+# to the schematic by Update PCB. $command is pcb-reannotate-back-annotate.
+pcb-designator-update-pcb-note = Update PCB renames parts back to the schematic's designators; use { $command } to keep them.
 # $designator is the kept footprint's designator.
 pcb-reannotate-kept-unlinked = { $designator } is not linked to a schematic part, so it keeps its designator.
 # Messages panel lines. $what is the field (Designator or Value), $why the reason.
@@ -628,3 +628,6 @@ pcb-3d-shot-interrupted = the 3D view was left before the screenshot was taken
 # (mockup row 175), and a toolbar tooltip ($tip, "Flip board") with its key.
 pcb-3d-lighting-next-key = · press { $key } for the next
 pcb-3d-tooltip-keyed = { $tip } ({ $key })
+# chrome-copy-help
+# The command the Re-Annotate banner names, in medium weight (mockup row 83).
+pcb-reannotate-back-annotate = Back Annotate

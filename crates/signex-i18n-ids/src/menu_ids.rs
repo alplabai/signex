@@ -54,6 +54,8 @@ define_ids! {
         MENU_HELP_ABOUT = "menu-help-about";
         MENU_HELP_DOCUMENTATION = "menu-help-documentation";
         MENU_HELP_REPORT_ISSUE = "menu-help-report-issue";
+        // chrome-copy-help
+        MENU_HELP_WELCOME_TIPS = "menu-help-welcome-tips";
         MENU_APP_TITLE = "menu-app-title";
         MENU_PLANNED_TOOLTIP = "menu-planned-tooltip";
         MENU_PLANNED_BADGE = "menu-planned-badge";
