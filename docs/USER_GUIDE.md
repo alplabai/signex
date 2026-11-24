@@ -381,6 +381,12 @@ then, in the footprint editor, Shapes. In Sketch mode the footprint editor shows
 the sketch bar instead. A small corner triangle marks a button with a dropdown;
 right-click it to open the dropdown.
 
+In the symbol editor, the Place Pin dropdown lists pin types under **Pin
+type** (Input, Output, Passive, Bidirectional, Power input). Picking one arms
+Place Pin, and every pin you place after that gets that type until you pick
+another; the picked type shows checked. Pick the checked type again to go back
+to unclassified pins. Every type is still offered in the pin's Properties.
+
 Right-click a pad in the footprint editor for the selection menu: **Move
 Selection By…** (type an X and a Y offset in mm, then **Move**), **Align ▸**
 (the **Align…** dialog, which aligns or spaces the selection per axis, the
@@ -609,14 +615,20 @@ silently, except a part with a conflict (below). Otherwise **Library Updates
 Available** opens, with a pill per change size (major, minor, patch) beside the
 count. Its table lists each part: the designator and Internal PN, the library,
 the version change (`1.4.2 → 2.0.0`) and a **Major**, **Minor** or **Patch**
-pill. Patch changes start ticked, minor and major changes unticked. Parts that
-share one library symbol share one tick. The checkbox in the table heading
+pill. Instances of one part at the same version change share one row that
+lists every designator (`R10, R11`), unless a field conflicts. Patch and minor
+changes start ticked, major changes unticked. Parts that share one library
+symbol share one tick. The checkbox in the table heading
 ticks every row, or clears them all when every row is ticked. When both your
 part and the library row changed a field, a line under the part shows
 **yours** and **library now**; choose **Keep mine** (the default) or **Use
 library value**, and answering ticks the part. **Update Selected Components**
 updates the ticked parts, each answer in the same **Undo** step as its part;
-**Skip All** and **Cancel** close without updating.
+**Skip All** and **Cancel** both close without updating. **Skip All** also
+remembers the offered versions for that sheet, so the dialog does not offer
+them again this session; a part is offered again once its library row moves to
+another version. **Cancel** remembers nothing, and the dialog asks again the
+next time the sheet is checked.
 
 **Copy and paste.** Select items and use **Edit ▸ Copy** or **Edit ▸ Cut**,
 then **Edit ▸ Paste**. The copy attaches to the cursor, centred on it and
