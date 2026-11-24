@@ -180,7 +180,7 @@ impl Signex {
             .document_project(sheet)
             .ok_or("the sheet belongs to no project")?;
         let set = self.edit_project_set(sheet)?;
-        let stitched = crate::app::stitched_netlist::netlist_of_set(
+        let stitched = crate::app::stitched_netlist::netlist_of_set_quiet(
             &set,
             Some(project.dir().to_path_buf()),
             &project.data.schematic_design.channel_naming,

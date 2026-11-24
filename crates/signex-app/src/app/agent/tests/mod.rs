@@ -15,6 +15,7 @@ mod journal;
 mod live;
 mod net_class_membership;
 mod opened;
+mod opened_deferred;
 mod origin;
 mod owed_repaint;
 #[cfg(unix)]
@@ -187,13 +188,33 @@ pub(super) fn open_the_child(app: &mut Signex) {
 /// [`call`] for a command that may wait for its reads (#2199): the task it
 /// leaves is driven to its end, then the reply is read.
 pub(super) fn call_settled(app: &mut Signex, id: &str, args: Value) -> Value {
-    let (reply, mut answer) = AgentReply::channel();
+    let pending = call_pending(app, id, args);
+    settle_pending(app, pending)
+}
+
+/// A request sent but not driven yet: what the app left to run, and where its
+/// reply arrives.
+pub(super) struct Pending {
+    task: iced::Task<Message>,
+    answer: iced::futures::channel::oneshot::Receiver<String>,
+}
+
+/// Send `id` as process 4242 and stop before its task runs, so a test can act
+/// as the person while the request's reads are in flight.
+pub(super) fn call_pending(app: &mut Signex, id: &str, args: Value) -> Pending {
+    let (reply, answer) = AgentReply::channel();
     let call = AgentCall {
         pid: Some(4242),
         input: Input::Line(line(app, id, args)),
         reply,
     };
     let task = app.update(Message::Agent(AgentMsg::Request(call)));
+    Pending { task, answer }
+}
+
+/// Drive `pending` to its end and read the reply.
+pub(super) fn settle_pending(app: &mut Signex, pending: Pending) -> Value {
+    let Pending { task, mut answer } = pending;
     crate::task_driver::TaskDriver::new()
         .settle(app, task)
         .expect("the request settled");

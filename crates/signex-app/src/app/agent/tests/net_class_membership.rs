@@ -249,10 +249,78 @@ fn a_net_in_no_document_is_refused_with_its_reason() {
     assert!(members(&app).is_empty());
 }
 
-/// One command id, one behaviour: the GUI's run and the agent's answer the
-/// same for a label-only net, a net in no document and a wired one.
+/// The membership check only asks: a child reference that escapes the project
+/// folder, which the style job reports, adds no Messages line per call, as the
+/// cache lookup it replaced added none.
 #[test]
-fn the_gui_and_the_agent_give_the_same_answer() {
+fn the_membership_check_logs_no_refused_child_reference() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_with_label_only_and_shared_nets(dir.path());
+    let reference = format!("../escape-{}.snxsch", uuid::Uuid::now_v7().simple());
+    let person = app.document_state.active_path.clone().expect("a sheet");
+    fixture::activate(&mut app, &dir.path().join("a.snxsch"));
+    let mut escaping = app
+        .document_state
+        .active_engine()
+        .expect("a")
+        .document()
+        .child_sheets[0]
+        .clone();
+    escaping.uuid = uuid::Uuid::now_v7();
+    escaping.filename = reference.clone();
+    escaping.position = Point::new(150.0, 50.0);
+    let placed = signex_engine::Command::PlaceChildSheet {
+        child_sheet: escaping,
+    };
+    assert!(app.apply_engine_command(placed, true, false));
+    // The whole project in memory, so the check stitches in place; the
+    // background jobs a settled request runs log the reference on their own.
+    let child = dir.path().join("power.snxsch");
+    fixture::add_sheet_with(&mut app, &child, child_sheet());
+    app.document_state.mark_document_clean(&child);
+    fixture::activate(&mut app, &person);
+    let mark = crate::diagnostics::newest_entry_id();
+
+    let has = app.project_has_net(&dir.path().join("a.snxsch"), LONELY);
+
+    assert_eq!(has, Ok(true));
+    let logged = crate::diagnostics::entries_since(mark)
+        .entries
+        .into_iter()
+        .filter(|entry| entry.message.contains(&reference))
+        .count();
+    assert_eq!(logged, 0, "the check logged the refused reference");
+}
+
+/// Trunk behaviour kept, not decided by #2549: the Properties label picker
+/// still reads the style cache through the label's wire, so a label-only net
+/// gets no picker, while the `assign_net_class` id takes that net.
+#[test]
+fn the_label_picker_still_offers_no_class_for_a_label_only_net() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_with_label_only_and_shared_nets(dir.path());
+    let child = dir.path().join("power.snxsch");
+    fixture::add_sheet_with(&mut app, &child, child_sheet());
+    app.document_state.mark_document_clean(&child);
+    app.interaction_state.active_canvas_mut().selected =
+        vec![signex_types::schematic::SelectedItem::new(
+            uid(LONELY_LABEL),
+            signex_types::schematic::SelectedKind::Label,
+        )];
+    app.update_selection_info();
+    app.settle_net_class_styles_blocking();
+
+    assert!(app.selected_label_class_pick().is_none());
+    let reply = agents_pick(&mut app, dir.path(), LONELY);
+    assert_eq!(reply["status"], "ran", "{reply}");
+}
+
+/// One command id, one behaviour: every run of `assign_net_class` (the app's
+/// own dispatch of the id and the agent's) answers the same for a label-only
+/// net, a net in no document and a wired one. This is the id, not the
+/// Properties label picker, which still reads the style cache.
+#[test]
+fn every_run_of_the_assign_net_class_id_gives_the_same_answer() {
     let dir = tempfile::tempdir().unwrap();
     let mut gui = app_with_label_only_and_shared_nets(dir.path());
     let mut agent = app_with_label_only_and_shared_nets(dir.path());
