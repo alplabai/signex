@@ -425,9 +425,9 @@ fn the_grab_list_is_reused_until_the_board_or_filter_changes() {
     assert!(std::sync::Arc::ptr_eq(&first, &grab(&mut r)), "reused");
     let mut filter = pcb_geom::PickFilter::default();
     filter.toggle(pcb_geom::PickKind::Polygons);
-    r.app
-        .with_pcb_selection(|sel, _| sel.set_filter(&filter))
-        .expect("a board");
+    // The app's filter, which every selection access hands to the canvas
+    // state (`with_pcb_selection`), as the Selection Filter panel sets it.
+    r.app.ui_state.pcb_pick_filter = filter;
     let filtered = grab(&mut r);
     assert!(
         !std::sync::Arc::ptr_eq(&first, &filtered),
