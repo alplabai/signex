@@ -93,7 +93,7 @@ fn previewed_step(hovered_mm: Option<f64>, active_mm: f64) -> f64 {
 fn preview_caption(i18n: &I18n, step_mm: f64, active_mm: f64) -> Localized {
     let rung = rung_of(step_mm);
     if is_step(step_mm, active_mm) {
-        let name = rung.map_or_else(|| mm_caption(i18n, step_mm), |r| text(i18n, r.label));
+        let name = rung_name(i18n, step_mm).unwrap_or_else(|| mm_caption(i18n, step_mm));
         return i18n.message(menu_ids::CTX_GRID_PREVIEW_ACTIVE, &[("step", name.into())]);
     }
     match rung {
