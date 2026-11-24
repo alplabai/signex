@@ -4,12 +4,13 @@
 //! footer and Cancel and Export PDF… on the right.
 
 use iced::widget::{Column, Row, container, row, scrollable};
-use iced::{Alignment, Background, Element, Length, Theme, Widget as _};
+use iced::{Background, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_output::{BoardLayerSet, BoardPrintOptions, BoardPrintPages, BoardPrintScale};
 use signex_types::pcb::PcbBoard;
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{Label, segmented, text, tooltip};
+use signex_widgets::segmented::SegmentedMetrics;
+use signex_widgets::{Label, SegmentedStyle, segmented, text, tooltip};
 
 use super::{SP, TS, kit, out};
 use crate::app::board_output::set_label;
@@ -26,8 +27,6 @@ type Parts<'a> = (
 
 /// Width of the options column (340 px).
 const OPTIONS_W: f32 = chrome_px(340.0 * 11.0 / 12.0);
-/// Width of the Layout group's labels (52 px).
-const LAYOUT_LABEL_W: f32 = chrome_px(52.0 * 11.0 / 12.0);
 
 fn flag_label(flag: BoardPrintFlag) -> MessageId {
     match flag {
@@ -167,7 +166,7 @@ fn layout_group<'a>(
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
-    let style = kit::segmented_style(tokens).fill_width(true);
+    let style = kit::segmented_style(tokens).fill_width(true).compact(true);
     let pages = segmented(
         [
             (
@@ -207,6 +206,11 @@ fn layout_group<'a>(
         style,
         |mono| out(BoardOutputMsg::PrintMonochromePicked(mono)),
     );
+    let lines = [
+        (t!(i18n, ids::BOARD_PRINT_PAGES), pages),
+        (t!(i18n, ids::BOARD_PRINT_SCALE), scale),
+        (t!(i18n, ids::BOARD_PRINT_INK), ink),
+    ];
     Column::new()
         .spacing(SP.s + SP.xs)
         .push(kit::section_head(
@@ -215,31 +219,37 @@ fn layout_group<'a>(
             i18n,
             tokens,
         ))
-        .push(layout_line(t!(i18n, ids::BOARD_PRINT_PAGES), pages, tokens))
-        .push(layout_line(t!(i18n, ids::BOARD_PRINT_SCALE), scale, tokens))
-        .push(layout_line(t!(i18n, ids::BOARD_PRINT_INK), ink, tokens))
+        .push(layout_grid(lines, style, tokens))
         .boxed()
 }
 
-/// One labelled line of the Layout group.
-fn layout_line<'a>(
-    label: Localized,
-    control: Element<'a, Message>,
+/// The Layout group's labelled lines: the labels in a column as wide as
+/// the widest of them, the controls taking the rest, so the two-segment
+/// Pages control keeps one line in the options column (mockup row 116).
+fn layout_grid<'a>(
+    lines: [(Localized, Element<'a, Message>); 3],
+    style: SegmentedStyle,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let ink = tokens::resolve(tokens).ink3;
-    let line: Row<Element<'a, Message>> = Row::new()
-        .spacing(SP.l - SP.xs)
-        .align_y(Alignment::Center)
-        .push(
-            text(label)
-                .size(TS.body)
-                .color(ink)
-                .width(Length::Fixed(LAYOUT_LABEL_W))
+    let line_h = SegmentedMetrics::from_text_size(style.text_size).track_height;
+    let gap = SP.s + SP.xs;
+    let mut labels: Column<Element<'a, Message>> = Column::new().spacing(gap);
+    let mut controls: Column<Element<'a, Message>> = Column::new().spacing(gap).width(Length::Fill);
+    for (label, control) in lines {
+        labels = labels.push(
+            container(text(label).size(TS.body).color(ink))
+                .height(Length::Fixed(line_h))
+                .align_y(iced::alignment::Vertical::Center)
                 .boxed(),
-        )
-        .push(control);
-    line.boxed()
+        );
+        controls = controls.push(control);
+    }
+    let grid: Row<Element<'a, Message>> = Row::new()
+        .spacing(SP.l - SP.xs)
+        .push(labels.boxed())
+        .push(controls.boxed());
+    grid.boxed()
 }
 
 /// What each page shows. Mirror the Bottom Side is greyed and deaf while

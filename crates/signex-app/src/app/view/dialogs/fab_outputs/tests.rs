@@ -1,6 +1,7 @@
 //! Mockup row 115 on screen: the group counts and the footer count follow the ticks,
-//! the ODB++ folder form is deaf until ODB++ is ticked, and after a run the
-//! footer offers Generate again and Close over the notes.
+//! the ODB++ folder form is deaf until ODB++ is ticked, a folder glyph leads
+//! the output folder, and after a run the footer offers Generate again and
+//! Close over the notes.
 
 use std::path::PathBuf;
 
@@ -12,7 +13,7 @@ use crate::app::fab_outputs::{
     FabOutputKinds, FabOutputsMsg, FabOutputsState, FabWritten, NoteSeverity,
 };
 use crate::app::{Message, PcbMsg, Signex};
-use crate::layout_probe::{find, lay_out_texts, messages_on_click_at};
+use crate::layout_probe::{find, lay_out_inputs, lay_out_texts, messages_on_click_at};
 
 const WINDOW: Size = Size::new(1400.0, 900.0);
 
@@ -112,6 +113,26 @@ fn the_odb_folder_form_takes_clicks_only_once_odb_is_ticked() {
             Message::Pcb(PcbMsg::FabOutputs(FabOutputsMsg::OdbFolderToggled))
         )),
         "greyed until ODB++ is ticked"
+    );
+}
+
+/// Mockup row 115: a folder glyph leads the Output folder path inside its
+/// field, so the path starts a glyph further right than the file name
+/// above it, which starts at the label column.
+#[test]
+fn the_output_folder_path_is_led_by_a_folder_glyph() {
+    let mut app = app_with(mockup_kinds());
+    if let Some(state) = app.ui_state.fab_outputs.as_mut() {
+        state.name = "dcdc".into();
+        state.folder = "fab-out".into();
+    }
+    let inputs = lay_out_inputs(app.view_fab_outputs_dialog(), WINDOW);
+    let name = find(&inputs, "dcdc").bounds;
+    let folder = find(&inputs, "fab-out").bounds;
+    let glyph = crate::styles::TypeScale::DEFAULT.body;
+    assert!(
+        folder.x >= name.x + glyph,
+        "the folder path sits after its glyph: name {name:?}, folder {folder:?}"
     );
 }
 

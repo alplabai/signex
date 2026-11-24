@@ -1,11 +1,12 @@
 //! Parts the board output dialogs share (Fabrication Outputs, Board Print /
 //! PDF, Board Reports): the uppercase section head with its count, the soft
 //! status banner and its glyphs, the status pill, the segmented look, a
-//! form tick box and the greyed form of a dependent control.
+//! form tick box, a text field led by a glyph and the greyed form of a
+//! dependent control.
 
 use std::sync::LazyLock;
 
-use iced::widget::{Row, Space, column, container, svg};
+use iced::widget::{Row, Space, TextInput, column, container, svg, text_input};
 use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, UserText};
 use signex_types::theme::ThemeTokens;
@@ -14,7 +15,7 @@ use signex_widgets::inert::unless_read_only_veiled;
 use signex_widgets::{CheckboxLabel as _, Label, SegmentedStyle, checkbox, text};
 
 use crate::app::Message;
-use crate::panels::form_look::checkbox_style;
+use crate::panels::form_look::{checkbox_style, text_input_style};
 use crate::styles::{HAIRLINE, PillTone, Radii, Spacing, TypeScale, pill, pill_colors, ti, tokens};
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -30,9 +31,75 @@ const GLYPH_INFO: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="
 const GLYPH_OK: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>"##;
 const GLYPH_WARN: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg>"##;
 
-/// The three glyphs parsed once: info, ok, warning.
-static GLYPHS: LazyLock<[svg::Handle; 3]> =
-    LazyLock::new(|| [GLYPH_INFO, GLYPH_OK, GLYPH_WARN].map(svg::Handle::from_memory));
+const GLYPH_FOLDER: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></svg>"##;
+const GLYPH_SEARCH: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>"##;
+
+/// The glyphs parsed once: info, ok, warning, then the field glyphs folder
+/// and search.
+static GLYPHS: LazyLock<[svg::Handle; 5]> = LazyLock::new(|| {
+    [GLYPH_INFO, GLYPH_OK, GLYPH_WARN, GLYPH_FOLDER, GLYPH_SEARCH].map(svg::Handle::from_memory)
+});
+
+/// The glyph that leads a text field: what the field holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::app::view::dialogs) enum FieldGlyph {
+    /// A folder path (Fabrication Outputs' Output folder).
+    Folder,
+    /// A filter (Board Reports' Filter rows).
+    Search,
+}
+
+impl FieldGlyph {
+    fn handle(self) -> svg::Handle {
+        match self {
+            FieldGlyph::Folder => GLYPHS[3].clone(),
+            FieldGlyph::Search => GLYPHS[4].clone(),
+        }
+    }
+}
+
+/// `input` on a form field with `glyph` before it, inside the field's
+/// outline (mockup rows 115 and 117). The input draws no box of its own;
+/// the field takes the form input's fill and outline.
+pub(in crate::app::view::dialogs) fn glyph_field<'a>(
+    glyph: FieldGlyph,
+    input: TextInput<'a, Message>,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let ink = tokens::resolve(tokens).ink4;
+    let icon = svg(glyph.handle())
+        .width(Length::Fixed(GLYPH))
+        .height(Length::Fixed(GLYPH))
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(ink),
+            ..Default::default()
+        });
+    let input = input.style(|theme: &Theme, status| text_input::Style {
+        background: Background::Color(Color::TRANSPARENT),
+        border: Border::default(),
+        ..text_input_style(theme, status)
+    });
+    let line: Row<Element<'a, Message>> = Row::new()
+        .spacing(SP.s)
+        .align_y(Alignment::Center)
+        .push(icon.boxed())
+        .push(input.boxed());
+    container(line)
+        .padding(Padding {
+            left: SP.s + SP.xs,
+            ..Padding::ZERO
+        })
+        .width(Length::Fill)
+        .style(|theme: &Theme| {
+            let look = text_input_style(theme, text_input::Status::Active);
+            container::Style {
+                background: Some(look.background),
+                border: look.border,
+                ..container::Style::default()
+            }
+        })
+        .boxed()
+}
 
 /// The glyph of `tone`: a circled i for information, a circled tick for
 /// success, a triangle for a warning or an error.

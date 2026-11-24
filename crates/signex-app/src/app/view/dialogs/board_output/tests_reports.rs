@@ -1,6 +1,7 @@
 //! Mockup row 117 on screen: the catalog names, cells in the user's unit, numbers
 //! right-aligned in their own columns, one growing column a report, the
-//! rows in the shown order, and the count and caption.
+//! rows in the shown order, the count and caption, and the filter's
+//! magnifier.
 
 use std::path::PathBuf;
 
@@ -15,7 +16,7 @@ use super::reports::{cell_text, kind_caption, kind_label, parts};
 use super::reports_table::{column_label, column_width, is_numeric};
 use crate::app::BoardReportsState;
 use crate::app::board_output::ReportSort;
-use crate::layout_probe::lay_out_texts;
+use crate::layout_probe::{find, lay_out_inputs, lay_out_texts};
 
 /// Every column has a heading and every kind a name in the catalog.
 #[test]
@@ -116,6 +117,24 @@ fn shown_texts(state: &BoardReportsState, i18n: &I18n) -> Vec<String> {
     .into_iter()
     .map(|t| t.text)
     .collect()
+}
+
+/// Mockup row 117: a magnifier leads the Filter rows field, inside it, so
+/// the typed text starts a glyph in from the field's left edge.
+#[test]
+fn the_filter_field_is_led_by_a_magnifier() {
+    let i18n = I18n::en_us();
+    let tokens = theme_tokens(ThemeId::BUILTINS[0]);
+    let state = net_lengths();
+    let field = super::reports::filter_field(&state, &i18n, &tokens);
+    let inputs = lay_out_inputs(field, Size::new(400.0, 100.0));
+    let placeholder = t!(i18n, ids::BOARD_REPORTS_FILTER).into_string();
+    let input = find(&inputs, &placeholder).bounds;
+    let glyph = crate::styles::TypeScale::DEFAULT.body;
+    assert!(
+        input.x >= glyph,
+        "the input sits after its glyph: {input:?}"
+    );
 }
 
 #[test]

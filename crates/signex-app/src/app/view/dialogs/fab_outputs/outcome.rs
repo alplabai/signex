@@ -1,6 +1,7 @@
-//! The destination (file name, output folder, how the files are named) and
-//! a run's outcome: the success banner with Open folder and the notes, each
-//! with its severity, or why nothing was written.
+//! The destination (file name, output folder led by a folder glyph, how
+//! the files are named) and a run's outcome: the success banner with Open
+//! folder and the notes, each with its severity, or why nothing was
+//! written.
 
 use iced::widget::{Column, Row, column, container, row};
 use iced::{Alignment, Border, Element, Length, Theme, Widget as _};
@@ -63,13 +64,17 @@ pub(super) fn destination<'a>(
         .size(TS.body)
         .padding(SP.s + SP.xs)
         .width(Length::Fill);
-    let folder = text_input(t!(i18n, ids::FAB_OUTPUTS_FOLDER), &state.folder)
-        .style(crate::panels::form_look::text_input_style)
-        .on_input(|v| fo(FabOutputsMsg::FolderEdited(v)))
-        .font(mono)
-        .size(TS.body)
-        .padding(SP.s + SP.xs)
-        .width(Length::Fill);
+    // Mockup row 115: a folder glyph leads the path, inside the field.
+    let folder = kit::glyph_field(
+        kit::FieldGlyph::Folder,
+        text_input(t!(i18n, ids::FAB_OUTPUTS_FOLDER), &state.folder)
+            .on_input(|v| fo(FabOutputsMsg::FolderEdited(v)))
+            .font(mono)
+            .size(TS.body)
+            .padding(SP.s + SP.xs)
+            .width(Length::Fill),
+        tokens,
+    );
     let browse = small_button(
         t!(i18n, ids::FAB_OUTPUTS_BROWSE),
         state

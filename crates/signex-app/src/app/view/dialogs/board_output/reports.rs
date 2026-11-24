@@ -145,12 +145,7 @@ fn toolbar<'a>(
         kit::segmented_style(tokens).fill_width(true),
         |kind| out(BoardOutputMsg::ReportPicked(kind)),
     );
-    let filter = text_input(t!(i18n, ids::BOARD_REPORTS_FILTER), &state.filter)
-        .style(crate::panels::form_look::text_input_style)
-        .on_input(|v| out(BoardOutputMsg::ReportFilterEdited(v)))
-        .size(TS.body)
-        .padding(SP.s + SP.xs)
-        .width(Length::Fill);
+    let filter = filter_field(state, i18n, tokens);
     let total = state.report.rows.len();
     let count = if shown == total {
         t!(i18n, ids::BOARD_REPORTS_ROWS, "count" => total)
@@ -173,4 +168,18 @@ fn toolbar<'a>(
     .padding([SP.l - SP.xs, SP.l + SP.xs])
     .width(Length::Fill)
     .boxed()
+}
+
+/// The Filter rows field, led by a magnifier inside it (mockup row 117).
+pub(super) fn filter_field<'a>(
+    state: &'a BoardReportsState,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let input = text_input(t!(i18n, ids::BOARD_REPORTS_FILTER), &state.filter)
+        .on_input(|v| out(BoardOutputMsg::ReportFilterEdited(v)))
+        .size(TS.body)
+        .padding(SP.s + SP.xs)
+        .width(Length::Fill);
+    kit::glyph_field(kit::FieldGlyph::Search, input, tokens)
 }

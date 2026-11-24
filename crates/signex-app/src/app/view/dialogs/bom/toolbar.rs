@@ -7,8 +7,8 @@ use iced::widget::{Row, Space, container, row, svg};
 use iced::{Background, Border, Color, Element, Length, Widget};
 use signex_i18n::{I18n, ids, t};
 use signex_output::{BomGrouping, BomValidationReport};
-use signex_types::theme::ThemeTokens;
-use signex_widgets::chips::{ChipMetrics, ChipStyle, chip};
+use signex_types::theme::{ThemeId, ThemeTokens};
+use signex_widgets::chips::{ChipMetrics, ChipStyle, icon_chip};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{Label, segmented, text, text_input};
 
@@ -81,7 +81,8 @@ impl Signex {
         ]
         .spacing(SP.m)
         .align_y(iced::Alignment::Center);
-        for issue_chip in issue_chips(&preview.validation_report, tokens, i18n) {
+        let theme = self.ui_state.effective_theme_id();
+        for issue_chip in issue_chips(&preview.validation_report, theme, tokens, i18n) {
             bar = bar.push(issue_chip);
         }
         container(bar)
@@ -164,32 +165,50 @@ fn variant_choices(
     (options, chosen)
 }
 
-/// One chip per severity that has issues, errors first; each opens the
-/// Rules tab. Notes get no chip: they flag no line.
+/// The severity of an issue chip.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IssueTone {
+    Error,
+    Warning,
+}
+
+/// The chips `report` earns: one per severity that has issues, with its
+/// count, errors first. Notes get no chip: they flag no line.
+fn issue_counts(report: &BomValidationReport) -> Vec<(IssueTone, usize)> {
+    [
+        (IssueTone::Error, report.error_count()),
+        (IssueTone::Warning, report.warning_count()),
+    ]
+    .into_iter()
+    .filter(|(_, count)| *count > 0)
+    .collect()
+}
+
+/// The glyph a chip of `tone` leads with, the command log's severity
+/// glyphs: the warning triangle on the warnings chip (mockup row 112).
+fn issue_glyph(tone: IssueTone, theme: ThemeId) -> svg::Handle {
+    match tone {
+        IssueTone::Error => crate::icons::icon_log_error(theme),
+        IssueTone::Warning => crate::icons::icon_log_warn(theme),
+    }
+}
+
+/// One chip per severity that has issues, led by its glyph; each opens the
+/// Rules tab.
 fn issue_chips<'a>(
     report: &BomValidationReport,
+    theme: ThemeId,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Vec<Element<'a, Message>> {
     let r = resolve(tokens);
-    let tones = [
-        (
-            report.error_count(),
-            ids::BOM_CHIP_ERRORS,
-            r.err_soft,
-            ti(tokens.error),
-        ),
-        (
-            report.warning_count(),
-            ids::BOM_CHIP_WARNINGS,
-            r.warn_soft,
-            ti(tokens.warning),
-        ),
-    ];
-    tones
+    issue_counts(report)
         .into_iter()
-        .filter(|(count, ..)| *count > 0)
-        .map(|(count, id, fill, ink)| {
+        .map(|(tone, count)| {
+            let (id, fill, ink) = match tone {
+                IssueTone::Error => (ids::BOM_CHIP_ERRORS, r.err_soft, ti(tokens.error)),
+                IssueTone::Warning => (ids::BOM_CHIP_WARNINGS, r.warn_soft, ti(tokens.warning)),
+            };
             let style = ChipStyle {
                 fill,
                 edge: Color::TRANSPARENT,
@@ -198,7 +217,8 @@ fn issue_chips<'a>(
                 on_fill: fill,
                 on_ink: ink,
             };
-            chip(
+            icon_chip(
+                issue_glyph(tone, theme),
                 t!(i18n, id, "count" => count),
                 None,
                 true,
@@ -230,5 +250,43 @@ mod tests {
         let (_, base) = variant_choices(&variants, None, &i18n);
         assert_eq!(base.value, None);
         assert_eq!(base.label, "Base");
+    }
+
+    /// Mockup row 112: the warnings chip leads with the warning triangle,
+    /// the errors chip with the error glyph; a note earns no chip.
+    #[test]
+    fn the_warnings_chip_leads_with_the_warning_glyph() {
+        use signex_output::{BomIssueSeverity, BomRule, BomValidationIssue};
+        let issue = |severity| BomValidationIssue {
+            rule: BomRule::MissingMpn,
+            severity,
+            message: String::new(),
+            references: vec!["J2".to_owned()],
+        };
+        let report = BomValidationReport {
+            issues: vec![
+                issue(BomIssueSeverity::Warning),
+                issue(BomIssueSeverity::Info),
+                issue(BomIssueSeverity::Warning),
+            ],
+        };
+        assert_eq!(issue_counts(&report), [(IssueTone::Warning, 2)]);
+        let theme = ThemeId::GraphiteLight;
+        assert_eq!(
+            issue_glyph(IssueTone::Warning, theme),
+            crate::icons::icon_log_warn(theme)
+        );
+        assert_eq!(
+            issue_glyph(IssueTone::Error, theme),
+            crate::icons::icon_log_error(theme)
+        );
+        let mut both = report.clone();
+        both.issues.push(issue(BomIssueSeverity::Error));
+        let tones: Vec<IssueTone> = issue_counts(&both).into_iter().map(|(t, _)| t).collect();
+        assert_eq!(
+            tones,
+            [IssueTone::Error, IssueTone::Warning],
+            "errors first"
+        );
     }
 }
