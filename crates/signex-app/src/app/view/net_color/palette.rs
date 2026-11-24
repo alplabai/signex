@@ -8,7 +8,7 @@ use iced::widget::{Space, Widget, column, container, row, scrollable, stack, svg
 use iced::{Alignment, Color, Element, Length, Theme};
 use signex_i18n::{Arg, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, text, text_input};
+use signex_widgets::{button, text};
 
 use super::row_flyout::RowFlyout;
 use super::{SWATCH, swatch, swatch_button};
@@ -16,8 +16,8 @@ use crate::app::handlers::editing_commands::net_color_palette::{CHOOSER_COLORS, 
 use crate::app::state::{NetColorToast, NetColorsCleared};
 use crate::app::{Message, NetColorMsg, Signex};
 use crate::styles::{
-    ChromeMetrics, DialogButtonKind, Spacing, TypeScale, dialog_button, dialog_footer_split, ti,
-    tokens::resolve,
+    ChromeMetrics, DialogButtonKind, Spacing, TypeScale, dialog_button, dialog_footer_split,
+    dialog_icon_button, ti, tokens::resolve,
 };
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -59,16 +59,14 @@ impl Signex {
         let i18n = &self.ui_state.i18n;
         let state = &self.ui_state.net_color_palette;
 
-        let filter = container(
-            text_input(
-                t!(i18n, ids::DIALOG_NET_COLOR_FILTER),
-                state.filter.as_str(),
-            )
-            .on_input(|s| net_message(NetColorMsg::FilterChanged(s)))
-            .style(crate::panels::form_look::text_input_style)
-            .padding([SP.s, SP.m])
-            .size(TS.body),
-        )
+        // The shared dialog search field: the magnifier, then the input.
+        let filter = container(crate::library::picker::search_field(
+            t!(i18n, ids::DIALOG_NET_COLOR_FILTER),
+            state.filter.as_str(),
+            |s| net_message(NetColorMsg::FilterChanged(s)),
+            None,
+            tokens,
+        ))
         .padding(iced::Padding {
             top: SP.m,
             right: SP.l,
@@ -112,7 +110,7 @@ impl Signex {
         let footer = dialog_footer_split(
             vec![dialog_button(
                 t!(i18n, ids::DIALOG_NET_COLOR_CLEAR_ALL),
-                DialogButtonKind::Ghost,
+                DialogButtonKind::Link,
                 has_colours.then(|| net_message(NetColorMsg::ClearedAll)),
                 tokens,
             )],
@@ -239,7 +237,8 @@ impl Signex {
             ));
         }
         let actions = row![
-            dialog_button(
+            dialog_icon_button(
+                crate::icons::icon_chrome_palette(GLYPH_THEME),
                 t!(i18n, ids::DIALOG_NET_COLOR_CUSTOM),
                 DialogButtonKind::Secondary,
                 Some(net_message(NetColorMsg::CustomOpenedFor(net.clone()))),
@@ -248,7 +247,7 @@ impl Signex {
             Space::new().width(Length::Fill),
             dialog_button(
                 t!(i18n, ids::DIALOG_NET_COLOR_CLEAR),
-                DialogButtonKind::Ghost,
+                DialogButtonKind::Link,
                 net_row.color.is_some().then(|| {
                     net_message(NetColorMsg::Set {
                         net: net.clone(),
@@ -338,6 +337,140 @@ mod tests {
         .find(|laid| laid.text == net)
         .map(|laid| laid.bounds.y)
         .expect("the net has a row")
+    }
+
+    /// A sheet with one net label per name in `nets`, open in `app`.
+    fn app_with_nets(nets: &[&str]) -> Signex {
+        let (mut app, _task) = Signex::new();
+        let mut sheet = SchematicSheet::default();
+        for (i, net) in nets.iter().enumerate() {
+            let at = Point::new(0.0, 10.0 * i as f64);
+            sheet.wires.push(signex_types::schematic::Wire {
+                uuid: uuid::Uuid::now_v7(),
+                start: at,
+                end: Point::new(10.0, at.y),
+                ..Default::default()
+            });
+            sheet.labels.push(Label::new(*net, at, LabelType::Net));
+        }
+        add_sheet_with(&mut app, std::path::Path::new("look.snxsch"), sheet);
+        app
+    }
+
+    /// The largest channel difference between the pixel column at `x` and
+    /// the one at `x_ref`, over the rows `ys`: zero where no frame is drawn
+    /// between them.
+    fn column_contrast(
+        pixels: &[u8],
+        width: usize,
+        x: f32,
+        x_ref: f32,
+        ys: std::ops::Range<usize>,
+    ) -> u8 {
+        let at = |x: usize, y: usize| &pixels[(y * width + x) * 4..(y * width + x) * 4 + 3];
+        let (x, x_ref) = (x.floor() as usize, x_ref.floor() as usize);
+        ys.flat_map(|y| {
+            at(x, y)
+                .iter()
+                .zip(at(x_ref, y))
+                .map(|(a, b)| a.abs_diff(*b))
+                .collect::<Vec<_>>()
+        })
+        .max()
+        .unwrap_or(0)
+    }
+
+    /// Mockup row 71: the filter is the shared search field, the magnifier
+    /// in front of "Filter nets".
+    #[test]
+    fn the_filter_has_the_search_glyph_before_its_input() {
+        let app = app_with_nets(&["A"]);
+        let inputs = crate::layout_probe::lay_out_inputs(
+            app.view_net_color_palette_body(),
+            iced::Size::new(360.0, 400.0),
+        );
+        let filter = inputs
+            .iter()
+            .find(|laid| laid.text == "Filter nets")
+            .expect("the filter input");
+        assert!(
+            filter.bounds.x >= SP.l + SP.m + TS.body,
+            "the glyph sits before the input: {filter:?}"
+        );
+    }
+
+    /// Mockup row 71: the window the app asks for is 360 wide and fits its
+    /// rows, so the footer sits right under the list, not at the foot of a
+    /// tall window.
+    #[test]
+    fn the_window_fits_its_rows_with_the_footer_under_the_list() {
+        let app = app_with_nets(&["A", "B", "C"]);
+        let size = app.modal_window_size(crate::app::state::ModalId::NetColorPalette);
+        let scale = app.ui_state.ui_scale;
+        assert_eq!(size.width, (360.0 * scale).ceil());
+        let window = iced::Size::new(360.0, size.height / scale);
+        let texts = lay_out_texts(app.view_net_color_palette_body(), window);
+        let last = crate::layout_probe::find(&texts, "C").bounds;
+        let footer = crate::layout_probe::find(&texts, "Clear all colors").bounds;
+        let gap = footer.y - (last.y + last.height);
+        assert!(gap > 0.0, "{last:?} {footer:?}");
+        assert!(
+            gap < ChromeMetrics::DEFAULT.row + crate::styles::dense_footer_height(),
+            "the footer follows the list: gap {gap} in {window:?}"
+        );
+    }
+
+    /// Mockup row 71: "Clear all colors" is a link, drawn with no frame even
+    /// while there is nothing to clear (the old Ghost drew a half border).
+    #[test]
+    fn clear_all_is_a_link_with_no_frame() {
+        let app = app_with_nets(&["A"]);
+        let window = iced::Size::new(360.0, 400.0);
+        let texts = lay_out_texts(app.view_net_color_palette_body(), window);
+        let label = crate::layout_probe::find(&texts, "Clear all colors").bounds;
+        let pixels = crate::layout_probe::draw_pixels(app.view_net_color_palette_body(), window);
+        let ys = label.y as usize..(label.y + label.height) as usize;
+        // The button's left edge is the footer's padding; compare it with
+        // the footer fill just outside.
+        let edge = SP.l;
+        for x in [edge, edge + 1.0] {
+            let contrast =
+                column_contrast(&pixels, window.width as usize, x, edge - 3.0, ys.clone());
+            assert!(contrast <= 1, "a frame at x {x}: contrast {contrast}");
+        }
+    }
+
+    /// Mockup row 71: the chooser's Custom… carries the palette glyph in
+    /// front of its label, and its Clear is a frameless link.
+    #[test]
+    fn the_chooser_has_a_palette_glyph_on_custom_and_a_link_clear() {
+        let mut app = app_with_nets(&["A"]);
+        let _ = app.update(net_message(NetColorMsg::Set {
+            net: "A".into(),
+            color: Some(signex_types::theme::Color::new(0xE0, 0x54, 0x54, 255)),
+        }));
+        let net_row = app.palette_rows().remove(0);
+        let window = iced::Size::new(CHOOSER_WIDTH, 200.0);
+        let texts = lay_out_texts(app.chooser(&net_row), window);
+        assert!(net_row.color.is_some(), "Clear has an action");
+        // A plain dialog button's label fills the button from the card's
+        // padding; the glyph pushes it right by at least its own side.
+        let custom = crate::layout_probe::find(&texts, "Custom…").bounds;
+        assert!(
+            custom.x - SP.m >= TS.body,
+            "the glyph sits before the label: {custom:?}"
+        );
+
+        let clear = crate::layout_probe::find(&texts, "Clear").bounds;
+        let pixels = crate::layout_probe::draw_pixels(app.chooser(&net_row), window);
+        let ys = clear.y as usize..(clear.y + clear.height) as usize;
+        // Clear sits at the right end of the card's padded content.
+        let edge = CHOOSER_WIDTH - SP.m;
+        for x in [edge - 1.0, edge - 2.0] {
+            let contrast =
+                column_contrast(&pixels, window.width as usize, x, edge + 2.0, ys.clone());
+            assert!(contrast <= 1, "a frame at x {x}: contrast {contrast}");
+        }
     }
 
     /// Mockup row 71: the chooser floats, so the list stays still.

@@ -71,6 +71,11 @@ fn look(kind: DialogButtonKind, tokens: &ThemeTokens) -> Look {
             border: Color::TRANSPARENT,
             text: ti(tokens.text),
         },
+        DialogButtonKind::Link => Look {
+            fills: [Color::TRANSPARENT, overlays()[1], overlays()[2]],
+            border: Color::TRANSPARENT,
+            text: tokens::resolve(tokens).accent_text,
+        },
         DialogButtonKind::Secondary | DialogButtonKind::Cancel => Look {
             fills: overlays(),
             border: ti(tokens.border),
@@ -124,15 +129,44 @@ mod tests {
     use super::*;
     use signex_types::theme::ThemeId;
 
-    const KINDS: [DialogButtonKind; 7] = [
+    const KINDS: [DialogButtonKind; 8] = [
         DialogButtonKind::Primary,
         DialogButtonKind::Secondary,
         DialogButtonKind::Danger,
         DialogButtonKind::DangerSolid,
         DialogButtonKind::Accent,
         DialogButtonKind::Ghost,
+        DialogButtonKind::Link,
         DialogButtonKind::Cancel,
     ];
+
+    /// Mockup row 71: a Link is accent text with no fill and no visible
+    /// border at rest; hover gives it the Ghost's fill.
+    #[test]
+    fn a_link_is_accent_text_without_a_frame() {
+        for &id in ThemeId::BUILTINS {
+            let tokens = signex_types::theme::theme_tokens(id);
+            let rest = style(DialogButtonKind::Link, id, button::Status::Active);
+            assert_eq!(fill(&rest), None, "{id:?}");
+            assert_eq!(rest.border.color, Color::TRANSPARENT, "{id:?}");
+            assert_eq!(
+                rest.text_color,
+                tokens::resolve(&tokens).accent_text,
+                "{id:?}"
+            );
+            assert_eq!(
+                dialog_label_color(DialogButtonKind::Link, &tokens),
+                tokens::resolve(&tokens).accent_text,
+                "{id:?}"
+            );
+            let hover = |kind| fill(&style(kind, id, button::Status::Hovered));
+            assert_eq!(
+                hover(DialogButtonKind::Link),
+                hover(DialogButtonKind::Ghost),
+                "{id:?}"
+            );
+        }
+    }
 
     fn style(kind: DialogButtonKind, id: ThemeId, status: button::Status) -> button::Style {
         let tokens = signex_types::theme::theme_tokens(id);

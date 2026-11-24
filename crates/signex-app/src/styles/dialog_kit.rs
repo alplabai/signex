@@ -39,6 +39,9 @@ pub enum DialogButtonKind {
     /// A quiet action with no fill or visible border at rest ("Decide
     /// later").
     Ghost,
+    /// A text action in the accent ink with no fill or border at rest, nor
+    /// when it has no action ("Clear all colors", mockup row 71).
+    Link,
     /// The dismissing action of a footer (Cancel, Close, Later): drawn as
     /// Secondary, it sits first in the right-aligned row.
     Cancel,
@@ -145,7 +148,7 @@ pub fn dialog_button<'a, M: Clone + 'a>(
         .height(Length::Fixed(height))
         .on_press_maybe(on_press);
     if disabled {
-        btn.style(disabled_button(tokens)).boxed()
+        btn.style(disabled_button(kind, tokens)).boxed()
     } else {
         btn.style(dialog_button_style(kind, tokens)).boxed()
     }
@@ -193,7 +196,7 @@ pub fn dialog_icon_button<'a, M: Clone + 'a>(
         .height(Length::Fixed(height))
         .on_press_maybe(on_press);
     if disabled {
-        btn.style(disabled_button(tokens)).boxed()
+        btn.style(disabled_button(kind, tokens)).boxed()
     } else {
         btn.style(dialog_button_style(kind, tokens)).boxed()
     }
@@ -227,13 +230,18 @@ fn label_color(kind: DialogButtonKind, disabled: bool, tokens: &ThemeTokens) -> 
 
 /// A button without an action: no fill, a half-strength border, the muted
 /// label set by [`dialog_button`]. The same for every role, so none reads as
-/// clickable.
+/// clickable, except that a [`DialogButtonKind::Link`] stays borderless text.
 fn disabled_button(
+    kind: DialogButtonKind,
     tokens: &ThemeTokens,
 ) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
-    let border = iced::Color {
-        a: 0.5,
-        ..ti(tokens.border)
+    let border = if kind == DialogButtonKind::Link {
+        iced::Color::TRANSPARENT
+    } else {
+        iced::Color {
+            a: 0.5,
+            ..ti(tokens.border)
+        }
     };
     let text = ti(tokens.text_secondary);
     move |_: &Theme, _: button::Status| button::Style {
@@ -344,6 +352,7 @@ mod tests {
                 DialogButtonKind::DangerSolid,
                 DialogButtonKind::Accent,
                 DialogButtonKind::Ghost,
+                DialogButtonKind::Link,
                 DialogButtonKind::Cancel,
             ] {
                 let ok = || signex_i18n::t!(i18n, signex_i18n::ids::DIALOG_BUTTON_OK);
@@ -381,8 +390,25 @@ mod tests {
             DialogButtonKind::DangerSolid,
             DialogButtonKind::Accent,
             DialogButtonKind::Ghost,
+            DialogButtonKind::Link,
         ] {
             assert_eq!(kind.resolved(), kind);
+        }
+    }
+
+    /// Mockup row 71: a Link with no action is muted text with no border;
+    /// every other role keeps the half-strength border that says "not now".
+    #[test]
+    fn a_disabled_link_draws_no_border() {
+        for id in ThemeId::BUILTINS {
+            let tokens = signex_types::theme::theme_tokens(*id);
+            let style = |kind| disabled_button(kind, &tokens)(&Theme::Dark, button::Status::Active);
+            let link = style(DialogButtonKind::Link);
+            assert_eq!(link.border.color, iced::Color::TRANSPARENT, "{id:?}");
+            assert_eq!(link.background, None, "{id:?}");
+            assert_eq!(link.text_color, ti(tokens.text_secondary), "{id:?}");
+            let ghost = style(DialogButtonKind::Ghost);
+            assert!(ghost.border.color.a > 0.0, "{id:?}: the Ghost is unchanged");
         }
     }
 
