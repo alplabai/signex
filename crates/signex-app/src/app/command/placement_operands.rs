@@ -6,7 +6,9 @@
 //! shape anchor.
 //!
 //! The points are explicit input in mm and are not snapped: one a click would
-//! snap elsewhere is refused, so nothing lands off the grid silently. A point
+//! snap elsewhere is refused, so nothing lands off the grid silently. That check
+//! still reads the person's grid and snap setting (`ui_state`), a declared 6.P3
+//! exception until sheets carry their own grid (docs/DECISIONS.md, 2026-11-24). A point
 //! may instead be a pin reference, `R1.2`, which is the pin's tip on the sheet
 //! the edit targets, on or off the grid (#2199). What the operands do not name
 //! (width, fill, wire colour, text size, font, justification) comes from the
@@ -288,7 +290,8 @@ impl Signex {
             // The snap may be the grid or, for a wire, a nearby pin end, wire
             // end or junction (the electrical grid, Shift+E).
             return Err(format!(
-                "`{name}` is not where a click lands (the grid, and for a wire the electrical grid): a click there lands on {sx},{sy}; pass that point"
+                "`{name}` is not where a click lands (the {} mm grid, and for a wire the electrical grid): a click there lands on {sx},{sy}; pass that point",
+                self.ui_state.grid_size_mm
             ));
         }
         Ok(Point::new(*x, *y))

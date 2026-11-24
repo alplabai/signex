@@ -25,7 +25,7 @@ const RED: Color = Color {
 
 /// A form far from every default: 270 degrees, 8 pt, right and top
 /// justified, a 0.4 mm outlined shape, a Medium red wire.
-fn persons_form(kind: PrePlacementKind) -> PrePlacementData {
+pub(super) fn persons_form(kind: PrePlacementKind) -> PrePlacementData {
     let mut pre = PrePlacementData::new("tool".into(), kind, "FROM_FORM".into(), 0.0, 0.0);
     pre.rotation = 270.0;
     pre.font_size_pt = 8;
