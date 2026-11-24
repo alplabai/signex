@@ -396,15 +396,19 @@ fn the_sheet_symbol_colour_rows_open_their_own_pickers() {
         instances: Vec::new(),
     });
     let shown = texts(&ctx);
+    let boxes =
+        crate::layout_probe::lay_out_inputs(view_panel(PanelKind::Properties, &ctx), WINDOW);
     let click = |label: &str| {
         let at = shown
             .iter()
             .find(|t| t.text == label)
             .unwrap_or_else(|| panic!("{label:?} missing from {shown:#?}"));
-        let swatch = iced::Point::new(
-            at.bounds.x + 96.0 + 30.0,
-            at.bounds.y + at.bounds.height / 2.0,
-        );
+        // The swatch left of the row's hex box (mockup row 46).
+        let hex_box = boxes
+            .iter()
+            .find(|b| (b.bounds.center_y() - at.bounds.center_y()).abs() < at.bounds.height)
+            .unwrap_or_else(|| panic!("no hex box beside {label:?}: {boxes:#?}"));
+        let (swatch, _chevron) = crate::panels::wire_style_rows::toggle_points(hex_box.bounds);
         crate::layout_probe::messages_on_click_at(
             view_panel(PanelKind::Properties, &ctx),
             WINDOW,

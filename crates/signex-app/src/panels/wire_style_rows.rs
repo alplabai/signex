@@ -1,26 +1,31 @@
 //! The Width and Color rows of a wire, shared by the Tab form of the wire
 //! tool and the Properties of a selected wire. Width is a 2 x 2 grid of the
 //! four presets, so no name is cut off; Color is a field that opens a small
-//! popover with the preset colours, Custom… and Reset to Default (#2523).
+//! popover with the preset colours, Custom… and Reset to Default (#2523),
+//! and takes a typed hex code (mockup row 46, `color_hex`).
 
 use std::rc::Rc;
 
-use iced::widget::{Column, Row, Space, container};
-use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget};
+use iced::widget::{Column, Row, Space, container, text_input};
+use iced::{Alignment, Background, Border, Color, Element, Font, Length, Theme, Widget};
 use signex_types::schematic::WireWidthPreset;
 
 use signex_i18n::{I18n, MessageId, UserText, ids, t};
+use signex_widgets::focused_escape::FocusedEscape;
 use signex_widgets::theme_ext::Radii;
 use signex_widgets::{button, text};
 
-use super::PanelMsg;
 use super::element_properties::rows::labelled_row;
 use super::form_look::{self, FormLook};
+use super::graphite::PROPERTY_FIELD_RADIUS;
+use super::{HexEntry, PanelMsg};
 use crate::choice::{Choice, chosen};
 use crate::styles::{Spacing, TypeScale};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
+/// Gap between the swatch, the hex box and the chevron of a Color field.
+const FACE_SPACING: f32 = SP.s;
 
 /// Width of the colour popover (184 px at a 12 px body).
 const POPOVER_WIDTH_EM: f32 = 184.0 / 12.0;
@@ -149,49 +154,99 @@ fn field_swatch<'a>(current: Option<[u8; 4]>) -> Element<'a, PanelMsg> {
         .boxed()
 }
 
-/// The Color field: swatch, the hex code or "Default", a chevron. A press
-/// opens or closes the popover.
-fn color_field_face<'a>(
+/// The hex text box inside the field: no frame of its own, the field draws
+/// it.
+fn bare_input_style(theme: &Theme, status: text_input::Status) -> text_input::Style {
+    text_input::Style {
+        background: Background::Color(Color::TRANSPARENT),
+        border: Border::default(),
+        ..form_look::text_input_style(theme, status)
+    }
+}
+
+/// A swatch or chevron of the field: no fill or frame, a press opens or
+/// closes the popover.
+fn bare_toggle<'a>(content: Element<'a, PanelMsg>, on_toggle: PanelMsg) -> Element<'a, PanelMsg> {
+    button(content)
+        .padding(0)
+        .on_press(on_toggle)
+        .style(|_: &Theme, _| iced::widget::button::Style::default())
+        .boxed()
+}
+
+/// What the Color field shows and sends besides its hex box.
+struct FieldFace<'r> {
     current: Option<[u8; 4]>,
+    hex: &'r HexEntry,
+    on_pick: &'r Rc<dyn Fn([u8; 4]) -> PanelMsg + 'static>,
     default_name: MessageId,
     is_open: bool,
     on_toggle: PanelMsg,
-    i18n: &I18n,
-) -> Element<'a, PanelMsg> {
-    let name: signex_widgets::Label<'a> = match current {
-        // A hex colour code is design data, not language.
-        Some(c) => UserText::new(format!("#{:02X}{:02X}{:02X}", c[0], c[1], c[2])).into(),
-        None => t!(i18n, default_name).into(),
-    };
-    let face = Row::<Element<'a, PanelMsg>>::new()
-        .spacing(SP.s + SP.xs)
-        .align_y(Alignment::Center)
-        .push(field_swatch(current))
-        .push(
-            text(name)
-                .size(TS.body)
-                .wrapping(iced::widget::text::Wrapping::None)
-                .width(Length::Fill)
-                .boxed(),
-        )
-        .push(
-            signex_widgets::chevron::chevron(true, TS.body, Color::TRANSPARENT)
-                .style(|theme: &Theme, _| iced::widget::svg::Style {
-                    color: Some(FormLook::of(theme).ink4),
-                    ..Default::default()
-                })
-                .boxed(),
-        );
-    button(face)
+}
+
+/// The Color field (mockup row 46): the swatch, the hex code in a mono
+/// box (the default name while the object has no colour of its own), a
+/// chevron. The swatch and the chevron open or close the popover; a code
+/// typed in the box applies on Enter or on leaving it, Esc restores.
+fn color_field_face<'a>(face: FieldFace<'_>, i18n: &I18n) -> Element<'a, PanelMsg> {
+    let FieldFace {
+        current,
+        hex,
+        on_pick,
+        default_name,
+        is_open,
+        on_toggle,
+    } = face;
+    let left = hex.left(current, on_pick.as_ref());
+    let is_refused = hex.is_refused();
+    let input = signex_widgets::text_input(t!(i18n, default_name), hex.text(current))
+        .font(Font::MONOSPACE)
+        .size(TS.body)
+        .padding([SP.s, 0.0])
         .width(Length::Fill)
-        .padding([SP.s, SP.s + SP.xs])
-        .on_press(on_toggle)
-        .style(move |theme: &Theme, status| {
-            let mut style = form_look::value_field_button(theme, status);
-            if is_open {
-                style.border.color = FormLook::of(theme).accent;
+        .on_input(hex.typed())
+        .on_submit(left.clone())
+        .on_blur(left)
+        .style(bare_input_style)
+        .boxed();
+    let input: Element<'a, PanelMsg> = FocusedEscape::new(input, hex.restored())
+        .ahead_of_blur()
+        .into();
+    let chevron = signex_widgets::chevron::chevron(true, TS.body, Color::TRANSPARENT)
+        .style(|theme: &Theme, _| iced::widget::svg::Style {
+            color: Some(FormLook::of(theme).ink4),
+            ..Default::default()
+        })
+        .boxed();
+    let row = Row::<Element<'a, PanelMsg>>::new()
+        .spacing(FACE_SPACING)
+        .align_y(Alignment::Center)
+        .push(bare_toggle(field_swatch(current), on_toggle.clone()))
+        .push(input)
+        .push(bare_toggle(chevron, on_toggle));
+    container(row)
+        .width(Length::Fill)
+        .padding([0.0, SP.s + SP.xs])
+        .style(move |theme: &Theme| {
+            let l = FormLook::of(theme);
+            let edge = if is_refused {
+                theme.palette().danger.base.color
+            } else if is_open {
+                l.accent
+            } else {
+                l.line
+            };
+            container::Style {
+                background: Some(Background::Color(l.field)),
+                text_color: Some(l.ink),
+                border: Border {
+                    width: 1.0,
+                    radius: PROPERTY_FIELD_RADIUS.into(),
+                    color: edge,
+                    ..Border::default()
+                },
+                ..container::Style::default()
             }
-            style
         })
         .boxed()
 }
@@ -322,6 +377,7 @@ pub fn wire_color_row<'a>(
     current: Option<signex_types::theme::Color>,
     picker: WireColorPicker,
     on_set: Rc<dyn Fn(Option<signex_types::theme::Color>) -> PanelMsg + 'static>,
+    hex: HexEntry,
     _muted: Color,
     _border_c: Color,
     i18n: &I18n,
@@ -340,6 +396,7 @@ pub fn wire_color_row<'a>(
             on_cancel: PanelMsg::CancelWireColorPicker,
             on_pick,
             on_clear: current.is_some().then(|| on_set(None)),
+            hex,
         },
         i18n,
     )
@@ -350,7 +407,9 @@ pub struct PopoverColorRow {
     pub label: signex_i18n::Localized,
     pub current: Option<[u8; 4]>,
     pub picker: WireColorPicker,
-    /// A press on the field: open or close the popover.
+    /// The hex box: its row and what is typed in it.
+    pub hex: HexEntry,
+    /// A press on the swatch or the chevron: open or close the popover.
     pub on_toggle: PanelMsg,
     /// Custom…: open the HSV / RGB picker.
     pub on_advanced: PanelMsg,
@@ -383,9 +442,20 @@ pub fn popover_color_row_named<'a>(
         on_cancel,
         on_pick,
         on_clear,
+        hex,
     } = row;
     let is_open = picker != WireColorPicker::Closed;
-    let face = color_field_face(current, default_name, is_open, on_toggle, i18n);
+    let face = color_field_face(
+        FieldFace {
+            current,
+            hex: &hex,
+            on_pick: &on_pick,
+            default_name,
+            is_open,
+            on_toggle,
+        },
+        i18n,
+    );
     let control: Element<'a, PanelMsg> = match picker {
         WireColorPicker::Advanced => iced_aw::ColorPicker::new(
             true,
@@ -409,6 +479,19 @@ pub fn popover_color_row_named<'a>(
         .boxed(),
     };
     labelled_row(label, control)
+}
+
+/// Where the swatch and the chevron of a Color field sit, by the bounds of
+/// its laid-out hex box: the centres a test presses.
+#[cfg(test)]
+pub(in crate::panels) fn toggle_points(hex_box: iced::Rectangle) -> (iced::Point, iced::Point) {
+    let swatch = TS.body * FIELD_SWATCH_EM;
+    let chevron = signex_widgets::chevron::side(TS.body);
+    let y = hex_box.center_y();
+    (
+        iced::Point::new(hex_box.x - FACE_SPACING - swatch / 2.0, y),
+        iced::Point::new(hex_box.x + hex_box.width + FACE_SPACING + chevron / 2.0, y),
+    )
 }
 
 #[cfg(test)]
@@ -461,33 +544,99 @@ mod tests {
         }
     }
 
-    fn color_row(
+    use crate::layout_probe::{self, LaidOutText};
+    use crate::panels::{ColorHexDraft, ColorRowKey};
+
+    const KEY: ColorRowKey = ColorRowKey::PrePlacementWire;
+
+    fn wire_row<'a>(
         picker: WireColorPicker,
         current: Option<signex_types::theme::Color>,
-    ) -> Vec<String> {
-        let en = I18n::en_us();
-        let row = wire_color_row(
+        draft: Option<&ColorHexDraft>,
+        en: &I18n,
+    ) -> Element<'a, PanelMsg> {
+        wire_color_row(
             current,
             picker,
             Rc::new(PanelMsg::SetPrePlacementWireColor),
+            HexEntry::of(KEY, draft),
             Color::BLACK,
             Color::BLACK,
-            &en,
-        );
-        crate::layout_probe::lay_out_texts(row, iced::Size::new(320.0, 400.0))
-            .into_iter()
-            .map(|t| t.text)
-            .collect()
+            en,
+        )
     }
 
-    /// Closed, the row shows its label and "Default"; the popover is not
-    /// part of the panel.
+    /// The texts and the hex boxes of the wire Color row in a `width` dock.
+    fn color_row(
+        picker: WireColorPicker,
+        current: Option<signex_types::theme::Color>,
+        width: f32,
+    ) -> (Vec<LaidOutText>, Vec<LaidOutText>) {
+        let en = I18n::en_us();
+        let size = iced::Size::new(width, 400.0);
+        let texts = layout_probe::lay_out_texts(wire_row(picker, current, None, &en), size);
+        let inputs = layout_probe::lay_out_inputs(wire_row(picker, current, None, &en), size);
+        (texts, inputs)
+    }
+
+    fn shown(laid_out: &[LaidOutText]) -> Vec<&str> {
+        laid_out.iter().map(|t| t.text.as_str()).collect()
+    }
+
+    /// Closed, the row shows its label and the hex box reads "Default"; the
+    /// popover is not part of the panel.
     #[test]
     fn the_closed_colour_field_shows_the_default() {
-        let shown = color_row(WireColorPicker::Closed, None);
-        assert!(shown.iter().any(|t| t == "Color"), "{shown:?}");
-        assert!(shown.iter().any(|t| t == "Default"), "{shown:?}");
-        assert!(!shown.iter().any(|t| t == "Preset Colours"), "{shown:?}");
+        let (texts, inputs) = color_row(WireColorPicker::Closed, None, 320.0);
+        assert!(shown(&texts).contains(&"Color"), "{texts:?}");
+        assert_eq!(shown(&inputs), ["Default"], "the placeholder of the box");
+        assert!(!shown(&texts).contains(&"Preset Colours"), "{texts:?}");
+    }
+
+    /// What is typed shows in the box until it is applied.
+    #[test]
+    fn a_typed_draft_shows_in_the_box() {
+        let en = I18n::en_us();
+        let draft = ColorHexDraft {
+            key: KEY,
+            text: "#12".into(),
+            refused: true,
+        };
+        let row = wire_row(WireColorPicker::Closed, None, Some(&draft), &en);
+        let inputs = layout_probe::lay_out_inputs(row, iced::Size::new(320.0, 80.0));
+        assert_eq!(shown(&inputs), ["#12"]);
+    }
+
+    /// Mockup row 46: in a 300 px dock the swatch, the hex box and the
+    /// chevron share the field column, and the box is wide enough for a
+    /// whole code in the mono face.
+    #[test]
+    fn the_swatch_box_and_chevron_fit_a_300_px_dock() {
+        let dock = 300.0;
+        let red = signex_types::theme::Color::new(0xFF, 0xF7, 0xE0, 255);
+        let (texts, inputs) = color_row(WireColorPicker::Closed, Some(red), dock);
+        let label = layout_probe::find(&texts, "Color").bounds;
+        let [field] = inputs.as_slice() else {
+            panic!("one hex box: {inputs:?}");
+        };
+        let swatch = TS.body * FIELD_SWATCH_EM;
+        assert!(
+            field.bounds.x >= label.x + label.width + swatch,
+            "the swatch sits between the label and the box: {field:?}"
+        );
+        let chevron_end = field.bounds.x
+            + field.bounds.width
+            + FACE_SPACING
+            + signex_widgets::chevron::side(TS.body);
+        assert!(chevron_end <= dock, "the chevron ends at {chevron_end}");
+        let code = layout_probe::natural::<PanelMsg>(
+            text(UserText::new("#FFF7E0".to_string()))
+                .font(Font::MONOSPACE)
+                .size(TS.body)
+                .boxed(),
+            "#FFF7E0",
+        );
+        assert!(field.bounds.width >= code.width, "{field:?} holds {code:?}");
     }
 
     /// Mockup row 43: the popover opens under its field, not beside it.
@@ -499,36 +648,49 @@ mod tests {
         ));
     }
 
-    /// A press on a shared colour field sends the message of its owner.
-    #[test]
-    fn a_colour_field_sends_its_owners_toggle() {
-        let en = I18n::en_us();
-        let row = popover_color_row(
+    fn sheet_border_row<'a>(en: &I18n) -> Element<'a, PanelMsg> {
+        popover_color_row(
             PopoverColorRow {
                 label: t!(en, ids::PROPERTIES_SHEET_BORDER),
                 current: None,
                 picker: WireColorPicker::Closed,
+                hex: HexEntry::of(ColorRowKey::ChildSheetBorder(uuid::Uuid::nil()), None),
                 on_toggle: PanelMsg::CancelChildSheetColorPicker,
                 on_advanced: PanelMsg::Noop,
                 on_cancel: PanelMsg::Noop,
                 on_pick: Rc::new(|_| PanelMsg::Noop),
                 on_clear: None,
             },
-            &en,
-        );
-        let pressed =
-            crate::layout_probe::messages_on_click(row, iced::Size::new(320.0, 80.0), "Default");
-        assert!(
-            matches!(pressed.as_slice(), [PanelMsg::CancelChildSheetColorPicker]),
-            "{pressed:?}"
-        );
+            en,
+        )
     }
 
-    /// A wire with its own colour shows the hex code.
+    /// A press on the swatch or the chevron of a shared colour field sends
+    /// the message of its owner; a press in the hex box sends nothing.
+    #[test]
+    fn a_colour_fields_swatch_and_chevron_send_its_owners_toggle() {
+        let en = I18n::en_us();
+        let size = iced::Size::new(320.0, 80.0);
+        let inputs = layout_probe::lay_out_inputs(sheet_border_row(&en), size);
+        let field = layout_probe::find(&inputs, "Default").bounds;
+        let (swatch, chevron) = toggle_points(field);
+        for at in [swatch, chevron] {
+            let pressed = layout_probe::messages_on_click_at(sheet_border_row(&en), size, None, at);
+            assert!(
+                matches!(pressed.as_slice(), [PanelMsg::CancelChildSheetColorPicker]),
+                "{at:?}: {pressed:?}"
+            );
+        }
+        let in_box =
+            layout_probe::messages_on_click_at(sheet_border_row(&en), size, None, field.center());
+        assert!(in_box.is_empty(), "{in_box:?}");
+    }
+
+    /// A wire with its own colour shows the hex code in the box.
     #[test]
     fn a_set_colour_shows_its_hex_code() {
         let red = signex_types::theme::Color::new(0xC0, 0x39, 0x2B, 255);
-        let shown = color_row(WireColorPicker::Closed, Some(red));
-        assert!(shown.iter().any(|t| t == "#C0392B"), "{shown:?}");
+        let (_texts, inputs) = color_row(WireColorPicker::Closed, Some(red), 320.0);
+        assert_eq!(shown(&inputs), ["#C0392B"]);
     }
 }

@@ -743,6 +743,7 @@ impl Signex {
                     builtin_parameters: Vec::new(),
                     drafts: drafts.clone(),
                     numeric_draft: None,
+                    color_hex_draft: None,
                     title_block_sheet: None,
                     collapsed_sections: std::collections::HashSet::new(),
                     part_panel: Default::default(),
