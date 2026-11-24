@@ -32,6 +32,26 @@ fn drop_fields_of_moved_symbols(moves: &mut Vec<(SelectedItem, f64, f64)>) {
     moves.retain(|(item, _, _)| !is_field_of(item, &symbols));
 }
 
+/// Drop the harness entries whose connector is in the same move: the
+/// connector carries them, and a slide on top would reorder them.
+fn drop_entries_of_moved_connectors(
+    moves: &mut Vec<(SelectedItem, f64, f64)>,
+    document: &SchematicSheet,
+) {
+    let connectors: std::collections::HashSet<uuid::Uuid> = moves
+        .iter()
+        .filter(|(item, _, _)| item.kind == SelectedKind::HarnessConnector)
+        .map(|(item, _, _)| item.uuid)
+        .collect();
+    moves.retain(|(item, _, _)| {
+        item.kind != SelectedKind::HarnessEntry
+            || document
+                .harness
+                .entry(item.uuid)
+                .is_none_or(|(connector, _)| !connectors.contains(&connector.uuid))
+    });
+}
+
 /// `items` less the field items whose symbol's turn already turns the text, so
 /// a turn rotates it once (#2094). A user-placed symbol's turn leaves its texts
 /// alone (the autoplacer skips them), so those field items stay.
@@ -181,6 +201,7 @@ impl Engine {
     ) -> Result<CommandResult, EngineError> {
         let mut moves = fold_port_text_moves(&self.document, moves);
         drop_fields_of_moved_symbols(&mut moves);
+        drop_entries_of_moved_connectors(&mut moves, &self.document);
         // A dragged bus carries the entries sitting on it (and, with
         // `keep_wires`, the wire ends on their far side).
         let followers = self.bus_followers(&moves, keep_wires);
@@ -195,6 +216,10 @@ impl Engine {
         // So must the wires, to tell the pairs already meeting end to end
         // (which a merge leaves) and where the move changed any.
         let pre_wires = self.pre_wires();
+        // A moved harness entry slides; with `keep_wires` its wires follow,
+        // and so do the wires of the entries it passes.
+        let entry_points =
+            keep_wires.then(|| super::harness_entry_slide::entry_points(&self.document, &items));
         #[cfg(test)]
         let adjacent = self.full_scan_moves.then(|| self.touching_wire_pairs());
 
@@ -230,7 +255,13 @@ impl Engine {
         // A drag preview's pre-move sheet is the preview's own, shared.
         let preview_sheet = self.preset_sheet.clone();
         let pre_move = preview_sheet.as_deref().unwrap_or(&before);
-        let patch = self.keep_contacts(pre_move, &contacts, &items, &followed, &fold, unfollowed);
+        let mut patch =
+            self.keep_contacts(pre_move, &contacts, &items, &followed, &fold, unfollowed);
+        if let Some(points) = &entry_points
+            && super::harness_entry_slide::follow_entry_wires(&mut self.document, points)
+        {
+            patch |= DocumentPatch::WIRES;
+        }
         let patch_pair = PatchPair {
             semantic: SemanticPatch::SelectionMoved,
             document: patch,
