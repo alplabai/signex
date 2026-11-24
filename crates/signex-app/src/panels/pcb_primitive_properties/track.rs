@@ -11,7 +11,7 @@ use signex_types::pcb_layer::PcbLayer;
 use signex_widgets::text;
 
 use super::drawing::{self, keys};
-use super::linked::{self, linked_row, prefixed_text, two_fields, unit};
+use super::linked::{self, linked_row, mm_point};
 use super::mask::track_mask_section;
 use super::rows::{Look, Section, dropdown, fixed_mm, net_value, stack};
 use super::{PcbPrimitiveMsg, PrimitiveField as F, SP, TS, TrackFacts, net_info};
@@ -110,13 +110,6 @@ fn properties<'a>(look: Look<'a>, f: &'a TrackFacts) -> Option<Element<'a, Panel
     }
     // No Position row: the location is the header's lock and Start / End
     // (mockup row 95).
-    let point = |fx, fy, at: (Option<f64>, Option<f64>)| {
-        two_fields(
-            prefixed_text(look, common, fx, at.0.map(fixed_mm), ids::PCB_PRIM_X),
-            prefixed_text(look, common, fy, at.1.map(fixed_mm), ids::PCB_PRIM_Y),
-            unit(look, ids::PCB_PRIM_UNIT_MM),
-        )
-    };
     s.push(
         common,
         ids::PCB_PRIM_POINT_START,
@@ -125,7 +118,7 @@ fn properties<'a>(look: Look<'a>, f: &'a TrackFacts) -> Option<Element<'a, Panel
             common,
             keys::START,
             ids::PCB_PRIM_POINT_START,
-            point(F::StartX, F::StartY, f.start),
+            mm_point(look, common, (F::StartX, F::StartY), f.start),
         ),
     );
     s.push(
@@ -136,7 +129,7 @@ fn properties<'a>(look: Look<'a>, f: &'a TrackFacts) -> Option<Element<'a, Panel
             common,
             keys::END,
             ids::PCB_PRIM_POINT_END,
-            point(F::EndX, F::EndY, f.end),
+            mm_point(look, common, (F::EndX, F::EndY), f.end),
         ),
     );
     s.push(

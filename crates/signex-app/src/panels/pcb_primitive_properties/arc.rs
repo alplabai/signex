@@ -9,7 +9,9 @@ use signex_engine::pcb::draw::ArcMode;
 use signex_i18n::{MessageId, ids};
 
 use super::drawing::{self, keys};
-use super::linked::{self, Segment, linked_row, prefixed_text, segments, two_fields, unit};
+use super::linked::{
+    self, Segment, linked_row, mm_point, prefixed_text, segments, two_fields, unit,
+};
 use super::rows::{
     Look, Section, any_layer_value, fixed_degrees, fixed_mm, labelled, net_value, stack, with_tip,
 };
@@ -128,23 +130,7 @@ fn properties<'a>(look: Look<'a>, f: &'a ArcFacts) -> Option<Element<'a, PanelMs
             common,
             keys::CENTRE,
             ids::PCB_PRIM_CENTRE,
-            two_fields(
-                prefixed_text(
-                    look,
-                    common,
-                    F::X,
-                    f.center.0.map(fixed_mm),
-                    ids::PCB_PRIM_X,
-                ),
-                prefixed_text(
-                    look,
-                    common,
-                    F::Y,
-                    f.center.1.map(fixed_mm),
-                    ids::PCB_PRIM_Y,
-                ),
-                unit(look, ids::PCB_PRIM_UNIT_MM),
-            ),
+            mm_point(look, common, (F::X, F::Y), f.center),
         ),
     );
     s.push(

@@ -312,6 +312,21 @@ pub(super) fn two_fields<'a>(
         .boxed()
 }
 
+/// A point as one X / Y row in mm, three decimals (mockup rows 95 and 98).
+pub(super) fn mm_point<'a>(
+    look: Look<'a>,
+    common: &PrimitiveCommon,
+    (fx, fy): (PrimitiveField, PrimitiveField),
+    (x, y): (Option<f64>, Option<f64>),
+) -> Element<'a, PanelMsg> {
+    use super::rows::fixed_mm;
+    two_fields(
+        prefixed_text(look, common, fx, x.map(fixed_mm), ids::PCB_PRIM_X),
+        prefixed_text(look, common, fy, y.map(fixed_mm), ids::PCB_PRIM_Y),
+        unit(look, ids::PCB_PRIM_UNIT_MM),
+    )
+}
+
 /// A value and the unit after it.
 pub(super) fn with_unit<'a>(
     value: Element<'a, PanelMsg>,

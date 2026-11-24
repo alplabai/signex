@@ -1,7 +1,8 @@
 //! Mockup rows 95 and 98: Start and End each keep X and Y on one row at the
 //! default 300 px dock, with room for the value, and stack at a narrow
 //! dock. The track panel has no Position row, track and arc lengths read
-//! to three decimals and arc angles to one, Square and Flat ends are faded
+//! to three decimals (the track's mask Expansion too) and arc angles to
+//! one, Square and Flat ends are faded
 //! as disabled, No Class sits where the class link would, and Show More
 //! carries the net's counts on its line.
 
@@ -139,13 +140,32 @@ fn track_lengths_read_to_three_decimals() {
 #[test]
 fn no_class_sits_where_the_class_link_would_and_not_in_a_field() {
     let ctx = context();
-    let f = track();
-    let section = super::net_info::open_section(Look::of(&ctx), &f.common, None)
-        .expect("Net Information shows");
-    let texts = plain(lay_out_texts(section, PANEL));
-    let net = crate::layout_probe::find(&texts, "GND");
-    let class = crate::layout_probe::find(&texts, "No Class");
-    assert_eq!(net.bounds.x, class.bounds.x, "{net:?} {class:?}");
+    let look = Look::of(&ctx);
+    // The track view passes its layer dot; the Class row has none.
+    let dot = Some(iced::Color::WHITE);
+    let class_x = |f: &TrackFacts, shown: &str| {
+        let section =
+            super::net_info::open_section(look, &f.common, dot).expect("Net Information shows");
+        let texts = plain(lay_out_texts(section, PANEL));
+        crate::layout_probe::find(&texts, shown).bounds.x
+    };
+    let unclassed = track();
+    let mut classed = track();
+    classed.common.net_info.class = Some("HighSpeed".into());
+    assert_eq!(
+        class_x(&unclassed, "No Class"),
+        class_x(&classed, "HighSpeed")
+    );
+}
+
+#[test]
+fn the_track_mask_expansion_reads_to_three_decimals() {
+    use signex_types::pcb::MaskExpansion;
+    let ctx = context();
+    let mut f = track();
+    f.solder_mask = Some(MaskExpansion::Manual { mm: 0.05 });
+    let inputs = plain(lay_out_inputs(super::track::view(&ctx, &f), PANEL));
+    assert!(shown(&inputs).contains(&"0.050"), "{inputs:?}");
 }
 
 #[test]
