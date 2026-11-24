@@ -1076,6 +1076,11 @@ panels-messages-pin-dot-refused-one = could not join { $pin } to the wires it en
 panels-messages-pin-dot-refused-many = could not join { $count } pins to wires of two nets they end on: { $names }
 # One entry of that list: a pin and the two nets.
 panels-messages-pin-dot-refused-entry = { $pin } ({ $through }, { $other })
+# "Keep wires" left a connected pin as a plain move: keeping it connected
+# would cross another net.
+panels-messages-pins-not-kept-one = could not keep { $name } connected without crossing another net
+# The same for several pins; $names lists the first few.
+panels-messages-pins-not-kept-many = could not keep { $count } pins connected without crossing another net: { $names }
 # Stands for a net nothing names.
 panels-messages-unnamed-net = an unnamed net
 # The end of a list cut after its first few entries.

@@ -142,7 +142,8 @@ impl Engine {
     }
 
     /// One notice for the connected pins the guard had to leave as a plain
-    /// move: a count and the first few, not a line per pin. Without `notice`
+    /// move, not a line per pin (the host words a count and the first few).
+    /// Without `notice`
     /// (a drag preview) the pins are listed and no notice is written.
     pub(super) fn warn_plain_pins(
         &mut self,
@@ -151,7 +152,6 @@ impl Engine {
         policy: &crate::Policy,
         notice: bool,
     ) {
-        const NAMED: usize = 3;
         let pins: Vec<String> = tips
             .iter()
             .filter(|tip| policy.plain.contains(&tip.old_key()) && guard.was_connected(tip))
@@ -164,22 +164,8 @@ impl Engine {
             self.unkept_pins.extend(pins);
             return;
         }
-        let shown = pins
-            .iter()
-            .take(NAMED)
-            .cloned()
-            .collect::<Vec<_>>()
-            .join(", ");
-        self.warnings.push(match pins.len() {
-            1 => format!("could not keep {shown} connected without crossing another net"),
-            n if n <= NAMED => {
-                format!("could not keep {n} pins connected without crossing another net: {shown}")
-            }
-            n => format!(
-                "could not keep {n} pins connected without crossing another net: {shown} and {} more",
-                n - NAMED
-            ),
-        });
+        self.warnings
+            .push(EngineNotice::PinsNotKept { pins: pins.clone() });
         self.unkept_pins.extend(pins);
     }
 

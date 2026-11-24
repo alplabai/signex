@@ -137,7 +137,7 @@ fn a_mirror_that_would_cross_nets_falls_back_to_the_plain_turn_and_warns() {
     assert!(
         warnings
             .iter()
-            .any(|w| w.contains("could not keep") && w.contains("R1")),
+            .any(|w| w.pins_not_kept().iter().any(|p| p.contains("R1"))),
         "{warnings:?}"
     );
     assert_eq!(engine.document().wires.len(), plain_wires);

@@ -19,6 +19,8 @@
 //! cap) refuses the whole step, in both directions, before any sheet moves.
 //! One Messages line names those sheets; a project is never left half undone.
 
+use signex_i18n_ids::{MessageId, Translatable, ids};
+
 use super::*;
 
 /// The sheets one undo group touched.
@@ -114,14 +116,37 @@ impl UndoGroupSheets {
 
     /// The one line of a step refused because `sheets` cannot move with the
     /// others (#2760).
-    pub(crate) fn out_of_reach(&self, undo: bool, sheets: &[std::path::PathBuf]) -> String {
-        format!(
-            "Cannot {} the {}: {} was saved and closed, or no longer holds this step, so no \
-             sheet was changed.",
-            if undo { "undo" } else { "redo" },
-            self.wide(),
-            file_names(sheets),
-        )
+    pub(crate) fn out_of_reach(&self, undo: bool, sheets: &[std::path::PathBuf]) -> Translatable {
+        let id = if undo {
+            ids::NOTICE_EDIT_GROUP_UNDO_OUT_OF_REACH
+        } else {
+            ids::NOTICE_EDIT_GROUP_REDO_OUT_OF_REACH
+        };
+        self.refusal(id, sheets)
+    }
+
+    /// The line of a redo refused because `dropped` went back to its saved
+    /// state.
+    pub(crate) fn redo_dropped(&self) -> Translatable {
+        self.refusal(ids::NOTICE_EDIT_GROUP_REDO_DROPPED, &self.dropped)
+            .arg("command", self.title())
+    }
+
+    /// The line of a step `blocked` sheets' later steps refuse.
+    pub(crate) fn blocked(&self, undo: bool, blocked: &[std::path::PathBuf]) -> Translatable {
+        if undo {
+            self.refusal(ids::NOTICE_EDIT_GROUP_UNDO_BLOCKED, blocked)
+        } else {
+            self.refusal(ids::NOTICE_EDIT_GROUP_REDO_BLOCKED, blocked)
+                .arg("noun", self.noun())
+        }
+    }
+
+    /// `id` naming this step and `sheets`.
+    fn refusal(&self, id: MessageId, sheets: &[std::path::PathBuf]) -> Translatable {
+        Translatable::new(id)
+            .arg("run", self.wide())
+            .arg("files", file_names(sheets))
     }
 }
 
@@ -278,7 +303,8 @@ impl Signex {
             return false;
         }
         if !skipped.is_empty() {
-            crate::diagnostics::log_warning(recorded.out_of_reach(undo, &skipped));
+            let line = recorded.out_of_reach(undo, &skipped);
+            crate::diagnostics::log_warning(line.render(&signex_i18n::I18n::en_us()));
             return false;
         }
         if sheets.is_empty() && boards.is_empty() {
