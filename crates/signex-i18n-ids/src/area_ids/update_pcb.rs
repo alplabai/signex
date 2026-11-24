@@ -73,4 +73,6 @@ define_ids! {
     PCB_REANNOTATE_ARROW = "pcb-reannotate-arrow";
     PCB_REANNOTATE_FOOTER_NOTE = "pcb-reannotate-footer-note";
     PCB_REANNOTATE_EXECUTE_COUNT = "pcb-reannotate-execute-count";
+    // m7/update-pcb-dialog
+    UPDATE_PCB_VALIDATED = "update-pcb-validated";
 }

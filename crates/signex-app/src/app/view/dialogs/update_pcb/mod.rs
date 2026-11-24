@@ -12,6 +12,7 @@ use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, text};
 
+use self::change_rows::StatusGlyph;
 use super::sizes;
 use crate::app::update_pcb::{BoardStatus, Phase, UpdatePcbState};
 use crate::app::{Message, Signex, UpdatePcbMsg};
@@ -79,12 +80,12 @@ impl Signex {
             "board" => state.board_name()
         )
         .into_string();
-        let header = super::header::graphite_header_closing(
+        // Mockup row 81: the subtitle on a second line, in the taller header.
+        let header = super::header::graphite_header_stacked(
             s(i18n, ids::UPDATE_PCB_TITLE),
-            Some(subtitle),
-            None,
+            subtitle,
             Some(up(UpdatePcbMsg::CloseRequested)),
-            super::header::DIALOG_HEADER_H,
+            super::header::PREFERENCES_HEADER_H,
             tokens,
         );
         let mut body = Column::new().spacing(SP.m).height(Length::Fill);
@@ -269,32 +270,43 @@ pub(super) fn list_frame<'a>(
     .boxed()
 }
 
-/// The last Validate's verdict: a green ✓ or the red reason.
+/// The last Validate's verdict: its glyph, its words and whether it passed
+/// ("Validated: ..." with the tick, mockup row 81, or the reason).
+fn validation_verdict(
+    state: &UpdatePcbState,
+    i18n: &I18n,
+) -> Option<(StatusGlyph, Localized, bool)> {
+    Some(match state.validation.as_ref()? {
+        Ok(()) => (
+            StatusGlyph::Check,
+            t!(i18n, ids::UPDATE_PCB_VALIDATED),
+            true,
+        ),
+        Err(why) => (
+            StatusGlyph::Blocked,
+            t!(i18n, ids::UPDATE_PCB_INVALID, "why" => why.as_str()),
+            false,
+        ),
+    })
+}
+
+/// The last Validate's verdict: green with the tick, or red with the reason.
 fn validation_line<'a>(
     state: &UpdatePcbState,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Option<Element<'a, Message>> {
-    let (glyph, words, ink) = match state.validation.as_ref()? {
-        Ok(()) => (
-            ids::UPDATE_PCB_STATUS_OK,
-            t!(i18n, ids::UPDATE_PCB_VALID),
-            ti(tokens.success),
-        ),
-        Err(why) => (
-            ids::CHANGE_ROW_ICON_BLOCKED,
-            t!(i18n, ids::UPDATE_PCB_INVALID, "why" => why.as_str()),
-            tokens::danger(tokens),
-        ),
+    let (glyph, words, ok) = validation_verdict(state, i18n)?;
+    let ink = if ok {
+        ti(tokens.success)
+    } else {
+        tokens::danger(tokens)
     };
     Some(
-        row![
-            text(t!(i18n, glyph)).size(TS.body).color(ink),
-            text(words).size(TS.body).color(ink),
-        ]
-        .spacing(SP.s)
-        .align_y(Alignment::Center)
-        .boxed(),
+        row![glyph.view(ink), text(words).size(TS.body).color(ink)]
+            .spacing(SP.s)
+            .align_y(Alignment::Center)
+            .boxed(),
     )
 }
 
