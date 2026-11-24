@@ -18,6 +18,8 @@ use signex_renderer::pcb::PcbLayerView;
 use signex_types::part::FootprintSourceRef;
 use signex_types::pcb::PcbBoard;
 
+use crate::app::Board3dShot;
+
 /// Viewport shape assumed until the view reports its size.
 const ASSUMED_VIEWPORT: [f32; 2] = [1200.0, 800.0];
 
@@ -47,10 +49,37 @@ struct FlipTween {
 
 /// A screenshot waiting for a frame drawn without the toolbar. `save_to`
 /// is the PNG to write (`None` copies it); `asked` once the capture ran.
+/// A transparent one is captured twice, over black then over white
+/// (`over_black` holds the first), and the two passes give each pixel's
+/// coverage.
 #[derive(Clone, Debug)]
 struct Capture {
     save_to: Option<PathBuf>,
     asked: bool,
+    transparent: bool,
+    over_black: Option<Arc<Board3dShot>>,
+}
+
+/// The flat backdrop a transparent screenshot's pass is drawn over, in
+/// place of the lighting preset's gradient.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MatteBackdrop {
+    Black,
+    White,
+}
+
+/// What a captured frame completes.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CaptureResult {
+    /// The pass over black was kept; the next frame is captured over white.
+    Pending,
+    /// The screenshot as captured, or nothing when the window had none.
+    Plain(Option<Arc<Board3dShot>>),
+    /// A transparent screenshot's two passes.
+    Matte {
+        black: Arc<Board3dShot>,
+        white: Arc<Board3dShot>,
+    },
 }
 
 /// One board in the 3D view.
@@ -279,7 +308,58 @@ impl Board3dSession {
         self.capture = Some(Capture {
             save_to,
             asked: false,
+            transparent: false,
+            over_black: None,
         });
+    }
+
+    /// Start a screenshot with a transparent backdrop, written to `save_to`
+    /// (mockup row 175): like [`Self::begin_capture`], over black and then
+    /// over white.
+    pub fn begin_transparent_capture(&mut self, save_to: PathBuf) {
+        self.begin_capture(Some(save_to));
+        if let Some(capture) = self.capture.as_mut() {
+            capture.transparent = true;
+        }
+    }
+
+    /// The flat backdrop the view is drawn over while a transparent
+    /// screenshot is taken; `None` draws the lighting preset's.
+    pub fn matte_backdrop(&self) -> Option<MatteBackdrop> {
+        let capture = self.capture.as_ref().filter(|c| c.transparent)?;
+        Some(if capture.over_black.is_some() {
+            MatteBackdrop::White
+        } else {
+            MatteBackdrop::Black
+        })
+    }
+
+    /// A capture came back as `shot`. The pass over black of a transparent
+    /// screenshot is kept and the next frame is captured again; otherwise
+    /// the capture ends, the overlays show again, and what to copy or write
+    /// is returned. A pass that caught nothing ends the capture with
+    /// `Plain(None)`.
+    pub fn finish_pass(&mut self, shot: Option<Arc<Board3dShot>>) -> CaptureResult {
+        if let Some(capture) = self.capture.as_mut().filter(|c| c.transparent)
+            && let Some(caught) = shot.as_ref()
+        {
+            match capture.over_black.take() {
+                None => {
+                    capture.over_black = Some(Arc::clone(caught));
+                    capture.asked = false;
+                    return CaptureResult::Pending;
+                }
+                Some(black) => {
+                    self.capture = None;
+                    return CaptureResult::Matte {
+                        black,
+                        white: Arc::clone(caught),
+                    };
+                }
+            }
+        }
+        self.capture = None;
+        CaptureResult::Plain(shot)
     }
 
     /// The capture a frame should run now, marked as run: `Some(save_to)`.

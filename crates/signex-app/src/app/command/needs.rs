@@ -612,6 +612,10 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "select_board_net"
         | "highlight_board_net"
         | "view_board_3d"
+        // Mockup row 175: the 3D view's Flip, lighting and screenshot.
+        | "flip_board_3d"
+        | "cycle_board_3d_lighting"
+        | "copy_board_3d_screenshot"
         | "next_layer"
         | "prev_layer"
         | "next_signal_layer"

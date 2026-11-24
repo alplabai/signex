@@ -83,10 +83,16 @@ impl Signex {
             Board3dMsg::ScreenshotCopyRequested => {
                 self.edit_board_3d(|session| session.begin_capture(None));
             }
-            Board3dMsg::ScreenshotSaveRequested => return self.ask_board_3d_png(),
+            Board3dMsg::ScreenshotSaveRequested => return self.ask_board_3d_png(false),
             Board3dMsg::ScreenshotSavePicked(path) => {
                 if let Some(path) = path {
                     self.edit_board_3d(|session| session.begin_capture(Some(path)));
+                }
+            }
+            Board3dMsg::ScreenshotTransparentSaveRequested => return self.ask_board_3d_png(true),
+            Board3dMsg::ScreenshotTransparentSavePicked(path) => {
+                if let Some(path) = path {
+                    self.edit_board_3d(|session| session.begin_transparent_capture(path));
                 }
             }
             Board3dMsg::ScreenshotTaken { save_to, shot } => {

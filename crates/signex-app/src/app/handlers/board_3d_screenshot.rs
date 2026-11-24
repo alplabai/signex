@@ -12,11 +12,13 @@ use iced::{Rectangle, Task};
 use signex_i18n::{I18n, ids, t};
 
 use super::board_3d::board_3d_message;
+use crate::app::state::CaptureResult;
 use crate::app::{Board3dMsg, Board3dShot, Message, Signex};
 
 impl Signex {
-    /// Save PNG…: ask where, off the update thread. The menu closes.
-    pub(super) fn ask_board_3d_png(&mut self) -> Task<Message> {
+    /// Save PNG… or Save with transparent backdrop… (`transparent`): ask
+    /// where, off the update thread. The menu closes.
+    pub(super) fn ask_board_3d_png(&mut self, transparent: bool) -> Task<Message> {
         let Some(session) = self.board_3d_in_view_mut() else {
             return Task::none();
         };
@@ -41,7 +43,13 @@ impl Signex {
                 }
                 dialog.save_file().await
             },
-            |path| board_3d_message(Board3dMsg::ScreenshotSavePicked(path)),
+            move |path| {
+                board_3d_message(if transparent {
+                    Board3dMsg::ScreenshotTransparentSavePicked(path)
+                } else {
+                    Board3dMsg::ScreenshotSavePicked(path)
+                })
+            },
         )
     }
 
@@ -71,15 +79,32 @@ impl Signex {
     }
 
     /// The capture came back: the overlays show again, and the shot is
-    /// copied or written.
+    /// copied or written. The first pass of a transparent screenshot waits
+    /// for the second, and the two are matted into one.
     pub(super) fn take_board_3d_shot(
         &mut self,
         save_to: Option<PathBuf>,
         shot: Option<Arc<Board3dShot>>,
     ) -> Task<Message> {
-        if let Some(session) = self.interaction_state.board_3d.as_mut() {
-            session.end_capture();
-        }
+        let result = match self.interaction_state.board_3d.as_mut() {
+            Some(session) => session.finish_pass(shot),
+            None => CaptureResult::Plain(shot),
+        };
+        let shot = match result {
+            CaptureResult::Pending => return Task::none(),
+            CaptureResult::Plain(shot) => shot,
+            CaptureResult::Matte { black, white } => match matte(&black, &white) {
+                Some(matted) => Some(Arc::new(matted)),
+                None => {
+                    if let Some(path) = save_to.as_deref() {
+                        let why =
+                            t!(self.ui_state.i18n, ids::PCB_3D_SHOT_MATTE_RESIZED).into_string();
+                        self.report_board_3d_save(path, Some(why.as_str()));
+                    }
+                    return Task::none();
+                }
+            },
+        };
         let Some(shot) = shot else {
             self.report_board_3d_empty();
             return Task::none();
@@ -204,6 +229,43 @@ pub(crate) fn crop_region(
     })
 }
 
+/// The screenshot with a transparent backdrop, from the view captured over
+/// black and over white: where the passes differ, the backdrop showed
+/// through. `None` when the passes differ in size.
+pub(crate) fn matte(black: &Board3dShot, white: &Board3dShot) -> Option<Board3dShot> {
+    if black.size != white.size || black.rgba.len() != white.rgba.len() {
+        return None;
+    }
+    let rgba = black
+        .rgba
+        .chunks_exact(4)
+        .zip(white.rgba.chunks_exact(4))
+        .flat_map(|(b, w)| matte_pixel(b, w))
+        .collect();
+    Some(Board3dShot {
+        rgba,
+        size: black.size,
+    })
+}
+
+/// One pixel of [`matte`], straight alpha: its coverage is one less the
+/// share of white that came through, its colour the black pass divided by
+/// that coverage.
+fn matte_pixel(black: &[u8], white: &[u8]) -> [u8; 4] {
+    let through = [0, 1, 2]
+        .map(|c| f32::from(white[c].saturating_sub(black[c])))
+        .iter()
+        .sum::<f32>()
+        / 3.0;
+    let alpha = 255.0 - through;
+    if alpha < 0.5 {
+        return [0, 0, 0, 0];
+    }
+    let [r, g, b] =
+        [0, 1, 2].map(|c| (f32::from(black[c]) * 255.0 / alpha).round().min(255.0) as u8);
+    [r, g, b, alpha.round() as u8]
+}
+
 /// `shot` as PNG bytes.
 pub(crate) fn encode_png(shot: &Board3dShot) -> Result<Vec<u8>, String> {
     use image::ImageEncoder as _;
@@ -288,5 +350,93 @@ mod tests {
         let read = image::load_from_memory(&bytes).expect("decodes").to_rgba8();
         assert_eq!(read.dimensions(), (2, 1));
         assert_eq!(read.into_raw(), shot.rgba);
+    }
+
+    fn row_shot(pixels: &[[u8; 4]]) -> Board3dShot {
+        Board3dShot {
+            rgba: pixels.concat(),
+            size: [u32::try_from(pixels.len()).expect("a short row"), 1],
+        }
+    }
+
+    /// Mockup row 175, Save with transparent backdrop: a pixel the same
+    /// over black and white is the board, kept opaque; one that is black
+    /// over black and white over white is backdrop, left clear; an edge
+    /// half over the backdrop keeps its colour at half coverage.
+    #[test]
+    fn the_two_passes_matte_into_coverage_and_colour() {
+        let black = row_shot(&[[10, 20, 30, 255], [0, 0, 0, 255], [128, 0, 0, 255]]);
+        let white = row_shot(&[
+            [10, 20, 30, 255],
+            [255, 255, 255, 255],
+            [255, 127, 127, 255],
+        ]);
+        let matted = matte(&black, &white).expect("same size");
+        assert_eq!(matted.size, [3, 1]);
+        assert_eq!(
+            matted.rgba,
+            [[10, 20, 30, 255], [0, 0, 0, 0], [255, 0, 0, 128]].concat()
+        );
+    }
+
+    /// The view changed size between the two passes: nothing is matted.
+    #[test]
+    fn passes_of_different_sizes_do_not_matte() {
+        let black = row_shot(&[[0, 0, 0, 255]]);
+        let white = row_shot(&[[255, 255, 255, 255], [255, 255, 255, 255]]);
+        assert_eq!(matte(&black, &white), None);
+    }
+
+    /// A transparent save captures the view over black, then over white on
+    /// the next frame with the chrome still hidden, and hands back both
+    /// passes; the lighting backdrop shows again after.
+    #[test]
+    fn a_transparent_save_captures_over_black_then_over_white() {
+        use crate::app::state::{Board3dSession, MatteBackdrop};
+
+        let target = PathBuf::from("board-3d.png");
+        let mut session = Board3dSession::open(Path::new("board.snxpcb"));
+        session.begin_transparent_capture(target.clone());
+        assert_eq!(session.matte_backdrop(), Some(MatteBackdrop::Black));
+        assert_eq!(session.take_capture(), Some(Some(target.clone())));
+
+        let black = Arc::new(row_shot(&[[0, 0, 0, 255]]));
+        assert_eq!(
+            session.finish_pass(Some(Arc::clone(&black))),
+            CaptureResult::Pending
+        );
+        assert!(session.is_capturing(), "the chrome stays hidden");
+        assert!(session.needs_frames(), "the next frame is captured");
+        assert_eq!(session.matte_backdrop(), Some(MatteBackdrop::White));
+        assert_eq!(session.take_capture(), Some(Some(target)));
+
+        let white = Arc::new(row_shot(&[[255, 255, 255, 255]]));
+        assert_eq!(
+            session.finish_pass(Some(Arc::clone(&white))),
+            CaptureResult::Matte { black, white }
+        );
+        assert!(!session.is_capturing());
+        assert_eq!(session.matte_backdrop(), None);
+    }
+
+    /// Copy and Save PNG… draw the lighting backdrop and end on their one
+    /// shot; a transparent pass that caught nothing ends the capture too.
+    #[test]
+    fn a_plain_capture_and_an_empty_pass_end_on_their_shot() {
+        use crate::app::state::Board3dSession;
+
+        let mut session = Board3dSession::open(Path::new("board.snxpcb"));
+        session.begin_capture(None);
+        assert_eq!(session.matte_backdrop(), None);
+        let shot = Arc::new(row_shot(&[[1, 2, 3, 255]]));
+        assert_eq!(
+            session.finish_pass(Some(Arc::clone(&shot))),
+            CaptureResult::Plain(Some(shot))
+        );
+        assert!(!session.is_capturing());
+
+        session.begin_transparent_capture(PathBuf::from("board-3d.png"));
+        assert_eq!(session.finish_pass(None), CaptureResult::Plain(None));
+        assert!(!session.is_capturing());
     }
 }

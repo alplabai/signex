@@ -612,3 +612,9 @@ pcb-reannotate-show-in-order = Show already in order
 pcb-reannotate-arrow = →
 pcb-reannotate-footer-note = One undo step; save the board to keep it.
 pcb-reannotate-execute-count = Execute { $count }
+# board-3d-keys-screenshot
+# The screenshot menu's transparent save (mockup row 175), and why it was not
+# written when the view changed size between its two captures ($why of
+# pcb-3d-shot-save-failed).
+pcb-3d-shot-save-transparent = Save with transparent backdrop…
+pcb-3d-shot-matte-resized = the 3D view changed size while it was captured

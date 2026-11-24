@@ -698,5 +698,9 @@ define_ids! {
         CMD_MENU_REMOVE_FROM_UNION = "cmd-menu-remove-from-union";
         CMD_BREAK_UNION = "cmd-break-union";
         CMD_MENU_BREAK_UNION = "cmd-menu-break-union";
+        // board-3d-keys-screenshot
+        CMD_FLIP_BOARD_3D = "cmd-flip-board-3d";
+        CMD_CYCLE_BOARD_3D_LIGHTING = "cmd-cycle-board-3d-lighting";
+        CMD_COPY_BOARD_3D_SCREENSHOT = "cmd-copy-board-3d-screenshot";
     }
 }

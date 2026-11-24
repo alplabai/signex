@@ -12,7 +12,7 @@ use iced::widget::button::{Status, Style as ButtonStyle};
 use iced::widget::{column, container, mouse_area, row, slider};
 use iced::{Alignment, Background, Border, Element, Font, Length, Padding, Theme, Widget as _};
 use signex_gfx::camera3d::{LightingPreset, ViewSide};
-use signex_i18n::{I18n, Translatable, ids, t};
+use signex_i18n::{I18n, MessageId, Translatable, ids, t};
 use signex_renderer::board3d::{BoardScene3d, Face};
 use signex_types::coord::Unit;
 use signex_types::pcb::{PadType, PcbBoard};
@@ -97,23 +97,35 @@ fn tick<'a>(
         .boxed()
 }
 
-/// The screenshot menu: Copy to clipboard and Save PNG…. The key column
-/// stays empty until the view has its own keys.
-pub(super) fn shot_menu<'a>(i18n: &I18n, look: &Look) -> Element<'a, Message> {
-    let items = column![
-        menu_item(
+/// The screenshot menu's rows, in order (mockup row 175): Copy to
+/// clipboard, Save PNG… and Save with transparent backdrop….
+fn shot_menu_rows() -> [(Icon, MessageId, Board3dMsg); 3] {
+    [
+        (
             Icon::Camera,
-            t!(i18n, ids::PCB_3D_SHOT_COPY),
+            ids::PCB_3D_SHOT_COPY,
             Board3dMsg::ScreenshotCopyRequested,
-            look,
         ),
-        menu_item(
+        (
             Icon::Download,
-            t!(i18n, ids::PCB_3D_SHOT_SAVE),
+            ids::PCB_3D_SHOT_SAVE,
             Board3dMsg::ScreenshotSaveRequested,
-            look,
         ),
-    ];
+        (
+            Icon::Download,
+            ids::PCB_3D_SHOT_SAVE_TRANSPARENT,
+            Board3dMsg::ScreenshotTransparentSaveRequested,
+        ),
+    ]
+}
+
+/// The screenshot menu, one row per [`shot_menu_rows`]. The key column
+/// stays empty: the menu is drawn without the keymap.
+pub(super) fn shot_menu<'a>(i18n: &I18n, look: &Look) -> Element<'a, Message> {
+    let mut items = column![];
+    for (glyph, name, press) in shot_menu_rows() {
+        items = items.push(menu_item(glyph, t!(i18n, name), press, look));
+    }
     popover(items.boxed(), M.menu_pad, look)
 }
 
@@ -459,5 +471,31 @@ mod tests {
         assert!(many.contains("C1, C2, C3, C4"), "{many}");
         assert!(many.contains("more"), "{many}");
         assert!(!many.contains("C5"), "{many}");
+    }
+
+    /// Mockup row 175: the screenshot menu lists Copy to clipboard, Save
+    /// PNG… and Save with transparent backdrop…, each sending its own
+    /// request.
+    #[test]
+    fn the_screenshot_menu_offers_a_transparent_save() {
+        let i18n = I18n::en_us_ref();
+        let rows: Vec<(String, Board3dMsg)> = shot_menu_rows()
+            .into_iter()
+            .map(|(_, name, press)| (t!(i18n, name).into_string(), press))
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                (
+                    "Copy to clipboard".to_owned(),
+                    Board3dMsg::ScreenshotCopyRequested
+                ),
+                ("Save PNG…".to_owned(), Board3dMsg::ScreenshotSaveRequested),
+                (
+                    "Save with transparent backdrop…".to_owned(),
+                    Board3dMsg::ScreenshotTransparentSaveRequested
+                ),
+            ]
+        );
     }
 }

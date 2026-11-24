@@ -640,7 +640,8 @@ Light and Dark, as the board palette does (DECISIONS, the 2026-11-19 board 3D
 view toolbar row).
 
 **Screenshot**: a click on the camera copies the view to the clipboard;
-the chevron's menu has Copy to clipboard and Save PNG…. The toolbar,
+the chevron's menu has Copy to clipboard, Save PNG… and Save with
+transparent backdrop…. The toolbar,
 popovers, toasts, status pill, hint and view cube hide, the next frame is
 captured from the main window (`iced::window::screenshot`) and cropped to
 the view in physical pixels, and the chrome shows again. Save PNG… asks for
@@ -648,6 +649,20 @@ the file first (the file-picker port) and writes the PNG atomically
 (temporary file renamed over it) off the update thread. Messages says
 whether the copy or the save worked, and why one failed (the clipboard's
 reason, or the write error).
+
+**Transparent screenshot** (mockup row 175): Save with transparent
+backdrop… captures the view twice, on two frames with the chrome hidden,
+first over flat black and then over flat white in place of the lighting
+backdrop. A pixel the same in both is opaque; where white came through, its
+share is the backdrop's, so the coverage is one less that share and the
+colour is the black pass divided by the coverage (straight alpha). The PNG
+is written like Save PNG…; when the view changed size between the passes
+nothing is written and Messages says why.
+
+**Keys** (mockup row 175): on a board `H` is the next lighting preset and
+`Mod+Shift+C` copies a screenshot, in both built-in profiles. The commands
+(`cycle_board_3d_lighting`, `copy_board_3d_screenshot`, and `flip_board_3d`
+for Flip, which has no key) do nothing while the board is flat.
 
 **Model-unread toast**: a part whose model could not be read adds its
 `pcb-3d-model-unread` line to Messages and also shows it as a dismissible

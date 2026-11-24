@@ -19,7 +19,7 @@ use signex_i18n::{I18n, MessageId, ids};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
-use crate::app::state::{Board3dSession, BuiltScene};
+use crate::app::state::{Board3dSession, BuiltScene, MatteBackdrop};
 use crate::app::{Board3dMsg, Message, PcbMsg, Signex};
 use crate::board_3d_shader::Board3dProgram;
 use crate::pcb_canvas::layer_style::board_3d_highlight;
@@ -255,8 +255,13 @@ impl Signex {
             lighting: session.lighting,
         };
         // The backdrop follows the lighting preset only, the same in both
-        // themes (DECISIONS, the 2026-11-19 board 3D view toolbar row).
-        let fill = backdrop_fill(session.lighting, 1.0);
+        // themes (DECISIONS, the 2026-11-19 board 3D view toolbar row). A
+        // transparent screenshot draws its passes over black and white.
+        let fill = match session.matte_backdrop() {
+            Some(MatteBackdrop::Black) => Background::Color(iced::Color::BLACK),
+            Some(MatteBackdrop::White) => Background::Color(iced::Color::WHITE),
+            None => backdrop_fill(session.lighting, 1.0),
+        };
         let backdrop = container(Space::new())
             .width(Length::Fill)
             .height(Length::Fill)
