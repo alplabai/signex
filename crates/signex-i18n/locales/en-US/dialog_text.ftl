@@ -550,7 +550,8 @@ dialog-reprefix-skip-hand-edited =
 
 # net-color-clear-toast
 # Net colour palette toast after Clear all colours. $count is how many
-# labelled nets lost their colour (a whole number).
+# labelled nets lost their colour (a whole number), as the palette counts
+# its rows; colours on nets with no label are cleared too but not counted.
 dialog-net-color-toast-cleared =
     { $count ->
         [one] Cleared { $count } net colour

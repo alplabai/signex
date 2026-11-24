@@ -1,11 +1,12 @@
 //! #2528 — the F5 palette's rows (coloured first, filtered) and the custom
 //! picker's Hex field.
 
-use super::net_color_driver::{activate, add_sheet_with, color, colour_of};
+use super::net_color_driver::{activate, add_sheet_with, color, colour_of, paint};
 use super::net_color_palette::{hex_of, net_label_names, palette_rows, parse_hex};
+use crate::app::state::NetColorsCleared;
 use crate::app::{Message, NetColorMsg, Signex};
 use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Wire};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// A wire per net, each with its label at the wire's left end, and one
 /// label on no wire.
@@ -267,4 +268,142 @@ fn an_applied_palette_colour_is_recorded() {
         color: Some(color(120)),
     }));
     assert_eq!(app.ui_state.net_colors.get("A"), Some(&color(120)));
+}
+
+// Mockup row 71: Clear all colours and a chooser's Clear show a toast with
+// what was cleared and Undo.
+
+fn wires_of(app: &Signex, path: &Path) -> Vec<uuid::Uuid> {
+    let sheet = app.document_state.engines[path].document();
+    sheet.wires.iter().map(|w| w.uuid).collect()
+}
+
+fn send(app: &mut Signex, msg: NetColorMsg) {
+    let _ = app.update(Message::NetColor(msg));
+}
+
+fn cleared(app: &Signex) -> Option<NetColorsCleared> {
+    let toast = app.ui_state.net_color_palette.toast.as_ref();
+    toast.map(|t| t.cleared.clone())
+}
+
+fn clear_net(app: &mut Signex, net: &str) {
+    send(
+        app,
+        NetColorMsg::Set {
+            net: net.into(),
+            color: None,
+        },
+    );
+}
+
+#[test]
+fn clear_all_counts_the_nets_and_its_undo_brings_them_back() {
+    let (mut app, path) = app_with_nets(&["A", "B", "C"]);
+    let wires = wires_of(&app, &path);
+    paint(&mut app, &[wires[0]], color(10));
+    paint(&mut app, &[wires[1]], color(20));
+
+    send(&mut app, NetColorMsg::ClearedAll);
+    assert_eq!(cleared(&app), Some(NetColorsCleared::Nets(2)));
+    let toast = app.ui_state.net_color_palette.toast.clone();
+    assert_eq!(toast.map(|t| t.sheet), Some(path));
+    assert!(app.net_color_toast_can_undo());
+    assert_eq!(colour_of(&app, wires[0]), None);
+
+    send(&mut app, NetColorMsg::ToastUndone);
+    assert_eq!(colour_of(&app, wires[0]), Some(color(10)));
+    assert_eq!(colour_of(&app, wires[1]), Some(color(20)));
+    assert_eq!(cleared(&app), None, "the toast goes with its Undo");
+}
+
+#[test]
+fn a_chooser_clear_names_the_net_and_its_undo_brings_it_back() {
+    let (mut app, path) = app_with_nets(&["A", "B"]);
+    let wires = wires_of(&app, &path);
+    paint(&mut app, &[wires[0]], color(10));
+
+    clear_net(&mut app, "A");
+    assert_eq!(colour_of(&app, wires[0]), None);
+    assert_eq!(cleared(&app), Some(NetColorsCleared::Net("A".into())));
+
+    send(&mut app, NetColorMsg::ToastUndone);
+    assert_eq!(colour_of(&app, wires[0]), Some(color(10)));
+}
+
+#[test]
+fn clear_all_of_unlabelled_nets_says_the_sheet_was_cleared() {
+    let (mut app, _task) = Signex::new();
+    let path = PathBuf::from("unlabelled.snxsch");
+    let mut sheet = sheet_with_nets(&["A"]);
+    let unlabelled = uuid::Uuid::now_v7();
+    sheet.wires.push(Wire {
+        uuid: unlabelled,
+        start: Point::new(0.0, 30.0),
+        end: Point::new(10.0, 30.0),
+        ..Default::default()
+    });
+    add_sheet_with(&mut app, &path, sheet);
+    paint(&mut app, &[unlabelled], color(30));
+
+    send(&mut app, NetColorMsg::ClearedAll);
+    assert_eq!(colour_of(&app, unlabelled), None);
+    assert_eq!(cleared(&app), Some(NetColorsCleared::Unlabelled));
+}
+
+#[test]
+fn nothing_cleared_shows_no_toast() {
+    let (mut app, _path) = app_with_nets(&["A"]);
+    send(&mut app, NetColorMsg::ClearedAll);
+    assert_eq!(cleared(&app), None, "a clean sheet");
+    clear_net(&mut app, "A");
+    assert_eq!(cleared(&app), None, "a net with no colour");
+    send(
+        &mut app,
+        NetColorMsg::Set {
+            net: "A".into(),
+            color: Some(color(40)),
+        },
+    );
+    assert_eq!(cleared(&app), None, "a colour pick is no clear");
+}
+
+/// The toast's Undo takes back its clear only: after a newer edit it is
+/// greyed, and a press undoes nothing.
+#[test]
+fn the_toast_undo_leaves_a_newer_edit_alone() {
+    let (mut app, path) = app_with_nets(&["A", "B"]);
+    let wires = wires_of(&app, &path);
+    paint(&mut app, &[wires[0]], color(10));
+    send(&mut app, NetColorMsg::ClearedAll);
+    paint(&mut app, &[wires[1]], color(50));
+    assert!(!app.net_color_toast_can_undo());
+
+    send(&mut app, NetColorMsg::ToastUndone);
+    assert_eq!(colour_of(&app, wires[1]), Some(color(50)));
+    assert_eq!(colour_of(&app, wires[0]), None);
+    assert_eq!(cleared(&app), None);
+}
+
+/// An older toast's timeout leaves the newer toast up.
+#[test]
+fn only_the_shown_toasts_timeout_hides_it() {
+    let (mut app, path) = app_with_nets(&["A", "B"]);
+    let wires = wires_of(&app, &path);
+    let revision = |app: &Signex| {
+        let toast = app.ui_state.net_color_palette.toast.as_ref();
+        toast.expect("a toast").revision
+    };
+    paint(&mut app, &[wires[0]], color(10));
+    clear_net(&mut app, "A");
+    let first = revision(&app);
+    paint(&mut app, &[wires[1]], color(20));
+    clear_net(&mut app, "B");
+    let second = revision(&app);
+    assert_ne!(first, second);
+
+    send(&mut app, NetColorMsg::ToastExpired(first));
+    assert_eq!(cleared(&app), Some(NetColorsCleared::Net("B".into())));
+    send(&mut app, NetColorMsg::ToastExpired(second));
+    assert_eq!(cleared(&app), None);
 }

@@ -831,7 +831,10 @@ picker (swatches, R / G / B, **Hex**, and the old and new colour side by side).
 **Use Color** colours the net on the sheet the picker was opened from; if
 another sheet is active by then, nothing changes and the Messages panel says
 so. **Clear all colours** at the foot of the palette clears the active sheet
-only. Each colour change is one **Undo** step and is saved with the sheet. A
+only. After **Clear** or **Clear all colours**, a toast in the palette says
+what was cleared; its **Undo** takes the clear back while it is still the
+sheet's newest edit, and the toast closes after a few seconds. Each colour
+change is one **Undo** step and is saved with the sheet. A
 sheet written by a newer Signex is read-only in this build and keeps its
 colours.
 

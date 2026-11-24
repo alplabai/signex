@@ -3,7 +3,7 @@
 //! first), a chooser floating beside the clicked row, and the Clear all
 //! footer. The window's title bar carries the title and the net count.
 
-use iced::widget::{Space, Widget, column, container, row, scrollable, stack};
+use iced::widget::{Space, Widget, column, container, row, scrollable, stack, svg};
 use iced::{Alignment, Color, Element, Length, Theme};
 use signex_i18n::{Arg, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
@@ -21,6 +21,8 @@ use crate::styles::{
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
+/// Any theme loads the monochrome check; its style tints it.
+const GLYPH_THEME: signex_types::theme::ThemeId = signex_types::theme::ThemeId::GraphiteDark;
 
 /// The chooser card: its colours on one line, inside its padding and border.
 const CHOOSER_WIDTH: f32 = CHOOSER_COLORS.len() as f32 * SWATCH
@@ -34,6 +36,19 @@ fn net_message(msg: NetColorMsg) -> Message {
 
 fn to_iced(c: signex_types::theme::Color) -> Color {
     Color::from_rgb8(c.r, c.g, c.b)
+}
+
+/// What the Clear toast says was cleared.
+fn toast_said(i18n: &signex_i18n::I18n, cleared: &NetColorsCleared) -> signex_i18n::Localized {
+    match cleared {
+        NetColorsCleared::Nets(count) => {
+            t!(i18n, ids::DIALOG_NET_COLOR_TOAST_CLEARED, "count" => *count)
+        }
+        NetColorsCleared::Unlabelled => t!(i18n, ids::DIALOG_NET_COLOR_TOAST_CLEARED_UNLABELLED),
+        NetColorsCleared::Net(net) => {
+            t!(i18n, ids::DIALOG_NET_COLOR_TOAST_CLEARED_NET, "net" => net.as_str())
+        }
+    }
 }
 
 impl Signex {
@@ -112,10 +127,19 @@ impl Signex {
             .style(crate::styles::modal_card(tokens))
             .clip(true)
             .boxed();
-        let Some(toast) = state.toast.as_ref() else {
-            return card;
-        };
-        // The toast floats over the foot of the list, above the footer.
+        match state.toast.as_ref() {
+            Some(toast) => self.with_clear_toast(card, toast),
+            None => card,
+        }
+    }
+
+    /// `card` with the Clear toast floating over the foot of its list, above
+    /// the footer.
+    fn with_clear_toast<'a>(
+        &'a self,
+        card: Element<'a, Message>,
+        toast: &NetColorToast,
+    ) -> Element<'a, Message> {
         let layer = container(self.clear_toast(toast))
             .width(Length::Fill)
             .height(Length::Fill)
@@ -130,22 +154,22 @@ impl Signex {
         stack(vec![card, layer]).boxed()
     }
 
-    /// The toast after a Clear (mockup row 71): what was cleared, and Undo
-    /// with its shortcut while the clear is still the sheet's newest edit.
+    /// The toast after a Clear (mockup row 71): a check, what was cleared,
+    /// and Undo with its shortcut while the clear is still the sheet's
+    /// newest edit.
     fn clear_toast(&self, toast: &NetColorToast) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
-        let said = match &toast.cleared {
-            NetColorsCleared::Nets(count) => {
-                t!(i18n, ids::DIALOG_NET_COLOR_TOAST_CLEARED, "count" => *count)
-            }
-            NetColorsCleared::Unlabelled => {
-                t!(i18n, ids::DIALOG_NET_COLOR_TOAST_CLEARED_UNLABELLED)
-            }
-            NetColorsCleared::Net(net) => {
-                t!(i18n, ids::DIALOG_NET_COLOR_TOAST_CLEARED_NET, "net" => net.as_str())
-            }
-        };
+        let check_c = ti(tokens.success);
+        // A monochrome glyph: the style below tints it.
+        let check = svg(crate::icons::icon_chrome_check(GLYPH_THEME))
+            .width(TS.body)
+            .height(TS.body)
+            .style(move |_: &Theme, _| svg::Style {
+                color: Some(check_c),
+                ..Default::default()
+            })
+            .boxed();
         let undo = dialog_button(
             t!(
                 i18n,
@@ -158,7 +182,8 @@ impl Signex {
             tokens,
         );
         let line = row![
-            text(said)
+            check,
+            text(toast_said(i18n, &toast.cleared))
                 .size(TS.caption)
                 .color(ti(tokens.text))
                 .width(Length::Fill)
