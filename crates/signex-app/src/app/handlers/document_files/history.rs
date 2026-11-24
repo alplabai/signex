@@ -776,6 +776,7 @@ fn restore_kind_of(kind: &crate::app::TabKind) -> Option<RestoreKind> {
     match kind {
         crate::app::TabKind::Schematic => Some(RestoreKind::Schematic),
         crate::app::TabKind::Pcb => Some(RestoreKind::Pcb),
+        crate::app::TabKind::PolygonManager => None,
         crate::app::TabKind::FootprintEditor(_) => Some(RestoreKind::Footprint),
         crate::app::TabKind::SymbolEditor(_) => Some(RestoreKind::Symbol),
         crate::app::TabKind::LibraryBrowser(_) | crate::app::TabKind::ComponentEditor(_) => {
@@ -783,8 +784,7 @@ fn restore_kind_of(kind: &crate::app::TabKind) -> Option<RestoreKind> {
         }
         crate::app::TabKind::Project(_)
         | crate::app::TabKind::Rules(_)
-        | crate::app::TabKind::LayerStack
-        | crate::app::TabKind::PolygonManager => None,
+        | crate::app::TabKind::LayerStack => None,
     }
 }
 

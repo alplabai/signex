@@ -21,10 +21,10 @@ use crate::app::{LoadedProject, Signex, TabKind};
 /// library tab. A new page kind adds its arm here.
 pub(crate) fn page_name(kind: &TabKind) -> Option<MessageId> {
     match kind {
+        TabKind::PolygonManager => Some(ids::POLYGON_MANAGER_PAGE),
         TabKind::Project(_) => Some(ids::CHROME_PAGE_TAB_PROJECT),
         TabKind::Rules(_) => Some(ids::RULES_TAB_TITLE),
         TabKind::LayerStack => Some(ids::PCB_STACK_TITLE),
-        TabKind::PolygonManager => Some(ids::POLYGON_MANAGER_PAGE),
         TabKind::Schematic
         | TabKind::Pcb
         | TabKind::ComponentEditor(_)

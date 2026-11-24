@@ -57,13 +57,13 @@ pub enum TabKind {
     /// in the project's [`crate::app::ProjectTabState::rules`];
     /// `TabInfo.path` is the `.snxprj` path, which Save writes.
     Rules(super::state::ProjectId),
+    /// A board's Polygon Manager as a page tab (mockup row 178), kept like
+    /// the Layer Stack tab: the board's path, after the board's tab.
+    PolygonManager,
     /// A board's Layer Stack as a page tab (mockup row 105). `TabInfo.path`
     /// is the board's path, which Save writes; the board stays in its own
     /// PCB tab, and this tab always sits after it (`app/layer_stack_tab`).
     LayerStack,
-    /// A board's Polygon Manager as a page tab (mockup row 178), kept like
-    /// the Layer Stack tab: the board's path, after the board's tab.
-    PolygonManager,
 }
 
 impl TabKind {
@@ -119,11 +119,6 @@ impl TabKind {
         }
     }
 
-    /// A board's Layer Stack tab.
-    pub fn is_layer_stack(&self) -> bool {
-        matches!(self, TabKind::LayerStack)
-    }
-
     /// A board's Polygon Manager tab.
     pub fn is_polygon_manager(&self) -> bool {
         matches!(self, TabKind::PolygonManager)
@@ -135,12 +130,21 @@ impl TabKind {
         matches!(self, TabKind::LayerStack | TabKind::PolygonManager)
     }
 
-    /// A page tab, not a drawing: the Project, Rules, Layer Stack and
-    /// Polygon Manager tabs. None is undocked or restored from History.
+    /// A board's Layer Stack tab.
+    pub fn is_layer_stack(&self) -> bool {
+        matches!(self, TabKind::LayerStack)
+    }
+
+    /// A page tab, not a drawing: the Project, Rules and Layer Stack tabs.
+    /// None is undocked or restored from History.
     pub fn is_project_page(&self) -> bool {
+        // Mockup row 178: the Polygon Manager is a page of its board.
+        if self.is_polygon_manager() {
+            return true;
+        }
         matches!(
             self,
-            TabKind::Project(_) | TabKind::Rules(_) | TabKind::LayerStack | TabKind::PolygonManager
+            TabKind::Project(_) | TabKind::Rules(_) | TabKind::LayerStack
         )
     }
 }

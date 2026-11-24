@@ -46,6 +46,7 @@ pub fn kind_glyph(kind: &TabKind) -> signex_i18n::MessageId {
     match kind {
         TabKind::Schematic => ids::PANELS_TAB_KIND_SCHEMATIC,
         TabKind::Pcb => ids::PANELS_TAB_KIND_PCB,
+        TabKind::PolygonManager => ids::POLYGON_MANAGER_TAB_KIND,
         TabKind::SymbolEditor(_) => ids::PANELS_TAB_KIND_SYMBOL,
         TabKind::FootprintEditor(_) => ids::PANELS_TAB_KIND_FOOTPRINT,
         TabKind::LibraryBrowser(_) => ids::PANELS_TAB_KIND_LIBRARY,
@@ -53,7 +54,6 @@ pub fn kind_glyph(kind: &TabKind) -> signex_i18n::MessageId {
         TabKind::Project(_) => ids::PANELS_TAB_KIND_PROJECT,
         TabKind::Rules(_) => ids::RULES_TAB_KIND,
         TabKind::LayerStack => ids::PCB_STACK_TAB_KIND,
-        TabKind::PolygonManager => ids::POLYGON_MANAGER_TAB_KIND,
     }
 }
 
