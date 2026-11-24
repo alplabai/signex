@@ -153,6 +153,23 @@ fn a_width_preset_hands_back_its_preset() {
     assert_eq!(picked, [WireWidthPreset::Large]);
 }
 
+/// Mockup row 41: the net label tool keeps B / I / U / T beside Font Size,
+/// disabled until text styles are stored, so a press is no button press (the
+/// live-looking buttons used to send `Noop`).
+#[test]
+fn the_text_style_buttons_are_disabled() {
+    let ctx = form(PrePlacementKind::NetLabel, "Net Label");
+    let shown = texts(&ctx);
+    for glyph in ["B", "I", "U", "T"] {
+        assert!(has(&shown, glyph), "{glyph:?} missing from {shown:#?}");
+        let sent = messages_on_click(view_panel(PanelKind::Properties, &ctx), WINDOW, glyph);
+        assert!(
+            !sent.iter().any(|m| matches!(m, PanelMsg::Noop)),
+            "{glyph}: {sent:?}"
+        );
+    }
+}
+
 #[test]
 fn the_ok_button_confirms() {
     let ctx = form(PrePlacementKind::Other, "Junction");

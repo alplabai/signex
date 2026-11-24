@@ -1,7 +1,8 @@
-//! SCH Filter's Presets section (Graphite mockup #56): a chip per saved preset (a click
+//! The Filter panel's Presets section on a schematic tab (Graphite mockup #56,
+//! moved into Filter by mockup rows 40 and 55): a chip per saved preset (a click
 //! applies it and makes it the one edited below), Save current, and the
 //! edited preset's name, Delete and kinds. The list is the one the Active
-//! Bar dropdown and Properties show (`active_bar::presets`).
+//! Bar dropdown shows (`active_bar::presets`).
 
 use iced::widget::{Column, Row, container};
 use iced::{Alignment, Element, Length, Widget as _};

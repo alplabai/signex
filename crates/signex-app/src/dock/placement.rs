@@ -155,7 +155,6 @@ impl PanelPosition {
             | PanelKind::Properties
             | PanelKind::Messages
             | PanelKind::Filter
-            | PanelKind::SchFilter
             | PanelKind::ObjectList
             | PanelKind::Drc
             | PanelKind::LayerStack

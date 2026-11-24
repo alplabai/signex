@@ -1,6 +1,6 @@
 //! Generic Properties-panel form-field row builders — label/value rows,
 //! integer/mm/pick/check editors, grid rows, the canvas-font popup, and
-//! the B/I/U/T font-style row — shared by every Properties surface.
+//! the disabled B/I/U/T font-style row — shared by every Properties surface.
 //! Moved verbatim from the former single-file `properties_parameters`
 //! module.
 
@@ -480,10 +480,12 @@ pub fn form_label<'a, M: 'a>(label: signex_i18n::Localized) -> Element<'a, M> {
     .boxed()
 }
 
-/// Altium-style B/I/U/T (Bold / Italic / Underline / Strikethrough) row.
+/// The B/I/U/T (Bold / Italic / Underline / Strikethrough) row. Placed text
+/// does not store a text style yet, so the buttons are drawn disabled in the
+/// muted ink and send nothing (mockup row 41).
 pub fn font_style_row<'a>(
-    _label_c: Color,
-    primary: Color,
+    muted: Color,
+    _primary: Color,
     input_bg: Color,
     input_bdr: Color,
 ) -> Element<'a, PanelMsg> {
@@ -492,7 +494,7 @@ pub fn font_style_row<'a>(
             // raw: a font-style glyph (B, I, U, T), drawn in its own style.
             text(raw(glyph.to_string()))
                 .size(TS.label)
-                .color(primary)
+                .color(muted)
                 .font(iced::Font {
                     weight: style,
                     ..signex_widgets::ui_font::regular()
@@ -501,25 +503,19 @@ pub fn font_style_row<'a>(
         )
         .width(Length::Fill)
         .padding([SP.s, 6.0])
-        .on_press(PanelMsg::Noop)
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let hovered = matches!(status, iced::widget::button::Status::Hovered);
-            iced::widget::button::Style {
-                background: Some(Background::Color(if hovered {
-                    input_bdr
-                } else {
-                    input_bg
-                })),
+        .style(
+            move |_: &Theme, _: iced::widget::button::Status| iced::widget::button::Style {
+                background: Some(Background::Color(input_bg)),
                 border: Border {
                     width: 1.0,
                     radius: 2.0.into(),
                     color: input_bdr,
                     ..Border::default()
                 },
-                text_color: primary,
+                text_color: muted,
                 ..iced::widget::button::Style::default()
-            }
-        })
+            },
+        )
         .boxed()
     };
     container(
@@ -583,6 +579,24 @@ mod tests {
         // Off keeps the muted label colour.
         let muted = Color::from_rgb(0.5, 0.5, 0.5);
         assert_eq!(check_state_color(false, muted, light_panel), muted);
+    }
+
+    /// Mockup row 41: the B / I / U / T buttons stay on the row but are
+    /// disabled until placed text stores its style; a press sends nothing.
+    #[test]
+    fn the_font_style_buttons_are_shown_disabled() {
+        let size = iced::Size::new(320.0, 60.0);
+        let grey = Color::from_rgb(0.5, 0.5, 0.5);
+        let row = || font_style_row(grey, Color::WHITE, Color::BLACK, grey);
+        let shown: Vec<String> = crate::layout_probe::lay_out_texts(row(), size)
+            .into_iter()
+            .map(|t| t.text)
+            .collect();
+        for glyph in ["B", "I", "U", "T"] {
+            assert!(shown.iter().any(|t| t == glyph), "{glyph:?} in {shown:?}");
+            let pressed = crate::layout_probe::messages_on_click(row(), size, glyph);
+            assert!(pressed.is_empty(), "{glyph}: {pressed:?}");
+        }
     }
 
     #[test]

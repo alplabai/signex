@@ -315,20 +315,6 @@ pub(crate) fn value_field_button(theme: &Theme, status: button::Status) -> butto
     }
 }
 
-/// Active tab chip of the Properties tab strip: accent-soft fill, radius 7.
-pub(in crate::panels) fn tab_chip(theme: &Theme, active: bool, hovered: bool) -> button::Style {
-    let l = FormLook::of(theme);
-    button::Style {
-        background: (active || hovered).then_some(Background::Color(l.accent_soft)),
-        text_color: if active { l.ink } else { l.ink3 },
-        border: Border {
-            radius: PROPERTY_FIELD_RADIUS.into(),
-            ..Border::default()
-        },
-        ..button::Style::default()
-    }
-}
-
 /// Section label of a Graphite form: uppercase, muted, 12 px side padding.
 pub(in crate::panels) fn section_label<'a, 'b, M: 'a>(
     title: impl Into<signex_widgets::Label<'b>>,

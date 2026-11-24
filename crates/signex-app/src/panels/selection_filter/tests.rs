@@ -1,6 +1,6 @@
-//! The Filter (Graphite mockup #55) and SCH Filter (Graphite mockup #56)
-//! panels: the kind toggles with their counts, the readout, the editor the
-//! Filter panel follows and the SCH Filter presets.
+//! The Filter panel (Graphite mockup #55; mockup rows 40 and 55 retire SCH
+//! Filter into it): the kind toggles with their counts, the readout, the
+//! editor it follows and, on a schematic tab, the presets.
 
 use std::path::PathBuf;
 
@@ -97,21 +97,19 @@ fn the_sheet_counts_each_kind_by_the_pick_rule() {
 }
 
 #[test]
-fn both_panels_list_the_twelve_kinds_with_their_counts() {
+fn the_filter_panel_lists_the_twelve_kinds_with_their_counts() {
     let app = app_on_sheet();
     let ctx = &app.document_state.panel_ctx;
-    for panel in [PanelKind::Filter, PanelKind::SchFilter] {
-        let shown = texts(panel, ctx);
-        for kind in SelectionFilter::ALL {
-            let label = t_label(ctx, *kind);
-            assert!(shown.contains(&label), "{panel:?}: {label} in {shown:?}");
-        }
-        assert!(shown.iter().any(|t| t == "3"), "{panel:?}: {shown:?}");
-        assert!(
-            shown.iter().filter(|t| *t == "0").count() >= SelectionFilter::ALL.len() - 1,
-            "{panel:?}: {shown:?}"
-        );
+    let shown = texts(PanelKind::Filter, ctx);
+    for kind in SelectionFilter::ALL {
+        let label = t_label(ctx, *kind);
+        assert!(shown.contains(&label), "{label} in {shown:?}");
     }
+    assert!(shown.iter().any(|t| t == "3"), "{shown:?}");
+    assert!(
+        shown.iter().filter(|t| *t == "0").count() >= SelectionFilter::ALL.len() - 1,
+        "{shown:?}"
+    );
 }
 
 fn t_label(ctx: &PanelContext, kind: SelectionFilter) -> String {
@@ -129,14 +127,8 @@ fn the_readout_counts_the_kinds_that_are_on() {
         &mut app,
         SchFilterMsg::KindToggled(SelectionFilter::DrawingObjects),
     );
-    let ctx = &app.document_state.panel_ctx;
-    for panel in [PanelKind::Filter, PanelKind::SchFilter] {
-        let shown = texts(panel, ctx);
-        assert!(
-            shown.iter().any(|t| t == "10 of 12 kinds"),
-            "{panel:?}: {shown:?}"
-        );
-    }
+    let shown = texts(PanelKind::Filter, &app.document_state.panel_ctx);
+    assert!(shown.iter().any(|t| t == "10 of 12 kinds"), "{shown:?}");
 }
 
 #[test]
@@ -339,7 +331,7 @@ fn the_presets_section_names_the_edited_preset_and_its_kinds() {
         });
     app.document_state.panel_ctx.custom_filter_presets =
         app.interaction_state.custom_filter_presets.clone();
-    let shown = texts(PanelKind::SchFilter, &app.document_state.panel_ctx);
+    let shown = texts(PanelKind::Filter, &app.document_state.panel_ctx);
     // The section title is upper-cased like every collapsible section.
     for label in ["PRESETS", "Save current", "Name", "Delete", "Wiring"] {
         assert!(shown.iter().any(|t| t == label), "{label} in {shown:?}");
@@ -349,7 +341,7 @@ fn the_presets_section_names_the_edited_preset_and_its_kinds() {
         "{shown:?}"
     );
     let saved = click(
-        PanelKind::SchFilter,
+        PanelKind::Filter,
         &app.document_state.panel_ctx,
         "Save current",
     );
@@ -357,6 +349,42 @@ fn the_presets_section_names_the_edited_preset_and_its_kinds() {
         saved.as_slice(),
         [PanelMsg::SchFilter(SchFilterMsg::PresetSaved)]
     ));
+}
+
+/// Mockup row 40: Document Options no longer carries a Custom Selection
+/// Filters section; its General section stays.
+#[test]
+fn document_options_has_no_custom_selection_filters_section() {
+    let app = app_with_presets(&["Wiring"]);
+    let shown = texts(PanelKind::Properties, &app.document_state.panel_ctx);
+    assert!(shown.iter().any(|t| t == "GENERAL"), "{shown:?}");
+    for label in [
+        "CUSTOM SELECTION FILTERS",
+        "+ Add Filter",
+        "Preset name",
+        "Wiring",
+    ] {
+        assert!(!shown.iter().any(|t| t == label), "{label} in {shown:?}");
+    }
+}
+
+/// Mockup rows 40 and 55: the presets live in Filter on a schematic tab only;
+/// a board tab and no document show none of them.
+#[test]
+fn the_presets_show_on_a_schematic_tab_only() {
+    let app = app_with_presets(&["Wiring"]);
+    let sheet = texts(PanelKind::Filter, &app.document_state.panel_ctx);
+    assert!(sheet.iter().any(|t| t == "PRESETS"), "{sheet:?}");
+    assert!(sheet.iter().any(|t| t == "Wiring"), "{sheet:?}");
+
+    let board = texts(PanelKind::Filter, &board_ctx(&app));
+    for label in ["PRESETS", "Save current", "Wiring"] {
+        assert!(!board.iter().any(|t| t == label), "{label} in {board:?}");
+    }
+
+    let (empty, _task) = Signex::new();
+    let none = texts(PanelKind::Filter, &empty.document_state.panel_ctx);
+    assert!(!none.iter().any(|t| t == "PRESETS"), "{none:?}");
 }
 
 /// The rename draft lives in the Model: a full panel context rebuild keeps

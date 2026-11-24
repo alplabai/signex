@@ -84,7 +84,8 @@ fn panel_shortcut_focuses_an_open_panel_in_a_collapsed_region() {
 fn every_panel_shortcut_toggles_its_own_panel() {
     for (id, kind) in [
         ("toggle_properties_panel", PanelKind::Properties),
-        ("toggle_schematic_filter_panel", PanelKind::SchFilter),
+        // SCH Filter is retired into Filter (mockup rows 40 and 55).
+        ("toggle_schematic_filter_panel", PanelKind::Filter),
         ("toggle_schematic_list_panel", PanelKind::ObjectList),
     ] {
         let (mut app, _task) = Signex::new();
