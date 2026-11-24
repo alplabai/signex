@@ -157,6 +157,20 @@ fn pour<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Option<Element<'a, PanelMsg>> {
         false,
         None,
     );
+    // The Copper card, with Repour and Shelve, leads the section (Caner,
+    // 2026-11-24). What a pour about to be placed holds is not known yet.
+    if !common.target.is_placement() {
+        s.push(
+            common,
+            ids::PCB_PRIM_POUR_COPPER,
+            linked(look, common, dz::SHELVE, copper_card(look, f)),
+        );
+        s.push(
+            common,
+            ids::PCB_PRIM_POUR_COPPER,
+            caption(look, look.t(ids::PCB_PRIM_POUR_SHELVE_NOTE)),
+        );
+    }
     s.push(
         common,
         ids::PCB_PRIM_POUR_FILL_MODE,
@@ -246,19 +260,6 @@ fn pour<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Option<Element<'a, PanelMsg>> {
         .width(Length::Fill)
         .boxed(),
     );
-    // What a pour about to be placed holds is not known yet.
-    if !common.target.is_placement() {
-        s.push(
-            common,
-            ids::PCB_PRIM_POUR_COPPER,
-            linked(look, common, dz::SHELVE, copper_card(look, f)),
-        );
-        s.push(
-            common,
-            ids::PCB_PRIM_POUR_COPPER,
-            caption(look, look.t(ids::PCB_PRIM_POUR_SHELVE_NOTE)),
-        );
-    }
     s.finish()
 }
 
