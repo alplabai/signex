@@ -78,5 +78,8 @@ fn the_filter_card_stays_inside_a_window_narrower_than_the_bar() {
         .iter()
         .map(|(_, at)| at.x + at.width)
         .fold(f32::MIN, f32::max);
-    assert!(rights - lefts <= card, "{lefts}..{rights} wider than {card}");
+    assert!(
+        rights - lefts <= card,
+        "{lefts}..{rights} wider than {card}"
+    );
 }

@@ -4,7 +4,7 @@
 
 use iced::widget::{Column, column, row, scrollable};
 use iced::{Alignment, Element, Length, Widget as _};
-use signex_i18n::{I18n, Localized, UserText, ids, t};
+use signex_i18n::{I18n, Localized, ids, t};
 use signex_sketch::heal::HEAL_TOLERANCE_MM;
 use signex_types::pcb::Point;
 use signex_types::sketch::SketchHost;
