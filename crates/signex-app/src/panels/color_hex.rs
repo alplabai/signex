@@ -68,9 +68,13 @@ pub enum ColorHexMsg {
 
 /// The colour `text` names as `[r, g, b]`, or `None` (see the module docs).
 pub fn parse_typed_hex(text: &str) -> Option<[u8; 3]> {
-    let typed = crate::app::handlers::editing_commands::net_color_palette::parse_hex(text)?;
-    let [r, g, b, _] = typed.into_rgba8();
-    Some([r, g, b])
+    let trimmed = text.trim();
+    let digits = trimmed.strip_prefix('#').unwrap_or(trimmed);
+    if digits.len() != 6 || !digits.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    let v = u32::from_str_radix(digits, 16).ok()?;
+    Some([(v >> 16) as u8, (v >> 8) as u8, v as u8])
 }
 
 /// `#RRGGBB`, upper case: how a colour row shows a colour. A hex code is
