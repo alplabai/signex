@@ -156,8 +156,9 @@ pub struct LibraryUpdatesState {
     pub schematic_path: PathBuf,
     /// Drift rows, sorted by `ref_des`.
     pub entries: Vec<LibraryUpdateEntry>,
-    /// The open-time scan could not check or update some symbol: a later
-    /// Apply must not clear the sheet's pending-update flag.
+    /// The open-time scan could not check or update some symbol, or left
+    /// out a version Skip All dismissed: a later Apply must not clear the
+    /// sheet's pending-update flag.
     pub scan_failed: bool,
     /// [`signex_engine::Engine::instance_id`] of the sheet when scanned.
     pub engine_instance: u64,

@@ -600,7 +600,8 @@ pub struct LibraryState {
     pub queued_library_updates: Vec<super::updates_dialog::LibraryUpdatesState>,
     /// Set of schematic paths the user explicitly skipped updates on.
     /// Nothing renders this set yet (no status-bar indicator). Cleared
-    /// on apply / re-scan / close-tab.
+    /// on apply / close-tab, and on a re-scan with no drift and no
+    /// `skipped_versions` entry still pending.
     pub skipped_updates_for: std::collections::HashSet<PathBuf>,
     /// The versions Skip All dismissed, per sheet; the scan leaves them out.
     pub skipped_versions: super::updates_dialog::SkippedVersions,
