@@ -289,35 +289,16 @@ fn titled_header<'a>(
         .boxed()
 }
 
-/// The State section, last of every placed object: the Locked check.
+/// The State section, last of every placed object: the Locked box before
+/// its label (mockup rows 47 and 48), the row kit's State section.
 pub(super) fn push_state_section<'a>(
     col: Column<Element<'a, PanelMsg>>,
     ctx: &'a PanelContext,
     locked: bool,
     toggled: PanelMsg,
-    muted: Color,
+    _muted: Color,
 ) -> Column<Element<'a, PanelMsg>> {
-    let panel_bg = PanelPalette::from_tokens(&ctx.tokens).panel_bg;
-    col.push(
-        ctx.collapsible(
-            "sel_state",
-            ids::PROPERTIES_SECTION_STATE,
-            &ctx.collapsed_sections,
-            move || {
-                Column::new()
-                    .spacing(0)
-                    .width(Length::Fill)
-                    .push(form_check_row(
-                        t!(ctx.i18n, ids::PROPERTIES_LOCKED),
-                        locked,
-                        toggled,
-                        muted,
-                        panel_bg,
-                    ))
-            },
-        )
-        .boxed(),
-    )
+    super::rows::push_state_section(col, ctx, locked, toggled)
 }
 
 /// The footer: "1 object selected".

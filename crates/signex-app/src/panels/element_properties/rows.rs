@@ -197,7 +197,10 @@ pub(super) fn field_insets(has_axis: bool, has_unit: bool) -> (f32, f32) {
 }
 
 /// The axis tag and the unit drawn over a field, left and right.
-fn field_tags<'a>(axis: Option<Label<'a>>, unit: Option<Label<'a>>) -> Element<'a, PanelMsg> {
+pub(super) fn field_tags<'a>(
+    axis: Option<Label<'a>>,
+    unit: Option<Label<'a>>,
+) -> Element<'a, PanelMsg> {
     let mut tags = Row::<Element<'a, PanelMsg>>::new()
         .align_y(Alignment::Center)
         .height(Length::Fill)
@@ -434,10 +437,6 @@ pub(in crate::panels) fn check_grid<'a>(
 
 /// The State section with its Locked box, the last section of a placed
 /// object's Properties.
-#[allow(
-    dead_code,
-    reason = "row kit of epic #2523; the g1 Properties units adopt it"
-)]
 pub(in crate::panels) fn push_state_section<'a>(
     col: Column<Element<'a, PanelMsg>>,
     ctx: &'a PanelContext,

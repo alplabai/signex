@@ -1,29 +1,35 @@
 //! Properties of a drawing shape (mockup row 48): the line-art illustration at the
-//! top, then Location (Position and Size; Center for an arc or a circle;
-//! Start and End for a line) → Properties (Border; Radius, Angles, Width)
-//! → Appearance (Color, Fill, Placement). The State ▸ Locked section is
-//! the shared one `selected` adds. Paired values share a row, and every
-//! kind keeps its own fields.
+//! top (a rectangle's with the caption naming its sample wire), then
+//! Location (Position and Size; Center for an arc or a circle; Start and
+//! End for a line) → Properties (Border; Radius, Angles, Width) →
+//! Appearance (Color, Fill, Placement). The panel header names the kind;
+//! the State ▸ Locked section is the shared one `selected` adds. Paired
+//! values share a row, every field carries its axis and unit inside it,
+//! and every kind keeps its own fields.
 
 use super::super::*;
 use super::illustrations::drawing_shape::{
-    DRAW_ANGLES, DRAW_BORDER, DRAW_CENTER, DRAW_ENDS, DRAW_FILL, DRAW_PLACEMENT, DRAW_RADIUS,
-    DRAW_SIZE, DRAW_WIDTH, ShapeFacts, shape_illustration,
+    DRAW_ANGLES, DRAW_BORDER, DRAW_CENTER, DRAW_ENDS, DRAW_FILL, DRAW_PLACEMENT, DRAW_POSITION,
+    DRAW_RADIUS, DRAW_SIZE, DRAW_WIDTH, ShapeFacts, shape_illustration, value_text,
 };
+use super::rows::{PAIR_FIELD_MIN, field_insets, field_tags, mono, pair_line};
 use crate::app::contracts::DrawingFieldEdit as E;
 use crate::panels::form_look;
 use crate::panels::multi_selection::{
-    Cell, PairField, control_row, hover_linked, illustration_view, pair_row, segmented_cells,
+    Cell, control_row, hover_linked, illustration_view, inset_caption, segmented_cells,
 };
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
 use signex_i18n::{I18n, MessageId, ids, t};
 use signex_types::schematic::{DrawingPlacement, FillType, SchDrawing, StrokeColor};
+use signex_widgets::Label;
 use signex_widgets::property_illustration::FieldId;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
+/// Average advance of an axis-tag letter, in captions.
+const AXIS_ADVANCE_EM: f32 = 0.6;
 
 /// The selection-info rows of the selected drawing, parsed.
 struct Rows<'a> {
@@ -78,7 +84,9 @@ fn shape_facts(
             end: rows.pair("End"),
         },
         "Rectangle" => ShapeFacts::Rect {
+            position: rows.pair("Position"),
             size: (rows.number("Width"), rows.number("Height")),
+            border: rows.number("Border"),
             fill: rows.fill(),
             placement,
         },
@@ -105,7 +113,7 @@ fn shown(field: DrawingFieldId, stored: f64, ctx: &PanelContext) -> String {
     ctx.drawing_edit_buf
         .get(&field)
         .cloned()
-        .unwrap_or_else(|| format!("{stored:.3}"))
+        .unwrap_or_else(|| value_text(stored))
 }
 
 /// The error colour while `field` holds text it cannot store (#2767).
@@ -116,27 +124,48 @@ fn refused_ink(field: DrawingFieldId, ctx: &PanelContext) -> Option<Color> {
         .map(|_| crate::styles::ti(ctx.tokens.error))
 }
 
-/// One half of a paired row: axis mark, box and unit. A value the box can
-/// store previews while typed and commits on Enter or on leaving the box.
-fn half<'a>(
+/// One drawing field: the box with its axis tag (when it has one) at the
+/// left and its unit at the right, inside it (mockup row 48). A value the
+/// box can store previews while typed and commits on Enter or on leaving
+/// the box.
+fn field_box<'a>(
     ctx: &PanelContext,
-    axis: MessageId,
+    axis: Option<MessageId>,
     field: DrawingFieldId,
     stored: f64,
     unit: MessageId,
-) -> PairField<'a> {
-    PairField {
-        axis: t!(ctx.i18n, axis),
-        value: shown(field, stored, ctx),
-        unit: t!(ctx.i18n, unit),
-        on_input: Box::new(move |s| PanelMsg::DrawingFieldTyping(field, s)),
-        on_submit: Some(PanelMsg::DrawingFieldLeft(field)),
-        on_blur: Some(PanelMsg::DrawingFieldLeft(field)),
-        error: refused_ink(field, ctx),
-    }
+) -> Element<'a, PanelMsg> {
+    let axis = axis.map(|id| Label::from(t!(ctx.i18n, id)));
+    let unit = Label::from(t!(ctx.i18n, unit));
+    let (left, right) = field_insets(axis.is_some(), true);
+    // A tag longer than one letter (Start, End) widens the inset by the rest.
+    let extra = axis
+        .as_ref()
+        .map_or(0, |a| a.as_str().chars().count().saturating_sub(1));
+    let left = left + extra as f32 * AXIS_ADVANCE_EM * TS.caption;
+    let input = signex_widgets::text_input(
+        signex_i18n::UserText::new(String::new()),
+        shown(field, stored, ctx),
+    )
+    .size(TS.body)
+    .font(mono())
+    .padding(iced::Padding {
+        top: SP.s,
+        bottom: SP.s,
+        left,
+        right,
+    })
+    .width(Length::Fill)
+    .on_input(move |s| PanelMsg::DrawingFieldTyping(field, s))
+    .on_submit(PanelMsg::DrawingFieldLeft(field))
+    .on_blur(PanelMsg::DrawingFieldLeft(field))
+    .style(form_look::refusable_input_style(refused_ink(field, ctx)));
+    iced::widget::stack![input, field_tags(axis, Some(unit))]
+        .width(Length::Fill)
+        .boxed()
 }
 
-/// A label | box | unit row of one drawing field.
+/// A label | field row of one drawing field.
 fn num_row<'a>(
     ctx: &PanelContext,
     label: MessageId,
@@ -145,24 +174,7 @@ fn num_row<'a>(
     unit: MessageId,
     muted: Color,
 ) -> Element<'a, PanelMsg> {
-    let input = signex_widgets::text_input(
-        signex_i18n::UserText::new(String::new()),
-        shown(field, stored, ctx),
-    )
-    .size(TS.body)
-    .padding(SP.s)
-    .width(Length::Fill)
-    .on_input(move |s| PanelMsg::DrawingFieldTyping(field, s))
-    .on_submit(PanelMsg::DrawingFieldLeft(field))
-    .on_blur(PanelMsg::DrawingFieldLeft(field))
-    .style(form_look::refusable_input_style(refused_ink(field, ctx)));
-    let control = row![
-        input,
-        text(t!(ctx.i18n, unit)).size(TS.caption).color(muted)
-    ]
-    .spacing(SP.xs)
-    .align_y(iced::Alignment::Center)
-    .boxed();
+    let control = field_box(ctx, None, field, stored, unit);
     control_row(t!(ctx.i18n, label), control, muted)
 }
 
@@ -176,16 +188,12 @@ fn pair<'a>(
     unit: MessageId,
     muted: Color,
 ) -> Element<'a, PanelMsg> {
-    hover_linked(
-        ctx,
-        link,
-        pair_row(
-            t!(ctx.i18n, label),
-            half(ctx, ax_a, field_a, a, unit),
-            half(ctx, ax_b, field_b, b, unit),
-            muted,
-        ),
-    )
+    let both = pair_line(
+        field_box(ctx, Some(ax_a), field_a, a, unit),
+        field_box(ctx, Some(ax_b), field_b, b, unit),
+        PAIR_FIELD_MIN,
+    );
+    hover_linked(ctx, link, control_row(t!(ctx.i18n, label), both, muted))
 }
 
 /// One Properties section's rows, top to bottom.
@@ -254,7 +262,7 @@ fn kind_rows<'a>(
                 vec![
                     pair(
                         ctx,
-                        DRAW_SIZE,
+                        DRAW_POSITION,
                         ids::PROPERTIES_DRAWING_POSITION,
                         (x, F::RectStartX, px),
                         (y, F::RectStartY, py),
@@ -433,45 +441,26 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
     ctx: &'a PanelContext,
     muted: Color,
     _primary: Color,
-    border_c: Color,
+    _border_c: Color,
 ) -> Element<'a, PanelMsg> {
     let rows = Rows {
         info: &ctx.selection_info,
     };
     let kind = rows.get("Type");
     let ink = crate::styles::ti(ctx.tokens.text);
+    // The panel header names the kind; the illustration comes first.
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
-    // Header: shape icon + type label. Draft SVGs live at
-    // assets/icons/shape_*.svg and can be swapped out for final art
-    // without touching the panel code.
-    let header_row: Element<'a, PanelMsg> =
-        if let Some(icon) = shape_icon_handle(&kind, ctx.theme_id) {
-            row![
-                iced::widget::svg(icon).width(TS.label).height(TS.label),
-                // raw: the engine's type name has no catalog message yet (#2060).
-                text(raw(kind.clone())).size(TS.body).color(ink),
-            ]
-            .spacing(SP.m)
-            .align_y(iced::Alignment::Center)
-            .boxed()
-        } else {
-            // raw: the engine's type name has no catalog message yet (#2060).
-            text(raw(kind.clone())).size(TS.body).color(ink).boxed()
-        };
-    col = col.push(
-        container(header_row)
-            .padding([6.0, SP.m])
-            .width(Length::Fill)
-            .boxed(),
-    );
-    col = col.push(thin_sep(border_c));
-
     let placement = ctx.selected_drawing_placement;
     if let Some(facts) = shape_facts(&kind, &rows, ctx.selected_drawing.as_ref(), placement) {
+        let has_sample_wire = matches!(facts, ShapeFacts::Rect { .. });
         col = col.push(illustration_view(
             ctx,
             shape_illustration(&facts, &ctx.i18n),
         ));
+        if has_sample_wire {
+            let caption = t!(ctx.i18n, ids::PROPERTIES_DRAWING_SAMPLE_WIRE);
+            col = col.push(inset_caption(caption, muted));
+        }
     }
 
     let Some((location, properties)) = kind_rows(ctx, &kind, &rows, muted) else {
@@ -738,5 +727,55 @@ mod tests {
         );
         assert!(at.windows(2).all(|w| w[0] < w[1]), "{shown:?}");
         assert!(!shown.iter().any(|t| t == "Fill"), "{shown:?}");
+    }
+
+    const RECTANGLE: [(&str, &str); 4] = [
+        ("Position", "1, 2"),
+        ("Width", "10"),
+        ("Height", "5"),
+        ("Border", "0.2"),
+    ];
+
+    /// Mockup row 48: the panel header names the kind, so the drawing's
+    /// rows start with the illustration, no second icon-and-name line;
+    /// under a rectangle's illustration a caption says what its sample wire
+    /// shows. An arc has no sample wire and no caption.
+    #[test]
+    fn the_rectangle_has_its_caption_and_no_second_name_line() {
+        let caption = "The sample wire shows Behind / Above";
+        let shown = texts("Rectangle", &RECTANGLE);
+        assert!(!shown.iter().any(|t| t == "Rectangle"), "{shown:?}");
+        assert!(shown.iter().any(|t| t == caption), "{shown:?}");
+        let arc = texts("Arc", &[("Center", "0, 0"), ("Radius", "5")]);
+        assert!(!arc.iter().any(|t| t == "Arc" || t == caption), "{arc:?}");
+    }
+
+    /// Mockup row 48: the X / W axis tags and the mm unit sit inside their
+    /// fields, as on every placed object's Position and Size.
+    #[test]
+    fn the_axis_and_unit_sit_inside_each_field() {
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.selection_info = std::iter::once(("Type", "Rectangle"))
+            .chain(RECTANGLE)
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        let size = iced::Size::new(400.0, 3000.0);
+        let view = || view_drawing_properties(&ctx, Color::WHITE, Color::WHITE, Color::BLACK);
+        let texts = crate::layout_probe::lay_out_texts(view(), size);
+        let boxes = crate::layout_probe::lay_out_inputs(view(), size);
+        let inside = |tag: &str, value: &str| {
+            let field = crate::layout_probe::find(&boxes, value).bounds;
+            texts.iter().any(|t| {
+                t.text == tag
+                    && t.bounds.x >= field.x
+                    && t.bounds.x + t.bounds.width <= field.x + field.width
+                    && (t.bounds.center_y() - field.center_y()).abs() < field.height / 2.0
+            })
+        };
+        for (tag, value) in [("X", "1.000"), ("W", "10.000"), ("mm", "10.000")] {
+            assert!(inside(tag, value), "{tag} outside {value}: {texts:?}");
+        }
+        assert!(inside("mm", "0.200"), "the Border unit: {texts:?}");
     }
 }

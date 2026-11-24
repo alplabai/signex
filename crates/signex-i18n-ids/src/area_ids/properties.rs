@@ -505,4 +505,9 @@ define_ids! {
     PROPERTIES_COUNT_HARNESS_CONNECTORS = "properties-count-harness-connectors";
     PROPERTIES_COUNT_HARNESS_ENTRIES = "properties-count-harness-entries";
     PROPERTIES_COUNT_HARNESS_WIRES = "properties-count-harness-wires";
+    // m7/sch-props-text-shape
+    PROPERTIES_DRAWING_ILLUSTRATION_BORDER = "properties-drawing-illustration-border";
+    PROPERTIES_DRAWING_SAMPLE_WIRE = "properties-drawing-sample-wire";
+    PROPERTIES_TEXT_NOTE_ILLUSTRATION_SIZE = "properties-text-note-illustration-size";
+    PROPERTIES_TEXT_NOTE_ILLUSTRATION_JUSTIFY = "properties-text-note-illustration-justify";
 }

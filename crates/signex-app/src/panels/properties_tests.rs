@@ -1078,3 +1078,73 @@ fn a_page_tab_of_an_open_project_does_not_ask_to_open_a_project() {
 fn plain_texts(ctx: &PanelContext) -> Vec<String> {
     texts(ctx).into_iter().map(|t| t.text).collect()
 }
+
+/// Mockup rows 47 and 48: the drawing and text note callouts and the
+/// rectangle's caption read as the mockup words them.
+#[test]
+fn the_text_and_shape_drawing_messages_read_as_the_mockup() {
+    let en = I18n::en_us();
+    let with = |id: MessageId, args: &[(&str, Arg)]| {
+        en.message_plain(id, args)
+            .replace(['\u{2068}', '\u{2069}'], "")
+    };
+    assert_eq!(
+        with(ids::PROPERTIES_DRAWING_SAMPLE_WIRE, &[]),
+        "The sample wire shows Behind / Above"
+    );
+    assert_eq!(
+        with(
+            ids::PROPERTIES_DRAWING_ILLUSTRATION_BORDER,
+            &[("width", "0.254".into()), ("fill", "Solid".into())]
+        ),
+        "Border 0.254 mm \u{b7} Fill Solid"
+    );
+    assert_eq!(
+        with(
+            ids::PROPERTIES_TEXT_NOTE_ILLUSTRATION_SIZE,
+            &[("size", "1.270".into()), ("unit", "mm".into())]
+        ),
+        "1.270 mm"
+    );
+    assert_eq!(
+        with(
+            ids::PROPERTIES_TEXT_NOTE_ILLUSTRATION_JUSTIFY,
+            &[("h", "Left".into()), ("v", "Top".into())]
+        ),
+        "Justify Left / Top"
+    );
+}
+
+/// Mockup rows 47 and 48: State ▸ Locked draws its box before its label,
+/// so the label stands right of the other rows' labels.
+#[test]
+fn the_locked_box_comes_before_its_label() {
+    for (kind, info) in [
+        (
+            SelectedKindForTest::TextNote,
+            &[("Type", "Text"), ("Locked", "No")][..],
+        ),
+        (
+            SelectedKindForTest::Drawing,
+            &[
+                ("Type", "Rectangle"),
+                ("Position", "1, 2"),
+                ("Locked", "No"),
+            ][..],
+        ),
+    ] {
+        let shown = texts(&one_selected(kind, info));
+        let x_of = |label: &str| {
+            (shown.iter().find(|t| t.text == label))
+                .unwrap_or_else(|| panic!("{kind:?}: {label:?} missing from {shown:#?}"))
+                .bounds
+                .x
+        };
+        let row_label = if kind == SelectedKindForTest::TextNote {
+            "Justify H"
+        } else {
+            "Position"
+        };
+        assert!(x_of("Locked") > x_of(row_label), "{kind:?}: {shown:#?}");
+    }
+}

@@ -9,15 +9,20 @@
 
 use super::super::*;
 use super::font_row::font_family_row;
-use super::placed_rows::{RowLook, edit_box, push_lock_note, push_position_rows};
-use super::rows::{PanelStyle, h_align_from_row, info_row, justify_h_row, justify_v_row};
+use super::illustrations::NoteValues;
+use super::placed_rows::{RowLook, push_lock_note, push_position_rows};
+use super::rows::{
+    PanelStyle, h_align_from_row, info_row, justify_h_row, justify_v_row, labelled_row,
+    sunken_value, unit_input, unit_suffix,
+};
 use crate::panels::{NoteLayout, PlacedEditMsg, PlacedField};
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
-use iced::widget::text_editor::{Binding, KeyPress};
+use iced::widget::text_editor::{self, Binding, KeyPress};
 use signex_i18n::{Localized, ids, t};
 use signex_types::measure::length_field_text;
 use signex_types::schematic::{HAlign, SelectedItem, SelectedKind, VAlign};
+use signex_widgets::Label;
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -61,7 +66,7 @@ pub(super) fn push_text_note_sections<'a>(
     // The illustration follows what is typed, not only what is stored.
     let shown_text = draft.map_or_else(|| get("Text"), |d| d.content.text());
     col = col.push(super::illustrations::show(
-        super::illustrations::text_note(&shown_text, justify_h, justify_v, i18n),
+        super::illustrations::text_note(&shown_text, justify_h, justify_v, &note_values(ctx), i18n),
         ctx,
     ));
 
@@ -159,17 +164,7 @@ pub(super) fn push_text_note_sections<'a>(
                     read_only,
                 ));
                 if let Some(size_mm) = ctx.placed.note_size_mm {
-                    let unit = ctx.unit.to_string();
-                    let label = t!(i18n, ids::PROPERTIES_TEXT_SIZE_UNIT, "unit" => unit.as_str());
-                    let shown = length_field_text(size_mm, ctx.unit);
-                    c = c.push(edit_box(
-                        label.into(),
-                        item,
-                        PlacedField::TextSize,
-                        shown,
-                        &ctx.placed,
-                        look,
-                    ));
+                    c = c.push(text_size_row(ctx, item, size_mm));
                 }
                 c.push(font_family_row(
                     t!(i18n, ids::PROPERTIES_FONT),
@@ -187,6 +182,73 @@ pub(super) fn push_text_note_sections<'a>(
         )
         .boxed(),
     )
+}
+
+/// The field values the illustration's callouts repeat, as the fields show
+/// them.
+fn note_values(ctx: &PanelContext) -> NoteValues {
+    let unit = ctx.unit;
+    NoteValues {
+        position: ctx.placed.geometry.map(|geometry| {
+            let at = geometry.position;
+            (
+                length_field_text(at.x, unit),
+                length_field_text(ctx.shown_y(at.y), unit),
+            )
+        }),
+        size: (ctx.placed.note_size_mm).map(|mm| (length_field_text(mm, unit), unit.to_string())),
+    }
+}
+
+/// Text Size, its unit inside the field (mockup row 47). A locked note shows
+/// the read-only value.
+fn text_size_row<'a>(
+    ctx: &'a PanelContext,
+    item: SelectedItem,
+    size_mm: f64,
+) -> Element<'a, PanelMsg> {
+    let i18n = &ctx.i18n;
+    let shown = length_field_text(size_mm, ctx.unit);
+    let unit = Label::from(unit_suffix(i18n, ctx.unit));
+    let control = if ctx.placed.locked.is_some() {
+        sunken_value(None, shown, Some(unit))
+    } else {
+        let field = PlacedField::TextSize;
+        let value = ctx.placed.text(item, &field, shown);
+        let submitted = PanelMsg::PlacedEdit(PlacedEditMsg::Submitted {
+            item,
+            field: field.clone(),
+        });
+        let typed = move |text| {
+            PanelMsg::PlacedEdit(PlacedEditMsg::Typed {
+                item,
+                field: field.clone(),
+                text,
+            })
+        };
+        unit_input(None, value, Some(unit), typed, submitted)
+    };
+    labelled_row(t!(i18n, ids::PROPERTIES_TEXT_SIZE), control)
+}
+
+/// The Text box drawn as a form field (mockup row 47): the field ground
+/// and hairline of every other box, the accent border while focused.
+fn note_box_style(theme: &Theme, status: text_editor::Status) -> text_editor::Style {
+    use iced::widget::text_input::Status as Field;
+    let as_field = match status {
+        text_editor::Status::Active => Field::Active,
+        text_editor::Status::Hovered => Field::Hovered,
+        text_editor::Status::Focused { is_hovered } => Field::Focused { is_hovered },
+        text_editor::Status::Disabled => Field::Disabled,
+    };
+    let field = crate::panels::form_look::text_input_style(theme, as_field);
+    text_editor::Style {
+        background: field.background,
+        border: field.border,
+        placeholder: field.placeholder,
+        value: field.value,
+        selection: field.selection,
+    }
 }
 
 /// The tallest the Text box gets: `NoteDraft::MAX_VISIBLE_LINES` lines and
@@ -211,6 +273,7 @@ fn text_box<'a>(
         .size(TS.body)
         .padding(SP.s)
         .height(Length::Fit.max(box_height_cap()))
+        .style(note_box_style)
         .key_binding(move |key| note_binding(key, item));
     if !read_only {
         editor = editor.on_action(move |action| {
@@ -394,6 +457,77 @@ mod tests {
             text.height > one_line.height,
             "no one-line Text field: {inputs:?}"
         );
+    }
+
+    /// Mockup row 47: the Text box is a field like every other, the field
+    /// ground (white in the light theme) and hairline, the accent while
+    /// focused.
+    #[test]
+    fn the_text_box_is_drawn_as_a_form_field() {
+        use iced::widget::text_input::Status as Field;
+        use signex_types::theme::{ThemeId, theme_tokens};
+        for &id in ThemeId::BUILTINS {
+            let theme = crate::app::Signex::id_to_iced_theme(id);
+            let field = crate::styles::tokens::resolve(&theme_tokens(id)).field;
+            let idle = note_box_style(&theme, text_editor::Status::Active);
+            assert_eq!(idle.background, iced::Background::Color(field), "{id:?}");
+            let focused = text_editor::Status::Focused { is_hovered: false };
+            let as_field = Field::Focused { is_hovered: false };
+            let input = crate::panels::form_look::text_input_style(&theme, as_field);
+            let drawn = note_box_style(&theme, focused);
+            assert_eq!(drawn.border, input.border, "{id:?}");
+        }
+    }
+
+    /// Mockup row 47: Text Size is one plain label with the unit inside its
+    /// field, at the right, as Position shows X and Y.
+    #[test]
+    fn the_text_size_unit_sits_inside_its_field() {
+        use super::super::child_sheet::tests::{app_showing, click};
+        let note = signex_types::schematic::TextNote {
+            uuid: uuid::Uuid::now_v7(),
+            text: "Keep the SW node small".into(),
+            position: signex_types::schematic::Point::new(60.0, 60.0),
+            rotation: 0.0,
+            font_size: 2.54,
+            font_family: None,
+            justify_h: HAlign::Left,
+            justify_v: VAlign::Top,
+            locked: false,
+        };
+        let sheet = signex_types::schematic::SchematicSheet {
+            paper_size: "A4".into(),
+            text_notes: vec![note],
+            ..Default::default()
+        };
+        let mut app = app_showing(sheet);
+        click(&mut app, (60.0, 60.0));
+        let ctx = &app.document_state.panel_ctx;
+        let view = || {
+            super::super::selected::view_selected_element_properties(
+                ctx,
+                Color::WHITE,
+                Color::WHITE,
+                Color::BLACK,
+            )
+        };
+        let window = iced::Size::new(320.0, 4000.0);
+        let texts = crate::layout_probe::lay_out_texts(view(), window);
+        let plain: Vec<String> = (texts.iter())
+            .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect();
+        assert!(plain.iter().any(|t| t == "Text Size"), "{plain:?}");
+        let with_unit = plain.iter().any(|t| t.starts_with("Text Size ("));
+        assert!(!with_unit, "{plain:?}");
+        let inputs = crate::layout_probe::lay_out_inputs(view(), window);
+        let field = crate::layout_probe::find(&inputs, "2.540").bounds;
+        let inside = |t: &&crate::layout_probe::LaidOutText| {
+            t.text.replace(['\u{2068}', '\u{2069}'], "") == "mm"
+                && t.bounds.x >= field.x
+                && t.bounds.x + t.bounds.width <= field.x + field.width
+                && (t.bounds.center_y() - field.center_y()).abs() < field.height / 2.0
+        };
+        assert!(texts.iter().any(|t| inside(&t)), "{field:?} {texts:?}");
     }
 
     #[test]
