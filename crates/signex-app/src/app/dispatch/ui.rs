@@ -176,6 +176,7 @@ impl Signex {
                         y,
                         target,
                         owner,
+                        hovered_step_mm: None,
                     });
                 }
                 self.finish_update()
@@ -183,6 +184,26 @@ impl Signex {
             UiMsg::GridPickerClose => {
                 self.interaction_state.grid_picker = None;
                 self.finish_update()
+            }
+            // Hover only changes what the preview draws: no refresh owed.
+            UiMsg::GridPickerStepHovered(step_mm) => {
+                if let Some(picker) = self.interaction_state.grid_picker.as_mut()
+                    && step_mm > 0.0
+                    && step_mm.is_finite()
+                {
+                    picker.hovered_step_mm = Some(step_mm);
+                }
+                Task::none()
+            }
+            // A leave of a row no longer hovered (the next row's enter came
+            // first) keeps the newer hover.
+            UiMsg::GridPickerStepLeft(step_mm) => {
+                if let Some(picker) = self.interaction_state.grid_picker.as_mut()
+                    && picker.hovered_step_mm == Some(step_mm)
+                {
+                    picker.hovered_step_mm = None;
+                }
+                Task::none()
             }
             UiMsg::GridPickerSelect(step_mm) => {
                 let picker = self.interaction_state.grid_picker.take();

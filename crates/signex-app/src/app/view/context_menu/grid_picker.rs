@@ -1,12 +1,13 @@
 //! The grid picker popup (Graphite mockup #63): the standard grid ladder under Imperial and
 //! Metric subheads, mil rows captioned with their mm value, the active step
 //! checked on the accent-soft fill, and a final Grid Properties… row; a
-//! read-only preview of the active step sits beside it.
+//! read-only preview of the hovered step (the active one when no row is
+//! hovered) sits beside it.
 
 use super::*;
 
 use super::items::text;
-use signex_i18n::{I18n, MessageId, menu_ids};
+use signex_i18n::{I18n, Localized, MessageId, menu_ids};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
 /// One rung of the ladder: its label, its step in mm and whether its row
@@ -76,18 +77,43 @@ fn mm_caption(i18n: &I18n, step_mm: f64) -> String {
     )
 }
 
+/// The step the preview draws: the hovered rung, else the active step.
+fn previewed_step(hovered_mm: Option<f64>, active_mm: f64) -> f64 {
+    hovered_mm.unwrap_or(active_mm)
+}
+
+/// The preview's caption for `step_mm`: its ladder name, marked active when
+/// it is `active_mm`.
+fn preview_caption(i18n: &I18n, step_mm: f64, active_mm: f64) -> Localized {
+    if is_step(step_mm, active_mm) {
+        let name = rung_name(i18n, step_mm).unwrap_or_else(|| mm_caption(i18n, step_mm));
+        return i18n.message(menu_ids::CTX_GRID_PREVIEW_ACTIVE, &[("step", name.into())]);
+    }
+    match IMPERIAL
+        .iter()
+        .chain(METRIC)
+        .find(|rung| is_step(rung.step_mm, step_mm))
+    {
+        Some(rung) => i18n.message(rung.label, &[]),
+        None => i18n.message(
+            menu_ids::CTX_GRID_MM_CAPTION,
+            &[("mm", step_mm.to_string().into())],
+        ),
+    }
+}
+
 impl Signex {
     /// The grid picker popup: the ladder card and, beside it, the preview of
-    /// the active step. Clicking a step sends
+    /// the hovered step, or the active one when no row is hovered (mockup
+    /// row 63). Clicking a step sends
     /// `Message::Ui(UiMsg::GridPickerSelect(step_mm))` and closes the popup.
     pub(in crate::app::view) fn view_grid_picker_menu(&self) -> Element<'_, Message> {
         use iced::widget::Widget as _;
-        let active_step = self
-            .interaction_state
-            .grid_picker
-            .as_ref()
+        let picker = self.interaction_state.grid_picker.as_ref();
+        let active_step = picker
             .and_then(|picker| self.document_state.footprint_editors.get(&picker.target))
             .map(|e| e.state.snap_options.grid_step_mm);
+        let hovered_step = picker.and_then(|picker| picker.hovered_step_mm);
         let panel_ctx = &self.document_state.panel_ctx;
         let i18n = &self.ui_state.i18n;
         let ladder = super::placement::menu_card(
@@ -96,16 +122,16 @@ impl Signex {
             &panel_ctx.ui_font_name,
         )
         .element;
-        let Some(step) = active_step else {
+        let Some(active) = active_step else {
             return ladder;
         };
-        let name = rung_name(i18n, step).unwrap_or_else(|| mm_caption(i18n, step));
+        let step = previewed_step(hovered_step, active);
         let preview = super::grid_preview::grid_preview_card(
             i18n,
             &panel_ctx.tokens,
             self.ui_state.effective_theme_id(),
             step,
-            name,
+            preview_caption(i18n, step, active),
         );
         iced::widget::row![ladder, preview]
             .spacing(crate::styles::Spacing::DEFAULT.m)
@@ -114,13 +140,18 @@ impl Signex {
     }
 }
 
-/// One ladder row: picks its step; the active one is checked on the
-/// accent-soft fill; a mil row shows its mm value as a caption.
+/// One ladder row: picks its step, and hovering it shows the step in the
+/// preview; the active one is checked on the accent-soft fill; a mil row
+/// shows its mm value as a caption.
 fn rung_row(i18n: &I18n, rung: &Rung, active_step: Option<f64>) -> DropdownEntry<Message> {
     let is_active = active_step.is_some_and(|s| is_step(s, rung.step_mm));
     let mut item = DropdownItem::new(
         text(i18n, rung.label),
         Message::Ui(UiMsg::GridPickerSelect(rung.step_mm)),
+    )
+    .hover(
+        Message::Ui(UiMsg::GridPickerStepHovered(rung.step_mm)),
+        Message::Ui(UiMsg::GridPickerStepLeft(rung.step_mm)),
     )
     .checked(is_active)
     .selected(is_active);
@@ -226,5 +257,91 @@ mod tests {
             Some("50 Mil")
         );
         assert_eq!(rung_name(I18n::en_us_ref(), 0.3), None);
+    }
+
+    /// Every step row publishes its own step as the pointer enters and
+    /// leaves it, so the preview can follow the hovered row (mockup row 63).
+    #[test]
+    fn each_step_row_reports_hovering_its_step() {
+        let rows = grid_picker_entries(I18n::en_us_ref(), Some(1.27));
+        let mut hovered = 0;
+        for item in items(&rows) {
+            let Some(Message::Ui(UiMsg::GridPickerSelect(step))) = item.on_press else {
+                assert!(item.on_hover.is_none(), "{}", item.label);
+                continue;
+            };
+            match &item.on_hover {
+                Some((
+                    Message::Ui(UiMsg::GridPickerStepHovered(enter)),
+                    Message::Ui(UiMsg::GridPickerStepLeft(leave)),
+                )) => {
+                    assert!(is_step(*enter, step), "{}", item.label);
+                    assert!(is_step(*leave, step), "{}", item.label);
+                }
+                _ => panic!("{} reports no hover", item.label),
+            }
+            hovered += 1;
+        }
+        assert_eq!(hovered, 13);
+    }
+
+    /// The preview draws the hovered step, and the active one when no row
+    /// is hovered; its caption names the step and marks only the active one.
+    #[test]
+    fn the_preview_follows_the_hovered_step() {
+        let i18n = I18n::en_us_ref();
+        let caption = |step: f64, active: f64| {
+            preview_caption(i18n, step, active)
+                .into_string()
+                .replace(['\u{2068}', '\u{2069}'], "")
+        };
+        assert!(is_step(previewed_step(None, 1.27), 1.27));
+        assert!(is_step(previewed_step(Some(1.0), 1.27), 1.0));
+        assert_eq!(caption(1.27, 1.27), "50 Mil · active");
+        assert_eq!(caption(1.0, 1.27), "1.000 mm");
+        assert_eq!(caption(2.54, 1.27), "100 Mil");
+    }
+
+    fn app_with_picker() -> Signex {
+        let (mut app, _boot) = Signex::new();
+        app.interaction_state.grid_picker = Some(crate::app::GridPickerState {
+            x: 0.0,
+            y: 0.0,
+            target: std::path::PathBuf::from("part.snxfpt"),
+            owner: None,
+            hovered_step_mm: None,
+        });
+        app
+    }
+
+    fn hovered(app: &Signex) -> Option<f64> {
+        app.interaction_state
+            .grid_picker
+            .as_ref()
+            .and_then(|picker| picker.hovered_step_mm)
+    }
+
+    /// Entering a row hovers its step; leaving it returns to none; a late
+    /// leave of the row before keeps the newer hover.
+    #[test]
+    fn hovering_a_row_sets_the_previewed_step_and_leaving_clears_it() {
+        let mut app = app_with_picker();
+        let _ = app.update(Message::Ui(UiMsg::GridPickerStepHovered(2.54)));
+        assert_eq!(hovered(&app), Some(2.54));
+        let _ = app.update(Message::Ui(UiMsg::GridPickerStepHovered(1.0)));
+        let _ = app.update(Message::Ui(UiMsg::GridPickerStepLeft(2.54)));
+        assert_eq!(hovered(&app), Some(1.0), "a stale leave keeps the hover");
+        let _ = app.update(Message::Ui(UiMsg::GridPickerStepLeft(1.0)));
+        assert_eq!(hovered(&app), None);
+        let _ = app.update(Message::Ui(UiMsg::GridPickerStepHovered(f64::NAN)));
+        assert_eq!(hovered(&app), None, "a bad step is not hovered");
+    }
+
+    /// A hover with the picker closed opens nothing.
+    #[test]
+    fn a_hover_with_the_picker_closed_does_nothing() {
+        let (mut app, _boot) = Signex::new();
+        let _ = app.update(Message::Ui(UiMsg::GridPickerStepHovered(1.27)));
+        assert!(app.interaction_state.grid_picker.is_none());
     }
 }

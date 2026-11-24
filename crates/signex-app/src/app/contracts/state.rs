@@ -123,6 +123,9 @@ pub struct GridPickerState {
     pub target: std::path::PathBuf,
     /// The undocked window it opened in; `None` for the main window.
     pub owner: Option<iced::window::Id>,
+    /// The ladder step under the pointer, in mm; the preview draws it in
+    /// place of the active step (mockup row 63).
+    pub hovered_step_mm: Option<f64>,
 }
 
 /// Grid Properties dialog draft (Ctrl+G in a footprint editor): the step
