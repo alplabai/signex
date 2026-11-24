@@ -13,6 +13,7 @@ mod hold;
 mod journal;
 #[cfg(unix)]
 mod live;
+mod net_class_membership;
 mod opened;
 mod origin;
 mod owed_repaint;
