@@ -184,6 +184,65 @@ fn delete_selected_removes_the_ticked_pins_and_their_ticks() {
     );
 }
 
+/// A dual op-amp's six pins, two of them outputs.
+fn six_pins() -> Symbol {
+    let mut sym = Symbol::empty("OPA2333");
+    for (i, (number, name)) in [
+        ("1", "OUTA"),
+        ("2", "INA"),
+        ("3", "INB"),
+        ("4", "OUTB"),
+        ("5", "VCC"),
+        ("6", "GND"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut pin = SymbolPin::new(number, name);
+        pin.position = [0.0, -2.54 * i as f64];
+        sym.pins.push(pin);
+    }
+    sym
+}
+
+#[test]
+fn delete_selected_removes_only_the_ticked_rows_the_filter_shows() {
+    let (mut app, path) = app_with(six_pins());
+    props(&mut app, SymbolPropsMsg::EditPinsInTablePressed);
+    for idx in 0..4 {
+        table(&mut app, PinTableMsg::RowChecked(idx, true));
+    }
+    table(&mut app, PinTableMsg::FilterChanged("out".into()));
+    table(&mut app, PinTableMsg::DeleteSelectedPressed);
+    let numbers: Vec<String> = pins_of(&app, &path).into_iter().map(|p| p.number).collect();
+    assert_eq!(numbers, ["2", "3", "5", "6"], "the hidden ticked rows stay");
+    let ticked: Vec<usize> = app.library.symbol_props[&path]
+        .table
+        .checked
+        .iter()
+        .copied()
+        .collect();
+    assert_eq!(
+        ticked,
+        [0, 1],
+        "INA and INB keep their ticks, at their new rows"
+    );
+}
+
+#[test]
+fn apply_to_selected_skips_ticked_rows_the_filter_hides() {
+    let (mut app, path) = app_with(six_pins());
+    props(&mut app, SymbolPropsMsg::EditPinsInTablePressed);
+    table(&mut app, PinTableMsg::RowChecked(0, true));
+    table(&mut app, PinTableMsg::RowChecked(2, true));
+    table(&mut app, PinTableMsg::FilterChanged("outa".into()));
+    table(&mut app, PinTableMsg::BulkHiddenPicked(Some(true)));
+    table(&mut app, PinTableMsg::BulkApplied);
+    let pins = pins_of(&app, &path);
+    assert!(pins[0].hidden, "OUTA is listed and ticked");
+    assert!(!pins[2].hidden, "INB is ticked but the filter hides it");
+}
+
 #[test]
 fn plus_pin_adds_a_row_with_the_next_number() {
     let (mut app, path) = app_with(opamp());

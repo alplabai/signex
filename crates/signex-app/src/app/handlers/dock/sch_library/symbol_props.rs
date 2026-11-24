@@ -6,6 +6,7 @@
 //! 122b), whose `+ Pin`, Delete selected, Apply to selected and Apply paste
 //! each change the symbol as one undo step.
 
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use super::*;
@@ -102,19 +103,24 @@ impl Signex {
                 });
             }
             PinTableMsg::DeleteSelectedPressed => {
+                let rows = self.pin_table_acted_rows(path, &table);
+                let mut deleted = false;
                 self.sym_editor_record_edit(None, |editor| {
-                    let removed = remove_pins(editor.primitive_mut(), &table.checked);
-                    if removed {
+                    deleted = remove_pins(editor.primitive_mut(), &rows);
+                    if deleted {
                         drop_pin_selection(&mut editor.selected);
                     }
-                    removed
+                    deleted
                 });
-                self.with_pin_table(path, |ui| ui.checked.clear());
+                if deleted {
+                    self.with_pin_table(path, |ui| ui.forget_removed(&rows));
+                }
             }
             PinTableMsg::BulkApplied => {
+                let rows = self.pin_table_acted_rows(path, &table);
                 let length = self.bulk_length(&table);
                 self.sym_editor_record_edit(None, |editor| {
-                    apply_bulk(editor.primitive_mut(), &table.checked, &table.bulk, length)
+                    apply_bulk(editor.primitive_mut(), &rows, &table.bulk, length)
                 });
                 self.with_pin_table(path, |ui| ui.bulk = Default::default());
             }
@@ -181,6 +187,19 @@ impl Signex {
             );
         }
         length
+    }
+
+    /// The ticked rows of `path`'s Pin table that it lists now, after the
+    /// filter and the issues-only view; none while the panel context shows
+    /// another symbol.
+    fn pin_table_acted_rows(&self, path: &Path, table: &PinTableUi) -> BTreeSet<usize> {
+        self.document_state
+            .panel_ctx
+            .symbol_editor
+            .as_ref()
+            .filter(|sym| sym.path == path)
+            .map(|sym| crate::panels::pin_table_acted_rows(sym, table, &self.ui_state.i18n))
+            .unwrap_or_default()
     }
 
     fn with_pin_table(&mut self, path: &Path, change: impl FnOnce(&mut PinTableUi)) {

@@ -26,7 +26,7 @@ mod pins_tab;
 mod rows;
 mod symbol;
 
-pub(crate) use pin_table::view_pin_table;
+pub(crate) use pin_table::{pin_table_acted_rows, view_pin_table};
 use rows::{Form, Look};
 
 /// Properties panel content for the active `.snxsym` editor tab.

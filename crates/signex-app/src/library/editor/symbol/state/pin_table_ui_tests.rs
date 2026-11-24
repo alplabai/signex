@@ -104,7 +104,10 @@ fn ticks_bulk_fields_and_the_paste_box_are_tab_state() {
     assert_eq!(ui.checked.iter().copied().collect::<Vec<_>>(), [5]);
     assert!(ui.apply(&PinTableMsg::AllChecked(vec![0, 1], true)));
     assert_eq!(ui.checked.len(), 3);
-    assert!(ui.apply(&PinTableMsg::AllChecked(Vec::new(), false)));
+    // Untick all unticks the listed rows only; row 5 is filtered out.
+    assert!(ui.apply(&PinTableMsg::AllChecked(vec![0, 1], false)));
+    assert_eq!(ui.checked.iter().copied().collect::<Vec<_>>(), [5]);
+    assert!(ui.apply(&PinTableMsg::AllChecked(vec![5], false)));
     assert!(ui.checked.is_empty());
     assert!(ui.apply(&PinTableMsg::BulkLengthChanged("5.08".into())));
     assert!(ui.apply(&PinTableMsg::BulkHiddenPicked(Some(true))));
@@ -140,6 +143,14 @@ fn ticks_of_pins_that_are_gone_are_dropped() {
     ui.checked.extend([1, 4, 7]);
     ui.keep_checks_below(5);
     assert_eq!(ui.checked.iter().copied().collect::<Vec<_>>(), [1, 4]);
+}
+
+#[test]
+fn ticks_left_after_a_delete_follow_their_pins() {
+    let mut ui = PinTableUi::default();
+    ui.checked.extend([0, 1, 2, 3, 6]);
+    ui.forget_removed(&[0, 3].into_iter().collect());
+    assert_eq!(ui.checked.iter().copied().collect::<Vec<_>>(), [0, 1, 4]);
 }
 
 #[test]

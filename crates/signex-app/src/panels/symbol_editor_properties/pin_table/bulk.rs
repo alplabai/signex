@@ -1,6 +1,7 @@
 //! The bulk edit bar of the Pin table: Type, Part, Length, Orientation and
 //! Hidden for every ticked row, a field left on Keep keeping each row's
-//! value, and Apply to selected. Greyed and inert while no row is ticked.
+//! value, and Apply to selected. Greyed and inert while no listed row is
+//! ticked; a ticked row the filter hides is not counted.
 
 use iced::widget::{Row, container, row};
 use iced::{Alignment, Background, Element, Length, Theme, Widget as _};
@@ -27,9 +28,10 @@ fn with_keep<V>(i18n: &I18n, choices: Vec<Choice<V>>) -> Vec<Choice<Option<V>>> 
         .collect()
 }
 
-pub(super) fn view<'a>(ui: &'a PinTableUi, form: &Form<'_>) -> Element<'a, PanelMsg> {
+/// The bar for `count` ticked rows the table lists now: the rows Apply to
+/// selected writes.
+pub(super) fn view<'a>(ui: &'a PinTableUi, count: usize, form: &Form<'_>) -> Element<'a, PanelMsg> {
     let i18n = form.i18n;
-    let count = ui.checked.len();
     let on = count > 0;
     let ink = if on { form.look.ink3 } else { form.look.ink4 };
     let label = |id: MessageId| -> Element<'a, PanelMsg> {

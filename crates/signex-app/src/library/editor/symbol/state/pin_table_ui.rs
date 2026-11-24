@@ -179,11 +179,14 @@ impl PinTableUi {
                     self.checked.remove(idx);
                 }
             }
+            // Only the listed rows: a ticked row the filter hides keeps its tick.
             PinTableMsg::AllChecked(rows, on) => {
                 if *on {
                     self.checked.extend(rows.iter().copied());
                 } else {
-                    self.checked.clear();
+                    for idx in rows {
+                        self.checked.remove(idx);
+                    }
                 }
             }
             PinTableMsg::BulkElectricalPicked(v) => self.bulk.electrical = *v,
@@ -229,6 +232,17 @@ impl PinTableUi {
     /// Forget ticks of pins that are gone (an undo, a delete elsewhere).
     pub fn keep_checks_below(&mut self, pin_count: usize) {
         self.checked.retain(|idx| *idx < pin_count);
+    }
+
+    /// The pins at `removed` were deleted: drop their ticks and move every
+    /// other tick to its pin's new index.
+    pub fn forget_removed(&mut self, removed: &BTreeSet<usize>) {
+        self.checked = self
+            .checked
+            .iter()
+            .filter(|idx| !removed.contains(idx))
+            .map(|idx| idx - removed.range(..*idx).count())
+            .collect();
     }
 }
 

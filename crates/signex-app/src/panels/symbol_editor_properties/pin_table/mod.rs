@@ -6,6 +6,8 @@
 //! Pin properties, the canvas and this table show one pin model. The tab's
 //! own state is `PinTableUi`, routed through `PanelMsg::SymbolProps`.
 
+use std::collections::BTreeSet;
+
 use iced::widget::{Column, Space, column, container, row, scrollable};
 use iced::{Alignment, Background, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, ids, t};
@@ -47,6 +49,27 @@ fn listed_rows<'p>(
         .collect()
 }
 
+/// The ticked rows among `listed`: what Delete selected and Apply to
+/// selected act on. A ticked row the filter hides is left alone.
+fn ticked_listed(listed: &[&SymbolPinSummary], ui: &PinTableUi) -> BTreeSet<usize> {
+    listed
+        .iter()
+        .map(|p| p.idx)
+        .filter(|idx| ui.checked.contains(idx))
+        .collect()
+}
+
+/// The ticked rows of `sym`'s Pin table that are listed now, after the
+/// filter and the issues-only view.
+pub(crate) fn pin_table_acted_rows(
+    sym: &SymbolEditorPanelContext,
+    ui: &PinTableUi,
+    i18n: &I18n,
+) -> BTreeSet<usize> {
+    let issues = pin_issues(&sym.pins);
+    ticked_listed(&listed_rows(sym, &issues, ui, i18n), ui)
+}
+
 /// The tab's body for the symbol `sym`. `ui` is the tab state as the
 /// Model holds it, so the paste box's editor keeps its cursor.
 pub(crate) fn view_pin_table<'a>(
@@ -67,16 +90,17 @@ pub(crate) fn view_pin_table<'a>(
     };
     let issues = pin_issues(&sym.pins);
     let listed = listed_rows(sym, &issues, ui, i18n);
+    let acted = ticked_listed(&listed, ui).len();
     let mut body: Column<Element<'a, PanelMsg>> = Column::new().width(Length::Fill);
     body = body.push(head(sym, ui, &issues, &form));
     body = body.push(rule(&form));
-    body = body.push(bar(ui, &form));
+    body = body.push(bar(ui, acted, &form));
     if let Some(paste) = &ui.paste {
         body = body.push(rule(&form));
         body = body.push(paste::view(sym, paste, &form));
     }
     body = body.push(rule(&form));
-    body = body.push(bulk::view(ui, &form));
+    body = body.push(bulk::view(ui, acted, &form));
     let rows = if listed.is_empty() {
         empty(sym.pins.is_empty(), &form)
     } else {
@@ -156,8 +180,9 @@ fn head<'a>(
     )
 }
 
-/// The filter, `+ Pin`, Delete selected and Paste rows….
-fn bar<'a>(ui: &'a PinTableUi, form: &Form<'_>) -> Element<'a, PanelMsg> {
+/// The filter, `+ Pin`, Delete selected (live while `acted` listed rows
+/// are ticked) and Paste rows….
+fn bar<'a>(ui: &'a PinTableUi, acted: usize, form: &Form<'_>) -> Element<'a, PanelMsg> {
     let i18n = form.i18n;
     let filter = text_input(
         t!(i18n, ids::EDITORS_SYMPROPS_PIN_FILTER),
@@ -175,7 +200,7 @@ fn bar<'a>(ui: &'a PinTableUi, form: &Form<'_>) -> Element<'a, PanelMsg> {
     );
     let delete = form.ghost(
         t!(i18n, ids::EDITORS_PIN_TABLE_DELETE),
-        (!ui.checked.is_empty()).then_some(table(PinTableMsg::DeleteSelectedPressed)),
+        (acted > 0).then_some(table(PinTableMsg::DeleteSelectedPressed)),
         None,
     );
     let paste = form.ghost(

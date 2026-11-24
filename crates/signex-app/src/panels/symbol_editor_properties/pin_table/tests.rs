@@ -157,6 +157,34 @@ fn the_bulk_bar_waits_for_a_ticked_row() {
 }
 
 #[test]
+fn the_selected_count_and_the_actions_follow_the_listed_ticked_rows() {
+    let fx = Fixture::new();
+    let sym = ctx(opamp_pins(), SymbolEditorSelection::None);
+    let mut ui = PinTableUi {
+        filter: "inb".into(),
+        ..PinTableUi::default()
+    };
+    ui.checked.extend([1, 4, 5]);
+    assert_eq!(
+        pin_table_acted_rows(&sym, &ui, &fx.i18n)
+            .into_iter()
+            .collect::<Vec<_>>(),
+        [4, 5]
+    );
+    let two = t!(fx.i18n, ids::EDITORS_PIN_TABLE_SELECTED, "count" => 2usize).into_string();
+    assert!(layout_texts(&sym, &ui, &fx).contains(&two));
+
+    // Only a ticked row the filter hides: nothing to act on.
+    ui.checked = [1].into_iter().collect();
+    assert!(pin_table_acted_rows(&sym, &ui, &fx.i18n).is_empty());
+    assert!(
+        layout_texts(&sym, &ui, &fx).contains(&word(&fx, ids::EDITORS_PIN_TABLE_NONE_SELECTED))
+    );
+    let delete = word(&fx, ids::EDITORS_PIN_TABLE_DELETE);
+    assert!(messages_on_click(tab_view(&sym, &ui, &fx), TAB, &delete).is_empty());
+}
+
+#[test]
 fn delete_selected_needs_a_tick_and_paste_rows_opens_the_box() {
     let fx = Fixture::new();
     let sym = ctx(opamp_pins(), SymbolEditorSelection::None);

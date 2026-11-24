@@ -205,10 +205,11 @@ fn the_generated_features_show_their_fields_and_body_size() {
     assert!(top_of(&texts, "Silkscreen outline") < top_of(&texts, "Assembly outline"));
 }
 
-/// Mockup row 124: the courtyard has Expansion and Line width; with the
-/// courtyard switched off both are greyed and inert.
+/// Mockup row 124: the courtyard has Expansion and Line width. With
+/// auto-fit off the Expansion goes, but the Line width stays live: it
+/// strokes a hand-drawn courtyard too (maintainer decision 2026-11-24).
 #[test]
-fn the_courtyard_shows_its_line_width_and_greys_it_when_off() {
+fn the_courtyard_line_width_stays_live_with_auto_fit_off() {
     let app = app_with_eight_pads();
     let mut fp = panel_ctx(&app);
     fp.generated.silk_outline = false;
@@ -225,8 +226,19 @@ fn the_courtyard_shows_its_line_width_and_greys_it_when_off() {
 
     fp.auto_fit_courtyard = false;
     let off = texts(&app, &fp);
-    assert!(!has(&off, "Line width"), "{off:#?}");
     assert!(!has(&off, "Expansion"), "{off:#?}");
+    let label = crate::layout_probe::find(&off, "Line width").bounds;
+    assert!(label.y < top_of(&off, "Silkscreen outline"));
+    // Its field is laid out on the label's line, showing the stored width;
+    // `number_input` always takes typing.
+    let inputs = crate::layout_probe::lay_out_inputs(body(&app, &fp), DOCK);
+    let width = fp.generated.courtyard_line_width_mm.to_string();
+    assert!(
+        inputs.iter().any(|i| i.text == width
+            && i.bounds.y < label.y + label.height
+            && label.y < i.bounds.y + i.bounds.height),
+        "{inputs:#?}"
+    );
 }
 
 #[test]

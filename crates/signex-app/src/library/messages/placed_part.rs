@@ -57,9 +57,10 @@ pub enum PlacedPartMsg {
     ChangeKeepToggled(String),
     /// An Apply to choice was picked.
     ChangeScopePicked(ChangeScope),
-    /// The off-thread read of the listed rows' pin counts finished.
+    /// The off-thread read of the listed rows' pin counts finished; `Err`
+    /// carries the runtime's text when the read's thread panicked.
     ChangePinCountsRead {
         target: PlacedPartTarget,
-        counts: Vec<(Uuid, usize)>,
+        counts: Result<Vec<(Uuid, usize)>, String>,
     },
 }

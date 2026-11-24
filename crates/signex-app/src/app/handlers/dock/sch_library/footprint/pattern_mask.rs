@@ -205,6 +205,28 @@ mod tests {
         assert_eq!(editor.history.undo_len(), 0);
     }
 
+    /// The field's hint never suggests a number the field refuses: not "1",
+    /// a linear pattern's source pad, nor "A1", a BGA's.
+    #[test]
+    fn the_hint_never_names_a_source_pad() {
+        let (app, _) = app_on_a_grid(Path::new("number-mask-hint.snxfpt"));
+        let hint = signex_i18n::t!(
+            app.ui_state.i18n,
+            signex_i18n::ids::EDITORS_ROLE_PATTERN_NUMBER_MASK_HINT
+        )
+        .into_string();
+        let examples = hint.split_once("e.g.").map_or(hint.as_str(), |(_, e)| e);
+        let numbers: Vec<&str> = examples
+            .split([',', ' '])
+            .map(str::trim)
+            .filter(|n| !n.is_empty() && *n != "or")
+            .collect();
+        assert!(!numbers.is_empty(), "{hint}");
+        for source in ["1", "A1"] {
+            assert!(!numbers.contains(&source), "{source} in {hint}");
+        }
+    }
+
     #[test]
     fn clearing_the_mask_brings_the_pads_back() {
         let path = PathBuf::from("number-mask-clear.snxfpt");

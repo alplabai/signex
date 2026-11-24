@@ -524,14 +524,14 @@ fn pin_counts_of_another_change_are_dropped() {
         &mut app,
         PlacedPartMsg::ChangePinCountsRead {
             target: other,
-            counts: vec![(NEW_ROW, 4)],
+            counts: Ok(vec![(NEW_ROW, 4)]),
         },
     );
     send(
         &mut app,
         PlacedPartMsg::ChangePinCountsRead {
             target,
-            counts: vec![(OLD_ROW, 2)],
+            counts: Ok(vec![(OLD_ROW, 2)]),
         },
     );
     let PickerMode::ChangeComponent(session) = &app.library.picker.as_ref().unwrap().mode else {
@@ -539,6 +539,27 @@ fn pin_counts_of_another_change_are_dropped() {
     };
     assert_eq!(session.row_pins.get(&NEW_ROW), None);
     assert_eq!(session.row_pins.get(&OLD_ROW), Some(&2));
+}
+
+/// A pin-count read whose thread panicked says so in Messages, as a
+/// symbol read that failed, and leaves the rows without a count.
+#[test]
+fn a_panicked_pin_count_read_says_so_in_messages() {
+    let (mut app, target) = app_changing_r5();
+    let needle = "pin count read 7f3c panicked";
+    let before = crate::diagnostics::logged_count(needle);
+    send(
+        &mut app,
+        PlacedPartMsg::ChangePinCountsRead {
+            target,
+            counts: Err(needle.into()),
+        },
+    );
+    assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
+    let PickerMode::ChangeComponent(session) = &app.library.picker.as_ref().unwrap().mode else {
+        panic!("the list is open");
+    };
+    assert_eq!(session.row_pins.get(&NEW_ROW), None);
 }
 
 #[test]

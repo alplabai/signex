@@ -272,7 +272,7 @@ impl Signex {
             async move {
                 tokio::task::spawn_blocking(move || read_pin_counts(reads, roots))
                     .await
-                    .unwrap_or_default()
+                    .map_err(|e| e.to_string())
             },
             move |counts| {
                 Message::Library(LibraryMessage::PlacedPart(
@@ -295,11 +295,34 @@ impl Signex {
         }
     }
 
+    /// The pin counts read for `target`'s list. A read whose thread
+    /// panicked says so in Messages, as a symbol read that failed; its
+    /// rows stay without a count.
     pub(super) fn store_row_pins(
         &mut self,
         target: PlacedPartTarget,
-        counts: Vec<(Uuid, usize)>,
+        counts: Result<Vec<(Uuid, usize)>, String>,
     ) -> Task<Message> {
+        let counts = match counts {
+            Ok(counts) => counts,
+            Err(error) => {
+                let i18n = &self.ui_state.i18n;
+                let reason = signex_i18n::t!(
+                    i18n,
+                    signex_i18n::ids::LIBRARY_WORKER_PANICKED,
+                    "error" => error
+                );
+                crate::diagnostics::log_warning(
+                    signex_i18n::t!(
+                        i18n,
+                        signex_i18n::ids::LIBRARY_ROW_SYMBOL_FAILED,
+                        "error" => reason.into_string()
+                    )
+                    .into_string(),
+                );
+                return Task::none();
+            }
+        };
         if let Some(session) = self.change_session_mut()
             && session.target == target
         {
