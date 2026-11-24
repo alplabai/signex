@@ -445,9 +445,49 @@ mod tests {
         assert_eq!(state.row.parameters["value"], meas(33_000.0, "ohm"));
     }
 
+    /// Mockup row 139: `10k` typed into the number field picks the k prefix
+    /// and leaves `10` in the field; Enter stores 10 kΩ.
+    #[test]
+    fn a_trailing_prefix_letter_typed_into_the_number_picks_the_prefix() {
+        let mut state = state_with("value", meas(4.7, "ohm"));
+        set_measurement_buf(&mut state, "value".into(), "10k".into(), None);
+        assert_eq!(
+            state.params_edit_buf.get("value").map(String::as_str),
+            Some("10")
+        );
+        assert_eq!(state.measurement_prefix("value"), SiPrefix::Kilo);
+        assert!(state.params_error.is_empty());
+        commit_measurement(&mut state, "value".into(), "ohm".into());
+        assert_eq!(state.row.parameters["value"], meas(10_000.0, "ohm"));
+        assert!(state.dirty);
+    }
+
+    /// A slot's unit decides which letters count: `100u` on a farad slot
+    /// picks micro, a `k` on it is refused like any other letter.
+    #[test]
+    fn a_slot_unit_decides_which_typed_prefix_letters_count() {
+        let mut state = fixture();
+        let cap = slot("value", "F");
+        set_measurement_buf(&mut state, "value".into(), "100u".into(), Some(cap.clone()));
+        assert_eq!(
+            state.params_edit_buf.get("value").map(String::as_str),
+            Some("100")
+        );
+        assert_eq!(state.measurement_prefix("value"), SiPrefix::Micro);
+        commit_measurement(&mut state, "value".into(), "F".into());
+        assert_eq!(state.row.parameters["value"], meas(100e-6, "F"));
+
+        set_measurement_buf(&mut state, "value".into(), "4.7k".into(), Some(cap));
+        assert!(state.params_error.contains_key("value"));
+        assert_eq!(
+            state.params_edit_buf.get("value").map(String::as_str),
+            Some("4.7k")
+        );
+    }
+
     #[test]
     fn a_prefix_typed_into_the_number_field_is_refused() {
-        for typed in ["4k7", "10k", "4.7uF"] {
+        for typed in ["4k7", "4.7uF"] {
             let mut state = state_with("value", meas(4700.0, "ohm"));
             set_measurement_buf(&mut state, "value".into(), typed.into(), None);
             commit_measurement(&mut state, "value".into(), "ohm".into());

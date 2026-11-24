@@ -11,7 +11,7 @@
 
 use signex_library::{
     ParamKind, ParamSlot, ParamValue, commit_measurement as commit_typed, commit_slot_measurement,
-    slot_field_seed, slot_unit,
+    param_edit::split_typed_prefix, slot_field_seed, slot_unit,
 };
 use signex_types::quantity::{MantissaError, SiPrefix, Unit, parse_mantissa};
 
@@ -35,16 +35,34 @@ pub(super) fn editing_unit(slot: Option<&ParamSlot>, unit_token: &str) -> Option
         .or_else(|| Unit::from_alias(unit_token.trim()))
 }
 
-/// Live-update the edit buffer for a measurement parameter row. A prefix
-/// or unit typed into the number (`4k7`) is refused at once.
+/// The known unit `name`'s field edits in: its slot's, else the stored
+/// measurement's.
+fn field_unit(state: &ComponentPreviewState, name: &str) -> Option<Unit> {
+    let stored = match state.row.parameters.get(name) {
+        Some(ParamValue::Measurement { unit, .. }) => unit.as_str(),
+        _ => "",
+    };
+    editing_unit(measurement_slot(state, name).as_ref(), stored)
+}
+
+/// Live-update the edit buffer for a measurement parameter row. A `k`,
+/// `M` or `u` (`µ`) typed at the end of the number picks that prefix and
+/// leaves the number in the field (mockup row 139); any other prefix or
+/// unit typed into the number (`4k7`) is refused at once.
 pub(super) fn set_measurement_buf(
     state: &mut ComponentPreviewState,
     name: String,
-    buf: String,
+    mut buf: String,
     slot: Option<ParamSlot>,
 ) {
     if let Some(slot) = slot {
         state.params_slot.insert(name.clone(), slot);
+    }
+    if let Some(unit) = field_unit(state, &name)
+        && let Some((number, prefix)) = split_typed_prefix(&buf, &unit)
+    {
+        buf = number;
+        state.params_prefix.insert(name.clone(), prefix);
     }
     match parse_mantissa(&buf) {
         Err(e @ (MantissaError::HasLetters(_) | MantissaError::Comma(_))) => {

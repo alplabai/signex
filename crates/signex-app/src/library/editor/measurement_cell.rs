@@ -1,6 +1,8 @@
 //! The editor of one measurement parameter: a number-only field, an SI
 //! prefix picker and the unit (fixed by the class template's slot, or
-//! the row's own). Users never type a prefix or a unit.
+//! the row's own). A unit is never typed; a `k`, `M` or `u` (`µ`) typed at
+//! the end of the number picks that prefix in the update
+//! (`set_measurement_buf`, mockup row 139).
 
 use iced::widget::{column, row};
 use iced::{Element, Length, Widget};
