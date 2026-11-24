@@ -222,4 +222,18 @@ define_ids! {
     DIALOG_ERC_SOURCE_PROJECT = "dialog-erc-source-project";
     DIALOG_ERC_SOURCE_USER_DEFAULT = "dialog-erc-source-user-default";
     DIALOG_ERC_PROFILE_MENU = "dialog-erc-profile-menu";
+    // project-shell
+    DIALOG_RENAME_PROJECT_FOLDER_KEPT = "dialog-rename-project-folder-kept";
+    DIALOG_VERSION_CONTROL_AUTHOR_NOTE = "dialog-version-control-author-note";
+    DIALOG_VERSION_CONTROL_AUTHOR_NAME = "dialog-version-control-author-name";
+    DIALOG_VERSION_CONTROL_AUTHOR_EMAIL = "dialog-version-control-author-email";
+    DIALOG_NETLIST_OMITTED_UNREADABLE = "dialog-netlist-omitted-unreadable";
+    DIALOG_NETLIST_OMITTED_NOT_A_FILE = "dialog-netlist-omitted-not-a-file";
+    DIALOG_NETLIST_OMITTED_TOO_LARGE = "dialog-netlist-omitted-too-large";
+    DIALOG_NETLIST_OMITTED_READ_FAILED = "dialog-netlist-omitted-read-failed";
+    DIALOG_NETLIST_OMITTED_NEWER_FORMAT = "dialog-netlist-omitted-newer-format";
+    DIALOG_NETLIST_OMITTED_NOT_A_SHEET = "dialog-netlist-omitted-not-a-sheet";
+    DIALOG_NETLIST_OMITTED_REFUSED = "dialog-netlist-omitted-refused";
+    DIALOG_NETLIST_OMITTED_SHEET_CYCLE = "dialog-netlist-omitted-sheet-cycle";
+    DIALOG_NETLIST_OMITTED_KEY_COLLISION = "dialog-netlist-omitted-key-collision";
 }

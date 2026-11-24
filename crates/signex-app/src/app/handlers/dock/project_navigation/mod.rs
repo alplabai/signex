@@ -335,7 +335,7 @@ impl Signex {
                 });
             }
             ProjectTreeAction::OpenRenameDialog(_) => {
-                self.open_rename_dialog(tree_path);
+                return self.open_rename_dialog(tree_path);
             }
             ProjectTreeAction::OpenRemoveDialog(_) => {
                 self.open_remove_dialog(tree_path);
@@ -350,7 +350,7 @@ impl Signex {
                 return self.run_validate_project(tree_path);
             }
             ProjectTreeAction::OpenProjectRenameDialog(_) => {
-                self.open_project_rename_dialog(tree_path);
+                return self.open_project_rename_dialog(tree_path);
             }
             ProjectTreeAction::OpenProjectOptions(_) => {
                 if let Some(&project_idx) = tree_path.first() {
@@ -381,7 +381,7 @@ impl Signex {
                 return self.add_project_footprint_library(tree_path);
             }
             ProjectTreeAction::OpenEnableVersionControl(_) => {
-                self.open_enable_version_control_dialog(tree_path);
+                return self.open_enable_version_control_dialog(tree_path);
             }
             ProjectTreeAction::OpenLibraryEnableVersionControl(row) => {
                 return self.open_library_enable_version_control_dialog(row);

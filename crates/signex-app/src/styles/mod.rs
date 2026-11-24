@@ -35,6 +35,8 @@ pub use metrics::ChromeMetrics;
 pub use radii::Radii;
 pub use scrollbar::{scrollbar_colors, scrollbar_style, thin_both, thin_scrollbar, thin_vertical};
 
+pub use dialog_kit::{dense_band_footer_height, dialog_band_padding};
+
 pub use buttons::{
     accent_button, danger_button, hover_row, outline_button, subtle_button, subtle_button_with_rest,
 };
