@@ -32,6 +32,29 @@ impl Signex {
     /// window) before that window's board is swapped in, as a key from it
     /// is judged: an undocked window's own tab, else the main window's.
     pub(crate) fn is_routing_board_track_in(&self, window: Option<iced::window::Id>) -> bool {
+        let (undocked, path) = self.key_window_tab(window);
+        self.is_routing_on(path.as_deref(), undocked)
+    }
+
+    /// Whether `window` (`None`: the main window) shows a board, judged
+    /// before its board is swapped in. There the rotate handler takes the
+    /// board path and never reaches a wire run (#2553).
+    pub(crate) fn window_shows_pcb(&self, window: Option<iced::window::Id>) -> bool {
+        let (_, path) = self.key_window_tab(window);
+        path.is_some_and(|path| {
+            (self.document_state.tabs.iter())
+                .find(|tab| tab.path == path)
+                .and_then(|tab| tab.cached_document.as_ref())
+                .is_some_and(|doc| doc.as_pcb().is_some())
+        })
+    }
+
+    /// The undocked window a key came from (`None`: the main window) and the
+    /// tab it shows: an undocked window's own tab, else the main window's.
+    fn key_window_tab(
+        &self,
+        window: Option<iced::window::Id>,
+    ) -> (Option<iced::window::Id>, Option<std::path::PathBuf>) {
         let undocked = window.filter(|id| self.ui_state.main_window_id != Some(*id));
         let path = match undocked {
             Some(id) => match self.ui_state.windows.get(&id) {
@@ -40,7 +63,7 @@ impl Signex {
             },
             None => self.active_tab_path(),
         };
-        self.is_routing_on(path.as_deref(), undocked)
+        (undocked, path)
     }
 
     /// The one rule both read: the armed tool is for the board at `path`
