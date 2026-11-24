@@ -649,4 +649,11 @@ pub enum FootprintEditorMsg {
     /// Import DXF… was pressed on a board sketch's bar (mockup row 179c).
     /// The board host answers it with the file dialog.
     SketchImportDxfRequested,
+    /// The Mirror options card (mockup row 191): answered by
+    /// `sketch_mode::mirror_card::route` before the editor; the editor
+    /// itself ignores it.
+    SketchMirrorCard(crate::library::editor::footprint::sketch_mode::mirror_card::MirrorCardMsg),
+    /// OK on the Mirror card: mirror the objects about the line, one undo
+    /// step on either host.
+    SketchMirrorApplied(crate::library::editor::footprint::sketch_mode::mirror_card::MirrorRequest),
 }

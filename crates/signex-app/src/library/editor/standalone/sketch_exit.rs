@@ -431,6 +431,11 @@ pub fn footprint_overlay<'a>(
         bake: Some(fp(FootprintEditorMsg::SketchBakeRequested)),
     };
     let mut stack = column![].spacing(SP.m);
+    // Jump to pad / Back to pad sit just above the preview card while it
+    // is open, else directly above the mode bar (Caner, 2026-11-24).
+    if let Some(link) = super::pad_link::link_button(editor, tokens, i18n) {
+        stack = stack.push(link);
+    }
     if exit_state.preview {
         let preview = BakePreview::of_footprint_editor(editor);
         let issues = footprint_issues(editor, &fp, i18n);
@@ -558,6 +563,78 @@ mod tests {
                 laid.bounds.x + laid.bounds.width <= cap,
                 "{:?} passes {cap}",
                 laid.bounds
+            );
+        }
+    }
+
+    /// A footprint in sketch mode whose selected Point drives pad "1", so
+    /// the canvas offers Jump to pad.
+    fn editor_offering_jump_to_pad() -> FootprintDocument {
+        use signex_sketch::SketchData;
+        use signex_sketch::attr::PadAttr;
+        use signex_sketch::entity::{Entity, EntityKind};
+        use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+
+        let plane = PlaneId::new();
+        let centre = SketchEntityId::new();
+        let mut point = Entity::new(centre, plane, EntityKind::Point { x: 0.0, y: 0.0 });
+        point.pad = Some(PadAttr {
+            number: "1".into(),
+            ..PadAttr::default()
+        });
+        let mut fp = signex_library::Footprint::empty("t");
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![point],
+            ..SketchData::default()
+        });
+        fp.pads.push(signex_library::Pad {
+            number: "1".into(),
+            ..signex_library::Pad::default()
+        });
+        let mut editor = FootprintDocument::new(
+            std::path::PathBuf::from("t.snxfpt"),
+            signex_library::FootprintFile::from_footprint(fp),
+        );
+        editor.state.mode = crate::library::editor::footprint::state::EditorMode::Sketch;
+        editor.state.pads[0].sketch_entity_id = Some(centre);
+        editor.state.selected_sketch = Some(centre);
+        assert!(
+            editor.state.pad_link_offer().is_some(),
+            "the fixture offers a link"
+        );
+        editor
+    }
+
+    /// Caner 2026-11-24: with the Bake preview card open, Jump to pad sits
+    /// just above the card and covers none of its text or the mode bar's.
+    #[test]
+    fn the_pad_link_sits_above_the_open_preview_card() {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        let i18n = I18n::en_us();
+        let mut editor = editor_offering_jump_to_pad();
+        editor.state.sketch_exit.preview = true;
+
+        let overlay = footprint_overlay(&editor, &tokens, &i18n);
+        let texts = crate::layout_probe::lay_out_texts(overlay, iced::Size::new(1200.0, 800.0));
+
+        let jump = i18n.message_plain(ids::SKETCH_TOOLS_JUMP_TO_PAD, &[]);
+        let heading = i18n.message_plain(ids::EDITORS_SKETCH_BAKE_RESULT, &[]);
+        let link = crate::layout_probe::find(&texts, &jump).bounds;
+        let card_top = crate::layout_probe::find(&texts, &heading).bounds.y;
+        assert!(
+            link.y + link.height <= card_top,
+            "the link {link:?} reaches below the card heading at {card_top}"
+        );
+        for other in texts.iter().filter(|t| t.text != jump) {
+            assert!(
+                other.bounds.intersection(&link).is_none(),
+                "the link {link:?} covers {:?} at {:?}",
+                other.text,
+                other.bounds
             );
         }
     }

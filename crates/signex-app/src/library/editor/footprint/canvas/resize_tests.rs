@@ -57,6 +57,7 @@ fn canvas_for<'a>(doc: &'a FootprintDocument, cache: &'a canvas::Cache) -> Footp
         zoom_step: 1.1,
         trackpad_pan: false,
         wheel_mode: Default::default(),
+        mirror_card: None,
     }
 }
 

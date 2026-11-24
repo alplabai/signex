@@ -6,6 +6,9 @@
 use signex_app::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
 use signex_app::dock::DockMessage;
 use signex_app::library::editor::footprint::driving_profile;
+use signex_app::library::editor::footprint::sketch_mode::mirror_card::{
+    MirrorCard, MirrorCardMsg, MirrorObject,
+};
 use signex_app::library::editor::footprint::{
     EditorMode, PadLinkMsg, PadLinkOffer, SketchTool, ToolPending,
 };
@@ -355,10 +358,19 @@ fn mirror_takes_a_centerline_under_the_first_click_as_its_line() {
     let (mut app, path) = open("mirror", with_sketch(s), SketchTool::Mirror);
 
     click(&mut app, &path, 0.05, 2.0, None);
-    assert_eq!(editor(&app, &path).state.selected_sketch, Some(centerline));
+    assert_eq!(mirror_card(&app, &path).line, Some(centerline));
     assert_eq!(points(sketch(&app, &path)), 3, "the pick mints no Point");
 
     click(&mut app, &path, 3.0, 1.0, Some(source));
+    assert!(
+        sketch(&app, &path).constraints.is_empty(),
+        "a pick writes nothing before OK"
+    );
+    edit(
+        &mut app,
+        &path,
+        FootprintEditorMsg::SketchMirrorCard(MirrorCardMsg::Confirmed),
+    );
     let sk = sketch(&app, &path);
     let image = sk.constraints.iter().find_map(|c| match c.kind {
         ConstraintKind::SymmetricAboutLine { p1, p2, line }
@@ -373,23 +385,27 @@ fn mirror_takes_a_centerline_under_the_first_click_as_its_line() {
 }
 
 #[test]
-fn mirror_ignores_a_plain_line_under_the_first_click() {
+fn mirror_does_not_take_a_plain_line_under_the_first_click_as_its_line() {
     let mut s = Sketch::new();
     let a = s.point(0.0, -5.0);
     let b = s.point(0.0, 5.0);
-    s.line(a, b);
+    let plain = s.line(a, b);
     let (mut app, path) = open("mirror-plain", with_sketch(s), SketchTool::Mirror);
+    let before = sketch(&app, &path).clone();
 
     click(&mut app, &path, 0.05, 2.0, None);
 
-    assert_eq!(editor(&app, &path).state.selected_sketch, None);
-    assert!(
-        editor(&app, &path)
-            .state
-            .solve_warnings
-            .iter()
-            .any(|w| w.starts_with("Mirror:"))
-    );
+    let card = mirror_card(&app, &path);
+    assert_eq!(card.line, None, "only a centerline is taken as the line");
+    assert_eq!(card.objects, vec![MirrorObject::Entity(plain)]);
+    assert_eq!(sketch(&app, &path), &before, "the pick writes nothing");
+}
+
+fn mirror_card<'a>(app: &'a Signex, path: &PathBuf) -> &'a MirrorCard {
+    app.library
+        .mirror_cards
+        .get(path)
+        .expect("the Mirror card is open")
 }
 
 // ─── Pads and the sketch (mockup row 192) ───────────────────────────────────

@@ -92,6 +92,7 @@ impl Signex {
                     &self.ui_state.i18n,
                     self.shows_footprint_layer_strip(window_id),
                     &self.document_state.panel_ctx.ui_font_name,
+                    self.library.mirror_cards.get(path),
                 )
                 .map(Message::Library)
                 .boxed(),
