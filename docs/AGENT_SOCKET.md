@@ -13,8 +13,8 @@ which `signex-cli` uses through `signex_app::headless::agent_client`.
 
 ## Off by default
 
-Preferences > Editing > "Allow agent connections" (`agent_connections_enabled`
-in `prefs.json`, default `false`). While it is off no socket and no token
+Preferences > System › General > "Allow agent connections"
+(`agent_connections_enabled` in `prefs.json`, default `false`). While it is off no socket and no token
 exist and nothing listens or accepts a connection. The app still lists each
 open project in the registry (below) and holds its lock, so that a headless
 `signex-cli` run does not edit a file open in a window; those entries name no

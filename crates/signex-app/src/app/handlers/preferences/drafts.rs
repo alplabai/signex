@@ -46,6 +46,11 @@ impl UiState {
             PrefNav::Keyboard => self
                 .preferences_keymap_editor
                 .differs_from(&self.keymap_profiles),
+            PrefNav::General => {
+                self.preferences_draft_autosave_enabled != self.autosave_enabled
+                    || self.preferences_draft_agent_connections_enabled
+                        != self.agent_connections_enabled
+            }
             PrefNav::Annotation => self.preferences_draft_annotate_undo != self.annotate_undo,
             PrefNav::Editing => {
                 self.preferences_draft_move_keeps_wires != self.move_keeps_wires
@@ -54,9 +59,6 @@ impl UiState {
                     || self.preferences_draft_edge_pan != self.edge_pan
                     || self.preferences_draft_increment_step != self.increment_step
                     || self.preferences_draft_paste_designators != self.paste_designators
-                    || self.preferences_draft_autosave_enabled != self.autosave_enabled
-                    || self.preferences_draft_agent_connections_enabled
-                        != self.agent_connections_enabled
                     || self.fast_grid_drafts_differ()
             }
             PrefNav::SchematicDisplay => {
@@ -291,5 +293,40 @@ impl Signex {
         }
         self.recompute_preferences_dirty();
         Task::none()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::app::{Message, PreferencesMsg, Signex};
+    use crate::preferences::{PrefMsg, PrefNav};
+
+    fn send(app: &mut Signex, msg: PrefMsg) {
+        let _ = app.update(Message::Preferences(PreferencesMsg::Inner(msg)));
+    }
+
+    /// Mockup row 147: the autosave and agent drafts belong to System ›
+    /// General, so their dot is on General and not on Editing.
+    #[test]
+    fn the_autosave_and_agent_drafts_dot_the_general_page() {
+        let (mut app, _boot) = Signex::new();
+        let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+        let autosave = app.ui_state.autosave_enabled;
+        let agents = app.ui_state.agent_connections_enabled;
+
+        send(&mut app, PrefMsg::DraftAutosaveEnabled(!autosave));
+        assert_eq!(
+            app.ui_state.preferences_pages.dirty_pages,
+            [PrefNav::General]
+        );
+        send(&mut app, PrefMsg::DraftAutosaveEnabled(autosave));
+        assert!(app.ui_state.preferences_pages.dirty_pages.is_empty());
+
+        send(&mut app, PrefMsg::DraftAgentConnectionsEnabled(!agents));
+        assert_eq!(
+            app.ui_state.preferences_pages.dirty_pages,
+            [PrefNav::General]
+        );
+        assert!(app.ui_state.preferences_dirty);
     }
 }
