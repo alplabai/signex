@@ -181,6 +181,49 @@ fn a_locked_union_keeps_its_members_until_unlocked() {
     );
 }
 
+/// The tab of the active sheet's first union, at `scale` px per mm.
+fn first_tab(app: &Signex, scale: f32) -> signex_types::schematic::Aabb {
+    use signex_app::schematic_runtime::{Designators, WireWidths, unions::union_frame};
+    let sheet = doc(app);
+    union_frame(
+        sheet,
+        &sheet.unions[0],
+        &Designators::new(),
+        WireWidths::default(),
+        scale,
+    )
+    .expect("the members are on the sheet")
+    .tab
+}
+
+/// Mockup row 158: only a locked union shows a padlock on its tab, so
+/// locking widens the tab and unlocking gives the room back.
+#[test]
+fn locking_a_union_makes_room_for_the_padlock_on_its_tab() {
+    let mut app = app_with_union();
+    let path = app.document_state.active_path.clone().unwrap();
+    let union = doc(&app).unions[0].uuid;
+    let open = first_tab(&app, 4.0);
+    let toggle = |app: &mut Signex| {
+        panel(
+            app,
+            UnionsMsg::LockToggled {
+                sheet: path.clone(),
+                union,
+            },
+        );
+    };
+    toggle(&mut app);
+    let locked = first_tab(&app, 4.0);
+    assert_eq!(locked.min_x, open.min_x);
+    assert!(
+        locked.max_x > open.max_x,
+        "the locked tab holds the padlock"
+    );
+    toggle(&mut app);
+    assert_eq!(first_tab(&app, 4.0), open, "unlocked, the room goes");
+}
+
 #[test]
 fn break_union_removes_it_and_keeps_the_objects() {
     let mut app = app_with_union();
