@@ -1,18 +1,21 @@
 //! Mockup row 89: with no rule written, the clearance column shows, muted,
-//! the clearance Run DRC checks with anyway, instead of empty cells.
+//! the clearance Run DRC checks with anyway, instead of empty cells. The
+//! Physical All row is empty until a fab tier is picked, then shows the
+//! tier's floors; Short-circuit and Un-routed net show the fixed No and On
+//! on All (maintainer decision 2026-11-24).
 
 use iced::Size;
 use signex_drc_dsl::table::catalog::Domain;
 use signex_drc_dsl::table::grid::GridScope;
 use signex_types::net_class::NetClass;
 use signex_types::pcb::{NetDef, PcbBoard};
-use signex_types::project::{DrcRuleSet, SetupProfile};
+use signex_types::project::{DrcRuleSet, FabTemplate, SetupProfile};
 
 use super::BuiltinClearance;
 use crate::app::handlers::menu::export::tests::app_workspace;
-use crate::app::rules_tab::RulesTabMsg;
-use crate::app::rules_tab::grid::RowRef;
+use crate::app::rules_tab::grid::{RowRef, mm_text};
 use crate::app::rules_tab::matrix_tests::send;
+use crate::app::rules_tab::{RulesPanel, RulesTabMsg};
 use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
 use crate::layout_probe::{LaidOutText, lay_out_texts};
@@ -81,8 +84,8 @@ fn laid_out(app: &Signex, id: ProjectId) -> Vec<LaidOutText> {
     lay_out_texts(app.view_rules_tab(id), Size::new(1600.0, 1000.0))
 }
 
-/// The texts reading `value` on the line of the text `row`.
-fn on_row<'t>(texts: &'t [LaidOutText], row: &str, value: &str) -> Vec<&'t LaidOutText> {
+/// The texts drawn on the line of the text `row`.
+fn row_line<'t>(texts: &'t [LaidOutText], row: &str) -> Vec<&'t LaidOutText> {
     let lines: Vec<f32> = texts
         .iter()
         .filter(|t| t.text == row)
@@ -91,13 +94,63 @@ fn on_row<'t>(texts: &'t [LaidOutText], row: &str, value: &str) -> Vec<&'t LaidO
     assert!(!lines.is_empty(), "{row} is not drawn");
     texts
         .iter()
-        .filter(|t| t.text == value)
         .filter(|t| {
             lines
                 .iter()
                 .any(|y| (t.bounds.center_y() - y).abs() < t.bounds.height / 2.0)
         })
         .collect()
+}
+
+/// The texts reading `value` on the line of the text `row`.
+fn on_row<'t>(texts: &'t [LaidOutText], row: &str, value: &str) -> Vec<&'t LaidOutText> {
+    row_line(texts, row)
+        .into_iter()
+        .filter(|t| t.text == value)
+        .collect()
+}
+
+fn pick(app: &mut Signex, id: ProjectId, domain: Domain) {
+    send(
+        app,
+        RulesTabMsg::DomainPicked {
+            project_id: id,
+            domain,
+        },
+    );
+}
+
+/// Pick and apply the Standard fab tier in the Presets panel, then close
+/// the panel.
+fn apply_standard_tier(app: &mut Signex, id: ProjectId) {
+    let panel = |panel| RulesTabMsg::PanelPicked {
+        project_id: id,
+        panel,
+    };
+    send(app, panel(Some(RulesPanel::Presets)));
+    send(
+        app,
+        RulesTabMsg::PresetPicked {
+            project_id: id,
+            preset: "tier:standard".into(),
+        },
+    );
+    send(app, RulesTabMsg::PresetApplied { project_id: id });
+    send(app, panel(None));
+    let dsl = app.document_state.projects[0]
+        .data
+        .rules
+        .as_ref()
+        .and_then(|rules| rules.drc.dsl.clone())
+        .unwrap_or_default();
+    assert!(dsl.contains("rule fab_track"), "the tier is stored: {dsl}");
+}
+
+/// The Standard tier's floors the Physical All row shows: track width,
+/// via diameter and via hole.
+fn standard_physical() -> [String; 3] {
+    let c = FabTemplate::Standard.capabilities();
+    [c.track_width, c.via_diameter, c.via_drill].map(mm_text)
 }
 
 #[test]
@@ -179,4 +232,74 @@ fn a_net_takes_its_class_and_a_scoped_rule_takes_nothing() {
         Some(0.3)
     );
     assert_eq!(builtin.for_row(&RowRef::Scoped("tight".into()), &[]), None);
+}
+
+#[test]
+fn the_physical_all_row_is_empty_until_a_fab_tier_is_picked() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id) = machine_rules_tab(&dir);
+    pick(&mut app, id, Domain::Physical);
+    let texts = laid_out(&app, id);
+    let lengths: Vec<&str> = row_line(&texts, "All")
+        .into_iter()
+        .map(|t| t.text.as_str())
+        .filter(|text| text.ends_with("mm"))
+        .collect();
+    assert!(lengths.is_empty(), "All shows no length: {lengths:?}");
+}
+
+#[test]
+fn the_physical_all_row_shows_the_picked_tiers_floors() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id) = machine_rules_tab(&dir);
+    apply_standard_tier(&mut app, id);
+    pick(&mut app, id, Domain::Physical);
+    let texts = laid_out(&app, id);
+    for floor in standard_physical() {
+        assert!(
+            !on_row(&texts, "All", &floor).is_empty(),
+            "All shows the tier's {floor}"
+        );
+    }
+}
+
+#[test]
+fn hiding_inherited_values_keeps_the_tiers_floors_on_all() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id) = machine_rules_tab(&dir);
+    apply_standard_tier(&mut app, id);
+    pick(&mut app, id, Domain::Physical);
+    send(&mut app, RulesTabMsg::InheritedToggled { project_id: id });
+    let texts = laid_out(&app, id);
+    let [track, ..] = standard_physical();
+    assert_eq!(on_row(&texts, "All", &track).len(), 1, "All keeps {track}");
+    let shown = texts.iter().filter(|t| t.text == track).count();
+    assert_eq!(shown, 1, "the rows below hide the inherited {track}");
+}
+
+#[test]
+fn short_circuit_and_unrouted_net_show_no_and_on_on_all_with_or_without_a_tier() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id) = machine_rules_tab(&dir);
+    for tier in ["none", "standard"] {
+        if tier == "standard" {
+            apply_standard_tier(&mut app, id);
+            pick(&mut app, id, Domain::Clearance);
+        }
+        let texts = laid_out(&app, id);
+        assert_eq!(
+            on_row(&texts, "All", "No").len(),
+            1,
+            "Short-circuit, {tier}"
+        );
+        assert_eq!(
+            on_row(&texts, "All", "On").len(),
+            1,
+            "Un-routed net, {tier}"
+        );
+        assert!(
+            on_row(&texts, "HV", "No").is_empty() && on_row(&texts, "HV", "On").is_empty(),
+            "the fixed values are All's alone, {tier}"
+        );
+    }
 }

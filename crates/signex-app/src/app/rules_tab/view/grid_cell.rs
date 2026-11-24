@@ -3,8 +3,9 @@
 //! (muted, or hidden while Show inherited values is off), an empty one, a
 //! column not checked yet (inert) or one that does not apply to the row
 //! (hatched). The tooltip names where the value comes from. An empty
-//! clearance cell shows, muted, the clearance Run DRC checks with anyway
-//! (mockup row 89).
+//! clearance cell shows, muted, the clearance Run DRC checks with anyway;
+//! All shows the fab tier's floor once a tier is picked, and the fixed No
+//! and On of Short-circuit and Un-routed net (mockup row 89).
 
 use std::collections::BTreeMap;
 
@@ -97,6 +98,21 @@ fn builtin_clearance(frame: &Frame, at: CellRef) -> Option<f64> {
         .for_row(row, grid.parents(at.row))
 }
 
+/// The fixed value All shows in a column Run DRC always checks with no
+/// rule to set it: shorts are never allowed and un-routed nets are always
+/// checked (mockup row 89). `None` for any other cell.
+fn fixed_value(frame: &Frame, at: CellRef) -> Option<Localized> {
+    let grid = frame.grid();
+    if !matches!(grid.row(at.row), Some(RowRef::All)) {
+        return None;
+    }
+    match grid.column(at.column)?.id {
+        "short_circuit_allowed" => Some(t!(frame.i18n, ids::RULES_CELL_NO)),
+        "unrouted_net_check" => Some(t!(frame.i18n, ids::RULES_CELL_ON)),
+        _ => None,
+    }
+}
+
 fn strong() -> Font {
     Font {
         weight: iced::font::Weight::Semibold,
@@ -167,10 +183,17 @@ pub(super) fn view<'a>(
             ..
         }
     );
-    let fill = match show {
-        CellShow::NotApplicable | CellShow::NotChecked => Some(style.inert_fill),
-        _ if is_selected => Some(style.accent_soft),
-        _ => None,
+    let is_inert = match show {
+        CellShow::NotApplicable => true,
+        CellShow::NotChecked => fixed_value(frame, at).is_none(),
+        _ => false,
+    };
+    let fill = if is_inert {
+        Some(style.inert_fill)
+    } else if is_selected {
+        Some(style.accent_soft)
+    } else {
+        None
     };
     let ring = style.text_size * RING_EM;
     let edge = if is_selected || set_edge {
@@ -217,7 +240,9 @@ fn face<'a>(
     let (value, ink, font): (String, Color, Font) = match show {
         CellShow::NotApplicable => return Space::new().boxed(),
         CellShow::NotChecked => (
-            t!(frame.i18n, ids::RULES_CELL_EMPTY).into_string(),
+            fixed_value(frame, at)
+                .unwrap_or_else(|| t!(frame.i18n, ids::RULES_CELL_EMPTY))
+                .into_string(),
             style.muted_ink,
             signex_widgets::ui_font::regular(),
         ),
@@ -242,7 +267,8 @@ fn face<'a>(
                 CellSource::Own { .. } if !is_all => (shown, style.ink, strong()),
                 CellSource::Set { .. } => (shown, style.ink, signex_widgets::ui_font::regular()),
                 CellSource::Own { .. } => (shown, style.ink, signex_widgets::ui_font::regular()),
-                _ if hide_inherited => (
+                // All keeps the fab tier's floor in view, as its own value.
+                _ if hide_inherited && !is_all => (
                     String::new(),
                     style.muted_ink,
                     signex_widgets::ui_font::regular(),
@@ -293,6 +319,9 @@ fn source_tip(frame: &Frame, show: &CellShow, at: CellRef, is_all: bool) -> Loca
     let i18n = frame.i18n;
     match show {
         CellShow::NotApplicable => t!(i18n, ids::RULES_CELL_NOT_APPLICABLE),
+        CellShow::NotChecked if fixed_value(frame, at).is_some() => {
+            t!(i18n, ids::RULES_CELL_ALWAYS_CHECKED)
+        }
         CellShow::NotChecked => t!(i18n, ids::RULES_CELL_NOT_CHECKED),
         CellShow::Empty if builtin_clearance(frame, at).is_some() => {
             t!(i18n, ids::RULES_CELL_FROM_DEFAULT)
