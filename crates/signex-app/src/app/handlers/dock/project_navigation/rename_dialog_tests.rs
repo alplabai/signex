@@ -73,9 +73,11 @@ fn the_dialog_names_the_sheet_symbols_that_place_the_file() {
     );
 }
 
-/// The field starts with the whole current name. Opening starts no work;
-/// once the dialog's window exists its name field is focused and selected,
-/// and no other dialog's window does that.
+/// The field starts with the whole current name. Opening asks for the field's
+/// focus and select-all and nothing else (mockup row 23: the field opens
+/// focused, the stem selected, also when the dialog shows in the main
+/// window); once the dialog's own window exists it asks again, and no other
+/// dialog's window does that.
 #[test]
 fn the_name_field_is_focused_once_the_window_opens() {
     use crate::app::state::ModalId;
@@ -88,15 +90,17 @@ fn the_name_field_is_focused_once_the_window_opens() {
         "no dialog, nothing to focus"
     );
     let opened = open(&mut app, &["top.snxsch"]);
-    assert_eq!(opened.units(), 0, "opening starts no work");
     let dialog = app.ui_state.rename_dialog.as_ref().expect("dialog opens");
     assert_eq!(dialog.buffer, "top.snxsch");
     assert!(dialog.name_clash.is_none());
-    assert_ne!(
-        app.focus_rename_field_once_open(ModalId::RenameDialog)
-            .units(),
-        0,
-        "the focus and select-all task"
+    let focus = app
+        .focus_rename_field_once_open(ModalId::RenameDialog)
+        .units();
+    assert_ne!(focus, 0, "the focus and select-all task");
+    assert_eq!(
+        opened.units(),
+        focus,
+        "opening asks for the focus and select-all, no other work"
     );
     assert_eq!(
         app.focus_rename_field_once_open(ModalId::RemoveDialog)
@@ -161,12 +165,41 @@ fn an_edit_keeps_the_composed_name_and_clears_the_last_error() {
     assert!(dialog.error.is_none());
 }
 
+/// Rename Project opens with its field focused too (mockup row 23), from the
+/// project tree and from the Project tab's Rename…; a closed project opens
+/// nothing and focuses nothing.
+#[test]
+fn rename_project_opens_with_the_field_focused() {
+    use crate::app::state::ModalId;
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let mut app = hierarchy(tmp.path());
+    let opened = app.open_project_rename_dialog(vec![0]);
+    let focus = app
+        .focus_rename_field_once_open(ModalId::RenameDialog)
+        .units();
+    assert_ne!(focus, 0);
+    assert_eq!(opened.units(), focus);
+
+    app.ui_state.rename_dialog = None;
+    let project_id = app.document_state.projects[0].id;
+    let from_tab =
+        app.dispatch_project_tab_message(crate::app::project_tab::ProjectTabMsg::RenameRequested {
+            project_id,
+        });
+    assert!(app.ui_state.rename_dialog.is_some(), "the tab opens it");
+    assert_eq!(from_tab.units(), focus);
+
+    app.ui_state.rename_dialog = None;
+    assert_eq!(app.open_project_rename_dialog(vec![9]).units(), 0);
+    assert!(app.ui_state.rename_dialog.is_none());
+}
+
 /// A project rename has no clash check here: its own checks run on submit.
 #[test]
 fn a_project_rename_is_not_checked_against_the_files() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let mut app = hierarchy(tmp.path());
-    app.open_project_rename_dialog(vec![0]);
+    let _ = app.open_project_rename_dialog(vec![0]);
     let _ = app.update(Message::Rename(RenameMsg::BufferChanged("top".to_string())));
     let dialog = app.ui_state.rename_dialog.as_ref().expect("dialog");
     assert!(dialog.is_project_rename);

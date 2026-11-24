@@ -1,11 +1,12 @@
-//! Subscriptions about windows and the app: which window has focus, the
-//! macOS system menu bar's build failures, and quit requests.
+//! Subscriptions about windows and the app: which window has focus, files
+//! dropped on a window, the macOS system menu bar's build failures, and
+//! quit requests.
 
 use iced::Subscription;
 
 use crate::app::handlers::canvas::ends_held_resume_esc;
 use crate::app::handlers::editing_commands::net_color_palette::is_pointer_press;
-use crate::app::{InputMsg, Message, NetColorMsg, WindowMsg};
+use crate::app::{GerberViewerMsg, InputMsg, Message, NetColorMsg, WindowMsg};
 
 /// Which window has focus: the system menu bar acts on it.
 pub(super) fn window_focus() -> Subscription<Message> {
@@ -39,6 +40,25 @@ pub(super) fn held_escape_end(is_held: bool) -> Subscription<Message> {
     }
     iced::event::listen_with(|event, _status, _window| {
         ends_held_resume_esc(&event).then_some(Message::Input(InputMsg::HeldEscapeEnded))
+    })
+}
+
+/// Files dragged over and dropped on any window (mockup rows 193 and 193f):
+/// the Gerber Viewer counts them while they hover and opens them once they
+/// land. Captured events count: a widget under the pointer must not keep a
+/// drop from the app.
+pub(super) fn file_drops() -> Subscription<Message> {
+    iced::event::listen_with(|event, _status, window| {
+        let iced::Event::Window(event) = event else {
+            return None;
+        };
+        let msg = match event {
+            iced::window::Event::FileHovered(path) => GerberViewerMsg::FileHovered(path),
+            iced::window::Event::FileDropped(path) => GerberViewerMsg::FileDropped { window, path },
+            iced::window::Event::FilesHoveredLeft => GerberViewerMsg::FilesHoverLeft,
+            _ => return None,
+        };
+        Some(Message::GerberViewer(msg))
     })
 }
 

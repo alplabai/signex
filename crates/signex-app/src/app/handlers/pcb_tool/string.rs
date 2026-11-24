@@ -1,6 +1,7 @@
 //! The String tool (#2373): each click places a board string on the active
-//! overlay, mechanical or documentation layer (`PcbLayer::takes_text`), as
-//! one undo step, with the text, height and turn set in Properties (#2393),
+//! copper, overlay, mechanical or documentation layer
+//! (`PcbLayer::takes_text`; on copper, copper of no net, #2883), as one
+//! undo step, with the text, height and turn set in Properties (#2393),
 //! else the catalog's new-string text at the default size.
 
 use signex_i18n::{ids, t};

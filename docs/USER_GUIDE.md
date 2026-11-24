@@ -101,7 +101,7 @@ Its footer says what the mouse wheel is set to; **change** opens
 **Preferences ▸ Appearance**, where the Mouse wheel setting is, and leaves the
 card open. Close it with **Got it**, the ✕ in its corner or `Esc`. It is a
 reminder only; nothing else changes when you dismiss it, and it does not come
-back.
+back on its own. **Help ▸ Show Welcome Tips** opens it again.
 
 `F1` (or **Help ▸ Keyboard Shortcuts**) opens a reference of every working
 binding in the active shortcut profile, grouped by category in two columns.
@@ -202,6 +202,11 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 - **Pan:** hold the right mouse button and drag.
   A right-click without dragging opens the context menu, unless you are in the
   middle of drawing a wire, where it cancels the wire.
+- **Pan at the edge:** while a tool is armed or you drag or move something,
+  hold the pointer near an edge of the canvas and the view moves that way,
+  faster the closer you are to the edge; what you are placing or dragging
+  stays under the pointer. Move onto a panel to stop; the tool stays armed.
+  **Preferences ▸ Editing** turns it off and sets its speed.
 - **Zoom:** scroll the mouse wheel. Zoom is centred on the pointer. Or hold the
   middle mouse button (the wheel button) and drag: up zooms in, down zooms out,
   about the point you pressed. A tool you have armed stays armed. In the 3D
@@ -1011,7 +1016,9 @@ choice: **Kind** starts at Same and the rest at Any, so at first every object
 of the same kind matches. A placed part reads as **Part**. **Current sheet**
 counts the matches on the sheet; **Whole project** also counts them on the
 project's other sheets, including closed ones. **Select N** selects the matches
-on the dialog's own sheet; matches elsewhere are only counted. Opened on a
+on the dialog's own sheet; matches elsewhere are listed in Messages, one row
+each (the first 50, then a count of the rest), and a row's **Show** opens its
+sheet and selects the object. Opened on a
 board, it searches that board.
 
 ### Search everywhere
@@ -1541,7 +1548,7 @@ not fit, scroll the strip sideways. Click a tab to make that layer active;
 new tracks, pours and text go on the active layer, and its tab has the
 accent bar along the top. `+` and `-` step to the next and previous layer,
 `*` to the next signal layer. A right-click on a tab hides, highlights or
-shows layers, sets the layer's colour (**Layer colour...**, saved with the
+shows layers, sets the layer's colour (**Layer color...**, saved with the
 board), sets the tab names (Short, Medium or Long) and the layer numbers,
 and its **Layer stack...** row opens the Layer Stack panel. The button at
 the left end of the tabs picks a layer set.
@@ -1744,7 +1751,7 @@ adds one and **Add net** puts nets in it.
 
 1. With the board in view, choose **Tools ▸ Design Rule Check** (`T D`), or
    press **Run DRC** in the Messages panel.
-2. Choose **Tools ▸ DRC Results** to open the results, grouped by rule.
+2. Choose **Tools ▸ DRC** to open the results, grouped by rule.
 3. Click a row: its objects are selected and the view centres on them.
 4. Fix the board and run DRC again. Results go stale when the board changes.
 
@@ -1753,7 +1760,7 @@ lines still open), keepout violations and every written rule. To accept a
 violation on purpose, press **Waive**, type why, and press **Waive** again.
 **Show waived** lists waived ones; **Unwaive** takes a waiver back.
 
-<!-- screenshot: the DRC Results panel with a clearance violation selected on the board -->
+<!-- screenshot: the DRC panel with a clearance violation selected on the board -->
 
 More detail: [DRC_RULES.md](DRC_RULES.md).
 
@@ -1966,10 +1973,10 @@ never in a project file. Each distributor has a card with its state:
   opens your browser to sign in and stores the refresh token in the keyring;
   **Cancel** stops a sign-in that is still waiting. **Disconnect** removes the
   stored token and forgets the account; if the keyring refuses, the card says
-  why and the message is also in the Messages panel. When Signex was started
-  without `SIGNEX_DIGIKEY_CLIENT_ID` the card shows *Not configured* and
-  Connect stays off until Signex is started with that variable (and
-  `SIGNEX_DIGIKEY_CLIENT_SECRET`) set.
+  why and the message is also in the Messages panel. A release build carries
+  its own DigiKey client id; `SIGNEX_DIGIKEY_CLIENT_ID` (with
+  `SIGNEX_DIGIKEY_CLIENT_SECRET`) overrides it. Only a build without one,
+  started without that variable, shows *Not configured* with Connect off.
 - **Mouser** takes an API key. **Test** checks it with one lookup and, if it
   works, saves it in the keyring; the card then shows *Key verified*. Editing
   the key makes it *Not tested* again.
@@ -1984,12 +1991,14 @@ row by its handle to move it; the order is saved at once to the
 
 **Preferences ▸ Library ▸ Component Classes** lists the classes a new library
 starts with. They appear in the class picker of New Component and Edit
-Component; a library's own list is edited in that library.
+Component. It is a seed list for new libraries: removing a class here does
+not change existing libraries; a library's own list is edited in that library.
 
 - The **Key** is what a part stores; the **Label** is what pickers show. Click
   a cell to edit it.
 - **+ Add Class** adds a row at the bottom, marked *new*, with its key ready
-  to type.
+  to type. Type the label and the key is made from it in lower snake case
+  (*Ferrite bead* gives `ferrite_bead`); type a key yourself and it stays.
 - Drag a row by its handle to change the order the picker shows. The filter
   field only hides rows; it does not change the order.
 - Point at a row and press **×** to remove it.

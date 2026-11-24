@@ -7,7 +7,7 @@ use signex_types::pcb::{PadShape, PadType, Point};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 
 use super::form_tests::{enter, form, panel, tab, typed};
-use super::tests::{app_with_board, board_of, click, escape, hover, live, run, undo};
+use super::tests::{app_with_board, board_of, click, escape, grid_only, hover, live, run, undo};
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::app::{Message, PcbMsg, PcbViewMsg, Signex};
 use crate::panels::PcbPrimitiveMsg;
@@ -87,6 +87,7 @@ fn the_four_tools_are_live_rows() {
 fn a_pad_lands_on_the_grid_on_the_net_under_it_one_step_per_click() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
+    grid_only(&mut app);
     let before = live(&app, &path);
     run(&mut app, "place_board_pad");
     hover(&mut app, 4.2, 0.3);
@@ -277,6 +278,7 @@ fn a_hole_wider_than_the_pad_is_refused_and_esc_keeps_the_previous_values() {
 fn the_arc_and_dimension_forms_set_width_and_precision() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
+    grid_only(&mut app);
     run(&mut app, "place_board_arc");
     let PcbPrimitiveFacts::Arc(arc) = form(&app) else {
         panic!("arming Arc shows the arc form");

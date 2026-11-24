@@ -205,12 +205,20 @@ pub struct UiState {
     pub net_hover_enabled: bool,
     /// Draft mirror of [`Self::net_hover_enabled`] for the Preferences dialog.
     pub preferences_draft_net_hover_enabled: bool,
+    /// Saved "Pan at the canvas edge" preference and its speed (#2872).
+    pub edge_pan: crate::app::edge_pan::EdgePanPrefs,
+    /// Draft mirror of [`Self::edge_pan`] for the Preferences dialog.
+    pub preferences_draft_edge_pan: crate::app::edge_pan::EdgePanPrefs,
     /// Saved "Fill symbol bodies" preference: the body shapes a symbol
     /// leaves unfilled draw filled, in the theme tint unless the user chose
     /// a colour. On by default.
     pub symbol_body_fill: crate::symbol_fill_prefs::SymbolBodyFill,
     /// Draft mirror of [`Self::symbol_body_fill`] for the Preferences dialog.
     pub preferences_draft_symbol_body_fill: crate::symbol_fill_prefs::SymbolBodyFill,
+    /// Saved PCB Defaults: what each new board dimension starts from (#2868).
+    pub pcb_dimension_defaults: signex_types::pcb_dimension_style::DimensionDefaults,
+    /// Draft of [`Self::pcb_dimension_defaults`] for the Preferences dialog.
+    pub preferences_pcb_defaults: crate::pcb_defaults_prefs::PcbDefaultsDraft,
     /// The fill colour field's preset palette is open (view state only).
     pub preferences_body_fill_palette_open: bool,
     /// The fill colour field's custom colour picker is open (view state only).

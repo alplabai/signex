@@ -79,11 +79,18 @@ fn a_field_a_drawing_lacks_or_an_odd_value_changes_nothing() {
         graphic_edit_command(&b, &line, &GraphicEdit::Width(-1.0)),
         Err(PrimitiveEditRefusal::Negative)
     );
+    // Copper was refused here; since Caner's 2026-11-24 decision (#2883) a
+    // drawing moves onto copper and only a keep-out refuses it.
+    let onto_copper = GraphicEdit::Layer(PcbLayer::Copper(CopperLayer::Top));
+    assert!(matches!(
+        graphic_edit_command(&b, &line, &onto_copper),
+        Ok(Some(_))
+    ));
     assert_eq!(
         graphic_edit_command(
             &b,
             &line,
-            &GraphicEdit::Layer(PcbLayer::Copper(CopperLayer::Top))
+            &GraphicEdit::Layer(PcbLayer::Technical(TechnicalLayer::KeepoutTop))
         ),
         Err(PrimitiveEditRefusal::GraphicLayerNotAllowed)
     );

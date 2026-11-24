@@ -284,6 +284,11 @@ define_ids! {
     PCB_PRIM_SOLDER_TENTED = "pcb-prim-solder-tented";
     // #2523: the pour, string and dimension panels and their illustrations.
     PCB_PRIM_UNIT_MM2 = "pcb-prim-unit-mm2";
+    // pcb-props-bar
+    PCB_PRIM_STRING_MIRRORED = "pcb-prim-string-mirrored";
+    PCB_PRIM_UNIT_MIL = "pcb-prim-unit-mil";
+    PCB_PRIM_DIM_VALUE_MIL = "pcb-prim-dim-value-mil";
+    // #2523, continued.
     PCB_PRIM_POUR_FILL_MODE = "pcb-prim-pour-fill-mode";
     PCB_PRIM_POUR_FILL_SOLID = "pcb-prim-pour-fill-solid";
     PCB_PRIM_POUR_FILL_HATCHED = "pcb-prim-pour-fill-hatched";
@@ -326,4 +331,39 @@ define_ids! {
     PCB_PRIM_DIM_PRECISION_STEP = "pcb-prim-dim-precision-step";
     PCB_PRIM_DIM_DRAWING_NOTE = "pcb-prim-dim-drawing-note";
     PCB_PRIM_DIM_LAYER_NOTE = "pcb-prim-dim-layer-note";
+    PCB_PRIM_DIM_ARROWS = "pcb-prim-dim-arrows";
+    PCB_PRIM_DIM_ARROW_STYLE = "pcb-prim-dim-arrow-style";
+    PCB_PRIM_DIM_ARROW_FILLED = "pcb-prim-dim-arrow-filled";
+    PCB_PRIM_DIM_ARROW_OPEN = "pcb-prim-dim-arrow-open";
+    PCB_PRIM_DIM_ARROW_NONE = "pcb-prim-dim-arrow-none";
+    PCB_PRIM_DIM_ARROW_LENGTH = "pcb-prim-dim-arrow-length";
+    PCB_PRIM_DIM_ARROW_WIDTH = "pcb-prim-dim-arrow-width";
+    PCB_PRIM_DIM_TEXT = "pcb-prim-dim-text";
+    PCB_PRIM_DIM_FONT = "pcb-prim-dim-font";
+    PCB_PRIM_DIM_FONT_MONO = "pcb-prim-dim-font-mono";
+    PCB_PRIM_DIM_FONT_SANS = "pcb-prim-dim-font-sans";
+    PCB_PRIM_DIM_BOLD = "pcb-prim-dim-bold";
+    PCB_PRIM_DIM_ITALIC = "pcb-prim-dim-italic";
+    PCB_PRIM_DIM_TEXT_WIDTH = "pcb-prim-dim-text-width";
+    PCB_PRIM_DIM_TEXT_POSITION = "pcb-prim-dim-text-position";
+    PCB_PRIM_DIM_TEXT_ABOVE = "pcb-prim-dim-text-above";
+    PCB_PRIM_DIM_TEXT_INLINE = "pcb-prim-dim-text-inline";
+    PCB_PRIM_DIM_TEXT_MANUAL = "pcb-prim-dim-text-manual";
+    PCB_PRIM_DIM_TEXT_GAP = "pcb-prim-dim-text-gap";
+    PCB_PRIM_DIM_TEXT_AT = "pcb-prim-dim-text-at";
+    PCB_PRIM_DIM_ALONG = "pcb-prim-dim-along";
+    PCB_PRIM_DIM_ACROSS = "pcb-prim-dim-across";
+    PCB_PRIM_DIM_EXTENSIONS = "pcb-prim-dim-extensions";
+    PCB_PRIM_DIM_EXT_OFFSET = "pcb-prim-dim-ext-offset";
+    PCB_PRIM_DIM_EXT_OVERSHOOT = "pcb-prim-dim-ext-overshoot";
+    PCB_PRIM_DIM_EXT_WIDTH = "pcb-prim-dim-ext-width";
+    PCB_PRIM_DIM_UNITS = "pcb-prim-dim-units";
+    PCB_PRIM_DIM_UNIT = "pcb-prim-dim-unit";
+    PCB_PRIM_DIM_UNIT_MM = "pcb-prim-dim-unit-mm";
+    PCB_PRIM_DIM_UNIT_MIL = "pcb-prim-dim-unit-mil";
+    PCB_PRIM_DIM_UNIT_IN = "pcb-prim-dim-unit-in";
+    PCB_PRIM_DIM_SHOW_UNIT = "pcb-prim-dim-show-unit";
+    PCB_PRIM_DIM_PREFIX = "pcb-prim-dim-prefix";
+    PCB_PRIM_DIM_SUFFIX = "pcb-prim-dim-suffix";
+    PCB_PRIM_DIM_TRAILING_ZEROS = "pcb-prim-dim-trailing-zeros";
 }

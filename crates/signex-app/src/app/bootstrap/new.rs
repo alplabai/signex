@@ -181,7 +181,9 @@ impl Signex {
         let annotate_undo = crate::fonts::read_annotate_undo_pref_from(prefs);
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref_from(prefs);
         let net_hover_enabled = crate::fonts::read_net_hover_pref_from(prefs);
+        let edge_pan = crate::fonts::read_edge_pan_pref_from(prefs);
         let symbol_body_fill = crate::symbol_fill_prefs::SymbolBodyFill::from_prefs(prefs);
+        let pcb_dimension_defaults = crate::pcb_defaults_prefs::from_prefs(prefs);
         let trackpad_pan = crate::fonts::read_trackpad_pan_pref_from(prefs);
         let wheel_mode = crate::fonts::read_wheel_mode_pref_from(prefs);
         let layer_switcher = crate::fonts::read_layer_switcher_pref_from(prefs);
@@ -397,8 +399,14 @@ impl Signex {
                 preferences_draft_move_keeps_wires: move_keeps_wires,
                 net_hover_enabled,
                 preferences_draft_net_hover_enabled: net_hover_enabled,
+                edge_pan,
+                preferences_draft_edge_pan: edge_pan,
                 symbol_body_fill,
                 preferences_draft_symbol_body_fill: symbol_body_fill,
+                preferences_pcb_defaults: crate::pcb_defaults_prefs::PcbDefaultsDraft::of(
+                    &pcb_dimension_defaults,
+                ),
+                pcb_dimension_defaults,
                 preferences_body_fill_palette_open: false,
                 preferences_body_fill_picker_open: false,
                 trackpad_pan,
@@ -810,12 +818,14 @@ impl Signex {
                 project_writes: Vec::new(),
                 moved_project_dirs: Vec::new(),
                 deferred_git_commits: Vec::new(),
+                gerber_viewer: Default::default(),
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,
                 canvas: sch_canvas,
                 canvases: std::collections::HashMap::new(),
                 pcb_canvas,
+                symbol_edge_pan: Default::default(),
                 pcb_canvases: std::collections::HashMap::new(),
                 tile_panes: Default::default(),
                 pcb_selection: Default::default(),
@@ -930,7 +940,7 @@ impl Signex {
         );
         // Read once here, not in `DistributorSettings::default` or a view.
         app.library.settings.set_start_environment(
-            crate::library::settings::digikey_oauth::env_client_configured(),
+            crate::library::settings::digikey_oauth::client_configured(),
             crate::library::settings::persistence::config_path().as_deref(),
         );
         // v0.9 Stage 9: the globally-configured libraries and the bundled

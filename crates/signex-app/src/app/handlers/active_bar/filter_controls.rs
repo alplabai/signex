@@ -47,6 +47,7 @@ impl Signex {
         self.document_state.panel_ctx.selection_filters =
             self.interaction_state.selection_filters.clone();
         self.interaction_state.editing_custom_filter = None;
+        self.mirror_edited_custom_filter();
         Task::none()
     }
 
@@ -109,10 +110,12 @@ impl Signex {
     pub(crate) fn handle_click_custom_filter_preset(&mut self, idx: usize) -> Task<Message> {
         let state = &mut self.interaction_state;
         let len = state.custom_filter_presets.len();
-        if presets::click(&mut state.editing_custom_filter, idx, len) != Some(PresetClick::Selected)
-        {
+        let clicked = presets::click(&mut state.editing_custom_filter, idx, len);
+        self.mirror_edited_custom_filter();
+        if clicked != Some(PresetClick::Selected) {
             return Task::none();
         }
+        let state = &mut self.interaction_state;
         state.selection_filters = state.custom_filter_presets[idx].as_set();
         state.active_custom_filter_tab = idx;
         self.document_state.panel_ctx.selection_filters = state.selection_filters.clone();
@@ -201,6 +204,13 @@ impl Signex {
         }
     }
 
+    /// Mirror the edited preset into the panel context now: the Active Bar
+    /// dispatch runs no `finish_update`, so its mirror sync would leave the
+    /// panels a step behind (#2873).
+    fn mirror_edited_custom_filter(&mut self) {
+        self.document_state.panel_ctx.selection_filter.editing = self.edited_custom_filter();
+    }
+
     /// Mirror the in-memory preset list + active-tab index into the
     /// panel context (so the Properties panel re-renders) and persist
     /// to disk.
@@ -209,6 +219,7 @@ impl Signex {
         self.document_state.panel_ctx.custom_filter_presets = presets.clone();
         self.document_state.panel_ctx.active_custom_filter_tab =
             self.interaction_state.active_custom_filter_tab;
+        self.mirror_edited_custom_filter();
         crate::fonts::background_pref_write(crate::fonts::SCHEMATIC_FILTER_PRESETS, move || {
             crate::fonts::write_filter_presets(crate::fonts::SCHEMATIC_FILTER_PRESETS, &presets)
         })

@@ -50,7 +50,8 @@ pub(super) fn list<'a>(ctx: &'a PanelContext, view: &'a NetInspectorView) -> Ele
     ]
     .width(Length::Fill);
     for net in &view.nets {
-        list = list.push(net_block(ctx, net));
+        let hovered = view.hovered_net.as_deref() == Some(net.name.as_str());
+        list = list.push(net_block(ctx, net, hovered));
     }
     super::scrolled(list.boxed())
 }
@@ -76,8 +77,8 @@ pub(super) fn heading<'a>(
 
 /// A net row and, when expanded, its members: one block on the selection
 /// fill so the members read as the net's.
-fn net_block<'a>(ctx: &'a PanelContext, net: &'a NetRow) -> Element<'a, PanelMsg> {
-    let mut block: Column<Element<'a, PanelMsg>> = column![net_row(ctx, net)];
+fn net_block<'a>(ctx: &'a PanelContext, net: &'a NetRow, hovered: bool) -> Element<'a, PanelMsg> {
+    let mut block: Column<Element<'a, PanelMsg>> = column![net_row(ctx, net, hovered)];
     for member in &net.members {
         block = block.push(member_row(ctx, &net.name, member));
     }
@@ -117,9 +118,49 @@ pub(super) fn expanded_fill<'a>(
     .boxed()
 }
 
+/// The Name cell of a net row: chevron and name, and on hover the row's
+/// Highlight on the right, as a board row has it (mockup row 58).
+fn name_cell<'a>(ctx: &'a PanelContext, net: &'a NetRow, hovered: bool) -> Element<'a, PanelMsg> {
+    let tokens = &ctx.tokens;
+    let r = resolve(tokens);
+    let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
+    let mut cell: Row<Element<'a, PanelMsg>> = Row::new()
+        .push(signex_widgets::chevron::chevron(net.expanded, TS.body, r.ink3).boxed())
+        .push(
+            text(UserText::new(net.name.as_str()))
+                .size(TS.body)
+                .font(mono)
+                .color(ti(tokens.text))
+                .wrapping(iced::widget::text::Wrapping::None)
+                .boxed(),
+        )
+        .spacing(SP.s)
+        .align_y(Alignment::Center);
+    if hovered {
+        let highlight = text(t!(ctx.i18n, ids::PANELS_NET_INSPECTOR_HIGHLIGHT))
+            .size(TS.caption)
+            .color(r.ink3);
+        cell = cell
+            .push(
+                Space::new()
+                    .width(Length::Fill)
+                    .height(Length::Shrink)
+                    .boxed(),
+            )
+            .push(
+                signex_widgets::button(highlight)
+                    .padding([SP.xs, SP.s])
+                    .on_press(msg(NetInspectorMsg::NetHighlighted(net.name.clone())))
+                    .style(crate::styles::menu_item(tokens))
+                    .boxed(),
+            );
+    }
+    container(cell).width(Length::Fill).clip(true).boxed()
+}
+
 /// A net: chevron and name, its class as a pill, pin count. Clicking folds
-/// or unfolds it.
-fn net_row<'a>(ctx: &'a PanelContext, net: &'a NetRow) -> Element<'a, PanelMsg> {
+/// or unfolds it; the pointer over it shows its Highlight.
+fn net_row<'a>(ctx: &'a PanelContext, net: &'a NetRow, hovered: bool) -> Element<'a, PanelMsg> {
     let i18n = &*ctx.i18n;
     let tokens = &ctx.tokens;
     let r = resolve(tokens);
@@ -142,20 +183,7 @@ fn net_row<'a>(ctx: &'a PanelContext, net: &'a NetRow) -> Element<'a, PanelMsg> 
         ),
     };
     let line = row![
-        container(
-            row![
-                signex_widgets::chevron::chevron(net.expanded, TS.body, r.ink3),
-                text(UserText::new(net.name.as_str()))
-                    .size(TS.body)
-                    .font(mono)
-                    .color(ink)
-                    .wrapping(iced::widget::text::Wrapping::None),
-            ]
-            .spacing(SP.s)
-            .align_y(Alignment::Center),
-        )
-        .width(Length::Fill)
-        .clip(true),
+        name_cell(ctx, net, hovered),
         container(kind_chip(class, tone, ChipMetrics::from_text_size(TS.body)))
             .width(CLASS_W)
             .clip(true),
@@ -171,11 +199,14 @@ fn net_row<'a>(ctx: &'a PanelContext, net: &'a NetRow) -> Element<'a, PanelMsg> 
     .spacing(SP.s)
     .height(CM.field)
     .align_y(Alignment::Center);
-    signex_widgets::button(line)
+    let row = signex_widgets::button(line)
         .width(Length::Fill)
         .padding([0.0, SP.l])
         .on_press(msg(NetInspectorMsg::NetToggled(net.name.clone())))
-        .style(crate::styles::menu_item(tokens))
+        .style(crate::styles::menu_item(tokens));
+    iced::widget::mouse_area(row)
+        .on_enter(msg(NetInspectorMsg::NetRowEntered(net.name.clone())))
+        .on_exit(msg(NetInspectorMsg::NetRowLeft(net.name.clone())))
         .boxed()
 }
 
@@ -297,6 +328,10 @@ fn kind_icon<'a>(ctx: &'a PanelContext, kind: NetMemberRowKind) -> Element<'a, P
         iced::widget::tooltip::Position::Top,
     )
 }
+
+#[cfg(test)]
+#[path = "by_net_tests.rs"]
+mod hover_tests;
 
 #[cfg(test)]
 mod tests {

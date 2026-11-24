@@ -9,7 +9,9 @@ use pcb_geom::{ItemRef, PickKind};
 use signex_types::pcb::Point;
 
 use super::form_tests::form;
-use super::tests::{app_with_board, board_of, click, escape, live, right_click, run, undo};
+use super::tests::{
+    app_with_board, board_of, click, escape, grid_only, live, right_click, run, undo,
+};
 use crate::app::{Message, Signex};
 use crate::panels::pcb_primitive_properties::{PcbPrimitiveFacts, ZoneKind};
 use crate::pcb_canvas::PcbCanvasMsg;
@@ -112,6 +114,7 @@ fn a_pour_cutout_across_a_pour_is_a_region_and_the_pour_keeps_its_outline() {
 fn a_pour_cutout_inside_a_pour_leaves_the_fill_empty_and_a_right_click_closes_it() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
+    grid_only(&mut app);
     draw_pour(&mut app);
     let before = live(&app, &path);
     let full = pour_copper(&app, &path);
@@ -139,6 +142,7 @@ fn a_pour_cutout_inside_a_pour_leaves_the_fill_empty_and_a_right_click_closes_it
 fn a_click_inside_a_pour_cutout_picks_it_and_shows_its_panel() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
+    grid_only(&mut app);
     draw_pour(&mut app);
     place_cutout(&mut app, &INSIDE);
     let cutout = board_of(&app, &path).zones[1].uuid;
@@ -167,6 +171,7 @@ fn a_click_inside_a_pour_cutout_picks_it_and_shows_its_panel() {
 fn moving_the_cutout_off_the_pour_brings_the_copper_back() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
+    grid_only(&mut app);
     draw_pour(&mut app);
     let full = pour_copper(&app, &path);
     place_cutout(&mut app, &INSIDE);
@@ -206,6 +211,7 @@ fn moving_the_cutout_off_the_pour_brings_the_copper_back() {
 fn deleting_the_cutout_brings_the_copper_back() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
+    grid_only(&mut app);
     draw_pour(&mut app);
     let full = pour_copper(&app, &path);
     place_cutout(&mut app, &INSIDE);

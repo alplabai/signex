@@ -173,11 +173,12 @@ greyed while no PCB is open. The command is also in the command palette and
 as the Run DRC button of the Messages panel. On a board the key is `T D` in
 the default profile and `F7` in Classic.
 
-## Tools ▸ DRC Results and Tools ▸ Net Classes {#tools-drc-results}
+## Tools ▸ DRC and Tools ▸ Net Classes {#tools-drc-results}
 
-Right after Design Rule Check, Tools ▸ DRC Results (`open_drc_panel`, #2399)
-and Tools ▸ Net Classes (`open_net_classes_panel`, #2400) open the board's
-DRC results panel and the Net Classes panel. DRC Results is greyed while no
+Right after Design Rule Check, Tools ▸ DRC (`open_drc_panel`, #2399; named
+like the ERC panel since mockup row 87) and Tools ▸ Net Classes
+(`open_net_classes_panel`, #2400) open the board's DRC panel and the Net
+Classes panel. DRC is greyed while no
 PCB is open. Net Classes is an alias of Design ▸ Net Classes
 (`open_net_classes`), live on a sheet or a board: see
 [Design ▸ Net Classes](#find-similar-filter-net-classes). No keymap preset
@@ -208,7 +209,8 @@ net-class history, with the panel's Undo and Redo. The commands are
 
 Tools ▸ Re-Annotate Board... runs `reannotate_board` (#1312), right after
 Design Rule Check with the other board rows, and is greyed while no PCB is
-open. It opens the Positional Re-Annotate dialog for the board in view:
+open. It opens the Re-Annotate Board dialog (subtitle "Positional · <board>")
+for the board in view:
 
 - **Order**: by X, then by Y (the default), or by Y, then by X. The sort is
   exact at 1 µm: parts are not grouped into columns or rows by a tolerance,

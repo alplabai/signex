@@ -6,6 +6,7 @@ use std::collections::BTreeSet;
 
 use pcb_geom::{ClickMode, ItemRef};
 use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb_graphic::BoardGraphicKind;
 use uuid::Uuid;
 
 use super::PcbSelectionState;
@@ -85,11 +86,22 @@ impl PcbSelectionState {
             };
             filter.allows(item).then_some(zone.outline.as_slice())
         });
-        let rooms: Vec<Vec<Point>> = (board.rooms.iter())
+        let mut boxes: Vec<Vec<Point>> = (board.rooms.iter())
             .filter(|room| filter.allows(ItemRef::Room(room.uuid)))
             .map(|room| room.outline.corners())
             .collect();
-        let rings = zones.chain(rooms.iter().map(Vec::as_slice));
+        // A text frame is picked inside its box too, so it drags from there.
+        boxes.extend(board.graphics.iter().filter_map(|graphic| {
+            let frame = BoardGraphicKind::TextFrame;
+            let item = ItemRef::Graphic {
+                graphic: graphic.uuid,
+                kind: pcb_geom::PickKind::of_graphic(frame),
+            };
+            let (a, b) = (graphic.start?, graphic.end?);
+            (graphic.graphic_type == frame.token() && filter.allows(item))
+                .then(|| vec![a, Point::new(b.x, a.y), b, Point::new(a.x, b.y)])
+        }));
+        let rings = zones.chain(boxes.iter().map(Vec::as_slice));
         shapes.extend(rings.filter_map(area_shape));
         shapes
     }

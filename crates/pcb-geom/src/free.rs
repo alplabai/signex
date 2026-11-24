@@ -9,6 +9,7 @@ use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{BoardText, Pad, PcbBoard};
 use signex_types::pcb_arc::TrackArc;
 use signex_types::pcb_dimension::LinearDimension;
+use signex_types::pcb_dimension_style::GLYPH_ADVANCE;
 use signex_types::pcb_free::free_pad_frame;
 
 use crate::shape::Shape;
@@ -18,10 +19,6 @@ use crate::units::{GeomError, PointNm, mm_to_nm};
 /// How far an arc's chords may stray from the arc, mm: 5 µm, well under
 /// any manufacturing tolerance.
 pub const ARC_CHORD_ERROR_MM: f64 = 0.005;
-
-/// The advance of one glyph of board text, in text heights: the canvas
-/// draws it in a monospace face whose glyphs are about this wide.
-const GLYPH_ADVANCE: f64 = 0.6;
 
 /// A free pad's copper.
 pub fn free_pad_shape(pad: &Pad) -> Result<Shape, GeomError> {
@@ -58,26 +55,45 @@ pub fn dimension_shapes(dimension: &LinearDimension) -> Result<Vec<Shape>, GeomE
     let Some(drawing) = dimension.drawing() else {
         return Ok(Vec::new());
     };
-    let radius = (mm_to_nm(dimension.line_width, "dimension.line_width")? / 2).abs();
     let mut shapes = drawing
         .strokes
         .iter()
-        .map(|(a, b)| {
+        .enumerate()
+        .map(|(index, (a, b))| {
+            let width = dimension.stroke_width(index);
             Ok(Shape::Capsule {
                 a: PointNm::from_mm(*a, "dimension")?,
                 b: PointNm::from_mm(*b, "dimension")?,
-                radius,
+                radius: (mm_to_nm(width, "dimension.line_width")? / 2).abs(),
             })
         })
         .collect::<Result<Vec<_>, GeomError>>()?;
-    let label = dimension.value_text();
-    shapes.push(text_box_at(
+    for arrow in &drawing.filled_arrows {
+        shapes.push(triangle(arrow)?);
+    }
+    shapes.push(text_box(
         drawing.label_at,
+        dimension.label_length(),
         dimension.text_height,
-        label.chars().count(),
         drawing.label_rotation_deg,
     )?);
     Ok(shapes)
+}
+
+/// A filled arrowhead as a counter-clockwise polygon.
+fn triangle(corners: &[signex_types::pcb::Point; 3]) -> Result<Shape, GeomError> {
+    let mut ring = corners
+        .iter()
+        .map(|p| PointNm::from_mm(*p, "dimension.arrow"))
+        .collect::<Result<Vec<_>, _>>()?;
+    let [a, b, c] = corners;
+    if (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x) < 0.0 {
+        ring.reverse();
+    }
+    Ok(Shape::Polygon {
+        ring: ring.into(),
+        radius: 0,
+    })
 }
 
 /// The box a board string's glyphs fill, centred on its position and
@@ -105,7 +121,20 @@ fn text_box_at(
     chars: usize,
     rotation_deg: f64,
 ) -> Result<Shape, GeomError> {
-    let width = height * GLYPH_ADVANCE * chars.max(1) as f64;
+    text_box(
+        center,
+        height * GLYPH_ADVANCE * chars.max(1) as f64,
+        height,
+        rotation_deg,
+    )
+}
+
+fn text_box(
+    center: signex_types::pcb::Point,
+    width: f64,
+    height: f64,
+    rotation_deg: f64,
+) -> Result<Shape, GeomError> {
     Ok(Shape::Rect {
         center: PointNm::from_mm(center, "text.position")?,
         half_w: (mm_to_nm(width, "text width")? / 2).abs(),

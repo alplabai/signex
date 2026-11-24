@@ -205,6 +205,38 @@ fn a_rule_control_offers_four_levels_and_an_on_off_rule_two() {
     assert!(!off[0].selected && off[1].selected);
 }
 
+/// Mockup row 148: the rule the matrix sets shows only On / Off plus a link
+/// to the matrix; no other rule has the link.
+#[test]
+fn only_the_rule_the_matrix_sets_shows_on_off_and_the_matrix_link() {
+    for rule in RuleKind::ALL {
+        let labels: Vec<_> = severity_segments(rule, rule.default_severity())
+            .iter()
+            .map(|s| s.label)
+            .collect();
+        if rule.is_on_off_only() {
+            assert_eq!(labels, [ids::DIALOG_RULES_ON, ids::DIALOG_RULES_OFF]);
+            assert_eq!(
+                matrix_link(rule),
+                Some(ids::PREFERENCES_RULES_MATRIX_LINK),
+                "{rule:?}"
+            );
+        } else {
+            assert_eq!(labels.len(), 4, "{rule:?}");
+            assert_eq!(matrix_link(rule), None, "{rule:?}");
+        }
+    }
+    assert!(RuleKind::PinTypeConflict.is_on_off_only());
+}
+
+/// The link names the matrix, in plain catalog text.
+#[test]
+fn the_matrix_link_says_the_matrix_sets_the_severity() {
+    let words =
+        signex_i18n::I18n::en_us_ref().message_plain(ids::PREFERENCES_RULES_MATRIX_LINK, &[]);
+    assert_eq!(words, "Severity set in the matrix");
+}
+
 #[test]
 fn every_group_has_a_catalog_heading() {
     let headings: std::collections::HashSet<_> =

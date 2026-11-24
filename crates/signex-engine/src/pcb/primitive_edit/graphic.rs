@@ -15,7 +15,7 @@ use crate::pcb::{BoardCommand, BoardItem};
 /// drawing's kind does not have leaves it as it is.
 #[derive(Debug, Clone, PartialEq)]
 pub enum GraphicEdit {
-    /// A non-copper layer other than a keep-out.
+    /// Any layer but a keep-out (copper too, #2883).
     Layer(PcbLayer),
     /// The stroke width in mm, 0 or more.
     Width(f64),

@@ -8,6 +8,8 @@ mod replace;
 mod scan;
 
 #[cfg(test)]
+mod replace_all_tests;
+#[cfg(test)]
 mod tests;
 
 use iced::Task;

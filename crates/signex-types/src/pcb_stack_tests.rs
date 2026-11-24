@@ -248,3 +248,42 @@ fn sizes_parse_from_text() {
     assert!(parse_layer_sizes("TopSilkscreen=0.6", number).is_err());
     assert!(parse_layer_sizes("top=x", number).is_err());
 }
+
+/// Mockup rows 176 and 177: a derived stack carries no finish and no Df, so
+/// it needs no newer token; either one does.
+#[test]
+fn a_finish_or_a_loss_tangent_is_materials_data() {
+    let stack = LayerStack::derived(&[], 1.6);
+    assert!(!stack.has_materials_data());
+    assert!(stack.layers.iter().all(|l| l.loss_tangent == 0.0));
+
+    let mut with_df = stack.clone();
+    with_df.layers[4].loss_tangent = 0.02;
+    assert!(with_df.has_materials_data());
+
+    let mut finished = stack.clone();
+    finished.finish = Some(BoardFinish::default());
+    assert!(finished.has_materials_data());
+    assert_eq!(stack.shown_finish(), BoardFinish::default());
+}
+
+/// Mockup row 105: the default finish is ENIG with green LPI glossy mask on
+/// both sides and white silkscreen; a negative mask thickness is invalid.
+#[test]
+fn the_default_finish_matches_the_mockup_and_checks_its_numbers() {
+    let finish = BoardFinish::default();
+    assert_eq!(finish.surface, SurfaceFinish::Enig);
+    assert_eq!(finish.mask.kind, MaskType::Lpi);
+    assert_eq!(finish.mask.color, FinishColor::Green);
+    assert_eq!(finish.mask.gloss, MaskGloss::Glossy);
+    assert_eq!(finish.mask.sides, FinishSides::Both);
+    assert_eq!(finish.silkscreen.color, FinishColor::White);
+    assert!(finish.numbers_valid());
+    assert!(SurfaceFinish::LeadFreeHasl.is_hasl() && !SurfaceFinish::Enig.is_hasl());
+
+    let mut bad = finish;
+    bad.mask.over_laminate_mm = -0.01;
+    assert!(!bad.numbers_valid());
+    bad.mask.over_laminate_mm = f64::INFINITY;
+    assert!(!bad.numbers_valid());
+}

@@ -1,12 +1,14 @@
 //! The Exit confirm ("Quit" on macOS) when unsaved edits remain: the
 //! question, one fact line, and the unsaved list grouped by project, then
 //! files outside every project, then the libraries (drafts and Component
-//! Preview rows). Cancel / Discard All / Save All.
+//! Preview rows). The intro and footer come from the shared unsaved-prompt
+//! chrome, wrapped around the grouped list (mockup row 136): Discard All at
+//! the left, Cancel and Save All at the right.
 
 use std::path::{Path, PathBuf};
 
 use super::*;
-use iced::widget::{Column, Space, column, container};
+use iced::widget::{Space, column, container};
 use iced::{Element, Length, Widget};
 use signex_i18n::{I18n, Localized, MessageId, Translatable, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
@@ -14,13 +16,13 @@ use signex_widgets::text;
 
 use super::graphite_list::{LIST_ROW_H, group_header, kind_cap, kind_code, list_box, list_row};
 use crate::app::state::ModalId;
-use crate::library::state::EditorAddress;
-use crate::styles::{
-    DialogButtonKind, DialogIcon, chrome_px, dialog_body, dialog_button, dialog_footer_split,
+use crate::library::modal_chrome::{
+    UnsavedActions, UnsavedBody, unsaved_body, unsaved_footer_parts,
 };
+use crate::library::state::EditorAddress;
+use crate::styles::{DialogIcon, chrome_px, dialog_footer_split};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// The widest a row's folder or library name gets before it is cut, so the
 /// file name keeps room (240 px at the 12 px base).
@@ -359,63 +361,50 @@ impl Signex {
         let groups = group_entries(self.quit_entries(&st.dirty_paths, &st.dirty_rows));
         let summary = QuitSummary::of(&groups, st.dirty_rows.len());
 
-        let lead = text(t!(
-            i18n,
-            pick(ids::DIALOG_QUIT_QUESTION, ids::DIALOG_EXIT_QUESTION)
-        ))
-        .size(TS.label)
-        .font(iced::Font {
-            weight: iced::font::Weight::Medium,
-            ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
-        })
-        .color(crate::styles::ti(tokens.text));
-        let fact = text(summary.line(i18n))
-            .size(TS.body)
-            .color(crate::styles::ti(tokens.text_secondary));
-        let mut body: Column<Element<'_, Message>> =
-            column![column![lead.boxed(), fact.boxed()].spacing(SP.s).boxed()].spacing(SP.m);
         // The list changed since the user last saw it: say so above it.
+        let mut above = Vec::new();
         if self.ui_state.quit_confirm_refreshed {
-            body = body.push(super::graphite::callout(
+            above.push(super::graphite::callout(
                 DialogIcon::Warn,
                 t!(i18n, ids::DIALOG_QUIT_LIST_CHANGED),
                 tokens,
             ));
         }
-        body = body.push(
-            container(self.unsaved_list(&groups, tokens))
-                .height(Length::Fit.max(
-                    crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT
-                        + crate::app::handlers::modal_sizing::LIST_BOX_CHROME,
-                ))
-                .boxed(),
+        let list = container(self.unsaved_list(&groups, tokens))
+            .height(Length::Fit.max(
+                crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT
+                    + crate::app::handlers::modal_sizing::LIST_BOX_CHROME,
+            ))
+            .boxed();
+        let body = unsaved_body(
+            UnsavedBody {
+                title: t!(
+                    i18n,
+                    pick(ids::DIALOG_QUIT_QUESTION, ids::DIALOG_EXIT_QUESTION)
+                )
+                .into_string(),
+                detail: summary.line(i18n).into_string(),
+                above,
+                list,
+                below: Vec::new(),
+            },
+            tokens,
         );
 
-        // Cancel at the left; Discard All, then Save All, at the right.
-        let footer = dialog_footer_split(
-            vec![dialog_button(
-                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
-                DialogButtonKind::Cancel,
-                Some(choose(ProjectCloseChoice::Cancel)),
-                tokens,
-            )],
-            vec![
-                dialog_button(
-                    t!(i18n, ids::DIALOG_UNSAVED_DISCARD_ALL),
-                    DialogButtonKind::Danger,
-                    Some(choose(ProjectCloseChoice::DiscardAll)),
-                    tokens,
-                ),
-                dialog_button(
-                    t!(i18n, ids::DIALOG_BUTTON_SAVE_ALL),
-                    DialogButtonKind::Primary,
-                    Some(choose(ProjectCloseChoice::SaveAll)),
-                    tokens,
-                ),
-            ],
+        // Mockup row 136: Discard All at the left; Cancel, then Save All,
+        // at the right.
+        let (left, right) = unsaved_footer_parts(
+            i18n,
+            UnsavedActions {
+                discard_all: Some(choose(ProjectCloseChoice::DiscardAll)),
+                cancel: choose(ProjectCloseChoice::Cancel),
+                save_all: choose(ProjectCloseChoice::SaveAll),
+            },
+            tokens,
         );
+        let footer = dialog_footer_split(left, right);
         container(
-            column![header, dialog_body(body), footer]
+            column![header, body, footer]
                 .width(self.dialog_width(ModalId::AppQuitConfirm, super::sizes::APP_QUIT_CONFIRM)),
         )
         .style(crate::styles::modal_card(tokens))

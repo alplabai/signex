@@ -30,6 +30,8 @@ mod open_read;
 #[cfg(test)]
 mod open_read_tests;
 mod pinned;
+#[cfg(test)]
+mod project_open_tests;
 mod project_save;
 #[cfg(test)]
 mod project_save_tests;

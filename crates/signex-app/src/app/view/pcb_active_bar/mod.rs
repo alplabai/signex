@@ -206,7 +206,7 @@ fn command_button(command: &str, icon: ActiveBarIcon, tooltip: String) -> Active
 }
 
 /// A button that runs `command` on a click and opens `menu` on a
-/// right-click, chevron and all.
+/// right-click or a click on its chevron (mockup row 108).
 fn menu_button(
     command: &str,
     menu: PcbBarMenu,
@@ -216,14 +216,16 @@ fn menu_button(
     tid: ThemeId,
 ) -> ActiveBarItem<Message> {
     let on_press = run(command);
+    let toggle = bar_message(PcbBarMsg::MenuToggled(menu));
     ActiveBarItem::Button(ActiveBarButton {
         icon,
         tooltip,
         enabled: on_press.is_some(),
         selected: open == Some(menu),
         on_press,
-        on_right_press: Some(bar_message(PcbBarMsg::MenuToggled(menu))),
+        on_right_press: Some(toggle.clone()),
         dropdown_indicator: Some(ActiveBarIcon::Svg(ic::icon_chevron_45(tid))),
+        on_chevron_press: Some(toggle),
     })
 }
 
@@ -244,6 +246,7 @@ fn dropdown_button(
         on_press: Some(toggle.clone()),
         on_right_press: Some(toggle),
         dropdown_indicator: Some(ActiveBarIcon::Svg(ic::icon_chevron_45(tid))),
+        on_chevron_press: None,
     })
 }
 
@@ -327,7 +330,8 @@ const BAR_GROUPS: [&[PcbBarGroup]; 3] = [
 ];
 
 /// The bar icon of `tool`: the footprint editor's where one fits, the board
-/// tool glyphs for pad, via, dimension and keepout (mockup row 108).
+/// tool glyphs for pad, via, dimension and keepout, the hatched area for the
+/// copper-area tools (mockup row 108).
 fn tool_icon(tool: BoardPlaceTool, tid: ThemeId) -> ActiveBarIcon {
     use BoardPlaceTool as T;
     let svg = ActiveBarIcon::Svg;
@@ -341,11 +345,9 @@ fn tool_icon(tool: BoardPlaceTool, tid: ThemeId) -> ActiveBarIcon {
         T::MultiRoute => svg(ic::icon_pcb_multi_route(tid)),
         T::Track => svg(ic::icon_shape_line(tid)),
         T::Arc => svg(ic::icon_shape_arc(tid)),
-        T::Fill => svg(ic::icon_shape_rect(tid)),
-        T::SolidRegion => svg(ic::icon_shape_polygon(tid)),
-        T::PolygonPour => svg(ic::icon_dd_polygon(tid)),
-        T::PourCutout => svg(ic::icon_dd_cut(tid)),
-        T::SlicePour => svg(ic::icon_dd_line(tid)),
+        T::Fill | T::SolidRegion | T::PolygonPour | T::PourCutout | T::SlicePour => {
+            svg(ic::icon_pcb_copper_area(tid))
+        }
         T::TextString => svg(ic::icon_text(tid)),
         T::Dimension => svg(ic::icon_pcb_dimension(tid)),
         T::Keepout => svg(ic::icon_pcb_keepout(tid)),

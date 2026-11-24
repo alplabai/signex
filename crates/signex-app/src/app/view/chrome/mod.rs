@@ -84,7 +84,9 @@ impl Signex {
             draft_annotate_undo: ui.preferences_draft_annotate_undo,
             draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
             draft_net_hover_enabled: ui.preferences_draft_net_hover_enabled,
+            draft_edge_pan: ui.preferences_draft_edge_pan,
             draft_symbol_body_fill: ui.preferences_draft_symbol_body_fill,
+            draft_pcb_defaults: &ui.preferences_pcb_defaults,
             body_fill_palette_open: ui.preferences_body_fill_palette_open,
             body_fill_picker_open: ui.preferences_body_fill_picker_open,
             draft_trackpad_pan: ui.preferences_draft_trackpad_pan,
@@ -497,21 +499,31 @@ mod layout_tests {
         );
     }
 
+    fn preferences_texts(app: &Signex) -> Vec<String> {
+        lay_out_texts(app.view_preferences_body(), iced::Size::new(900.0, 620.0))
+            .into_iter()
+            .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect()
+    }
+
     /// Restore defaults has no backend, so no Preferences page draws it
-    /// (mockup row 143): the footer's buttons are Cancel, Apply and OK.
+    /// (mockup row 143): the footer's buttons are Cancel, Apply and OK, with
+    /// Close in place of Cancel on Rule Profiles (mockup row 148).
     #[test]
     fn no_preferences_page_draws_restore_defaults() {
+        use crate::preferences::PrefNav;
         let (mut app, _task) = Signex::new();
-        for nav in crate::preferences::PrefNav::ALL.iter().copied() {
+        for nav in PrefNav::ALL.iter().copied() {
             app.ui_state.preferences_nav = nav;
 
-            let texts: Vec<String> =
-                lay_out_texts(app.view_preferences_body(), iced::Size::new(900.0, 620.0))
-                    .into_iter()
-                    .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
-                    .collect();
+            let texts = preferences_texts(&app);
 
-            for button in ["Cancel", "Apply", "OK"] {
+            let dismiss = if nav == PrefNav::RuleProfiles {
+                "Close"
+            } else {
+                "Cancel"
+            };
+            for button in [dismiss, "Apply", "OK"] {
                 assert!(
                     texts.iter().any(|t| t == button),
                     "{nav:?}: no {button} in the footer"
@@ -523,6 +535,75 @@ mod layout_tests {
                     .any(|t| t.to_lowercase().contains("restore default")),
                 "{nav:?} draws Restore defaults"
             );
+        }
+    }
+
+    /// Mockup row 148: Rule Profiles edits are already saved, so its footer
+    /// offers no Cancel.
+    #[test]
+    fn the_rule_profiles_footer_offers_close_and_no_cancel() {
+        let (mut app, _task) = Signex::new();
+        app.ui_state.preferences_nav = crate::preferences::PrefNav::RuleProfiles;
+
+        let texts = preferences_texts(&app);
+
+        assert!(texts.iter().any(|t| t == "Close"), "{texts:?}");
+        assert!(!texts.iter().any(|t| t == "Cancel"), "{texts:?}");
+    }
+
+    /// Mockup row 147: Autosave recovery copies and Allow agent connections
+    /// are drawn on System › General, and no longer on Editing.
+    #[test]
+    fn autosave_and_agent_connections_are_on_general_not_editing() {
+        use crate::preferences::PrefNav;
+        let rows = ["Autosave recovery copies", "Allow agent connections"];
+        let (mut app, _task) = Signex::new();
+
+        app.ui_state.preferences_nav = PrefNav::General;
+        let general = preferences_texts(&app);
+        app.ui_state.preferences_nav = PrefNav::Editing;
+        let editing = preferences_texts(&app);
+
+        for row in rows {
+            assert!(general.iter().any(|t| t == row), "General has no {row}");
+            assert!(!editing.iter().any(|t| t == row), "Editing still has {row}");
+        }
+    }
+
+    /// Mockup row 147: Show net info on hover shows the one-sentence summary
+    /// with More…, and the whole help only once More… is pressed.
+    #[test]
+    fn the_net_hover_help_draws_its_summary_with_more() {
+        use signex_i18n::ids;
+        let en = signex_i18n::I18n::en_us();
+        let summary = en.message_plain(ids::PREFERENCES_NET_HOVER_HELP_SUMMARY, &[]);
+        let whole = en.message_plain(ids::PREFERENCES_NET_HOVER_HELP, &[]);
+        let (mut app, _task) = Signex::new();
+        app.ui_state.preferences_nav = crate::preferences::PrefNav::Editing;
+
+        let texts = preferences_texts(&app);
+
+        let help = texts.iter().find(|t| t.starts_with(&summary));
+        assert_eq!(help.map(|t| t.ends_with("More…")), Some(true), "{texts:#?}");
+        assert!(!texts.iter().any(|t| t.contains(&whole)), "{texts:#?}");
+    }
+
+    /// Mockup row 143: nav search finds a page by its listed setting
+    /// labels, so each page draws every label listed for it.
+    #[test]
+    fn every_listed_setting_label_is_drawn_on_its_page() {
+        use crate::preferences::{PrefNav, setting_labels};
+        let (mut app, _task) = Signex::new();
+        // The fill colour row is drawn only while the body fill is on.
+        app.ui_state.preferences_draft_symbol_body_fill.enabled = true;
+        let en = signex_i18n::I18n::en_us();
+        for &nav in PrefNav::ALL {
+            app.ui_state.preferences_nav = nav;
+            let texts = preferences_texts(&app);
+            for &id in setting_labels(nav) {
+                let label = signex_i18n::t!(en, id).into_string();
+                assert!(texts.contains(&label), "{nav:?} does not draw {label}");
+            }
         }
     }
 

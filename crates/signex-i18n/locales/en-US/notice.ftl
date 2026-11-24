@@ -310,3 +310,6 @@ notice-edit-group-redo-out-of-reach = Cannot redo the { $run }: { $files } was s
 notice-load-not-installed = { $file } could not be loaded into the editor ({ $error }); the sheet already open was kept
 # The same for a sheet a git restore wrote behind a tab not in view.
 notice-load-restore-engine-failed = [git] restore: { $file } was restored but its engine could not start: { $error }
+# chrome-copy-help
+# After the detail of a Save Failed card (mockup row 11): nothing was lost.
+notice-save-failed-edits-kept = Your edits are still open and unsaved.

@@ -84,6 +84,14 @@ impl Signex {
                 self.ui_state.panel_list_open = false;
                 Some(Task::none())
             }
+            MenuMessage::OpenWelcomeTips => {
+                // The one first-run card again (mockup row 14); its close,
+                // Got it, Esc and a canvas gesture close it as on first launch.
+                self.ui_state.first_run_tour_open = true;
+                self.interaction_state.context_menu = None;
+                self.ui_state.panel_list_open = false;
+                Some(Task::none())
+            }
             MenuMessage::OpenAbout => {
                 self.ui_state.about_open = true;
                 self.interaction_state.context_menu = None;
