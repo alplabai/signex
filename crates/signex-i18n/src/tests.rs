@@ -132,8 +132,8 @@ fn isolation_marks_wrap_only_placeables() {
 }
 
 /// A message splits around an argument's value where the argument is, not
-/// where the same word occurs in the sentence, and the isolation marks go
-/// with the value (the reset confirm's key cap, mockup row 76). A value the
+/// where the same word occurs in the sentence, and the isolation marks are
+/// dropped with the split (the reset confirm's key cap, mockup row 76). A value the
 /// message does not hold, or an empty one, does not split it.
 #[test]
 fn a_message_splits_around_an_argument_value() {

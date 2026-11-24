@@ -5,11 +5,12 @@
 //! key cap.
 
 use super::super::*;
-use iced::widget::{column, container, row};
+use iced::widget::text::Span;
+use iced::widget::{column, container};
 use iced::{Element, Length, Widget};
 use signex_i18n::{Localized, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::text;
+use signex_widgets::{rich_text, span};
 
 use super::super::widgets::{draggable_header, modal_title_header, os_title_bar_slot};
 use super::controls::banner_style;
@@ -128,27 +129,44 @@ impl Signex {
     }
 }
 
-/// The undo caveat with its shortcut drawn as a key cap where the sentence
-/// names it (mockup row 76). A translation that leaves the shortcut out
-/// shows as plain words.
+/// The undo caveat as one wrapping paragraph, its shortcut drawn as a key
+/// cap where the sentence names it (mockup row 76). A translation that
+/// leaves the shortcut out shows as plain words.
 fn undo_caveat<'a>(
     undo: Localized,
     shortcut: &str,
     ink: iced::Color,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
-    let words = |part: Localized| text(part).size(TS.caption).color(ink);
-    let Some((before, cap, after)) = undo.split_around(shortcut) else {
-        return words(undo).width(Length::Fill).boxed();
+    let spans = match undo.split_around(shortcut) {
+        Some((before, cap, after)) => vec![
+            span::<()>(before).color(ink),
+            key_cap_span(cap, tokens),
+            span::<()>(after).color(ink),
+        ],
+        None => vec![span::<()>(undo).color(ink)],
     };
-    row![
-        words(before),
-        crate::keyboard_shortcuts_modal::key_cap(cap, false, tokens),
-        words(after).width(Length::Fill),
-    ]
-    .spacing(SP.xs)
-    .align_y(iced::Alignment::Center)
-    .boxed()
+    rich_text::<(), Message, iced::Theme>(spans)
+        .size(TS.caption)
+        .wrapping(iced::widget::text::Wrapping::Word)
+        .width(Length::Fill)
+        .boxed()
+}
+
+/// A shortcut inside a sentence on the key-cap face (`styles::key_cap`, the
+/// face of every key cap) in the mono font. The padding only grows the
+/// face, so it stays inside the spaces around the shortcut.
+fn key_cap_span<'a>(cap: Localized, tokens: &ThemeTokens) -> Span<'a, ()> {
+    // The key-cap style reads only the tokens, not the theme.
+    let face = crate::styles::key_cap(tokens)(&iced::Theme::Light);
+    span::<()>(cap)
+        .font(crate::fonts::iced_font_for_family(
+            crate::fonts::CHROME_MONO_FONT,
+        ))
+        .color_maybe(face.text_color)
+        .background_maybe(face.background)
+        .border(face.border)
+        .padding([TS.caption * 0.1, TS.caption * 0.25])
 }
 
 #[cfg(test)]
