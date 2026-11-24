@@ -42,6 +42,10 @@ use crate::ignore::IgnoreResult;
 #[derive(Debug, Clone)]
 pub struct RequirementsRun {
     pub report: Result<CheckReport, String>,
+    /// The board outline's width and height in mm as the run measured them,
+    /// for the Board size cards; `None` when no board was read or it has no
+    /// outline.
+    pub board_mm: Option<(f64, f64)>,
     pub finished_at: DateTime<Utc>,
 }
 
@@ -326,16 +330,17 @@ impl Signex {
         {
             return Task::none();
         }
-        let job = self.requirements_check_job(project);
+        let job = self.requirements_measured_check_job(project);
         self.requirements_tab(project_id).running = true;
         Task::perform(
             async move {
-                let report = tokio::task::spawn_blocking(job)
+                let ran = tokio::task::spawn_blocking(job)
                     .await
-                    .map_err(|error| format!("the check did not finish: {error}"))
-                    .and_then(|report| report);
+                    .map_err(|error| format!("the check did not finish: {error}"));
+                let board_mm = ran.as_ref().ok().and_then(|(_, measured)| *measured);
                 RequirementsRun {
-                    report,
+                    report: ran.map(|(report, _)| report),
+                    board_mm,
                     finished_at: Utc::now(),
                 }
             },

@@ -406,6 +406,7 @@ fn the_failed_count_reads_the_last_finished_run() {
     let with_run = |report| RequirementsTabState {
         last_run: Some(Arc::new(RequirementsRun {
             report,
+            board_mm: None,
             finished_at: chrono::Utc::now(),
         })),
         ..RequirementsTabState::default()

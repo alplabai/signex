@@ -73,4 +73,19 @@ define_ids! {
     REQUIREMENTS_PROBLEM_EMPTY = "requirements-problem-empty";
     REQUIREMENTS_PROBLEM_UNKNOWN_STATE = "requirements-problem-unknown-state";
     REQUIREMENTS_PROBLEM_NET_CLASS_ASKS_NOTHING = "requirements-problem-net-class-asks-nothing";
+    // requirements-board-size
+    REQUIREMENTS_SUMMARY_MEASURED = "requirements-summary-measured";
+    REQUIREMENTS_FIELD_MEASURED_FROM = "requirements-field-measured-from";
+    REQUIREMENTS_MEASURED_FROM_OUTLINE = "requirements-measured-from-outline";
+    REQUIREMENTS_BOARD_PREVIEW = "requirements-board-preview";
+    REQUIREMENTS_BOARD_PREVIEW_HINT = "requirements-board-preview-hint";
+    REQUIREMENTS_BOARD_NOT_MEASURED = "requirements-board-not-measured";
+    REQUIREMENTS_BOARD_MEASURED = "requirements-board-measured";
+    REQUIREMENTS_BOARD_MAX_WIDTH = "requirements-board-max-width";
+    REQUIREMENTS_BOARD_MAX_HEIGHT = "requirements-board-max-height";
+    REQUIREMENTS_BOARD_LEGEND_LIMIT = "requirements-board-legend-limit";
+    REQUIREMENTS_BOARD_LEGEND_OUTLINE = "requirements-board-legend-outline";
+    REQUIREMENTS_BOARD_MARGIN = "requirements-board-margin";
+    REQUIREMENTS_BOARD_FITS = "requirements-board-fits";
+    REQUIREMENTS_BOARD_DOES_NOT_FIT = "requirements-board-does-not-fit";
 }
