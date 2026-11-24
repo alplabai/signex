@@ -27,9 +27,30 @@ pub fn overlay_link<'a>(
     tokens: &'a ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
-    let Some(offer) = editor.state.pad_link_offer() else {
+    let Some(link) = link_button(editor, tokens, i18n) else {
         return Space::new().boxed();
     };
+    container(link)
+        .padding(Padding {
+            bottom: SP.xl + mode_bar_height() + SP.m,
+            ..Padding::new(SP.xl)
+        })
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_x(Horizontal::Left)
+        .align_y(Vertical::Bottom)
+        .boxed()
+}
+
+/// The link button itself, unplaced; `None` when there is nothing to link
+/// to. The mode bar's column (`sketch_exit::footprint_overlay`) can stack
+/// it first, so it sits just above the preview card while that is open.
+pub fn link_button<'a>(
+    editor: &'a FootprintDocument,
+    tokens: &'a ThemeTokens,
+    i18n: &I18n,
+) -> Option<Element<'a, LibraryMessage>> {
+    let offer = editor.state.pad_link_offer()?;
     let label = match offer {
         PadLinkOffer::BackToPad { pad_idx, .. } => {
             let designator = editor
@@ -76,16 +97,7 @@ pub fn overlay_link<'a>(
                 ..button_widget::Style::default()
             }
         });
-    container(link)
-        .padding(Padding {
-            bottom: SP.xl + mode_bar_height() + SP.m,
-            ..Padding::new(SP.xl)
-        })
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .align_x(Horizontal::Left)
-        .align_y(Vertical::Bottom)
-        .boxed()
+    Some(link.boxed())
 }
 
 /// Height of the sketch mode bar (`sketch_exit::mode_bar`) under the link:

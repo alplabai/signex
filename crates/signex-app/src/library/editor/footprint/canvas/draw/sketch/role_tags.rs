@@ -1,8 +1,9 @@
 //! Role tags on baked loops (mockup row 190): a closed loop with a role
 //! names it in a small pill at its top-left corner, in the role's colour,
-//! whether the loop is selected or not. The role's colour also tints the
-//! loop's fill (`fills`); courtyard takes the board's Courtyard Top colour,
-//! so it no longer reads as a keepout.
+//! whether the loop is selected or not. A pad's loop has no tag: the pad
+//! shows its number. Courtyard takes the board's Courtyard Top colour, so
+//! it no longer reads as a keepout; the fill does the same in its own
+//! priority (`fills::fill_colour`).
 
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Size};
@@ -14,6 +15,7 @@ use super::sketch_ink::SketchInk;
 use crate::library::editor::footprint::canvas::FootprintCanvasState;
 use crate::library::editor::footprint::layers::{FpLayer, LayerPalette};
 use crate::library::editor::footprint::sketch_dispatch::current_role_of;
+use crate::library::editor::footprint::sketch_mode::roles::shown_role;
 use crate::library::editor::footprint::state::FootprintEditorState;
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -42,9 +44,9 @@ pub(super) fn loop_role(sketch: &SketchData, closed: &ClosedLoop) -> SketchRole 
         .unwrap_or(SketchRole::Unassigned)
 }
 
-/// The colour a loop with `role` is tinted and tagged in: its layer's
-/// colour in the board palette. `None` for a role with no footprint layer
-/// (the loop keeps the neutral fill).
+/// The colour a loop with `role` is tagged in: its layer's colour in the
+/// board palette. `None` for a role with no footprint layer (the tag takes
+/// the label ink).
 pub(super) fn role_colour(role: SketchRole) -> Option<Color> {
     use SketchRole as R;
     let layer = match role {
@@ -76,7 +78,8 @@ pub(super) struct LoopTag<'a> {
 }
 
 /// The tag of `closed`, named as the host's role picker names its role;
-/// `None` for a loop without a role or before the words are rendered.
+/// `None` for a loop without a role, a pad's loop or before the words are
+/// rendered.
 pub(super) fn loop_tag<'a>(
     sketch: &SketchData,
     closed: &ClosedLoop,
@@ -85,6 +88,15 @@ pub(super) fn loop_tag<'a>(
 ) -> Option<LoopTag<'a>> {
     let role = loop_role(sketch, closed);
     let host = state.sketch_host();
+    // A pad profile's edges carry no role; the pad on its centre names it.
+    let is_pad_profile = closed
+        .lines
+        .first()
+        .and_then(|id| sketch.entities.iter().find(|e| e.id == *id))
+        .is_some_and(|edge| shown_role(sketch, edge, host) == SketchRole::Pad);
+    if role == SketchRole::Pad || is_pad_profile {
+        return None;
+    }
     let text = state.canvas_text.role_tag(host, role.on_host(host))?;
     let colour = role_colour(role).unwrap_or(SketchInk::board().label);
     let (left, top) = closed
@@ -205,15 +217,16 @@ mod tests {
             .collect()
     }
 
-    /// Mockup row 190: every role a loop can take draws its tag, on each
-    /// host; a loop without a role draws none.
+    /// Mockup row 190: every role a loop can take but Pad draws its tag, on
+    /// each host; a loop without a role draws none.
     #[test]
     fn each_role_draws_its_tag() {
         for host in [SketchHost::Footprint, SketchHost::Board] {
             let (fp, _, _) = rectangle();
             assert!(tags(&fp, &state_for(&fp, host)).is_empty(), "no role");
             for &role in host.roles() {
-                if role == SketchRole::Unassigned {
+                // A pad's loop draws no tag (`a_pad_loop_draws_no_tag`).
+                if matches!(role, SketchRole::Unassigned | SketchRole::Pad) {
                     continue;
                 }
                 let (mut fp, corners, line) = rectangle();
@@ -235,6 +248,39 @@ mod tests {
                 assert_eq!(drawn[0].0, format!("{role:?}"), "on {host:?}");
             }
         }
+    }
+
+    /// A pad shows its number, not a tag: neither a loop carrying a pad nor
+    /// a pad's sketch profile draws one, while the same loop as a courtyard
+    /// does.
+    #[test]
+    fn a_pad_loop_draws_no_tag() {
+        use signex_sketch::attr::{CustomPadShape, PadAttr, PadShape};
+
+        let (mut fp, corners, _) = rectangle();
+        set_entity_role(&mut fp, corners[0], SketchRole::Pad);
+        assert!(tags(&fp, &state_for(&fp, SketchHost::Footprint)).is_empty());
+
+        let (mut fp, _, line) = rectangle();
+        let sketch = fp.sketch.as_mut().expect("a sketch");
+        let plane = sketch.planes[0].id;
+        let mut centre = Entity::new(
+            SketchEntityId::new(),
+            plane,
+            EntityKind::Point { x: 3.0, y: 2.0 },
+        );
+        centre.pad = Some(PadAttr {
+            number: "1".into(),
+            shape: PadShape::Custom(CustomPadShape::SketchProfile { source: vec![line] }),
+            ..PadAttr::default()
+        });
+        sketch.entities.push(centre);
+        let state = state_for(&fp, SketchHost::Footprint);
+        assert!(tags(&fp, &state).is_empty(), "a pad profile draws no tag");
+
+        let (mut fp, _, line) = rectangle();
+        set_entity_role(&mut fp, line, SketchRole::Courtyard);
+        assert_eq!(tags(&fp, &state_for(&fp, SketchHost::Footprint)).len(), 1);
     }
 
     /// A selected loop keeps its tag, in the same place.
