@@ -619,7 +619,7 @@ panels-list-region-window = window
 # The PCB panel's row in the panel list, named for its first mode.
 panels-list-row-nets = Nets
 # Foot of the panel list: where the tool documents went.
-panels-list-foot = Rules and the other tool documents open as tabs, from their menus or the command palette.
+panels-list-foot = Layer Stack, Rules and the other tool documents open as tabs, from their menus or the command palette.
 panels-erc-running = Running…
 panels-erc-no-findings-left = No findings left since the last run
 panels-erc-empty-hint = Run ERC to populate project-wide diagnostics
