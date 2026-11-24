@@ -898,6 +898,9 @@ mod sketch_snap_board;
 // preview drawn on the canvas.
 #[path = "regression/board_sketch_checks.rs"]
 mod board_sketch_checks;
+// mockup rows 179 and 179-slot - board sketch Bake as picks and the Slot header's size.
+#[path = "regression/board_sketch_bake_as.rs"]
+mod board_sketch_bake_as;
 // mockup row 187 / mockup row 191 / mockup row 192: Chamfer, Extend, Linear Pattern, Mirror about a
 // centerline, and the pad link of Edit in Sketch.
 #[path = "regression/sketch_tools_padlink.rs"]
