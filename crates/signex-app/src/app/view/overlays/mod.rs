@@ -18,6 +18,8 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 mod bars;
 #[cfg(test)]
 mod dismiss_tests;
+#[cfg(test)]
+mod filter_menu_tests;
 mod dock_zones;
 mod modals;
 mod net_hover;
