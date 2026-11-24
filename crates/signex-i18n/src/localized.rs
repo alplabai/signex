@@ -14,11 +14,6 @@ impl Localized {
         Self(text)
     }
 
-    /// Hand the text to a widget.
-    pub fn into_string(self) -> String {
-        self.0
-    }
-
     /// The text before the argument value `value`, the value itself and the
     /// text after it, for drawing the value as its own widget (a key cap
     /// inside a sentence). The isolated placeable is looked for first, so a
@@ -39,6 +34,11 @@ impl Localized {
             Self(value.to_owned()),
             Self(after.to_owned()),
         ))
+    }
+
+    /// Hand the text to a widget.
+    pub fn into_string(self) -> String {
+        self.0
     }
 }
 
