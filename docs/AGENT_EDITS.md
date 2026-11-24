@@ -50,7 +50,7 @@ Two commands, both with capability `edit` in `signex-cli`:
   (`bring_drawings_forward`, `bring_drawings_to_front`,
   `send_drawings_backward`, `send_drawings_to_back`) and `delete_selection`
   run by uuid as their own command (#2326 slice 6.P2b) but a list does not
-  carry them yet: whether it may is not decided. A test pins the set.
+  carry them yet: whether it may is #2877. A test pins the set.
 - An edit acts on the call's `document`, or on the sheet its own `document`
   names (an id or a path). Where a command takes a `document` operand
   (`color_net`, the placements), the call's is filled in when the edit names
