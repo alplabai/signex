@@ -40,8 +40,9 @@ panels-messages-level-trace = TRACE
 
 ## Components panel
 
-# Placeholder of the components filter field.
-panels-components-filter = Filter components…
+# Placeholder of the components search field; 100n and 0.1u are example
+# values the value-aware search finds (mockup row 52).
+panels-components-filter = Search, try 100n or 0.1u
 
 # Ghost button that opens the Add library menu.
 panels-components-add = Add
@@ -1319,3 +1320,13 @@ panels-compiled-design-msg-no-project = Compile project: open a sheet of a proje
 panels-compiled-design-naming-refused = Channel naming not changed: { $why }
 # harness-connector-properties
 panels-harness-add-entry = Add entry
+# components-panel-cx
+# Match summary under the Components search: $value is a displayed value
+# such as 100 nF, $count the number of parts showing it.
+panels-components-match-value = { $value } { $count }
+# Match summary: $count more values than the line lists.
+panels-components-match-more = +{ $count } more
+# Match summary: $count parts the number matched by name or text only.
+panels-components-match-by-name = name or text { $count }
+# Match summary: the mark between two entries.
+panels-components-match-separator = ·

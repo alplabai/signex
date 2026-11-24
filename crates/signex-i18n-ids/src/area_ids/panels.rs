@@ -448,4 +448,9 @@ define_ids! {
     PANELS_COMPILED_DESIGN_NAMING_REFUSED = "panels-compiled-design-naming-refused";
     // harness-connector-properties
     PANELS_HARNESS_ADD_ENTRY = "panels-harness-add-entry";
+    // components-panel-cx
+    PANELS_COMPONENTS_MATCH_VALUE = "panels-components-match-value";
+    PANELS_COMPONENTS_MATCH_MORE = "panels-components-match-more";
+    PANELS_COMPONENTS_MATCH_BY_NAME = "panels-components-match-by-name";
+    PANELS_COMPONENTS_MATCH_SEPARATOR = "panels-components-match-separator";
 }
