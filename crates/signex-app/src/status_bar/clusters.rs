@@ -324,12 +324,17 @@ fn layer_pill_view<'a>(
 ) -> Option<Element<'a, StatusBarRequest>> {
     let layer = r.surface.active_layer.clone()?;
     let r_tokens = resolve(tokens);
+    // The filled pill names the layer in its accent ink; the plain label in
+    // the text ink (mockup row 6).
+    let name_ink = if layer.opens_list {
+        r_tokens.accent_soft_ink
+    } else {
+        ti(tokens.text)
+    };
     let mut face = row![
         super::board::layer_swatch(layer.colour, tokens),
         text(layer.caption).size(TS.body).color(r_tokens.ink3),
-        text(layer.name)
-            .size(TS.body)
-            .color(r_tokens.accent_soft_ink),
+        text(layer.name).size(TS.body).color(name_ink),
     ]
     .spacing(SP.s)
     .align_y(iced::Alignment::Center);

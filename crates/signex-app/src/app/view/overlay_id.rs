@@ -579,7 +579,17 @@ impl Signex {
                     let dismissed = Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(
                         crate::status_bar::BoardPopoverEvent::Dismissed,
                     )));
-                    layers.extend(Self::dismiss_over(dismissed, card));
+                    // Mockup row 164 draws no scrim behind a status popover:
+                    // the click-outside layer is clear.
+                    let outside = Self::dismiss_layer_tinted(dismissed, iced::Color::TRANSPARENT);
+                    layers.push(
+                        iced::widget::Stack::new()
+                            .width(iced::Length::Fill)
+                            .height(iced::Length::Fill)
+                            .push(outside)
+                            .push(card)
+                            .boxed(),
+                    );
                 }
             }
             OverlayId::DockDragZone => layers.extend(self.dock_drag_zone_overlay()),
@@ -747,6 +757,71 @@ mod tests {
                 "{id:?} paints under the floating panels"
             );
         }
+    }
+
+    /// Mockup row 164: a board status popover paints no scrim, so the window
+    /// behind it keeps its colours, and a press outside it still closes it.
+    #[test]
+    fn a_board_status_popover_leaves_the_window_undimmed() {
+        use crate::layout_probe::{draw_pixels, messages_on_click_at};
+        const WINDOW: iced::Size = iced::Size::new(1400.0, 900.0);
+
+        let (mut app, _boot) = Signex::new();
+        app.ui_state.first_run_tour_open = false;
+        let main = iced::window::Id::unique();
+        app.ui_state.main_window_id = Some(main);
+        app.ui_state.window_size = (WINDOW.width, WINDOW.height);
+        let _ = app.update(Message::File(crate::app::FileMsg::PcbOpenFinished {
+            disk: None,
+            path: std::path::PathBuf::from("/w/popover.snxpcb"),
+            title: "popover".to_string(),
+            result: Ok(Box::new(
+                crate::app::handlers::document_files::save_async_tests::empty_board(),
+            )),
+        }));
+        app.sync_pcb_canvas_from_visible_board();
+        let request = StatusBarRequest::BoardCounterClicked {
+            window: None,
+            counter: crate::status_bar::BoardCounter::Grid,
+        };
+        let _ = app.update(Signex::status_bar_message(main, None, request));
+        let layers = || {
+            let mut layers = Vec::new();
+            app.extend_overlay(&mut layers, OverlayId::BoardStatusPopover, main);
+            assert!(!layers.is_empty(), "the Grid popover is open");
+            let white = iced::widget::container(iced::widget::Space::new())
+                .width(iced::Length::Fill)
+                .height(iced::Length::Fill)
+                .style(|_: &iced::Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(iced::Color::WHITE)),
+                    ..iced::widget::container::Style::default()
+                });
+            layers
+                .into_iter()
+                .fold(
+                    iced::widget::Stack::new()
+                        .width(iced::Length::Fill)
+                        .height(iced::Length::Fill)
+                        .push(white.boxed()),
+                    |stack, layer| stack.push(layer),
+                )
+                .boxed()
+        };
+        // The top-left corner: far from the card, which sits above the bar.
+        let corner = iced::Point::new(4.0, 4.0);
+        let pixels = draw_pixels(layers(), WINDOW);
+        let at = (corner.y as usize * WINDOW.width as usize + corner.x as usize) * 4;
+        assert_eq!(pixels[at..at + 3], [255, 255, 255], "the window is dimmed");
+        let messages = messages_on_click_at(layers(), WINDOW, None, corner);
+        assert!(
+            messages.iter().any(|m| matches!(
+                m,
+                Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(
+                    crate::status_bar::BoardPopoverEvent::Dismissed
+                )))
+            )),
+            "a press outside sent {messages:?}"
+        );
     }
 
     /// #2376, through the whole main-window view: a right-click menu open over
