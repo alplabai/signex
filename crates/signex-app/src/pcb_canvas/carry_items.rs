@@ -66,7 +66,7 @@ fn moved(board: &PcbBoard, carried: &BTreeSet<Uuid>, delta: Point) -> Vec<BoardI
 /// else added.
 fn put(board: &mut PcbBoard, item: BoardItem, replace: bool) {
     fn set<T>(list: &mut Vec<T>, item: T, same: impl Fn(&T) -> bool, replace: bool) {
-        match list.iter().position(|old| same(old)).filter(|_| replace) {
+        match list.iter().position(same).filter(|_| replace) {
             Some(index) => list[index] = item,
             None => list.push(item),
         }
