@@ -46,7 +46,7 @@ impl PanelGroup {
 /// Stack, BOM Studio, Export Jobs, Variants and the Design Notebook open as
 /// document tabs of their project, so the list leaves them out (DECISIONS
 /// 2026-11-18, mockup row 7). To-Do is left out too: it folds into the
-/// Design Notebook (decision of 2026-11-24, mockup row 7).
+/// Design Notebook (DECISIONS 2026-11-24, mockup row 7).
 pub fn panel_group(kind: PanelKind) -> Option<PanelGroup> {
     let group = match kind {
         PanelKind::LayerStack
@@ -115,7 +115,7 @@ mod tests {
     ];
 
     /// Panels the list leaves out: the tool documents, and To-Do, which
-    /// folds into the Design Notebook (decision of 2026-11-24).
+    /// folds into the Design Notebook (DECISIONS 2026-11-24, mockup row 7).
     fn is_unlisted(kind: PanelKind) -> bool {
         TOOL_DOCUMENTS.contains(&kind) || kind == PanelKind::Todo
     }
@@ -210,7 +210,7 @@ mod tests {
         assert_eq!(members(PanelGroup::Pcb), [K::Layers, K::PcbNets]);
     }
 
-    /// Mockup row 7, decision of 2026-11-24: To-Do folds into the Design
+    /// DECISIONS 2026-11-24, mockup row 7: To-Do folds into the Design
     /// Notebook, so the list never lists it, in no group and with no
     /// document open; it is still a panel kind the command palette reaches.
     #[test]
