@@ -215,10 +215,15 @@ fn board() -> signex_types::pcb::PcbBoard {
     };
     serde_json::from_value(serde_json::json!({
         "uuid": id(100),
-        "footprints": [footprint(1, 10.0, false), footprint(2, 30.0, true)]
+        "footprints": [footprint(1, 10.0, false), footprint(2, 30.0, true)],
+        "rooms": [{"uuid": id(ROOM), "name": "R", "colour": "#2CA8B8",
+                   "outline": {"Rect": {"x_mm": 0.0, "y_mm": 0.0, "w_mm": 5.0, "h_mm": 5.0}}}]
     }))
     .unwrap()
 }
+
+/// A room of the board: no board item, so Delete leaves it.
+const ROOM: u128 = 300;
 
 fn app_with_board(dir: &Path) -> (Signex, PathBuf) {
     let mut app = app_workspace(&dir.to_string_lossy(), &[]);
@@ -235,7 +240,10 @@ fn live(app: &Signex, path: &Path) -> String {
 fn the_menu_delete_on_a_board_matches_its_operand_form_and_clears_the_selection() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
-    app.select_pcb_items(&[ItemRef::Footprint(id(1))]);
+    // The room stays on the board; the selection clears all the same.
+    app.select_pcb_items(&[ItemRef::Footprint(id(1)), ItemRef::Room(id(ROOM))]);
+    let selected = app.with_pcb_selection(|sel, _| sel.selection().items().count());
+    assert_eq!(selected, Some(2));
     let _ = app.update(Message::Edit(EditMsg::DeleteSelected));
     assert!(translator::ran("delete_selection"));
     let selected = app.with_pcb_selection(|sel, _| sel.selection().items().count());
