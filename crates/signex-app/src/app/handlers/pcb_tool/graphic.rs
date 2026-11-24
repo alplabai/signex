@@ -1,5 +1,6 @@
 //! The Graphics tools (#2424), on the active non-copper layer (not a
-//! keep-out), each drawing one undo step:
+//! keep-out), each drawing one undo step (Line and Arc on copper place
+//! tracks: `graphic_copper`):
 //! - Line: a run; each click adds a line from the last point, a click on
 //!   the last point ends the run;
 //! - Arc: the centre, the start (its distance is the radius), the end;
@@ -17,14 +18,17 @@ use signex_types::pcb::{
     BoardGraphic, PCB_DEFAULT_GRAPHIC_WIDTH_MM, PCB_DEFAULT_TEXT_SIZE_MM, PcbBoard, Point,
 };
 use signex_types::pcb_graphic::{BoardGraphicKind, takes_board_graphics};
-use signex_types::pcb_layer::PcbLayer;
+use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 use uuid::Uuid;
 
-use super::tool_layer::DRAWING_LAYER;
 use super::{BoardToolDefaults, BoardToolSession};
 use crate::app::handlers::pcb_primitive::{PrimitiveEdit, graphic_edit};
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::app::{PcbViewMsg, Signex};
+
+/// The layer a Graphics tool's form shows while the active layer cannot
+/// take a drawing.
+const FALLBACK_LAYER: PcbLayer = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
 
 impl BoardToolDefaults {
     /// The layer and width a Graphics tool draws with on `layer`.
@@ -114,6 +118,9 @@ impl Signex {
         let Some(kind) = tool.graphic_kind() else {
             return;
         };
+        if self.copper_graphic_clicked(tool, at) {
+            return;
+        }
         let name = t!(self.ui_state.i18n, tool.name()).into_string();
         let Some(layer) = self.active_graphic_layer() else {
             let note = t!(
@@ -179,6 +186,9 @@ impl Signex {
         cursor: Point,
         preview: &mut PcbBoard,
     ) {
+        if self.copper_graphic_preview(session, cursor, preview) {
+            return;
+        }
         let (Some(kind), Some(layer)) = (session.tool.graphic_kind(), self.active_graphic_layer())
         else {
             return;
@@ -199,7 +209,7 @@ impl Signex {
         let session = self.own_board_tool()?;
         let kind = session.tool.graphic_kind()?;
         let at = session.cursor.unwrap_or(Point::new(0.0, 0.0));
-        let layer = self.active_graphic_layer().unwrap_or(DRAWING_LAYER);
+        let layer = self.active_graphic_layer().unwrap_or(FALLBACK_LAYER);
         let text = self.frame_text();
         let far = Point::new(at.x + 2.0, at.y + 1.0);
         let points = match kind {

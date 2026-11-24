@@ -165,7 +165,6 @@ pcb-bar-group =
         [tune] Tune
         [via_pad] Via / Pad
         [copper_areas] Copper Areas
-        [copper_drawing] Copper Drawing
         [dimensions] Dimensions
         [text] Text
        *[graphics] Graphics

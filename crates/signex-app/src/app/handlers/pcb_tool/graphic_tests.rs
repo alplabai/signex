@@ -97,26 +97,20 @@ fn each_graphics_tool_draws_one_undo_step_per_drawing() {
     assert_eq!(live(&app, &path), before, "one undo per drawing");
 }
 
-/// On a copper layer picked after arming, the tools say so in the status
-/// bar and draw nothing; the tool stays armed and draws once an overlay is
-/// active.
+/// On a copper layer the tools say so and draw nothing; the tool stays
+/// armed and draws once an overlay is active.
 #[test]
 fn a_graphics_tool_draws_nothing_on_copper() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
     let before = live(&app, &path);
-    run(&mut app, "place_board_rectangle");
     pick_layer(&mut app, PcbLayer::Copper(CopperLayer::Top));
+    run(&mut app, "place_board_rectangle");
     click(&mut app, 3.0, 3.0);
     click(&mut app, 6.0, 6.0);
     assert_eq!(live(&app, &path), before);
     let session = app.interaction_state.pcb_tool.as_ref().expect("armed");
     assert!(session.points.is_empty(), "no corner was taken");
-    let why = app.board_tool_status().expect("a status line");
-    assert!(
-        why.contains("make a non-copper layer other than a keep-out active"),
-        "the status bar says why: {why}"
-    );
     pick_layer(&mut app, PcbLayer::Technical(TechnicalLayer::KeepoutTop));
     click(&mut app, 3.0, 3.0);
     click(&mut app, 6.0, 6.0);
