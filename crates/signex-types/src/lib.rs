@@ -49,6 +49,7 @@ pub mod theme;
 mod token_enum;
 pub mod variables;
 pub mod violation;
+pub mod zone_cutout;
 pub mod zone_holes;
 pub mod zone_keepout;
 pub mod zone_pour;

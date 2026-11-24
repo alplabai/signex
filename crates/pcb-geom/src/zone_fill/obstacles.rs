@@ -1,6 +1,6 @@
 //! What a pour's fill keeps clear of (#2216): other nets' copper on its
-//! layer grown by the clearance, keepouts, and the fills of other nets'
-//! pours filled before it.
+//! layer grown by the clearance, keepouts and pour cutouts (#2871), and the
+//! fills of other nets' pours filled before it.
 
 use signex_types::pcb::{PcbBoard, Zone};
 use signex_types::pcb_free::free_pad_frame;
@@ -105,12 +105,19 @@ impl Obstacles<'_> {
         out
     }
 
-    /// Keepout zones on the pour's layer, and solid copper zones of other
-    /// nets grown by the clearance. Other pours are cleared through their
-    /// fills ([`Self::earlier_fills`]).
+    /// Keepout zones and pour cutouts (#2871) on the pour's layer, as they
+    /// are, and solid copper zones of other nets grown by the clearance.
+    /// Other pours are cleared through their fills ([`Self::earlier_fills`]).
     fn zones(&self, out: &mut Vec<Polygon>) {
         for other in &self.board.zones {
             if other.is_pour() {
+                continue;
+            }
+            if other.is_pour_cutout() {
+                let on_layer = layer_mask(std::iter::once(other.layer.as_str())) & self.layers != 0;
+                if on_layer && let Some(area) = ring_nm(&other.outline).filter(|r| r.len() >= 3) {
+                    out.push(Polygon::new(area, Vec::new()));
+                }
                 continue;
             }
             if let Some(keepout) = other.as_keepout() {

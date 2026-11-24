@@ -417,7 +417,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_board_multi_route` | Route the selected nets side by side as a bus, around other nets | place | — | — |
 | `place_board_pad` | Place a free pad on the board | place | — | — |
 | `place_board_polygon_pour` | Place a polygon pour on the active copper layer, filled clear of other nets | place | `P G` | — |
-| `place_board_pour_cutout` | Cut an area out of the polygon pours on the active copper layer | place | — | — |
+| `place_board_pour_cutout` | Place a cutout region the polygon pours on the active copper layer leave empty | place | — | — |
 | `place_board_quick_route` | Route straight to the clicked point at the rule width, without avoiding other nets | place | — | — |
 | `place_board_rectangle` | Draw a rectangle by two corners on the active non-copper layer | place | — | — |
 | `place_board_region` | Place a polygon of solid copper on the active copper layer | place | `P R` | — |

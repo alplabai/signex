@@ -1689,8 +1689,9 @@ locked track, a pad or a via is never pushed; the route walks around it.
 4. The pour fills its area and keeps clear of other nets' copper.
 
 Select a pour to change its net, clearance, priority and island removal in
-**Properties**. **Place ▸ Pour Cutout** cuts a hole in a pour and **Place ▸
-Slice Pour** cuts a pour in two. The fill follows every board edit by
+**Properties**. **Place ▸ Pour Cutout** places a cutout region that every
+pour on its layer leaves empty; select it to move it, change its layer or
+delete it, and the pour's copper follows. **Place ▸ Slice Pour** cuts a pour in two. The fill follows every board edit by
 itself; **Tools ▸ Repour All** and **Tools ▸ Repour Selected** fill again and
 report the result in the Messages panel.
 

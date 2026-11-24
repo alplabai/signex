@@ -11,6 +11,7 @@ use signex_types::pcb::{
     PcbSetup, Point, Segment, Via, ViaType, Zone,
 };
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+use signex_types::zone_cutout::POUR_CUTOUT_FILL;
 use signex_types::zone_keepout::{KEEPOUT_FILL, keepout_copper};
 use signex_types::zone_pour::POUR_FILL;
 use uuid::Uuid;
@@ -248,6 +249,16 @@ pub fn new_keepout(id: Uuid, outline: Vec<Point>, layer: PcbLayer) -> Option<Zon
         remove_dead_islands: false,
         shelved: false,
         unknown: Default::default(),
+    })
+}
+
+/// A pour cutout over `outline` on `layer` (#2871): a zone with the cutout
+/// fill and no net, which every pour on `layer` leaves empty. `None` for an
+/// outline with no area.
+pub fn new_pour_cutout(id: Uuid, outline: Vec<Point>, layer: CopperLayer) -> Option<Zone> {
+    new_keepout(id, outline, PcbLayer::Copper(layer)).map(|zone| Zone {
+        fill_type: POUR_CUTOUT_FILL.into(),
+        ..zone
     })
 }
 

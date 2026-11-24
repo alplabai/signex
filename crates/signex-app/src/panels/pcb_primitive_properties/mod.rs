@@ -306,6 +306,7 @@ fn title(facts: &PcbPrimitiveFacts) -> MessageId {
             Some(ZoneKind::Region) => ids::PCB_PRIM_REGION_TITLE,
             Some(ZoneKind::Pour) => ids::PCB_PRIM_POUR_TITLE,
             Some(ZoneKind::Keepout) => ids::PCB_PRIM_KEEPOUT_TITLE,
+            Some(ZoneKind::Cutout) => ids::PCB_PRIM_CUTOUT_TITLE,
             None => ids::PCB_PRIM_AREA_TITLE,
         },
         PcbPrimitiveFacts::Arc(_) => ids::PCB_PRIM_ARC_TITLE,

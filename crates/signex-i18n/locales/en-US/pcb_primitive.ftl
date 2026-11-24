@@ -166,6 +166,12 @@ pcb-prim-fill-title = Fill
 pcb-prim-region-title = Solid Region
 pcb-prim-pour-title = Polygon Pour
 pcb-prim-keepout-title = Keepout
+# A pour cutout (#2871): its corners, its area in mm², and the illustration's
+# caption.
+pcb-prim-cutout-title = Pour Cutout
+pcb-prim-cutout-vertices = Vertices
+pcb-prim-cutout-area = Area
+pcb-prim-cutout-drawing = Pours leave this area empty
 pcb-prim-area-title = Areas
 pcb-prim-area-count = { $count ->
     [one] 1 Area
