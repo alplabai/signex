@@ -47,11 +47,12 @@ pub(super) fn keepouts(ctx: &Context<'_>) -> Result<Vec<PcbKeepout>, BoardBakeEr
     Ok(out)
 }
 
+/// The board cutouts, and each one that is a slot with its uuid and size.
+pub(super) type CutoutsWithSlots = (Vec<PcbCutout>, Vec<(Uuid, slot::Slot)>);
+
 /// The cutouts, and each one that is a slot with its uuid and size, so the
 /// bake preview lists a slot once, as a slot.
-pub(super) fn cutouts_with_slots(
-    ctx: &Context<'_>,
-) -> Result<(Vec<PcbCutout>, Vec<(Uuid, slot::Slot)>), BoardBakeError> {
+pub(super) fn cutouts_with_slots(ctx: &Context<'_>) -> Result<CutoutsWithSlots, BoardBakeError> {
     let eval = build_ctx(ctx.sketch, ctx.params);
     let mut loops = TracedLoops::default();
     let mut out = Vec::new();
