@@ -202,13 +202,13 @@ pub struct InteractionState {
     /// User-defined custom filter presets (capped at
     /// `crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT`). Loaded from
     /// `~/.config/signex/prefs.json` on launch and written back when
-    /// edited from the Properties panel.
+    /// edited from the Filter panel.
     pub custom_filter_presets: Vec<crate::active_bar::CustomFilterPreset>,
-    /// Index of the active preset tab in the Properties-panel editor.
+    /// Index of the preset the Filter panel's Presets section edits.
     /// Clamped to `0..custom_filter_presets.len()` whenever the list
     /// changes; ignored entirely when the list is empty.
     pub active_custom_filter_tab: usize,
-    /// SCH Filter's inline preset rename: the preset and the name typed so
+    /// The Filter panel's inline preset rename: the preset and the name typed so
     /// far. Mirrored into each panel context after every update.
     pub filter_preset_rename: Option<(usize, String)>,
     /// The schematic preset selected for editing: chip clicks change it in

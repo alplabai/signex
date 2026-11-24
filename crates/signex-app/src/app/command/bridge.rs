@@ -114,9 +114,10 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "toggle_properties_panel" => Message::Overlay(OverlayMsg::PanelToggled(
             crate::panels::PanelKind::Properties,
         )),
-        "toggle_schematic_filter_panel" => Message::Overlay(OverlayMsg::PanelToggled(
-            crate::panels::PanelKind::SchFilter,
-        )),
+        // SCH Filter is retired into Filter (mockup rows 40 and 55).
+        "toggle_schematic_filter_panel" => {
+            Message::Overlay(OverlayMsg::PanelToggled(crate::panels::PanelKind::Filter))
+        }
         "toggle_schematic_list_panel" => Message::Overlay(OverlayMsg::PanelToggled(
             crate::panels::PanelKind::ObjectList,
         )),

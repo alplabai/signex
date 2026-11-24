@@ -417,11 +417,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         ),
         "set_selection_filters" => Some(
             "`set_selection_filters` needs the operand `kinds` — \
-             use the SCH Filter panel or the Active Bar's filter",
+             use the Filter panel or the Active Bar's filter",
         ),
         "apply_selection_filter_preset" => Some(
             "`apply_selection_filter_preset` needs the operand `name` — \
-             click the preset in the SCH Filter panel",
+             click the preset in the Filter panel",
         ),
         "set_object_position" => Some(
             "`set_object_position` needs the operands `id` and `at` — \

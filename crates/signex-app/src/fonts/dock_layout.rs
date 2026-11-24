@@ -184,7 +184,6 @@ pub(crate) fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         Properties => "properties",
         Filter => "filter",
         Erc => "erc",
-        SchFilter => "sch_filter",
         ObjectList => "object_list",
         Messages => "messages",
         CommandLog => "command_log",
@@ -221,7 +220,8 @@ pub(crate) fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         "properties" => Properties,
         "filter" => Filter,
         "erc" => Erc,
-        "sch_filter" => SchFilter,
+        // SCH Filter is retired into Filter (mockup rows 40 and 55).
+        "sch_filter" => Filter,
         "object_list" => ObjectList,
         "messages" => Messages,
         "command_log" => CommandLog,
@@ -544,5 +544,40 @@ mod tests {
             dock.panel_kinds(PanelPosition::Right),
             [PanelKind::Properties, PanelKind::Annotations]
         );
+    }
+
+    /// Mockup rows 40 and 55: SCH Filter is retired into Filter. A layout
+    /// saved with `sch_filter` loads it as Filter, once even when the layout
+    /// also names `filter`, and no panel saves under `sch_filter` any more.
+    #[test]
+    fn a_saved_sch_filter_loads_as_the_filter_panel() {
+        assert_eq!(parse_panel_kind("sch_filter"), Some(PanelKind::Filter));
+        let json = serde_json::json!({
+            "dock": {
+                "left": { "panels": ["projects"], "collapsed": false },
+                "right": { "panels": ["properties", "sch_filter"], "collapsed": false },
+                "bottom": { "panels": ["messages"], "collapsed": false },
+            }
+        });
+        let dock = read_dock_layout_from(Some(&json)).expect("the layout loads");
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Right),
+            [PanelKind::Properties, PanelKind::Filter]
+        );
+
+        let both = serde_json::json!({
+            "dock": {
+                "right": { "panels": ["filter", "properties", "sch_filter"], "collapsed": false },
+            }
+        });
+        let dock = read_dock_layout_from(Some(&both)).expect("the layout loads");
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Right),
+            [PanelKind::Filter, PanelKind::Properties]
+        );
+        for kind in crate::panels::ALL_PANELS {
+            assert_ne!(panel_kind_key(*kind), "sch_filter", "{kind:?}");
+        }
+        assert_eq!(panel_kind_key(PanelKind::Filter), "filter");
     }
 }

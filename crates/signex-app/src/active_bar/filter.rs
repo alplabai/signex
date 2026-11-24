@@ -54,7 +54,7 @@ impl SelectionFilter {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Components => "Parts",
+            Self::Components => "Components",
             Self::Wires => "Wires",
             Self::Buses => "Buses",
             Self::SheetSymbols => "Sheet Symbols",
@@ -98,7 +98,8 @@ mod tests {
     use super::*;
 
     /// `label` is the en-US catalog text, so a chip and the Properties
-    /// panel name a category the same way; Components reads "Parts".
+    /// panel name a category the same way; Components reads "Components"
+    /// (mockup row 55).
     #[test]
     fn every_label_is_the_en_us_catalog_text() {
         let i18n = signex_i18n::I18n::en_us_ref();
@@ -109,6 +110,6 @@ mod tests {
                 "{filter:?}"
             );
         }
-        assert_eq!(SelectionFilter::Components.label(), "Parts");
+        assert_eq!(SelectionFilter::Components.label(), "Components");
     }
 }

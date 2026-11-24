@@ -1,8 +1,9 @@
-//! The selection filter panels: what a click, a box and the hover pick
-//! select. SCH Filter (Graphite mockup #56, #2417) is the schematic filter with its saved
-//! presets; Filter (Graphite mockup #55) follows the active editor and edits the schematic
-//! or the board filter. Both draw one toggle column (`kinds`) and edit the
-//! filters the Active Bar dropdowns edit, with their messages.
+//! The Filter panel: what a click, a box and the hover pick select. It
+//! follows the active editor (Graphite mockup #55): on a schematic tab it
+//! edits the schematic filter and its saved presets (SCH Filter is retired
+//! into it, mockup rows 40 and 55), on a board the board filter. It draws
+//! one toggle column (`kinds`) and edits the filters the Active Bar
+//! dropdowns edit, with their messages.
 
 mod counts;
 mod kinds;
@@ -26,7 +27,7 @@ use crate::styles::{Spacing, TypeScale, ti};
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// What the schematic filter's panels send.
+/// What the Filter panel sends on a schematic tab.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SchFilterMsg {
     /// A kind's toggle was clicked: turn that kind on or off.
@@ -57,27 +58,9 @@ fn board(msg: PcbBoardMsg) -> PanelMsg {
     PanelMsg::PcbBoard(msg)
 }
 
-/// The SCH Filter panel (Graphite mockup #56): a caption, the schematic kinds and the
-/// presets.
-pub(super) fn sch_view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    let muted = resolve(&ctx.tokens).ink3;
-    let hint = container(
-        text(t!(ctx.i18n, ids::PANELS_SCH_FILTER_HINT))
-            .size(TS.caption)
-            .color(muted),
-    )
-    .padding([SP.s, SP.m]);
-    Column::new()
-        .spacing(SP.xs)
-        .width(Length::Fill)
-        .push(hint.boxed())
-        .push(schematic_kinds(ctx))
-        .push(presets::section(ctx))
-        .boxed()
-}
-
-/// The Filter panel (Graphite mockup #55): the active editor's kinds, or the empty card
-/// with no schematic or board tab.
+/// The Filter panel (Graphite mockup #55): the active editor's kinds, with the
+/// saved presets on a schematic tab (mockup rows 40 and 55), or the empty card with
+/// no schematic or board tab.
 pub(super) fn filter_view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let (editor, kinds, caption, editing) =
         match (ctx.selection_filter.editor, ctx.pcb_board.as_ref()) {
@@ -120,7 +103,12 @@ pub(super) fn filter_view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         let line = container(text(line).size(TS.caption).color(muted)).padding([SP.xs, SP.m]);
         column = column.push(line.boxed());
     }
-    column.push(caption.boxed()).boxed()
+    column = column.push(caption.boxed());
+    // The schematic presets section shows on a schematic tab only.
+    if ctx.selection_filter.editor == FilterEditor::Schematic {
+        column = column.push(presets::section(ctx));
+    }
+    column.boxed()
 }
 
 /// The editor's name in semibold and that the panel follows the active

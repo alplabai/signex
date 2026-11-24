@@ -163,7 +163,7 @@ panels-filters-delete = Delete
 panels-filters-unnamed = Filter { $number }
 
 # Object kinds a selection filter can include.
-panels-filter-components = Parts
+panels-filter-components = Components
 panels-filter-wires = Wires
 panels-filter-buses = Buses
 panels-filter-sheet-symbols = Sheet Symbols
@@ -1332,6 +1332,10 @@ panels-harness-msg-entry-off-connector = Harness entry not placed: click on a ha
 panels-compiled-design-msg-no-project = Compile project: open a sheet of a project first; a sheet outside a project has no compiled design.
 # $why says why the project refused the edit.
 panels-compiled-design-naming-refused = Channel naming not changed: { $why }
+
+# sch-panels-tidy
+# The Canvas Font field (mockup row 40): $family is the font, $size its size in points.
+panels-canvas-font-summary = { $family } · { $size } pt
 # harness-connector-properties
 panels-harness-add-entry = Add entry
 # components-panel-cx

@@ -276,23 +276,37 @@ pub fn form_check_row_shortcut<'a>(
     .boxed()
 }
 
+/// What the Canvas Font field reads (mockup row 40): `Iosevka · 10 pt`.
+pub(crate) fn canvas_font_summary(
+    i18n: &signex_i18n::I18n,
+    family: &str,
+    size_pt: f32,
+) -> signex_i18n::Localized {
+    let size = size_pt.round().max(0.0) as u32;
+    t!(i18n, ids::PANELS_CANVAS_FONT_SUMMARY, "family" => family, "size" => size)
+}
+
+/// The Canvas Font row (mockup row 40): a field reading the font and its
+/// size in points, with the open glyph at its end; a press opens the font
+/// settings.
 pub fn form_font_link_row<'a>(
     label: signex_i18n::Localized,
-    current_family: &str,
-    current_size_px: f32,
-    _bold: bool,
-    _italic: bool,
+    summary: signex_i18n::Localized,
+    theme: signex_types::theme::ThemeId,
     label_c: Color,
 ) -> Element<'a, PanelMsg> {
-    let summary = format!("{current_family}, {:.0}px", current_size_px);
-
+    let open = crate::styles::tinted_glyph(
+        crate::icons::icon_chrome_external_link(theme),
+        TS.body,
+        label_c,
+    );
     container(
         row![
             property_label(label, label_c),
             signex_widgets::button(
-                text(signex_i18n::UserText::new(summary))
-                    .size(TS.body)
-                    .width(Length::Fill),
+                row![text(summary).size(TS.body).width(Length::Fill), open]
+                    .spacing(SP.s)
+                    .align_y(iced::Alignment::Center),
             )
             .on_press(PanelMsg::OpenCanvasFontPopup)
             .padding([SP.xs, 6.0])

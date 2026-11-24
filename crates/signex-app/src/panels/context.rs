@@ -291,10 +291,10 @@ pub struct PanelContext {
     pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
     /// User-defined custom filter presets (capped at
     /// `crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT`). Edited from
-    /// the Properties panel; surfaced as shortcut buttons in the Active
+    /// the Filter panel; surfaced as shortcut buttons in the Active
     /// Bar's filter dropdown.
     pub custom_filter_presets: Vec<crate::active_bar::CustomFilterPreset>,
-    /// Index of the active preset tab in the Properties-panel editor
+    /// Index of the preset the Filter panel's Presets section edits
     /// (mirrored from `InteractionState`). Clamped on every sync.
     pub active_custom_filter_tab: usize,
     /// User-defined footprint-editor filter presets, mirrored from
