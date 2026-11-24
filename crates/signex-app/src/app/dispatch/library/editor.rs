@@ -294,7 +294,28 @@ impl Signex {
         msg: FootprintEditorMsg,
     ) -> Task<Message> {
         // A board in sketch mode hosts the same sketch editor (#2234).
-        if self.board_sketch_takes(&path, &msg) {
+        let on_board = self.board_sketch_takes(&path, &msg);
+        // The Mirror card answers its own messages and Mirror's picks beside
+        // the editor, on either host (mockup row 191).
+        let editor = if on_board {
+            self.interaction_state
+                .board_sketch
+                .as_ref()
+                .map(|session| &*session.editor)
+        } else {
+            self.document_state.footprint_editors.get(&path)
+        };
+        let msg = match editor {
+            Some(editor) => {
+                use crate::library::editor::footprint::sketch_mode::mirror_card;
+                match mirror_card::route(editor, &mut self.library.mirror_cards, msg) {
+                    Some(msg) => msg,
+                    None => return Task::none(),
+                }
+            }
+            None => msg,
+        };
+        if on_board {
             return self.apply_board_sketch_edit(msg);
         }
         // v0.26-E — clipboard ops need both `pad_clipboard` and the

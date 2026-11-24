@@ -7,10 +7,12 @@ use signex_sketch::entity::EntityKind;
 
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::check_lines;
+use crate::library::editor::footprint::sketch_mode::roles::edge_slot_size;
 use crate::panels::{BoardSketchProps, MountingHoleProps};
 
-/// The Roles section's rows and centerline count of a footprint in Sketch
-/// mode (mockup row 190); nothing on a board or outside the mode.
+/// The role rows and centerline count of a sketch in Sketch mode: the Roles
+/// section of a footprint (mockup row 190), the Bake as list of a board's
+/// Bake panel (mockup row 179); nothing outside the mode.
 pub(super) fn sketch_role_rows(
     editor: &FootprintDocument,
 ) -> (
@@ -18,15 +20,31 @@ pub(super) fn sketch_role_rows(
     usize,
 ) {
     use crate::library::editor::footprint::EditorMode;
-    use crate::library::editor::footprint::sketch_mode::roles::profile_role_rows;
+    use crate::library::editor::footprint::sketch_mode::roles::{
+        board_profile_rows, profile_role_rows,
+    };
     use signex_types::sketch::SketchHost;
     let host = editor.state.sketch_host();
-    match editor.primitive().sketch.as_ref() {
-        Some(s) if editor.state.mode == EditorMode::Sketch && host == SketchHost::Footprint => (
-            profile_role_rows(s, host),
-            s.entities.iter().filter(|e| e.centerline).count(),
+    let sketch = editor.primitive().sketch.as_ref();
+    let centerlines =
+        |s: &signex_sketch::SketchData| s.entities.iter().filter(|e| e.centerline).count();
+    match sketch {
+        Some(s) if editor.state.mode == EditorMode::Sketch && host == SketchHost::Footprint => {
+            (profile_role_rows(s, host), centerlines(s))
+        }
+        Some(s) if editor.state.mode == EditorMode::Sketch && host == SketchHost::Board => (
+            board_profile_rows(s, editor.state.last_solve.as_ref()),
+            centerlines(s),
         ),
         _ => (Vec::new(), 0),
+    }
+}
+
+impl crate::app::Signex {
+    /// The open bake preview of the board sketch in view, for the
+    /// Properties Bake panel (mockup row 179); `None` while it is closed.
+    pub(crate) fn board_sketch_bake_preview(&self) -> Option<crate::panels::BoardBakePreview> {
+        self.board_sketch_in_view()?.preview.clone()
     }
 }
 
@@ -60,6 +78,8 @@ pub(super) fn board_sketch_props(editor: &FootprintDocument) -> Option<BoardSket
         selected,
         is_edge: !matches!(entity.kind, EntityKind::Point { .. }),
         is_circle: matches!(entity.kind, EntityKind::Circle { .. }),
+        selected_slot: sketch
+            .and_then(|s| edge_slot_size(s, editor.state.last_solve.as_ref(), entity.id)),
         outline: entity.board_outline,
         hole: entity.mounting_hole.as_ref().map(|hole| MountingHoleProps {
             drill: hole.drill_expr.clone().unwrap_or_default(),

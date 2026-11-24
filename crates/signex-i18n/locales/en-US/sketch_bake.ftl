@@ -45,6 +45,12 @@ sketch-bake-roles-empty = No closed profiles yet.
 sketch-bake-roles-mask = Solder mask: from the pad rule, no entity
 # $count is the number of centerlines.
 sketch-bake-roles-centerlines = Centerlines: { $count }, never bake
+# The board sketch's Bake panel (mockup row 179): one Bake as row per closed
+# profile, as the footprint's Roles rows.
+sketch-bake-bake-as = Bake as
+# Under the Slot header of a clicked slot edge (mockup row 179): $length end to
+# end and $width across, in mm with two decimals.
+sketch-bake-slot-size = { $length } × { $width } mm
 # Properties after Bake (mockup row 190), until a non-pad object, a
 # multi-selection, an edit or an empty click ends it.
 sketch-bake-outcome-title = Baked · { $pads ->

@@ -754,6 +754,11 @@ pub struct LibraryState {
     /// `.snxsym` path. Session only; an entry outlives its tab so a
     /// reopened file shows the same tab.
     pub symbol_props: HashMap<PathBuf, crate::library::editor::symbol::state::SymbolPropsUi>,
+    /// The open Mirror card of each sketch editor (mockup row 191), by the
+    /// editor's path: the `.snxfpt` of a footprint, the board of a board
+    /// sketch. Session only, never saved or undone.
+    pub mirror_cards:
+        HashMap<PathBuf, crate::library::editor::footprint::sketch_mode::mirror_card::MirrorCard>,
 }
 
 /// Three mount sources surfaced as collapsible sections inside the
