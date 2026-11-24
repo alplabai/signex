@@ -599,7 +599,8 @@ viewpoint is tinted; a turn by hand clears it. Bottom is still a viewpoint
 (`PresetPicked`), reached by Flip. Reset looks
 from Iso on the side shown, framed; flip, explode and lighting stay. Fit and
 View ▸ Fit All frame the board from where it is seen. Entering the view looks
-from the top, framed for an assumed shape; the view's first redraw reports
+from Iso on the top side (the tinted viewpoint), framed for an assumed shape;
+the view's first redraw reports
 its real size and frames it again, and a later redraw reports where the
 view sits in the window (where a screenshot is cropped). A gesture never
 frames it again, so the first drag or wheel step cannot jump. The view
