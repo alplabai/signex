@@ -157,7 +157,8 @@ fn file_name_of(path: &Path) -> String {
 impl Signex {
     /// Every entry of the quit confirm, classified: drafts and rows under the
     /// libraries, a file under the open project that owns it (its sheets,
-    /// its board, the project file itself), any other file under Other.
+    /// its board, the Export Jobs in its folder, the project file itself),
+    /// any other file under Other.
     pub(super) fn quit_entries(&self, paths: &[PathBuf], rows: &[EditorAddress]) -> Vec<QuitEntry> {
         let roots = self.draft_library_roots();
         let drafts: std::collections::HashSet<PathBuf> =
@@ -193,7 +194,8 @@ impl Signex {
     }
 
     /// A file: under the open project that owns it (its sheets, its board,
-    /// the project file itself), else under Other.
+    /// the Export Jobs in its folder, the project file itself), else under
+    /// Other.
     fn quit_file_entry(&self, path: &Path) -> QuitEntry {
         let projects = &self.document_state.projects;
         let owner = self

@@ -13,6 +13,10 @@
 //! code path edited the data (a rename, a sheet added or removed, a project
 //! closed, an engine swapped in without bumping an epoch). Hashing the inputs
 //! costs one allocation-free pass; the keys it spares are the expensive part.
+//!
+//! An Export Job (`.snxout`) is not listed in the `.snxprj`: it belongs to the
+//! project whose folder holds it, the deepest such folder when projects nest
+//! (decision of 2026-11-24, mockup row 16).
 
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -28,6 +32,9 @@ pub(crate) struct OwnershipIndex {
     /// Per project, in `projects` order: its case rule and the keys of the
     /// sheets and board its `.snxprj` lists.
     listed: Vec<(CaseFold, HashSet<String>)>,
+    /// Per project, in `projects` order: the key of its folder, which holds
+    /// its Export Jobs. Empty when the project file has no folder.
+    folders: Vec<String>,
     /// `child key → parent path`, once per distinct case rule.
     parents: Vec<(CaseFold, HashMap<String, PathBuf>)>,
 }
@@ -67,6 +74,17 @@ impl OwnershipIndex {
                 (fold, keys)
             })
             .collect();
+        let folders = projects
+            .iter()
+            .map(|p| {
+                let dir = p.dir();
+                if dir.as_os_str().is_empty() {
+                    String::new()
+                } else {
+                    path_key_with(dir, fold_of(p))
+                }
+            })
+            .collect();
         let parents = folds
             .into_iter()
             .map(|fold| (fold, parent_of(loaded, fold)))
@@ -74,6 +92,7 @@ impl OwnershipIndex {
         Self {
             stamp,
             listed,
+            folders,
             parents,
         }
     }
@@ -125,6 +144,9 @@ impl OwnershipIndex {
         if let Some(project) = self.listing(projects, path, |_| true) {
             return Some(project);
         }
+        if is_export_job(path) {
+            return self.holding_folder(projects, path);
+        }
         self.parents.iter().find_map(|(fold, parents)| {
             let mut seen: HashSet<PathBuf> = HashSet::new();
             let mut current = path.to_path_buf();
@@ -138,6 +160,39 @@ impl OwnershipIndex {
             None
         })
     }
+
+    /// The project whose folder holds `path` at any depth: the deepest folder,
+    /// the earlier project on a tie. Each folder is compared under its
+    /// project's case rule.
+    fn holding_folder<'a>(
+        &self,
+        projects: &'a [LoadedProject],
+        path: &Path,
+    ) -> Option<&'a LoadedProject> {
+        projects
+            .iter()
+            .zip(&self.listed)
+            .zip(&self.folders)
+            .filter(|((_, (fold, _)), folder)| folder_holds(folder, &path_key_with(path, *fold)))
+            .min_by_key(|(_, folder)| std::cmp::Reverse(folder.len()))
+            .map(|((project, _), _)| project)
+    }
+}
+
+/// Whether `path` names an Export Job document (`.snxout`, any case).
+fn is_export_job(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("snxout"))
+}
+
+/// Whether the folder keyed `folder` holds the file keyed `file` at any
+/// depth: `file` continues `folder` past a separator, so `/w/a` does not hold
+/// `/w/ab/x.snxout`.
+fn folder_holds(folder: &str, file: &str) -> bool {
+    !folder.is_empty()
+        && file
+            .strip_prefix(folder)
+            .is_some_and(|rest| folder.ends_with('/') || rest.starts_with('/'))
 }
 
 impl DocumentState {
@@ -401,6 +456,40 @@ mod tests {
         assert_eq!(owner(&ds, "/w/a/  "), None, "a blank name names no board");
         ds.projects[0].data.pcb_file = None;
         assert_eq!(owner(&ds, "/w/a/new.snxpcb"), None);
+    }
+
+    /// Decision 2026-11-24 (mockup row 16): an Export Job belongs to the
+    /// project whose folder holds it, at any depth, though no `.snxprj`
+    /// lists it; a sibling folder sharing the name's prefix does not hold it,
+    /// and the rule is for Export Jobs only.
+    #[test]
+    fn an_export_job_under_the_project_folder_is_the_projects() {
+        let (ds, id) = state();
+        assert_eq!(owner(&ds, "/w/a/fab.snxout"), Some(id));
+        assert_eq!(owner(&ds, "/w/a/outputs/deep/fab.snxout"), Some(id));
+        assert_eq!(owner(&ds, "/w/a/FAB.SNXOUT"), Some(id), "any case");
+        assert_eq!(owner(&ds, "/w/ab/fab.snxout"), None, "a sibling folder");
+        assert_eq!(owner(&ds, "/w/fab.snxout"), None, "above the folder");
+        assert_eq!(owner(&ds, "/x/fab.snxout"), None);
+        assert_eq!(
+            owner(&ds, "/w/a/unlisted.snxsch"),
+            None,
+            "a sheet still needs its listing"
+        );
+    }
+
+    /// With one project's folder inside another's, the inner project owns the
+    /// Export Jobs in its own folder; the outer keeps the rest. Closing the
+    /// inner project hands them to the outer.
+    #[test]
+    fn the_deepest_project_folder_owns_an_export_job() {
+        let (mut ds, outer) = state();
+        let inner = ds.mint_project_id();
+        ds.projects.push(project(inner, "/w/a/sub", &["s.snxsch"]));
+        assert_eq!(owner(&ds, "/w/a/sub/out/fab.snxout"), Some(inner));
+        assert_eq!(owner(&ds, "/w/a/fab.snxout"), Some(outer));
+        ds.projects.retain(|p| p.id != inner);
+        assert_eq!(owner(&ds, "/w/a/sub/out/fab.snxout"), Some(outer));
     }
 
     #[test]

@@ -228,6 +228,31 @@ fn an_unsaved_export_job_has_its_out_cap() {
     );
 }
 
+/// An unsaved Export Job under a project's folder is listed under that
+/// project, as mockup row 16 draws it; one outside every project folder is
+/// under Other files (decision 2026-11-24: no `.snxprj` listing needed).
+#[test]
+fn an_export_job_under_the_project_folder_is_grouped_under_the_project() {
+    let mut app = dirty_app(
+        &[
+            "/w/a/top.snxsch",
+            "/w/a/outputs/fab.snxout",
+            "/x/loose.snxout",
+        ],
+        Vec::new(),
+    );
+    project(&mut app, "/w/a", "carrier", &["top.snxsch"]);
+    let st = app.ui_state.app_quit_confirm.clone().expect("open");
+    let groups = group_entries(app.quit_entries(&st.dirty_paths, &st.dirty_rows));
+    assert_eq!(
+        names(&groups),
+        vec![
+            (QuitGroupKey::Project(0), vec!["top.snxsch", "fab.snxout"]),
+            (QuitGroupKey::Other, vec!["loose.snxout"]),
+        ]
+    );
+}
+
 /// The dialog as laid out: the question, the fact line, one heading per
 /// group with its count, and kind caps on the rows.
 #[test]

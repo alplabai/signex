@@ -140,6 +140,28 @@ fn the_list_is_grouped_under_the_project_with_kind_caps() {
     assert!(cap.x < sheet.x, "the kind cap leads the row");
 }
 
+/// An Export Job in the project's folder is grouped under the project, with
+/// its OUT cap, not under Other files (decision 2026-11-24, mockup row 16).
+#[test]
+fn an_export_job_in_the_project_folder_is_grouped_under_the_project() {
+    let mut app = app_closing(&["a.snxsch", "jobs/fab.snxout"], Default::default());
+    crate::app::handlers::menu::export::tests::add_project(&mut app, "/p", &["a.snxsch"]);
+    if let Some(project) = app.document_state.projects.last_mut() {
+        project.data.name = "dcdc-buck".into();
+    }
+    let texts = lay_out_texts(
+        app.view_project_close_confirm_body(),
+        iced::Size::new(900.0, 700.0),
+    );
+    for label in ["DCDC-BUCK", "fab.snxout", "OUT"] {
+        find(&texts, label);
+    }
+    assert!(
+        !texts.iter().any(|t| t.text == "OTHER FILES"),
+        "the Export Job belongs to the project: {texts:#?}"
+    );
+}
+
 /// The window follows the grouped list: more rows make it taller until the
 /// list's cap, then the list scrolls.
 #[test]
