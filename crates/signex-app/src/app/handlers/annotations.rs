@@ -22,7 +22,7 @@ use crate::dock::DockMessage;
 use crate::panels::annotations::{
     Annotation, AnnotationKind, AnnotationRow, AnnotationsState, AnnotationsView, FileGroup,
     FileReadError, IsoDate, KindChip, ListStatus, NotebookFile, NotebookScan, PartIndex, PartPlace,
-    RefChip, Reference, RowKey, ScanProblem,
+    RefChip, Reference, RowKey, ScanProblem, part_flags,
 };
 use crate::panels::{AnnotationsMsg, NetInspectorMsg, PanelKind, PanelMsg};
 
@@ -45,15 +45,16 @@ struct DesignInputs {
 }
 
 impl Signex {
-    /// Keep the panel's scan current: a scan starts when the panel is shown
-    /// and when the project in view changes (a project opened). Runs after
-    /// every message; does nothing while the panel is closed.
+    /// Keep the scan current: a scan starts when the panel is shown and when
+    /// the project in view changes (a project opened, a switch to another),
+    /// panel open or not, since the schematic's annotation flags come from
+    /// it and are drawn by default. Runs after every message.
     pub(crate) fn sync_annotations_panel(&mut self) -> Task<Message> {
-        if !self.is_panel_open(PanelKind::Annotations) {
+        let open = self.is_panel_open(PanelKind::Annotations);
+        let newly_shown = open && !std::mem::replace(&mut self.ui_state.annotations.shown, true);
+        if !open {
             self.ui_state.annotations.shown = false;
-            return Task::none();
         }
-        let newly_shown = !std::mem::replace(&mut self.ui_state.annotations.shown, true);
         // Compared without building the target: this runs on every message.
         let held = self.ui_state.annotations.target.as_ref();
         let active = self.document_state.active_document_project();
@@ -87,13 +88,18 @@ impl Signex {
             state.scan = None;
             state.expanded = None;
             state.status = ListStatus::NoProject;
+            state.flags = Arc::default();
             self.refresh_annotations_view();
+            self.repaint_annotation_flags();
             return Task::none();
         };
         if !same_project || state.scan.is_none() {
             state.scan = None;
             state.expanded = None;
             state.status = ListStatus::Reading;
+            // Another project's flags never show on this one's sheets.
+            state.flags = Arc::default();
+            self.repaint_annotation_flags();
         }
         self.refresh_annotations_view();
         Task::perform(
@@ -189,6 +195,7 @@ impl Signex {
                 if !state.expanded.as_ref().is_some_and(still_there) {
                     state.expanded = None;
                 }
+                state.flags = Arc::new(part_flags(&scan));
                 state.scan = Some(Arc::new(scan));
             }
             Err(why) => {
@@ -199,7 +206,36 @@ impl Signex {
                 log::warn!(target: TARGET, "{}", line.into_string());
                 state.scan = None;
                 state.status = ListStatus::Unavailable;
+                state.flags = Arc::default();
             }
+        }
+        self.repaint_annotation_flags();
+    }
+
+    /// The annotation flags the sheet at `path` shows: the last scan's, when
+    /// the sheet is of the project that scan read; none elsewhere.
+    pub(crate) fn annotation_flag_view(
+        &self,
+        path: Option<&Path>,
+    ) -> crate::schematic_runtime::annotation_flags::AnnotationFlagView<'_> {
+        let state = &self.ui_state.annotations;
+        let project = path
+            .and_then(|path| self.document_state.document_project(path))
+            .map(|project| project.id);
+        let scanned = state.target.as_ref().map(|target| target.0);
+        crate::schematic_runtime::annotation_flags::AnnotationFlagView {
+            parts: (project.is_some() && project == scanned).then_some(&*state.flags),
+            ink: crate::schematic_runtime::annotation_flags::AnnotationFlagInk::from_tokens(
+                &self.tokens_for(self.ui_state.preferences_draft_theme),
+            ),
+        }
+    }
+
+    /// Redraw the selection layer of every sheet, where the flags are drawn.
+    fn repaint_annotation_flags(&mut self) {
+        self.interaction_state.canvas.clear_overlay_cache();
+        for canvas in self.interaction_state.canvases.values_mut() {
+            canvas.clear_overlay_cache();
         }
     }
 
@@ -609,5 +645,287 @@ fn row_of(
             .unwrap_or_default(),
         line: annotation.line,
         jump,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::handlers::editing_commands::net_color_driver::add_sheet_with;
+    use crate::app::{CaseFold, LoadedProject};
+    use crate::schematic_runtime::annotation_flags::{FlagMark, PartFlags};
+    use signex_types::project::{ProjectData, SheetEntry};
+    use signex_types::schematic::{Point, SchematicSheet, Symbol};
+    use signex_widgets::theme_ext::AnnotationTone;
+
+    const DIR: &str = "/w/flags";
+    const U3: u128 = 0x0001_6503;
+
+    fn project(id: ProjectId) -> LoadedProject {
+        LoadedProject {
+            id,
+            path: PathBuf::from(DIR).join("p.snxprj"),
+            data: ProjectData {
+                document_id: None,
+                description: None,
+                name: "p".into(),
+                dir: DIR.into(),
+                schematic_root: Some("a.snxsch".into()),
+                pcb_file: None,
+                sheets: vec![SheetEntry {
+                    name: "a.snxsch".into(),
+                    filename: "a.snxsch".into(),
+                    symbols_count: 0,
+                    wires_count: 0,
+                    labels_count: 0,
+                    unknown: Default::default(),
+                }],
+                variant_definitions: Vec::new(),
+                active_variant: None,
+                libraries: Vec::new(),
+                enable_git: false,
+                net_classes: Vec::new(),
+                rules: None,
+                annotation: None,
+                schematic_defaults: Default::default(),
+                project_defaults: Default::default(),
+                agent_journal: Default::default(),
+                schematic_design: Default::default(),
+                fab_outputs: None,
+                router_tool_diameter: None,
+                requirements: Default::default(),
+                parameters: Default::default(),
+                unknown: Default::default(),
+            },
+            pending_libraries: Default::default(),
+            case_fold: CaseFold::from_probe(false),
+            case_probed: false,
+            case_decided: false,
+        }
+    }
+
+    /// The project's sheet `a.snxsch`, open and active, holding U3 at
+    /// (50, 40); the panel's scan is of this project.
+    fn app_with_u3() -> (Signex, PathBuf, ProjectId) {
+        let (mut app, _boot) = Signex::new();
+        let id = app.document_state.mint_project_id();
+        app.document_state.projects.push(project(id));
+        let path = PathBuf::from(DIR).join("a.snxsch");
+        let sheet = SchematicSheet {
+            uuid: uuid::Uuid::now_v7(),
+            paper_size: "A4".into(),
+            symbols: vec![Symbol {
+                uuid: uuid::Uuid::from_u128(U3),
+                lib_id: "Device:R".into(),
+                reference: "U3".into(),
+                position: Point::new(50.0, 40.0),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        add_sheet_with(&mut app, &path, sheet);
+        app.ui_state.annotations.target = Some((id, PathBuf::from(DIR)));
+        (app, path, id)
+    }
+
+    fn settle(app: &mut Signex, msg: AnnotationsMsg) {
+        let task = app.handle_annotations_message(msg);
+        let mut driver = crate::task_driver::TaskDriver::new();
+        let mut queue = std::collections::VecDeque::from([task]);
+        let mut steps = 0;
+        while let Some(task) = queue.pop_front() {
+            for message in driver.outputs(task).expect("the task chain settled") {
+                steps += 1;
+                assert!(steps < 1_000, "the task chain settles");
+                if !matches!(message, Message::DockLayout(_)) {
+                    queue.push_back(app.update(message));
+                }
+            }
+        }
+    }
+
+    fn notebook(text: &str, parts: Option<PartIndex>) -> NotebookScan {
+        let (annotations, problems) = signex_notebook::scan(text);
+        NotebookScan {
+            folder_found: true,
+            files: vec![NotebookFile {
+                path: PathBuf::from(DIR).join("notebook/bringup.snxnbk"),
+                label: "notebook/bringup.snxnbk".into(),
+                annotations,
+                problems,
+                read_error: None,
+            }],
+            unlisted: Vec::new(),
+            parts,
+        }
+    }
+
+    fn flags_of(list: &[(&str, AnnotationTone, u32)]) -> Arc<PartFlags> {
+        let mut parts = PartFlags::new();
+        for &(part, tone, count) in list {
+            parts
+                .entry(part.to_string())
+                .or_default()
+                .push(FlagMark { tone, count });
+        }
+        Arc::new(parts)
+    }
+
+    /// Mockup row 165: clicking U3 opens its sheet, zooms to it and selects it.
+    #[test]
+    fn a_part_chip_zooms_to_the_part_and_selects_it() {
+        let (mut app, path, _id) = app_with_u3();
+        let mut parts = PartIndex::new();
+        parts.insert(
+            "U3".into(),
+            PartPlace {
+                sheet: path.clone(),
+                symbol: uuid::Uuid::from_u128(U3),
+                placement: None,
+            },
+        );
+        app.ui_state.annotations.scan = Some(Arc::new(notebook("", Some(parts))));
+        app.interaction_state.canvas.pending_fit.set(None);
+        settle(
+            &mut app,
+            AnnotationsMsg::ReferenceClicked(Reference::Component("U3".into())),
+        );
+        assert_eq!(
+            app.document_state.active_path.as_deref(),
+            Some(path.as_path())
+        );
+        assert_eq!(
+            app.interaction_state.active_canvas().selected,
+            vec![SelectedItem::new(
+                uuid::Uuid::from_u128(U3),
+                SelectedKind::Symbol
+            )]
+        );
+        let fit = app
+            .interaction_state
+            .canvas
+            .pending_fit
+            .get()
+            .expect("the view zooms to the part");
+        assert_eq!(fit.center(), iced::Point::new(50.0, 40.0));
+        assert!(
+            fit.width <= 16.0 && fit.height <= 16.0,
+            "a close zoom: {fit:?}"
+        );
+    }
+
+    #[test]
+    fn a_scan_puts_its_flags_on_the_sheets_and_repaints_them() {
+        let (mut app, _path, _id) = app_with_u3();
+        let generation = app.ui_state.annotations.generation;
+        let before = app.interaction_state.canvas.overlay_cache_clears;
+        let scan = notebook(
+            "#annotation(kind: \"issue\")[#component(\"U3\") runs warm]\n\
+             #annotation(kind: \"decision\")[Use the LDO for #component(\"U3\")]\n",
+            None,
+        );
+        settle(
+            &mut app,
+            AnnotationsMsg::Scanned {
+                generation,
+                result: Arc::new(Ok(scan)),
+            },
+        );
+        assert_eq!(
+            app.ui_state.annotations.flags.get("U3"),
+            Some(&vec![
+                FlagMark {
+                    tone: AnnotationTone::Issue,
+                    count: 1
+                },
+                FlagMark {
+                    tone: AnnotationTone::Decision,
+                    count: 1
+                },
+            ])
+        );
+        assert!(
+            app.interaction_state.canvas.overlay_cache_clears > before,
+            "the selection layer, where the flags are, redraws"
+        );
+    }
+
+    #[test]
+    fn the_flags_show_only_on_the_sheets_of_the_scanned_project() {
+        let (mut app, path, id) = app_with_u3();
+        app.ui_state.annotations.flags = flags_of(&[("U3", AnnotationTone::Issue, 2)]);
+        let shown = app.annotation_flag_view(Some(path.as_path()));
+        assert!(shown.has_flags(), "the scanned project's sheet");
+        assert!(
+            app.annotation_flag_view(Some(Path::new("/elsewhere/b.snxsch")))
+                .parts
+                .is_none(),
+            "a sheet of no project"
+        );
+        assert!(app.annotation_flag_view(None).parts.is_none());
+        let other = app.document_state.mint_project_id();
+        app.ui_state.annotations.target = Some((other, PathBuf::from("/w/other")));
+        assert!(
+            app.annotation_flag_view(Some(path.as_path()))
+                .parts
+                .is_none(),
+            "a scan of another project ({other:?}, not {id:?})"
+        );
+    }
+
+    #[test]
+    fn no_project_in_view_drops_the_flags() {
+        let (mut app, _path, _id) = app_with_u3();
+        app.ui_state.annotations.flags = flags_of(&[("U3", AnnotationTone::Note, 1)]);
+        let _ = app.start_annotations_scan(None);
+        assert!(app.ui_state.annotations.flags.is_empty());
+    }
+
+    /// The flags are drawn by default (mockup row 165), so the project in
+    /// view is read with the Annotations panel closed too.
+    #[test]
+    fn the_flags_show_with_the_annotations_panel_closed() {
+        let (mut app, path, id) = app_with_u3();
+        assert!(!app.is_panel_open(PanelKind::Annotations));
+        app.document_state.active_path = Some(path.clone());
+        app.ui_state.annotations.target = None;
+        let before = app.ui_state.annotations.generation;
+        let _ = app.sync_annotations_panel();
+        let state = &app.ui_state.annotations;
+        assert_eq!(state.generation, before + 1, "a read started");
+        assert_eq!(state.target.as_ref().map(|t| t.0), Some(id));
+        let generation = state.generation;
+        settle(
+            &mut app,
+            AnnotationsMsg::Scanned {
+                generation,
+                result: Arc::new(Ok(notebook(
+                    "#annotation(kind: \"issue\")[#component(\"U3\") runs warm]\n",
+                    None,
+                ))),
+            },
+        );
+        assert!(!app.is_panel_open(PanelKind::Annotations));
+        assert!(app.annotation_flag_view(Some(path.as_path())).has_flags());
+    }
+
+    #[test]
+    fn a_closed_panel_reads_again_only_when_the_project_in_view_changes() {
+        let (mut app, path, _id) = app_with_u3();
+        assert!(!app.is_panel_open(PanelKind::Annotations));
+        app.document_state.active_path = Some(path);
+        app.ui_state.annotations.target = None;
+        let _ = app.sync_annotations_panel();
+        let read = app.ui_state.annotations.generation;
+        let _ = app.sync_annotations_panel();
+        assert_eq!(app.ui_state.annotations.generation, read, "nothing moved");
+        let other = app.document_state.mint_project_id();
+        app.ui_state.annotations.target = Some((other, PathBuf::from("/w/other")));
+        let _ = app.sync_annotations_panel();
+        assert_eq!(
+            app.ui_state.annotations.generation,
+            read + 1,
+            "back on this project after another one's read"
+        );
     }
 }

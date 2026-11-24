@@ -24,6 +24,7 @@ pub use signex_notebook::{
 };
 
 use super::{PanelContext, PanelMsg};
+use crate::schematic_runtime::annotation_flags::{FlagMark, PartFlags};
 use crate::styles::{ChromeMetrics, Radii, Spacing, TypeScale, ti, tokens::resolve};
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -147,6 +148,49 @@ pub struct AnnotationsState {
     pub target: Option<(crate::app::ProjectId, PathBuf)>,
     /// The panel was open at the last look, so a later open is a new show.
     pub shown: bool,
+    /// The flags the last scan puts on the parts of the design (mockup row 165).
+    pub flags: Arc<PartFlags>,
+}
+
+/// The flags of every part the scan's annotations name: per designator, one
+/// mark per kind (in kind order) with how many blocks of that kind name the
+/// part. A block naming a part twice (`#component("U1")` and
+/// `#pin("U1", "3")`) counts once.
+pub(crate) fn part_flags(scan: &NotebookScan) -> PartFlags {
+    let mut counts: HashMap<&str, [u32; AnnotationKind::ALL.len()]> = HashMap::new();
+    for annotation in scan.files.iter().flat_map(|f| &f.annotations) {
+        let Some(slot) = AnnotationKind::ALL
+            .iter()
+            .position(|&k| k == annotation.kind)
+        else {
+            continue;
+        };
+        let mut named: Vec<&str> = annotation
+            .references
+            .iter()
+            .filter_map(Reference::component)
+            .collect();
+        named.sort_unstable();
+        named.dedup();
+        for part in named {
+            counts.entry(part).or_default()[slot] += 1;
+        }
+    }
+    counts
+        .into_iter()
+        .map(|(part, by_kind)| {
+            let marks = AnnotationKind::ALL
+                .iter()
+                .zip(by_kind)
+                .filter(|(_, count)| *count > 0)
+                .map(|(&kind, count)| FlagMark {
+                    tone: tone(kind),
+                    count,
+                })
+                .collect();
+            (part.to_string(), marks)
+        })
+        .collect()
 }
 
 /// A kind chip: its count over every annotation and whether it is shown.
@@ -413,4 +457,98 @@ pub(super) fn rule<'a>(color: iced::Color) -> Element<'a, PanelMsg> {
             ..container::Style::default()
         })
         .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::layout_probe::{find, lay_out_texts, messages_on_click_at, root_size};
+
+    const WINDOW: iced::Size = iced::Size::new(320.0, 240.0);
+
+    fn scan_of(text: &str) -> NotebookScan {
+        let (annotations, problems) = signex_notebook::scan(text);
+        assert!(problems.is_empty(), "{problems:?}");
+        NotebookScan {
+            folder_found: true,
+            files: vec![NotebookFile {
+                path: PathBuf::from("notebook/bringup.snxnbk"),
+                label: "notebook/bringup.snxnbk".into(),
+                annotations,
+                problems,
+                read_error: None,
+            }],
+            unlisted: Vec::new(),
+            parts: None,
+        }
+    }
+
+    #[test]
+    fn a_part_gets_one_mark_per_kind_counting_the_blocks_that_name_it() {
+        let scan = scan_of(
+            "#annotation(kind: \"issue\")[#component(\"U3\") runs warm.]\n\
+             #annotation(kind: \"decision\")[Use the LDO for #component(\"U3\").]\n\
+             #annotation(kind: \"issue\")[#component(\"C6\") is missing near #component(\"U3\").]\n\
+             #annotation(kind: \"note\")[#component(\"U1\") pin #pin(\"U1\", \"3\") on #net(\"VBUS\").]\n",
+        );
+        let flags = part_flags(&scan);
+        let mark = |tone, count| FlagMark { tone, count };
+        assert_eq!(
+            flags.get("U3"),
+            Some(&vec![
+                mark(AnnotationTone::Issue, 2),
+                mark(AnnotationTone::Decision, 1)
+            ]),
+            "kinds in kind order, Issue before Decision"
+        );
+        assert_eq!(flags.get("C6"), Some(&vec![mark(AnnotationTone::Issue, 1)]));
+        assert_eq!(
+            flags.get("U1"),
+            Some(&vec![mark(AnnotationTone::Note, 1)]),
+            "a part and its pin in one block count once"
+        );
+        assert!(!flags.contains_key("VBUS"), "a net carries no flag");
+        assert_eq!(flags.len(), 3);
+    }
+
+    #[test]
+    fn no_annotations_no_flags() {
+        assert!(part_flags(&NotebookScan::default()).is_empty());
+    }
+
+    fn ready_context() -> PanelContext {
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.annotations = Arc::new(AnnotationsView {
+            status: ListStatus::Ready,
+            date: DateWindow::Last7Days,
+            ..AnnotationsView::default()
+        });
+        ctx
+    }
+
+    /// Decision 2026-11-24: New annotation (+) sits at the filter bar's right
+    /// end and is greyed without an open notebook, which this build never has.
+    #[test]
+    fn new_annotation_sits_greyed_at_the_right_end_of_the_filter_bar() {
+        let ctx = ready_context();
+        let size = root_size(filters::tools(&ctx, &ctx.annotations), WINDOW);
+        let texts = lay_out_texts(filters::tools(&ctx, &ctx.annotations), WINDOW);
+        let date = find(&texts, "Last 7 days").bounds;
+        let plus = iced::Point::new(size.width - PAD - METRICS.row / 2.0, date.center_y());
+        assert!(
+            date.x + date.width < plus.x - METRICS.row / 2.0,
+            "the date field ends before the + ({date:?}, {plus:?})"
+        );
+        let pressed =
+            messages_on_click_at(filters::tools(&ctx, &ctx.annotations), WINDOW, None, plus);
+        assert!(pressed.is_empty(), "the + is greyed: {pressed:?}");
+    }
+
+    #[test]
+    fn the_greyed_new_annotation_says_why() {
+        let ctx = ready_context();
+        let tip = t!(ctx.i18n, ids::ANNOTATIONS_NEW_NEEDS_NOTEBOOK).into_string();
+        assert_eq!(tip, "New annotation · open a notebook first");
+    }
 }

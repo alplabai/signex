@@ -184,6 +184,7 @@ impl Signex {
             wire_tool_active: false,
             placement: None,
             unions: self.union_view(Some(path)),
+            annotation_flags: self.annotation_flag_view(Some(path)),
             ..prefs
         };
         crate::canvas::SchematicSurface::new(crate::canvas::SchematicCanvas::new(slot, prefs))
