@@ -777,3 +777,7 @@ properties-count-harness-wires = { $count ->
 # power-port-font-rows
 # Tooltip of the disabled Bold / Italic / Underline / Strikethrough buttons.
 properties-text-style-not-stored = Bold, italic, underline and strikethrough are not stored yet.
+# Style leader of the power-port illustration. $style is the style's name.
+properties-power-illustration-style = Style · { $style }
+# Font Size callout of the power-port illustration. $size is the size in points.
+properties-power-illustration-font-size = Font Size { $size }

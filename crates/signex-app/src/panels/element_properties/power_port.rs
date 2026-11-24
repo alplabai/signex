@@ -14,6 +14,7 @@ use crate::panels::PlacedEditMsg;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
 use signex_i18n::{MessageId, ids, t};
+use signex_types::measure::length_field_text;
 use signex_types::schematic::{PowerPortStyle, SelectedItem, SelectedKind};
 use signex_widgets::CheckboxLabel as _;
 use signex_widgets::property_illustration::{IllustrationHover, Ink, property_illustration};
@@ -86,6 +87,40 @@ fn restyled(id: uuid::Uuid, lib_id: &str, rotation: f64, style: PowerPortStyle) 
     }
 }
 
+/// The callouts of the port's drawing, read as its rows read: the style's
+/// name, the Font Size points and the Location X and Y (mockup row 45).
+pub(super) fn port_callouts(
+    ctx: &PanelContext,
+    lib_id: &str,
+    font_size_pt: u32,
+) -> illustrations::PowerPortCallouts {
+    let i18n = &ctx.i18n;
+    let style = i18n.message_plain(style_label(PowerPortStyle::of(lib_id)), &[]);
+    let position = ctx.placed.geometry.map(|geometry| {
+        let at = geometry.position;
+        let x = length_field_text(at.x, ctx.unit);
+        let y = length_field_text(ctx.shown_y(at.y), ctx.unit);
+        (x, y)
+    });
+    illustrations::PowerPortCallouts::new(i18n, &style, font_size_pt, position)
+}
+
+/// The port's drawing: the glyph and name in the power colour, from the
+/// canvas palette, on its wire stub with the value callouts.
+fn port_drawing<'a>(
+    ctx: &PanelContext,
+    lib_id: &str,
+    name: &str,
+    font_size_pt: u32,
+) -> Element<'a, PanelMsg> {
+    let power = signex_widgets::theme_ext::power_port(&ctx.canvas_colors);
+    let callouts = port_callouts(ctx, lib_id, font_size_pt);
+    illustrations::show(
+        illustrations::power_port(lib_id, name, power, callouts),
+        ctx,
+    )
+}
+
 pub(super) fn push_power_port_sections<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     ctx: &'a PanelContext,
@@ -115,12 +150,7 @@ pub(super) fn push_power_port_sections<'a>(
     let (font_family, font_size_pt) = stored_font(&ctx.selection_info);
     let i18n: &'a signex_i18n::I18n = &ctx.i18n;
 
-    // The glyph and name in the power colour, from the canvas palette.
-    let power = signex_widgets::theme_ext::power_port(&ctx.canvas_colors);
-    col = col.push(illustrations::show(
-        illustrations::power_port(&lib_id, &value, power, i18n),
-        ctx,
-    ));
+    col = col.push(port_drawing(ctx, &lib_id, &value, font_size_pt));
 
     // ── Location ── (#2418): Position and Rotation through the shared rows.
     let look = super::placed_rows::RowLook { muted, input_bg };
@@ -496,6 +526,32 @@ mod tests {
             "{shown:?}"
         );
         assert_eq!(beside("Font Size").as_deref(), Some("36"), "{shown:?}");
+    }
+
+    /// Mockup row 45: the drawing's callouts read the port's style, its
+    /// stored font size and the Location X and Y as the rows show them.
+    #[test]
+    fn the_drawing_callouts_read_the_ports_rows() {
+        let (app, _task) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.placed.geometry = Some(signex_engine::PlacedGeometry {
+            position: signex_types::schematic::Point::new(152.4, 50.8),
+            rotation: Some(0.0),
+            size: None,
+        });
+        let plain = |t: &signex_widgets::property_illustration::Text| {
+            t.as_str().replace(['\u{2068}', '\u{2069}'], "")
+        };
+        let callouts = port_callouts(&ctx, "power:arrow", 14);
+        assert_eq!(plain(&callouts.style), "Style · Arrow");
+        assert_eq!(plain(&callouts.font_size), "Font Size 14");
+        let x = length_field_text(152.4, ctx.unit);
+        let y = length_field_text(ctx.shown_y(50.8), ctx.unit);
+        assert_eq!(plain(&callouts.position), format!("Position {x}, {y}"));
+        ctx.placed.geometry = None;
+        let bare = port_callouts(&ctx, "power:GND", 10);
+        assert_eq!(plain(&bare.style), "Style · Power Ground");
+        assert_eq!(plain(&bare.position), "Position");
     }
 
     /// Picking a hanging style for a rising port turns it by 180°.

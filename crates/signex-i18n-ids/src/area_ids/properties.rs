@@ -507,4 +507,6 @@ define_ids! {
     PROPERTIES_COUNT_HARNESS_WIRES = "properties-count-harness-wires";
     // power-port-font-rows
     PROPERTIES_TEXT_STYLE_NOT_STORED = "properties-text-style-not-stored";
+    PROPERTIES_POWER_ILLUSTRATION_STYLE = "properties-power-illustration-style";
+    PROPERTIES_POWER_ILLUSTRATION_FONT_SIZE = "properties-power-illustration-font-size";
 }
