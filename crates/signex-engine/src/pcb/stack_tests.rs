@@ -204,6 +204,17 @@ fn a_layer_with_items_on_it_cannot_be_removed() {
 }
 
 #[test]
+fn items_on_a_layer_count_what_sits_on_it_alone() {
+    let mut b = board(4, "Inner2Copper");
+    let mut second = b.segments[0].clone();
+    second.uuid = Uuid::from_u128(3);
+    b.segments.push(second);
+    assert_eq!(crate::pcb::items_on_layer(&b, "Inner2Copper"), 2);
+    assert_eq!(crate::pcb::items_on_layer(&b, "Inner1Copper"), 0);
+    assert_eq!(crate::pcb::items_on_layer(&b, "TopCopper"), 0);
+}
+
+#[test]
 fn bad_stacks_are_refused() {
     let b = board(2, "TopCopper");
     let base = LayerStack::derived(&b.layers, b.thickness);
