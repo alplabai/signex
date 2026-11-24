@@ -377,5 +377,5 @@ fn cancel_on_a_board_sketch_writes_nothing() {
 
     assert_eq!(board_sketch_of(&f), before, "no Point, no copy");
     assert_eq!(board_undo_len(&f), undo_before);
-    assert!(f.app.library.mirror_cards.get(&f.path).is_none());
+    assert!(!f.app.library.mirror_cards.contains_key(&f.path));
 }
