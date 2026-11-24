@@ -165,8 +165,9 @@ impl Signex {
         .boxed()
     }
 
-    /// The list header: its heading, the Changes / All switch, the filter
-    /// and Re-prefix to standard.
+    /// The list header: its heading, then (packed to the right, as mockup
+    /// row 75 draws them) the Changes / All switch, the filter and Re-prefix
+    /// to standard.
     fn annotate_list_header(&self, has_standard: bool) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
@@ -174,7 +175,8 @@ impl Signex {
         let session = &self.ui_state.annotate_session;
         let entries = &self.ui_state.annotate_preview.entries;
         // Hugging its labels, the switch takes its whole width before the
-        // filter shares out the rest, so its two segments never fold.
+        // spacer and the capped filter share out the rest, so its two
+        // segments never fold.
         let switch_style = r.segmented(TS.body);
         let switch = segmented(
             [
@@ -211,6 +213,7 @@ impl Signex {
             .then_some(Message::Annotate(AnnotateMsg::ReprefixPressed));
         row![
             section_heading(i18n, ids::DIALOG_ANNOTATE_CHANGES_HEADING, tokens),
+            iced::widget::Space::new().width(Length::Fill),
             switch,
             container(filter).width(Length::Fill.max(FILTER_MAX_W)),
             dialog_button(

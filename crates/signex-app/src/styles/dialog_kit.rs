@@ -199,6 +199,35 @@ pub fn dialog_icon_button<'a, M: Clone + 'a>(
     }
 }
 
+/// Alpha of a [`primary_dialog_button`]'s ink while it has no action.
+const PRIMARY_DISABLED_INK_ALPHA: f32 = 0.7;
+
+/// A dialog's call to action on the theme's primary fill (dark ink in the
+/// light theme), as Annotate's Accept (mockup row 75) and Assign
+/// Footprints' Apply (mockup row 80) draw it. `face` builds the content in
+/// the ink it is given; `on_press: None` fades that ink and the fill.
+pub fn primary_dialog_button<'a, M: Clone + 'a>(
+    face: impl FnOnce(iced::Color) -> Element<'a, M>,
+    on_press: Option<M>,
+    tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    let ink = tokens::resolve(tokens).primary_ink;
+    let ink = if on_press.is_some() {
+        ink
+    } else {
+        iced::Color {
+            a: PRIMARY_DISABLED_INK_ALPHA,
+            ..ink
+        }
+    };
+    button(face(ink))
+        .padding([0.0, SP.l])
+        .height(Length::Fixed(ChromeMetrics::DEFAULT.button))
+        .on_press_maybe(on_press)
+        .style(super::primary_button(tokens))
+        .boxed()
+}
+
 /// Horizontal label padding of a dialog button, the same for every role.
 const DENSE_PAD: f32 = 14.0 * 12.0 / 11.0;
 

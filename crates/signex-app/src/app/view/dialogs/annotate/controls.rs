@@ -7,7 +7,7 @@
 
 use super::super::*;
 use iced::widget::{container, pick_list, row, scrollable};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::{Background, Border, Color, Element, Theme};
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
@@ -240,36 +240,28 @@ pub(super) fn accept_button<'a>(
     on_press: Option<Message>,
     theme_tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
-    let r = crate::styles::tokens::resolve(theme_tokens);
-    let ink = if on_press.is_some() {
-        r.primary_ink
-    } else {
-        Color {
-            a: 0.7,
-            ..r.primary_ink
-        }
-    };
-    let count = Color { a: 0.8, ..ink };
-    button(
-        row![
-            text(t!(i18n, ids::DIALOG_ANNOTATE_ACCEPT))
-                .size(TS.label)
-                .color(ink)
-                .wrapping(iced::widget::text::Wrapping::None),
-            text(signex_i18n::UserText::new(i18n.count(changes as i64)))
-                .size(TS.caption)
-                .color(count)
-                .font(ga::mono())
-                .wrapping(iced::widget::text::Wrapping::None),
-        ]
-        .spacing(SP.s)
-        .align_y(iced::Alignment::Center),
+    let label = t!(i18n, ids::DIALOG_ANNOTATE_ACCEPT);
+    let changes = signex_i18n::UserText::new(i18n.count(changes as i64));
+    crate::styles::primary_dialog_button(
+        |ink| {
+            row![
+                text(label)
+                    .size(TS.label)
+                    .color(ink)
+                    .wrapping(iced::widget::text::Wrapping::None),
+                text(changes)
+                    .size(TS.caption)
+                    .color(Color { a: 0.8, ..ink })
+                    .font(ga::mono())
+                    .wrapping(iced::widget::text::Wrapping::None),
+            ]
+            .spacing(SP.s)
+            .align_y(iced::Alignment::Center)
+            .boxed()
+        },
+        on_press,
+        theme_tokens,
     )
-    .padding([0.0, SP.l])
-    .height(Length::Fixed(crate::styles::ChromeMetrics::DEFAULT.button))
-    .on_press_maybe(on_press)
-    .style(crate::styles::primary_button(theme_tokens))
-    .boxed()
 }
 
 #[cfg(test)]

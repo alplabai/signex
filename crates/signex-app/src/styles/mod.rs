@@ -40,7 +40,7 @@ pub use buttons::{
 pub use dialog_kit::{
     DialogButtonKind, dense_footer_height, dialog_body, dialog_button, dialog_footer,
     dialog_footer_band, dialog_footer_height, dialog_footer_split, dialog_hint, dialog_icon_button,
-    dialog_list, dialog_message, dialog_section,
+    dialog_list, dialog_message, dialog_section, primary_dialog_button,
 };
 pub(crate) use dialog_parts::medium_font;
 pub use dialog_parts::{
