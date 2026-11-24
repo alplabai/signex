@@ -44,6 +44,11 @@ pub enum NetColorMsg {
     /// The palette footer's "Clear all colours" was pressed: the active
     /// sheet's net colours go in one undo step.
     ClearedAll,
+    /// The Clear toast's Undo was pressed: the clear is undone while it is
+    /// still the sheet's newest edit.
+    ToastUndone,
+    /// The Clear toast made at this engine revision timed out.
+    ToastExpired(u64),
 }
 
 /// Parameter Manager dialog message family (ADR-0001 D3). Namespaced

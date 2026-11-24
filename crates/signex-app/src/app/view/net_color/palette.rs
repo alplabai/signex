@@ -3,7 +3,7 @@
 //! first), a chooser floating beside the clicked row, and the Clear all
 //! footer. The window's title bar carries the title and the net count.
 
-use iced::widget::{Space, Widget, column, container, row, scrollable};
+use iced::widget::{Space, Widget, column, container, row, scrollable, stack};
 use iced::{Alignment, Color, Element, Length, Theme};
 use signex_i18n::{Arg, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
@@ -12,6 +12,7 @@ use signex_widgets::{button, text, text_input};
 use super::row_flyout::RowFlyout;
 use super::{SWATCH, swatch, swatch_button};
 use crate::app::handlers::editing_commands::net_color_palette::{CHOOSER_COLORS, PaletteRow};
+use crate::app::state::{NetColorToast, NetColorsCleared};
 use crate::app::{Message, NetColorMsg, Signex};
 use crate::styles::{
     ChromeMetrics, DialogButtonKind, Spacing, TypeScale, dialog_button, dialog_footer_split, ti,
@@ -107,9 +108,79 @@ impl Signex {
             ],
         );
 
-        container(column![filter, list, footer].height(Length::Fill))
+        let card = container(column![filter, list, footer].height(Length::Fill))
             .style(crate::styles::modal_card(tokens))
             .clip(true)
+            .boxed();
+        let Some(toast) = state.toast.as_ref() else {
+            return card;
+        };
+        // The toast floats over the foot of the list, above the footer.
+        let layer = container(self.clear_toast(toast))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .padding(iced::Padding {
+                top: 0.0,
+                right: SP.m,
+                bottom: crate::styles::dense_footer_height() + SP.m,
+                left: SP.m,
+            })
+            .align_y(iced::alignment::Vertical::Bottom)
+            .boxed();
+        stack(vec![card, layer]).boxed()
+    }
+
+    /// The toast after a Clear (mockup row 71): what was cleared, and Undo
+    /// with its shortcut while the clear is still the sheet's newest edit.
+    fn clear_toast(&self, toast: &NetColorToast) -> Element<'_, Message> {
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let i18n = &self.ui_state.i18n;
+        let said = match &toast.cleared {
+            NetColorsCleared::Nets(count) => {
+                t!(i18n, ids::DIALOG_NET_COLOR_TOAST_CLEARED, "count" => *count)
+            }
+            NetColorsCleared::Unlabelled => {
+                t!(i18n, ids::DIALOG_NET_COLOR_TOAST_CLEARED_UNLABELLED)
+            }
+            NetColorsCleared::Net(net) => {
+                t!(i18n, ids::DIALOG_NET_COLOR_TOAST_CLEARED_NET, "net" => net.as_str())
+            }
+        };
+        let undo = dialog_button(
+            t!(
+                i18n,
+                ids::DIALOG_NET_COLOR_TOAST_UNDO,
+                "undo" => crate::keymap::shown_in("Mod+Z", i18n)
+            ),
+            DialogButtonKind::Secondary,
+            self.net_color_toast_can_undo()
+                .then(|| net_message(NetColorMsg::ToastUndone)),
+            tokens,
+        );
+        let line = row![
+            text(said)
+                .size(TS.caption)
+                .color(ti(tokens.text))
+                .width(Length::Fill)
+                .boxed(),
+            undo,
+        ]
+        .spacing(SP.m)
+        .align_y(Alignment::Center);
+        let surface = crate::styles::card(tokens);
+        let shadow = crate::styles::floating_shadow(tokens);
+        container(line)
+            .width(Length::Fill)
+            .padding(iced::Padding {
+                top: SP.s,
+                right: SP.s,
+                bottom: SP.s,
+                left: SP.m,
+            })
+            .style(move |theme: &Theme| container::Style {
+                shadow,
+                ..surface(theme)
+            })
             .boxed()
     }
 
@@ -257,5 +328,45 @@ mod tests {
         let _ = app.update(net_message(NetColorMsg::RowOpened("A".into())));
         assert_eq!(app.ui_state.net_color_palette.chooser.as_deref(), Some("A"));
         assert_eq!(y_of_net(&app, "C"), closed);
+    }
+
+    /// Mockup row 71: after Clear all colours the palette shows "Cleared 1
+    /// net colour" with an Undo naming its shortcut.
+    #[test]
+    fn clear_all_shows_the_toast_with_undo_and_its_shortcut() {
+        let (mut app, _task) = Signex::new();
+        let mut sheet = SchematicSheet::default();
+        let wire = signex_types::schematic::Wire {
+            uuid: uuid::Uuid::now_v7(),
+            start: Point::new(0.0, 0.0),
+            end: Point::new(10.0, 0.0),
+            ..Default::default()
+        };
+        let wire_id = wire.uuid;
+        sheet.wires.push(wire);
+        sheet
+            .labels
+            .push(Label::new("A", Point::new(0.0, 0.0), LabelType::Net));
+        add_sheet_with(&mut app, std::path::Path::new("toast.snxsch"), sheet);
+        let red = signex_types::theme::Color::new(0xE0, 0x54, 0x54, 255);
+        let _ = app.commit_net_colors(&[wire_id], red);
+        let _ = app.update(net_message(NetColorMsg::ClearedAll));
+
+        let undo = format!(
+            "Undo {}",
+            crate::keymap::shown_in("Mod+Z", &app.ui_state.i18n)
+        );
+        let texts: Vec<String> = lay_out_texts(
+            app.view_net_color_palette_body(),
+            iced::Size::new(360.0, 400.0),
+        )
+        .into_iter()
+        .map(|laid| laid.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect();
+        assert!(
+            texts.iter().any(|t| t == "Cleared 1 net colour"),
+            "{texts:?}"
+        );
+        assert!(texts.contains(&undo), "{texts:?}");
     }
 }

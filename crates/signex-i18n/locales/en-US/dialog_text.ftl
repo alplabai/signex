@@ -547,3 +547,18 @@ dialog-reprefix-skip-hand-edited =
         [one] { $count } hand-edited prefix
        *[other] { $count } hand-edited prefixes
     }
+
+# net-color-clear-toast
+# Net colour palette toast after Clear all colours. $count is how many
+# labelled nets lost their colour (a whole number).
+dialog-net-color-toast-cleared =
+    { $count ->
+        [one] Cleared { $count } net colour
+       *[other] Cleared { $count } net colours
+    }
+# The same toast when the colours cleared were on nets with no label.
+dialog-net-color-toast-cleared-unlabelled = Cleared the net colours of this sheet
+# Toast after Clear in a row's chooser. $net is the net name.
+dialog-net-color-toast-cleared-net = Cleared the colour of { $net }
+# The toast's button. $undo is the Undo shortcut, such as "Ctrl+Z".
+dialog-net-color-toast-undo = Undo { $undo }

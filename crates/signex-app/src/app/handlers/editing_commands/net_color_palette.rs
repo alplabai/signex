@@ -8,6 +8,7 @@
 use super::super::super::*;
 use crate::app::handlers::canvas::net_color_click::{net_elements_in, wire_at};
 use crate::app::mutation_gateway::MutationOutcome;
+use crate::app::state::{NetColorToast, NetColorsCleared};
 use signex_i18n::{ids, t};
 use signex_types::schematic::{Label, LabelType, SchematicSheet};
 use signex_types::theme::Color;
@@ -28,6 +29,9 @@ pub(crate) const CHOOSER_COLORS: [(u8, u8, u8); 10] = [
 
 /// Rows the palette window is sized for before its list scrolls.
 const VISIBLE_ROWS: usize = 12;
+
+/// How long the Clear toast shows (mockup row 71).
+const CLEAR_TOAST: std::time::Duration = std::time::Duration::from_secs(6);
 
 /// One palette row: a net label text and the colour its net shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -197,7 +201,10 @@ impl Signex {
                 self.close_detached_modal(crate::app::state::ModalId::NetColorPalette)
             }
             NetColorMsg::Set { net, color } => {
-                self.set_palette_net_color(&net, color);
+                let outcome = self.set_palette_net_color(&net, color);
+                if color.is_none() && outcome == MutationOutcome::Changed {
+                    return self.show_clear_toast(NetColorsCleared::Net(net));
+                }
                 Task::none()
             }
             NetColorMsg::CustomShow(show) => {
@@ -282,17 +289,83 @@ impl Signex {
             }
             NetColorMsg::ClearedAll => {
                 self.ui_state.net_color_palette.chooser = None;
-                if let Some(path) = self.document_state.active_path.clone() {
-                    self.run_clear_all_net_colors(Some(&path));
+                let Some(path) = self.document_state.active_path.clone() else {
+                    return Task::none();
+                };
+                let nets = self.coloured_palette_nets();
+                if self.run_clear_all_net_colors(Some(&path)).sheets == 0 {
+                    return Task::none();
+                }
+                self.show_clear_toast(match nets {
+                    0 => NetColorsCleared::Unlabelled,
+                    n => NetColorsCleared::Nets(n),
+                })
+            }
+            NetColorMsg::ToastUndone => {
+                if self.net_color_toast_can_undo() {
+                    self.handle_undo_requested();
+                }
+                self.ui_state.net_color_palette.toast = None;
+                Task::none()
+            }
+            NetColorMsg::ToastExpired(revision) => {
+                let toast = &mut self.ui_state.net_color_palette.toast;
+                if toast.as_ref().is_some_and(|t| t.revision == revision) {
+                    *toast = None;
                 }
                 Task::none()
             }
         }
     }
 
+    /// How many labelled nets show a colour on the active sheet.
+    fn coloured_palette_nets(&self) -> usize {
+        self.document_state.active_engine().map_or(0, |engine| {
+            let sheet = engine.document();
+            net_label_names(sheet)
+                .iter()
+                .filter(|net| net_color_on(sheet, net).is_some())
+                .count()
+        })
+    }
+
+    /// Show the toast for a clear just made on the active sheet, and time it
+    /// out after [`CLEAR_TOAST`] unless a newer toast replaced it.
+    fn show_clear_toast(&mut self, cleared: NetColorsCleared) -> Task<Message> {
+        let Some(sheet) = self.document_state.active_path.clone() else {
+            return Task::none();
+        };
+        let Some(revision) = self.document_state.active_engine().map(|e| e.revision()) else {
+            return Task::none();
+        };
+        self.ui_state.net_color_palette.toast = Some(NetColorToast {
+            cleared,
+            sheet,
+            revision,
+        });
+        // Built inside the future: `sleep` needs the runtime the task runs on.
+        Task::perform(async { tokio::time::sleep(CLEAR_TOAST).await }, move |()| {
+            Message::NetColor(NetColorMsg::ToastExpired(revision))
+        })
+    }
+
+    /// Whether the toast's Undo would take back its clear: the toast's sheet
+    /// is active and the clear is still its newest edit.
+    pub(crate) fn net_color_toast_can_undo(&self) -> bool {
+        let Some(toast) = self.ui_state.net_color_palette.toast.as_ref() else {
+            return false;
+        };
+        self.document_state.active_path.as_deref() == Some(toast.sheet.as_path())
+            && self
+                .document_state
+                .active_engine()
+                .is_some_and(|engine| engine.revision() == toast.revision)
+    }
+
     /// Colour `net` on the active sheet (`None` clears it) in one undo step,
-    /// and close the row's chooser.
-    fn set_palette_net_color(&mut self, net: &str, color: Option<Color>) {
+    /// and close the row's chooser. What the commit did; `Unchanged` when no
+    /// label of `net` sits on a wire.
+    fn set_palette_net_color(&mut self, net: &str, color: Option<Color>) -> MutationOutcome {
         self.ui_state.net_color_palette.chooser = None;
         let elements = self
             .document_state
@@ -301,10 +374,13 @@ impl Signex {
             .unwrap_or_default();
         // An alpha of 0 clears. A refusal (a read-only sheet) is already
         // said in Messages by the commit.
-        let applied = !elements.is_empty() && {
+        let outcome = if elements.is_empty() {
+            MutationOutcome::Unchanged
+        } else {
             let paint = color.unwrap_or(Color::new(0, 0, 0, 0));
-            self.commit_net_colors(&elements, paint).0 != MutationOutcome::Failed
+            self.commit_net_colors(&elements, paint).0
         };
+        let applied = !elements.is_empty() && outcome != MutationOutcome::Failed;
         // The per-name record follows the sheet: an empty or refused commit
         // leaves it.
         match color {
@@ -320,6 +396,7 @@ impl Signex {
         for canvas in self.interaction_state.all_schematic_canvases_mut() {
             canvas.clear_content_cache();
         }
+        outcome
     }
 
     /// The custom picker's Use Color: colour the picker's net when it came
@@ -365,5 +442,160 @@ impl Signex {
             crate::app::contracts::Channel::G => custom.draft.g = v,
             crate::app::contracts::Channel::B => custom.draft.b = v,
         }
+    }
+}
+
+/// Mockup row 71: Clear all colours and a chooser's Clear show a toast with
+/// what was cleared and Undo.
+#[cfg(test)]
+mod toast_tests {
+    use super::super::net_color_driver::{add_sheet_with, color, colour_of, paint};
+    use crate::app::state::NetColorsCleared;
+    use crate::app::{Message, NetColorMsg, Signex};
+    use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Wire};
+    use std::path::PathBuf;
+
+    /// A labelled wire per net, then one wire with no label. The wire ids
+    /// in that order.
+    fn app_with_nets(nets: &[&str]) -> (Signex, PathBuf, Vec<uuid::Uuid>) {
+        let mut sheet = SchematicSheet {
+            uuid: uuid::Uuid::now_v7(),
+            paper_size: "A4".to_string(),
+            ..Default::default()
+        };
+        for i in 0..=nets.len() {
+            let y = 10.0 * i as f64;
+            sheet.wires.push(Wire {
+                uuid: uuid::Uuid::now_v7(),
+                start: Point::new(0.0, y),
+                end: Point::new(10.0, y),
+                ..Default::default()
+            });
+            if let Some(net) = nets.get(i) {
+                sheet
+                    .labels
+                    .push(Label::new(*net, Point::new(0.0, y), LabelType::Net));
+            }
+        }
+        let wires = sheet.wires.iter().map(|w| w.uuid).collect();
+        let (mut app, _task) = Signex::new();
+        let path = PathBuf::from("toast.snxsch");
+        add_sheet_with(&mut app, &path, sheet);
+        (app, path, wires)
+    }
+
+    fn send(app: &mut Signex, msg: NetColorMsg) {
+        let _ = app.update(Message::NetColor(msg));
+    }
+
+    fn cleared(app: &Signex) -> Option<NetColorsCleared> {
+        let toast = app.ui_state.net_color_palette.toast.as_ref();
+        toast.map(|t| t.cleared.clone())
+    }
+
+    fn clear_net(app: &mut Signex, net: &str) {
+        send(
+            app,
+            NetColorMsg::Set {
+                net: net.into(),
+                color: None,
+            },
+        );
+    }
+
+    #[test]
+    fn clear_all_counts_the_nets_and_its_undo_brings_them_back() {
+        let (mut app, path, wires) = app_with_nets(&["A", "B", "C"]);
+        paint(&mut app, &[wires[0]], color(10));
+        paint(&mut app, &[wires[1]], color(20));
+
+        send(&mut app, NetColorMsg::ClearedAll);
+        assert_eq!(cleared(&app), Some(NetColorsCleared::Nets(2)));
+        let toast = app.ui_state.net_color_palette.toast.clone();
+        assert_eq!(toast.map(|t| t.sheet), Some(path));
+        assert!(app.net_color_toast_can_undo());
+        assert_eq!(colour_of(&app, wires[0]), None);
+
+        send(&mut app, NetColorMsg::ToastUndone);
+        assert_eq!(colour_of(&app, wires[0]), Some(color(10)));
+        assert_eq!(colour_of(&app, wires[1]), Some(color(20)));
+        assert_eq!(cleared(&app), None, "the toast goes with its Undo");
+    }
+
+    #[test]
+    fn a_chooser_clear_names_the_net_and_its_undo_brings_it_back() {
+        let (mut app, _path, wires) = app_with_nets(&["A", "B"]);
+        paint(&mut app, &[wires[0]], color(10));
+
+        clear_net(&mut app, "A");
+        assert_eq!(colour_of(&app, wires[0]), None);
+        assert_eq!(cleared(&app), Some(NetColorsCleared::Net("A".into())));
+
+        send(&mut app, NetColorMsg::ToastUndone);
+        assert_eq!(colour_of(&app, wires[0]), Some(color(10)));
+    }
+
+    #[test]
+    fn clear_all_of_unlabelled_nets_says_the_sheet_was_cleared() {
+        let (mut app, _path, wires) = app_with_nets(&["A"]);
+        paint(&mut app, &[wires[1]], color(30));
+        send(&mut app, NetColorMsg::ClearedAll);
+        assert_eq!(colour_of(&app, wires[1]), None);
+        assert_eq!(cleared(&app), Some(NetColorsCleared::Unlabelled));
+    }
+
+    #[test]
+    fn nothing_cleared_shows_no_toast() {
+        let (mut app, _path, _wires) = app_with_nets(&["A"]);
+        send(&mut app, NetColorMsg::ClearedAll);
+        assert_eq!(cleared(&app), None, "a clean sheet");
+        clear_net(&mut app, "A");
+        assert_eq!(cleared(&app), None, "a net with no colour");
+        send(
+            &mut app,
+            NetColorMsg::Set {
+                net: "A".into(),
+                color: Some(color(40)),
+            },
+        );
+        assert_eq!(cleared(&app), None, "a colour pick is no clear");
+    }
+
+    /// The toast's Undo takes back its clear only: after a newer edit it is
+    /// greyed, and a press undoes nothing.
+    #[test]
+    fn the_toast_undo_leaves_a_newer_edit_alone() {
+        let (mut app, _path, wires) = app_with_nets(&["A", "B"]);
+        paint(&mut app, &[wires[0]], color(10));
+        send(&mut app, NetColorMsg::ClearedAll);
+        paint(&mut app, &[wires[1]], color(50));
+        assert!(!app.net_color_toast_can_undo());
+
+        send(&mut app, NetColorMsg::ToastUndone);
+        assert_eq!(colour_of(&app, wires[1]), Some(color(50)));
+        assert_eq!(colour_of(&app, wires[0]), None);
+        assert_eq!(cleared(&app), None);
+    }
+
+    /// An older toast's timeout leaves the newer toast up.
+    #[test]
+    fn only_the_shown_toasts_timeout_hides_it() {
+        let (mut app, _path, wires) = app_with_nets(&["A", "B"]);
+        let revision = |app: &Signex| {
+            let toast = app.ui_state.net_color_palette.toast.as_ref();
+            toast.expect("a toast").revision
+        };
+        paint(&mut app, &[wires[0]], color(10));
+        clear_net(&mut app, "A");
+        let first = revision(&app);
+        paint(&mut app, &[wires[1]], color(20));
+        clear_net(&mut app, "B");
+        let second = revision(&app);
+        assert_ne!(first, second);
+
+        send(&mut app, NetColorMsg::ToastExpired(first));
+        assert_eq!(cleared(&app), Some(NetColorsCleared::Net("B".into())));
+        send(&mut app, NetColorMsg::ToastExpired(second));
+        assert_eq!(cleared(&app), None);
     }
 }
