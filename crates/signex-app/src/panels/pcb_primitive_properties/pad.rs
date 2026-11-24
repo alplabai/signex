@@ -292,8 +292,10 @@ fn hole_row<'a>(look: Look<'a>, f: &'a PadFacts) -> Element<'a, PanelMsg> {
     )
 }
 
-/// Rule / Manual and Expansion of a pad mask: what the board does not
-/// store per pad yet, so greyed with that reason.
+/// Source and Expansion of a pad mask (mockup row 97), live while the
+/// switch heading them allows editing. The board stores no expansion per
+/// pad, so the pad follows the rule: Rule is chosen, Manual is inert with
+/// that reason, and Expansion reads "Rule", greyed while the rule decides.
 fn mask_rows<'a>(look: Look<'a>, unit: Option<MessageId>) -> Element<'a, PanelMsg> {
     let source = segments(vec![
         Segment {
@@ -307,22 +309,28 @@ fn mask_rows<'a>(look: Look<'a>, unit: Option<MessageId>) -> Element<'a, PanelMs
             msg: None,
         },
     ]);
-    let expansion = value_box(
-        look,
-        unit.map_or_else(
-            || UserText::new(String::new()).into(),
-            |u| Label::from(look.t(u)),
+    let mut expansion = row![value_box(look, look.t(ids::PCB_PRIM_RULE))]
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center);
+    if let Some(unit) = unit {
+        expansion = expansion.push(text(look.t(unit)).size(TS.body).color(look.muted));
+    }
+    rows_column(vec![
+        labelled(
+            look,
+            ids::PCB_PRIM_SOURCE,
+            with_tip(look, source, ids::PCB_PRIM_MASK_UNSUPPORTED),
         ),
-    );
-    let rows = rows_column(vec![
-        labelled(look, ids::PCB_PRIM_SOURCE, source),
-        labelled(look, ids::PCB_PRIM_EXPANSION, expansion),
-    ]);
-    with_tip(
-        look,
-        greyed_unless(look, false, rows),
-        ids::PCB_PRIM_MASK_UNSUPPORTED,
-    )
+        labelled(
+            look,
+            ids::PCB_PRIM_EXPANSION,
+            with_tip(
+                look,
+                greyed_unless(look, false, expansion.boxed()),
+                ids::PCB_PRIM_MASK_UNSUPPORTED,
+            ),
+        ),
+    ])
 }
 
 /// The Paste subsection: its switch heads it, ticked for a surface pad.
