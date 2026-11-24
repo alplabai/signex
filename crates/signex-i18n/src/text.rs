@@ -43,6 +43,15 @@ pub(crate) fn upper_in(tag: &str, text: &str) -> String {
         .into_owned()
 }
 
+pub(crate) fn lower_in(tag: &str, text: &str) -> String {
+    let lang = tag
+        .parse::<LanguageIdentifier>()
+        .unwrap_or(LanguageIdentifier::UNKNOWN);
+    CaseMapper::new()
+        .lowercase_to_string(text, &lang)
+        .into_owned()
+}
+
 impl I18n {
     /// `text` case-folded for matching: `İ` and `I` become `i` and `ı` under
     /// `tr`/`az`, `ß` becomes `ss`, and under `en` it is plain lowercase.
@@ -88,6 +97,13 @@ impl I18n {
     /// [`Self::fold_for_search`]. Never fold or compare with it.
     pub fn upper_for_display(&self, text: &str) -> String {
         upper_in(self.locale(), text)
+    }
+
+    /// `text` in lower case for display: `I` becomes `ı` when the message
+    /// language is `tr`/`az`. Follows the message locale like
+    /// [`Self::upper_for_display`]. Never fold or compare with it.
+    pub fn lower_for_display(&self, text: &str) -> String {
+        lower_in(self.locale(), text)
     }
 
     /// The order of `a` and `b` in the formatting locale's alphabet (`ç`

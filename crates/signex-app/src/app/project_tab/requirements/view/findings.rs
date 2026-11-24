@@ -37,7 +37,7 @@ pub(super) fn findings_sentence(findings: &[&Finding], i18n: &I18n) -> Option<St
                 i18n,
                 ids::REQUIREMENTS_FINDINGS_NEXT,
                 "head" => head,
-                "next" => mid_sentence(clause),
+                "next" => mid_sentence(clause, i18n),
             )
             .into_string(),
         });
@@ -75,11 +75,14 @@ fn part_line(line: &PartMiss, i18n: &I18n) -> String {
 
 /// `clause` as it reads after a semicolon: an opening word in sentence case
 /// (`The`, `Net`) goes lower case; a name (`R2`, `DRC`) stays as written.
-fn mid_sentence(clause: &str) -> String {
+fn mid_sentence(clause: &str, i18n: &I18n) -> String {
     let mut chars = clause.chars();
     match (chars.next(), chars.next()) {
         (Some(first), Some(second)) if first.is_uppercase() && second.is_lowercase() => {
-            first.to_lowercase().chain(clause.chars().skip(1)).collect()
+            let rest = &clause[first.len_utf8()..];
+            let mut out = i18n.lower_for_display(&first.to_string());
+            out.push_str(rest);
+            out
         }
         _ => clause.to_string(),
     }
