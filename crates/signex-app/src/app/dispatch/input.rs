@@ -170,6 +170,8 @@ enum InputConsumer {
     LibraryPicker,
     /// Enter saves all in Close Project and is swallowed in Remove (#2262).
     ConfirmDefault,
+    /// Enter / Shift+Enter step through the Find results (mockup row 67).
+    FindStep,
     /// F1 toggles the keyboard-shortcuts sheet.
     ShortcutsSheet,
     /// Tab moves the in-place editor along a part's fields (mockup row 65).
@@ -198,6 +200,7 @@ const CLAIM_ORDER: [InputConsumer; 14] = [
     InputConsumer::ComponentsRowMenu,
     InputConsumer::LibraryPicker,
     InputConsumer::ConfirmDefault,
+    InputConsumer::FindStep,
     InputConsumer::ShortcutsSheet,
     InputConsumer::TextEditTab,
     InputConsumer::SelectionSlots,
@@ -386,7 +389,8 @@ impl Signex {
                 }
                 let key = self
                     .rules_drawing_key(window, event)
-                    .or_else(|| self.project_preview_key(window, event));
+                    .or_else(|| self.project_preview_key(window, event))
+                    .or_else(|| self.gerber_viewer_key(window, event));
                 match (target, key) {
                     (InputTarget::Main | InputTarget::UndockedTab, Some(message)) => {
                         Claim::consume(message)
@@ -405,6 +409,7 @@ impl Signex {
                 .picker_arrow_message(target, event)
                 .map_or(Claim::Pass, Claim::consume),
             InputConsumer::ConfirmDefault => self.claim_confirm_default(target, event),
+            InputConsumer::FindStep => self.claim_find_step(target, window, event),
             InputConsumer::ShortcutsSheet => self.claim_shortcuts_sheet(target, event),
             InputConsumer::TextEditTab => self.claim_text_edit_tab(target, window, event),
             InputConsumer::SelectionSlots => Self::claim_selection_slots(event),
@@ -699,6 +704,35 @@ impl Signex {
                 .map_or(Claim::Swallow, Claim::consume),
             _ => Claim::Pass,
         }
+    }
+
+    /// Enter / Shift+Enter step the Find results (mockup row 67) in the
+    /// window that shows the dialog: its own window, or the window it was
+    /// opened in while nothing is painted above it there.
+    fn claim_find_step(
+        &self,
+        target: InputTarget,
+        window: iced::window::Id,
+        event: &keyboard::Event,
+    ) -> Claim {
+        use crate::app::state::ModalId;
+        let in_dialog = target == InputTarget::DetachedModal(ModalId::FindReplace)
+            || (target.paints_overlay_stack()
+                && self.detached_window_of(ModalId::FindReplace).is_none()
+                && self.overlay_belongs_to(self.ui_state.find_replace.window, window)
+                && self.find_in_front());
+        self.find_step_key(in_dialog, event)
+            .map_or(Claim::Pass, Claim::consume)
+    }
+
+    /// Whether Find is the frontmost open overlay: the one Esc would close.
+    fn find_in_front(&self) -> bool {
+        matches!(
+            self.escape_overlay_message(),
+            Some(Message::FindReplaceMsg(
+                crate::find_replace::FindReplaceMsg::Close
+            ))
+        )
     }
 
     /// F1 toggles the keyboard-shortcuts sheet: open if closed, close if
@@ -1009,6 +1043,7 @@ mod tests {
             InputConsumer::ComponentsRowMenu,
             InputConsumer::LibraryPicker,
             InputConsumer::ConfirmDefault,
+            InputConsumer::FindStep,
             InputConsumer::ShortcutsSheet,
             InputConsumer::TextEditTab,
             InputConsumer::SelectionSlots,

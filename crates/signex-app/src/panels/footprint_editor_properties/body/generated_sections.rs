@@ -33,7 +33,11 @@ pub(super) fn view<'a>(
 
 /// The typed text while it is refused or spells the stored value; text an
 /// undo has left behind gives way to the stored value.
-fn live_text(buffer: Option<&String>, stored: f64, fits: fn(f64) -> bool) -> Option<&String> {
+pub(super) fn live_text(
+    buffer: Option<&String>,
+    stored: f64,
+    fits: fn(f64) -> bool,
+) -> Option<&String> {
     buffer.filter(|text| match crate::numeric_field::parse_field_f64(text) {
         Some(value) if fits(value) => value == stored,
         _ => true,

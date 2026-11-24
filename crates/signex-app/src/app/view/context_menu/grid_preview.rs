@@ -1,12 +1,13 @@
-//! The grid picker's read-only preview (Graphite mockup #63): line art of a resistor, a
-//! power port and a ground on the picked grid, each pin ringed green when the
-//! 2.54 mm pin pitch lands on the grid and amber when it does not. No expand
-//! button and no editable label: the ladder is the only control.
+//! The grid picker's read-only preview (mockup row 63): line art of a resistor, a
+//! power port and a ground on the hovered ladder step (the active step when
+//! no row is hovered), each pin ringed green when the 2.54 mm pin pitch
+//! lands on the grid and amber when it does not. No expand button and no
+//! editable label: the ladder is the only control.
 
 use super::*;
 
 use iced::{Length, Point, Rectangle};
-use signex_i18n::{I18n, menu_ids};
+use signex_i18n::{I18n, Localized, menu_ids};
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::property_illustration::{
     Illustration, IllustrationHover, Ink, Paint, Part, Primitive, Style, Tint, Weight,
@@ -135,14 +136,14 @@ pub(super) fn grid_illustration(step_mm: f64, tokens: &ThemeTokens, tid: ThemeId
         .parts(part_parts(Paint::Document(power), Paint::Document(ring)))
 }
 
-/// The preview card: its title and the step it shows, the drawing, and a
-/// line saying whether the pins land on the grid.
+/// The preview card: its title and `step_caption` (the step it shows), the
+/// drawing, and a line saying whether the pins land on the grid.
 pub(super) fn grid_preview_card<'a>(
     i18n: &I18n,
     tokens: &'a ThemeTokens,
     tid: ThemeId,
     step_mm: f64,
-    step_name: String,
+    step_caption: Localized,
 ) -> Element<'a, Message> {
     use iced::widget::{Widget as _, column, container, row};
     let ink = crate::styles::ti(tokens.text);
@@ -154,12 +155,9 @@ pub(super) fn grid_preview_card<'a>(
             weight: iced::font::Weight::Semibold,
             ..signex_widgets::ui_font::regular()
         });
-    let caption = signex_widgets::text(i18n.message(
-        menu_ids::CTX_GRID_PREVIEW_ACTIVE,
-        &[("step", step_name.into())],
-    ))
-    .size(TS.caption)
-    .color(muted);
+    let caption = signex_widgets::text(step_caption)
+        .size(TS.caption)
+        .color(muted);
     let help = if pins_on_grid(step_mm) {
         menu_ids::CTX_GRID_PREVIEW_ON_PITCH
     } else {

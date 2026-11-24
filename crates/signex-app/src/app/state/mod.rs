@@ -73,11 +73,12 @@ mod window_tab;
 pub use crate::app::core::case_fold::CaseFold;
 pub use crate::app::core::document_times::DocumentTimes;
 pub use agent_edits::AgentEdits;
-pub use board_3d::{Board3dSession, BuiltScene};
+pub use board_3d::{Board3dSession, BuiltScene, CaptureResult, MatteBackdrop};
 pub use board_net_classes::BoardNetClassPanelState;
 pub use board_sketch::BoardSketchSession;
 pub use board_sketch_dxf::{
-    DXF_LAYER_TARGETS, DxfLayerTarget, SketchDxfDialog, SketchDxfMsg, SketchDxfProblem,
+    DXF_LAYER_TARGETS, DxfImportMode, DxfLayerTarget, SketchDxfDialog, SketchDxfMsg,
+    SketchDxfProblem, SketchDxfResult, SketchDxfStep,
 };
 pub use bom_preview::{BomIssueLine, BomPreviewState, BomSidebarTab, ColumnResizeState};
 pub(crate) use document_load::SheetInstall;
@@ -101,6 +102,8 @@ pub use placement::{
 };
 pub use preview::{PdfQuality, PreviewState};
 pub use profile_update::PendingProfileUpdate;
+pub(crate) use sheet_read::SheetUnreadable;
+pub use sheet_read::UnreadableCause;
 pub use tab_placements::{TabPlacements, default_placement};
 pub use ui::{DEFAULT_BOTTOM_PANEL_HEIGHT, UiState};
 
@@ -200,6 +203,32 @@ pub struct NetColorPaletteState {
     pub filter: String,
     /// The net label text whose chooser is open beside its row.
     pub chooser: Option<String>,
+    /// The toast after a Clear, while it shows (mockup row 71).
+    pub toast: Option<NetColorToast>,
+}
+
+/// The net colour palette's toast after a Clear, with its Undo.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NetColorToast {
+    pub cleared: NetColorsCleared,
+    /// The sheet the clear was made on.
+    pub sheet: std::path::PathBuf,
+    /// The sheet's engine revision right after the clear. Unique per edit,
+    /// so it also tells this toast's timeout from an older one's.
+    pub revision: u64,
+}
+
+/// What a palette toast says was cleared.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NetColorsCleared {
+    /// Clear all colours took the colour off this many listed nets (named by
+    /// a label or a power port).
+    Nets(usize),
+    /// Clear all colours took colours off nets that no label or power port
+    /// names.
+    Unlabelled,
+    /// A row chooser's Clear took the colour off this net.
+    Net(String),
 }
 
 /// Transient state for the Move Selection dialog.
@@ -693,6 +722,9 @@ pub struct DocumentState {
     /// Commits asked for while their project folder moved, run once the move
     /// has finished.
     pub deferred_git_commits: Vec<DeferredGitCommit>,
+    /// The Gerber Viewer tab (mockup rows 193 and 193f): the package shown
+    /// and the app-wide recent packages. Its slice owns it.
+    pub gerber_viewer: crate::app::gerber_viewer::GerberViewerState,
 }
 
 /// A project folder a rename moved from `old` to `new`.

@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use uuid::Uuid;
 
 use super::ResolvedPlacement;
+use crate::library::state::{ChangeFilter, ChangeScope};
 
 /// What the user asked of the selected placed part, from the canvas context
 /// menu, the Properties panel or a command id.
@@ -48,4 +49,18 @@ pub enum PlacedPartMsg {
     ChangePreviewBackedOut,
     /// The preview was confirmed: apply the change.
     ChangeConfirmed,
+    /// A row of Change Component's list was clicked: pick it and read it.
+    ChangeRowClicked(Uuid),
+    /// A filter chip of Change Component's list was pressed.
+    ChangeFilterToggled(ChangeFilter),
+    /// A user parameter's Keep now box was toggled.
+    ChangeKeepToggled(String),
+    /// An Apply to choice was picked.
+    ChangeScopePicked(ChangeScope),
+    /// The off-thread read of the listed rows' pin counts finished; `Err`
+    /// carries the runtime's text when the read's thread panicked.
+    ChangePinCountsRead {
+        target: PlacedPartTarget,
+        counts: Result<Vec<(Uuid, usize)>, String>,
+    },
 }

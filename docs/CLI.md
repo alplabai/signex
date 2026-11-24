@@ -1027,8 +1027,8 @@ Find by text on a board is `find_items` (designator and value).
 
 ## Working through a running Signex
 
-When a person has the project open in Signex with Preferences > Editing >
-"Allow agent connections" on, `run` sends each command to that process
+When a person has the project open in Signex with Preferences > System ›
+General > "Allow agent connections" on, `run` sends each command to that process
 instead of booting its own (#1924; the app's side, the registry and the
 security rules are in [AGENT_SOCKET.md](AGENT_SOCKET.md)). The command runs
 inside the app's update loop like a click, so the person sees the change at

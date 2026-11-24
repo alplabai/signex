@@ -193,17 +193,19 @@ impl Signex {
         id: ProjectId,
         edit: impl FnOnce(&mut DrcRuleSet),
     ) -> Result<(), String> {
-        self.commit_fab_section(id, edit, None)
+        self.commit_fab_section(id, edit, None, None)
     }
 
     /// [`Self::commit_drc_section`] that also sets the project's router
-    /// tool to `router` mm when it is `Some`, in the same undo step: a fab
-    /// tier or profile preset. Unchanged rules and router record no step.
+    /// tool to `router` mm and its min slot to `min_slot` mm when each is
+    /// `Some`, in the same undo step: a fab tier or profile preset (mockup
+    /// row 179d). Unchanged rules, router and min slot record no step.
     pub(crate) fn commit_fab_section(
         &mut self,
         id: ProjectId,
         edit: impl FnOnce(&mut DrcRuleSet),
         router: Option<f64>,
+        min_slot: Option<f64>,
     ) -> Result<(), String> {
         let project = self.rules_writable(id)?;
         let before = project.data.rules.clone();
@@ -213,6 +215,9 @@ impl Signex {
             .clone()
             .unwrap_or_else(|| self.seeded_project_rules());
         edit(&mut after.drc);
+        if min_slot.is_some() {
+            after.set_min_slot(min_slot);
+        }
         if before.as_ref() == Some(&after) && router_after == router_before {
             return Ok(());
         }

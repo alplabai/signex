@@ -13,7 +13,7 @@
 //! An optional `drc` section (#2307) has the shape of the project's
 //! `rules.drc`. Keys this build does not know (a section from a newer build,
 //! an unknown rule id) are kept verbatim and written back, as everywhere
-//! else. A `schema` newer than [`RULE_PROFILE_SCHEMA_V2`] is refused rather
+//! else. A `schema` newer than [`RULE_PROFILE_SCHEMA_V3`] is refused rather
 //! than half-read, because applying part of a rule set silently changes
 //! results. The schema is content-driven ([`RuleProfile::written_schema`],
 //! `docs/architecture/snxrules-format.md`).
@@ -31,6 +31,10 @@ pub const RULE_PROFILE_SCHEMA_V1: u32 = 1;
 /// diameter (mockup row 179d). `fab` keeps no unknown keys, so an older build would
 /// drop the value on re-save; it refuses this schema by name instead.
 pub const RULE_PROFILE_SCHEMA_V2: u32 = 2;
+
+/// The schema of a profile whose `fab` section names a min slot (mockup
+/// row 179d), for the same reason as [`RULE_PROFILE_SCHEMA_V2`].
+pub const RULE_PROFILE_SCHEMA_V3: u32 = 3;
 
 /// File extension of a profile, without the dot.
 pub const RULE_PROFILE_EXTENSION: &str = "snxrules";
@@ -84,6 +88,11 @@ pub struct FabProfileInfo {
     /// [`RULE_PROFILE_SCHEMA_V2`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub router_tool_diameter: Option<f64>,
+    /// The narrowest slot the maker routes, across, in mm (mockup row
+    /// 179d); absent when the profile names none. Present, the file is
+    /// written at [`RULE_PROFILE_SCHEMA_V3`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_slot: Option<f64>,
 }
 
 /// Why a profile file could not be used.
@@ -114,7 +123,7 @@ impl RuleProfile {
         let profile: Self =
             serde_json::from_slice(bytes).map_err(|e| RuleProfileError::Parse(e.to_string()))?;
         match profile.schema {
-            Some(v) if v > RULE_PROFILE_SCHEMA_V2 => Err(RuleProfileError::UnsupportedSchema(v)),
+            Some(v) if v > RULE_PROFILE_SCHEMA_V3 => Err(RuleProfileError::UnsupportedSchema(v)),
             _ => Ok(profile),
         }
     }
@@ -124,15 +133,24 @@ impl RuleProfile {
         self.fab.as_ref().and_then(|fab| fab.router_tool_diameter)
     }
 
-    /// The schema the file is written at: 2 while the `fab` section names a
-    /// router tool diameter, else as read (a 2 with nothing that needs it
-    /// goes back to 1), so a file without the value re-saves as today.
+    /// The min slot the `fab` section names, if any.
+    pub fn min_slot(&self) -> Option<f64> {
+        self.fab.as_ref().and_then(|fab| fab.min_slot)
+    }
+
+    /// The schema the file is written at: 3 while the `fab` section names a
+    /// min slot, else 2 while it names a router tool diameter, else as read
+    /// (a 2 or 3 with nothing that needs it goes back to 1), so a file
+    /// without either value re-saves as today.
     pub fn written_schema(&self) -> Option<u32> {
+        if self.min_slot().is_some() {
+            return Some(RULE_PROFILE_SCHEMA_V3);
+        }
         if self.router_tool_diameter().is_some() {
             return Some(RULE_PROFILE_SCHEMA_V2);
         }
         match self.schema {
-            Some(RULE_PROFILE_SCHEMA_V2) => Some(RULE_PROFILE_SCHEMA_V1),
+            Some(RULE_PROFILE_SCHEMA_V2 | RULE_PROFILE_SCHEMA_V3) => Some(RULE_PROFILE_SCHEMA_V1),
             other => other,
         }
     }
@@ -168,3 +186,6 @@ mod tests;
 
 #[cfg(test)]
 mod router_tests;
+
+#[cfg(test)]
+mod min_slot_tests;

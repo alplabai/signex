@@ -1,13 +1,13 @@
 //! Parameters section view (mockup row 30): a filter, then one
 //! bordered list with a Title block and a Variables group. A value box is
 //! outlined only on hover or focus; a variable row shows its remove button
-//! on hover; an `=` expression value shows its result or error under its
-//! row (#1987). Pure: reads the project and the tab state, emits
-//! `ProjectTabMsg`s.
+//! on hover; an `=` expression value shows its result in a green pill beside
+//! the value, or its error in an error-filled row (#1987). Pure: reads the
+//! project and the tab state, emits `ProjectTabMsg`s.
 
 use std::collections::BTreeMap;
 
-use iced::widget::{Column, Space, column, container, hover, row, text_input as input};
+use iced::widget::{Column, Row, Space, column, container, hover, row, text_input as input};
 use iced::{
     Alignment, Background, Border, Color, Element, Font, Length, Padding, Theme, Widget as _,
 };
@@ -20,13 +20,15 @@ use super::rename::{RenameNote, problem_words, rename_note};
 use super::{ParameterGroup, VisibleParameters, field_words, variable_count, visible_parameters};
 use crate::app::Message;
 use crate::app::project_tab::general::tab_message;
-use crate::app::project_tab::look::{ButtonKind, Glyph, glyph, icon_button, text_button};
+use crate::app::project_tab::look::{
+    ButtonKind, Glyph, glyph, icon_button, panel_pill, pill, text_button,
+};
 use crate::app::project_tab::table::{SP, TS, section};
 use crate::app::project_tab::{ProjectTabMsg, ProjectTabState};
 use crate::app::state::{LoadedProject, ProjectId};
 use crate::panels::TitleBlockField;
 use crate::styles::tokens::{danger, hover_overlay, resolve};
-use crate::styles::{ChromeMetrics, HAIRLINE, Radii, ti};
+use crate::styles::{ChromeMetrics, HAIRLINE, PillTone, Radii, ti};
 
 /// Width of the filter field, in `body`-size characters (260 px).
 const FILTER_EMS: f32 = 21.7;
@@ -85,6 +87,44 @@ struct Rows<'s> {
     i18n: &'s I18n,
     tokens: &'s ThemeTokens,
     look: Look,
+}
+
+/// What an `=` expression value shows on its row (mockup row 30). A literal
+/// value shows as typed and has none.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Evaluation {
+    /// The result, in a green pill beside the value.
+    Shows(String),
+    /// Why it does not evaluate, under the value in an error-filled row
+    /// with a "?" pill beside the value.
+    Error(String),
+}
+
+/// What the parameter `name` evaluates to or why it does not (#1987).
+pub(super) fn evaluation(parameters: &BTreeMap<String, String>, name: &str) -> Option<Evaluation> {
+    let stored = parameters.get(name)?;
+    if let FieldText::Literal(_) = classify(stored) {
+        return None;
+    }
+    Some(match variable_text(&TextTable(parameters), name)? {
+        Ok(value) => Evaluation::Shows(value),
+        Err(error) => Evaluation::Error(error.to_string()),
+    })
+}
+
+/// The words of an expression's result pill and whether it is the error
+/// "?" of one that does not evaluate (mockup row 30).
+pub(super) fn result_words(
+    i18n: &I18n,
+    evaluated: Option<&Evaluation>,
+) -> Option<(Localized, bool)> {
+    Some(match evaluated? {
+        Evaluation::Shows(value) => (
+            t!(i18n, ids::PROJECT_PARAMETER_SHOWS, "value" => value.clone()),
+            false,
+        ),
+        Evaluation::Error(_) => (t!(i18n, ids::PROJECT_PARAMETER_UNRESOLVED), true),
+    })
 }
 
 pub(in crate::app::project_tab) fn view<'a>(
@@ -187,8 +227,13 @@ impl Rows<'_> {
         if title_block_open {
             let cells = shown.title_block.iter().map(|field| {
                 let value = parameters.get(field.key()).map_or("", String::as_str);
-                let line = self.title_block_row(*field, value);
-                self.evaluated(line, parameters, field.key())
+                let evaluated = evaluation(parameters, field.key());
+                let shows = self.result_pill(evaluated.as_ref());
+                let line = self.title_block_row(*field, value, shows);
+                self.noted(
+                    line,
+                    self.error_note(evaluated.as_ref()).into_iter().collect(),
+                )
             });
             list = push_separated(list, cells, look);
         }
@@ -234,12 +279,18 @@ impl Rows<'_> {
             let typed = draft
                 .filter(|(from, _)| from.as_str() == name)
                 .map(|(_, text)| text.as_str());
-            let note = typed.and_then(|text| {
+            let rename = typed.and_then(|text| {
                 rename_note(parameters, name, text, refused)
                     .map(|note| self.note_words(note, name, text))
             });
-            let line = self.variable_row(name, typed, value, note);
-            self.evaluated(line, parameters, name)
+            let evaluated = evaluation(parameters, name);
+            let notes = rename
+                .into_iter()
+                .chain(self.error_note(evaluated.as_ref()))
+                .collect();
+            let shows = self.result_pill(evaluated.as_ref());
+            let line = self.variable_line(name, typed, value, shows);
+            self.noted(line, notes)
         });
         list = push_separated(list, cells, self.look);
         list = list.push(hairline(self.look.line_soft));
@@ -303,8 +354,14 @@ impl Rows<'_> {
         column![header, hairline(look.line_soft)].boxed()
     }
 
-    /// A title-block field: its name, then its value box.
-    fn title_block_row<'a>(&self, field: TitleBlockField, value: &str) -> Element<'a, Message> {
+    /// A title-block field: its name, then its value box and, for an
+    /// expression, its result pill.
+    fn title_block_row<'a>(
+        &self,
+        field: TitleBlockField,
+        value: &str,
+        shows: Option<Element<'a, Message>>,
+    ) -> Element<'a, Message> {
         let project_id = self.project_id;
         let key = field.key();
         let value_box = self
@@ -328,50 +385,29 @@ impl Rows<'_> {
         .padding([0.0, SP.m])
         .width(TS.body * NAME_EMS)
         .clip(true);
-        let line = row![
-            name,
-            container(value_box).width(Length::Fill),
-            Space::new().width(TS.body * REMOVE_EMS),
-        ]
-        .align_y(Alignment::Center)
-        .height(METRICS.field);
+        let line = value_line(name.boxed(), value_box, shows);
         hover(line, wash(self.look, None)).boxed()
     }
 
-    /// `line` with, under its value, what the parameter `name` evaluates to
-    /// or why it does not (#1987). A literal value shows as typed and adds
-    /// nothing.
-    fn evaluated<'a>(
-        &self,
-        line: Element<'a, Message>,
-        parameters: &BTreeMap<String, String>,
-        name: &str,
-    ) -> Element<'a, Message> {
-        let Some(stored) = parameters.get(name) else {
-            return line;
+    /// The result pill of an expression: the green "Shows …" pill, or the
+    /// error "?" on the panel fill when it does not evaluate.
+    fn result_pill<'a>(&self, evaluated: Option<&Evaluation>) -> Option<Element<'a, Message>> {
+        let (words, is_error) = result_words(self.i18n, evaluated)?;
+        Some(if is_error {
+            panel_pill(words, PillTone::Err, self.tokens)
+        } else {
+            pill(words, PillTone::Ok, None, self.tokens)
+        })
+    }
+
+    /// The "Error: …" note of an expression that does not evaluate, drawn
+    /// as a refusal (error fill and ink).
+    fn error_note(&self, evaluated: Option<&Evaluation>) -> Option<(Localized, bool)> {
+        let Some(Evaluation::Error(error)) = evaluated else {
+            return None;
         };
-        if let FieldText::Literal(_) = classify(stored) {
-            return line;
-        }
-        let Some(outcome) = variable_text(&TextTable(parameters), name) else {
-            return line;
-        };
-        let (words, ink) = match outcome {
-            Ok(value) => (
-                t!(self.i18n, ids::PROJECT_PARAMETER_SHOWS, "value" => value),
-                self.look.ink3,
-            ),
-            Err(error) => {
-                let error = error.to_string();
-                (
-                    t!(self.i18n, ids::PROJECT_PARAMETER_ERROR, "error" => error),
-                    self.look.err,
-                )
-            }
-        };
-        let note = container(text(words).size(TS.caption).color(ink))
-            .padding(Padding::ZERO.left(TS.body * NAME_EMS + SP.s).bottom(SP.xs));
-        column![line, note].boxed()
+        let words = t!(self.i18n, ids::PROJECT_PARAMETER_ERROR, "error" => error.clone());
+        Some((words, true))
     }
 
     /// The words of a rename note and whether it is a refusal (error ink)
@@ -386,28 +422,14 @@ impl Rows<'_> {
         }
     }
 
-    /// A variable: its name box (Enter renames), its value box, the remove
-    /// button on hover and, while its name is typed over, the rename note.
-    fn variable_row<'a>(
-        &self,
-        name: &str,
-        typed: Option<&str>,
-        value: &str,
-        note: Option<(Localized, bool)>,
-    ) -> Element<'a, Message> {
-        let hovered = self.variable_line(name, typed, value);
-        match note {
-            None => hovered,
-            Some((words, is_refusal)) => self.noted(hovered, words, is_refusal),
-        }
-    }
-
-    /// The name box, value box and hover remove button of a variable.
+    /// The name box (Enter renames), value box, result pill of an
+    /// expression and hover remove button of a variable.
     fn variable_line<'a>(
         &self,
         name: &str,
         typed: Option<&str>,
         value: &str,
+        shows: Option<Element<'a, Message>>,
     ) -> Element<'a, Message> {
         let (project_id, look) = (self.project_id, self.look);
         let from = name.to_string();
@@ -436,15 +458,11 @@ impl Rows<'_> {
             .on_submit(tab_message(ProjectTabMsg::ParameterSubmitted {
                 project_id,
             }));
-        let line = row![
-            container(name_box)
-                .padding(Padding::ZERO.left(SP.s))
-                .width(TS.body * NAME_EMS),
-            container(value_box).width(Length::Fill),
-            Space::new().width(TS.body * REMOVE_EMS),
-        ]
-        .align_y(Alignment::Center)
-        .height(METRICS.field);
+        let name_cell = container(name_box)
+            .padding(Padding::ZERO.left(SP.s))
+            .width(TS.body * NAME_EMS)
+            .boxed();
+        let line = value_line(name_cell, value_box, shows);
         let remove = icon_button(
             Glyph::Close,
             t!(self.i18n, ids::PROJECT_PARAMETERS_REMOVE),
@@ -457,28 +475,40 @@ impl Rows<'_> {
         hover(line, wash(look, Some(remove))).boxed()
     }
 
-    /// `line` with `words` under it, over the soft fill with a bar at the
-    /// left: error colours for a refusal, warning colours otherwise.
+    /// `line` with each note under it, over the soft fill with a bar at the
+    /// left: error colours when a note is a refusal or an expression error,
+    /// warning colours otherwise. No notes leaves `line` as it is.
     fn noted<'a>(
         &self,
         line: Element<'a, Message>,
-        words: Localized,
-        is_refusal: bool,
+        notes: Vec<(Localized, bool)>,
     ) -> Element<'a, Message> {
+        if notes.is_empty() {
+            return line;
+        }
         let look = self.look;
-        let (ink, soft) = if is_refusal {
-            (look.err, look.err_soft)
-        } else {
-            (look.warn, look.warn_soft)
+        let tone = |is_refusal: bool| {
+            if is_refusal {
+                (look.err, look.err_soft)
+            } else {
+                (look.warn, look.warn_soft)
+            }
         };
-        let reason = row![
-            glyph(Glyph::Warn, TS.caption, ink),
-            text(words).size(TS.caption).color(ink),
-        ]
-        .spacing(SP.xs)
-        .align_y(Alignment::Center)
-        .padding([0.0, SP.m]);
-        let noted = column![line, reason].padding(Padding::ZERO.bottom(SP.xs));
+        let (ink, soft) = tone(notes.iter().any(|(_, is_refusal)| *is_refusal));
+        let mut noted: Column<Element<'a, Message>> = Column::new()
+            .padding(Padding::ZERO.bottom(SP.xs))
+            .push(line);
+        for (words, is_refusal) in notes {
+            let note_ink = tone(is_refusal).0;
+            let reason = row![
+                glyph(Glyph::Warn, TS.caption, note_ink),
+                text(words).size(TS.caption).color(note_ink),
+            ]
+            .spacing(SP.xs)
+            .align_y(Alignment::Center)
+            .padding([0.0, SP.m]);
+            noted = noted.push(reason.boxed());
+        }
         let bar = container(Space::new())
             .width(HAIRLINE * ERROR_BAR_HAIRLINES)
             .height(Length::Fill)
@@ -518,9 +548,8 @@ impl Rows<'_> {
             .boxed()
     }
 
-    /// A name or value box drawn as plain text until hovered or focused. A
-    /// set value is mono; an empty one shows its placeholder in the UI face
-    /// (the bundled UI face has no italic, so it stays upright).
+    /// A name or value box drawn as plain text until hovered or focused, in
+    /// the face [`inline_font`] picks.
     fn inline_input<'a>(&self, value: &str, is_name: bool) -> input::TextInput<'a, Message> {
         let look = self.look;
         let placeholder = if is_name {
@@ -533,12 +562,46 @@ impl Rows<'_> {
             .size(TS.body)
             .padding([SP.xs, SP.s])
             .width(Length::Fill);
-        if value.is_empty() {
-            field
-        } else {
-            field.font(mono())
+        match inline_font(value, is_name) {
+            Some(font) => field.font(font),
+            None => field,
         }
     }
+}
+
+/// The face of an inline box: a set value or name is mono; an empty value
+/// reads "Not set" in the italic UI face (mockup row 30); an empty name
+/// keeps its placeholder in the UI face.
+pub(super) fn inline_font(value: &str, is_name: bool) -> Option<Font> {
+    if !value.is_empty() {
+        Some(mono())
+    } else if is_name {
+        None
+    } else {
+        Some(Font {
+            style: iced::font::Style::Italic,
+            ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
+        })
+    }
+}
+
+/// A parameter row: `name`, the value box and, right of it, the result pill
+/// of an expression, then the remove column.
+fn value_line<'a>(
+    name: Element<'a, Message>,
+    value_box: input::TextInput<'a, Message>,
+    shows: Option<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    let mut line: Row<Element<'a, Message>> = Row::new()
+        .align_y(Alignment::Center)
+        .height(METRICS.field)
+        .push(name)
+        .push(container(value_box).width(Length::Fill).boxed());
+    if let Some(shows) = shows {
+        line = line.push(container(shows).padding([0.0, SP.s]).boxed());
+    }
+    line.push(Space::new().width(TS.body * REMOVE_EMS).boxed())
+        .boxed()
 }
 
 /// Push `rows` with a soft hairline between each two.

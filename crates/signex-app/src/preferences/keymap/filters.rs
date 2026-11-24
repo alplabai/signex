@@ -61,12 +61,12 @@ impl KeymapContextFilter {
 
     /// The chip a context's rows show under besides All. Contexts without
     /// a chip of their own (dialogs, text fields, the palette, placement)
-    /// show under All only.
+    /// show under All only. The board 3D view's rows show under PCB.
     pub fn for_context(context: ShortcutContext) -> Option<Self> {
         match context {
             ShortcutContext::Global => Some(Self::Global),
             ShortcutContext::Schematic => Some(Self::Schematic),
-            ShortcutContext::Pcb => Some(Self::Pcb),
+            ShortcutContext::Pcb | ShortcutContext::Board3d => Some(Self::Pcb),
             ShortcutContext::Footprint => Some(Self::Footprint),
             ShortcutContext::Library => Some(Self::Library),
             ShortcutContext::Modal

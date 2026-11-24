@@ -260,8 +260,7 @@ pub fn place_zone(zone: Zone) -> BoardCommand {
 
 /// A board string (#2373) reading `text` at `at` on `layer`, at the PCB
 /// default size and unturned. `None` on a layer that takes no text
-/// (`PcbLayer::takes_text`): copper text would be copper the copper list,
-/// DRC and ratsnest never read.
+/// (`PcbLayer::takes_text`); on copper it is copper of no net (#2883).
 pub fn new_text(
     id: Uuid,
     at: Point,
@@ -292,8 +291,8 @@ pub fn place_item(item: BoardItem) -> BoardCommand {
 }
 
 pub use super::draw_free::{
-    ArcMode, FREE_PAD_HOLE_MM, FREE_PAD_SIZE_MM, arc_points, new_arc, new_dimension, new_free_pad,
-    new_free_pad_on,
+    ArcMode, FREE_PAD_HOLE_MM, FREE_PAD_SIZE_MM, arc_points, arc_points_about, new_arc,
+    new_dimension, new_free_pad, new_free_pad_on,
 };
 
 /// Whether the polygon encloses any area, in integer nm (exact): false for

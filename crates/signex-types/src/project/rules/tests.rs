@@ -110,9 +110,9 @@ fn a_shape_change_without_a_schema_bump_is_kept_not_applied() {
 
 #[test]
 fn a_newer_schema_is_kept_not_applied_even_when_its_values_parse() {
-    let text = project_with_rules(r#"{"schema":2,"erc":{"severity":{"unused_pin":"error"}}}"#);
+    let text = project_with_rules(r#"{"schema":3,"erc":{"severity":{"unused_pin":"error"}}}"#);
     let (data, saved) = open_and_resave(&text);
-    assert!(data.rules.is_none(), "v2 meaning must not be read as v1");
+    assert!(data.rules.is_none(), "v3 meaning must not be read as v2");
     assert_eq!(saved["rules"], rules_of(&text));
 }
 

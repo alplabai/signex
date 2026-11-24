@@ -60,8 +60,8 @@ domain area, such as `documents.rs`, `wiring.rs` or `view.rs`), as message ids; 
 4. Modal and text-entry guards run first. For example, Escape closes open
    dialogs before normal shortcuts are considered.
 5. Normal keys are converted to `KeyStroke` values and looked up against the
-   active contexts, such as `global`, `schematic`, `pcb`, `library`, and
-   `footprint`.
+   active contexts, such as `global`, `schematic`, `pcb`, `board_3d`,
+   `library`, and `footprint`.
 6. A resolved `AppCommandId` goes through `Signex::dispatch_command`, which maps
    it to a `Message` with `core_to_message` (`app/command/bridge.rs`).
 
@@ -166,7 +166,15 @@ in the chord profile and `Shift+O` in Classic, whose `E` alone is taken
 Classic's `L` and `Q` keep their sheet meaning on a sheet. `Q` sits in a
 `pcb` section of its own before the global sections, so `cycle_unit` keeps
 `Ctrl+Q` as its menu hint. A test checks that every `pcb` binding of both
-profiles names a command enabled on a board.
+profiles names a command enabled on a board; `H` and `Mod+Shift+C` (the 3D
+view's lighting and screenshot copy) are the exception, greyed on a flat
+board because they need the 3D view.
+
+The `board_3d` context (mockup row 175) is live, after `pcb`, only while the
+main window shows the board in 3D, so its bindings outrank the board's: both
+profiles bind `F` there to Flip (`flip_board_3d`), and `F` stays Change
+Footprint on a flat board. Its rows show under the PCB chip in Preferences
+and the PCB scope of the shortcuts sheet.
 
 ### One-time macOS prompt for a custom profile
 
@@ -236,7 +244,8 @@ The page (`preferences/keymap/`) reads top to bottom:
 - **Filter row**: the search field (label, command id or keys) and the
   context chips **All**, **Global**, **Schematic**, **PCB**, **Footprint**,
   **Library** and **Conflicts** (with the conflict count). One chip is on at
-  a time. A row shows under the chip of its context; rows of dialogs, text
+  a time. A row shows under the chip of its context (a board 3D view row
+  under PCB); rows of dialogs, text
   fields, the palette and placement show under All only. Conflicts lists
   the rows that take part in a conflict of the active profile. The chip is
   page view state (`KeymapViewState`): it never marks Preferences dirty and

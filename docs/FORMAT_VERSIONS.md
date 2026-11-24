@@ -23,8 +23,10 @@ format declares only its own table row below.
   colour of its own, `snxpcb/1.6` when it has rooms (#2457) and `snxpcb/1.8`
   when its stackup has a name (#2833), a board sketch pattern repeats a baked
   target (#2517) or an array has a numbering sweep other than row by row
-  (mockup row 126), and `snxpcb/1.9` when a pour is shelved (#2738), so a
-  build that reads only the lower token opens it read-only.
+  (mockup row 126), `snxpcb/1.9` when a pour is shelved (#2738) and
+  `snxpcb/1.10` when its stackup carries a finish or a layer's loss tangent
+  (mockup rows 176 and 177), so a build that reads only the lower token
+  opens it read-only.
 - **Load** reads every token in the format's readable list. `snxsch/1` and
   `snxsch/1.0` are the same version.
 - **A newer token** is refused on load with an error that names the token,
@@ -47,6 +49,8 @@ format declares only its own table row below.
 | `.snxpcb`, board sketch targets | `snxpcb/1.7` while the board sketch carries a slot, pour, mechanical drawing or component anchor (decision 2, 2026-11-20), or a reference dimension, pattern link, pattern mirror or pad override (decisions 5, 9, 10), rooms or not; else the token above, byte for byte | adds `snxpcb/1.7` | opens read-only | refused |
 | `.snxpcb`, stackup name, patterned targets, numbering sweep | `snxpcb/1.8` while `[stackup]` carries `stack_name` (mockup row 105, #2833), an array or mirror repeats a baked target (a source on or connected to one; #2517), or an array's numbering sweep is not row by row (mockup row 126), whatever else the board holds; else the tokens above, byte for byte | adds `snxpcb/1.8` | opens read-only | refused |
 | `.snxpcb`, shelved pour | `snxpcb/1.9` while any pour is shelved (#2738, DECISIONS 2026-11-23), whatever else the board holds; else the tokens above, byte for byte | adds `snxpcb/1.9` | opens read-only | refused |
+| `.snxpcb`, stack materials | `snxpcb/1.10` while `[stackup]` carries a `finish` table (solder mask, silkscreen, surface finish; mockup row 176) or a stack row carries `loss_tangent` copied from the material library (mockup row 177), whatever else the board holds; else the tokens above, byte for byte. A 1.9 build would drop the row's Df on save | adds `snxpcb/1.10` | opens read-only | refused |
+| `.snxmat`, user material library | `snxmat/1` (`materials.snxmat` in the config folder: the person's own cores, prepregs, copper foils and masks, mockup row 177) | `snxmat/1` | refused | refused |
 | `.snxprj` | `snxprj/1` | `snxprj/1` | refused | read as `snxprj/1` |
 | `.snxlib` | `snxlib/2` | `snxlib/2` | refused | refused |
 | `.snxfpt` | `snxfpt/1.1`, `1.2` with sketch links (reference dimensions, pattern sources and mirrors, per-instance pad overrides), or `1.3` with generated features (silkscreen outline, pad clearance, pin 1 marker, assembly outline; mockup row 124, #2834) or a pattern numbering sweep other than row by row (mockup row 126), whatever else it holds | `snxfpt/1`, `1.1`, `1.2`, `1.3` | refused | refused |
@@ -55,11 +59,18 @@ format declares only its own table row below.
 
 `.snxrules` profiles carry a numeric `schema` key instead of a token
 (`docs/architecture/snxrules-format.md`); a newer schema is refused there too.
-It is content-driven: `2` only while the `fab` block names a
-`router_tool_diameter` (mockup row 179d), else as read; this build reads `1` and `2`.
+It is content-driven: `3` while the `fab` block names a `min_slot`, else `2`
+while it names a `router_tool_diameter` (mockup row 179d), else as read; this
+build reads `1` to `3`.
 The project's copy, the top-level `.snxprj` key `router_tool_diameter`, is a
 declared `ProjectData` field and needs no token: an older build keeps it as an
 unknown key, as `fab_outputs`. No `.snxpcb` content is added for it.
+
+The project's min slot is stored with the rules, `rules.min_slot`, and steps
+the `rules` section's own `schema` to `2` while it is present (`1` again once
+it is cleared; `ProjectRules::written_schema`). A build that reads only rules
+schema `1` keeps a `2` section verbatim and does not apply it, so the value
+is never dropped. The `.snxprj` token stays `snxprj/1`.
 
 **`snxsch/1.3` and older builds.** A build that reads up to `snxsch/1.2`
 opens a 1.3 sheet read-only and refuses its saves. A build older than the

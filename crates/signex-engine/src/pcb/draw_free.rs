@@ -99,6 +99,37 @@ fn by_centre(centre: Point, start: Point, toward: Point) -> Option<(Point, Point
     )
 }
 
+/// The start, middle and end of the arc about `centre` from `start` (its
+/// distance is the radius) to the angle of `toward`, the way of increasing
+/// angle in the model's axes (clockwise on screen): the board Graphics Arc
+/// drawn on copper, as a track arc (#2869). `None` for a point on the
+/// centre, or a full turn, which no track arc is.
+pub fn arc_points_about(
+    centre: Point,
+    start: Point,
+    toward: Point,
+) -> Option<(Point, Point, Point)> {
+    let radius = (start.x - centre.x).hypot(start.y - centre.y);
+    if !(radius.is_finite() && radius > 0.0) || toward == centre {
+        return None;
+    }
+    let start_angle = (start.y - centre.y).atan2(start.x - centre.x);
+    let end_angle = (toward.y - centre.y).atan2(toward.x - centre.x);
+    let turn = (end_angle - start_angle).rem_euclid(TAU);
+    if turn == 0.0 {
+        return None;
+    }
+    Some(
+        ArcSweep {
+            center: centre,
+            radius,
+            start_angle,
+            sweep: turn,
+        }
+        .three_points(),
+    )
+}
+
 fn by_edge(start: Point, end: Point) -> Option<(Point, Point, Point)> {
     let half = Point::new((end.x - start.x) / 2.0, (end.y - start.y) / 2.0);
     if half.x == 0.0 && half.y == 0.0 {

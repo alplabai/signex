@@ -7,10 +7,10 @@ use pcb_geom::{GeomError, GraphicShape, PointNm, TextPlacement, mm_to_nm};
 use signex_types::pcb::{PCB_DEFAULT_TEXT_SIZE_MM, PcbBoard};
 use signex_types::schematic::HAlign;
 
-use super::collect::{Images, graphic_function};
+use super::collect::{Images, board_drawing_function, graphic_function};
 use super::frame::FabFrame;
 use super::layers::FabLayer;
-use super::marks::{Attributes, Mark, Step};
+use super::marks::{Attributes, Function, Mark, Step};
 use super::notes::Tally;
 
 /// One text to write.
@@ -22,6 +22,8 @@ struct Line<'a> {
     /// The longest the line may be, mm: a text frame line is condensed to
     /// its box.
     room_mm: Option<f64>,
+    /// A board string or text frame line: conductor on copper (#2883).
+    on_board: bool,
 }
 
 /// Every text of `board` on a fabrication layer, as strokes on its image.
@@ -43,6 +45,7 @@ pub(crate) fn texts(images: &mut Images, board: &PcbBoard, frame: FabFrame, tall
                 size_mm: text.size_mm,
                 justify: text.justify,
                 room_mm: None,
+                on_board: false,
             };
             write(images, FabLayer::of(text.layer), &line, frame, tally);
         }
@@ -63,6 +66,7 @@ pub(crate) fn texts(images: &mut Images, board: &PcbBoard, frame: FabFrame, tall
                             size_mm: size_or_default(graphic.font_size),
                             justify: HAlign::Center,
                             room_mm: None,
+                            on_board: false,
                         };
                         write(images, Some(layer), &line, frame, tally);
                     }
@@ -87,6 +91,7 @@ pub(crate) fn texts(images: &mut Images, board: &PcbBoard, frame: FabFrame, tall
                 size_mm,
                 justify: HAlign::Center,
                 room_mm: Some(frame_line.width_mm),
+                on_board: true,
             };
             write(images, Some(layer), &line, frame, tally);
         }
@@ -103,6 +108,7 @@ pub(crate) fn texts(images: &mut Images, board: &PcbBoard, frame: FabFrame, tall
                     size_mm: size_or_default(text.font_size),
                     justify: HAlign::Center,
                     room_mm: None,
+                    on_board: true,
                 };
                 write(images, Some(layer), &line, frame, tally);
             }
@@ -149,14 +155,19 @@ fn marks(line: &Line<'_>, layer: FabLayer, frame: FabFrame) -> Result<Vec<Mark>,
         }
         None => pcb_geom::text_strokes(line.content, &line.at, line.size_mm, line.justify)?,
     };
+    let function = if line.on_board {
+        board_drawing_function(layer)
+    } else {
+        graphic_function(layer)
+    };
     Ok(strokes
         .into_iter()
-        .filter_map(|points| stroke(&points, width, layer, frame))
+        .filter_map(|points| stroke(&points, width, function, frame))
         .collect())
 }
 
 /// One polyline as a stroke; a lone point is a dot, a stroke of no length.
-fn stroke(points: &[PointNm], width: i64, layer: FabLayer, frame: FabFrame) -> Option<Mark> {
+fn stroke(points: &[PointNm], width: i64, function: Function, frame: FabFrame) -> Option<Mark> {
     let (&first, rest) = points.split_first()?;
     let start = frame.point(first);
     let steps = if rest.is_empty() {
@@ -166,7 +177,7 @@ fn stroke(points: &[PointNm], width: i64, layer: FabLayer, frame: FabFrame) -> O
     };
     Some(Mark::Stroke {
         width,
-        function: graphic_function(layer),
+        function,
         start,
         steps,
         attributes: Attributes::default(),

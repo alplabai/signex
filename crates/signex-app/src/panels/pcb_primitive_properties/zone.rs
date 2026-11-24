@@ -157,6 +157,20 @@ fn pour<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Option<Element<'a, PanelMsg>> {
         false,
         None,
     );
+    // The Copper card, with Repour and Shelve, leads the section (Caner,
+    // 2026-11-24). What a pour about to be placed holds is not known yet.
+    if !common.target.is_placement() {
+        s.push(
+            common,
+            ids::PCB_PRIM_POUR_COPPER,
+            linked(look, common, dz::SHELVE, copper_card(look, f)),
+        );
+        s.push(
+            common,
+            ids::PCB_PRIM_POUR_COPPER,
+            caption(look, look.t(ids::PCB_PRIM_POUR_SHELVE_NOTE)),
+        );
+    }
     s.push(
         common,
         ids::PCB_PRIM_POUR_FILL_MODE,
@@ -246,19 +260,6 @@ fn pour<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Option<Element<'a, PanelMsg>> {
         .width(Length::Fill)
         .boxed(),
     );
-    // What a pour about to be placed holds is not known yet.
-    if !common.target.is_placement() {
-        s.push(
-            common,
-            ids::PCB_PRIM_POUR_COPPER,
-            linked(look, common, dz::SHELVE, copper_card(look, f)),
-        );
-        s.push(
-            common,
-            ids::PCB_PRIM_POUR_COPPER,
-            caption(look, look.t(ids::PCB_PRIM_POUR_SHELVE_NOTE)),
-        );
-    }
     s.finish()
 }
 
@@ -705,6 +706,31 @@ mod tests {
         let mut read_only = pour(Some(false));
         read_only.common.editability = Editability::ReadOnly;
         assert_eq!(shelve_message(&read_only), None);
+    }
+
+    /// Caner, 2026-11-24: a placed pour's Copper card, with Repour and
+    /// Shelve, is the first row of its Pour section, above Fill Mode.
+    #[test]
+    fn the_copper_card_leads_the_pour_section() {
+        use crate::layout_probe::{find, lay_out_texts};
+        let (app, _boot) = crate::app::Signex::new();
+        let ctx = app.document_state.panel_ctx.clone();
+        let look = Look::of(&ctx);
+        let f = pour(Some(false));
+        let section = super::pour(look, &f).expect("a pour has a Pour section");
+        let texts = lay_out_texts(section, iced::Size::new(400.0, 2000.0));
+        let copper = find(&texts, "Copper").bounds.y;
+        let repour = find(&texts, "Repour").bounds.y;
+        let shelve = find(&texts, "Shelve").bounds.y;
+        let fill_mode = find(&texts, "Fill Mode").bounds.y;
+        assert!(copper < fill_mode && repour < fill_mode && shelve < fill_mode);
+        // Only the section's title is above the card.
+        let above: Vec<&str> = texts
+            .iter()
+            .filter(|t| t.bounds.y < copper)
+            .map(|t| t.text.as_str())
+            .collect();
+        assert_eq!(above.len(), 1, "the title alone: {above:?}");
     }
 
     /// Mockup row 99: Corner Size is greyed and takes no typing while the

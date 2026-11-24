@@ -6,6 +6,13 @@ define_ids! {
     PREFERENCES_MOVE_KEEPS_WIRES_HELP = "preferences-move-keeps-wires-help";
     PREFERENCES_NET_HOVER = "preferences-net-hover";
     PREFERENCES_NET_HOVER_HELP = "preferences-net-hover-help";
+    PREFERENCES_EDGE_PAN = "preferences-edge-pan";
+    PREFERENCES_EDGE_PAN_HELP = "preferences-edge-pan-help";
+    PREFERENCES_EDGE_PAN_SPEED = "preferences-edge-pan-speed";
+    PREFERENCES_EDGE_PAN_SPEED_HELP = "preferences-edge-pan-speed-help";
+    PREFERENCES_EDGE_PAN_SPEED_SLOW = "preferences-edge-pan-speed-slow";
+    PREFERENCES_EDGE_PAN_SPEED_MEDIUM = "preferences-edge-pan-speed-medium";
+    PREFERENCES_EDGE_PAN_SPEED_FAST = "preferences-edge-pan-speed-fast";
     PREFERENCES_DRAG_DIRECTION = "preferences-drag-direction";
     PREFERENCES_DRAG_DIRECTION_HELP = "preferences-drag-direction-help";
     PREFERENCES_INCREMENT_STEP = "preferences-increment-step";
@@ -190,10 +197,23 @@ define_ids! {
     PREFERENCES_CLASSES_KEY_MALFORMED = "preferences-classes-key-malformed";
     PREFERENCES_CLASSES_RESET_CONFIRM = "preferences-classes-reset-confirm";
     PREFERENCES_CLASSES_RESET_CONFIRM_YES = "preferences-classes-reset-confirm-yes";
+    // prefs-rules-library
+    PREFERENCES_RULES_MATRIX_LINK = "preferences-rules-matrix-link";
     PREFERENCES_PAGE_SCHEMATIC_DISPLAY = "preferences-page-schematic-display";
     PREFERENCES_SECTION_SCHEMATIC_DISPLAY = "preferences-section-schematic-display";
     PREFERENCES_SYMBOL_BODY_FILL = "preferences-symbol-body-fill";
     PREFERENCES_SYMBOL_BODY_FILL_HELP = "preferences-symbol-body-fill-help";
     PREFERENCES_SYMBOL_BODY_FILL_COLOUR = "preferences-symbol-body-fill-colour";
     PREFERENCES_SYMBOL_BODY_FILL_COLOUR_HELP = "preferences-symbol-body-fill-colour-help";
+    PREFERENCES_PAGE_PCB_DEFAULTS = "preferences-page-pcb-defaults";
+    PREFERENCES_GROUP_PCB = "preferences-group-pcb";
+    PREFERENCES_GROUP_PCB_HEADING = "preferences-group-pcb-heading";
+    PREFERENCES_SECTION_PCB_DIMENSIONS = "preferences-section-pcb-dimensions";
+    PREFERENCES_PCB_DIMENSIONS_HELP = "preferences-pcb-dimensions-help";
+    // prefs-shell-pages
+    PREFERENCES_PAGE_GENERAL = "preferences-page-general";
+    PREFERENCES_GENERAL_HEADING = "preferences-general-heading";
+    PREFERENCES_GENERAL_INTRO = "preferences-general-intro";
+    PREFERENCES_NET_HOVER_HELP_SUMMARY = "preferences-net-hover-help-summary";
+    PREFERENCES_PROFILES_DELETE_ACTION = "preferences-profiles-delete-action";
 }

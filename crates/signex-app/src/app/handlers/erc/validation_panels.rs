@@ -3,8 +3,12 @@
 //! git config, so it is read once, off the update loop, the first time a
 //! waiver form opens; every later form reuses the cached answer.
 
-use iced::Task;
+use std::path::PathBuf;
 
+use iced::Task;
+use signex_types::schematic::SelectedItem;
+
+use crate::app::handlers::canvas::{AfterOpen, SheetOpen};
 use crate::app::{Message, Signex};
 use crate::dock::DockMessage;
 use crate::panels::{ErcPanelMsg, MessagesPanelMsg, PanelMsg, UserIdentity, ValidationPanels};
@@ -37,8 +41,12 @@ impl Signex {
     }
 
     /// A chip, dropdown or filter edit in the Messages panel; Copy writes
-    /// the rows the panel shows to the clipboard.
+    /// the rows the panel shows to the clipboard; a row's Show opens the
+    /// sheet it names and selects its object (mockup row 86).
     pub(crate) fn handle_messages_panel(&mut self, msg: MessagesPanelMsg) -> Task<Message> {
+        if let MessagesPanelMsg::ShowPressed { document, object } = msg {
+            return self.show_message_target(document, object);
+        }
         let ctx = &self.document_state.panel_ctx;
         let task = match msg {
             MessagesPanelMsg::Copied => {
@@ -58,6 +66,27 @@ impl Signex {
         self.ui_state.validation_panels.messages.apply(msg, newest);
         self.sync_validation_panels();
         task
+    }
+
+    /// Open `document` and select `object` where it is now. A sheet nobody
+    /// holds is read on a worker; the object is selected when it arrives. A
+    /// window cannot switch sheets inside its swap, so from a panel window
+    /// the open is queued to the main window.
+    fn show_message_target(
+        &mut self,
+        document: PathBuf,
+        object: Option<SelectedItem>,
+    ) -> Task<Message> {
+        let open = SheetOpen::plain().then(AfterOpen::Reveal { item: object });
+        if self.interaction_state.acting_window.is_some() {
+            return Task::done(Message::Project(
+                crate::app::ProjectMsg::SheetOpenRequested {
+                    path: document,
+                    open: Box::new(open),
+                },
+            ));
+        }
+        self.open_sheet(document, open)
     }
 
     /// Ask who the user is, once: the answer arrives as
@@ -178,5 +207,45 @@ mod tests {
                 .cleared_through,
             newest
         );
+    }
+
+    /// Mockup row 86: a row's Show goes to the sheet it names and selects
+    /// the object there, whatever its kind.
+    #[test]
+    fn show_selects_the_object_on_the_named_sheet() {
+        use signex_types::schematic::{NoConnect, Point, SchematicSheet, SelectedKind};
+        let mark = NoConnect {
+            uuid: uuid::Uuid::now_v7(),
+            position: Point::new(25.4, 12.7),
+        };
+        let item = SelectedItem::new(mark.uuid, SelectedKind::NoConnect);
+        let sheet = SchematicSheet {
+            no_connects: vec![mark],
+            ..Default::default()
+        };
+        let path = PathBuf::from("/w/p/power.snxsch");
+        let (mut app, _boot) = Signex::new();
+        app.ui_state.first_run_tour_open = false;
+        app.document_state.engines.insert(
+            path.clone(),
+            signex_engine::Engine::new(sheet).expect("engine"),
+        );
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "power".to_owned(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        app.document_state.active_tab = app.document_state.tabs.len() - 1;
+        app.document_state.active_path = Some(path.clone());
+        let _ = panel(
+            &mut app,
+            PanelMsg::MessagesView(MessagesPanelMsg::ShowPressed {
+                document: path,
+                object: Some(item),
+            }),
+        );
+        assert_eq!(app.interaction_state.active_canvas().selected, vec![item]);
     }
 }

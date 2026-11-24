@@ -2,7 +2,9 @@
 //! one undo step, the larger piece keeps the pour, and a cut that meets no
 //! pour changes nothing.
 
-use super::tests::{app_with_board, board_of, click, escape, live, right_click, run, undo};
+use super::tests::{
+    app_with_board, board_of, click, escape, grid_only, live, right_click, run, undo,
+};
 use crate::app::Signex;
 
 /// Draws a pour over (1, -4)..(9, 4) on the top copper and ends the tool.
@@ -64,6 +66,7 @@ fn a_pour_cutout_across_a_pour_leaves_two_pours_in_one_step() {
 fn a_pour_cutout_inside_a_pour_is_a_hole_and_a_right_click_closes_it() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
+    grid_only(&mut app);
     draw_pour(&mut app);
     let before = live(&app, &path);
 

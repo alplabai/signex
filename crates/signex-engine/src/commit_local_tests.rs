@@ -29,7 +29,7 @@ struct Outcome {
     /// The net colours, a new wire's keyed by its place in the wire list.
     colors: Vec<(String, signex_types::theme::Color)>,
     result: Result<crate::CommandResult, String>,
-    warnings: Vec<String>,
+    warnings: Vec<crate::EngineNotice>,
     unkept_pins: Vec<String>,
 }
 

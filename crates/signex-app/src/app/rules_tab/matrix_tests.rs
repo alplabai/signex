@@ -939,3 +939,45 @@ fn undoing_a_seeded_tier_drops_its_router_tool_too() {
     assert_eq!(router(&app), None);
     assert_eq!(dsl(&app), TEXT);
 }
+
+fn min_slot(app: &Signex) -> Option<f64> {
+    app.document_state.projects[0]
+        .data
+        .rules
+        .as_ref()
+        .and_then(|rules| rules.min_slot())
+}
+
+/// mockup row 179d: a tier preset stores its min slot with the rules, in
+/// the same undo step as its rules and router tool.
+#[test]
+fn a_tier_preset_stores_its_min_slot_in_the_same_undo_step() {
+    for (tier, expected) in [("standard", 0.8), ("advanced", 0.6), ("hdi", 0.5)] {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut app, id) = app_with_board(&dir);
+        open(&mut app);
+        assert_eq!(min_slot(&app), None);
+
+        let preset = format!("preset=tier:{tier}");
+        let _ = answer(&mut app, "rules_preset_apply", &[preset.as_str()]);
+        assert_eq!(min_slot(&app), Some(expected), "{tier}");
+        assert_eq!(undo_steps(&app, id), 1, "rules and min slot are one step");
+
+        command(&mut app, "undo");
+        assert_eq!(min_slot(&app), None, "the undo restores the min slot");
+        command(&mut app, "redo");
+        assert_eq!(min_slot(&app), Some(expected), "{tier}");
+    }
+}
+
+/// The New PCB tier seed stores the tier's min slot too; its undo drops it.
+#[test]
+fn a_seeded_tier_stores_its_min_slot_and_undo_drops_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id) = app_with_board(&dir);
+    app.seed_tier_rules(id, signex_types::project::FabTemplate::Hdi);
+    assert_eq!(min_slot(&app), Some(0.5));
+    assert_eq!(undo_steps(&app, id), 1);
+    assert!(app.step_rules_of(id, true));
+    assert_eq!(min_slot(&app), None);
+}

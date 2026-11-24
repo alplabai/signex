@@ -144,12 +144,19 @@ pub(super) fn segments<'t>(text: &'t str, ranges: &[Range<usize>]) -> Vec<(&'t s
     out
 }
 
-/// The list box: the groups, or the empty state.
+/// The list box: the groups, or the empty state. With `max_height` it fits
+/// its rows up to that height, then scrolls (mockup row 67); without, it
+/// fills its parent.
 pub(super) fn results<'a>(
     state: &'a FindReplaceState,
     theme_tokens: &ThemeTokens,
     i18n: &I18n,
+    max_height: Option<f32>,
 ) -> Element<'a, FindReplaceMsg> {
+    let (scroll_h, box_h) = match max_height {
+        Some(max) => (Length::Shrink, Length::Fit.max(max)),
+        None => (Length::Fill, Length::Fill),
+    };
     let groups = groups(state);
     let muted = tokens::muted_text(theme_tokens);
     let content: Element<'a, FindReplaceMsg> = if groups.is_empty() {
@@ -175,12 +182,12 @@ pub(super) fn results<'a>(
         scrollable(list)
             .direction(crate::styles::thin_vertical())
             .style(crate::styles::scrollbar_style(theme_tokens))
-            .height(Length::Fill)
+            .height(scroll_h)
             .boxed()
     };
     container(content)
         .width(Length::Fill)
-        .height(Length::Fill)
+        .height(box_h)
         .clip(true)
         .style(crate::styles::card(theme_tokens))
         .boxed()

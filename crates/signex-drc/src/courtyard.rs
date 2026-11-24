@@ -1,13 +1,14 @@
 //! Courtyard overlap (#2435): the courtyards of two parts on one side that
 //! overlap, or come closer than a rule's minimum. A courtyard is measured
-//! as the turned box of its drawings, the body a click selects a part by;
-//! a part without courtyard drawings is not checked. Board-wide rules only.
+//! as the turned box of its drawings' outline; their line width is drawn
+//! for display only and not measured (maintainer decision 2026-11-24). A
+//! part without courtyard drawings is not checked. Board-wide rules only.
 
 use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{Footprint, PcbBoard};
 use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 
-use pcb_geom::{ItemRef, Shape, Side, footprint_body};
+use pcb_geom::{ItemRef, Shape, Side, courtyard_outline};
 
 use crate::near::{gap_under, near_pairs};
 use crate::user_rules::LimitKind;
@@ -21,7 +22,7 @@ pub(crate) fn violations(board: &PcbBoard, rules: &DrcRules) -> Vec<Violation> {
         .footprints
         .iter()
         .filter(|f| has_courtyard(f))
-        .filter_map(|f| Some((f, Side::of_layer(&f.layer), footprint_body(f).ok()?)))
+        .filter_map(|f| Some((f, Side::of_layer(&f.layer), courtyard_outline(f).ok()??)))
         .collect();
     let shapes: Vec<Shape> = parts.iter().map(|p| p.2.clone()).collect();
     let pairs = near_pairs(&shapes, limit, |i, j| parts[i].1 == parts[j].1);
@@ -69,3 +70,7 @@ pub(crate) fn parts(board: &PcbBoard) -> impl Iterator<Item = uuid::Uuid> + '_ {
         .filter(|f| has_courtyard(f))
         .map(|f| f.uuid)
 }
+
+#[cfg(test)]
+#[path = "courtyard_tests.rs"]
+mod tests;

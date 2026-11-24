@@ -5,14 +5,14 @@
 use iced::widget::{Column, Row, container, svg};
 use iced::{Alignment, Element, Length, Padding, Shadow, Theme, Widget};
 use signex_i18n::{I18n, Localized, ids, t};
-use signex_types::theme::ThemeTokens;
+use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::{button, text, tooltip};
 
 use crate::app::document::UndoTarget;
 use crate::app::{ErcMsg, Message, Signex};
 use crate::styles::{
     ChromeMetrics, DialogButtonKind, card, dialog_button, dialog_footer_height,
-    dialog_footer_split, floating_shadow, hover_row, outline_button, ti,
+    dialog_footer_split, dialog_icon_button, floating_shadow, hover_row, outline_button, ti,
 };
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -58,6 +58,22 @@ fn icon_button<'a>(
         .padding([SP.xs, SP.m])
         .style(card(theme_tokens));
     tooltip(btn, tip, tooltip::Position::Top).gap(SP.xs).boxed()
+}
+
+/// The primary "▶ Run ERC" (mockup row 84): the play glyph, tinted with the
+/// label colour, before the label.
+fn run_erc_button<'a>(
+    i18n: &I18n,
+    theme_tokens: &ThemeTokens,
+    theme: ThemeId,
+) -> Element<'a, Message> {
+    dialog_icon_button(
+        crate::icons::icon_log_play(theme),
+        t!(i18n, ids::DIALOG_ERC_RUN),
+        DialogButtonKind::Primary,
+        Some(erc(ErcMsg::Run)),
+        theme_tokens,
+    )
 }
 
 impl Signex {
@@ -139,12 +155,7 @@ impl Signex {
                     Some(erc(ErcMsg::CloseDialog)),
                     theme_tokens,
                 ),
-                dialog_button(
-                    t!(i18n, ids::DIALOG_ERC_RUN),
-                    DialogButtonKind::Primary,
-                    Some(erc(ErcMsg::Run)),
-                    theme_tokens,
-                ),
+                run_erc_button(i18n, theme_tokens, self.ui_state.effective_theme_id()),
             ],
         )
     }
@@ -200,5 +211,52 @@ impl Signex {
                 })
                 .boxed(),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::layout_probe::root_size;
+
+    /// Mockup row 84: Run ERC leads with the play glyph, so it is wider than
+    /// the same primary button without one, at the same height.
+    #[test]
+    fn run_erc_leads_with_the_play_glyph() {
+        let (app, _boot) = Signex::new();
+        let tokens = app.document_state.panel_ctx.tokens.clone();
+        let i18n = I18n::en_us();
+        let window = iced::Size::new(600.0, 100.0);
+        let with_glyph = root_size(
+            run_erc_button(&i18n, &tokens, ThemeId::GraphiteDark),
+            window,
+        );
+        let plain = root_size(
+            dialog_button(
+                t!(i18n, ids::DIALOG_ERC_RUN),
+                DialogButtonKind::Primary,
+                Some(erc(ErcMsg::Run)),
+                &tokens,
+            ),
+            window,
+        );
+        assert!(
+            with_glyph.width > plain.width,
+            "{with_glyph:?} vs {plain:?}"
+        );
+        assert_eq!(with_glyph.height, plain.height);
+    }
+
+    /// Mockup row 84 draws a project that stores its rules: Undo and Redo
+    /// sit beside Profile then, and are absent under User Default.
+    #[test]
+    fn undo_and_redo_are_drawn_only_while_the_project_stores_rules() {
+        let (app, _boot) = Signex::new();
+        let tokens = app.document_state.panel_ctx.tokens.clone();
+        let window = iced::Size::new(1000.0, 80.0);
+        let draw = |stores_rules| {
+            crate::layout_probe::draw_pixels(app.view_erc_footer(stores_rules, &tokens), window)
+        };
+        assert_ne!(draw(true), draw(false));
     }
 }

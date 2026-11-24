@@ -24,12 +24,15 @@ pub(crate) fn page_name(kind: &TabKind) -> Option<MessageId> {
         TabKind::Project(_) => Some(ids::CHROME_PAGE_TAB_PROJECT),
         TabKind::Rules(_) => Some(ids::RULES_TAB_TITLE),
         TabKind::LayerStack => Some(ids::PCB_STACK_TITLE),
+        TabKind::PinTable => Some(ids::EDITORS_PIN_TABLE_PAGE),
         TabKind::Schematic
         | TabKind::Pcb
         | TabKind::ComponentEditor(_)
         | TabKind::SymbolEditor(_)
         | TabKind::FootprintEditor(_)
         | TabKind::LibraryBrowser(_) => None,
+        // Titled by its package, not a project (`app/gerber_viewer/tab`).
+        TabKind::GerberViewer => None,
     }
 }
 
@@ -96,6 +99,11 @@ impl Signex {
                         tab.kind
                             .is_layer_stack()
                             .then(|| self.layer_stack_title(&tab.path, tab.project_id))
+                    })
+                    .or_else(|| {
+                        tab.kind
+                            .is_pin_table()
+                            .then(|| self.pin_table_title(&tab.path))
                     })
                     .map(|title| (i, title))
             })

@@ -543,6 +543,9 @@ pub enum PickerMsg {
         generation: u64,
         result: Result<Box<crate::panels::components_panel::details::ComponentDetails>, String>,
     },
+    /// A button of the Library panel's row-style switch was pressed
+    /// (mockup row 119).
+    PanelRowStylePicked(super::state::LibraryRowStyle),
 }
 
 /// Edit Component Details modal sub-message tree — keeps

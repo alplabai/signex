@@ -17,8 +17,10 @@
 //! With a part selected the splitter divides the list from its details;
 //! with none, the list takes the free height above Recently placed.
 //!
-//! Search is a case-insensitive substring filter over `mpn` /
-//! `manufacturer` / `internal_pn` / library name.
+//! Search is value-aware (`query`): `100n` finds a 0.1 µF part, a bare
+//! `100` every measurement showing 100, and other words are case-insensitive
+//! substrings of the part number, MPN, manufacturer, description or library
+//! name. An info line under the header counts what each bare number matched.
 
 use std::path::PathBuf;
 
@@ -42,6 +44,7 @@ pub mod details;
 mod empty;
 pub mod global_prefs;
 mod look;
+pub(crate) mod query;
 pub mod recent;
 mod rows;
 mod sections;
@@ -115,6 +118,9 @@ pub(crate) fn view<'a>(
         col = col.push(chips::chip_row(&counts, selected, tokens, i18n));
         col = col.push(Space::new().height(6.0).boxed());
         col = col.push(thin_sep(look::separator(tokens)));
+    }
+    if let Some(summary) = look::match_summary(panel.rows.match_summary(), tokens, i18n) {
+        col = col.push(summary);
     }
     if !state.id_clash_notices.is_empty() {
         col = col.push(id_clash_notices(state, tokens, i18n));

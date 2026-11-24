@@ -13,11 +13,11 @@ pcb-layer-tab-show-only = Show only this layer
 # The layer's colour, saved with the board: opens the Layers panel's
 # colour picker for the layer; greyed with the reason for a layer whose
 # colour the board cannot change yet.
-pcb-layer-tab-colour = Layer colour...
-pcb-layer-tab-colour-unavailable = This layer's colour cannot be changed yet.
+pcb-layer-tab-colour = Layer color...
+pcb-layer-tab-colour-unavailable = This layer's color cannot be changed yet.
 # Give the layer, or every layer, the board palette colour again.
-pcb-layer-tab-colour-reset = Reset layer colour
-pcb-layer-tab-colour-reset-all = Reset all layer colours
+pcb-layer-tab-colour-reset = Reset layer color
+pcb-layer-tab-colour-reset-all = Reset all layer colors
 # Edit ▸ Origin ▸ Set waits for a click on the board.
 pcb-origin-set-hint = Origin: click on the board to set the origin there. Esc cancels
 # Edit ▸ Origin ▸ Snap to Outline Corner before the pointer was on the board.
@@ -165,7 +165,6 @@ pcb-bar-group =
         [tune] Tune
         [via_pad] Via / Pad
         [copper_areas] Copper Areas
-        [copper_drawing] Copper Drawing
         [dimensions] Dimensions
         [text] Text
        *[graphics] Graphics
@@ -212,7 +211,7 @@ pcb-tool-keepout-needs-layer = Keepout: make a copper layer or a keep-out layer 
 # The text a string placed with the String tool reads until it is edited.
 pcb-tool-string-text = String
 # A String click while the active layer takes no text.
-pcb-tool-string-needs-text-layer = String: make a silkscreen, mechanical or documentation layer active to place a string on it
+pcb-tool-string-needs-text-layer = String: make a copper, silkscreen, mechanical or documentation layer active to place a string on it
 # The free pad, arc, string and dimension tools (#2373): what the Messages
 # panel says when one is armed, and when a click adds nothing.
 pcb-tool-hint-pad = Pad: click to place a through-hole pad on the net under it; Tab edits its shape, size and hole. Esc or a right-click ends the tool
@@ -390,9 +389,9 @@ pcb-footprint-duplicate = { $count ->
 pcb-footprint-enter-hint = Press Enter to apply the change.
 
 # Tools > Re-Annotate Board (#1312): the Positional Re-Annotate dialog.
-pcb-reannotate-title = Positional Re-Annotate
+pcb-reannotate-title = Re-Annotate Board
 # Under the title. $board is the board document's name.
-pcb-reannotate-subtitle = { $board }
+pcb-reannotate-subtitle = Positional · { $board }
 pcb-reannotate-intro = Numbers the board's parts by where they sit, from 1 within each prefix. Prefixes stay; locked footprints keep their designators.
 # The walk order and its two choices (each card's hint is below them).
 pcb-reannotate-order = Order
@@ -421,9 +420,9 @@ pcb-reannotate-stale = The board changed, so the list was made again. Check it, 
 pcb-reannotate-refused = Nothing was changed: { $why }
 pcb-reannotate-cancel = Cancel
 pcb-reannotate-execute = Execute
-# Under the Designator field and in the Re-Annotate dialog: the board's
-# designators are not carried to the schematic by Update PCB.
-pcb-designator-update-pcb-note = Update PCB renames parts back to the schematic's designators; use Back Annotate to keep them.
+# The Re-Annotate dialog's banner: the board's designators are not carried
+# to the schematic by Update PCB. $command is pcb-reannotate-back-annotate.
+pcb-designator-update-pcb-note = Update PCB renames parts back to the schematic's designators; use { $command } to keep them.
 # $designator is the kept footprint's designator.
 pcb-reannotate-kept-unlinked = { $designator } is not linked to a schematic part, so it keeps its designator.
 # Messages panel lines. $what is the field (Designator or Value), $why the reason.
@@ -511,7 +510,9 @@ pcb-3d-shot-clipboard-occupied = another program holds the clipboard
 pcb-3d-shot-clipboard-format = the clipboard does not take images
 pcb-3d-shot-clipboard-conversion = the image could not be converted for the clipboard
 pcb-3d-shot-saved = A screenshot of the 3D view was saved to { $path }.
-pcb-3d-shot-save-failed = The screenshot of the 3D view could not be saved to { $path }: { $why }
+# The reason comes before the path: Messages cuts a line at 160 bytes, and a
+# long path must not cut the reason off.
+pcb-3d-shot-save-failed = The screenshot of the 3D view could not be saved ({ $why }): { $path }
 pcb-3d-shot-empty = The 3D view could not be captured: the window had nothing to show.
 # View cube faces, top side up and turned over.
 pcb-3d-cube-top = TOP
@@ -612,3 +613,21 @@ pcb-reannotate-show-in-order = Show already in order
 pcb-reannotate-arrow = →
 pcb-reannotate-footer-note = One undo step; save the board to keep it.
 pcb-reannotate-execute-count = Execute { $count }
+
+# board-3d-keys-screenshot
+# The screenshot menu's transparent save (mockup row 175), and why a
+# screenshot was not written or copied ($why of pcb-3d-shot-save-failed and
+# pcb-3d-shot-copy-failed): the view changed size between the two captures
+# of a transparent save, another screenshot was being taken, or the view was
+# left before the capture came back.
+pcb-3d-shot-save-transparent = Save with transparent backdrop…
+pcb-3d-shot-matte-resized = the 3D view changed size while it was captured
+pcb-3d-shot-busy = another screenshot of the 3D view was being taken
+pcb-3d-shot-interrupted = the 3D view was left before the screenshot was taken
+# The lighting toast's last words, $key the next-lighting key drawn as a cap
+# (mockup row 175), and a toolbar tooltip ($tip, "Flip board") with its key.
+pcb-3d-lighting-next-key = · press { $key } for the next
+pcb-3d-tooltip-keyed = { $tip } ({ $key })
+# chrome-copy-help
+# The command the Re-Annotate banner names, in medium weight (mockup row 83).
+pcb-reannotate-back-annotate = Back Annotate

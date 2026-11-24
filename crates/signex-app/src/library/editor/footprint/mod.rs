@@ -64,7 +64,7 @@ pub(crate) mod updates;
 // the Properties footprint card), named here so callers outside the slice do
 // not reach into `canvas`.
 pub use canvas::PreviewFootprint;
-pub(crate) use canvas::graphite_look_for;
+pub(crate) use canvas::{SketchInk, graphite_look_for};
 
 // What board sketch mode (#2234) hosts the sketch tool with: the tool and
 // mode its messages name, the board backdrop, and the edit router.
@@ -89,11 +89,11 @@ pub use state::pad_link::driving_profile;
 pub use state::pad_scope::PadScope;
 pub use state::sketch_overlay::{CanvasMenu, MenuTarget, PatternField, ValueEdit, ValueTarget};
 pub use state::{
-    CheckLine, CheckStatus, EditorPad, FOOTPRINT_HEIGHT_BUFFER, FootprintEditorState, GridDef,
-    GridDisplay, PAD_CLEARANCE_BUFFER, PadInstance, PadLinkMsg, PadLinkOffer, PadPatternKind,
-    PadSide, PadSketchSource, PadStackTab, SILK_LINE_WIDTH_BUFFER, SketchCanvasText, SketchOverlay,
-    SnapOptions, SnappingMode, check_lines, pad_field, pad_field_buffer_key,
-    sketch_pad_field_buffer_key,
+    COURTYARD_LINE_WIDTH_BUFFER, CheckLine, CheckStatus, EditorPad, FOOTPRINT_HEIGHT_BUFFER,
+    FootprintEditorState, GridDef, GridDisplay, PAD_CLEARANCE_BUFFER, PadInstance, PadLinkMsg,
+    PadLinkOffer, PadPatternKind, PadSide, PadSketchSource, PadStackTab, SILK_LINE_WIDTH_BUFFER,
+    SketchCanvasText, SketchOverlay, SnapOptions, SnappingMode, check_lines, pad_field,
+    pad_field_buffer_key, sketch_pad_field_buffer_key,
 };
 pub(crate) use updates::hold_patterned_pad_edit;
 

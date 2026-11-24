@@ -63,8 +63,6 @@ pub(crate) fn banner_height(card_w: f32, pad: f32, text: &str) -> f32 {
 const REFUSAL_BANNER: f32 = 60.0;
 /// Characters a line of the New Library refusal banner holds.
 const REFUSAL_LINE_CHARS: usize = 80;
-/// Height of one row of the Close Project list (`dialog_row`).
-pub(crate) const DIALOG_ROW_HEIGHT: f32 = 30.0;
 /// The most the Close Project list grows to before it scrolls.
 pub(crate) const CLOSE_LIST_MAX_HEIGHT: f32 = 180.0;
 /// A one-line info or warning callout and the gap above it.
@@ -147,11 +145,17 @@ fn note_block(lines: usize, padded: bool) -> f32 {
 
 /// What the Rename dialog adds over the layout its base height was measured
 /// on (mockup row 23): the path under the title, the "New name" label, the wider gap
-/// above the field, then the placing-symbol note, the name clash and the
-/// handler's error when they show.
-fn rename_growth(d: &crate::app::RenameDialogState) -> f32 {
+/// above the field, the body's bottom padding over the footer band and the
+/// band's own height over the plain footer, then the folder-kept note, the
+/// placing-symbol note, the name clash and the handler's error when they show.
+fn rename_growth(d: &crate::app::RenameDialogState, keeps_folder: bool) -> f32 {
+    use crate::styles::{dense_band_footer_height, dense_footer_height};
     let sp = crate::styles::Spacing::DEFAULT;
     let mut grow = caption_line() + sp.xs + 1.0 + body_line() + 4.0 + (sp.l - sp.m);
+    grow += sp.l + dense_band_footer_height() - dense_footer_height();
+    if keeps_folder {
+        grow += note_block(1, true);
+    }
     if !d.placing_symbols.is_empty() {
         grow += note_block(2, true);
     }
@@ -235,13 +239,15 @@ fn body_growth(width: f32, text: &str) -> f32 {
 }
 
 impl Signex {
-    /// Window height of the Close Project confirm: its rows up to the list
-    /// cap, then a callout each for the kept documents and the reason
-    /// Discard All is withheld.
+    /// Window height of the Close Project confirm: its grouped list (the
+    /// Exit confirm's, headings and rows) up to the list cap, then a callout
+    /// each for the kept documents and the reason Discard All is withheld.
     fn close_confirm_height(&self, c: &crate::app::ProjectCloseConfirmState, width: f32) -> f32 {
+        use crate::app::view::dialogs::graphite_list::{LIST_ROW_H, list_box_height};
         let column = width - 2.0 * crate::styles::Spacing::DEFAULT.l - CALLOUT_INSET;
-        let rows = (c.dirty_paths.len() + c.dirty_rows.len()) as f32 * DIALOG_ROW_HEIGHT;
-        let mut height = LIST_DIALOG_BASE + rows.min(CLOSE_LIST_MAX_HEIGHT);
+        let (groups, rows) = self.unsaved_list_shape(&c.dirty_paths, &c.dirty_rows);
+        let list = list_box_height(groups, rows, LIST_ROW_H);
+        let mut height = LIST_DIALOG_BASE + list.min(CLOSE_LIST_MAX_HEIGHT);
         if !c.kept_paths.is_empty() {
             let names: Vec<String> = c
                 .kept_paths
@@ -337,9 +343,12 @@ impl Signex {
                 const CAPTION_LINE: f32 = 15.0;
                 const CHOICE_ROW_GAP: f32 = 3.0;
                 let i18n = &self.ui_state.i18n;
-                let detail = n.detail_text(i18n);
-                let mut height =
-                    BASE + (wrapped_lines(&detail, 64) as f32 * MESSAGE_LINE).min(MESSAGE_MAX);
+                // The note is its own text line under the detail.
+                let note_lines = n
+                    .note
+                    .map_or(0, |note| wrapped_lines(&i18n.message_plain(note, &[]), 64));
+                let lines = wrapped_lines(&n.detail_text(i18n), 64) + note_lines;
+                let mut height = BASE + (lines as f32 * MESSAGE_LINE).min(MESSAGE_MAX);
                 if let Some(system) = &n.system {
                     let lines = wrapped_lines(system.as_str(), 66) as f32;
                     height += GAP + SYSTEM_PAD + (lines * CAPTION_LINE).min(MESSAGE_MAX);
@@ -487,7 +496,7 @@ impl Signex {
             ModalId::RenameDialog => ui
                 .rename_dialog
                 .as_ref()
-                .map(|d| fixed.height + rename_growth(d)),
+                .map(|d| fixed.height + rename_growth(d, self.rename_keeps_folder(d))),
             ModalId::EnableVersionControl => ui
                 .enable_version_control
                 .as_ref()

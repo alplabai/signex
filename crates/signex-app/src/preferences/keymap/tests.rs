@@ -189,6 +189,25 @@ fn each_context_chip_shows_only_the_rows_of_its_context() {
     }
 }
 
+/// Mockup row 175: a board 3D view binding (F, Flip) has no chip of its
+/// own; it shows under PCB, next to the board's keys.
+#[test]
+fn a_board_3d_view_row_shows_under_the_pcb_chip() {
+    use crate::keymap::ShortcutContext as C;
+    let editor = editor_in_contexts(&[
+        ("F", "change_footprint", C::Pcb),
+        ("F", "flip_board_3d", C::Board3d),
+        ("P W", "place_wire", C::Schematic),
+    ]);
+    let mut pcb = shown(&editor, KeymapContextFilter::Pcb);
+    pcb.sort();
+    assert_eq!(pcb, ["change_footprint", "flip_board_3d"]);
+    assert_eq!(
+        shown(&editor, KeymapContextFilter::Schematic),
+        ["place_wire"]
+    );
+}
+
 #[test]
 fn the_conflicts_chip_lists_exactly_the_conflicting_rows() {
     use crate::keymap::ShortcutContext as C;

@@ -7,12 +7,12 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use signex_engine::{DocumentPatch, UndoGroupId};
+use signex_i18n_ids::ids;
 
 use super::notices::{engine_error_notice, warning_notice};
 use super::{ActiveSettlement, DocumentState};
 use crate::app::UndoGroupSheets;
 use crate::app::core::event::{ChangeCause, CoreEvent, DocumentChanged};
-use crate::app::undo_groups::file_names;
 
 /// A grouped step run by the core half.
 #[derive(Debug, Default)]
@@ -55,18 +55,13 @@ impl DocumentState {
         if !undo && !recorded.dropped.is_empty() {
             // All or nothing: redoing the other sheets would leave one part
             // under two designators.
-            step.members.push(warning_notice(format!(
-                "Cannot redo the {}: {} went back to its saved state. Run {} again.",
-                recorded.wide(),
-                file_names(&recorded.dropped),
-                recorded.title(),
-            )));
+            step.members.push(warning_notice(recorded.redo_dropped()));
             return step;
         }
         let sheets = self.sort_group_sheets(group, undo, &recorded, &active_path);
         if !sheets.blocked.is_empty() {
             step.members
-                .push(blocked_notice(&recorded, undo, &sheets.blocked));
+                .push(warning_notice(recorded.blocked(undo, &sheets.blocked)));
             return step;
         }
         // Undo until you save (#2760): a project is never left half undone.
@@ -180,7 +175,10 @@ impl DocumentState {
                 // already stepped stay stepped; it is logged.
                 Err(error) => {
                     debug_assert!(false, "group step failed after the pre-check: {error}");
-                    events.push(engine_error_notice("Engine group step failed", error));
+                    events.push(engine_error_notice(
+                        ids::NOTICE_EDIT_GROUP_STEP_FAILED,
+                        error,
+                    ));
                     continue;
                 }
             };
@@ -276,20 +274,4 @@ impl DocumentState {
         // A pass can push the saved step off a full stack.
         self.sync_history_dirty(path);
     }
-}
-
-/// The refusal of a step a member's later step blocks.
-fn blocked_notice(recorded: &UndoGroupSheets, undo: bool, blocked: &[PathBuf]) -> CoreEvent {
-    let (wide, noun, names) = (recorded.wide(), recorded.noun(), file_names(blocked));
-    warning_notice(if undo {
-        format!(
-            "Cannot undo the {wide}: {names} has a later step (an edit or a \
-             net-class pick). Undo the newer edit on {names} first."
-        )
-    } else {
-        format!(
-            "Cannot redo the {wide}: {names} was edited after the \
-             undo, so the {noun} can't be redone across sheets."
-        )
-    })
 }

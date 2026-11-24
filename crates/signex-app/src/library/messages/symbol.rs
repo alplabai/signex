@@ -277,6 +277,11 @@ pub enum SymbolEditorMsg {
     /// Toggle a kind on the symbol-editor selection filter.
     ToggleSelectionFilter(crate::library::editor::symbol::state::SymbolFilterKind),
 
+    /// A pin type was picked in the Place Pin dropdown (mockup row 141): it
+    /// stays for every following placed pin and arms Place Pin. Picking the
+    /// checked type again goes back to unclassified pins.
+    PinTypePicked(signex_types::schematic::PinDirection),
+
     // ── Right-click context menu ─────────────────────────────
     /// Right-release-without-pan opens the context menu at
     /// window-absolute `(x, y)`; `target` is what the cursor was

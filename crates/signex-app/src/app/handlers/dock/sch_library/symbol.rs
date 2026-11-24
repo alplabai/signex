@@ -71,7 +71,7 @@ impl Signex {
     /// run the standard dirty / refresh cycle. `edit` returns whether it
     /// changed anything. Silently no-ops when no Symbol editor is active,
     /// so callers need no match of their own.
-    fn sym_editor_record_edit(
+    pub(super) fn sym_editor_record_edit(
         &mut self,
         key: Option<crate::app::documents::FieldEditKey>,
         edit: impl FnOnce(&mut crate::app::SymbolDocument) -> bool,
@@ -427,14 +427,12 @@ impl Signex {
     }
 
     fn mark_active_symbol_tab_dirty(&mut self) {
+        // A Pin table tab marks its symbol.
         let Some(path) = self
             .document_state
             .tabs
             .get(self.document_state.active_tab)
-            .and_then(|t| match &t.kind {
-                crate::app::TabKind::SymbolEditor(p) => Some(p.clone()),
-                _ => None,
-            })
+            .and_then(|t| t.symbol_document().cloned())
         else {
             return;
         };
@@ -509,17 +507,14 @@ impl Signex {
     }
 
     /// Borrow-mut the active tab's `SymbolDocument`, if the
-    /// active tab is a Symbol editor. Returns `None` for any other
-    /// tab kind so the SCH Library handlers can exit fast.
+    /// active tab is a Symbol editor or its Pin table tab. Returns `None`
+    /// for any other tab kind so the SCH Library handlers can exit fast.
     pub(super) fn active_symbol_editor_mut(&mut self) -> Option<&mut crate::app::SymbolDocument> {
         let path = self
             .document_state
             .tabs
             .get(self.document_state.active_tab)
-            .and_then(|t| match &t.kind {
-                crate::app::TabKind::SymbolEditor(p) => Some(p.clone()),
-                _ => None,
-            })?;
+            .and_then(|t| t.symbol_document().cloned())?;
         // Refused while the editor's library is being deleted.
         if !self.editor_edit_allowed(&path) {
             return None;

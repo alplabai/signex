@@ -222,8 +222,11 @@ fn a_board_string_lands_on_its_layer_at_the_default_size_in_one_step() {
     assert_eq!(serde_json::to_string(engine.board()).unwrap(), before);
 }
 
+/// Was `a_board_string_lands_on_an_overlay_mechanical_or_documentation_layer_only`,
+/// with copper refused; a string lands on copper too since Caner's
+/// 2026-11-24 decision (#2883).
 #[test]
-fn a_board_string_lands_on_an_overlay_mechanical_or_documentation_layer_only() {
+fn a_board_string_lands_on_a_copper_overlay_mechanical_or_documentation_layer_only() {
     use signex_types::pcb_layer::{CopperLayer, MechanicalLayer, PcbLayer, TechnicalLayer};
 
     let at = Point::new(2.0, 3.0);
@@ -238,9 +241,13 @@ fn a_board_string_lands_on_an_overlay_mechanical_or_documentation_layer_only() {
     );
     let dims = PcbLayer::Technical(TechnicalLayer::Dimensions);
     assert!(new_text(id, at, dims, "J1".into()).is_some(), "#2373");
+    for (layer, token) in [
+        (PcbLayer::Copper(CopperLayer::Top), "TopCopper"),
+        (PcbLayer::Copper(CopperLayer::Bottom), "BottomCopper"),
+    ] {
+        assert_eq!(new_text(id, at, layer, "J1".into()).unwrap().layer, token);
+    }
     for layer in [
-        PcbLayer::Copper(CopperLayer::Top),
-        PcbLayer::Copper(CopperLayer::Bottom),
         PcbLayer::Technical(TechnicalLayer::EdgeCuts),
         PcbLayer::Technical(TechnicalLayer::SolderMaskTop),
     ] {

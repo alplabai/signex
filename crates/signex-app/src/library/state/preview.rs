@@ -431,7 +431,8 @@ pub struct DistributorSettings {
     /// call, so a test can observe the request without touching the OS
     /// credential store.
     pub digikey_token_remover: fn() -> Result<(), String>,
-    /// Whether `SIGNEX_DIGIKEY_CLIENT_ID` was set at start. Bootstrap reads
+    /// Whether a DigiKey client id was present at start, built in or from
+    /// `SIGNEX_DIGIKEY_CLIENT_ID` (mockup row 149). Bootstrap reads
     /// it once ([`Self::set_start_environment`]), never `Default` or the
     /// view; `false` draws the DigiKey card's error state.
     pub digikey_client_configured: bool,

@@ -14,7 +14,8 @@
 
 use std::path::PathBuf;
 
-use signex_i18n::{I18n, ids, t};
+use signex_i18n::{I18n, MessageId, ids, t};
+use signex_types::schematic::PinDirection;
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
@@ -50,6 +51,12 @@ fn stub_with_icon(
     DropdownItem::new(label, sym(path, SymbolEditorMsg::ActiveBarStub(label))).icon(icon)
 }
 
+/// A dropdown section header, shown in capitals like the board bar's
+/// group headers (mockup row 141).
+fn section_header(i18n: &I18n, id: MessageId) -> DropdownEntry<LibraryMessage> {
+    DropdownEntry::Header(i18n.upper_for_display(&t!(i18n, id).into_string()))
+}
+
 /// Build the entries for the dropdown matching `menu`. `tid` resolves
 /// the per-theme accent tint on each SVG icon (icons reuse the
 /// schematic active bar's icon set for visual consistency across
@@ -58,6 +65,7 @@ pub fn entries(
     menu: SymActiveBarMenu,
     selection_filter: SymbolSelectionFilter,
     active_tool: SymbolTool,
+    pin_type: Option<PinDirection>,
     path: PathBuf,
     tid: ThemeId,
     i18n: &I18n,
@@ -68,7 +76,7 @@ pub fn entries(
         SymActiveBarMenu::Place => place_entries(path, tid),
         SymActiveBarMenu::Select => select_entries(path, tid),
         SymActiveBarMenu::Align => align_entries(path, tid),
-        SymActiveBarMenu::Pin => pin_entries(active_tool, path),
+        SymActiveBarMenu::Pin => pin_entries(active_tool, pin_type, path, i18n),
         SymActiveBarMenu::Text => text_entries(active_tool, path, tid),
         SymActiveBarMenu::Shapes => shapes_entries(active_tool, path, tid, i18n),
     }
@@ -321,12 +329,25 @@ fn align_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessag
     ]
 }
 
-fn pin_entries(active_tool: SymbolTool, path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
-    // SchLib has one Place Pin tool today; the variants (input /
-    // output / passive / etc.) mutate a pin AFTER placement via the
-    // Properties panel. Surface "Place Pin" as the only wired item;
-    // the variant rows are stubs that hint future flow.
-    vec![
+/// The pin types the Place Pin dropdown offers (mockup row 141); the
+/// Properties panel offers every `PinDirection`.
+const PIN_TYPES: [PinDirection; 5] = [
+    PinDirection::Input,
+    PinDirection::Output,
+    PinDirection::Passive,
+    PinDirection::Bidirectional,
+    PinDirection::PowerInput,
+];
+
+fn pin_entries(
+    active_tool: SymbolTool,
+    pin_type: Option<PinDirection>,
+    path: PathBuf,
+    i18n: &I18n,
+) -> Vec<DropdownEntry<LibraryMessage>> {
+    // A picked type is sticky: it stays for every following pin and shows
+    // checked (accepted 2026-11-24, mockup row 141).
+    let mut entries = vec![
         DropdownEntry::Item(
             DropdownItem::new(
                 "Place Pin",
@@ -338,13 +359,18 @@ fn pin_entries(active_tool: SymbolTool, path: PathBuf) -> Vec<DropdownEntry<Libr
             .checked(active_tool == SymbolTool::AddPin),
         ),
         DropdownEntry::Separator,
-        DropdownEntry::Header("Variants (set via Properties)".into()),
-        DropdownEntry::Item(stub("Input", path.clone())),
-        DropdownEntry::Item(stub("Output", path.clone())),
-        DropdownEntry::Item(stub("Passive", path.clone())),
-        DropdownEntry::Item(stub("Bidirectional", path.clone())),
-        DropdownEntry::Item(stub("Power", path)),
-    ]
+        section_header(i18n, ids::EDITORS_SYMBOL_BAR_PIN_TYPE),
+    ];
+    entries.extend(PIN_TYPES.into_iter().map(|kind| {
+        DropdownEntry::Item(
+            DropdownItem::new(
+                kind.label(),
+                sym(path.clone(), SymbolEditorMsg::PinTypePicked(kind)),
+            )
+            .checked(pin_type == Some(kind)),
+        )
+    }));
+    entries
 }
 
 fn text_entries(
@@ -378,32 +404,25 @@ fn shapes_entries(
     tid: ThemeId,
     i18n: &I18n,
 ) -> Vec<DropdownEntry<LibraryMessage>> {
-    // The armed tool's row keeps the highlight as well as the check; the
-    // stub rows below have no glyph and keep the icon column empty.
+    // Mockup row 141: the armed tool's row is the current choice, drawn
+    // with the accent-soft fill and ink and no check mark.
+    let row = |label: &'static str, tool: SymbolToolMsg, armed: SymbolTool| {
+        DropdownItem::new(label, sym(path.clone(), SymbolEditorMsg::SetTool(tool)))
+            .selected(active_tool == armed)
+    };
     let shape = |label: &'static str,
                  tool: SymbolToolMsg,
                  armed: SymbolTool,
                  icon: iced::widget::svg::Handle|
      -> DropdownEntry<LibraryMessage> {
-        let is_armed = active_tool == armed;
-        DropdownEntry::Item(
-            DropdownItem::new(label, sym(path.clone(), SymbolEditorMsg::SetTool(tool)))
-                .icon(icon)
-                .checked(is_armed)
-                .active(is_armed),
-        )
+        DropdownEntry::Item(row(label, tool, armed).icon(icon))
     };
     // A shape with no glyph: the icon column stays empty (mockup row 141).
     let plain = |label: &'static str, tool: SymbolToolMsg, armed: SymbolTool| {
-        let is_armed = active_tool == armed;
-        DropdownEntry::Item(
-            DropdownItem::new(label, sym(path.clone(), SymbolEditorMsg::SetTool(tool)))
-                .checked(is_armed)
-                .active(is_armed),
-        )
+        DropdownEntry::Item(row(label, tool, armed))
     };
     vec![
-        DropdownEntry::Header(t!(i18n, ids::EDITORS_SYMBOL_BAR_SHAPES).into_string()),
+        section_header(i18n, ids::EDITORS_SYMBOL_BAR_SHAPES),
         shape(
             "Line",
             SymbolToolMsg::PlaceLine,
@@ -644,7 +663,7 @@ mod tests {
                 _ => None,
             });
             assert!(
-                row.is_some_and(|item| item.active),
+                row.is_some_and(|item| item.selected),
                 "{label} is highlighted"
             );
             let expected = match item_msg(&entries, label) {
@@ -662,7 +681,7 @@ mod tests {
         }
     }
 
-    /// Mockup row 141: the Shapes menu opens under a "Shapes" header and highlights
+    /// Mockup row 141: the Shapes menu opens under a "SHAPES" header and highlights
     /// the armed tool's row (and only it).
     #[test]
     fn shapes_menu_has_a_header_and_highlights_the_armed_tool() {
@@ -675,11 +694,11 @@ mod tests {
         );
         let header = t!(i18n, ids::EDITORS_SYMBOL_BAR_SHAPES).into_string();
         assert_eq!(header, "Shapes");
-        assert!(matches!(&entries[0], DropdownEntry::Header(h) if *h == header));
+        assert!(matches!(&entries[0], DropdownEntry::Header(h) if h == "SHAPES"));
         let highlighted: Vec<&str> = entries
             .iter()
             .filter_map(|e| match e {
-                DropdownEntry::Item(item) if item.active => Some(item.label.as_str()),
+                DropdownEntry::Item(item) if item.selected => Some(item.label.as_str()),
                 _ => None,
             })
             .collect();
@@ -688,5 +707,76 @@ mod tests {
             item_msg(&entries, "Rectangle"),
             SymbolEditorMsg::SetTool(SymbolToolMsg::PlaceRectangle)
         ));
+    }
+
+    /// Mockup row 141: the armed shape draws as the current choice (the
+    /// accent-soft fill and ink, pinned by the dropdown widget's
+    /// `the_selected_row_uses_the_accent_soft_tokens`) with no check mark,
+    /// and no row claims an open submenu.
+    #[test]
+    fn the_armed_shape_is_the_current_choice_without_a_check() {
+        let i18n = I18n::en_us();
+        for theme in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let entries = shapes_entries(
+                SymbolTool::PlaceRectangle,
+                PathBuf::from("t.snxsym"),
+                theme,
+                &i18n,
+            );
+            for entry in &entries {
+                let DropdownEntry::Item(item) = entry else {
+                    continue;
+                };
+                assert_eq!(item.selected, item.label == "Rectangle", "{}", item.label);
+                assert!(!item.checked, "{} draws no check", item.label);
+                assert!(!item.active, "{} opens no submenu", item.label);
+            }
+        }
+    }
+
+    /// Mockup row 141 (accepted 2026-11-24): the Place Pin dropdown's types
+    /// sit under a "Pin type" header, each row picks its `PinDirection`, and
+    /// the sticky type shows checked.
+    #[test]
+    fn the_pin_menu_picks_a_sticky_pin_type_under_a_pin_type_header() {
+        let i18n = I18n::en_us();
+        let entries = pin_entries(
+            SymbolTool::AddPin,
+            Some(PinDirection::Output),
+            PathBuf::from("t.snxsym"),
+            &i18n,
+        );
+        let header = t!(i18n, ids::EDITORS_SYMBOL_BAR_PIN_TYPE).into_string();
+        assert_eq!(header, "Pin type");
+        assert!(
+            entries
+                .iter()
+                .any(|e| matches!(e, DropdownEntry::Header(h) if h == "PIN TYPE"))
+        );
+        assert!(
+            !entries
+                .iter()
+                .any(|e| matches!(e, DropdownEntry::Header(h) if h.contains("Variants"))),
+            "the old hint header is gone"
+        );
+
+        for kind in PIN_TYPES {
+            assert!(
+                matches!(
+                    item_msg(&entries, kind.label()),
+                    SymbolEditorMsg::PinTypePicked(picked) if *picked == kind
+                ),
+                "{} picks its type",
+                kind.label()
+            );
+        }
+        let checked: Vec<&str> = entries
+            .iter()
+            .filter_map(|e| match e {
+                DropdownEntry::Item(item) if item.checked => Some(item.label.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(checked, ["Place Pin", "Output"]);
     }
 }

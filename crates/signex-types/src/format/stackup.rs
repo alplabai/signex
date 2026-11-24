@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{FormatError, UnknownFields};
 use crate::pcb::{LayerDef, PcbBoard, PcbSetup};
-use crate::pcb_stack::{LayerStack, StackLayer, clean_stack_name};
+use crate::pcb_stack::{BoardFinish, LayerStack, StackLayer, clean_stack_name};
 
 #[derive(Serialize)]
 pub(super) struct StackBlock<'a> {
@@ -37,6 +37,10 @@ pub(super) struct StackBlock<'a> {
     /// The physical stack (#2401), top to bottom; absent until it is edited.
     #[serde(skip_serializing_if = "Option::is_none")]
     rows: Option<&'a [StackLayer]>,
+    /// Mask, silkscreen and surface finish (mockup rows 105 and 176); a
+    /// board with one writes `snxpcb/1.10`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    finish: Option<&'a BoardFinish>,
     #[serde(flatten)]
     unknown: &'a UnknownFields,
 }
@@ -62,6 +66,9 @@ pub(super) struct StackRaw {
     /// Absent in files saved before the stack manager (#2401).
     #[serde(default)]
     rows: Option<Vec<StackLayer>>,
+    /// Absent in files saved before the Finish sub-tab.
+    #[serde(default)]
+    finish: Option<BoardFinish>,
     /// Foreign keys inside `[stackup]`.
     #[serde(flatten)]
     unknown: UnknownFields,
@@ -89,6 +96,7 @@ pub(super) fn block(board: &PcbBoard) -> StackBlock<'_> {
         display_names: display_names(board),
         setup: board.setup.as_ref(),
         rows: board.stackup.as_ref().map(|s| s.layers.as_slice()),
+        finish: board.stackup.as_ref().and_then(|s| s.finish.as_ref()),
         unknown: &board.unknown.stackup,
     }
 }
@@ -163,13 +171,18 @@ pub(super) fn read(s: StackRaw, thickness_mm: f64) -> Result<StackRead, FormatEr
         kept.insert_value(&token, value);
     }
     let name = s.stack_name.as_deref().and_then(clean_stack_name);
-    let stackup = match (s.rows, name) {
-        (Some(rows), name) => Some(LayerStack { name, layers: rows }),
-        (None, Some(name)) => Some(LayerStack {
-            name: Some(name),
+    let stackup = match (s.rows, name, s.finish) {
+        (Some(rows), name, finish) => Some(LayerStack {
+            name,
+            layers: rows,
+            finish,
+        }),
+        (None, None, None) => None,
+        (None, name, finish) => Some(LayerStack {
+            name,
+            finish,
             ..LayerStack::derived(&layers, thickness_mm)
         }),
-        (None, None) => None,
     };
     Ok(StackRead {
         layers,

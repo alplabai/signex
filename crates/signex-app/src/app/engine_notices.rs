@@ -32,7 +32,38 @@ pub(crate) fn notice_line(i18n: &I18n, notice: &EngineNotice) -> String {
             ids::PANELS_MESSAGES_HELD_PINS_MANY,
         ),
         EngineNotice::PinDotRefused { pins } => refused_line(i18n, pins),
+        EngineNotice::PinsNotKept { pins } => pins_not_kept_line(i18n, pins),
     }
+}
+
+/// The line for pins left as a plain move. Its counts go as text, so the
+/// line stays byte-identical with the engine's English before #2644.
+fn pins_not_kept_line(i18n: &I18n, pins: &[String]) -> String {
+    if let [pin] = pins {
+        return i18n.message_plain(
+            ids::PANELS_MESSAGES_PINS_NOT_KEPT_ONE,
+            &[("name", Arg::from(pin.as_str()))],
+        );
+    }
+    let first = first_names(pins);
+    let names = if pins.len() <= NAMED {
+        first
+    } else {
+        i18n.message_plain(
+            ids::PANELS_MESSAGES_LIST_MORE,
+            &[
+                ("names", Arg::from(first)),
+                ("count", Arg::from((pins.len() - NAMED).to_string())),
+            ],
+        )
+    };
+    i18n.message_plain(
+        ids::PANELS_MESSAGES_PINS_NOT_KEPT_MANY,
+        &[
+            ("count", Arg::from(pins.len().to_string())),
+            ("names", Arg::from(names)),
+        ],
+    )
 }
 
 /// `one` naming the single entry of `names`, else `many` with the count and
@@ -52,12 +83,7 @@ fn names_line(i18n: &I18n, names: &[String], one: MessageId, many: MessageId) ->
 
 /// The first few of `names`, then "and N more" when there are others.
 fn shown(i18n: &I18n, names: &[String]) -> String {
-    let first = names
-        .iter()
-        .take(NAMED)
-        .cloned()
-        .collect::<Vec<_>>()
-        .join(", ");
+    let first = first_names(names);
     if names.len() <= NAMED {
         return first;
     }
@@ -68,6 +94,16 @@ fn shown(i18n: &I18n, names: &[String]) -> String {
             ("count", Arg::from(names.len() - NAMED)),
         ],
     )
+}
+
+/// The first [`NAMED`] of `names`, comma-separated.
+fn first_names(names: &[String]) -> String {
+    names
+        .iter()
+        .take(NAMED)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// The line for pin ends left without a dot that would merge two nets.

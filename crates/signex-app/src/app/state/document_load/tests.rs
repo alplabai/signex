@@ -34,13 +34,20 @@ fn edited_engine_at(path: &Path) -> Engine {
     engine
 }
 
-/// The one notice of `install`, as the Messages panel shows it.
+/// The one notice of `install`, as the Messages panel shows it in en-US. It
+/// is a catalog line, so the pseudo-locale words it differently (#2644).
 fn only_line(install: &SheetInstall) -> String {
     assert_eq!(install.notices.len(), 1, "{:?}", install.notices);
     let notice = &install.notices[0];
     assert_eq!(notice.level, NoticeLevel::Warning);
     match &notice.body {
-        NoticeBody::Text(text) => text.render(&I18n::en_us()),
+        NoticeBody::Text(text) => {
+            assert!(text.id().is_some(), "a catalog line: {text:?}");
+            let en = text.render(&I18n::en_us());
+            let xa = I18n::new(&signex_i18n::LanguagePref::Locale("en-XA".into()));
+            assert_ne!(text.render(&xa), en, "the line follows the language");
+            en
+        }
         NoticeBody::Engine(other) => panic!("not a text notice: {other:?}"),
     }
 }

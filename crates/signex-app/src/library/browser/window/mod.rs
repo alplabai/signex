@@ -17,6 +17,18 @@ use std::path::Path;
 /// line plus the 4 px a text cell pads above and below, the tallest cell.
 pub(super) const BROWSER_ROW_HEIGHT: f32 =
     super::BROWSER_TEXT_SIZE * crate::styles::LINE_HEIGHT + 2.0 * 4.0;
+/// Height of every data row in thumbnail rows (mockup rows 118 and 119):
+/// the row's tile with the text cell's padding above and below.
+pub(super) const BROWSER_THUMB_ROW_HEIGHT: f32 = crate::library::panel::THUMB_TILE_H + 2.0 * 4.0;
+
+/// Height of every data row under the shared row style.
+pub fn row_height(style: crate::library::state::LibraryRowStyle) -> f32 {
+    match style {
+        crate::library::state::LibraryRowStyle::Compact => BROWSER_ROW_HEIGHT,
+        crate::library::state::LibraryRowStyle::Thumbnail => BROWSER_THUMB_ROW_HEIGHT,
+    }
+}
+
 /// Height of the header row, which scrolls with the rows and so offsets
 /// them from the top of the scrollable content.
 pub(super) const BROWSER_HEADER_HEIGHT: f32 = 28.0;
@@ -96,7 +108,12 @@ fn offset_to_reveal(index: usize, scroll: GridScroll, row_h: f32, leading_h: f32
 /// Scroll offset that brings the grid's `index`-th row into view, or `None`
 /// when it already is.
 pub fn reveal_row_offset(index: usize, scroll: GridScroll) -> Option<f32> {
-    offset_to_reveal(index, scroll, BROWSER_ROW_HEIGHT, BROWSER_HEADER_HEIGHT)
+    reveal_row_offset_at(index, scroll, BROWSER_ROW_HEIGHT)
+}
+
+/// [`reveal_row_offset`] for rows `row_h` tall (see [`row_height`]).
+pub fn reveal_row_offset_at(index: usize, scroll: GridScroll, row_h: f32) -> Option<f32> {
+    offset_to_reveal(index, scroll, row_h, BROWSER_HEADER_HEIGHT)
 }
 
 impl crate::library::state::LibraryState {
@@ -112,14 +129,53 @@ impl crate::library::state::LibraryState {
         }
         self.shown_browser = shown.map(Path::to_path_buf);
     }
+
+    /// The symbols of the rows the shown browser builds in thumbnail rows,
+    /// for the shared thumbnail read; empty in compact rows.
+    pub(crate) fn browser_wanted_thumbnails(&self) -> Vec<signex_library::PrimitiveRef> {
+        if self.library_panel.row_style != crate::library::state::LibraryRowStyle::Thumbnail {
+            return Vec::new();
+        }
+        let Some(path) = self.shown_browser.as_deref() else {
+            return Vec::new();
+        };
+        let (Some(lib), Some(browser)) = (self.library_at(path), self.library_browsers.get(path))
+        else {
+            return Vec::new();
+        };
+        let Some(cache) = browser.view_cache.as_ref() else {
+            return Vec::new();
+        };
+        let Some(rows) = lib
+            .tables
+            .get(super::view_cache::active_table(lib, browser))
+        else {
+            return Vec::new();
+        };
+        let window = visible_rows_at(
+            browser.grid_scroll,
+            cache.visible.len(),
+            BROWSER_THUMB_ROW_HEIGHT,
+        );
+        cache.visible[window]
+            .iter()
+            .filter_map(|&i| rows.get(i))
+            .map(|row| row.symbol_ref)
+            .collect()
+    }
 }
 
 /// The rows the grid builds for `count` rows at `scroll`.
 pub fn visible_rows(scroll: GridScroll, count: usize) -> Range<usize> {
+    visible_rows_at(scroll, count, BROWSER_ROW_HEIGHT)
+}
+
+/// [`visible_rows`] for rows `row_h` tall (see [`row_height`]).
+pub fn visible_rows_at(scroll: GridScroll, count: usize, row_h: f32) -> Range<usize> {
     visible_range(
         scroll.offset_y - BROWSER_HEADER_HEIGHT,
         scroll.viewport_h,
-        BROWSER_ROW_HEIGHT,
+        row_h,
         count,
         OVERSCAN_ROWS,
     )

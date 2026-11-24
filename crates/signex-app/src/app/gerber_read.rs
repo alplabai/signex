@@ -133,6 +133,20 @@ pub(crate) fn problem_text(problem: &ReadProblem, i18n: &I18n) -> Localized {
             "line" => line,
             "why" => why.as_str()
         ),
+        ProblemKind::Unopenable { why } => t!(
+            i18n,
+            ids::GERBER_VIEWER_READ_UNOPENABLE,
+            "file" => file,
+            "line" => line,
+            "why" => why.as_str()
+        ),
+        ProblemKind::TooLarge { limit_mib } => t!(
+            i18n,
+            ids::GERBER_VIEWER_READ_TOO_LARGE,
+            "file" => file,
+            "line" => line,
+            "limit" => *limit_mib
+        ),
     }
 }
 

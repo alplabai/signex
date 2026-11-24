@@ -1,5 +1,5 @@
 //! Electrical Rules Check (ERC) modal (#2413): the source strip (where the
-//! rules come from, plus severity count tiles), the shared rule editor body
+//! rules come from, plus severity count chips), the shared rule editor body
 //! (per-rule severities and the pin-connection matrix), the profile forms and
 //! the footer (Profile menu, Undo / Redo, Close, Run ERC).
 
@@ -85,6 +85,8 @@ impl Signex {
             on_changed_only: |on| Message::Erc(ErcMsg::RulesChangedOnlyToggled(on)),
             on_filter: |query| Message::Erc(ErcMsg::RuleFilterChanged(query)),
             on_open_rule: None,
+            // The matrix is beside the list here.
+            on_open_matrix: None,
         });
 
         // In-window: sized to the window-capped modal. Detached: the OS
