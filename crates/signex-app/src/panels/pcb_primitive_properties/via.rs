@@ -14,7 +14,7 @@ use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Space, column, container, pick_list, row, stack as layered};
 use iced::{Background, Color, Element, Length, Padding, Theme, Widget as _};
 use signex_engine::pcb::via_types::ViaTypeKey;
-use signex_i18n::{Localized, MessageId, UserText, ids, t};
+use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::StackMode;
 use signex_types::pcb_via_protection::{Ipc4761, PlugSide, ViaFill};
@@ -191,6 +191,18 @@ fn definition<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMs
 /// its spec; the closed field shows the picked type's span glyph, name and
 /// sizes over the list, whose own text is hidden so it never shows cut.
 fn via_type_field<'a>(look: Look<'a>, f: &'a ViaFacts) -> Element<'a, PanelMsg> {
+    let list = via_type_list(f);
+    let Some(choice) = f.via_type.as_ref() else {
+        return list;
+    };
+    layered![list, type_face(look, f, choice)]
+        .width(Length::Fill)
+        .boxed()
+}
+
+/// The Via Type pick_list under the face: its entries are the full labels,
+/// its own text is transparent so only the face shows on the closed field.
+fn via_type_list(f: &ViaFacts) -> Element<'_, PanelMsg> {
     let common = &f.common;
     let live = common.is_editable() && !common.target.is_placement();
     let target = common.target.clone();
@@ -206,7 +218,7 @@ fn via_type_field<'a>(look: Look<'a>, f: &'a ViaFacts) -> Element<'a, PanelMsg> 
     })
     .padding(SP.s)
     .width(Length::Fill);
-    let list = if live {
+    if live {
         list.on_select(move |c: ViaTypeChoice| {
             via_msg(ViaMsg::TypePicked {
                 target: target.clone(),
@@ -216,13 +228,7 @@ fn via_type_field<'a>(look: Look<'a>, f: &'a ViaFacts) -> Element<'a, PanelMsg> 
         .boxed()
     } else {
         list.boxed()
-    };
-    let Some(choice) = f.via_type.as_ref() else {
-        return list;
-    };
-    layered![list, type_face(look, f, choice)]
-        .width(Length::Fill)
-        .boxed()
+    }
 }
 
 /// The closed Via Type field: span glyph, the type's name (cut with an
@@ -304,6 +310,8 @@ fn span_glyph<'a>(
             })
     };
     let lines = column(order.iter().map(|&layer| {
+        // The palette colour: a layer repainted in the view (#2363) is not
+        // carried in `LayerChoice` yet.
         let colour = layer_style::layer_colour(PcbLayer::from(layer), look.tokens());
         container(swatch(Color { a: 1.0, ..colour }, Length::Fill, stroke))
             .height(Length::Fixed(pitch))
@@ -536,14 +544,30 @@ pub(super) fn class_label(class: Ipc4761) -> MessageId {
     }
 }
 
-/// The short name of a class, as the Protection header's chip shows it:
-/// "Type I-b", "open", "Custom".
-fn class_code(look: Look<'_>, class: Ipc4761) -> Localized {
+/// The short name of a class: "Type I-b", "open", "Custom". A via type's
+/// spec and the Protection header's chip both name it so.
+pub(crate) fn class_short(i18n: &I18n, class: Ipc4761) -> Localized {
     match class.code() {
-        Some(code) => t!(look.ctx.i18n, ids::PCB_PRIM_IPC_CODE, "code" => code),
-        None if class == Ipc4761::Open => look.t(ids::PCB_PRIM_IPC_SHORT_OPEN),
-        None => look.t(ids::PCB_PRIM_IPC_CUSTOM),
+        Some(code) => t!(i18n, ids::PCB_PRIM_IPC_CODE, "code" => code),
+        None if class == Ipc4761::Open => t!(i18n, ids::PCB_PRIM_IPC_SHORT_OPEN),
+        None => t!(i18n, ids::PCB_PRIM_IPC_CUSTOM),
     }
+}
+
+/// The Protection header's badge (mockup row 96): the class chip and
+/// "from type".
+fn protection_badge<'a>(look: Look<'a>, class: Ipc4761) -> Element<'a, PanelMsg> {
+    row![
+        pill(look, class_short(&look.ctx.i18n, class)),
+        text(look.t(ids::PCB_PRIM_FROM_TYPE))
+            .size(TS.dense)
+            .color(resolve(look.tokens()).ink4)
+            .wrapping(iced::widget::text::Wrapping::None)
+            .boxed(),
+    ]
+    .spacing(SP.xs)
+    .align_y(iced::Alignment::Center)
+    .boxed()
 }
 
 fn protection<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg>> {
@@ -555,19 +579,7 @@ fn protection<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMs
         None,
     );
     if let Some(class) = class {
-        s = s.badge(
-            row![
-                pill(look, class_code(look, class)),
-                text(look.t(ids::PCB_PRIM_FROM_TYPE))
-                    .size(TS.dense)
-                    .color(resolve(look.tokens()).ink4)
-                    .wrapping(iced::widget::text::Wrapping::None)
-                    .boxed(),
-            ]
-            .spacing(SP.xs)
-            .align_y(iced::Alignment::Center)
-            .boxed(),
-        );
+        s = s.badge(protection_badge(look, class));
     }
     let choices: Vec<ClassChoice> = Ipc4761::ALL
         .into_iter()

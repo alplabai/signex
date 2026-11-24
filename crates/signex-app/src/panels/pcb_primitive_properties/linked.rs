@@ -114,7 +114,8 @@ pub(super) fn section_header<'a>(
     look: Look<'a>,
     title: Localized,
     is_open: bool,
-    (summary, badge): (Option<Label<'a>>, Option<Element<'a, PanelMsg>>),
+    summary: Option<Label<'a>>,
+    badge: Option<Element<'a, PanelMsg>>,
     key: String,
 ) -> Element<'a, PanelMsg> {
     let faint = resolve(look.tokens()).ink4;

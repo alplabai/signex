@@ -56,6 +56,7 @@ pub use facts::{
 };
 pub use linked::{EndChoice, end_choices, ends_tip};
 pub use via::ViaMsg;
+pub(crate) use via::class_short;
 pub use zone::PourMsg;
 pub(crate) use zone::unfilled_reason;
 

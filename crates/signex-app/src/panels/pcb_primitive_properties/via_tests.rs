@@ -1,6 +1,7 @@
-//! The Via panel's Not stored yet group: a microvia type adds the greyed
-//! Microvia Stacked / Staggered row (Caner, 2026-11-20); a through type
-//! has no such row.
+//! The Via panel: the Not stored yet group (a microvia type adds the greyed
+//! Microvia Stacked / Staggered row, Caner 2026-11-20; a through type has
+//! none), the Position row and mm units, the Via Type face and span glyph,
+//! the via stack and the Protection header (mockup row 96).
 
 use pcb_geom::ItemRef;
 use signex_engine::pcb::via_types::ViaTypeKey;
@@ -376,6 +377,20 @@ fn the_via_type_field_shows_the_name_and_sizes_not_the_list_entry() {
     assert!(line.contains(&"0.6/0.3"), "{line:?}");
     let entry = f.via_type.as_ref().expect("a type").label.clone();
     assert!(!texts.iter().any(|t| t.text == entry), "{texts:?}");
+}
+
+/// Mockup row 96: the list under the face draws no label of its own, so the
+/// picked entry never shows through the face: with a type picked it draws
+/// the same pixels as with none.
+#[test]
+fn the_list_under_the_type_face_draws_no_label() {
+    use crate::layout_probe::draw_pixels;
+    let picked = via(ViaType::Through, false);
+    let mut unpicked = via(ViaType::Through, false);
+    unpicked.via_type = None;
+    let size = iced::Size::new(300.0, 40.0);
+    let drawn = draw_pixels(super::via_type_list(&picked), size);
+    assert_eq!(drawn, draw_pixels(super::via_type_list(&unpicked), size));
 }
 
 /// Mockup row 96: the span glyph draws each copper layer in its colour.

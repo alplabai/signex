@@ -105,7 +105,8 @@ impl<'a> Section<'a> {
     }
 
     /// A chip after the summary in the header of a collapsible section (the
-    /// via's protection class, mockup row 96).
+    /// via's protection class, mockup row 96). Only a collapsible section
+    /// draws it.
     pub fn badge(mut self, badge: Element<'a, PanelMsg>) -> Self {
         self.badge = Some(badge);
         self
@@ -130,6 +131,7 @@ impl<'a> Section<'a> {
         }
         let title = self.look.t(self.title);
         let Some(collapse) = self.collapse else {
+            debug_assert!(self.badge.is_none(), "a badge needs a collapsible section");
             let mut col: Column<Element<'a, PanelMsg>> = column![
                 container(crate::panels::widgets::section_title(
                     title,
@@ -150,7 +152,8 @@ impl<'a> Section<'a> {
             self.look,
             title,
             !is_closed,
-            (collapse.summary, self.badge),
+            collapse.summary,
+            self.badge,
             set_key,
         );
         let mut col: Column<Element<'a, PanelMsg>> = column![header].spacing(SP.xs);
