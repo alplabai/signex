@@ -40,7 +40,7 @@ annotate_schematic_quietly	bridge	Annotate(Run(Incremental))	core	active documen
 annotate_schematic_quietly	in_window_rewrite	document_window	gui	window	routing
 annotate_schematic_quietly	refusal_needs	ActiveSheet	core	active document	routing
 annotate_schematic_quietly	disabled_still_runs	explains_when_unavailable	core	active document,dialog answer	handler
-apply_edits	operand_handler	run_operands: named document	core	active document,tool state,pre-placement form,origin	handler
+apply_edits	operand_handler	run_operands: named document	core	active document,tool state,origin	handler
 apply_edits	refusal_needs_operands	needs_operands_reason	gui	none	routing
 apply_edits	headless_missing_operand	needs `document`	core	none	routing
 apply_layout_board	bridge	DockLayout(Workspace(ApplyRequested(Builtin(Layout))))	gui	window,settings	handler
@@ -313,7 +313,7 @@ draw_full_circle	in_window_rewrite	document_window	gui	window	routing
 draw_full_circle	refusal_needs	Schematic	gui	active document	routing
 draw_full_circle	headless_refusal	headless_refusal	gui	none	routing
 draw_graphic_line	bridge	ActiveBar(Action(DrawLine))	gui	active document	gate
-draw_graphic_line	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,pre-placement form,origin	handler
+draw_graphic_line	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 draw_graphic_line	in_window_rewrite	document_window	gui	window	routing
 draw_graphic_line	refusal_needs	Schematic	gui	active document	routing
 draw_graphic_line	headless_missing_operand	needs `start`	core	none	routing
@@ -322,7 +322,7 @@ draw_hierarchical_sheet	in_window_rewrite	document_window	gui	window	routing
 draw_hierarchical_sheet	refusal_needs	Schematic	gui	active document	routing
 draw_hierarchical_sheet	headless_refusal	headless_refusal	gui	none	routing
 draw_line	active_bar	DrawLine	gui	active document	gate
-draw_line	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,pre-placement form,origin	handler
+draw_line	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 draw_line	in_window_rewrite	document_window	gui	window	routing
 draw_line	refusal_needs	Schematic	gui	active document	routing
 draw_line	headless_missing_operand	needs `start`	core	none	routing
@@ -331,7 +331,7 @@ draw_polygon	in_window_rewrite	document_window	gui	window	routing
 draw_polygon	refusal_needs	Schematic	gui	active document	routing
 draw_polygon	headless_refusal	headless_refusal	gui	none	routing
 draw_rectangle	active_bar	DrawRectangle	gui	active document	gate
-draw_rectangle	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,pre-placement form,origin	handler
+draw_rectangle	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 draw_rectangle	in_window_rewrite	document_window	gui	window	routing
 draw_rectangle	refusal_needs	Schematic	gui	active document	routing
 draw_rectangle	headless_missing_operand	needs `start`	core	none	routing
@@ -861,7 +861,7 @@ place_diff_pair	in_window_rewrite	document_window	gui	window	routing
 place_diff_pair	refusal_needs	Schematic	gui	active document	routing
 place_diff_pair	headless_missing_operand	needs `at`	core	none	routing
 place_global_label	bridge	ActiveBar(Action(PlacePort))	gui	active document	gate
-place_global_label	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,pre-placement form,origin	handler
+place_global_label	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 place_global_label	in_window_rewrite	document_window	gui	window	routing
 place_global_label	refusal_needs	Schematic	gui	active document	routing
 place_global_label	headless_missing_operand	needs `at`	core	none	routing
@@ -879,7 +879,7 @@ place_harness_entry	in_window_rewrite	document_window	gui	window	routing
 place_harness_entry	refusal_needs	Schematic	gui	active document	routing
 place_harness_entry	headless_refusal	headless_refusal	gui	none	routing
 place_hierarchical_label	bridge	ActiveBar(Action(PlaceOffSheetConnector))	gui	active document	gate
-place_hierarchical_label	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,pre-placement form,origin	handler
+place_hierarchical_label	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 place_hierarchical_label	in_window_rewrite	document_window	gui	window	routing
 place_hierarchical_label	refusal_needs	Schematic	gui	active document	routing
 place_hierarchical_label	headless_missing_operand	needs `at`	core	none	routing
@@ -893,12 +893,12 @@ place_linear_dimension	in_window_rewrite	document_window	gui	window	routing
 place_linear_dimension	refusal_needs	Schematic	gui	active document	routing
 place_linear_dimension	headless_refusal	headless_refusal	gui	none	routing
 place_local_net_label	bridge	ActiveBar(Action(PlaceNetLabel))	gui	active document	gate
-place_local_net_label	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,pre-placement form,origin	handler
+place_local_net_label	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 place_local_net_label	in_window_rewrite	document_window	gui	window	routing
 place_local_net_label	refusal_needs	Schematic	gui	active document	routing
 place_local_net_label	headless_missing_operand	needs `at`	core	none	routing
 place_net_label	active_bar	PlaceNetLabel	gui	active document	gate
-place_net_label	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,pre-placement form,origin	handler
+place_net_label	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 place_net_label	in_window_rewrite	document_window	gui	window	routing
 place_net_label	refusal_needs	Schematic	gui	active document	routing
 place_net_label	headless_missing_operand	needs `at`	core	none	routing
