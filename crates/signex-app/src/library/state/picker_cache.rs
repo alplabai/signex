@@ -87,6 +87,27 @@ impl PickerRows {
             .any(|entry| &*entry.path == path && entry.summary.row_id == row_id)
     }
 
+    /// The listed row `step` rows from `from` (↑ is -1, ↓ is +1, mockup row
+    /// 129) and its place in the list, stopping at the first and last row.
+    /// With no listed row at `from`, ↓ gives the first row and ↑ the last.
+    pub fn stepped(
+        &self,
+        from: Option<(&Path, Uuid)>,
+        step: isize,
+    ) -> Option<(usize, &PickerEntry)> {
+        let last = self.visible.len().checked_sub(1)?;
+        let at = from.and_then(|(path, row_id)| {
+            self.visible()
+                .position(|e| &*e.path == path && e.summary.row_id == row_id)
+        });
+        let index = match at {
+            Some(at) => at.saturating_add_signed(step).min(last),
+            None if step < 0 => last,
+            None => 0,
+        };
+        self.visible().nth(index).map(|entry| (index, entry))
+    }
+
     /// The parameter columns a range filter can go on.
     pub(crate) fn filter_columns(&self) -> &[FilterColumn] {
         &self.filter_columns

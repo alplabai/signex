@@ -428,5 +428,6 @@ fn the_bar_draws_in_the_browser_and_the_picker_with_a_between_filter() {
         &tokens,
         &signex_i18n::I18n::en_us(),
         false,
+        crate::library::browser::PreviewLook::for_tests(),
     ));
 }

@@ -528,11 +528,21 @@ pub enum PickerMsg {
     PanelComponentClicked(super::state::ComponentsPanelRowKey),
     FilterChanged(String),
     SelectComponent(uuid::Uuid),
+    /// ↑ (-1) or ↓ (+1) was pressed over the picker's list (mockup row
+    /// 129): the selection moves that many listed rows.
+    SelectionStepped(isize),
     PlaceSelected,
     /// A range filter on a parameter column of the picker's list.
     RangeFilter(RangeFilterMsg),
     /// A kind chip of the Library panel was pressed (mockup row 119).
     PanelKindPicked(super::state::LibraryPanelKind),
+    /// The selected row's symbol and footprint read for the preview
+    /// column finished (mockup row 129); an older read is dropped.
+    PreviewLoaded {
+        key: super::state::ComponentsPanelRowKey,
+        generation: u64,
+        result: Result<Box<crate::panels::components_panel::details::ComponentDetails>, String>,
+    },
     /// A button of the Library panel's row-style switch was pressed
     /// (mockup row 119).
     PanelRowStylePicked(super::state::LibraryRowStyle),

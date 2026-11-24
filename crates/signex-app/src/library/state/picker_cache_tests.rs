@@ -220,3 +220,43 @@ fn the_scope_counts_follow_the_component_set_not_the_query() {
     assert_eq!(visible_pns(&state), ["L-1U"]);
     assert_eq!((rows.library_count(), rows.part_count()), (2, 3));
 }
+
+/// ↑ and ↓ walk the listed rows and stop at the ends; with nothing listed
+/// selected, ↓ starts at the first row and ↑ at the last (mockup row 129).
+#[test]
+fn arrow_steps_walk_the_listed_rows_and_stop_at_the_ends() {
+    let mut state = state_with_picker();
+    state.open_libraries[0]
+        .cached_components
+        .push(summary("L-1U", "LQ", "Inductor"));
+    state.touch_data();
+    state.sync_view_caches();
+    let rows = &state.picker.as_ref().expect("picker").rows;
+    let pn = |entry: Option<(usize, &PickerEntry)>| {
+        entry.map(|(_, e)| e.summary.internal_pn.as_str().to_string())
+    };
+    let at = |i: usize| {
+        let e = rows.visible().nth(i).expect("row");
+        Some((&*e.path, e.summary.row_id))
+    };
+    assert_eq!(pn(rows.stepped(None, 1)).as_deref(), Some("R-10K"));
+    assert_eq!(pn(rows.stepped(None, -1)).as_deref(), Some("L-1U"));
+    assert_eq!(rows.stepped(at(0), 1).map(|(i, _)| i), Some(1));
+    assert_eq!(pn(rows.stepped(at(0), 1)).as_deref(), Some("C-100N"));
+    assert_eq!(pn(rows.stepped(at(1), -1)).as_deref(), Some("R-10K"));
+    assert_eq!(pn(rows.stepped(at(2), 1)).as_deref(), Some("L-1U"));
+    assert_eq!(pn(rows.stepped(at(0), -1)).as_deref(), Some("R-10K"));
+
+    // A row the filter hides counts as no selection; an empty list gives
+    // nothing.
+    let hidden = at(0).map(|(p, id)| (p.to_path_buf(), id)).expect("row");
+    set_filter(&mut state, "inductor");
+    state.sync_view_caches();
+    let rows = &state.picker.as_ref().expect("picker").rows;
+    let from = Some((hidden.0.as_path(), hidden.1));
+    assert_eq!(pn(rows.stepped(from, 1)).as_deref(), Some("L-1U"));
+    set_filter(&mut state, "no such part");
+    state.sync_view_caches();
+    let rows = &state.picker.as_ref().expect("picker").rows;
+    assert!(rows.stepped(None, 1).is_none());
+}
