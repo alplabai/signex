@@ -14,7 +14,7 @@ use signex_types::schematic::{Point, SchematicSheet, symbol_crossed_by};
 use super::project_names::{aliases_of, needing_merge, project_change_refusal};
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::Signex;
-use crate::app::handlers::canvas::{bus_commands, wire_commands};
+use crate::app::handlers::canvas::{DEFAULT_WIRE_STYLE, bus_commands, wire_commands};
 
 /// How many touched items a refusal names before it says "and N more".
 const NAMED_EXTRAS: usize = 3;
@@ -193,7 +193,8 @@ impl Signex {
             .ok_or("no schematic is open")?
             .document();
         let segments = self.checked_segments(before, start, end, "wire")?;
-        let commands = wire_commands(&segments, self.wire_placement_style());
+        // The person's Tab form is theirs; a run takes the default (#2326).
+        let commands = wire_commands(&segments, DEFAULT_WIRE_STYLE);
         let after = Self::sheet_after(before, &commands)?;
         let intent = wire_intent(
             before,

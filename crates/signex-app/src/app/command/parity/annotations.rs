@@ -494,7 +494,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     (&["unselect_all"], Bridge, &[Selection]),
     // The placement handlers: a point must be where a click lands (grid,
     // and for a wire the electrical grid of the edited sheet's engine, #2542);
-    // what the operands leave out comes from the pre-placement form.
+    // what the operands leave out comes from the project defaults, never the
+    // pre-placement form (#2326).
     (&["place_wire", "draw_wire"], Operand, &[ToolState]),
     (&["place_bus", "draw_bus"], Operand, &[ToolState]),
     (
@@ -506,12 +507,6 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "place_local_net_label",
             "place_global_label",
             "place_hierarchical_label",
-        ],
-        Operand,
-        &[PrePlacementForm, ToolState],
-    ),
-    (
-        &[
             "place_power_symbol",
             "place_no_connect",
             "place_junction",
@@ -539,6 +534,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         &[ToolState],
     ),
     // The tool defaults, and the active layer when `layer` is not given.
+    // Declared 6.P3 exception: still the person's form until #2876 (docs/DECISIONS.md, 2026-11-24).
     (
         &["add_board_graphic"],
         Operand,

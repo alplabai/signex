@@ -222,6 +222,18 @@ of the project's net-class history, not the board's: Edit ▸ Undo and `revert`
 do not take it back, the board Net Classes panel's Undo and Redo do. An agent
 puts a class back with the inverse command.
 
+A schematic placement an agent makes (through `apply_edits`, as a CLI run with
+operands does) takes what its operands name and the project's schematic
+defaults for the rest: unrotated, the default text size and font, left and
+bottom justified, the default shape width and fill, a wire of the default
+width and the theme's colour. It never reads the person's pre-placement (Tab)
+form, so what the person has set there does not change what an agent places
+(#2326, [DECISIONS.md](DECISIONS.md) 2026-11-24). The person's own clicks
+still place what their form holds. Two inputs still come from the person, as
+declared exceptions: the off-grid check uses their grid size and snap setting
+(the refusal names the grid), and `add_board_graphic` takes their PCB tool
+form for what its operands leave out.
+
 Refused with a reason: `undo` and `redo` (`PERSON_ONLY`, the one hand-kept
 constant, checked against the catalog by a test; the agent takes back its own
 step with `revert`), a command with a file path operand (`save_document_as`,
