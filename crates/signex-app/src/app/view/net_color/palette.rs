@@ -60,7 +60,7 @@ impl Signex {
         let state = &self.ui_state.net_color_palette;
 
         // The shared dialog search field: the magnifier, then the input.
-        let filter = container(crate::library::picker::search_field(
+        let filter = container(crate::styles::dialog_search_field(
             t!(i18n, ids::DIALOG_NET_COLOR_FILTER),
             state.filter.as_str(),
             |s| net_message(NetColorMsg::FilterChanged(s)),
@@ -380,6 +380,39 @@ mod tests {
         .unwrap_or(0)
     }
 
+    /// `c` as 8-bit RGB, as `draw_pixels` stores it.
+    fn rgb8(c: Color) -> [u8; 3] {
+        let channel = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+        [channel(c.r), channel(c.g), channel(c.b)]
+    }
+
+    /// The largest channel difference between two RGB pixels.
+    fn distance(a: [u8; 3], b: [u8; 3]) -> u8 {
+        (0..3).map(|i| a[i].abs_diff(b[i])).max().unwrap_or(0)
+    }
+
+    /// Mockup row 71: the label drawn inside `bounds` is in the accent ink,
+    /// not the plain text ink a Ghost button draws. The pixel closest to the
+    /// accent must be near it and nearer to it than to the plain ink.
+    fn assert_accent_ink(pixels: &[u8], window: iced::Size, bounds: iced::Rectangle, app: &Signex) {
+        let tokens = &app.document_state.panel_ctx.tokens;
+        let (accent, plain) = (rgb8(resolve(tokens).accent_text), rgb8(ti(tokens.text)));
+        assert_ne!(accent, plain, "the theme tells the two inks apart");
+        let width = window.width as usize;
+        let xs = bounds.x.max(0.0) as usize..((bounds.x + bounds.width).ceil() as usize).min(width);
+        let rows = window.height as usize;
+        let ys = bounds.y.max(0.0) as usize..((bounds.y + bounds.height).ceil() as usize).min(rows);
+        let closest = ys
+            .flat_map(|y| xs.clone().map(move |x| (y * width + x) * 4))
+            .map(|i| [pixels[i], pixels[i + 1], pixels[i + 2]])
+            .min_by_key(|p| distance(*p, accent))
+            .expect("the label has pixels");
+        assert!(
+            distance(closest, accent) <= 48 && distance(closest, accent) < distance(closest, plain),
+            "label ink {closest:?}: accent {accent:?}, plain {plain:?}"
+        );
+    }
+
     /// Mockup row 71: the filter is the shared search field, the magnifier
     /// in front of "Filter nets".
     #[test]
@@ -414,10 +447,32 @@ mod tests {
         let footer = crate::layout_probe::find(&texts, "Clear all colors").bounds;
         let gap = footer.y - (last.y + last.height);
         assert!(gap > 0.0, "{last:?} {footer:?}");
+        // Between the two labels: at most the label's inset in its row, the
+        // list's SP.s foot pad, the SP.m - SP.s the window height allows the
+        // filter beyond its padding (both SP.m + SP.s), the footer's SP.l
+        // pad and the label's inset in its button. One row too many fails.
+        let m = ChromeMetrics::DEFAULT;
+        let fit = SP.m + SP.s + SP.l + (m.row - last.height) + (m.button - footer.height);
         assert!(
-            gap < ChromeMetrics::DEFAULT.row + crate::styles::dense_footer_height(),
-            "the footer follows the list: gap {gap} in {window:?}"
+            gap <= fit,
+            "the footer follows the list: gap {gap} > {fit} in {window:?}"
         );
+    }
+
+    /// Mockup row 71: with a colour to clear, "Clear all colors" is drawn in
+    /// the accent ink of a link.
+    #[test]
+    fn clear_all_draws_accent_ink_once_a_net_has_a_colour() {
+        let mut app = app_with_nets(&["A"]);
+        let _ = app.update(net_message(NetColorMsg::Set {
+            net: "A".into(),
+            color: Some(signex_types::theme::Color::new(0xE0, 0x54, 0x54, 255)),
+        }));
+        let window = iced::Size::new(360.0, 400.0);
+        let texts = lay_out_texts(app.view_net_color_palette_body(), window);
+        let label = crate::layout_probe::find(&texts, "Clear all colors").bounds;
+        let pixels = crate::layout_probe::draw_pixels(app.view_net_color_palette_body(), window);
+        assert_accent_ink(&pixels, window, label, &app);
     }
 
     /// Mockup row 71: "Clear all colors" is a link, drawn with no frame even
@@ -471,6 +526,7 @@ mod tests {
                 column_contrast(&pixels, window.width as usize, x, edge + 2.0, ys.clone());
             assert!(contrast <= 1, "a frame at x {x}: contrast {contrast}");
         }
+        assert_accent_ink(&pixels, window, clear, &app);
     }
 
     /// Mockup row 71: the chooser floats, so the list stays still.
