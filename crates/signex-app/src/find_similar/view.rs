@@ -8,11 +8,11 @@ use iced::{Alignment, Background, Border, Element, Font, Length, Theme, Widget};
 use signex_engine::SimilarValue;
 use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{Label, SegmentedStyle, segmented, text, tooltip};
+use signex_widgets::{Label, SegmentedStyle, raw, segmented, text, tooltip};
 
 use crate::styles::{
     self, DialogButtonKind, PillTone, Radii, Spacing, TypeScale, chrome_px, dialog_body,
-    dialog_button, dialog_footer, ti, tokens,
+    dialog_button, ti, tokens,
 };
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -26,6 +26,9 @@ const PROPERTY_W: f32 = chrome_px(150.0 * 11.0 / 12.0);
 const MATCH_W: f32 = chrome_px(120.0 * 11.0 / 12.0);
 /// The label in front of the scope control (52 px at the default base).
 const SCOPE_LABEL_W: f32 = chrome_px(52.0 * 11.0 / 12.0);
+/// Footer padding, vertical and horizontal (10 and 16 px at the default base).
+const FOOTER_PAD_V: f32 = chrome_px(10.0 * 11.0 / 12.0);
+const FOOTER_PAD_H: f32 = chrome_px(16.0 * 11.0 / 12.0);
 /// The seed value column is cut to this many characters.
 const VALUE_SHOWN_CHARS: usize = 28;
 
@@ -170,13 +173,49 @@ fn property_row<'a>(
     .align_y(Alignment::Center)
     .spacing(SP.m);
     let fill = same.then_some(tokens::resolve(tokens).accent_soft);
+    // Square: the row sits between the table's rules.
     container(line)
         .padding([SP.xs, SP.m])
         .width(Length::Fill)
         .style(move |_: &Theme| container::Style {
             background: fill.map(Background::Color),
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// The column heads on the sunken band, in capitals for the message
+/// language, laid out like the rows under them (mockup row 68).
+fn table_head<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, FindSimilarMsg> {
+    let r = tokens::resolve(tokens);
+    let (fill, faint) = (r.sunken, r.ink3);
+    let head = |id| {
+        let words = t!(i18n, id).into_string();
+        // raw: catalog text already rendered, then upper-cased for the locale.
+        text(raw(i18n.upper_for_display(&words)))
+            .size(TS.section)
+            .font(styles::medium_font())
+            .color(faint)
+            .wrapping(iced::widget::text::Wrapping::None)
+    };
+    let cells = row![
+        head(ids::FIND_SIMILAR_COL_PROPERTY).width(PROPERTY_W),
+        head(ids::FIND_SIMILAR_COL_SEED).width(Length::Fill),
+        head(ids::FIND_SIMILAR_COL_MATCH).width(MATCH_W),
+    ]
+    .spacing(SP.m)
+    .align_y(Alignment::Center);
+    // Inside the table's 1 px border, so its corners sit 1 px tighter.
+    let radius = Radii::GRAPHITE.button - 1.0;
+    container(cells)
+        .padding([SP.xs, SP.m])
+        .width(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(fill)),
             border: Border {
-                radius: Radii::GRAPHITE.control.into(),
+                radius: iced::border::Radius::default()
+                    .top_left(radius)
+                    .top_right(radius),
                 ..Border::default()
             },
             ..container::Style::default()
@@ -184,30 +223,19 @@ fn property_row<'a>(
         .boxed()
 }
 
+/// The property table: a bordered list, the head band, a rule under every
+/// row (`styles::dialog_rows`, mockup row 68).
 fn table<'a>(
     state: &FindSimilarState,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, FindSimilarMsg> {
-    let faint = tokens::resolve(tokens).ink3;
-    let head = |id| text(t!(i18n, id)).size(TS.caption).color(faint);
-    let heading = row![
-        head(ids::FIND_SIMILAR_COL_PROPERTY).width(PROPERTY_W),
-        head(ids::FIND_SIMILAR_COL_SEED).width(Length::Fill),
-        head(ids::FIND_SIMILAR_COL_MATCH).width(MATCH_W),
-    ]
-    .spacing(SP.m)
-    .padding([0.0, SP.m]);
-    let mut rows: Column<Element<'a, FindSimilarMsg>> = column![heading].spacing(SP.xs);
-    for v in &state.values {
-        rows = rows.push(property_row(
-            v,
-            state.same.contains(&v.property),
-            tokens,
-            i18n,
-        ));
-    }
-    rows.boxed()
+    let rows: Vec<Element<'a, FindSimilarMsg>> = state
+        .values
+        .iter()
+        .map(|v| property_row(v, state.same.contains(&v.property), tokens, i18n))
+        .collect();
+    styles::dialog_rows(Some(table_head(tokens, i18n)), rows, None, tokens)
 }
 
 fn scope_row<'a>(
@@ -285,6 +313,33 @@ fn counts<'a>(
     line.boxed()
 }
 
+/// Cancel and Select N on the chrome band under a rule (mockup row 68).
+fn footer<'a>(
+    state: &FindSimilarState,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, FindSimilarMsg> {
+    styles::dialog_footer_band(
+        Vec::new(),
+        vec![
+            dialog_button(
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
+                DialogButtonKind::Cancel,
+                Some(FindSimilarMsg::Closed),
+                tokens,
+            ),
+            dialog_button(
+                select_label(state, i18n),
+                DialogButtonKind::Primary,
+                select_message(state),
+                tokens,
+            ),
+        ],
+        iced::Padding::from([FOOTER_PAD_V, FOOTER_PAD_H]),
+        tokens,
+    )
+}
+
 /// The dialog as a centred card on a scrim in the main window.
 pub fn view<'a>(
     state: &'a FindSimilarState,
@@ -318,20 +373,7 @@ pub fn view<'a>(
         );
     }
 
-    let footer = dialog_footer(vec![
-        dialog_button(
-            t!(i18n, ids::DIALOG_BUTTON_CANCEL),
-            DialogButtonKind::Cancel,
-            Some(FindSimilarMsg::Closed),
-            tokens,
-        ),
-        dialog_button(
-            select_label(state, i18n),
-            DialogButtonKind::Primary,
-            select_message(state),
-            tokens,
-        ),
-    ]);
+    let footer = footer(state, tokens, i18n);
 
     let dialog =
         container(column![header, dialog_body(body), footer].width(Length::Fixed(DIALOG_W)))
@@ -466,5 +508,93 @@ mod tests {
             let board = state.clone().on_board();
             let _ = view(&board, &tokens, &en);
         }
+    }
+
+    fn four_values() -> Vec<SimilarValue> {
+        let mut values = part_values();
+        values.push(SimilarValue {
+            property: SimilarProperty::Footprint,
+            value: "RES_0603".into(),
+        });
+        values.push(SimilarValue {
+            property: SimilarProperty::LibraryPart,
+            value: "Stock:STOCK-R".into(),
+        });
+        values
+    }
+
+    /// RGBA of the pixel at `(x, y)` in a `width`-wide capture.
+    fn pixel(pixels: &[u8], width: f32, x: f32, y: f32) -> [u8; 4] {
+        let i = ((y as usize) * (width as usize) + x as usize) * 4;
+        [pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]]
+    }
+
+    /// Mockup row 68: the heads read in capitals on their band and sit over
+    /// the columns of the rows.
+    #[test]
+    fn the_table_heads_are_capitals_over_their_columns() {
+        let en = I18n::en_us();
+        let tokens = theme_tokens(ThemeId::GraphiteLight);
+        let state = FindSimilarState::new("Symbol R3".into(), four_values(), None);
+        let window = iced::Size::new(DIALOG_W, 600.0);
+        let texts = crate::layout_probe::lay_out_texts(table(&state, &tokens, &en), window);
+        let property = crate::layout_probe::find(&texts, "PROPERTY");
+        crate::layout_probe::find(&texts, "SEED VALUE");
+        crate::layout_probe::find(&texts, "MATCH");
+        let kind = crate::layout_probe::find(
+            &texts,
+            &en.message_plain(property_label(SimilarProperty::Kind), &[]),
+        );
+        assert!(
+            (property.bounds.x - kind.bounds.x).abs() < 0.5,
+            "{texts:#?}"
+        );
+        assert!(property.bounds.y + property.bounds.height <= kind.bounds.y);
+    }
+
+    /// Mockup row 68: a rule runs under every row, so between two unfilled
+    /// rows the row padding changes colour.
+    #[test]
+    fn a_rule_separates_the_table_rows() {
+        let en = I18n::en_us();
+        let tokens = theme_tokens(ThemeId::GraphiteLight);
+        let state = FindSimilarState::new("Symbol R3".into(), four_values(), None);
+        let window = iced::Size::new(DIALOG_W, 600.0);
+        let texts = crate::layout_probe::lay_out_texts(table(&state, &tokens, &en), window);
+        let label = |p| en.message_plain(property_label(p), &[]);
+        let top = crate::layout_probe::find(&texts, &label(SimilarProperty::Value)).bounds;
+        let bottom = crate::layout_probe::find(&texts, &label(SimilarProperty::LibraryPart)).bounds;
+        let pixels = crate::layout_probe::draw_pixels(table(&state, &tokens, &en), window);
+        // In the left row padding, clear of the border and of any text.
+        let x = SP.m / 2.0 + 1.0;
+        let (from, to) = (top.y + top.height / 2.0, bottom.y + bottom.height / 2.0);
+        let mut changes = 0;
+        let mut y = from;
+        while y + 1.0 < to {
+            if pixel(&pixels, window.width, x, y) != pixel(&pixels, window.width, x, y + 1.0) {
+                changes += 1;
+            }
+            y += 1.0;
+        }
+        assert!(
+            changes >= 4,
+            "two rules, each an edge in and out: {changes}"
+        );
+    }
+
+    /// Mockup row 68: the footer is a band under a rule, so its top line is
+    /// drawn in another colour than the band below it.
+    #[test]
+    fn a_rule_sits_above_the_footer() {
+        let en = I18n::en_us();
+        let tokens = theme_tokens(ThemeId::GraphiteLight);
+        let state = FindSimilarState::new("Symbol R3".into(), part_values(), None);
+        let window = iced::Size::new(DIALOG_W, 100.0);
+        let pixels = crate::layout_probe::draw_pixels(footer(&state, &tokens, &en), window);
+        // At the left end: the buttons sit on the right.
+        let x = FOOTER_PAD_H / 2.0;
+        let band = pixel(&pixels, window.width, x, FOOTER_PAD_V / 2.0 + 1.0);
+        assert_ne!(pixel(&pixels, window.width, x, 0.0), band);
+        assert_ne!(band, [0, 0, 0, 255], "the band is filled");
     }
 }
