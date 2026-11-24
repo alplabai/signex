@@ -188,7 +188,7 @@ impl Signex {
             &self.ui_state.i18n,
             &self.canvas_menu_context(window_id),
         ))];
-        let variant = self.canvas_menu_variant();
+        let variant = self.canvas_menu_variant(window_id);
         entries.extend(canvas_menu_with_variant(
             &self.ui_state.i18n,
             tid,
@@ -202,10 +202,13 @@ impl Signex {
     }
 
     /// The variant the "In variant" row names (mockup row 62): the active
-    /// one of the project that owns the sheet, when that project has a
-    /// variant besides Base. `None` hides the row.
-    pub(super) fn canvas_menu_variant(&self) -> Option<MenuVariant> {
-        let project = self.document_state.active_document_project()?;
+    /// one of the project that owns the sheet `window_id` shows, when that
+    /// project has a variant besides Base. `None` hides the row.
+    pub(super) fn canvas_menu_variant(&self, window_id: iced::window::Id) -> Option<MenuVariant> {
+        let project = self
+            .document_state
+            .sheet_path_for_window(window_id, &self.ui_state)
+            .and_then(|path| self.document_state.document_project(path))?;
         if project.data.variant_definitions.is_empty() {
             return None;
         }

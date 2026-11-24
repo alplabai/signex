@@ -606,7 +606,7 @@ impl Signex {
             ContextSubmenu::AddNewToLibrary => {
                 super::project_tree::library::library_add_new_entries(i18n, tid)
             }
-            ContextSubmenu::InVariant => match self.canvas_menu_variant() {
+            ContextSubmenu::InVariant => match self.canvas_menu_variant(window_id) {
                 Some(variant) => {
                     let part = match self.canvas_menu_context(window_id) {
                         super::menus::MenuContext::Selection {
@@ -767,9 +767,110 @@ mod tests {
         (app, id, dir)
     }
 
+    /// The variant the main window's menu names.
+    fn main_variant(app: &Signex) -> Option<MenuVariant> {
+        let window = app.ui_state.main_window_id.expect("main window");
+        app.canvas_menu_variant(window)
+    }
+
     fn lite(app: &Signex) -> MenuVariant {
-        app.canvas_menu_variant()
-            .expect("the project has a variant")
+        main_variant(app).expect("the project has a variant")
+    }
+
+    /// A second project, B, in its own folder, defining `definitions`, whose
+    /// one sheet `b.snxsch` (placing R9) shows in an undocked window with R9
+    /// selected. The main window keeps project A's sheet active.
+    fn undock_project_b(
+        app: &mut Signex,
+        definitions: &[&str],
+    ) -> (iced::window::Id, crate::app::ProjectId, tempfile::TempDir) {
+        let dir = tempfile::tempdir().expect("a folder");
+        let id = app.document_state.mint_project_id();
+        let mut project = app.document_state.projects[0].clone();
+        project.id = id;
+        project.path = dir.path().join("ProjectB.snxprj");
+        project.data.name = "ProjectB".to_string();
+        project.data.dir = dir.path().to_string_lossy().into_owned();
+        project.data.schematic_root = Some("b.snxsch".to_string());
+        project.data.sheets[0].name = "b.snxsch".to_string();
+        project.data.sheets[0].filename = "b.snxsch".to_string();
+        project.data.variant_definitions = definitions.iter().map(|d| d.to_string()).collect();
+        project.data.active_variant = definitions.first().map(|d| d.to_string());
+        app.document_state.projects.push(project);
+        let path = dir.path().join("b.snxsch");
+        let part = uuid::Uuid::from_u128(9);
+        let sheet = SchematicSheet {
+            symbols: vec![Symbol {
+                uuid: part,
+                lib_id: "Device:R".to_string(),
+                reference: "R9".to_string(),
+                value: "10k".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        open_with(&mut app.document_state, &path, sheet);
+        let window = iced::window::Id::unique();
+        app.ui_state.windows.insert(
+            window,
+            crate::app::state::WindowKind::UndockedTab {
+                path,
+                title: "b".into(),
+            },
+        );
+        let mut slot = crate::canvas::CanvasSlot::new();
+        slot.selected = vec![SelectedItem::new(part, SelectedKind::Symbol)];
+        app.interaction_state.canvases.insert(window, slot);
+        (window, id, dir)
+    }
+
+    #[test]
+    fn an_undocked_sheet_names_the_variant_of_its_own_project() {
+        // A defines Lite and its sheet is active in the main window; B has
+        // only Base and its sheet is undocked.
+        let (mut app, a, _dir) = app_with(&["Lite"], Some("Lite"));
+        let (window, _b, _dir_b) = undock_project_b(&mut app, &[]);
+        assert_eq!(app.canvas_menu_variant(window), None, "B has no variant");
+        assert_eq!(main_variant(&app).map(|v| v.project_id), Some(a));
+
+        // The reverse: A has only Base, B defines Pro.
+        let (mut app, _a, _dir) = app_with(&[], None);
+        let (window, b, _dir_b) = undock_project_b(&mut app, &["Pro"]);
+        assert_eq!(main_variant(&app), None, "A has no variant");
+        let variant = app.canvas_menu_variant(window).expect("B's variant");
+        assert_eq!(
+            variant,
+            MenuVariant {
+                project_id: b,
+                name: "Pro".to_string(),
+            }
+        );
+        let MenuContext::Selection {
+            part: Some((reference, _)),
+            ..
+        } = app.canvas_menu_context(window)
+        else {
+            panic!("R9 is selected in the undocked window");
+        };
+        let rows = in_variant_entries(I18n::en_us_ref(), &variant, Some(&reference));
+        assert_eq!(layout(&rows)[0], "# R9 in Pro");
+
+        // New variant… from B's window adds to B, not to the active A.
+        let press = item(&rows, "New variant…")
+            .on_press
+            .clone()
+            .expect("a live row");
+        let _ = app.update(press);
+        assert!(
+            app.document_state.projects[0]
+                .data
+                .variant_definitions
+                .is_empty()
+        );
+        assert_eq!(
+            app.document_state.projects[1].data.variant_definitions,
+            ["Pro", "Variant 1"]
+        );
     }
 
     #[test]
@@ -804,7 +905,7 @@ mod tests {
     #[test]
     fn a_project_with_only_base_has_no_in_variant_row() {
         let (app, _id, _dir) = app_with(&[], None);
-        assert_eq!(app.canvas_menu_variant(), None);
+        assert_eq!(main_variant(&app), None);
         assert_eq!(
             flyout_block(&selection_menu(None)),
             ["Part Actions", "Sheet Actions", "Place"]
@@ -815,7 +916,7 @@ mod tests {
     fn a_loose_sheet_has_no_in_variant_row() {
         let (mut app, _id, _dir) = app_with(&["Lite"], Some("Lite"));
         app.document_state.projects.clear();
-        assert_eq!(app.canvas_menu_variant(), None);
+        assert_eq!(main_variant(&app), None);
     }
 
     #[test]
