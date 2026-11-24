@@ -8,7 +8,7 @@ use super::super::*;
 use iced::widget::text::Span;
 use iced::widget::{column, container};
 use iced::{Element, Length, Widget};
-use signex_i18n::{Localized, ids, t};
+use signex_i18n::{Localized, MessageId, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{rich_text, span};
 
@@ -98,25 +98,24 @@ impl Signex {
         ]
         .spacing(SP.m);
 
+        let run = (!self.ui_state.annotate_runs.is_running())
+            .then_some(Message::Annotate(AnnotateMsg::Run(mode)));
         let dialog = container(
             column![
                 header,
                 dialog_body(body),
-                dialog_footer(vec![
-                    dialog_button(
-                        t!(i18n, ids::DIALOG_BUTTON_CANCEL),
-                        DialogButtonKind::Cancel,
-                        Some(Message::Annotate(AnnotateMsg::CloseResetConfirm)),
-                        tokens,
-                    ),
-                    dialog_button(
-                        t!(i18n, action),
-                        DialogButtonKind::Danger,
-                        (!self.ui_state.annotate_runs.is_running())
-                            .then_some(Message::Annotate(AnnotateMsg::Run(mode))),
-                        tokens,
-                    ),
-                ]),
+                dialog_footer(
+                    footer_buttons(action)
+                        .into_iter()
+                        .map(|(label, kind)| {
+                            let on_press = match kind {
+                                DialogButtonKind::Danger => run.clone(),
+                                _ => Some(Message::Annotate(AnnotateMsg::CloseResetConfirm)),
+                            };
+                            dialog_button(t!(i18n, label), kind, on_press, tokens)
+                        })
+                        .collect()
+                ),
             ]
             .width(self.dialog_width(
                 crate::app::state::ModalId::AnnotateResetConfirm,
@@ -127,6 +126,17 @@ impl Signex {
         .clip(true);
         dialog.boxed()
     }
+}
+
+/// The confirm's footer: Cancel, then the reset asked for. There is no
+/// "Save all first": a reset writes no file and one undo restores every
+/// sheet, so saving first protects nothing (mockup row 76, Caner
+/// 2026-11-24).
+fn footer_buttons(action: MessageId) -> [(MessageId, DialogButtonKind); 2] {
+    [
+        (ids::DIALOG_BUTTON_CANCEL, DialogButtonKind::Cancel),
+        (action, DialogButtonKind::Danger),
+    ]
 }
 
 /// The undo caveat as one wrapping paragraph, its shortcut drawn as a key
@@ -188,6 +198,26 @@ mod tests {
             let undo = t!(i18n, id, "undo" => shortcut.clone());
             let (_, cap, _) = undo.split_around(&shortcut).expect("the shortcut");
             assert_eq!(cap.into_string(), shortcut, "{id:?}");
+        }
+    }
+
+    /// Mockup row 76 (Caner 2026-11-24): the confirm offers Cancel and the
+    /// reset only, with no "Save all first", for both resets.
+    #[test]
+    fn the_reset_confirm_offers_cancel_and_the_reset_only() {
+        use super::footer_buttons;
+        use crate::styles::DialogButtonKind;
+        for action in [
+            ids::DIALOG_ANNOTATE_RESET_ALL,
+            ids::DIALOG_ANNOTATE_RESET_RENUMBER,
+        ] {
+            assert_eq!(
+                footer_buttons(action),
+                [
+                    (ids::DIALOG_BUTTON_CANCEL, DialogButtonKind::Cancel),
+                    (action, DialogButtonKind::Danger),
+                ]
+            );
         }
     }
 
