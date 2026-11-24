@@ -50,10 +50,11 @@ impl Signex {
                 snap.to_grids = !snap.to_grids;
             }
             PcbBoardMsg::SnapScopePicked(scope) => self.ui_state.pcb_snap.scope = *scope,
-            PcbBoardMsg::SnapObjectToggled(object) => self.ui_state.pcb_snap.toggle_object(*object),
-            PcbBoardMsg::SnapDistancePicked(distance) => {
-                self.ui_state.pcb_snap.distance = *distance;
+            PcbBoardMsg::SnappingCycled => {
+                let snap = &mut self.ui_state.pcb_snap;
+                snap.scope = snap.scope.next();
             }
+            PcbBoardMsg::SnapObjectToggled(object) => self.ui_state.pcb_snap.toggle_object(*object),
             PcbBoardMsg::SnapToGuidesToggled => {
                 let snap = &mut self.ui_state.pcb_snap;
                 snap.to_guides = !snap.to_guides;
@@ -154,14 +155,6 @@ impl Signex {
         }
         self.sync_pcb_board_summary();
         task
-    }
-
-    /// Shift+E on a board: step Snapping through All Layers, Current Layer
-    /// and Off.
-    pub(crate) fn cycle_pcb_snapping(&mut self) {
-        let snap = &mut self.ui_state.pcb_snap;
-        snap.scope = snap.scope.next();
-        self.sync_pcb_board_summary();
     }
 
     /// Select the board's components on `side`, as a Board Information count

@@ -375,6 +375,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `create_rooms_from_sheets` | Make a room for each sheet of the project and move its parts into it | design | — | — |
 | `cycle_arc_mode` | Switch the Arc tool between by centre, by edge and any angle | pcb | — | — |
 | `cycle_board_3d_lighting` | Next lighting preset in the 3D view | view | `H` | `H` |
+| `cycle_board_snapping` | Cycle board snapping | view | `Shift+E` | `Shift+E` |
 | `cycle_route_mode` | Switch Interactive Routing between walking around and pushing other nets' tracks | pcb | — | — |
 | `delete_layer_set` | Delete a saved layer set | view | — | — |
 | `delete_net_class` | Delete a net class | design | — | — |

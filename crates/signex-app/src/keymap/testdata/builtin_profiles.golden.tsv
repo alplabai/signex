@@ -112,6 +112,7 @@ signex_standard	bind	Pcb	P T	command:place_board_track
 signex_standard	bind	Pcb	P V	command:place_board_via
 signex_standard	bind	Pcb	Shift+*	command:next_signal_layer
 signex_standard	bind	Pcb	Shift++	command:next_layer
+signex_standard	bind	Pcb	Shift+E	command:cycle_board_snapping
 signex_standard	bind	Pcb	Shift+S	command:toggle_single_layer_mode
 signex_standard	bind	Pcb	T D	command:run_drc
 signex_standard	bind	Board3d	F	command:flip_board_3d
@@ -508,6 +509,7 @@ signex_standard	hint	-	-	previous_grid
 signex_standard	hint	-	-	open_grid_picker
 signex_standard	hint	-	-	open_grid_properties
 signex_standard	hint	-	Shift+E	toggle_electrical_grid
+signex_standard	hint	-	Shift+E	cycle_board_snapping
 signex_standard	hint	-	Ctrl+Shift+G	toggle_visible_grid
 signex_standard	hint	-	-	open_library_browser
 signex_standard	hint	-	-	edit_library_symbol
@@ -650,6 +652,7 @@ classic	bind	Pcb	L	command:flip_selection
 classic	bind	Pcb	Mod+Shift+C	command:copy_board_3d_screenshot
 classic	bind	Pcb	Shift+*	command:next_signal_layer
 classic	bind	Pcb	Shift++	command:next_layer
+classic	bind	Pcb	Shift+E	command:cycle_board_snapping
 classic	bind	Pcb	Shift+O	command:set_board_origin
 classic	bind	Pcb	Shift+S	command:toggle_single_layer_mode
 classic	bind	Board3d	F	command:flip_board_3d
@@ -1046,6 +1049,7 @@ classic	hint	-	Shift+N	previous_grid
 classic	hint	-	-	open_grid_picker
 classic	hint	-	-	open_grid_properties
 classic	hint	-	-	toggle_electrical_grid
+classic	hint	-	Shift+E	cycle_board_snapping
 classic	hint	-	Ctrl+Shift+G	toggle_visible_grid
 classic	hint	-	-	open_library_browser
 classic	hint	-	Ctrl+Shift+E	edit_library_symbol

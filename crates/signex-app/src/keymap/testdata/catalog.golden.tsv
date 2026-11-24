@@ -389,6 +389,7 @@ previous_grid	view	Previous grid	-	General	-	-	Always	gui_only	-
 open_grid_picker	view	Open grid picker	-	General	-	-	Always	gui_only	-
 open_grid_properties	view	Open grid properties	-	General	-	-	Always	gui_only	-
 toggle_electrical_grid	view	Toggle electrical grid	-	General	-	-	Always	gui_only	-
+cycle_board_snapping	view	Cycle board snapping	-	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 toggle_visible_grid	view	Toggle visible grid	Toggle Grid	General	-	-	Always	gui_only	-
 open_library_browser	library	Open library browser	Library Editor	General	-	-	Always	gui_only	-
 edit_library_symbol	library	Edit library symbol	-	General	-	-	RequiresSelection	gui_only	-

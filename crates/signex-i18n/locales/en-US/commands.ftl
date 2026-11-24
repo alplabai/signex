@@ -162,6 +162,8 @@ cmd-menu-reset-workspace-layout = Reset Layout
 cmd-toggle-cross-select-mode = Toggle Cross Select Mode
 cmd-menu-toggle-cross-select-mode = Cross Select Mode
 cmd-toggle-electrical-grid = Toggle electrical grid
+# #2879: the board's Snapping steps All Layers, Current Layer, Off.
+cmd-cycle-board-snapping = Cycle board snapping
 cmd-toggle-floating-panels = Toggle floating panels
 cmd-toggle-properties-panel = Toggle Properties panel
 cmd-toggle-schematic-filter-panel = Toggle schematic filter panel

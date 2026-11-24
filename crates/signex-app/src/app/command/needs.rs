@@ -614,6 +614,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         }
         "cycle_snap_grid_forward" | "open_grid_picker" => Needs::FootprintEditor,
         "toggle_ratsnest"
+        // #2879: Shift+E on a board.
+        | "cycle_board_snapping"
         | "toggle_origin_marker"
         | "select_board_net"
         | "highlight_board_net"

@@ -68,8 +68,6 @@ pcb-board-snap-body-points = 3D Body Snap Points
 pcb-board-snap-texts = Texts
 pcb-board-snap-object-unavailable = Boards hold no 3D bodies yet.
 pcb-board-snap-distance = Distance
-# $factor is a multiple of the snap grid, such as 0.5.
-pcb-board-snap-distance-value = { $factor }x Snap Grid
 pcb-board-axis-range = Axis Range
 
 # The board illustration's size row (#2523): the size comes from the board
