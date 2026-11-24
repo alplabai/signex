@@ -505,4 +505,7 @@ define_ids! {
     PROPERTIES_COUNT_HARNESS_CONNECTORS = "properties-count-harness-connectors";
     PROPERTIES_COUNT_HARNESS_ENTRIES = "properties-count-harness-entries";
     PROPERTIES_COUNT_HARNESS_WIRES = "properties-count-harness-wires";
+    // m7/erc-blanket-directives
+    PROPERTIES_ALL_RULES_NAME = "properties-all-rules-name";
+    PROPERTIES_RULE_TOTAL = "properties-rule-total";
 }

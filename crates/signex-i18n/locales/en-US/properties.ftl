@@ -774,3 +774,12 @@ properties-count-harness-wires = { $count ->
     [one] 1 signal harness
    *[other] { $count } signal harnesses
 }
+
+# m7/erc-blanket-directives
+# Suppressed rules (mockup row 49): the All rules enable row, with the
+# number of built-in rules right-aligned on the same row.
+properties-all-rules-name = All rules
+properties-rule-total = { $count ->
+    [one] 1 rule
+   *[other] { $count } rules
+}
