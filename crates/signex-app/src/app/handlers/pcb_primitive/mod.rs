@@ -100,9 +100,15 @@ impl PcbPrimitivePanel {
     /// Forget the drafts typed on `board` (its undo or redo moved them).
     pub(crate) fn drop_drafts_of(&mut self, board: &Path) {
         if self.draft_target.as_ref().is_some_and(|t| t.board == board) {
-            self.draft_target = None;
-            self.drafts.clear();
+            self.drop_drafts();
         }
+    }
+
+    /// Forget every draft: a length typed in the old Units must not be read
+    /// in the new ones (mockup row 101).
+    pub(crate) fn drop_drafts(&mut self) {
+        self.draft_target = None;
+        self.drafts.clear();
     }
 }
 

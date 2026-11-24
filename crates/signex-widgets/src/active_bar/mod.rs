@@ -347,7 +347,8 @@ where
             chevron_size,
             svg_tint,
             glyph_color,
-            b.on_chevron_press,
+            // A greyed button ignores a left click, on the chevron too.
+            b.on_chevron_press.filter(|_| b.enabled),
         );
         iced::widget::Stack::new()
             .push(
@@ -488,7 +489,7 @@ where
         .width(Length::Fixed(size))
         .height(Length::Fixed(size));
     // No fill of its own: the bar button under it draws the hover.
-    iced::widget::button(area)
+    button(area)
         .padding(0)
         .style(|_: &Theme, _| iced::widget::button::Style::default())
         .on_press(message)
@@ -584,6 +585,25 @@ mod tests {
         let right = mouse::Button::Right;
         assert_eq!(press(group_button(Some(CHEVRON)), right, centre), [RIGHT]);
         assert_eq!(press(group_button(Some(CHEVRON)), right, corner), [RIGHT]);
+    }
+
+    /// A greyed button ignores a left click on its chevron, as on the rest
+    /// of it; right-click still opens the dropdown.
+    #[test]
+    fn a_greyed_button_ignores_a_click_on_its_chevron() {
+        let (_, corner) = button_points();
+        let greyed = || {
+            let ActiveBarItem::Button(b) = group_button(Some(CHEVRON)) else {
+                unreachable!("group_button builds a button");
+            };
+            ActiveBarItem::Button(ActiveBarButton {
+                enabled: false,
+                ..b
+            })
+        };
+        let no_messages: [u8; 0] = [];
+        assert_eq!(press(greyed(), mouse::Button::Left, corner), no_messages);
+        assert_eq!(press(greyed(), mouse::Button::Right, corner), [RIGHT]);
     }
 
     /// Without a chevron message a click on the corner runs the tool, as

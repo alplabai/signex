@@ -551,7 +551,10 @@ Text Height and its Position X/Y origin; the rotation is not drawn), then
 the text across the full width, Layer, Position (X and Y on one row), Text
 Height, Rotation, and the quick rotation steps 0°, 90°, 180° and 270°. A
 step is on while the rotation equals it; a pick sets the rotation as one
-undo step, like a typed one.
+undo step, like a typed one. A string on a bottom-side layer reads mirrored
+on the board, and a read-only "Mirrored (bottom side)" row under Layer says
+so (Caner, 2026-11-24, mockup row 100; `TextFacts::is_mirrored`, the
+same side rule the board renderer mirrors by).
 
 ## Arc
 
@@ -617,6 +620,15 @@ Precision is a 0 to 6 segmented control, so a precision outside that range
 cannot be entered from the panel. Each edit is one undo step. There is no
 Type row: angular, radial, diameter, leader, baseline and centre-mark
 dimensions have no model yet and are not offered.
+
+The lengths (Start, End, Offset, Line Width, Text Height) and the Value
+card follow the board's Units, mm or mils (Caner, 2026-11-24, mockup row
+101); in mils the Value is the measured length to the dimension's
+precision, and the illustration's value and text height match. A bare
+number typed in mils is read as mils; a number ending in mm, mil or mils
+keeps its unit. The model and the file stay in mm and the value drawn on
+the board stays mm text, so there is no new file column. A Units switch
+drops lengths typed and not yet entered.
 
 ## Graphics {#graphics}
 
@@ -789,15 +801,20 @@ the Tune rows are the length tuning commands of #2389 (palette, no menu row).
   first row that can run. A click runs it as its menu row does. It is drawn
   selected while one of its group's tools is armed on the board in the main
   window, as a schematic bar button is, and while its dropdown is open.
-- **Dropdown.** A right-click on a group with more than one row opens its
-  rows under a heading with the group's name in capitals (mockup row 108). The tools
+- **Dropdown.** A right-click on a group with more than one row, or a
+  click on the corner triangle, opens its rows under a heading with the group's name in capitals (mockup row 108). The tools
   come first; a group's commands (Repour Selected and Repour All, Change
   Footprint) sit below a separator after them. The row the button shows is
   drawn current, with the accent-soft fill. A live row runs its command and
   is greyed by the same gate as its menu row; a tool the board editor cannot
   run yet is greyed and its tooltip is the reason Place gives ("Place
   Component: not available on boards yet"). A button with a dropdown has the
-  corner triangle; a group of one row (Dimensions, Text) has neither.
+  corner triangle; a group of one row (Dimensions, Text) has neither. A
+  click on the triangle opens the dropdown and a click elsewhere on the
+  button still runs the row it shows (Caner, 2026-11-24, mockup row 108);
+  Move and View work the same way. The triangle is its own button inside
+  the bar button (`ActiveBarButton::on_chevron_press`); a greyed button
+  ignores a click on it.
 - **Glyphs.** Every button is an SVG glyph drawn in the bar's ink: Via, Pad,
   Dimension and Keepout use the board tool glyphs of their dropdown rows
   (`assets/icons/pcb/`), the via a ring around its drill hole and the pad a

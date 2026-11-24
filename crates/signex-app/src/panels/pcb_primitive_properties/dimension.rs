@@ -8,6 +8,9 @@ use iced::{Element, Length, Widget as _};
 use signex_i18n::{MessageId, UserText, ids, t};
 use signex_types::coord::Unit;
 use signex_types::measure::mm_per;
+use signex_types::pcb_dimension::LinearDimension;
+use signex_types::schematic::Point;
+use uuid::Uuid;
 
 use super::drawing::dimension as dd;
 use super::linked::{
@@ -65,7 +68,9 @@ fn headline(look: Look<'_>, f: &DimensionFacts) -> Option<String> {
         let ((Some(x0), Some(y0)), (Some(x1), Some(y1))) = (f.start, f.end) else {
             return None;
         };
-        let mils = (x1 - x0).hypot(y1 - y0) / mm_per(Unit::Mil);
+        let measured =
+            LinearDimension::new(Uuid::nil(), Point::new(x0, y0), Point::new(x1, y1), 0.0);
+        let mils = measured.value_mm() / mm_per(Unit::Mil);
         let number = format!("{:.*}", usize::from(f.precision?), mils);
         let line = t!(look.ctx.i18n, ids::PCB_PRIM_DIM_VALUE_MIL, "value" => number);
         Some(line.into_string())
@@ -78,12 +83,28 @@ fn headline(look: Look<'_>, f: &DimensionFacts) -> Option<String> {
 
 pub(super) fn view<'a>(ctx: &'a PanelContext, f: &'a DimensionFacts) -> Element<'a, PanelMsg> {
     let look = Look::of(ctx);
-    let drawing = illustration(look, &f.common, dd::illustration(f, &ctx.i18n));
+    let drawing = illustration(
+        look,
+        &f.common,
+        dd::illustration(&drawn(look, f), &ctx.i18n),
+    );
     stack(vec![
         Some(drawing),
         value_card(look, f),
         properties(look, f),
     ])
+}
+
+/// `f` as the illustration shows it: the Value of the card and the text
+/// height in the board's Units, so its callouts match the fields under it.
+/// The points stay in mm; the drawing is fitted to its frame.
+fn drawn(look: Look<'_>, f: &DimensionFacts) -> DimensionFacts {
+    let shown = length_unit(look).0;
+    DimensionFacts {
+        value: headline(look, f),
+        text_height: f.text_height.map(|v| v / mm_per(shown)),
+        ..f.clone()
+    }
 }
 
 /// The measured value as a headline card; none for a dimension not placed
@@ -128,19 +149,6 @@ fn properties<'a>(look: Look<'a>, f: &'a DimensionFacts) -> Option<Element<'a, P
     let (shown, unit_id) = length_unit(look);
     let unit_label = || unit(look, unit_id);
     let len = |value_mm: Option<f64>| value_mm.map(|v| v / mm_per(shown));
-    let point = |label, field, x_field, y_field, (x, y): (Option<f64>, Option<f64>)| {
-        linked_row(
-            look,
-            common,
-            field,
-            label,
-            two_fields(
-                prefixed(look, common, x_field, len(x), ids::PCB_PRIM_X),
-                prefixed(look, common, y_field, len(y), ids::PCB_PRIM_Y),
-                unit_label(),
-            ),
-        )
-    };
     let mut s = Section::new(look, ids::PCB_PRIM_PROPERTIES).collapsible(
         "pcb_prim.dimension.properties",
         false,
@@ -148,36 +156,7 @@ fn properties<'a>(look: Look<'a>, f: &'a DimensionFacts) -> Option<Element<'a, P
     );
     // What a dimension not placed yet measures is its clicks'.
     if !common.target.is_placement() {
-        s.push(
-            common,
-            ids::PCB_PRIM_POINT_START,
-            point(
-                ids::PCB_PRIM_POINT_START,
-                dd::START,
-                F::StartX,
-                F::StartY,
-                f.start,
-            ),
-        );
-        s.push(
-            common,
-            ids::PCB_PRIM_POINT_END,
-            point(ids::PCB_PRIM_POINT_END, dd::END, F::EndX, F::EndY, f.end),
-        );
-        s.push(
-            common,
-            ids::PCB_PRIM_OFFSET,
-            linked_row(
-                look,
-                common,
-                dd::OFFSET,
-                ids::PCB_PRIM_OFFSET,
-                with_unit(
-                    mm_field(common, F::Offset, len(f.offset), look),
-                    unit_label(),
-                ),
-            ),
-        );
+        push_placement_rows(&mut s, look, f);
     }
     s.push(
         common,
@@ -229,6 +208,58 @@ fn properties<'a>(look: Look<'a>, f: &'a DimensionFacts) -> Option<Element<'a, P
     s.finish()
 }
 
+/// Where a placed dimension stands: Start, End and Offset, in the board's
+/// Units.
+fn push_placement_rows<'a>(s: &mut Section<'a>, look: Look<'a>, f: &'a DimensionFacts) {
+    let common = &f.common;
+    let (shown, unit_id) = length_unit(look);
+    let unit_label = || unit(look, unit_id);
+    let len = |value_mm: Option<f64>| value_mm.map(|v| v / mm_per(shown));
+    let point = |label, field, x_field, y_field, (x, y): (Option<f64>, Option<f64>)| {
+        linked_row(
+            look,
+            common,
+            field,
+            label,
+            two_fields(
+                prefixed(look, common, x_field, len(x), ids::PCB_PRIM_X),
+                prefixed(look, common, y_field, len(y), ids::PCB_PRIM_Y),
+                unit_label(),
+            ),
+        )
+    };
+    s.push(
+        common,
+        ids::PCB_PRIM_POINT_START,
+        point(
+            ids::PCB_PRIM_POINT_START,
+            dd::START,
+            F::StartX,
+            F::StartY,
+            f.start,
+        ),
+    );
+    s.push(
+        common,
+        ids::PCB_PRIM_POINT_END,
+        point(ids::PCB_PRIM_POINT_END, dd::END, F::EndX, F::EndY, f.end),
+    );
+    s.push(
+        common,
+        ids::PCB_PRIM_OFFSET,
+        linked_row(
+            look,
+            common,
+            dd::OFFSET,
+            ids::PCB_PRIM_OFFSET,
+            with_unit(
+                mm_field(common, F::Offset, len(f.offset), look),
+                unit_label(),
+            ),
+        ),
+    );
+}
+
 /// Precision as 0 to 6 decimals: a pick is one undo step, so a precision
 /// outside 0 to 6 cannot be typed.
 fn precision<'a>(look: Look<'a>, f: &'a DimensionFacts) -> Element<'a, PanelMsg> {
@@ -254,7 +285,6 @@ fn precision<'a>(look: Look<'a>, f: &'a DimensionFacts) -> Element<'a, PanelMsg>
 #[cfg(test)]
 mod tests {
     use pcb_geom::ItemRef;
-    use uuid::Uuid;
 
     use super::*;
     use crate::layout_probe::lay_out_texts;
@@ -364,6 +394,27 @@ mod tests {
         }
         let value = t!(ctx.i18n, ids::PCB_PRIM_DIM_VALUE_MIL, "value" => "2440.94").into_string();
         assert!(headline_texts(&ctx, &f).contains(&value));
+    }
+
+    /// Mockup row 101: the illustration's value and text height callouts
+    /// follow the board's Units with the card and the fields.
+    #[test]
+    fn the_illustration_follows_the_board_units() {
+        let f = sample();
+        let mm = drawn(Look::of(&ctx_in(Unit::Mm)), &f);
+        assert_eq!(mm.value.as_deref(), Some("62.00mm"));
+        assert_eq!(mm.text_height, Some(1.0));
+        let ctx = ctx_in(Unit::Mil);
+        let mils = drawn(Look::of(&ctx), &f);
+        let value = t!(ctx.i18n, ids::PCB_PRIM_DIM_VALUE_MIL, "value" => "2440.94").into_string();
+        assert_eq!(mils.value, Some(value));
+        let height = mils.text_height.expect("a text height");
+        assert!((height - 1.0 / 0.0254).abs() < 1e-9, "{height}");
+        assert_eq!(
+            (mils.start, mils.end),
+            (f.start, f.end),
+            "points stay in mm"
+        );
     }
 
     /// A typed length is in the board's Units unless it names its unit.

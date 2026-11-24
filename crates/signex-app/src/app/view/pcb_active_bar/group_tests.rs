@@ -531,3 +531,43 @@ fn a_group_without_a_dropdown_has_no_chevron_message() {
         );
     }
 }
+
+/// Mockup row 108: Move and View run their command on a click as well,
+/// and their corner chevron opens the dropdown like a group's does.
+#[test]
+fn a_click_on_the_move_or_view_chevron_opens_its_dropdown() {
+    let m = Metrics::GRAPHITE;
+    let corner = m.padding + m.btn - m.chevron / 2.0;
+    let corner = iced::Point::new(corner, corner);
+    let centre = m.padding + m.btn / 2.0;
+    let centre = iced::Point::new(centre, centre);
+    for menu in [PcbBarMenu::Move, PcbBarMenu::View] {
+        let mut app = board_app();
+        let tokens = signex_types::theme::theme_tokens(app.ui_state.effective_theme_id());
+        let clicked = |at: iced::Point| {
+            let item = bar_of(&app)
+                .into_iter()
+                .find(|item| opens(item, menu))
+                .unwrap_or_else(|| panic!("a {menu:?} button"));
+            let ActiveBarItem::Button(button) = &item else {
+                unreachable!("opens matches only a button");
+            };
+            let run = format!("{:?}", button.on_press);
+            let bar = signex_widgets::active_bar::view(vec![item], &tokens);
+            let size = iced::Size::new(200.0, 100.0);
+            let sent = crate::layout_probe::messages_on_click_at(bar, size, None, at);
+            (run, sent)
+        };
+        let toggle = format!("{:?}", bar_message(PcbBarMsg::MenuToggled(menu)));
+        let (run, sent) = clicked(centre);
+        let sent: Vec<String> = sent.iter().map(|m| format!("{:?}", Some(m))).collect();
+        assert_eq!(sent, [run], "{menu:?}: a plain click runs the command");
+        let (_, sent) = clicked(corner);
+        let shown: Vec<String> = sent.iter().map(|m| format!("{m:?}")).collect();
+        assert_eq!(shown, [toggle], "{menu:?}: the chevron toggles");
+        for message in sent {
+            let _ = app.update(message);
+        }
+        assert_eq!(app.interaction_state.pcb_bar_menu, Some(menu));
+    }
+}

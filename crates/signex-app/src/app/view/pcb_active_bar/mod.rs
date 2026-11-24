@@ -205,7 +205,7 @@ fn command_button(command: &str, icon: ActiveBarIcon, tooltip: String) -> Active
 }
 
 /// A button that runs `command` on a click and opens `menu` on a
-/// right-click, chevron and all.
+/// right-click or a click on its chevron (mockup row 108).
 fn menu_button(
     command: &str,
     menu: PcbBarMenu,
@@ -215,15 +215,16 @@ fn menu_button(
     tid: ThemeId,
 ) -> ActiveBarItem<Message> {
     let on_press = run(command);
+    let toggle = bar_message(PcbBarMsg::MenuToggled(menu));
     ActiveBarItem::Button(ActiveBarButton {
         icon,
         tooltip,
         enabled: on_press.is_some(),
         selected: open == Some(menu),
         on_press,
-        on_right_press: Some(bar_message(PcbBarMsg::MenuToggled(menu))),
+        on_right_press: Some(toggle.clone()),
         dropdown_indicator: Some(ActiveBarIcon::Svg(ic::icon_chevron_45(tid))),
-        on_chevron_press: None,
+        on_chevron_press: Some(toggle),
     })
 }
 
