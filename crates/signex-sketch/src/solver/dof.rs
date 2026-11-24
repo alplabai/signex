@@ -8,10 +8,12 @@
 //!   redundant or conflicting constraints.
 //!
 //! Strategy:
-//! 1. Compute the QR factorisation of the Jacobian J (m × n).
-//! 2. The numerical rank `r = rank(J, tol)` tells us how many of the
-//!    `n` state variables are pinned by the constraint set. Effective
-//!    free DoF = `n − r`.
+//! 1. Row-reduce the Jacobian J (m × n) with partial pivoting
+//!    ([`crate::solver::free_motion::rank`]), the same reduction that
+//!    gives the free motions of the Properties DOF card.
+//! 2. The numerical rank `r` (pivots above `RANK_TOL`) tells us how many
+//!    of the `n` state variables are pinned by the constraint set.
+//!    Effective free DoF = `n − r`.
 //! 3. For per-entity colouring, apply a coarse global rule: if the
 //!    rank equals `n`, every non-fixed Point is fully constrained
 //!    (black); otherwise every non-fixed Point has free DoF (blue).
@@ -19,16 +21,14 @@
 //!    is still larger than `RANK_TOL` after solve is over-constrained
 //!    (red). This needs only the residual magnitude, not the Jacobian.
 //!
-//! Reference: *Numerical Recipes* (Press et al., 3rd ed.) §2.10
-//! ("QR Decomposition") for the rank computation. Algorithm derived
-//! from first principles — no third-party numerical-library or
-//! constraint-solver source consulted.
+//! Algorithm derived from first principles — no third-party
+//! numerical-library or constraint-solver source consulted.
 
 use std::collections::HashMap;
 
 use crate::id::{ConstraintId, SketchEntityId};
 use crate::sketch::SketchData;
-use crate::solver::linalg::QrDecomposition;
+use crate::solver::free_motion;
 use crate::solver::lm::SolveResult;
 use crate::solver::state::{EntityIndex, points_touched};
 
@@ -82,6 +82,19 @@ pub fn entity_colours(
     index: &EntityIndex,
     params: &crate::solver::residual::ResolvedParams,
 ) -> HashMap<SketchEntityId, DofColor> {
+    let rank = free_motion::rank(jacobian, solve_result.state.len());
+    entity_colours_at_rank(sketch, solve_result, index, params, rank)
+}
+
+/// [`entity_colours`] for a Jacobian of rank `rank`, which the solve takes
+/// from the same row reduction as its free motions.
+pub(crate) fn entity_colours_at_rank(
+    sketch: &SketchData,
+    solve_result: &SolveResult,
+    index: &EntityIndex,
+    params: &crate::solver::residual::ResolvedParams,
+    rank: usize,
+) -> HashMap<SketchEntityId, DofColor> {
     let mut colours = HashMap::new();
 
     // Step 1: identify constraints whose residual exceeds RANK_TOL
@@ -113,14 +126,6 @@ pub fn entity_colours(
     // Step 2: classify the bulk of entities under the conservative
     // coarse rule.
     let n = solve_result.state.len();
-    let rank = if jacobian.is_empty() || n == 0 {
-        0
-    } else {
-        match QrDecomposition::new(jacobian) {
-            Ok(qr) => qr.rank(RANK_TOL),
-            Err(_) => 0,
-        }
-    };
     let fully_pinned = n > 0 && rank == n;
 
     // Fixed points: zero free DoF by construction. Override with Over

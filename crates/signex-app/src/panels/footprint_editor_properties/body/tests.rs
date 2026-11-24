@@ -385,6 +385,8 @@ fn the_sketch_sections_show_the_solve_statistics_and_parameters() {
         over_constraint_count: 0,
         over_constraints: Vec::new(),
         redundant_constraints: Vec::new(),
+        dof: 0,
+        free_motions: Vec::new(),
     });
     fp.sketch_parameters = vec![("pitch".into(), "1.27".into())];
     let texts = texts(&app, &fp);
@@ -401,6 +403,233 @@ fn the_sketch_sections_show_the_solve_statistics_and_parameters() {
         "SOLVE WARNINGS",
     ] {
         assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
+    }
+}
+
+/// Mockup row 179: the Sketch solve section leads with the DOF card and the
+/// free motions, each with Show, above the solve statistics.
+#[test]
+fn the_sketch_solve_section_leads_with_the_dof_card_and_the_free_motions() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.sketch_constraint_count = 46;
+    fp.last_solve = Some(FootprintSolveSummary {
+        iterations: 6,
+        elapsed_ms: 3,
+        final_residual_norm: 0.0,
+        over_constraint_count: 0,
+        over_constraints: Vec::new(),
+        redundant_constraints: Vec::new(),
+        dof: 2,
+        free_motions: vec![crate::panels::FreeMotionSummary {
+            focus_entity_id: signex_sketch::id::SketchEntityId::new(),
+            entity_count: 4,
+            kind: signex_sketch::solver::free_motion::MotionKind::Slide { dx: 1.0, dy: 0.0 },
+        }],
+    });
+    let texts = texts(&app, &fp);
+    for label in [
+        "2",
+        "Under-constrained · 2 DOF",
+        "46 constraints · solved in 3 ms",
+        "4 points slide along X",
+        "Show",
+    ] {
+        assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
+    }
+    assert!(top_of(&texts, "SKETCH SOLVE") < top_of(&texts, "Under-constrained · 2 DOF"));
+    assert!(top_of(&texts, "4 points slide along X") < top_of(&texts, "ITERATIONS"));
+}
+
+/// Mockup row 179: a board sketch with nothing selected leads with the
+/// Sketch DOF section, titled with its DOF, right under the board header and
+/// above the Board, Outline checks and Snap Options sections; the solve
+/// section shows once and Parameters follows it (see
+/// a_board_sketch_shows_parameters_and_bake_as_under_the_sketch_dof_section).
+#[test]
+fn a_board_sketch_leads_with_the_sketch_dof_section() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.mode_kind = FootprintModeKind::Sketch;
+    fp.sketch_host = signex_types::sketch::SketchHost::Board;
+    fp.board = Some(crate::panels::BoardSketchProps::default());
+    fp.last_solve = Some(FootprintSolveSummary {
+        iterations: 6,
+        elapsed_ms: 3,
+        final_residual_norm: 0.0,
+        over_constraint_count: 0,
+        over_constraints: Vec::new(),
+        redundant_constraints: Vec::new(),
+        dof: 2,
+        free_motions: Vec::new(),
+    });
+    assert!(matches!(body_state(&fp), BodyState::Board(_)));
+    let texts = texts(&app, &fp);
+    let dof = top_of(&texts, "SKETCH: 2 DOF");
+    assert!(top_of(&texts, "Board Sketch") < dof, "{texts:#?}");
+    assert!(dof < top_of(&texts, "Under-constrained · 2 DOF"));
+    for below in ["Name", "Outline checks", "SNAP OPTIONS", "PARAMETERS"] {
+        assert!(dof < top_of(&texts, below), "{below:?}: {texts:#?}");
+    }
+    let solves = texts.iter().filter(|t| t.text == "SKETCH: 2 DOF").count();
+    assert_eq!(solves, 1, "{texts:#?}");
+    assert!(!has(&texts, "SKETCH SOLVE"), "{texts:#?}");
+}
+
+/// Mockup row 179: on a board the DOF card carries the constraint count and
+/// the solve time, so the Sketch DOF section drops those two rows and keeps
+/// the others. The footprint host keeps them (see
+/// the_sketch_sections_show_the_solve_statistics_and_parameters).
+#[test]
+fn a_board_sketch_dof_section_does_not_repeat_the_card_counts() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.mode_kind = FootprintModeKind::Sketch;
+    fp.sketch_host = signex_types::sketch::SketchHost::Board;
+    fp.board = Some(crate::panels::BoardSketchProps::default());
+    fp.sketch_constraint_count = 46;
+    fp.last_solve = Some(FootprintSolveSummary {
+        iterations: 6,
+        elapsed_ms: 3,
+        final_residual_norm: 0.0,
+        over_constraint_count: 0,
+        over_constraints: Vec::new(),
+        redundant_constraints: Vec::new(),
+        dof: 2,
+        free_motions: Vec::new(),
+    });
+    let texts = texts(&app, &fp);
+    assert!(has(&texts, "46 constraints · solved in 3 ms"), "{texts:#?}");
+    for gone in ["CONSTRAINTS", "ELAPSED", "3 ms"] {
+        assert!(!has(&texts, gone), "{gone:?} repeats the card: {texts:#?}");
+    }
+    for kept in ["ENTITIES", "ITERATIONS", "RESIDUAL"] {
+        assert!(has(&texts, kept), "{kept:?} missing: {texts:#?}");
+    }
+}
+
+/// Mockup row 179: an over-constrained board card says "last good solve
+/// kept" with no time, so the Elapsed row stays; the count is on the card,
+/// so the Constraints row still goes.
+#[test]
+fn an_over_constrained_board_sketch_keeps_the_elapsed_row() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.mode_kind = FootprintModeKind::Sketch;
+    fp.sketch_host = signex_types::sketch::SketchHost::Board;
+    fp.board = Some(crate::panels::BoardSketchProps::default());
+    fp.sketch_constraint_count = 46;
+    fp.last_solve = Some(FootprintSolveSummary {
+        iterations: 6,
+        elapsed_ms: 3,
+        final_residual_norm: 0.0,
+        over_constraint_count: 1,
+        over_constraints: Vec::new(),
+        redundant_constraints: Vec::new(),
+        dof: 0,
+        free_motions: Vec::new(),
+    });
+    let texts = texts(&app, &fp);
+    assert!(
+        has(&texts, "46 constraints · last good solve kept"),
+        "{texts:#?}"
+    );
+    for kept in ["ELAPSED", "3 ms", "ENTITIES", "ITERATIONS", "RESIDUAL"] {
+        assert!(has(&texts, kept), "{kept:?} missing: {texts:#?}");
+    }
+    assert!(!has(&texts, "CONSTRAINTS"), "{texts:#?}");
+}
+
+/// Mockup row 179: before a first solve a board sketch has no card, so the
+/// Constraints row stays.
+#[test]
+fn an_unsolved_board_sketch_keeps_the_constraints_row() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.mode_kind = FootprintModeKind::Sketch;
+    fp.sketch_host = signex_types::sketch::SketchHost::Board;
+    fp.board = Some(crate::panels::BoardSketchProps::default());
+    fp.sketch_constraint_count = 46;
+    fp.last_solve = None;
+    let texts = texts(&app, &fp);
+    for kept in ["ENTITIES", "CONSTRAINTS", "46", "Not solved yet"] {
+        assert!(has(&texts, kept), "{kept:?} missing: {texts:#?}");
+    }
+}
+
+/// Mockup row 179e: the Parameters list stays under a selected entity's
+/// form in Sketch mode, so a pattern's spacing and the parameters it names
+/// sit together.
+#[test]
+fn the_parameters_list_follows_a_selection_in_sketch_mode() {
+    let app = app_with_eight_pads();
+    let mut fp = ctx_with_line_selected(&app);
+    fp.sketch_parameters = vec![("board_w".into(), "60mm".into())];
+    let texts = texts(&app, &fp);
+    assert!(top_of(&texts, "ENTITY") < top_of(&texts, "PARAMETERS"));
+    assert!(has(&texts, "board_w"), "{texts:#?}");
+}
+
+/// `fp` as a board sketch in Sketch mode with one parameter and the two
+/// closed profiles of the rectangle-and-slot fixture.
+fn as_board_sketch(fp: &mut FootprintEditorPanelContext) {
+    use crate::library::editor::footprint::sketch_mode::roles::{
+        board_profile_rows, fixtures::rect_and_slot,
+    };
+    let f = rect_and_slot();
+    fp.mode_kind = FootprintModeKind::Sketch;
+    fp.sketch_host = signex_types::sketch::SketchHost::Board;
+    fp.board = Some(crate::panels::BoardSketchProps::default());
+    fp.sketch_parameters = vec![("board_w".into(), "60mm".into())];
+    fp.profile_roles = board_profile_rows(&f.sketch, Some(&f.solve));
+}
+
+/// Mockup row 179: with nothing selected a board sketch shows Sketch DOF,
+/// then Parameters, then Bake as with a row per closed profile, all above
+/// the board summary and Snap Options; each section shows once.
+#[test]
+fn a_board_sketch_shows_parameters_and_bake_as_under_the_sketch_dof_section() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    as_board_sketch(&mut fp);
+    assert!(matches!(body_state(&fp), BodyState::Board(_)));
+    let texts = texts(&app, &fp);
+    let order = ["SKETCH DOF", "PARAMETERS", "board_w", "BAKE AS"];
+    for pair in order.windows(2) {
+        let (above, below) = (top_of(&texts, pair[0]), top_of(&texts, pair[1]));
+        assert!(above < below, "{pair:?}: {texts:#?}");
+    }
+    assert!(top_of(&texts, "Profile 1 · 4 edges") > top_of(&texts, "BAKE AS"));
+    for below in ["Name", "Outline checks", "SNAP OPTIONS"] {
+        assert!(
+            top_of(&texts, "Profile 2 · 4 edges") < top_of(&texts, below),
+            "{below:?}: {texts:#?}"
+        );
+    }
+    for once in ["PARAMETERS", "BAKE AS"] {
+        let count = texts.iter().filter(|t| t.text == once).count();
+        assert_eq!(count, 1, "{once:?}: {texts:#?}");
+    }
+}
+
+/// Mockup row 179 (m179-slot): under a board selection Parameters and Bake
+/// as follow the selection's section, above the Board and Snap Options
+/// sections, and show once.
+#[test]
+fn a_board_selection_shows_parameters_and_bake_as_under_its_section() {
+    let app = app_with_eight_pads();
+    let mut fp = ctx_with_line_selected(&app);
+    as_board_sketch(&mut fp);
+    assert!(matches!(body_state(&fp), BodyState::SketchEntity(_)));
+    let texts = texts(&app, &fp);
+    let order = ["ENTITY", "PARAMETERS", "BAKE AS", "SNAP OPTIONS"];
+    for pair in order.windows(2) {
+        let (above, below) = (top_of(&texts, pair[0]), top_of(&texts, pair[1]));
+        assert!(above < below, "{pair:?}: {texts:#?}");
+    }
+    for once in ["PARAMETERS", "BAKE AS"] {
+        let count = texts.iter().filter(|t| t.text == once).count();
+        assert_eq!(count, 1, "{once:?}: {texts:#?}");
     }
 }
 

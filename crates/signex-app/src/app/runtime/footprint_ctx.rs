@@ -1,7 +1,7 @@
 use super::footprint_summaries::{
-    build_over_constraint_summaries, build_redundant_constraint_summaries,
-    build_rejected_conflict_summaries, build_sketch_entity_summary, footprint_pad_kind_label,
-    footprint_pad_shape_label,
+    build_free_motion_summaries, build_over_constraint_summaries,
+    build_redundant_constraint_summaries, build_rejected_conflict_summaries,
+    build_sketch_entity_summary, footprint_pad_kind_label, footprint_pad_shape_label,
 };
 
 /// v0.14.2 — project the active `.snxfpt` editor's data into a
@@ -41,6 +41,8 @@ pub(super) fn build_footprint_editor_panel_ctx(
             over_constraint_count: out.over_constraints.len(),
             over_constraints,
             redundant_constraints: build_redundant_constraint_summaries(editor.primitive(), out),
+            dof: out.free_motions.dof,
+            free_motions: build_free_motion_summaries(&out.free_motions),
         }
     });
 
@@ -707,13 +709,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
         selected_keepout,
         selected_cutout,
         selected_sketch_pad,
-        board: super::board_sketch_ctx::board_sketch_props(editor).map(|board| {
-            crate::panels::BoardSketchProps {
-                target: app.board_sketch_target(),
-                bake: app.board_sketch_bake_preview(),
-                ..board
-            }
-        }),
+        board: app.board_sketch_panel_props(editor),
         snap_options: editor.state.snap_options,
         selection_filter: editor.state.selection_filter,
         snap_subtab: editor.state.snap_subtab,

@@ -53,6 +53,8 @@ fn a_board_offers_the_targets_its_bake_produces() {
     assert!(!SketchHost::Footprint.offers_role(R::BoardOutline));
 }
 
+// Mockup row 179e: rails and mouse bites stay with the panel tool and the
+// enclosure keep-in waits for MCAD, so the board list has neither.
 #[test]
 fn the_bake_targets_of_each_host() {
     use BakedKind as K;
