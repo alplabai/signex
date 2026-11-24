@@ -1033,6 +1033,11 @@ panels-messages-filter-hint = Filter messages
 panels-messages-copy-tooltip = Copy the shown messages
 panels-messages-clear-tooltip = Clear the messages
 panels-messages-none-match = No messages match the filters.
+# find-messages
+# A Messages row's action: open the sheet the line names and select the object.
+panels-messages-show = Show
+# A schematic Net Inspector net row's hover action: draw the net bright on every sheet, or no longer.
+panels-net-inspector-highlight = Highlight
 # Tab + compact dock panel pair (#2523): the panel header's link that opens
 # the same view as a document tab.
 panels-paired-open-as-tab = Open as tab
@@ -1317,9 +1322,3 @@ panels-harness-msg-entry-off-connector = Harness entry not placed: click on a ha
 panels-compiled-design-msg-no-project = Compile project: open a sheet of a project first; a sheet outside a project has no compiled design.
 # $why says why the project refused the edit.
 panels-compiled-design-naming-refused = Channel naming not changed: { $why }
-
-# find-messages
-# A Messages row's action: open the sheet the line names and select the object.
-panels-messages-show = Show
-# A schematic Net Inspector net row's hover action: draw the net bright on every sheet, or no longer.
-panels-net-inspector-highlight = Highlight
