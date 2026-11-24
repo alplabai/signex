@@ -505,4 +505,6 @@ define_ids! {
     PROPERTIES_COUNT_HARNESS_CONNECTORS = "properties-count-harness-connectors";
     PROPERTIES_COUNT_HARNESS_ENTRIES = "properties-count-harness-entries";
     PROPERTIES_COUNT_HARNESS_WIRES = "properties-count-harness-wires";
+    // power-port-font-rows
+    PROPERTIES_TEXT_STYLE_NOT_STORED = "properties-text-style-not-stored";
 }

@@ -774,3 +774,6 @@ properties-count-harness-wires = { $count ->
     [one] 1 signal harness
    *[other] { $count } signal harnesses
 }
+# power-port-font-rows
+# Tooltip of the disabled Bold / Italic / Underline / Strikethrough buttons.
+properties-text-style-not-stored = Bold, italic, underline and strikethrough are not stored yet.
