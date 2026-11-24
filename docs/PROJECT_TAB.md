@@ -8,10 +8,10 @@ history, which the ERC dialog and the Rules tab share.
 
 ## Page tabs (#2523)
 
-The Project, Rules and Layer Stack tabs are page tabs: document tabs that show
-one of a project's pages rather than a drawing. The later page kinds (Length
-Matching, Polygon Manager, BOM Studio, Export Job, Variant Manager, Design
-Notebook) join them. Two rules hold for every page tab, in
+The Project, Rules, Layer Stack and Variant Manager tabs are page tabs:
+document tabs that show one of a project's pages rather than a drawing. The
+later page kinds (Length Matching, Polygon Manager, BOM Studio, Export Job,
+Design Notebook) join them. Two rules hold for every page tab, in
 `app/page_tab.rs`:
 
 - **Title.** `<project> — <page>`, for example `dcdc-buck — Rules` or
@@ -79,7 +79,12 @@ message. The chrome catalog draws a sample of it.
   it numbers pages by the sheet hierarchy (the root sheet, then the other
   pages by file key), and changing that would renumber the nets of an
   exported netlist.
-- **Variants** — the Variant Manager layout (#1293). The top bar holds the
+- **Variants** — a link: the row opens the project's Variant Manager tab
+  (mockup row 32), `<project> — Variants`, and does not change the Project
+  tab's section; the project tree's Variant Manager row opens the same tab,
+  and opening it again focuses it. The tab saves into the `.snxprj` and its
+  edits are undo steps of the project's General history. Its layout (#1293):
+  the top bar holds the
   Active variant select (Base or a definition), the parts filter (designator,
   value as written or value shown; terms split at commas and spaces, `U*` a wildcard over the whole
   text, a plain term such as `10k` anywhere in it) and Only rows that differ
@@ -90,19 +95,39 @@ message. The chrome catalog draws a sample of it.
   the active variant follows), Delete removes it (removing the active one
   makes Base active). Base cannot be renamed or deleted. `+` (and New
   variant from Base when the project has Base only) adds the first free
-  "Variant N" and opens its name. The centre shows a card per variant
+  "Variant N" and opens its name. The default variant (Base until another
+  is set; not the active one) has a star and a default pill on its row and
+  card. Under the list, Duplicate adds "<name> copy" (then "<name> copy 2",
+  ...) carrying what the source changes and the fits its sheets give it, and
+  opens its name; it waits for a parts read that holds. Set as default moves
+  the star. The top bar ends with Settings..., Compare variants... and Open
+  in BOM Studio, greyed with a "Not built yet" tooltip. The centre shows a
+  card per variant
   (parts fitted, cost "—" while no prices are known, changes against Base)
   and the parts matrix: one row per part, a column per variant, Fitted or
-  Not fitted, only cells that differ from Base coloured. The matrix is
-  read-only here. Its parts are read off the UI thread from every sheet of
+  Not fitted, only cells that differ from Base coloured; a cell with a value
+  of its own shows the value and what it replaces (value, footprint,
+  override). A click selects a cell and the right pane shows that part in
+  that variant: a Fitting switch (Fitted, Not fitted; Alternate is greyed,
+  not built yet; As on the sheets drops the cell's own fit), the parameter
+  overrides (Value, Footprint and the part's fields with Base's value, the
+  variant's value typed in place and stored on Enter, an empty one or the
+  reset arrow back to Base; greyed while the part is not fitted) and the
+  part in the other variants. Base's cells are the sheets: shown, not
+  edited. These settings are stored in the `.snxprj` (`variant_settings`,
+  see `docs/architecture/snxprj-format.md`) and laid over the read as it is
+  shown, so an edit shows without reading the sheets again; the BOM lists a
+  variant with the same settings. No sheet preview of the part yet. Its
+  parts are read off the UI thread from every sheet of
   the project, open ones with their unsaved edits, each child sheet once per
   placement as the BOM counts it, with the BOM's own fit rule
   (`signex_output::variant_fit`) and the value the BOM lists (an `=` value
   evaluated on its sheet, #1986); after a sheet edit or a change of the
   project parameters the status line offers Read again. Names are trimmed, at most 64 characters, no control
   characters, unique ignoring ASCII case, and never `Base`; a refused edit
-  shows its reason and changes nothing. Changing a cell, Duplicate, Set as
-  default, Compare variants and Open in BOM Studio are not built yet.
+  shows its reason and changes nothing. Settings, Compare variants, Open in
+  BOM Studio, alternate parts, the cell menu and the sheet preview are not
+  built yet.
 - **Libraries** — the project's libraries in list order, with the path as
   stored (cut from the start so the file name stays visible), the kind (in
   the project, shared, global) and the mount state read from the app as a
@@ -174,8 +199,8 @@ message. The chrome catalog draws a sample of it.
   drawing in a larger window, which Close, Esc or a press beside it closes.
 
 Each section but Variants shows its title and help line over its content in
-a column that scrolls inside the tab. Variants (mockup row 32) shows its
-title and help over the Variant Manager, which fills the rest of the tab.
+a column that scrolls inside the tab. Variants (mockup row 32) opens the
+Variant Manager tab instead; the Variant Manager fills that tab.
 
 ## Requirements (#2339)
 

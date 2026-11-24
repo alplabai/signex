@@ -375,6 +375,40 @@ saves byte-identical; a value that is not a positive number reads as absent
 and is dropped on the next save. No format token changes: a build that
 predates the field keeps the key as an unknown key.
 
+## Variant settings (`variant_settings`)
+
+`ProjectData.variant_settings` (`VariantSettings`) is an optional top-level
+object the Variant Manager tab edits (mockup row 32), added without bumping
+the `snxprj/1` token. It sits beside `variant_definitions` and
+`active_variant`, which keep their shape.
+
+```json
+"variant_settings": {
+  "default": "Lite",
+  "parts": [
+    { "designator": "J3", "fitted": false, "variant": "Lite" },
+    { "designator": "R5", "parameters": { "Value": "47k" }, "variant": "Lite" }
+  ]
+}
+```
+
+- `default`: the default variant's name; absent is Base. It is not the
+  active variant (what the editors show).
+- `parts`: what one variant changes on one part, named by the designator
+  the BOM lists. `fitted` (absent: as the sheets say) and `parameters`, by
+  name: `Value`, `Footprint` or a field name. An entry that changes nothing
+  is dropped. A variant's own fit and values decide over the part's fields
+  on the sheets (`Fitted@V`, `DNP@V`, ...); Base is always the sheets.
+- A rename of a variant renames its entries and the default; a removal drops
+  them (and the default falls back to Base).
+- Each list and the whole key are omitted when empty, so a project that
+  never set one re-saves byte-identical.
+- Why no new token: the key is additive. A build that predates it keeps it
+  in the unknown-key bag and writes it back unchanged
+  (`project::variant_settings_tests`).
+- A section this build cannot read opens the project, is not applied, is
+  written back verbatim and refuses every variant settings edit.
+
 ## Known gaps (open questions)
 
 - **Unknown keys and the version token (#788, fixed).** `ProjectData`,
