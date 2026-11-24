@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 use signex_app::test_adapter::{Origin, Outcome, TestAdapter};
+use signex_types::net_class::NetClass;
 use signex_types::project::{DrcRuleSet, ProjectData, ProjectRules, SheetEntry};
 use signex_types::schematic::{
     Label, LabelType, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, SchematicSheet,
@@ -29,6 +30,9 @@ const LABEL: Uuid = Uuid::from_u128(0x103);
 /// Two rules on, one off, no syntax error. The board's 0.25 mm VCC tracks
 /// break `vcc_w`.
 const RULES: &str = "rule vcc_a on clearance when net == \"VCC\" require clearance >= 0.3mm then error\ndisabled rule vcc_b on clearance when net == \"VCC\" require clearance >= 0.4mm then warning\nrule vcc_w on track when net == \"VCC\" require width >= 1mm then error\n";
+/// [`RULES`] with vcc_b on: two equally specific rules ask different
+/// clearances of VCC.
+const RULES_CONTESTED: &str = "rule vcc_a on clearance when net == \"VCC\" require clearance >= 0.3mm then error\nrule vcc_b on clearance when net == \"VCC\" require clearance >= 0.4mm then warning\n";
 
 fn lib_pin(number: &str, x: f64) -> LibPin {
     LibPin {
@@ -85,9 +89,9 @@ fn sheet_text() -> String {
         .expect("encode the sheet")
 }
 
-/// The project: one sheet, the stored [`RULES`], one parts requirement and,
-/// when `board` is given, that board.
-fn project_data(dir: &Path, board: Option<&str>) -> ProjectData {
+/// The project: one sheet, the stored `rules`, net class Power (VCC), one
+/// parts requirement and, when `board` is given, that board.
+fn project_data(dir: &Path, board: Option<&str>, rules: &str) -> ProjectData {
     ProjectData {
         document_id: None,
         description: None,
@@ -107,10 +111,14 @@ fn project_data(dir: &Path, board: Option<&str>) -> ProjectData {
         active_variant: None,
         libraries: Vec::new(),
         enable_git: false,
-        net_classes: Vec::new(),
+        net_classes: vec![NetClass {
+            name: "Power".into(),
+            nets: vec!["VCC".into()],
+            ..NetClass::default()
+        }],
         rules: Some(ProjectRules {
             drc: DrcRuleSet {
-                dsl: Some(RULES.into()),
+                dsl: Some(rules.into()),
                 ..DrcRuleSet::default()
             },
             ..ProjectRules::default()
@@ -137,7 +145,7 @@ struct Opened {
     board: PathBuf,
 }
 
-fn open_project(adapter: &mut TestAdapter, with_board: bool) -> Opened {
+fn open_project(adapter: &mut TestAdapter, with_board: bool, rules: &str) -> Opened {
     let dir = adapter.root().join("P");
     std::fs::create_dir_all(&dir).unwrap();
     let sheet = dir.join("top.snxsch");
@@ -147,7 +155,7 @@ fn open_project(adapter: &mut TestAdapter, with_board: bool) -> Opened {
         std::fs::write(&board, BOARD).unwrap();
     }
     let project = dir.join("P.snxprj");
-    let data = project_data(&dir, with_board.then_some("board.snxpcb"));
+    let data = project_data(&dir, with_board.then_some("board.snxpcb"), rules);
     signex_types::project::write_project(&project, &data).unwrap();
     let open = format!("path={}", project.display());
     let (outcome, pending) = adapter.execute("open_document", &[&open], Origin::Person);
@@ -181,7 +189,7 @@ fn ask(adapter: &mut TestAdapter, id: &str, args: &[&str]) -> Value {
 #[test]
 fn the_document_queries_answer_through_the_adapter() {
     let mut adapter = TestAdapter::new();
-    let opened = open_project(&mut adapter, false);
+    let opened = open_project(&mut adapter, false, RULES);
     let sheet = document(&opened.sheet);
 
     let listed = ask(&mut adapter, "list_documents", &[]);
@@ -231,7 +239,7 @@ fn the_document_queries_answer_through_the_adapter() {
 #[test]
 fn the_project_checks_answer_through_the_adapter_once_their_run_lands() {
     let mut adapter = TestAdapter::new();
-    let opened = open_project(&mut adapter, false);
+    let opened = open_project(&mut adapter, false, RULES);
 
     let erc = ask(&mut adapter, "check_erc", &[&document(&opened.sheet)]);
     assert_eq!(erc["check"], "erc", "{erc}");
@@ -241,6 +249,25 @@ fn the_project_checks_answer_through_the_adapter_once_their_run_lands() {
             .as_array()
             .is_some_and(|findings| !findings.is_empty()),
         "R1's pins are unconnected: {erc}"
+    );
+    let mut unused: Vec<(String, &str)> = erc["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["rule"] == "builtin::unused_pin")
+        .map(|f| {
+            (
+                f["items"][0].to_string(),
+                f["evidence"]["pin"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    unused.sort_unstable();
+    let r1 = json!(R1.to_string()).to_string();
+    assert_eq!(
+        unused,
+        [(r1.clone(), "1@-2540,0"), (r1, "2@2540,0")],
+        "both of R1's pins: {erc}"
     );
 
     let requirements = ask(
@@ -265,7 +292,7 @@ fn the_project_checks_answer_through_the_adapter_once_their_run_lands() {
 #[test]
 fn the_project_and_rule_reads_answer_through_the_adapter() {
     let mut adapter = TestAdapter::new();
-    let opened = open_project(&mut adapter, false);
+    let opened = open_project(&mut adapter, false, RULES);
     let project = document(&opened.project);
 
     let settings = ask(&mut adapter, "project_settings", &[&project]);
@@ -298,7 +325,7 @@ fn the_project_and_rule_reads_answer_through_the_adapter() {
     assert_eq!(got["limits"]["min_clearance"], "0.4mm", "{got}");
 
     let matrix = ask(&mut adapter, "rules_matrix_get", &[&project]);
-    assert_eq!(matrix["classes"], json!([]), "{matrix}");
+    assert_eq!(matrix["classes"], json!(["Power"]), "{matrix}");
     assert_eq!(matrix["cells"], json!([]), "{matrix}");
 
     let diff = ask(
@@ -308,12 +335,16 @@ fn the_project_and_rule_reads_answer_through_the_adapter() {
     );
     assert_eq!(diff["mode"], "merge", "{diff}");
     assert_eq!(diff["removed"], 0, "{diff}");
+    // The tier's fab_* rules are new to a project that writes only vcc_*.
+    assert_eq!(diff["added"], 7, "{diff}");
+    assert_eq!(diff["changed"], 0, "{diff}");
+    assert_eq!(diff["changes"][0]["rule"], "fab_clearance", "{diff}");
 }
 
 #[test]
 fn the_board_queries_answer_through_the_adapter() {
     let mut adapter = TestAdapter::new();
-    let opened = open_project(&mut adapter, true);
+    let opened = open_project(&mut adapter, true, RULES);
     let board = document(&opened.board);
     let project = document(&opened.project);
 
@@ -346,6 +377,12 @@ fn the_board_queries_answer_through_the_adapter() {
 
     let panel = ask(&mut adapter, "board_panel", &[&board]);
     assert_eq!(panel["panel"], Value::Null, "{panel}");
+    assert_eq!(
+        panel["document"],
+        opened.board.display().to_string(),
+        "{panel}"
+    );
+    assert_eq!(panel["revision"], 1, "{panel}");
 
     let drc = ask(&mut adapter, "check_drc", &[&board]);
     assert_eq!(drc["check"], "drc", "{drc}");
@@ -387,4 +424,25 @@ fn the_board_queries_answer_through_the_adapter() {
     assert_eq!(why["kind"], "min_track_width", "{why}");
     assert_eq!(why["required_mm"], 1.0, "{why}");
     assert_eq!(why["sides"][0]["net"], "VCC", "{why}");
+}
+
+#[test]
+fn rules_conflicts_names_the_contested_rules_through_the_adapter() {
+    let mut adapter = TestAdapter::new();
+    let opened = open_project(&mut adapter, true, RULES_CONTESTED);
+
+    let flags = ask(
+        &mut adapter,
+        "rules_conflicts",
+        &[&document(&opened.project)],
+    );
+    assert_eq!(
+        flags,
+        json!({ "flags": [
+            { "rule": "vcc_a", "flag": "shadowed", "by": "vcc_b" },
+            { "rule": "vcc_a", "flag": "conflict", "with": "vcc_b" },
+            { "rule": "vcc_b", "flag": "conflict", "with": "vcc_a" },
+        ] }),
+        "the stricter vcc_b wins: {flags}"
+    );
 }
