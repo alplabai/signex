@@ -21,6 +21,7 @@ use crate::app::{LoadedProject, Signex, TabKind};
 /// library tab. A new page kind adds its arm here.
 pub(crate) fn page_name(kind: &TabKind) -> Option<MessageId> {
     match kind {
+        TabKind::PolygonManager => Some(ids::POLYGON_MANAGER_PAGE),
         TabKind::Project(_) => Some(ids::CHROME_PAGE_TAB_PROJECT),
         TabKind::Rules(_) => Some(ids::RULES_TAB_TITLE),
         TabKind::LayerStack => Some(ids::PCB_STACK_TITLE),
@@ -96,9 +97,8 @@ impl Signex {
             .filter_map(|(i, tab)| {
                 self.page_tab_title(&tab.kind)
                     .or_else(|| {
-                        tab.kind
-                            .is_layer_stack()
-                            .then(|| self.layer_stack_title(&tab.path, tab.project_id))
+                        let page = page_name(&tab.kind).filter(|_| tab.kind.is_board_page())?;
+                        Some(self.board_page_title(&tab.path, tab.project_id, page))
                     })
                     .or_else(|| {
                         tab.kind

@@ -306,8 +306,8 @@ impl Signex {
                 .style(crate::styles::chrome_separator(&document.panel_ctx.tokens))
                 .boxed(),
         );
-        // A Layer Stack or Pin table tab stays on the main strip while its
-        // owner is undocked, so it can be the strip's only tab.
+        // A document page tab stays on the main strip while its owner is
+        // undocked, so it can be the strip's only tab.
         let shows_page = is_main_window && document.tabs.iter().any(|t| t.kind.is_document_page());
         if !document.tabs.is_empty() && (!visible_paths.is_empty() || shows_page) {
             // Resolve "really dragging" — Some only after the
@@ -455,6 +455,9 @@ impl Signex {
         }
         if self.layer_stack_tab_in_window(is_main) {
             return self.view_layer_stack_tab();
+        }
+        if self.polygon_manager_tab_in_window(is_main) {
+            return self.view_polygon_manager_tab();
         }
         if let Some(symbol) = self.pin_table_tab_in_window(is_main) {
             return self.view_pin_table_tab(symbol);

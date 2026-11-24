@@ -736,6 +736,10 @@ cmd-menu-remove-from-union = Remove Selection from Union
 cmd-break-union = Break the selected union
 cmd-menu-break-union = Break Union
 
+# polygon-manager
+# Mockup row 178: the board's Polygon Manager tab.
+cmd-polygon-manager = Open the Polygon Manager of the board
+cmd-menu-polygon-manager = Polygon Manager...
 # board-3d-keys-screenshot
 # The board 3D view's Flip, lighting and screenshot buttons (mockup row 175).
 cmd-flip-board-3d = Turn the board over in the 3D view

@@ -438,6 +438,72 @@ pcb-prim-dim-precision-step = { $decimals }
 pcb-prim-dim-drawing-note = { $layer } · text { $height }
 # The caption under a dimension's Layer row.
 pcb-prim-dim-layer-note = Any board layer, copper included. On copper a dimension is a drawing only: no copper, DRC or Gerber.
+
+# polygon-manager
+# Mockup row 178: the Polygon Manager tab of a board, and the PCB panel's
+# Polygons mode (mockup row 106). The page name titles the tab
+# ("dcdc-buck — Polygons") and names the panel mode.
+polygon-manager-page = Polygons
+# The mono kind code on the tab.
+polygon-manager-tab-kind = PGN
+polygon-manager-open = Open Polygon Manager
+polygon-manager-sub-pours = Pours
+polygon-manager-sub-shelved = Shelved
+polygon-manager-sub-bulk = Bulk edit
+polygon-manager-repour-all-tip = Fill every pour of the board again; shelved pours stay empty
+polygon-manager-repour-selected = Repour selected
+polygon-manager-repour-selected-tip = Fill the board again and report the ticked pours
+polygon-manager-shelve-selected = Shelve selected
+polygon-manager-select-tip = Tick one or more pours first
+# The toolbar's live status.
+polygon-manager-status = { $pours ->
+    [one] 1 pour
+   *[other] { $pours } pours
+} · { $shelved } shelved
+polygon-manager-status-not-filled = { $pours ->
+    [one] 1 pour
+   *[other] { $pours } pours
+} · { $shelved } shelved · { $unfilled } not filled
+polygon-manager-state-poured = Poured
+polygon-manager-state-not-filled = Not filled
+polygon-manager-all-layers = All layers
+polygon-manager-all-nets = All nets
+polygon-manager-all-states = All
+polygon-manager-col-order = Order
+polygon-manager-col-order-tip = Pour order on its layer: order 1 fills first and keeps its copper where pours overlap. A shelved pour has no place. Change it with Priority in Properties.
+polygon-manager-col-name = Name
+polygon-manager-col-state = State
+polygon-manager-clearance-tip = Empty follows the board's clearance.
+# The placeholder of a clearance that follows the board's.
+polygon-manager-clearance-board = board
+polygon-manager-col-min-width = Min width
+polygon-manager-col-islands = Islands below
+polygon-manager-col-dead = Dead copper
+polygon-manager-col-area = Area mm²
+polygon-manager-col-pieces = Pieces
+polygon-manager-col-facts-tip = From the fill of the board as it is now.
+polygon-manager-col-actions = Actions
+polygon-manager-no-board-title = No board
+polygon-manager-no-board = Open a board to manage its polygon pours.
+polygon-manager-none-title = No polygon pours
+polygon-manager-none = The board has no polygon pours. Place one with Place ▸ Polygon Pour.
+polygon-manager-no-match = No pour matches the filters.
+polygon-manager-footer = Edits here are the same steps as in Properties: one undo step each.
+polygon-manager-footer-note = Pours and their settings save with the board.
+polygon-manager-detail-none = Click a pour's name to see its fill.
+polygon-manager-islands-removed = Islands removed
+polygon-manager-issues = Issues from the last repour
+polygon-manager-no-issues = No issues.
+polygon-manager-bulk-pick = Tick two or more pours on the Pours page to edit them together.
+# $count ticked pours.
+polygon-manager-bulk-hint = { $count } pours ticked. A field they do not share reads mixed; Enter applies it to every ticked pour as one undo step.
+polygon-manager-mixed = mixed
+polygon-manager-all-chip = All
+polygon-manager-needs-attention = Needs attention
+# Under a pour's name in the panel: its net and layer.
+polygon-manager-panel-where = { $net } · { $layer }
+# A cell with no value: a shelved pour's order, a pour with no fill.
+polygon-manager-none-value = —
 ## A dimension's look (#2868): its Arrows, Text, Extension Lines, and Units and Format sections.
 pcb-prim-dim-arrows = Arrows
 pcb-prim-dim-arrow-style = Arrow Style

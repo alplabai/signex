@@ -714,6 +714,7 @@ impl Signex {
                     annotations: Default::default(),
                     pcb_board: None,
                     layer_stack: None,
+                    polygons: None,
                     selection_count: 0,
                     selected_uuid: None,
                     selected_kind: None,

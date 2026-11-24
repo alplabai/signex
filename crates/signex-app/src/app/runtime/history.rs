@@ -302,6 +302,8 @@ fn history_target_of(active: &crate::app::TabInfo) -> Option<std::path::PathBuf>
         crate::app::TabKind::GerberViewer => None,
         crate::app::TabKind::LibraryBrowser(p) => Some(p.clone()),
         crate::app::TabKind::ComponentEditor(_) => None,
+        // A board page; its board's tab offers the board's history.
+        crate::app::TabKind::PolygonManager => None,
         // A restored `.snxprj` would replace the whole loaded project
         // (libraries, sheets, variants) under every open document; not
         // offered until the Project tab can reload it safely (#1084).

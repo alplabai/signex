@@ -263,6 +263,7 @@ place_wire
 place_wire_to_bus_entry
 placement_accept
 placement_properties
+polygon_manager
 prev_layer
 previous_document_tab
 previous_grid

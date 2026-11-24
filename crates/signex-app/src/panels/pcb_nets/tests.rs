@@ -425,7 +425,15 @@ fn the_polygons_mode_lists_the_pours_and_runs_the_copper_card_actions() {
         "{sent:?}"
     );
     let sent = crate::layout_probe::messages_on_click(view(&ctx), PANEL, "Open Polygon Manager");
-    assert!(sent.is_empty(), "no Polygon Manager tab yet: {sent:?}");
+    assert!(
+        matches!(
+            sent.as_slice(),
+            [PanelMsg::PcbPanel(PcbPanelMsg::Polygons(
+                crate::panels::PolygonMsg::ManagerOpened
+            ))]
+        ),
+        "opens the Polygon Manager tab: {sent:?}"
+    );
 }
 
 fn class_table() -> super::super::BoardNetClassView {

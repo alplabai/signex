@@ -114,6 +114,8 @@ pub mod pcb_component;
 pub mod pcb_nets;
 pub mod pcb_primitive_properties;
 pub mod pcb_room_properties;
+pub mod polygons;
+pub use polygons::{PolygonFacts, PolygonMsg, PolygonsUi};
 mod projects;
 mod projects_graphite;
 mod properties;

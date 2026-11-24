@@ -429,6 +429,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_board_text_frame` | Place text wrapped in a box on the active layer | place | — | — |
 | `place_board_track` | Route a track on the active copper layer | place | `P T` | — |
 | `place_board_via` | Place a via on the board | place | `P V` | — |
+| `polygon_manager` | Open the Polygon Manager of the board | pcb | — | — |
 | `prev_layer` | Make the previous layer of the board active | view | `-` | `-` |
 | `query_board_nets` | Query board nets | search | — | — |
 | `reannotate_board` | Re-annotate the board's designators by position | design | — | — |

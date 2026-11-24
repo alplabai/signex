@@ -469,6 +469,7 @@ const MENU_SESSION: &[&str] = &[
     "place_text_string",
     "place_wire",
     "placement_properties",
+    "polygon_manager",
     "prev_layer",
     "previous_document_tab",
     "previous_grid",
