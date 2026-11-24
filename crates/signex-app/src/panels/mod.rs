@@ -314,7 +314,8 @@ pub enum PanelKind {
 
 /// Every panel kind, in the panel list's order. The list leaves out the
 /// tool documents, which open as document tabs (DECISIONS 2026-11-18,
-/// mockup row 7; [`panel_groups::panel_group`]).
+/// mockup row 7), and To-Do, which folds into the Design Notebook
+/// ([`panel_groups::panel_group`]).
 pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Projects,
     PanelKind::Components,

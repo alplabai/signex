@@ -45,14 +45,16 @@ impl PanelGroup {
 /// The group `kind` is listed under. `None` for a tool document: Layer
 /// Stack, BOM Studio, Export Jobs, Variants and the Design Notebook open as
 /// document tabs of their project, so the list leaves them out (DECISIONS
-/// 2026-11-18, mockup row 7).
+/// 2026-11-18, mockup row 7). To-Do is left out too: it folds into the
+/// Design Notebook (decision of 2026-11-24, mockup row 7).
 pub fn panel_group(kind: PanelKind) -> Option<PanelGroup> {
     let group = match kind {
         PanelKind::LayerStack
         | PanelKind::BomStudio
         | PanelKind::OutputJobs
         | PanelKind::Variants
-        | PanelKind::Wiki => return None,
+        | PanelKind::Wiki
+        | PanelKind::Todo => return None,
         PanelKind::Projects
         | PanelKind::Components
         | PanelKind::Library
@@ -63,7 +65,6 @@ pub fn panel_group(kind: PanelKind) -> Option<PanelGroup> {
         // Classes belong to the project (#2417); on a board they are a mode
         // of the Nets panel (mockup row 106), so the PCB group has no row.
         | PanelKind::NetClasses
-        | PanelKind::Todo
         // A sibling tab of Projects (#1308).
         | PanelKind::CompiledDesign => PanelGroup::Project,
         PanelKind::Properties
@@ -113,15 +114,23 @@ mod tests {
         PanelKind::Wiki,
     ];
 
+    /// Panels the list leaves out: the tool documents, and To-Do, which
+    /// folds into the Design Notebook (decision of 2026-11-24).
+    fn is_unlisted(kind: PanelKind) -> bool {
+        TOOL_DOCUMENTS.contains(&kind) || kind == PanelKind::Todo
+    }
+
     /// Every panel of the list sits in exactly one group, so grouping
-    /// drops none and lists none twice; a tool document sits in none.
+    /// drops none and lists none twice; an unlisted panel sits in none.
     #[test]
     fn every_panel_is_in_exactly_one_group() {
         let grouped = grouped_panels(|_| true);
         let listed: Vec<PanelKind> = grouped.iter().flat_map(|(_, k)| k.clone()).collect();
-        assert_eq!(listed.len(), ALL_PANELS.len() - TOOL_DOCUMENTS.len());
+        let unlisted = ALL_PANELS.iter().filter(|&&k| is_unlisted(k)).count();
+        assert_eq!(unlisted, TOOL_DOCUMENTS.len() + 1);
+        assert_eq!(listed.len(), ALL_PANELS.len() - unlisted);
         for kind in ALL_PANELS {
-            let expected = usize::from(!TOOL_DOCUMENTS.contains(kind));
+            let expected = usize::from(!is_unlisted(*kind));
             assert_eq!(
                 listed.iter().filter(|&&k| k == *kind).count(),
                 expected,
@@ -176,7 +185,6 @@ mod tests {
                 K::Favorites,
                 K::Snippets,
                 K::NetClasses,
-                K::Todo,
                 K::CompiledDesign,
             ]
         );
@@ -200,6 +208,20 @@ mod tests {
             [K::SchLibrary, K::FootprintLibrary]
         );
         assert_eq!(members(PanelGroup::Pcb), [K::Layers, K::PcbNets]);
+    }
+
+    /// Mockup row 7, decision of 2026-11-24: To-Do folds into the Design
+    /// Notebook, so the list never lists it, in no group and with no
+    /// document open; it is still a panel kind the command palette reaches.
+    #[test]
+    fn to_do_is_not_listed() {
+        assert!(ALL_PANELS.contains(&PanelKind::Todo));
+        assert_eq!(panel_group(PanelKind::Todo), None);
+        assert!(
+            grouped_panels(|_| true)
+                .iter()
+                .all(|(_, kinds)| !kinds.contains(&PanelKind::Todo))
+        );
     }
 
     /// Mockup row 7 lists the PCB group as Layers and Nets only: Net Classes
