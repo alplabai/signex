@@ -32,7 +32,8 @@ const TILE_CODE: f32 = chrome_px(8.5 * 11.0 / 12.0);
 const PILL_H: f32 = chrome_px(16.0 * 11.0 / 12.0);
 
 /// The kind code of the document at `path`, by extension, as its tab shows
-/// it: SCH, PCB, SYM, FPT or PRJ. `None` for any other file.
+/// it: SCH, PCB, SYM, FPT, PRJ or OUT (an Export Job). `None` for any other
+/// file.
 pub(super) fn kind_code(path: &Path) -> Option<MessageId> {
     [
         ("snxsch", ids::PANELS_TAB_KIND_SCHEMATIC),
@@ -40,6 +41,7 @@ pub(super) fn kind_code(path: &Path) -> Option<MessageId> {
         ("snxsym", ids::PANELS_TAB_KIND_SYMBOL),
         ("snxfpt", ids::PANELS_TAB_KIND_FOOTPRINT),
         ("snxprj", ids::PANELS_TAB_KIND_PROJECT),
+        ("snxout", ids::PANELS_TAB_KIND_OUTPUT_JOB),
     ]
     .into_iter()
     .find(|(ext, _)| has_extension(path, ext))
@@ -257,6 +259,17 @@ mod tests {
             .map(|id| en.message_plain(id, &[]))
             .collect();
         assert_eq!(shown, ["SCH", "PCB", "SYM", "FPT", "PRJ"]);
+    }
+
+    /// An Export Job (`.snxout`) leads with OUT, as on its tab (mockup row
+    /// 16, OUT fab.snxout).
+    #[test]
+    fn an_export_job_reads_out() {
+        let code = kind_code(Path::new("hw/fab.snxout"));
+        assert_eq!(code, Some(ids::PANELS_TAB_KIND_OUTPUT_JOB));
+        assert_eq!(kind_code(Path::new("FAB.SNXOUT")), code);
+        let shown = code.map(|id| I18n::en_us().message_plain(id, &[]));
+        assert_eq!(shown.as_deref(), Some("OUT"));
     }
 
     /// The box height counts headings, rows, the rules between them and the

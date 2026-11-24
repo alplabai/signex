@@ -1317,3 +1317,7 @@ panels-harness-msg-entry-off-connector = Harness entry not placed: click on a ha
 panels-compiled-design-msg-no-project = Compile project: open a sheet of a project first; a sheet outside a project has no compiled design.
 # $why says why the project refused the edit.
 panels-compiled-design-naming-refused = Channel naming not changed: { $why }
+# quit-list-snxout-cap
+# Kind code of an Export Job (.snxout) document, as on its tab and in the
+# unsaved list of the Exit confirm.
+panels-tab-kind-output-job = OUT

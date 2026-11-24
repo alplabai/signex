@@ -202,6 +202,32 @@ fn entries_are_classified_with_kind_and_folder() {
     );
 }
 
+/// An unsaved Export Job is listed with its OUT kind cap and its folder
+/// (mockup row 16, OUT fab.snxout).
+#[test]
+fn an_unsaved_export_job_has_its_out_cap() {
+    let app = dirty_app(&["/w/a/fab.snxout"], Vec::new());
+    let st = app.ui_state.app_quit_confirm.clone().expect("open");
+    let entries = app.quit_entries(&st.dirty_paths, &st.dirty_rows);
+    let listed: Vec<(Option<signex_i18n::MessageId>, &str, String)> = entries
+        .iter()
+        .map(|e| (e.kind, e.name.as_str(), e.meta.clone()))
+        .collect();
+    let folder = std::path::Path::new("/w/a").display().to_string();
+    assert_eq!(
+        listed,
+        vec![(Some(ids::PANELS_TAB_KIND_OUTPUT_JOB), "fab.snxout", folder)]
+    );
+    let texts = lay_out_texts(
+        app.view_app_quit_confirm_body(),
+        iced::Size::new(500.0, 600.0),
+    );
+    assert!(
+        texts.iter().any(|t| t.text == "OUT"),
+        "the OUT cap is drawn"
+    );
+}
+
 /// The dialog as laid out: the question, the fact line, one heading per
 /// group with its count, and kind caps on the rows.
 #[test]
