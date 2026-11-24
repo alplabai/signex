@@ -249,6 +249,8 @@ mod dock_tab_controls;
 #[path = "regression/core_safety_net.rs"]
 mod core_safety_net;
 
+#[path = "regression/adapter_queries.rs"]
+mod adapter_queries;
 #[path = "regression/edit_tail_seam.rs"]
 mod edit_tail_seam;
 #[path = "regression/load_seam.rs"]
