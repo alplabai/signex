@@ -6,21 +6,26 @@
 //! `set_layer_stack` (an agent, the CLI) runs the same step with a whole
 //! stack.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use signex_engine::pcb::BoardCommand;
 use signex_engine::pcb::drill_pairs::{drill_pairs, via_type_counts};
 use signex_engine::pcb::stack_edit::{StackEdit, edit_stack};
 use signex_engine::pcb::via_types::{ViaTypeDef, via_types};
+use signex_engine::pcb::{BoardCommand, items_on_layer};
 use signex_i18n::{I18n, ids, t};
 use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{PcbBoard, ViaType};
 use signex_types::pcb_stack::{LayerStack, clean_stack_name};
+use signex_types::project::{ProfileRef, resolve_profile};
 
+use crate::app::new_project::profile_name_id;
+use crate::app::state::ProjectId;
 use crate::app::state::pcb_edit::CheckedStep;
 use crate::app::{Signex, TabKind};
-use crate::panels::layer_stack::{DrillPairRow, StackSubTab, StackUnit, ViaTypeRow, kind_label};
+use crate::panels::layer_stack::{
+    CopperUse, DrillPairRow, StackSubTab, StackUnit, ViaTypeRow, kind_label,
+};
 use crate::panels::pcb_primitive_properties::parse_number;
 use crate::panels::{LayerStackFacts, LayerStackMsg, StackField};
 use crate::pcb_canvas::layer_style;
@@ -310,11 +315,54 @@ impl Signex {
             drill_pairs: drill_pair_rows(i18n, board, &stack, &names),
             via_types: via_type_rows(i18n, board),
             has_project: tab.project_id.is_some(),
+            copper_use: copper_use(board, &stack),
+            fab_profile: tab.project_id.and_then(|id| self.fab_profile_name(id)),
             names,
             stack,
             board: path,
         })
     }
+
+    /// The project's fab profile as the New Project cards name it: a tier
+    /// by its catalog name, a saved profile by its own. `None` when the
+    /// project names none or one that is gone.
+    fn fab_profile_name(&self, id: ProjectId) -> Option<String> {
+        let project = self.document_state.project_by_id(id)?;
+        let token = project.data.project_defaults.profile.as_deref()?;
+        let name = match resolve_profile(token, &self.ui_state.setup_profiles)? {
+            ProfileRef::BuiltIn(tier) | ProfileRef::Edited { profile: tier, .. } => {
+                t!(self.ui_state.i18n, profile_name_id(tier)).into_string()
+            }
+            ProfileRef::User(profile) => profile.name.clone(),
+        };
+        Some(name)
+    }
+}
+
+/// Per row, what sits on a copper row's board layer; `None` on other rows.
+fn copper_use(board: &PcbBoard, stack: &LayerStack) -> Vec<Option<CopperUse>> {
+    stack
+        .layers
+        .iter()
+        .map(|row| {
+            if !row.kind.is_copper() {
+                return None;
+            }
+            if row.layer.is_empty() {
+                return Some(CopperUse::default());
+            }
+            let nets: BTreeSet<String> = board
+                .zones
+                .iter()
+                .filter(|z| z.layer == row.layer && !z.net_name.is_empty())
+                .map(|z| z.net_name.clone())
+                .collect();
+            Some(CopperUse {
+                items: items_on_layer(board, &row.layer),
+                nets: nets.into_iter().collect(),
+            })
+        })
+        .collect()
 }
 
 /// The name each row shows: its own, else its copper layer's or kind's.

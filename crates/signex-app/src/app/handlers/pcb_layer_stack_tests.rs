@@ -14,6 +14,7 @@ use crate::app::{EditMsg, Message, Signex};
 use crate::dock::DockMessage;
 use crate::keymap::AppCommandId;
 use crate::menu_bar::MenuMessage;
+use crate::panels::layer_stack::CopperUse;
 use crate::panels::{LayerStackFacts, LayerStackMsg, PanelKind, PanelMsg, StackField};
 
 /// Top copper, the top overlay and bottom copper, 1.6 mm, and a track on
@@ -502,6 +503,56 @@ fn the_toolbar_stackup_name_is_one_undo_step_and_reaches_the_file() {
         board_of(&app, &path).stackup.is_none(),
         "one undo takes the name back: the same name again made no step"
     );
+}
+
+#[test]
+fn the_facts_count_items_name_pour_nets_and_the_projects_fab_profile() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
+    let path = dir.path().join("board.snxpcb");
+    let zone = |net: &str, id: u128| -> signex_types::pcb::Zone {
+        serde_json::from_value(serde_json::json!({
+            "uuid": Uuid::from_u128(id), "net_name": net, "layer": "Inner1Copper"
+        }))
+        .unwrap()
+    };
+    let mut pcb = board(true);
+    pcb.zones = vec![zone("GND", 8), zone("GND", 9), zone("AGND", 10)];
+    app.open_pcb_tab(path, "board".into(), pcb);
+    let project = app.document_state.projects[0].id;
+    app.document_state.projects[0].data.project_defaults.profile = Some("advanced".into());
+    let at = app.document_state.active_tab;
+    app.document_state.tabs[at].project_id = Some(project);
+
+    let shown = app.layer_stack_facts().expect("the manager's facts");
+    let row = |token: &str| {
+        shown
+            .stack
+            .layers
+            .iter()
+            .position(|l| l.layer == token)
+            .expect("a copper row")
+    };
+    assert_eq!(
+        shown.copper_use[row("Inner1Copper")],
+        Some(CopperUse {
+            items: 4,
+            nets: vec!["AGND".into(), "GND".into()],
+        }),
+        "the track and three pours; each net once, sorted"
+    );
+    assert_eq!(
+        shown.copper_use[row("TopCopper")],
+        Some(CopperUse::default())
+    );
+    let dielectric = row_of(&shown, StackLayerKind::Dielectric, 0);
+    assert_eq!(shown.copper_use[dielectric], None, "only copper rows");
+    assert_eq!(shown.copper_use.len(), shown.stack.layers.len());
+    assert_eq!(shown.fab_profile.as_deref(), Some("Advanced"));
+
+    app.document_state.projects[0].data.project_defaults.profile = None;
+    let shown = app.layer_stack_facts().expect("the manager's facts");
+    assert_eq!(shown.fab_profile, None, "a project that names no profile");
 }
 
 #[test]
