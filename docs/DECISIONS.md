@@ -596,3 +596,4 @@ removed or changed row: `crates/signex-app/src/menu_bar/testdata/menu_bar.golden
 | 2026-11-24 | Clicking any edge of a valid slot shows a Slot header with its size in Properties; the selection itself does not change. | Caner (2026-11-24) | #2843 | not yet pinned |
 | 2026-11-24 | The numeric degrees-of-freedom card is deferred; the Bake panel shows the existing solve state. | Caner (2026-11-24) | #2843 | not applicable (scope) |
 | 2026-11-24 | Baked loops show role tags, courtyard gets its own colour instead of the Keep-Out colour, and Jump to pad sits directly above the mode bar, left-aligned, so it never covers Bake. | Caner (2026-11-24) | #2843 | not yet pinned |
+| 2026-11-24 | Min slot is 0.80 mm for Standard, 0.60 mm for Advanced and 0.50 mm for HDI. The outline check warns only, like the other outline checks, and lands in its own PR with the project schema step. | Caner (2026-11-24) | #2843 | not yet pinned |
