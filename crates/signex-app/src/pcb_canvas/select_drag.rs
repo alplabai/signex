@@ -45,6 +45,22 @@ impl DraggedItems {
     }
 }
 
+/// The inside of an area or room outline, as a grab shape; `None` for an
+/// outline of fewer than three corners or one the geometry cannot hold.
+fn area_shape(outline: &[Point]) -> Option<pcb_geom::Shape> {
+    if outline.len() < 3 {
+        return None;
+    }
+    let ring = (outline.iter())
+        .map(|p| pcb_geom::PointNm::from_mm(*p, "area outline"))
+        .collect::<Result<Vec<_>, _>>()
+        .ok()?;
+    Some(pcb_geom::Shape::Polygon {
+        ring: ring.into(),
+        radius: 0,
+    })
+}
+
 /// Whether a drag of `item` goes through [`DraggedItems`].
 pub(super) fn is_dragged_item(item: ItemRef) -> bool {
     let mut probe = DraggedItems::default();
@@ -54,10 +70,28 @@ pub(super) fn is_dragged_item(item: ItemRef) -> bool {
 
 impl PcbSelectionState {
     /// The shapes of every object a press grabs to drag through
-    /// [`DraggedItems`] that the selection filter lets a click pick.
-    pub(super) fn item_grab_shapes(&self) -> Vec<pcb_geom::Shape> {
+    /// [`DraggedItems`] that the selection filter lets a click pick: their
+    /// strokes and edges, and the inside of each area and room (Caner,
+    /// 2026-11-24). What the press drags is what a click there picks, so
+    /// a track, pad, via or part on top of an area still wins.
+    pub(super) fn item_grab_shapes(&self, board: &PcbBoard) -> Vec<pcb_geom::Shape> {
         let filter = &self.filter;
-        self.shapes_of(|item| is_dragged_item(item) && filter.allows(item))
+        let mut shapes = self.shapes_of(|item| is_dragged_item(item) && filter.allows(item));
+        let zones = board.zones.iter().filter_map(|zone| {
+            let kind = pcb_geom::PickKind::of_zone(zone).filter(|k| k.is_pickable())?;
+            let item = ItemRef::Zone {
+                zone: zone.uuid,
+                kind,
+            };
+            filter.allows(item).then_some(zone.outline.as_slice())
+        });
+        let rooms: Vec<Vec<Point>> = (board.rooms.iter())
+            .filter(|room| filter.allows(ItemRef::Room(room.uuid)))
+            .map(|room| room.outline.corners())
+            .collect();
+        let rings = zones.chain(rooms.iter().map(Vec::as_slice));
+        shapes.extend(rings.filter_map(area_shape));
+        shapes
     }
 
     /// What a press at `at` drags of these objects: the one a click there
