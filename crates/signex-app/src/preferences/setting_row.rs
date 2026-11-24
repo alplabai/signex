@@ -45,6 +45,14 @@ const CH_EM: f32 = 0.55;
 const INTRO_MAX_W: f32 = 72.0 * CH_EM * TS.body;
 const HELP_MAX_W: f32 = 66.0 * CH_EM * TS.caption;
 
+/// Weight 700 of the default UI family, the weight of a bold run in help.
+fn bold() -> Font {
+    Font {
+        weight: font::Weight::Bold,
+        ..signex_widgets::ui_font::regular()
+    }
+}
+
 /// Weight 600 of the default UI family.
 pub(in crate::preferences) fn semibold() -> Font {
     Font {
@@ -255,11 +263,6 @@ pub(in crate::preferences) fn help_text_marked<'a>(
         .size(TS.caption)
         .width(Length::Fill)
         .boxed()
-}
-
-/// Weight 700 of the default UI family, the weight of a bold run in help.
-fn bold() -> Font {
-    signex_widgets::ui_font::at(font::Weight::Bold)
 }
 
 /// A small status pill in `tone`, for the name of a setting row.
