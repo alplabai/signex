@@ -12,7 +12,7 @@ use iced::widget::button::{Status, Style as ButtonStyle};
 use iced::widget::{column, container, mouse_area, row, slider};
 use iced::{Alignment, Background, Border, Element, Font, Length, Padding, Theme, Widget as _};
 use signex_gfx::camera3d::{LightingPreset, ViewSide};
-use signex_i18n::{I18n, MessageId, Translatable, ids, t};
+use signex_i18n::{I18n, MessageId, Translatable, UserText, ids, t};
 use signex_renderer::board3d::{BoardScene3d, Face};
 use signex_types::coord::Unit;
 use signex_types::pcb::{PadType, PcbBoard};
@@ -196,7 +196,7 @@ fn popover<'a>(body: Element<'a, Message>, pad: f32, look: &Look) -> Element<'a,
 /// shared key-cap style.
 fn key_cap<'a>(key: String, look: &Look) -> Element<'a, Message> {
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
-    container(text(key).size(TS.caption).font(mono))
+    container(text(UserText::new(key)).size(TS.caption).font(mono))
         .padding(Padding::from([0.0, M.bar_gap * 2.0]))
         .style(crate::styles::key_cap_of(look.r))
         .boxed()
@@ -253,7 +253,12 @@ pub(super) fn lighting_toast<'a>(
         .spacing(M.bar_gap * 2.0)
         .align_y(Alignment::Center);
     if let Some((before, after)) = next_lighting_words(i18n, next_key) {
-        let word = |part: String| text(part).size(TS.body).color(look.text).boxed();
+        let word = |part: String| {
+            text(UserText::new(part))
+                .size(TS.body)
+                .color(look.text)
+                .boxed()
+        };
         words = words
             .push(word(before))
             .push(key_cap(next_key.to_owned(), look))
