@@ -1,5 +1,6 @@
 //! #2234 — the board bake: one test per product and per refusal.
 
+use signex_sketch::array::{Array, ArrayId, ArrayKind, GridDepopulation, NumberingScheme};
 use signex_sketch::attr::{
     BoardCutoutAttr, KeepoutAttr, KeepoutKinds, MountingHoleAttr, VScoreHintAttr, VScoreSide,
 };
@@ -7,7 +8,7 @@ use signex_sketch::baked_kinds::BakedKind;
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-use signex_sketch::sketch::SketchData;
+use signex_sketch::sketch::{PatternMirror, SketchData};
 use signex_types::pcb::{NetDef, Point};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
@@ -105,6 +106,203 @@ fn board_outline(s: &mut Sketch) -> Vec<SketchEntityId> {
         s.get(edge).board_outline = true;
     }
     edges
+}
+
+fn hole_at(s: &mut Sketch, x: f64, y: f64) -> SketchEntityId {
+    let hole = s.circle(x, y, 1.5);
+    s.get(hole).mounting_hole = Some(MountingHoleAttr::default());
+    hole
+}
+
+fn add_pattern(s: &mut Sketch, kind: ArrayKind) -> ArrayId {
+    let id = ArrayId::new();
+    s.data.arrays.push(Array {
+        id,
+        kind,
+        numbering: NumberingScheme::default(),
+    });
+    id
+}
+
+fn row(source: SketchEntityId, count: &str, dx: &str, dy: &str) -> ArrayKind {
+    ArrayKind::Linear {
+        source,
+        count_expr: count.into(),
+        dx_expr: dx.into(),
+        dy_expr: dy.into(),
+    }
+}
+
+fn hole_positions(baked: &BakedBoard) -> Vec<(i64, i64)> {
+    let points: Vec<Point> = baked.holes.iter().map(|h| h.position).collect();
+    sorted(&points)
+}
+
+#[test]
+fn a_patterned_hole_writes_every_instance_with_its_attributes() {
+    let mut s = Sketch::new();
+    let hole = s.circle(5.0, 5.0, 1.5);
+    s.get(hole).mounting_hole = Some(MountingHoleAttr {
+        drill_expr: Some("3.2mm".into()),
+        plated: true,
+        net: Some("GND".into()),
+    });
+    add_pattern(&mut s, row(hole, "4", "5mm", "0mm"));
+
+    let baked = s.bake().unwrap();
+
+    assert_eq!(
+        hole_positions(&baked),
+        sorted(&mm(&[(5.0, 5.0), (10.0, 5.0), (15.0, 5.0), (20.0, 5.0)]))
+    );
+    assert!(
+        baked
+            .holes
+            .iter()
+            .all(|h| (h.drill - 3.2).abs() < 1e-9 && h.plated && h.net == Some(4))
+    );
+}
+
+#[test]
+fn a_patterned_hole_keeps_its_uuid_and_rebakes_equal() {
+    let mut s = Sketch::new();
+    let hole = hole_at(&mut s, 5.0, 5.0);
+    add_pattern(&mut s, row(hole, "3", "5mm", "0mm"));
+
+    let baked = s.bake().unwrap();
+
+    let source: Vec<_> = baked.holes.iter().filter(|h| h.uuid == hole.0).collect();
+    assert_eq!(source.len(), 1);
+    assert_eq!(sorted(&[source[0].position]), sorted(&mm(&[(5.0, 5.0)])));
+    let unique: std::collections::HashSet<_> = baked.holes.iter().map(|h| h.uuid).collect();
+    assert_eq!(unique.len(), 3, "each instance has its own uuid");
+    assert_eq!(s.bake().unwrap(), baked);
+}
+
+#[test]
+fn a_size_parameter_drives_the_hole_spacing() {
+    let mut s = Sketch::new();
+    s.data.parameters.insert("hole_pitch", "10mm");
+    let hole = hole_at(&mut s, 5.0, 5.0);
+    add_pattern(&mut s, row(hole, "3", "hole_pitch", "0mm"));
+    assert_eq!(
+        hole_positions(&s.bake().unwrap()),
+        sorted(&mm(&[(5.0, 5.0), (15.0, 5.0), (25.0, 5.0)]))
+    );
+
+    s.data.parameters.insert("hole_pitch", "7mm");
+
+    assert_eq!(
+        hole_positions(&s.bake().unwrap()),
+        sorted(&mm(&[(5.0, 5.0), (12.0, 5.0), (19.0, 5.0)]))
+    );
+}
+
+#[test]
+fn a_pattern_of_the_centre_point_repeats_the_hole() {
+    let mut s = Sketch::new();
+    let hole = hole_at(&mut s, 5.0, 5.0);
+    let EntityKind::Circle { center, .. } = s.get(hole).kind else {
+        unreachable!("the hole is a circle");
+    };
+    add_pattern(&mut s, row(center, "2", "5mm", "0mm"));
+
+    assert_eq!(
+        hole_positions(&s.bake().unwrap()),
+        sorted(&mm(&[(5.0, 5.0), (10.0, 5.0)]))
+    );
+}
+
+#[test]
+fn a_pattern_of_a_pattern_and_its_mirror_write_every_hole_once() {
+    let mut s = Sketch::new();
+    let hole = hole_at(&mut s, 5.0, 5.0);
+    let (a, b) = (s.point(25.0, 0.0), s.point(25.0, 30.0));
+    let line = s.line(a, b);
+    let inner = add_pattern(&mut s, row(hole, "2", "5mm", "0mm"));
+    let outer = add_pattern(&mut s, row(hole, "2", "0mm", "10mm"));
+    s.data.set_pattern_source(outer, inner).unwrap();
+    s.data
+        .add_pattern_mirror(PatternMirror {
+            id: ArrayId::new(),
+            pattern: outer,
+            line,
+        })
+        .unwrap();
+
+    assert_eq!(
+        hole_positions(&s.bake().unwrap()),
+        sorted(&mm(&[
+            (5.0, 5.0),
+            (10.0, 5.0),
+            (5.0, 15.0),
+            (10.0, 15.0),
+            (45.0, 5.0),
+            (40.0, 5.0),
+            (45.0, 15.0),
+            (40.0, 15.0),
+        ]))
+    );
+}
+
+#[test]
+fn a_hole_on_its_mirror_line_is_drilled_once() {
+    let mut s = Sketch::new();
+    let hole = hole_at(&mut s, 25.0, 5.0);
+    let (a, b) = (s.point(25.0, 0.0), s.point(25.0, 30.0));
+    let line = s.line(a, b);
+    let single = add_pattern(&mut s, row(hole, "1", "5mm", "0mm"));
+    s.data
+        .add_pattern_mirror(PatternMirror {
+            id: ArrayId::new(),
+            pattern: single,
+            line,
+        })
+        .unwrap();
+
+    assert_eq!(s.bake().unwrap().holes.len(), 1);
+}
+
+#[test]
+fn a_suppressed_instance_is_not_drilled() {
+    let mut s = Sketch::new();
+    let hole = hole_at(&mut s, 5.0, 5.0);
+    add_pattern(
+        &mut s,
+        ArrayKind::Grid {
+            source: hole,
+            nx_expr: "2".into(),
+            ny_expr: "2".into(),
+            dx_expr: "5mm".into(),
+            dy_expr: "5mm".into(),
+            depopulation: Some(GridDepopulation {
+                mask_expr: String::new(),
+                suppressed_instances: vec![(1, 1)],
+            }),
+        },
+    );
+
+    assert_eq!(
+        hole_positions(&s.bake().unwrap()),
+        sorted(&mm(&[(5.0, 5.0), (10.0, 5.0), (5.0, 10.0)]))
+    );
+}
+
+#[test]
+fn a_hole_pattern_that_does_not_expand_refuses_the_bake() {
+    for (count, dx) in [("5mm", "5mm"), ("0", "5mm"), ("3", "= missing")] {
+        let mut s = Sketch::new();
+        let hole = hole_at(&mut s, 5.0, 5.0);
+        add_pattern(&mut s, row(hole, count, dx, "0mm"));
+
+        match s.bake() {
+            Err(BoardBakeError::Expression { entity, what, .. }) => {
+                assert_eq!(entity, hole);
+                assert_eq!(what, "mounting hole pattern");
+            }
+            other => panic!("count {count}, dx {dx}: expected a refusal, got {other:?}"),
+        }
+    }
 }
 
 #[test]
@@ -472,4 +670,42 @@ fn baking_twice_gives_the_same_board() {
     let hole = s.circle(4.0, 4.0, 1.6);
     s.get(hole).mounting_hole = Some(MountingHoleAttr::default());
     assert_eq!(s.bake().unwrap(), s.bake().unwrap());
+}
+
+/// #2518: the bake preview counts each board target, and a board answers
+/// for exactly the targets the board host lists.
+#[test]
+fn the_preview_counts_every_board_target() {
+    use signex_types::sketch::SketchHost;
+
+    let mut s = Sketch::new();
+    board_outline(&mut s);
+    let hole = s.circle(4.0, 4.0, 1.6);
+    s.get(hole).mounting_hole = Some(MountingHoleAttr::default());
+    let baked = s.bake().unwrap();
+    assert_eq!(baked_count(&baked, BakedKind::BoardOutline), Some(1));
+    assert_eq!(baked_count(&baked, BakedKind::MountingHoles), Some(1));
+    assert_eq!(baked_count(&baked, BakedKind::Keepouts), Some(0));
+    assert_eq!(baked_count(&baked, BakedKind::Pads), None);
+    for kind in [
+        BakedKind::Pads,
+        BakedKind::SilkF,
+        BakedKind::SilkB,
+        BakedKind::Courtyard,
+        BakedKind::MaskOpenings,
+        BakedKind::MaskExcludes,
+        BakedKind::PasteApertures,
+        BakedKind::Pours,
+        BakedKind::Keepouts,
+        BakedKind::Cutouts,
+        BakedKind::VScores,
+        BakedKind::BoardOutline,
+        BakedKind::MountingHoles,
+    ] {
+        assert_eq!(
+            baked_count(&baked, kind).is_some(),
+            SketchHost::Board.bake_targets().contains(&kind),
+            "{kind:?}"
+        );
+    }
 }

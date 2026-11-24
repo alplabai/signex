@@ -2,10 +2,12 @@
 
 use iced::Task;
 use signex_i18n::{ids, t};
-use signex_types::project::{ProjectSetup, ResolvedSetup, SheetDefaults};
+use signex_types::project::ResolvedSetup;
 
 use super::{DocumentSetupMsg, DocumentSetupState, SetupKind};
-use crate::app::new_project::{NewProjectMsg, NewProjectState, ProfileStored, store_profile};
+use crate::app::new_project::{
+    NewProjectMsg, NewProjectState, ProfileStored, ProfileTarget, store_profile,
+};
 use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
 
@@ -16,21 +18,7 @@ impl Signex {
     /// values are used.
     pub(crate) fn resolved_project_setup(&mut self, project: ProjectId) -> Option<ResolvedSetup> {
         let loaded = self.document_state.project_by_id(project)?;
-        let mut resolved = ProjectSetup::for_project(
-            &loaded.data.project_defaults,
-            loaded.data.designator_standard(),
-            &self.ui_state.setup_profiles,
-        );
-        // A project that stores no sheet defaults and names no saved profile
-        // gets the blank sheet Add New always made (A4), not the New Project
-        // default.
-        if loaded.data.project_defaults.sheet.is_none() && resolved.setup.user_profile.is_none() {
-            let blank = crate::app::handlers::document_files::blank_schematic_sheet_for_new_doc();
-            resolved.setup.sheet = SheetDefaults {
-                paper_size: blank.paper_size,
-                show_title_block: blank.frame.show_title_block,
-            };
-        }
+        let resolved = super::new_document_setup(&loaded.data, &self.ui_state.setup_profiles);
         let ui = &mut self.ui_state;
         if let Some(missing) = &resolved.missing_profile
             && ui.missing_profiles_warned.insert(missing.clone())
@@ -101,9 +89,11 @@ impl Signex {
         }
         let project_name = loaded.data.name.clone();
         let project_had_designators = loaded.data.designator_standard().is_some();
+        let saved = super::has_saved_setup(&loaded.data.project_defaults, kind);
         let Some(resolved) = self.resolved_project_setup(project) else {
             return Task::none();
         };
+        let project_setup = saved.then(|| resolved.setup.clone());
         let mut draft = NewProjectState::of_setup(resolved.setup);
         draft.customize_open = true;
         self.ui_state.document_setup = Some(Box::new(DocumentSetupState {
@@ -114,6 +104,8 @@ impl Signex {
             project_had_designators,
             designators_picked: false,
             profile_picked: false,
+            project_setup,
+            other_profile_open: false,
         }));
         Task::none()
     }
@@ -130,6 +122,21 @@ impl Signex {
             | DocumentSetupMsg::Setup(NewProjectMsg::CancelRequested) => {
                 self.ui_state.document_setup = None;
                 Task::none()
+            }
+            DocumentSetupMsg::OtherProfileToggled => {
+                self.toggle_other_profile();
+                Task::none()
+            }
+            // Enter in an open Rename field renames; it never creates.
+            DocumentSetupMsg::SubmitRequested
+            | DocumentSetupMsg::Setup(NewProjectMsg::SubmitRequested)
+                if self
+                    .ui_state
+                    .document_setup
+                    .as_ref()
+                    .is_some_and(|s| s.draft.renaming.is_some()) =>
+            {
+                self.edit_document_setup(NewProjectMsg::ProfileRenameConfirmed)
             }
             DocumentSetupMsg::SubmitRequested
             | DocumentSetupMsg::Setup(NewProjectMsg::SubmitRequested) => {
@@ -151,6 +158,13 @@ impl Signex {
     fn edit_document_setup(&mut self, edit: NewProjectMsg) -> Task<Message> {
         use NewProjectMsg as M;
         match edit {
+            M::Preview(preview) => match self.ui_state.document_setup.as_mut() {
+                Some(state) => state
+                    .draft
+                    .act_on_preview(preview)
+                    .map(|msg| Message::from(DocumentSetupMsg::Setup(NewProjectMsg::Preview(msg)))),
+                None => Task::none(),
+            },
             M::ProfilePicked(_)
             | M::UserProfilePicked(_)
             | M::FabPicked(_)
@@ -168,7 +182,19 @@ impl Signex {
             | M::SaveProfileCancelled
             | M::UserProfileRemoveRequested(_)
             | M::UserProfileRemoveConfirmed
-            | M::UserProfileRemoveCancelled => {
+            | M::UserProfileRemoveCancelled
+            | M::CardHovered { .. }
+            | M::CardLayersStepped(..)
+            | M::ProfileMenuToggled(_)
+            | M::ProfileEditRequested(_)
+            | M::ProfileEditSaved
+            | M::ProfileEditCancelled
+            | M::ProfileResetRequested(_)
+            | M::ProfileDuplicateRequested { .. }
+            | M::ProfileRenameRequested(_)
+            | M::ProfileRenameEdited(_)
+            | M::ProfileRenameConfirmed
+            | M::ProfileRenameCancelled => {
                 let ui = &mut self.ui_state;
                 let Some(state) = ui.document_setup.as_mut() else {
                     return Task::none();
@@ -176,6 +202,7 @@ impl Signex {
                 match &edit {
                     M::DesignatorsPicked(_) => state.designators_picked = true,
                     M::UserProfilePicked(_) => state.profile_picked = true,
+                    M::ProfileEditRequested(ProfileTarget::Saved(_)) => state.profile_picked = true,
                     _ => {}
                 }
                 let project = state.project;
@@ -203,6 +230,26 @@ impl Signex {
             | M::TargetChecked { .. }
             | M::SubmitRequested
             | M::CancelRequested => Task::none(),
+        }
+    }
+
+    /// "Use another profile..." unfolds the cards under the summary row;
+    /// "Keep project setup" folds them and takes the project's setup back
+    /// (#2538).
+    fn toggle_other_profile(&mut self) {
+        let Some(state) = self.ui_state.document_setup.as_mut() else {
+            return;
+        };
+        let Some(project_setup) = state.project_setup.clone() else {
+            return;
+        };
+        state.other_profile_open = !state.other_profile_open;
+        if !state.other_profile_open {
+            state.draft.setup = project_setup;
+            state.draft.refresh_drafts();
+            state.draft.editing = None;
+            state.draft.profile_menu = None;
+            state.profile_picked = false;
         }
     }
 

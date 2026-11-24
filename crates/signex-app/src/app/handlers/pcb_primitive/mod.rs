@@ -14,6 +14,7 @@ mod links;
 mod placement;
 mod stack_facts;
 mod tune;
+mod via_type;
 mod zone;
 
 #[cfg(test)]
@@ -35,6 +36,7 @@ use signex_i18n::{MessageId, ids, t};
 use signex_types::pcb::{MaskExpansion, PadShape, PcbBoard};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::StackMode;
+use signex_widgets::property_illustration::IllustrationHover;
 
 use crate::app::Signex;
 use crate::app::state::pcb_edit::CheckedStep;
@@ -53,10 +55,23 @@ pub struct PcbPrimitivePanel {
     pub search: String,
     /// The pick button is waiting for a click on this board for these items.
     pub net_pick: Option<PrimitiveTarget>,
+    /// The field or illustration callout under the pointer (#2523).
+    pub hover: IllustrationHover,
+    /// The "Not stored yet" group is open.
+    pub unstored_open: bool,
+    /// The copper layer the via illustration's top view shows.
+    pub via_view_layer: Option<CopperLayer>,
+    /// The pour Copper card's menu of board-wide commands is open (#2523).
+    pub pour_menu_open: bool,
+    /// The target the panel showed at the last sync: `hover`,
+    /// `via_view_layer` and `pour_menu_open` belong to it alone.
+    pub shown: Option<PrimitiveTarget>,
 }
 
 impl PcbPrimitivePanel {
-    /// Forget drafts and a pick that were not made for `shown` on `board`.
+    /// Forget drafts and a pick that were not made for `shown` on `board`; a
+    /// new `shown` also drops the hover, the via view layer and the pour
+    /// menu.
     pub(crate) fn keep_only(&mut self, board: &Path, shown: Option<&PrimitiveTarget>) {
         let stale = |t: &PrimitiveTarget| t.board == board && Some(t) != shown;
         if self.draft_target.as_ref().is_some_and(stale) {
@@ -66,6 +81,19 @@ impl PcbPrimitivePanel {
         if self.net_pick.as_ref().is_some_and(stale) {
             self.net_pick = None;
         }
+        if self.shown.as_ref() != shown {
+            self.shown = shown.cloned();
+            self.hover = IllustrationHover::default();
+            self.via_view_layer = None;
+            self.pour_menu_open = false;
+        }
+    }
+
+    /// Whether the per-target state (hover, via view layer, pour menu) is
+    /// `target`'s: facts built before `keep_only` saw a new target must not
+    /// show the old one's.
+    pub(crate) fn is_showing(&self, target: &PrimitiveTarget) -> bool {
+        self.shown.as_ref() == Some(target)
     }
 
     /// Forget the drafts typed on `board` (its undo or redo moved them).
@@ -224,6 +252,32 @@ impl Signex {
                 };
                 self.apply_primitive_edit(target, PrimitiveEdit::Mode(*mode), what);
             }
+            // Only the hover changes: patch the shown facts instead of
+            // rebuilding the board summary on every pointer crossing.
+            M::IllustrationHovered(hover) => {
+                panel.hover.update(hover.clone());
+                let hover = panel.hover.clone();
+                let shown = self.document_state.panel_ctx.pcb_board.as_mut();
+                if let Some(facts) = shown.and_then(|b| b.primitive.as_mut()) {
+                    facts.common_mut().hover = hover;
+                }
+                return;
+            }
+            M::UnstoredToggled => panel.unstored_open = !panel.unstored_open,
+            M::ValuePicked {
+                target,
+                field,
+                value,
+            } => {
+                self.apply_primitive_edit(
+                    target,
+                    PrimitiveEdit::Number(*field, *value),
+                    field_name(*field),
+                );
+            }
+            M::ArcModePicked(mode) => self.pick_arc_mode(*mode),
+            M::Via(m) => self.handle_via_msg(m),
+            M::Pour(m) => self.handle_pour_msg(m),
         }
         self.sync_pcb_board_summary();
     }
@@ -285,7 +339,24 @@ impl Signex {
             self.edit_board_tool_value(&edit, what);
             return;
         }
-        let Some(engine) = self.document_state.board_engine(&target.board) else {
+        self.run_guarded_board_step(&target.board, what, |board| {
+            Ok(primitive_command(board, &target.items, &edit)?
+                .into_iter()
+                .collect())
+        });
+    }
+
+    /// Run the commands `build` makes from the board at `path` as one undo
+    /// step labelled `what`, or say why not: the board is gone (logged), it
+    /// is read-only, `build` refuses, or the board moved on meanwhile. No
+    /// command is no step.
+    pub(crate) fn run_guarded_board_step(
+        &mut self,
+        path: &Path,
+        what: MessageId,
+        build: impl FnOnce(&PcbBoard) -> Result<Vec<BoardCommand>, PrimitiveEditRefusal>,
+    ) {
+        let Some(engine) = self.document_state.board_engine(path) else {
             let name = t!(self.ui_state.i18n, what).into_string();
             let line = t!(self.ui_state.i18n, ids::PCB_PRIM_BOARD_GONE, "what" => name);
             crate::diagnostics::log_warning(line.into_string());
@@ -297,9 +368,9 @@ impl Signex {
             return;
         }
         let revision = engine.revision();
-        let command = match primitive_command(engine.board(), &target.items, &edit) {
-            Ok(Some(command)) => command,
-            Ok(None) => return,
+        let commands = match build(engine.board()) {
+            Ok(commands) if commands.is_empty() => return,
+            Ok(commands) => commands,
             Err(refusal) => {
                 self.refuse_primitive_edit(what, refusal.to_string());
                 return;
@@ -310,7 +381,8 @@ impl Signex {
             label: &label,
             expected_revision: revision,
         };
-        if let Err(error) = self.execute_board_commands(&target.board, vec![command], Some(step)) {
+        self.ui_state.command_replay.mark_board_properties_edit();
+        if let Err(error) = self.execute_board_commands(path, commands, Some(step)) {
             self.refuse_primitive_edit(what, error.to_string());
         }
     }
@@ -338,6 +410,7 @@ fn field_name(field: PrimitiveField) -> MessageId {
         F::EndX | F::EndY => ids::PCB_PRIM_END,
         F::Diameter => ids::PCB_PRIM_DIAMETER,
         F::HoleSize => ids::PCB_PRIM_HOLE_SIZE,
+        F::FinishedHole => ids::PCB_PRIM_FINISHED_HOLE,
         F::Designator => ids::PCB_PRIM_DESIGNATOR,
         F::Rotation => ids::PCB_PRIM_ROTATION,
         F::SizeX => ids::PCB_PRIM_X_SIZE,
@@ -433,7 +506,10 @@ fn primitive_command(
             free::free_command(board, items, edit)
         }
         Some(ItemRef::Graphic { .. }) => graphic::graphic_command(board, items, edit),
-        Some(ItemRef::Footprint(_) | ItemRef::FootprintText { .. }) | None => Ok(None),
+        // A room edits through Room Properties (#2457).
+        Some(ItemRef::Footprint(_) | ItemRef::FootprintText { .. } | ItemRef::Room(_)) | None => {
+            Ok(None)
+        }
     }
 }
 
@@ -463,6 +539,9 @@ fn via_edit(edit: &PrimitiveEdit) -> Option<ViaEdit> {
         PrimitiveEdit::Number(F::Y, v) => ViaEdit::Y(v),
         PrimitiveEdit::Number(F::Diameter, v) => ViaEdit::Diameter(v),
         PrimitiveEdit::Number(F::HoleSize, v) => ViaEdit::HoleSize(v),
+        PrimitiveEdit::Number(F::FinishedHole, v) => {
+            ViaEdit::HoleSize(signex_engine::pcb::via_types::ViaTypeDef::drill_for_finished(v))
+        }
         PrimitiveEdit::Number(F::LayerSize(layer), v) => ViaEdit::LayerDiameter(layer, v),
         PrimitiveEdit::Net(net) => ViaEdit::Net(net),
         PrimitiveEdit::Span(top, bottom) => ViaEdit::Span(top, bottom),

@@ -310,16 +310,8 @@ impl SchematicCanvas<'_> {
             return;
         };
         let wire_color = crate::render_config::to_iced(&self.prefs.canvas_colors.wire);
-        let placed = canvas::Stroke::default().with_color(wire_color);
-        let rubber = canvas::Stroke::default().with_color(Color {
-            a: 0.7,
-            ..wire_color
-        });
-        for (p1, p2, width) in strokes.placed {
-            frame.stroke(&canvas::Path::line(p1, p2), placed.with_width(width));
-        }
-        for (p1, p2, width) in strokes.rubber {
-            frame.stroke(&canvas::Path::line(p1, p2), rubber.with_width(width));
+        for (p1, p2, stroke) in strokes.styled(wire_color) {
+            frame.stroke(&canvas::Path::line(p1, p2), stroke);
         }
     }
 
@@ -379,4 +371,29 @@ impl SchematicCanvas<'_> {
 pub(crate) struct WirePreviewStrokes {
     pub placed: Vec<(iced::Point, iced::Point, f32)>,
     pub rubber: Vec<(iced::Point, iced::Point, f32)>,
+}
+
+/// A preview segment's screen ends and the stroke it draws with.
+pub(crate) type StyledSegment = (iced::Point, iced::Point, canvas::Stroke<'static>);
+
+impl WirePreviewStrokes {
+    /// Each segment with the stroke it draws with: the stroke of a placed
+    /// wire or bus segment, so corners join the same; the rubber band at
+    /// 70% opacity.
+    pub(crate) fn styled(self, color: Color) -> Vec<StyledSegment> {
+        let faded = Color { a: 0.7, ..color };
+        let tinted = |colour: Color| {
+            move |(a, b, w): (iced::Point, iced::Point, f32)| {
+                (
+                    a,
+                    b,
+                    crate::renderer_scene_canvas::solid_line_stroke(w, colour),
+                )
+            }
+        };
+        let placed = self.placed.into_iter().map(tinted(color));
+        placed
+            .chain(self.rubber.into_iter().map(tinted(faded)))
+            .collect()
+    }
 }

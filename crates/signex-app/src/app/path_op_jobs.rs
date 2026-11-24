@@ -115,9 +115,14 @@ fn read_parent_sheets(paths: &[PathBuf]) -> ParentSheets {
 
 fn read_sheet(path: &Path) -> Result<signex_types::schematic::SchematicSheet, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("could not be read: {e}"))?;
-    signex_types::format::SnxSchematic::parse(&text)
+    let mut sheet = signex_types::format::SnxSchematic::parse(&text)
         .map(|parsed| parsed.sheet)
-        .map_err(|e| format!("could not be parsed: {e}"))
+        .map_err(|e| format!("could not be parsed: {e}"))?;
+    // A parent left unsaved compares its save with these bytes (#2760).
+    sheet.unknown.source_hash = Some(Box::new(
+        crate::persist::ContentHash::of(text.as_bytes()).to_raw(),
+    ));
+    Ok(sheet)
 }
 
 /// `fs::rename` replaces an existing file on Unix, so the destination is

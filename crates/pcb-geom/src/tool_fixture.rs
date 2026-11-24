@@ -16,6 +16,7 @@ pub(crate) fn clearance(_: u32, _: u32) -> i64 {
 pub(crate) fn empty_board() -> PcbBoard {
     PcbBoard {
         stackup: None,
+        rooms: Vec::new(),
         free: Default::default(),
         sketch: None,
         options: Default::default(),
@@ -135,6 +136,7 @@ pub(crate) fn zone(n: u128, net: u32, fill: &str, rect: (f64, f64, f64, f64)) ->
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
         unknown: Default::default(),
     }
 }

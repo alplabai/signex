@@ -4,6 +4,8 @@
 
 use std::path::{Path, PathBuf};
 
+use signex_i18n::RenderTranslatable;
+
 use serde_json::{Value, json};
 use signex_types::schematic::{
     HAlign, LibSymbol, Point, SchDrawing, SchematicSheet, Symbol, TextNote, TextProp, VAlign, Wire,
@@ -31,7 +33,7 @@ fn answered(outcome: CommandOutcome) -> Value {
 
 fn refusal(outcome: CommandOutcome) -> String {
     match outcome {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("not refused: {other:?}"),
     }
 }

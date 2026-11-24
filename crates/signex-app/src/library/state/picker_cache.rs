@@ -16,9 +16,8 @@ use crate::library::range_filter::{FilterColumn, RangeFilters, parameter_label, 
 pub struct PickerEntry {
     /// The `.snxlib` the component belongs to; shared by its siblings.
     pub path: Arc<Path>,
+    /// The row as listed; its `state` draws as the State column's pill.
     pub summary: ComponentSummary,
-    /// `{:?}` of the lifecycle state, as the row shows it.
-    pub state_label: String,
     /// The row's parameters, for the range filter. Empty when the library's
     /// tables do not hold the row.
     parameters: signex_library::ParamMap,
@@ -38,7 +37,6 @@ impl PickerEntry {
             parameters,
             path: Arc::clone(path),
             summary: summary.clone(),
-            state_label: format!("{:?}", summary.state),
             internal_pn_key: i18n.fold_for_search(summary.internal_pn.as_str()),
             mpn_key: i18n.fold_for_search(&summary.mpn),
             description_key: i18n.fold_for_search(&summary.description),
@@ -61,6 +59,9 @@ pub struct PickerRows {
     /// The message locale the entries' keys were folded in.
     built_in: Option<&'static str>,
     entries: Vec<PickerEntry>,
+    /// How many distinct libraries the entries come from; built with
+    /// `entries`.
+    library_count: usize,
     /// The normalised query `visible` was filtered for.
     needle: Option<String>,
     /// The range filters `visible` was filtered with.
@@ -79,6 +80,13 @@ impl PickerRows {
         self.visible.iter().map(|&i| &self.entries[i])
     }
 
+    /// Whether the row `row_id` of the library at `path` is listed under
+    /// the current query and range filters.
+    pub fn shows(&self, path: &Path, row_id: Uuid) -> bool {
+        self.visible()
+            .any(|entry| &*entry.path == path && entry.summary.row_id == row_id)
+    }
+
     /// The parameter columns a range filter can go on.
     pub(crate) fn filter_columns(&self) -> &[FilterColumn] {
         &self.filter_columns
@@ -93,6 +101,18 @@ impl PickerRows {
     /// No row matches.
     pub fn is_empty(&self) -> bool {
         self.visible.is_empty()
+    }
+
+    /// How many distinct libraries the listed parts come from, whatever
+    /// the query; the header's scope note.
+    pub fn library_count(&self) -> usize {
+        self.library_count
+    }
+
+    /// How many parts the open libraries list, whatever the query; the
+    /// header's scope note.
+    pub fn part_count(&self) -> usize {
+        self.entries.len()
     }
 
     /// Bring the rows up to date with `libraries` at `data_version` and the
@@ -111,6 +131,7 @@ impl PickerRows {
             self.entries_at != Some(data_version) || self.built_in != Some(i18n.locale());
         if entries_stale {
             self.entries = build_entries(i18n, libraries);
+            self.library_count = distinct_libraries(&self.entries);
             self.filter_columns = picker_filter_columns(&self.entries);
             self.entries_at = Some(data_version);
             self.built_in = Some(i18n.locale());
@@ -152,6 +173,13 @@ fn build_entries(i18n: &signex_i18n::I18n, libraries: &[OpenLibrary]) -> Vec<Pic
         }));
     }
     entries
+}
+
+/// How many distinct `.snxlib` files `entries` come from.
+fn distinct_libraries(entries: &[PickerEntry]) -> usize {
+    let paths: std::collections::HashSet<&Path> =
+        entries.iter().map(|entry| &*entry.path).collect();
+    paths.len()
 }
 
 /// The parameter keys that hold measurements across the picker's

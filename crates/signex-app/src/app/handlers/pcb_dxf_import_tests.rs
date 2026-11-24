@@ -216,6 +216,7 @@ fn a_refused_operand_import_is_answered_with_the_reason() {
     let CommandOutcome::Disabled { reason } = outcome else {
         panic!("a refusal: {outcome:?}");
     };
+    let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
     assert!(reason.contains("no closed shape"), "{reason}");
 
     let missing = format!("path={}", f.dxf.with_file_name("gone.dxf").display());
@@ -265,6 +266,7 @@ fn an_import_onto_a_copper_layer_is_refused() {
     let CommandOutcome::Disabled { reason } = outcome else {
         panic!("refused up front: {outcome:?}");
     };
+    let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
     assert!(reason.contains("copper"), "{reason}");
     assert!(board(&f.app, &f.board).graphics.is_empty());
 }

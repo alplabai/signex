@@ -59,6 +59,12 @@ pub struct MenuMetrics {
     pub min_width: f32,
     /// Widest fitted card.
     pub max_width: f32,
+    /// Text size of a row badge pill.
+    pub badge_size: f32,
+    /// Horizontal padding inside a badge pill.
+    pub badge_pad_x: f32,
+    /// Height of a badge pill.
+    pub badge_height: f32,
 }
 
 impl MenuMetrics {
@@ -86,6 +92,9 @@ impl MenuMetrics {
         separator_margin: 4.0,
         min_width: 200.0,
         max_width: 320.0,
+        badge_size: MENU_SHORTCUT_SIZE,
+        badge_pad_x: 6.0,
+        badge_height: 15.0,
     };
 
     /// Height of one item row; `has_icons` is whether the menu has an icon
@@ -141,16 +150,16 @@ impl MenuMetrics {
             .map(|rows| rows + 2.0 * self.panel_pad)
     }
 
-    /// Top of the open submenu's launcher row (a submenu row marked active),
-    /// measured from the top of the card; `None` when no launcher is open or
-    /// a `Custom` row above it has no known height.
+    /// Top of the open submenu's launcher row (a submenu row marked active
+    /// or selected), measured from the top of the card; `None` when no
+    /// launcher is open or a `Custom` row above it has no known height.
     pub fn active_submenu_top<M: Clone>(&self, entries: &[DropdownEntry<M>]) -> Option<f32> {
         let has_icons = has_icons(entries);
         let mut y = self.panel_pad;
         for entry in entries {
             if let DropdownEntry::Item(item) = entry
                 && item.submenu
-                && item.active
+                && (item.active || item.selected)
             {
                 return Some(y);
             }
@@ -162,8 +171,8 @@ impl MenuMetrics {
     /// Width a card of `entries` needs, clamped to this look's fitted range
     /// and to `max_w`. It mirrors the row layout: panel padding, row
     /// padding, the icon column when a row has an icon, the label, the gap
-    /// before the shortcut column, the shortcut, the check and the chevron
-    /// column. Labels are measured in `ui_family`, the face the menu draws
+    /// before the shortcut column, the badge pill, the shortcut, the check
+    /// and the chevron column. Labels are measured in `ui_family`, the face the menu draws
     /// in, and shortcuts in the face their column draws in. `Custom` rows
     /// are not measured; a caller with custom rows sizes for them itself.
     pub fn fitted_width<M: Clone>(
@@ -190,10 +199,16 @@ impl MenuMetrics {
                         w += self.icon_size + self.row_spacing;
                     }
                     w += self.row_spacing + self.cluster_gap;
-                    if let Some(s) = &item.shortcut {
+                    for s in [&item.caption, &item.shortcut].into_iter().flatten() {
                         w += self.row_spacing + advance(s, self.shortcut_size, shortcut_family);
                     }
-                    if item.checked {
+                    if let Some(badge) = &item.badge {
+                        // The pill's text, its padding and its 1 px outline.
+                        w += self.row_spacing
+                            + advance(badge.as_str(), self.badge_size, family)
+                            + 2.0 * (self.badge_pad_x + 1.0);
+                    }
+                    if item.checked && item.lead_check.is_none() {
                         w += self.row_spacing + self.check_size;
                     }
                     if has_chevrons {
@@ -220,13 +235,14 @@ fn line_height(size: f32) -> f32 {
         .0
 }
 
-/// Whether any item row of `entries` carries an icon or a swatch: the menu
-/// then has an icon column.
+/// Whether any item row of `entries` carries an icon, a swatch or a leading
+/// check: the menu then has an icon column.
 pub(super) fn has_icons<M: Clone>(entries: &[DropdownEntry<M>]) -> bool {
     entries.iter().any(|entry| {
         matches!(
             entry,
-            DropdownEntry::Item(item) if item.icon.is_some() || item.swatch.is_some()
+            DropdownEntry::Item(item)
+                if item.icon.is_some() || item.swatch.is_some() || item.lead_check.is_some()
         )
     })
 }

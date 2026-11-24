@@ -47,8 +47,40 @@ pub enum BoardBakeError {
     HoleDrill { entity: SketchEntityId, drill: f64 },
     #[error("mounting hole {entity} names net {net:?}, which the board does not have")]
     UnknownNet { entity: SketchEntityId, net: String },
+    #[error("pour {entity} names net {net:?}, which the board does not have")]
+    PourUnknownNet { entity: SketchEntityId, net: String },
+    /// A Slot profile that is not two parallel lines joined by two tangent
+    /// arcs of one radius.
+    #[error("slot {entity} is not a slot: two parallel lines joined by two tangent arcs")]
+    NotASlot { entity: SketchEntityId },
+    #[error("pour {entity} is not on a copper layer")]
+    PourNotCopper { entity: SketchEntityId },
+    #[error("component anchor {entity} is not a point")]
+    AnchorNotAPoint { entity: SketchEntityId },
+    #[error("component anchor {entity} names no component; pick one in Properties")]
+    AnchorWithoutComponent { entity: SketchEntityId },
+    /// A component anchor names a footprint the board does not hold.
+    #[error("component anchor {entity} names a component the board does not have")]
+    UnknownComponent {
+        entity: SketchEntityId,
+        footprint: uuid::Uuid,
+    },
     #[error("V-score {entity} is not a line")]
     VScoreNotALine { entity: SketchEntityId },
+    /// A pattern repeats a target that cannot be instanced: the outline
+    /// (a board has one) or a component anchor (a component is in one place).
+    #[error("the {} at {entity} has a pattern, which it cannot repeat; remove the pattern", .kind.label())]
+    NotPatternable {
+        kind: BakedKind,
+        entity: SketchEntityId,
+    },
+    /// The patterns of the whole sketch write more instances than one bake
+    /// may; `entity` is the item that went over.
+    #[error("the sketch's patterns place more than {limit} items, reached at entity {entity}")]
+    TooManyInstances {
+        entity: SketchEntityId,
+        limit: usize,
+    },
     #[error("the {what} of entity {entity} does not evaluate: {message}")]
     Expression {
         entity: SketchEntityId,

@@ -1,29 +1,26 @@
-//! Component Preview tab — read-only Symbol/Footprint render plus
-//! template-validated forms for parameters / supply / datasheet /
-//! simulation.
+//! Component editor — a library row opened as a document (a main-window
+//! tab or its own `WindowKind::ComponentEditor` window), Graphite mockup
+//! row 128.
 //!
-//! In the v0.9-refactor-2 (DBLib) model, components are TSV rows
-//! addressed by [`crate::library::state::EditorAddress`]
-//! (`library_path + table + row_id`). The state lives on
+//! In the DBLib model, components are TSV rows addressed by
+//! [`crate::library::state::EditorAddress`] (`library_path + table +
+//! row_id`). The state lives on
 //! [`crate::library::state::ComponentPreviewState`].
 //!
-//! The Component view is preview-only: Symbol and Footprint render
-//! read-only. Editing happens via standalone `.snxsym` / `.snxfpt`
-//! document tabs in the main window — right-click on either render
-//! in the Preview tab fires
-//! [`crate::library::messages::LibraryMessage::OpenPrimitiveEditor`]
-//! to open the standalone editor.
-//!
-//! Tab count is 5: Preview / Parameters / Supply / Datasheet /
-//! Simulation. Pin Map folds into Preview as an inline subsection;
-//! History is reachable via `git log`; Where-Used is a footer line
-//! on Preview.
+//! Layout: the header (`header.rs`: internal PN, version, unsaved and parse
+//! pills, library / table, close), underline tabs with counts in the order
+//! General, Parameters, Supply, Datasheet, Simulation, Pin Map, Alternates,
+//! the active tab's body, and the footer (`footer.rs`: Reload saved
+//! version, Ctrl+S, Release…, Save & Close, Cancel, Save). Symbol and
+//! Footprint draw read-only; Open on either opens the standalone
+//! `.snxsym` / `.snxfpt` editor.
 
 pub mod alternate_symbols;
 pub mod datasheet_picker;
+mod footer;
 pub mod footprint;
+mod general;
 mod header;
-pub mod inert;
 pub(crate) mod kit;
 mod measurement_cell;
 pub mod params;
@@ -35,11 +32,12 @@ pub mod supply;
 pub mod symbol;
 pub mod text_extent;
 
-use iced::widget::{Space, Widget, column, container, row};
+use iced::widget::{Widget, column, container, row};
 use iced::{Color, Element, Length};
-use signex_i18n::{I18n, ids, t};
+use signex_i18n::{I18n, t};
 use signex_library::TemplateViolation;
 use signex_types::theme::{CanvasColors, ThemeTokens};
+use signex_widgets::inert;
 use signex_widgets::text;
 use signex_widgets::theme_ext;
 
@@ -51,10 +49,27 @@ use super::state::{ComponentPreviewState, EditorAddress, LibraryState, PreviewTa
 
 /// Fade over a read-only tab: the panel colour, so it dims on any theme.
 const READ_ONLY_VEIL_ALPHA: f32 = 0.55;
-/// Render a Component Preview surface — five tabs (Preview / Parameters
-/// / Supply / Datasheet / Simulation), all read-only for Symbol+
-/// Footprint. The active tab body fills the panel; the header strip
-/// and footer give the row's identity + save controls.
+
+/// Narrowest the editor lays out, in body text heights: the General columns
+/// shrink down to it, so PIN TO PAD, Cancel and Save stay on screen in a
+/// docked tab (mockup row 128, decided 2026-11-22). A narrower window
+/// scrolls the editor sideways inside its frame.
+const MIN_EDITOR_EM: f32 = 52.0;
+const MIN_EDITOR_W: f32 = TS.body * MIN_EDITOR_EM;
+
+/// The widget id of a parameter's field, so the header's parse pill can
+/// focus it. Keyed by the row too: two editors can be open.
+pub(crate) fn unparsed_field_id(address: &EditorAddress, name: &str) -> iced::widget::Id {
+    iced::widget::Id::from(format!(
+        "component-editor-param:{}:{}:{}:{name}",
+        address.library_path.display(),
+        address.table,
+        address.row_id
+    ))
+}
+
+/// Render the component editor: header, tabs, the active tab and the
+/// footer, kept at least [`MIN_EDITOR_W`] wide.
 #[expect(
     clippy::too_many_arguments,
     reason = "the editor views take the language handle beside their existing seven inputs (#2225)"
@@ -69,36 +84,28 @@ pub(crate) fn view<'a>(
     address: EditorAddress,
     i18n: &'a I18n,
 ) -> Element<'a, LibraryMessage> {
-    let read_only = library_state.is_read_only(&state.library_path);
-    let header = view_header(state, tokens, i18n, address.clone(), read_only);
-    let tabs = view_tabs(state, library_state, tokens, i18n, address.clone());
-    let body = view_active_tab(
-        state,
-        library_state,
-        tokens,
-        canvas_colors,
-        grid,
-        device_px_per_logical_px,
-        address.clone(),
-        i18n,
-    );
-    let footer = view_footer(state, tokens, i18n, address, read_only);
-
-    column![header, tabs, body, footer]
-        .spacing(0)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .boxed()
-}
-
-fn view_header<'a>(
-    state: &'a ComponentPreviewState,
-    tokens: &'a ThemeTokens,
-    i18n: &I18n,
-    address: EditorAddress,
-    read_only: bool,
-) -> Element<'a, LibraryMessage> {
-    header::view(state, tokens, i18n, address, read_only)
+    let canvas_colors = *canvas_colors;
+    kit::sideways_frame(MIN_EDITOR_W, tokens, move || {
+        let read_only = library_state.is_read_only(&state.library_path);
+        let header = header::view(state, tokens, i18n, address.clone());
+        let tabs = view_tabs(state, library_state, tokens, i18n, address.clone());
+        let body = view_active_tab(
+            state,
+            library_state,
+            tokens,
+            &canvas_colors,
+            grid,
+            device_px_per_logical_px,
+            address.clone(),
+            i18n,
+        );
+        let footer = footer::view(state, tokens, i18n, &address, read_only);
+        column![header, tabs, body, footer]
+            .spacing(0)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .boxed()
+    })
 }
 
 /// How many required slots of `class` have no usable value. Zero for a
@@ -119,9 +126,9 @@ fn missing_required_in(
         .count()
 }
 
-/// The number a tab shows in its badge slot; `None` draws no badge. The
-/// Parameters count is hidden at 0 and on a read-only library, where the
-/// tab is inert and the user cannot act on it.
+/// The missing-required count the Parameters tab shows; `None` draws no
+/// error badge. Hidden at 0 and on a read-only library, where the tab is
+/// inert and the user cannot act on it.
 fn tab_badge(
     tab: PreviewTab,
     state: &ComponentPreviewState,
@@ -145,9 +152,10 @@ fn tab_badge(
     }
 }
 
-/// The badge of a Graphite tab: the failing-parameter count (error), the
-/// pins with a pad out of all pins (ok when complete, warning otherwise),
-/// the alternate-symbol count (neutral).
+/// The count a tab shows: Parameters, its missing required slots (error)
+/// or else how many parameters the row has (neutral); Pin Map, the pins
+/// with a pad of all pins (ok when complete, warning otherwise);
+/// Alternates, the alternate symbols (neutral).
 fn graphite_badge(
     tab: PreviewTab,
     state: &ComponentPreviewState,
@@ -155,9 +163,13 @@ fn graphite_badge(
 ) -> Option<(String, crate::styles::PillTone)> {
     use crate::styles::PillTone;
     match tab {
-        PreviewTab::Parameters => {
-            tab_badge(tab, state, library_state).map(|n| (n.to_string(), PillTone::Err))
-        }
+        PreviewTab::Parameters => tab_badge(tab, state, library_state)
+            .map(|n| (n.to_string(), PillTone::Err))
+            .or_else(|| {
+                Some(state.row.parameters.len())
+                    .filter(|n| *n > 0)
+                    .map(|n| (n.to_string(), PillTone::Neutral))
+            }),
         PreviewTab::PinMap => preview::pin_map_counts(state).map(|(mapped, total)| {
             let tone = if mapped == total {
                 PillTone::Ok
@@ -267,8 +279,8 @@ fn view_active_tab<'a>(
     i18n: &'a I18n,
 ) -> Element<'a, LibraryMessage> {
     // A read-only library (the stock library) shows every editing tab
-    // dimmed and inert; the Preview tab guards its own editing parts
-    // because its Open Editor buttons must stay live.
+    // dimmed and inert; the General tab guards its own editing parts
+    // because its Open buttons must stay live.
     let read_only = library_state.is_read_only(&state.library_path);
     let veil = read_only_veil(tokens);
     let inner: Element<'_, LibraryMessage> = match state.active_tab {
@@ -310,95 +322,13 @@ fn view_active_tab<'a>(
                 .boxed(),
         ),
     };
-    // The one body padding. A tab is a scrolling stack of `kit::card`
-    // sections with no outer surface of its own.
+    // The one body padding (the mock's 16 px). A tab is a scrolling stack
+    // of `kit::card` sections with no outer surface of its own.
     container(inner)
-        .padding(SP.l)
+        .padding(SP.xl)
         .width(Length::Fill)
         .height(Length::Fill)
         .boxed()
-}
-
-fn view_footer<'a>(
-    state: &'a ComponentPreviewState,
-    tokens: &'a ThemeTokens,
-    i18n: &I18n,
-    address: EditorAddress,
-    read_only: bool,
-) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
-
-    if read_only {
-        return container(
-            text(t!(i18n, ids::EDITORS_COMPONENT_READ_ONLY_FOOTER))
-                .size(TS.body)
-                .color(muted),
-        )
-        .padding([SP.m, SP.l])
-        .width(Length::Fill)
-        .style(crate::styles::modal_footer_strip(tokens))
-        .boxed();
-    }
-
-    // There is no bottom bar: Save / Save & Close live in the header.
-    // The bar only returns for the stale-row reload prompt.
-    if !state.stale_base {
-        return Space::new().height(0.0).boxed();
-    }
-
-    let event = |msg: EditorMsg| {
-        Some(LibraryMessage::EditorEvent {
-            library_path: address.library_path.clone(),
-            table: address.table.clone(),
-            row_id: address.row_id,
-            msg,
-        })
-    };
-    let dirty_marker: Element<'_, LibraryMessage> = if state.has_unsaved_edits() {
-        text(t!(i18n, ids::EDITORS_COMPONENT_UNSAVED_MARKER))
-            .size(TS.body)
-            .color(muted)
-            .boxed()
-    } else {
-        Space::new().width(0.0).boxed()
-    };
-
-    // Offered once a save was refused because the row changed on the
-    // server; discarding the working copy asks first.
-    let reload: Element<'_, LibraryMessage> = if !state.stale_base {
-        Space::new().width(0.0).boxed()
-    } else if state.reload_confirming {
-        row![
-            Space::new().width(SP.l),
-            text(t!(i18n, ids::EDITORS_COMPONENT_RELOAD_CONFIRM))
-                .size(TS.body)
-                .color(muted),
-            Space::new().width(SP.m),
-            kit::primary_button("Reload", event(EditorMsg::ReloadConfirmed), tokens),
-            Space::new().width(SP.m),
-            kit::secondary_button("Keep editing", event(EditorMsg::ReloadCancelled), tokens),
-        ]
-        .align_y(iced::Alignment::Center)
-        .boxed()
-    } else {
-        row![
-            Space::new().width(SP.l),
-            kit::secondary_button(
-                "Reload saved version",
-                event(EditorMsg::ReloadRequested),
-                tokens
-            ),
-        ]
-        .boxed()
-    };
-
-    container(
-        row![reload, Space::new().width(Length::Fill), dirty_marker,]
-            .align_y(iced::Alignment::Center),
-    )
-    .padding([SP.m, SP.l])
-    .style(crate::styles::modal_footer_strip(tokens))
-    .boxed()
 }
 
 #[cfg(test)]
@@ -454,6 +384,43 @@ mod tests {
         }
     }
 
+    /// Mockup row 128: the tab strip reads General, Parameters, Supply, Datasheet,
+    /// Simulation, Pin Map, Alternates.
+    #[test]
+    fn the_tab_strip_follows_the_mock_order() {
+        assert_eq!(
+            PreviewTab::GRAPHITE_ORDER,
+            &[
+                PreviewTab::Preview,
+                PreviewTab::Parameters,
+                PreviewTab::Supply,
+                PreviewTab::Datasheet,
+                PreviewTab::Simulation,
+                PreviewTab::PinMap,
+                PreviewTab::Alternates,
+            ]
+        );
+    }
+
+    /// Two editors' fields never share a focus id.
+    #[test]
+    fn unparsed_field_ids_are_per_row_and_per_field() {
+        let a = EditorAddress::new("/l.snxlib".into(), "t".into(), signex_library::RowId::new());
+        let b = EditorAddress::new("/l.snxlib".into(), "t".into(), signex_library::RowId::new());
+        assert_ne!(
+            unparsed_field_id(&a, "value"),
+            unparsed_field_id(&b, "value")
+        );
+        assert_ne!(
+            unparsed_field_id(&a, "value"),
+            unparsed_field_id(&a, "power")
+        );
+        assert_eq!(
+            unparsed_field_id(&a, "value"),
+            unparsed_field_id(&a, "value")
+        );
+    }
+
     fn preview_with(pn: &str, class: &str) -> ComponentPreviewState {
         use signex_library::{
             ComponentClass, ComponentRow, DatasheetRef, InternalPn, LifecycleState,
@@ -496,7 +463,8 @@ mod tests {
         )
     }
 
-    fn header_texts(state: &ComponentPreviewState) -> Vec<String> {
+    /// Header texts with Fluent's bidi isolation marks removed.
+    fn plain_header_texts(state: &ComponentPreviewState) -> Vec<String> {
         let tokens = theme_tokens(ThemeId::GraphiteDark);
         let address = EditorAddress::new(
             std::path::PathBuf::from("/tmp/test.snxlib"),
@@ -504,67 +472,51 @@ mod tests {
             signex_library::RowId::from(state.row.row_id),
         );
         crate::layout_probe::lay_out_texts(
-            view_header(state, &tokens, &signex_i18n::I18n::en_us(), address, false),
+            header::view(state, &tokens, &signex_i18n::I18n::en_us(), address),
             iced::Size::new(1400.0, 200.0),
         )
         .into_iter()
-        .map(|t| t.text)
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
         .collect()
     }
 
-    /// The header shows the row's identity once: part number, lifecycle
-    /// state and class.
+    /// Mockup row 128: the header shows the part number once, its version pill and the
+    /// library / table under it; lifecycle, class, description and the
+    /// manufacturer part are not in the header any more.
     #[test]
-    fn identity_is_shown_once_with_class_and_state() {
-        let texts = header_texts(&preview_with("RES-0001", "resistor"));
-        for want in ["RES-0001", "Draft", "resistor"] {
+    fn header_shows_the_part_number_version_and_location() {
+        let mut state = preview_with("RES-0001", "resistor");
+        state.row.description = "Thick-film chip resistor".into();
+        let texts = plain_header_texts(&state);
+        for want in ["RES-0001", "v0.0.1", "test / t"] {
             assert_eq!(
                 texts.iter().filter(|t| t.as_str() == want).count(),
                 1,
                 "{want:?} in {texts:?}"
             );
         }
+        for gone in [
+            "Draft",
+            "resistor",
+            "Thick-film chip resistor",
+            "Acme ACM-001",
+        ] {
+            assert!(!texts.iter().any(|t| t == gone), "{gone:?} in {texts:?}");
+        }
     }
 
     #[test]
     fn identity_falls_back_when_pn_and_class_are_empty() {
-        let texts = header_texts(&preview_with(" ", ""));
+        let texts = plain_header_texts(&preview_with(" ", ""));
         assert!(texts.iter().any(|t| t == "(no part number)"), "{texts:?}");
-        assert!(texts.iter().any(|t| t == "Draft"), "{texts:?}");
         assert!(
             texts.iter().all(|t| !t.trim().is_empty()),
-            "an empty class leaves a blank pill: {texts:?}"
+            "an empty value leaves a blank text: {texts:?}"
         );
     }
 
-    /// Header texts with Fluent's bidi isolation marks removed.
-    fn plain_header_texts(state: &ComponentPreviewState) -> Vec<String> {
-        header_texts(state)
-            .into_iter()
-            .map(|t| t.replace(['\u{2068}', '\u{2069}'], ""))
-            .collect()
-    }
-
-    /// #2262: the identity line carries the version and the library /
-    /// table the row lives in; the description is the heading and the
-    /// manufacturer part sits beside it.
-    #[test]
-    fn header_shows_version_location_description_and_part() {
-        let mut state = preview_with("RES-0001", "resistor");
-        state.row.description = "Thick-film chip resistor".into();
-        let texts = plain_header_texts(&state);
-        for want in [
-            "v0.0.1",
-            "test / t",
-            "Thick-film chip resistor",
-            "Acme ACM-001",
-        ] {
-            assert!(texts.iter().any(|t| t == want), "{want:?} in {texts:?}");
-        }
-    }
-
     /// A row with no description and no manufacturer part draws no empty
-    /// heading line.
+    /// text in the header.
     #[test]
     fn header_leaves_out_an_empty_summary() {
         let mut state = preview_with("RES-0001", "resistor");
@@ -573,15 +525,15 @@ mod tests {
         assert!(texts.iter().all(|t| !t.trim().is_empty()), "{texts:?}");
     }
 
-    /// The parse-error chip counts the pending measurement edits that did
-    /// not parse, and is absent when there are none; the unsaved marker
+    /// The parse pill counts the pending measurement edits that did not
+    /// parse, and is absent when there are none; the "• unsaved" pill
     /// follows the dirty flag.
     #[test]
     fn header_chip_counts_unparsed_fields_and_marks_unsaved() {
         let mut state = preview_with("RES-0001", "resistor");
         let clean = plain_header_texts(&state);
         assert!(!clean.iter().any(|t| t.contains("parse")), "{clean:?}");
-        assert!(!clean.iter().any(|t| t.contains("Unsaved")), "{clean:?}");
+        assert!(!clean.iter().any(|t| t.contains("unsaved")), "{clean:?}");
         state
             .params_error
             .insert("value".into(), "not a number".into());
@@ -591,10 +543,7 @@ mod tests {
             texts.iter().any(|t| t == "1 field does not parse"),
             "{texts:?}"
         );
-        assert!(
-            texts.iter().any(|t| t.contains("Unsaved changes")),
-            "{texts:?}"
-        );
+        assert!(texts.iter().any(|t| t == "• unsaved"), "{texts:?}");
         state
             .params_error
             .insert("power".into(), "not a number".into());
@@ -603,5 +552,22 @@ mod tests {
             texts.iter().any(|t| t == "2 fields do not parse"),
             "{texts:?}"
         );
+    }
+
+    /// The Parameters tab counts the row's parameters when nothing required
+    /// is missing.
+    #[test]
+    fn the_parameters_tab_counts_the_parameters() {
+        let mut state = preview_with("RES-0001", "");
+        let library = LibraryState::default();
+        assert!(graphite_badge(PreviewTab::Parameters, &state, &library).is_none());
+        state.row.parameters.insert(
+            "tolerance".into(),
+            signex_library::ParamValue::Text("1%".into()),
+        );
+        let (label, tone) =
+            graphite_badge(PreviewTab::Parameters, &state, &library).expect("a count");
+        assert_eq!(label, "1");
+        assert_eq!(tone, crate::styles::PillTone::Neutral);
     }
 }

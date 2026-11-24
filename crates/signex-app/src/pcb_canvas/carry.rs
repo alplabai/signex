@@ -7,17 +7,20 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use pcb_geom::{BoardTextField, TrackEnds};
-use signex_engine::pcb::BoardClipboard;
+use pcb_geom::{ArcEnds, BoardTextField, TrackEnds};
+use signex_engine::pcb::footprint_text_edit::{FootprintTextEdit, footprint_text_command};
 use signex_engine::pcb::part_place::PartToPlace;
-use signex_engine::pcb::placement::{grid_for, grid_step_mm};
-use signex_engine::pcb::snap::{GuideHit, SnapQuery, axis_snap, guide_snap, object_snap_point};
+use signex_engine::pcb::placement::grid_for;
+use signex_engine::pcb::snap::{
+    GuideHit, ShownLayers, SnapQuery, axis_snap, guide_snap, object_snap_point,
+};
+use signex_engine::pcb::{BoardClipboard, BoardCommand};
 use signex_types::pcb::{PcbBoard, Point, Segment};
-use signex_types::pcb_layer::CopperLayer;
+use signex_types::pcb_arc::TrackArc;
 use signex_types::pcb_options::{GridUse, GuideKind};
 use uuid::Uuid;
 
-use super::PcbSnapOptions;
+use super::{PcbSnapOptions, SnapView};
 
 /// What a paste on the cursor places, and the shapes its preview draws
 /// with the copy's origin at (0, 0).
@@ -66,6 +69,15 @@ pub struct PcbCarry {
     /// A footprint's designator or comment a drag moves on its own (#2368);
     /// `footprints` is then empty.
     pub text: Option<(Uuid, BoardTextField)>,
+    /// The vias a drag moves; `footprints` is then empty.
+    pub vias: BTreeSet<Uuid>,
+    /// Tracks or copper arcs end on the carried `vias`, read when the drag
+    /// starts.
+    pub via_tracks: bool,
+    /// Ctrl has been down during this drag: the footprints or vias move
+    /// alone and their tracks stay. One-way until the carry ends, so
+    /// releasing Ctrl never reattaches them (Caner, 2026-11-21).
+    pub leaves_tracks: bool,
 }
 
 impl PcbCarry {
@@ -93,7 +105,64 @@ impl PcbCarry {
             paste: None,
             part: None,
             text: None,
+            vias: BTreeSet::new(),
+            via_tracks: false,
+            leaves_tracks: false,
         }
+    }
+
+    /// The footprints and vias the carry takes.
+    pub fn carried(&self) -> BTreeSet<Uuid> {
+        self.footprints.union(&self.vias).copied().collect()
+    }
+
+    /// Whether this carry moves objects already on the board, which then
+    /// move themselves in their real look. A paste or a part on the cursor
+    /// does not exist yet and keeps its ghost.
+    pub fn previews_on_board(&self) -> bool {
+        !self.footprints.is_empty() || !self.vias.is_empty() || self.text.is_some()
+    }
+
+    /// The ids of what moves with this carry on `board`: the footprints or
+    /// vias and the tracks and arcs following them. Their selection marks do
+    /// not stay behind.
+    pub fn moving_ids(&self, board: &PcbBoard) -> BTreeSet<Uuid> {
+        let mut ids = self.carried();
+        ids.extend(self.following(board).iter().map(|ends| ends.track));
+        ids.extend(self.following_arcs(board).iter().map(|ends| ends.arc));
+        ids
+    }
+
+    /// The track ends on what is carried, which move with it; none with
+    /// Ctrl held.
+    pub fn following(&self, board: &PcbBoard) -> Vec<TrackEnds> {
+        if self.leaves_tracks {
+            Vec::new()
+        } else if self.vias.is_empty() {
+            pcb_geom::tracks_on_pads(board, &self.footprints)
+        } else {
+            pcb_geom::tracks_on_vias(board, &self.vias)
+        }
+    }
+
+    /// The copper arc ends on the carried vias, which move with them; none
+    /// with Ctrl held.
+    pub fn following_arcs(&self, board: &PcbBoard) -> Vec<ArcEnds> {
+        if self.leaves_tracks {
+            Vec::new()
+        } else {
+            pcb_geom::arcs_on_vias(board, &self.vias)
+        }
+    }
+
+    /// What a carry's snap leaves out: the carried footprints or vias and
+    /// the tracks and arcs following them. With Ctrl they stay put, so they
+    /// still count.
+    pub fn snap_skip(&self, board: &PcbBoard) -> BTreeSet<Uuid> {
+        let mut skip = self.carried();
+        skip.extend(self.following(board).iter().map(|ends| ends.track));
+        skip.extend(self.following_arcs(board).iter().map(|ends| ends.arc));
+        skip
     }
 
     /// A Move, a paste or a part on the cursor waits for clicks: nothing is
@@ -129,28 +198,118 @@ impl PcbCarry {
 /// footprint nearest `from` lands on the components grid
 /// (`placement::grid_for`); then a guide in reach fixes the axes it runs
 /// across, and axis snapping lines the free axes up with object points
-/// (#2374). `active` is the active copper layer.
+/// (#2374). An object or guide pulls the carried pad centre or origin
+/// nearest the press, so it lands exactly on the point. `skip` is what the
+/// snap leaves out ([`PcbCarry::snap_skip`]).
 pub fn carry_delta(
     board: &PcbBoard,
     footprints: &BTreeSet<Uuid>,
+    skip: &BTreeSet<Uuid>,
     from: Point,
     to: Point,
-    snap: &PcbSnapOptions,
-    active: CopperLayer,
+    view: SnapView,
 ) -> Point {
-    let radius_mm = snap.distance.factor() * grid_step_mm(board);
-    let query = snap.layer_mask(active).map(|layers| SnapQuery {
-        objects: &snap.objects,
+    let on_grid = grid_delta(board, footprints, from, to, view.options);
+    let anchor = grabbed_point(board, footprints, from).unwrap_or(from);
+    let target = Point::new(anchor.x + to.x - from.x, anchor.y + to.y - from.y);
+    let what = GridUse::Components;
+    snapped_delta(board, skip, anchor, target, on_grid, what, view)
+}
+
+/// The origin or pad centre of the carried `footprints` nearest the press.
+fn grabbed_point(board: &PcbBoard, footprints: &BTreeSet<Uuid>, from: Point) -> Option<Point> {
+    let distance = |p: &Point| (p.x - from.x).powi(2) + (p.y - from.y).powi(2);
+    board
+        .footprints
+        .iter()
+        .filter(|fp| footprints.contains(&fp.uuid))
+        .flat_map(|fp| {
+            let pads = fp
+                .pads
+                .iter()
+                .filter_map(|pad| pcb_geom::pad_world_center(fp, pad).ok())
+                .map(pcb_geom::PointNm::to_mm);
+            std::iter::once(fp.position).chain(pads)
+        })
+        .min_by(|a, b| distance(a).total_cmp(&distance(b)))
+}
+
+/// The offset that takes the carried `vias` from `from` towards `to`, snapped
+/// as [`carry_delta`] snaps but for the centre of the via nearest `from`, so
+/// it lands exactly on the snap point wherever the via was pressed. A via is
+/// not a component: it takes the Non-Components grid.
+pub fn via_carry_delta(
+    board: &PcbBoard,
+    vias: &BTreeSet<Uuid>,
+    skip: &BTreeSet<Uuid>,
+    from: Point,
+    to: Point,
+    view: SnapView,
+) -> Point {
+    let raw = Point::new(to.x - from.x, to.y - from.y);
+    let distance = |p: Point| (p.x - from.x).powi(2) + (p.y - from.y).powi(2);
+    let Some(centre) = board
+        .vias
+        .iter()
+        .filter(|via| vias.contains(&via.uuid))
+        .map(|via| via.position)
+        .min_by(|a, b| distance(*a).total_cmp(&distance(*b)))
+    else {
+        return raw;
+    };
+    let on_grid = if view.options.to_grids {
+        grid_for(board, GridUse::NonComponents).snap_delta(centre, raw)
+    } else {
+        raw
+    };
+    let target = Point::new(centre.x + raw.x, centre.y + raw.y);
+    let what = GridUse::NonComponents;
+    snapped_delta(board, skip, centre, target, on_grid, what, view)
+}
+
+/// `on_grid` refined by the object, guide and axis snaps at `to`, leaving
+/// the carried `skip` items out of them. The reach counts on the grid that
+/// applies to `what`. With the status bar's Snap off, nothing pulls.
+fn snapped_delta(
+    board: &PcbBoard,
+    skip: &BTreeSet<Uuid>,
+    from: Point,
+    to: Point,
+    on_grid: Point,
+    what: GridUse,
+    view: SnapView,
+) -> Point {
+    if !view.snap_on {
+        return Point::new(to.x - from.x, to.y - from.y);
+    }
+    let snap = view.options;
+    let radius_mm = snap.catch_radius_mm(grid_for(board, what).step_mm, view.px_per_mm);
+    let no_objects = BTreeSet::new();
+    let objects = if view.objects_on {
+        &snap.objects
+    } else {
+        &no_objects
+    };
+    let shown = ShownLayers {
+        copper: view.shown_copper,
+        hidden: &view.hidden,
+        through_hidden: view.through_hidden,
+        hidden_kinds: &view.hidden_kinds,
+    };
+    let query = snap.layer_mask(view.active).map(|layers| SnapQuery {
+        objects,
         layers,
-        skip: footprints,
+        skip,
         radius_mm,
+        shown,
+        net: view.net,
     });
     if let Some(query) = &query
         && let Some(target) = object_snap_point(board, to, query)
     {
         return Point::new(target.x - from.x, target.y - from.y);
     }
-    let mut delta = grid_delta(board, footprints, from, to, snap);
+    let mut delta = on_grid;
     let (mut free_x, mut free_y) = (true, true);
     if snap.to_guides
         && let Some(hit) = guide_snap(&board.options.guides, to, radius_mm)
@@ -214,52 +373,50 @@ fn grid_delta(
     }
 }
 
-/// Where a placement tool's point at `to` lands (#2373): an object point
-/// within the snap distance, else the nearest point of the board's grid when
-/// grid snapping is on, else `to` itself. `active` is the active copper
-/// layer.
-pub fn snap_point(
-    board: &PcbBoard,
-    to: Point,
-    snap: &PcbSnapOptions,
-    active: CopperLayer,
-) -> Point {
-    if let Some(layers) = snap.layer_mask(active) {
-        let none = BTreeSet::new();
-        let query = SnapQuery {
-            objects: &snap.objects,
-            layers,
-            skip: &none,
-            radius_mm: snap.distance.factor() * grid_step_mm(board),
-        };
-        if let Some(target) = object_snap_point(board, to, &query) {
-            return target;
-        }
-    }
-    if !snap.to_grids {
-        return to;
-    }
-    // Tool points are not components: the Non-Components grid (#2374).
-    grid_for(board, GridUse::NonComponents).snap_delta(Point::new(0.0, 0.0), to)
+/// Where a placement tool's point at `to` lands (#2373). Tool points are
+/// not components: the Non-Components grid (#2374).
+pub fn snap_point(board: &PcbBoard, to: Point, view: SnapView) -> Point {
+    snap_point_on(board, to, GridUse::NonComponents, view)
 }
 
-/// `board` without `footprints` and the `following` tracks, the ones with
-/// an end on their pads: what a drag preview leaves in place.
+/// Where a point at `to` lands by every Snap Option, on the grid for `what`:
+/// an object point in reach, else the grid (when on) refined by guides and
+/// axes, else `to`. A paste and a part on the cursor land the same way,
+/// with a view [`SnapView::without_objects`].
+pub fn snap_point_on(board: &PcbBoard, to: Point, what: GridUse, view: SnapView) -> Point {
+    let zero = Point::new(0.0, 0.0);
+    let on_grid = if view.options.to_grids {
+        grid_for(board, what).snap_delta(zero, to)
+    } else {
+        to
+    };
+    snapped_delta(board, &BTreeSet::new(), zero, to, on_grid, what, view)
+}
+
+/// `board` without the `carried` footprints and vias and the `following`
+/// tracks, the ones with an end on them: what a drag preview leaves in place.
 pub fn board_without(
     board: &PcbBoard,
-    footprints: &BTreeSet<Uuid>,
+    carried: &BTreeSet<Uuid>,
     following: &[TrackEnds],
 ) -> PcbBoard {
     let following: BTreeSet<Uuid> = following.iter().map(|ends| ends.track).collect();
     let mut rest = PcbBoard {
         footprints: Vec::new(),
         segments: Vec::new(),
+        vias: Vec::new(),
         ..board.clone()
     };
     rest.footprints = board
         .footprints
         .iter()
-        .filter(|fp| !footprints.contains(&fp.uuid))
+        .filter(|fp| !carried.contains(&fp.uuid))
+        .cloned()
+        .collect();
+    rest.vias = board
+        .vias
+        .iter()
+        .filter(|via| !carried.contains(&via.uuid))
         .cloned()
         .collect();
     rest.segments = board
@@ -269,6 +426,69 @@ pub fn board_without(
         .cloned()
         .collect();
     rest
+}
+
+/// `board` without the footprint text `text`: what a drag of it leaves in
+/// place.
+pub fn board_without_text(board: &PcbBoard, text: (Uuid, BoardTextField)) -> PcbBoard {
+    let mut rest = board.clone();
+    let (id, field) = text;
+    if let Some(footprint) = rest.footprints.iter_mut().find(|fp| fp.uuid == id)
+        && let Some(index) = pcb_geom::property_index(footprint, field)
+    {
+        footprint.properties[index].hidden = true;
+    }
+    rest
+}
+
+/// Only the footprint text `text` of `board`, moved by `delta`, as the drop's
+/// command (`footprint_text_command`) moves it: what its drag preview draws.
+pub fn carried_text_board(
+    board: &PcbBoard,
+    text: (Uuid, BoardTextField),
+    delta: Point,
+) -> PcbBoard {
+    let (id, field) = text;
+    let zero = Point::new(0.0, 0.0);
+    let mut only = carried_board(board, &BTreeSet::from([id]), &[], zero);
+    let moved = footprint_text_command(board, id, field, FootprintTextEdit::MoveBy(delta));
+    let Some(footprint) = only.footprints.first_mut() else {
+        return only;
+    };
+    footprint.pads.clear();
+    footprint.graphics.clear();
+    if let Ok(Some(BoardCommand::SetFootprintProperty {
+        index, property, ..
+    })) = moved
+    {
+        footprint.properties[index] = property;
+    }
+    let shown = pcb_geom::property_index(footprint, field);
+    for (index, property) in footprint.properties.iter_mut().enumerate() {
+        property.hidden |= Some(index) != shown;
+    }
+    only
+}
+
+/// The arcs of `ends` on `board` as the move by `delta` leaves them; an arc
+/// no longer where `ends` found it is left out.
+pub fn followed_arcs(board: &PcbBoard, ends: &[ArcEnds], delta: Point) -> Vec<TrackArc> {
+    ends.iter()
+        .filter_map(|ends| {
+            let arc = board.free.arcs.get(ends.index)?;
+            (arc.uuid == ends.arc).then(|| ends.follow(arc, delta))
+        })
+        .collect()
+}
+
+/// `board` with each of `arcs` put over the arc with its uuid.
+pub fn with_arcs_replaced(mut board: PcbBoard, arcs: &[TrackArc]) -> PcbBoard {
+    for arc in arcs {
+        if let Some(slot) = board.free.arcs.iter_mut().find(|a| a.uuid == arc.uuid) {
+            *slot = arc.clone();
+        }
+    }
+    board
 }
 
 /// The track of `ends` on `board` with its ends on the moved pads shifted
@@ -282,13 +502,13 @@ fn followed(board: &PcbBoard, ends: &TrackEnds, delta: Point) -> Option<Segment>
     Some(ends.follow(segment, delta))
 }
 
-/// `board` as a move of `footprints` by `delta` leaves it: they and the
-/// `following` track ends on their pads moved (#2379), as the drop's
-/// commands (`placement::move_commands`) move them. The drag preview's
-/// ratsnest is read off it.
+/// `board` as a move of the `carried` footprints and vias by `delta` leaves
+/// it: they and the `following` track ends on them moved (#2379), as the
+/// drop's commands (`placement::move_commands`, `move_vias`) move them. The
+/// drag preview's ratsnest is read off it.
 pub fn board_after_move(
     board: &PcbBoard,
-    footprints: &BTreeSet<Uuid>,
+    carried: &BTreeSet<Uuid>,
     following: &[TrackEnds],
     delta: Point,
 ) -> PcbBoard {
@@ -296,9 +516,16 @@ pub fn board_after_move(
     for fp in moved
         .footprints
         .iter_mut()
-        .filter(|fp| footprints.contains(&fp.uuid))
+        .filter(|fp| carried.contains(&fp.uuid))
     {
         fp.position = Point::new(fp.position.x + delta.x, fp.position.y + delta.y);
+    }
+    for via in moved
+        .vias
+        .iter_mut()
+        .filter(|via| carried.contains(&via.uuid))
+    {
+        via.position = Point::new(via.position.x + delta.x, via.position.y + delta.y);
     }
     for ends in following {
         if let Some(segment) = followed(board, ends, delta) {
@@ -308,23 +535,33 @@ pub fn board_after_move(
     moved
 }
 
-/// Only `footprints` of `board`, moved by `delta`, on its layers, with the
-/// `following` tracks on their pads (#2379): what a drag preview draws
-/// where they are going. No other copper of the board's own.
+/// Only the `carried` footprints and vias of `board`, moved by `delta`, on
+/// its layers, with the `following` tracks on them (#2379): what a drag
+/// preview draws where they are going. No other copper of the board's own.
 pub fn carried_board(
     board: &PcbBoard,
-    footprints: &BTreeSet<Uuid>,
+    carried: &BTreeSet<Uuid>,
     following: &[TrackEnds],
     delta: Point,
 ) -> PcbBoard {
     let moved = board
         .footprints
         .iter()
-        .filter(|fp| footprints.contains(&fp.uuid))
+        .filter(|fp| carried.contains(&fp.uuid))
         .map(|fp| {
             let mut fp = fp.clone();
             fp.position = Point::new(fp.position.x + delta.x, fp.position.y + delta.y);
             fp
+        })
+        .collect();
+    let vias = board
+        .vias
+        .iter()
+        .filter(|via| carried.contains(&via.uuid))
+        .map(|via| {
+            let mut via = via.clone();
+            via.position = Point::new(via.position.x + delta.x, via.position.y + delta.y);
+            via
         })
         .collect();
     let segments = following
@@ -342,13 +579,14 @@ pub fn carried_board(
         nets: board.nets.clone(),
         footprints: moved,
         segments,
-        vias: Vec::new(),
+        vias,
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),
         free: Default::default(),
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
     }
@@ -357,6 +595,23 @@ pub fn carried_board(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use signex_types::pcb_layer::CopperLayer;
+
+    /// Zoomed in far enough that the Distance setting decides the reach.
+    fn view(options: &PcbSnapOptions) -> SnapView<'_> {
+        SnapView::new(options, CopperLayer::Top, 1000.0)
+    }
+
+    #[test]
+    fn the_catch_radius_is_the_larger_of_the_grid_and_the_screen_reach() {
+        let snap = PcbSnapOptions::default();
+        // 0.5 x 0.1 mm is 2.4 px at 48 px/mm: the 8 px reach wins.
+        assert!((snap.catch_radius_mm(0.1, 48.0) - 8.0 / 48.0).abs() < 1e-12);
+        // 0.5 x 2.54 mm beats 8 px: a coarse grid keeps its larger radius.
+        assert!((snap.catch_radius_mm(2.54, 48.0) - 1.27).abs() < 1e-12);
+        // Zoomed out, 8 px is more of the board.
+        assert!((snap.catch_radius_mm(0.1, 2.0) - 4.0).abs() < 1e-12);
+    }
 
     #[test]
     fn the_nearest_origin_lands_on_the_grid() {
@@ -373,10 +628,10 @@ mod tests {
         let delta = carry_delta(
             &board,
             &both,
+            &both,
             Point::new(1.0, 1.0),
             Point::new(2.0, 1.3),
-            &PcbSnapOptions::default(),
-            CopperLayer::Top,
+            view(&PcbSnapOptions::default()),
         );
         // U1 at 1.1 + 1.0 = 2.1 snaps to 2.0; y 1.0 + 0.3 snaps to 1.5.
         assert!(
@@ -409,10 +664,10 @@ mod tests {
         carry_delta(
             &guided_board(),
             &[Uuid::from_u128(1)].into(),
+            &[Uuid::from_u128(1)].into(),
             Point::new(1.0, 1.0),
             to,
-            snap,
-            CopperLayer::Top,
+            view(snap),
         )
     }
 

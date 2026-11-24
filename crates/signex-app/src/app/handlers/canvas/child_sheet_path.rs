@@ -117,6 +117,25 @@ pub(crate) fn reference_from(from_dir: &Path, to: &Path, fold: CaseFold) -> Stri
     parts.join("/")
 }
 
+/// What a contents table row stores for `to`, seen from the folder `from_dir`
+/// of the sheet holding the table: [`reference_from`], or `to` whole when no
+/// relative path joins them (another drive).
+pub(crate) fn link_from(from_dir: &Path, to: &Path, fold: CaseFold) -> String {
+    let (from, target) = (fold_dots(from_dir), fold_dots(to));
+    let other_drive = match (from.components().next(), target.components().next()) {
+        (Some(a @ Component::Prefix(_)), Some(b @ Component::Prefix(_))) => {
+            !same_component(&a, &b, fold)
+        }
+        (Some(Component::Prefix(_)), _) | (_, Some(Component::Prefix(_))) => true,
+        _ => false,
+    };
+    if other_drive {
+        to.to_string_lossy().into_owned()
+    } else {
+        reference_from(from_dir, to, fold)
+    }
+}
+
 /// Whether two path components name the same entry under `fold`.
 fn same_component(a: &Component<'_>, b: &Component<'_>, fold: CaseFold) -> bool {
     path_key_with(Path::new(a.as_os_str()), fold) == path_key_with(Path::new(b.as_os_str()), fold)
@@ -241,6 +260,39 @@ mod tests {
                 CaseFold::PRESERVE
             ),
             "../shared/r.snxsch"
+        );
+    }
+
+    #[test]
+    fn a_contents_link_is_relative_to_the_sheet_holding_the_table() {
+        assert_eq!(
+            link_from(
+                &p("/proj"),
+                &p("/proj/power/buck.snxsch"),
+                CaseFold::PRESERVE
+            ),
+            "power/buck.snxsch"
+        );
+        assert_eq!(
+            link_from(
+                &p("/proj/toc"),
+                &p("/proj/power/buck.snxsch"),
+                CaseFold::PRESERVE
+            ),
+            "../power/buck.snxsch"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_contents_link_to_another_drive_stays_whole() {
+        assert_eq!(
+            link_from(
+                Path::new(r"C:\proj"),
+                Path::new(r"D:\shared\buck.snxsch"),
+                CaseFold::FOLD
+            ),
+            r"D:\shared\buck.snxsch"
         );
     }
 

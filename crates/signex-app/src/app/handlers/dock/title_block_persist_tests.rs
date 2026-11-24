@@ -337,6 +337,7 @@ fn remove_dialog_on_draft_sheet() -> (Signex, PathBuf, tempfile::TempDir, Arc<Re
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     (app, sheet, dir, recorder)
 }
@@ -864,4 +865,81 @@ fn undoing_a_committed_title_block_draft_makes_the_sheet_clean_again() {
             "committed_while_active={committed_while_active}: still dirty after undo"
         );
     }
+}
+
+/// #2531: a title-block row inherited from the project reads as the
+/// project's (its "project" pill) until the sheet's own value is typed and
+/// applied. The override goes through the title-block commit path: one undo
+/// step that brings the project's value back, and Save writes it.
+#[test]
+fn overriding_a_project_title_block_value_is_one_undo_step_and_saved() {
+    use crate::app::handlers::menu::export::tests as fx;
+    use crate::app::{EditMsg, FileMsg};
+    use crate::panels::{TitleBlockSource, title_block_source};
+    let mut app = fx::app_workspace("/w/p", &["top.snxsch"]);
+    let id = app.document_state.projects[0].id;
+    app.document_state.projects[0]
+        .data
+        .parameters
+        .insert("company".into(), "Alp Lab".into());
+    let sheet = PathBuf::from("/w/p/top.snxsch");
+    fx::open_with(&mut app.document_state, &sheet, SchematicSheet::default());
+    app.document_state.tabs.push(TabInfo {
+        title: "top".to_string(),
+        path: sheet.clone(),
+        cached_document: None,
+        project_id: Some(id),
+        kind: TabKind::Schematic,
+    });
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(sheet.clone());
+    let recorder = Arc::new(Recorder::default());
+    app.document_state.document_saves = DocumentSaves::new(recorder.clone());
+    let source = |app: &mut Signex| {
+        app.refresh_panel_ctx();
+        let ctx = &app.document_state.panel_ctx;
+        title_block_source(
+            TitleBlockField::Company,
+            &ctx.title_block,
+            &ctx.project_parameters,
+        )
+    };
+    let company = |app: &Signex| {
+        let engine = &app.document_state.engines[&sheet];
+        engine.document().title_block.get("company").cloned()
+    };
+    assert_eq!(source(&mut app), TitleBlockSource::Project);
+
+    let panel = |app: &mut Signex, msg: PanelMsg| {
+        let task = app.update(Message::Dock(DockMessage::Panel(msg)));
+        settle(app, task);
+    };
+    panel(
+        &mut app,
+        PanelMsg::TitleBlockTyping(TitleBlockField::Company, "Other".into()),
+    );
+    assert_eq!(company(&app), None, "a draft is not applied");
+    panel(
+        &mut app,
+        PanelMsg::CommitTitleBlockField(TitleBlockField::Company),
+    );
+    assert_eq!(company(&app).as_deref(), Some("Other"));
+    assert_eq!(source(&mut app), TitleBlockSource::Sheet);
+
+    let task = app.update(Message::Edit(EditMsg::Undo));
+    settle(&mut app, task);
+    assert_eq!(company(&app), None, "one undo step");
+    assert_eq!(source(&mut app), TitleBlockSource::Project);
+    let task = app.update(Message::Edit(EditMsg::Redo));
+    settle(&mut app, task);
+    assert_eq!(company(&app).as_deref(), Some("Other"));
+
+    let task = app.update(Message::File(FileMsg::Save));
+    settle(&mut app, task);
+    let bytes = recorder.0.lock().unwrap().last().cloned();
+    let saved = signex_types::format::SnxSchematic::parse(&bytes.expect("Save wrote the sheet"))
+        .expect("reopens")
+        .sheet;
+    let saved = saved.title_block.get("company").map(String::as_str);
+    assert_eq!(saved, Some("Other"));
 }

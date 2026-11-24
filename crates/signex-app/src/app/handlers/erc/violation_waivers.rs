@@ -1,9 +1,10 @@
 //! Waive / restore one ERC finding with a reason (#1285).
 //!
 //! Waivers live in the project's rule set (`ProjectRules::erc_waivers`). The
-//! reason and author are typed into an inline editor in the ERC panel, held
-//! as `ui_state.erc_waive_draft`; confirming is one undoable rule-set edit,
-//! the same path as net waivers, then ERC re-runs.
+//! reason is typed into an inline editor in the ERC panel and the author is
+//! the git identity (mockup row 88), both held as `ui_state.erc_waive_draft`;
+//! confirming is one undoable rule-set edit, the same path as net waivers,
+//! then ERC re-runs.
 
 use iced::Task;
 
@@ -69,20 +70,16 @@ impl Signex {
                 message,
                 sheet,
             } => {
+                let ask = self.ask_user_identity();
                 self.start_erc_waiver(key.clone(), message.clone(), sheet.clone());
-                Task::none()
+                ask
             }
-            ErcWaiverMsg::ReasonChanged(reason) => {
+            ErcWaiverMsg::ReasonActed(action) => {
                 if let Some(draft) = self.ui_state.erc_waive_draft.as_mut() {
-                    draft.reason = reason.clone();
-                    draft.error = None;
-                }
-                Task::none()
-            }
-            ErcWaiverMsg::AuthorChanged(author) => {
-                if let Some(draft) = self.ui_state.erc_waive_draft.as_mut() {
-                    draft.author = author.clone();
-                    draft.error = None;
+                    if action.is_edit() {
+                        draft.error = None;
+                    }
+                    draft.reason.perform(action.clone());
                 }
                 Task::none()
             }
@@ -97,22 +94,18 @@ impl Signex {
         follow
     }
 
-    /// Open the editor for the finding keyed `key`. The author defaults to
-    /// the last one used, then to the OS login name; the reason carries over
-    /// only when it is the same finding.
+    /// Open the editor for the finding keyed `key`. The author is the cached
+    /// git identity (mockup row 88); the reason carries over only when it is
+    /// the same finding.
     fn start_erc_waiver(
         &mut self,
         key: signex_erc::waivers::violation::WaiverKey,
         message: String,
         sheet: std::path::PathBuf,
     ) {
-        let author = self
-            .ui_state
-            .erc_waive_draft
-            .as_ref()
-            .map(|d| d.author.clone())
-            .filter(|a| !a.trim().is_empty())
-            .unwrap_or_else(default_author);
+        let identity = &self.ui_state.validation_panels.identity;
+        let author = identity.author();
+        let awaits_identity = matches!(identity, crate::panels::UserIdentity::Asking);
         // Re-opening the same finding (after a refused or stale Confirm and a
         // re-run) keeps the reason already typed.
         let reason = self
@@ -128,6 +121,7 @@ impl Signex {
             message,
             reason,
             author,
+            awaits_identity,
             error: None,
         });
     }
@@ -136,6 +130,9 @@ impl Signex {
         let Some(draft) = self.ui_state.erc_waive_draft.clone() else {
             return Task::none();
         };
+        if draft.awaits_identity {
+            return Task::none();
+        }
         // The fingerprint is taken from the sheet as it is now, not as it was
         // when the row was drawn, so an edit in between cannot make the new
         // waiver lapse on arrival.
@@ -150,10 +147,11 @@ impl Signex {
             }
         };
         let date = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let reason = draft.reason.text();
         let waiver = match signex_erc::waivers::violation::new_waiver(
             &key,
             &draft.message,
-            &draft.reason,
+            &reason,
             &draft.author,
             &date,
         ) {
@@ -174,7 +172,7 @@ impl Signex {
             "ERC: waived {} ({}): {}",
             draft.key.rule_id,
             draft.message,
-            draft.reason.trim()
+            reason.trim()
         ));
         self.replace_project_rules(Some(rules), true);
         self.handle_run_erc()
@@ -237,12 +235,4 @@ impl Signex {
         self.replace_project_rules(Some(rules), true);
         self.handle_run_erc()
     }
-}
-
-/// The OS login name, or empty when the environment names none.
-fn default_author() -> String {
-    ["USER", "USERNAME", "LOGNAME"]
-        .iter()
-        .find_map(|k| std::env::var(k).ok().filter(|v| !v.trim().is_empty()))
-        .unwrap_or_default()
 }

@@ -106,6 +106,10 @@ pub enum BackBlock {
     /// The sheet is placed more than once, so a value would change every
     /// placement.
     SharedSheet,
+    /// The part is in a channel of a repeated sheet: its designator is
+    /// derived from the sheet and the channel naming, so it has no value of
+    /// its own to write.
+    ChannelDesignator,
     /// Changing a part's footprint from the board waits for #2248.
     FootprintFromBoard,
 }
@@ -207,6 +211,20 @@ impl BackChangeList {
                 && shared(sheet, units)
             {
                 row.blocked = Some(BackBlock::SharedSheet);
+                row.on = false;
+            }
+        }
+        self.refresh_shared_notes();
+    }
+
+    /// Block the designator rows of the placements `is_channel` names: a
+    /// written entry would sit on a compiled channel and change nothing.
+    pub fn block_channel_designators(&mut self, is_channel: impl Fn(&InstancePath) -> bool) {
+        for row in &mut self.rows {
+            if let BackChange::Designator { sheet, .. } = &row.change
+                && is_channel(sheet)
+            {
+                row.blocked = Some(BackBlock::ChannelDesignator);
                 row.on = false;
             }
         }

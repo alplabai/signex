@@ -59,12 +59,7 @@ impl BomComponent {
     /// else "fitted unless the part is marked DNP". It is only a quantity;
     /// which parts are listed is decided by [`BomEngineOptions::admits`].
     pub fn is_fitted(&self) -> bool {
-        self.in_bom
-            && self.on_board
-            && self
-                .variant_fitted
-                .or(self.base_fitted)
-                .unwrap_or(!self.dnp)
+        self.in_bom && self.on_board && fit_of(self.variant_fitted, self.base_fitted, self.dnp)
     }
 
     /// Whether a variant override or base field explicitly marks the part as
@@ -73,6 +68,13 @@ impl BomComponent {
     fn is_explicitly_not_fitted(&self) -> bool {
         self.variant_fitted.or(self.base_fitted) == Some(false)
     }
+}
+
+/// The fit rule before the BOM's in-BOM and on-board gates: the variant's
+/// override, else the base fields, else fitted unless the part is DNP. The
+/// one place it is decided, for the BOM and the variant matrix.
+pub fn fit_of(variant_fitted: Option<bool>, base_fitted: Option<bool>, dnp: bool) -> bool {
+    variant_fitted.or(base_fitted).unwrap_or(!dnp)
 }
 
 /// Metadata propagated to BOM outputs.

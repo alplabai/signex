@@ -1,6 +1,6 @@
 //! Area fields (#2393): the layer and net of a fill, solid region, polygon
 //! pour or keepout, and a pour's clearance, minimum width, priority and
-//! island rules (#2216).
+//! island rules (#2216), and whether it is shelved (#2523).
 
 use signex_types::format::{parse_pcb_layer, pcb_layer_token};
 use signex_types::pcb::{PcbBoard, Zone};
@@ -34,6 +34,9 @@ pub enum ZoneEdit {
     /// Whether a pour drops islands touching no copper of its net. Other
     /// areas are left as they are.
     RemoveDeadIslands(bool),
+    /// Whether a pour is shelved (#2523): it keeps its outline and settings
+    /// but holds no copper. Other areas are left as they are.
+    Shelved(bool),
 }
 
 /// Whether `layer` can hold `zone`: copper for a copper area, a layer that
@@ -116,6 +119,7 @@ pub fn apply_zone_edit(
         | ZoneEdit::Priority(_)
         | ZoneEdit::MinIslandArea(_)
         | ZoneEdit::RemoveDeadIslands(_)
+        | ZoneEdit::Shelved(_)
             if !zone.is_pour() => {}
         ZoneEdit::Clearance(v) => zone.clearance = v,
         ZoneEdit::MinThickness(v) => zone.min_thickness = v,
@@ -123,6 +127,7 @@ pub fn apply_zone_edit(
         ZoneEdit::Priority(v) => zone.priority = v as u32,
         ZoneEdit::MinIslandArea(v) => zone.min_island_area = v,
         ZoneEdit::RemoveDeadIslands(on) => zone.remove_dead_islands = on,
+        ZoneEdit::Shelved(on) => zone.shelved = on,
     }
     Ok(())
 }

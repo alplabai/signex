@@ -1,12 +1,27 @@
 //! The TOML shape of a shortcut file and its conversion to and from profiles.
 
-use super::{ProfileLoadError, ShortcutProfile, ShortcutProfileKind, ShortcutProfileSet};
+use super::{
+    BuiltInProfile, ProfileLoadError, ShortcutProfile, ShortcutProfileKind, ShortcutProfileSet,
+};
 use crate::keymap::{
     AppCommandId, Platform, ShortcutBinding, ShortcutBindingAction, ShortcutContext,
     ShortcutTrigger,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+
+/// The id files saved before #2759 hold for the Signex Standard profile.
+/// Read only: nothing writes it back.
+pub(in crate::keymap) const RENAMED_PROFILE_ID: &str = "altium";
+
+/// A profile id as read from a file, under its current name.
+fn current_profile_id(id: String) -> String {
+    if id == RENAMED_PROFILE_ID {
+        BuiltInProfile::SignexStandard.id().to_string()
+    } else {
+        id
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TomlShortcutProfile {
@@ -86,10 +101,12 @@ impl TomlShortcutConfig {
         set: &mut ShortcutProfileSet,
     ) -> Result<Option<String>, ProfileLoadError> {
         self.signex_settings.validate()?;
-        for profile in self.keyboard_shortcuts.profiles {
+        let mut shortcuts = self.keyboard_shortcuts;
+        shortcuts.move_custom_profiles_off_the_standard_id();
+        for profile in shortcuts.profiles {
             set.insert_custom_profile(profile.into_profile()?)?;
         }
-        let wanted = self.keyboard_shortcuts.active_profile;
+        let wanted = current_profile_id(shortcuts.active_profile);
         match set.set_active_profile(wanted.clone()) {
             Ok(()) => Ok(None),
             Err(ProfileLoadError::UnknownActiveProfile(_)) => Ok(Some(wanted)),
@@ -141,6 +158,56 @@ struct TomlKeyboardShortcutsConfig {
     profiles: Vec<TomlKeyboardShortcuts>,
 }
 
+impl TomlKeyboardShortcutsConfig {
+    /// A custom profile saved under the id the built-in now holds moves to a
+    /// free id, and the active pointer and bases that meant it follow. Runs
+    /// on the ids as written: the renamed id always meant the built-in, so
+    /// it must not be folded in first. The file changes on the next save.
+    fn move_custom_profiles_off_the_standard_id(&mut self) {
+        let standard = BuiltInProfile::SignexStandard.id();
+        let mut taken: BTreeSet<String> = self
+            .profiles
+            .iter()
+            .map(|profile| profile.profile_id.clone())
+            .collect();
+        let mut moved = BTreeSet::new();
+        let mut holder = None;
+        for profile in &mut self.profiles {
+            if profile.profile_kind == ShortcutProfileKind::Custom && profile.profile_id == standard
+            {
+                let id = free_profile_id(standard, &taken);
+                taken.insert(id.clone());
+                moved.insert(id.clone());
+                profile.profile_id = id.clone();
+                // The last one is the one an older build kept under this id.
+                holder = Some(id);
+            }
+        }
+        let Some(holder) = holder else {
+            return;
+        };
+        if self.active_profile == standard {
+            self.active_profile = holder.clone();
+        }
+        for profile in &mut self.profiles {
+            if profile.base_profile.as_deref() == Some(standard)
+                && !moved.contains(&profile.profile_id)
+            {
+                profile.base_profile = Some(holder.clone());
+            }
+        }
+    }
+}
+
+/// `{base}_custom`, numbered from 2 when that is taken.
+fn free_profile_id(base: &str, taken: &BTreeSet<String>) -> String {
+    let first = format!("{base}_custom");
+    std::iter::once(first.clone())
+        .chain((2u32..).map(|n| format!("{first}_{n}")))
+        .find(|id| !taken.contains(id))
+        .unwrap_or(first)
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct TomlKeyboardShortcuts {
     schema_version: u32,
@@ -170,12 +237,12 @@ impl TomlKeyboardShortcuts {
             .flat_map(TomlKeymapSection::into_bindings)
             .collect::<Result<Vec<_>, _>>()?;
         Ok(ShortcutProfile {
-            id: self.profile_id,
+            id: current_profile_id(self.profile_id),
             name: self.profile_name,
             kind: self.profile_kind,
             schema_version: self.schema_version,
             description: self.description,
-            base_profile: self.base_profile,
+            base_profile: self.base_profile.map(current_profile_id),
             bindings,
         })
     }

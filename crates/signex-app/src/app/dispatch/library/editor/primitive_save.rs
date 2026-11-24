@@ -366,7 +366,16 @@ impl Signex {
         } = done;
         match result {
             Ok(written) => {
-                self.document_state.document_saves.clear_failure(&path);
+                let docs = &mut self.document_state;
+                docs.document_saves.clear_failure(&path);
+                // A Save As moved the draft off `from`: a failure recorded
+                // there (a save refused over a changed file) is not its own.
+                if let Some(from) = save_as.as_ref().map(|origin| &origin.from)
+                    && !docs.symbol_editors.contains_key(from)
+                    && !docs.footprint_editors.contains_key(from)
+                {
+                    docs.document_saves.clear_failure(from);
+                }
                 self.finish_primitive_save(&path, generation, written, save_as.is_some(), refresh);
             }
             Err(reason) => self.fail_primitive_save(&path, generation, save_as, reason),

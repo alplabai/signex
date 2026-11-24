@@ -12,12 +12,43 @@ use iced::mouse;
 use iced::widget::canvas;
 use iced::{Point, Rectangle};
 
+use crate::library::editor::footprint::snap::{self, SketchInference};
 use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage};
 
-use super::super::hit_test::{sketch_hit_other, sketch_snap};
+use super::super::hit_test::{sketch_glyph_at, sketch_hit_other, sketch_snap};
 use super::super::{DragState, FootprintCanvas, FootprintCanvasState};
 
 impl FootprintCanvas<'_> {
+    /// A right-click that did not pan, in sketch mode with the Select tool
+    /// (mockup row 188): on a constraint glyph or value it opens the constraint menu,
+    /// on a pattern glyph or value the pattern menu, at the click. `None`
+    /// anywhere else, so the footprint context menu opens as before.
+    pub(in crate::library::editor::footprint::canvas) fn released_secondary_on_glyph(
+        &self,
+        cstate: &FootprintCanvasState,
+        cursor_pos: Point,
+    ) -> Option<canvas::Action<LibraryMessage>> {
+        use super::super::glyph_layout::GlyphTarget;
+        use crate::library::editor::footprint::sketch_mode::SketchCanvasMsg;
+        use crate::library::editor::footprint::state::{EditorMode, SketchTool};
+        if self.state.mode != EditorMode::Sketch || self.state.active_tool != SketchTool::Select {
+            return None;
+        }
+        let glyph = sketch_glyph_at(self.sketch, self.state, cstate, cursor_pos)?;
+        let (x, y) = (cursor_pos.x, cursor_pos.y);
+        let msg = match glyph.target {
+            GlyphTarget::Constraint(constraint) => {
+                SketchCanvasMsg::ConstraintMenuOpened { constraint, x, y }
+            }
+            GlyphTarget::Pattern(array) | GlyphTarget::PatternValue(array, _) => {
+                SketchCanvasMsg::PatternMenuOpened { array, x, y }
+            }
+            GlyphTarget::Instance { .. } => return None,
+        };
+        self.cache.clear();
+        Some(canvas::Action::publish(self.sketch_canvas_event(msg)).and_capture())
+    }
+
     /// The `pad_idx == usize::MAX` left-release branch: a press that
     /// started on empty canvas. Either it moved (Text Frame commit /
     /// rubber-band select) or it was a click (sketch click-add / place
@@ -65,7 +96,7 @@ impl FootprintCanvas<'_> {
             let anchor = drag.grab_offset_mm;
             let release_world = cursor
                 .position_in(bounds)
-                .map(|p| cstate.screen_to_world(p))
+                .map(|p| self.pointer_move_world(cstate, p))
                 .unwrap_or(anchor);
             let x_mm = anchor.0.min(release_world.0);
             let y_mm = anchor.1.min(release_world.1);
@@ -280,6 +311,28 @@ impl FootprintCanvas<'_> {
         if self.state.placement_paused && self.state.active_tool != SketchTool::Select {
             return None;
         }
+        // mockup row 188 — the constraint the press's snap infers, `Off` under Ctrl.
+        // An inferring click mints its own Point and the constraint ties it
+        // to the curve, so it reuses no Point.
+        let inference = snap::click_inference(
+            cstate.last_snap,
+            click_world,
+            self.sketch,
+            self.state,
+            cstate.current_modifiers.command(),
+        );
+        // A drawing click lands where its snap showed: a grid or axis
+        // position that merely lies near a Point does not reuse it.
+        let snapped_off_point = self.state.active_tool.is_drawing()
+            && cstate.last_snap.is_some_and(|s| {
+                (s.pos.0 - click_world.0).abs() < 1e-9
+                    && (s.pos.1 - click_world.1).abs() < 1e-9
+                    && !matches!(s.kind, snap::SnapKind::Point(_))
+            });
+        let snap_id = match inference {
+            Some(SketchInference::Off) | None if !snapped_off_point => snap_id,
+            _ => None,
+        };
         let msg = match self.state.active_tool {
             SketchTool::Select => EditorMsg::Footprint(FootprintEditorMsg::SketchSelect {
                 id: select_id,
@@ -290,11 +343,20 @@ impl FootprintCanvas<'_> {
             // the press missed every line, so an un-moved empty click is
             // a no-op — it never places geometry.
             SketchTool::DragTrackEnd => return None,
-            SketchTool::Point => EditorMsg::Footprint(FootprintEditorMsg::SketchPlacePoint {
-                x_mm: click_world.0,
-                y_mm: click_world.1,
+            SketchTool::Point => EditorMsg::Footprint(match inference {
+                Some(inference) => FootprintEditorMsg::SketchPlacePointInferred {
+                    x_mm: click_world.0,
+                    y_mm: click_world.1,
+                    inference,
+                },
+                None => FootprintEditorMsg::SketchPlacePoint {
+                    x_mm: click_world.0,
+                    y_mm: click_world.1,
+                },
             }),
             SketchTool::Line
+            | SketchTool::Slot
+            | SketchTool::Polygon
             | SketchTool::Rectangle
             | SketchTool::RoundedRectangle
             | SketchTool::Circle
@@ -307,13 +369,24 @@ impl FootprintCanvas<'_> {
             | SketchTool::TangentArc
             | SketchTool::Fillet
             | SketchTool::Trim
+            | SketchTool::Chamfer
+            | SketchTool::Extend
+            | SketchTool::LinearPattern
             // #372 — Break Track routes its single click through the
             // same SketchToolClick path as Trim; the dispatcher's edit
             // arm hit-tests the Line and hands off to `split_line`.
-            | SketchTool::BreakTrack => EditorMsg::Footprint(FootprintEditorMsg::SketchToolClick {
-                x_mm: click_world.0,
-                y_mm: click_world.1,
-                snap_id,
+            | SketchTool::BreakTrack => EditorMsg::Footprint(match inference {
+                Some(inference) => FootprintEditorMsg::SketchToolClickInferred {
+                    x_mm: click_world.0,
+                    y_mm: click_world.1,
+                    snap_id,
+                    inference,
+                },
+                None => FootprintEditorMsg::SketchToolClick {
+                    x_mm: click_world.0,
+                    y_mm: click_world.1,
+                    snap_id,
+                },
             }),
         };
         Some(canvas::Action::publish(LibraryMessage::EditorEvent {

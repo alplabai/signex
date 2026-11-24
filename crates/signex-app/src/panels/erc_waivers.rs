@@ -1,10 +1,15 @@
-//! Per-finding ERC waivers in the ERC panel (#1285): the Waive chip, the
-//! inline reason editor it opens, and the list of stored waivers.
+//! Per-finding ERC waivers in the ERC panel (#1285): the shared waiver form
+//! under the row being waived (AV-13), and the stored waivers' rows in the
+//! Waived group with their status pills.
 
-use super::*;
-use crate::styles::{Spacing, TypeScale};
-use iced::Widget;
+use iced::widget::text_editor;
 use signex_erc::waivers::violation::WaiverKey;
+use signex_i18n::{I18n, Localized, ids, t};
+
+use super::validation_kit::{FindingRow, finding_row, severity_badge, status_pill};
+use super::waiver_form::{ReasonFormEvents, ReasonFormView, WaiverReason, reason_form};
+use super::*;
+use crate::styles::{PillTone, Spacing, TypeScale};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -12,16 +17,17 @@ const SP: Spacing = Spacing::DEFAULT;
 /// Messages of the per-finding waiver UI, nested under `PanelMsg`.
 #[derive(Debug, Clone)]
 pub enum ErcWaiverMsg {
-    /// The Waive chip was pressed on the finding keyed `key`. Carries the key,
-    /// not the row index, so a run that lands between render and click cannot
-    /// retarget it, and the sheet, so Confirm re-keys it on that sheet only.
+    /// The Waive action was pressed on the finding keyed `key`. Carries the
+    /// key, not the row index, so a run that lands between render and click
+    /// cannot retarget it, and the sheet, so Confirm re-keys it on that
+    /// sheet only.
     Started {
         key: WaiverKey,
         message: String,
         sheet: std::path::PathBuf,
     },
-    ReasonChanged(String),
-    AuthorChanged(String),
+    /// The Reason field was typed in, or its cursor moved.
+    ReasonActed(text_editor::Action),
     Confirmed,
     Cancelled,
     /// Restore the finding a stored waiver hides.
@@ -38,8 +44,11 @@ pub struct ErcWaiveDraft {
     /// The sheet the finding is filed under; Confirm re-keys it there only.
     pub sheet: std::path::PathBuf,
     pub message: String,
-    pub reason: String,
+    pub reason: WaiverReason,
+    /// The git identity, empty when git has none (mockup row 88).
     pub author: String,
+    /// The git identity is still being read: Waive waits for it.
+    pub awaits_identity: bool,
     /// Why the last Confirm was refused.
     pub error: Option<String>,
 }
@@ -53,8 +62,42 @@ pub enum ErcWaiverStatus {
     Lapsed,
     /// No finding of this rule on these objects (fixed, or not run yet).
     Unmatched,
-    /// No reason or author (hand-edited file): never honoured.
+    /// No reason (hand-edited file): never honoured.
     Incomplete,
+}
+
+impl ErcWaiverStatus {
+    /// The status of a net waiver that hid `hidden` findings.
+    pub(super) fn of_net(hidden: usize) -> Self {
+        match hidden {
+            0 => Self::Unmatched,
+            n => Self::Waiving(n),
+        }
+    }
+
+    /// The pill's words and tone.
+    pub(super) fn pill(self, i18n: &I18n) -> (Localized, PillTone) {
+        match self {
+            Self::Waiving(1) => (t!(i18n, ids::PANELS_ERC_WAIVER_STATUS_ONE), PillTone::Ok),
+            Self::Waiving(n) => (
+                // As `format!` writes it, no grouping (#2059).
+                t!(i18n, ids::PANELS_ERC_WAIVER_STATUS_MANY, "count" => n.to_string()),
+                PillTone::Ok,
+            ),
+            Self::Lapsed => (
+                t!(i18n, ids::PANELS_ERC_WAIVER_STATUS_LAPSED),
+                PillTone::Err,
+            ),
+            Self::Unmatched => (
+                t!(i18n, ids::PANELS_ERC_WAIVER_STATUS_UNMATCHED),
+                PillTone::Neutral,
+            ),
+            Self::Incomplete => (
+                t!(i18n, ids::PANELS_ERC_WAIVER_STATUS_INCOMPLETE),
+                PillTone::Warn,
+            ),
+        }
+    }
 }
 
 /// One stored per-finding waiver for the panel.
@@ -71,34 +114,25 @@ pub struct ErcViolationWaiverEntry {
     pub severity: Option<ErcSeverityLite>,
 }
 
-/// "Waive" chip for a finding that names objects; nothing otherwise.
-pub(super) fn waive_chip<'a>(
+/// The "Waive" action of a finding that names objects; `None` otherwise.
+pub(super) fn waive_action<'a>(
     entry: &ErcDiagnosticEntry,
-    tokens: &'a signex_types::theme::ThemeTokens,
-    i18n: &signex_i18n::I18n,
-) -> Element<'a, PanelMsg> {
-    let Some(key) = entry.waiver_key.clone() else {
-        return Space::new().width(0).height(0).boxed();
-    };
-    row![
-        Space::new().width(6).height(Length::Shrink),
-        signex_widgets::button(
-            text(signex_i18n::t!(i18n, signex_i18n::ids::PANELS_ERC_WAIVE))
-                .size(TS.caption)
-                .color(theme_ext::text_primary(tokens))
-        )
-        .padding([SP.xs, SP.m])
-        .on_press(PanelMsg::ErcWaiver(ErcWaiverMsg::Started {
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Option<Element<'a, PanelMsg>> {
+    let key = entry.waiver_key.clone()?;
+    Some(super::validation_kit::row_action(
+        t!(i18n, ids::PANELS_ERC_WAIVE),
+        PanelMsg::ErcWaiver(ErcWaiverMsg::Started {
             key,
             message: entry.message.clone(),
             sheet: entry.sheet_path.clone(),
-        }))
-        .style(crate::styles::menu_item(tokens)),
-    ]
-    .boxed()
+        }),
+        tokens,
+    ))
 }
 
-/// The reason / author editor under the row being waived, if it is this one.
+/// The shared waiver form under the row being waived, if it is this one.
 pub(super) fn waive_editor<'a>(
     entry: &ErcDiagnosticEntry,
     ctx: &'a PanelContext,
@@ -107,153 +141,104 @@ pub(super) fn waive_editor<'a>(
     if entry.waiver_key.as_ref() != Some(&draft.key) {
         return None;
     }
-    let wrap = PanelMsg::ErcWaiver;
-    let input = |hint: signex_i18n::MessageId, value: &'a str, on: fn(String) -> ErcWaiverMsg| {
-        signex_widgets::text_input(signex_i18n::t!(ctx.i18n, hint), value)
-            .on_input(move |s| wrap(on(s)))
-            .on_submit(wrap(ErcWaiverMsg::Confirmed))
-            .size(TS.body)
-            .padding(SP.s)
-            .width(Length::Fill)
-    };
-    let button = |label: signex_i18n::MessageId, msg: ErcWaiverMsg| {
-        signex_widgets::button(
-            text(signex_i18n::t!(ctx.i18n, label))
-                .size(TS.caption)
-                .color(theme_ext::text_primary(&ctx.tokens)),
-        )
-        .padding([SP.xs, SP.m])
-        .on_press(wrap(msg))
-        .style(crate::styles::menu_item(&ctx.tokens))
-    };
-    let mut col: Column<Element<'a, PanelMsg>> = Column::new()
-        .spacing(SP.xs)
-        .padding([SP.xs, 18.0])
-        .width(Length::Fill);
-    col = col.push(
-        input(
-            signex_i18n::ids::PLACEHOLDER_ERC_WAIVER_REASON,
-            &draft.reason,
-            ErcWaiverMsg::ReasonChanged,
-        )
-        .boxed(),
+    let mut error = None;
+    if let Some(why) = draft.error.as_deref() {
+        // raw: the refusal is worded by the waiver handler in English (#2061).
+        error = Some(raw(why));
+    }
+    let form = reason_form(
+        ReasonFormView {
+            reason: &draft.reason,
+            placeholder: t!(ctx.i18n, ids::PLACEHOLDER_ERC_WAIVER_REASON),
+            error,
+        },
+        ReasonFormEvents {
+            reason: |action| PanelMsg::ErcWaiver(ErcWaiverMsg::ReasonActed(action)),
+            confirm: (!draft.awaits_identity)
+                .then_some(PanelMsg::ErcWaiver(ErcWaiverMsg::Confirmed)),
+            cancel: PanelMsg::ErcWaiver(ErcWaiverMsg::Cancelled),
+        },
+        &ctx.i18n,
+        &ctx.tokens,
     );
-    col = col.push(
-        input(
-            signex_i18n::ids::PLACEHOLDER_ERC_WAIVER_AUTHOR,
-            &draft.author,
-            ErcWaiverMsg::AuthorChanged,
-        )
-        .boxed(),
-    );
-    if let Some(error) = &draft.error {
-        col = col.push(
-            // raw: the refusal is worded by the waiver handler in English (#2061).
-            text(raw(error.clone()))
+    Some(container(form).padding([SP.xs, SP.m]).boxed())
+}
+
+/// Who waived it and when; the date alone for a waiver with no author (git
+/// had no identity, mockup row 88).
+fn waived_by_line<'a>(
+    ctx: &'a PanelContext,
+    w: &'a ErcViolationWaiverEntry,
+) -> Option<Element<'a, PanelMsg>> {
+    let muted = theme_ext::text_secondary(&ctx.tokens);
+    if w.author.trim().is_empty() {
+        if w.date.is_empty() {
+            return None;
+        }
+        return Some(
+            text(signex_i18n::UserText::new(w.date.as_str()))
                 .size(TS.caption)
-                .color(theme_ext::error_color(&ctx.tokens))
+                .color(muted)
                 .boxed(),
         );
     }
-    col = col.push(
-        row![
-            button(signex_i18n::ids::PANELS_ERC_WAIVE, ErcWaiverMsg::Confirmed),
-            Space::new().width(6).height(Length::Shrink),
-            button(
-                signex_i18n::ids::PANELS_ERC_WAIVER_CANCEL,
-                ErcWaiverMsg::Cancelled
-            ),
-        ]
-        .boxed(),
-    );
-    Some(col.boxed())
-}
-
-/// The project's per-finding waivers, dimmed, each with its reason, author,
-/// status and a Restore button. Shown even when every finding is waived.
-pub(super) fn violation_waivers_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    use signex_i18n::{ids, t};
-    let muted = theme_ext::text_secondary(&ctx.tokens);
-    let i18n = &ctx.i18n;
-    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(SP.xs).width(Length::Fill);
-    if ctx.erc_violation_waivers.is_empty() {
-        return col.boxed();
-    }
-    col = col.push(separator(&ctx.tokens).boxed());
-    col = col.push(
+    Some(
         text(t!(
-            i18n,
-            ids::PANELS_ERC_FINDINGS_WAIVED,
-            "count" => ctx.erc_violation_waivers.len().to_string()
+            ctx.i18n, ids::PANELS_ERC_WAIVED_BY,
+            "author" => w.author.as_str(), "date" => w.date.as_str()
         ))
         .size(TS.caption)
         .color(muted)
         .boxed(),
-    );
-    for w in &ctx.erc_violation_waivers {
-        let color = match w.status {
-            ErcWaiverStatus::Lapsed | ErcWaiverStatus::Incomplete => {
-                theme_ext::warning_color(&ctx.tokens)
-            }
-            _ => muted,
-        };
-        col = col.push(
-            row![
-                text(violation_waiver_detail(w, i18n))
-                    .size(TS.caption)
-                    .color(color)
-                    .width(Length::Fill),
-                signex_widgets::button(
-                    text(t!(i18n, ids::PANELS_ERC_RESTORE))
-                        .size(TS.caption)
-                        .color(theme_ext::text_primary(&ctx.tokens)),
-                )
-                .padding([SP.xs, SP.m])
-                .on_press(PanelMsg::ErcWaiver(ErcWaiverMsg::Removed {
-                    rule_id: w.rule_id.clone(),
-                    objects: w.objects.clone(),
-                }))
-                .style(crate::styles::menu_item(&ctx.tokens)),
-            ]
-            .align_y(iced::Alignment::Center)
-            .width(Length::Fill)
-            .boxed(),
-        );
-    }
-    col.boxed()
+    )
 }
 
-/// A stored waiver's two lines: rule, finding and status, then why and who.
-/// The rule id, message, reason, author and date are stored text, shown as
-/// they are.
-fn violation_waiver_detail(
-    w: &ErcViolationWaiverEntry,
-    i18n: &signex_i18n::I18n,
-) -> signex_i18n::Localized {
-    use signex_i18n::ids;
-    let status = match w.status {
-        ErcWaiverStatus::Waiving(1) => i18n.message_plain(ids::PANELS_ERC_WAIVER_STATUS_ONE, &[]),
-        ErcWaiverStatus::Waiving(n) => i18n.message_plain(
-            ids::PANELS_ERC_WAIVER_STATUS_MANY,
-            &[("count", n.to_string().into())],
-        ),
-        ErcWaiverStatus::Lapsed => i18n.message_plain(ids::PANELS_ERC_WAIVER_STATUS_LAPSED, &[]),
-        ErcWaiverStatus::Unmatched => {
-            i18n.message_plain(ids::PANELS_ERC_WAIVER_STATUS_UNMATCHED, &[])
-        }
-        ErcWaiverStatus::Incomplete => {
-            i18n.message_plain(ids::PANELS_ERC_WAIVER_STATUS_INCOMPLETE, &[])
-        }
-    };
-    signex_i18n::t!(
-        i18n,
-        ids::PANELS_ERC_VIOLATION_WAIVER_ROW,
-        "rule" => w.rule_id.as_str(),
-        "message" => w.message.as_str(),
-        "status" => status,
-        "reason" => w.reason.as_str(),
-        "author" => w.author.as_str(),
-        "date" => w.date.as_str()
+/// A stored per-finding waiver in the Waived group: the finding, its status
+/// pill and reason, who waived it and when, and Restore.
+pub(super) fn violation_waiver_row<'a>(
+    ctx: &'a PanelContext,
+    w: &'a ErcViolationWaiverEntry,
+) -> Element<'a, PanelMsg> {
+    let i18n = &*ctx.i18n;
+    let tokens = &ctx.tokens;
+    let muted = theme_ext::text_secondary(tokens);
+    let (status, tone) = w.status.pill(i18n);
+    let mut reason_line = row![status_pill(status, tone, tokens)]
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center);
+    if !w.reason.is_empty() {
+        reason_line = reason_line.push(
+            // The reason, author and date are stored text, shown as written.
+            text(signex_i18n::UserText::new(w.reason.as_str()))
+                .size(TS.caption)
+                .color(muted)
+                .boxed(),
+        );
+    }
+    let mut extra: Vec<Element<'a, PanelMsg>> = waived_by_line(ctx, w).into_iter().collect();
+    extra.push(super::validation_kit::row_action(
+        t!(i18n, ids::PANELS_ERC_RESTORE),
+        PanelMsg::ErcWaiver(ErcWaiverMsg::Removed {
+            rule_id: w.rule_id.clone(),
+            objects: w.objects.clone(),
+        }),
+        tokens,
+    ));
+    finding_row(
+        FindingRow {
+            badge: severity_badge(raw("–"), PillTone::Neutral, false, tokens),
+            // raw: the finding as signex-erc worded it when it was waived (#2062).
+            message: raw(w.message.as_str()),
+            place: reason_line.wrap().vertical_spacing(SP.xs).boxed(),
+            extra,
+            actions: Vec::new(),
+            selected: false,
+            hovered: true,
+            on_press: None,
+            on_enter: None,
+            on_exit: None,
+        },
+        tokens,
     )
 }
 
@@ -274,65 +259,76 @@ mod tests {
         }
     }
 
-    /// The rendered section heads the list with the count as `format!` wrote
-    /// it, no grouping, and shows each waiver's line (#2059).
-    #[test]
-    fn the_view_counts_the_stored_waivers() {
-        let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
-        ctx.erc_violation_waivers = vec![waiver(ErcWaiverStatus::Lapsed); 1200];
-        let texts: Vec<String> = crate::layout_probe::lay_out_texts(
-            violation_waivers_section(&ctx),
-            iced::Size::new(600.0, 100_000.0),
+    fn texts(ctx: &PanelContext) -> Vec<String> {
+        crate::layout_probe::lay_out_texts(
+            super::super::view_erc(ctx),
+            iced::Size::new(300.0, 100_000.0),
         )
         .into_iter()
         .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
-        .collect();
-        assert!(
-            texts.iter().any(|t| t == "1200 findings waived"),
-            "{:?}",
-            &texts[..texts.len().min(4)]
-        );
-        assert!(texts.iter().any(|t| t
-            == "unused-pin  Pin 3 of U1 is unconnected  (LAPSED: an involved object changed)\n  Reason: spare gate  by hg 2026-11-16"));
+        .collect()
     }
 
-    /// The stored-waiver line reads as the `format!` it replaced (#2059).
+    /// The Waived group counts the stored waivers, and an open group lists
+    /// each with its status pill, reason, author and date (#85).
     #[test]
-    fn a_stored_waiver_reads_as_before() {
-        let i18n = signex_i18n::I18n::en_us();
-        let mut w = ErcViolationWaiverEntry {
-            rule_id: "unused-pin".into(),
-            objects: vec![],
-            message: "Pin 3 of U1 is unconnected".into(),
-            reason: "spare gate".into(),
-            author: "hg".into(),
-            date: "2026-11-16".into(),
-            status: ErcWaiverStatus::Waiving(1),
-            severity: None,
-        };
-        let shown = |w: &ErcViolationWaiverEntry| {
-            violation_waiver_detail(w, &i18n)
+    fn the_waived_group_counts_and_lists_the_stored_waivers() {
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.erc_violation_waivers = vec![waiver(ErcWaiverStatus::Lapsed); 12];
+        ctx.validation.erc.waived_open = Some(true);
+        let shown = texts(&ctx);
+        assert!(shown.iter().any(|t| t == "Waived"), "{shown:?}");
+        assert!(shown.iter().any(|t| t == "12"), "{shown:?}");
+        assert!(shown.iter().any(|t| t == "Pin 3 of U1 is unconnected"));
+        assert!(
+            shown
+                .iter()
+                .any(|t| t == "LAPSED: an involved object changed")
+        );
+        assert!(shown.iter().any(|t| t == "spare gate"));
+        assert!(shown.iter().any(|t| t == "by hg · 2026-11-16"));
+        assert!(shown.iter().any(|t| t == "Restore"));
+    }
+
+    /// Each status reads as its pill (#85): waived, waives N findings,
+    /// LAPSED, matches no finding, ignored.
+    #[test]
+    fn every_waiver_status_has_its_pill() {
+        let i18n = I18n::en_us();
+        let words = |s: ErcWaiverStatus| {
+            s.pill(&i18n)
+                .0
                 .into_string()
                 .replace(['\u{2068}', '\u{2069}'], "")
         };
-        let expected = |status: &str| {
-            format!(
-                "unused-pin  Pin 3 of U1 is unconnected  ({status})\n  Reason: spare gate  by hg 2026-11-16"
-            )
-        };
-        assert_eq!(shown(&w), expected("waived"));
-        for (status, text) in [
-            (ErcWaiverStatus::Waiving(1200), "waives 1200 findings"),
-            (
-                ErcWaiverStatus::Lapsed,
-                "LAPSED: an involved object changed",
-            ),
-            (ErcWaiverStatus::Unmatched, "matches no finding"),
-            (ErcWaiverStatus::Incomplete, "ignored: no reason or author"),
-        ] {
-            w.status = status;
-            assert_eq!(shown(&w), expected(text));
-        }
+        assert_eq!(words(ErcWaiverStatus::Waiving(1)), "waived");
+        assert_eq!(
+            words(ErcWaiverStatus::Waiving(1200)),
+            "waives 1200 findings"
+        );
+        assert_eq!(
+            words(ErcWaiverStatus::Lapsed),
+            "LAPSED: an involved object changed"
+        );
+        assert_eq!(words(ErcWaiverStatus::Unmatched), "matches no finding");
+        assert_eq!(words(ErcWaiverStatus::Incomplete), "ignored: no reason");
+        assert_eq!(ErcWaiverStatus::of_net(0), ErcWaiverStatus::Unmatched);
+        assert_eq!(ErcWaiverStatus::of_net(3), ErcWaiverStatus::Waiving(3));
+    }
+
+    /// Mockup row 88: a waiver stored with no author shows its date alone,
+    /// never a dangling "by".
+    #[test]
+    fn a_waiver_without_an_author_shows_its_date_alone() {
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut stored = waiver(ErcWaiverStatus::Waiving(1));
+        stored.author.clear();
+        ctx.erc_violation_waivers = vec![stored];
+        ctx.validation.erc.waived_open = Some(true);
+        let shown = texts(&ctx);
+        assert!(shown.iter().any(|t| t == "2026-11-16"), "{shown:?}");
+        assert!(!shown.iter().any(|t| t.starts_with("by ")), "{shown:?}");
     }
 }

@@ -13,11 +13,19 @@ impl Signex {
                 ..Default::default()
             };
         };
-        let view = self
-            .active_tab_path()
-            .map(|path| self.pcb_layer_view(&path))
+        let path = self.active_tab_path();
+        let view = path
+            .as_ref()
+            .map(|path| self.pcb_layer_view(path))
             .unwrap_or_default();
+        // The more menu's Layer Stack... row runs the catalog command, live
+        // exactly when the command is (mockup row 103).
+        let layer_stack_live = crate::keymap::AppCommandId::new(
+            crate::app::handlers::pcb_layer_strip::LAYER_STACK_COMMAND,
+        )
+        .is_ok_and(|id| crate::app::command::is_enabled(&id, &self.command_context(None)));
         crate::panels::PcbLayersPanel {
+            layer_stack_live,
             saved_sets: self
                 .ui_state
                 .layer_strip
@@ -27,8 +35,33 @@ impl Signex {
                 .collect(),
             grid_visible: self.ui_state.grid_visible,
             board_3d: self.board_3d_in_view().is_some(),
+            board: path,
             ..crate::panels::PcbLayersPanel::new(board, &view, self.ui_state.i18n.clone())
         }
+    }
+
+    /// Rebuild the Layers panel after an edit of the active board (an undo
+    /// or a redo too), so its colours follow the board and its open colour
+    /// card with them.
+    pub(crate) fn refresh_pcb_layers_panel(&mut self) {
+        let panel = self.pcb_layers_panel_state();
+        let ctx = &mut self.document_state.panel_ctx;
+        ctx.pcb_layers_ui
+            .follow_board(ctx.pcb_layers.board.as_deref(), &panel);
+        ctx.pcb_layers = panel;
+    }
+
+    /// The PCB panel's nets of the active board, with the unrouted counts
+    /// once the ratsnest holds this revision's.
+    pub(crate) fn pcb_nets_summary(&self) -> Option<crate::panels::PcbNetsSummary> {
+        let summary = crate::panels::PcbNetsSummary::of(self.active_pcb_snapshot()?);
+        let path = self.active_tab_path()?;
+        let revision = self.board_revision(&path);
+        let ratsnest = &self.interaction_state.pcb_ratsnest;
+        Some(match ratsnest.counts_for(&path, revision) {
+            Some(counts) => summary.with_unrouted(counts),
+            None => summary,
+        })
     }
 
     /// The Properties panel's board summary for the active tab. The selection
@@ -85,7 +118,9 @@ impl Signex {
             summary
                 .with_footprint(footprint)
                 .with_component(component)
-                .with_primitive(primitive),
+                .with_primitive(primitive)
+                // #2457: one room selected shows Room Properties.
+                .with_room(self.room_facts(&tab.path, board)),
         )
     }
 
@@ -120,6 +155,6 @@ impl Signex {
                 .pcb_primitive
                 .keep_only(board, target);
         }
-        self.document_state.panel_ctx.pcb_board = summary;
+        self.document_state.panel_ctx.pcb_board = summary.map(Box::new);
     }
 }

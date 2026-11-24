@@ -25,6 +25,7 @@ mod reference_display;
 pub mod substitution;
 pub mod svg;
 pub mod template;
+pub mod variant_fit;
 
 pub use assembly::{AssemblyDrawing, AssemblyInk, AssemblyMark, assembly_drawing, assembly_ink};
 pub use board_report::{
@@ -48,8 +49,9 @@ pub use pdf::board::{
 pub use pdf::{
     ColourMode, MAX_PAGE_EDGE_MM, MAX_SCALE_PERCENT, MIN_CUSTOM_EDGE_MM, MIN_PRINTABLE_MM,
     MarginEdge, MarginUpdate, Margins, PageRange, PageSetupError, PageSize, PageSizeKind,
-    PdfExporter, PdfOptions, PdfOutput, PdfScale, PdfScaleMode, SchematicPalette, check_page_range,
-    parse_custom_edge_mm, parse_mm, parse_percent,
+    PartBookmarkOrder, PdfExporter, PdfLayer, PdfLayerVisibility, PdfOptions, PdfOutput, PdfScale,
+    PdfScaleMode, SchematicPalette, Watermark, WatermarkPages, WatermarkPlacement, WatermarkText,
+    check_page_range, parse_custom_edge_mm, parse_mm, parse_percent,
 };
 pub use preview::{
     MAX_PREVIEW_EDGE_PX, PreviewOptions, PreviewPage, PreviewPageInfo, PreviewRasterizer,
@@ -59,6 +61,7 @@ pub use reference_display::show_board_references;
 pub use substitution::{SubstitutionContext, resolve, resolve_text};
 pub use svg::board::{AssemblySvgOptions, assembly_svg};
 pub use template::{Template, TemplateError, TemplateId, TitleBlockField};
+pub use variant_fit::{VariantMatrix, VariantRow, is_fitted, part_is_fitted, variant_matrix};
 
 /// The universal exporter trait — one impl per output format.
 pub trait Exporter {
@@ -91,7 +94,7 @@ pub struct ExportContext {
     /// the printed pages *plus* the hierarchical children reached through
     /// `child_sheets`, which are never printed pages. A terminal in the
     /// netlist can sit on any of these, so anything that joins netlist
-    /// terminals back to symbols (the Protel component blocks) must walk this
+    /// terminals back to symbols (the `.NET` component blocks) must walk this
     /// set, not [`Self::sheets`]. A sheet placed several times appears once.
     pub netlist_sheets: Vec<SchematicSheet>,
     /// Where each [`Self::netlist_sheets`] entry sits in the hierarchy: one

@@ -1,6 +1,8 @@
-//! Bottom status bar — cursor position, grid, snap, layer, zoom, units.
+//! Bottom status bar: the cursor, grid and snap, the tool and its hint at the
+//! left; the selection (on a board, the board counters), zoom and the Panels
+//! button at the right.
 
-use iced::Element;
+use iced::{Color, Element};
 use signex_i18n::Localized;
 use signex_types::coord::Unit;
 use signex_types::schematic::{SelectedItem, SelectedKind};
@@ -9,11 +11,27 @@ use signex_types::theme::ThemeTokens;
 use crate::app::StatusBarRequest;
 use crate::styles;
 
+mod board;
+mod clusters;
 mod graphite;
-pub use graphite::{
-    POPUP_GAP, POPUP_PADDING, POPUP_RIGHT_MARGIN, POPUP_WIDTH, check_ink, panels_button, popup,
-    popup_height, popup_row, popup_row_height,
+mod grid_popover;
+pub(crate) use board::{
+    AnchorBar, BoardPopoverModel, BoardReadout, ConnectionTally, DrcAge, DrcList, DrcTally,
+    GridChoice, LAYER_DROPDOWN_WIDTH, LayerChoice, LayerDropdownGroup, LayerList, NetRow,
+    SelectedRow, SelectedWhat, SelectionList, UnroutedList, board_grid_value, custom_pitch,
+    group_layers, popover_left as board_popover_left, popover_view as board_popover_view,
+    two_column_card as layer_dropdown_card,
 };
+pub use board::{
+    BoardCounter, BoardPopoverEvent, BoardPopoverKind, BoardStatusPopover, BoardStatusUi,
+};
+pub use graphite::{
+    POPUP_GAP, POPUP_PADDING, POPUP_RIGHT_MARGIN, POPUP_WIDTH, check_ink, grid_readout_x,
+    panel_list_foot_height, panel_list_height, panels_button, popup, popup_caption_height,
+    popup_caption_padding, popup_row, popup_row_height,
+};
+pub use grid_popover::{GridPopoverEvent, GridSnapPopover, GridSnapSettings};
+pub(crate) use grid_popover::{HOTSPOTS_COMMAND, view as grid_popover_view};
 
 /// Height of the status bar: a fixed band from [`styles::ChromeMetrics`].
 /// A layout probe in `canvas_region` ties it to the laid-out bar.
@@ -33,18 +51,44 @@ pub(crate) struct Readout<'r> {
     pub grid_size_mm: f32,
     pub selection: Option<Localized>,
     pub pending_git_commits: usize,
-    pub altium_import: Option<&'r str>,
+    /// The file a running board import reads, shown as "Importing …".
+    pub board_import: Option<&'r str>,
     pub activity: Option<&'r Activity>,
-    pub board: BoardReadout,
+    pub surface: SurfaceReadout,
 }
 
-/// What the status bar shows of the board in view; empty without one.
+/// What the status bar shows of the surface in view beyond the cursor and
+/// grid; empty for a surface without a board or a sheet.
 #[derive(Debug, Clone, Default)]
-pub(crate) struct BoardReadout {
-    /// The active copper layer: a caption and the name.
-    pub active_layer: Option<(Localized, Localized)>,
+pub(crate) struct SurfaceReadout {
+    /// The active copper layer of a board in view.
+    pub active_layer: Option<LayerReadout>,
     /// The view's turn on screen (#2316).
     pub view_angle: Option<ViewAngleReadout>,
+    /// Whether a right-click on the Grid read-out opens the Grid & Snap
+    /// popover: on a schematic sheet only.
+    pub opens_grid_popover: bool,
+    /// The board counters (#2460): on a board tab only. With them the layer
+    /// pill and the Grid read-out open popovers, and the Selected counter
+    /// stands in for the selection summary.
+    pub board: Option<BoardReadout>,
+    /// A project is open and this window shows no document (mockup row 2):
+    /// the bar keeps the cursor columns, empty, and Panels.
+    pub no_document: bool,
+    /// Skipped libraries still missing (mockup row 138); above zero the bar
+    /// shows the Library Missing chip.
+    pub missing_libraries: usize,
+}
+
+/// The board's active layer pill: a caption, the name and the colour the
+/// board view draws the layer in.
+#[derive(Debug, Clone)]
+pub(crate) struct LayerReadout {
+    pub caption: Localized,
+    pub name: Localized,
+    pub colour: Color,
+    /// A click opens the layer dropdown; otherwise the pill is a label.
+    pub opens_list: bool,
 }
 
 /// The board view's angle readout (#2316): a click opens a value field.
@@ -137,12 +181,12 @@ pub(crate) fn view<'a>(
     selected: &[SelectedItem],
     tokens: &ThemeTokens,
     pending_git_commits: usize,
-    altium_import: Option<&str>,
+    board_import: Option<&str>,
     activity: Option<&Activity>,
-    board: BoardReadout,
+    surface: SurfaceReadout,
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, StatusBarRequest> {
-    graphite::view(
+    clusters::view(
         &Readout {
             x,
             y,
@@ -154,9 +198,9 @@ pub(crate) fn view<'a>(
             grid_size_mm,
             selection: selection_summary(selected, i18n),
             pending_git_commits,
-            altium_import,
+            board_import,
             activity,
-            board,
+            surface,
         },
         tokens,
         i18n,

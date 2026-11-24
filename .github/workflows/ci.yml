@@ -576,6 +576,73 @@ jobs:
         if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
         run: bash scripts/test_check_uifree_state.sh
 
+      # App-authored English with no catalog id (#2326 M2, #2644): calls of
+      # `CommandOutcome::disabled` and `Translatable::legacy_english` may only
+      # get fewer. Rules and blind spots live in the script. Hard gate.
+      - name: Legacy-English ratchet
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/check_legacy_english.sh
+
+      - name: Legacy-English ratchet controls
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/test_check_legacy_english.sh
+
+      # The edit-tail seam (#2326 M5, M6): only the tail wrappers call the core
+      # half in app/state/sheet_change/, and it names no GUI state and not the
+      # diagnostics log. Rules and blind spots live in the script. Hard gate.
+      - name: Sheet-change seam guard
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/check_sheet_change_seam.sh
+
+      - name: Sheet-change seam guard controls
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/test_check_sheet_change_seam.sh
+
+      # The load seam (#2326 slice 3, #2704): only the load wrappers call the
+      # core half in app/state/document_load/, which names no GUI state, takes
+      # no closure and removes an engine in one place. Rules and blind spots
+      # live in the script. Hard gate.
+      - name: Load seam guard
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/check_document_load_seam.sh
+
+      - name: Load seam guard controls
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/test_check_document_load_seam.sh
+
+      # Command operands run only through the entries in app/command and the
+      # agent route (#2731): zero production calls elsewhere in signex-app.
+      # Rules and blind spots live in the script. Hard gate.
+      - name: Command entry ratchet
+        if: ${{ !cancelled() }}
+        run: bash scripts/check_command_entry.sh
+
+      - name: Command entry ratchet controls
+        if: ${{ !cancelled() }}
+        run: bash scripts/test_check_command_entry.sh
+
+      # A panic in the app must not leave a value taken out (#2651, ADR-0006):
+      # production catch_unwind calls under crates/signex-app/src/app may only
+      # get fewer. Rules and blind spots live in the script. Hard gate.
+      - name: catch_unwind ratchet
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/check_app_catch_unwind.sh
+
+      - name: catch_unwind ratchet controls
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/test_check_app_catch_unwind.sh
+
+      # The projector draws documents and writes none (#2326 slice 3, #2705):
+      # no core-state write and no wrapper call under app/projector.
+      # Rules and blind spots live in the script. Hard gate.
+      - name: Projector write guard
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/check_projector_writes.sh
+
+      - name: Projector write guard controls
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/test_check_projector_writes.sh
+
       # `signex-app` cannot say `[lints] workspace = true` — cargo rejects
       # mixing inheritance with per-lint overrides, and that crate carries its
       # own `[lints.clippy] let_underscore_must_use` that the workspace

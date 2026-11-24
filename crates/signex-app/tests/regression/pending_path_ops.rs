@@ -66,7 +66,9 @@ fn fixture(dirty: bool) -> Fixture {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -132,14 +134,16 @@ fn complete(app: &mut Signex, task: iced::Task<Message>) {
 }
 
 fn open_rename_dialog(app: &mut Signex, target: &Path, buffer: &str) {
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0],
         buffer: buffer.to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
 }
 
 /// Submit the rename and return the not-yet-run worker task.
@@ -157,6 +161,7 @@ fn start_delete(app: &mut Signex, target: &Path) -> iced::Task<Message> {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::DeleteFile,
@@ -589,6 +594,7 @@ fn the_exclude_prompt_save_is_refused_while_a_rename_holds_the_file() {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     let _prompt = f.app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::ExcludeFromProject,

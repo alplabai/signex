@@ -16,7 +16,8 @@ fn scanning_dialog(dir: &str) -> Signex {
         project_name: "Lib".into(),
         items: Vec::new(),
         use_lfs: false,
-        intro_text: String::new(),
+        commit_message: "Initial version".to_string(),
+        commit_every_save: true,
         error: None,
         working: false,
         scanning: true,
@@ -28,7 +29,7 @@ fn row(name: &str) -> TrackItem {
     TrackItem {
         absolute: PathBuf::from("/lib").join(name),
         relative: name.to_string(),
-        label: "Config".into(),
+        kind: crate::app::contracts::TrackKind::Config,
         is_directory: false,
         tracked: true,
     }

@@ -19,6 +19,7 @@ use signex_sketch::solver::FullSolveOutput;
 use signex_types::pcb_layer::PcbLayer;
 
 use crate::layer_label::layer_id;
+use crate::open_ends::warn_open_profiles;
 use crate::profile::TraceError;
 use crate::traced_loops::TracedLoops;
 
@@ -92,6 +93,7 @@ fn bake_layered<O, F>(
 where
     F: Fn(Polygon, LayerId) -> O,
 {
+    let mut open = false;
     let mut loops = TracedLoops::default();
     for entity in &sketch.entities {
         if entity.bake_skipped() {
@@ -121,10 +123,7 @@ where
                 let layer_id = layer_id(layer);
                 out.push(make(Polygon::new(vertices), layer_id));
             }
-            Err(TraceError::OpenChain) => warnings.push(format!(
-                "entity {}: {attr_name} profile is not closed (open chain); skipping",
-                entity.id
-            )),
+            Err(TraceError::OpenChain) => open = true,
             Err(TraceError::Branching) => warnings.push(format!(
                 "entity {}: {attr_name} profile branches at a vertex; skipping",
                 entity.id
@@ -135,7 +134,21 @@ where
             )),
         }
     }
+    if open {
+        let name = object_name(attr_name);
+        warn_open_profiles(sketch, solve, name, |e| attr_extract(e).is_some(), warnings);
+    }
     Ok(())
+}
+
+/// The object a warning names for the attribute `attr_name`.
+fn object_name(attr_name: &str) -> &str {
+    match attr_name {
+        "MaskOpeningAttr" => "Mask opening",
+        "MaskExcludeAttr" => "Mask exclude",
+        "PasteApertureAttr" => "Paste aperture",
+        other => other,
+    }
 }
 
 #[cfg(test)]

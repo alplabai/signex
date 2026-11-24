@@ -59,7 +59,7 @@ otherwise keep the old frame.
 ## Tests
 
 `gpu_mount_tests.rs` renders the real stack headlessly through iced's wgpu
-renderer (never tiny-skia, which swaps red and blue and cannot run shader
+renderer (never the software renderer, vello_cpu, which cannot run shader
 primitives) and pins coverage, CPU parity, z-order, HiDPI and padding.
 `gpu_mount_drag_tests.rs` drives the overlay's `update` and reads the programs'
 primitives with no GPU.

@@ -31,8 +31,6 @@ pub struct WaiverKey {
 pub enum WaiverError {
     /// The reason is blank.
     MissingReason,
-    /// The author is blank.
-    MissingAuthor,
     /// The finding names no object on its sheet, so nothing could make the
     /// waiver lapse.
     NotWaivable,
@@ -42,7 +40,6 @@ impl std::fmt::Display for WaiverError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             WaiverError::MissingReason => "a waiver needs a reason",
-            WaiverError::MissingAuthor => "a waiver needs an author",
             WaiverError::NotWaivable => "this finding names no object, so it cannot be waived",
         })
     }
@@ -163,6 +160,7 @@ impl Scope {
                 K::PartWithoutFootprint
                 | K::PartWithoutValue
                 | K::PartWithoutMpn
+                | K::PartWithoutLibraryBody
                 | K::UnannotatedDesignator
                 | K::DuplicateRefDesignator
                 | K::UnitsNotPlaced,
@@ -191,8 +189,8 @@ fn net_content(net: &crate::NetFinding) -> String {
     format!("{}|{}", net.name, pins.join(","))
 }
 
-/// A new waiver for the finding keyed `key`. Reason and author are trimmed
-/// and required.
+/// A new waiver for the finding keyed `key`. Reason and author are trimmed;
+/// the reason is required, and the author is empty when git has no identity.
 pub fn new_waiver(
     key: &WaiverKey,
     message: &str,
@@ -203,9 +201,6 @@ pub fn new_waiver(
     let (reason, author) = (reason.trim(), author.trim());
     if reason.is_empty() {
         return Err(WaiverError::MissingReason);
-    }
-    if author.is_empty() {
-        return Err(WaiverError::MissingAuthor);
     }
     if key.objects.is_empty() || key.fingerprint.is_empty() {
         return Err(WaiverError::NotWaivable);
@@ -257,7 +252,7 @@ pub struct WaiverSplit {
 
 /// Split one sheet's findings by `waivers`. Each finding must carry its
 /// [`Violation::waiver_key`] (see [`stamp_keys`]). An incomplete waiver (no
-/// reason or author) never hides anything.
+/// reason) never hides anything.
 pub fn split_waived(violations: Vec<Violation>, waivers: &[ErcWaiver]) -> WaiverSplit {
     let mut split = WaiverSplit::default();
     for v in violations {
@@ -360,6 +355,21 @@ fn object_content(sheet: &SchematicSheet, item: &SelectedItem, scope: Scope) -> 
             json!({"text": t.text, "position": to_value(&t.position)?})
         }
         SelectedKind::Drawing | SelectedKind::Directive => return None,
+        // #1280: a harness finding lapses when the connector's type, entries
+        // or place change.
+        SelectedKind::HarnessConnector => harness_connector_view(sheet.harness.connector(id)?)?,
+        SelectedKind::HarnessEntry => {
+            let (c, index) = sheet.harness.entry(id)?;
+            json!({
+                "name": c.entries[index].name,
+                "index": index,
+                "connector": harness_connector_view(c)?,
+            })
+        }
+        SelectedKind::HarnessWire => {
+            let w = sheet.harness.wire(id)?;
+            json!({"start": to_value(&w.start)?, "end": to_value(&w.end)?})
+        }
     };
     let mut out = String::new();
     write_canonical(&value, &mut out)?;
@@ -396,6 +406,23 @@ fn symbol_view(s: &signex_types::schematic::Symbol, scope: Scope) -> Option<serd
 
 fn to_value(object: &impl Serialize) -> Option<serde_json::Value> {
     serde_json::to_value(object).ok()
+}
+
+/// What a harness connector's findings depend on: its type, entry names and
+/// where its tip and entries sit, lengths in stored nanometres.
+fn harness_connector_view(
+    c: &signex_types::schematic::HarnessConnector,
+) -> Option<serde_json::Value> {
+    use signex_types::format::mm_as_stored_nm;
+    let names: Vec<&str> = c.entries.iter().map(|e| e.name.as_str()).collect();
+    Some(serde_json::json!({
+        "type": c.harness_type,
+        "entries": names,
+        "position": to_value(&c.position)?,
+        "width_nm": mm_as_stored_nm(c.width)?,
+        "pitch_nm": mm_as_stored_nm(c.entry_pitch)?,
+        "rotation": c.rotation,
+    }))
 }
 
 fn write_canonical(value: &serde_json::Value, out: &mut String) -> Option<()> {

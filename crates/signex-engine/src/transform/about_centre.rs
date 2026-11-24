@@ -128,6 +128,7 @@ fn directive_points(d: &signex_types::schematic::SchDirective) -> Vec<Point> {
             vec![*start, *end]
         }
         SchDirective::DiffPair { position, .. } => vec![*position],
+        SchDirective::NetParameters { position, .. } => vec![*position],
     }
 }
 
@@ -235,6 +236,16 @@ impl Engine {
                 .filter(|d| d.uuid() == id)
                 .flat_map(directive_points)
                 .collect(),
+            SelectedKind::HarnessConnector => doc
+                .harness
+                .connector(id)
+                .map(|c| c.anchor_points())
+                .unwrap_or_default(),
+            SelectedKind::HarnessWire => doc
+                .harness
+                .wire(id)
+                .map(|w| vec![w.start, w.end])
+                .unwrap_or_default(),
             _ => Vec::new(),
         }
     }
@@ -397,6 +408,9 @@ impl Engine {
                     at(end);
                 }
                 SchDrawing::Polyline { points, .. } => points.iter_mut().for_each(at),
+                SchDrawing::Bezier(b) => b.map_points(|p| transform.point(centre, p)),
+                SchDrawing::Dimension(dim) => dim.map_points(|p| transform.point(centre, p)),
+                SchDrawing::Table(t) => t.map_points(|p| transform.point(centre, p)),
             }
         }
         for d in doc
@@ -405,6 +419,22 @@ impl Engine {
             .filter(|d| has(SelectedKind::Directive, d.uuid()))
         {
             d.map_points(|p| transform.point(centre, p));
+        }
+        for c in doc
+            .harness
+            .connectors
+            .iter_mut()
+            .filter(|c| has(SelectedKind::HarnessConnector, c.uuid))
+        {
+            *c = c.mapped(|p| transform.point(centre, p));
+        }
+        for w in doc
+            .harness
+            .wires
+            .iter_mut()
+            .filter(|w| has(SelectedKind::HarnessWire, w.uuid))
+        {
+            w.map_points(|p| transform.point(centre, p));
         }
 
         self.autoplace_symbol_fields(&present_symbol_ids(items));

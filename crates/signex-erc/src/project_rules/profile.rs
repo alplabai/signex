@@ -15,7 +15,7 @@ use crate::RuleKind;
 /// Name of the profile Signex ships.
 pub const BUILTIN_PROFILE_NAME: &str = "Signex Default";
 /// Content version of the shipped profile; bump when its rules change.
-pub const BUILTIN_PROFILE_VERSION: &str = "1.1";
+pub const BUILTIN_PROFILE_VERSION: &str = "1.3";
 /// `RuleProfileRef::source` of the shipped profile.
 pub const SOURCE_BUILTIN: &str = "builtin";
 /// `RuleProfileRef::source` of a profile in the user's library.

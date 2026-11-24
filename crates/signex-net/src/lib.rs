@@ -14,12 +14,20 @@ pub mod uf;
 pub mod board;
 
 mod parts;
-pub use parts::{DesignPart, design_parts};
+pub use parts::{DesignPart, design_parts, design_parts_named};
 
 pub mod cross_probe;
 
 mod directives;
+pub use directives::{
+    BlanketCatch, BlanketNet, NetParametersOn, blanket_nets, directive_net_classes,
+    fill_pattern_classes, net_parameters,
+};
 pub use directives::{DiffPair, blanket_net_classes, compile_masked, diff_pairs};
+mod diff_pair_classes;
+pub use diff_pair_classes::{
+    ClassMember, class_members, diff_pairs_with_classes, pair_count, pairs_by_every_suffix,
+};
 
 mod net_class;
 pub use net_class::{
@@ -54,11 +62,35 @@ pub use signature::{NetSignature, net_members, net_signatures, net_signatures_at
 
 mod project;
 pub use project::{
+    ChannelDesignators, EntryBuses, build_project_netlist_indexed_named,
+    build_project_netlist_named, channel_uuid, multi_named_nets_named,
+    project_name_changes_as_written, project_name_changes_named,
+};
+pub use project::{
     ComponentPin, ComponentReport, HoverPin, MultiNamedNet, NetAnchor, NetHover, NetIndex,
-    NetMember, NetMemberKind, NetMembers, NetNameSource, NumberingIssue, PagePlacement,
+    NetMember, NetMemberKind, NetMembers, NetNameSource, NumberingIssue, PagePlacement, PlacedPin,
     PlacedSymbol, ProjectGraph, ProjectNetChange, ProjectNetlist, ProjectRoot, SheetKey,
-    SheetNumbering, SheetOccurrence, SheetPage, StitchIssue, build_project_netlist,
+    SheetNumbering, SheetOccurrence, SheetPage, StitchIssue, UnconnectedPin, build_project_netlist,
     build_project_netlist_indexed, instance_entry_designators, is_auto_name, multi_named_nets,
     number_issues, parse_page_number, project_name_changes, project_occurrences, sheet_numbering,
     with_page_number,
 };
+
+mod compiled;
+#[cfg(test)]
+mod compiled_tests;
+pub use compiled::{
+    CompiledDesign, CompiledNet, CompiledPart, CompiledSheet, CompiledSheetNet, CompiledTarget,
+    SheetTitle, compile_design,
+};
+
+mod harness;
+#[cfg(test)]
+mod harness_fixture;
+pub use harness::{
+    HarnessBundle, HarnessLeaf, HarnessMismatch, HarnessPort, HarnessSheetEntry, harness_bundles,
+    harness_mismatches, harness_segments_touch, on_harness,
+};
+
+mod names_in_use;
+pub use names_in_use::sheet_net_names;

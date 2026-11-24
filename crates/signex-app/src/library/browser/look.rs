@@ -21,7 +21,7 @@ pub(super) fn cell_font(kind: &ColumnKind) -> Font {
     if mono {
         crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
     } else {
-        Font::default()
+        signex_widgets::ui_font::regular()
     }
 }
 
@@ -122,11 +122,6 @@ pub(super) fn plain_cell_input(
             selection: Color { a: 0.4, ..accent },
         }
     }
-}
-
-/// Corner radius of a small bordered control.
-pub(super) fn control_radius() -> f32 {
-    crate::styles::Radii::GRAPHITE.button
 }
 
 /// Height of the column-header row.

@@ -41,6 +41,7 @@ fn sheet() -> SchematicRenderSnapshot {
         uuid: BUS,
         start: Point::new(10.0, 50.0),
         end: Point::new(60.0, 50.0),
+        ..Default::default()
     });
     sheet.junctions.push(Junction {
         uuid: uuid::Uuid::from_u128(4),
@@ -156,6 +157,38 @@ fn unset_items_follow_the_project_and_explicit_ones_do_not() {
         (0.254, 0.5, 0.45, 0.7)
     );
     assert_eq!(canvas_widths(project()), (0.3, 0.5, 0.6, 1.0));
+}
+
+/// #2813: a bus draws and is grabbed at its own width, in its own colour.
+#[test]
+fn a_bus_draws_and_hits_at_its_own_style() {
+    let red = signex_types::theme::Color::new(255, 0, 0, 255);
+    let mut styled = sheet();
+    styled.buses[0].stroke_width = 1.0;
+    styled.buses[0].color = Some(red);
+    let snap = build_renderer_snapshot(
+        &styled,
+        &transform(),
+        &canvas_colors(ThemeId::GraphiteLight),
+        bounds(),
+        None,
+        SceneOverrides {
+            defaults: project(),
+            ..SceneOverrides::default()
+        },
+    );
+    let drawn = snap
+        .wires
+        .iter()
+        .find(|w| w.id == renderer_id(BUS))
+        .expect("drawn");
+    assert_eq!(drawn.width_mm, 1.0, "own width beats the project's 0.6");
+    assert_eq!(drawn.explicit_color, Some(to_rgba(to_iced(&red))));
+    let widths = WireWidths {
+        defaults: project(),
+        ..WireWidths::default()
+    };
+    assert_eq!(widths.bus_mm(&styled.buses[0]), 1.0);
 }
 
 #[test]

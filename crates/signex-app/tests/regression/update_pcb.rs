@@ -194,7 +194,9 @@ fn add_project(
             schematic_defaults: Default::default(),
             project_defaults: defaults,
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -257,7 +259,7 @@ fn fixture_preparing(
     if let Some((board, newer)) = board {
         let mut text = SnxPcb::new(board).write_string().unwrap();
         if newer {
-            text = text.replacen(signex_types::format::SNXPCB_FORMAT_V1, "snxpcb/1.9", 1);
+            text = text.replacen(signex_types::format::SNXPCB_FORMAT_V1, "snxpcb/1.10", 1);
         }
         std::fs::write(&board_path, text).unwrap();
     }
@@ -382,6 +384,7 @@ fn board_of(footprints: Vec<signex_types::pcb::Footprint>) -> PcbBoard {
         outline: Vec::new(),
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         layers: Vec::new(),
         setup: None,

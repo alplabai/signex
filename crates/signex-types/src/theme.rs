@@ -163,6 +163,9 @@ impl<'de> Deserialize<'de> for ThemeId {
 // UI chrome tokens
 // ---------------------------------------------------------------------------
 
+mod selected_segment;
+pub use selected_segment::SelectedSegmentLook;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThemeTokens {
     pub bg: Color,
@@ -244,6 +247,15 @@ pub struct ExtendedTokens {
     /// Modal scrim colour; the alpha channel is its strength.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scrim: Option<Color>,
+    /// Fill of the selected option of a segmented control.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_segment: Option<Color>,
+    /// Text on [`ExtendedTokens::selected_segment`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_segment_ink: Option<Color>,
+    /// Shadow under the selected option; alpha 0 is no shadow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_segment_shadow: Option<Color>,
 }
 
 impl ExtendedTokens {
@@ -268,6 +280,9 @@ impl ExtendedTokens {
         info_soft: None,
         shadow: None,
         scrim: None,
+        selected_segment: None,
+        selected_segment_ink: None,
+        selected_segment_shadow: None,
     };
 
     /// True when no field is set (the serde skip test).
@@ -351,6 +366,13 @@ pub struct CanvasColors {
     /// workspace colour.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub board_sheet: Option<Color>,
+    /// Signal harness wires, connector outlines and harness names (#1280,
+    /// one project colour); `None` uses the bus colour.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harness: Option<Color>,
+    /// Harness connector and entry fill; `None` uses the paper.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harness_soft: Option<Color>,
 }
 
 /// The colour each PCB layer family is listed with. The board edge and
@@ -457,6 +479,18 @@ impl CanvasColors {
         self.board_sheet
             .unwrap_or_else(|| self.board_workspace_color())
     }
+
+    /// The colour of signal harnesses (#1280).
+    #[must_use]
+    pub fn harness_color(&self) -> Color {
+        self.harness.unwrap_or(self.bus)
+    }
+
+    /// The fill of harness connectors and entries.
+    #[must_use]
+    pub fn harness_soft_color(&self) -> Color {
+        self.harness_soft.unwrap_or(self.paper)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -514,6 +548,9 @@ const GRAPHITE_LIGHT_TOKENS: ThemeTokens = ThemeTokens {
         // About 50%: the Light backdrop must visibly dim the app behind a
         // dialog or the palette (#2262, Caner 2026-11-12).
         scrim: Some(Color::new(0x15, 0x17, 0x1A, 128)),
+        selected_segment: s(0xFF, 0xFF, 0xFF),
+        selected_segment_ink: s(0x15, 0x17, 0x1A),
+        selected_segment_shadow: Some(Color::new(0x15, 0x17, 0x1A, 26)),
     },
 };
 
@@ -556,6 +593,8 @@ const GRAPHITE_LIGHT_CANVAS: CanvasColors = CanvasColors {
     board_grid_major: None,
     board_workspace: None,
     board_sheet: None,
+    harness: s(0x6B, 0x4F, 0xA0),
+    harness_soft: s(0xEF, 0xEA, 0xF8),
 };
 
 const GRAPHITE_DARK_TOKENS: ThemeTokens = ThemeTokens {
@@ -593,6 +632,10 @@ const GRAPHITE_DARK_TOKENS: ThemeTokens = ThemeTokens {
         info_soft: s(0x16, 0x22, 0x3F),
         shadow: Some(Color::new(0, 0, 0, 115)),
         scrim: Some(Color::new(0, 0, 0, 140)),
+        // The Neutral look; `SelectedSegmentLook::apply` swaps in Accent.
+        selected_segment: s(0x3D, 0x40, 0x47),
+        selected_segment_ink: s(0xFF, 0xFF, 0xFF),
+        selected_segment_shadow: Some(Color::new(0, 0, 0, 115)),
     },
 };
 
@@ -635,6 +678,8 @@ const GRAPHITE_DARK_CANVAS: CanvasColors = CanvasColors {
     board_workspace: s(0x5C, 0x5E, 0x63),
     // A step lighter than the workspace, so the sheet reads as paper.
     board_sheet: s(0x6E, 0x70, 0x75),
+    harness: s(0xB7, 0x9C, 0xF0),
+    harness_soft: s(0x26, 0x1F, 0x36),
 };
 
 /// Red top and blue bottom copper, as Altium lists them.
@@ -917,6 +962,9 @@ mod tests {
                 info_soft: Some(c(0, 0, 0)),
                 shadow: Some(c(0, 0, 0)),
                 scrim: Some(c(0, 0, 0)),
+                selected_segment: Some(c(0, 0, 0)),
+                selected_segment_ink: Some(c(0, 0, 0)),
+                selected_segment_shadow: Some(c(0, 0, 0)),
             })
             .unwrap()
             .as_object()

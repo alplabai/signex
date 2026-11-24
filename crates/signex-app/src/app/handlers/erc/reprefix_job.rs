@@ -137,7 +137,7 @@ impl Signex {
             return self.handle_detach_modal(super::super::super::state::ModalId::ReprefixConfirm);
         }
         let groups_before = self.document_state.next_undo_group;
-        let applied = self.number_project(
+        let task = self.number_project(
             AnnotatePass {
                 mode: signex_engine::AnnotateMode::Incremental,
                 reprefix: Some(&targets),
@@ -145,7 +145,6 @@ impl Signex {
             },
             set,
         );
-        debug_assert!(applied.writes.is_empty(), "a re-prefix writes nothing");
         // A run that was rolled back or changed nothing records no group; its
         // own message already said so, so the follow-up lines would mislead.
         if self.document_state.next_undo_group > groups_before
@@ -158,7 +157,7 @@ impl Signex {
             self.report_split_parts(&plan.changes);
             self.report_undo_sheets();
         }
-        applied.task
+        task
     }
 
     /// Accept a read for planning: still current, every sheet readable.

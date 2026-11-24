@@ -3,7 +3,7 @@
 For an agent or a script, `check_erc` runs ERC on demand and answers with
 structured findings instead of a file ([CLI.md](CLI.md), "Checks on demand").
 
-Reports > ERC Report writes the results of the newest ERC run. It never
+Tools ▸ Reports ▸ ERC Report writes the results of the newest ERC run. It never
 runs ERC itself; the rows are the ERC panel's rows, in the same order, so a
 finding whose part, wire or label has since been deleted is left out, as it is
 in the panel. When the document changed after the run, every form says so
@@ -90,7 +90,7 @@ it is omitted otherwise.
 | `waivers[].rule_id` | string | Stable rule id, `builtin::...` or `user::...`. |
 | `waivers[].subject` | string | The waived finding's message, or `net <name>` for a per-net waiver. |
 | `waivers[].reason` / `author` / `date` | string | Empty for a per-net waiver, which records none. |
-| `waivers[].status` | string | `"active"`, `"lapsed"` (an involved object changed, so the finding is reported again), `"unmatched"` or `"incomplete"` (no reason or author; ignored). |
+| `waivers[].status` | string | `"active"`, `"lapsed"` (an involved object changed, so the finding is reported again), `"unmatched"` or `"incomplete"` (no reason; ignored). |
 | `waivers[].waived_count` | integer | Findings it hid in this run. |
 | `waivers[].severity` | string or `null` | Severity of the finding it hid (`"Error"`, `"Warning"`, `"Info"`); `null` when unknown (per-net waivers, or nothing hidden). |
 

@@ -104,6 +104,11 @@ fn new_object_ids(cmd: &Command) -> Vec<Uuid> {
             .chain(child_sheet.pins.iter().map(|p| p.uuid))
             .collect(),
         Command::PlaceSheetPin { pin, .. } => vec![pin.uuid],
+        Command::PlaceHarnessConnector { connector } => std::iter::once(connector.uuid)
+            .chain(connector.entries.iter().map(|e| e.uuid))
+            .collect(),
+        Command::PlaceHarnessEntry { entry, .. } => vec![entry.uuid],
+        Command::PlaceHarnessWire { wire } => vec![wire.uuid],
         _ => Vec::new(),
     }
 }
@@ -124,6 +129,7 @@ fn id_index(sheet: &SchematicSheet) -> IdIndex {
         index.insert(symbol.uuid);
         index.extend(symbol.pins.iter().map(|p| p.uuid));
     }
+    index.extend(sheet.harness.ids());
     index
 }
 
@@ -143,4 +149,5 @@ fn holds_id(sheet: &SchematicSheet, id: Uuid) -> bool {
             .child_sheets
             .iter()
             .any(|s| s.uuid == id || s.pins.iter().any(|p| p.uuid == id))
+        || sheet.harness.holds_id(id)
 }

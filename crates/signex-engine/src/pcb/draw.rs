@@ -198,6 +198,7 @@ pub fn new_copper_area(
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
         unknown: Default::default(),
     })
 }
@@ -245,6 +246,7 @@ pub fn new_keepout(id: Uuid, outline: Vec<Point>, layer: PcbLayer) -> Option<Zon
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
         unknown: Default::default(),
     })
 }
@@ -291,6 +293,7 @@ pub fn place_item(item: BoardItem) -> BoardCommand {
 
 pub use super::draw_free::{
     ArcMode, FREE_PAD_HOLE_MM, FREE_PAD_SIZE_MM, arc_points, new_arc, new_dimension, new_free_pad,
+    new_free_pad_on,
 };
 
 /// Whether the polygon encloses any area, in integer nm (exact): false for

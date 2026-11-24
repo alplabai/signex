@@ -1,4 +1,4 @@
-use signex_types::schematic::SchematicSheet;
+use signex_types::schematic::{ChannelRepeat, SchematicSheet};
 
 use crate::EngineError;
 use crate::patch::{DocumentPatch, PatchPair};
@@ -152,6 +152,7 @@ impl Engine {
     /// The document now matches the file just written: remember this point
     /// of the history, so undoing or redoing back to it is clean again.
     pub fn mark_saved(&mut self) {
+        self.commit_live_edit();
         self.history.mark_saved();
     }
 
@@ -177,6 +178,7 @@ impl Engine {
     /// never touches the document or its save point, and it keeps the
     /// sheet's redo branch: a pick does not change the sheet.
     pub fn record_class_pick(&mut self, marker: ClassPickMarker) {
+        self.commit_live_edit();
         self.field_edit_run = None;
         self.history.record_inert(HistoryStep::Pick(marker));
     }
@@ -228,6 +230,29 @@ impl Engine {
         steps.iter().rev().map(HistoryStep::marker)
     }
 
+    /// The group of the next edit one way, past the markers `is_dead` calls
+    /// dead, moving nothing. `None` when a live marker or an ungrouped edit
+    /// comes first.
+    pub fn group_past_dead_picks(
+        &self,
+        undo: bool,
+        is_dead: impl Fn(ClassPickMarker) -> bool,
+    ) -> Option<UndoGroupId> {
+        let steps = if undo {
+            self.history.undo_steps()
+        } else {
+            self.history.redo_steps()
+        };
+        for step in steps.iter().rev() {
+            match step.marker() {
+                Some(marker) if is_dead(marker) => {}
+                Some(_) => return None,
+                None => return step.group(),
+            }
+        }
+        None
+    }
+
     /// Is there an edit of the sheet (not just a marker) to undo or redo?
     pub fn has_document_step(&self, undo: bool) -> bool {
         self.steps_from_top(undo).any(|marker| marker.is_none())
@@ -277,6 +302,18 @@ impl Engine {
             .and_then(HistoryStep::group)
     }
 
+    /// The newest designator of sheet symbol `id` on the undo stack that is
+    /// not a `Repeat(...)`: what switching its repeat off goes back to.
+    pub fn earlier_plain_sheet_name(&self, id: uuid::Uuid) -> Option<&str> {
+        self.history.undo_steps().iter().rev().find_map(|step| {
+            let HistoryStep::Edit(entry) = step else {
+                return None;
+            };
+            let name = entry.snapshot.child_sheet(id)?.name.trim();
+            (!name.is_empty() && ChannelRepeat::parse(name).is_none()).then_some(name)
+        })
+    }
+
     /// Monotonic position in the edit timeline: how many recorded edits
     /// are currently applied, counting any evicted by the history cap.
     /// Undo lowers it, redo raises it, a new edit raises it and drops
@@ -305,6 +342,7 @@ impl Engine {
     }
 
     pub fn undo(&mut self) -> Result<Option<PatchPair>, EngineError> {
+        self.commit_live_edit();
         self.field_edit_run = None;
         // An empty stack, or a marker the app has yet to step, changes
         // nothing, so it moves no revision.
@@ -349,7 +387,19 @@ impl Engine {
         Ok(patch_pair)
     }
 
+    /// [`Self::discard_undo_group_top`] for a run that stamped no group: the
+    /// caller knows the top entry is the one it just recorded. `None` when
+    /// there was nothing to undo.
+    pub fn discard_undo_top(&mut self) -> Result<Option<PatchPair>, EngineError> {
+        let patch_pair = self.undo()?;
+        if patch_pair.is_some() {
+            self.history.discard_top();
+        }
+        Ok(patch_pair)
+    }
+
     pub fn redo(&mut self) -> Result<Option<PatchPair>, EngineError> {
+        self.commit_live_edit();
         self.field_edit_run = None;
         // As in `undo`: nothing to move, no revision.
         if self.next_class_pick(false).is_some() {
@@ -398,6 +448,8 @@ impl Engine {
             self.absorb_into_transaction(patch_pair);
             return;
         }
+        // An open preview is the step under this one (`exec/live_edit.rs`).
+        self.commit_live_edit_under(&snapshot);
 
         // Share every collection the step left unchanged with the entry
         // before it, so a long history holds one copy of each.

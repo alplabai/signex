@@ -28,7 +28,8 @@ cargo test -p signex-app --release --lib render_bench -- --ignored --nocapture -
 
 The harness is `crates/signex-app/src/canvas/render_bench_tests.rs` (an
 `#[ignore]`d test; `pan_bench_tests.rs` is the older #2102 pan bench). Release
-needs `library/editor/inert.rs`'s tests gated on `debug_assertions`, because
+needs the headless-renderer tests (`signex-widgets/src/inert.rs`,
+`signex-widgets/src/enable_section.rs`) gated on `debug_assertions`, because
 iced's `()` renderer only exists in debug builds.
 
 ## Method
@@ -46,7 +47,7 @@ iced's `()` renderer only exists in debug builds.
 - **Code path.** The real widgets: `UserInterface::build`, `update` (the drag is
   real `CursorMoved`/`ButtonPressed` events), `draw`, then
   `iced_wgpu::Renderer::screenshot`, which uploads, renders and reads back. So
-  GPU work is inside the timing. Never tiny-skia.
+  GPU work is inside the timing. Never the software renderer (vello_cpu).
 - **Floor.** An empty sheet through the same stack: 2.0 ms at dpr 1, 6.7 ms at
   dpr 2. It is the readback plus the empty backdrop (paper, grid, frame), not
   the sheet; read every number net of it. No

@@ -46,7 +46,8 @@ pub struct MenuItem {
 /// A placeholder is a feature with no handler yet (greyed, its `reason` as
 /// the tooltip, else "planned"); an unavailable row is greyed informational
 /// text; a live row has one and is greyed out unless enabled in the current
-/// context.
+/// context; a header is a small caption over the rows below it, not a
+/// command at all: docs/MENU_BAR.md#header-entries
 #[derive(Debug, Clone)]
 pub enum ItemState {
     Placeholder {
@@ -57,6 +58,7 @@ pub enum ItemState {
         action: MenuMessage,
         is_enabled: bool,
     },
+    Header,
 }
 
 /// A row's shortcut: the display text, plus the command id it belongs to so a
@@ -83,17 +85,23 @@ impl MenuItem {
     pub fn is_enabled(&self) -> bool {
         self.dispatches().is_some()
     }
+
+    /// Whether the row is a section caption rather than a command row.
+    pub fn is_header(&self) -> bool {
+        matches!(self.state, ItemState::Header)
+    }
 }
 
 /// The English titles of the root menus, left to right, which the tests pin;
-/// the bar reads [`ROOT_TITLE_IDS`].
+/// the bar reads [`ROOT_TITLE_IDS`]. Reports and Window are submenus of Tools
+/// and View: docs/MENU_BAR.md#root-menus
 #[cfg(test)]
-pub const ROOT_TITLES: [&str; 10] = [
-    "File", "Edit", "View", "Project", "Place", "Design", "Tools", "Reports", "Window", "Help",
+pub const ROOT_TITLES: [&str; 8] = [
+    "File", "Edit", "View", "Project", "Place", "Design", "Tools", "Help",
 ];
 
 /// The catalog message of each root title, left to right.
-const ROOT_TITLE_IDS: [signex_i18n::MessageId; 10] = [
+const ROOT_TITLE_IDS: [signex_i18n::MessageId; 8] = [
     signex_i18n::ids::MENU_FILE,
     signex_i18n::menu_ids::MENU_EDIT,
     signex_i18n::menu_ids::MENU_VIEW,
@@ -101,8 +109,6 @@ const ROOT_TITLE_IDS: [signex_i18n::MessageId; 10] = [
     signex_i18n::menu_ids::MENU_PLACE,
     signex_i18n::menu_ids::MENU_DESIGN,
     signex_i18n::menu_ids::MENU_TOOLS,
-    signex_i18n::menu_ids::MENU_REPORTS,
-    signex_i18n::menu_ids::MENU_WINDOW,
     signex_i18n::menu_ids::MENU_HELP,
 ];
 
@@ -124,8 +130,6 @@ pub fn menu_bar_model(ctx: &MenuContext) -> MenuBarModel {
         menus::place(ctx),
         menus::design(ctx),
         menus::tools(ctx),
-        menus::reports(ctx),
-        menus::window(ctx),
         menus::help(ctx),
     ];
     MenuBarModel {

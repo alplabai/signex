@@ -93,7 +93,7 @@ fn with_profile() {
     let answer = match session.run(&[
         "name=Motor Driver Rev A",
         &location,
-        "profile=hobby",
+        "profile=advanced",
         "overrides=layers=6,clearance=0.12,sheet=A4",
     ]) {
         CommandOutcome::Answered(value) => value,
@@ -111,7 +111,10 @@ fn with_profile() {
     let data = signex_types::project::parse_project(&path).expect("project");
     let pcb = data.project_defaults.pcb.expect("pcb defaults");
     assert_eq!((pcb.copper_layers, pcb.clearance_mm), (6, 0.12));
-    assert_eq!(pcb.track_width_mm, 0.25, "the rest is the hobby profile");
+    assert_eq!(
+        pcb.track_width_mm, 0.125,
+        "the rest is the advanced profile"
+    );
     assert_eq!(data.project_defaults.sheet.expect("sheet").paper_size, "A4");
 
     // Without the folder, straight into the location.
@@ -145,6 +148,7 @@ fn refusals() {
     ] {
         match session.run(&operands) {
             CommandOutcome::Disabled { reason } => {
+                let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
                 assert!(reason.contains(want), "{operands:?}: {reason}")
             }
             other => panic!("{operands:?} was not refused: {other:?}"),

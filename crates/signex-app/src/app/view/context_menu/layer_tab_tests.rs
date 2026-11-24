@@ -33,7 +33,23 @@ fn the_menu_lists_every_row_of_the_tab_menu() {
     let view = PcbLayerView::default();
     let prefs = LayerStripPrefs::default();
     let state = state(layer, &view, &prefs, TabColours::default());
-    let rows = rows(layer_tab_menu_entries(&I18n::en_us(), &state));
+    let i18n = I18n::en_us();
+    let entries = layer_tab_menu_entries(&i18n, &state);
+    // mockup row 104 (Caner, 2026-11-20): the four tab name rows are a TAB NAMES
+    // header over the Short | Medium | Long switch and the Show layer
+    // numbers checkbox row, both custom entries, then Flip board view.
+    let tail = &entries[entries.len() - 4..];
+    assert!(matches!(&tail[0], DropdownEntry::Header(h) if h == "TAB NAMES"));
+    assert!(matches!(tail[1], DropdownEntry::Custom(_)), "the switch");
+    assert!(
+        matches!(tail[2], DropdownEntry::Custom(_)),
+        "the Show layer numbers row"
+    );
+    assert!(
+        matches!(&tail[3], DropdownEntry::Item(item) if item.label == "Flip board view"),
+        "Flip board view follows the numbers row"
+    );
+    let rows = rows(entries);
     let labels: Vec<&str> = rows.iter().map(|(label, _, _)| label.as_str()).collect();
     assert_eq!(
         labels,
@@ -50,10 +66,6 @@ fn the_menu_lists_every_row_of_the_tab_menu() {
             "Layer stack...",
             "Drill symbols...",
             "Layer drawing order...",
-            "Short tab names",
-            "Medium tab names",
-            "Long tab names",
-            "Show layer numbers",
             "Flip board view",
         ]
     );
@@ -101,10 +113,20 @@ fn the_menu_lists_every_row_of_the_tab_menu() {
     ] {
         assert!(row(label).1.is_none(), "{label} is greyed");
     }
-    let long = rows.iter().find(|(l, _, _)| l == "Long tab names");
-    assert!(
-        long.is_some_and(|(_, _, on)| *on),
-        "the default style is checked"
+    let cells = tab_name_cells(&i18n, &prefs);
+    let on: Vec<&str> = cells
+        .iter()
+        .filter(|(_, _, on)| *on)
+        .map(|(name, _, _)| name.as_str())
+        .collect();
+    assert_eq!(on, ["Long"], "the default style is the selected cell");
+    assert_eq!(
+        cells,
+        vec![
+            ("Short".to_owned(), LayerNameStyle::Short, false),
+            ("Medium".to_owned(), LayerNameStyle::Medium, false),
+            ("Long".to_owned(), LayerNameStyle::Long, true),
+        ]
     );
 }
 
@@ -222,14 +244,14 @@ fn the_flyouts_list_each_kind_and_its_layers() {
     let bottom = PcbLayer::Copper(CopperLayer::Bottom);
     view.hide(bottom);
     let i18n = I18n::en_us();
-    let hide = rows(layer_kind_entries(
-        &i18n,
-        LayerTabSubmenu::Hide,
-        &layers,
-        &view,
-    ));
-    assert_eq!(hide[0].0, "Signal layers");
-    assert_eq!(hide[1].0, "Top Layer", "the shown signal layer");
+    // mockup row 104 (Caner, 2026-11-20): a HIDE or SHOW header and All layers come
+    // first, then each kind's row and its layers.
+    let hide_entries = layer_kind_entries(&i18n, LayerTabSubmenu::Hide, &layers, &view);
+    assert!(matches!(&hide_entries[0], DropdownEntry::Header(h) if h == "HIDE"));
+    let hide = rows(hide_entries);
+    assert_eq!(hide[0].0, "All layers", "All layers is the first row");
+    assert_eq!(hide[1].0, "Signal layers");
+    assert_eq!(hide[2].0, "Top Layer", "the shown signal layer");
     assert!(!hide.iter().any(|(l, _, _)| l == "Bottom Layer"));
     assert_eq!(
         hide.iter()
@@ -240,22 +262,27 @@ fn the_flyouts_list_each_kind_and_its_layers() {
     assert!(hide.iter().any(|(l, _, _)| l == "Top Silkscreen"));
     assert!(hide.iter().any(|(l, _, _)| l == "Silkscreen layers"));
 
-    let show = rows(layer_kind_entries(
-        &i18n,
-        LayerTabSubmenu::Show,
-        &layers,
-        &view,
-    ));
-    assert_eq!(show[1].0, "Bottom Layer", "the hidden signal layer");
+    let show_entries = layer_kind_entries(&i18n, LayerTabSubmenu::Show, &layers, &view);
+    assert!(matches!(&show_entries[0], DropdownEntry::Header(h) if h == "SHOW"));
+    let show = rows(show_entries);
+    assert_eq!(show[0].0, "All layers", "All layers is the first row");
     assert_eq!(
-        view_event(&show[1].1),
+        view_event(&show[0].1),
+        Some(PcbViewMsg::LayerKindVisibilitySet {
+            kind: LayerKind::All,
+            visible: true
+        })
+    );
+    assert_eq!(show[2].0, "Bottom Layer", "the hidden signal layer");
+    assert_eq!(
+        view_event(&show[2].1),
         Some(PcbViewMsg::LayerVisibilitySet {
             layer: bottom,
             visible: true
         })
     );
     assert_eq!(
-        view_event(&show[0].1),
+        view_event(&show[1].1),
         Some(PcbViewMsg::LayerKindVisibilitySet {
             kind: LayerKind::Signal,
             visible: true

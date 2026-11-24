@@ -64,7 +64,7 @@ pub(super) fn bake_solution_with(
     // intentional.
     // A board sketch bakes to the board with `bake_board` on commit, never
     // into the editor's working footprint (#2234).
-    let footprint_bake = state.board_backdrop.is_none();
+    let footprint_bake = state.sketch_host() == signex_types::sketch::SketchHost::Footprint;
     if footprint_bake && !sketch.entities.is_empty() {
         // Pads + array expansions.
         let mut baked: Vec<signex_library::primitive::footprint::Pad> = Vec::new();
@@ -110,6 +110,7 @@ pub(super) fn bake_solution_with(
             &mut footprint.body_3d,
             &mut state.solve_warnings,
         )?;
+        signex_bake::bake_generated(footprint);
 
         // Bake warnings (a skipped over-cap array, a dropped
         // feature) are failures the user must be able to see:
@@ -169,6 +170,7 @@ pub(super) fn bake_solution_with(
         // goes with them. (A sketch that never baked owns nothing.)
         let remaps = BakedFields::clear_owned(footprint, &mut state.solve_warnings);
         state.remap_silk_selection(&remaps);
+        signex_bake::bake_generated(footprint);
         for warning in
             take_unlogged_bake_warnings(&state.solve_warnings, &mut state.logged_solve_warnings)
         {

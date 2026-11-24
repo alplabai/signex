@@ -210,14 +210,16 @@ fn the_other_confirms_close_to_their_safe_choice() {
 #[test]
 fn a_notice_raised_over_a_detached_dialog_gets_its_own_window() {
     let (mut app, _main) = quit_app();
-    app.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(crate::app::RenameDialogState {
         target_path: "p.snxsch".into(),
         tree_path: vec![0],
         project_id: None,
         buffer: "p".into(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     let _ = app.sync_detached_modals();
     app.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(
         crate::app::state::verbatim("it failed"),
@@ -309,14 +311,16 @@ fn a_lock_closes_the_menus_and_the_palette_behind_it() {
 #[test]
 fn the_locking_window_is_the_topmost_dialog_every_time() {
     let (mut app, main) = quit_app();
-    app.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(crate::app::RenameDialogState {
         target_path: "p.snxsch".into(),
         tree_path: vec![0],
         project_id: None,
         buffer: "p".into(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     raise_quit_confirm(&mut app, main);
     let quit = app
         .detached_window_of(ModalId::AppQuitConfirm)
@@ -339,6 +343,8 @@ fn a_recovery_prompt_whose_window_vanishes_twice_stays_in_the_window() {
             path: "p.snxsch".into(),
             age_secs: 90,
             older_than_file: false,
+            saved_age_secs: Some(600),
+            checked_at: std::time::SystemTime::UNIX_EPOCH,
         });
     for expected_windows in [1usize, 1] {
         let _ = app.sync_detached_modals();

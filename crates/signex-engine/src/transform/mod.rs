@@ -8,6 +8,19 @@ use crate::command::MirrorAxis;
 use super::Engine;
 
 impl Engine {
+    /// Whether `item` is on this sheet. A symbol's reference or value field
+    /// is there while its symbol is.
+    pub fn holds_selected_item(&self, item: &SelectedItem) -> bool {
+        match item.kind {
+            SelectedKind::SymbolRefField | SelectedKind::SymbolValField => self
+                .document
+                .symbols
+                .iter()
+                .any(|symbol| symbol.uuid == item.uuid),
+            _ => self.contains_selected_item(item),
+        }
+    }
+
     pub(crate) fn contains_selected_item(&self, item: &SelectedItem) -> bool {
         if let Some(found) = self.contains_selected_sheet_item(item) {
             return found;
@@ -60,6 +73,9 @@ impl Engine {
                 .directives
                 .iter()
                 .any(|d| d.uuid() == item.uuid),
+            SelectedKind::HarnessConnector => self.document.harness.connector(item.uuid).is_some(),
+            SelectedKind::HarnessEntry => self.document.harness.entry(item.uuid).is_some(),
+            SelectedKind::HarnessWire => self.document.harness.wire(item.uuid).is_some(),
             _ => false,
         }
     }
@@ -110,6 +126,20 @@ impl Engine {
                 self.document.directives.retain(|d| d.uuid() != item.uuid);
                 self.document.directives.len() != before_len
             }
+            SelectedKind::HarnessConnector => {
+                remove_by_uuid(&mut self.document.harness.connectors, item.uuid)
+            }
+            SelectedKind::HarnessWire => {
+                remove_by_uuid(&mut self.document.harness.wires, item.uuid)
+            }
+            // An entry belongs to its connector: deleting it closes the gap,
+            // so the entries below move up a slot.
+            SelectedKind::HarnessEntry => self
+                .document
+                .harness
+                .entry_owner_mut(item.uuid)
+                .map(|(connector, index)| connector.entries.remove(index))
+                .is_some(),
             // A child sheet owns its pins (`ChildSheet::pins`); removing the
             // sheet entry removes them with it in one shot — no separate
             // reconcile step needed, the whole owning document goes away.
@@ -229,6 +259,11 @@ impl Engine {
                 decided.dots
             }
         };
+        // Two wire ends on a pin end, and a directive's stem on a wire, get a
+        // dot too (`corner_dots`, `stem_dots`), never on a bare T a guarded
+        // move keeps (`frozen.bare`).
+        let bare = frozen.map(|frozen| frozen.bare);
+        corner_dots::add_meeting_dots(&self.document, items, bare, ids, &mut pin_dots);
         let mut judged: Vec<signex_types::schematic::Point> = (self.document.junctions.iter())
             .zip(&verdict)
             .filter(|(j, v)| j.minted && v.is_none())
@@ -267,8 +302,10 @@ impl Engine {
         // deleted wire is no longer in `touched` yet is exactly what strands
         // its neighbours' dots (issue #422). The index makes each check O(1).
         // A dot no wire meeting holds stays while a pin end still sits strictly
-        // inside a wire there: it goes when the pin or the wire leaves. The
-        // no-short rule is the minting's, never a reason to drop a dot.
+        // inside a wire there, or two wire ends meet on it, and while a stem
+        // stands on a wire there: it goes when the pin, stem or wire leaves.
+        // The no-short rule is the minting's, never a reason to drop a dot.
+        let stems = stem_dots::stem_keys(&self.document);
         let moved: std::collections::HashSet<uuid::Uuid> = (items.iter())
             .filter(|item| item.kind == SelectedKind::Symbol)
             .map(|item| item.uuid)
@@ -277,7 +314,7 @@ impl Engine {
         let moved_tips = std::cell::OnceCell::new();
         let pin_holds = |at: &signex_types::schematic::Point| {
             let k = signex_net::pt_key(at);
-            let through = (index.segment_candidates(*at).into_iter()).any(|i| {
+            let crossing = (index.segment_candidates(*at).into_iter()).filter(|&i| {
                 let wire = index.wire(i);
                 let (a, b) = (
                     signex_net::pt_key(&wire.start),
@@ -285,7 +322,17 @@ impl Engine {
                 );
                 k != a && k != b && signex_net::point_on_segment(k, a, b)
             });
-            if !through {
+            let through_n = crossing.count();
+            let through = through_n > 0;
+            // Or two wire ends meet on the pin end (`corner_dots`), or a
+            // stem stands on one wire there, never where a second passes
+            // (`stem_dots`).
+            let ends = autoplace::wire_endpoint_count(*at, &index);
+            let stem = stems.contains(&k);
+            if stem && ((through_n == 1 && ends == 0) || (!through && ends >= 2)) {
+                return true;
+            }
+            if !through && ends < 2 && !(stem && ends == 1) {
                 return false;
             }
             // The pin ends of the sheet before the edit (a drag preview's,
@@ -542,6 +589,20 @@ impl Engine {
                     }
                 })
                 .unwrap_or(false),
+            SelectedKind::HarnessConnector => self
+                .document
+                .harness
+                .connector_mut(item.uuid)
+                .map(|c| c.translate(dx, dy))
+                .is_some(),
+            SelectedKind::HarnessWire => self
+                .document
+                .harness
+                .wire_mut(item.uuid)
+                .map(|w| w.translate(dx, dy))
+                .is_some(),
+            // An entry sits in a slot of its connector; it moves with it.
+            SelectedKind::HarnessEntry => false,
             SelectedKind::Directive => self
                 .document
                 .directives
@@ -557,6 +618,11 @@ impl Engine {
                 .iter_mut()
                 .find(|d| d.uuid() == item.uuid)
                 .map(|d| {
+                    if d.map_annotation_points(|p| {
+                        signex_types::schematic::Point::new(p.x + dx, p.y + dy)
+                    }) {
+                        return true;
+                    }
                     match d {
                         SchDrawing::Line { start, end, .. } => {
                             start.x += dx;
@@ -589,6 +655,9 @@ impl Engine {
                                 p.x += dx;
                                 p.y += dy;
                             }
+                        }
+                        // Moved by `map_annotation_points` above.
+                        SchDrawing::Bezier(_) | SchDrawing::Dimension(_) | SchDrawing::Table(_) => {
                         }
                     }
                     true
@@ -666,6 +735,45 @@ impl Engine {
                 })
                 .unwrap_or(false),
             SelectedKind::BusEntry => self.rotate_bus_entry(item, angle_degrees),
+            SelectedKind::HarnessConnector | SelectedKind::HarnessWire => {
+                self.turn_harness_item(item, |(dx, dy)| {
+                    // Counter-clockwise on a y-down page.
+                    let (sin, cos) = angle_degrees.to_radians().sin_cos();
+                    (dx * cos + dy * sin, -dx * sin + dy * cos)
+                })
+            }
+            _ => false,
+        }
+    }
+
+    /// Turn or mirror a harness connector or wire in place, about its own
+    /// centre, by `vector` (the image of an offset from that centre).
+    fn turn_harness_item(
+        &mut self,
+        item: &SelectedItem,
+        vector: impl Fn((f64, f64)) -> (f64, f64),
+    ) -> bool {
+        use signex_types::schematic::Point;
+        let harness = &mut self.document.harness;
+        let vector = &vector;
+        let about = |centre: Point| {
+            move |p: Point| {
+                let (dx, dy) = vector((p.x - centre.x, p.y - centre.y));
+                Point::new(centre.x + dx, centre.y + dy)
+            }
+        };
+        match item.kind {
+            SelectedKind::HarnessConnector => harness
+                .connector_mut(item.uuid)
+                .map(|c| *c = c.mapped(about(c.centre())))
+                .is_some(),
+            SelectedKind::HarnessWire => harness
+                .wire_mut(item.uuid)
+                .map(|w| {
+                    let mid = Point::new((w.start.x + w.end.x) / 2.0, (w.start.y + w.end.y) / 2.0);
+                    w.map_points(about(mid));
+                })
+                .is_some(),
             _ => false,
         }
     }
@@ -679,6 +787,12 @@ impl Engine {
                 })
             }
             SelectedKind::BusEntry => self.mirror_bus_entry(item, axis),
+            SelectedKind::HarnessConnector | SelectedKind::HarnessWire => {
+                self.turn_harness_item(item, |(dx, dy)| match axis {
+                    MirrorAxis::Horizontal => (-dx, dy),
+                    MirrorAxis::Vertical => (dx, -dy),
+                })
+            }
             _ => false,
         }
     }
@@ -694,11 +808,13 @@ mod about_centre;
 mod autoplace;
 mod autoplace_request;
 mod bus_entry;
+mod corner_dots;
 mod dot_verdicts;
 mod merge;
 mod pin_junctions;
 mod region_wires;
 pub(crate) mod rubber_band;
+mod stem_dots;
 mod wire_index;
 use autoplace::autoplace_fields;
 pub use autoplace::place_fields_for_new_symbol;
@@ -748,6 +864,8 @@ macro_rules! impl_has_uuid {
 }
 
 impl_has_uuid!(
+    signex_types::schematic::HarnessConnector,
+    signex_types::schematic::HarnessWire,
     signex_types::schematic::Wire,
     signex_types::schematic::Bus,
     signex_types::schematic::BusEntry,

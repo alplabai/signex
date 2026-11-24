@@ -1,8 +1,9 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use signex_engine::FindHit;
+use signex_engine::{FindHit, FindQuery, MatchOptions, PatternError};
+use signex_types::schematic::SelectedItem;
 
 /// One result: where it is (`sheet`, plus the hit's placement and position)
 /// and what the scan saw there. The hit's text is for display; a replace
@@ -12,8 +13,9 @@ pub struct FindMatch {
     /// The sheet file the hit is on.
     pub sheet: Option<PathBuf>,
     pub hit: FindHit,
-    /// Which placement of a sheet placed more than once a designator hit was
-    /// read at ("placement 2 of 3"); `None` otherwise.
+    /// What else names the hit in its row: the placement a designator hit
+    /// was read at on a sheet placed more than once ("placement 2 of 3"), or
+    /// the part a Value hit belongs to ("R5"); `None` otherwise.
     pub placement_label: Option<String>,
 }
 
@@ -57,10 +59,28 @@ pub struct ReplaceJob {
     /// captured. If it differs at apply time the replace is refused: a sheet
     /// symbol was placed, removed, renamed or re-pointed mid-read.
     pub child_sheets: ChildSheetSignature,
-    pub query: String,
+    /// The query and its match options as they were when Replace was asked.
+    pub find: FindQuery,
     pub replacement: String,
-    /// The results the user was looking at: the only hits it may replace.
+    /// The included results the user was looking at: the only hits it may
+    /// replace. A row whose include box was cleared is not in it (#2525).
     pub matches: Vec<FindMatch>,
+}
+
+/// Identity of a result across a rescan: its sheet, the item and the
+/// placement a designator was read at. The include set is keyed by it, so a
+/// row cleared before a Replace Current stays cleared after the refresh.
+pub type ResultKey = (Option<PathBuf>, SelectedItem, Option<String>);
+
+impl FindMatch {
+    /// See [`ResultKey`].
+    pub fn key(&self) -> ResultKey {
+        (
+            self.sheet.clone(),
+            self.hit.item,
+            self.hit.placement.as_ref().map(ToString::to_string),
+        )
+    }
 }
 
 /// What a project scan found, built off the UI thread.
@@ -80,6 +100,13 @@ pub struct FindReplaceState {
     pub replace_mode: bool,
     pub query: String,
     pub replacement: String,
+    /// Match case / Whole word / Regex (#2525). Whole word is on by default,
+    /// so a net name never matches inside a longer one.
+    pub options: MatchOptions,
+    /// Results whose include box is cleared: Replace All leaves them alone.
+    /// Every result is included by default; a new query, options or scope
+    /// clears the set (#2525).
+    pub excluded: HashSet<ResultKey>,
     pub matches: Vec<FindMatch>,
     pub selected_index: Option<usize>,
     pub scope: FindScope,
@@ -115,6 +142,49 @@ impl FindReplaceState {
             .as_ref()
             .map_or(self.matches.len(), |board| board.hits.len())
     }
+
+    /// The query compiled under the options. An invalid regex is the error
+    /// the Find field shows; it matches nothing.
+    pub fn find_query(&self) -> Result<FindQuery, PatternError> {
+        FindQuery::new(&self.query, self.options)
+    }
+
+    /// Whether result `index` is included in Replace All. A board's hits
+    /// have no include box, so they always are.
+    pub fn is_included(&self, index: usize) -> bool {
+        self.board.is_some()
+            || self
+                .matches
+                .get(index)
+                .is_some_and(|hit| !self.excluded.contains(&hit.key()))
+    }
+
+    /// How many results Replace All acts on.
+    pub fn included_count(&self) -> usize {
+        if self.board.is_some() {
+            return self.result_count();
+        }
+        (0..self.matches.len())
+            .filter(|&index| self.is_included(index))
+            .count()
+    }
+
+    /// The results Replace All acts on, in list order.
+    pub fn included_matches(&self) -> Vec<FindMatch> {
+        self.matches
+            .iter()
+            .filter(|hit| !self.excluded.contains(&hit.key()))
+            .cloned()
+            .collect()
+    }
+
+    /// Clear or set the include box of the result `key` names. Keyed, not
+    /// indexed: a rescan between the draw and the click reorders the list.
+    pub fn toggle_included(&mut self, key: ResultKey) {
+        if !self.excluded.remove(&key) {
+            self.excluded.insert(key);
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -126,6 +196,13 @@ pub enum FindReplaceMsg {
     ReplaceCurrent,
     ReplaceAll,
     ScopeChanged(FindScope),
+    /// The header's Find / Replace switch was set (`true`: Replace).
+    ModeChanged(bool),
+    MatchCaseToggled,
+    WholeWordToggled,
+    RegexToggled,
+    /// The include box of the result with this key was clicked.
+    ResultIncludeToggled(ResultKey),
     /// Find next (F3): step to the result after the current one.
     NextRequested,
     /// Find previous (Shift+F3).

@@ -45,21 +45,21 @@ preferences-subtitle = { $group } / { $page }
 # Footer pill while there are changes not applied yet.
 preferences-unsaved = Unsaved changes
 
-# Footer hint on the Theme page.
+# Footer hint on the Appearance page.
 preferences-theme-preview-hint = Theme changes preview live
 
 # Page names in the page list.
-preferences-page-theme = Theme
+preferences-page-theme = Appearance
 preferences-page-keyboard = Keyboard shortcuts
 # The page of graphical editing options (selection, dragging, paste).
-preferences-page-editing = Graphical editing
+preferences-page-editing = Editing
 preferences-page-annotation = Annotation
 # The library of named electrical rule check (ERC) rule sets.
 preferences-page-rule-profiles = Rule Profiles
 # API keys of part distributors.
 preferences-page-distributors = Distributor APIs
 # The component classes a new library starts with.
-preferences-page-component-classes = Default Component Classes
+preferences-page-component-classes = Component Classes
 
 # Page groups: the name in the subtitle, and the heading (in capitals) over
 # the group in the page list.
@@ -97,7 +97,7 @@ preferences-appearance-pin-selection-help = How a click selects a pin on the sym
 preferences-appearance-ui-scale = Interface scale
 preferences-appearance-ui-scale-help = Scales text, panels, menus and dialogs on top of the display scale. Applied to every window when you save.
 preferences-appearance-zoom-speed = Zoom speed
-preferences-appearance-zoom-speed-help = How far one mouse-wheel notch zooms on the schematic, PCB, symbol and footprint canvases.
+preferences-appearance-zoom-speed-help = How far one mouse-wheel notch, or a middle-button drag, zooms on the schematic, PCB, symbol and footprint canvases.
 preferences-appearance-trackpad-pan = Two-finger scroll pans
 preferences-appearance-trackpad-pan-help = When on, a two-finger trackpad scroll pans the schematic, PCB, symbol and footprint canvases instead of zooming them. Pinching and Ctrl/Cmd + scroll still zoom, and a mouse wheel notch still zooms. Off by default.
 preferences-appearance-remember-geometry = Remember window size and position
@@ -188,21 +188,6 @@ pref-keymap-claimed = { $display } is claimed by { $action } and will never reac
 # Value beside the zoom speed slider. $percent is a whole number.
 preferences-appearance-zoom-step-value = { $percent }% per notch
 
-## Section titles of the pages
-preferences-section-font = Font
-preferences-section-window-controls = Window controls
-preferences-section-schematic-editor = Schematic Editor
-preferences-section-pcb-editor = PCB Editor
-preferences-section-rendering = Rendering
-preferences-section-symbol-editor = Symbol Editor
-preferences-section-interface-scale = Interface scale
-preferences-section-navigation = Navigation
-preferences-section-window = Window
-preferences-section-annotation = Schematic — Annotation
-preferences-section-editing = Schematic — Editing
-preferences-section-distributors = Library — Distributor APIs
-preferences-restore-defaults = Restore defaults
-
 ## Schematic ▸ Editing (#2058)
 preferences-move-keeps-wires = Keep wires connected when moving
 preferences-move-keeps-wires-help = When on, moving, rotating or mirroring symbols, child sheets or sheet pins (drag, Move, Move By, align, rotate, mirror) drags the wires on their pins along, adding a bend where needed to keep them horizontal or vertical. A net check afterwards keeps this from changing connectivity beyond what a plain move, rotate or mirror would do; a pin that cannot be kept connected moves alone and is reported in the Messages panel. When off, only the selected items move or turn and attached wires stay where they were. Hold Alt through one drag to do the opposite for that drag only; the Drag with connections command (G in the Classic profile) drags the picked object with its wires whatever this says.
@@ -219,8 +204,9 @@ preferences-autosave-help = When on, { -brand-name } keeps a recovery copy of ea
 
 ## Schematic ▸ Annotation
 preferences-annotate-undo = Annotate undo
-# $undo is the Undo shortcut, such as "Ctrl+Z".
-preferences-annotate-undo-help = How many undo steps one annotate run is. One step reverts every sheet the run touched together from whichever sheet { $undo } is pressed on; per sheet undoes each sheet on its own. Applies to the next annotate run.
+# $undo is the Undo shortcut, such as "Ctrl+Z". The two choices are named as
+# preferences-annotate-undo-project and preferences-annotate-undo-per-sheet read.
+preferences-annotate-undo-help = How many undo steps one annotate run is. One step for the whole project reverts every sheet the run touched together, from whichever sheet { $undo } is pressed on. Per sheet undoes each sheet on its own. Applies to the next annotate run.
 
 ## Schematic ▸ Display
 # The page of how the schematic is drawn.
@@ -234,32 +220,36 @@ preferences-symbol-body-fill-colour-help = A soft tint of the theme unless you p
 
 ## Default Component Classes
 preferences-classes-title = Default Component Classes
-preferences-classes-help = Seeds the class registry of newly-created libraries. Per-library edits live inside each .snxlib's manifest (forthcoming Library Properties pane); this list controls only what new libraries inherit.
+preferences-classes-help = The classes a new library starts with. They appear in the class picker of New Component and Edit Component. A library's own list is edited in that library.
 preferences-classes-key = Key
 preferences-classes-label = Label
 preferences-classes-remove = Remove
-preferences-classes-empty = No classes defined. Click "+ Add Class" to add one or "Reset to Defaults" to restore the seed list.
+preferences-classes-empty = No classes defined. Add Class to add one, or Reset to Defaults to restore the seed list.
 preferences-classes-add = + Add Class
-preferences-classes-reset = Reset to Defaults
+# The ellipsis says the button asks before it acts.
+preferences-classes-reset = Reset to Defaults…
 
 ## The banner for a preferences file that could not be loaded
-# $path is the file; $error says what is wrong with it, in English.
-preferences-file-broken = Your preferences file at { $path } { $error }.
-preferences-file-defaults = Appearance, ERC severities, component classes and panel layout are showing their defaults, and changes to them are not being saved. The file itself has not been altered — repair it by hand, or start a fresh one and keep the old file beside it.
+# Bold first line of the banner.
+preferences-file-broken = Your preferences file could not be read.
+preferences-file-defaults = Appearance, ERC severities, component classes and panel layout show their defaults and are not saved. The file itself has not been altered.
 preferences-file-start-fresh = Start a fresh preferences file
 
 ## Rule Profiles
 preferences-profiles-title = Rule Profiles
-preferences-profiles-help = A profile is a named set of ERC rules. A new project starts with a copy of the default profile. Changes here are saved to the profile's file at once.
+preferences-profiles-help = A profile is a named set of ERC rules. A new project starts with a copy of the default profile.
 preferences-profiles-reading = Reading the profile library...
-preferences-profiles-automatic = Automatic (User Default if you have one, else { -brand-name } Default)
-# Notes after a profile's name and version.
+# Heading of the profile list.
+preferences-profiles-list-heading = Profiles
+preferences-profiles-automatic-name = Automatic
+preferences-profiles-automatic-note = User Default if you have one, else { -brand-name } Default
+# Under the profile list.
+preferences-profiles-hint = The radio marks the default for new projects. Click a row to edit it.
+# Notes under a profile's name and version.
 preferences-profiles-note-builtin = shipped, read-only
 preferences-profiles-note-user-default = this machine's rules
 # $name and $version are the profile's.
 preferences-profiles-row = { $name }  v{ $version }
-# $name and $version are the profile's; $note is one of the notes above.
-preferences-profiles-row-note = { $name }  v{ $version }  ({ $note })
 preferences-profiles-is-default = Default for new projects
 preferences-profiles-use-as-default = Use as default
 preferences-profiles-new = New
@@ -269,15 +259,31 @@ preferences-profiles-rename = Rename
 preferences-profiles-delete-confirm = Delete "{ $name }"? Projects that recorded it keep their rules but can no longer find it for Update from profile.
 preferences-profiles-keep = Keep
 preferences-profiles-name = Name
-# $name is the profile's name.
-preferences-profiles-editing = Editing "{ $name }". Changes are saved to the profile's file immediately.
+# Pill beside the profile's name once its edits reached its file.
+preferences-profiles-saved = Saved
+preferences-profiles-saved-line = Changes are saved to the profile's file immediately.
+# Why edits of the User Default profile are not saved; $why is the file error.
+preferences-profiles-machine-read-only = The machine's rules are read-only this session, because your old ERC preferences could not be merged into User Default yet: { $why }
+preferences-profiles-machine-loading = Loading the User Default profile; changes wait until it has loaded.
+preferences-profiles-machine-not-saving = User Default is not saving: { $why } Your changes last until you quit.
+# Title of the rule editor opened for one rule; $name is the profile's name.
+preferences-profiles-rule-title = Rule Profile: { $name }
+# $rules counts every rule; $changed and $cells count what differs.
+preferences-profiles-rule-summary = Preferences ▸ Rule Profiles · { $rules } rules · { $changed ->
+        [one] 1 rule
+       *[other] { $changed } rules
+    } and { $cells ->
+        [one] 1 matrix cell
+       *[other] { $cells } matrix cells
+    } differ from the shipped profile
 # $name is the profile's name.
 preferences-profiles-read-only = "{ $name }" is read-only. Duplicate it to change the rules.
 preferences-profiles-none-selected = No profile is selected.
 # $name is the profile's name.
 preferences-profiles-reset-confirm = Put every rule of "{ $name }" back to the { -brand-name } Default values?
 preferences-profiles-reset = Reset
-preferences-profiles-reset-to-default = Reset to { -brand-name } Default
+# The ellipsis says the button asks before it acts.
+preferences-profiles-reset-to-default = Reset to { -brand-name } Default…
 
 ## Designators on paste: the choices (also in Paste Array)
 # The pasted part keeps its designator unless the project already uses it.
@@ -290,3 +296,234 @@ preferences-paste-designators-next-free = Next free number
 ## Annotate undo: the choices
 preferences-annotate-undo-project = One step for the whole project
 preferences-annotate-undo-per-sheet = Per sheet
+
+## Preferences shell (mockup row 143), Language page (mockup row 144a),
+## Annotation page (mockup row 146)
+
+# Page name of the interface-language page in the page list.
+preferences-page-language = Language
+
+# Footer note on the Language page: when a chosen language takes effect.
+preferences-language-footer-note = The language changes when you press Apply or OK; no restart
+
+# Footer note on the Rule Profiles page (mockup row 148).
+preferences-rule-profiles-footer-note = Rule profiles save to their files at once.
+
+# Second line of the preferences-file banner. $path is the file; $error says
+# what is wrong with it, in English.
+preferences-file-where = { $path }: { $error }
+# Banner button: shows the folder that holds the preferences file.
+preferences-file-open-folder = Open folder
+# Messages line when Open folder fails. $path is the folder; $why is the
+# system's reason, in English.
+preferences-file-open-folder-failed = Preferences: could not open the folder { $path }: { $why }
+# $why above when the file manager launch never reported back.
+preferences-file-open-folder-unfinished = the file manager launch did not finish ({ $error })
+
+# Language page.
+preferences-language-heading = Language
+preferences-language-intro = The language of menus, panels, dialogs and messages. Your designs are not changed.
+# Section label, shown in capitals.
+preferences-language-section-interface = INTERFACE
+preferences-language-interface = Interface language
+preferences-language-interface-help = Applies to every open window at once. Text on the canvas (designators, values, net names) is your own and is never translated.
+# First row of the language list. $language is the language the system
+# setting resolves to, named in its own language.
+preferences-language-follow-system = Follow the system: { $language }
+# The pseudo-locale in the language list: a testing aid, not a language.
+# Keep "en-XA" as written.
+preferences-language-pseudo = Pseudo-locale (en-XA)
+# Label over the sample strings, shown in capitals.
+preferences-language-preview = PREVIEW
+preferences-language-preview-caption = A few strings from the menus and dialogs in the chosen language.
+# Info banner while the pseudo-locale is chosen.
+preferences-language-pseudo-note = The pseudo-locale wraps every string in brackets, swaps letters for accented ones and makes it about 30 % longer. A string that shows without brackets is not translatable yet; a label that is cut off needs more room.
+
+# Annotation page.
+preferences-annotation-heading = Annotation
+preferences-annotation-intro = How annotate runs behave on the schematic.
+# Section labels, shown in capitals.
+preferences-annotation-section-undo = UNDO
+preferences-annotation-section-related = RELATED
+# Help of the "Designators on paste" row that points to the Editing page.
+preferences-annotation-paste-help = Lives on Editing, because it applies to paste, not annotate.
+# Link to the Editing page.
+preferences-annotation-open-editing = Open Editing ›
+
+## Appearance page and Editing page (mockup rows 144 and 147)
+
+# Shared by both pages. The link after a shortened help text that shows the
+# whole text; the leading space separates it from that text.
+preferences-pages-more = { " " }More…
+# The link after a whole help text that shortens it again.
+preferences-pages-less = { " " }Less
+# Tooltip of the button that grows a preview to fill the page.
+preferences-pages-expand-preview = Expand preview
+# Tooltip of the same button while the preview fills the page.
+preferences-pages-close-preview = Close the expanded preview (Esc)
+# A length in millimetres. $value is the number.
+preferences-pages-millimetres = { $value } mm
+# Pill beside a setting that applies at the next start.
+preferences-pill-restart = Restart
+# Pill beside a setting that is still being tried out.
+preferences-pill-experimental = Experimental
+
+# Appearance page.
+preferences-appearance-heading = Appearance
+# Section labels of the page, shown in capitals.
+preferences-appearance-section-look = LOOK
+preferences-appearance-section-canvas = CANVAS
+preferences-appearance-section-navigation = NAVIGATION
+preferences-appearance-section-window = WINDOW
+preferences-appearance-ui-font-short-help = Applies to all panels and menus.
+# Readout beside the Interface scale slider. $percent is a whole number.
+preferences-appearance-ui-scale-value = { $percent }%
+preferences-appearance-grid-style-label = Grid style
+preferences-appearance-grid-style-help = Appearance of snap points, per editor.
+# Captions of the two grid style pickers: the editor each one is for.
+preferences-appearance-grid-style-schematic = Schematic
+preferences-appearance-grid-style-symbol = Symbol
+# The grid styles.
+preferences-grid-style-dots = Dots
+preferences-grid-style-lines = Lines
+preferences-grid-style-small-crosses = Small crosses
+# Label over the grid preview, shown in capitals.
+preferences-appearance-grid-preview = GRID PREVIEW
+# Caption beside that label. $schematic and $symbol are grid styles, $grid a length.
+preferences-appearance-grid-preview-caption = Schematic: { $schematic } · Symbol: { $symbol }, { $grid }
+# Captions drawn on the two halves of the preview. $style is a grid style, $grid a length.
+preferences-appearance-grid-preview-schematic = Schematic · { $style } · { $grid }
+preferences-appearance-grid-preview-symbol = Symbol · { $style } · { $grid }
+preferences-appearance-symbol-grid-label = Symbol editor default grid
+preferences-appearance-symbol-grid-help = Applied when a symbol library is first opened. Can be changed per library from the canvas status bar.
+preferences-appearance-pin-selection-label = Pin selection
+preferences-appearance-pin-selection-short-help = How a click selects a pin on the symbol editor canvas: the pin body only, or its name and number labels too.
+# The two pin selection choices.
+preferences-pin-selection-pin-only = Pin only
+preferences-pin-selection-text-and-pin = Text and pin
+# The GPU render setting; the Experimental pill stands beside it.
+preferences-appearance-gpu-render-label = GPU Render
+preferences-appearance-antialiasing-short-help = Smooth the edges of canvas shapes.
+# The two Mouse wheel choices.
+preferences-wheel-mode-zoom = Zoom
+preferences-wheel-mode-scroll = Scroll
+preferences-wheel-mode-short-help = Zoom: the wheel zooms the canvas. Scroll: the wheel and two-finger scroll pan, Shift + wheel pans sideways, Ctrl/Cmd + wheel or a pinch zooms.
+# How a board picks its active layer.
+preferences-layer-switcher-label = Layer switcher
+preferences-layer-switcher-strip = Strip
+preferences-layer-switcher-dropdown = Dropdown
+preferences-layer-switcher-help = Strip: layer tabs under the board. Dropdown: the status bar's Layer pill opens a list of the visible layers.
+# How the selected option of a segmented control looks.
+preferences-selected-segment-label = Selected option
+preferences-selected-segment-neutral = Neutral
+preferences-selected-segment-accent = Accent
+preferences-selected-segment-help = How the selected option of a segmented control looks in Graphite Dark. Neutral: fill #3D4047, text #FFFFFF, with the chip shadow. Accent: fill #C2552D, text #FFFFFF, no shadow. Graphite Light is unchanged under both.
+preferences-appearance-trackpad-pan-short-help = A two-finger trackpad scroll pans instead of zooming. Pinch and Ctrl/Cmd + scroll still zoom. Only used when Mouse wheel is Zoom.
+preferences-appearance-remember-geometry-short-help = Reopen the main window at the size and position it had when you last closed it.
+
+# Editing page.
+preferences-editing-heading = Editing
+preferences-editing-intro = How moving, selecting, pasting and snapping behave on the schematic canvas.
+# Section labels of the page, shown in capitals.
+preferences-editing-section-move = MOVE AND SELECT
+preferences-editing-section-grid = GRID
+preferences-editing-section-text = TEXT AND PASTE
+preferences-editing-section-files = FILES AND AGENTS
+# Shortened help texts; More… shows the whole text.
+preferences-move-keeps-wires-help-summary = Moving, rotating or mirroring symbols, child sheets or sheet pins drags the wires on their pins along, adding a bend where needed. Hold Alt through one drag to do the opposite.
+preferences-drag-direction-help-summary = Left to right selects only what the box fully contains; right to left selects everything the box touches. When off, the Inside / Touching mode (Shift+S) decides.
+preferences-paste-designators-help-summary = What pasted parts are called. Applies to Paste, Smart Paste, Duplicate, rubber-stamp copy and Paste Array; the units of one part always stay one part.
+preferences-autosave-help-summary = Keeps a recovery copy of each schematic, symbol and footprint with unsaved changes about once a minute, in the { -brand-name } config folder. Your own file is never touched. Off by default.
+preferences-agent-connections-help-summary = { -brand-name } listens for agents running as you on this computer, through a socket only you can open. Every request is listed in Messages. Off by default.
+preferences-editing-fast-grid-1-help = Snap grid set by the Fast grid 1 command. Cycle fast grid steps between the two fast grids. Default 1.27 mm (50 mil).
+preferences-editing-fast-grid-2-help = Snap grid set by the Fast grid 2 command. Default 2.54 mm (100 mil).
+# Readout beside a fast grid field: the grid in mil. $value is the number.
+preferences-editing-fast-grid-mil = { $value } mil
+# The same readout while the field holds no valid grid.
+preferences-editing-fast-grid-mil-invalid = —
+# Error under a fast grid field. $reason says why the text would be refused.
+preferences-editing-fast-grid-problem = { $reason }
+# Label over the snap preview, shown in capitals.
+preferences-editing-snap-preview = SNAP PREVIEW
+# Caption beside that label. $first and $second are a length or the text below.
+preferences-editing-snap-caption = Fast grid 1 { $first } (dots) · Fast grid 2 { $second } (rings)
+# Stands for a fast grid the field would refuse.
+preferences-editing-snap-not-valid = not valid
+# Label on the drawing. $number is 1 or 2, $pitch a length.
+preferences-editing-snap-label = Fast grid { $number } · { $pitch }
+# The same label while its field holds no valid grid.
+preferences-editing-snap-label-invalid = Fast grid { $number } · invalid
+# Note when a fine grid is drawn with only some of its points. $count is a whole number.
+preferences-editing-snap-every = 1 point in { $count } drawn
+# Note at the point the pointer snaps to.
+preferences-editing-snap-here = snaps here
+# Note while Fast grid 2 is not valid.
+preferences-editing-snap-no-rings = no rings until it is fixed
+preferences-editing-snap-help = Click a pitch on the drawing to type it; Enter commits, Tab moves to the other pitch, Esc cancels. Drag a ● handle to change a pitch. The fields above follow, and the other way round.
+# Tooltips of the Increment step buttons.
+preferences-editing-increment-down = Step down
+preferences-editing-increment-up = Step up
+
+## Keyboard shortcuts page (mockup row 145)
+# Profile picker entries. $name is the profile's name, $count its number of bindings.
+preferences-keymap-profile-option-built-in = { $name } · { $count ->
+    [one] { $count } binding
+   *[other] { $count } bindings
+}
+preferences-keymap-profile-option-custom = { $name } (custom) · { $count ->
+    [one] { $count } binding
+   *[other] { $count } bindings
+}
+preferences-keymap-import = Import…
+preferences-keymap-export = Export…
+# Conflict banner, before the clashing keys. $count is the number of conflicts.
+preferences-keymap-conflict-lead = { $count ->
+    [one] { $count } conflict in active profile:
+   *[other] { $count } conflicts in active profile:
+}
+# Conflict banner, after the clashing keys. $first and $second are the two commands.
+preferences-keymap-conflict-pair = is bound to both { $first } and { $second }.
+# Conflict banner, after keys macOS keeps for itself. $command is the command bound to them.
+preferences-keymap-conflict-reserved = is reserved by macOS but bound to { $command }.
+# Banner button: turns on the Conflicts filter.
+preferences-keymap-show = Show
+# Context filter chips; the context names reuse the table's.
+preferences-keymap-filter-all = All
+preferences-keymap-filter-conflicts = Conflicts
+# Marks the column the table is sorted by, ascending.
+preferences-keymap-sorted-ascending = ▲
+# Between the strokes of a key sequence: P then W.
+preferences-keymap-then = then
+# Shortcut cell of a command with no key.
+preferences-keymap-no-shortcut = —
+preferences-keymap-no-rows-in-filter = No shortcuts in this context.
+# Recorder popover, while keys are being captured.
+preferences-keymap-recording-live = ● Recording
+
+## Component Classes page (Library ▸ Component Classes)
+# Placeholder of the filter field above the table.
+preferences-classes-filter = Filter classes
+# How many classes the list holds; $count is a whole number.
+preferences-classes-count = { $count ->
+    [one] { $count } class
+   *[other] { $count } classes
+}
+# Column captions: the key is what a part stores, the label what pickers show.
+preferences-classes-key-note = stored in parts
+preferences-classes-label-note = shown in pickers
+# Pill on the row Add Class just appended.
+preferences-classes-new = new
+# $filter is the text typed in the filter field.
+preferences-classes-no-match = No class matches "{ $filter }".
+# $key is the repeated key; $label the class that already has it.
+preferences-classes-key-duplicate = The key "{ $key }" is already used by { $label }. Keys must be unique.
+preferences-classes-key-missing = This class has no key. Give it one, or Save leaves the class out.
+# $key is the key as typed.
+preferences-classes-key-malformed = The key "{ $key }" should use only lowercase letters, digits and underscores, like the built-in keys.
+# Asked by Reset to Defaults…; $count is how many classes the list holds and
+# $defaults how many default classes replace them.
+preferences-classes-reset-confirm = { $count ->
+    [one] Replace the one class in this list
+   *[other] Replace the { $count } classes in this list
+} with the { $defaults } default classes?
+preferences-classes-reset-confirm-yes = Reset

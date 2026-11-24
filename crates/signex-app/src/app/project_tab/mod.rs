@@ -17,10 +17,14 @@ mod commands;
 mod erc_annotation;
 mod general;
 mod libraries;
+mod look;
 mod open;
 mod parameters;
+mod preview_ui;
 mod requirements;
+mod row_drag;
 mod schematic_defaults;
+mod section_list;
 mod setup;
 mod sheets;
 mod table;
@@ -40,6 +44,8 @@ mod save_point_tests;
 #[cfg(test)]
 mod schematic_defaults_tests;
 #[cfg(test)]
+mod section_list_tests;
+#[cfg(test)]
 mod sections_tests;
 #[cfg(test)]
 mod setup_tests;
@@ -52,13 +58,19 @@ pub(crate) use commands::{
     project_set_version_control,
 };
 pub use general::ProjectGeneralFacts;
-pub(crate) use open::project_tab_title;
+pub use parameters::ParameterGroup;
+#[cfg(test)]
+pub(crate) use preview_ui::PreviewPopup;
+pub use preview_ui::{ProjectPreviewMsg, ProjectPreviewUi};
 pub use requirements::{RequirementsMsg, RequirementsTabState};
 pub(crate) use requirements::{
     project_add_requirement, project_enable_requirement, project_remove_requirement,
     project_run_requirements, project_set_requirement,
 };
+pub use row_drag::RowDragMsg;
+pub(crate) use sheets::sheet_thumbnail;
 
+pub use crate::app::core::row_drag::RowDrag;
 use crate::app::state::ProjectId;
 
 /// A section of the Project tab, in list order (#1084).
@@ -76,12 +88,12 @@ pub enum ProjectSection {
     Libraries,
     /// The project's ERC rules and annotate undo choice (#1692).
     ErcAnnotation,
-    /// The project's repository and commit on save (#1693).
-    VersionControl,
     /// Widths and sizes of unset schematic items (#2026).
     SchematicDefaults,
     /// What new PCBs and sheets start from (#2232).
     Setup,
+    /// The project's repository and commit on save (#1693).
+    VersionControl,
     /// The project's requirements and their checks (#2339).
     Requirements,
 }
@@ -95,9 +107,9 @@ impl ProjectSection {
         ProjectSection::Variants,
         ProjectSection::Libraries,
         ProjectSection::ErcAnnotation,
-        ProjectSection::VersionControl,
         ProjectSection::SchematicDefaults,
         ProjectSection::Setup,
+        ProjectSection::VersionControl,
         ProjectSection::Requirements,
     ];
 
@@ -150,17 +162,52 @@ pub struct ProjectTabState {
     /// The project's Rules tab (#2398): sub-tab, search, the cell being
     /// typed in, the text view and the cached flags.
     pub rules: crate::app::RulesTabState,
-    /// The newest edit of the project went to its rule history, not to
-    /// `general_history`: what `undo document=<.snxprj>` steps first.
-    pub rules_step_newest: bool,
-    /// The name typed for a new variant, not yet added (#1690).
-    pub new_variant_name: String,
     /// The variant name being typed over, until Enter renames it.
     pub variant_rename: Option<VariantRenameDraft>,
     /// Why the last variant edit was refused; cleared by the next edit.
     pub variant_problem: Option<signex_types::project::VariantProblem>,
+    /// The variant clicked in the Variants list (#1293), Base by its name;
+    /// `None` follows the active variant. Never the active variant itself.
+    pub variant_selected: Option<String>,
+    /// The parts filter as typed in the Variants top bar.
+    pub variant_filter: String,
+    /// Only rows that differ: the matrix hides parts every variant fits as
+    /// Base does.
+    pub variants_only_differ: bool,
+    /// The parts by variants matrix last read, or why it could not be read.
+    pub variant_parts: Option<
+        std::sync::Arc<
+            Result<
+                signex_output::VariantMatrix,
+                crate::app::core::parts_read_error::PartsReadError,
+            >,
+        >,
+    >,
+    /// `DocumentState::sheet_edit_epoch` when `variant_parts` was read.
+    pub variant_parts_epoch: u64,
+    /// The project parameters the newest parts read evaluates values with
+    /// (#1986); other parameters make the read not current.
+    pub variant_parts_parameters: Option<std::collections::BTreeMap<String, String>>,
+    /// The newest parts read started; an older one's result is dropped.
+    pub variant_parts_generation: u64,
+    /// A parts read is running.
+    pub variant_parts_reading: bool,
     /// The Requirements section's drafts, refusal and last run (#2339).
     pub requirements: RequirementsTabState,
+    /// The Parameters filter as typed (mockup row 30).
+    pub parameter_filter: String,
+    /// The Parameters Title block group is folded shut.
+    pub parameter_title_block_closed: bool,
+    /// The Parameters Variables group is folded shut.
+    pub parameter_variables_closed: bool,
+    /// A variable name being typed over, `(from, text)`, until Enter
+    /// renames it.
+    pub parameter_rename: Option<(String, String)>,
+    /// Enter refused the typed variable name; the reason is read again
+    /// from the draft. Cleared by the next keystroke.
+    pub parameter_rename_refused: bool,
+    /// A Sheets or Libraries row held by its grip (mockup rows 31 and 33).
+    pub row_drag: Option<RowDrag>,
 }
 
 /// Messages of a Project tab, namespaced under `ProjectMsg::Tab`. Each
@@ -205,6 +252,26 @@ pub enum ProjectTabMsg {
     ParameterAdded {
         project_id: ProjectId,
     },
+    /// The Parameters filter as typed (mockup row 30).
+    ParameterFilterEdited {
+        project_id: ProjectId,
+        text: String,
+    },
+    /// A Parameters group header clicked: fold the group or open it.
+    ParameterGroupToggled {
+        project_id: ProjectId,
+        group: ParameterGroup,
+    },
+    /// A variable's name as typed over in its row.
+    ParameterRenameEdited {
+        project_id: ProjectId,
+        from: String,
+        text: String,
+    },
+    /// Enter in a variable's name box: rename it to what was typed.
+    ParameterRenameSubmitted {
+        project_id: ProjectId,
+    },
     /// A schematic default as typed (#2026); empty clears it.
     SchematicDefaultEdited {
         project_id: ProjectId,
@@ -247,19 +314,20 @@ pub enum ProjectTabMsg {
     RenameRequested {
         project_id: ProjectId,
     },
+    /// Explore in the General section's files card: the project folder in
+    /// the system file manager.
+    ExploreRequested {
+        project_id: ProjectId,
+    },
     /// A Move up / Move down button of the Sheets table (#1689).
     SheetMoved {
         project_id: ProjectId,
         filename: String,
         step: signex_types::project::ListMove,
     },
-    /// The new variant name as typed (#1690).
-    NewVariantNameEdited {
-        project_id: ProjectId,
-        text: String,
-    },
-    /// Add the typed variant.
-    VariantAdded {
+    /// Add New ▸ Schematic in an empty Sheets section (mockup row 31): the
+    /// project tree's New Schematic flow for the project.
+    AddSchematicRequested {
         project_id: ProjectId,
     },
     /// A variant's name as typed over in its row.
@@ -276,10 +344,53 @@ pub enum ProjectTabMsg {
         project_id: ProjectId,
         name: String,
     },
-    /// The Active check of a row; `None` is Base.
+    /// The Active variant picked in the Variants top bar; `None` is Base.
     ActiveVariantPicked {
         project_id: ProjectId,
         name: Option<String>,
+    },
+    /// `+` or New variant from Base (#1293): the first free "Variant N" is
+    /// added and its name opens for typing.
+    NewVariantRequested {
+        project_id: ProjectId,
+    },
+    /// A variant clicked in the Variants list; `None` is Base. Selecting is
+    /// not picking the active variant.
+    VariantSelected {
+        project_id: ProjectId,
+        name: Option<String>,
+    },
+    /// Rename, or a double-click on a variant's name: the name opens for
+    /// typing in its row.
+    VariantRenameStarted {
+        project_id: ProjectId,
+        name: String,
+    },
+    /// The parts filter as typed.
+    VariantFilterEdited {
+        project_id: ProjectId,
+        text: String,
+    },
+    /// Only rows that differ, turned on or off.
+    VariantDifferingToggled {
+        project_id: ProjectId,
+    },
+    /// Read again: the parts matrix is read anew.
+    VariantPartsReadRequested {
+        project_id: ProjectId,
+    },
+    /// A parts read finished: read `generation`, started at the sheet edit
+    /// count `epoch`.
+    VariantPartsRead {
+        project_id: ProjectId,
+        generation: u64,
+        epoch: u64,
+        parts: std::sync::Arc<
+            Result<
+                signex_output::VariantMatrix,
+                crate::app::core::parts_read_error::PartsReadError,
+            >,
+        >,
     },
     /// A Move up / Move down button of the Libraries table (#1691), with the
     /// library's path as the project stores it.
@@ -288,6 +399,23 @@ pub enum ProjectTabMsg {
         path: std::path::PathBuf,
         step: signex_types::project::ListMove,
     },
+    /// A Sheets or Libraries row's grip was pressed, dragged or let go.
+    RowDragged {
+        project_id: ProjectId,
+        msg: RowDragMsg,
+    },
+    /// Locate… on a Missing library row (mockup row 33): the file picker
+    /// for the library that resolved to `missing`.
+    LibraryLocateRequested {
+        project_id: ProjectId,
+        missing: std::path::PathBuf,
+    },
+    /// The Locate… picker answered (`None`: cancelled).
+    LibraryLocatePicked {
+        project_id: ProjectId,
+        missing: std::path::PathBuf,
+        picked: Option<std::path::PathBuf>,
+    },
     /// The annotate undo choice (#1692); `None` follows Preferences.
     AnnotateUndoPicked {
         project_id: ProjectId,
@@ -295,6 +423,11 @@ pub enum ProjectTabMsg {
     },
     /// "Store ERC rules in this project": a copy of this machine's rules.
     ErcRulesStoreRequested {
+        project_id: ProjectId,
+    },
+    /// Open Electrical Rules Check…: the ERC dialog for this project, its
+    /// Project tab brought to the front first.
+    ErcDialogRequested {
         project_id: ProjectId,
     },
     /// The Commit every save check (#1693).
@@ -310,5 +443,11 @@ pub enum ProjectTabMsg {
     Requirements {
         project_id: ProjectId,
         msg: RequirementsMsg,
+    },
+    /// A preview's value label, drag handle or larger window (mockup rows
+    /// 31 and 36).
+    PreviewActed {
+        project_id: ProjectId,
+        msg: ProjectPreviewMsg,
     },
 }

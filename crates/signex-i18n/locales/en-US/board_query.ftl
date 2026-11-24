@@ -36,3 +36,14 @@ board-nets-select = Select
 board-nets-highlight = Highlight
 board-nets-summary = { $shown } of { $total } nets
 board-nets-empty = No net of the board matches the filter
+
+## Board items an agent or the CLI names by uuid (#2326)
+# { $id } is the uuid; the whole command is refused, nothing changes.
+board-target-unknown = { $id } names nothing on the board this command acts on; nothing was changed
+# A keepout is made from the named zones or from the named lines, never both.
+board-keepout-mixed = A keepout is made from zones or from lines, not both; nothing was changed
+# A command on one component (swap, reuse block place) names it by uuid or by designator.
+board-component-both = Name the component by ids or by designator, not both; nothing was changed
+board-component-none = Name the component by ids (its uuid) or by designator; nothing was changed
+# { $count } is how many uuids ids named.
+board-component-many = ids names { $count } items, and this command acts on one component; nothing was changed

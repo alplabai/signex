@@ -1,5 +1,6 @@
 //! The Pad, Arc and Dimension tools (#2373), each placing as one undo step:
-//! - Pad: each click places a free through-hole pad on the net under it;
+//! - Pad: each click places a free pad on the net under it, a surface pad
+//!   on the active top or bottom copper, else through-hole;
 //! - Arc: on the active layer, by centre, by edge or at any angle
 //!   (`cycle_arc_mode`); a copper arc takes the net under its start;
 //! - Dimension: two clicks for the points it measures, a third for where
@@ -17,6 +18,7 @@ use signex_types::pcb_dimension::LinearDimension;
 use signex_types::pcb_layer::PcbLayer;
 use uuid::Uuid;
 
+use super::outline_preview::open_outline;
 use super::{BoardToolDefaults, BoardToolSession};
 use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
@@ -30,20 +32,13 @@ pub(crate) fn arc_mode_hint(mode: ArcMode) -> MessageId {
     }
 }
 
-/// The short name of `mode`, as Properties shows it.
-pub(crate) fn arc_mode_name(mode: ArcMode) -> MessageId {
-    match mode {
-        ArcMode::Centre => ids::PCB_ARC_MODE_CENTRE_NAME,
-        ArcMode::Edge => ids::PCB_ARC_MODE_EDGE_NAME,
-        ArcMode::AnyAngle => ids::PCB_ARC_MODE_ANY_NAME,
-    }
-}
-
 impl BoardToolDefaults {
-    /// The free pad the Pad tool places at `at` on `board`.
-    pub fn pad(&self, board: &PcbBoard, id: Uuid, at: Point) -> Pad {
+    /// The free pad the Pad tool places at `at` on `board` with `layer`
+    /// active: a surface pad on the top or bottom copper, else through-hole
+    /// (Caner 2026-11-21).
+    pub fn pad(&self, board: &PcbBoard, id: Uuid, at: Point, layer: PcbLayer) -> Pad {
         let number = self.pad_designator.clone().unwrap_or_else(|| "1".into());
-        let mut pad = draw::new_free_pad(board, id, at, number);
+        let mut pad = draw::new_free_pad_on(board, id, at, number, layer);
         if let Some(shape) = self.pad_shape {
             pad.shape = shape;
         }
@@ -130,13 +125,13 @@ impl Signex {
 
     /// A Pad click at `at`: place a free pad there.
     pub(super) fn pad_clicked(&mut self, at: Point) {
-        let Some(board) = self.active_pcb() else {
+        let (Some(board), Some(layer)) = (self.active_pcb(), self.active_board_layer()) else {
             return;
         };
         let pad = self
             .interaction_state
             .pcb_tool_defaults
-            .pad(board, Uuid::now_v7(), at);
+            .pad(board, Uuid::now_v7(), at, layer);
         let name = t!(self.ui_state.i18n, ids::PCB_TOOL_PAD).into_string();
         self.run_placement(&name, Ok(vec![draw::place_item(BoardItem::FreePad(pad))]));
     }
@@ -225,12 +220,19 @@ impl Signex {
                 preview
                     .free
                     .pads
-                    .push(defaults.pad(board, Uuid::nil(), cursor));
+                    .push(defaults.pad(board, Uuid::nil(), cursor, layer));
             }
             BoardPlaceTool::Arc => {
                 let arc = draw::arc_points(defaults.arc_mode, &clicks)
                     .and_then(|points| defaults.arc(board, Uuid::nil(), points, layer));
-                preview.free.arcs.extend(arc);
+                match arc {
+                    Some(arc) => preview.free.arcs.push(arc),
+                    // Before the arc is made, a line from its first click.
+                    None if clicks.len() > 1 => {
+                        preview.segments.extend(open_outline(&clicks, layer));
+                    }
+                    None => {}
+                }
             }
             BoardPlaceTool::Dimension => {
                 // Before the second point the line lies on the measured one.
@@ -270,9 +272,12 @@ impl Signex {
     /// The pad the Pad tool places next, at the pointer, for its form.
     pub(crate) fn next_board_pad(&self, board: &PcbBoard) -> Pad {
         let at = self.board_tool_cursor();
+        let layer = self
+            .active_board_layer()
+            .unwrap_or(PcbLayer::Copper(self.pcb_active_layer()));
         self.interaction_state
             .pcb_tool_defaults
-            .pad(board, Uuid::nil(), at)
+            .pad(board, Uuid::nil(), at, layer)
     }
 
     /// The arc the Arc tool places next, for its form: the arc being drawn

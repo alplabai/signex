@@ -3,7 +3,6 @@
 use super::*;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
-use iced::widget::column;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -80,6 +79,24 @@ pub fn is_section_collapsed(key: &str, collapsed: &CollapsedSections) -> bool {
     collapsed.contains(key)
 }
 
+/// The entry `ToggleSection` flips for section `key`: the key itself for a
+/// section open by default (recorded while closed), `<key>.open` for one
+/// closed by default (recorded while open). The one encoding every panel
+/// with default-closed sections uses.
+pub fn section_toggle_key(key: &str, closed_by_default: bool) -> String {
+    if closed_by_default {
+        format!("{key}.open")
+    } else {
+        key.to_owned()
+    }
+}
+
+/// Whether section `key` shows its body: a default-open one unless its key
+/// is recorded, a default-closed one only while its open key is.
+pub fn is_section_open(key: &str, closed_by_default: bool, collapsed: &CollapsedSections) -> bool {
+    collapsed.contains(&section_toggle_key(key, closed_by_default)) == closed_by_default
+}
+
 /// Property key-value row: the key is UI text, the value is design data
 /// (owned, to avoid lifetime issues in closures).
 pub fn prop_kv_row<'a>(
@@ -113,42 +130,40 @@ pub fn section_title<'a, 'b>(
         .style(crate::styles::section_label(tokens))
 }
 
-pub fn separator<'a>(tokens: &ThemeTokens) -> iced::widget::Text<'a> {
-    // Use a cached static string instead of allocating on every render
-    const SEP: &str = "──────────────────────────────";
-    // raw: a rule of box-drawing glyphs, not language.
-    text(raw(SEP))
-        .size(TS.micro)
-        .color(theme_ext::border_color(tokens))
-}
-
-/// A planned panel: its name (`title`), the planned note and what it will
-/// do (`desc`).
+/// A planned panel (#1283): the shared planned card with the panel's icon,
+/// its name (`title`), the planned pill and what it will do (`desc`). The
+/// dock title is the panel's only title row.
 pub fn view_stub<'a>(
     title: signex_i18n::MessageId,
     desc: signex_i18n::MessageId,
     ctx: &PanelContext,
 ) -> Element<'a, PanelMsg> {
-    container(
-        column![
-            section_title(ctx.i18n.message(title, &[]), &ctx.tokens, &ctx.i18n),
-            separator(&ctx.tokens),
-            text(
-                ctx.i18n
-                    .message(signex_i18n::menu_ids::MENU_PLANNED_TOOLTIP, &[])
-            )
-            .size(TS.caption)
-            .color(theme_ext::text_primary(&ctx.tokens)),
-            text(ctx.i18n.message(desc, &[]))
-                .size(TS.caption)
-                .color(theme_ext::text_secondary(&ctx.tokens)),
-        ]
-        .spacing(SP.s)
-        .padding(6),
+    super::empty_state::planned_card(
+        &ctx.tokens,
+        planned_icon(title),
+        ctx.i18n.message(title, &[]),
+        ctx.i18n
+            .message(signex_i18n::menu_ids::MENU_PLANNED_TOOLTIP, &[]),
+        ctx.i18n.message(desc, &[]),
     )
-    .width(Length::Fill)
-    .boxed()
 }
+
+/// The planned card's glyph for the panel named `title`: Favorites a star,
+/// Snippets a snippet, To-Do a check, any other a clock.
+fn planned_icon(title: signex_i18n::MessageId) -> &'static [u8] {
+    use signex_i18n::ids;
+    match title {
+        t if t == ids::PANELS_KIND_FAVORITES => GLYPH_STAR,
+        t if t == ids::PANELS_KIND_SNIPPETS => GLYPH_SNIPPET,
+        t if t == ids::PANELS_KIND_TODO => GLYPH_CHECK,
+        _ => GLYPH_PLANNED,
+    }
+}
+
+const GLYPH_STAR: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M8 2.2l1.8 3.7 4 .6-2.9 2.8.7 4L8 11.4l-3.6 1.9.7-4L2.2 6.5l4-.6z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>"#;
+const GLYPH_SNIPPET: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M5.5 4L2 8l3.5 4M10.5 4L14 8l-3.5 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>"#;
+const GLYPH_CHECK: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5.2 8.2l1.9 1.9 3.7-4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>"#;
+const GLYPH_PLANNED: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.8" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 4.8V8l2.2 1.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>"#;
 
 /// Render one indented part row inside the SCH Library tree-expander.
 /// Active part gets the selection background; otherwise the row hovers
@@ -222,23 +237,28 @@ pub fn property_label<'a, M: 'a>(
 
 /// Numeric edit row used by the shape pre-placement form. The typed text
 /// stays as a draft while the box is edited, so `-` and `1.` survive; each
-/// parsable keystroke is applied, and Enter shows the stored value again.
+/// value the field takes is applied, and Enter shows the stored value again.
+/// Text it refuses stays, outlined in `error`.
 pub fn form_edit_row_f64<'a>(
     label: signex_i18n::Localized,
     value: f64,
     key: crate::panels::NumericFieldKey,
     draft: Option<&crate::panels::NumericDraft>,
     muted: Color,
+    error: Color,
 ) -> Element<'a, PanelMsg> {
     use iced::widget::row;
-    row![
-        property_label(label, muted),
-        crate::panels::numeric_input("", key, value, draft).size(TS.body),
-    ]
-    .padding([4, PROPERTY_ROW_PAD_X])
-    .spacing(PROPERTY_ROW_GAP)
-    .align_y(iced::Alignment::Center)
-    .boxed()
+    let input = crate::panels::numeric_input("", key, value, draft).size(TS.body);
+    let input = if key.refused_in(draft) {
+        input.style(super::form_look::refusable_input_style(Some(error)))
+    } else {
+        input
+    };
+    row![property_label(label, muted), input]
+        .padding([4, PROPERTY_ROW_PAD_X])
+        .spacing(PROPERTY_ROW_GAP)
+        .align_y(iced::Alignment::Center)
+        .boxed()
 }
 
 pub fn shape_fill_row<'a>(
@@ -292,6 +312,25 @@ pub fn shape_fill_row<'a>(
 #[cfg(test)]
 mod label_tests {
     use super::*;
+
+    /// #1283: Favorites, Snippets and To-Do have their own glyph on the
+    /// planned card; every other planned panel the neutral one.
+    #[test]
+    fn each_planned_panel_has_its_glyph() {
+        use signex_i18n::ids;
+        let glyphs = [
+            planned_icon(ids::PANELS_KIND_FAVORITES),
+            planned_icon(ids::PANELS_KIND_SNIPPETS),
+            planned_icon(ids::PANELS_KIND_TODO),
+            planned_icon(ids::PANELS_KIND_WIKI),
+        ];
+        for (i, a) in glyphs.iter().enumerate() {
+            for b in &glyphs[i + 1..] {
+                assert_ne!(a, b);
+            }
+        }
+        assert_eq!(planned_icon(ids::PANELS_KIND_BOM_STUDIO), GLYPH_PLANNED);
+    }
 
     /// #2347: every property label takes the fixed column, so a wide dock
     /// gives its extra width to the field, not the label.

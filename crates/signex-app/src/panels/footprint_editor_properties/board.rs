@@ -22,10 +22,32 @@ use crate::styles::{Spacing, TypeScale};
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
+// Declared here, not in the folder's `mod.rs`: the section ships with the
+// Board summary it follows.
+#[path = "outline_checks.rs"]
+mod outline_checks;
+
+// The Slot, Pour, Mechanical layer and Component anchor rows (decision 2).
+#[path = "board_targets.rs"]
+mod board_targets;
+
 /// The Board section with nothing selected (#2356): the board's name, its
 /// outline's size and area, and the sketch's counts. It stands where a
-/// footprint shows its own fields, none of which apply to a board.
+/// footprint shows its own fields, none of which apply to a board. The
+/// Outline checks section follows it (mockup row 179d).
 pub(super) fn view_board_summary<'a>(
+    col: Column<Element<'a, PanelMsg>>,
+    fp: &'a FootprintEditorPanelContext,
+    board: &'a BoardSketchProps,
+    palette: PanelPalette,
+    collapsed_sections: &'a CollapsedSections,
+    i18n: &I18n,
+) -> Column<Element<'a, PanelMsg>> {
+    let col = view_board_facts(col, fp, board, palette, collapsed_sections, i18n);
+    outline_checks::view_outline_checks(col, board, palette, collapsed_sections, i18n)
+}
+
+fn view_board_facts<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,
     board: &'a BoardSketchProps,
@@ -144,6 +166,7 @@ pub(super) fn view_board_section<'a>(
             move |value| PanelMsg::BoardSketch(M::HoleNetEdited { id, value }),
         ));
     }
+    col = board_targets::view_board_targets(col, id, &board.target, palette, i18n);
     col.push(
         container(
             text(t!(i18n, ids::BOARD_SKETCH_ROLES_HINT))

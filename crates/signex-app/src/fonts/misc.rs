@@ -83,6 +83,39 @@ pub fn write_stock_copy_target_pref_at(path: &Path, target: &Path) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Components panel row style (#2535)
+// ──────────────────────────────────────────────────────────────────────────
+
+const COMPONENTS_PREVIEWS_KEY: &str = "components_panel_previews";
+
+/// The Components panel "Previews" switch, from `prefs.json`. Compact rows
+/// when the key is missing or not a boolean.
+pub fn read_components_row_style_pref_from(
+    json: Option<&serde_json::Value>,
+) -> crate::library::state::ComponentsRowStyle {
+    let previews = json
+        .and_then(|json| json[COMPONENTS_PREVIEWS_KEY].as_bool())
+        .unwrap_or(false);
+    crate::library::state::ComponentsRowStyle::from_previews(previews)
+}
+
+pub fn write_components_row_style_pref(style: crate::library::state::ComponentsRowStyle) {
+    write_components_row_style_pref_at(&prefs_path(), style)
+}
+
+pub fn write_components_row_style_pref_at(
+    path: &Path,
+    style: crate::library::state::ComponentsRowStyle,
+) {
+    update_prefs_json(path, COMPONENTS_PREVIEWS_KEY, |prefs| {
+        prefs.insert(
+            COMPONENTS_PREVIEWS_KEY.to_string(),
+            serde_json::json!(style.shows_previews()),
+        );
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Persistent search queries (UX_IMPROVEMENTS_OVER_ALTIUM §1.1)
 // ──────────────────────────────────────────────────────────────────────────
 
@@ -333,6 +366,55 @@ pub fn write_wheel_mode_pref(mode: crate::canvas::WheelMode) {
 pub fn write_wheel_mode_pref_at(path: &Path, mode: crate::canvas::WheelMode) {
     update_prefs_json(path, "mouse_wheel", |prefs| {
         prefs.insert("mouse_wheel".to_string(), serde_json::json!(mode.as_pref()));
+    })
+}
+
+/// Read "Layer switcher". Defaults to the strip when the key is missing or
+/// not a known value.
+pub fn read_layer_switcher_pref_from(
+    json: Option<&serde_json::Value>,
+) -> crate::layer_strip_prefs::LayerSwitcher {
+    json.and_then(|json| json["pcb_layer_switcher"].as_str())
+        .map(crate::layer_strip_prefs::LayerSwitcher::from_pref)
+        .unwrap_or_default()
+}
+
+pub fn write_layer_switcher_pref(switcher: crate::layer_strip_prefs::LayerSwitcher) {
+    write_layer_switcher_pref_at(&prefs_path(), switcher)
+}
+
+pub fn write_layer_switcher_pref_at(
+    path: &Path,
+    switcher: crate::layer_strip_prefs::LayerSwitcher,
+) {
+    update_prefs_json(path, "pcb_layer_switcher", |prefs| {
+        prefs.insert(
+            "pcb_layer_switcher".to_string(),
+            serde_json::json!(switcher.as_pref()),
+        );
+    })
+}
+
+/// Read "Selected option". Defaults to Neutral when the key is missing or
+/// not a known value.
+pub fn read_selected_segment_pref_from(
+    json: Option<&serde_json::Value>,
+) -> signex_types::theme::SelectedSegmentLook {
+    json.and_then(|json| json["selected_segment"].as_str())
+        .map(signex_types::theme::SelectedSegmentLook::from_pref)
+        .unwrap_or_default()
+}
+
+pub fn write_selected_segment_pref(look: signex_types::theme::SelectedSegmentLook) {
+    write_selected_segment_pref_at(&prefs_path(), look)
+}
+
+pub fn write_selected_segment_pref_at(path: &Path, look: signex_types::theme::SelectedSegmentLook) {
+    update_prefs_json(path, "selected_segment", |prefs| {
+        prefs.insert(
+            "selected_segment".to_string(),
+            serde_json::json!(look.as_pref()),
+        );
     })
 }
 

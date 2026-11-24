@@ -11,6 +11,8 @@
 
 use iced::Color;
 use signex_types::theme::ThemeTokens;
+use signex_widgets::SegmentedStyle;
+use signex_widgets::theme_ext::{self, SOFT_TINT_ALPHA};
 
 use super::ti;
 
@@ -205,8 +207,17 @@ pub fn muted_text(tokens: &ThemeTokens) -> Color {
     ti(tokens.text_secondary)
 }
 
-/// Text of a disabled control: secondary text at half strength.
+/// Text of a disabled control: the theme's `ink4` when it sets one (both
+/// Graphite themes do), else secondary text at half strength.
 pub fn disabled_text(tokens: &ThemeTokens) -> Color {
+    tokens
+        .extended
+        .ink4
+        .map_or_else(|| half_secondary(tokens), ti)
+}
+
+/// Secondary text at half strength: the derived `ink4`.
+fn half_secondary(tokens: &ThemeTokens) -> Color {
     let c = ti(tokens.text_secondary);
     Color { a: c.a * 0.5, ..c }
 }
@@ -274,10 +285,28 @@ pub struct ResolvedTokens {
     pub shadow: Color,
     /// Modal scrim colour; `a` is the strength.
     pub scrim: Color,
+    /// Fill of the selected option of a segmented control.
+    pub selected_segment: Color,
+    /// Text on [`Self::selected_segment`].
+    pub selected_segment_ink: Color,
+    /// Shadow under the selected option; alpha 0 is no shadow.
+    pub selected_segment_shadow: Color,
 }
 
-/// Alpha of a soft status / accent tint derived from its base colour.
-const SOFT_TINT_ALPHA: f32 = 0.15;
+impl ResolvedTokens {
+    /// The style of a segmented control at `text_size`: the one place its
+    /// track, resting ink and selected chip are read from the tokens.
+    pub fn segmented(&self, text_size: f32) -> SegmentedStyle {
+        SegmentedStyle::new(
+            self.sunken,
+            self.selected_segment,
+            self.selected_segment_shadow,
+            self.ink3,
+            self.selected_segment_ink,
+            text_size,
+        )
+    }
+}
 
 /// Alpha of the shadow under a floating surface when the theme sets none.
 const FALLBACK_SHADOW_ALPHA: f32 = 0.35;
@@ -292,8 +321,10 @@ pub fn resolve(tokens: &ThemeTokens) -> ResolvedTokens {
     let pick = |set: Option<signex_types::theme::Color>, fallback: Color| set.map_or(fallback, ti);
     let panel = ti(tokens.panel_bg);
     let accent = ti(tokens.accent);
+    let raised = pick(e.raised, panel);
+    let shadow = pick(e.shadow, scrim(FALLBACK_SHADOW_ALPHA));
     ResolvedTokens {
-        raised: pick(e.raised, panel),
+        raised,
         field: pick(e.field, input_bg(tokens)),
         sunken: pick(
             e.sunken,
@@ -305,10 +336,10 @@ pub fn resolve(tokens: &ThemeTokens) -> ResolvedTokens {
         ),
         line_strong: pick(e.line_strong, ti(tokens.border)),
         ink3: pick(e.ink3, muted_text(tokens)),
-        ink4: pick(e.ink4, disabled_text(tokens)),
+        ink4: pick(e.ink4, half_secondary(tokens)),
         accent_text: pick(e.accent_text, accent),
-        accent_soft: pick(e.accent_soft, tint(accent, SOFT_TINT_ALPHA)),
-        accent_soft_ink: pick(e.accent_soft_ink, ti(tokens.text)),
+        accent_soft: theme_ext::accent_soft(tokens),
+        accent_soft_ink: theme_ext::accent_soft_ink(tokens),
         primary: pick(e.primary, accent_fill(tokens)),
         primary_ink: pick(e.primary_ink, on_accent(tokens)),
         info: pick(e.info, accent),
@@ -316,7 +347,10 @@ pub fn resolve(tokens: &ThemeTokens) -> ResolvedTokens {
         warn_soft: pick(e.warn_soft, tint(ti(tokens.warning), SOFT_TINT_ALPHA)),
         err_soft: pick(e.err_soft, tint(ti(tokens.error), SOFT_TINT_ALPHA)),
         info_soft: pick(e.info_soft, tint(accent, SOFT_TINT_ALPHA)),
-        shadow: pick(e.shadow, scrim(FALLBACK_SHADOW_ALPHA)),
+        shadow,
         scrim: pick(e.scrim, scrim(BACKDROP_ALPHA)),
+        selected_segment: pick(e.selected_segment, raised),
+        selected_segment_ink: pick(e.selected_segment_ink, ti(tokens.text)),
+        selected_segment_shadow: pick(e.selected_segment_shadow, shadow),
     }
 }

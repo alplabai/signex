@@ -71,17 +71,3 @@ fn absorb(name: &str, candidate: &str, slot: &mut String, conflicts: &mut BTreeS
         conflicts.insert(name.to_string());
     }
 }
-
-/// A fit state for the whole part from its units': not fitted if any unit says
-/// so (a DNP unit makes the part DNP), else fitted if any unit says so.
-pub(super) fn merge_fit_states(states: impl IntoIterator<Item = Option<bool>>) -> Option<bool> {
-    let mut merged = None;
-    for state in states {
-        match state {
-            Some(false) => return Some(false),
-            Some(true) => merged = Some(true),
-            None => {}
-        }
-    }
-    merged
-}

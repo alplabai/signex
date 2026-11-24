@@ -302,7 +302,7 @@ fn reprefix_confirm_cancel_changes_nothing() {
         .reprefix_confirm
         .as_ref()
         .expect("confirm is open");
-    assert_eq!(open.change_lines.len(), 1);
+    assert_eq!(open.changes.len(), 1);
     assert_eq!(open.parts, 1, "the Confirm button counts the one part");
     assert_eq!(refs(&w, ROOT), ["D1"], "nothing applies before Confirm");
 
@@ -498,9 +498,9 @@ fn reprefix_unopened_sheets_stay_dirty_unsaved_and_undo_as_one() {
         .reprefix_confirm
         .as_ref()
         .expect("confirm")
-        .change_lines;
+        .changes;
     assert!(
-        !lines.iter().any(|l| l.contains("matched by symbol")),
+        !lines.iter().any(|l| l.by_symbol),
         "the reopened part carries its stored row link (#1417): {lines:?}"
     );
     confirm(&mut w.app);
@@ -601,10 +601,9 @@ fn undone_reprefix_does_not_shadow_a_sheet_rewritten_on_disk() {
         Message::Annotate(AnnotateMsg::Run(signex_engine::AnnotateMode::Incremental)),
     );
 
-    // An unopened sheet is annotated and written straight to disk.
-    let on_disk = signex_engine::Engine::open(&child_path).expect("reopen the child");
+    // An unopened sheet is annotated into a parked engine, unsaved.
     assert_eq!(
-        on_disk.document().symbols[0].reference,
+        w.app.document_state.engines[&child_path].document().symbols[0].reference,
         "R1",
         "Annotate must read the rewritten file, not the pre-undo copy"
     );

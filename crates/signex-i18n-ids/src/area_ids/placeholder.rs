@@ -17,12 +17,10 @@ define_ids! {
     PLACEHOLDER_COLOR_CHANNEL = "placeholder-color-channel";
     PLACEHOLDER_PDF_PAGE = "placeholder-pdf-page";
     PLACEHOLDER_RENAME_PROJECT = "placeholder-rename-project";
-    PLACEHOLDER_RENAME_FILE = "placeholder-rename-file";
     PLACEHOLDER_GRID_STEP = "placeholder-grid-step";
     PLACEHOLDER_CHILD_SHEET_PATH = "placeholder-child-sheet-path";
     PLACEHOLDER_CHILD_SHEET_LINE_WIDTH = "placeholder-child-sheet-line-width";
     PLACEHOLDER_ERC_WAIVER_REASON = "placeholder-erc-waiver-reason";
-    PLACEHOLDER_ERC_WAIVER_AUTHOR = "placeholder-erc-waiver-author";
     PLACEHOLDER_MIXED = "placeholder-mixed";
     PLACEHOLDER_TEXT_EDIT_DESIGNATOR = "placeholder-text-edit-designator";
     PLACEHOLDER_TEXT_EDIT_VALUE = "placeholder-text-edit-value";

@@ -94,13 +94,18 @@ fn fn_body<'a>(source: &'a str, name: &str) -> &'a str {
     &source[start..end]
 }
 
-/// The facts `ctx.<field>` names in `body`, with those of every helper
-/// `name(ctx)` it calls whose body is in `source`.
+/// The facts `ctx.<field>` (or `core.<field>`, the core half a Ui need
+/// reads) names in `body`, with those of every helper `name(ctx)` it calls
+/// whose body is in `source`.
 fn facts_named(body: &str, source: &str) -> BTreeSet<String> {
     let mut named = BTreeSet::new();
     for line in body.lines().filter(|line| !line.trim().starts_with("//")) {
-        for (at, _) in line.match_indices("ctx.") {
-            let path: String = line[at + 4..]
+        let reads = ["ctx.", "core."].into_iter().flat_map(|prefix| {
+            line.match_indices(prefix)
+                .map(move |(at, _)| at + prefix.len())
+        });
+        for at in reads {
+            let path: String = line[at..]
                 .chars()
                 .take_while(|c| c.is_ascii_lowercase() || *c == '_' || *c == '.')
                 .collect();

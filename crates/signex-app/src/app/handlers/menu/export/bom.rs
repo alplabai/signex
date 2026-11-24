@@ -7,8 +7,14 @@ use signex_output::{BomColumn, BomExporter, BomFormat, BomGrouping, BomOptions, 
 
 use super::super::super::super::*;
 
+#[path = "bom_rows.rs"]
+mod rows;
+#[cfg(test)]
+#[path = "bom_tests.rs"]
+mod tests;
+
 impl Signex {
-    /// Open the BOM preview modal — Altium parity with Print Preview.
+    /// Open the BOM preview modal, the export dialog of mockup row 112.
     /// Builds the rolled-up table from the active project's
     /// schematic snapshot and seeds the modal with the default
     /// options. The user adjusts grouping / include flags / format
@@ -47,22 +53,23 @@ impl Signex {
             },
             ..BomOptions::default()
         };
-        let Some((table, validation_report)) = self.rebuild_bom_table(&opts) else {
+        let Some((ctx, issues)) = super::build_bom_export_scope(&self.document_state) else {
             self.refuse_export(signex_i18n::ids::NOTICE_BOM_NO_SHEET);
             return Task::none();
         };
-        // Default sort: ascending by the Designator column when it
-        // exists in the column set. Matches Altium's "rows are
-        // ordered by reference designator on open" convention.
+        if self.refused_for_channel_naming(&issues) {
+            return Task::none();
+        }
+        let (table, validation_report) = self.bom_table_of(ctx, &opts);
+        // Default sort: ascending by the Designator column when it exists
+        // in the column set, so lines open in designator order.
         let default_sort = opts
             .columns
             .iter()
             .position(|c| matches!(c, signex_output::BomColumn::Designator))
             .map(|idx| (idx, true));
-        let row_order =
-            crate::app::view::dialogs::sorted_row_order(&table.rows, &opts.columns, default_sort);
-        self.document_state.bom_preview = Some(crate::app::state::BomPreviewState {
-            row_order,
+        let mut preview = crate::app::state::BomPreviewState {
+            row_order: Vec::new(),
             source,
             options: opts,
             table,
@@ -75,7 +82,16 @@ impl Signex {
             column_widths: std::collections::HashMap::new(),
             column_resize: None,
             sidebar_tab: crate::app::state::BomSidebarTab::General,
-        });
+            filter: String::new(),
+            visible_lines: Vec::new(),
+            row_flags: Vec::new(),
+            issue_lines: Vec::new(),
+            selected_row: None,
+            scroll_x: 0.0,
+            export_pending: false,
+        };
+        preview.refresh_rows();
+        self.document_state.bom_preview = Some(preview);
         self.handle_detach_modal(crate::app::state::ModalId::BomPreview)
     }
 
@@ -92,18 +108,63 @@ impl Signex {
         }
     }
 
-    pub(crate) fn handle_bom_preview_set_include_dnp(&mut self, include: bool) {
+    /// The one not-fitted option over the two domain flags, which it always
+    /// sets together (docs/DECISIONS.md, 2026-11-19).
+    pub(crate) fn handle_bom_preview_include_not_fitted(&mut self, include: bool) {
         if let Some(preview) = self.document_state.bom_preview.as_mut() {
             preview.options.include_dnp = include;
+            preview.options.include_not_fitted = include;
         }
         self.rerollup_bom_preview();
     }
 
-    pub(crate) fn handle_bom_preview_set_include_not_fitted(&mut self, include: bool) {
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
-            preview.options.include_not_fitted = include;
+    /// Select the line an issue points at and scroll it into view. A filter
+    /// that hides the line is cleared, so the selection is never off screen.
+    pub(crate) fn handle_bom_preview_issue_selected(&mut self, issue: usize) -> Task<Message> {
+        let Some(preview) = self.document_state.bom_preview.as_mut() else {
+            return Task::none();
+        };
+        let Some(Some(at)) = preview.issue_lines.get(issue).copied() else {
+            return Task::none();
+        };
+        preview.selected_row = Some(at.row);
+        let line = at.line.saturating_sub(1);
+        if !preview.visible_lines.contains(&line) {
+            preview.filter.clear();
+            preview.refresh_rows();
         }
-        self.rerollup_bom_preview();
+        let Some(position) = preview.visible_lines.iter().position(|&l| l == line) else {
+            return Task::none();
+        };
+        let y = position as f32 * crate::styles::ChromeMetrics::DEFAULT.field;
+        iced::widget::operation::scrollable::scroll_to(
+            crate::app::state::BomPreviewState::BODY_SCROLL,
+            iced::widget::scrollable::AbsoluteOffset {
+                x: None,
+                y: Some(y),
+            },
+            iced::widget::operation::Animation::Instant,
+        )
+    }
+
+    /// The table body scrolled: move the sticky header to the same
+    /// horizontal offset.
+    pub(crate) fn handle_bom_preview_body_scrolled(&mut self, x: f32) -> Task<Message> {
+        let Some(preview) = self.document_state.bom_preview.as_mut() else {
+            return Task::none();
+        };
+        if preview.scroll_x == x {
+            return Task::none();
+        }
+        preview.scroll_x = x;
+        iced::widget::operation::scrollable::scroll_to(
+            crate::app::state::BomPreviewState::HEADER_SCROLL,
+            iced::widget::scrollable::AbsoluteOffset {
+                x: Some(x),
+                y: None,
+            },
+            iced::widget::operation::Animation::Instant,
+        )
     }
 
     /// Turn one validation rule on or off and re-validate. Rule flags do not
@@ -231,9 +292,13 @@ impl Signex {
     /// and finish in `handle_export_bom_finished`. Mirrors the
     /// PrintPreview → Export PDF pattern.
     pub(crate) fn handle_bom_preview_export(&mut self) -> Option<Task<Message>> {
-        let Some(preview) = self.document_state.bom_preview.as_ref() else {
+        let Some(preview) = self.document_state.bom_preview.as_mut() else {
             return Some(Task::none());
         };
+        preview.export_pending = true;
+        // A column drag cannot drop while the settings wait for the save.
+        preview.column_drag = None;
+        preview.column_drag_press_x = None;
         let options = preview.options.clone();
         let source = preview.source.clone();
         let (ext, format_filter) = bom_format_filter(options.format);
@@ -249,13 +314,10 @@ impl Signex {
         let filter_exts_owned: Vec<String> = filter_exts.iter().map(|s| s.to_string()).collect();
 
         // The options and source ride inside `BomFinished`, so a second
-        // Export click gets its own copy (#852). Dismiss the preview; the
-        // detached preview window also needs to close so the OS window
-        // doesn't linger after Export.
-        self.document_state.bom_preview = None;
-        let close_window = self.close_detached_modal(crate::app::state::ModalId::BomPreview);
-
-        let dialog = Task::perform(
+        // Export click gets its own copy (#852). The dialog stays open: a
+        // cancelled save keeps its settings, and `handle_bom_written` closes
+        // it once the file is written.
+        Some(Task::perform(
             async move {
                 let exts_refs: Vec<&str> = filter_exts_owned.iter().map(String::as_str).collect();
                 target
@@ -273,8 +335,63 @@ impl Signex {
                     result: path.ok_or_else(|| "cancelled".to_string()),
                 })
             },
-        );
-        Some(Task::batch([close_window, dialog]))
+        ))
+    }
+
+    /// Whether `msg` would change what Export writes while an Export is in
+    /// its save dialog or write. Those edits are not taken (#2792); viewing
+    /// the table, and Cancel, still work.
+    pub(crate) fn bom_edit_waits_for_save(&self, msg: &BomPreviewMsg) -> bool {
+        let pending = self
+            .document_state
+            .bom_preview
+            .as_ref()
+            .is_some_and(|preview| preview.export_pending);
+        pending
+            && matches!(
+                msg,
+                BomPreviewMsg::SetGrouping(..)
+                    | BomPreviewMsg::SetFormat(..)
+                    | BomPreviewMsg::NotFittedIncludedToggled(..)
+                    | BomPreviewMsg::SetRule(..)
+                    | BomPreviewMsg::ToggleColumn(..)
+                    | BomPreviewMsg::SetVariant(..)
+                    | BomPreviewMsg::ColumnDragStart(..)
+                    | BomPreviewMsg::ColumnDragDrop(..)
+                    | BomPreviewMsg::Export
+            )
+    }
+
+    /// The Export of `source` ended without closing its dialog: it takes
+    /// edits again.
+    fn end_bom_export(&mut self, source: &std::path::Path) {
+        if let Some(preview) = self.document_state.bom_preview.as_mut()
+            && preview.source == source
+        {
+            preview.export_pending = false;
+        }
+    }
+
+    /// A BOM's write landed: report it, and close the dialog open for its
+    /// document only when the file was written.
+    pub(crate) fn handle_bom_written(
+        &mut self,
+        source: PathBuf,
+        outcome: crate::app::contracts::ExportWriteOutcome,
+    ) -> Task<Message> {
+        self.end_bom_export(&source);
+        let is_written = outcome.result.is_ok();
+        let reported = self.handle_export_written(outcome);
+        let is_open_for_source = self
+            .document_state
+            .bom_preview
+            .as_ref()
+            .is_some_and(|preview| preview.source == source);
+        if is_written && is_open_for_source {
+            Task::batch([reported, self.handle_bom_preview_close()])
+        } else {
+            reported
+        }
     }
 
     pub(crate) fn handle_bom_preview_close(&mut self) -> Task<Message> {
@@ -293,14 +410,23 @@ impl Signex {
         &self,
         opts: &BomOptions,
     ) -> Option<(signex_output::BomTable, signex_output::BomValidationReport)> {
-        let mut ctx = super::build_bom_export_context(&self.document_state)?;
+        let ctx = super::build_bom_export_context(&self.document_state)?;
+        Some(self.bom_table_of(ctx, opts))
+    }
+
+    /// The rolled-up table and its validation of an assembled scope.
+    fn bom_table_of(
+        &self,
+        mut ctx: signex_output::ExportContext,
+        opts: &BomOptions,
+    ) -> (signex_output::BomTable, signex_output::BomValidationReport) {
         crate::library::drift::apply_library_names(&mut ctx, &self.library.drift.names);
         let opts = BomOptions {
             price_book: crate::library::bom_prices::price_book(&self.library),
             board_left_out: self.active_board_left_out_of_bom(),
             ..opts.clone()
         };
-        Some(signex_output::bom::rollup_with_validation(&ctx, &opts))
+        signex_output::bom::rollup_with_validation(&ctx, &opts)
     }
 
     fn rerollup_bom_preview(&mut self) {
@@ -317,6 +443,8 @@ impl Signex {
         {
             preview.table = table;
             preview.validation_report = report;
+            // Row indexes name lines of the old table.
+            preview.selected_row = None;
         }
     }
 
@@ -330,6 +458,7 @@ impl Signex {
             Ok(p) => p,
             Err(e) => {
                 log::info!("BOM export not written: {e}");
+                self.end_bom_export(&source);
                 return Task::none();
             }
         };
@@ -338,6 +467,7 @@ impl Signex {
             match super::build_bom_export_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,
                 None => {
+                    self.end_bom_export(&source);
                     self.refuse_export(
                         signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_BOM_SOURCE_CLOSED)
                             .arg("path", source.display().to_string()),
@@ -345,6 +475,10 @@ impl Signex {
                     return Task::none();
                 }
             };
+        if self.refused_for_channel_naming(&issues) {
+            self.end_bom_export(&source);
+            return Task::none();
+        }
         // A BOM is a machine-and-procurement-consumed deliverable, not the
         // print-preview intermediate `rebuild_bom_table` renders — so unlike
         // that path it must not stay silent. A cross-dir child-filename
@@ -381,7 +515,7 @@ impl Signex {
                 // Advisory, not a gate: the file is written; tell the
                 // user what validation found instead of dropping it.
                 let advisory = bom_validation_notice(&output.validation_report, &save_path);
-                return self.write_export(
+                let write = self.write_export(
                     save_path,
                     output.bytes,
                     "BOM",
@@ -389,8 +523,18 @@ impl Signex {
                     advisory,
                     Vec::new(),
                 );
+                return write.map(move |message| match message {
+                    Message::Export(ExportMsg::FileWritten(outcome)) => {
+                        Message::Export(ExportMsg::BomWritten {
+                            source: source.clone(),
+                            outcome,
+                        })
+                    }
+                    other => other,
+                });
             }
             Err(e) => {
+                self.end_bom_export(&source);
                 self.report_export_failure(
                     signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_BOM_EXPORT_FAILED)
                         .arg("error", e.to_string()),

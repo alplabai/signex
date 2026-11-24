@@ -8,8 +8,10 @@ use signex_library::primitive::{
     Drill, Footprint, FpGraphic, FpGraphicKind, Pad, PadKind, PadShape, Polygon,
 };
 
-use super::footprint_scale::{length_label, round_length_mm, scale_bar, size_label};
-use super::{FootprintPreview, PreviewState};
+use super::footprint_scale::{
+    drawing_area, length_label, round_length_mm, scale_bar, size_label, size_label_bounds,
+};
+use super::{FIT_PAD, FootprintPreview, PreviewState};
 use crate::layout_probe::headless_renderer;
 use crate::library::editor::footprint::canvas::{FootprintCanvas, FootprintCanvasState};
 use crate::library::editor::footprint::state::FootprintEditorState;
@@ -169,6 +171,7 @@ fn draw_editor(fp: &Footprint, at: &PreviewState) -> Painted {
         sketch: None,
         silk_f: &fp.silk_f,
         silk_b: &fp.silk_b,
+        generated_silk: &fp.generated.silk,
         zoom_step: 1.1,
         trackpad_pan: false,
         wheel_mode: Default::default(),
@@ -353,7 +356,8 @@ fn the_fit_centres_the_footprint_inside_a_narrow_and_a_wide_box() {
     let model = preview_of(&fixture());
     let (min_x, min_y, max_x, max_y) = model.bbox_mm().expect("pads give a bbox");
     for size in [iced::Size::new(120.0, 156.0), iced::Size::new(700.0, 156.0)] {
-        let camera = super::fitted_camera(&model, Rectangle::with_size(size));
+        let area = Rectangle::with_size(size);
+        let camera = super::fitted_camera(&model, area);
         let (scale, off) = (camera.scale, camera.offset);
         let low = (min_x as f32 * scale + off.x, min_y as f32 * scale + off.y);
         let high = (max_x as f32 * scale + off.x, max_y as f32 * scale + off.y);
@@ -362,8 +366,45 @@ fn the_fit_centres_the_footprint_inside_a_narrow_and_a_wide_box() {
             high.0 <= size.width && high.1 <= size.height,
             "{size:?} {high:?}"
         );
+        // Centred across the box, and down the part above the readouts.
+        let drawing = drawing_area(area, (min_x, min_y, max_x, max_y), FIT_PAD);
         assert!((low.0 + high.0 - size.width).abs() < 1e-2, "{size:?}");
-        assert!((low.1 + high.1 - size.height).abs() < 1e-2, "{size:?}");
+        assert!((low.1 + high.1 - drawing.height).abs() < 1e-2, "{size:?}");
+    }
+}
+
+/// Caner's report of 2026-11-21: the size sits under the drawing, clear of
+/// the footprint and courtyard and of the scale bar, in a wide and a narrow
+/// preview.
+#[test]
+fn the_size_label_sits_at_the_bottom_clear_of_the_drawing_and_the_bar() {
+    let model = preview_of(&fixture());
+    let bbox = model.bbox_mm().expect("bbox");
+    let label = size_label(bbox);
+    let text = crate::styles::TypeScale::DEFAULT.caption;
+    for size in [
+        iced::Size::new(320.0, 200.0),
+        iced::Size::new(150.0, 132.0),
+        iced::Size::new(120.0, 156.0),
+    ] {
+        let area = Rectangle::with_size(size);
+        let camera = super::fitted_camera(&model, area);
+        let bounds = size_label_bounds(area, &label);
+        assert!(bounds.y >= size.height / 2.0, "{size:?} {bounds:?}");
+        assert!(
+            bounds.y + bounds.height <= size.height,
+            "{size:?} {bounds:?}"
+        );
+        let drawing_bottom = bbox.3 as f32 * camera.scale + camera.offset.y;
+        assert!(
+            drawing_bottom <= bounds.y + 1e-2,
+            "{size:?}: drawing ends at {drawing_bottom}, label starts at {}",
+            bounds.y
+        );
+        let (_, bar) = scale_bar(camera.scale, size.width).expect("bar");
+        let beside_bar = bounds.x >= text + bar;
+        let above_bar = bounds.y + bounds.height <= size.height - text * 3.0 + 1e-2;
+        assert!(beside_bar || above_bar, "{size:?} {bounds:?} bar {bar}");
     }
 }
 

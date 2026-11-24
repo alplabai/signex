@@ -20,6 +20,7 @@ use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 
 use crate::eval_util::{build_ctx, opt_eval_mm};
+use crate::open_ends::warn_open_profiles;
 use crate::profile::TraceError;
 use crate::traced_loops::TracedLoops;
 
@@ -31,6 +32,7 @@ pub fn bake_cutouts(
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
     let ctx = build_ctx(sketch, params_canonical);
+    let mut open = false;
     let mut loops = TracedLoops::default();
     for entity in &sketch.entities {
         if entity.bake_skipped() {
@@ -78,10 +80,7 @@ pub fn bake_cutouts(
                     through: attr.through,
                 });
             }
-            Err(TraceError::OpenChain) => warnings.push(format!(
-                "entity {}: BoardCutoutAttr profile is not closed (open chain); skipping",
-                entity.id
-            )),
+            Err(TraceError::OpenChain) => open = true,
             Err(TraceError::Branching) => warnings.push(format!(
                 "entity {}: BoardCutoutAttr profile branches at a vertex; skipping",
                 entity.id
@@ -91,6 +90,15 @@ pub fn bake_cutouts(
                 entity.id
             )),
         }
+    }
+    if open {
+        warn_open_profiles(
+            sketch,
+            solve,
+            "Cutout",
+            |e| e.board_cutout.is_some(),
+            warnings,
+        );
     }
     Ok(())
 }

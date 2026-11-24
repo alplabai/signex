@@ -217,9 +217,9 @@ fn solved_points(sketch: &SketchData) -> HashSet<SketchEntityId> {
     let by_id: HashMap<SketchEntityId, &Entity> =
         sketch.entities.iter().map(|e| (e.id, e)).collect();
     let lookup = |id: SketchEntityId| by_id.get(&id).copied();
+    // A point only a driven dimension reads stays out: it measures.
     let mut solved: HashSet<SketchEntityId> = sketch
-        .constraints
-        .iter()
+        .driving_constraints()
         .flat_map(|c| points_touched_with(&c.kind, &lookup))
         .collect();
 

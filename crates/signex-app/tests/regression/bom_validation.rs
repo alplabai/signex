@@ -96,8 +96,67 @@ fn a_rollup_change_refreshes_the_report() {
         .validation_report
         .issues
         .clear();
-    let _ = app.update(Message::BomPreview(BomPreviewMsg::SetIncludeDnp(true)));
+    let _ = app.update(Message::BomPreview(
+        BomPreviewMsg::NotFittedIncludedToggled(true),
+    ));
     assert_eq!(issue_rules(&app).len(), 2);
+}
+
+/// Mockup row 112 and docs/DECISIONS.md (2026-11-19): the one not-fitted
+/// option of the BOM dialog sets both domain flags, and the export it starts
+/// carries them.
+#[test]
+fn the_not_fitted_option_reaches_the_export_with_both_flags() {
+    let mut app = app_with_faulty_bom();
+    let _ = app.update(Message::Menu(MenuMessage::ExportBom));
+    let _ = app.update(Message::BomPreview(
+        BomPreviewMsg::NotFittedIncludedToggled(true),
+    ));
+    let options = &app
+        .document_state
+        .bom_preview
+        .as_ref()
+        .expect("preview open")
+        .options;
+    assert!(options.include_dnp, "DNP parts are included");
+    assert!(options.include_not_fitted, "not-fitted parts are included");
+}
+
+/// Mockup row 112: the toolbar filter hides lines, never parts of the file: the
+/// export written while a filter hides every line still lists every part.
+#[test]
+fn a_filter_hiding_every_line_still_exports_every_part() {
+    let dir = std::env::temp_dir().join(format!("signex-bom-112-{}", uuid::Uuid::now_v7()));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let out = dir.join("bom.csv");
+
+    let mut app = app_with_faulty_bom();
+    let _ = app.update(Message::Menu(MenuMessage::ExportBom));
+    let _ = app.update(Message::BomPreview(BomPreviewMsg::FilterChanged(
+        "matches nothing".into(),
+    )));
+    let preview = app
+        .document_state
+        .bom_preview
+        .as_ref()
+        .expect("preview open");
+    assert!(
+        preview.visible_lines.is_empty(),
+        "the filter hides every line"
+    );
+    let options = preview.options.clone();
+
+    let finished = Message::Export(ExportMsg::BomFinished {
+        source: app.document_state.active_path.clone().expect("active"),
+        options: Box::new(options),
+        result: Ok(out.clone()),
+    });
+    let task = app.update(finished);
+    crate::settle_support::settle_task(&mut app, task);
+
+    let csv = std::fs::read_to_string(&out).expect("the BOM is written");
+    assert!(csv.contains("R1"), "{csv}");
+    std::fs::remove_dir_all(&dir).expect("cleanup");
 }
 
 #[test]

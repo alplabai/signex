@@ -653,3 +653,76 @@ fn a_swap_to_an_embedded_ref_held_by_another_body_is_refused_and_changes_nothing
             .shares_storage_with(&before.lib_symbols)
     );
 }
+
+/// U1 of `engine_with_wired_pin_2` with a user note and an MPN the new part
+/// also supplies.
+fn engine_with_user_parameters() -> (Engine, Uuid) {
+    let (engine, id) = engine_with_wired_pin_2();
+    let mut sheet = engine.document().clone();
+    let fields = &mut sheet.symbols[0].fields;
+    fields.insert("Note".into(), "FB divider, sets 3.3 V".into());
+    fields.insert("MPN".into(), "OLD-MPN".into());
+    (Engine::new(sheet).unwrap(), id)
+}
+
+#[test]
+fn user_parameters_are_the_ones_the_new_part_does_not_supply() {
+    let (engine, id) = engine_with_user_parameters();
+    let names = replacement(swap_pins()).user_parameters(engine.document(), id);
+    assert_eq!(names, ["Note", "Tolerance"], "MPN comes from the new part");
+}
+
+#[test]
+fn the_swap_keeps_exactly_the_ticked_user_parameters_and_replaces_library_fields() {
+    let (mut engine, id) = engine_with_user_parameters();
+    let swap =
+        replacement(swap_pins()).keeping_parameters(engine.document(), id, &["Note".to_string()]);
+    engine
+        .execute(Command::ChangeComponent {
+            symbol_id: id,
+            replacement: swap,
+        })
+        .unwrap();
+    let sym = &engine.document().symbols[0];
+    assert_eq!(
+        sym.fields.get("Note").map(String::as_str),
+        Some("FB divider, sets 3.3 V")
+    );
+    assert!(!sym.fields.contains_key("Tolerance"), "unticked: cleared");
+    assert_eq!(sym.fields.get("MPN").map(String::as_str), Some("NEW-MPN"));
+    assert_eq!(sym.footprint, "L:FP-NEW");
+    engine.undo().unwrap();
+    let back = &engine.document().symbols[0];
+    assert_eq!(back.fields.get("Tolerance").map(String::as_str), Some("1%"));
+}
+
+#[test]
+fn keeping_every_user_parameter_is_the_plain_swap() {
+    let (engine, id) = engine_with_user_parameters();
+    let all = replacement(swap_pins()).user_parameters(engine.document(), id);
+    let kept = replacement(swap_pins()).keeping_parameters(engine.document(), id, &all);
+    assert_eq!(kept.fields, replacement(swap_pins()).fields);
+}
+
+#[test]
+fn several_parts_change_in_one_batch_as_one_undo_step() {
+    let (engine, first) = engine_with_wired_pin_2();
+    let mut sheet = engine.document().clone();
+    let second = Uuid::from_u128(2);
+    let mut copy = sheet.symbols[0].clone();
+    copy.uuid = second;
+    copy.reference = "U2".into();
+    copy.position = Point::new(40.0, 10.0);
+    sheet.symbols.push(copy);
+    let mut engine = Engine::new(sheet).unwrap();
+    engine
+        .execute_batch([first, second].map(|symbol_id| Command::ChangeComponent {
+            symbol_id,
+            replacement: replacement(swap_pins()),
+        }))
+        .unwrap();
+    assert!(engine.document().symbols.iter().all(|s| s.lib_id == NEW));
+    engine.undo().unwrap();
+    assert!(engine.document().symbols.iter().all(|s| s.lib_id == OLD));
+    assert!(!engine.can_undo());
+}

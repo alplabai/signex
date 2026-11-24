@@ -1,7 +1,8 @@
 //! The design reuse commands from their operands (#2410): an agent or the
 //! CLI names the board (`document`), the block (`name`) and what to save
-//! (`ids`) or where to place it (`designator`, `degrees`), and gets what was
-//! saved or placed as JSON. The same `Signex` calls as the board menu.
+//! (`ids`) or where to place it (the anchor by `ids`, its uuid, or by
+//! `designator`; `degrees`), and gets what was saved or placed as JSON. The
+//! same `Signex` calls as the board menu.
 
 use std::path::Path;
 
@@ -12,7 +13,7 @@ use signex_types::pcb::PcbBoard;
 use uuid::Uuid;
 
 use super::{ReuseRerun, read_blocks_task};
-use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
+use crate::app::command::{CommandArgs, CommandOutcome, OperandValue, component_by_uuid};
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
@@ -20,7 +21,7 @@ type Ran = (CommandOutcome, Task<Message>);
 
 fn refused(reason: impl Into<String>) -> Ran {
     let reason = reason.into();
-    (CommandOutcome::Disabled { reason }, Task::none())
+    (CommandOutcome::disabled(reason), Task::none())
 }
 
 fn text<'a>(args: &'a CommandArgs, name: &str) -> &'a str {
@@ -58,13 +59,15 @@ fn board_items(board: &PcbBoard, ids: &str) -> Result<Vec<BoardItemId>, String> 
 
 /// The project's blocks of `board`, read first when they are not read yet:
 /// then the command `id` runs again, as the caller that sent it, when they
-/// land (`Deferred`). `None` when they are read.
+/// land (`Deferred`). `None` when they are read, or when the board menu
+/// runs it (`from_view`): the menu reads the blocks itself, or acts on those
+/// it lists, as before the translator.
 fn read_first(app: &mut Signex, board: &Path, id: &str, args: &CommandArgs) -> Option<Ran> {
     let folder = match app.reuse_block_folder(board) {
         Ok(folder) => folder,
         Err(reason) => return Some(refused(reason)),
     };
-    if !app.retry_and_need_read(&folder) {
+    if app.agent.from_view || !app.retry_and_need_read(&folder) {
         return None;
     }
     let Ok(command) = AppCommandId::new(id) else {
@@ -114,8 +117,8 @@ pub(crate) fn save_board_reuse_block(app: &mut Signex, args: &CommandArgs) -> Ra
     }
 }
 
-/// `place_board_reuse_block document=<board> name=<name> designator=<ref>
-/// [degrees=<turn>]`. While the project's blocks are not read yet, they are
+/// `place_board_reuse_block document=<board> name=<name> (ids=<uuid> |
+/// designator=<ref>) [degrees=<turn>]`. While the project's blocks are not read yet, they are
 /// read first and the command runs when they land (`Deferred`).
 pub(crate) fn place_board_reuse_block(app: &mut Signex, args: &CommandArgs) -> Ran {
     let board = match app.named_output_board(args) {
@@ -125,16 +128,20 @@ pub(crate) fn place_board_reuse_block(app: &mut Signex, args: &CommandArgs) -> R
     if let Some(waiting) = read_first(app, &board, "place_board_reuse_block", args) {
         return waiting;
     }
-    let anchor = match app
-        .document_state
-        .pcb_board(&board)
-        .ok_or_else(|| "the board is not open".to_string())
-        .and_then(|pcb| {
+    let Some(pcb) = app.document_state.pcb_board(&board) else {
+        return refused("the board is not open");
+    };
+    let anchor = match component_by_uuid(pcb, args) {
+        Ok(Some(anchor)) => anchor,
+        Ok(None) => {
             let typed = text(args, "designator");
-            placement::by_designator(pcb, app.document_state.stored_reference_for(&board, typed))
-        }) {
-        Ok(anchor) => anchor,
-        Err(reason) => return refused(reason),
+            let stored = app.document_state.stored_reference_for(&board, typed);
+            match placement::by_designator(pcb, stored) {
+                Ok(anchor) => anchor,
+                Err(reason) => return refused(reason),
+            }
+        }
+        Err(reason) => return (CommandOutcome::Disabled { reason }, Task::none()),
     };
     let degrees = match args.operand("degrees") {
         Some(OperandValue::Angle(degrees)) => *degrees,

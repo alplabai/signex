@@ -25,6 +25,7 @@ impl Signex {
         let find = &mut self.ui_state.find_replace;
         if find.window != window {
             find.matches.clear();
+            find.excluded.clear();
             find.selected_index = None;
             find.window = window;
         }
@@ -108,7 +109,9 @@ impl Signex {
                 self.cancel_replace_job("Find was closed");
             }
             FindReplaceMsg::QueryChanged(query) => {
-                self.ui_state.find_replace.query = query;
+                let find = &mut self.ui_state.find_replace;
+                find.query = query;
+                find.excluded.clear();
                 return self.refresh_find_matches();
             }
             FindReplaceMsg::ScopeChanged(scope) => {
@@ -118,9 +121,25 @@ impl Signex {
                     find.skips_reported.clear();
                     find.skipped_note = None;
                     find.matches.clear();
+                    find.excluded.clear();
                     find.selected_index = None;
                 }
                 return self.refresh_find_matches();
+            }
+            FindReplaceMsg::ModeChanged(replace_mode) => {
+                self.ui_state.find_replace.replace_mode = replace_mode;
+            }
+            FindReplaceMsg::MatchCaseToggled => {
+                return self.change_match_options(|o| o.match_case = !o.match_case);
+            }
+            FindReplaceMsg::WholeWordToggled => {
+                return self.change_match_options(|o| o.whole_word = !o.whole_word);
+            }
+            FindReplaceMsg::RegexToggled => {
+                return self.change_match_options(|o| o.regex = !o.regex);
+            }
+            FindReplaceMsg::ResultIncludeToggled(key) => {
+                self.ui_state.find_replace.toggle_included(key);
             }
             FindReplaceMsg::ProjectReplacePrepared { generation, result } => {
                 return self.apply_project_replace(generation, &result);
@@ -139,5 +158,18 @@ impl Signex {
         }
 
         Task::none()
+    }
+
+    /// Match case, Whole word or Regex was flipped: the old include boxes
+    /// belonged to another set of results, so they reset, and the search
+    /// runs again (#2525).
+    fn change_match_options(
+        &mut self,
+        change: impl FnOnce(&mut signex_engine::MatchOptions),
+    ) -> Task<Message> {
+        let find = &mut self.ui_state.find_replace;
+        change(&mut find.options);
+        find.excluded.clear();
+        self.refresh_find_matches()
     }
 }

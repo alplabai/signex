@@ -8,7 +8,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text, text_input};
 
 use crate::library::messages::LibraryMessage;
-use crate::library::state::ComponentsMountSource;
+use crate::library::state::{ComponentsMountSource, ComponentsRowStyle};
 use crate::styles::tokens::{hover_overlay, resolve};
 use crate::styles::{PillTone, TypeScale, ti};
 
@@ -79,11 +79,17 @@ pub(super) fn filter_field<'a>(
     .center_y(FILTER_HEIGHT)
     .width(Length::Fill)
     .style(crate::styles::field(tokens, false));
+    // The header row holds the side insets.
     container(field)
-        .padding([8.0, EDGE])
+        .padding([8.0, 0.0])
         .width(Length::Fill)
         .boxed()
 }
+
+/// Width the filter keeps beside Add and Previews, so its text stays
+/// readable; when the dock cannot hold all three, Previews wraps below
+/// (mockup row 52).
+const FILTER_ROW_W: f32 = TS.body * 10.5;
 
 /// Height of a source chip.
 const CHIP_HEIGHT: f32 = 22.0;
@@ -91,6 +97,7 @@ const CHIP_HEIGHT: f32 = 22.0;
 /// The filter row: the search field and the "+ Add" ghost button.
 pub(super) fn header_row<'a>(
     filter: Element<'a, LibraryMessage>,
+    row_style: ComponentsRowStyle,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
@@ -109,13 +116,86 @@ pub(super) fn header_row<'a>(
     .on_press(LibraryMessage::ComponentsPanelAddMenuToggled)
     .style(crate::panels::form_look::ghost_button);
     row![
-        container(filter).width(Length::Fill),
-        container(add).padding(Padding {
-            right: EDGE,
-            ..Padding::ZERO
-        })
+        container(filter).width(Length::Fixed(FILTER_ROW_W)),
+        add,
+        previews_switch(row_style, tokens, i18n),
     ]
+    .spacing(CHEVRON_GAP)
+    .padding([0.0, EDGE])
     .align_y(Alignment::Center)
+    .wrap()
+    .boxed()
+}
+
+/// The "Previews" switch next to Add: rows with a symbol thumbnail and a
+/// description, remembered as a preference (#2535).
+fn previews_switch<'a>(
+    row_style: ComponentsRowStyle,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, LibraryMessage> {
+    let r = resolve(tokens);
+    let on = row_style.shows_previews();
+    let style = signex_widgets::toggle_switch::ToggleSwitchStyle::new(
+        ti(tokens.accent),
+        r.line_strong,
+        crate::styles::tokens::on_accent(tokens),
+    );
+    let flipped = ComponentsRowStyle::from_previews(!on);
+    let switch = signex_widgets::toggle_switch::toggle_switch(
+        on,
+        style,
+        Some(LibraryMessage::ComponentsPanelRowStylePicked(flipped)),
+    );
+    // The label flips the switch too.
+    let label = button(
+        text(t!(i18n, ids::PANELS_COMPONENTS_PREVIEWS))
+            .size(TS.caption)
+            .color(r.ink3),
+    )
+    .padding(0.0)
+    .on_press(LibraryMessage::ComponentsPanelRowStylePicked(flipped))
+    .style(|_: &Theme, _| button::Style::default());
+    crate::panels::graphite::hint_tooltip(
+        row![switch, label]
+            .spacing(super::SP.s)
+            .align_y(Alignment::Center)
+            .boxed(),
+        t!(i18n, ids::PANELS_COMPONENTS_PREVIEWS_TOOLTIP),
+        tokens,
+        iced::widget::tooltip::Position::Bottom,
+    )
+}
+
+/// Width of a row symbol thumbnail.
+pub(super) const THUMB_WIDTH: f32 = TS.body * 3.0;
+/// Height of a row symbol thumbnail.
+pub(super) const THUMB_HEIGHT: f32 = TS.body * 2.5;
+/// Height of a Previews row: thumbnail, name and one line of description.
+pub(super) const PREVIEW_ROW_HEIGHT: f32 = TS.body * 10.0 / 3.0;
+
+/// The empty box a thumbnail not read yet takes, so rows keep their layout.
+pub(super) fn thumb_placeholder<'a>() -> Element<'a, LibraryMessage> {
+    iced::widget::Space::new()
+        .width(THUMB_WIDTH)
+        .height(THUMB_HEIGHT)
+        .boxed()
+}
+
+/// The small "Place" button of a hovered row or a recent part.
+pub(super) fn place_button<'a>(
+    on_press: LibraryMessage,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, LibraryMessage> {
+    button(
+        text(t!(i18n, ids::PANELS_COMPONENTS_PLACE))
+            .size(TS.caption)
+            .color(ti(tokens.text)),
+    )
+    .padding([super::SP.xs, super::SP.m])
+    .on_press(on_press)
+    .style(crate::styles::outline_button(tokens))
     .boxed()
 }
 
@@ -203,16 +283,28 @@ pub(super) fn source_chip<'a>(
     .boxed()
 }
 
-/// The source chips under the search box, wrapped to the dock width.
-pub(super) fn chip_row<'a>(chips: Vec<Element<'a, LibraryMessage>>) -> Element<'a, LibraryMessage> {
+/// The source chips under the search box, wrapped to the dock width, with
+/// the library-count caption at the right.
+pub(super) fn chip_row<'a>(
+    chips: Vec<Element<'a, LibraryMessage>>,
+    caption: Localized,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
     let mut wrap = iced_aw::Wrap::new().spacing(6.0).line_spacing(6.0);
     for chip in chips {
         wrap = wrap.push(chip);
     }
-    container(wrap)
-        .padding([0.0, EDGE])
-        .width(Length::Fill)
-        .boxed()
+    container(
+        row![
+            container(wrap).width(Length::Fill),
+            text(caption).size(TS.caption).color(resolve(tokens).ink4),
+        ]
+        .spacing(CHEVRON_GAP)
+        .align_y(Alignment::Center),
+    )
+    .padding([0.0, EDGE])
+    .width(Length::Fill)
+    .boxed()
 }
 
 /// A secondary empty-state line.
@@ -236,7 +328,7 @@ pub(super) fn library_header<'a>(
     root: std::path::PathBuf,
     name: String,
     source: ComponentsMountSource,
-    rows: usize,
+    count: Localized,
     collapsed: bool,
     tokens: &ThemeTokens,
     i18n: &I18n,
@@ -256,10 +348,7 @@ pub(super) fn library_header<'a>(
             PillTone::Neutral,
             tokens
         ),
-        text(t!(i18n, ids::PANELS_COMPONENTS_COUNT, "count" => rows))
-            .size(TS.caption)
-            .font(mono())
-            .color(r.ink4),
+        text(count).size(TS.caption).font(mono()).color(r.ink4),
     ]
     .spacing(CHEVRON_GAP)
     .align_y(Alignment::Center);
@@ -290,6 +379,23 @@ pub(super) fn separator(tokens: &ThemeTokens) -> Color {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Mockup row 52: in a narrow dock the filter keeps its width and Add
+    /// sits after it.
+    #[test]
+    fn the_filter_keeps_its_width_in_a_narrow_dock() {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        let i18n = I18n::en_us_ref();
+        let header = header_row(
+            filter_field("", &tokens, i18n),
+            ComponentsRowStyle::default(),
+            &tokens,
+            i18n,
+        );
+        let texts = crate::layout_probe::lay_out_texts(header, iced::Size::new(240.0, 120.0));
+        let add = crate::layout_probe::find(&texts, "Add");
+        assert!(add.bounds.x >= FILTER_ROW_W, "Add at {:?}", add.bounds);
+    }
 
     #[test]
     fn section_chevron_box_is_the_shared_one_for_the_body_size() {

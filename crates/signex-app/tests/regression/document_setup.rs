@@ -17,21 +17,21 @@ use signex_types::schematic::{SchematicSheet, SheetOrientation};
 
 use crate::menu_support::menu_row;
 
-fn send(app: &mut Signex, message: Message) {
+pub(crate) fn send(app: &mut Signex, message: Message) {
     let task = app.update(message);
     crate::drive::drive(app, task);
 }
 
-fn setup(app: &mut Signex, msg: NewProjectMsg) {
+pub(crate) fn setup(app: &mut Signex, msg: NewProjectMsg) {
     send(app, Message::from(DocumentSetupMsg::Setup(msg)));
 }
 
-fn create(app: &mut Signex) {
+pub(crate) fn create(app: &mut Signex) {
     send(app, Message::from(DocumentSetupMsg::SubmitRequested));
 }
 
 /// A saved project `name` in `dir` with one sheet, made the active one.
-fn add_project(
+pub(crate) fn add_project(
     app: &mut Signex,
     dir: &Path,
     name: &str,
@@ -70,7 +70,9 @@ fn add_project(
         schematic_defaults: Default::default(),
         project_defaults: defaults,
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
         fab_outputs: None,
+        router_tool_diameter: None,
         requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
@@ -113,7 +115,7 @@ fn fixture(defaults: ProjectDefaults) -> Fixture {
     }
 }
 
-fn board_at<'a>(app: &'a Signex, path: &Path) -> Option<&'a PcbBoard> {
+pub(crate) fn board_at<'a>(app: &'a Signex, path: &Path) -> Option<&'a PcbBoard> {
     app.document_state
         .tabs
         .iter()
@@ -123,7 +125,7 @@ fn board_at<'a>(app: &'a Signex, path: &Path) -> Option<&'a PcbBoard> {
         .map(|engine| engine.board())
 }
 
-fn copper(board: &PcbBoard) -> usize {
+pub(crate) fn copper(board: &PcbBoard) -> usize {
     board
         .layers
         .iter()
@@ -134,20 +136,21 @@ fn copper(board: &PcbBoard) -> usize {
 /// New PCB opens the dialog, prefilled from the project; nothing is made.
 #[test]
 fn new_pcb_opens_the_setup_dialog_prefilled_from_the_project() {
-    let hobby = signex_types::project::ProjectSetup::from_profile(SetupProfile::Hobby).defaults();
-    let mut f = fixture(hobby);
+    let advanced =
+        signex_types::project::ProjectSetup::from_profile(SetupProfile::Advanced).defaults();
+    let mut f = fixture(advanced);
     let tabs = f.app.document_state.tabs.len();
     send(&mut f.app, menu_row("new_pcb_document"));
     let state = f.app.ui_state.document_setup.as_ref().expect("the dialog");
     assert_eq!(state.kind, SetupKind::Pcb);
     assert_eq!(f.app.document_state.tabs.len(), tabs, "no board yet");
     assert!(f.app.document_state.projects[0].data.pcb_file.is_none());
-    // Create with the prefill: the project's Hobby rules.
+    // Create with the prefill: the project's Advanced rules.
     create(&mut f.app);
     assert!(f.app.ui_state.document_setup.is_none());
     let board = board_at(&f.app, &f.dir.join("demo.snxpcb")).expect("the board");
-    assert_eq!(copper(board), 2);
-    assert_eq!(board.setup.as_ref().map(|s| s.clearance), Some(0.2));
+    assert_eq!(copper(board), 6);
+    assert_eq!(board.setup.as_ref().map(|s| s.clearance), Some(0.1));
     assert!(!f.dir.join("demo.snxpcb").exists(), "nothing written");
 }
 
@@ -172,7 +175,7 @@ fn create_with_hdi_makes_a_board_with_the_hdi_rules() {
     create(&mut f.app);
     let board = board_at(&f.app, &f.dir.join("demo.snxpcb")).expect("the board");
     let hdi = SetupProfile::Hdi.pcb(8);
-    assert_eq!(copper(board), 6);
+    assert_eq!(copper(board), 8);
     assert_eq!(board.thickness, 1.0);
     let rules = board.setup.as_ref().expect("board setup");
     assert_eq!(rules.clearance, hdi.clearance_mm);
@@ -353,7 +356,7 @@ fn a_saved_profile_appears_in_a_second_project() {
 #[test]
 fn a_missing_profile_falls_back_to_the_stored_values() {
     let mut stored =
-        signex_types::project::ProjectSetup::from_profile(SetupProfile::Hobby).defaults();
+        signex_types::project::ProjectSetup::from_profile(SetupProfile::Advanced).defaults();
     stored.profile = Some("user-gone".into());
     let mut f = fixture(stored);
     send(&mut f.app, menu_row("new_pcb_document"));
@@ -361,7 +364,7 @@ fn a_missing_profile_falls_back_to_the_stored_values() {
     assert_eq!(state.kind, SetupKind::Pcb);
     create(&mut f.app);
     let board = board_at(&f.app, &f.dir.join("demo.snxpcb")).expect("the board");
-    assert_eq!(copper(board), 2, "the stored Hobby rules");
+    assert_eq!(copper(board), 6, "the stored Advanced rules");
 }
 
 /// Press the open setup dialog's Create, if one is open: the step a New PCB

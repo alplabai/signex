@@ -62,9 +62,9 @@ pub fn redundant_constraint_ids(
         .into_iter()
         .map(|row| (None, without_zeros(row)))
         .collect();
+    // A driven (reference) dimension has no rows and is never flagged.
     for c in sketch
-        .constraints
-        .iter()
+        .driving_constraints()
         .filter(|c| !violated.contains(&c.id))
     {
         for row in constraint_rows(c, state, index, sketch, params)? {
@@ -90,8 +90,7 @@ pub fn redundant_constraint_ids(
     }
     Ok(Some(
         sketch
-            .constraints
-            .iter()
+            .driving_constraints()
             .map(|c| c.id)
             .filter(|id| {
                 verdicts

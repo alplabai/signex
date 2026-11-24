@@ -20,6 +20,7 @@
 use std::collections::{HashMap, HashSet};
 
 use signex_net::{MultiNamedNet, NetNameSource, ProjectGraph, SheetKey, pt_key};
+use signex_types::project::ChannelNaming;
 use signex_types::schematic::{SelectedItem, SelectedKind};
 
 use crate::context::ErcContext;
@@ -50,11 +51,20 @@ type Facts = HashMap<SheetKey, SheetFacts>;
 /// Every multiple-names finding in `graph`, each filed under the sheet of the
 /// name that won when that sheet is part of it, else of the best name left.
 pub fn project_net_multiple_names(graph: &ProjectGraph) -> ProjectNetNames {
+    project_net_multiple_names_named(graph, &ChannelNaming::default())
+}
+
+/// [`project_net_multiple_names`] with repeated sheets named through `naming`,
+/// so "the netlist uses" names what the export writes.
+pub fn project_net_multiple_names_named(
+    graph: &ProjectGraph,
+    naming: &ChannelNaming,
+) -> ProjectNetNames {
     let mut facts = Facts::new();
     let mut out = ProjectNetNames::default();
     // A child placed twice yields one finding per instance; one marker, one row.
     let mut seen: HashSet<(SheetKey, (i64, i64), Vec<String>)> = HashSet::new();
-    for net in signex_net::multi_named_nets(graph) {
+    for net in signex_net::multi_named_nets_named(graph, naming) {
         load_facts(graph, &net, &mut facts);
         let included = reportable_sources(&net, &facts);
         let mut names: Vec<String> = included.iter().map(|s| s.name.clone()).collect();

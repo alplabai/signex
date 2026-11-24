@@ -4,6 +4,8 @@
 //! page origin on the rows, a lock refusing with its reason.
 
 use std::collections::HashMap;
+
+use signex_i18n::RenderTranslatable;
 use std::path::Path;
 
 use serde_json::Value;
@@ -188,7 +190,7 @@ fn answered(outcome: CommandOutcome) -> Value {
 
 fn refusal(outcome: CommandOutcome) -> String {
     match outcome {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("not refused: {other:?}"),
     }
 }

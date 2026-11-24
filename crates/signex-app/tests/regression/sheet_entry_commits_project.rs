@@ -51,7 +51,9 @@ fn project_data(dir: &Path) -> ProjectData {
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
         fab_outputs: None,
+        router_tool_diameter: None,
         requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
@@ -116,14 +118,16 @@ fn complete(app: &mut Signex, task: iced::Task<Message>) {
 }
 
 fn rename(app: &mut Signex, target: &Path, buffer: &str) {
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0],
         buffer: buffer.to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     let task = app.update(Message::Rename(RenameMsg::Submit));
     complete(app, task);
 }
@@ -333,14 +337,16 @@ fn a_rename_whose_move_back_also_fails_tells_the_user_where_the_file_is() {
 
     let mut f = fixture(true);
     let from = f.dir.join("Second.snxsch");
-    f.app.ui_state.rename_dialog = Some(RenameDialogState {
+    f.app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: from.clone(),
         tree_path: vec![0],
         buffer: "Third.snxsch".to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     let task = f.app.update(Message::Rename(RenameMsg::Submit));
     let mut messages = run(task);
     if let Some(Message::Rename(RenameMsg::FileRenamed(done))) = messages.first_mut() {

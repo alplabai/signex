@@ -74,12 +74,7 @@ impl Signex {
     /// Where a Measure click at `at` lands on the board in view.
     fn measure_point(&self, at: Point) -> Option<Point> {
         let board = self.active_pcb()?;
-        Some(snap_point(
-            board,
-            at,
-            &self.ui_state.pcb_snap,
-            self.pcb_active_layer(),
-        ))
+        Some(snap_point(board, at, self.pcb_snap_view()))
     }
 
     /// The pointer moved: after the first click the ruler follows it.

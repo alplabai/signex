@@ -2,7 +2,7 @@
 //! Its outline only bounds the copper; the copper itself is the fill
 //! `pcb_geom::zone_fills` computes, clear of other nets' copper by the
 //! pour's clearance. The fill is not stored: see `docs/PCB_TOOLS.md`,
-//! "Polygon Pour".
+//! "Polygon Pour". A shelved pour (`Zone::shelved`) has no fill at all.
 
 use crate::pcb::{PcbBoard, Zone};
 
@@ -14,7 +14,8 @@ pub(crate) fn is_unset_area(value: &f64) -> bool {
     *value == 0.0
 }
 
-/// `Zone::remove_dead_islands` is left out of the file when off.
+/// `Zone::remove_dead_islands` and `Zone::shelved` are left out of the file
+/// when off.
 pub(crate) fn is_off(value: &bool) -> bool {
     !*value
 }
@@ -23,6 +24,13 @@ impl Zone {
     /// Whether this zone is a polygon pour, whose copper is computed.
     pub fn is_pour(&self) -> bool {
         self.fill_type == POUR_FILL
+    }
+
+    /// Whether this zone is a shelved polygon pour (#2523): its outline and
+    /// settings stay, but it has no fill. `shelved` on any other zone is
+    /// ignored.
+    pub fn is_shelved_pour(&self) -> bool {
+        self.is_pour() && self.shelved
     }
 
     /// How far, in mm, the pour's fill keeps from copper of other nets: its
@@ -80,5 +88,19 @@ mod tests {
         assert_eq!(back, zone);
         zone.min_island_area = -1.0;
         assert_eq!(zone.pour_min_island_mm2(), None);
+    }
+
+    /// #2523: only a pour is shelved; the flag on another zone is ignored.
+    #[test]
+    fn only_a_pour_is_shelved() {
+        let mut zone: Zone = serde_json::from_str(
+            r#"{ "uuid": "8d15b2f9-8f86-41d7-9ec4-0f54a4f3a651", "fill_type": "pour" }"#,
+        )
+        .expect("zone");
+        assert!(!zone.shelved && !zone.is_shelved_pour());
+        zone.shelved = true;
+        assert!(zone.is_shelved_pour());
+        zone.fill_type = "solid".into();
+        assert!(!zone.is_shelved_pour());
     }
 }

@@ -4,6 +4,8 @@
 
 use std::path::PathBuf;
 
+use signex_i18n::RenderTranslatable;
+
 use serde_json::Value;
 
 use crate::app::command::{CommandArgs, CommandOutcome};
@@ -42,7 +44,7 @@ fn answer(app: &mut Signex, id: &str, operands: &[&str]) -> Value {
 
 fn refusal(app: &mut Signex, id: &str, operands: &[&str]) -> String {
     match run(app, id, operands) {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("{id} was not refused: {other:?}"),
     }
 }
@@ -207,7 +209,7 @@ fn an_edit_without_operands_names_the_project_tab() {
     let command = AppCommandId::new("project_add_variant").unwrap();
     let (outcome, _) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("Project tab")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("Project tab")),
         "{outcome:?}"
     );
     assert!(

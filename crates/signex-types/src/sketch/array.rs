@@ -90,6 +90,67 @@ impl ArrayKind {
             Self::Polar { source, center, .. } => vec![*source, *center],
         }
     }
+
+    /// Whether single instances of this array can be suppressed. A grid
+    /// and a polar array keep a suppression list; a linear array has none.
+    pub fn has_suppression_model(&self) -> bool {
+        !matches!(self, Self::Linear { .. })
+    }
+
+    /// Whether instance `(i, j)` is on the suppression list (`j` is 0 for
+    /// a polar array). The mask expression is not evaluated here.
+    pub fn is_instance_suppressed(&self, i: u32, j: u32) -> bool {
+        self.depopulation()
+            .is_some_and(|d| d.suppressed_instances.contains(&(i, j)))
+    }
+
+    /// Put instance `(i, j)` on the suppression list or take it off.
+    /// The list gains a depopulation with an empty mask when it first
+    /// needs one, and drops it again when the list empties and the mask is
+    /// blank. Returns whether the array changed; a linear array never does.
+    pub fn set_instance_suppressed(&mut self, i: u32, j: u32, suppressed: bool) -> bool {
+        let slot = match self {
+            Self::Grid { depopulation, .. } | Self::Polar { depopulation, .. } => depopulation,
+            Self::Linear { .. } => return false,
+        };
+        if suppressed {
+            let d = slot.get_or_insert_with(|| GridDepopulation {
+                mask_expr: String::new(),
+                suppressed_instances: Vec::new(),
+            });
+            if d.suppressed_instances.contains(&(i, j)) {
+                return false;
+            }
+            d.suppressed_instances.push((i, j));
+            return true;
+        }
+        let Some(d) = slot.as_mut() else {
+            return false;
+        };
+        let before = d.suppressed_instances.len();
+        d.suppressed_instances.retain(|&entry| entry != (i, j));
+        let changed = d.suppressed_instances.len() != before;
+        if d.mask_expr.trim().is_empty() && d.suppressed_instances.is_empty() {
+            *slot = None;
+        }
+        changed
+    }
+
+    /// Flip the suppression of instance `(i, j)`. Returns whether the
+    /// array changed.
+    pub fn toggle_instance_suppressed(&mut self, i: u32, j: u32) -> bool {
+        let suppressed = self.is_instance_suppressed(i, j);
+        self.set_instance_suppressed(i, j, !suppressed)
+    }
+
+    fn depopulation(&self) -> Option<&GridDepopulation> {
+        match self {
+            Self::Grid { depopulation, .. } | Self::Polar { depopulation, .. } => {
+                depopulation.as_ref()
+            }
+            Self::Linear { .. } => None,
+        }
+    }
 }
 
 /// Predicate evaluated per `(i, j)` index in a Grid array.
@@ -118,6 +179,10 @@ pub enum NumberingScheme {
     LinearIncrement {
         start_expr: String,
         step_expr: String,
+        /// The order a grid's cells take their numbers (mockup row 126).
+        /// A one-dimensional pattern has no second axis and ignores it.
+        #[serde(default, skip_serializing_if = "GridSweep::is_row_by_row")]
+        sweep: GridSweep,
     },
 
     /// BGA convention — row letter + col number (`A1`, `H17`). IPC-7351
@@ -140,6 +205,42 @@ impl Default for NumberingScheme {
         Self::LinearIncrement {
             start_expr: "1".into(),
             step_expr: "1".into(),
+            sweep: GridSweep::default(),
+        }
+    }
+}
+
+/// The order a grid pattern numbers its cells (mockup row 126).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GridSweep {
+    /// Along each row, then the next row.
+    #[default]
+    RowByRow,
+    /// Along each column, then the next column.
+    ColumnByColumn,
+    /// Down the first column, up the next: the DIP order.
+    DownThenUp,
+}
+
+impl GridSweep {
+    pub const ALL: [Self; 3] = [Self::RowByRow, Self::ColumnByColumn, Self::DownThenUp];
+
+    pub fn is_row_by_row(&self) -> bool {
+        *self == Self::RowByRow
+    }
+
+    /// The 0-based place of cell `(i, j)` in the numbering of an `nx` × `ny`
+    /// grid. A `j` past the last row (a mirrored instance) keeps its
+    /// row-major place, so it continues after the grid's own numbers.
+    pub fn sequence(self, i: usize, j: usize, nx: usize, ny: usize) -> usize {
+        if j >= ny {
+            return j * nx + i;
+        }
+        match self {
+            Self::RowByRow => j * nx + i,
+            Self::ColumnByColumn => i * ny + j,
+            Self::DownThenUp if i % 2 == 1 => i * ny + (ny - 1 - j),
+            Self::DownThenUp => i * ny + j,
         }
     }
 }

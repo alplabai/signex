@@ -1,34 +1,26 @@
-//! BOM preview — the spreadsheet-style data grid (row-number gutter,
-//! draggable/resizable/sortable column headers, and the scrollable body
-//! rows). Extracted from `dialogs/bom.rs` (ADR-0001, issue #164) as pure
-//! code motion — the child-push order inside every row/column is preserved
-//! byte-for-byte, so the rendered table is pixel-identical.
+//! BOM dialog — the data grid: a sticky header of sortable, draggable and
+//! resizable column heads over the scrolling lines, each line led by a
+//! row-number gutter that carries its validation flag.
 
 use super::super::*;
-use iced::widget::{Row, Space, column, container, row, scrollable};
+use iced::widget::{Row, Space, column, container, mouse_area, row, scrollable};
 use iced::{Background, Color, Element, Length, Theme, Widget};
-use signex_widgets::{raw, text};
+use signex_i18n::UserText;
+use signex_output::{BomColumn, BomIssueSeverity, BomRow};
+use signex_types::theme::ThemeTokens;
+use signex_widgets::{button, raw, text};
 
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+use crate::app::state::BomPreviewState;
+use crate::styles::tokens::resolve;
+use crate::styles::{ChromeMetrics, HAIRLINE, Spacing, TypeScale, ti};
 
-/// First designator of a BOM row — the key the export pipeline orders rows by,
-/// so the preview's Designator sort matches the exported file exactly.
-fn first_reference(row: &signex_output::BomRow) -> &str {
-    row.references.first().map(String::as_str).unwrap_or("")
-}
-
-/// Rendered text of one cell — also the sort key for the text columns. The
-/// same text every export writer emits.
-fn column_value(c: &signex_output::BomColumn, r: &signex_output::BomRow) -> String {
-    signex_output::bom::cell_text(r, c)
-}
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// The catalog name of a standard column; `None` for a custom-field column,
 /// whose name is the field's own. Exported files keep `BomColumn::header`.
-pub(super) fn column_name(c: &signex_output::BomColumn) -> Option<signex_i18n::MessageId> {
+pub(super) fn column_name(c: &BomColumn) -> Option<signex_i18n::MessageId> {
     use signex_i18n::ids;
-    use signex_output::BomColumn;
     Some(match c {
         BomColumn::Name => ids::BOM_COLUMN_NAME,
         BomColumn::Designator => ids::BOM_COLUMN_DESIGNATOR,
@@ -50,31 +42,77 @@ pub(super) fn column_name(c: &signex_output::BomColumn) -> Option<signex_i18n::M
 }
 
 /// The header text of a column in `i18n`'s language.
-fn column_header(
-    c: &signex_output::BomColumn,
+pub(super) fn column_header(
+    c: &BomColumn,
     i18n: &signex_i18n::I18n,
 ) -> signex_widgets::Label<'static> {
     match column_name(c) {
         Some(id) => i18n.message(id, &[]).into(),
-        None => signex_i18n::UserText::new(c.header()).into(),
+        None => UserText::new(c.header()).into(),
     }
 }
 
+/// Height of the header and of every line (rule included), as drawn: a
+/// field tall.
+const ROW_H: f32 = ChromeMetrics::DEFAULT.field;
+/// Width of the row-number gutter, a column width fixed by mockup row 112.
+const GUTTER_W: f32 = 34.0;
+/// Width of the flag edge at the left of a flagged line's gutter.
+const FLAG_EDGE: f32 = SP.xs;
+/// Width of the resize handle between two column heads; lines leave the
+/// same gap so cells stay under their heads.
+const HANDLE_W: f32 = SP.s + SP.xs / 2.0;
+/// A header press becomes a drag once the cursor has moved this far, the
+/// same threshold the tab drag ghost uses; a press-and-release without
+/// motion is a click (sort).
+const COL_DRAG_THRESHOLD_PX: f32 = 6.0;
+/// Strength of a flagged line's soft tint: the drawn 70 % mix.
+const FLAG_FILL_ALPHA: f32 = 0.7;
+
+/// First designator of a BOM row — the key the export pipeline orders rows by,
+/// so the preview's Designator sort matches the exported file exactly.
+fn first_reference(row: &BomRow) -> &str {
+    row.references.first().map(String::as_str).unwrap_or("")
+}
+
+/// Rendered text of one cell — also the sort key for the text columns. The
+/// same text every export writer emits.
+fn column_value(c: &BomColumn, r: &BomRow) -> String {
+    signex_output::bom::cell_text(r, c)
+}
+
+/// Columns of numbers: right-aligned, in the mono face.
+fn is_numeric(c: &BomColumn) -> bool {
+    matches!(
+        c,
+        BomColumn::Qty
+            | BomColumn::UnitPrice
+            | BomColumn::BuyQty
+            | BomColumn::ExtendedPrice
+            | BomColumn::Stock
+    )
+}
+
+/// Columns set in the mono face: the numbers and the footprint name.
+fn is_mono(c: &BomColumn) -> bool {
+    is_numeric(c) || matches!(c, BomColumn::Footprint)
+}
+
 /// Default on-screen width of a column, in px, until the user resizes it.
-pub(in crate::app) fn default_column_width(c: &signex_output::BomColumn) -> f32 {
-    use signex_output::BomColumn;
+/// The default column set fits beside the sidebar of the 1000 px dialog, so
+/// Qty is in view on opening (mockup row 112).
+pub(in crate::app) fn default_column_width(c: &BomColumn) -> f32 {
     match c {
-        BomColumn::Name => 140.0,
-        BomColumn::Description => 220.0,
-        BomColumn::Designator | BomColumn::Reference => 220.0,
-        BomColumn::Value => 110.0,
-        BomColumn::Footprint => 140.0,
-        BomColumn::LibRef => 160.0,
-        BomColumn::Qty => 50.0,
+        BomColumn::Name => 120.0,
+        BomColumn::Description => 130.0,
+        BomColumn::Designator | BomColumn::Reference => 110.0,
+        BomColumn::Value => 74.0,
+        BomColumn::Footprint => 118.0,
+        BomColumn::LibRef => 110.0,
+        BomColumn::Qty => 44.0,
         BomColumn::Custom(_) => 120.0,
-        BomColumn::UnitPrice | BomColumn::BuyQty | BomColumn::ExtendedPrice | BomColumn::Stock => {
-            80.0
-        }
+        BomColumn::UnitPrice | BomColumn::ExtendedPrice => 74.0,
+        BomColumn::BuyQty | BomColumn::Stock => 66.0,
         BomColumn::Currency => 70.0,
         BomColumn::Distributor | BomColumn::PriceAge => 100.0,
     }
@@ -89,11 +127,10 @@ pub(in crate::app) fn default_column_width(c: &signex_output::BomColumn) -> f32 
 /// plain `str` compare here would show R1, R10, R2 over an export reading
 /// R1, R2, R10. Value sorts by parsed quantity ahead of its text; every other column sorts case-insensitively on its cell text.
 pub(in crate::app) fn sorted_row_order(
-    rows: &[signex_output::BomRow],
-    columns: &[signex_output::BomColumn],
+    rows: &[BomRow],
+    columns: &[BomColumn],
     sort: Option<(usize, bool)>,
 ) -> Vec<usize> {
-    use signex_output::BomColumn;
     let mut row_order: Vec<usize> = (0..rows.len()).collect();
     let Some((sort_idx, asc)) = sort else {
         return row_order;
@@ -172,440 +209,348 @@ pub(in crate::app) fn sorted_row_order(
     row_order
 }
 
+/// Ink of a flag (the gutter number and its edge): the warning or error
+/// colour. `None` for a clean line; notes never flag one.
+fn flag_ink(tokens: &ThemeTokens, flag: Option<BomIssueSeverity>) -> Option<Color> {
+    match flag? {
+        BomIssueSeverity::Error => Some(ti(tokens.error)),
+        BomIssueSeverity::Warning => Some(ti(tokens.warning)),
+        BomIssueSeverity::Info => None,
+    }
+}
+
+/// Fill of a line at rest: the neutral selection fill when selected, else
+/// the soft tint of its flag, else none. Selection never borrows the warning
+/// amber (docs/DECISIONS.md, 2026-11-19).
+fn line_fill(
+    tokens: &ThemeTokens,
+    flag: Option<BomIssueSeverity>,
+    selected: bool,
+) -> Option<Color> {
+    if selected {
+        return Some(ti(tokens.selection));
+    }
+    let r = resolve(tokens);
+    let soft = match flag? {
+        BomIssueSeverity::Error => r.err_soft,
+        BomIssueSeverity::Warning => r.warn_soft,
+        BomIssueSeverity::Info => return None,
+    };
+    Some(Color {
+        a: soft.a * FLAG_FILL_ALPHA,
+        ..soft
+    })
+}
+
+/// A container filled with `color`.
+fn filled(color: Option<Color>) -> impl Fn(&Theme) -> container::Style + 'static {
+    move |_| container::Style {
+        background: color.map(Background::Color),
+        ..container::Style::default()
+    }
+}
+
 impl Signex {
-    /// Build the scrollable BOM data grid (header strip + data rows) for the
-    /// active preview. Returns the `scrollable` body the modal drops into its
-    /// main row.
+    /// The data grid: the sticky header over the scrolling lines.
     pub(super) fn bom_table(&self) -> Element<'_, Message> {
-        use signex_output::BomColumn;
         let Some(ref preview) = self.document_state.bom_preview else {
             return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
-        let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
-        // Build the table from `preview.options.columns`. Width
-        // resolution: user override (set by the column-resize
-        // handle drag) takes precedence; otherwise fall back to
-        // the per-`BomColumn` default below.
-        let column_width = |idx: usize, c: &BomColumn| -> f32 {
-            preview
-                .column_widths
-                .get(&idx)
-                .copied()
-                .unwrap_or_else(|| default_column_width(c))
-        };
-        // Compute the table's full content width — gutter + 1 px
-        // gutter→data divider + sum(column_width) + (n-1) inter-
-        // column dividers + (n-1) resize-handle slots. Used as
-        // the Fixed width on the table inner so Direction::Both
-        // scrollable knows when to engage horizontal scrolling.
-        let data_columns_width: f32 = preview
+        // A resized column keeps its width; the rest take their default.
+        let widths: Vec<f32> = preview
             .options
             .columns
             .iter()
             .enumerate()
-            .map(|(idx, c)| column_width(idx, c))
-            .sum();
-        let n_data = preview.options.columns.len();
-        let dividers_width = n_data.saturating_sub(1) as f32;
-        let resize_slots_width = n_data.saturating_sub(1) as f32 * 4.0;
-        let table_width: f32 =
-            36.0 + 1.0 + data_columns_width + dividers_width + resize_slots_width;
-        // Headers: clickable + draggable. Click cycles sort; press
-        // arms a drag, release on another header drops the source
-        // column at that index. Sort indicator (▲/▼) appears next to
-        // the active sort column.
-        let sort_arrow = |idx: usize| -> &'static str {
-            match preview.sort {
-                Some((c, true)) if c == idx => " ▲",
-                Some((c, false)) if c == idx => " ▼",
-                _ => "",
-            }
-        };
-        // Row-number column (left) — Altium parity. No header label,
-        // just shows the row position. Width 36 holds 1-9999 cleanly.
-        // Header cells share `HEADER_ROW_H`; data rows share
-        // `DATA_ROW_H`. Both centered vertically so text doesn't
-        // float at the top of its stripe.
-        const NUM_COL_WIDTH: f32 = 36.0;
-        const HEADER_ROW_H: f32 = 24.0;
-        const DATA_ROW_H: f32 = 22.0;
-        // raw: an empty cell, no text.
-        let num_header: Element<'_, Message> = container(text(raw("")))
-            .width(Length::Fixed(NUM_COL_WIDTH))
-            .height(HEADER_ROW_H)
-            .boxed();
+            .map(|(idx, c)| {
+                preview
+                    .column_widths
+                    .get(&idx)
+                    .copied()
+                    .unwrap_or_else(|| default_column_width(c))
+            })
+            .collect();
+        let gaps = widths.len().saturating_sub(1) as f32 * HANDLE_W;
+        // Fixed, so the body scrolls sideways once the columns overflow.
+        let table_width = (GUTTER_W + widths.iter().sum::<f32>() + gaps).max(100.0);
 
-        let mut header_row: Row<Element<'_, Message>> = Row::new()
-            .spacing(0)
-            .align_y(iced::Alignment::Center)
-            .push(num_header);
-        // Vertical divider between row-number column and the data
-        // columns so the gutter is visibly its own zone.
-        header_row = header_row.push(
-            container(Space::new())
-                .width(1)
-                .height(HEADER_ROW_H)
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(border_c)),
-                    ..container::Style::default()
-                })
+        let mut lines: Vec<Element<'_, Message>> = Vec::with_capacity(preview.visible_lines.len());
+        for &line in &preview.visible_lines {
+            // `visible_lines` and `row_order` are rebuilt with `table` in
+            // `update`; a stale index means that pairing broke.
+            let Some((row_idx, r)) = preview
+                .row_order
+                .get(line)
+                .and_then(|&row_idx| preview.table.rows.get(row_idx).map(|r| (row_idx, r)))
+            else {
+                debug_assert!(false, "stale BOM line {line}");
+                continue;
+            };
+            lines.push(table_line(
+                preview,
+                r,
+                row_idx,
+                line + 1,
+                &widths,
+                table_width,
+                tokens,
+            ));
+        }
+        // Room under the last line for the floating horizontal scrollbar.
+        lines.push(
+            Space::new()
+                .height(ChromeMetrics::DEFAULT.scrollbar_width())
                 .boxed(),
         );
-        // Only treat the press as a "real" drag once the cursor
-        // has moved past 6 px from where it pressed — same
-        // threshold the tab drag-ghost uses. A press-and-release
-        // without motion counts as a click and never lights the
-        // header up.
-        const COL_DRAG_THRESHOLD_PX: f32 = 6.0;
+        let body = scrollable(column(lines).width(Length::Fixed(table_width)))
+            .id(BomPreviewState::BODY_SCROLL)
+            .direction(crate::styles::thin_both())
+            .style(crate::styles::scrollbar_style(tokens))
+            .on_scroll(|scroll| {
+                Message::BomPreview(BomPreviewMsg::BodyScrolled(
+                    scroll.viewport.absolute_offset().x,
+                ))
+            })
+            .width(Length::Fill)
+            .height(Length::Fill);
+        column![
+            self.bom_table_header(preview, &widths, table_width, tokens),
+            body
+        ]
+        .spacing(0)
+        .boxed()
+    }
+
+    /// The sticky header: it stays put while the lines scroll down and
+    /// follows them sideways (`BodyScrolled` moves it). A click sorts, a
+    /// drag reorders, the handle between heads resizes.
+    fn bom_table_header<'a>(
+        &'a self,
+        preview: &'a BomPreviewState,
+        widths: &[f32],
+        table_width: f32,
+        tokens: &ThemeTokens,
+    ) -> Element<'a, Message> {
+        let r = resolve(tokens);
+        let ink = ti(tokens.text);
         let cursor_x = self.interaction_state.last_mouse_pos.0;
         let active_drag = match (preview.column_drag, preview.column_drag_press_x) {
             (Some(idx), Some(ox)) if (cursor_x - ox).abs() > COL_DRAG_THRESHOLD_PX => Some(idx),
             _ => None,
         };
+        let medium = iced::Font {
+            weight: iced::font::Weight::Medium,
+            ..signex_widgets::ui_font::regular()
+        };
+        let n = preview.options.columns.len();
+        let mut heads: Row<Element<'a, Message>> =
+            Row::new().push(Space::new().width(GUTTER_W).height(ROW_H).boxed());
         for (idx, c) in preview.options.columns.iter().enumerate() {
-            // Header bg is neutral by default. The only time a
-            // column lights up is while the user is actively
-            // dragging its header to reorder (cursor moved past
-            // threshold) — sort doesn't get a highlight (the
-            // ▲/▼ glyph already conveys that).
-            let cell_bg = if active_drag == Some(idx) {
-                Some(Background::Color(Color {
-                    a: 0.22,
-                    ..crate::styles::ti(tokens.accent)
-                }))
-            } else {
-                None
+            let sorted = match preview.sort {
+                Some((s, asc)) if s == idx => Some(asc),
+                _ => None,
             };
-            // Header cell content: column name on the left, sort
-            // arrow (when this column is the active sort) anchored
-            // to the right via Space::Fill. Spreadsheet convention.
-            let arrow = sort_arrow(idx).trim();
-            let cell_content = row![
-                text(column_header(c, self.ui_state.i18n.as_ref()))
-                    .size(TS.body)
-                    .color(text_c),
-                Space::new().width(Length::Fill),
-                // raw: the sort arrow is a glyph, not language.
-                text(raw(arrow.to_string())).size(TS.body).color(text_c),
-            ]
-            .align_y(iced::Alignment::Center);
-            // All headers use Fixed widths — needed for the
-            // Direction::Both scrollable to know its content
-            // size and engage horizontal scroll when columns
-            // overflow the viewport. The previous Fill-last
-            // experiment killed horizontal scrolling because
-            // Both-direction collapses Fill children to zero.
-            let header_cell_width = Length::Fixed(column_width(idx, c));
-            let cell = container(cell_content)
-                .width(header_cell_width)
-                .height(HEADER_ROW_H)
-                .padding([0, 6])
-                .align_y(iced::alignment::Vertical::Center)
-                .style(move |_: &Theme| container::Style {
-                    background: cell_bg,
-                    ..container::Style::default()
-                });
-            // mouse_area gives us press (drag-start) + release
-            // + on_enter / on_exit. on_release fires on the
-            // press-source widget; the drop logic uses
-            // `column_hover` (set via on_enter on the target) to
-            // resolve where the cursor was at release time.
-            let header_cell: Element<'_, Message> = iced::widget::mouse_area(cell)
-                .on_press(Message::BomPreview(BomPreviewMsg::ColumnDragStart(idx)))
-                .on_release(if preview.column_drag == Some(idx) {
-                    Message::BomPreview(BomPreviewMsg::SortColumn(idx))
-                } else {
-                    Message::BomPreview(BomPreviewMsg::ColumnDragDrop(idx))
-                })
-                .on_enter(Message::BomPreview(BomPreviewMsg::ColumnHoverEnter(idx)))
-                .on_exit(Message::BomPreview(BomPreviewMsg::ColumnHoverExit(idx)))
-                .interaction(iced::mouse::Interaction::Pointer)
-                .boxed();
-            header_row = header_row.push(header_cell);
-            if idx + 1 < preview.options.columns.len() {
-                // 1 px theme-border vertical divider + 4 px
-                // transparent resize handle. No accent bg in
-                // either — they sit between columns and shouldn't
-                // bleed sort highlights into neighbouring cells.
-                header_row = header_row.push(
-                    container(Space::new())
-                        .width(1)
-                        .height(24)
-                        .style(move |_: &Theme| container::Style {
-                            background: Some(Background::Color(border_c)),
-                            ..container::Style::default()
-                        })
+            let mut label: Row<Element<'a, Message>> = Row::new()
+                .spacing(SP.xs)
+                .align_y(iced::Alignment::Center)
+                .push(
+                    text(column_header(c, self.ui_state.i18n.as_ref()))
+                        .size(TS.body)
+                        .font(medium)
+                        .color(if sorted.is_some() { ink } else { r.ink3 })
+                        .wrapping(iced::widget::text::Wrapping::None)
                         .boxed(),
                 );
-                let resize_handle: Element<'_, Message> =
-                    iced::widget::mouse_area(container(Space::new()).width(4).height(HEADER_ROW_H))
+            if let Some(asc) = sorted {
+                let arrow = if asc { "\u{25B2}" } else { "\u{25BC}" };
+                // raw: the sort arrow is a glyph.
+                label = label.push(
+                    text(raw(arrow))
+                        .size(TS.caption)
+                        .color(r.accent_text)
+                        .boxed(),
+                );
+            }
+            // A head lights up only while it is being dragged to a new place.
+            let fill = (active_drag == Some(idx)).then_some(r.accent_soft);
+            let cell = container(label)
+                .width(Length::Fixed(widths[idx]))
+                .height(ROW_H)
+                .padding([0.0, SP.m])
+                .align_x(if is_numeric(c) {
+                    iced::alignment::Horizontal::Right
+                } else {
+                    iced::alignment::Horizontal::Left
+                })
+                .align_y(iced::alignment::Vertical::Center)
+                .clip(true)
+                .style(filled(fill));
+            // The release lands on the head under the cursor: the pressed
+            // head itself sorts, another one takes the dragged column.
+            heads = heads.push(
+                mouse_area(cell)
+                    .on_press(Message::BomPreview(BomPreviewMsg::ColumnDragStart(idx)))
+                    .on_release(if preview.column_drag == Some(idx) {
+                        Message::BomPreview(BomPreviewMsg::SortColumn(idx))
+                    } else {
+                        Message::BomPreview(BomPreviewMsg::ColumnDragDrop(idx))
+                    })
+                    .on_enter(Message::BomPreview(BomPreviewMsg::ColumnHoverEnter(idx)))
+                    .on_exit(Message::BomPreview(BomPreviewMsg::ColumnHoverExit(idx)))
+                    .interaction(iced::mouse::Interaction::Pointer)
+                    .boxed(),
+            );
+            if idx + 1 < n {
+                let rule = container(Space::new())
+                    .width(HAIRLINE)
+                    .height(Length::Fill)
+                    .style(filled(Some(r.line_soft)));
+                let handle = container(rule)
+                    .width(HANDLE_W)
+                    .height(ROW_H)
+                    .padding([SP.s, 0.0])
+                    .align_x(iced::alignment::Horizontal::Center);
+                heads = heads.push(
+                    mouse_area(handle)
                         .on_press(Message::BomPreview(BomPreviewMsg::ColumnResizeStart(idx)))
                         .on_release(Message::BomPreview(BomPreviewMsg::ColumnResizeEnd))
                         .interaction(iced::mouse::Interaction::ResizingHorizontally)
-                        .boxed();
-                header_row = header_row.push(resize_handle);
+                        .boxed(),
+                );
             }
         }
-        // Header strip locked to `table_width` so it scrolls in
-        // lockstep with the body rows when the user pans
-        // horizontally.
-        let sunken = crate::styles::tokens::resolve(tokens).sunken;
-        // The sunken header band.
-        let table_header_el: Element<'_, Message> = container(header_row)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(sunken)),
-                ..container::Style::default()
-            })
-            .width(Length::Fixed(table_width.max(100.0)))
-            .boxed();
-
-        // Display order is computed in `update` (`BomPreviewState::row_order`),
-        // never here.
-        let row_order = &preview.row_order;
-
-        let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(preview.table.rows.len());
-        for (visible_idx, &row_idx) in row_order.iter().enumerate() {
-            let Some(r) = preview.table.rows.get(row_idx) else {
-                // `row_order` is rebuilt with `table` in `update`; a stale
-                // index means that pairing broke - fail loudly in dev.
-                debug_assert!(false, "stale BOM row_order index {row_idx}");
-                continue;
-            };
-            let alt_bg = if visible_idx % 2 == 0 {
-                Color::from_rgba(1.0, 1.0, 1.0, 0.0)
-            } else {
-                Color::from_rgba(1.0, 1.0, 1.0, 0.025)
-            };
-            // Single-line cell: rely on `wrapping(None)` +
-            // `clip(true)` to cut overflow at the right edge.
-            // Manual char-count truncation was over-trimming —
-            // hard to estimate per-glyph width across themes /
-            // fonts, and the "…" suffix never showed when our
-            // estimate was too wide. iced 0.14 lacks a built-in
-            // ellipsis primitive; clipping is the honest choice.
-            const CELL_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.body;
-            let cell =
-                |s: String, width: Length, _truncate_at: f32, mono: bool| -> Element<'_, Message> {
-                    let face = text(signex_i18n::UserText::new(s))
-                        .size(CELL_TEXT_SIZE)
-                        .color(text_c)
-                        .wrapping(iced::widget::text::Wrapping::None);
-                    let face = if mono {
-                        face.font(crate::fonts::iced_font_for_family(
-                            crate::fonts::CHROME_MONO_FONT,
-                        ))
-                    } else {
-                        face
-                    };
-                    container(face)
-                        .width(width)
-                        .height(DATA_ROW_H)
-                        .padding([0, 6])
-                        .align_y(iced::alignment::Vertical::Center)
-                        .clip(true)
-                        .boxed()
-                };
-            // Leftmost row-number gutter cell — muted text, right-aligned.
-            // raw: a row number, not language.
-            let num_cell: Element<'_, Message> = container(
-                text(raw((visible_idx + 1).to_string()))
-                    .size(CELL_TEXT_SIZE)
-                    .color(text_muted),
-            )
-            .width(Length::Fixed(36.0))
-            .height(DATA_ROW_H)
-            .padding([0, 6])
-            .align_x(iced::alignment::Horizontal::Right)
-            .align_y(iced::alignment::Vertical::Center)
-            .boxed();
-            // Body rows: subtle 1 px vertical column dividers —
-            // theme-border at 30 % alpha so they read as faint
-            // groove lines without competing with the header
-            // dividers above. Same ordering as the header so
-            // columns line up pixel-for-pixel.
-            let subtle_divider_color = Color { a: 0.3, ..border_c };
-            let body_divider = move || -> Element<'_, Message> {
-                container(Space::new())
-                    .width(1)
-                    .height(DATA_ROW_H)
-                    .style(move |_: &Theme| container::Style {
-                        background: Some(Background::Color(subtle_divider_color)),
-                        ..container::Style::default()
-                    })
-                    .boxed()
-            };
-            let mut row_inner: Row<Element<'_, Message>> = Row::new().spacing(0).push(num_cell);
-            row_inner = row_inner.push(body_divider());
-            for (col_idx, c) in preview.options.columns.iter().enumerate() {
-                // Every column uses Fixed widths so the
-                // Direction::Both scrollable can compute total
-                // content width and turn on horizontal scroll
-                // when columns overflow the viewport.
-                let w = column_width(col_idx, c);
-                let (cell_width, truncate_at) = (Length::Fixed(w), w);
-                // Graphite sets the designator columns in the mono face.
-                let mono = matches!(c, BomColumn::Designator | BomColumn::Reference);
-                row_inner = row_inner.push(cell(column_value(c, r), cell_width, truncate_at, mono));
-                if col_idx + 1 < preview.options.columns.len() {
-                    row_inner = row_inner.push(body_divider());
-                    // 4 px transparent spacer to mirror the
-                    // header's resize-handle width — keeps
-                    // columns pixel-aligned with the header.
-                    row_inner = row_inner.push(Space::new().width(4).boxed());
-                }
-            }
-            let row_el = container(row_inner)
-                .width(Length::Fixed(table_width.max(100.0)))
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(alt_bg)),
-                    ..container::Style::default()
-                });
-            rows.push(row_el.boxed());
-        }
-        // Header + rows live inside the same vertical column so the
-        // horizontal scroll moves them together. Without this, the
-        // header was wrapped separately and stayed fixed while the
-        // body rows scrolled past it.
-        // Both-direction scrollable. Header + rows live inside
-        // the same fixed-width column so horizontal scrolling
-        // moves them together (the user pans columns left/right
-        // without the header staying in place). The 16 px
-        // bottom buffer keeps the last data row above the
-        // horizontal scrollbar's reserved zone — without it,
-        // row N would clip when the scrollable's H bar paints
-        // inside the viewport at the bottom.
-        let table_inner: Element<'_, Message> = column![
-            table_header_el,
-            column(rows).spacing(0),
-            Space::new().height(16),
+        let strip = scrollable(container(heads).width(Length::Fixed(table_width)))
+            .id(BomPreviewState::HEADER_SCROLL)
+            .direction(iced::widget::scrollable::Direction::Horizontal(
+                iced::widget::scrollable::Scrollbar::hidden(),
+            ))
+            .width(Length::Fill);
+        let chrome = ti(tokens.toolbar_bg);
+        let edge = ti(tokens.border);
+        column![
+            container(strip)
+                .width(Length::Fill)
+                .style(filled(Some(chrome))),
+            container(Space::new())
+                .width(Length::Fill)
+                .height(HAIRLINE)
+                .style(filled(Some(edge))),
         ]
-        .width(Length::Fixed(table_width.max(100.0)))
-        .boxed();
-        let body = scrollable(table_inner)
-            .direction(iced::widget::scrollable::Direction::Both {
-                vertical: iced::widget::scrollable::Scrollbar::default(),
-                horizontal: iced::widget::scrollable::Scrollbar::default(),
-            })
-            .width(Length::Fill)
-            .height(Length::Fill);
-        body.boxed()
+        .boxed()
     }
+}
+
+/// One line: the gutter (line number, flag edge), the cells, then a soft
+/// rule. A click selects it.
+fn table_line<'a>(
+    preview: &BomPreviewState,
+    r: &BomRow,
+    row_idx: usize,
+    line_no: usize,
+    widths: &[f32],
+    table_width: f32,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let res = resolve(tokens);
+    let ink = ti(tokens.text);
+    let mono = super::super::graphite::mono();
+    let flag = preview.row_flags.get(row_idx).copied().flatten();
+    let edge = flag_ink(tokens, flag);
+    let cell_h = ROW_H - HAIRLINE;
+
+    // raw: a line number, not language.
+    let number = container(
+        text(raw(line_no.to_string()))
+            .size(TS.caption)
+            .font(mono)
+            .color(edge.unwrap_or(res.ink4)),
+    )
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .padding(iced::Padding {
+        right: SP.s,
+        ..iced::Padding::ZERO
+    })
+    .align_x(iced::alignment::Horizontal::Right)
+    .align_y(iced::alignment::Vertical::Center);
+    let gutter = row![
+        container(Space::new())
+            .width(FLAG_EDGE)
+            .height(Length::Fill)
+            .style(filled(edge)),
+        number,
+    ]
+    .width(GUTTER_W)
+    .height(cell_h);
+
+    let n = preview.options.columns.len();
+    let mut cells: Row<Element<'a, Message>> = Row::new().push(gutter.boxed());
+    for (idx, c) in preview.options.columns.iter().enumerate() {
+        let value = column_value(c, r);
+        // An empty cell reads as a muted dash, as drawn.
+        let face = if value.is_empty() {
+            // raw: a dash glyph for "nothing here", not language.
+            text(raw("\u{2014}")).color(res.ink4)
+        } else {
+            let colour = if matches!(c, BomColumn::Stock) {
+                res.ink4
+            } else {
+                ink
+            };
+            text(UserText::new(value)).color(colour)
+        };
+        let face = if is_mono(c) {
+            face.font(mono).size(TS.dense)
+        } else {
+            face.size(TS.body)
+        };
+        cells = cells.push(
+            container(face.wrapping(iced::widget::text::Wrapping::None))
+                .width(Length::Fixed(widths[idx]))
+                .height(cell_h)
+                .padding([0.0, SP.m])
+                .align_x(if is_numeric(c) {
+                    iced::alignment::Horizontal::Right
+                } else {
+                    iced::alignment::Horizontal::Left
+                })
+                .align_y(iced::alignment::Vertical::Center)
+                .clip(true)
+                .boxed(),
+        );
+        if idx + 1 < n {
+            cells = cells.push(Space::new().width(HANDLE_W).boxed());
+        }
+    }
+    let content = column![
+        cells,
+        container(Space::new())
+            .width(Length::Fill)
+            .height(HAIRLINE)
+            .style(filled(Some(res.line_soft))),
+    ]
+    .width(Length::Fixed(table_width));
+
+    let rest = line_fill(tokens, flag, preview.selected_row == Some(row_idx));
+    let hover = ti(tokens.hover);
+    button(content)
+        .padding(0)
+        .width(Length::Fixed(table_width))
+        .on_press(Message::BomPreview(BomPreviewMsg::RowSelected(row_idx)))
+        .style(move |_: &Theme, status: button::Status| {
+            let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+            // A flagged or selected line keeps its fill under the pointer.
+            let fill = rest.or(hovered.then_some(hover));
+            button::Style {
+                background: fill.map(Background::Color),
+                text_color: ink,
+                ..button::Style::default()
+            }
+        })
+        .boxed()
 }
 
 #[cfg(test)]
-mod tests {
-    use super::sorted_row_order;
-    use signex_output::{BomColumn, BomRow};
-
-    fn row(references: &[&str], qty: u32, value: &str) -> BomRow {
-        BomRow {
-            references: references.iter().map(|r| r.to_string()).collect(),
-            qty,
-            value: value.to_string(),
-            ..BomRow::default()
-        }
-    }
-
-    /// The export pipeline orders rollup rows by their first designator with
-    /// `signex_types::designator::compare_references`, and the preview modal
-    /// opens with the Designator column sort pre-seeded. Sorting the joined
-    /// reference string with `str::cmp` here showed R1, R10, R2 in the modal
-    /// over a CSV/HTML/XLSX reading R1, R2, R10 — the preview has to agree
-    /// with the file the user exports one click later.
-    #[test]
-    fn designator_sort_matches_the_export_order() {
-        let rows = vec![
-            row(&["R10"], 1, "1k"),
-            row(&["R2"], 1, "2k"),
-            row(&["R1", "R11"], 2, "3k"),
-        ];
-        let columns = vec![BomColumn::Designator, BomColumn::Qty];
-
-        let ascending = sorted_row_order(&rows, &columns, Some((0, true)));
-        assert_eq!(ascending, vec![2, 1, 0], "R1 < R2 < R10");
-
-        let descending = sorted_row_order(&rows, &columns, Some((0, false)));
-        assert_eq!(descending, vec![0, 1, 2], "descending is the exact reverse");
-    }
-
-    /// Qty stays numeric and the text columns stay case-insensitive — the
-    /// natural-order change must not have leaked into the other branches.
-    #[test]
-    fn other_columns_keep_their_own_orders() {
-        let rows = vec![
-            row(&["R1"], 10, "beta"),
-            row(&["R2"], 2, "Alpha"),
-            row(&["R3"], 9, "gamma"),
-        ];
-        let columns = vec![BomColumn::Designator, BomColumn::Qty, BomColumn::Value];
-
-        assert_eq!(
-            sorted_row_order(&rows, &columns, Some((1, true))),
-            vec![1, 2, 0]
-        );
-        assert_eq!(
-            sorted_row_order(&rows, &columns, Some((2, true))),
-            vec![1, 0, 2]
-        );
-    }
-
-    /// No sort spec, or one pointing past the column set, leaves the rollup
-    /// order the export pipeline already produced.
-    #[test]
-    fn unsorted_and_out_of_range_keep_rollup_order() {
-        let rows = vec![row(&["R10"], 1, "a"), row(&["R2"], 1, "b")];
-        let columns = vec![BomColumn::Designator];
-
-        assert_eq!(sorted_row_order(&rows, &columns, None), vec![0, 1]);
-        assert_eq!(
-            sorted_row_order(&rows, &columns, Some((7, true))),
-            vec![0, 1]
-        );
-    }
-
-    /// Pins behaviour (not a bug repro): descending sort reverses the comparison, not the slice, so rows with
-    /// equal keys keep rollup order in both directions (and the cached
-    /// lowercase key makes "Alpha"/"alpha" equal).
-    #[test]
-    fn descending_sort_is_stable_for_equal_keys() {
-        let rows = vec![
-            row(&["R1"], 1, "Alpha"),
-            row(&["R2"], 1, "beta"),
-            row(&["R3"], 1, "alpha"),
-            row(&["R4"], 1, "BETA"),
-        ];
-        let columns = vec![BomColumn::Designator, BomColumn::Value];
-
-        assert_eq!(
-            sorted_row_order(&rows, &columns, Some((1, true))),
-            vec![0, 2, 1, 3]
-        );
-        assert_eq!(
-            sorted_row_order(&rows, &columns, Some((1, false))),
-            vec![1, 3, 0, 2]
-        );
-    }
-
-    /// Value sorts by quantity, not by text: `10k` after `2k` and `4k7`
-    /// between them, parsed values ahead of free text, `R2` before `R10`.
-    #[test]
-    fn value_column_sorts_by_quantity() {
-        let rows = vec![
-            row(&["R1"], 1, "10k"),
-            row(&["R2"], 1, "2k"),
-            row(&["R3"], 1, "DNP"),
-            row(&["R4"], 1, "4k7"),
-            row(&["C1"], 1, "1uF"),
-            row(&["C2"], 1, "100n"),
-        ];
-        let columns = vec![BomColumn::Designator, BomColumn::Value];
-        let asc = sorted_row_order(&rows, &columns, Some((1, true)));
-        // Ohm family (2k, 4k7, 10k), then farad (100n, 1uF), then text.
-        assert_eq!(asc, vec![1, 3, 0, 5, 4, 2]);
-        let desc = sorted_row_order(&rows, &columns, Some((1, false)));
-        assert_eq!(desc, vec![2, 4, 5, 0, 3, 1]);
-    }
-}
+#[path = "table_tests.rs"]
+mod tests;

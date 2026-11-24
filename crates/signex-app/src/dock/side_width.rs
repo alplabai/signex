@@ -9,8 +9,9 @@ const BODY: f32 = TypeScale::DEFAULT.body;
 
 /// Width a fresh layout gives the left dock.
 pub const DEFAULT_LEFT_DOCK_WIDTH: f32 = 240.0;
-/// Width a fresh layout gives the right dock.
-pub const DEFAULT_RIGHT_DOCK_WIDTH: f32 = 220.0;
+/// Width a fresh layout gives the right dock (mockup rows 40 to 57 are drawn
+/// at 300 px). A saved layout keeps the width it stored.
+pub const DEFAULT_RIGHT_DOCK_WIDTH: f32 = 300.0;
 
 impl DockArea {
     /// The width the user dragged the `side` dock to (#2395). Only a dock

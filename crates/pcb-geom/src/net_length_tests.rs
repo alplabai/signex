@@ -37,6 +37,7 @@ fn board(segments: Vec<Segment>) -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -136,6 +137,7 @@ fn area(n: u128, fill: &str, net: u32) -> signex_types::pcb::Zone {
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
         unknown: Default::default(),
     }
 }

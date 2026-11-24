@@ -70,7 +70,7 @@ pub fn open_library_among(
 
 /// Captured shape of a New Library request that hasn't been written
 /// to disk yet. Lives on `LoadedProject.pending_libraries` between
-/// the user clicking "Create Library" on the Library Options modal
+/// the user clicking "Create Library" in the New Library dialog
 /// and the next successful project save (which materialises the
 /// `.snxlib` via `create_pending_library`). Closes
 /// `feedback_no_disk_writes_without_user_save.md`'s "wait for
@@ -94,10 +94,23 @@ const RESERVED_STEMS: &[&str] = &[
     "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];
 
-/// Shared pre-flight for a new `.snxlib` path: extension, portable
-/// non-empty stem, and the target must not already exist. Rejecting
-/// here beats a confusing adapter-init error later.
+/// Shared pre-flight for a new `.snxlib` path: a usable name, and the target
+/// must not already exist. Rejecting here beats a confusing adapter-init
+/// error later.
 pub(crate) fn validate_new_library_path(lib_path: &Path) -> Result<(), LibraryError> {
+    validate_new_library_name(lib_path)?;
+    if lib_path.exists() {
+        return Err(LibraryError::Conflict(format!(
+            "{} already exists",
+            lib_path.display()
+        )));
+    }
+    Ok(())
+}
+
+/// The name half of [`validate_new_library_path`], which reads no disk:
+/// the `.snxlib` extension and a portable, non-empty stem.
+pub(crate) fn validate_new_library_name(lib_path: &Path) -> Result<(), LibraryError> {
     let ext_ok = lib_path
         .extension()
         .and_then(|e| e.to_str())
@@ -126,12 +139,6 @@ pub(crate) fn validate_new_library_path(lib_path: &Path) -> Result<(), LibraryEr
     {
         return Err(LibraryError::Conflict(format!(
             "library name {stem:?} is not a portable file name"
-        )));
-    }
-    if lib_path.exists() {
-        return Err(LibraryError::Conflict(format!(
-            "{} already exists",
-            lib_path.display()
         )));
     }
     Ok(())
@@ -365,7 +372,7 @@ pub fn create_library_at(
     let library_id = Uuid::now_v7();
     let manifest = seed_manifest(library_id, stem, &state.new_library_defaults);
 
-    // LFS opt-in (Stage 11): the "Library Options" modal that pops up
+    // LFS opt-in (Stage 11): the New Library dialog that pops up
     // after the New Library Save-As dialog feeds `use_lfs` here. The
     // adapter writes `.gitattributes` for `*.step`/`*.stp`/`*.wrl`/
     // `*.iges` and stages it into the initial commit when `true`.

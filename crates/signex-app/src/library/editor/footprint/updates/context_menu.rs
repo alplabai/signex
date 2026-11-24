@@ -18,7 +18,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintDocument, msg: FootprintEd
 
 // v0.26 — right-click context menu plumbing. State-only
 // mutations; canvas cache is cleared when target adjusts the
-// selection (right-click on a pad selects it Altium-style).
+// selection (right-click on a pad selects it).
 fn show(
     editor: &mut crate::app::FootprintDocument,
     x: f32,
@@ -27,12 +27,12 @@ fn show(
 ) {
     use crate::library::editor::footprint::state::FootprintContextTarget;
     // Close any active dropdown before opening the context
-    // menu so two popups never coexist (Altium parity).
+    // menu so two popups never coexist.
     editor.state.active_bar_menu = None;
-    // v0.26-B Altium parity — right-click on a pad selects
-    // it (so subsequent menu actions like Delete / Properties
-    // act on the right-clicked pad) without losing prior
-    // selection on bare-canvas right-click.
+    // Right-click on a pad selects it (so subsequent menu
+    // actions like Delete / Properties act on the right-clicked
+    // pad) without losing prior selection on bare-canvas
+    // right-click.
     match target {
         FootprintContextTarget::Pad(idx) => {
             if editor.state.selected_pad != Some(idx) {
@@ -124,5 +124,29 @@ fn run_action(
             editor.state.context_menu = None;
             editor.canvas_cache.clear();
         }
+        Act::OnSelection(_) => {
+            unreachable!("apply_footprint_primitive_edit unwraps selection rows before routing")
+        }
+    }
+}
+
+/// The message a selection row of the menu runs: the same one its
+/// active-bar row sends.
+pub(super) fn selection_message(
+    pick: crate::library::editor::footprint::state::context_menu::SelectionAction,
+) -> FootprintEditorMsg {
+    use crate::library::editor::footprint::state::context_menu::SelectionAction as Pick;
+    use crate::library::editor::footprint::state::{EditorMode, SketchTool};
+    match pick {
+        Pick::MoveBy => FootprintEditorMsg::MoveByOpen,
+        Pick::AlignDialog => FootprintEditorMsg::AlignOpen,
+        Pick::Align(op) => FootprintEditorMsg::AlignPads(op),
+        Pick::AlignToGrid => FootprintEditorMsg::ActiveBarAlignSelectionToGrid,
+        Pick::Rotate => FootprintEditorMsg::ActiveBarRotateSelection,
+        Pick::Flip => FootprintEditorMsg::ActiveBarFlipSelection,
+        Pick::RectangularPattern => {
+            FootprintEditorMsg::ActiveBarSetSketchTool(SketchTool::RectPattern)
+        }
+        Pick::EditSketch => FootprintEditorMsg::SetMode(EditorMode::Sketch),
     }
 }

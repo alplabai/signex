@@ -56,6 +56,7 @@ fn zone(n: u128, net: u32, fill: &str, layer: &str, rect: (f64, f64, f64, f64)) 
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
         unknown: Default::default(),
     }
 }
@@ -84,6 +85,7 @@ fn board(pads: Vec<Pad>) -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::nil(),
         version: 1,
@@ -350,6 +352,34 @@ fn pours_of_one_net_overlap() {
     let fills = zone_fills(&b);
     assert_eq!(twice_area(&fills.of(0).expect("filled").pieces), FULL);
     assert_eq!(twice_area(&fills.of(1).expect("filled").pieces), FULL);
+}
+
+/// #2523: a shelved pour has no fill and does not clear other pours; once
+/// unshelved it fills and clears again.
+#[test]
+fn a_shelved_pour_has_no_fill_and_does_not_clear_other_pours() {
+    let mut b = board(Vec::new());
+    b.zones
+        .push(zone(2, 2, POUR_FILL, "TopCopper", (0.0, -10.0, 20.0, 10.0)));
+    b.zones[1].priority = 5;
+    b.zones[1].shelved = true;
+    let fills = zone_fills(&b);
+    assert!(fills.of(1).is_none(), "a shelved pour holds no copper");
+    assert_eq!(
+        twice_area(&fills.of(0).expect("filled").pieces),
+        FULL,
+        "the other pour fills its whole outline"
+    );
+
+    b.zones[1].shelved = false;
+    let fills = zone_fills(&b);
+    assert_eq!(fills.of(1).expect("filled again").pieces.len(), 1);
+    assert!(twice_area(&fills.of(0).expect("filled").pieces) < FULL);
+
+    // Shelving the only pour leaves nothing to fill.
+    let mut alone = board(Vec::new());
+    alone.zones[0].shelved = true;
+    assert!(zone_fills(&alone).is_empty());
 }
 
 /// #2216: a pour on another layer does not clear this one.

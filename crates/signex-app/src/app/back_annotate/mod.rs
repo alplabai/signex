@@ -5,9 +5,11 @@
 //! sheet as one undo group, loading a sheet that is not open into memory and
 //! leaving it unsaved (`apply.rs`, `app/sheet_write.rs`). Nothing is written
 //! to disk. Entry points: Tools ▸ Annotation ▸ Back Annotate Schematics...,
-//! Design ▸ Update Schematics in `<project>`, the palette.
+//! Design ▸ Update Schematics in `<project>`, the palette. A rename that
+//! would put a designator on two parts starts unticked (`duplicates.rs`).
 
 mod apply;
+pub(crate) mod duplicates;
 pub(crate) mod read;
 mod update;
 
@@ -19,6 +21,7 @@ use std::sync::Arc;
 
 use signex_engine::pcb::eco::{BackChangeList, BackGroup, BackKey};
 
+pub(crate) use apply::FileEdits;
 pub use read::BackRead;
 
 use crate::app::state::ProjectId;
@@ -49,6 +52,16 @@ pub enum BackAnnotateMsg {
         group: BackGroup,
         on: bool,
     },
+    /// A group's heading was clicked: fold or open it.
+    GroupFolded {
+        group: BackGroup,
+        folded: bool,
+    },
+    /// The Notes group's heading was clicked: fold or open it.
+    NotesFolded(bool),
+    /// The banner's Show link: the flagged rename row is brought into view
+    /// (its group opens) and highlighted.
+    DuplicateShown(BackKey),
     RefreshRequested,
     ValidateRequested,
     ExecuteRequested,
@@ -83,6 +96,12 @@ pub struct BackAnnotateState {
     /// The edits Execute planned, written exactly as planned once the
     /// closed sheets were stated again.
     pub(crate) pending: Option<PendingWrite>,
+    /// Groups the user folded (`true`) or opened; every group starts open.
+    pub(crate) folds: std::collections::BTreeMap<BackGroup, bool>,
+    /// The Notes group was folded.
+    pub(crate) notes_folded: bool,
+    /// The row the banner's Show link points at, drawn highlighted.
+    pub(crate) focused: Option<BackKey>,
 }
 
 impl BackAnnotateState {
@@ -102,7 +121,33 @@ impl BackAnnotateState {
             validation: None,
             checking: false,
             pending: None,
+            folds: std::collections::BTreeMap::new(),
+            notes_folded: false,
+            focused: None,
         }
+    }
+
+    /// Whether `group` is folded now.
+    pub fn is_folded(&self, group: BackGroup) -> bool {
+        self.folds.get(&group).copied().unwrap_or(false)
+    }
+
+    /// The renames of the list shown that would put a designator on two
+    /// parts, flagged on their rows (AV-11).
+    pub fn duplicate_renames(
+        &self,
+    ) -> std::collections::BTreeMap<BackKey, duplicates::DuplicateRename> {
+        self.list
+            .as_ref()
+            .map(duplicates::duplicate_renames)
+            .unwrap_or_default()
+    }
+
+    /// The file name of the sheet that holds `part`, for the flag's caption.
+    pub(crate) fn part_sheet_name(&self, part: &duplicates::PartKey) -> Option<String> {
+        let read = self.read.as_ref()?;
+        let file = read.files.get(part)?;
+        Some(crate::app::update_pcb::file_name(&file.file))
     }
 
     /// The board's file name, for labels.

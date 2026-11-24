@@ -32,10 +32,9 @@ pub enum SymbolContextTarget {
     Field(FieldKey),
 }
 
-/// The one submenu the symbol context menu currently has (Place ▸).
-/// Kept as an enum (not a bare `bool`) so a second submenu can slot in
-/// later without reshaping `SymbolContextMenuState`.
+/// The submenus of the symbol context menu, expanded in place.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolContextSubmenu {
     Place,
+    Align,
 }

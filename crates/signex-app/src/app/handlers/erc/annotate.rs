@@ -6,70 +6,11 @@ use signex_i18n::RenderTranslatable;
 use super::super::super::*;
 use super::annotate_job::PassKind;
 
-/// Annotate a sheet that exists only on disk and encode it for the write
-/// worker. `None` when nothing changed or the sheet failed; every failure is
-/// logged with the path. Only for sheets with no engine at all — an engine (open
-/// or parked) holds the user's unsaved edits and is annotated in place instead
-/// (#669).
-pub(super) fn annotate_unopened_for_write(
-    mut sheet: signex_types::schematic::SchematicSheet,
-    path: &std::path::Path,
-    mode: signex_engine::AnnotateMode,
-    next_by_prefix: &mut std::collections::HashMap<String, u32>,
-    scope: signex_engine::AnnotateScope<'_>,
-    assigned: &mut std::collections::HashMap<usize, String>,
-) -> Option<Vec<u8>> {
-    let context = format!("Annotate failed on unopened sheet '{}'", path.display());
-    let repairs = sheet.take_load_repairs();
-    let mut engine = match signex_engine::Engine::new(sheet) {
-        Ok(engine) => engine,
-        Err(error) => {
-            crate::diagnostics::log_error(&context, &anyhow::Error::new(error));
-            return None;
-        }
-    };
-    match engine.annotate_in_project(mode, next_by_prefix, scope, assigned) {
-        Ok(true) => {}
-        Ok(false) => return None,
-        Err(error) => {
-            crate::diagnostics::log_error(&context, &anyhow::Error::new(error));
-            return None;
-        }
-    }
-    let bytes = encode_unopened("Annotate", path, &engine)?;
-    // The sheet is written with the repairs: say so, now the encode held.
-    crate::app::sheet_repairs::log_sheet_repairs(path, &repairs);
-    Some(bytes)
-}
-
-/// The sheet `engine` holds as `.snxsch` bytes, for the write worker. `None`
-/// (logged with the path, and the objects a refusal names) when it cannot be
-/// encoded.
-pub(super) fn encode_unopened(
-    label: &str,
-    path: &std::path::Path,
-    engine: &signex_engine::Engine,
-) -> Option<Vec<u8>> {
-    match engine.serialize() {
-        Ok(text) => Some(text.into_bytes()),
-        Err(error) => {
-            let error = anyhow::Error::new(error);
-            crate::diagnostics::log_error(
-                &format!("{label} could not encode '{}'", path.display()),
-                &error,
-            );
-            crate::app::handlers::document_files::log_foreign_column_offenders(&error);
-            None
-        }
-    }
-}
-
 /// Annotate a sheet that exists only on disk, in memory, WITHOUT writing it.
 /// Returns the engine (path set) when the pass changed it, so the caller can
-/// park it dirty like any other unsaved sheet (#669): nothing reaches disk
-/// until the user saves, and the engine's history makes the change undoable.
-/// Re-prefix uses this; plain Annotate uses `annotate_unopened_for_write`.
-/// `Err` means the sheet failed and was logged.
+/// park it dirty like any other unsaved sheet (#669, #2760): nothing reaches
+/// disk until the user saves, and the engine's history makes the change
+/// undoable. `Err` means the sheet failed and was logged.
 pub(super) fn annotate_unopened_in_memory(
     mut sheet: signex_types::schematic::SchematicSheet,
     path: &std::path::Path,
@@ -156,9 +97,8 @@ fn skipped_summary(skipped: &std::collections::BTreeSet<std::path::PathBuf>) -> 
 impl Signex {
     /// Whether a bulk pass must leave the tab-less sheet at `path` alone
     /// because a History restore of it is still running (even a cancelled
-    /// one) or a read of it is in flight: the write would race the worker,
-    /// and a read landing later would install the pre-pass content over it.
-    /// The reason leads the Messages line.
+    /// one), a read of it is in flight or a save holds it: an engine parked
+    /// now would race that worker's result. The reason leads the Messages line.
     pub(super) fn unopened_write_blocked(&self, pass: &str, path: &std::path::Path) -> bool {
         let Some(reason) = self.unopened_block_reason(path) else {
             return false;
@@ -168,7 +108,7 @@ impl Signex {
         true
     }
 
-    /// Why a bulk pass cannot write the tab-less sheet at `path` now.
+    /// Why a bulk pass cannot change the tab-less sheet at `path` now.
     fn unopened_block_reason(&self, path: &std::path::Path) -> Option<&'static str> {
         if self.document_state.pending_restores.contains(path) {
             Some("a History restore of it is still running")
@@ -192,6 +132,49 @@ impl Signex {
         ordered_paths: &[std::path::PathBuf],
         read_only: &std::collections::BTreeSet<std::path::PathBuf>,
     ) -> bool {
+        let skipped = self.sheets_a_reset_would_skip(project_set, ordered_paths, read_only);
+        if skipped.is_empty() {
+            return false;
+        }
+        let detail = signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_RUN_WOULD_SKIP)
+            .arg("label", label)
+            .arg("sheets", skipped.join(", "));
+        crate::diagnostics::log_warning(detail.render_en_us());
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
+        true
+    }
+
+    /// Refuse a Reset All that could not reach a sheet (#2760): one undo
+    /// could not restore a project only partly reset. True when refused.
+    pub(super) fn refuse_reset_all_that_skips(
+        &mut self,
+        label: &str,
+        project_set: &crate::app::project_sheets::ProjectSheetSet,
+        ordered_paths: &[std::path::PathBuf],
+    ) -> bool {
+        let skipped =
+            self.sheets_a_reset_would_skip(project_set, ordered_paths, &Default::default());
+        if skipped.is_empty() {
+            return false;
+        }
+        self.refuse_run(
+            label,
+            &format!(
+                "it could not reach {}, so the project would be only partly reset. Nothing was \
+                 changed; try again once the sheet is free.",
+                skipped.join(", ")
+            ),
+        );
+        true
+    }
+
+    /// The sheets a reset would leave out, each with why.
+    fn sheets_a_reset_would_skip(
+        &self,
+        project_set: &crate::app::project_sheets::ProjectSheetSet,
+        ordered_paths: &[std::path::PathBuf],
+        read_only: &std::collections::BTreeSet<std::path::PathBuf>,
+    ) -> Vec<String> {
         let mut skipped: Vec<String> = read_only
             .iter()
             .map(|path| {
@@ -220,15 +203,7 @@ impl Signex {
                 skipped.push(format!("{} ({reason})", sheet_name(path)));
             }
         }
-        if skipped.is_empty() {
-            return false;
-        }
-        let detail = signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_RUN_WOULD_SKIP)
-            .arg("label", label)
-            .arg("sheets", skipped.join(", "));
-        crate::diagnostics::log_warning(detail.render_en_us());
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
-        true
+        skipped
     }
 
     /// Tell the user which sheets a bulk pass skipped: Messages panel plus a
@@ -292,8 +267,9 @@ impl Signex {
         true
     }
 
-    /// Annotate the whole project. The sheets are read, numbered and written
-    /// by [`Self::begin_project_run`]'s three steps; nothing blocks `update`.
+    /// Annotate the whole project. The sheets are read and numbered by
+    /// [`Self::begin_project_run`]'s two steps; nothing blocks `update`, and
+    /// no file changes until the user saves (#2760).
     pub(crate) fn handle_annotate(&mut self, mode: signex_engine::AnnotateMode) -> Task<Message> {
         self.begin_project_run(PassKind::Annotate(mode))
     }
@@ -301,24 +277,34 @@ impl Signex {
     pub(crate) fn handle_open_annotate_dialog(&mut self) -> Task<Message> {
         self.ui_state.annotate_dialog_open = true;
         self.interaction_state.context_menu = None;
-        // Altium parity: these big modals live in their own OS window
-        // from the moment they open — no in-window overlay, no drag-off
-        // dance. `handle_detach_modal` is idempotent, so re-opening
-        // while a window already exists just no-ops.
+        self.reset_annotate_session();
+        // These big modals live in their own OS window from the moment they
+        // open. `handle_detach_modal` is idempotent, so re-opening while a
+        // window already exists just no-ops.
         self.handle_detach_modal(super::super::super::state::ModalId::AnnotateDialog)
     }
 
     pub(crate) fn handle_close_annotate_dialog(&mut self) -> Task<Message> {
         self.ui_state.annotate_dialog_open = false;
+        // The ticks belong to this dialog session: a later run from a menu
+        // covers every sheet.
+        self.reset_annotate_session();
         // A Re-prefix request belongs to this dialog session: leaving it
         // makes any lookup in flight and any open confirm stale.
         self.invalidate_reprefix();
         let close_confirm = self.drain_reprefix_window_close();
+        // So is an open Reset confirm: without the ticks its Run would
+        // cover every sheet.
+        let close_reset = if self.ui_state.annotate_reset_confirm {
+            self.handle_close_annotate_reset_confirm()
+        } else {
+            Task::none()
+        };
         let close = self.close_detached_modal(super::super::super::state::ModalId::AnnotateDialog);
-        Task::batch([close, close_confirm])
+        Task::batch([close, close_confirm, close_reset])
     }
 
-    /// Altium's "Reset Duplicate Designators" — find references that
+    /// Reset Duplicate Designators: find references that
     /// appear on more than one part across the WHOLE project and reset just
     /// those to `{prefix}?`. The project is the one assembler's answer; see
     /// `reset_duplicates.rs` for the numbering half.
@@ -334,5 +320,62 @@ impl Signex {
         // The cached preview rows were ordered under the old setting.
         self.recompute_annotate_entries();
         Task::none()
+    }
+
+    /// Forget the dialog session's view, filter and ticks; the reset the
+    /// confirm runs stays, as a confirm may be open over the dialog.
+    fn reset_annotate_session(&mut self) {
+        let session = &mut self.ui_state.annotate_session;
+        let reset_mode = session.reset_mode;
+        **session = crate::app::handlers::erc::AnnotateSession {
+            reset_mode,
+            ..Default::default()
+        };
+        self.recompute_annotate_entries();
+    }
+
+    /// A sheet row's tick was clicked: the file joins or leaves the run.
+    pub(crate) fn handle_annotate_sheet_tick_toggled(&mut self, path: std::path::PathBuf) {
+        let unticked = &mut self.ui_state.annotate_session.unticked;
+        if !unticked.remove(&path) {
+            unticked.insert(path);
+        }
+        self.recompute_annotate_entries();
+    }
+
+    /// The sheets table's header tick: every loaded sheet joins (`true`) or
+    /// leaves the run.
+    pub(crate) fn handle_annotate_all_sheets_ticked(&mut self, on: bool) {
+        let paths = self.ui_state.annotate_preview.sheet_paths();
+        let unticked = &mut self.ui_state.annotate_session.unticked;
+        if on {
+            unticked.clear();
+        } else {
+            unticked.extend(paths);
+        }
+        self.recompute_annotate_entries();
+    }
+
+    /// Reset All or Reset & Renumber was asked for: open the confirm for that
+    /// reset, with the preview loaded so it can name its scope (#76).
+    pub(crate) fn handle_annotate_reset_pressed(
+        &mut self,
+        mode: signex_engine::AnnotateMode,
+    ) -> Task<Message> {
+        self.ui_state.annotate_session.reset_mode = mode;
+        let open = self.handle_open_annotate_reset_confirm();
+        Task::batch([open, self.refresh_annotate_preview()])
+    }
+
+    /// The sheets the dialog's ticks leave out of an Annotate run. Empty
+    /// unless the dialog is open: a run from a menu covers every sheet.
+    pub(super) fn annotate_unticked_sheets(
+        &self,
+    ) -> std::collections::BTreeSet<std::path::PathBuf> {
+        if self.ui_state.annotate_dialog_open {
+            self.ui_state.annotate_session.unticked.clone()
+        } else {
+            Default::default()
+        }
     }
 }

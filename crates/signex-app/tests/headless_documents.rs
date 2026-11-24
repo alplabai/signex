@@ -170,6 +170,7 @@ fn write_board(path: &Path, id: &str) {
     let mut board = signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: id.parse().expect("uuid"),
@@ -226,7 +227,9 @@ fn write_project(dir: &Path) -> PathBuf {
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
         fab_outputs: None,
+        router_tool_diameter: None,
         requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
@@ -370,7 +373,7 @@ fn by_document() {
             .app
             .dispatch_command_headless(&id(name), CommandArgs::none());
         assert!(
-            matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("needs the operand")),
+            matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("needs the operand")),
             "{name}: {outcome:?}"
         );
     }
@@ -431,7 +434,7 @@ fn by_document() {
     let missing = format!("document={}", root.path().join("nope.snxsch").display());
     let outcome = session.run("save_document", &[&missing]);
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("not an open")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("not an open")),
         "{outcome:?}"
     );
 

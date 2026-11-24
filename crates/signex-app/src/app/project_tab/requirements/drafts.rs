@@ -97,9 +97,9 @@ impl RequirementsTabState {
             .position(|place| place.as_ref() == Some(key))
     }
 
-    /// An edit moved the list from `before` to `after`: every entry's drafts
-    /// and refusal follow it, a renamed one's included; a removed entry's go
-    /// with it.
+    /// An edit moved the list from `before` to `after`: every entry's drafts,
+    /// refusal and card flip follow it, a renamed one's included; a removed
+    /// entry's go with it.
     pub(super) fn follow_edit(
         &mut self,
         before: &[RequirementEntry],
@@ -119,6 +119,7 @@ impl RequirementsTabState {
     ) {
         self.follow(before, after, None, true);
         self.problem = None;
+        self.problem_field = None;
     }
 
     fn follow(
@@ -144,9 +145,16 @@ impl RequirementsTabState {
             .into_iter()
             .filter_map(|((key, field), text)| Some(((moved(&key)?, field), text)))
             .collect();
+        self.toggled = std::mem::take(&mut self.toggled)
+            .iter()
+            .filter_map(moved)
+            .collect();
         self.problem = self.problem.take().and_then(|(at, problem)| match at {
             None => Some((None, problem)),
             Some(key) => moved(&key).map(|key| (Some(key), problem)),
         });
+        if self.problem.is_none() {
+            self.problem_field = None;
+        }
     }
 }

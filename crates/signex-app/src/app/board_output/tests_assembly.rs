@@ -5,6 +5,8 @@ use signex_output::{BoardLayerSet, BoardPrintOptions};
 
 use super::tests::{app_with_board, output, run};
 use super::{BoardOutputDialog, BoardOutputMsg};
+use signex_i18n::RenderTranslatable;
+
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::menu::export::settle;
 use crate::app::{Message, Signex};
@@ -148,7 +150,7 @@ fn the_cli_writes_the_named_sides_into_the_folder() {
         &[&document, &path, "sides=inner"],
     );
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("side")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("side")),
         "{outcome:?}"
     );
 }

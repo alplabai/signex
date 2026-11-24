@@ -58,6 +58,23 @@ fn each_new_place_row_arms_its_tool() {
     }
 }
 
+/// #1267, #1300: Bezier went live; Table and the Dimension tools are new.
+#[test]
+fn the_annotation_rows_arm_their_tools_and_grey_without_a_sheet() {
+    for (path, tool) in [
+        ("Place/Graphics/Bezier", "Bezier"),
+        ("Place/Graphics/Table", "Table"),
+        ("Place/Graphics/Dimension/Linear", "LinearDimension"),
+        ("Place/Graphics/Dimension/Aligned", "AlignedDimension"),
+    ] {
+        let mut app = one_symbol_selected();
+        assert!(row_is_live(&app, path), "{path} is greyed on a sheet");
+        let _ = click(&mut app, path);
+        assert_eq!(probe(&app).tool, tool, "{path}");
+        assert!(!row_is_live(&bare_app(), path), "{path} without a sheet");
+    }
+}
+
 #[test]
 fn port_rows_arm_their_port_kind() {
     use signex_types::schematic::LabelType;
@@ -208,12 +225,10 @@ fn the_new_commands_report_their_outcome_to_an_agent() {
             "open_net_classes" => "No schematic or PCB is open",
             _ => "No schematic is open",
         };
-        assert_eq!(
-            outcome,
-            CommandOutcome::Disabled {
-                reason: reason.to_string()
-            },
-            "{id} without a sheet"
+        assert!(
+            matches!(&outcome, CommandOutcome::Disabled { reason: got }
+                if signex_i18n::RenderTranslatable::render_en_us(got) == reason),
+            "{id} without a sheet: {outcome:?}"
         );
         let mut app = one_symbol_selected();
         let (outcome, _task) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);

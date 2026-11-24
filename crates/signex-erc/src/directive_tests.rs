@@ -30,6 +30,9 @@ fn blanket(exclusions: &[&str]) -> SchDirective {
         end: Point::new(20.0, 20.0),
         net_class: None,
         erc_exclusions: exclusions.iter().map(|s| s.to_string()).collect(),
+        track_width: None,
+        pour: signex_types::schematic::BlanketPour::Normal,
+        include_edge_nets: false,
     }
 }
 
@@ -64,6 +67,9 @@ fn a_blanket_keeps_other_rules_and_findings_outside_it() {
         end: Point::new(60.0, 60.0),
         net_class: None,
         erc_exclusions: vec![ORPHAN.to_string()],
+        track_width: None,
+        pour: signex_types::schematic::BlanketPour::Normal,
+        include_edge_nets: false,
     });
     assert_eq!(orphans(&outside), 1);
 }

@@ -3,7 +3,7 @@
 //! agents; it writes through the same worker as the dialog's Create.
 
 use iced::Task;
-use signex_types::project::{ProjectSetup, SetupProfile};
+use signex_types::project::{ProjectSetup, SetupProfile, UserProfile};
 
 use super::check_name;
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
@@ -13,12 +13,7 @@ use crate::app::{Message, Signex};
 type Ran = (CommandOutcome, Task<Message>);
 
 fn refused(reason: impl Into<String>) -> Ran {
-    (
-        CommandOutcome::Disabled {
-            reason: reason.into(),
-        },
-        Task::none(),
-    )
+    (CommandOutcome::disabled(reason), Task::none())
 }
 
 fn text<'a>(args: &'a CommandArgs, key: &str) -> Option<&'a str> {
@@ -28,14 +23,16 @@ fn text<'a>(args: &'a CommandArgs, key: &str) -> Option<&'a str> {
     }
 }
 
-/// Read the operands into the setup the dialog would have produced.
-fn setup_from(args: &CommandArgs) -> Result<ProjectSetup, String> {
+/// Read the operands into the setup the dialog would have produced: a
+/// built-in the user edited takes its override's values (#2536).
+fn setup_from(args: &CommandArgs, users: &[UserProfile]) -> Result<ProjectSetup, String> {
     let profile = match text(args, "profile") {
         None => SetupProfile::Standard,
         Some(t) => SetupProfile::from_token(t)
-            .ok_or_else(|| format!("profile `{t}` is not hobby, standard, hdi or custom"))?,
+            .ok_or_else(|| format!("profile `{t}` is not standard, advanced, hdi or custom"))?,
     };
     let mut setup = ProjectSetup::from_profile(profile);
+    setup.pick_profile(profile, users);
     if let Some(overrides) = text(args, "overrides") {
         setup.apply_overrides(overrides)?;
     }
@@ -52,7 +49,7 @@ pub(crate) fn new_project_with_profile(app: &mut Signex, args: &CommandArgs) -> 
         Ok(name) => name.to_string(),
         Err(_) => return refused(format!("`{name}` is not a usable project name")),
     };
-    let setup = match setup_from(args) {
+    let setup = match setup_from(args, &app.ui_state.setup_profiles) {
         Ok(setup) => setup,
         Err(reason) => return refused(reason),
     };

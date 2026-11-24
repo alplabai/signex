@@ -8,6 +8,7 @@ use pcb_geom::{
     PointNm, collect_copper, layer_bit, pad_layers, pad_pieces, pieces_on, via_layers, via_shape,
 };
 use signex_types::pcb::{PadNet, PcbBoard, Point, Via};
+use signex_types::pcb_free::free_pad_frame;
 use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
@@ -31,12 +32,12 @@ pub struct PadAt {
 impl PadAt {
     /// The pad as a person names it, `U1.3`.
     pub fn label(&self) -> String {
-        format!("{}.{}", self.reference, self.number)
-    }
-
-    /// Whether the pad reaches copper layer `layer`.
-    pub fn reaches(&self, layer: CopperLayer) -> bool {
-        self.layers & (1 << layer_bit(layer)) != 0
+        match (self.reference.is_empty(), self.number.is_empty()) {
+            (false, _) => format!("{}.{}", self.reference, self.number),
+            // A free pad belongs to no part.
+            (true, false) => self.number.clone(),
+            (true, true) => "free pad".to_string(),
+        }
     }
 }
 
@@ -93,64 +94,106 @@ pub fn start_on_copper(
 }
 
 /// The via at `to` when a leg of `style` ends on a pad off its layer (a
-/// surface pad on Top while the leg runs on an inner layer). A leg of no
-/// net yet takes the pad's net. `new_via` makes the via at `to` (the caller
-/// sizes it and gives it its id).
+/// surface pad on Top while the leg runs on an inner layer, or a point
+/// outside a through pad's smaller copper on the leg's layer). A leg of no
+/// net yet takes the lowest net among the pads the via reaches, so the
+/// result does not depend on their order; [`pad_end`] then refuses it if
+/// they differ. `new_via` makes the via at `to` (the caller sizes it and
+/// gives it its id).
 pub fn end_via(
     board: &PcbBoard,
     to: Point,
     style: &mut TrackStyle,
     new_via: impl FnOnce(Point) -> Via,
 ) -> Option<Via> {
-    let pad = pad_at(board, to, u32::MAX)?;
-    if pad.reaches(style.layer) {
+    if pads_at(board, to, u32::MAX).is_empty()
+        || !pads_at(board, to, 1 << layer_bit(style.layer)).is_empty()
+    {
         return None;
     }
+    let via = new_via(to);
     if style.net == 0 {
-        style.net = pad.net;
+        let reached = pads_at(board, to, via_layers(&via));
+        let nets = reached.iter().map(|pad| pad.net).filter(|net| *net != 0);
+        style.net = nets.min().unwrap_or(0);
     }
     Some(Via {
         attributes: Default::default(),
         net: style.net,
-        ..new_via(to)
+        ..via
     })
 }
 
-/// The pad under `at` on a copper layer of `layers` (a `layer_bit` mask),
-/// netted or not.
-pub fn pad_at(board: &PcbBoard, at: Point, layers: u32) -> Option<PadAt> {
-    let p = PointNm::from_mm(at, "route point").ok()?;
-    board.footprints.iter().find_map(|footprint| {
-        footprint.pads.iter().find_map(|pad| {
-            let pieces = pad_pieces(footprint, pad).ok()?;
-            let hit = pieces_on(pieces, layers).any(|shape| shape.contains(p, 0));
-            hit.then(|| PadAt {
-                footprint: footprint.uuid,
-                pad: pad.uuid,
-                reference: footprint.reference.clone(),
-                number: pad.number.clone(),
-                net: pad.net.as_ref().map_or(0, |net| net.number),
-                layers: pad_layers(footprint, pad),
-            })
+/// Every pad under `at` on a copper layer of `layers` (a `layer_bit` mask),
+/// by pad id, so no answer depends on board order. A part's pad counts
+/// netted or not; a free pad only with a net, as one of no net cannot join
+/// a route.
+fn pads_at(board: &PcbBoard, at: Point, layers: u32) -> Vec<PadAt> {
+    let Ok(p) = PointNm::from_mm(at, "route point") else {
+        return Vec::new();
+    };
+    let frame = free_pad_frame();
+    let placed = board
+        .footprints
+        .iter()
+        .flat_map(|footprint| footprint.pads.iter().map(move |pad| (footprint, pad)));
+    let free = board
+        .free
+        .pads
+        .iter()
+        .filter(|pad| pad.net.as_ref().is_some_and(|net| net.number != 0))
+        .map(|pad| (&frame, pad));
+    let mut hits: Vec<PadAt> = placed
+        .chain(free)
+        .filter(|(footprint, pad)| {
+            pad_pieces(footprint, pad)
+                .is_ok_and(|pieces| pieces_on(pieces, layers).any(|shape| shape.contains(p, 0)))
         })
-    })
+        .map(|(footprint, pad)| PadAt {
+            footprint: footprint.uuid,
+            pad: pad.uuid,
+            reference: footprint.reference.clone(),
+            number: pad.number.clone(),
+            net: pad.net.as_ref().map_or(0, |net| net.number),
+            layers: pad_layers(footprint, pad),
+        })
+        .collect();
+    hits.sort_by_key(|hit| hit.pad);
+    hits
 }
 
-/// What a leg of a route on `net` ending at `to` does at the pad there, on
-/// any copper layer. A route of no net yet ends anywhere (it takes the net
-/// of what it lands on).
-pub fn pad_end(board: &PcbBoard, to: Point, net: u32) -> PadEnd {
+/// What a leg of `style` ending at `to` does at the pads there: those on
+/// its layer, or with an end `via` those on the via's span. Any pad of
+/// another net refuses it. A route of no net yet ends anywhere (it takes
+/// the net of what it lands on).
+pub fn pad_end(board: &PcbBoard, to: Point, style: &TrackStyle, via: Option<&Via>) -> PadEnd {
+    let layers = via.map_or(1 << layer_bit(style.layer), via_layers);
+    pad_end_on(board, to, style.net, layers)
+}
+
+/// What a layer-change `via` of a route on `net` does at the pads on its
+/// span, by the rule of [`pad_end`].
+pub fn via_pad_end(board: &PcbBoard, via: &Via, net: u32) -> PadEnd {
+    pad_end_on(board, via.position, net, via_layers(via))
+}
+
+fn pad_end_on(board: &PcbBoard, at: Point, net: u32, layers: u32) -> PadEnd {
     if net == 0 {
         return PadEnd::Free;
     }
-    let Some(pad) = pad_at(board, to, u32::MAX) else {
-        return PadEnd::Free;
-    };
+    let pads = pads_at(board, at, layers);
     let route_net = net;
-    match pad.net {
-        0 => PadEnd::Joins { pad, route_net },
-        other if other != net => PadEnd::OtherNet { pad, route_net },
-        _ => PadEnd::Free,
+    let foreign = pads
+        .iter()
+        .filter(|pad| pad.net != 0 && pad.net != net)
+        .min_by_key(|pad| (pad.net, pad.pad));
+    if let Some(pad) = foreign {
+        let pad = pad.clone();
+        return PadEnd::OtherNet { pad, route_net };
+    }
+    match pads.into_iter().find(|pad| pad.net == 0) {
+        Some(pad) => PadEnd::Joins { pad, route_net },
+        None => PadEnd::Free,
     }
 }
 

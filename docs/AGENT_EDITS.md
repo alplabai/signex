@@ -129,10 +129,10 @@ Two commands, both with capability `edit` in `signex-cli`:
 - A step that spans sheets is recorded as an `UndoGroupKind::AgentEdit` group
   (`DocumentState::undo_groups`): Ctrl+Z or Ctrl+Y on any of its sheets moves
   every open sheet of the group, by the rule a project-wide annotate follows
-  (`apply_grouped_step`). If a sheet has a later step on top of the group, the
+  (`DocumentState::step_undo_group`). If a sheet has a later step on top of the group, the
   whole undo is refused with a Messages line naming it, and nothing moves: the
   person undoes the newer edit first. A sheet closed since, or whose history no
-  longer holds the group, is skipped with a warning.
+  longer holds the group, refuses the whole step the same way (#2760).
 - The agent has no `undo` or `redo` inside `apply_edits`. `revert group=N`
   takes back step N only while it is the newest entry of that document
   (`Engine::discard_undo_group_top`); for a step that spans sheets, the call

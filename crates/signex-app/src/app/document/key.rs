@@ -39,7 +39,8 @@ impl DocumentKey {
     pub(crate) fn of(tab: &TabInfo) -> Option<Self> {
         match &tab.kind {
             TabKind::Schematic => Some(Self::Schematic(tab.path.clone())),
-            TabKind::Pcb => Some(Self::Pcb(tab.path.clone())),
+            // A Layer Stack tab edits, saves and undoes its board.
+            TabKind::Pcb | TabKind::LayerStack => Some(Self::Pcb(tab.path.clone())),
             TabKind::SymbolEditor(path) => Some(Self::Symbol(path.clone())),
             TabKind::FootprintEditor(path) => Some(Self::Footprint(path.clone())),
             TabKind::ComponentEditor(ce) => Some(Self::Row(EditorAddress::new(

@@ -54,16 +54,17 @@ pub fn build_renderer_snapshot(
             continue;
         }
 
+        let base_color = bus
+            .color
+            .as_ref()
+            .map(to_iced)
+            .unwrap_or_else(|| to_iced(&colors.bus));
         wires.push(WireInput {
             id: renderer_id(bus.uuid),
             p0: [bus.start.x as f32, bus.start.y as f32],
             p1: [bus.end.x as f32, bus.end.y as f32],
-            width_mm: overrides.defaults.bus_mm() as f32,
-            explicit_color: Some(to_rgba(focus_color(
-                to_iced(&colors.bus),
-                focus_set,
-                bus.uuid,
-            ))),
+            width_mm: overrides.defaults.bus_line_mm(bus.stroke_width) as f32,
+            explicit_color: Some(to_rgba(focus_color(base_color, focus_set, bus.uuid))),
         });
     }
 
@@ -163,6 +164,27 @@ pub fn build_renderer_snapshot(
         focus_set,
         &mut wires,
         &mut wire_line_styles,
+    );
+    harness::push(
+        snapshot,
+        transform,
+        colors,
+        bounds,
+        focus_set,
+        harness::HarnessOut {
+            wires: &mut wires,
+            polygons: &mut polygons,
+            texts: &mut labels,
+        },
+    );
+    directives::push_flag_texts(
+        snapshot,
+        transform,
+        colors,
+        bounds,
+        focus_set,
+        document_family,
+        &mut parameter_texts,
     );
 
     // A dot takes the colour most of its wires share, else its own rule.
@@ -311,6 +333,20 @@ pub fn build_renderer_snapshot(
         let min_y = y0.min(y1) as f32;
         let max_x = x0.max(x1) as f32;
         let max_y = y0.max(y1) as f32;
+        // A repeated sheet draws as a stack with a ×N pill (#1279).
+        let accent = focus_color(to_iced(&colors.selection), focus_set, sheet.uuid);
+        let is_repeated = super::repeat_stack::push_repeat_stack(
+            sheet,
+            &super::repeat_stack::StackLook {
+                outline: to_rgba(color),
+                accent: to_rgba(accent),
+                badge_ink: to_rgba(to_iced(&colors.paper)),
+                stroke_mm: overrides.defaults.shape_stroke_mm(sheet.stroke_width) as f32,
+                family: resolve_family(None, document_family),
+            },
+            &mut polygons,
+            &mut parameter_texts,
+        );
         polygons.push(PolygonInput {
             vertices: vec![
                 [min_x, min_y],
@@ -330,7 +366,7 @@ pub fn build_renderer_snapshot(
                 min_y + screen_px_to_world_mm(6.0, transform.scale) as f32,
             ],
             size_mm: 1.05,
-            color: to_rgba(color),
+            color: to_rgba(if is_repeated { accent } else { color }),
             bold: false,
             italic: false,
             family: resolve_family(None, document_family),
@@ -353,6 +389,7 @@ pub fn build_renderer_snapshot(
 
     let mut drawings = Vec::with_capacity(snapshot.drawings.len());
     let mut drawings_front = Vec::new();
+    let power_nets = drawings::power_nets_if_tables(snapshot);
     for drawing in &snapshot.drawings {
         let bbox = drawing_aabb(drawing);
         let min = transform.world_to_screen((bbox.min_x, bbox.min_y));
@@ -373,6 +410,13 @@ pub fn build_renderer_snapshot(
             transform.scale,
             &overrides.defaults,
             out,
+        );
+        drawings::push_drawing_texts(
+            drawing,
+            colors,
+            focus_set,
+            &power_nets,
+            &mut parameter_texts,
         );
     }
 

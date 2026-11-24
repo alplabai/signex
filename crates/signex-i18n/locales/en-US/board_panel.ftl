@@ -2,8 +2,6 @@
 # Tools ▸ Panelize Board and Remove Panel, and what they say in Messages.
 
 board-panel-section = Panel
-board-panel-none = This board is made on its own. Panelize it to array copies with rails, fiducials, tooling holes and breakaway tabs or score lines.
-board-panel-add = Panelize Board
 board-panel-remove = Remove Panel
 board-panel-columns = Columns
 board-panel-rows = Rows

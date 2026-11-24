@@ -173,12 +173,21 @@ pub enum FootprintEditorMsg {
     /// switching tools mid-gesture doesn't leave dangling anchors.
     SketchSetTool(crate::library::editor::footprint::state::SketchTool),
 
-    /// v0.16.1 — toggle construction-mode (sticky).
-    SketchToggleConstruction,
+    /// A segment of the Active Bar's Linetype control was picked: the
+    /// linetype new entities get (sticky).
+    SketchLinetypePicked(crate::library::editor::footprint::sketch_mode::SketchLinetype),
 
-    /// v0.22 Phase A5 — toggle centerline-mode (sticky). Mutually
-    /// exclusive with construction-mode.
-    SketchToggleCenterline,
+    /// The sketch mode bar's Bake preview (or Back to sketch) was pressed.
+    SketchBakePreviewToggled,
+    /// The sketch mode bar's Bake was pressed: keep the edits and leave.
+    SketchBakeRequested,
+    /// Discard changes was pressed: leave, asking first when there are
+    /// edits.
+    SketchDiscardRequested,
+    /// The discard was confirmed: drop the edits and leave.
+    SketchDiscardConfirmed,
+    /// The discard was cancelled: keep editing.
+    SketchDiscardCancelled,
 
     /// v0.16.1 — TAB pause/resume during pad placement.
     TogglePlacementPause,
@@ -586,4 +595,58 @@ pub enum FootprintEditorMsg {
     /// v0.13.3 — Inline numeric input for the Dimension tool /
     /// editable Distance value. Updates `state.dimension_input`.
     SketchDimensionInput(String),
+
+    /// The sketch parameters table and the info bar's Parameters button
+    /// (mockup row 189).
+    SketchParameters(crate::library::editor::footprint::parameters_table::SketchParametersMsg),
+    /// Values on the sketch drawing, the constraint and pattern menus and
+    /// instance suppression (mockup row 187, mockup row 188, mockup row 191).
+    SketchCanvas(crate::library::editor::footprint::sketch_mode::SketchCanvasMsg),
+    /// A board-feature row of a board sketch's Snap ▾ (#2518).
+    SketchSnap(crate::library::editor::footprint::snap_menu::SketchSnapMsg),
+    /// mockup row 192 — the floating pad link on the sketch canvas.
+    PadLink(crate::library::editor::footprint::state::PadLinkMsg),
+    /// mockup row 192, item D1 — the answer to "This pad / All pads" after an edit of a
+    /// patterned pad.
+    PadScopeAnswered(crate::library::editor::footprint::state::pad_scope::PadScope),
+    /// Convert to reference, Make driving and Delete mirror, from the
+    /// constraint and pattern menus and the Properties conflict rows
+    /// (mockup row 187, mockup row 188).
+    SketchReference(
+        crate::library::editor::footprint::sketch_mode::constraint_menu::SketchReferenceMsg,
+    ),
+    /// A drawing tool's click that took an inference snap or was made
+    /// with Ctrl held (mockup row 188): [`Self::SketchToolClick`] plus the
+    /// constraint it lands, in the same undo step.
+    SketchToolClickInferred {
+        x_mm: f64,
+        y_mm: f64,
+        snap_id: Option<signex_sketch::id::SketchEntityId>,
+        inference: crate::library::editor::footprint::snap::SketchInference,
+    },
+    /// The Point tool's [`Self::SketchPlacePoint`] with the constraint its
+    /// snap lands (mockup row 188).
+    SketchPlacePointInferred {
+        x_mm: f64,
+        y_mm: f64,
+        inference: crate::library::editor::footprint::snap::SketchInference,
+    },
+    /// Close gap was pressed on an open profile (mockup row 190): join the open end
+    /// `merge` into `keep`, one undo step, on either host.
+    SketchCloseGapRequested {
+        keep: signex_sketch::id::SketchEntityId,
+        merge: signex_sketch::id::SketchEntityId,
+    },
+    /// Add fillets was pressed on the failing inside corners (mockup row
+    /// 179d): round them to the required radius, one undo step.
+    SketchAddFilletsRequested,
+    /// A role was picked on a row of the Roles section (mockup row 190): the
+    /// whole closed profile through `seed` takes it, one undo step.
+    SketchProfileRolePicked {
+        seed: signex_sketch::id::SketchEntityId,
+        role: RoleTag,
+    },
+    /// Import DXF… was pressed on a board sketch's bar (mockup row 179c).
+    /// The board host answers it with the file dialog.
+    SketchImportDxfRequested,
 }

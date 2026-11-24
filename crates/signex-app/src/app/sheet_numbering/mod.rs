@@ -14,7 +14,7 @@ mod state;
 mod update;
 
 #[cfg(test)]
-mod apply_tests;
+pub(crate) mod apply_tests;
 #[cfg(test)]
 mod tests;
 

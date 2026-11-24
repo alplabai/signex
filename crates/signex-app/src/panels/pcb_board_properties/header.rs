@@ -1,17 +1,18 @@
-//! The panel header (#2353): the board's name, the search field, the
-//! Selection Filter button and the General / Parameters / Health Check tabs.
+//! The panel header (#2353, #2523): 'Board' and the file name with the
+//! Selection Filter button on one row, the General / Parameters / Health
+//! Check tabs under it, and the search field the General tab shows next.
 
 use iced::widget::text::{Ellipsis, Wrapping};
-use iced::widget::{Column, Row, container, row, svg};
+use iced::widget::{Row, container, row, svg};
 use iced::{Alignment, Element, Length, Theme, Widget as _};
 use signex_i18n::{Localized, UserText, ids, t};
 use signex_widgets::{button, text, text_input};
 
 use super::super::form_look;
-use super::chrome::Form;
+use super::chrome::{Form, mono, segment_cell};
 use super::{BoardTab, PanelMsg, PcbBoardMsg, PcbBoardSummary, SP, filter, info};
 use crate::styles::tokens::resolve;
-use crate::styles::{PillTone, TypeScale, pill};
+use crate::styles::{PillTone, TypeScale};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 
@@ -19,6 +20,7 @@ fn msg(m: PcbBoardMsg) -> PanelMsg {
     PanelMsg::PcbBoard(m)
 }
 
+/// The header row and the tabs.
 pub(super) fn view<'a>(form: &Form<'a>, board: &'a PcbBoardSummary) -> Element<'a, PanelMsg> {
     let semibold = iced::Font {
         weight: iced::font::Weight::Semibold,
@@ -26,104 +28,73 @@ pub(super) fn view<'a>(form: &Form<'a>, board: &'a PcbBoardSummary) -> Element<'
     };
     let title = row![
         text(form.t(ids::PCB_PROPERTIES_TITLE))
-            .size(TS.body)
+            .size(TS.label)
             .font(semibold)
-            .color(form.ink()),
+            .color(form.ink())
+            .wrapping(Wrapping::None),
         text(UserText::new(board.name.clone()))
-            .size(TS.dense)
-            .color(form.muted())
+            .size(TS.caption)
+            .font(mono())
+            .color(form.faint())
             .wrapping(Wrapping::None)
             .ellipsis(Ellipsis::End)
             .width(Length::Fill),
+        filter_button(form, board),
     ]
-    .spacing(SP.m)
+    .spacing(SP.s)
     .align_y(Alignment::Center);
-
-    let search = text_input(form.t(ids::PCB_BOARD_SEARCH), board.view.search.as_str())
-        .on_input(|s| msg(PcbBoardMsg::SearchChanged(s)))
-        .size(TS.body)
-        .padding([SP.xs, SP.s])
-        .style(form_look::text_input_style)
-        .width(Length::Fill);
-    let menu = filter_button(form, board);
-    let tools = row![search, menu].spacing(SP.s).align_y(Alignment::Center);
-
-    let mut col: Column<Element<'a, PanelMsg>> = Column::new()
+    iced::widget::column![title, tabs(form, board.view.tab)]
         .spacing(SP.s)
-        .width(Length::Fill)
-        .push(title.boxed())
-        .push(tools.boxed());
-    col = col.push(tabs(form, board.view.tab));
-    container(col)
         .padding([SP.m, SP.l])
         .width(Length::Fill)
         .boxed()
 }
 
+/// The search field that filters the General tab's rows.
+pub(super) fn search<'a>(form: &Form<'a>, board: &'a PcbBoardSummary) -> Element<'a, PanelMsg> {
+    let field = text_input(form.t(ids::PCB_BOARD_SEARCH), board.view.search.as_str())
+        .on_input(|s| msg(PcbBoardMsg::SearchChanged(s)))
+        .size(TS.body)
+        .padding([SP.xs, SP.s])
+        .style(form_look::text_input_style)
+        .width(Length::Fill);
+    container(field)
+        .padding([SP.xs, SP.l])
+        .width(Length::Fill)
+        .boxed()
+}
+
+/// The three tabs as one segmented strip. The Health Check tab carries the
+/// count of design and electrical rule findings as an error badge.
 fn tabs<'a>(form: &Form<'a>, active: BoardTab) -> Element<'a, PanelMsg> {
     let findings = info::drc_violations(form).unwrap_or(0) + form.ctx.erc_diagnostics.len();
-    let general = tab(
-        form,
-        form.t(ids::PCB_BOARD_TAB_GENERAL),
-        None,
+    let label = |id| text(form.t(id)).size(TS.body).wrapping(Wrapping::None);
+    let general = segment_cell(
+        label(ids::PCB_BOARD_TAB_GENERAL).boxed(),
         active == BoardTab::General,
         Some(msg(PcbBoardMsg::TabPicked(BoardTab::General))),
     );
     let parameters = form.tip(
-        tab(
-            form,
-            form.t(ids::PCB_BOARD_TAB_PARAMETERS),
-            None,
-            false,
-            None,
-        ),
+        segment_cell(label(ids::PCB_BOARD_TAB_PARAMETERS).boxed(), false, None),
         form.t(ids::PCB_BOARD_PARAMETERS_UNAVAILABLE),
     );
-    let health = tab(
-        form,
-        form.t(ids::PCB_BOARD_TAB_HEALTH),
-        (findings > 0).then(|| t!(form.i18n, ids::PCB_BOARD_HEALTH_BADGE, "count" => findings)),
+    let mut health: Row<Element<'a, PanelMsg>> = Row::new()
+        .spacing(SP.s)
+        .align_y(Alignment::Center)
+        .push(label(ids::PCB_BOARD_TAB_HEALTH).boxed());
+    if findings > 0 {
+        let badge = t!(form.i18n, ids::PCB_BOARD_HEALTH_BADGE, "count" => findings);
+        health = health.push(form.pill(badge, PillTone::Err));
+    }
+    let health = segment_cell(
+        health.boxed(),
         active == BoardTab::HealthCheck,
         Some(msg(PcbBoardMsg::TabPicked(BoardTab::HealthCheck))),
     );
-    row![general, parameters, health]
-        .spacing(SP.xs)
-        .align_y(Alignment::Center)
-        .boxed()
-}
-
-/// One tab chip; `msg: None` draws it disabled. `badge` is a warning count.
-fn tab<'a>(
-    form: &Form<'a>,
-    label: Localized,
-    badge: Option<Localized>,
-    active: bool,
-    msg: Option<PanelMsg>,
-) -> Element<'a, PanelMsg> {
-    let mut content: Row<Element<'a, PanelMsg>> = Row::new()
-        .spacing(SP.s)
-        .align_y(Alignment::Center)
-        .push(text(label).size(TS.body).boxed());
-    if let Some(badge) = badge {
-        content = content.push(
-            container(text(badge).size(TS.caption))
-                .padding([0.0, SP.s])
-                .style(pill(form.tokens(), PillTone::Warn))
-                .boxed(),
-        );
-    }
-    let enabled = msg.is_some();
-    button(content)
-        .padding([SP.s, SP.l])
-        .on_press_maybe(msg)
-        .style(move |theme: &Theme, status: button::Status| {
-            let hovered = matches!(status, button::Status::Hovered);
-            let mut style = form_look::tab_chip(theme, active, hovered);
-            if !enabled {
-                style.text_color = form_look::FormLook::of(theme).ink4;
-            }
-            style
-        })
+    container(signex_widgets::FitRow::new(vec![general, parameters, health]).fill(true))
+        .padding(SP.xs)
+        .width(Length::Fill)
+        .style(form_look::segmented_frame)
         .boxed()
 }
 
@@ -148,10 +119,9 @@ fn filter_button<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Element<'a, Pa
     } else {
         glyph
     };
-    let count = t!(form.i18n, ids::PCB_BOARD_FILTER_COUNT, "on" => on, "total" => total);
     let content = row![
         glyph,
-        text(count)
+        text(filter_count(form, board))
             .size(TS.body)
             .color(ink)
             .wrapping(Wrapping::None)
@@ -173,4 +143,11 @@ fn filter_button<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Element<'a, Pa
         t!(form.i18n, ids::PCB_BOARD_FILTER_TIP_OFF, "off" => off.join(", "))
     };
     form.tip(shown.boxed(), tip)
+}
+
+/// How many kinds the filter has on, of all: `11/13`.
+pub(super) fn filter_count(form: &Form<'_>, board: &PcbBoardSummary) -> Localized {
+    let total = pcb_geom::PickKind::ALL.len();
+    let on = board.filter.on_kinds().count();
+    t!(form.i18n, ids::PCB_BOARD_FILTER_COUNT, "on" => on, "total" => total)
 }

@@ -68,7 +68,7 @@ pub struct UiState {
     /// `component_classes` + persisted on Save.
     pub preferences_draft_component_classes: Vec<crate::fonts::ComponentClassEntry>,
     /// Preferences ▸ Rule Profiles (#1608).
-    pub profile_manager: crate::app::state::rule_profile_ui::ProfileManager,
+    pub profile_manager: Box<crate::app::state::rule_profile_ui::ProfileManager>,
     /// The boot task is still reading the `User Default` profile into
     /// `erc_severity_override` / `pin_matrix_overrides`. Edits of the machine's
     /// rules wait for it: writing the maps back before they hold the file's
@@ -80,8 +80,8 @@ pub struct UiState {
     /// edit now could be overwritten by that migration on a later launch.
     pub machine_rules_locked: Option<String>,
     /// Why the machine's rules are not being saved (the `User Default` file
-    /// could not be read or written), shown in the ERC dialog. `None` when
-    /// they are.
+    /// could not be read or written), shown in the ERC dialog and on the Rule
+    /// Profiles page. `None` when they are.
     pub machine_rules_problem: Option<String>,
     /// The profile new projects start from; `None` means "User Default if
     /// the machine has one, else Signex Default" (#1608). Persisted in
@@ -91,7 +91,7 @@ pub struct UiState {
     pub save_profile_dialog: Option<crate::app::state::rule_profile_ui::SaveProfileDialog>,
     /// Profile file writes waiting their turn (#1608).
     pub profile_writes: crate::app::state::rule_profile_ui::ProfileWriteQueue,
-    /// Loaded keyboard-shortcut profiles (bundled Altium / Classic
+    /// Loaded keyboard-shortcut profiles (bundled Signex Standard / Classic
     /// built-ins plus any user profile in the OS config dir). Drives
     /// shortcut dispatch and the Help ▸ Keyboard Shortcuts reference.
     pub keymap_profiles: crate::keymap::ShortcutProfileSet,
@@ -142,6 +142,13 @@ pub struct UiState {
     /// menu are placed inside it, not inside the main window (#1910).
     pub undocked_window_sizes: std::collections::HashMap<iced::window::Id, (f32, f32)>,
     pub panel_list_open: bool,
+    /// The Grid & Snap popover a right-click on a sheet's Grid read-out
+    /// opens (mockup row 6), with the window it belongs to; `None` while closed. Boxed
+    /// to keep `UiState` under its size ceiling.
+    pub grid_snap_popover: Option<Box<crate::status_bar::GridSnapPopover>>,
+    /// The board counters' open popover and the time their DRC age is read
+    /// against (#2460). Boxed to keep `UiState` under its size ceiling.
+    pub board_status: Box<crate::status_bar::BoardStatusUi>,
     pub preferences_open: bool,
     /// Help ▸ Keyboard Shortcuts modal — reference table over the
     /// active keyboard-shortcut profile. Toggled from the Help menu
@@ -154,6 +161,9 @@ pub struct UiState {
     /// the view then computes the sections inline, so a stale cache is
     /// impossible by construction.
     pub shortcut_sections: Option<Vec<crate::keyboard_shortcuts_modal::ShortcutSection>>,
+    /// The shortcuts sheet's filter text and scope, set afresh each time
+    /// the sheet opens (#2262).
+    pub shortcut_sheet: crate::keyboard_shortcuts_modal::ShortcutSheet,
     /// Help ▸ About Signex dialog.
     pub about_open: bool,
     /// File ▸ Open Recent — loaded from `prefs.json` at boot, updated on
@@ -162,6 +172,10 @@ pub struct UiState {
     /// The Start screen's pinned projects (#2305), loaded from `prefs.json`
     /// at boot and saved on every pin and unpin.
     pub pinned_projects: crate::pinned_projects::PinnedProjects,
+    /// The Start screen project thumbnails (mockup row 1): read from the cache
+    /// at boot, rebuilt after a save. Boxed: a pointer of the size budget
+    /// (#2412).
+    pub project_thumbnails: Box<crate::project_thumbnail::ProjectThumbnails>,
     /// First-run tour overlay — a single dismissible card shown only
     /// before the user has dismissed it once. Initial value is read
     /// from prefs in `bootstrap`; transitions to `false` on the first
@@ -211,9 +225,24 @@ pub struct UiState {
     pub wheel_mode: crate::canvas::WheelMode,
     /// Draft mirror of [`Self::wheel_mode`] for the Preferences dialog.
     pub preferences_draft_wheel_mode: crate::canvas::WheelMode,
+    /// How a board picks its active layer: the tabs or a dropdown.
+    pub layer_switcher: crate::layer_strip_prefs::LayerSwitcher,
+    /// Draft mirror of [`Self::layer_switcher`] for the Preferences dialog.
+    pub preferences_draft_layer_switcher: crate::layer_strip_prefs::LayerSwitcher,
+    /// How the selected option of a segmented control looks in a dark theme.
+    pub selected_segment: signex_types::theme::SelectedSegmentLook,
+    /// Draft mirror of [`Self::selected_segment`] for the Preferences dialog.
+    pub preferences_draft_selected_segment: signex_types::theme::SelectedSegmentLook,
     /// The locale in force: its catalog bundle and the Language list. Shared
     /// with the menus; replaced by `Signex::set_language` (#2055).
     pub i18n: std::sync::Arc<signex_i18n::I18n>,
+    /// The Project tab previews' open label, held handle and larger window.
+    pub project_preview: crate::app::project_tab::ProjectPreviewUi,
+    /// Each project's repository as last read, and the one branch switcher.
+    pub project_git: Box<crate::app::project_git::ProjectGitState>,
+    /// The Preferences language draft, dirty pages and page view state.
+    /// Boxed: a pointer of the size budget (#2412).
+    pub preferences_pages: Box<crate::preferences::PreferencesPagesState>,
     /// Saved "Remember window size and position" preference. Off by default.
     pub remember_window_geometry: bool,
     /// Draft mirror of [`Self::remember_window_geometry`] for Preferences.
@@ -431,8 +460,9 @@ pub struct UiState {
     pub preferences_keymap_recorder: Option<KeymapRecorderState>,
     pub preferences_dirty: bool,
     /// Rename-sheet modal state. Opened from the Projects-panel tree
-    /// context menu; `None` when the modal is closed.
-    pub rename_dialog: Option<crate::app::RenameDialogState>,
+    /// context menu; `None` when the modal is closed. Boxed: a closed dialog
+    /// costs one pointer (#2412).
+    pub rename_dialog: Option<Box<crate::app::RenameDialogState>>,
     /// Remove-from-project modal state (Delete / Exclude / Cancel).
     pub remove_dialog: Option<crate::app::RemoveDialogState>,
     /// "Close Project — Unsaved Edits" confirmation modal. `Some`
@@ -457,8 +487,9 @@ pub struct UiState {
     /// v0.18.11 — Cartesian Grid Editor modal (Ctrl+G in a
     /// footprint editor). `Some` while the dialog is visible;
     /// carries the in-flight Step X / Step Y / link buffers so
-    /// keystrokes don't immediately mutate the active editor.
-    pub grid_properties: Option<crate::app::GridPropertiesState>,
+    /// keystrokes don't immediately mutate the active editor. Boxed: a
+    /// closed dialog costs one pointer (#2412).
+    pub grid_properties: Option<Box<crate::app::GridPropertiesState>>,
     /// The New Project setup dialog, while open (#2232). Nothing is on disk
     /// until its Create. Boxed so a closed dialog costs one pointer (#2412).
     pub new_project: Option<Box<crate::app::NewProjectState>>,
@@ -493,9 +524,16 @@ pub struct UiState {
     pub board_reannotate: Option<crate::app::BoardReannotateState>,
     /// The options Re-Annotate Board was last used with, for its next opening.
     pub board_reannotate_options: signex_engine::pcb::designators::ReannotateOptions,
+    /// Rooms (#2457): the Room Properties drafts and illustration hover, and
+    /// Create Rooms from Sheets while open. Boxed: a pointer of the size
+    /// budget (#2412).
+    pub rooms: Box<crate::app::rooms::RoomsUi>,
     /// File ▸ Fabrication Outputs (#2388), while open. Nothing is written
     /// until Generate.
     pub fab_outputs: Option<Box<crate::app::FabOutputsState>>,
+    /// Design ▸ Differential Pair Classes… (#1282), while open: a copy of
+    /// the project's classes until OK.
+    pub diff_pair_classes: Option<Box<crate::app::DiffPairClassesState>>,
     /// Generation of the newest Fabrication Outputs write, outside the
     /// dialog so a reopened dialog never takes an older answer.
     pub fab_outputs_writes: u64,
@@ -506,28 +544,51 @@ pub struct UiState {
     /// memory as one undo group; nothing is written to disk. Boxed like
     /// `new_project`.
     pub back_annotate: Option<Box<crate::app::BackAnnotateState>>,
-    /// The Find Similar Objects dialog, while open (#1257).
-    pub find_similar: Option<crate::find_similar::FindSimilarState>,
+    /// Compare Board with Schematic (#2462), while open. Boxed like
+    /// `back_annotate`.
+    pub compare_board: Option<Box<crate::app::CompareBoardState>>,
+    /// The Find Similar Objects dialog, while open (#1257); boxed so the
+    /// closed dialog costs one pointer (#2412).
+    pub find_similar: Option<Box<crate::find_similar::FindSimilarState>>,
     /// Token of the newest Find Similar project search. Lives outside the
     /// dialog state so a reopened dialog never reuses an old token.
     pub find_similar_generation: u64,
     /// The Tools ▸ Assign Footprints dialog, while open (#2248). Apply
-    /// changes the open sheets in memory; the user saves.
-    pub assign_footprints: Option<crate::app::AssignFootprintsState>,
+    /// changes the open sheets in memory; the user saves. Boxed: a closed
+    /// dialog costs one pointer (#2412).
+    pub assign_footprints: Option<Box<crate::app::AssignFootprintsState>>,
     /// Generation of the newest Assign Footprints read. Outside the dialog's
     /// state so a reopened dialog never takes an older read.
     pub assign_footprints_reads: u64,
-    /// The Net Inspector panel's filter and expanded nets (#1269).
-    pub net_inspector: crate::panels::NetInspectorState,
-    /// The open Paste Array dialog (#1264).
-    pub paste_array: Option<crate::paste_array::PasteArrayState>,
+    /// The Net Inspector panel's mode, filter and expanded rows (#1269);
+    /// boxed so its growth stays off `UiState` (#2412).
+    pub net_inspector: Box<crate::panels::NetInspectorState>,
+    /// The Object List panel's picks and rows (#1259); boxed as above.
+    pub object_list: Box<crate::panels::ObjectListState>,
+    /// The Compiled Design panel, channel tabs and Repeat rows (#1279, #1308).
+    /// Boxed: the `UiState` size ceiling.
+    pub compiled_design: Box<crate::app::compiled_design::CompiledDesignUi>,
+    /// Named unions: hidden per sheet, the panel and the popover (mockup row 158).
+    /// Boxed: the `UiState` size ceiling.
+    pub unions: Box<crate::app::unions::UnionsState>,
+    /// The open Smart Paste dialog (mockup row 155).
+    pub smart_paste: Option<Box<crate::smart_paste::SmartPasteState>>,
+    /// The Annotations panel's filters, expanded row and last scan (mockup row 165).
+    /// Boxed: a pointer of the size budget (#2412).
+    pub annotations: Box<crate::panels::AnnotationsState>,
+    /// The open Paste Array dialog (#1264); boxed as `find_similar`.
+    pub paste_array: Option<Box<crate::paste_array::PasteArrayState>>,
     /// How many Paste Array dialogs were opened: tags each one so a numbers
     /// read answers only the dialog that asked for it.
     pub paste_array_opens: u64,
+    /// In-place text editors opened this session; the key hint above the
+    /// editor shows for the first few. Not persisted: no preference stores
+    /// such counters.
+    pub text_edit_opens: u32,
     /// v0.18.14.1 — Custom Selection Filter modal draft. `Some`
     /// while the dialog is visible; the eight-bool draft mirror
-    /// commits on Apply, discards on Cancel.
-    pub selection_filter_custom: Option<crate::app::SelectionFilterCustomState>,
+    /// commits on Apply, discards on Cancel. Boxed as `find_similar`.
+    pub selection_filter_custom: Option<Box<crate::app::SelectionFilterCustomState>>,
     /// ERC results for the currently-visible sheet. Driven by the
     /// per-sheet cache below — switching tabs repoints this at the
     /// cached violations for that sheet, so markers and the Messages
@@ -550,8 +611,12 @@ pub struct UiState {
     pub erc_page_frames: crate::app::handlers::erc::PageFrames,
     /// The waiver being written in the ERC panel, if any (#1285).
     pub erc_waive_draft: Option<crate::panels::ErcWaiveDraft>,
-    /// Global cursor into the flattened ERC diagnostics list spanning all
-    /// sheets in `erc_violations_by_path`. Used by next/prev navigation.
+    /// What the ERC and Messages panels show, the cached user identity and
+    /// what the newest ERC run checked (#85, #86, AV-13); boxed so its
+    /// growth stays off `UiState` (#2412).
+    pub validation_panels: Box<crate::panels::ValidationPanels>,
+    /// The selected ERC finding: its index into the flattened list spanning
+    /// all sheets in `erc_violations_by_path`.
     pub erc_focus_global_index: Option<usize>,
     /// Token of the newest ERC run; a finished run applies only if it still
     /// matches (#111).
@@ -593,9 +658,16 @@ pub struct UiState {
     pub annotate_order: AnnotateOrder,
     /// ERC dialog open flag — opens the full severity-matrix + pin-matrix UI.
     pub erc_dialog_open: bool,
+    /// The ERC dialog's "Profile" menu is open (#2413). Cleared when the
+    /// dialog opens or closes and when a row is chosen.
+    pub erc_profile_menu_open: bool,
     /// Reset-and-renumber confirmation modal. When true, the Design →
     /// Reset menu item shows a confirm before discarding every number.
     pub annotate_reset_confirm: bool,
+    /// The Annotate dialog's session: change-list view and filter, sheet
+    /// ticks, the Fixed options fold and which reset the confirm runs.
+    /// Boxed: a closed dialog costs one pointer (#2412).
+    pub annotate_session: Box<crate::app::handlers::erc::AnnotateSession>,
     /// Per-modal offset in window pixels from the centered position.
     /// Updated when the user drags the title bar. Persists until the app
     /// closes so reopening a dialog lands where it was last placed.
@@ -611,6 +683,9 @@ pub struct UiState {
     pub move_selection: MoveSelectionState,
     /// F5 Net Color palette state — open flag and transient edit buffer.
     pub net_color_palette_open: bool,
+    /// F5 Net Color palette: filter text and the open row chooser; boxed so
+    /// its growth stays off `UiState` (#2412).
+    pub net_color_palette: Box<crate::app::state::NetColorPaletteState>,
     /// Parameter Manager dialog state.
     pub parameter_manager_open: bool,
     /// Parameter Manager table: the new-column name, the row filter and the
@@ -629,6 +704,8 @@ pub struct UiState {
     /// baseline in `pin_matrix_view`. Persisted alongside the ERC
     /// severity map.
     pub pin_matrix_overrides: std::collections::HashMap<(u8, u8), signex_erc::Severity>,
+    /// The ERC dialog rule editor's list filter (#1289).
+    pub erc_rule_list: Box<crate::app::core::rule_list_filter::RuleListFilter>,
     /// Symbols whose designator the user locked against reannotation.
     /// Exposed as per-row checkboxes in the Annotate dialog; the engine
     /// skips these uuids in `annotate_with_seed_and_locks`.
@@ -693,7 +770,7 @@ pub struct UiState {
     /// (later) undocked tabs. `SecondaryWindowClosed` removes entries so
     /// the detached content reattaches to the main window.
     pub windows: std::collections::HashMap<iced::window::Id, WindowKind>,
-    /// Window ▸ Tile: the main window shows its documents in panes in this
+    /// View ▸ Window ▸ Tile: the main window shows its documents in panes in this
     /// layout (#2249); `None` shows the active document alone.
     pub document_tiling: Option<crate::app::TileLayout>,
     /// Calculator state, owned here so the modal view stays a pure
@@ -705,6 +782,21 @@ pub struct UiState {
     /// row. The chrome-strip search bar is the always-rendered input;
     /// `open` gates the dropdown overlay only.
     pub command_palette: super::super::command_palette::CommandPaletteState,
+    /// The Start screen's page and its filters, back to Home once the
+    /// screen goes away. Boxed: a pointer of the size budget (#2412).
+    pub start_screen: Box<crate::start_screen::StartScreenState>,
+    /// The tab strip's "+N" overflow menu is open (mockup row 5); it lists the tabs
+    /// the main window's strip has no room for.
+    pub tab_overflow_menu_open: bool,
+    /// The Command Log (#2458): every command this session ran and what its
+    /// panel shows. Session only; boxed, a pointer of the size budget (#2412).
+    pub command_log: Box<crate::panels::CommandLogState>,
+    /// What each Command Log row took, for Replay. Beside the log, not in
+    /// the copy the panel holds. Boxed: the size budget (#2412).
+    pub(crate) command_replay: Box<crate::app::handlers::command_log::ReplayBook>,
+    /// Workspace layouts (mockup row 166): the list, its store, and the Save Layout
+    /// and Manage Layouts dialogs while open. Boxed: the size budget (#2412).
+    pub workspace_layouts: Box<crate::workspace_layouts::WorkspaceLayoutsState>,
 }
 
 impl UiState {
@@ -741,53 +833,9 @@ impl UiState {
         crate::canvas::Camera::zoom_step_factor(self.preferences_draft_zoom_step_percent)
     }
 
-    /// True when any Preferences draft differs from its saved live value.
-    /// Single source of truth so every live-preview `PrefMsg::Draft*` handler
-    /// stays consistent as new drafts are added (the old per-handler inline
-    /// chains had drifted to different term sets). Covers ALL draft state —
-    /// the 10 appearance drafts, the component-class table and the keymap
-    /// working copy — so an appearance recompute can't report "clean" while
-    /// a pending rebind or class edit would be lost on close.
-    ///
-    /// The three Symbol Editor terms joined in #629. Until then the claim
-    /// above was false: they wrote themselves to `prefs.json` on change and
-    /// were deliberately left out, so the predicate was consistent with
-    /// their behaviour but not with the footer the user was looking at.
-    pub fn preferences_draft_differs(&self) -> bool {
-        self.preferences_draft_theme != self.theme_id
-            || self.preferences_draft_font != self.ui_font_name
-            || self.preferences_draft_grid_style != self.grid_style
-            || self.preferences_draft_pcb_gpu_render != self.pcb_gpu_render
-            || self.preferences_draft_antialiasing != self.antialiasing
-            || self.preferences_draft_annotate_undo != self.annotate_undo
-            || self.preferences_draft_move_keeps_wires != self.move_keeps_wires
-            || self.preferences_draft_net_hover_enabled != self.net_hover_enabled
-            || self.preferences_draft_symbol_body_fill != self.symbol_body_fill
-            || self.preferences_draft_trackpad_pan != self.trackpad_pan
-            || self.preferences_draft_wheel_mode != self.wheel_mode
-            || self.preferences_draft_remember_window_geometry != self.remember_window_geometry
-            || self.preferences_draft_drag_direction_select != self.drag_direction_select
-            || self.preferences_draft_increment_step != self.increment_step
-            || self.preferences_draft_paste_designators != self.paste_designators
-            || self.preferences_draft_window_controls_placement != self.window_controls_placement
-            || self.preferences_draft_autosave_enabled != self.autosave_enabled
-            || self.preferences_draft_agent_connections_enabled != self.agent_connections_enabled
-            || self.preferences_draft_symbol_grid_style != self.symbol_grid_style
-            // Exact `!=` on the f32 is deliberate: the picker assigns from
-            // `canvas::grid::GRID_SIZES_MM`, so draft and committed are the
-            // same constant unless the user actually moved it. A tolerance
-            // here would let a real change read as clean.
-            || self.preferences_draft_symbol_grid_size_mm != self.symbol_grid_size_mm
-            || self.fast_grid_drafts_differ()
-            || self.preferences_draft_symbol_pin_selection != self.symbol_pin_selection
-            || self.preferences_draft_zoom_step_percent != self.zoom_step_percent
-            || self.preferences_draft_ui_scale_percent
-                != crate::ui_scale::scale_to_percent(self.ui_scale)
-            || self.preferences_draft_component_classes != self.component_classes
-            || self
-                .preferences_keymap_editor
-                .differs_from(&self.keymap_profiles)
-    }
+    // The Preferences dirty predicate (`preferences_draft_differs`, per page
+    // `preferences_page_differs`) lives with the draft handlers in
+    // `app/handlers/preferences/drafts.rs`.
 
     /// The theme every surface paints with: the Preferences draft while
     /// the dialog is open (the live preview), the saved theme otherwise.
@@ -799,12 +847,6 @@ impl UiState {
         } else {
             self.theme_id
         }
-    }
-
-    /// True when closing Preferences without Save would lose work — drives
-    /// the Save/Discard footer + every dirty-close guard.
-    pub fn preferences_has_unsaved_changes(&self) -> bool {
-        self.preferences_draft_differs()
     }
 }
 
@@ -832,12 +874,25 @@ mod tests {
             ),
             ("update_pcb", field_size(|ui| &ui.update_pcb)),
             ("back_annotate", field_size(|ui| &ui.back_annotate)),
+            ("compare_board", field_size(|ui| &ui.compare_board)),
+            ("rooms.create", field_size(|ui| &ui.rooms.create)),
             (
                 "pending_profile_update",
                 field_size(|ui| &ui.pending_profile_update),
             ),
             ("fab_outputs", field_size(|ui| &ui.fab_outputs)),
+            ("find_similar", field_size(|ui| &ui.find_similar)),
+            ("paste_array", field_size(|ui| &ui.paste_array)),
+            (
+                "selection_filter_custom",
+                field_size(|ui| &ui.selection_filter_custom),
+            ),
+            ("assign_footprints", field_size(|ui| &ui.assign_footprints)),
+            ("annotate_session", field_size(|ui| &ui.annotate_session)),
+            ("validation_panels", field_size(|ui| &ui.validation_panels)),
             ("sheet_sync", field_size(|ui| &ui.sheet_sync)),
+            ("profile_manager", field_size(|ui| &ui.profile_manager)),
+            ("erc_rule_list", field_size(|ui| &ui.erc_rule_list)),
             (
                 "board_output.dialog",
                 field_size(|ui| &ui.board_output.dialog),

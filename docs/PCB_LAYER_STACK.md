@@ -12,6 +12,16 @@ the manager has no rows and shows `LayerStack::derived`: overlay, paste and
 mask on each face, its copper layers with FR-4 between them, sized so the
 total is the board thickness. The first edit stores the stack.
 
+The stackup has an optional name (mockup row 105, #2833), the `stack_name` key
+of `[stackup]`. A named board writes `snxpcb/1.8`; without a name the key is
+absent and the file keeps its lower token, byte for byte
+(`docs/FORMAT_VERSIONS.md`). `BoardCommand::SetStackupName` is the only edit
+of the name, one undo step that trims it and takes a blank as no name; a
+`SetLayerStack` keeps it. Naming a board with no stored stack stores the
+derived one, and removing the name of a stack equal to the derived one stores
+none again. The toolbar field keeps a draft until Enter and shows the board's
+file name as its placeholder.
+
 Copper is named by place: the first copper row is `TopCopper`, the last
 `BottomCopper`, the rest `Inner1Copper`, `Inner2Copper`, ... in order. A
 copper row names the board layer it was (`layer`), or none for a new one.
@@ -30,16 +40,30 @@ and a copper layer left out while items or a board-sketch keepout are on
 it. Its inverse, `RestoreLayerStack`, puts back the stack, layer list,
 thickness, copper names and dropped sizes exactly.
 
-The manager (Design ▸ Layer Stack Manager..., `board_layer_stack`) is a
-table, one row per layer: Name, Type (a copper row switches between Signal
-and Plane), Material, Thickness, Er (dielectric and mask rows) and Weight
-(copper rows), with the total thickness and copper count above it. Add
-Signal, Add Plane and Add Dielectric insert below the selected row, kept
-between the outer copper rows; a new copper layer brings a dielectric with
-it. Remove takes the selected row, and a dielectric next to a copper one.
-Move Up and Move Down swap the row with its neighbour. Each is one step
-through `signex_engine::pcb::stack_edit`. An impedance column waits for a
-trace-width choice.
+The manager (Design ▸ Layer Stack Manager..., `board_layer_stack`) is a page
+tab of the board (mockup row 105; docs/PROJECT_TAB.md, "Page tabs"), opened by
+every Layer Stack entry point and never docked. The tab has the board's path,
+so it shows the board's dirty dot, and Save and Undo act on the board. It
+always sits after the board's tab, because path lookups take the first tab;
+closing it leaves the board alone, and closing the board closes it.
+
+Its Stack sub-tab is a table, one row per layer: Name, Type (a copper row
+switches between Signal and Plane), Material, Thickness, Er (dielectric and
+mask rows) and Weight (copper rows). Beside it are a to-scale cross-section
+with the drill spans and an oblique preview of the board slab; a row with no
+thickness is drawn as a mark. The toolbar's Add inserts a signal, plane or
+dielectric below the selected row, kept between the outer copper rows; a new
+copper layer brings a dielectric with it. Remove takes the selected row, and
+a dielectric next to a copper one. Move Up and Move Down swap the row with its
+neighbour. Each is one step through `signex_engine::pcb::stack_edit`. The
+mm / µm / mil switch is view state: the board stays in mm. Symmetric stack
+reads whether the stack mirrors; Presets, Import and Export are greyed with
+their reason. An impedance column waits for a trace-width choice.
+
+The Via Types / Drill Pairs sub-tab lists what the board's vias make
+(`signex_engine::pcb::drill_pairs`, `via_types`): each pair's span, depth
+through the stack, smallest drill, aspect ratio and via count, and each type's
+drill, finished hole, pad, protection and use count. Neither table is stored.
 
 ## Per-layer sizes {#sizes}
 
@@ -75,10 +99,44 @@ Properties Lock box, the board menu's Lock
 and Unlock rows (`lock_board_items`, `unlock_board_items`) and an agent with
 `ids` set it.
 
-A via's span is edited with the From and To rows of the Via panel or
+A via's span comes from the via type it picks in the Via panel (mockup row
+96); the free From and To rows are gone. An agent still sets a span with
 `set_via_span`: both ends must be different copper layers of the board; Top
 to Bottom is a through via, any other span a blind (or buried) one, and a
 micro via stays micro. DRC reads the span (`pcb_geom::via_layers`).
+
+## Via types {#via-types}
+
+Until the Layer Stack Manager stores via types, the board's via types are
+derived from its vias (`signex_engine::pcb::via_types`): one type per kind,
+span and tenting the vias have, sized by the diameter and drill most of them
+share (on a tie the smaller), plus the through via the Via tool places
+(`PcbSetup::via_diameter`, `via_drill`) when no via is through. Through types
+come first, then by top layer; a type is named with the span name the panel
+shows ("Thru 1:4"). Picking a type in the Via panel sets the vias' kind,
+span, diameter, drill and tenting as one undo step. Diameter, Drill and
+Finished Hole are always editable. A via whose diameter or drill differs from
+its type's is an override: that size is in bold with a reset arrow, and its
+"from type" note goes. Typing the type's value clears the override. The
+finished hole is the drill less twice `VIA_PLATING_MM` (0.025 mm), and typing
+one sets the drill that leaves it; a drill below `PcbSetup::via_min_drill`
+shows a warning.
+
+A known trap of derived types: the type's size is the one most of its vias
+share, so an override on most vias of a type moves the type's size with it.
+Five vias at 0.6/0.3 with three of them overridden to 0.8/0.4 make a 0.8/0.4
+type; the two untouched vias then read as overridden, and their reset arrows
+size them to 0.8/0.4. A type with a single via never reads as overridden:
+typing a new size on it changes the type's size. Stored via types (mockup row 105) end this; until then
+`via_types_tests::overriding_most_vias_of_a_derived_type_moves_the_type`
+pins it.
+
+The Protection section names the IPC-4761 type the via's fill, plug side, cap
+and per-side tenting make (`signex_types::pcb_via_protection`). A via stores
+only its tenting, so fill and cap read as none and the Type, Fill, Plug From
+and Cap rows are read-only; Tented Top and Bottom stay editable there until
+via types are stored. Type II is listed greyed: its second cover coat is not
+stored.
 
 Free pads (a pad that belongs to no footprint) do not exist on a board yet,
 so a pad's lock is its footprint's and its layer is not edited here.

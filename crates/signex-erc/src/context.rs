@@ -10,6 +10,8 @@ use signex_types::schematic::{InstancePath, SchematicSheet};
 use signex_types::schematic::{LabelType, PinDirection, Point, no_erc_rules_suppress, pin_tips};
 use uuid::Uuid;
 
+pub use crate::harness_snapshot::ErcHarness;
+
 // ---------------------------------------------------------------------------
 // Paper size
 // ---------------------------------------------------------------------------
@@ -93,7 +95,8 @@ pub struct ErcSymbol {
     pub footprint: String,
     /// `false` for a part that is not placed on the board (no footprint due).
     pub on_board: bool,
-    /// Units the library symbol defines ([`LibSymbol::unit_count`]).
+    /// Units the library symbol defines ([`LibSymbol::unit_count`], at least
+    /// 1); 0 for a part with no library body, whose units are not known.
     ///
     /// [`LibSymbol::unit_count`]: signex_types::schematic::LibSymbol::unit_count
     pub unit_count: u32,
@@ -130,6 +133,11 @@ impl ErcNetPin {
 }
 
 impl ErcSymbol {
+    /// Whether the sheet holds this symbol's library body.
+    pub fn has_library_body(&self) -> bool {
+        self.unit_count > 0
+    }
+
     /// The designator of each placement of this symbol, see
     /// [`placement_designators`].
     pub fn placement_designators(&self) -> Vec<&str> {
@@ -342,6 +350,8 @@ pub struct ErcContext {
     /// Lets cross-sheet rules count a file once however many parents
     /// reference it.
     pub key: Option<signex_net::SheetKey>,
+    /// The sheet's signal harnesses (#1280).
+    pub harness: ErcHarness,
 }
 
 impl ErcContext {
@@ -493,50 +503,7 @@ impl ErcContext {
         let mut symbols: Vec<ErcSymbol> = snapshot
             .symbols
             .iter()
-            .filter_map(|sym| {
-                let lib_sym = snapshot.resolve_lib_symbol(sym)?;
-                let pins = pin_tips(&lib_sym, sym)
-                    .map(|(lp, world)| ErcPin {
-                        world_pos: Point::new(world.x, world.y),
-                        local_pos: lp.pin.position,
-                        number: if lp.pin.number.is_empty() {
-                            lp.pin.name.clone()
-                        } else {
-                            lp.pin.number.clone()
-                        },
-                        electrical_type: lp.pin.direction,
-                        required: !matches!(
-                            lp.pin.direction,
-                            PinDirection::Unclassified | PinDirection::DoNotConnect
-                        ),
-                        connected: false,
-                    })
-                    .collect();
-
-                Some(ErcSymbol {
-                    uuid: sym.uuid,
-                    reference: sym.reference.clone(),
-                    instance_designators: sym
-                        .valid_instance_entries()
-                        .map(|(_, r)| r.to_string())
-                        .collect(),
-                    lib_id: sym.lib_id.clone(),
-                    unit: sym.unit,
-                    value: signex_types::part_fields::evaluated_value(
-                        &snapshot.symbols,
-                        sym,
-                        &variables,
-                        false,
-                    ),
-                    footprint: sym.footprint.clone(),
-                    on_board: sym.on_board,
-                    unit_count: lib_sym.unit_count(),
-                    position: sym.position,
-                    is_power: sym.is_power,
-                    pins,
-                    attrs: sym.fields.clone(),
-                })
-            })
+            .map(|sym| project_symbol(snapshot, sym, &variables))
             .collect();
 
         // The one shared gate (`signex_net::ConnectedPoints`) — the same
@@ -579,6 +546,7 @@ impl ErcContext {
             nets,
             children,
             key: None,
+            harness: ErcHarness::from_sheet(snapshot),
         }
     }
 }
@@ -586,6 +554,55 @@ impl ErcContext {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/// One placed symbol as the rules read it. A part with no library body keeps
+/// its fields but has no pins and a `unit_count` of 0: neither is known, and
+/// `PartWithoutLibraryBody` reports it.
+fn project_symbol(
+    snapshot: &SchematicSheet,
+    sym: &signex_types::schematic::Symbol,
+    variables: &[&dyn signex_types::variables::Resolver],
+) -> ErcSymbol {
+    let lib_sym = snapshot.resolve_lib_symbol(sym);
+    let lib = lib_sym.as_deref();
+    let pins: Vec<ErcPin> = lib.map_or_else(Vec::new, |lib| {
+        pin_tips(lib, sym)
+            .map(|(lp, world)| ErcPin {
+                world_pos: Point::new(world.x, world.y),
+                local_pos: lp.pin.position,
+                number: if lp.pin.number.is_empty() {
+                    lp.pin.name.clone()
+                } else {
+                    lp.pin.number.clone()
+                },
+                electrical_type: lp.pin.direction,
+                required: !matches!(
+                    lp.pin.direction,
+                    PinDirection::Unclassified | PinDirection::DoNotConnect
+                ),
+                connected: false,
+            })
+            .collect()
+    });
+    ErcSymbol {
+        uuid: sym.uuid,
+        reference: sym.reference.clone(),
+        instance_designators: sym
+            .valid_instance_entries()
+            .map(|(_, r)| r.to_string())
+            .collect(),
+        lib_id: sym.lib_id.clone(),
+        unit: sym.unit,
+        value: signex_types::part_fields::evaluated_value(&snapshot.symbols, sym, variables, false),
+        footprint: sym.footprint.clone(),
+        on_board: sym.on_board,
+        unit_count: lib.map_or(0, |lib| lib.unit_count()),
+        position: sym.position,
+        is_power: sym.is_power,
+        pins,
+        attrs: sym.fields.clone(),
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Net summaries for the DSL

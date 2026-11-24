@@ -34,14 +34,20 @@ uuid = { workspace = true }
 anyhow = { workspace = true }
 signex-widgets = { workspace = true }
 signex-i18n = { workspace = true }
+# The core's notices are catalog keys (`app/core/event`), named without the
+# Fluent stack (scripts/check_core_guard.sh).
+signex-i18n-ids = { workspace = true }
 signex-erc = { workspace = true }
 signex-erc-dsl = { workspace = true }
 pcb-geom = { path = "../pcb-geom" }
 signex-drc = { workspace = true }
 signex-drc-dsl = { workspace = true }
 signex-req = { workspace = true }
+signex-notebook = { workspace = true }
 signex-net = { workspace = true }
 signex-output = { workspace = true }
+# The Gerber Viewer's reader and compare (#2539), UI-free.
+signex-gerber = { workspace = true }
 signex-library = { workspace = true, features = [
     "local-git",
     "database",
@@ -100,7 +106,8 @@ getrandom = "0.4"
 # gating in code paths that regular `cargo build`/`cargo run` never see).
 # The workspace's `resolver = "2"` keeps this feature from leaking into
 # non-test builds of the `signex` binary. See issue #437, hoisted to
-# cover all four resolvers in #440.
+# cover all four resolvers in #440. It also compiles the ADR-0006 test
+# adapter (`test_adapter`) for those binaries.
 test-prefs-redirect = []
 
 [dev-dependencies]
@@ -115,8 +122,8 @@ git2 = { workspace = true }
 url = "2"
 # A headless renderer for laying a widget tree out in a unit test, so text
 # is measured with real fonts (`layout_probe`, #623). Already in the lock
-# file through `iced`'s default `tiny-skia` feature.
-iced_tiny_skia = "0.15.0-dev"
+# file through `iced`'s default `vello-cpu` feature.
+iced_vello_cpu = "0.15.0-dev"
 # The GPU renderer, built headlessly, so a pixel test can run the real
 # `stack!` of the GPU-mounted schematic (`canvas::gpu_mount_tests`, #199).
 iced_wgpu = "0.15.0-dev"

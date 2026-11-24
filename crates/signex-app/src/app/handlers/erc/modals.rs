@@ -10,6 +10,7 @@ use crate::library::messages::LibraryMessage;
 impl Signex {
     pub(crate) fn handle_open_erc_dialog(&mut self) -> Task<Message> {
         self.ui_state.erc_dialog_open = true;
+        self.ui_state.erc_profile_menu_open = false;
         self.interaction_state.context_menu = None;
         let drift = self.check_profile_drift_task();
         let detach = self.handle_detach_modal(super::super::super::state::ModalId::ErcDialog);
@@ -18,6 +19,7 @@ impl Signex {
 
     pub(crate) fn handle_close_erc_dialog(&mut self) -> Task<Message> {
         self.ui_state.erc_dialog_open = false;
+        self.ui_state.erc_profile_menu_open = false;
         self.ui_state.pending_profile_update = None;
         self.ui_state.save_profile_dialog = None;
         self.close_detached_modal(super::super::super::state::ModalId::ErcDialog)
@@ -122,16 +124,8 @@ impl Signex {
             return Task::none();
         }
 
-        // Make the tab active so the duplicated view in the new window
-        // lands on that tab's content. Main window's active_tab is
-        // shared — if the user wants to keep editing a different tab in
-        // main, they can switch after the window opens.
-        if idx != self.document_state.active_tab {
-            self.park_active_schematic_session();
-            self.document_state.active_tab = idx;
-            self.sync_active_tab();
-        }
-
+        // Main stays on the tab it shows. If that is this one,
+        // `UndockedTabOpened` moves it to a docked tab.
         let size = iced::Size::new(1400.0, 900.0);
         let position = self.new_window_position(
             size,
@@ -182,8 +176,10 @@ impl Signex {
     }
 
     /// Remove the floating panel at `idx` and open an OS window that
-    /// renders that panel's content. Closing the OS window re-docks the
-    /// panel to the right column — see `SecondaryWindowClosed` in
+    /// renders that panel's content. Where the dialog windows are borderless
+    /// so is this one, and it draws the Graphite title strip with Dock back
+    /// (mockup row 8, `view/detached_panel.rs`). Closing the OS window re-docks the
+    /// panel in its home region — see `SecondaryWindowClosed` in
     /// dispatch/mod.rs.
     pub(crate) fn handle_detach_floating_panel(&mut self, idx: usize) -> Task<Message> {
         let Some(fp) = self.document_state.dock.floating.get(idx) else {
@@ -201,18 +197,14 @@ impl Signex {
             crate::app::handlers::window_placement::Anchor::SourceCenter,
             iced::window::Position::Default,
         );
-        let (id, open_task) = iced::window::open(iced::window::Settings {
-            size,
-            resizable: true,
-            decorations: true,
-            exit_on_close_request: false,
-            position,
-            ..Default::default()
-        });
+        let borderless = self.dialog_windows_borderless();
+        let (id, open_task) =
+            iced::window::open(detached_panel_window_settings(size, position, borderless));
         self.ui_state.windows.insert(
             id,
             super::super::super::state::WindowKind::DetachedPanel(kind),
         );
+        self.note_dialog_window(id, borderless);
         open_task.map(move |settled_id| {
             Message::Window(WindowMsg::DetachedPanelOpened {
                 kind,
@@ -251,7 +243,11 @@ impl Signex {
             ModalId::EnableVersionControl => Some(Message::EnableVersionControl(
                 EnableVersionControlMsg::Close,
             )),
-            ModalId::GridProperties => Some(Message::GridProperties(GridPropertiesMsg::Close)),
+            // The OS close is the Cancel button: one click closes the
+            // dialog, even with a preview label open.
+            ModalId::GridProperties => {
+                Some(Message::GridProperties(GridPropertiesMsg::CancelPressed))
+            }
             ModalId::SelectionFilterCustom => {
                 Some(Message::SelectionFilter(SelectionFilterMsg::CloseCustom))
             }
@@ -402,32 +398,28 @@ impl Signex {
                 return self
                     .run_in_window_document(window, |app| app.handle_move_selection_apply());
             }
-            self.ui_state.move_selection.open = false;
             crate::diagnostics::log_info(
                 "Move Selection closed: the sheet it was opened on is no longer shown",
             );
-            return Task::none();
+            return self.finish_move_selection();
         }
-        // Classify both axes before acting: a refused axis (`nan` / `inf` /
-        // overflow) must not be read as "0 on that axis" while the other
-        // axis still moves the selection. `move_offset` has already logged
-        // the refusal, naming the axis; the dialog stays open so the user
-        // can fix it.
-        let dx = move_offset("Move Selection X", &self.ui_state.move_selection.dx);
-        let dy = move_offset("Move Selection Y", &self.ui_state.move_selection.dy);
+        // Classify both axes before acting: a refused axis must not be read
+        // as "0 on that axis" while the other still moves the selection.
+        // The dialog stays open so the user can fix the named box.
+        let unit = self.ui_state.unit;
+        let dx = move_offset("Move Selection X", &self.ui_state.move_selection.dx, unit);
+        let dy = move_offset("Move Selection Y", &self.ui_state.move_selection.dy, unit);
         let (Some(dx), Some(dy)) = (dx, dy) else {
             return Task::none();
         };
         if dx == 0.0 && dy == 0.0 {
-            self.ui_state.move_selection.open = false;
-            return Task::none();
+            return self.finish_move_selection();
         }
         let items = self.interaction_state.active_canvas_mut().selected.clone();
         if items.is_empty() {
-            self.ui_state.move_selection.open = false;
-            return Task::none();
+            return self.finish_move_selection();
         }
-        self.ui_state.move_selection.open = false;
+        let closed = self.finish_move_selection();
         // Through the mutation gateway, not `engine.execute` directly: the
         // gateway consumes the `CommandResult` this used to discard, so the
         // sheet is marked dirty — without it the quit guard sees a
@@ -438,29 +430,31 @@ impl Signex {
             signex_engine::Command::MoveSelection {
                 items,
                 dx,
-                dy,
+                dy: crate::app::handlers::editing_commands::move_selection_dialog::stored_dy(dy),
                 keep_wires: self.ui_state.move_keeps_wires,
                 wiring: signex_types::corner::DragWiringMode::Auto,
             },
             true,
             true,
         );
-        Task::none()
+        closed
+    }
+
+    /// The dialog is done: its state and its own window both go (#2766).
+    fn finish_move_selection(&mut self) -> Task<Message> {
+        self.ui_state.move_selection.open = false;
+        self.close_detached_modal(super::super::super::state::ModalId::MoveSelection)
     }
 }
 
-/// A Move Selection offset typed in the dialog. `None` means refused
-/// (`nan` / `inf` / overflow: an `inf` offset would send every selected item
-/// to infinity) and the whole apply is abandoned. Text that is not a number
-/// at all (empty, `-`) is the user mid-edit and moves by nothing. `field`
-/// names the box in the refusal line.
-fn move_offset(field: &str, text: &str) -> Option<f64> {
-    use crate::numeric_field::{FieldNumber, parse_named_field_number};
-    match parse_named_field_number(field, text) {
-        FieldNumber::Number(v) => Some(v),
-        FieldNumber::NotANumber => Some(0.0),
-        FieldNumber::Refused => None,
-    }
+/// A Move Selection offset in mm, read as the preview reads it
+/// (`move_selection_dialog::offset_mm`). `None` means refused, and the
+/// refusal is logged naming the box (`field`).
+fn move_offset(field: &str, text: &str, unit: signex_types::coord::Unit) -> Option<f64> {
+    use crate::app::handlers::editing_commands::move_selection_dialog::offset_mm;
+    offset_mm(text, unit)
+        .map_err(|reason| crate::diagnostics::log_warning(format!("{field} refused: {reason}")))
+        .ok()
 }
 
 /// The initial window size of `modal`: its in-window dimensions, so the user
@@ -469,43 +463,55 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
     match modal {
         ModalId::AnnotateDialog => iced::Size::new(1000.0, 680.0),
         ModalId::ErcDialog => iced::Size::new(1000.0, 600.0),
-        ModalId::AnnotateResetConfirm => iced::Size::new(440.0, 191.0),
+        ModalId::AnnotateResetConfirm => iced::Size::new(440.0, 261.0),
         ModalId::ReprefixConfirm => iced::Size::new(560.0, 500.0),
-        ModalId::MoveSelection => iced::Size::new(420.0, 240.0),
-        ModalId::NetColorPalette => iced::Size::new(520.0, 480.0),
+        // Content-fit (#66, #71): heights from the type scale.
+        ModalId::MoveSelection => iced::Size::new(
+            360.0,
+            crate::app::handlers::editing_commands::move_selection_dialog::window_height(),
+        ),
+        ModalId::NetColorPalette => iced::Size::new(
+            360.0,
+            crate::app::handlers::editing_commands::net_color_palette::palette_window_height(0),
+        ),
         ModalId::ParameterManager => iced::Size::new(900.0, 560.0),
         ModalId::Preferences => iced::Size::new(900.0, 620.0),
         ModalId::NewProject => iced::Size::new(860.0, 700.0),
         ModalId::FindReplace => iced::Size::new(440.0, 320.0),
-        ModalId::RenameDialog => iced::Size::new(420.0, 151.0),
+        ModalId::RenameDialog => iced::Size::new(460.0, 151.0),
         ModalId::RemoveDialog => iced::Size::new(520.0, 221.0),
         ModalId::PrintPreview => iced::Size::new(1000.0, 700.0),
         ModalId::BomPreview => iced::Size::new(1080.0, 700.0),
-        ModalId::EnableVersionControl => iced::Size::new(560.0, 480.0),
+        // The height follows the file list (`modal_sizing`).
+        ModalId::EnableVersionControl => iced::Size::new(580.0, 480.0),
         ModalId::GridProperties => iced::Size::new(480.0, 281.0),
         ModalId::SelectionFilterCustom => iced::Size::new(440.0, 323.0),
-        ModalId::About => iced::Size::new(400.0, 200.0),
-        ModalId::KeyboardShortcuts => iced::Size::new(520.0, 600.0),
-        ModalId::PassiveCalculator => iced::Size::new(640.0, 480.0),
-        ModalId::FirstRunTour => iced::Size::new(360.0, 170.0),
-        ModalId::CreateChildSheet => iced::Size::new(560.0, 206.0),
-        ModalId::ErrorNotice => iced::Size::new(520.0, 260.0),
+        ModalId::About => iced::Size::new(400.0, 272.0),
+        ModalId::KeyboardShortcuts => iced::Size::new(720.0, 560.0),
+        // The 680 px card less its header (the OS title bar names it).
+        ModalId::PassiveCalculator => iced::Size::new(680.0, 556.0),
+        ModalId::FirstRunTour => iced::Size::new(320.0, 226.0),
+        ModalId::CreateChildSheet => iced::Size::new(520.0, 206.0),
+        ModalId::ErrorNotice => iced::Size::new(480.0, 260.0),
         ModalId::NetlistIncompletePrompt => iced::Size::new(580.0, 360.0),
-        ModalId::AutosaveRecovery => iced::Size::new(540.0, 187.0),
+        // The two version rows and the notes; tall enough for the
+        // saved-file-newer case, which adds the Restore caption (#2262).
+        ModalId::AutosaveRecovery => iced::Size::new(540.0, 360.0),
         ModalId::ProjectCloseConfirm => iced::Size::new(540.0, 310.0),
-        ModalId::AppQuitConfirm => iced::Size::new(540.0, 310.0),
+        ModalId::AppQuitConfirm => iced::Size::new(500.0, 310.0),
         ModalId::LibraryPicker => iced::Size::new(560.0, 540.0),
-        ModalId::LibraryEditRow => iced::Size::new(640.0, 600.0),
+        ModalId::LibraryEditRow => iced::Size::new(860.0, 640.0),
         ModalId::LibraryPrimitivePicker => iced::Size::new(760.0, 600.0),
         ModalId::LibraryDocumentOptions => iced::Size::new(580.0, 360.0),
-        ModalId::LibraryCreateOptions => iced::Size::new(520.0, 310.0),
-        ModalId::LibraryStockCopy => iced::Size::new(520.0, 380.0),
-        ModalId::LibraryUpdates => iced::Size::new(680.0, 460.0),
-        ModalId::LibraryCloseConfirm => iced::Size::new(560.0, 234.0),
+        ModalId::LibraryCreateOptions => iced::Size::new(600.0, 310.0),
+        ModalId::LibraryStockCopy => iced::Size::new(520.0, 301.0),
+        ModalId::LibraryUpdates => iced::Size::new(800.0, 500.0),
+        ModalId::LibraryCloseConfirm => iced::Size::new(500.0, 234.0),
         ModalId::LibraryDeleteConfirm => iced::Size::new(520.0, 100.0),
-        ModalId::LibraryRecovery => iced::Size::new(600.0, 280.0),
-        // Height follows the type scale (authored at the 11 px base).
-        ModalId::NetColorCustom => iced::Size::new(600.0, crate::styles::chrome_px(390.0)),
+        ModalId::LibraryRecovery => iced::Size::new(560.0, 194.0),
+        // Height follows the type scale (authored at the 11 px base). The
+        // 8 x 6 quick pick (#72) leaves the right column the tallest.
+        ModalId::NetColorCustom => iced::Size::new(600.0, crate::styles::chrome_px(300.0)),
     }
 }
 
@@ -606,23 +612,55 @@ pub(crate) fn detached_modal_settings(size: iced::Size) -> iced::window::Setting
     }
 }
 
+/// Window settings for a detached panel at `position`: resizable, and
+/// without the OS decorations when `borderless` (the window then draws its
+/// own title strip, mockup row 8). The close request reaches `WindowCloseRequested`.
+pub(crate) fn detached_panel_window_settings(
+    size: iced::Size,
+    position: iced::window::Position,
+    borderless: bool,
+) -> iced::window::Settings {
+    iced::window::Settings {
+        size,
+        resizable: true,
+        decorations: !borderless,
+        exit_on_close_request: false,
+        position,
+        ..Default::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{detached_modal_settings, move_offset};
+    use super::{detached_modal_settings, detached_panel_window_settings, move_offset};
+    use signex_types::coord::Unit::Mm;
+
+    /// Mockup row 8: a detached panel window drops the OS decorations where it draws
+    /// the Graphite title strip, and keeps them where the OS draws the
+    /// controls.
+    #[test]
+    fn a_detached_panel_window_is_borderless_like_the_dialogs() {
+        let size = iced::Size::new(420.0, 360.0);
+        let at = iced::window::Position::Default;
+        let s = detached_panel_window_settings(size, at, true);
+        assert!(!s.decorations && s.resizable && !s.exit_on_close_request);
+        assert_eq!(s.size, size);
+        assert!(detached_panel_window_settings(size, at, false).decorations);
+    }
 
     /// #828 -- `inf` / `nan` / an overflow must not become a move offset.
     #[test]
     fn move_offset_refuses_non_finite_text() {
         for bad in ["nan", "NaN", "inf", "-inf", "1e999", "-1e999"] {
-            assert_eq!(move_offset("Move Selection X", bad), None, "{bad:?}");
+            assert_eq!(move_offset("Move Selection X", bad, Mm), None, "{bad:?}");
         }
     }
 
     #[test]
     fn move_offset_reads_ordinary_text() {
-        assert_eq!(move_offset("Move Selection X", " 2.5 "), Some(2.5));
-        assert_eq!(move_offset("Move Selection X", "-1"), Some(-1.0));
-        assert_eq!(move_offset("Move Selection X", ""), Some(0.0));
+        assert_eq!(move_offset("Move Selection X", " 2.5 ", Mm), Some(2.5));
+        assert_eq!(move_offset("Move Selection X", "-1", Mm), Some(-1.0));
+        assert_eq!(move_offset("Move Selection X", "", Mm), Some(0.0));
     }
 
     #[test]

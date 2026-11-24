@@ -17,6 +17,15 @@ impl ContentHash {
     pub fn of(bytes: &[u8]) -> Self {
         Self(Sha256::digest(bytes).into())
     }
+
+    /// The digest as a sheet read carries it across the crate boundary.
+    pub fn to_raw(self) -> [u8; 32] {
+        self.0
+    }
+
+    pub fn from_raw(raw: [u8; 32]) -> Self {
+        Self(raw)
+    }
 }
 
 /// What one read of a document's file learned: its fingerprint, and the file

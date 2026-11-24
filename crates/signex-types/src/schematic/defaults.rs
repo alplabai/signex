@@ -97,11 +97,17 @@ impl SchematicDefaults {
         Self::resolve(own_mm, fallback)
     }
 
-    /// The width a bus draws and exports at. A bus stores no width of its own
-    /// and has no net class, so it is the project default, else the built-in.
+    /// The width of a bus with none of its own: the project default, else the
+    /// built-in. A bus has no net class.
     #[must_use]
     pub fn bus_mm(&self) -> f64 {
         Self::resolve(self.bus_width_mm, SCHEMATIC_RENDER_BUS_STROKE_MM)
+    }
+
+    /// The width a bus storing `own_mm` draws and exports at.
+    #[must_use]
+    pub fn bus_line_mm(&self, own_mm: f64) -> f64 {
+        Self::resolve(own_mm, self.bus_mm())
     }
 
     /// The width a symbol graphic or pin stored as `width_mm` draws at.
@@ -116,16 +122,16 @@ impl SchematicDefaults {
         Self::resolve(width_mm, self.shape_stroke_mm)
     }
 
-    /// The radius a junction stored with `diameter_mm` draws and exports at,
-    /// never under [`SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM`].
+    /// The radius a junction stored with `diameter_mm` draws and exports at:
+    /// a stored size never under [`SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM`];
+    /// an unset one at the project's default, whose range is its own limit.
     #[must_use]
     pub fn junction_radius_mm(&self, diameter_mm: f64) -> f64 {
-        let diameter = if is_set_width(diameter_mm) {
-            diameter_mm
+        if is_set_width(diameter_mm) {
+            (diameter_mm * 0.5).max(SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM)
         } else {
-            self.junction_diameter_mm
-        };
-        (diameter * 0.5).max(SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM)
+            self.junction_diameter_mm * 0.5
+        }
     }
 
     /// The symbol's library stroke width, which its pins draw at: the most

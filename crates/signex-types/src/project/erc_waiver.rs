@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use super::UnknownJson;
 
 /// One accepted ERC finding. Every field loads with a default so a partial
-/// or hand-edited entry still opens; one without a reason or author is kept
-/// on disk but never honoured.
+/// or hand-edited entry still opens; one without a reason is kept on disk but
+/// never honoured.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ErcWaiver {
     /// Stable rule id (`builtin::unused_pin`, `user::my_rule`).
@@ -25,7 +25,7 @@ pub struct ErcWaiver {
     /// Why the finding is acceptable. Required.
     #[serde(default)]
     pub reason: String,
-    /// Who accepted it. Required.
+    /// Who accepted it: the git identity, empty when git has none.
     #[serde(default)]
     pub author: String,
     /// When, as `YYYY-MM-DD`.
@@ -42,13 +42,12 @@ pub struct ErcWaiver {
 
 impl ErcWaiver {
     /// Whether the waiver may hide a finding: it names a rule and objects
-    /// and carries a non-blank reason and author.
+    /// and carries a non-blank reason. The author may be empty.
     pub fn is_complete(&self) -> bool {
         !self.rule_id.is_empty()
             && !self.objects.is_empty()
             && !self.fingerprint.is_empty()
             && !self.reason.trim().is_empty()
-            && !self.author.trim().is_empty()
     }
 
     /// Same rule and same objects as `other`: the two waive one finding.

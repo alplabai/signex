@@ -3,6 +3,7 @@
 //! person's Ctrl+Z takes and `revert` can take back.
 
 use serde_json::{Value, json};
+use signex_i18n::RenderTranslatable;
 
 use super::{app_at_work, call, call_as, path};
 use crate::app::Signex;
@@ -279,7 +280,7 @@ fn persons_refusal(app: &mut Signex, name: &str, operands: &[&str]) -> String {
     texts.push(&document);
     let args = crate::app::command::CommandArgs::parse_operands(&id, &texts).unwrap();
     match app.run_operands_settled(&id, &args).0 {
-        crate::app::command::CommandOutcome::Disabled { reason } => reason,
+        crate::app::command::CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("{name} was not refused: {other:?}"),
     }
 }

@@ -73,7 +73,7 @@ fn read_library(lib: &MountedLibrary) -> Result<HashMap<Uuid, RowFacts>, String>
     use signex_library::LibraryAdapter as _;
     use signex_library::adapters::local_git::LocalGitAdapter;
 
-    let adapter = LocalGitAdapter::open(&lib.path).map_err(|e| {
+    let adapter = LocalGitAdapter::open_to_read(&lib.path).map_err(|e| {
         format!(
             "Re-prefix: could not open library '{}' ({}): {e}",
             lib.display_name,

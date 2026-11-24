@@ -247,7 +247,7 @@ pub fn pin_junction_repairs(sheet: &SchematicSheet, ids: &mut dyn IdSource) -> V
 
 /// An automatic pin dot at `position`, its id from the caller's `ids`: the
 /// engine mints none (#2429).
-fn pin_dot(position: Point, ids: &mut dyn IdSource) -> Junction {
+pub(crate) fn pin_dot(position: Point, ids: &mut dyn IdSource) -> Junction {
     Junction {
         uuid: ids.next_id(),
         position,

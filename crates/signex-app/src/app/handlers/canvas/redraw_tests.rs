@@ -34,6 +34,7 @@ fn empty_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         free: Default::default(),
         options: Default::default(),
         unknown: Default::default(),

@@ -1,8 +1,18 @@
 //! The board under a board sketch (#2234): what the sketch editor draws
-//! beneath the sketch so the user draws against the real board. Read once
-//! when sketch mode starts; it is a picture, never edited.
+//! beneath the sketch so the user draws against the real board, and what
+//! its snaps reach (#2518). Read once when sketch mode starts; it is a
+//! picture, never edited.
 
-use signex_types::pcb::PcbBoard;
+use std::borrow::Cow;
+
+use pcb_geom::{GraphicShape, PointNm};
+use signex_sketch::constraint::{ConstraintKind, DimTarget};
+use signex_sketch::mirrored_angle::{mirror, retypes_shown};
+use signex_sketch::solver::residual::ResolvedParams;
+use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point};
+use signex_types::pcb_origin::BoardOrigin;
+
+use super::{GuideAxis, PlacementInputKind};
 
 /// A track as drawn under the sketch, in board mm.
 #[derive(Debug, Clone, PartialEq)]
@@ -10,6 +20,42 @@ pub struct BackdropTrack {
     pub from: (f64, f64),
     pub to: (f64, f64),
     pub width: f64,
+}
+
+/// A placed pad under the sketch, in board mm.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BackdropPad {
+    pub centre: (f64, f64),
+    /// Width and height in the pad's own axes.
+    pub size: (f64, f64),
+    /// The pad's turn on the board, degrees counter-clockwise.
+    pub rotation_deg: f64,
+    /// Drawn as a disc rather than a turned rectangle.
+    pub round: bool,
+    /// Which copper it is, for its colour.
+    pub copper: PadCopper,
+    /// `J1-1` for a pad of J1, the pad number alone for a free pad.
+    pub designator: String,
+}
+
+/// The copper a backdrop pad is drawn in: its side's layer, or the
+/// Multi-Layer colour for a through-hole pad, as the PCB canvas does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PadCopper {
+    Top,
+    Bottom,
+    Through,
+}
+
+/// One courtyard drawing of a placed component, in board mm.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BackdropCourtyard {
+    /// The component's designator.
+    pub reference: String,
+    /// A line's two ends, or a rectangle's or polygon's corners.
+    pub points: Vec<(f64, f64)>,
+    /// The last point joins the first (a rectangle or polygon).
+    pub closed: bool,
 }
 
 /// The parts of a board drawn under its sketch, in board mm.
@@ -20,11 +66,158 @@ pub struct BoardBackdrop {
     pub tracks: Vec<BackdropTrack>,
     /// Vias as (centre, diameter).
     pub vias: Vec<((f64, f64), f64)>,
+    /// Placed pads with copper: every pad but a non-plated one.
+    pub pads: Vec<BackdropPad>,
+    /// Drilled pads, plated and not, as (centre, drill diameter).
+    pub holes: Vec<((f64, f64), f64)>,
+    /// Component courtyards drawn as lines, rectangles or polygons; a
+    /// courtyard arc or circle is not carried.
+    pub courtyards: Vec<BackdropCourtyard>,
+    /// Where the board's coordinates count from, kept with the board.
+    pub origin: BoardOrigin,
+    /// The board view hides its origin marker.
+    pub hides_origin_marker: bool,
+}
+
+impl super::FootprintEditorState {
+    /// Where the origin marker goes, in model mm: the board's origin on a
+    /// board sketch (`None` while its view hides it), else the footprint's
+    /// (0, 0).
+    pub fn origin_marker_mm(&self) -> Option<(f64, f64)> {
+        match self.board_backdrop.as_deref() {
+            Some(board) if board.hides_origin_marker => None,
+            Some(board) => Some((board.origin.at.x, board.origin.at.y)),
+            None => Some((0.0, 0.0)),
+        }
+    }
+
+    /// A model point as the user reads it: on a board sketch from the board
+    /// origin with Y up, as the PCB view shows it; a footprint's as stored.
+    pub fn shown_mm(&self, [x, y]: [f64; 2]) -> [f64; 2] {
+        match self.board_backdrop.as_deref() {
+            Some(board) => {
+                let shown = board.origin.to_user(Point::new(x, y));
+                [shown.x, shown.y]
+            }
+            None => [x, y],
+        }
+    }
+
+    /// The model point a board sketch's grid steps from: the board origin.
+    /// `None` on a footprint, whose grid steps from (0, 0).
+    pub fn grid_origin_mm(&self) -> Option<(f64, f64)> {
+        let board = self.board_backdrop.as_deref()?;
+        Some((board.origin.at.x, board.origin.at.y))
+    }
+
+    /// A guide's stored position as the user reads it.
+    pub fn guide_shown_mm(&self, axis: GuideAxis, position_mm: f64) -> f64 {
+        match (self.board_backdrop.as_deref(), axis) {
+            (Some(board), GuideAxis::Vertical) => board.origin.user_x(position_mm),
+            (Some(board), GuideAxis::Horizontal) => board.origin.user_y(position_mm),
+            (None, _) => position_mm,
+        }
+    }
+
+    /// The position to store for a guide the user placed at `shown_mm`.
+    pub fn guide_model_mm(&self, axis: GuideAxis, shown_mm: f64) -> f64 {
+        match (self.board_backdrop.as_deref(), axis) {
+            (Some(board), GuideAxis::Vertical) => board.origin.board_x(shown_mm),
+            (Some(board), GuideAxis::Horizontal) => board.origin.board_y(shown_mm),
+            (None, _) => shown_mm,
+        }
+    }
+
+    /// A model angle in degrees as the user reads it. The model's y runs
+    /// down the screen, so a board's Y-up sense is its negative. The mirror
+    /// is its own inverse, so it also takes a typed angle to the model.
+    pub fn angle_deg_mirrored(&self, deg: f64) -> f64 {
+        if self.board_backdrop.is_some() {
+            0.0 - deg
+        } else {
+            deg
+        }
+    }
+
+    /// `kind` as the user reads it: a board angle through the mirror.
+    pub fn shown_constraint<'k>(&self, kind: &'k ConstraintKind) -> Cow<'k, ConstraintKind> {
+        let ConstraintKind::Angle { l1, l2, target } = kind else {
+            return Cow::Borrowed(kind);
+        };
+        if self.board_backdrop.is_none() {
+            return Cow::Borrowed(kind);
+        }
+        Cow::Owned(ConstraintKind::Angle {
+            l1: *l1,
+            l2: *l2,
+            target: mirror(target),
+        })
+    }
+
+    /// The target to store for `kind` when the user entered `shown`: a board
+    /// angle through the mirror.
+    pub fn stored_target(&self, kind: &ConstraintKind, shown: DimTarget) -> DimTarget {
+        if self.board_backdrop.is_none() || !matches!(kind, ConstraintKind::Angle { .. }) {
+            return shown;
+        }
+        mirror(&shown)
+    }
+
+    /// Whether `typed` on a board angle is what it already shows, so
+    /// committing it is no edit. Always false on a footprint.
+    pub fn retypes_shown_angle(
+        &self,
+        kind: &ConstraintKind,
+        typed: &DimTarget,
+        params: &ResolvedParams,
+    ) -> bool {
+        let ConstraintKind::Angle { target, .. } = kind else {
+            return false;
+        };
+        self.board_backdrop.is_some() && retypes_shown(&mirror(target), typed, params)
+    }
+
+    /// The turn of the arc the Arc tool commits now. A positive sweep typed
+    /// on a board runs counter-clockwise on screen, clockwise in the model.
+    pub fn arc_tool_sweeps_ccw(&self) -> bool {
+        let typed = self
+            .placement_input
+            .as_ref()
+            .filter(|input| input.kind == PlacementInputKind::ArcSweep)
+            .and_then(|input| crate::numeric_field::parse_field_f64(&input.buffer));
+        !(self.board_backdrop.is_some() && typed.is_some_and(|deg| deg > 0.0))
+    }
+}
+
+/// Where one pad sits, before its copper and drill are read.
+struct PlacedPad {
+    centre: (f64, f64),
+    rotation_deg: f64,
+    designator: String,
+    /// The pad sits on the bottom side.
+    bottom: bool,
+}
+
+/// Whether a native layer token names a bottom-side layer.
+fn on_bottom(layer: &str) -> bool {
+    signex_types::format::parse_pcb_layer(layer).and_then(|l| l.side())
+        == Some(signex_types::pcb_layer::BoardSide::Bottom)
+}
+
+fn mm(p: PointNm) -> (f64, f64) {
+    let p = p.to_mm();
+    (p.x, p.y)
+}
+
+/// The same point for the badge's name lookup: the snap hands back the
+/// feature's own coordinates, so only rounding separates them.
+fn same_point(a: (f64, f64), b: (f64, f64)) -> bool {
+    (a.0 - b.0).abs() < 1e-9 && (a.1 - b.1).abs() < 1e-9
 }
 
 impl BoardBackdrop {
     pub fn from_board(board: &PcbBoard) -> Self {
-        Self {
+        let mut backdrop = Self {
             outline: board.outline.iter().map(|p| (p.x, p.y)).collect(),
             tracks: board
                 .segments
@@ -40,7 +233,102 @@ impl BoardBackdrop {
                 .iter()
                 .map(|v| ((v.position.x, v.position.y), v.diameter))
                 .collect(),
+            origin: board.options.origin,
+            ..Self::default()
+        };
+        for footprint in &board.footprints {
+            backdrop.add_footprint(footprint);
         }
+        for pad in &board.free.pads {
+            let placed = PlacedPad {
+                centre: (pad.position.x, pad.position.y),
+                rotation_deg: pad.rotation,
+                designator: pad.number.clone(),
+                bottom: pad.layers.first().is_some_and(|l| on_bottom(l)),
+            };
+            backdrop.add_pad(pad, placed);
+        }
+        backdrop
+    }
+
+    /// A component's pads and courtyard. A pad or drawing whose placement
+    /// does not compute (a non-finite position) is left out of the picture.
+    fn add_footprint(&mut self, footprint: &Footprint) {
+        for pad in &footprint.pads {
+            let (Ok(centre), Ok(rotation_deg)) = (
+                pcb_geom::pad_world_center(footprint, pad),
+                pcb_geom::pad_world_rotation_deg(footprint, pad),
+            ) else {
+                continue;
+            };
+            let designator = match (footprint.reference.is_empty(), pad.number.is_empty()) {
+                (false, false) => format!("{}-{}", footprint.reference, pad.number),
+                (false, true) => footprint.reference.clone(),
+                _ => pad.number.clone(),
+            };
+            let placed = PlacedPad {
+                centre: mm(centre),
+                rotation_deg,
+                designator,
+                bottom: on_bottom(&footprint.layer),
+            };
+            self.add_pad(pad, placed);
+        }
+        for graphic in footprint
+            .graphics
+            .iter()
+            .filter(|g| pcb_geom::is_courtyard(g))
+        {
+            let Ok(Some(placed)) = pcb_geom::footprint_graphic_placement(footprint, graphic) else {
+                continue;
+            };
+            let (points, closed) = match placed.shape {
+                GraphicShape::Line { a, b } => (vec![mm(a), mm(b)], false),
+                GraphicShape::Polygon { points } => (points.into_iter().map(mm).collect(), true),
+                _ => continue,
+            };
+            self.courtyards.push(BackdropCourtyard {
+                reference: footprint.reference.clone(),
+                points,
+                closed,
+            });
+        }
+    }
+
+    /// One pad: its drill, and its copper unless it is non-plated.
+    fn add_pad(&mut self, pad: &Pad, placed: PlacedPad) {
+        let drilled = matches!(pad.pad_type, PadType::Thru | PadType::NpThru);
+        if drilled && let Some(drill) = pad.drill.as_ref().filter(|d| d.diameter > 0.0) {
+            self.holes.push((placed.centre, drill.diameter));
+        }
+        if pad.pad_type == PadType::NpThru {
+            return;
+        }
+        let copper = match (pad.pad_type, placed.bottom) {
+            (PadType::Thru, _) => PadCopper::Through,
+            (_, true) => PadCopper::Bottom,
+            (_, false) => PadCopper::Top,
+        };
+        self.pads.push(BackdropPad {
+            centre: placed.centre,
+            size: (pad.size.x, pad.size.y),
+            rotation_deg: placed.rotation_deg,
+            round: pad.shape == PadShape::Circle,
+            copper,
+            designator: placed.designator,
+        });
+    }
+
+    /// The pad whose centre is `pos`, for the snap badge's name.
+    pub fn pad_at(&self, pos: (f64, f64)) -> Option<&BackdropPad> {
+        self.pads.iter().find(|p| same_point(p.centre, pos))
+    }
+
+    /// The courtyard with a corner at `pos`, for the snap badge's name.
+    pub fn courtyard_at(&self, pos: (f64, f64)) -> Option<&BackdropCourtyard> {
+        self.courtyards
+            .iter()
+            .find(|c| c.points.iter().any(|&p| same_point(p, pos)))
     }
 
     /// Width and height of the outline's extent in mm, or `None` without
@@ -71,6 +359,12 @@ impl BoardBackdrop {
             .copied()
             .chain(self.tracks.iter().flat_map(|t| [t.from, t.to]))
             .chain(self.vias.iter().map(|v| v.0))
+            .chain(self.pads.iter().map(|p| p.centre))
+            .chain(
+                self.courtyards
+                    .iter()
+                    .flat_map(|c| c.points.iter().copied()),
+            )
             .filter(|p| p.0.is_finite() && p.1.is_finite());
         points.fold(None, |bbox, (x, y)| {
             Some(match bbox {

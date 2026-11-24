@@ -80,8 +80,13 @@ fn refs_of(sheet: &SchematicSheet) -> Vec<String> {
     sheet.symbols.iter().map(|s| s.reference.clone()).collect()
 }
 
-/// `[a_page, b_root, c_child, d_cached]`, open sheets from their engines and
-/// the others from disk.
+/// The sheet a run parked at `path`: nothing is on disk until a save (#2760).
+fn parked_sheet(app: &Signex, path: &Path) -> SchematicSheet {
+    app.document_state.engines[path].document().clone()
+}
+
+/// `[a_page, b_root, c_child, d_cached]`, sheets a run changed from their
+/// engines and the others from disk.
 fn all_refs(app: &Signex, dir: &Path) -> [Vec<String>; 4] {
     let name = ["a_page", "b_root", "c_child", "d_cached"];
     name.map(|n| {
@@ -247,8 +252,7 @@ fn a_child_placed_twice_gets_its_own_designators_per_placement_and_exports() {
     let (mut app, dir, [a, b]) = project_with_a_child_placed_twice();
     let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
     settle_task(&mut app, task);
-    let text = std::fs::read_to_string(dir.join("m_child.snxsch")).expect("child on disk");
-    let child = SnxSchematic::parse(&text).expect("parse").sheet;
+    let child = parked_sheet(&app, &dir.join("m_child.snxsch"));
     let root = app.document_state.engines[&dir.join("b_root.snxsch")]
         .document()
         .clone();
@@ -283,22 +287,46 @@ fn a_child_placed_twice_gets_its_own_designators_per_placement_and_exports() {
     );
 }
 
+/// #2740: the channels of a repeat are one logical sheet. Annotate numbers
+/// it once and writes nothing under a compiled channel.
+#[test]
+fn a_repeated_sheet_is_numbered_once_with_no_instance_entries() {
+    let dir = std::env::temp_dir().join(format!("signex-annotate-repeat-{}", Uuid::now_v7()));
+    std::fs::create_dir_all(&dir).expect("tempdir");
+    write(&dir, "m_child.snxsch", sheet(&[], &[("R?", 1)]));
+    let mut app = app_workspace(&dir.to_string_lossy(), &["b_root.snxsch"]);
+    let mut root = sheet(&["m_child.snxsch"], &[]);
+    root.child_sheets[0].uuid = Uuid::from_u128(1);
+    root.child_sheets[0].name = "Repeat(CH, 1, 3)".to_string();
+    let root_path = dir.join("b_root.snxsch");
+    open_with(&mut app.document_state, &root_path, root);
+    app.document_state.active_path = Some(root_path);
+
+    let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+    settle_task(&mut app, task);
+
+    let child = parked_sheet(&app, &dir.join("m_child.snxsch"));
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(refs_of(&child), ["R1"]);
+    assert!(child.symbols[0].instances.is_empty());
+}
+
 #[test]
 fn a_part_added_later_to_a_child_placed_twice_is_numbered_per_placement() {
     let (mut app, dir, [a, b]) = project_with_a_child_placed_twice();
     let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
     settle_task(&mut app, task);
     let child_path = dir.join("m_child.snxsch");
-    let mut child = SnxSchematic::parse(&std::fs::read_to_string(&child_path).expect("child"))
-        .expect("parse")
-        .sheet;
-    child.symbols.push(symbol("Q?", 1, 100.0));
-    write(&dir, "m_child.snxsch", child);
+    let mut document = parked_sheet(&app, &child_path);
+    document.symbols.push(symbol("Q?", 1, 100.0));
+    (app.document_state.engines.get_mut(&child_path))
+        .expect("parked child")
+        .execute(signex_engine::Command::ReplaceDocument { document })
+        .expect("add the part");
 
     let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
     settle_task(&mut app, task);
-    let text = std::fs::read_to_string(&child_path).expect("child on disk");
-    let child = SnxSchematic::parse(&text).expect("parse").sheet;
+    let child = parked_sheet(&app, &child_path);
     std::fs::remove_dir_all(&dir).ok();
 
     let (new_a, new_b) = (
@@ -330,10 +358,8 @@ fn the_preview_numbers_a_child_placed_twice_as_the_run_applies_it() {
 
     let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
     settle_task(&mut app, task);
-    let text = std::fs::read_to_string(dir.join("m_child.snxsch")).expect("child on disk");
-    let child = SnxSchematic::parse(&text).expect("parse").sheet;
-    let text = std::fs::read_to_string(dir.join("z_other.snxsch")).expect("other on disk");
-    let other = SnxSchematic::parse(&text).expect("parse").sheet;
+    let child = parked_sheet(&app, &dir.join("m_child.snxsch"));
+    let other = parked_sheet(&app, &dir.join("z_other.snxsch"));
     std::fs::remove_dir_all(&dir).ok();
 
     let applied = [designators_at(&child, a), designators_at(&child, b)].concat();
@@ -412,8 +438,7 @@ fn reset_duplicates_resets_a_child_placed_twice_per_placement() {
     let (mut app, dir, _) = placed_twice(&[("Q1", 1)], child);
     let task = app.handle_reset_duplicate_designators();
     settle_task(&mut app, task);
-    let text = std::fs::read_to_string(dir.join("m_child.snxsch")).expect("child on disk");
-    let child = SnxSchematic::parse(&text).expect("parse").sheet;
+    let child = parked_sheet(&app, &dir.join("m_child.snxsch"));
     let root = refs_of(app.document_state.engines[&dir.join("b_root.snxsch")].document());
     std::fs::remove_dir_all(&dir).ok();
     let symbol = &child.symbols[0];
@@ -472,8 +497,7 @@ fn a_child_left_with_one_placement_is_numbered_where_it_resolves() {
     let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
     settle_task(&mut app, task);
     let root_refs = refs_of(app.document_state.engines[&root_path].document());
-    let text = std::fs::read_to_string(dir.join("m_child.snxsch")).expect("child on disk");
-    let child = SnxSchematic::parse(&text).expect("parse").sheet;
+    let child = parked_sheet(&app, &dir.join("m_child.snxsch"));
     std::fs::remove_dir_all(&dir).ok();
     let at_b = designators_at(&child, b);
     assert!(

@@ -106,7 +106,7 @@ fn describe(change: &EcoChange) -> String {
     }
 }
 
-fn blocked_text(why: &EcoBlock) -> String {
+pub(super) fn blocked_text(why: &EcoBlock) -> String {
     match why {
         EcoBlock::MissingFootprint(e) => format!("no footprint: {e}"),
         EcoBlock::NeedsAnnotation => "not annotated; run Annotate".into(),
@@ -119,7 +119,7 @@ fn blocked_text(why: &EcoBlock) -> String {
     }
 }
 
-fn note_text(note: &EcoNote) -> String {
+pub(super) fn note_text(note: &EcoNote) -> String {
     match note {
         EcoNote::UnreadableSheet(path) => format!(
             "a sheet could not be read ({}); nothing linked under it is removed",

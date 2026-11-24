@@ -87,6 +87,12 @@ pub enum EditError {
     },
     /// The rewritten rule would not compile; what the compiler said.
     Invalid(Vec<String>),
+    /// A grid cell would not show the written value: rule `by` still
+    /// governs it (`None`: `rule` is off).
+    Overruled {
+        rule: String,
+        by: Option<String>,
+    },
 }
 
 impl fmt::Display for EditError {
@@ -105,6 +111,15 @@ impl fmt::Display for EditError {
             EditError::NameTaken(name) => write!(f, "a rule called '{name}' already exists"),
             EditError::BadValue { field, reason } => write!(f, "{field}: {reason}"),
             EditError::Invalid(said) => write!(f, "the rule would not apply: {}", said.join("; ")),
+            EditError::Overruled { rule, by: Some(by) } => write!(
+                f,
+                "rule '{by}' is stricter and still governs this cell; change or remove \
+                 '{by}' rather than '{rule}'"
+            ),
+            EditError::Overruled { rule, by: None } => write!(
+                f,
+                "rule '{rule}' is off, so the cell would not show the value; switch it on first"
+            ),
         }
     }
 }

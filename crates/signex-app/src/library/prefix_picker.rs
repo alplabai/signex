@@ -5,7 +5,7 @@
 //! ([`SiPrefix::all_for`]) and is hidden for units that take none
 //! (`%`, `ppm/C`, `V/us`, `AWG`).
 
-use iced::widget::pick_list;
+use iced::widget::{PickList, pick_list};
 use iced::{Element, Widget as _};
 use signex_types::quantity::{SiPrefix, Unit};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
@@ -24,10 +24,15 @@ impl std::fmt::Display for PrefixChoice {
     }
 }
 
+/// A prefix and unit as one glyph: `kΩ`, `µF`, plain `Ω`.
+pub(crate) fn prefixed_glyph(prefix: SiPrefix, unit: &Unit) -> String {
+    format!("{}{}", prefix.symbol(), unit.glyph())
+}
+
 fn choice(prefix: SiPrefix, unit: &Unit) -> PrefixChoice {
     PrefixChoice {
         prefix,
-        label: format!("{}{}", prefix.symbol(), unit.glyph()),
+        label: prefixed_glyph(prefix, unit),
     }
 }
 
@@ -52,12 +57,15 @@ pub(crate) fn effective_prefix(unit: &Unit, prefix: SiPrefix) -> SiPrefix {
     }
 }
 
-/// The picker, or `None` for a unit that takes no prefix.
-pub(crate) fn prefix_picker<'a, M: Clone + 'a>(
+type PrefixList<'a, M> = PickList<'a, PrefixChoice, Vec<PrefixChoice>, PrefixChoice, M>;
+
+/// The picker in the Graphite dropdown look. It opens with the current
+/// entry under the pointer, so that row shows the look's highlight.
+fn prefix_list<'a, M: Clone + 'a>(
     unit: &Unit,
     selected: SiPrefix,
     on_pick: impl Fn(SiPrefix) -> M + 'a,
-) -> Option<Element<'a, M>> {
+) -> Option<PrefixList<'a, M>> {
     let choices = prefix_choices(unit);
     if choices.is_empty() {
         return None;
@@ -67,9 +75,17 @@ pub(crate) fn prefix_picker<'a, M: Clone + 'a>(
         pick_list(Some(current), choices, |c: &PrefixChoice| c.to_string())
             .graphite()
             .on_select(move |c: PrefixChoice| on_pick(c.prefix))
-            .padding([3, 6])
-            .boxed(),
+            .padding([3, 6]),
     )
+}
+
+/// The picker, or `None` for a unit that takes no prefix.
+pub(crate) fn prefix_picker<'a, M: Clone + 'a>(
+    unit: &Unit,
+    selected: SiPrefix,
+    on_pick: impl Fn(SiPrefix) -> M + 'a,
+) -> Option<Element<'a, M>> {
+    prefix_list(unit, selected, on_pick).map(|list| list.boxed())
 }
 
 #[cfg(test)]

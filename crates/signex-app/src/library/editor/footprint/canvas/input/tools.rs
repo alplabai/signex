@@ -10,6 +10,7 @@
 use iced::Point;
 use iced::widget::canvas;
 
+use crate::library::editor::footprint::snap;
 use crate::library::editor::footprint::state::{EditorMode, PadsTool, SketchTool};
 use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage};
 
@@ -222,7 +223,11 @@ impl FootprintCanvas<'_> {
         let (_, start, end) = best_line?;
         let (sp, ep) = (pos_of(start)?, pos_of(end)?);
         let d2 = |p: (f64, f64)| (p.0 - world.0).powi(2) + (p.1 - world.1).powi(2);
-        let nearer = if d2(ep) < d2(sp) { end } else { start };
+        let (nearer, anchor) = if d2(ep) < d2(sp) {
+            (end, ep)
+        } else {
+            (start, sp)
+        };
 
         // Arm the existing Point-drag path — identical to
         // `try_sketch_point_grab` from here on, so release + per-tick
@@ -234,8 +239,8 @@ impl FootprintCanvas<'_> {
             pad_idx: usize::MAX,
             sketch_point: Some(nearer),
             sketch_line: None,
-            grab_offset_mm: (0.0, 0.0),
-            last_world: world,
+            grab_offset_mm: (world.0 - anchor.0, world.1 - anchor.1),
+            last_world: anchor,
             press_screen: cursor_pos,
             moved: false,
         });
@@ -271,12 +276,13 @@ impl FootprintCanvas<'_> {
             // can't render alongside the Point drag.
             cstate.box_select_anchor_screen = None;
             cstate.box_select_current_screen = None;
+            let anchor = snap::point_pos(point_id, self.sketch, self.state).unwrap_or(world);
             cstate.drag = Some(DragState {
                 pad_idx: usize::MAX,
                 sketch_point: Some(point_id),
                 sketch_line: None,
-                grab_offset_mm: (0.0, 0.0),
-                last_world: world,
+                grab_offset_mm: (world.0 - anchor.0, world.1 - anchor.1),
+                last_world: anchor,
                 press_screen: cursor_pos,
                 moved: false,
             });
@@ -314,7 +320,7 @@ impl FootprintCanvas<'_> {
         {
             const LINE_HIT_TOL_PX: f32 = 10.0;
             let tol_mm = (LINE_HIT_TOL_PX / cstate.scale.max(1.0)) as f64;
-            let mut best_line: Option<(f64, signex_sketch::id::SketchEntityId)> = None;
+            let mut best_line: Option<(f64, signex_sketch::id::SketchEntityId, (f64, f64))> = None;
             let pos_of = |id: signex_sketch::id::SketchEntityId| -> Option<(f64, f64)> {
                 if let Some(solve) = self.state.last_solve.as_ref()
                     && let Some(p) = signex_sketch::solver::state::point_xy(
@@ -350,12 +356,12 @@ impl FootprintCanvas<'_> {
                     let px = a.0 + tc * dx;
                     let py = a.1 + tc * dy;
                     let d2 = (px - world.0).powi(2) + (py - world.1).powi(2);
-                    if d2 <= tol_mm * tol_mm && best_line.as_ref().is_none_or(|(b2, _)| d2 < *b2) {
-                        best_line = Some((d2, ent.id));
+                    if d2 <= tol_mm * tol_mm && best_line.as_ref().is_none_or(|(b2, ..)| d2 < *b2) {
+                        best_line = Some((d2, ent.id, (px, py)));
                     }
                 }
             }
-            if let Some((_, line_id)) = best_line {
+            if let Some((_, line_id, foot)) = best_line {
                 // Make sure no stale rubber-band anchor is left over
                 // from a prior gesture.
                 cstate.box_select_anchor_screen = None;
@@ -364,8 +370,8 @@ impl FootprintCanvas<'_> {
                     pad_idx: usize::MAX,
                     sketch_point: None,
                     sketch_line: Some(line_id),
-                    grab_offset_mm: (0.0, 0.0),
-                    last_world: world,
+                    grab_offset_mm: (world.0 - foot.0, world.1 - foot.1),
+                    last_world: foot,
                     press_screen: cursor_pos,
                     moved: false,
                 });
@@ -433,11 +439,26 @@ impl FootprintCanvas<'_> {
         cursor_pos: Point,
         world: (f64, f64),
     ) -> Option<canvas::Action<LibraryMessage>> {
+        // A graphic tool's click on a pad places there (a track from a pad
+        // centre); it does not grab the pad.
+        let places_graphic = matches!(
+            self.state.pads_tool,
+            PadsTool::PlaceString
+                | PadsTool::PlaceTextFrame
+                | PadsTool::PlaceTrack
+                | PadsTool::PlaceArc
+                | PadsTool::PlacePolygon
+                | PadsTool::PlaceRegion
+        );
         if matches!(self.state.mode, EditorMode::Normal)
+            && !places_graphic
             && self.state.selection_filter.pads
             && let Some(pad_idx) = self.state.pad_at(world.0, world.1)
         {
             let pad = &self.state.pads[pad_idx];
+            // The offset is from the real cursor: `world` is already snapped
+            // under a placement tool.
+            let raw = cstate.screen_to_world(cursor_pos);
             // v0.27 — defensively clear any stale rubber-band
             // anchor from a prior gesture so the pad drag doesn't
             // render alongside a phantom selection box.
@@ -447,7 +468,7 @@ impl FootprintCanvas<'_> {
                 pad_idx,
                 sketch_point: None,
                 sketch_line: None,
-                grab_offset_mm: (world.0 - pad.position_mm.0, world.1 - pad.position_mm.1),
+                grab_offset_mm: (raw.0 - pad.position_mm.0, raw.1 - pad.position_mm.1),
                 last_world: world,
                 press_screen: cursor_pos,
                 moved: false,

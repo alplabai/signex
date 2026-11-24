@@ -81,11 +81,19 @@ pub(crate) fn resolve_new_project(
     resolve_new_project_with(chosen, &KnownFolders::from_system(), layout)
 }
 
-fn resolve_in_place(
-    parent: &Path,
-    marker: String,
-    known: &KnownFolders,
-) -> Result<NewProjectTarget> {
+/// The `.snxprj` of project `stem` under `parent`: `<parent>/<stem>/<stem>.snxprj`
+/// in its own folder, else `<parent>/<stem>.snxprj`. Reads no disk, so the
+/// New Project dialog shows the path the resolver below lands on.
+pub(crate) fn project_file_in(parent: &Path, stem: &str, own_folder: bool) -> PathBuf {
+    let file = format!("{stem}.snxprj");
+    if own_folder {
+        parent.join(stem).join(file)
+    } else {
+        parent.join(file)
+    }
+}
+
+fn resolve_in_place(parent: &Path, stem: &str, known: &KnownFolders) -> Result<NewProjectTarget> {
     if !parent.is_dir() {
         anyhow::bail!("{} is not a folder", parent.display());
     }
@@ -104,7 +112,7 @@ fn resolve_in_place(
             parent.display()
         );
     }
-    let project_path = parent.join(marker);
+    let project_path = project_file_in(parent, stem, false);
     if project_path.exists() {
         anyhow::bail!("{} already exists", project_path.display());
     }
@@ -122,9 +130,8 @@ fn resolve_new_project_with(
     layout: NewProjectLayout,
 ) -> Result<NewProjectTarget> {
     let (parent, stem) = new_project_parts(chosen)?;
-    let marker = format!("{stem}.snxprj");
     if layout == NewProjectLayout::InPlace {
-        return resolve_in_place(parent, marker, known);
+        return resolve_in_place(parent, &stem, known);
     }
     // ASCII case-insensitive on every volume: on a case-sensitive one this
     // only reuses a `foo` folder for project `Foo`, which is harmless.
@@ -142,11 +149,8 @@ fn resolve_new_project_with(
         );
     }
     let reuse_parent = parent_is_the_project_folder && is_unused(parent)?;
-    let folder = if reuse_parent {
-        parent.to_path_buf()
-    } else {
-        parent.join(&stem)
-    };
+    let project_path = project_file_in(parent, &stem, !reuse_parent);
+    let folder = project_path.parent().unwrap_or(parent).to_path_buf();
     if let Some(outer) = enclosing_project(&folder, known) {
         anyhow::bail!(
             "{} would be inside the project in {} — pick a location outside it",
@@ -172,7 +176,6 @@ fn resolve_new_project_with(
             );
         }
     }
-    let project_path = folder.join(marker);
     Ok(NewProjectTarget {
         folder,
         project_path,
@@ -347,12 +350,16 @@ fn seed_project_rules(
 }
 
 /// The first content of a dialog-made `.snxprj`: the project as the folder
-/// shows it, with the chosen defaults and designator standard and its id.
-/// Part of the creation: a failure takes the project back.
+/// shows it, with the chosen defaults and designator standard and its id,
+/// and the picked fab tier's router tool (mockup row 179d). Part of the creation: a
+/// failure takes the project back.
 fn write_setup(project_path: &Path, setup: &signex_types::project::ProjectSetup) -> Result<()> {
     let mut data = signex_types::project::parse_project_bytes(project_path, b"")
         .with_context(|| format!("read the new project {}", project_path.display()))?;
     data.project_defaults = setup.defaults();
+    if let Some(tier) = setup.fab {
+        data.set_router_tool_diameter(Some(tier.capabilities().router_tool_diameter));
+    }
     data.annotation = Some(signex_types::project::AnnotationSettings {
         designator_standard: Some(setup.designators),
         ..Default::default()
@@ -773,5 +780,42 @@ mod tests {
             .rules;
         let dsl = rules.and_then(|r| r.drc.dsl).unwrap_or_default();
         assert!(!dsl.contains("fab_"), "{dsl}");
+    }
+
+    /// mockup row 179d: a fab tier picked in the setup stores its router tool in the
+    /// project; no tier stores none.
+    #[test]
+    fn a_new_project_with_a_fab_tier_stores_its_router_tool() {
+        use signex_types::project::{FabTemplate, ProjectSetup};
+        let tmp = tempfile::tempdir().unwrap();
+        let seed = RuleSeed {
+            dir: Some(tmp.path().join("no-library-yet")),
+            ..RuleSeed::default()
+        };
+        for (tier, diameter) in [
+            (FabTemplate::Standard, 2.0),
+            (FabTemplate::Advanced, 1.6),
+            (FabTemplate::Hdi, 1.0),
+        ] {
+            let mut setup = ProjectSetup::default();
+            setup.apply_fab(tier);
+            let plan = NewProjectPlan {
+                layout: NewProjectLayout::NamedFolder,
+                setup: Some(setup),
+            };
+            let name = format!("{tier:?}.snxprj");
+            let written =
+                write_new_project_files_with(&tmp.path().join(name), &seed, &plan).unwrap();
+            let data = signex_types::project::parse_project(&written).unwrap();
+            assert_eq!(data.router_tool_diameter(), Some(diameter), "{tier:?}");
+        }
+        let plain = NewProjectPlan {
+            layout: NewProjectLayout::NamedFolder,
+            setup: Some(ProjectSetup::default()),
+        };
+        let written =
+            write_new_project_files_with(&tmp.path().join("Plain.snxprj"), &seed, &plain).unwrap();
+        let data = signex_types::project::parse_project(&written).unwrap();
+        assert_eq!(data.router_tool_diameter(), None);
     }
 }

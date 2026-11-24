@@ -43,6 +43,7 @@ mod close_preview_tests;
 mod commit_pending;
 mod component_preview;
 mod components_panel;
+mod components_panel_rows;
 #[cfg(test)]
 mod datasheet_open_tests;
 mod datasheet_save;
@@ -70,6 +71,7 @@ mod primitive_copy;
 #[cfg(test)]
 mod primitive_copy_tests;
 mod primitive_picker;
+mod primitive_preview;
 #[cfg(test)]
 mod range_filter_tests;
 mod read_only;
@@ -79,6 +81,8 @@ mod recovery_read_only_tests;
 mod refresh;
 mod registration;
 mod rename_guard;
+#[cfg(test)]
+mod row_flows_tests;
 mod row_summary;
 #[cfg(test)]
 mod row_summary_tests;
@@ -135,15 +139,28 @@ impl Signex {
                     ..
                 }
         );
+        let shown_row = self.shown_browser_row();
         let task = self.route_library_message(msg);
-        let task = Task::batch([task, self.refresh_components_details_if_stale()]);
+        // Properties and its Pick buttons act on the row in the panel context
+        // (mockup row 127), so any change of selection rebuilds it.
+        if self.shown_browser_row() != shown_row {
+            self.refresh_panel_ctx();
+        }
+        let task = Task::batch([
+            task,
+            self.refresh_components_details_if_stale(),
+            self.refresh_browser_previews(),
+        ]);
         if per_event {
             self.sync_diagnostics_panel_ctx();
             // A part-number keystroke in the preview retitles its tab.
             self.sync_component_tab_titles();
             return task;
         }
-        Task::batch([task, self.finish_update()])
+        let finished = self.finish_update();
+        // After the view caches are current, so the rows asked for are the
+        // rows the panel now lists.
+        Task::batch([task, finished, self.request_components_thumbnails()])
     }
 
     fn route_library_message(&mut self, msg: LibraryMessage) -> Task<Message> {
@@ -328,6 +345,12 @@ impl Signex {
             LibraryMessage::LibraryCreateOptionsConfirm => {
                 self.handle_library_create_options_confirm()
             }
+            LibraryMessage::LibraryCreateOptionsRelocateRequested => {
+                self.handle_library_create_options_relocate()
+            }
+            LibraryMessage::LibraryCreateOptionsOpenExistingRequested => {
+                self.handle_library_create_options_open_existing()
+            }
             LibraryMessage::AddLibrarySymbolFilePicked { project_id, path } => {
                 self.handle_add_library_symbol_file_picked(project_id, path)
             }
@@ -483,10 +506,12 @@ impl Signex {
                 self.handle_document_options_set_sheet_color(c)
             }
             LibraryMessage::DocumentOptionsToggleGrid => self.handle_document_options_toggle_grid(),
-            LibraryMessage::DocumentOptionsCycleGridSize => {
-                self.handle_document_options_cycle_grid_size()
+            LibraryMessage::DocumentOptionsGridSpacingPicked(mm) => {
+                self.handle_document_options_grid_spacing_picked(mm)
             }
-            LibraryMessage::DocumentOptionsCycleUnit => self.handle_document_options_cycle_unit(),
+            LibraryMessage::DocumentOptionsUnitPicked(unit) => {
+                self.handle_document_options_unit_picked(unit)
+            }
             LibraryMessage::DocumentOptionsApply => self.handle_document_options_apply(),
             LibraryMessage::DocumentOptionsCancel => {
                 self.library.document_options = None;
@@ -525,6 +550,9 @@ impl Signex {
                 self.library.library_updates = None;
                 self.show_next_queued_updates();
                 Task::none()
+            }
+            LibraryMessage::LibraryUpdatesSelectAllToggled => {
+                self.handle_library_updates_select_all_toggled()
             }
 
             // ── Components Panel (Stage 9) ────────────────────────────
@@ -566,7 +594,20 @@ impl Signex {
                 self.handle_components_panel_row_menu_picked(action)
             }
             LibraryMessage::ComponentsPanelSplitDragStarted => {
+                self.library.components_panel.split_dragging = true;
                 self.handle_layout_drag_started(DragTarget::ComponentsSplit);
+                Task::none()
+            }
+            LibraryMessage::ComponentsPanelSplitHovered(is_hovered) => {
+                self.library.components_panel.split_hovered = is_hovered;
+                Task::none()
+            }
+            LibraryMessage::ComponentsPanelPreviewMoved(pane, gesture) => {
+                let zoom_step = self.ui_state.effective_zoom_step();
+                self.library
+                    .components_panel
+                    .preview_views
+                    .apply(pane, gesture, zoom_step);
                 Task::none()
             }
             LibraryMessage::ComponentsPanelDetailsLoaded {
@@ -622,6 +663,24 @@ impl Signex {
                 outcome,
             } => self.handle_pricing_refresh_finished(library_path, outcome),
             LibraryMessage::StockCopy(msg) => self.handle_stock_copy(msg),
+            LibraryMessage::ComponentsPanelRowStylePicked(style) => {
+                self.handle_components_panel_row_style_picked(style)
+            }
+            LibraryMessage::ComponentsPanelThumbnailsLoaded(read) => {
+                self.library.components_panel.thumbs.finish(read);
+                Task::none()
+            }
+            LibraryMessage::ComponentsPanelOpenProjectClicked => {
+                Task::done(Message::Menu(crate::menu_bar::MenuMessage::OpenProject))
+            }
+            LibraryMessage::BrowserPreviewLoaded {
+                key,
+                generation,
+                result,
+            } => self.handle_browser_preview_loaded(key, generation, result),
+            LibraryMessage::BrowserMoreMenuToggled { library_path } => {
+                self.handle_browser_more_menu_toggled(library_path)
+            }
         }
     }
 }

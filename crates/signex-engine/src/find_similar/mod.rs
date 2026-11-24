@@ -141,6 +141,9 @@ pub fn kind_label(kind: SelectedKind) -> &'static str {
         SelectedKind::ChildSheet => "Sheet symbol",
         SelectedKind::Drawing => "Drawing",
         SelectedKind::Directive => "Directive",
+        SelectedKind::HarnessConnector => "Harness connector",
+        SelectedKind::HarnessEntry => "Harness entry",
+        SelectedKind::HarnessWire => "Harness wire",
     }
 }
 
@@ -256,6 +259,24 @@ fn entries(sheet: &SchematicSheet) -> Vec<(SelectedItem, Vec<SimilarValue>)> {
     }
     for d in &sheet.drawings {
         push(d.uuid(), K::Drawing, Vec::new());
+    }
+    // #1280: a connector is compared by its harness type, an entry by name.
+    for c in &sheet.harness.connectors {
+        push(
+            c.uuid,
+            K::HarnessConnector,
+            vec![val(SimilarProperty::Name, c.harness_type.trim())],
+        );
+        for e in &c.entries {
+            push(
+                e.uuid,
+                K::HarnessEntry,
+                vec![val(SimilarProperty::Name, e.name.trim())],
+            );
+        }
+    }
+    for w in &sheet.harness.wires {
+        push(w.uuid, K::HarnessWire, Vec::new());
     }
     out
 }

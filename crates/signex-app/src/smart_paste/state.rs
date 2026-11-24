@@ -1,0 +1,336 @@
+//! The Smart Paste dialog's state and messages (mockup row 155). The fields hold what
+//! the user typed; `input` checks them. What the copies are called and the
+//! clipboard summary are worked out in `update` (they read the sheet and
+//! the project's designators) and kept here for the view.
+
+use std::collections::HashSet;
+use std::path::PathBuf;
+
+use super::plan::{
+    DesignatorChoice, InputProblem, MAX_COPIES, NetAfter, NetChoice, PasteInput, PlaceMode,
+    after_paste, parse_mm, pattern_separates, taken_names,
+};
+
+/// The dialog's size (mockup: 880 x 600).
+pub const DIALOG_SIZE: (f32, f32) = (880.0, 600.0);
+
+/// What the clipboard holds, for the subtitle.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ClipboardSummary {
+    /// The copied parts' designators.
+    pub parts: Vec<String>,
+    pub wires: usize,
+    pub labels: usize,
+}
+
+/// One drawable of the preview, in mm relative to the clipboard's anchor.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PreviewShape {
+    Line {
+        from: (f64, f64),
+        to: (f64, f64),
+    },
+    /// A part's box and its designator.
+    Part {
+        min: (f64, f64),
+        max: (f64, f64),
+        reference: String,
+    },
+    /// A net label and the copied net it names (`None` for a power label).
+    Label {
+        at: (f64, f64),
+        net: String,
+        power: bool,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct SmartPasteState {
+    /// The sheet the paste was asked on; the dialog closes when it changes.
+    pub target: PathBuf,
+    pub mode: PlaceMode,
+    pub offset_x: String,
+    pub offset_y: String,
+    pub copies: String,
+    pub step_x: String,
+    pub step_y: String,
+    pub designators: DesignatorChoice,
+    pub nets: NetChoice,
+    pub pattern: String,
+    pub start: String,
+    pub summary: ClipboardSummary,
+    /// The copied nets, `true` for a power net.
+    pub copied_nets: Vec<(String, bool)>,
+    /// The net names the project already writes (#2744).
+    pub names_in_use: HashSet<String>,
+    /// Project sheets whose net names could not be read (#2744).
+    pub unread_sheets: Vec<PathBuf>,
+    /// "R4 → R6, R5 → R7": what Next free calls the parts, per copy.
+    pub next_free_text: String,
+    /// The clipboard's drawables and their box, for the preview.
+    pub shapes: Vec<PreviewShape>,
+    pub bounds: ((f64, f64), (f64, f64)),
+}
+
+impl SmartPasteState {
+    /// A dialog for a clipboard whose copy is `width` mm wide: the copy is
+    /// offset one width and a grid step to the right, and the array step
+    /// is the same.
+    #[must_use]
+    pub fn new(target: PathBuf, step_mm: f64) -> Self {
+        let step = format!("{step_mm:.2}");
+        Self {
+            target,
+            mode: PlaceMode::Offset,
+            offset_x: step.clone(),
+            offset_y: "0.00".into(),
+            copies: "3".into(),
+            step_x: step,
+            step_y: "0.00".into(),
+            designators: DesignatorChoice::NextFree,
+            nets: NetChoice::Rewrite,
+            pattern: "${Net}_${n}".into(),
+            start: "2".into(),
+            summary: ClipboardSummary::default(),
+            copied_nets: Vec::new(),
+            names_in_use: HashSet::new(),
+            unread_sheets: Vec::new(),
+            next_free_text: String::new(),
+            shapes: Vec::new(),
+            bounds: ((0.0, 0.0), (0.0, 0.0)),
+        }
+    }
+
+    /// The choices, checked.
+    pub fn input(&self) -> Result<PasteInput, InputProblem> {
+        let (copies, x, y) = match self.mode {
+            PlaceMode::Offset => (1, &self.offset_x, &self.offset_y),
+            PlaceMode::Array => {
+                let copies = self
+                    .copies
+                    .trim()
+                    .parse::<u32>()
+                    .ok()
+                    .filter(|n| (1..=MAX_COPIES).contains(n))
+                    .ok_or(InputProblem::Copies)?;
+                (copies, &self.step_x, &self.step_y)
+            }
+        };
+        let (Some(dx), Some(dy)) = (parse_mm(x), parse_mm(y)) else {
+            return Err(InputProblem::Distance);
+        };
+        let rewrite = match self.nets {
+            NetChoice::Keep => None,
+            NetChoice::Rewrite => {
+                let start = self
+                    .start
+                    .trim()
+                    .parse::<i64>()
+                    .map_err(|_| InputProblem::Start)?;
+                let signal_nets = self.copied_nets.iter().filter(|(_, p)| !p).count();
+                if !pattern_separates(&self.pattern, copies, signal_nets) {
+                    return Err(InputProblem::Pattern);
+                }
+                Some((self.pattern.clone(), start))
+            }
+        };
+        Ok(PasteInput {
+            copies,
+            dx,
+            dy,
+            designators: self.designators,
+            rewrite,
+        })
+    }
+
+    /// How many copies the drawing shows (1 while the input is not valid).
+    #[must_use]
+    pub fn copy_count(&self) -> u32 {
+        self.input().map_or(1, |i| i.copies)
+    }
+
+    /// The After paste table rows; empty while the input is not valid.
+    #[must_use]
+    pub fn after_rows(&self) -> Vec<(String, NetAfter)> {
+        self.input()
+            .map(|input| after_paste(&self.copied_nets, &input))
+            .unwrap_or_default()
+    }
+
+    /// The rewritten names that would join a net; Paste stops on any (#2744).
+    #[must_use]
+    pub fn taken_names(&self) -> Vec<String> {
+        self.input()
+            .map(|input| taken_names(&self.copied_nets, &input, &self.names_in_use))
+            .unwrap_or_default()
+    }
+
+    /// The unread sheets that stop this paste (#2744): their net names are
+    /// unknown, so a rewritten name could join one. Empty when the paste
+    /// rewrites no net name.
+    #[must_use]
+    pub fn unread_sheets_in_the_way(&self) -> &[PathBuf] {
+        let rewrites = self.input().is_ok_and(|input| input.rewrite.is_some())
+            && self.copied_nets.iter().any(|(_, power)| !power);
+        if rewrites { &self.unread_sheets } else { &[] }
+    }
+
+    /// The sheets of [`Self::unread_sheets_in_the_way`], as one line.
+    #[must_use]
+    pub fn unread_sheets_text(&self) -> String {
+        self.unread_sheets_in_the_way()
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    /// Whether Paste can go ahead: the input reads, no name is taken and no
+    /// unread sheet could hold a rewritten name.
+    #[must_use]
+    pub fn can_paste(&self) -> bool {
+        self.input().is_ok()
+            && self.taken_names().is_empty()
+            && self.unread_sheets_in_the_way().is_empty()
+    }
+
+    /// The offset (or step) the drawing's first copy sits at.
+    #[must_use]
+    pub fn first_offset(&self) -> (f64, f64) {
+        let (x, y) = match self.mode {
+            PlaceMode::Offset => (&self.offset_x, &self.offset_y),
+            PlaceMode::Array => (&self.step_x, &self.step_y),
+        };
+        (parse_mm(x).unwrap_or(0.0), parse_mm(y).unwrap_or(0.0))
+    }
+
+    /// Put the first copy at `(dx, dy)` mm (a drag on the drawing).
+    pub fn set_first_offset(&mut self, dx: f64, dy: f64) {
+        let (x, y) = (format!("{dx:.2}"), format!("{dy:.2}"));
+        match self.mode {
+            PlaceMode::Offset => (self.offset_x, self.offset_y) = (x, y),
+            PlaceMode::Array => (self.step_x, self.step_y) = (x, y),
+        }
+    }
+}
+
+/// What happened in the Smart Paste dialog.
+#[derive(Debug, Clone)]
+pub enum SmartPasteMsg {
+    ModePicked(PlaceMode),
+    OffsetXEdited(String),
+    OffsetYEdited(String),
+    CopiesEdited(String),
+    StepXEdited(String),
+    StepYEdited(String),
+    DesignatorsPicked(DesignatorChoice),
+    NetsPicked(NetChoice),
+    PatternEdited(String),
+    StartEdited(String),
+    /// The first copy was dragged on the drawing to `(dx, dy)` mm, snapped.
+    FirstCopyDragged {
+        dx: f64,
+        dy: f64,
+    },
+    /// Paste: the copies go on the cursor.
+    PasteConfirmed,
+    Cancelled,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn offset_mode_places_one_copy_and_array_mode_reads_copies_and_step() {
+        let mut s = SmartPasteState::new(PathBuf::from("/p/a.snxsch"), 20.32);
+        let one = s.input().expect("valid");
+        assert_eq!((one.copies, one.dx, one.dy), (1, 20.32, 0.0));
+        s.mode = PlaceMode::Array;
+        s.copies = "4".into();
+        s.step_y = "-5.08".into();
+        let many = s.input().expect("valid");
+        assert_eq!((many.copies, many.dy), (4, -5.08));
+        s.copies = "0".into();
+        assert_eq!(s.input(), Err(InputProblem::Copies));
+    }
+
+    #[test]
+    fn keep_ignores_the_pattern_and_rewrite_checks_it() {
+        let mut s = SmartPasteState::new(PathBuf::from("/p/a.snxsch"), 20.32);
+        s.pattern = "plain".into();
+        assert_eq!(s.input(), Err(InputProblem::Pattern));
+        s.nets = NetChoice::Keep;
+        assert_eq!(s.input().expect("valid").rewrite, None);
+    }
+
+    /// #2744: one number for two signal nets would short them.
+    #[test]
+    fn a_number_alone_is_refused_for_two_signal_nets() {
+        let mut s = SmartPasteState::new(PathBuf::from("/p/a.snxsch"), 20.32);
+        s.copied_nets = vec![
+            ("FB".into(), false),
+            ("VOUT".into(), false),
+            ("GND".into(), true),
+        ];
+        s.pattern = "${n}".into();
+        assert_eq!(s.input(), Err(InputProblem::Pattern));
+        assert!(!s.can_paste());
+    }
+
+    #[test]
+    fn a_pattern_without_a_number_is_refused_for_an_array() {
+        let mut s = SmartPasteState::new(PathBuf::from("/p/a.snxsch"), 20.32);
+        s.copied_nets = vec![("FB".into(), false)];
+        s.pattern = "${Net}_A".into();
+        assert!(s.input().is_ok(), "one copy keeps one name");
+        s.mode = PlaceMode::Array;
+        s.copies = "3".into();
+        assert_eq!(s.input(), Err(InputProblem::Pattern));
+    }
+
+    #[test]
+    fn a_name_in_use_is_flagged_and_stops_paste() {
+        let mut s = SmartPasteState::new(PathBuf::from("/p/a.snxsch"), 20.32);
+        s.copied_nets = vec![("FB".into(), false)];
+        assert!(s.can_paste());
+        s.names_in_use.insert("FB_2".into());
+        assert_eq!(s.taken_names(), ["FB_2"]);
+        assert!(!s.can_paste());
+        s.start = "3".into();
+        assert!(s.can_paste(), "another Start clears it");
+        s.start = "2".into();
+        s.nets = NetChoice::Keep;
+        assert!(s.can_paste(), "Keep is a chosen join");
+    }
+
+    /// #2744: only a rewritten signal net can collide with an unread name.
+    #[test]
+    fn an_unread_sheet_stops_only_a_paste_that_rewrites_a_net_name() {
+        let bad = PathBuf::from("bad.snxsch");
+        let mut s = SmartPasteState::new(PathBuf::from("/p/a.snxsch"), 20.32);
+        s.unread_sheets = vec![bad.clone()];
+        s.copied_nets = vec![("FB".into(), false), ("GND".into(), true)];
+        assert_eq!(s.unread_sheets_in_the_way(), [bad]);
+        assert!(!s.can_paste());
+        s.nets = NetChoice::Keep;
+        assert!(s.unread_sheets_in_the_way().is_empty());
+        assert!(s.can_paste(), "Keep rewrites nothing");
+        s.nets = NetChoice::Rewrite;
+        s.copied_nets = vec![("GND".into(), true)];
+        assert!(s.can_paste(), "a power net is never rewritten");
+        s.copied_nets.clear();
+        assert!(s.can_paste(), "no net at all");
+    }
+
+    #[test]
+    fn a_drag_moves_the_offset_or_the_step() {
+        let mut s = SmartPasteState::new(PathBuf::from("/p/a.snxsch"), 20.32);
+        s.set_first_offset(25.4, 2.54);
+        assert_eq!(s.first_offset(), (25.4, 2.54));
+        s.mode = PlaceMode::Array;
+        s.set_first_offset(10.16, 0.0);
+        assert_eq!(s.step_x, "10.16");
+        assert_eq!(s.offset_x, "25.40");
+    }
+}

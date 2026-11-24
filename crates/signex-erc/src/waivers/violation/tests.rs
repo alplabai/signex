@@ -102,7 +102,7 @@ fn the_fingerprint_does_not_depend_on_field_map_order() {
 }
 
 #[test]
-fn reason_and_author_are_required_and_incomplete_waivers_hide_nothing() {
+fn the_reason_is_required_and_incomplete_waivers_hide_nothing() {
     let id = Uuid::now_v7();
     let sheet = sheet_with(part(id));
     let v = finding_on(id, RuleKind::UnusedPin);
@@ -112,12 +112,27 @@ fn reason_and_author_are_required_and_incomplete_waivers_hide_nothing() {
         Err(WaiverError::MissingReason)
     );
     assert_eq!(
-        new_waiver(&key, "", "why", " ", ""),
-        Err(WaiverError::MissingAuthor)
+        new_waiver(&key, "", "why", " ", "").map(|w| w.author),
+        Ok(String::new())
     );
     let mut hand_edited = waive(&v, &sheet);
     hand_edited.reason.clear();
     assert_eq!(split(v, &sheet, &[hand_edited]).kept.len(), 1);
+}
+
+/// Mockup row 88: with no git identity the author is stored empty, and the
+/// waiver still hides its finding.
+#[test]
+fn a_waiver_without_an_author_is_complete_and_hides_its_finding() {
+    let id = Uuid::now_v7();
+    let sheet = sheet_with(part(id));
+    let v = finding_on(id, RuleKind::UnusedPin);
+    let key = waiver_key(&v, &sheet).expect("key");
+    let waiver = new_waiver(&key, &v.message, "test point", "", "2026-11-22").expect("valid");
+    assert_eq!(waiver.author, "");
+    assert!(waiver.is_complete());
+    let out = split(v, &sheet, &[waiver]);
+    assert_eq!((out.kept.len(), out.waived.len()), (0, 1));
 }
 
 #[test]

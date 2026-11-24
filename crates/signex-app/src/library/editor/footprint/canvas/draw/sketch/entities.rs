@@ -6,16 +6,18 @@ use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point};
 
 use crate::library::editor::footprint::canvas::FootprintCanvasState;
+use crate::library::editor::footprint::canvas::glyph_layout::sketch_glyphs;
 use crate::library::editor::footprint::state::FootprintEditorState;
 
 use super::constraints::draw_constraint_icons;
 use super::fills::draw_filled_closed_loops;
+use super::sketch_ink::SketchInk;
 
 /// Render the sketch entities (Phase 6.2). Points draw as small
 /// filled circles, Lines stroke between their endpoints (dashed if
 /// `construction == true`), Circles stroke the radius circle, Arcs
 /// stroke a polyline approximation between start/end. DOF colour
-/// drives the tint.
+/// drives the tint, in the [`SketchInk`] board palette.
 pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_overlay(
     frame: &mut canvas::Frame,
     cstate: &FootprintCanvasState,
@@ -53,38 +55,29 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_overlay(
             })
     }
 
-    // v0.27 — Fusion-style DOF palette tuned for the white sketch
-    // canvas. Under-constrained → blue, fully-constrained → black,
-    // over-constrained → red, no-solve → dark grey. The pre-v0.27
-    // light-grey "no solve" colour was effectively invisible
-    // against white; dark grey reads at the same weight as the
-    // black fully-constrained state without competing with it.
-    // Entities named by the constraints of a rejected edit take the
-    // theme's error colour until the next edit or successful solve.
+    // The DOF palette on the board ground: green fully constrained, blue
+    // under, red over, grey before any solve. Entities named by the
+    // constraints of a rejected edit take the theme's error colour until
+    // the next edit or successful solve.
+    let ink = SketchInk::board();
     let conflict_entities = state.conflict.entities(sketch);
     let dof_colour = |id: SketchEntityId| -> Color {
         use signex_sketch::solver::dof::DofColor;
         if conflict_entities.contains(&id) {
             return conflict_colour;
         }
-        if let Some(solve) = state.last_solve.as_ref() {
-            match solve.colours.get(&id) {
-                Some(DofColor::Under) => Color::from_rgba(0.10, 0.30, 0.85, 1.00),
-                Some(DofColor::Over) => Color::from_rgba(0.85, 0.10, 0.10, 1.00),
-                Some(DofColor::Full) => Color::from_rgba(0.0, 0.0, 0.0, 1.00),
-                None => Color::from_rgba(0.40, 0.40, 0.40, 1.00),
-            }
-        } else {
-            Color::from_rgba(0.40, 0.40, 0.40, 1.00)
+        match state.last_solve.as_ref().and_then(|s| s.colours.get(&id)) {
+            Some(DofColor::Under) => ink.under,
+            Some(DofColor::Over) => ink.over,
+            Some(DofColor::Full) => ink.full,
+            None => ink.unsolved,
         }
     };
 
-    // v0.27 — Fusion-style selection highlight. Entities in the
-    // primary / secondary / extras selection sets render with a
-    // saturated orange instead of the DOF palette, so the user
-    // can see which entities the rubber-band picked. Mirrors the
-    // colour Altium / Fusion use for selected sketch geometry.
-    let selection_colour = Color::from_rgba(1.00, 0.45, 0.05, 1.00);
+    // Entities in the primary / secondary / extras selection sets draw in
+    // the selection colour instead of the DOF palette, so the user can see
+    // which entities the rubber-band picked.
+    let selection_colour = ink.selection;
     let is_selected = |id: SketchEntityId| -> bool {
         state.selected_sketch == Some(id)
             || state.selected_sketch_secondary == Some(id)
@@ -94,8 +87,10 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_overlay(
     // v0.13.2 Phase 6.6 — Constraint icon overlay. Render BEFORE
     // entities so glyphs sit underneath the geometry layer and don't
     // hide pad-edge clicks. Tinted red for over-constrained
-    // constraints; muted otherwise.
-    draw_constraint_icons(frame, cstate, sketch, state, conflict_colour);
+    // constraints; muted otherwise. Values and pattern glyphs draw on
+    // top (`draw_sketch_values`), from the same layout.
+    let glyphs = sketch_glyphs(sketch, state, cstate);
+    draw_constraint_icons(frame, &glyphs, state, &ink, conflict_colour);
 
     // v0.16.1 — Filled rendering for closed loops. Walks the line
     // graph, finds simple cycles whose Lines are NOT all
@@ -152,14 +147,15 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_overlay(
                 };
                 let p0 = cstate.world_to_screen(s);
                 let p1 = cstate.world_to_screen(e);
-                // v0.22 Phase A5 — Centerline lines render in Altium /
-                // Fusion gold (#c9a04b) regardless of DOF colour, so
-                // axis / mirror lines stay visually distinct from
-                // construction scaffolding.
+                // Centerlines draw gold whatever their DOF colour, so axis
+                // and mirror lines stay distinct from construction lines,
+                // which draw grey.
                 let col = if is_selected(entity.id) {
                     selection_colour
                 } else if entity.centerline {
-                    Color::from_rgba(0.79, 0.63, 0.30, 1.00)
+                    ink.centerline
+                } else if entity.construction {
+                    ink.construction
                 } else {
                     dof_colour(start)
                 };
@@ -228,17 +224,16 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_overlay(
                 let centre = cstate.world_to_screen(c);
                 let r_screen = (radius as f32) * cstate.scale;
                 let path = Path::circle(Point::new(centre.x, centre.y), r_screen);
-                // v0.27 — Circle entity stroke. Pre-solve uses a
-                // darker cyan that reads against white sketch
-                // canvas; post-solve drops to the DOF palette so
-                // the constraint state shows through.
+                // Circle entity stroke: its own unsolved colour before a
+                // solve, the DOF palette after, so the constraint state
+                // shows through.
                 let dof = dof_colour(entity.id);
                 let unsolved = state.last_solve.is_none();
                 let selected = is_selected(entity.id);
                 let col = if selected {
                     selection_colour
                 } else if unsolved {
-                    Color::from_rgba(0.10, 0.55, 0.85, 1.00)
+                    ink.unsolved
                 } else {
                     dof
                 };

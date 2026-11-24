@@ -51,6 +51,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::now_v7(),
@@ -189,7 +190,7 @@ fn signal_layers_hide_the_other_layers_from_the_canvas_and_the_strip() {
     assert_eq!(
         count(&app, main, "Top Silkscreen"),
         overlay_tabs - 1,
-        "the strip no longer lists the overlay"
+        "the strip no longer lists the silkscreen"
     );
     assert_eq!(
         count(&app, main, "Signal"),

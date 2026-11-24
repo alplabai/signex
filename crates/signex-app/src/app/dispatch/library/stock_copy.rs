@@ -85,11 +85,14 @@ impl Signex {
 
     fn handle_stock_copy_target_picked(&mut self, root: PathBuf) -> Task<Message> {
         if !self.library.can_receive_stock_copy(&root) {
+            let reason = signex_i18n::t!(
+                &self.ui_state.i18n,
+                signex_i18n::ids::LIBRARY_STOCK_COPY_NOT_WRITABLE,
+                "path" => root.display().to_string()
+            )
+            .into_string();
             if let Some(state) = self.library.stock_copy.as_mut() {
-                state.error = Some(format!(
-                    "{} is not open and writable; pick another library.",
-                    root.display()
-                ));
+                state.error = Some(reason);
             }
             return Task::none();
         }

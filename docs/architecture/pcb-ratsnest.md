@@ -81,3 +81,21 @@ print the figure with `--nocapture`.
 there is no panel control yet (follow-up: the nets panel is Graphite-owned). Drawing is the existing overlay in
 `signex-renderer` (`pcb/ratsnest.rs` converts lines to `RatsnestInput`;
 `pcb/emit.rs` draws them in `ColorSlot::Ratsnest`).
+
+## While a route is drawn
+
+The ratsnest follows the route end (Caner, 2026-11-21). While a Track run
+or a route (Interactive Routing, Quick Route) of a net is drawn,
+`pcb_geom::route_rats` splits that net's pads by whether the copper under
+the route's first point reaches them (the island pass of a refresh, run
+once per route start and per board revision under the route, keyed by
+`RouteRatsKey`: board, revision, net, start). The board then draws its
+lines less those of the routed net that leave the start's copper
+(`RouteRats::without_start`, in `PcbRatsnest::apply`), and the route on the
+pointer draws one line from the route's end (the end of its drawn legs
+nearest the pointer) to the nearest pad the start does not reach
+(`RouteRats::line_from`, `pcb_tool/route_rats.rs`), so a pointer move is a
+scan of one net's pads. A hidden net draws neither. When the route lands,
+is dropped or the tool ends, the split is forgotten and the board's own
+lines are drawn again. A start on a pour piece only is read as a start on
+no copper: every pad of the net is then a target.

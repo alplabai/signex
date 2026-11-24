@@ -8,8 +8,8 @@ use signex_types::pcb_layer::{CopperLayer, TechnicalLayer};
 
 /// A new two-layer board: it declares only a few technical layers.
 fn board() -> PcbBoard {
-    signex_types::project::SetupProfile::Hobby
-        .pcb(2)
+    signex_types::project::SetupProfile::Standard
+        .rules_on(2)
         .new_board()
 }
 

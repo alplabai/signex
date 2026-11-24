@@ -99,6 +99,7 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("edit_no_erc_rules", directive::edit_no_erc_rules),
     ("place_compile_mask", directive::compile_mask),
     ("place_diff_pair", directive::diff_pair),
+    ("place_parameter_set", directive::net_parameters),
     ("autoplace_fields", extras::autoplace_fields),
     ("place_design_block", extras::place_design_block),
     ("import_graphics", extras::import_graphics),
@@ -505,7 +506,7 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         ),
         // #2410: a person picks the block on a component's board menu.
         "place_board_reuse_block" => Some(
-            "`place_board_reuse_block` needs the operands `document`, `name` and `designator` — \
+            "`place_board_reuse_block` needs the operands `document`, `name` and `ids` or `designator` — \
              right-click a component on the board and pick the block",
         ),
         "project_move_sheet"
@@ -559,7 +560,10 @@ impl Signex {
         } else if let Some(reason) =
             enablement::disabled_reason(command, &self.command_context(None))
         {
-            return refused(reason);
+            let outcome = CommandOutcome::Disabled {
+                reason: reason.into(),
+            };
+            return (outcome, Task::none());
         }
         // What its checks read from disk is read off the UI thread first, and
         // the command runs when that lands (#2199).

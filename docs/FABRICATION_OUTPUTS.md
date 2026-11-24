@@ -1,7 +1,7 @@
 # Fabrication outputs
 
-File ▸ Fabrication Outputs (#2388), the PCB Active Bar's Fabrication Outputs
-button and the palette row all run `fabrication_outputs`. It opens one
+File ▸ Fabrication Outputs (#2388) and the palette row both run
+`fabrication_outputs`. It opens one
 dialog on the board in view: which files to write, the file-name stem, and
 the output folder (default: a `fabrication` folder beside the board). Nothing
 is written until Generate. Generate copies the board as it is in memory
@@ -19,6 +19,29 @@ write the job as its folder tree instead of one archive), the assembly
 drawing as a PDF, the assembly drawings as SVG, and the board's STEP model.
 By default every kind is ticked but the SVG drawings and the STEP model,
 and ODB++ is the archive.
+
+The dialog (720 x 640, mockup row 115) lists the kinds in four groups over two
+columns: Fabrication (Gerber RS-274X, Excellon drill, IPC-D-356 test
+netlist) and Single-file job (IPC-2581 revision C, ODB++ job) on the left,
+Assembly (pick and place, the assembly drawing PDF, the assembly drawing
+SVGs) and 3D (the STEP model) on the right. Each kind is a short title with
+a muted description under it where one helps; each group's head counts its
+ticks ("2 of 3") and the footer counts them all ("5 kinds of file
+selected"), both as you tick. The ODB++ folder box always shows, indented
+under ODB++ and greyed and deaf until ODB++ is ticked; unticking ODB++
+keeps its value for the next time. Under Destination are the file name, the
+output folder with Browse…, and an example of the names ("Files are named
+dcdc-…, for example dcdc-assembly.pdf."). Before a run the footer reads
+Cancel and Generate. After one it reads Generate again and Close, with the
+time the outcome arrived ("Generated 14:36", read when the answer comes in,
+never while drawing), and the body shows a success banner ("14 files
+written to …") with an Open folder button, which shows the folder in the
+file manager off the update thread (a failed launch is a Messages
+warning), then the notes as a list, each with its glyph: what the files
+leave out is a warning, and older files beside the set are an error, since
+sent with it they can break a fab order. A run that wrote nothing shows why
+in an error banner. The ticks stay the project's, as below; the dialog never
+offers to delete the older files, it only lists them.
 
 The ticks of a board its project names are saved in the project: the
 `.snxprj` key `fab_outputs`, an object of the ten booleans (`gerber`,
@@ -148,7 +171,8 @@ The board sketch's V-score lines are written on their own image,
 `<name>-vscore.gbr` (`.FileFunction` `Vcut`), one stroke per line with the
 profile's pen and `.AperFunction` `Other,VScore`. A board without one writes
 no such file. When the board has a panel (`docs/PANELISATION.md`) the dialog
-shows a "Whole panel" box, ticked by default: Generate then writes the panel
+heads its body with an info banner holding the "Whole panel" box, ticked by
+default: Generate then writes the panel
 as one board (every copy, the frame as the profile, the routed edges, the
 fiducials, the tooling and bite holes in the non-plated drill file, and the
 panel's V-scores). Unticked, the board alone is written. A panel that does

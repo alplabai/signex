@@ -2,7 +2,7 @@
 //! document or project, plus the project options and report dialogs.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
-use signex_i18n_ids::command_ids;
+use signex_i18n_ids::{command_ids, menu_ids};
 
 pub(super) const DOCUMENTS: &[CommandMetadata] = &[
     CommandMetadata {
@@ -86,6 +86,18 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
         operands: operands::SAVE_DOCUMENT_AS,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2844: File > Save All, on a key. It writes every unsaved document of
+    // the session, so it stays a person's command.
+    CommandMetadata {
+        id: "save_all",
+        category: "file",
+        label: command_ids::CMD_SAVE_ALL,
+        menu_label: Some(menu_ids::MENU_FILE_SAVE_ALL),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

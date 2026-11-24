@@ -1,500 +1,238 @@
+//! The sketch sections: Sketch solve (a DOF pill in the header; entity and
+//! constraint counts, the last solve's iterations, residual and time, the
+//! redundant and conflicting constraints), Parameters and Solve warnings.
+//! The nothing-selected body shows them, and so does Sketch mode under a
+//! selection.
+
 use iced::widget::{Column, container, row};
-use iced::{Element, Length, Theme, Widget};
+use iced::{Element, Length, Widget as _};
+use signex_i18n::{UserText, ids, t};
 use signex_widgets::{raw, text, text_input};
 
-use super::super::{
-    CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
-    SnapOptionFlag,
-};
+use super::super::PanelMsg;
+use super::body::{Ctx, caption, is_open, kv_row, pill, section};
 use super::conflicts;
-use super::managers::{render_grid_manager, render_other_section};
-use super::props_kv_row;
-use super::snap_options::render_snapping_mode_row;
-use crate::panels::{collapsible_section_header, is_section_collapsed};
-use crate::styles::{Spacing, TypeScale};
+use crate::panels::form_look;
+use crate::styles::{PillTone, Spacing, TypeScale, ti};
 
-/// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-pub(super) fn view_sections<'a>(
-    mut col: Column<Element<'a, PanelMsg>>,
-    fp: &'a FootprintEditorPanelContext,
-    palette: PanelPalette,
-    collapsed_sections: &'a CollapsedSections,
-    unit: signex_types::coord::Unit,
-    i18n: &signex_i18n::I18n,
+const SOLVE_KEY: &str = "fp_dof";
+const PARAMETERS_KEY: &str = "fp_parameters";
+const WARNINGS_KEY: &str = "fp_solve_warnings";
+/// Warnings listed before the "+N more" line.
+const MAX_WARNINGS: usize = 8;
+/// Width of a parameter name, in captions.
+const PARAMETER_NAME_EM: f32 = 10.0;
+
+pub(super) fn view_sketch_sections<'a>(
+    col: Column<Element<'a, PanelMsg>>,
+    cx: Ctx<'a, '_>,
 ) -> Column<Element<'a, PanelMsg>> {
-    let PanelPalette {
-        muted,
-        primary,
-        border: border_c,
-        input_bg,
-        ..
-    } = palette;
-    // Track no-selection state so the v0.18.13 Library Options
-    // sections (Grid Manager / Guide Manager / Other) only render
-    // in the empty-canvas Properties body.
-    // v0.18.24 — silk graphic selection counts as a selection too:
-    // hide Manager sections so the silk panel branch isn't shadowed.
-    let no_selection = fp.selected_pad.is_none()
-        && fp.selected_sketch_entity.is_none()
-        && fp.selected_silk_summary.is_none();
+    let col = solve_section(col, cx);
+    let col = parameters_section(col, cx);
+    warnings_section(col, cx)
+}
 
-    // v0.18.11.2 — Snap Options promoted out of the no-selection
-    // branch so it stays reachable while a pad/entity is selected.
-    // Earlier (v0.17.0) the section was tucked inside the empty-
-    // canvas summary which made the controls disappear the moment
-    // the user clicked a pad.
-    col = col.push(
-        collapsible_section_header(
-            "fp_snap_options",
-            "Snap Options",
-            collapsed_sections,
-            primary,
-            border_c,
-        )
-        .boxed(),
+/// The "+N more" caption under a cut list.
+pub(super) fn more_rows<'a>(cx: Ctx<'a, '_>, count: usize) -> Element<'a, PanelMsg> {
+    caption(
+        t!(cx.i18n, ids::EDITORS_FP_PROPS_MORE, "count" => count),
+        cx.tokens,
+    )
+}
+
+fn solve_section<'a>(
+    mut col: Column<Element<'a, PanelMsg>>,
+    cx: Ctx<'a, '_>,
+) -> Column<Element<'a, PanelMsg>> {
+    let Ctx {
+        fp, tokens, i18n, ..
+    } = cx;
+    let state = fp.sketch_state;
+    let dof = if state.tone == PillTone::Ok {
+        t!(i18n, ids::EDITORS_FP_PROPS_DOF_ZERO)
+    } else {
+        t!(i18n, state.label)
+    };
+    let title = t!(i18n, ids::EDITORS_FP_PROPS_SECTION_SOLVE);
+    let header = section(
+        SOLVE_KEY,
+        &title,
+        Some(pill(dof, state.tone, tokens)),
+        cx.collapsed,
+        tokens,
+        i18n,
     );
-    let snap_open = !is_section_collapsed("fp_snap_options", collapsed_sections);
-    let opts = fp.snap_options;
-    if snap_open {
-        // v0.13 — Snap target categories as INDEPENDENT toggle pills
-        // (Altium PCB Library editor parity): each can be on
-        // simultaneously. Replaces the previous mutex sub-tab.
-        col = col.push(
-            container(text(raw("Snap targets")).size(TS.caption).color(muted))
-                .padding([SP.s, SP.m])
-                .width(Length::Fill)
-                .boxed(),
-        );
-        let snap_pill =
-            |label: &'static str, flag: SnapOptionFlag, on: bool| -> Element<'static, PanelMsg> {
-                signex_widgets::button(
-                    text(raw(label))
-                        .size(TS.caption)
-                        .color(if on { primary } else { muted })
-                        .align_x(iced::alignment::Horizontal::Center),
-                )
-                .padding([3.0, SP.l])
-                .on_press(PanelMsg::FpEditorToggleSnapOption(flag))
-                .style(move |theme: &Theme, status: iced::widget::button::Status| {
-                    let hovered = matches!(status, iced::widget::button::Status::Hovered);
-                    crate::panels::form_look::segment_cell(theme, on, hovered)
-                })
-                .boxed()
-            };
-        col = col.push(
-            container(
-                row![
-                    snap_pill("Grids", SnapOptionFlag::SnapToGrids, opts.snap_to_grids),
-                    snap_pill("Guides", SnapOptionFlag::SnapToGuides, opts.snap_to_guides),
-                    snap_pill("Axes", SnapOptionFlag::SnapToAxes, opts.snap_to_axes),
-                ]
-                .spacing(SP.s)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([SP.xs, SP.m])
-            .width(Length::Fill)
-            .style(crate::panels::form_look::segmented_frame)
-            .boxed(),
-        );
+    col = col.push(header);
+    if !is_open(SOLVE_KEY, cx.collapsed) {
+        return col;
+    }
+    let kv = |id: signex_i18n::MessageId, value: String| kv_row(&t!(i18n, id), value, tokens, i18n);
+    col = col.push(kv(
+        ids::EDITORS_FP_PROPS_ENTITIES,
+        i18n.count(fp.sketch_entity_count as i64),
+    ));
+    col = col.push(kv(
+        ids::EDITORS_FP_PROPS_CONSTRAINTS,
+        i18n.count(fp.sketch_constraint_count as i64),
+    ));
+    let Some(solve) = fp.last_solve.as_ref() else {
+        col = col.push(caption(t!(i18n, ids::EDITORS_FP_PROPS_NOT_SOLVED), tokens));
+        return conflict_rows(col, cx);
+    };
+    col = col.push(kv(
+        ids::EDITORS_FP_PROPS_ITERATIONS,
+        i18n.count(solve.iterations as i64),
+    ));
+    col = col.push(kv(
+        ids::EDITORS_FP_PROPS_RESIDUAL,
+        format!("{:.3e}", solve.final_residual_norm),
+    ));
+    col = col.push(kv(
+        ids::EDITORS_FP_PROPS_ELAPSED,
+        t!(i18n, ids::EDITORS_FP_PROPS_ELAPSED_VALUE, "ms" => solve.elapsed_ms).into_string(),
+    ));
+    col = col.push(kv(
+        ids::EDITORS_FP_PROPS_OVER_CONSTRAINED,
+        i18n.count(solve.over_constraint_count as i64),
+    ));
+    col = super::redundant::push_redundant_rows(col, solve, cx);
+    conflict_rows(col, cx)
+}
 
-        // v0.18.14.3 — "Snapping" mode (All Layers / Current Layer /
-        // Off). Mutually exclusive — selecting one deselects the
-        // others — but rendered as a 3-segment toggle row so it reads
-        // visually like the Altium scope picker.
-        col = render_snapping_mode_row(col, fp, primary, muted, border_c);
+/// Conflicting constraints, worst first: the last solve's, then the last
+/// rejected edit's. A click selects the row's entity.
+fn conflict_rows<'a>(
+    mut col: Column<Element<'a, PanelMsg>>,
+    cx: Ctx<'a, '_>,
+) -> Column<Element<'a, PanelMsg>> {
+    let fp = cx.fp;
+    let rows = conflicts::conflict_rows(
+        fp.last_solve
+            .as_ref()
+            .map_or(&[], |s| s.over_constraints.as_slice()),
+        &fp.rejected_conflicts,
+    );
+    if rows.is_empty() {
+        return col;
+    }
+    col = col.push(caption(
+        t!(cx.i18n, ids::EDITORS_FP_PROPS_CONFLICTS),
+        cx.tokens,
+    ));
+    for row in rows.iter().take(conflicts::MAX_ROWS) {
+        col = col.push(conflicts::conflict_row(row, cx.i18n));
+    }
+    if rows.len() > conflicts::MAX_ROWS {
+        col = col.push(more_rows(cx, rows.len() - conflicts::MAX_ROWS));
+    }
+    col
+}
 
-        // v0.13 — Altium-style "Objects for snapping" table. 12-row
-        // checkbox list mapped to the snap_* fields on SnapOptions.
-        col = col.push(
-            container(
-                text(raw("Objects for snapping"))
-                    .size(TS.caption)
-                    .color(muted),
+fn parameters_section<'a>(
+    mut col: Column<Element<'a, PanelMsg>>,
+    cx: Ctx<'a, '_>,
+) -> Column<Element<'a, PanelMsg>> {
+    let Ctx {
+        fp, tokens, i18n, ..
+    } = cx;
+    let count = pill(
+        t!(i18n, ids::EDITORS_FP_PROPS_COUNT, "count" => fp.sketch_parameters.len()),
+        PillTone::Neutral,
+        tokens,
+    );
+    let title = t!(i18n, ids::EDITORS_FP_PROPS_SECTION_PARAMETERS);
+    col = col.push(section(
+        PARAMETERS_KEY,
+        &title,
+        Some(count),
+        cx.collapsed,
+        tokens,
+        i18n,
+    ));
+    if !is_open(PARAMETERS_KEY, cx.collapsed) {
+        return col;
+    }
+    if fp.sketch_parameters.is_empty() {
+        return col.push(caption(
+            t!(i18n, ids::EDITORS_FP_PROPS_PARAMETERS_NONE),
+            tokens,
+        ));
+    }
+    for (name, expr) in &fp.sketch_parameters {
+        let edited = name.clone();
+        let line = row![
+            text(UserText::new(name.as_str()))
+                .size(TS.body)
+                .font(crate::fonts::iced_font_for_family(
+                    crate::fonts::CHROME_MONO_FONT
+                ))
+                .color(ti(tokens.text))
+                .width(Length::Fixed(TS.caption * PARAMETER_NAME_EM)),
+            text_input(
+                t!(i18n, ids::EDITORS_FP_PROPS_PARAMETER_PLACEHOLDER),
+                expr.clone()
             )
-            .padding([6.0, SP.m])
-            .width(Length::Fill)
-            .boxed(),
-        );
-        let header = row![
-            text(raw("On/Off"))
-                .size(TS.caption)
-                .color(muted)
-                .width(Length::Fixed(60.0)),
-            text(raw("Objects"))
-                .size(TS.caption)
-                .color(muted)
-                .width(Length::Fill),
+            .size(TS.body)
+            .padding(SP.xs)
+            .style(form_look::text_input_style)
+            .on_input(move |expr| PanelMsg::FpEditorEditParameter {
+                name: edited.clone(),
+                expr,
+            }),
         ]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center);
         col = col.push(
-            container(header)
+            container(line)
                 .padding([SP.xs, SP.m])
                 .width(Length::Fill)
                 .boxed(),
         );
-        col = col.push(super::super::thin_sep(border_c));
-        let snap_rows: &[(&str, SnapOptionFlag, bool)] = &[
-            (
-                "Track Vertices",
-                SnapOptionFlag::TrackVertices,
-                opts.snap_track_vertices,
-            ),
-            (
-                "Track Lines",
-                SnapOptionFlag::TrackLines,
-                opts.snap_track_lines,
-            ),
-            (
-                "Arc Centers",
-                SnapOptionFlag::ArcCenters,
-                opts.snap_arc_centers,
-            ),
-            (
-                "Intersections",
-                SnapOptionFlag::Intersections,
-                opts.snap_intersections,
-            ),
-            (
-                "Pad Centers",
-                SnapOptionFlag::PadCenters,
-                opts.snap_pad_centers,
-            ),
-            (
-                "Pad Vertices",
-                SnapOptionFlag::PadVertices,
-                opts.snap_pad_vertices,
-            ),
-            ("Pad Edges", SnapOptionFlag::PadEdges, opts.snap_pad_edges),
-            (
-                "Via Centers",
-                SnapOptionFlag::ViaCenters,
-                opts.snap_via_centers,
-            ),
-            ("Texts", SnapOptionFlag::Texts, opts.snap_texts),
-            ("Regions", SnapOptionFlag::Regions, opts.snap_regions),
-            (
-                "Footprint Origins",
-                SnapOptionFlag::FootprintOrigins,
-                opts.snap_footprint_origins,
-            ),
-            (
-                "3D Body Snap Points",
-                SnapOptionFlag::Body3dPoints,
-                opts.snap_3d_body_points,
-            ),
-        ];
-        for &(label, flag, on) in snap_rows {
-            let label_owned: String = label.to_string();
-            let row_w = row![
-                container(
-                    signex_widgets::checkbox(on)
-                        .on_toggle(move |_| PanelMsg::FpEditorToggleSnapOption(flag))
-                        .size(TS.label)
-                        .spacing(0),
-                )
-                .width(Length::Fixed(60.0))
-                .padding([0, 0]),
-                text(raw(label_owned))
-                    .size(TS.caption)
-                    .color(primary)
-                    .width(Length::Fill),
-            ]
-            .spacing(SP.s)
-            .align_y(iced::Alignment::Center);
-            col = col.push(
-                container(row_w)
-                    .padding([SP.xs, SP.m])
-                    .width(Length::Fill)
-                    .boxed(),
-            );
-        }
-
-        // Snap Distance + Axis Snap Range numeric rows.
-        let mk_num_row = |label: &str,
-                          value: f64,
-                          on_input: fn(String) -> PanelMsg|
-         -> Element<'static, PanelMsg> {
-            container(
-                row![
-                    text(raw(label.to_string()))
-                        .size(TS.caption)
-                        .color(muted)
-                        .width(Length::Fixed(110.0)),
-                    text_input(raw(""), format!("{value:.3}"))
-                        .size(TS.caption)
-                        .padding(SP.xs)
-                        .style(crate::panels::form_look::text_input_style)
-                        .on_input(on_input),
-                ]
-                .spacing(6)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([SP.xs, SP.m])
-            .width(Length::Fill)
-            .boxed()
-        };
-        col = col.push(mk_num_row(
-            "Snap Distance",
-            opts.snap_distance_mm,
-            PanelMsg::FpEditorSetSnapDistance,
-        ));
-        col = col.push(mk_num_row(
-            "Axis Snap Range",
-            opts.axis_snap_range_mm,
-            PanelMsg::FpEditorSetAxisSnapRange,
-        ));
-
-        // Grid step retained for parity with v0.18.x flow.
-        col = col.push(mk_num_row(
-            "Grid step (mm)",
-            opts.grid_step_mm,
-            PanelMsg::FpEditorSetSnapGridStep,
-        ));
-    } // end if snap_open
-
-    // v0.18.13 — Library Options layout (Grid Manager / Guide
-    // Manager / Other) below Snap Options, only on the no-selection
-    // body to mirror Altium's per-state Properties surface.
-    if no_selection {
-        col = col.push(
-            collapsible_section_header(
-                "fp_grid_manager",
-                "Grid Manager",
-                collapsed_sections,
-                primary,
-                border_c,
-            )
-            .boxed(),
-        );
-        if !is_section_collapsed("fp_grid_manager", collapsed_sections) {
-            col = render_grid_manager(col, fp, primary, muted, border_c);
-        }
-        // Guide Manager removed in v0.13 — sketch-mode owns guides /
-        // construction geometry; the standalone Guide Manager was
-        // redundant.
-        col = col.push(
-            collapsible_section_header("fp_other", "Other", collapsed_sections, primary, border_c)
-                .boxed(),
-        );
-        if !is_section_collapsed("fp_other", collapsed_sections) {
-            col = render_other_section(col, fp, palette, unit, i18n);
-        }
     }
+    col
+}
 
-    // v0.16.2 — Sketch-mode-only sections (Parameters, DOF, Solve
-    // warnings). Always visible when the editor is in Sketch mode so
-    // the user can monitor solve state while authoring, regardless of
-    // whether anything is selected. Migrated out of the bottom-of-canvas
-    // inspector strip that shipped in v0.13.1.
-    if fp.mode_kind == FootprintModeKind::Sketch {
-        // Parameters
-        col = col.push(
-            collapsible_section_header(
-                "fp_parameters",
-                "Parameters",
-                collapsed_sections,
-                primary,
-                border_c,
-            )
-            .boxed(),
-        );
-        if !is_section_collapsed("fp_parameters", collapsed_sections) {
-            if fp.sketch_parameters.is_empty() {
-                col = col.push(
-                    container(
-                        text(raw("(none — add via expression)"))
-                            .size(TS.caption)
-                            .color(muted),
-                    )
-                    .padding([SP.xs, SP.m])
-                    .width(Length::Fill)
-                    .boxed(),
-                );
-            } else {
-                for (name, expr) in &fp.sketch_parameters {
-                    let name_clone = name.clone();
-                    let row = row![
-                        text(signex_i18n::UserText::new(name))
-                            .size(TS.caption)
-                            .color(primary)
-                            .width(Length::Fixed(110.0)),
-                        text_input(raw("expression…"), expr)
-                            .size(TS.caption)
-                            .padding(SP.xs)
-                            .style(crate::panels::form_look::text_input_style)
-                            .on_input(move |new_expr| PanelMsg::FpEditorEditParameter {
-                                name: name_clone.clone(),
-                                expr: new_expr,
-                            }),
-                    ]
-                    .spacing(6)
-                    .align_y(iced::Alignment::Center);
-                    col = col.push(
-                        container(row)
-                            .padding([SP.xs, SP.m])
-                            .width(Length::Fill)
-                            .boxed(),
-                    );
-                }
-            }
-        } // end if !fp_parameters collapsed
-
-        // DOF / Last solve
-        col = col.push(
-            collapsible_section_header(
-                "fp_dof",
-                "DOF / Last solve",
-                collapsed_sections,
-                primary,
-                border_c,
-            )
-            .boxed(),
-        );
-        if !is_section_collapsed("fp_dof", collapsed_sections) {
-            col = props_kv_row(
-                col,
-                muted,
-                input_bg,
-                "Sketch entities",
-                i18n.count(fp.sketch_entity_count as i64),
-            );
-            col = props_kv_row(
-                col,
-                muted,
-                input_bg,
-                "Constraints",
-                i18n.count(fp.sketch_constraint_count as i64),
-            );
-            if let Some(s) = fp.last_solve.as_ref() {
-                col = props_kv_row(
-                    col,
-                    muted,
-                    input_bg,
-                    "Iterations",
-                    i18n.count(s.iterations as i64),
-                );
-                col = props_kv_row(
-                    col,
-                    muted,
-                    input_bg,
-                    "Elapsed",
-                    format!("{} ms", s.elapsed_ms),
-                );
-                col = props_kv_row(
-                    col,
-                    muted,
-                    input_bg,
-                    "Residual norm",
-                    format!("{:.3e}", s.final_residual_norm),
-                );
-                col = props_kv_row(
-                    col,
-                    muted,
-                    input_bg,
-                    "Over-constrained",
-                    i18n.count(s.over_constraint_count as i64),
-                );
-                col = super::redundant::push_redundant_rows(col, s, muted, input_bg, i18n);
-            } else {
-                col = col.push(
-                    container(text(raw("(no solve yet)")).size(TS.caption).color(muted))
-                        .padding([SP.xs, SP.m])
-                        .width(Length::Fill)
-                        .boxed(),
-                );
-            }
-
-            // Conflicting constraints, worst first: the last solve's, then
-            // the last rejected edit's. Click selects the row's entity.
-            let conflicts = conflicts::conflict_rows(
-                fp.last_solve
-                    .as_ref()
-                    .map_or(&[], |s| s.over_constraints.as_slice()),
-                &fp.rejected_conflicts,
-            );
-            if !conflicts.is_empty() {
-                col = col.push(
-                    container(
-                        text(raw("Conflicts (worst first)"))
-                            .size(TS.caption)
-                            .color(muted),
-                    )
-                    .padding([SP.s, SP.m])
-                    .width(Length::Fill)
-                    .boxed(),
-                );
-                for row in conflicts.iter().take(conflicts::MAX_ROWS) {
-                    col = col.push(conflicts::conflict_row(row));
-                }
-                if conflicts.len() > conflicts::MAX_ROWS {
-                    col = col.push(
-                        container(
-                            text(raw(format!(
-                                "… +{} more",
-                                conflicts.len() - conflicts::MAX_ROWS
-                            )))
-                            .size(TS.caption)
-                            .color(muted),
-                        )
-                        .padding([SP.xs, SP.m])
-                        .width(Length::Fill)
-                        .boxed(),
-                    );
-                }
-            }
-        } // end if !fp_dof collapsed
-
-        // Solve warnings
-        col = col.push(
-            collapsible_section_header(
-                "fp_solve_warnings",
-                "Solve warnings",
-                collapsed_sections,
-                primary,
-                border_c,
-            )
-            .boxed(),
-        );
-        if !is_section_collapsed("fp_solve_warnings", collapsed_sections) {
-            if fp.solve_warnings.is_empty() {
-                col = col.push(
-                    container(text(raw("(none)")).size(TS.caption).color(muted))
-                        .padding([SP.xs, SP.m])
-                        .width(Length::Fill)
-                        .boxed(),
-                );
-            } else {
-                for w in fp.solve_warnings.iter().take(8) {
-                    col = col.push(
-                        container(text(raw(w)).size(TS.caption).color(muted))
-                            .padding([SP.xs, SP.m])
-                            .width(Length::Fill)
-                            .boxed(),
-                    );
-                }
-                if fp.solve_warnings.len() > 8 {
-                    col = col.push(
-                        container(
-                            text(raw(format!("… +{} more", fp.solve_warnings.len() - 8)))
-                                .size(TS.caption)
-                                .color(muted),
-                        )
-                        .padding([SP.xs, SP.m])
-                        .width(Length::Fill)
-                        .boxed(),
-                    );
-                }
-            }
-        } // end if !fp_solve_warnings collapsed
+fn warnings_section<'a>(
+    mut col: Column<Element<'a, PanelMsg>>,
+    cx: Ctx<'a, '_>,
+) -> Column<Element<'a, PanelMsg>> {
+    let Ctx {
+        fp, tokens, i18n, ..
+    } = cx;
+    let count = (!fp.solve_warnings.is_empty()).then(|| {
+        pill(
+            t!(i18n, ids::EDITORS_FP_PROPS_COUNT, "count" => fp.solve_warnings.len()),
+            PillTone::Warn,
+            tokens,
+        )
+    });
+    let title = t!(i18n, ids::EDITORS_FP_PROPS_SECTION_WARNINGS);
+    col = col.push(section(
+        WARNINGS_KEY,
+        &title,
+        count,
+        cx.collapsed,
+        tokens,
+        i18n,
+    ));
+    if !is_open(WARNINGS_KEY, cx.collapsed) {
+        return col;
     }
-
-    // Settings + Hint footer — always visible at the bottom of the
-    // panel regardless of mode / selection so common toggles stay
-    // reachable. Factored into a helper so the early-return placement
-    // branch above can render the same footer.
+    if fp.solve_warnings.is_empty() {
+        return col.push(caption(
+            t!(i18n, ids::EDITORS_FP_PROPS_WARNINGS_NONE),
+            tokens,
+        ));
+    }
+    for warning in fp.solve_warnings.iter().take(MAX_WARNINGS) {
+        // raw: the solver's own note, not yet in the catalog.
+        col = col.push(caption(raw(warning.clone()), tokens));
+    }
+    if fp.solve_warnings.len() > MAX_WARNINGS {
+        col = col.push(more_rows(cx, fp.solve_warnings.len() - MAX_WARNINGS));
+    }
     col
 }

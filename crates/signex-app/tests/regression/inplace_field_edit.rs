@@ -373,6 +373,61 @@ fn a_command_with_nothing_to_edit_focuses_nothing() {
     ));
 }
 
+fn tab(app: &mut Signex) {
+    let _ = app.update(Message::TextEdit(TextEditMsg::NextFieldRequested));
+}
+
+/// Mockup row 65: Tab keeps what was typed and goes designator, value,
+/// footprint; on the footprint it stays, and each field is its own undo.
+#[test]
+fn tab_walks_a_parts_fields_and_keeps_each_text() {
+    let mut app = app();
+    select(&mut app, &[(0, SelectedKind::Symbol)]);
+    request(&mut app, TextEditTarget::Designator);
+    let opens = app.ui_state.text_edit_opens;
+    let _ = app.update(Message::TextEdit(TextEditMsg::Changed("R9".into())));
+    tab(&mut app);
+    assert_eq!(doc(&app).symbols[0].reference, "R9");
+    assert_eq!(
+        editing(&app),
+        Some((SelectedKind::SymbolValField, "10k".into()))
+    );
+    let _ = app.update(Message::TextEdit(TextEditMsg::Changed("47k".into())));
+    tab(&mut app);
+    assert_eq!(doc(&app).symbols[0].value, "47k");
+    assert_eq!(editing(&app), Some((SelectedKind::Symbol, "R_0603".into())));
+    tab(&mut app);
+    assert_eq!(
+        editing(&app),
+        Some((SelectedKind::Symbol, "R_0603".into())),
+        "the footprint is the last field"
+    );
+    assert_eq!(app.ui_state.text_edit_opens, opens, "a move is not a use");
+    let _ = app.update(Message::Input(signex_app::app::InputMsg::EscapePressed {
+        window: None,
+    }));
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(doc(&app).symbols[0].value, "10k");
+    assert_eq!(doc(&app).symbols[0].reference, "R9");
+}
+
+/// A power port's one text is its net name: Tab stays on it.
+#[test]
+fn tab_on_a_power_port_stays_on_its_net_name() {
+    let mut sheet = empty_sheet();
+    let mut port = part("#PWR01", "+5V", R1_AT);
+    port.is_power = true;
+    sheet.symbols = vec![port];
+    let mut app = app_with(sheet);
+    select(&mut app, &[(0, SelectedKind::Symbol)]);
+    request(&mut app, TextEditTarget::Designator);
+    tab(&mut app);
+    assert_eq!(
+        editing(&app),
+        Some((SelectedKind::SymbolValField, "+5V".into()))
+    );
+}
+
 /// #1799 — a power port's designator is never drawn, so F2 / Edit Designator
 /// edits what is drawn: the net name, through the Value edit Properties uses.
 #[test]

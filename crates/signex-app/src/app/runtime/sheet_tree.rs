@@ -30,11 +30,10 @@ pub(super) struct RowMarks<'a> {
 }
 
 impl RowMarks<'_> {
-    /// A listed file is `(missing)` only when the probe found it absent and
-    /// no open or unsaved document holds it: a document created this session
-    /// is not on disk until the user saves it (#2350).
+    /// A listed file is `(missing)`: see
+    /// [`ProjectFsFacts::is_listed_file_missing`].
     pub(super) fn is_missing(&self, facts: &ProjectFsFacts, path: &Path) -> bool {
-        facts.is_missing(path) && !self.open.contains(path) && !self.dirty.contains(path)
+        facts.is_listed_file_missing(path, self.open.contains(path), self.dirty.contains(path))
     }
 }
 
@@ -241,6 +240,7 @@ fn child_rows(node: &SheetNode, ctx: &RowCtx<'_>, placed: &mut HashSet<String>) 
         let mut info = row(&child.name, &relative, &child.path, ctx.marks);
         info.in_project_list = ctx.listed.contains(&key);
         info.is_child_reference = true;
+        info.file_key = key;
         info.unreadable = child.kind == SheetNodeKind::Unreadable;
         // A symbol whose file the walk found absent is missing until a newer
         // file-status check sees it. A file the walk read stays unmarked: one
@@ -277,6 +277,7 @@ fn row(name: &str, filename: &str, abs: &Path, marks: &RowMarks<'_>) -> SheetInf
         missing: false,
         unreadable: false,
         is_child_reference: false,
+        file_key: String::new(),
         in_project_list: false,
         children: Vec::new(),
     }

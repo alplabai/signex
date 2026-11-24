@@ -1,4 +1,4 @@
-//! Ids of `locales/en-US/bom.ftl`: the BOM preview (#2058).
+//! Ids of `locales/en-US/bom.ftl`: the BOM export dialog (#2058).
 
 define_ids! {
     BOM;
@@ -8,10 +8,8 @@ define_ids! {
     BOM_TAB_RULES = "bom-tab-rules";
     BOM_SECTION_ITEMS = "bom-section-items";
     BOM_SECTION_EXPORT = "bom-section-export";
-    BOM_SECTION_COLUMNS = "bom-section-columns";
     BOM_SECTION_RULES = "bom-section-rules";
     BOM_SECTION_ISSUES = "bom-section-issues";
-    BOM_GROUPING = "bom-grouping";
     BOM_GROUPING_GROUPED = "bom-grouping-grouped";
     BOM_GROUPING_UNGROUPED = "bom-grouping-ungrouped";
     BOM_GROUPING_FLAT = "bom-grouping-flat";
@@ -19,12 +17,18 @@ define_ids! {
     BOM_FORMAT_CSV = "bom-format-csv";
     BOM_FORMAT_XLSX = "bom-format-xlsx";
     BOM_FORMAT_HTML = "bom-format-html";
-    BOM_INCLUDE_DNP = "bom-include-dnp";
     BOM_INCLUDE_NOT_FITTED = "bom-include-not-fitted";
     BOM_VARIANT = "bom-variant";
     BOM_VARIANT_BASE = "bom-variant-base";
-    BOM_VARIANT_IS = "bom-variant-is";
-    BOM_CURRENT_VARIANT = "bom-current-variant";
+    BOM_FILTER_PLACEHOLDER = "bom-filter-placeholder";
+    BOM_CHIP_WARNINGS = "bom-chip-warnings";
+    BOM_CHIP_ERRORS = "bom-chip-errors";
+    BOM_COLUMNS_HINT = "bom-columns-hint";
+    BOM_ISSUES_HINT = "bom-issues-hint";
+    BOM_ISSUE_LINE = "bom-issue-line";
+    BOM_EXPORT_CSV = "bom-export-csv";
+    BOM_EXPORT_XLSX = "bom-export-xlsx";
+    BOM_EXPORT_HTML = "bom-export-html";
     BOM_COLUMN_NAME = "bom-column-name";
     BOM_COLUMN_DESCRIPTION = "bom-column-description";
     BOM_COLUMN_DESIGNATOR = "bom-column-designator";
@@ -40,7 +44,6 @@ define_ids! {
     BOM_COLUMN_STOCK = "bom-column-stock";
     BOM_COLUMN_DISTRIBUTOR = "bom-column-distributor";
     BOM_COLUMN_PRICE_AGE = "bom-column-price-age";
-    BOM_NO_ISSUES = "bom-no-issues";
     BOM_NO_ISSUES_FOUND = "bom-no-issues-found";
     BOM_ISSUES_ERRORS = "bom-issues-errors";
     BOM_ISSUES_WARNINGS = "bom-issues-warnings";

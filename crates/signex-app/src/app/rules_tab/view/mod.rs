@@ -1,32 +1,42 @@
-//! The Rules tab view (#2398): toolbar, notes, then the table and the
-//! selected rule's detail, or the text view. Pure: reads the project, its
-//! rule text, the tab state and the last DRC run, and emits
-//! `RulesTabMsg`s. Every text is a catalog message or the user's own text.
+//! The Rules tab view (#2398, #2530), top to bottom: the domain bar, the
+//! find and filter bar, the constraint set cards, the notes, then the
+//! constraint grid with the selected cell's detail strip under it (or the
+//! Clearance matrix, or the text view). Pure: reads the project, its rule
+//! text, the tab state and the last DRC run, and emits `RulesTabMsg`s.
+//! Every text is a catalog message or the user's own text.
 
 mod detail;
+mod grid_cell;
+mod grid_icons;
+mod grid_preview;
+mod grid_toolbar;
 mod matrix;
 mod presets;
+// #1489: "from schematic" under a rule Update PCB wrote.
+mod schematic_source;
 mod sets;
 mod table;
+mod text_bar;
 mod text_view;
 
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 
-use iced::widget::{Row, Space, column, container, row};
-use iced::{Alignment, Element, Length, Widget as _};
+use iced::widget::{column, container, row};
+use iced::{Element, Length, Widget as _};
 use signex_drc::{Effective, RuleResult};
-use signex_drc_dsl::table::{RuleKind, RuleRow, RuleTable};
-use signex_i18n::{I18n, Localized, UserText, ids, t};
-use signex_types::pcb::PcbBoard;
-use signex_types::project::DrcRuleSet;
+use signex_drc_dsl::table::catalog::{CatalogGroup, Domain};
+use signex_drc_dsl::table::{RuleRow, RuleTable};
+use signex_i18n::{I18n, MessageId, UserText, ids, t};
+use signex_types::project::{DrcRuleSet, NamedRuleSet};
 use signex_types::theme::ThemeTokens;
 use signex_types::violation::Severity;
-use signex_widgets::{button, text, text_input};
+use signex_widgets::constraint_grid::{ColumnId, GridMetrics, GridStyle};
+use signex_widgets::text;
 
 pub(super) use super::analysis::Checked;
-use super::{
-    ClearanceView, RulesDomain, RulesFilter, RulesOrigin, RulesPanel, RulesTabMsg, RulesTabState,
-};
+use super::grid::{Cells, RulesGrid};
+use super::{RulesOrigin, RulesPanel, RulesTabMsg, RulesTabState};
 use crate::app::state::ProjectId;
 use crate::app::{Message, ProjectMsg, Signex};
 use crate::styles::{Spacing, TypeScale, tokens};
@@ -50,23 +60,80 @@ pub(super) struct Frame<'a> {
     pub origin: RulesOrigin,
     pub checked: Cow<'a, Checked>,
     pub running: bool,
-    pub board: Option<&'a PcbBoard>,
     /// The selected rule's sample value and the net it is for.
     pub why: Option<&'a (Effective, String)>,
-    /// The net classes' names, for the scope cell's suggestions.
+    /// The net classes' names, for the matrix.
     pub classes: Vec<String>,
     /// The rule layer whose severity entries outrank a rule's own word.
     pub layer: Option<&'a DrcRuleSet>,
+    /// The project's constraint sets.
+    pub sets: BTreeMap<String, NamedRuleSet>,
 }
 
-impl Frame<'_> {
+impl<'a> Frame<'a> {
     /// The rule's results in the last run, by rule id.
+    /// `None` while the run is stale or the rule changed since it ran: an
+    /// old count must not speak for the rule as it is now.
     pub fn result(&self, row: &RuleRow) -> Option<RuleResult> {
         match &*self.checked {
-            Checked::Ran { results, .. } => {
+            Checked::Ran {
+                stale: false,
+                results,
+                used,
+            } if used.get(&row.name) == row.compiled.as_ref() => {
                 Some(results.get(&row.id()).copied().unwrap_or_default())
             }
             _ => None,
+        }
+    }
+
+    /// Whether there was a run and the board has not changed since.
+    fn has_current_run(&self) -> bool {
+        matches!(&*self.checked, Checked::Ran { stale: false, .. })
+    }
+
+    /// The findings of `domain`'s rules in the last run, counting only
+    /// rules unchanged since it ([`Self::result`]); `None` with no current
+    /// run.
+    pub fn domain_findings(&self, domain: Domain) -> Option<usize> {
+        self.has_current_run()
+            .then(|| super::grid::domain_findings(&self.table, domain, |row| self.result(row)))
+    }
+
+    /// The findings of `group`'s rules, as [`Self::domain_findings`].
+    pub fn group_findings(&self, group: &CatalogGroup) -> Option<usize> {
+        self.has_current_run()
+            .then(|| super::grid::group_findings(&self.table, group, |row| self.result(row)))
+    }
+
+    /// Why the rule's findings line shows no count (or that it passed);
+    /// `None` when the last run counts findings for the rule as it is.
+    /// A rule the board or an edit outdated is never "not checked yet".
+    pub fn findings_reason(&self, row: &RuleRow) -> Option<MessageId> {
+        if !self.is_on(row) {
+            return Some(ids::RULES_BLANK_OFF);
+        }
+        match &*self.checked {
+            Checked::NoBoard => Some(ids::RULES_BLANK_NO_BOARD),
+            Checked::NotRun => Some(ids::RULES_BLANK_NOT_CHECKED),
+            Checked::Ran { stale: true, .. } => Some(ids::RULES_BLANK_STALE),
+            Checked::Ran { used, .. } if used.get(&row.name) != row.compiled.as_ref() => {
+                Some(ids::RULES_BLANK_CHANGED)
+            }
+            // A rule the compiler refused is not applied, so not checked.
+            Checked::Ran { .. } if row.compiled.is_none() => Some(ids::RULES_BLANK_NOT_CHECKED),
+            Checked::Ran { results, .. } => {
+                let scope = self
+                    .state
+                    .analysis
+                    .as_ref()
+                    .and_then(|a| a.scope.get(&row.name));
+                if scope == Some(&0) {
+                    return Some(ids::RULES_BLANK_NO_OBJECTS);
+                }
+                let passes = results.get(&row.id()).is_none_or(|r| r.violations == 0);
+                passes.then_some(ids::RULES_BLANK_PASSES)
+            }
         }
     }
 
@@ -86,11 +153,46 @@ impl Frame<'_> {
     pub fn severity(&self, row: &RuleRow) -> Severity {
         self.entry(row).flatten().unwrap_or(row.severity)
     }
+
+    pub fn grid(&self) -> &'a RulesGrid {
+        &self.state.grid
+    }
+
+    /// The cells of the grid, resolved from the rule text and the sets.
+    pub fn cells(&self) -> Cells<'_> {
+        Cells {
+            grid: &self.state.grid,
+            table: &self.table,
+            sets: &self.sets,
+        }
+    }
+
+    /// The grid's colours and sizes.
+    pub fn grid_style(&self) -> GridStyle {
+        GridStyle::from_tokens(self.tokens, TS.body)
+    }
+
+    pub fn metrics(&self) -> GridMetrics {
+        GridMetrics::for_text(TS.body)
+    }
+}
+
+/// Where column `column` starts, from the grid's left edge, so a find can
+/// scroll it into view.
+pub(super) fn column_left(grid: &RulesGrid, column: ColumnId) -> f32 {
+    table::column_left(grid, column, GridMetrics::for_text(TS.body))
+}
+
+/// The id of the grid's both-ways scrollable.
+pub(super) fn grid_scroll_id() -> iced::widget::Id {
+    iced::widget::Id::from("rules-constraint-grid".to_string())
 }
 
 impl Signex {
-    /// The project whose Rules tab the main window shows. A Rules tab is
-    /// not undocked (it would take the main window's shortcuts).
+    /// The project whose Rules tab the main window shows. Undocking a page
+    /// tab is refused today (`handle_undock_tab`, #1202), so only the main
+    /// window draws one; its drawing keys already follow the window that
+    /// shows it (`rules_drawing_key`), should that change.
     pub(crate) fn rules_tab_in_window(&self, is_main: bool) -> Option<ProjectId> {
         if !is_main {
             return None;
@@ -120,50 +222,53 @@ impl Signex {
             .boxed();
         };
         let frame = self.rules_frame(id, i18n, tokens, state, src, origin);
-        let matrix_shown =
-            state.domain == RulesDomain::Clearance && state.clearance_view == ClearanceView::Matrix;
+        let domain = state.grid.domain();
         let rules: Element<'_, Message> = match state.text.as_ref() {
             Some(rules_text) => text_view::view(&frame, rules_text),
-            None if matrix_shown => matrix::view(&frame),
-            None => column![table::view(&frame), detail::view(&frame)]
-                .spacing(SP.l)
-                .height(Length::Fill)
-                .boxed(),
+            None if state.is_matrix_shown() => matrix::view(&frame),
+            None if domain == Domain::SignalIntegrity => table::later(&frame),
+            None => column![
+                container(table::view(&frame)).height(Length::FillPortion(3)),
+                container(detail::view(&frame)).height(Length::FillPortion(2)),
+            ]
+            .spacing(SP.m)
+            .height(Length::Fill)
+            .boxed(),
         };
-        let panel: Option<Element<'_, Message>> = match state.panel {
-            Some(RulesPanel::Sets) => {
-                let sets = self
-                    .rules_drc_of(id)
-                    .map(|drc| drc.sets)
-                    .unwrap_or_default();
-                Some(sets::view(&frame, &sets))
-            }
-            Some(RulesPanel::Presets) => Some(presets::view(&frame, self.preset_profiles())),
-            None => None,
-        };
-        let body: Element<'_, Message> = match panel {
-            Some(panel) => row![
+        let body: Element<'_, Message> = match state.panel {
+            Some(RulesPanel::Presets) => row![
                 container(rules).width(Length::FillPortion(3)),
-                container(panel).width(Length::FillPortion(2)),
+                container(presets::view(&frame, self.preset_profiles()))
+                    .width(Length::FillPortion(2)),
             ]
             .spacing(SP.l)
             .height(Length::Fill)
             .boxed(),
-            None => rules,
+            _ => rules,
         };
-        container(
-            column![toolbar(&frame), notes(&frame), body]
-                .spacing(SP.m)
-                .height(Length::Fill),
-        )
-        .padding(SP.l)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(crate::styles::panel_region(tokens))
-        .boxed()
+        let bar = if state.text.is_some() {
+            text_bar::view(&frame)
+        } else {
+            grid_toolbar::domains(&frame)
+        };
+        let mut page = column![bar].spacing(SP.s);
+        if state.text.is_none() {
+            page = page.push(grid_toolbar::find_bar(&frame));
+        }
+        if state.panel == Some(RulesPanel::Sets) {
+            page = page.push(sets::view(&frame));
+        }
+        page = page.push(notes(&frame)).push(body);
+        container(page.height(Length::Fill))
+            .padding(SP.l)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(crate::styles::panel_region(tokens))
+            .boxed()
     }
 
-    fn rules_frame<'a>(
+    /// What one frame of tab `id` reads.
+    pub(super) fn rules_frame<'a>(
         &'a self,
         id: ProjectId,
         i18n: &'a I18n,
@@ -203,196 +308,24 @@ impl Signex {
             origin,
             checked,
             running,
-            board: board.map(|(_, board)| board),
             why: analysis.and_then(|analysis| analysis.why.as_ref()),
             classes,
             layer: self.rules_drc_layer(id),
+            sets: self.rules_drc_of(id).map(|d| d.sets).unwrap_or_default(),
         }
     }
 }
 
-/// A toolbar button: accent when `on`.
-fn pick<'a>(
-    label: Localized,
-    on: bool,
-    msg: Message,
-    tokens: &ThemeTokens,
-) -> Element<'a, Message> {
-    let face = button(text(label).size(TS.label))
-        .padding([SP.xs, SP.m])
-        .on_press(msg);
-    if on {
-        face.style(crate::styles::accent_button(tokens)).boxed()
-    } else {
-        face.style(crate::styles::subtle_button(tokens)).boxed()
-    }
-}
-
-/// The findings of `domain`'s rules in the last run.
-fn domain_findings(frame: &Frame, domain: RulesDomain) -> usize {
-    frame
-        .table
-        .rows
-        .iter()
-        .filter(|row| row.kind.map(RulesDomain::of) == Some(domain))
-        .filter_map(|row| frame.result(row))
-        .map(|r| r.violations)
-        .sum()
-}
-
-fn toolbar<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
-    let (i18n, tokens, state, id) = (frame.i18n, frame.tokens, frame.state, frame.id);
-    let mut bar: Row<Element<'a, Message>> = Row::new().spacing(SP.s).align_y(Alignment::Center);
-    let in_table = state.text.is_none();
-    for domain in RulesDomain::ALL {
-        let label = match domain {
-            RulesDomain::Clearance => ids::RULES_DOMAIN_CLEARANCE,
-            RulesDomain::Routing => ids::RULES_DOMAIN_ROUTING,
-            RulesDomain::Holes => ids::RULES_DOMAIN_HOLES,
-            RulesDomain::Mask => ids::RULES_DOMAIN_MASK,
-            RulesDomain::Assembly => ids::RULES_DOMAIN_ASSEMBLY,
-        };
-        let count = domain_findings(frame, domain);
-        let face = row![
-            text(t!(i18n, label)).size(TS.label),
-            text(t!(i18n, ids::RULES_DOMAIN_COUNT, "count" => count))
-                .size(TS.caption)
-                .color(if count > 0 {
-                    tokens::danger(tokens)
-                } else {
-                    tokens::muted_text(tokens)
-                }),
-        ]
-        .spacing(SP.s)
-        .align_y(Alignment::Center);
-        let tab = button(face)
-            .padding([SP.xs, SP.m])
-            .on_press(up(RulesTabMsg::DomainPicked {
-                project_id: id,
-                domain,
-            }));
-        bar = if domain == state.domain && in_table {
-            bar.push(tab.style(crate::styles::accent_button(tokens)).boxed())
-        } else {
-            bar.push(tab.style(crate::styles::subtle_button(tokens)).boxed())
-        };
-    }
-    bar = bar.push(Space::new().width(SP.l).boxed());
-    if in_table {
-        bar = bar.push(
-            text_input(
-                t!(i18n, ids::RULES_SEARCH_PLACEHOLDER),
-                state.search.as_str(),
-            )
-            .on_input(move |text| {
-                up(RulesTabMsg::SearchEdited {
-                    project_id: id,
-                    text,
-                })
-            })
-            .size(TS.label)
-            .padding(SP.s)
-            .width(Length::Fixed(TS.body * 22.0))
-            .style(crate::panels::form_look::text_input_style)
-            .boxed(),
-        );
-        for filter in RulesFilter::ALL {
-            let label = match filter {
-                RulesFilter::All => ids::RULES_FILTER_ALL,
-                RulesFilter::Violations => ids::RULES_FILTER_VIOLATIONS,
-                RulesFilter::Flagged => ids::RULES_FILTER_FLAGGED,
-                RulesFilter::Disabled => ids::RULES_FILTER_DISABLED,
-            };
-            let msg = up(RulesTabMsg::FilterPicked {
-                project_id: id,
-                filter,
-            });
-            bar = bar.push(pick(t!(i18n, label), filter == state.filter, msg, tokens));
-        }
-    }
-    if in_table && state.domain == RulesDomain::Clearance {
-        let matrix = state.clearance_view == ClearanceView::Matrix;
-        let (label, view) = if matrix {
-            (ids::RULES_VIEW_LIST, ClearanceView::List)
-        } else {
-            (ids::RULES_VIEW_MATRIX, ClearanceView::Matrix)
-        };
-        let msg = up(RulesTabMsg::ClearanceViewPicked {
-            project_id: id,
-            view,
-        });
-        bar = bar.push(pick(t!(i18n, label), false, msg, tokens));
-    }
-    bar = bar.push(Space::new().width(Length::Fill).boxed());
-    for (panel, label) in [
-        (RulesPanel::Sets, ids::RULES_PANEL_SETS),
-        (RulesPanel::Presets, ids::RULES_PANEL_PRESETS),
-    ] {
-        let open = state.panel == Some(panel);
-        let msg = up(RulesTabMsg::PanelPicked {
-            project_id: id,
-            panel: (!open).then_some(panel),
-        });
-        bar = bar.push(pick(t!(i18n, label), open, msg, tokens));
-    }
-    if in_table && !frame.table.is_unparsed() {
-        for &kind in state.domain.kinds() {
-            let label = match kind {
-                RuleKind::Clearance => ids::RULES_ADD_CLEARANCE,
-                RuleKind::Track => ids::RULES_ADD_TRACK,
-                RuleKind::Via => ids::RULES_ADD_VIA,
-                RuleKind::Hole => ids::RULES_ADD_HOLE,
-                RuleKind::Edge => ids::RULES_ADD_EDGE,
-                RuleKind::Silk => ids::RULES_ADD_SILK,
-                RuleKind::Mask => ids::RULES_ADD_MASK,
-                RuleKind::Paste => ids::RULES_ADD_PASTE,
-                RuleKind::Courtyard => ids::RULES_ADD_COURTYARD,
-            };
-            let msg = up(RulesTabMsg::RuleAdded {
-                project_id: id,
-                kind,
-            });
-            bar = bar.push(pick(t!(i18n, label), false, msg, tokens));
-        }
-    }
-    let drc_label = if frame.running {
-        ids::RULES_DRC_RUNNING
-    } else {
-        ids::RULES_RUN_DRC
-    };
-    let can_run = !frame.running && !matches!(*frame.checked, Checked::NoBoard);
-    bar = bar.push(
-        button(text(t!(i18n, drc_label)).size(TS.label))
-            .padding([SP.xs, SP.m])
-            .style(crate::styles::outline_button(tokens))
-            .on_press_maybe(can_run.then(|| up(RulesTabMsg::DrcRequested { project_id: id })))
-            .boxed(),
-    );
-    let (view_label, to_text) = if in_table {
-        (ids::RULES_VIEW_TEXT, true)
-    } else {
-        (ids::RULES_VIEW_TABLE, false)
-    };
-    let toggle = up(RulesTabMsg::TextViewToggled {
-        project_id: id,
-        on: to_text,
-    });
-    bar = bar.push(pick(t!(i18n, view_label), false, toggle, tokens));
-    bar.boxed()
-}
-
-/// One line per note: where the rules come from, a syntax error, a
-/// refused edit.
+/// The notes over the grid: the info banner while the rules come from
+/// this machine's profile, a syntax error, a refused edit.
 fn notes<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
     let (i18n, tokens) = (frame.i18n, frame.tokens);
     let mut lines = column![].spacing(SP.xs);
     if frame.origin == RulesOrigin::Machine {
-        lines = lines.push(
-            text(t!(i18n, ids::RULES_ORIGIN_MACHINE))
-                .size(TS.body)
-                .color(tokens::muted_text(tokens))
-                .boxed(),
-        );
+        lines = lines.push(grid_toolbar::info_banner(
+            frame,
+            t!(i18n, ids::RULES_ORIGIN_MACHINE),
+        ));
     }
     if let Some(first) = frame.table.syntax.first() {
         let error = first.render(&frame.src);

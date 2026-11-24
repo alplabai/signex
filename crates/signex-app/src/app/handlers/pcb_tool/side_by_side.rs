@@ -45,7 +45,7 @@ impl Signex {
             }
             return;
         };
-        if at == anchor {
+        if self.clicks_run_end(at, anchor) {
             self.end_route_shape();
             return;
         }

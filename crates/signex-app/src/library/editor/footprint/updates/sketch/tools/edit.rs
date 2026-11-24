@@ -16,7 +16,7 @@
 //! `break_track` are each already a single cohesive click-driven edit
 //! under the cap and are moved verbatim without further splitting.
 
-use super::ToolClickCtx;
+use super::{ToolClickCtx, pick_line_at};
 use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
 use crate::library::editor::footprint::sketch_mode::SketchEdit;
 use crate::library::editor::footprint::state::{PlacementInputKind, SketchTool, ToolPending};
@@ -34,46 +34,6 @@ pub(super) fn apply(
         SketchTool::BreakTrack => break_track(editor, ctx),
         _ => unreachable!("non-curve edits tool routed here"),
     }
-}
-
-/// Hit-test the click against every sketch Line (0.30 mm tolerance,
-/// nearest stroke wins). Shared by both curve-edit tools that pick a
-/// Line by click.
-fn pick_line_at(sketch: &signex_sketch::SketchData, x: f64, y: f64) -> Option<SketchEntityId> {
-    const TOL_MM: f64 = 0.30;
-    let pos_of = |id: SketchEntityId| -> Option<(f64, f64)> {
-        sketch
-            .entities
-            .iter()
-            .find(|e| e.id == id)
-            .and_then(|e| match e.kind {
-                EntityKind::Point { x, y } => Some((x, y)),
-                _ => None,
-            })
-    };
-    let mut best: Option<(f64, SketchEntityId)> = None;
-    for e in &sketch.entities {
-        if let EntityKind::Line { start, end } = e.kind {
-            let (Some(a), Some(b)) = (pos_of(start), pos_of(end)) else {
-                continue;
-            };
-            let dx = b.0 - a.0;
-            let dy = b.1 - a.1;
-            let llen2 = dx * dx + dy * dy;
-            if llen2 <= 1e-12 {
-                continue;
-            }
-            let t = ((x - a.0) * dx + (y - a.1) * dy) / llen2;
-            let tc = t.clamp(0.0, 1.0);
-            let px = a.0 + tc * dx;
-            let py = a.1 + tc * dy;
-            let d2 = (px - x).powi(2) + (py - y).powi(2);
-            if d2 <= TOL_MM * TOL_MM && best.as_ref().is_none_or(|(b2, _)| d2 < *b2) {
-                best = Some((d2, e.id));
-            }
-        }
-    }
-    best.map(|(_, id)| id)
 }
 
 // v0.27 — EDA Fillet. Two-click gesture:

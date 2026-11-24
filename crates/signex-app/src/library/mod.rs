@@ -38,6 +38,7 @@ pub mod editor;
 pub mod external_poll;
 pub mod held_back;
 pub mod loose_symbols;
+pub(crate) mod measurement_slot;
 pub mod messages;
 pub(crate) mod modal_chrome;
 pub mod mount;
@@ -56,6 +57,7 @@ pub mod preview_refresh;
 #[cfg(test)]
 mod preview_refresh_tests;
 pub mod pricing;
+pub(crate) mod primitive_label;
 pub mod primitive_picker;
 pub mod range_filter;
 pub mod recovery;
@@ -71,6 +73,7 @@ pub mod stock_copy;
 pub mod symbol_delete;
 #[cfg(test)]
 pub(crate) mod test_adapters;
+pub(crate) mod unit_menu;
 pub(crate) mod unit_picker;
 pub mod updates_dialog;
 #[cfg(test)]

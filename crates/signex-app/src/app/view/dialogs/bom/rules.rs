@@ -1,21 +1,25 @@
-//! BOM preview — the Rules tab: one checkbox per validation rule plus the
-//! live issue list grouped by severity. Pure rendering; the rules and the
-//! report come from `signex-bom` (via `signex-output`), the toggles route
-//! through `BomPreviewMsg::SetRule`.
+//! BOM dialog — the Rules tab: one checkbox per validation rule, then the
+//! live issues grouped by severity. A click on an issue selects its line.
+//! The rules and the report come from `signex-bom` (via `signex-output`).
 
 use super::super::*;
 use iced::widget::{Column, Space, column, container, row};
-use iced::{Background, Border, Color, Element, Length, Theme, Widget};
-use signex_i18n::{ids, t};
-use signex_output::{BomIssueSeverity, BomRule};
+use iced::{Background, Color, Element, Length, Theme, Widget};
+use signex_i18n::{UserText, ids, t};
+use signex_output::{BomIssueSeverity, BomRule, BomValidationIssue};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
 
-use super::super::widgets::section_header;
+use super::sidebar::{caption, card_list, check_row, section};
+use crate::app::state::BomIssueLine;
+use crate::styles::tokens::resolve;
+use crate::styles::{PillTone, Radii, Spacing, TypeScale, ti};
 
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
+
+/// Least height of an issue row, as drawn.
+const ISSUE_ROW_H: f32 = 34.0;
 
 impl Signex {
     /// Build the Rules tab pane for the active preview.
@@ -24,110 +28,71 @@ impl Signex {
             return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
-        let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
-        let accent_c = crate::styles::ti(tokens.accent);
-
         let i18n = self.ui_state.i18n.as_ref();
-        let mut rule_list: Column<Element<'_, Message>> = Column::new().spacing(0);
+        let report = &preview.validation_report;
+
+        let mut pane: Column<Element<'_, Message>> =
+            Column::new().push(section(i18n, ids::BOM_SECTION_RULES, None, true, tokens));
         for rule in BomRule::ALL {
             let on = preview.options.rule_options.is_enabled(rule);
-            let name = t!(i18n, rule_label(rule));
-            rule_list =
-                rule_list.push(rule_row(rule, name, on, text_c, border_c, accent_c, tokens));
+            pane = pane.push(check_row(
+                t!(i18n, rule_label(rule)),
+                on,
+                Message::BomPreview(BomPreviewMsg::SetRule(rule, !on)),
+                tokens,
+            ));
         }
-
-        let mut issues: Column<Element<'_, Message>> = Column::new().spacing(SP.xs);
-        let report = &preview.validation_report;
+        pane = pane.push(section(
+            i18n,
+            ids::BOM_SECTION_ISSUES,
+            issue_pill(report, tokens),
+            false,
+            tokens,
+        ));
         if report.issues.is_empty() {
-            issues = issues.push(
-                text(t!(i18n, ids::BOM_NO_ISSUES_FOUND))
-                    .size(TS.body)
-                    .color(text_muted)
-                    .boxed(),
-            );
+            return pane
+                .push(Space::new().height(SP.s).boxed())
+                .push(caption(t!(i18n, ids::BOM_NO_ISSUES_FOUND), tokens))
+                .boxed();
         }
         for (severity, heading) in [
             (BomIssueSeverity::Error, ids::BOM_ISSUES_ERRORS),
             (BomIssueSeverity::Warning, ids::BOM_ISSUES_WARNINGS),
             (BomIssueSeverity::Info, ids::BOM_ISSUES_NOTES),
         ] {
-            let of_severity: Vec<_> = report
+            let items: Vec<Element<'_, Message>> = report
                 .issues
                 .iter()
-                .filter(|issue| issue.severity == severity)
+                .enumerate()
+                .filter(|(_, issue)| issue.severity == severity)
+                .map(|(index, issue)| {
+                    let at = preview.issue_lines.get(index).copied().flatten();
+                    let part = at
+                        .and_then(|at| preview.table.rows.get(at.row))
+                        .map(|row| {
+                            if row.value.is_empty() {
+                                row.name.clone()
+                            } else {
+                                row.value.clone()
+                            }
+                        })
+                        .unwrap_or_default();
+                    issue_row(issue, index, at, part, i18n, tokens)
+                })
                 .collect();
-            if of_severity.is_empty() {
+            if items.is_empty() {
                 continue;
             }
-            issues = issues.push(
-                text(t!(i18n, heading, "count" => of_severity.len()))
-                    .size(TS.body)
-                    .color(severity_color(severity, text_c, tokens))
-                    .boxed(),
-            );
-            for issue in of_severity {
-                issues = issues.push(
-                    column![
-                        // raw: the validator's own message, in English (#2061).
-                        text(raw(issue.message.clone())).size(TS.body).color(text_c),
-                        text(signex_i18n::UserText::new(issue.references.join(", ")))
-                            .size(TS.caption)
-                            .color(text_muted),
-                    ]
-                    .spacing(1)
-                    .padding([SP.xs, SP.m])
-                    .boxed(),
-                );
-            }
-            issues = issues.push(Space::new().height(6).boxed());
+            pane = pane
+                .push(Space::new().height(SP.m).boxed())
+                .push(caption(t!(i18n, heading, "count" => items.len()), tokens))
+                .push(Space::new().height(SP.xs).boxed())
+                .push(card_list(items, tokens));
         }
-
-        column![
-            section_header(t!(i18n, ids::BOM_SECTION_RULES), text_muted),
-            container(rule_list).padding([SP.s, 0.0]),
-            Space::new().height(8),
-            section_header(t!(i18n, ids::BOM_SECTION_ISSUES), text_muted),
-            container(issues).padding([SP.m, SP.l]),
-        ]
-        .spacing(0)
-        .boxed()
+        pane.push(Space::new().height(SP.s).boxed())
+            .push(caption(t!(i18n, ids::BOM_ISSUES_HINT), tokens))
+            .boxed()
     }
-}
-
-/// Footer-sized issue count (`2 errors, 5 warnings`), `None` when clean.
-/// The English matches `BomValidationReport::summary`, which logs keep.
-pub(super) fn issue_count_label(
-    report: &signex_output::BomValidationReport,
-    i18n: &signex_i18n::I18n,
-) -> Option<signex_i18n::Localized> {
-    use signex_i18n::{RenderTranslatable, Translatable};
-    let notes = report
-        .issues
-        .iter()
-        .filter(|issue| issue.severity == BomIssueSeverity::Info)
-        .count();
-    [
-        (report.error_count(), ids::BOM_ISSUE_COUNT_ERRORS),
-        (report.warning_count(), ids::BOM_ISSUE_COUNT_WARNINGS),
-        (notes, ids::BOM_ISSUE_COUNT_NOTES),
-    ]
-    .into_iter()
-    .filter(|(count, _)| *count > 0)
-    // `n` picks the plural; `count` is shown ungrouped, as `summary()` writes it.
-    .map(|(count, id)| {
-        Translatable::new(id)
-            .arg("n", count)
-            .arg("count", count.to_string())
-    })
-    .rev()
-    .reduce(|second, first| {
-        Translatable::new(ids::BOM_ISSUE_COUNT_PAIR)
-            .arg("first", first)
-            .arg("second", second)
-    })
-    .map(|count| count.localized(i18n))
 }
 
 /// The catalog name of a validation rule.
@@ -141,78 +106,136 @@ pub(super) fn rule_label(rule: BomRule) -> signex_i18n::MessageId {
     }
 }
 
-/// Colour for a severity heading and the footer count.
-pub(super) fn severity_color(
-    severity: BomIssueSeverity,
-    neutral: Color,
-    tokens: &ThemeTokens,
-) -> Color {
+/// Colour of a severity's glyph and count: error, warning, or the muted ink
+/// for notes.
+fn severity_ink(severity: BomIssueSeverity, tokens: &ThemeTokens) -> Color {
     match severity {
-        BomIssueSeverity::Error => signex_widgets::theme_ext::error_color(tokens),
-        BomIssueSeverity::Warning => signex_widgets::theme_ext::warning_color(tokens),
-        BomIssueSeverity::Info => neutral,
+        BomIssueSeverity::Error => ti(tokens.error),
+        BomIssueSeverity::Warning => ti(tokens.warning),
+        BomIssueSeverity::Info => resolve(tokens).ink3,
     }
 }
 
-fn rule_row<'a>(
-    rule: BomRule,
-    name: signex_i18n::Localized,
-    on: bool,
-    text_c: Color,
-    border_c: Color,
-    accent_c: Color,
+/// The count pill beside the Issues heading, toned by the worst severity.
+fn issue_pill<'a>(
+    report: &signex_output::BomValidationReport,
+    tokens: &ThemeTokens,
+) -> Option<Element<'a, Message>> {
+    if report.issues.is_empty() {
+        return None;
+    }
+    let tone = if report.has_errors() {
+        PillTone::Err
+    } else if report.warning_count() > 0 {
+        PillTone::Warn
+    } else {
+        PillTone::Neutral
+    };
+    // raw: a count, not language.
+    Some(
+        container(text(raw(report.issues.len().to_string())).size(TS.caption))
+            .padding([0.0, SP.s])
+            .style(crate::styles::pill(tokens, tone))
+            .boxed(),
+    )
+}
+
+/// One issue: its glyph, the designators and the rule, and under them the
+/// line it is on. A click selects that line. A unit-field conflict also
+/// names the field, which only the validator's message carries.
+fn issue_row<'a>(
+    issue: &BomValidationIssue,
+    index: usize,
+    at: Option<BomIssueLine>,
+    part: String,
+    i18n: &signex_i18n::I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
-    let hover_c = crate::styles::tokens::hover_overlay(tokens);
-    let pip_bg = if on {
-        accent_c
-    } else {
-        crate::styles::tokens::resolve(tokens).field
+    let r = resolve(tokens);
+    let ink = ti(tokens.text);
+    let glyph = match issue.severity {
+        BomIssueSeverity::Info => "\u{2139}",
+        BomIssueSeverity::Error | BomIssueSeverity::Warning => "\u{26A0}",
     };
-    // raw: a tick glyph (or a blank of the same size), not language.
-    let inner = if on {
-        text(raw("\u{2713}")).size(TS.caption).color(Color::WHITE)
-    } else {
-        text(raw(" ")).size(TS.caption)
+    let mono = iced::Font {
+        weight: iced::font::Weight::Semibold,
+        ..super::super::graphite::mono()
     };
-    let pip = container(inner)
-        .width(14)
-        .height(14)
-        .align_x(iced::alignment::Horizontal::Center)
-        .align_y(iced::alignment::Vertical::Center)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(pip_bg)),
-            border: Border {
-                width: 1.0,
-                radius: 2.0.into(),
-                color: border_c,
-                ..Border::default()
-            },
-            ..container::Style::default()
-        });
-    button(
-        row![
-            pip,
-            Space::new().width(8),
-            text(name).size(TS.body).color(text_c),
-            Space::new().width(Length::Fill),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .on_press(Message::BomPreview(BomPreviewMsg::SetRule(rule, !on)))
-    .padding([3.0, SP.l])
-    .width(Length::Fill)
-    .style(move |_: &Theme, status: button::Status| {
-        let bg = match status {
-            button::Status::Hovered | button::Status::Pressed => Some(Background::Color(hover_c)),
-            _ => None,
-        };
-        button::Style {
-            background: bg,
-            border: Border::default(),
-            text_color: text_c,
-            ..button::Style::default()
-        }
-    })
-    .boxed()
+    let title = row![
+        text(UserText::new(issue.references.join(", ")))
+            .size(TS.body)
+            .font(mono)
+            .color(ink),
+        text(t!(i18n, rule_label(issue.rule)))
+            .size(TS.body)
+            .color(ink),
+    ]
+    .spacing(SP.s);
+    let mut lines: Column<Element<'a, Message>> = Column::new().push(title.boxed());
+    if let Some(at) = at {
+        lines = lines.push(
+            text(t!(i18n, ids::BOM_ISSUE_LINE, "line" => at.line, "part" => part))
+                .size(TS.caption)
+                .color(r.ink4)
+                .boxed(),
+        );
+    }
+    if issue.rule == BomRule::UnitFieldConflict {
+        // raw: the validator's own message, in English (#2061).
+        lines = lines.push(
+            text(raw(issue.message.clone()))
+                .size(TS.caption)
+                .color(r.ink4)
+                .boxed(),
+        );
+    }
+    let hover = ti(tokens.hover);
+    let line = r.line_soft;
+    // The zero-width strut keeps the row at least as tall as drawn.
+    // raw: a status glyph, not language.
+    let content = column![
+        container(
+            row![
+                Space::new()
+                    .width(0)
+                    .height(ISSUE_ROW_H - crate::styles::HAIRLINE),
+                text(raw(glyph))
+                    .size(TS.body)
+                    .color(severity_ink(issue.severity, tokens)),
+                lines.width(Length::Fill),
+            ]
+            .spacing(SP.m)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([SP.xs, SP.m])
+        .width(Length::Fill),
+        container(Space::new())
+            .width(Length::Fill)
+            .height(crate::styles::HAIRLINE)
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(line)),
+                ..container::Style::default()
+            }),
+    ];
+    // An issue on no line (its parts are left out of the BOM) has nothing
+    // to select.
+    let on_press = at.map(|_| Message::BomPreview(BomPreviewMsg::IssueSelected(index)));
+    let pressable = on_press.is_some();
+    button(content)
+        .padding(0)
+        .width(Length::Fill)
+        .on_press_maybe(on_press)
+        .style(move |_: &Theme, status: button::Status| {
+            let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+            button::Style {
+                background: (pressable && hovered).then_some(Background::Color(hover)),
+                text_color: ink,
+                border: iced::Border {
+                    radius: Radii::GRAPHITE.small.into(),
+                    ..iced::Border::default()
+                },
+                ..button::Style::default()
+            }
+        })
+        .boxed()
 }

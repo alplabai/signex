@@ -385,3 +385,23 @@ fn a_taken_symbol_name_gets_a_number_and_an_empty_sheet_a_spot() {
     assert!(below.y > 100.0, "under the lowest sheet symbol: {below:?}");
     assert!(spot.y < below.y);
 }
+
+/// Mockup row 79 (#2831): a removal left out goes; every other change stays.
+#[test]
+fn leaving_out_a_removal_keeps_every_other_change() {
+    let rename = SheetEntryRename {
+        from: "OLD".to_string(),
+        to: "NEW".to_string(),
+    };
+    let preview = SheetSyncPreview {
+        added: vec!["IN".to_string()],
+        removed: vec!["A".to_string(), "B".to_string()],
+        renamed: vec![rename.clone()],
+    };
+    let kept = std::collections::BTreeSet::from(["A".to_string()]);
+    let chosen = preview.leaving_out(&kept);
+    assert_eq!(chosen.removed, ["B"]);
+    assert_eq!(chosen.added, ["IN"]);
+    assert_eq!(chosen.renamed, [rename]);
+    assert_eq!(preview.removed, ["A", "B"], "the preview is left as it was");
+}

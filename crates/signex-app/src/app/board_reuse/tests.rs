@@ -11,8 +11,10 @@ use signex_types::pcb::{PcbBoard, SymbolLink};
 use signex_types::schematic::InstancePath;
 use uuid::Uuid;
 
+use signex_i18n::RenderTranslatable;
+
 use super::ReuseBlockMsg;
-use crate::app::command::{CommandArgs, CommandOutcome};
+use crate::app::command::{CommandArgs, CommandOutcome, translator};
 use crate::app::handlers::menu::export::settle;
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::{ContextAction, ContextMenuMsg, Message, Signex};
@@ -85,11 +87,16 @@ fn board() -> PcbBoard {
 }
 
 fn app_with_board(dir: &Path) -> (Signex, PathBuf) {
+    app_on(dir, board())
+}
+
+/// An app with `pcb` open as the project's board.
+fn app_on(dir: &Path, pcb: PcbBoard) -> (Signex, PathBuf) {
     let mut app = app_workspace(&dir.to_string_lossy(), &[]);
     app.ui_state.first_run_tour_open = false;
     app.document_state.projects[0].data.pcb_file = Some("board.snxpcb".into());
     let path = dir.join("board.snxpcb");
-    app.open_pcb_tab(path.clone(), "board".into(), board());
+    app.open_pcb_tab(path.clone(), "board".into(), pcb);
     (app, path)
 }
 
@@ -239,7 +246,7 @@ fn an_agent_saves_a_block_by_designators_and_a_bad_name_is_refused() {
         &[&document, "name=../amp", "ids=U1"],
     );
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("cannot name a block")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("cannot name a block")),
         "{outcome:?}"
     );
 }
@@ -251,7 +258,7 @@ fn place_without_operands_says_what_it_needs() {
     let command = AppCommandId::new("place_board_reuse_block").unwrap();
     let (outcome, _) = app.dispatch_command_reporting(&command, CommandArgs::default(), None);
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("designator")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("designator")),
         "{outcome:?}"
     );
 }
@@ -301,7 +308,7 @@ fn a_name_that_differs_from_a_block_only_in_case_is_refused() {
     );
 
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("named amp")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("named amp")),
         "{outcome:?}"
     );
     assert_eq!(app.reuse_block_names_in_window(None), ["amp"]);
@@ -329,7 +336,7 @@ fn an_agent_save_before_the_blocks_are_read_cannot_overwrite_a_block_named_in_an
     );
 
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("named R1-U1")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("named R1-U1")),
         "{outcome:?}"
     );
     assert_eq!(
@@ -474,7 +481,7 @@ fn a_failed_block_folder_read_is_retried_on_the_next_save() {
         &[&document, "name=amp", "ids=U1"],
     );
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("could not be read")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("could not be read")),
         "{outcome:?}"
     );
 
@@ -509,4 +516,305 @@ fn a_failed_block_folder_read_is_retried_on_the_next_menu_open() {
 
     let blocks = &app.document_state.reuse_blocks;
     assert_eq!(blocks.read_failure(dir.path()), None);
+}
+
+/// The menu save of channel A writes the block file the operand handler
+/// writes for the same board, name and items (#2326 slice 6 translator).
+#[test]
+fn a_menu_save_writes_the_block_the_operand_handler_writes() {
+    // One board for both: its pads take fresh uuids.
+    let pcb = board();
+    let menu_dir = tempfile::tempdir().unwrap();
+    let (mut menu, _) = app_on(menu_dir.path(), pcb.clone());
+    save_channel_a(&mut menu);
+    assert!(translator::ran("save_board_reuse_block"));
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_on(dir.path(), pcb);
+    let document = format!("document={}", board.display());
+    let ids: Vec<String> = [0x11u128, 0x12, 0x31, 0x32]
+        .map(|n| Uuid::from_u128(n).to_string())
+        .to_vec();
+    let ids = format!("ids={}", ids.join(","));
+    let outcome = headless(
+        &mut app,
+        "save_board_reuse_block",
+        &[&document, "name=R1-U1", &ids],
+    );
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+    let file = |dir: &Path| {
+        std::fs::read_to_string(dir.join("reuse-blocks").join("R1-U1.snxpcb")).expect("block")
+    };
+    assert_eq!(file(menu_dir.path()), file(dir.path()));
+}
+
+/// A menu save of a selection with no footprint, track or via in it says
+/// what it always said, not the `ids` refusal an agent gets.
+#[test]
+fn a_menu_save_of_a_selection_with_nothing_a_block_holds_is_refused() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
+    app.ui_state.first_run_tour_open = false;
+    app.document_state.projects[0].data.pcb_file = Some("board.snxpcb".into());
+    let path = dir.path().join("board.snxpcb");
+    let mut pcb = board();
+    pcb.zones = serde_json::from_value(serde_json::json!([{
+        "uuid": Uuid::from_u128(0x41), "net": 1, "net_name": "GND", "layer": "TopCopper",
+        "outline": [{"x": 0.0, "y": 0.0}, {"x": 5.0, "y": 0.0}, {"x": 5.0, "y": 5.0}],
+        "fill_type": "solid"
+    }]))
+    .unwrap();
+    let kind = pcb_geom::PickKind::of_zone(&pcb.zones[0]).expect("a pickable area");
+    app.open_pcb_tab(path, "board".into(), pcb);
+    let zone = Uuid::from_u128(0x41);
+    app.select_pcb_items(&[pcb_geom::ItemRef::Zone { zone, kind }]);
+    let mark = crate::diagnostics::newest_entry_id();
+    let task = app.update(Message::Menu(MenuMessage::command(
+        "save_board_reuse_block",
+    )));
+    settle(&mut app, task);
+    let said = crate::diagnostics::entries_since(mark).entries;
+    assert!(
+        said.iter()
+            .any(|e| e.message.contains("a block needs at least one footprint")),
+        "{said:?}"
+    );
+    assert!(
+        !said.iter().any(|e| e.message.contains("`ids`")),
+        "{said:?}"
+    );
+    assert!(
+        !dir.path().join("reuse-blocks").exists(),
+        "nothing is saved"
+    );
+}
+
+/// The board menu's Place row for `name` on the component at (x, y).
+fn place_from_menu(app: &mut Signex, name: &str, x: f64, y: f64) {
+    click(app, x, y, ClickMode::Replace);
+    right_click(app);
+    let place = ReuseBlockMsg::PlaceRequested {
+        name: name.to_string(),
+    };
+    let task = app.update(Message::ContextMenu(ContextMenuMsg::Action(
+        ContextAction::ReuseBlock(place),
+    )));
+    settle(app, task);
+}
+
+/// Where each footprint sits and how many tracks and vias: a placed block
+/// takes fresh uuids, so two placements compare by these.
+fn layout(app: &Signex, board: &Path) -> Vec<String> {
+    let pcb = app.document_state.pcb_board(board).expect("board");
+    let mut lines: Vec<String> = pcb
+        .footprints
+        .iter()
+        .map(|fp| {
+            let (x, y) = (fp.position.x, fp.position.y);
+            format!("{} {x} {y} {}", fp.reference, fp.rotation)
+        })
+        .collect();
+    lines.push(format!(
+        "{} tracks {} vias",
+        pcb.segments.len(),
+        pcb.vias.len()
+    ));
+    lines
+}
+
+/// The menu Place on U2 lays the block as the operand handler does with
+/// `designator=U2`, through the handler (#2326 slice 6 translator).
+#[test]
+fn a_menu_place_lays_the_block_as_the_operand_handler_does() {
+    let pcb = board();
+    let menu_dir = tempfile::tempdir().unwrap();
+    let (mut menu, menu_board) = app_on(menu_dir.path(), pcb.clone());
+    save_channel_a(&mut menu);
+    place_from_menu(&mut menu, "R1-U1", 49.0, 50.0);
+    assert!(translator::ran("place_board_reuse_block"));
+    assert_eq!(at(&menu, &menu_board, R2), (54.0, 50.0), "it placed");
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_on(dir.path(), pcb);
+    save_channel_a(&mut app);
+    let document = format!("document={}", board.display());
+    let outcome = headless(
+        &mut app,
+        "place_board_reuse_block",
+        &[&document, "name=R1-U1", "designator=U2"],
+    );
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+    assert_eq!(layout(&menu, &menu_board), layout(&app, &board));
+}
+
+/// The menu names the clicked anchor by uuid (#2326 slice 6), so the block
+/// is placed around it where its designator is shared, or stored as "U2 ",
+/// as before the translator.
+#[test]
+fn a_menu_place_on_a_component_whose_designator_is_shared_places_around_it() {
+    let mut pcb = board();
+    pcb.footprints[3].reference = "U2".into();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_on(dir.path(), pcb);
+    save_channel_a(&mut app);
+    place_from_menu(&mut app, "R1-U1", 49.0, 50.0);
+    assert!(translator::ran("place_board_reuse_block"));
+    assert_eq!(at(&app, &board, R2), (54.0, 50.0), "placed around U2");
+}
+
+#[test]
+fn a_menu_place_on_a_reference_with_spaces_places_around_it() {
+    let mut pcb = board();
+    pcb.footprints[2].reference = "U2 ".into();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_on(dir.path(), pcb);
+    save_channel_a(&mut app);
+    place_from_menu(&mut app, "R1-U1", 49.0, 50.0);
+    assert_eq!(at(&app, &board, R2), (54.0, 50.0), "placed around U2");
+}
+
+/// An agent names the anchor by uuid where its designator is shared.
+#[test]
+fn an_agent_places_a_block_around_the_component_its_uuid_names() {
+    let mut pcb = board();
+    pcb.footprints[3].reference = "U2".into();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_on(dir.path(), pcb);
+    save_channel_a(&mut app);
+    let document = format!("document={}", board.display());
+    let ids = format!("ids={U2}");
+    let outcome = headless(
+        &mut app,
+        "place_board_reuse_block",
+        &[&document, "name=R1-U1", &ids],
+    );
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+    assert_eq!(at(&app, &board, R2), (54.0, 50.0));
+}
+
+/// The menu's Place row sent with U2 selected, its task settled.
+fn place_on_u2(app: &mut Signex, name: &str) -> Vec<String> {
+    click(app, 49.0, 50.0, ClickMode::Replace);
+    let mark = crate::diagnostics::newest_entry_id();
+    let place = ReuseBlockMsg::PlaceRequested {
+        name: name.to_string(),
+    };
+    let task = app.update(Message::Pcb(crate::app::PcbMsg::ReuseBlock(place)));
+    settle(app, task);
+    crate::diagnostics::entries_since(mark)
+        .entries
+        .into_iter()
+        .map(|e| e.message)
+        .collect()
+}
+
+/// A menu Place is refused at once, as it always was, while the project's
+/// blocks are not read: the menu reads nothing first, even with the block
+/// on disk.
+#[test]
+fn a_menu_place_before_the_blocks_are_read_is_refused_without_reading_them() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut earlier, _) = app_with_board(dir.path());
+    save_channel_a(&mut earlier);
+    let (mut app, board) = app_with_board(dir.path());
+
+    let said = place_on_u2(&mut app, "R1-U1");
+
+    assert!(
+        said.iter()
+            .any(|m| m.contains("the project has no reuse block named R1-U1")),
+        "{said:?}"
+    );
+    assert!(app.document_state.reuse_blocks.needs_read(dir.path()));
+    assert_eq!(at(&app, &board, R2), (70.0, 70.0), "nothing is placed");
+}
+
+/// After a failed read a menu Place is refused with why, again on the next
+/// Place: the menu does not read the folder again (a save or a menu open
+/// does).
+#[test]
+fn a_menu_place_after_a_failed_read_is_refused_without_reading_again() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_with_board(dir.path());
+    let not_a_folder = dir.path().join("reuse-blocks");
+    std::fs::write(&not_a_folder, b"x").unwrap();
+    right_click(&mut app);
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::Close));
+    let unread = "the project's reuse blocks could not be read";
+
+    let first = place_on_u2(&mut app, "amp");
+    std::fs::remove_file(&not_a_folder).unwrap();
+    let second = place_on_u2(&mut app, "amp");
+
+    assert!(first.iter().any(|m| m.contains(unread)), "{first:?}");
+    assert!(second.iter().any(|m| m.contains(unread)), "{second:?}");
+    let blocks = &app.document_state.reuse_blocks;
+    assert!(blocks.read_failure(dir.path()).is_some(), "not read again");
+}
+
+/// A block kept in the Model while its folder is marked to be read again (a
+/// second read failed, then a board menu opened) is placed from the Model by
+/// a menu Place, as before the translator: the menu waits for no read and
+/// leaves no answer parked for an agent.
+#[test]
+fn a_menu_place_of_a_kept_block_while_a_read_is_owed_places_it_at_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_with_board(dir.path());
+    save_channel_a(&mut app);
+    let failed = super::BlocksOnDisk {
+        error: Some("the read did not finish".into()),
+        ..Default::default()
+    };
+    let blocks = &mut app.document_state.reuse_blocks;
+    blocks.land(dir.path(), &failed);
+    blocks.retry_failed_read(dir.path());
+    let folder = dir.path().join("reuse-blocks");
+    std::fs::remove_dir_all(&folder).unwrap();
+    std::fs::write(&folder, b"x").unwrap();
+
+    let said = place_on_u2(&mut app, "R1-U1");
+
+    assert_eq!(at(&app, &board, R2), (54.0, 50.0), "placed, {said:?}");
+    assert!(app.document_state.agent_edits.finished.is_empty());
+}
+
+/// A menu run ends `from_view`: an agent's Place after it, while the
+/// project's blocks are owed a read, still reads them first (`Deferred`).
+#[test]
+fn an_agent_place_after_a_menu_place_still_reads_the_blocks_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_with_board(dir.path());
+    save_channel_a(&mut app);
+    place_on_u2(&mut app, "R1-U1");
+    assert!(translator::ran("place_board_reuse_block"));
+    assert!(!app.agent.from_view, "the translator restores it");
+
+    let failed = super::BlocksOnDisk {
+        error: Some("the read did not finish".into()),
+        ..Default::default()
+    };
+    let blocks = &mut app.document_state.reuse_blocks;
+    blocks.land(dir.path(), &failed);
+    blocks.retry_failed_read(dir.path());
+    let command = AppCommandId::new("place_board_reuse_block").unwrap();
+    let document = format!("document={}", board.display());
+    let args = CommandArgs::parse_operands(&command, &[&document, "name=R1-U1", "designator=U2"])
+        .expect("operands parse");
+    let (outcome, _) = app.run_operands(&command, &args);
+
+    assert!(
+        matches!(outcome, CommandOutcome::Deferred { .. }),
+        "{outcome:?}"
+    );
 }

@@ -56,7 +56,25 @@ impl Signex {
                 Task::none()
             }
             M::ProblemsOnlyToggled(on) => {
-                self.with_update_pcb_table(|table| table.problems_only = on);
+                use super::table::RowFilter;
+                self.with_update_pcb_table(|table| {
+                    table.filter = on.then_some(RowFilter::Problems);
+                });
+                Task::none()
+            }
+            M::FilterQueryChanged(query) => {
+                self.with_update_pcb_table(|table| table.query = query);
+                Task::none()
+            }
+            M::FilterCleared => {
+                self.with_update_pcb_table(|table| {
+                    table.filter = None;
+                    table.query.clear();
+                });
+                Task::none()
+            }
+            M::NotesFolded(folded) => {
+                self.with_update_pcb_table(|table| table.notes_open = !folded);
                 Task::none()
             }
             M::RowFocused(key) => {
@@ -241,6 +259,7 @@ impl Signex {
         };
         let project_dir = project.dir().to_path_buf();
         let request = DesignRequest {
+            naming: crate::app::saved_channel_naming::SavedChannelNaming::of(&project.data),
             plan: plan_project_sheets_for(&self.document_state, &root),
             project_dir,
             board,
@@ -296,6 +315,14 @@ impl Signex {
                         )
                         .into_string(),
                     );
+                }
+                for problem in &computed.snapshot.rule_problems {
+                    if state.logged_rule_problems.insert(problem.clone()) {
+                        crate::diagnostics::log_warning(
+                            super::rules_from_schematic::problem_line(&self.ui_state.i18n, problem)
+                                .into_string(),
+                        );
+                    }
                 }
                 state.snapshot = Some(Arc::clone(&computed.snapshot));
                 state.list = Some(computed.list.clone());

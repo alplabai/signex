@@ -6,6 +6,7 @@ new_pcb_document	file	New PCB in the project	PCB	PCB	-	-	Always	mutates_doc	prof
 open_document	file	Open document	Open...	General	-	-	Always	-	path:path
 save_document	file	Save document	Save	General	-	-	Always	-	document:document
 save_document_as	file	Save as	Save As...	General	-	-	Always	-	document:document,path:path,overwrite:bool?
+save_all	file	Save all unsaved documents	Save All	General	-	-	Always	gui_only	-
 revert	edit	Revert an agent's edit step	-	General	-	-	Always	mutates_doc	document:document,group:text,documents:text?
 close_active_document	file	Close active document	Close Document	General	-	-	Always	-	document:document
 close_all_documents	window	Close all documents	Close All Documents	General	-	-	Always	gui_only	-
@@ -66,8 +67,12 @@ change_component	edit	Change the selected part's component	Change Component…	S
 open_parameter_manager	design	Open Parameter Manager	Parameter Manager...	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 set_symbol_parameter	edit	Set a parameter of a placed part	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,name:text,value:text?,document:document?
 set_sheet_variable	edit	Set a sheet variable	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	name:text,value:text?,remove:bool?,document:document?
-lock_board_items	modify	Lock the selected tracks and vias	Lock	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text
-unlock_board_items	modify	Unlock the selected tracks and vias	Unlock	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text
+lock_board_items	modify	Lock the selected tracks and vias	Lock	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets
+unlock_board_items	modify	Unlock the selected tracks and vias	Unlock	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets
+create_union	edit	Create a union from the selection	Create Union…	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
+add_to_union	edit	Add the selection to the selected union	Add Selection to Union	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
+remove_from_union	edit	Remove the selection from its union	Remove Selection from Union	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
+break_union	edit	Break the selected union	Break Union	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 bring_drawings_forward	edit	Bring drawings forward	Bring Forward	General	-	-	RequiresSelection	mutates_doc,undoable	-
 bring_drawings_to_front	edit	Bring drawings to front	Bring to Front	General	-	-	RequiresSelection	mutates_doc,undoable	-
 send_drawings_backward	edit	Send drawings backward	Send Backward	General	-	-	RequiresSelection	mutates_doc,undoable	-
@@ -86,7 +91,7 @@ align_bottom	modify	Align bottom	Align Bottom	Schematic	-	-	RequiresSelection	mu
 align_vertical_centers	modify	Align vertical centers	Align Vertical Centers	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
 distribute_vertically	modify	Distribute vertically	Distribute Vertically	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
 align_to_grid	modify	Align to grid	Align To Grid	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
-arrange_in_box	modify	Arrange the selected components inside a box drawn on the board	Arrange in Box	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text,start:point/mm,end:point/mm
+arrange_in_box	modify	Arrange the selected components inside a box drawn on the board	Arrange in Box	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets,start:point/mm,end:point/mm
 drag	modify	Drag	Drag	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 drag_selection	modify	Drag selection	Drag Selection	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 drag_keep_connections	modify	Drag while keeping connections	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
@@ -113,19 +118,19 @@ place_no_erc	place	Place Generic No ERC directive	Generic No ERC	Schematic	-	-	R
 place_compile_mask	place	Place Compile Mask directive	Compile Mask	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,document:document?
 place_design_block	place	Place design block	Design Block...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	path:path,at:point/mm,document:document?
 place_reuse_block	place	Place reuse block	Reuse Block...	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
-place_parameter_set	place	Place parameter set	Parameter Set	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+place_parameter_set	place	Place net parameters	Net Parameters	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,class:text?,diff_pair_class:text?,width:text?,clearance:text?,via_diameter:text?,via_hole:text?,current:text?,document:document?
 place_diff_pair	place	Place diff pair	Differential Pair	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,document:document?
-place_blanket	place	Place blanket	Blanket	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,class:text?,exclude:text?,document:document?
+place_blanket	place	Place net blanket	Net Blanket	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,class:text?,exclude:text?,document:document?
 place_text	place	Place text	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text,document:document?
 place_text_string	place	Place text string	Text String	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text,document:document?
 place_text_frame	place	Place text frame	Text Frame	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_note	place	Place note	Note	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_graphic	place	Place graphic	Graphic...	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_board_pad	place	Place a free pad on the board	Pad	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
-swap_pins	modify	Swap the nets of two equivalent pins of a component, on the board and on its schematic	Swap Pins	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,designator:text,pins:text
-swap_gates	modify	Swap two equivalent gates of a component, on the board and on its schematic	Swap Gates	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,designator:text,units:text
+swap_pins	modify	Swap the nets of two equivalent pins of a component, on the board and on its schematic	Swap Pins	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets?,designator:text?,pins:text
+swap_gates	modify	Swap two equivalent gates of a component, on the board and on its schematic	Swap Gates	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets?,designator:text?,units:text
 save_board_reuse_block	design	Save the selected placed and routed parts as a reuse block of the project	Save as Reuse Block	PCB	-	-	RequiresDocument(Pcb)	-	document:document,name:text,ids:text
-place_board_reuse_block	design	Place a reuse block on the channel of the selected component	Place Reuse Block	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,name:text,designator:text,degrees:turn/deg?
+place_board_reuse_block	design	Place a reuse block on the channel of the selected component	Place Reuse Block	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,name:text,ids:targets?,designator:text?,degrees:turn/deg?
 draw_wire	place	Draw wire	Wire	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,allow_merge:bool?,allow_open:bool?,dry_run:bool?,document:document?
 place_wire	place	Place wire	Wire	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,allow_merge:bool?,allow_open:bool?,dry_run:bool?,document:document?
 draw_bus	place	Draw bus	Bus	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,allow_merge:bool?,allow_open:bool?,dry_run:bool?,document:document?
@@ -150,11 +155,11 @@ place_board_quick_route	place	Route straight to the clicked point at the rule wi
 place_board_multi_route	place	Route the selected nets side by side as a bus, around other nets	Multi-Route	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 tune_net_length	pcb	Lengthen the selected tracks' nets with meanders to a target length, or to the longest of them	Length Tuning	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,net:text?,value:text?
 tune_diff_pair	pcb	Lengthen the shorter net of a differential pair with meanders to match the longer one	Differential Pair Length Tuning	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,net:text?
-set_via_span	modify	Set the copper layers vias span	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text,layers:text
+set_via_span	modify	Set the copper layers vias span	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets,layers:text
 stitch_vias	pcb	Fill the selected areas, or every pour, with vias of their net on a grid, clear of other nets	Via Stitching	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text?,start:point/mm?,end:point/mm?,net:text?,pitch:length/mm?
 add_teardrops	pcb	Add teardrops where tracks of the selected nets, or of every net, enter a pad or via	Add Teardrops	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,net:text?
 remove_teardrops	pcb	Remove the teardrops of the selected nets, or of every net	Remove Teardrops	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,net:text?
-gloss_selected_routes	pcb	Shorten the selected routes by cutting their corners where the clearance allows	Gloss Selected Routes	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text
+gloss_selected_routes	pcb	Shorten the selected routes by cutting their corners where the clearance allows	Gloss Selected Routes	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets
 draw_arc	place	Draw arc	Arc	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 draw_full_circle	place	Draw full circle	Full Circle	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 draw_elliptical_arc	place	Draw elliptical arc	Elliptical Arc	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
@@ -165,8 +170,11 @@ draw_rectangle	place	Draw rectangle	Rectangle	Schematic	-	-	RequiresDocument(Sch
 draw_round_rectangle	place	Draw round rectangle	Round Rectangle	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 draw_polygon	place	Draw polygon	Polygon	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 draw_bezier	place	Draw bezier	Bezier	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+place_table	place	Place table	Table	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+place_linear_dimension	place	Place linear dimension	Linear	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+place_aligned_dimension	place	Place aligned dimension	Aligned	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 import_graphics	place	Import graphics	Import Graphics...	General	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	path:path,at:point/mm,document:document?
-edit_blanket	place	Edit blanket parameters	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,start:point/mm?,end:point/mm?,class:text?,exclude:text?,document:document?
+edit_blanket	place	Edit net blanket parameters	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,start:point/mm?,end:point/mm?,class:text?,exclude:text?,document:document?
 edit_no_erc_rules	place	Edit No ERC rules	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,rules:text?,document:document?
 place_board_arc	place	Draw an arc on the active layer	Arc	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_string	place	Place a string on the active silkscreen, mechanical or documentation layer	String	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
@@ -199,6 +207,7 @@ sync_sheet_pins	design	Sync the selected sheet symbol's pins with its child shee
 create_sheet_symbol_from_sheet	design	Create a sheet symbol from a sheet file, with an entry for every port	Create Sheet Symbol From Sheet...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	path:path,at:point/mm?,allow_merge:bool?,document:document?
 sync_sheet_entries	design	Synchronize the selected sheet symbol's entries and its sheet's ports, with a preview	Synchronize Sheet Entries and Ports...	Schematic	-	-	RequiresSelection	mutates_doc,undoable	symbol:text,direction:text,document:document?
 number_schematic_sheets	design	Number schematic sheets	Number Schematic Sheets...	Schematic	-	-	Always	gui_only	-
+compile_project	design	Compile the project	Compile Project	Schematic	-	-	Always	gui_only	-
 open_child_sheet	navigation	Open the selected sheet symbol's child sheet	Open Child Sheet	Schematic	-	-	RequiresSelection	gui_only	-
 leave_sheet	navigation	Leave sheet / go to parent sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 navigate_up_hierarchy	navigation	Navigate up hierarchy	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
@@ -207,6 +216,7 @@ previous_sheet	navigation	Previous sheet	-	Schematic	-	-	RequiresDocument(Schema
 sheet_navigation_back	navigation	Sheet navigation back	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 sheet_navigation_forward	navigation	Sheet navigation forward	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 set_sheet_symbol_size	edit	Set the size of a sheet symbol	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,size:point/mm,document:document?
+add_table_of_contents	design	Add table of contents sheet	Add Table of Contents Sheet	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 annotate_schematic	design	Annotate schematic	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 annotate_schematic_quietly	design	Annotate schematic quietly	Annotate Schematics Quietly	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	-
 force_annotate_all_schematics	design	Force annotate all schematics	Force Annotate All Schematics	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	-
@@ -222,7 +232,7 @@ check_drc	validation	Check design rules	-	General	-	-	Always	-	document:document
 check_requirements	validation	Check project requirements	-	General	-	-	Always	-	document:document,baseline:text?
 open_drc_panel	pcb	Open the DRC results panel	DRC Results	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 show_drc_violation	pcb	Select a DRC violation and centre the view on it	-	PCB	-	-	RequiresDocument(Pcb)	-	document:document,id:text
-waive_drc_violation	pcb	Waive a DRC violation with a note	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text,text:text?
+waive_drc_violation	pcb	Waive a DRC violation with a note	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text,text:text?,author:text?
 unwaive_drc_violation	pcb	Take back the waiver of a DRC violation	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text
 filter_drc_results	pcb	Filter the DRC results by rule, layer and severity	-	PCB	-	-	RequiresDocument(Pcb)	-	document:document,rule:text?,layer:text?,severity:text?,waived:bool?
 open_rules	design	Open the design rules of the project	Rules...	PCB	-	-	Always	gui_only	-
@@ -237,12 +247,13 @@ rules_explain	validation	Explain the value a DRC finding asks for	-	PCB	-	-	Alwa
 rules_conflicts	validation	List shadowed and conflicting design rules	-	PCB	-	-	Always	-	document:document
 rules_matrix_get	validation	Read the class-to-class clearance matrix	-	PCB	-	-	Always	-	document:document
 rules_matrix_set	design	Set a cell of the class-to-class clearance matrix	-	PCB	-	-	Always	mutates_doc,undoable	document:document,class_a:text,class_b:text,object_pair:text?,layer:text?,value:text?
-rules_set_create	design	Create a named rule set	-	PCB	-	-	Always	mutates_doc,undoable	document:document,name:text,values:text,severity:text?
-rules_set_edit	design	Change the limits of a named rule set	-	PCB	-	-	Always	mutates_doc,undoable	document:document,set:text,values:text,severity:text?
-rules_set_apply	design	Apply a named rule set to a class or net	-	PCB	-	-	Always	mutates_doc,undoable	document:document,set:text,scope:text
+rules_set_create	design	Create a constraint set	-	PCB	-	-	Always	mutates_doc,undoable	document:document,name:text,values:text,severity:text?
+rules_set_edit	design	Change the limits of a constraint set	-	PCB	-	-	Always	mutates_doc,undoable	document:document,set:text,values:text,severity:text?
+rules_set_apply	design	Apply a constraint set to a class or net	-	PCB	-	-	Always	mutates_doc,undoable	document:document,set:text,scope:text
 rules_preset_diff	validation	Show what a rules preset would change	-	PCB	-	-	Always	-	document:document,preset:text
 rules_preset_apply	design	Apply a rules preset	-	PCB	-	-	Always	mutates_doc,undoable	document:document,preset:text
 update_pcb_from_schematic	pcb_sync	Update PCB from schematic	-	Schematic	-	-	Always	mutates_doc,undoable	apply:bool
+compare_board_with_schematic	pcb_sync	Compare board with schematic	Compare Board with Schematic…	Schematic	-	-	Always	gui_only	-
 assign_footprints	design	Assign footprints	Assign Footprints	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 change_footprint	modify	Change the footprint of the selected components	Change Footprint...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 place_board_via	place	Place a via on the board	Via	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
@@ -256,12 +267,14 @@ place_board_pour_cutout	place	Cut an area out of the polygon pours on the active
 place_board_slice_pour	place	Slice the polygon pours on the active copper layer along a line	Slice Pour	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 repour_selected	pcb	Fill the selected polygon pours again and report their copper	Repour Selected	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 repour_all	pcb	Fill every polygon pour of the board again and report their copper	Repour All	PCB	-	-	RequiresDocument(Pcb)	-	document:document
-board_shape_from_selection	design	Make the selected closed lines the board outline	Board Shape from Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text
-keepout_from_selection	design	Turn the selected area or closed lines into a keepout on its layer	Keepout from Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text
+board_shape_from_selection	design	Make the selected closed lines the board outline	Board Shape from Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets
+keepout_from_selection	design	Turn the selected area or closed lines into a keepout on its layer	Keepout from Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets
 panelize_board	pcb	Array the board into a manufacturing panel	Panelize Board	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document
 remove_board_panel	pcb	Remove the board's panel	Remove Panel	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document
 set_board_panel	pcb	Change a setting of the board's panel	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,field:text,value:text
 board_panel	pcb	Describe the board's panel	-	PCB	-	-	Always	-	document:document
+place_board_room	place	Draw a room by two corners: an area for the parts of one sheet	Room	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+create_rooms_from_sheets	design	Make a room for each sheet of the project and move its parts into it	Create Rooms from Sheets...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 next_layer	view	Make the next layer of the board active	Next Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 prev_layer	view	Make the previous layer of the board active	Previous Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 next_signal_layer	view	Make the next signal layer active	Next Signal Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
@@ -281,8 +294,8 @@ set_layer_tab_names	view	Name the layer tabs short, medium or long	Layer Tab Nam
 toggle_layer_numbers	view	Show or hide the numbers on the layer tabs	Show Layer Numbers	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 board_layer_stack	design	Open the layer stack manager of the board	Layer Stack Manager...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 set_layer_stack	design	Replace the layer stack of a board	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,stack:text
-set_layer_sizes	modify	Set the per-layer copper sizes of vias or pads	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text,sizes:text
-set_pad_shape	modify	Set the copper shape of pads, with a trapezoid's delta or a custom outline	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text,shape:text,delta:text?,corners:text?
+set_layer_sizes	modify	Set the per-layer copper sizes of vias or pads	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets,sizes:text
+set_pad_shape	modify	Set the copper shape of pads, with a trapezoid's delta or a custom outline	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets,shape:text,delta:text?,corners:text?
 set_layer_visible	view	Show or hide one layer of the board view	Set Layer Visible	PCB	-	-	RequiresDocument(Pcb)	-	layer:text,on:bool,document:document
 set_active_layer	view	Make one layer the active layer	Set Active Layer	PCB	-	-	RequiresDocument(Pcb)	-	layer:text,document:document
 set_layer_color	view	Give one layer its own colour, saved with the board, or the palette colour again	Set Layer Color	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	layer:text,color:color?,document:document
@@ -302,9 +315,12 @@ clear_net_color	view	Clear net color	Clear Net Color	Schematic	-	-	RequiresDocum
 clear_all_net_colors	view	Clear all net colors	Clear All Net Colors	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document
 open_net_color_palette	view	Open net color palette	Net Color...	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 open_net_inspector	panels	Open Net Inspector panel	Net Inspector	General	-	-	Always	gui_only	-
+open_compiled_design	panels	Open Compiled Design panel	Compiled Design	General	-	-	Always	gui_only	-
 assign_net_class	design	Assign net to class	Assign Net Class...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document,net_name:text,class:text?
 open_net_classes	design	Open the project's Net Classes panel	Net Classes	General	-	-	Always	gui_only	-
 open_net_classes_panel	design	Open the Net Classes panel of the project	Net Classes	General	-	-	Always	gui_only	-
+open_harness_definitions	design	Open the harness definitions	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
+open_diff_pair_classes	design	Open the project's differential pair classes	Differential Pair Classes…	General	-	-	Always	gui_only	-
 add_net_class	design	Add a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,name:text?
 rename_net_class	design	Rename a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,class:text,name:text
 delete_net_class	design	Delete a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,class:text
@@ -355,7 +371,7 @@ set_board_origin	edit	Set the board origin at a clicked point	Set	PCB	-	-	Requir
 reset_board_origin	edit	Move the board origin to the bottom-left of the board outline	Reset	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document
 snap_board_origin_to_corner	edit	Move the board origin to the outline corner nearest the pointer	Snap to Outline Corner	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 measure_distance	view	Measure distance	-	General	-	-	Always	gui_only	-
-measure_board	search	Measure on a board	-	PCB	-	-	Always	-	document:document,start:point/mm?,end:point/mm?,ids:text?
+measure_board	search	Measure on a board	-	PCB	-	-	Always	-	document:document,start:point/mm?,end:point/mm?,ids:targets?
 reset_local_coordinates	view	Reset local coordinates	-	General	-	-	Always	gui_only	-
 cycle_unit	view	Cycle display unit	-	General	-	-	Always	gui_only	-
 view_board_3d	view	Show the board in 3D, or flat again	3D View	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
@@ -392,4 +408,11 @@ untile_documents	window	Untile documents	Untile	General	-	-	Always	gui_only	-
 toggle_floating_panels	window	Toggle floating panels	-	General	-	-	Always	gui_only	-
 toggle_properties_panel	panels	Toggle Properties panel	-	General	-	-	Always	gui_only	-
 toggle_schematic_filter_panel	panels	Toggle schematic filter panel	-	General	-	-	Always	gui_only	-
-toggle_schematic_list_panel	panels	Toggle schematic list panel	-	General	-	-	Always	gui_only	-
+toggle_schematic_list_panel	panels	Toggle Object List panel	-	General	-	-	Always	gui_only	-
+apply_layout_schematic	window	Workspace layout: Schematic	Schematic	General	-	-	Always	gui_only	-
+apply_layout_board	window	Workspace layout: Layout	Layout	General	-	-	Always	gui_only	-
+apply_layout_review	window	Workspace layout: Review	Review	General	-	-	Always	gui_only	-
+apply_layout_notebook	window	Workspace layout: Notebook	Notebook	General	-	-	Always	gui_only	-
+save_workspace_layout	window	Save the panel arrangement as a workspace layout	Save Layout…	General	-	-	Always	gui_only	-
+manage_workspace_layouts	window	Manage workspace layouts	Manage Layouts…	General	-	-	Always	gui_only	-
+reset_workspace_layout	window	Reset the edited built-in workspace layout	Reset Layout	General	-	-	Always	gui_only	-

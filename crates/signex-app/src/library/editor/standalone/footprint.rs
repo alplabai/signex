@@ -34,6 +34,7 @@ pub fn view_footprint<'a>(
     _theme_id: signex_types::theme::ThemeId,
     i18n: &signex_i18n::I18n,
     show_layer_strip: bool,
+    ui_family: &str,
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
     // v0.16.2.2 — footprint canvas uses Altium PCB-editor colours
@@ -45,7 +46,7 @@ pub fn view_footprint<'a>(
     // Symbol (schematic) canvas stays theme-driven — Altium's
     // schematic editor uses a different (cream-ish) palette.
     // The paper / charcoal ground is painted instead.
-    let graphite = crate::library::editor::footprint::canvas::graphite_look_for(tokens);
+    let graphite = crate::library::editor::footprint::graphite_look_for(tokens);
     let (bg, grid) = (graphite.bg, graphite.dot);
 
     // The canvas fills the tab: layer visibility lives in the Layers dock
@@ -56,16 +57,20 @@ pub fn view_footprint<'a>(
     // Active bar floats OVER the canvas via Stack so the canvas
     // drawing area extends edge-to-edge behind it instead of being
     // clipped under the bar's bottom. Mirrors Fusion 360 / Altium.
-    // v0.14.2 — mode switcher is its own floating widget at the
-    // canvas's top-LEFT, separate from the centered active bar.
-    let mode_switcher =
-        crate::library::editor::footprint::pads_active_bar::mode_switcher_overlay(editor, tokens);
+    // The editor bar (mockup row 187): Footprint / Sketch switch, 3D toggle and, in
+    // sketch mode, the sketch info caption and Parameters.
+    let mode_switcher = crate::library::editor::footprint::pads_active_bar::mode_switcher_overlay(
+        editor,
+        tokens,
+        i18n,
+        super::sketch_info_bar::editor_bar_items(editor, tokens, i18n),
+    );
     // v0.18.11.1 — canvas-overlay multi-footprint tab strip removed.
     // The Footprint Library left-dock panel (v0.18.8) renders the
     // same list (internal `file.footprints[i]`) with proper
     // Place/Add/Delete/Edit buttons, so the redundant on-canvas
-    // chip was just visual noise. Keep `mode_switcher` (Sketch /
-    // Pads / 3D) at top-right since it has no panel equivalent.
+    // chip was just visual noise. Keep `mode_switcher` (the editor
+    // bar) at top-right since it has no panel equivalent.
 
     // v0.18.14 — single unified active bar carries mode-keyed
     // tools (left half) + the eight Selection Filter pills (right
@@ -83,10 +88,33 @@ pub fn view_footprint<'a>(
         .height(Length::Fill)
         .push(canvas_area);
     let body = match editor.state.mode {
-        EditorMode::Sketch | EditorMode::Normal => stack
+        // The sketch mode bar: Bake preview · Discard changes · Bake (#2518).
+        EditorMode::Sketch => stack
+            .push(super::dof_chip::overlay(editor, tokens, i18n))
+            .push(super::dof_chip::zoom_pill_overlay(editor, tokens))
+            .push(super::sketch_exit::footprint_overlay(editor, tokens, i18n))
+            .push(super::bake_legend::overlay(editor, tokens, i18n))
+            .push(super::pad_link::overlay_link(editor, tokens, i18n))
+            .push(mode_switcher)
+            .push(
+                crate::library::editor::footprint::parameters_table::view::overlay(
+                    editor, tokens, i18n,
+                ),
+            )
+            // The constraint / pattern menu at the right-click (mockup row 188).
+            .push(
+                crate::library::editor::footprint::sketch_mode::constraint_menu::overlay(
+                    editor, tokens, i18n, ui_family,
+                ),
+            )
+            .boxed(),
+        EditorMode::Normal => stack
             .push(super::dof_chip::overlay(editor, tokens, i18n))
             .push(super::dof_chip::zoom_pill_overlay(editor, tokens))
             .push(mode_switcher)
+            .push(
+                crate::library::editor::footprint::pad_scope_prompt::overlay(editor, tokens, i18n),
+            )
             .boxed(),
         EditorMode::View3d => stack.push(mode_switcher).boxed(),
     };
@@ -675,6 +703,7 @@ pub(super) fn view_footprint_canvas<'a>(
         sketch: editor.primitive().sketch.as_ref(),
         silk_f: editor.primitive().silk_f.as_slice(),
         silk_b: editor.primitive().silk_b.as_slice(),
+        generated_silk: editor.primitive().generated.silk.as_slice(),
         zoom_step: editor.zoom_step,
         trackpad_pan: editor.trackpad_pan,
         wheel_mode: editor.wheel_mode,

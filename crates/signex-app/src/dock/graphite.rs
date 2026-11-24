@@ -25,7 +25,7 @@ const RAIL_ACCENT: f32 = 2.0;
 pub(super) fn title_font() -> Font {
     Font {
         weight: font::Weight::Medium,
-        ..Font::DEFAULT
+        ..signex_widgets::ui_font::regular()
     }
 }
 

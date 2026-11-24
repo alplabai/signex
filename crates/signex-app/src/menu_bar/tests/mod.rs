@@ -54,7 +54,7 @@ pub(super) fn sheet_of(symbols: Vec<Symbol>) -> SchematicSheet {
 /// A named way to build an app in one state.
 pub(super) type Fixture = (&'static str, fn() -> Signex);
 
-/// A fresh app on the Altium keymap with the first-run tour closed.
+/// A fresh app on the Signex Standard keymap with the first-run tour closed.
 pub(super) fn bare_app() -> Signex {
     let (mut app, _task) = Signex::new();
     app.ui_state.first_run_tour_open = false;
@@ -62,8 +62,8 @@ pub(super) fn bare_app() -> Signex {
     app.ui_state.visible_grid_mm = 1.0;
     app.ui_state
         .keymap_profiles
-        .set_active_profile("altium")
-        .expect("altium profile");
+        .set_active_profile("signex_standard")
+        .expect("signex_standard profile");
     app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active().into();
     app
 }
@@ -172,6 +172,7 @@ pub(super) fn menu_context_in(app: &Signex, window: Option<iced::window::Id>) ->
         i18n: std::sync::Arc::clone(&app.ui_state.i18n),
         cross_select: app.interaction_state.cross_select.enabled,
         pcb_sync: app.pcb_sync_label(window),
+        layouts: app.layouts_menu(),
     }
 }
 
@@ -299,6 +300,13 @@ pub(super) struct Probe {
     pub find_similar: bool,
     /// View ▸ Selection Filter opens an Active Bar dropdown (#2416).
     pub active_bar_menu: bool,
+    /// Design ▸ Differential Pair Classes... opens its dialog.
+    pub diff_pair_classes: bool,
+    /// View ▸ Window ▸ Layouts (mockup row 166): the two dialogs and the layout on
+    /// screen.
+    pub save_layout: bool,
+    pub manage_layouts: bool,
+    pub layout_active: Option<String>,
 }
 
 pub(super) fn probe(app: &Signex) -> Probe {
@@ -381,6 +389,15 @@ pub(super) fn probe(app: &Signex) -> Probe {
         document_setup: app.ui_state.document_setup.is_some(),
         find_similar: app.ui_state.find_similar.is_some(),
         active_bar_menu: app.interaction_state.active_bar_menu.is_some(),
+        diff_pair_classes: app.ui_state.diff_pair_classes.is_some(),
+        save_layout: app.ui_state.workspace_layouts.save.is_some(),
+        manage_layouts: app.ui_state.workspace_layouts.manage.is_some(),
+        layout_active: app
+            .ui_state
+            .workspace_layouts
+            .layouts
+            .active()
+            .map(|id| id.key().to_string()),
     }
 }
 
@@ -470,7 +487,9 @@ pub(super) fn open_project(app: &mut Signex, file: &str) -> usize {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -498,6 +517,7 @@ pub(super) fn loaded_board_app() -> Signex {
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::now_v7(),

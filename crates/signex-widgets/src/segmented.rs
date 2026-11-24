@@ -1,88 +1,145 @@
 //! Segmented control: a sunken track holding equal-height segments, the
-//! selected one drawn as a raised chip. Stateless — the caller owns the
-//! selection and maps each pick to a message.
+//! selected one drawn as a raised chip. Used as a mode switch (a panel's
+//! modes, a two-page toggle). Stateless — the caller owns the selection and
+//! maps each pick to a message. Sizes derive from the text size.
 
-use crate::{button, raw, text};
+use crate::widest_face::WidestFace;
+use crate::{FitRow, Label, button, text};
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{Row, container};
-use iced::{Background, Border, Color, Element, Length, Padding, Theme, Widget};
+use iced::font::Weight;
+use iced::widget::container;
+use iced::{
+    Background, Border, Color, Element, Font, Length, Padding, Shadow, Theme, Vector, Widget,
+};
 
-/// Track height in px.
-pub const TRACK_HEIGHT: f32 = 28.0;
-/// Gap between the track edge and the segments.
-pub const TRACK_PAD: f32 = 2.0;
-/// Track corner radius.
-pub const TRACK_RADIUS: f32 = 7.0;
-/// Horizontal padding inside a segment.
-pub const SEGMENT_PAD_H: f32 = 12.0;
+// Graphite sizes at a 12 px body, kept as ratios of the text size.
+const SEGMENT_HEIGHT_EM: f32 = 22.0 / 12.0;
+const TRACK_PAD_EM: f32 = 2.0 / 12.0;
+const SEGMENT_GAP_EM: f32 = 2.0 / 12.0;
+const SEGMENT_PAD_EM: f32 = 10.0 / 12.0;
+const TRACK_RADIUS_EM: f32 = 7.0 / 12.0;
+const SHADOW_OFFSET_EM: f32 = 1.0 / 12.0;
+const SHADOW_BLUR_EM: f32 = 2.0 / 12.0;
 
-/// Colours and metrics for [`segmented`]; colours come from the caller's tokens.
+/// The face of a segment's label: the UI font, medium when selected.
+fn segment_font(is_selected: bool) -> Font {
+    crate::ui_font::at(if is_selected {
+        Weight::Medium
+    } else {
+        Weight::Normal
+    })
+}
+
+/// Colours for [`segmented`]; they come from the caller's tokens.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SegmentedStyle {
     /// Sunken track fill.
     pub track: Color,
     /// Fill of the selected segment (the raised chip).
     pub active_fill: Color,
-    /// Outline of the selected segment.
-    pub active_edge: Color,
+    /// Drop shadow under the selected segment.
+    pub shadow: Color,
     /// Label colour of unselected segments.
     pub ink: Color,
     /// Label colour of the selected segment.
     pub active_ink: Color,
+    /// Body text size; every metric derives from it.
     pub text_size: f32,
-    pub track_height: f32,
-    pub track_radius: f32,
-    /// Stretch segments to share the full width instead of hugging labels.
+    /// Take the full width, segments sharing what their labels leave spare,
+    /// instead of hugging the labels. Either way the segments fold onto more
+    /// lines rather than overlap.
     pub fill_width: bool,
 }
 
 impl SegmentedStyle {
-    /// Default metrics (28 px track, radius 7, 12 px labels) with the given colours.
+    /// The given colours at `text_size`, hugging the labels.
     pub fn new(
         track: Color,
         active_fill: Color,
-        active_edge: Color,
+        shadow: Color,
         ink: Color,
         active_ink: Color,
+        text_size: f32,
     ) -> Self {
         Self {
             track,
             active_fill,
-            active_edge,
+            shadow,
             ink,
             active_ink,
-            text_size: 12.0,
-            track_height: TRACK_HEIGHT,
-            track_radius: TRACK_RADIUS,
+            text_size,
             fill_width: false,
         }
-    }
-
-    pub fn text_size(mut self, text_size: f32) -> Self {
-        self.text_size = text_size;
-        self
     }
 
     pub fn fill_width(mut self, fill_width: bool) -> Self {
         self.fill_width = fill_width;
         self
     }
+
+    /// The same style with `ink` on the unselected segments.
+    pub fn resting_ink(mut self, ink: Color) -> Self {
+        self.ink = ink;
+        self
+    }
 }
 
-/// Height of one segment inside a track of `track_height`.
-pub fn segment_height(track_height: f32) -> f32 {
-    (track_height - 2.0 * TRACK_PAD).max(0.0)
+/// Sizes of a segmented control, derived from its text size.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SegmentedMetrics {
+    pub segment_height: f32,
+    pub track_pad: f32,
+    pub track_height: f32,
+    pub gap: f32,
+    pub segment_pad_h: f32,
+    pub track_radius: f32,
+    pub segment_radius: f32,
+    pub shadow_offset: f32,
+    pub shadow_blur: f32,
 }
 
-/// Corner radius of a segment, concentric with the track.
-pub fn segment_radius(track_radius: f32) -> f32 {
-    (track_radius - TRACK_PAD).max(0.0)
+impl SegmentedMetrics {
+    pub fn from_text_size(text_size: f32) -> Self {
+        let segment_height = text_size * SEGMENT_HEIGHT_EM;
+        let track_pad = text_size * TRACK_PAD_EM;
+        let track_radius = text_size * TRACK_RADIUS_EM;
+        Self {
+            segment_height,
+            track_pad,
+            track_height: segment_height + 2.0 * track_pad,
+            gap: text_size * SEGMENT_GAP_EM,
+            segment_pad_h: text_size * SEGMENT_PAD_EM,
+            track_radius,
+            segment_radius: segment_radius(track_radius, track_pad),
+            shadow_offset: text_size * SHADOW_OFFSET_EM,
+            shadow_blur: text_size * SHADOW_BLUR_EM,
+        }
+    }
+}
+
+/// Corner radius of a segment, concentric with the track and never negative.
+pub fn segment_radius(track_radius: f32, track_pad: f32) -> f32 {
+    (track_radius - track_pad).max(0.0)
+}
+
+/// A segment's label in `font`.
+fn label_face<'a, M: 'a>(label: Label<'a>, size: f32, ink: Color, font: Font) -> Element<'a, M> {
+    let face = text(label)
+        .size(size)
+        .color(ink)
+        .font(font)
+        .height(Length::Fill)
+        .align_y(Vertical::Center)
+        .align_x(Horizontal::Center)
+        .wrapping(iced::widget::text::Wrapping::None)
+        .ellipsis(iced::widget::text::Ellipsis::End);
+    iced::Widget::boxed(face)
 }
 
 /// Segmented control over `options` (value, label). `on_select` maps the
 /// picked value to the caller's message; picking the selected one re-emits it.
 pub fn segmented<'a, V, M>(
-    options: &[(V, &str)],
+    options: impl IntoIterator<Item = (V, Label<'a>)>,
     selected: V,
     style: SegmentedStyle,
     on_select: impl Fn(V) -> M + 'a,
@@ -91,63 +148,85 @@ where
     V: Copy + PartialEq + 'a,
     M: Clone + 'a,
 {
-    let seg_h = segment_height(style.track_height);
-    let seg_r = segment_radius(style.track_radius);
-    let seg_w = if style.fill_width {
+    segments(options, selected, style, Some(&on_select))
+}
+
+/// [`segmented`] that takes no press, for a choice that cannot change now.
+/// The caller passes the greyed colours in `style`.
+pub fn segmented_disabled<'a, V, M>(
+    options: impl IntoIterator<Item = (V, Label<'a>)>,
+    selected: V,
+    style: SegmentedStyle,
+) -> Element<'a, M>
+where
+    V: Copy + PartialEq + 'a,
+    M: Clone + 'a,
+{
+    segments(options, selected, style, None)
+}
+
+fn segments<'a, V, M>(
+    options: impl IntoIterator<Item = (V, Label<'a>)>,
+    selected: V,
+    style: SegmentedStyle,
+    on_select: Option<&dyn Fn(V) -> M>,
+) -> Element<'a, M>
+where
+    V: Copy + PartialEq + 'a,
+    M: Clone + 'a,
+{
+    let m = SegmentedMetrics::from_text_size(style.text_size);
+    let track_width = if style.fill_width {
         Length::Fill
     } else {
         Length::Shrink
     };
 
-    let mut row: Row<Element<'a, M>> = Row::new().spacing(0.0);
+    let mut cells: Vec<Element<'a, M>> = Vec::new();
     for (value, label) in options {
-        let is_active = *value == selected;
+        let is_active = value == selected;
         let ink = if is_active {
             style.active_ink
         } else {
             style.ink
         };
-        let label = text(raw((*label).to_string()))
-            .size(style.text_size)
-            .color(ink)
-            .height(Length::Fill)
-            .align_y(Vertical::Center)
-            .align_x(Horizontal::Center)
-            .width(seg_w);
+        // Both faces are measured, so picking a segment cannot refold the row.
+        let plain = label_face(label.clone(), style.text_size, ink, segment_font(false));
+        let medium = label_face(label, style.text_size, ink, segment_font(true));
+        let label: Element<'a, M> = WidestFace::new(plain, medium, is_active).into();
         let seg = button(label)
-            .padding(Padding::from([0.0, SEGMENT_PAD_H]))
-            .width(seg_w)
-            .height(seg_h)
-            .on_press(on_select(*value))
+            .padding(Padding::from([0.0, m.segment_pad_h]))
+            .height(m.segment_height)
+            .on_press_maybe(on_select.map(|select| select(value)))
             .style(move |_: &Theme, _| button::Style {
                 background: is_active.then_some(Background::Color(style.active_fill)),
                 text_color: ink,
                 border: Border {
-                    color: if is_active {
-                        style.active_edge
-                    } else {
-                        Color::TRANSPARENT
-                    },
-                    width: if is_active { 1.0 } else { 0.0 },
-                    radius: seg_r.into(),
+                    radius: m.segment_radius.into(),
                     ..Border::default()
+                },
+                shadow: if is_active {
+                    Shadow {
+                        color: style.shadow,
+                        offset: Vector::new(0.0, m.shadow_offset),
+                        blur_radius: m.shadow_blur,
+                    }
+                } else {
+                    Shadow::default()
                 },
                 ..button::Style::default()
             });
-        row = row.push(seg.boxed());
+        cells.push(seg.boxed());
     }
 
-    container(row)
-        .padding(TRACK_PAD)
-        .width(if style.fill_width {
-            Length::Fill
-        } else {
-            Length::Shrink
-        })
+    let cells = FitRow::new(cells).spacing(m.gap).fill(style.fill_width);
+    container(cells)
+        .padding(m.track_pad)
+        .width(track_width)
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(style.track)),
             border: Border {
-                radius: style.track_radius.into(),
+                radius: m.track_radius.into(),
                 ..Border::default()
             },
             ..container::Style::default()
@@ -159,26 +238,49 @@ where
 mod tests {
     use super::*;
 
+    /// Fixture text for the tests.
+    fn sample(text: &str) -> Label<'static> {
+        crate::raw(text.to_owned())
+    }
+    use crate::Label;
+
     #[test]
-    fn default_track_leaves_a_24_px_segment() {
-        assert_eq!(segment_height(TRACK_HEIGHT), 24.0);
+    fn metrics_at_the_12_px_body_match_the_mockup() {
+        let m = SegmentedMetrics::from_text_size(12.0);
+        assert!((m.segment_height - 22.0).abs() < 1e-4);
+        assert!((m.track_height - 26.0).abs() < 1e-4);
+        assert!((m.track_radius - 7.0).abs() < 1e-4);
+        assert!((m.segment_radius - 5.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn metrics_scale_with_the_text_size() {
+        let a = SegmentedMetrics::from_text_size(12.0);
+        let b = SegmentedMetrics::from_text_size(18.0);
+        assert!((b.track_height - 1.5 * a.track_height).abs() < 1e-4);
+        assert!((b.segment_pad_h - 1.5 * a.segment_pad_h).abs() < 1e-4);
     }
 
     #[test]
     fn segment_radius_is_concentric_and_never_negative() {
-        assert_eq!(segment_radius(TRACK_RADIUS), 5.0);
-        assert_eq!(segment_radius(1.0), 0.0);
+        assert_eq!(segment_radius(7.0, 2.0), 5.0);
+        assert_eq!(segment_radius(1.0, 2.0), 0.0);
     }
 
     #[test]
-    fn tiny_track_clamps_segment_height_to_zero() {
-        assert_eq!(segment_height(3.0), 0.0);
+    fn a_selected_segment_uses_the_family_of_an_unselected_one() {
+        let (selected, unselected) = (segment_font(true), segment_font(false));
+        assert_eq!(selected.family, unselected.family);
+        assert_eq!(selected.family, crate::ui_font::regular().family);
+        assert_eq!(selected.weight, Weight::Medium);
+        assert_eq!(unselected.weight, Weight::Normal);
     }
 
     #[derive(Clone, Copy, PartialEq, Debug)]
     enum Mode {
-        A,
-        B,
+        Nets,
+        NetClasses,
+        Polygons,
     }
 
     #[test]
@@ -186,14 +288,19 @@ mod tests {
         let style = SegmentedStyle::new(
             Color::BLACK,
             Color::WHITE,
-            Color::WHITE,
+            Color::BLACK,
             Color::WHITE,
             Color::BLACK,
+            12.0,
         )
         .fill_width(true);
-        for sel in [Mode::A, Mode::B] {
+        for sel in [Mode::Nets, Mode::NetClasses, Mode::Polygons] {
             let _: Element<'_, Mode> = segmented(
-                &[(Mode::A, "Assistant"), (Mode::B, "Generator")],
+                [
+                    (Mode::Nets, sample("Nets")),
+                    (Mode::NetClasses, sample("Net Classes")),
+                    (Mode::Polygons, sample("Polygons")),
+                ],
                 sel,
                 style,
                 |m| m,

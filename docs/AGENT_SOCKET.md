@@ -157,8 +157,9 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `save_board_reuse_block` and `place_board_reuse_block` (#2410; a swap is
   one undo step across the board and its sheet, a save writes the block's
   file in the project's `reuse-blocks` folder, and a place may wait for the
-  project's blocks to be read like an edit waiting for its reads), and the
-  Project tab edits `project_move_sheet`, `project_add_variant`,
+  project's blocks to be read like an edit waiting for its reads; a swap or
+  a place names its component by `ids`, its uuid, or by `designator`,
+  exactly one), and the Project tab edits `project_move_sheet`, `project_add_variant`,
   `project_rename_variant`, `project_remove_variant`,
   `project_set_active_variant`, `project_move_library`,
   `project_set_annotate_undo` and `project_set_version_control`
@@ -171,7 +172,7 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   The window-layout commands `tile_windows_horizontally`,
   `tile_windows_vertically` and `untile_documents` (#2249) name no document:
   they are open to agents by the maintainer's rule that everything is
-  AI-controllable, run the Window menu row's handler (refused with its reason
+  AI-controllable, run the View ▸ Window menu row's handler (refused with its reason
   when the row is greyed) and answer with the layout they left:
   `{"tiled", "layout": "stacked" | "side_by_side" | null, "panes"}`, each
   pane `{"focused", "document", "name"}` in pane order (`document` and

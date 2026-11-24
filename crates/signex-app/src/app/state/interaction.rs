@@ -85,12 +85,20 @@ pub struct InteractionState {
     pub tab_drag_origin: Option<(f32, f32)>,
     pub wire_points: Vec<signex_types::schematic::Point>,
     pub wire_drawing: bool,
+    /// The undocked window the wire being drawn started in; `None`: main.
+    pub wire_window: Option<iced::window::Id>,
+    /// Width and colour of the wire the route being drawn started on, which
+    /// its wires take; `None` when it started on no wire.
+    pub(crate) wire_start_style: Option<(f64, Option<signex_types::theme::Color>)>,
     /// 3-click arc placement buffer. Holds the first two clicks
     /// (start, mid); the third click commits as SchDrawing::Arc.
     pub arc_points: Vec<signex_types::schematic::Point>,
     /// Freehand polygon placement buffer. Accumulates clicks until
     /// the user presses Enter / double-clicks / right-clicks.
     pub polyline_points: Vec<signex_types::schematic::Point>,
+    /// The Bezier and dimension tools' clicked points and the text the next
+    /// dimension takes (#1267).
+    pub(crate) annotation_tool: crate::app::handlers::canvas::AnnotationTool,
     /// Two-click shape placement: first click sets the anchor, second
     /// click commits. Used by Tool::Line, Tool::Rectangle, Tool::Circle.
     pub shape_anchor: Option<signex_types::schematic::Point>,
@@ -137,9 +145,6 @@ pub struct InteractionState {
     /// Right-click menu of a Start screen project row (#2305): which
     /// project, anchored where the click landed.
     pub start_row_menu: Option<crate::start_screen::StartRowMenu>,
-    /// The Start screen navigation row last picked; back to Home once the
-    /// Start screen goes away.
-    pub start_section: crate::start_screen::StartSection,
     /// Currently-expanded submenu inside the right-click context menu
     /// (None when no submenu is shown). Always cleared when
     /// `context_menu` becomes None.
@@ -176,6 +181,9 @@ pub struct InteractionState {
     pub active_bar_menu_window: Option<iced::window::Id>,
     /// The open dropdown of the main window's PCB Active Bar (#2352).
     pub pcb_bar_menu: Option<crate::app::PcbBarMenu>,
+    /// An Active Bar took the last right press, so the canvas ignores its
+    /// release. Cleared by that release or the next right press on a canvas.
+    pub swallow_right_release: bool,
     /// The open right-click menu of a layer tab under a board canvas (#2379).
     pub pcb_layer_tab_menu: Option<crate::app::LayerTabMenu>,
     /// The open menu of the layer set button under a board canvas (#2394).
@@ -197,6 +205,9 @@ pub struct InteractionState {
     /// Clamped to `0..custom_filter_presets.len()` whenever the list
     /// changes; ignored entirely when the list is empty.
     pub active_custom_filter_tab: usize,
+    /// SCH Filter's inline preset rename: the preset and the name typed so
+    /// far. Mirrored into each panel context after every update.
+    pub filter_preset_rename: Option<(usize, String)>,
     /// User-defined footprint-editor filter presets (capped at
     /// `crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT`). Loaded from
     /// `~/.config/signex/prefs.json` on launch; parallel to
@@ -209,11 +220,20 @@ pub struct InteractionState {
     pub pending_power: Option<(String, String)>,
     /// A library part attached to the cursor, waiting for its click.
     pub placement: Option<super::PlacementSession>,
+    /// The values the current Tab pause began with; `None` when not paused.
+    pub placement_pause: Option<super::SheetPlacementPause>,
     /// The last label or text note placed, for "Repeat last item" (#1253).
     pub last_placement: Option<super::LastPlacement>,
     /// Designator numbers for pasted parts (Next free), seeded when a paste
     /// starts.
     pub paste_counters: Option<super::PasteCounters>,
+    /// The sheet the last numbering read was for and the project sheets it
+    /// could not read; Smart Paste stops on them (#2744).
+    pub paste_unread_sheets: Option<(std::path::PathBuf, Vec<std::path::PathBuf>)>,
+    /// The designator rule of the Smart Paste on the cursor (mockup row 155): its
+    /// dialog's choice, used instead of the preference until the next paste
+    /// starts.
+    pub paste_designators_override: Option<crate::paste_prefs::PasteDesignators>,
     /// Token for library reads. Every pick takes a new value and carries it,
     /// so only the LATEST pick may arm a session; Esc, a right-click and any
     /// tool change bump it too, so a read that finishes after a cancel arms
@@ -224,6 +244,9 @@ pub struct InteractionState {
     /// while the Bus Entry tool is armed). The signs are the orientation; see
     /// `signex_types::schematic::BusEntry`.
     pub bus_entry_size: (f64, f64),
+    /// The harness type the last Harness Connector click placed; the next
+    /// connector takes it (#1280).
+    pub last_harness_type: Option<String>,
     /// Uuid of the placed symbol the cursor is currently hovering over,
     /// if any. Set/cleared by the canvas `CursorAt` handler. Drives the
     /// hover tooltip overlay (designator + value + footprint + lib_id).
@@ -243,9 +266,33 @@ pub struct InteractionState {
     /// card tracks the cursor (offset to bottom-right by ~16 px so it
     /// doesn't obscure the symbol).
     pub hover_screen_pos: Option<(f32, f32)>,
+    /// The zoom pill's preset menu is up (Graphite mockup #64): opened by a click on the
+    /// pill's percentage, closed by a pick, Esc or a click outside it.
+    pub zoom_presets_open: bool,
 }
 
 impl InteractionState {
+    /// Forget a sheet Tab pause once placement is no longer paused, so a
+    /// later Esc never restores its stale values. A footprint pause stays.
+    pub fn end_sheet_placement_pause(&mut self) {
+        if matches!(
+            self.placement_pause,
+            Some(super::SheetPlacementPause::Sheet { .. })
+        ) {
+            self.placement_pause = None;
+        }
+    }
+
+    /// Whether a sheet Tab pause belongs to a window other than the one
+    /// acting now, so a change to the acting sheet must leave it alone.
+    pub fn is_sheet_pause_elsewhere(&self) -> bool {
+        matches!(
+            self.placement_pause,
+            Some(super::SheetPlacementPause::Sheet { window, .. })
+                if window != self.acting_window
+        )
+    }
+
     pub fn active_canvas(&self) -> &CanvasSlot {
         &self.canvas
     }

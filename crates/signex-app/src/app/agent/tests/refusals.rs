@@ -421,6 +421,7 @@ fn the_close_route_refuses_an_agent_close_of_a_sheet_with_a_title_block_draft() 
     let crate::app::command::CommandOutcome::Disabled { reason } = outcome else {
         panic!("the close was not refused: {outcome:?}");
     };
+    let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
     assert!(reason.contains("title-block draft"), "{reason}");
     assert_eq!(
         app.document_state
@@ -461,6 +462,7 @@ fn the_close_route_refuses_an_agent_close_of_a_sheet_with_a_paper_edge_draft() {
     let crate::app::command::CommandOutcome::Disabled { reason } = outcome else {
         panic!("the close was not refused: {outcome:?}");
     };
+    let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
     assert!(reason.contains("page-settings draft"), "{reason}");
     assert_eq!(
         app.document_state

@@ -27,7 +27,15 @@ pub enum OperandKind {
     Document,
     /// A length in mm, above zero: a grid step (#2408).
     Length,
+    /// The items a command acts on, by uuid, comma separated (#2326): at
+    /// least one and at most [`MAX_TARGETS`]; a repeated uuid counts once.
+    Targets,
 }
+
+/// The most uuids one [`OperandKind::Targets`] operand names. A handler finds
+/// each by a scan of the document's items, so this bounds one call's work
+/// (and its text, about 370 kB); a person's selection is far smaller.
+pub const MAX_TARGETS: usize = 10_000;
 
 impl OperandKind {
     pub const fn name(self) -> &'static str {
@@ -41,6 +49,7 @@ impl OperandKind {
             Self::Color => "color",
             Self::Document => "document",
             Self::Length => "length",
+            Self::Targets => "targets",
         }
     }
 
@@ -49,7 +58,9 @@ impl OperandKind {
         match self {
             Self::Point | Self::Length => Some("mm"),
             Self::Angle | Self::Turn => Some("deg"),
-            Self::Text | Self::Path | Self::Bool | Self::Color | Self::Document => None,
+            Self::Text | Self::Path | Self::Bool | Self::Color | Self::Document | Self::Targets => {
+                None
+            }
         }
     }
 }
@@ -128,6 +139,20 @@ pub const EDIT_BLANKET: &[Operand] = &[
     optional("end", OperandKind::Point),
     optional("class", OperandKind::Text),
     optional("exclude", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
+/// A Net Parameters directive (#1489): the point on a wire it sits on, the
+/// net class and diff-pair class it gives that net, and its routing rules
+/// (lengths in mm, `current` in A, information only).
+pub const NET_PARAMETERS: &[Operand] = &[
+    required("at", OperandKind::Point),
+    optional("class", OperandKind::Text),
+    optional("diff_pair_class", OperandKind::Text),
+    optional("width", OperandKind::Text),
+    optional("clearance", OperandKind::Text),
+    optional("via_diameter", OperandKind::Text),
+    optional("via_hole", OperandKind::Text),
+    optional("current", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
 /// A wire run, checked against the sheet before it lands (#2199): `allow_merge`
@@ -510,18 +535,21 @@ pub const FOOTPRINT_TEXT_SET: &[Operand] = &[
     required("field", OperandKind::Text),
     required("value", OperandKind::Text),
 ];
-/// `swap_pins` (#2410): two pins of the component `designator` on the board
-/// `document`, as `pins` = `a,b` (pad numbers).
+/// `swap_pins` (#2410): two pins of one component on the board `document`,
+/// as `pins` = `a,b` (pad numbers). The component is named by `ids` (its
+/// uuid) or by `designator`, exactly one of them (#2326).
 pub const SWAP_PINS: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("designator", OperandKind::Text),
+    optional("ids", OperandKind::Targets),
+    optional("designator", OperandKind::Text),
     required("pins", OperandKind::Text),
 ];
-/// `swap_gates` (#2410): two gates of the component `designator`, as
-/// `units` = `a,b` (unit numbers).
+/// `swap_gates` (#2410): two gates of one component, named as for
+/// `swap_pins`, as `units` = `a,b` (unit numbers).
 pub const SWAP_GATES: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("designator", OperandKind::Text),
+    optional("ids", OperandKind::Targets),
+    optional("designator", OperandKind::Text),
     required("units", OperandKind::Text),
 ];
 /// `save_board_reuse_block` (#2410): the block `name` made of `ids`
@@ -531,12 +559,14 @@ pub const SAVE_REUSE_BLOCK: &[Operand] = &[
     required("name", OperandKind::Text),
     required("ids", OperandKind::Text),
 ];
-/// `place_board_reuse_block` (#2410): the block `name` around the component
-/// `designator`, turned by `degrees`.
+/// `place_board_reuse_block` (#2410): the block `name` around one component,
+/// named by `ids` (its uuid) or by `designator` (exactly one, #2326), turned
+/// by `degrees`.
 pub const PLACE_REUSE_BLOCK: &[Operand] = &[
     required("document", OperandKind::Document),
     required("name", OperandKind::Text),
-    required("designator", OperandKind::Text),
+    optional("ids", OperandKind::Targets),
+    optional("designator", OperandKind::Text),
     optional("degrees", OperandKind::Turn),
 ];
 /// A save dialog's answer for the named document.
@@ -611,7 +641,7 @@ pub const MEASURE_BOARD: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("start", OperandKind::Point),
     optional("end", OperandKind::Point),
-    optional("ids", OperandKind::Text),
+    optional("ids", OperandKind::Targets),
 ];
 /// `query_board_nets` (#2403): every net of the named board, or one.
 pub const QUERY_BOARD_NETS: &[Operand] = &[
@@ -644,11 +674,13 @@ pub const DRC_VIOLATION: &[Operand] = &[
     required("document", OperandKind::Document),
     required("id", OperandKind::Text),
 ];
-/// Waive a finding of the named board's last run; `text` is the note.
+/// Waive a finding of the named board's last run; `text` is the note and
+/// `author` who accepted it (AV-13).
 pub const WAIVE_DRC_VIOLATION: &[Operand] = &[
     required("document", OperandKind::Document),
     required("id", OperandKind::Text),
     optional("text", OperandKind::Text),
+    optional("author", OperandKind::Text),
 ];
 /// What the DRC results show: one rule id, one copper layer token, one
 /// severity (`error`, `warning`, `info`), and whether waived findings show.
@@ -788,7 +820,7 @@ pub const TEARDROPS: &[Operand] = &[
 /// `arrange_in_box` (#2409): the components and the box's two corners.
 pub const ARRANGE_BOX: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("ids", OperandKind::Text),
+    required("ids", OperandKind::Targets),
     required("start", OperandKind::Point),
     required("end", OperandKind::Point),
 ];
@@ -918,13 +950,13 @@ pub const SET_LAYER_STACK: &[Operand] = &[
 /// separated.
 pub const BOARD_ITEMS: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("ids", OperandKind::Text),
+    required("ids", OperandKind::Targets),
 ];
 /// `set_via_span` (#2407): vias by uuid and the two copper layers they join,
 /// `TopCopper,Inner2Copper`.
 pub const SET_VIA_SPAN: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("ids", OperandKind::Text),
+    required("ids", OperandKind::Targets),
     required("layers", OperandKind::Text),
 ];
 /// `set_layer_sizes` (#2401): vias or pads by uuid and their per-layer sizes
@@ -932,7 +964,7 @@ pub const SET_VIA_SPAN: &[Operand] = &[
 /// a via size one number, a pad size `<x>x<y>`.
 pub const SET_LAYER_SIZES: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("ids", OperandKind::Text),
+    required("ids", OperandKind::Targets),
     required("sizes", OperandKind::Text),
 ];
 /// `set_pad_shape` (#2242): pads by uuid and their `shape` (`circle`, `rect`,
@@ -941,7 +973,7 @@ pub const SET_LAYER_SIZES: &[Operand] = &[
 /// pad's own frame.
 pub const SET_PAD_SHAPE: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("ids", OperandKind::Text),
+    required("ids", OperandKind::Targets),
     required("shape", OperandKind::Text),
     optional("delta", OperandKind::Text),
     optional("corners", OperandKind::Text),

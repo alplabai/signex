@@ -1,6 +1,7 @@
 //! Other (#2353, #2374): the units the panel and canvas show lengths in,
-//! the pour names, the designator display and the sheet card (#2386). All
-//! but the units are board options, each edit one undo step.
+//! the designator display, the pour names and the sheet card (#2386). All
+//! but the units are board options, each edit one undo step. Last, the link
+//! to the Layer Stack, where the board materials live (#2523).
 
 use iced::widget::Column;
 use iced::{Element, Widget as _};
@@ -40,22 +41,6 @@ pub(super) fn section<'a>(
     rows.push(form.row(&[&units], form.field(&units, toggle)));
 
     let options = &board.options;
-    let naming = form.t(ids::PCB_BOARD_POLYGON_NAMING);
-    let schemes = PolygonNaming::ALL
-        .into_iter()
-        .map(|value| Choice {
-            value,
-            label: example_name(form, value),
-        })
-        .collect();
-    let pick = fields::dropdown(
-        schemes,
-        Some(options.polygon_naming),
-        naming.clone(),
-        PcbBoardMsg::PolygonNamingPicked,
-    );
-    rows.push(form.row(&[&naming], form.field(&naming, pick)));
-
     let designators = form.t(ids::PCB_BOARD_DESIGNATOR_DISPLAY);
     let display = |value, label: MessageId| Segment {
         label: form.t(label),
@@ -74,8 +59,39 @@ pub(super) fn section<'a>(
     ]);
     rows.push(form.row(&[&designators], form.field(&designators, toggle)));
 
+    let naming = form.t(ids::PCB_BOARD_POLYGON_NAMING);
+    let schemes = PolygonNaming::ALL
+        .into_iter()
+        .map(|value| Choice {
+            value,
+            label: example_name(form, value),
+        })
+        .collect();
+    let pick = fields::dropdown(
+        schemes,
+        Some(options.polygon_naming),
+        naming.clone(),
+        PcbBoardMsg::PolygonNamingPicked,
+    );
+    rows.push(form.row(&[&naming], form.field(&naming, pick)));
+
     rows.push(sheet_card(form, board));
+    rows.push(materials(form));
     form.section("pcb_board_other", ids::PCB_BOARD_SECTION_OTHER, rows)
+}
+
+/// Board materials: solder mask, silkscreen, surface finish, copper weights
+/// and materials live in the Layer Stack (#2523, mockup row 176); the row
+/// links there.
+fn materials<'a>(form: &Form<'a>) -> Shown<'a> {
+    let label = form.t(ids::PCB_BOARD_MATERIALS);
+    let link_text = form.t(ids::PCB_BOARD_MATERIALS_LINK);
+    let link = form.text_link(
+        link_text.clone(),
+        PanelMsg::PcbBoard(PcbBoardMsg::LayerStackOpened),
+        form.t(ids::PCB_BOARD_MATERIALS_TIP),
+    );
+    form.row(&[&label, &link_text], form.field(&label, link))
 }
 
 /// A pour scheme as the name it gives the first pour of GND on the top

@@ -38,6 +38,7 @@ pub(crate) fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::from_u128(0xB0A2D),
         version: 1,
@@ -446,7 +447,7 @@ fn a_refused_bake_keeps_the_board_and_the_mode_and_says_why() {
 
     send(
         &mut f,
-        Message::Pcb(PcbMsg::Sketch(BoardSketchMsg::LeaveRequested)),
+        Message::Pcb(PcbMsg::Sketch(BoardSketchMsg::BakeRequested)),
     );
     assert!(in_sketch(&f), "a refused commit keeps the mode on");
     assert_eq!(snapshot(&f), before, "the board is unchanged");
@@ -478,10 +479,16 @@ fn a_refused_bake_keeps_the_board_and_the_mode_and_says_why() {
         "Messages says why too"
     );
 
-    // Discard drops the copy and leaves the board as it was.
+    // Discard changes asks first (#2518), then drops the copy and leaves
+    // the board as it was.
     send(
         &mut f,
         Message::Pcb(PcbMsg::Sketch(BoardSketchMsg::DiscardRequested)),
+    );
+    assert!(in_sketch(&f), "the copy has changes: Discard asks first");
+    send(
+        &mut f,
+        Message::Pcb(PcbMsg::Sketch(BoardSketchMsg::DiscardConfirmed)),
     );
     assert!(!in_sketch(&f));
     assert_eq!(snapshot(&f), before);

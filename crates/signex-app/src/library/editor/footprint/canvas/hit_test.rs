@@ -7,6 +7,20 @@ use signex_sketch::id::SketchEntityId;
 
 use super::FootprintCanvasState;
 use super::geometry::screen_dist_to_segment_sq;
+use super::glyph_layout::{Glyph, glyph_at, sketch_glyphs};
+use crate::library::editor::footprint::state::FootprintEditorState;
+
+/// The constraint glyph, value, pattern glyph or instance slot under the
+/// canvas point `screen`, from the same layout the draw pass paints.
+pub(super) fn sketch_glyph_at(
+    sketch: Option<&signex_sketch::SketchData>,
+    state: &FootprintEditorState,
+    cstate: &FootprintCanvasState,
+    screen: iced::Point,
+) -> Option<Glyph> {
+    let glyphs = sketch_glyphs(sketch?, state, cstate);
+    glyph_at(&glyphs, screen).cloned()
+}
 
 /// v0.13.2 — Snap radius in screen pixels. A click within this
 /// distance of an existing sketch Point's screen position resolves
@@ -107,11 +121,25 @@ pub(super) fn sketch_snap(
     cstate: &FootprintCanvasState,
     click_world: (f64, f64),
 ) -> Option<SketchEntityId> {
+    sketch_snap_except(sketch, cstate, click_world, &[])
+}
+
+/// [`sketch_snap`] that skips the Points in `except`: a dragged Point or
+/// Line must not snap to itself.
+pub(super) fn sketch_snap_except(
+    sketch: Option<&signex_sketch::SketchData>,
+    cstate: &FootprintCanvasState,
+    click_world: (f64, f64),
+    except: &[Option<SketchEntityId>],
+) -> Option<SketchEntityId> {
     let sketch = sketch?;
     let click_screen = cstate.world_to_screen(click_world);
     let radius_sq = SKETCH_SNAP_RADIUS_PX * SKETCH_SNAP_RADIUS_PX;
     let mut best: Option<(f32, SketchEntityId)> = None;
     for entity in &sketch.entities {
+        if except.contains(&Some(entity.id)) {
+            continue;
+        }
         if let EntityKind::Point { x, y } = entity.kind {
             let p = cstate.world_to_screen((x, y));
             let dx = p.x - click_screen.x;

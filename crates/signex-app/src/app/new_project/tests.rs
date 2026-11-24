@@ -38,33 +38,35 @@ fn a_fresh_dialog_is_standard_4_layer() {
 #[test]
 fn picking_a_profile_refills_the_fields_and_custom_opens_them() {
     let mut s = NewProjectState::new(String::new());
-    s.pick_profile(SetupProfile::Hdi);
-    assert_eq!(s.drafts.clearance, "0.1");
-    assert_eq!(s.drafts.via, "0.3");
-    assert_eq!(s.setup.pcb.copper_layers, 6);
-    assert!(!s.customize_open);
-    s.pick_profile(SetupProfile::Custom);
-    assert!(s.customize_open);
+    s.pick_profile(SetupProfile::Hdi, &[]);
+    assert_eq!(s.drafts.clearance, "0.075");
+    assert_eq!(s.drafts.via, "0.25");
     assert_eq!(s.setup.pcb.copper_layers, 8);
+    assert!(!s.customize_open);
+    s.pick_profile(SetupProfile::Custom, &[]);
+    assert!(s.customize_open);
+    assert_eq!(s.setup.pcb.copper_layers, 4, "the Custom card's own count");
+    assert_eq!(s.drafts.clearance, "0.075", "Custom keeps the rules shown");
 }
 
 #[test]
-fn the_stepper_switches_to_custom_and_stays_in_range() {
+fn the_stepper_keeps_the_tier_moves_by_two_and_stays_in_range() {
     let mut s = NewProjectState::new(String::new());
-    s.step_layers(1);
+    s.step_layers(2);
     assert_eq!(
         (s.setup.profile, s.setup.pcb.copper_layers),
-        (SetupProfile::Custom, 5)
+        (SetupProfile::Standard, 6),
+        "the layer count is its own choice (#2537)"
     );
     assert!(s.customize_open);
     for _ in 0..40 {
-        s.step_layers(1);
+        s.step_layers(2);
     }
     assert_eq!(s.setup.pcb.copper_layers, 32);
     for _ in 0..40 {
-        s.step_layers(-1);
+        s.step_layers(-2);
     }
-    assert_eq!(s.setup.pcb.copper_layers, 1);
+    assert_eq!(s.setup.pcb.copper_layers, 2);
 }
 
 #[test]
@@ -258,7 +260,7 @@ fn create_writes_the_project_with_the_chosen_defaults() {
     let pcb = data.project_defaults.pcb.clone().expect("pcb defaults");
     assert_eq!(
         (pcb.copper_layers, pcb.clearance_mm, pcb.thickness_mm),
-        (6, 0.1, 1.2)
+        (8, 0.075, 1.6)
     );
     assert_eq!(
         data.project_defaults.sheet.as_ref().unwrap().paper_size,
@@ -285,6 +287,65 @@ fn with_the_folder_off_the_project_goes_straight_into_the_location() {
     assert!(tmp.path().join("Flat.snxprj").is_file());
     assert!(tmp.path().join("Flat.snxsch").is_file());
     assert!(!tmp.path().join("Flat").exists());
+}
+
+/// The path the dialog shows is the file Create writes, with the folder on
+/// and off.
+#[test]
+fn the_path_shown_is_the_file_create_writes() {
+    for make_folder in [true, false] {
+        let tmp = tempfile::tempdir().unwrap();
+        let (mut app, _t) = Signex::new();
+        settle(&mut app, Message::Menu(MenuMessage::NewProject));
+        dialog(
+            &mut app,
+            NewProjectMsg::LocationEdited(tmp.path().display().to_string()),
+        );
+        dialog(&mut app, NewProjectMsg::NameEdited(" Rev.A ".into()));
+        dialog(&mut app, NewProjectMsg::MakeFolderToggled(make_folder));
+        let shown = app
+            .ui_state
+            .new_project
+            .as_ref()
+            .unwrap()
+            .project_file()
+            .expect("a path");
+        let expected = if make_folder {
+            tmp.path().join("Rev.A").join("Rev.A.snxprj")
+        } else {
+            tmp.path().join("Rev.A.snxprj")
+        };
+        assert_eq!(shown, expected);
+        assert!(!shown.exists(), "showing it writes nothing");
+        dialog(&mut app, NewProjectMsg::SubmitRequested);
+        assert!(app.ui_state.new_project.is_none(), "created");
+        assert!(shown.is_file(), "{}", shown.display());
+    }
+}
+
+/// A new project left on its default sheet is A3: stored in the project and
+/// on its first sheet. The A4 in mockup row 21 is a sample value.
+#[test]
+fn a_new_project_defaults_to_an_a3_sheet() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, _t) = Signex::new();
+    settle(&mut app, Message::Menu(MenuMessage::NewProject));
+    let state = app.ui_state.new_project.as_ref().unwrap();
+    assert_eq!(state.setup.sheet.paper_size, "A3");
+    dialog(
+        &mut app,
+        NewProjectMsg::LocationEdited(tmp.path().display().to_string()),
+    );
+    dialog(&mut app, NewProjectMsg::NameEdited("Sheet".into()));
+    dialog(&mut app, NewProjectMsg::SubmitRequested);
+    let project = tmp.path().join("Sheet").join("Sheet.snxprj");
+    let data = signex_types::project::parse_project(&project).expect("project written");
+    assert_eq!(
+        data.project_defaults.sheet.as_ref().unwrap().paper_size,
+        "A3"
+    );
+    let sheet_text = std::fs::read_to_string(project.with_extension("snxsch")).unwrap();
+    assert!(sheet_text.contains("A3"), "{sheet_text}");
 }
 
 #[test]

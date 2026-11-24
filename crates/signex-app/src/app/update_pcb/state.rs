@@ -58,6 +58,9 @@ pub struct UpdatePcbState {
     /// Libraries whose open failure was already logged: a recompute logs
     /// each once per dialog.
     pub(crate) logged_library_errors: std::collections::HashSet<PathBuf>,
+    /// Schematic rules left out that were already logged, likewise once.
+    pub(crate) logged_rule_problems:
+        std::collections::HashSet<super::rules_from_schematic::RuleProblem>,
 }
 
 impl UpdatePcbState {
@@ -80,6 +83,7 @@ impl UpdatePcbState {
             apply,
             snapshot: None,
             logged_library_errors: std::collections::HashSet::new(),
+            logged_rule_problems: std::collections::HashSet::new(),
             list: None,
             validation: None,
             table: TableState::default(),
@@ -138,6 +142,15 @@ impl UpdatePcbState {
             .flat_map(|list| &list.rows)
             .filter(|row| self.table.shows(row))
             .collect()
+    }
+
+    /// The rows the Problems card lifts above the list: every blocked row,
+    /// in list order.
+    pub fn problem_rows(&self) -> Vec<&EcoRow> {
+        self.list
+            .as_ref()
+            .map(super::table::problems)
+            .unwrap_or_default()
     }
 
     /// The tick state of a table group.

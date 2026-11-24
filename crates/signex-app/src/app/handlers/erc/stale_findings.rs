@@ -62,7 +62,7 @@ impl SheetObjects {
                         .iter()
                         .any(|p| signex_net::pt_key(p) == signex_net::pt_key(&at))
             }
-            SheetPin | Drawing => true,
+            SheetPin | Drawing | HarnessConnector | HarnessEntry | HarnessWire => true,
         }
     }
 }

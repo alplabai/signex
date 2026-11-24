@@ -9,7 +9,7 @@
 //! events through `UserInterface::update`; a frame with events builds the
 //! tree again, as the app's `view` does after the message. Then `draw`, and
 //! `iced_wgpu::Renderer::screenshot` uploads, renders and reads back, so the
-//! GPU work is inside the timing. Never tiny-skia.
+//! GPU work is inside the timing. Never the software renderer (vello_cpu).
 //!
 //! ```text
 //! cargo test -p signex-app --release --lib pcb_frame_bench -- --ignored --nocapture --test-threads=1
