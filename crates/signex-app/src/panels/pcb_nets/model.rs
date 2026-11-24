@@ -404,7 +404,14 @@ impl PcbPanelUi {
             PcbPanelMsg::NetClicked(net) => self.selected = toggled(self.selected.take(), net),
             PcbPanelMsg::ClassClicked(class) => self.class = toggled(self.class.take(), class),
             PcbPanelMsg::PairClicked(pair) => self.pair = toggled(self.pair.take(), pair),
-            PcbPanelMsg::PourClicked(pour) => self.pour = toggled(self.pour.take(), pour),
+            PcbPanelMsg::PourClicked(pour) => {
+                self.pour = toggled(self.pour.take(), pour);
+                // One pick for the panel and the Polygon Manager tab
+                // (DECISIONS 2026-11-18, "Tab + compact panel pair").
+                if self.pour == Some(pour) {
+                    self.polygons.current = Some(pour);
+                }
+            }
             PcbPanelMsg::PourChipPicked(chip) => self.pour_chip = chip,
         }
     }
