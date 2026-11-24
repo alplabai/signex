@@ -227,8 +227,7 @@ fn new_pill<'a>(i18n: &signex_i18n::I18n, look: &Look) -> Element<'a, Message> {
     let word = i18n.upper_for_display(&i18n.message_plain(signex_i18n::ids::PDF_SECTION_NEW, &[]));
     let fill = look.info_soft;
     container(
-        // raw: the catalog word, upper-cased for the locale.
-        text(signex_widgets::raw(word))
+        text(signex_i18n::UserText::new(word))
             .size(TS.badge)
             .color(look.info)
             .font(iced::Font {
