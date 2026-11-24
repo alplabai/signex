@@ -55,11 +55,18 @@ format declares only its own table row below.
 
 `.snxrules` profiles carry a numeric `schema` key instead of a token
 (`docs/architecture/snxrules-format.md`); a newer schema is refused there too.
-It is content-driven: `2` only while the `fab` block names a
-`router_tool_diameter` (mockup row 179d), else as read; this build reads `1` and `2`.
+It is content-driven: `3` while the `fab` block names a `min_slot`, else `2`
+while it names a `router_tool_diameter` (mockup row 179d), else as read; this
+build reads `1` to `3`.
 The project's copy, the top-level `.snxprj` key `router_tool_diameter`, is a
 declared `ProjectData` field and needs no token: an older build keeps it as an
 unknown key, as `fab_outputs`. No `.snxpcb` content is added for it.
+
+The project's min slot is stored with the rules, `rules.min_slot`, and steps
+the `rules` section's own `schema` to `2` while it is present (`1` again once
+it is cleared; `ProjectRules::written_schema`). A build that reads only rules
+schema `1` keeps a `2` section verbatim and does not apply it, so the value
+is never dropped. The `.snxprj` token stays `snxprj/1`.
 
 **`snxsch/1.3` and older builds.** A build that reads up to `snxsch/1.2`
 opens a 1.3 sheet read-only and refuses its saves. A build older than the

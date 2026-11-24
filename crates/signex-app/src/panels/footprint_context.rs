@@ -785,6 +785,9 @@ pub struct BoardSketchProps {
     /// The project's router tool diameter in mm (mockup row 179d), for the Fab
     /// profile group; `None` when its fab profile names none.
     pub router_tool_diameter: Option<f64>,
+    /// The project's min slot in mm (mockup row 179d), for the Fab profile
+    /// group; `None` when its fab profile names none.
+    pub min_slot: Option<f64>,
     /// The radius Add fillets applies; `None` when no failing corner can
     /// take a fillet (mockup row 179d).
     pub fillet_radius: Option<f64>,

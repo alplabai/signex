@@ -57,8 +57,8 @@ fn removing_the_router_diameter_writes_schema_1_again() {
 fn schema_2_is_read_and_a_later_one_still_refused() {
     let read = RuleProfile::from_json_bytes(br#"{"schema":2,"name":"x"}"#).unwrap();
     assert_eq!(read.name, "x");
-    let err = RuleProfile::from_json_bytes(br#"{"schema":3,"name":"x"}"#).unwrap_err();
-    assert!(matches!(err, RuleProfileError::UnsupportedSchema(3)));
+    let err = RuleProfile::from_json_bytes(br#"{"schema":4,"name":"x"}"#).unwrap_err();
+    assert!(matches!(err, RuleProfileError::UnsupportedSchema(4)));
 }
 
 #[test]

@@ -100,4 +100,11 @@ define_ids! {
     BOARD_SKETCH_DXF_LAYERS = "board-sketch-dxf-layers";
     BOARD_SKETCH_DXF_LAYER_TARGET = "board-sketch-dxf-layer-target";
     BOARD_SKETCH_DXF_LAYER_SKIPPED = "board-sketch-dxf-layer-skipped";
+    // min-slot
+    BOARD_SKETCH_CHECK_MIN_SLOT = "board-sketch-check-min-slot";
+    BOARD_SKETCH_CHECK_NAME_MIN_SLOT = "board-sketch-check-name-min-slot";
+    BOARD_SKETCH_CHECK_SKIPPED_MIN_SLOT = "board-sketch-check-skipped-min-slot";
+    BOARD_SKETCH_CHECK_SLOT_NARROW = "board-sketch-check-slot-narrow";
+    BOARD_SKETCH_FAB_MIN_SLOT = "board-sketch-fab-min-slot";
+    BOARD_SKETCH_FAB_MIN_SLOT_NONE = "board-sketch-fab-min-slot-none";
 }
