@@ -332,3 +332,32 @@ fn the_hit_kinds_keep_their_english() {
         check(board_find_kind_label(kind), kind.label());
     }
 }
+
+/// Mockup row 67: in the main window the list ends after its last result
+/// and the footer follows, so the gap from the last row to the footer is
+/// the same for two results as for five.
+#[test]
+fn the_in_window_list_fits_its_results() {
+    let en = I18n::en_us();
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
+    let window = iced::Size::new(1200.0, 900.0);
+    let gap = |state: &FindReplaceState| -> f32 {
+        let texts = crate::layout_probe::lay_out_texts(super::view(state, &tokens, &en), window);
+        let last_row = texts
+            .iter()
+            .filter(|t| matches!(plain(&t.text).as_str(), "dcdc" | "mcu"))
+            .map(|t| t.bounds.y + t.bounds.height)
+            .fold(f32::MIN, f32::max);
+        let note = texts
+            .iter()
+            .find(|t| plain(&t.text) == "Replace All is one undo step")
+            .unwrap_or_else(|| panic!("{texts:#?}"));
+        note.bounds.y - last_row
+    };
+    let five = sample();
+    let mut two = sample();
+    two.matches.truncate(2);
+    let (gap_two, gap_five) = (gap(&two), gap(&five));
+    assert!(gap_two > 0.0, "{gap_two}");
+    assert!((gap_two - gap_five).abs() < 1.0, "{gap_two} vs {gap_five}");
+}
