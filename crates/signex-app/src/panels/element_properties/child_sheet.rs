@@ -331,6 +331,7 @@ fn style_section<'a>(
     let stroke_width_buf = ctx.child_sheet_stroke_width_buf.clone();
     let refused_ink = crate::styles::ti(ctx.tokens.error);
     let i18n: &'a signex_i18n::I18n = &ctx.i18n;
+    let hex_draft = ctx.color_hex_draft.as_ref();
     ctx.collapsible(
         "sel_child_sheet_style",
         ids::PROPERTIES_SECTION_STYLE,
@@ -343,6 +344,7 @@ fn style_section<'a>(
                 border_open,
                 border_advanced,
                 /* is_border */ true,
+                hex_draft,
                 i18n,
             );
             let fill = child_sheet_color_row(
@@ -351,6 +353,7 @@ fn style_section<'a>(
                 fill_open,
                 fill_advanced,
                 /* is_border */ false,
+                hex_draft,
                 i18n,
             );
             // Mockup row 46: a small ghost action under the fields.
@@ -459,19 +462,28 @@ fn entries_section<'a>(
 }
 
 /// One colour field of the child-sheet Style section (mockup row 46): the
-/// swatch, its code or Default and a chevron, opening the preset popover.
-/// Custom… switches to the HSV / RGB picker. Both picks send the same
-/// `EditChildSheet*Color` message, so undo is identical for both.
+/// swatch, its code (typed codes apply on Enter) or Default and a chevron,
+/// opening the preset popover. Custom… switches to the HSV / RGB picker.
+/// Every pick sends the same `EditChildSheet*Color` message, so undo is
+/// identical for all.
 fn child_sheet_color_row<'a>(
     sheet_id: uuid::Uuid,
     current: Option<signex_types::schematic::StrokeColor>,
     show_picker: bool,
     show_advanced: bool,
     is_border: bool,
+    hex_draft: Option<&crate::panels::ColorHexDraft>,
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     use crate::panels::wire_style_rows::{PopoverColorRow, WireColorPicker, popover_color_row};
+    use crate::panels::{ColorRowKey, HexEntry};
     use std::rc::Rc;
+
+    let hex_key = if is_border {
+        ColorRowKey::ChildSheetBorder(sheet_id)
+    } else {
+        ColorRowKey::ChildSheetFill(sheet_id)
+    };
 
     // StrokeColor → [u8; 4] RGBA so the generic widget stays agnostic
     // of the schematic colour type.
@@ -516,6 +528,7 @@ fn child_sheet_color_row<'a>(
             label: t!(i18n, label),
             current: current_rgba,
             picker,
+            hex: HexEntry::of(hex_key, hex_draft),
             on_toggle,
             on_advanced: PanelMsg::OpenChildSheetAdvancedPicker(sheet_id, is_border),
             on_cancel: PanelMsg::CancelChildSheetColorPicker,

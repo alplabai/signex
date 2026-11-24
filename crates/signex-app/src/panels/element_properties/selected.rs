@@ -163,6 +163,10 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     if let (Some(id), Some((width, color))) = (uuid, ctx.selected_wire_style) {
         let picker = ctx.wire_color_picker;
         let is_bus = selected_kind == Some(SelectedKind::Bus);
+        let hex = crate::panels::HexEntry::of(
+            crate::panels::ColorRowKey::Run(id),
+            ctx.color_hex_draft.as_ref(),
+        );
         col = col.push(
             ctx.collapsible(
                 "sel_wire_style",
@@ -177,6 +181,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             color,
                             picker,
                             std::rc::Rc::new(move |c| color_picked(id, is_bus, c)),
+                            hex.clone(),
                             muted,
                             border_c,
                             &ctx.i18n,
