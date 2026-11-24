@@ -50,6 +50,7 @@ pub mod rooms;
 pub mod route;
 pub mod similar;
 pub mod snap;
+mod snap_curves;
 mod snap_points;
 mod stack;
 pub mod stack_edit;

@@ -218,6 +218,8 @@ context = "schematic"
 # to the other side, `N` shows or hides the ratsnest, `F` changes the
 # footprint, `P K` draws a keepout and `T D` runs the design rule check.
 # `E O S` sets the board origin (Edit ▸ Origin ▸ Set, 2026-11-18).
+# `Shift+E` steps the board's Snapping (#2879); elsewhere it stays the
+# electrical grid.
 # Mockup row 175: in the 3D view `H` steps to the next lighting preset and
 # `Mod+Shift+C` copies a screenshot of the view; both are greyed on a flat
 # board.
@@ -244,6 +246,7 @@ context = "pcb"
 "P R" = "place_board_region"
 "P T" = "place_board_track"
 "P V" = "place_board_via"
+"Shift+E" = "cycle_board_snapping"
 "Shift+S" = "toggle_single_layer_mode"
 "T D" = "run_drc"
 

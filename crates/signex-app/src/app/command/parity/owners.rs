@@ -332,6 +332,7 @@ const MENU_SESSION: &[&str] = &[
     "cross_probe",
     "cycle_arc_mode",
     "cycle_board_3d_lighting",
+    "cycle_board_snapping",
     "cycle_fast_grid",
     "cycle_route_mode",
     "cycle_selection_mode",

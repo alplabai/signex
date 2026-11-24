@@ -511,6 +511,10 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }
         "toggle_auto_focus" => Message::Overlay(OverlayMsg::ToggleAutoFocus),
         "toggle_electrical_grid" => Message::Ui(UiMsg::ToggleSnapHotspots),
+        // #2879: Shift+E on a board steps the Snap Options' Snapping.
+        "cycle_board_snapping" => Message::Dock(crate::dock::DockMessage::Panel(
+            crate::panels::PanelMsg::PcbBoard(crate::panels::PcbBoardMsg::SnappingCycled),
+        )),
         "cross_probe" => Message::CrossProbe(CrossProbeMsg::ProbeRequested),
         "toggle_cross_select_mode" => Message::CrossProbe(CrossProbeMsg::CrossSelectModeToggled),
         // #1312: the Update PCB dialog for the document in view. Its headless

@@ -212,8 +212,7 @@ pub fn carry_delta(
     let on_grid = grid_delta(board, footprints, from, to, view.options);
     let anchor = grabbed_point(board, footprints, from).unwrap_or(from);
     let target = Point::new(anchor.x + to.x - from.x, anchor.y + to.y - from.y);
-    let what = GridUse::Components;
-    snapped_delta(board, skip, anchor, target, on_grid, what, view)
+    snapped_delta(board, skip, anchor, target, on_grid, view)
 }
 
 /// The origin or pad centre of the carried `footprints` nearest the press.
@@ -263,27 +262,25 @@ pub fn via_carry_delta(
         raw
     };
     let target = Point::new(centre.x + raw.x, centre.y + raw.y);
-    let what = GridUse::NonComponents;
-    snapped_delta(board, skip, centre, target, on_grid, what, view)
+    snapped_delta(board, skip, centre, target, on_grid, view)
 }
 
 /// `on_grid` refined by the object, guide and axis snaps at `to`, leaving
-/// the carried `skip` items out of them. The reach counts on the grid that
-/// applies to `what`. With the status bar's Snap off, nothing pulls.
+/// the carried `skip` items out of them. The reach is the Snap Distance,
+/// whatever the grid (#2879). With the status bar's Snap off, nothing pulls.
 fn snapped_delta(
     board: &PcbBoard,
     skip: &BTreeSet<Uuid>,
     from: Point,
     to: Point,
     on_grid: Point,
-    what: GridUse,
     view: SnapView,
 ) -> Point {
     if !view.snap_on {
         return Point::new(to.x - from.x, to.y - from.y);
     }
     let snap = view.options;
-    let radius_mm = snap.catch_radius_mm(grid_for(board, what).step_mm, view.px_per_mm);
+    let radius_mm = snap.catch_radius_mm(view.px_per_mm);
     let no_objects = BTreeSet::new();
     let objects = if view.objects_on {
         &snap.objects
@@ -296,7 +293,7 @@ fn snapped_delta(
         through_hidden: view.through_hidden,
         hidden_kinds: &view.hidden_kinds,
     };
-    let query = snap.layer_mask(view.active).map(|layers| SnapQuery {
+    let query = snap.snap_layers(view.active).map(|layers| SnapQuery {
         objects,
         layers,
         skip,
@@ -390,7 +387,7 @@ pub fn snap_point_on(board: &PcbBoard, to: Point, what: GridUse, view: SnapView)
     } else {
         to
     };
-    snapped_delta(board, &BTreeSet::new(), zero, to, on_grid, what, view)
+    snapped_delta(board, &BTreeSet::new(), zero, to, on_grid, view)
 }
 
 /// `board` without the `carried` footprints and vias and the `following`
@@ -595,22 +592,30 @@ pub fn carried_board(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signex_types::pcb_layer::CopperLayer;
+    use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
     /// Zoomed in far enough that the Distance setting decides the reach.
     fn view(options: &PcbSnapOptions) -> SnapView<'_> {
-        SnapView::new(options, CopperLayer::Top, 1000.0)
+        SnapView::new(options, PcbLayer::Copper(CopperLayer::Top), 1000.0)
     }
 
+    /// Caner, 2026-11-24 (#2879): Snap Distance is a length, 1 mm by
+    /// default, never under 8 px; it replaces the multiple of the grid
+    /// (2026-11-21), so this test now pins the length.
     #[test]
-    fn the_catch_radius_is_the_larger_of_the_grid_and_the_screen_reach() {
+    fn the_catch_radius_is_the_larger_of_the_distance_and_the_screen_reach() {
         let snap = PcbSnapOptions::default();
-        // 0.5 x 0.1 mm is 2.4 px at 48 px/mm: the 8 px reach wins.
-        assert!((snap.catch_radius_mm(0.1, 48.0) - 8.0 / 48.0).abs() < 1e-12);
-        // 0.5 x 2.54 mm beats 8 px: a coarse grid keeps its larger radius.
-        assert!((snap.catch_radius_mm(2.54, 48.0) - 1.27).abs() < 1e-12);
+        assert_eq!(snap.distance_mm, 1.0);
+        // 1 mm is 48 px at 48 px/mm: the distance wins.
+        assert!((snap.catch_radius_mm(48.0) - 1.0).abs() < 1e-12);
         // Zoomed out, 8 px is more of the board.
-        assert!((snap.catch_radius_mm(0.1, 2.0) - 4.0).abs() < 1e-12);
+        assert!((snap.catch_radius_mm(2.0) - 4.0).abs() < 1e-12);
+        let fine = PcbSnapOptions {
+            distance_mm: 0.05,
+            ..PcbSnapOptions::default()
+        };
+        // 0.05 mm is 2.4 px at 48 px/mm: the 8 px floor wins.
+        assert!((fine.catch_radius_mm(48.0) - 8.0 / 48.0).abs() < 1e-12);
     }
 
     #[test]

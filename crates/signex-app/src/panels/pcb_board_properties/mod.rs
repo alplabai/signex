@@ -47,7 +47,7 @@ use signex_widgets::property_illustration::{IllustrationHover, IllustrationMsg};
 use uuid::Uuid;
 
 use super::{PanelContext, PanelMsg};
-use crate::pcb_canvas::{PcbSnapOptions, SnapDistance, SnapScope};
+use crate::pcb_canvas::{PcbSnapOptions, SnapScope};
 use crate::styles::Spacing;
 use chrome::Form;
 
@@ -98,6 +98,8 @@ pub enum GridCard {
 /// A text field of the panel whose draft is kept until Enter (#2374).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum BoardField {
+    /// Snap Distance, a length (#2879).
+    SnapDistance,
     AxisRange,
     GuideX(Uuid),
     GuideY(Uuid),
@@ -146,8 +148,10 @@ pub enum PcbBoardMsg {
     FilterPresetRemoved(usize),
     SnapToGridsToggled,
     SnapScopePicked(SnapScope),
+    /// `cycle_board_snapping` (Shift+E on a board, #2879): Snapping steps
+    /// All Layers, Current Layer, Off.
+    SnappingCycled,
     SnapObjectToggled(SnapObject),
-    SnapDistancePicked(SnapDistance),
     /// A components count was clicked: select those components.
     ComponentsSelected(ComponentSide),
     /// The DRC violations count was clicked.
@@ -256,8 +260,8 @@ impl PcbBoardMsg {
             | Self::FilterPresetRemoved(_)
             | Self::SnapToGridsToggled
             | Self::SnapScopePicked(_)
+            | Self::SnappingCycled
             | Self::SnapObjectToggled(_)
-            | Self::SnapDistancePicked(_)
             | Self::DrcResultsOpened
             | Self::IllustrationHovered(_)
             | Self::GridStepTyped(_)

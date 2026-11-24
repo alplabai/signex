@@ -67,6 +67,7 @@ cross_probe	ProbeTarget	f444599bb1ec57ce
 cut	CutTarget	357034e47c47e0d1
 cycle_arc_mode	Pcb	119d310e454dd5e4
 cycle_board_3d_lighting	Board3dView	67f23fb7bfc76e84
+cycle_board_snapping	Pcb	119d310e454dd5e4
 cycle_fast_grid	-	f2929686b07ef725
 cycle_route_mode	Pcb	119d310e454dd5e4
 cycle_selection_mode	-	f2929686b07ef725

@@ -159,6 +159,7 @@ define_ids! {
         CMD_TOGGLE_CROSS_SELECT_MODE = "cmd-toggle-cross-select-mode";
         CMD_MENU_TOGGLE_CROSS_SELECT_MODE = "cmd-menu-toggle-cross-select-mode";
         CMD_TOGGLE_ELECTRICAL_GRID = "cmd-toggle-electrical-grid";
+        CMD_CYCLE_BOARD_SNAPPING = "cmd-cycle-board-snapping";
         CMD_TOGGLE_FLOATING_PANELS = "cmd-toggle-floating-panels";
         CMD_TOGGLE_PROPERTIES_PANEL = "cmd-toggle-properties-panel";
         CMD_TOGGLE_SCHEMATIC_FILTER_PANEL = "cmd-toggle-schematic-filter-panel";

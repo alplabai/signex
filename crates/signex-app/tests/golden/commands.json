@@ -340,6 +340,11 @@
     "category": "view"
   },
   {
+    "id": "cycle_board_snapping",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "cycle_fast_grid",
     "group": "General",
     "category": "view"

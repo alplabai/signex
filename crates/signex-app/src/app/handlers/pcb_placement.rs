@@ -13,7 +13,7 @@ use signex_engine::pcb::placement::{self, PlacementRefusal, PlacementTransform};
 use signex_engine::pcb::{BoardCommand, BoardItemId};
 use signex_renderer::pcb::{BOARD_OUTLINE, BoardObject, board_layers};
 use signex_types::pcb::Point;
-use signex_types::pcb_layer::PcbLayer;
+use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_options::GridUse;
 use uuid::Uuid;
 
@@ -427,9 +427,13 @@ impl Signex {
             Some(window) => state.pcb_canvas_for_window(window),
             None => tile().unwrap_or(&state.pcb_canvas),
         };
+        let active = self
+            .active_tab_path()
+            .map(|path| self.pcb_layer_view(&path).active())
+            .unwrap_or(PcbLayer::Copper(CopperLayer::Top));
         let mut view = SnapView::new(
             &self.ui_state.pcb_snap,
-            self.pcb_active_layer(),
+            active,
             f64::from(canvas.camera_ref().scale()),
         );
         view.snap_on = self.ui_state.snap_enabled;

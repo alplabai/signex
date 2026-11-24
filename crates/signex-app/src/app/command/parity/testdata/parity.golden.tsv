@@ -238,6 +238,10 @@ cycle_board_3d_lighting	bridge	Pcb(Board3d(LightingCycled))	gui	active document,
 cycle_board_3d_lighting	in_window_rewrite	document_window	gui	window	routing
 cycle_board_3d_lighting	refusal_needs	Board3dView	gui	active document,window	routing
 cycle_board_3d_lighting	headless_refusal	headless_refusal	gui	none	routing
+cycle_board_snapping	bridge	Dock(Panel(PcbBoard(SnappingCycled)))	gui	active document	gate
+cycle_board_snapping	in_window_rewrite	document_window	gui	window	routing
+cycle_board_snapping	refusal_needs	Pcb	gui	active document	routing
+cycle_board_snapping	headless_refusal	headless_refusal	gui	none	routing
 cycle_fast_grid	bridge	Ui(FastGridCycled)	gui	tool state	handler
 cycle_fast_grid	in_window_rewrite	document_window	gui	window	routing
 cycle_fast_grid	headless_refusal	headless_refusal	gui	none	routing
