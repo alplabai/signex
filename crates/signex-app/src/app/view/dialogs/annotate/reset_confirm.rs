@@ -1,12 +1,14 @@
 //! The reset confirm (#76). It serves both footer buttons: the title and
 //! the danger button follow the reset asked for (Reset All / Reset &
-//! Renumber). The detail names the scope, and the banner says how undo
-//! works, in the same words as the dialog footer.
+//! Renumber). The detail names the scope, and the warn banner says how undo
+//! works, in the same words as the dialog footer, with the shortcut as a
+//! key cap.
 
 use super::super::*;
-use iced::widget::{column, container};
+use iced::widget::{column, container, row};
 use iced::{Element, Length, Widget};
-use signex_i18n::{ids, t};
+use signex_i18n::{Localized, ids, t};
+use signex_types::theme::ThemeTokens;
 use signex_widgets::text;
 
 use super::super::widgets::{draggable_header, modal_title_header, os_title_bar_slot};
@@ -73,8 +75,9 @@ impl Signex {
         } else {
             ids::DIALOG_ANNOTATE_RESET_PER_SHEET
         };
-        let undo = t!(i18n, undo_id, "undo" => crate::keymap::shown_in("Mod+Z", i18n));
-        let banner = container(text(undo).size(TS.caption).color(ink).width(Length::Fill))
+        let shortcut = crate::keymap::shown_in("Mod+Z", i18n);
+        let undo = t!(i18n, undo_id, "undo" => shortcut.clone());
+        let banner = container(undo_caveat(undo, &shortcut, ink, tokens))
             .padding([SP.s, SP.m])
             .width(Length::Fill)
             .style(banner_style(tokens, PillTone::Warn));
@@ -122,5 +125,58 @@ impl Signex {
         .style(crate::styles::modal_card(tokens))
         .clip(true);
         dialog.boxed()
+    }
+}
+
+/// The undo caveat with its shortcut drawn as a key cap where the sentence
+/// names it (mockup row 76). A translation that leaves the shortcut out
+/// shows as plain words.
+fn undo_caveat<'a>(
+    undo: Localized,
+    shortcut: &str,
+    ink: iced::Color,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let words = |part: Localized| text(part).size(TS.caption).color(ink);
+    let Some((before, cap, after)) = undo.split_around(shortcut) else {
+        return words(undo).width(Length::Fill).boxed();
+    };
+    row![
+        words(before),
+        crate::keyboard_shortcuts_modal::key_cap(cap, false, tokens),
+        words(after).width(Length::Fill),
+    ]
+    .spacing(SP.xs)
+    .align_y(iced::Alignment::Center)
+    .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use signex_i18n::{I18n, ids, t};
+
+    use crate::app::Signex;
+
+    /// Mockup row 76: both undo caveats name the shortcut where the key cap
+    /// goes, so neither falls back to plain words.
+    #[test]
+    fn both_undo_caveats_carry_the_shortcut_as_a_key_cap() {
+        let i18n = I18n::en_us();
+        let shortcut = crate::keymap::shown_in("Mod+Z", &i18n);
+        for id in [
+            ids::DIALOG_ANNOTATE_RESET_ONE_STEP,
+            ids::DIALOG_ANNOTATE_RESET_PER_SHEET,
+        ] {
+            let undo = t!(i18n, id, "undo" => shortcut.clone());
+            let (_, cap, _) = undo.split_around(&shortcut).expect("the shortcut");
+            assert_eq!(cap.into_string(), shortcut, "{id:?}");
+        }
+    }
+
+    /// The confirm with its key-cap banner builds.
+    #[test]
+    fn the_reset_confirm_builds() {
+        let (app, _task) = Signex::new();
+        let _ = app.view_annotate_reset_confirm_body();
     }
 }
