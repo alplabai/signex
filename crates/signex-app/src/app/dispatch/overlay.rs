@@ -680,11 +680,7 @@ impl Signex {
     pub(crate) fn dispatch_erc_message(&mut self, msg: ErcMsg) -> Task<Message> {
         match msg {
             ErcMsg::Run => {
-                let close_task = if self.ui_state.erc_dialog_open {
-                    self.handle_close_erc_dialog()
-                } else {
-                    Task::none()
-                };
+                let close_task = self.close_erc_dialog_for_run();
                 let task = self.handle_run_erc();
                 let finish = self.finish_update();
                 Task::batch([close_task, finish, task])

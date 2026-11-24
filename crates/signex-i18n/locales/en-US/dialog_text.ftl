@@ -183,7 +183,7 @@ dialog-reprefix-question = Change designator prefixes?
 # $count is how many more changes are not listed (a whole number).
 dialog-reprefix-more = +{ $count } more
 
-## ERC severity chips: one label under each count.
+## ERC severity chips: one label before each count.
 dialog-erc-chip-errors = Errors
 dialog-erc-chip-warnings = Warnings
 dialog-erc-chip-info = Info
@@ -565,3 +565,6 @@ dialog-net-color-toast-cleared-unlabelled = Cleared the net colors of this sheet
 dialog-net-color-toast-cleared-net = Cleared the color of { $net }
 # The toast's button. $undo is the Undo shortcut, such as "Ctrl+Z".
 dialog-net-color-toast-undo = Undo { $undo }
+# find-messages
+# Right of the Pin Connection Matrix heading while its cells take edits.
+dialog-rules-matrix-cycle-hint = Click a cell to cycle severity.

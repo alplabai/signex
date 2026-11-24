@@ -2,15 +2,20 @@
 //! Document filters and a text filter, then the CLASS / DOCUMENT / SOURCE /
 //! MESSAGE / TIME table. Copy and Clear sit in the dock title bar
 //! (`super::title_actions`). DEBUG and TRACE rows show only when a verbose
-//! log level is set. A row does not cross-probe (open decision on #86).
+//! log level is set. A row that names a sheet offers Show, which opens the
+//! sheet and selects the object it names; a plain click does nothing
+//! (mockup row 86).
 
-use iced::widget::{column, pick_list};
+use std::path::PathBuf;
+
+use iced::widget::{Row, column, pick_list};
 use signex_i18n::{I18n, MessageId, UserText, ids, t};
-use signex_widgets::chips::{ChipMetrics, ChipStyle, FilterSet, filter_chips};
+use signex_types::schematic::SelectedItem;
+use signex_widgets::chips::{ChipMetrics, ChipStyle, ChipTone, chip, tag_chip};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
-use signex_widgets::{Label, text_input};
+use signex_widgets::text_input;
 
-use super::messages_row::{MessageSource, clock_time};
+use super::messages_row::{MessageSource, clock_time, document_name, named_documents};
 use super::*;
 use crate::diagnostics::{DiagnosticEntry, DiagnosticLevel};
 use crate::styles::tokens::resolve;
@@ -54,7 +59,7 @@ pub struct MessagesView {
     /// One source, or every source.
     pub source: Option<MessageSource>,
     /// One document, or every document.
-    pub document: Option<String>,
+    pub document: Option<PathBuf>,
     /// Text a shown message must contain (any case).
     pub query: String,
     /// Clear hides every entry up to this id; the log keeps them.
@@ -66,8 +71,13 @@ pub struct MessagesView {
 pub enum MessagesPanelMsg {
     LevelPicked(MessageLevel),
     SourcePicked(Option<MessageSource>),
-    DocumentPicked(Option<String>),
+    DocumentPicked(Option<PathBuf>),
     QueryEdited(String),
+    /// A row's Show: open `document` and select `object` on it.
+    ShowPressed {
+        document: PathBuf,
+        object: Option<SelectedItem>,
+    },
     /// Copy in the title bar: the shown rows go to the clipboard.
     Copied,
     /// Clear in the title bar: every message so far is hidden.
@@ -76,7 +86,8 @@ pub enum MessagesPanelMsg {
 
 impl MessagesView {
     /// Apply a filter event. `newest` is the newest log entry's id, which
-    /// Clear hides up to. Copy is the app's (it writes the clipboard).
+    /// Clear hides up to. Copy and Show are the app's (they write the
+    /// clipboard, open a sheet).
     pub fn apply(&mut self, msg: MessagesPanelMsg, newest: Option<u64>) {
         match msg {
             MessagesPanelMsg::LevelPicked(level) => self.level = level,
@@ -88,7 +99,7 @@ impl MessagesView {
                     self.cleared_through = newest;
                 }
             }
-            MessagesPanelMsg::Copied => {}
+            MessagesPanelMsg::Copied | MessagesPanelMsg::ShowPressed { .. } => {}
         }
     }
 }
@@ -113,7 +124,7 @@ pub(crate) fn visible<'e>(
 }
 
 /// The visible entries the chips, dropdowns and filter text let through.
-/// A log entry names no document, so a document filter lets none through.
+/// A document filter lets through only the entries that name that sheet.
 pub(crate) fn shown<'e>(
     entries: &'e [DiagnosticEntry],
     view: &MessagesView,
@@ -130,7 +141,11 @@ pub(crate) fn shown<'e>(
             view.source
                 .is_none_or(|s| MessageSource::of_code(&e.code) == s)
         })
-        .filter(|_| view.document.is_none())
+        .filter(|e| {
+            view.document
+                .as_ref()
+                .is_none_or(|d| e.document.as_ref() == Some(d))
+        })
         .filter(|e| query.is_empty() || i18n.fold_for_search(&e.message).contains(&query))
         .collect()
 }
@@ -193,11 +208,108 @@ fn chip_style(tokens: &ThemeTokens) -> ChipStyle {
     }
 }
 
+/// The tone of a level: the row's CLASS pill and the level chip's tag.
+fn level_tone(level: DiagnosticLevel) -> PillTone {
+    match level {
+        DiagnosticLevel::Error => PillTone::Err,
+        DiagnosticLevel::Warning => PillTone::Warn,
+        DiagnosticLevel::Info => PillTone::Info,
+        DiagnosticLevel::Debug | DiagnosticLevel::Trace => PillTone::Neutral,
+    }
+}
+
+/// Fill and ink of a level chip's tag, from the level's pill tone.
+pub(crate) fn level_tag_tone(tokens: &ThemeTokens, level: DiagnosticLevel) -> ChipTone {
+    let (fill, ink) = crate::styles::pill_colors(tokens, level_tone(level));
+    ChipTone { fill, ink }
+}
+
+/// All, then ERROR, WARN and INFO as mono tags in their level's tone, each
+/// with its count (mockup row 86).
+fn level_chips<'a>(ctx: &'a PanelContext, visible: &[&DiagnosticEntry]) -> Element<'a, PanelMsg> {
+    let i18n: &'a I18n = &ctx.i18n;
+    let picked = ctx.validation.messages.level;
+    let style = chip_style(&ctx.tokens);
+    let metrics = ChipMetrics::from_text_size(TS.body);
+    let [all, errors, warnings, infos] = level_counts(visible);
+    let press = |level| Some(messages_msg(MessagesPanelMsg::LevelPicked(level)));
+    let mut chips: Row<Element<'a, PanelMsg>> = Row::new().spacing(metrics.row_gap).push(chip(
+        t!(i18n, ids::PANELS_MESSAGES_LEVEL_ALL),
+        Some(all),
+        picked == MessageLevel::All,
+        style,
+        metrics,
+        i18n,
+        press(MessageLevel::All),
+    ));
+    for (level, diagnostic, count) in [
+        (MessageLevel::Error, DiagnosticLevel::Error, errors),
+        (MessageLevel::Warning, DiagnosticLevel::Warning, warnings),
+        (MessageLevel::Info, DiagnosticLevel::Info, infos),
+    ] {
+        chips = chips.push(tag_chip(
+            t!(i18n, level_id(diagnostic)),
+            level_tag_tone(&ctx.tokens, diagnostic),
+            None,
+            Some(count),
+            picked == level,
+            style,
+            metrics,
+            i18n,
+            press(level),
+        ));
+    }
+    chips.wrap().vertical_spacing(metrics.row_gap).boxed()
+}
+
+/// The filter field: the search glyph and a borderless input in one field
+/// frame (mockup row 86).
+fn filter_field<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    let tokens = &ctx.tokens;
+    let r = resolve(tokens);
+    let ink4 = r.ink4;
+    let ink = crate::styles::ti(tokens.text);
+    let accent = crate::styles::ti(tokens.accent);
+    let glyph = iced::widget::svg(crate::icons::icon_chrome_search(ctx.theme_id))
+        .width(TS.body)
+        .height(TS.body)
+        .style(move |_: &Theme, _| iced::widget::svg::Style {
+            color: Some(ink4),
+            ..iced::widget::svg::Style::default()
+        });
+    let input = text_input(
+        t!(ctx.i18n, ids::PANELS_MESSAGES_FILTER_HINT),
+        &ctx.validation.messages.query,
+    )
+    .on_input(|q| messages_msg(MessagesPanelMsg::QueryEdited(q)))
+    .size(TS.body)
+    .padding(iced::Padding::ZERO)
+    .width(Length::Fill)
+    .style(move |_: &Theme, _| iced::widget::text_input::Style {
+        background: Background::Color(iced::Color::TRANSPARENT),
+        border: iced::Border::default(),
+        placeholder: ink4,
+        value: ink,
+        selection: iced::Color { a: 0.4, ..accent },
+    });
+    let field_height = crate::styles::ChromeMetrics::DEFAULT.field;
+    container(
+        row![glyph.boxed(), input.boxed()]
+            .spacing(SP.s)
+            .align_y(iced::Alignment::Center),
+    )
+    .padding([0.0, SP.m])
+    .width(Length::Fixed(TS.body * FILTER_FIELD_EM))
+    .center_y(field_height)
+    .style(crate::styles::field(tokens, false))
+    .boxed()
+}
+
 /// One entry of the Source or Document dropdown; `None` is "all".
 #[derive(Debug, Clone, PartialEq)]
 enum MessagesChoice {
     Source(Option<MessageSource>),
-    Document(Option<String>),
+    Document(Option<PathBuf>),
 }
 
 fn choice_label(i18n: &I18n, choice: &MessagesChoice) -> String {
@@ -207,7 +319,7 @@ fn choice_label(i18n: &I18n, choice: &MessagesChoice) -> String {
         MessagesChoice::Document(None) => {
             t!(i18n, ids::PANELS_MESSAGES_ALL_DOCUMENTS).into_string()
         }
-        MessagesChoice::Document(Some(d)) => d.clone(),
+        MessagesChoice::Document(Some(d)) => document_name(d),
     }
 }
 
@@ -215,36 +327,6 @@ fn choice_label(i18n: &I18n, choice: &MessagesChoice) -> String {
 fn toolbar<'a>(ctx: &'a PanelContext, visible: &[&DiagnosticEntry]) -> Element<'a, PanelMsg> {
     let i18n: &'a I18n = &ctx.i18n;
     let view = &ctx.validation.messages;
-    let [all, errors, warnings, infos] = level_counts(visible);
-    let chips = filter_chips(
-        [
-            (
-                MessageLevel::All,
-                Label::from(t!(i18n, ids::PANELS_MESSAGES_LEVEL_ALL)),
-                Some(all),
-            ),
-            (
-                MessageLevel::Error,
-                Label::from(t!(i18n, ids::PANELS_MESSAGES_LEVEL_ERROR)),
-                Some(errors),
-            ),
-            (
-                MessageLevel::Warning,
-                Label::from(t!(i18n, ids::PANELS_MESSAGES_LEVEL_WARNING)),
-                Some(warnings),
-            ),
-            (
-                MessageLevel::Info,
-                Label::from(t!(i18n, ids::PANELS_MESSAGES_LEVEL_INFO)),
-                Some(infos),
-            ),
-        ],
-        &FilterSet::new([view.level]),
-        chip_style(&ctx.tokens),
-        ChipMetrics::from_text_size(TS.body),
-        i18n,
-        |level| messages_msg(MessagesPanelMsg::LevelPicked(level)),
-    );
     let mut sources = vec![MessagesChoice::Source(None)];
     let mut present: Vec<MessageSource> = visible
         .iter()
@@ -253,6 +335,12 @@ fn toolbar<'a>(ctx: &'a PanelContext, visible: &[&DiagnosticEntry]) -> Element<'
     present.sort();
     present.dedup();
     sources.extend(present.into_iter().map(|s| MessagesChoice::Source(Some(s))));
+    let mut documents = vec![MessagesChoice::Document(None)];
+    documents.extend(
+        named_documents(visible)
+            .into_iter()
+            .map(|d| MessagesChoice::Document(Some(d))),
+    );
     let label = move |choice: &MessagesChoice| choice_label(i18n, choice);
     let dropdown = |selected: MessagesChoice, options: Vec<MessagesChoice>| {
         pick_list(Some(selected), options, label)
@@ -263,12 +351,6 @@ fn toolbar<'a>(ctx: &'a PanelContext, visible: &[&DiagnosticEntry]) -> Element<'
             })
             .boxed()
     };
-    let filter = text_input(t!(i18n, ids::PANELS_MESSAGES_FILTER_HINT), &view.query)
-        .on_input(|q| messages_msg(MessagesPanelMsg::QueryEdited(q)))
-        .size(TS.body)
-        .padding(SP.s)
-        .style(super::form_look::text_input_style)
-        .width(Length::Fixed(TS.body * FILTER_FIELD_EM));
     let line = resolve(&ctx.tokens).line_strong;
     let rule = container(Space::new())
         .width(Length::Fixed(crate::styles::HAIRLINE))
@@ -278,15 +360,12 @@ fn toolbar<'a>(ctx: &'a PanelContext, visible: &[&DiagnosticEntry]) -> Element<'
             ..container::Style::default()
         });
     row![
-        chips,
+        level_chips(ctx, visible),
         rule,
         dropdown(MessagesChoice::Source(view.source), sources),
-        dropdown(
-            MessagesChoice::Document(view.document.clone()),
-            vec![MessagesChoice::Document(None)],
-        ),
+        dropdown(MessagesChoice::Document(view.document.clone()), documents),
         Space::new().width(Length::Fill).height(Length::Shrink),
-        filter,
+        filter_field(ctx),
     ]
     .spacing(SP.s)
     .padding([SP.s, SP.m])
@@ -310,8 +389,16 @@ fn column_widths(i18n: &I18n, rows: &[&DiagnosticEntry]) -> [f32; 4] {
         .chain([chars(ids::PANELS_MESSAGES_COLUMN_CLASS)])
         .max()
         .unwrap_or_default();
-    let document =
-        chars(ids::PANELS_MESSAGES_COLUMN_DOCUMENT).max(chars(ids::PANELS_MESSAGES_NO_VALUE));
+    let document = rows
+        .iter()
+        .filter_map(|e| e.document.as_deref())
+        .map(|d| document_name(d).chars().count())
+        .chain([
+            chars(ids::PANELS_MESSAGES_COLUMN_DOCUMENT),
+            chars(ids::PANELS_MESSAGES_NO_VALUE),
+        ])
+        .max()
+        .unwrap_or_default();
     let source = rows
         .iter()
         .map(|e| chars(MessageSource::of_code(&e.code).id()))
@@ -332,15 +419,9 @@ fn level_pill<'a>(
     i18n: &I18n,
     level: DiagnosticLevel,
 ) -> Element<'a, PanelMsg> {
-    let tone = match level {
-        DiagnosticLevel::Error => PillTone::Err,
-        DiagnosticLevel::Warning => PillTone::Warn,
-        DiagnosticLevel::Info => PillTone::Info,
-        DiagnosticLevel::Debug | DiagnosticLevel::Trace => PillTone::Neutral,
-    };
     container(text(t!(i18n, level_id(level))).size(TS.caption))
         .padding([0.0, SP.s])
-        .style(crate::styles::pill(tokens, tone))
+        .style(crate::styles::pill(tokens, level_tone(level)))
         .boxed()
 }
 
@@ -352,8 +433,33 @@ fn cell<'a>(content: Element<'a, PanelMsg>, width: Length) -> Element<'a, PanelM
         .boxed()
 }
 
+/// The Document cell: the file name of the sheet the row names, else a dash.
+fn document_text<'a>(
+    i18n: &I18n,
+    entry: &DiagnosticEntry,
+    ink: iced::Color,
+    none_ink: iced::Color,
+) -> Element<'a, PanelMsg> {
+    let cell = match entry.document.as_deref() {
+        Some(document) => text(UserText::new(document_name(document))).color(ink),
+        None => text(t!(i18n, ids::PANELS_MESSAGES_NO_VALUE)).color(none_ink),
+    };
+    cell.size(TS.body)
+        .wrapping(iced::widget::text::Wrapping::None)
+        .boxed()
+}
+
+/// What a row's Show sends: the sheet it names and the object on it.
+fn show_message(entry: &DiagnosticEntry) -> Option<MessagesPanelMsg> {
+    Some(MessagesPanelMsg::ShowPressed {
+        document: entry.document.clone()?,
+        object: entry.object,
+    })
+}
+
 /// The Message cell of a Messages row: the text, then the link to the command
-/// the row offers, if any (`messages_row::row_action`).
+/// the row offers, if any (`messages_row::row_action`), and Show when the
+/// row names a sheet.
 fn message_text<'a>(
     tokens: &ThemeTokens,
     i18n: &I18n,
@@ -363,19 +469,26 @@ fn message_text<'a>(
     let line = text(UserText::new(entry.message.as_str()))
         .size(TS.body)
         .color(ink);
-    let Some((link, label)) = super::messages_row::row_action(entry) else {
+    let link = super::messages_row::row_action(entry)
+        .map(|(link, label)| (PanelMsg::MessageLinkPressed(link), label));
+    let show = show_message(entry).map(|msg| (messages_msg(msg), ids::PANELS_MESSAGES_SHOW));
+    if link.is_none() && show.is_none() {
         return line.boxed();
-    };
-    row![
-        line,
-        Space::new().width(6).height(Length::Shrink),
-        signex_widgets::button(text(t!(i18n, label)).size(TS.body).color(ink))
-            .padding([SP.xs, SP.m])
-            .on_press(PanelMsg::MessageLinkPressed(link))
-            .style(crate::styles::menu_item(tokens)),
-    ]
-    .align_y(iced::Alignment::Center)
-    .boxed()
+    }
+    let mut cell: Row<Element<'a, PanelMsg>> = Row::new()
+        .push(line.boxed())
+        .push(Space::new().width(6).height(Length::Shrink).boxed())
+        .align_y(iced::Alignment::Center);
+    for (press, label) in link.into_iter().chain(show) {
+        cell = cell.push(
+            signex_widgets::button(text(t!(i18n, label)).size(TS.body).color(ink))
+                .padding([SP.xs, SP.m])
+                .on_press(press)
+                .style(crate::styles::menu_item(tokens))
+                .boxed(),
+        );
+    }
+    cell.boxed()
 }
 
 /// The empty state: centred title, the hint, and the variables in mono.
@@ -495,10 +608,7 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                         Length::Fixed(class_w)
                     ),
                     cell(
-                        text(t!(i18n, ids::PANELS_MESSAGES_NO_VALUE))
-                            .size(TS.body)
-                            .color(ink4)
-                            .boxed(),
+                        document_text(i18n, entry, ink3, ink4),
                         Length::Fixed(document_w),
                     ),
                     cell(
