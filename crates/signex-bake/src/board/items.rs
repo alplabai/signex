@@ -53,7 +53,10 @@ pub fn baked_item_count(items: &SketchBoardItems, kind: BakedKind) -> Option<usi
     items.count(kind)
 }
 
-fn items(ctx: &Context<'_>, board: &PcbBoard) -> Result<SketchBoardItems, BoardBakeError> {
+pub(super) fn items(
+    ctx: &Context<'_>,
+    board: &PcbBoard,
+) -> Result<SketchBoardItems, BoardBakeError> {
     Ok(SketchBoardItems {
         zones: pours(ctx, &board.nets)?,
         graphics: mechanical(ctx)?,

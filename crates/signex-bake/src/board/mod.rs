@@ -17,6 +17,7 @@ mod geometry;
 mod inside_corners;
 mod items;
 mod patterned;
+mod preview;
 mod slot;
 
 #[cfg(test)]
@@ -31,6 +32,7 @@ pub use checks::{
 pub use error::BoardBakeError;
 pub use fillets::{FilletReport, add_fillets, fillet_targets};
 pub use items::{bake_board_items, bake_board_with_items, baked_item_count};
+pub use preview::{BoardPreviewBake, bake_board_preview};
 pub use slot::{Slot, slot_size};
 
 use std::collections::HashMap;
@@ -64,22 +66,45 @@ pub(crate) fn solved<T>(
     let solve = Solver::default()
         .solve(sketch, &params)
         .map_err(BoardBakeError::Solve)?;
+    at_solve(sketch, &solve, &params, bake)
+}
+
+/// Run `bake` on `sketch` at a solve the caller already has.
+pub(crate) fn at_solve<T>(
+    sketch: &SketchData,
+    solve: &FullSolveOutput,
+    params: &HashMap<String, f64>,
+    bake: impl FnOnce(&Context<'_>) -> Result<T, BoardBakeError>,
+) -> Result<T, BoardBakeError> {
     bake(&Context {
         sketch,
-        solve: &solve,
-        params: &params,
+        solve,
+        params,
         instances: InstanceBudget::default(),
     })
 }
 
 fn baked(ctx: &Context<'_>, nets: &[NetDef]) -> Result<BakedBoard, BoardBakeError> {
-    Ok(BakedBoard {
-        outline: outline(ctx)?,
-        keepouts: features::keepouts(ctx)?,
-        cutouts: features::cutouts(ctx)?,
+    baked_with_slots(ctx, nets).map(|(baked, _)| baked)
+}
+
+/// The board bake, and each slot among its cutouts: the cutout's uuid and
+/// its size.
+fn baked_with_slots(
+    ctx: &Context<'_>,
+    nets: &[NetDef],
+) -> Result<(BakedBoard, Vec<(uuid::Uuid, Slot)>), BoardBakeError> {
+    let outline = outline(ctx)?;
+    let keepouts = features::keepouts(ctx)?;
+    let (cutouts, slots) = features::cutouts_with_slots(ctx)?;
+    let baked = BakedBoard {
+        outline,
+        keepouts,
+        cutouts,
         holes: features::holes(ctx, nets)?,
         v_scores: features::v_scores(ctx)?,
-    })
+    };
+    Ok((baked, slots))
 }
 
 /// How many items of `kind` a board bake produced, for the bake preview

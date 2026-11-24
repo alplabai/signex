@@ -304,6 +304,10 @@ pub struct FootprintCanvas<'a> {
     pub trackpad_pan: bool,
     /// Preferences "Mouse wheel", synced with `trackpad_pan`.
     pub wheel_mode: crate::canvas::WheelMode,
+    /// The Mirror card the Mirror ghost draws (mockup row 191); `None`
+    /// while Mirror is not armed.
+    pub mirror_card:
+        Option<crate::library::editor::footprint::sketch_mode::mirror_card::MirrorCard>,
 }
 
 impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {

@@ -767,12 +767,19 @@ pub struct BoardSketchProps {
     /// The selected entity's Slot, Pour, Mechanical layer or Component
     /// anchor rows (decision 2, 2026-11-20).
     pub target: crate::panels::BoardTargetProps,
+    /// The size (length, width) in mm of the slot the selected edge belongs
+    /// to, whatever its role, for the Slot header (mockup row 179); `None`
+    /// when it is no slot edge.
+    pub selected_slot: Option<(f64, f64)>,
     /// The project's router tool diameter in mm (mockup row 179d), for the Fab
     /// profile group; `None` when its fab profile names none.
     pub router_tool_diameter: Option<f64>,
     /// The radius Add fillets applies; `None` when no failing corner can
     /// take a fillet (mockup row 179d).
     pub fillet_radius: Option<f64>,
+    /// The open bake preview, shown as the Bake panel (mockup row 179);
+    /// `None` while the preview is closed.
+    pub bake: Option<crate::panels::BoardBakePreview>,
 }
 
 /// A mounting hole's fields as the Properties panel edits them.

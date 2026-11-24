@@ -898,6 +898,9 @@ mod sketch_snap_board;
 // preview drawn on the canvas.
 #[path = "regression/board_sketch_checks.rs"]
 mod board_sketch_checks;
+// mockup rows 179 and 179-slot - board sketch Bake as picks and the Slot header's size.
+#[path = "regression/board_sketch_bake_as.rs"]
+mod board_sketch_bake_as;
 // mockup row 187 / mockup row 191 / mockup row 192: Chamfer, Extend, Linear Pattern, Mirror about a
 // centerline, and the pad link of Edit in Sketch.
 #[path = "regression/sketch_tools_padlink.rs"]
@@ -906,6 +909,9 @@ mod sketch_tools_padlink;
 // pattern links; a loop is refused.
 #[path = "regression/sketch_pattern_links.rs"]
 mod sketch_pattern_links;
+// mockup row 191: the Mirror options card on footprint and board hosts.
+#[path = "regression/sketch_mirror_card.rs"]
+mod sketch_mirror_card;
 // mockup row 192, item D1: an edit of a patterned pad asks This pad / All pads.
 #[path = "regression/sketch_pad_scope.rs"]
 mod sketch_pad_scope;

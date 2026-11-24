@@ -39,6 +39,7 @@ fn canvas_for<'a>(
         zoom_step: 1.1,
         trackpad_pan: false,
         wheel_mode: Default::default(),
+        mirror_card: None,
     }
 }
 

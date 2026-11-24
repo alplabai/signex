@@ -145,16 +145,16 @@ fn bake_preview_counts_the_board_targets_without_touching_the_board() {
     );
     sketch(&mut f, BoardSketchMsg::BakePreviewToggled);
     let session = f.app.interaction_state.board_sketch.as_ref().unwrap();
-    use signex_app::library::editor::footprint::sketch_mode::BakePreview;
-    use signex_types::sketch::baked_kinds::BakedKind;
-    let Some(BakePreview::Counts(counts)) = session.preview.as_ref() else {
+    // Mockup row 179: the preview lists the values Bake writes, here the
+    // outline's size, not a count per target.
+    use signex_app::panels::{BakedOutline, BoardBakePreview};
+    let Some(BoardBakePreview::Writes(rows)) = session.preview.as_ref() else {
         panic!("the preview bakes: {:?}", session.preview);
     };
-    assert_eq!(
-        counts.iter().map(|(kind, _)| *kind).collect::<Vec<_>>(),
-        SketchHost::Board.bake_targets()
-    );
-    assert!(counts.contains(&(BakedKind::BoardOutline, 1)));
+    let Some(BakedOutline::Size(width, height)) = rows.outline else {
+        panic!("the outline bakes: {rows:?}");
+    };
+    assert!((width - 40.0).abs() < 1e-6 && (height - 30.0).abs() < 1e-6);
     assert_eq!(snapshot(&f), before, "a preview writes nothing");
 
     sketch(&mut f, BoardSketchMsg::BakePreviewToggled);

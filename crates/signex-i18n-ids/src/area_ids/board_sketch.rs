@@ -1,6 +1,7 @@
 //! Ids of `locales/en-US/board_sketch.ftl` added after the list in `lib.rs`
 //! reached the file-size cap: the Outline checks of board sketch mode
-//! (mockup row 179d) and the bake preview's errors (mockup row 190).
+//! (mockup row 179d), the bake preview's errors (mockup row 190) and the
+//! Properties Bake panel (mockup row 179).
 
 define_ids! {
     BOARD_SKETCH;
@@ -64,4 +65,16 @@ define_ids! {
     BOARD_SKETCH_DXF_CANCEL = "board-sketch-dxf-cancel";
     BOARD_SKETCH_DXF_IMPORTED = "board-sketch-dxf-imported";
     BOARD_SKETCH_DXF_REJECTED = "board-sketch-dxf-rejected";
+    BOARD_SKETCH_BAKE_TITLE = "board-sketch-bake-title";
+    BOARD_SKETCH_BAKE_STATUS = "board-sketch-bake-status";
+    BOARD_SKETCH_BAKE_SOLVE = "board-sketch-bake-solve";
+    BOARD_SKETCH_BAKE_SIZE = "board-sketch-bake-size";
+    BOARD_SKETCH_BAKE_OUTLINE_REMOVED = "board-sketch-bake-outline-removed";
+    BOARD_SKETCH_BAKE_HOLE_PLATED = "board-sketch-bake-hole-plated";
+    BOARD_SKETCH_BAKE_HOLE_UNPLATED = "board-sketch-bake-hole-unplated";
+    BOARD_SKETCH_BAKE_KEEPOUT_LAYERS = "board-sketch-bake-keepout-layers";
+    BOARD_SKETCH_BAKE_ANCHOR = "board-sketch-bake-anchor";
+    BOARD_SKETCH_BAKE_NOTHING = "board-sketch-bake-nothing";
+    BOARD_SKETCH_BAKE_UNSOLVED = "board-sketch-bake-unsolved";
+    BOARD_SKETCH_BAKE_CLOSE_HINT = "board-sketch-bake-close-hint";
 }

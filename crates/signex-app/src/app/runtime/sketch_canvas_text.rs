@@ -7,10 +7,12 @@
 //! refresh is a comparison.
 
 use signex_i18n::{I18n, MessageId, ids};
+use signex_types::sketch::{SketchHost, SketchRole};
 
 use super::super::*;
 use crate::library::editor::footprint::ConflictSources;
 use crate::library::editor::footprint::SketchCanvasText;
+use crate::library::editor::footprint::sketch_mode::roles::role_label_id;
 use crate::library::editor::footprint::sketch_mode::value_edit::conflicting_constraints;
 
 /// `id` as plain canvas text: no bidi isolation marks.
@@ -59,7 +61,21 @@ pub(crate) fn render_sketch_canvas_text(i18n: &I18n) -> SketchCanvasText {
         pattern_sweep: w(ids::SKETCH_CANVAS_PATTERN_SWEEP),
         pattern_mirror: w(ids::SKETCH_CANVAS_PATTERN_MIRROR),
         pattern_of: w(ids::SKETCH_CANVAS_PATTERN_OF),
+        role_tags: role_tags(i18n),
     }
+}
+
+/// Each host's role names as its picker shows them; Unassigned draws no tag.
+fn role_tags(i18n: &I18n) -> Vec<(SketchHost, SketchRole, String)> {
+    [SketchHost::Footprint, SketchHost::Board]
+        .into_iter()
+        .flat_map(|host| {
+            host.roles()
+                .iter()
+                .filter(|role| **role != SketchRole::Unassigned)
+                .map(move |&role| (host, role, word(i18n, role_label_id(role, host))))
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -167,6 +183,32 @@ mod tests {
         assert_eq!(text.snap_horizontal, "Horizontal");
         assert_eq!(text.snap_board_outline, "Board outline");
         assert_eq!(text.locale, Some("en-US"));
+    }
+
+    /// Mockup row 190: every role but Unassigned has its tag on each host,
+    /// named as that host's picker names it.
+    #[test]
+    fn every_offered_role_has_its_tag_word() {
+        let text = render_sketch_canvas_text(&en_us());
+        for host in [SketchHost::Footprint, SketchHost::Board] {
+            for &role in host.roles() {
+                let tag = text.role_tag(host, role);
+                if role == SketchRole::Unassigned {
+                    assert_eq!(tag, None);
+                } else {
+                    let tag = tag.unwrap_or_else(|| panic!("{role:?} on {host:?} has no tag"));
+                    assert!(!tag.is_empty() && !has_isolation_marks(tag), "{tag:?}");
+                }
+            }
+        }
+        assert_eq!(
+            text.role_tag(SketchHost::Footprint, SketchRole::Courtyard),
+            Some("Courtyard")
+        );
+        assert_eq!(
+            text.role_tag(SketchHost::Board, SketchRole::Keepout),
+            Some("Keepout")
+        );
     }
 
     #[test]
