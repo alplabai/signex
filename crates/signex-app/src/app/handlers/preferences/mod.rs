@@ -9,6 +9,9 @@ mod keymap;
 mod keymap_tests;
 pub(crate) mod language;
 mod pages_view;
+mod pcb_defaults;
+#[cfg(test)]
+mod pcb_defaults_tests;
 mod prefs_file;
 mod profile_page;
 mod profiles;
@@ -129,6 +132,8 @@ impl Signex {
         self.ui_state.preferences_draft_symbol_body_fill = self.ui_state.symbol_body_fill;
         self.ui_state.preferences_body_fill_palette_open = false;
         self.ui_state.preferences_body_fill_picker_open = false;
+        self.ui_state.preferences_pcb_defaults =
+            crate::pcb_defaults_prefs::PcbDefaultsDraft::of(&self.ui_state.pcb_dimension_defaults);
         self.ui_state.preferences_draft_trackpad_pan = self.ui_state.trackpad_pan;
         self.ui_state.preferences_draft_wheel_mode = self.ui_state.wheel_mode;
         self.ui_state.preferences_draft_layer_switcher = self.ui_state.layer_switcher;
@@ -363,6 +368,7 @@ impl Signex {
             | PrefMsg::ComponentClassResetDefaults) => {
                 return self.handle_preferences_draft(msg);
             }
+            PrefMsg::PcbDefaults(msg) => self.handle_pcb_defaults_message(msg),
             PrefMsg::Profiles(msg) => return self.handle_profiles_message(msg),
             PrefMsg::ResetPrefsFile => self.handle_prefs_file_reset(),
             PrefMsg::PrefsFolderOpenRequested => return self.open_prefs_folder(),

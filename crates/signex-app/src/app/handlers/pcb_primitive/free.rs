@@ -150,6 +150,7 @@ pub(super) fn dimension_facts(
         layer: layer_choice(shared(dimensions.iter().map(|d| d.layer.as_str())), i18n),
         // Any layer, copper included (Caner, 2026-11-21).
         layers: layer_choices(board, i18n, |_| true),
+        style: super::dimension_style::style_facts(dimensions),
         common,
     }
 }
@@ -320,7 +321,12 @@ fn text_edit(edit: &PrimitiveEdit) -> Option<TextEdit> {
 
 /// A typed precision that is not a whole number of decimals the dimension
 /// can show is refused as out of range.
-fn dimension_edit(edit: &PrimitiveEdit) -> Option<Result<DimensionEdit, PrimitiveEditRefusal>> {
+pub(crate) fn dimension_edit(
+    edit: &PrimitiveEdit,
+) -> Option<Result<DimensionEdit, PrimitiveEditRefusal>> {
+    if let Some(style) = super::dimension_style_edit(edit) {
+        return Some(Ok(DimensionEdit::Style(style)));
+    }
     Some(Ok(match *edit {
         PrimitiveEdit::Number(F::StartX, v) => DimensionEdit::StartX(v),
         PrimitiveEdit::Number(F::StartY, v) => DimensionEdit::StartY(v),

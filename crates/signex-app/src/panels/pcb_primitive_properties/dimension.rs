@@ -1,6 +1,7 @@
 //! The Dimension panel (#2373, #2523, mockup row 101): the illustration, the measured
 //! Value on a card under it, then where it stands (Start, End, Offset) and
-//! its Style: line width, text height, decimals and layer.
+//! its Style: line width, text height, decimals and layer; then its Arrows,
+//! Text, Extension Lines, and Units and Format (`dimension_style`, #2868).
 
 use iced::widget::{container, row};
 use iced::{Element, Length, Widget as _};
@@ -22,11 +23,9 @@ const MAX_PRECISION: u32 = 6;
 pub(super) fn view<'a>(ctx: &'a PanelContext, f: &'a DimensionFacts) -> Element<'a, PanelMsg> {
     let look = Look::of(ctx);
     let drawing = illustration(look, &f.common, dd::illustration(f, &ctx.i18n));
-    stack(vec![
-        Some(drawing),
-        value_card(look, f),
-        properties(look, f),
-    ])
+    let mut sections = vec![Some(drawing), value_card(look, f), properties(look, f)];
+    sections.extend(super::dimension_style::sections(look, f));
+    stack(sections)
 }
 
 /// The measured value as a headline card; none for a dimension not placed
@@ -215,6 +214,7 @@ mod tests {
             value: Some("62.00 mm".into()),
             layer: None,
             layers: Vec::new(),
+            style: Default::default(),
         };
         let section = properties(Look::of(&ctx), &f).expect("the section");
         let note = t!(ctx.i18n, ids::PCB_PRIM_DIM_LAYER_NOTE).into_string();

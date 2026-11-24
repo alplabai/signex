@@ -5,6 +5,7 @@
 //! one undo step. Each builder returns `None` when every item already reads
 //! so. Targets are absolute per item, as for every board command.
 
+mod dimension_style;
 mod free;
 mod graphic;
 mod pad;
@@ -12,6 +13,8 @@ mod track;
 mod via;
 mod zone;
 
+#[cfg(test)]
+mod dimension_style_tests;
 #[cfg(test)]
 mod free_tests;
 #[cfg(test)]
@@ -21,6 +24,7 @@ mod tests;
 #[cfg(test)]
 mod zone_tests;
 
+pub use dimension_style::{DimensionStyleEdit, apply_style};
 pub use free::{
     ArcEdit, ArcSpan, DIMENSION_MAX_PRECISION, DimensionEdit, TextEdit, apply_arc, apply_dimension,
     apply_free_pad, apply_text, arc_edit_command, dimension_edit_command, free_pad_edit_command,

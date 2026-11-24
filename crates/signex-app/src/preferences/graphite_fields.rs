@@ -18,6 +18,7 @@ pub(super) fn graphite_label(item: PrefNav) -> MessageId {
         PrefNav::Keyboard => ids::PREFERENCES_PAGE_KEYBOARD,
         PrefNav::Editing => ids::PREFERENCES_PAGE_EDITING,
         PrefNav::SchematicDisplay => ids::PREFERENCES_PAGE_SCHEMATIC_DISPLAY,
+        PrefNav::PcbDefaults => ids::PREFERENCES_PAGE_PCB_DEFAULTS,
         PrefNav::Annotation => ids::PREFERENCES_PAGE_ANNOTATION,
         PrefNav::RuleProfiles => ids::PREFERENCES_PAGE_RULE_PROFILES,
         PrefNav::LibraryDistributors => ids::PREFERENCES_PAGE_DISTRIBUTORS,
@@ -32,6 +33,10 @@ pub(super) fn group_messages(item: PrefNav) -> (MessageId, MessageId) {
         "Schematic" => (
             ids::PREFERENCES_GROUP_SCHEMATIC,
             ids::PREFERENCES_GROUP_SCHEMATIC_HEADING,
+        ),
+        "PCB" => (
+            ids::PREFERENCES_GROUP_PCB,
+            ids::PREFERENCES_GROUP_PCB_HEADING,
         ),
         "Validation" => (
             ids::PREFERENCES_GROUP_VALIDATION,
@@ -59,6 +64,7 @@ fn former_names(item: PrefNav) -> &'static [&'static str] {
         | PrefNav::Keyboard
         | PrefNav::Annotation
         | PrefNav::SchematicDisplay
+        | PrefNav::PcbDefaults
         | PrefNav::RuleProfiles
         | PrefNav::LibraryDistributors => &[],
     }

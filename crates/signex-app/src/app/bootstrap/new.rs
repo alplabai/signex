@@ -183,6 +183,7 @@ impl Signex {
         let net_hover_enabled = crate::fonts::read_net_hover_pref_from(prefs);
         let edge_pan = crate::fonts::read_edge_pan_pref_from(prefs);
         let symbol_body_fill = crate::symbol_fill_prefs::SymbolBodyFill::from_prefs(prefs);
+        let pcb_dimension_defaults = crate::pcb_defaults_prefs::from_prefs(prefs);
         let trackpad_pan = crate::fonts::read_trackpad_pan_pref_from(prefs);
         let wheel_mode = crate::fonts::read_wheel_mode_pref_from(prefs);
         let layer_switcher = crate::fonts::read_layer_switcher_pref_from(prefs);
@@ -402,6 +403,10 @@ impl Signex {
                 preferences_draft_edge_pan: edge_pan,
                 symbol_body_fill,
                 preferences_draft_symbol_body_fill: symbol_body_fill,
+                preferences_pcb_defaults: crate::pcb_defaults_prefs::PcbDefaultsDraft::of(
+                    &pcb_dimension_defaults,
+                ),
+                pcb_dimension_defaults,
                 preferences_body_fill_palette_open: false,
                 preferences_body_fill_picker_open: false,
                 trackpad_pan,

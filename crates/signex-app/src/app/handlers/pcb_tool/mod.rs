@@ -53,6 +53,8 @@ mod area_form_tests;
 #[cfg(test)]
 mod area_tests;
 #[cfg(test)]
+mod dimension_defaults_tests;
+#[cfg(test)]
 mod form_tests;
 #[cfg(test)]
 mod free_tests;

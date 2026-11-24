@@ -205,4 +205,9 @@ define_ids! {
     PREFERENCES_SYMBOL_BODY_FILL_HELP = "preferences-symbol-body-fill-help";
     PREFERENCES_SYMBOL_BODY_FILL_COLOUR = "preferences-symbol-body-fill-colour";
     PREFERENCES_SYMBOL_BODY_FILL_COLOUR_HELP = "preferences-symbol-body-fill-colour-help";
+    PREFERENCES_PAGE_PCB_DEFAULTS = "preferences-page-pcb-defaults";
+    PREFERENCES_GROUP_PCB = "preferences-group-pcb";
+    PREFERENCES_GROUP_PCB_HEADING = "preferences-group-pcb-heading";
+    PREFERENCES_SECTION_PCB_DIMENSIONS = "preferences-section-pcb-dimensions";
+    PREFERENCES_PCB_DIMENSIONS_HELP = "preferences-pcb-dimensions-help";
 }

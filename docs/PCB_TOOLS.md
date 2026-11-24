@@ -619,6 +619,49 @@ cannot be entered from the panel. Each edit is one undo step. There is no
 Type row: angular, radial, diameter, leader, baseline and centre-mark
 dimensions have no model yet and are not offered.
 
+### Dimension settings {#dimension-settings}
+
+Each dimension carries its own look (`signex_types::pcb_dimension_style::DimensionStyle`,
+#2868, Caner 2026-11-24), shown in four more sections of the Dimension
+panel, each pick or Enter one undo step:
+
+- **Arrows**: Arrow Style (Filled, a closed triangle; Open, two strokes;
+  None), Arrow Length (from the tip back along the line) and Arrow Width
+  (across the line at the open end).
+- **Text**: Font (Mono, the board's monospace face; Sans, the interface
+  face), Bold, Italic, Text Width (the width of one character; the canvas
+  stretches the glyphs to it), Text Position (Above: beside the line on
+  the side it stands off, Text Gap from it; Inline: on the line, which
+  breaks Text Gap before and after the value, and is left out when the
+  value does not fit between the arrows; Manual: at Text Point) and Text
+  Gap. Text Point shows only for Manual: Along is mm from the middle of
+  the line along it, Across mm from the line on the side the Offset is
+  measured on, so the value moves and turns with the dimension. Picking
+  Manual starts the point where the value was drawn.
+- **Extension Lines**: Extension Offset (the gap between a measured point
+  and the start of its extension line), Overshoot (how far it runs past
+  the dimension line) and Extension Width.
+- **Units and Format**: Unit (mm, mil, in), Show unit, Prefix and Suffix
+  (written before and after the number) and Trailing zeros (off: `10.50`
+  reads `10.5`, `10.00` reads `10`).
+
+Lengths are mm and not below zero; Text Width is above zero. The canvas,
+the pick index (the value's box is Text Width per character) and the PDF
+and SVG assembly drawings draw the arrows, widths and positions. The
+assembly drawings print the value in their one face: Font, Bold, Italic
+and Text Width are drawn on the canvas only.
+
+A new dimension starts from Preferences ▸ PCB ▸ PCB Defaults (line width,
+text height, precision and every setting above, in `prefs.json` under
+`pcb_dimension_defaults`); the Dimension tool's form changes them for the
+next dimensions of the session; a placed dimension's Properties change it
+alone. With no saved defaults a new dimension has the look dimensions had
+before these settings: open arrows one text height long and 0.6 wide, the
+value Above, half a text height off the line, extension lines from the
+measured points half a text height past the line at the line width, mm
+with the unit and trailing zeros. Those lengths no longer follow a later
+Text Height edit.
+
 ## Graphics {#graphics}
 
 Place ▸ Graphics on a board and the PCB Active Bar's Graphics group (#2424):
@@ -752,6 +795,18 @@ the `.snxpcb` (`signex_types::format::board_free`), lengths in integer nm.
 A board without any has no section and re-saves byte-identical. Each item
 has its own uuid in the board's one id space; a duplicate is repaired on
 load like any other board object.
+
+A `[[free.dimensions]]` row writes its look keys (#2868,
+`signex_types::format::board_dimension`) only where they differ from the
+look of its own text height and line width (`DimensionStyle::for_text_height`):
+`arrow_style` (`filled`, `open`, `none`), `arrow_length`, `arrow_width`,
+`font` (`mono`, `sans`), `bold`, `italic`, `text_width`, `text_position`
+(`above`, `inline`, `manual`), `text_gap`, `text_along`, `text_across`,
+`extension_offset`, `extension_overshoot`, `extension_width`, `unit`
+(`mm`, `mil`, `in`), `show_unit`, `prefix`, `suffix`, `trailing_zeros`;
+lengths in integer nm. A dimension of that look writes none of them, so an
+older board reads and re-saves byte-identical; an older reader skips the
+keys (and drops them if it saves).
 
 ## Selection Filter
 

@@ -232,6 +232,13 @@ preferences-symbol-body-fill-colour-help = A soft tint of the theme unless you p
 # Beside the On / Off control of the rule whose severity the pin connection
 # matrix sets; in Rule Profiles it opens the matrix tab.
 preferences-rules-matrix-link = Severity set in the matrix
+## PCB ▸ PCB Defaults (#2868)
+# The page of what a new board dimension starts from.
+preferences-page-pcb-defaults = PCB Defaults
+preferences-group-pcb = PCB
+preferences-group-pcb-heading = PCB
+preferences-section-pcb-dimensions = PCB — New Dimensions
+preferences-pcb-dimensions-help = Each dimension you place starts from these. Its own Properties change it afterwards; dimensions already on a board keep their look.
 
 ## Default Component Classes
 preferences-classes-title = Default Component Classes

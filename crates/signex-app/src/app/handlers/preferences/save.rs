@@ -24,6 +24,10 @@ impl Signex {
         self.ui_state.edge_pan = self.ui_state.preferences_draft_edge_pan;
         // Repainted by `sync_theme` below: the canvas colours carry it.
         self.ui_state.symbol_body_fill = self.ui_state.preferences_draft_symbol_body_fill;
+        // #2868: the next dimension placed starts from these.
+        self.ui_state.pcb_dimension_defaults =
+            self.ui_state.preferences_pcb_defaults.defaults.clone();
+        self.ui_state.preferences_pcb_defaults.texts.clear();
         self.ui_state.trackpad_pan = self.ui_state.preferences_draft_trackpad_pan;
         self.ui_state.wheel_mode = self.ui_state.preferences_draft_wheel_mode;
         self.ui_state.layer_switcher = self.ui_state.preferences_draft_layer_switcher;

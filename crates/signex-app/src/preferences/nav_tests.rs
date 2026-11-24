@@ -30,7 +30,8 @@ fn the_sidebar_lists_language_between_appearance_and_keyboard_shortcuts() {
     );
 }
 
-/// Mockup row 143: the whole nav, page by page, with its group.
+/// Mockup row 143: the whole nav, page by page, with its group; PCB
+/// Defaults (#2868, Caner 2026-11-24) after the Schematic pages.
 #[test]
 fn the_sidebar_follows_the_mock_groups() {
     let rows: Vec<(&str, &str)> = PrefNav::ALL
@@ -46,6 +47,7 @@ fn the_sidebar_follows_the_mock_groups() {
             ("Schematic", "Annotation"),
             ("Schematic", "Editing"),
             ("Schematic", "Display"),
+            ("PCB", "PCB Defaults"),
             ("Validation", "Rule Profiles"),
             ("Library", "Distributor APIs"),
             ("Library", "Component Classes"),

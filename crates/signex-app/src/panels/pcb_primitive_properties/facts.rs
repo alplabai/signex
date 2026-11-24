@@ -9,6 +9,9 @@ use pcb_geom::ItemRef;
 use signex_engine::pcb::draw::ArcMode;
 use signex_engine::pcb::via_types::ViaTypeKey;
 use signex_types::pcb::{MaskExpansion, PadShape, ViaType};
+use signex_types::pcb_dimension_style::{
+    ArrowStyle, BoardFont, DimensionTextPosition, DimensionUnits,
+};
 use signex_types::pcb_graphic::BoardGraphicKind;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::StackMode;
@@ -99,6 +102,20 @@ pub enum PrimitiveField {
     /// An arc's or circle's centre on a board drawing (#2424).
     CenterX,
     CenterY,
+    /// A dimension's arrowheads, text, Manual text point and extension
+    /// lines, in mm (#2868).
+    ArrowLength,
+    ArrowWidth,
+    TextWidth,
+    TextGap,
+    TextAlong,
+    TextAcross,
+    ExtensionOffset,
+    ExtensionOvershoot,
+    ExtensionWidth,
+    /// Text written before and after a dimension's value.
+    Prefix,
+    Suffix,
 }
 
 /// An on / off setting of a track or via (#2378).
@@ -121,7 +138,10 @@ pub struct MaskSideFacts {
 impl PrimitiveField {
     /// A field typed as text, not as a number.
     pub fn is_text(self) -> bool {
-        matches!(self, Self::Designator | Self::Text)
+        matches!(
+            self,
+            Self::Designator | Self::Text | Self::Prefix | Self::Suffix
+        )
     }
 
     /// A mask expansion field: a typed number sets a manual expansion.
@@ -468,6 +488,33 @@ pub struct DimensionFacts {
     pub layer: Option<AreaLayerChoice>,
     /// The layers that take text.
     pub layers: Vec<AreaLayerChoice>,
+    /// Arrows, text, extension lines and number format (#2868).
+    pub style: DimensionStyleFacts,
+}
+
+/// The look the selected dimensions share (#2868); `None` where they
+/// differ. Lengths are mm.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DimensionStyleFacts {
+    pub arrow_style: Option<ArrowStyle>,
+    pub arrow_length: Option<f64>,
+    pub arrow_width: Option<f64>,
+    pub font: Option<BoardFont>,
+    pub bold: Option<bool>,
+    pub italic: Option<bool>,
+    pub text_width: Option<f64>,
+    pub text_position: Option<DimensionTextPosition>,
+    pub text_gap: Option<f64>,
+    /// The Manual text point, along and across the dimension line.
+    pub text_at: (Option<f64>, Option<f64>),
+    pub extension_offset: Option<f64>,
+    pub extension_overshoot: Option<f64>,
+    pub extension_width: Option<f64>,
+    pub unit: Option<DimensionUnits>,
+    pub show_unit: Option<bool>,
+    pub prefix: Option<String>,
+    pub suffix: Option<String>,
+    pub trailing_zeros: Option<bool>,
 }
 
 /// Board drawings (#2424): lines, arcs, circles, rectangles and text

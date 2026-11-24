@@ -62,6 +62,9 @@ impl UiState {
             PrefNav::SchematicDisplay => {
                 self.preferences_draft_symbol_body_fill != self.symbol_body_fill
             }
+            PrefNav::PcbDefaults => self
+                .preferences_pcb_defaults
+                .differs_from(&self.pcb_dimension_defaults),
             // Rule profiles save to their files at once, and distributor
             // settings live in the library state: neither has drafts.
             PrefNav::RuleProfiles | PrefNav::LibraryDistributors => false,
