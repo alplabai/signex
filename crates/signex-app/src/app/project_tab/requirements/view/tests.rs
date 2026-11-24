@@ -113,10 +113,12 @@ fn a_failed_card_reads_its_findings_as_one_sentence() {
         finished_at: chrono::Utc::now(),
     }));
     let texts = texts(&app, id);
+    // The report puts its findings in one order (`CheckReport::new`, by
+    // message), whatever order the check filed them in: C6 reads first.
     assert_eq!(
         count(
             &texts,
-            "2 of 21 parts are not released: L1 is draft and C6 is obsolete."
+            "2 of 21 parts are not released: C6 is obsolete and L1 is draft."
         ),
         1,
         "{texts:#?}"

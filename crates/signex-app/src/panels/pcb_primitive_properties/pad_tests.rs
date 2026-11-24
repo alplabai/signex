@@ -143,9 +143,23 @@ fn a_surface_pads_paste_source_is_live_with_rule_chosen_and_manual_inert() {
         1,
         "{shown:?}"
     );
-    // The board stores no expansion per pad: Manual sends nothing.
+    // The board stores no expansion per pad: Manual sends no edit. The
+    // pointer entering the row lights its callout, which is not an edit.
     let sent = messages_on_click(paste(look, &f), MASK_WINDOW, &manual);
-    assert!(sent.is_empty(), "Manual sends nothing: {sent:?}");
+    let edits: Vec<_> = sent
+        .iter()
+        .filter(|m| {
+            !matches!(
+                m,
+                crate::panels::PanelMsg::PcbPrimitive(
+                    crate::panels::pcb_primitive_properties::PcbPrimitiveMsg::IllustrationHovered(
+                        _
+                    )
+                )
+            )
+        })
+        .collect();
+    assert!(edits.is_empty(), "Manual sends no edit: {sent:?}");
 }
 
 #[test]

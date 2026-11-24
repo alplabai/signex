@@ -349,9 +349,12 @@ fn paste<'a>(look: Look<'a>, f: &'a PadFacts) -> Element<'a, PanelMsg> {
 }
 
 /// The Solder mask subsection, headed by its Tented switch (off: the pad
-/// has an opening).
+/// has an opening). The switch reads the other way round from Paste: its
+/// rows are live while it is off. The board stores no tenting per pad yet,
+/// so the switch stays off and the rows unveiled.
 fn solder<'a>(look: Look<'a>, f: &'a PadFacts) -> Element<'a, PanelMsg> {
     let header = EnableSection::new(look.t(ids::PCB_PRIM_SOLDER_TENTED), false)
+        .live_while_off(true)
         .tip(look.t(ids::PCB_PRIM_MASK_UNSUPPORTED));
     linked(
         look,

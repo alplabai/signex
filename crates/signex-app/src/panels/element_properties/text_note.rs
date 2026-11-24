@@ -384,9 +384,14 @@ mod tests {
             Color::WHITE,
             Color::BLACK,
         );
+        // The probe lists the multi-line box with the inputs (a text editor
+        // reports itself as one); it is the Text box, not the one-line
+        // field, when it stands taller than the one-line Text Size field.
         let inputs = crate::layout_probe::lay_out_inputs(view, iced::Size::new(320.0, 4000.0));
+        let text = crate::layout_probe::find(&inputs, stored).bounds;
+        let one_line = crate::layout_probe::find(&inputs, "2.540").bounds;
         assert!(
-            !inputs.iter().any(|i| i.text == stored),
+            text.height > one_line.height,
             "no one-line Text field: {inputs:?}"
         );
     }
