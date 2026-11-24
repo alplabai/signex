@@ -757,3 +757,7 @@ library-browser-read-only-note = This library ships with Signex and is not edita
 library-browser-preview-loading = Loading…
 # A preview tile whose drawing could not be read.
 library-browser-preview-unreadable = Could not be read
+
+# library-copy-recovery
+# Copy to Library footer primary: copy the stock primitive into the selected library ($library is its name).
+library-stock-copy-copy-to = Copy to { $library }

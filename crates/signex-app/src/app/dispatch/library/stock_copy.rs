@@ -58,12 +58,21 @@ impl Signex {
             label,
             previous_unavailable: self.library.stock_copy_target.clone(),
             error: None,
+            selected: None,
         });
         Task::none()
     }
 
     pub(super) fn handle_stock_copy(&mut self, msg: StockCopyMsg) -> Task<Message> {
         match msg {
+            // Selecting only moves the radio; the copy waits for the
+            // footer's Copy to <library> (mockup row 134).
+            StockCopyMsg::TargetSelected(root) => {
+                if let Some(state) = self.library.stock_copy.as_mut() {
+                    state.selected = Some(root);
+                }
+                Task::none()
+            }
             StockCopyMsg::TargetPicked(root) => self.handle_stock_copy_target_picked(root),
             StockCopyMsg::NewLibraryRequested => {
                 new_library_dialog(self.ui_state.io.picker.clone(), &self.ui_state.i18n)

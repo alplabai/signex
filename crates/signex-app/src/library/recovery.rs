@@ -28,7 +28,8 @@
 //!    reason. The close (x, Esc) leaves the library unopened.
 //!    *Restore from remote* is reserved for when the
 //!    manifest records a `[users.<remote>]` URL; v0.9 leaves the button
-//!    disabled because no remote field exists yet (Stage 13+).
+//!    disabled because no remote field exists yet (Stage 13+), and while it
+//!    is disabled Skip for now is the primary (mockup row 138).
 //!
 //! 3. **Broken primitive binding** (a row's `symbol_uuid` /
 //!    `footprint_uuid` resolves to a UUID with no on-disk file) —
@@ -56,7 +57,6 @@ use uuid::Uuid;
 use super::messages::LibraryMessage;
 use super::modal_chrome::{
     danger_btn, footer_strip, header_with_note_closing, key_value_box, mono_value, notice_banner,
-    secondary_btn,
 };
 use crate::styles::{
     DialogButtonKind, DialogIcon, PillTone, Spacing, TypeScale, dialog_body, dialog_button,
@@ -394,6 +394,23 @@ fn facts<'a>(
     }
 }
 
+/// Whether the fix can be pressed: Restore from remote needs a known
+/// remote; the other fixes always can.
+pub(crate) fn fix_enabled(dialog: &RecoveryDialog) -> bool {
+    !matches!(dialog, RecoveryDialog::GitMissing { remote: None, .. })
+}
+
+/// The roles of Skip for now and of the fix, in footer order. The fix is
+/// the primary; while it cannot be pressed Skip for now is the primary
+/// instead, so the dialog keeps a default action (mockup row 138).
+pub(crate) fn footer_roles(dialog: &RecoveryDialog) -> [DialogButtonKind; 2] {
+    if fix_enabled(dialog) {
+        [DialogButtonKind::Secondary, DialogButtonKind::Primary]
+    } else {
+        [DialogButtonKind::Primary, DialogButtonKind::Secondary]
+    }
+}
+
 /// The destructive action on the left, then Skip for now, then the fix.
 fn footer<'a>(
     dialog: &RecoveryDialog,
@@ -401,6 +418,7 @@ fn footer<'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let skip_label = t!(i18n, ids::LIBRARY_RECOVERY_SKIP_FOR_NOW);
+    let [skip_role, fix_role] = footer_roles(dialog);
     let (destroy, skip, fix) = match dialog {
         RecoveryDialog::LibraryMissing { .. } => (
             danger_btn(
@@ -411,7 +429,7 @@ fn footer<'a>(
             LibraryMessage::RecoveryLibraryMissing(LibraryMissingChoice::Cancel),
             dialog_button(
                 t!(i18n, ids::LIBRARY_RECOVERY_LOCATE),
-                DialogButtonKind::Primary,
+                fix_role,
                 Some(LibraryMessage::RecoveryLibraryMissing(
                     LibraryMissingChoice::Locate,
                 )),
@@ -419,7 +437,7 @@ fn footer<'a>(
             ),
         ),
         // Restoring is the fix once a remote is known; until then it is
-        // drawn disabled.
+        // drawn disabled and Skip for now is the primary.
         RecoveryDialog::GitMissing { remote, .. } => (
             danger_btn(
                 t!(i18n, ids::LIBRARY_RECOVERY_REINIT),
@@ -429,7 +447,7 @@ fn footer<'a>(
             LibraryMessage::RecoveryGitMissing(GitMissingChoice::Skip),
             dialog_button(
                 t!(i18n, ids::LIBRARY_RECOVERY_RESTORE_REMOTE),
-                DialogButtonKind::Primary,
+                fix_role,
                 remote.as_ref().map(|_| {
                     LibraryMessage::RecoveryGitMissing(GitMissingChoice::RestoreFromRemote)
                 }),
@@ -445,7 +463,7 @@ fn footer<'a>(
             LibraryMessage::RecoveryBrokenBinding(BrokenBindingChoice::Cancel),
             dialog_button(
                 t!(i18n, ids::LIBRARY_RECOVERY_REBIND),
-                DialogButtonKind::Primary,
+                fix_role,
                 Some(LibraryMessage::RecoveryBrokenBinding(
                     BrokenBindingChoice::Rebind,
                 )),
@@ -455,7 +473,10 @@ fn footer<'a>(
     };
     footer_strip(
         vec![destroy],
-        vec![secondary_btn(skip_label, skip, tokens), fix],
+        vec![
+            dialog_button(skip_label, skip_role, Some(skip), tokens),
+            fix,
+        ],
         tokens,
     )
 }
@@ -596,6 +617,29 @@ mod tests {
             "{shown:?}"
         );
         assert!(banners(&dialogs[0], &i18n).is_empty());
+    }
+
+    /// Mockup row 138 (layout): the fix is the one primary after a
+    /// secondary Skip for now; with no remote, Restore from remote is
+    /// disabled and secondary, and Skip for now is the primary instead.
+    #[test]
+    fn skip_for_now_is_the_primary_while_restore_from_remote_is_disabled() {
+        use crate::styles::DialogButtonKind::{Primary, Secondary};
+        let dialogs = all_dialogs();
+        let no_remote = &dialogs[1];
+        assert!(!fix_enabled(no_remote));
+        assert_eq!(footer_roles(no_remote), [Primary, Secondary]);
+        for dialog in [&dialogs[0], &dialogs[2], &dialogs[3], &dialogs[4]] {
+            assert!(fix_enabled(dialog), "{dialog:?}");
+            assert_eq!(footer_roles(dialog), [Secondary, Primary], "{dialog:?}");
+        }
+        for dialog in &dialogs {
+            let primaries = footer_roles(dialog)
+                .iter()
+                .filter(|role| **role == Primary)
+                .count();
+            assert_eq!(primaries, 1, "one primary in {dialog:?}");
+        }
     }
 
     /// Every case draws from tokens alone in every built-in theme, in the

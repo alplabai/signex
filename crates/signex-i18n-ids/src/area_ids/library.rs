@@ -290,4 +290,6 @@ define_ids! {
     LIBRARY_BROWSER_READ_ONLY_NOTE = "library-browser-read-only-note";
     LIBRARY_BROWSER_PREVIEW_LOADING = "library-browser-preview-loading";
     LIBRARY_BROWSER_PREVIEW_UNREADABLE = "library-browser-preview-unreadable";
+    // library-copy-recovery
+    LIBRARY_STOCK_COPY_COPY_TO = "library-stock-copy-copy-to";
 }

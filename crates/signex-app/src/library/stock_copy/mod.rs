@@ -88,6 +88,9 @@ pub struct StockCopyState {
     pub previous_unavailable: Option<PathBuf>,
     /// The last attempt's failure, shown in the dialog.
     pub error: Option<String>,
+    /// The library row the user selected; `None` keeps the preselect
+    /// ([`crate::library::state::LibraryState::stock_copy_choice`]).
+    pub selected: Option<PathBuf>,
 }
 
 /// Where the copy goes.
@@ -102,8 +105,11 @@ pub enum CopyTarget {
 /// Events of the "Copy to Library" dialog and its copy.
 #[derive(Debug, Clone)]
 pub enum StockCopyMsg {
-    /// The user clicked a mounted writable library in the dialog: the copy
-    /// goes there at once.
+    /// The user selected a library row in the dialog; nothing is copied
+    /// until the copy is confirmed (mockup row 134).
+    TargetSelected(PathBuf),
+    /// The user confirmed the copy into this mounted writable library (the
+    /// footer's "Copy to <library>"): the copy goes there.
     TargetPicked(PathBuf),
     /// The user asked to create a new library to copy into.
     NewLibraryRequested,
