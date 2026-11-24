@@ -134,24 +134,26 @@ pub(super) fn view<'a>(
         }
         style
     });
-    let mut pn_cell = labelled(
+    let pn_cell = labelled(
         t!(i18n, ids::LIBRARY_EDIT_ROW_INTERNAL_PN),
         pn_input.boxed(),
         tokens,
     );
-    if let Some(table) = pn_conflict {
-        pn_cell = pn_cell.push(
-            text(t!(
-                i18n,
-                ids::LIBRARY_EDIT_ROW_PN_CONFLICT,
-                "pn" => edit.draft.internal_pn.as_str().trim(),
-                "table" => table
-            ))
-            .size(TS.caption)
-            .color(error)
-            .boxed(),
-        );
-    }
+    // The reason spans the whole row under the field: squeezed into the
+    // Internal PN cell it wrapped onto three lines and pushed the binding
+    // cards out of the column (mockup row 130).
+    let conflict_line = pn_conflict.map(|table| {
+        text(t!(
+            i18n,
+            ids::LIBRARY_EDIT_ROW_PN_CONFLICT,
+            "pn" => edit.draft.internal_pn.as_str().trim(),
+            "table" => table
+        ))
+        .size(TS.caption)
+        .color(error)
+        .width(Length::Fill)
+        .boxed()
+    });
 
     let class_picks: Vec<ClassPick> = classes
         .iter()
@@ -189,7 +191,7 @@ pub(super) fn view<'a>(
         .width(Length::Fill)
         .padding(SP.s + SP.xs);
 
-    let pn_class_state = row![
+    let pn_class_state_row = row![
         pn_cell.width(Length::FillPortion(PN_SHARE)),
         labelled(
             t!(i18n, ids::LIBRARY_EDIT_ROW_CLASS),
@@ -205,6 +207,13 @@ pub(super) fn view<'a>(
         .width(Length::FillPortion(PICK_SHARE)),
     ]
     .spacing(gap);
+    let mut pn_class_state: Column<Element<'a, LibraryMessage>> =
+        column![pn_class_state_row.boxed()]
+            .spacing(SP.xs + SP.xs)
+            .width(Length::Fill);
+    if let Some(line) = conflict_line {
+        pn_class_state = pn_class_state.push(line);
+    }
 
     let mfr_mpn = row![
         labelled(

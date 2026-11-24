@@ -9,6 +9,8 @@ mod bindings;
 mod checks;
 mod delete_confirm;
 mod identity;
+#[cfg(test)]
+mod layout_tests;
 
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Element, Length, Theme, Widget as _};
@@ -244,21 +246,21 @@ fn class_label(context: &EditRowContext<'_>) -> Option<String> {
     )
 }
 
-/// "Reload saved version", offered once a save was refused because the row
-/// changed on the server; discarding the draft asks first, inline.
+/// "Reload saved version": a quiet action at the footer's left at all
+/// times, the conflict state included (mockup row 130). Discarding the
+/// draft asks first, inline.
 fn reload_control<'a>(
     edit: &EditRowModalState,
     tokens: &ThemeTokens,
     i18n: &I18n,
     send: &impl Fn(BrowserEditMsg) -> LibraryMessage,
 ) -> Element<'a, LibraryMessage> {
-    if !edit.stale_base {
-        return Space::new().width(0).boxed();
-    }
     if !edit.reload_confirming {
-        return secondary_btn(
+        return crate::styles::dialog_icon_button(
+            crate::icons::icon_chrome_refresh(signex_types::theme::ThemeId::GraphiteDark),
             t!(i18n, ids::LIBRARY_EDIT_ROW_RELOAD_SAVED),
-            send(BrowserEditMsg::ReloadRequested),
+            crate::styles::DialogButtonKind::Ghost,
+            Some(send(BrowserEditMsg::ReloadRequested)),
             tokens,
         );
     }
