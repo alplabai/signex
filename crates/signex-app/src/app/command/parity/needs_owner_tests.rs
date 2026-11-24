@@ -18,14 +18,9 @@ use crate::keymap::AppCommandId;
 /// its document, so `run_operands` runs it past the gate. Remove it then;
 /// `a_route_past_the_gate_by_its_document_alone_has_a_translated_gui_route`
 /// checks the second reason never removes an id whose GUI route still acts
-/// on the selection itself.
-const AWAITS_TARGETS: &[&str] = &[
-    "bring_drawings_forward",
-    "bring_drawings_to_front",
-    "delete_selection",
-    "send_drawings_backward",
-    "send_drawings_to_back",
-];
+/// on the selection itself. Empty since slice 6.P2b; it stays so that a
+/// route gated on the UI again fails here.
+const AWAITS_TARGETS: &[&str] = &[];
 
 /// Translated GUI routes the parity table cannot name `translator`: the
 /// bridge arm only arms the tool, and a later board click runs the operand

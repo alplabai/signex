@@ -32,12 +32,11 @@ impl Signex {
                             ),
                         },
                     ))
-                } else {
+                } else if let Some(task) = self.delete_pcb_selection() {
                     // A board deletes its own selection (#2240).
-                    if !self.delete_pcb_selection() {
-                        self.handle_selection_delete_requested();
-                    }
-                    Task::none()
+                    task
+                } else {
+                    self.delete_sheet_selection()
                 };
                 Task::batch([task, self.finish_update()])
             }
@@ -108,8 +107,8 @@ impl Signex {
             },
             EditMsg::RepeatLastItem => self.handle_repeat_last_item_requested(),
             EditMsg::ArrangeDrawings(arrange) => {
-                self.handle_drawings_arrange_requested(arrange);
-                self.finish_update()
+                let task = self.handle_drawings_arrange_requested(arrange);
+                Task::batch([task, self.finish_update()])
             }
             EditMsg::Extras(msg) => self.dispatch_placement_extras(msg),
             EditMsg::SheetSync(msg) => self.dispatch_sheet_sync(msg),
