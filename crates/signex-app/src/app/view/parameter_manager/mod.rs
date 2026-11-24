@@ -247,7 +247,11 @@ impl Signex {
         // Mockup row 70: the toolbar wraps at narrow widths. The filter group
         // and the Add group share one line while both fit, the Add group at
         // the right; else the Add group folds under the filter, and the hint
-        // folds under the filter before the filter overflows.
+        // folds under the filter before the filter overflows. FitRow tops its
+        // cells, so a strut as tall as the Add button centres the filter on
+        // the Add group's line.
+        let strut = Space::new().height(Length::Fixed(styles::ChromeMetrics::DEFAULT.button));
+        let filter = row![strut, filter].align_y(Alignment::Center);
         let search = row![filter, hint]
             .spacing(SP.m)
             .align_y(Alignment::Center)
@@ -340,20 +344,35 @@ fn empty_area(content: Element<'_, Message>) -> Element<'_, Message> {
 mod toolbar_tests {
     use super::{FILTER_WIDTH_EM, NEW_KEY_WIDTH_EM, SP, TS};
     use crate::app::Signex;
-    use signex_widgets::fit_row::plan_lines;
+    use crate::layout_probe::{find, lay_out_inputs};
+    use iced::{Rectangle, Size};
 
-    /// Mockup row 70: the toolbar's filter group and Add group share a
-    /// line while both fit, and fold onto two lines, neither wider than the
-    /// toolbar, when it is narrow.
+    /// The filter box ("R1" typed) and the new-key box ("MPN" typed) of the
+    /// real toolbar laid out `width` wide.
+    fn filter_and_new_key(width: f32) -> (Rectangle, Rectangle) {
+        let (mut app, _task) = Signex::new();
+        app.ui_state.parameter_table.filter = "R1".to_string();
+        app.ui_state.parameter_table.new_key = "MPN".to_string();
+        let window = Size::new(width, TS.body * 40.0);
+        let inputs = lay_out_inputs(app.view_parameter_toolbar(), window);
+        (find(&inputs, "R1").bounds, find(&inputs, "MPN").bounds)
+    }
+
+    /// Mockup row 70: the filter and the new key share one line, centred
+    /// on it, while both fit; when the toolbar is narrow the new key folds
+    /// under the filter instead of running past the toolbar's edge.
     #[test]
     fn the_toolbar_groups_fold_instead_of_overflowing() {
-        let groups = [TS.body * FILTER_WIDTH_EM, TS.body * NEW_KEY_WIDTH_EM];
-        let both = groups[0] + groups[1] + SP.m;
-        assert_eq!(plan_lines(&groups, both * 1.5, SP.m, true, None).len(), 1);
-        let narrow = both - SP.m - groups[1] / 2.0;
-        let lines = plan_lines(&groups, narrow, SP.m, true, None);
-        assert_eq!(lines.len(), 2);
-        assert!(lines.iter().flatten().all(|width| *width <= narrow));
+        let (filter, key) = filter_and_new_key(TS.body * 100.0);
+        assert!(key.x > filter.x + filter.width, "{filter:?} {key:?}");
+        assert!(
+            (filter.center_y() - key.center_y()).abs() < 1.0,
+            "one line, centred: {filter:?} {key:?}"
+        );
+        let narrow = 2.0 * SP.l + TS.body * (FILTER_WIDTH_EM + NEW_KEY_WIDTH_EM / 2.0) + SP.m;
+        let (filter, key) = filter_and_new_key(narrow);
+        assert!(key.y >= filter.y + filter.height, "{filter:?} {key:?}");
+        assert!(key.x + key.width <= narrow, "{key:?} within {narrow}");
     }
 
     /// The folding toolbar builds with a filter and a new key typed.
