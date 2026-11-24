@@ -8,7 +8,7 @@ use iced::{Alignment, Background, Border, Element, Font, Length, Theme, Widget};
 use signex_engine::SimilarValue;
 use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{Label, SegmentedStyle, raw, segmented, text, tooltip};
+use signex_widgets::{Label, SegmentedStyle, segmented, text, tooltip};
 
 use crate::styles::{
     self, DialogButtonKind, PillTone, Radii, Spacing, TypeScale, chrome_px, dialog_body,
@@ -207,8 +207,8 @@ fn table_head<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, FindSimilarM
     let faint = tokens::resolve(tokens).ink3;
     let head = |id| {
         let words = t!(i18n, id).into_string();
-        // raw: catalog text already rendered, then upper-cased for the locale.
-        text(raw(i18n.upper_for_display(&words)))
+        // Catalog text already rendered, then upper-cased for the locale.
+        text(UserText::new(i18n.upper_for_display(&words)))
             .size(TS.section)
             .font(styles::medium_font())
             .color(faint)

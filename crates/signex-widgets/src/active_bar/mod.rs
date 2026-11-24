@@ -536,7 +536,9 @@ mod tests {
         let window = Size::new(200.0, 100.0);
         let mut tree = Tree::new(&element);
         tree.diff(&mut element);
-        element.layout(&mut tree, &renderer, &Limits::new(Size::ZERO, window));
+        element
+            .as_widget_mut()
+            .layout(&mut tree, &renderer, &Limits::new(Size::ZERO, window));
         let layout = Layout::new(tree.size);
         let cursor = mouse::Cursor::Available(at);
         let mut bus = Bus::new();
@@ -547,7 +549,7 @@ mod tests {
         ] {
             // One shell per event, as the runtime does.
             let mut shell = Shell::new(&iced::window::Headless, Waker::noop(), &mut bus);
-            element.update(
+            element.as_widget_mut().update(
                 &mut tree,
                 &Event::Mouse(event),
                 layout,

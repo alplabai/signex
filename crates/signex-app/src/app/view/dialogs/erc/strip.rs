@@ -5,10 +5,10 @@
 use iced::widget::{Column, Row, Space, column, container};
 use iced::{Alignment, Background, Element, Length, Theme, Widget};
 use signex_erc::Severity;
-use signex_i18n::{I18n, MessageId, ids, t};
+use signex_i18n::{I18n, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::chips::{ChipMetrics, ChipStyle, ChipTone, tag_count};
-use signex_widgets::{Label, raw, text, theme_ext};
+use signex_widgets::{Label, text, theme_ext};
 
 use crate::app::{Message, Signex};
 use crate::styles::{HAIRLINE, PillTone, pill, pill_colors, tokens};
@@ -85,8 +85,8 @@ pub(super) fn severity_chips<'a>(
         let (caption, tag, tone) = chip_look(severity);
         let tag: Label<'a> = match tag {
             Some(letter) => t!(i18n, letter).into(),
-            // raw: a dash for Off, the same in every language.
-            None => raw("\u{2013}".to_owned()),
+            // A dash for Off, the same in every language.
+            None => UserText::new("\u{2013}".to_owned()).into(),
         };
         let (fill, ink) = pill_colors(tokens, tone);
         chips = chips.push(tag_count(

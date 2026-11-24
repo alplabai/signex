@@ -100,6 +100,8 @@ pub(crate) fn key_from_label(label: &str) -> String {
     let mut key = String::with_capacity(label.len());
     for c in label.chars() {
         if c.is_ascii_alphanumeric() {
+            // A class key the user never reads, not display text.
+            // ast-grep-ignore: no-case-in-view
             key.push(c.to_ascii_lowercase());
         } else if !key.is_empty() && !key.ends_with('_') {
             key.push('_');

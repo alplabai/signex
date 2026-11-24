@@ -404,7 +404,7 @@ pub(crate) fn mono_value<'a>(value: String, tokens: &ThemeTokens) -> Element<'a,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signex_i18n::{ids, t};
+    use signex_i18n::{UserText, ids, t};
     use signex_types::theme::ThemeId;
 
     fn unsaved_footer(discard: bool) -> Element<'static, LibraryMessage> {
@@ -449,7 +449,7 @@ mod tests {
     fn the_unsaved_body_stacks_intro_notes_and_list() {
         use crate::layout_probe::{find, lay_out_texts};
         let tokens = signex_types::theme::theme_tokens(ThemeId::BUILTINS[0]);
-        let line = |s: &str| text(raw(s.to_owned())).boxed();
+        let line = |s: &str| text(UserText::new(s.to_owned())).boxed();
         let body: Element<'_, LibraryMessage> = unsaved_body(
             UnsavedBody {
                 title: "question".into(),
