@@ -8,6 +8,7 @@
 use super::super::*;
 use super::doc_rows::{enable_box, label_row, segmented_row, unless_off};
 use super::document_options::{hover_row, illustration_view};
+use super::form_rows::canvas_font_summary;
 use super::grid_illustration::{GridFacts, HOTSPOTS, SNAP_GRID, VISIBLE_GRID, grid_illustration};
 use crate::choice::Choice;
 use crate::panels::doc_grid::{DocGridField, DocGridMsg, pitch_text, pitch_unit, typed_pitch_mm};
@@ -195,10 +196,8 @@ fn general_section<'a>(
     c = c.push(hover_row(HOTSPOTS, hover, &ctx.tokens, hotspots));
     c = c.push(form_font_link_row(
         t!(i18n, ids::PROPERTIES_CANVAS_FONT),
-        &ctx.canvas_font_name,
-        ctx.canvas_font_size,
-        ctx.canvas_font_bold,
-        ctx.canvas_font_italic,
+        canvas_font_summary(i18n, &ctx.canvas_font_name, ctx.canvas_font_size),
+        ctx.theme_id,
         muted,
     ));
     if ctx.canvas_font_popup_open {
