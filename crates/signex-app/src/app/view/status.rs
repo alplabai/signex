@@ -365,6 +365,8 @@ mod tests {
         let picker = app.interaction_state.grid_picker.as_ref().expect("open");
         assert!(picker.opens_upward);
         assert_eq!(picker.y, card_bottom);
+        // The drawn overlay borrows the app; release it before the next update.
+        drop(overlay);
 
         let _ = app.update(Message::Ui(UiMsg::GridPickerClose));
         app.interaction_state.last_mouse_pos = (300.0, 200.0);
