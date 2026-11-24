@@ -90,14 +90,16 @@ fn footprint_preview_heads_its_column_as_an_uppercase_label() {
     let i18n = I18n::en_us();
     let theme = theme_tokens(ThemeId::GraphiteLight);
     let state = state();
-    let texts: Vec<String> =
-        lay_out_texts(preview::column(&state, &i18n, &theme), Size::new(800.0, 900.0))
-            .into_iter()
-            .map(|t| t.text)
-            .collect();
+    let texts: Vec<String> = lay_out_texts(
+        preview::column(&state, &i18n, &theme),
+        Size::new(800.0, 900.0),
+    )
+    .into_iter()
+    .map(|t| t.text)
+    .collect();
+    assert!(texts.iter().any(|t| t == "FOOTPRINT PREVIEW"), "{texts:#?}");
     assert!(
-        texts.iter().any(|t| t == "FOOTPRINT PREVIEW"),
+        !texts.iter().any(|t| t == "Footprint preview"),
         "{texts:#?}"
     );
-    assert!(!texts.iter().any(|t| t == "Footprint preview"), "{texts:#?}");
 }

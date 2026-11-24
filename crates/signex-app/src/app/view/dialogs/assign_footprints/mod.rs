@@ -164,9 +164,8 @@ impl Signex {
                     cancel,
                     tokens,
                 ),
-                dialog_button(
-                    t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_APPLY),
-                    super::graphite::call_to_action(tokens),
+                apply_button(
+                    i18n,
                     state
                         .can_apply()
                         .then(|| af(AssignFootprintsMsg::ApplyRequested)),
@@ -182,6 +181,37 @@ impl Signex {
         .clip(true)
         .boxed()
     }
+}
+
+/// Apply on the primary fill (dark ink in the light theme), as mockup row 80
+/// draws it; without an action its label fades on the faded fill.
+fn apply_button<'a>(
+    i18n: &I18n,
+    on_press: Option<Message>,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let r = tokens::resolve(tokens);
+    let ink = if on_press.is_some() {
+        r.primary_ink
+    } else {
+        Color {
+            a: 0.7,
+            ..r.primary_ink
+        }
+    };
+    signex_widgets::button(
+        text(t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_APPLY))
+            .size(TS.label)
+            .color(ink)
+            .height(Length::Fill)
+            .align_y(iced::alignment::Vertical::Center)
+            .wrapping(iced::widget::text::Wrapping::None),
+    )
+    .padding([0.0, SP.l])
+    .height(Length::Fixed(crate::styles::ChromeMetrics::DEFAULT.button))
+    .on_press_maybe(on_press)
+    .style(crate::styles::primary_button(tokens))
+    .boxed()
 }
 
 /// The intro, then the filter row, the ticked bar and the table (or why

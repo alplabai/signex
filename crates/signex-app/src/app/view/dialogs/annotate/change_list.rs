@@ -12,22 +12,21 @@ use signex_widgets::{button, segmented, text, text_input};
 use super::super::graphite as gr;
 use super::super::graphite_annotate as ga;
 use super::controls::{
-    all_listed_locked, banner_style, bordered_style, lock_all_header, reprefix_note, scroll_style,
-    section_heading,
+    all_listed_locked, banner_style, bordered_style, line_glyph, lock_all_header, reprefix_note,
+    scroll_style, section_heading,
 };
 use super::{SP, TS};
 use crate::app::handlers::erc::{
     AnnotateListView, AnnotatePreviewEntry, change_count, changing_sheets, is_changing, listed_rows,
 };
-use crate::styles::{DialogButtonKind, PillTone, dialog_button};
+use crate::styles::{DialogButtonKind, DialogIcon, PillTone, dialog_button};
 
 /// Column widths: the mock's 56 / 110 / 130 / 130 px at the 12 px body.
 const LOCK_COL_W: f32 = TS.body * 56.0 / 12.0;
 const CURRENT_COL_W: f32 = TS.body * 110.0 / 12.0;
 const PROPOSED_COL_W: f32 = TS.body * 130.0 / 12.0;
 const LOCATION_COL_W: f32 = TS.body * 130.0 / 12.0;
-/// Widest the Changes / All switch and the filter field grow: 180 / 170 px.
-const SWITCH_MAX_W: f32 = TS.body * 15.0;
+/// Widest the filter field grows: 170 px.
 const FILTER_MAX_W: f32 = TS.body * 170.0 / 12.0;
 /// Height of one list row.
 const ROW_H: f32 = TS.body + 2.0 * SP.m;
@@ -74,10 +73,15 @@ impl Signex {
             self.annotate_banner(),
             self.annotate_list_header(standard.is_some()),
             self.annotate_table(),
-            text(reprefix_note(i18n, standard))
-                .size(TS.caption)
-                .color(faint)
-                .width(Length::Fill),
+            row![
+                line_glyph(DialogIcon::Info, TS.caption, faint),
+                text(reprefix_note(i18n, standard))
+                    .size(TS.caption)
+                    .color(faint)
+                    .width(Length::Fill),
+            ]
+            .spacing(SP.s)
+            .align_y(Alignment::Start),
         ]
         .spacing(SP.m + SP.xs)
         .height(Length::Fill)
@@ -109,7 +113,15 @@ impl Signex {
                 (self.annotate_banner_changes(changes), PillTone::Info)
             }
         };
-        container(content)
+        let icon = match tone {
+            PillTone::Warn => DialogIcon::Warn,
+            _ => DialogIcon::Info,
+        };
+        let (_, glyph_ink) = crate::styles::pill_colors(tokens, tone);
+        let line = row![line_glyph(icon, TS.body, glyph_ink), content]
+            .spacing(SP.m)
+            .align_y(Alignment::Start);
+        container(line)
             .padding([SP.m, SP.m + SP.xs])
             .width(Length::Fill)
             .style(banner_style(tokens, tone))
@@ -161,7 +173,9 @@ impl Signex {
         let r = crate::styles::tokens::resolve(tokens);
         let session = &self.ui_state.annotate_session;
         let entries = &self.ui_state.annotate_preview.entries;
-        let switch_style = r.segmented(TS.body).fill_width(true);
+        // Hugging its labels, the switch takes its whole width before the
+        // filter shares out the rest, so its two segments never fold.
+        let switch_style = r.segmented(TS.body);
         let switch = segmented(
             [
                 (
@@ -197,8 +211,8 @@ impl Signex {
             .then_some(Message::Annotate(AnnotateMsg::ReprefixPressed));
         row![
             section_heading(i18n, ids::DIALOG_ANNOTATE_CHANGES_HEADING, tokens),
-            container(switch).width(Length::FillPortion(18).max(SWITCH_MAX_W)),
-            container(filter).width(Length::FillPortion(17).max(FILTER_MAX_W)),
+            switch,
+            container(filter).width(Length::Fill.max(FILTER_MAX_W)),
             dialog_button(
                 t!(i18n, ids::DIALOG_ANNOTATE_REPREFIX),
                 DialogButtonKind::Secondary,

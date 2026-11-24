@@ -1,8 +1,9 @@
 //! Small form controls used by the Annotate modal: the inline checkbox pip,
 //! the uppercase section label, the order-of-processing dropdown and its
 //! description, the Lock column header checkbox (lock or unlock every row),
-//! pills, banners, Accept with its count and the shared bordered-container
-//! style. Graphite looks come from `graphite_annotate`.
+//! pills, banners and the glyph that leads a line, Accept with its count
+//! and the shared bordered-container style. Graphite looks come from
+//! `graphite_annotate`.
 
 use super::super::*;
 use iced::widget::{container, pick_list, row, scrollable};
@@ -200,6 +201,16 @@ pub(super) fn pill<'a>(
     .padding([SP.xs, SP.m - SP.xs])
     .style(crate::styles::pill(theme_tokens, tone))
     .boxed()
+}
+
+/// `icon`'s glyph one line of `text_size` tall, in `ink`, to lead a line of
+/// that size (the banner, the Re-prefix note).
+pub(super) fn line_glyph<'a>(
+    icon: crate::styles::DialogIcon,
+    text_size: f32,
+    ink: Color,
+) -> Element<'a, Message> {
+    icon.glyph_element(text_size * crate::styles::LINE_HEIGHT, ink)
 }
 
 /// A banner box: the tone's soft fill with a hairline of the tone.
