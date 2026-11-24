@@ -15,11 +15,16 @@ use crate::app::sheet_sync::SheetSyncPreviewMode;
 /// Least height of the drawing in captions: about 200 px, taller expanded.
 const HEIGHT_EM: f32 = 18.0;
 const EXPANDED_HEIGHT_EM: f32 = 30.0;
-/// Vertical pitch of the entries, and the room above and below the box.
-const PITCH_EM: f32 = 2.6;
+/// Vertical pitch of the entries, and the room above and below the box. The
+/// pitch leaves a rename's old-name caption room between its own flag and
+/// the row above, so the label layout never pushes it onto another row.
+const PITCH_EM: f32 = 3.4;
 const MARGIN_EM: f32 = 2.6;
 /// Half the height of an entry flag, and how far its point reaches.
 const FLAG_HALF_EM: f32 = 0.75;
+/// How far the old-name caption's middle sits above its entry's row: just
+/// clear of the entry's own name.
+const WAS_RISE_EM: f32 = 1.55;
 const FLAG_TIP_EM: f32 = 0.7;
 /// Width of a character of a mono entry name, and the flag's side padding.
 const CHAR_EM: f32 = 0.62;
@@ -251,7 +256,7 @@ fn entry_parts(
         parts.push(Part::new(strike, Style::outline(Ink::Error, Weight::Thin)));
     }
     if let Some(was) = item.was {
-        let over = Point::new(middle.x, y - size.em(FLAG_HALF_EM + 0.6));
+        let over = Point::new(middle.x, y - size.em(WAS_RISE_EM));
         let words: Text = t!(i18n, ids::SHEET_SYNC_PREVIEW_WAS, "name" => was).into();
         parts.push(label(
             over,
@@ -403,6 +408,88 @@ mod tests {
         assert!(!before.iter().any(|t| t == "VIN_12V"));
         assert!(before.iter().any(|t| t == "VIN"));
         assert!(!before.iter().any(|t| t.contains("was")));
+    }
+
+    /// The box the drawing's label layout reserves for a label, in px: the
+    /// same estimate as `signex-widgets`' callout layout (mono names at
+    /// 1.07 captions, notes at 0.93, 0.62 / 0.58 advance, 1.3 line height,
+    /// centred on `at`).
+    fn label_box(label: &TextLabel, caption: f32) -> Rectangle {
+        let (size, advance) = match label.role {
+            TextRole::Mono => (1.07 * caption, 0.62),
+            _ => (0.93 * caption, 0.58),
+        };
+        let width = label.text.as_str().chars().count() as f32 * advance * size;
+        let height = 1.3 * size;
+        Rectangle::new(
+            Point::new(label.at.x - width / 2.0, label.at.y - height / 2.0),
+            Size::new(width, height),
+        )
+    }
+
+    /// #2847, mockup row 79: the old-name caption sits directly above the
+    /// renamed entry, even when a removed entry is the row above it. Its
+    /// box is clear of every entry name (so the label layout leaves it in
+    /// place) and it sits nearer its own flag than the flag above.
+    #[test]
+    fn the_was_caption_sits_with_the_renamed_entry() {
+        let caption = 11.0;
+        let entries = vec![
+            entry("VSENSE", "input", SheetEntryChange::Removed),
+            entry(
+                "VIN_12V",
+                "power",
+                SheetEntryChange::Renamed {
+                    from: "VIN".to_string(),
+                },
+            ),
+            entry("GND", "passive", SheetEntryChange::Kept),
+        ];
+        let mode = SheetSyncPreviewMode::After;
+        let size = PreviewSize::new(540.0, false, rows_of(&entries, mode), caption);
+        let drawing = illustration(
+            &entries,
+            mode,
+            ("U_Power", "power.snxsch"),
+            Color::BLACK,
+            size,
+            I18n::en_us_ref(),
+        );
+        let labels: Vec<&TextLabel> = drawing
+            .visible_parts()
+            .filter_map(|part| match &part.primitive {
+                Primitive::Label(label) => Some(label),
+                _ => None,
+            })
+            .collect();
+        let find = |words: &str| {
+            *labels
+                .iter()
+                .find(|l| l.text.as_str() == words)
+                .unwrap_or_else(|| panic!("{words} drawn"))
+        };
+        let was = labels
+            .iter()
+            .find(|l| l.text.as_str().contains("was"))
+            .expect("a was caption");
+        let (renamed, above) = (find("VIN_12V"), find("VSENSE"));
+
+        let note = label_box(was, caption);
+        let clearance = 0.2 * caption;
+        for name in labels.iter().filter(|l| l.role == TextRole::Mono) {
+            let b = label_box(name, caption);
+            let crowds = note.x < b.x + b.width + clearance
+                && b.x < note.x + note.width + clearance
+                && note.y < b.y + b.height + clearance
+                && b.y < note.y + note.height + clearance;
+            assert!(!crowds, "{note:?} crowds {:?}", name.text.as_str());
+        }
+
+        assert!(above.at.y < was.at.y && was.at.y < renamed.at.y);
+        let half = size.em(FLAG_HALF_EM);
+        let to_own = (renamed.at.y - half) - (note.y + note.height);
+        let to_above = note.y - (above.at.y + half);
+        assert!(to_own >= 0.0 && to_above > to_own, "{to_own} vs {to_above}");
     }
 
     /// A removed entry is a dashed ghost only in the After drawing.
