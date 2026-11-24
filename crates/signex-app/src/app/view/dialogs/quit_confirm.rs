@@ -147,6 +147,22 @@ fn folder_of(path: &Path) -> String {
         .unwrap_or_default()
 }
 
+/// A row's muted folder or library at the right, on one line. One too wide
+/// for its column is cut at the start with an ellipsis, so the folder's own
+/// name stays in view (mockup row 16).
+fn meta_cell<'a, M: 'a>(meta: &str, muted: iced::Color) -> Element<'a, M> {
+    container(
+        text(UserText::new(meta.to_owned()))
+            .size(TS.caption)
+            .color(muted)
+            .wrapping(iced::widget::text::Wrapping::None)
+            .ellipsis(iced::widget::text::Ellipsis::Start),
+    )
+    .width(Length::Fit.max(META_MAX_W))
+    .clip(true)
+    .boxed()
+}
+
 /// The file name of `path`, or the whole path when it has none.
 fn file_name_of(path: &Path) -> String {
     path.file_name()
@@ -301,17 +317,7 @@ impl Signex {
                     .clip(true)
                     .boxed(),
                 );
-                cells.push(
-                    container(
-                        text(UserText::new(entry.meta.clone()))
-                            .size(TS.caption)
-                            .color(muted)
-                            .wrapping(iced::widget::text::Wrapping::None),
-                    )
-                    .width(Length::Fit.max(META_MAX_W))
-                    .clip(true)
-                    .boxed(),
-                );
+                cells.push(meta_cell(&entry.meta, muted));
                 items.push(list_row(cells, LIST_ROW_H));
             }
         }

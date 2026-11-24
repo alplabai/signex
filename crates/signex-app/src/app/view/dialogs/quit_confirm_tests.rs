@@ -326,3 +326,26 @@ fn cancel_leads_the_footer() {
         "Cancel stands apart"
     );
 }
+
+/// Mockup row 16: a folder too long for its column is cut at its start
+/// with an ellipsis, so its own name shows. Two folders that differ only
+/// before the cut draw the same; two that differ at the end do not.
+#[test]
+fn a_long_folder_is_cut_at_its_start_so_its_name_shows() {
+    let width = super::META_MAX_W.ceil();
+    let window = iced::Size::new(width, (super::TS.caption * 4.0).ceil());
+    let shared = "c".repeat(width as usize);
+    let draw = |head: &str, name: &str| {
+        let folder = format!("/{}/{shared}/{name}", head.repeat(width as usize));
+        crate::layout_probe::draw_pixels(
+            super::meta_cell::<()>(&folder, iced::Color::WHITE),
+            window,
+        )
+    };
+    let a = draw("a", "sample");
+    let blank =
+        crate::layout_probe::draw_pixels(super::meta_cell::<()>("", iced::Color::WHITE), window);
+    assert_ne!(a, blank, "the folder draws");
+    assert_eq!(a, draw("b", "sample"), "the start of the folder is cut");
+    assert_ne!(a, draw("a", "samplf"), "the folder's own name shows");
+}
