@@ -14,6 +14,7 @@ mod buttons;
 mod dialog_buttons;
 mod dialog_kit;
 mod dialog_parts;
+mod dialog_search;
 mod dialog_shell;
 pub mod disabled;
 mod graphite;
@@ -48,6 +49,7 @@ pub use dialog_parts::{
     dialog_inline_error, dialog_row, dialog_rows, dialog_section_label, dirty_dot, file_kind_icon,
     violet_pair,
 };
+pub use dialog_search::dialog_search_field;
 pub use dialog_shell::{
     DIALOG_ICON_TILE, DIALOG_INTRO_EXTRA, DialogIcon, dialog_glyph, dialog_icon_tile, dialog_intro,
     dialog_intro_with, tinted_glyph,
