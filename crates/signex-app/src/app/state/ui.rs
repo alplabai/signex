@@ -693,7 +693,8 @@ pub struct UiState {
     pub parameter_manager_open: bool,
     /// Parameter Manager table: the new-column name, the row filter and the
     /// sheet of the last cell edit. Cell text itself is never held here.
-    pub parameter_table: crate::app::state::ParameterTableState,
+    /// Boxed: a closed table costs one pointer (#2412).
+    pub parameter_table: Box<crate::app::state::ParameterTableState>,
     /// Active "pick a reference item" mode for z-order operations
     /// (BringToFrontOf / SendToBackOf). When Some, the next canvas click
     /// resolves the reference uuid and submits the Reorder command.
@@ -896,6 +897,7 @@ mod tests {
             ("sheet_sync", field_size(|ui| &ui.sheet_sync)),
             ("profile_manager", field_size(|ui| &ui.profile_manager)),
             ("erc_rule_list", field_size(|ui| &ui.erc_rule_list)),
+            ("parameter_table", field_size(|ui| &ui.parameter_table)),
             (
                 "board_output.dialog",
                 field_size(|ui| &ui.board_output.dialog),

@@ -589,6 +589,18 @@ mod tests {
         assert!(!session(&app).is_capturing(), "the chrome shows again");
     }
 
+    /// Messages cuts a line at 160 bytes: a failed save names its reason
+    /// before the path, so a long path does not cut the reason off.
+    #[test]
+    fn a_failed_save_keeps_its_reason_in_messages_with_a_long_path() {
+        let (app, _boot) = Signex::new();
+        let why = "a reason only this test gives";
+        let long = PathBuf::from(format!("/{}/board-3d.png", "deep".repeat(40)));
+        let before = crate::diagnostics::logged_count(why);
+        app.report_board_3d_save(&long, Some(why));
+        assert_eq!(crate::diagnostics::logged_count(why), before + 1);
+    }
+
     /// The view changed size between the two passes: nothing is written,
     /// and Messages says why.
     #[test]

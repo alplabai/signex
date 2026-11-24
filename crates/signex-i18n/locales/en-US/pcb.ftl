@@ -511,7 +511,9 @@ pcb-3d-shot-clipboard-occupied = another program holds the clipboard
 pcb-3d-shot-clipboard-format = the clipboard does not take images
 pcb-3d-shot-clipboard-conversion = the image could not be converted for the clipboard
 pcb-3d-shot-saved = A screenshot of the 3D view was saved to { $path }.
-pcb-3d-shot-save-failed = The screenshot of the 3D view could not be saved to { $path }: { $why }
+# The reason comes before the path: Messages cuts a line at 160 bytes, and a
+# long path must not cut the reason off.
+pcb-3d-shot-save-failed = The screenshot of the 3D view could not be saved ({ $why }): { $path }
 pcb-3d-shot-empty = The 3D view could not be captured: the window had nothing to show.
 # View cube faces, top side up and turned over.
 pcb-3d-cube-top = TOP

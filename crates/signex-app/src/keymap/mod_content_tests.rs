@@ -10,7 +10,9 @@ use std::str::FromStr;
 type Row = (ShortcutContext, String, String);
 
 /// The approved platform-standard set: `(key, shift)` chords that are `Mod`.
-const STANDARD: [(&str, bool); 27] = [
+/// `Mod+Shift+C` (copy a board 3D screenshot, both profiles) is approved in
+/// the 2026-11-24 board 3D keys row of docs/DECISIONS.md.
+const STANDARD: [(&str, bool); 28] = [
     ("alt+s", false),
     ("n", false),
     ("o", false),
@@ -38,6 +40,7 @@ const STANDARD: [(&str, bool); 27] = [
     ("f", true),
     ("a", true),
     ("g", false),
+    ("c", true),
 ];
 
 fn compiled(platform: Platform, id: &str) -> CompiledKeymap {
@@ -59,7 +62,7 @@ fn macos_moves_exactly_the_approved_standard_set() {
     for (id, moved, extra) in [
         (
             "signex_standard",
-            20,
+            21,
             vec![
                 "\u{2325}I",
                 "\u{2325}\u{2318}F",
@@ -68,7 +71,7 @@ fn macos_moves_exactly_the_approved_standard_set() {
                 "\u{21e7}TAB",
             ],
         ),
-        ("classic", 23, vec!["\u{21e7}\u{2318}Z"]),
+        ("classic", 24, vec!["\u{21e7}\u{2318}Z"]),
     ] {
         let win = rows(Platform::Windows, id);
         let mac = rows(Platform::MacOs, id);

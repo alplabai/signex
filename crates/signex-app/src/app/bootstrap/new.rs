@@ -562,7 +562,7 @@ impl Signex {
                 net_color_palette_open: false,
                 net_color_palette: Default::default(),
                 parameter_manager_open: false,
-                parameter_table: crate::app::state::ParameterTableState::default(),
+                parameter_table: Box::default(),
                 reorder_picker: None,
                 move_pick: None,
                 pin_matrix_overrides: std::collections::HashMap::new(),
