@@ -190,12 +190,12 @@ define_ids! {
     PREFERENCES_CLASSES_KEY_MALFORMED = "preferences-classes-key-malformed";
     PREFERENCES_CLASSES_RESET_CONFIRM = "preferences-classes-reset-confirm";
     PREFERENCES_CLASSES_RESET_CONFIRM_YES = "preferences-classes-reset-confirm-yes";
+    // prefs-rules-library
+    PREFERENCES_RULES_MATRIX_LINK = "preferences-rules-matrix-link";
     PREFERENCES_PAGE_SCHEMATIC_DISPLAY = "preferences-page-schematic-display";
     PREFERENCES_SECTION_SCHEMATIC_DISPLAY = "preferences-section-schematic-display";
     PREFERENCES_SYMBOL_BODY_FILL = "preferences-symbol-body-fill";
     PREFERENCES_SYMBOL_BODY_FILL_HELP = "preferences-symbol-body-fill-help";
     PREFERENCES_SYMBOL_BODY_FILL_COLOUR = "preferences-symbol-body-fill-colour";
     PREFERENCES_SYMBOL_BODY_FILL_COLOUR_HELP = "preferences-symbol-body-fill-colour-help";
-    // prefs-rules-library
-    PREFERENCES_RULES_MATRIX_LINK = "preferences-rules-matrix-link";
 }
