@@ -173,15 +173,41 @@ pub(super) fn pair_rules(i18n: &I18n, class: Option<&NetClass>) -> (String, Stri
     )
 }
 
+/// The pair's Gap / Width: its class's two fields, typed in like the class
+/// detail's; read-only `board` values with no class or no project table.
+fn gap_width<'a>(ctx: &'a PanelContext, class: Option<&NetClass>) -> Element<'a, PanelMsg> {
+    use crate::panels::board_net_classes::{self as classes, BoardNetClassField as F};
+    let i18n = &*ctx.i18n;
+    let label = t!(i18n, ids::PANELS_PCB_PAIRS_DETAIL_GAP_WIDTH);
+    let table = ctx
+        .net_classes
+        .board
+        .as_ref()
+        .filter(|view| view.in_project);
+    let (Some(class), Some(view)) = (class, table) else {
+        let (gap, width) = pair_rules(i18n, class);
+        let two = t!(i18n, ids::PANELS_PCB_PAIR_OF_VALUES, "first" => gap, "second" => width);
+        return line(ctx, label.into(), mm_label(i18n, two.into_string()));
+    };
+    row![
+        text(label)
+            .size(TS.body)
+            .color(ti(ctx.tokens.text))
+            .width(Length::Fill),
+        classes::rule_pair(ctx, view, class, [F::DiffPairGap, F::DiffPairWidth]),
+    ]
+    .spacing(SP.s)
+    .align_y(iced::Alignment::Center)
+    .boxed()
+}
+
 /// The selected pair: its two nets, the gap and width it keeps, the routed
 /// length of each half and the skew between them.
 pub(super) fn pair<'a>(ctx: &'a PanelContext, pair: &'a PcbDiffPairRow) -> Element<'a, PanelMsg> {
     let i18n = &*ctx.i18n;
     let class = first_matching_class(board_classes(ctx), &pair.positive);
-    let (gap, width) = pair_rules(i18n, class);
     let net = |name: &str| -> Label<'a> { UserText::new(name.to_owned()).into() };
     let label = |id: signex_i18n::MessageId| -> Label<'a> { t!(i18n, id).into() };
-    let two = t!(i18n, ids::PANELS_PCB_PAIR_OF_VALUES, "first" => gap, "second" => width);
     let routed = t!(
         i18n,
         ids::PANELS_PCB_PAIRS_DETAIL_ROUTED_VALUE,
@@ -202,11 +228,7 @@ pub(super) fn pair<'a>(ctx: &'a PanelContext, pair: &'a PcbDiffPairRow) -> Eleme
             label(ids::PANELS_PCB_PAIRS_DETAIL_NEGATIVE),
             net(&pair.negative)
         ),
-        line(
-            ctx,
-            label(ids::PANELS_PCB_PAIRS_DETAIL_GAP_WIDTH),
-            mm_label(i18n, two.into_string())
-        ),
+        gap_width(ctx, class),
         line(
             ctx,
             label(ids::PANELS_PCB_PAIRS_DETAIL_ROUTED),

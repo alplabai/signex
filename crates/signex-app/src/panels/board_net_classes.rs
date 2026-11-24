@@ -530,6 +530,7 @@ fn swatch<'a>(ctx: &PanelContext, class: &NetClass) -> Element<'a, PanelMsg> {
                     crate::styles::HAIRLINE
                 },
                 radius: (TS.caption / 2.0).into(),
+                ..iced::Border::default()
             },
             ..container::Style::default()
         })
@@ -624,7 +625,8 @@ fn detail_row<'a>(
 }
 
 /// Two rule fields of a row and their unit; an empty field reads `board`.
-fn rule_pair<'a>(
+/// The pair detail edits its class's Gap / Width through it too.
+pub fn rule_pair<'a>(
     ctx: &'a PanelContext,
     view: &BoardNetClassView,
     class: &NetClass,
@@ -718,9 +720,10 @@ fn pattern_row<'a>(ctx: &PanelContext, pattern: &str, matches: usize) -> Element
     .boxed()
 }
 
-/// The selected class: its rules (Width / Clear., Via, Impedance), Delete,
-/// its member nets and patterns with what they hold on the board, and Add
-/// net. Every edit goes through the class table's own messages.
+/// The selected class: its name and colour, its rules (Width / Clear., Via,
+/// Diff pair, Impedance), Delete, its member nets and patterns with what
+/// they hold on the board, and Add net. Every edit goes through the class
+/// table's own messages; this detail is the board's only class editor.
 pub fn class_detail<'a>(
     ctx: &'a PanelContext,
     view: &BoardNetClassView,
@@ -760,6 +763,22 @@ pub fn class_detail<'a>(
         .push(title.boxed())
         .push(detail_row(
             ctx,
+            ids::BOARD_NET_CLASSES_COL_NAME,
+            cell(ctx, view, class, F::Name, NAME_W),
+        ))
+        .push(detail_row(
+            ctx,
+            ids::BOARD_NET_CLASSES_COL_COLOR,
+            row![
+                swatch(ctx, class),
+                cell(ctx, view, class, F::Color, COLOR_W)
+            ]
+            .spacing(SP.xs)
+            .align_y(iced::Alignment::Center)
+            .boxed(),
+        ))
+        .push(detail_row(
+            ctx,
             ids::PANELS_PCB_CLASSES_WIDTH_CLEARANCE,
             rule_pair(ctx, view, class, [F::Width, F::Clearance]),
         ))
@@ -767,6 +786,11 @@ pub fn class_detail<'a>(
             ctx,
             ids::PANELS_PCB_CLASSES_VIA,
             rule_pair(ctx, view, class, [F::ViaDiameter, F::ViaDrill]),
+        ))
+        .push(detail_row(
+            ctx,
+            ids::PANELS_PCB_CLASSES_DIFF_PAIR,
+            rule_pair(ctx, view, class, [F::DiffPairGap, F::DiffPairWidth]),
         ))
         .push(detail_row(
             ctx,

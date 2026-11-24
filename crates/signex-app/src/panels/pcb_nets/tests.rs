@@ -480,6 +480,53 @@ fn the_net_classes_mode_is_a_class_list_over_the_selected_class() {
     }
 }
 
+fn panel_inputs(ctx: &PanelContext) -> Vec<String> {
+    crate::layout_probe::lay_out_inputs(view(ctx), PANEL)
+        .into_iter()
+        .map(|t| t.text)
+        .collect()
+}
+
+/// The board's only class editor keeps every field the class table had:
+/// Name, Colour and the diff-pair Gap / Width beside the mockup's rules.
+#[test]
+fn the_class_detail_edits_name_colour_and_the_pair_rules() {
+    let mut ctx = panel_ctx(PcbPanelMode::NetClasses);
+    let mut table = class_table();
+    table.classes[0].diff_pair_gap = 0.175;
+    ctx.net_classes.board = Some(table);
+    ctx.pcb_panel.class = Some("Power".to_owned());
+    let texts = panel_texts(&ctx);
+    for want in ["Name", "Colour", "Diff pair"] {
+        assert!(shows(&texts, want), "{want}: {texts:?}");
+    }
+    let inputs = panel_inputs(&ctx);
+    for want in ["Power", "0.5", "0.3", "0.175"] {
+        assert!(inputs.iter().any(|t| t == want), "{want}: {inputs:?}");
+    }
+}
+
+/// Mockup row 106: the pair detail's Gap / Width are its class's fields,
+/// typed in; with no class they stay the read-only board values.
+#[test]
+fn the_pair_detail_edits_its_class_gap_and_width() {
+    let mut ctx = panel_ctx(PcbPanelMode::DiffPairs);
+    ctx.pcb_panel.pair = Some("USB".to_owned());
+    assert!(
+        !panel_inputs(&ctx).iter().any(|t| t == "board"),
+        "no class, no fields"
+    );
+    let mut table = class_table();
+    table.classes[0].diff_pair_gap = 0.175;
+    ctx.net_classes.board = Some(table);
+    let inputs = panel_inputs(&ctx);
+    assert!(inputs.iter().any(|t| t == "0.175"), "{inputs:?}");
+    assert!(
+        inputs.iter().any(|t| t == "board"),
+        "unset width: {inputs:?}"
+    );
+}
+
 #[test]
 fn a_class_summary_reads_unset_rules_as_a_dash_and_shows_vias_once_set() {
     let i18n = I18n::en_us_ref();

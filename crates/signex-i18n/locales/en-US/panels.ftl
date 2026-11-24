@@ -1413,3 +1413,5 @@ panels-pcb-classes-matches =
         [one] { $count } match
        *[other] { $count } matches
     }
+# The class detail's row of the diff-pair gap and width fields.
+panels-pcb-classes-diff-pair = Diff pair

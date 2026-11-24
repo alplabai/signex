@@ -492,4 +492,5 @@ define_ids! {
     PANELS_PCB_CLASSES_MEMBERS = "panels-pcb-classes-members";
     PANELS_PCB_CLASSES_NODES = "panels-pcb-classes-nodes";
     PANELS_PCB_CLASSES_MATCHES = "panels-pcb-classes-matches";
+    PANELS_PCB_CLASSES_DIFF_PAIR = "panels-pcb-classes-diff-pair";
 }
