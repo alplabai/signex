@@ -1,11 +1,12 @@
 //! Part outside its room (#2457): a member part of a room with Keep parts
 //! inside whose body is not inside the room's outline shrunk by its margin.
-//! The body is the box round `pcb_geom::footprint_body`; the outline is the
+//! The body is the box round `pcb_geom::checked_body` (the courtyard outline
+//! without its display stroke, else the pads); the outline is the
 //! room's rectangle or polygon. Only rooms with the rule on are checked, so a
 //! board without such rooms gets the report it got before. See
 //! `docs/PCB_ROOMS.md`, "Design rule".
 
-use pcb_geom::{GeomError, ItemRef, PointNm, Polygon, Rejected, footprint_body, mm_to_nm};
+use pcb_geom::{GeomError, ItemRef, PointNm, Polygon, Rejected, checked_body, mm_to_nm};
 use signex_types::pcb::{Footprint, PcbBoard, Room};
 
 use crate::findings::mm;
@@ -22,7 +23,7 @@ pub fn overhang_nm(room: &Room, footprint: &Footprint) -> Result<i64, GeomError>
         .map(|p| PointNm::from_mm(p, "room.outline"))
         .collect::<Result<Vec<_>, _>>()?;
     let margin = mm_to_nm(room.margin_mm.max(0.0), "room.margin")?;
-    let body = footprint_body(footprint)?.aabb();
+    let body = checked_body(footprint)?.aabb();
     let region = Polygon::new(ring.clone(), Vec::new());
     let worst = body
         .corners()
@@ -214,6 +215,34 @@ mod tests {
         let v = found(&with_room(board(9.5), true));
         assert_eq!(v.len(), 1);
         assert_eq!(v[0].measured_nm, 250_000);
+    }
+
+    /// R2 at `x` with a 2 mm square courtyard round its origin, drawn at
+    /// `width`.
+    fn with_courtyard(x: f64, width: f64) -> PcbBoard {
+        let mut b = board(x);
+        let courtyard: signex_types::pcb::FpGraphic = serde_json::from_value(json!({
+            "graphic_type": "rect", "layer": "TopCourtyard", "width": width,
+            "start": {"x": -1.0, "y": -1.0}, "end": {"x": 1.0, "y": 1.0}}))
+        .expect("courtyard");
+        b.footprints[0].graphics.push(courtyard);
+        with_room(b, true)
+    }
+
+    fn overhangs(b: &PcbBoard) -> Vec<i64> {
+        found(b).iter().map(|v| v.measured_nm).collect()
+    }
+
+    /// DRC never counts the courtyard stroke (Caner, 2026-11-24): the
+    /// outline reaching 10 mm is 0.5 mm past the inside line at either width.
+    #[test]
+    fn the_room_overhang_is_the_same_at_stroke_0_and_0_05() {
+        let thin = overhangs(&with_courtyard(9.0, 0.0));
+        assert_eq!(thin, [500_000]);
+        assert_eq!(overhangs(&with_courtyard(9.0, 0.05)), thin);
+        // 0.01 mm inside; half a 0.05 mm stroke would take it past.
+        assert!(overhangs(&with_courtyard(8.49, 0.0)).is_empty());
+        assert!(overhangs(&with_courtyard(8.49, 0.05)).is_empty());
     }
 
     #[test]

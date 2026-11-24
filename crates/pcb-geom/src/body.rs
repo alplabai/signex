@@ -46,6 +46,15 @@ pub fn courtyard_outline(footprint: &Footprint) -> Result<Option<Shape>, GeomErr
     Ok(courtyard_extent(footprint, Stroke::Excluded)?.map(|local| placed(&placement, local)))
 }
 
+/// The body DRC measures a part by: its [`courtyard_outline`], or without a
+/// courtyard the [`footprint_body`] of its pads (or origin).
+pub fn checked_body(footprint: &Footprint) -> Result<Shape, GeomError> {
+    match courtyard_outline(footprint)? {
+        Some(outline) => Ok(outline),
+        None => footprint_body(footprint),
+    }
+}
+
 /// The local box `local` placed on the board, as a turned rectangle.
 fn placed(placement: &Placement, local: RectNm) -> Shape {
     let centre = PointNm::new(
