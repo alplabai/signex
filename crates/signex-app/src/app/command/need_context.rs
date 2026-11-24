@@ -62,6 +62,8 @@ pub(crate) struct CoreBoard {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct UiContext {
     pub pcb_view_turned: bool,
+    /// Read from the 3D view's session, which is interaction state.
+    pub board_3d_shown: bool,
     pub undocked_has_canvas: bool,
     pub has_selection: bool,
     pub selection_all_locked: bool,
@@ -108,6 +110,7 @@ impl CommandContext {
     pub(crate) fn ui(&self) -> UiContext {
         UiContext {
             pcb_view_turned: self.pcb_view_turned,
+            board_3d_shown: self.board_3d_shown,
             undocked_has_canvas: self.undocked_has_canvas,
             has_selection: self.has_selection,
             selection_all_locked: self.selection_all_locked,

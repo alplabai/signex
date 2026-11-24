@@ -182,6 +182,9 @@ pub struct NetInspectorView {
     pub component_total: usize,
     /// With a board in view, its nets instead of the project's (#2403).
     pub board: Option<BoardNetView>,
+    /// The By Net row under the pointer, which shows its Highlight (mockup
+    /// row 58).
+    pub hovered_net: Option<String>,
 }
 
 /// The first [`MEMBER_PREVIEW`] of `items` unless `full`, and how many were

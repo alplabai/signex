@@ -67,6 +67,17 @@ pub(super) fn apply_symbol_ui(editor: &mut SymEditor, msg: SymbolEditorMsg) {
             editor.selection_filter.toggle(kind);
             editor.canvas_cache.clear();
         }
+        SymbolEditorMsg::PinTypePicked(pin_type) => {
+            // Sticky (mockup row 141): the type stays for every following
+            // pin; picking the checked type again goes back to unclassified.
+            if editor.pin_type == Some(pin_type) {
+                editor.pin_type = None;
+                editor.active_bar_menu = None;
+            } else {
+                editor.pin_type = Some(pin_type);
+                apply_symbol_ui(editor, SymbolEditorMsg::SetTool(SymbolToolMsg::AddPin));
+            }
+        }
         _ => {}
     }
 }
@@ -193,5 +204,63 @@ mod tests {
         );
         assert_eq!(editor_a.primitive().graphics.len(), 1);
         assert_eq!(editor_a.history.undo_len(), 1);
+    }
+
+    /// Mockup row 141 (accepted 2026-11-24): a type picked in the Place Pin
+    /// dropdown arms Place Pin and stays for every following pin.
+    #[test]
+    fn a_picked_pin_type_stays_for_every_following_pin() {
+        use signex_types::schematic::PinDirection;
+        let mut editor = new_editor("A");
+        editor.active_bar_menu = Some(crate::library::editor::symbol::state::SymActiveBarMenu::Pin);
+
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PinTypePicked(PinDirection::Output),
+        );
+        assert_eq!(editor.pin_type, Some(PinDirection::Output));
+        assert_eq!(editor.tool, SymbolTool::AddPin, "Place Pin is armed");
+        assert_eq!(editor.active_bar_menu, None, "the menu closes");
+
+        apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::AddPin { x: 0.0, y: 0.0 });
+        apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::AddPin { x: 0.0, y: 5.0 });
+        let types: Vec<PinDirection> = editor
+            .primitive()
+            .pins
+            .iter()
+            .map(|p| p.electrical)
+            .collect();
+        assert_eq!(types, [PinDirection::Output, PinDirection::Output]);
+    }
+
+    /// With no type picked, a placed pin is unclassified; picking the
+    /// checked type again goes back to that.
+    #[test]
+    fn picking_the_checked_type_again_places_unclassified_pins() {
+        use signex_types::schematic::PinDirection;
+        let mut editor = new_editor("A");
+        apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::AddPin { x: 0.0, y: 0.0 });
+
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PinTypePicked(PinDirection::Passive),
+        );
+        apply_symbol_primitive_edit(
+            &mut editor,
+            SymbolEditorMsg::PinTypePicked(PinDirection::Passive),
+        );
+        assert_eq!(editor.pin_type, None);
+        apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::AddPin { x: 0.0, y: 5.0 });
+
+        let types: Vec<PinDirection> = editor
+            .primitive()
+            .pins
+            .iter()
+            .map(|p| p.electrical)
+            .collect();
+        assert_eq!(
+            types,
+            [PinDirection::Unclassified, PinDirection::Unclassified]
+        );
     }
 }

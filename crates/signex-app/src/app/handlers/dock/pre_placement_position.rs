@@ -110,7 +110,11 @@ impl Signex {
             Task::none()
         } else {
             let at = pp.position.start(cursor);
-            self.click_with_tool((at.x, at.y), (at.x, at.y))
+            self.click_with_tool(
+                (at.x, at.y),
+                (at.x, at.y),
+                crate::app::handlers::canvas::WirePoint::EndsWire,
+            )
         };
         self.clear_typed_position();
         task

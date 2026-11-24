@@ -599,7 +599,8 @@ viewpoint is tinted; a turn by hand clears it. Bottom is still a viewpoint
 (`PresetPicked`), reached by Flip. Reset looks
 from Iso on the side shown, framed; flip, explode and lighting stay. Fit and
 View ▸ Fit All frame the board from where it is seen. Entering the view looks
-from the top, framed for an assumed shape; the view's first redraw reports
+from Iso on the top side (the tinted viewpoint), framed for an assumed shape;
+the view's first redraw reports
 its real size and frames it again, and a later redraw reports where the
 view sits in the window (where a screenshot is cropped). A gesture never
 frames it again, so the first drag or wheel step cannot jump. The view
@@ -640,7 +641,8 @@ Light and Dark, as the board palette does (DECISIONS, the 2026-11-19 board 3D
 view toolbar row).
 
 **Screenshot**: a click on the camera copies the view to the clipboard;
-the chevron's menu has Copy to clipboard and Save PNG…. The toolbar,
+the chevron's menu has Copy to clipboard, Save PNG… and Save with
+transparent backdrop…. The toolbar,
 popovers, toasts, status pill, hint and view cube hide, the next frame is
 captured from the main window (`iced::window::screenshot`) and cropped to
 the view in physical pixels, and the chrome shows again. Save PNG… asks for
@@ -648,6 +650,34 @@ the file first (the file-picker port) and writes the PNG atomically
 (temporary file renamed over it) off the update thread. Messages says
 whether the copy or the save worked, and why one failed (the clipboard's
 reason, or the write error).
+
+**Transparent screenshot** (mockup row 175): Save with transparent
+backdrop… captures the view twice, on two frames with the chrome hidden,
+first over flat black and then over flat white in place of the lighting
+backdrop. A pixel the same in both is opaque; where white came through, its
+share is the backdrop's, so the coverage is one less that share and the
+colour is the black pass divided by the coverage (straight alpha). The PNG
+is written like Save PNG…; when the view changed size between the passes
+nothing is written and Messages says why. The mesh pipeline draws without
+multisampling, so edges come out hard; only a translucent surface with the
+backdrop behind it comes out partly transparent. While a capture is
+under way, Flip, the next lighting preset, a new screenshot and a drag,
+wheel or click on the view are ignored,
+and a save picked meanwhile is not written (Messages says so); a pass that
+comes back after the view was left is dropped with a Messages line.
+
+**Keys** (mockup row 175): on a board `H` is the next lighting preset and
+`Mod+Shift+C` copies a screenshot, in both built-in profiles; on a flat
+board both commands (`cycle_board_3d_lighting`, `copy_board_3d_screenshot`)
+are greyed with the reason that they need the 3D view. `F` is Flip
+(`flip_board_3d`) in the `board_3d` shortcut context, live only while the
+main window shows the board in 3D, where it outranks the board's `F`
+(Change Footprint). Flip does nothing while the board is flat. The chrome
+names each key the active keymap binds, as the mockup draws them: the
+Flip, lighting and screenshot tooltips end in the key ("Flip board (F)"),
+the menu's Copy row shows its key as a cap, and the lighting toast ends in
+"· press H for the next" with the key as a cap; an unbound command shows
+no key.
 
 **Model-unread toast**: a part whose model could not be read adds its
 `pcb-3d-model-unread` line to Messages and also shows it as a dismissible

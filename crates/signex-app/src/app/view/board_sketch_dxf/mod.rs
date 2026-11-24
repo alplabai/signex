@@ -1,10 +1,10 @@
-//! The Import DXF card of a board sketch (#2794, mockup row 179c): file, units,
-//! scale, a target per DXF layer and what the import would make, at the
-//! canvas's bottom right. It takes the canvas's presses, so the sketch cannot
-//! change under it.
+//! The Import DXF card of a board sketch (#2794, mockup row 179c), at the
+//! canvas's bottom right over a preview of the drawing: file, units, scale
+//! and a target per DXF layer, then the profile check, then what landed. It
+//! takes the canvas's presses, so the sketch cannot change under it.
 
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{Column, column, container, opaque, pick_list, row, scrollable};
+use iced::widget::{Column, column, container, opaque, pick_list, row, scrollable, stack};
 use iced::{Alignment, Element, Length, Widget as _};
 use signex_engine::pcb::dxf::DxfUnits;
 use signex_i18n::{I18n, Localized, UserText, ids, t};
@@ -15,12 +15,18 @@ use signex_widgets::{text, text_input, theme_ext};
 
 use crate::app::state::{
     DXF_LAYER_TARGETS, DxfLayerTarget, SketchDxfDialog, SketchDxfMsg, SketchDxfProblem,
+    SketchDxfStep,
 };
 use crate::app::{DxfImportMsg, Message, PcbMsg};
 use crate::library::editor::footprint::parameters_table::view::field_style;
 use crate::library::editor::footprint::sketch_mode::roles::role_label;
 use crate::panels::form_look;
 use crate::styles::{DialogButtonKind, Spacing, TypeScale, dialog_button};
+
+mod check;
+mod preview;
+#[cfg(test)]
+mod tests;
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -37,20 +43,43 @@ fn send(event: SketchDxfMsg) -> Message {
     Message::Pcb(PcbMsg::DxfImport(DxfImportMsg::SketchDialog(event)))
 }
 
-/// The dialog over the sketch canvas.
+/// The dialog over the sketch canvas, with the drawing previewed beside it.
 pub(super) fn overlay<'a>(
     dialog: &'a SketchDxfDialog,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, Message> {
-    let card = column![
-        text(t!(i18n, ids::BOARD_SKETCH_DXF_TITLE))
-            .size(TS.title)
-            .font(iced::Font {
-                weight: iced::font::Weight::Semibold,
-                ..signex_widgets::ui_font::regular()
-            })
-            .color(theme_ext::text_primary(tokens)),
+    let card = match dialog.step {
+        SketchDxfStep::Mapping => mapping_card(dialog, tokens, i18n),
+        SketchDxfStep::Checking => check::check_card(dialog, tokens, i18n),
+        SketchDxfStep::Imported(result) => check::result_card(result, tokens, i18n),
+    };
+    let card_width = TS.body * CARD_EM;
+    let card = container(card)
+        .padding(SP.l)
+        .width(Length::Fixed(card_width))
+        .style(crate::styles::modal_card(tokens));
+    let placed = container(card)
+        .padding(SP.xl)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_x(Horizontal::Right)
+        .align_y(Vertical::Bottom);
+    let preview = preview::preview(dialog, card_width + 2.0 * SP.xl, i18n);
+    opaque(stack![preview, placed]).capture_scroll(true).boxed()
+}
+
+/// Units, scale and a target per layer, then Next: check profiles.
+fn mapping_card<'a>(
+    dialog: &'a SketchDxfDialog,
+    tokens: &'a ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, Message> {
+    column![
+        heading(
+            t!(i18n, ids::BOARD_SKETCH_DXF_TITLE),
+            theme_ext::text_primary(tokens)
+        ),
         field(
             t!(i18n, ids::BOARD_SKETCH_DXF_FILE),
             text(UserText::new(dialog.file.as_str()))
@@ -71,24 +100,23 @@ pub(super) fn overlay<'a>(
         ),
         layer_rows(dialog, tokens, i18n),
         join_row(dialog, tokens, i18n),
-        check_line(dialog, tokens, i18n),
+        problem_line(dialog, tokens, i18n),
         buttons(dialog, tokens, i18n),
     ]
-    .spacing(SP.s);
-    let card = container(card)
-        .padding(SP.l)
-        .width(Length::Fixed(TS.body * CARD_EM))
-        .style(crate::styles::modal_card(tokens));
-    opaque(
-        container(card)
-            .padding(SP.xl)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(Horizontal::Right)
-            .align_y(Vertical::Bottom),
-    )
-    .capture_scroll(true)
+    .spacing(SP.s)
     .boxed()
+}
+
+/// The card's heading.
+fn heading<'a>(label: Localized, color: iced::Color) -> Element<'a, Message> {
+    text(label)
+        .size(TS.title)
+        .font(iced::Font {
+            weight: iced::font::Weight::Semibold,
+            ..signex_widgets::ui_font::regular()
+        })
+        .color(color)
+        .boxed()
 }
 
 fn field<'a>(
@@ -225,37 +253,25 @@ fn join_row<'a>(
     .boxed()
 }
 
-/// What Import would make, or why it cannot run.
-fn check_line<'a>(
+/// Why the choices cannot import; nothing when they can, since the check
+/// step names what the drawing holds.
+fn problem_line<'a>(
     dialog: &SketchDxfDialog,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, Message> {
-    let (line, color) = match dialog.check {
-        Ok(check) => (
-            t!(
-                i18n,
-                ids::BOARD_SKETCH_DXF_CHECK,
-                "edges" => (check.lines + check.arcs + check.circles).to_string(),
-                "healed" => check.healed.to_string(),
-                "open" => check.open_ends.to_string()
-            ),
-            if check.open_ends > 0 {
-                theme_ext::error_color(tokens)
-            } else {
-                theme_ext::text_secondary(tokens)
-            },
-        ),
-        Err(problem) => {
-            let id = match problem {
-                SketchDxfProblem::Scale => ids::BOARD_SKETCH_DXF_BAD_SCALE,
-                SketchDxfProblem::Range => ids::BOARD_SKETCH_DXF_OUT_OF_RANGE,
-                SketchDxfProblem::NothingPicked => ids::BOARD_SKETCH_DXF_NOTHING,
-            };
-            (t!(i18n, id), theme_ext::error_color(tokens))
-        }
+    let Err(problem) = dialog.check else {
+        return iced::widget::Space::new().boxed();
     };
-    text(line).size(TS.caption).color(color).boxed()
+    let id = match problem {
+        SketchDxfProblem::Scale => ids::BOARD_SKETCH_DXF_BAD_SCALE,
+        SketchDxfProblem::Range => ids::BOARD_SKETCH_DXF_OUT_OF_RANGE,
+        SketchDxfProblem::NothingPicked => ids::BOARD_SKETCH_DXF_NOTHING,
+    };
+    text(t!(i18n, id))
+        .size(TS.caption)
+        .color(theme_ext::error_color(tokens))
+        .boxed()
 }
 
 fn buttons<'a>(
@@ -263,12 +279,15 @@ fn buttons<'a>(
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, Message> {
-    let import = dialog.check.is_ok().then(|| send(SketchDxfMsg::Confirmed));
+    let next = dialog
+        .check
+        .is_ok()
+        .then(|| send(SketchDxfMsg::CheckRequested));
     row![
         dialog_button(
-            t!(i18n, ids::BOARD_SKETCH_DXF_IMPORT),
+            t!(i18n, ids::BOARD_SKETCH_DXF_NEXT),
             DialogButtonKind::Primary,
-            import,
+            next,
             tokens,
         ),
         dialog_button(

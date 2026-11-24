@@ -123,7 +123,8 @@ byte-identical to before.
 the `snxprj/1` token: the key is optional with a default, a file without it
 loads as `None` and is written back without a `rules` key, and an older build
 that sees the key keeps it in its unknown-key bag. The section has its own
-`schema` number (currently 1), independent of the file token.
+`schema` number (1, or 2 while it holds a `min_slot`), independent of the
+file token.
 
 ```json
 "rules": {
@@ -189,8 +190,21 @@ that sees the key keeps it in its unknown-key bag. The section has its own
     "dsl": "..."
   }
   ```
+- `min_slot` (mockup row 179d) is the narrowest slot the project's fab tier
+  or profile routes, across, in mm; the board sketch's min slot check reads
+  it (`docs/PCB_SKETCH.md`, "Outline checks"). It is set with the rules by a
+  fab tier (New Project, a tier seeded for a new board, the tier preset) or
+  a fab profile naming one, in the same undo step. It is not part of the
+  rule-set hash. While it is present the section is written at `schema` 2
+  (`ProjectRules::written_schema`), and clearing it writes 1 again, so a
+  section without it re-saves byte-identical. A build that reads only
+  schema 1 keeps a schema 2 section verbatim and unapplied, so it never
+  drops the value. A value that is not a positive number reads as absent.
+  ```json
+  "rules": { "schema": 2, "min_slot": 0.8 }
+  ```
 - A section this build cannot interpret never stops the project from opening
-  (#1180). A `schema` above 1, or a value whose shape changed (a severity that
+  (#1180). A `schema` above 2, or a value whose shape changed (a severity that
   is an object, say), makes the whole section opaque: it is kept verbatim in
   the project's unknown-key bag, written back untouched, and not applied; ERC
   uses the machine preferences and says so once per open. A later build may

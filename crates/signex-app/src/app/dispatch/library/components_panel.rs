@@ -568,11 +568,13 @@ impl Signex {
             error = %err,
             "global_libraries.toml save failed ({action})"
         );
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(
+        let detail =
             signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_GLOBAL_LIBRARIES_NOT_SAVED)
                 .arg("action", action)
-                .arg("error", err.to_string()),
-        ));
+                .arg("error", err.to_string());
+        self.document_state.error_notice = Some(
+            crate::app::state::ErrorNotice::save_with_no_open_edits(detail),
+        );
     }
 
     /// Promote an Installed library to Global.

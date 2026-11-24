@@ -96,6 +96,12 @@ defaults (line width 0.12 mm, clearance 0.20 mm, marker on), which is not
 written, so such a file keeps its lower token; anything else writes
 `snxfpt/1.3`.
 
+The courtyard's Line width (mockup row 124, #2850, default 0.05 mm) is stored
+with these values as `generated.courtyard_line_width_mm` and follows the same
+token rule. Placing the footprint strokes the board courtyard at that width,
+whichever way the courtyard was drawn. The field sits under the generated
+courtyard switch and is greyed while that switch is off.
+
 The pin 1 dot sits on pad 1's outer side, or on the first other side clear of
 every pad by the clearance; with no clear side there is no dot. While the
 silkscreen outline and the marker are on and no dot is placed, for that reason
@@ -391,8 +397,15 @@ slots draws a ring; a click suppresses that instance (one undo step) and a
 second click brings it back. The suppression list is the one the
 Properties pattern form ticks, kept by one helper on the array type
 (`ArrayKind::set_instance_suppressed`). A linear pattern has no
-suppression list, so its instances do not toggle. The source's own slot is
-not offered: it is the source pad.
+suppression list, so its instances do not toggle. The pattern form's
+Numbering Mask (mockup row 126, #2845) edits the same list by pad number
+(`4,5`, `A2,B4`; commas or spaces): it shows the numbers of the suppressed
+instances, and a typed list replaces the list in one undo step
+(`signex_bake::array::instances_numbered`, `ArrayKind::set_suppressed_instances`).
+A number the pattern does not have is refused and the text stays in the field;
+on a linear pattern the field is greyed. The source's own slot is
+not offered: it is the source pad. The canvas draws no ring on it, and the
+Mask refuses the source pad's number the same way.
 
 ## Conflicts {#conflicts}
 

@@ -406,6 +406,12 @@ pub enum UiMsg {
     /// payload is the step in mm; the dispatcher writes it to the
     /// active footprint editor's `state.snap_options.grid_step_mm`.
     GridPickerSelect(f64),
+    /// The pointer entered the picker's ladder row of this step (mm): the
+    /// preview draws it.
+    GridPickerStepHovered(f64),
+    /// The pointer left the ladder row of this step (mm): the preview
+    /// returns to the active step unless another row is hovered.
+    GridPickerStepLeft(f64),
     /// Layout drag started on a dock splitter / floating element.
     DragStart(DragTarget),
     /// Layout drag moved to window-space (x, y).

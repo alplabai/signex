@@ -32,6 +32,9 @@ pub(crate) struct CommandContext {
     pub has_pcb: bool,
     /// The board view of the window is turned on screen (#2316).
     pub pcb_view_turned: bool,
+    /// The window shows the board in 3D (mockup row 175): the main window,
+    /// the only one that draws the 3D view.
+    pub board_3d_shown: bool,
     /// The undocked tab window the command came from shows a schematic or
     /// a PCB. Fit All acts on that window's own canvas; the per-window
     /// document commands read [`Self::document_is_schematic`] and
@@ -278,6 +281,7 @@ impl Signex {
             has_pcb: self.has_active_pcb()
                 || window.is_some_and(|id| self.undocked_pcb_path(id).is_some()),
             pcb_view_turned: self.pcb_view_turned_in(window),
+            board_3d_shown: self.board_3d_shown_in(window),
             undocked_has_canvas: self.undocked_tab_has_canvas(window),
             document_is_schematic: own.is_schematic,
             document_is_editor: own.is_editor,

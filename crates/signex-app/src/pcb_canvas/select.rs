@@ -15,6 +15,10 @@ use uuid::Uuid;
 
 use super::highlight::Highlight;
 
+#[path = "select_drag.rs"]
+mod drag;
+pub use drag::DraggedItems;
+
 #[derive(Debug, Default)]
 pub struct PcbSelectionState {
     selection: Selection,
@@ -373,6 +377,8 @@ impl PcbSelectionState {
             if self.filter.is_on(pcb_geom::PickKind::Vias) {
                 grab.extend(self.shapes_of(|item| matches!(item, ItemRef::Via(_))));
             }
+            // Every other selectable object drags too (#2870).
+            grab.extend(self.item_grab_shapes(board));
             grab
         };
         // Only what is not on the board yet has a ghost: a paste.

@@ -47,7 +47,7 @@ use signex_widgets::property_illustration::{IllustrationHover, IllustrationMsg};
 use uuid::Uuid;
 
 use super::{PanelContext, PanelMsg};
-use crate::pcb_canvas::{PcbSnapOptions, SnapDistance, SnapScope};
+use crate::pcb_canvas::{PcbSnapOptions, SnapScope};
 use crate::styles::Spacing;
 use chrome::Form;
 
@@ -98,6 +98,8 @@ pub enum GridCard {
 /// A text field of the panel whose draft is kept until Enter (#2374).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum BoardField {
+    /// Snap Distance, a length (#2879).
+    SnapDistance,
     AxisRange,
     GuideX(Uuid),
     GuideY(Uuid),
@@ -135,19 +137,20 @@ pub enum PcbBoardMsg {
     FilterAllToggled,
     /// The filter dropdown's All (`true`) or None (`false`) cell.
     FilterAllSet(bool),
-    /// Save the chips that are on as a new preset (#2383).
+    /// Save the chips that are on as a new preset (#2383), selected for
+    /// editing.
     FilterPresetAdded,
-    /// A preset was clicked: its kinds become the filter, and it is the one
-    /// the panel edits.
+    /// A preset was clicked: its kinds become the filter and it is selected
+    /// for editing, or, if it was the selected one, editing ends (#2873).
     FilterPresetApplied(usize),
     FilterPresetRenamed(usize, String),
-    /// Save the chips that are on into this preset.
-    FilterPresetUpdated(usize),
     FilterPresetRemoved(usize),
     SnapToGridsToggled,
     SnapScopePicked(SnapScope),
+    /// `cycle_board_snapping` (Shift+E on a board, #2879): Snapping steps
+    /// All Layers, Current Layer, Off.
+    SnappingCycled,
     SnapObjectToggled(SnapObject),
-    SnapDistancePicked(SnapDistance),
     /// A components count was clicked: select those components.
     ComponentsSelected(ComponentSide),
     /// The DRC violations count was clicked.
@@ -252,12 +255,11 @@ impl PcbBoardMsg {
             | Self::FilterPresetAdded
             | Self::FilterPresetApplied(_)
             | Self::FilterPresetRenamed(..)
-            | Self::FilterPresetUpdated(_)
             | Self::FilterPresetRemoved(_)
             | Self::SnapToGridsToggled
             | Self::SnapScopePicked(_)
+            | Self::SnappingCycled
             | Self::SnapObjectToggled(_)
-            | Self::SnapDistancePicked(_)
             | Self::DrcResultsOpened
             | Self::IllustrationHovered(_)
             | Self::GridStepTyped(_)
@@ -311,9 +313,10 @@ pub struct PcbBoardSummary {
     /// The board opened read-only (a newer format).
     pub read_only: bool,
     pub filter: PickFilter,
-    /// The filter's saved presets and the one the panel edits (#2383).
+    /// The filter's saved presets (#2383) and the one selected for editing
+    /// (#2873).
     pub presets: Vec<crate::active_bar::CustomFilterPreset<PickKind>>,
-    pub preset_tab: usize,
+    pub preset_editing: Option<usize>,
     pub snap: PcbSnapOptions,
     /// The fast grid preferences (#1672) the Grid Manager offers.
     pub fast_grids_mm: [f32; 2],
@@ -388,6 +391,19 @@ impl PcbBoardSummary {
     pub fn with_room(self, room: Option<super::pcb_room_properties::RoomFacts>) -> Self {
         Self { room, ..self }
     }
+}
+
+/// Whether `outline` is an axis-aligned rectangle, by the rule of the Size
+/// row here: the board sketch's Board section reads its size the same way.
+pub fn outline_is_rectangle(outline: &[signex_types::pcb::Point]) -> bool {
+    let Some((first, rest)) = outline.split_first() else {
+        return false;
+    };
+    let extent = rest.iter().fold(
+        (first.x, first.y, first.x, first.y),
+        |(x0, y0, x1, y1), p| (x0.min(p.x), y0.min(p.y), x1.max(p.x), y1.max(p.y)),
+    );
+    is_rectangle(outline, extent)
 }
 
 /// Whether `outline` is the rectangle `extent`: four corners, each on a

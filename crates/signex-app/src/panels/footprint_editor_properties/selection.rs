@@ -60,7 +60,8 @@ fn entity_status(entity: &FootprintSketchEntitySummary, i18n: &I18n) -> Localize
 /// A selected sketch entity: the Slot header when it is a slot edge, then
 /// the role sub-form when its role has one (it carries its own header and
 /// illustration), else the entity header unless the Slot header stands;
-/// then the Entity section.
+/// on a board sketch the Sketch DOF section under that header; then the
+/// Entity section.
 pub(super) fn view_sketch_entity<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     cx: Ctx<'a, '_>,
@@ -77,8 +78,15 @@ pub(super) fn view_sketch_entity<'a>(
     // An edge of a slot heads with the slot; the selection stays the edge
     // (mockup row 179).
     let slot = fp.board.as_ref().and_then(|board| board.selected_slot);
+    // A board sketch's Sketch DOF section comes right under the header: the
+    // Slot header, else the role sub-form, which carries its own header
+    // (mockup row 179, m179-slot).
+    let leads = super::sections::leads_with_solve(cx);
     if let Some((length, width)) = slot {
         col = col.push(slot_header(length, width, cx));
+        if leads {
+            col = super::sections::view_sketch_solve_section(col, cx);
+        }
     }
     col = match subform {
         Some(form) => col.push(form),
@@ -89,6 +97,9 @@ pub(super) fn view_sketch_entity<'a>(
             tokens,
         )),
     };
+    if leads && slot.is_none() {
+        col = super::sections::view_sketch_solve_section(col, cx);
+    }
     let title = t!(i18n, ids::EDITORS_FP_PROPS_SECTION_ENTITY);
     col = col.push(section(
         ENTITY_KEY,

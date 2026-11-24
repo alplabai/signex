@@ -11,11 +11,14 @@ use iced::{Color, Element};
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
-use super::{
-    ActiveBarAction, ActiveBarMenu, ActiveBarMsg, CustomFilterPreset, SelectionFilter,
-    action_enabled,
+use super::{ActiveBarAction, ActiveBarMenu, ActiveBarMsg, action_enabled};
+#[cfg(test)]
+use super::{CustomFilterPreset, SelectionFilter};
+pub use custom::SchematicFilterState;
+pub(crate) use custom::{
+    FilterChip, FilterMenu, editing_line, filter_menu_entry, preset_chips, preset_editing_line,
+    preset_label,
 };
-pub(crate) use custom::{FilterChip, FilterMenu, filter_menu_entry, preset_label};
 use custom::{filter_entry, net_color_entries};
 #[cfg(test)]
 use tables::render;
@@ -42,8 +45,7 @@ pub fn view_dropdown<'a>(
     i18n: &signex_i18n::I18n,
     menu: ActiveBarMenu,
     tokens: &'a ThemeTokens,
-    filters: &std::collections::HashSet<SelectionFilter>,
-    custom_presets: &[CustomFilterPreset],
+    filter: &SchematicFilterState<'_>,
     tid: ThemeId,
     has_selection: bool,
     has_net_colors: bool,
@@ -51,8 +53,7 @@ pub fn view_dropdown<'a>(
 ) -> Element<'a, ActiveBarMsg> {
     let state = MenuState {
         tokens,
-        filters,
-        custom_presets,
+        filter,
         tid,
         sel: has_selection,
         nc: has_net_colors,
@@ -64,8 +65,7 @@ pub fn view_dropdown<'a>(
 /// The bar state one dropdown is built from.
 struct MenuState<'s> {
     tokens: &'s ThemeTokens,
-    filters: &'s std::collections::HashSet<SelectionFilter>,
-    custom_presets: &'s [CustomFilterPreset],
+    filter: &'s SchematicFilterState<'s>,
     tid: ThemeId,
     sel: bool,
     nc: bool,
@@ -169,10 +169,14 @@ fn dropdown_entries(
     has_selection: bool,
     has_net_colors: bool,
 ) -> Vec<DropdownEntry<ActiveBarMsg>> {
+    let filter = SchematicFilterState {
+        filters,
+        presets: custom_presets,
+        editing: None,
+    };
     let state = MenuState {
         tokens,
-        filters,
-        custom_presets,
+        filter: &filter,
         tid,
         sel: has_selection,
         nc: has_net_colors,
@@ -193,7 +197,7 @@ fn dropdown_entries_with(
     match (menu, menu_table(menu)) {
         (_, Some(specs)) => render_with_hints(i18n, specs, s.tid, s.sel, s.nc, hint),
         (ActiveBarMenu::Filter, None) => {
-            vec![filter_entry(i18n, s.tokens, s.filters, s.custom_presets)]
+            vec![filter_entry(i18n, s.tokens, s.filter)]
         }
         (_, None) => net_color_entries(i18n, s.tid, s.sel, s.nc),
     }
@@ -238,6 +242,13 @@ fn dropdown_min_width(menu: ActiveBarMenu) -> Option<f32> {
         // "Clear All Net Colors" (20), as drawn.
         ActiveBarMenu::NetColor => 212.0,
     })
+}
+
+/// The Selection Filter card's pinned width (mockup row 61), for the
+/// overlay's placement tests.
+#[cfg(test)]
+pub(crate) fn filter_card_width() -> f32 {
+    dropdown_min_width(ActiveBarMenu::Filter).unwrap_or_default()
 }
 
 /// Horizontal offset (in px) to align dropdown below a given button index.

@@ -1,8 +1,11 @@
 //! Imported drawing to sketch geometry (mockup row 179c). Each piece becomes
-//! a sketch entity. With `join` on, ends of one tag within the one heal
-//! tolerance share a point (Coincident by construction) and exactly level or
-//! plumb lines take Horizontal or Vertical. Pure: the caller adds the result
-//! to a sketch.
+//! a sketch entity. With `join` on, ends of one tag that meet share a point
+//! (Coincident by construction) and exactly level or plumb lines take
+//! Horizontal or Vertical. [`build_import`] heals and merges: ends within the
+//! one heal tolerance meet and collinear overlapping lines become one;
+//! [`build_import_as_is`] joins only ends that touch. [`check_profiles`]
+//! names what healing would fix. Pure: the caller adds the result to a
+//! sketch.
 
 use std::collections::HashMap;
 
@@ -11,6 +14,12 @@ use crate::entity::{Entity, EntityKind};
 use crate::heal::{HEAL_TOLERANCE_MM, heals};
 use crate::id::{ConstraintId, SketchEntityId};
 use crate::plane::PlaneId;
+
+mod check;
+mod overlap;
+
+pub use check::{ImportGap, ImportOverlap, ProfileReport, check_profiles};
+pub use overlap::merge_overlaps;
 
 /// Two coordinates closer than this (mm) are the same: a joined end this
 /// close was not a gap, and a line this level is horizontal.
@@ -58,6 +67,11 @@ pub struct ImportCheck {
     pub dropped: usize,
     /// Horizontal and Vertical constraints added.
     pub constraints: usize,
+    /// Collinear overlapping lines folded into another line.
+    pub merged: usize,
+    /// Degrees of freedom the imported geometry keeps: two per point, one
+    /// per circle radius, less one per arc closure and per constraint.
+    pub dof: usize,
 }
 
 /// The entities and constraints of an import.
@@ -67,12 +81,16 @@ pub struct SketchImport {
     pub constraints: Vec<Constraint>,
     /// Each edge with the tag of its piece.
     pub edges: Vec<(SketchEntityId, usize)>,
+    /// The tag of each profile: edges that share points, or a circle.
+    pub profiles: Vec<usize>,
     pub check: ImportCheck,
 }
 
-/// The end points of an import, joined within the tolerance when `join`.
+/// The end points of an import, joined when `join`: within the heal
+/// tolerance when `heal`, else only where they touch.
 struct Ends {
     join: bool,
+    heal: bool,
     ids: Vec<SketchEntityId>,
     at: Vec<(f64, f64)>,
     uses: Vec<u32>,
@@ -82,9 +100,10 @@ struct Ends {
 }
 
 impl Ends {
-    fn new(join: bool) -> Self {
+    fn new(join: bool, heal: bool) -> Self {
         Self {
             join,
+            heal,
             ids: Vec::new(),
             at: Vec::new(),
             uses: Vec::new(),
@@ -108,7 +127,12 @@ impl Ends {
             for y in cy - 1..=cy + 1 {
                 for &i in self.cells.get(&(tag, x, y)).into_iter().flatten() {
                     let gap = (self.at[i].0 - p.0).hypot(self.at[i].1 - p.1);
-                    if heals(gap) && best.is_none_or(|(_, b)| gap < b) {
+                    let meets = if self.heal {
+                        heals(gap)
+                    } else {
+                        gap <= SAME_MM
+                    };
+                    if meets && best.is_none_or(|(_, b)| gap < b) {
                         best = Some((i, gap));
                     }
                 }
@@ -151,14 +175,30 @@ impl Ends {
     }
 }
 
-/// The sketch geometry of `pieces` on `plane`.
+/// The sketch geometry of `pieces` on `plane`, healed and merged: with
+/// `join`, ends within the heal tolerance meet, and collinear overlapping
+/// lines of one tag become one line first.
 pub fn build_import(pieces: &[ImportPiece], plane: PlaneId, join: bool) -> SketchImport {
-    let mut ends = Ends::new(join);
+    let (merged, folded) = merge_overlaps(pieces);
+    let mut import = build(&merged, plane, join, true);
+    import.check.merged = folded;
+    import
+}
+
+/// The sketch geometry of `pieces` on `plane` as drawn: with `join`, only
+/// ends that touch meet; no gap heals and no overlap merges.
+pub fn build_import_as_is(pieces: &[ImportPiece], plane: PlaneId, join: bool) -> SketchImport {
+    build(pieces, plane, join, false)
+}
+
+fn build(pieces: &[ImportPiece], plane: PlaneId, join: bool, heal: bool) -> SketchImport {
+    let mut ends = Ends::new(join, heal);
     let mut edges: Vec<Entity> = Vec::new();
     let mut centers: Vec<Entity> = Vec::new();
     let mut tagged = Vec::new();
     let mut constraints = Vec::new();
     let mut check = ImportCheck::default();
+    let (mut links, mut circles) = (Vec::new(), Vec::new());
     let point = |(x, y): (f64, f64)| EntityKind::Point { x, y };
     for piece in pieces {
         let id = SketchEntityId::new();
@@ -168,6 +208,7 @@ pub fn build_import(pieces: &[ImportPiece], plane: PlaneId, join: bool) -> Sketc
                     check.dropped += 1;
                     continue;
                 };
+                links.push((i, j, piece.tag));
                 check.lines += 1;
                 if join {
                     constraints.extend(level_constraint(id, ends.at[i], ends.at[j]));
@@ -182,6 +223,7 @@ pub fn build_import(pieces: &[ImportPiece], plane: PlaneId, join: bool) -> Sketc
                     check.dropped += 1;
                     continue;
                 };
+                links.push((i, j, piece.tag));
                 check.arcs += 1;
                 let hub = SketchEntityId::new();
                 centers.push(Entity::new(hub, plane, point(center)));
@@ -193,6 +235,7 @@ pub fn build_import(pieces: &[ImportPiece], plane: PlaneId, join: bool) -> Sketc
                 }
             }
             ImportShape::Circle { center, radius } => {
+                circles.push(piece.tag);
                 check.circles += 1;
                 let hub = SketchEntityId::new();
                 centers.push(Entity::new(hub, plane, point(center)));
@@ -213,13 +256,35 @@ pub fn build_import(pieces: &[ImportPiece], plane: PlaneId, join: bool) -> Sketc
         .map(|i| Entity::new(ends.ids[i], plane, point(ends.at[i])))
         .collect();
     entities.append(&mut centers);
+    let points = entities.len();
     entities.append(&mut edges);
+    check.dof = (2 * points + check.circles).saturating_sub(check.arcs + check.constraints);
     SketchImport {
         entities,
         constraints,
         edges: tagged,
+        profiles: profile_tags(ends.ids.len(), &links, &circles),
         check,
     }
+}
+
+/// The tag of each profile: each set of `links` (two ends of `ends` and a
+/// tag) that share an end, in order of their first end, then each of
+/// `circles`.
+fn profile_tags(ends: usize, links: &[(usize, usize, usize)], circles: &[usize]) -> Vec<usize> {
+    let mut parent: Vec<usize> = (0..ends).collect();
+    for &(i, j, _) in links {
+        let (ri, rj) = (overlap::root(&mut parent, i), overlap::root(&mut parent, j));
+        parent[ri.max(rj)] = ri.min(rj);
+    }
+    let mut chains: std::collections::BTreeMap<usize, usize> = std::collections::BTreeMap::new();
+    for &(i, _, tag) in links {
+        let r = overlap::root(&mut parent, i);
+        chains.entry(r).or_insert(tag);
+    }
+    let mut profiles: Vec<usize> = chains.into_values().collect();
+    profiles.extend(circles);
+    profiles
 }
 
 /// Horizontal or Vertical for a line that is exactly level or plumb.
@@ -315,6 +380,43 @@ mod tests {
         let import = build_import(&two, PlaneId::new(), true);
         assert_eq!(points(&import), 8, "each tag keeps its own corners");
         assert_eq!(import.check.open_ends, 0, "both loops still close");
+    }
+
+    #[test]
+    fn as_is_leaves_a_small_gap_open_and_joins_touching_ends() {
+        let import = build_import_as_is(&square(0.03), PlaneId::new(), true);
+        assert_eq!(import.check.healed, 0);
+        assert_eq!(import.check.open_ends, 2);
+        assert_eq!(import.check.lines, 4);
+        let closed = build_import_as_is(&square(0.0), PlaneId::new(), true);
+        assert_eq!(closed.check.open_ends, 0);
+    }
+
+    #[test]
+    fn heal_and_merge_folds_an_overlapping_line_and_as_is_keeps_it() {
+        let mut pieces = square(0.0);
+        pieces.push(line((2.0, 0.0), (8.0, 0.0)));
+        let healed = build_import(&pieces, PlaneId::new(), true);
+        assert_eq!((healed.check.lines, healed.check.merged), (4, 1));
+        let as_is = build_import_as_is(&pieces, PlaneId::new(), true);
+        assert_eq!((as_is.check.lines, as_is.check.merged), (5, 0));
+    }
+
+    #[test]
+    fn dof_counts_points_and_radii_less_constraints() {
+        // A square: 4 corners (8) less 4 H / V leaves its place and size.
+        let square = build_import(&square(0.0), PlaneId::new(), true);
+        assert_eq!(square.check.dof, 4);
+        assert_eq!(square.profiles, [0], "one closed profile");
+        // A circle: its centre and radius.
+        let pieces = [ImportPiece {
+            shape: ImportShape::Circle {
+                center: (1.0, 1.0),
+                radius: 0.5,
+            },
+            tag: 0,
+        }];
+        assert_eq!(build_import(&pieces, PlaneId::new(), true).check.dof, 3);
     }
 
     #[test]

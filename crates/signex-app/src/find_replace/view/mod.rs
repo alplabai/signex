@@ -24,8 +24,9 @@ const SP: Spacing = Spacing::DEFAULT;
 
 /// Card width: a result line and its sheet fit on one row.
 const DIALOG_W: f32 = chrome_px(500.0 * 11.0 / 12.0);
-/// Card height of the in-window dialog; the results list takes the rest.
-const DIALOG_H: f32 = chrome_px(480.0 * 11.0 / 12.0);
+/// Tallest the in-window results list grows before it scrolls (240 px at
+/// the default base); the card fits the list.
+const LIST_MAX_H: f32 = chrome_px(240.0 * 11.0 / 12.0);
 /// Width of the form's label column (Find, Replace, Scope).
 const LABEL_W: f32 = chrome_px(72.0 * 11.0 / 12.0);
 
@@ -93,8 +94,20 @@ fn build<'a>(
     }
     let top = top.push(form::form(state, theme_tokens, i18n));
 
-    let list = results::results(state, theme_tokens, i18n);
-    let mut body = column![list].spacing(SP.s).height(Length::Fill);
+    // In the main window the card fits its content and the list grows to
+    // LIST_MAX_H, then scrolls; in its own window the list takes the rest.
+    let (dialog_w, dialog_h, list_max) = if windowed {
+        (Length::Fill, Length::Fill, None)
+    } else {
+        (Length::Fixed(DIALOG_W), Length::Shrink, Some(LIST_MAX_H))
+    };
+    let body_h = if windowed {
+        Length::Fill
+    } else {
+        Length::Shrink
+    };
+    let list = results::results(state, theme_tokens, i18n, list_max);
+    let mut body = column![list].spacing(SP.s).height(body_h);
     if let Some(note) = &state.skipped_note {
         body = body.push(results::skipped_line(note, theme_tokens, i18n));
     }
@@ -111,16 +124,11 @@ fn build<'a>(
             theme_tokens,
         )
     };
-    let (dialog_w, dialog_h) = if windowed {
-        (Length::Fill, Length::Fill)
-    } else {
-        (Length::Fixed(DIALOG_W), Length::Fixed(DIALOG_H))
-    };
     let dialog = container(
         column![
             header,
             container(top).padding([SP.l, SP.xl]),
-            container(body).padding([0.0, SP.xl]).height(Length::Fill),
+            container(body).padding([0.0, SP.xl]).height(body_h),
             footer::footer(state, theme_tokens, i18n),
         ]
         .width(dialog_w)

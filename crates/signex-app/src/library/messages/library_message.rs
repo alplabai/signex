@@ -538,8 +538,9 @@ pub enum LibraryMessage {
     /// User clicked Update Selected Components — apply the picked
     /// updates to the schematic engine + dirty-mark + close modal.
     LibraryUpdatesApply,
-    /// User clicked Skip All — close the modal and record the path on
-    /// `skipped_updates_for` (not rendered anywhere yet).
+    /// User clicked Skip All — close the modal and remember the offered
+    /// versions for the sheet (`skipped_versions`) so they are not offered
+    /// again.
     LibraryUpdatesSkipAll,
     /// User dismissed the modal (Cancel / Esc / X). No state mutates;
     /// drift is left pinned and the schematic stays clean.
@@ -685,6 +686,16 @@ pub enum LibraryMessage {
     /// The preview pane's ⋯ button was pressed: its menu opened or closed.
     BrowserMoreMenuToggled {
         library_path: PathBuf,
+    },
+    /// The column button at the right of the count line was pressed: the
+    /// column chooser opened or closed (mockup row 118).
+    BrowserColumnsMenuToggled {
+        library_path: PathBuf,
+    },
+    /// A column was turned on or off in the chooser, by its sort key.
+    BrowserColumnToggled {
+        library_path: PathBuf,
+        column_key: String,
     },
 }
 

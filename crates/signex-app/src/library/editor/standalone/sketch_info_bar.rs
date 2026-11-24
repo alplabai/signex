@@ -1,30 +1,29 @@
 //! The sketch info bar (mockup rows 187 and 179): what is being sketched, on which plane
 //! and at which grid step, and the Parameters button that opens the
 //! parameters table. On a footprint it is the sketch half of the editor bar,
-//! after the Footprint / Sketch switch; on a board it floats alone at the
-//! canvas's top right, clear of the DOF chips at the top left.
+//! after the Footprint / Sketch switch; on a board it sits alone at the
+//! canvas's top right, across from the DOF chips. Its buttons are the bar's
+//! control height, like the mode segments.
 
-use iced::widget::{Space, column, container, row};
+use iced::widget::{container, row};
 use iced::{Alignment, Border, Element, Length, Widget as _};
 use signex_i18n::{I18n, ids, t};
 use signex_sketch::plane::PlaneKind;
 use signex_sketch::unit::Quantity;
 use signex_types::sketch::SketchHost;
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{text, theme_ext};
+use signex_widgets::{Label, button, text, theme_ext};
 
 use crate::app::FootprintDocument;
+use crate::library::editor::footprint::pads_active_bar::EDITOR_BAR_CONTROL_HEIGHT;
 use crate::library::editor::footprint::parameters_table::SketchParametersMsg;
 use crate::library::editor::footprint::parameters_table::state::display_value;
 use crate::library::editor::footprint::state::EditorMode;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
-use crate::styles::{DialogButtonKind, Radii, dialog_button};
+use crate::styles::{Radii, accent_button, outline_button};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
-
-/// The board bar's distance from the canvas top, in body text heights.
-const TOP_CLEARANCE_EM: f32 = 3.5;
 
 /// The plane new sketch geometry goes on, as the caption's selector: the
 /// first plane, Top when the sketch has none yet.
@@ -63,11 +62,7 @@ fn caption_and_parameters<'a>(
             SketchParametersMsg::TableToggled,
         )),
     };
-    let kind = if editor.state.parameters_table.is_some() {
-        DialogButtonKind::Accent
-    } else {
-        DialogButtonKind::Secondary
-    };
+    let table_open = editor.state.parameters_table.is_some();
     let mut bar = row![
         text(caption)
             .size(TS.caption)
@@ -81,20 +76,48 @@ fn caption_and_parameters<'a>(
             path: editor.path.clone(),
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchImportDxfRequested),
         };
-        bar = bar.push(dialog_button(
+        bar = bar.push(bar_button(
             t!(i18n, ids::BOARD_SKETCH_DXF_OPEN),
-            DialogButtonKind::Secondary,
-            Some(import),
+            false,
+            import,
             tokens,
         ));
     }
-    bar.push(dialog_button(
+    bar.push(bar_button(
         t!(i18n, ids::SKETCH_INFO_PARAMETERS),
-        kind,
-        Some(parameters),
+        table_open,
+        parameters,
         tokens,
     ))
     .boxed()
+}
+
+/// A button of the bar, as tall as the bar's mode segments (mockup rows 179
+/// and 187, `.btn.sm`), its caption-size label centred; accent while `on`.
+fn bar_button<'a>(
+    label: impl Into<Label<'a>>,
+    on: bool,
+    msg: LibraryMessage,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    type Style =
+        Box<dyn Fn(&iced::Theme, iced::widget::button::Status) -> iced::widget::button::Style>;
+    let style: Style = if on {
+        Box::new(accent_button(tokens))
+    } else {
+        Box::new(outline_button(tokens))
+    };
+    let face = text(label)
+        .size(TS.caption)
+        .height(Length::Fill)
+        .wrapping(iced::widget::text::Wrapping::None)
+        .align_y(iced::alignment::Vertical::Center);
+    button(face)
+        .padding([0.0, SP.m])
+        .height(Length::Fixed(EDITOR_BAR_CONTROL_HEIGHT))
+        .on_press(msg)
+        .style(style)
+        .boxed()
 }
 
 /// The sketch half of a footprint's editor bar (mockup row 187): the caption and
@@ -107,15 +130,16 @@ pub fn editor_bar_items<'a>(
     (editor.state.mode == EditorMode::Sketch).then(|| caption_and_parameters(editor, tokens, i18n))
 }
 
-/// The bar of a board sketch, floating at the canvas's top right.
-pub fn overlay<'a>(
+/// The framed bar of a board sketch, unplaced: the board sketch's chrome row
+/// (`board_sketch`) puts it at the canvas's top right, under the Active Bar.
+pub fn board_bar<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
     let fill = theme_ext::to_color(&tokens.panel_bg);
     let line = theme_ext::border_color(tokens);
-    let bar = container(caption_and_parameters(editor, tokens, i18n))
+    container(caption_and_parameters(editor, tokens, i18n))
         .padding([SP.xs, SP.m])
         .style(move |_: &iced::Theme| iced::widget::container::Style {
             background: Some(fill.into()),
@@ -126,16 +150,8 @@ pub fn overlay<'a>(
                 ..Border::default()
             },
             ..Default::default()
-        });
-    container(column![
-        Space::new().height(TS.body * TOP_CLEARANCE_EM),
-        bar
-    ])
-    .padding([0.0, SP.m])
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .align_x(iced::alignment::Horizontal::Right)
-    .boxed()
+        })
+        .boxed()
 }
 
 #[cfg(test)]
@@ -238,7 +254,7 @@ mod tests {
         let tokens = theme_tokens(ThemeId::GraphiteDark);
         let i18n = signex_i18n::I18n::en_us();
         let texts = lay_out_texts(
-            super::overlay(&session.editor, &tokens, &i18n),
+            super::board_bar(&session.editor, &tokens, &i18n),
             iced::Size::new(1400.0, 900.0),
         );
         let import = find(&texts, "Import DXF…").bounds;

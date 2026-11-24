@@ -30,8 +30,12 @@ mod board_sketch_attr;
 pub use board_sketch_attr::{BoardSketchAttrMsg, BoardTargetProps, ComponentChoice, LayerChoice};
 mod board_bake_preview;
 pub use board_bake_preview::{
-    BakedHole, BakedOutline, BoardBakePreview, BoardBakeRefusal, BoardBakeRows,
+    BakedHole, BakedKeepout, BakedOutline, BoardBakePreview, BoardBakeRefusal, BoardBakeRows,
 };
+mod board_sketch_props;
+pub use board_sketch_props::{BoardSketchProps, MountingHoleProps};
+mod free_motion_summary;
+pub use free_motion_summary::FreeMotionSummary;
 mod sketch_fix;
 pub use sketch_fix::SketchFixMsg;
 mod board_net_classes;
@@ -171,6 +175,9 @@ pub(super) use properties_parameters::{
 };
 use properties_parameters::{view_properties_general, view_properties_parameters};
 use symbol_editor_properties::view_symbol_editor_properties;
+/// The Pin table document tab's body (mockup row 122b) and the rows its
+/// bulk actions act on.
+pub(crate) use symbol_editor_properties::{pin_table_acted_rows, view_pin_table};
 
 // -- Re-exports: keep the `crate::panels::*` public surface stable and the
 //    sibling `super::` / `crate::panels::` paths resolving after the split. --
@@ -179,14 +186,16 @@ pub use color_field::{ColorFieldProps, color_field};
 pub use context::{FootprintChoiceItem, PINS_SECTION_KEY, PanelContext, SymbolChoiceItem};
 pub use erc_waivers::{ErcViolationWaiverEntry, ErcWaiveDraft, ErcWaiverMsg, ErcWaiverStatus};
 pub use footprint_context::{
-    ArrayKindSummary, ArrayParamField, ArraySummary, BgaConfigSummary, BoardSketchProps,
-    CutoutSummary, FootprintEditorPanelContext, FootprintLibInternalRow, FootprintLibSibling,
-    FootprintModeKind, FootprintPadSummary, FootprintSelectedSilkSummary,
-    FootprintSketchEntitySummary, FootprintSolveSummary, KeepoutKindFlag, KeepoutSummary,
-    MountingHoleProps, NumberingSchemeKindUi, OverConstraintSummary, PadShapeParamSummary,
-    PourSummary, RejectedConflictSummary, SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
+    ArrayKindSummary, ArrayParamField, ArraySummary, BgaConfigSummary, CutoutSummary,
+    FootprintEditorPanelContext, FootprintLibInternalRow, FootprintLibSibling, FootprintModeKind,
+    FootprintPadSummary, FootprintSelectedSilkSummary, FootprintSketchEntitySummary,
+    FootprintSolveSummary, KeepoutKindFlag, KeepoutSummary, NumberingSchemeKindUi,
+    OverConstraintSummary, PadShapeParamSummary, PourSummary, RejectedConflictSummary,
+    SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
-pub use footprint_context::{PATTERN_PREVIEW_MAX_INSTANCES, SketchStateSummary};
+pub use footprint_context::{
+    PATTERN_PREVIEW_MAX_INSTANCES, SketchStateSummary, number_mask_buffer_key,
+};
 pub use footprint_outline::{OutlineSegment, PadOutlineSummary, segments as outline_segments};
 pub use footprint_place_block::FootprintPlaceBlock;
 pub use illustration::{HoverSubject, PanelIllustrationHover};
@@ -296,6 +305,9 @@ pub enum PanelKind {
     FootprintLibrary,
     /// PCB editor net table: nets with pad counts and routed length.
     PcbNets,
+    /// The compact Length Matching panel beside the board (mockup rows 7
+    /// and 107): the board's length-matching groups while routing.
+    LengthMatching,
     /// VSCode-style per-file Git history. Right-dock surface that
     /// follows the active tab and shows the file's last 50 commits
     /// via `signex_widgets::history_pane`.
@@ -314,7 +326,10 @@ pub enum PanelKind {
     Annotations,
 }
 
-/// All available panel kinds for the panel list button.
+/// Every panel kind, in the panel list's order. The list leaves out the
+/// tool documents, which open as document tabs (DECISIONS 2026-11-18,
+/// mockup row 7), and To-Do, which folds into the Design Notebook
+/// ([`panel_groups::panel_group`]).
 pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Projects,
     PanelKind::Components,
@@ -342,6 +357,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::SchLibrary,
     PanelKind::FootprintLibrary,
     PanelKind::PcbNets,
+    PanelKind::LengthMatching,
     PanelKind::History,
     PanelKind::NetInspector,
     PanelKind::CompiledDesign,
@@ -372,7 +388,11 @@ impl PanelKind {
     pub fn needs_pcb(self) -> bool {
         matches!(
             self,
-            PanelKind::Drc | PanelKind::LayerStack | PanelKind::Layers | PanelKind::PcbNets
+            PanelKind::Drc
+                | PanelKind::LayerStack
+                | PanelKind::Layers
+                | PanelKind::PcbNets
+                | PanelKind::LengthMatching
         )
     }
 
@@ -417,6 +437,7 @@ impl PanelKind {
             PanelKind::SchLibrary => ids::PANELS_KIND_SCH_LIBRARY,
             PanelKind::FootprintLibrary => ids::PANELS_KIND_FOOTPRINT_LIBRARY,
             PanelKind::PcbNets => ids::PANELS_KIND_PCB_NETS,
+            PanelKind::LengthMatching => ids::PANELS_PAIRED_LENGTH_MATCHING,
             PanelKind::History => ids::PANELS_KIND_HISTORY,
             PanelKind::NetInspector => ids::PANELS_KIND_NET_INSPECTOR,
             PanelKind::CompiledDesign => ids::PANELS_KIND_COMPILED_DESIGN,
@@ -461,6 +482,7 @@ impl PanelKind {
             PanelKind::SchLibrary => "SCH Library",
             PanelKind::FootprintLibrary => "Footprint Library",
             PanelKind::PcbNets => "PCB",
+            PanelKind::LengthMatching => "Length Matching",
             PanelKind::History => "History",
             PanelKind::NetInspector => "Net Inspector",
             PanelKind::CompiledDesign => "Compiled Design",
@@ -604,6 +626,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         }
         // Its list and detail scroll on their own.
         PanelKind::PcbNets => return pcb_nets::view(ctx),
+        PanelKind::LengthMatching => paired::length_matching_view(ctx),
         PanelKind::History => return history::view_history(ctx),
         PanelKind::NetInspector => return net_inspector::view(ctx),
         PanelKind::CompiledDesign => return compiled_design::view(ctx),

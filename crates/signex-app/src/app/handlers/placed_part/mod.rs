@@ -9,6 +9,7 @@
 #[cfg(test)]
 mod blocker_tests;
 mod change_component;
+mod change_session;
 mod datasheet;
 mod edit_symbol;
 
@@ -99,6 +100,13 @@ impl Signex {
             } => self.show_change_preview(target, row_id, result),
             PlacedPartMsg::ChangePreviewBackedOut => self.back_out_of_change_preview(),
             PlacedPartMsg::ChangeConfirmed => self.confirm_change_component(),
+            PlacedPartMsg::ChangeRowClicked(row_id) => self.click_change_row(row_id),
+            PlacedPartMsg::ChangeFilterToggled(filter) => self.toggle_change_filter(filter),
+            PlacedPartMsg::ChangeKeepToggled(name) => self.toggle_change_keep(name),
+            PlacedPartMsg::ChangeScopePicked(scope) => self.pick_change_scope(scope),
+            PlacedPartMsg::ChangePinCountsRead { target, counts } => {
+                self.store_row_pins(target, counts)
+            }
         }
     }
 }

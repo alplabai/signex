@@ -247,6 +247,9 @@ pub struct SymbolFileEntry {
     pub pin_count: usize,
     /// Free-text description — surfaced as the second tree column.
     pub description: String,
+    /// The symbol's drawing for a thumbnail row of the Library panel
+    /// (mockup row 119); built only while thumbnail rows are on.
+    pub drawing: Option<std::sync::Arc<signex_types::schematic::LibSymbol>>,
 }
 
 /// Extended pin fields surfaced on the Properties panel — flows

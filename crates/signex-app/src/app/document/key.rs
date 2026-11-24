@@ -42,6 +42,8 @@ impl DocumentKey {
             // A Layer Stack tab edits, saves and undoes its board.
             TabKind::Pcb | TabKind::LayerStack => Some(Self::Pcb(tab.path.clone())),
             TabKind::SymbolEditor(path) => Some(Self::Symbol(path.clone())),
+            // A Pin table tab edits, saves and undoes its symbol.
+            TabKind::PinTable => Some(Self::Symbol(tab.path.clone())),
             TabKind::FootprintEditor(path) => Some(Self::Footprint(path.clone())),
             TabKind::ComponentEditor(ce) => Some(Self::Row(EditorAddress::new(
                 ce.library_path.clone(),
@@ -52,6 +54,8 @@ impl DocumentKey {
                 Some(Self::Project(*id))
             }
             TabKind::LibraryBrowser(_) => None,
+            // Read-only fabrication files: nothing to save or undo.
+            TabKind::GerberViewer => None,
         }
     }
 }

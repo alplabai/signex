@@ -148,6 +148,8 @@ pub struct SymbolCanvas<'a> {
     pub zoom_step: f32,
     /// `SymbolDocument::tool_epoch`. Set with [`Self::with_tool_epoch`].
     pub tool_epoch: u64,
+    /// The editor's edge pan link (#2872). Set with [`Self::with_edge_pan`].
+    pub edge_pan: Option<&'a crate::canvas::EdgePanLink>,
 }
 
 impl<'a> SymbolCanvas<'a> {
@@ -212,7 +214,14 @@ impl<'a> SymbolCanvas<'a> {
             zoom_step: crate::canvas::Camera::zoom_step_factor(
                 crate::canvas::Camera::ZOOM_STEP_PERCENT_DEFAULT,
             ),
+            edge_pan: None,
         }
+    }
+
+    /// Report the pointer to `link` and replay it after an edge pan.
+    pub fn with_edge_pan(mut self, link: &'a crate::canvas::EdgePanLink) -> Self {
+        self.edge_pan = Some(link);
+        self
     }
 
     /// The scene replay options at `scale` px/mm in this canvas's window.
@@ -383,6 +392,12 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         // `impl SymbolCanvas` method in `input::{tools, pointer,
         // camera, keys}`. Arm order + patterns are identical to the
         // pre-split god-function; behaviour is byte-identical.
+        // An edge pan moved the view: the redraw replays the pointer (#2872).
+        let replayed = self.edge_pan.and_then(|link| link.replayed(event, cursor));
+        let event = replayed.as_ref().unwrap_or(event);
+        if let Some(link) = self.edge_pan {
+            link.observe(cursor.position_in(bounds), bounds.size());
+        }
         state.sync_tool_epoch(self.tool_epoch);
         let followed = self.follow_middle_zoom(state, event, bounds, cursor);
         let routed = match event {

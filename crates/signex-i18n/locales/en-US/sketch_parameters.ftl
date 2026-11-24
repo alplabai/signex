@@ -91,3 +91,9 @@ sketch-parameters-preview-empty = Nothing to bake yet.
 sketch-parameters-preview-pads-hidden = Pads are hidden until the expression reads.
 sketch-parameters-preview-dimension = { $value } { $unit }
 sketch-parameters-preview-dimension-named = { $name } = { $value } { $unit }
+
+# sketch-live-checks-card
+# Live checks: the closest two pads, as a warning under the solder-mask web,
+# or as the passed line.
+sketch-parameters-check-mask-web = Pads { $first } and { $second } are { $gap } { $unit } apart, under the { $web } { $unit } solder-mask web.
+sketch-parameters-checks-gap = No overlaps. Smallest pad gap { $gap } { $unit }.

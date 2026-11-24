@@ -2,7 +2,7 @@
 //! The # tile selects a row and shows its copper place; the other cells are
 //! typed in place and applied with Enter. A cell that does not apply to the
 //! row's kind shows a dash. Net, Items and Drill pairs are read from the
-//! board; Df and Cu % have nothing to read yet and show a dash with a hint.
+//! board; Cu % has nothing to read yet and shows a dash with a hint.
 
 use iced::widget::scrollable::{Direction, Scrollbar};
 use iced::widget::tooltip::Position;
@@ -47,7 +47,11 @@ const COLUMNS: [TableColumn; 11] = [
     col(ids::PCB_STACK_COL_THICKNESS, 3, None),
     col(ids::PCB_STACK_COL_WEIGHT, 2, None),
     col(ids::PCB_STACK_COL_DK, 2, Some(ids::PCB_STACK_COL_DK_TIP)),
-    col(ids::PCB_STACK_COL_DF, 2, Some(ids::PCB_STACK_COL_DF_TIP)),
+    col(
+        ids::PCB_STACK_COL_DF,
+        2,
+        Some(ids::PCB_STACK_COL_DF_STORED_TIP),
+    ),
     col(ids::PCB_STACK_COL_NET, 3, Some(ids::PCB_STACK_COL_NET_TIP)),
     col(
         ids::PCB_STACK_COL_COPPER,
@@ -196,16 +200,15 @@ fn cells<'a>(
     } else {
         dash(ctx)
     };
-    let dk = if insulator {
-        field(
-            facts,
-            index,
-            StackField::DielectricConstant,
-            Some(format_number(layer.dielectric_constant)),
-        )
-    } else {
-        dash(ctx)
+    let insulator_field = |field_kind, number: f64| {
+        if insulator {
+            field(facts, index, field_kind, Some(format_number(number)))
+        } else {
+            dash(ctx)
+        }
     };
+    let dk = insulator_field(StackField::DielectricConstant, layer.dielectric_constant);
+    let df = insulator_field(StackField::LossTangent, layer.loss_tangent);
     let used = facts.copper_use.get(index).and_then(Option::as_ref);
     let items = used.map_or_else(|| dash(ctx), |u| value(ctx, u.items.to_string()));
     let pairs = place.map_or_else(|| dash(ctx), |place| drill_pairs_cell(ctx, facts, place));
@@ -221,8 +224,7 @@ fn cells<'a>(
         field(facts, index, StackField::Thickness, Some(thickness)),
         weight,
         dk,
-        // Df: the stack stores no loss tangent.
-        dash(ctx),
+        df,
         net_cell(ctx, layer.kind, used.map(|u| u.nets.as_slice())),
         // Cu %: copper coverage is not measured.
         dash(ctx),

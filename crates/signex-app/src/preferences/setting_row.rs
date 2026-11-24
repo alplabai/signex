@@ -10,7 +10,7 @@ use iced::{Alignment, Background, Border, Color, Element, Font, Length, Padding,
 use iced::{Widget as _, font};
 use signex_i18n::Localized;
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, text};
+use signex_widgets::{button, rich_text, span, text};
 
 use super::PrefMsg;
 use crate::styles::{self, PillTone, Radii, Spacing, TypeScale, chrome_px, ti, tokens};
@@ -44,6 +44,14 @@ const CH_EM: f32 = 0.55;
 /// Line caps of the intro (72ch) and of a row's help (66ch).
 const INTRO_MAX_W: f32 = 72.0 * CH_EM * TS.body;
 const HELP_MAX_W: f32 = 66.0 * CH_EM * TS.caption;
+
+/// Weight 700 of the default UI family, the weight of a bold run in help.
+fn bold() -> Font {
+    Font {
+        weight: font::Weight::Bold,
+        ..signex_widgets::ui_font::regular()
+    }
+}
 
 /// Weight 600 of the default UI family.
 pub(in crate::preferences) fn semibold() -> Font {
@@ -233,6 +241,26 @@ pub(in crate::preferences) fn help_text<'a>(
     text(text_)
         .size(TS.caption)
         .color(tokens::resolve(t).ink3)
+        .width(Length::Fill)
+        .boxed()
+}
+
+/// A row's help with some runs in bold (the option names it explains), as
+/// [`Localized::runs_marking`] cuts them: caption size in `ink3`.
+pub(in crate::preferences) fn help_text_marked<'a>(
+    runs: Vec<(Localized, bool)>,
+    t: &ThemeTokens,
+) -> Element<'a, PrefMsg> {
+    let ink3 = tokens::resolve(t).ink3;
+    let spans: Vec<_> = runs
+        .into_iter()
+        .map(|(run, is_mark)| {
+            let run = span::<PrefMsg>(run).color(ink3);
+            if is_mark { run.font(bold()) } else { run }
+        })
+        .collect();
+    rich_text::<PrefMsg, PrefMsg, Theme>(spans)
+        .size(TS.caption)
         .width(Length::Fill)
         .boxed()
 }

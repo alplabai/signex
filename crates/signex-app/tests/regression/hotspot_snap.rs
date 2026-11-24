@@ -195,18 +195,17 @@ fn click_on_the_grid_point_next_to_a_wire_end_stays_on_the_grid() {
     let (mut app, path) = app_with_off_grid_pin_and_wire(true);
     click(&mut app, 0.0, 25.4);
     click(&mut app, 5.08, 25.4);
-    // One grid step from the end of the wire just placed.
+    // One grid step from the end of the wire just placed. The second click
+    // ended that wire (docs/DECISIONS.md, 2026-11-24, Caner: the wire tool no
+    // longer continues a wire), so this click starts a new one, and its start
+    // must stay on the grid point rather than jump to the wire end.
     click(&mut app, 6.35, 25.4);
-    let wire = app.document_state.engines[&path]
-        .document()
-        .wires
-        .last()
-        .expect("a wire was placed")
-        .clone();
-    // The second leg runs straight on from the first, so it folds into it
-    // (#1254): one wire from the first click to the grid point.
-    assert_eq!((wire.start.x, wire.end.x), (0.0, 6.35));
-    assert_eq!(wire.end.y, 25.4);
+    assert_eq!(
+        app.interaction_state.wire_points,
+        vec![Point::new(6.35, 25.4)]
+    );
+    let wires = &app.document_state.engines[&path].document().wires;
+    assert_eq!(wires.len(), 1, "only the first wire is placed: {wires:?}");
 }
 
 /// Moving a symbol whose pin tip would land 0.3 / 0.1 mm beside an off-grid

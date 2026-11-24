@@ -18,6 +18,7 @@ mod origin;
 mod owed_repaint;
 #[cfg(unix)]
 mod presence;
+mod query_surfaces;
 mod refusals;
 mod round_trip;
 mod window_layout;

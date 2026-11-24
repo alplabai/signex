@@ -533,6 +533,9 @@ pub enum PickerMsg {
     RangeFilter(RangeFilterMsg),
     /// A kind chip of the Library panel was pressed (mockup row 119).
     PanelKindPicked(super::state::LibraryPanelKind),
+    /// A button of the Library panel's row-style switch was pressed
+    /// (mockup row 119).
+    PanelRowStylePicked(super::state::LibraryRowStyle),
 }
 
 /// Edit Component Details modal sub-message tree — keeps

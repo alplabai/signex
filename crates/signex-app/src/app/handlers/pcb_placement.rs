@@ -13,7 +13,7 @@ use signex_engine::pcb::placement::{self, PlacementRefusal, PlacementTransform};
 use signex_engine::pcb::{BoardCommand, BoardItemId};
 use signex_renderer::pcb::{BOARD_OUTLINE, BoardObject, board_layers};
 use signex_types::pcb::Point;
-use signex_types::pcb_layer::PcbLayer;
+use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_options::GridUse;
 use uuid::Uuid;
 
@@ -210,6 +210,13 @@ impl Signex {
             }
             if let Some(reach) = pick
                 && self.start_via_drag(&path, from, reach)
+            {
+                self.carry_to(from, to);
+                return;
+            }
+            // Any other object a click there picks (#2870).
+            if let Some(reach) = pick
+                && self.start_item_drag(&path, from, reach)
             {
                 self.carry_to(from, to);
                 return;
@@ -427,9 +434,13 @@ impl Signex {
             Some(window) => state.pcb_canvas_for_window(window),
             None => tile().unwrap_or(&state.pcb_canvas),
         };
+        let active = self
+            .active_tab_path()
+            .map(|path| self.pcb_layer_view(&path).active())
+            .unwrap_or(PcbLayer::Copper(CopperLayer::Top));
         let mut view = SnapView::new(
             &self.ui_state.pcb_snap,
-            self.pcb_active_layer(),
+            active,
             f64::from(canvas.camera_ref().scale()),
         );
         view.snap_on = self.ui_state.snap_enabled;
@@ -485,6 +496,11 @@ impl Signex {
                 return;
             };
             delta
+        } else if !carry.items.is_empty() || !carry.rooms.is_empty() {
+            let Some(delta) = self.item_drag_delta(carry, from, to) else {
+                return;
+            };
+            delta
         } else {
             let skip = carry.snap_skip(board);
             carry_delta(
@@ -520,6 +536,10 @@ impl Signex {
         }
         if !carry.vias.is_empty() {
             self.drop_via_carry(&carry, from, to);
+            return;
+        }
+        if !carry.items.is_empty() || !carry.rooms.is_empty() {
+            self.drop_item_carry(&carry, from, to);
             return;
         }
         if carry.footprints.is_empty() {

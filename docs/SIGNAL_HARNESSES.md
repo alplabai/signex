@@ -8,7 +8,7 @@ CS) as one thick wire, so one harness wire replaces four. Issue #1280.
 | Object | Where it lives | What it is |
 |---|---|---|
 | Harness connector | sheet (`SheetHarness::connectors`) | A body with a flat side and a pointed tip. Signal wires end on its entries on the flat side; the harness wire leaves at the tip. It has a harness type (`SPI_BUS`), a width, an entry pitch, a quarter turn and a lock. |
-| Harness entry | inside its connector | One named signal of the connector, at a slot on the flat side. Deleting one closes the gap. |
+| Harness entry | inside its connector | One named signal of the connector, at a slot on the flat side. Deleting one closes the gap. Dragging or moving one slides it to the nearest slot on the same side, the others closing up, and its signal wire follows it. |
 | Harness wire | sheet (`SheetHarness::wires`) | One straight segment that carries a whole harness, drawn thicker than a bus in the harness colour. |
 | Harness-typed sheet entry | sheet (`SheetHarness::entry_types`) | A sheet entry of a sheet symbol with a harness type: it carries a harness into the child sheet. Set in Properties > Harness type. |
 | Harness definition | project (`.snxprj` `schematic_design.harness_definitions`) | A harness type and its entries, in order. An entry may itself be a harness (`UART` inside `DEBUG`). |
@@ -25,6 +25,8 @@ and Harness Entry, and the Active Bar's Harness group:
 - **Harness Entry** is one click on a connector: the entry goes to the nearest
   slot and takes the next definition entry the connector lacks, else
   `ENTRY_n`.
+- The **+** in the Entries header of a connector's Properties adds an entry
+  after the last, named the same way.
 
 Every placement and every Properties edit is one undo step. Moving, turning,
 mirroring, locking, deleting, copying and pasting work on connectors (with

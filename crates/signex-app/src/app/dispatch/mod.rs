@@ -133,6 +133,7 @@ impl Signex {
             Message::UpdatePcb(msg) => self.dispatch_update_pcb_message(msg),
             Message::PanZoomBench(msg) => self.dispatch_pan_zoom_bench_message(msg),
             Message::DiffPairClasses(msg) => self.dispatch_diff_pair_classes_message(msg),
+            Message::GerberViewer(msg) => self.dispatch_gerber_viewer_message(msg),
         }
     }
 
@@ -275,7 +276,7 @@ impl Signex {
                             ModalId::ParameterManager => {
                                 self.end_parameter_edit_runs();
                                 self.ui_state.parameter_manager_open = false;
-                                self.ui_state.parameter_table = Default::default();
+                                *self.ui_state.parameter_table = Default::default();
                             }
                             ModalId::RenameDialog => self.ui_state.rename_dialog = None,
                             ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
@@ -656,4 +657,79 @@ impl Signex {
 fn window_scale_task(id: iced::window::Id) -> Task<Message> {
     iced::window::scale_factor(id)
         .map(move |s| Message::Window(WindowMsg::WindowScaleChanged(id, s)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dock::{DockMessage, PanelPosition, PanelSite};
+    use crate::panels::PanelKind;
+
+    /// A detached Projects panel that was last docked in the bottom region,
+    /// not its home (left).
+    fn detached_from_bottom(app: &mut Signex) -> iced::window::Id {
+        let kind = PanelKind::Projects;
+        let dock = &mut app.document_state.dock;
+        dock.close_panel(kind);
+        dock.add_panel(PanelPosition::Bottom, kind);
+        let Some(PanelSite::Docked(pos, idx)) = dock.locate(kind) else {
+            panic!("Projects is docked at the bottom");
+        };
+        dock.update(DockMessage::UndockPanel(pos, idx));
+        let Some(PanelSite::Floating(idx)) = dock.locate(kind) else {
+            panic!("Projects floats");
+        };
+        let _ = app.update(Message::Window(WindowMsg::DetachFloatingPanel(idx)));
+        let detached = app.ui_state.windows.iter().find_map(|(id, window)| {
+            matches!(
+                window,
+                super::super::state::WindowKind::DetachedPanel(PanelKind::Projects)
+            )
+            .then_some(*id)
+        });
+        let Some(id) = detached else {
+            panic!("Projects has a detached window");
+        };
+        assert!(app.document_state.dock.locate(kind).is_none());
+        id
+    }
+
+    fn home_region_holds_projects(app: &Signex) -> bool {
+        matches!(
+            app.document_state.dock.locate(PanelKind::Projects),
+            Some(PanelSite::Docked(PanelPosition::Left, _))
+        )
+    }
+
+    /// DECISIONS 2026-11-20 (h): Dock back re-docks a detached panel in its
+    /// home region, not the last region it was in (mockup row 8).
+    #[test]
+    fn dock_back_re_docks_a_detached_panel_in_its_home_region() {
+        let (mut app, _boot) = Signex::new();
+        let id = detached_from_bottom(&mut app);
+
+        let close = app.update(Message::Window(WindowMsg::DetachedPanelDockBackPressed(id)));
+        assert_ne!(close.units(), 0, "Dock back closes the window");
+        let _ = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(id)));
+
+        assert!(home_region_holds_projects(&app));
+        assert!(
+            !app.document_state
+                .dock
+                .panel_kinds(PanelPosition::Bottom)
+                .contains(&PanelKind::Projects)
+        );
+    }
+
+    /// The window's close re-docks the same way as Dock back.
+    #[test]
+    fn closing_a_detached_panel_window_re_docks_it_in_its_home_region() {
+        let (mut app, _boot) = Signex::new();
+        let id = detached_from_bottom(&mut app);
+
+        let _ = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(id)));
+
+        assert!(!app.ui_state.windows.contains_key(&id));
+        assert!(home_region_holds_projects(&app));
+    }
 }

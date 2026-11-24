@@ -33,6 +33,11 @@ pub struct ComponentEditorTab {
 pub enum TabKind {
     Schematic,
     Pcb,
+    /// The Gerber Viewer (mockup rows 193 and 193f), one tab at a time, on
+    /// the main window only. State lives in
+    /// [`crate::app::DocumentState::gerber_viewer`]; `TabInfo.path` is the
+    /// package's first path, read only, never saved.
+    GerberViewer,
     ComponentEditor(ComponentEditorTab),
     /// `.snxsym` opened as a main-window document tab. Editor state
     /// lives in [`crate::app::DocumentState::symbol_editors`] keyed by
@@ -65,9 +70,19 @@ pub enum TabKind {
     /// state lives in the project's [`crate::app::ProjectTabState`];
     /// `TabInfo.path` is the `.snxprj` path, which Save writes.
     VariantManager(super::state::ProjectId),
+    /// A symbol's Pin table as a page tab (mockup row 122b). `TabInfo.path`
+    /// is the `.snxsym` path, which Save writes; it sits after the symbol's
+    /// own tab (`app/pin_table_tab`).
+    PinTable,
 }
 
 impl TabKind {
+    /// The Gerber Viewer tab: no document, never undocked, nothing to
+    /// save or restore from History.
+    pub fn is_gerber_viewer(&self) -> bool {
+        matches!(self, TabKind::GerberViewer)
+    }
+
     pub fn is_component_editor(&self) -> bool {
         matches!(self, TabKind::ComponentEditor(_))
     }
@@ -133,14 +148,28 @@ impl TabKind {
         }
     }
 
-    /// A page tab, not a drawing: the Project, Rules, Layer Stack and
-    /// Variant Manager tabs. None is undocked or restored from History.
+    /// A symbol's Pin table tab.
+    pub fn is_pin_table(&self) -> bool {
+        matches!(self, TabKind::PinTable)
+    }
+
+    /// A page of an open document that holds no document of its own and
+    /// shares its owner's path: the Layer Stack and Pin table tabs. It sits
+    /// after its owner's tab and stays on the main strip.
+    pub fn is_document_page(&self) -> bool {
+        matches!(self, TabKind::LayerStack | TabKind::PinTable)
+    }
+
+    /// A page tab, not a drawing: the Project, Rules, Layer Stack, Pin
+    /// table and Variant Manager tabs. None is undocked or restored from
+    /// History.
     pub fn is_project_page(&self) -> bool {
         matches!(
             self,
             TabKind::Project(_)
                 | TabKind::Rules(_)
                 | TabKind::LayerStack
+                | TabKind::PinTable
                 | TabKind::VariantManager(_)
         )
     }
@@ -192,6 +221,18 @@ pub struct TabInfo {
     /// ComponentEditor tabs carry the `(library_path, table, row_id)`
     /// triple that resolves into `LibraryState.editors`.
     pub kind: TabKind,
+}
+
+impl TabInfo {
+    /// The `.snxsym` this tab edits: a symbol editor's own, or the one a
+    /// Pin table tab shows.
+    pub fn symbol_document(&self) -> Option<&PathBuf> {
+        match &self.kind {
+            TabKind::SymbolEditor(path) => Some(path),
+            TabKind::PinTable => Some(&self.path),
+            _ => None,
+        }
+    }
 }
 
 /// Per-tab state for an open `.snxsym` document. Symbol editing
@@ -316,6 +357,9 @@ pub struct SymbolDocument {
     pub active_bar_menu: Option<crate::library::editor::symbol::state::SymActiveBarMenu>,
     /// v0.13 — Pause flag for placement (TAB during Place Pin / etc.).
     pub placement_paused: bool,
+    /// The pin type picked in the Place Pin dropdown, stamped on every
+    /// following placed pin; `None` places unclassified pins (mockup row 141).
+    pub pin_type: Option<signex_types::schematic::PinDirection>,
     /// Undo / redo snapshots (each the whole `.snxsym` container, symbols
     /// shared structurally between steps) and the depth at which this draft
     /// last equalled its file, so Undo back to it reads clean (#1854).
@@ -444,6 +488,7 @@ impl SymbolDocument {
             selection_filter: Default::default(),
             active_bar_menu: None,
             placement_paused: false,
+            pin_type: None,
             history: crate::app::History::at_start(Self::HISTORY_DEPTH),
             history_generation: 0,
             last_edit_key: None,

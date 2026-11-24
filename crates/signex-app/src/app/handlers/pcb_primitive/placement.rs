@@ -33,7 +33,8 @@ impl Signex {
         let paused = session.paused.is_some();
         let target = PrimitiveTarget::placement(path.to_path_buf());
         let i18n = &*self.ui_state.i18n;
-        let facts = match session.tool {
+        // A Graphics Line or Arc on copper shows the track or arc it places.
+        let facts = match self.placing_tool(session.tool) {
             BoardPlaceTool::Via => {
                 let via = self.next_board_via(board);
                 let mut common =
@@ -72,8 +73,10 @@ impl Signex {
                 let mut common =
                     self.primitive_common_on(board, target, Editability::Editable, net);
                 common.placement_paused = paused;
-                let mode = self.interaction_state.pcb_tool_defaults.arc_mode;
-                PcbPrimitiveFacts::Arc(arc_facts(board, common, &[&arc], i18n, Some(mode)))
+                // The Graphics Arc is drawn one way only: no mode to pick.
+                let mode = (session.tool == BoardPlaceTool::Arc)
+                    .then_some(self.interaction_state.pcb_tool_defaults.arc_mode);
+                PcbPrimitiveFacts::Arc(arc_facts(board, common, &[&arc], i18n, mode))
             }
             BoardPlaceTool::TextString => {
                 let text = self.next_board_text()?;

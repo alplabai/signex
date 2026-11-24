@@ -4,10 +4,14 @@
 //! Users never type a prefix or unit here, as in the editors: an operator
 //! picker (`≥ ≤ = between`), a number field (digits, a sign and a decimal
 //! point only), an SI-prefix picker, and the unit fixed to the column's.
-//! `between` has two number-and-prefix pairs.
+//! `between` has two number-and-prefix pairs. Once applied (Done or
+//! Enter), a filter folds into a compact removable chip, "Resistance
+//! 1k – 100k Ω ×" (mockup row 118); a press on the chip opens the editor
+//! again.
 //!
-//! * [`draft`]: the model: what the user has set, and the validated
-//!   [`signex_library::RangeFilter`] it yields. Pure; no IO.
+//! * [`draft`]: the model: what the user has set, the validated
+//!   [`signex_library::RangeFilter`] it yields, and which filter has its
+//!   editor open. Pure; no IO.
 //! * [`retain_in_range`]: applies the active filters to a row list and
 //!   counts the rows a filter excluded.
 //! * [`view`]: the pure widget both surfaces draw.
@@ -19,6 +23,8 @@ mod apply;
 mod draft;
 mod view;
 
+#[cfg(test)]
+mod chip_tests;
 #[cfg(test)]
 mod tests;
 

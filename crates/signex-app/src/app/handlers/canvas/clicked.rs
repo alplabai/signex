@@ -3,11 +3,23 @@ use iced::Task;
 use super::super::super::*;
 use super::shape_tool::ClickKind;
 
+/// What a Wire tool point does to the wire in progress
+/// (docs/DECISIONS.md, 2026-11-24).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(in crate::app::handlers) enum WirePoint {
+    /// A click: the second point places the wire and ends it; the tool
+    /// stays armed for the next wire.
+    EndsWire,
+    /// The add-vertex key (#1669): the point is a corner, the wire goes on.
+    AddsVertex,
+}
+
 impl Signex {
     pub(in crate::app::handlers) fn handle_canvas_clicked(
         &mut self,
         world_x: f64,
         world_y: f64,
+        wire_point: WirePoint,
     ) -> Task<Message> {
         // Altium-style lasso: first click anchors the start,
         // the cursor path auto-samples vertices, a second
@@ -156,7 +168,7 @@ impl Signex {
         // A click places where it lands: a position typed in the Tab form
         // is not carried over to the object after it (#2532).
         self.clear_typed_position();
-        self.click_with_tool((wx, wy), (world_x, world_y))
+        self.click_with_tool((wx, wy), (world_x, world_y), wire_point)
     }
 
     /// What a click of the armed tool does at `(wx, wy)`, already snapped
@@ -166,6 +178,7 @@ impl Signex {
         &mut self,
         (wx, wy): (f64, f64),
         (world_x, world_y): (f64, f64),
+        wire_point: WirePoint,
     ) -> Task<Message> {
         // A part on the cursor: the click places it, whatever tool is shown.
         if self.interaction_state.placement.is_some() {
@@ -179,9 +192,14 @@ impl Signex {
                 if !self.interaction_state.wire_drawing {
                     self.start_wire_drawing(pt);
                 } else if let Some(&start) = self.interaction_state.wire_points.last() {
-                    let (end_pt, _) =
+                    let (end_pt, placed) =
                         self.place_wire_at(start, pt, self.interaction_state.corner_rule);
-                    self.continue_wire_drawing(end_pt);
+                    // A point that placed nothing keeps the start.
+                    if placed && wire_point == WirePoint::EndsWire {
+                        self.end_wire_drawing();
+                    } else {
+                        self.continue_wire_drawing(end_pt);
+                    }
                 }
             }
             Tool::Bus => {
@@ -323,5 +341,16 @@ impl Signex {
     fn continue_wire_drawing(&mut self, end_pt: signex_types::schematic::Point) {
         self.interaction_state.wire_points = vec![end_pt];
         self.interaction_state.active_canvas_mut().wire_preview = vec![end_pt];
+    }
+
+    /// After the wire's second click: no wire in progress, the tool stays
+    /// armed and the next click starts a new wire.
+    fn end_wire_drawing(&mut self) {
+        let state = &mut self.interaction_state;
+        state.wire_drawing = false;
+        state.wire_points.clear();
+        let canvas = state.active_canvas_mut();
+        canvas.wire_preview.clear();
+        canvas.drawing_mode = false;
     }
 }

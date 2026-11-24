@@ -131,6 +131,42 @@ fn a_click_picks_the_nearest_slot() {
     assert_eq!(c.slot_at(c.entry_point(2)), 2);
 }
 
+fn names(c: &HarnessConnector) -> Vec<&str> {
+    c.entries.iter().map(|e| e.name.as_str()).collect()
+}
+
+/// A dragged entry slides along the flat side (docs/DECISIONS.md,
+/// 2026-11-24): to the nearest slot, clamped to the side's ends, the others
+/// closing up; a point off the side picks the slot level with it.
+#[test]
+fn an_entry_slides_to_the_nearest_slot_and_stays_on_the_side() {
+    for rotation in [0.0, 90.0, 180.0, 270.0] {
+        let mut c = connector(rotation, &["A", "B", "C", "D"]);
+        let third = c.entry_point(2);
+        assert!(c.slide_entry(0, third), "{rotation}");
+        assert_eq!(names(&c), ["B", "C", "A", "D"], "{rotation}");
+
+        // Far past the last slot: it stops at the end of the side.
+        let mut end = connector(rotation, &["A", "B", "C", "D"]);
+        let (first, last) = (end.entry_point(0), end.entry_point(3));
+        let beyond = Point::new(
+            last.x + (last.x - first.x) * 5.0,
+            last.y + (last.y - first.y) * 5.0,
+        );
+        assert!(end.slide_entry(1, beyond), "{rotation}");
+        assert_eq!(names(&end), ["A", "C", "D", "B"], "{rotation}");
+    }
+}
+
+#[test]
+fn an_entry_left_on_its_own_slot_does_not_change() {
+    let mut c = connector(0.0, &["A", "B"]);
+    let own = c.entry_point(1);
+    assert!(!c.slide_entry(1, Point::new(own.x - 1.0, own.y + 0.5)));
+    assert!(!c.slide_entry(5, own), "no such entry");
+    assert_eq!(names(&c), ["A", "B"]);
+}
+
 #[test]
 fn uses_count_every_connector_of_a_type() {
     let a = SheetHarness {

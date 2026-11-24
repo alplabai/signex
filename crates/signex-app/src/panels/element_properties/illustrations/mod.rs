@@ -1,6 +1,7 @@
 //! Line-art illustrations under the Properties header (epic #2523, mockup rows 40 to 51):
 //! a part, a pin, a footprint thumbnail, a wire or bus, a net label, a port,
-//! a power port, a text note, a sheet symbol and a drawing shape. Each
+//! a power port, a text note, a sheet symbol, a drawing shape and a harness
+//! connector (mockup row 152). Each
 //! builder turns the selected object into plain `Illustration` data, with
 //! callouts named after the rows below; [`show`] draws it. They are pure, so
 //! the tests read the parts they produce instead of pixels. Rotation is never
@@ -12,17 +13,21 @@ pub(super) mod part;
 pub(super) mod pin;
 pub(super) mod sheet_symbol;
 
+mod harness_connector;
 mod net_label;
 mod port;
 mod power_port;
 mod text_note;
 mod wire;
 
+pub(super) use harness_connector::harness_connector;
 pub(super) use net_label::net_label;
 pub(super) use port::port;
 pub(super) use power_port::{power_port, style_glyph};
 pub(super) use text_note::text_note;
 pub(super) use wire::{RunShape, run};
+
+pub(super) use power_port::PowerPortCallouts;
 
 use super::super::*;
 use crate::styles::{Spacing, TypeScale};
@@ -53,6 +58,7 @@ pub(super) mod fields {
     pub const POSITION: FieldId = FieldId::new("position");
     pub const TEXT: FieldId = FieldId::new("text");
     pub const TEXT_SIZE: FieldId = FieldId::new("text_size");
+    pub const ENTRY_PITCH: FieldId = FieldId::new("entry_pitch");
 }
 
 /// `illustration` drawn on the panel ground, full width.
@@ -75,7 +81,7 @@ mod tests {
     use super::*;
     use signex_i18n::I18n;
     use signex_types::schematic::{HAlign, PowerPortStyle, VAlign, WireWidthPreset};
-    use signex_widgets::property_illustration::{Ink, Paint, Primitive};
+    use signex_widgets::property_illustration::{Ink, Paint, Primitive, Text};
 
     /// No builder draws a turn: a rotation would show as an arc.
     fn has_no_arc(illustration: &Illustration) -> bool {
@@ -130,7 +136,8 @@ mod tests {
         let red = iced::Color::from_rgb8(0xC0, 0x39, 0x2B);
         for style in PowerPortStyle::ALL {
             let lib_id = format!("power:{}", style.lib_tag());
-            let drawing = power_port(&lib_id, "+3V3", red, &en);
+            let callouts = PowerPortCallouts::new(&en, style.label(), 10, None);
+            let drawing = power_port(&lib_id, "+3V3", red, callouts);
             assert!(has_no_arc(&drawing), "{style:?}");
             let red_parts = drawing.visible_parts().filter(|p| {
                 p.style
@@ -143,6 +150,66 @@ mod tests {
                 name |= matches!(part.primitive, Primitive::Label(_));
             }
             assert!(glyph && name, "{style:?}: glyph {glyph}, name {name}");
+        }
+    }
+
+    /// Every label text the drawing carries, the bidi marks around
+    /// arguments removed.
+    fn label_texts(illustration: &Illustration) -> Vec<String> {
+        let text = |t: &Text| t.as_str().replace(['\u{2068}', '\u{2069}'], "");
+        (illustration.visible_parts())
+            .filter_map(|p| match &p.primitive {
+                Primitive::Leader(leader) => Some(text(&leader.label)),
+                Primitive::Callout(callout) => callout.label.as_ref().map(text),
+                Primitive::Label(label) => Some(text(&label.text)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Mockup row 45: the callouts carry the row values (Style · Bar, the
+    /// font size, Position x, y) and no bare field names.
+    #[test]
+    fn a_power_port_callouts_carry_their_values() {
+        let en = I18n::en_us();
+        let red = iced::Color::from_rgb8(0xC0, 0x39, 0x2B);
+        let at = Some(("152.40".to_string(), "50.80".to_string()));
+        let callouts = PowerPortCallouts::new(&en, "Bar", 10, at);
+        let texts = label_texts(&power_port("power:bar", "+3V3", red, callouts));
+        for wanted in [
+            "+3V3",
+            "Style · Bar",
+            "Font Size 10",
+            "Position 152.40, 50.80",
+        ] {
+            assert!(texts.iter().any(|t| t == wanted), "{wanted}: {texts:?}");
+        }
+        for bare in ["Name", "Style", "Font Size", "Position"] {
+            assert!(!texts.iter().any(|t| t == bare), "{bare}: {texts:?}");
+        }
+    }
+
+    /// Mockup row 45: the port sits on a wire stub drawn at the wire's
+    /// width, running from the hotspot away from the head.
+    #[test]
+    fn a_power_port_sits_on_a_wire_stub() {
+        let en = I18n::en_us();
+        let red = iced::Color::from_rgb8(0xC0, 0x39, 0x2B);
+        for (lib_id, runs_down) in [("power:bar", true), ("power:GND", false)] {
+            let callouts = PowerPortCallouts::new(&en, "Bar", 10, None);
+            let drawing = power_port(lib_id, "+3V3", red, callouts);
+            assert_eq!(
+                band_width_of(&drawing),
+                wire::band_width(WireWidthPreset::Small),
+                "{lib_id}"
+            );
+            let band = drawing.visible_parts().find_map(|p| match &p.primitive {
+                Primitive::Band { points, .. } => Some(points.clone()),
+                _ => None,
+            });
+            let points = band.expect("a stub");
+            let goes_down = points[1].y > points[0].y;
+            assert_eq!(goes_down, runs_down, "{lib_id}");
         }
     }
 

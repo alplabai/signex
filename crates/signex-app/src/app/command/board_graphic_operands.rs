@@ -130,8 +130,7 @@ fn new_graphic(app: &Signex, board: &PcbBoard, args: &CommandArgs) -> Result<Boa
     };
     if !takes_board_graphics(layer) {
         return Err(
-            "a drawing goes on a non-copper layer other than a keep-out; name one with `layer`"
-                .to_string(),
+            "a drawing goes on any layer but a keep-out; name one with `layer`".to_string(),
         );
     }
     let origin = board.options.origin;

@@ -60,7 +60,7 @@ find-similar-same = Same
 find-similar-any = Any
 find-similar-scope-sheet = Current sheet
 find-similar-scope-project = Whole project
-find-similar-footer = Selects every match. Matches on other sheets are only counted.
+find-similar-footer = Selects every match. Matches on other sheets are listed in Messages.
 # $seed names the object the search starts from, such as "Part R1", in
 # English.
 find-similar-seed = Seed: { $seed }
@@ -151,3 +151,15 @@ find-similar-prop-designator-prefix = Designator prefix
 find-similar-prop-net-name = Net name
 # Net, global, hierarchical or power label.
 find-similar-prop-label-type = Label type
+
+# find-messages
+# Find mode footer buttons: step to the result before / after the current one
+# (Shift+Enter / Enter).
+find-previous = Previous
+find-next = Next
+# A Messages row for one match on another sheet; $what names the object as
+# the engine describes it (such as "Symbol R3"), $sheet is the sheet's file.
+find-similar-listed = Find Similar: { $what } on { $sheet }
+# After the listed matches, when there were more than Messages lists; $count
+# is how many were left out.
+find-similar-not-listed = Find Similar: { $count } more on other sheets, not listed

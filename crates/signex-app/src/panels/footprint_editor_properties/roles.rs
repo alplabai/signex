@@ -43,7 +43,8 @@ pub(super) fn view_roles<'a>(
         .push(bake_buttons(cx))
 }
 
-/// The Bake as section of a board sketch's Bake panel (mockup row 179):
+/// The Bake as section of a board sketch, in its Bake panel and its
+/// Properties body (mockup row 179):
 /// the footprint's profile list with the board's roles, without its Bake
 /// buttons, mask and centerline lines. Nothing on a footprint.
 pub(super) fn view_board_bake_as<'a>(

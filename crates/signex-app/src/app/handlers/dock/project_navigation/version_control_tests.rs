@@ -18,6 +18,7 @@ fn open_dialog_on(project_dir: &std::path::Path) -> Signex {
         error: None,
         working: false,
         scanning: false,
+        author: crate::app::contracts::CommitAuthor::Resolved,
     });
     app
 }
@@ -363,7 +364,7 @@ fn the_dialog_opens_with_a_first_commit_message_and_commit_every_save_on() {
         .project_fs
         .facts
         .set_exists(crate::app::state::project_fs::git_marker(tmp.path()), false);
-    app.open_enable_version_control_dialog(vec![0]);
+    let _probe = app.open_enable_version_control_dialog(vec![0]);
     let st = dialog(&app);
     assert_eq!(st.commit_message, "Initial version of demo");
     assert!(st.commit_every_save);
@@ -509,4 +510,211 @@ fn commit_every_save_on_turns_enable_git_on() {
     );
 
     assert!(app.document_state.projects[0].data.enable_git);
+}
+
+/// Mockup row 26: `outputs/` starts unticked (generated files churn every
+/// commit), the project's own files start ticked, and the user can still
+/// tick it.
+#[test]
+fn outputs_starts_unticked_and_can_be_ticked() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let (mut app, _task) = Signex::new();
+    push_demo_project(&mut app, tmp.path());
+    app.document_state
+        .project_fs
+        .facts
+        .set_exists(crate::app::state::project_fs::git_marker(tmp.path()), false);
+    let _probe = app.open_enable_version_control_dialog(vec![0]);
+
+    let items = &dialog(&app).items;
+    let outputs = items
+        .iter()
+        .position(|i| i.relative == "outputs")
+        .expect("an outputs/ row");
+    assert!(!items[outputs].tracked, "outputs/ starts unticked");
+    assert!(items[outputs].is_directory);
+    assert!(
+        items
+            .iter()
+            .filter(|i| i.relative != "outputs")
+            .all(|i| i.tracked),
+        "every other row starts ticked: {items:?}"
+    );
+
+    send(
+        &mut app,
+        crate::app::EnableVersionControlMsg::ToggleItem(outputs),
+    );
+    assert!(dialog(&app).items[outputs].tracked, "the user can tick it");
+}
+
+fn missing_author() -> crate::app::contracts::CommitAuthor {
+    crate::app::contracts::CommitAuthor::Missing {
+        name: String::new(),
+        email: String::new(),
+    }
+}
+
+/// Mockup row 26: opening the dialog asks git for an author off the UI
+/// thread; until it answers Enable is withheld.
+#[test]
+fn the_dialog_opens_probing_the_author_and_withholds_enable() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let (mut app, _task) = Signex::new();
+    push_demo_project(&mut app, tmp.path());
+    app.document_state
+        .project_fs
+        .facts
+        .set_exists(crate::app::state::project_fs::git_marker(tmp.path()), false);
+
+    let probe = app.open_enable_version_control_dialog(vec![0]);
+
+    assert_eq!(probe.units(), 1, "one probe task");
+    assert_eq!(
+        dialog(&app).author,
+        crate::app::contracts::CommitAuthor::Probing
+    );
+    let task = app.handle_enable_version_control_confirm();
+    assert_eq!(task.units(), 0, "no run before git answered");
+    assert!(!dialog(&app).working);
+}
+
+/// Mockup row 26: git with an author shows no fields; one with none shows
+/// them. An answer for another folder is dropped.
+#[test]
+fn the_probe_answer_decides_whether_the_fields_show() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let mut app = open_dialog_on(tmp.path());
+    app.ui_state.enable_version_control.as_mut().unwrap().author =
+        crate::app::contracts::CommitAuthor::Probing;
+    let answer =
+        |dir: &std::path::Path, has_identity| crate::app::EnableVersionControlMsg::AuthorProbed {
+            project_dir: dir.to_path_buf(),
+            has_identity,
+        };
+
+    send(&mut app, answer(std::path::Path::new("/elsewhere"), false));
+    assert_eq!(
+        dialog(&app).author,
+        crate::app::contracts::CommitAuthor::Probing,
+        "stale"
+    );
+    send(&mut app, answer(tmp.path(), false));
+    assert_eq!(dialog(&app).author, missing_author());
+
+    let mut known = open_dialog_on(tmp.path());
+    known
+        .ui_state
+        .enable_version_control
+        .as_mut()
+        .unwrap()
+        .author = crate::app::contracts::CommitAuthor::Probing;
+    send(&mut known, answer(tmp.path(), true));
+    assert_eq!(
+        dialog(&known).author,
+        crate::app::contracts::CommitAuthor::Resolved
+    );
+}
+
+/// Mockup row 26: with no git author, Enable stays withheld until both the
+/// name and the email are filled.
+#[test]
+fn a_missing_author_withholds_enable_until_both_fields_are_filled() {
+    use crate::app::EnableVersionControlMsg as Msg;
+    let tmp = tempfile::TempDir::new().unwrap();
+    let mut app = open_dialog_on(tmp.path());
+    app.ui_state.enable_version_control.as_mut().unwrap().author = missing_author();
+
+    assert_eq!(app.handle_enable_version_control_confirm().units(), 0);
+    send(&mut app, Msg::AuthorNameChanged("Ada Lovelace".into()));
+    assert_eq!(
+        app.handle_enable_version_control_confirm().units(),
+        0,
+        "the email is still blank"
+    );
+    send(&mut app, Msg::AuthorEmailChanged("ada@example.org".into()));
+    assert_eq!(
+        dialog(&app).author.typed(),
+        Some(("Ada Lovelace".to_string(), "ada@example.org".to_string()))
+    );
+
+    let task = app.handle_enable_version_control_confirm();
+
+    assert_eq!(task.units(), 1, "the run starts");
+    assert!(dialog(&app).working);
+}
+
+/// Mockup row 26: a typed author git would refuse withholds Enable, checked
+/// by the repo-config writer's own `parse_author`.
+#[test]
+fn an_author_git_would_refuse_withholds_enable() {
+    let typed = |name: &str, email: &str| {
+        crate::app::contracts::CommitAuthor::Missing {
+            name: name.into(),
+            email: email.into(),
+        }
+        .typed()
+    };
+    for (name, email) in [
+        ("Ada <L", "ada@example.org"),
+        ("Ada", "ada lovelace@example.org"),
+        ("Ada", "a<b"),
+        ("Ada", "ada@example.org>"),
+        ("   ", "ada@example.org"),
+    ] {
+        assert_eq!(typed(name, email), None, "{name:?} / {email:?}");
+    }
+    assert_eq!(
+        typed("  Ada Lovelace ", " ada@example.org "),
+        Some(("Ada Lovelace".into(), "ada@example.org".into())),
+        "trimmed"
+    );
+
+    let tmp = tempfile::TempDir::new().unwrap();
+    let mut app = open_dialog_on(tmp.path());
+    app.ui_state.enable_version_control.as_mut().unwrap().author =
+        crate::app::contracts::CommitAuthor::Missing {
+            name: "Ada".into(),
+            email: "ada lovelace@example.org".into(),
+        };
+    assert_eq!(app.handle_enable_version_control_confirm().units(), 0);
+}
+
+/// Mockup row 26 (the 2026-11-22 repo-config writer): the typed author signs
+/// the first commit and is written to the new repository's own config.
+#[test]
+fn the_typed_author_signs_the_first_commit_and_is_stored_in_the_repository() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    std::fs::write(tmp.path().join("demo.snxprj"), "x").unwrap();
+
+    let outcome = enable_version_control_blocking(
+        crate::app::VersionControlScope::Project,
+        tmp.path(),
+        Some("demo"),
+        false,
+        None,
+        true,
+        FirstCommit {
+            message: "Initial version of demo",
+            author: Some(("Ada Lovelace", "ada@example.org")),
+        },
+    );
+
+    assert!(
+        matches!(
+            outcome,
+            crate::app::EnableVersionControlOutcome::Created { .. }
+        ),
+        "{outcome:?}"
+    );
+    let repo = git2::Repository::open(tmp.path()).expect("a repository");
+    let local = repo
+        .config()
+        .unwrap()
+        .open_level(git2::ConfigLevel::Local)
+        .unwrap();
+    assert_eq!(local.get_string("user.name").unwrap(), "Ada Lovelace");
+    assert_eq!(local.get_string("user.email").unwrap(), "ada@example.org");
+    let head = repo.head().unwrap().peel_to_commit().unwrap();
+    assert_eq!(head.author().name(), Some("Ada Lovelace"));
 }

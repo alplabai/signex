@@ -70,6 +70,8 @@ macro_rules! t {
 #[cfg(test)]
 mod consistency_tests;
 #[cfg(test)]
+mod en_us_copy_tests;
+#[cfg(test)]
 mod format_tests;
 #[cfg(test)]
 mod tests;

@@ -713,7 +713,7 @@ mod tests {
             "the box sits beside its label: {label:?} {auto:?}"
         );
         assert!(
-            !texts.iter().any(|t| t.text == "Preset Colours"),
+            !texts.iter().any(|t| t.text == "Preset Colors"),
             "{texts:?}"
         );
     }

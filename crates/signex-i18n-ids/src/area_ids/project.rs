@@ -301,4 +301,6 @@ define_ids! {
     VARIANT_MANAGER_PARAMETER_VALUE = "variant-manager-parameter-value";
     VARIANT_MANAGER_PARAMETER_FOOTPRINT = "variant-manager-parameter-footprint";
     VARIANT_MANAGER_SETTINGS_UNREADABLE = "variant-manager-settings-unreadable";
+    // dialog-polish
+    PROJECT_PARAMETER_UNRESOLVED = "project-parameter-unresolved";
 }

@@ -40,10 +40,15 @@ impl Signex {
                     } else {
                         active
                     };
-                    // A Layer Stack tab stays after its board's.
+                    // A Layer Stack tab stays after its board's, a Pin
+                    // table tab after its symbol's.
                     let active = self.document_state.active_tab;
+                    let active = crate::app::layer_stack_tab::keep_pages_after_boards(
+                        &mut self.document_state.tabs,
+                        active,
+                    );
                     self.document_state.active_tab =
-                        crate::app::layer_stack_tab::keep_pages_after_boards(
+                        crate::app::pin_table_tab::keep_pin_tables_after_symbols(
                             &mut self.document_state.tabs,
                             active,
                         );
@@ -209,16 +214,26 @@ impl Signex {
     }
 
     fn close_tab(&mut self, idx: usize, park_dirty: bool, keep_session: bool) -> Task<Message> {
-        // A Layer Stack tab shares its board's path but holds no document:
-        // nothing below, which acts on that path, may run for it.
+        // A Layer Stack or Pin table tab shares its owner's path but holds no
+        // document: nothing below, which acts on that path, may run for it.
         if self
             .document_state
             .tabs
             .get(idx)
-            .is_some_and(|tab| tab.kind.is_layer_stack())
+            .is_some_and(|tab| tab.kind.is_document_page())
         {
-            self.close_layer_stack_tab(idx, keep_session);
+            self.close_document_page_tab(idx, keep_session);
             return Task::none();
+        }
+        // The Gerber Viewer holds no document either; its path is its
+        // package's, which no engine or draft is keyed by.
+        if self
+            .document_state
+            .tabs
+            .get(idx)
+            .is_some_and(|tab| tab.kind.is_gerber_viewer())
+        {
+            return self.close_gerber_viewer_tab(idx, keep_session);
         }
         if let Some(tab) = self.document_state.tabs.get(idx) {
             let path = tab.path.clone();
@@ -361,6 +376,9 @@ impl Signex {
             }
             self.document_state.footprint_editors.remove(p);
             self.document_state.mark_document_clean(p);
+        }
+        if matches!(closing_kind, crate::app::TabKind::SymbolEditor(_)) {
+            self.drop_pin_table_tab_of(&closing_path);
         }
         if matches!(closing_kind, crate::app::TabKind::Pcb) {
             self.drop_layer_stack_tab_of(&closing_path);
@@ -518,10 +536,10 @@ impl Signex {
         let Some(tab) = self.document_state.tabs.get(idx) else {
             return Vec::new();
         };
-        // A Layer Stack tab stays on the main strip while its board is
-        // undocked.
+        // A Layer Stack or Pin table tab stays on the main strip while its
+        // owner is undocked.
         let left_main =
-            |tab: &TabInfo| !tab.kind.is_layer_stack() && self.tab_is_undocked(&tab.path);
+            |tab: &TabInfo| !tab.kind.is_document_page() && self.tab_is_undocked(&tab.path);
         if left_main(tab) {
             return Vec::new();
         }

@@ -709,3 +709,23 @@ fn the_preview_counts_every_board_target() {
         );
     }
 }
+
+/// Mockup row 179e: Properties reads the board's size from the sketch's
+/// closed outline; a sketch without one has none to read.
+#[test]
+fn the_sketch_outline_is_the_closed_profile_it_bakes() {
+    let mut s = Sketch::new();
+    let solve = |s: &Sketch| {
+        Solver::default()
+            .solve(&s.data, &resolve(&s.data.parameters).unwrap())
+            .unwrap()
+    };
+    hole_at(&mut s, 5.0, 5.0);
+    assert_eq!(sketch_outline(&s.data, &solve(&s)), None);
+    board_outline(&mut s);
+    let outline = sketch_outline(&s.data, &solve(&s)).expect("a closed outline");
+    assert_eq!(
+        sorted(&outline),
+        sorted(&mm(&[(0.0, 0.0), (50.0, 0.0), (50.0, 30.0), (0.0, 30.0)]))
+    );
+}

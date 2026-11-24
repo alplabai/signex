@@ -3,6 +3,7 @@ use std::sync::Arc;
 mod board_text;
 mod camera;
 mod carry;
+mod carry_items;
 mod content;
 #[cfg(test)]
 mod content_pixel_tests;
@@ -35,17 +36,18 @@ pub use board_text::BoardTextLayer;
 pub use camera::BoardCamera;
 pub use carry::{
     CarryKind, PasteLoad, PcbCarry, board_after_move, board_without, board_without_text,
-    carried_board, carried_text_board, carry_delta, followed_arcs, snap_point, snap_point_on,
-    via_carry_delta, with_arcs_replaced,
+    carried_board, carried_text_board, carry_delta, followed_arcs, item_carry_delta, snap_point,
+    snap_point_on, via_carry_delta, with_arcs_replaced,
 };
+pub use carry_items::{carried_item_ids, item_points};
 pub use content::BoardContentLayer;
 pub(crate) use grid::stroke_origin_marker;
 pub use highlight::{Highlight, HighlightLayer};
 pub use marks::BoardMarks;
 pub use msg::{LEAVE_TRACKS_KEY, PcbCanvasMsg};
 pub use rooms::{RoomMark, RoomsOverlay};
-pub use select::PcbSelectionState;
-pub use snap_options::{PcbSnapOptions, SnapDistance, SnapScope, SnapView};
+pub use select::{DraggedItems, PcbSelectionState};
+pub use snap_options::{PcbSnapOptions, SnapScope, SnapView};
 
 use crate::scene_generation::next_scene_generation;
 use iced::event::Event;
@@ -178,6 +180,8 @@ pub struct PcbCanvas {
     text_key: std::cell::Cell<Option<board_text::TextKey>>,
     /// Whether this canvas reports clicks and hovers.
     pub selectable: bool,
+    /// The pointer as the edge pan reads it, written on every event (#2872).
+    pub edge_pan: crate::canvas::EdgePanLink,
 }
 
 /// Ends the hold on a right release the Active Bar's press owned.
@@ -230,6 +234,7 @@ impl PcbCanvas {
             text_cache: canvas::Cache::default(),
             text_key: std::cell::Cell::new(None),
             selectable: true,
+            edge_pan: crate::canvas::EdgePanLink::default(),
         }
     }
 
@@ -655,6 +660,11 @@ impl canvas::Program<Message> for PcbCanvas {
     ) -> Option<canvas::Action<Message>> {
         // Remember the bounds so menu zoom (no cursor) can find the view centre.
         self.viewport.set(bounds);
+        // An edge pan moved the view: the redraw replays the pointer (#2872).
+        let replayed = self.edge_pan.replayed(event, cursor);
+        let event = replayed.as_ref().unwrap_or(event);
+        self.edge_pan
+            .observe(cursor.position_in(bounds), bounds.size());
         if let Some(action) = self.middle_zoom_event(state, event, bounds, cursor) {
             return Some(action);
         }

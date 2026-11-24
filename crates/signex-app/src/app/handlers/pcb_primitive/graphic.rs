@@ -18,16 +18,21 @@ use crate::panels::pcb_primitive_properties::{
 };
 use crate::pcb_canvas::layer_style;
 
-/// The layers a drawing can be on: every technical layer but the keep-outs,
-/// then the mechanical layers the board's layer table lists.
+/// The layers a drawing can be on: the board's copper layers (#2883), every
+/// technical layer but the keep-outs, then the mechanical layers the
+/// board's layer table lists.
 fn graphic_layers(board: &PcbBoard, i18n: &I18n) -> Vec<AreaLayerChoice> {
+    let copper = signex_renderer::pcb::board_copper_layers(&board.layers)
+        .into_iter()
+        .map(PcbLayer::Copper);
     let mechanical = board
         .layers
         .iter()
         .filter_map(|def| def.pcb_layer())
         .filter(|layer| matches!(layer, PcbLayer::Mechanical(_)));
-    PcbLayer::all()
-        .filter(|layer| matches!(layer, PcbLayer::Technical(_)))
+    let technical = PcbLayer::all().filter(|layer| matches!(layer, PcbLayer::Technical(_)));
+    copper
+        .chain(technical)
         .chain(mechanical)
         .filter(|layer| takes_board_graphics(*layer))
         .map(|layer| AreaLayerChoice {

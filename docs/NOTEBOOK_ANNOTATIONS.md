@@ -116,9 +116,12 @@ line:
 - **Scope:** the whole project of the active document (the drawn choice of
   the mock-up), every `.snxnbk` file in `<project>/notebook/`, sorted by file
   name.
-- **When:** the panel reads the files off the UI thread when it is shown,
-  when the project in view changes (a project is opened), and on the Refresh
-  button. While a new read runs, the last list stays shown.
+- **When:** the files are read off the UI thread when the panel is shown,
+  when the project in view changes (a project is opened, or a switch to
+  another project and back), and on the Refresh button. The project-change
+  read runs with the panel closed too, since the schematic's annotation
+  flags come from it, except for a project whose Close Project is still
+  resolving its sheets. While a new read runs, the last list stays shown.
 - **Parts:** the same read assembles the project's sheets (open sheets with
   their unsaved edits, the others from disk) and lists every designator and
   the sheet holding it. A `#component` or `#pin` whose part is not in the
@@ -133,7 +136,10 @@ line:
   Part, Status and Date fields. Part lists the parts the annotations name;
   Status lists the statuses they carry; Date offers Any date, Last 7 days
   (today and the six days before) and Last 30 days. A field with a value
-  shows it with an x that clears it.
+  shows it with an x that clears it. New annotation (+) ends the row of
+  fields; it inserts a note annotation into the open notebook and is greyed
+  without one (decision 2026-11-24). No notebook tab exists yet, so it is
+  always greyed, with the tooltip "New annotation · open a notebook first".
 - **List:** one header per file (its path and how many rows it shows), then
   its rows newest first, undated last. A row shows the kind's icon box, the
   title, the snippet, the reference chips, the status pill and the date
@@ -141,8 +147,8 @@ line:
 - **A row click** expands it: its file and line, the block as written, and
   a Jump button to its first part. Hovering a row (or expanding it) shows the
   Jump to schematic button.
-- **A part chip** opens the sheet that holds the part, centres the view on it
-  and selects it. **A net chip** highlights the net on every sheet and goes
+- **A part chip** opens the sheet that holds the part, centres and zooms the
+  view on it and selects it. **A net chip** highlights the net on every sheet and goes
   to its first member, as the Net Inspector does; that needs a sheet of the
   project in view.
 - **Footer:** "N of M annotations" and the number of notebook files.
@@ -153,9 +159,34 @@ Kind colours: Note the secondary ink, Calculation the info blue,
 Measurement the success green, Issue the error red, Decision purple (Light
 `#7A3EA8`, Dark `#D2A8F0`); `signex_widgets::theme_ext::annotation_kind_colour`.
 
+## Annotation flags
+
+A part that annotations name carries flags on the schematic canvas (drawn
+on by default, the mock-up's choice):
+
+- One flag per kind, at the part's top-right corner, side by side in kind
+  order (Note, Calculation, Measurement, Issue, Decision). A flag is a pole
+  with a notched pennant in the kind's colour; the pennant holds how many
+  blocks of that kind name the part. A block naming the part twice
+  (`#component("U1")` and `#pin("U1", "3")`) counts once. Nets and power
+  ports carry no flag.
+- A part is matched by the designator the canvas draws for it, so a sheet
+  reused under several placements flags each placement's own parts.
+- The flags come from the last read, which runs whether or not the
+  Annotations panel is open, and show only on the sheets of the project that
+  read was of. A notebook file edited outside Signex shows once the project
+  is read again (the panel shown, a project switch, or Refresh). While a read of another project runs, and
+  with no project in view, there are none.
+- They are sized from the caption text and keep their size on screen at any
+  zoom. They are drawn in the selection layer, so they are editor-only and
+  never reach a print or an export.
+
 ## Not built yet
 
 These parts of the mock-up wait for the notebook tab and are tracked as
 their own issues: Open in notebook, New Notebook and Import .typ… in the
-empty state, the panel header's New annotation button, calculation results
-computed from part parameters, and annotation flags on the schematic canvas.
+empty state, the New annotation action itself (the button is there, greyed),
+calculation results computed from part parameters, and the flag hover card
+("U3 · 3 annotations"). The View ▸ Annotation Flags switch of the mock-up is a
+proposal and is not built. The header More button is left out until its
+items are decided (decision 2026-11-24).

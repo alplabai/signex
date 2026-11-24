@@ -17,6 +17,8 @@ use signex_types::pcb::{
     BoardGraphic, BoardText, Footprint, FpGraphic, PCB_DEFAULT_GRAPHIC_WIDTH_MM,
     PCB_DEFAULT_TEXT_SIZE_MM, PcbBoard,
 };
+use signex_types::pcb_dimension::LinearDimension;
+use signex_types::pcb_dimension_style::GLYPH_ADVANCE;
 use signex_types::pcb_graphic::BoardGraphicKind;
 use signex_types::pcb_layer::PcbLayer;
 use signex_types::schematic::HAlign;
@@ -24,7 +26,7 @@ use signex_types::schematic::HAlign;
 use super::board_features::{line, push_loop};
 use super::board_paint::BoardObject;
 use super::emit::{dim_if, mm_with_floor, point_to_xy};
-use super::footprint_text::FootprintTextInput;
+use super::footprint_text::{FootprintTextInput, TextFace};
 use super::layer_view::PcbLayerView;
 use crate::theme::ResolvedTheme;
 
@@ -181,18 +183,30 @@ fn free_drawings(board: &PcbBoard, view: Option<&PcbLayerView>, out: &mut Drawin
         else {
             continue;
         };
-        let width_mm = mm_with_floor(dimension.line_width, PCB_DEFAULT_GRAPHIC_WIDTH_MM, 0.0);
+        let width = |mm: f64| mm_with_floor(mm, PCB_DEFAULT_GRAPHIC_WIDTH_MM, 0.0);
+        let strokes = drawing.strokes.iter().enumerate();
         out.graphics
-            .extend(drawing.strokes.iter().map(|(a, b)| GraphicInput {
+            .extend(strokes.map(|(index, (a, b))| GraphicInput {
                 shape: GraphicShapeInput::Line {
                     p0: point_to_xy(*a),
                     p1: point_to_xy(*b),
                 },
                 layer,
-                width_mm,
+                width_mm: width(dimension.stroke_width(index)),
                 filled: false,
                 dimmed,
             }));
+        // #2868: a filled arrowhead is a closed triangle.
+        let arrows = drawing.filled_arrows.iter();
+        out.graphics.extend(arrows.map(|corners| GraphicInput {
+            shape: GraphicShapeInput::Polygon {
+                points: corners.iter().map(|p| point_to_xy(*p)).collect(),
+            },
+            layer,
+            width_mm: width(dimension.line_width),
+            filled: true,
+            dimmed,
+        }));
         out.texts.push(FootprintTextInput {
             content: dimension.value_text(),
             position: point_to_xy(drawing.label_at),
@@ -202,7 +216,26 @@ fn free_drawings(board: &PcbBoard, view: Option<&PcbLayerView>, out: &mut Drawin
             layer,
             justify: HAlign::Center,
             designator: false,
+            face: dimension_face(dimension),
         });
+    }
+}
+
+/// The glyphs of a dimension's value: its font, weight, slant, and its
+/// text width over the plain glyph width at its height.
+fn dimension_face(dimension: &LinearDimension) -> TextFace {
+    let style = &dimension.style;
+    let plain = dimension.text_height * GLYPH_ADVANCE;
+    let stretch = style.text_width / plain;
+    TextFace {
+        font: style.font,
+        bold: style.bold,
+        italic: style.italic,
+        stretch: if stretch.is_finite() && stretch > 0.0 {
+            stretch as f32
+        } else {
+            1.0
+        },
     }
 }
 
@@ -271,6 +304,7 @@ fn text_graphic(
         layer,
         justify: HAlign::Center,
         designator: false,
+        face: TextFace::PLAIN,
     })
 }
 
@@ -290,6 +324,7 @@ fn frame_lines(graphic: &BoardGraphic, layer: PcbLayer) -> Vec<FootprintTextInpu
             layer,
             justify: HAlign::Center,
             designator: false,
+            face: TextFace::PLAIN,
         })
         .collect()
 }
@@ -308,6 +343,7 @@ fn board_text(text: &BoardText, layer: PcbLayer) -> Option<FootprintTextInput> {
         layer,
         justify: HAlign::Center,
         designator: false,
+        face: TextFace::PLAIN,
     })
 }
 
@@ -392,3 +428,7 @@ pub(crate) fn arc_points(
 #[cfg(test)]
 #[path = "graphics_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "dimension_render_tests.rs"]
+mod dimension_render_tests;

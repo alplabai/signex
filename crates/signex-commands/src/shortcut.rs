@@ -21,6 +21,10 @@ pub enum ShortcutContext {
     TextInput,
     CommandPalette,
     Placement,
+    /// The board 3D view of the main window (mockup row 175): live with
+    /// `Pcb` while the view is shown, and it outranks it.
+    #[serde(rename = "board_3d")]
+    Board3d,
 }
 
 #[derive(
