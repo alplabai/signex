@@ -148,6 +148,8 @@ mod emit;
 use emit::*;
 pub mod halo;
 pub use halo::OverlayHaloInput;
+pub mod annotation_flags;
+pub use annotation_flags::{AnnotationFlagInput, AnnotationFlagMetrics};
 
 /// Schematic renderer: builds a GPU `Scene` from a [`SchematicSnapshot`].
 pub struct SchematicRenderer;

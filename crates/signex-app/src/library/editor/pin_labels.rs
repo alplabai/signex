@@ -77,11 +77,6 @@ pub(crate) fn orientation_by_name(debug_name: &str) -> Option<PinOrientation> {
     })
 }
 
-/// The label of a pin orientation, by its debug name (`Right`).
-pub(crate) fn orientation_name_message(debug_name: &str) -> Option<MessageId> {
-    orientation_by_name(debug_name).map(orientation_message)
-}
-
 /// Every pin symbol (the Inside / Inside Edge / Outside Edge / Outside
 /// glyphs), in the order the Properties dropdowns list them.
 pub(crate) const PIN_SYMBOLS: [PinSymbolKind; 15] = [
@@ -178,7 +173,9 @@ mod tests {
         use signex_library::PinOrientation as O;
         for o in [O::Up, O::Down, O::Left, O::Right] {
             assert!(
-                orientation_name_message(&format!("{o:?}")).is_some(),
+                orientation_by_name(&format!("{o:?}"))
+                    .map(orientation_message)
+                    .is_some(),
                 "{o:?}"
             );
         }

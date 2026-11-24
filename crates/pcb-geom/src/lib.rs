@@ -60,7 +60,7 @@ mod units;
 mod zone_fill;
 
 pub use arrange::{arrange_in_box, pack_in_box, placed_extent};
-pub use body::{footprint_body, is_courtyard};
+pub use body::{checked_body, courtyard_outline, footprint_body, is_courtyard};
 pub use closed_path::{PathRefusal, closed_path};
 pub use connections::{ConnectionCounts, NetUnrouted, PadName, connection_counts};
 pub use copper::{

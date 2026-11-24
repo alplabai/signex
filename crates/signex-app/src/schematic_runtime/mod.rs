@@ -21,6 +21,7 @@ use signex_types::schematic::{
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
 
+pub mod annotation_flags;
 mod bezier;
 mod cache_copy;
 mod dimension;

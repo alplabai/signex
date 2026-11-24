@@ -119,6 +119,71 @@ mod tests {
         }
     }
 
+    fn project() -> LoadedProject {
+        let data = serde_json::from_str(
+            r#"{"name":"dcdc-buck","dir":"","schematic_root":null,"pcb_file":null}"#,
+        )
+        .expect("a project");
+        LoadedProject {
+            id: crate::app::state::ProjectId::test_id(29),
+            path: std::env::temp_dir().join("designator-hint.snxprj"),
+            data,
+            pending_libraries: Default::default(),
+            case_fold: Default::default(),
+            case_probed: false,
+            case_decided: false,
+        }
+    }
+
+    /// Mockup row 29 (#2805): the hint sits in the value column under the
+    /// picker, on one line, and names the choices in the picker's order.
+    #[test]
+    fn the_hint_lays_out_under_the_picker_in_the_value_column() {
+        let (app, _boot) = crate::app::Signex::new();
+        let i18n = &app.ui_state.i18n;
+        let tokens = &app.document_state.panel_ctx.tokens;
+        let project = project();
+        let window = iced::Size::new(900.0, 400.0);
+        let texts: Vec<crate::layout_probe::LaidOutText> =
+            crate::layout_probe::lay_out_texts(row(&project, i18n, tokens), window)
+                .into_iter()
+                .map(|t| crate::layout_probe::LaidOutText {
+                    text: t.text.replace(['\u{2068}', '\u{2069}'], ""),
+                    ..t
+                })
+                .collect();
+        let hint_words = standards_hint(i18n)
+            .into_string()
+            .replace(['\u{2068}', '\u{2069}'], "");
+        let names: Vec<String> = StandardChoice::ALL.iter().map(|c| c.label(i18n)).collect();
+        assert_eq!(hint_words, names.join(" · "));
+        let caption = crate::layout_probe::find(
+            &texts,
+            &t!(i18n, ids::PROJECT_GENERAL_DESIGNATOR_STANDARD).into_string(),
+        )
+        .bounds;
+        let hint = crate::layout_probe::find(&texts, &hint_words).bounds;
+        assert!(
+            hint.x > caption.x + caption.width,
+            "the hint is in the value column: {hint:?} vs {caption:?}"
+        );
+        assert!(
+            hint.center_y() > caption.center_y(),
+            "the hint is under the picker: {hint:?} vs {caption:?}"
+        );
+        let one_line = crate::layout_probe::natural::<Message>(
+            text(signex_i18n::UserText::new(hint_words.clone()))
+                .size(TS.caption)
+                .boxed(),
+            &hint_words,
+        );
+        assert!(
+            hint.height < one_line.height * 1.5,
+            "the hint wraps: {hint:?} vs {one_line:?}"
+        );
+        assert!(hint.x + hint.width <= window.width, "{hint:?}");
+    }
+
     /// The picker offers "Library designator" and every standard once, in
     /// the standards' own order, so a new standard cannot be left out.
     #[test]

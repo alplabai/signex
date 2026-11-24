@@ -129,3 +129,71 @@ board-sketch-bake-anchor = Moves { $reference }
 board-sketch-bake-nothing = Bake writes nothing to the board.
 board-sketch-bake-unsolved = The sketch does not bake: it is not solved.
 board-sketch-bake-close-hint = Bake preview on the mode bar closes this panel.
+# dxf-import-check-step
+# The Import DXF profile check and result (mockup row 179c).
+board-sketch-dxf-next = Next: check profiles
+board-sketch-dxf-problems = { $problems ->
+        [one] 1 problem
+       *[other] { $problems } problems
+    } in { $profiles ->
+        [one] 1 profile
+       *[other] { $profiles } profiles
+    }
+board-sketch-dxf-no-problems = No problems in { $profiles ->
+        [one] 1 profile
+       *[other] { $profiles } profiles
+    }
+# $profile is the target the profile lands as, such as Board outline.
+board-sketch-dxf-gap = { $profile } open: gap { $gap } mm at ({ $x }, { $y })
+board-sketch-dxf-open-end = { $profile } open at ({ $x }, { $y }): no end within { $tolerance } mm
+board-sketch-dxf-overlap = { $count } overlapping segments at ({ $x }, { $y })
+board-sketch-dxf-circles-closed = { $count ->
+        [one] 1 circle closed
+       *[other] { $count } circles closed
+    }
+board-sketch-dxf-heal-under = Heal under
+board-sketch-dxf-heal = Heal and merge
+board-sketch-dxf-as-is = Import as is
+board-sketch-dxf-result-title = Imported: { $outlines ->
+        [one] 1 outline
+       *[other] { $outlines } outlines
+    }, { $holes ->
+        [one] 1 hole
+       *[other] { $holes } holes
+    }
+board-sketch-dxf-result-others = and { $others ->
+        [one] 1 other profile
+       *[other] { $others } other profiles
+    }
+board-sketch-dxf-result-healed = { $healed ->
+        [one] 1 gap closed
+       *[other] { $healed } gaps closed
+    } (end points merged), { $merged ->
+        [one] 1 overlapping segment
+       *[other] { $merged } overlapping segments
+    } merged into one line.
+board-sketch-dxf-result-as-is = Imported as drawn: no gap closed, no overlap merged.
+board-sketch-dxf-result-constraints = { $constraints ->
+        [one] 1 constraint added
+       *[other] { $constraints } constraints added
+    }; DOF { $dof } left.
+board-sketch-dxf-result-unlinked = The DXF is not linked: a later change to the file does not reach this sketch.
+board-sketch-dxf-done = Done
+# Marks on the preview of the drawing.
+board-sketch-dxf-mark-gap = gap { $gap } mm
+board-sketch-dxf-mark-overlap = { $count } overlapping segments
+# The layer caption under the preview; $list joins the layer entries.
+board-sketch-dxf-layers = layer { $list }
+board-sketch-dxf-layer-target = { $layer } → { $target }
+board-sketch-dxf-layer-skipped = { $layer } ignored
+# min-slot
+# The min slot outline check (mockup row 179d): every Slot opening at least as
+# wide as the fab routes.
+board-sketch-check-min-slot = Slots: none narrower than the min slot
+board-sketch-check-name-min-slot = Min slot
+board-sketch-check-skipped-min-slot = { $check }: not checked, the project's fab profile names no min slot
+# A slot narrower than the min slot; $width and $min in millimetres.
+board-sketch-check-slot-narrow = Slot { $width } mm wide < min slot { $min } mm
+# The Fab profile group's min slot row; $width in millimetres.
+board-sketch-fab-min-slot = Min slot Ø { $width } · from profile
+board-sketch-fab-min-slot-none = Min slot: the project's fab profile names none

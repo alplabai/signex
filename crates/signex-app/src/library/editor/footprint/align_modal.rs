@@ -48,9 +48,12 @@ pub(crate) const VERTICAL_OPTIONS: [(MessageId, Option<AlignOp>); 5] = [
     (ids::DIALOG_ALIGN_NONE, None),
 ];
 
-/// Card width and label column, in body-text ems: wide enough for all
-/// five segments of a row.
-const CARD_EM: f32 = 30.0;
+/// Card width and label column, in body-text ems. The card holds each
+/// axis's five segments on one row (mockup row 140): the Vertical labels
+/// take about 14 em, their segment padding, gaps and track about 9 em,
+/// and the label column, gap and body padding about 8.5 em; the rest is
+/// headroom for a wider face. At 30 em the row folded onto two lines.
+const CARD_EM: f32 = 36.0;
 const LABEL_EM: f32 = 5.8;
 
 /// The segmented-control look from the theme tokens.
@@ -214,5 +217,48 @@ mod tests {
                 None
             ]
         );
+    }
+
+    /// Mockup row 140: each axis's five segments sit on one row, Left to
+    /// None and Top to None, the Vertical row under the Horizontal one.
+    #[test]
+    fn each_axis_keeps_its_five_segments_on_one_row() {
+        use crate::layout_probe::{find, lay_out_texts};
+        use crate::library::editor::footprint::state::AlignModal;
+        use signex_types::theme::{ThemeId, theme_tokens};
+
+        let path = std::path::PathBuf::from("/tmp/align.snxfpt");
+        let file =
+            signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("F"));
+        let mut editor = crate::app::FootprintDocument::new(path, file);
+        editor.state.align_modal = Some(AlignModal {
+            horizontal: Some(AlignOp::CenterH),
+            vertical: None,
+        });
+        let tokens = theme_tokens(ThemeId::GraphiteLight);
+        let en = signex_i18n::I18n::en_us_ref();
+        let card = super::view_align_modal(&editor, &tokens, en).expect("the modal is open");
+        let texts = lay_out_texts(card, iced::Size::new(2_000.0, 2_000.0));
+
+        let row_of = |label: &str| find(&texts, label).bounds.center_y();
+        let nones: Vec<f32> = texts
+            .iter()
+            .filter(|t| t.text == "None")
+            .map(|t| t.bounds.center_y())
+            .collect();
+        assert_eq!(nones.len(), 2, "one None per axis: {texts:#?}");
+        let same_row = |a: f32, b: f32| (a - b).abs() < 1.0;
+
+        let horizontal = row_of("Left");
+        assert!(same_row(row_of("Right"), horizontal), "Right: {texts:#?}");
+        assert!(
+            same_row(nones[0], horizontal),
+            "Horizontal None: {texts:#?}"
+        );
+
+        let vertical = row_of("Top");
+        assert!(same_row(row_of("Bottom"), vertical), "Bottom: {texts:#?}");
+        assert!(same_row(nones[1], vertical), "Vertical None: {texts:#?}");
+        assert!(vertical > horizontal, "Vertical sits under Horizontal");
     }
 }

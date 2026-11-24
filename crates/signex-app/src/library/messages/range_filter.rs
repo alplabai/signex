@@ -42,4 +42,13 @@ pub enum RangeFilterMsg {
     Cleared {
         key: String,
     },
+    /// The chip of an applied filter was pressed: its editor opens.
+    ChipPressed {
+        key: String,
+    },
+    /// The editor of a filter was finished (Done or Enter): a complete
+    /// filter folds back into its chip.
+    EditingFinished {
+        key: String,
+    },
 }

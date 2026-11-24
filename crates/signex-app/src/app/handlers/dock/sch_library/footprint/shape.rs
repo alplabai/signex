@@ -28,7 +28,7 @@ pub(super) fn sketch_entity_mut(
 }
 
 /// The active footprint's sketch array `array_id`, if it exists.
-fn sketch_array_mut(
+pub(super) fn sketch_array_mut(
     editor: &mut FootprintDocument,
     array_id: signex_sketch::array::ArrayId,
 ) -> Option<&mut signex_sketch::array::Array> {
@@ -318,6 +318,9 @@ impl Signex {
     ) -> bool {
         use crate::panels::ArrayParamField;
         use signex_sketch::array::{ArrayKind, GridDepopulation};
+        if field == ArrayParamField::NumberMask {
+            return self.fp_editor_set_array_number_mask(array_id, value);
+        }
         if let Some(editor) = self.active_footprint_editor_mut() {
             // Low byte = which field, so two fields of one array do not merge.
             let key = Some((

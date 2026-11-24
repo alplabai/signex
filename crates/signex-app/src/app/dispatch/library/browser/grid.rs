@@ -140,10 +140,12 @@ impl Signex {
         let Some(index) = self.library.browser_row_position_of_selection(library_path) else {
             return Task::none();
         };
+        let row_h = crate::library::browser::row_height(self.library.library_panel.row_style);
         let Some(state) = self.library.library_browsers.get_mut(library_path) else {
             return Task::none();
         };
-        let Some(offset_y) = crate::library::browser::reveal_row_offset(index, state.grid_scroll)
+        let Some(offset_y) =
+            crate::library::browser::reveal_row_offset_at(index, state.grid_scroll, row_h)
         else {
             return Task::none();
         };

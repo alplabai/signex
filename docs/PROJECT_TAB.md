@@ -29,6 +29,13 @@ Notebook) join them. Two rules hold for every page tab, in
 A Layer Stack tab shares its board's path, and path lookups take the first
 tab, so it always sits after the board's tab (`app/layer_stack_tab.rs`).
 
+A symbol's Pin table tab (mockup row 122b, opened by the Pins tab's `Edit pins
+in table…`) is a page of its symbol in the same way: its path is the
+`.snxsym`, it sits after the symbol editor's tab, Save, Undo and the dirty dot
+are the symbol's, and closing the symbol closes it (`app/pin_table_tab.rs`).
+Its title is `<symbol> · Pin table`, the symbol's own name rather than a
+project's.
+
 A shared page shell, `signex_widgets::doc_tab_shell`, holds the Layer Stack
 tab; the Project and Rules tabs do not use it yet. It draws, from the top,
 a toolbar row (items from the left, wrapping when the tab is

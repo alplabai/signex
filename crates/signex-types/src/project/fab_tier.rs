@@ -27,6 +27,8 @@ pub struct FabCapabilities {
     /// The router bit that cuts the board outline and its openings: an
     /// inside corner tighter than half of it cannot be cut (mockup row 179d).
     pub router_tool_diameter: f64,
+    /// The narrowest slot the maker routes, across (mockup row 179d).
+    pub min_slot: f64,
 }
 
 /// When the tier numbers were last checked.
@@ -49,6 +51,7 @@ impl FabTemplate {
                 mask_sliver: 0.1,
                 silk_to_pad: 0.15,
                 router_tool_diameter: 2.0,
+                min_slot: 0.8,
             },
             Self::Advanced => FabCapabilities {
                 clearance: 0.1,
@@ -62,6 +65,7 @@ impl FabTemplate {
                 mask_sliver: 0.075,
                 silk_to_pad: 0.1,
                 router_tool_diameter: 1.6,
+                min_slot: 0.6,
             },
             Self::Hdi => FabCapabilities {
                 clearance: 0.075,
@@ -75,6 +79,7 @@ impl FabTemplate {
                 mask_sliver: 0.06,
                 silk_to_pad: 0.075,
                 router_tool_diameter: 1.0,
+                min_slot: 0.5,
             },
         }
     }
@@ -93,6 +98,7 @@ impl FabTemplate {
                 .to_string(),
             published: TIERS_REVISED.to_string(),
             router_tool_diameter: Some(self.capabilities().router_tool_diameter),
+            min_slot: Some(self.capabilities().min_slot),
         }
     }
 }

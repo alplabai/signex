@@ -471,11 +471,11 @@ profile. The generic tiers are fab profiles shipped with Signex: their
 `fab` block names no maker, says which process class they stand for, and
 dates the numbers; they are starting points, not one maker's limits.
 
-| Tier | Clearance | Track | Via / drill | Hole | Annular ring | Hole to hole | Edge | Mask sliver | Silkscreen to pad | Router tool Ø |
-|---|---|---|---|---|---|---|---|---|---|---|
-| Standard | 0.15 | 0.15 | 0.5 / 0.25 | 0.25 | 0.125 | 0.5 | 0.3 | 0.1 | 0.15 | 2.0 |
-| Advanced | 0.1 | 0.1 | 0.4 / 0.2 | 0.2 | 0.1 | 0.4 | 0.25 | 0.075 | 0.1 | 1.6 |
-| HDI | 0.075 | 0.075 | 0.25 / 0.1 | 0.1 | 0.075 | 0.3 | 0.2 | 0.06 | 0.075 | 1.0 |
+| Tier | Clearance | Track | Via / drill | Hole | Annular ring | Hole to hole | Edge | Mask sliver | Silkscreen to pad | Router tool Ø | Min slot |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Standard | 0.15 | 0.15 | 0.5 / 0.25 | 0.25 | 0.125 | 0.5 | 0.3 | 0.1 | 0.15 | 2.0 | 0.8 |
+| Advanced | 0.1 | 0.1 | 0.4 / 0.2 | 0.2 | 0.1 | 0.4 | 0.25 | 0.075 | 0.1 | 1.6 | 0.6 |
+| HDI | 0.075 | 0.075 | 0.25 / 0.1 | 0.1 | 0.075 | 0.3 | 0.2 | 0.06 | 0.075 | 1.0 | 0.5 |
 
 All in mm. Mask sliver and silkscreen rules are warnings, the rest errors.
 The router tool diameter is no rule: it is the bit that cuts the board
@@ -487,6 +487,13 @@ project's value). The board sketch's inside-corner check warns at a corner
 tighter than half of it (`PCB_SKETCH.md`, "Outline checks"). The tier values
 are generic starting points (decision 3, Caner 2026-11-20); check your
 maker's. The Project tab's Project setup tier pick does not set it yet.
+
+The min slot is no rule either: the narrowest slot the maker routes,
+across (DECISIONS 2026-11-23 and 2026-11-24). A fab profile stores it as
+`fab.min_slot`; the project stores it with its rules, `rules.min_slot`, set
+in the same places and the same undo step as the router tool, except that
+New Project stores it with the seeded rules. The board sketch's min slot
+check warns at a narrower Slot (`PCB_SKETCH.md`, "Outline checks").
 
 Picking a tier in project setup (New Project, the Project tab's Project
 setup, New PCB) writes the same seven rules as the tier preset: see

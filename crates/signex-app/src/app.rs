@@ -56,6 +56,7 @@ mod parked_sheets;
 pub mod path_op_jobs;
 pub mod path_ops;
 pub(crate) mod pin_junction_repair;
+mod pin_table_tab;
 pub mod project_entry_disk;
 pub(crate) mod project_git;
 mod project_tab;

@@ -19,6 +19,8 @@ mod bars;
 #[cfg(test)]
 mod dismiss_tests;
 mod dock_zones;
+#[cfg(test)]
+mod filter_menu_tests;
 mod modals;
 mod net_hover;
 mod palette;

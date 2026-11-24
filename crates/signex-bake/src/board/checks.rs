@@ -1,6 +1,7 @@
 //! Outline checks of a board sketch (mockup row 179d): the outline is one closed
-//! loop, it does not cross itself, every opening lies inside it, and no
-//! inside corner is tighter than the router tool cuts. The checks read the
+//! loop, it does not cross itself, every opening lies inside it, no
+//! inside corner is tighter than the router tool cuts, and no slot is
+//! narrower than the fab's min slot. The checks read the
 //! solve the editor already has (no second solve) and walk the outline with
 //! the bake's own profile walk, so they see what Bake writes. Each finding
 //! names the sketch entities of its place. Every check warns only: Bake
@@ -22,6 +23,7 @@ use signex_types::pcb::Point;
 use super::features::hole_places;
 use super::geometry::{boundary, circle};
 use super::inside_corners::tight_corners;
+use super::min_slot::narrow_slots;
 use super::patterned::boundary_places;
 use super::{BoardBakeError, Context};
 use crate::eval_util::{build_ctx, eval_mm};
@@ -40,6 +42,17 @@ pub struct OutlineChecks {
     pub no_crossing: CheckState,
     pub openings_inside: CheckState,
     pub inside_corners: CheckState,
+    pub min_slot: CheckState,
+}
+
+/// What the project's fab tier or profile gives the checks, in mm: `None`
+/// leaves the check that needs it not checked.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct FabLimits {
+    /// The inside-corner check's router tool.
+    pub router_tool_diameter: Option<f64>,
+    /// The min slot check's narrowest slot, across.
+    pub min_slot: Option<f64>,
 }
 
 /// One outline check, in the order Properties lists them.
@@ -53,14 +66,17 @@ pub enum OutlineCheck {
     OpeningsInside,
     /// No inside corner is sharper than the router can cut.
     InsideCorners,
+    /// No slot is narrower than the fab routes.
+    MinSlot,
 }
 
 impl OutlineCheck {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::Closed,
         Self::NoCrossing,
         Self::OpeningsInside,
         Self::InsideCorners,
+        Self::MinSlot,
     ];
 }
 
@@ -84,6 +100,8 @@ pub enum NotChecked {
     Unsolved,
     /// The project's fab profile names no router tool diameter.
     NoRouterTool,
+    /// The project's fab profile names no min slot.
+    NoMinSlot,
 }
 
 /// A failure and its place.
@@ -129,6 +147,13 @@ pub enum Finding {
         radius_mm: f64,
         tool_radius_mm: f64,
     },
+    /// The Slot opening traced from `entity` is `width_mm` across, under
+    /// the fab's `min_slot_mm`.
+    NarrowSlot {
+        entity: SketchEntityId,
+        width_mm: f64,
+        min_slot_mm: f64,
+    },
 }
 
 impl Finding {
@@ -142,7 +167,8 @@ impl Finding {
             Self::Branching { edge } => std::slice::from_ref(edge),
             Self::Untraceable { entity }
             | Self::OpeningOutside { entity, .. }
-            | Self::TightCorner { entity, .. } => std::slice::from_ref(entity),
+            | Self::TightCorner { entity, .. }
+            | Self::NarrowSlot { entity, .. } => std::slice::from_ref(entity),
         }
     }
 }
@@ -154,6 +180,7 @@ impl OutlineChecks {
             OutlineCheck::NoCrossing => &self.no_crossing,
             OutlineCheck::OpeningsInside => &self.openings_inside,
             OutlineCheck::InsideCorners => &self.inside_corners,
+            OutlineCheck::MinSlot => &self.min_slot,
         }
     }
 
@@ -187,6 +214,15 @@ pub fn outline_checks_with_router(
     solve.map(|solve| outline_checks_with(sketch, solve, &solve.params, router_tool_diameter))
 }
 
+/// [`outline_checks_after`] with the project's fab limits.
+pub fn outline_checks_with_fab(
+    sketch: &SketchData,
+    solve: Option<&FullSolveOutput>,
+    fab: FabLimits,
+) -> Option<OutlineChecks> {
+    solve.map(|solve| outline_checks_with_limits(sketch, solve, &solve.params, fab))
+}
+
 /// Check the outline of `sketch` at the positions of `solve`, resolved
 /// with `params`, without a router tool.
 pub fn outline_checks(
@@ -198,12 +234,26 @@ pub fn outline_checks(
 }
 
 /// [`outline_checks`] with the router tool diameter in mm: `None` leaves
-/// the inside corners not checked.
+/// the inside corners not checked. No min slot is known.
 pub fn outline_checks_with(
     sketch: &SketchData,
     solve: &FullSolveOutput,
     params: &HashMap<String, f64>,
     router_tool_diameter: Option<f64>,
+) -> OutlineChecks {
+    let fab = FabLimits {
+        router_tool_diameter,
+        min_slot: None,
+    };
+    outline_checks_with_limits(sketch, solve, params, fab)
+}
+
+/// [`outline_checks`] with the project's fab limits.
+pub fn outline_checks_with_limits(
+    sketch: &SketchData,
+    solve: &FullSolveOutput,
+    params: &HashMap<String, f64>,
+    fab: FabLimits,
 ) -> OutlineChecks {
     let ctx = Context {
         sketch,
@@ -213,7 +263,14 @@ pub fn outline_checks_with(
     };
     let not_checked = |why| CheckState::NotChecked(why);
     let all_not_checked = |why| (not_checked(why), not_checked(why), not_checked(why));
-    let (closed, no_crossing, openings_inside, inside_corners) = match trace_outline(&ctx) {
+    let outline = trace_outline(&ctx);
+    // Slots are checked whatever the outline is, but not behind a solve.
+    let min_slot = match fab.min_slot.filter(|mm| usable_mm(*mm)) {
+        _ if matches!(outline, Outline::Unsolved) => not_checked(NotChecked::Unsolved),
+        Some(min_slot) => state_of(narrow_slots(&ctx, min_slot)),
+        None => not_checked(NotChecked::NoMinSlot),
+    };
+    let (closed, no_crossing, openings_inside, inside_corners) = match outline {
         Outline::Missing => {
             let (a, b, c) = all_not_checked(NotChecked::NoOutline);
             (a, b, c, not_checked(NotChecked::NoOutline))
@@ -232,7 +289,7 @@ pub fn outline_checks_with(
             CheckState::Passed,
             state_of(crossings(&outline)),
             state_of(openings_outside(&ctx, &outline)),
-            match router_tool_diameter.filter(|d| d.is_finite() && *d > 0.0) {
+            match fab.router_tool_diameter.filter(|d| usable_mm(*d)) {
                 Some(diameter) => state_of(tight_corners(&ctx, &outline, diameter)),
                 None => not_checked(NotChecked::NoRouterTool),
             },
@@ -243,7 +300,13 @@ pub fn outline_checks_with(
         no_crossing,
         openings_inside,
         inside_corners,
+        min_slot,
     }
+}
+
+/// A fab limit the checks can use: finite and positive.
+fn usable_mm(mm: f64) -> bool {
+    mm.is_finite() && mm > 0.0
 }
 
 fn state_of(findings: Vec<Finding>) -> CheckState {

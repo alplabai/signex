@@ -69,18 +69,20 @@ pub(super) struct Look {
     pub(super) muted: Color,
     pub(super) name: Color,
     pub(super) error: Color,
+    pub(super) warn: Color,
     focus: Color,
     pub(super) line: Color,
 }
 
 impl Look {
-    fn of(tokens: &ThemeTokens) -> Self {
+    pub(super) fn of(tokens: &ThemeTokens) -> Self {
         let r = crate::styles::tokens::resolve(tokens);
         Self {
             ink: theme_ext::text_primary(tokens),
             muted: r.ink4,
             name: r.info,
             error: theme_ext::error_color(tokens),
+            warn: theme_ext::warning_color(tokens),
             focus: r.accent_soft,
             line: theme_ext::border_color(tokens),
         }

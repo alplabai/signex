@@ -94,7 +94,9 @@ impl Signex {
     /// Start the off-thread child-sheet read for closing `project_id`. Used by
     /// the click and again when the open-project set changed under a result
     /// already in hand (a project opened meanwhile has unresolved children).
-    fn spawn_close_refs_resolve(&self, project_id: ProjectId) -> Task<Message> {
+    /// The project's notebook is not read while the close resolves.
+    fn spawn_close_refs_resolve(&mut self, project_id: ProjectId) -> Task<Message> {
+        self.ui_state.annotations.closing = Some(project_id);
         let inputs = self.document_state.sheet_ref_inputs();
         Task::perform(
             async move {
@@ -133,6 +135,9 @@ impl Signex {
         project_id: ProjectId,
         result: Result<Box<SheetRefs>, String>,
     ) -> Task<Message> {
+        if self.ui_state.annotations.closing == Some(project_id) {
+            self.ui_state.annotations.closing = None;
+        }
         // The gate below reads the dirty marks: a draft typed while the read
         // ran is an edit of its sheet like any other.
         self.commit_drafts_of_project(project_id);
