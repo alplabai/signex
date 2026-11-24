@@ -48,6 +48,7 @@ impl Signex {
                 active_layer: self.status_layer(window_id),
                 view_angle: self.status_view_angle(window_id),
                 opens_grid_popover: self.status_sheet_tab(window_id).is_some(),
+                opens_grid_picker: self.status_shows_footprint(window_id),
                 board: self.status_board(window_id),
                 no_document: self.status_shows_no_document(window_id),
                 missing_libraries: self.skipped_missing_libraries().len(),
@@ -267,6 +268,74 @@ mod tests {
         app.document_state.footprint_editors.insert(path, editor);
         assert_ne!(app.ui_state.grid_size_mm, 0.5);
         assert_eq!(app.status_grid(window).size_mm, 0.5);
+    }
+
+    /// An empty footprint `f.snxfpt` open in the active tab.
+    fn open_footprint_tab(app: &mut Signex) -> std::path::PathBuf {
+        let path = std::path::PathBuf::from("f.snxfpt");
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "f".into(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: crate::app::TabKind::FootprintEditor(path.clone()),
+        });
+        app.document_state.active_tab = app.document_state.tabs.len() - 1;
+        let file =
+            signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("f"));
+        let editor = crate::app::FootprintDocument::new(path.clone(), file);
+        app.document_state
+            .footprint_editors
+            .insert(path.clone(), editor);
+        path
+    }
+
+    /// Where `window`'s bar draws the Grid read-out's text.
+    fn grid_text_x(app: &Signex, window: iced::window::Id) -> f32 {
+        crate::layout_probe::lay_out_texts(
+            app.view_status_bar(window),
+            iced::Size::new(1200.0, 40.0),
+        )
+        .into_iter()
+        .find(|t| t.text.contains("Grid"))
+        .expect("the Grid read-out is drawn")
+        .bounds
+        .x
+    }
+
+    /// Mockup row 63: on a footprint tab the Grid read-out starts with the
+    /// grid glyph, so its text sits a glyph further right than on a sheet;
+    /// its caret opens the step list on that footprint.
+    #[test]
+    fn a_footprint_grid_read_out_has_a_glyph_and_its_caret_opens_the_steps() {
+        let (mut app, window) = app_with_window();
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "a.snxsch".into(),
+            path: "a.snxsch".into(),
+            cached_document: None,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        app.document_state.active_tab = 0;
+        let sheet_x = grid_text_x(&app, window);
+        let path = open_footprint_tab(&mut app);
+        assert!(app.status_shows_footprint(window));
+        let glyph = crate::styles::TypeScale::DEFAULT.body;
+        let footprint_x = grid_text_x(&app, window);
+        assert!(
+            footprint_x >= sheet_x + glyph,
+            "no grid glyph: sheet {sheet_x}, footprint {footprint_x}"
+        );
+        assert!(app.interaction_state.grid_picker.is_none());
+        let caret = StatusBarRequest::GridCaretClicked { window: None };
+        let _ = app.update(Signex::status_bar_message(window, None, caret));
+        assert_eq!(
+            app.interaction_state
+                .grid_picker
+                .as_ref()
+                .map(|p| p.target.clone()),
+            Some(path)
+        );
     }
 
     /// A right-click on the Grid read-out opens the popover over the window

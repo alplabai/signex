@@ -111,6 +111,12 @@ impl Signex {
             .map(|editor| editor.path.clone())
     }
 
+    /// Whether `window_id` shows a footprint tab: its Grid read-out opens
+    /// the grid step list (mockup row 63).
+    pub(crate) fn status_shows_footprint(&self, window_id: iced::window::Id) -> bool {
+        matches!(self.status_surface(window_id), Surface::FootprintEditor(_))
+    }
+
     /// The Document Options of the library holding the symbol at `path`;
     /// a lone file, outside any open library, gets the defaults.
     pub(crate) fn symbol_display(&self, path: &Path) -> LibraryDisplaySettings {

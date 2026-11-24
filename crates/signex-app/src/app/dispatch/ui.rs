@@ -287,6 +287,17 @@ impl Signex {
             }
             // `status_bar_message` names the window; a bare one is the main
             // window's.
+            // The caret opens the step list as the open_grid_picker key
+            // does in that window: an undocked one runs it on its footprint.
+            UiMsg::StatusBar(StatusBarRequest::GridCaretClicked { window }) => {
+                let open = Message::Ui(UiMsg::GridPickerOpen);
+                match window {
+                    Some(window) if self.is_document_window(window) => {
+                        self.run_command_in_window(window, open)
+                    }
+                    _ => self.dispatch_update(open),
+                }
+            }
             UiMsg::StatusBar(StatusBarRequest::GridReadoutRightClicked) => {
                 match self.ui_state.main_window_id {
                     Some(main) => {
@@ -701,6 +712,11 @@ impl Signex {
             // The Grid & Snap popover opens over the window that asked.
             (StatusBarRequest::GridReadoutRightClicked, _) => {
                 Message::Overlay(OverlayMsg::GridSnapPopoverToggled(window))
+            }
+            (StatusBarRequest::GridCaretClicked { .. }, _) => {
+                Message::Ui(UiMsg::StatusBar(StatusBarRequest::GridCaretClicked {
+                    window: Some(window),
+                }))
             }
             (StatusBarRequest::ToggleGrid, Some(path)) => {
                 symbol_edit(path, SymbolEditorMsg::ToggleGrid)

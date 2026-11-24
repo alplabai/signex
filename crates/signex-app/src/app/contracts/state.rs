@@ -778,4 +778,10 @@ pub enum StatusBarRequest {
     /// Click on the Library Missing chip: reopens the dialog of a skipped
     /// library (mockup row 138).
     LibraryMissingChipClicked,
+    /// Click on the caret of a footprint's Grid read-out: opens the grid
+    /// step list (mockup row 63) for the footprint `window` shows. The bar
+    /// sends `window: None`; `Signex::status_bar_message` names it.
+    GridCaretClicked {
+        window: Option<iced::window::Id>,
+    },
 }
