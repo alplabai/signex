@@ -176,8 +176,10 @@ fn a_string_on_a_copper_layer_says_why_in_the_status_bar() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with(dir.path(), Vec::new());
     let before = live(&app, &path);
-    make_active(&mut app, inner());
+    // Arming puts the overlay forward (#2869); a copper layer picked after
+    // it still takes no string.
     run(&mut app, "place_board_string");
+    make_active(&mut app, inner());
     click(&mut app, 4.0, 4.0);
     assert_eq!(live(&app, &path), before);
     let why = status(&app);

@@ -17,17 +17,14 @@ use signex_types::pcb::{
     BoardGraphic, PCB_DEFAULT_GRAPHIC_WIDTH_MM, PCB_DEFAULT_TEXT_SIZE_MM, PcbBoard, Point,
 };
 use signex_types::pcb_graphic::{BoardGraphicKind, takes_board_graphics};
-use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
+use signex_types::pcb_layer::PcbLayer;
 use uuid::Uuid;
 
+use super::tool_layer::DRAWING_LAYER;
 use super::{BoardToolDefaults, BoardToolSession};
 use crate::app::handlers::pcb_primitive::{PrimitiveEdit, graphic_edit};
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::app::{PcbViewMsg, Signex};
-
-/// The layer a Graphics tool's form shows while the active layer cannot
-/// take a drawing.
-const FALLBACK_LAYER: PcbLayer = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
 
 impl BoardToolDefaults {
     /// The layer and width a Graphics tool draws with on `layer`.
@@ -112,7 +109,7 @@ impl Signex {
 
     /// A Graphics tool click at `at`: a point of the drawing, or the drawing
     /// itself once it has its points. Off a layer a drawing may go on, the
-    /// Messages panel says so and nothing changes.
+    /// Messages panel and the status bar say so and nothing changes.
     pub(super) fn graphic_clicked(&mut self, tool: BoardPlaceTool, at: Point) {
         let Some(kind) = tool.graphic_kind() else {
             return;
@@ -124,7 +121,7 @@ impl Signex {
                 ids::PCB_TOOL_NEEDS_GRAPHIC_LAYER,
                 "tool" => name.as_str()
             );
-            crate::diagnostics::log_warning(note.into_string());
+            self.note_board_tool(note.into_string());
             return;
         };
         let Some(session) = self.own_board_tool() else {
@@ -202,7 +199,7 @@ impl Signex {
         let session = self.own_board_tool()?;
         let kind = session.tool.graphic_kind()?;
         let at = session.cursor.unwrap_or(Point::new(0.0, 0.0));
-        let layer = self.active_graphic_layer().unwrap_or(FALLBACK_LAYER);
+        let layer = self.active_graphic_layer().unwrap_or(DRAWING_LAYER);
         let text = self.frame_text();
         let far = Point::new(at.x + 2.0, at.y + 1.0);
         let points = match kind {

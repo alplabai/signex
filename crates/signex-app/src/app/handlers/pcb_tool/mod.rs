@@ -40,6 +40,7 @@ mod route_rats;
 mod router;
 mod side_by_side;
 mod string;
+mod tool_layer;
 
 pub(crate) use form::has_form;
 pub use form::{BoardToolDefaults, PlacementPause};
@@ -78,6 +79,8 @@ mod side_by_side_tests;
 mod string_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tool_layer_tests;
 
 /// A placement tool armed on one board in one window, and the shape it is
 /// drawing.
@@ -158,6 +161,7 @@ impl Signex {
             paused: None,
             note: None,
         });
+        self.activate_tool_layer(tool);
         crate::diagnostics::log_info(self.board_tool_hint(tool));
         self.sync_route_ratsnest();
         self.refresh_pcb_highlight();

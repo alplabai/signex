@@ -296,15 +296,14 @@ impl Signex {
     }
 
     /// The string the String tool places next, for its form; on a layer
-    /// that takes no text, as it would read on the top overlay.
+    /// that takes no text, as it would read on the layer arming the tool
+    /// makes active (`tool_layer`).
     pub(crate) fn next_board_text(&self) -> Option<BoardText> {
         let at = self.board_tool_cursor();
         let layer = self
             .active_board_layer()
             .filter(|l| l.takes_text())
-            .unwrap_or(PcbLayer::Technical(
-                signex_types::pcb_layer::TechnicalLayer::SilkscreenTop,
-            ));
+            .unwrap_or(super::tool_layer::DRAWING_LAYER);
         let fallback = t!(self.ui_state.i18n, ids::PCB_TOOL_STRING_TEXT).into_string();
         let defaults = &self.interaction_state.pcb_tool_defaults;
         defaults.text(Uuid::nil(), at, layer, fallback)

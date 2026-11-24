@@ -540,8 +540,11 @@ cursor) is drawn as its outline alone.
 text (`pcb-tool-string-text`, "String"), or the text, height and turn set in
 its placement form; the string carries no net. A layer takes a string when
 `PcbLayer::takes_text` holds: the two overlay layers, the mechanical layers
-and the documentation layers (Dimensions among them). On any other layer a
-click places nothing and the Messages panel names the layers that do.
+and the documentation layers (Dimensions among them). Arming the tool while
+the active layer takes no string (a board opens on copper) makes the top
+overlay active, the layer its form shows (#2869). On any other layer picked
+after that, a click places nothing and the Messages panel and the status bar
+name the layers that do.
 Copper text would be copper that the copper list, the design rule check and
 the ratsnest never read. The canvas draws it (#2387); a click or box picks
 it (`pcb_geom::ItemRef::Text`, the selection filter's Texts kind).
@@ -629,8 +632,11 @@ draws a board drawing (`PcbBoard::graphics`, kinds in
 
 - **Layer.** Any non-copper layer but the two keep-out layers, whose areas
   the design rule check reads as rules: overlay, solder mask, paste, fab,
-  assembly, courtyard, mechanical, documentation, the board outline. On
-  another layer a click adds nothing and the Messages panel says so.
+  assembly, courtyard, mechanical, documentation, the board outline.
+  Arming a tool while the active layer takes no drawing (a board opens on
+  copper) makes the top overlay active, the layer its form shows (#2869). On
+  another layer picked after that, a click adds nothing and the Messages
+  panel and the status bar say so.
 - **Line.** The first click starts a run; each later click adds a line from
   the run's end, any angle. A click on the run's end, Esc or a right-click
   ends the run.
