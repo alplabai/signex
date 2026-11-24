@@ -1,6 +1,7 @@
-//! The Dimension panel (#2373, #2523, mockup row 101): the illustration, the measured
-//! Value on a card under it, then where it stands (Start, End, Offset) and
-//! its Style: line width, text height, decimals and layer. Lengths and the
+//! The Dimension panel (#2373, #2523, mockup row 101): the measured Value
+//! on a headline card (the header puts it above the search), the
+//! illustration, then where it stands (Start, End, Offset) and under a
+//! Style subhead: line width, text height, decimals and layer. Lengths and the
 //! Value follow the board's Units, mm or mils (Caner, 2026-11-24).
 
 use iced::widget::{container, row};
@@ -16,6 +17,7 @@ use super::drawing::dimension as dd;
 use super::linked::{
     Segment, illustration, linked, linked_row, prefixed, segments, two_fields, unit, with_unit,
 };
+use super::mask::subhead;
 use super::rows::{Look, PAD_X, Section, any_layer_row, mm_field, stack};
 use super::stack_rows::caption;
 use super::{DimensionFacts, PcbPrimitiveMsg, PrimitiveField as F, SP, TS, parse_number};
@@ -88,11 +90,7 @@ pub(super) fn view<'a>(ctx: &'a PanelContext, f: &'a DimensionFacts) -> Element<
         &f.common,
         dd::illustration(&drawn(look, f), &ctx.i18n),
     );
-    stack(vec![
-        Some(drawing),
-        value_card(look, f),
-        properties(look, f),
-    ])
+    stack(vec![Some(drawing), properties(look, f)])
 }
 
 /// `f` as the illustration shows it: the Value of the card and the text
@@ -109,7 +107,10 @@ fn drawn(look: Look<'_>, f: &DimensionFacts) -> DimensionFacts {
 
 /// The measured value as a headline card; none for a dimension not placed
 /// yet.
-fn value_card<'a>(look: Look<'a>, f: &'a DimensionFacts) -> Option<Element<'a, PanelMsg>> {
+pub(super) fn value_card<'a>(
+    look: Look<'a>,
+    f: &'a DimensionFacts,
+) -> Option<Element<'a, PanelMsg>> {
     let value = headline(look, f)?;
     let mono = iced::Font {
         weight: iced::font::Weight::Medium,
@@ -161,7 +162,7 @@ fn properties<'a>(look: Look<'a>, f: &'a DimensionFacts) -> Option<Element<'a, P
     s.push(
         common,
         ids::PCB_PRIM_DIM_STYLE,
-        caption(look, look.t(ids::PCB_PRIM_DIM_STYLE)),
+        subhead(look, ids::PCB_PRIM_DIM_STYLE),
     );
     for (label, field, value) in [
         (ids::PCB_PRIM_LINE_WIDTH, F::LineWidth, f.line_width),
@@ -415,6 +416,45 @@ mod tests {
             (f.start, f.end),
             "points stay in mm"
         );
+    }
+
+    /// Mockup row 101: Style is a subhead over Line Width, Text Height,
+    /// Precision and Layer, a step smaller than the row labels and alone on
+    /// its line, not a row of its own.
+    #[test]
+    fn style_is_a_subhead_over_its_rows() {
+        let ctx = ctx_in(Unit::Mm);
+        let f = sample();
+        let section = properties(Look::of(&ctx), &f).expect("a section");
+        let texts = lay_out_texts(section, iced::Size::new(300.0, 1200.0));
+        let style = t!(ctx.i18n, ids::PCB_PRIM_DIM_STYLE).into_string();
+        let style = crate::layout_probe::find(&texts, &style).bounds;
+        let width = t!(ctx.i18n, ids::PCB_PRIM_LINE_WIDTH).into_string();
+        let width = crate::layout_probe::find(&texts, &width).bounds;
+        assert!(style.height < width.height, "{style:?} vs {width:?}");
+        assert!(style.y + style.height <= width.y, "above Line Width");
+        let beside = texts.iter().filter(|t| {
+            let mid = t.bounds.y + t.bounds.height / 2.0;
+            mid > style.y && mid < style.y + style.height
+        });
+        assert_eq!(beside.count(), 1, "Style is alone on its line: {texts:?}");
+    }
+
+    /// Mockup row 101: the Value card heads the panel, above the search and
+    /// so above the illustration, and is drawn once.
+    #[test]
+    fn the_value_card_sits_above_the_search() {
+        let ctx = ctx_in(Unit::Mm);
+        let facts = super::super::PcbPrimitiveFacts::Dimension(sample());
+        let window = iced::Size::new(300.0, 1200.0);
+        let texts = lay_out_texts(super::super::view(&ctx, &facts), window);
+        let label = t!(ctx.i18n, ids::PCB_PRIM_VALUE).into_string();
+        let values: Vec<_> = texts.iter().filter(|t| t.text == label).collect();
+        assert_eq!(values.len(), 1, "{texts:?}");
+        let inputs = crate::layout_probe::lay_out_inputs(super::super::view(&ctx, &facts), window);
+        let search = t!(ctx.i18n, ids::PCB_PRIM_SEARCH).into_string();
+        let search = crate::layout_probe::find(&inputs, &search).bounds;
+        assert!(values[0].bounds.y + values[0].bounds.height <= search.y);
     }
 
     /// A typed length is in the board's Units unless it names its unit.

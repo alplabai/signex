@@ -610,10 +610,11 @@ arrow at each end and the value (`value_text`, to `precision` decimals, at
 most 6), drawn by the board renderer and picked by its strokes and the box
 of its value. Two equal points add nothing and say so.
 
-The Dimension panel (#2523) shows the illustration (the two points, the
-extension lines, the Offset and the value), the measured Value on a card
-under it, then Start and End (X and Y on one row each), Offset, and under
-Style: Line Width, Text Height, Precision and Layer (every board layer,
+The Dimension panel (#2523) shows the measured Value on a headline card
+under the header, above the search (mockup row 101), then the illustration
+(the two points, the extension lines, the Offset and the value), then Start
+and End (X and Y on one row each), Offset, and under a Style subhead:
+Line Width, Text Height, Precision and Layer (every board layer,
 copper included; a caption under the row says a dimension on copper is a
 drawing only).
 Precision is a 0 to 6 segmented control, so a precision outside that range

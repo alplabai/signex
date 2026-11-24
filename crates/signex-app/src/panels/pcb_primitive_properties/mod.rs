@@ -8,7 +8,8 @@
 //!
 //! The header is this module's own (#2523, mockup rows 95 to 102: header,
 //! search, illustration, sections): the kind, a count pill, the lock icon,
-//! then the search, or while placing the paused callout. Each kind's view
+//! a dimension's Value card (mockup row 101), then the search, or while
+//! placing the paused callout. Each kind's view
 //! opens with its illustration (`drawing`, linked to its rows by
 //! `linked`). The board panel (#2353) and the component panel (#2354) carry
 //! the same shape, and the three meet in `pcb_board_properties::view`,
@@ -266,6 +267,13 @@ fn header<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<'a
             })
             .width(Length::Fill)
     ];
+    // Mockup row 101: a dimension's measured Value is the headline card,
+    // above the search.
+    if let PcbPrimitiveFacts::Dimension(f) = facts
+        && let Some(card) = dimension::value_card(look, f)
+    {
+        col = col.push(card);
+    }
     if placing {
         let line = if common.placement_paused {
             ids::PCB_PRIM_PLACING_PAUSED
@@ -278,22 +286,27 @@ fn header<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<'a
     }
     let via = matches!(facts, PcbPrimitiveFacts::Via(_));
     if !placing && !via && common.editability == Editability::ItemLocked {
-        let unlock = button(text(look.t(ids::PCB_PRIM_UNLOCK)).size(TS.caption))
-            .padding([SP.xs, SP.s])
-            .style(form_look::ghost_button)
-            .on_press(PanelMsg::PcbPrimitive(PcbPrimitiveMsg::LockToggled {
-                target: common.target.clone(),
-                locked: false,
-            }));
-        col = col.push(callout(
-            look,
-            PillTone::Warn,
-            true,
-            look.t(ids::PCB_PRIM_ITEM_LOCKED),
-            Some(unlock.boxed()),
-        ));
+        col = col.push(locked_callout(look, common));
     }
     col.width(Length::Fill).boxed()
+}
+
+/// The warn callout of a locked item, with Unlock.
+fn locked_callout<'a>(look: rows::Look<'a>, common: &PrimitiveCommon) -> Element<'a, PanelMsg> {
+    let unlock = button(text(look.t(ids::PCB_PRIM_UNLOCK)).size(TS.caption))
+        .padding([SP.xs, SP.s])
+        .style(form_look::ghost_button)
+        .on_press(PanelMsg::PcbPrimitive(PcbPrimitiveMsg::LockToggled {
+            target: common.target.clone(),
+            locked: false,
+        }));
+    callout(
+        look,
+        PillTone::Warn,
+        true,
+        look.t(ids::PCB_PRIM_ITEM_LOCKED),
+        Some(unlock.boxed()),
+    )
 }
 
 /// The header title: the kind, a zone its real kind, a drawing its own.
