@@ -928,7 +928,7 @@ impl Signex {
         );
         // Read once here, not in `DistributorSettings::default` or a view.
         app.library.settings.set_start_environment(
-            crate::library::settings::digikey_oauth::env_client_configured(),
+            crate::library::settings::digikey_oauth::client_configured(),
             crate::library::settings::persistence::config_path().as_deref(),
         );
         // v0.9 Stage 9: the globally-configured libraries and the bundled

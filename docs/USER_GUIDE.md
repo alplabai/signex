@@ -1938,10 +1938,10 @@ never in a project file. Each distributor has a card with its state:
   opens your browser to sign in and stores the refresh token in the keyring;
   **Cancel** stops a sign-in that is still waiting. **Disconnect** removes the
   stored token and forgets the account; if the keyring refuses, the card says
-  why and the message is also in the Messages panel. When Signex was started
-  without `SIGNEX_DIGIKEY_CLIENT_ID` the card shows *Not configured* and
-  Connect stays off until Signex is started with that variable (and
-  `SIGNEX_DIGIKEY_CLIENT_SECRET`) set.
+  why and the message is also in the Messages panel. A release build carries
+  its own DigiKey client id; `SIGNEX_DIGIKEY_CLIENT_ID` (with
+  `SIGNEX_DIGIKEY_CLIENT_SECRET`) overrides it. Only a build without one,
+  started without that variable, shows *Not configured* with Connect off.
 - **Mouser** takes an API key. **Test** checks it with one lookup and, if it
   works, saves it in the keyring; the card then shows *Key verified*. Editing
   the key makes it *Not tested* again.
@@ -1956,12 +1956,14 @@ row by its handle to move it; the order is saved at once to the
 
 **Preferences ▸ Library ▸ Component Classes** lists the classes a new library
 starts with. They appear in the class picker of New Component and Edit
-Component; a library's own list is edited in that library.
+Component. It is a seed list for new libraries: removing a class here does
+not change existing libraries; a library's own list is edited in that library.
 
 - The **Key** is what a part stores; the **Label** is what pickers show. Click
   a cell to edit it.
 - **+ Add Class** adds a row at the bottom, marked *new*, with its key ready
-  to type.
+  to type. Type the label and the key is made from it in lower snake case
+  (*Ferrite bead* gives `ferrite_bead`); type a key yourself and it stays.
 - Drag a row by its handle to change the order the picker shows. The filter
   field only hides rows; it does not change the order.
 - Point at a row and press **×** to remove it.

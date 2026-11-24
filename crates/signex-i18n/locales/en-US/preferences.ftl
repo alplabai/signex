@@ -220,7 +220,7 @@ preferences-symbol-body-fill-colour-help = A soft tint of the theme unless you p
 
 ## Default Component Classes
 preferences-classes-title = Default Component Classes
-preferences-classes-help = The classes a new library starts with. They appear in the class picker of New Component and Edit Component. A library's own list is edited in that library.
+preferences-classes-help = The classes a new library starts with. They appear in the class picker of New Component and Edit Component. This is a seed list for new libraries: removing a class here does not change existing libraries. A library's own list is edited in that library.
 preferences-classes-key = Key
 preferences-classes-label = Label
 preferences-classes-remove = Remove
@@ -527,3 +527,8 @@ preferences-classes-reset-confirm = { $count ->
    *[other] Replace the { $count } classes in this list
 } with the { $defaults } default classes?
 preferences-classes-reset-confirm-yes = Reset
+
+# prefs-rules-library
+# Beside the On / Off control of the rule whose severity the pin connection
+# matrix sets; in Rule Profiles it opens the matrix tab.
+preferences-rules-matrix-link = Severity set in the matrix

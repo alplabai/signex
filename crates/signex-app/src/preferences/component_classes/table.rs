@@ -217,7 +217,7 @@ fn class_row<'a>(
         t!(i18n, ids::PLACEHOLDER_COMPONENT_CLASS_LABEL),
         entry.label.as_str(),
     )
-    .on_input(move |label| PrefMsg::ComponentClassEditLabel { index, label })
+    .on_input(move |label| classes_msg(ClassesViewMsg::LabelEdited { index, label }))
     .size(TS.body)
     .padding([SP.xs, SP.s])
     .width(Length::Fill)

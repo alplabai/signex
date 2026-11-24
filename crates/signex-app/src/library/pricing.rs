@@ -99,7 +99,7 @@ pub fn resolve_client(
     }
     match source {
         DistributorSource::DigiKey => {
-            let (id, secret) = digikey_oauth::read_env_credentials();
+            let (id, secret) = digikey_oauth::client_credentials();
             if id.is_empty() {
                 return Err(ClientUnavailable::AuthMissing(format!(
                     "DigiKey client id missing; set {}",

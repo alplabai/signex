@@ -196,4 +196,6 @@ define_ids! {
     PREFERENCES_SYMBOL_BODY_FILL_HELP = "preferences-symbol-body-fill-help";
     PREFERENCES_SYMBOL_BODY_FILL_COLOUR = "preferences-symbol-body-fill-colour";
     PREFERENCES_SYMBOL_BODY_FILL_COLOUR_HELP = "preferences-symbol-body-fill-colour-help";
+    // prefs-rules-library
+    PREFERENCES_RULES_MATRIX_LINK = "preferences-rules-matrix-link";
 }

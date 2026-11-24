@@ -23,6 +23,12 @@ fn open_rule(rule: RuleKind) -> PrefMsg {
     page(ProfilePageMsg::RuleOpened(rule))
 }
 
+/// The matrix link of an on/off-only rule: the Pin Connection Matrix tab,
+/// from the list or from the rule opened alone (mockup row 148).
+fn open_matrix() -> PrefMsg {
+    page(ProfilePageMsg::EditorTabPicked(ProfileEditorTab::PinMatrix))
+}
+
 pub(super) fn view<'a>(
     manager: &'a ProfileManager,
     listed: &'a ListedProfile,
@@ -48,6 +54,7 @@ pub(super) fn view<'a>(
         on_changed_only: |on| pane(ProfilesMsg::ChangedOnlyToggled(on)),
         on_filter: |query| pane(ProfilesMsg::RuleFilterChanged(query)),
         on_open_rule: Some(open_rule as fn(RuleKind) -> PrefMsg),
+        on_open_matrix: Some(open_matrix()),
     };
     let body: Element<'static, PrefMsg> = match (manager.open_rule, manager.editor_tab) {
         (Some(rule), _) => one_rule(&editor, rule, name, i18n),
@@ -198,4 +205,28 @@ fn one_rule(
     .spacing(SP.s)
     .width(Length::Fill)
     .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::{Message, PreferencesMsg, Signex};
+
+    /// Mockup row 148: the matrix link opens the Pin Connection Matrix tab,
+    /// also from the rule opened alone.
+    #[test]
+    fn the_matrix_link_opens_the_matrix_tab_and_closes_the_open_rule() {
+        let (mut app, _) = Signex::new();
+        let _ = app.update(Message::Preferences(PreferencesMsg::Inner(open_rule(
+            RuleKind::PinTypeConflict,
+        ))));
+        let manager = &app.ui_state.profile_manager;
+        assert_eq!(manager.open_rule, Some(RuleKind::PinTypeConflict));
+
+        let _ = app.update(Message::Preferences(PreferencesMsg::Inner(open_matrix())));
+
+        let manager = &app.ui_state.profile_manager;
+        assert_eq!(manager.editor_tab, ProfileEditorTab::PinMatrix);
+        assert_eq!(manager.open_rule, None, "the matrix half shows");
+    }
 }
