@@ -505,4 +505,6 @@ define_ids! {
     PANELS_PCB_CLASSES_NODES = "panels-pcb-classes-nodes";
     PANELS_PCB_CLASSES_MATCHES = "panels-pcb-classes-matches";
     PANELS_PCB_CLASSES_DIFF_PAIR = "panels-pcb-classes-diff-pair";
+    // quit-list-snxout-cap
+    PANELS_TAB_KIND_OUTPUT_JOB = "panels-tab-kind-output-job";
 }

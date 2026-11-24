@@ -1438,3 +1438,7 @@ panels-pcb-classes-matches =
     }
 # The class detail's row of the diff-pair gap and width fields.
 panels-pcb-classes-diff-pair = Diff pair
+# quit-list-snxout-cap
+# Kind code of an Export Job (.snxout) document, as on its tab and in the
+# unsaved list of the Exit confirm.
+panels-tab-kind-output-job = OUT

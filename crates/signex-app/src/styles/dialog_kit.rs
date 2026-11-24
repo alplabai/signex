@@ -24,7 +24,8 @@ const GLYPH_ADVANCE_EM: f32 = 0.62;
 /// see `dialog_buttons`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DialogButtonKind {
-    /// The affirmative action; one per dialog (accent fill).
+    /// The affirmative action; one per dialog (the theme's primary fill: the
+    /// ink on Graphite, the accent fill on a theme that sets none).
     Primary,
     /// Cancel, Close and other non-committal actions: a subtle fill and the
     /// standard border.
