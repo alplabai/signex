@@ -22,6 +22,8 @@ mod sheet_open;
 pub(crate) mod sheet_open_tests;
 pub use sheet_open::{AfterOpen, PendingSheetOpen, SheetOpen};
 mod double_clicked;
+#[cfg(test)]
+mod drag_every_kind_tests;
 mod field_edit;
 pub(crate) use field_edit::{editor_placeholder, next_part_field};
 pub(crate) mod fit_view;
