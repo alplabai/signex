@@ -20,9 +20,11 @@ mod wire;
 
 pub(super) use net_label::net_label;
 pub(super) use port::port;
-pub(super) use power_port::{PowerPortCallouts, power_port, style_glyph};
+pub(super) use power_port::{power_port, style_glyph};
 pub(super) use text_note::text_note;
 pub(super) use wire::{RunShape, run};
+
+pub(super) use power_port::PowerPortCallouts;
 
 use super::super::*;
 use crate::styles::{Spacing, TypeScale};
