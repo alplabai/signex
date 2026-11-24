@@ -78,22 +78,35 @@ fn pill<'a>(
         .boxed()
 }
 
-/// The chips floating at the canvas's top-left (the footprint editor).
-pub fn overlay<'a>(
+/// The chips of `editor` at the left and `bar` (the footprint editor bar or
+/// a board's sketch info bar) at the right of one row under the Active
+/// Bar's band (mockup rows 179 and 187, #2882). The Active Bar can be as
+/// wide as the canvas, so nothing of this row starts inside its band, and
+/// one row cannot lay the chips and the bar over each other.
+pub fn chrome_row<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
+    bar: Element<'a, LibraryMessage>,
 ) -> Element<'a, LibraryMessage> {
-    container(chips(editor, tokens, i18n))
-        .padding(SP.xl)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .boxed()
+    let line = row![
+        chips(editor, tokens, i18n),
+        Space::new().width(Length::Fill),
+        bar
+    ]
+    .spacing(SP.m);
+    container(column![
+        Space::new().height(crate::active_bar::bar_band_bottom()),
+        line
+    ])
+    .padding([0.0, SP.m])
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .boxed()
 }
 
-/// The solve-state pill above the name chip, unplaced; a board sketch lays
-/// them out in its chrome row (`board_sketch`).
-pub fn chips<'a>(
+/// The solve-state pill above the name chip, unplaced.
+fn chips<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
@@ -159,3 +172,7 @@ pub fn zoom_pill_overlay<'a>(
         .align_y(iced::alignment::Vertical::Bottom)
         .boxed()
 }
+
+#[cfg(test)]
+#[path = "footprint_chrome_tests.rs"]
+mod tests;
