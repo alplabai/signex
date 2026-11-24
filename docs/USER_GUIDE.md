@@ -1725,7 +1725,7 @@ lines still open), keepout violations and every written rule. To accept a
 violation on purpose, press **Waive**, type why, and press **Waive** again.
 **Show waived** lists waived ones; **Unwaive** takes a waiver back.
 
-<!-- screenshot: the DRC Results panel with a clearance violation selected on the board -->
+<!-- screenshot: the DRC panel with a clearance violation selected on the board -->
 
 More detail: [DRC_RULES.md](DRC_RULES.md).
 

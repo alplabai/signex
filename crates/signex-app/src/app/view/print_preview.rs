@@ -46,7 +46,7 @@ impl Signex {
         let mut sentence: iced::widget::Column<Element<'_, Message>> =
             iced::widget::Column::new().push_boxed(line(notice.detail.localized(i18n)));
         // A failed save adds that the edits are still open (mockup row 11).
-        if let Some(note) = notice.note() {
+        if let Some(note) = notice.note {
             sentence = sentence.push_boxed(line(t!(i18n, note)));
         }
         let mut content: iced::widget::Column<Element<'_, Message>> = iced::widget::Column::new()

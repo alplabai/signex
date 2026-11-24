@@ -324,7 +324,7 @@ open_diff_pair_classes	design	Open the project's differential pair classes	Diffe
 add_net_class	design	Add a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,name:text?
 rename_net_class	design	Rename a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,class:text,name:text
 delete_net_class	design	Delete a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,class:text
-set_net_class_rules	design	Set the color and board rules of a net class-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,class:text,color:color?,width:text?,clearance:text?,via_diameter:text?,via_drill:text?,diff_pair_gap:text?,diff_pair_width:text?
+set_net_class_rules	design	Set the color and board rules of a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,class:text,color:color?,width:text?,clearance:text?,via_diameter:text?,via_drill:text?,diff_pair_gap:text?,diff_pair_width:text?
 assign_board_net_class	design	Put a board net in a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,net_name:text,class:text?
 select_board_net	select	Select every track, via and pad of a board net	Select Net	PCB	-	-	RequiresDocument(Pcb)	-	net:text?
 highlight_board_net	select	Highlight a board net	Highlight Net	PCB	-	-	RequiresDocument(Pcb)	-	net:text?

@@ -337,9 +337,12 @@ impl Signex {
                 const CAPTION_LINE: f32 = 15.0;
                 const CHOICE_ROW_GAP: f32 = 3.0;
                 let i18n = &self.ui_state.i18n;
-                let detail = n.sentence_text(i18n);
-                let mut height =
-                    BASE + (wrapped_lines(&detail, 64) as f32 * MESSAGE_LINE).min(MESSAGE_MAX);
+                // The note is its own text line under the detail.
+                let note_lines = n
+                    .note
+                    .map_or(0, |note| wrapped_lines(&i18n.message_plain(note, &[]), 64));
+                let lines = wrapped_lines(&n.detail_text(i18n), 64) + note_lines;
+                let mut height = BASE + (lines as f32 * MESSAGE_LINE).min(MESSAGE_MAX);
                 if let Some(system) = &n.system {
                     let lines = wrapped_lines(system.as_str(), 66) as f32;
                     height += GAP + SYSTEM_PAD + (lines * CAPTION_LINE).min(MESSAGE_MAX);

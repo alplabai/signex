@@ -209,7 +209,8 @@ net-class history, with the panel's Undo and Redo. The commands are
 
 Tools ▸ Re-Annotate Board... runs `reannotate_board` (#1312), right after
 Design Rule Check with the other board rows, and is greyed while no PCB is
-open. It opens the Positional Re-Annotate dialog for the board in view:
+open. It opens the Re-Annotate Board dialog (subtitle "Positional · <board>")
+for the board in view:
 
 - **Order**: by X, then by Y (the default), or by Y, then by X. The sort is
   exact at 1 µm: parts are not grouped into columns or rows by a tolerance,

@@ -203,7 +203,7 @@ fn a_save_failed_card_says_the_edits_are_still_open() {
     let en = I18n::en_us();
     let notice = ErrorNotice::save(verbatim("power.snxsch could not be written."));
     assert_eq!(
-        notice.note(),
+        notice.note,
         Some(signex_i18n::ids::NOTICE_SAVE_FAILED_EDITS_KEPT)
     );
     let sentence = "power.snxsch could not be written. Your edits are still open and unsaved.";
@@ -218,9 +218,23 @@ fn a_save_failed_card_says_the_edits_are_still_open() {
         ErrorNotice::create(verbatim("x")),
         ErrorNotice::disk_changed(PathBuf::from("/w/a.snxsch"), DiskDrift::Changed),
     ] {
-        assert_eq!(other.note(), None, "{:?}", other.title);
+        assert_eq!(other.note, None, "{:?}", other.title);
         assert_eq!(other.sentence_text(&en), other.detail_text(&en));
     }
+}
+
+/// A Save Failed card for a write that leaves no open edits (the global
+/// library list) keeps the heading and claims nothing about unsaved edits.
+#[test]
+fn a_save_failed_card_with_no_open_edits_has_no_note() {
+    let en = I18n::en_us();
+    let notice = ErrorNotice::save_with_no_open_edits(verbatim("global_libraries.toml: denied"));
+    assert_eq!(notice.title_text(&en), "Save Failed");
+    assert_eq!(notice.note, None);
+    assert_eq!(
+        notice.copy_text(&en),
+        "Save Failed\n\nglobal_libraries.toml: denied"
+    );
 }
 
 /// A failed save names the operation in the sentence and keeps the error

@@ -24,6 +24,10 @@ pub struct ErrorNotice {
     /// A choice the card offers beside dismissing it; `None` for a plain
     /// notice, whose only button is OK.
     pub action: Option<NoticeAction>,
+    /// A sentence of the card's own after the detail, e.g. that the edits
+    /// are still open and unsaved (mockup row 11); `None` for most cards.
+    /// Kept out of [`Self::detail_line_en_us`].
+    pub note: Option<MessageId>,
 }
 
 /// How bad what the card reports is; picks its heading glyph.
@@ -82,6 +86,7 @@ impl ErrorNotice {
             detail: detail.into(),
             system: None,
             action: None,
+            note: None,
         }
     }
 
@@ -104,19 +109,11 @@ impl ErrorNotice {
         self.detail.render(i18n)
     }
 
-    /// The sentence the card adds after the detail, if any: a failed save
-    /// says the edits are still open and unsaved (mockup row 11). It is the
-    /// card's own words, so it stays out of [`Self::detail_line_en_us`].
-    pub fn note(&self) -> Option<MessageId> {
-        (self.title.id() == Some(ids::NOTICE_SAVE_FAILED))
-            .then_some(ids::NOTICE_SAVE_FAILED_EDITS_KEPT)
-    }
-
     /// The detail and the card's note after it, one space apart: the
     /// readable sentence as the card shows it.
     pub fn sentence_text(&self, i18n: &I18n) -> String {
         let detail = self.detail_text(i18n);
-        match self.note() {
+        match self.note {
             Some(note) => format!("{detail} {}", i18n.message_plain(note, &[])),
             None => detail,
         }
@@ -200,6 +197,7 @@ impl ErrorNotice {
             detail: detail.arg("name", name),
             system: None,
             action: Some(NoticeAction::DiskChanged { path, drift }),
+            note: None,
         }
     }
 
@@ -208,8 +206,20 @@ impl ErrorNotice {
         Self::new(ids::NOTICE_EXPORT_FAILED, detail)
     }
 
-    /// A write failed, and the operation that needed it did not proceed.
+    /// A write of open edits failed, and the operation that needed it did
+    /// not proceed. The card says the edits are still open and unsaved
+    /// (mockup row 11).
     pub fn save(detail: impl Into<Translatable>) -> Self {
+        Self {
+            note: Some(ids::NOTICE_SAVE_FAILED_EDITS_KEPT),
+            ..Self::new(ids::NOTICE_SAVE_FAILED, detail)
+        }
+    }
+
+    /// A write failed that leaves no open edits behind, such as the global
+    /// library list, whose change is dropped. Same heading as
+    /// [`Self::save`], without its note.
+    pub fn save_with_no_open_edits(detail: impl Into<Translatable>) -> Self {
         Self::new(ids::NOTICE_SAVE_FAILED, detail)
     }
 
