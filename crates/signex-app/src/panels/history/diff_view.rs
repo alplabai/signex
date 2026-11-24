@@ -19,7 +19,7 @@ use crate::styles::tokens::resolve;
 /// Gap between the header, the runs and their lines.
 const GAP_EM: f32 = 6.0 / 12.0;
 /// Width of the + / − mark in front of a line.
-const MARK_EM: f32 = 12.0 / 12.0;
+const MARK_EM: f32 = 1.0;
 /// Space around a line inside its tinted band.
 const LINE_PAD_EM: f32 = 4.0 / 12.0;
 /// Space above the block, and its padding (vertical, horizontal).

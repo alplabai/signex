@@ -45,6 +45,9 @@ const PART_TILE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="16" 
 
 /// How one list row draws: on one line, or as a thumbnail row whose tile
 /// is drawn with the given look.
+// The thumbnail look is a small Copy value built once per list draw; boxing
+// it would cost a heap allocation per row for no gain.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum RowLook {
     Compact,
