@@ -120,7 +120,8 @@ line:
   when the project in view changes (a project is opened, or a switch to
   another project and back), and on the Refresh button. The project-change
   read runs with the panel closed too, since the schematic's annotation
-  flags come from it. While a new read runs, the last list stays shown.
+  flags come from it, except for a project whose Close Project is still
+  resolving its sheets. While a new read runs, the last list stays shown.
 - **Parts:** the same read assembles the project's sheets (open sheets with
   their unsaved edits, the others from disk) and lists every designator and
   the sheet holding it. A `#component` or `#pin` whose part is not in the

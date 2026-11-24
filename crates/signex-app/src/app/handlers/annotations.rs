@@ -59,7 +59,9 @@ impl Signex {
         let held = self.ui_state.annotations.target.as_ref();
         let active = self.document_state.active_document_project();
         let moved = held.map(|(id, dir)| (*id, dir.as_path())) != active.map(|p| (p.id, p.dir()));
-        if newly_shown || moved {
+        // A project being closed is not read for the flags it is about to lose.
+        let closing = active.is_some_and(|p| self.ui_state.annotations.closing == Some(p.id));
+        if newly_shown || (moved && !closing) {
             let target = self.annotations_target();
             return self.start_annotations_scan(target);
         }
@@ -927,5 +929,23 @@ mod tests {
             read + 1,
             "back on this project after another one's read"
         );
+    }
+
+    /// Close Project resolving its sheets starts no notebook read of the
+    /// project it closes; once the close resolves, a project still open is
+    /// read as before.
+    #[test]
+    fn a_project_being_closed_is_not_read() {
+        let (mut app, path, id) = app_with_u3();
+        assert!(!app.is_panel_open(PanelKind::Annotations));
+        app.document_state.active_path = Some(path);
+        app.ui_state.annotations.target = None;
+        app.ui_state.annotations.closing = Some(id);
+        let before = app.ui_state.annotations.generation;
+        let _ = app.sync_annotations_panel();
+        assert_eq!(app.ui_state.annotations.generation, before, "no read");
+        app.ui_state.annotations.closing = None;
+        let _ = app.sync_annotations_panel();
+        assert_eq!(app.ui_state.annotations.generation, before + 1);
     }
 }

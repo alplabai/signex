@@ -150,6 +150,9 @@ pub struct AnnotationsState {
     pub shown: bool,
     /// The flags the last scan puts on the parts of the design (mockup row 165).
     pub flags: Arc<PartFlags>,
+    /// The project whose Close Project is resolving its sheets: a change of
+    /// the project in view does not read its notebook meanwhile.
+    pub closing: Option<crate::app::ProjectId>,
 }
 
 /// The flags of every part the scan's annotations name: per designator, one

@@ -212,12 +212,41 @@ fn the_comparison_shows_both_parts_the_table_kept_and_apply_to() {
         upper(ids::LIBRARY_CHANGE_COMPONENT_PARAMETERS),
         upper(ids::LIBRARY_CHANGE_COMPONENT_KEPT),
         upper(ids::LIBRARY_CHANGE_COMPONENT_APPLY_TO),
-        "Only R5 on this sheet".into(),
         "Change 1 part".into(),
         "One undo step. The PCB footprint changes on Update PCB.".into(),
     ] {
         assert!(shown.contains(&label), "{label:?} in {shown:#?}");
     }
+    // A radio draws its own label, which the text probe does not list: the
+    // Apply to option is the radio under the heading, labelled from the
+    // catalog with the part's reference.
+    let only = i18n
+        .message(
+            ids::LIBRARY_CHANGE_COMPONENT_SCOPE_THIS,
+            &[("reference", Arg::from("R5"))],
+        )
+        .into_string()
+        .replace(['\u{2068}', '\u{2069}'], "");
+    assert_eq!(only, "Only R5 on this sheet");
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
+    let state = compared();
+    let card = || view(state.picker.as_ref().unwrap(), &tokens, i18n, false).unwrap();
+    let laid = lay_out_texts(card(), WINDOW);
+    let apply_to = upper(ids::LIBRARY_CHANGE_COMPONENT_APPLY_TO);
+    let heading = crate::layout_probe::find(&laid, &apply_to).bounds;
+    let radio = super::TS.heading;
+    let at = iced::Point::new(
+        heading.x + radio / 2.0,
+        heading.y + heading.height + crate::styles::Spacing::DEFAULT.s + radio / 2.0,
+    );
+    let picked = crate::layout_probe::messages_on_click_at(card(), WINDOW, None, at);
+    assert!(
+        picked.iter().any(|m| matches!(
+            m,
+            LibraryMessage::PlacedPart(PlacedPartMsg::ChangeScopePicked(ChangeScope::ThisPart))
+        )),
+        "{picked:?}"
+    );
 }
 
 #[test]

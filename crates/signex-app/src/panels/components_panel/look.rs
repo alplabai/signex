@@ -493,9 +493,18 @@ mod tests {
             "filter {filter:?} not under Add {:?}",
             add.bounds
         );
+        // The probe gives the text input inside the field box, which spans
+        // the dock between the header insets (EDGE each side) and pads its
+        // content by EDGE: the input ends at the box's inner right edge and
+        // starts right after the 14 px search glyph and its gap.
+        let right = filter.x + filter.width;
         assert!(
-            filter.width >= dock.width - 2.0 * EDGE - 1.0,
-            "filter {filter:?} does not span the dock"
+            (right - (dock.width - 2.0 * EDGE)).abs() <= 1.0,
+            "filter {filter:?} does not reach the dock's right inset"
+        );
+        assert!(
+            filter.x <= 2.0 * EDGE + 14.0 + CHEVRON_GAP + 1.0,
+            "filter {filter:?} does not start at the dock's left inset"
         );
     }
 

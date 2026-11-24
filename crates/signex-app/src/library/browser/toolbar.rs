@@ -272,6 +272,13 @@ mod tests {
         sorted_by: None,
     };
 
+    /// Whether `text` is the count line of [`COUNT`]; Fluent wraps each
+    /// number in isolation marks, which the match leaves out.
+    fn is_count_line(text: &str) -> bool {
+        text.replace(['\u{2068}', '\u{2069}'], "")
+            .contains("3 of 9 shown")
+    }
+
     fn toolbar<'a>(
         columns: &'a [GridColumn],
         browser: &'a LibraryBrowserState,
@@ -312,7 +319,7 @@ mod tests {
         let browser = LibraryBrowserState::new("lib.snxlib".into());
         let count_y = lay_out_texts(toolbar(&cols, &browser, &tokens), WINDOW)
             .into_iter()
-            .find(|t| t.text.contains("3 of 9 shown"))
+            .find(|t| is_count_line(&t.text))
             .expect("count line")
             .bounds
             .center_y();
@@ -357,7 +364,7 @@ mod tests {
         let laid = lay_out_texts(toolbar(&cols, &browser, &tokens), WINDOW);
         let count = laid
             .iter()
-            .find(|t| t.text.contains("3 of 9 shown"))
+            .find(|t| is_count_line(&t.text))
             .expect("count line");
         assert!(
             !laid

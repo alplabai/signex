@@ -149,7 +149,8 @@ fn text_words_must_all_match() {
     row.description = "Ceramic capacitor".into();
     assert!(matches(&row, "murata grm"));
     assert!(matches(&row, "ceramic"), "the description is searched");
-    assert!(!matches(&row, "murata era"));
+    // "tdk" is in no field ("era" was, inside "Ceramic").
+    assert!(!matches(&row, "murata tdk"));
 }
 
 fn shown(state: &LibraryState) -> usize {

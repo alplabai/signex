@@ -16,7 +16,7 @@ use signex_types::schematic::{
 use uuid::Uuid;
 
 use super::{compare_rows, distinct_pins, hidden_rows, placed_now};
-use crate::app::{EditMsg, Message, Signex};
+use crate::app::{EditMsg, Message, Signex, TabInfo, TabKind};
 use crate::library::PickerState;
 use crate::library::messages::{
     LibraryMessage, PlacedPartMsg, PlacedPartTarget, ResolvedPlacement,
@@ -323,6 +323,15 @@ fn app_changing_r5() -> (Signex, PlacedPartTarget) {
         .engines
         .insert(PathBuf::from(SHEET), engine);
     app.document_state.active_path = Some(PathBuf::from(SHEET));
+    // Undo steps the active tab's document, so the sheet has its tab.
+    app.document_state.tabs.push(TabInfo {
+        title: "buck_channel".into(),
+        path: PathBuf::from(SHEET),
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
     let summary = ComponentSummary {
         row_id: NEW_ROW,
         internal_pn: InternalPn::new("R-0603-31K6"),
