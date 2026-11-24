@@ -344,6 +344,7 @@ impl Signex {
                 self.clear_active_camera_caches();
             }
             CanvasEvent::FitSelection => self.fit_selection(),
+            CanvasEvent::EdgePanTicked => return self.edge_pan_ticked(),
             CanvasEvent::RedrawRequested => {
                 self.clear_active_camera_caches();
                 if self.has_active_schematic() {

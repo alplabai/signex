@@ -318,6 +318,8 @@ pub struct SymbolDocument {
     pub pending_view: Option<SymbolViewRequest>,
     /// Canvas size at the last `ViewportMeasured` (zero before it).
     pub viewport: iced::Size,
+    /// The pointer as the edge pan reads it, written by the canvas (#2872).
+    pub edge_pan: crate::canvas::EdgePanLink,
     /// The last fit and the camera it left; a resize refits while the
     /// camera is still that one (#2345).
     pub fitted: Option<crate::canvas::FittedView>,
@@ -456,6 +458,7 @@ impl SymbolDocument {
             cursor_mm: None,
             pending_view: None,
             viewport: iced::Size::ZERO,
+            edge_pan: Default::default(),
             fitted: None,
             selection_filter: Default::default(),
             active_bar_menu: None,

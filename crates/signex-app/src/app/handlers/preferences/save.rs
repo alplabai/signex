@@ -21,6 +21,7 @@ impl Signex {
         self.ui_state.annotate_undo = self.ui_state.preferences_draft_annotate_undo;
         self.ui_state.move_keeps_wires = self.ui_state.preferences_draft_move_keeps_wires;
         self.ui_state.net_hover_enabled = self.ui_state.preferences_draft_net_hover_enabled;
+        self.ui_state.edge_pan = self.ui_state.preferences_draft_edge_pan;
         // Repainted by `sync_theme` below: the canvas colours carry it.
         self.ui_state.symbol_body_fill = self.ui_state.preferences_draft_symbol_body_fill;
         self.ui_state.trackpad_pan = self.ui_state.preferences_draft_trackpad_pan;

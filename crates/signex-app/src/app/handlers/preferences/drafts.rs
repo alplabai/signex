@@ -51,6 +51,7 @@ impl UiState {
                 self.preferences_draft_move_keeps_wires != self.move_keeps_wires
                     || self.preferences_draft_drag_direction_select != self.drag_direction_select
                     || self.preferences_draft_net_hover_enabled != self.net_hover_enabled
+                    || self.preferences_draft_edge_pan != self.edge_pan
                     || self.preferences_draft_increment_step != self.increment_step
                     || self.preferences_draft_paste_designators != self.paste_designators
                     || self.preferences_draft_autosave_enabled != self.autosave_enabled
@@ -147,6 +148,12 @@ impl Signex {
             }
             PrefMsg::DraftNetHoverEnabled(enabled) => {
                 self.ui_state.preferences_draft_net_hover_enabled = enabled;
+            }
+            PrefMsg::DraftEdgePanEnabled(enabled) => {
+                self.ui_state.preferences_draft_edge_pan.enabled = enabled;
+            }
+            PrefMsg::DraftEdgePanSpeed(speed) => {
+                self.ui_state.preferences_draft_edge_pan.speed = speed;
             }
             PrefMsg::SymbolBodyFill(msg) => self.ui_state.apply_body_fill_message(msg),
             PrefMsg::DraftTrackpadPan(enabled) => {

@@ -205,6 +205,10 @@ pub struct UiState {
     pub net_hover_enabled: bool,
     /// Draft mirror of [`Self::net_hover_enabled`] for the Preferences dialog.
     pub preferences_draft_net_hover_enabled: bool,
+    /// Saved "Pan at the canvas edge" preference and its speed (#2872).
+    pub edge_pan: crate::app::edge_pan::EdgePanPrefs,
+    /// Draft mirror of [`Self::edge_pan`] for the Preferences dialog.
+    pub preferences_draft_edge_pan: crate::app::edge_pan::EdgePanPrefs,
     /// Saved "Fill symbol bodies" preference: the body shapes a symbol
     /// leaves unfilled draw filled, in the theme tint unless the user chose
     /// a colour. On by default.

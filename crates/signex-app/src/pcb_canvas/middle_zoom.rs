@@ -85,7 +85,7 @@ impl PcbCanvas {
     }
 
     /// What the canvas tells the app about the pointer at `pos`.
-    pub(super) fn pointer_report(&self, pos: iced::Point, bounds: Rectangle) -> Message {
+    pub(crate) fn pointer_report(&self, pos: iced::Point, bounds: Rectangle) -> Message {
         if self.selectable {
             return Message::PcbCanvas(gesture::pointer_moved(self, pos, bounds));
         }
