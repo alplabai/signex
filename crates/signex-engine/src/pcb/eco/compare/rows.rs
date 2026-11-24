@@ -18,7 +18,7 @@ pub fn compare(eco: &EcoChangeList, back: &BackChangeList) -> CompareReport {
     let mut rows: Vec<(CompareRow, bool)> = eco
         .rows
         .iter()
-        .filter(|row| !only_locks_pad(row, eco))
+        .filter(|row| !only_locks_pad(row, eco) && !reads_same(row, eco))
         .map(eco_row)
         .collect();
     for back_row in &back.rows {
@@ -49,8 +49,55 @@ pub fn compare(eco: &EcoChangeList, back: &BackChangeList) -> CompareReport {
 /// a difference between board and schematic (mockup row 162). One that
 /// another row needs stays, or that row could never be applied.
 fn only_locks_pad(row: &EcoRow, eco: &EcoChangeList) -> bool {
-    matches!(&row.change, EcoChange::PadNet { from, to, .. } if from == to)
-        && !eco.rows.iter().any(|other| other.needs.contains(&row.key))
+    matches!(&row.change, EcoChange::PadNet { from, to, .. } if from == to) && !is_needed(row, eco)
+}
+
+fn is_needed(row: &EcoRow, eco: &EcoChangeList) -> bool {
+    eco.rows.iter().any(|other| other.needs.contains(&row.key))
+}
+
+/// A pad row whose two sides read the same net name (U1 pin 3 +5V / +5V)
+/// tied to other rows: not drawn (mockup row 162), its tick follows those
+/// rows ([`tick_folded`]). One tied to nothing stays drawn, as no other row
+/// would carry its change.
+fn reads_same(row: &EcoRow, eco: &EcoChangeList) -> bool {
+    matches!(&row.change, EcoChange::PadNet { from, to, .. } if net_name(from) == net_name(to))
+        && (is_needed(row, eco) || !row.needs.is_empty())
+}
+
+/// Tick each pad row [`reads_same`] keeps out of the report as the rows
+/// around it say: on while a ticked row needs it, or while every row it
+/// needs is ticked; off otherwise.
+pub(super) fn tick_folded(eco: &mut EcoChangeList) {
+    let folded: Vec<EcoKey> = eco
+        .rows
+        .iter()
+        .filter(|row| !only_locks_pad(row, eco) && reads_same(row, eco))
+        .map(|row| row.key.clone())
+        .collect();
+    for key in &folded {
+        eco.set_on(key, false);
+    }
+    // Each pass ticks one more row, so this ends.
+    while let Some(key) = folded
+        .iter()
+        .find(|key| eco.row(key).is_some_and(|row| follows(row, eco)))
+        .cloned()
+    {
+        eco.set_on(&key, true);
+    }
+}
+
+/// An unticked, unblocked folded row that a ticked row needs, or whose
+/// every need is ticked.
+fn follows(row: &EcoRow, eco: &EcoChangeList) -> bool {
+    let is_on = |key: &EcoKey| eco.row(key).is_some_and(|r| r.on);
+    let needed_by_on = eco
+        .rows
+        .iter()
+        .any(|other| other.on && other.needs.contains(&row.key));
+    let needs_met = !row.needs.is_empty() && row.needs.iter().all(is_on);
+    !row.on && row.blocked.is_none() && (needed_by_on || needs_met)
 }
 
 /// Destructive and board-originated rows, and rows Update PCB starts

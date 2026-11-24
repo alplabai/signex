@@ -337,6 +337,7 @@ impl CompareReport {
         let mut footprint_changed = false;
         if let Some(key) = pcb {
             footprint_changed = self.eco.set_on(&key, direction == Direction::UpdatePcb);
+            rows::tick_folded(&mut self.eco);
         }
         if let Some(key) = back {
             self.back
@@ -418,6 +419,7 @@ impl CompareReport {
                 back.set_on(key, true);
             }
         }
+        rows::tick_folded(&mut eco);
         (eco, back)
     }
 
