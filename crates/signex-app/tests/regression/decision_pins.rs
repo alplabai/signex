@@ -17,8 +17,8 @@ use signex_app::find_replace::{FindReplaceMsg, FindScope};
 use signex_app::panels::{
     LayersPanelUi, LayersTab, NetInspectorMsg, PanelKind, PanelMsg, PcbLayersPanel,
 };
-use signex_app::start_screen::Surface;
 use signex_app::task_driver::TaskDriver;
+use signex_i18n::ids;
 use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Wire};
 use tempfile::TempDir;
 use uuid::Uuid;
@@ -131,9 +131,18 @@ fn opening_a_saved_project_shows_the_hint_and_opens_no_document() {
         "no document opens on its own: {opened:?}"
     );
     assert!(state.engines.is_empty() && state.active_path.is_none());
-    assert_eq!(
-        Surface::select(state.active_project.is_some()),
-        Surface::ProjectHint
+
+    let main = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(main);
+    app.ui_state.first_run_tour_open = false;
+    let new_sheet = app
+        .ui_state
+        .i18n
+        .message_plain(ids::START_HINT_NEW_SHEET, &[]);
+    let texts = probe::texts(app.view(main), WINDOW);
+    assert!(
+        shows(&texts, &new_sheet),
+        "the canvas shows the project hint: {texts:#?}"
     );
 }
 
@@ -269,6 +278,10 @@ fn an_undocked_sheet_window_has_no_zoom_pill_and_the_main_window_has_one() {
     let main_texts = probe::texts(app.view(main), WINDOW);
     assert!(shows(&main_texts, "Fit"), "the main canvas has the pill");
     let window_texts = probe::texts(app.view(window), WINDOW);
+    assert!(
+        window_texts.iter().any(|t| t.text.contains("pin-window")),
+        "the undocked window draws its own sheet's tab: {window_texts:#?}"
+    );
     assert!(
         !shows(&window_texts, "Fit"),
         "an undocked window has no known canvas rectangle, so no pill: {window_texts:#?}"
