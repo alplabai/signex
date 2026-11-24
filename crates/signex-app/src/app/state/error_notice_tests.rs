@@ -238,7 +238,8 @@ fn a_save_failed_card_with_no_open_edits_has_no_note() {
 }
 
 /// A failed save names the operation in the sentence and keeps the error
-/// chain (path and OS error) for the system block.
+/// chain for the system block, the path line over the OS error line
+/// (mockup row 11).
 #[test]
 fn a_failed_save_puts_the_error_chain_in_the_system_block() {
     let _ = crate::diagnostics::init_logging();
@@ -253,13 +254,39 @@ fn a_failed_save_puts_the_error_chain_in_the_system_block() {
     );
     assert_eq!(
         notice.system.as_ref().map(UserText::as_str),
-        Some("writing /w/a.snxsch: Access is denied. (os error 5)")
+        Some("writing /w/a.snxsch\nAccess is denied. (os error 5)")
     );
     // What leaves the screen (a signex-cli reason) is the one line the card
     // read before mockup row 11.
     assert_eq!(
         notice.detail_line_en_us(),
         "Failed to save active document: writing /w/a.snxsch: Access is denied. (os error 5)"
+    );
+}
+
+/// Mockup row 11: the system block puts each cause of the chain on its own
+/// line, outermost first; the copied text keeps the lines and the one line
+/// that leaves the screen joins them with a colon.
+#[test]
+fn the_system_block_puts_each_cause_on_its_own_line() {
+    let en = I18n::en_us();
+    let error = anyhow::anyhow!("Access is denied. (os error 5)")
+        .context("renaming the temporary file")
+        .context("writing C:\\work\\power.snxsch");
+    let notice = ErrorNotice::save(verbatim("Failed to save")).with_error_chain(&error);
+    let system = notice.system.as_ref().map(UserText::as_str);
+    assert_eq!(
+        system,
+        Some(
+            "writing C:\\work\\power.snxsch\nrenaming the temporary file\n\
+             Access is denied. (os error 5)"
+        )
+    );
+    assert!(notice.copy_text(&en).ends_with(system.unwrap_or_default()));
+    assert_eq!(
+        notice.detail_line_en_us(),
+        "Failed to save: writing C:\\work\\power.snxsch: renaming the temporary file: \
+         Access is denied. (os error 5)"
     );
 }
 

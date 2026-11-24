@@ -99,6 +99,14 @@ impl ErrorNotice {
         self
     }
 
+    /// `self` with `error`'s chain as its system part, one cause per line:
+    /// the path line over the OS error line (mockup row 11).
+    #[must_use]
+    pub fn with_error_chain(self, error: &anyhow::Error) -> Self {
+        let lines: Vec<String> = error.chain().map(ToString::to_string).collect();
+        self.with_system(lines.join("\n"))
+    }
+
     /// The heading in `i18n`'s language.
     pub fn title_text(&self, i18n: &I18n) -> String {
         self.title.render(i18n)
@@ -125,7 +133,10 @@ impl ErrorNotice {
     pub fn detail_line_en_us(&self) -> String {
         let detail = self.detail.render(&I18n::en_us());
         match &self.system {
-            Some(system) => format!("{detail}: {system}"),
+            Some(system) => {
+                let system: Vec<&str> = system.as_str().lines().collect();
+                format!("{detail}: {}", system.join(": "))
+            }
             None => detail,
         }
     }
