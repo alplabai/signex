@@ -408,7 +408,8 @@ fn the_sketch_solve_section_leads_with_the_dof_card_and_the_free_motions() {
 /// Mockup row 179: a board sketch with nothing selected leads with the
 /// Sketch DOF section, titled with its DOF, right under the board header and
 /// above the Board, Outline checks and Snap Options sections; the solve
-/// section shows once and Parameters stays at the bottom.
+/// section shows once and Parameters follows it (see
+/// a_board_sketch_shows_parameters_and_bake_as_under_the_sketch_dof_section).
 #[test]
 fn a_board_sketch_leads_with_the_sketch_dof_section() {
     let app = app_with_eight_pads();
@@ -531,6 +532,69 @@ fn the_parameters_list_follows_a_selection_in_sketch_mode() {
     let texts = texts(&app, &fp);
     assert!(top_of(&texts, "ENTITY") < top_of(&texts, "PARAMETERS"));
     assert!(has(&texts, "board_w"), "{texts:#?}");
+}
+
+/// `fp` as a board sketch in Sketch mode with one parameter and the two
+/// closed profiles of the rectangle-and-slot fixture.
+fn as_board_sketch(fp: &mut FootprintEditorPanelContext) {
+    use crate::library::editor::footprint::sketch_mode::roles::{
+        board_profile_rows, fixtures::rect_and_slot,
+    };
+    let f = rect_and_slot();
+    fp.mode_kind = FootprintModeKind::Sketch;
+    fp.sketch_host = signex_types::sketch::SketchHost::Board;
+    fp.board = Some(crate::panels::BoardSketchProps::default());
+    fp.sketch_parameters = vec![("board_w".into(), "60mm".into())];
+    fp.profile_roles = board_profile_rows(&f.sketch, Some(&f.solve));
+}
+
+/// Mockup row 179: with nothing selected a board sketch shows Sketch DOF,
+/// then Parameters, then Bake as with a row per closed profile, all above
+/// the board summary and Snap Options; each section shows once.
+#[test]
+fn a_board_sketch_shows_parameters_and_bake_as_under_the_sketch_dof_section() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    as_board_sketch(&mut fp);
+    assert!(matches!(body_state(&fp), BodyState::Board(_)));
+    let texts = texts(&app, &fp);
+    let order = ["SKETCH DOF", "PARAMETERS", "board_w", "BAKE AS"];
+    for pair in order.windows(2) {
+        let (above, below) = (top_of(&texts, pair[0]), top_of(&texts, pair[1]));
+        assert!(above < below, "{pair:?}: {texts:#?}");
+    }
+    assert!(top_of(&texts, "Profile 1 · 4 edges") > top_of(&texts, "BAKE AS"));
+    for below in ["Name", "Outline checks", "SNAP OPTIONS"] {
+        assert!(
+            top_of(&texts, "Profile 2 · 4 edges") < top_of(&texts, below),
+            "{below:?}: {texts:#?}"
+        );
+    }
+    for once in ["PARAMETERS", "BAKE AS"] {
+        let count = texts.iter().filter(|t| t.text == once).count();
+        assert_eq!(count, 1, "{once:?}: {texts:#?}");
+    }
+}
+
+/// Mockup row 179 (m179-slot): under a board selection Parameters and Bake
+/// as follow the selection's section, above the Board and Snap Options
+/// sections, and show once.
+#[test]
+fn a_board_selection_shows_parameters_and_bake_as_under_its_section() {
+    let app = app_with_eight_pads();
+    let mut fp = ctx_with_line_selected(&app);
+    as_board_sketch(&mut fp);
+    assert!(matches!(body_state(&fp), BodyState::SketchEntity(_)));
+    let texts = texts(&app, &fp);
+    let order = ["ENTITY", "PARAMETERS", "BAKE AS", "SNAP OPTIONS"];
+    for pair in order.windows(2) {
+        let (above, below) = (top_of(&texts, pair[0]), top_of(&texts, pair[1]));
+        assert!(above < below, "{pair:?}: {texts:#?}");
+    }
+    for once in ["PARAMETERS", "BAKE AS"] {
+        let count = texts.iter().filter(|t| t.text == once).count();
+        assert_eq!(count, 1, "{once:?}: {texts:#?}");
+    }
 }
 
 /// A sketch line selected in Sketch mode, with no role.

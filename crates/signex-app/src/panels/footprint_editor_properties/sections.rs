@@ -5,7 +5,8 @@
 //! shows), Parameters and Solve warnings.
 //! The nothing-selected body shows them, and so does Sketch mode under a
 //! selection. A board sketch leads with the solve section, titled Sketch DOF,
-//! right under its object header (mockup row 179).
+//! right under its object header, and shows Parameters and Bake as under it
+//! or under the selection's section (mockup row 179).
 
 use iced::widget::{Column, container, row};
 use iced::{Element, Length, Widget as _};
@@ -34,7 +35,8 @@ pub(super) fn view_sketch_sections<'a>(
     cx: Ctx<'a, '_>,
 ) -> Column<Element<'a, PanelMsg>> {
     let col = solve_section(col, cx);
-    view_sketch_sections_after_solve(col, cx)
+    let col = parameters_section(col, cx);
+    warnings_section(col, cx)
 }
 
 /// A board sketch in Sketch mode puts the Sketch DOF section right under
@@ -52,12 +54,22 @@ pub(super) fn view_sketch_solve_section<'a>(
     solve_section(col, cx)
 }
 
-/// The sketch sections after the solve: Parameters and Solve warnings.
-pub(super) fn view_sketch_sections_after_solve<'a>(
+/// A board sketch's Parameters and Bake as, right under its Sketch DOF
+/// section or under the selection's section (mockup row 179).
+pub(super) fn view_board_parameters_and_bake_as<'a>(
     col: Column<Element<'a, PanelMsg>>,
     cx: Ctx<'a, '_>,
 ) -> Column<Element<'a, PanelMsg>> {
     let col = parameters_section(col, cx);
+    super::roles::view_board_bake_as(col, cx)
+}
+
+/// The Solve warnings section alone, for a board body that showed its
+/// Parameters near the top.
+pub(super) fn view_sketch_warnings<'a>(
+    col: Column<Element<'a, PanelMsg>>,
+    cx: Ctx<'a, '_>,
+) -> Column<Element<'a, PanelMsg>> {
     warnings_section(col, cx)
 }
 
