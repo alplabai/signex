@@ -68,16 +68,9 @@ fn view_board_facts<'a>(
     if is_section_collapsed("fp_board", collapsed_sections) {
         return col;
     }
-    let size = match board.board_size_mm {
-        Some((w, h)) => t!(
-            i18n, ids::PCB_PROPERTIES_SIZE_VALUE,
-            "width" => format!("{w:.2}"), "height" => format!("{h:.2}")
-        ),
-        None => t!(i18n, ids::PCB_PROPERTIES_NO_OUTLINE),
-    };
     let mut rows = vec![
         (ids::BOARD_SKETCH_NAME, board.board_name.clone()),
-        (ids::PCB_PROPERTIES_SIZE, size.into_string()),
+        (ids::PCB_PROPERTIES_SIZE, size_value(board, i18n)),
     ];
     if let Some(area) = board.board_area_mm2 {
         let area = t!(i18n, ids::BOARD_SKETCH_AREA_VALUE, "area" => format!("{area:.2}"));
@@ -100,6 +93,21 @@ fn view_board_facts<'a>(
         ));
     }
     col
+}
+
+/// The Size row's value: read-only "W × H mm · from board shape" while the
+/// sketch's closed outline sets it (mockup row 179e), else the board's own
+/// outline, or that there is none.
+fn size_value(board: &BoardSketchProps, i18n: &I18n) -> String {
+    let Some((w, h)) = board.board_size_mm else {
+        return t!(i18n, ids::PCB_PROPERTIES_NO_OUTLINE).into_string();
+    };
+    let id = if board.size_from_shape {
+        ids::BOARD_SKETCH_SIZE_FROM_SHAPE
+    } else {
+        ids::PCB_PROPERTIES_SIZE_VALUE
+    };
+    t!(i18n, id, "width" => format!("{w:.2}"), "height" => format!("{h:.2}")).into_string()
 }
 
 pub(super) fn view_board_section<'a>(
@@ -177,4 +185,34 @@ pub(super) fn view_board_section<'a>(
         .width(Length::Fill)
         .boxed(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use signex_i18n::I18n;
+
+    use super::size_value;
+    use crate::panels::BoardSketchProps;
+
+    fn size(board: &BoardSketchProps) -> String {
+        size_value(board, &I18n::en_us()).replace(['\u{2068}', '\u{2069}'], "")
+    }
+
+    /// Mockup row 179e: the sketch's closed outline sets the size, read-only
+    /// "from board shape", even before Bake gives the board an outline.
+    #[test]
+    fn the_size_reads_from_the_board_shape_while_the_sketch_owns_the_outline() {
+        let shape = BoardSketchProps {
+            board_size_mm: Some((60.0, 40.0)),
+            size_from_shape: true,
+            ..BoardSketchProps::default()
+        };
+        assert_eq!(size(&shape), "60.00 × 40.00 mm · from board shape");
+        let board = BoardSketchProps {
+            size_from_shape: false,
+            ..shape.clone()
+        };
+        assert_eq!(size(&board), "60.00 × 40.00 mm");
+        assert_eq!(size(&BoardSketchProps::default()), "No outline");
+    }
 }

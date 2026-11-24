@@ -59,10 +59,18 @@ pub(super) fn board_sketch_props(editor: &FootprintDocument) -> Option<BoardSket
             .first()
             .map(|&(_, radius)| radius)
     });
+    // The sketch's closed outline is what Bake writes, so the size reads
+    // from it; without one, from the board's (mockup row 179e).
+    let shape = sketch_shape(editor);
     let board = BoardSketchProps {
         board_name: editor.primitive().name.clone(),
-        board_size_mm: backdrop.outline_size_mm(),
-        board_area_mm2: backdrop.outline_area_mm2(),
+        board_size_mm: shape
+            .map(|(size, _)| size)
+            .or_else(|| backdrop.outline_size_mm()),
+        board_area_mm2: shape
+            .map(|(_, area)| area)
+            .or_else(|| backdrop.outline_area_mm2()),
+        size_from_shape: shape.is_some(),
         // Read here, where every path that solves ends up, so they are live.
         outline_checks: check_lines(checks.as_ref()),
         router_tool_diameter: editor.state.sketch_exit.router_tool_diameter,
@@ -88,4 +96,25 @@ pub(super) fn board_sketch_props(editor: &FootprintDocument) -> Option<BoardSket
         }),
         ..board
     })
+}
+
+/// The extent `(width, height)` and area in mm of the closed outline the
+/// sketch bakes at its last solve; `None` without one.
+fn sketch_shape(editor: &FootprintDocument) -> Option<((f64, f64), f64)> {
+    let sketch = editor.primitive().sketch.as_ref()?;
+    let solve = editor.state.last_solve.as_ref()?;
+    let outline = signex_bake::board::sketch_outline(sketch, solve)?;
+    let (first, rest) = outline.split_first()?;
+    let (lo, hi) = rest
+        .iter()
+        .fold(((first.x, first.y), (first.x, first.y)), |(lo, hi), p| {
+            (
+                (lo.0.min(p.x), lo.1.min(p.y)),
+                (hi.0.max(p.x), hi.1.max(p.y)),
+            )
+        });
+    let ring: Vec<signex_sketch::geom::Point2> =
+        outline.iter().map(|p| (p.x, p.y).into()).collect();
+    let area = signex_sketch::geom::predicates::signed_area(&ring).abs();
+    Some(((hi.0 - lo.0, hi.1 - lo.1), area))
 }

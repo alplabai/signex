@@ -196,6 +196,10 @@ fn layout_rows<'a>(
                 param(pattern, F::LinearDyExpr, "0", dy_expr),
                 tokens,
             ));
+            let exprs = [dx_expr.as_str(), dy_expr.as_str()];
+            if let Some(spacing) = spacing_note(pattern, exprs, i18n) {
+                rows.push(note(spacing, tokens));
+            }
         }
         ArrayKindSummary::Grid {
             nx_expr,
@@ -223,6 +227,10 @@ fn layout_rows<'a>(
                 ),
                 tokens,
             ));
+            let exprs = [dx_expr.as_str(), dy_expr.as_str()];
+            if let Some(spacing) = spacing_note(pattern, exprs, i18n) {
+                rows.push(note(spacing, tokens));
+            }
             rows.push(field_row(
                 t!(i18n, ids::EDITORS_PATTERN_MASK),
                 param(pattern, F::MaskExpr, "i != 0 || j != 0", mask_expr),
@@ -279,6 +287,50 @@ fn layout_rows<'a>(
         }
     }
     rows
+}
+
+/// "Spacing 53.00 × 33.00 mm" under spacing fields that name a parameter,
+/// such as `board_w - 2*hole_inset` (mockup row 179e): the values the bake
+/// walks, so an edit of `board_w` shows here. `None` for plain lengths and
+/// while the pattern does not resolve.
+pub(super) fn spacing_note(
+    pattern: &ArraySummary,
+    exprs: [&str; 2],
+    i18n: &I18n,
+) -> Option<Localized> {
+    if exprs.into_iter().all(is_plain_length) {
+        return None;
+    }
+    let (dx, dy) = walked_spacing(pattern)?;
+    Some(t!(
+        i18n, ids::SKETCH_PATTERN_SPACING_VALUE,
+        "dx" => format!("{dx:.2}"), "dy" => format!("{dy:.2}")
+    ))
+}
+
+/// A bare number with an optional `mm`: nothing to resolve.
+fn is_plain_length(expr: &str) -> bool {
+    let text = expr.trim().trim_start_matches('=').trim();
+    let number = text.strip_suffix("mm").unwrap_or(text).trim();
+    number.parse::<f64>().is_ok()
+}
+
+/// The step between neighbouring instances in mm, from the preview the bake
+/// walks: `(dx, dy)` of a row, or a grid's column and row steps.
+fn walked_spacing(pattern: &ArraySummary) -> Option<(f64, f64)> {
+    let ArrayPreview::Instances(all) = &pattern.preview else {
+        return None;
+    };
+    let at = |i: usize, j: usize| {
+        all.iter()
+            .find(|c| c.i == i && c.j == j)
+            .map(|c| c.offset_mm)
+    };
+    match kind_of(pattern) {
+        PatternKind::Linear => at(1, 0).map(|[dx, dy]| (dx, dy)),
+        PatternKind::Grid => Some((at(1, 0)?[0], at(0, 1)?[1])),
+        PatternKind::Polar => None,
+    }
 }
 
 /// The centre position and the Re-pick button of a polar pattern.

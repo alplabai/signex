@@ -30,7 +30,7 @@ mod board_sketch_attr;
 pub use board_sketch_attr::{BoardSketchAttrMsg, BoardTargetProps, ComponentChoice, LayerChoice};
 mod board_bake_preview;
 pub use board_bake_preview::{
-    BakedHole, BakedOutline, BoardBakePreview, BoardBakeRefusal, BoardBakeRows,
+    BakedHole, BakedKeepout, BakedOutline, BoardBakePreview, BoardBakeRefusal, BoardBakeRows,
 };
 mod sketch_fix;
 pub use sketch_fix::SketchFixMsg;
@@ -184,7 +184,7 @@ pub use footprint_context::{
     MountingHoleProps, NumberingSchemeKindUi, OverConstraintSummary, PadShapeParamSummary,
     PourSummary, RejectedConflictSummary, SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
-pub use footprint_context::{PATTERN_PREVIEW_MAX_INSTANCES, SketchStateSummary};
+pub use footprint_context::{FreeMotionSummary, PATTERN_PREVIEW_MAX_INSTANCES, SketchStateSummary};
 pub use footprint_outline::{OutlineSegment, PadOutlineSummary, segments as outline_segments};
 pub use footprint_place_block::FootprintPlaceBlock;
 pub use illustration::{HoverSubject, PanelIllustrationHover};

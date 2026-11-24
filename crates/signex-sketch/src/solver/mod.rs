@@ -1,6 +1,7 @@
 pub mod derivatives;
 pub mod dim_cache;
 pub mod dof;
+pub mod free_motion;
 pub mod jacobian;
 pub mod linalg;
 pub mod lm;
@@ -107,6 +108,9 @@ pub struct FullSolveOutput {
     /// is empty until [`Solver::redundancy_report`] fills it in.
     pub redundancy_pending: bool,
     pub jacobian: Vec<Vec<f64>>,
+    /// The free degrees of freedom at the solved state and the motions
+    /// they are, for the Properties DOF card (mockup row 179).
+    pub free_motions: free_motion::FreeMotions,
     /// GH #599 — the resolved parameters this solve ran with.
     /// Consumers that re-evaluate residuals against the output (the
     /// over-constraint diagnostics panel) need the same map: an
@@ -332,6 +336,7 @@ impl Solver {
         // parametric constraints are evaluated rather than dropped.
         let colours = entity_colours(sketch, &result, &jacobian, &result.index, params);
         let over_constraints = over_constraint_ids(sketch, &result, params);
+        let free_motions = free_motion::free_motions(&result, &jacobian);
 
         let (redundant_constraints, warnings) = if with_redundancy {
             redundancy_outcome(
@@ -354,6 +359,7 @@ impl Solver {
             warnings,
             redundancy_pending: !with_redundancy,
             jacobian,
+            free_motions,
             params: params.clone(),
         })
     }

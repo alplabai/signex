@@ -41,6 +41,19 @@ pub(super) fn build_footprint_editor_panel_ctx(
             over_constraint_count: out.over_constraints.len(),
             over_constraints,
             redundant_constraints: build_redundant_constraint_summaries(editor.primitive(), out),
+            dof: out.free_motions.dof,
+            free_motions: out
+                .free_motions
+                .motions
+                .iter()
+                .filter_map(|motion| {
+                    Some(crate::panels::FreeMotionSummary {
+                        focus_entity_id: *motion.entities.first()?,
+                        entity_count: motion.entities.len(),
+                        kind: motion.kind,
+                    })
+                })
+                .collect(),
         }
     });
 

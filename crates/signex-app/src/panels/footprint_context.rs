@@ -552,6 +552,20 @@ pub struct FootprintSolveSummary {
     /// constraint order. Same row shape as `over_constraints`; the residual
     /// is ~0 and not shown.
     pub redundant_constraints: Vec<OverConstraintSummary>,
+    /// The free degrees of freedom of the solve, for the DOF card (mockup row 179).
+    pub dof: usize,
+    /// What still moves, one row each under the DOF card.
+    pub free_motions: Vec<FreeMotionSummary>,
+}
+
+/// One free motion of the solve: what moves, and Show's target.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FreeMotionSummary {
+    /// The entity Show selects: the first the motion moves.
+    pub focus_entity_id: signex_sketch::id::SketchEntityId,
+    /// How many entities move.
+    pub entity_count: usize,
+    pub kind: signex_sketch::solver::free_motion::MotionKind,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -749,6 +763,9 @@ pub struct BoardSketchProps {
     /// Width and height of the board outline's extent in mm; `None`
     /// without an outline.
     pub board_size_mm: Option<(f64, f64)>,
+    /// The size and area are read from the sketch's closed outline, which
+    /// Bake writes, not from the board's (mockup row 179e).
+    pub size_from_shape: bool,
     /// The area the board outline encloses in mm².
     pub board_area_mm2: Option<f64>,
     /// The selected entity, if any.

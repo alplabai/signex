@@ -1,6 +1,7 @@
-//! The sketch sections: Sketch solve (a DOF pill in the header; entity and
-//! constraint counts, the last solve's iterations, residual and time, the
-//! redundant and conflicting constraints), Parameters and Solve warnings.
+//! The sketch sections: Sketch solve (a DOF pill in the header; the DOF card
+//! with the free motions, entity and constraint counts, the last solve's
+//! iterations, residual and time, the redundant and conflicting
+//! constraints), Parameters and Solve warnings.
 //! The nothing-selected body shows them, and so does Sketch mode under a
 //! selection.
 
@@ -74,6 +75,10 @@ fn solve_section<'a>(
     col = col.push(header);
     if !is_open(SOLVE_KEY, cx.collapsed) {
         return col;
+    }
+    // The DOF card and the free motions lead (mockup row 179).
+    if let Some(solve) = fp.last_solve.as_ref() {
+        col = super::dof_card::push_dof_card(col, cx, solve);
     }
     let kv = |id: signex_i18n::MessageId, value: String| kv_row(&t!(i18n, id), value, tokens, i18n);
     col = col.push(kv(

@@ -349,6 +349,8 @@ fn the_sketch_sections_show_the_solve_statistics_and_parameters() {
         over_constraint_count: 0,
         over_constraints: Vec::new(),
         redundant_constraints: Vec::new(),
+        dof: 0,
+        free_motions: Vec::new(),
     });
     fp.sketch_parameters = vec![("pitch".into(), "1.27".into())];
     let texts = texts(&app, &fp);
@@ -366,6 +368,54 @@ fn the_sketch_sections_show_the_solve_statistics_and_parameters() {
     ] {
         assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
     }
+}
+
+/// Mockup row 179: the Sketch solve section leads with the DOF card and the
+/// free motions, each with Show, above the solve statistics.
+#[test]
+fn the_sketch_solve_section_leads_with_the_dof_card_and_the_free_motions() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.sketch_constraint_count = 46;
+    fp.last_solve = Some(FootprintSolveSummary {
+        iterations: 6,
+        elapsed_ms: 3,
+        final_residual_norm: 0.0,
+        over_constraint_count: 0,
+        over_constraints: Vec::new(),
+        redundant_constraints: Vec::new(),
+        dof: 2,
+        free_motions: vec![crate::panels::FreeMotionSummary {
+            focus_entity_id: signex_sketch::id::SketchEntityId::new(),
+            entity_count: 4,
+            kind: signex_sketch::solver::free_motion::MotionKind::Slide { dx: 1.0, dy: 0.0 },
+        }],
+    });
+    let texts = texts(&app, &fp);
+    for label in [
+        "2",
+        "Under-constrained · 2 DOF",
+        "46 constraints · solved in 3 ms",
+        "4 points slide along X",
+        "Show",
+    ] {
+        assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
+    }
+    assert!(top_of(&texts, "SKETCH SOLVE") < top_of(&texts, "Under-constrained · 2 DOF"));
+    assert!(top_of(&texts, "4 points slide along X") < top_of(&texts, "ITERATIONS"));
+}
+
+/// Mockup row 179e: the Parameters list stays under a selected entity's
+/// form in Sketch mode, so a pattern's spacing and the parameters it names
+/// sit together.
+#[test]
+fn the_parameters_list_follows_a_selection_in_sketch_mode() {
+    let app = app_with_eight_pads();
+    let mut fp = ctx_with_line_selected(&app);
+    fp.sketch_parameters = vec![("board_w".into(), "60mm".into())];
+    let texts = texts(&app, &fp);
+    assert!(top_of(&texts, "ENTITY") < top_of(&texts, "PARAMETERS"));
+    assert!(has(&texts, "board_w"), "{texts:#?}");
 }
 
 /// A sketch line selected in Sketch mode, with no role.
