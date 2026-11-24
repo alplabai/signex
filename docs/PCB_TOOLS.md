@@ -492,19 +492,39 @@ the panel header shows it greyed, with the reason as its tooltip.
 
 ### Pour Cutout and Slice Pour
 
-Both work on the polygon pours of the active copper layer and are one undo
-step each (`signex_engine::pcb::pour_edit`, geometry in
-`pcb_geom::{cut_area, slice_area}`):
+Both work on the active copper layer and are one undo step each.
 
 - **Pour Cutout** (`place_board_pour_cutout`) is drawn like a Solid Region.
-  Closed, its area is cut out of every pour it overlaps: a hole when inside,
-  a notch at an edge, or several pieces.
+  Closed, it places a pour cutout (#2871, DECISIONS 2026-11-24): a region
+  of its own on the layer (`draw::new_pour_cutout`, a zone with the
+  `pour_cutout` fill type and no net, `signex_types::zone_cutout`). It
+  edits no pour. Every polygon pour on the layer leaves the region empty
+  when it fills (`pcb_geom` zone fill obstacles), exactly as drawn, with no
+  clearance round it. It is placed whether or not it overlaps a pour.
+  The region is picked by a click inside it, over the pour under it, and
+  shows in the selection filter as a Region. It moves by dragging or Move,
+  is deleted like any object, and its layer is set in Properties, each one
+  undo step; the pour's fill follows. Its Properties panel shows the layer,
+  its vertices and its area; the board has no area vertex editing yet, so
+  its corners are changed by drawing it again. It holds no copper, so DRC, the copper list,
+  Gerber, PDF and the 3D view read only the pours' fills around it. In the
+  board file it is an entry of `[[pour_cutouts]]` (below).
 - **Slice Pour** (`place_board_slice_pour`) takes two clicks; every pour the
-  segment between them meets is cut in two along the line through them.
+  segment between them meets is cut in two along the line through them
+  (`signex_engine::pcb::pour_edit::slice_pours`, geometry in
+  `pcb_geom::slice_area`). The largest piece keeps the pour (its uuid and
+  settings); every other piece becomes a new pour with the same settings.
+  When nothing is cut, Messages says so and the board is unchanged.
 
-The largest piece keeps the pour (its uuid and settings); every other piece
-becomes a new pour with the same settings, and a pour the cutout covers whole
-is removed. When nothing is cut, Messages says so and the board is unchanged.
+#### Pour cutouts in the board file
+
+A `.snxpcb` keeps its pour cutouts in a `[[pour_cutouts]]` array of zone
+tables, after `[[zones]]` (`format::pour_cutouts`). Each entry is read as a
+cutout whatever its `fill_type` says, and the cutouts are loaded after the
+zones. The array is written only when the board has a cutout, so a board
+without one saves byte for byte as before. A build that does not know the
+array keeps it as an unknown key and writes it back, and never reads a
+cutout as copper.
 
 ### Repour
 

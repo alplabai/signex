@@ -1,6 +1,7 @@
-//! The area panel (#2393, #2523, mockup row 99): fills, solid regions, polygon pours
-//! and keepouts. Under the illustration: Net Information and the net of a
-//! copper area, the layer, a keepout's kinds; a pour's Pour section with its
+//! The area panel (#2393, #2523, mockup row 99): fills, solid regions, polygon pours,
+//! keepouts and pour cutouts. Under the illustration: Net Information and the
+//! net of a copper area, the layer, a keepout's kinds, a pour cutout's
+//! vertices and area (#2871); a pour's Pour section with its
 //! fill rules, the thermal relief and corners it cannot use yet (greyed:
 //! the fill draws no spokes and stores no corners), and the Copper card with
 //! what the fill holds, Repour, Shelve or Unshelve and the board-wide menu.
@@ -142,7 +143,35 @@ fn properties<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Option<Element<'a, PanelM
             ),
         );
     }
+    if f.kind == Some(ZoneKind::Cutout) {
+        for (label, row) in cutout_outline(look, f) {
+            s.push(common, label, row);
+        }
+    }
     s.finish()
+}
+
+/// A pour cutout's Vertices and Area (#2871), read only; nothing while
+/// several are selected.
+fn cutout_outline<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Vec<(MessageId, Element<'a, PanelMsg>)> {
+    let Some((vertices, area)) = f.outline else {
+        return Vec::new();
+    };
+    let vertices = read_only(look, UserText::new(vertices.to_string()));
+    let area = with_unit(
+        read_only(look, UserText::new(format_number(area))),
+        unit(look, ids::PCB_PRIM_UNIT_MM2),
+    );
+    vec![
+        (
+            ids::PCB_PRIM_CUTOUT_VERTICES,
+            labelled(look, ids::PCB_PRIM_CUTOUT_VERTICES, vertices),
+        ),
+        (
+            ids::PCB_PRIM_CUTOUT_AREA,
+            labelled(look, ids::PCB_PRIM_CUTOUT_AREA, area),
+        ),
+    ]
 }
 
 /// A pour's fill rules and its Copper card; nothing for other areas.
@@ -676,6 +705,7 @@ mod tests {
             thermal: Some((false, 0.0, 0.0)),
             menu_open: false,
             unfilled: None,
+            outline: None,
         }
     }
 

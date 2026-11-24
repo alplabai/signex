@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 
 use signex_types::pcb::{Point, SOLID_FILL, Zone};
 use signex_types::pcb_graphic::BoardGraphicKind;
+use signex_types::zone_cutout::POUR_CUTOUT_FILL;
 use signex_types::zone_keepout::KEEPOUT_FILL;
 use signex_types::zone_pour::POUR_FILL;
 
@@ -77,12 +78,13 @@ impl PickKind {
 
     /// The kind a drawn area is (#2383): a keepout, a Fill (solid copper on
     /// an upright rectangle, as the Fill tool draws it), a Solid Region or a
-    /// polygon pour (#2216). `None` for a zone of a kind no tool draws.
+    /// pour cutout (#2871, a region holding no copper), or a polygon pour
+    /// (#2216). `None` for a zone of a kind no tool draws.
     pub fn of_zone(zone: &Zone) -> Option<Self> {
         match zone.fill_type.as_str() {
             KEEPOUT_FILL => Some(PickKind::Keepouts),
             SOLID_FILL if is_upright_rectangle(&zone.outline) => Some(PickKind::Fills),
-            SOLID_FILL => Some(PickKind::Regions),
+            SOLID_FILL | POUR_CUTOUT_FILL => Some(PickKind::Regions),
             POUR_FILL => Some(PickKind::Polygons),
             _ => None,
         }

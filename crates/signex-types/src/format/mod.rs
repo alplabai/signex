@@ -53,6 +53,7 @@ mod pcb_row_columns;
 mod pcb_rows;
 mod pcb_token;
 mod pcb_uuid_repair;
+mod pour_cutouts;
 mod refinement_extras;
 mod sch_rows;
 mod sch_token;
@@ -126,6 +127,8 @@ mod pcb_route_attrs_tests;
 mod pcb_stack_tests;
 #[cfg(test)]
 mod pcb_uuid_repair_tests;
+#[cfg(test)]
+mod pour_cutouts_tests;
 #[cfg(test)]
 mod refinement_tests;
 #[cfg(test)]
@@ -887,19 +890,20 @@ impl SnxPcb {
         write_tsv_section(&mut out, "vias", &via_rows)?;
 
         // Zones — full struct array (each zone serialises naturally
-        // under `[[zones]]` with its own uuid scalar).
-        if !self.board.zones.is_empty() {
+        // under `[[zones]]` with its own uuid scalar); the pour cutouts
+        // (#2871) in their own `[[pour_cutouts]]` array.
+        let zones = pour_cutouts::zones_of(&self.board);
+        if !zones.is_empty() {
             #[derive(Serialize)]
             struct ZonesWrapper<'a> {
-                zones: &'a [Zone],
+                zones: Vec<&'a Zone>,
             }
             out.push('\n');
-            let wrapper = ZonesWrapper {
-                zones: &self.board.zones,
-            };
+            let wrapper = ZonesWrapper { zones };
             finite_toml::ensure_finite(&wrapper)?;
             out.push_str(&toml::to_string_pretty(&wrapper)?);
         }
+        pour_cutouts::write(&mut out, &self.board)?;
 
         // The board sketch (#2234): absent for a board without one.
         board_sketch::write(&mut out, &self.board)?;
@@ -990,7 +994,8 @@ impl SnxPcb {
         let vias = rows_to_vias(via_rows)?;
 
         // Reconstitute zones from `[[zones]]` array.
-        let zones = raw.zones.unwrap_or_default();
+        let mut zones = raw.zones.unwrap_or_default();
+        zones.extend(pour_cutouts::read(raw.pour_cutouts));
 
         // Stackup → layers list (rebuild LayerDef with synthetic ids).
         let mut stackup_display_names = UnknownFields::default();
@@ -1090,6 +1095,9 @@ struct PcbRaw {
     vias: Option<TsvBody>,
     #[serde(default)]
     zones: Option<Vec<Zone>>,
+    /// Pour cutouts (#2871), `format::pour_cutouts`.
+    #[serde(default)]
+    pour_cutouts: Option<Vec<Zone>>,
     #[serde(default)]
     extras: Option<PcbExtrasRaw>,
     #[serde(default)]

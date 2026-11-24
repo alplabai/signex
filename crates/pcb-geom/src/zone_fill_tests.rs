@@ -3,6 +3,7 @@ use crate::rect::RectNm;
 use crate::transform::pad_shape;
 use signex_types::pcb::{Footprint, Pad, PadNet, PadShape, PadType, Point, Segment};
 use signex_types::pcb_arc::TrackArc;
+use signex_types::zone_cutout::POUR_CUTOUT_FILL;
 use signex_types::zone_keepout::KEEPOUT_FILL;
 use signex_types::zone_pour::POUR_FILL;
 
@@ -214,6 +215,53 @@ fn a_keepout_on_the_layer_and_the_pours_own_holes_are_left_empty() {
     assert_eq!(
         twice_area(&fill),
         FULL - 2 * 2 * (4 * MM as i128) * (MM as i128)
+    );
+}
+
+/// #2871: a pour cutout on the pour's layer is left empty as drawn, with no
+/// clearance round it, and the pour's outline is not touched; one on another
+/// layer is not; moved off the pour or removed, the copper comes back.
+#[test]
+fn a_pour_cutout_on_the_layer_is_left_empty_and_the_outline_kept() {
+    let mut b = board(Vec::new());
+    let outline = b.zones[0].outline.clone();
+    b.zones.push(zone(
+        2,
+        0,
+        POUR_CUTOUT_FILL,
+        "TopCopper",
+        (2.0, 2.0, 4.0, 5.0),
+    ));
+    b.zones.push(zone(
+        3,
+        0,
+        POUR_CUTOUT_FILL,
+        "BottomCopper",
+        (-8.0, -8.0, -6.0, -6.0),
+    ));
+    let fill = pieces(&b);
+    assert_eq!(fill.len(), 1);
+    assert_eq!(fill[0].holes.len(), 1, "the top cutout, not the bottom one");
+    assert_eq!(
+        twice_area(&fill),
+        FULL - 2 * (2 * MM as i128) * (3 * MM as i128)
+    );
+    assert_eq!(b.zones[0].outline, outline, "the outline is not edited");
+
+    let mut removed = b.clone();
+    removed.zones.remove(1);
+    assert_eq!(
+        twice_area(&pieces(&removed)),
+        FULL,
+        "removed, the copper is back"
+    );
+    for p in &mut b.zones[1].outline {
+        p.x += 20.0;
+    }
+    assert_eq!(
+        twice_area(&pieces(&b)),
+        FULL,
+        "moved off, the copper is back"
     );
 }
 

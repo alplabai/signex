@@ -187,12 +187,14 @@ pub enum ZoneKind {
     Region,
     Pour,
     Keepout,
+    /// A pour cutout (#2871): an area the pours on its layer leave empty.
+    Cutout,
 }
 
 impl ZoneKind {
     /// Whether the area is copper (it has a net).
     pub fn is_copper(self) -> bool {
-        self != Self::Keepout
+        !matches!(self, Self::Keepout | Self::Cutout)
     }
 }
 
@@ -438,6 +440,9 @@ pub struct ZoneFacts {
     pub menu_open: bool,
     /// Why a selected pour has no fill, when one has none.
     pub unfilled: Option<pcb_geom::Unfilled>,
+    /// The vertices and the area in mm² of one selected area; `None` for
+    /// several (#2871: a pour cutout's panel shows them).
+    pub outline: Option<(usize, f64)>,
 }
 
 /// Free arcs (#2373). Positions and angles are read from the board origin

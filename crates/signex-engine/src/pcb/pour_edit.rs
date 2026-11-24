@@ -1,12 +1,12 @@
-//! Pour Cutout and Slice Pour as board commands (#2216). Every polygon pour
-//! on the copper layer that the cutout overlaps, or the slice line meets, is
-//! rewritten with the shapes `pcb_geom` cuts it into: the largest keeps the
-//! pour's identity, each other piece is a new pour with the same settings,
-//! and a pour the cutout covers whole is removed. The commands run as one
-//! batch, so the edit is one undo step. Shelve all and Unshelve all (#2523)
-//! set every pour's `shelved` in one replace.
+//! Slice Pour as board commands (#2216). Every polygon pour on the copper
+//! layer that the slice line meets is rewritten with the shapes `pcb_geom`
+//! cuts it into: the largest keeps the pour's identity and each other piece
+//! is a new pour with the same settings. The commands run as one batch, so
+//! the edit is one undo step. Pour Cutout edits no pour: it places a cutout
+//! region (`draw::new_pour_cutout`, #2871) the fill leaves empty. Shelve
+//! all and Unshelve all (#2523) set every pour's `shelved` in one replace.
 
-use pcb_geom::{AreaShape, cut_area, slice_area};
+use pcb_geom::{AreaShape, slice_area};
 use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{PcbBoard, Point, Zone};
 use signex_types::pcb_layer::CopperLayer;
@@ -29,17 +29,6 @@ pub fn shelve_all_pours(board: &PcbBoard, shelved: bool) -> Option<BoardCommand>
         })
         .collect();
     (!items.is_empty()).then_some(BoardCommand::ReplaceItems { items })
-}
-
-/// The commands that take `cutout` out of every pour on `layer` it
-/// overlaps; empty when it overlaps none. `new_id` names each new piece.
-pub fn cut_pours(
-    board: &PcbBoard,
-    layer: CopperLayer,
-    cutout: &[Point],
-    new_id: impl FnMut() -> Uuid,
-) -> Vec<BoardCommand> {
-    rewrite(board, layer, |zone| cut_area(zone, cutout), new_id)
 }
 
 /// The commands that slice every pour on `layer` the segment from `a` to

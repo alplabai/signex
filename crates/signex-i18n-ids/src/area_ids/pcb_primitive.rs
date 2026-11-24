@@ -136,6 +136,10 @@ define_ids! {
     PCB_PRIM_REGION_TITLE = "pcb-prim-region-title";
     PCB_PRIM_POUR_TITLE = "pcb-prim-pour-title";
     PCB_PRIM_KEEPOUT_TITLE = "pcb-prim-keepout-title";
+    PCB_PRIM_CUTOUT_TITLE = "pcb-prim-cutout-title";
+    PCB_PRIM_CUTOUT_VERTICES = "pcb-prim-cutout-vertices";
+    PCB_PRIM_CUTOUT_AREA = "pcb-prim-cutout-area";
+    PCB_PRIM_CUTOUT_DRAWING = "pcb-prim-cutout-drawing";
     PCB_PRIM_AREA_TITLE = "pcb-prim-area-title";
     PCB_PRIM_AREA_COUNT = "pcb-prim-area-count";
     PCB_PRIM_POUR_SETTINGS = "pcb-prim-pour-settings";
