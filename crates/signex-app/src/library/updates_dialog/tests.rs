@@ -258,13 +258,64 @@ fn set_all_ticks_or_clears_every_entry() {
     assert!(!empty.all_selected());
 }
 
-/// The summary pills count each bump kind.
+/// The summary pills count the table rows of each bump kind: R2 and R3
+/// share one row (mockup row 135 draws "2 patch" for R10, R11 and C4).
 #[test]
 fn count_of_counts_each_kind() {
     let state = mixed_state();
     assert_eq!(state.count_of(BumpKind::Major), 1);
     assert_eq!(state.count_of(BumpKind::Minor), 1);
-    assert_eq!(state.count_of(BumpKind::Patch), 3);
+    assert_eq!(state.count_of(BumpKind::Patch), 2);
+}
+
+/// Mockup row 135: instances of one part at the same version pair share a
+/// row that lists every designator, in designator order.
+#[test]
+fn same_version_instances_of_one_part_share_a_row() {
+    let state = mixed_state();
+    let rows = state.rows();
+    let names: Vec<String> = rows.iter().map(|r| r.ref_des()).collect();
+    assert_eq!(names, vec!["C4", "L1", "R2, R3", "U3"]);
+    let shared = &rows[2];
+    assert_eq!(shared.entries.len(), 2);
+    assert_eq!(shared.lead().ref_des, "R2");
+}
+
+/// Instances that would draw a different line stay apart: another version
+/// pair, another `lib_id`, or a conflict (its answers are per instance).
+#[test]
+fn instances_that_differ_or_conflict_keep_their_own_rows() {
+    let mut state = mixed_state();
+    let base = state.entries[2].clone(); // R2
+    let mut other_version = base.clone();
+    other_version.symbol_uuid = Uuid::now_v7();
+    other_version.ref_des = "R5".into();
+    other_version.current_version = "0.9.0".into();
+    let mut other_lib_id = base.clone();
+    other_lib_id.symbol_uuid = Uuid::now_v7();
+    other_lib_id.ref_des = "R6".into();
+    other_lib_id.lib_id = "L:R2".into();
+    let mut conflicted = base.clone();
+    conflicted.symbol_uuid = Uuid::now_v7();
+    conflicted.ref_des = "R7".into();
+    conflicted.conflicts = vec![ConflictChoice {
+        field: StampField::Mpn,
+        mine: "A".into(),
+        library: "B".into(),
+        choice: Choice::KeepMine,
+    }];
+    state
+        .entries
+        .extend([other_version, other_lib_id, conflicted]);
+    let rows: Vec<String> = state.rows().iter().map(|r| r.ref_des()).collect();
+    assert_eq!(rows, vec!["C4", "L1", "R2, R3", "U3", "R5", "R6", "R7"]);
+    // The conflicted major U3 never joins anything either.
+    let mut twin = state.entries[4].clone();
+    twin.symbol_uuid = Uuid::now_v7();
+    twin.ref_des = "U4".into();
+    state.entries.push(twin);
+    let rows: Vec<String> = state.rows().iter().map(|r| r.ref_des()).collect();
+    assert!(rows.contains(&"U3".to_string()) && rows.contains(&"U4".to_string()));
 }
 
 /// The texts the card lays out, without the Fluent isolation marks.
@@ -292,10 +343,11 @@ fn the_card_shows_every_kind_and_the_conflict_line() {
         let has = |wanted: &str| texts.iter().any(|t| t == wanted);
         for wanted in [
             "Library Updates Available",
-            "5 placed components drifted from the library since this schematic was last saved.",
+            "4 placed components drifted from the library since this schematic was last saved.",
             "1 major",
             "1 minor",
-            "3 patch",
+            "2 patch",
+            "R2, R3",
             "PART",
             "LIBRARY",
             "VERSION",
@@ -317,9 +369,10 @@ fn the_card_shows_every_kind_and_the_conflict_line() {
         ] {
             assert!(has(wanted), "{theme:?}: missing {wanted:?} in {texts:?}");
         }
-        // The two R-0402 rows show their PN; C4 has none, so none is added.
+        // The shared R2, R3 row shows its PN once; C4 has none, so none is
+        // added.
         let pns = texts.iter().filter(|t| *t == "R-0402-10K-1%").count();
-        assert_eq!(pns, 2, "{theme:?}: {texts:?}");
+        assert_eq!(pns, 1, "{theme:?}: {texts:?}");
     }
 }
 

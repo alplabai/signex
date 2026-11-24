@@ -11,8 +11,10 @@ use uuid::Uuid;
 
 use super::part_sync::{Choice, Choices, ConflictView};
 
+mod rows;
 mod skipped;
 mod view;
+use rows::DriftRow;
 pub use skipped::SkippedVersions;
 pub use view::view;
 
@@ -252,10 +254,5 @@ impl LibraryUpdatesState {
     /// Number of entries the user has currently checked.
     pub fn selected_count(&self) -> usize {
         self.entries.iter().filter(|e| e.selected).count()
-    }
-
-    /// Number of entries of bump `kind`: the count on its summary pill.
-    pub fn count_of(&self, kind: BumpKind) -> usize {
-        self.entries.iter().filter(|e| e.bump_kind == kind).count()
     }
 }

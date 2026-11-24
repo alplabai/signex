@@ -610,8 +610,10 @@ silently, except a part with a conflict (below). Otherwise **Library Updates
 Available** opens, with a pill per change size (major, minor, patch) beside the
 count. Its table lists each part: the designator and Internal PN, the library,
 the version change (`1.4.2 → 2.0.0`) and a **Major**, **Minor** or **Patch**
-pill. Patch and minor changes start ticked, major changes unticked. Parts that
-share one library symbol share one tick. The checkbox in the table heading
+pill. Instances of one part at the same version change share one row that
+lists every designator (`R10, R11`), unless a field conflicts. Patch and minor
+changes start ticked, major changes unticked. Parts that share one library
+symbol share one tick. The checkbox in the table heading
 ticks every row, or clears them all when every row is ticked. When both your
 part and the library row changed a field, a line under the part shows
 **yours** and **library now**; choose **Keep mine** (the default) or **Use
