@@ -5,7 +5,7 @@ use std::sync::{Mutex, OnceLock};
 use anyhow::Result;
 use log::{Level, LevelFilter, Log, Metadata, Record, debug, error, info, warn};
 
-const MAX_DIAGNOSTIC_ENTRIES: usize = 200;
+pub(crate) const MAX_DIAGNOSTIC_ENTRIES: usize = 200;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiagnosticLevel {

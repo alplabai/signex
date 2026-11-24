@@ -985,7 +985,9 @@ choice: **Kind** starts at Same and the rest at Any, so at first every object
 of the same kind matches. A placed part reads as **Part**. **Current sheet**
 counts the matches on the sheet; **Whole project** also counts them on the
 project's other sheets, including closed ones. **Select N** selects the matches
-on the dialog's own sheet; matches elsewhere are only counted. Opened on a
+on the dialog's own sheet; matches elsewhere are listed in Messages, one row
+each (the first 50, then a count of the rest), and a row's **Show** opens its
+sheet and selects the object. Opened on a
 board, it searches that board.
 
 ### Search everywhere

@@ -144,7 +144,7 @@ impl Signex {
                     self.hover_net_row(None);
                 }
             }
-            NetInspectorMsg::NetHighlighted(net) => self.highlight_listed_net(&net),
+            NetInspectorMsg::NetHighlighted(net) => return self.highlight_listed_net(&net),
         }
         Task::none()
     }

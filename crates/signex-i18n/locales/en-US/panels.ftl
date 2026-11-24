@@ -1038,6 +1038,8 @@ panels-messages-none-match = No messages match the filters.
 panels-messages-show = Show
 # A schematic Net Inspector net row's hover action: draw the net bright on every sheet, or no longer.
 panels-net-inspector-highlight = Highlight
+# Logged when a Net Inspector row's Highlight names a net the project no longer has; $net is its name.
+panels-net-inspector-net-gone = Highlight another net; net { $net } is no longer in the project.
 # Tab + compact dock panel pair (#2523): the panel header's link that opens
 # the same view as a document tab.
 panels-paired-open-as-tab = Open as tab

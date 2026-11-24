@@ -281,6 +281,7 @@ define_ids! {
     // find-messages
     PANELS_MESSAGES_SHOW = "panels-messages-show";
     PANELS_NET_INSPECTOR_HIGHLIGHT = "panels-net-inspector-highlight";
+    PANELS_NET_INSPECTOR_NET_GONE = "panels-net-inspector-net-gone";
     PANELS_PAIRED_OPEN_AS_TAB = "panels-paired-open-as-tab";
     PANELS_PAIRED_LENGTH_MATCHING = "panels-paired-length-matching";
     PANELS_COMPACT_GROUP_MEMBERS = "panels-compact-group-members";

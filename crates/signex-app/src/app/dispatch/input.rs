@@ -402,15 +402,7 @@ impl Signex {
                 self.claim_components_row_menu(target, window, event)
             }
             InputConsumer::ConfirmDefault => self.claim_confirm_default(target, event),
-            InputConsumer::FindStep => {
-                use crate::app::state::ModalId;
-                // Its own window, or the main window while it has none.
-                let in_dialog = target == InputTarget::DetachedModal(ModalId::FindReplace)
-                    || (target.paints_overlay_stack()
-                        && self.detached_window_of(ModalId::FindReplace).is_none());
-                self.find_step_key(in_dialog, event)
-                    .map_or(Claim::Pass, Claim::consume)
-            }
+            InputConsumer::FindStep => self.claim_find_step(target, window, event),
             InputConsumer::ShortcutsSheet => self.claim_shortcuts_sheet(target, event),
             InputConsumer::TextEditTab => self.claim_text_edit_tab(target, window, event),
             InputConsumer::SelectionSlots => Self::claim_selection_slots(event),
@@ -705,6 +697,35 @@ impl Signex {
                 .map_or(Claim::Swallow, Claim::consume),
             _ => Claim::Pass,
         }
+    }
+
+    /// Enter / Shift+Enter step the Find results (mockup row 67) in the
+    /// window that shows the dialog: its own window, or the window it was
+    /// opened in while nothing is painted above it there.
+    fn claim_find_step(
+        &self,
+        target: InputTarget,
+        window: iced::window::Id,
+        event: &keyboard::Event,
+    ) -> Claim {
+        use crate::app::state::ModalId;
+        let in_dialog = target == InputTarget::DetachedModal(ModalId::FindReplace)
+            || (target.paints_overlay_stack()
+                && self.detached_window_of(ModalId::FindReplace).is_none()
+                && self.overlay_belongs_to(self.ui_state.find_replace.window, window)
+                && self.find_in_front());
+        self.find_step_key(in_dialog, event)
+            .map_or(Claim::Pass, Claim::consume)
+    }
+
+    /// Whether Find is the frontmost open overlay: the one Esc would close.
+    fn find_in_front(&self) -> bool {
+        matches!(
+            self.escape_overlay_message(),
+            Some(Message::FindReplaceMsg(
+                crate::find_replace::FindReplaceMsg::Close
+            ))
+        )
     }
 
     /// F1 toggles the keyboard-shortcuts sheet: open if closed, close if

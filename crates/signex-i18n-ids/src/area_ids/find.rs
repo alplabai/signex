@@ -85,4 +85,5 @@ define_ids! {
     FIND_PREVIOUS = "find-previous";
     FIND_NEXT = "find-next";
     FIND_SIMILAR_LISTED = "find-similar-listed";
+    FIND_SIMILAR_NOT_LISTED = "find-similar-not-listed";
 }

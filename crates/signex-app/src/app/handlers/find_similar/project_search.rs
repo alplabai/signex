@@ -123,8 +123,8 @@ impl Signex {
         }
     }
 
-    /// What a project search found elsewhere: the total, then every match
-    /// on its own Messages row, which names its sheet and object so the
+    /// What a project search found elsewhere: the total, then the matches,
+    /// each on its own Messages row, which names its sheet and object so the
     /// row's Show opens it (mockup row 68).
     pub(super) fn report_other_sheets(&self, found: &ProjectMatches) {
         let dir = self
@@ -143,10 +143,22 @@ impl Signex {
                 found.elsewhere.len()
             ));
         }
+        self.list_other_sheet_matches(found, dir.as_deref());
+        for (path, why) in &found.unreadable {
+            crate::diagnostics::log_warning(format!(
+                "Find Similar: not searched, {why}: {}",
+                path.display()
+            ));
+        }
+    }
+
+    /// One Messages row per match, up to [`LISTED_MATCHES_CAP`], then one
+    /// line with the count left out, so a large search cannot push the
+    /// summary and older lines (ERC results) out of the ring.
+    fn list_other_sheet_matches(&self, found: &ProjectMatches, dir: Option<&std::path::Path>) {
         let i18n = &self.ui_state.i18n;
-        for listed in &found.listed {
+        for listed in found.listed.iter().take(LISTED_MATCHES_CAP) {
             let shown = dir
-                .as_deref()
                 .and_then(|d| listed.sheet.strip_prefix(d).ok())
                 .unwrap_or(&listed.sheet);
             let line = t!(
@@ -162,11 +174,14 @@ impl Signex {
                 Some(listed.item),
             );
         }
-        for (path, why) in &found.unreadable {
-            crate::diagnostics::log_warning(format!(
-                "Find Similar: not searched, {why}: {}",
-                path.display()
-            ));
+        let left_out = found.listed.len().saturating_sub(LISTED_MATCHES_CAP);
+        if left_out > 0 {
+            let line = t!(i18n, ids::FIND_SIMILAR_NOT_LISTED, "count" => left_out);
+            crate::diagnostics::log_info(line.into_string());
         }
     }
 }
+
+/// The most matches on other sheets listed in Messages: a quarter of the
+/// Messages ring, so a listing never evicts the rest of the panel.
+pub(super) const LISTED_MATCHES_CAP: usize = crate::diagnostics::MAX_DIAGNOSTIC_ENTRIES / 4;
