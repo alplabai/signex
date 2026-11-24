@@ -197,8 +197,7 @@ pub enum DimensionEdit {
     Style(DimensionStyleEdit),
 }
 
-/// The most decimals a dimension shows.
-pub const DIMENSION_MAX_PRECISION: u8 = 6;
+pub use signex_types::pcb_dimension::DIMENSION_MAX_PRECISION;
 
 /// The command setting `edit` on every dimension in `dimensions`.
 pub fn dimension_edit_command(

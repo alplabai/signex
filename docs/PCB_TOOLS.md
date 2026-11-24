@@ -664,10 +664,14 @@ and SVG assembly drawings draw the arrows, widths and positions. The
 assembly drawings print the value in their one face: Font, Bold, Italic
 and Text Width are drawn on the canvas only.
 
-A new dimension starts from Preferences ▸ PCB ▸ PCB Defaults (line width,
-text height, precision and every setting above, in `prefs.json` under
-`pcb_dimension_defaults`); the Dimension tool's form changes them for the
-next dimensions of the session; a placed dimension's Properties change it
+A new dimension starts from its project's dimension defaults (line
+width, text height, precision and every setting above, stored in the
+`.snxprj` as `project_defaults.dimension`; Caner 2026-11-24). A new
+project is seeded with Preferences ▸ PCB ▸ PCB Defaults (`prefs.json`,
+`pcb_dimension_defaults`) and keeps its own copy from then on; a project
+from before, which stores none, and a board in no project follow
+Preferences. The Dimension tool's form changes them for the next
+dimensions of the session; a placed dimension's Properties change it
 alone. With no saved defaults a new dimension has the look dimensions had
 before these settings: open arrows one text height long and 0.6 wide, the
 value Above, half a text height off the line, extension lines from the
@@ -820,6 +824,8 @@ look of its own text height and line width (`DimensionStyle::for_text_height`):
 lengths in integer nm. A dimension of that look writes none of them, so an
 older board reads and re-saves byte-identical; an older reader skips the
 keys (and drops them if it saves).
+`signex_types::format::board_uses_dimension_style` says whether a save
+writes any of them; the format token is bumped only for such a board.
 
 ## Selection Filter
 

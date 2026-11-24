@@ -753,6 +753,7 @@ fn a_new_pcb_takes_the_project_defaults_and_is_not_written() {
         }),
         sheet: None,
         profile: None,
+        dimension: None,
     };
     let mut f = fixture_with(|_| Vec::new(), None, defaults);
     send(&mut f.app, menu_row("new_pcb_document"));

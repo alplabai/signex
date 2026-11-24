@@ -153,6 +153,7 @@ mod zone_shelved_tests;
 
 // Public API re-exports — preserve the `format::…` import paths that
 // signex-app / signex-engine / signex-output rely on.
+pub use board_dimension::{board_uses_dimension_style, dimension_uses_style};
 pub use header_id::document_id_in_header;
 pub use load_repair::{RepairedObject, SheetLoadRepair};
 pub use pcb_rows::{

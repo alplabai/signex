@@ -238,7 +238,7 @@ preferences-page-pcb-defaults = PCB Defaults
 preferences-group-pcb = PCB
 preferences-group-pcb-heading = PCB
 preferences-section-pcb-dimensions = PCB — New Dimensions
-preferences-pcb-dimensions-help = Each dimension you place starts from these. Its own Properties change it afterwards; dimensions already on a board keep their look.
+preferences-pcb-dimensions-help = Each new project starts with these as its dimension defaults, and the dimensions you place in it start from them. Projects already made keep their own; a dimension's Properties change it afterwards.
 
 ## Default Component Classes
 preferences-classes-title = Default Component Classes

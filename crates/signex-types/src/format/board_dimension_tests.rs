@@ -136,3 +136,28 @@ fn a_non_finite_look_length_is_refused_on_write() {
         Err(FormatError::NonFiniteField { .. })
     ));
 }
+
+/// The predicate the format token bump reads: true exactly when a save
+/// writes a look key.
+#[test]
+fn a_board_uses_a_dimension_style_only_when_a_look_key_is_written() {
+    let mut board = empty_board();
+    assert!(!board_uses_dimension_style(&board), "no dimension");
+    let mut d = dimension();
+    d.text_height = 2.0;
+    d.style = DimensionStyle::for_text_height(2.0, d.line_width);
+    board.free.dimensions.push(d.clone());
+    assert!(!board_uses_dimension_style(&board), "the old look");
+    assert!(!dimension_uses_style(&d));
+
+    let mut filled = d.clone();
+    filled.style.arrow_style = ArrowStyle::Filled;
+    assert!(dimension_uses_style(&filled));
+    let mut moved = d.clone();
+    moved.text_at = Point::new(0.0, 1.0);
+    assert!(dimension_uses_style(&moved), "a Manual point is a look key");
+    board.free.dimensions.push(filled);
+    assert!(board_uses_dimension_style(&board));
+    let text = SnxPcb::new(board).write_string().expect("writes");
+    assert!(text.contains("arrow_style"), "{text}");
+}
