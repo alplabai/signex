@@ -155,12 +155,25 @@ impl PcbCarry {
         if self.leaves_tracks {
             return Vec::new();
         }
-        let mut ends = Vec::new();
+        let mut ends: Vec<TrackEnds> = Vec::new();
+        let mut add = |found: Vec<TrackEnds>| {
+            for e in found {
+                // A track from a moved pad to a moved via follows by both
+                // ends, so it moves whole by the offset.
+                match ends.iter_mut().find(|old| old.track == e.track) {
+                    Some(old) => {
+                        old.start |= e.start;
+                        old.end |= e.end;
+                    }
+                    None => ends.push(e),
+                }
+            }
+        };
         if !self.footprints.is_empty() {
-            ends.extend(pcb_geom::tracks_on_pads(board, &self.footprints));
+            add(pcb_geom::tracks_on_pads(board, &self.footprints));
         }
         if !self.vias.is_empty() {
-            ends.extend(pcb_geom::tracks_on_vias(board, &self.vias));
+            add(pcb_geom::tracks_on_vias(board, &self.vias));
         }
         ends.retain(|e| !self.items.contains(&e.track));
         ends

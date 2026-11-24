@@ -23,11 +23,14 @@ use crate::pcb_canvas::{
 };
 
 /// The commands that move `items` and `rooms` of `board` by `delta`, one
-/// undo step; refused whole when one is locked or a room is not a box.
+/// undo step; refused whole when one is locked or a room is not a box. A
+/// room takes its unlocked parts along, except the `carried_parts` the drag
+/// moves itself, so each part moves by the offset once.
 fn move_commands(
     board: &PcbBoard,
     items: &BTreeSet<Uuid>,
     rooms: &BTreeSet<Uuid>,
+    carried_parts: &BTreeSet<Uuid>,
     delta: Point,
 ) -> Result<Vec<BoardCommand>, PlacementRefusal> {
     let ids: BTreeSet<BoardItemId> = carried_item_ids(board, items).into_iter().collect();
@@ -42,11 +45,23 @@ fn move_commands(
         if room.locked {
             return Err(BoardCommandError::RoomLocked(id).into());
         }
-        let b =
-            (room.outline.bounds()).ok_or(BoardCommandError::RoomInvalid { field: "outline" })?;
+        if room.outline.bounds().is_none() {
+            return Err(BoardCommandError::RoomInvalid { field: "outline" }.into());
+        }
         if delta.x != 0.0 || delta.y != 0.0 {
-            let to = Point::new(b.x_mm + delta.x, b.y_mm + delta.y);
-            commands.push(BoardCommand::MoveRoom { room: id, to });
+            // `MoveRoom` with the parts the drag does not move already.
+            let footprints = (room.members(&board.footprints))
+                .filter(|fp| !fp.locked && !carried_parts.contains(&fp.uuid))
+                .map(|fp| {
+                    let to = Point::new(fp.position.x + delta.x, fp.position.y + delta.y);
+                    (fp.uuid, to)
+                })
+                .collect();
+            commands.push(BoardCommand::PlaceRoom {
+                room: id,
+                outline: room.outline.translated(delta.x, delta.y),
+                footprints,
+            });
         }
     }
     Ok(commands)
@@ -64,7 +79,10 @@ fn selection_refusal(board: &PcbBoard, all: &DraggedSelection) -> Option<Placeme
             .then(|| placement::editable_vias(board, &all.vias).err())
             .flatten()
     };
-    let rest = || move_commands(board, &all.rest.items, &all.rest.rooms, zero).err();
+    let rest = || {
+        let (items, rooms) = (&all.rest.items, &all.rest.rooms);
+        move_commands(board, items, rooms, &all.footprints, zero).err()
+    };
     footprints.or_else(vias).or_else(rest)
 }
 
@@ -92,18 +110,32 @@ fn mixed_commands(
             placement::move_vias(board, &carry.vias, delta)?
         });
     }
-    let whole = |item: &BoardItem| match item {
-        BoardItem::Segment(t) => carry.items.contains(&t.uuid),
-        BoardItem::Arc(a) => carry.items.contains(&a.uuid),
-        _ => false,
-    };
+    // The track ends the part and via moves shifted each on its own; they
+    // are put back as one follow per track (`PcbCarry::following`): both
+    // ends of a track from a moved pad to a moved via, none of one carried
+    // whole. An arc carried whole is not also followed by an end.
+    let whole_arc =
+        |item: &BoardItem| matches!(item, BoardItem::Arc(a) if carry.items.contains(&a.uuid));
     for command in &mut commands {
         if let BoardCommand::ReplaceItems { items } = command {
-            items.retain(|item| !whole(item));
+            items.retain(|item| !matches!(item, BoardItem::Segment(_)) && !whole_arc(item));
         }
     }
     commands.retain(|c| !matches!(c, BoardCommand::ReplaceItems { items } if items.is_empty()));
-    commands.extend(move_commands(board, &carry.items, &carry.rooms, delta)?);
+    let followed: Vec<BoardItem> = (carry.following(board).iter())
+        .map(|ends| BoardItem::Segment(ends.follow(&board.segments[ends.index], delta)))
+        .collect();
+    if !followed.is_empty() && (delta.x != 0.0 || delta.y != 0.0) {
+        commands.push(BoardCommand::ReplaceItems { items: followed });
+    }
+    let (items, rooms) = (&carry.items, &carry.rooms);
+    commands.extend(move_commands(
+        board,
+        items,
+        rooms,
+        &carry.footprints,
+        delta,
+    )?);
     Ok(commands)
 }
 
@@ -118,8 +150,10 @@ impl Signex {
             return false;
         };
         let DraggedItems { items, rooms } = dragged;
-        let refused = (self.active_pcb())
-            .and_then(|board| move_commands(board, &items, &rooms, Point::new(0.0, 0.0)).err());
+        let refused = (self.active_pcb()).and_then(|board| {
+            let zero = Point::new(0.0, 0.0);
+            move_commands(board, &items, &rooms, &BTreeSet::new(), zero).err()
+        });
         let window = self.interaction_state.acting_window;
         let mut carry = PcbCarry::new(CarryKind::Drag, path.to_path_buf(), window, BTreeSet::new());
         carry.anchor = Some(from);
@@ -238,7 +272,8 @@ impl Signex {
     pub(super) fn drop_item_carry(&mut self, carry: &PcbCarry, from: Point, to: Point) {
         let built = self.item_drag_delta(carry, from, to).and_then(|delta| {
             let board = self.active_pcb()?;
-            Some(move_commands(board, &carry.items, &carry.rooms, delta))
+            let (items, rooms) = (&carry.items, &carry.rooms);
+            Some(move_commands(board, items, rooms, &carry.footprints, delta))
         });
         self.end_pcb_carry();
         if let Some(built) = built {
