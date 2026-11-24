@@ -46,7 +46,6 @@ fn tooltip_texts(
     at: iced::Point,
 ) -> Vec<String> {
     use iced::Rectangle;
-    use iced::advanced::overlay::Overlay as _;
     use iced::advanced::shell::{Bus, Waker};
     use iced::advanced::widget::operation::Text;
     use iced::advanced::widget::{Id, Operation, Tree};

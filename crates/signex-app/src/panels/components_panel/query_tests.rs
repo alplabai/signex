@@ -14,7 +14,7 @@ use crate::library::state::{ComponentsRowStyle, LibraryState};
 use crate::panels::components_panel::look;
 use crate::panels::components_panel::tests::{fixture_row, library_with};
 
-fn i18n() -> I18n {
+fn i18n() -> std::sync::Arc<I18n> {
     I18n::en_us()
 }
 

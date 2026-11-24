@@ -176,7 +176,7 @@ mod tests {
     use super::super::Parts;
     use crate::app::state::ProjectId;
     use crate::layout_probe::{LaidOutText, lay_out_texts};
-    use iced::{Rectangle, Size, Widget as _};
+    use iced::{Rectangle, Size};
     use signex_output::{VariantMatrix, VariantRow};
     use signex_types::theme::{ThemeId, theme_tokens};
 

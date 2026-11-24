@@ -469,21 +469,34 @@ pub(super) fn separator(tokens: &ThemeTokens) -> Color {
 mod tests {
     use super::*;
 
-    /// Mockup row 52: in a narrow dock the filter keeps its width and Add
-    /// sits after it.
+    /// Mockup row 52: in a narrow dock the search field sits under Add and
+    /// Previews and spans the dock, so its placeholder stays readable.
     #[test]
-    fn the_filter_keeps_its_width_in_a_narrow_dock() {
+    fn the_filter_spans_a_narrow_dock_under_add() {
         let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
         let i18n = I18n::en_us_ref();
-        let header = header_row(
-            filter_field("", &tokens, i18n),
-            ComponentsRowStyle::default(),
-            &tokens,
-            i18n,
-        );
-        let texts = crate::layout_probe::lay_out_texts(header, iced::Size::new(240.0, 120.0));
+        let header = || {
+            header_row(
+                filter_field("", &tokens, i18n),
+                ComponentsRowStyle::default(),
+                &tokens,
+                i18n,
+            )
+        };
+        let dock = iced::Size::new(240.0, 120.0);
+        let texts = crate::layout_probe::lay_out_texts(header(), dock);
         let add = crate::layout_probe::find(&texts, "Add");
-        assert!(add.bounds.x >= FILTER_ROW_W, "Add at {:?}", add.bounds);
+        let inputs = crate::layout_probe::lay_out_inputs(header(), dock);
+        let filter = inputs.first().expect("the search field").bounds;
+        assert!(
+            filter.y >= add.bounds.y + add.bounds.height,
+            "filter {filter:?} not under Add {:?}",
+            add.bounds
+        );
+        assert!(
+            filter.width >= dock.width - 2.0 * EDGE - 1.0,
+            "filter {filter:?} does not span the dock"
+        );
     }
 
     #[test]
