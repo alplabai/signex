@@ -31,12 +31,31 @@ fn board_with_rectangle_and_slot() -> (Fixture, Vec<SketchEntityId>, Vec<SketchE
     click(&mut f, 40.0, 5.0);
     click(&mut f, 35.0, 7.0);
     edit(&mut f, FootprintEditorMsg::ToolEscape);
+    // The Slot tool also draws a construction diameter across each end; only
+    // the profile's own edges count.
+    let construction = construction_ids(&f);
     let slot: Vec<_> = ids_of(&f, is_edge)
         .into_iter()
-        .filter(|id| !before.contains(id))
+        .filter(|id| !before.contains(id) && !construction.contains(id))
         .collect();
     assert_eq!(slot.len(), 4, "two lines and two arcs");
     (f, rect, slot)
+}
+
+fn construction_ids(f: &Fixture) -> Vec<SketchEntityId> {
+    let session = f
+        .app
+        .interaction_state
+        .board_sketch
+        .as_ref()
+        .expect("sketch mode");
+    session
+        .working_sketch()
+        .entities
+        .iter()
+        .filter(|e| e.construction)
+        .map(|e| e.id)
+        .collect()
 }
 
 fn is_edge(kind: &EntityKind) -> bool {

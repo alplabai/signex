@@ -219,8 +219,11 @@ fn canvas_texts(app: &mut Signex) -> Vec<String> {
         .collect()
 }
 
+/// Section headings render in capitals, so a heading matches either way.
 fn has(texts: &[String], label: &str) -> bool {
-    texts.iter().any(|text| text == label)
+    texts
+        .iter()
+        .any(|text| text == label || *text == label.to_uppercase())
 }
 
 /// The outline, a plated hole, a top-copper keepout, a slot, a plain
