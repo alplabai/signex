@@ -1,6 +1,7 @@
 //! Line-art illustrations under the Properties header (epic #2523, mockup rows 40 to 51):
 //! a part, a pin, a footprint thumbnail, a wire or bus, a net label, a port,
-//! a power port, a text note, a sheet symbol and a drawing shape. Each
+//! a power port, a text note, a sheet symbol, a drawing shape and a harness
+//! connector (mockup row 152). Each
 //! builder turns the selected object into plain `Illustration` data, with
 //! callouts named after the rows below; [`show`] draws it. They are pure, so
 //! the tests read the parts they produce instead of pixels. Rotation is never
@@ -12,12 +13,14 @@ pub(super) mod part;
 pub(super) mod pin;
 pub(super) mod sheet_symbol;
 
+mod harness_connector;
 mod net_label;
 mod port;
 mod power_port;
 mod text_note;
 mod wire;
 
+pub(super) use harness_connector::harness_connector;
 pub(super) use net_label::net_label;
 pub(super) use port::port;
 pub(super) use power_port::{power_port, style_glyph};
@@ -53,6 +56,7 @@ pub(super) mod fields {
     pub const POSITION: FieldId = FieldId::new("position");
     pub const TEXT: FieldId = FieldId::new("text");
     pub const TEXT_SIZE: FieldId = FieldId::new("text_size");
+    pub const ENTRY_PITCH: FieldId = FieldId::new("entry_pitch");
 }
 
 /// `illustration` drawn on the panel ground, full width.

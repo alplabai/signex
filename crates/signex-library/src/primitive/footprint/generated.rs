@@ -1,5 +1,6 @@
 //! Generated footprint features (mockup row 124): the switches and values
 //! the Properties panel edits, and the strokes the last bake made from them.
+//! The courtyard line width applies to the courtyard outline whatever drew it.
 //! The strokes stay out of the hand-drawn silk and fab lists, so a re-bake
 //! never touches those. See `docs/FOOTPRINT_SKETCH.md`, "Generated features".
 
@@ -11,6 +12,12 @@ use super::{FpGraphic, default_true};
 pub const DEFAULT_SILK_LINE_WIDTH_MM: f64 = 0.12;
 /// Silkscreen clearance to the pads a footprint starts with, in mm.
 pub const DEFAULT_PAD_CLEARANCE_MM: f64 = 0.20;
+/// Courtyard line width a footprint starts with, in mm (mockup row 124).
+pub const DEFAULT_COURTYARD_LINE_WIDTH_MM: f64 = 0.05;
+
+fn default_courtyard_line_width() -> f64 {
+    DEFAULT_COURTYARD_LINE_WIDTH_MM
+}
 
 fn default_silk_line_width() -> f64 {
     DEFAULT_SILK_LINE_WIDTH_MM
@@ -28,6 +35,9 @@ fn is_off(value: &bool) -> bool {
 /// to the file, so such a footprint keeps its lower format token.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GeneratedFeatures {
+    /// Stroke width of the courtyard outline on the board, in mm.
+    #[serde(default = "default_courtyard_line_width")]
+    pub courtyard_line_width_mm: f64,
     #[serde(default, skip_serializing_if = "is_off")]
     pub silk_outline: bool,
     #[serde(default = "default_silk_line_width")]
@@ -49,6 +59,7 @@ pub struct GeneratedFeatures {
 impl Default for GeneratedFeatures {
     fn default() -> Self {
         Self {
+            courtyard_line_width_mm: DEFAULT_COURTYARD_LINE_WIDTH_MM,
             silk_outline: false,
             silk_line_width_mm: DEFAULT_SILK_LINE_WIDTH_MM,
             pad_clearance_mm: DEFAULT_PAD_CLEARANCE_MM,

@@ -6,6 +6,7 @@ use signex_types::schematic::BodyStyle;
 use signex_widgets::property_illustration::{IllustrationHover, IllustrationMsg};
 
 use super::BodyScope;
+use super::pin_table_ui::{PinTableMsg, PinTableUi};
 
 /// The tab the Properties panel shows while nothing is selected.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -45,8 +46,11 @@ pub enum SymbolPropsMsg {
     PinsBackPressed,
     /// `+ Pin` on the Pins tab: arm the Add Pin tool.
     AddPinPressed,
-    /// `Edit pins in table…` / `Back to the pin list` on the Pins tab.
-    PinTableToggled,
+    /// `Edit pins in table…` on the Pins tab: open the Pin table document
+    /// tab (mockup row 122b), or focus it.
+    EditPinsInTablePressed,
+    /// Something done in the Pin table tab.
+    PinTable(PinTableMsg),
     PartStepPressed(PartStep),
     BodyPicked(BodyStyle),
     /// Applies to: retag the selection for both bodies or the shown one.
@@ -60,9 +64,8 @@ pub struct SymbolPropsUi {
     pub tab: SymbolPropsTab,
     pub pin_filter: String,
     pub part_chip: PartChip,
-    /// The Pins tab shows the pin table (name and hidden edited in place
-    /// for every listed pin) instead of the compact list.
-    pub pin_table: bool,
+    /// The Pin table document tab's own state.
+    pub table: PinTableUi,
     pub hover: IllustrationHover,
 }
 
@@ -74,13 +77,14 @@ impl SymbolPropsUi {
             SymbolPropsMsg::TabPicked(tab) => self.tab = *tab,
             SymbolPropsMsg::PinFilterChanged(query) => self.pin_filter.clone_from(query),
             SymbolPropsMsg::PartChipPicked(chip) => self.part_chip = *chip,
-            SymbolPropsMsg::PinTableToggled => self.pin_table = !self.pin_table,
+            SymbolPropsMsg::PinTable(msg) => return self.table.apply(msg),
             SymbolPropsMsg::IllustrationHovered(hover) => self.hover.update(hover.clone()),
             SymbolPropsMsg::PinsBackPressed => {
                 self.tab = SymbolPropsTab::Pins;
                 return false;
             }
             SymbolPropsMsg::AddPinPressed
+            | SymbolPropsMsg::EditPinsInTablePressed
             | SymbolPropsMsg::PartStepPressed(_)
             | SymbolPropsMsg::BodyPicked(_)
             | SymbolPropsMsg::BodyScopePicked(_) => return false,
@@ -106,14 +110,20 @@ mod tests {
         assert_eq!(ui.part_chip, PartChip::Part(2));
     }
 
+    /// Mockup row 122b: Edit pins in table… opens a document tab, which the
+    /// caller does; the tab's filter is this editor's state.
     #[test]
-    fn the_pin_table_toggle_is_panel_state() {
+    fn edit_pins_in_table_is_left_to_the_caller_and_the_tab_filter_is_kept() {
         let mut ui = SymbolPropsUi::default();
-        assert!(!ui.pin_table);
-        assert!(ui.apply(&SymbolPropsMsg::PinTableToggled));
-        assert!(ui.pin_table);
-        assert!(ui.apply(&SymbolPropsMsg::PinTableToggled));
-        assert!(!ui.pin_table);
+        assert!(!ui.apply(&SymbolPropsMsg::EditPinsInTablePressed));
+        assert_eq!(ui, SymbolPropsUi::default());
+        assert!(
+            ui.apply(&SymbolPropsMsg::PinTable(PinTableMsg::FilterChanged(
+                "IN".into()
+            )))
+        );
+        assert_eq!(ui.table.filter, "IN");
+        assert!(!ui.apply(&SymbolPropsMsg::PinTable(PinTableMsg::BulkApplied)));
     }
 
     #[test]

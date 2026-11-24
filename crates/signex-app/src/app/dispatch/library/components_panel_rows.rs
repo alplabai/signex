@@ -25,11 +25,16 @@ impl Signex {
         })
     }
 
-    /// Ask for the row thumbnails the panel draws and has not read yet.
-    /// Runs after every library message; a no-op when nothing is missing.
+    /// Ask for the row thumbnails the panel draws and has not read yet, and
+    /// the part symbols of the Library panel's and the shown Library
+    /// Browser's thumbnail rows (mockup rows 118 and 119), which share the
+    /// cache. Runs after every library message; a no-op when nothing is
+    /// missing.
     pub(super) fn request_components_thumbnails(&mut self) -> Task<Message> {
         let mounted = self.library.open_libraries.len();
-        let wanted = crate::panels::components_panel::wanted_thumbnails(&self.library);
+        let mut wanted = crate::panels::components_panel::wanted_thumbnails(&self.library);
+        wanted.extend(self.library.browser_wanted_thumbnails());
+        wanted.extend(crate::library::panel::wanted_thumbnails(&self.library));
         let thumbs = &mut self.library.components_panel.thumbs;
         thumbs.note_mounted(mounted);
         let missing = thumbs.take_missing(wanted);

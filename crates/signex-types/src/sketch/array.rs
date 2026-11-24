@@ -136,6 +136,26 @@ impl ArrayKind {
         changed
     }
 
+    /// Replace the suppression list with `cells` (the Numbering Mask, mockup
+    /// row 126), keeping the mask expression. The depopulation goes when
+    /// both end up empty. Returns whether the array changed; a linear array
+    /// never does.
+    pub fn set_suppressed_instances(&mut self, cells: Vec<(u32, u32)>) -> bool {
+        let slot = match self {
+            Self::Grid { depopulation, .. } | Self::Polar { depopulation, .. } => depopulation,
+            Self::Linear { .. } => return false,
+        };
+        let before = slot.clone();
+        let mask_expr = slot.take().map(|d| d.mask_expr).unwrap_or_default();
+        if !(mask_expr.trim().is_empty() && cells.is_empty()) {
+            *slot = Some(GridDepopulation {
+                mask_expr,
+                suppressed_instances: cells,
+            });
+        }
+        *slot != before
+    }
+
     /// Flip the suppression of instance `(i, j)`. Returns whether the
     /// array changed.
     pub fn toggle_instance_suppressed(&mut self, i: u32, j: u32) -> bool {
@@ -296,4 +316,65 @@ pub fn bga_row_letter(row_index: u32, skip_letters: bool, start_row: char) -> St
         out.push(*c);
     }
     out
+}
+
+#[cfg(test)]
+mod suppression_tests {
+    use super::*;
+
+    fn grid(depopulation: Option<GridDepopulation>) -> ArrayKind {
+        ArrayKind::Grid {
+            source: SketchEntityId::new(),
+            nx_expr: "2".into(),
+            ny_expr: "4".into(),
+            dx_expr: "1".into(),
+            dy_expr: "1".into(),
+            depopulation,
+        }
+    }
+
+    /// Mockup row 126: the Numbering Mask replaces the list, keeps the mask
+    /// expression, and an empty list with a blank mask drops the depopulation.
+    #[test]
+    fn the_suppressed_list_is_replaced_and_keeps_the_mask_expression() {
+        let mut kind = grid(Some(GridDepopulation {
+            mask_expr: "i != 0".into(),
+            suppressed_instances: vec![(0, 0)],
+        }));
+        assert!(kind.set_suppressed_instances(vec![(1, 2), (0, 3)]));
+        assert!(kind.is_instance_suppressed(1, 2));
+        assert!(kind.is_instance_suppressed(0, 3));
+        assert!(!kind.is_instance_suppressed(0, 0));
+        assert!(!kind.set_suppressed_instances(vec![(1, 2), (0, 3)]));
+        assert!(kind.set_suppressed_instances(Vec::new()));
+        let ArrayKind::Grid { depopulation, .. } = &kind else {
+            unreachable!()
+        };
+        assert_eq!(
+            depopulation.as_ref().map(|d| d.mask_expr.as_str()),
+            Some("i != 0")
+        );
+
+        let mut bare = grid(None);
+        assert!(bare.set_suppressed_instances(vec![(0, 1)]));
+        assert!(bare.set_suppressed_instances(Vec::new()));
+        assert!(matches!(
+            bare,
+            ArrayKind::Grid {
+                depopulation: None,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn a_linear_pattern_has_no_suppressed_list() {
+        let mut kind = ArrayKind::Linear {
+            source: SketchEntityId::new(),
+            count_expr: "4".into(),
+            dx_expr: "1".into(),
+            dy_expr: "0".into(),
+        };
+        assert!(!kind.set_suppressed_instances(vec![(0, 0)]));
+    }
 }

@@ -61,6 +61,10 @@ pub enum TabKind {
     /// is the board's path, which Save writes; the board stays in its own
     /// PCB tab, and this tab always sits after it (`app/layer_stack_tab`).
     LayerStack,
+    /// A symbol's Pin table as a page tab (mockup row 122b). `TabInfo.path`
+    /// is the `.snxsym` path, which Save writes; it sits after the symbol's
+    /// own tab (`app/pin_table_tab`).
+    PinTable,
 }
 
 impl TabKind {
@@ -121,12 +125,24 @@ impl TabKind {
         matches!(self, TabKind::LayerStack)
     }
 
-    /// A page tab, not a drawing: the Project, Rules and Layer Stack tabs.
-    /// None is undocked or restored from History.
+    /// A symbol's Pin table tab.
+    pub fn is_pin_table(&self) -> bool {
+        matches!(self, TabKind::PinTable)
+    }
+
+    /// A page of an open document that holds no document of its own and
+    /// shares its owner's path: the Layer Stack and Pin table tabs. It sits
+    /// after its owner's tab and stays on the main strip.
+    pub fn is_document_page(&self) -> bool {
+        matches!(self, TabKind::LayerStack | TabKind::PinTable)
+    }
+
+    /// A page tab, not a drawing: the Project, Rules, Layer Stack and Pin
+    /// table tabs. None is undocked or restored from History.
     pub fn is_project_page(&self) -> bool {
         matches!(
             self,
-            TabKind::Project(_) | TabKind::Rules(_) | TabKind::LayerStack
+            TabKind::Project(_) | TabKind::Rules(_) | TabKind::LayerStack | TabKind::PinTable
         )
     }
 }
@@ -177,6 +193,18 @@ pub struct TabInfo {
     /// ComponentEditor tabs carry the `(library_path, table, row_id)`
     /// triple that resolves into `LibraryState.editors`.
     pub kind: TabKind,
+}
+
+impl TabInfo {
+    /// The `.snxsym` this tab edits: a symbol editor's own, or the one a
+    /// Pin table tab shows.
+    pub fn symbol_document(&self) -> Option<&PathBuf> {
+        match &self.kind {
+            TabKind::SymbolEditor(path) => Some(path),
+            TabKind::PinTable => Some(&self.path),
+            _ => None,
+        }
+    }
 }
 
 /// Per-tab state for an open `.snxsym` document. Symbol editing

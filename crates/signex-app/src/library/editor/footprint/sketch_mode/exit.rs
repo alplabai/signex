@@ -40,6 +40,10 @@ pub struct SketchExit {
     /// by the board session from the open project; the inside-corner check
     /// reads it. Always `None` on a footprint.
     pub router_tool_diameter: Option<f64>,
+    /// The min slot of the board's project, in mm (mockup row 179d), set
+    /// with the router tool; the min slot check reads it. Always `None` on
+    /// a footprint.
+    pub min_slot: Option<f64>,
     /// Why the last Bake found the sketch unsolvable. Footprint host only.
     solve_refusal: Option<SolveRefusal>,
     /// What the last Bake wrote, for Properties (mockup row 190).

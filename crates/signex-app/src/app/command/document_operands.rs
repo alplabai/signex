@@ -35,7 +35,7 @@ fn ran(task: Task<Message>) -> Ran {
 }
 
 /// The document `args` names, or the refusal.
-fn named(app: &Signex, args: &CommandArgs) -> Result<DocumentEntry, String> {
+pub(super) fn named(app: &Signex, args: &CommandArgs) -> Result<DocumentEntry, String> {
     match args.operand("document") {
         Some(OperandValue::Document(target)) => app.resolve_document_target(target),
         _ => Err("the operand `document` is needed".to_string()),

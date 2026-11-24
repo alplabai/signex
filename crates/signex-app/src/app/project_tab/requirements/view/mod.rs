@@ -3,6 +3,9 @@
 //! header; `summary` draws the counts row under it, `card` one card per
 //! entry, `findings` a failed card's findings as one sentence.
 
+mod board_size;
+#[cfg(test)]
+mod board_size_tests;
 mod card;
 mod findings;
 mod summary;
@@ -124,6 +127,7 @@ pub(in crate::app::project_tab) fn view<'a>(
             refused_here: problem_at == Some(index),
             tab,
             report,
+            measured: last.and_then(|run| run.board_mm),
             i18n,
             tokens,
         };

@@ -24,7 +24,7 @@ use signex_i18n::I18n;
 /// The time types of [`GraphCommit::time`], for callers without their own
 /// chrono dependency (the chrome catalog).
 pub use chrono::{DateTime, Duration, Utc};
-pub use detail::{commit_detail, more_button};
+pub use detail::{commit_detail, commit_detail_picking, more_button};
 pub use draw::{GraphGeometry, SegmentShape};
 pub use lanes::{DotKind, Edge, EdgeKind, EdgeStyle, GraphLayout, RowLayout, layout};
 pub use model::{ChangedFile, FileStatus, GraphCommit, RefPill, author_color_index, initials};

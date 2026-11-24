@@ -338,6 +338,19 @@ fn silk_fab_and_courtyard_land_on_their_board_layers() {
     assert_eq!(board.graphics[4].points.len(), 3);
 }
 
+/// Mockup row 124: the courtyard is stroked at the footprint's courtyard
+/// line width, its default when the footprint names none.
+#[test]
+fn the_courtyard_takes_the_footprint_courtyard_line_width() {
+    use crate::primitive::footprint::DEFAULT_COURTYARD_LINE_WIDTH_MM;
+    let mut fp = library(Vec::new());
+    fp.courtyard = Polygon::new(vec![[-2.0, -2.0], [2.0, -2.0], [2.0, 2.0]]);
+    let width = |fp: &Footprint| board_footprint(fp).unwrap().graphics[0].width;
+    assert_eq!(width(&fp), DEFAULT_COURTYARD_LINE_WIDTH_MM);
+    fp.generated.courtyard_line_width_mm = 0.1524;
+    assert_eq!(width(&fp), 0.1524);
+}
+
 #[test]
 fn an_arc_keeps_its_sweep_through_the_middle_point() {
     let mut fp = library(Vec::new());

@@ -19,11 +19,9 @@ pub(super) fn build_symbol_editor_panel_ctx(
         SymbolFileEntry, SymbolPinDetails, SymbolPinSummary,
     };
 
+    // A Pin table tab shows its symbol's pins, and Properties stays on it.
     let active = app.document_state.tabs.get(app.document_state.active_tab)?;
-    let path = match &active.kind {
-        crate::app::TabKind::SymbolEditor(p) => p.clone(),
-        _ => return None,
-    };
+    let path = active.symbol_document()?.clone();
     let editor = app.document_state.symbol_editors.get(&path)?;
     let sym = editor.primitive();
 
@@ -57,6 +55,9 @@ pub(super) fn build_symbol_editor_panel_ctx(
         })
         .collect();
 
+    // Thumbnail rows of the Library panel draw each symbol's body.
+    let drawings =
+        app.library.library_panel.row_style == crate::library::state::LibraryRowStyle::Thumbnail;
     let symbols_in_file: Vec<SymbolFileEntry> = editor
         .file
         .symbols
@@ -68,6 +69,7 @@ pub(super) fn build_symbol_editor_panel_ctx(
             uuid: s.uuid,
             pin_count: s.pins.len(),
             description: s.description.clone(),
+            drawing: drawings.then(|| std::sync::Arc::new(s.to_lib_symbol(s.uuid.to_string()))),
         })
         .collect();
 

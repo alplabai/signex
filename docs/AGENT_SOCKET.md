@@ -159,7 +159,13 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   file in the project's `reuse-blocks` folder, and a place may wait for the
   project's blocks to be read like an edit waiting for its reads; a swap or
   a place names its component by `ids`, its uuid, or by `designator`,
-  exactly one), and the Project tab edits `project_move_sheet`, `project_add_variant`,
+  exactly one), and the drawing order `bring_drawings_forward`,
+  `bring_drawings_to_front`, `send_drawings_backward` and
+  `send_drawings_to_back` and `delete_selection` (#2326; one undo step on
+  the items `ids` names by uuid on the named sheet, or for a delete the named
+  board, answered with `document`, `ids` and `changed`; a uuid that names
+  nothing there refuses the whole command; [CLI.md](CLI.md), "Drawing order
+  and Delete by uuid"), and the Project tab edits `project_move_sheet`, `project_add_variant`,
   `project_rename_variant`, `project_remove_variant`,
   `project_set_active_variant`, `project_move_library`,
   `project_set_annotate_undo` and `project_set_version_control`

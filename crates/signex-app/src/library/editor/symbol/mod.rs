@@ -24,3 +24,8 @@ pub use state::{
     BodyScope, BodyScopeRow, PartChip, PartStep, SymActiveBarMenu, SymbolPropsMsg, SymbolPropsTab,
     SymbolPropsUi, SymbolSelection, rect_end_for_extent, rect_extent,
 };
+/// The Pin table document tab's state, messages and edits (mockup row 122b).
+pub use state::{
+    PasteDraft, PasteField, PasteMode, PinTableMsg, PinTableUi, add_table_pin, apply_bulk,
+    apply_paste, parse_mm, paste_preview, remove_pins,
+};

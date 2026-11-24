@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 
 use super::CommandArgs;
+use super::translator;
 use super::*;
 use crate::keymap::AppCommandId;
 use signex_types::schematic::{
@@ -150,6 +151,29 @@ fn a_mixed_selection_ignores_the_circuit_items() {
         app.document_state.active_engine().unwrap().document().wires
     );
     assert_eq!(wires_before, wires_after);
+}
+
+/// #2326 slice 6.P2b: each order step from a key, menu row or the palette
+/// runs its operand handler on the sheet in view (`command::translator`).
+#[test]
+fn each_order_step_runs_its_operand_handler() {
+    for command in ARRANGE {
+        let mut app = app_with_drawings();
+        select(&mut app, vec![drawing(2)]);
+        run(&mut app, command);
+        assert!(translator::ran(command), "{command}");
+        assert_ne!(order(&app), [1, 2, 3, 4], "{command} moved nothing");
+    }
+}
+
+/// A selected drawing the sheet no longer holds (an agent deleted it) is
+/// left out: the drawing still on the sheet moves, as before the translator.
+#[test]
+fn a_selected_drawing_the_sheet_lost_is_left_out() {
+    let mut app = app_with_drawings();
+    select(&mut app, vec![drawing(2), drawing(999)]);
+    run(&mut app, "bring_drawings_forward");
+    assert_eq!(order(&app), [1, 3, 2, 4]);
 }
 
 #[test]

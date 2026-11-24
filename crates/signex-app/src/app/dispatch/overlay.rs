@@ -386,6 +386,10 @@ impl Signex {
                 {
                     self.handle_project_tree_action(action)
                 }
+                // The Variant Manager is a tab of the main window.
+                pick @ ContextMenuMsg::Action(
+                    ContextAction::ShowInVariantManager(_) | ContextAction::NewVariant(_),
+                ) => self.dispatch_context_menu_message(pick),
                 other => self
                     .run_in_window_document(window, |app| app.dispatch_context_menu_message(other)),
             },
@@ -555,6 +559,12 @@ impl Signex {
                         self.handle_active_bar_action(active_bar_action)
                     }
                     ContextAction::ReuseBlock(event) => self.handle_reuse_block(event),
+                    ContextAction::ShowInVariantManager(project_id) => {
+                        self.open_variant_manager_of(project_id, false)
+                    }
+                    ContextAction::NewVariant(project_id) => {
+                        self.open_variant_manager_of(project_id, true)
+                    }
                 }
             }
         }

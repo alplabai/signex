@@ -383,6 +383,89 @@ fn a_masked_or_unticked_instance_is_skipped() {
     assert_eq!(shown.kept(), Some(2));
 }
 
+/// Mockup row 126: the Numbering Mask shows the skipped pads' numbers, keeps
+/// typed text that skips the same pads, and refuses a number the pattern
+/// does not have.
+#[test]
+fn the_number_mask_shows_the_skipped_pads_and_refuses_unknown_numbers() {
+    use signex_bake::array::NumberMaskRefusal;
+    let ctx = grid_ctx_with(
+        NumberingScheme::default(),
+        "2",
+        Some(GridDepopulation {
+            mask_expr: String::new(),
+            suppressed_instances: vec![(1, 1)],
+        }),
+    );
+    let pattern = ctx.selected_array.as_ref().expect("a pattern");
+    assert_eq!(
+        pattern::shown_number_mask(pattern, None),
+        ("4".into(), None)
+    );
+    let typed = |text: &str| pattern::shown_number_mask(pattern, Some(&text.to_owned()));
+    assert_eq!(typed("4,"), ("4,".into(), None), "typing keeps its text");
+    assert_eq!(
+        typed("2"),
+        ("4".into(), None),
+        "text an undo left gives way"
+    );
+    assert_eq!(
+        typed("4,9"),
+        (
+            "4,9".into(),
+            Some(NumberMaskRefusal::NotInPattern("9".into()))
+        )
+    );
+    assert_eq!(
+        typed("4,1"),
+        ("4,1".into(), Some(NumberMaskRefusal::IsSource("1".into()))),
+        "the source pad is not skipped"
+    );
+}
+
+#[test]
+fn a_refused_number_mask_says_why_under_the_field() {
+    let mut source = None;
+    let sketch = sketch(|plane, s| {
+        let id = pad_point(plane, s, None);
+        s.arrays.push(Array {
+            id: ArrayId::new(),
+            kind: ArrayKind::Grid {
+                source: id,
+                nx_expr: "2".into(),
+                ny_expr: "2".into(),
+                dx_expr: "1.27mm".into(),
+                dy_expr: "2mm".into(),
+                depopulation: None,
+            },
+            numbering: NumberingScheme::default(),
+        });
+        source = Some(id);
+    });
+    let source = source.unwrap();
+    let mut ctx = ctx_with(sketch, source);
+    let array_id = ctx.selected_array.as_ref().expect("a pattern").array_id;
+    ctx.numeric_buffers.insert(
+        crate::panels::number_mask_buffer_key(array_id),
+        "A1,B4".into(),
+    );
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
+    let palette = PanelPalette::from_tokens(&tokens);
+    let collapsed = CollapsedSections::default();
+    let i18n = signex_i18n::I18n::en_us();
+    let form = view_role_subform(&ctx, source, palette, &tokens, &collapsed, &i18n)
+        .expect("a pattern form");
+    let texts: Vec<String> =
+        crate::layout_probe::lay_out_texts(form, iced::Size::new(260.0, 4000.0))
+            .into_iter()
+            .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect();
+    assert!(
+        texts.iter().any(|t| t == "No pad A1 in this pattern"),
+        "{texts:#?}"
+    );
+}
+
 #[test]
 fn a_count_that_does_not_evaluate_draws_the_source_only() {
     let ctx = grid_ctx_with(NumberingScheme::default(), "missing_parameter", None);

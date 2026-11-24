@@ -97,7 +97,7 @@ pub(super) fn cutouts_with_slots(ctx: &Context<'_>) -> Result<CutoutsWithSlots, 
 /// Whether the cutout seeded by `seed` is a Slot: the seed, or any edge of
 /// its loop, carries `board_slot`. A circle tagged Slot is checked, and
 /// refused, as one.
-fn is_slot(ctx: &Context<'_>, seed: &Entity) -> bool {
+pub(super) fn is_slot(ctx: &Context<'_>, seed: &Entity) -> bool {
     if seed.board_slot.is_some() {
         return true;
     }

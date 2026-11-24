@@ -18,6 +18,21 @@ pub(super) struct GridColumn {
     pub(super) width: f32,
 }
 
+impl GridColumn {
+    /// The column's header text: a parameter name with a capital first
+    /// letter ("Value"), the narrow Sym and Fpt, else the label.
+    pub(super) fn caption(&self, i18n: &I18n) -> String {
+        match &self.kind {
+            ColumnKind::Parameter(_) => {
+                crate::library::range_filter::parameter_caption(i18n, &self.label)
+            }
+            ColumnKind::Symbol => t!(i18n, ids::LIBRARY_BROWSER_COLUMN_SYM).into_string(),
+            ColumnKind::Footprint => t!(i18n, ids::LIBRARY_BROWSER_COLUMN_FPT).into_string(),
+            _ => self.label.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(super) enum ColumnKind {
     InternalPn,
@@ -291,12 +306,14 @@ pub(super) fn derive_columns(
     for class in &classes {
         if let Some(tmpl) = registry.resolve(library_id, class) {
             for slot in &tmpl.required_params {
-                let already = columns
-                    .iter()
-                    .any(|c| matches!(&c.kind, ColumnKind::Parameter(k) if k == &slot.name));
+                let already = columns.iter().any(
+                    |c| matches!(&c.kind, ColumnKind::Parameter(k) if same_key(k, &slot.name)),
+                );
                 if already {
                     continue;
                 }
+                // The rows' own spelling ("Value"), so the cells read them.
+                let key = row_spelling(rows, &slot.name);
                 // Label is the slot name only — no `(unit)` suffix.
                 // Units vary per row (a "value" column holds 10kΩ in
                 // resistors, 4.7µF in capacitors), so the column
@@ -306,7 +323,7 @@ pub(super) fn derive_columns(
                 // `range_filter::parameter_caption`.
                 columns.push(GridColumn {
                     label: slot.name.clone(),
-                    kind: ColumnKind::Parameter(slot.name.clone()),
+                    kind: ColumnKind::Parameter(key),
                     width: 110.0,
                 });
             }
@@ -339,8 +356,9 @@ pub(super) fn derive_columns(
     }
     let mut sorted: Vec<(String, usize)> = counts.into_iter().collect();
     sorted.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-    // A key the class template already gave a column keeps that one.
-    let templated: std::collections::BTreeSet<String> = columns
+    // A key the class template already gave a column keeps that one, in
+    // any letter case: "Value" and "value" are one Value column.
+    let templated: Vec<String> = columns
         .iter()
         .filter_map(|c| match &c.kind {
             ColumnKind::Parameter(key) => Some(key.clone()),
@@ -349,7 +367,7 @@ pub(super) fn derive_columns(
         .collect();
     let extra = sorted
         .into_iter()
-        .filter(|(key, _)| !templated.contains(key));
+        .filter(|(key, _)| !templated.iter().any(|t| same_key(t, key)));
     for (key, _) in extra.take(MAX_PARAM_COLUMNS) {
         columns.push(GridColumn {
             label: crate::library::range_filter::parameter_label(&key),
@@ -358,6 +376,27 @@ pub(super) fn derive_columns(
         });
     }
     columns
+}
+
+/// Whether two parameter keys name one parameter: keys compare without
+/// letter case, so a template's "value" and a row's "Value" share a column.
+pub(super) fn same_key(a: &str, b: &str) -> bool {
+    a.eq_ignore_ascii_case(b)
+}
+
+/// The spelling of the template key `name` the rows use: an exact match
+/// first, then one differing only in letter case, else `name` itself.
+fn row_spelling(rows: &[ComponentRow], name: &str) -> String {
+    let mut found: Option<&String> = None;
+    for key in rows.iter().flat_map(|r| r.parameters.keys()) {
+        if key == name {
+            return name.to_string();
+        }
+        if found.is_none() && same_key(key, name) {
+            found = Some(key);
+        }
+    }
+    found.cloned().unwrap_or_else(|| name.to_string())
 }
 
 /// Whether `r` matches `needle`, already folded with `i18n.fold_for_search`:
@@ -445,6 +484,27 @@ mod sort_tests {
             .filter(|c| matches!(&c.kind, ColumnKind::Parameter(k) if k == "value"))
             .count();
         assert_eq!(values, 1);
+    }
+
+    /// Mockup row 118: the template's "value" and the rows' "Value" are one
+    /// Value column, and it reads the rows' cells.
+    #[test]
+    fn a_value_key_in_another_letter_case_shares_the_template_column() {
+        let mut rows = vec![row_with(10.0, "kΩ")];
+        rows[0].class = ComponentClass::new("resistor");
+        let value = rows[0].parameters.remove("value").expect("value");
+        rows[0].parameters.insert("Value".into(), value);
+        let registry = signex_library::TemplateRegistry::new_with_builtins();
+        let pricing = std::collections::HashMap::new();
+        let prices = super::super::price::PriceView::new(&pricing, chrono::Utc::now(), &rows);
+        let columns = derive_columns(&rows, uuid::Uuid::nil(), &registry, "resistors", &prices);
+        let values: Vec<&ColumnKind> = columns
+            .iter()
+            .map(|c| &c.kind)
+            .filter(|k| matches!(k, ColumnKind::Parameter(key) if same_key(key, "value")))
+            .collect();
+        assert_eq!(values.len(), 1, "{values:?}");
+        assert_eq!(values[0].cell_value(&rows[0]), "10 kΩ");
     }
 
     fn param_row(value: ParamValue) -> ComponentRow {

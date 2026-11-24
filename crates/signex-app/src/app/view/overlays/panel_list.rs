@@ -124,8 +124,9 @@ impl OpenDocuments {
     /// Whether the list offers `kind`. Layers also serves the footprint
     /// editor, which docks it on its tab. On a board Net Classes is a mode
     /// of the PCB panel (mockup rows 7 and 106), so it has no row of its own.
+    /// Layer Stack is a tab the foot caption names (mockup rows 7 and 105).
     fn offers(self, kind: PanelKind) -> bool {
-        if kind == PanelKind::NetClasses && self.pcb {
+        if kind == PanelKind::LayerStack || (kind == PanelKind::NetClasses && self.pcb) {
             return false;
         }
         let board_met =
@@ -272,6 +273,7 @@ mod tests {
             PanelKind::Layers,
             PanelKind::PcbNets,
             PanelKind::LayerStack,
+            PanelKind::LengthMatching,
             PanelKind::Drc,
         ] {
             assert!(!sheet.offers(kind), "{kind:?} without a board");
@@ -309,15 +311,87 @@ mod tests {
 
     /// Mockup row 7, under the decision of 2026-11-22: the foot caption does
     /// not send anyone to a BOM Studio or Export Jobs tab, which are still
-    /// panels in this list.
+    /// panels in this list. Layer Stack opens as a tab (mockup row 105), so
+    /// the foot names it.
     #[test]
     fn the_foot_caption_names_only_what_opens_as_a_tab() {
         let i18n = signex_i18n::I18n::en_us();
         let foot = t!(i18n, ids::PANELS_LIST_FOOT).into_string();
         assert!(foot.contains("open as tabs"), "{foot}");
-        for listed in ["BOM Studio", "Export Jobs", "Layer Stack"] {
+        assert!(foot.contains("Layer Stack"), "{foot}");
+        for listed in ["BOM Studio", "Export Jobs"] {
             assert!(!foot.contains(listed), "{foot}");
         }
+    }
+
+    /// Mockup row 7: with a board open the PCB group reads Layers, Nets,
+    /// Length Matching. Layer Stack is a tab named in the foot, and Net
+    /// Classes is a mode of the Nets panel.
+    #[test]
+    fn a_board_lists_layers_nets_and_length_matching() {
+        let board = OpenDocuments {
+            schematic: false,
+            pcb: true,
+            footprint: false,
+        };
+        let groups = grouped_panels(|kind| board.offers(kind));
+        let pcb = groups
+            .iter()
+            .find(|(g, _)| *g == crate::panels::panel_groups::PanelGroup::Pcb)
+            .map(|(_, kinds)| kinds.clone())
+            .unwrap_or_default();
+        assert_eq!(
+            pcb,
+            [
+                PanelKind::Layers,
+                PanelKind::PcbNets,
+                PanelKind::LengthMatching
+            ]
+        );
+        let i18n = signex_i18n::I18n::en_us();
+        let rows: Vec<String> = pcb
+            .iter()
+            .map(|k| t!(i18n, k.list_message()).into_string())
+            .collect();
+        assert_eq!(rows, ["Layers", "Nets", "Length Matching"]);
+    }
+
+    /// The Layer Stack row is gone from the list everywhere: its tab opens
+    /// from the Design menu or the command palette.
+    #[test]
+    fn layer_stack_is_never_a_panel_list_row() {
+        for (schematic, pcb, footprint) in [(true, true, true), (false, true, false)] {
+            let open = OpenDocuments {
+                schematic,
+                pcb,
+                footprint,
+            };
+            assert!(!open.offers(PanelKind::LayerStack));
+        }
+    }
+
+    /// Length Matching needs a board, like the other board panels.
+    #[test]
+    fn length_matching_needs_a_board() {
+        let sheet = OpenDocuments {
+            schematic: true,
+            pcb: false,
+            footprint: true,
+        };
+        assert!(!sheet.offers(PanelKind::LengthMatching));
+    }
+
+    /// A click on the Length Matching row opens the compact panel in the
+    /// right dock, beside the board, and its row then carries the check
+    /// and "right".
+    #[test]
+    fn the_length_matching_row_docks_the_panel_on_the_right() {
+        let (mut app, _boot) = Signex::new();
+        let kind = PanelKind::LengthMatching;
+        app.document_state.dock.close_panel(kind);
+        assert_eq!(app.panel_region(kind), None);
+        let _ = app.update(Message::Overlay(OverlayMsg::OpenPanel(kind)));
+        assert_eq!(app.panel_region(kind), Some(PanelRegion::Right));
     }
 
     /// The app's own region answer: a panel in the dock reads its region; a
