@@ -309,4 +309,23 @@ fn a_selected_finding_shows_its_actions_in_the_dark_theme() {
         with_glyph.width > plain.width,
         "{with_glyph:?} vs {plain:?}"
     );
+
+    // The actions take their look from the dark tokens, not the light ones.
+    let light = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+    let size = iced::Size::new(with_glyph.width.ceil(), with_glyph.height.ceil());
+    let draw = |tokens: &signex_types::theme::ThemeTokens, glyph: bool| {
+        let action = if glyph {
+            show_action(label(), PanelMsg::FocusErcViolation(1), tokens)
+        } else {
+            row_action(label(), PanelMsg::FocusErcViolation(1), tokens)
+        };
+        crate::layout_probe::draw_pixels(action, size)
+    };
+    for glyph in [true, false] {
+        assert_ne!(
+            draw(&ctx.tokens, glyph),
+            draw(&light, glyph),
+            "glyph {glyph}: the dark action draws like the light one"
+        );
+    }
 }

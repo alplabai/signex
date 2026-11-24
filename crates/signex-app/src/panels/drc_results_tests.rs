@@ -353,8 +353,9 @@ fn waive_opens_the_reason_form_under_the_row() {
     );
 }
 
-/// Mockup row 88: a written rule's group has the Rule link; Short and
-/// Unconnected are always checked and no rule sets them, so theirs has none.
+/// Mockup row 88: a written rule's group has the Rule link; Short,
+/// Unconnected and Keepout are set by no written rule, so theirs has none.
+/// A part outside its room keeps its link to Placement.
 #[test]
 fn short_and_unconnected_groups_have_no_rule_link() {
     let mut unconnected = row(2, ViolationKind::Unconnected, "builtin::unconnected", None);
@@ -379,6 +380,9 @@ fn short_and_unconnected_groups_have_no_rule_link() {
     assert!(has_rule_link(ViolationKind::Clearance));
     assert!(!has_rule_link(ViolationKind::Short));
     assert!(!has_rule_link(ViolationKind::Unconnected));
+    assert!(!has_rule_link(ViolationKind::Keepout));
+    assert!(has_rule_link(ViolationKind::PartOutsideRoom));
+    assert!(has_rule_link(ViolationKind::TrackWidth));
 }
 
 /// Mockup row 88: in a 300 px dock the three filter dropdowns share one

@@ -1,7 +1,6 @@
 //! The DRC panel's rule groups and violation rows (#88): a group heading
-//! "HV_08 (3)" with its Rule link (none on Short and Unconnected), then
-//! two-line rows (the detail; the
-//! layer, position and object count) whose Show / Waive / Unwaive show on
+//! "HV_08 (3)" with its Rule link (none where no rule sets the kind), then
+//! two-line rows (the detail; the layer, position and object count) whose Show / Waive / Unwaive show on
 //! hover or selection, and on the row whose waiver form is open.
 
 use signex_i18n::{ids, t};
@@ -35,14 +34,18 @@ fn severity_badge_of<'a>(
     severity_badge(t!(ctx.i18n, letter), tone, selected, &ctx.tokens)
 }
 
-/// Whether a group of `kind` has a rule to open. Shorts and unconnected
-/// items are always checked and no rule sets them, so their groups have
-/// no Rule link (mockup row 88).
+/// Whether a group of `kind` has a rule to open (mockup row 88). A short
+/// is always checked, and a kind no written limit sets (an unconnected
+/// link, a keepout) has no rule either, so their groups have no Rule link.
+/// A part outside its room keeps it: the link opens Placement, where the
+/// room rule lives (`rules_domain_of`).
 pub(super) fn has_rule_link(kind: signex_drc::ViolationKind) -> bool {
-    !matches!(
-        kind,
-        signex_drc::ViolationKind::Short | signex_drc::ViolationKind::Unconnected
-    )
+    use signex_drc::ViolationKind as K;
+    match kind {
+        K::Short => false,
+        K::PartOutsideRoom => true,
+        _ => !kind.limits().is_empty(),
+    }
 }
 
 /// One rule's group: its heading, then its rows while open.
