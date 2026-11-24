@@ -485,7 +485,7 @@ fn a_click_on_the_chevron_opens_the_group_dropdown() {
     let sent: Vec<String> = sent.iter().map(|m| format!("{m:?}")).collect();
     assert_eq!(
         sent,
-        [toggle.clone()],
+        std::slice::from_ref(&toggle),
         "the chevron toggles, it does not run"
     );
     let sent = clicked_on_group(&app, group, iced::Point::new(centre, centre));

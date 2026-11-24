@@ -215,7 +215,7 @@ mod tests {
     #[test]
     fn the_counts_draw_as_one_line_tagged_chips() {
         let (app, _boot) = crate::app::Signex::new();
-        let tokens = app.document_state.panel_ctx.tokens.clone();
+        let tokens = app.document_state.panel_ctx.tokens;
         let i18n = I18n::en_us();
         let counts = [
             (Severity::Error, 15),

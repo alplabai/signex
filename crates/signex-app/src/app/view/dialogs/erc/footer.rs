@@ -224,7 +224,7 @@ mod tests {
     #[test]
     fn run_erc_leads_with_the_play_glyph() {
         let (app, _boot) = Signex::new();
-        let tokens = app.document_state.panel_ctx.tokens.clone();
+        let tokens = app.document_state.panel_ctx.tokens;
         let i18n = I18n::en_us();
         let window = iced::Size::new(600.0, 100.0);
         let with_glyph = root_size(
@@ -252,7 +252,7 @@ mod tests {
     #[test]
     fn undo_and_redo_are_drawn_only_while_the_project_stores_rules() {
         let (app, _boot) = Signex::new();
-        let tokens = app.document_state.panel_ctx.tokens.clone();
+        let tokens = app.document_state.panel_ctx.tokens;
         let window = iced::Size::new(1000.0, 80.0);
         let draw = |stores_rules| {
             crate::layout_probe::draw_pixels(app.view_erc_footer(stores_rules, &tokens), window)
