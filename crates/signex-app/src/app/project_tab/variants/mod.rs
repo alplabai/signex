@@ -25,7 +25,7 @@ mod tab;
 mod tests;
 
 use manager::VariantCell;
-pub use manager::{VariantManagerMsg, VariantManagerUi};
+pub use manager::VariantManagerMsg;
 
 use crate::app::core::parts_read_error::PartsReadError;
 
