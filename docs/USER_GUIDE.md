@@ -691,10 +691,13 @@ Wires connect pins and each other.
    `W`, one after the other, or press `Ctrl+W`. With the Classic profile press
    `W`.
 2. Click on the sheet to start a wire.
-3. Click again to end the segment. Each click commits a segment and starts the
-   next from the same point.
-4. Double-click to stop drawing. `Esc` or a right-click cancels the wire you
-   are drawing.
+3. Click again to end it. The second click places the wire, with the corner
+   the wiring mode gives it (for example an L that goes horizontal first, or
+   one straight leg), and connects it. One **Undo** removes the whole wire.
+4. The tool stays on with no wire in progress: the next click starts a new
+   wire. To fix a corner and carry on drawing the same wire, press the add
+   vertex key (`Insert`, `Alt+I` on macOS) instead of clicking.
+5. `Esc` or a right-click cancels the wire you are drawing.
 
 Wires snap to the grid while snapping is on. The status bar shows the active
 tool.
