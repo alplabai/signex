@@ -25,10 +25,15 @@ impl crate::app::Signex {
         ) {
             return None;
         }
-        // Its own window, or the main window while it has none.
+        // Its own window, or the main window while it has none and paints
+        // on top there: the Esc ladder's front overlay is the picker.
         let in_own_window = target == InputTarget::DetachedModal(ModalId::LibraryPicker);
         let in_main_fallback = target.paints_overlay_stack()
-            && self.detached_window_of(ModalId::LibraryPicker).is_none();
+            && self.detached_window_of(ModalId::LibraryPicker).is_none()
+            && matches!(
+                self.escape_overlay_message(),
+                Some(Message::Library(LibraryMessage::ClosePicker))
+            );
         if !in_own_window && !in_main_fallback {
             return None;
         }
@@ -104,6 +109,48 @@ mod tests {
         );
         assert_eq!(
             step_of(app.picker_arrow_message(InputTarget::DetachedPanel, &down)),
+            None
+        );
+    }
+
+    /// The picker's own window takes the arrows; the main window does not
+    /// while the picker is detached, nor while a modal paints above it; a
+    /// stage with no list takes none.
+    #[test]
+    fn the_arrows_follow_the_window_stage_and_front_overlay() {
+        use crate::app::state::WindowKind;
+        let (mut app, _boot) = crate::app::Signex::new();
+        let down = arrow(keyboard::key::Named::ArrowDown);
+        app.library.picker = Some(PickerState::default());
+        let own = InputTarget::DetachedModal(ModalId::LibraryPicker);
+
+        app.library.close_library_confirm = Some(crate::library::state::CloseLibraryConfirmState {
+            library_path: "/tmp/picker-keys/Lib.snxlib".into(),
+            library_name: "Lib".into(),
+            dirty_editors: Vec::new(),
+            dirty_paths: Vec::new(),
+        });
+        let in_main = step_of(app.picker_arrow_message(InputTarget::Main, &down));
+        assert_eq!(in_main, None, "a confirm paints above the picker");
+        app.library.close_library_confirm = None;
+
+        let window = iced::window::Id::unique();
+        app.ui_state
+            .windows
+            .insert(window, WindowKind::DetachedModal(ModalId::LibraryPicker));
+        assert_eq!(step_of(app.picker_arrow_message(own, &down)), Some(1));
+        let in_main = step_of(app.picker_arrow_message(InputTarget::Main, &down));
+        assert_eq!(in_main, None, "the picker shows in its own window");
+        app.ui_state.windows.remove(&window);
+
+        let picker = app.library.picker.as_mut().expect("picker open");
+        picker.mode = PickerMode::Datasheets(crate::library::state::DatasheetChoice {
+            reference: "R1".into(),
+            targets: Vec::new(),
+        });
+        assert_eq!(step_of(app.picker_arrow_message(own, &down)), None);
+        assert_eq!(
+            step_of(app.picker_arrow_message(InputTarget::Main, &down)),
             None
         );
     }
