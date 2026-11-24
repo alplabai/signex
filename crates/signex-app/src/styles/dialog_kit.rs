@@ -519,9 +519,24 @@ mod tests {
                 button::Status::Hovered,
                 button::Status::Pressed,
             ] {
-                let style = disabled_button(&tokens)(&Theme::Dark, status);
-                assert!(style.background.is_none(), "{id:?} {status:?}");
-                assert_eq!(style.text_color, ti(tokens.text_secondary), "{id:?}");
+                for kind in [
+                    DialogButtonKind::Primary,
+                    DialogButtonKind::Secondary,
+                    DialogButtonKind::Danger,
+                    DialogButtonKind::DangerSolid,
+                    DialogButtonKind::Accent,
+                    DialogButtonKind::Ghost,
+                    DialogButtonKind::Link,
+                    DialogButtonKind::Cancel,
+                ] {
+                    let style = disabled_button(kind, &tokens)(&Theme::Dark, status);
+                    assert!(style.background.is_none(), "{id:?} {status:?} {kind:?}");
+                    assert_eq!(
+                        style.text_color,
+                        ti(tokens.text_secondary),
+                        "{id:?} {kind:?}"
+                    );
+                }
             }
             for kind in [
                 DialogButtonKind::Primary,
