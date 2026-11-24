@@ -156,6 +156,29 @@ fn properties_show_the_board_not_footprint_fields() {
     }
 }
 
+/// Mockup row 187: Messages never repeats the sketch mode hint, however
+/// often the mode is entered.
+#[test]
+fn entering_sketch_mode_again_does_not_repeat_the_hint() {
+    let (mut app, _tmp) = sketching();
+    let hint =
+        signex_i18n::t!(app.ui_state.i18n, signex_i18n::ids::BOARD_SKETCH_ENTERED).into_string();
+    let said = crate::diagnostics::logged_count(&hint);
+    assert!(said >= 1, "the first entry says the hint");
+    for _ in 0..3 {
+        let toggle = || Message::Pcb(PcbMsg::Sketch(BoardSketchMsg::ModeToggled));
+        send(&mut app, toggle());
+        assert!(app.interaction_state.board_sketch.is_none(), "left");
+        send(&mut app, toggle());
+        assert!(app.interaction_state.board_sketch.is_some(), "entered");
+    }
+    assert_eq!(
+        crate::diagnostics::logged_count(&hint),
+        said,
+        "entering again says nothing new"
+    );
+}
+
 /// The board in sketch mode with its origin at (5, 30).
 fn sketching_from_origin() -> (Signex, tempfile::TempDir) {
     sketching_with(|board| {

@@ -1,8 +1,10 @@
-//! The parameters table card (mockup row 189): Name · Expression · Value · Unit ·
+//! The parameters table panel (mockup row 189): Name · Expression · Value · Unit ·
 //! Used by, a row menu, the autocomplete under the row being typed, the
 //! in-use delete prompt, and Add parameter; under the rows, the live bake
-//! preview beside Live checks (`preview_canvas`). An overlay at the canvas's
-//! top right, under the sketch info bar; empty while closed.
+//! preview with its driving dimensions beside Live checks
+//! (`preview_canvas`), the preview taking the room left. A panel over the
+//! whole canvas, under the sketch info bar and above the sketch mode bar,
+//! not a card over the drawing; empty while closed.
 
 use std::path::PathBuf;
 
@@ -32,14 +34,15 @@ const EXPRESSION_EM: f32 = 16.0;
 const VALUE_EM: f32 = 6.0;
 const UNIT_EM: f32 = 4.0;
 const MENU_EM: f32 = 2.0;
-/// The card's width and the tallest its row list grows, in body heights.
-/// Wide enough for the bake preview and Live checks side by side under
-/// the rows; the rows scroll sooner so the whole card stays on the canvas.
-const CARD_EM: f32 = 72.0;
+/// The tallest the row list grows, in body heights; the rows scroll
+/// sooner so the live preview keeps its room.
 const ROWS_MAX_EM: f32 = 18.0;
-/// The card's distance from the canvas top: under the mode switcher and the
-/// sketch info bar.
+/// The panel's distance from the canvas top: under the mode switcher and
+/// the sketch info bar.
 pub const TOP_CLEARANCE_EM: f32 = 7.0;
+/// The panel's distance from the canvas bottom, in body heights: the
+/// sketch mode bar (Bake preview · Discard changes · Bake) stays in reach.
+pub(super) const BOTTOM_CLEARANCE_EM: f32 = 5.0;
 
 /// Builds the messages the card sends, for the editor at `path`.
 #[derive(Clone)]
@@ -89,7 +92,7 @@ impl Look {
     }
 }
 
-/// The table card, or nothing while it is closed.
+/// The table panel, or nothing while it is closed.
 pub fn overlay<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
@@ -127,18 +130,19 @@ pub fn overlay<'a>(
     card = card.push(super::preview_canvas::live_row(
         editor, problems, look, tokens, i18n,
     ));
-    let card = container(card)
+    let panel = container(card)
         .padding(SP.l)
-        .width(Length::Fixed(TS.body * CARD_EM))
-        .style(crate::styles::modal_card(tokens));
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(crate::styles::card(tokens));
     container(column![
         Space::new().height(TS.body * TOP_CLEARANCE_EM),
-        card
+        panel,
+        Space::new().height(TS.body * BOTTOM_CLEARANCE_EM),
     ])
     .padding([0.0, SP.m])
     .width(Length::Fill)
     .height(Length::Fill)
-    .align_x(iced::alignment::Horizontal::Right)
     .boxed()
 }
 

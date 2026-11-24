@@ -22,7 +22,8 @@ use signex_types::sketch::SketchHost;
 
 use super::SketchParametersMsg;
 use super::checks::failed_lines;
-use super::preview::{BakePreview, PreviewPad, failing_parameters, of_editor};
+use super::preview::{BakePreview, Mm, PreviewPad, failing_parameters, of_editor};
+use super::preview_canvas::{arrow_head, label_rect};
 use super::view::problems_of;
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::state::{BoardBackdrop, EditorMode, EditorPad};
@@ -155,6 +156,77 @@ fn the_preview_reads_the_current_solve_and_never_solves() {
         assert!((drawn_length(&preview) - 2.0).abs() < EPS, "{host:?}");
         assert!((preview.dimensions[0].value - 2.0).abs() < EPS);
     }
+}
+
+/// Mockup row 189: the preview draws each driving dimension's line, end
+/// to end over what it measures, with its label in the middle of it.
+#[test]
+fn a_driving_dimension_draws_its_line_with_the_label_in_the_middle() {
+    let near = |p: Mm, q: Mm| (p.0 - q.0).hypot(p.1 - q.1) < EPS;
+    for host in HOSTS {
+        let editor = editor_on(host, line_sketch());
+        let preview = of_editor(&editor).expect("solved on entry");
+        let edge = &preview.edges[0];
+        let (a, b) = (edge[0], edge[edge.len() - 1]);
+        let dimension = &preview.dimensions[0];
+        let (from, to) = dimension.span.expect("a distance has a line");
+        assert!(
+            (near(from, a) && near(to, b)) || (near(from, b) && near(to, a)),
+            "{host:?}: {from:?}..{to:?} is not the measured line {a:?}..{b:?}"
+        );
+        let middle = ((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0);
+        assert!(near(dimension.at, middle), "{host:?}: the label sits on it");
+    }
+}
+
+/// The label pill holds its text and the arrowheads point at the line's
+/// ends, both sized from the type scale.
+#[test]
+fn a_dimension_label_pill_holds_its_text_and_arrows_point_out() {
+    use iced::Point;
+    let centre = Point::new(100.0, 50.0);
+    let short = label_rect(centre, "2 mm");
+    let long = label_rect(centre, "w = 2 mm");
+    assert!(short.contains(centre), "centred on its place");
+    assert!(long.width > short.width, "a longer label is wider");
+    let [tip, p, q] = arrow_head(Point::ORIGIN, Point::new(100.0, 0.0));
+    assert_eq!(tip, Point::ORIGIN);
+    assert!(p.x > 0.0 && q.x > 0.0, "the head opens back along the line");
+    assert!((p.y + q.y).abs() < 1e-4, "symmetric about it");
+}
+
+/// Mockup row 189: the table is a panel across the canvas, not a card at
+/// its top right; the live preview sits under the rows, wider than the
+/// Live checks beside it.
+#[test]
+fn the_table_is_a_panel_across_the_canvas_with_the_preview_beside_live_checks() {
+    use signex_types::theme::{ThemeId, theme_tokens};
+    let editor = editor_on(SketchHost::Footprint, line_sketch());
+    let tokens = theme_tokens(ThemeId::GraphiteDark);
+    let i18n = signex_i18n::I18n::en_us();
+    let window = iced::Size::new(1600.0, 1000.0);
+    let texts =
+        crate::layout_probe::lay_out_texts(super::view::overlay(&editor, &tokens, &i18n), window);
+    let find = |label: &str| {
+        texts
+            .iter()
+            .find(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == label)
+            .unwrap_or_else(|| panic!("no {label:?} in {texts:#?}"))
+            .bounds
+    };
+    let title = find("Parameters");
+    assert!(
+        title.x < window.width / 8.0,
+        "the panel starts at the canvas's left: {title:?}"
+    );
+    let add = find("Add parameter");
+    let preview = find("Live bake preview");
+    let checks = find("Live checks");
+    assert!(preview.y > add.y && checks.y > add.y, "under the table");
+    assert!(
+        checks.x - preview.x > window.width / 2.0,
+        "the preview takes the wider share: {preview:?} {checks:?}"
+    );
 }
 
 #[test]

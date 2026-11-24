@@ -57,6 +57,9 @@ pub(super) enum PreviewPad {
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct DrivingDimension {
     pub(super) at: Mm,
+    /// The dimension line, from one measured end to the other; `None` for
+    /// an angle.
+    pub(super) span: Option<(Mm, Mm)>,
     /// The parameter its expression names, when it names exactly one.
     pub(super) name: Option<String>,
     /// Millimetres, or radians for an angle.
@@ -146,6 +149,12 @@ impl BakePreview {
             .copied()
             .chain(pad_points)
             .chain(self.dimensions.iter().map(|d| d.at))
+            .chain(
+                self.dimensions
+                    .iter()
+                    .filter_map(|d| d.span)
+                    .flat_map(|(a, b)| [a, b]),
+            )
             .fold(None, |acc, p| {
                 Some(match acc {
                     None => (p, p),
@@ -255,6 +264,66 @@ impl Positions<'_> {
             }
         }
     }
+
+    /// The solved centre and radius of a circle or arc.
+    fn round(
+        &self,
+        id: SketchEntityId,
+        entities: &HashMap<SketchEntityId, &Entity>,
+    ) -> Option<(Mm, f64)> {
+        let entity = entities.get(&id)?;
+        match entity.kind {
+            EntityKind::Circle { center, radius } => {
+                let result = &self.solve.result;
+                let radius =
+                    circle_radius(entity.id, &result.state, &result.index).unwrap_or(radius);
+                Some((self.point(center)?, radius))
+            }
+            EntityKind::Arc { center, start, .. } => {
+                let (c, s) = (self.point(center)?, self.point(start)?);
+                Some((c, (s.0 - c.0).hypot(s.1 - c.1)))
+            }
+            _ => None,
+        }
+    }
+
+    /// The dimension line of `kind` at the solve: between the two points,
+    /// from a point to its foot on a line, or from a point to the nearest
+    /// point of a circle, as the sketch canvas draws it. `None` for an
+    /// angle.
+    fn span(
+        &self,
+        kind: &ConstraintKind,
+        entities: &HashMap<SketchEntityId, &Entity>,
+    ) -> Option<(Mm, Mm)> {
+        match *kind {
+            ConstraintKind::DistancePtPt { p1, p2, .. } => Some((self.point(p1)?, self.point(p2)?)),
+            ConstraintKind::DistancePtLine { point, line, .. } => {
+                let p = self.point(point)?;
+                let EntityKind::Line { start, end } = entities.get(&line)?.kind else {
+                    return None;
+                };
+                let (a, b) = (self.point(start)?, self.point(end)?);
+                let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+                let len2 = dx * dx + dy * dy;
+                if len2 <= f64::EPSILON {
+                    return None;
+                }
+                let t = ((p.0 - a.0) * dx + (p.1 - a.1) * dy) / len2;
+                Some((p, (a.0 + t * dx, a.1 + t * dy)))
+            }
+            ConstraintKind::DistancePtCircle { point, circle, .. } => {
+                let p = self.point(point)?;
+                let (c, r) = self.round(circle, entities)?;
+                let d = (p.0 - c.0).hypot(p.1 - c.1);
+                if d <= f64::EPSILON {
+                    return None;
+                }
+                Some((p, (c.0 + (p.0 - c.0) * r / d, c.1 + (p.1 - c.1) * r / d)))
+            }
+            _ => None,
+        }
+    }
 }
 
 /// Points along an arc of `sweep` radians from `from`, both ends included.
@@ -304,8 +373,14 @@ fn driving_dimensions(
                 DimTarget::Expr(source) => bound_parameter(source, sketch).map(str::to_owned),
                 DimTarget::Literal(_) => None,
             };
+            // The label sits on its dimension line, as on the sketch canvas.
+            let span = at.span(&c.kind, &entities);
+            let middle = span.map_or((sx / n, sy / n), |(a, b)| {
+                ((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0)
+            });
             Some(DrivingDimension {
-                at: (sx / n, sy / n),
+                at: middle,
+                span,
                 is_last_good: name.as_ref().is_some_and(|n| failing.contains(n)),
                 name,
                 value,
