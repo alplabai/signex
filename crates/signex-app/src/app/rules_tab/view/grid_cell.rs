@@ -2,13 +2,20 @@
 //! ↺), one a constraint set wrote (an accent edge), an inherited one
 //! (muted, or hidden while Show inherited values is off), an empty one, a
 //! column not checked yet (inert) or one that does not apply to the row
-//! (hatched). The tooltip names where the value comes from.
+//! (hatched). The tooltip names where the value comes from. An empty
+//! clearance cell shows, muted, the clearance Run DRC checks with anyway
+//! (mockup row 89).
+
+use std::collections::BTreeMap;
 
 use iced::alignment::Vertical;
 use iced::widget::{Row, Space, container, mouse_area};
 use iced::{Background, Border, Color, Element, Font, Length, Padding, Theme, Widget as _};
+use signex_drc_dsl::table::LimitField;
 use signex_drc_dsl::table::grid::{CellSource, GridScope};
 use signex_i18n::{Localized, ids, t};
+use signex_types::net_class::NetClass;
+use signex_types::pcb::PcbBoard;
 use signex_widgets::constraint_grid::{CellRef, EDITOR_ID, GridMessage, GridMetrics, GridStyle};
 use signex_widgets::{button, text, text_input, tooltip};
 
@@ -20,6 +27,65 @@ use crate::styles::HAIRLINE;
 
 /// Border width of the selected cell's ring and a set value's edge.
 const RING_EM: f32 = 1.5 / 12.0;
+
+/// The clearance Run DRC checks a pair with while no rule asks more: the
+/// open board's setup clearance (0.2 mm when it sets none), raised for a
+/// net class's nets by the class's own clearance.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct BuiltinClearance {
+    board_mm: f64,
+    classes: BTreeMap<String, f64>,
+}
+
+impl BuiltinClearance {
+    /// `None` when the board's setup clearance is not usable (the check
+    /// refuses the board too).
+    pub(crate) fn of(board: &PcbBoard, classes: &[NetClass]) -> Option<Self> {
+        let rules = signex_drc::DrcRules::for_board(board, &[]).ok()?;
+        let classes = classes
+            .iter()
+            .filter(|class| class.clearance.is_finite() && class.clearance > 0.0)
+            .map(|class| (class.name.clone(), class.clearance))
+            .collect();
+        Some(Self {
+            board_mm: crate::app::rules_tab::json::mm(rules.clearance),
+            classes,
+        })
+    }
+
+    /// For `row`, whose parents are `parents` (nearest first); `None` for
+    /// a heading or a scoped rule.
+    pub(crate) fn for_row(&self, row: &RowRef, parents: &[GridScope]) -> Option<f64> {
+        let class = match row {
+            RowRef::Heading(_) | RowRef::Scoped(_) => return None,
+            RowRef::Class(name) => Some(name.as_str()),
+            _ => parents.iter().find_map(|parent| match parent {
+                GridScope::Class(name) => Some(name.as_str()),
+                _ => None,
+            }),
+        };
+        let raised = class
+            .and_then(|class| self.classes.get(class))
+            .copied()
+            .unwrap_or(0.0);
+        Some(self.board_mm.max(raised))
+    }
+}
+
+/// What an empty clearance cell checks with anyway, from the open board;
+/// `None` for any other column or with no board open.
+fn builtin_clearance(frame: &Frame, at: CellRef) -> Option<f64> {
+    let grid = frame.grid();
+    let column = grid.column(at.column)?;
+    if column.field != Some(LimitField::MinClearance) {
+        return None;
+    }
+    let row = grid.row(at.row)?;
+    frame
+        .builtin_clearance
+        .as_ref()?
+        .for_row(row, grid.parents(at.row))
+}
 
 fn strong() -> Font {
     Font {
@@ -145,11 +211,19 @@ fn face<'a>(
             style.muted_ink,
             signex_widgets::ui_font::regular(),
         ),
-        CellShow::Empty => (
-            String::new(),
-            style.muted_ink,
-            signex_widgets::ui_font::regular(),
-        ),
+        // All keeps its base value in view, as a value of its own would.
+        CellShow::Empty => match builtin_clearance(frame, at) {
+            Some(mm) if is_all || !hide_inherited => (
+                format!("{mm}mm"),
+                style.muted_ink,
+                signex_widgets::ui_font::regular(),
+            ),
+            _ => (
+                String::new(),
+                style.muted_ink,
+                signex_widgets::ui_font::regular(),
+            ),
+        },
         CellShow::Value {
             written, source, ..
         } => {
@@ -210,6 +284,9 @@ fn source_tip(frame: &Frame, show: &CellShow, at: CellRef, is_all: bool) -> Loca
     match show {
         CellShow::NotApplicable => t!(i18n, ids::RULES_CELL_NOT_APPLICABLE),
         CellShow::NotChecked => t!(i18n, ids::RULES_CELL_NOT_CHECKED),
+        CellShow::Empty if builtin_clearance(frame, at).is_some() => {
+            t!(i18n, ids::RULES_CELL_FROM_DEFAULT)
+        }
         CellShow::Empty => t!(i18n, ids::RULES_CELL_NOT_SET),
         CellShow::Value { source, .. } => match source {
             _ if is_all => t!(i18n, ids::RULES_CELL_FROM_ALL),
@@ -246,3 +323,7 @@ pub(super) fn scope_name(frame: &Frame, scope: &GridScope) -> String {
         },
     }
 }
+
+#[cfg(test)]
+#[path = "grid_cell_tests.rs"]
+mod tests;

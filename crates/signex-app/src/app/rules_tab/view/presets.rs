@@ -1,7 +1,7 @@
 //! The Presets side panel (#2398, #2530): three generic tier cards with
 //! their key minimums, the rule profiles that hold DRC rules, and the
-//! preview of a pick (Added / Changed / Removed, old → new) with Cancel and
-//! Apply in the same card. Apply stores it as one undo step.
+//! preview of a pick (Added / Changed / Removed, old → new), with Cancel
+//! and Apply pinned at the panel's foot. Apply stores it as one undo step.
 
 use std::sync::LazyLock;
 
@@ -119,30 +119,29 @@ pub(super) fn view<'a>(
     .width(Length::Fill);
     let line = ti(tokens.border);
     let panel_fill = ti(tokens.panel_bg);
-    container(
-        Column::new()
-            .push(header.boxed())
-            .push(
-                scrollable(body.padding([SP.m, SP.l]))
-                    .direction(crate::styles::thin_vertical())
-                    .style(crate::styles::scrollbar_style(tokens))
-                    .height(Length::Fill)
-                    .boxed(),
-            )
-            .height(Length::Fill),
-    )
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .style(move |_: &Theme| container::Style {
-        background: Some(Background::Color(panel_fill)),
-        border: Border {
-            width: 1.0,
-            color: line,
-            ..Border::default()
-        },
-        ..container::Style::default()
-    })
-    .boxed()
+    let mut panel: Column<Element<'a, Message>> = Column::new().push(header.boxed()).push(
+        scrollable(body.padding([SP.m, SP.l]))
+            .direction(crate::styles::thin_vertical())
+            .style(crate::styles::scrollbar_style(tokens))
+            .height(Length::Fill)
+            .boxed(),
+    );
+    if frame.state.preview.is_some() {
+        panel = panel.push(preview_actions(frame, line));
+    }
+    container(panel.height(Length::Fill))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(panel_fill)),
+            border: Border {
+                width: 1.0,
+                color: line,
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
 }
 
 fn icon<'a>(
@@ -285,9 +284,43 @@ fn change_row<'a>(frame: &Frame<'a>, change: &RowChange) -> Element<'a, Message>
     line.boxed()
 }
 
-/// "Applying <preset> changes:", one row per change, then Cancel / Apply.
-fn preview_card<'a>(frame: &Frame<'a>, preview: &PresetPreview) -> Element<'a, Message> {
+/// Cancel and Apply of the open preview, pinned under the scrolled cards
+/// so a long change list never pushes them out of view (mockup row 91).
+fn preview_actions<'a>(frame: &Frame<'a>, line: iced::Color) -> Element<'a, Message> {
     let (i18n, tokens, id) = (frame.i18n, frame.tokens, frame.id);
+    let cancel = button(text(t!(i18n, ids::RULES_PRESET_CANCEL)).size(TS.caption))
+        .padding([SP.xs, SP.m])
+        .style(crate::styles::outline_button(tokens))
+        .on_press(up(RulesTabMsg::PresetDismissed { project_id: id }));
+    let apply = button(text(t!(i18n, ids::RULES_PRESET_APPLY)).size(TS.caption))
+        .padding([SP.xs, SP.m])
+        .style(crate::styles::primary_button(tokens))
+        .on_press(up(RulesTabMsg::PresetApplied { project_id: id }));
+    let divider = container(Space::new())
+        .width(Length::Fill)
+        .height(crate::styles::HAIRLINE)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(line)),
+            ..container::Style::default()
+        });
+    let actions = container(
+        Row::new()
+            .spacing(SP.s)
+            .push(Space::new().width(Length::Fill).boxed())
+            .push(cancel.boxed())
+            .push(apply.boxed()),
+    )
+    .padding([SP.s, SP.l])
+    .width(Length::Fill);
+    Column::new()
+        .push(divider.boxed())
+        .push(actions.boxed())
+        .boxed()
+}
+
+/// "Applying <preset> changes:" and one row per change.
+fn preview_card<'a>(frame: &Frame<'a>, preview: &PresetPreview) -> Element<'a, Message> {
+    let (i18n, tokens) = (frame.i18n, frame.tokens);
     let label = match preview
         .preset
         .strip_prefix("tier:")
@@ -321,22 +354,6 @@ fn preview_card<'a>(frame: &Frame<'a>, preview: &PresetPreview) -> Element<'a, M
                 .boxed(),
         );
     }
-    let cancel = button(text(t!(i18n, ids::RULES_PRESET_CANCEL)).size(TS.caption))
-        .padding([SP.xs, SP.m])
-        .style(crate::styles::outline_button(tokens))
-        .on_press(up(RulesTabMsg::PresetDismissed { project_id: id }));
-    let apply = button(text(t!(i18n, ids::RULES_PRESET_APPLY)).size(TS.caption))
-        .padding([SP.xs, SP.m])
-        .style(crate::styles::primary_button(tokens))
-        .on_press(up(RulesTabMsg::PresetApplied { project_id: id }));
-    lines = lines.push(
-        Row::new()
-            .spacing(SP.s)
-            .push(Space::new().width(Length::Fill).boxed())
-            .push(cancel.boxed())
-            .push(apply.boxed())
-            .boxed(),
-    );
     let r = resolve(tokens);
     let (fill, line) = (r.field, ti(tokens.border));
     container(lines)
@@ -354,3 +371,7 @@ fn preview_card<'a>(frame: &Frame<'a>, preview: &PresetPreview) -> Element<'a, M
         })
         .boxed()
 }
+
+#[cfg(test)]
+#[path = "presets_tests.rs"]
+mod tests;

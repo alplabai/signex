@@ -68,6 +68,8 @@ pub(super) struct Frame<'a> {
     pub layer: Option<&'a DrcRuleSet>,
     /// The project's constraint sets.
     pub sets: BTreeMap<String, NamedRuleSet>,
+    /// What an empty clearance cell checks with; `None` with no board open.
+    pub builtin_clearance: Option<grid_cell::BuiltinClearance>,
 }
 
 impl<'a> Frame<'a> {
@@ -293,11 +295,15 @@ impl Signex {
             Some(analysis) => Cow::Borrowed(&analysis.checked),
             None => Cow::Owned(self.rules_checked(id)),
         };
-        let classes = self
+        let net_classes = self
             .document_state
             .project_by_id(id)
-            .map(|p| p.data.net_classes.iter().map(|c| c.name.clone()).collect())
+            .map(|p| p.data.net_classes.as_slice())
             .unwrap_or_default();
+        let classes = net_classes.iter().map(|c| c.name.clone()).collect();
+        let builtin_clearance = board
+            .as_ref()
+            .and_then(|(_, board)| grid_cell::BuiltinClearance::of(board, net_classes));
         Frame {
             id,
             i18n,
@@ -312,6 +318,7 @@ impl Signex {
             classes,
             layer: self.rules_drc_layer(id),
             sets: self.rules_drc_of(id).map(|d| d.sets).unwrap_or_default(),
+            builtin_clearance,
         }
     }
 }
