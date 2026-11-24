@@ -77,7 +77,7 @@ impl Signex {
                 PasteArrayMsg::PreviewExpandToggled => {
                     state.preview_expanded = !state.preview_expanded;
                 }
-                PasteArrayMsg::PreviewCopyGrabbed(at) => state.grab_copy_two(at),
+                PasteArrayMsg::PreviewCopyGrabbed { at, scale } => state.grab_copy_two(at, scale),
                 PasteArrayMsg::PreviewCopyDragged(at) => state.drag_copy_two(at),
                 PasteArrayMsg::PreviewCopyDropped => state.preview_drag = None,
                 PasteArrayMsg::PreviewValueClicked(field) => {
@@ -88,8 +88,8 @@ impl Signex {
                 }
                 PasteArrayMsg::PreviewEditSubmitted => state.finish_preview_edit(),
                 // Esc ends a value typed on the drawing before it closes the
-                // dialog.
-                PasteArrayMsg::Closed if state.cancel_preview_edit() => {}
+                // dialog; Cancel and the X always close.
+                PasteArrayMsg::EscapePressed if state.cancel_preview_edit() => {}
                 PasteArrayMsg::DesignatorsChosen(mode) => {
                     state.designators = mode;
                     if mode.reads_project() {
@@ -97,7 +97,9 @@ impl Signex {
                     }
                 }
                 PasteArrayMsg::ApplyPressed => self.apply_paste_array(),
-                PasteArrayMsg::Closed => self.ui_state.paste_array = None,
+                PasteArrayMsg::EscapePressed | PasteArrayMsg::Closed => {
+                    self.ui_state.paste_array = None;
+                }
             }
         }
         Task::batch([seeding, focus, self.finish_update()])
@@ -248,8 +250,15 @@ mod tests {
     #[test]
     fn dragging_copy_two_sets_the_spacing() {
         let mut app = open_dialog();
-        send(&mut app, PasteArrayMsg::PreviewCopyGrabbed((10.0, 0.0)));
-        send(&mut app, PasteArrayMsg::PreviewCopyDragged((12.7, 2.54)));
+        // Pressed at 10 px per mm, moved 2.7 mm right and 2.54 mm down.
+        send(
+            &mut app,
+            PasteArrayMsg::PreviewCopyGrabbed {
+                at: (100.0, 50.0),
+                scale: 10.0,
+            },
+        );
+        send(&mut app, PasteArrayMsg::PreviewCopyDragged((127.0, 75.4)));
         send(&mut app, PasteArrayMsg::PreviewCopyDropped);
         let state = dialog(&app);
         assert_eq!(state.preview_drag, None);
@@ -269,10 +278,10 @@ mod tests {
         );
         send(&mut app, PasteArrayMsg::CountChanged("6".into()));
         assert_eq!(dialog(&app).count, "6");
-        send(&mut app, PasteArrayMsg::Closed);
+        send(&mut app, PasteArrayMsg::EscapePressed);
         assert_eq!(dialog(&app).count, "2");
         assert!(dialog(&app).preview_edit.is_none());
-        send(&mut app, PasteArrayMsg::Closed);
+        send(&mut app, PasteArrayMsg::EscapePressed);
         assert!(app.ui_state.paste_array.is_none());
 
         let mut app = open_dialog();
@@ -287,5 +296,23 @@ mod tests {
             (state.step.as_str(), state.preview_edit.is_none()),
             ("4", true)
         );
+    }
+
+    /// Mockup row 69: Esc on the drawing ends only the inline edit; Cancel
+    /// and the header X close the dialog on the first press, edit or not.
+    #[test]
+    fn cancel_closes_at_once_with_a_value_typed_on_the_drawing() {
+        let mut app = open_dialog();
+        send(
+            &mut app,
+            PasteArrayMsg::PreviewValueClicked(PasteArrayField::Copies),
+        );
+        send(&mut app, PasteArrayMsg::CountChanged("6".into()));
+        send(&mut app, PasteArrayMsg::Closed);
+        assert!(app.ui_state.paste_array.is_none());
+
+        let mut app = open_dialog();
+        send(&mut app, PasteArrayMsg::EscapePressed);
+        assert!(app.ui_state.paste_array.is_none(), "no edit open");
     }
 }

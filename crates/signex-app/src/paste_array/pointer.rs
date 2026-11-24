@@ -1,10 +1,12 @@
 //! Pointer input on the Paste Array preview (mockup row 69): a press on copy
 //! 2 holds it and the spacing follows the drag; a click on a drawn value opens
 //! it for typing on the drawing. It draws nothing and keeps no state: the
-//! held copy lives in `PasteArrayState::preview_drag`.
+//! held copy, with the drawing's scale at the press, lives in
+//! `PasteArrayState::preview_drag`. Points it sends are in pixels in the
+//! drawing.
 
 use iced::widget::canvas::{self, Canvas};
-use iced::{Element, Length, Point, Rectangle, Renderer, Theme, mouse};
+use iced::{Element, Length, Point, Rectangle, Renderer, Theme, Widget as _, mouse};
 use signex_widgets::property_illustration::Fit;
 
 use super::PasteArrayMsg;
@@ -32,8 +34,15 @@ impl PreviewPointer {
         }
         self.layout
             .is_on_copy_two(&fit, self.text_size, at)
-            .then(|| PasteArrayMsg::PreviewCopyGrabbed(self.layout.to_sheet(&fit, at)))
+            .then(|| PasteArrayMsg::PreviewCopyGrabbed {
+                at: pixels(at),
+                scale: f64::from(fit.scale),
+            })
     }
+}
+
+fn pixels(at: Point) -> (f64, f64) {
+    (f64::from(at.x), f64::from(at.y))
 }
 
 impl canvas::Program<PasteArrayMsg> for PreviewPointer {
@@ -53,12 +62,11 @@ impl canvas::Program<PasteArrayMsg> for PreviewPointer {
             mouse::Event::ButtonPressed(mouse::Button::Left) => {
                 self.press(bounds, cursor.position_in(bounds)?)
             }
-            // A held copy follows the pointer out of the drawing too.
+            // A held copy follows the pointer out of the drawing too. The
+            // move is read against the press's scale, not this redraw's fit.
             mouse::Event::CursorMoved { position } if self.is_dragging => {
                 let at = Point::new(position.x - bounds.x, position.y - bounds.y);
-                Some(PasteArrayMsg::PreviewCopyDragged(
-                    self.layout.to_sheet(&self.fit(bounds), at),
-                ))
+                Some(PasteArrayMsg::PreviewCopyDragged(pixels(at)))
             }
             mouse::Event::ButtonReleased(mouse::Button::Left) if self.is_dragging => {
                 Some(PasteArrayMsg::PreviewCopyDropped)
@@ -116,17 +124,24 @@ pub(super) fn preview_pointer<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paste_array::PasteArrayField;
     use crate::paste_array::preview::{PreviewSpec, layout};
+    use crate::paste_array::{PasteArrayField, PasteArrayState};
+    use crate::paste_prefs::PasteDesignators;
     use iced::widget::canvas::Program;
     use signex_i18n::UserText;
+    use signex_types::coord::Unit;
 
     fn pointer(is_dragging: bool) -> PreviewPointer {
+        pointer_at((10.16, 0.0), is_dragging)
+    }
+
+    /// Four copies drawn `spacing` mm apart.
+    fn pointer_at(spacing: (f64, f64), is_dragging: bool) -> PreviewPointer {
         let text = |s: &str| UserText::new(s.to_owned()).into();
         let spec = PreviewSpec {
             positions: 4,
-            dx_mm: 10.16,
-            dy_mm: 0.0,
+            dx_mm: spacing.0,
+            dy_mm: spacing.1,
             step: 1,
             copy_size_mm: Some((8.0, 4.0)),
             grid_mm: 1.27,
@@ -170,9 +185,16 @@ mod tests {
         let (ox, oy) = p.layout.origin;
         let copy_two = on_screen(&p, Point::new((ox + 10.16 + 4.0) as f32, (oy + 2.0) as f32));
         let press = mouse::Event::ButtonPressed(mouse::Button::Left);
-        let Some(PasteArrayMsg::PreviewCopyGrabbed((x, y))) = sent(&p, press, copy_two) else {
+        let Some(PasteArrayMsg::PreviewCopyGrabbed { at, scale }) = sent(&p, press, copy_two)
+        else {
             panic!("copy 2 is grabbed");
         };
+        // The press in drawing pixels and the drawing's scale: through that
+        // fit it reads back as the point 4 mm into copy 2.
+        let fit = p.fit(BOUNDS);
+        assert_eq!(scale, f64::from(fit.scale));
+        let x = (at.0 - f64::from(fit.offset.x)) / scale - ox;
+        let y = (at.1 - f64::from(fit.offset.y)) / scale - oy;
         assert!(
             (x - 14.16).abs() < 1e-3 && (y - 2.0).abs() < 1e-3,
             "{x} {y}"
@@ -214,5 +236,45 @@ mod tests {
             sent(&held, release, outside),
             Some(PasteArrayMsg::PreviewCopyDropped)
         ));
+    }
+
+    fn spacing(s: &PasteArrayState) -> (f64, f64) {
+        let input = s.input().expect("the spacing parses");
+        (input.dx_mm, input.dy_mm)
+    }
+
+    /// What the handler does with the pointer's grab and drag messages.
+    fn apply(s: &mut PasteArrayState, msg: Option<PasteArrayMsg>) {
+        match msg {
+            Some(PasteArrayMsg::PreviewCopyGrabbed { at, scale }) => s.grab_copy_two(at, scale),
+            Some(PasteArrayMsg::PreviewCopyDragged(at)) => s.drag_copy_two(at),
+            other => panic!("not a grab or a drag: {other:?}"),
+        }
+    }
+
+    /// Mockup row 69: the drawing refits as the spacing grows, and a pointer
+    /// held still keeps the spacing it set instead of running away. Each
+    /// move is sent to the layout drawn after the one before.
+    #[test]
+    fn a_pointer_held_still_keeps_the_spacing_as_the_drawing_refits() {
+        let mut s = PasteArrayState::new(Unit::Mm, 10.16, 0.0, 1, PasteDesignators::Keep, 3, None);
+        s.count = "4".to_owned();
+        let p = pointer_at(spacing(&s), false);
+        let (ox, oy) = p.layout.origin;
+        let copy_two = on_screen(&p, Point::new((ox + 10.16 + 4.0) as f32, (oy + 2.0) as f32));
+        let press = mouse::Event::ButtonPressed(mouse::Button::Left);
+        apply(&mut s, sent(&p, press, copy_two));
+
+        // Moved right a few millimetres' worth, then held there.
+        let held = Point::new(copy_two.x + 20.0, copy_two.y);
+        let mut seen = Vec::new();
+        for _ in 0..5 {
+            let p = pointer_at(spacing(&s), true);
+            let moved = mouse::Event::CursorMoved { position: held };
+            apply(&mut s, sent(&p, moved, held));
+            seen.push(spacing(&s));
+        }
+        assert!(seen[0].0 > 10.16, "the move widened the spacing: {seen:?}");
+        assert!(seen.iter().all(|now| *now == seen[0]), "{seen:?}");
     }
 }

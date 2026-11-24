@@ -24,6 +24,8 @@ pub const FIELD_Y: FieldId = FieldId::new("paste-array-y");
 
 /// Dragging copy 2 steps the spacing by this much, in mm.
 pub const DRAG_SNAP_MM: f64 = 1.27;
+/// A drag sets no spacing further than this either way, in mm.
+pub const DRAG_REACH_MM: f64 = 254.0;
 
 /// The copy size drawn when the copy has no measurable extent, in mm.
 const FALLBACK_COPY_MM: f64 = 5.08;
@@ -152,16 +154,6 @@ impl PreviewLayout {
         })
     }
 
-    /// A screen point of a drawing fitted by `fit`, in mm from the
-    /// original's corner.
-    pub fn to_sheet(&self, fit: &Fit, screen: Point) -> (f64, f64) {
-        let scale = f64::from(fit.scale.max(f32::EPSILON));
-        (
-            f64::from(screen.x - fit.offset.x) / scale - self.origin.0,
-            f64::from(screen.y - fit.offset.y) / scale - self.origin.1,
-        )
-    }
-
     /// The drawn value whose label is under `screen`, in a drawing fitted by
     /// `fit` with captions of `text_size` pixels.
     pub fn value_at(&self, fit: &Fit, text_size: f32, screen: Point) -> Option<PasteArrayField> {
@@ -204,16 +196,36 @@ impl PreviewLayout {
     }
 }
 
-/// The spacing that puts copy 2's grabbed point at `at`, both in mm from the
-/// original's corner; `grab` is where on copy 2 it was grabbed. Snapped to
-/// [`DRAG_SNAP_MM`].
-pub fn dragged_spacing(grab: (f64, f64), at: (f64, f64)) -> (f64, f64) {
-    let snap = |mm: f64| {
-        let snapped = (mm / DRAG_SNAP_MM).round() * DRAG_SNAP_MM;
+/// Copy 2 held on the preview.
+///
+/// The drawing refits as the spacing grows, so a move read through the new
+/// fit would feed the spacing back into itself. Every move reads through
+/// the scale of the press instead.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PreviewDrag {
+    /// The press, in pixels in the drawing.
+    pub press: (f64, f64),
+    /// Pixels per mm of the drawing at the press.
+    pub scale: f64,
+    /// The spacing at the press, in mm.
+    pub start: (f64, f64),
+}
+
+/// The spacing with the held copy 2 moved to `at`, in pixels in the drawing:
+/// the spacing at the press plus the move, snapped to [`DRAG_SNAP_MM`] and
+/// kept within [`DRAG_REACH_MM`] either way.
+pub fn dragged_spacing(drag: PreviewDrag, at: (f64, f64)) -> (f64, f64) {
+    let scale = drag.scale.max(f64::from(f32::EPSILON));
+    let spacing = |start: f64, press: f64, now: f64| {
+        let snapped = ((start + (now - press) / scale) / DRAG_SNAP_MM).round() * DRAG_SNAP_MM;
+        let kept = snapped.clamp(-DRAG_REACH_MM, DRAG_REACH_MM);
         // No "-0" in a field.
-        if snapped == 0.0 { 0.0 } else { snapped }
+        if kept == 0.0 { 0.0 } else { kept }
     };
-    (snap(at.0 - grab.0), snap(at.1 - grab.1))
+    (
+        spacing(drag.start.0, drag.press.0, at.0),
+        spacing(drag.start.1, drag.press.1, at.1),
+    )
 }
 
 fn pt(x: f64, y: f64) -> Point {
@@ -667,27 +679,43 @@ mod tests {
         assert_eq!(layout.value_at(&fit, 11.0, centre_of(0.0)), None);
     }
 
-    /// The screen to sheet map undoes the fit: copy 2's corner reads as one
-    /// spacing from the original's.
-    #[test]
-    fn screen_points_read_back_in_sheet_mm() {
-        let layout = layout(&spec(4));
-        let fit = fit(&layout);
-        let (ox, oy) = layout.origin;
-        let corner = fit.point(pt(ox + 10.16, oy));
-        let (x, y) = layout.to_sheet(&fit, corner);
-        assert!((x - 10.16).abs() < 1e-3 && y.abs() < 1e-3, "{x} {y}");
-    }
-
     /// Mockup row 69: dragging copy 2 sets the spacing, snapped to 1.27 mm.
     #[test]
     fn a_drag_sets_the_spacing_on_a_1_27_mm_step() {
-        // Grabbed 2 mm into copy 2, dropped with that point at (14.5, -2.9).
-        let (dx, dy) = dragged_spacing((2.0, 1.0), (14.5, -2.9));
+        // Pressed at 10 px per mm with the spacing at (10, 1), moved 2.5 mm
+        // right and 4.9 mm up: (12.5, -3.9) snaps to (12.7, -3.81).
+        let drag = PreviewDrag {
+            press: (100.0, 50.0),
+            scale: 10.0,
+            start: (10.0, 1.0),
+        };
+        let (dx, dy) = dragged_spacing(drag, (125.0, 1.0));
         assert!((dx - 12.7).abs() < 1e-9, "{dx}");
         assert!((dy + 3.81).abs() < 1e-9, "{dy}");
-        let (dx, dy) = dragged_spacing((2.0, 1.0), (2.3, 0.8));
+        let still = PreviewDrag {
+            start: (0.0, 0.0),
+            ..drag
+        };
+        let (dx, dy) = dragged_spacing(still, (103.0, 48.0));
         assert_eq!((dx, dy), (0.0, 0.0));
         assert!(dy.is_sign_positive(), "no -0 in the field");
+    }
+
+    /// Mockup row 69: a drag keeps the spacing within 254 mm either way.
+    #[test]
+    fn a_drag_keeps_the_spacing_within_254_mm() {
+        let drag = PreviewDrag {
+            press: (0.0, 0.0),
+            scale: 1.0,
+            start: (250.0, -250.0),
+        };
+        assert_eq!(
+            dragged_spacing(drag, (1.0e6, -1.0e6)),
+            (DRAG_REACH_MM, -DRAG_REACH_MM)
+        );
+        assert_eq!(
+            dragged_spacing(drag, (-1.0e6, 1.0e6)),
+            (-DRAG_REACH_MM, DRAG_REACH_MM)
+        );
     }
 }

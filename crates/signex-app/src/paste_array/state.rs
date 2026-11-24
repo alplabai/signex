@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use signex_types::coord::Unit;
 use signex_widgets::property_illustration::{IllustrationHover, IllustrationMsg};
 
+use super::preview::PreviewDrag;
 use crate::paste_prefs::PasteDesignators;
 use signex_types::measure::{length_field_text, parse_length_field_mm};
 use signex_types::text_increment::{STEP_MAX, STEP_MIN};
@@ -58,9 +59,8 @@ pub struct PasteArrayState {
     pub hover: IllustrationHover,
     /// The preview is drawn at its taller size.
     pub preview_expanded: bool,
-    /// Copy 2 is held on the preview: where on it it was grabbed, in mm from
-    /// its corner.
-    pub preview_drag: Option<(f64, f64)>,
+    /// Copy 2 is held on the preview.
+    pub preview_drag: Option<PreviewDrag>,
     /// The value being typed on the preview, and its text from before.
     pub preview_edit: Option<(PasteArrayField, String)>,
 }
@@ -136,22 +136,23 @@ impl PasteArrayState {
         }
     }
 
-    /// Copy 2 was pressed at `at`, in mm from the original's corner. A
-    /// dialog whose spacing does not parse has no copy 2 to hold.
-    pub fn grab_copy_two(&mut self, at: (f64, f64)) {
-        self.preview_drag = self
-            .input()
-            .ok()
-            .map(|input| (at.0 - input.dx_mm, at.1 - input.dy_mm));
+    /// Copy 2 was pressed at `at`, in pixels in a drawing of `scale` pixels
+    /// per mm. A dialog whose spacing does not parse has no copy 2 to hold.
+    pub fn grab_copy_two(&mut self, at: (f64, f64), scale: f64) {
+        self.preview_drag = self.input().ok().map(|input| PreviewDrag {
+            press: at,
+            scale,
+            start: (input.dx_mm, input.dy_mm),
+        });
     }
 
-    /// The held copy 2 moved to `at`: the spacing follows, snapped to the
-    /// drag step, in the dialog's unit.
+    /// The held copy 2 moved to `at`, in pixels in the drawing: the spacing
+    /// follows, snapped to the drag step, in the dialog's unit.
     pub fn drag_copy_two(&mut self, at: (f64, f64)) {
-        let Some(grab) = self.preview_drag else {
+        let Some(drag) = self.preview_drag else {
             return;
         };
-        let (dx, dy) = super::preview::dragged_spacing(grab, at);
+        let (dx, dy) = super::preview::dragged_spacing(drag, at);
         self.x_spacing = length_field_text(dx, self.unit);
         self.y_spacing = length_field_text(dy, self.unit);
     }
@@ -305,11 +306,13 @@ pub enum PasteArrayMsg {
     PreviewHovered(IllustrationMsg),
     /// The preview's expand button was pressed.
     PreviewExpandToggled,
-    /// Copy 2 was pressed on the preview, at this point in mm from the
-    /// original's corner.
-    PreviewCopyGrabbed((f64, f64)),
-    /// The held copy 2 was dragged to this point, in mm from the original's
-    /// corner.
+    /// Copy 2 was pressed on the preview at `at`, in pixels in the drawing,
+    /// which drew `scale` pixels per mm.
+    PreviewCopyGrabbed {
+        at: (f64, f64),
+        scale: f64,
+    },
+    /// The held copy 2 was dragged to this point, in pixels in the drawing.
     PreviewCopyDragged((f64, f64)),
     /// The held copy 2 was let go.
     PreviewCopyDropped,
@@ -319,6 +322,10 @@ pub enum PasteArrayMsg {
     PreviewEditSubmitted,
     /// OK: place the array.
     ApplyPressed,
+    /// Esc with the dialog on top: it puts back a value typed on the drawing,
+    /// or closes the dialog when none is open.
+    EscapePressed,
+    /// Cancel or the header X: the dialog closes.
     Closed,
 }
 
@@ -460,10 +467,18 @@ mod tests {
     #[test]
     fn dragging_copy_two_sets_the_spacing_fields() {
         let mut s = state();
-        // Grabbed 1 mm into copy 2 (at 10 mm), moved 5 mm right, 2.5 mm down.
-        s.grab_copy_two((11.0, 0.5));
-        assert_eq!(s.preview_drag, Some((1.0, 0.5)));
-        s.drag_copy_two((16.0, 3.0));
+        // Pressed at 10 px per mm with copy 2 at 10 mm, moved 5 mm right and
+        // 2.5 mm down.
+        s.grab_copy_two((110.0, 5.0), 10.0);
+        assert_eq!(
+            s.preview_drag,
+            Some(PreviewDrag {
+                press: (110.0, 5.0),
+                scale: 10.0,
+                start: (10.0, 0.0),
+            })
+        );
+        s.drag_copy_two((160.0, 30.0));
         let input = s.input().unwrap();
         assert!((input.dx_mm - 15.24).abs() < 1e-9, "{}", input.dx_mm);
         assert!((input.dy_mm - 2.54).abs() < 1e-9, "{}", input.dy_mm);
@@ -476,13 +491,13 @@ mod tests {
 
         let mut mil =
             PasteArrayState::new(Unit::Mil, 2.54, 0.0, 1, PasteDesignators::Keep, 3, None);
-        mil.grab_copy_two((2.54, 0.0));
-        mil.drag_copy_two((5.08, 0.0));
+        mil.grab_copy_two((25.4, 0.0), 10.0);
+        mil.drag_copy_two((50.8, 0.0));
         assert_eq!(mil.x_spacing, length_field_text(5.08, Unit::Mil));
 
         let mut bad = state();
         bad.x_spacing = "x".to_owned();
-        bad.grab_copy_two((1.0, 1.0));
+        bad.grab_copy_two((1.0, 1.0), 10.0);
         assert_eq!(bad.preview_drag, None, "no copy 2 to hold");
     }
 
