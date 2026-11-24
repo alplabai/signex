@@ -51,7 +51,7 @@ pub enum FilterEditor {
     Board,
 }
 
-/// What the Filter and SCH Filter panels read besides the filters
+/// What the Filter panel reads besides the filters
 /// themselves: the active editor, its per-kind counts and the preset name
 /// being typed.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -64,7 +64,7 @@ pub struct SelectionFilterFacts {
     /// The document and revision the counts were taken from: a rebuild at
     /// the same key keeps them.
     pub key: Option<(PathBuf, u64)>,
-    /// SCH Filter's inline rename: the preset and the name typed so far.
+    /// The Filter panel's inline preset rename: the preset and the name typed so far.
     pub rename: Option<(usize, String)>,
 }
 

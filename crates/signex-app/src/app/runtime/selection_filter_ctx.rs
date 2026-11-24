@@ -1,6 +1,6 @@
 //! The filter panels' part of the panel context (Graphite mockup #55,
 //! Graphite mockup #56): the editor the Filter panel follows and its
-//! per-kind counts, taken once per document revision, and SCH Filter's
+//! per-kind counts, taken once per document revision, and the Filter panel's
 //! preset rename, read from the Model.
 
 use super::super::*;
@@ -19,7 +19,7 @@ impl Signex {
         }
     }
 
-    /// SCH Filter's preset rename, while its preset still exists.
+    /// The Filter panel's preset rename, while its preset still exists.
     pub(in crate::app) fn filter_preset_rename(&self) -> Option<(usize, String)> {
         let presets = self.interaction_state.custom_filter_presets.len();
         self.interaction_state

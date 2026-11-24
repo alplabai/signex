@@ -42,7 +42,7 @@ thread_local! {
 }
 
 impl Signex {
-    /// Copy the UI-state grid/unit/snap fields, SCH Filter's preset rename
+    /// Copy the UI-state grid/unit/snap fields, the Filter panel's preset rename
     /// and the recent projects into the panel context. Runs on the
     /// idle-cursor DragMove path, so the recent list is compared first and
     /// cloned only when it changed.
