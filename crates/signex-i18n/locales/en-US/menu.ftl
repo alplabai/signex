@@ -98,6 +98,9 @@ menu-tools-passive-calculator = Passive Network Calculator...
 menu-help-about = About { -brand-name }
 menu-help-documentation = Documentation
 menu-help-report-issue = Report an Issue
+# chrome-copy-help
+# Help menu row (mockup row 14): opens the first-run card again.
+menu-help-welcome-tips = Show Welcome Tips
 
 ## Native app menu and menu chrome (#2057)
 # The product name: a term, so a message names it as { -brand-name }.
@@ -342,7 +345,3 @@ ctx-fp-align-to-grid = Align To Grid
 # Symbol editor menu: rows acting on the selection.
 ctx-symbol-rotate-selection = Rotate Selection
 ctx-symbol-align-to-grid = Align To Grid
-
-# chrome-copy-help
-# Help menu row (mockup row 14): opens the first-run card again.
-menu-help-welcome-tips = Show Welcome Tips

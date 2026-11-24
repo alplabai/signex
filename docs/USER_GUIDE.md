@@ -830,7 +830,7 @@ that net, **Clear** takes the colour off, and **Custom…** opens the colour
 picker (swatches, R / G / B, **Hex**, and the old and new colour side by side).
 **Use Color** colours the net on the sheet the picker was opened from; if
 another sheet is active by then, nothing changes and the Messages panel says
-so. **Clear all colors** at the foot of the palette clears the active sheet
+so. **Clear all colours** at the foot of the palette clears the active sheet
 only. Each colour change is one **Undo** step and is saved with the sheet. A
 sheet written by a newer Signex is read-only in this build and keeps its
 colours.
