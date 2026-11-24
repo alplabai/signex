@@ -314,7 +314,8 @@ impl OpenOverlays {
             | OverlayId::PanelList
             | OverlayId::DockDragZone
             | OverlayId::ComponentsRowDragLabel
-            | OverlayId::FloatingPanels => None,
+            | OverlayId::FloatingPanels
+            | OverlayId::DockDropTargetLabel => None,
 
             // ── Dialogs ─────────────────────────────────────────────
             OverlayId::Preferences => self
