@@ -226,3 +226,42 @@ fn copper_shapes_place_one_copper_drawing_each() {
         assert_eq!(live(&app, &path), before, "{tool:?}: one undo step");
     }
 }
+
+fn pick(app: &mut Signex, layer: PcbLayer) {
+    let _ = app.update(Message::Pcb(PcbMsg::View(PcbViewMsg::ActiveLayerPicked(
+        layer,
+    ))));
+}
+
+/// A Line run begun on copper does not go on as a drawing once an overlay
+/// is active, nor one begun on the overlay as a track: the flip drops the
+/// points, and the next drawing starts at its own first click.
+#[test]
+fn a_layer_flip_mid_run_starts_a_new_line() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_pad(dir.path());
+    // #2879's default object and axis snaps would pull these clicks.
+    app.ui_state.pcb_snap.objects.clear();
+    app.ui_state.pcb_snap.to_axes = false;
+    arm_on(&mut app, TOP, BoardPlaceTool::Line);
+    clicks(&mut app, &[(0.0, 0.0)]);
+    pick(&mut app, OVERLAY);
+    clicks(&mut app, &[(5.0, 5.0), (9.0, 5.0)]);
+    let board = board_of(&app, &path);
+    assert!(board.segments.is_empty(), "no track from the copper point");
+    assert_eq!(board.graphics.len(), 1, "one line");
+    let line = &board.graphics[0];
+    let p = signex_types::pcb::Point::new;
+    assert_eq!(
+        (line.start, line.end),
+        (Some(p(5.0, 5.0)), Some(p(9.0, 5.0)))
+    );
+
+    pick(&mut app, TOP);
+    clicks(&mut app, &[(5.0, 10.0), (8.0, 10.0)]);
+    let board = board_of(&app, &path);
+    assert_eq!(board.graphics.len(), 1, "no drawing from the overlay point");
+    assert_eq!(board.segments.len(), 1, "one track");
+    let track = &board.segments[0];
+    assert_eq!((track.start, track.end), (p(5.0, 10.0), p(8.0, 10.0)));
+}

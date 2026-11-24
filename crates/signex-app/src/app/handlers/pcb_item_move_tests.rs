@@ -10,7 +10,8 @@ use iced::widget::canvas;
 use iced::{Event, Rectangle, mouse};
 use signex_engine::pcb::BoardItemId;
 use signex_engine::pcb::item_move::moved_item;
-use signex_types::pcb::{PcbBoard, Point, Room, RoomLayer, RoomOutline};
+use signex_types::pcb::{PcbBoard, Point, Room, RoomLayer, RoomOutline, RoomSource};
+use signex_types::schematic::InstancePath;
 use uuid::Uuid;
 
 use crate::app::handlers::menu::export::tests::app_workspace;
@@ -24,6 +25,12 @@ const BOUNDS: Rectangle = Rectangle {
     height: 1200.0,
 };
 const ROOM: Uuid = Uuid::from_u128(0x90);
+const U1: Uuid = Uuid::from_u128(0x70);
+const U2: Uuid = Uuid::from_u128(0x73);
+const VIA: Uuid = Uuid::from_u128(0x74);
+const TRACK_TO_VIA: Uuid = Uuid::from_u128(0x75);
+/// The sheet the room is for; U2 is placed from it.
+const SHEET: u128 = 0x5EE7;
 const DELTA: Point = Point { x: 5.0, y: 0.0 };
 
 fn id(n: u128) -> Uuid {
@@ -60,7 +67,13 @@ fn board() -> PcbBoard {
                       "width": 0.25, "layer": "TopCopper", "net": 0},
                      // A track over the pour, for the press precedence.
                      {"uuid": id(0x11), "start": pt(21.0, 44.0), "end": pt(25.0, 44.0),
-                      "width": 0.25, "layer": "TopCopper", "net": 0}],
+                      "width": 0.25, "layer": "TopCopper", "net": 0},
+                     // From U1's pad to the via, for a drag of both.
+                     {"uuid": TRACK_TO_VIA, "start": pt(28.0, 48.0), "end": pt(34.0, 48.0),
+                      "width": 0.25, "layer": "TopCopper", "net": 1}],
+        "nets": [{"number": 1, "name": "N"}],
+        "vias": [{"uuid": VIA, "position": pt(34.0, 48.0), "diameter": 0.8, "drill": 0.4,
+                  "layers": ["TopCopper", "BottomCopper"], "net": 1}],
         "free": {
             "arcs": [{"uuid": id(0x20), "start": pt(10.0, 0.0), "mid": pt(12.0, -2.0),
                       "end": pt(14.0, 0.0), "width": 0.25, "layer": "TopCopper", "net": 0}],
@@ -89,7 +102,25 @@ fn board() -> PcbBoard {
             zone(0x63, "keepout", &[(30.0, 40.0), (34.0, 40.0), (34.0, 44.0), (30.0, 44.0)]),
             // A pour cutout (#2871) inside the pour, clear of its presses.
             zone(0x64, "pour_cutout", &[(24.0, 41.0), (25.5, 41.0), (25.5, 43.0), (24.0, 43.0)])
-        ]
+        ],
+        // A part beside the pour, for a drag of a mixed selection.
+        "footprints": [{
+            "uuid": U1, "reference": "U1", "position": pt(28.0, 48.0),
+            "rotation": 0.0, "layer": "TopCopper", "locked": false,
+            "pads": [{"uuid": id(0x71), "number": "1", "pad_type": "smd",
+                      "shape": "rect", "position": pt(0.0, 0.0),
+                      "size": {"x": 1.0, "y": 1.0}, "drill": null,
+                      "layers": ["TopCopper"], "net": {"number": 1, "name": "N"}}]
+        }, {
+            // A part of the room's sheet, inside the room.
+            "uuid": U2, "reference": "U2", "position": pt(42.0, 38.0),
+            "rotation": 0.0, "layer": "TopCopper", "locked": false,
+            "schematic_link": {"sheet": [id(SHEET)], "units": [id(0x7A)]},
+            "pads": [{"uuid": id(0x72), "number": "1", "pad_type": "smd",
+                      "shape": "rect", "position": pt(0.0, 0.0),
+                      "size": {"x": 1.0, "y": 1.0}, "drill": null,
+                      "layers": ["TopCopper"]}]
+        }]
     }))
     .unwrap();
     // Inside the copper extent Fit frames: Fit reads no room, so a room
@@ -97,7 +128,10 @@ fn board() -> PcbBoard {
     board.rooms.push(Room {
         uuid: ROOM,
         name: "R1".into(),
-        source: None,
+        source: Some(RoomSource {
+            sheet: InstancePath::from_chain(vec![id(SHEET)]),
+            channel: None,
+        }),
         layer: RoomLayer::Top,
         outline: RoomOutline::Rect {
             x_mm: 38.0,
@@ -341,4 +375,157 @@ fn a_press_on_empty_board_starts_a_box() {
         selection.contains(pcb_geom::ItemRef::Text(id(0x40))),
         "the box selected the string inside it"
     );
+}
+
+fn u1_position(r: &Rig) -> Point {
+    let fp = r.board().footprints.iter().find(|fp| fp.uuid == U1);
+    fp.expect("U1").position
+}
+
+/// Box-select U1 with the pour (and the track inside it), then drag from
+/// `press`: everything selected moves by one offset as one undo step.
+fn drag_mixed_selection_from(press: Point) {
+    let mut r = rig();
+    let before = live(&r.app, &r.path);
+    r.drag(Point::new(19.0, 39.0), Point::new(29.5, 49.5));
+    let selection = r.app.interaction_state.pcb_selection.selection().clone();
+    assert!(selection.footprints().contains(&U1), "the box took U1");
+    assert!(
+        selection.items().any(|i| matches!(i,
+            pcb_geom::ItemRef::Zone { zone, .. } if zone == id(0x62))),
+        "and the pour"
+    );
+    let pour = BoardItemId::Zone(id(0x62));
+    let track = BoardItemId::Segment(id(0x11));
+    let (pour_to, track_to) = (
+        moved_item(r.board(), pour, DELTA).unwrap(),
+        moved_item(r.board(), track, DELTA).unwrap(),
+    );
+    let u1_to = Point::new(u1_position(&r).x + DELTA.x, u1_position(&r).y);
+    r.drag(press, Point::new(press.x + DELTA.x, press.y + DELTA.y));
+    let zero = Point::new(0.0, 0.0);
+    assert_eq!(
+        moved_item(r.board(), pour, zero),
+        Some(pour_to),
+        "the pour moved"
+    );
+    assert_eq!(
+        moved_item(r.board(), track, zero),
+        Some(track_to),
+        "the track moved"
+    );
+    assert_eq!(u1_position(&r), u1_to, "U1 moved with them");
+    let _ = r.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(live(&r.app, &r.path), before, "one undo step");
+}
+
+/// #2870: a press on the pour of a mixed selection carries the part too.
+#[test]
+fn a_press_on_a_selected_pour_drags_the_whole_selection() {
+    drag_mixed_selection_from(Point::new(23.0, 42.0));
+}
+
+/// #2870: a press on the part of a mixed selection carries the pour too.
+#[test]
+fn a_press_on_a_selected_part_drags_the_whole_selection() {
+    drag_mixed_selection_from(Point::new(28.0, 48.0));
+}
+
+/// The grab list is built once per board, view and filter, not on every
+/// paint: a second paint shares the first one's shapes.
+#[test]
+fn the_grab_list_is_reused_until_the_board_or_filter_changes() {
+    let mut r = rig();
+    let grab = |r: &mut Rig| {
+        r.app
+            .with_pcb_selection(|sel, board| sel.paint(board, None).1)
+            .expect("a board")
+    };
+    let first = grab(&mut r);
+    assert!(!first.is_empty());
+    assert!(std::sync::Arc::ptr_eq(&first, &grab(&mut r)), "reused");
+    let mut filter = pcb_geom::PickFilter::default();
+    filter.toggle(pcb_geom::PickKind::Polygons);
+    r.app
+        .with_pcb_selection(|sel, _| sel.set_filter(&filter))
+        .expect("a board");
+    let filtered = grab(&mut r);
+    assert!(
+        !std::sync::Arc::ptr_eq(&first, &filtered),
+        "a filter change rebuilds"
+    );
+    assert!(filtered.len() < first.len(), "the pour's shapes are gone");
+}
+
+fn position_of(r: &Rig, part: Uuid) -> Point {
+    let fp = r.board().footprints.iter().find(|fp| fp.uuid == part);
+    fp.expect("the part").position
+}
+
+/// A room selected with a part of its own, dragged from inside the room:
+/// the room and the part each move by the offset once (the room's move
+/// leaves the part to the drag), as one undo step.
+#[test]
+fn a_selected_part_in_a_dragged_room_moves_once() {
+    let mut r = rig();
+    let before = live(&r.app, &r.path);
+    // A box round the room takes it and U2.
+    r.drag(Point::new(37.5, 33.5), Point::new(43.5, 39.5));
+    let selection = r.app.interaction_state.pcb_selection.selection().clone();
+    assert!(selection.footprints().contains(&U2), "the box took U2");
+    assert!(
+        selection.contains(pcb_geom::ItemRef::Room(ROOM)),
+        "and the room"
+    );
+    let u2 = position_of(&r, U2);
+    r.drag(Point::new(40.0, 37.0), Point::new(45.0, 37.0));
+    let room = r.board().rooms.iter().find(|room| room.uuid == ROOM);
+    let b = room.and_then(|room| room.outline.bounds()).expect("a box");
+    assert_eq!((b.x_mm, b.y_mm), (43.0, 34.0), "the room moved");
+    assert_eq!(
+        position_of(&r, U2),
+        Point::new(u2.x + DELTA.x, u2.y),
+        "U2 moved by the offset once, not twice"
+    );
+    let _ = r.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(live(&r.app, &r.path), before, "one undo step");
+}
+
+/// A part and a via selected (the track between them is not), dragged by
+/// the part: the track's ends on the pad and on the via both follow, so it
+/// moves whole by the offset, as one undo step.
+#[test]
+fn a_track_from_a_moved_pad_to_a_moved_via_moves_whole() {
+    use crate::pcb_canvas::PcbCanvasMsg;
+    let mut r = rig();
+    let before = live(&r.app, &r.path);
+    let click = |r: &mut Rig, at: Point, mode| {
+        let _ = r.app.update(Message::PcbCanvas(PcbCanvasMsg::Clicked {
+            at,
+            tolerance_mm: 0.05,
+            mode,
+        }));
+    };
+    click(&mut r, Point::new(28.0, 48.0), pcb_geom::ClickMode::Replace);
+    click(&mut r, Point::new(34.0, 48.0), pcb_geom::ClickMode::Toggle);
+    let selection = r.app.interaction_state.pcb_selection.selection().clone();
+    assert!(selection.footprints().contains(&U1), "U1 is selected");
+    assert!(
+        selection.contains(pcb_geom::ItemRef::Via(VIA)),
+        "and the via"
+    );
+    assert!(
+        !selection.contains(pcb_geom::ItemRef::Track(TRACK_TO_VIA)),
+        "but not the track"
+    );
+    let track = BoardItemId::Segment(TRACK_TO_VIA);
+    let expected = moved_item(r.board(), track, DELTA).unwrap();
+    r.drag(Point::new(28.0, 48.0), Point::new(33.0, 48.0));
+    let moved = moved_item(r.board(), track, Point::new(0.0, 0.0));
+    assert_eq!(moved, Some(expected), "both ends moved");
+    assert_eq!(position_of(&r, U1), Point::new(33.0, 48.0), "U1 moved");
+    let via = r.board().vias.iter().find(|v| v.uuid == VIA).unwrap();
+    assert_eq!(via.position, Point::new(39.0, 48.0), "the via moved");
+    let _ = r.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(live(&r.app, &r.path), before, "one undo step");
 }

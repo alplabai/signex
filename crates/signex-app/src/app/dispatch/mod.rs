@@ -606,6 +606,8 @@ impl Signex {
                 if self.ui_state.focused_window == Some(id) {
                     self.ui_state.focused_window = None;
                 }
+                // No edge pan behind Alt+Tab (#2872).
+                self.forget_edge_pan_pointers();
                 self.end_pcb_drag_on_focus_loss(id)
             }
             WindowMsg::NativeMenuRowChosen(action) => self.handle_native_menu_row_chosen(action),

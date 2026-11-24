@@ -396,7 +396,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         let replayed = self.edge_pan.and_then(|link| link.replayed(event, cursor));
         let event = replayed.as_ref().unwrap_or(event);
         if let Some(link) = self.edge_pan {
-            link.observe(cursor.position_in(bounds), bounds.size());
+            link.observe_event(event, cursor, bounds);
         }
         state.sync_tool_epoch(self.tool_epoch);
         let followed = self.follow_middle_zoom(state, event, bounds, cursor);

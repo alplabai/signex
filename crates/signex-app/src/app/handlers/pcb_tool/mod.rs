@@ -96,6 +96,10 @@ pub struct BoardToolSession {
     pub window: Option<iced::window::Id>,
     /// The points placed so far of the shape being drawn.
     pub points: Vec<Point>,
+    /// Whether `points` were placed with a copper layer active: a Graphics
+    /// Line or Arc drops them when the active layer flips between copper
+    /// and not (#2869), as tracks and drawings are drawn differently.
+    pub points_on_copper: bool,
     /// Where the next click lands; `None` until the pointer is over the
     /// board.
     pub cursor: Option<Point>,
@@ -158,6 +162,7 @@ impl Signex {
             path,
             window: self.interaction_state.acting_window,
             points: Vec::new(),
+            points_on_copper: false,
             cursor: None,
             route: None,
             router: None,

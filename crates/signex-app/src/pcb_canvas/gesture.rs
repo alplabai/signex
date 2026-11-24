@@ -180,12 +180,12 @@ impl Gesture {
                     }
                 } else if self.modifiers.is_empty() && self.second_click(press) {
                     PcbCanvasMsg::DoubleClicked {
-                        at: pressed,
+                        at: tool_click_at(clicks_only, pressed, canvas, press, pos, bounds),
                         tolerance_mm: hover_reach_mm(canvas.scale()),
                     }
                 } else {
                     PcbCanvasMsg::Clicked {
-                        at: pressed,
+                        at: tool_click_at(clicks_only, pressed, canvas, press, pos, bounds),
                         tolerance_mm: hover_reach_mm(canvas.scale()),
                         mode: click_mode(self.modifiers),
                     }
@@ -275,6 +275,25 @@ fn pressed_at(
     bounds: Rectangle,
 ) -> Point {
     kept.unwrap_or_else(|| canvas.screen_to_world(press, bounds))
+}
+
+/// Where a click released at `pos` lands. A tool's click (`clicks_only`)
+/// lands where its ghost is: under the pointer once the view moved under
+/// the held press, as an edge pan does (#2872). Otherwise at `pressed`.
+fn tool_click_at(
+    clicks_only: bool,
+    pressed: Point,
+    canvas: &PcbCanvas,
+    press: iced::Point,
+    pos: iced::Point,
+    bounds: Rectangle,
+) -> Point {
+    let view_moved = canvas.screen_to_world(press, bounds) != pressed;
+    if clicks_only && view_moved {
+        canvas.screen_to_world(pos, bounds)
+    } else {
+        pressed
+    }
 }
 
 /// The hover reach, in mm, at the canvas's zoom.

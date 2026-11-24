@@ -150,24 +150,55 @@ impl PcbCarry {
 
     /// The track ends on what is carried, which move with it; none with
     /// Ctrl held.
+    /// A track carried whole (#2870) is not one that follows by an end.
     pub fn following(&self, board: &PcbBoard) -> Vec<TrackEnds> {
         if self.leaves_tracks {
-            Vec::new()
-        } else if self.vias.is_empty() {
-            pcb_geom::tracks_on_pads(board, &self.footprints)
-        } else {
-            pcb_geom::tracks_on_vias(board, &self.vias)
+            return Vec::new();
         }
+        let mut ends: Vec<TrackEnds> = Vec::new();
+        let mut add = |found: Vec<TrackEnds>| {
+            for e in found {
+                // A track from a moved pad to a moved via follows by both
+                // ends, so it moves whole by the offset.
+                match ends.iter_mut().find(|old| old.track == e.track) {
+                    Some(old) => {
+                        old.start |= e.start;
+                        old.end |= e.end;
+                    }
+                    None => ends.push(e),
+                }
+            }
+        };
+        if !self.footprints.is_empty() {
+            add(pcb_geom::tracks_on_pads(board, &self.footprints));
+        }
+        if !self.vias.is_empty() {
+            add(pcb_geom::tracks_on_vias(board, &self.vias));
+        }
+        ends.retain(|e| !self.items.contains(&e.track));
+        ends
     }
 
     /// The copper arc ends on the carried vias, which move with them; none
-    /// with Ctrl held.
+    /// with Ctrl held, nor for an arc carried whole.
     pub fn following_arcs(&self, board: &PcbBoard) -> Vec<ArcEnds> {
         if self.leaves_tracks {
-            Vec::new()
-        } else {
-            pcb_geom::arcs_on_vias(board, &self.vias)
+            return Vec::new();
         }
+        let mut ends = pcb_geom::arcs_on_vias(board, &self.vias);
+        ends.retain(|e| !self.items.contains(&e.arc));
+        ends
+    }
+
+    /// Whether the carry holds more than one of footprints, vias and other
+    /// objects: a drag of a mixed selection (#2870).
+    pub fn is_mixed(&self) -> bool {
+        let kinds = [
+            !self.footprints.is_empty(),
+            !self.vias.is_empty(),
+            !self.items.is_empty() || !self.rooms.is_empty(),
+        ];
+        kinds.into_iter().filter(|held| *held).count() > 1
     }
 
     /// What a carry's snap leaves out: the carried footprints or vias and
