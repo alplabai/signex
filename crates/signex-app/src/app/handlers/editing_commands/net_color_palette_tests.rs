@@ -484,3 +484,61 @@ fn the_palette_opens_centred_not_at_the_pointer() {
         settings.position
     );
 }
+
+/// The monitor and position a window opens at, when it names them.
+fn opens_at(position: iced::window::Position) -> Option<(Option<usize>, f32, f32)> {
+    match position {
+        iced::window::Position::Specific(p) => {
+            Some((p.monitor_index.map(|m| m.0), p.position.x, p.position.y))
+        }
+        _ => None,
+    }
+}
+
+#[test]
+fn with_the_main_window_known_the_palette_opens_at_its_monitor_centre() {
+    use crate::app::handlers::window_placement::{Anchor, position_for};
+    let (mut app, _task) = Signex::new();
+    let main = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(main);
+    let monitor = crate::app::window_geometry::MonitorInfo {
+        name: None,
+        size: (1920.0, 1080.0),
+        primary: true,
+    };
+    // The main window sits off the monitor's centre, so its centre and the
+    // monitor's differ.
+    let _ = app.window_geometry_read(crate::app::GeometryReadout {
+        id: main,
+        reading: Some(crate::app::window_geometry::WindowReading {
+            monitor_index: Some(0),
+            position: (0.0, 0.0),
+            size: (1000.0, 700.0),
+            maximized: false,
+        }),
+        monitors: vec![monitor.clone()],
+    });
+
+    let (settings, borderless) = app.dialog_window_settings(ModalId::NetColorPalette);
+    let size = app.dialog_window_size_of(ModalId::NetColorPalette, None, borderless);
+    let source = app.ui_state.window_geometry.source(main);
+    let monitors = [monitor];
+    let place = |anchor| {
+        opens_at(position_for(
+            source.as_ref(),
+            (size.width, size.height),
+            &monitors,
+            anchor,
+            iced::window::Position::Centered,
+        ))
+    };
+
+    let opened = opens_at(settings.position);
+    assert!(opened.is_some(), "{:?}", settings.position);
+    assert_eq!(opened, place(Anchor::MonitorCenter));
+    assert_ne!(
+        opened,
+        place(Anchor::SourceCenter),
+        "not at the main window"
+    );
+}

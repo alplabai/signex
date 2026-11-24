@@ -11,7 +11,7 @@ use crate::app::handlers::canvas::net_color_click::{net_elements_in, wire_at};
 use crate::app::mutation_gateway::MutationOutcome;
 use crate::app::state::{NetColorToast, NetColorsCleared};
 use signex_i18n::{ids, t};
-use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, pin_tips};
+use signex_types::schematic::{Label, LabelType, Point, SchematicSheet};
 use signex_types::theme::Color;
 use std::collections::BTreeMap;
 
@@ -50,9 +50,10 @@ fn is_net_label(label: &Label) -> bool {
 }
 
 /// The points that name each net of `sheet`, by name: its net labels
-/// (net, global and hierarchical) and the pin tips of the power ports that
-/// name a net (`signex_net::name_carrying_ports`, so a power flag does not).
-/// A net named only by a power port is listed too (mockup row 71).
+/// (net, global and hierarchical) and the power-port pin tips that name a net
+/// (`signex_net::name_carrying_tips`, so neither a power flag nor a
+/// contact-only pin does). A net named only by a power port is listed too
+/// (mockup row 71).
 fn net_name_anchors(sheet: &SchematicSheet) -> BTreeMap<String, Vec<Point>> {
     let mut anchors: BTreeMap<String, Vec<Point>> = BTreeMap::new();
     for label in sheet.labels.iter().filter(|l| is_net_label(l)) {
@@ -61,17 +62,8 @@ fn net_name_anchors(sheet: &SchematicSheet) -> BTreeMap<String, Vec<Point>> {
             .or_default()
             .push(label.position);
     }
-    let ports: BTreeMap<uuid::Uuid, &str> =
-        signex_net::name_carrying_ports(sheet).into_iter().collect();
-    for sym in &sheet.symbols {
-        let Some(net) = ports.get(&sym.uuid) else {
-            continue;
-        };
-        let Some(lib) = sheet.resolve_lib_symbol(sym) else {
-            continue;
-        };
-        let tips = anchors.entry((*net).to_owned()).or_default();
-        tips.extend(pin_tips(&lib, sym).map(|(_, tip)| tip));
+    for (tip, net) in signex_net::name_carrying_tips(sheet) {
+        anchors.entry(net.to_owned()).or_default().push(tip);
     }
     anchors
 }

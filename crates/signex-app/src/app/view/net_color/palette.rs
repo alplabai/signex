@@ -1,8 +1,8 @@
 //! The F5 net colour palette body (#71, #2528): a filter, one row per net
 //! named by a label or a power port (the swatch in a fixed column, the name
-//! in mono, coloured nets
-//! first), a chooser floating beside the clicked row, and the Clear all
-//! footer. The window's title bar carries the title and the net count.
+//! in mono, coloured nets first), a chooser floating beside the clicked row,
+//! and the Clear all footer. The window's title bar carries the title and the
+//! net count.
 
 use iced::widget::{Space, Widget, column, container, row, scrollable, stack, svg};
 use iced::{Alignment, Color, Element, Length, Theme};
