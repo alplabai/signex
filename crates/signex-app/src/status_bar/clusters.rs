@@ -667,4 +667,27 @@ mod tests {
         r.board_import = Some("board.zip");
         assert!(segments(&r).contains(&S::Import));
     }
+
+    /// Mockup rows 6 and 164: under Strip the active layer is a plain label
+    /// with no fill; the Dropdown pill keeps its accent-soft fill.
+    #[test]
+    fn under_strip_the_active_layer_is_a_label_with_no_fill() {
+        let i18n = I18n::en_us();
+        let tokens = signex_types::theme::theme_tokens(ThemeId::GraphiteDark);
+        let accent_soft = resolve(&tokens).accent_soft.into_rgba8();
+        let window = iced::Size::new(600.0, 40.0);
+        let has_fill = |opens_list: bool| {
+            let mut surface = board_surface(&i18n);
+            if let Some(layer) = surface.active_layer.as_mut() {
+                layer.opens_list = opens_list;
+            }
+            let r = readout(None, surface);
+            let pill = layer_pill_view(&r, &tokens).expect("a board has a layer pill");
+            crate::layout_probe::draw_pixels(pill, window)
+                .chunks_exact(4)
+                .any(|p| (0..3).all(|i| p[i].abs_diff(accent_soft[i]) <= 1))
+        };
+        assert!(!has_fill(false), "the Strip label paints the accent fill");
+        assert!(has_fill(true), "the Dropdown pill lost its accent fill");
+    }
 }

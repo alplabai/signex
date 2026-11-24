@@ -575,22 +575,7 @@ impl Signex {
             OverlayId::ZoomPresets => layers.extend(self.zoom_presets_overlay(window_id)),
             OverlayId::GridSnapPopover => layers.extend(self.grid_snap_popover_overlay(window_id)),
             OverlayId::BoardStatusPopover => {
-                if let Some(card) = self.board_popover_card(window_id) {
-                    let dismissed = Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(
-                        crate::status_bar::BoardPopoverEvent::Dismissed,
-                    )));
-                    // Mockup row 164 draws no scrim behind a status popover:
-                    // the click-outside layer is clear.
-                    let outside = Self::dismiss_layer_tinted(dismissed, iced::Color::TRANSPARENT);
-                    layers.push(
-                        iced::widget::Stack::new()
-                            .width(iced::Length::Fill)
-                            .height(iced::Length::Fill)
-                            .push(outside)
-                            .push(card)
-                            .boxed(),
-                    );
-                }
+                layers.extend(self.board_status_popover_overlay(window_id))
             }
             OverlayId::DockDragZone => layers.extend(self.dock_drag_zone_overlay()),
             OverlayId::ComponentsRowDragLabel => {
@@ -655,6 +640,27 @@ impl Signex {
             OverlayId::HoverTooltip => layers.extend(self.view_hover_tooltip(window_id)),
             OverlayId::LibraryUpdates => layers.extend(self.library_updates_overlay()),
         }
+    }
+
+    /// The open board status popover over a clear click-outside layer:
+    /// mockup row 164 draws no scrim behind it.
+    fn board_status_popover_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Option<Element<'_, Message>> {
+        let card = self.board_popover_card(window_id)?;
+        let dismissed = Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(
+            crate::status_bar::BoardPopoverEvent::Dismissed,
+        )));
+        let outside = Self::dismiss_layer_tinted(dismissed, iced::Color::TRANSPARENT);
+        Some(
+            iced::widget::Stack::new()
+                .width(iced::Length::Fill)
+                .height(iced::Length::Fill)
+                .push(outside)
+                .push(card)
+                .boxed(),
+        )
     }
 }
 
