@@ -7,12 +7,12 @@
 
 use std::collections::BTreeSet;
 
-use iced::widget::{column, pick_list, text_editor};
+use iced::widget::{column, pick_list, stack, text_editor};
 use signex_drc::ViolationKind;
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::pcb_layer::CopperLayer;
 use signex_types::violation::Severity;
-use signex_widgets::dropdown_style::GraphiteDropdown as _;
+use signex_widgets::dropdown_style::{FIELD_TEXT_SIZE, GraphiteDropdown as _, pick_list_style};
 use signex_widgets::stat_tiles::{Density, StatTile, Tone as TileTone, stat_tiles};
 use signex_widgets::{CheckboxLabel as _, checkbox};
 
@@ -240,6 +240,48 @@ fn choice_label(i18n: &I18n, drc: &DrcPanel, choice: &DrcFilterChoice) -> String
     }
 }
 
+/// Room right of a filter dropdown's label for its arrow and a gap.
+const FILTER_ARROW_ROOM: f32 = FIELD_TEXT_SIZE + SP.xs;
+
+/// A filter dropdown's padding: the field's own, widened on the right by
+/// the arrow's room. The pick list clips its label at the right padding
+/// but draws its own arrow inside it, so the arrow is drawn over the field
+/// instead and a long label ("All severities") ends before it (mockup
+/// row 88).
+pub(super) fn filter_field_padding() -> iced::Padding {
+    let base = iced::widget::button::DEFAULT_PADDING;
+    iced::Padding {
+        right: base.right + FILTER_ARROW_ROOM,
+        ..base
+    }
+}
+
+/// The arrow of a filter dropdown, at the field's right padding in the
+/// dropdown's own glyph and colour.
+fn filter_arrow<'a>() -> Element<'a, PanelMsg> {
+    use iced::advanced::text::Renderer as _;
+    let arrow = <iced::Renderer>::ARROW_DOWN_ICON.to_string();
+    container(
+        text(signex_i18n::UserText::new(arrow))
+            .font(<iced::Renderer>::ICON_FONT)
+            .size(FIELD_TEXT_SIZE)
+            .shaping(iced::widget::text::Shaping::Basic)
+            .style(|theme: &Theme| iced::widget::text::Style {
+                color: Some(pick_list_style(theme, pick_list::Status::Active).handle_color),
+                ..Default::default()
+            }),
+    )
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .align_x(iced::alignment::Horizontal::Right)
+    .align_y(iced::alignment::Vertical::Center)
+    .padding(iced::Padding {
+        right: iced::widget::button::DEFAULT_PADDING.right,
+        ..iced::Padding::ZERO
+    })
+    .boxed()
+}
+
 /// One compact row of the three dropdowns, then Show waived with the
 /// waived count beside it.
 fn filters<'a>(ctx: &'a PanelContext, drc: &'a DrcPanel) -> Element<'a, PanelMsg> {
@@ -266,11 +308,13 @@ fn filters<'a>(ctx: &'a PanelContext, drc: &'a DrcPanel) -> Element<'a, PanelMsg
     ];
     let label = move |choice: &DrcFilterChoice| choice_label(i18n, drc, choice);
     let dropdown = |selected: DrcFilterChoice, options: Vec<DrcFilterChoice>| {
-        pick_list(Some(selected), options, label)
+        let field = pick_list(Some(selected), options, label)
             .graphite()
+            .handle(pick_list::Handle::None)
+            .padding(filter_field_padding())
             .on_select(|choice: DrcFilterChoice| drc_msg(DrcPanelMsg::FilterPicked(choice)))
-            .width(Length::Fill)
-            .boxed()
+            .width(Length::Fill);
+        stack![field, filter_arrow()].width(Length::Fill).boxed()
     };
     let filter = &drc.filter;
     let waived = drc.rows.iter().filter(|r| r.waiver.is_some()).count();

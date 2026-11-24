@@ -8,7 +8,8 @@ use signex_i18n::{ids, t};
 use super::erc_panel::{ErcGroup, ErcPanelMsg, erc_row_text};
 use super::erc_waivers::{ErcWaiverStatus, violation_waiver_row, waive_action, waive_editor};
 use super::validation_kit::{
-    FindingRow, GroupHeader, finding_row, group_header, row_action, severity_badge, status_pill,
+    FindingRow, GroupHeader, finding_row, group_header, row_action, severity_badge, show_action,
+    status_pill,
 };
 use super::*;
 use crate::styles::{PillTone, Spacing, TypeScale};
@@ -100,7 +101,7 @@ fn finding<'a>(ctx: &'a PanelContext, v: &'a ErcDiagnosticEntry) -> Element<'a, 
             tokens,
         ));
     }
-    actions.push(row_action(
+    actions.push(show_action(
         t!(i18n, ids::PANELS_ERC_SHOW),
         PanelMsg::FocusErcViolation(v.global_index),
         tokens,

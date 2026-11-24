@@ -201,3 +201,112 @@ fn run_erc_reads_running_while_it_runs() {
     assert!(busy.iter().any(|t| t == "Running…"), "{busy:?}");
     assert!(messages_on_click(view_erc(&ctx), window, "Running…").is_empty());
 }
+
+const DOCK: f32 = 300.0;
+
+/// The panel laid out in a dock `DOCK` wide, isolation marks stripped.
+fn laid_out(ctx: &PanelContext) -> Vec<crate::layout_probe::LaidOutText> {
+    lay_out_texts(view_erc(ctx), iced::Size::new(DOCK, 4000.0))
+        .into_iter()
+        .map(|mut t| {
+            t.text = t.text.replace(['\u{2068}', '\u{2069}'], "");
+            t
+        })
+        .collect()
+}
+
+/// Mockup row 85: Run ERC has a play glyph in front of its label. The face
+/// (glyph, label, key) is centred on the button, so the glyph pushes the
+/// label right of where a label-and-key face would put it. "Running…" has
+/// no glyph and sits centred.
+#[test]
+fn run_erc_has_a_play_glyph_before_its_label() {
+    let mut ctx = context();
+    ctx.validation.run_erc_key = "F8".into();
+    let shown = laid_out(&ctx);
+    let label = crate::layout_probe::find(&shown, "Run ERC").bounds;
+    let key = crate::layout_probe::find(&shown, "F8").bounds;
+    let centre = DOCK / 2.0;
+    let without_glyph = centre - (label.width + SP.s + key.width) / 2.0;
+    let glyph_shift = (TS.label + SP.s) / 2.0;
+    assert!(
+        label.x >= without_glyph + glyph_shift - 1.0,
+        "label at {}, a face with no glyph puts it at {without_glyph}",
+        label.x
+    );
+    ctx.erc_running = true;
+    let busy = crate::layout_probe::find(&laid_out(&ctx), "Running…").bounds;
+    assert!(
+        (busy.center_x() - centre).abs() <= 1.0,
+        "Running… centred, no glyph: {busy:?}"
+    );
+}
+
+/// Mockup row 85: the clean-run ok banner starts with a check glyph, so its
+/// words begin after the glyph and a gap, not at the banner's padding.
+#[test]
+fn the_clean_run_banner_starts_with_a_check_glyph() {
+    let mut ctx = context();
+    ctx.erc_ran = true;
+    let words = crate::layout_probe::find(&laid_out(&ctx), "No problems found.").bounds;
+    // The panel's padding, the banner's, then the glyph and its gap.
+    let after_glyph = SP.m + SP.m + TS.body + SP.s;
+    assert!(
+        words.x >= after_glyph - 0.5,
+        "words at {}, the glyph ends at {after_glyph}",
+        words.x
+    );
+}
+
+/// Mockup row 85, dark: the selected row of a net finding shows Show and
+/// Waive net, and an unused pin's row Add No-Connect; Show carries the
+/// target glyph, so it is wider than the same label with none.
+#[test]
+fn a_selected_finding_shows_its_actions_in_the_dark_theme() {
+    let mut ctx = context();
+    ctx.tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteDark);
+    ctx.erc_ran = true;
+    let mut conflict = entry(
+        1,
+        "Pin type conflict",
+        ErcSeverityLite::Error,
+        "U1.5 drives PGOOD",
+    );
+    conflict.net = Some(signex_erc::NetFinding {
+        name: "PGOOD".into(),
+        pins: Vec::new(),
+    });
+    let mut unused = entry(
+        0,
+        "Unused pin",
+        ErcSeverityLite::Warning,
+        "U2.PA8 is not connected",
+    );
+    unused.rule_kind = Some(signex_erc::RuleKind::UnusedPin);
+    ctx.erc_diagnostics = vec![conflict, unused];
+    ctx.erc_focus_index = Some(1);
+    let shown = texts(&ctx);
+    assert!(shown.iter().any(|t| t == "Show"), "{shown:?}");
+    assert!(shown.iter().any(|t| t == "Waive net"), "{shown:?}");
+    assert!(!shown.iter().any(|t| t == "Add No-Connect"), "{shown:?}");
+    ctx.erc_focus_index = Some(0);
+    let shown = texts(&ctx);
+    assert!(shown.iter().any(|t| t == "Add No-Connect"), "{shown:?}");
+
+    use super::super::validation_kit::{row_action, show_action};
+    let i18n = signex_i18n::I18n::en_us();
+    let window = iced::Size::new(DOCK, 4000.0);
+    let label = || signex_i18n::t!(i18n, signex_i18n::ids::PANELS_ERC_SHOW);
+    let with_glyph = crate::layout_probe::root_size(
+        show_action(label(), PanelMsg::FocusErcViolation(1), &ctx.tokens),
+        window,
+    );
+    let plain = crate::layout_probe::root_size(
+        row_action(label(), PanelMsg::FocusErcViolation(1), &ctx.tokens),
+        window,
+    );
+    assert!(
+        with_glyph.width > plain.width,
+        "{with_glyph:?} vs {plain:?}"
+    );
+}

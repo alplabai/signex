@@ -1,5 +1,6 @@
 //! The DRC panel's rule groups and violation rows (#88): a group heading
-//! "HV_08 (3)" with its Rule link, then two-line rows (the detail; the
+//! "HV_08 (3)" with its Rule link (none on Short and Unconnected), then
+//! two-line rows (the detail; the
 //! layer, position and object count) whose Show / Waive / Unwaive show on
 //! hover or selection, and on the row whose waiver form is open.
 
@@ -9,6 +10,7 @@ use signex_types::violation::Severity;
 use super::drc_results::{DrcPanelMsg, drc_msg, rule_label};
 use super::validation_kit::{
     FindingRow, GroupHeader, finding_row, group_header, link, link_ink, row_action, severity_badge,
+    show_action,
 };
 use super::waiver_form::{ReasonFormEvents, ReasonFormView, reason_form};
 use super::*;
@@ -33,6 +35,16 @@ fn severity_badge_of<'a>(
     severity_badge(t!(ctx.i18n, letter), tone, selected, &ctx.tokens)
 }
 
+/// Whether a group of `kind` has a rule to open. Shorts and unconnected
+/// items are always checked and no rule sets them, so their groups have
+/// no Rule link (mockup row 88).
+pub(super) fn has_rule_link(kind: signex_drc::ViolationKind) -> bool {
+    !matches!(
+        kind,
+        signex_drc::ViolationKind::Short | signex_drc::ViolationKind::Unconnected
+    )
+}
+
 /// One rule's group: its heading, then its rows while open.
 pub(super) fn group<'a>(
     ctx: &'a PanelContext,
@@ -47,11 +59,13 @@ pub(super) fn group<'a>(
         i18n, ids::DRC_PANEL_GROUP,
         "rule" => rule_label(i18n, first), "count" => members.len()
     );
-    let rule_link = link(
-        t!(i18n, ids::DRC_PANEL_RULE_LINK),
-        drc_msg(DrcPanelMsg::RuleOpened(first.rule.clone())),
-        link_ink(tokens),
-    );
+    let rule_link = has_rule_link(first.kind).then(|| {
+        link(
+            t!(i18n, ids::DRC_PANEL_RULE_LINK),
+            drc_msg(DrcPanelMsg::RuleOpened(first.rule.clone())),
+            link_ink(tokens),
+        )
+    });
     let mut col: Column<Element<'a, PanelMsg>> =
         Column::new().width(Length::Fill).push(group_header(
             GroupHeader {
@@ -60,7 +74,7 @@ pub(super) fn group<'a>(
                 title: title.into(),
                 title_ink: theme_ext::text_primary(tokens),
                 count: None,
-                trailing: Some(rule_link),
+                trailing: rule_link,
                 on_toggle: drc_msg(DrcPanelMsg::GroupToggled(first.rule.clone())),
             },
             i18n,
@@ -125,7 +139,7 @@ fn violation<'a>(
         };
         extra.push(text(said).size(TS.caption).color(detail_ink).boxed());
     }
-    let mut actions = vec![row_action(
+    let mut actions = vec![show_action(
         t!(i18n, ids::DRC_PANEL_SHOW),
         drc_msg(DrcPanelMsg::RowPicked(item.key.clone())),
         tokens,
