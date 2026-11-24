@@ -415,7 +415,10 @@ fn rule_total_row<'a>(
     i18n: &signex_i18n::I18n,
     muted: Color,
 ) -> Element<'a, PanelMsg> {
-    let count = text(t!(i18n, ids::PROPERTIES_RULE_TOTAL, "count" => total))
+    let count = t!(i18n, ids::PROPERTIES_RULE_TOTAL, "count" => total)
+        .to_string()
+        .replace(['\u{2068}', '\u{2069}'], "");
+    let count = text(count)
         .size(TS.caption)
         .color(muted)
         .wrapping(iced::widget::text::Wrapping::None);
