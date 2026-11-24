@@ -391,7 +391,9 @@ mod tests {
         for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
             let t = theme_tokens(id);
             let (under, soft) = label_chip_fills(&t);
-            assert_eq!(under, crate::styles::ti(t.panel_bg));
+            let outer = chip_fill(under)(&Theme::Dark);
+            let panel_bg = crate::styles::ti(t.panel_bg);
+            assert_eq!(outer.background, Some(Background::Color(panel_bg)));
             assert_eq!(soft, crate::styles::tokens::resolve(&t).accent_soft);
             let zone = crate::styles::dock_zone_highlight(&t)(&Theme::Dark);
             assert_eq!(zone.background, Some(Background::Color(soft)));
