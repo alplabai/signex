@@ -138,7 +138,7 @@ pub(crate) fn hex_of(c: iced::Color) -> String {
 /// The colour a typed hex code names: six hex digits, `#` optional. `None`
 /// for anything else.
 pub(crate) fn parse_hex(text: &str) -> Option<iced::Color> {
-    let [r, g, b] = crate::panels::color_hex::parse_typed_hex(text)?;
+    let [r, g, b] = crate::panels::parse_typed_hex(text)?;
     Some(iced::Color::from_rgb8(r, g, b))
 }
 
