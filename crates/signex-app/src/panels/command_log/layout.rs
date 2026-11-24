@@ -18,11 +18,12 @@ const RESULT_MIN: f32 = TS.body * 100.0 / 12.0;
 const SEARCH_MIN: f32 = TS.body * 10.0;
 /// The search field's width in the mock.
 const SEARCH_W: f32 = TS.body * 250.0 / 12.0;
-/// The bar's width without the search field, at the English labels. A longer
-/// language wraps the filters to a second line instead of clipping.
-const BAR_WITHOUT_SEARCH: f32 = TS.body * 61.0;
-/// Below this the switch and the actions take their own line.
-const ACTIONS_LINE_BELOW: f32 = TS.body * 40.0;
+/// The filter row's width without the search field (chips, result switch,
+/// Follow newest, padding), at the English labels. The panel actions are in
+/// the dock title bar.
+const BAR_WITHOUT_SEARCH: f32 = TS.body * 58.0;
+/// From this width the filters and Follow newest share one row.
+const ONE_ROW_FROM: f32 = SEARCH_MIN + BAR_WITHOUT_SEARCH;
 
 /// Less than this over the width is float rounding, not overflow.
 const ROUNDING: f32 = 0.5;
@@ -82,10 +83,10 @@ pub(super) fn search_width(panel: f32) -> f32 {
     (panel - BAR_WITHOUT_SEARCH).clamp(SEARCH_MIN, SEARCH_W)
 }
 
-/// Whether the panel is too narrow for the filters and the actions side by
-/// side.
-pub(super) fn actions_on_own_line(panel: f32) -> bool {
-    panel < ACTIONS_LINE_BELOW
+/// Whether the filters and Follow newest fit on one row; narrower, the
+/// filters wrap and Follow newest takes its own line.
+pub(super) fn filters_on_one_row(panel: f32) -> bool {
+    panel >= ONE_ROW_FROM
 }
 
 #[cfg(test)]
@@ -141,7 +142,7 @@ mod tests {
     }
 
     #[test]
-    fn the_search_field_shrinks_so_the_actions_stay_in_the_dock() {
+    fn the_search_field_shrinks_so_follow_newest_stays_in_the_dock() {
         let search = search_width(DOCK);
         assert!(search < SEARCH_W);
         assert!(search + BAR_WITHOUT_SEARCH <= DOCK);
@@ -150,8 +151,8 @@ mod tests {
     }
 
     #[test]
-    fn a_side_dock_puts_the_actions_on_their_own_line() {
-        assert!(actions_on_own_line(290.0));
-        assert!(!actions_on_own_line(DOCK));
+    fn a_side_dock_puts_follow_newest_on_its_own_line() {
+        assert!(!filters_on_one_row(290.0));
+        assert!(filters_on_one_row(DOCK));
     }
 }

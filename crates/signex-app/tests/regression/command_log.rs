@@ -322,6 +322,42 @@ fn the_panel_list_shows_command_log_under_verify() {
     assert!(!PanelKind::CommandLog.needs_pcb());
 }
 
+/// Mockup row 161: Pause, Save log as…, Clear and More sit in the panel's
+/// title bar, not on the filter row; paused, the first one resumes.
+#[test]
+fn the_panel_actions_sit_in_the_dock_title_bar() {
+    use signex_app::panels::title_actions;
+    let mut app = fresh_app();
+    let actions = title_actions(PanelKind::CommandLog, &app.document_state.panel_ctx);
+    let presses: Vec<Option<CommandLogMsg>> = actions
+        .into_iter()
+        .map(|action| match action.on_press {
+            Some(PanelMsg::CommandLog(msg)) => Some(msg),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        presses,
+        [
+            Some(CommandLogMsg::PauseToggled),
+            Some(CommandLogMsg::SaveRequested),
+            Some(CommandLogMsg::Cleared),
+            Some(CommandLogMsg::MoreToggled),
+        ]
+    );
+
+    let _ = app.update(log_message(CommandLogMsg::PauseToggled));
+    let ctx = &app.document_state.panel_ctx;
+    let first = title_actions(PanelKind::CommandLog, ctx)
+        .into_iter()
+        .next()
+        .expect("Resume logging");
+    assert_eq!(
+        first.tip.into_string(),
+        signex_i18n::t!(ctx.i18n, signex_i18n::ids::COMMAND_LOG_RESUME).into_string()
+    );
+}
+
 #[test]
 fn the_dock_layout_round_trips_the_command_log_key() {
     let json = serde_json::json!({

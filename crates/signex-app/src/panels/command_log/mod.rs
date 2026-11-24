@@ -23,6 +23,8 @@ use crate::styles::{
     tokens::{composite_over, hover_overlay, resolve},
 };
 
+pub(crate) use toolbar::title_actions;
+
 pub use crate::app::core::command_log::{
     CLI_CLIENT, CommandLog, JumpTarget, LogCounts, LogFilters, LogOutcome, LogRow, LogSource,
     MAX_ROWS, ResultFilter, SourceKind, failure_code, operand_text,
@@ -585,5 +587,99 @@ fn result_glyph(tokens: &ThemeTokens, outcome: &LogOutcome) -> (svg::Handle, Col
         LogOutcome::Ok(_) => (crate::icons::icon_log_ok(GLYPH_THEME), ti(tokens.success)),
         LogOutcome::Warn(_) => (crate::icons::icon_log_warn(GLYPH_THEME), ti(tokens.warning)),
         LogOutcome::Failed(_) => (crate::icons::icon_log_error(GLYPH_THEME), ti(tokens.error)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::layout_probe::{LaidOutText, lay_out_texts};
+
+    /// The short bottom dock of the audit capture (mockup row 161): the
+    /// panel's content below its title bar, at the 12 px body.
+    const SHORT_DOCK: iced::Size = iced::Size::new(890.0, 180.0);
+
+    fn context_with_one_row() -> PanelContext {
+        let (app, _boot) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        let log = &mut std::sync::Arc::make_mut(&mut ctx.command_log).log;
+        let seq = log.record(LogRow {
+            seq: 0,
+            at: chrono::Local::now(),
+            source: LogSource::Gui { window: None },
+            command: "undo".to_string(),
+            label: "Undo".to_string(),
+            operands: serde_json::Map::new(),
+            outcome: LogOutcome::Failed("Nothing to undo".to_string()),
+            took: Duration::ZERO,
+            document: None,
+            project: None,
+            undoable: false,
+            view_only: false,
+            undone_at: None,
+        });
+        assert_eq!(seq, Some(1));
+        ctx
+    }
+
+    fn laid_out(ctx: &PanelContext, window: iced::Size) -> Vec<LaidOutText> {
+        lay_out_texts(view(ctx), window)
+            .into_iter()
+            .map(|t| LaidOutText {
+                text: t.text.replace(['\u{2068}', '\u{2069}'], ""),
+                ..t
+            })
+            .collect()
+    }
+
+    fn bounds(texts: &[LaidOutText], label: &str) -> iced::Rectangle {
+        crate::layout_probe::find(texts, label).bounds
+    }
+
+    /// Mockup row 161: search, Source chips, All / Failed / Undone and
+    /// Follow newest share one row in the bottom dock, Follow newest last.
+    #[test]
+    fn the_filters_and_follow_newest_share_one_row_in_the_bottom_dock() {
+        let ctx = context_with_one_row();
+        let texts = laid_out(&ctx, SHORT_DOCK);
+        let source = bounds(&texts, "Source");
+        let all = bounds(&texts, "All");
+        let follow = bounds(&texts, "Follow newest");
+        let line = |b: iced::Rectangle| b.center_y();
+        let tolerance = TS.body / 2.0;
+        assert!(
+            (line(all) - line(source)).abs() < tolerance,
+            "{all:?} vs {source:?}"
+        );
+        assert!(
+            (line(follow) - line(source)).abs() < tolerance,
+            "{follow:?}"
+        );
+        assert!(follow.x > all.x + all.width, "Follow newest comes last");
+        assert!(follow.x + follow.width <= SHORT_DOCK.width, "{follow:?}");
+    }
+
+    /// A narrow side dock still shows Follow newest, on its own line.
+    #[test]
+    fn a_side_dock_keeps_follow_newest_inside_the_panel() {
+        let ctx = context_with_one_row();
+        let narrow = iced::Size::new(290.0, 400.0);
+        let follow = bounds(&laid_out(&ctx, narrow), "Follow newest");
+        assert!(follow.x + follow.width <= narrow.width, "{follow:?}");
+    }
+
+    /// Mockup row 161: in a short dock the detail pane keeps Replay and Jump
+    /// to in view; the error, arguments, result, undo and CLI line scroll.
+    #[test]
+    fn a_short_dock_keeps_the_detail_actions_in_view() {
+        let ctx = context_with_one_row();
+        let texts = laid_out(&ctx, SHORT_DOCK);
+        let replay = bounds(&texts, "Replay");
+        assert!(
+            replay.y + replay.height <= SHORT_DOCK.height,
+            "Replay at {replay:?} is below the panel"
+        );
+        let jump = bounds(&texts, "Jump to object");
+        assert!(jump.y + jump.height <= SHORT_DOCK.height, "{jump:?}");
     }
 }
