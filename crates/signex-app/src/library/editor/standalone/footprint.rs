@@ -99,7 +99,6 @@ pub fn view_footprint<'a>(
             .push(super::dof_chip::zoom_pill_overlay(editor, tokens))
             .push(super::sketch_exit::footprint_overlay(editor, tokens, i18n))
             .push(super::bake_legend::overlay(editor, tokens, i18n))
-            .push(super::pad_link::overlay_link(editor, tokens, i18n))
             .push(mode_switcher)
             .push(
                 crate::library::editor::footprint::parameters_table::view::overlay(
