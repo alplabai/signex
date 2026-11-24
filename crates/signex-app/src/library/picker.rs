@@ -160,7 +160,7 @@ pub(crate) fn view<'a>(
         i18n,
         |msg| LibraryMessage::Picker(PickerMsg::RangeFilter(msg)),
     )
-    .unwrap_or_else(|| range_filter_add_unavailable(i18n));
+    .unwrap_or_else(|| range_filter_add_unavailable(tokens, i18n));
     let top = row![search, range_bar]
         .spacing(SP.m)
         .align_y(iced::Alignment::Start);

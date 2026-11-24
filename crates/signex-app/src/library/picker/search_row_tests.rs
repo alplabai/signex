@@ -1,7 +1,9 @@
 //! The picker's search row and footer hint (mockup row 129).
 
 use super::*;
-use crate::layout_probe::{find, lay_out_inputs, lay_out_texts, messages_on_click};
+use crate::layout_probe::{
+    find, lay_out_inputs, lay_out_texts, messages_on_click, messages_on_clicks,
+};
 use signex_types::theme::ThemeId;
 
 const WINDOW: iced::Size = iced::Size::new(1200.0, 800.0);
@@ -41,6 +43,57 @@ fn add_range_filter_shares_the_search_row_without_a_measurement_column() {
 
     let clicked = messages_on_click(picker_view(&picker, &tokens), WINDOW, "Add range filter…");
     assert!(clicked.is_empty(), "{clicked:?}");
+}
+
+/// The disabled "Add range filter…" holds no open state: the press after a
+/// click on it still reaches a part row, which publishes its selection.
+#[test]
+fn a_click_on_the_unavailable_filter_leaves_the_next_click_to_the_list() {
+    use crate::library::state::{LibraryState, OpenLibrary};
+    let tokens = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
+    let part = signex_library::ComponentSummary {
+        row_id: uuid::Uuid::now_v7(),
+        internal_pn: signex_library::InternalPn::new("R-10K"),
+        mpn: "RC0805".into(),
+        state: signex_library::LifecycleState::Released,
+        description: "Resistor 10k".into(),
+    };
+    let row_id = part.row_id;
+    let mut state = LibraryState::default();
+    state.open_libraries.push(OpenLibrary {
+        root: "/tmp/picker-search-row/Lib.snxlib".into(),
+        display_name: "Lib".into(),
+        library_id: uuid::Uuid::now_v7(),
+        tables: Default::default(),
+        cached_components: vec![part],
+        cached_symbols: Vec::new(),
+        cached_footprints: Vec::new(),
+        cached_sims: Vec::new(),
+        cached_classes: Vec::new(),
+        observed_stamp: None,
+        own_edit_stamp: None,
+        display: Default::default(),
+        dangling: Default::default(),
+        pricing: Default::default(),
+    });
+    state.touch_data();
+    state.picker = Some(PickerState::default());
+    state.sync_view_caches_in(I18n::en_us_ref());
+    let picker = state.picker.as_ref().expect("picker open");
+    assert!(picker.rows.filter_columns().is_empty());
+
+    let clicked = messages_on_clicks(
+        picker_view(picker, &tokens),
+        WINDOW,
+        &["Add range filter…", "R-10K"],
+    );
+    let selected = clicked.iter().any(|m| {
+        matches!(
+            m,
+            LibraryMessage::Picker(PickerMsg::SelectComponent(id)) if *id == row_id
+        )
+    });
+    assert!(selected, "{clicked:?}");
 }
 
 /// The footer names the arrows as well as Enter, in both list stages.
