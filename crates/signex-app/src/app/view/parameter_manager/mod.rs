@@ -185,7 +185,8 @@ impl Signex {
     }
 
     /// Filter on the left with the fields it searches; the new parameter
-    /// name and Add column on the right, as one group.
+    /// name and Add column on the right, as one group that folds under the
+    /// filter when the dialog is narrow.
     fn view_parameter_toolbar(&self) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
@@ -243,18 +244,21 @@ impl Signex {
             Some(Message::ParameterManager(ParameterManagerMsg::ColumnAdded)),
             tokens,
         );
-        let bar = container(
-            row![
-                filter,
-                hint,
-                Space::new().width(Length::Fill),
-                row![new_key, add].spacing(SP.s).align_y(Alignment::Center),
-            ]
+        // Mockup row 70: the toolbar wraps at narrow widths. The filter group
+        // and the Add group share one line while both fit, the Add group at
+        // the right; else the Add group folds under the filter, and the hint
+        // folds under the filter before the filter overflows.
+        let search = row![filter, hint]
             .spacing(SP.m)
-            .align_y(Alignment::Center),
-        )
-        .padding([SP.m, SP.l])
-        .width(Length::Fill);
+            .align_y(Alignment::Center)
+            .wrap()
+            .vertical_spacing(SP.s);
+        let add_column = container(row![new_key, add].spacing(SP.s).align_y(Alignment::Center))
+            .align_x(iced::alignment::Horizontal::Right);
+        let groups = signex_widgets::FitRow::new(vec![search.boxed(), add_column.boxed()])
+            .spacing(SP.m)
+            .fill(true);
+        let bar = container(groups).padding([SP.m, SP.l]).width(Length::Fill);
         column![bar, table::rule(r.line_soft, Length::Fill, true)].boxed()
     }
 
@@ -330,6 +334,36 @@ fn empty_area(content: Element<'_, Message>) -> Element<'_, Message> {
         .height(Length::Fill)
         .center_x(Length::Fill)
         .boxed()
+}
+
+#[cfg(test)]
+mod toolbar_tests {
+    use super::{FILTER_WIDTH_EM, NEW_KEY_WIDTH_EM, SP, TS};
+    use crate::app::Signex;
+    use signex_widgets::fit_row::plan_lines;
+
+    /// Mockup row 70: the toolbar's filter group and Add group share a
+    /// line while both fit, and fold onto two lines, neither wider than the
+    /// toolbar, when it is narrow.
+    #[test]
+    fn the_toolbar_groups_fold_instead_of_overflowing() {
+        let groups = [TS.body * FILTER_WIDTH_EM, TS.body * NEW_KEY_WIDTH_EM];
+        let both = groups[0] + groups[1] + SP.m;
+        assert_eq!(plan_lines(&groups, both * 1.5, SP.m, true, None).len(), 1);
+        let narrow = both - SP.m - groups[1] / 2.0;
+        let lines = plan_lines(&groups, narrow, SP.m, true, None);
+        assert_eq!(lines.len(), 2);
+        assert!(lines.iter().flatten().all(|width| *width <= narrow));
+    }
+
+    /// The folding toolbar builds with a filter and a new key typed.
+    #[test]
+    fn the_toolbar_builds() {
+        let (mut app, _task) = Signex::new();
+        app.ui_state.parameter_table.filter = "R1".to_string();
+        app.ui_state.parameter_table.new_key = "MPN".to_string();
+        let _ = app.view_parameter_toolbar();
+    }
 }
 
 #[cfg(test)]
