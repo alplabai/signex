@@ -186,8 +186,9 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `name` are null for a pane outside an open project). They never change the
   active tab.
   The CSV, PDF, SVG and STEP writers `export_board_report`,
-  `export_board_pdf`, `export_assembly_svg` and `export_board_step` take a
-  `path`, so they are CLI only.
+  `export_board_pdf`, `export_assembly_svg` and `export_board_step`, and
+  `fabrication_outputs` with its operands (#2470), take a `path`, so they
+  are CLI only.
 
 The last three are open to agents by the maintainer's decision (#1924):
 
