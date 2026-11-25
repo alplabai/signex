@@ -459,6 +459,10 @@ impl Builder<'_> {
 
 /// What the loads that tell draw together, and whether every load tells.
 fn sum(loads: &[RailLoad]) -> (f64, bool) {
-    let total: f64 = loads.iter().filter_map(|load| load.current_a).sum();
+    // A fold from +0.0: an empty `sum` of floats is -0.0.
+    let total = loads
+        .iter()
+        .filter_map(|load| load.current_a)
+        .fold(0.0, |total, current| total + current);
     (total, loads.iter().all(|load| load.current_a.is_some()))
 }
