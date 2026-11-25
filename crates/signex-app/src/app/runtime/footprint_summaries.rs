@@ -540,9 +540,9 @@ mod tests {
     /// rejected one clashed with, which is still in the sketch.
     #[test]
     fn a_rejected_edit_reads_one_conflict_and_suggests_the_kept_dimension() {
+        use crate::library::editor::footprint::FootprintEditorState;
         use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
         use crate::library::editor::footprint::sketch_mode::SketchEdit;
-        use crate::library::editor::footprint::FootprintEditorState;
         use crate::library::editor::standalone::dof_chip::sketch_dof;
         use crate::panels::SketchDof;
 
