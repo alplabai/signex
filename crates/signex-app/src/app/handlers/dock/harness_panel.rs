@@ -187,6 +187,12 @@ impl Signex {
         ))
     }
 
+    /// The harness entry the canvas tints for a far-side mismatch (mockup
+    /// row 152); `None` for any other finding.
+    pub(crate) fn erc_marker_harness_entry(v: &signex_erc::Violation) -> Option<uuid::Uuid> {
+        far_side_mismatch(v).map(|(entry, _, _)| entry)
+    }
+
     /// Handle an edit or click of the harness panels; `None` for any other
     /// panel message. Go to answers with the task that opens the sheet.
     pub(super) fn handle_dock_harness_message(
@@ -544,5 +550,13 @@ mod marker_caption_tests {
             .message_plain(ids::PANELS_HARNESS_EXPECTS, &[("expects", "CS_ADC".into())]);
         assert_eq!(expects, "expects CS_ADC");
         assert_eq!(captions, [Some(expects), None, None]);
+        let tinted: Vec<Option<uuid::Uuid>> = app
+            .interaction_state
+            .active_canvas()
+            .erc_markers
+            .iter()
+            .map(|m| m.harness_entry)
+            .collect();
+        assert_eq!(tinted, [Some(uuid::Uuid::from_u128(11)), None, None]);
     }
 }

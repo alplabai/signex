@@ -181,6 +181,66 @@ pub fn draw_erc_captions(
     }
 }
 
+/// A harness entry the far side expects under another name: its tab, and the
+/// severity of the finding that marks it (mockup row 152).
+#[derive(Debug, Clone)]
+pub struct MismatchedEntry {
+    pub tab: Vec<Point>,
+    pub severity: ErcSeverity,
+}
+
+/// Redraw each mismatched entry's tab over the sheet in its marker's ink: a
+/// heavier outline on a faint fill, so the entry reads as the one the caption
+/// names. Editor-only, like the markers.
+pub fn draw_mismatched_entries(
+    frame: &mut canvas::Frame,
+    entries: &[MismatchedEntry],
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+    graphite: &crate::canvas::GraphiteCanvasInk,
+) {
+    if entries.is_empty() {
+        return;
+    }
+    let mut overlays = OverlayInputs::default();
+    for entry in entries {
+        let stroke = point_marker_stroke(entry.severity, colors, graphite);
+        push_entry_tint(&mut overlays, &entry.tab, transform, stroke);
+    }
+    let snapshot = RendererSnapshot {
+        overlays,
+        ..Default::default()
+    };
+    draw_renderer_snapshot(
+        frame,
+        &snapshot,
+        &ResolvedTheme::from_canvas_colors(*colors),
+        DirtyFlags::OVERLAY,
+        transform,
+    );
+}
+
+/// The tint of one entry tab: the harness's nested-entry outline weight,
+/// floored in screen px like the marker strokes.
+fn push_entry_tint(
+    overlays: &mut OverlayInputs,
+    tab: &[Point],
+    transform: &ScreenTransform,
+    stroke: Color,
+) {
+    let floor = screen_px_to_world_mm(MARKER_STROKE_MIN_PX, transform.scale) as f32;
+    let weight = signex_types::schematic::SCHEMATIC_HARNESS_NESTED_OUTLINE_MM as f32;
+    overlays.ghost_polygons.push(OverlayPolygonInput {
+        vertices: tab.iter().map(|p| [p.x as f32, p.y as f32]).collect(),
+        fill_color: to_rgba(Color {
+            a: MARKER_DISC_ALPHA,
+            ..stroke
+        }),
+        stroke_color: Some(to_rgba(stroke)),
+        stroke_width_mm: weight.max(floor),
+    });
+}
+
 /// The top centre of a marker's caption in screen px: right under the halo,
 /// which keeps its px floor zoomed out.
 fn caption_top_centre(marker: &ErcMarker, transform: &ScreenTransform) -> iced::Point {
@@ -332,6 +392,46 @@ mod tests {
             let halo_px = (MARKER_HALO_RADIUS_MM * scale).max(MARKER_HALO_RADIUS_MIN_PX);
             assert!((top.y - centre.y - halo_px).abs() < 1e-3, "@{scale}");
             assert!(top.y - centre.y >= MARKER_HALO_RADIUS_MIN_PX - 1e-3);
+        }
+    }
+
+    /// Mockup row 152, Entry mismatch: the mismatched entry's tab is
+    /// redrawn in the marker's ink, outlined over a faint fill, never thinner
+    /// than the marker strokes on screen.
+    #[test]
+    fn a_mismatched_entry_tab_is_outlined_in_the_marker_ink() {
+        let tab = vec![
+            Point::new(0.0, 0.0),
+            Point::new(1.0, 0.0),
+            Point::new(1.5, 0.5),
+            Point::new(1.0, 1.0),
+            Point::new(0.0, 1.0),
+        ];
+        let ink = Color::from_rgb(0.6, 0.4, 0.1);
+        for scale in [1.5_f32, 3.0, 40.0] {
+            let transform = ScreenTransform {
+                offset_x: 0.0,
+                offset_y: 0.0,
+                scale,
+                device_px_per_logical_px: 1.0,
+            };
+            let mut overlays = OverlayInputs::default();
+            push_entry_tint(&mut overlays, &tab, &transform, ink);
+            let [poly] = overlays.ghost_polygons.as_slice() else {
+                panic!("one tint per entry");
+            };
+            assert_eq!(poly.vertices.len(), tab.len());
+            assert_eq!(poly.vertices[2], [1.5, 0.5]);
+            assert_eq!(poly.stroke_color, Some(to_rgba(ink)));
+            assert!(poly.fill_color[3] <= MARKER_DISC_ALPHA + 1e-6, "faint fill");
+            assert!(
+                poly.stroke_width_mm * scale >= MARKER_STROKE_MIN_PX - 1e-3,
+                "@{scale}: thin outline"
+            );
+            assert!(
+                poly.stroke_width_mm
+                    >= signex_types::schematic::SCHEMATIC_HARNESS_NESTED_OUTLINE_MM as f32 - 1e-6
+            );
         }
     }
 

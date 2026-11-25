@@ -11,6 +11,9 @@ pub struct ErcMarker {
     /// A short line drawn under the marker, such as `expects CS_ADC` by a
     /// mismatched harness entry (mockup row 152).
     pub caption: Option<String>,
+    /// The harness entry a far-side mismatch names, redrawn in the marker's
+    /// ink so the entry the caption speaks of stands out (mockup row 152).
+    pub harness_entry: Option<uuid::Uuid>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
