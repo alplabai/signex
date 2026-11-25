@@ -72,3 +72,31 @@ fn placing_an_unrelated_part_does_not_report_an_old_mixed_part_again() {
     app.warn_mixed_version_parts(&HashMap::from([(path, joined)]));
     assert_eq!(warnings(&dir, "U1"), 1);
 }
+
+/// Mockup row 86: the warning names the part's sheet and its first unit, so
+/// the Messages row shows the sheet and offers Show.
+#[test]
+fn the_warning_names_the_sheet_and_the_parts_first_unit() {
+    let _ = crate::diagnostics::init_logging();
+    let (app, dir) = project(
+        vec![on(unit("U1", 1, 0.0), V1), on(unit("U1", 2, 10.0), V2)],
+        vec![],
+    );
+    let path = dir.join("a_root.snxsch");
+    let doc = app.document_state.engines[&path].document();
+    let first = doc.symbols[0].uuid;
+    let joined: HashSet<Uuid> = [doc.symbols[1].uuid].into();
+    app.warn_mixed_version_parts(&HashMap::from([(path.clone(), joined)]));
+    let dir_text = dir.to_string_lossy().to_string();
+    let found: Vec<_> = crate::diagnostics::recent_entries()
+        .into_iter()
+        .filter(|e| e.message.contains(&dir_text) && e.message.starts_with("U1 on "))
+        .collect();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].document.as_deref(), Some(path.as_path()));
+    let unit = signex_types::schematic::SelectedItem::new(
+        first,
+        signex_types::schematic::SelectedKind::Symbol,
+    );
+    assert_eq!(found[0].object, Some(unit));
+}

@@ -144,6 +144,38 @@ pub fn log_info_at(
     eprintln!("[INFO] {rendered}");
 }
 
+/// A warning about `object` on the sheet `document`: its Messages row names
+/// the sheet and offers Show (mockup row 86). It keeps the code and Source of
+/// a plain [`log_warning`] line and, like every warning, is never held.
+pub fn log_warning_at(
+    message: impl AsRef<str>,
+    document: std::path::PathBuf,
+    object: Option<signex_types::schematic::SelectedItem>,
+) {
+    if configured_level() < LevelFilter::Warn {
+        return;
+    }
+    let rendered = message.as_ref();
+    #[cfg(test)]
+    SAID_ON_THREAD.with(|said| said.set(said.get() + 1));
+    let (code, message) = summarize_record(module_path!(), rendered);
+    let entry = (DiagnosticLevel::Warning, code, message, chrono::Utc::now());
+    let target = EntryTarget {
+        document: Some(document),
+        object,
+        ..EntryTarget::default()
+    };
+    push_to_ring(entries(), &NEXT_ENTRY_ID, entry, target);
+    eprintln!("[WARN] {rendered}");
+}
+
+/// [`log_warning_at`] about a placed part: `symbol` is the unit Show selects.
+pub fn log_part_warning(message: impl AsRef<str>, document: &std::path::Path, symbol: uuid::Uuid) {
+    use signex_types::schematic::{SelectedItem, SelectedKind};
+    let object = SelectedItem::new(symbol, SelectedKind::Symbol);
+    log_warning_at(message, document.to_path_buf(), Some(object));
+}
+
 /// Tell the user which locked objects an edit passed over.
 pub fn log_locked_skips(skipped: &[String]) {
     if let Some(line) = crate::app::core::event::locked_skips(skipped) {
@@ -688,6 +720,32 @@ mod entry_target_tests {
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].document.as_deref(), Some(sheet.as_path()));
         assert_eq!(found[0].object, Some(item));
+    }
+
+    /// Mockup row 86: a warning that names a part carries its sheet and the
+    /// part, keeps the code a plain warning has, and is not held while an
+    /// agent's edit list runs.
+    #[test]
+    fn a_warning_about_a_part_keeps_its_sheet_and_part() {
+        let sheet = std::path::PathBuf::from("/w/p/charger.snxsch");
+        let symbol = uuid::Uuid::now_v7();
+        let needle = format!("part-warning {symbol}");
+        let plain = format!("plain {needle}");
+        let _ = init_logging();
+        log_warning(&plain);
+        hold_info();
+        log_part_warning(&needle, &sheet, symbol);
+        let found = logged(&needle);
+        release_held_info(true);
+        let found: Vec<_> = found.into_iter().filter(|e| e.message == needle).collect();
+        assert_eq!(found.len(), 1, "a warning is never held");
+        assert_eq!(found[0].level, DiagnosticLevel::Warning);
+        assert_eq!(found[0].document.as_deref(), Some(sheet.as_path()));
+        assert_eq!(
+            found[0].object,
+            Some(SelectedItem::new(symbol, SelectedKind::Symbol))
+        );
+        assert_eq!(found[0].code, logged(&plain)[0].code);
     }
 
     /// A plain log line names no document or object.
