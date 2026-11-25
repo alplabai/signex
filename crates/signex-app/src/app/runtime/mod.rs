@@ -14,6 +14,9 @@ mod history_repo;
 mod label_class_pick;
 pub(super) mod navigator_ctx;
 pub(in crate::app) mod net_class_styles;
+mod not_fitted;
+#[cfg(test)]
+mod not_fitted_tests;
 mod panel_ctx;
 mod pin_focus;
 mod placed_ctx;

@@ -849,6 +849,10 @@ pub use directive_flag::{
 };
 mod no_erc;
 pub use no_erc::{NoErcDirective, canonical_no_erc_rules, no_erc_rules_suppress};
+mod not_fitted;
+pub use not_fitted::{
+    NOT_FITTED_CROSS_WIDTH_SCALE, NOT_FITTED_PAPER_SHARE, greyed_ink, not_fitted_cross,
+};
 mod sheet;
 pub use sheet::*;
 mod sheet_frame;

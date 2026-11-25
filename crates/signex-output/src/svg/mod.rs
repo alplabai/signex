@@ -24,6 +24,7 @@ mod glyph_height_tests;
 mod harness;
 mod labels;
 mod markers;
+mod not_fitted;
 mod repeat_stack;
 mod sch_table;
 mod symbols;
@@ -106,6 +107,9 @@ pub struct SvgEvaluatorInputs<'a> {
     /// Resolves `${TOKEN}` special strings in text notes, the same context
     /// the title block resolves with. `None` leaves the text as stored.
     pub special_strings: Option<&'a crate::SubstitutionContext<'a>>,
+    /// The project's variant settings, which decide over the sheets which
+    /// parts draw as not fitted (#1294). `None` reads the sheets alone.
+    pub variant_settings: Option<&'a signex_types::project::VariantSettings>,
 }
 
 fn fill_to_rgb(

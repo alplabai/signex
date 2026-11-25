@@ -632,6 +632,7 @@ mod tests {
                 special_strings: None,
                 defaults: Default::default(),
                 designator_standard: None,
+                not_fitted: None,
             },
         )
     }

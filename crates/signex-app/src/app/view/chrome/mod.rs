@@ -89,6 +89,7 @@ impl Signex {
             draft_pcb_defaults: &ui.preferences_pcb_defaults,
             body_fill_palette_open: ui.preferences_body_fill_palette_open,
             body_fill_picker_open: ui.preferences_body_fill_picker_open,
+            draft_cross_out_not_fitted: ui.preferences_draft_cross_out_not_fitted,
             draft_trackpad_pan: ui.preferences_draft_trackpad_pan,
             draft_wheel_mode: ui.preferences_draft_wheel_mode,
             draft_layer_switcher: ui.preferences_draft_layer_switcher,

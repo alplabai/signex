@@ -34,7 +34,7 @@ impl Signex {
 
     /// What the active canvas's designators are a function of; `None` with no
     /// active sheet. The engine revision moves on every document change.
-    fn designators_key(&self) -> Option<crate::canvas::DesignatorsKey> {
+    pub(super) fn designators_key(&self) -> Option<crate::canvas::DesignatorsKey> {
         let path = self.document_state.active_path.as_deref()?;
         let engine = self
             .document_state

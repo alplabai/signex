@@ -130,6 +130,7 @@ impl Signex {
         self.ui_state.preferences_draft_net_hover_enabled = self.ui_state.net_hover_enabled;
         self.ui_state.preferences_draft_edge_pan = self.ui_state.edge_pan;
         self.ui_state.preferences_draft_symbol_body_fill = self.ui_state.symbol_body_fill;
+        self.ui_state.preferences_draft_cross_out_not_fitted = self.ui_state.cross_out_not_fitted;
         self.ui_state.preferences_body_fill_palette_open = false;
         self.ui_state.preferences_body_fill_picker_open = false;
         *self.ui_state.preferences_pcb_defaults =
@@ -344,6 +345,7 @@ impl Signex {
             | PrefMsg::DraftEdgePanEnabled(..)
             | PrefMsg::DraftEdgePanSpeed(..)
             | PrefMsg::SymbolBodyFill(..)
+            | PrefMsg::DraftCrossOutNotFitted(..)
             | PrefMsg::DraftTrackpadPan(..)
             | PrefMsg::DraftWheelMode(..)
             | PrefMsg::DraftLayerSwitcher(..)

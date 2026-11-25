@@ -63,6 +63,7 @@ impl UiState {
             }
             PrefNav::SchematicDisplay => {
                 self.preferences_draft_symbol_body_fill != self.symbol_body_fill
+                    || self.preferences_draft_cross_out_not_fitted != self.cross_out_not_fitted
             }
             PrefNav::PcbDefaults => self
                 .preferences_pcb_defaults
@@ -161,6 +162,9 @@ impl Signex {
                 self.ui_state.preferences_draft_edge_pan.speed = speed;
             }
             PrefMsg::SymbolBodyFill(msg) => self.ui_state.apply_body_fill_message(msg),
+            PrefMsg::DraftCrossOutNotFitted(enabled) => {
+                self.ui_state.preferences_draft_cross_out_not_fitted = enabled;
+            }
             PrefMsg::DraftTrackpadPan(enabled) => {
                 self.ui_state.preferences_draft_trackpad_pan = enabled;
             }

@@ -35,6 +35,8 @@ pub(super) struct DisplayPage<'a> {
     pub(super) theme_tint: Option<signex_types::theme::Color>,
     pub(super) palette_open: bool,
     pub(super) picker_open: bool,
+    /// The "Cross out not-fitted parts" draft (#1294).
+    pub(super) cross_out_not_fitted: bool,
     pub(super) tokens: &'a signex_types::theme::ThemeTokens,
     pub(super) i18n: &'a I18n,
 }
@@ -45,6 +47,7 @@ pub(super) fn content_schematic_display<'a>(page_in: DisplayPage<'a>) -> Element
         theme_tint,
         palette_open,
         picker_open,
+        cross_out_not_fitted,
         tokens,
         i18n,
     } = page_in;
@@ -100,5 +103,22 @@ pub(super) fn content_schematic_display<'a>(page_in: DisplayPage<'a>) -> Element
             tokens,
         ));
     }
+    items.push(setting_row(
+        SettingRow {
+            label: t!(i18n, ids::PREFERENCES_CROSS_OUT_NOT_FITTED),
+            pills: Vec::new(),
+            help: Some(help_text(
+                t!(i18n, ids::PREFERENCES_CROSS_OUT_NOT_FITTED_HELP),
+                tokens,
+            )),
+            control: toggle(
+                cross_out_not_fitted,
+                tokens,
+                PrefMsg::DraftCrossOutNotFitted,
+            ),
+            error: None,
+        },
+        tokens,
+    ));
     page(items)
 }
