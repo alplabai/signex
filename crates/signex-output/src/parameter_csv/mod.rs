@@ -2,10 +2,11 @@
 //! parts written out, a file read back, and what an import of it changes.
 //!
 //! RFC 4180, UTF-8 with a byte-order mark and CRLF line ends, written by the
-//! BOM's row writer. The first line holds the column titles: Reference,
-//! Value, Footprint, then one column per parameter in use, sorted. Then one
-//! line per listed part (power ports left out), in sheet order. The format
-//! and the import rules: docs/PARAMETER_CSV.md.
+//! BOM's row writer. The first line holds the column titles: Unique Id (the
+//! key an import matches by), Reference, Value, Footprint, then one column
+//! per parameter in use, sorted. Then one line per listed part (power ports
+//! left out), in sheet order. The format and the import rules:
+//! docs/PARAMETER_CSV.md.
 
 mod plan;
 mod read;
@@ -23,6 +24,8 @@ use crate::bom::csv::{is_formula_lead, write_csv_row};
 pub use plan::{ImportPlan, ParameterChange, plan_import};
 pub use read::{CsvPart, ParameterCsv, parse};
 
+/// Title of the column that keys each line to its part: the part's uuid.
+pub const UNIQUE_ID_COLUMN: &str = "Unique Id";
 /// Title of the column that names each part.
 pub const REFERENCE_COLUMN: &str = "Reference";
 /// Title of the value column: written for context, never imported.
@@ -37,8 +40,8 @@ pub enum ParameterCsvError {
     NotUtf8,
     #[error("the file holds no column titles")]
     NoHeader,
-    #[error("the file has no Reference column")]
-    NoReferenceColumn,
+    #[error("the file has neither a Unique Id nor a Reference column")]
+    NoKeyColumn,
     #[error("two columns are titled {0}")]
     DuplicateColumn(String),
     #[error("{0}")]
@@ -67,6 +70,7 @@ pub fn export(parts: &[&Symbol]) -> Result<Vec<u8>, ParameterCsvError> {
     let keys = parameter_keys(parts);
     let mut out = b"\xef\xbb\xbf".to_vec();
     let mut titles = vec![
+        UNIQUE_ID_COLUMN.to_string(),
         REFERENCE_COLUMN.to_string(),
         VALUE_COLUMN.to_string(),
         FOOTPRINT_COLUMN.to_string(),
@@ -75,6 +79,7 @@ pub fn export(parts: &[&Symbol]) -> Result<Vec<u8>, ParameterCsvError> {
     write_line(&mut out, &titles)?;
     for part in parts {
         let mut cells = vec![
+            part.uuid.to_string(),
             part.reference.clone(),
             part.value.clone(),
             part.footprint.clone(),

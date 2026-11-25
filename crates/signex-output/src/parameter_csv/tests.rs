@@ -45,10 +45,94 @@ fn an_export_has_the_titles_then_one_line_per_listed_part() {
     let text = String::from_utf8(exported(&doc)).expect("utf-8");
     assert_eq!(
         text,
-        "\u{feff}Reference,Value,Footprint,MPN,Tolerance\r\n\
-         R1,10k,R_0603,RC0603,1%\r\n\
-         R2,10k,R_0603,,5%\r\n"
+        "\u{feff}Unique Id,Reference,Value,Footprint,MPN,Tolerance\r\n\
+         00000000-0000-0000-0000-000000000001,R1,10k,R_0603,RC0603,1%\r\n\
+         00000000-0000-0000-0000-000000000002,R2,10k,R_0603,,5%\r\n"
     );
+}
+
+/// A line goes to the part its Unique Id names, whatever its reference now
+/// says, so a re-annotated sheet still takes its edited export.
+#[test]
+fn a_line_goes_to_the_part_its_unique_id_names() {
+    let doc = sheet(vec![
+        part(1, "R1", &[("Tolerance", "1%")]),
+        part(2, "R2", &[("Tolerance", "5%")]),
+    ]);
+    let plan = plan_of(
+        &doc,
+        "Unique Id,Reference,Tolerance\n\
+         00000000-0000-0000-0000-000000000002,R1,2%\n\
+         00000000-0000-0000-0000-000000000001,R2,1%\n",
+    );
+    assert_eq!(
+        plan.changes,
+        vec![ParameterChange {
+            symbol: Uuid::from_u128(2),
+            reference: "R2".to_string(),
+            key: "Tolerance".to_string(),
+            before: Some("5%".to_string()),
+            after: "2%".to_string(),
+        }]
+    );
+    assert_eq!(plan.unmatched_lines, 0);
+}
+
+/// An id no listed part has, an id a line already took and an id that is
+/// not a uuid are unmatched lines; a reference never stands in for them.
+#[test]
+fn an_unknown_or_repeated_unique_id_is_unmatched() {
+    let doc = sheet(vec![part(1, "R1", &[("Tolerance", "1%")])]);
+    let plan = plan_of(
+        &doc,
+        "Unique Id,Reference,Tolerance\n\
+         00000000-0000-0000-0000-000000000009,R1,2%\n\
+         00000000-0000-0000-0000-000000000001,R1,3%\n\
+         00000000-0000-0000-0000-000000000001,R1,4%\n\
+         not-an-id,,5%\n",
+    );
+    assert_eq!(plan.changes.len(), 1);
+    assert_eq!(plan.changes[0].after, "3%");
+    assert_eq!(plan.unmatched_lines, 3);
+    assert_eq!(
+        plan.unmatched,
+        vec!["R1".to_string(), "not-an-id".to_string()]
+    );
+}
+
+/// A line without an id goes by reference, but never to a part a Unique Id
+/// in the file already names.
+#[test]
+fn a_line_without_an_id_goes_by_reference_to_a_part_no_id_names() {
+    let doc = sheet(vec![
+        part(1, "U1", &[("Note", "a")]),
+        part(2, "U1", &[("Note", "b")]),
+    ]);
+    let plan = plan_of(
+        &doc,
+        "Unique Id,Reference,Note\n\
+         00000000-0000-0000-0000-000000000001,U1,x\n\
+         ,U1,y\n",
+    );
+    let targets: Vec<(Uuid, &str)> = plan
+        .changes
+        .iter()
+        .map(|c| (c.symbol, c.after.as_str()))
+        .collect();
+    assert_eq!(
+        targets,
+        vec![(Uuid::from_u128(1), "x"), (Uuid::from_u128(2), "y")]
+    );
+}
+
+#[test]
+fn added_and_changed_parameters_are_counted_apart() {
+    let doc = sheet(vec![part(1, "R1", &[("Tolerance", "1%")])]);
+    let plan = plan_of(&doc, "Reference,Tolerance,MPN\nR1,2%,RC0603\nR7,1%,\n");
+    assert_eq!(plan.changed_count(), 1);
+    assert_eq!(plan.added_count(), 1);
+    assert!(plan.changes[1].is_added());
+    assert_eq!(plan.unmatched_lines, 1);
 }
 
 /// Every awkward value comes back exactly as it went out, so importing an
@@ -94,7 +178,8 @@ fn a_formula_cell_is_written_behind_a_quote() {
     let text = String::from_utf8(exported(&doc)).expect("utf-8");
     assert_eq!(
         text,
-        "\u{feff}Reference,Value,Footprint,'=HYPERLINK(1)\r\nR1,10k,R_0603,'=SUM(A1)\r\n"
+        "\u{feff}Unique Id,Reference,Value,Footprint,'=HYPERLINK(1)\r\n\
+         00000000-0000-0000-0000-000000000001,R1,10k,R_0603,'=SUM(A1)\r\n"
     );
     let csv = parse(text.as_bytes()).expect("parse");
     assert_eq!(csv.keys, vec!["=HYPERLINK(1)".to_string()]);
@@ -183,7 +268,11 @@ fn files_that_are_not_a_parameter_table_are_refused() {
     assert_eq!(parse(b"\xef\xbb\xbf\r\n"), Err(ParameterCsvError::NoHeader));
     assert_eq!(
         parse(b"Value,MPN\n10k,x\n"),
-        Err(ParameterCsvError::NoReferenceColumn)
+        Err(ParameterCsvError::NoKeyColumn)
+    );
+    assert_eq!(
+        parse(b"Unique Id,unique id\n"),
+        Err(ParameterCsvError::DuplicateColumn("unique id".to_string()))
     );
     assert_eq!(
         parse(b"Reference,MPN,MPN\n"),
@@ -193,6 +282,17 @@ fn files_that_are_not_a_parameter_table_are_refused() {
         parse(b"Reference,reference\n"),
         Err(ParameterCsvError::DuplicateColumn("reference".to_string()))
     );
+}
+
+#[test]
+fn a_file_keyed_by_unique_id_alone_is_read() {
+    let doc = sheet(vec![part(1, "R1", &[("Tolerance", "1%")])]);
+    let plan = plan_of(
+        &doc,
+        " UNIQUE ID ,Tolerance\n00000000-0000-0000-0000-000000000001,2%\n",
+    );
+    assert_eq!(plan.changes.len(), 1);
+    assert_eq!(plan.changes[0].reference, "R1");
 }
 
 #[test]
