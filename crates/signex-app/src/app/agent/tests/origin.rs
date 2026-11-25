@@ -5,7 +5,7 @@
 use serde_json::{Value, json};
 use signex_i18n::RenderTranslatable;
 
-use super::{app_at_work, call, call_as, path};
+use super::{app_at_work, call, call_as, call_settled, path};
 use crate::app::Signex;
 use crate::app::agent::Origin;
 use crate::app::handlers::editing_commands::net_color_driver as fixture;
@@ -260,7 +260,8 @@ fn an_agents_net_class_pick_stays_a_pick_with_no_group_or_label() {
         vec![signex_types::net_class::NetClass::named("Power")];
     app.settle_net_class_styles_blocking();
 
-    let reply = call(
+    // The project's closed child is read first (#2549).
+    let reply = call_settled(
         &mut app,
         "assign_net_class",
         json!({"document": doc("a.snxsch"), "net_name": "VCC", "class": "Power"}),

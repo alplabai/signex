@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 mod net_names;
 mod placed;
-pub use net_names::{element_net_names, wire_at_point};
+pub use net_names::{element_net_names, netlist_has_net, wire_at_point};
 pub use placed::{placement_class_styles, placement_net_names};
 
 use signex_types::net::{NetClassId, Netlist};

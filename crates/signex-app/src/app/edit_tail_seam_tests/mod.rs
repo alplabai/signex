@@ -10,6 +10,7 @@ mod members;
 mod messages;
 mod refresh;
 mod repaint;
+mod tail_rules;
 
 use std::path::{Path, PathBuf};
 
