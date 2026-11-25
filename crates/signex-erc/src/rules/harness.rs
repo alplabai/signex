@@ -143,7 +143,7 @@ fn far_side_mismatches(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             let Some(far) = ctx
                 .children
                 .get(&symbol.filename)
-                .and_then(|child| child.harness.port_leaves(&entry.name))
+                .and_then(|child| far_leaves(child, &entry.name, 0))
             else {
                 continue;
             };
@@ -157,10 +157,39 @@ fn far_side_mismatches(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                     .iter()
                     .filter(|l| l.connector == c.uuid)
                     .collect();
-                compare_with_far(c, &near, far, &symbol.name, out);
+                compare_with_far(c, &near, &far, &symbol.name, out);
             }
         }
     }
+}
+
+/// How many sheets that only pass a harness on ERC looks through; a longer
+/// chain is read as ending there.
+const CARRY_DEPTH: usize = 32;
+
+/// The leaves the harness port `name` of `child` carries. A child that only
+/// passes the harness on (#2657) is looked through to its own children; when
+/// that reaches no connector the far side is empty, so every entry here is
+/// reported. `None` when the child has no such port.
+fn far_leaves(child: &ErcContext, name: &str, depth: usize) -> Option<Vec<HarnessLeaf>> {
+    let bundle = child.harness.port_bundle(name)?;
+    if !bundle.passes_through() {
+        return Some(bundle.leaves.clone());
+    }
+    let mut out = Vec::new();
+    if depth >= CARRY_DEPTH {
+        return Some(out);
+    }
+    for entry in &bundle.sheet_entries {
+        let leaves = child
+            .child_sheets
+            .iter()
+            .find(|cs| cs.uuid == entry.sheet_symbol)
+            .and_then(|cs| child.children.get(&cs.filename))
+            .and_then(|grand| far_leaves(grand, &entry.name, depth + 1));
+        out.extend(leaves.into_iter().flatten());
+    }
+    Some(out)
 }
 
 /// The leaf paths of `c` against the child's, both ways. A plain entry missing
