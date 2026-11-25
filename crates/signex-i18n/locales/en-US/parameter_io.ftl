@@ -21,7 +21,7 @@ parameter-io-import-failed = Could not import { $file }: { $why }
 parameter-io-why-too-large = the file is larger than { $megabytes } MB
 parameter-io-why-not-utf8 = the file is not UTF-8 text
 parameter-io-why-no-header = the file is empty
-parameter-io-why-no-reference = the file has no Reference column
+parameter-io-why-no-key = the file has neither a Unique Id nor a Reference column
 # $column is the column title the file holds twice.
 parameter-io-why-duplicate = two columns are titled { $column }
 
@@ -37,14 +37,19 @@ parameter-io-preview-summary =
         [one] { $parts } part
        *[other] { $parts } parts
     }.
+# Under the summary. $added is how many parameters a part gets that it did
+# not have, $changed how many it has get a new value.
+parameter-io-preview-counts = { $added } added, { $changed } changed
 parameter-io-preview-undo = Apply is one undo step. Nothing changes until you apply.
 # $sheet is the sheet's file name.
 parameter-io-preview-nothing = The file changes nothing on { $sheet }.
-# $count is how many references; $references lists them, comma separated.
+# $count is how many lines of the file match no part; $references names
+# them (a reference, or a unique id where the reference is blank), comma
+# separated.
 parameter-io-preview-unmatched =
     { $count ->
-        [one] { $count } reference in the file is not on the sheet and is skipped: { $references }
-       *[other] { $count } references in the file are not on the sheet and are skipped: { $references }
+        [one] { $count } line in the file matches no part on the sheet and is skipped: { $references }
+       *[other] { $count } lines in the file match no part on the sheet and are skipped: { $references }
     }
 # $sheet is the sheet's file name.
 parameter-io-preview-sheet-gone = { $sheet } is no longer open.

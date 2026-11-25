@@ -116,17 +116,27 @@ impl Signex {
                     .size(TS.body),
                 )
                 .push(
+                    text(t!(
+                        i18n,
+                        ids::PARAMETER_IO_PREVIEW_COUNTS,
+                        "added" => plan.added_count(),
+                        "changed" => plan.changed_count()
+                    ))
+                    .size(TS.caption)
+                    .color(r.ink3),
+                )
+                .push(
                     text(t!(i18n, ids::PARAMETER_IO_PREVIEW_UNDO))
                         .size(TS.caption)
                         .color(r.ink3),
                 );
         }
-        if !plan.unmatched.is_empty() {
+        if plan.unmatched_lines > 0 {
             content = content.push(
                 text(t!(
                     i18n,
                     ids::PARAMETER_IO_PREVIEW_UNMATCHED,
-                    "count" => plan.unmatched.len(),
+                    "count" => plan.unmatched_lines,
                     "references" => plan.unmatched.join(", ")
                 ))
                 .size(TS.caption)

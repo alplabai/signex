@@ -13,11 +13,12 @@ define_ids! {
     PARAMETER_IO_WHY_TOO_LARGE = "parameter-io-why-too-large";
     PARAMETER_IO_WHY_NOT_UTF8 = "parameter-io-why-not-utf8";
     PARAMETER_IO_WHY_NO_HEADER = "parameter-io-why-no-header";
-    PARAMETER_IO_WHY_NO_REFERENCE = "parameter-io-why-no-reference";
+    PARAMETER_IO_WHY_NO_KEY = "parameter-io-why-no-key";
     PARAMETER_IO_WHY_DUPLICATE = "parameter-io-why-duplicate";
     PARAMETER_IO_PREVIEW_SUBTITLE = "parameter-io-preview-subtitle";
     PARAMETER_IO_PREVIEW_SUMMARY = "parameter-io-preview-summary";
-    PARAMETER_IO_PREVIEW_UNDO = "parameter-io-preview-undo";
+    PARAMETER_IO_PREVIEW_COUNTS = "parameter-io-preview-counts";
+    PARAMETER_IO_PREVIEW_UNDO ="parameter-io-preview-undo";
     PARAMETER_IO_PREVIEW_NOTHING = "parameter-io-preview-nothing";
     PARAMETER_IO_PREVIEW_UNMATCHED = "parameter-io-preview-unmatched";
     PARAMETER_IO_PREVIEW_SHEET_GONE = "parameter-io-preview-sheet-gone";

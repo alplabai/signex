@@ -38,9 +38,7 @@ impl ImportReadError {
             .into_string(),
             Self::Csv(ParameterCsvError::NotUtf8) => plain(ids::PARAMETER_IO_WHY_NOT_UTF8),
             Self::Csv(ParameterCsvError::NoHeader) => plain(ids::PARAMETER_IO_WHY_NO_HEADER),
-            Self::Csv(ParameterCsvError::NoReferenceColumn) => {
-                plain(ids::PARAMETER_IO_WHY_NO_REFERENCE)
-            }
+            Self::Csv(ParameterCsvError::NoKeyColumn) => plain(ids::PARAMETER_IO_WHY_NO_KEY),
             Self::Csv(ParameterCsvError::DuplicateColumn(column)) => t!(
                 i18n,
                 ids::PARAMETER_IO_WHY_DUPLICATE,

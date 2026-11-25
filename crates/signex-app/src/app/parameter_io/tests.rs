@@ -87,8 +87,31 @@ fn export_writes_the_listed_parts_to_the_picked_file() {
     let written = std::fs::read(&file).expect("the export was written");
     assert_eq!(
         String::from_utf8(written).expect("utf-8"),
-        "\u{feff}Reference,Value,Footprint,Tolerance\r\nR1,10k,R_0603,1%\r\nR2,10k,R_0603,5%\r\n"
+        "\u{feff}Unique Id,Reference,Value,Footprint,Tolerance\r\n\
+         00000000-0000-0000-0000-000000000001,R1,10k,R_0603,1%\r\n\
+         00000000-0000-0000-0000-000000000002,R2,10k,R_0603,5%\r\n"
     );
+}
+
+/// The file is keyed by unique id: a line whose Reference cell names
+/// another part still writes the part its id names.
+#[test]
+fn apply_writes_the_part_the_unique_id_names() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, answers, _sheet) = app_in(dir.path());
+    import(
+        &mut app,
+        &answers,
+        dir.path(),
+        "Unique Id,Reference,Tolerance\r\n\
+         00000000-0000-0000-0000-000000000002,R1,10%\r\n\
+         00000000-0000-0000-0000-000000000077,R2,20%\r\n",
+    );
+    let plan = app.parameter_import_plan().expect("plan");
+    assert_eq!(plan.unmatched_lines, 1, "the unknown id matches nothing");
+    send(&mut app, ParameterIoMsg::PreviewAccepted);
+    assert_eq!(field(&app, 1, "Tolerance").as_deref(), Some("1%"));
+    assert_eq!(field(&app, 2, "Tolerance").as_deref(), Some("10%"));
 }
 
 #[test]
@@ -245,4 +268,5 @@ fn an_export_imports_back_to_no_change() {
     import(&mut app, &answers, dir.path(), &text);
     let plan = app.parameter_import_plan().expect("plan");
     assert!(plan.changes.is_empty() && plan.unmatched.is_empty());
+    assert_eq!(plan.unmatched_lines, 0);
 }
