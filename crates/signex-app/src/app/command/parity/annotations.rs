@@ -378,6 +378,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Check,
         &[Settings],
     ),
+    // The design report runs the same checks (#2945).
+    (&["generate_design_notebook"], Operand, &[Settings]),
     // The answer names the view angle of the board's canvas.
     (&["document_info"], Query, &[Window]),
     // `rules_explain` and `rules_get` read the board's last DRC run

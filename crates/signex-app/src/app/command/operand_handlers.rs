@@ -195,6 +195,11 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "import_dxf_outline",
         crate::app::handlers::pcb_dxf_import::import_dxf_outline,
     ),
+    // #2945, mockup row 201: the design report, answered once it is built.
+    (
+        "generate_design_notebook",
+        crate::app::notebook_generate::generate_design_notebook,
+    ),
     ("rules_matrix_set", crate::app::rules_tab::rules_matrix_set),
     ("rules_set_create", crate::app::rules_tab::rules_set_create),
     ("rules_set_edit", crate::app::rules_tab::rules_set_edit),

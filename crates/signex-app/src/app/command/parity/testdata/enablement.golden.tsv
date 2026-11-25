@@ -136,6 +136,7 @@ footprint_mode_sketch	-	f2929686b07ef725
 footprint_mode_view_3d	-	f2929686b07ef725
 footprint_recompute_courtyard_outline	-	f2929686b07ef725
 force_annotate_all_schematics	ActiveSheet	cff87b9cc03394bf
+generate_design_notebook	OpenProject	ee0317ecaf5bfb5b
 gloss_selected_routes	PcbSelection	b2eee5a7d6ad7c41
 go_to_net_partner	-	f2929686b07ef725
 hide_layer	Pcb	119d310e454dd5e4

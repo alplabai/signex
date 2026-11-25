@@ -54,6 +54,9 @@ mod library_delete;
 mod load_gateway;
 mod mutation_gateway;
 pub(crate) mod new_project;
+// #2945, mockup row 201: Generate design notebook.
+pub(crate) mod notebook_generate;
+pub use notebook_generate::{NotebookGenerateMsg, NotebookGenerateUi};
 pub(crate) mod page_tab;
 pub mod parent_reference_disk;
 mod parked_sheets;

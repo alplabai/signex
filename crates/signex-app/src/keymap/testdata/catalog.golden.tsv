@@ -428,3 +428,4 @@ apply_layout_notebook	window	Workspace layout: Notebook	Notebook	General	-	-	Alw
 save_workspace_layout	window	Save the panel arrangement as a workspace layout	Save Layout…	General	-	-	Always	gui_only	-
 manage_workspace_layouts	window	Manage workspace layouts	Manage Layouts…	General	-	-	Always	gui_only	-
 reset_workspace_layout	window	Reset the edited built-in workspace layout	Reset Layout	General	-	-	Always	gui_only	-
+generate_design_notebook	reports	Generate design notebook	-	General	-	-	Always	-	document:document,sections:text?,variant:text?,template:text?,document_number:text?,revision:text?,checks:text?,save:bool?,update:bool?

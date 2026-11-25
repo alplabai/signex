@@ -121,6 +121,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `find_previous` | Find previous | search | `Shift+F3` | `Shift+F3` |
 | `find_similar_objects` | Find Similar Objects | select | `Shift+F` | `Shift+F` |
 | `find_text` | Find text | search | — | — |
+| `generate_design_notebook` | Generate design notebook | reports | — | — |
 | `home_view` | Reset the view rotation and Flip, then fit the board or sheet | view | — | — |
 | `import_graphics` | Import graphics | place | — | `Mod+Shift+F` |
 | `list_documents` | List documents | file | — | — |

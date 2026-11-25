@@ -138,6 +138,7 @@ footprint_mode_sketch
 footprint_mode_view_3d
 footprint_recompute_courtyard_outline
 force_annotate_all_schematics
+generate_design_notebook
 gloss_selected_routes
 go_to_net_partner
 hide_layer

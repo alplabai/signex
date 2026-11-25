@@ -364,6 +364,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "fabrication_outputs" => Message::from(crate::app::FabOutputsMsg::Requested),
         // #1282: Design ▸ Differential Pair Classes….
         "open_diff_pair_classes" => Message::from(crate::app::DiffPairClassesMsg::Requested),
+        // #2945, mockup row 201: the Generate options dialog.
+        "generate_design_notebook" => Message::from(crate::app::NotebookGenerateMsg::DialogOpened),
         // #2404, #2402, #2488: Board Reports on a table, its CSV, Board Print /
         // PDF, the STEP model.
         "board_report_bom" => board_report(signex_output::BoardReportKind::Bom),

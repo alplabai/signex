@@ -168,6 +168,9 @@ pub enum Message {
     /// The Gerber Viewer tab and window file drops (mockup rows 193 and
     /// 193f). Routed to `dispatch_gerber_viewer_message`.
     GerberViewer(crate::app::GerberViewerMsg),
+    /// Generate design notebook (#2945, mockup row 201): its options dialog
+    /// and its runs. Routed to `dispatch_notebook_generate_message`.
+    NotebookGenerate(crate::app::NotebookGenerateMsg),
 }
 
 impl Message {

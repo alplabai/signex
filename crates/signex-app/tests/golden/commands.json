@@ -685,6 +685,11 @@
     "category": "design"
   },
   {
+    "id": "generate_design_notebook",
+    "group": "General",
+    "category": "reports"
+  },
+  {
     "id": "gloss_selected_routes",
     "group": "Pcb",
     "category": "pcb"

@@ -565,6 +565,9 @@ pub struct UiState {
     /// Design ▸ Differential Pair Classes… (#1282), while open: a copy of
     /// the project's classes until OK.
     pub diff_pair_classes: Option<Box<crate::app::DiffPairClassesState>>,
+    /// Generate design notebook (#2945): its options dialog, and the newest
+    /// report made in the app, unsaved.
+    pub notebook_generate: Box<crate::app::NotebookGenerateUi>,
     /// Generation of the newest Fabrication Outputs write, outside the
     /// dialog so a reopened dialog never takes an older answer.
     pub fab_outputs_writes: u64,

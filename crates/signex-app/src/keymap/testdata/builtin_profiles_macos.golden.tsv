@@ -548,6 +548,7 @@ signex_standard	hint	-	-	apply_layout_notebook
 signex_standard	hint	-	-	save_workspace_layout
 signex_standard	hint	-	-	manage_workspace_layouts
 signex_standard	hint	-	-	reset_workspace_layout
+signex_standard	hint	-	-	generate_design_notebook
 classic	bind	Pcb	Q	command:cycle_unit
 classic	bind	Global	/	command:switch_segment_posture
 classic	bind	Global	A	command:place_symbol
@@ -1101,3 +1102,4 @@ classic	hint	-	-	apply_layout_notebook
 classic	hint	-	-	save_workspace_layout
 classic	hint	-	-	manage_workspace_layouts
 classic	hint	-	-	reset_workspace_layout
+classic	hint	-	-	generate_design_notebook

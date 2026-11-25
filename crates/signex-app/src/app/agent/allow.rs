@@ -122,6 +122,8 @@ mod tests {
                 "filter_drc_results",
                 "find_items",
                 "find_similar_items",
+                // #2945: the design report of the named project.
+                "generate_design_notebook",
                 "gloss_selected_routes",
                 // #2394: the board view's layers, on the named board.
                 "hide_layer",
