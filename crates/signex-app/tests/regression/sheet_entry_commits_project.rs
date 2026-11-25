@@ -303,8 +303,9 @@ fn rename_failure(app: &Signex) -> String {
 }
 
 /// A project read from a newer minor cannot be written, so a sheet rename in
-/// it is undone: the file is back, the saved project keeps its bytes and the
-/// project in memory still names the old file.
+/// it is refused before the file moves (#2904): the file stays, the saved
+/// project keeps its bytes and the project in memory still names the old
+/// file.
 #[test]
 fn rename_in_a_newer_minor_project_is_undone() {
     let mut f = fixture(true);
@@ -322,15 +323,18 @@ fn rename_in_a_newer_minor_project_is_undone() {
         told.contains("Nothing was changed") && told.contains("snxprj/1.2"),
         "{told}"
     );
+    // Refused up front, not moved and moved back.
+    assert!(told.contains("Not renamed"), "{told}");
 }
 
-/// Add New Schematic in a project read from a newer minor: the blank sheet
-/// is removed again, the saved project keeps its bytes and the project in
-/// memory lists no new sheet.
+/// Add New Schematic in a project read from a newer minor is refused before
+/// the blank sheet is written (#2904): no sheet, the saved project keeps its
+/// bytes, the project in memory lists no new sheet, and a card says why.
 #[test]
 fn add_new_schematic_in_a_newer_minor_project_leaves_no_sheet() {
-    let said = "the project file could not be written, so AddedNM.snxsch was not kept";
-    let before = logged_count(said);
+    let kept = "the project file could not be written, so AddedNM.snxsch was not kept";
+    let said = "Add New Schematic refused: AddedNM.snxsch was not created";
+    let (kept_before, before) = (logged_count(kept), logged_count(said));
     let mut f = fixture(true);
     let saved = make_newer_minor(&mut f);
     let path = add_new(&mut f, "AddedNM.snxsch");
@@ -341,6 +345,12 @@ fn add_new_schematic_in_a_newer_minor_project_leaves_no_sheet() {
     assert_eq!(names(memory), ["Second.snxsch"]);
     assert_eq!(memory.schematic_root.as_deref(), Some("Second.snxsch"));
     assert_eq!(logged_count(said), before + 1);
+    assert_eq!(logged_count(kept), kept_before, "no sheet was written");
+    let notice = f.app.document_state.error_notice.as_ref().expect("card");
+    assert!(
+        notice.detail.render_en_us().contains("was not created"),
+        "{notice:?}"
+    );
 }
 
 #[test]

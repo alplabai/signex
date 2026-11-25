@@ -28,8 +28,10 @@ format declares only its own table row below.
   (mockup rows 176 and 177) and `snxpcb/1.11` when it has a pour cutout
   (#2871), a dimension with a non-default look (#2868) or a drawing or
   string on a copper layer (#2883). A project stays `snxprj/1`, byte for
-  byte, and writes `snxprj/1.1` when it has variant settings. So a build that
-  reads only the lower token opens it read-only.
+  byte, and writes `snxprj/1.1` when it has variant settings. A build that
+  reads only the lower token opens such a sheet or board read-only. A project
+  is different: a released build refuses a `snxprj/1.1` project on load; see
+  the `.snxprj` variant settings row below.
 - **Load** reads every token in the format's readable list. `snxsch/1` and
   `snxsch/1.0` are the same version.
 - **A newer token** is refused on load with an error that names the token,
@@ -37,7 +39,9 @@ format declares only its own table row below.
   adds the file name (`parse schematic <path>`, `project file <path>`).
 - **A newer minor** of `.snxsch` / `.snxpcb` / `.snxprj` opens for viewing instead: the
   document remembers the token and every save, Save As included, is refused,
-  so content this build cannot represent is never dropped (#977, #1402).
+  so content this build cannot represent is never dropped (#977, #1402). A
+  read-only project shows a banner on its Project tab, gets no recovery copy,
+  and Close Project and Exit offer Discard All, not Save All, for it (#2904).
 - **An older or foreign token** that is not in the list, or a garbled one
   (`snxsch/01`, `snxsch/1.`, a number in a `.snxprj`), is refused naming it.
 - **No token** is refused, except in `.snxprj`, where a file with no token

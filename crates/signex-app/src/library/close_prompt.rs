@@ -146,7 +146,9 @@ pub fn view<'a>(
                 CloseLibraryChoice::DiscardAll,
             )),
             cancel,
-            save_all: LibraryMessage::CloseLibraryConfirm(CloseLibraryChoice::SaveAll),
+            save_all: Some(LibraryMessage::CloseLibraryConfirm(
+                CloseLibraryChoice::SaveAll,
+            )),
         },
         tokens,
     );

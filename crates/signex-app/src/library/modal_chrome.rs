@@ -246,11 +246,11 @@ pub(crate) fn unsaved_body<'a, M: 'a>(
 }
 
 /// What the three buttons of an unsaved-changes prompt publish. A `None`
-/// Discard All is withheld (the button is left out).
+/// Discard All or Save All is withheld (the button is left out).
 pub(crate) struct UnsavedActions<M> {
     pub discard_all: Option<M>,
     pub cancel: M,
-    pub save_all: M,
+    pub save_all: Option<M>,
 }
 
 /// The footer buttons of an unsaved-changes prompt as `(left, right)`: the
@@ -273,20 +273,20 @@ pub(crate) fn unsaved_footer_parts<'a, M: Clone + 'a>(
         })
         .into_iter()
         .collect();
-    let right = vec![
-        dialog_button(
-            t!(i18n, ids::DIALOG_BUTTON_CANCEL),
-            DialogButtonKind::Cancel,
-            Some(actions.cancel),
-            tokens,
-        ),
-        dialog_button(
+    let mut right = vec![dialog_button(
+        t!(i18n, ids::DIALOG_BUTTON_CANCEL),
+        DialogButtonKind::Cancel,
+        Some(actions.cancel),
+        tokens,
+    )];
+    if let Some(message) = actions.save_all {
+        right.push(dialog_button(
             t!(i18n, ids::DIALOG_BUTTON_SAVE_ALL),
             DialogButtonKind::Primary,
-            Some(actions.save_all),
+            Some(message),
             tokens,
-        ),
-    ];
+        ));
+    }
     (left, right)
 }
 

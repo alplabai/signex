@@ -206,6 +206,10 @@ impl Signex {
         let Some((project_dir, _)) = self.project_dir_and_path(project_id, "Add New", &[]) else {
             return iced::Task::none();
         };
+        // A read-only project cannot list the sheet: write nothing (#2904).
+        if self.refuse_add_in_read_only_project(project_id, &path) {
+            return iced::Task::none();
+        }
         let fold = self
             .document_state
             .project_by_id(project_id)

@@ -396,3 +396,6 @@ variant-manager-settings-unreadable = The project's variant settings could not b
 # The result pill of a project variable's `=` expression that does not
 # evaluate (mockup row 30); the reason is in the Error line under the row.
 project-parameter-unresolved = ?
+# The banner over the Project tab of a project written by a newer version
+# (#2904). $format is the format it was written in, such as "snxprj/1.2".
+project-read-only-banner = Read-only: this project was written by a newer { -brand-name } ({ $format }). Its changes cannot be saved in this build; edit it in that version.

@@ -396,3 +396,29 @@ fn each_button_keeps_its_outcome() {
     assert_eq!(choice("Cancel"), ProjectCloseChoice::Cancel);
     assert_eq!(choice("Save All"), ProjectCloseChoice::SaveAll);
 }
+
+/// A read-only project's unsaved settings (#2904): Save All is left out and
+/// a warn note under the list says why; Discard All and Cancel stay.
+#[test]
+fn a_read_only_project_withholds_save_all_and_says_why() {
+    let mut app = dirty_app(&["/x/p.snxprj", "/y/loose.snxsch"], Vec::new());
+    project(&mut app, "/x", "Newer", &[]);
+    app.document_state.projects[0]
+        .data
+        .unknown
+        .newer_minor_source = Some("snxprj/1.2".into());
+    let texts = lay_out_texts(
+        app.view_app_quit_confirm_body(),
+        iced::Size::new(500.0, 900.0),
+    );
+    assert!(texts.iter().all(|t| t.text != "Save All"), "{texts:#?}");
+    find(&texts, "Discard All");
+    find(&texts, "Cancel");
+    let note = texts
+        .iter()
+        .find(|t| t.text.contains("Save All is not offered"))
+        .expect("the note")
+        .bounds;
+    let row = find(&texts, "loose.snxsch").bounds;
+    assert!(row.y < note.y, "the note sits under the list");
+}

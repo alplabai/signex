@@ -110,6 +110,9 @@ impl Signex {
             .projects
             .iter()
             .filter(|project| self.is_dirty_project(&project.path))
+            // Read-only (newer minor): it cannot be encoded, and its banner
+            // already says so; autosave stays quiet (#2904).
+            .filter(|project| !project.data.is_from_newer_minor())
             .map(|project| DocumentKey::Project(project.id));
         let rows = self
             .library

@@ -376,6 +376,10 @@ impl Signex {
                     + crate::app::handlers::modal_sizing::LIST_BOX_CHROME,
             ))
             .boxed();
+        // A read-only project's settings cannot be saved: no Save All (#2904).
+        let read_only = self.read_only_dirty_projects(&st.dirty_paths);
+        let withheld = crate::app::read_only_project::save_all_withheld_line(i18n, &read_only);
+        let save_allowed = withheld.is_none();
         let body = unsaved_body(
             UnsavedBody {
                 title: t!(
@@ -386,7 +390,10 @@ impl Signex {
                 detail: summary.line(i18n).into_string(),
                 above,
                 list,
-                below: Vec::new(),
+                below: withheld
+                    .map(|line| super::graphite::callout(DialogIcon::Warn, line, tokens))
+                    .into_iter()
+                    .collect(),
             },
             tokens,
         );
@@ -398,7 +405,7 @@ impl Signex {
             UnsavedActions {
                 discard_all: Some(choose(ProjectCloseChoice::DiscardAll)),
                 cancel: choose(ProjectCloseChoice::Cancel),
-                save_all: choose(ProjectCloseChoice::SaveAll),
+                save_all: save_allowed.then(|| choose(ProjectCloseChoice::SaveAll)),
             },
             tokens,
         );

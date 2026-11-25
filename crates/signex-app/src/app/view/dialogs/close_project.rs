@@ -20,6 +20,7 @@ use super::widgets::modal_title_header;
 use crate::app::ProjectCloseChoice;
 use crate::app::file_extension::has_extension;
 use crate::app::handlers::modal_sizing::CLOSE_LIST_MAX_HEIGHT;
+use crate::app::read_only_project::save_all_withheld_line;
 use crate::app::state::ModalId;
 use crate::app::state::sheet_refs::{bounded_names, file_label};
 use crate::library::modal_chrome::{
@@ -76,6 +77,14 @@ impl Signex {
                 tokens,
             ));
         }
+        // A read-only project's settings cannot be saved: no Save All (#2904).
+        let read_only = self.read_only_dirty_projects(&st.dirty_paths);
+        let withheld = save_all_withheld_line(i18n, &read_only);
+        let save_allowed = withheld.is_none();
+        if let Some(line) = withheld {
+            let line = text(line).size(TS.body).boxed();
+            below.push(dialog_callout(CalloutTone::Warn, line, tokens));
+        }
         let body = unsaved_body(
             UnsavedBody {
                 title: t!(i18n, ids::DIALOG_CLOSE_PROJECT_QUESTION).into_string(),
@@ -91,7 +100,7 @@ impl Signex {
             UnsavedActions {
                 discard_all: discard_allowed.then(|| choose(ProjectCloseChoice::DiscardAll)),
                 cancel: choose(ProjectCloseChoice::Cancel),
-                save_all: choose(ProjectCloseChoice::SaveAll),
+                save_all: save_allowed.then(|| choose(ProjectCloseChoice::SaveAll)),
             },
             tokens,
         );

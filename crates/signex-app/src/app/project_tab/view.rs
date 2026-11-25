@@ -129,6 +129,10 @@ impl Signex {
                 .height(Length::Fill)
                 .style(crate::styles::panel_region(tokens)),
         ];
+        let page: Element<'_, Message> = match read_only_banner(project, i18n, tokens) {
+            Some(banner) => column![banner, page].boxed(),
+            None => page.boxed(),
+        };
         // A handle let go past the drawing still ends its drag.
         let ui = &self.ui_state.project_preview;
         let is_held = ui.labels_of(project_id).dragging_index().is_some();
@@ -189,3 +193,20 @@ impl Signex {
         Some(preview_ui::window(project_id, hint, drawing, i18n, tokens))
     }
 }
+
+/// The warn banner over a project read from a newer `.snxprj` minor: its
+/// edits cannot be saved in this build (#2904).
+fn read_only_banner<'a>(
+    project: &crate::app::state::LoadedProject,
+    i18n: &signex_i18n::I18n,
+    tokens: &signex_types::theme::ThemeTokens,
+) -> Option<Element<'a, Message>> {
+    let format = project.data.unknown.newer_minor_source.as_deref()?;
+    let line = crate::app::read_only_project::banner_line(i18n, format);
+    let body = text(line).size(TypeScale::default().body).boxed();
+    let callout = crate::styles::dialog_callout(crate::styles::CalloutTone::Warn, body, tokens);
+    Some(container(callout).padding(BANNER_PADDING).boxed())
+}
+
+/// Space around the read-only banner, in logical pixels.
+const BANNER_PADDING: f32 = 8.0;

@@ -287,6 +287,14 @@ impl Signex {
         if self.project_library_kind(&state).is_some() {
             return self.begin_library_rename(&state, new_path);
         }
+        // The move also rewrites the saved `.snxprj`: a read-only project
+        // refuses it before the file moves (#2904).
+        if let Some(refusal) =
+            self.read_only_project_rename_refusal(state.tree_path.first().copied())
+        {
+            self.set_rename_error(&refusal);
+            return iced::Task::none();
+        }
 
         // Find every parent sheet that references this file BEFORE it
         // moves, while the hierarchy walk can still reach it.

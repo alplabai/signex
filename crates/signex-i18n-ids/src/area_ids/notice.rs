@@ -136,4 +136,7 @@ define_ids! {
     NOTICE_LOAD_RESTORE_ENGINE_FAILED = "notice-load-restore-engine-failed";
     // chrome-copy-help
     NOTICE_SAVE_FAILED_EDITS_KEPT = "notice-save-failed-edits-kept";
+    NOTICE_PROJECT_READ_ONLY_SAVE = "notice-project-read-only-save";
+    NOTICE_PROJECT_READ_ONLY_RENAME = "notice-project-read-only-rename";
+    NOTICE_PROJECT_READ_ONLY_ADD = "notice-project-read-only-add";
 }

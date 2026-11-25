@@ -302,3 +302,35 @@ fn kept_documents_say_why_they_stay_open() {
         "a.snxsch, b.snxsch stay open because other open projects may use them."
     );
 }
+
+/// A read-only project's unsaved settings (#2904): Save All is left out and
+/// a warn note says why; Discard All and Cancel stay.
+#[test]
+fn a_read_only_project_withholds_save_all_and_says_why() {
+    let mut app = crate::app::handlers::menu::export::tests::app_workspace("/p", &[]);
+    let project = &mut app.document_state.projects[0];
+    project.data.unknown.newer_minor_source = Some("snxprj/1.2".into());
+    let (project_id, prj) = (project.id, project.path.clone());
+    app.ui_state.project_close_confirm = Some(Box::new(crate::app::ProjectCloseConfirmState {
+        project_id,
+        project_name: "ProjectA".into(),
+        dirty_paths: vec![prj],
+        dirty_rows: Vec::new(),
+        kept_paths: Vec::new(),
+        sheet_refs: Default::default(),
+    }));
+    let texts = lay_out_texts(
+        app.view_project_close_confirm_body(),
+        iced::Size::new(900.0, 700.0),
+    );
+    assert!(texts.iter().all(|t| t.text != "Save All"), "{texts:#?}");
+    find(&texts, "Discard All");
+    find(&texts, "Cancel");
+    assert!(
+        texts.iter().any(|t| {
+            let line = plain(t.text.clone());
+            line.contains("'ProjectA'") && line.contains("Save All is not offered")
+        }),
+        "{texts:#?}"
+    );
+}

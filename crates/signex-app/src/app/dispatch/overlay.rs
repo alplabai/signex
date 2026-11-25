@@ -156,7 +156,7 @@ impl Signex {
             ProjectMsg::StartScreen(msg) => self.dispatch_start_screen_message(msg),
             ProjectMsg::Thumbnail(msg) => self.dispatch_project_thumbnail_message(msg),
             ProjectMsg::SheetNumbering(msg) => self.dispatch_sheet_numbering_message(msg),
-            ProjectMsg::CloseConfirm(choice) => self.handle_project_close_confirm(choice),
+            ProjectMsg::CloseConfirm(choice) => self.handle_project_close_choice(choice),
             ProjectMsg::AssignFootprints(msg) => self.dispatch_assign_footprints_message(msg),
             ProjectMsg::CompiledDesign(msg) => self.dispatch_compiled_design_message(msg),
             ProjectMsg::CloseRefsResolved { project_id, result } => {
@@ -196,7 +196,7 @@ impl Signex {
             ProjectMsg::WindowHierarchyAssembled(root, generation, assembly) => {
                 self.handle_window_hierarchy_assembled(&root, generation, assembly)
             }
-            ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
+            ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_choice(choice),
             ProjectMsg::Tab(msg) => self.dispatch_project_tab_message(msg),
             ProjectMsg::Rules(msg) => self.dispatch_rules_tab_message(msg),
             ProjectMsg::Git(msg) => self.dispatch_project_git_message(msg),
@@ -892,13 +892,14 @@ impl Signex {
     ) -> Option<Message> {
         use crate::app::state::ModalId;
         match modal {
-            ModalId::ProjectCloseConfirm => {
-                self.ui_state.project_close_confirm.is_some().then(|| {
+            // Not while Save All is withheld for a read-only project (#2904).
+            ModalId::ProjectCloseConfirm => (self.ui_state.project_close_confirm.as_ref())
+                .filter(|c| self.read_only_dirty_projects(&c.dirty_paths).is_empty())
+                .map(|_| {
                     Message::Project(ProjectMsg::CloseConfirm(
                         crate::app::ProjectCloseChoice::SaveAll,
                     ))
-                })
-            }
+                }),
             _ => None,
         }
     }

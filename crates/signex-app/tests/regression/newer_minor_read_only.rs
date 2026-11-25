@@ -174,4 +174,10 @@ fn saving_a_newer_minor_project_writes_nothing_and_creates_no_library() {
         system.contains("read-only") && system.contains("snxprj/1.2"),
         "{notice:?}"
     );
+    // Its own sentence names the project and why (#2904).
+    let detail = notice.detail.render_en_us();
+    assert!(
+        detail.contains("Newer") && detail.contains("was not saved"),
+        "{detail}"
+    );
 }

@@ -211,10 +211,10 @@ fn restore_keeps_the_id_of_the_open_project() {
 }
 
 /// A project read from a newer minor cannot be encoded for a save, so it
-/// gets no recovery copy either; the refusal is reported once, not on
-/// every tick.
+/// gets no recovery copy either, and autosave stays quiet about it: the
+/// Project tab's read-only banner already says so (#2904).
 #[test]
-fn a_newer_minor_project_gets_no_sidecar_and_the_refusal_is_reported_once() {
+fn a_newer_minor_project_gets_no_sidecar_and_autosave_stays_quiet() {
     let _ = signex_app::diagnostics::init_logging();
     let tmp = tempfile::tempdir().unwrap();
     let file = tmp.path().join("P.snxprj");
@@ -247,5 +247,5 @@ fn a_newer_minor_project_gets_no_sidecar_and_the_refusal_is_reported_once() {
     );
     assert_eq!(std::fs::read(&file).unwrap(), before, "untouched");
     assert!(app.document_state.is_document_dirty(&prj));
-    assert_eq!(logged(), reported_before + 1, "reported once, not per tick");
+    assert_eq!(logged(), reported_before, "no refusal is reported");
 }
