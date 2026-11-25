@@ -91,6 +91,8 @@ mod pcb_layers_panel;
 mod pcb_net_focus;
 #[cfg(test)]
 mod pcb_net_focus_tests;
+#[cfg(test)]
+mod pcb_net_focus_window_tests;
 mod pcb_nets_panel;
 #[cfg(test)]
 mod pcb_nets_panel_tests;

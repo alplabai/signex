@@ -1401,7 +1401,10 @@ as on a sheet (#2403). The numbers and matches come from the domain crates
   the amount differs from the drawn one, so a tool or carry starting or
   ending, Esc included, and Save of a new amount repaint it; the board
   under a drag preview keeps the focus, the ghost on the cursor is never
-  dimmed. Copper is dimmed by its net (`BoardPaint::net_opacity`), on top
+  dimmed. A highlight is board-wide; a tool or carry counts only in the
+  window it runs in (`board_focus_nets(path, window)`), so the same board
+  shown in the main window and an undocked window dims each for its own
+  tool. Copper is dimmed by its net (`BoardPaint::net_opacity`), on top
   of the View Options transparency of its kind.
 - **Net Inspector**: lists the board's nets (see `MENU_BAR.md`, "Tools ▸ Net
   Inspector").

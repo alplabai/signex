@@ -957,8 +957,12 @@ impl Signex {
         // its own selection over the new geometry.
         let board_moved =
             self.document_state.pcb_revisions.get(&target_path).copied() != board_revision_before;
-        if board_moved && self.active_tab_path().as_ref() == Some(&target_path) {
+        let main_shows_board = self.active_tab_path().as_ref() == Some(&target_path);
+        if board_moved && main_shows_board {
             self.refresh_pcb_highlight();
+        } else if main_shows_board {
+            // A net highlighted from the window is board-wide (#2514).
+            self.sync_board_net_focus();
         }
 
         match task_result {

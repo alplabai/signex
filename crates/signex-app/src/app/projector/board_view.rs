@@ -44,7 +44,25 @@ impl Signex {
             .unwrap_or_default();
 
         // An undocked window showing the same tab draws the same board
-        // (#494). Its camera stays its own.
+        // (#494). Its camera stays its own, and it dims for its own tool or
+        // carry (#2514).
+        let shows_board = |id: &iced::window::Id| {
+            matches!(
+                self.ui_state.windows.get(id),
+                Some(crate::app::state::WindowKind::UndockedTab { path, .. })
+                    if *path == board_path
+            )
+        };
+        let window_snapshots: std::collections::HashMap<iced::window::Id, _> =
+            (self.interaction_state.pcb_canvases.keys())
+                .filter(|id| shows_board(id))
+                .map(|&id| {
+                    let nets = self.board_focus_nets(&board_path, Some(id));
+                    let snapshot = (renderer_snapshot.clone())
+                        .map(|snapshot| self.with_focus_on(snapshot, &nets));
+                    (id, snapshot)
+                })
+                .collect();
         let active_path = self
             .document_state
             .tabs
@@ -57,7 +75,7 @@ impl Signex {
                     if Some(path.as_path()) == active_path
             );
             if shows_active {
-                canvas.set_renderer_snapshot(renderer_snapshot.clone());
+                canvas.set_renderer_snapshot(window_snapshots.get(id).cloned().flatten());
                 canvas.set_board_grid(board_grid);
                 canvas.set_board_marks(marks.clone());
                 canvas.set_origin_marker_visible(origin_marker);

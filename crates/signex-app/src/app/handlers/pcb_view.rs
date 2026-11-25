@@ -90,15 +90,13 @@ impl Signex {
 
     /// The snapshot of `board` as the view of `path` shows it, without the
     /// ratsnest. Designators draw as the project's standard shows them
-    /// (#1416). Copper off the nets in focus (`board_focus_nets`) dims by
-    /// the Preferences ▸ PCB ▸ Display amount (#2514).
+    /// (#1416). Copper off the nets in focus in the acting window
+    /// (`board_focus_nets`) dims by the Preferences ▸ PCB ▸ Display amount
+    /// (#2514).
     pub(crate) fn pcb_snapshot_for(&self, path: &Path, board: &PcbBoard) -> PcbSnapshot {
-        let mut snapshot = self.pcb_unfocused_snapshot_for(path, board);
-        snapshot.paint = snapshot.paint.with_net_focus(
-            &self.board_focus_nets(path),
-            self.ui_state.pcb_dim_others_percent,
-        );
-        snapshot
+        let window = self.interaction_state.acting_window;
+        let nets = self.board_focus_nets(path, window);
+        self.with_focus_on(self.pcb_unfocused_snapshot_for(path, board), &nets)
     }
 
     fn pcb_unfocused_snapshot_for(&self, path: &Path, board: &PcbBoard) -> PcbSnapshot {
