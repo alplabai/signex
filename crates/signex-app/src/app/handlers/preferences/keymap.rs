@@ -293,8 +293,10 @@ impl Signex {
                     .preferences_keymap_editor
                     .active_profile()
                     .clone();
+                // Serialised once here so a profile that cannot be written
+                // says so before the save dialog opens.
                 match crate::keymap::export_custom_profile(&profile) {
-                    Ok(source) => {
+                    Ok(_) => {
                         let filename = format!("{}.toml", profile.id);
                         // The status line must describe this attempt, not
                         // the last one.
@@ -312,13 +314,17 @@ impl Signex {
                             let Some(path) = picked else {
                                 return Message::noop();
                             };
-                            // The serialization failure below already
-                            // reported through `preferences_keymap_status`;
-                            // the write failure was the half that vanished
-                            // (#533). A whole-file write yields
-                            // `io::Result<()>`, so there is no short write
-                            // to handle.
-                            let outcome = match tokio::fs::write(&path, source.as_bytes()).await {
+                            // The write failure is reported too (#533). It
+                            // is crash-safe (`atomic_write`): an export over
+                            // an existing file never leaves it half written.
+                            let target = path.clone();
+                            let written = tokio::task::spawn_blocking(move || {
+                                crate::keymap::write_profile_file(&target, &profile)
+                                    .map_err(|error| error.to_string())
+                            })
+                            .await
+                            .unwrap_or_else(|error| Err(error.to_string()));
+                            let outcome = match written {
                                 Ok(()) => Ok(path),
                                 Err(error) => {
                                     Err(format!("{path}: {error}", path = path.display()))
@@ -347,10 +353,15 @@ impl Signex {
                 label,
                 context,
                 trigger,
+                unassigned,
             } => {
-                self.ui_state.preferences_keymap_recorder = Some(
-                    crate::app::KeymapRecorderState::new(slot, command, label, context, trigger),
-                );
+                self.ui_state.preferences_keymap_recorder =
+                    Some(crate::app::KeymapRecorderState {
+                        unassigned,
+                        ..crate::app::KeymapRecorderState::new(
+                            slot, command, label, context, trigger,
+                        )
+                    });
                 self.ui_state.preferences_keymap_status.clear();
             }
             PrefMsg::KeymapRecorderCancel => {
@@ -400,16 +411,28 @@ impl Signex {
                 let Some(recorder) = self.ui_state.preferences_keymap_recorder.clone() else {
                     return Task::none();
                 };
-                if recorder.strokes.is_empty() {
+                if recorder.strokes.is_empty() && recorder.unassigned {
                     self.ui_state.preferences_keymap_status =
                         "Record at least one keystroke before applying.".to_string();
                     return Task::none();
                 }
-                match self
-                    .ui_state
-                    .preferences_keymap_editor
-                    .edit_active_trigger_parsed(recorder.slot, recorder.trigger())
-                {
+                let editor = &mut self.ui_state.preferences_keymap_editor;
+                // Mockup row 145: a command with no key gets a new binding;
+                // OK after Clear takes the row's key away.
+                let applied = if recorder.unassigned {
+                    editor
+                        .assign_active_trigger(
+                            recorder.command.clone(),
+                            recorder.context,
+                            recorder.trigger(),
+                        )
+                        .map(|_| ())
+                } else if recorder.strokes.is_empty() {
+                    editor.remove_active_trigger(recorder.slot)
+                } else {
+                    editor.edit_active_trigger_parsed(recorder.slot, recorder.trigger())
+                };
+                match applied {
                     Ok(()) => {
                         self.ui_state.preferences_keymap_status.clear();
                         self.recompute_preferences_dirty();

@@ -268,7 +268,26 @@ The page (`preferences/keymap/`) reads top to bottom:
   current keys, a help line, a warning when a fixed app key would swallow
   the recorded keys, and Clear, Stop (Record once stopped), Cancel and OK.
   OK puts the new keys in the working copy; like every Preferences change
-  they are saved by the dialog's Apply or OK.
+  they are saved by the dialog's Apply or OK. Every keystroke while
+  recording is recorded, Esc included; only Cancel closes the recorder.
+  OK with nothing recorded (after Clear) takes the row's key away.
+- **Commands with no key** (#2495, Caner 2026-11-25): the table also lists
+  every command the active profile gives no key, built-in or from an
+  installed extension, as an Unbound row in the command's own context (the
+  one editor it acts in, else Global). A built-in command is listed when a
+  key can run it, the rule the command palette uses. In a custom profile
+  its Edit opens the same recorder, and OK adds a binding at the end of the
+  profile (`KeymapEditorModel::assign_active_trigger`), saved with the
+  profile in `keyboard_shortcuts.toml`; an extension command is saved under
+  its `ext.` id. On a built-in profile these rows have no Edit: Create
+  copies the profile first.
+
+`KeymapEditorModel` also has `clear_active_command_keys` (take every key from
+one command) and the profile file IO `read_profile_file` and
+`write_profile_file` (Export… writes through `atomic_write` in a task). They
+are the pieces a CLI run would use to import, export, set or clear a binding;
+those commands are not in the catalog yet (see `docs/DECISIONS.md`,
+2026-11-25).
 
 The editor is backed by `KeymapEditorModel`, which exposes rows with:
 

@@ -57,11 +57,13 @@ pub use profile::{
     BindingConflict, BuiltInProfile, CompiledKeymap, KeyLookup, ProfileLoadError, RestoredProfiles,
     ShortcutProfile, ShortcutProfileKind, ShortcutProfileSet, TomlShortcutProfile, config_path,
     config_path_for_dir, export_custom_profile, export_custom_profiles, import_custom_profile,
-    load_profile_set, load_profile_set_at, read_backup_profiles_at, save_profile_set,
-    save_profile_set_at,
+    load_profile_set, load_profile_set_at, read_backup_profiles_at, read_profile_file,
+    save_profile_set, save_profile_set_at, write_profile_file,
 };
 pub use signex_commands::{AppCommandId, Platform};
 
+#[cfg(test)]
+mod assign_tests;
 #[cfg(test)]
 mod binding_tests;
 #[cfg(test)]

@@ -352,6 +352,64 @@ fn only_custom_keyboard_rows_offer_edit() {
     assert!(table::edit_message(row, false).is_none());
 }
 
+/// Mockup row 145 ("Export Netlist — Unbound"): the page lists commands
+/// with no key, Unbound, and a custom profile offers Edit on them.
+#[test]
+fn the_page_lists_commands_without_a_key_as_unbound_rows_with_edit() {
+    use crate::keymap::Platform;
+    use filters::RowState;
+    let editor = editor_in_contexts(&[("Ctrl+F", "find", crate::keymap::ShortcutContext::Global)]);
+    let none = crate::keymap::ExtensionCommandNames::default();
+    let page = |search: &str, filter| {
+        filters::page_rows(
+            &editor,
+            signex_i18n::I18n::en_us_ref(),
+            &none,
+            search,
+            filter,
+            &[],
+            Platform::Windows,
+        )
+    };
+    let rows = page("", KeymapContextFilter::All);
+    assert!(rows.iter().any(|row| !row.unassigned), "the binding row stays");
+    let unbound: Vec<_> = rows.iter().filter(|row| row.unassigned).collect();
+    assert!(!unbound.is_empty());
+    for row in &unbound {
+        assert_eq!(
+            RowState::of(row, &[], Platform::Windows, true),
+            RowState::Unbound
+        );
+        assert!(row.command.as_ref().is_some_and(|c| c.as_str() != "find"));
+        assert!(matches!(
+            table::edit_message(row, true),
+            Some(PrefMsg::KeymapRecorderOpen {
+                unassigned: true,
+                ..
+            })
+        ));
+        assert!(
+            table::edit_message(row, false).is_none(),
+            "built-ins are read-only"
+        );
+    }
+    let shown: Vec<String> = rows.iter().map(|row| row.label.clone()).collect();
+    let mut sorted = shown.clone();
+    signex_i18n::I18n::en_us_ref().sort_for_display(&mut sorted, |label| label.as_str());
+    assert_eq!(shown, sorted, "one list, sorted by command");
+
+    // The search narrows them as it does the bound rows; Conflicts has none.
+    let first = unbound[0].command.clone().unwrap();
+    let searched = page(first.as_str(), KeymapContextFilter::All);
+    assert!(
+        searched
+            .iter()
+            .any(|row| row.command.as_ref() == Some(&first))
+    );
+    assert!(searched.len() < rows.len());
+    assert!(page("", KeymapContextFilter::Conflicts).is_empty());
+}
+
 #[test]
 fn the_recorder_popover_keeps_clear_stop_cancel_and_ok() {
     use signex_i18n::shortcut_ids as sids;

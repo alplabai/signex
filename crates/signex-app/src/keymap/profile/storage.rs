@@ -101,6 +101,20 @@ pub fn export_custom_profile(profile: &ShortcutProfile) -> Result<String, Profil
     toml::to_string_pretty(&document).map_err(ProfileLoadError::TomlSerialize)
 }
 
+/// Read one custom profile from a profile file (Import…). Blocking: call it
+/// from a task, never from `update`.
+pub fn read_profile_file(path: &Path) -> Result<ShortcutProfile, ProfileLoadError> {
+    let source = std::fs::read_to_string(path).map_err(ProfileLoadError::Io)?;
+    import_custom_profile(&source)
+}
+
+/// Write one custom profile to a profile file (Export…), crash-safe through
+/// [`signex_types::atomic_io::atomic_write`]. Blocking: call it from a task.
+pub fn write_profile_file(path: &Path, profile: &ShortcutProfile) -> Result<(), ProfileLoadError> {
+    let source = export_custom_profile(profile)?;
+    signex_types::atomic_io::atomic_write(path, source.as_bytes()).map_err(ProfileLoadError::Io)
+}
+
 pub fn export_custom_profiles(set: &ShortcutProfileSet) -> Result<String, ProfileLoadError> {
     let document = TomlShortcutConfig::from_profile_set(set)?;
     toml::to_string_pretty(&document).map_err(ProfileLoadError::TomlSerialize)

@@ -2,7 +2,8 @@ use crate::keymap::ExtensionCommandNames;
 use crate::keymap::{
     AppCommandId, BindingConflict, CatalogTextExt, CommandGroup, CompiledKeymap, Platform,
     ProfileLoadError, ShortcutBinding, ShortcutBindingAction, ShortcutContext, ShortcutProfile,
-    ShortcutProfileKind, ShortcutProfileSet, ShortcutTrigger, fallback_label, metadata_for,
+    ShortcutProfileKind, ShortcutProfileSet, ShortcutTrigger, all_command_ids, fallback_label,
+    metadata_for,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -171,6 +172,7 @@ impl KeymapEditorModel {
                                     trigger,
                                     self.platform,
                                 ),
+                            unassigned: false,
                             source: source.clone(),
                         }
                     })
@@ -203,6 +205,71 @@ impl KeymapEditorModel {
     #[cfg(test)]
     pub fn filtered_rows(&self, query: &str) -> Vec<KeymapEditorRow> {
         self.filtered_rows_in(signex_i18n::I18n::en_us_ref(), query)
+    }
+
+    /// One row for each command with no key in the active profile on this
+    /// OS, so any command can be given one (mockup row 145): the catalog
+    /// commands `offers` accepts and every installed extension command.
+    /// Each row is Unbound, in the command's own context, and carries the
+    /// slot a new binding takes; [`Self::assign_active_trigger`] adds it.
+    pub fn unassigned_rows_in_with(
+        &self,
+        i18n: &signex_i18n::I18n,
+        extensions: &ExtensionCommandNames,
+        offers: impl Fn(&AppCommandId) -> bool,
+    ) -> Vec<KeymapEditorRow> {
+        let active = self.profiles.active_profile();
+        let bound: BTreeSet<&AppCommandId> = active
+            .bindings
+            .iter()
+            .filter(|binding| binding.applies_on(self.platform))
+            .filter_map(|binding| match &binding.action {
+                ShortcutBindingAction::Command(command) => Some(command),
+                ShortcutBindingAction::Unbind(_) | ShortcutBindingAction::NoAction => None,
+            })
+            .collect();
+        let source = match active.kind {
+            ShortcutProfileKind::BuiltIn => KeymapEditorSource::BuiltIn(active.id.clone()),
+            ShortcutProfileKind::Custom => KeymapEditorSource::Custom(active.id.clone()),
+        };
+        let next = BindingSlot {
+            binding: active.bindings.len(),
+            trigger: 0,
+        };
+        let catalog = all_command_ids()
+            .filter_map(|id| AppCommandId::new(id).ok())
+            .filter(|command| offers(command));
+        catalog
+            .chain(extensions.ids().cloned())
+            .filter(|command| !bound.contains(command))
+            .map(|command| {
+                let metadata = metadata_for(&command);
+                let extension = extensions.get(&command);
+                KeymapEditorRow {
+                    slot: next,
+                    group: metadata.map_or(CommandGroup::General, |metadata| metadata.group),
+                    category: metadata
+                        .map(|metadata| metadata.category)
+                        .or(extension.map(|name| name.category))
+                        .unwrap_or(EXTENSION_CATEGORY)
+                        .to_string(),
+                    label: metadata
+                        .map(|metadata| metadata.label_in(i18n))
+                        .or_else(|| extensions.label_in(i18n, &command))
+                        .unwrap_or_else(|| fallback_label(&command)),
+                    context: default_context(&command),
+                    trigger: String::new(),
+                    trigger_english: String::new(),
+                    trigger_config: String::new(),
+                    trigger_valid: true,
+                    keyboard_editable: true,
+                    unbound: false,
+                    unassigned: true,
+                    source: source.clone(),
+                    command: Some(command),
+                }
+            })
+            .collect()
     }
 
     pub fn create_custom_from_active(
@@ -306,6 +373,120 @@ impl KeymapEditorModel {
         Ok(())
     }
 
+    /// Give `command` the key `trigger` in `context` in the active custom
+    /// profile, as a new binding after the others so no row's slot moves.
+    /// Returns the new binding's slot. A built-in profile is read-only:
+    /// editing one means copying it first (Create).
+    pub fn assign_active_trigger(
+        &mut self,
+        command: AppCommandId,
+        context: ShortcutContext,
+        trigger: ShortcutTrigger,
+    ) -> Result<BindingSlot, ProfileLoadError> {
+        self.refuse_built_in()?;
+        let profile = self.profiles.active_profile_mut();
+        profile.bindings.push(ShortcutBinding {
+            action: ShortcutBindingAction::Command(command),
+            context,
+            triggers: vec![trigger],
+            platform: None,
+        });
+        Ok(BindingSlot {
+            binding: profile.bindings.len() - 1,
+            trigger: 0,
+        })
+    }
+
+    /// Take the key at `slot` away from its command in the active custom
+    /// profile; a binding left with no trigger goes too. Drafts of the
+    /// rows after it move with their triggers.
+    pub fn remove_active_trigger(&mut self, slot: BindingSlot) -> Result<(), ProfileLoadError> {
+        self.refuse_built_in()?;
+        let profile = self.profiles.active_profile_mut();
+        let binding = profile
+            .bindings
+            .get_mut(slot.binding)
+            .filter(|binding| slot.trigger < binding.triggers.len())
+            .ok_or(ProfileLoadError::UnknownBindingSlot)?;
+        binding.triggers.remove(slot.trigger);
+        let binding_gone = binding.triggers.is_empty();
+        if binding_gone {
+            profile.bindings.remove(slot.binding);
+        }
+        self.shift_drafts_after_removal(slot, binding_gone);
+        Ok(())
+    }
+
+    /// Take every key from `command` in the active custom profile on this
+    /// OS; its pointer gestures stay. Returns how many keys went. Pending
+    /// drafts are dropped, as on a profile switch.
+    pub fn clear_active_command_keys(
+        &mut self,
+        command: &AppCommandId,
+    ) -> Result<usize, ProfileLoadError> {
+        self.refuse_built_in()?;
+        let platform = self.platform;
+        let mut removed = 0;
+        self.profiles
+            .active_profile_mut()
+            .bindings
+            .retain_mut(|binding| {
+                let ours = binding.applies_on(platform)
+                    && matches!(&binding.action, ShortcutBindingAction::Command(c) if c == command);
+                if !ours {
+                    return true;
+                }
+                let before = binding.triggers.len();
+                binding
+                    .triggers
+                    .retain(|trigger| !matches!(trigger, ShortcutTrigger::KeySequence(_)));
+                removed += before - binding.triggers.len();
+                !binding.triggers.is_empty()
+            });
+        self.clear_trigger_drafts();
+        Ok(removed)
+    }
+
+    fn refuse_built_in(&self) -> Result<(), ProfileLoadError> {
+        if self.active_profile_is_custom() {
+            Ok(())
+        } else {
+            Err(ProfileLoadError::BuiltInMutation(
+                self.profiles.active_profile().id.clone(),
+            ))
+        }
+    }
+
+    /// Re-key the drafts after the trigger at `removed` went (and its
+    /// binding, when `binding_gone`); the removed row's own draft is dropped.
+    fn shift_drafts_after_removal(&mut self, removed: BindingSlot, binding_gone: bool) {
+        let moved = |key: BindingSlot| -> Option<BindingSlot> {
+            if key == removed {
+                None
+            } else if binding_gone && key.binding > removed.binding {
+                Some(BindingSlot {
+                    binding: key.binding - 1,
+                    ..key
+                })
+            } else if key.binding == removed.binding && key.trigger > removed.trigger {
+                Some(BindingSlot {
+                    trigger: key.trigger - 1,
+                    ..key
+                })
+            } else {
+                Some(key)
+            }
+        };
+        self.trigger_drafts = std::mem::take(&mut self.trigger_drafts)
+            .into_iter()
+            .filter_map(|(key, draft)| moved(key).map(|key| (key, draft)))
+            .collect();
+        self.invalid_trigger_drafts = std::mem::take(&mut self.invalid_trigger_drafts)
+            .into_iter()
+            .filter_map(moved)
+            .collect();
+    }
+
     pub fn has_invalid_trigger_drafts(&self) -> bool {
         !self.invalid_trigger_drafts.is_empty()
     }
@@ -390,6 +571,9 @@ pub struct KeymapEditorRow {
     /// A later `Unbind` of this command on this trigger and context shadows
     /// the row: it is listed, but the shortcut does not work.
     pub unbound: bool,
+    /// A command with no key in the profile: recording one adds a binding
+    /// ([`KeymapEditorModel::unassigned_rows_in_with`]).
+    pub unassigned: bool,
     pub source: KeymapEditorSource,
 }
 
@@ -437,6 +621,15 @@ impl From<ShortcutProfile> for KeymapEditorModel {
         let profiles = ShortcutProfileSet::new([profile], active)
             .expect("single-profile editor model uses its profile as active");
         Self::new(profiles)
+    }
+}
+
+/// Where a new key for `command` applies: the one editor it acts in, else
+/// everywhere.
+fn default_context(command: &AppCommandId) -> ShortcutContext {
+    match signex_commands::catalog::required_contexts(command) {
+        Some([only]) => *only,
+        _ => ShortcutContext::Global,
     }
 }
 

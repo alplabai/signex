@@ -342,13 +342,15 @@ pub enum PrefMsg {
     /// `preferences_keymap_status`, where the serialization failure at
     /// the same call site already reported.
     KeymapExportFinished(Result<std::path::PathBuf, String>),
-    /// Open the chord recorder for a specific binding.
+    /// Open the chord recorder for a specific binding, or for a command
+    /// with no key yet (`unassigned`), whose OK adds a binding.
     KeymapRecorderOpen {
         slot: crate::keymap::BindingSlot,
         command: crate::keymap::AppCommandId,
         label: String,
         context: crate::keymap::ShortcutContext,
         trigger: String,
+        unassigned: bool,
     },
     /// Dismiss the recorder without applying.
     KeymapRecorderCancel,
@@ -362,7 +364,8 @@ pub enum PrefMsg {
     KeymapRecorderModifiersChanged(crate::keymap::Modifiers),
     /// A captured keystroke, routed from the keyboard subscription.
     KeymapRecorderKeyPressed(crate::keymap::KeyStroke),
-    /// Apply the recorded chord to the binding under edit.
+    /// Apply the recorded chord to the binding under edit. With nothing
+    /// recorded (after Clear), the binding's key is taken away.
     KeymapRecorderApply,
 }
 
