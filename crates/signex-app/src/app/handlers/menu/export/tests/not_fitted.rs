@@ -67,13 +67,40 @@ fn path(name: &str) -> PathBuf {
 /// How unit B draws on the child page of `ctx`, rendered as the PDF and
 /// the preview render a page: the fits decided over `ctx`, then the page.
 struct ChildDrawn {
-    /// Open two-point strokes in the symbol ink: the cross.
+    /// Two-point strokes in the symbol ink beyond those the page draws with
+    /// the preference off: the cross. (A theme palette can draw wires in
+    /// the symbol ink.)
     crosses: usize,
     /// Whether the body outline is in the greyed symbol ink.
     greyed: bool,
 }
 
 fn child_drawn(ctx: &ExportContext, opts: &PdfOptions) -> ChildDrawn {
+    let ink = opts.palette.symbol_stroke;
+    let (strokes, paper) = child_strokes(ctx, opts);
+    let plain = PdfOptions {
+        draw_not_fitted: false,
+        ..opts.clone()
+    };
+    let ink_lines = |strokes: &Strokes| {
+        strokes
+            .iter()
+            .filter(|(count, stroke)| *count == 2 && *stroke == Some(ink))
+            .count()
+    };
+    let [r, g, b] = greyed_ink([ink.0, ink.1, ink.2], [paper.0, paper.1, paper.2]);
+    ChildDrawn {
+        crosses: ink_lines(&strokes) - ink_lines(&child_strokes(ctx, &plain).0),
+        greyed: strokes
+            .iter()
+            .any(|(count, stroke)| *count == 5 && *stroke == Some((r, g, b))),
+    }
+}
+
+/// Every path on the child page as (command count, stroke), and the paper.
+type Strokes = Vec<(usize, Option<(f32, f32, f32)>)>;
+
+fn child_strokes(ctx: &ExportContext, opts: &PdfOptions) -> (Strokes, (f32, f32, f32)) {
     let page = ctx
         .sheets
         .iter()
@@ -94,12 +121,7 @@ fn child_drawn(ctx: &ExportContext, opts: &PdfOptions) -> ChildDrawn {
         placed_fits: Some(&fits),
     };
     let svg = SvgRenderContext::from_sheet(page, opts, 297.0, 210.0, 1.0, Some(&inputs));
-    let ink = opts.palette.symbol_stroke;
-    let [r, g, b] = greyed_ink(
-        [ink.0, ink.1, ink.2],
-        [svg.paper.0, svg.paper.1, svg.paper.2],
-    );
-    let strokes: Vec<_> = svg
+    let strokes = svg
         .elements
         .iter()
         .filter_map(|e| match e {
@@ -107,15 +129,7 @@ fn child_drawn(ctx: &ExportContext, opts: &PdfOptions) -> ChildDrawn {
             SvgElement::Text { .. } => None,
         })
         .collect();
-    ChildDrawn {
-        crosses: strokes
-            .iter()
-            .filter(|(count, stroke)| *count == 2 && *stroke == Some(ink))
-            .count(),
-        greyed: strokes
-            .iter()
-            .any(|(count, stroke)| *count == 5 && *stroke == Some((r, g, b))),
-    }
+    (strokes, svg.paper)
 }
 
 fn assert_not_fitted(drawn: &ChildDrawn, what: &str) {
