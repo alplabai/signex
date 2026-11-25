@@ -284,10 +284,12 @@ pub fn build_renderer_snapshot(
         } else {
             symbol::push_primitives(&primitives, &style, &mut sink);
             if not_fitted {
+                // The cross is in the theme's error ink (decision of
+                // 2026-11-25), as SVG and PDF draw it.
                 symbol::push_not_fitted_cross(
                     snapshot.body_of(symbol),
                     symbol,
-                    stroke_color,
+                    focus_color(to_iced(&colors.erc_error), focus_set, symbol.uuid),
                     &style,
                     &mut sink,
                 );

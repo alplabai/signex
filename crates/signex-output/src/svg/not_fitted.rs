@@ -64,7 +64,7 @@ pub(super) fn grey_elements(elements: &mut [SvgElement], paper: (f32, f32, f32))
     }
 }
 
-/// The cross over `sym`'s body, in the symbol ink, not greyed.
+/// The cross over `sym`'s body, in the theme's error ink, not greyed.
 pub(super) fn push_not_fitted_cross(
     out: &mut Vec<SvgElement>,
     sym: &Symbol,
@@ -85,7 +85,7 @@ pub(super) fn push_not_fitted_cross(
             ],
             style: SvgStyle {
                 stroke_alpha: 1.0,
-                stroke_rgb: Some(palette.symbol_stroke),
+                stroke_rgb: Some(palette.error),
                 fill_rgb: None,
                 stroke_width: width as f32,
             },

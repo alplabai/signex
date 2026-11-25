@@ -60,12 +60,14 @@ fn options(draw_not_fitted: bool, variant: Option<&str>) -> PdfOptions {
     }
 }
 
-/// What the part draws: the body outline's stroke, its body fill, and how
-/// many crosses (open two-point strokes in the symbol ink) the page has.
+/// What the part draws: the body outline's stroke, its body fill, how many
+/// crosses (open two-point strokes in the error ink) the page has, and how
+/// many such strokes are in the symbol ink.
 struct Drawn {
     outline: (f32, f32, f32),
     fill: (f32, f32, f32),
     crosses: usize,
+    symbol_ink_strokes: usize,
 }
 
 fn drawn(sheet: &SheetSnapshot, opts: &PdfOptions, settings: Option<&VariantSettings>) -> Drawn {
@@ -116,15 +118,19 @@ fn drawn_with(
         .nth(1)
         .and_then(|(_, _, style)| style.fill_rgb)
         .expect("the body fill after the page fill");
-    let ink = opts.palette.symbol_stroke;
-    let crosses = paths
-        .iter()
-        .filter(|(closed, count, style)| *count == 2 && !*closed && style.stroke_rgb == Some(ink))
-        .count();
+    let open_strokes_in = |ink: (f32, f32, f32)| {
+        paths
+            .iter()
+            .filter(|(closed, count, style)| {
+                *count == 2 && !*closed && style.stroke_rgb == Some(ink)
+            })
+            .count()
+    };
     Drawn {
         outline,
         fill,
-        crosses,
+        crosses: open_strokes_in(opts.palette.error),
+        symbol_ink_strokes: open_strokes_in(opts.palette.symbol_stroke),
     }
 }
 
@@ -144,6 +150,28 @@ fn a_dnp_part_prints_greyed_with_a_cross_and_a_fitted_one_as_before() {
     );
     assert_eq!(dnp.fill, greyed_rgb((0.9, 0.9, 0.8), palette.paper));
     assert_eq!(dnp.crosses, 2, "two strokes, corner to corner");
+}
+
+/// The cross is in the theme's error ink, not the symbol ink (decision of
+/// 2026-11-25), and a themed palette takes its error token.
+#[test]
+fn the_cross_prints_in_the_error_ink() {
+    let opts = options(true, None);
+    assert_ne!(opts.palette.error, opts.palette.symbol_stroke);
+    let dnp = drawn(&page(true), &opts, None);
+    assert_eq!(dnp.crosses, 2);
+    assert_eq!(
+        dnp.symbol_ink_strokes, 0,
+        "no stroke of the cross in the symbol ink"
+    );
+
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteDark);
+    let themed = PdfOptions {
+        palette: SchematicPalette::from(&colors),
+        ..options(true, None)
+    };
+    let dark = drawn(&page(true), &themed, None);
+    assert_eq!(dark.crosses, 2, "in the dark theme's error ink");
 }
 
 #[test]
