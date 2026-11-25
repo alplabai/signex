@@ -56,7 +56,8 @@ floating over the dock, under the field and right-aligned to it, so the
 rows below stay where they are (#2674). The menu keeps inside the window,
 above the field when there is no room below. Picking a preset or an
 accepted custom format closes it, and so does a press anywhere outside the
-menu and its field; a press on the field toggles it.
+menu and its field; a press on the field toggles it. Esc closes it with no
+change, the typed custom format dropped.
 
 ## Stitching
 
