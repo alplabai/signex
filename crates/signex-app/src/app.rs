@@ -55,7 +55,9 @@ mod load_gateway;
 mod mutation_gateway;
 pub(crate) mod new_project;
 pub(crate) mod notebook_project;
-pub use notebook_project::NotebookMsg;
+// Mockup row 195: the Design Notebook tab.
+pub mod notebook_tab;
+pub use notebook_tab::NotebookMsg;
 pub(crate) mod page_tab;
 pub mod parent_reference_disk;
 mod parked_sheets;

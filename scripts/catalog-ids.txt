@@ -177,6 +177,9 @@ next_highlighted_net_item
 next_layer
 next_sheet
 next_signal_layer
+notebook_compile
+notebook_insert
+notebook_view
 number_schematic_sheets
 open_child_sheet
 open_command_palette

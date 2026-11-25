@@ -280,6 +280,13 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "project_run_requirements",
         crate::app::project_tab::project_run_requirements,
     ),
+    // #2795: the Design Notebook tab, on the project `document` names.
+    (
+        "notebook_compile",
+        crate::app::notebook_tab::notebook_compile,
+    ),
+    ("notebook_insert", crate::app::notebook_tab::notebook_insert),
+    ("notebook_view", crate::app::notebook_tab::notebook_view),
 ];
 
 /// The turn `view_rotate` asks for: its `degrees`, else a quarter turn
@@ -534,6 +541,10 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         | "project_run_requirements" => Some(
             "the `project_*` edits need their operands — \
              use the Project tab (Project ▸ Project Options...)",
+        ),
+        "notebook_compile" | "notebook_insert" | "notebook_view" => Some(
+            "the `notebook_*` commands need their operands — \
+             use the Design Notebook tab",
         ),
         _ => None,
     }

@@ -338,6 +338,11 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "project_enable_requirement",
         "it writes the project's settings, which no sheet's undo step covers",
     ),
+    // #2795: the insert lands in the notebook tab's text, not on a sheet.
+    (
+        "notebook_insert",
+        "it edits the project's Design Notebook, which no sheet's undo step covers; run it as its own command",
+    ),
 ];
 
 const BOARD_EDIT: &str =

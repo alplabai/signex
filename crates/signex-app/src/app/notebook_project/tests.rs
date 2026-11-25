@@ -112,7 +112,8 @@ fn every_notebook_command_reaches_its_request() {
         let command = AppCommandId::new(id).expect("a catalog id");
         let got = bridge::core_to_message(&command, &CommandArgs::none());
         assert!(
-            matches!(&got, Some(Message::Project(ProjectMsg::Notebook(msg))) if *msg == want),
+            matches!(&got, Some(Message::Project(ProjectMsg::Notebook(msg)))
+                if format!("{msg:?}") == format!("{want:?}")),
             "{id}: {got:?}"
         );
     }

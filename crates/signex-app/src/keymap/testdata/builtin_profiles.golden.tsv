@@ -552,6 +552,9 @@ signex_standard	hint	-	-	open_design_notebook
 signex_standard	hint	-	-	generate_design_notebook
 signex_standard	hint	-	-	export_notebook_pdf
 signex_standard	hint	-	-	toggle_notebook_badges
+signex_standard	hint	-	-	notebook_compile
+signex_standard	hint	-	-	notebook_insert
+signex_standard	hint	-	-	notebook_view
 classic	bind	Pcb	Q	command:cycle_unit
 classic	bind	Global	/	command:switch_segment_posture
 classic	bind	Global	A	command:place_symbol
@@ -1109,3 +1112,6 @@ classic	hint	-	-	open_design_notebook
 classic	hint	-	-	generate_design_notebook
 classic	hint	-	-	export_notebook_pdf
 classic	hint	-	-	toggle_notebook_badges
+classic	hint	-	-	notebook_compile
+classic	hint	-	-	notebook_insert
+classic	hint	-	-	notebook_view

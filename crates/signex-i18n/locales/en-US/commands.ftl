@@ -771,3 +771,8 @@ cmd-export-notebook-pdf = Export the Design Notebook as PDF
 cmd-menu-export-notebook-pdf = Design Notebook PDF…
 cmd-toggle-notebook-badges = Show or hide the Notebook badges on the schematic
 cmd-menu-toggle-notebook-badges = Notebook Badges
+# notebook-tab
+# The Design Notebook tab's commands (mockup row 195).
+cmd-notebook-compile = Compile the project's Design Notebook and report its pages and problems
+cmd-notebook-insert = Insert a reference or a block into the open Design Notebook
+cmd-notebook-view = Set the view, the side panel or the next problem of the Design Notebook tab

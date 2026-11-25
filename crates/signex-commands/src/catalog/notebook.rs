@@ -1,8 +1,11 @@
-//! Design Notebook commands (mockup rows 195, 197, 201 and 202): open the
-//! project's notebook, generate one from the project, export it as PDF, and
-//! show or hide the Notebook badges on the schematic.
+//! Design Notebook commands (#2795, mockup rows 195-202): open the
+//! project's notebook, generate one from the project, export it as PDF,
+//! show or hide the Notebook badges on the schematic, and the notebook
+//! tab's own commands (compile and report, insert what the toolbar inserts,
+//! pick the view and side panel). The tab's commands name the project with
+//! `document`, so a CLI or an agent reaches the tab the person sees.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement};
+use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, operands};
 use signex_i18n_ids::command_ids;
 
 pub(super) const NOTEBOOK: &[CommandMetadata] = &[
@@ -49,6 +52,40 @@ pub(super) const NOTEBOOK: &[CommandMetadata] = &[
         group: CommandGroup::Schematic,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // The notebook tab (mockup row 195).
+    CommandMetadata {
+        id: "notebook_compile",
+        category: "reports",
+        label: command_ids::CMD_NOTEBOOK_COMPILE,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "notebook_insert",
+        category: "edit",
+        label: command_ids::CMD_NOTEBOOK_INSERT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::NOTEBOOK_INSERT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "notebook_view",
+        category: "view",
+        label: command_ids::CMD_NOTEBOOK_VIEW,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::NOTEBOOK_VIEW,
         ..CommandMetadata::DEFAULT
     },
 ];

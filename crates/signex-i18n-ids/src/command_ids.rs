@@ -729,5 +729,9 @@ define_ids! {
         CMD_MENU_EXPORT_NOTEBOOK_PDF = "cmd-menu-export-notebook-pdf";
         CMD_TOGGLE_NOTEBOOK_BADGES = "cmd-toggle-notebook-badges";
         CMD_MENU_TOGGLE_NOTEBOOK_BADGES = "cmd-menu-toggle-notebook-badges";
+        // notebook-tab
+        CMD_NOTEBOOK_COMPILE = "cmd-notebook-compile";
+        CMD_NOTEBOOK_INSERT = "cmd-notebook-insert";
+        CMD_NOTEBOOK_VIEW = "cmd-notebook-view";
     }
 }

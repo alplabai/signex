@@ -136,6 +136,9 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `new_project_with_profile` | New project from a profile | file | — | — |
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
 | `next_grid` | Next grid | view | — | `N` |
+| `notebook_compile` | Compile the project's Design Notebook and report its pages and problems | reports | — | — |
+| `notebook_insert` | Insert a reference or a block into the open Design Notebook | edit | — | — |
+| `notebook_view` | Set the view, the side panel or the next problem of the Design Notebook tab | view | — | — |
 | `open_command_palette` | Open command palette | commands | `Mod+Shift+P` | `Ctrl+K`, `Mod+Shift+P` |
 | `open_compiled_design` | Open Compiled Design panel | panels | — | — |
 | `open_datasheet` | Open datasheet | edit | — | `D` |

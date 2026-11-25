@@ -648,6 +648,15 @@ next_signal_layer	bridge	Pcb(View(SignalLayerStepped { forward: true }))	gui	act
 next_signal_layer	in_window_rewrite	board_view_in_window|document_window	gui	window	routing
 next_signal_layer	refusal_needs	Pcb	gui	active document	routing
 next_signal_layer	headless_refusal	headless_refusal	gui	none	routing
+notebook_compile	operand_handler	run_operands: named document	core	origin	handler
+notebook_compile	refusal_needs_operands	needs_operands_reason	gui	none	routing
+notebook_compile	headless_missing_operand	needs `document`	core	none	routing
+notebook_insert	operand_handler	run_operands: named document	core	cursor,origin	handler
+notebook_insert	refusal_needs_operands	needs_operands_reason	gui	none	routing
+notebook_insert	headless_missing_operand	needs `document`	core	none	routing
+notebook_view	operand_handler	run_operands: named document	gui	origin	handler
+notebook_view	refusal_needs_operands	needs_operands_reason	gui	none	routing
+notebook_view	headless_missing_operand	needs `document`	gui	none	routing
 number_schematic_sheets	bridge	Project(SheetNumbering(Requested))	gui	active document	gate
 number_schematic_sheets	in_window_rewrite	document_window	gui	window	routing
 number_schematic_sheets	refusal_needs	ProjectSheet	gui	active document	routing

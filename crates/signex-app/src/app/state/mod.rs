@@ -725,6 +725,9 @@ pub struct DocumentState {
     /// The Gerber Viewer tab (mockup rows 193 and 193f): the package shown
     /// and the app-wide recent packages. Its slice owns it.
     pub gerber_viewer: crate::app::gerber_viewer::GerberViewerState,
+    /// Each project's Design Notebook tab (mockup row 195), kept while the
+    /// project is loaded so a closed tab keeps its unsaved text.
+    pub notebooks: std::collections::HashMap<ProjectId, crate::app::notebook_tab::NotebookTab>,
 }
 
 /// A project folder a rename moved from `old` to `new`.

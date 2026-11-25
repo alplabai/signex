@@ -432,3 +432,6 @@ open_design_notebook	design	Open the Design Notebook of the project (Wiki)	Open 
 generate_design_notebook	design	Generate a design notebook from the project	Generate from Project…	General	-	-	Always	gui_only	-
 export_notebook_pdf	file	Export the Design Notebook as PDF	Design Notebook PDF…	General	-	-	Always	gui_only	-
 toggle_notebook_badges	view	Show or hide the Notebook badges on the schematic	Notebook Badges	Schematic	-	-	Always	gui_only	-
+notebook_compile	reports	Compile the project's Design Notebook and report its pages and problems	-	General	-	-	Always	-	document:document
+notebook_insert	edit	Insert a reference or a block into the open Design Notebook	-	General	-	-	Always	mutates_doc,undoable	document:document,kind:text,name:text?,line:text?
+notebook_view	view	Set the view, the side panel or the next problem of the Design Notebook tab	-	General	-	-	Always	-	document:document,view:text?,panel:text?,next_problem:bool?

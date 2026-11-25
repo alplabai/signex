@@ -245,6 +245,11 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     ),
     // A run already going in the Project tab skips this one.
     (&["project_run_requirements"], Operand, &[Window]),
+    // #2795: a compile reads the project's notebook as its tab holds it (or
+    // its file) and the view writes that tab's session, nothing implicit; an
+    // insert lands at the tab's cursor unless `line` names one.
+    (&["notebook_compile", "notebook_view"], Operand, &[]),
+    (&["notebook_insert"], Operand, &[Cursor]),
     // The board update targets the window acting, else the active document.
     (
         &["update_pcb_from_schematic"],

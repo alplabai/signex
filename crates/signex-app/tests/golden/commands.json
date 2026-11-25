@@ -880,6 +880,21 @@
     "category": "view"
   },
   {
+    "id": "notebook_compile",
+    "group": "General",
+    "category": "reports"
+  },
+  {
+    "id": "notebook_insert",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "notebook_view",
+    "group": "General",
+    "category": "view"
+  },
+  {
     "id": "number_schematic_sheets",
     "group": "Schematic",
     "category": "design"

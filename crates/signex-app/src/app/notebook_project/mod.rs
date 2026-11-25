@@ -2,40 +2,20 @@
 //! commands that open, generate and export it, the Notebook badges toggle,
 //! and the Projects tree's notebook row. This slice resolves which project
 //! and which file a request means; the notebook tab, the badges, the
-//! generator and the PDF export act on it (`seams.rs`). Rows and ids:
-//! `docs/MENU_BAR.md`, "Project ▸ Design Notebook".
+//! generator and the PDF export act on it (`seams.rs`). The requests are
+//! `NotebookMsg` variants, routed by the `notebook_tab` router. Rows and
+//! ids: `docs/MENU_BAR.md`, "Project ▸ Design Notebook".
 
 use std::path::{Path, PathBuf};
 
 use iced::Task;
 
 use crate::app::state::ProjectId;
-use crate::app::{Message, Signex};
+use crate::app::{Message, NotebookMsg, Signex};
 
 mod seams;
 #[cfg(test)]
 mod tests;
-
-/// Messages of a project's Design Notebook, under `ProjectMsg::Notebook`.
-/// A request without a project means the active document's project.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum NotebookMsg {
-    /// Project ▸ Design Notebook ▸ Open Design Notebook, the palette, Add
-    /// New ▸ Design Notebook or a double-click on the notebook row.
-    OpenRequested { project: Option<ProjectId> },
-    /// Project ▸ Design Notebook ▸ Generate from Project… (mockup row 201).
-    GenerateRequested { project: Option<ProjectId> },
-    /// File ▸ Export ▸ Design Notebook PDF… (mockup row 202).
-    ExportPdfRequested { project: Option<ProjectId> },
-    /// View ▸ Notebook Badges (mockup row 197).
-    BadgesToggled,
-}
-
-impl From<NotebookMsg> for Message {
-    fn from(msg: NotebookMsg) -> Self {
-        Message::Project(crate::app::ProjectMsg::Notebook(msg))
-    }
-}
 
 /// The notebook a request means: its project and its file, which may not
 /// exist yet (a notebook is written only on Save, mockup row 195).
@@ -46,21 +26,6 @@ pub(crate) struct NotebookTarget {
 }
 
 impl Signex {
-    pub(crate) fn dispatch_notebook_message(&mut self, msg: NotebookMsg) -> Task<Message> {
-        match msg {
-            NotebookMsg::OpenRequested { project } => {
-                self.with_notebook(project, Self::show_design_notebook)
-            }
-            NotebookMsg::GenerateRequested { project } => {
-                self.with_notebook(project, Self::generate_design_notebook)
-            }
-            NotebookMsg::ExportPdfRequested { project } => {
-                self.with_notebook(project, Self::export_design_notebook_pdf)
-            }
-            NotebookMsg::BadgesToggled => self.toggle_notebook_badges(),
-        }
-    }
-
     /// The notebook of `project`, else of the active document's project:
     /// the same project rule as Design ▸ Rules.
     pub(crate) fn notebook_target(&self, project: Option<ProjectId>) -> Option<NotebookTarget> {
@@ -87,7 +52,9 @@ impl Signex {
         }
     }
 
-    fn with_notebook(
+    /// Run `then` on the notebook `project` means, or say in Messages that
+    /// no project is open.
+    pub(crate) fn with_notebook(
         &mut self,
         project: Option<ProjectId>,
         then: fn(&mut Self, NotebookTarget) -> Task<Message>,
