@@ -95,7 +95,9 @@ fn saved_areas_read_back_from_the_board_file() {
     input.push_str(&jsonl(&[json!({
         "id": "save_document", "args": {"document": "board.snxpcb"}
     })]));
-    let out = run_cli(&["run", fx.project.to_str().unwrap(), "--save"], input);
+    // The refused region does not stop the run before the save.
+    let project = fx.project.to_str().unwrap();
+    let out = run_cli(&["run", project, "--save", "--keep-going"], input);
 
     assert_eq!(
         out.lines[4]["status"], "ran",
