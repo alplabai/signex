@@ -70,3 +70,43 @@ fn the_dialog_paints_the_copy_path_and_the_read_only_note() {
         "the path the copy lands on: {plain:#?}"
     );
 }
+
+/// A Save that found keys the copy cannot keep: the dialog names them, and
+/// its primary button agrees to go without them.
+#[test]
+fn the_dialog_names_the_keys_the_copy_cannot_keep_and_asks_before_writing() {
+    let (mut app, id) = refused_app();
+    let _ = app.update(Message::from(SaveProjectAsMsg::Requested {
+        project: Some(id),
+    }));
+    let dialog = app.ui_state.save_project_as.as_deref_mut().expect("dialog");
+    dialog.target = crate::app::new_project::TargetStatus::Clear;
+    dialog.not_kept = Some(vec!["fab_outputs.laser_marking".into()]);
+    let texts = lay_out_texts(app.save_project_as_overlay().expect("paints"), WINDOW);
+    let plain: Vec<String> = texts
+        .iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect();
+    assert!(
+        plain
+            .iter()
+            .any(|t| t.contains("fab_outputs.laser_marking")
+                && t.contains("Nothing has been written")),
+        "{plain:#?}"
+    );
+    assert!(!plain.iter().any(|t| t == "Save copy"), "{plain:#?}");
+    let messages = messages_on_click(
+        app.save_project_as_overlay().expect("paints"),
+        WINDOW,
+        "Save copy without them",
+    );
+    assert!(
+        matches!(
+            messages.as_slice(),
+            [Message::Project(crate::app::ProjectMsg::SaveAs(
+                SaveProjectAsMsg::KeysNotKeptAccepted
+            ))]
+        ),
+        "{messages:?}"
+    );
+}

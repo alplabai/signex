@@ -2,16 +2,23 @@
 //! folder, in this build's format, which then opens beside it. The copy is
 //! planned in `update` (`plan`, with the unsaved edits encoded from memory in
 //! `unsaved`), written on the blocking pool (`write`) and the original folder
-//! is never written. Rules: docs/PROJECT_SETUP.md,
+//! is never written. A newer-minor project's `.snxprj` is first checked for
+//! the keys this build would not keep (`dropped_keys`); each is named and
+//! agreed to before anything is written. Rules: docs/PROJECT_SETUP.md,
 //! "Save Project As".
 
+mod dropped_keys;
 mod plan;
 mod unsaved;
 mod update;
 mod write;
 
 #[cfg(test)]
+mod keys_tests;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod write_tests;
 
 use std::path::PathBuf;
 
@@ -43,6 +50,10 @@ pub struct SaveProjectAsState {
     pub(crate) saving: Option<PathBuf>,
     /// Why the last Save failed, shown in the dialog.
     pub(crate) error: Option<String>,
+    /// The keys of a newer-minor project's `.snxprj` the copy would leave
+    /// out or change, found by the last Save, which wrote nothing. Shown as
+    /// a warning; the copy is written only once they are agreed to.
+    pub(crate) not_kept: Option<Vec<String>>,
 }
 
 impl SaveProjectAsState {
@@ -104,6 +115,14 @@ pub enum SaveProjectAsMsg {
         status: TargetStatus,
     },
     SubmitRequested,
+    /// The Save of a newer-minor project's copy stopped before writing: the
+    /// copy would leave out or change `keys` of its `.snxprj`.
+    KeysNotKeptFound {
+        project_path: PathBuf,
+        keys: Vec<String>,
+    },
+    /// The person agreed the copy goes without the keys the dialog names.
+    KeysNotKeptAccepted,
     CancelRequested,
     /// The copy planned as `project_path` was written (the `.snxprj`), or
     /// not, with the reason.

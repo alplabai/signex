@@ -11,7 +11,7 @@ use signex_types::project::{SNXPRJ_FORMAT_V1, encode_project, parse_project};
 
 use super::SaveProjectAsMsg;
 use super::plan::{listed, plan_copy};
-use super::write::write_copy;
+use super::write::{CopyOutcome, write_copy};
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::new_project::{TargetProblem, TargetStatus, check_target};
 use crate::app::state::NoticeAction;
@@ -21,7 +21,7 @@ use crate::app::{
 use crate::persist::run_task::outputs;
 
 /// A minor this build does not know: the project opens read-only.
-const NEWER: &str = "snxprj/1.9";
+pub(super) const NEWER: &str = "snxprj/1.9";
 
 /// The documents the fixture project lists, below its folder.
 const LISTED: [&str; 7] = [
@@ -34,13 +34,13 @@ const LISTED: [&str; 7] = [
     "libs/assets/datasheets/r.pdf",
 ];
 
-fn put(path: &Path, bytes: &[u8]) {
+pub(super) fn put(path: &Path, bytes: &[u8]) {
     fs::create_dir_all(path.parent().expect("a parent")).expect("folder");
     fs::write(path, bytes).expect("write");
 }
 
 /// Every file under `dir` with its bytes, keyed by its path below `dir`.
-fn snapshot(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+pub(super) fn snapshot(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     fn walk(root: &Path, dir: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
         for entry in fs::read_dir(dir).expect("read folder") {
             let path = entry.expect("entry").path();
@@ -65,7 +65,7 @@ fn json(path: &Path) -> String {
 /// this build does not know: a root and a child sheet, a board and a project
 /// library with its folders, and a file it does not list. Returns its folder
 /// and the `.snxprj` bytes on disk.
-fn newer_project(root: &Path) -> (PathBuf, String) {
+pub(super) fn newer_project(root: &Path) -> (PathBuf, String) {
     let dir = root.join("P");
     put(&dir.join("P.snxsch"), b"root sheet\n");
     put(&dir.join("sub/child.snxsch"), b"child\tsheet\r\n");
@@ -111,8 +111,10 @@ fn the_copy_holds_every_listed_document_byte_for_byte_and_the_project_in_the_cur
     let out = tmp.path().join("out");
     fs::create_dir(&out).expect("out");
 
-    let plan = plan_copy(&data, &dir, "Copy", &out, Vec::new()).expect("plan");
-    let written = write_copy(&plan).expect("the copy");
+    let plan = plan_copy(&data, &dir.join("P.snxprj"), "Copy", &out, Vec::new()).expect("plan");
+    let CopyOutcome::Written(written) = write_copy(&plan).expect("the copy") else {
+        panic!("the copy keeps every key, so it is written");
+    };
 
     let copy = out.join("Copy");
     assert_eq!(written, copy.join("Copy.snxprj"));
@@ -165,7 +167,7 @@ fn a_target_folder_that_exists_and_is_not_empty_is_refused_and_nothing_is_writte
         matches!(&status, TargetStatus::Problem(TargetProblem::FolderNotEmpty(path)) if *path == taken),
         "the dialog refuses it before Save: {status:?}"
     );
-    let plan = plan_copy(&data, &dir, "Copy", &out, Vec::new()).expect("plan");
+    let plan = plan_copy(&data, &dir.join("P.snxprj"), "Copy", &out, Vec::new()).expect("plan");
     let why = write_copy(&plan).expect_err("refused");
     assert!(why.contains("not empty"), "{why}");
     assert_eq!(snapshot(&taken).len(), 1, "nothing was added");
@@ -179,7 +181,7 @@ fn the_copy_is_never_written_inside_the_original_folder() {
     let (dir, _) = newer_project(tmp.path());
     let before = snapshot(&dir);
     let data = parse_project(&dir.join("P.snxprj")).expect("parse");
-    let plan = plan_copy(&data, &dir, "Copy", &dir, Vec::new()).expect("plan");
+    let plan = plan_copy(&data, &dir.join("P.snxprj"), "Copy", &dir, Vec::new()).expect("plan");
     let why = write_copy(&plan).expect_err("refused");
     assert!(why.contains("inside"), "{why}");
     assert_eq!(snapshot(&dir), before);
@@ -193,7 +195,7 @@ fn a_listed_file_missing_on_disk_refuses_the_copy_before_anything_is_written() {
     let data = parse_project(&dir.join("P.snxprj")).expect("parse");
     let out = tmp.path().join("out");
     fs::create_dir(&out).expect("out");
-    let plan = plan_copy(&data, &dir, "Copy", &out, Vec::new()).expect("plan");
+    let plan = plan_copy(&data, &dir.join("P.snxprj"), "Copy", &out, Vec::new()).expect("plan");
     let why = write_copy(&plan).expect_err("refused");
     assert!(
         why.contains("P.snxpcb") && why.contains("not on disk"),

@@ -628,7 +628,9 @@ the whole board is filled either way. Nothing in the document changes, so
 there is no undo step, unless a pour it acts on is unfilled (#2506): Repour
 first clears `unfilled` on those pours as one undo step
 (`pour_edit::refill_pours`), which marks the board changed; Repour All does
-so for every unfilled pour, from an agent or the CLI too. `repour_all
+so for every unfilled pour, from an agent or the CLI too, so `repour_all`
+is an edit (the CLI's `edit` capability, and the agent journal records
+it) and runs as its own command, not in an edit list. `repour_all
 document=<board>` answers an agent or the CLI with each pour's `zone`,
 `net`, `net_name`, `layer`, `priority`, `shelved`, `unfilled`, `filled`,
 `pieces`, `area_mm2` and `islands_removed`; a shelved pour is not filled.

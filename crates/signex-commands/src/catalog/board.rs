@@ -102,10 +102,12 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
-    // #2216: fill the pours again and report their copper. Read-only (fills
-    // are computed, not stored). Repour Selected reads the selection, so it
-    // is window only; Repour All named a board (`document`) answers with
-    // each pour's fill as JSON. No default key.
+    // #2216: fill the pours again and report their copper. Repour Selected
+    // reads the selection, so it is window only; Repour All named a board
+    // (`document`) answers with each pour's fill as JSON. #2506: Repour All
+    // also clears `unfilled` on every unfilled pour as one undo step, so it
+    // edits the board (`MUTATES`: the CLI's Edit capability, journaled). No
+    // default key.
     CommandMetadata {
         id: "repour_selected",
         category: "pcb",
@@ -123,7 +125,7 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_REPOUR_ALL),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::NONE,
+        flags: CommandFlags::MUTATES,
         operands: super::operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },

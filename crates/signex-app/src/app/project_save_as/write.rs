@@ -1,7 +1,8 @@
-//! The Save Project As writes, on the blocking pool (never in `update`). The
-//! target is checked again, every listed file is read from the original
-//! folder (or taken from its unsaved edits, encoded in `update`) and written
-//! into the new one with the atomic writer, and the
+//! The Save Project As writes, on the blocking pool (never in `update`). A
+//! newer-minor project's keys check runs first and can stop the copy before
+//! anything is written. The target is checked again, every listed file is
+//! read from the original folder (or taken from its unsaved edits, encoded in
+//! `update`) and written into the new one with the atomic writer, and the
 //! `.snxprj` goes last. A failure takes back what this call wrote. Nothing in
 //! the original folder is ever written.
 
@@ -9,14 +10,39 @@ use std::path::{Path, PathBuf};
 
 use signex_types::atomic_io::atomic_write;
 
+use super::dropped_keys::dropped_from_file;
 use super::plan::{CopyPlan, Listed};
 use crate::app::handlers::document_files::new_project::{NewProjectLayout, resolve_new_project};
 
 /// One file of the copy: where it is read, and its path in the new folder.
 type CopyFile = (PathBuf, PathBuf);
 
-/// Write the copy `plan` describes. Returns the new `.snxprj`.
-pub(crate) fn write_copy(plan: &CopyPlan) -> Result<PathBuf, String> {
+/// What a Save of the copy came to when nothing failed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CopyOutcome {
+    /// The copy is on disk; its new `.snxprj`.
+    Written(PathBuf),
+    /// Nothing was written: the copy of a newer-minor project would leave
+    /// out or change these keys of its `.snxprj`, and the person has not
+    /// agreed to all of them.
+    NotKept(Vec<String>),
+}
+
+/// Write the copy `plan` describes, unless its keys check names a key the
+/// plan has not accepted; then nothing is written.
+pub(crate) fn write_copy(plan: &CopyPlan) -> Result<CopyOutcome, String> {
+    if let Some(check) = &plan.keys_check {
+        let folder = plan.location.join(&plan.name);
+        let dropped = dropped_from_file(&check.source_file, &plan.name, &folder)?;
+        if !dropped.iter().all(|key| check.accepted.contains(key)) {
+            return Ok(CopyOutcome::NotKept(dropped));
+        }
+    }
+    write_files(plan).map(CopyOutcome::Written)
+}
+
+/// The writes of the copy. Returns the new `.snxprj`.
+fn write_files(plan: &CopyPlan) -> Result<PathBuf, String> {
     let chosen = plan.location.join(format!("{}.snxprj", plan.name));
     // Refuses a folder that exists and is not empty, a project folder, and a
     // place inside a project (the open one included).
