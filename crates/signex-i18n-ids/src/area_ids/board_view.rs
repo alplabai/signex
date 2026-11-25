@@ -10,6 +10,7 @@ define_ids! {
     PCB_LAYERS_CLEAR_SEARCH = "pcb-layers-clear-search";
     PCB_LAYERS_MORE_TIP = "pcb-layers-more-tip";
     PCB_LAYERS_SET_DELETE_CURRENT = "pcb-layers-set-delete-current";
+    PCB_LAYERS_SET_DELETE_NONE = "pcb-layers-set-delete-none";
     PCB_LAYERS_LAYER_STACK = "pcb-layers-layer-stack";
     PCB_LAYERS_ACTIVE = "pcb-layers-active";
     PCB_LAYERS_NO_ACTIVE = "pcb-layers-no-active";

@@ -113,6 +113,8 @@ pub struct PcbLayersPanel {
     /// The Layer Stack command can run: the more menu's Layer Stack... row
     /// is live.
     pub layer_stack_live: bool,
+    /// Why the Layer Stack command cannot run: the greyed row's tooltip.
+    pub layer_stack_reason: Option<signex_i18n::MessageId>,
     /// A board is open; without one the panel shows its empty state.
     pub board_open: bool,
     /// The tab path of the board shown, so an open colour card can tell a
@@ -142,6 +144,7 @@ impl Default for PcbLayersPanel {
             grid_visible: true,
             board_3d: false,
             layer_stack_live: false,
+            layer_stack_reason: None,
             board_open: false,
             board: None,
             i18n: I18n::en_us(),

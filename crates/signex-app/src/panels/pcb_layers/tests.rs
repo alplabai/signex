@@ -429,6 +429,9 @@ fn menu_open(view: &PcbLayerView) -> PanelContext {
 #[path = "menu_tests.rs"]
 mod menu;
 
+#[path = "controls_tests.rs"]
+mod controls;
+
 /// View From Bottom Side, now in the more menu (mockup row 103), flips the
 /// view and closes the menu (`app::handlers::pcb_layers_panel::tests`).
 #[test]
