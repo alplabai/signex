@@ -313,6 +313,9 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             crate::workspace_layouts::WorkspaceLayoutMsg::ResetActiveRequested.into()
         }
         "open_parameter_manager" => Message::ParameterManager(ParameterManagerMsg::Open),
+        // #1295: the Parameter Manager footer's Export… and Import….
+        "export_parameters" => crate::app::parameter_io::ParameterIoMsg::ExportRequested.into(),
+        "import_parameters" => crate::app::parameter_io::ParameterIoMsg::ImportRequested.into(),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),
         // Tools ▸ Assign Footprints (#2248) and View ▸ Net Inspector (#1269).
@@ -1367,6 +1370,28 @@ mod tests {
         assert!(matches!(
             resolve(&id, &CommandArgs::none()),
             Some(Message::ParameterManager(ParameterManagerMsg::Open))
+        ));
+    }
+
+    /// #1295 - the palette's Export… and Import… of the Parameter Manager
+    /// reach the same messages as its footer buttons.
+    #[test]
+    fn export_and_import_parameters_resolve_to_the_footer_messages() {
+        use crate::app::parameter_io::ParameterIoMsg;
+        let export = AppCommandId::new("export_parameters").unwrap();
+        let import = AppCommandId::new("import_parameters").unwrap();
+        assert!(is_dispatchable(&export) && is_dispatchable(&import));
+        assert!(matches!(
+            resolve(&export, &CommandArgs::none()),
+            Some(Message::ParameterManager(ParameterManagerMsg::Io(
+                ParameterIoMsg::ExportRequested
+            )))
+        ));
+        assert!(matches!(
+            resolve(&import, &CommandArgs::none()),
+            Some(Message::ParameterManager(ParameterManagerMsg::Io(
+                ParameterIoMsg::ImportRequested
+            )))
         ));
     }
 
