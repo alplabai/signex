@@ -21,33 +21,59 @@
 //! [`CompiledNotebook`] draws a page for the preview and writes a PDF that
 //! is the same file every time.
 //!
+//! [`resolve_references`] checks a file's references against a
+//! [`DesignIndex`] the caller builds from the project and tells the stale
+//! ones apart (renamed, deleted, missing pin), each with its fixes
+//! ([`apply_fix`]); [`reference_card`] is a reference's hover card,
+//! [`picker_entries`] the `@` picker and [`badges`] the schematic's
+//! Notebook badges (mockup rows 196 and 197).
+//!
 //! UI-free and IO-free: the caller reads the files.
 
 mod annotation;
+mod badge;
+mod card;
 mod compile;
 mod date;
+mod design;
 mod file;
 mod filter;
+mod fix;
 mod header;
 mod id;
+mod json;
 mod lexer;
+mod picker;
 mod reference;
+mod resolution;
 mod scan;
 mod sources;
 mod syntax;
 mod world;
 
 pub use annotation::{Annotation, AnnotationKind, Status};
+pub use badge::{Badge, BadgeTarget, BadgeTone, BlockMention, badge_of, badges, worst_tone};
+pub use card::{
+    CONTEXT_ACTIONS, CardAction, CardFacts, ReferenceCard, last_measurement, reference_card,
+};
 pub use compile::{
     Compilation, CompileOptions, CompiledNotebook, Diagnostic, DiagnosticSeverity, PDF_CREATOR,
     PageImage, PageInfo, compile,
 };
 pub use date::IsoDate;
+pub use design::{DesignIndex, DesignNet, DesignPart, DesignPin, PinName, natural_order};
 pub use file::{HEADER_FENCE, NotebookFile, NotebookFileError};
 pub use filter::{DateWindow, Filter, newest_first};
+pub use fix::{
+    Fix, FixError, FixOffer, Fixed, PlannedFix, apply_fix, apply_plan, markup_text, plan_update_all,
+};
 pub use header::{Header, HeaderError, NOTEBOOK_FORMAT, StoredReference};
 pub use id::{BlockId, SERIAL_WIDTH};
+pub use picker::{PICKER_LIMIT, PickerEntry, picker_entries};
 pub use reference::{Reference, quote};
+pub use resolution::{
+    ReferenceReport, ReferenceState, ResolvedReference, resolve_one, resolve_references,
+};
 pub use scan::{ProblemKind, SNIPPET_MAX_CHARS, ScanProblem, TITLE_MAX_CHARS, scan};
 pub use sources::{LoadProblem, LoadProblemKind, NotebookSources, resolve};
 pub use syntax::{Include, ReferenceAt, distinct_references, includes, references, typst_source};
@@ -64,8 +90,12 @@ pub const DEFAULT_NOTEBOOK_FILE: &str = "design.snxnbk";
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_badges;
+#[cfg(test)]
 mod tests_compile;
 #[cfg(test)]
 mod tests_file;
 #[cfg(test)]
 mod tests_model;
+#[cfg(test)]
+mod tests_references;
