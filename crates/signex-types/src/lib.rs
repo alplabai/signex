@@ -1,6 +1,7 @@
 pub mod agent_journal;
 pub mod anchor2d;
 pub mod atomic_io;
+pub mod block_diagram;
 pub mod check;
 pub mod coord;
 pub mod corner;
