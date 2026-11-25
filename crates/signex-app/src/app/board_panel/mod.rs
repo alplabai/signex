@@ -58,10 +58,24 @@ impl Signex {
             BoardPanelMsg::PanelizeRequested => self.panelize(&path),
             BoardPanelMsg::RemoveRequested => self.remove_panel(&path),
         };
-        if let Err(why) = result {
-            self.say_panel_refused(why);
+        match result {
+            Ok(true) if msg == BoardPanelMsg::PanelizeRequested => self.reveal_panel_section(),
+            Ok(_) => Task::none(),
+            Err(why) => {
+                self.say_panel_refused(why);
+                Task::none()
+            }
         }
-        Task::none()
+    }
+
+    /// A new panel opens the Panel section of Properties and scrolls it into
+    /// view: it sits under Grid Manager and Guide Manager (mockup row 93).
+    fn reveal_panel_section(&mut self) -> Task<Message> {
+        self.document_state
+            .panel_ctx
+            .collapsed_sections
+            .insert(pcb_board_properties::panel_section_open_key());
+        crate::panels::snap_properties_to_end()
     }
 
     /// The default panel on the board at `path`. A board that already has

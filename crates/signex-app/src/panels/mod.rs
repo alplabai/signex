@@ -21,7 +21,7 @@ mod pcb_layers;
 mod placed_edit;
 pub mod pre_placement;
 mod scroll;
-pub(crate) use scroll::panel_scrollable;
+pub(crate) use scroll::{PROPERTIES_SCROLL_ID, panel_scrollable, snap_properties_to_end};
 mod properties_parameters;
 mod symbol_editor_properties;
 
@@ -632,5 +632,9 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Annotations => return annotations::view(ctx),
     };
 
-    panel_scrollable(content).boxed()
+    let scroller = panel_scrollable(content);
+    if kind == PanelKind::Properties {
+        return scroller.id(PROPERTIES_SCROLL_ID).boxed();
+    }
+    scroller.boxed()
 }
