@@ -11,7 +11,9 @@ use uuid::Uuid;
 
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::{EditMsg, Message, Signex};
-use crate::pcb_canvas::{PcbCanvasState, board_without, carried_board, followed_arcs};
+use crate::pcb_canvas::{
+    PcbCanvasState, board_without, carried_board, followed_arcs, with_stretched_tracks,
+};
 
 const U1: Uuid = Uuid::from_u128(0x10);
 const FREE: Uuid = Uuid::from_u128(0x40);
@@ -327,8 +329,16 @@ fn the_preview_draws_the_via_and_its_track_where_they_are_going() {
     assert_eq!(following.len(), 1);
     assert_eq!(following[0].track, TRACK);
     let carry = rig.app.interaction_state.pcb_carry.as_ref().expect("carry");
+    // What the preview draws: the moved via and its track bent at one 45°
+    // corner, as the drop bends it (Caner, 2026-11-25, #2513).
     let drawn = carried_board(&before, &carry.carried(), &following, carry.delta);
-    assert!(close(drawn.segments[0].end, 24.0, 13.0), "the moved track");
+    let drawn = with_stretched_tracks(drawn, &before, carry, &following);
+    let runs = |a: (f64, f64), b: (f64, f64)| {
+        (drawn.segments.iter()).any(|s| close(s.start, a.0, a.1) && close(s.end, b.0, b.1))
+    };
+    assert_eq!(drawn.segments.len(), 2, "the track and its new leg");
+    assert!(runs((15.0, 10.0), (21.0, 10.0)), "the track keeps its far end");
+    assert!(runs((21.0, 10.0), (24.0, 13.0)), "the moved track ends on the via");
     assert!(close(drawn.vias[0].position, 24.0, 13.0), "the moved via");
     let left = board_without(&before, &carry.carried(), &following);
     assert!(left.segments.is_empty(), "the track left its old place");

@@ -76,29 +76,9 @@ impl Signex {
 
     /// Release a via drag at `to`: move the vias as one step.
     pub(super) fn drop_via_carry(&mut self, carry: &PcbCarry, from: Point, to: Point) {
-        let built = self.via_drag_delta(carry, from, to).and_then(|delta| {
-            let board = self.active_pcb()?;
-            Some((
-                delta,
-                if carry.leaves_tracks {
-                    placement::move_vias_only(board, &carry.vias, delta)
-                } else {
-                    placement::move_vias(board, &carry.vias, delta, carry.stretch_corner)
-                },
-            ))
-        });
-        self.end_pcb_carry();
-        if let Some((delta, built)) = built {
-            // The Command Log keeps the offset and the corner rule, so a
-            // replay bends the tracks on the vias as this drop does (#2513).
-            self.ui_state.command_replay.note_via_drop(
-                carry.vias.clone(),
-                delta,
-                carry.leaves_tracks,
-                carry.stretch_corner,
-            );
-            self.run_placement("Move", built);
-            self.ui_state.command_replay.forget_board_marks();
-        }
+        // Logged with its offset and corner rule, so a Replay bends the
+        // tracks on the vias as this drop does (#2513).
+        let delta = self.via_drag_delta(carry, from, to);
+        self.drop_dragged(carry, delta);
     }
 }

@@ -15,6 +15,7 @@ use signex_engine::pcb::{BoardCommand, BoardCommandError, BoardItem, BoardItemId
 use signex_types::pcb::{PcbBoard, Point};
 use uuid::Uuid;
 
+use super::command_log::BoardDrop;
 use super::pcb_placement::refuse;
 use crate::app::Signex;
 use crate::pcb_canvas::{
@@ -152,6 +153,71 @@ fn follow_commands(board: &PcbBoard, carry: &PcbCarry, delta: Point) -> Vec<Boar
     placement::stretch_commands(board, &following, delta, carry.stretch_corner)
 }
 
+/// The commands that move what a drag carries by `delta`, one undo step: a
+/// mixed carry by [`mixed_commands`]; vias or footprints with the tracks on
+/// them (none with Ctrl); other objects and rooms with the tracks they
+/// stretch. The drop and its Command Log Replay both build them here, so a
+/// Replay bends the tracks as the drop did (#2513).
+pub(crate) fn drag_commands(
+    board: &PcbBoard,
+    carry: &PcbCarry,
+    delta: Point,
+) -> Result<Vec<BoardCommand>, PlacementRefusal> {
+    let (corner, leaves) = (carry.stretch_corner, carry.leaves_tracks);
+    if carry.is_mixed() {
+        return mixed_commands(board, carry, delta);
+    }
+    if !carry.vias.is_empty() {
+        return if leaves {
+            placement::move_vias_only(board, &carry.vias, delta)
+        } else {
+            placement::move_vias(board, &carry.vias, delta, corner)
+        };
+    }
+    if carry.items.is_empty() && carry.rooms.is_empty() {
+        return if leaves {
+            placement::move_footprints_only(board, &carry.footprints, delta)
+        } else {
+            placement::move_commands(board, &carry.footprints, delta, corner)
+        };
+    }
+    let (items, rooms) = (&carry.items, &carry.rooms);
+    let mut commands = move_commands(board, items, rooms, &carry.footprints, delta)?;
+    commands.extend(follow_commands(board, carry, delta));
+    Ok(commands)
+}
+
+/// What a Command Log Replay of `drop` carries (#2513): a drag carry with
+/// its objects, offset, Ctrl state and corner, for [`drag_commands`].
+pub(crate) fn carry_of_drop(drop: &BoardDrop) -> PcbCarry {
+    let mut carry = PcbCarry::new(
+        CarryKind::Drag,
+        std::path::PathBuf::new(),
+        None,
+        drop.footprints.clone(),
+    );
+    carry.vias = drop.vias.clone();
+    carry.items = drop.items.clone();
+    carry.rooms = drop.rooms.clone();
+    carry.delta = drop.delta;
+    carry.leaves_tracks = drop.leaves_tracks;
+    carry.stretch_corner = drop.corner;
+    carry
+}
+
+/// The Command Log's record of a drop of `carry` by `delta`.
+fn drop_of_carry(carry: &PcbCarry, delta: Point) -> BoardDrop {
+    BoardDrop {
+        footprints: carry.footprints.clone(),
+        vias: carry.vias.clone(),
+        items: carry.items.clone(),
+        rooms: carry.rooms.clone(),
+        delta,
+        leaves_tracks: carry.leaves_tracks,
+        corner: carry.stretch_corner,
+    }
+}
+
 impl Signex {
     /// A press at `from` on a track, arc, area, string, dimension, drawing
     /// or room starts a drag of it. Whether it did.
@@ -274,31 +340,31 @@ impl Signex {
     /// Release a mixed drag at `to`: everything it carries moves by one
     /// offset as one undo step.
     pub(super) fn drop_mixed_carry(&mut self, carry: &PcbCarry, from: Point, to: Point) {
-        let built = self.mixed_drag_delta(carry, from, to).and_then(|delta| {
-            let board = self.active_pcb()?;
-            Some(mixed_commands(board, carry, delta))
-        });
-        self.end_pcb_carry();
-        if let Some(built) = built {
-            self.run_placement("Move", built);
-        }
+        let delta = self.mixed_drag_delta(carry, from, to);
+        self.drop_dragged(carry, delta);
     }
 
     /// Release an item drag at `to`: move what it carries, and stretch the
     /// tracks joined to a carried track's ends (#2513), as one step.
     pub(super) fn drop_item_carry(&mut self, carry: &PcbCarry, from: Point, to: Point) {
-        let built = self.item_drag_delta(carry, from, to).and_then(|delta| {
+        let delta = self.item_drag_delta(carry, from, to);
+        self.drop_dragged(carry, delta);
+    }
+
+    /// Move what `carry` holds by `delta` ([`drag_commands`]) as one step,
+    /// logged as an offset move with its corner so a Replay rebuilds the
+    /// same bent tracks (#2513).
+    pub(super) fn drop_dragged(&mut self, carry: &PcbCarry, delta: Option<Point>) {
+        let built = delta.and_then(|delta| {
             let board = self.active_pcb()?;
-            let (items, rooms) = (&carry.items, &carry.rooms);
-            let moved = move_commands(board, items, rooms, &carry.footprints, delta);
-            Some(moved.map(|mut commands| {
-                commands.extend(follow_commands(board, carry, delta));
-                commands
-            }))
+            Some((delta, drag_commands(board, carry, delta)))
         });
         self.end_pcb_carry();
-        if let Some(built) = built {
+        if let Some((delta, built)) = built {
+            let drop = drop_of_carry(carry, delta);
+            self.ui_state.command_replay.note_drop(drop);
             self.run_placement("Move", built);
+            self.ui_state.command_replay.forget_board_marks();
         }
     }
 }

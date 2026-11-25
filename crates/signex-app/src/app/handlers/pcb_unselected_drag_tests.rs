@@ -369,3 +369,6 @@ fn selected_tracks_still_move_whole() {
     r.undo();
     assert_eq!(r.live(), before, "one undo step");
 }
+
+#[path = "pcb_unselected_drag_replay_tests.rs"]
+mod replay;

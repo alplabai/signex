@@ -24,6 +24,62 @@ use crate::panels::PanelMsg;
 /// Longest text of a recorded input in a row's arguments.
 const SUMMARY_CHARS: usize = 600;
 
+/// What a board drop carried and how (#2513): Replay rebuilds the same move
+/// from it, the tracks that follow bent at the same corner.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct BoardDrop {
+    pub(crate) footprints: BTreeSet<Uuid>,
+    pub(crate) vias: BTreeSet<Uuid>,
+    /// Tracks, arcs, areas, strings, dimensions and drawings (#2870).
+    pub(crate) items: BTreeSet<Uuid>,
+    pub(crate) rooms: BTreeSet<Uuid>,
+    pub(crate) delta: Point,
+    pub(crate) leaves_tracks: bool,
+    /// The corner the tracks that follow bend at, so a replay bends them as
+    /// the drop did whatever the router's rule is by then.
+    pub(crate) corner: CornerRule,
+}
+
+impl BoardDrop {
+    /// A drop of `footprints` alone.
+    pub(crate) fn of_footprints(
+        footprints: BTreeSet<Uuid>,
+        delta: Point,
+        leaves_tracks: bool,
+        corner: CornerRule,
+    ) -> Self {
+        Self {
+            footprints,
+            vias: BTreeSet::new(),
+            items: BTreeSet::new(),
+            rooms: BTreeSet::new(),
+            delta,
+            leaves_tracks,
+            corner,
+        }
+    }
+
+    /// How many objects of each kind it carried, for the row's detail.
+    fn summary(&self) -> String {
+        let counts = [
+            (self.footprints.len(), "footprints"),
+            (self.vias.len(), "vias"),
+            (self.items.len(), "objects"),
+            (self.rooms.len(), "rooms"),
+        ];
+        let carried: Vec<String> = (counts.iter())
+            .filter(|(n, _)| *n > 0)
+            .map(|(n, kind)| format!("{n} {kind}"))
+            .collect();
+        let carried = if carried.is_empty() {
+            "0 footprints".to_string()
+        } else {
+            carried.join(", ")
+        };
+        format!("{carried} by ({}, {})", self.delta.x, self.delta.y)
+    }
+}
+
 /// The finished input of one operation.
 #[derive(Debug, Clone)]
 pub(super) enum ReplayInput {
@@ -45,15 +101,9 @@ pub(super) enum ReplayInput {
         /// holds anything else.
         guard: BoardReplayGuard,
     },
-    /// Footprints or vias carried by an offset.
+    /// Board objects carried by an offset: a part, via, track or mixed drop.
     BoardMove {
-        footprints: BTreeSet<Uuid>,
-        vias: BTreeSet<Uuid>,
-        delta: Point,
-        leaves_tracks: bool,
-        /// The corner the tracks that follow bend at (#2513), so a replay
-        /// bends them as the drop did.
-        corner: CornerRule,
+        drop: BoardDrop,
         /// What the move wrote, before and after; set once it has run.
         guard: Option<BoardReplayGuard>,
     },
@@ -100,20 +150,7 @@ impl ReplayInput {
         let text = match self {
             Self::Sheet { commands, .. } => format!("{commands:?}"),
             Self::Board { commands, .. } => format!("{commands:?}"),
-            Self::BoardMove {
-                footprints,
-                vias,
-                delta,
-                ..
-            } if vias.is_empty() => format!(
-                "{} footprints by ({}, {})",
-                footprints.len(),
-                delta.x,
-                delta.y
-            ),
-            Self::BoardMove { vias, delta, .. } => {
-                format!("{} vias by ({}, {})", vias.len(), delta.x, delta.y)
-            }
+            Self::BoardMove { drop, .. } => drop.summary(),
             Self::ReuseBlock {
                 name,
                 anchor,
@@ -547,33 +584,18 @@ impl ReplayBook {
         leaves_tracks: bool,
         corner: CornerRule,
     ) {
-        self.board_input = Some(ReplayInput::BoardMove {
+        self.note_drop(BoardDrop::of_footprints(
             footprints,
-            vias: BTreeSet::new(),
             delta,
             leaves_tracks,
             corner,
-            guard: None,
-        });
+        ));
     }
 
-    /// The via drop about to run moves `vias` by `delta`, the tracks on them
-    /// bent at `corner` (#2513).
-    pub(crate) fn note_via_drop(
-        &mut self,
-        vias: BTreeSet<Uuid>,
-        delta: Point,
-        leaves_tracks: bool,
-        corner: CornerRule,
-    ) {
-        self.board_input = Some(ReplayInput::BoardMove {
-            footprints: BTreeSet::new(),
-            vias,
-            delta,
-            leaves_tracks,
-            corner,
-            guard: None,
-        });
+    /// The board drop about to run carries `drop`: a via, track or mixed
+    /// drop as well as a part's (#2513).
+    pub(crate) fn note_drop(&mut self, drop: BoardDrop) {
+        self.board_input = Some(ReplayInput::BoardMove { drop, guard: None });
     }
 
     /// The board edit about to run places the reuse block `name`.

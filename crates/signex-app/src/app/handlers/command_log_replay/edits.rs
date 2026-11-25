@@ -6,7 +6,7 @@ use std::path::Path;
 use iced::Task;
 use pcb_geom::ItemRef;
 use signex_engine::Command;
-use signex_engine::pcb::placement::{self, PlacementRefusal};
+use signex_engine::pcb::placement::PlacementRefusal;
 use signex_engine::pcb::{BoardCommand, BoardReplayGuard};
 use signex_i18n::{Translatable, ids};
 
@@ -18,6 +18,7 @@ use super::run::{
 };
 use super::selection::Shown;
 use crate::app::command::CommandOutcome;
+use crate::app::handlers::pcb_item_move::{carry_of_drop, drag_commands};
 use crate::app::core::command_log::RecordedTargets;
 use crate::app::core::mutation_outcome::MutationOutcome;
 use crate::app::{Message, Signex};
@@ -45,32 +46,19 @@ fn board_outcome<E: std::fmt::Display>(
     }
 }
 
-/// The commands a recorded board move builds on `board` as it is now: its
-/// footprints or vias by its offset, the tracks on them bent at its
-/// recorded corner (#2513), or left in place after a Ctrl drag. `None` for
-/// another input.
+/// The commands a recorded board move builds on `board` as it is now: what
+/// it carried by its offset, the tracks that follow bent at its recorded
+/// corner (#2513), or left in place after a Ctrl drag, built as the drop
+/// built them (`pcb_item_move::drag_commands`). `None` for another input.
 fn rebuilt_board_move(
     board: &signex_types::pcb::PcbBoard,
     input: &ReplayInput,
 ) -> Option<Result<Vec<BoardCommand>, PlacementRefusal>> {
-    let ReplayInput::BoardMove {
-        footprints,
-        vias,
-        delta,
-        leaves_tracks,
-        corner,
-        ..
-    } = input
-    else {
+    let ReplayInput::BoardMove { drop, .. } = input else {
         return None;
     };
-    let (delta, corner) = (*delta, *corner);
-    Some(match (vias.is_empty(), *leaves_tracks) {
-        (false, true) => placement::move_vias_only(board, vias, delta),
-        (false, false) => placement::move_vias(board, vias, delta, corner),
-        (true, true) => placement::move_footprints_only(board, footprints, delta),
-        (true, false) => placement::move_commands(board, footprints, delta, corner),
-    })
+    let carry = carry_of_drop(drop);
+    Some(drag_commands(board, &carry, drop.delta))
 }
 
 /// Whether a recorded board move no longer fits: a target left where the move
@@ -342,11 +330,10 @@ fn input_targets(input: &ReplayInput) -> RecordedTargets {
     match input {
         ReplayInput::Sheet { targets, .. } => RecordedTargets::Sheet(targets.clone()),
         ReplayInput::Board { targets, .. } => RecordedTargets::Board(targets.clone()),
-        ReplayInput::BoardMove {
-            footprints, vias, ..
-        } => RecordedTargets::Board(
-            (footprints.iter().map(|id| ItemRef::Footprint(*id)))
-                .chain(vias.iter().map(|id| ItemRef::Via(*id)))
+        // A carried object or room that is gone fails its guard instead.
+        ReplayInput::BoardMove { drop, .. } => RecordedTargets::Board(
+            (drop.footprints.iter().map(|id| ItemRef::Footprint(*id)))
+                .chain(drop.vias.iter().map(|id| ItemRef::Via(*id)))
                 .collect(),
         ),
         ReplayInput::ReuseBlock { anchor, .. } => {

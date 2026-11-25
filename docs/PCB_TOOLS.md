@@ -1007,7 +1007,9 @@ them with `signex_engine::pcb::placement::stretch_commands`
 (`move_commands`, `move_vias`): a `ReplaceItems` of the tracks and an
 `AddItems` of the new legs, one undo step. A track with both ends on what
 moves moves whole, with no corner. The Command Log keeps the offset and the
-corner rule of a part or via drop, so a Replay bends the tracks as the drop
+corner rule of every drop (part, via, track, object or mixed selection), so
+a Replay rebuilds it with the drop's own builder
+(`handlers::pcb_item_move::drag_commands`) and bends the tracks as the drop
 did, whatever the router's rule is by then (`docs/COMMAND_LOG.md`).
 
 ## Moving a designator or comment on its own

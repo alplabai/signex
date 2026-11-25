@@ -311,24 +311,13 @@ impl Signex {
             .and_then(ReplayInput::row_command)
             .or(by_family);
         let input = match dropped {
-            Some(ReplayInput::BoardMove {
-                footprints,
-                vias,
-                delta,
-                leaves_tracks,
-                corner,
-                ..
-            }) => {
+            Some(ReplayInput::BoardMove { drop, .. }) => {
                 let mut guard = guard;
                 if let Some(board) = self.document_state.pcb_board(path) {
                     guard.record_after(board);
                 }
                 ReplayInput::BoardMove {
-                    footprints,
-                    vias,
-                    delta,
-                    leaves_tracks,
-                    corner,
+                    drop,
                     guard: Some(guard),
                 }
             }
