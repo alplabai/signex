@@ -1,17 +1,19 @@
 # Board placement tools
 
-How the PCB editor's placement tools behave (#2373). The table of tools,
-live and greyed, is `crates/signex-app/src/app/pcb_tools.rs`
-(`BoardPlaceTool::state`); the Place menu on a board and the PCB Active Bar
-are both built from it (see `MENU_BAR.md`, "Place on a board").
+How the PCB editor's placement tools behave (#2373). The table of tools is
+`crates/signex-app/src/app/pcb_tools.rs` (`BoardPlaceTool::command`); the
+Place menu on a board and the PCB Active Bar are both built from it (see
+`MENU_BAR.md`, "Place on a board"). Every tool runs on a board: Component,
+the last one greyed "not available on boards yet", runs since #2505.
 
 ## Common behaviour
 
-- **Arming.** Each live tool has a catalog command (`place_board_*`). Its
+- **Arming.** Each tool has a catalog command (`place_board_*`). Its
   Place row, its PCB Active Bar button, a key bound to it and the command
   palette all run that command, which arms the tool on the board in view of
   the window it ran in. Arming ends a Move, a paste or a part on the cursor
-  and a Properties net pick; starting any of those ends the tool.
+  and a Properties net pick; starting any of those ends the tool. Component
+  arms no click tool: it opens the part picker (see "Component").
 - **Points.** A clicked point lands on an object point within the snap
   distance (the Snap Options), else on the board's grid
   (`PcbSetup::grid_size`, else the PCB default) when grid snapping is on.
@@ -30,6 +32,40 @@ are both built from it (see `MENU_BAR.md`, "Place on a board").
   not open the board menu. A tab switch leaves the tool behind on its board.
 - **Nets.** A via or track takes the net of the copper it starts on
   (`pcb_geom::net_at`, integer nm), or no net over bare board.
+
+## Component {#component}
+
+`place_board_component` (#2505; no key in the shipped profiles) is Place ▸
+Component on a board, the Component row of the board canvas menu's Place
+flyout and the first row of the PCB Active Bar's Components group. It is
+greyed on a read-only board (`Needs::EditablePcb`).
+
+- **Pick.** It opens the part picker, the one Place ▸ Component... opens on
+  a sheet (`LibraryMessage::OpenPicker`). Its Place button reads the row and
+  its default footprint off the update thread (`resolve_board_part`) and
+  puts the footprint on the cursor of the board the pick was made for, the
+  same Place carry as a part placed from the Components panel (#2364,
+  `handlers/pcb_part_place.rs`). A row with no footprint, or one the board
+  cannot hold, is refused with why in Messages and nothing goes on the
+  cursor.
+- **Placing.** The footprint follows the pointer on the components grid,
+  drawn by the board renderer and dimmed. Space turns it a quarter
+  counter-clockwise, Shift+Space clockwise; L (Flip Selection) moves it to
+  the other side, pads and graphics with it, and so do `mirror_x` and
+  `mirror_y` (the latter with a half turn). Each click places a copy as one board undo step
+  (`BoardCommand::AddItems`) with the next designator of its prefix on the
+  board, and the part stays on the cursor for the next copy. Esc, a
+  right-click, a tab switch or a newer pick ends it.
+- **Schematic link.** The placed footprint has no schematic part
+  (`Footprint::schematic_link` is none) and keeps its library link
+  (`library_ref`). The next Update PCB lists it as kept unlinked
+  (`EcoNote::KeptUnlinked`) and never ticks its removal; a part later
+  given the same designator on the sheet is linked to it by that
+  designator, as for any unlinked footprint (`docs/UPDATE_PCB.md`).
+- **Bar group.** The Components group's button shows Component until
+  Change Footprint is run from its dropdown; the group remembers the row
+  its dropdown ran last. Place ▸ Component itself does not change it,
+  since it arms no tool.
 
 ## Via
 
@@ -1013,7 +1049,8 @@ tools; Change Footprint is the Edit and board canvas menu row of #2366, and
 the Tune rows are the length tuning commands of #2389 (palette, no menu row).
 
 - **Button.** It shows and runs the row its group ran last; until then, the
-  first row that can run. A click runs it as its menu row does. It is drawn
+  first row (Component for Components since #2505). A click runs it as its
+  menu row does. It is drawn
   selected while one of its group's tools is armed on the board in the main
   window, as a schematic bar button is, and while its dropdown is open.
 - **Dropdown.** A right-click on a group with more than one row, or a
@@ -1021,10 +1058,8 @@ the Tune rows are the length tuning commands of #2389 (palette, no menu row).
   come first; a group's commands (Repour Selected, Repour All and Unfill
   Selected, Change
   Footprint) sit below a separator after them. The row the button shows is
-  drawn current, with the accent-soft fill. A live row runs its command and
-  is greyed by the same gate as its menu row; a tool the board editor cannot
-  run yet is greyed and its tooltip is the reason Place gives ("Place
-  Component: not available on boards yet"). A button with a dropdown has the
+  drawn current, with the accent-soft fill. A row runs its command and is
+  greyed by the same gate as its menu row. A button with a dropdown has the
   corner triangle; a group of one row (Text) has neither. A
   click on the triangle opens the dropdown and a click elsewhere on the
   button still runs the row it shows (Caner, 2026-11-24, mockup row 108);
@@ -1047,13 +1082,12 @@ the Tune rows are the length tuning commands of #2389 (palette, no menu row).
   row 108). There is no Copper Drawing group (#2869): the Graphics Line and
   Arc draw a track and a track arc on copper, and Track and the copper Arc
   tool stay in Place on a board.
-- **No live row.** A group whose rows are all greyed is one greyed button
-  with that reason as its tooltip and no dropdown.
 - **Last used.** A tool armed from the group's dropdown, Place, a key or the
-  palette becomes the group's button. Each group's last row is kept in
+  palette becomes the group's button; Component, which arms no tool, does
+  so only from the dropdown. Each group's last row is kept in
   `prefs.json` under `pcb_bar_last_tools` (group key to command id), written
   off the update thread, so it outlives the session. A stored command that is
-  not a live row of its group reads as never used.
+  not a row of its group reads as never used.
 
 ## Moving a component with its tracks
 

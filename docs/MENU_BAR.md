@@ -605,13 +605,13 @@ Graphics group), then Board Sketch (`board_sketch`, the same command as
 Design ▸ Board Sketch and the PCB Active Bar's button). Every other tab keeps
 the sheet's Place rows.
 
-The rows come from one table, `app/pcb_tools.rs` (`BoardPlaceTool::state`),
+The rows come from one table, `app/pcb_tools.rs` (`BoardPlaceTool::command`),
 which the PCB Active Bar builds its buttons from (#2352), so the two surfaces
-run and grey the same set. A live tool (#2373) is a command row that runs the
-same command as its Active Bar button and arms the tool on the board in view;
-see "Board placement tools" in `docs/PCB_TOOLS.md`. A tool the board editor
-cannot run yet is an `ItemState::Placeholder` whose `reason` is its tooltip
-("Place Component: not available on boards yet").
+run the same set. Each tool (#2373) is a command row that runs the same
+command as its Active Bar button and arms the tool on the board in view;
+Component (`place_board_component`, #2505) opens the part picker instead and
+the pick goes on the cursor. See "Board placement tools" in
+`docs/PCB_TOOLS.md`. No board tool is a greyed placeholder any more.
 
 The golden fixture marks the sheet's Place rows `-` in the `pcb` column: that
 variant's bar does not have them. `menu_bar/testdata/menu_bar_place_board.golden.tsv`

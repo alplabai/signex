@@ -1607,8 +1607,11 @@ still need a connection.
 
 <!-- screenshot: a board after Update PCB, footprints beside the outline with the ratsnest -->
 
-Parts come from the schematic through Update PCB. **Place ▸ Component** on a
-board is greyed with the reason "not available on boards yet".
+Parts come from the schematic through Update PCB. To put a part on the board
+without one, choose **Place ▸ Component** on the board and pick it: its
+footprint follows the cursor, `Space` turns it, `L` flips it to the other
+side, and each click places a copy. Such a footprint is not linked to a
+schematic part; Update PCB lists it as unlinked and keeps it.
 
 - **Move:** drag a footprint, or select it and choose **Edit ▸ Move ▸
   Move**. Tracks joined to its pads come along. Hold `Ctrl` (`Cmd` on macOS)
