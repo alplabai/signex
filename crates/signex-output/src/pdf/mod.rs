@@ -111,22 +111,21 @@ pub struct PdfOptions {
     pub physical_sheet_number: bool,
     pub physical_document_number: bool,
     /// Render schematic chrome elements when set. False hides each
-    /// element from the exported PDF. Mirrors Altium's "Schematics
-    /// include" checklist verbatim.
+    /// element from the exported PDF: the "Schematics include" checklist.
     ///
     /// Live toggles (renderer honours the value):
     ///   `include_no_erc_markers` (No-ERC directives),
     ///   `include_no_connect_markers` (no-connect X marks),
     ///   `include_notes`,
     ///   `include_parameter_sets` (Net Parameters directives, #2656),
-    ///   `include_blankets` (Net Blankets, #2656).
+    ///   `include_blankets` (Net Blankets, #2656),
+    ///   `include_compile_masks` and `include_diff_pairs` (off by default).
     ///
     /// Dormant toggles — the schematic model has no such object yet, so
     /// these are stored but produce no observable difference today:
     /// `include_probes` (probe markers), `include_collapsed_notes`
     /// (collapsed-note placards). They keep the user's choice until the
-    /// object lands; the gating is then one line. Compile Masks and
-    /// Differential Pairs have no toggle and are not printed (#2656).
+    /// object lands; the gating is then one line.
     pub include_no_erc_markers: bool,
     /// Draws the no-connect X marks. Separate from the No-ERC
     /// directive toggle above: they are different schematic objects.
@@ -134,6 +133,11 @@ pub struct PdfOptions {
     pub include_parameter_sets: bool,
     pub include_probes: bool,
     pub include_blankets: bool,
+    /// Compile Masks, as a dotted outline. Off by default.
+    pub include_compile_masks: bool,
+    /// Differential Pair directives, as two short strokes and their flag.
+    /// Off by default.
+    pub include_diff_pairs: bool,
     pub include_notes: bool,
     pub include_collapsed_notes: bool,
     /// Bookmark target zoom level for component / net jumps inside the
@@ -283,6 +287,8 @@ impl Default for PdfOptions {
             include_parameter_sets: true,
             include_probes: true,
             include_blankets: true,
+            include_compile_masks: false,
+            include_diff_pairs: false,
             include_notes: true,
             include_collapsed_notes: false,
             bookmark_zoom: 0.5,

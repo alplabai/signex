@@ -1,15 +1,17 @@
 //! Schematic directives on paper (#2656), drawn as on the canvas in the
-//! directive colour (`no_connect`): a Net Blanket as a dashed outline and a
-//! Net Parameters directive as a flag on a stem. Compile Masks and
-//! Differential Pairs are not printed. Flags come from the one geometry the
-//! canvas uses (`signex_types::schematic::directive_flag`). PDF pages and
-//! print are drawn from these elements. Design note:
+//! directive colour (`no_connect`): a Net Blanket as a dashed outline, a
+//! Compile Mask as a dotted one, a Differential Pair as two short strokes and
+//! a Net Parameters directive as a flag on a stem, each kind behind its own
+//! export option. Flags come from the one geometry the canvas uses
+//! (`signex_types::schematic::directive_flag`). PDF pages and print are drawn
+//! from these elements. Design note:
 //! `docs/SCHEMATIC_DIRECTIVES.md`, "Drawing".
 
 use signex_types::net_class::NetLineStyle;
 use signex_types::schematic::{
-    Aabb, DIRECTIVE_FLAG_TEXT_MM, Point, SCHEMATIC_NO_CONNECT_STROKE_MM, SchDirective,
-    SchematicSheet, directive_flag, directive_flag_line_origin,
+    Aabb, DIRECTIVE_FLAG_TEXT_MM, Point, SCHEMATIC_NO_CONNECT_STROKE_MM,
+    SCHEMATIC_RENDER_NO_CONNECT_HALF_LEN_MM, SchDirective, SchematicSheet, directive_flag,
+    directive_flag_line_origin,
 };
 
 use super::family::alias_for_family;
@@ -20,14 +22,15 @@ use crate::pdf::PdfOptions;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
 
-/// Whether the export options draw `directive`: Net Blankets follow
-/// "Blankets", Net Parameters directives "Parameter Sets". A Compile Mask and
-/// a Differential Pair are never printed (#2656 asks for the other two only).
+/// Whether the export options draw `directive`: each kind has its own option.
+/// Net Blankets and Net Parameters are on by default, Compile Masks and
+/// Differential Pairs off (decision of 2026-11-25).
 fn is_drawn(directive: &SchDirective, opts: &PdfOptions) -> bool {
     match directive {
         SchDirective::Blanket { .. } => opts.include_blankets,
         SchDirective::NetParameters { .. } => opts.include_parameter_sets,
-        SchDirective::CompileMask { .. } | SchDirective::DiffPair { .. } => false,
+        SchDirective::CompileMask { .. } => opts.include_compile_masks,
+        SchDirective::DiffPair { .. } => opts.include_diff_pairs,
     }
 }
 
@@ -49,9 +52,23 @@ pub(super) fn push_directives(
     for directive in sheet.directives.iter().filter(|d| is_drawn(d, opts)) {
         let mut commands = Vec::new();
         if let Some(r) = directive.region() {
-            let dashed = NetLineStyle::Dashed;
+            let line = match directive {
+                SchDirective::CompileMask { .. } => NetLineStyle::Dotted,
+                _ => NetLineStyle::Dashed,
+            };
             for (a, b) in edges(&r) {
-                push_marks(&mut commands, xform, a, b, dashed, style.stroke_width);
+                push_marks(&mut commands, xform, a, b, line, style.stroke_width);
+            }
+        } else if let SchDirective::DiffPair { .. } = directive {
+            let half = SCHEMATIC_RENDER_NO_CONNECT_HALF_LEN_MM;
+            let at = directive.anchor();
+            for dy in [-half * 0.4, half * 0.4] {
+                push_segment(
+                    &mut commands,
+                    xform,
+                    Point::new(at.x - half, at.y + dy),
+                    Point::new(at.x + half, at.y + dy),
+                );
             }
         }
         let flag = directive_flag(directive);
