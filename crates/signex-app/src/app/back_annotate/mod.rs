@@ -7,12 +7,16 @@
 //! to disk. Entry points: Tools ▸ Annotation ▸ Back Annotate Schematics...,
 //! Design ▸ Update Schematics in `<project>`, the palette. A rename that
 //! would put a designator on two parts starts unticked (`duplicates.rs`).
+//! `command.rs` is the operand form (#2470).
 
 mod apply;
+mod command;
 pub(crate) mod duplicates;
 pub(crate) mod read;
 mod update;
 
+#[cfg(test)]
+mod command_tests;
 #[cfg(test)]
 mod tests;
 
@@ -22,6 +26,7 @@ use std::sync::Arc;
 use signex_engine::pcb::eco::{BackChangeList, BackGroup, BackKey};
 
 pub(crate) use apply::FileEdits;
+pub(crate) use command::back_annotate_schematics;
 pub use read::BackRead;
 
 use crate::app::state::ProjectId;
@@ -72,6 +77,20 @@ pub enum BackAnnotateMsg {
         result: Result<Vec<PathBuf>, String>,
     },
     CloseRequested,
+    /// The operand form's read landed (#2470), with its closed sheets
+    /// stated again; no dialog is involved.
+    OperandRead(Box<OperandRead>),
+}
+
+/// What the operand form's worker found, and what answering its caller needs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OperandRead {
+    pub(crate) waiting: crate::app::agent::WaitingCommand,
+    pub(crate) project: ProjectId,
+    pub(crate) board: PathBuf,
+    pub(crate) dry_run: bool,
+    /// The read, and the closed sheets that changed on disk since it.
+    pub(crate) result: Result<(Arc<BackRead>, Vec<PathBuf>), String>,
 }
 
 /// The dialog, while open.
