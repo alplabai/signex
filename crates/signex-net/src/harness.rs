@@ -77,6 +77,30 @@ impl HarnessBundle {
     pub fn net_type(&self) -> Option<&str> {
         self.types.first().map(String::as_str)
     }
+
+    /// Whether the bundle only passes a harness on: a harness port and a
+    /// harness-typed sheet entry, no connector. Its signals are the far
+    /// sides', carried through it.
+    #[must_use]
+    pub fn passes_through(&self) -> bool {
+        passes_through(
+            !self.connectors.is_empty(),
+            !self.ports.is_empty(),
+            !self.sheet_entries.is_empty(),
+            self.nested,
+        )
+    }
+}
+
+/// The one pass-through rule, shared by [`HarnessBundle::passes_through`]
+/// and the stitcher's [`Carry`]: inferred, never stored.
+fn passes_through(
+    has_connector: bool,
+    has_port: bool,
+    has_sheet_entry: bool,
+    nested: bool,
+) -> bool {
+    !has_connector && !nested && has_port && has_sheet_entry
 }
 
 /// The harness union-find of one sheet.
@@ -147,6 +171,11 @@ impl<'a> Topology<'a> {
     fn tip_class(&mut self, connector: usize) -> Key {
         let tip = self.sheet.harness.connectors[connector].tip_point();
         find(&mut self.parent, pt_key(&tip))
+    }
+
+    /// Whether a connector's tip lies on the bundle `class`.
+    fn has_connector(&mut self, class: Key) -> bool {
+        (0..self.sheet.harness.connectors.len()).any(|ci| self.tip_class(ci) == class)
     }
 
     /// The bundle nested at entry `entry` of connector `connector`, if its
@@ -338,6 +367,19 @@ pub(crate) struct SheetHarnessNets {
     pub(crate) pins: Vec<Vec<(String, Leaves)>>,
     /// Each harness port's name with the leaves of its bundle.
     pub(crate) ports: Vec<(String, Leaves)>,
+    /// The bundles that only pass a harness on; their ports and typed
+    /// entries are listed here, not in `pins` / `ports`.
+    pub(crate) carries: Vec<Carry>,
+}
+
+/// A bundle that passes a harness on (#2657): it has no nets of its own, so
+/// the stitcher joins, path by path, every side it meets through it.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub(crate) struct Carry {
+    /// `(child_sheets index, entry name)` of each typed sheet entry on it.
+    pub(crate) pins: Vec<(usize, String)>,
+    /// The name of each harness port on it.
+    pub(crate) ports: Vec<String>,
 }
 
 /// Sample `sheet`'s harness nets from the fully merged net union-find
@@ -363,6 +405,9 @@ pub(crate) fn sample(sheet: &SchematicSheet, parent: &mut HashMap<Key, Key>) -> 
             }
         }
     }
+    let nested = topo.nested_classes();
+    // Connector-less bundles: a carry when it has a port and a typed entry.
+    let mut carries: BTreeMap<Key, Carry> = BTreeMap::new();
     for (index, cs) in sheet.child_sheets.iter().enumerate() {
         for pin in &cs.pins {
             if sheet.harness.entry_type(pin.uuid).is_none() {
@@ -373,6 +418,11 @@ pub(crate) fn sample(sheet: &SchematicSheet, parent: &mut HashMap<Key, Key>) -> 
             else {
                 continue;
             };
+            if !topo.has_connector(class) && !nested.contains(&class) {
+                let carry = carries.entry(class).or_default();
+                carry.pins.push((index, name.to_string()));
+                continue;
+            }
             let leaves = root_leaves(&mut topo, class, parent);
             out.pins[index].push((name.to_string(), leaves));
         }
@@ -384,9 +434,23 @@ pub(crate) fn sample(sheet: &SchematicSheet, parent: &mut HashMap<Key, Key>) -> 
         let (Some(name), Some(class)) = (label.port_name(), topo.class_at(label.position)) else {
             continue;
         };
+        if !topo.has_connector(class) && !nested.contains(&class) {
+            carries
+                .entry(class)
+                .or_default()
+                .ports
+                .push(name.to_string());
+            continue;
+        }
         let leaves = root_leaves(&mut topo, class, parent);
         out.ports.push((name.to_string(), leaves));
     }
+    // A connector-less bundle that is not a carry has no leaves, so it joins
+    // nothing either way.
+    out.carries = carries
+        .into_values()
+        .filter(|c| passes_through(false, !c.ports.is_empty(), !c.pins.is_empty(), false))
+        .collect();
     out
 }
 
@@ -407,6 +471,8 @@ fn root_leaves(topo: &mut Topology<'_>, class: Key, parent: &mut HashMap<Key, Ke
 /// with the same-named harness port of its child, leaf by leaf of the same
 /// path. `edges` are the stitcher's `(parent occurrence, sheet symbol index,
 /// child occurrence)`; `harness_of` reads an occurrence's sampled harness.
+/// A sheet that only passes the harness on joins the sides it meets
+/// ([`join_through_carries`]).
 pub(crate) fn join_across_sheets<'a>(
     l2: &mut HashMap<(usize, Key), (usize, Key)>,
     edges: &[(usize, usize, usize)],
@@ -427,6 +493,89 @@ pub(crate) fn join_across_sheets<'a>(
             }
         }
     }
+    join_through_carries(l2, edges, &harness_of);
+}
+
+/// One carry of one occurrence: `(occurrence, index in its carries)`.
+type CarryId = (usize, usize);
+
+/// The leaves one side brings to a carry: `(occurrence, leaves)`.
+type Side<'a> = (usize, &'a Leaves);
+
+/// Join every side a chain of carries meets (#2657). Carries that face each
+/// other across an edge are one carry; each side with leaves (a parent's
+/// typed entry or a child's port on a bundle with connectors) is attached to
+/// it, and the attached sides' leaves of the same path are one net.
+fn join_through_carries<'a>(
+    l2: &mut HashMap<(usize, Key), (usize, Key)>,
+    edges: &[(usize, usize, usize)],
+    harness_of: &impl Fn(usize) -> &'a SheetHarnessNets,
+) {
+    let mut chains: HashMap<CarryId, CarryId> = HashMap::new();
+    let mut sides: Vec<(CarryId, Side<'a>)> = Vec::new();
+    for &(parent_occ, cs_index, child_occ) in edges {
+        let up = harness_of(parent_occ);
+        let down = harness_of(child_occ);
+        let up_carries = carry_pins(up, cs_index);
+        let down_carries = carry_ports(down);
+        for &(ci, name) in &up_carries {
+            for &(cj, _) in down_carries.iter().filter(|(_, n)| *n == name) {
+                union(&mut chains, (parent_occ, ci), (child_occ, cj));
+            }
+            for (_, leaves) in down.ports.iter().filter(|(n, _)| n == name) {
+                sides.push(((parent_occ, ci), (child_occ, leaves)));
+            }
+        }
+        let Some(pins) = up.pins.get(cs_index) else {
+            continue;
+        };
+        for &(cj, name) in &down_carries {
+            for (_, leaves) in pins.iter().filter(|(n, _)| n == name) {
+                sides.push(((child_occ, cj), (parent_occ, leaves)));
+            }
+        }
+    }
+    // Chain root -> path -> the net roots of that path, in a fixed order.
+    let mut joined: BTreeMap<CarryId, BTreeMap<&str, Vec<(usize, Key)>>> = BTreeMap::new();
+    for (carry, (occ, leaves)) in sides {
+        let chain = find(&mut chains, carry);
+        let paths = joined.entry(chain).or_default();
+        for (path, root) in leaves {
+            paths.entry(path.as_str()).or_default().push((occ, *root));
+        }
+    }
+    for nodes in joined.values().flat_map(BTreeMap::values) {
+        let Some((&first, rest)) = nodes.split_first() else {
+            continue;
+        };
+        for &node in rest {
+            union(l2, first, node);
+        }
+    }
+}
+
+/// `(carry index, entry name)` of each carry's typed entry on the sheet
+/// symbol `cs_index`.
+fn carry_pins(h: &SheetHarnessNets, cs_index: usize) -> Vec<(usize, &str)> {
+    h.carries
+        .iter()
+        .enumerate()
+        .flat_map(|(i, c)| {
+            c.pins
+                .iter()
+                .filter(move |(cs, _)| *cs == cs_index)
+                .map(move |(_, name)| (i, name.as_str()))
+        })
+        .collect()
+}
+
+/// `(carry index, port name)` of each carry's harness port.
+fn carry_ports(h: &SheetHarnessNets) -> Vec<(usize, &str)> {
+    h.carries
+        .iter()
+        .enumerate()
+        .flat_map(|(i, c)| c.ports.iter().map(move |name| (i, name.as_str())))
+        .collect()
 }
 
 /// Every bundle of `sheet`, top-level and nested, for ERC and the editor.
