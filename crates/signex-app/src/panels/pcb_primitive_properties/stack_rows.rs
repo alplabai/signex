@@ -71,7 +71,9 @@ pub(super) fn size_rows<'a>(
             let y = mm_field(common, PrimitiveField::LayerSizeY(size.layer), size.y, look);
             pair(x, y)
         } else {
-            x
+            // A via's diameter on that layer, in mm like its Simple one
+            // (mockup row 96).
+            super::linked::with_unit(x, super::linked::unit(look, ids::PCB_PRIM_UNIT_MM))
         };
         let label = UserText::new(size.label.clone());
         if common.shows(&look.ctx.i18n, &size.label) {

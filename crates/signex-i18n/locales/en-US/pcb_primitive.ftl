@@ -552,3 +552,6 @@ pcb-prim-dim-show-unit = Show unit
 pcb-prim-dim-prefix = Prefix
 pcb-prim-dim-suffix = Suffix
 pcb-prim-dim-trailing-zeros = Trailing zeros
+# m7/pcb-props-via-zone
+# The closed Via Type field's sizes; $diameter and $drill are in mm.
+pcb-prim-via-type-sizes = { $diameter }/{ $drill }

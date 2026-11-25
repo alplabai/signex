@@ -4,14 +4,14 @@
 //! module only names them.
 
 use signex_engine::pcb::via_types::{ViaTypeDef, is_overridden, min_via_drill, type_of, via_types};
-use signex_i18n::{I18n, Localized, ids, t};
+use signex_i18n::{I18n, ids, t};
 use signex_types::pcb::{Pad, PcbBoard, Point, Via, ViaType};
 use signex_types::pcb_layer::{CopperLayer, InnerCopper};
 use signex_types::pcb_stack::StackMode;
-use signex_types::pcb_via_protection::{Ipc4761, ViaProtection};
+use signex_types::pcb_via_protection::ViaProtection;
 
 use crate::panels::pcb_primitive_properties::{
-    LayerChoice, LayerSizeRow, ViaFacts, ViaTypeChoice, format_number, shared,
+    LayerChoice, LayerSizeRow, ViaFacts, ViaTypeChoice, class_short, format_number, shared,
 };
 use crate::pcb_canvas::layer_style;
 
@@ -39,15 +39,6 @@ fn kind_word(i18n: &I18n, kind: ViaType) -> String {
 fn drill_pair(i18n: &I18n, kind: ViaType, (from, to): (usize, usize)) -> String {
     let kind = kind_word(i18n, kind);
     t!(i18n, ids::PCB_PRIM_VIA_DRILL_PAIR, "kind" => kind, "from" => from, "to" => to).into_string()
-}
-
-/// A protection class as a via type's spec names it: "Type I-b", "open".
-fn class_short(i18n: &I18n, class: Ipc4761) -> Localized {
-    match class.code() {
-        Some(code) => t!(i18n, ids::PCB_PRIM_IPC_CODE, "code" => code),
-        None if class == Ipc4761::Open => t!(i18n, ids::PCB_PRIM_IPC_SHORT_OPEN),
-        None => t!(i18n, ids::PCB_PRIM_IPC_CUSTOM),
-    }
 }
 
 fn type_choice(i18n: &I18n, def: &ViaTypeDef) -> ViaTypeChoice {

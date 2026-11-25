@@ -1,6 +1,7 @@
-//! The Via panel's Not stored yet group: a microvia type adds the greyed
-//! Microvia Stacked / Staggered row (Caner, 2026-11-20); a through type
-//! has no such row.
+//! The Via panel: the Not stored yet group (a microvia type adds the greyed
+//! Microvia Stacked / Staggered row, Caner 2026-11-20; a through type has
+//! none), the Position row and mm units, the Via Type face and span glyph,
+//! the via stack and the Protection header (mockup row 96).
 
 use pcb_geom::ItemRef;
 use signex_engine::pcb::via_types::ViaTypeKey;
@@ -18,6 +19,9 @@ use crate::panels::pcb_primitive_properties::rows::Look;
 use crate::panels::pcb_primitive_properties::{ViaFacts, ViaTypeChoice};
 
 const WINDOW: iced::Size = iced::Size::new(300.0, 2000.0);
+/// The fixture type's name and spec, as the board's via types name them.
+const TYPE_NAME: &str = "Thru 1:4";
+const TYPE_SPEC: &str = "Through 1:4 · 0.6/0.3 · open";
 
 fn context() -> PanelContext {
     let (app, _boot) = Signex::new();
@@ -36,10 +40,10 @@ fn via(kind: ViaType, unstored_open: bool) -> ViaFacts {
             tented_top: false,
             tented_bottom: false,
         },
-        name: String::new(),
-        spec: String::new(),
+        name: TYPE_NAME.to_string(),
+        spec: TYPE_SPEC.to_string(),
         kind,
-        label: String::new(),
+        label: format!("{TYPE_NAME} · {TYPE_SPEC}"),
     };
     ViaFacts {
         common,
@@ -350,4 +354,173 @@ fn a_through_type_has_no_microvia_row() {
         !texts.contains(&said(&ctx, ids::PCB_PRIM_MICROVIA)),
         "{texts:?}"
     );
+}
+
+/// `section` laid out, isolation marks stripped.
+fn plain_texts(section: iced::Element<'_, crate::panels::PanelMsg>) -> Vec<LaidOutText> {
+    lay_out_texts(section, WINDOW)
+        .into_iter()
+        .map(|t| LaidOutText {
+            text: t.text.replace(['\u{2068}', '\u{2069}'], ""),
+            ..t
+        })
+        .collect()
+}
+
+/// The texts on the line of the label `label`, the label left out. The last
+/// text that says it is the row's label (a layer chip above says it too).
+fn on_line_of<'t>(texts: &'t [LaidOutText], label: &str) -> Vec<&'t str> {
+    let row = texts
+        .iter()
+        .rev()
+        .find(|t| t.text == label)
+        .unwrap_or_else(|| panic!("no {label:?} in {texts:#?}"))
+        .bounds;
+    texts
+        .iter()
+        .filter(|t| t.text != label && (t.bounds.center_y() - row.center_y()).abs() < row.height)
+        .map(|t| t.text.as_str())
+        .collect()
+}
+
+/// Mockup row 96: Position marks its fields X and Y and ends in mm.
+#[test]
+fn the_position_row_marks_x_and_y_and_ends_in_mm() {
+    let ctx = context();
+    let mut f = via(ViaType::Through, false);
+    f.x = Some(18.4);
+    f.y = Some(27.15);
+    let texts = plain_texts(definition(Look::of(&ctx), &f).expect("the definition"));
+    let line = on_line_of(&texts, &said(&ctx, ids::PCB_PRIM_POSITION));
+    for want in [ids::PCB_PRIM_X, ids::PCB_PRIM_Y, ids::PCB_PRIM_UNIT_MM] {
+        let want = said(&ctx, want);
+        assert!(line.contains(&want.as_str()), "{want} in {line:?}");
+    }
+}
+
+/// Mockup row 96: Diameter, Drill and Finished Hole end in mm.
+#[test]
+fn diameter_drill_and_finished_hole_end_in_mm() {
+    let ctx = context();
+    let mut f = via(ViaType::Through, false);
+    f.finished_hole = Some(0.25);
+    let texts = plain_texts(via_stack(Look::of(&ctx), &f).expect("the via stack"));
+    let mm = said(&ctx, ids::PCB_PRIM_UNIT_MM);
+    for label in [
+        ids::PCB_PRIM_DIAMETER,
+        ids::PCB_PRIM_DRILL,
+        ids::PCB_PRIM_FINISHED_HOLE,
+    ] {
+        let line = on_line_of(&texts, &said(&ctx, label));
+        assert!(line.contains(&mm.as_str()), "{label:?}: {line:?}");
+    }
+}
+
+/// Mockup row 96: a Full Stack via's diameter on each layer ends in mm too.
+#[test]
+fn each_layer_diameter_ends_in_mm() {
+    use crate::panels::pcb_primitive_properties::LayerSizeRow;
+    let ctx = context();
+    let mut f = via(ViaType::Through, false);
+    f.mode = Some(signex_types::pcb_stack::StackMode::Full);
+    f.layer_sizes = [
+        (CopperLayer::Top, "Top Layer"),
+        (CopperLayer::Bottom, "Bottom Layer"),
+    ]
+    .into_iter()
+    .map(|(layer, label)| LayerSizeRow {
+        layer,
+        label: label.to_string(),
+        x: Some(0.6),
+        y: None,
+    })
+    .collect();
+    let texts = plain_texts(via_stack(Look::of(&ctx), &f).expect("the via stack"));
+    let mm = said(&ctx, ids::PCB_PRIM_UNIT_MM);
+    for label in ["Top Layer", "Bottom Layer"] {
+        let line = on_line_of(&texts, label);
+        assert!(line.contains(&mm.as_str()), "{label}: {line:?}");
+    }
+}
+
+/// Mockup row 96: the closed Via Type field shows the type's name and its
+/// diameter / drill on its own line, never the whole list entry cut short.
+#[test]
+fn the_via_type_field_shows_the_name_and_sizes_not_the_list_entry() {
+    let ctx = context();
+    let f = via(ViaType::Through, false);
+    let texts = plain_texts(definition(Look::of(&ctx), &f).expect("the definition"));
+    let line = on_line_of(&texts, &said(&ctx, ids::PCB_PRIM_VIA_TYPE));
+    assert!(line.contains(&TYPE_NAME), "{line:?}");
+    assert!(line.contains(&"0.6/0.3"), "{line:?}");
+    let entry = f.via_type.as_ref().expect("a type").label.clone();
+    assert!(!texts.iter().any(|t| t.text == entry), "{texts:?}");
+}
+
+/// Mockup row 96: the list under the face draws no label of its own, so the
+/// picked entry never shows through the face: with a type picked it draws
+/// the same pixels as with none.
+#[test]
+fn the_list_under_the_type_face_draws_no_label() {
+    use crate::layout_probe::draw_pixels;
+    let picked = via(ViaType::Through, false);
+    let mut unpicked = via(ViaType::Through, false);
+    unpicked.via_type = None;
+    let size = iced::Size::new(300.0, 40.0);
+    let drawn = draw_pixels(super::via_type_list(&picked), size);
+    assert_eq!(drawn, draw_pixels(super::via_type_list(&unpicked), size));
+}
+
+/// Mockup row 96: the span glyph draws each copper layer in its colour.
+#[test]
+fn the_span_glyph_draws_the_copper_layers_in_their_colours() {
+    use crate::panels::pcb_primitive_properties::LayerChoice;
+    let ctx = context();
+    let mut f = via(ViaType::Through, false);
+    f.layers = [CopperLayer::Top, CopperLayer::Bottom]
+        .into_iter()
+        .map(|layer| LayerChoice {
+            layer,
+            label: String::new(),
+        })
+        .collect();
+    let key = f.via_type.as_ref().expect("a type").key;
+    let size = iced::Size::new(40.0, 40.0);
+    let pixels =
+        crate::layout_probe::draw_pixels(super::span_glyph(Look::of(&ctx), &f.layers, key), size);
+    for layer in [CopperLayer::Top, CopperLayer::Bottom] {
+        let colour = crate::pcb_canvas::layer_style::layer_colour(layer.into(), &ctx.tokens);
+        let want = [colour.r, colour.g, colour.b].map(|c| (c * 255.0).round() as i32);
+        let found = pixels.chunks(4).any(|p| {
+            p.iter()
+                .zip(want)
+                .all(|(got, want)| (i32::from(*got) - want).abs() <= 3)
+        });
+        assert!(found, "no pixel of {layer:?} in the glyph");
+    }
+}
+
+/// Mockup row 96: the Protection header names the class on a chip, with
+/// its "from type" tag, on the header's own line.
+#[test]
+fn the_protection_header_names_the_class_on_a_chip() {
+    use signex_types::pcb_via_protection::Ipc4761;
+    let ctx = context();
+    let mut f = via(ViaType::Through, false);
+    f.protection = Ipc4761::IB.preset();
+    let texts = plain_texts(super::protection(Look::of(&ctx), &f).expect("the protection"));
+    let title = ctx
+        .i18n
+        .upper_for_display(&said(&ctx, ids::PCB_PRIM_PROTECTION));
+    let line = on_line_of(&texts, &title);
+    let chip = t!(ctx.i18n, ids::PCB_PRIM_IPC_CODE, "code" => "I-b")
+        .into_string()
+        .replace(['\u{2068}', '\u{2069}'], "");
+    assert!(line.contains(&chip.as_str()), "{chip} in {line:?}");
+    assert!(
+        line.contains(&said(&ctx, ids::PCB_PRIM_FROM_TYPE).as_str()),
+        "{line:?}"
+    );
+    let chips = texts.iter().filter(|t| t.text == chip).count();
+    assert_eq!(chips, 1, "the chip shows once: {texts:?}");
 }

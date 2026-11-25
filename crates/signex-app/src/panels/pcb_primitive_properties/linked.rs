@@ -109,12 +109,13 @@ pub(super) fn linked_row<'a>(
 }
 
 /// The header of a collapsible section: chevron, title, and on the right
-/// the summary. A press folds or unfolds it under `key`.
+/// the summary and then the badge. A press folds or unfolds it under `key`.
 pub(super) fn section_header<'a>(
     look: Look<'a>,
     title: Localized,
     is_open: bool,
     summary: Option<Label<'a>>,
+    badge: Option<Element<'a, PanelMsg>>,
     key: String,
 ) -> Element<'a, PanelMsg> {
     let faint = resolve(look.tokens()).ink4;
@@ -134,6 +135,9 @@ pub(super) fn section_header<'a>(
                 .wrapping(iced::widget::text::Wrapping::None)
                 .boxed(),
         );
+    }
+    if let Some(badge) = badge {
+        line = line.push(badge);
     }
     button(container(line).padding([SP.s, PAD_X]).width(Length::Fill))
         .padding(0)

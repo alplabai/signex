@@ -50,6 +50,7 @@ pub(super) struct Section<'a> {
     rows: Vec<Element<'a, PanelMsg>>,
     title: MessageId,
     collapse: Option<Collapse<'a>>,
+    badge: Option<Element<'a, PanelMsg>>,
 }
 
 /// How a collapsible section folds: its key in the panel's collapsed set,
@@ -83,6 +84,7 @@ impl<'a> Section<'a> {
             rows: Vec::new(),
             title,
             collapse: None,
+            badge: None,
         }
     }
 
@@ -99,6 +101,14 @@ impl<'a> Section<'a> {
             closed_by_default,
             summary,
         });
+        self
+    }
+
+    /// A chip after the summary in the header of a collapsible section (the
+    /// via's protection class, mockup row 96). Only a collapsible section
+    /// draws it.
+    pub fn badge(mut self, badge: Element<'a, PanelMsg>) -> Self {
+        self.badge = Some(badge);
         self
     }
 
@@ -121,6 +131,7 @@ impl<'a> Section<'a> {
         }
         let title = self.look.t(self.title);
         let Some(collapse) = self.collapse else {
+            debug_assert!(self.badge.is_none(), "a badge needs a collapsible section");
             let mut col: Column<Element<'a, PanelMsg>> = column![
                 container(crate::panels::widgets::section_title(
                     title,
@@ -137,8 +148,14 @@ impl<'a> Section<'a> {
         };
         let is_closed = collapse.is_closed(self.look.ctx);
         let set_key = collapse.set_key();
-        let header =
-            super::linked::section_header(self.look, title, !is_closed, collapse.summary, set_key);
+        let header = super::linked::section_header(
+            self.look,
+            title,
+            !is_closed,
+            collapse.summary,
+            self.badge,
+            set_key,
+        );
         let mut col: Column<Element<'a, PanelMsg>> = column![header].spacing(SP.xs);
         if !is_closed {
             for r in self.rows {
