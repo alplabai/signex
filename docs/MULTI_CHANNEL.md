@@ -224,9 +224,13 @@ A variant can fit a part in one channel and leave it out in another (#2662).
 
 ## Not built yet
 
-- The Compiled Design panel does not show per-channel variant state yet.
+- The Compiled Design panel does not show per-channel variant state yet
+  (the grey "Not fitted (Lite)" tag on a channel row, mockup row 154).
+- A channel tab's Properties have no Variant line yet ("In Lite, CH3 and
+  CH4 are Not fitted", mockup row 151).
 - The canvas has no right-click "This channel only / All channels" for a
-  variant fit yet; it is set in the Variant Manager and on the cards.
+  variant fit yet (mockup row 32); it is set in the Variant Manager and on
+  the cards.
 - The channel cards list the channel's designators; the miniature drawing of
   the sheet at card scale with the channel's designators and net names is not
   drawn yet (#2658).
