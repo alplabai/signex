@@ -1,7 +1,7 @@
 //! #1259 / #2630: the Object List's reads, its read generation and the lists
 //! of undocked windows.
 
-use signex_types::schematic::{Point, SchematicSheet, Symbol};
+use signex_types::schematic::{InstancePath, Point, SchematicSheet, Symbol, SymbolInstance};
 
 use super::*;
 use crate::app::{TabInfo, TabKind};
@@ -309,6 +309,78 @@ fn a_project_read_lands_in_the_window_it_was_read_for() {
             rows: Ok(Arc::new(Vec::new())),
         });
     assert!(!f.app.ui_state.object_list.windows.contains_key(&gone));
+}
+
+/// #2629 (item 3): a refresh that runs inside an undocked window's swap
+/// keeps that window's list, so after it neither list is read again and
+/// neither shows the other window's sheet.
+#[test]
+fn a_refresh_inside_a_windows_swap_leaves_both_lists_settled() {
+    let mut f = undocked();
+    let window = f.window;
+    let _ = f.app.sync_object_list();
+    let generations = |app: &Signex| {
+        let state = &app.ui_state.object_list;
+        (state.source.generation, state.windows[&window].generation)
+    };
+    let before = generations(&f.app);
+
+    let _ = f
+        .app
+        .run_in_window_document(window, |app| app.sync_object_list());
+    let _ = f.app.sync_object_list();
+
+    assert_eq!(generations(&f.app), before, "no list was read again");
+    assert_eq!(names(&f.app.document_state.panel_ctx.object_list), ["R1"]);
+    assert_eq!(names(window_view(&f)), ["R2"]);
+}
+
+/// #2630: a part of a child sheet placed twice is named by the placement
+/// in view (R101 or R201), not by its stored `reference`, and the filter
+/// finds that name.
+#[test]
+fn a_twice_placed_childs_part_reads_as_the_placement_in_view() {
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.first_run_tour_open = false;
+    let child = PathBuf::from("child.snxsch");
+    let first = InstancePath::from_chain(vec![Uuid::from_u128(100)]);
+    let second = InstancePath::from_chain(vec![Uuid::from_u128(200)]);
+    let mut s = sheet(1, "R1");
+    s.symbols[0].instances = [(&first, "R101"), (&second, "R201")]
+        .into_iter()
+        .map(|(placement, reference)| SymbolInstance {
+            project: "p".into(),
+            path: placement.to_string(),
+            reference: reference.into(),
+            unit: 1,
+        })
+        .collect();
+    let engine = signex_engine::Engine::new(s).expect("engine");
+    app.document_state.engines.insert(child.clone(), engine);
+    app.document_state.tabs.push(tab(&child));
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(child.clone());
+    app.document_state
+        .dock
+        .add_panel(PanelPosition::Right, PanelKind::ObjectList);
+    let listed = |app: &Signex| names(&app.document_state.panel_ctx.object_list);
+
+    app.document_state
+        .tab_placements
+        .record(&child, Some(second));
+    app.ui_state.object_list.filter = "R201".into();
+    let _ = app.sync_object_list();
+    assert_eq!(listed(&app), ["R201"]);
+
+    // Viewing the other placement reads the rows again.
+    app.document_state
+        .tab_placements
+        .record(&child, Some(first));
+    let _ = app.sync_object_list();
+    assert!(listed(&app).is_empty(), "R201 is not the placement in view");
+    app.ui_state.object_list.filter.clear();
+    let _ = app.sync_object_list();
+    assert_eq!(listed(&app), ["R101"]);
 }
 
 /// #2630: the rows a closed window kept are dropped with it.
