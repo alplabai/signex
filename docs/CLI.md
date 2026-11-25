@@ -567,6 +567,45 @@ whose undo step covers the edited sheet only. The answer is
 `{"symbol", "name", "file", "direction", "added", "removed", "renamed"}`,
 `renamed` a list of `{"from", "to"}`; empty lists when the two sides agree.
 
+## Changing a part's component
+
+```text
+change_component id=<part uuid> library=<id or path> part=<row id or part number>
+                 [pins=old:new,..] [drop=Name,..] [dry_run=true] [document=..]
+```
+
+Change Component from operands (#2954): the placed part `id` (its uuid from
+`find_items` or `read_document`, every unit of it on the sheet) takes the
+drawing, footprint, datasheet and identity fields of a library row, as the
+dialog's Change applies it: one engine edit, one undo step, position,
+rotation and designator kept. Without operands, in a window, it opens the
+Change Component dialog on the selected part as before.
+
+- `library` and `part` name the row as for `place_component`; the row is read
+  off the UI thread before the edit runs. A power symbol row is refused.
+- The pins map by number, then by name. `pins` maps by hand: each `old:new`
+  pair gives an old pin's new pin, `old:-` leaves it on no pin; a new pin
+  serves one old pin, so the old pin it served before is left on none. A pin
+  either part does not have is refused. With a hand mapping, what ends on a
+  connected old pin's tip moves to its new pin's tip; a mapping whose carried
+  wires would join another net is refused with the reason.
+- User and override parameters (those the new part does not supply) are
+  kept; `drop` names the ones cleared. A name that is not one of them is
+  refused with the list. Library-owned fields always come from the new part
+  (DECISIONS 2026-11-19).
+- A locked unit, units on other sheets, or a sheet that could hold units but
+  is not open refuse the change, with the same advice the dialog gives; so
+  does a new part with no drawing for a placed unit.
+- `dry_run=true` answers and changes nothing.
+
+The answer is `{"designator", "part", "mapped_by_hand", "pins": [{"old",
+"old_name", "new", "new_name", "net"}], "dangling", "moved", "carried",
+"gained", "kept", "dropped", "dry_run"}`: `pins` is one row per old pin, `new`
+and `new_name` null when it goes to no pin, `net` null when nothing is
+connected to it and an empty name for an unnamed net; `dangling`, `moved`,
+`carried` and `gained` are pin numbers as the dialog's warnings list them.
+`change_component` is not yet one of an `apply_edits` list.
+
 ## Editing placed objects
 
 The Location and Parameters rows of a placed object in Properties run these

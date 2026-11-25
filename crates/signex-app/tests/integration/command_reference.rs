@@ -157,6 +157,12 @@ fn render() -> String {
          act on the selection as before; rules in [CLI.md](CLI.md), \"Placing parts\n\
          and hierarchy\".\n\
          \n\
+         `change_component id=.. library=.. part=..` swaps a placed part for a row of\n\
+         an open library in one undo step, its pins mapped by number or by hand\n\
+         (`pins=1:2,3:-`), and answers with the pin table (old pin, new pin, net);\n\
+         without operands it opens the Change Component dialog on the selection.\n\
+         Rules in [CLI.md](CLI.md), \"Changing a part's component\".\n\
+         \n\
          Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).\n",
     );
 
