@@ -21,10 +21,13 @@ pub enum RuleKind {
     Mask,
     Paste,
     Courtyard,
+    /// A part's 3D body: its height and its 3D clearance to other
+    /// bodies (#2939).
+    Component,
 }
 
 impl RuleKind {
-    pub const ALL: [RuleKind; 9] = [
+    pub const ALL: [RuleKind; 10] = [
         RuleKind::Clearance,
         RuleKind::Track,
         RuleKind::Via,
@@ -34,6 +37,7 @@ impl RuleKind {
         RuleKind::Mask,
         RuleKind::Paste,
         RuleKind::Courtyard,
+        RuleKind::Component,
     ];
 
     /// The word after `on`.
@@ -48,6 +52,7 @@ impl RuleKind {
             RuleKind::Mask => "mask",
             RuleKind::Paste => "paste",
             RuleKind::Courtyard => "courtyard",
+            RuleKind::Component => "component",
         }
     }
 
@@ -72,6 +77,13 @@ impl RuleKind {
             RuleKind::Clearance | RuleKind::Track | RuleKind::Via | RuleKind::Hole | RuleKind::Edge
         )
     }
+
+    /// Whether a board-wide kind still takes a layer condition: a component
+    /// rule with `layer == TopCopper` or `BottomCopper` is for the parts on
+    /// that side (#2939).
+    pub const fn takes_side(self) -> bool {
+        matches!(self, RuleKind::Component)
+    }
 }
 
 /// One limit column: `(field, kind, field word, bound, id, limit)`.
@@ -84,7 +96,7 @@ type FieldRow = (
     LimitKind,
 );
 
-const FIELDS: [FieldRow; 19] = {
+const FIELDS: [FieldRow; 21] = {
     use Bound::{AtLeast, AtMost};
     use LimitField as F;
     use LimitKind as L;
@@ -242,6 +254,22 @@ const FIELDS: [FieldRow; 19] = {
             "min_courtyard_spacing",
             L::MinCourtyardGap,
         ),
+        (
+            F::MaxHeight,
+            K::Component,
+            "height",
+            AtMost,
+            "max_height",
+            L::MaxComponentHeight,
+        ),
+        (
+            F::MinBodyClearance,
+            K::Component,
+            "clearance",
+            AtLeast,
+            "min_body_clearance",
+            L::MinBodyClearance,
+        ),
     ]
 };
 
@@ -267,11 +295,13 @@ pub enum LimitField {
     MinPasteExpansion,
     MaxPasteExpansion,
     MinCourtyardSpacing,
+    MaxHeight,
+    MinBodyClearance,
 }
 
 impl LimitField {
-    pub const ALL: [LimitField; 19] = {
-        let mut out = [LimitField::MinClearance; 19];
+    pub const ALL: [LimitField; 21] = {
+        let mut out = [LimitField::MinClearance; 21];
         let mut i = 0;
         while i < FIELDS.len() {
             out[i] = FIELDS[i].0;
