@@ -70,6 +70,10 @@ pub(super) fn set(
     } = plan(board, &mut stack)?;
     // The name has its own command: a stack edit never changes it.
     stack.name = board.stackup.as_ref().and_then(|s| s.name.clone());
+    // A stack sent without a finish (an agent's row list) keeps the board's.
+    if stack.finish.is_none() {
+        stack.finish = board.stackup.as_ref().and_then(|s| s.finish.clone());
+    }
     let layers = copper_defs(&board.layers, &stack, &origins)?;
     let snapshot = StackSnapshot {
         stackup: board.stackup.clone(),

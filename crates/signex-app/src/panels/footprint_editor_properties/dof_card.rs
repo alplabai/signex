@@ -10,7 +10,7 @@ use signex_sketch::solver::free_motion::MotionKind;
 use signex_widgets::text;
 
 use super::body::{Ctx, ghost};
-use crate::panels::{FootprintSolveSummary, FreeMotionSummary, PanelMsg};
+use crate::panels::{FootprintSolveSummary, FreeMotionSummary, PanelMsg, SketchDof};
 use crate::styles::{PillTone, Radii, Spacing, TypeScale, pill_colors};
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -30,33 +30,41 @@ pub(super) struct DofCard {
     pub detail: Localized,
 }
 
-/// The card for `solve` of a sketch with `constraints` constraints. An
-/// over-constrained sketch shows minus its conflict count and keeps its
-/// last good solve.
-pub(super) fn dof_card(solve: &FootprintSolveSummary, constraints: usize, i18n: &I18n) -> DofCard {
-    let conflicts = solve.over_constraint_count;
-    if conflicts > 0 {
-        return DofCard {
-            number: t!(i18n, ids::SKETCH_DOF_NUMBER_OVER, "count" => conflicts),
-            tone: PillTone::Err,
-            state: t!(i18n, ids::SKETCH_DOF_OVER, "count" => conflicts),
-            detail: t!(i18n, ids::SKETCH_DOF_KEPT, "count" => constraints),
-        };
-    }
+/// The card for the DOF state `dof` of `solve`, a sketch with `constraints`
+/// constraints. An over-constrained sketch (a solve conflict or a rejected
+/// edit) shows minus its conflict count and keeps its last good solve.
+pub(super) fn dof_card(
+    dof: SketchDof,
+    solve: &FootprintSolveSummary,
+    constraints: usize,
+    i18n: &I18n,
+) -> DofCard {
+    let free = match dof {
+        SketchDof::Over { conflicts } => {
+            return DofCard {
+                number: t!(i18n, ids::SKETCH_DOF_NUMBER_OVER, "count" => conflicts),
+                tone: PillTone::Err,
+                state: t!(i18n, ids::SKETCH_DOF_OVER, "count" => conflicts),
+                detail: t!(i18n, ids::SKETCH_DOF_KEPT, "count" => constraints),
+            };
+        }
+        SketchDof::Under { dof } => dof,
+        SketchDof::Full => 0,
+    };
     let detail = t!(
         i18n, ids::SKETCH_DOF_SOLVED,
         "count" => constraints, "ms" => solve.elapsed_ms
     );
-    let (tone, state) = if solve.dof > 0 {
+    let (tone, state) = if free > 0 {
         (
             PillTone::Info,
-            t!(i18n, ids::SKETCH_DOF_UNDER, "dof" => solve.dof),
+            t!(i18n, ids::SKETCH_DOF_UNDER, "dof" => free),
         )
     } else {
         (PillTone::Ok, t!(i18n, ids::SKETCH_DOF_FULL))
     };
     DofCard {
-        number: t!(i18n, ids::SKETCH_DOF_NUMBER, "dof" => solve.dof),
+        number: t!(i18n, ids::SKETCH_DOF_NUMBER, "dof" => free),
         tone,
         state,
         detail,
@@ -107,7 +115,26 @@ pub(super) fn push_dof_card<'a>(
     cx: Ctx<'a, '_>,
     solve: &FootprintSolveSummary,
 ) -> Column<Element<'a, PanelMsg>> {
-    let card = dof_card(solve, cx.fp.sketch_constraint_count, cx.i18n);
+    let (tile, ink) = dof_tile(cx, solve);
+    col = col.push(tile);
+    for motion in solve.free_motions.iter().take(MAX_MOTIONS) {
+        col = col.push(motion_row(motion, cx, ink));
+    }
+    if solve.free_motions.len() > MAX_MOTIONS {
+        let more = solve.free_motions.len() - MAX_MOTIONS;
+        col = col.push(super::sections::more_rows(cx, more));
+    }
+    col
+}
+
+/// The card alone, as the board's Bake panel shows it (mockup row 179),
+/// with the ink its free-motion rows take.
+pub(super) fn dof_tile<'a>(
+    cx: Ctx<'a, '_>,
+    solve: &FootprintSolveSummary,
+) -> (Element<'a, PanelMsg>, iced::Color) {
+    let dof = card_dof(cx, solve);
+    let card = dof_card(dof, solve, cx.fp.sketch_constraint_count, cx.i18n);
     let (fill, ink) = pill_colors(cx.tokens, card.tone);
     let number = text(card.number)
         .size(TS.title * NUMBER_SCALE)
@@ -132,20 +159,22 @@ pub(super) fn push_dof_card<'a>(
             },
             ..Default::default()
         });
-    col = col.push(
-        container(tile)
-            .padding([SP.xs, SP.m])
-            .width(Length::Fill)
-            .boxed(),
-    );
-    for motion in solve.free_motions.iter().take(MAX_MOTIONS) {
-        col = col.push(motion_row(motion, cx, ink));
-    }
-    if solve.free_motions.len() > MAX_MOTIONS {
-        let more = solve.free_motions.len() - MAX_MOTIONS;
-        col = col.push(super::sections::more_rows(cx, more));
-    }
-    col
+    let tile = container(tile)
+        .padding([SP.xs, SP.m])
+        .width(Length::Fill)
+        .boxed();
+    (tile, ink)
+}
+
+/// The DOF state the chip shows, else one read from `solve` itself.
+pub(super) fn card_dof(cx: Ctx<'_, '_>, solve: &FootprintSolveSummary) -> SketchDof {
+    cx.fp.sketch_state.dof.unwrap_or_else(|| {
+        SketchDof::of(
+            solve.over_constraint_count,
+            !cx.fp.rejected_conflicts.is_empty(),
+            solve.dof,
+        )
+    })
 }
 
 /// "One point slides along X" and Show.

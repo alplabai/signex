@@ -3,8 +3,8 @@
 //! its illustration callout and a hovered callout its row; the Ends row
 //! keeps Round with Square and Flat greyed; the Arc form's Placement pick
 //! sets how the armed tool draws; a picked value is one undo step; a
-//! selection partly locked counts its locks for the header icon; the
-//! Position row moves several tracks at once.
+//! selection partly locked counts its locks for the header icon; a picked
+//! location moves several tracks at once.
 
 use pcb_geom::{ClickMode, ItemRef};
 use signex_app::app::{EditMsg, FileMsg, Message, Signex, TabDocument};

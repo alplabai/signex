@@ -55,6 +55,12 @@ impl Layout {
         self.height() / TS.caption
     }
 
+    /// The caption size in view units: the drawing scales, its text does
+    /// not.
+    pub fn caption_units(self) -> f32 {
+        TS.caption / self.unit_px
+    }
+
     /// A view point in drawing pixels.
     pub fn px(self, p: Point) -> Point {
         Point::new(p.x * self.unit_px, p.y * self.unit_px)
@@ -98,7 +104,8 @@ pub(super) fn dimension_labels<'a>(
                 .caption(t!(i18n, label.caption))
                 .anchor(label.anchor)
                 .decimals(DECIMALS)
-                .limits(limits(label));
+                .limits(limits(label))
+                .edit_glyph();
             if let Some(handle) = label.handle {
                 out = out.handle(DragHandle {
                     at: layout.px(handle.at),

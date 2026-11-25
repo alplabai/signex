@@ -69,6 +69,9 @@ pub struct InteractionState {
     /// The board in sketch mode and its working copy (#2234); `None` when
     /// no board is in sketch mode.
     pub board_sketch: Option<super::BoardSketchSession>,
+    /// Whether Messages has had the board sketch mode hint this session:
+    /// it is said once, not on every entry (mockup row 187).
+    pub board_sketch_hint_said: bool,
     /// The board shown in 3D in the main window (#2390); `None` when the
     /// main window shows boards flat.
     pub board_3d: Option<super::Board3dSession>,
@@ -202,13 +205,13 @@ pub struct InteractionState {
     /// User-defined custom filter presets (capped at
     /// `crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT`). Loaded from
     /// `~/.config/signex/prefs.json` on launch and written back when
-    /// edited from the Properties panel.
+    /// edited from the Filter panel.
     pub custom_filter_presets: Vec<crate::active_bar::CustomFilterPreset>,
-    /// Index of the active preset tab in the Properties-panel editor.
+    /// Index of the preset the Filter panel's Presets section edits.
     /// Clamped to `0..custom_filter_presets.len()` whenever the list
     /// changes; ignored entirely when the list is empty.
     pub active_custom_filter_tab: usize,
-    /// SCH Filter's inline preset rename: the preset and the name typed so
+    /// The Filter panel's inline preset rename: the preset and the name typed so
     /// far. Mirrored into each panel context after every update.
     pub filter_preset_rename: Option<(usize, String)>,
     /// The schematic preset selected for editing: chip clicks change it in

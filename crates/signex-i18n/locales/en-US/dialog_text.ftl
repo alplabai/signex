@@ -141,6 +141,20 @@ dialog-quit-library-count =
 dialog-quit-group-other = Other files
 dialog-quit-group-libraries = Libraries
 dialog-quit-list-changed = The unsaved list changed; review and confirm again.
+# Close Project and Exit when a project written by a newer version has
+# unsaved settings and other files are unsaved too (#2904). $count is how
+# many such projects (a whole number); $projects lists their names, quoted.
+dialog-unsaved-read-only-projects =
+    { $count ->
+        [one] { $projects } was written by a newer { -brand-name } and is read-only in this build, so its project settings cannot be saved. Save All saves every other file and leaves it unsaved; Discard { $projects } drops only its unsaved settings; Cancel keeps everything open.
+       *[other] { $projects } were written by a newer { -brand-name } and are read-only in this build, so their project settings cannot be saved. Save All saves every other file and leaves them unsaved; Discard { $projects } drops only their unsaved settings; Cancel keeps everything open.
+    }
+# The same when nothing else is unsaved. $count and $projects as above.
+dialog-unsaved-read-only-projects-only =
+    { $count ->
+        [one] { $projects } was written by a newer { -brand-name } and is read-only in this build, so its project settings cannot be saved and Save All is not offered. Discard { $projects } drops its unsaved settings; Cancel keeps it open.
+       *[other] { $projects } were written by a newer { -brand-name } and are read-only in this build, so their project settings cannot be saved and Save All is not offered. Discard { $projects } drops their unsaved settings; Cancel keeps them open.
+    }
 
 ## Autosave recovery prompt
 
@@ -183,7 +197,7 @@ dialog-reprefix-question = Change designator prefixes?
 # $count is how many more changes are not listed (a whole number).
 dialog-reprefix-more = +{ $count } more
 
-## ERC severity chips: one label under each count.
+## ERC severity chips: one label before each count.
 dialog-erc-chip-errors = Errors
 dialog-erc-chip-warnings = Warnings
 dialog-erc-chip-info = Info
@@ -565,3 +579,6 @@ dialog-net-color-toast-cleared-unlabelled = Cleared the net colors of this sheet
 dialog-net-color-toast-cleared-net = Cleared the color of { $net }
 # The toast's button. $undo is the Undo shortcut, such as "Ctrl+Z".
 dialog-net-color-toast-undo = Undo { $undo }
+# find-messages
+# Right of the Pin Connection Matrix heading while its cells take edits.
+dialog-rules-matrix-cycle-hint = Click a cell to cycle severity.

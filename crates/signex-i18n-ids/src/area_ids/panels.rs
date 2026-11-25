@@ -279,6 +279,10 @@ define_ids! {
     PANELS_MESSAGES_COPY_TOOLTIP = "panels-messages-copy-tooltip";
     PANELS_MESSAGES_CLEAR_TOOLTIP = "panels-messages-clear-tooltip";
     PANELS_MESSAGES_NONE_MATCH = "panels-messages-none-match";
+    // find-messages
+    PANELS_MESSAGES_SHOW = "panels-messages-show";
+    PANELS_NET_INSPECTOR_HIGHLIGHT = "panels-net-inspector-highlight";
+    PANELS_NET_INSPECTOR_NET_GONE = "panels-net-inspector-net-gone";
     PANELS_PAIRED_OPEN_AS_TAB = "panels-paired-open-as-tab";
     PANELS_PAIRED_LENGTH_MATCHING = "panels-paired-length-matching";
     PANELS_COMPACT_GROUP_MEMBERS = "panels-compact-group-members";
@@ -449,6 +453,8 @@ define_ids! {
     HARNESS_MSG_ENTRY_OFF_CONNECTOR = "panels-harness-msg-entry-off-connector";
     PANELS_COMPILED_DESIGN_MSG_NO_PROJECT = "panels-compiled-design-msg-no-project";
     PANELS_COMPILED_DESIGN_NAMING_REFUSED = "panels-compiled-design-naming-refused";
+    // sch-panels-tidy
+    PANELS_CANVAS_FONT_SUMMARY = "panels-canvas-font-summary";
     // harness-connector-properties
     PANELS_HARNESS_ADD_ENTRY = "panels-harness-add-entry";
     // components-panel-cx

@@ -206,9 +206,11 @@ fn the_matrix_view_builds_with_an_open_editor() {
     let words = MatrixText {
         clear: label("Clear"),
         fallback: label("Fallback"),
+        fallback_value: signex_i18n::ids::RULES_MATRIX_DEFAULT,
     };
     let style = GridStyle::from_tokens(&theme_tokens(ThemeId::DEFAULT), 12.0);
     let _ = matrix_view(&matrix, &values, mm(), &words, style);
+    let _: iced::Element<'_, MatrixMessage> = mirror_swatch(12.0, style);
     matrix.update(
         MatrixMessage::CellPressed(ClassPair::new(2, 1)),
         &values,
@@ -239,4 +241,88 @@ fn an_untouched_editor_reports_no_change() {
         matrix.update(MatrixMessage::EditSubmitted, &values, mil),
         None
     );
+}
+
+fn catalog_words() -> MatrixText<'static> {
+    MatrixText {
+        clear: signex_i18n::UserText::new("Clear").into(),
+        fallback: signex_i18n::UserText::new("Fallback").into(),
+        fallback_value: signex_i18n::ids::RULES_MATRIX_DEFAULT,
+    }
+}
+
+/// The text as drawn, without Fluent's isolation marks.
+fn plain(label: &crate::Label<'_>) -> String {
+    label.as_str().replace(['\u{2068}', '\u{2069}'], "")
+}
+
+/// Mockup row 90: a fallback reads as the legend's sample, in parentheses
+/// with its unit; a written value is the bare number.
+#[test]
+fn a_fallback_cell_reads_in_parentheses_with_its_unit() {
+    let words = catalog_words();
+    let fallback = cell_text(PairClearance::Fallback(0.15), mm(), &words);
+    assert_eq!(plain(&fallback), "(0.15 mm)");
+    let written = cell_text(PairClearance::Written(0.8), mm(), &words);
+    assert_eq!(plain(&written), "0.8");
+}
+
+/// Mockup row 90: the class names down and across are mono too, at the
+/// table's heading weight.
+#[test]
+fn class_names_are_mono_at_the_heading_weight() {
+    use signex_types::theme::{ThemeId, theme_tokens};
+    let style = GridStyle::from_tokens(&theme_tokens(ThemeId::GraphiteDark), 12.0);
+    let own = iced::Font::new("Chrome Mono");
+    let font = super::matrix_view::name_font(style.with_mono(own));
+    assert_eq!(font.family, iced::font::Family::Name("Chrome Mono"));
+    assert_eq!(font.weight, iced::font::Weight::Semibold);
+}
+
+/// A fallback names the format's unit, not a fixed millimetre.
+#[test]
+fn a_fallback_cell_names_the_display_unit() {
+    let words = catalog_words();
+    let mil = LengthFormat::new(I18n::en_us_ref(), Unit::Mil);
+    let fallback = cell_text(PairClearance::Fallback(0.254), mil, &words);
+    assert_eq!(plain(&fallback), "(10 mil)");
+}
+
+/// Mockup row 90: cell values are in the monospace face, a written one
+/// heavier; a fallback is in the faint ink, not the table's muted ink.
+#[test]
+fn cell_values_are_mono_and_a_fallback_is_faint() {
+    use iced::font::{Family, Weight};
+    use signex_types::theme::{ThemeId, theme_tokens};
+    let style = GridStyle::from_tokens(&theme_tokens(ThemeId::GraphiteDark), 12.0);
+    let font = |written| super::matrix_view::value_font(written, style);
+    assert_eq!(font(true).family, iced::Font::MONOSPACE.family);
+    assert_eq!(font(true).weight, Weight::Medium);
+    assert_eq!(font(false).weight, Weight::Normal);
+    let own = iced::Font::new("Chrome Mono");
+    let set = super::matrix_view::value_font(false, style.with_mono(own));
+    assert_eq!(set.family, Family::Name("Chrome Mono"), "the caller's face");
+    assert_ne!(style.faint_ink, style.muted_ink);
+    assert_ne!(style.faint_ink, style.ink);
+}
+
+/// Mockup row 90: the mirror half is hatched with diagonal hairlines that
+/// stay inside the cell, one stroke per period along the diagonal.
+#[test]
+fn the_mirror_hatch_covers_the_cell_with_clipped_diagonals() {
+    use iced::Size;
+    let size = Size::new(90.0, 24.0);
+    let strokes = super::matrix_view::hatch_segments(size, 6.0);
+    // x + y runs from 6 to 108 in steps of 6.
+    assert_eq!(strokes.len(), 18);
+    for (from, to) in &strokes {
+        for p in [from, to] {
+            assert!((0.0..=size.width).contains(&p.x), "{p:?}");
+            assert!((0.0..=size.height).contains(&p.y), "{p:?}");
+        }
+        assert!((from.x + from.y - (to.x + to.y)).abs() < 1e-3, "45° stroke");
+        assert!(to.x > from.x && to.y < from.y, "lower left to upper right");
+    }
+    assert!(super::matrix_view::hatch_segments(size, 0.0).is_empty());
+    assert!(super::matrix_view::hatch_segments(size, f32::NAN).is_empty());
 }

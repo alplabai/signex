@@ -33,6 +33,11 @@ pub struct ComponentEditorTab {
 pub enum TabKind {
     Schematic,
     Pcb,
+    /// The Gerber Viewer (mockup rows 193 and 193f), one tab at a time, on
+    /// the main window only. State lives in
+    /// [`crate::app::DocumentState::gerber_viewer`]; `TabInfo.path` is the
+    /// package's first path, read only, never saved.
+    GerberViewer,
     ComponentEditor(ComponentEditorTab),
     /// `.snxsym` opened as a main-window document tab. Editor state
     /// lives in [`crate::app::DocumentState::symbol_editors`] keyed by
@@ -57,10 +62,17 @@ pub enum TabKind {
     /// in the project's [`crate::app::ProjectTabState::rules`];
     /// `TabInfo.path` is the `.snxprj` path, which Save writes.
     Rules(super::state::ProjectId),
+    /// A board's Polygon Manager as a page tab (mockup row 178), kept like
+    /// the Layer Stack tab: the board's path, after the board's tab.
+    PolygonManager,
     /// A board's Layer Stack as a page tab (mockup row 105). `TabInfo.path`
     /// is the board's path, which Save writes; the board stays in its own
     /// PCB tab, and this tab always sits after it (`app/layer_stack_tab`).
     LayerStack,
+    /// The project's Variant Manager as a page tab (mockup row 32). Tab
+    /// state lives in the project's [`crate::app::ProjectTabState`];
+    /// `TabInfo.path` is the `.snxprj` path, which Save writes.
+    VariantManager(super::state::ProjectId),
     /// A symbol's Pin table as a page tab (mockup row 122b). `TabInfo.path`
     /// is the `.snxsym` path, which Save writes; it sits after the symbol's
     /// own tab (`app/pin_table_tab`).
@@ -68,6 +80,12 @@ pub enum TabKind {
 }
 
 impl TabKind {
+    /// The Gerber Viewer tab: no document, never undocked, nothing to
+    /// save or restore from History.
+    pub fn is_gerber_viewer(&self) -> bool {
+        matches!(self, TabKind::GerberViewer)
+    }
+
     pub fn is_component_editor(&self) -> bool {
         matches!(self, TabKind::ComponentEditor(_))
     }
@@ -120,9 +138,28 @@ impl TabKind {
         }
     }
 
+    /// A board's Polygon Manager tab.
+    pub fn is_polygon_manager(&self) -> bool {
+        matches!(self, TabKind::PolygonManager)
+    }
+
+    /// A page of a board, which shares the board's path and holds no
+    /// document: the Layer Stack and Polygon Manager tabs.
+    pub fn is_board_page(&self) -> bool {
+        matches!(self, TabKind::LayerStack | TabKind::PolygonManager)
+    }
+
     /// A board's Layer Stack tab.
     pub fn is_layer_stack(&self) -> bool {
         matches!(self, TabKind::LayerStack)
+    }
+
+    /// `Some(id)` if this tab is a project's Variant Manager tab.
+    pub fn as_variant_manager(&self) -> Option<super::state::ProjectId> {
+        match self {
+            TabKind::VariantManager(id) => Some(*id),
+            _ => None,
+        }
     }
 
     /// A symbol's Pin table tab.
@@ -131,18 +168,28 @@ impl TabKind {
     }
 
     /// A page of an open document that holds no document of its own and
-    /// shares its owner's path: the Layer Stack and Pin table tabs. It sits
-    /// after its owner's tab and stays on the main strip.
+    /// shares its owner's path: the board pages (Layer Stack, Polygon
+    /// Manager) and the Pin table tab. It sits after its owner's tab and
+    /// stays on the main strip.
     pub fn is_document_page(&self) -> bool {
-        matches!(self, TabKind::LayerStack | TabKind::PinTable)
+        self.is_board_page() || self.is_pin_table()
     }
 
-    /// A page tab, not a drawing: the Project, Rules, Layer Stack and Pin
-    /// table tabs. None is undocked or restored from History.
+    /// A page tab, not a drawing: the Project, Rules, Layer Stack, Pin
+    /// table and Variant Manager tabs. None is undocked or restored from
+    /// History.
     pub fn is_project_page(&self) -> bool {
+        // Mockup row 178: the Polygon Manager is a page of its board.
+        if self.is_polygon_manager() {
+            return true;
+        }
         matches!(
             self,
-            TabKind::Project(_) | TabKind::Rules(_) | TabKind::LayerStack | TabKind::PinTable
+            TabKind::Project(_)
+                | TabKind::Rules(_)
+                | TabKind::LayerStack
+                | TabKind::PinTable
+                | TabKind::VariantManager(_)
         )
     }
 }

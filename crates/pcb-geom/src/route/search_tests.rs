@@ -1,8 +1,10 @@
 //! #2389 — walkaround: the rule's legs when they are clear, a way round an
 //! other-net pad at the rule clearance when they are not, in the corner
-//! mode's directions.
+//! mode's directions; a drawing on copper is in the way too (#2883).
 
 use signex_types::corner::{CornerMode, CornerRule};
+use signex_types::pcb::{BoardGraphic, Point};
+use uuid::Uuid;
 
 use super::test_board::{at, board, nm, pad_at};
 use super::{RouteWorld, Walk, walkaround};
@@ -81,6 +83,36 @@ fn a_run_goes_around_an_other_net_pad_at_the_rule_clearance() {
             assert!(dx == 0 || dy == 0 || diagonal, "{mode:?}: leg {leg:?}");
         }
     }
+}
+
+/// #2883: a circle drawn on copper is copper of no net; a route of a net
+/// goes round its stroke at the rule clearance, never across it.
+#[test]
+fn a_run_goes_around_a_copper_circle() {
+    let mut board = board(Vec::new(), Vec::new());
+    board.graphics.push(BoardGraphic {
+        uuid: Uuid::from_u128(77),
+        graphic_type: "circle".into(),
+        layer: "TopCopper".into(),
+        width: 0.2,
+        start: None,
+        end: Some(Point::new(6.0, 0.0)),
+        center: Some(Point::new(5.0, 0.0)),
+        radius: 1.0,
+        points: Vec::new(),
+        text: String::new(),
+        font_size: 0.0,
+    });
+    let world = RouteWorld::new(&board, &rule);
+    let walk = walk(CornerMode::Ortho90);
+    let straight = super::NewCopper::track(at(0.0, 0.0), at(10.0, 0.0), walk.radius, 1, 1);
+    assert!(
+        !world.is_clear(&straight),
+        "the circle's stroke is in the way"
+    );
+    let path = walkaround(&world, at(0.0, 0.0), at(10.0, 0.0), &walk).expect("a way round");
+    assert!(path.len() > 2, "not straight across the circle");
+    assert!(legs_are_clear(&world, &walk, &path), "{path:?}");
 }
 
 #[test]

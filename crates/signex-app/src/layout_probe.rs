@@ -8,15 +8,20 @@
 //! size with a headless vello_cpu renderer, so text is measured with real
 //! fonts, and reports the bounds of every text widget in it.
 //!
-//! The fonts are whatever the system and iced's defaults provide, not the
-//! app's bundled faces, so widths are close to, not identical with, the
-//! running app's. Assert on relations a few pixels cannot flip: a label
-//! sits on one line, a button is at least as wide as its label.
+//! The probe measures with the app's own fonts: the faces `main` registers
+//! ([`crate::fonts::bundled::registered`]) are loaded once into iced's
+//! global font system, and the default font is the UI font at its default
+//! family (Inter), as `main` sets it when no other is saved. Widths do not
+//! depend on the machine's fonts, so a layout that passes here passes on
+//! CI. Still assert on relations rather than pixel counts: a label sits on
+//! one line, a button is at least as wide as its label.
+
+use std::sync::OnceLock;
 
 use iced::advanced::widget::operation::{Text, TextInput};
 use iced::advanced::widget::{Id, Operation, Tree};
 use iced::advanced::{Layout, Widget as _, layout, renderer};
-use iced::{Element, Font, Pixels, Rectangle, Size, Theme};
+use iced::{Element, Pixels, Rectangle, Size, Theme};
 
 /// One text widget as laid out: its content and its bounds in window
 /// coordinates.
@@ -128,6 +133,53 @@ pub(crate) fn messages_on_click_at<M>(
         ]
         .map(iced::Event::Mouse),
     )
+}
+
+/// The messages left clicks on the centres of `labels` publish, in order,
+/// over one laid-out `element`, so a widget's state carries from one click
+/// to the next (a control a click left open takes the following press).
+pub(crate) fn messages_on_clicks<M>(
+    mut element: Element<'_, M, Theme, iced::Renderer>,
+    window: Size,
+    labels: &[&str],
+) -> Vec<M> {
+    use iced::advanced::mouse;
+    let renderer = headless_renderer();
+    let mut tree = Tree::new(&element);
+    tree.diff(&mut element);
+    element.layout(
+        &mut tree,
+        &renderer,
+        &layout::Limits::new(Size::ZERO, window),
+    );
+    let size = tree.size;
+    let mut collect = CollectTexts(Vec::new());
+    element.operate(
+        &mut tree,
+        Layout::new(size),
+        &Rectangle::with_size(size),
+        &renderer,
+        &mut collect,
+    );
+    let mut published = Vec::new();
+    for label in labels {
+        let at = find(&collect.0, label).bounds.center();
+        let click = [
+            mouse::Event::CursorMoved { position: at },
+            mouse::Event::ButtonPressed(mouse::Button::Left),
+            mouse::Event::ButtonReleased(mouse::Button::Left),
+        ]
+        .map(iced::Event::Mouse);
+        published.extend(deliver(
+            &mut element,
+            &mut tree,
+            &renderer,
+            window,
+            at,
+            &click,
+        ));
+    }
+    published
 }
 
 /// The messages one wheel `delta` at `point` publishes from the laid-out
@@ -257,6 +309,26 @@ pub(crate) fn draw_pixels<M>(
         &layout::Limits::new(Size::ZERO, window),
     );
     let size = tree.size;
+    // As the runtime does before every frame: a redraw sets each widget's
+    // status (a button that never saw one draws as disabled).
+    {
+        use iced::advanced::shell::{Bus, Waker};
+        let mut bus = Bus::new();
+        let mut shell =
+            iced::advanced::Shell::new(&iced::window::Headless, Waker::noop(), &mut bus);
+        let redraw = iced::Event::Window(iced::window::Event::RedrawRequested(
+            std::time::Instant::now(),
+        ));
+        element.update(
+            &mut tree,
+            &redraw,
+            Layout::new(size),
+            iced::advanced::mouse::Cursor::Unavailable,
+            &renderer,
+            &mut shell,
+            &Rectangle::with_size(window),
+        );
+    }
     // As the compositor does before every frame.
     iced::advanced::Renderer::reset(&mut renderer, Rectangle::with_size(window));
     element.draw(
@@ -296,9 +368,27 @@ pub(crate) fn natural<M>(element: Element<'_, M, Theme, iced::Renderer>, label: 
     find(&texts, label).bounds
 }
 
+/// Load the app's faces into iced's global font system, which the vello_cpu
+/// renderer draws with and every paragraph is measured with. Once per test
+/// process.
+pub(crate) fn load_app_fonts() {
+    static LOADED: OnceLock<()> = OnceLock::new();
+    LOADED.get_or_init(|| {
+        let mut fonts = iced::advanced::graphics::text::font_system()
+            .write()
+            .expect("font system");
+        for face in crate::fonts::bundled::registered() {
+            fonts.load_font(std::borrow::Cow::Borrowed(face));
+        }
+    });
+}
+
+/// The headless software renderer, with the app's fonts loaded and the UI
+/// font as its default.
 pub(crate) fn headless_renderer() -> iced::Renderer {
+    load_app_fonts();
     iced::Renderer::Secondary(iced_vello_cpu::Renderer::new(renderer::Settings {
-        font: Font::DEFAULT,
+        font: signex_widgets::ui_font::regular(),
         text_size: Pixels(16.0),
         ..renderer::Settings::default()
     }))

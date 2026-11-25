@@ -13,6 +13,7 @@ pub mod dimension_label;
 pub mod doc_tab_shell;
 pub mod dropdown_style;
 pub mod enable_section;
+pub mod fit_bar;
 pub mod fit_row;
 pub mod flow_progress;
 pub mod focused_escape;
@@ -24,7 +25,9 @@ pub mod icon_button;
 pub mod inert;
 mod label;
 pub mod length_format;
+pub mod measured_width;
 pub mod passive_calculator;
+mod pen_glyph;
 pub mod press_outside;
 pub mod property_illustration;
 pub mod segmented;
@@ -44,6 +47,7 @@ mod widest_face;
 // `signex_widgets::active_bar_dropdown::…` consumers resolve unchanged.
 pub use active_bar::dropdown as active_bar_dropdown;
 
+pub use fit_bar::FitBar;
 pub use fit_row::FitRow;
 pub use history_graph::{HistoryGraph, HistoryGraphStyle};
 pub use history_pane::{HistoryEntry, history_pane};
@@ -54,6 +58,7 @@ pub use house_extra::{
 };
 pub use label::{Label, raw};
 pub use length_format::LengthFormat;
+pub use measured_width::MeasuredWidth;
 pub use segmented::{SegmentedStyle, segmented};
 pub use tab_pill::{AccentPosition, TabPill, TabPillStyle};
 pub use toggle_switch::{ToggleSwitchStyle, toggle_switch};

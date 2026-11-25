@@ -439,6 +439,22 @@ impl Signex {
                         .find(|c| c.row_id == row_id)
                         .map(|summary| (lib.root.clone(), summary.clone()))
                 });
+                return self.start_picker_preview_load();
+            }
+            PickerMsg::SelectionStepped(step) => return self.step_picker_selection(step),
+            PickerMsg::PreviewLoaded {
+                key,
+                generation,
+                result,
+            } => {
+                // A stale read (older generation or another row) is dropped
+                // unlogged.
+                let why = result.as_ref().err().cloned();
+                if picker.preview.finish(&key, generation, result)
+                    && let Some(why) = why
+                {
+                    crate::diagnostics::log_warning(format!("Picker preview not read: {why}"));
+                }
             }
             // The Place button exists in the Place stage only.
             PickerMsg::PlaceSelected
@@ -463,6 +479,97 @@ impl Signex {
             }
         }
         Task::none()
+    }
+
+    /// ↑ or ↓ over the picker's list (mockup row 129): select the listed row
+    /// `step` rows on, read its preview and scroll it into view. Only the
+    /// stages that show the list move.
+    fn step_picker_selection(&mut self, step: isize) -> Task<Message> {
+        use crate::library::state::PickerMode;
+        let Some(picker) = self.library.picker.as_mut() else {
+            return Task::none();
+        };
+        if !matches!(
+            picker.mode,
+            PickerMode::Place | PickerMode::ChangeComponent(_)
+        ) {
+            return Task::none();
+        }
+        let from = picker
+            .shown_selection()
+            .map(|(path, summary)| (path.as_path(), summary.row_id));
+        let Some((index, entry)) = picker.rows.stepped(from, step) else {
+            return Task::none();
+        };
+        let selected = (entry.path.to_path_buf(), entry.summary.clone());
+        let count = picker.rows.visible().len();
+        picker.selected = Some(selected);
+        let reveal = iced::widget::operation::scrollable::snap_to(
+            crate::library::picker::LIST_ID,
+            crate::library::picker::list_offset_showing(index, count),
+            iced::widget::operation::Animation::Instant,
+        );
+        Task::batch([self.start_picker_preview_load(), reveal])
+    }
+
+    /// Read the picker's selected row's symbol and footprint on a worker
+    /// for the preview column (mockup row 129); the result lands as
+    /// `PickerMsg::PreviewLoaded`. A read that is still current is kept.
+    fn start_picker_preview_load(&mut self) -> Task<Message> {
+        let Some(key) = self.picker_preview_key() else {
+            return Task::none();
+        };
+        let stamp = self.components_row_stamp(&key);
+        let libraries = self.library.shared_adapters();
+        let own = self.library.shared_adapter_at(&key.library_path);
+        let Some(picker) = self.library.picker.as_mut() else {
+            return Task::none();
+        };
+        if picker.preview.is_fresh(&key, stamp) {
+            return Task::none();
+        }
+        let generation = picker.preview.begin(key.clone(), stamp);
+        // A read that cannot start is recorded as failed, so the tiles do
+        // not wait on it.
+        let Some(own) = own.filter(|_| !key.table.is_empty()) else {
+            let why = if key.table.is_empty() {
+                "the part is no longer listed in its library".to_string()
+            } else {
+                format!("its library {} is not open", key.library_path.display())
+            };
+            crate::diagnostics::log_warning(format!("Picker preview not read: {why}"));
+            picker.preview.finish(&key, generation, Err(why));
+            return Task::none();
+        };
+        super::components_panel::details_read_task(
+            key,
+            own,
+            libraries,
+            "preview worker",
+            move |key, result| {
+                Message::Library(LibraryMessage::Picker(PickerMsg::PreviewLoaded {
+                    key,
+                    generation,
+                    result,
+                }))
+            },
+        )
+    }
+
+    /// The preview key of the picker's selected row. A row whose table is
+    /// no longer known keeps an empty table, so its read still lands (as
+    /// failed) on the row the tiles show.
+    fn picker_preview_key(&self) -> Option<crate::library::state::ComponentsPanelRowKey> {
+        let (path, summary) = self.library.picker.as_ref()?.selected.clone()?;
+        let table = self
+            .library
+            .table_of_row(&path, summary.row_id)
+            .unwrap_or_default();
+        Some(crate::library::state::ComponentsPanelRowKey {
+            library_path: path,
+            table,
+            row_id: signex_library::RowId::from_uuid(summary.row_id),
+        })
     }
 
     /// F34 — Save-As dialog confirmed for a new symbol library file

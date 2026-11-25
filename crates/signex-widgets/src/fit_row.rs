@@ -70,6 +70,10 @@ where
     }
 }
 
+/// Less than this over the width is float rounding, not overflow: a parent
+/// sized to the cells' measured sum hands back the sum less a few ulps.
+const ROUNDING: f32 = 0.01;
+
 /// The widths of each line for cells of `naturals` in `available`: the most
 /// columns (up to `max_columns`) whose every line fits, one column at worst.
 /// With `is_fill` each line takes the whole width; a cell wider than the
@@ -92,7 +96,7 @@ pub fn plan_lines(
         .find(|&c| {
             naturals
                 .chunks(c)
-                .all(|line| line_width(line, gap) <= available)
+                .all(|line| line_width(line, gap) <= available + ROUNDING)
         })
         .unwrap_or(1);
     let is_fill = is_fill && available.is_finite();
@@ -365,6 +369,14 @@ mod tests {
     fn max_columns_caps_a_line() {
         let lines = plan_lines(&[10.0; 4], 500.0, 0.0, false, Some(2));
         assert_eq!(lines.len(), 2);
+    }
+
+    #[test]
+    fn cells_a_rounding_error_over_the_width_still_share_one_line() {
+        let lines = plan_lines(&[150.0, 132.0], 283.999, 2.0, true, None);
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        let lines = plan_lines(&[150.0, 132.0], 283.5, 2.0, true, None);
+        assert_eq!(lines.len(), 2, "half a pixel short is overflow: {lines:?}");
     }
 
     #[test]

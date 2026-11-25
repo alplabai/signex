@@ -27,6 +27,7 @@ use iced::{
 };
 use signex_i18n::UserText;
 
+use crate::pen_glyph::{PEN_EM, pen_glyph};
 use crate::{Label, LengthFormat, Translate, button, text, text_input};
 
 /// Average advance of a monospace glyph, in ems; sizes a label before layout.
@@ -157,6 +158,8 @@ pub struct DimensionLabel<'a> {
     /// The drawing writes this label itself: the closed label is only a
     /// press target the size of its caption.
     pub is_bare: bool,
+    /// A pen glyph after the value says the label can be typed into.
+    pub has_edit_glyph: bool,
 }
 
 impl<'a> DimensionLabel<'a> {
@@ -174,7 +177,14 @@ impl<'a> DimensionLabel<'a> {
             limits: ValueLimits::default(),
             refused_ink: None,
             is_bare: false,
+            has_edit_glyph: false,
         }
+    }
+
+    /// Show the pen glyph after the value.
+    pub fn edit_glyph(mut self) -> Self {
+        self.has_edit_glyph = true;
+        self
     }
 
     pub fn refused_ink(mut self, color: Color) -> Self {
@@ -232,7 +242,17 @@ impl<'a> DimensionLabel<'a> {
         } else {
             self.value_text().chars().count()
         };
-        label_box(caption_chars, value_chars, text_size, self.at, self.anchor)
+        let mut bounds = label_box(caption_chars, value_chars, text_size, self.at, self.anchor);
+        if self.has_edit_glyph && !self.is_bare {
+            let extra = (GAP_EM + PEN_EM) * text_size;
+            bounds.x -= match self.anchor {
+                LabelAnchor::Start => 0.0,
+                LabelAnchor::Middle => extra / 2.0,
+                LabelAnchor::End => extra,
+            };
+            bounds.width += extra;
+        }
+        bounds
     }
 }
 
@@ -657,7 +677,8 @@ fn tag_view<'a>(
             .on_press(DimensionLabelMessage::LabelPressed(index));
         return Translate::new(target.boxed(), (bounds.x, bounds.y)).into();
     }
-    let mut content: Row<Element<'a, DimensionLabelMessage>> = Row::new().spacing(GAP_EM * size);
+    let mut content: Row<Element<'a, DimensionLabelMessage>> =
+        Row::new().spacing(GAP_EM * size).align_y(Vertical::Center);
     if let Some(caption) = &label.caption {
         content = content.push(
             text(caption.clone())
@@ -674,6 +695,9 @@ fn tag_view<'a>(
             .color(style.ink)
             .boxed(),
     );
+    if label.has_edit_glyph {
+        content = content.push(pen_glyph(size, style.ink));
+    }
     let s = style;
     let tag = container(content)
         .width(bounds.width)

@@ -12,8 +12,8 @@ mod view;
 mod tests;
 
 pub(in crate::panels) use controls::{
-    Cell, PairField, control_row, counted_section, hover_linked, illustration_view, inset_caption,
-    pair_row, segmented_cells,
+    Cell, control_row, counted_section, hover_linked, illustration_view, inset_caption,
+    segmented_cells,
 };
 pub use form_state::{MultiKind, SelectionForm, SelectionFormMsg, SelectionKinds, rule_matches};
 pub use view::view_multi_selection;

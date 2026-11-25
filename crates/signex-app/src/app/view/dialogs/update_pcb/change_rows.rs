@@ -2,24 +2,156 @@
 //! a group header (fold chevron, tri-state tick, title, `n of m` pill and
 //! the `+a · ~b · −c` split) and a dense row (tick, action pill, object in
 //! mono, the detail filling the width, an optional caption under it and a
-//! status icon whose words are its tooltip).
+//! status icon whose words are its tooltip). Every mark is a drawn glyph
+//! (mockup rows 81, 82), so none depends on the UI font having it.
 
 use iced::widget::text::Wrapping;
-use iced::widget::{Column, Row, Space, container, mouse_area, tooltip as tip};
+use iced::widget::{Column, Row, Space, container, mouse_area, svg, tooltip as tip};
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_engine::pcb::eco::GroupTicks;
-use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
+use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{checkbox, text, tooltip};
+use signex_widgets::{text, tooltip};
 
 use super::super::graphite::mono;
 use crate::app::Message;
 use crate::app::update_pcb::table::Summary;
-use crate::panels::form_look::{checkbox_style, ghost_button, mixed_checkbox_style};
-use crate::styles::{PillTone, Spacing, TypeScale, pill, pill_colors, ti, tokens};
+use crate::panels::form_look::ghost_button;
+use crate::styles::{
+    DialogIcon, PillTone, Radii, Spacing, TypeScale, pill, pill_colors, ti, tinted_glyph, tokens,
+};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
+
+/// Side of a status glyph: one body line.
+pub(in crate::app::view::dialogs) const GLYPH_SIDE: f32 = TS.body;
+/// Side of a tick box: the mockup's 14 px at the 12 px body.
+const TICK_SIDE: f32 = TS.body * 14.0 / 12.0;
+
+const GLYPH_CHECK: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M3.5 8.4l3 3L12.5 5" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>"##;
+const GLYPH_DASH: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4.5 8h7" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round"/></svg>"##;
+
+/// A drawn mark: the tick, the dash, and the dialogs' blocked, info and
+/// warn glyphs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::app::view::dialogs) enum StatusGlyph {
+    Check,
+    Dash,
+    Blocked,
+    Info,
+    Warn,
+}
+
+impl StatusGlyph {
+    fn handle(self) -> svg::Handle {
+        match self {
+            Self::Check => crate::icons::static_glyph(GLYPH_CHECK),
+            Self::Dash => crate::icons::static_glyph(GLYPH_DASH),
+            Self::Blocked => DialogIcon::Error.glyph_handle(),
+            Self::Info => DialogIcon::Info.glyph_handle(),
+            Self::Warn => DialogIcon::Warn.glyph_handle(),
+        }
+    }
+
+    /// The glyph, [`GLYPH_SIDE`] square, in `ink`.
+    pub(in crate::app::view::dialogs) fn view<'a>(self, ink: Color) -> Element<'a, Message> {
+        tinted_glyph(self.handle(), GLYPH_SIDE, ink)
+    }
+}
+
+/// The state a tick box shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::app::view::dialogs) enum Tick {
+    Off,
+    On,
+    /// Some rows of the group are ticked and some are not.
+    Mixed,
+}
+
+impl Tick {
+    pub(in crate::app::view::dialogs) fn of(on: bool) -> Self {
+        if on { Self::On } else { Self::Off }
+    }
+
+    /// A group's box: on when every open row is ticked, mixed when some are.
+    pub(in crate::app::view::dialogs) fn of_group(ticks: GroupTicks) -> Self {
+        if ticks.all() {
+            Self::On
+        } else if ticks.mixed() {
+            Self::Mixed
+        } else {
+            Self::Off
+        }
+    }
+}
+
+/// Fill, hairline and mark of a tick box.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(in crate::app::view::dialogs) struct TickLook {
+    pub fill: Color,
+    pub edge: Color,
+    pub mark: Option<(StatusGlyph, Color)>,
+}
+
+/// A tick box's look (mockup row 81): ticked or mixed is solid accent with
+/// the white tick or dash; empty is the field; a box that cannot change sits
+/// on the sunken fill, a ticked one on the strong line.
+pub(in crate::app::view::dialogs) fn tick_look(
+    tick: Tick,
+    enabled: bool,
+    tokens: &ThemeTokens,
+) -> TickLook {
+    let r = tokens::resolve(tokens);
+    let white = tokens::on_accent(tokens);
+    let mark = match tick {
+        Tick::Off => None,
+        Tick::On => Some((StatusGlyph::Check, white)),
+        Tick::Mixed => Some((StatusGlyph::Dash, white)),
+    };
+    let (fill, edge) = match (tick, enabled) {
+        (Tick::Off, true) => (r.field, r.line_strong),
+        (Tick::Off, false) => (r.sunken, r.line_soft),
+        (_, true) => {
+            let accent = tokens::accent_fill(tokens);
+            (accent, accent)
+        }
+        (_, false) => (r.line_strong, r.line_strong),
+    };
+    TickLook { fill, edge, mark }
+}
+
+/// A tick box; a press sends `on_press`, none leaves it inert.
+pub(in crate::app::view::dialogs) fn tick_box<'a>(
+    tick: Tick,
+    on_press: Option<Message>,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let look = tick_look(tick, on_press.is_some(), tokens);
+    let mark: Element<'a, Message> = match look.mark {
+        Some((glyph, ink)) => tinted_glyph(glyph.handle(), TICK_SIDE, ink),
+        None => Space::new().width(TICK_SIDE).height(TICK_SIDE).boxed(),
+    };
+    let face = container(mark)
+        .center(TICK_SIDE)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(look.fill)),
+            border: Border {
+                width: 1.0,
+                color: look.edge,
+                radius: Radii::GRAPHITE.key.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        });
+    let mut press = signex_widgets::button(face)
+        .padding(0)
+        .style(|_: &Theme, _| iced::widget::button::Style::default());
+    if let Some(message) = on_press {
+        press = press.on_press(message);
+    }
+    press.boxed()
+}
 
 /// Side of the status icon cell: the mockup's 22 px at the 12 px body.
 pub(in crate::app::view::dialogs) const STATUS_W: f32 = TS.body * 22.0 / 12.0;
@@ -48,18 +180,18 @@ pub(in crate::app::view::dialogs) enum RowStatus {
 }
 
 impl RowStatus {
-    fn glyph(self) -> Option<MessageId> {
+    pub(in crate::app::view::dialogs) fn glyph(self) -> Option<StatusGlyph> {
         match self {
             Self::Quiet => None,
-            Self::Applies => Some(ids::UPDATE_PCB_STATUS_OK),
-            Self::Skipped => Some(ids::CHANGE_ROW_ICON_SKIPPED),
-            Self::Blocked => Some(ids::CHANGE_ROW_ICON_BLOCKED),
-            Self::Info => Some(ids::CHANGE_ROW_ICON_INFO),
-            Self::Warn => Some(ids::CHANGE_ROW_ICON_WARN),
+            Self::Applies => Some(StatusGlyph::Check),
+            Self::Skipped => Some(StatusGlyph::Dash),
+            Self::Blocked => Some(StatusGlyph::Blocked),
+            Self::Info => Some(StatusGlyph::Info),
+            Self::Warn => Some(StatusGlyph::Warn),
         }
     }
 
-    fn ink(self, tokens: &ThemeTokens) -> Color {
+    pub(in crate::app::view::dialogs) fn ink(self, tokens: &ThemeTokens) -> Color {
         match self {
             Self::Applies => ti(tokens.success),
             Self::Blocked => tokens::danger(tokens),
@@ -82,26 +214,22 @@ pub(in crate::app::view::dialogs) struct GroupHeader {
     /// The `+a · ~b · −c` split; `None` hides it.
     pub split: Option<Summary>,
     /// A glyph before the title in its ink (the Notes info or warn mark).
-    pub mark: Option<(Localized, Color)>,
+    pub mark: Option<(StatusGlyph, Color)>,
 }
 
-/// The header of one group, on the sunken band of the list.
+/// The header of one group, on the sunken band of the list: the shared
+/// chevron, the tri-state tick, the mark, the title, `n of m` and the split.
 pub(in crate::app::view::dialogs) fn group_header<'a>(
     header: GroupHeader,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
-    let fold_id = if header.folded {
-        ids::UPDATE_PCB_FOLD_CLOSED
-    } else {
-        ids::UPDATE_PCB_FOLD_OPEN
-    };
-    let fold = signex_widgets::button(
-        text(t!(i18n, fold_id))
-            .size(TS.body)
-            .color(tokens::muted_text(tokens)),
-    )
-    .padding([0.0, SP.xs])
+    let fold = signex_widgets::button(signex_widgets::chevron::chevron(
+        !header.folded,
+        TS.body,
+        tokens::muted_text(tokens),
+    ))
+    .padding(0)
     .on_press(header.on_fold.clone())
     .style(ghost_button);
     let mut line: Row<Element<'a, Message>> = Row::new()
@@ -109,19 +237,10 @@ pub(in crate::app::view::dialogs) fn group_header<'a>(
         .align_y(Alignment::Center)
         .push(fold.boxed());
     if let Some(ticks) = header.ticks {
-        let mut boxed = checkbox(ticks.all() || ticks.mixed()).size(TS.body);
-        boxed = if ticks.mixed() {
-            boxed.style(mixed_checkbox_style)
-        } else {
-            boxed.style(checkbox_style)
-        };
-        if let Some(message) = header.on_tick {
-            boxed = boxed.on_toggle(move |_| message.clone());
-        }
-        line = line.push(boxed.boxed());
+        line = line.push(tick_box(Tick::of_group(ticks), header.on_tick, tokens));
     }
     if let Some((glyph, ink)) = header.mark {
-        line = line.push(text(glyph).size(TS.body).color(ink).boxed());
+        line = line.push(glyph.view(ink));
     }
     let (pill_fill, pill_ink) = pill_colors(tokens, PillTone::Neutral);
     line = line
@@ -240,7 +359,6 @@ pub(in crate::app::view::dialogs) struct ChangeRow<'a> {
 /// One dense row of the list.
 pub(in crate::app::view::dialogs) fn change_row<'a>(
     r: ChangeRow<'a>,
-    i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let ink = if r.dimmed {
@@ -248,10 +366,11 @@ pub(in crate::app::view::dialogs) fn change_row<'a>(
     } else {
         ti(tokens.text)
     };
-    let mut tick = checkbox(r.on).size(TS.body).style(checkbox_style);
-    if let Some(toggle) = r.on_toggle {
-        tick = tick.on_toggle(toggle);
-    }
+    let tick = tick_box(
+        Tick::of(r.on),
+        r.on_toggle.map(|toggle| toggle(!r.on)),
+        tokens,
+    );
     let mut line: Row<Element<'a, Message>> = Row::new()
         .spacing(SP.m)
         .align_y(Alignment::Center)
@@ -289,7 +408,7 @@ pub(in crate::app::view::dialogs) fn change_row<'a>(
     }
     line = line
         .push(container(middle).width(Length::Fill).clip(true).boxed())
-        .push(status_cell(r.status, r.status_tip, i18n, tokens));
+        .push(status_cell(r.status, r.status_tip, tokens));
     let tint = tokens::selection_tint(tokens);
     let edge = tokens::resolve(tokens).line_soft;
     let focused = r.focused;
@@ -332,11 +451,10 @@ pub(in crate::app::view::dialogs) fn detail_text<'a>(
 fn status_cell<'a>(
     status: RowStatus,
     words: Option<Localized>,
-    i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let cell: Element<'a, Message> = match status.glyph() {
-        Some(id) => container(text(t!(i18n, id)).size(TS.body).color(status.ink(tokens)))
+        Some(glyph) => container(glyph.view(status.ink(tokens)))
             .center(STATUS_W)
             .boxed(),
         None => Space::new().width(STATUS_W).height(STATUS_W).boxed(),

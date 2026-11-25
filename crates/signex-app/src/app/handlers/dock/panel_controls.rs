@@ -172,13 +172,9 @@ impl Signex {
                 // Recorded in the sheet's history: undo back to the save
                 // point clears the mark.
                 self.document_state.mark_history_edit_dirty(sheet);
-                if let Some(tab) = self
-                    .document_state
-                    .tabs
-                    .iter_mut()
-                    .find(|t| t.path == sheet)
-                {
-                    tab.cached_document = None;
+                let docs = &mut self.document_state;
+                if let Some(idx) = docs.tabs.iter().position(|t| t.path == sheet) {
+                    docs.take_tab_board_engine(idx);
                 }
             }
             Ok(_) => {}
@@ -230,9 +226,10 @@ impl Signex {
         match panel_msg {
             crate::panels::PanelMsg::SetUnit(unit) => {
                 self.ui_state.unit = *unit;
-                // Typed pitches were read in the old unit.
+                // Typed pitches and lengths were read in the old unit.
                 self.document_state.panel_ctx.visible_grid_draft = None;
                 self.document_state.panel_ctx.snap_grid_draft = None;
+                self.interaction_state.pcb_primitive.drop_drafts();
             }
             crate::panels::PanelMsg::RunErc => {
                 follow = self.handle_run_erc();

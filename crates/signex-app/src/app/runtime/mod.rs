@@ -42,9 +42,9 @@ thread_local! {
 }
 
 impl Signex {
-    /// Copy the UI-state grid/unit/snap fields, SCH Filter's preset rename
-    /// and edited preset and the recent projects into the panel context.
-    /// Runs on the idle-cursor DragMove path, so the recent list is
+    /// Copy the UI-state grid/unit/snap fields, the Filter panel's preset
+    /// rename and edited preset and the recent projects into the panel
+    /// context. Runs on the idle-cursor DragMove path, so the recent list is
     /// compared first and cloned only when it changed.
     pub(in crate::app) fn sync_panel_ctx_mirrors(&mut self) {
         self.document_state.panel_ctx.selection_filter.rename = self.filter_preset_rename();

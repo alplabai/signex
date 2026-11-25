@@ -9,6 +9,8 @@
 mod board;
 mod by_component;
 mod by_net;
+#[cfg(test)]
+mod member_cap_tests;
 mod model;
 
 use iced::widget::{Space, column, container, row, scrollable};
@@ -58,6 +60,13 @@ pub enum NetInspectorMsg {
     BoardNetSelected(String),
     /// A board net row's Highlight: draw the net bright, or no longer.
     BoardNetHighlighted(String),
+    /// The pointer entered a schematic net row (mockup row 58).
+    NetRowEntered(String),
+    /// The pointer left a schematic net row.
+    NetRowLeft(String),
+    /// A schematic net row's Highlight, shown on hover: draw the net bright
+    /// on every sheet, or no longer.
+    NetHighlighted(String),
 }
 
 fn msg(m: NetInspectorMsg) -> PanelMsg {

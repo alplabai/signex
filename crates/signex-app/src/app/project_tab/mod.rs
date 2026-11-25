@@ -69,6 +69,7 @@ pub(crate) use requirements::{
 };
 pub use row_drag::RowDragMsg;
 pub(crate) use sheets::sheet_thumbnail;
+pub use variants::VariantManagerMsg;
 
 pub use crate::app::core::row_drag::RowDrag;
 use crate::app::state::ProjectId;
@@ -192,6 +193,9 @@ pub struct ProjectTabState {
     pub variant_parts_generation: u64,
     /// A parts read is running.
     pub variant_parts_reading: bool,
+    /// The Variant Manager tab's selected cell and typed value (mockup row
+    /// 32).
+    pub variant_manager: crate::app::core::variant_cell::VariantManagerUi,
     /// The Requirements section's drafts, refusal and last run (#2339).
     pub requirements: RequirementsTabState,
     /// The Parameters filter as typed (mockup row 30).
@@ -378,6 +382,12 @@ pub enum ProjectTabMsg {
     /// Read again: the parts matrix is read anew.
     VariantPartsReadRequested {
         project_id: ProjectId,
+    },
+    /// The Variant Manager tab's cell edits, Duplicate and Set as default
+    /// (mockup row 32).
+    VariantManager {
+        project_id: ProjectId,
+        msg: VariantManagerMsg,
     },
     /// A parts read finished: read `generation`, started at the sheet edit
     /// count `epoch`.

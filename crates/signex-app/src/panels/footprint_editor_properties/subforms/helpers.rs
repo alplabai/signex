@@ -15,8 +15,7 @@ use signex_widgets::property_illustration::Illustration;
 use signex_widgets::{CheckboxLabel as _, Label, button, checkbox, text, text_input};
 
 use super::super::super::{
-    CollapsedSections, FootprintEditorPanelContext, PROPERTY_LABEL_COLUMN, PROPERTY_ROW_GAP,
-    PanelMsg, form_look,
+    FootprintEditorPanelContext, PROPERTY_LABEL_COLUMN, PROPERTY_ROW_GAP, PanelMsg, form_look,
 };
 use crate::panels::enable_section::enable_section_style;
 use crate::panels::widgets::section_title;
@@ -111,12 +110,9 @@ pub(super) fn note<'a>(line: impl Into<Label<'a>>, tokens: &ThemeTokens) -> Elem
         .boxed()
 }
 
-/// Whether section `key` shows its body. A section closed by default stores
-/// its key in `collapsed` while it is open, so one toggle message serves
-/// both kinds.
-pub(super) fn is_open(key: &str, collapsed: &CollapsedSections, open_by_default: bool) -> bool {
-    collapsed.contains(key) != open_by_default
-}
+/// Whether section `key` shows its body; the one rule lives beside the
+/// body's section header.
+pub(super) use super::super::body::section_shown as is_open;
 
 /// A collapsible section header: chevron and the uppercase title.
 pub(super) fn section_header<'a>(

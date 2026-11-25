@@ -86,6 +86,11 @@ impl Signex {
         self.refuse_while_project_moves(&project_path, "save")?;
         self.refuse_while_path_op(&project_path, "saved")?;
         self.refuse_project_while_delete_pending(project_id, "saved")?;
+        // A project read from a newer minor is read-only: refuse before any
+        // pending library is created, so a refused save writes nothing.
+        if let Some(refusal) = self.read_only_project_save(project_id) {
+            return Err(anyhow::Error::new(refusal));
+        }
         let project = self
             .document_state
             .project_by_id(project_id)

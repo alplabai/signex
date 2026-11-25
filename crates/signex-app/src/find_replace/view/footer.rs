@@ -1,6 +1,6 @@
 //! The footer: "Match 2 of 5" and, in Replace mode, the one-undo-step note,
 //! Replace Current and the primary button that counts the included results
-//! ("Replace 1 of 5", #2525).
+//! ("Replace 1 of 5", #2525); in Find mode, Previous and Next.
 
 use iced::widget::column;
 use iced::{Element, Widget};
@@ -51,24 +51,62 @@ pub(super) fn footer<'a>(
                 .color(muted),
         );
     }
-    let mut buttons: Vec<Element<'a, FindReplaceMsg>> = Vec::new();
-    if state.replace_mode {
-        let idle = !state.is_busy();
-        let current =
-            (idle && state.selected_index.is_some()).then_some(FindReplaceMsg::ReplaceCurrent);
-        let all = (idle && state.included_count() > 0).then_some(FindReplaceMsg::ReplaceAll);
-        buttons.push(dialog_button(
+    let buttons = if state.replace_mode {
+        replace_buttons(state, theme_tokens, i18n)
+    } else {
+        step_buttons(state, theme_tokens, i18n)
+    };
+    dialog_footer_split(vec![info.boxed()], buttons)
+}
+
+/// Replace mode's Replace Current and the counted primary button.
+fn replace_buttons<'a>(
+    state: &FindReplaceState,
+    theme_tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Vec<Element<'a, FindReplaceMsg>> {
+    let idle = !state.is_busy();
+    let current =
+        (idle && state.selected_index.is_some()).then_some(FindReplaceMsg::ReplaceCurrent);
+    let all = (idle && state.included_count() > 0).then_some(FindReplaceMsg::ReplaceAll);
+    vec![
+        dialog_button(
             t!(i18n, ids::FIND_REPLACE_CURRENT),
             DialogButtonKind::Secondary,
             current,
             theme_tokens,
-        ));
-        buttons.push(dialog_button(
+        ),
+        dialog_button(
             replace_label(state, i18n),
             DialogButtonKind::Primary,
             all,
             theme_tokens,
-        ));
-    }
-    dialog_footer_split(vec![info.boxed()], buttons)
+        ),
+    ]
+}
+
+/// Find mode's Previous and Next (Shift+Enter / Enter, mockup row 67): they
+/// step through the results as Find previous / next do. Off with no result
+/// or while a project search runs.
+fn step_buttons<'a>(
+    state: &FindReplaceState,
+    theme_tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Vec<Element<'a, FindReplaceMsg>> {
+    let can_step = !state.is_busy() && state.result_count() > 0;
+    let step = |msg: FindReplaceMsg| can_step.then_some(msg);
+    vec![
+        dialog_button(
+            t!(i18n, ids::FIND_PREVIOUS),
+            DialogButtonKind::Secondary,
+            step(FindReplaceMsg::PreviousRequested),
+            theme_tokens,
+        ),
+        dialog_button(
+            t!(i18n, ids::FIND_NEXT),
+            DialogButtonKind::Primary,
+            step(FindReplaceMsg::NextRequested),
+            theme_tokens,
+        ),
+    ]
 }

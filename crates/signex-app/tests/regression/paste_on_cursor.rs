@@ -531,6 +531,7 @@ fn a_paste_into_a_sheet_of_another_project_brings_the_body() {
                 }],
                 variant_definitions: Vec::new(),
                 active_variant: None,
+                variant_settings: Default::default(),
                 libraries: Vec::new(),
                 enable_git: false,
                 net_classes: Vec::new(),

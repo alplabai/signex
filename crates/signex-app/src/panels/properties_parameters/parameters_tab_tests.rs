@@ -342,6 +342,48 @@ fn an_empty_sheet_variable_reads_not_set() {
     assert_eq!(shown_in_row(&mut app, "VIN"), "12V");
 }
 
+/// Add the sheet variable `name` and commit `value` to it, from the panel.
+fn add_variable(app: &mut Signex, name: &str, value: &str) {
+    use crate::panels::SheetVariableMsg;
+    let variables = |app: &mut Signex, m: SheetVariableMsg| panel(app, PanelMsg::SheetVariables(m));
+    variables(app, SheetVariableMsg::NewNameTyped(name.into()));
+    variables(app, SheetVariableMsg::Added);
+    let typed = SheetVariableMsg::ValueTyped {
+        name: name.into(),
+        text: value.into(),
+    };
+    variables(app, typed);
+    variables(app, SheetVariableMsg::ValueSubmitted(name.into()));
+}
+
+/// Mockup row 40, as drawn: an expression variable shows its result in a
+/// pill, and one naming an unknown variable shows an error line under its
+/// row naming it.
+#[test]
+fn sheet_variable_rows_draw_a_result_and_an_error_line() {
+    use crate::layout_probe::lay_out_texts;
+    use iced::{Size, Widget};
+    let (mut app, _path, _recorder) = app_on_sheet();
+    panel(&mut app, PanelMsg::PropertiesTab(1));
+    add_variable(&mut app, "VIN", "12");
+    add_variable(&mut app, "VOUT", "3");
+    add_variable(&mut app, "RATIO", "=VOUT/VIN");
+    add_variable(&mut app, "ILIM", "=VIN/RSNS");
+    app.refresh_panel_ctx();
+    let ctx = &app.document_state.panel_ctx;
+    let view = super::view_properties_parameters(ctx, iced::Color::BLACK).boxed();
+    let shown: Vec<String> = lay_out_texts(view, Size::new(320.0, 4000.0))
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect();
+    assert!(shown.iter().any(|t| t == "0.25"), "{shown:?}");
+    let error = shown
+        .iter()
+        .find(|t| t.starts_with("Error:"))
+        .unwrap_or_else(|| panic!("no error line: {shown:?}"));
+    assert!(error.contains("RSNS"), "{error:?}");
+}
+
 /// #2531: the Built-in group lists the sheet's names and numbers first.
 #[test]
 fn the_built_in_group_opens_with_the_sheets_names_and_numbers() {

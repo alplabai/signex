@@ -1,6 +1,6 @@
 //! Mockup row 116 on screen: the page plan's cards follow `page_plan`, an empty plan
-//! disables Export PDF, and Mirror the Bottom Side takes clicks only while
-//! a bottom set is ticked.
+//! disables Export PDF, the Pages control keeps one line, and Mirror the
+//! Bottom Side takes clicks only while a bottom set is ticked.
 
 use std::path::PathBuf;
 
@@ -170,6 +170,27 @@ fn an_empty_plan_disables_export_pdf() {
     );
     let laid = texts(&empty, &i18n);
     find(&laid, &t!(i18n, ids::BOARD_PRINT_NO_SETS).into_string());
+}
+
+/// Mockup row 116: the Pages control keeps its two segments on one line
+/// beside its label in the options column, as Scale and Ink do.
+#[test]
+fn the_pages_control_keeps_one_line() {
+    let i18n = I18n::en_us();
+    let laid = texts(&state(&[BoardLayerSet::Top]), &i18n);
+    let words = |id: signex_i18n::MessageId| t!(i18n, id).into_string();
+    let per_set = find(&laid, &words(ids::BOARD_PRINT_PAGES_PER_SET)).bounds;
+    let composite = find(&laid, &words(ids::BOARD_PRINT_PAGES_COMPOSITE)).bounds;
+    let label = find(&laid, &words(ids::BOARD_PRINT_PAGES)).bounds;
+    assert!(
+        (per_set.center_y() - composite.center_y()).abs() < 1.0,
+        "one line: {per_set:?} {composite:?}"
+    );
+    assert!(
+        (per_set.center_y() - label.center_y()).abs() < 1.0,
+        "beside its label: {per_set:?} {label:?}"
+    );
+    assert!(composite.x > per_set.x + per_set.width, "side by side");
 }
 
 #[test]

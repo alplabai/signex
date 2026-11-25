@@ -1,7 +1,7 @@
 //! The page in the middle of the Export PDF dialog: a toolbar for page
 //! stepping and zoom over the page, the page with the watermark drawn over
-//! it, and a caption in paper units ("ISO A4 landscape · 297 × 210 mm ·
-//! Fit to Page"). Drag pans a zoomed page; the wheel zooms.
+//! it, and a caption in paper units ("A4 landscape · 297 × 210 mm · Fit to
+//! Page"). Drag pans a zoomed page; the wheel zooms.
 
 use iced::Widget as _;
 use iced::widget::{Space, column, container, image, row, stack, svg};
@@ -12,6 +12,7 @@ use signex_widgets::{raw, text};
 
 use super::super::*;
 use super::form::{Look, SP, TS, rule};
+use super::page_setup::page_size_label;
 use super::rail::{RailCaption, rail_entries};
 use super::watermark_overlay::{self, WatermarkOverlay};
 use crate::app::state::PreviewState;
@@ -24,13 +25,14 @@ const STEP_ICON: f32 = 14.0;
 /// Space around the page.
 const PAGE_MARGIN: f32 = SP.xl + SP.s;
 
-/// The paper's name and orientation, as "ISO A4 landscape".
+/// The paper's name and orientation, as "A4 landscape": the size by its
+/// Size picker name.
 pub(super) fn paper_name(options: &PdfOptions, i18n: &I18n) -> String {
     let id = match options.orientation {
         SheetOrientation::Portrait => ids::PDF_PAPER_PORTRAIT,
         SheetOrientation::Landscape => ids::PDF_PAPER_LANDSCAPE,
     };
-    let size = options.page_size.kind().to_string();
+    let size = i18n.message_plain(page_size_label(options.page_size.kind()), &[]);
     i18n.message_plain(id, &[("size", size.into())])
 }
 
@@ -341,13 +343,14 @@ mod tests {
             .replace(['\u{2068}', '\u{2069}'], "")
     }
 
-    /// Mockup row 111: the caption names the paper in mm, not the raster in pixels.
+    /// Mockup row 111: the caption names the paper in mm, not the raster in
+    /// pixels, and names the paper as the Size picker does ("A4").
     #[test]
     fn the_caption_is_in_paper_units() {
         let i18n = I18n::en_us();
         assert_eq!(
             caption(&PdfOptions::default(), &i18n),
-            "ISO A4 landscape · 297 × 210 mm · Fit to Page"
+            "A4 landscape · 297 × 210 mm · Fit to Page"
         );
         let options = PdfOptions {
             orientation: SheetOrientation::Portrait,
@@ -356,8 +359,73 @@ mod tests {
         };
         assert_eq!(
             caption(&options, &i18n),
-            "ISO A4 portrait · 210 × 297 mm · 50 %"
+            "A4 portrait · 210 × 297 mm · 50 %"
         );
+    }
+
+    /// A preview of one ticked sheet whose page came back rasterised in
+    /// `rgb` all over.
+    fn one_drawn_page(rgb: [u8; 3]) -> PreviewState {
+        use signex_output::{PreviewPage, PreviewPageInfo};
+        use signex_types::schematic::InstancePath;
+        let mut preview = PreviewState::blank_for_tests();
+        let key = (
+            std::path::PathBuf::from("/w/top.snxsch"),
+            InstancePath::root(),
+        );
+        preview.sheet_files = vec![(key.clone(), "top".to_owned())];
+        preview.selected_files = std::iter::once(key).collect();
+        let (width_px, height_px) = (60_u32, 42_u32);
+        let info = PreviewPageInfo {
+            page_number: 1,
+            sheet_count: 1,
+            width_px,
+            height_px,
+        };
+        let rgba = std::iter::repeat_n(
+            [rgb[0], rgb[1], rgb[2], u8::MAX],
+            (width_px * height_px) as usize,
+        )
+        .flatten()
+        .collect();
+        let page = PreviewPage {
+            page_number: 1,
+            sheet_count: 1,
+            width_px,
+            height_px,
+            rgba,
+        };
+        preview.begin_raster(1);
+        let outcome = preview.apply_raster(1, &[info], vec![(0, page)]);
+        assert_eq!(outcome, crate::app::state::RasterOutcome::Applied);
+        preview
+    }
+
+    /// Whether some pixel of `pixels` (RGBA) is `rgb`, give or take the
+    /// rounding of the image filter.
+    fn shows(pixels: &[u8], rgb: [u8; 3]) -> bool {
+        pixels
+            .chunks_exact(4)
+            .any(|p| (0..3).all(|c| p[c].abs_diff(rgb[c]) <= 2))
+    }
+
+    /// Mockup row 111: the page in the middle and its thumbnail draw the
+    /// rasterised sheet, not a blank page. (A one-frame GPU capture misses
+    /// a large page: the renderer uploads it on a worker and redraws when
+    /// it lands. The software renderer here draws it at once.)
+    #[test]
+    fn the_shown_page_and_its_thumbnail_draw_the_rasterised_sheet() {
+        use crate::layout_probe::draw_pixels;
+        let (app, _task) = Signex::new();
+        let ink = [0, 200, 0];
+        let drawn = one_drawn_page(ink);
+        let other = one_drawn_page([0, 0, 200]);
+        let page = iced::Size::new(600.0, 420.0);
+        let rail = iced::Size::new(super::super::rail::RAIL_W, 420.0);
+        assert!(shows(&draw_pixels(app.view_pdf_viewer(&drawn), page), ink));
+        assert!(!shows(&draw_pixels(app.view_pdf_viewer(&other), page), ink));
+        assert!(shows(&draw_pixels(app.view_pdf_rail(&drawn), rail), ink));
+        assert!(!shows(&draw_pixels(app.view_pdf_rail(&other), rail), ink));
     }
 
     #[test]

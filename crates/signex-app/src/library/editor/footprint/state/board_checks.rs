@@ -226,6 +226,15 @@ impl GapOffer {
 /// The lines of `checks`: one per check, a failing check one per finding.
 /// No checks (the sketch is not solved): one line that says so.
 pub fn check_lines(checks: Option<&OutlineChecks>) -> Vec<CheckLine> {
+    check_lines_against(checks, None)
+}
+
+/// [`check_lines`], with the Inside corners and Min slot lines naming
+/// `profile`, the fab profile their limits come from (mockup row 179d).
+pub fn check_lines_against(
+    checks: Option<&OutlineChecks>,
+    profile: Option<&str>,
+) -> Vec<CheckLine> {
     let Some(checks) = checks else {
         return vec![line(
             CheckStatus::NotChecked,
@@ -234,19 +243,44 @@ pub fn check_lines(checks: Option<&OutlineChecks>) -> Vec<CheckLine> {
     };
     let mut lines = Vec::new();
     for check in OutlineCheck::ALL {
+        let fab = profile.filter(|_| uses_fab(check));
         match checks.state(check) {
-            CheckState::Passed => lines.push(line(
-                CheckStatus::Passed,
-                Translatable::new(passed_id(check)),
-            )),
-            CheckState::Failed(findings) => lines.extend(findings.iter().map(failed_line)),
+            CheckState::Passed => lines.push(line(CheckStatus::Passed, passed_text(check, fab))),
+            CheckState::Failed(findings) => {
+                lines.extend(findings.iter().map(|finding| failed_line(finding, fab)));
+            }
             CheckState::NotChecked(why) => lines.push(line(
                 CheckStatus::NotChecked,
-                Translatable::new(skipped_id(*why)).arg("check", Translatable::new(name_id(check))),
+                skipped_text(*why, fab).arg("check", Translatable::new(name_id(check))),
             )),
         }
     }
     lines
+}
+
+/// Whether `check` reads a fab profile limit.
+fn uses_fab(check: OutlineCheck) -> bool {
+    matches!(check, OutlineCheck::InsideCorners | OutlineCheck::MinSlot)
+}
+
+/// A passed check's line; `profile` names the fab profile it ran against.
+fn passed_text(check: OutlineCheck, profile: Option<&str>) -> Translatable {
+    let named = match check {
+        OutlineCheck::InsideCorners => ids::BOARD_SKETCH_CHECK_CORNERS_PROFILE,
+        OutlineCheck::MinSlot => ids::BOARD_SKETCH_CHECK_MIN_SLOT_PROFILE,
+        _ => return Translatable::new(passed_id(check)),
+    };
+    with_profile(passed_id(check), named, profile)
+}
+
+/// A skipped check's line, before its `check` argument.
+fn skipped_text(why: NotChecked, profile: Option<&str>) -> Translatable {
+    let named = match why {
+        NotChecked::NoRouterTool => ids::BOARD_SKETCH_CHECK_SKIPPED_ROUTER_PROFILE,
+        NotChecked::NoMinSlot => ids::BOARD_SKETCH_CHECK_SKIPPED_MIN_SLOT_PROFILE,
+        _ => return Translatable::new(skipped_id(why)),
+    };
+    with_profile(skipped_id(why), named, profile)
 }
 
 /// A line that names no place and offers nothing.
@@ -294,7 +328,7 @@ pub fn mm(value: f64, decimals: usize) -> String {
     format!("{value:.decimals$}")
 }
 
-fn failed_line(finding: &Finding) -> CheckLine {
+fn failed_line(finding: &Finding, profile: Option<&str>) -> CheckLine {
     let text = match finding {
         Finding::OpenEnd {
             gap_mm: Some(gap),
@@ -327,18 +361,26 @@ fn failed_line(finding: &Finding) -> CheckLine {
             radius_mm,
             tool_radius_mm,
             ..
-        } => Translatable::new(ids::BOARD_SKETCH_CHECK_CORNER_TIGHT)
-            .arg("radius", mm(*radius_mm, 2))
-            .arg("tool", mm(*tool_radius_mm, 2))
-            .arg("x", mm(at.x, 2))
-            .arg("y", mm(at.y, 2)),
+        } => with_profile(
+            ids::BOARD_SKETCH_CHECK_CORNER_TIGHT,
+            ids::BOARD_SKETCH_CHECK_CORNER_TIGHT_PROFILE,
+            profile,
+        )
+        .arg("radius", mm(*radius_mm, 2))
+        .arg("tool", mm(*tool_radius_mm, 2))
+        .arg("x", mm(at.x, 2))
+        .arg("y", mm(at.y, 2)),
         Finding::NarrowSlot {
             width_mm,
             min_slot_mm,
             ..
-        } => Translatable::new(ids::BOARD_SKETCH_CHECK_SLOT_NARROW)
-            .arg("width", mm(*width_mm, 2))
-            .arg("min", mm(*min_slot_mm, 2)),
+        } => with_profile(
+            ids::BOARD_SKETCH_CHECK_SLOT_NARROW,
+            ids::BOARD_SKETCH_CHECK_SLOT_NARROW_PROFILE,
+            profile,
+        )
+        .arg("width", mm(*width_mm, 2))
+        .arg("min", mm(*min_slot_mm, 2)),
     };
     let close_gap = match finding {
         Finding::OpenEnd {
@@ -360,5 +402,13 @@ fn failed_line(finding: &Finding) -> CheckLine {
         text,
         place: finding.place().first().copied(),
         close_gap,
+    }
+}
+
+/// `plain`, or `named` with the fab profile's name when there is one.
+fn with_profile(plain: MessageId, named: MessageId, profile: Option<&str>) -> Translatable {
+    match profile {
+        Some(name) => Translatable::new(named).arg("profile", name),
+        None => Translatable::new(plain),
     }
 }

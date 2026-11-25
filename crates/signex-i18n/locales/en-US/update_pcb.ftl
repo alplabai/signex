@@ -177,3 +177,7 @@ change-row-split-remove = −{ $count }
 change-row-split-separator = ·
 # The Notes group's count.
 change-row-notes-count = { $count }
+
+# mockup rows 81 and 82
+# The footer after a passing Validate, beside Report... (mockup row 81).
+update-pcb-validated = Validated: every ticked change applies to the board.

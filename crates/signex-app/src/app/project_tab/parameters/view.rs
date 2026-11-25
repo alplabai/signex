@@ -509,13 +509,16 @@ impl Rows<'_> {
             .padding([0.0, SP.m]);
             noted = noted.push(reason.boxed());
         }
-        let bar = container(Space::new())
-            .width(HAIRLINE * ERROR_BAR_HAIRLINES)
-            .height(Length::Fill)
-            .style(move |_: &Theme| filled(ink));
-        container(row![bar, noted])
+        // The bar is the ink fill showing through a left padding: a Fill
+        // height bar would make the whole page Fill and halve its scroller
+        // (#2755).
+        let soft_fill = container(noted)
             .width(Length::Fill)
-            .style(move |_: &Theme| filled(soft))
+            .style(move |_: &Theme| filled(soft));
+        container(soft_fill)
+            .width(Length::Fill)
+            .padding(Padding::ZERO.left(HAIRLINE * ERROR_BAR_HAIRLINES))
+            .style(move |_: &Theme| filled(ink))
             .boxed()
     }
 

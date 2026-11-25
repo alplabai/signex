@@ -50,6 +50,8 @@ define_ids! {
     DIALOG_QUIT_GROUP_OTHER = "dialog-quit-group-other";
     DIALOG_QUIT_GROUP_LIBRARIES = "dialog-quit-group-libraries";
     DIALOG_QUIT_LIST_CHANGED = "dialog-quit-list-changed";
+    DIALOG_UNSAVED_READ_ONLY_PROJECTS = "dialog-unsaved-read-only-projects";
+    DIALOG_UNSAVED_READ_ONLY_PROJECTS_ONLY = "dialog-unsaved-read-only-projects-only";
     DIALOG_RECOVERY_FOUND = "dialog-recovery-found";
     DIALOG_RECOVERY_OLDER = "dialog-recovery-older";
     DIALOG_RECOVERY_RESTORE_HINT = "dialog-recovery-restore-hint";
@@ -247,4 +249,6 @@ define_ids! {
     DIALOG_NET_COLOR_TOAST_CLEARED_UNLABELLED = "dialog-net-color-toast-cleared-unlabelled";
     DIALOG_NET_COLOR_TOAST_CLEARED_NET = "dialog-net-color-toast-cleared-net";
     DIALOG_NET_COLOR_TOAST_UNDO = "dialog-net-color-toast-undo";
+    // find-messages
+    DIALOG_RULES_MATRIX_CYCLE_HINT = "dialog-rules-matrix-cycle-hint";
 }

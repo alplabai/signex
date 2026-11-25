@@ -5833,6 +5833,7 @@ dependencies = [
  "windows-sys 0.61.2",
  "winres",
  "wiremock",
+ "zip",
 ]
 
 [[package]]

@@ -32,6 +32,8 @@ pub struct FootprintEditorPanelContext {
     /// is back at its last good solve; these rows say why the edit did not
     /// stick. Empty after any edit or solve that succeeds.
     pub rejected_conflicts: Vec<RejectedConflictSummary>,
+    /// The conflict the DOF card suggests removing (mockup row 179).
+    pub conflict_suggestion: Option<super::ConflictSuggestion>,
     /// Read-only summary of the selected pad — populated when in
     /// Pads mode and a pad is selected.
     pub selected_pad: Option<FootprintPadSummary>,
@@ -98,7 +100,11 @@ pub struct FootprintEditorPanelContext {
     /// What the last Bake wrote, until a non-pad object, a multi-selection,
     /// an edit or an empty click ends it (mockup row 190).
     pub bake_outcome: Option<crate::library::editor::footprint::sketch_mode::BakeOutcome>,
-    /// The Roles section's rows, in a footprint sketch (mockup row 190).
+    /// A footprint sketch's open bake preview, which Properties shows in
+    /// place of the canvas card (mockup row 190).
+    pub footprint_bake: Option<crate::library::editor::standalone::sketch_exit::FootprintBakeCard>,
+    /// The Roles section's rows, in a footprint sketch and after its Bake
+    /// (mockup row 190).
     pub profile_roles: Vec<crate::library::editor::footprint::sketch_mode::roles::ProfileRoleRow>,
     /// How many centerlines the sketch has; they never bake.
     pub centerline_count: usize,
@@ -759,4 +765,6 @@ pub struct FootprintSketchEntitySummary {
 pub struct SketchStateSummary {
     pub tone: crate::styles::PillTone,
     pub label: signex_i18n::MessageId,
+    /// The solve's DOF state; `None` with no sketch or no solve yet.
+    pub dof: Option<super::SketchDof>,
 }

@@ -137,6 +137,10 @@ pub enum MenuMessage {
     /// listing every binding from the active keymap profile, callable from
     /// Help ▸ Keyboard Shortcuts and from F1.
     OpenKeyboardShortcuts,
+    /// Help ▸ Show Welcome Tips (mockup row 14): opens the first-run card
+    /// again. The card is the same one, and its close persists as on first
+    /// launch.
+    OpenWelcomeTips,
     /// Tools ▸ New Part — bumps the active `.snxsym` symbol's max
     /// `part_number` by one and switches the editor's active_part to
     /// the new value. No-op when no Symbol editor is the active tab.

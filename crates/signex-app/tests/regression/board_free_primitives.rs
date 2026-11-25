@@ -44,7 +44,10 @@ fn board() -> PcbBoard {
             "dimensions": [{"uuid": DIM, "start": {"x": 30.0, "y": 10.0},
                             "end": {"x": 40.0, "y": 10.0}, "offset": 2.0,
                             "layer": "Dimensions", "line_width": 0.1,
-                            "text_height": 1.0, "precision": 2}]
+                            "text_height": 1.0, "precision": 2,
+                            // The point a placed dimension carries: Above,
+                            // half a text height off the line (#2868).
+                            "text_at": {"x": 0.0, "y": 1.0}}]
         }
     }))
     .unwrap()

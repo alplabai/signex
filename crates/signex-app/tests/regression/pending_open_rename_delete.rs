@@ -38,6 +38,7 @@ fn project_with_sheet(dir: &Path) -> (Signex, PathBuf) {
             }],
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),

@@ -1,5 +1,6 @@
-//! #2216 — Pour Cutout and Slice Pour: one batch, the largest piece keeps the
-//! pour, the rest are new pours with its settings, undo restores the board.
+//! #2216 — Slice Pour: one batch, the largest piece keeps the pour, the rest
+//! are new pours with its settings, undo restores the board. #2871 — Pour
+//! Cutout places a cutout region and leaves the pour as it was.
 
 use signex_types::pcb::{PcbBoard, Point};
 use signex_types::pcb_layer::CopperLayer;
@@ -7,8 +8,8 @@ use signex_types::zone_pour::POUR_FILL;
 use uuid::Uuid;
 
 use super::*;
-use crate::pcb::BoardEngine;
 use crate::pcb::tests::{ZONE_1, board, id};
+use crate::pcb::{BoardEngine, draw};
 
 fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<Point> {
     vec![
@@ -39,59 +40,44 @@ fn ids() -> impl FnMut() -> Uuid {
     }
 }
 
+/// #2871 (DECISIONS 2026-11-24, replacing the #2216 cut): a cutout across,
+/// inside or over the whole pour is placed as a region of its own in one
+/// step, and the pour is left as it was. Before, the cut rewrote the pour
+/// into pieces, a hole, or nothing.
 #[test]
-fn a_cutout_across_a_pour_leaves_two_pours_in_one_step() {
+fn a_cutout_is_a_region_of_its_own_and_the_pour_is_left_as_it_was() {
     let b = with_pour();
-    let commands = cut_pours(&b, CopperLayer::Bottom, &rect(3.0, -1.0, 5.0, 11.0), ids());
-    assert_eq!(commands.len(), 2, "a replace and an add");
-    let mut engine = BoardEngine::new(b.clone(), 1);
-    engine.execute_batch(commands).expect("applies");
-    let zones = &engine.board().zones;
-    assert_eq!(zones.len(), 2);
-    assert_eq!(zones[0].uuid, id(ZONE_1), "the larger piece keeps the pour");
-    assert_eq!(zones[1].uuid, Uuid::from_u128(901));
-    for zone in zones {
-        assert!(zone.is_pour());
-        assert_eq!((zone.priority, zone.clearance), (2, 0.3), "settings kept");
-        assert_eq!(zone.layer, "BottomCopper");
+    for (n, cut) in [
+        (1, rect(3.0, -1.0, 5.0, 11.0)),
+        (2, rect(4.0, 4.0, 6.0, 6.0)),
+        (3, rect(-1.0, -1.0, 11.0, 11.0)),
+    ] {
+        let region =
+            draw::new_pour_cutout(Uuid::from_u128(0xC00 + n), cut.clone(), CopperLayer::Bottom)
+                .expect("an area");
+        let mut engine = BoardEngine::new(b.clone(), 1);
+        engine.execute(draw::place_zone(region)).expect("applies");
+        let zones = &engine.board().zones;
+        assert_eq!(zones.len(), 2, "the pour and the cutout");
+        assert_eq!(zones[0], b.zones[0], "the pour's outline is not edited");
+        let cutout = &zones[1];
+        assert!(cutout.is_pour_cutout() && !cutout.is_pour());
+        assert_eq!((cutout.net, cutout.layer.as_str()), (0, "BottomCopper"));
+        assert_eq!(cutout.outline, cut);
+        engine.undo().expect("undo").expect("a step");
+        assert_eq!(engine.board().zones, b.zones, "one step undoes it");
     }
-    engine.undo().expect("undo").expect("a step");
-    assert_eq!(engine.board().zones, b.zones, "one step undoes it all");
 }
 
+/// #2871: a cutout with no area is not placed.
 #[test]
-fn a_cutout_on_another_layer_or_off_the_pour_changes_nothing() {
-    let b = with_pour();
-    let cut = rect(3.0, 3.0, 5.0, 5.0);
-    assert!(cut_pours(&b, CopperLayer::Top, &cut, ids()).is_empty());
-    let away = rect(30.0, 30.0, 35.0, 35.0);
-    assert!(cut_pours(&b, CopperLayer::Bottom, &away, ids()).is_empty());
-}
-
-#[test]
-fn a_cutout_over_the_whole_pour_removes_it() {
-    let b = with_pour();
-    let commands = cut_pours(
-        &b,
-        CopperLayer::Bottom,
-        &rect(-1.0, -1.0, 11.0, 11.0),
-        ids(),
-    );
-    let mut engine = BoardEngine::new(b, 1);
-    engine.execute_batch(commands).expect("applies");
-    assert!(engine.board().zones.is_empty());
-}
-
-#[test]
-fn a_cutout_inside_a_pour_is_a_hole_in_it() {
-    let b = with_pour();
-    let commands = cut_pours(&b, CopperLayer::Bottom, &rect(4.0, 4.0, 6.0, 6.0), ids());
-    let mut engine = BoardEngine::new(b, 1);
-    engine.execute_batch(commands).expect("applies");
-    let zones = &engine.board().zones;
-    assert_eq!(zones.len(), 1);
-    assert_eq!(zones[0].holes.len(), 1);
-    assert_eq!(zones[0].usable_holes(), vec![0], "the fill can use it");
+fn a_cutout_with_no_area_is_not_placed() {
+    let flat = vec![
+        Point::new(0.0, 0.0),
+        Point::new(4.0, 0.0),
+        Point::new(8.0, 0.0),
+    ];
+    assert!(draw::new_pour_cutout(Uuid::from_u128(1), flat, CopperLayer::Top).is_none());
 }
 
 #[test]

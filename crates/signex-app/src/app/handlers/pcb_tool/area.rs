@@ -128,7 +128,7 @@ impl Signex {
         }
         let (tool, outline) = (session.tool, session.points.clone());
         if tool == BoardPlaceTool::PourCutout {
-            self.cut_pours_with(outline);
+            self.place_pour_cutout(outline);
         } else {
             self.add_area(tool, outline);
         }

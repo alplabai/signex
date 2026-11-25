@@ -22,8 +22,9 @@ use std::path::{Path, PathBuf};
 use signex_types::schematic::SchematicSheet;
 
 pub(crate) use crate::app::core::file_stamp::DiskStamps;
-use crate::app::state::DocumentState;
+use crate::app::core::unreadable_cause::UnreadableCause;
 use crate::app::state::scope::{CaseFold, path_key_with};
+use crate::app::state::{DocumentState, SheetUnreadable};
 use crate::library::closed_sheets::FileStamp;
 
 /// The sheets a project consists of, plus what could not be made sense of
@@ -43,6 +44,9 @@ pub(crate) struct ProjectSheetSet {
     /// `(path, why)`. Distinguished from an absent file so the user is not
     /// sent hunting for a corrupt sheet sitting right where it should be.
     pub(crate) unreadable: Vec<(PathBuf, String)>,
+    /// The reader's cause for each `unreadable` path the walk read, so a list
+    /// can say why in the UI language (mockup row 28).
+    pub(crate) unreadable_causes: HashMap<PathBuf, UnreadableCause>,
     /// Sheets a walk reached that are not on disk (and not open): declared by
     /// a parent's `child_sheets` or seeded, but nothing is there. Assemblers
     /// leave these to the stitcher's `MissingChild`; the closed-sheet scan
@@ -77,6 +81,7 @@ impl ProjectSheetSet {
             sheets: HashMap::new(),
             pages_outside_the_hierarchy: Vec::new(),
             unreadable: Vec::new(),
+            unreadable_causes: HashMap::new(),
             absent: Vec::new(),
             refused: Vec::new(),
             root: None,
@@ -222,11 +227,12 @@ pub(crate) fn load_sheet(
         &|p| document_state.engines.get(p).map(|e| e.document().clone()),
         path,
     )
+    .map_err(|e| e.to_string())
 }
 
 /// [`load_sheet`] from disk only, for a read off the UI thread (#2199).
 pub(crate) fn load_sheet_file(path: &Path) -> Result<Option<SchematicSheet>, String> {
-    load_sheet_with(&|_| None, path)
+    load_sheet_with(&|_| None, path).map_err(|e| e.to_string())
 }
 
 /// [`load_sheet_with`] reading a sheet that is not open only when `guard`
@@ -235,11 +241,11 @@ fn load_sheet_guarded(
     open: &dyn Fn(&Path) -> Option<SchematicSheet>,
     guard: ReadGuard<'_>,
     path: &Path,
-) -> Result<Option<SchematicSheet>, String> {
+) -> Result<Option<SchematicSheet>, SheetUnreadable> {
     if let Some(sheet) = open(path) {
         return Ok(Some(sheet));
     }
-    guard(path)?;
+    guard(path).map_err(|why| SheetUnreadable::new(UnreadableCause::Refused, why))?;
     load_sheet_with(&|_| None, path)
 }
 
@@ -255,18 +261,25 @@ pub(crate) fn fold_key(path: &Path, fold: CaseFold) -> String {
 fn load_sheet_with(
     open: &dyn Fn(&Path) -> Option<SchematicSheet>,
     path: &Path,
-) -> Result<Option<SchematicSheet>, String> {
+) -> Result<Option<SchematicSheet>, SheetUnreadable> {
+    use UnreadableCause::{NotARegularFile, ReadFailed};
     if let Some(sheet) = open(path) {
         return Ok(Some(sheet));
     }
     // A FIFO or device named like a sheet would block the read for good.
     if std::fs::metadata(path).is_ok_and(|meta| !meta.is_file()) {
-        return Err("could not be read (not a regular file)".into());
+        let why = "could not be read (not a regular file)";
+        return Err(SheetUnreadable::new(NotARegularFile, why));
     }
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(format!("could not be read ({e})")),
+        Err(e) => {
+            return Err(SheetUnreadable::new(
+                ReadFailed,
+                format!("could not be read ({e})"),
+            ));
+        }
     };
     match signex_types::format::SnxSchematic::parse(&text) {
         // The repairs stay on the sheet: a pass that writes it reports them
@@ -279,7 +292,10 @@ fn load_sheet_with(
             ));
             Ok(Some(parsed.sheet))
         }
-        Err(e) => Err(format!("could not be parsed ({e})")),
+        Err(e) => Err(SheetUnreadable::parse_failed(
+            &e,
+            format!("could not be parsed ({e})"),
+        )),
     }
 }
 
@@ -557,6 +573,7 @@ fn assemble_project_sheets_with(
         sheets: HashMap::new(),
         pages_outside_the_hierarchy: Vec::new(),
         unreadable: Vec::new(),
+        unreadable_causes: HashMap::new(),
         absent: Vec::new(),
         refused: Vec::new(),
         root: Some(root_path.to_path_buf()),
@@ -628,7 +645,8 @@ fn walk(
                 continue;
             }
             Err(why) => {
-                set.unreadable.push((path.clone(), why));
+                set.unreadable_causes.insert(path.clone(), why.cause);
+                set.unreadable.push((path.clone(), why.detail));
                 continue;
             }
         };
@@ -1562,6 +1580,7 @@ mod tests {
             sheets: sheets.clone(),
             pages_outside_the_hierarchy: pages,
             unreadable: Vec::new(),
+            unreadable_causes: HashMap::new(),
             absent: Vec::new(),
             refused: Vec::new(),
             root: Some(root_path.clone()),
@@ -1683,6 +1702,7 @@ mod tests {
                     .collect(),
                 variant_definitions: Vec::new(),
                 active_variant: None,
+                variant_settings: Default::default(),
                 libraries: Vec::new(),
                 enable_git: false,
                 net_classes: Vec::new(),

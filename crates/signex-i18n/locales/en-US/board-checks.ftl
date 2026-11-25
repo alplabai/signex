@@ -38,7 +38,7 @@ board-net-classes-undo = Undo net class edit
 board-net-classes-redo = Redo net class edit
 board-net-classes-empty = No net classes yet. Add one, then pick its nets.
 board-net-classes-col-name = Name
-board-net-classes-col-color = Colour
+board-net-classes-col-color = Color
 board-net-classes-col-width = Width
 board-net-classes-col-clearance = Clearance
 board-net-classes-col-via = Via
@@ -56,7 +56,7 @@ board-net-classes-patterns =
        *[other] also { $count } patterns
     }
 board-net-classes-invalid-number = { $field } must be a number of millimetres, or empty for the board's value.
-board-net-classes-invalid-color = The colour must be #RRGGBB or #RRGGBBAA, or empty for none.
+board-net-classes-invalid-color = The color must be #RRGGBB or #RRGGBBAA, or empty for none.
 
 ## DRC panel (#87, #88): the idle header, notices, count tiles and rows.
 drc-panel-rules = Rules

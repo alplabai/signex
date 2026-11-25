@@ -10,20 +10,6 @@ const SP: Spacing = Spacing::DEFAULT;
 
 // ─── Helpers ──────────────────────────────────────────────────
 
-pub fn shape_icon_handle(
-    elem_type: &str,
-    theme: signex_types::theme::ThemeId,
-) -> Option<svg::Handle> {
-    match elem_type {
-        "Line" => Some(crate::icons::icon_shape_line(theme)),
-        "Rectangle" => Some(crate::icons::icon_shape_rect(theme)),
-        "Circle" => Some(crate::icons::icon_shape_circle(theme)),
-        "Arc" => Some(crate::icons::icon_shape_arc(theme)),
-        "Polygon" => Some(crate::icons::icon_shape_polygon(theme)),
-        _ => None,
-    }
-}
-
 /// Just the header part of a collapsible section — clickable button
 /// with SVG chevron + 1px rule. Returns whether the section is
 /// collapsed via `is_collapsed_section(...)` so callers can guard

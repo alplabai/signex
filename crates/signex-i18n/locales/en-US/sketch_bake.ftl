@@ -15,7 +15,7 @@ sketch-bake-checks-warn = A failing check warns only; Bake still applies the ske
 # Under rows that name a place: what a click does.
 sketch-bake-select-hint = Click a row to select its place in the sketch.
 # Under the counts: the canvas shows the result.
-sketch-bake-drawn = The canvas draws the result in its layer colours, the sketch faint on top.
+sketch-bake-drawn = The canvas draws the result in its layer colors, the sketch faint on top.
 # Close gap (mockup row 190), offered on an open profile on both hosts: the button,
 # and why it is or is not offered. $gap and $tolerance are millimetres.
 sketch-bake-close-gap = Close gap
@@ -74,3 +74,12 @@ sketch-bake-legend-paste = Paste
 sketch-bake-legend-mask = Mask
 sketch-bake-legend-silk = Silk
 sketch-bake-legend-courtyard = Courtyard
+# mockup row 190
+# The Pads ↔ Sketch section after Bake (mockup row 190): what the links are,
+# and the line shown until a pad is clicked.
+sketch-bake-outcome-link-caption = Each pad keeps a link to the sketch entity that made it. Click a pad on the canvas.
+sketch-bake-outcome-link-empty = No pad selected.
+# The clicked pad's row: the pad, the sketch entity it came from, and the
+# link that shows that entity in Sketch mode.
+sketch-bake-outcome-link-from = Pad { $number } ← { $source }
+sketch-bake-outcome-show-in-sketch = Show in Sketch

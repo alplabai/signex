@@ -1,6 +1,7 @@
-//! The area panel (#2393, #2523, mockup row 99): fills, solid regions, polygon pours
-//! and keepouts. Under the illustration: Net Information and the net of a
-//! copper area, the layer, a keepout's kinds; a pour's Pour section with its
+//! The area panel (#2393, #2523, mockup row 99): fills, solid regions, polygon pours,
+//! keepouts and pour cutouts. Under the illustration: Net Information and the
+//! net of a copper area, the layer, a keepout's kinds, a pour cutout's
+//! vertices and area (#2871); a pour's Pour section with its
 //! fill rules, the thermal relief and corners it cannot use yet (greyed:
 //! the fill draws no spokes and stores no corners), and the Copper card with
 //! what the fill holds, Repour, Shelve or Unshelve and the board-wide menu.
@@ -142,7 +143,35 @@ fn properties<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Option<Element<'a, PanelM
             ),
         );
     }
+    if f.kind == Some(ZoneKind::Cutout) {
+        for (label, row) in cutout_outline(look, f) {
+            s.push(common, label, row);
+        }
+    }
     s.finish()
+}
+
+/// A pour cutout's Vertices and Area (#2871), read only; nothing while
+/// several are selected.
+fn cutout_outline<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Vec<(MessageId, Element<'a, PanelMsg>)> {
+    let Some((vertices, area)) = f.outline else {
+        return Vec::new();
+    };
+    let vertices = read_only(look, UserText::new(vertices.to_string()));
+    let area = with_unit(
+        read_only(look, UserText::new(format_number(area))),
+        unit(look, ids::PCB_PRIM_UNIT_MM2),
+    );
+    vec![
+        (
+            ids::PCB_PRIM_CUTOUT_VERTICES,
+            labelled(look, ids::PCB_PRIM_CUTOUT_VERTICES, vertices),
+        ),
+        (
+            ids::PCB_PRIM_CUTOUT_AREA,
+            labelled(look, ids::PCB_PRIM_CUTOUT_AREA, area),
+        ),
+    ]
 }
 
 /// A pour's fill rules and its Copper card; nothing for other areas.
@@ -357,11 +386,11 @@ fn corners<'a>(
 }
 
 /// Corner Size, greyed while Corners is Sharp, the only corner the fill
-/// makes (mockup row 99). The board stores no size, so it is blank.
+/// makes (mockup row 99). It shows the size a sharp corner has: 0.
 fn corner_size_value<'a>(look: Look<'a>) -> Element<'a, PanelMsg> {
     veiled(
         look.tokens(),
-        sunken_value(look, UserText::new(String::new())),
+        sunken_value(look, UserText::new(format_number(0.0))),
     )
 }
 
@@ -676,6 +705,7 @@ mod tests {
             thermal: Some((false, 0.0, 0.0)),
             menu_open: false,
             unfilled: None,
+            outline: None,
         }
     }
 
@@ -746,5 +776,88 @@ mod tests {
         let greyed = draw_pixels(corner_size_value(look), window);
         let plain = draw_pixels(sunken_value(look, UserText::new(String::new())), window);
         assert_ne!(greyed, plain, "the veil dims the sunken value");
+    }
+
+    fn context() -> PanelContext {
+        let (app, _boot) = crate::app::Signex::new();
+        app.document_state.panel_ctx.clone()
+    }
+
+    fn plain(text: &str) -> String {
+        text.replace(['\u{2068}', '\u{2069}'], "")
+    }
+
+    fn said(ctx: &PanelContext, id: MessageId) -> String {
+        plain(&t!(ctx.i18n, id).into_string())
+    }
+
+    /// Fill Mode offers Solid and Hatched and no None (docs/DECISIONS.md
+    /// 2026-11-19, #2523: the outline-only state is Shelve).
+    #[test]
+    fn fill_mode_offers_solid_and_hatched_and_no_none() {
+        let ctx = context();
+        let shown: Vec<String> = crate::layout_probe::lay_out_texts(
+            fill_mode(Look::of(&ctx)),
+            iced::Size::new(300.0, 60.0),
+        )
+        .into_iter()
+        .map(|t| plain(&t.text))
+        .collect();
+        let want = [
+            ids::PCB_PRIM_POUR_FILL_SOLID,
+            ids::PCB_PRIM_POUR_FILL_HATCHED,
+        ]
+        .map(|id| said(&ctx, id));
+        assert_eq!(shown, want);
+    }
+
+    /// Mockup row 99: a keepout's Keeps Out row sits right under Layer; a
+    /// pour has none.
+    #[test]
+    fn a_keepout_lists_keeps_out_right_under_layer() {
+        let ctx = context();
+        let texts = |f: &ZoneFacts| -> Vec<String> {
+            let section = properties(Look::of(&ctx), f).expect("the properties");
+            crate::layout_probe::lay_out_texts(section, iced::Size::new(300.0, 600.0))
+                .into_iter()
+                .map(|t| plain(&t.text))
+                .collect()
+        };
+        let (layer, keeps_out) = (
+            said(&ctx, ids::PCB_PRIM_LAYER),
+            said(&ctx, ids::PCB_PRIM_KEEPOUT_KINDS),
+        );
+        let mut keepout = pour(None);
+        keepout.kind = Some(ZoneKind::Keepout);
+        keepout.is_copper = false;
+        keepout.is_pour = false;
+        let shown = texts(&keepout);
+        let at = shown.iter().position(|t| *t == layer).expect("Layer");
+        assert_eq!(shown.get(at + 1), Some(&keeps_out), "{shown:?}");
+        assert!(!texts(&pour(Some(false))).contains(&keeps_out));
+    }
+
+    /// Mockup row 99: the greyed Corner Size still shows its value, the
+    /// size a Sharp corner has, under the veil.
+    #[test]
+    fn the_greyed_corner_size_shows_its_value() {
+        use crate::layout_probe::draw_pixels;
+        let ctx = context();
+        let look = Look::of(&ctx);
+        let window = iced::Size::new(120.0, 30.0);
+        let shown = draw_pixels(corner_size_value(look), window);
+        let blank = draw_pixels(
+            veiled(
+                look.tokens(),
+                sunken_value(look, UserText::new(String::new())),
+            ),
+            window,
+        );
+        assert_ne!(shown, blank, "the greyed field draws its value");
+        let unveiled = draw_pixels(
+            sunken_value(look, UserText::new(format_number(0.0))),
+            window,
+        );
+        assert_ne!(shown, unveiled, "the value is greyed");
     }
 }

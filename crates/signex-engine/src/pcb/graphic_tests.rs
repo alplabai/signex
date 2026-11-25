@@ -75,13 +75,17 @@ fn an_arcs_end_lands_on_its_circle_and_a_circle_takes_its_radius() {
     );
 }
 
+/// Was `copper_keep_out_and_shapes_with_nothing_to_draw_are_refused`, with
+/// copper refused; a drawing goes on copper since Caner's 2026-11-24
+/// decision (#2883), and only a keep-out refuses it.
 #[test]
-fn copper_keep_out_and_shapes_with_nothing_to_draw_are_refused() {
+fn keep_out_and_shapes_with_nothing_to_draw_are_refused() {
     let o = Point::new(0.0, 0.0);
     let p = Point::new(4.0, 3.0);
     let copper = GraphicStyle::on(PcbLayer::Copper(CopperLayer::Top));
     let keep_out = GraphicStyle::on(PcbLayer::Technical(TechnicalLayer::KeepoutTop));
-    assert!(new_line(Uuid::nil(), o, p, copper).is_none());
+    let on_copper = new_rectangle(Uuid::nil(), o, p, copper).expect("copper takes a drawing");
+    assert_eq!(on_copper.layer, "TopCopper");
     assert!(new_line(Uuid::nil(), o, p, keep_out).is_none());
     assert!(new_line(Uuid::nil(), o, o, silk()).is_none());
     assert!(new_circle(Uuid::nil(), o, o, silk()).is_none());
@@ -92,7 +96,7 @@ fn copper_keep_out_and_shapes_with_nothing_to_draw_are_refused() {
 }
 
 /// A drawing is a board item: delete and replace keep its id and index, and
-/// a replace onto copper is refused.
+/// a replace onto a keep-out is refused (onto copper until #2883).
 #[test]
 fn a_drawing_is_deleted_and_replaced_by_id() {
     let mut engine = BoardEngine::new(board(), 1);
@@ -107,10 +111,10 @@ fn a_drawing_is_deleted_and_replaced_by_id() {
         })
         .unwrap();
     assert_eq!(engine.board().graphics[0].width, 0.3);
-    let mut onto_copper = line.clone();
-    onto_copper.layer = "TopCopper".into();
+    let mut onto_keep_out = line.clone();
+    onto_keep_out.layer = "TopKeepout".into();
     let refused = engine.execute(BoardCommand::ReplaceItems {
-        items: vec![BoardItem::Graphic(onto_copper)],
+        items: vec![BoardItem::Graphic(onto_keep_out)],
     });
     assert!(matches!(
         refused,

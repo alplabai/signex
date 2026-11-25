@@ -942,6 +942,7 @@ fn join_project_with_a_second_sheet(app: &mut Signex) -> PathBuf {
             sheets: vec![sheet_entry(SHEET), sheet_entry("sheet-two.snxsch")],
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),

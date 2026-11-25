@@ -10,17 +10,19 @@ use crate::app::state::scope::CaseFold;
 use signex_i18n::RenderTranslatable;
 
 impl Signex {
-    /// Open the rename modal for a tree row. Its name field is focused once
-    /// the dialog's window opens ([`Self::focus_rename_field_once_open`]).
-    pub(super) fn open_rename_dialog(&mut self, tree_path: Vec<usize>) {
+    /// Open the rename modal for a tree row. The returned task focuses its
+    /// name field with the stem selected (mockup row 23) when the dialog
+    /// shows in the main window; an own window does it once it opens
+    /// ([`Self::focus_rename_field_once_open`]).
+    pub(super) fn open_rename_dialog(&mut self, tree_path: Vec<usize>) -> iced::Task<Message> {
         if self.refuse_on_missing_child(&tree_path, "Rename", false) {
-            return;
+            return iced::Task::none();
         }
         let Some(target_path) = self.tree_path_to_file_path(&tree_path) else {
             crate::diagnostics::log_warning(
                 "Rename cancelled: the selected project-tree row no longer resolves to a file.",
             );
-            return;
+            return iced::Task::none();
         };
         let filename = target_path
             .file_name()
@@ -39,6 +41,7 @@ impl Signex {
             placing_symbols,
             name_clash: None,
         }));
+        rename_field_focus()
     }
 
     /// The Rename field has focus and its text selected once the dialog's
@@ -52,12 +55,7 @@ impl Signex {
         {
             return iced::Task::none();
         }
-        use iced::widget::operation;
-        let id: &iced::widget::Id = &crate::app::contracts::RENAME_INPUT_ID;
-        iced::Task::batch([
-            operation::focus(id.clone()),
-            operation::text_input::select_all(id.clone()),
-        ])
+        rename_field_focus()
     }
 
     /// The sheet symbols of `owner`'s own project that place `target`: the
@@ -153,12 +151,16 @@ impl Signex {
     /// Open the rename modal seeded with the project name (the `.snxprj`
     /// file stem). On submit, [`handle_rename_submit`] sees
     /// `is_project_rename = true` and renames the project (see `project_rename`).
-    pub(crate) fn open_project_rename_dialog(&mut self, tree_path: Vec<usize>) {
+    /// Returns the field focus of [`Self::open_rename_dialog`].
+    pub(crate) fn open_project_rename_dialog(
+        &mut self,
+        tree_path: Vec<usize>,
+    ) -> iced::Task<Message> {
         let Some(&project_idx) = tree_path.first() else {
-            return;
+            return iced::Task::none();
         };
         let Some(project) = self.document_state.projects.get(project_idx) else {
-            return;
+            return iced::Task::none();
         };
         let target_path = project.path.clone();
         let stem = target_path
@@ -176,6 +178,7 @@ impl Signex {
             placing_symbols: Vec::new(),
             name_clash: None,
         }));
+        rename_field_focus()
     }
 
     pub(crate) fn handle_rename_submit(&mut self) -> iced::Task<Message> {
@@ -283,6 +286,14 @@ impl Signex {
         // together once the file rename lands (#739).
         if self.project_library_kind(&state).is_some() {
             return self.begin_library_rename(&state, new_path);
+        }
+        // The move also rewrites the saved `.snxprj`: a read-only project
+        // refuses it before the file moves (#2904).
+        if let Some(refusal) =
+            self.read_only_project_rename_refusal(state.tree_path.first().copied())
+        {
+            self.set_rename_error(&refusal);
+            return iced::Task::none();
         }
 
         // Find every parent sheet that references this file BEFORE it
@@ -515,6 +526,17 @@ impl Signex {
         self.set_rename_error(REASON);
         crate::diagnostics::log_warning(format!("[rename] refused: {REASON}"));
     }
+}
+
+/// Focus the Rename name field and select its text. The field holds only
+/// the stem (the extension is a fixed suffix), so the stem is selected.
+pub(super) fn rename_field_focus() -> iced::Task<Message> {
+    use iced::widget::operation;
+    let id: &iced::widget::Id = &crate::app::contracts::RENAME_INPUT_ID;
+    iced::Task::batch([
+        operation::focus(id.clone()),
+        operation::text_input::select_all(id.clone()),
+    ])
 }
 
 #[cfg(test)]

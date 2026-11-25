@@ -108,3 +108,31 @@ fn a_value_typed_on_the_drawing_writes_the_pinned_cell_as_one_undo_step() {
     );
     let _ = app.view_rules_tab(id);
 }
+
+/// Mockup row 90: the hovered cell's drawing names its two tracks over its
+/// classes (column class first), reads its gap as "≥ 0.2 mm" and sets a
+/// scale bar beside it.
+#[test]
+fn a_hovered_cell_is_drawn_with_its_title_gap_and_scale() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id) = app_with_board(&dir);
+    show_matrix(&mut app, id);
+    send(
+        &mut app,
+        RulesTabMsg::MatrixHovered {
+            project_id: id,
+            key: Some(CellKey::new("LV", "HV")),
+        },
+    );
+    let drawn = target(&app, id).expect("the hovered cell is drawn");
+    let texts = super::drawing::drawn_texts(&drawn, signex_i18n::I18n::en_us_ref());
+    for want in [
+        "Track ↔ Track",
+        "HV ↔ LV · different nets",
+        "≥ 0.2 mm",
+        "0.5 mm",
+    ] {
+        assert!(texts.iter().any(|t| t == want), "{want}: {texts:?}");
+    }
+    let _ = app.view_rules_tab(id);
+}

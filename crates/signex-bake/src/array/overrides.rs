@@ -78,9 +78,7 @@ pub(crate) fn bake_instances(
         .find(|e| e.id == source)
         .and_then(|e| e.pad.as_ref())
     else {
-        warnings.push(format!(
-            "pattern source {source}: no PadAttr on source entity — pattern skipped"
-        ));
+        warnings.push(super::not_a_pad("pattern", sketch, solve, source));
         return Ok(());
     };
     let Some(at) = point_xy(source, &solve.result.state, &solve.result.index, sketch) else {

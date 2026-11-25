@@ -69,6 +69,8 @@ mod held_rotate_window_tests;
 mod pcb_align;
 mod pcb_board_options;
 mod pcb_board_panel;
+#[cfg(test)]
+mod pcb_board_store_tests;
 mod pcb_clipboard;
 #[cfg(test)]
 mod pcb_clipboard_tests;
@@ -126,6 +128,7 @@ pub mod pcb_view_rotation;
 pub mod placed_part;
 pub(crate) mod placement_extras;
 pub mod placement_session;
+mod polygon_manager;
 pub mod preferences;
 pub mod project_case;
 mod project_fs;

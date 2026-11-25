@@ -38,7 +38,7 @@ pub(super) fn view<M: Clone + 'static>(editor: &RuleEditor<'_, M>) -> Element<'s
     let i18n = editor.i18n;
     let ink3 = resolve(tokens).ink3;
     column![
-        section_heading(i18n, ids::DIALOG_RULES_MATRIX_HEADING, tokens),
+        heading(i18n, tokens, editor.editable),
         matrix(editor),
         legend(i18n, tokens),
         text(t!(i18n, ids::DIALOG_RULES_MATRIX_CAPTION))
@@ -53,6 +53,27 @@ pub(super) fn view<M: Clone + 'static>(editor: &RuleEditor<'_, M>) -> Element<'s
         left: SP.l,
     })
     .width(Length::Fill)
+    .boxed()
+}
+
+/// The section heading, with the click hint on its right while the cells
+/// take edits (mockup row 84).
+fn heading<M: 'static>(i18n: &I18n, tokens: &ThemeTokens, editable: bool) -> Element<'static, M> {
+    let title = section_heading(i18n, ids::DIALOG_RULES_MATRIX_HEADING, tokens);
+    if !editable {
+        return title;
+    }
+    let faint = resolve(tokens).ink4;
+    row![
+        title,
+        Space::new().width(Length::Fill).height(Length::Shrink),
+        text(t!(i18n, ids::DIALOG_RULES_MATRIX_CYCLE_HINT))
+            .size(TS.caption)
+            .color(faint)
+            .wrapping(iced::widget::text::Wrapping::None),
+    ]
+    .spacing(SP.m)
+    .align_y(Alignment::Center)
     .boxed()
 }
 
@@ -305,5 +326,32 @@ mod tests {
             grid + 2.0 * SP.l <= super::super::MATRIX_PANE_W + 1e-3,
             "{grid}"
         );
+    }
+
+    /// Mockup row 84: an editable matrix says on the heading's right that a
+    /// click cycles a cell, inside the pane; the inert shipped grid does not.
+    #[test]
+    fn the_heading_carries_the_cycle_hint_only_while_editable() {
+        let (app, _boot) = crate::app::Signex::new();
+        let tokens = app.document_state.panel_ctx.tokens;
+        let i18n = I18n::en_us();
+        let inner = super::super::MATRIX_PANE_W - 2.0 * SP.l;
+        let window = iced::Size::new(inner, 200.0);
+        let laid_out = |editable| {
+            crate::layout_probe::lay_out_texts(heading::<()>(&i18n, &tokens, editable), window)
+        };
+        let shown = laid_out(true);
+        let texts: Vec<String> = shown
+            .iter()
+            .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect();
+        assert_eq!(
+            texts,
+            ["PIN CONNECTION MATRIX", "Click a cell to cycle severity."]
+        );
+        let (title, hint) = (&shown[0].bounds, &shown[1].bounds);
+        assert!(hint.x >= title.x + title.width, "{shown:#?}");
+        assert!(hint.x + hint.width <= inner + 0.5, "{shown:#?}");
+        assert_eq!(laid_out(false).len(), 1);
     }
 }

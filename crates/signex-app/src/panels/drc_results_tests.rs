@@ -352,3 +352,77 @@ fn waive_opens_the_reason_form_under_the_row() {
         "{shown:?}"
     );
 }
+
+/// Mockup row 88: a written rule's group has the Rule link; Short,
+/// Unconnected and Keepout are set by no written rule, so theirs has none.
+/// A part outside its room keeps its link to Placement.
+#[test]
+fn short_and_unconnected_groups_have_no_rule_link() {
+    let mut unconnected = row(2, ViolationKind::Unconnected, "builtin::unconnected", None);
+    unconnected.severity = Some(Severity::Warning);
+    let ctx = context(
+        vec![
+            row(0, ViolationKind::Clearance, "user::HV_08", None),
+            row(1, ViolationKind::Short, "builtin::short", None),
+            unconnected,
+        ],
+        DrcFilter::default(),
+    );
+    let shown = texts(&ctx);
+    assert!(shown.iter().any(|t| t == "Short (1)"), "{shown:?}");
+    assert!(shown.iter().any(|t| t == "Unconnected (1)"), "{shown:?}");
+    assert_eq!(
+        shown.iter().filter(|t| *t == "Rule").count(),
+        1,
+        "HV_08 only: {shown:?}"
+    );
+    use super::super::drc_rows::has_rule_link;
+    assert!(has_rule_link(ViolationKind::Clearance));
+    assert!(!has_rule_link(ViolationKind::Short));
+    assert!(!has_rule_link(ViolationKind::Unconnected));
+    assert!(!has_rule_link(ViolationKind::Keepout));
+    assert!(has_rule_link(ViolationKind::PartOutsideRoom));
+    assert!(has_rule_link(ViolationKind::TrackWidth));
+}
+
+/// Mockup row 88: in a 300 px dock the three filter dropdowns share one
+/// row, and each label ("All severities" the longest) is clipped before
+/// the arrow, not drawn under it: the label's room ends where the arrow
+/// begins.
+#[test]
+fn a_filter_label_ends_before_its_arrow() {
+    use iced::advanced::text::Renderer as _;
+    let ctx = context(
+        vec![row(0, ViolationKind::Short, "builtin::short", None)],
+        DrcFilter::default(),
+    );
+    let laid: Vec<crate::layout_probe::LaidOutText> =
+        lay_out_texts(view(&ctx), iced::Size::new(300.0, 1200.0))
+            .into_iter()
+            .map(|mut t| {
+                t.text = t.text.replace(['\u{2068}', '\u{2069}'], "");
+                t
+            })
+            .collect();
+    let arrow = <iced::Renderer>::ARROW_DOWN_ICON.to_string();
+    let arrows: Vec<iced::Rectangle> = laid
+        .iter()
+        .filter(|t| t.text == arrow)
+        .map(|t| t.bounds)
+        .collect();
+    assert_eq!(arrows.len(), 3, "{laid:#?}");
+    let pad = filter_field_padding();
+    for label in ["All rules", "All layers", "All severities"] {
+        let field = crate::layout_probe::find(&laid, label).bounds;
+        let own = arrows
+            .iter()
+            .find(|a| a.x >= field.x && a.x + a.width <= field.x + field.width + 0.5)
+            .unwrap_or_else(|| panic!("no arrow inside {label:?} at {field:?}: {arrows:?}"));
+        let label_end = field.x + field.width - pad.right;
+        assert!(
+            label_end <= own.x + 0.5,
+            "{label:?} runs to {label_end}, its arrow starts at {}",
+            own.x
+        );
+    }
+}

@@ -14,6 +14,7 @@ fn blank_project() -> ProjectData {
         sheets: Vec::new(),
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         net_classes: Vec::new(),
@@ -449,4 +450,28 @@ fn a_fab_override_picks_the_tier() {
     for tier in FabTemplate::ALL {
         assert_eq!(FabTemplate::from_token(tier.token()), Some(tier));
     }
+}
+
+/// #2868: a project stores its own dimension defaults and reads them back;
+/// out-of-range ones are kept verbatim and not applied.
+#[test]
+fn a_project_stores_its_dimension_defaults() {
+    use crate::pcb_dimension_style::{ArrowStyle, DimensionDefaults};
+    let mut data = blank_project();
+    let mut dimension = DimensionDefaults::default();
+    dimension.style.arrow_style = ArrowStyle::Filled;
+    dimension.style.suffix = " ref".into();
+    data.project_defaults.dimension = Some(dimension.clone());
+    let bytes = encode_project(&data).unwrap();
+    let back = parse_project_bytes(std::path::Path::new("P.snxprj"), &bytes).unwrap();
+    assert_eq!(back.project_defaults.dimension, Some(dimension));
+
+    let mut wild = data.clone();
+    if let Some(d) = wild.project_defaults.dimension.as_mut() {
+        d.line_width = -1.0;
+    }
+    let bytes = encode_project(&wild).unwrap();
+    let back = parse_project_bytes(std::path::Path::new("P.snxprj"), &bytes).unwrap();
+    assert!(back.project_defaults.dimension.is_none());
+    assert!(back.has_unreadable_project_defaults());
 }

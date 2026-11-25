@@ -5,9 +5,10 @@
 //! (`active_bar::presets::PresetKind`).
 
 use iced::widget::{Column, Row, Space, container};
-use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
+use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
 use pcb_geom::PickKind;
 use signex_i18n::{MessageId, UserText, ids, t};
+use signex_types::theme::ThemeTokens;
 use signex_widgets::chips::count_text;
 use signex_widgets::{Label, button, checkbox, segmented, text};
 
@@ -18,7 +19,9 @@ use crate::panels::graphite::hint_tooltip;
 use crate::panels::pcb_board_properties::pick_kind_label;
 use crate::panels::{PanelContext, PanelMsg};
 use crate::styles::tokens::resolve;
-use crate::styles::{Radii, Spacing, TypeScale, dimmed, dimmed_button, ti};
+use crate::styles::{
+    DashedOutline, HAIRLINE, Radii, Spacing, TypeScale, dashed_frame, dimmed, dimmed_button, ti,
+};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -123,9 +126,29 @@ pub(super) fn toggle_column<'a, K: FilterKind>(
         .boxed()
 }
 
+/// Dash and gap of an off toggle's outline, in em of the body text.
+const OFF_DASH_EM: f32 = 4.0 / 12.0;
+const OFF_GAP_EM: f32 = 3.0 / 12.0;
+
+/// A toggle's edge (mockup row 55): an on kind has the solid hairline; an
+/// off kind drops it for a dashed outline in the faded hairline colour.
+pub(super) fn toggle_edge(tokens: &ThemeTokens, on: bool) -> (Color, Option<DashedOutline>) {
+    let line = ti(tokens.border);
+    if on {
+        return (line, None);
+    }
+    let dashed = DashedOutline {
+        color: dimmed(line),
+        width: HAIRLINE,
+        radius: Radii::GRAPHITE.control,
+        dash: [TS.body * OFF_DASH_EM, TS.body * OFF_GAP_EM],
+    };
+    (Color::TRANSPARENT, Some(dashed))
+}
+
 /// A kind's toggle: checkbox, name and count. An off kind takes the
-/// Graphite disabled look (faded fill, border and ink).
-fn toggle_row<'a, K: FilterKind>(
+/// Graphite disabled look (faded fill and ink) with a dashed edge.
+pub(super) fn toggle_row<'a, K: FilterKind>(
     ctx: &'a PanelContext,
     kind: K,
     on: bool,
@@ -157,31 +180,48 @@ fn toggle_row<'a, K: FilterKind>(
                 .boxed(),
         );
     }
-    let (fill, hover, ink, line) = (r.field, r.sunken, ti(tokens.text), ti(tokens.border));
-    let row = button(cells)
+    let (line, dashed) = toggle_edge(tokens, on);
+    let face = button(cells)
         .width(Length::Fill)
         .padding([SP.xs, SP.s])
         .on_press_maybe(live.then_some(msg))
-        .style(move |_: &Theme, status: button::Status| {
-            let hovered = live && matches!(status, button::Status::Hovered);
-            let style = button::Style {
-                background: Some(Background::Color(if hovered { hover } else { fill })),
-                text_color: ink,
-                border: Border {
-                    width: 1.0,
-                    radius: Radii::GRAPHITE.control.into(),
-                    color: line,
-                    ..Border::default()
-                },
-                ..button::Style::default()
-            };
-            if on { style } else { dimmed_button(style) }
-        })
+        .style(face_style(tokens, on, live, line))
         .boxed();
+    let row = match dashed {
+        Some(outline) => dashed_frame(face, outline),
+        None => face,
+    };
     if live {
         row
     } else {
         let why = t!(i18n, ids::PCB_BOARD_FILTER_UNAVAILABLE);
         hint_tooltip(row, why, tokens, iced::widget::tooltip::Position::Bottom)
+    }
+}
+
+/// A toggle's face: the field fill (sunken on hover while live), its
+/// `line` hairline, faded as a whole while the kind is off.
+fn face_style(
+    tokens: &ThemeTokens,
+    on: bool,
+    live: bool,
+    line: Color,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+    let r = resolve(tokens);
+    let (fill, hover, ink) = (r.field, r.sunken, ti(tokens.text));
+    move |_: &Theme, status: button::Status| {
+        let hovered = live && matches!(status, button::Status::Hovered);
+        let style = button::Style {
+            background: Some(Background::Color(if hovered { hover } else { fill })),
+            text_color: ink,
+            border: Border {
+                width: HAIRLINE,
+                radius: Radii::GRAPHITE.control.into(),
+                color: line,
+                ..Border::default()
+            },
+            ..button::Style::default()
+        };
+        if on { style } else { dimmed_button(style) }
     }
 }

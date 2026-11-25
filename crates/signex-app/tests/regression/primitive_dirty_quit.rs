@@ -130,6 +130,7 @@ pub(crate) fn push_project(app: &mut Signex, dir: &Path, name: &str) {
             sheets: Vec::new(),
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: vec![LibraryEntry {
                 path: PathBuf::from("lib.snxlib"),
                 kind: LibraryEntryKind::ProjectLocal,

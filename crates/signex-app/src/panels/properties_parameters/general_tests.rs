@@ -38,6 +38,47 @@ fn each_origin_keeps_its_english_name() {
     }
 }
 
+/// Mockup row 40: the Canvas Font field reads the font and its size in
+/// points ("Iosevka · 10 pt", not "Iosevka, 10px").
+#[test]
+fn the_canvas_font_field_reads_the_family_and_its_points() {
+    let summary = canvas_font_summary(&en(), "Iosevka", 10.0).into_string();
+    assert_eq!(
+        summary.replace(['\u{2068}', '\u{2069}'], ""),
+        "Iosevka · 10 pt"
+    );
+    let rounded = canvas_font_summary(&en(), "Iosevka", 10.6).into_string();
+    assert!(rounded.contains("11"), "{rounded:?}");
+}
+
+/// Mockup row 40, as laid out: the field shows the summary, no px size,
+/// and a press on it opens the font settings.
+#[test]
+fn the_canvas_font_field_draws_its_summary_and_opens_the_settings() {
+    use crate::layout_probe::{lay_out_texts, messages_on_click};
+    let window = iced::Size::new(320.0, 200.0);
+    let row = || {
+        form_font_link_row(
+            t!(en(), ids::PROPERTIES_CANVAS_FONT),
+            canvas_font_summary(&en(), "Iosevka", 11.0),
+            signex_types::theme::ThemeId::GraphiteLight,
+            iced::Color::BLACK,
+        )
+    };
+    let summary = canvas_font_summary(&en(), "Iosevka", 11.0).into_string();
+    let texts: Vec<String> = lay_out_texts(row(), window)
+        .into_iter()
+        .map(|t| t.text)
+        .collect();
+    assert!(texts.contains(&summary), "{texts:?}");
+    assert!(!texts.iter().any(|t| t.ends_with("px")), "{texts:?}");
+    let pressed = messages_on_click(row(), window, &summary);
+    assert!(
+        matches!(pressed.as_slice(), [PanelMsg::OpenCanvasFontPopup]),
+        "{pressed:?}"
+    );
+}
+
 #[test]
 fn each_sheet_colour_keeps_its_english_name() {
     let custom =

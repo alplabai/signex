@@ -613,3 +613,51 @@ fn baking_a_patterned_sketch_twice_gives_the_same_board() {
     assert_eq!(first.1.zones.len(), 3);
     assert_eq!(first.1.graphics.len(), 3);
 }
+
+/// Mockup row 179e, #2894 / #2772: a 2 x 2 hole pattern spaced by the size
+/// parameters bakes into four holes, and they follow an edit of `board_w`.
+#[test]
+fn a_rectangular_hole_pattern_bound_to_parameters_bakes_one_hole_per_instance() {
+    let mut s = Sketch::new();
+    s.data.parameters.insert("board_w", "60mm");
+    s.data.parameters.insert("board_h", "40mm");
+    s.data.parameters.insert("hole_inset", "3.5mm");
+    let hole = s.circle(3.5, 3.5, 1.6);
+    s.get(hole).mounting_hole = Some(MountingHoleAttr::default());
+    s.pattern(ArrayKind::Grid {
+        source: hole,
+        nx_expr: "2".into(),
+        ny_expr: "2".into(),
+        dx_expr: "board_w - 2*hole_inset".into(),
+        dy_expr: "board_h - 2*hole_inset".into(),
+        depopulation: None,
+    });
+    let centres = |baked: &BakedBoard| {
+        let mut at: Vec<(i64, i64)> = baked
+            .holes
+            .iter()
+            .map(|h| (um(&[h.position.x])[0], um(&[h.position.y])[0]))
+            .collect();
+        at.sort_unstable();
+        at
+    };
+    let grid = |xs: [f64; 2], ys: [f64; 2]| {
+        let mut at: Vec<(i64, i64)> = xs
+            .iter()
+            .flat_map(|&x| ys.iter().map(move |&y| (um(&[x])[0], um(&[y])[0])))
+            .collect();
+        at.sort_unstable();
+        at
+    };
+
+    let baked = s.bake().unwrap();
+    assert_eq!(centres(&baked), grid([3.5, 56.5], [3.5, 36.5]));
+    let mut uuids: Vec<Uuid> = baked.holes.iter().map(|h| h.uuid).collect();
+    uuids.sort_unstable();
+    uuids.dedup();
+    assert_eq!(uuids.len(), 4, "each instance is its own hole");
+
+    s.data.parameters.insert("board_w", "70mm");
+    let wider = s.bake().unwrap();
+    assert_eq!(centres(&wider), grid([3.5, 66.5], [3.5, 36.5]));
+}

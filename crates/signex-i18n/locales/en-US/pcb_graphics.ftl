@@ -23,7 +23,7 @@ pcb-tool-hint-rectangle = Rectangle: on a non-copper layer, click two opposite c
 pcb-tool-hint-text-frame = Text Frame: on a non-copper layer, click two opposite corners of the box; Tab pauses to edit its text in Properties. Esc or a right-click drops it, then ends the tool
 
 ## Notes in the Messages panel. $tool is the tool's name.
-pcb-tool-needs-graphic-layer = { $tool }: make a non-copper layer other than a keep-out active to draw on it
+pcb-tool-needs-graphic-layer = { $tool }: make a layer other than a keep-out active to draw on it
 # The text a text frame reads until it is edited.
 pcb-tool-text-frame-text = Text
 

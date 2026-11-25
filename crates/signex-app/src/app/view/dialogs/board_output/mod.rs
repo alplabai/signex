@@ -42,7 +42,8 @@ impl Signex {
         let (header, body, footer) = match self.ui_state.board_output.dialog.as_deref() {
             Some(BoardOutputDialog::Reports(state)) => {
                 let unit = crate::panels::pcb_board_properties::shown_unit(self.ui_state.unit);
-                reports::parts(state, unit, i18n, tokens)
+                let theme = self.ui_state.effective_theme_id();
+                reports::parts(state, unit, theme, i18n, tokens)
             }
             Some(BoardOutputDialog::Print(state)) => {
                 let board = self.document_state.pcb_board(&state.board);

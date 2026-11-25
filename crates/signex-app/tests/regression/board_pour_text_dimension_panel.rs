@@ -417,3 +417,80 @@ fn a_precision_step_is_one_undo_step() {
     });
     assert_eq!(edited.free.dimensions[0].value_text(), "10.000mm");
 }
+
+/// Mockup row 101 (Caner, 2026-11-24): while the board shows mils, a length
+/// typed into a dimension field is read in mils and saved in mm, as one
+/// undo step; a number that names "mm" stays mm.
+#[test]
+fn a_dimension_length_typed_in_mils_is_saved_in_mm() {
+    let mut f = open_board();
+    f.app.ui_state.unit = signex_types::coord::Unit::Mil;
+    let target = picked_dimension(&mut f);
+    let typed = |f: &mut Fixture, field: PrimitiveField, text: &str| {
+        send(f, dimension_typed(&target, field, text));
+        send(f, dimension_submitted(&target, field));
+    };
+    let edited = assert_one_step(&mut f, |f| typed(f, PrimitiveField::LineWidth, "10"));
+    assert!((edited.free.dimensions[0].line_width - 0.254).abs() < 1e-9);
+    // `assert_one_step` ends undone; type it again for the save.
+    typed(&mut f, PrimitiveField::LineWidth, "10");
+    typed(&mut f, PrimitiveField::TextHeight, "2mm");
+    assert!((live(&f).free.dimensions[0].text_height - 2.0).abs() < 1e-9);
+
+    send(&mut f, Message::File(FileMsg::Save));
+    let saved = &on_disk(&f).free.dimensions[0];
+    assert!((saved.line_width - 0.254).abs() < 1e-9, "saved in mm");
+    assert!((saved.text_height - 2.0).abs() < 1e-9, "saved in mm");
+}
+
+/// Mockup row 101: a length typed while the board showed mils and not yet
+/// entered is dropped when the Units change, so Enter cannot read it in mm.
+#[test]
+fn a_units_switch_drops_a_dimension_length_typed_in_the_old_units() {
+    let mut f = open_board();
+    f.app.ui_state.unit = signex_types::coord::Unit::Mil;
+    let target = picked_dimension(&mut f);
+    let before = live(&f).free.dimensions[0].line_width;
+    send(
+        &mut f,
+        dimension_typed(&target, PrimitiveField::LineWidth, "10"),
+    );
+    let to_mm = PanelMsg::SetUnit(signex_types::coord::Unit::Mm);
+    send(&mut f, Message::Dock(DockMessage::Panel(to_mm)));
+    send(
+        &mut f,
+        dimension_submitted(&target, PrimitiveField::LineWidth),
+    );
+    assert_eq!(
+        live(&f).free.dimensions[0].line_width,
+        before,
+        "the draft is gone"
+    );
+}
+
+/// Selects the board's dimension with a click on its line; the panel's
+/// target.
+fn picked_dimension(f: &mut Fixture) -> PrimitiveTarget {
+    let drawing = board().free.dimensions[0].drawing().expect("a drawing");
+    let (a, b) = drawing.strokes[0];
+    click(f, Point::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0));
+    let PcbPrimitiveFacts::Dimension(dimension) = facts(f) else {
+        panic!("the dimension panel shows");
+    };
+    dimension.common.target.clone()
+}
+
+fn dimension_typed(target: &PrimitiveTarget, field: PrimitiveField, text: &str) -> Message {
+    panel(PcbPrimitiveMsg::FieldTyped {
+        target: target.clone(),
+        field,
+        text: text.into(),
+    })
+}
+
+fn dimension_submitted(target: &PrimitiveTarget, field: PrimitiveField) -> Message {
+    panel(PcbPrimitiveMsg::FieldSubmitted {
+        target: target.clone(),
+        field,
+    })
+}

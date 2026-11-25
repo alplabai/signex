@@ -1,13 +1,14 @@
 //! Properties panel views — the General tab of Document Options
-//! (`view_properties_general`: General, Page Options, Net Classes and the
-//! Custom Selection Filters section) — plus the filter-tab / preset-chip /
-//! segmented-button chrome the Properties views use. The sheet's parameters
+//! (`view_properties_general`: General, Page Options and Net Classes; the
+//! selection filter presets live in the Filter panel, mockup row 40) — plus
+//! the filter-chip / segmented-button chrome the Properties views use. The sheet's parameters
 //! live in the Parameters tab (`parameters_tab`), Page Options in
 //! `page_options`.
 
 use super::super::*;
 use super::doc_rows::{enable_box, label_row, segmented_row, unless_off};
 use super::document_options::{hover_row, illustration_view};
+use super::form_rows::canvas_font_summary;
 use super::grid_illustration::{GridFacts, HOTSPOTS, SNAP_GRID, VISIBLE_GRID, grid_illustration};
 use crate::choice::Choice;
 use crate::panels::doc_grid::{DocGridField, DocGridMsg, pitch_text, pitch_unit, typed_pitch_mm};
@@ -16,7 +17,6 @@ use crate::panels::form_look;
 use crate::panels::typed_pick::TypedPick;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
-use iced::widget::column;
 use signex_i18n::{I18n, UserText, ids, t};
 use signex_types::schematic::SheetOrientation;
 use signex_widgets::Label;
@@ -70,132 +70,6 @@ fn sheet_color_choice(
         value: color,
         label: i18n.message_plain(id, &[]),
     }
-}
-
-/// The section on the Graphite section chrome.
-fn selection_filters_section_for<'a>(
-    ctx: &'a PanelContext,
-    palette: PanelPalette,
-) -> Column<Element<'a, PanelMsg>> {
-    let presets = ctx.custom_filter_presets.clone();
-    let tab = ctx.active_custom_filter_tab;
-    let i18n = std::sync::Arc::clone(&ctx.i18n);
-    Column::new().spacing(0).width(Length::Fill).push(
-        ctx.collapsible(
-            "prop_sel_filter",
-            ids::PROPERTIES_SECTION_SELECTION_FILTERS,
-            &ctx.collapsed_sections,
-            move || selection_filters_body(presets, tab, palette, &i18n),
-        )
-        .boxed(),
-    )
-}
-
-/// Body of the Custom Selection Filters section.
-fn selection_filters_body<'a>(
-    presets: Vec<crate::active_bar::CustomFilterPreset>,
-    active_custom_filter_tab: usize,
-    palette: PanelPalette,
-    i18n: &I18n,
-) -> Column<Element<'a, PanelMsg>> {
-    let PanelPalette { muted, primary, .. } = palette;
-    use crate::active_bar::{CUSTOM_FILTER_PRESET_LIMIT, SelectionFilter};
-    let active_tab = active_custom_filter_tab.min(presets.len().saturating_sub(1));
-    let muted_c = muted;
-    let primary_c = primary;
-    let mut c: Column<Element<'a, PanelMsg>> = Column::new().spacing(6).width(Length::Fill);
-    if presets.is_empty() {
-        c = c.push(
-            container(
-                text(t!(i18n, ids::PANELS_FILTERS_NO_PRESETS))
-                    .size(TS.body)
-                    .color(muted_c),
-            )
-            .padding([SP.s, SP.m])
-            .boxed(),
-        );
-        c = c.push(
-            container(
-                signex_widgets::button(
-                    text(t!(i18n, ids::PANELS_FILTERS_ADD_FILTER)).size(TS.body),
-                )
-                .padding([SP.s, 10.0])
-                .on_press(PanelMsg::AddCustomFilterPreset)
-                .style(form_look::ghost_button),
-            )
-            .padding([SP.s, SP.m])
-            .boxed(),
-        );
-        return c;
-    }
-    let mut tabs: iced::widget::Row<Element<'a, PanelMsg>> = iced::widget::Row::new()
-        .spacing(SP.xs)
-        .align_y(iced::Alignment::Center);
-    for (idx, preset) in presets.iter().enumerate() {
-        let label: Label<'static> = if preset.name.trim().is_empty() {
-            t!(i18n, ids::PANELS_FILTERS_UNNAMED, "number" => idx + 1).into()
-        } else {
-            UserText::new(preset.name.clone()).into()
-        };
-        tabs = tabs.push(custom_filter_tab(label, idx == active_tab, idx));
-    }
-    if presets.len() < CUSTOM_FILTER_PRESET_LIMIT {
-        tabs = tabs.push(
-            signex_widgets::button(
-                text(t!(i18n, ids::PANELS_FILTERS_ADD_PRESET))
-                    .size(TS.label)
-                    .color(primary_c),
-            )
-            .padding([3, 10])
-            .on_press(PanelMsg::AddCustomFilterPreset)
-            .style(form_look::ghost_button)
-            .boxed(),
-        );
-    }
-    c = c.push(container(tabs).padding([SP.s, SP.m]).boxed());
-    let preset = &presets[active_tab];
-    let included: std::collections::HashSet<SelectionFilter> =
-        preset.filters.iter().copied().collect();
-    let header = row![
-        signex_widgets::text_input(
-            t!(i18n, ids::PANELS_FILTERS_PRESET_NAME),
-            preset.name.clone()
-        )
-        .size(TS.body)
-        .padding([3, 6])
-        .on_input(move |s| PanelMsg::RenameCustomFilterPreset(active_tab, s))
-        .style(form_look::text_input_style)
-        .width(Length::Fill)
-        .boxed(),
-        signex_widgets::button(
-            text(t!(i18n, ids::PANELS_FILTERS_DELETE))
-                .size(TS.body)
-                .color(primary_c),
-        )
-        .padding([3.0, SP.m])
-        .on_press(PanelMsg::RemoveCustomFilterPreset(active_tab))
-        .style(form_look::ghost_button)
-        .boxed(),
-    ]
-    .spacing(SP.s)
-    .align_y(iced::Alignment::Center);
-    let mut wrap = Wrap::new().spacing(SP.s).line_spacing(4.0);
-    for &f in SelectionFilter::ALL {
-        wrap = wrap.push(preset_chip(
-            t!(i18n, f.message()).into(),
-            active_tab,
-            f,
-            included.contains(&f),
-        ));
-    }
-    c = c.push(
-        container(
-            column![header.boxed(), container(wrap).padding([SP.s, 0.0]).boxed()].spacing(SP.s),
-        )
-        .padding([6.0, SP.m])
-        .boxed(),
-    );
-    c
 }
 
 /// The grid pitch dropdown in the panel's unit (mockup row 40): a row of the
@@ -322,10 +196,8 @@ fn general_section<'a>(
     c = c.push(hover_row(HOTSPOTS, hover, &ctx.tokens, hotspots));
     c = c.push(form_font_link_row(
         t!(i18n, ids::PROPERTIES_CANVAS_FONT),
-        &ctx.canvas_font_name,
-        ctx.canvas_font_size,
-        ctx.canvas_font_bold,
-        ctx.canvas_font_italic,
+        canvas_font_summary(i18n, &ctx.canvas_font_name, ctx.canvas_font_size),
+        ctx.theme_id,
         muted,
     ));
     if ctx.canvas_font_popup_open {
@@ -393,11 +265,6 @@ pub fn view_properties_general<'a>(
     col = col.push(thin_sep(hairline));
     col = col.push(view_net_classes_section(ctx).boxed());
 
-    // Custom Selection Filters sit last: Document Options opens on General
-    // (#2262); the presets stay here and in the active bar's Filter menu.
-    col = col.push(thin_sep(hairline));
-    col = col.push(selection_filters_section_for(ctx, palette).boxed());
-
     col
 }
 
@@ -440,50 +307,6 @@ pub(crate) fn chip_label<'a>(label: Label<'a>, on: bool) -> iced::widget::Text<'
             },
             ..Default::default()
         })
-}
-
-/// Tab button in the Custom Selection Filters tab strip. Active tab
-/// gets a filled background; both states use the theme accent for the
-/// border so the section reads as one piece with the chips and the
-/// Active Bar dropdown.
-pub fn custom_filter_tab(
-    label: Label<'static>,
-    active: bool,
-    idx: usize,
-) -> Element<'static, PanelMsg> {
-    signex_widgets::button(chip_label(label, active))
-        .padding([3, 10])
-        .on_press(PanelMsg::SelectCustomFilterTab(idx))
-        .style(move |theme: &Theme, status: iced::widget::button::Status| {
-            form_look::tab_chip(
-                theme,
-                active,
-                matches!(status, iced::widget::button::Status::Hovered),
-            )
-        })
-        .boxed()
-}
-
-/// Member chip for a custom-filter preset card (Properties panel).
-/// Border colour matches the Active Bar Filter dropdown chips (theme
-/// accent), so chip styling stays consistent across both surfaces.
-pub fn preset_chip(
-    label: Label<'static>,
-    preset_idx: usize,
-    filter: crate::active_bar::SelectionFilter,
-    enabled: bool,
-) -> Element<'static, PanelMsg> {
-    signex_widgets::button(chip_label(label, enabled).align_x(iced::alignment::Horizontal::Center))
-        .padding([3.0, SP.m])
-        .on_press(PanelMsg::ToggleCustomFilterPresetMember(preset_idx, filter))
-        .style(move |theme: &Theme, status: iced::widget::button::Status| {
-            graphite_filter_chip(
-                theme,
-                enabled,
-                matches!(status, iced::widget::button::Status::Hovered),
-            )
-        })
-        .boxed()
 }
 
 /// Label colour of a segmented-button cell: the active cell sits on

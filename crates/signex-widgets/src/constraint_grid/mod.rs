@@ -25,7 +25,7 @@ pub use matrix::{
     ClassMatrix, ClassPair, MatrixChange, MatrixClass, MatrixEdit, MatrixMessage, PairClearance,
     PairValues,
 };
-pub use matrix_view::{MATRIX_EDITOR_ID, MatrixText, matrix_view};
+pub use matrix_view::{MATRIX_EDITOR_ID, MatrixText, cell_text, matrix_view, mirror_swatch};
 pub use model::{
     CellEdit, CellRef, CellValue, CellValues, ColumnGroup, ColumnId, ColumnKind, ConstraintGrid,
     GridColumn, GridError, GridRow, GroupId, Resolved, RowId, RowKind, ValueSource, VisibleRow,

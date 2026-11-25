@@ -164,6 +164,15 @@ a pad's flash on a mask or paste image is `Other,PadOpening`.
   footprint's text drawings, board strings and text frame lines. A dot is a
   stroke of no length. A text the geometry cannot hold is counted with the
   skipped items.
+- A board drawing or string on a copper layer is conductor of no net
+  (#2883). The copper images write exactly the items the design rule check
+  reads as copper: `pcb_geom::board_graphic_copper` and `board_text_copper`
+  decide, all or nothing per item. A `poly` or `polygon` drawing is its
+  closed outline at its width, as the Gerber always drew it. An item they
+  refuse (an unknown kind, missing points such as a polygon of fewer than
+  two, or a value the geometry cannot hold) is left out whole and gets its
+  own note naming its kind, id, layer and why, in the dialog and in
+  Messages.
 
 ## V-score lines and panels (#2410)
 

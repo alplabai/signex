@@ -222,16 +222,17 @@ impl Signex {
     }
 }
 
-/// The catalog name of a page-size picker entry.
+/// The catalog name of a page-size picker entry. The ISO sizes go by their
+/// bare names ("A4"), as mockup row 111 shows them.
 pub(super) fn page_size_label(kind: PageSizeKind) -> signex_i18n::MessageId {
     match kind {
-        PageSizeKind::IsoA0 => ids::PDF_PAGE_SIZE_ISO_A0,
-        PageSizeKind::IsoA1 => ids::PDF_PAGE_SIZE_ISO_A1,
-        PageSizeKind::IsoA2 => ids::PDF_PAGE_SIZE_ISO_A2,
-        PageSizeKind::IsoA3 => ids::PDF_PAGE_SIZE_ISO_A3,
-        PageSizeKind::IsoA4 => ids::PDF_PAGE_SIZE_ISO_A4,
-        PageSizeKind::IsoA5 => ids::PDF_PAGE_SIZE_ISO_A5,
-        PageSizeKind::IsoB5 => ids::PDF_PAGE_SIZE_ISO_B5,
+        PageSizeKind::IsoA0 => ids::PDF_PAPER_SIZE_A0,
+        PageSizeKind::IsoA1 => ids::PDF_PAPER_SIZE_A1,
+        PageSizeKind::IsoA2 => ids::PDF_PAPER_SIZE_A2,
+        PageSizeKind::IsoA3 => ids::PDF_PAPER_SIZE_A3,
+        PageSizeKind::IsoA4 => ids::PDF_PAPER_SIZE_A4,
+        PageSizeKind::IsoA5 => ids::PDF_PAPER_SIZE_A5,
+        PageSizeKind::IsoB5 => ids::PDF_PAPER_SIZE_B5,
         PageSizeKind::AnsiA => ids::PDF_PAGE_SIZE_ANSI_A,
         PageSizeKind::AnsiB => ids::PDF_PAGE_SIZE_ANSI_B,
         PageSizeKind::AnsiC => ids::PDF_PAGE_SIZE_ANSI_C,

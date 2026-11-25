@@ -99,7 +99,9 @@ fn board() -> PcbBoard {
             zone(0x60, "solid", &[(0.0, 40.0), (4.0, 40.0), (4.0, 44.0), (0.0, 44.0)]),
             zone(0x61, "solid", &[(10.0, 40.0), (14.0, 40.0), (12.0, 44.0)]),
             zone(0x62, "pour", &[(20.0, 40.0), (26.0, 40.0), (26.0, 46.0), (20.0, 46.0)]),
-            zone(0x63, "keepout", &[(30.0, 40.0), (34.0, 40.0), (34.0, 44.0), (30.0, 44.0)])
+            zone(0x63, "keepout", &[(30.0, 40.0), (34.0, 40.0), (34.0, 44.0), (30.0, 44.0)]),
+            // A pour cutout (#2871) inside the pour, clear of its presses.
+            zone(0x64, "pour_cutout", &[(24.0, 41.0), (25.5, 41.0), (25.5, 43.0), (24.0, 43.0)])
         ],
         // A part beside the pour, for a drag of a mixed selection.
         "footprints": [{
@@ -232,7 +234,7 @@ fn live(app: &Signex, path: &Path) -> String {
 #[test]
 fn every_board_object_kind_moves_by_dragging_it() {
     use BoardItemId as I;
-    let cases: [(&str, BoardItemId, Point); 13] = [
+    let cases: [(&str, BoardItemId, Point); 14] = [
         ("track", I::Segment(id(0x10)), Point::new(2.0, 0.0)),
         ("arc", I::Arc(id(0x20)), Point::new(12.0, -2.0)),
         ("dimension", I::Dimension(id(0x30)), Point::new(33.0, 0.0)),
@@ -246,6 +248,7 @@ fn every_board_object_kind_moves_by_dragging_it() {
         ("solid region", I::Zone(id(0x61)), Point::new(12.0, 40.0)),
         ("polygon pour", I::Zone(id(0x62)), Point::new(23.0, 40.0)),
         ("keepout", I::Zone(id(0x63)), Point::new(32.0, 40.0)),
+        ("pour cutout", I::Zone(id(0x64)), Point::new(25.0, 41.0)),
     ];
     let mut r = rig();
     let before = live(&r.app, &r.path);
@@ -323,6 +326,24 @@ fn a_press_inside_an_area_or_room_drags_it() {
         (43.0, 34.0),
         "the room dragged from inside"
     );
+}
+
+/// #2871: a press inside a pour cutout drags the cutout as one undo step,
+/// and the pour around it stays.
+#[test]
+fn a_press_inside_a_pour_cutout_drags_the_cutout_not_the_pour() {
+    let mut r = rig();
+    let before = live(&r.app, &r.path);
+    let pour = moved_item(r.board(), BoardItemId::Zone(id(0x62)), Point::new(0.0, 0.0));
+    let cutout = BoardItemId::Zone(id(0x64));
+    assert!(
+        moved_by_drag(&mut r, cutout, Point::new(24.5, 42.0)),
+        "the cutout moved"
+    );
+    let after = moved_item(r.board(), BoardItemId::Zone(id(0x62)), Point::new(0.0, 0.0));
+    assert_eq!(after, pour, "the pour around it stays");
+    let _ = r.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(live(&r.app, &r.path), before, "one undo step");
 }
 
 /// An object on top of an area wins the press: the track over the pour

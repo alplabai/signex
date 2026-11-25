@@ -25,8 +25,22 @@ impl Signex {
             ProjectTabMsg::ErcDialogRequested { project_id } => {
                 return self.open_erc_from_tab(project_id);
             }
+            ProjectTabMsg::RenameRequested { project_id } => {
+                return self.open_project_rename_from_tab(project_id);
+            }
+            ProjectTabMsg::EnableVersionControlRequested { project_id } => {
+                return self.open_version_control_from_tab(project_id);
+            }
             ProjectTabMsg::VariantPartsReadRequested { project_id } => {
                 return self.read_variant_parts(project_id, true);
+            }
+            // The Variants row opens the Variant Manager tab (mockup row 32).
+            ProjectTabMsg::SectionSelected {
+                project_id,
+                section: ProjectSection::Variants,
+            } => return self.open_variant_manager_tab(project_id),
+            ProjectTabMsg::VariantManager { project_id, msg } => {
+                return self.dispatch_variant_manager(project_id, msg);
             }
             ProjectTabMsg::PreviewActed { project_id, msg } => {
                 return self.act_on_project_preview(project_id, msg);
@@ -42,13 +56,9 @@ impl Signex {
             } => return self.finish_library_locate(project_id, &missing, picked),
             _ => {}
         }
-        // Showing the Variants section reads its parts; a variant edit that
-        // changed the columns reads them again (#1293).
+        // A variant edit that changed the columns reads the parts again
+        // (#1293).
         let parts_read = match &msg {
-            ProjectTabMsg::SectionSelected {
-                project_id,
-                section: ProjectSection::Variants,
-            } => Some((*project_id, true)),
             ProjectTabMsg::NewVariantRequested { project_id }
             | ProjectTabMsg::VariantRenameSubmitted { project_id }
             | ProjectTabMsg::VariantRemoved { project_id, .. } => Some((*project_id, false)),
@@ -223,9 +233,6 @@ impl Signex {
             ProjectTabMsg::AgentJournalLinesEdited { project_id, text } => {
                 self.edit_agent_journal_lines(project_id, text);
             }
-            ProjectTabMsg::RenameRequested { project_id } => {
-                self.open_project_rename_from_tab(project_id);
-            }
             ProjectTabMsg::ExploreRequested { project_id } => {
                 self.explore_project_folder(project_id);
             }
@@ -233,10 +240,13 @@ impl Signex {
             ProjectTabMsg::SetupEdited { .. }
             | ProjectTabMsg::Requirements { .. }
             | ProjectTabMsg::PreviewActed { .. }
-            | ProjectTabMsg::VariantPartsReadRequested { .. } => {}
+            | ProjectTabMsg::VariantPartsReadRequested { .. }
+            | ProjectTabMsg::VariantManager { .. } => {}
             // Routed by `dispatch_project_tab_message`: they open a dialog.
             ProjectTabMsg::AddSchematicRequested { .. }
+            | ProjectTabMsg::RenameRequested { .. }
             | ProjectTabMsg::ErcDialogRequested { .. }
+            | ProjectTabMsg::EnableVersionControlRequested { .. }
             | ProjectTabMsg::LibraryLocateRequested { .. }
             | ProjectTabMsg::LibraryLocatePicked { .. } => {}
             ProjectTabMsg::RowDragged { project_id, msg } => {
@@ -297,9 +307,6 @@ impl Signex {
             }
             ProjectTabMsg::VersionControlToggled { project_id, on } => {
                 self.toggle_project_version_control(project_id, on);
-            }
-            ProjectTabMsg::EnableVersionControlRequested { project_id } => {
-                self.open_version_control_from_tab(project_id);
             }
         }
     }
@@ -365,8 +372,12 @@ impl Signex {
     }
 
     /// Rename… in the General section: the same dialog and flow as the
-    /// project tree's Rename. Not a document edit, so nothing is dirtied.
-    fn open_project_rename_from_tab(&mut self, project_id: ProjectId) {
+    /// project tree's Rename, its name field focused. Not a document edit, so
+    /// nothing is dirtied.
+    fn open_project_rename_from_tab(
+        &mut self,
+        project_id: ProjectId,
+    ) -> iced::Task<crate::app::Message> {
         match self
             .document_state
             .projects
@@ -374,9 +385,12 @@ impl Signex {
             .position(|p| p.id == project_id)
         {
             Some(idx) => self.open_project_rename_dialog(vec![idx]),
-            None => crate::diagnostics::log_warning(
-                "Project tab: the project was closed; nothing to rename",
-            ),
+            None => {
+                crate::diagnostics::log_warning(
+                    "Project tab: the project was closed; nothing to rename",
+                );
+                iced::Task::none()
+            }
         }
     }
 

@@ -136,9 +136,13 @@ fn a_string_takes_its_text_height_and_text_layers_only() {
         (t.text.as_str(), t.font_size, t.rotation),
         ("U7", 2.5, 270.0)
     );
+    // Copper was refused here; a string goes on copper since Caner's
+    // 2026-11-24 decision (#2883). A solder mask still takes no text.
     let copper = TextEdit::Layer(PcbLayer::Copper(CopperLayer::Top));
+    assert!(matches!(text_edit_command(&b, &ids, &copper), Ok(Some(_))));
+    let mask = TextEdit::Layer(PcbLayer::Technical(TechnicalLayer::SolderMaskTop));
     assert_eq!(
-        text_edit_command(&b, &ids, &copper),
+        text_edit_command(&b, &ids, &mask),
         Err(PrimitiveEditRefusal::LayerNotAllowed)
     );
     let zero = text_edit_command(&b, &ids, &TextEdit::Height(0.0)).unwrap();

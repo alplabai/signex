@@ -119,7 +119,7 @@ const PLAIN: &[(MessageId, &str)] = &[
     (ids::PROPERTIES_WIRE_WIDTH_LARGE, "Large"),
     (ids::PROPERTIES_WIRE_COLOR, "Color"),
     (ids::PROPERTIES_COLOR_DEFAULT, "Default"),
-    (ids::PROPERTIES_COLOR_PRESETS, "Preset Colours"),
+    (ids::PROPERTIES_COLOR_PRESETS, "Preset Colors"),
     (ids::PROPERTIES_COLOR_CUSTOM, "Custom\u{2026}"),
     (ids::PROPERTIES_COLOR_RESET, "Reset to Default"),
     (ids::PROPERTIES_UNIT_MM, "mm"),
@@ -162,7 +162,7 @@ const PLAIN: &[(MessageId, &str)] = &[
     ),
     (ids::PANELS_NET_CLASSES_SECTION, "Net Classes"),
     (ids::PANELS_NET_CLASSES_NAME, "Name"),
-    (ids::PANELS_NET_CLASSES_COLOR, "Colour"),
+    (ids::PANELS_NET_CLASSES_COLOR, "Color"),
     (ids::PANELS_NET_CLASSES_WIDTH, "Width (mm)"),
     (ids::PANELS_NET_CLASSES_LINE, "Line"),
     (ids::PANELS_NET_CLASSES_LINE_DEFAULT, "Default"),
@@ -843,7 +843,7 @@ fn the_net_class_field_rows_keep_their_names_and_order() {
         ..Default::default()
     }];
     let shown = texts(&ctx);
-    let fields = ["Name", "Colour", "Width (mm)", "Line", "Nets", "Patterns"];
+    let fields = ["Name", "Color", "Width (mm)", "Line", "Nets", "Patterns"];
     let rows: Vec<&str> = plain(&shown)
         .into_iter()
         .filter(|t| fields.contains(t))
@@ -988,10 +988,10 @@ fn same_in_en_xa(mut ctx: PanelContext) -> Vec<String> {
 /// #2059: Document Options and a selected part with its footprint card
 /// draw no catalog text in English under en-XA; only the design's own
 /// words (the part's footprint name) stay. Unit symbols are not translated
-/// (DECISIONS 2026-11-22, Caner, "Unit symbols"), so Document Options pins
-/// its exact tags: in mm the Units segment, whose English text matches, and
-/// the Visible and Snap Grid tags; in mil the two grid tags. One more
-/// hard-coded unit on the panel changes these lists.
+/// (DECISIONS 2026-11-22, Caner, "Unit symbols"), but the pseudolocale
+/// brackets every catalog message (#2064, mockup row 144a), so the Units
+/// segment and the Visible and Snap Grid tags read "[mm]" / "[mil]" and no
+/// unit matches English. A hard-coded unit on the panel shows up here.
 #[test]
 fn the_properties_panel_draws_no_english_under_en_xa() {
     let in_unit = |unit| {
@@ -1001,8 +1001,11 @@ fn the_properties_panel_draws_no_english_under_en_xa() {
         ctx.snap_enabled = true;
         same_in_en_xa(ctx)
     };
-    assert_eq!(in_unit(signex_types::coord::Unit::Mm), ["mm", "mm", "mm"]);
-    assert_eq!(in_unit(signex_types::coord::Unit::Mil), ["mil", "mil"]);
+    assert_eq!(in_unit(signex_types::coord::Unit::Mm), Vec::<String>::new());
+    assert_eq!(
+        in_unit(signex_types::coord::Unit::Mil),
+        Vec::<String>::new()
+    );
     assert_eq!(same_in_en_xa(document_parameters()), Vec::<String>::new());
     let mut part = one_selected(
         SelectedKindForTest::Symbol,
@@ -1077,4 +1080,74 @@ fn a_page_tab_of_an_open_project_does_not_ask_to_open_a_project() {
 
 fn plain_texts(ctx: &PanelContext) -> Vec<String> {
     texts(ctx).into_iter().map(|t| t.text).collect()
+}
+
+/// Mockup rows 47 and 48: the drawing and text note callouts and the
+/// rectangle's caption read as the mockup words them.
+#[test]
+fn the_text_and_shape_drawing_messages_read_as_the_mockup() {
+    let en = I18n::en_us();
+    let with = |id: MessageId, args: &[(&str, Arg)]| {
+        en.message_plain(id, args)
+            .replace(['\u{2068}', '\u{2069}'], "")
+    };
+    assert_eq!(
+        with(ids::PROPERTIES_DRAWING_SAMPLE_WIRE, &[]),
+        "The sample wire shows Behind / Above"
+    );
+    assert_eq!(
+        with(
+            ids::PROPERTIES_DRAWING_ILLUSTRATION_BORDER,
+            &[("width", "0.254".into()), ("fill", "Solid".into())]
+        ),
+        "Border 0.254 mm \u{b7} Fill Solid"
+    );
+    assert_eq!(
+        with(
+            ids::PROPERTIES_TEXT_NOTE_ILLUSTRATION_SIZE,
+            &[("size", "1.270".into()), ("unit", "mm".into())]
+        ),
+        "1.270 mm"
+    );
+    assert_eq!(
+        with(
+            ids::PROPERTIES_TEXT_NOTE_ILLUSTRATION_JUSTIFY,
+            &[("h", "Left".into()), ("v", "Top".into())]
+        ),
+        "Justify Left / Top"
+    );
+}
+
+/// Mockup rows 47 and 48: State ▸ Locked draws its box before its label,
+/// so the label stands right of the other rows' labels.
+#[test]
+fn the_locked_box_comes_before_its_label() {
+    for (kind, info) in [
+        (
+            SelectedKindForTest::TextNote,
+            &[("Type", "Text"), ("Locked", "No")][..],
+        ),
+        (
+            SelectedKindForTest::Drawing,
+            &[
+                ("Type", "Rectangle"),
+                ("Position", "1, 2"),
+                ("Locked", "No"),
+            ][..],
+        ),
+    ] {
+        let shown = texts(&one_selected(kind, info));
+        let x_of = |label: &str| {
+            (shown.iter().find(|t| t.text == label))
+                .unwrap_or_else(|| panic!("{kind:?}: {label:?} missing from {shown:#?}"))
+                .bounds
+                .x
+        };
+        let row_label = if kind == SelectedKindForTest::TextNote {
+            "Justify H"
+        } else {
+            "Position"
+        };
+        assert!(x_of("Locked") > x_of(row_label), "{kind:?}: {shown:#?}");
+    }
 }

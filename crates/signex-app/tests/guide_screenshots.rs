@@ -33,7 +33,9 @@ use signex_app::app::{
     ErcMsg, FileMsg, LoadedProject, Message, PreferencesMsg, Signex, TabInfo, TabKind,
 };
 use signex_app::canvas::{BoxDirection, CanvasEvent};
+use signex_app::dock::DockMessage;
 use signex_app::library::LibraryMessage;
+use signex_app::panels::{ErcPanelMsg, PanelMsg};
 use signex_app::preferences::PrefMsg;
 use signex_types::project::{ProjectData, SheetEntry};
 use signex_types::schematic::{
@@ -452,6 +454,7 @@ fn open_readme_project(app: &mut Signex, dir: &std::path::Path) -> PathBuf {
             .collect(),
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         net_classes: Vec::new(),
@@ -556,5 +559,27 @@ fn render_guide_screenshots() {
     shoot(&mut renderer, &app, "guide-wired-symbol.png");
 
     settle_support::settle(&mut app, Message::Erc(ErcMsg::Run));
+    // As the guide's caption says: the "Unused pin" group in view with its
+    // row's Add No-Connect, and R1 readable. Fold the other warning group,
+    // point at the unused-pin row (its actions show on hover), and fit the
+    // canvas again after the run.
+    let unused = app
+        .document_state
+        .panel_ctx
+        .erc_diagnostics
+        .iter()
+        .find(|d| d.rule_kind == Some(signex_erc::RuleKind::UnusedPin))
+        .expect("ERC reports R1's unused pin")
+        .global_index;
+    let erc_view = |msg: ErcPanelMsg| Message::Dock(DockMessage::Panel(PanelMsg::ErcView(msg)));
+    let _ = app.update(erc_view(ErcPanelMsg::GroupToggled(
+        signex_erc::RuleKind::SinglePinNet.label().to_string(),
+    )));
+    let _ = app.update(erc_view(ErcPanelMsg::RowEntered(unused)));
+    // The row's actions sit on a third line under its message: give the
+    // bottom dock the room a user would drag it to.
+    app.ui_state.bottom_height = 300.0;
+    let _ = draw(&mut renderer, &app);
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::FitAll));
     shoot(&mut renderer, &app, "guide-erc.png");
 }

@@ -186,6 +186,7 @@ fn add_project(
             }],
             variant_definitions: Vec::new(),
             active_variant: None,
+            variant_settings: Default::default(),
             libraries: Vec::new(),
             enable_git: false,
             net_classes: Vec::new(),
@@ -259,7 +260,7 @@ fn fixture_preparing(
     if let Some((board, newer)) = board {
         let mut text = SnxPcb::new(board).write_string().unwrap();
         if newer {
-            text = text.replacen(signex_types::format::SNXPCB_FORMAT_V1, "snxpcb/1.10", 1);
+            text = text.replacen(signex_types::format::SNXPCB_FORMAT_V1, "snxpcb/1.12", 1);
         }
         std::fs::write(&board_path, text).unwrap();
     }
@@ -753,6 +754,7 @@ fn a_new_pcb_takes_the_project_defaults_and_is_not_written() {
         }),
         sheet: None,
         profile: None,
+        dimension: None,
     };
     let mut f = fixture_with(|_| Vec::new(), None, defaults);
     send(&mut f.app, menu_row("new_pcb_document"));

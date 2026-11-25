@@ -109,6 +109,7 @@ fn project_data(dir: &Path, board: Option<&str>, rules: &str) -> ProjectData {
         }],
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         net_classes: vec![NetClass {

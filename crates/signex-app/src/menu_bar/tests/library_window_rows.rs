@@ -449,3 +449,48 @@ fn only_the_layout_captions_are_headers() {
         ]
     );
 }
+
+/// Mockup row 166: Save Layout… draws the save glyph and Reset the undo glyph in
+/// the check column; every other row of the bar keeps that column for its
+/// check mark alone.
+#[test]
+fn save_layout_and_reset_are_the_rows_with_an_icon() {
+    use crate::menu_bar::model::MenuIcon;
+    use crate::workspace_layouts::{BuiltinLayout, LayoutId, ManageLayoutsMsg};
+    fn icons(menu: &Menu, parent: &str, out: &mut Vec<(String, MenuIcon)>) {
+        for entry in &menu.entries {
+            match entry {
+                MenuEntry::Item(item) => {
+                    if let Some(icon) = item.icon {
+                        out.push((format!("{parent}/{}", item.label), icon));
+                    }
+                }
+                MenuEntry::Submenu(sub) => icons(sub, &format!("{parent}/{}", sub.title), out),
+                MenuEntry::Separator => {}
+            }
+        }
+    }
+    let mut app = layouts_app();
+    let _ = click(&mut app, "View/Window/Layouts/Schematic");
+    let _ = app.update(ManageLayoutsMsg::Requested.into());
+    let _ = app
+        .update(ManageLayoutsMsg::RowSelected(LayoutId::Builtin(BuiltinLayout::Schematic)).into());
+    let _ = app.update(ManageLayoutsMsg::UpdateFromCurrentRequested.into());
+    let mut found = Vec::new();
+    for menu in &menu_bar_model(&menu_context(&app)).menus {
+        icons(menu, &menu.title, &mut found);
+    }
+    assert_eq!(
+        found,
+        [
+            (
+                "View/Window/Layouts/Save Layout…".to_owned(),
+                MenuIcon::Save
+            ),
+            (
+                "View/Window/Layouts/Reset \u{201c}Schematic\u{201d}".to_owned(),
+                MenuIcon::Reset
+            ),
+        ]
+    );
+}

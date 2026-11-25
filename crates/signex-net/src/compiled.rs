@@ -123,7 +123,8 @@ pub struct SheetTitle {
 }
 
 impl SheetTitle {
-    fn of(sheet: &SchematicSheet) -> Self {
+    /// The title block values of `sheet`.
+    pub fn of(sheet: &SchematicSheet) -> Self {
         let field = |key: &str| sheet.title_block.get(key).cloned().unwrap_or_default();
         Self {
             title: field("title"),

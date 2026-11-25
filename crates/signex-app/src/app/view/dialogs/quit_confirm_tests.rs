@@ -145,6 +145,7 @@ fn project(app: &mut Signex, dir: &str, name: &str, sheets: &[&str]) {
                     .collect(),
                 variant_definitions: Vec::new(),
                 active_variant: None,
+                variant_settings: Default::default(),
                 libraries: Vec::new(),
                 enable_git: false,
                 net_classes: Vec::new(),
@@ -332,9 +333,10 @@ fn the_list_changed_note_sits_above_the_list() {
     assert!(heading.y < row.y);
 }
 
-/// Cancel leads at the left; Discard All, then Save All, end the footer.
+/// Mockup row 136: Discard All stands alone at the left; Cancel, then Save
+/// All, end the footer.
 #[test]
-fn cancel_leads_the_footer() {
+fn discard_all_leads_the_footer() {
     let app = dirty_app(&["/x/loose.snxsch"], Vec::new());
     let texts = lay_out_texts(
         app.view_app_quit_confirm_body(),
@@ -343,9 +345,137 @@ fn cancel_leads_the_footer() {
     let cancel = find(&texts, "Cancel").bounds;
     let discard = find(&texts, "Discard All").bounds;
     let save = find(&texts, "Save All").bounds;
-    assert!(cancel.x < discard.x && discard.x < save.x);
+    assert!(discard.x < cancel.x && cancel.x < save.x);
     assert!(
-        discard.x - (cancel.x + cancel.width) > 100.0,
-        "Cancel stands apart"
+        cancel.x - (discard.x + discard.width) > 100.0,
+        "Discard All stands apart"
+    );
+}
+
+/// The question is the intro's title, above the fact line, and both sit
+/// above the grouped list (mockup row 136, warn intro).
+#[test]
+fn the_question_heads_the_intro_above_the_fact_line() {
+    let app = dirty_app(&["/x/loose.snxsch"], Vec::new());
+    let texts = lay_out_texts(
+        app.view_app_quit_confirm_body(),
+        iced::Size::new(500.0, 600.0),
+    );
+    let question = texts
+        .iter()
+        .find(|t| t.text.starts_with("Save changes before"))
+        .expect("the question")
+        .bounds;
+    let fact = texts
+        .iter()
+        .find(|t| t.text.contains("unsaved document"))
+        .expect("the fact line")
+        .bounds;
+    let heading = find(&texts, "OTHER FILES").bounds;
+    assert!(question.y < fact.y && fact.y < heading.y);
+}
+
+/// Each button still answers with its own choice.
+#[test]
+fn each_button_keeps_its_outcome() {
+    use crate::app::ProjectCloseChoice;
+    use crate::app::contracts::{Message, ProjectMsg};
+    let choice = |label: &str| {
+        let app = dirty_app(&["/x/loose.snxsch"], Vec::new());
+        let messages = crate::layout_probe::messages_on_click(
+            app.view_app_quit_confirm_body(),
+            iced::Size::new(500.0, 600.0),
+            label,
+        );
+        match messages.as_slice() {
+            [Message::Project(ProjectMsg::AppQuitConfirm(choice))] => *choice,
+            other => panic!("{label}: {other:?}"),
+        }
+    };
+    assert_eq!(choice("Discard All"), ProjectCloseChoice::DiscardAll);
+    assert_eq!(choice("Cancel"), ProjectCloseChoice::Cancel);
+    assert_eq!(choice("Save All"), ProjectCloseChoice::SaveAll);
+}
+
+/// An Exit prompt listing `paths` with the project `Newer` at `/x` read from
+/// a newer minor (#2904).
+fn read_only_quitting(paths: &[&str]) -> Signex {
+    let mut app = dirty_app(paths, Vec::new());
+    project(&mut app, "/x", "Newer", &[]);
+    app.document_state.projects[0]
+        .data
+        .unknown
+        .newer_minor_source = Some("snxprj/1.2".into());
+    app
+}
+
+/// The discard button of the read-only `Newer`, as drawn.
+fn discard_newer() -> String {
+    let projects = ["Newer".to_string()];
+    crate::app::read_only_project::discard_read_only_label(
+        signex_i18n::I18n::en_us_ref(),
+        &projects,
+    )
+    .into_string()
+}
+
+/// A read-only project's unsaved settings beside another unsaved file
+/// (#2904, Caner 2026-11-25): Save All stays for the file, the discard names
+/// the project alone, Discard All is gone, and a warn note under the list
+/// says what each does.
+#[test]
+fn a_read_only_project_keeps_save_all_for_the_rest_and_discards_only_its_settings() {
+    use crate::app::ProjectCloseChoice;
+    use crate::app::contracts::{Message, ProjectMsg};
+    let app = read_only_quitting(&["/x/p.snxprj", "/y/loose.snxsch"]);
+    let texts = lay_out_texts(
+        app.view_app_quit_confirm_body(),
+        iced::Size::new(500.0, 900.0),
+    );
+    find(&texts, "Save All");
+    find(&texts, "Cancel");
+    find(&texts, &discard_newer());
+    assert!(texts.iter().all(|t| t.text != "Discard All"), "{texts:#?}");
+    let note = texts
+        .iter()
+        .find(|t| t.text.contains("Save All saves every other file"))
+        .expect("the note");
+    assert!(!note.text.contains("Discard All"), "{note:?}");
+    let row = find(&texts, "loose.snxsch").bounds;
+    assert!(row.y < note.bounds.y, "the note sits under the list");
+    let messages = crate::layout_probe::messages_on_click(
+        app.view_app_quit_confirm_body(),
+        iced::Size::new(500.0, 900.0),
+        &discard_newer(),
+    );
+    assert!(
+        matches!(
+            messages.as_slice(),
+            [Message::Project(ProjectMsg::AppQuitConfirm(
+                ProjectCloseChoice::DiscardReadOnly
+            ))]
+        ),
+        "{messages:?}"
+    );
+}
+
+/// Only the read-only project's settings unsaved: nothing else saves, so
+/// Save All is left out and the note says why; its discard and Cancel stay.
+#[test]
+fn a_read_only_project_alone_withholds_save_all_and_says_why() {
+    let app = read_only_quitting(&["/x/p.snxprj"]);
+    let texts = lay_out_texts(
+        app.view_app_quit_confirm_body(),
+        iced::Size::new(500.0, 900.0),
+    );
+    assert!(texts.iter().all(|t| t.text != "Save All"), "{texts:#?}");
+    assert!(texts.iter().all(|t| t.text != "Discard All"), "{texts:#?}");
+    find(&texts, &discard_newer());
+    find(&texts, "Cancel");
+    assert!(
+        texts
+            .iter()
+            .any(|t| t.text.contains("Save All is not offered")),
+        "{texts:#?}"
     );
 }

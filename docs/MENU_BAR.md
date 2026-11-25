@@ -173,11 +173,12 @@ greyed while no PCB is open. The command is also in the command palette and
 as the Run DRC button of the Messages panel. On a board the key is `T D` in
 the default profile and `F7` in Classic.
 
-## Tools ▸ DRC Results and Tools ▸ Net Classes {#tools-drc-results}
+## Tools ▸ DRC and Tools ▸ Net Classes {#tools-drc-results}
 
-Right after Design Rule Check, Tools ▸ DRC Results (`open_drc_panel`, #2399)
-and Tools ▸ Net Classes (`open_net_classes_panel`, #2400) open the board's
-DRC results panel and the Net Classes panel. DRC Results is greyed while no
+Right after Design Rule Check, Tools ▸ DRC (`open_drc_panel`, #2399; named
+like the ERC panel since mockup row 87) and Tools ▸ Net Classes
+(`open_net_classes_panel`, #2400) open the board's DRC panel and the Net
+Classes panel. DRC is greyed while no
 PCB is open. Net Classes is an alias of Design ▸ Net Classes
 (`open_net_classes`), live on a sheet or a board: see
 [Design ▸ Net Classes](#find-similar-filter-net-classes). No keymap preset
@@ -192,8 +193,9 @@ stores the waiver with the note in the board (`waive_drc_violation`, one
 board undo step), and Unwaive takes it back (`unwaive_drc_violation`). A
 waived violation is hidden until Show waived is on. The results are marked
 stale when the board or its project's net classes change after the run (a
-waiver alone, or its Undo or Redo, does not). The
-Rule link of a group stays greyed until boards have a Rules table.
+waiver alone, or its Undo or Redo, does not). A
+group's Rule link opens the rule in the Rules tab; Short, Unconnected and
+Keepout groups have none, since no written rule sets them.
 
 The Net Classes panel is a table of the board's project net classes (the
 same table the schematic's net classes and DRC read): name, colour, track
@@ -208,7 +210,8 @@ net-class history, with the panel's Undo and Redo. The commands are
 
 Tools ▸ Re-Annotate Board... runs `reannotate_board` (#1312), right after
 Design Rule Check with the other board rows, and is greyed while no PCB is
-open. It opens the Positional Re-Annotate dialog for the board in view:
+open. It opens the Re-Annotate Board dialog (subtitle "Positional · <board>")
+for the board in view:
 
 - **Order**: by X, then by Y (the default), or by Y, then by X. The sort is
   exact at 1 µm: parts are not grouped into columns or rows by a tolerance,
@@ -249,6 +252,12 @@ no PCB is open. Both fill the board's polygon pours again and say in Messages
 how many pours, pieces of copper and removed islands they came to; Repour
 Selected reports the selected pours and says so when none is selected.
 Rules in `docs/PCB_TOOLS.md`, "Repour".
+
+Tools ▸ Polygon Manager..., after them, runs `polygon_manager` (mockup row
+178): it opens the board's Polygon Manager tab, or focuses the one that is
+open, greyed while no PCB is open. The board menu offers the same row on a
+polygon pour, and the PCB panel's Polygons mode links to it. See
+`docs/PCB_POLYGON_MANAGER.md`.
 
 ## Tools ▸ Panelize Board and Remove Panel {#tools-panelize-board}
 
@@ -430,8 +439,9 @@ keep their names; whether to rename them to "Export PDF…" is still open.
 
 The dialog is one screen (#2430): the sheets as thumbnails on the left (an
 unticked sheet's thumbnail is dimmed, not removed), the page in the middle with
-a toolbar for page stepping and zoom and a caption in paper units ("ISO A4
-landscape · 297 × 210 mm · Fit to Page"), and the settings on the right. The
+a toolbar for page stepping and zoom and a caption in paper units ("A4
+landscape · 297 × 210 mm · Fit to Page"; ISO sizes go by their bare names, as
+in the Size picker), and the settings on the right. The
 settings sections, top to bottom: Sheets (Select All · Clear, "N of M"), Pages
 (All / Current / Specific), Page Setup (size, orientation, scale, the margins
 as two rows of two in mm from the page edge), Output (schematic and PCB colour
@@ -443,7 +453,9 @@ how many pages print, on which paper and at which quality, or the last
 export's outcome; Cancel closes the dialog (Close once an export finished)
 and Export PDF… asks where to save.
 
-Watermark, PDF Layers and Bookmarks (#1298): "Print a watermark" is off by
+Watermark, PDF Layers and Bookmarks (#1298) carry a NEW pill on their
+headings (mockup row 168). "Print a watermark" and "Write PDF layers" are
+toggle switches heading their sections. "Print a watermark" is off by
 default; on, it prints DRAFT, CONFIDENTIAL or a custom text at the chosen
 opacity and angle (0, 45, 90 or typed), in a fixed red (#C0392B, shown as a
 swatch; the dialog has no colour picker), on every page or the first only,

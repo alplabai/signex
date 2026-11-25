@@ -92,6 +92,43 @@ fn bake_instance(
     Ok(())
 }
 
+/// How a bake warning names a pattern source: its kind and where it sits,
+/// not its id (mockup row 179e, #2772).
+fn source_name(
+    sketch: &SketchData,
+    solve: &FullSolveOutput,
+    source: signex_sketch::id::SketchEntityId,
+) -> String {
+    use signex_sketch::entity::EntityKind;
+    use signex_sketch::solver::state::point_xy;
+    let Some(entity) = sketch.entities.iter().find(|e| e.id == source) else {
+        return format!("entity {source}");
+    };
+    let (kind, at) = match entity.kind {
+        EntityKind::Point { .. } => ("point", source),
+        EntityKind::Line { start, .. } => ("line", start),
+        EntityKind::Arc { center, .. } => ("arc", center),
+        EntityKind::Circle { center, .. } => ("circle", center),
+    };
+    match point_xy(at, &solve.result.state, &solve.result.index, sketch) {
+        Some((x, y)) => format!("the {kind} at ({x:.3}, {y:.3}) mm"),
+        None => format!("a {kind}"),
+    }
+}
+
+/// The warning for a pattern whose source carries no pad: a footprint
+/// pattern repeats pads only. `what` is "linear array", "pattern", ….
+fn not_a_pad(
+    what: &str,
+    sketch: &SketchData,
+    solve: &FullSolveOutput,
+    source: signex_sketch::id::SketchEntityId,
+) -> String {
+    let name = source_name(sketch, solve, source);
+    let skipped = what.rsplit(' ').next().unwrap_or(what);
+    format!("{what} of {name}: the source is not a pad — {skipped} skipped")
+}
+
 /// Most pad instances one array may expand to. Array counts come from
 /// user / file expressions and the bake runs on the editor's update
 /// thread, so an unbounded count (`=100000` by `=100000`) would freeze

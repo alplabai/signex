@@ -158,16 +158,17 @@ fn pours_toolbar<'a>(ctx: &'a PanelContext, board: Option<&Path>) -> Element<'a,
             board: board.to_path_buf(),
         })
     });
-    let manager = crate::panels::graphite::hint_tooltip(
-        dialog_button(
-            t!(i18n, ids::PANELS_PCB_POURS_OPEN_MANAGER),
-            DialogButtonKind::Secondary,
-            None::<PanelMsg>,
-            &ctx.tokens,
-        ),
-        t!(i18n, ids::PANELS_PCB_POURS_MANAGER_LATER),
+    // The Polygon Manager tab of the board in view (mockup row 178).
+    let open_manager = board.map(|_| {
+        msg(PcbPanelMsg::Polygons(
+            crate::panels::PolygonMsg::ManagerOpened,
+        ))
+    });
+    let manager = dialog_button(
+        t!(i18n, ids::PANELS_PCB_POURS_OPEN_MANAGER),
+        DialogButtonKind::Secondary,
+        open_manager,
         &ctx.tokens,
-        iced::widget::tooltip::Position::Bottom,
     );
     row![
         dialog_button(

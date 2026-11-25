@@ -388,6 +388,8 @@ canonical_icon!(icon_pcb_quick_route, "pcb/quick_route.svg");
 canonical_icon!(icon_pcb_multi_route, "pcb/multi_route.svg");
 canonical_icon!(icon_pcb_length_tune, "pcb/length_tune.svg");
 canonical_icon!(icon_pcb_diff_pair_tune, "pcb/diff_pair_tune.svg");
+// Mockup row 108: the hatched area the copper-area tool rows share.
+canonical_icon!(icon_pcb_copper_area, "pcb/copper_area.svg");
 
 // ─── Sketch mode (footprint editor sketch active bar) ──────────────
 //
@@ -545,7 +547,8 @@ mod tests {
     /// and are distinct drawings; #2389's routing and tuning glyphs too.
     #[test]
     fn board_tool_glyphs_follow_the_dropdown_rules() {
-        let glyphs: [&str; 9] = [
+        let glyphs: [&str; 10] = [
+            include_str!("../assets/icons/pcb/copper_area.svg"),
             include_str!("../assets/icons/pcb/dimension.svg"),
             include_str!("../assets/icons/pcb/keepout.svg"),
             include_str!("../assets/icons/pcb/pad.svg"),

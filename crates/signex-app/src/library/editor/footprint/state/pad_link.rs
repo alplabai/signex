@@ -23,12 +23,15 @@ pub struct PadLinkFocus {
     pub is_instance: bool,
 }
 
-/// Events of the floating pad link on the sketch canvas.
+/// Events of the floating pad links on the canvas.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PadLinkMsg {
     /// Back to pad or Jump to pad was pressed: show the pad `entity`
     /// drives, in Footprint mode.
     PadLinkPressed { entity: SketchEntityId },
+    /// Edit in Sketch was pressed on the Footprint canvas: pad `pad_idx`'s
+    /// driving entity, in sketch mode.
+    EditInSketchPressed { pad_idx: usize },
 }
 
 /// What the floating link offers.
@@ -147,9 +150,10 @@ impl FootprintEditorState {
         self.sketch_overlay = SketchOverlay::default();
     }
 
-    pub fn apply_pad_link(&mut self, msg: PadLinkMsg) {
+    pub fn apply_pad_link(&mut self, msg: PadLinkMsg, sketch: Option<&SketchData>) {
         match msg {
             PadLinkMsg::PadLinkPressed { entity } => self.return_to_pad(entity),
+            PadLinkMsg::EditInSketchPressed { pad_idx } => self.edit_pad_in_sketch(pad_idx, sketch),
         }
     }
 }

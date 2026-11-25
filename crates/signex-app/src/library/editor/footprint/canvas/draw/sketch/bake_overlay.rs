@@ -2,9 +2,9 @@
 //! Bake writes, drawn in its layer colours, with the sketch faint on top. A
 //! veil in the ground colour pushes back what is under it. A board draws its
 //! bake (outline, cutouts, mounting holes, keepouts, V-scores) in the board
-//! theme's `BoardEdge`, `BoardOpening`, `Keepout` and `BoardArea` slots; a
-//! footprint its pads, silk and courtyard as Pads mode draws them, plus the
-//! mask, paste, pour, keepout and cutout fields. Rules:
+//! theme's `BoardEdge` (the outline faintly filled in it), `BoardOpening` and
+//! `Keepout` slots; a footprint its pads, silk and courtyard as Pads mode
+//! draws them, plus the mask, paste, pour, keepout and cutout fields. Rules:
 //! `docs/FOOTPRINT_SKETCH.md`, "Leaving sketch mode", and
 //! `docs/PCB_SKETCH.md`, "The way out".
 
@@ -41,6 +41,8 @@ const FAINT_ALPHA: f32 = 0.35;
 const REGION_FILL_ALPHA: f32 = 0.35;
 /// Fill of a keepout, which only forbids.
 const KEEPOUT_FILL_ALPHA: f32 = 0.15;
+/// Fill of the baked outline, against the board edge colour.
+const OUTLINE_FILL_ALPHA: f32 = 0.08;
 /// Outline stroke of baked geometry, in pixels.
 const EDGE_WIDTH: f32 = 1.5;
 /// Stroke of the faint sketch, in pixels.
@@ -208,6 +210,13 @@ fn sided(layer: &LayerId, top: TechnicalLayer, bottom: TechnicalLayer) -> PcbLay
     PcbLayer::Technical(if is_bottom(layer) { bottom } else { top })
 }
 
+/// The baked outline's fill: a faint tint of the board edge colour, so the
+/// sketch stays visible through it (mockup row 179). The board palette's
+/// opaque `BoardArea` would hide it.
+fn outline_fill(edge: Color) -> Color {
+    edge.scale_alpha(OUTLINE_FILL_ALPHA)
+}
+
 /// The board's bake in the board theme's slots, as the PCB canvas draws a
 /// board's features (`docs/PCB_SKETCH.md`, "Drawing the board").
 fn draw_board_bake(frame: &mut canvas::Frame, cstate: &FootprintCanvasState, baked: &BakedBoard) {
@@ -225,7 +234,7 @@ fn draw_board_bake(frame: &mut canvas::Frame, cstate: &FootprintCanvasState, bak
         .as_deref()
         .and_then(|outline| polygon_path(cstate, outline.iter().map(|p| (p.x, p.y))))
     {
-        frame.fill(&path, slot(ColorSlot::BoardArea));
+        frame.fill(&path, outline_fill(edge));
         frame.stroke(&path, solid(edge));
     }
     for item in &baked.keepouts {
@@ -333,10 +342,19 @@ fn graphic_path(cstate: &FootprintCanvasState, drawing: &BoardGraphic) -> Option
         )),
         BoardGraphicKind::Circle => Some(Path::circle(
             cstate.world_to_screen(at(drawing.center?)),
-            drawing.radius as f32 * cstate.scale,
+            circle_radius_mm(drawing)? as f32 * cstate.scale,
         )),
         BoardGraphicKind::Rectangle | BoardGraphicKind::TextFrame => None,
     }
+}
+
+/// A drawn circle's radius in mm, from its rim as the board reads it;
+/// `None` without a centre or with a radius that is not a length.
+fn circle_radius_mm(drawing: &BoardGraphic) -> Option<f64> {
+    let center = drawing.center?;
+    let radius =
+        pcb_geom::circle_radius(center, drawing.radius, drawing.start, drawing.end).ok()?;
+    Some(pcb_geom::nm_to_mm(radius))
 }
 
 fn dashed(colour: Color) -> Stroke<'static> {
@@ -480,4 +498,52 @@ fn arc_path(
             );
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use signex_types::pcb::{BoardGraphic, Point};
+    use uuid::Uuid;
+
+    use super::*;
+
+    /// The preview draws a baked circle at its rim, not at a saved radius
+    /// that disagrees, as the Gerber and the copper check read it.
+    #[test]
+    fn a_baked_circle_is_drawn_at_its_rim() {
+        let circle = BoardGraphic {
+            uuid: Uuid::from_u128(1),
+            graphic_type: "circle".into(),
+            layer: "Mechanical1".into(),
+            width: 0.1,
+            start: None,
+            end: Some(Point::new(4.0, 3.0)),
+            center: Some(Point::new(1.0, -1.0)),
+            radius: 2.0,
+            points: Vec::new(),
+            text: String::new(),
+            font_size: 0.0,
+        };
+        let radius = circle_radius_mm(&circle).unwrap();
+        assert!((radius - 5.0).abs() < 1e-9, "radius {radius}");
+        let rimless = BoardGraphic {
+            end: None,
+            ..circle
+        };
+        assert_eq!(circle_radius_mm(&rimless), Some(2.0));
+    }
+
+    /// Mockup row 179 (#2892): the baked outline is a faint tint of the
+    /// board edge, not the opaque board area, so the sketch shows through.
+    #[test]
+    fn the_baked_outline_fill_lets_the_sketch_show_through() {
+        let theme = ResolvedTheme::from_canvas_colors(crate::styles::board_canvas_colors());
+        let [r, g, b, a] = theme.color(ColorSlot::BoardEdge);
+        let edge = Color { r, g, b, a };
+        let fill = outline_fill(edge);
+        assert!(fill.a < 0.2, "a faint fill: {fill:?}");
+        assert_eq!((fill.r, fill.g, fill.b), (edge.r, edge.g, edge.b));
+        let [.., area_alpha] = theme.color(ColorSlot::BoardArea);
+        assert!(fill.a < area_alpha, "lighter than the board area");
+    }
 }
