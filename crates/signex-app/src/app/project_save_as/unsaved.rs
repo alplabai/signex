@@ -137,7 +137,7 @@ impl Signex {
                 .active_idx
                 .min(file.footprints.len().saturating_sub(1));
             if let Some(footprint) = file.footprints.get_mut(active) {
-                crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(
+                crate::library::editor::footprint::FootprintEditorState::sync_pads_to_primitive(
                     &editor.state,
                     footprint,
                 );
