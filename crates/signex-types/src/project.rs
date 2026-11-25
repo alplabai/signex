@@ -19,6 +19,7 @@ mod fab_tier;
 mod min_slot;
 mod order;
 mod profile_override;
+mod rails;
 mod requirements;
 mod router_tool;
 mod rule_file;
@@ -53,6 +54,7 @@ pub use profile_override::{
     ProfileChange, builtin_override, duplicate_profile, override_builtin, rename_user_profile,
     reset_builtin, saved_profiles, unique_profile_name,
 };
+pub use rails::{RAILS_KEY, RailEdit, RailProblem, RailSpec, is_percent};
 pub use requirements::{
     DEFAULT_PART_STATES, LIFECYCLE_STATES, MAX_REQUIREMENT_ID_CHARS, REQUIREMENT_KINDS,
     REQUIREMENTS_KEY, Requirement, RequirementEntry, RequirementField, RequirementKind,
