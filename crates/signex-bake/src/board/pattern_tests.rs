@@ -783,6 +783,42 @@ fn a_linear_slot_pattern_bakes_a_slot_per_instance() {
     }
 }
 
+/// One pattern over the cap on its own is refused as the cap, not as a
+/// count that does not evaluate: a row by its count, a grid by nx x ny.
+#[test]
+fn one_pattern_over_the_instance_cap_refuses_as_the_cap() {
+    let over = (MAX_ARRAY_INSTANCES + 1).to_string();
+    let half = (MAX_ARRAY_INSTANCES / 2 + 1).to_string();
+    let linear = |hole| row(hole, &over, "1mm", "0mm");
+    let grid = |hole| ArrayKind::Grid {
+        source: hole,
+        nx_expr: half.clone(),
+        ny_expr: "2".into(),
+        dx_expr: "1mm".into(),
+        dy_expr: "1mm".into(),
+        depopulation: None,
+    };
+    let kinds: [&dyn Fn(SketchEntityId) -> ArrayKind; 2] = [&linear, &grid];
+    for kind in kinds {
+        let mut s = Sketch::new();
+        let hole = s.circle(0.0, 0.0, 1.0);
+        s.get(hole).mounting_hole = Some(MountingHoleAttr::default());
+        s.pattern(kind(hole));
+
+        let error = s.bake().unwrap_err();
+
+        assert!(
+            matches!(error, BoardBakeError::TooManyInstances { entity, limit }
+                if entity == hole && limit == MAX_ARRAY_INSTANCES),
+            "{error:?}"
+        );
+        assert!(
+            error.to_string().contains("more than 10000 items"),
+            "{error}"
+        );
+    }
+}
+
 /// The refusal text is the Messages line the board sketch writes when the
 /// cap stops the bake; it names the limit and the item that went over.
 #[test]
