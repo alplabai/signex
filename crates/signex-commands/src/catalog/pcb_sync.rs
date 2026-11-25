@@ -1,7 +1,10 @@
 //! Schematic-to-board sync commands: update the board from the schematic,
 //! compare the two, assign footprints and change a placed footprint.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
+use super::{
+    CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, footprint_operands,
+    operands,
+};
 use signex_i18n_ids::command_ids;
 
 pub(super) const PCB_SYNC: &[CommandMetadata] = &[
@@ -41,8 +44,34 @@ pub(super) const PCB_SYNC: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2937: the footprint of placed parts on the sheet `document` names, as
+    // Assign Footprints' Apply sets it, from its operands only.
+    CommandMetadata {
+        id: "assign_footprint",
+        category: "design",
+        label: command_ids::CMD_ASSIGN_FOOTPRINT,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: footprint_operands::FOOTPRINT_CHOICE,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2937: every part's footprint, and whether an open library has it.
+    CommandMetadata {
+        id: "query_footprint_assignments",
+        category: "design",
+        label: command_ids::CMD_QUERY_FOOTPRINT_ASSIGNMENTS,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
     // #2366: pick a library footprint for the selected footprints; the swap
-    // is one board undo step. No default key.
+    // is one board undo step. No default key. #2937: with its operands it
+    // swaps the footprints named on the board `document` names, headless.
     CommandMetadata {
         id: "change_footprint",
         category: "modify",
@@ -50,7 +79,8 @@ pub(super) const PCB_SYNC: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_CHANGE_FOOTPRINT),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_ONLY,
+        flags: CommandFlags::MUTATES,
+        operands: footprint_operands::FOOTPRINT_CHOICE,
         ..CommandMetadata::DEFAULT
     },
 ];
