@@ -267,7 +267,7 @@ impl Signex {
         // child-space or unplaced one would land on empty canvas (#956).
         // A net-level finding is drawn at its net's representative pin with the
         // distinct net marker; a No-ERC directive never reaches it.
-        self.interaction_state.active_canvas_mut().erc_markers = violations
+        let markers: Vec<crate::canvas::ErcMarker> = violations
             .iter()
             .filter(|v| {
                 matches!(
@@ -284,11 +284,12 @@ impl Signex {
                     signex_erc::Severity::Warning => crate::canvas::ErcMarkerSeverity::Warning,
                     _ => crate::canvas::ErcMarkerSeverity::Info,
                 },
+                caption: self.erc_marker_caption(v),
             })
             .collect();
-        self.interaction_state
-            .active_canvas_mut()
-            .clear_overlay_cache();
+        let canvas = self.interaction_state.active_canvas_mut();
+        canvas.erc_markers = markers;
+        canvas.clear_overlay_cache();
         self.ui_state.erc_violations = violations;
     }
 

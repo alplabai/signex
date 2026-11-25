@@ -20,7 +20,7 @@ mod power_port;
 mod text_note;
 mod wire;
 
-pub(super) use harness_connector::harness_connector;
+pub(super) use harness_connector::{HarnessArt, harness_connector};
 pub(super) use net_label::net_label;
 pub(super) use port::port;
 pub(super) use power_port::{power_port, style_glyph};

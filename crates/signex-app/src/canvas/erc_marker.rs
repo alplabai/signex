@@ -8,6 +8,9 @@ pub struct ErcMarker {
     pub severity: ErcMarkerSeverity,
     /// `true` for a net-level finding, drawn with the distinct net marker.
     pub net_level: bool,
+    /// A short line drawn under the marker, such as `expects CS_ADC` by a
+    /// mismatched harness entry (mockup row 152).
+    pub caption: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

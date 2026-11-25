@@ -1220,6 +1220,7 @@ mod tests {
             y: 10.0,
             severity: ErcMarkerSeverity::Error,
             net_level: false,
+            caption: None,
         });
         let view = SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters));
         assert!(view.selected.is_empty());
