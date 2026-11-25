@@ -538,7 +538,7 @@ fn the_job_reports_a_class_conflict_between_two_sheets() {
     let dir = Path::new("/proj");
     let (root_path, child_path) = (dir.join("root.snxsch"), dir.join("child.snxsch"));
     let blanket = signex_types::schematic::SchDirective::Blanket {
-        uuid: Uuid::from_u128(0x2656_11),
+        uuid: Uuid::from_u128(0x265611),
         start: pt(-1.0, -1.0),
         end: pt(11.0, 1.0),
         net_class: Some("SW_NODE".into()),
@@ -547,11 +547,11 @@ fn the_job_reports_a_class_conflict_between_two_sheets() {
         pour: Default::default(),
         include_edge_nets: false,
     };
-    let mut root = vbus_sheet(0x2656_01, vec![parameters(0x2656_12, "SIGNAL"), blanket]);
+    let mut root = vbus_sheet(0x265601, vec![parameters(0x265612, "SIGNAL"), blanket]);
     let mut placement = child_with_pin("child.snxsch", "UNUSED");
     placement.pins.clear();
     root.child_sheets.push(placement);
-    let child = vbus_sheet(0x2656_02, vec![parameters(0x2656_13, "POWER")]);
+    let child = vbus_sheet(0x265602, vec![parameters(0x265613, "POWER")]);
     let open: crate::app::project_sheets::OpenSheets =
         [(root_path.clone(), root), (child_path.clone(), child)]
             .into_iter()
@@ -575,7 +575,7 @@ fn the_job_reports_a_class_conflict_between_two_sheets() {
     primaries.sort();
     assert_eq!(
         primaries,
-        [Uuid::from_u128(0x2656_11), Uuid::from_u128(0x2656_12)],
+        [Uuid::from_u128(0x265611), Uuid::from_u128(0x265612)],
         "{on_root:?}"
     );
     for v in &on_root {
