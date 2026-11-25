@@ -6,6 +6,7 @@
 use std::path::{Path, PathBuf};
 
 use signex_engine::{Command, DocumentPatch};
+use signex_i18n_ids::ids;
 use signex_types::schematic::{SelectedItem, SelectedKind};
 
 use crate::app::Signex;
@@ -75,7 +76,9 @@ fn move_items(items: Vec<SelectedItem>) -> Command {
 fn the_core_half_alone_leaves_an_edited_sheet_dirty() {
     let (mut app, path) = colours::app_with_sheet("core-half-dirty.snxsch");
     assert!(!dirty(&app, &path));
-    let edit = app.document_state.execute_on_edit_path(paper("A3"), true);
+    let edit =
+        app.document_state
+            .execute_on_edit_path(paper("A3"), true, ids::NOTICE_EDIT_COMMAND_FAILED);
     assert_eq!(edit.outcome, MutationOutcome::Changed);
     // Nothing projected: the mark is the core half's alone.
     assert!(dirty(&app, &path), "close-confirm must ask for this sheet");
@@ -84,7 +87,9 @@ fn the_core_half_alone_leaves_an_edited_sheet_dirty() {
 #[test]
 fn an_edit_returns_one_document_changed_with_its_patch_and_edit_cause() {
     let (mut app, path) = colours::app_with_sheet("core-half-event.snxsch");
-    let edit = app.document_state.execute_on_edit_path(paper("A3"), true);
+    let edit =
+        app.document_state
+            .execute_on_edit_path(paper("A3"), true, ids::NOTICE_EDIT_COMMAND_FAILED);
     assert_eq!(edit.events.len(), 1, "{:?}", edit.events);
     let changed = changes(&edit.events);
     assert_eq!(changed[0].path, path);
@@ -97,7 +102,9 @@ fn an_undo_returns_a_step_cause() {
     let (mut app, path) = colours::app_with_sheet("core-half-step.snxsch");
     // The loaded engine's position becomes the save point.
     app.document_state.mark_document_clean(&path);
-    let _edit = app.document_state.execute_on_edit_path(paper("A3"), true);
+    let _edit =
+        app.document_state
+            .execute_on_edit_path(paper("A3"), true, ids::NOTICE_EDIT_COMMAND_FAILED);
     assert!(dirty(&app, &path));
     let step = app
         .document_state
@@ -116,9 +123,11 @@ fn an_edit_inside_an_agent_run_owes_its_patch_emits_no_document_event_and_keeps_
     let (mut app, path, symbol, wire) = with_locked_symbol("core-half-owed.snxsch");
     assert!(!dirty(&app, &path));
     app.document_state.agent_edits.target = Some(path.clone());
-    let edit = app
-        .document_state
-        .execute_on_edit_path(move_items(vec![symbol, wire]), true);
+    let edit = app.document_state.execute_on_edit_path(
+        move_items(vec![symbol, wire]),
+        true,
+        ids::NOTICE_EDIT_COMMAND_FAILED,
+    );
     assert_eq!(edit.outcome, MutationOutcome::Changed);
     assert!(changes(&edit.events).is_empty(), "{:?}", edit.events);
     assert_eq!(notice_levels(&edit.events), [NoticeLevel::Warning]);

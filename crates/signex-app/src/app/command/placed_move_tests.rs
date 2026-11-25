@@ -489,3 +489,60 @@ fn a_zero_distance_move_leaves_history_and_dirty_as_the_position_row_does() {
     assert_eq!(history_of(&row).0, fresh.0, "the sheet is as it was");
     assert_eq!(answer["moved_wires"], serde_json::json!([]), "{answer}");
 }
+
+/// The Messages lines logged since `mark` that hold `needle`.
+fn logged_since(mark: Option<u64>, needle: &str) -> Vec<String> {
+    crate::diagnostics::entries_since(mark)
+        .entries
+        .into_iter()
+        .map(|entry| entry.message)
+        .filter(|m| m.contains(needle))
+        .collect()
+}
+
+/// A non-lock engine refusal on the operand move's gateway form logs trunk's
+/// batch-tail line, "Engine command execution failed: …", and answers the
+/// engine's own text; a person's single-command edit keeps "Engine command
+/// failed: …" (Hakan, 2026-11-25, #2326 comment 7164045899). A move cannot be
+/// refused for a non-lock reason today, so a bad wire width stands in.
+#[test]
+fn an_operand_move_refusal_keeps_trunks_messages_line() {
+    use crate::ignore::IgnoreResult;
+    crate::diagnostics::init_logging()
+        .ignore("another test in this binary already installed the same logger");
+    let (sheet, _r1) = resistor_with(vec![wire((30.0, 50.0), (45.0, 50.0))]);
+    let wire_id = sheet.wires[0].uuid;
+    // Widths no other test sends: the log is shared with the tests beside this one.
+    let refused = |width_mm| signex_engine::Command::SetWireWidth { wire_id, width_mm };
+    let expected = |width_mm| signex_engine::EngineError::InvalidWireWidth(width_mm).to_string();
+
+    let (mut app, _d) = app_with(sheet.clone());
+    let mark = crate::diagnostics::newest_entry_id();
+    let (outcome, reason, _) = app.apply_engine_command_noticing(refused(-2552.25), true, true);
+    assert_eq!(
+        outcome,
+        crate::app::mutation_gateway::MutationOutcome::Failed
+    );
+    assert_eq!(
+        reason,
+        Some(expected(-2552.25)),
+        "the answer's refusal text"
+    );
+    let said = logged_since(mark, "-2552.25");
+    assert!(
+        said.iter()
+            .any(|m| m.starts_with("Engine command execution failed: ")),
+        "{said:?}"
+    );
+
+    let (mut gui, _g) = app_with(sheet);
+    let mark = crate::diagnostics::newest_entry_id();
+    let (_, reason) = gui.apply_engine_command_reporting(refused(-2552.75), true, true);
+    assert_eq!(reason, Some(expected(-2552.75)));
+    let said = logged_since(mark, "-2552.75");
+    assert!(
+        said.iter()
+            .any(|m| m.starts_with("Engine command failed: ")),
+        "{said:?}"
+    );
+}
