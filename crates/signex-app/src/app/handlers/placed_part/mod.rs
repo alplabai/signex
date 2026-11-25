@@ -13,6 +13,8 @@ mod change_session;
 mod datasheet;
 mod edit_symbol;
 
+pub(crate) use change_component::replacement_of;
+
 use iced::Task;
 use signex_types::schematic::{SelectedKind, Symbol};
 
@@ -28,7 +30,7 @@ pub(crate) struct PlacedPart {
 
 /// How messages name the part: its designator, or "the part" for one that
 /// has none yet.
-pub(super) fn part_name(symbol: &Symbol) -> String {
+pub(crate) fn part_name(symbol: &Symbol) -> String {
     match symbol.reference.trim() {
         "" => "the part".to_string(),
         reference => reference.to_string(),

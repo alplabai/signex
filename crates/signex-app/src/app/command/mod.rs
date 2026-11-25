@@ -24,6 +24,9 @@ mod board_operands;
 mod board_view_operand_tests;
 mod board_view_operands;
 pub(crate) mod bridge;
+#[cfg(test)]
+mod change_component_operand_tests;
+mod change_component_operands;
 mod component_operand;
 #[cfg(test)]
 mod directive_operand_tests;
@@ -131,6 +134,7 @@ pub(crate) use opened::answers_with_the_new_document;
 pub(crate) use operand_handlers::runs_headless_without_operands;
 pub use operands::{OperandError, OperandValue};
 pub(crate) use operands::{missing_headless_operand, parse_targets};
+pub(crate) use part_operands::library_row;
 pub(crate) use placed_operands::PlacedRefusal;
 pub use signex_commands::CommandOutcome;
 

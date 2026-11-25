@@ -42,7 +42,7 @@ pub(super) fn place_component(app: &mut Signex, args: &CommandArgs) -> Ran {
 
 /// The library row `part` names in `library`: a row id, else a part number
 /// (internal or manufacturer) that exactly one row carries.
-pub(super) fn library_row(library: &OpenLibrary, part: &str) -> Result<(String, Uuid), String> {
+pub(crate) fn library_row(library: &OpenLibrary, part: &str) -> Result<(String, Uuid), String> {
     let part = part.trim();
     let rows = || {
         library
@@ -159,7 +159,7 @@ impl Signex {
     /// file or folder, a relative one read from the edited sheet's project
     /// folder. Paths are compared spelled out (`..` folded) under the
     /// project's case rule; no file is looked at.
-    pub(super) fn open_library_named(&self, named: &str) -> Result<&OpenLibrary, String> {
+    pub(crate) fn open_library_named(&self, named: &str) -> Result<&OpenLibrary, String> {
         let named = named.trim();
         let id = Uuid::parse_str(named).ok();
         let docs = &self.document_state;
