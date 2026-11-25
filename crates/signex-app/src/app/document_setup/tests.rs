@@ -108,11 +108,26 @@ fn board_copper(app: &Signex, path: &Path) -> Option<(usize, f64)> {
     Some((copper, board.setup.as_ref()?.clearance))
 }
 
+/// #2470: a headless New PCB answers with the board it made.
+pub(super) fn assert_answers_board(outcome: &CommandOutcome, path: &Path) {
+    let CommandOutcome::Answered(answer) = outcome else {
+        panic!("New PCB answers with its board: {outcome:?}");
+    };
+    assert_eq!(answer["kind"], "pcb", "{answer}");
+    assert_eq!(
+        answer["path"].as_str().map(Path::new),
+        Some(path),
+        "{answer}"
+    );
+    let id = answer["id"].as_str().expect("the board's id");
+    assert!(id.parse::<uuid::Uuid>().is_ok(), "{answer}");
+}
+
 #[test]
 fn headless_new_pcb_with_a_built_in_profile_makes_its_board_without_a_dialog() {
     let mut f = fixture(ProjectDefaults::default());
     let outcome = run(&mut f.app, "new_pcb_document", &["profile=hdi"]);
-    assert!(matches!(outcome, CommandOutcome::Ran), "{outcome:?}");
+    assert_answers_board(&outcome, &f.dir.join("demo.snxpcb"));
     assert!(f.app.ui_state.document_setup.is_none(), "no dialog");
     let hdi = SetupProfile::Hdi.pcb(8);
     assert_eq!(
@@ -127,7 +142,7 @@ fn headless_new_pcb_with_the_project_profile_takes_the_stored_rules() {
     let advanced = ProjectSetup::from_profile(SetupProfile::Advanced).defaults();
     let mut f = fixture(advanced);
     let outcome = run(&mut f.app, "new_pcb_document", &["profile=project"]);
-    assert!(matches!(outcome, CommandOutcome::Ran), "{outcome:?}");
+    assert_answers_board(&outcome, &f.dir.join("demo.snxpcb"));
     assert_eq!(
         board_copper(&f.app, &f.dir.join("demo.snxpcb")),
         Some((6, 0.1))
@@ -139,7 +154,7 @@ fn headless_new_pcb_without_a_profile_takes_the_project_setup_as_before() {
     let advanced = ProjectSetup::from_profile(SetupProfile::Advanced).defaults();
     let mut f = fixture(advanced);
     let outcome = run(&mut f.app, "new_pcb_document", &[]);
-    assert!(matches!(outcome, CommandOutcome::Ran), "{outcome:?}");
+    assert_answers_board(&outcome, &f.dir.join("demo.snxpcb"));
     assert!(f.app.ui_state.document_setup.is_none(), "no dialog");
     assert_eq!(
         board_copper(&f.app, &f.dir.join("demo.snxpcb")),
@@ -264,4 +279,73 @@ fn the_dialog_closes_when_its_project_closes() {
     f.app.document_state.active_project = None;
     let _ = f.app.update(Message::noop());
     assert!(f.app.ui_state.document_setup.is_none());
+}
+
+/// #2470: `document` names the project the board joins and `name` its file;
+/// nothing is written, the board and the project stay unsaved.
+#[test]
+fn headless_new_pcb_names_its_project_and_its_board_file() {
+    let mut f = fixture(ProjectDefaults::default());
+    f.app.document_state.active_project = None;
+    let project = f.dir.join("demo.snxprj");
+    let document = format!("document={}", project.display());
+    let outcome = run(&mut f.app, "new_pcb_document", &[&document, "name=Main"]);
+    let board = f.dir.join("Main.snxpcb");
+    assert_answers_board(&outcome, &board);
+    assert!(!board.exists(), "opened unsaved");
+    let loaded = &f.app.document_state.projects[0];
+    assert_eq!(loaded.data.pcb_file.as_deref(), Some("Main.snxpcb"));
+    assert!(f.app.document_state.is_document_dirty(&project));
+}
+
+#[test]
+fn headless_new_pcb_keeps_the_board_the_project_names() {
+    let mut f = fixture(ProjectDefaults::default());
+    f.app.document_state.projects[0].data.pcb_file = Some("demo.snxpcb".into());
+    let outcome = run(&mut f.app, "new_pcb_document", &["name=Other"]);
+    assert!(
+        matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("already names the board")),
+        "{outcome:?}"
+    );
+    assert!(f.app.document_state.tabs.is_empty());
+    // The name it names is the board it makes.
+    let outcome = run(&mut f.app, "new_pcb_document", &["name=demo.snxpcb"]);
+    assert_answers_board(&outcome, &f.dir.join("demo.snxpcb"));
+}
+
+#[test]
+fn headless_new_pcb_refuses_a_name_that_is_not_a_file_name() {
+    let mut f = fixture(ProjectDefaults::default());
+    let outcome = run(&mut f.app, "new_pcb_document", &["name=../away"]);
+    assert!(
+        matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("not a usable board file name")),
+        "{outcome:?}"
+    );
+    assert!(f.app.document_state.tabs.is_empty());
+}
+
+/// The menu's New PCB (its setup dialog, Create) and the operand form make
+/// the same board at the same path.
+#[test]
+fn the_dialogs_create_and_the_operand_form_make_the_same_board() {
+    let advanced = || ProjectSetup::from_profile(SetupProfile::Advanced).defaults();
+    let mut gui = fixture(advanced());
+    let _ = gui
+        .app
+        .update(Message::from(super::DocumentSetupMsg::OpenRequested {
+            kind: super::SetupKind::Pcb,
+            project: None,
+        }));
+    let task = gui
+        .app
+        .update(Message::from(super::DocumentSetupMsg::SubmitRequested));
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut gui.app, task)
+        .expect("the task chain settled");
+    let mut cli = fixture(advanced());
+    let outcome = run(&mut cli.app, "new_pcb_document", &[]);
+    assert_answers_board(&outcome, &cli.dir.join("demo.snxpcb"));
+    let made = board_copper(&gui.app, &gui.dir.join("demo.snxpcb"));
+    assert!(made.is_some(), "the dialog made the board");
+    assert_eq!(made, board_copper(&cli.app, &cli.dir.join("demo.snxpcb")));
 }
