@@ -95,12 +95,18 @@ panel says what it will list.
 
 All six table columns stay at any width. Command, Arguments and Result shrink
 together to their least widths, then the table scrolls sideways, header and
-rows together. The detail pane takes at most half the panel. In the filter
-bar the search field shrinks first, then the filters wrap; in a narrow side
-dock Follow newest and the actions take their own line, so they are never
-clipped.
+rows together. The detail pane takes at most half the panel; its body
+scrolls and Replay and Jump to stay pinned under it, with a failed row's
+Replay hint, so a short dock never hides them. The filter row holds search,
+the Source chips, All / Failed / Undone and Follow newest at its right end;
+the search field shrinks first. Filters that still do not fit (a narrow side
+dock, a longer language) wrap to a second line, and in a narrow side dock
+Follow newest takes its own line, so nothing is clipped.
 
 ## Actions
+
+Pause logging, Save log as…, Clear and More are in the panel's dock title
+bar (mockup row 161); More opens its strip under the filter row.
 
 - **Pause logging** stops recording until Resume logging; **Clear** empties
   the log (numbering goes on).

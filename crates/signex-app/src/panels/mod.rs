@@ -500,12 +500,14 @@ pub struct TitleAction {
 /// The title-bar actions of `kind`: Clear of the ERC panel (#85) while it
 /// holds results, Copy and Clear of the Messages panel (#86), Recompile of
 /// Compiled Design (mockup row 154), Refresh of Annotations (row 165),
-/// Create Union of Unions (row 158) and the + of Projects (row 19): Add New,
-/// or New Project with no project open.
+/// Create Union of Unions (row 158), the + of Projects (row 19): Add New,
+/// or New Project with no project open, and Pause, Save, Clear and More of
+/// the Command Log (row 161).
 pub fn title_actions(kind: PanelKind, ctx: &PanelContext) -> Vec<TitleAction> {
     use signex_i18n::{ids, menu_ids, t};
     let tid = ctx.theme_id;
     match kind {
+        PanelKind::CommandLog => command_log::title_actions(ctx),
         PanelKind::Projects => vec![TitleAction {
             icon: crate::icons::icon_plus(tid),
             tip: if ctx.project_tree.is_empty() {

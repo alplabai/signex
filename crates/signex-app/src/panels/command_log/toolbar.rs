@@ -1,6 +1,6 @@
-//! The filter bar (search, source chips, result switch, Follow newest) with
-//! the panel's actions at its end (Pause, Save log as…, Clear, More), and
-//! the More strip.
+//! The filter row (search, source chips, result switch, Follow newest), the
+//! panel's title-bar actions (Pause, Save log as…, Clear, More), and the
+//! More strip.
 
 use iced::widget::{Row, Space, column, container, row};
 use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Widget as _};
@@ -11,13 +11,14 @@ use signex_widgets::{Label, ToggleSwitchStyle, segmented, text, text_input, togg
 
 use super::{
     CM, CommandLogMsg, CommandLogState, GLYPH_THEME, ICON, LogCounts, PanelContext, PanelMsg,
-    ResultFilter, SP, SourceKind, TS, icon, icon_button, layout, message,
+    ResultFilter, SP, SourceKind, TS, icon, layout, message,
 };
+use crate::panels::TitleAction;
 use crate::styles::{self, HAIRLINE, ti, tokens::resolve};
 
-/// The filter bar, `width` wide. The actions are never clipped: the search
-/// field shrinks first, then the filters wrap, and in a side dock the switch
-/// and the actions take their own line.
+/// The filter row, `width` wide (mockup row 161): the filters, then Follow
+/// newest at the right end. The search field gives up width first; in a
+/// side dock the filters wrap and Follow newest takes its own line.
 pub(super) fn bar<'a>(
     ctx: &'a PanelContext,
     state: &'a CommandLogState,
@@ -25,20 +26,18 @@ pub(super) fn bar<'a>(
     empty: bool,
     width: f32,
 ) -> Element<'a, PanelMsg> {
-    let tokens = &ctx.tokens;
+    let one_row = layout::filters_on_one_row(width);
     let filters = filter_group(ctx, state, counts, empty, width);
-    let tail = row![follow_switch(ctx, state), vsep(tokens), actions(ctx, state)]
-        .spacing(SP.s + SP.xs)
-        .align_y(Alignment::Center);
-    let line: Element<'a, PanelMsg> = if layout::actions_on_own_line(width) {
-        column![filters, container(tail).align_right(Length::Fill)]
-            .spacing(SP.s + SP.xs)
-            .width(Length::Fill)
+    let follow = follow_switch(ctx, state);
+    let line: Element<'a, PanelMsg> = if one_row {
+        row![filters, follow]
+            .spacing(SP.m + SP.xs)
+            .align_y(Alignment::Center)
             .boxed()
     } else {
-        row![filters, tail]
+        column![filters, container(follow).align_right(Length::Fill)]
             .spacing(SP.s + SP.xs)
-            .align_y(Alignment::Center)
+            .width(Length::Fill)
             .boxed()
     };
     container(line)
@@ -48,8 +47,8 @@ pub(super) fn bar<'a>(
         .boxed()
 }
 
-/// Search, source chips and the result switch, wrapping in the width left.
-/// In an empty session every filter reads 0 and is greyed.
+/// Search, source chips and the result switch, wrapping when they do not fit
+/// on one line. In an empty session every filter reads 0 and is greyed.
 fn filter_group<'a>(
     ctx: &'a PanelContext,
     state: &'a CommandLogState,
@@ -113,6 +112,8 @@ fn filter_group<'a>(
         state.log.filters.result,
         counts,
     ));
+    // Wrapping in both layouts: a longer language takes a second line
+    // instead of running under Follow newest.
     let filters = filters.wrap().vertical_spacing(SP.xs).boxed();
     signex_widgets::inert::unless_read_only_veiled(empty, veil(tokens), filters)
 }
@@ -136,55 +137,47 @@ fn follow_switch<'a>(ctx: &'a PanelContext, state: &'a CommandLogState) -> Eleme
     .boxed()
 }
 
-/// The panel's actions: Pause (Resume while paused), Save log as…, Clear
-/// and More.
-fn actions<'a>(ctx: &'a PanelContext, state: &'a CommandLogState) -> Element<'a, PanelMsg> {
+/// The panel's dock title-bar actions (mockup row 161): Pause (Resume while
+/// paused), Save log as…, Clear and More.
+pub(crate) fn title_actions(ctx: &PanelContext) -> Vec<TitleAction> {
     let i18n: &I18n = &ctx.i18n;
-    let tokens = &ctx.tokens;
-    let (pause_glyph, pause_tip) = if state.log.paused {
-        (
-            crate::icons::icon_log_play(GLYPH_THEME),
-            t!(i18n, ids::COMMAND_LOG_RESUME),
-        )
-    } else {
-        (
-            crate::icons::icon_log_pause(GLYPH_THEME),
-            t!(i18n, ids::COMMAND_LOG_PAUSE),
-        )
+    let tid = ctx.theme_id;
+    let paused = ctx.command_log.log.paused;
+    let action = |icon, tip, msg| TitleAction {
+        icon,
+        tip,
+        on_press: Some(message(msg)),
     };
-    row![
-        icon_button(
-            tokens,
-            pause_glyph,
-            pause_tip,
-            state.log.paused,
-            message(CommandLogMsg::PauseToggled),
-        ),
-        icon_button(
-            tokens,
-            crate::icons::icon_log_save(GLYPH_THEME),
+    vec![
+        if paused {
+            action(
+                crate::icons::icon_log_play(tid),
+                t!(i18n, ids::COMMAND_LOG_RESUME),
+                CommandLogMsg::PauseToggled,
+            )
+        } else {
+            action(
+                crate::icons::icon_log_pause(tid),
+                t!(i18n, ids::COMMAND_LOG_PAUSE),
+                CommandLogMsg::PauseToggled,
+            )
+        },
+        action(
+            crate::icons::icon_log_save(tid),
             t!(i18n, ids::COMMAND_LOG_SAVE),
-            false,
-            message(CommandLogMsg::SaveRequested),
+            CommandLogMsg::SaveRequested,
         ),
-        icon_button(
-            tokens,
-            crate::icons::icon_log_trash(GLYPH_THEME),
+        action(
+            crate::icons::icon_log_trash(tid),
             t!(i18n, ids::COMMAND_LOG_CLEAR),
-            false,
-            message(CommandLogMsg::Cleared),
+            CommandLogMsg::Cleared,
         ),
-        icon_button(
-            tokens,
-            crate::icons::icon_log_more(GLYPH_THEME),
+        action(
+            crate::icons::icon_log_more(tid),
             t!(i18n, ids::COMMAND_LOG_MORE),
-            state.more_open,
-            message(CommandLogMsg::MoreToggled),
+            CommandLogMsg::MoreToggled,
         ),
     ]
-    .spacing(SP.xs)
-    .align_y(Alignment::Center)
-    .boxed()
 }
 
 /// What More opens: the Show view commands switch, under the bar's right end.
