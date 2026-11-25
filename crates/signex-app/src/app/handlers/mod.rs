@@ -118,6 +118,8 @@ pub(crate) mod pcb_tool;
 pub(crate) mod pcb_tune;
 #[cfg(test)]
 mod pcb_tune_tests;
+#[cfg(test)]
+mod pcb_unselected_drag_tests;
 mod pcb_via_move;
 #[cfg(test)]
 mod pcb_via_move_tests;

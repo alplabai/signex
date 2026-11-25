@@ -148,8 +148,8 @@ impl PcbCarry {
         ids
     }
 
-    /// The track ends on what is carried, which move with it; none with
-    /// Ctrl held.
+    /// The track ends on what is carried (pads, vias and the ends of carried
+    /// tracks), which move with it; none with Ctrl held.
     /// A track carried whole (#2870) is not one that follows by an end.
     pub fn following(&self, board: &PcbBoard) -> Vec<TrackEnds> {
         if self.leaves_tracks {
@@ -174,6 +174,10 @@ impl PcbCarry {
         }
         if !self.vias.is_empty() {
             add(pcb_geom::tracks_on_vias(board, &self.vias));
+        }
+        if !self.items.is_empty() {
+            // A dragged track stretches the tracks joined to its ends (#2513).
+            add(pcb_geom::tracks_on_tracks(board, &self.items));
         }
         ends.retain(|e| !self.items.contains(&e.track));
         ends

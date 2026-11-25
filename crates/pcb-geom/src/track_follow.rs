@@ -6,7 +6,8 @@
 //! pad reaches, and the track is on the pad's net (no net counts as 0): the
 //! same contact the ratsnest treats as connected. Only that end moves; the
 //! other end stays, so whatever it joins stays joined. On a via an end
-//! follows only at the via's exact position.
+//! follows only at the via's exact position, and on a dragged track only at
+//! one of its ends (#2513).
 
 use std::collections::BTreeSet;
 
@@ -159,7 +160,31 @@ pub fn tracks_on_vias(board: &PcbBoard, vias: &BTreeSet<Uuid>) -> Vec<TrackEnds>
     if spots.is_empty() {
         return Vec::new();
     }
-    ends_where(board, |net, layers, p| at_via(&spots, net, layers, p))
+    ends_where(board, |net, layers, p| at_spot(&spots, net, layers, p))
+}
+
+/// The tracks of `board` other than `tracks` with an end on an end of one of
+/// `tracks`, to the nanometre, on its layer and net, in board order (#2513):
+/// a dragged track stretches the tracks joined to it. Only the joined end
+/// follows, so their other end stays, on a pad or wherever it is. A locked
+/// track is left out, as for [`tracks_on_pads`].
+pub fn tracks_on_tracks(board: &PcbBoard, tracks: &BTreeSet<Uuid>) -> Vec<TrackEnds> {
+    let spots: Vec<(PointNm, u32, u32)> = (board.segments.iter())
+        .filter(|segment| tracks.contains(&segment.uuid))
+        .flat_map(|segment| {
+            let layers = layer_mask(std::iter::once(segment.layer.as_str()));
+            [segment.start, segment.end].into_iter().filter_map(move |p| {
+                let at = PointNm::from_mm(p, "track end").ok()?;
+                Some((at, layers, segment.net))
+            })
+        })
+        .collect();
+    if spots.is_empty() {
+        return Vec::new();
+    }
+    let mut ends = ends_where(board, |net, layers, p| at_spot(&spots, net, layers, p));
+    ends.retain(|e| !tracks.contains(&e.track));
+    ends
 }
 
 /// The copper arcs of `board` with an end at one of `vias`, by the rule of
@@ -178,7 +203,7 @@ pub fn arcs_on_vias(board: &PcbBoard, vias: &BTreeSet<Uuid>) -> Vec<ArcEnds> {
         .filter_map(|(index, arc)| {
             let layers = layer_mask(std::iter::once(arc.layer.as_str()));
             let on = |p: Point| {
-                PointNm::from_mm(p, "arc end").is_ok_and(|p| at_via(&spots, arc.net, layers, p))
+                PointNm::from_mm(p, "arc end").is_ok_and(|p| at_spot(&spots, arc.net, layers, p))
             };
             let (start, end) = (on(arc.start), on(arc.end));
             (start || end).then_some(ArcEnds {
@@ -204,10 +229,12 @@ fn via_spots(board: &PcbBoard, vias: &BTreeSet<Uuid>) -> Vec<(PointNm, u32, u32)
         .collect()
 }
 
-fn at_via(spots: &[(PointNm, u32, u32)], net: u32, layers: u32, p: PointNm) -> bool {
+/// Whether `p` is exactly on one of `spots` (a point, the layers it reaches
+/// and its net), on a shared layer and on its net.
+fn at_spot(spots: &[(PointNm, u32, u32)], net: u32, layers: u32, p: PointNm) -> bool {
     spots
         .iter()
-        .any(|(at, reach, via_net)| *via_net == net && reach & layers != 0 && *at == p)
+        .any(|(at, reach, spot_net)| *spot_net == net && reach & layers != 0 && *at == p)
 }
 
 /// The unlocked tracks with an end `touches` accepts, given the track's net,

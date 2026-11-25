@@ -297,3 +297,50 @@ fn follow_shifts_only_the_named_ends() {
     assert_eq!(moved.start, Point::new(2.0, -1.0));
     assert_eq!(moved.end, Point::new(11.0, -1.0));
 }
+
+/// #2513: a dragged track takes along only the ends joined to its own ends,
+/// on its layer and net, of tracks it does not carry, and none locked.
+#[test]
+fn only_an_end_on_an_end_of_a_dragged_track_follows() {
+    let mut locked = track(7, (4.0, 0.0), (4.0, -5.0), 1, "TopCopper");
+    locked.locked = true;
+    let board = board(vec![
+        // The dragged track, from (0, 0) to (4, 0).
+        track(1, (0.0, 0.0), (4.0, 0.0), 1, "TopCopper"),
+        // Joined at (4, 0), runs on to a pad end at (9, 0).
+        track(2, (4.0, 0.0), (9.0, 0.0), 1, "TopCopper"),
+        // Joined at (0, 0) by its end.
+        track(3, (0.0, 5.0), (0.0, 0.0), 1, "TopCopper"),
+        // At (4, 0) but another net.
+        track(4, (4.0, 0.0), (4.0, 5.0), 2, "TopCopper"),
+        // At (4, 0) but on the bottom copper.
+        track(5, (4.0, 0.0), (8.0, 5.0), 1, "BottomCopper"),
+        // Touching the middle of the dragged track, not an end.
+        track(6, (2.0, 0.0), (2.0, 5.0), 1, "TopCopper"),
+        locked,
+    ]);
+    let ends = tracks_on_tracks(&board, &[id(201)].into());
+    assert_eq!(
+        ends,
+        [
+            TrackEnds {
+                track: id(202),
+                index: 1,
+                start: true,
+                end: false,
+            },
+            TrackEnds {
+                track: id(203),
+                index: 2,
+                start: false,
+                end: true,
+            },
+        ]
+    );
+    let both = tracks_on_tracks(&board, &[id(201), id(202)].into());
+    assert!(
+        both.iter().all(|e| e.track != id(202)),
+        "a track carried too is not one that follows: {both:?}"
+    );
+    assert!(tracks_on_tracks(&board, &BTreeSet::new()).is_empty());
+}

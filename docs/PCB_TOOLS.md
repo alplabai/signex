@@ -965,6 +965,32 @@ move the footprint alone and leave its tracks where they were. Turn and Mirror
 need the track ends turned about the footprint, not shifted, so they need more
 than the shift a move applies.
 
+## Dragging a track or via
+
+With no tool armed, a press on a track or via and a drag move it in one
+gesture, selected or not (#2513); there is no click to select it first. A
+press on a selected one carries the whole selection (#2870).
+
+The tracks joined to a dragged track stretch: a track whose end lies exactly
+on an end of the dragged track, to the nanometre, on its layer and net, moves
+that end by the offset (`pcb_geom::tracks_on_tracks`). Its other end stays,
+on a pad, a via or wherever it is, so it stays joined there. A dragged via
+takes the track and copper arc ends on it along the same way
+(`pcb_geom::tracks_on_vias`, `arcs_on_vias`). A track carried whole, because
+it is in the dragged selection, moves whole and is not stretched by an end. A
+locked track is not stretched and stays where it is. With Ctrl held the
+dragged track or via moves alone and nothing stretches.
+
+The preview draws the dragged track with the stretched tracks where the drop
+puts them, and the drop moves them all as one undo step
+(`handlers::pcb_item_move`). A locked track or via does not move: the press
+carries nothing and Messages says it is locked
+(`Move: track <id> is locked; nothing changed`).
+
+The stretch is straight: a joined track keeps its far end and turns to meet
+the moved end, without a 45° or orthogonal corner. The dragged track's own
+ends move with it, so an end of it on a pad or via leaves that pad or via.
+
 ## Moving a designator or comment on its own
 
 A press on a component's designator or comment drags that text alone
