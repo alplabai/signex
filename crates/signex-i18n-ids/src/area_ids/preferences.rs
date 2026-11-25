@@ -215,6 +215,20 @@ define_ids! {
     PREFERENCES_PCB_DIM_OTHERS = "preferences-pcb-dim-others";
     PREFERENCES_PCB_DIM_OTHERS_HELP = "preferences-pcb-dim-others-help";
     PREFERENCES_PCB_DIM_OTHERS_VALUE = "preferences-pcb-dim-others-value";
+    // An extension's page (#2495).
+    PREFERENCES_GROUP_EXTENSIONS = "preferences-group-extensions";
+    PREFERENCES_GROUP_EXTENSIONS_HEADING = "preferences-group-extensions-heading";
+    PREFERENCES_EXTENSION_PAGE = "preferences-extension-page";
+    PREFERENCES_EXTENSION_INTRO = "preferences-extension-intro";
+    PREFERENCES_EXTENSION_SECTION = "preferences-extension-section";
+    PREFERENCES_EXTENSION_KEY = "preferences-extension-key";
+    PREFERENCES_EXTENSION_VALUE = "preferences-extension-value";
+    PREFERENCES_EXTENSION_TYPE_TEXT = "preferences-extension-type-text";
+    PREFERENCES_EXTENSION_TYPE_NUMBER = "preferences-extension-type-number";
+    PREFERENCES_EXTENSION_TYPE_SWITCH = "preferences-extension-type-switch";
+    PREFERENCES_EXTENSION_TYPE_LIST = "preferences-extension-type-list";
+    PREFERENCES_EXTENSION_TYPE_GROUP = "preferences-extension-type-group";
+    PREFERENCES_EXTENSION_TYPE_EMPTY = "preferences-extension-type-empty";
     // prefs-shell-pages
     PREFERENCES_PAGE_GENERAL = "preferences-page-general";
     PREFERENCES_GENERAL_HEADING = "preferences-general-heading";

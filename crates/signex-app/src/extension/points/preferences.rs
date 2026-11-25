@@ -51,6 +51,19 @@ impl PreferenceValues {
     pub(crate) fn added_key(&self, key: &str) -> Option<&'static str> {
         self.values.get_key_value(key).map(|(added, _)| *added)
     }
+
+    /// Each key with its value, in key order.
+    pub fn iter(&self) -> impl Iterator<Item = (&'static str, &serde_json::Value)> {
+        self.values.iter().map(|(key, value)| (*key, value))
+    }
+
+    /// Record `value` for the added key `key` (a save that landed); a key the
+    /// extension did not add is left out.
+    pub(crate) fn set(&mut self, key: &str, value: serde_json::Value) {
+        if let Some(slot) = self.values.get_mut(key) {
+            *slot = value;
+        }
+    }
 }
 
 impl Preferences {

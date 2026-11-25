@@ -172,6 +172,10 @@ pub struct UiState {
     /// the view then computes the sections inline, so a stale cache is
     /// impossible by construction.
     pub shortcut_sections: Option<Vec<crate::keyboard_shortcuts_modal::ShortcutSection>>,
+    /// The installed extensions' commands as the keymap surfaces and the
+    /// palette name them (#2495); empty in the Community binary. Set once,
+    /// by `Signex::with_extensions`.
+    pub extension_commands: crate::keymap::ExtensionCommandNames,
     /// The shortcuts sheet's filter text and scope, set afresh each time
     /// the sheet opens (#2262).
     pub shortcut_sheet: crate::keyboard_shortcuts_modal::ShortcutSheet,
@@ -854,7 +858,11 @@ impl UiState {
     /// dropped otherwise (the next open rebuilds it).
     pub fn refresh_shortcut_sections(&mut self) {
         self.shortcut_sections = self.keyboard_shortcuts_open.then(|| {
-            crate::keyboard_shortcuts_modal::build_sections(&self.i18n, &self.keymap_profiles)
+            crate::keyboard_shortcuts_modal::build_sections_with(
+                &self.i18n,
+                &self.keymap_profiles,
+                &self.extension_commands,
+            )
         });
     }
 

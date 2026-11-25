@@ -173,6 +173,7 @@ impl Signex {
             pcb_sync: self.pcb_sync_label(Some(window_id)),
             layouts: self.layouts_menu(),
             extension_rows: self.extensions.menu_rows(),
+            extension_panels: self.extensions.panels(),
         };
         let undocked = ui.main_window_id != Some(window_id);
         let menu_row = || {

@@ -116,6 +116,7 @@ other extension's. Each point is a field with a file of its own under
 | Menu bar and Active Bar rows | `menu_rows: MenuRows` | GUI adapter, outside `app/core/` | open |
 | Start-screen sections | `start_screen: StartScreenSections` | GUI adapter, outside `app/core/` | open |
 | Preferences | `preferences: Preferences` | GUI adapter, outside `app/core/` | open |
+| Message files | `messages: Messages` | GUI adapter, outside `app/core/` | open, see "Messages an extension ships" |
 
 A new point gets a file of its own with its entry type and its `add` method,
 and a line under "Changes by version". The rules each point follows are set
@@ -134,7 +135,8 @@ in #2495:
   Start screen renders nothing there.
 
 Text an extension shows goes through the `.ftl` catalogs like the rest of the
-application; sizes come from the theme and the font size, never fixed pixels.
+application, its own messages included (see "Messages an extension ships");
+sizes come from the theme and the font size, never fixed pixels.
 
 Every `add` checks the id against the owner's `ext.<name>.` prefix and the
 id rule (see "Ids") and refuses one added twice. Every point refuses with one
@@ -170,8 +172,15 @@ let notes = points.panels.add("ext.sample.notes", title_id, PanelPosition::Right
 panel behaves like a built-in one: tabs, collapse, close, drag and the
 layout's change detection. `ExtensionPanelKind::open_message` is the message
 that opens it, docked in its home region when it is not open yet; an
-extension returns it from `update` as `Task::done(kind.open_message())`. An
-extension panel is not listed in the built-in panel list.
+extension returns it from `update` as `Task::done(kind.open_message())`.
+
+Every installed extension's panels are listed in the status bar's panel
+list, in an Extensions group after the built-in groups, and in the View menu,
+in a View ▸ Extensions submenu after the built-in panel rows, each row
+checked while its panel is open (`docs/DECISIONS.md`, 2026-11-25). The
+command palette offers "Open Panel: <title>" for them too. With no extension
+installed neither group is shown, so the Community list and menu are the
+built-in ones, row for row.
 
 A saved layout (`prefs.json` and the workspace layouts) stores the panel
 under its key. A key in some extension's namespace that no installed
@@ -226,9 +235,43 @@ a stored key it did not add is not read. The extension keeps those
 `PreferenceValues` to save later: `values.save(key, value)` returns the `Task`
 that writes one value on a blocking worker, in the order the saves were made
 (the quit path waits for it), and answers the extension with a
-`PreferenceSaved` payload. It refuses a key outside the extension's prefix
-(`NotOwned`) and a key it did not add with `Preferences::add`
-(`NotRegistered`).
+`PreferenceSaved` payload (the key, the value and whether the write landed).
+It refuses a key outside the extension's prefix (`NotOwned`) and a key it did
+not add with `Preferences::add` (`NotRegistered`).
+
+Each installed extension that added preferences gets a Preferences page of
+its own, named after it, under an Extensions group after the built-in pages
+(`docs/DECISIONS.md`, 2026-11-25). The page is built from the same building
+blocks as the built-in pages: a heading, a section and one setting row per
+preference, with the preference's key, a pill naming the kind of value it
+holds (text, number, on or off, list, group or empty) and its value. It shows
+the value loaded at launch, or the last one a save landed for; it holds no
+draft, so its footer offers Close. The values stay in the one `extensions`
+object of `prefs.json`.
+
+### Messages an extension ships
+
+```rust
+points.messages.add("en-US", include_str!("en-US.ftl"))?;
+let title = points.messages.id("ext-sample-notes-title").expect("an own id");
+points.panels.add("ext.sample.notes", title, PanelPosition::Right, NotesView::default())?;
+```
+
+An extension may ship its own `.ftl` files, one per locale
+(`docs/DECISIONS.md`, 2026-11-25). Every message id a file defines starts
+with `ext-<name>-` (a term: `-ext-<name>-`), so it cannot shadow a built-in
+message or another extension's; no built-in id starts with `ext-`. Install
+refuses a file that does not parse (`RegisterError::InvalidMessages`) or that
+defines any other id (`NotOwned`). `Messages::id` hands out a `MessageId` for
+the extension's own ids only; `MessageId::extension` is the `const` form, for
+a catalog row in a `static`, and accepts nothing outside `ext-`.
+
+The files join the app's catalog when the extensions are installed and every
+time the language changes, so a panel title, a row label, a section heading
+or a command label that names one follows the app language like a built-in
+message. A message the active language's files lack falls back to the en-US
+file, as a built-in message falls back to en-US; the pseudolocale reads the
+en-US files.
 
 ## One request path
 
@@ -358,12 +401,22 @@ impl Extension for Sample {
   row of either kind.
 - **Not on the agent socket.** The agent socket refuses every `ext.` id,
   installed or not, with "extension commands are not open to the agent
-  socket in version 1". Opening them needs the socket's allowlist rules for
-  extension rows (see "Open questions").
-- **Not yet.** An extension command is not listed in the command palette, the
-  Keyboard Shortcuts pane, `docs/COMMANDS.md` or the `signex commands`
-  output, and `signex-cli` installs no extension, so it refuses an `ext.` id
-  as an unknown command. See "Open questions".
+  socket in version 1".
+- **The palette and the keyboard shortcuts.** An installed extension's
+  command is listed in the command palette and in the keyboard shortcuts
+  (the Preferences page and the Help sheet) as "<extension>: <label>", under
+  its row's category, with its shortcut (`docs/DECISIONS.md`, 2026-11-25).
+  It can be bound to a key like a built-in command: a custom profile's
+  binding names the `ext.` id, the binding is saved under that id in
+  `keyboard_shortcuts.toml`, and the key runs the command through
+  `dispatch_command`. A binding to an extension command that no installed
+  extension adds stays in its profile (the TOML parses ext ids) and is
+  listed as "<id> (unavailable: extension not installed)"; its key does
+  nothing.
+- **Not listed elsewhere.** `docs/COMMANDS.md` and the `signex commands`
+  output describe the Community build and list built-in commands only, and
+  `signex-cli` installs no extension, so it refuses an `ext.` id as an
+  unknown command.
 
 ### Behaviour changes
 
@@ -394,10 +447,17 @@ Its handler returns the past-tense payload `HelloSaid`.
 button whose press is `ExtensionMsg::for_view(owner, NOTES, NotesPressed)`,
 and `update` counts the presses. The object is the panel's state.
 
-**4. Registering.** `Extension::register` adds all three:
+**4. Its own messages.** `tests/example_extension/en-US.ftl` holds the
+panel's title, the button's text and the command's label, each under
+`ext-example-`. The ids are `const` (`MessageId::extension`), so the
+command's `static` row names its label directly.
+
+**5. Registering.** `Extension::register` adds the message file, then all
+three:
 
 ```rust
-points.panels.add(NOTES, LABEL, PanelPosition::Right, notes)?;
+points.messages.add("en-US", MESSAGES)?;
+points.panels.add(NOTES, TITLE, PanelPosition::Right, notes)?;
 points.commands.add(&SAY_HELLO_ROW, |_args| Ok(HelloSaid))?;
 points.menu_rows.add_menu_row(MenuRoot::Tools, LABEL, SAY_HELLO)?;
 ```
@@ -406,17 +466,19 @@ A test installs the extension with `ExtensionHost::install` and hands the
 host to `Signex::new()` through `with_extensions`; a binary passes the same
 `Vec<Box<dyn Extension>>` to `launch::run`.
 
-**5. Driving it.**
+**6. Driving it.**
 
 - *Open the panel.* `app.extensions().panel(NOTES)` gives its
-  `ExtensionPanelKind`; `app.update(kind.open_message())` docks it in its
-  home region, the right dock. A `Message::Extension` addressed to the
+  `ExtensionPanelKind`, titled "Notes" from the example's own file;
+  `app.update(kind.open_message())` docks it in its home region, the right
+  dock. A `Message::Extension` addressed to the
   panel's key reaches `Notes::update`, not the extension's own `update`.
   The test reads the extension's id off `app.extensions().ids()`, since
   outside the crate an id comes only from install.
 - *Pick the menu row.* `menu_bar_model` built with
-  `MenuContext::default().with_extension_rows(app.extensions().menu_rows())`,
-  the model the window draws, ends Tools with a separator and the row. The
+  `MenuContext::default().with_extension_rows(app.extensions().menu_rows())`
+  in the app's language, the model the window draws, ends Tools with a
+  separator and the row, "Say hello". The
   row's `MenuMessage::Command` is what a click sends; `app.update` runs the
   command through `dispatch_command`, and the extension receives `HelloSaid`.
 - *Run the command through the request path.*
@@ -427,9 +489,6 @@ host to `Signex::new()` through `with_extensions`; a binary passes the same
   (the override is process-wide), `Signex::boot_headless`, then
   `with_extensions`, then both `dispatch_command_headless` and
   `run_command_request(RequestSurface::Headless, request)` answer `Ran`.
-
-The labels reuse built-in catalog messages because an extension cannot ship
-`.ftl` messages yet (see "Open questions").
 
 ## Versioning
 
@@ -455,8 +514,20 @@ const _: () = assert!(signex_app::extension::API_VERSION == 1);
   public constructor), `ExtensionMsg`, `ExtensionHost`, `InstallError`, `launch::run` and
   `Signex::with_extensions`.
 - `Message::Extension`, routed to the owning extension alone.
-- `ExtensionPoints` with five points: catalog commands, dock panels,
-  menu rows, Start-screen sections and preferences.
+- `ExtensionPoints` with six points: catalog commands, dock panels,
+  menu rows, Start-screen sections, preferences and message files.
+- An extension's own `.ftl` files: `Messages::{add, id, prefix, files}`,
+  `MessageId::extension`, `ExtensionMessages`, `RegisterError::InvalidMessages`
+  (`signex_i18n::{ExtensionMessages, ftl_entry_ids}`,
+  `I18n::with_extension_messages`).
+- Extension panels in the panel list and under View ▸ Extensions
+  (`ExtensionHost::panels`, `MenuContext::with_extension_panels`,
+  `MenuMessage::OpenExtensionPanel`, `PanelGroup::Extensions`); extension
+  commands in the palette and the keyboard shortcuts
+  (`ExtensionHost::command_names`, `keymap::ExtensionCommandNames`,
+  `KeymapEditorModel::rows_in_with`, `build_sections_with`); a Preferences
+  page per extension (`ExtensionHost::{preference_pages, preference_page,
+  name_at}`, `PreferencePage`, `PrefNav::Extension`).
 - Catalog commands: `CatalogCommands::add`, `ExtensionCommand`,
   `ExtensionHost::{command, commands}`, `Signex::command_metadata`, and
   `AppCommandId` accepting `ext.<name>.<command>`
@@ -481,74 +552,55 @@ const _: () = assert!(signex_app::extension::API_VERSION == 1);
 - One request path: `Signex::run_command_request`, `CommandRequest`,
   `RequestSurface`, `RequestOutcome` and `RefusalCause`, with `if_revision`.
 
-## Open questions
+## Implementation notes (version 1 defaults)
 
-Choices made in version 1 for the maintainers to confirm or change:
+What version 1 does where the decisions above leave a choice. Each is the
+conservative default; a later version may change it, under the versioning
+rule.
 
-- **How stable is this API?** Version 1 promises the versioning rule above. Is
-  the API stable across releases from now on, or is nothing promised before
-  Signex 1.0?
-- **What an extension can read.** `update` receives only its own message; it
-  cannot read the documents, the selection or the other application state.
-  Should it get read access, and through which part (the core's `query`, or a
-  GUI context)?
-- **Boot work.** Install cannot return a `Task`, so an extension cannot start
-  background work at boot. Should `register` (or a separate hook) return one?
+- **Stability.** Version 1 promises the versioning rule above and nothing
+  more.
+- **What an extension can read.** `update` receives only its own message; an
+  extension cannot read the documents, the selection or other application
+  state.
+- **Boot work.** Install returns no `Task`, so an extension starts no
+  background work at boot.
 - **Headless runs.** `headless::boot_headless` and `signex-cli` install no
-  extension. Should a headless run take the same set, so an extension's core
-  commands run from a script?
+  extension; a headless caller installs a set with `with_extensions`.
 - **Bench mode.** The pan/zoom bench (`SIGNEX_BENCH_PAN_ZOOM`) installs the
-  binary's extensions too. Should it run without them?
-- **Install order.** Extensions register in the order the binary lists them.
-  Is that the order their rows, panels and sections appear in, or should each
-  addition carry its own position?
-- **Name rules.** A name is a lowercase ASCII identifier. Should names allow
-  more (`-`, upper case), or be reserved in a list?
-- **Extension text.** A panel title, a row label, a section heading and a
-  command's label are a catalog `MessageId`, and only the built-in catalog
-  makes one, so an extension shows the text of an existing message. Should an
-  extension ship `.ftl` messages of its own, and how are they merged?
-- **Panel list.** An extension panel opens only through its own message and
-  a saved layout; the built-in panel list and View ▸ Panels do not list it.
-  Should they, and under which group?
+  binary's extensions too.
+- **Install order.** Extensions register in the order the binary lists them,
+  and their rows, panels, sections and pages appear in that order; an
+  addition carries no position of its own.
+- **Name rules.** A name is a lowercase ASCII identifier; no name is
+  reserved.
 - **Which bars.** Rows go to the end of a root menu and of a PCB Active Bar
   tool group's dropdown. A group with one row (Text) shows no dropdown, so a
   row added there is not reachable; the schematic Active Bar and the context
-  menus take no rows. Should rows carry a position, and reach those bars?
-- **Slots.** The Start screen has one slot, at the end of Home. Are more
-  wanted (the Projects or Libraries page, beside the hero)?
+  menus take no rows.
+- **Slots.** The Start screen has one slot, at the end of Home.
 - **Kept keys and workspace layouts.** Applying a workspace layout replaces
   the dock, so the keys the old arrangement kept are not carried over; a
-  layout saved while keys were kept keeps them. Should applying a layout
-  carry the current kept keys over?
-- **Preference storage.** Values sit in one `extensions` object of
-  `prefs.json`, under their full keys. Is that the place, or should each
-  extension get a file of its own? Extension preferences show no row in the
-  Preferences dialog; should the dialog get a page per extension?
-- **`if_revision` in `signex-cli`.** The agent socket takes `if_revision`;
-  the `signex-cli` request line does not yet, so a headless run cannot ask
-  for it. Should the CLI line take it as a top-level field too?
-- **One revision or many.** `if_revision` checks the one document named by
-  `document`. Should it also take a map of documents to revisions, as
-  `apply_edits` takes `expect_revisions`?
-- **A revision refusal in the journal.** A request refused by `if_revision`
-  writes no edit-journal line, because nothing ran. Should it be recorded?
-- **The GUI's revision refusal.** No GUI surface sets `if_revision`. A GUI
-  refusal for the revision would add no Command Log row and log no
-  Messages line. Is that right for an extension's row?
-- **A command id that reads as a built-in one.** `ext.sample.undo` is refused
-  as well as `undo`, so a palette or log line never shows two commands with
-  one name. Should the `<command>` part be free instead?
+  layout saved while keys were kept keeps them.
+- **Preference pages are read-only.** An extension's page shows its values;
+  the extension changes them with `PreferenceValues::save`. Its preferences
+  carry no label message, so a row shows the preference's key.
+- **`if_revision` in `signex-cli`.** Only the agent socket takes
+  `if_revision`; the `signex-cli` request line does not.
+- **One revision.** `if_revision` checks the one document named by
+  `document`; `apply_edits` keeps its own `expect_revisions` for more.
+- **A revision refusal writes no journal line**, because nothing ran.
+- **The GUI's revision refusal.** No GUI surface sets `if_revision`; a GUI
+  refusal for the revision would add no Command Log row and log no Messages
+  line.
+- **A command id that reads as a built-in one** (`ext.sample.undo`) is
+  refused as well as `undo`, so a palette or log line never shows two
+  commands with one name.
 - **Operands and document access.** An extension command takes no operands
-  and cannot mutate a document in this version. Should it get operands
-  (parsed against its own row, as a built-in command's are) and a way to
-  edit through the engine?
-- **Listings.** The command palette, the Keyboard Shortcuts pane, the
-  `signex commands` output and `docs/COMMANDS.md` list built-in commands only.
-  Should an installed extension's commands appear in the first two (the last
-  two describe the Community build)?
+  and cannot mutate a document.
 - **Enablement.** A row's `enable` predicate is carried, not evaluated, as for
-  every built-in row today. Should an extension get a predicate of its own?
-- **Extension commands on the agent socket.** The socket refuses them in
-  version 1. Should an extension command that names a document be open to
-  agents under the same allowlist rules as a built-in one?
+  every built-in row.
+- **Extension commands on the agent socket** are refused.
+- **Product name.** A binary built on `signex-app` still shows "Signex" in
+  the window title, the help and version text and the catalog's
+  `-brand-name` term; the extension API sets no product name.

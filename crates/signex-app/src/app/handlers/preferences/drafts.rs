@@ -72,7 +72,8 @@ impl UiState {
                 .differs_from(&self.pcb_dimension_defaults),
             // Rule profiles save to their files at once, and distributor
             // settings live in the library state: neither has drafts.
-            PrefNav::RuleProfiles | PrefNav::LibraryDistributors => false,
+            // An extension's page shows its values and holds no draft.
+            PrefNav::RuleProfiles | PrefNav::LibraryDistributors | PrefNav::Extension(_) => false,
             PrefNav::ComponentClasses => {
                 self.preferences_draft_component_classes != self.component_classes
             }

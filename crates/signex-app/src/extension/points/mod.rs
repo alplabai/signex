@@ -12,6 +12,7 @@
 mod commands;
 mod error;
 mod menu_rows;
+mod messages;
 mod panels;
 mod preferences;
 mod start_screen;
@@ -19,6 +20,7 @@ mod start_screen;
 pub use commands::{CatalogCommands, ExtensionCommand};
 pub use error::RegisterError;
 pub use menu_rows::{ActiveBarRow, MenuRoot, MenuRow, MenuRows, PcbBarGroup};
+pub use messages::Messages;
 pub use panels::{ExtensionPanelKind, Panels};
 pub use preferences::{PreferenceValues, Preferences};
 pub use start_screen::{StartScreenSections, StartScreenSlot};
@@ -42,6 +44,8 @@ pub struct ExtensionPoints {
     pub start_screen: StartScreenSections,
     /// Preferences.
     pub preferences: Preferences,
+    /// The extension's own `.ftl` message files.
+    pub messages: Messages,
 }
 
 /// Claim `id` for `owner`: refused when it is not under the owner's prefix,
@@ -75,6 +79,7 @@ impl ExtensionPoints {
             menu_rows: MenuRows::new(owner.clone()),
             start_screen: StartScreenSections::new(owner.clone()),
             preferences: Preferences::new(owner.clone()),
+            messages: Messages::new(owner.clone()),
             owner,
         }
     }
@@ -92,6 +97,7 @@ impl ExtensionPoints {
             && self.menu_rows.is_empty()
             && self.start_screen.is_empty()
             && self.preferences.is_empty()
+            && self.messages.is_empty()
     }
 
     /// The first addition a point refused, if any. Two checks need the
@@ -109,6 +115,7 @@ impl ExtensionPoints {
             .chain(&self.menu_rows.errors)
             .chain(&self.start_screen.errors)
             .chain(&self.preferences.errors)
+            .chain(&self.messages.errors)
             .next()
             .cloned();
         let shared_key = || {

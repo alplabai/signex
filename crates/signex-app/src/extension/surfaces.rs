@@ -9,8 +9,42 @@ use iced::widget::Space;
 use iced::{Element, Widget as _};
 
 use super::points::{ActiveBarRow, ExtensionPanelKind, MenuRow, PcbBarGroup, StartScreenSlot};
-use super::{ExtensionHost, ExtensionMsg, ViewContext};
+use super::{ExtensionHost, ExtensionMsg, PreferenceValues, ViewContext};
+use crate::keymap::{AppCommandId, ExtensionCommandName, ExtensionCommandNames};
 use signex_i18n::MessageId;
+
+impl ExtensionHost {
+    /// Every installed extension's dock panels, in install order: the
+    /// Extensions group of the panel list and of the View menu.
+    pub fn panels(&self) -> Vec<ExtensionPanelKind> {
+        self.points()
+            .flat_map(|points| points.panels.kinds())
+            .collect()
+    }
+
+    /// The installed commands as the palette and the keymap surfaces name
+    /// them: the extension's name and the command's label, by id.
+    pub fn command_names(&self) -> ExtensionCommandNames {
+        let mut names = ExtensionCommandNames::default();
+        for entry in &self.installed {
+            for command in entry.points.commands.iter() {
+                let metadata = command.metadata();
+                let Ok(id) = AppCommandId::new(metadata.id) else {
+                    continue;
+                };
+                names.insert(
+                    id,
+                    ExtensionCommandName {
+                        extension: entry.id.name().to_owned(),
+                        label: metadata.label,
+                        category: metadata.category,
+                    },
+                );
+            }
+        }
+        names
+    }
+}
 
 /// One Start-screen section, drawn: its heading and its body.
 pub(crate) struct DrawnSection<'a> {
@@ -91,6 +125,48 @@ impl ExtensionHost {
             }
             let values = entry.points.preferences.values_from(stored);
             entry.extension.preferences_loaded(&values);
+            entry.preference_values = Some(values);
         }
     }
+
+    /// The name of the extension installed at `index`.
+    pub fn name_at(&self, index: usize) -> Option<&str> {
+        self.installed.get(index).map(|entry| entry.id.name())
+    }
+
+    /// The Preferences page of each installed extension that added
+    /// preferences, in install order.
+    pub fn preference_pages(&self) -> impl Iterator<Item = PreferencePage<'_>> {
+        (0..self.installed.len()).filter_map(|index| self.preference_page(index))
+    }
+
+    /// The Preferences page of the extension installed at `index`: its
+    /// values as last loaded or saved, else its defaults. `None` when it
+    /// added no preference.
+    pub fn preference_page(&self, index: usize) -> Option<PreferencePage<'_>> {
+        let entry = self.installed.get(index)?;
+        if entry.points.preferences.is_empty() {
+            return None;
+        }
+        let values = entry
+            .preference_values
+            .clone()
+            .unwrap_or_else(|| entry.points.preferences.values_from(&BTreeMap::new()));
+        Some(PreferencePage {
+            index,
+            name: entry.id.name(),
+            values,
+        })
+    }
+}
+
+/// One installed extension's Preferences page (#2495).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PreferencePage<'a> {
+    /// The extension's install index (`PrefNav::Extension`).
+    pub index: usize,
+    /// The extension's name.
+    pub name: &'a str,
+    /// Its preferences and their values.
+    pub values: PreferenceValues,
 }

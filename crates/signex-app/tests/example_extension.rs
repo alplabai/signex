@@ -35,7 +35,7 @@ use signex_app::menu_bar::model::{MenuEntry, menu_bar_model};
 use signex_app::menu_bar::{MenuContext, MenuMessage};
 use signex_app::panels::PanelKind;
 use signex_app::task_driver::TaskDriver;
-use signex_i18n::{MessageId, ids, t};
+use signex_i18n::{MessageId, t};
 use signex_types::project::{ErcRules, RuleProfile};
 use signex_widgets::{button, text};
 
@@ -47,10 +47,22 @@ const NAME: &str = "example";
 const NOTES: &str = "ext.example.notes";
 /// The catalog command the menu row runs.
 const SAY_HELLO: &str = "ext.example.say_hello";
-/// An extension cannot ship `.ftl` messages yet, so its title, label and
-/// body text reuse built-in catalog messages ("Wiki" and its stub text).
-const LABEL: MessageId = ids::PANELS_KIND_WIKI;
-const BODY: MessageId = ids::PANELS_STUB_WIKI;
+/// The extension's own messages, in its own `.ftl` file. Each id starts with
+/// `ext-example-`, so it cannot shadow a built-in message.
+const MESSAGES: &str = include_str!("example_extension/en-US.ftl");
+
+/// One of the extension's message ids, checked when the binary compiles.
+const fn own(id: &'static str) -> MessageId {
+    match MessageId::extension(id) {
+        Some(id) => id,
+        None => panic!("not an extension message id"),
+    }
+}
+
+/// The panel's title, the button it draws, and the command's label.
+const TITLE: MessageId = own("ext-example-notes-title");
+const BODY: MessageId = own("ext-example-notes-body");
+const LABEL: MessageId = own("ext-example-say-hello");
 
 /// The command's catalog row. It takes no operands, changes no document and
 /// runs headless as well as from a window.
@@ -111,13 +123,17 @@ impl Extension for Example {
     }
 
     fn register(&mut self, points: &mut ExtensionPoints) {
+        points
+            .messages
+            .add("en-US", MESSAGES)
+            .expect("the messages register");
         let notes = Notes {
             owner: points.owner().clone(),
             seen: Arc::clone(&self.seen),
         };
         points
             .panels
-            .add(NOTES, LABEL, PanelPosition::Right, notes)
+            .add(NOTES, TITLE, PanelPosition::Right, notes)
             .expect("the panel registers");
         points
             .commands
@@ -166,6 +182,11 @@ fn the_panel_opens_in_its_home_region_and_its_messages_reach_its_update() {
         .extensions()
         .panel(NOTES)
         .expect("the panel is registered");
+    // Its title is the example's own message, in the app's language.
+    assert_eq!(
+        app.ui_state.i18n.message(notes.title(), &[]).into_string(),
+        "Notes"
+    );
     assert!(
         app.document_state
             .dock
@@ -198,8 +219,12 @@ fn the_panel_opens_in_its_home_region_and_its_messages_reach_its_update() {
 #[test]
 fn the_menu_row_ends_tools_and_picking_it_runs_the_command() {
     let (mut app, seen) = app_with_example();
-    let menu =
-        menu_bar_model(&MenuContext::default().with_extension_rows(app.extensions().menu_rows()));
+    // The menu in the app's language, which carries the example's messages.
+    let mut ctx = MenuContext::default()
+        .with_extension_rows(app.extensions().menu_rows())
+        .with_extension_panels(app.extensions().panels());
+    ctx.i18n = Arc::clone(&app.ui_state.i18n);
+    let menu = menu_bar_model(&ctx);
     let tools = MenuRoot::ALL
         .iter()
         .position(|root| *root == MenuRoot::Tools)
@@ -208,7 +233,7 @@ fn the_menu_row_ends_tools_and_picking_it_runs_the_command() {
     else {
         panic!("Tools ends with a separator and the example's row");
     };
-    assert_eq!(row.label, "Wiki");
+    assert_eq!(row.label, "Say hello");
     let picked = row.dispatches().cloned().expect("the row is live");
     assert!(matches!(&picked, MenuMessage::Command(id) if id.as_str() == SAY_HELLO));
 

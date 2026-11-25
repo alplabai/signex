@@ -248,6 +248,25 @@ preferences-pcb-dim-others-help = While a net is highlighted, or while you route
 # Beside the slider: the dim amount, 0 to 100.
 preferences-pcb-dim-others-value = { $percent }%
 
+## An installed extension's page (#2495). { $extension } is the extension's
+## name.
+preferences-group-extensions = Extensions
+preferences-group-extensions-heading = EXTENSIONS
+preferences-extension-page = { $extension }
+preferences-extension-intro = The preferences { $extension } added. Their values are kept in prefs.json, under the extension's own keys.
+preferences-extension-section = PREFERENCES
+# A preference's key, as the extension named it.
+preferences-extension-key = { $key }
+# A preference's stored value, as JSON.
+preferences-extension-value = { $value }
+# The kind of value a preference holds.
+preferences-extension-type-text = Text
+preferences-extension-type-number = Number
+preferences-extension-type-switch = On or off
+preferences-extension-type-list = List
+preferences-extension-type-group = Group
+preferences-extension-type-empty = Empty
+
 ## Default Component Classes
 preferences-classes-title = Default Component Classes
 preferences-classes-help = The classes a new library starts with. They appear in the class picker of New Component and Edit Component. This is a seed list for new libraries: removing a class here does not change existing libraries. A library's own list is edited in that library.

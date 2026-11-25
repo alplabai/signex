@@ -215,7 +215,34 @@ fn arrange(ctx: &MenuContext) -> Vec<MenuEntry> {
     ]
 }
 
+/// View with View ▸ Extensions, the installed extensions' panels, after the
+/// built-in panel rows (#2495). With no extension panel the menu is the
+/// built-in one, row for row.
 pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
+    let mut entries = view_built_in(ctx);
+    if ctx.extension_panels.is_empty() {
+        return entries;
+    }
+    let panels = ctx
+        .extension_panels
+        .iter()
+        .map(|&kind| {
+            panel_item(
+                ctx,
+                kind.title(),
+                PanelKind::Extension(kind),
+                MenuMessage::OpenExtensionPanel(kind),
+            )
+        })
+        .collect();
+    // Before the separator that ends the panel rows (the Window submenu
+    // follows it).
+    let at = entries.len().saturating_sub(2);
+    entries.insert(at, submenu(ctx, ids::PANELS_LIST_GROUP_EXTENSIONS, panels));
+    entries
+}
+
+fn view_built_in(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         cmd_item_gated(ctx, cmd("zoom_in_at_cursor", "Ctrl+=")),
         cmd_item_gated(ctx, cmd("zoom_out_at_cursor", "Ctrl+-")),

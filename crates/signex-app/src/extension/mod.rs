@@ -11,6 +11,7 @@
 mod dispatch;
 mod host;
 mod id;
+mod localize;
 mod message;
 pub mod points;
 mod prefs;
@@ -22,6 +23,8 @@ pub use id::{ExtensionId, InvalidExtensionName};
 pub use message::ExtensionMsg;
 pub use points::{ExtensionCommand, ExtensionPoints, PreferenceValues, RegisterError};
 pub use prefs::PreferenceSaved;
+pub use signex_i18n::{ExtensionMessages, MessageId};
+pub use surfaces::PreferencePage;
 pub use view::{ExtensionView, ViewContext};
 // The one extension id rule, the catalog row types a command is added with,
 // and its handler's refusal.
@@ -75,6 +78,8 @@ pub trait Extension: Send + 'static {
 
 #[cfg(test)]
 mod command_tests;
+#[cfg(test)]
+mod listing_tests;
 #[cfg(test)]
 mod surface_tests;
 #[cfg(test)]

@@ -371,6 +371,7 @@ impl Signex {
                 preferences_open: false,
                 keyboard_shortcuts_open: false,
                 shortcut_sections: None,
+                extension_commands: Default::default(),
                 shortcut_sheet: Default::default(),
                 about_open: false,
                 recent_projects: crate::recent_projects::RecentProjects::from_paths(

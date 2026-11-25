@@ -9,6 +9,7 @@ mod binding;
 mod catalog;
 mod display;
 mod editor;
+mod extension_names;
 mod mod_migration;
 mod physical;
 mod profile;
@@ -46,6 +47,7 @@ pub(crate) use catalog::{IDS_STILL_TEXT, OPERAND_CONVENTION};
 pub use editor::{
     BindingSlot, KeymapEditorModel, KeymapEditorProfile, KeymapEditorRow, KeymapEditorSource,
 };
+pub use extension_names::{ExtensionCommandName, ExtensionCommandNames};
 pub use mod_migration::{
     ModMigration, ModMove, migrate_active_to_mod, offers_mod_migration, standard_ctrl_rows,
     with_standard_set_on_mod,

@@ -95,6 +95,7 @@ impl KeymapContextFilter {
 /// The rows the table shows: those matching the search and the chip,
 /// sorted by command name ascending (on-screen collation, stable, so rows
 /// of one command keep their profile order).
+#[cfg(test)]
 pub(super) fn visible_rows(
     editor: &KeymapEditorModel,
     i18n: &I18n,
@@ -103,8 +104,23 @@ pub(super) fn visible_rows(
     conflicts: &[BindingConflict],
     platform: Platform,
 ) -> Vec<KeymapEditorRow> {
+    let none = crate::keymap::ExtensionCommandNames::default();
+    visible_rows_with(editor, i18n, &none, search, filter, conflicts, platform)
+}
+
+/// [`visible_rows`] with the installed extensions' commands named by
+/// `extensions` (#2495).
+pub(super) fn visible_rows_with(
+    editor: &KeymapEditorModel,
+    i18n: &I18n,
+    extensions: &crate::keymap::ExtensionCommandNames,
+    search: &str,
+    filter: KeymapContextFilter,
+    conflicts: &[BindingConflict],
+    platform: Platform,
+) -> Vec<KeymapEditorRow> {
     let mut rows: Vec<KeymapEditorRow> = editor
-        .filtered_rows_in(i18n, search)
+        .filtered_rows_in_with(i18n, extensions, search)
         .into_iter()
         .filter(|row| filter.matches(row, conflicts, platform))
         .collect();

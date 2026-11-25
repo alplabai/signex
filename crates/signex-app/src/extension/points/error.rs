@@ -33,6 +33,8 @@ pub enum RegisterError {
     /// A command row mutates a document; an extension command cannot in this
     /// version.
     MutatesDocument(String),
+    /// A message file does not parse; the reason.
+    InvalidMessages(String),
 }
 
 impl fmt::Display for RegisterError {
@@ -56,6 +58,7 @@ impl fmt::Display for RegisterError {
             Self::MutatesDocument(id) => {
                 write!(f, "{id:?} mutates a document; an extension command cannot")
             }
+            Self::InvalidMessages(why) => f.write_str(why),
         }
     }
 }

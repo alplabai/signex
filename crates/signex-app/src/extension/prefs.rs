@@ -8,11 +8,13 @@ use super::points::{PreferenceValues, RegisterError};
 use crate::app::Message;
 
 /// The answer to [`PreferenceValues::save`], sent to the extension as the
-/// payload of an [`ExtensionMsg`]: the key it saved and whether the write
-/// landed.
+/// payload of an [`ExtensionMsg`]: the key it saved, the value, and whether
+/// the write landed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreferenceSaved {
     pub key: &'static str,
+    /// The value that was saved.
+    pub value: serde_json::Value,
     pub result: Result<(), String>,
 }
 
@@ -38,13 +40,18 @@ impl PreferenceValues {
             return Err(RegisterError::NotRegistered(key.to_owned()));
         };
         let owner = self.owner().clone();
+        let saved = value.clone();
         Ok(crate::fonts::background_pref_merge(
             crate::fonts::EXTENSION_PREFS_KEY,
             move || crate::fonts::write_extension_pref(key, value),
             move |result| {
                 Message::Extension(ExtensionMsg::new(
                     owner.clone(),
-                    PreferenceSaved { key, result },
+                    PreferenceSaved {
+                        key,
+                        value: saved.clone(),
+                        result,
+                    },
                 ))
             },
         ))

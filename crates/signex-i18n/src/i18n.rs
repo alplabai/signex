@@ -133,6 +133,16 @@ impl I18n {
         self.locale
     }
 
+    /// The active locale's bundle, to add an extension's messages to.
+    pub(crate) fn primary_mut(&mut self) -> &mut Bundle {
+        &mut self.primary
+    }
+
+    /// The en-US fallback bundle, to add an extension's messages to.
+    pub(crate) fn fallback_mut(&mut self) -> &mut Bundle {
+        &mut self.fallback
+    }
+
     /// An instance whose message locale is `tag` although no catalog exists
     /// for it, so tests of other crates can exercise the Turkic case rules
     /// (`tr`) before a `tr` catalog lands. Messages render from en-US.

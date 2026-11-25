@@ -38,6 +38,8 @@ pub(crate) struct MenuInputs {
     layouts: crate::workspace_layouts::LayoutsMenu,
     /// The rows the installed extensions add (#2495).
     extension_rows: Vec<crate::extension::points::MenuRow>,
+    /// The installed extensions' panels, under View ▸ Extensions (#2495).
+    extension_panels: Vec<crate::extension::points::ExtensionPanelKind>,
 }
 
 impl PartialEq for MenuInputs {
@@ -50,6 +52,7 @@ impl PartialEq for MenuInputs {
             && self.pcb_sync == other.pcb_sync
             && self.layouts == other.layouts
             && self.extension_rows == other.extension_rows
+            && self.extension_panels == other.extension_panels
             && match (&self.keymap, &other.keymap) {
                 (Some(a), Some(b)) => Arc::ptr_eq(a, b),
                 (None, None) => true,
@@ -80,6 +83,7 @@ impl MenuInputs {
             pcb_sync: None,
             layouts: Default::default(),
             extension_rows: Vec::new(),
+            extension_panels: Vec::new(),
         }
     }
 
@@ -98,6 +102,18 @@ impl MenuInputs {
 
     pub(super) fn extension_rows(&self) -> &[crate::extension::points::MenuRow] {
         &self.extension_rows
+    }
+
+    pub(crate) fn with_extension_panels(
+        mut self,
+        panels: Vec<crate::extension::points::ExtensionPanelKind>,
+    ) -> Self {
+        self.extension_panels = panels;
+        self
+    }
+
+    pub(super) fn extension_panels(&self) -> &[crate::extension::points::ExtensionPanelKind] {
+        &self.extension_panels
     }
 
     pub(super) fn layouts(&self) -> &crate::workspace_layouts::LayoutsMenu {

@@ -8,7 +8,7 @@ use signex_commands::catalog::CommandMetadata;
 
 use super::{
     Extension, ExtensionCommand, ExtensionId, ExtensionMsg, ExtensionPoints, InvalidExtensionName,
-    RegisterError,
+    PreferenceValues, RegisterError,
 };
 use crate::app::Message;
 
@@ -17,6 +17,9 @@ pub(super) struct Installed {
     pub(super) id: ExtensionId,
     pub(super) extension: Box<dyn Extension>,
     pub(super) points: ExtensionPoints,
+    /// Its preference values as last loaded or saved, for its Preferences
+    /// page; `None` before `load_preferences`.
+    pub(super) preference_values: Option<PreferenceValues>,
 }
 
 /// The extensions a binary installed at boot. Empty in the Community binary.
@@ -86,6 +89,7 @@ impl ExtensionHost {
                 id,
                 extension,
                 points,
+                preference_values: None,
             });
         }
         Ok(Self { installed })
@@ -143,6 +147,15 @@ impl ExtensionHost {
         if let Some(view) = message.view().and_then(|key| entry.points.view_mut(key)) {
             return view.update(message);
         }
+        // A saved preference shows on the extension's Preferences page.
+        if let Some(saved) = message.payload::<super::PreferenceSaved>()
+            && saved.result.is_ok()
+        {
+            let values = entry
+                .preference_values
+                .get_or_insert_with(|| entry.points.preferences.values_from(&Default::default()));
+            values.set(saved.key, saved.value.clone());
+        }
         entry.extension.update(message)
     }
 }
@@ -150,13 +163,23 @@ impl ExtensionHost {
 impl crate::app::Signex {
     /// The model with `extensions` installed. Called once at boot, before
     /// the first update. A panel the saved dock layout names under a key
-    /// an installed extension registered is docked where it was saved.
+    /// an installed extension registered is docked where it was saved. The
+    /// extensions' `.ftl` files join the message catalog, and their commands
+    /// the keymap's names.
     pub fn with_extensions(mut self, extensions: ExtensionHost) -> Self {
         self.extensions = extensions;
         let host = &self.extensions;
         self.document_state
             .dock
             .adopt_extension_panels(|key| host.panel(key));
+        if self.extensions.is_empty() {
+            return self;
+        }
+        self.ui_state.extension_commands = self.extensions.command_names();
+        if !self.extensions.message_files().is_empty() {
+            self.relocalize_for_extensions();
+        }
+        self.ui_state.refresh_shortcut_sections();
         self
     }
 

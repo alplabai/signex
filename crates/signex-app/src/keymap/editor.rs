@@ -1,9 +1,14 @@
+use crate::keymap::ExtensionCommandNames;
 use crate::keymap::{
     AppCommandId, BindingConflict, CatalogTextExt, CommandGroup, CompiledKeymap, Platform,
     ProfileLoadError, ShortcutBinding, ShortcutBindingAction, ShortcutContext, ShortcutProfile,
     ShortcutProfileKind, ShortcutProfileSet, ShortcutTrigger, fallback_label, metadata_for,
 };
 use std::collections::{BTreeMap, BTreeSet};
+
+/// The category of a binding to an extension command no installed
+/// extension adds.
+const EXTENSION_CATEGORY: &str = "extensions";
 
 /// Identity of one trigger row: its position in the active profile's
 /// bindings, and in that binding's trigger list (#1378).
@@ -69,8 +74,21 @@ impl KeymapEditorModel {
         self.rows_in(signex_i18n::I18n::en_us_ref())
     }
 
-    /// The rows, labelled in the message language of `i18n`.
+    /// The rows, labelled in the message language of `i18n`. An extension
+    /// command reads as unavailable; see [`Self::rows_in_with`].
     pub fn rows_in(&self, i18n: &signex_i18n::I18n) -> Vec<KeymapEditorRow> {
+        self.rows_in_with(i18n, &ExtensionCommandNames::default())
+    }
+
+    /// [`Self::rows_in`] with the installed extensions' commands named by
+    /// `extensions` ("<extension>: <label>", in their own category). A
+    /// binding to an extension command none of them adds stays a row,
+    /// labelled unavailable (`docs/DECISIONS.md`, 2026-11-25).
+    pub fn rows_in_with(
+        &self,
+        i18n: &signex_i18n::I18n,
+        extensions: &ExtensionCommandNames,
+    ) -> Vec<KeymapEditorRow> {
         let active = self.profiles.active_profile();
         let source = match active.kind {
             ShortcutProfileKind::BuiltIn => KeymapEditorSource::BuiltIn(active.id.clone()),
@@ -113,6 +131,18 @@ impl KeymapEditorModel {
                             Some(draft) if !trigger_valid => draft.clone(),
                             _ => trigger.config_text(),
                         };
+                        let extension_label = command
+                            .as_ref()
+                            .and_then(|command| extensions.label_in(i18n, command));
+                        let extension_category = command
+                            .as_ref()
+                            .filter(|command| command.is_extension())
+                            .map(|command| {
+                                extensions
+                                    .get(command)
+                                    .map_or(EXTENSION_CATEGORY, |name| name.category)
+                                    .to_string()
+                            });
                         KeymapEditorRow {
                             slot,
                             command,
@@ -121,9 +151,11 @@ impl KeymapEditorModel {
                                 .unwrap_or(CommandGroup::General),
                             category: metadata
                                 .map(|metadata| metadata.category.to_string())
+                                .or(extension_category)
                                 .unwrap_or_else(|| "uncategorized".to_string()),
                             label: metadata
                                 .map(|metadata| metadata.label_in(i18n))
+                                .or(extension_label)
                                 .or_else(|| binding.action.command().map(fallback_label))
                                 .unwrap_or_else(|| "No action".to_string()),
                             context: binding.context,
@@ -150,7 +182,18 @@ impl KeymapEditorModel {
     /// each row's label, command id or trigger text. An empty query
     /// returns every row.
     pub fn filtered_rows_in(&self, i18n: &signex_i18n::I18n, query: &str) -> Vec<KeymapEditorRow> {
-        self.rows_in(i18n)
+        self.filtered_rows_in_with(i18n, &ExtensionCommandNames::default(), query)
+    }
+
+    /// [`Self::filtered_rows_in`] with the installed extensions' commands
+    /// named, as [`Self::rows_in_with`] names them.
+    pub fn filtered_rows_in_with(
+        &self,
+        i18n: &signex_i18n::I18n,
+        extensions: &ExtensionCommandNames,
+        query: &str,
+    ) -> Vec<KeymapEditorRow> {
+        self.rows_in_with(i18n, extensions)
             .into_iter()
             .filter(|row| row.matches_query_in(i18n, query))
             .collect()

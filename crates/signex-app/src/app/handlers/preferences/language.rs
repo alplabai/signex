@@ -33,7 +33,7 @@ impl Signex {
         if pref == *self.ui_state.i18n.pref() {
             return Task::none();
         }
-        let next = Arc::new(I18n::new(&pref));
+        let next = Arc::new(self.i18n_for(&pref));
         log_dropped_language(&next);
         // A Preferences draft that still stood for the language in force
         // follows the switch, so a palette or menu change made while the
@@ -66,7 +66,7 @@ impl Signex {
         let preview = if draft == self.ui_state.i18n.pref() {
             Arc::clone(&self.ui_state.i18n)
         } else {
-            Arc::new(I18n::new(draft))
+            Arc::new(self.i18n_for(draft))
         };
         self.ui_state.preferences_pages.language_preview = Some(preview);
     }
