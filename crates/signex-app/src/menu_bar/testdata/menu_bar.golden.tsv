@@ -69,6 +69,7 @@ View	menu	View	-	-	-	-	-
 View/Zoom In	item	Zoom In	zoom_in_at_cursor	Ctrl+=	ZoomIn	01100000	cmd:zoom_in_at_cursor
 View/Zoom Out	item	Zoom Out	zoom_out_at_cursor	Ctrl+-	ZoomOut	01100000	cmd:zoom_out_at_cursor
 View/Fit All	item	Fit All	zoom_to_fit	Home	ZoomFit	01100100	cmd:zoom_to_fit
+View/Home View	item	Home View	-	-	HomeView	01100000	cmd:home_view
 View/---	separator	-	-	-	-	-	-
 View/Toggle Grid	item	Toggle Grid	toggle_visible_grid	Shift+Ctrl+G	ToggleGrid	11111111	cmd:toggle_visible_grid
 View/Cycle Grid Size	item	Cycle Grid Size	-	-	CycleGrid	11111111	cmd:next_grid

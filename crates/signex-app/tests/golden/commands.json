@@ -725,6 +725,11 @@
     "category": "select"
   },
   {
+    "id": "home_view",
+    "group": "General",
+    "category": "view"
+  },
+  {
     "id": "import_dxf",
     "group": "Pcb",
     "category": "file"

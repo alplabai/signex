@@ -1155,6 +1155,12 @@ starts at 0°. In an undocked PCB window the rows, the palette, the keys and
 its own status bar act on that window's board and leave the main window's as
 it is. See `docs/DECISIONS.md` (2026-11-12).
 
+View ▸ Home View (`home_view`, mockup row 194) sits after Fit All. It does
+what the Home button left of the canvas zoom pill does: on a board, rotation
+0°, Flip off, then Fit; on a sheet, Fit. It is live with a sheet or a board in
+view, acts on the main window, and has no default key. See
+`docs/PCB_TOOLS.md`, "Orientation tile and Home View".
+
 Two View rows come from the layer tab menu (#2394): Show Layer Numbers
 (`toggle_layer_numbers`) under Show All Layers, a per-user setting of the
 layer tabs, and Flip Board View (`flip_board_view`) under Reset View

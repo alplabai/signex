@@ -477,6 +477,8 @@ define_ids! {
         CMD_MENU_VIEW_ROTATE_180 = "cmd-menu-view-rotate-180";
         CMD_VIEW_ROTATE_RESET = "cmd-view-rotate-reset";
         CMD_MENU_VIEW_ROTATE_RESET = "cmd-menu-view-rotate-reset";
+        CMD_HOME_VIEW = "cmd-home-view";
+        CMD_MENU_HOME_VIEW = "cmd-menu-home-view";
         CMD_VIEW_BOARD_3D = "cmd-view-board-3d";
         CMD_MENU_VIEW_BOARD_3D = "cmd-menu-view-board-3d";
         CMD_TOGGLE_LAYERS_PANEL = "cmd-toggle-layers-panel";

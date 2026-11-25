@@ -482,6 +482,7 @@ signex_standard	hint	-	-	view_rotate
 signex_standard	hint	-	-	view_rotate_ccw
 signex_standard	hint	-	-	view_rotate_180
 signex_standard	hint	-	-	view_rotate_reset
+signex_standard	hint	-	-	home_view
 signex_standard	hint	-	-	toggle_origin_marker
 signex_standard	hint	-	E O S	set_board_origin
 signex_standard	hint	-	-	reset_board_origin
@@ -1022,6 +1023,7 @@ classic	hint	-	-	view_rotate
 classic	hint	-	-	view_rotate_ccw
 classic	hint	-	-	view_rotate_180
 classic	hint	-	-	view_rotate_reset
+classic	hint	-	-	home_view
 classic	hint	-	-	toggle_origin_marker
 classic	hint	-	Shift+O	set_board_origin
 classic	hint	-	-	reset_board_origin
