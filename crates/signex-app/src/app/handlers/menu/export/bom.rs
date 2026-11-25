@@ -21,39 +21,50 @@ impl Signex {
     /// in the modal and clicks Export to drive the file dialog.
     pub(crate) fn handle_bom_preview_open(&mut self) -> Task<Message> {
         let anchor = self.document_state.active_path.clone();
-        self.commit_drafts_in_scope_of(anchor.as_deref());
-        if let Some(anchor) = anchor.as_deref() {
-            self.report_part_field_issues_in_scope_of(anchor);
-        }
         if !self.document_state.has_active_engine() {
+            self.commit_drafts_in_scope_of(anchor.as_deref());
+            if let Some(anchor) = anchor.as_deref() {
+                self.report_part_field_issues_in_scope_of(anchor);
+            }
             log::warn!("BOM preview: no active schematic");
             return Task::none();
         }
         // Pin the preview to the document it is built for; Export writes
         // this one even after a tab switch (#852).
-        let Some(source) = self.document_state.active_path.clone() else {
+        let Some(source) = anchor else {
             crate::diagnostics::log_warning("BOM preview: no active document to export");
             return Task::none();
         };
         let active_variant = self
             .document_state
-            .active_document_project()
-            .and_then(|p| p.data.active_variant.clone())
-            .unwrap_or_else(|| "Base".to_string());
+            .document_project(&source)
+            .and_then(|p| p.data.active_variant.clone());
+        self.open_bom_preview_in(source, active_variant)
+    }
+
+    /// The BOM preview of the sheets `source` (an open sheet) belongs to,
+    /// with `variant` picked in its variant select (`None` or Base's name is
+    /// Base): the dialog Open in BOM Studio opens from the Variant Manager
+    /// (#2949) and File ▸ Reports ▸ BOM opens on the active variant.
+    pub(crate) fn open_bom_preview_in(
+        &mut self,
+        source: PathBuf,
+        variant: Option<String>,
+    ) -> Task<Message> {
+        self.commit_drafts_in_scope_of(Some(&source));
+        self.report_part_field_issues_in_scope_of(&source);
         let variants = self
             .document_state
-            .active_document_project()
+            .document_project(&source)
             .map(|p| p.data.variant_definitions.clone())
             .unwrap_or_default();
         let opts = BomOptions {
-            active_variant: if active_variant.eq_ignore_ascii_case("Base") {
-                None
-            } else {
-                Some(active_variant)
-            },
+            active_variant: variant.filter(|name| !signex_types::project::is_base_variant(name)),
             ..BomOptions::default()
         };
-        let Some((ctx, issues)) = super::build_bom_export_scope(&self.document_state) else {
+        let Some((ctx, issues)) =
+            super::build_bom_export_scope_for_source(&self.document_state, &source)
+        else {
             self.refuse_export(signex_i18n::ids::NOTICE_BOM_NO_SHEET);
             return Task::none();
         };
@@ -415,7 +426,7 @@ impl Signex {
     }
 
     /// The rolled-up table and its validation of an assembled scope.
-    fn bom_table_of(
+    pub(crate) fn bom_table_of(
         &self,
         mut ctx: signex_output::ExportContext,
         opts: &BomOptions,

@@ -277,6 +277,16 @@ define_ids! {
     VARIANT_MANAGER_COMPARE = "variant-manager-compare";
     VARIANT_MANAGER_OPEN_BOM = "variant-manager-open-bom";
     VARIANT_MANAGER_NOT_BUILT = "variant-manager-not-built";
+    // Compare variants (#2949, mockup row 59, view d).
+    VARIANT_MANAGER_COMPARE_SWAP = "variant-manager-compare-swap";
+    VARIANT_MANAGER_COMPARE_SWAP_MARK = "variant-manager-compare-swap-mark";
+    VARIANT_MANAGER_COMPARE_PARAMETER = "variant-manager-compare-parameter";
+    VARIANT_MANAGER_COMPARE_NONE = "variant-manager-compare-none";
+    VARIANT_MANAGER_COMPARE_UNKNOWN = "variant-manager-compare-unknown";
+    VARIANT_MANAGER_COMPARE_FOOTER = "variant-manager-compare-footer";
+    VARIANT_MANAGER_COMPARE_CLOSE = "variant-manager-compare-close";
+    // Open in BOM Studio with no sheet of the project open (#2949).
+    VARIANT_MANAGER_BOM_NO_SHEET = "variant-manager-bom-no-sheet";
     VARIANT_MANAGER_DUPLICATE = "variant-manager-duplicate";
     VARIANT_MANAGER_SET_DEFAULT = "variant-manager-set-default";
     VARIANT_MANAGER_DEFAULT = "variant-manager-default";

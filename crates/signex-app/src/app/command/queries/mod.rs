@@ -8,7 +8,8 @@
 //! rule profile library, read off the update loop first), and the board
 //! queries `measure_board`, `query_board_nets` and `find_similar_items`
 //! (#2403), `board_panel` (#2410, `app::board_panel`), and the Project tab's
-//! `project_settings` (#1689-#1693, `app::project_tab`). Each
+//! `project_settings` (#1689-#1693, `app::project_tab`) with the Variant
+//! Manager's `compare_variants` and `variant_bom` (#2949). Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -64,6 +65,9 @@ const QUERY_IDS: &[&str] = &[
     "rules_preset_diff",
     "board_panel",
     "project_settings",
+    // #2949: the Variant Manager's Compare variants and Open in BOM Studio.
+    "compare_variants",
+    "variant_bom",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -144,8 +148,13 @@ impl Signex {
                 return Some((outcome, Task::none()));
             }
             // The Project tab's sections (#1689-#1693).
-            "project_settings" => {
-                let outcome = match self.project_settings(args) {
+            "project_settings" | "compare_variants" | "variant_bom" => {
+                let answer = match id {
+                    "compare_variants" => self.compare_variants(args),
+                    "variant_bom" => self.variant_bom(args),
+                    _ => self.project_settings(args),
+                };
+                let outcome = match answer {
                     Ok(value) => CommandOutcome::Answered(value),
                     Err(reason) => CommandOutcome::disabled(reason),
                 };

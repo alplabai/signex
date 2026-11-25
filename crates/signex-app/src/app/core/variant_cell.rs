@@ -25,4 +25,14 @@ pub struct VariantManagerUi {
     pub cell: Option<VariantCell>,
     /// The value being typed in the right pane's overrides.
     pub draft: Option<OverrideDraft>,
+    /// Compare variants (#2949, mockup row 59 view d), while it is shown in
+    /// place of the cards and the matrix.
+    pub compare: Option<CompareSides>,
+}
+
+/// The two variants Compare variants shows side by side; `None` is Base.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CompareSides {
+    pub from: Option<String>,
+    pub to: Option<String>,
 }

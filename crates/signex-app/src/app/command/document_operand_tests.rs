@@ -547,6 +547,10 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "project_rename_variant",
                     "project_remove_variant",
                     "project_set_active_variant",
+                    // #2949: the Variant Manager's top bar actions.
+                    "project_set_default_variant",
+                    "compare_variants",
+                    "variant_bom",
                     "project_move_library",
                     "project_set_annotate_undo",
                     "project_set_version_control",

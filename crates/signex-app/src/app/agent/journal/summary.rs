@@ -24,7 +24,7 @@ const TEXT_CHARS: usize = 120;
 const HEADER: &str = "Agent edits since the previous commit:";
 
 /// Commands whose change lands in the project file, whatever sheet they name.
-const PROJECT_WIDE: [&str; 27] = [
+const PROJECT_WIDE: [&str; 28] = [
     "assign_net_class",
     "rules_add",
     "rules_set",
@@ -45,6 +45,7 @@ const PROJECT_WIDE: [&str; 27] = [
     "project_rename_variant",
     "project_remove_variant",
     "project_set_active_variant",
+    "project_set_default_variant",
     "project_move_library",
     "project_set_annotate_undo",
     "project_set_version_control",
