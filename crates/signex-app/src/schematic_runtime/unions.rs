@@ -1,5 +1,6 @@
 //! Named unions on the sheet (mockup row 158): a dashed outline around the members, a
-//! name tab at its top-left with the tags beside it, a padlock on the tab.
+//! name tab at its top-left with the tags beside it, a padlock on the tab of
+//! a locked union only.
 //! Drawn in the selection layer, so the outline follows the camera, is
 //! editor-only and never reaches a print or an export. A hidden union keeps
 //! its outline and a grey tab while its members fade behind a veil in the
@@ -107,9 +108,11 @@ fn member_boxes(
         .collect()
 }
 
-/// Width of the name tab in screen px.
+/// Width of the name tab in screen px; only a locked union's tab has room
+/// for the padlock (mockup row 158).
 fn tab_width_px(union: &SchUnion) -> f32 {
-    TAB_PAD_PX * 2.0 + union.name.chars().count() as f32 * TAB_CHAR_PX + LOCK_PX
+    let lock = if union.locked { LOCK_PX } else { 0.0 };
+    TAB_PAD_PX * 2.0 + union.name.chars().count() as f32 * TAB_CHAR_PX + lock
 }
 
 /// The outline and tab of `union` at camera scale `scale` (px per mm);
@@ -279,13 +282,15 @@ fn draw_tab(
         font: ui_font,
         ..canvas::Text::default()
     });
-    let lock_ink = if is_selected && !hidden {
-        ink.on_accent
-    } else {
-        ink.caption
-    };
-    let lock_at = iced::Point::new(top_left.x + size.width - LOCK_PX + 3.0, top_left.y + 5.0);
-    draw_padlock(frame, lock_at, union.locked, lock_ink);
+    if union.locked {
+        let lock_ink = if is_selected && !hidden {
+            ink.on_accent
+        } else {
+            ink.caption
+        };
+        let lock_at = iced::Point::new(top_left.x + size.width - LOCK_PX + 3.0, top_left.y + 5.0);
+        draw_padlock(frame, lock_at, lock_ink);
+    }
     if !union.tags.is_empty() && !hidden {
         let tags = union
             .tags
@@ -304,23 +309,16 @@ fn draw_tab(
     }
 }
 
-/// A 9 px padlock with its top-left at `at`: closed, or open with the
-/// shackle's right leg lifted off the body.
-fn draw_padlock(frame: &mut canvas::Frame, at: iced::Point, closed: bool, colour: Color) {
+/// A closed 9 px padlock with its top-left at `at`.
+fn draw_padlock(frame: &mut canvas::Frame, at: iced::Point, colour: Color) {
     let body = iced::Point::new(at.x, at.y + 4.0);
     frame.fill_rectangle(body, iced::Size::new(8.0, 5.0), colour);
     let (left, right) = (at.x + 1.5, at.x + 6.5);
-    // Open: the shackle rises 2 px and its right leg stops short of the body.
-    let (rim, right_end) = if closed {
-        (at.y, body.y)
-    } else {
-        (at.y - 2.0, at.y)
-    };
     let shackle = canvas::Path::new(|p| {
         p.move_to(iced::Point::new(left, body.y));
-        p.line_to(iced::Point::new(left, rim));
-        p.line_to(iced::Point::new(right, rim));
-        p.line_to(iced::Point::new(right, right_end));
+        p.line_to(iced::Point::new(left, at.y));
+        p.line_to(iced::Point::new(right, at.y));
+        p.line_to(iced::Point::new(right, body.y));
     });
     frame.stroke(
         &shackle,
@@ -395,6 +393,48 @@ mod tests {
             10.0,
         );
         assert_eq!(miss, None);
+    }
+
+    fn tab_of(s: &SchematicSheet) -> Aabb {
+        union_frame(
+            s,
+            &s.unions[0],
+            &Designators::new(),
+            WireWidths::default(),
+            4.0,
+        )
+        .expect("members on the sheet")
+        .tab
+    }
+
+    /// Mockup row 158: only a locked union carries a padlock, so only its
+    /// tab has room for one.
+    #[test]
+    fn only_a_locked_union_tab_makes_room_for_the_padlock() {
+        let mut s = sheet();
+        let open = tab_of(&s);
+        s.unions[0].locked = true;
+        let locked = tab_of(&s);
+        let lock_mm = screen_px_to_world_mm(LOCK_PX, 4.0);
+        assert!(((locked.max_x - locked.min_x) - (open.max_x - open.min_x) - lock_mm).abs() < 1e-6);
+        assert_eq!(open.min_x, locked.min_x);
+    }
+
+    /// Mockup row 158: the padlock's place on a locked tab is not part of an
+    /// unlocked union's tab, so a click there misses it.
+    #[test]
+    fn the_padlock_place_is_on_the_tab_only_when_locked() {
+        let mut s = sheet();
+        s.unions[0].locked = true;
+        let tab = tab_of(&s);
+        let lock_mm = screen_px_to_world_mm(LOCK_PX, 4.0);
+        let (x, y) = (tab.max_x - lock_mm / 2.0, (tab.min_y + tab.max_y) / 2.0);
+        let at = |s: &SchematicSheet| {
+            union_tab_at(s, &Designators::new(), WireWidths::default(), 4.0, x, y)
+        };
+        assert_eq!(at(&s), Some(uuid::Uuid::from_u128(100)));
+        s.unions[0].locked = false;
+        assert_eq!(at(&s), None);
     }
 
     #[test]
