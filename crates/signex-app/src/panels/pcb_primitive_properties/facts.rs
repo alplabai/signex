@@ -438,7 +438,8 @@ pub struct ZoneFacts {
     /// differ or an area is not a pour.
     pub shelved: Option<bool>,
     /// The thermal relief the pours store: on, spoke width and air gap in
-    /// mm; `None` when they differ. The fill does not draw spokes yet.
+    /// mm; `None` when they differ. While on, the fill joins the pads of
+    /// the pour's net through spokes (#2580).
     pub thermal: Option<(bool, f64, f64)>,
     /// The Copper card's menu of board-wide pour commands is open.
     pub menu_open: bool,
