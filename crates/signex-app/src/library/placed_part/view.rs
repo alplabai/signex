@@ -95,6 +95,7 @@ pub fn preview_lines(preview: &ComponentChangePreview) -> Vec<PreviewLine> {
         let how = match pair.by {
             PinMatchedBy::Number => "",
             PinMatchedBy::Name => " (by name)",
+            PinMatchedBy::Chosen => " (by hand)",
         };
         lines.push(PreviewLine {
             kind: LineKind::Info,
@@ -337,6 +338,8 @@ mod tests {
             replaced: vec!["Footprint".into(), "MPN".into()],
             kept: vec!["Designator".into(), "Tolerance".into()],
             changed_data: Vec::new(),
+            carried: Vec::new(),
+            refused: None,
         };
         let lines = preview_lines(&preview);
         let warnings: Vec<&str> = lines

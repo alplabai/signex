@@ -511,7 +511,7 @@ impl Signex {
 }
 
 /// The replacement the engine applies for a read part.
-fn replacement_of(resolved: &ResolvedPlacement) -> ComponentReplacement {
+pub(crate) fn replacement_of(resolved: &ResolvedPlacement) -> ComponentReplacement {
     ComponentReplacement {
         lib_symbol: resolved.lib_symbol.clone(),
         library_id: Some(resolved.library_id),
@@ -522,6 +522,7 @@ fn replacement_of(resolved: &ResolvedPlacement) -> ComponentReplacement {
         footprint: resolved.footprint.clone(),
         datasheet: resolved.datasheet.clone(),
         fields: resolved.fields.clone(),
+        pin_map: None,
     }
 }
 

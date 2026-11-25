@@ -265,6 +265,7 @@ fn replacement() -> ComponentReplacement {
         footprint: "R_0603".into(),
         datasheet: String::new(),
         fields: vec![("MPN".into(), "RC0603FR-0731K6L".into())],
+        pin_map: None,
     }
 }
 
