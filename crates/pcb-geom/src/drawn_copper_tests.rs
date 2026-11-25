@@ -117,3 +117,114 @@ fn drawings_and_strings_off_copper_are_not_copper() {
     b.texts.push(string("TopSilkscreen"));
     assert!(drawn_copper(&b).is_empty());
 }
+
+#[test]
+fn a_copper_drawing_that_does_not_convert_is_refused_whole_with_why() {
+    let mut b = board();
+    let mut bad = circle("TopCopper");
+    bad.uuid = Uuid::from_u128(3);
+    bad.end = Some(Point::new(f64::NAN, 10.0));
+    b.graphics.push(bad.clone());
+    b.graphics.push(circle("TopCopper"));
+    assert_eq!(
+        super::board_graphic_copper(&bad),
+        Err(super::DrawnCopperFault::Geometry(
+            crate::GeomError::Unrepresentable("graphic.radius")
+        ))
+    );
+    let copper = drawn_copper(&b);
+    assert!(!copper.is_empty(), "the good circle is copper");
+    assert!(
+        copper.iter().all(|c| !matches!(
+            c.item,
+            ItemRef::Graphic { graphic, .. } if graphic == Uuid::from_u128(3)
+        )),
+        "the refused circle gives no copper"
+    );
+}
+
+#[test]
+fn a_drawing_of_an_unknown_kind_or_missing_its_points_is_refused() {
+    let mut spline = circle("TopCopper");
+    spline.graphic_type = "spline".into();
+    assert_eq!(
+        super::board_graphic_copper(&spline),
+        Err(super::DrawnCopperFault::UnknownKind)
+    );
+    let mut bare = circle("TopCopper");
+    bare.center = None;
+    assert_eq!(
+        super::board_graphic_copper(&bare),
+        Err(super::DrawnCopperFault::MissingPoints)
+    );
+}
+
+/// A copper `poly` or `polygon` through `points`, 0.2 mm wide.
+fn polygon(kind: &str, points: Vec<Point>) -> BoardGraphic {
+    BoardGraphic {
+        uuid: Uuid::from_u128(4),
+        graphic_type: kind.into(),
+        center: None,
+        end: None,
+        points,
+        ..circle("TopCopper")
+    }
+}
+
+fn square() -> Vec<Point> {
+    vec![
+        Point::new(1.0, 1.0),
+        Point::new(4.0, 1.0),
+        Point::new(4.0, 3.0),
+        Point::new(1.0, 3.0),
+    ]
+}
+
+#[test]
+fn a_copper_polygon_is_copper_along_its_closed_outline() {
+    let corners = [at(1.0, 1.0), at(4.0, 1.0), at(4.0, 3.0), at(1.0, 3.0)];
+    let expected: Vec<Shape> = (0..4)
+        .map(|i| Shape::Capsule {
+            a: corners[i],
+            b: corners[(i + 1) % 4],
+            radius: 100_000,
+        })
+        .collect();
+    let id = ItemRef::Graphic {
+        graphic: Uuid::from_u128(4),
+        kind: PickKind::Other,
+    };
+    for kind in ["poly", "polygon"] {
+        let mut b = board();
+        b.graphics.push(polygon(kind, square()));
+        let copper = drawn_copper(&b);
+        assert!(copper.iter().all(|c| c.item == id && c.net == 0), "{kind}");
+        let shapes: Vec<Shape> = copper.into_iter().map(|c| c.shape).collect();
+        assert_eq!(shapes, expected, "{kind}");
+    }
+}
+
+#[test]
+fn a_polygon_missing_or_with_bad_points_is_refused() {
+    for kind in ["poly", "polygon"] {
+        let lone = polygon(kind, vec![Point::new(1.0, 1.0)]);
+        assert_eq!(
+            super::board_graphic_copper(&lone),
+            Err(super::DrawnCopperFault::MissingPoints),
+            "{kind}"
+        );
+        let mut points = square();
+        points[2].x = f64::NAN;
+        let bad = polygon(kind, points);
+        assert_eq!(
+            super::board_graphic_copper(&bad),
+            Err(super::DrawnCopperFault::Geometry(
+                crate::GeomError::Unrepresentable("graphic.points")
+            )),
+            "{kind}"
+        );
+        let mut b = board();
+        b.graphics.extend([lone, bad]);
+        assert!(drawn_copper(&b).is_empty(), "{kind}");
+    }
+}

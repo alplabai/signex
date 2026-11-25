@@ -11,7 +11,7 @@ use super::collect::{Images, board_drawing_function, graphic_function};
 use super::frame::FabFrame;
 use super::layers::FabLayer;
 use super::marks::{Attributes, Function, Mark, Step};
-use super::notes::Tally;
+use super::notes::{DrawnCopperItem, Tally};
 
 /// One text to write.
 struct Line<'a> {
@@ -80,6 +80,12 @@ pub(crate) fn texts(images: &mut Images, board: &PcbBoard, frame: FabFrame, tall
         let Some(layer) = FabLayer::of_token(&graphic.layer) else {
             continue;
         };
+        // A copper text frame the conversion refuses was left out whole,
+        // and named, with its box.
+        if matches!(layer, FabLayer::Copper(_)) && pcb_geom::board_graphic_copper(graphic).is_err()
+        {
+            continue;
+        }
         let size_mm = pcb_geom::text_frame_size_mm(graphic);
         // Corners the geometry refuses give no lines: the box was counted
         // as skipped.
@@ -100,6 +106,12 @@ pub(crate) fn texts(images: &mut Images, board: &PcbBoard, frame: FabFrame, tall
         let Some(layer) = FabLayer::of_token(&text.layer) else {
             continue;
         };
+        if let FabLayer::Copper(copper) = layer
+            && let Err(fault) = pcb_geom::board_text_copper(text)
+        {
+            tally.skip_drawn_copper(DrawnCopperItem::Text { id: text.uuid }, copper, fault);
+            continue;
+        }
         match pcb_geom::board_text_placement(text) {
             Ok(at) => {
                 let line = Line {

@@ -68,7 +68,7 @@ pub use copper::{
     CopperItem, collect_copper, copper_layers, layer_bit, layer_mask, net_at, pad_layers,
     pad_pieces, pieces_on, via_layers, via_pieces,
 };
-pub use drawn_copper::drawn_copper;
+pub use drawn_copper::{DrawnCopperFault, board_graphic_copper, board_text_copper, drawn_copper};
 pub use flip::flip_footprint;
 pub use free::{
     ARC_CHORD_ERROR_MM, arc_is_copper, arc_shapes, dimension_shapes, free_copper_on,
@@ -77,7 +77,7 @@ pub use free::{
 pub use gloss::{Glossed, gloss};
 pub use graphic::{
     GraphicShape, PlacedGraphic, board_graphic_placement, board_text_placement,
-    footprint_graphic_placement,
+    footprint_graphic_placement, is_polygon_token,
 };
 pub use graphic_index::graphic_strokes;
 pub use index::{

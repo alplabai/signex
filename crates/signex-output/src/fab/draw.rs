@@ -135,7 +135,7 @@ pub(crate) fn draw(drawing: &Drawing, pen: &Pen) -> Result<Drawn, GeomError> {
             };
             vec![stroke(a, vec![Step::Arc { to: b, center, ccw }])]
         }
-        "poly" | "polygon" => {
+        kind if pcb_geom::is_polygon_token(kind) => {
             let points = drawing
                 .points
                 .iter()

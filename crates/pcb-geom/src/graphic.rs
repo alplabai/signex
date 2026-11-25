@@ -126,6 +126,12 @@ const BOARD_FRAME: Placement = Placement {
     side: Side::Top,
 };
 
+/// Whether `graphic_type` names a closed polygon through its `points`: the
+/// `poly` and `polygon` tokens, both drawn so by the Gerber.
+pub fn is_polygon_token(graphic_type: &str) -> bool {
+    matches!(graphic_type, "poly" | "polygon")
+}
+
 /// The fields one drawing kind reads, from a footprint or a board drawing.
 struct Source<'a> {
     kind: &'a str,
@@ -170,7 +176,7 @@ fn place(
                     .collect::<Result<Vec<_>, GeomError>>()?,
             }
         }
-        "poly" => {
+        kind if is_polygon_token(kind) => {
             if source.points.len() < 2 {
                 return Ok(None);
             }

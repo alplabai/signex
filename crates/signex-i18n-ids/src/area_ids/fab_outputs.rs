@@ -56,6 +56,7 @@ define_ids! {
     FAB_OUTPUTS_STEP_REFUSED = "fab-outputs-step-refused";
     FAB_OUTPUTS_NOTE_ZONES = "fab-outputs-note-zones";
     FAB_OUTPUTS_NOTE_SKIPPED = "fab-outputs-note-skipped";
+    FAB_OUTPUTS_NOTE_DRAWN_COPPER = "fab-outputs-note-drawn-copper";
     FAB_OUTPUTS_NOTE_UNNAMED_PARTS = "fab-outputs-note-unnamed-parts";
     FAB_OUTPUTS_NOTE_HOLES = "fab-outputs-note-holes";
     FAB_OUTPUTS_NOTE_MODEL_UNREAD = "fab-outputs-note-model-unread";
