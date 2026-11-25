@@ -268,8 +268,8 @@ fn the_commands_edit_through_the_same_path_and_refuse_with_the_reason() {
         &["requirement=size"],
     );
     assert!(reason.contains("no requirement `size`"), "{reason}");
-    let reason = refusal(&mut app, "project_add_requirement", &["kind=rail_budget"]);
-    assert!(reason.contains("rail_budget"), "{reason}");
+    let reason = refusal(&mut app, "project_add_requirement", &["kind=no_such_kind"]);
+    assert!(reason.contains("no_such_kind"), "{reason}");
 
     let settings = answer(&mut app, "project_settings", &[]);
     assert_eq!(settings["requirements"][0]["id"], "cost");

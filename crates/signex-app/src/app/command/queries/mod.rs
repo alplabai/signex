@@ -8,7 +8,8 @@
 //! rule profile library, read off the update loop first), and the board
 //! queries `measure_board`, `query_board_nets` and `find_similar_items`
 //! (#2403), `board_panel` (#2410, `app::board_panel`), and the Project tab's
-//! `project_settings` (#1689-#1693, `app::project_tab`). Each
+//! `project_settings` (#1689-#1693, `app::project_tab`), and
+//! `query_rail_budget` (#2943), answered once its run lands. Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -29,6 +30,8 @@ mod elements;
 mod find;
 mod pins;
 pub(in crate::app::command) use pins::pin_id;
+mod rail_budget;
+pub use rail_budget::RailBudgetAnswered;
 mod read;
 mod sheet_view;
 mod transient;
@@ -64,6 +67,7 @@ const QUERY_IDS: &[&str] = &[
     "rules_preset_diff",
     "board_panel",
     "project_settings",
+    "query_rail_budget",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -127,6 +131,8 @@ impl Signex {
             "check_erc" => return Some(self.check_erc(command, args)),
             "check_drc" => return Some(self.check_drc(command, args)),
             "check_requirements" => return Some(self.check_requirements(command, args)),
+            // The project's rails against its parts, read off the UI thread.
+            "query_rail_budget" => return Some(self.query_rail_budget(command, args)),
             // The Rules manager's reads (#2398).
             "rules_list" | "rules_get" | "rules_effective" | "rules_explain"
             | "rules_conflicts" => {
@@ -204,3 +210,5 @@ pub(crate) mod check_drc_tests;
 mod check_erc_tests;
 #[cfg(test)]
 mod check_requirements_tests;
+#[cfg(test)]
+mod rail_budget_tests;

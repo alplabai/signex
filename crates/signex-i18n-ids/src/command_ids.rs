@@ -21,6 +21,7 @@ define_ids! {
         CMD_CHECK_DRC = "cmd-check-drc";
         CMD_CHECK_ERC = "cmd-check-erc";
         CMD_CHECK_REQUIREMENTS = "cmd-check-requirements";
+        CMD_QUERY_RAIL_BUDGET = "cmd-query-rail-budget";
         CMD_CLOSE_ACTIVE_DOCUMENT = "cmd-close-active-document";
         CMD_MENU_CLOSE_ACTIVE_DOCUMENT = "cmd-menu-close-active-document";
         CMD_CLOSE_ALL_DOCUMENTS = "cmd-close-all-documents";
@@ -284,6 +285,7 @@ define_ids! {
         CMD_PROJECT_REMOVE_REQUIREMENT = "cmd-project-remove-requirement";
         CMD_PROJECT_ENABLE_REQUIREMENT = "cmd-project-enable-requirement";
         CMD_PROJECT_RUN_REQUIREMENTS = "cmd-project-run-requirements";
+        CMD_PROJECT_SET_RAIL = "cmd-project-set-rail";
         CMD_NUMBER_SCHEMATIC_SHEETS = "cmd-number-schematic-sheets";
         CMD_MENU_NUMBER_SCHEMATIC_SHEETS = "cmd-menu-number-schematic-sheets";
         CMD_RESET_SCHEMATIC_DESIGNATORS = "cmd-reset-schematic-designators";

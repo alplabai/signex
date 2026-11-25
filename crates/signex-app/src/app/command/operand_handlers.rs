@@ -276,6 +276,11 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "project_enable_requirement",
         crate::app::project_tab::project_enable_requirement,
     ),
+    // #2943: the project's power rails.
+    (
+        "project_set_rail",
+        crate::app::project_tab::project_set_rail,
+    ),
     (
         "project_run_requirements",
         crate::app::project_tab::project_run_requirements,
@@ -534,6 +539,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         | "project_run_requirements" => Some(
             "the `project_*` edits need their operands — \
              use the Project tab (Project ▸ Project Options...)",
+        ),
+        // #2943: no panel edits the rails yet.
+        "project_set_rail" => Some(
+            "`project_set_rail` needs the operands `document` and `net`, with `voltage`, \
+             `tolerance_percent` or `remove` — run it from the command line",
         ),
         _ => None,
     }

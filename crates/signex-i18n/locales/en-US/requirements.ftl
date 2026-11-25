@@ -108,3 +108,26 @@ requirements-board-legend-outline = board outline, last run
 requirements-board-margin = margin { $width } × { $height } mm
 requirements-board-fits = the board fits
 requirements-board-does-not-fit = the board does not fit
+# requirements-rails-and-layers (#2943)
+requirements-kind-rail-budget = Rail budget
+requirements-kind-layer-count = Layer count
+requirements-field-net = Rails (* and ?)
+requirements-field-voltage = Voltage (V)
+requirements-field-tolerance = Tolerance (%)
+requirements-field-max-current = Max load (A)
+requirements-field-margin = Supply margin (%)
+requirements-field-min-layers = Min copper layers
+requirements-field-max-layers = Max copper layers
+# A rail budget card: $net the rails, $limits one phrase per limit, as a list.
+requirements-summary-rail-budget = { $net }: { $limits }
+requirements-summary-rail-supply = load within the source's supply
+requirements-summary-rail-voltage = { $voltage } V
+requirements-summary-rail-voltage-tolerance = { $voltage } V ± { $tolerance } %
+requirements-summary-rail-max-current = load ≤ { $current } A
+requirements-summary-rail-margin = { $margin } % margin
+requirements-summary-layer-range = { $min } to { $max } copper layers
+requirements-summary-layer-min = at least { $min } copper layers
+requirements-summary-layer-max = at most { $max } copper layers
+requirements-problem-not-a-voltage = { $text } is not a voltage: a number other than 0.
+requirements-problem-not-a-percent = { $text } is not a percentage from 0 to below 100.
+requirements-problem-layer-count-asks-nothing = Set a minimum or a maximum layer count.

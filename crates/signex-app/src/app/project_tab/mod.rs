@@ -21,6 +21,7 @@ mod look;
 mod open;
 mod parameters;
 mod preview_ui;
+mod rails;
 mod requirements;
 mod row_drag;
 mod schematic_defaults;
@@ -62,6 +63,7 @@ pub use parameters::ParameterGroup;
 #[cfg(test)]
 pub(crate) use preview_ui::PreviewPopup;
 pub use preview_ui::{ProjectPreviewMsg, ProjectPreviewUi};
+pub(crate) use rails::project_set_rail;
 pub use requirements::{RequirementsMsg, RequirementsTabState};
 pub(crate) use requirements::{
     project_add_requirement, project_enable_requirement, project_remove_requirement,

@@ -936,6 +936,15 @@ pub const PROJECT_ENABLE_REQUIREMENT: &[Operand] = &[
     required("requirement", OperandKind::Text),
     required("on", OperandKind::Bool),
 ];
+/// `project_set_rail` (#2943): the rail `net`'s voltage and tolerance as
+/// typed (an empty tolerance clears it), or `remove` to take it out.
+pub const PROJECT_SET_RAIL: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("net", OperandKind::Text),
+    optional("voltage", OperandKind::Text),
+    optional("tolerance_percent", OperandKind::Text),
+    optional("remove", OperandKind::Bool),
+];
 
 /// `set_layer_stack` (#2401): the named board's whole stack, top to bottom,
 /// as JSON rows (`{"layers": [...]}` or the list); a copper row names the
