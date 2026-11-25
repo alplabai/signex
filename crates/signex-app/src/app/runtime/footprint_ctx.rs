@@ -1,5 +1,5 @@
 use super::footprint_summaries::{
-    build_free_motion_summaries, build_over_constraint_summaries,
+    build_conflict_suggestion, build_free_motion_summaries, build_over_constraint_summaries,
     build_redundant_constraint_summaries, build_rejected_conflict_summaries,
     build_sketch_entity_summary, footprint_pad_kind_label, footprint_pad_shape_label,
 };
@@ -652,6 +652,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
             editor.primitive(),
             &editor.state.conflict,
         ),
+        conflict_suggestion: build_conflict_suggestion(editor),
         selected_pad,
         selected_pad_count: editor
             .state
@@ -769,8 +770,10 @@ pub(super) fn build_footprint_editor_panel_ctx(
         body_extent_mm: signex_bake::body_extent(editor.primitive()),
         pin_one_dot_missing: signex_bake::pin_one_dot_is_missing(editor.primitive()),
         sketch_state: {
-            let (tone, label) = crate::library::editor::standalone::dof_chip::dof_state(editor);
-            crate::panels::SketchStateSummary { tone, label }
+            use crate::library::editor::standalone::dof_chip;
+            let (tone, label) = dof_chip::dof_state(editor);
+            let dof = dof_chip::sketch_dof(editor);
+            crate::panels::SketchStateSummary { tone, label, dof }
         },
     })
 }

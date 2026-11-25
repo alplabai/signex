@@ -13,28 +13,38 @@ use signex_widgets::{Label, text};
 
 use crate::app::FootprintDocument;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+use crate::panels::SketchDof;
 use crate::styles::{PillTone, Radii, pill_colors};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
+/// The last solve's DOF state, which the chip, the Sketch DOF section and
+/// its card all read (mockup row 179): its conflicts, a rejected edit, then
+/// the free motions' count. `None` with no sketch or no solve yet.
+pub(crate) fn sketch_dof(editor: &FootprintDocument) -> Option<SketchDof> {
+    editor.primitive().sketch.as_ref()?;
+    let solve = editor.state.last_solve.as_ref()?;
+    let over_colour = solve.colours.values().any(|c| *c == DofColor::Over);
+    let over = solve.over_constraints.len().max(usize::from(over_colour));
+    Some(SketchDof::of(
+        over,
+        !editor.state.conflict.is_empty(),
+        solve.free_motions.dof,
+    ))
+}
 
 /// What the last solve says about the sketch, or why there is nothing to say.
 pub(crate) fn dof_state(editor: &FootprintDocument) -> (PillTone, MessageId) {
     if editor.primitive().sketch.is_none() {
         return (PillTone::Neutral, ids::EDITORS_SKETCH_NONE);
     }
-    let Some(solve) = editor.state.last_solve.as_ref() else {
-        return (PillTone::Neutral, ids::EDITORS_SKETCH_NOT_SOLVED);
-    };
-    let over =
-        !solve.over_constraints.is_empty() || solve.colours.values().any(|c| *c == DofColor::Over);
-    if over {
-        return (PillTone::Err, ids::EDITORS_SKETCH_OVER_CONSTRAINED);
+    match sketch_dof(editor) {
+        None => (PillTone::Neutral, ids::EDITORS_SKETCH_NOT_SOLVED),
+        Some(SketchDof::Over { .. }) => (PillTone::Err, ids::EDITORS_SKETCH_OVER_CONSTRAINED),
+        Some(SketchDof::Under { .. }) => (PillTone::Info, ids::EDITORS_SKETCH_UNDER_CONSTRAINED),
+        Some(SketchDof::Full) => (PillTone::Ok, ids::EDITORS_SKETCH_FULLY_CONSTRAINED),
     }
-    if solve.colours.values().any(|c| *c == DofColor::Under) {
-        return (PillTone::Info, ids::EDITORS_SKETCH_UNDER_CONSTRAINED);
-    }
-    (PillTone::Ok, ids::EDITORS_SKETCH_FULLY_CONSTRAINED)
 }
 
 fn pill<'a>(

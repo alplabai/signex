@@ -150,4 +150,7 @@ define_ids! {
     BOARD_PATTERN_BAKES_DRAWINGS = "board-pattern-bakes-drawings";
     BOARD_PATTERN_BAKES_REFUSED = "board-pattern-bakes-refused";
     BOARD_PATTERN_BAKES_UNRESOLVED = "board-pattern-bakes-unresolved";
+    SKETCH_DOF_SUGGEST = "sketch-dof-suggest";
+    SKETCH_DOF_SUGGEST_REMOVE = "sketch-dof-suggest-remove";
+    SKETCH_DOF_SUGGEST_CONVERT = "sketch-dof-suggest-convert";
 }

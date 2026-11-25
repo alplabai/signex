@@ -134,6 +134,35 @@ pub(super) fn build_rejected_conflict_summaries(
         .collect()
 }
 
+/// The conflict the DOF card suggests removing (mockup row 179): among the
+/// solve's over-constrained constraints, then the rejected edit's, the first
+/// still in the sketch, a dimension before any other kind.
+pub(super) fn build_conflict_suggestion(
+    editor: &crate::app::FootprintDocument,
+) -> Option<crate::panels::ConflictSuggestion> {
+    use crate::library::editor::footprint::sketch_mode::constraint_menu::kind_name;
+    let sketch = editor.primitive().sketch.as_ref()?;
+    let over = editor
+        .state
+        .last_solve
+        .as_ref()
+        .map_or(&[][..], |s| s.over_constraints.as_slice());
+    let candidates: Vec<_> = over
+        .iter()
+        .chain(editor.state.conflict.constraints())
+        .filter_map(|id| sketch.constraints.iter().find(|c| c.id == *id))
+        .collect();
+    let pick = candidates
+        .iter()
+        .find(|c| c.kind.dim_target().is_some())
+        .or_else(|| candidates.first())?;
+    Some(crate::panels::ConflictSuggestion {
+        constraint: pick.id,
+        kind_name: kind_name(&pick.kind),
+        dimension: pick.kind.dim_target().is_some(),
+    })
+}
+
 /// Residual magnitude for one over-constrained constraint, or `None`
 /// when it cannot be evaluated.
 ///
@@ -504,5 +533,78 @@ mod tests {
 
         apply_sketch_edit(&mut state, &mut fp, SketchEdit::ForceRebuild).expect("solves");
         assert!(build_rejected_conflict_summaries(&fp, &state.conflict).is_empty());
+    }
+
+    /// Mockup row 179: after a rejected edit the chip, the section and the
+    /// card read one conflict, and the suggestion names the dimension the
+    /// rejected one clashed with, which is still in the sketch.
+    #[test]
+    fn a_rejected_edit_reads_one_conflict_and_suggests_the_kept_dimension() {
+        use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
+        use crate::library::editor::footprint::sketch_mode::SketchEdit;
+        use crate::library::editor::footprint::state::FootprintEditorState;
+        use crate::library::editor::standalone::dof_chip::sketch_dof;
+        use crate::panels::SketchDof;
+
+        let plane = PlaneId::new();
+        let (p1, p2) = (SketchEntityId::new(), SketchEntityId::new());
+        let distance = |mm: f64| Constraint {
+            id: ConstraintId::new(),
+            kind: ConstraintKind::DistancePtPt {
+                p1,
+                p2,
+                target: DimTarget::Literal(mm),
+            },
+        };
+        let kept = distance(5.0);
+        let kept_id = kept.id;
+        let mut fp = Footprint::empty("suggestion");
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![
+                Entity::new(p1, plane, EntityKind::Point { x: 0.0, y: 0.0 }),
+                Entity::new(p2, plane, EntityKind::Point { x: 1.0, y: 0.0 }),
+            ],
+            constraints: vec![
+                Constraint {
+                    id: ConstraintId::new(),
+                    kind: ConstraintKind::Fixed { point: p1 },
+                },
+                kept,
+            ],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::ForceRebuild).expect("solvable");
+        apply_sketch_edit(
+            &mut state,
+            &mut fp,
+            SketchEdit::AddConstraint(distance(9.0)),
+        )
+        .expect_err("9 mm contradicts 5 mm");
+
+        let mut editor = crate::app::FootprintDocument::new(
+            std::path::PathBuf::from("suggestion.snxfpt"),
+            signex_library::FootprintFile::from_footprint(fp),
+        );
+        editor.state = state;
+
+        assert_eq!(sketch_dof(&editor), Some(SketchDof::Over { conflicts: 1 }));
+        let suggestion = build_conflict_suggestion(&editor).expect("a conflict to suggest");
+        assert_eq!(suggestion.constraint, kept_id);
+        assert!(suggestion.dimension);
+        assert_eq!(
+            suggestion.kind_name,
+            signex_i18n::ids::SKETCH_CANVAS_KIND_DISTANCE
+        );
+
+        // With the conflict cleared the kept solve reads again: p2 still
+        // turns about the fixed p1, so one free motion is left.
+        editor.state.conflict.clear();
+        assert!(build_conflict_suggestion(&editor).is_none());
+        assert_eq!(sketch_dof(&editor), Some(SketchDof::Under { dof: 1 }));
     }
 }

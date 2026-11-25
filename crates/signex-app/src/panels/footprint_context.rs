@@ -32,6 +32,8 @@ pub struct FootprintEditorPanelContext {
     /// is back at its last good solve; these rows say why the edit did not
     /// stick. Empty after any edit or solve that succeeds.
     pub rejected_conflicts: Vec<RejectedConflictSummary>,
+    /// The conflict the DOF card suggests removing (mockup row 179).
+    pub conflict_suggestion: Option<super::ConflictSuggestion>,
     /// Read-only summary of the selected pad — populated when in
     /// Pads mode and a pad is selected.
     pub selected_pad: Option<FootprintPadSummary>,
@@ -763,4 +765,6 @@ pub struct FootprintSketchEntitySummary {
 pub struct SketchStateSummary {
     pub tone: crate::styles::PillTone,
     pub label: signex_i18n::MessageId,
+    /// The solve's DOF state; `None` with no sketch or no solve yet.
+    pub dof: Option<super::SketchDof>,
 }

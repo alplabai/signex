@@ -7,7 +7,7 @@ use signex_sketch::id::SketchEntityId;
 use signex_sketch::solver::free_motion::MotionKind;
 
 use super::{dof_card, motion_label};
-use crate::panels::{FootprintSolveSummary, FreeMotionSummary};
+use crate::panels::{FootprintSolveSummary, FreeMotionSummary, SketchDof};
 use crate::styles::PillTone;
 
 fn plain(text: impl Into<String>) -> String {
@@ -32,7 +32,8 @@ fn card_texts(
     conflicts: usize,
     constraints: usize,
 ) -> (String, PillTone, String, String) {
-    let card = dof_card(&solve(dof, conflicts), constraints, &I18n::en_us());
+    let state = SketchDof::of(conflicts, false, dof);
+    let card = dof_card(state, &solve(dof, conflicts), constraints, &I18n::en_us());
     (
         plain(card.number.into_string()),
         card.tone,
@@ -68,6 +69,24 @@ fn an_over_constrained_sketch_shows_its_conflicts_and_keeps_the_last_solve() {
     assert_eq!((number.as_str(), tone), ("\u{2212}1", PillTone::Err));
     assert_eq!(state, "Over-constrained · 1 conflict");
     assert_eq!(detail, "49 constraints · last good solve kept");
+}
+
+#[test]
+fn a_rejected_edit_shows_the_over_constrained_card_over_a_free_solve() {
+    let state = SketchDof::of(0, true, 4);
+    let card = dof_card(state, &solve(4, 0), 7, &I18n::en_us());
+    assert_eq!(
+        (plain(card.number.into_string()).as_str(), card.tone),
+        ("\u{2212}1", PillTone::Err)
+    );
+    assert_eq!(
+        plain(card.state.into_string()),
+        "Over-constrained · 1 conflict"
+    );
+    assert_eq!(
+        plain(card.detail.into_string()),
+        "7 constraints · last good solve kept"
+    );
 }
 
 fn label(kind: MotionKind, entity_count: usize) -> String {

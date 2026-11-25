@@ -25,6 +25,7 @@ mod bake_outcome;
 mod bake_panel;
 mod board;
 mod body;
+mod conflict_suggestion;
 mod conflicts;
 mod dof_card;
 mod illustration;

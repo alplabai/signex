@@ -36,6 +36,8 @@ mod board_sketch_props;
 pub use board_sketch_props::{BoardSketchProps, MountingHoleProps};
 mod free_motion_summary;
 pub use free_motion_summary::FreeMotionSummary;
+mod sketch_dof;
+pub use sketch_dof::{ConflictSuggestion, SketchDof};
 mod sketch_fix;
 pub use sketch_fix::SketchFixMsg;
 mod board_net_classes;

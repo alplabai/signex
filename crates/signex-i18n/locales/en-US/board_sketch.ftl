@@ -324,3 +324,8 @@ board-pattern-bakes-drawings =
     }
 board-pattern-bakes-refused = Bake refuses a pattern of the board outline or a component anchor
 board-pattern-bakes-unresolved = Bakes once its count and spacing resolve
+# The suggestion under an over-constrained sketch's conflict rows (mockup
+# rows 179 and 187); $kind names a constraint kind, such as Distance.
+sketch-dof-suggest = Suggested: remove the conflicting { $kind }.
+sketch-dof-suggest-remove = Remove conflicting constraint
+sketch-dof-suggest-convert = Convert to reference
