@@ -307,13 +307,13 @@ fn select_and_highlight_net_act_on_the_net_of_the_selection() {
     );
 }
 
-/// The net in focus the board scene is drawn with, and its dim amount.
-fn drawn_focus(app: &Signex) -> Option<(u32, u8)> {
+/// The nets in focus the board scene is drawn with, and the dim amount.
+fn drawn_focus(app: &Signex) -> Option<(Vec<u32>, u8)> {
     app.interaction_state
         .pcb_canvas
         .active_renderer_snapshot()
         .and_then(|snapshot| snapshot.paint.net_focus())
-        .map(|focus| (focus.net, focus.dim_percent))
+        .map(|focus| (focus.nets.clone(), focus.dim_percent))
 }
 
 /// #2514: a highlighted net redraws the board with every other net dimmed
@@ -333,15 +333,19 @@ fn a_highlighted_net_dims_the_other_nets_by_the_preference() {
 
     app.select_pcb_items(&[ItemRef::Track(GND_TRACK)]);
     run(&mut app, "highlight_board_net");
-    assert_eq!(drawn_focus(&app), Some((1, 50)));
+    assert_eq!(drawn_focus(&app), Some((vec![1], 50)));
 
     let prefs = |msg| Message::Preferences(PreferencesMsg::Inner(msg));
     let _ = app.update(Message::Preferences(PreferencesMsg::Open));
     let _ = app.update(prefs(PrefMsg::DraftPcbDimOthersPercent(80)));
-    assert_eq!(drawn_focus(&app), Some((1, 50)), "a draft does not redraw");
+    assert_eq!(
+        drawn_focus(&app),
+        Some((vec![1], 50)),
+        "a draft does not redraw"
+    );
     let _ = app.update(prefs(PrefMsg::Save));
     assert_eq!(app.ui_state.pcb_dim_others_percent, 80);
-    assert_eq!(drawn_focus(&app), Some((1, 80)));
+    assert_eq!(drawn_focus(&app), Some((vec![1], 80)));
 
     app.clear_pcb_selection();
     assert!(app.interaction_state.pcb_query.net_highlight.is_none());

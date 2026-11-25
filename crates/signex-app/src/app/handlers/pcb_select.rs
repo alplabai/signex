@@ -148,12 +148,7 @@ impl Signex {
             self.interaction_state.pcb_carry = None;
             self.ui_state.command_replay.drop_pending_move();
         }
-        let cleared = self.interaction_state.pcb_selection.clear();
-        if unlit {
-            // The other nets come back to full brightness (#2514); this
-            // repaints the highlight too.
-            self.sync_pcb_canvas_from_visible_board();
-        } else if cleared || carried {
+        if self.interaction_state.pcb_selection.clear() || carried || unlit {
             self.refresh_pcb_highlight();
         }
     }
@@ -218,6 +213,12 @@ impl Signex {
     /// Hand the canvas the copper to paint for the current selection, the
     /// preview of a drag or Move, and what a press grabs to drag (#2240).
     pub(crate) fn refresh_pcb_highlight(&mut self) {
+        // A highlight, route, drag or placement that starts or ends changes
+        // the nets the board keeps bright (#2514): the board is drawn again,
+        // and that comes back here with the scene in step.
+        if self.sync_board_net_focus() {
+            return;
+        }
         // The leg on the pointer is routed here, once per change, not per
         // repaint (#2389).
         self.update_router_preview();
@@ -380,9 +381,13 @@ fn sync_drag_preview(
             .arcs
             .retain(|arc| !arcs.iter().any(|ends| ends.arc == arc.uuid));
         let fills = pcb_geom::zone_fills(&rest);
-        let base = PcbSnapshot::from_board_with_view(&rest, view)
+        let mut base = PcbSnapshot::from_board_with_view(&rest, view)
             .with_designator_standard(standard)
             .with_zone_fills(&fills);
+        // The board under the carry keeps the nets in focus (#2514).
+        if let Some(shown) = canvas.active_renderer_snapshot() {
+            base.paint = base.paint.with_focus_of(&shown.paint);
+        }
         canvas.begin_drag_preview(carried.clone(), carry.leaves_tracks, following, base);
     }
     let following = canvas.drag_preview_following().to_vec();

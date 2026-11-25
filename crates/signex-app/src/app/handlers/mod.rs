@@ -88,6 +88,9 @@ mod pcb_item_move_tests;
 pub(crate) mod pcb_layer_stack;
 pub(crate) mod pcb_layer_strip;
 mod pcb_layers_panel;
+mod pcb_net_focus;
+#[cfg(test)]
+mod pcb_net_focus_tests;
 mod pcb_nets_panel;
 #[cfg(test)]
 mod pcb_nets_panel_tests;

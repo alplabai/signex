@@ -65,6 +65,8 @@ mod graphic_tests;
 #[cfg(test)]
 mod layer_tests;
 #[cfg(test)]
+mod net_focus_tests;
+#[cfg(test)]
 mod outline_preview_tests;
 #[cfg(test)]
 mod pause_tests;
