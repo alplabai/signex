@@ -720,5 +720,13 @@ define_ids! {
         CMD_FLIP_BOARD_3D = "cmd-flip-board-3d";
         CMD_CYCLE_BOARD_3D_LIGHTING = "cmd-cycle-board-3d-lighting";
         CMD_COPY_BOARD_3D_SCREENSHOT = "cmd-copy-board-3d-screenshot";
+        // notebook-references
+        CMD_NOTEBOOK_REFERENCES = "cmd-notebook-references";
+        CMD_NOTEBOOK_REFERENCE_CARD = "cmd-notebook-reference-card";
+        CMD_NOTEBOOK_REFERENCE_PICKER = "cmd-notebook-reference-picker";
+        CMD_NOTEBOOK_BADGES = "cmd-notebook-badges";
+        CMD_NOTEBOOK_FIX_REFERENCE = "cmd-notebook-fix-reference";
+        CMD_TOGGLE_NOTEBOOK_BADGES = "cmd-toggle-notebook-badges";
+        CMD_MENU_TOGGLE_NOTEBOOK_BADGES = "cmd-menu-toggle-notebook-badges";
     }
 }

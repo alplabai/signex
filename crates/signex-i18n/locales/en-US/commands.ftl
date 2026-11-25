@@ -760,3 +760,12 @@ cmd-menu-polygon-manager = Polygon Manager...
 cmd-flip-board-3d = Turn the board over in the 3D view
 cmd-cycle-board-3d-lighting = Next lighting preset in the 3D view
 cmd-copy-board-3d-screenshot = Copy a screenshot of the 3D view
+# notebook-references
+# Design Notebook references and the Notebook badges (mockup rows 196 and 197).
+cmd-notebook-references = List the notebook's references and the stale ones
+cmd-notebook-reference-card = Read the hover card of a notebook reference
+cmd-notebook-reference-picker = List what the @ reference picker offers
+cmd-notebook-badges = List the Notebook badges and their blocks
+cmd-notebook-fix-reference = Fix a stale notebook reference
+cmd-toggle-notebook-badges = Show or hide the Notebook badges
+cmd-menu-toggle-notebook-badges = Notebook Badges

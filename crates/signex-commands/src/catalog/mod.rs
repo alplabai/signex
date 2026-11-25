@@ -24,6 +24,7 @@ mod history;
 mod layers;
 mod library;
 mod nets;
+mod notebook;
 mod operands;
 mod pcb_sync;
 mod placement;
@@ -331,6 +332,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     grid::GRID,
     library::LIBRARY,
     workspace::WORKSPACE,
+    notebook::NOTEBOOK,
 ];
 
 /// Flattened iterator over every command's metadata, across all groups, in

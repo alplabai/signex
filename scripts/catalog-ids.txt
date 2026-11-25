@@ -175,6 +175,11 @@ next_highlighted_net_item
 next_layer
 next_sheet
 next_signal_layer
+notebook_badges
+notebook_fix_reference
+notebook_reference_card
+notebook_reference_picker
+notebook_references
 number_schematic_sheets
 open_child_sheet
 open_command_palette
@@ -399,6 +404,7 @@ toggle_floating_panels
 toggle_layer_numbers
 toggle_layer_visibility
 toggle_layers_panel
+toggle_notebook_badges
 toggle_origin_marker
 toggle_properties_panel
 toggle_ratsnest
