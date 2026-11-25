@@ -30,9 +30,10 @@ pub const PACKAGE_VERSION: (u32, u32, u32) = (0, 1, 0);
 pub const PACKAGE_IMPORT: &str = "#import \"@signex/notebook:0.1.0\": *";
 
 /// The package's files, served by the world as written in the crate.
-const PACKAGE_FILES: [(&str, &str); 2] = [
+const PACKAGE_FILES: [(&str, &str); 3] = [
     ("typst.toml", include_str!("../typst/notebook/typst.toml")),
     ("lib.typ", include_str!("../typst/notebook/lib.typ")),
+    ("measure.typ", include_str!("../typst/notebook/measure.typ")),
 ];
 
 /// The extensions read as Typst source.
@@ -87,6 +88,12 @@ impl NotebookWorld {
         for (path, text) in PACKAGE_FILES {
             if let Some(id) = package_id(path) {
                 world.add(id, path, text.as_bytes().to_vec());
+            }
+        }
+        // What the package's #attachment prints (`crate::derived`).
+        for (path, bytes) in crate::derived::package_files(notebook) {
+            if let Some(id) = package_id(&path) {
+                world.add(id, &path, bytes);
             }
         }
         Some(world)

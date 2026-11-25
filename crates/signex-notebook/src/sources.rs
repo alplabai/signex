@@ -5,15 +5,18 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::attachment::DesignValues;
 use crate::syntax::includes;
 
 /// The files of one notebook, keyed by their `/`-separated path inside the
 /// notebook folder (`design.snxnbk`, `chapters/power.snxnbk`,
-/// `attachments/ripple.csv`).
+/// `attachments/ripple.csv`), and the design's part values the stale marks
+/// are printed against.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NotebookSources {
     main: String,
     files: BTreeMap<String, Vec<u8>>,
+    design: DesignValues,
 }
 
 /// A file [`NotebookSources::load`] could not add.
@@ -45,7 +48,11 @@ impl NotebookSources {
         let main = normalize(&main).unwrap_or_default();
         let mut files = BTreeMap::new();
         files.insert(main.clone(), text.into());
-        Self { main, files }
+        Self {
+            main,
+            files,
+            design: DesignValues::default(),
+        }
     }
 
     /// Read the notebook file `main` and every chapter it includes, at any
@@ -69,6 +76,7 @@ impl NotebookSources {
         let mut sources = Self {
             main: main.clone(),
             files: BTreeMap::new(),
+            design: DesignValues::default(),
         };
         let mut seen = BTreeSet::from([main.clone()]);
         let mut pending = vec![(String::new(), 0, main.clone(), main)];
@@ -117,6 +125,34 @@ impl NotebookSources {
         };
         self.files.insert(path, bytes.into());
         true
+    }
+
+    /// Set the design's part values, by designator: an attachment taken
+    /// with other values prints its stale mark. None are set by default,
+    /// and then nothing prints as stale.
+    pub fn set_design_values(&mut self, values: DesignValues) {
+        self.design = values;
+    }
+
+    /// The part values set with [`Self::set_design_values`].
+    pub fn design_values(&self) -> &DesignValues {
+        &self.design
+    }
+
+    /// The attachments the notebook files name that are not held yet, as
+    /// paths inside the notebook folder (`attachments/scope/a.csv`), each
+    /// once, sorted: what the caller reads before a compile so the figures
+    /// print.
+    pub fn missing_attachments(&self) -> Vec<String> {
+        let mut missing: Vec<String> = crate::record::record(self)
+            .attachments
+            .iter()
+            .map(crate::attachment::Attachment::path_in_notebook)
+            .filter(|path| !self.files.contains_key(path))
+            .collect();
+        missing.sort();
+        missing.dedup();
+        missing
     }
 
     /// The notebook file's path.

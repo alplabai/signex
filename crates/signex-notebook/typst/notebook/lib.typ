@@ -75,7 +75,9 @@
 // DEC-.
 #let note = _entry("note")
 #let calculation = _entry("calculation")
-#let measurement = _entry("measurement")
+// The measurement block prints a verdict table, and attachments are
+// figures (mockup row 199): measure.typ.
+#import "measure.typ": attachment, measurement
 #let issue = _entry("issue")
 #let decision = _entry("decision")
 

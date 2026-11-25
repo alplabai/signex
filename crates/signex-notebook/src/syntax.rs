@@ -85,7 +85,7 @@ pub fn distinct_references(source: &str) -> Vec<Reference> {
     distinct
 }
 
-fn reference_of(call: ast::FuncCall<'_>) -> Option<Reference> {
+pub(crate) fn reference_of(call: ast::FuncCall<'_>) -> Option<Reference> {
     let ast::Expr::Ident(name) = call.callee() else {
         return None;
     };
@@ -126,7 +126,7 @@ fn walk(node: &SyntaxNode, offset: usize, visit: &mut impl FnMut(&SyntaxNode, us
 }
 
 /// The 1-based line byte `offset` of `text` is on.
-fn line_of(text: &str, offset: usize) -> u32 {
+pub(crate) fn line_of(text: &str, offset: usize) -> u32 {
     let before = text.get(..offset).unwrap_or(text);
     u32::try_from(before.matches('\n').count() + 1).unwrap_or(u32::MAX)
 }

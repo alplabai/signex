@@ -21,7 +21,28 @@
 //! [`CompiledNotebook`] draws a page for the preview and writes a PDF that
 //! is the same file every time.
 //!
+//! Bench work (mockup row 199): [`measurement`] reads the `#measurement`
+//! readings with their verdict and builds the timeline of a net, part or
+//! pin; [`attachment`] reads the `#attachment` figures, their stale marks
+//! and the copy into `notebook/attachments/`; [`scope`] draws a scope CSV
+//! as a vector plot. [`record`] gathers them over a notebook's files and
+//! [`report`] gives the command answers (`docs/NOTEBOOK_MEASUREMENTS.md`).
+//!
 //! UI-free and IO-free: the caller reads the files.
+
+pub mod attachment;
+pub mod edit;
+pub mod measurement;
+pub mod record;
+pub mod report;
+pub mod scope;
+pub mod si;
+
+mod derived;
+mod literal;
+mod timestamp;
+
+pub use timestamp::Timestamp;
 
 mod annotation;
 mod compile;
@@ -64,8 +85,16 @@ pub const DEFAULT_NOTEBOOK_FILE: &str = "design.snxnbk";
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_attachment;
+#[cfg(test)]
 mod tests_compile;
 #[cfg(test)]
 mod tests_file;
 #[cfg(test)]
+mod tests_measure_print;
+#[cfg(test)]
+mod tests_measurement;
+#[cfg(test)]
 mod tests_model;
+#[cfg(test)]
+mod tests_scope;
