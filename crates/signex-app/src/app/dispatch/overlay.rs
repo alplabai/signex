@@ -692,6 +692,7 @@ impl Signex {
             ErcMsg::RunFinished { generation, result } => {
                 self.handle_erc_run_finished(generation, &result)
             }
+            ErcMsg::Live(msg) => self.dispatch_live_erc_message(msg),
             ErcMsg::StoreRulesInProject => self.handle_store_erc_rules_in_project(),
             ErcMsg::PinJunctionRepairRequested => {
                 self.repair_pin_junctions();

@@ -654,6 +654,9 @@ pub struct UiState {
     pub erc_run_generation: u64,
     /// An ERC run is in flight; the ERC panel shows "Running…".
     pub erc_running: bool,
+    /// Live ERC (#1288): the preference, the wait after an edit and the
+    /// sheets the last live check read. Boxed: its maps stay off `UiState`.
+    pub live_erc: Box<crate::app::handlers::erc::LiveErc>,
     /// `DocumentState::sheet_edit_epoch` when the sheets behind the cached ERC
     /// results were read; the results are stale once the document is past it.
     pub erc_epoch: u64,
@@ -927,6 +930,7 @@ mod tests {
             ("profile_manager", field_size(|ui| &ui.profile_manager)),
             ("erc_rule_list", field_size(|ui| &ui.erc_rule_list)),
             ("parameter_table", field_size(|ui| &ui.parameter_table)),
+            ("live_erc", field_size(|ui| &ui.live_erc)),
             (
                 "board_output.dialog",
                 field_size(|ui| &ui.board_output.dialog),

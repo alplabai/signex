@@ -233,6 +233,9 @@ impl Signex {
         // A board that opened takes its kept view; a changed view is saved
         // soon (#2480).
         tasks.push(self.sync_pcb_layer_views());
+        // A sheet edit starts live ERC's wait (#1288); its timer is a
+        // subscription, so this update returns no task for it.
+        self.sync_live_erc();
         // A Properties draft of a board no window shows any more goes (#1312).
         self.prune_pcb_footprint_draft();
         self.prune_pcb_component_draft();
