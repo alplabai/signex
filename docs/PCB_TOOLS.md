@@ -234,8 +234,8 @@ checked by `scripts/check_routing_corpus.sh`; its README says what the
 licences allow. The boards are stored in Git LFS: in a clone without the
 LFS objects each board is a pointer file, and the tests skip it with a
 message (`git lfs pull` fetches them). With
-`SIGNEX_REQUIRE_ROUTING_CORPUS=1` the load check fails on a pointer or an
-empty corpus instead.
+`SIGNEX_REQUIRE_ROUTING_CORPUS=1` the load check and the long runs fail on
+a pointer or an empty corpus instead.
 
 - **Soak.** A seeded driver applies random actions through `BoardEngine`:
   routes and shoves (one or two legs from a ratsnest line or a pad, landed
@@ -244,7 +244,15 @@ empty corpus instead.
   matches the steps taken, undo and redo give back the board exactly as it
   was, ids are unique, tracks are finite, on copper and on known nets, no
   zero-length track appeared, a refused route changed nothing, and a
-  just-routed draft fits the board it was routed on. A failure prints its
+  just-routed draft fits the board it was routed on. The board states the
+  history is compared against are digests of the board's JSON, so 100 steps
+  of history on a large corpus board hold no copies of it. Every so often,
+  two costlier checks: the DRC delta of a route (as in the bench below; by
+  default every 25th route of the long soak) and the file round trip (by
+  default every 1 000 actions and after the last; per PR after the last):
+  the board written as `.snxpcb` and read back keeps every track and via and
+  writes the same file again. A board that does not round-trip as loaded is
+  reported and not round-trip checked. A failure prints its
   seed, action index and the command that replays it. A routed track laid
   over a same-net track already there (same layer, on one line, sharing a
   stretch) fails the soak (#2492). Not checked yet (#2482):
@@ -266,14 +274,26 @@ empty corpus instead.
   too long for per-PR CI. Per PR the routing corpus is checked by loading
   alone (`tests/routing/corpus_check.rs`): every board parses, names only
   layers this build knows (copper items on copper), and no track end lands
-  on another net's pad once the pads are placed. The scheduled `routing-soak` workflow runs the ignored
-  `soak_long` (10 000 actions on every board) and `bench_thresholds` (shoves converged within 8 rounds on 95%
-  of actions; median latency at most 16 ms and p95 at most 33 ms on the
-  median board by copper count) in release; a failed night opens or
-  comments on the issue "Nightly routing soak is failing". `SIGNEX_SOAK_SEED`,
-  `SIGNEX_SOAK_ACTIONS` and `SIGNEX_SOAK_BOARD` pick the seed, the length
-  and one board (looked up in the whole corpus, also by the short runs).
-  `routing-soak` checks out the LFS objects. `test · workspace` fetches
+  on another net's pad once the pads are placed. The `routing-soak`
+  workflow runs weekly and on demand (`workflow_dispatch`, with seed,
+  length and board inputs), never on a PR, and is not a required check. In
+  release it runs the ignored `soak_long` (10 000 actions on every board,
+  the boards side by side, one per core) and then, alone on the runner,
+  `bench_thresholds` (shoves converged within 8 rounds on 95% of actions;
+  median latency at most 16 ms and p95 at most 33 ms on the median board by
+  copper count). Every board fails or passes on its own and gets a report
+  line; the lines go to the run summary and the uploaded artifact
+  `routing-report-<run number>` (format: `docs/PERFORMANCE.md`, "Router
+  soak and bench"). Latency is asserted only where
+  `SIGNEX_ROUTING_ASSERT_LATENCY=1`, which only the scheduled job sets;
+  elsewhere it is measured and reported. A failed scheduled run opens or
+  comments on the issue "Scheduled routing soak is failing".
+  `SIGNEX_SOAK_SEED`, `SIGNEX_SOAK_ACTIONS` and `SIGNEX_SOAK_BOARD` pick the
+  seed, the length and one board (looked up in the whole corpus, also by
+  the short runs); the rest are listed in `docs/PERFORMANCE.md`.
+  `routing-soak` checks out the LFS objects and sets
+  `SIGNEX_REQUIRE_ROUTING_CORPUS=1`, so a board left as a pointer fails the
+  long runs too. `test · workspace` fetches
   them from a `.git/lfs` cache keyed on the boards' object ids, and sets
   `SIGNEX_REQUIRE_ROUTING_CORPUS=1`, on pushes, the merge queue and on a PR
   that changes the corpus, `signex-types`, `pcb-geom` or the routing tests.
