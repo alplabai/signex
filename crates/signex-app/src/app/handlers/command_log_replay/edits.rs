@@ -58,7 +58,9 @@ fn rebuilt_board_move(
         return None;
     };
     let carry = carry_of_drop(drop);
-    Some(drag_commands(board, &carry, drop.delta))
+    // A replay adds its corner legs as new tracks, so fresh ids.
+    let mut ids = signex_types::object_id::UuidV7Ids;
+    Some(drag_commands(board, &carry, drop.delta, &mut ids))
 }
 
 /// Whether a recorded board move no longer fits: a target left where the move

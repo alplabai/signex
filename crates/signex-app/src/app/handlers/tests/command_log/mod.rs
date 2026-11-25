@@ -512,6 +512,7 @@ fn a_board_move_replays_its_offset_while_another_part_is_selected() {
         &moved,
         delta,
         corner,
+        &mut signex_types::object_id::UuidV7Ids,
     );
     app.ui_state
         .command_replay

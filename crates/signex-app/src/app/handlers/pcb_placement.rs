@@ -578,7 +578,13 @@ impl Signex {
             let commands = if carry.leaves_tracks {
                 placement::move_footprints_only(board, &carry.footprints, delta)
             } else {
-                placement::move_commands(board, &carry.footprints, delta, carry.stretch_corner)
+                placement::move_commands(
+                    board,
+                    &carry.footprints,
+                    delta,
+                    carry.stretch_corner,
+                    &mut signex_types::object_id::UuidV7Ids,
+                )
             };
             (delta, commands)
         });

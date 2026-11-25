@@ -70,7 +70,14 @@ impl Signex {
         let delta = self.via_drag_delta(carry, from, to)?;
         let board = self.active_pcb()?;
         let refused = !carry.leaves_tracks
-            && placement::move_vias(board, &carry.vias, delta, carry.stretch_corner).is_err();
+            && placement::move_vias(
+                board,
+                &carry.vias,
+                delta,
+                carry.stretch_corner,
+                &mut signex_types::object_id::UuidV7Ids,
+            )
+            .is_err();
         Some(if refused { Point::new(0.0, 0.0) } else { delta })
     }
 

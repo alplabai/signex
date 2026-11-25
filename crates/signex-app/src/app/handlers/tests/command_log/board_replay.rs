@@ -308,6 +308,7 @@ fn drop_part(app: &mut Signex, path: &Path, dx: f64) {
         &moved,
         delta,
         corner,
+        &mut signex_types::object_id::UuidV7Ids,
     );
     app.ui_state
         .command_replay
@@ -761,6 +762,7 @@ fn a_board_move_replay_bends_the_tracks_on_its_pads_as_the_drop_did() {
         &moved,
         delta,
         corner,
+        &mut signex_types::object_id::UuidV7Ids,
     );
     app.ui_state
         .command_replay

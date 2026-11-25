@@ -12,6 +12,7 @@ use std::path::Path;
 use signex_engine::pcb::item_move::move_items;
 use signex_engine::pcb::placement::{self, PlacementRefusal};
 use signex_engine::pcb::{BoardCommand, BoardCommandError, BoardItem, BoardItemId};
+use signex_types::object_id::{IdSource, UuidV7Ids};
 use signex_types::pcb::{PcbBoard, Point};
 use uuid::Uuid;
 
@@ -95,6 +96,7 @@ fn mixed_commands(
     board: &PcbBoard,
     carry: &PcbCarry,
     delta: Point,
+    new_ids: &mut dyn IdSource,
 ) -> Result<Vec<BoardCommand>, PlacementRefusal> {
     let mut commands = Vec::new();
     let corner = carry.stretch_corner;
@@ -102,14 +104,14 @@ fn mixed_commands(
         commands.extend(if carry.leaves_tracks {
             placement::move_footprints_only(board, &carry.footprints, delta)?
         } else {
-            placement::move_commands(board, &carry.footprints, delta, corner)?
+            placement::move_commands(board, &carry.footprints, delta, corner, new_ids)?
         });
     }
     if !carry.vias.is_empty() {
         commands.extend(if carry.leaves_tracks {
             placement::move_vias_only(board, &carry.vias, delta)?
         } else {
-            placement::move_vias(board, &carry.vias, delta, corner)?
+            placement::move_vias(board, &carry.vias, delta, corner, new_ids)?
         });
     }
     // The track ends the part and via moves shifted each on its own, and
@@ -129,7 +131,7 @@ fn mixed_commands(
         BoardCommand::AddItems { .. } => false,
         _ => true,
     });
-    commands.extend(follow_commands(board, carry, delta));
+    commands.extend(follow_commands(board, carry, delta, new_ids));
     let (items, rooms) = (&carry.items, &carry.rooms);
     commands.extend(move_commands(
         board,
@@ -145,12 +147,17 @@ fn mixed_commands(
 /// moved by `delta` and bent at the carry's corner as the drag preview draws
 /// them, with their new legs added (`placement::stretch_commands`, #2513);
 /// none for a zero offset.
-fn follow_commands(board: &PcbBoard, carry: &PcbCarry, delta: Point) -> Vec<BoardCommand> {
+fn follow_commands(
+    board: &PcbBoard,
+    carry: &PcbCarry,
+    delta: Point,
+    new_ids: &mut dyn IdSource,
+) -> Vec<BoardCommand> {
     if delta.x == 0.0 && delta.y == 0.0 {
         return Vec::new();
     }
     let following = carry.following(board);
-    placement::stretch_commands(board, &following, delta, carry.stretch_corner)
+    placement::stretch_commands(board, &following, delta, carry.stretch_corner, new_ids)
 }
 
 /// The commands that move what a drag carries by `delta`, one undo step: a
@@ -162,28 +169,29 @@ pub(crate) fn drag_commands(
     board: &PcbBoard,
     carry: &PcbCarry,
     delta: Point,
+    new_ids: &mut dyn IdSource,
 ) -> Result<Vec<BoardCommand>, PlacementRefusal> {
     let (corner, leaves) = (carry.stretch_corner, carry.leaves_tracks);
     if carry.is_mixed() {
-        return mixed_commands(board, carry, delta);
+        return mixed_commands(board, carry, delta, new_ids);
     }
     if !carry.vias.is_empty() {
         return if leaves {
             placement::move_vias_only(board, &carry.vias, delta)
         } else {
-            placement::move_vias(board, &carry.vias, delta, corner)
+            placement::move_vias(board, &carry.vias, delta, corner, new_ids)
         };
     }
     if carry.items.is_empty() && carry.rooms.is_empty() {
         return if leaves {
             placement::move_footprints_only(board, &carry.footprints, delta)
         } else {
-            placement::move_commands(board, &carry.footprints, delta, corner)
+            placement::move_commands(board, &carry.footprints, delta, corner, new_ids)
         };
     }
     let (items, rooms) = (&carry.items, &carry.rooms);
     let mut commands = move_commands(board, items, rooms, &carry.footprints, delta)?;
-    commands.extend(follow_commands(board, carry, delta));
+    commands.extend(follow_commands(board, carry, delta, new_ids));
     Ok(commands)
 }
 
@@ -357,7 +365,7 @@ impl Signex {
     pub(super) fn drop_dragged(&mut self, carry: &PcbCarry, delta: Option<Point>) {
         let built = delta.and_then(|delta| {
             let board = self.active_pcb()?;
-            Some((delta, drag_commands(board, carry, delta)))
+            Some((delta, drag_commands(board, carry, delta, &mut UuidV7Ids)))
         });
         self.end_pcb_carry();
         if let Some((delta, built)) = built {
