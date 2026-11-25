@@ -81,6 +81,7 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
                     crate::app::PlacementExtrasMsg::AutoplaceFieldsRequested
                         | crate::app::PlacementExtrasMsg::CopyAttributesRequested { .. }
                 )
+                | EditMsg::SheetSwap(_)
         ),
         Message::Selection(selection) => matches!(
             selection,

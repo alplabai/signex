@@ -29,6 +29,7 @@ use super::placement_operands as place;
 use super::repair_reset_operands as repair_reset;
 use super::selection_filter_operands as filter;
 use super::selection_operands as selection;
+use super::sheet_swap_operands as sheet_swap;
 use super::sheet_sync_operands as sheet_sync;
 use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::board_output as output;
@@ -215,6 +216,9 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("set_board_panel", crate::app::board_panel::set_board_panel),
     ("swap_pins", swap::swap_pins),
     ("swap_gates", swap::swap_gates),
+    // #1261: the same swaps started on the named sheet.
+    ("swap_schematic_pins", sheet_swap::swap_schematic_pins),
+    ("swap_schematic_gates", sheet_swap::swap_schematic_gates),
     ("save_board_reuse_block", reuse::save_board_reuse_block),
     ("place_board_reuse_block", reuse::place_board_reuse_block),
     // #2326: the drawing order and Delete on the `document` named.

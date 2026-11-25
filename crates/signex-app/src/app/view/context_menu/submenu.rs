@@ -365,22 +365,18 @@ pub(super) fn arrange_entries(
 
 /// Part Actions submenu (#2419) — the placed part's library actions, then
 /// Autoplace Fields and Copy Attributes (#1667), live when one placed part is
-/// selected and the command's own rule allows it.
+/// selected and the command's own rule allows it. Swap Pins and Swap Gates
+/// (#1261) follow, live when the clicked pin or the selected units name a
+/// swap the part allows.
 pub(super) fn part_actions_entries(
     i18n: &I18n,
     selection: CanvasSelection,
     hint: &dyn Fn(&str) -> String,
 ) -> Vec<DropdownEntry<Message>> {
-    let row = |id: &'static str| {
-        dd_ruled(
-            i18n,
-            None,
-            id,
-            &hint(id),
-            &selection.commands,
-            selection.placed_part_selected,
-        )
+    let ruled = |id: &'static str, applies: bool| {
+        dd_ruled(i18n, None, id, &hint(id), &selection.commands, applies)
     };
+    let row = |id: &'static str| ruled(id, selection.placed_part_selected);
     vec![
         row("open_datasheet"),
         row("edit_selected_symbol_in_symbol_editor"),
@@ -388,6 +384,9 @@ pub(super) fn part_actions_entries(
         DropdownEntry::Separator,
         row("autoplace_fields"),
         row("copy_attributes_or_add_vertex"),
+        DropdownEntry::Separator,
+        ruled("swap_schematic_pins", selection.swap.pins),
+        ruled("swap_schematic_gates", selection.swap.gates),
     ]
 }
 

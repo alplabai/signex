@@ -135,6 +135,12 @@ impl Signex {
                     crate::app::handlers::placed_part::selected_placed_symbol(engine, canvas)
                         .is_some()
                 }),
+            // #1261: the swap the clicked pin or the selected units ask for.
+            swap: self
+                .document_state
+                .engine_for_window(window_id, &self.ui_state)
+                .map(|engine| self.sheet_swap_ready(engine.document(), canvas))
+                .unwrap_or_default(),
             // Mockup row 158: the selection holds a member of a union.
             union_selected: self
                 .document_state
@@ -417,6 +423,8 @@ pub(super) struct CanvasSelection {
     pub(super) drawing_selected: bool,
     /// One non-power symbol: the placed-part actions apply (#1260).
     pub(super) placed_part_selected: bool,
+    /// Swap Pins and Swap Gates have a swap to make (#1261).
+    pub(super) swap: crate::app::sheet_swap::SwapReady,
     /// The selection holds a member of a union: Add / Remove / Break apply
     /// (mockup row 158).
     pub(super) union_selected: bool,

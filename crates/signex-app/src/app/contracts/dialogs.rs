@@ -685,6 +685,8 @@ pub enum EditMsg {
     ArrangeDrawings(signex_engine::DrawingArrange),
     /// A placement extra on a sheet (#1667).
     Extras(super::PlacementExtrasMsg),
+    /// A pin or gate swap started on the sheet (#1261).
+    SheetSwap(crate::app::SheetSwapMsg),
     /// Bottom-up hierarchy (#1276): a sheet symbol from a sheet, and the
     /// sheet entry sync with its preview.
     SheetSync(crate::app::SheetSyncMsg),
