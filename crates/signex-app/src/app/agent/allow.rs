@@ -196,6 +196,8 @@ mod tests {
                 "set_object_transparency",
                 "set_object_visible",
                 "set_pad_shape",
+                "set_pour_corners",
+                "set_pour_fill",
                 "set_via_span",
                 "show_drc_violation",
                 "show_layer_group",

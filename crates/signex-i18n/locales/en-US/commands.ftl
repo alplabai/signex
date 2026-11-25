@@ -588,6 +588,9 @@ cmd-menu-unlock-board-items = Unlock
 cmd-set-via-span = Set the copper layers vias span
 cmd-set-layer-sizes = Set the per-layer copper sizes of vias or pads
 cmd-set-pad-shape = Set the copper shape of pads, with a trapezoid's delta or a custom outline
+# #2578, #2579: a polygon pour's corners and fill.
+cmd-set-pour-corners = Set how polygon pours shape the corners of their outline: sharp, rounded or chamfered, with a size
+cmd-set-pour-fill = Set whether polygon pours fill with solid copper or a hatch, with the hatch width and gap
 cmd-stitch-vias = Fill the selected areas, or every pour, with vias of their net on a grid, clear of other nets
 cmd-menu-stitch-vias = Via Stitching
 cmd-add-teardrops = Add teardrops where tracks of the selected nets, or of every net, enter a pad or via
