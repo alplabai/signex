@@ -21,15 +21,21 @@ pub(super) const SNXFPT_FORMAT_SKETCH_LINKS: &str = "snxfpt/1.2";
 /// build would drop them on save, so it refuses the file by name.
 pub(super) const SNXFPT_FORMAT_V1_3: &str = "snxfpt/1.3";
 
+/// Written when a pad or a sketch pad sets its own thermal relief values
+/// (#2593): a 1.3 build refuses the pad columns as a schema mismatch and
+/// would drop the sketch pad's on save, so it refuses the file by name.
+pub(super) const SNXFPT_FORMAT_V1_4: &str = "snxfpt/1.4";
+
 /// `.snxfpt` version policy. A newer token, minor included, is refused by
 /// name: an older build cannot tell which of its shapes it would misread.
 pub(super) const FOOTPRINT_FILE_VERSION: FormatVersion = FormatVersion {
-    current: SNXFPT_FORMAT_V1_3,
+    current: SNXFPT_FORMAT_V1_4,
     readable: &[
         "snxfpt/1",
         SNXFPT_FORMAT_V1_1,
         SNXFPT_FORMAT_SKETCH_LINKS,
         SNXFPT_FORMAT_V1_3,
+        SNXFPT_FORMAT_V1_4,
     ],
     newer_minor: NewerMinor::Refused,
     missing: MissingToken::Refused,
@@ -39,6 +45,9 @@ impl FootprintFile {
     /// The lowest token that holds this file's content. From content, so a
     /// file whose last link, sweep or generated feature goes drops back down.
     pub fn format_token(&self) -> &'static str {
+        if self.footprints.iter().any(has_pad_thermal) {
+            return SNXFPT_FORMAT_V1_4;
+        }
         let needs_1_3 = |fp: &Footprint| {
             !fp.generated.is_default()
                 || fp.sketch.as_ref().is_some_and(|s| s.has_numbering_sweep())
@@ -57,4 +66,15 @@ impl FootprintFile {
             SNXFPT_FORMAT_V1_1
         }
     }
+}
+
+/// Whether a pad or a sketch pad of `fp` sets its own thermal relief values.
+fn has_pad_thermal(fp: &Footprint) -> bool {
+    let mut sketch_pads = fp
+        .sketch
+        .iter()
+        .flat_map(|sketch| sketch.entities.iter())
+        .filter_map(|entity| entity.pad.as_ref());
+    fp.pads.iter().any(|pad| !pad.thermal.is_rule())
+        || sketch_pads.any(|attr| !attr.stack.thermal.is_rule())
 }

@@ -1,3 +1,4 @@
+use crate::pad_thermal::PadThermal;
 use crate::pcb_layer::PcbLayer;
 use serde::{Deserialize, Serialize};
 
@@ -198,6 +199,10 @@ pub struct PadStackOverrides {
     /// "Round Rectangle" UI even when the shape is changed and back.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub corner_radius_pct: Option<f64>,
+    /// The pad's own thermal relief air gap, spoke width and spokes
+    /// (#2593), each `None` following the pour; written only when set.
+    #[serde(default, skip_serializing_if = "PadThermal::is_rule")]
+    pub thermal: PadThermal,
 }
 
 /// Hand-written so the paste-enable and thermal-relief flags default to
@@ -217,6 +222,7 @@ impl Default for PadStackOverrides {
             mask_bottom_tented: false,
             thermal_relief: true,
             corner_radius_pct: None,
+            thermal: PadThermal::RULE,
         }
     }
 }
@@ -235,6 +241,7 @@ impl PadStackOverrides {
             && !self.mask_bottom_tented
             && self.thermal_relief
             && self.corner_radius_pct.is_none()
+            && self.thermal.is_rule()
     }
 }
 

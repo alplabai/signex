@@ -630,3 +630,21 @@ fn generated_strokes_are_placed_on_the_top_silk_and_fab() {
     assert_eq!(layer_of(0.12), token(TechnicalLayer::SilkscreenTop));
     assert_eq!(layer_of(0.1), token(TechnicalLayer::FabTop));
 }
+
+/// #2593: a pad's own thermal relief values are carried to the board pad,
+/// where a pour connecting to it reads them.
+#[test]
+fn a_pads_own_thermal_relief_values_are_carried() {
+    use signex_types::pad_thermal::PadThermal;
+    let mut tht = pad("1", PadKind::Tht, PadShape::Round, &["*.Cu", "*.Mask"]);
+    tht.drill = Some(Drill {
+        diameter: 0.8,
+        slot_length: None,
+    });
+    tht.thermal = PadThermal {
+        air_gap: Some(0.4),
+        spoke_width: None,
+        spokes: Some(2),
+    };
+    assert_eq!(convert_one(tht.clone()).unwrap().thermal, tht.thermal);
+}
