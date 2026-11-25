@@ -2,13 +2,15 @@
 //! named nets on purpose. The netlist keeps both nets; [`net_ties`] reads
 //! which nets each tie joins off the netlist, so the netlist export, the
 //! command answers and the tests read one answer. It derives no
-//! connectivity: `signex_net::build_netlist` does. See `docs/NET_TIES.md`.
+//! connectivity: `signex_net::build_netlist` does. On a board a tie is a
+//! footprint of type Net Tie ([`board_net_ties`]). See `docs/NET_TIES.md`.
 
 use std::collections::HashMap;
 
 use uuid::Uuid;
 
 use crate::net::Netlist;
+use crate::pcb::{ComponentType, PcbBoard};
 use crate::schematic::{InstancePath, SchematicSheet};
 
 /// One pin of a net tie and the net it is on.
@@ -55,19 +57,83 @@ pub struct NetTie {
 impl NetTie {
     /// The distinct nets its pins are on, sorted.
     pub fn nets(&self) -> Vec<&str> {
-        let mut nets: Vec<&str> = self.pins.iter().map(|p| p.net.as_str()).collect();
-        nets.sort_unstable();
-        nets.dedup();
-        nets
+        nets_of(&self.pins)
     }
 
     pub fn status(&self) -> NetTieStatus {
-        match (self.pins.len(), self.nets().len()) {
-            (0 | 1, _) => NetTieStatus::Open,
-            (_, 1) => NetTieStatus::OneNet,
-            _ => NetTieStatus::Joins,
-        }
+        status_of(&self.pins)
     }
+}
+
+/// One net-tie footprint on a board: its pads are the copper bridge DRC
+/// allows (#1277).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoardNetTie {
+    pub footprint: Uuid,
+    pub designator: String,
+    pub component_type: ComponentType,
+    /// Its pads that are on a net, by pad number; `pin` is the pad number.
+    pub pads: Vec<NetTiePin>,
+}
+
+impl BoardNetTie {
+    /// The distinct nets its pads are on, sorted.
+    pub fn nets(&self) -> Vec<&str> {
+        nets_of(&self.pads)
+    }
+
+    pub fn status(&self) -> NetTieStatus {
+        status_of(&self.pads)
+    }
+}
+
+fn nets_of(pins: &[NetTiePin]) -> Vec<&str> {
+    let mut nets: Vec<&str> = pins.iter().map(|p| p.net.as_str()).collect();
+    nets.sort_unstable();
+    nets.dedup();
+    nets
+}
+
+fn status_of(pins: &[NetTiePin]) -> NetTieStatus {
+    match (pins.len(), nets_of(pins).len()) {
+        (0 | 1, _) => NetTieStatus::Open,
+        (_, 1) => NetTieStatus::OneNet,
+        _ => NetTieStatus::Joins,
+    }
+}
+
+fn sort_pins(pins: &mut [NetTiePin]) {
+    pins.sort_by(|a, b| a.pin.cmp(&b.pin).then_with(|| a.net.cmp(&b.net)));
+}
+
+/// Every net-tie footprint of `board` (type Net Tie or Net Tie (in BOM)), in
+/// board order, with the nets of its pads. A pad of no net is left out.
+pub fn board_net_ties(board: &PcbBoard) -> Vec<BoardNetTie> {
+    board
+        .footprints
+        .iter()
+        .filter(|f| f.component.component_type.is_net_tie())
+        .map(|f| {
+            let mut pads: Vec<NetTiePin> = f
+                .pads
+                .iter()
+                .filter_map(|p| {
+                    let net = p.net.as_ref().filter(|n| n.number != 0)?;
+                    Some(NetTiePin {
+                        pin: p.number.clone(),
+                        net: net.name.clone(),
+                    })
+                })
+                .collect();
+            sort_pins(&mut pads);
+            BoardNetTie {
+                footprint: f.uuid,
+                designator: f.reference.clone(),
+                component_type: f.component.component_type,
+                pads,
+            }
+        })
+        .collect()
 }
 
 /// Every net tie of `sheets` (placed sheets with their occurrence paths), in
@@ -101,8 +167,7 @@ pub fn net_ties(netlist: &Netlist, sheets: &[(InstancePath, &SchematicSheet)]) -
         }
     }
     for tie in &mut ties {
-        tie.pins
-            .sort_by(|a, b| a.pin.cmp(&b.pin).then_with(|| a.net.cmp(&b.net)));
+        sort_pins(&mut tie.pins);
     }
     ties
 }

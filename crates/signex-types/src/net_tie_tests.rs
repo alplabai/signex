@@ -1,7 +1,8 @@
 use uuid::Uuid;
 
-use super::{NetTieStatus, net_ties};
+use super::{NetTieStatus, board_net_ties, net_ties};
 use crate::net::{Net, NetId, Netlist, Terminal};
+use crate::pcb::{ComponentType, PcbBoard};
 use crate::schematic::{InstancePath, SchematicSheet, Symbol};
 
 const TIE: Uuid = Uuid::from_u128(0x1277_0001);
@@ -115,6 +116,56 @@ fn a_power_port_or_an_untied_part_is_never_a_tie() {
     });
     assert!(net_ties(&nets, &[(root.clone(), &power)]).is_empty());
     assert!(net_ties(&nets, &[(root, &untied)]).is_empty());
+}
+
+/// A footprint `reference` with pads `(number, net number, net name)`.
+fn footprint(n: u128, reference: &str, pads: &[(&str, u32, &str)]) -> serde_json::Value {
+    let pads: Vec<serde_json::Value> = pads
+        .iter()
+        .enumerate()
+        .map(|(i, (number, net, name))| {
+            serde_json::json!({
+                "uuid": Uuid::from_u128(0x100 * n + i as u128), "number": number,
+                "pad_type": "smd", "shape": "rect",
+                "position": {"x": i as f64, "y": 0.0}, "size": {"x": 0.6, "y": 1.0},
+                "drill": null, "layers": ["TopCopper"],
+                "net": if *net == 0 { serde_json::Value::Null } else {
+                    serde_json::json!({"number": net, "name": name})
+                }
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "uuid": Uuid::from_u128(n), "reference": reference, "value": "",
+        "footprint_id": "NT", "position": {"x": 0.0, "y": 0.0},
+        "rotation": 0.0, "layer": "TopCopper", "pads": pads, "properties": []
+    })
+}
+
+#[test]
+fn a_boards_net_ties_are_its_net_tie_footprints_with_their_pad_nets() {
+    let mut board: PcbBoard = serde_json::from_value(serde_json::json!({
+        "uuid": Uuid::nil(),
+        "footprints": [
+            footprint(1, "NT1", &[("2", 2, "AGND"), ("1", 1, "GND")]),
+            footprint(2, "R1", &[("1", 1, "GND"), ("2", 3, "SIG")]),
+            footprint(3, "NT2", &[("1", 1, "GND"), ("2", 0, "")]),
+        ],
+    }))
+    .unwrap();
+    board.footprints[0].component.component_type = ComponentType::NetTie;
+    board.footprints[2].component.component_type = ComponentType::NetTieInBom;
+
+    let ties = board_net_ties(&board);
+    assert_eq!(ties.len(), 2, "R1 is a standard part");
+    assert_eq!(ties[0].designator, "NT1");
+    assert_eq!(ties[0].footprint, Uuid::from_u128(1));
+    assert_eq!(ties[0].nets(), ["AGND", "GND"]);
+    assert_eq!(ties[0].pads[0].pin, "1", "by pad number");
+    assert_eq!(ties[0].status(), NetTieStatus::Joins);
+    assert_eq!(ties[1].component_type, ComponentType::NetTieInBom);
+    assert_eq!(ties[1].pads.len(), 1, "a pad of no net is left out");
+    assert_eq!(ties[1].status(), NetTieStatus::Open);
 }
 
 #[test]
