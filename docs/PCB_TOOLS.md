@@ -668,7 +668,12 @@ last. Each kind takes the dimension look settings below.
   the click with one arrow on the circle and no extension lines; the value
   reads `R` before the radius (after any prefix). A click on no arc or
   circle adds nothing and says so. Start is the centre and End the leader's
-  point on the circle.
+  point on the circle. The Dimension panel's illustration draws it as the
+  leader, with no extension lines and no Offset callout.
+
+In mils the Value card reads the length each kind measures (across, up or
+down, or the radius after `R`); a selection of different kinds shows the
+drawn text. These choices are Caner's (2026-11-25).
 
 The values stay live: a dimension's value is measured from its points
 whenever it is drawn, so editing Start or End changes it, and a radial
