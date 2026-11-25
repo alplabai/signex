@@ -750,6 +750,35 @@ canvas's bottom-left names the tool and the next click.
 Checks: `schematic::drawing_kinds_tests`, `signex_output::svg::annotation_drawing_tests`,
 `annotation_drawing_tests` (engine), `app::sch_tables::tests`.
 
+## sch-not-fitted — Not-fitted parts (#1294)
+
+Decided by Caner, 2026-11-25: one drawing style for now, behind the user
+preference Preferences ▸ Schematic ▸ Display ▸ "Cross out not-fitted parts"
+(on by default, `prefs.json` key `cross_out_not_fitted`; nothing is stored in
+the project). A style picker comes later.
+
+**Which parts.** A part is not fitted when the BOM would call it so: the
+project's variant settings (Variant Manager) for the variant, else the
+sheets' fit fields for it, else the base fit fields, else not fitted when a
+unit is marked DNP. One unit not fitted makes every unit of the part on the
+sheet not fitted. Power ports are never parts. The canvas reads the
+project's active variant; a PDF, its preview and print read the printed
+variant. `signex_output::not_fitted_symbols` decides for all of them.
+
+**How it draws.** The part's body graphics, pins, pin names and numbers, its
+library text and its default body fill are greyed: each colour moved 60 %
+of the way to the paper colour (`signex_types::schematic::greyed_ink`). A
+cross runs corner to corner over the body box (`not_fitted_cross`: the body
+graphics, no pins, no text) in the symbol ink, not greyed, twice as wide as
+an unset symbol line. The designator, the value and the other fields keep
+their colours, so the part still reads. A symbol whose library entry is
+missing keeps its crossed placeholder box. In Black & White the greyed ink
+prints black like every other ink; the cross still marks the part.
+
+Checks: `schematic::not_fitted_tests` (types), `variant_fit::drawn_tests`,
+`signex_output::svg::not_fitted::tests`, `schematic_runtime::not_fitted_tests`,
+`app::runtime::not_fitted_tests`.
+
 ## Canvas cursor
 
 Decided by Caner, 2026-11-21. One rule for the schematic, board, footprint
