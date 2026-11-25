@@ -292,14 +292,12 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "Top".to_string(),
             path: held.clone(),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "Other".to_string(),
             path: dir.path().join("Other.snxsch"),
-            cached_document: None,
             project_id: None,
             kind: crate::app::TabKind::Schematic,
         });

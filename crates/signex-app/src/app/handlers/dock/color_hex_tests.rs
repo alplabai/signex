@@ -55,7 +55,6 @@ fn app_with_rects(count: usize) -> (Signex, PathBuf, Vec<uuid::Uuid>) {
     app.document_state.tabs.push(TabInfo {
         title: "color".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

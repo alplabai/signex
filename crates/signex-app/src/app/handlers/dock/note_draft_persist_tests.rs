@@ -194,7 +194,6 @@ fn project_with_typed_note() -> (Signex, PathBuf, crate::app::ProjectId) {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "top".to_string(),
         path: sheet.clone(),
-        cached_document: None,
         project_id: Some(id),
         kind: crate::app::TabKind::Schematic,
     });
@@ -264,7 +263,6 @@ fn remove_dialog_on_typed_note() -> (Signex, PathBuf, tempfile::TempDir) {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "top".to_string(),
         path: sheet.clone(),
-        cached_document: None,
         project_id: Some(id),
         kind: crate::app::TabKind::Schematic,
     });

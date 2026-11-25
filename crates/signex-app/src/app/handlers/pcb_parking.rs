@@ -21,7 +21,9 @@ impl Signex {
         self.end_board_3d_of(&path);
         self.end_only_unrouted_of(&path);
         let keep = park_dirty && self.document_state.is_document_dirty(&path);
-        if keep && let Some(engine) = self.document_state.take_tab_board_engine(idx) {
+        // The board leaves the store with its tab: parked, or dropped here.
+        let engine = self.document_state.take_tab_board_engine(idx);
+        if keep && let Some(engine) = engine {
             self.document_state.park_pcb_board(path, engine);
             return;
         }

@@ -79,7 +79,6 @@ fn app_with_selected_row(
     app.document_state.tabs.push(TabInfo {
         title: "Lib".into(),
         path: root.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::LibraryBrowser(root),
     });

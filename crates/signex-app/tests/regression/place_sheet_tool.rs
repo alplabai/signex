@@ -59,7 +59,6 @@ pub(crate) fn app_with_sheet_tool(path: PathBuf) -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "root".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -262,7 +261,6 @@ fn defaults_are_unique_across_parents_of_one_project() {
     app.document_state.tabs.push(TabInfo {
         title: "other".to_string(),
         path: other.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -363,7 +361,6 @@ fn a_half_placed_sheet_corner_does_not_follow_the_user_to_another_tab() {
     app.document_state.tabs.push(TabInfo {
         title: "other".to_string(),
         path: other,
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

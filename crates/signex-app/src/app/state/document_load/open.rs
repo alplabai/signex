@@ -13,7 +13,6 @@ impl DocumentState {
         self.tabs.push(TabInfo {
             title,
             path,
-            cached_document: None,
             project_id,
             kind: TabKind::Schematic,
         });

@@ -34,7 +34,6 @@ fn symbol_app() -> (Signex, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: "PINS".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });
@@ -157,7 +156,6 @@ fn the_panel_state_belongs_to_its_editor() {
     app.document_state.tabs.push(TabInfo {
         title: "OTHER".into(),
         path: other.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(other),
     });

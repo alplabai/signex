@@ -1,5 +1,6 @@
-//! What the board store means, pinned on the tab storage before the engine
-//! leaves the tab (#2449): whatever holds the engine, these must hold.
+//! What the board store means (#2449): pinned while the engine still lived
+//! in its tab, and held by `DocumentState::boards` since. The `boards`
+//! checks pin that no board is left behind in the path-keyed map.
 
 use std::path::{Path, PathBuf};
 
@@ -91,6 +92,38 @@ fn a_clean_close_drops_the_board_with_its_tab() {
 }
 
 #[test]
+fn a_closed_board_leaves_nothing_in_the_store() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let _ = app.close_tab_parking_dirty(0);
+    assert!(app.document_state.boards.is_empty(), "a clean close");
+
+    app.open_pcb_tab(path.clone(), "board".into(), empty_board());
+    park(&mut app, &path);
+    assert!(app.document_state.boards.is_empty(), "a parking close");
+
+    let _ = app.document_state.take_parked_pcb_board(&path);
+    app.open_pcb_tab(path.clone(), "board".into(), empty_board());
+    app.document_state.mark_document_dirty(&path);
+    let _ = app.close_tab_now(0);
+    assert!(app.document_state.boards.is_empty(), "a discarding close");
+    assert!(app.document_state.parked_pcb_boards.is_empty());
+}
+
+#[test]
+fn closing_a_boards_layer_stack_tab_keeps_the_board() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    app.open_layer_stack_tab();
+    let page = app.document_state.active_tab;
+    let _ = app.close_tab_parking_dirty(page);
+
+    assert_eq!(app.document_state.tabs.len(), 1);
+    assert!(app.document_state.board_engine_mut(&path).is_some());
+    assert!(app.document_state.tab_board_engine(0).is_some());
+}
+
+#[test]
 fn a_rename_moves_an_open_board_to_its_new_path() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
@@ -106,6 +139,7 @@ fn a_rename_moves_an_open_board_to_its_new_path() {
         docs.board_engine(&path).is_none(),
         "nothing is left at the old path"
     );
+    assert!(!docs.boards.contains_key(&path));
     assert!(!docs.holds_pcb(&path));
 }
 

@@ -32,7 +32,6 @@ fn locked_symbol_app(reference: &str) -> (Signex, uuid::Uuid) {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "symbol-locked".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

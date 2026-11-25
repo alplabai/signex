@@ -134,7 +134,6 @@ pub(super) fn dirty_symbol_in_library(f: &mut Fixture) -> PathBuf {
     documents.tabs.push(TabInfo {
         title: "Held".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });

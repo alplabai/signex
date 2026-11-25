@@ -122,7 +122,6 @@ impl Signex {
                 self.document_state.tabs.push(crate::app::TabInfo {
                     title,
                     path: path.clone(),
-                    cached_document: None,
                     project_id,
                     kind,
                 });

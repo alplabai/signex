@@ -327,7 +327,6 @@ fn app_changing_r5() -> (Signex, PlacedPartTarget) {
     app.document_state.tabs.push(TabInfo {
         title: "buck_channel".into(),
         path: PathBuf::from(SHEET),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

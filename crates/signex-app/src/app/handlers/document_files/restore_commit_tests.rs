@@ -27,7 +27,6 @@ pub(super) fn open_tab(dir: &Path, path: &Path, kind: TabKind) -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "part".into(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind,
     });
@@ -589,7 +588,6 @@ fn a_restore_finishing_after_a_tab_switch_restores_its_tab_without_taking_focus(
     app.document_state.tabs.push(TabInfo {
         title: "other".into(),
         path: other.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(other),
     });
@@ -835,7 +833,6 @@ fn a_restore_does_not_land_in_a_tab_reopened_while_it_ran() {
     app.document_state.tabs.push(TabInfo {
         title: "part".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

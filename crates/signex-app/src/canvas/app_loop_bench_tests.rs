@@ -50,7 +50,6 @@ fn app_with(g: &Generated, keep_wires: bool) -> (Signex, iced::window::Id) {
     app.document_state.tabs.push(TabInfo {
         title: "bench".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

@@ -121,7 +121,6 @@ fn open_component_tab(app: &mut Signex, address: &EditorAddress) {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "row".into(),
         path: address.synthetic_tab_path(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::ComponentEditor(crate::app::ComponentEditorTab {
             library_path: address.library_path.clone(),
@@ -175,7 +174,6 @@ fn ctrl_z_in_a_component_window_steps_that_window_not_the_main_tab() {
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "other".into(),
         path: std::path::PathBuf::from("other.snxsch"),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });

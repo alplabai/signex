@@ -565,14 +565,12 @@ mod tests {
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "s".into(),
             path: root.join("power.snxsch"),
-            cached_document: None,
             project_id: None,
             kind: TabKind::Schematic,
         });
         app.document_state.tabs.push(crate::app::TabInfo {
             title: "lib".into(),
             path: root.join("parts.snxlib"),
-            cached_document: None,
             project_id: None,
             kind: TabKind::LibraryBrowser(root.join("parts.snxlib")),
         });

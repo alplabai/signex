@@ -139,7 +139,6 @@ fn fixture_with(child: Option<SchematicSheet>, symbols: Vec<ChildSheet>) -> Fixt
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "parent".to_string(),
         path: parent_path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

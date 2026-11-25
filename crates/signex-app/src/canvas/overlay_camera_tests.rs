@@ -61,7 +61,6 @@ pub(crate) fn graphite_app_showing(
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "halo-camera".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });

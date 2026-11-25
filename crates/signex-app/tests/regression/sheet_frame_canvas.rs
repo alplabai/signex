@@ -26,7 +26,6 @@ fn app_with_title_block() -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "power".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -118,7 +117,6 @@ fn loose_sheets_are_numbered_as_the_export_numbers_them() {
     app.document_state.tabs.push(TabInfo {
         title: "second".to_string(),
         path: second,
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

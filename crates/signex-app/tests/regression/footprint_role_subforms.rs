@@ -24,7 +24,6 @@ fn open_editor(stem: &str, footprint: Footprint) -> (Signex, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: stem.into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

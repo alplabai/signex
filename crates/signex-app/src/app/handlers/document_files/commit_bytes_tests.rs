@@ -59,7 +59,6 @@ fn sheet_fixture(stem: &str) -> (tempfile::TempDir, PathBuf, Signex) {
     app.document_state.tabs.push(TabInfo {
         title: file_name(&path),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

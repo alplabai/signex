@@ -162,7 +162,6 @@ fn run_erc(root: SchematicSheet, child: SchematicSheet, active: Active) -> Vec<V
         app.document_state.tabs.push(signex_app::app::TabInfo {
             title: title.to_string(),
             path: path.clone(),
-            cached_document: None,
             project_id: Some(project),
             kind: signex_app::app::TabKind::Schematic,
         });

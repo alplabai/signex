@@ -24,7 +24,6 @@ fn app_with_dirty_sheet(dir: &Path) -> (Signex, PathBuf, PathBuf, u64) {
     app.document_state.tabs.push(TabInfo {
         title: "a".to_string(),
         path: from.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

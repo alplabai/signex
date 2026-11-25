@@ -24,7 +24,7 @@ use std::time::Duration;
 
 use iced::Task;
 
-pub use board::BoardEngines;
+pub use board::{BoardEngines, boardless_tab};
 pub use disk::{DiskWrite, TestDisk};
 
 use crate::app::command::{CommandArgs, CommandOutcome};

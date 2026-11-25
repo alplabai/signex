@@ -112,7 +112,6 @@ fn two_libraries_with(dir: &Path, edited: bool, far_read_only: bool) -> Two {
     app.document_state.tabs.push(TabInfo {
         title: "GATEDRV8".into(),
         path: symbol_path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(symbol_path.clone()),
     });

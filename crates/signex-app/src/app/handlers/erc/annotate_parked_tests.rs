@@ -25,7 +25,6 @@ fn fixture() -> (Signex, PathBuf, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: "a_root.snxsch".into(),
         path: dir.join("a_root.snxsch"),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

@@ -49,7 +49,6 @@ fn app_with_drawings() -> Signex {
     app.document_state.tabs.push(TabInfo {
         title: "doc".into(),
         path,
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

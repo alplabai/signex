@@ -39,7 +39,6 @@ fn app_with_sheet() -> (Signex, uuid::Uuid) {
     app.document_state.tabs.push(TabInfo {
         title: "a_root.snxsch".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

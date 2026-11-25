@@ -111,6 +111,30 @@ fn a_project_closed_meanwhile_is_not_dirtied_by_the_rollback() {
     assert!(!app.document_state.has_dirty_documents());
 }
 
+/// A board open from inside a renamed library folder keeps its board: the
+/// board store follows the tab to the new path (#2449).
+#[test]
+fn a_board_open_under_a_renamed_library_moves_with_its_tab() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let old_path = tmp.path().join("alpha.snxlib");
+    let new_path = tmp.path().join("alpha2.snxlib");
+    let board = old_path.join("demo.snxpcb");
+    let moved = new_path.join("demo.snxpcb");
+    let (mut app, _task) = Signex::new();
+    let pcb = crate::app::handlers::document_files::save_async_tests::empty_board();
+    app.open_pcb_tab(board.clone(), "demo".into(), pcb);
+
+    app.rekey_library_documents(&old_path, &new_path, Default::default());
+
+    let docs = &mut app.document_state;
+    assert_eq!(docs.tabs[0].path, moved);
+    assert!(docs.board_engine_mut(&moved).is_some(), "the board moved");
+    assert!(
+        !docs.boards.contains_key(&board),
+        "nothing is left at the old path"
+    );
+}
+
 #[test]
 fn a_rollback_of_an_unsaved_project_moves_the_file_back() {
     let tmp = tempfile::TempDir::new().unwrap();

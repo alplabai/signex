@@ -31,7 +31,6 @@ fn a_pasted_symbol_does_not_inherit_the_originals_instance_entries() {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "paste-instances".to_string(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

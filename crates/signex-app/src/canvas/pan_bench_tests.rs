@@ -175,7 +175,6 @@ fn pan_bench_app_view() {
     app.document_state.tabs.push(TabInfo {
         title: "bench".into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::Schematic,
     });

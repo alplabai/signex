@@ -381,7 +381,6 @@ fn a_scan_landing_after_a_tab_switch_deletes_only_in_its_own_file() {
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "other".into(),
         path: other.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::SymbolEditor(other.clone()),
     });

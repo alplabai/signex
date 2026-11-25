@@ -142,7 +142,6 @@ fn open_symbol_tab(f: &mut Fixture, path: &std::path::Path) {
     f.app.document_state.tabs.push(TabInfo {
         title: "r".into(),
         path: path.to_path_buf(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::SymbolEditor(path.to_path_buf()),
     });

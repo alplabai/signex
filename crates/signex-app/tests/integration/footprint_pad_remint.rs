@@ -84,7 +84,6 @@ fn editor_with_minted_pad(stem: &str, mut pad: EditorPad) -> (Signex, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: stem.into(),
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

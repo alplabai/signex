@@ -71,7 +71,6 @@ fn open_editor_at(path: PathBuf, file: FootprintFile) -> (Signex, PathBuf) {
     app.document_state.tabs.push(TabInfo {
         title: stem,
         path: path.clone(),
-        cached_document: None,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

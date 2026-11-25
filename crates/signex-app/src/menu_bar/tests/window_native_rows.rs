@@ -97,7 +97,6 @@ pub(super) fn with_undocked_window(mut app: Signex) -> (Signex, iced::window::Id
         TabInfo {
             title: "undocked".into(),
             path: path.clone(),
-            cached_document: None,
             project_id: None,
             kind: TabKind::Schematic,
         },

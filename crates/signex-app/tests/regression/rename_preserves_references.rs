@@ -202,7 +202,6 @@ fn renaming_a_child_sheet_updates_an_open_parents_reference() {
     f.app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "root".to_string(),
         path: f.root.clone(),
-        cached_document: None,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

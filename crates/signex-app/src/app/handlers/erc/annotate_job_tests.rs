@@ -244,7 +244,6 @@ fn saving_the_open_root_while_the_sheets_are_read_is_allowed_and_cancels_the_run
     app.document_state.tabs.push(crate::app::TabInfo {
         title: "a_root".into(),
         path: root.clone(),
-        cached_document: None,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
