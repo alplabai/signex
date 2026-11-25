@@ -720,18 +720,26 @@ draws a board drawing (`PcbBoard::graphics`, kinds in
   active. Full Circle, Rectangle and Text Frame on copper (Caner,
   2026-11-24, #2883) place a drawing whose stroked outline is copper with
   no net (a text frame's text too); Properties shows the drawing.
-- **Copper of no net (#2883).** A drawing on copper (along its stroke, a
-  text frame's lines included) and a string on copper (along its glyph
-  strokes, in the board stroke font) are copper of no net, listed once by
-  `pcb_geom::drawn_copper` (curves within `ARC_CHORD_ERROR_MM`). The design
-  rule check measures them against every net's copper (a short or a
-  clearance finding naming the drawing or string, net 0); two pieces of no
-  net are never a pair. A pour keeps its clearance from them, unless the
-  pour has no net, as for any other net. The interactive router, via
-  stitching, teardrops and gloss keep clear of them. The Gerber writes them
-  on the copper image as `Conductor` with no net (was `NonConductor`). They
-  join no net: the ratsnest, a new track's net and the edge clearance
-  check do not read them.
+- **Copper of no net (#2883, #2515).** A drawing on copper (along its
+  stroke, a text frame's lines included) and a string on copper (along its
+  glyph strokes, in the board stroke font) are copper of no net, listed by
+  `pcb_geom::drawn_copper` (curves within `ARC_CHORD_ERROR_MM`). With the
+  pads, free pads, tracks, copper arcs and vias of net 0 they make
+  `pcb_geom::no_net_copper` (an unplated pad of no net only on the copper
+  layers it lists, as the Gerber flashes it). The design rule check
+  measures that list against every net's copper (a short or a clearance
+  finding naming the item, net 0) and against the board edge; two pieces
+  of no net are never a pair. A pour keeps its clearance from them, unless
+  the pour has no net, as for any other net. The interactive router keeps
+  clear of all of it, and a push never moves a track of no net (the route
+  walks round it); via stitching, teardrops and gloss keep clear of it too.
+  The Gerber writes drawings and strings on the copper image as `Conductor`
+  with no net (was `NonConductor`). Copper of no net joins no net: the
+  ratsnest, the unrouted check and a new track's net (`net_at`) do not read
+  it, so a track of no net across two pads of one net is a short to each
+  and leaves them unrouted. A footprint's own drawings on a copper layer
+  are written on the copper image as `NonConductor`, and the check and the
+  router do not read them.
 - **Line.** The first click starts a run; each later click adds a line from
   the run's end, any angle. A click on the run's end, Esc or a right-click
   ends the run.

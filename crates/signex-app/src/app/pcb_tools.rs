@@ -32,10 +32,11 @@ pub enum BoardPlaceTool {
     Keepout,
     /// A room by two corners (#2457).
     Room,
-    /// A line on a non-copper layer (#2424).
+    /// A line on the active layer (#2424); on copper, a run of tracks on
+    /// the net under its first click (`graphic_copper`).
     Line,
-    /// An arc on a non-copper layer by its centre, start and end; `Arc` is
-    /// the copper one.
+    /// An arc on the active layer by its centre, start and end; on copper,
+    /// a track arc on the net under its start (`graphic_copper`).
     GraphicArc,
     FullCircle,
     Rectangle,
