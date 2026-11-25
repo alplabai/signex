@@ -107,6 +107,7 @@ cmd-previous-grid = Previous grid
 cmd-print = Print
 cmd-menu-print = Print...
 cmd-query-pins = Query pins
+cmd-query-power-tree = Query the project's power tree
 cmd-read-document = Read document
 cmd-redo = Redo
 cmd-refresh-view = Refresh/redraw

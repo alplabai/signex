@@ -410,6 +410,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "measure_board",
             "query_board_nets",
             "query_pins",
+            // #1313: the project's sheets, read off the UI thread.
+            "query_power_tree",
             "read_document",
         ],
         Query,

@@ -62,6 +62,8 @@ pub mod path_ops;
 pub(crate) mod pin_junction_repair;
 mod pin_table_tab;
 mod polygon_manager_tab;
+// #1313: the power tree run behind `query_power_tree`.
+mod power_tree;
 pub mod project_entry_disk;
 pub(crate) mod project_git;
 pub(crate) mod project_save_as;

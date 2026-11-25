@@ -151,6 +151,8 @@ mod tests {
                 "project_settings",
                 "query_board_nets",
                 "query_pins",
+                // #1313: the project's power tree.
+                "query_power_tree",
                 "read_document",
                 "remove_board_panel",
                 "remove_teardrops",
