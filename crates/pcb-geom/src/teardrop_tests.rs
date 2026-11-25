@@ -98,3 +98,54 @@ fn a_track_entering_off_centre_gets_a_teardrop_along_the_track() {
     // Base centred on the track's line too.
     assert_eq!(outline[0].y - line, line - outline[3].y);
 }
+
+/// The pad of [`board`]'s part (`pad_part(10, ..)` names it 11).
+const PAD: Uuid = Uuid::from_u128(11);
+
+#[test]
+fn the_rule_turns_teardrops_off_at_vias_or_at_pads() {
+    let mut no_vias = board();
+    no_vias.options.teardrops.vias = false;
+    let plan = teardrops(&no_vias, None, clearance);
+    assert_eq!(plan.drops.len(), 1, "{plan:?}");
+    assert_eq!(plan.drops[0].track, Uuid::from_u128(3), "only the pad's");
+
+    let mut no_pads = board();
+    no_pads.options.teardrops.pads = false;
+    let plan = teardrops(&no_pads, None, clearance);
+    assert_eq!(plan.drops.len(), 1, "{plan:?}");
+    assert_eq!(plan.drops[0].track, Uuid::from_u128(2), "only the via's");
+}
+
+#[test]
+fn a_pad_override_wins_over_the_rule_both_ways() {
+    let mut board = board();
+    board.options.teardrops.pads = false;
+    board.options.teardrops.set_pad_override(PAD, Some(true));
+    let plan = teardrops(&board, None, clearance);
+    assert!(plan.drops.iter().any(|d| d.track == Uuid::from_u128(3)));
+
+    board.options.teardrops.pads = true;
+    board.options.teardrops.set_pad_override(PAD, Some(false));
+    let plan = teardrops(&board, None, clearance);
+    assert!(plan.drops.iter().all(|d| d.track != Uuid::from_u128(3)));
+    assert_eq!(plan.skipped, 0, "a pad the rule leaves out is not a skip");
+}
+
+#[test]
+fn the_rule_sets_how_wide_and_how_long_a_teardrop_is() {
+    let mut board = board();
+    board.options.teardrops.width_share = 0.5;
+    board.options.teardrops.length_share = 2.0;
+    let plan = teardrops(&board, None, clearance);
+    // Base at half the via radius; tip two radii past the via edge.
+    assert_eq!(
+        plan.drops[0].outline,
+        [
+            PointNm::new(0, 250_000),
+            PointNm::new(1_500_000, 125_000),
+            PointNm::new(1_500_000, -125_000),
+            PointNm::new(0, -250_000),
+        ]
+    );
+}
