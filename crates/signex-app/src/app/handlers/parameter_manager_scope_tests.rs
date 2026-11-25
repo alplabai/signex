@@ -171,6 +171,31 @@ fn the_subtitle_names_the_sheet_or_counts_the_sheets() {
     );
 }
 
+/// All sheets lists the open sheets only; a sheet of the project that is
+/// not open is counted beside the switch instead of being left out quietly.
+#[test]
+fn all_sheets_counts_the_project_sheets_it_cannot_list() {
+    let mut app = app();
+    all_sheets(&mut app);
+    assert_eq!(app.closed_parameter_sheets(), 0, "a and b are both open");
+
+    app.document_state.engines.remove(Path::new(B));
+    app.document_state
+        .tabs
+        .retain(|tab| tab.path != Path::new(B));
+    assert_eq!(app.parameter_sheets(), paths(&[A]));
+    assert_eq!(app.closed_parameter_sheets(), 1, "b is closed");
+
+    let _ = app.update(Message::ParameterManager(Pm::ScopePicked(
+        ParameterScope::ActiveSheet,
+    )));
+    assert_eq!(
+        app.closed_parameter_sheets(),
+        0,
+        "Active sheet lists a only"
+    );
+}
+
 #[test]
 fn all_sheets_on_a_loose_sheet_lists_no_project_sheet() {
     let mut app = app();
