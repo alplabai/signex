@@ -720,5 +720,9 @@ define_ids! {
         CMD_FLIP_BOARD_3D = "cmd-flip-board-3d";
         CMD_CYCLE_BOARD_3D_LIGHTING = "cmd-cycle-board-3d-lighting";
         CMD_COPY_BOARD_3D_SCREENSHOT = "cmd-copy-board-3d-screenshot";
+        // notebook-tab
+        CMD_NOTEBOOK_COMPILE = "cmd-notebook-compile";
+        CMD_NOTEBOOK_INSERT = "cmd-notebook-insert";
+        CMD_NOTEBOOK_VIEW = "cmd-notebook-view";
     }
 }

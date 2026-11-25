@@ -231,6 +231,8 @@ pub(super) const WRITES: &[(&[&str], Surface, Writes)] = &[
             "hide_layer_group",
             "show_layer_group",
             "show_layer_set",
+            // #2795: the notebook tab's view, side panel and cursor.
+            "notebook_view",
         ],
         Operand,
         Session,
@@ -587,6 +589,8 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "new_pcb_document",
     "new_project_with_profile",
     "new_schematic_sheet",
+    "notebook_compile",
+    "notebook_insert",
     "open_document",
     "panelize_board",
     "place_blanket",

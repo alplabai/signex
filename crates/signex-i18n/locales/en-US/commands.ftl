@@ -760,3 +760,8 @@ cmd-menu-polygon-manager = Polygon Manager...
 cmd-flip-board-3d = Turn the board over in the 3D view
 cmd-cycle-board-3d-lighting = Next lighting preset in the 3D view
 cmd-copy-board-3d-screenshot = Copy a screenshot of the 3D view
+# notebook-tab
+# The Design Notebook tab's commands (mockup row 195).
+cmd-notebook-compile = Compile the project's Design Notebook and report its pages and problems
+cmd-notebook-insert = Insert a reference or a block into the open Design Notebook
+cmd-notebook-view = Set the view, the side panel or the next problem of the Design Notebook tab

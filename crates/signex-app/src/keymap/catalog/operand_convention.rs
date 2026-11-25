@@ -115,6 +115,12 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("diff_pair_class", OperandKind::Text),
     ("via_hole", OperandKind::Text),
     ("current", OperandKind::Text),
+    // #2795: the Design Notebook tab's line (from 1), view, side panel and
+    // next problem.
+    ("line", OperandKind::Text),
+    ("view", OperandKind::Text),
+    ("panel", OperandKind::Text),
+    ("next_problem", OperandKind::Bool),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

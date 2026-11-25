@@ -986,3 +986,25 @@ pub const SET_PAD_SHAPE: &[Operand] = &[
     optional("delta", OperandKind::Text),
     optional("corners", OperandKind::Text),
 ];
+
+/// `notebook_insert` (#2795): what an insert button writes into the open
+/// notebook. `kind` is `calculation`, `measurement`, `figure`, `note`,
+/// `issue` or `decision`, or `component`, `pin` or `net` with the `name`
+/// (`R7`, `U3.12`, `+3V3`); `line` (from 1, in the file) moves the cursor
+/// there first.
+pub const NOTEBOOK_INSERT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("kind", OperandKind::Text),
+    optional("name", OperandKind::Text),
+    optional("line", OperandKind::Text),
+];
+
+/// `notebook_view` (#2795): the tab's `view` (`source`, `split`,
+/// `preview`), its side `panel` (`outline`, `pages`, `references`), and
+/// `next_problem` to move the cursor to the next problem.
+pub const NOTEBOOK_VIEW: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("view", OperandKind::Text),
+    optional("panel", OperandKind::Text),
+    optional("next_problem", OperandKind::Bool),
+];

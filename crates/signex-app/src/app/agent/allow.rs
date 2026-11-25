@@ -131,6 +131,10 @@ mod tests {
                 "list_documents",
                 "lock_board_items",
                 "measure_board",
+                // #2795: the Design Notebook tab, on the named project.
+                "notebook_compile",
+                "notebook_insert",
+                "notebook_view",
                 "panelize_board",
                 // #2410: pin and gate swap and design reuse, on the named board.
                 "place_board_reuse_block",

@@ -173,6 +173,9 @@ next_highlighted_net_item	-	f2929686b07ef725
 next_layer	Pcb	119d310e454dd5e4
 next_sheet	-	f2929686b07ef725
 next_signal_layer	Pcb	119d310e454dd5e4
+notebook_compile	-	f2929686b07ef725
+notebook_insert	-	f2929686b07ef725
+notebook_view	-	f2929686b07ef725
 number_schematic_sheets	ProjectSheet	b9cf07c7e6ca1a9f
 open_child_sheet	-	f2929686b07ef725
 open_command_palette	-	f2929686b07ef725
