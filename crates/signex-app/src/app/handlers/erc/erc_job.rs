@@ -431,9 +431,10 @@ fn add_project_net_names(
 
 /// The project-wide `NetClassConflict` pass (#2656): a class a directive on
 /// another sheet gives a net is only visible in the stitched netlist. A
-/// sheet's own finding on a directive the project netlist classes a net with
-/// is dropped for the project's answer (ranked as the netlist ranks it); a
-/// sheet the roots never reach keeps its own.
+/// sheet's own finding on a directive and net the project netlist classes is
+/// dropped for the project's answer (ranked as the netlist ranks it); a net
+/// the project netlist does not carry and a sheet the roots never reach keep
+/// their own.
 fn add_project_class_conflicts(
     by_path: &mut ViolationsByPath,
     graph: &project_sheets::AssembledGraph,
@@ -458,12 +459,7 @@ fn add_project_class_conflicts(
         if graph.paths.get(&key) != Some(path) {
             continue;
         }
-        list.retain(|v| {
-            v.builtin_kind() != Some(signex_erc::RuleKind::NetClassConflict)
-                || !v
-                    .primary
-                    .is_some_and(|p| found.covered.contains(&(key.clone(), p.uuid)))
-        });
+        list.retain(|v| !found.replaces(&key, v));
     }
     file_project_findings(by_path, graph, found.findings, overrides);
 }
