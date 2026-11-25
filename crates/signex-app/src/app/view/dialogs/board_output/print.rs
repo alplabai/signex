@@ -25,8 +25,9 @@ type Parts<'a> = (
     Element<'a, Message>,
 );
 
-/// Width of the options column (340 px).
-const OPTIONS_W: f32 = chrome_px(340.0 * 11.0 / 12.0);
+/// Width of the options column (376 px): wide enough that the Pages
+/// segments stay on one line (282 px measured, mockup row 116).
+const OPTIONS_W: f32 = chrome_px(376.0 * 11.0 / 12.0);
 
 fn flag_label(flag: BoardPrintFlag) -> MessageId {
     match flag {
@@ -288,7 +289,3 @@ fn show_group<'a>(
     }
     col.boxed()
 }
-
-#[cfg(test)]
-#[path = "tests_print_measure.rs"]
-mod tests_print_measure;
