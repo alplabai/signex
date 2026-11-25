@@ -373,6 +373,7 @@ view_rotate	view	Rotate the board view clockwise	Rotate View 90° Clockwise	PCB	
 view_rotate_ccw	view	Rotate the board view 90° counter-clockwise	Rotate View 90° Counter-Clockwise	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 view_rotate_180	view	Rotate the board view 180°	Rotate View 180°	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 view_rotate_reset	view	Reset the board view rotation to 0°	Reset View Rotation	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+home_view	view	Reset the view rotation and Flip, then fit the board or sheet	Home View	General	-	-	Always	gui_only	-
 toggle_origin_marker	view	Show or hide the board origin marker	Toggle Origin Marker	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 set_board_origin	edit	Set the board origin at a clicked point	Set	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 reset_board_origin	edit	Move the board origin to the bottom-left of the board outline	Reset	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document

@@ -51,6 +51,9 @@ pub(crate) enum OverlayId {
     SchematicActiveBar,
     /// The Graphite zoom pill over the schematic canvas.
     CanvasZoomPill,
+    /// The orientation tile and the Home button by the zoom pill, and the
+    /// board's zoom pill (mockup row 194).
+    CanvasOrientation,
     FootprintActiveBar,
     FootprintMoveBy,
     FootprintAlign,
@@ -190,6 +193,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 84] = [
     OverlayId::PlacementPaused,
     OverlayId::SchematicActiveBar,
     OverlayId::CanvasZoomPill,
+    OverlayId::CanvasOrientation,
     OverlayId::FootprintActiveBar,
     OverlayId::FootprintMoveBy,
     OverlayId::FootprintAlign,
@@ -322,7 +326,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         // Its layer is window-sized (the pill is placed by `Translate`), so a
         // guard around the layer would swallow every wheel in the window:
         // no panel would scroll. The pill guards its own bounds instead.
-        OverlayId::CanvasZoomPill => false,
+        OverlayId::CanvasZoomPill | OverlayId::CanvasOrientation => false,
 
         // Their layers are window-sized positioners (a `Fill` column, the zoom
         // pill's `Translate`): a guard there took the wheel over the whole
@@ -548,6 +552,9 @@ impl Signex {
                 self.canvas_zoom_pill_overlay(window_id),
                 self.overlay_owner(window_id),
             )),
+            OverlayId::CanvasOrientation => {
+                layers.extend(self.canvas_orientation_overlay(window_id))
+            }
             OverlayId::FootprintActiveBar => {
                 layers.extend(self.footprint_active_bar_overlay(window_id))
             }

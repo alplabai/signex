@@ -220,6 +220,8 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("zoom_in_at_cursor", "Ctrl+=")),
         cmd_item_gated(ctx, cmd("zoom_out_at_cursor", "Ctrl+-")),
         cmd_item_gated(ctx, cmd("zoom_to_fit", "Home")),
+        // Rotation 0°, Flip off, Fit (mockup row 194); no default key.
+        cmd_item_gated(ctx, cmd("home_view", "")),
         SEP,
         // Trunk spelling kept (not `Mod+`): the fallback is never shown while a keymap is active.
         cmd_item_gated(ctx, cmd("toggle_visible_grid", "Shift+Ctrl+G")),

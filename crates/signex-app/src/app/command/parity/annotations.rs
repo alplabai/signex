@@ -40,6 +40,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "zoom_to_fit",
             "zoom_to_all_objects",
             "show_all_design_objects",
+            // Mockup row 194: Home ends in the same Fit.
+            "home_view",
         ],
         Bridge,
         &[RenderCache],

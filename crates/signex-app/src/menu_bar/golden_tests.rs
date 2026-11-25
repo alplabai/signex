@@ -372,6 +372,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("zoom_in_at_cursor", "ZoomIn"),
     ("zoom_out_at_cursor", "ZoomOut"),
     ("zoom_to_fit", "ZoomFit"),
+    // Mockup row 194: fixture name only.
+    ("home_view", "HomeView"),
     ("toggle_visible_grid", "ToggleGrid"),
     ("toggle_auto_focus", "ToggleAutoFocus"),
     ("toggle_ratsnest", "ToggleRatsnest"),

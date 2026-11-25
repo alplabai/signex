@@ -595,6 +595,28 @@ fn a_click_on_the_show_grid_caption_toggles_the_grid() {
     assert_eq!(shown(&sent), shown(&[PanelMsg::ToggleGrid]));
 }
 
+/// Mockup row 194: General Settings carries the Orientation eye; it
+/// hides the tile, and on a hidden tile it shows it again.
+#[test]
+fn the_orientation_tile_eye_toggles_the_tile() {
+    let toggled = shown(&[PanelMsg::PcbLayers(
+        PcbViewMsg::OrientationTileVisibilityToggled,
+    )]);
+    let mut hidden = PcbLayerView::default();
+    hidden.toggle_orientation_tile();
+    for view in [PcbLayerView::default(), hidden] {
+        let ctx = context_with(&view, options());
+        let label = find(&texts(&ctx), "Orientation").bounds;
+        let sent = messages_along(&ctx, "Orientation", label.x + label.width, WINDOW.width);
+        assert_eq!(
+            shown(&sent),
+            toggled,
+            "tile shown: {}",
+            view.orientation_tile_visible()
+        );
+    }
+}
+
 /// mockup row 103: All Objects reads Mixed in the Transparency column while the
 /// kinds differ, and its eye then shows every kind; with every kind shown
 /// there is no Mixed.

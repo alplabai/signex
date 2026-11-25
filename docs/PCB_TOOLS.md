@@ -1363,8 +1363,10 @@ regions keep the palette colour.
 **View Options**: above the sections, Configuration is one labelled field
 reading Default, greyed until presets exist. General Settings holds 3D
 Off/On, Single Layer Off/On (Mono is greyed; the tooltip gives the full
-name, Single Layer Mode) and the Show Grid switch (a click on its caption
-toggles the grid too). Object Visibility is a
+name, Single Layer Mode), the Show Grid switch (a click on its caption
+toggles the grid too) and the Orientation eye, which hides or shows the
+orientation tile over the canvas (see "Orientation tile and Home View"
+below). Object Visibility is a
 grid of four columns under a header: eye, Object, Draft and Transparency (a
 slider and its percent). All Objects comes first, in medium weight; while
 the rows differ its eye is faded and Transparency reads Mixed. Then one row
@@ -1395,6 +1397,55 @@ in its tooltip; the not-yet ones and presets are tracked in #2480. Every control
 `set_object_visible` (`kind=all` for All Objects) and
 `set_object_transparency` (`value` in percent), next to the layer strip's
 commands above.
+
+## Orientation tile and Home View
+
+Mockup row 194 (#2508), decided by Caner on 2026-11-25. The bottom-right
+corner of the main window's canvas holds a small cluster:
+
+- The zoom pill (`- 100% + | Fit`) where it always sits, one body line in
+  from the canvas edges. On a board the pill's percentage is a plain
+  read-out: the zoom presets act on a sheet.
+- Home, a one-button pill with the house glyph, a small gap (`Spacing::s`)
+  left of the zoom pill and as tall as it. Its hover hint reads "Home View ·
+  rotation 0°, Flip off, fit" ("Home View · rotation 0°, fit" on a sheet).
+  While the board view is turned or flipped it carries an accent dot in its
+  top-right corner.
+- The orientation tile, right-aligned with the zoom pill one medium gap
+  (`Spacing::m`) above it, in the pill's shell (raised fill, hairline
+  border, button radius). It is three rows square (`ChromeMetrics::row` x
+  3), so it scales with the UI font. Two arrows start at an origin dot: +X
+  in the theme's error tone, +Y in its ok tone, each labelled, so colour is
+  not the only cue. The arrows turn with View Rotation and Flip Board View
+  mirrors +X; the labels stay upright. The tile reads the same transform the
+  board canvas draws with (`signex_gfx::view_rotation::ViewRotation`), and
+  +Y points up at 0° because the board counts Y up from its origin.
+- Under the arrows, a caption row names a view away from home: "90°" when
+  turned, "Bottom" when flipped, "Bottom · 90°" with both. The angle reads as
+  the status bar's View readout does (tenths of a degree, a whole number
+  without its fraction). At rotation 0° with Flip off there is no caption
+  row.
+
+Home (the button, View ▸ Home View, or the `home_view` command, which has no
+default key) sets View Rotation to 0°, turns Flip Board View off and runs Fit
+All, in one step. Fit alone keeps the turn and the flip; Home always returns
+to the top view. Like the turn, it is view state: no undo step and no dirty
+mark. It acts on the main window's canvas.
+
+A click on the tile does nothing; Home is the only way back. The View
+Options tab's Orientation eye (General Settings) hides the tile and leaves
+Home and the pill; the choice is kept with the board view, like the origin
+marker, for the session.
+
+The schematic canvas shows the same tile and Home button by its zoom pill.
+A sheet has no Flip and does not turn, so the tile has no caption row and
+Home fits the sheet. Its +Y follows the sheet's page origin: up from a
+lower-left origin, down from an upper-left one.
+
+The cluster is laid out against the canvas rectangle of the size the window
+is drawn at (`Signex::canvas_bounds_sized`), so it stays inside the canvas
+beside an open right dock at any dock width (#2911). The tile and Home show
+in the main window only, not on a board shown in 3D or in Board Sketch.
 
 ## Reading a board
 

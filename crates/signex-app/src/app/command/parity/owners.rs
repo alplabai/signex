@@ -393,6 +393,7 @@ const MENU_SESSION: &[&str] = &[
     "highlight_board_net",
     "highlight_net_under_cursor",
     "highlight_related_net_objects",
+    "home_view",
     "import_dxf",
     "import_dxf_outline",
     "import_graphics",

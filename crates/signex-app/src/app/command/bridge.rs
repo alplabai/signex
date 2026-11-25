@@ -532,6 +532,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "view_rotate_ccw" => view_turn(ViewRotationMsg::TurnedBy(-90.0)),
         "view_rotate_180" => view_turn(ViewRotationMsg::TurnedBy(180.0)),
         "view_rotate_reset" => view_turn(ViewRotationMsg::AngleSet(0.0)),
+        // Mockup row 194: rotation 0°, Flip off, Fit.
+        "home_view" => Message::Ui(UiMsg::HomeViewRequested),
         "toggle_layers_panel" => {
             Message::Overlay(OverlayMsg::PanelToggled(crate::panels::PanelKind::Layers))
         }

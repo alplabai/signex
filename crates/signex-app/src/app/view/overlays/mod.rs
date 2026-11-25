@@ -23,6 +23,7 @@ mod dock_zones;
 mod filter_menu_tests;
 mod modals;
 mod net_hover;
+mod orientation;
 mod palette;
 #[cfg(test)]
 mod palette_scrim_tests;

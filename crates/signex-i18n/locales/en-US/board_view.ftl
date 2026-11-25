@@ -123,6 +123,8 @@ pcb-view-on = On
 pcb-view-mono = Mono
 # The grid checkbox.
 pcb-view-show-grid = Show Grid
+# The eye that shows or hides the orientation tile over the canvas (mockup row 194).
+pcb-view-orientation-tile = Orientation
 # A row of Object Visibility. $kind is the kind's token.
 pcb-view-object = { $kind ->
     [all] All Objects

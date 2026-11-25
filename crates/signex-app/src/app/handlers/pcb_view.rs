@@ -300,6 +300,7 @@ fn apply_event(view: &mut PcbLayerView, layers: &[LayerDef], event: PcbViewMsg) 
     match event {
         PcbViewMsg::RatsnestVisibilityToggled => view.toggle_ratsnest(),
         PcbViewMsg::OriginMarkerVisibilityToggled => view.toggle_origin_marker(),
+        PcbViewMsg::OrientationTileVisibilityToggled => view.toggle_orientation_tile(),
         PcbViewMsg::ActiveLayerStepped { forward } => {
             view.step_active(&board_layers(layers), forward);
         }

@@ -615,7 +615,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // #2457: the dialog reads the sheets of the board's project.
         "create_rooms_from_sheets" => Needs::PcbInProject,
         "annotate_schematic_quietly" | "force_annotate_all_schematics" => Needs::ActiveSheet,
-        "zoom_in_at_cursor" | "zoom_out_at_cursor" => Needs::Canvas,
+        // Home View acts on the main window's sheet or board (mockup row 194).
+        "zoom_in_at_cursor" | "zoom_out_at_cursor" | "home_view" => Needs::Canvas,
         // Redraw, like a fit, acts on a main or undocked sheet or board canvas.
         "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" | "refresh_view" => {
             Needs::FitTarget

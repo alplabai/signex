@@ -144,6 +144,7 @@ highlight_board_net	Pcb	119d310e454dd5e4
 highlight_layer	Pcb	119d310e454dd5e4
 highlight_net_under_cursor	-	f2929686b07ef725
 highlight_related_net_objects	-	f2929686b07ef725
+home_view	Canvas	7db52528128cca61
 import_dxf	Pcb	119d310e454dd5e4
 import_dxf_outline	Pcb	119d310e454dd5e4
 import_graphics	Schematic	f8bd7a5cb84e915b

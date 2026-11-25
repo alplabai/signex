@@ -526,6 +526,10 @@ highlight_net_under_cursor	headless_refusal	headless_refusal	gui	none	routing
 highlight_related_net_objects	bridge	Ui(NetNav(RelatedNetHighlightRequested))	gui	selection	handler
 highlight_related_net_objects	in_window_rewrite	document_window	gui	window	routing
 highlight_related_net_objects	headless_refusal	headless_refusal	gui	none	routing
+home_view	bridge	Ui(HomeViewRequested)	gui	active document,render cache	handler
+home_view	in_window_rewrite	document_window	gui	window	routing
+home_view	refusal_needs	Canvas	gui	active document	routing
+home_view	headless_refusal	headless_refusal	gui	none	routing
 import_dxf	bridge	Pcb(DxfImport(Requested { outline: false }))	gui	active document,tool state,dialog answer	handler
 import_dxf	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 import_dxf	in_window_rewrite	document_window	gui	window	routing
