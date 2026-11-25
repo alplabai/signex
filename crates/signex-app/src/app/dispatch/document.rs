@@ -342,6 +342,10 @@ impl Signex {
                 let task = self.handle_bom_written(source, *outcome);
                 iced::Task::batch([task, self.finish_update()])
             }
+            ExportMsg::BlockDiagram(msg) => {
+                let task = self.handle_block_diagram_export(msg);
+                iced::Task::batch([task, self.finish_update()])
+            }
         }
     }
 

@@ -14,6 +14,7 @@ mod actions;
 pub(crate) mod agent;
 pub(crate) mod assign_footprints;
 pub(crate) mod back_annotate;
+pub(crate) mod block_diagram_export;
 pub(crate) mod board_output;
 pub(crate) mod board_panel;
 pub(crate) mod board_reannotate;
@@ -130,6 +131,7 @@ pub use assign_footprints::{
     FootprintPart, PartAccess, TickedBar,
 };
 pub use back_annotate::{BackAnnotateMsg, BackAnnotateState};
+pub use block_diagram_export::BlockDiagramExportMsg;
 pub use board_output::{
     BoardOutputDialog, BoardOutputMsg, BoardOutputState, BoardPrintFlag, BoardPrintState,
     BoardReportsState,

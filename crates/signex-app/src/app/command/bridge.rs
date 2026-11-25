@@ -381,6 +381,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             ))
         }
         "export_board_step" => Message::from(crate::app::BoardOutputMsg::StepExportRequested),
+        // #2796: the diagram in view (or one picked), then the SVG or PDF file.
+        "export_block_diagram" => Message::from(crate::app::BlockDiagramExportMsg::Requested),
         // #2410: Tools ▸ Panelize Board and Remove Panel, on the board in view.
         "panelize_board" => Message::from(crate::app::BoardPanelMsg::PanelizeRequested),
         "remove_board_panel" => Message::from(crate::app::BoardPanelMsg::RemoveRequested),
