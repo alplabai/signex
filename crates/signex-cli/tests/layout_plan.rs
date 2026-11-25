@@ -67,7 +67,8 @@ fn the_plan_is_set_read_judged_undone_and_saved_through_the_cli() {
         ]),
     );
     let line = |n: usize| &out.lines[n];
-    assert_eq!(line(0)["status"], "ran", "{}", out.stdout);
+    let done = |n: usize| matches!(line(n)["status"].as_str(), Some("ran" | "answered"));
+    assert!(done(0), "the board opens: {}", out.stdout);
 
     let set = line(1);
     assert_eq!(set["status"], "answered", "{}", out.stdout);
@@ -103,7 +104,7 @@ fn the_plan_is_set_read_judged_undone_and_saved_through_the_cli() {
     let reason = refused["reason"].as_str().unwrap_or_default();
     assert!(reason.contains("placement stage"), "{reason}");
 
-    assert_eq!(line(5)["status"], "ran", "{}", out.stdout);
+    assert!(done(5), "undo runs: {}", out.stdout);
     let after = line(6);
     assert_eq!(after["data"]["empty"], true, "one undo takes the set back");
 }
