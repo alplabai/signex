@@ -225,6 +225,13 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     ("arrange_in_box", BOARD_EDIT),
     // #2506: it refills the board's unfilled pours as one board step.
     ("repour_all", BOARD_EDIT),
+    // #2470: each route or via from operands is one step on the board.
+    ("place_board_via", BOARD_EDIT),
+    ("place_board_track", BOARD_EDIT),
+    ("place_board_route", BOARD_EDIT),
+    ("place_board_diff_pair", BOARD_EDIT),
+    ("place_board_quick_route", BOARD_EDIT),
+    ("place_board_multi_route", BOARD_EDIT),
     (
         "rules_matrix_set",
         "it writes the project's rule set, which no sheet's undo step covers",
@@ -603,6 +610,8 @@ mod tests {
             ("reset_layer_colors", "edits a board"),
             ("reset_board_origin", "edits a board"),
             ("repour_all", "edits a board"),
+            ("place_board_route", "edits a board"),
+            ("place_board_via", "edits a board"),
             ("set_board_origin", "not runnable headless"),
             // #2326 slice 6.P2b: run by uuid on their own, not in a list yet.
             ("bring_drawings_forward", "does not carry it yet"),

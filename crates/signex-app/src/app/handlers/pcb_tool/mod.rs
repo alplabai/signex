@@ -28,6 +28,7 @@ use crate::pcb_canvas::{carried_board, snap_point};
 const END_RUN_PX: f64 = 2.0;
 
 mod area;
+mod bus_order;
 mod form;
 mod free;
 mod free_form;
@@ -38,6 +39,7 @@ mod pour_cut;
 mod quick;
 mod route;
 mod route_end;
+mod route_order;
 mod route_rats;
 mod router;
 mod side_by_side;
@@ -46,6 +48,7 @@ mod string;
 pub(crate) use form::has_form;
 pub use form::{BoardToolDefaults, PlacementPause};
 pub(crate) use free_form::precision_of;
+pub(crate) use route_order::{RouteMade, RouteOrder, ViaOrder, tool_refusal};
 pub use router::RouterState;
 
 #[cfg(test)]
@@ -74,6 +77,8 @@ mod pause_tests;
 mod pour_cut_tests;
 #[cfg(test)]
 mod pour_tests;
+#[cfg(test)]
+mod route_order_tests;
 #[cfg(test)]
 mod route_rats_tests;
 #[cfg(test)]

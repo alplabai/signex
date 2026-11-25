@@ -602,6 +602,13 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     // #2389: length tuning on the named board.
                     "tune_net_length",
                     "tune_diff_pair",
+                    // #2470: the routing tools and the via on the named board.
+                    "place_board_via",
+                    "place_board_track",
+                    "place_board_route",
+                    "place_board_diff_pair",
+                    "place_board_quick_route",
+                    "place_board_multi_route",
                     // #2326 slice 6.P2b: the drawing order and Delete by uuid.
                     "bring_drawings_forward",
                     "bring_drawings_to_front",
