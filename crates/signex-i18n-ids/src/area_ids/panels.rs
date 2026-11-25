@@ -352,6 +352,7 @@ define_ids! {
     PANELS_HARNESS_ENTRY = "panels-harness-entry";
     PANELS_HARNESS_NET = "panels-harness-net";
     PANELS_HARNESS_EXPECTS_PILL = "panels-harness-expects-pill";
+    PANELS_HARNESS_EXPECTS = "panels-harness-expects";
     PANELS_HARNESS_COMPILED = "panels-harness-compiled";
     PANELS_HARNESS_START = "panels-harness-start";
     PANELS_HARNESS_END = "panels-harness-end";

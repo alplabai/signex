@@ -1173,6 +1173,8 @@ panels-harness-entries = Entries
 panels-harness-entry = Entry
 panels-harness-net = Net on this sheet
 panels-harness-expects-pill = { $far } expects { $expects }
+# By a mismatched harness entry, in the Properties drawing and on the sheet: the entry name the far side expects in its place.
+panels-harness-expects = expects { $expects }
 # $example is a compiled net name such as SPI_BUS.SCK.
 panels-harness-compiled = Compiled net names: { $example } … unless a net label names them.
 panels-harness-start = Start
