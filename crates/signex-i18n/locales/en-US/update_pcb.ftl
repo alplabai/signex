@@ -178,6 +178,6 @@ change-row-split-separator = ·
 # The Notes group's count.
 change-row-notes-count = { $count }
 
-# m7/update-pcb-dialog
+# mockup rows 81 and 82
 # The footer after a passing Validate, beside Report... (mockup row 81).
 update-pcb-validated = Validated: every ticked change applies to the board.

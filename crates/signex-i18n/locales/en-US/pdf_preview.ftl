@@ -193,7 +193,7 @@ pdf-page-size-tabloid = Tabloid
 # The Scale picker entry that prints at a typed percentage.
 pdf-scale-mode-percent = Percent
 
-# m7/pdf-export-preview
+# mockup rows 111 and 168
 
 # The ISO paper sizes by their bare names, in the Size picker, the page
 # caption and the footer (mockup row 111).
