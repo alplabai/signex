@@ -86,10 +86,7 @@ pub(in crate::app::view) struct ClusterRects {
 /// The cluster against `canvas`: the zoom pill where it always sits, Home a
 /// small gap to its left, the tile (`tile`: whether it shows and whether it
 /// has a caption row) right-aligned a medium gap above the pill.
-pub(in crate::app::view) fn cluster_rects(
-    canvas: Rectangle,
-    tile: Option<bool>,
-) -> ClusterRects {
+pub(in crate::app::view) fn cluster_rects(canvas: Rectangle, tile: Option<bool>) -> ClusterRects {
     let (pill_w, pill_h) = pill_size();
     let (pill_x, pill_y) = pill_origin(canvas);
     let pill = Rectangle::new(
@@ -173,10 +170,11 @@ impl Signex {
             menu_ids::HOME_VIEW_HINT_SHEET
         };
         let rects = cluster_rects(canvas, orientation.tile_shown().then_some(away));
-        let place = |element: Element<'static, Message>, at: Rectangle| -> Element<'static, Message> {
-            // The `Translate` spans the window; only the card may take the wheel.
-            signex_widgets::Translate::new(super::scroll_guard(element), (at.x, at.y)).boxed()
-        };
+        let place =
+            |element: Element<'static, Message>, at: Rectangle| -> Element<'static, Message> {
+                // The `Translate` spans the window; only the card may take the wheel.
+                signex_widgets::Translate::new(super::scroll_guard(element), (at.x, at.y)).boxed()
+            };
         let home = crate::canvas::zoom_pill::home_view(
             tokens,
             crate::icons::icon_chrome_home(self.ui_state.theme_id),

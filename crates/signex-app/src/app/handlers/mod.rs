@@ -66,6 +66,9 @@ pub(crate) use pcb_drc_check::LOOSE_BOARD_WARNING;
 pub(crate) use pcb_drc_results::DrcWaiverText;
 #[cfg(test)]
 mod held_rotate_window_tests;
+mod home_view;
+#[cfg(test)]
+mod home_view_tests;
 mod pcb_align;
 mod pcb_board_options;
 mod pcb_board_panel;
@@ -123,9 +126,6 @@ mod pcb_via_move;
 mod pcb_via_move_tests;
 pub mod pcb_view;
 pub mod pcb_view_rotation;
-mod home_view;
-#[cfg(test)]
-mod home_view_tests;
 pub mod placed_part;
 pub(crate) mod placement_extras;
 pub mod placement_session;

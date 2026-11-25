@@ -108,24 +108,43 @@ fn holds(outer: Rectangle, inner: Rectangle) -> bool {
 /// small gap left of the pill on its line, all inside `canvas`.
 fn assert_cluster_inside(canvas: Rectangle, rects: ClusterRects, case: &str) {
     const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
-    for (name, rect) in [("pill", Some(rects.pill)), ("home", Some(rects.home)), ("tile", rects.tile)] {
+    for (name, rect) in [
+        ("pill", Some(rects.pill)),
+        ("home", Some(rects.home)),
+        ("tile", rects.tile),
+    ] {
         if let Some(rect) = rect {
-            assert!(holds(canvas, rect), "{case}: {name} {rect:?} leaves {canvas:?}");
+            assert!(
+                holds(canvas, rect),
+                "{case}: {name} {rect:?} leaves {canvas:?}"
+            );
         }
     }
     let (pill, home) = (rects.pill, rects.home);
     assert_eq!(home.y, pill.y, "{case}: Home is off the pill's line");
-    assert!((pill.x - (home.x + home.width) - SP.s).abs() < 1e-3, "{case}: Home gap");
+    assert!(
+        (pill.x - (home.x + home.width) - SP.s).abs() < 1e-3,
+        "{case}: Home gap"
+    );
     if let Some(tile) = rects.tile {
-        assert!((tile.x + tile.width - (pill.x + pill.width)).abs() < 1e-3, "{case}: tile right edge");
-        assert!((pill.y - (tile.y + tile.height) - SP.m).abs() < 1e-3, "{case}: tile gap");
+        assert!(
+            (tile.x + tile.width - (pill.x + pill.width)).abs() < 1e-3,
+            "{case}: tile right edge"
+        );
+        assert!(
+            (pill.y - (tile.y + tile.height) - SP.m).abs() < 1e-3,
+            "{case}: tile gap"
+        );
     }
 }
 
 fn assert_right_dock_open(app: &Signex) {
     let dock = &app.document_state.dock;
     assert!(dock.has_panels(PanelPosition::Right), "no right dock");
-    assert!(!dock.is_collapsed(PanelPosition::Right), "right dock collapsed");
+    assert!(
+        !dock.is_collapsed(PanelPosition::Right),
+        "right dock collapsed"
+    );
 }
 
 /// The main window showing an empty board, laid out at [`LAID_OUT`].
@@ -153,7 +172,10 @@ fn canvas_of(app: &Signex) -> Rectangle {
 fn rects_of(app: &Signex, main: iced::window::Id) -> ClusterRects {
     let orientation = app.view_orientation(main).expect("a canvas in view");
     let has_caption = orientation.caption(&app.ui_state.i18n).is_some();
-    cluster_rects(canvas_of(app), orientation.tile_shown().then_some(has_caption))
+    cluster_rects(
+        canvas_of(app),
+        orientation.tile_shown().then_some(has_caption),
+    )
 }
 
 /// Texts the main window lays out whose centre is inside `rect`.
@@ -171,7 +193,9 @@ fn texts_in(app: &Signex, main: iced::window::Id, rect: Rectangle) -> Vec<LaidOu
 fn the_board_cluster_stays_inside_the_canvas_with_a_right_dock() {
     let (mut app, main, _) = board_app();
     assert_right_dock_open(&app);
-    let _ = app.update(Message::Pcb(PcbMsg::ViewRotation(ViewRotationMsg::AngleSet(90.0))));
+    let _ = app.update(Message::Pcb(PcbMsg::ViewRotation(
+        ViewRotationMsg::AngleSet(90.0),
+    )));
     let _ = app.update(Message::Pcb(PcbMsg::View(PcbViewMsg::BoardFlipToggled)));
     for width in [crate::dock::MIN_SIDE_DOCK_WIDTH, 320.0, 480.0] {
         app.ui_state.right_width = width;
@@ -181,11 +205,15 @@ fn the_board_cluster_stays_inside_the_canvas_with_a_right_dock() {
         assert_cluster_inside(canvas_of(&app), rects, &case);
         let tile = rects.tile.expect("tile");
         assert!(
-            texts_in(&app, main, tile).iter().any(|t| plain(&t.text) == "Bottom · 90°"),
+            texts_in(&app, main, tile)
+                .iter()
+                .any(|t| plain(&t.text) == "Bottom · 90°"),
             "{case}: no caption in the tile"
         );
         assert!(
-            texts_in(&app, main, rects.pill).iter().any(|t| t.text == "Fit"),
+            texts_in(&app, main, rects.pill)
+                .iter()
+                .any(|t| t.text == "Fit"),
             "{case}: no board zoom pill"
         );
     }
@@ -210,27 +238,44 @@ fn the_sheet_cluster_has_no_flip_caption_and_stays_inside_the_canvas() {
     let tile = rects.tile.expect("the tile shows on a sheet");
     assert_eq!(tile.size(), Size::from(super::tile::tile_size(false)));
     assert_cluster_inside(canvas_of(&app), rects, "sheet");
-    let in_tile: Vec<String> = texts_in(&app, main, tile).iter().map(|t| plain(&t.text)).collect();
+    let in_tile: Vec<String> = texts_in(&app, main, tile)
+        .iter()
+        .map(|t| plain(&t.text))
+        .collect();
     assert!(
-        !in_tile.iter().any(|t| t.starts_with("Bottom") || t.ends_with('°')),
+        !in_tile
+            .iter()
+            .any(|t| t.starts_with("Bottom") || t.ends_with('°')),
         "a sheet tile has a caption: {in_tile:?}"
     );
 }
 
 /// The View Options eye hides the tile and keeps Home and the pill; the
-/// choice lives in the board's view, so it holds across a tab switch back.
+/// choice is kept in the board's view (`PcbLayerView`) and in the panel.
 #[test]
 fn the_view_options_eye_hides_the_tile_and_is_kept_with_the_board_view() {
     let (mut app, main, path) = board_app();
     assert!(rects_of(&app, main).tile.is_some());
-    let _ = app.update(Message::Pcb(PcbMsg::View(PcbViewMsg::OrientationTileVisibilityToggled)));
+    let _ = app.update(Message::Pcb(PcbMsg::View(
+        PcbViewMsg::OrientationTileVisibilityToggled,
+    )));
     assert!(!app.pcb_layer_view(&path).orientation_tile_visible());
-    assert!(!app.document_state.panel_ctx.pcb_layers.orientation_tile_visible);
+    assert!(
+        !app.document_state
+            .panel_ctx
+            .pcb_layers
+            .orientation_tile_visible
+    );
     let rects = rects_of(&app, main);
     assert_eq!(rects.tile, None, "the eye did not hide the tile");
     assert_cluster_inside(canvas_of(&app), rects, "tile hidden");
-    let _ = app.update(Message::Pcb(PcbMsg::View(PcbViewMsg::OrientationTileVisibilityToggled)));
-    assert!(rects_of(&app, main).tile.is_some(), "the eye did not show it again");
+    let _ = app.update(Message::Pcb(PcbMsg::View(
+        PcbViewMsg::OrientationTileVisibilityToggled,
+    )));
+    assert!(
+        rects_of(&app, main).tile.is_some(),
+        "the eye did not show it again"
+    );
 }
 
 /// No tile in another window: the cluster is the main window's.

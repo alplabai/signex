@@ -32,7 +32,9 @@ fn board_app() -> (Signex, PathBuf) {
 
 /// Turn the board view 90° and flip it, then drop any queued fit.
 fn turn_and_flip(app: &mut Signex, path: &PathBuf) {
-    let _ = app.update(Message::Pcb(PcbMsg::ViewRotation(ViewRotationMsg::AngleSet(90.0))));
+    let _ = app.update(Message::Pcb(PcbMsg::ViewRotation(
+        ViewRotationMsg::AngleSet(90.0),
+    )));
     let _ = app.update(Message::Pcb(PcbMsg::View(PcbViewMsg::BoardFlipToggled)));
     let canvas = &app.interaction_state.pcb_canvas;
     assert_eq!(canvas.view_rotation_deg(), 90.0);
