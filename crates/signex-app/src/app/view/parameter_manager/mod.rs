@@ -725,9 +725,10 @@ mod filter_tests {
             Path::new("/x/io.snxsch"),
         ];
         let names = parameter_sheet_names(&paths, Some(Path::new("/w")));
-        let ch1 = Path::new("ch1").join("io.snxsch").display().to_string();
-        let ch2 = Path::new("ch2").join("io.snxsch").display().to_string();
-        let outside = Path::new("/x/io.snxsch").display().to_string();
-        assert_eq!(names, ["top.snxsch".to_string(), ch1, ch2, outside]);
+        // The Sheet column writes a project path with `/` on every platform.
+        assert_eq!(
+            names,
+            ["top.snxsch", "ch1/io.snxsch", "ch2/io.snxsch", "/x/io.snxsch"]
+        );
     }
 }
