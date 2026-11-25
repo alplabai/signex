@@ -11,6 +11,7 @@
 
 use std::collections::BTreeSet;
 
+use signex_types::corner::{CornerMode, CornerRule};
 use signex_types::pcb::{PcbBoard, Point, Segment};
 use signex_types::pcb_arc::TrackArc;
 use uuid::Uuid;
@@ -44,6 +45,59 @@ impl TrackEnds {
             moved.end = shift(segment.end);
         }
         moved
+    }
+
+    /// [`Self::follow`] for a track stretched by a dragged track (#2513),
+    /// kept at 0°, 45° or 90°. With one end following and the moved end off
+    /// those lines from the fixed end, the track takes `rule`'s two legs from
+    /// the fixed end: it keeps the leg at its fixed end, and the leg to the
+    /// moved end is the second track returned, with the uuid `added` and the
+    /// rest of the track's fields. One leg, or both ends or none following:
+    /// the plain follow.
+    pub fn stretch(
+        &self,
+        segment: &Segment,
+        delta: Point,
+        rule: CornerRule,
+        added: Uuid,
+    ) -> (Segment, Option<Segment>) {
+        let moved = self.follow(segment, delta);
+        if self.start == self.end {
+            return (moved, None);
+        }
+        let (fixed, free) = if self.start {
+            (moved.end, moved.start)
+        } else {
+            (moved.start, moved.end)
+        };
+        let &[(_, corner), _] = rule.legs(fixed, free).as_slice() else {
+            return (moved, None);
+        };
+        let (mut kept, mut leg) = (moved.clone(), moved);
+        leg.uuid = added;
+        if self.start {
+            // Fixed at the end: the corner to the end, the moved start to
+            // the corner.
+            kept.start = corner;
+            leg.end = corner;
+        } else {
+            kept.end = corner;
+            leg.start = corner;
+        }
+        (kept, Some(leg))
+    }
+}
+
+/// The corner rule a stretched track bends by (#2513): the router's rule
+/// `live` when it bends at 45°, else a straight leg out of the fixed end
+/// then the 45° leg to the moved end, so the segments stay at 0°, 45° or 90°.
+pub fn stretch_rule(live: CornerRule) -> CornerRule {
+    match live.mode {
+        CornerMode::Angle45Start | CornerMode::Angle45End => live,
+        CornerMode::Ortho90 | CornerMode::FreeAngle => CornerRule {
+            mode: CornerMode::Angle45End,
+            is_flipped: false,
+        },
     }
 }
 

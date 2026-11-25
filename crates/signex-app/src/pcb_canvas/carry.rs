@@ -15,6 +15,7 @@ use signex_engine::pcb::snap::{
     GuideHit, ShownLayers, SnapQuery, axis_snap, guide_snap, object_snap_point,
 };
 use signex_engine::pcb::{BoardClipboard, BoardCommand};
+use signex_types::corner::CornerRule;
 use signex_types::pcb::{PcbBoard, Point, Segment};
 use signex_types::pcb_arc::TrackArc;
 use signex_types::pcb_options::{GridUse, GuideKind};
@@ -84,6 +85,10 @@ pub struct PcbCarry {
     /// alone and their tracks stay. One-way until the carry ends, so
     /// releasing Ctrl never reattaches them (Caner, 2026-11-21).
     pub leaves_tracks: bool,
+    /// The corner a track stretched by a carried track bends at
+    /// (`pcb_geom::stretch_rule`), read off the router's rule when the drag
+    /// starts (#2513).
+    pub stretch_corner: CornerRule,
 }
 
 impl PcbCarry {
@@ -116,6 +121,7 @@ impl PcbCarry {
             rooms: BTreeSet::new(),
             via_tracks: false,
             leaves_tracks: false,
+            stretch_corner: pcb_geom::stretch_rule(CornerRule::default()),
         }
     }
 
@@ -181,6 +187,17 @@ impl PcbCarry {
         }
         ends.retain(|e| !self.items.contains(&e.track));
         ends
+    }
+
+    /// The tracks a carried track stretches by an end (#2513), which bend
+    /// at [`Self::stretch_corner`]; none with Ctrl held.
+    pub fn stretching(&self, board: &PcbBoard) -> BTreeSet<Uuid> {
+        if self.leaves_tracks || self.items.is_empty() {
+            return BTreeSet::new();
+        }
+        (pcb_geom::tracks_on_tracks(board, &self.items).iter())
+            .map(|ends| ends.track)
+            .collect()
     }
 
     /// The copper arc ends on the carried vias, which move with them; none
@@ -581,6 +598,64 @@ fn followed(board: &PcbBoard, ends: &TrackEnds, delta: Point) -> Option<Segment>
         .get(ends.index)
         .filter(|segment| segment.uuid == ends.track)?;
     Some(ends.follow(segment, delta))
+}
+
+/// The `following` tracks of `carry` on `board` as a move by `delta` leaves
+/// them (#2513): each follows its ends, and one that `carry` stretches
+/// bends at its corner (`TrackEnds::stretch`), the leg to its moved end a
+/// new track with an id from `new_id`. The followed tracks, then the new
+/// legs. A track `board` no longer holds where `following` found it is left
+/// out.
+pub fn followed_tracks(
+    board: &PcbBoard,
+    carry: &PcbCarry,
+    following: &[TrackEnds],
+    delta: Point,
+    mut new_id: impl FnMut() -> Uuid,
+) -> (Vec<Segment>, Vec<Segment>) {
+    let stretching = carry.stretching(board);
+    let (mut tracks, mut legs) = (Vec::new(), Vec::new());
+    for ends in following {
+        let Some(segment) = (board.segments.get(ends.index)).filter(|s| s.uuid == ends.track)
+        else {
+            continue;
+        };
+        if !stretching.contains(&ends.track) {
+            tracks.push(ends.follow(segment, delta));
+            continue;
+        }
+        let (kept, leg) = ends.stretch(segment, delta, carry.stretch_corner, new_id());
+        tracks.push(kept);
+        legs.extend(leg);
+    }
+    (tracks, legs)
+}
+
+/// `preview`, a board drawn or read as the drop of `carry` leaves it, with
+/// the tracks `carry` stretches bent at their corner as the drop bends them
+/// ([`followed_tracks`]); the new legs take fresh ids.
+pub fn with_stretched_tracks(
+    mut preview: PcbBoard,
+    board: &PcbBoard,
+    carry: &PcbCarry,
+    following: &[TrackEnds],
+) -> PcbBoard {
+    let stretching = carry.stretching(board);
+    if stretching.is_empty() {
+        return preview;
+    }
+    let ends: Vec<TrackEnds> = (following.iter())
+        .filter(|e| stretching.contains(&e.track))
+        .copied()
+        .collect();
+    let (tracks, legs) = followed_tracks(board, carry, &ends, carry.delta, Uuid::now_v7);
+    for track in tracks {
+        if let Some(slot) = preview.segments.iter_mut().find(|s| s.uuid == track.uuid) {
+            *slot = track;
+        }
+    }
+    preview.segments.extend(legs);
+    preview
 }
 
 /// `board` as a move of the `carried` footprints and vias by `delta` leaves

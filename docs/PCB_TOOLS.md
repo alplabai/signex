@@ -987,9 +987,18 @@ puts them, and the drop moves them all as one undo step
 carries nothing and Messages says it is locked
 (`Move: track <id> is locked; nothing changed`).
 
-The stretch is straight: a joined track keeps its far end and turns to meet
-the moved end, without a 45° or orthogonal corner. The dragged track's own
-ends move with it, so an end of it on a pad or via leaves that pad or via.
+A stretched track stays at 0°, 45° or 90°, as a routed one does (Caner,
+2026-11-25). When its moved end is still on one of those lines from its
+fixed end, it stays one track. Otherwise it bends at one 45° corner: the
+track keeps the leg at its fixed end and a new track, with its width, layer
+and net, runs from the corner to the moved end (`TrackEnds::stretch`). The
+corner follows the router's corner rule when that bends at 45° (45° start or
+45° end, with its flip). With the 90° or any-angle rule, the track leaves its
+fixed end straight and turns 45° into the moved end
+(`pcb_geom::stretch_rule`). The rule is read when the drag starts. The
+dragged track's own ends move with it, so an end of it on a pad or via
+leaves that pad or via. Tracks that a dragged via, or a dragged part's pads,
+take along still turn straight to the moved end, with no corner.
 
 ## Moving a designator or comment on its own
 

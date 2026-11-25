@@ -36,8 +36,9 @@ pub use board_text::BoardTextLayer;
 pub use camera::BoardCamera;
 pub use carry::{
     CarryKind, PasteLoad, PcbCarry, board_after_move, board_without, board_without_text,
-    carried_board, carried_text_board, carry_delta, followed_arcs, item_carry_delta, snap_point,
-    snap_point_on, via_carry_delta, with_arcs_replaced,
+    carried_board, carried_text_board, carry_delta, followed_arcs, followed_tracks,
+    item_carry_delta, snap_point, snap_point_on, via_carry_delta, with_arcs_replaced,
+    with_stretched_tracks,
 };
 pub use carry_items::{carried_item_ids, item_points};
 pub use content::BoardContentLayer;

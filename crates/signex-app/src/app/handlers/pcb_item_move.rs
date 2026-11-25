@@ -12,14 +12,14 @@ use std::path::Path;
 use signex_engine::pcb::item_move::move_items;
 use signex_engine::pcb::placement::{self, PlacementRefusal};
 use signex_engine::pcb::{BoardCommand, BoardCommandError, BoardItem, BoardItemId};
-use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb::{PcbBoard, Point, Segment};
 use uuid::Uuid;
 
 use super::pcb_placement::refuse;
 use crate::app::Signex;
 use crate::pcb_canvas::{
     CarryKind, DraggedItems, DraggedSelection, PcbCarry, carried_item_ids, carry_delta,
-    item_carry_delta, item_points, via_carry_delta,
+    followed_tracks, item_carry_delta, item_points, via_carry_delta,
 };
 
 /// The commands that move `items` and `rooms` of `board` by `delta`, one
@@ -122,7 +122,7 @@ fn mixed_commands(
         }
     }
     commands.retain(|c| !matches!(c, BoardCommand::ReplaceItems { items } if items.is_empty()));
-    commands.extend(follow_command(board, carry, delta));
+    commands.extend(follow_commands(board, carry, delta));
     let (items, rooms) = (&carry.items, &carry.rooms);
     commands.extend(move_commands(
         board,
@@ -135,14 +135,30 @@ fn mixed_commands(
 }
 
 /// The track ends that follow what `carry` holds (`PcbCarry::following`),
-/// moved by `delta` as the drag preview draws them; `None` with none or a
-/// zero offset.
-fn follow_command(board: &PcbBoard, carry: &PcbCarry, delta: Point) -> Option<BoardCommand> {
-    let followed: Vec<BoardItem> = (carry.following(board).iter())
-        .map(|ends| BoardItem::Segment(ends.follow(&board.segments[ends.index], delta)))
-        .collect();
-    let moves = delta.x != 0.0 || delta.y != 0.0;
-    (!followed.is_empty() && moves).then_some(BoardCommand::ReplaceItems { items: followed })
+/// moved by `delta` as the drag preview draws them, and the corner legs of
+/// the tracks a carried track stretches (#2513) added; none for a zero
+/// offset.
+fn follow_commands(board: &PcbBoard, carry: &PcbCarry, delta: Point) -> Vec<BoardCommand> {
+    if delta.x == 0.0 && delta.y == 0.0 {
+        return Vec::new();
+    }
+    let following = carry.following(board);
+    let (tracks, legs) = followed_tracks(board, carry, &following, delta, Uuid::now_v7);
+    let segments = |tracks: Vec<Segment>| -> Vec<BoardItem> {
+        tracks.into_iter().map(BoardItem::Segment).collect()
+    };
+    let mut commands = Vec::new();
+    if !tracks.is_empty() {
+        commands.push(BoardCommand::ReplaceItems {
+            items: segments(tracks),
+        });
+    }
+    if !legs.is_empty() {
+        commands.push(BoardCommand::AddItems {
+            items: segments(legs),
+        });
+    }
+    commands
 }
 
 impl Signex {
@@ -163,6 +179,7 @@ impl Signex {
         let window = self.interaction_state.acting_window;
         let mut carry = PcbCarry::new(CarryKind::Drag, path.to_path_buf(), window, BTreeSet::new());
         carry.anchor = Some(from);
+        carry.stretch_corner = pcb_geom::stretch_rule(self.interaction_state.corner_rule);
         match refused {
             Some(refusal) => refuse("Move", &refusal),
             None => {
@@ -217,9 +234,11 @@ impl Signex {
         let refused = selection_refusal(board, &all);
         let via_tracks = !pcb_geom::tracks_on_vias(board, &all.vias).is_empty()
             || !pcb_geom::arcs_on_vias(board, &all.vias).is_empty();
+        let corner = pcb_geom::stretch_rule(self.interaction_state.corner_rule);
         let Some(carry) = self.interaction_state.pcb_carry.as_mut() else {
             return;
         };
+        carry.stretch_corner = corner;
         match refused {
             Some(refusal) => {
                 refuse("Move", &refusal);
@@ -282,7 +301,7 @@ impl Signex {
             let (items, rooms) = (&carry.items, &carry.rooms);
             let moved = move_commands(board, items, rooms, &carry.footprints, delta);
             Some(moved.map(|mut commands| {
-                commands.extend(follow_command(board, carry, delta));
+                commands.extend(follow_commands(board, carry, delta));
                 commands
             }))
         });

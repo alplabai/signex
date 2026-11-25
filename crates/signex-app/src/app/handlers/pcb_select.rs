@@ -13,6 +13,7 @@ use crate::canvas::CanvasEvent;
 use crate::pcb_canvas::{
     PcbCanvas, PcbCanvasMsg, PcbCarry, PcbSelectionState, board_after_move, board_without,
     board_without_text, carried_board, carried_text_board, followed_arcs, with_arcs_replaced,
+    with_stretched_tracks,
 };
 
 impl Signex {
@@ -382,15 +383,16 @@ fn sync_drag_preview(
     let following = canvas.drag_preview_following().to_vec();
     canvas.move_drag_preview(carry.delta, || {
         let arcs = followed_arcs(board, &carry.following_arcs(board), carry.delta);
-        let mut moved = carried_board(board, &carried, &following, carry.delta);
+        // A stretched track bends at its corner as the drop bends it (#2513).
+        let moved = carried_board(board, &carried, &following, carry.delta);
+        let mut moved = with_stretched_tracks(moved, board, carry, &following);
         moved.free.arcs = arcs.clone();
         let snapshot = carried_snapshot(&moved, view, standard);
         match ratsnest {
             Some((cache, path)) => {
-                let after = with_arcs_replaced(
-                    board_after_move(board, &carried, &following, carry.delta),
-                    &arcs,
-                );
+                let after = board_after_move(board, &carried, &following, carry.delta);
+                let after = with_stretched_tracks(after, board, carry, &following);
+                let after = with_arcs_replaced(after, &arcs);
                 let fills = pcb_geom::zone_fills(&after);
                 cache.apply_uncached(path, &after, &fills, snapshot)
             }

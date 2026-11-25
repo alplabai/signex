@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::{EditMsg, Message, Signex};
-use crate::pcb_canvas::{PcbCanvasMsg, PcbCanvasState, carried_board};
+use crate::pcb_canvas::{PcbCanvasMsg, PcbCanvasState, carried_board, with_stretched_tracks};
 
 const U1: Uuid = Uuid::from_u128(0x2513_0001);
 const VIA: Uuid = Uuid::from_u128(0x2513_0002);
@@ -188,10 +188,35 @@ fn p(x: f64, y: f64) -> Point {
     Point::new(x, y)
 }
 
-/// With nothing selected, a press on the track and a drag move it; the
+fn near(a: Point, b: Point) -> bool {
+    (a.x - b.x).abs() < 1e-6 && (a.y - b.y).abs() < 1e-6
+}
+
+impl Rig {
+    /// How many tracks of the board run from `a` to `b`, either way round.
+    fn tracks_between(&self, a: Point, b: Point) -> usize {
+        (self.board().segments.iter())
+            .filter(|t| {
+                (near(t.start, a) && near(t.end, b)) || (near(t.start, b) && near(t.end, a))
+            })
+            .count()
+    }
+
+    fn assert_all_at_legal_angles(&self) {
+        for t in &self.board().segments {
+            let (dx, dy) = ((t.end.x - t.start.x).abs(), (t.end.y - t.start.y).abs());
+            let legal = dx < 1e-6 || dy < 1e-6 || (dx - dy).abs() < 1e-6;
+            assert!(legal, "{} runs at 0°, 45° or 90°: {t:?}", t.uuid);
+        }
+    }
+}
+
+/// With nothing selected, a press on the track and a drag move it. The
 /// track from U1's pad stretches by its joined end and keeps its pad end,
-/// the track to the via keeps its via end. The drop is what the preview
-/// drew, and one undo puts everything back.
+/// the track to the via keeps its via end, and each bends at one 45° corner
+/// (Caner, 2026-11-25): the track keeps the leg at its fixed end and a new
+/// track runs on to the moved end. The drop is what the preview drew, and
+/// one undo puts everything back.
 #[test]
 fn an_unselected_track_drags_and_stretches_the_tracks_joined_to_it() {
     let mut r = rig();
@@ -208,24 +233,55 @@ fn an_unselected_track_drags_and_stretches_the_tracks_joined_to_it() {
         let canvas = &r.app.interaction_state.pcb_canvas;
         assert!(canvas.previews_drag(), "the drag previews on the board");
         let following = canvas.drag_preview_following().to_vec();
-        carried_board(r.board(), &carry.carried(), &following, carry.delta).segments
+        let drawn = carried_board(r.board(), &carry.carried(), &following, carry.delta);
+        with_stretched_tracks(drawn, r.board(), carry, &following).segments
     };
     r.release(p(7.5, 3.0));
     assert_eq!(r.track(DRAGGED), (p(5.0, 3.0), p(10.0, 3.0)), "moved whole");
-    assert_eq!(r.track(ON_PAD), (p(0.0, 0.0), p(5.0, 3.0)), "pad end stays");
-    assert_eq!(r.track(TO_VIA), (p(10.0, 3.0), p(15.0, 0.0)), "via end stays");
+    // (0, 0) to (5, 3): straight to (2, 0), then 45° up.
+    assert_eq!(r.track(ON_PAD), (p(0.0, 0.0), p(2.0, 0.0)), "pad end stays");
+    assert_eq!(r.tracks_between(p(2.0, 0.0), p(5.0, 3.0)), 1, "its 45° leg");
+    // (15, 0) to (10, 3): straight to (13, 0), then 45° up.
+    assert_eq!(r.track(TO_VIA), (p(13.0, 0.0), p(15.0, 0.0)), "via end stays");
+    assert_eq!(r.tracks_between(p(10.0, 3.0), p(13.0, 0.0)), 1, "its 45° leg");
     assert_eq!(r.track(FROM_VIA), (p(15.0, 0.0), p(20.0, 0.0)), "not joined");
+    assert_eq!(r.board().segments.len(), 7, "two new legs");
+    r.assert_all_at_legal_angles();
     let via = r.board().vias.iter().find(|v| v.uuid == VIA).unwrap();
     assert_eq!(via.position, p(15.0, 0.0), "the via stays");
     let ids: Vec<Uuid> = ghost.iter().map(|t| t.uuid).collect();
-    assert_eq!(ghost.len(), 3, "the ghost holds the track and both joined: {ids:?}");
+    assert_eq!(ghost.len(), 5, "the track, both joined and their legs: {ids:?}");
     for drawn in &ghost {
         assert_eq!(
-            (drawn.start, drawn.end),
-            r.track(drawn.uuid),
-            "the drop is the ghost"
+            r.tracks_between(drawn.start, drawn.end),
+            1,
+            "the drop is the ghost: {drawn:?}"
         );
     }
+    r.undo();
+    assert_eq!(r.live(), before, "one undo step");
+}
+
+/// A stretch that lands on an axis or an exact 45° line stays one track
+/// (Caner, 2026-11-25). One undo step each.
+#[test]
+fn a_stretch_on_a_legal_angle_stays_one_track() {
+    let mut r = rig();
+    let before = r.live();
+    // Along the track: the joined tracks shorten and lengthen on the axis.
+    r.drag(p(7.5, 0.0), p(5.5, 0.0));
+    assert_eq!(r.track(DRAGGED), (p(3.0, 0.0), p(8.0, 0.0)));
+    assert_eq!(r.track(ON_PAD), (p(0.0, 0.0), p(3.0, 0.0)));
+    assert_eq!(r.track(TO_VIA), (p(8.0, 0.0), p(15.0, 0.0)));
+    assert_eq!(r.board().segments.len(), 5, "no corner");
+    r.undo();
+    assert_eq!(r.live(), before, "one undo step");
+    // 5 mm up: both joined tracks run at exactly 45°.
+    r.drag(p(7.5, 0.0), p(7.5, 5.0));
+    assert_eq!(r.track(ON_PAD), (p(0.0, 0.0), p(5.0, 5.0)));
+    assert_eq!(r.track(TO_VIA), (p(10.0, 5.0), p(15.0, 0.0)));
+    assert_eq!(r.board().segments.len(), 5, "no corner");
+    r.assert_all_at_legal_angles();
     r.undo();
     assert_eq!(r.live(), before, "one undo step");
 }
@@ -262,8 +318,9 @@ fn a_locked_track_stays_and_says_why() {
 }
 
 /// A drag of a selection holding two joined tracks moves both whole, not
-/// also by the end they share, as before #2513; the tracks outside the
-/// selection joined to them stretch. One undo step.
+/// also by the end they share, as before #2513; the unselected tracks
+/// joined to them stretch with a 45° corner (Caner, 2026-11-25). One undo
+/// step.
 #[test]
 fn selected_tracks_still_move_whole() {
     let mut r = rig();
@@ -276,8 +333,12 @@ fn selected_tracks_still_move_whole() {
     r.drag(p(7.5, 0.0), p(7.5, 3.0));
     assert_eq!(r.track(DRAGGED), (p(5.0, 3.0), p(10.0, 3.0)), "whole");
     assert_eq!(r.track(TO_VIA), (p(10.0, 3.0), p(15.0, 3.0)), "whole");
-    assert_eq!(r.track(ON_PAD), (p(0.0, 0.0), p(5.0, 3.0)), "stretched");
-    assert_eq!(r.track(FROM_VIA), (p(15.0, 3.0), p(20.0, 0.0)), "stretched");
+    assert_eq!(r.track(ON_PAD), (p(0.0, 0.0), p(2.0, 0.0)), "stretched");
+    assert_eq!(r.tracks_between(p(2.0, 0.0), p(5.0, 3.0)), 1, "its leg");
+    // (20, 0) to (15, 3): straight to (18, 0), then 45° up.
+    assert_eq!(r.track(FROM_VIA), (p(18.0, 0.0), p(20.0, 0.0)), "stretched");
+    assert_eq!(r.tracks_between(p(15.0, 3.0), p(18.0, 0.0)), 1, "its leg");
+    r.assert_all_at_legal_angles();
     r.undo();
     assert_eq!(r.live(), before, "one undo step");
 }
