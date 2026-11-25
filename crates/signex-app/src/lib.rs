@@ -8,9 +8,10 @@
 //! API for a non-GUI caller (#1933): [`headless`] (boot without a window,
 //! run commands by id), with [`config_root`]'s override,
 //! [`fonts::catalog::install_before_boot`], [`task_driver`] and
-//! [`io_ports`]. Everything else is `pub` only so integration tests in
-//! `tests/` can reach engine state, dispatch handlers, dirty bits and panel
-//! context: that is test harness, not API.
+//! [`io_ports`]. API for a binary built on this crate (#2495): [`launch`]
+//! and [`extension`] (docs/EXTENSION_API.md). Everything else is `pub` only
+//! so integration tests in `tests/` can reach engine state, dispatch
+//! handlers, dirty bits and panel context: that is test harness, not API.
 
 // `clippy::let_underscore_must_use` (Cargo.toml `[lints.clippy]`, GH #99
 // part 1) is warn-level in production code on purpose — it flags the 13
@@ -39,6 +40,7 @@ pub mod config_root;
 pub mod diagnostics;
 pub mod dock;
 pub mod double_click;
+pub mod extension;
 pub mod feature_flags;
 pub mod find_replace;
 pub mod find_similar;
@@ -59,6 +61,7 @@ pub mod smart_paste;
 mod ignore;
 pub mod keyboard_shortcuts_modal;
 pub mod keymap;
+pub mod launch;
 pub mod layer_strip_prefs;
 #[cfg(test)]
 pub(crate) mod layout_probe;
