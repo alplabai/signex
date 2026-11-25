@@ -516,3 +516,30 @@ fn the_board_menu_compares_with_the_schematic_in_a_project() {
     assert!(matches!(in_project[compare + 1], DropdownEntry::Separator));
     assert_eq!(compare + 2, at("Toggle Ratsnest"));
 }
+
+/// #2506: a right-click on a polygon pour offers Unfill Selected, which
+/// runs `unfill_selected`, right before Polygon Manager; off a pour the row
+/// is not there.
+#[test]
+fn the_pour_menu_has_a_live_unfill_row_before_polygon_manager() {
+    let picked = PcbTargets {
+        shown: true,
+        any: true,
+        ..PcbTargets::default()
+    };
+    let on_pour = crate::app::view::context_menu::board_menu::pcb_pour_menu(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        &board_ctx(picked),
+        &shortcuts(),
+    );
+    assert!(runs(
+        row_message(&on_pour, "Unfill Selected"),
+        "unfill_selected"
+    ));
+    let names = labels(&on_pour);
+    let unfill = names.iter().position(|l| l == "Unfill Selected");
+    let manager = names.iter().position(|l| l == "Polygon Manager...");
+    assert_eq!(unfill.map(|at| at + 1), manager, "{names:?}");
+    assert!(absent(&rows(picked), "Unfill Selected"));
+}

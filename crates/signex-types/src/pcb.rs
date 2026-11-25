@@ -518,6 +518,12 @@ pub struct Zone {
     /// it is not filled and clears nothing (#2523). Not written when off.
     #[serde(default, skip_serializing_if = "crate::zone_pour::is_off")]
     pub shelved: bool,
+    /// An unfilled pour keeps its outline and settings but holds no copper
+    /// and clears nothing until the next Repour, which clears the flag
+    /// (#2506). Unlike a shelved pour it counts as not filled. Not written
+    /// when off.
+    #[serde(default, skip_serializing_if = "crate::zone_pour::is_off")]
+    pub unfilled: bool,
     /// Keys in this zone's `[[zones]]` table that this build does not
     /// recognise, kept so a save re-emits them: a zone field added by a
     /// later build (as `holes` was in #818) survives a re-save here (#883).

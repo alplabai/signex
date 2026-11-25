@@ -545,6 +545,8 @@ define_ids! {
         CMD_MENU_REPOUR_SELECTED = "cmd-menu-repour-selected";
         CMD_REPOUR_ALL = "cmd-repour-all";
         CMD_MENU_REPOUR_ALL = "cmd-menu-repour-all";
+        CMD_UNFILL_SELECTED = "cmd-unfill-selected";
+        CMD_MENU_UNFILL_SELECTED = "cmd-menu-unfill-selected";
         CMD_PLACE_BOARD_ROUTE = "cmd-place-board-route";
         CMD_MENU_PLACE_BOARD_ROUTE = "cmd-menu-place-board-route";
         CMD_CYCLE_ROUTE_MODE = "cmd-cycle-route-mode";

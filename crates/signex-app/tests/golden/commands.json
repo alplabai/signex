@@ -2030,6 +2030,11 @@
     "category": "interactive"
   },
   {
+    "id": "unfill_selected",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "unlock_board_items",
     "group": "Pcb",
     "category": "modify"

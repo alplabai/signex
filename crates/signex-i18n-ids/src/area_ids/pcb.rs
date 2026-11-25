@@ -63,6 +63,7 @@ define_ids! {
     PCB_POUR_REPOURED = "pcb-pour-repoured";
     PCB_POUR_NONE = "pcb-pour-none";
     PCB_POUR_NONE_SELECTED = "pcb-pour-none-selected";
+    PCB_POUR_UNFILL_NONE_SELECTED = "pcb-pour-unfill-none-selected";
     PCB_LAYER_TAB_HIDE = "pcb-layer-tab-hide";
     PCB_LAYER_TAB_SHOW_ONLY = "pcb-layer-tab-show-only";
     PCB_LAYER_TAB_COLOUR = "pcb-layer-tab-colour";
@@ -173,6 +174,7 @@ define_ids! {
     PCB_POUR_UNFILLED_NO_LAYER = "pcb-pour-unfilled-no-layer";
     PCB_POUR_UNFILLED_OUTLINE = "pcb-pour-unfilled-outline";
     PCB_POUR_UNFILLED_CLEARANCE = "pcb-pour-unfilled-clearance";
+    PCB_POUR_UNFILLED_UNTIL_REPOUR = "pcb-pour-unfilled-until-repour";
     PCB_ROUTE_AIM_BLOCKED = "pcb-route-aim-blocked";
     PCB_TOOL_PAUSED = "pcb-tool-paused";
     PCB_TUNE_NEEDS_TRACKS = "pcb-tune-needs-tracks";

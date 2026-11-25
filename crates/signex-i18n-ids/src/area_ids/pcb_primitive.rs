@@ -310,6 +310,8 @@ define_ids! {
     PCB_PRIM_POUR_SHELVE = "pcb-prim-pour-shelve";
     PCB_PRIM_POUR_SHELVE_TIP = "pcb-prim-pour-shelve-tip";
     PCB_PRIM_POUR_UNSHELVE = "pcb-prim-pour-unshelve";
+    PCB_PRIM_POUR_UNFILL = "pcb-prim-pour-unfill";
+    PCB_PRIM_POUR_UNFILL_TIP = "pcb-prim-pour-unfill-tip";
     PCB_PRIM_POUR_MENU = "pcb-prim-pour-menu";
     PCB_PRIM_POUR_MENU_TIP = "pcb-prim-pour-menu-tip";
     PCB_PRIM_POUR_REPOUR_ALL = "pcb-prim-pour-repour-all";

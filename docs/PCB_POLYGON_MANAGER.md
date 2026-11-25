@@ -26,7 +26,9 @@ and Save and Undo act on the board.
   the ticked rows are greyed while none is ticked.
 - **Sub-tabs.** Pours (every pour), Shelved (the shelved pours only) and
   Bulk edit.
-- **Filters.** Layer, Net and State (All, Poured, Shelved, Not filled).
+- **Filters.** Layer, Net and State (All, Poured, Shelved, Not filled). An
+  unfilled pour (#2506) is Not filled and counts in "· N not filled" until
+  it is repoured.
 - **Table.** One row per pour, grouped by copper layer in stack order, each
   layer in pour order with its shelved pours last. Columns: a tick box,
   Order (the place in the fill order of the layer, from 1; a shelved pour

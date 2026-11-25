@@ -50,6 +50,7 @@ const BOARD_ROWS: &[&str] = &[
     "change_footprint",
     "lock_board_items",
     "unlock_board_items",
+    "unfill_selected",
     "swap_pins",
     "swap_gates",
     "save_board_reuse_block",

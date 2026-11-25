@@ -145,7 +145,8 @@ fn row_tooltip(row: PcbBarRow, i18n: &I18n) -> String {
 }
 
 /// The bar button's icon for `row`: the tool's bar icon, the repour glyph
-/// for Repour (#2216), a tuning command's glyph (#2389), the component glyph
+/// for Repour (#2216), the undo glyph for Unfill (#2506), a tuning command's
+/// glyph (#2389), the component glyph
 /// for a command of the Components
 /// group.
 fn button_icon(row: PcbBarRow, tid: ThemeId) -> ActiveBarIcon {
@@ -157,11 +158,12 @@ fn button_icon(row: PcbBarRow, tid: ThemeId) -> ActiveBarIcon {
     }
 }
 
-/// The glyph of a Repour (#2216) or tuning (#2389) command row; `None` for
-/// another command.
+/// The glyph of a Repour (#2216), Unfill (#2506, the Repour glyph turned
+/// back) or tuning (#2389) command row; `None` for another command.
 fn command_icon(id: &str, tid: ThemeId) -> Option<svg::Handle> {
     match id {
         id if is_repour(id) => Some(ic::icon_redo(tid)),
+        "unfill_selected" => Some(ic::icon_undo(tid)),
         "tune_net_length" => Some(ic::icon_pcb_length_tune(tid)),
         _ => None,
     }

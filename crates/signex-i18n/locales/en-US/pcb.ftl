@@ -246,6 +246,7 @@ pcb-pour-repoured = Repour: { $pours ->
 } filled, { $pieces } areas of copper, { $islands } islands removed
 pcb-pour-none = Repour: the board has no polygon pour
 pcb-pour-none-selected = Repour Selected: select a polygon pour first
+pcb-pour-unfill-none-selected = Unfill Selected: select a polygon pour first
 # Interactive Routing (#2389): its Active Bar tooltip and Messages hint, the
 # lines a leg it cannot route writes, and the mode `cycle_route_mode` picks.
 pcb-bar-route-tooltip = Interactive Routing (Space flips the corner, Shift+Space changes the corner mode)
@@ -297,6 +298,7 @@ pcb-pour-not-filled = { $pour }: not filled: { $why }
 pcb-pour-unfilled-no-layer = it is on no copper layer
 pcb-pour-unfilled-outline = its outline has fewer than three corners the board geometry can hold
 pcb-pour-unfilled-clearance = its clearance is not a length the board geometry can hold
+pcb-pour-unfilled-until-repour = it was unfilled; Repour fills it again
 # The leg on the pointer found no way; the straight leg drawn shows where
 # it was aimed.
 pcb-route-aim-blocked = the preview found no way to the pointer that keeps the clearance the rules ask; a click searches further and says if there is none

@@ -127,6 +127,19 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         operands: super::operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
+    // #2506: clear the copper of the selected pours, keeping their outline,
+    // until the next Repour; one undo step. It reads the selection, so it is
+    // window only. No default key.
+    CommandMetadata {
+        id: "unfill_selected",
+        category: "pcb",
+        label: command_ids::CMD_UNFILL_SELECTED,
+        menu_label: Some(command_ids::CMD_MENU_UNFILL_SELECTED),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
     // Mockup row 178: open the board's Polygon Manager tab, or focus it
     // (Tools, a pour's right-click, the PCB panel's Polygons mode). No
     // default key.

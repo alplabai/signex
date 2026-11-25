@@ -410,6 +410,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("open_net_classes_panel", "OpenNetClassesPanel"),
     ("repour_selected", "RepourSelected"),
     ("repour_all", "RepourAll"),
+    // #2506: fixture name only.
+    ("unfill_selected", "UnfillSelected"),
     // Mockup row 178: Tools ▸ Polygon Manager..., fixture name only.
     ("polygon_manager", "PolygonManager"),
     ("reannotate_board", "ReannotateBoard"),

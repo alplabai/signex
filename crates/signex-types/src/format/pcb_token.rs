@@ -57,15 +57,16 @@ pub const SNXPCB_FORMAT_V1_10: &str = "snxpcb/1.10";
 /// dimension with a non-default look ([`super::board_uses_dimension_style`],
 /// #2868), DECISIONS 2026-11-24, or drawn copper: a board drawing or string
 /// on a copper layer ([`super::board_has_drawn_copper`], #2883), DECISIONS
+/// 2026-11-25, or an unfilled pour (`Zone::unfilled`, #2506), DECISIONS
 /// 2026-11-25. A build that knows only 1.10 would drop the look keys on
-/// save, has never seen a cutout and does not count drawn copper as copper,
-/// so it opens 1.11 read-only. A board with none keeps its token, byte for
-/// byte.
+/// save, has never seen a cutout, does not count drawn copper as copper and
+/// would flood an unfilled pour, so it opens 1.11 read-only. A board with
+/// none keeps its token, byte for byte.
 pub const SNXPCB_FORMAT_V1_11: &str = "snxpcb/1.11";
 
 /// The token a save of `board` writes, from its content, highest need
-/// first: a pour cutout, a dimension look or drawn copper need
-/// [`SNXPCB_FORMAT_V1_11`],
+/// first: a pour cutout, a dimension look, drawn copper or an unfilled pour
+/// need [`SNXPCB_FORMAT_V1_11`],
 /// stack materials [`SNXPCB_FORMAT_V1_10`], a shelved pour
 /// [`SNXPCB_FORMAT_V1_9`], a stackup name, a
 /// patterned baked target or a numbering sweep [`SNXPCB_FORMAT_V1_8`], the
@@ -82,8 +83,9 @@ pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
         .as_ref()
         .is_some_and(|s| s.has_materials_data());
     let cutout = board.zones.iter().any(|zone| zone.is_pour_cutout());
+    let unfilled = board.zones.iter().any(|zone| zone.is_unfilled_pour());
     let look = super::board_uses_dimension_style(board);
-    if cutout || look || super::board_has_drawn_copper(board) {
+    if cutout || look || unfilled || super::board_has_drawn_copper(board) {
         SNXPCB_FORMAT_V1_11
     } else if materials {
         SNXPCB_FORMAT_V1_10

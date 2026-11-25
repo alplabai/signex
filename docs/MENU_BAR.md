@@ -243,7 +243,7 @@ because the command picks the direction (`DECISIONS.md`, 2026-11-10). Use
 fields. Properties has no standing note: it warns through the designator
 mismatch callout, with its Update PCB button (`DECISIONS.md`, 2026-11-23).
 
-## Tools ▸ Repour Selected, Repour All {#tools-repour}
+## Tools ▸ Repour Selected, Repour All, Unfill Selected {#tools-repour}
 
 Right after Re-Annotate Board, Tools ▸ Repour Selected and Repour All run
 `repour_selected` and `repour_all` (#2216) on the board in view, greyed while
@@ -251,6 +251,12 @@ no PCB is open. Both fill the board's polygon pours again and say in Messages
 how many pours, pieces of copper and removed islands they came to; Repour
 Selected reports the selected pours and says so when none is selected.
 Rules in `docs/PCB_TOOLS.md`, "Repour".
+
+Tools ▸ Unfill Selected, right after Repour All (#2506, DECISIONS
+2026-11-25), runs `unfill_selected` on the board in view, greyed while no
+PCB is open: the selected pours keep their outline and hold no copper until
+the next Repour, as one undo step, and with no pour selected Messages says
+to select one. Rules in `docs/PCB_TOOLS.md`, "Polygon Pour".
 
 Tools ▸ Polygon Manager..., after them, runs `polygon_manager` (mockup row
 178): it opens the board's Polygon Manager tab, or focuses the one that is

@@ -492,6 +492,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `toggle_single_layer_mode` | Draw only the active layer, or every layer again | view | `Shift+S` | `Shift+S` |
 | `tune_diff_pair` | Lengthen the shorter net of a differential pair with meanders to match the longer one | pcb | — | — |
 | `tune_net_length` | Lengthen the selected tracks' nets with meanders to a target length, or to the longest of them | pcb | — | — |
+| `unfill_selected` | Clear the copper of the selected polygon pours until the next repour | pcb | — | — |
 | `unlock_board_items` | Unlock the selected tracks and vias | modify | — | — |
 | `unwaive_drc_violation` | Take back the waiver of a DRC violation | pcb | — | — |
 | `view_board_3d` | Show the board in 3D, or flat again | view | `3` | `3` |

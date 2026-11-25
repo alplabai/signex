@@ -151,3 +151,32 @@ fn shelve_all_and_unshelve_all_are_one_step_each() {
     engine.undo().expect("undo").expect("a step");
     assert_eq!(engine.board().zones, b.zones, "each was a single step");
 }
+
+/// #2506: Repour clears `unfilled` on the unfilled pours it names (every
+/// pour for `None`) in one step that undo reverses; with no unfilled pour
+/// there is no command, so Repour stays a refresh.
+#[test]
+fn refill_clears_unfilled_on_the_named_pours_in_one_step() {
+    let mut b = with_pour();
+    let mut second = b.zones[0].clone();
+    second.uuid = Uuid::from_u128(77);
+    b.zones.push(second);
+    assert!(refill_pours(&b, None).is_none(), "nothing is unfilled");
+    b.zones[0].unfilled = true;
+    b.zones[1].unfilled = true;
+
+    let mut engine = BoardEngine::new(b.clone(), 1);
+    let named = [Uuid::from_u128(77)];
+    let one = refill_pours(engine.board(), Some(&named[..])).expect("one to refill");
+    engine.execute(one).expect("applies");
+    let unfilled: Vec<bool> = engine.board().zones.iter().map(|z| z.unfilled).collect();
+    assert_eq!(unfilled, vec![true, false], "only the named pour");
+    let all = refill_pours(engine.board(), None).expect("the other");
+    engine.execute(all).expect("applies");
+    assert!(engine.board().zones.iter().all(|z| !z.unfilled));
+    assert!(refill_pours(engine.board(), None).is_none(), "all filled");
+
+    engine.undo().expect("undo").expect("a step");
+    engine.undo().expect("undo").expect("a step");
+    assert_eq!(engine.board().zones, b.zones, "each was a single step");
+}

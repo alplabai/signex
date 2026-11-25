@@ -421,6 +421,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         // their copper came to.
         "repour_selected" => Message::Pcb(PcbMsg::RepourRequested { selected: true }),
         "repour_all" => Message::Pcb(PcbMsg::RepourRequested { selected: false }),
+        // #2506: clear the copper of the selected pours until Repour.
+        "unfill_selected" => Message::Pcb(PcbMsg::UnfillRequested),
         "place_board_keepout" => board_tool(BoardPlaceTool::Keepout),
         // #2457: Place ▸ Room and Design ▸ Rooms ▸ Create Rooms from Sheets.
         "place_board_room" => board_tool(BoardPlaceTool::Room),

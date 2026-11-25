@@ -85,6 +85,9 @@ pub enum PcbMsg {
     /// board in view are computed again and Messages says what the selected
     /// pours (`selected`) or all of them came to.
     RepourRequested { selected: bool },
+    /// `unfill_selected` ran (#2506): the selected pours of the board in
+    /// view hold no copper until the next Repour, as one undo step.
+    UnfillRequested,
     /// Swapping the footprint of placed components (#2366).
     FootprintSwap(FootprintSwapMsg),
     /// The right-click menu of a layer tab (#2379).

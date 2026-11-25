@@ -156,6 +156,8 @@ mod version_tests;
 mod wire_color_tests;
 #[cfg(test)]
 mod zone_shelved_tests;
+#[cfg(test)]
+mod zone_unfilled_tests;
 
 // Public API re-exports — preserve the `format::…` import paths that
 // signex-app / signex-engine / signex-output rely on.
