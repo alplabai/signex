@@ -522,6 +522,20 @@ pub(crate) fn problem_text(i18n: &I18n, file: &str, problem: &ScanProblem) -> Lo
             i18n, ids::ANNOTATIONS_PROBLEM_BAD_REFERENCE,
             "file" => file, "line" => line.as_str(), "reference" => reference.as_str()
         ),
+        ProblemKind::BadId { kind, id } => t!(
+            i18n, ids::ANNOTATIONS_PROBLEM_BAD_ID,
+            "file" => file, "line" => line.as_str(), "id" => id.as_str(),
+            "kind" => kind.function(), "prefix" => kind.id_prefix()
+        ),
+        ProblemKind::DuplicateId { id } => t!(
+            i18n, ids::ANNOTATIONS_PROBLEM_DUPLICATE_ID,
+            "file" => file, "line" => line.as_str(), "id" => id.as_str()
+        ),
+        ProblemKind::BadField { argument, value } => t!(
+            i18n, ids::ANNOTATIONS_PROBLEM_BAD_FIELD,
+            "file" => file, "line" => line.as_str(),
+            "argument" => argument.as_str(), "value" => value.as_str()
+        ),
     }
 }
 

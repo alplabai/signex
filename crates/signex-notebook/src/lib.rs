@@ -15,6 +15,11 @@
 //! `DEC-002`). The earlier `#annotation(kind: "...", ...)` block is still
 //! read: [`scan`] lists its blocks and every problem it met, by line, and
 //! [`Filter`] picks the ones a list shows (`docs/NOTEBOOK_ANNOTATIONS.md`).
+//! Each block is a review record ([`Record`], mockup row 198): the fields
+//! its kind prints, a Measurement's rows with their [`Verdict`], and the
+//! ids it cites ([`links`]); a failing Measurement opens an Issue
+//! ([`open_failing_measurements`]). [`new_block_source`] is what an insert
+//! button writes.
 //!
 //! [`compile`] turns [`NotebookSources`] into pages over Typst, with the
 //! bundled `@signex/notebook` package and fonts only; a
@@ -24,6 +29,7 @@
 //! UI-free and IO-free: the caller reads the files.
 
 mod annotation;
+mod block;
 mod compile;
 mod date;
 mod file;
@@ -31,10 +37,13 @@ mod filter;
 mod header;
 mod id;
 mod lexer;
+mod links;
+mod record;
 mod reference;
 mod scan;
 mod sources;
 mod syntax;
+mod template;
 mod world;
 
 pub use annotation::{Annotation, AnnotationKind, Status};
@@ -47,10 +56,19 @@ pub use file::{HEADER_FENCE, NotebookFile, NotebookFileError};
 pub use filter::{DateWindow, Filter, newest_first};
 pub use header::{Header, HeaderError, NOTEBOOK_FORMAT, StoredReference};
 pub use id::{BlockId, SERIAL_WIDTH};
+pub use links::{
+    Link, cited_by, issue_for_failure, links, open_failing_measurements, unopened_failures,
+};
+pub use record::{
+    Alternative, CalculationRecord, Citation, DecisionRecord, IssueRecord, Limits,
+    MeasurementRecord, MeasurementRow, NoteRecord, Record, Severity, VERDICT_WARN_MARGIN, Verdict,
+    verdict_of,
+};
 pub use reference::{Reference, quote};
 pub use scan::{ProblemKind, SNIPPET_MAX_CHARS, ScanProblem, TITLE_MAX_CHARS, scan};
 pub use sources::{LoadProblem, LoadProblemKind, NotebookSources, resolve};
 pub use syntax::{Include, ReferenceAt, distinct_references, includes, references, typst_source};
+pub use template::{new_block_source, next_block_id};
 pub use world::{PACKAGE_IMPORT, PACKAGE_NAME, PACKAGE_NAMESPACE, PACKAGE_VERSION};
 
 /// The project folder that holds the notebooks.
@@ -69,3 +87,5 @@ mod tests_compile;
 mod tests_file;
 #[cfg(test)]
 mod tests_model;
+#[cfg(test)]
+mod tests_records;

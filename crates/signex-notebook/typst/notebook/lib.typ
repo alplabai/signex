@@ -26,62 +26,10 @@
   _reference("pin", name)
 }
 
-#let _kind-labels = (
-  note: "Note",
-  calculation: "Calculation",
-  measurement: "Measurement",
-  issue: "Issue",
-  decision: "Decision",
-)
-
-// The common frame of an annotation block: a left rule, the kind label,
-// the typed id, the title and the status, then the body. A block never
-// splits across a page break.
-#let _block(kind, id, title, status, body) = block(
-  breakable: false,
-  width: 100%,
-  above: 1.2em,
-  below: 1.2em,
-  stroke: (left: 1.5pt + luma(35%)),
-  inset: (left: 8pt, rest: 6pt),
-  {
-    text(weight: "bold", size: 0.85em, upper(_kind-labels.at(kind, default: kind)))
-    if id != none { h(0.6em); raw(str(id)) }
-    if title != none { h(0.6em); strong(title) }
-    if status != none { h(1fr); text(size: 0.85em, upper(str(status))) }
-    if body != none { parbreak(); body }
-  },
-)
-
-// The function of one block kind. Named fields other than id, title and
-// status (owner, target, chosen, value, ...) are accepted for the kinds
-// that print them; the body is optional.
-#let _entry(kind) = (..args) => {
-  let named = args.named()
-  let body = args.pos().at(0, default: none)
-  if body == none and "value" in named {
-    body = [#str(named.at("value")) #named.at("unit", default: "")]
-  }
-  _block(
-    kind,
-    named.at("id", default: none),
-    named.at("title", default: none),
-    named.at("status", default: none),
-    body,
-  )
-}
-
-// One function per kind, each with a typed id: NOTE-, CALC-, MEAS-, ISS-,
-// DEC-.
-#let note = _entry("note")
-#let calculation = _entry("calculation")
-#let measurement = _entry("measurement")
-#let issue = _entry("issue")
-#let decision = _entry("decision")
-
-// The earlier one-function form, #annotation(kind: "issue", ...)[...],
-// still prints.
-#let annotation(kind: "note", ..args) = _entry(kind)(..args)
+// One function per kind, each with a typed id (NOTE-, CALC-, MEAS-, ISS-,
+// DEC-), printed as a review record; the earlier #annotation(kind: ...)
+// form; the verdict rule; the page block. See blocks.typ.
+#import "blocks.typ": note, calculation, measurement, issue, decision, annotation, verdict, page-info
 
 // The report layout: #show: report.with(doc: "DN-0042", rev: "B").
 // No creation date is written, so two exports give the same file.
