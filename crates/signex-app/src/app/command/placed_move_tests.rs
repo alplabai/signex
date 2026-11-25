@@ -317,7 +317,7 @@ fn wire(a: (f64, f64), b: (f64, f64)) -> Wire {
 /// R1 at (50, 50), pins at (45, 50) and (55, 50), a wire into pin 1 and
 /// foreign wire ends on both corners a 10 mm drop could take: the engine's
 /// "every route collides" case.
-fn blocked_resistor() -> (SchematicSheet, Uuid) {
+pub(crate) fn blocked_resistor() -> (SchematicSheet, Uuid) {
     resistor_with(vec![
         wire((30.0, 50.0), (45.0, 50.0)),
         wire((45.0, 55.0), (45.0, 58.0)),
@@ -411,4 +411,51 @@ fn a_wire_the_move_folds_away_is_named_as_removed() {
     assert_wire_ids(&answer, &loaded, &doc(&agent).wires);
     let removed = answer["removed_wires"].as_array().expect("a list");
     assert!(!removed.is_empty(), "{answer}");
+}
+
+/// X typed into R1's Position row and Enter, as a person does.
+fn type_x(app: &mut Signex, r1: Uuid, text: &str) {
+    use crate::panels::{PanelMsg, PlacedEditMsg, PlacedField};
+    let item = SelectedItem::new(r1, SelectedKind::Symbol);
+    app.interaction_state.active_canvas_mut().selected = vec![item];
+    app.update_selection_info();
+    let field = PlacedField::X;
+    for msg in [
+        PlacedEditMsg::Typed {
+            item,
+            field: field.clone(),
+            text: text.into(),
+        },
+        PlacedEditMsg::Submitted { item, field },
+    ] {
+        let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(
+            PanelMsg::PlacedEdit(msg),
+        )));
+    }
+}
+
+/// The Properties Position row still reads the person's "keep wires": off,
+/// the wires stay byte-equal; on, the wire into pin 1 follows the part.
+#[test]
+fn the_position_row_honours_the_persons_keep_wires() {
+    let (sheet, r1) = resistor_with(vec![wire((30.0, 50.0), (45.0, 50.0))]);
+    for keeps in [false, true] {
+        let (mut app, _d) = app_with(sheet.clone());
+        app.ui_state.move_keeps_wires = keeps;
+        type_x(&mut app, r1, "60");
+
+        assert_eq!(part_at(&app, r1), Point::new(60.0, 50.0), "keeps {keeps}");
+        let wires = &doc(&app).wires;
+        if keeps {
+            let pin_1 = signex_net::pt_key(&Point::new(55.0, 50.0));
+            let on_pin = |w: &Wire| {
+                [w.start, w.end]
+                    .iter()
+                    .any(|p| signex_net::pt_key(p) == pin_1)
+            };
+            assert!(wires.iter().any(on_pin), "the wire follows: {wires:?}");
+        } else {
+            assert_eq!(*wires, sheet.wires, "a plain move");
+        }
+    }
 }

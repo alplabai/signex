@@ -72,7 +72,7 @@ mod part_operand_tests;
 mod part_operands;
 mod placed_move;
 #[cfg(test)]
-mod placed_move_tests;
+pub(crate) mod placed_move_tests;
 #[cfg(test)]
 mod placed_operand_tests;
 mod placed_operands;

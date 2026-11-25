@@ -596,8 +596,10 @@ set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
   added), `removed_wires` (ids of wires it removed) and `fallbacks`, one
   `{"kind", "names", "message"}` per notice (`pins_not_kept` names the pins,
   `grip_end_left` carries `at` instead of `names`, `message` is the Messages
-  line). A sheet entry stays on its symbol's
-  border. A pin reference is refused here. The Position row in Properties
+  line). An agent reaches it only inside `apply_edits`, where its answer is
+  that edit's entry of `results`; the fallbacks are named there too, while
+  their Messages line waits for the list's commit. A sheet entry stays on
+  its symbol's border. A pin reference is refused here. The Position row in Properties
   makes the same move with the "keep wires" preference and `auto`.
 - `set_object_rotation` turns a part in place (its wires follow when "keep
   wires" is on) or sets a label's angle. A power port takes the absolute angle its

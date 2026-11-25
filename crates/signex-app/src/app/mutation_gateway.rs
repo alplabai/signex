@@ -138,10 +138,29 @@ impl Signex {
         (outcome, refusal)
     }
 
-    /// The edit tail itself; also hands back the engine notices the command
-    /// raised (a pin the rubber band could not keep), for a caller that
-    /// answers with them (#2552). They still go to Messages.
-    pub(crate) fn apply_engine_command_recording(
+    /// [`Self::apply_engine_command_reporting`] that also hands back the
+    /// engine notices the command raised (a pin the rubber band could not
+    /// keep), for a caller that answers with them (#2552). They still reach
+    /// Messages, after the commit inside an agent's edit list.
+    pub(crate) fn apply_engine_command_noticing(
+        &mut self,
+        command: signex_engine::Command,
+        clear_overlay_cache: bool,
+        update_selection_info: bool,
+    ) -> (
+        MutationOutcome,
+        Option<String>,
+        Vec<signex_engine::EngineNotice>,
+    ) {
+        self.apply_engine_command_recording(
+            command,
+            true,
+            clear_overlay_cache,
+            update_selection_info,
+        )
+    }
+
+    fn apply_engine_command_recording(
         &mut self,
         command: signex_engine::Command,
         record_history: bool,
@@ -158,10 +177,15 @@ impl Signex {
         let recorded = record_history
             .then(|| self.sheet_edit_to_record(std::slice::from_ref(&command)))
             .flatten();
+        let mark = self.document_state.edit_engine().map(|e| e.notice_mark());
         let edit = self
             .document_state
             .execute_on_edit_path(command, record_history);
-        let notices = engine_notices_of(&edit.events);
+        // An open transaction holds the notices until its commit (no event).
+        let notices = match (self.document_state.edit_engine(), mark) {
+            (Some(engine), Some(mark)) if engine.in_transaction() => engine.notices_since(mark),
+            _ => engine_notices_of(&edit.events),
+        };
         let (outcome, refusal) =
             self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info);
         if outcome == MutationOutcome::Changed

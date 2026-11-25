@@ -63,8 +63,7 @@ impl Signex {
         if let Some(reason) = engine.lock_refusal(&command) {
             return Err(PlacedRefusal::new(reason));
         }
-        let (outcome, reason, notices) =
-            self.apply_engine_command_recording(command, true, true, true);
+        let (outcome, reason, notices) = self.apply_engine_command_noticing(command, true, true);
         if outcome == Applied::Failed {
             return Err(PlacedRefusal {
                 reason: reason.unwrap_or_else(|| "the engine refused the edit".into()),
@@ -114,4 +113,65 @@ fn fallback(notice: &EngineNotice) -> Value {
         }
     };
     json!({ "kind": kind, "names": names, "message": message })
+}
+
+#[cfg(test)]
+mod tests {
+    use signex_engine::RefusedPinDot;
+
+    use super::*;
+
+    fn names(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| (*s).to_string()).collect()
+    }
+
+    /// Every notice kind answers its kind, what it names (a grip end its
+    /// `at`) and its Messages line.
+    #[test]
+    fn every_fallback_kind_has_its_answer_shape() {
+        let pin_dot = RefusedPinDot {
+            pin: "R3 pin 2".into(),
+            through: Some("VCC".into()),
+            other: None,
+        };
+        let cases = [
+            (
+                EngineNotice::DraggedWireLeft {
+                    held: names(&["R7 pin 1"]),
+                },
+                json!({"kind": "dragged_wire_left", "names": ["R7 pin 1"]}),
+            ),
+            (
+                EngineNotice::HeldPinsNotJoined {
+                    pins: names(&["U1 pin 4"]),
+                },
+                json!({"kind": "held_pins_not_joined", "names": ["U1 pin 4"]}),
+            ),
+            (
+                EngineNotice::PinDotRefused {
+                    pins: vec![pin_dot],
+                },
+                json!({"kind": "pin_dot_refused", "names": ["R3 pin 2"]}),
+            ),
+            (
+                EngineNotice::GripEndLeft {
+                    at: Point::new(1.5, -2.0),
+                },
+                json!({"kind": "grip_end_left", "at": [1.5, -2.0]}),
+            ),
+            (
+                EngineNotice::PinsNotKept {
+                    pins: names(&["R1 pin 1", "R1 pin 2"]),
+                },
+                json!({"kind": "pins_not_kept", "names": ["R1 pin 1", "R1 pin 2"]}),
+            ),
+        ];
+        for (notice, mut expected) in cases {
+            let line =
+                crate::app::engine_notices::notice_line(&signex_i18n::I18n::en_us(), &notice);
+            assert!(!line.is_empty(), "{notice:?}");
+            expected["message"] = json!(line);
+            assert_eq!(fallback(&notice), expected, "{notice:?}");
+        }
+    }
 }
