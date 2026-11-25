@@ -49,9 +49,15 @@ one net. An entry whose point a harness wire or a connector tip touches
 
 Across the hierarchy, a harness-typed sheet entry `N` on a sheet symbol joins
 the bundle it touches with the child sheet's bundle that carries the harness
-port `N`, entry by entry by path. A child that only passes a harness on to a
-grandchild (a port and a typed sheet entry on one bundle, no connector) does
-not carry it further yet.
+port `N`, entry by entry by path.
+
+A child that only passes a harness on to a grandchild **carries** it (#2657):
+a bundle with a harness port and a harness-typed sheet entry and no connector
+has no nets of its own, so the sides it meets (the parent's entry, the
+grandchild's port, or further carrying sheets) are joined to each other by
+path, nested paths included. The carry is inferred from those objects; nothing
+is stored for it. A bundle with no connector that lacks the port or the typed
+entry carries nothing.
 
 A sheet without harness objects takes none of these steps: its netlist is the
 same as before harnesses existed.
@@ -68,6 +74,11 @@ other name the naming rule ranks, see `docs/NET_NAMING.md`) outranks it.
 |---|---|---|
 | `harness_entry_mismatch` | Warning | An entry the far side of the harness carries and this connector lacks (`sensor expects entry CS_ADC; this harness has CS`), an entry only this connector carries (`sensor has no entry CS2`), compared by full path so nested entries count (`sensor has no entry UART.RX`) and reported on the parent sheet, a definition entry the connector lacks, or a connector entry its definition does not list. Located on the entry. |
 | `harness_type_conflict` | Warning | Connectors or typed sheet entries of two types on one harness. |
+
+When the child only passes the harness on, the parent compares against the
+leaves of the connectors the carry reaches below it. When the carry reaches no
+connector, the signals stop at the child and each entry of the parent's
+connector is reported as one the child has no entry for.
 
 Waivers and No-ERC directives work as for every rule. A port on a harness
 wire is not a disconnected port, a typed sheet entry on a harness wire is not
@@ -113,3 +124,9 @@ drops them on save. See `docs/architecture/snxsch-refinement-objects.md` and
 
 Wires end exactly on the entry points and tips the model computes, so the
 fixture holds whatever the connector geometry is.
+
+The carry fixture (`carry_fixture_netlist`, golden
+`testdata/harness_carry_netlist.golden.tsv`) sends the nested `DEBUG`
+harness from `mcu.snxsch` through `bridge.snxsch`, which holds only a port
+`DEBUG` on a harness wire to the `connectors` sheet symbol's typed entry
+`DEBUG`. Its netlist equals the direct fixture's.
