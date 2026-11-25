@@ -578,7 +578,7 @@ Properties rows read the panel's unit and the page origin instead. The answer
 is `{"id", "kind", "position", "rotation"?, "size"?}` after the edit.
 
 ```text
-set_object_position id=<uuid> at=x,y [document=..]
+set_object_position id=<uuid> at=x,y [keep_wires=true|false] [wiring=auto|horizontal_first|vertical_first|straight] [document=..]
 set_object_rotation id=<uuid> rotation=0|90|180|270 [document=..]
 set_sheet_symbol_size id=<uuid> size=w,h [document=..]
 set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
@@ -586,9 +586,22 @@ set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
 
 - `set_object_position` moves a part, label, sheet symbol, sheet entry, wire
   or bus (its start), bus entry, junction, no-connect, No-ERC directive or
-  text note so its position is `at`. Wires on a moved part follow it when
-  "keep wires" is on, as a drag does; a sheet entry stays on its symbol's
-  border. A pin reference is refused here.
+  text note so its position is `at`. Its wire handling is in its operands,
+  never the person's settings (#2552): `keep_wires` (default `true`) makes
+  the wires on a moved part follow it, and `wiring` (default `auto`) bends
+  them as the drag wiring mode of that name does. It is the edit a drag of
+  the same distance commits, with the same rubber band and guard. A contact
+  the guard cannot keep is left as a plain move; the answer adds
+  `moved_wires` (ids of wires whose ends changed and of wires the move
+  added), `removed_wires` (ids of wires it removed) and `fallbacks`, one
+  `{"kind", "names", "message"}` per notice (`pins_not_kept` names the pins,
+  `grip_end_left` carries `at` instead of `names`, `message` is the Messages
+  line). An agent reaches it only inside `apply_edits`, where its answer is
+  that edit's entry of `results`; the fallbacks are named there too, while
+  their Messages line waits for the list's commit. A sheet entry stays on
+  its symbol's border. A pin reference is refused here. The Position row in
+  Properties makes the same move with the "keep wires" preference and
+  `auto`.
 - `set_object_rotation` turns a part in place (its wires follow when "keep
   wires" is on) or sets a label's angle. A power port takes the absolute angle its
   Rotation row always set. Any other kind is refused.
