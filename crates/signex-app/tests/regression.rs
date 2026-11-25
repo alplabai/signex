@@ -453,6 +453,11 @@ mod cross_sheet_multiple_names;
 #[path = "regression/cross_probe.rs"]
 mod cross_probe;
 
+// #2907 — nets (wires, labels, sheet entries, pads, tracks, vias, copper
+// zones) cross probe both ways, undocked windows included.
+#[path = "regression/cross_probe_nets.rs"]
+mod cross_probe_nets;
+
 // #2232 — New PCB / New Schematic setup dialogs and saved profiles.
 #[path = "regression/document_setup.rs"]
 mod document_setup;
