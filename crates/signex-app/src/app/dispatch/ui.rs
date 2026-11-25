@@ -358,6 +358,7 @@ impl Signex {
                 self.interaction_state.zoom_presets_open = false;
                 self.run_menu_command(&command, None)
             }
+            UiMsg::HomeViewRequested => self.go_home_view(),
         }
     }
 

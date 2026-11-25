@@ -300,6 +300,7 @@ impl OpenOverlays {
             OverlayId::PlacementPaused
             | OverlayId::SchematicActiveBar
             | OverlayId::CanvasZoomPill
+            | OverlayId::CanvasOrientation
             | OverlayId::FootprintActiveBar
             | OverlayId::FootprintContextMenu
             | OverlayId::FootprintMoveBy
