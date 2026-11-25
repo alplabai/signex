@@ -108,3 +108,19 @@ requirements-board-legend-outline = board outline, last run
 requirements-board-margin = margin { $width } × { $height } mm
 requirements-board-fits = the board fits
 requirements-board-does-not-fit = the board does not fit
+# Part lifecycle: the variant checked and fitted parts only (#2686)
+requirements-field-variant = Variant
+requirements-field-fitted-only = Fitted parts only
+# The Variant choice that follows the project's active variant; $name is its name.
+requirements-variant-active = Active variant ({ $name })
+# A failed parts_state card that checks fitted parts only; as requirements-parts-unmet.
+requirements-parts-unmet-fitted = { $missed } of { $of } fitted { $of ->
+        [one] part
+       *[other] parts
+    } { $missed ->
+        [one] is
+       *[other] are
+    } not { $allowed }: { $lines }.
+requirements-problem-unknown-variant = { $name } is no variant of this project: Base or one of its variants.
+# Beside a net class card's pill when its fields changed since the run that judged it.
+requirements-edits-not-checked = last run · edits not checked yet

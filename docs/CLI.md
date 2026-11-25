@@ -941,7 +941,7 @@ file).
 | `erc_clean` | `allow_warnings` (default `false`) | the project's ERC run (as `check_erc` runs it from the root sheet) has no error finding, and no warning finding unless allowed |
 | `drc_clean` | `allow_warnings` (default `false`) | the DRC run of the project's board (as `check_drc` runs it) has no error finding, and no warning finding unless allowed |
 | `board_size` | `max_width_mm`, `max_height_mm` | the bounding box of the board outline is at most that wide and high |
-| `parts_state` | `states` (default `["released"]`; of `draft`, `in_review`, `released`, `deprecated`, `obsolete`) | every part the BOM buys was placed from a library row, of an open library, in one of the states |
+| `parts_state` | `states` (default `["released"]`; of `draft`, `in_review`, `released`, `deprecated`, `obsolete`), `variant` (optional: `Base` or one of the project's variants; left out, the active variant), `fitted_only` (default `true`, written only when `false`) | every part of that variant's BOM was placed from a library row, of an open library, in one of the states; with `fitted_only` only the parts the variant fits are checked |
 | `net_class` | `nets` (a `*`/`?` pattern), `class`, `min_trace_width_mm`, `min_clearance_mm` (all but `nets` optional, at least one given) | every board net matching `nets` is in `class`, and the class of each sets at least the given track width and clearance |
 | `bom_cost` | `quantity`, `currency`, `max_unit_cost` | the BOM costs at most `max_unit_cost` per board in `currency` when `quantity` boards are built |
 
@@ -1000,7 +1000,13 @@ How each kind is measured:
 - `board_size` takes the outline's axis-aligned bounding box; a rotated board
   is not turned to fit.
 - `parts_state` checks the parts the BOM buys (fitted, in the BOM and on the
-  board, the active variant applied), each placement of a child sheet once.
+  board, the variant applied), each placement of a child sheet once. Its
+  `variant` names the BOM (Base, or a variant compared without ASCII case;
+  left out, the project's active variant), and a variant rename follows into
+  it. With `fitted_only` off it also checks the parts that variant does not
+  fit (DNP, not fitted, out of the BOM or off the board). A `variant` the
+  project no longer has is not checked: the finding says so. A part's
+  `evidence` also carries `variant` and `fitted_only` (#2686).
   The states come from the libraries open in the app.
 - `net_class` reads the nets of the project's board; a class's `0` (unset)
   value fails a minimum.

@@ -8,7 +8,8 @@ use serde_json::Value;
 use signex_i18n::{I18n, UserText, ids, t};
 use signex_types::check::{CheckReport, Finding, Severity};
 use signex_types::project::{
-    Requirement, RequirementEntry, RequirementField, RequirementKind, RequirementProblem,
+    BASE_VARIANT, Requirement, RequirementEntry, RequirementField, RequirementKind,
+    RequirementProblem,
 };
 use signex_types::theme::ThemeTokens;
 use signex_widgets::chips::{ChipMetrics, ChipTone, kind_chip};
@@ -23,7 +24,7 @@ use super::super::words::{field_words, kind_words, problem_words};
 use super::super::{EntryKey, RequirementsMsg, RequirementsTabState, message};
 use super::findings::findings_sentence;
 use super::summary::summary_words;
-use super::{Choice, Verdict, board_size, findings_of, stored_text, verdict};
+use super::{Choice, Verdict, board_size, edited_since_run, findings_of, stored_text, verdict};
 use crate::app::Message;
 use crate::app::state::ProjectId;
 use crate::styles::tokens::{self as ink, resolve};
@@ -72,6 +73,12 @@ pub(super) struct Card<'s> {
     /// The board outline's width and height in mm as the last run measured
     /// them, for a Board size card.
     pub(super) measured: Option<(f64, f64)>,
+    /// Each entry's stored value as the last finished run checked it.
+    pub(super) checked: Option<&'s [Value]>,
+    /// The project's variants, for a Part lifecycle card's Variant field.
+    pub(super) variants: &'s [String],
+    /// The name of the project's active variant (Base when none is).
+    pub(super) active_variant: &'s str,
     pub(super) i18n: &'s I18n,
     pub(super) tokens: &'s ThemeTokens,
 }
@@ -126,10 +133,16 @@ impl Card<'_> {
             self.switch(requirement.enabled),
             self.veiled(requirement.enabled, self.header_info(requirement, raw)),
             self.outcome_pill(verdict),
-            self.remove(),
         ]
         .spacing(HEADER_GAP)
         .align_y(Alignment::Center);
+        if self.shows_edits_note(requirement, raw, verdict) {
+            let note = text(t!(self.i18n, ids::REQUIREMENTS_EDITS_NOT_CHECKED))
+                .size(TS.caption)
+                .color(resolve(self.tokens).ink3);
+            line = line.push(note);
+        }
+        line = line.push(self.remove());
         if let Some(open) = chevron {
             line = line.push(self.expand_button(open));
         }
@@ -373,14 +386,46 @@ impl Card<'_> {
     }
 
     fn kind_field<'a>(&self, field: RequirementField, raw: &Value) -> Element<'a, Message> {
-        if field != RequirementField::AllowWarnings {
-            return self.text_field(field, raw);
+        match field {
+            RequirementField::AllowWarnings | RequirementField::FittedOnly => {
+                self.flag_field(field, raw)
+            }
+            RequirementField::Variant => self.variant_field(raw),
+            _ => self.text_field(field, raw),
         }
+    }
+
+    /// The Variant pick of a Part lifecycle card (#2686, mockup row 38):
+    /// the active variant (stored as no value), Base, then each variant. A
+    /// stored name the project no longer has stays shown as written.
+    fn variant_field<'a>(&self, raw: &Value) -> Element<'a, Message> {
+        let (project_id, index) = (self.project_id, self.index);
+        let (choices, selected) =
+            variant_choices(self.variants, self.active_variant, raw, self.i18n);
+        let picker = pick_list(Some(selected), choices, Choice::to_string)
+            .graphite()
+            .on_select(move |choice: Choice<String>| {
+                message(
+                    project_id,
+                    RequirementsMsg::FieldPicked {
+                        index,
+                        field: RequirementField::Variant,
+                        value: choice.value,
+                    },
+                )
+            })
+            .width(Length::Fill);
+        self.cell(RequirementField::Variant, picker.boxed())
+    }
+
+    /// A yes/no field as a checkbox; a tick commits at once. Left out of the
+    /// file, Fitted parts only is on and Allow warnings off.
+    fn flag_field<'a>(&self, field: RequirementField, raw: &Value) -> Element<'a, Message> {
         let (project_id, index) = (self.project_id, self.index);
         let on = raw
             .get(field.key())
             .and_then(Value::as_bool)
-            .unwrap_or(false);
+            .unwrap_or(field == RequirementField::FittedOnly);
         let flag = checkbox(on)
             .style(crate::panels::form_look::checkbox_style)
             .size(TS.title)
@@ -473,6 +518,18 @@ impl Card<'_> {
         unless_read_only_veiled(!enabled, veil, content)
     }
 
+    /// Whether a net class card says its edits are not checked yet (#2686,
+    /// mockup row 38): it shows a verdict of the last run, and its fields
+    /// changed since that run or hold a draft or a refusal.
+    fn shows_edits_note(&self, requirement: &Requirement, raw: &Value, verdict: Verdict) -> bool {
+        let judged = matches!(verdict, Verdict::Passed | Verdict::Failed);
+        let net_class = matches!(requirement.kind, RequirementKind::NetClass { .. });
+        let edited = self
+            .checked
+            .is_some_and(|checked| edited_since_run(checked, Some(&requirement.id), raw));
+        judged && net_class && (edited || self.has_draft_or_problem())
+    }
+
     fn has_draft_or_problem(&self) -> bool {
         self.refused_here
             || self
@@ -505,6 +562,39 @@ impl Card<'_> {
             matches!(entry, RequirementEntry::Known { .. }) && tab.problem_field.is_some_and(shows);
         (self.refused_here && !in_box).then_some(refused)
     }
+}
+
+/// The Variant choices of a Part lifecycle card, and the one its stored
+/// value `raw` picks: the active variant (`active`, stored as no value),
+/// Base, then each of `variants`. A stored name none of them has is picked
+/// as written.
+pub(super) fn variant_choices(
+    variants: &[String],
+    active: &str,
+    raw: &Value,
+    i18n: &I18n,
+) -> (Vec<Choice<String>>, Choice<String>) {
+    let named = |name: &str| Choice {
+        value: name.to_string(),
+        label: name.to_string(),
+    };
+    let follows = t!(i18n, ids::REQUIREMENTS_VARIANT_ACTIVE, "name" => active);
+    let mut choices = vec![Choice {
+        value: String::new(),
+        label: follows.to_string(),
+    }];
+    choices.push(named(BASE_VARIANT));
+    choices.extend(variants.iter().map(|name| named(name)));
+    let stored = raw
+        .get(RequirementField::Variant.key())
+        .and_then(Value::as_str)
+        .map_or("", str::trim);
+    let selected = choices
+        .iter()
+        .find(|choice| choice.value.eq_ignore_ascii_case(stored))
+        .cloned()
+        .unwrap_or_else(|| named(stored));
+    (choices, selected)
 }
 
 /// The limit of a Board size requirement; `None` for any other kind.

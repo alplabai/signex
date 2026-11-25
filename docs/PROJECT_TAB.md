@@ -255,10 +255,20 @@ nothing and says nothing in Messages. Edits are General undo steps; a run is
 not an edit. An entry with no id takes its verdict from the run under its
 place in the list (`req::#1` for the first), the name the check gives it.
 
-Not built yet (follow-up issue "Requirements: variant and fitted parts for
-Part lifecycle, measured-from and a limit preview for Board size", #2686): Part lifecycle's Variant and Fitted parts only fields, Board size's
-Measured from, its preview with limit handles and the measured size on a
-passed card, and the net class note that edits are not checked yet.
+A Part lifecycle card (#2686, mockup row 38) has a Variant pick (the active
+variant, shown with its name and stored as no value; Base; then each of the
+project's variants; a stored name the project no longer has stays shown) and
+a Fitted parts only box, on by default. Both commit at once as one General
+step, as `project_set_requirement` with `field=variant` or
+`field=fitted_only` does; a variant the project does not have is refused. A
+failed card checking fitted parts only says "N of M fitted parts". A net
+class card that shows a verdict of the last run says "last run · edits not
+checked yet" beside its pill once its fields differ from the values that
+run checked, or hold a typed value or a refusal, until the next run.
+
+The Board size card's Measured from names the board outline, the one
+reference the check measures, and its preview is read-only: the limits are
+typed in their fields (DECISIONS 2026-11-24, #2815).
 
 ## Preferences and the project
 

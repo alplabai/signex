@@ -94,4 +94,11 @@ define_ids! {
     REQUIREMENTS_BOARD_MARGIN = "requirements-board-margin";
     REQUIREMENTS_BOARD_FITS = "requirements-board-fits";
     REQUIREMENTS_BOARD_DOES_NOT_FIT = "requirements-board-does-not-fit";
+    // Part lifecycle variant and fitted parts, the net class note (#2686)
+    REQUIREMENTS_FIELD_VARIANT = "requirements-field-variant";
+    REQUIREMENTS_FIELD_FITTED_ONLY = "requirements-field-fitted-only";
+    REQUIREMENTS_VARIANT_ACTIVE = "requirements-variant-active";
+    REQUIREMENTS_PARTS_UNMET_FITTED = "requirements-parts-unmet-fitted";
+    REQUIREMENTS_PROBLEM_UNKNOWN_VARIANT = "requirements-problem-unknown-variant";
+    REQUIREMENTS_EDITS_NOT_CHECKED = "requirements-edits-not-checked";
 }
