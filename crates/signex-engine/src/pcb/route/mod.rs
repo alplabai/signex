@@ -8,6 +8,7 @@
 //! Differential pairs and buses route side by side (`bus`, `pair`).
 
 mod bus;
+mod cover;
 mod ends;
 mod pair;
 mod tune;
@@ -259,7 +260,7 @@ pub fn route_leg(
         p if p == b => to,
         p => p.to_mm(),
     };
-    let tracks = path
+    let routed: Vec<Segment> = path
         .windows(2)
         .map(|leg| Segment {
             uuid: ids(),
@@ -273,6 +274,13 @@ pub fn route_leg(
             locked: false,
         })
         .collect();
+    // Same-net copper is no obstacle to the search, so a leg can run along
+    // a track of its net: lay only what that copper does not cover (#2492).
+    let mut tracks: Vec<Segment> = Vec::with_capacity(routed.len());
+    for track in routed {
+        let pieces = cover::uncovered(track, working.segments.iter().chain(&tracks), &mut ids);
+        tracks.extend(pieces);
+    }
     let shoved: Vec<Segment> = pushed
         .into_iter()
         .filter_map(|p| moved_track(&working, p))
@@ -389,6 +397,8 @@ fn lattice_step(grid_mm: f64, a: PointNm, b: PointNm) -> i64 {
 
 #[cfg(test)]
 mod bus_tests;
+#[cfg(test)]
+mod cover_tests;
 #[cfg(test)]
 mod ends_tests;
 #[cfg(test)]

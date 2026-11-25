@@ -14,6 +14,7 @@ use signex_types::pcb::{PcbBoard, Point, Segment};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use uuid::Uuid;
 
+use super::cover::uncovered;
 use super::{RouteRefusal, RouteRules, lattice_step, nm};
 
 /// The tracks of a bus: their layer, width and the distance between the
@@ -166,8 +167,11 @@ fn exit_step(members: &[BusMember], a: PointNm, b: PointNm, step: i64) -> Option
 }
 
 /// The members' tracks along `centre`: each member at its offset, joined
-/// straight from its start point. Empty for a centre line with no leg yet.
+/// straight from its start point, without the stretches a track of its net
+/// on `board` (or an earlier one of these) already covers (#2492). Empty
+/// for a centre line with no leg yet.
 pub fn bus_tracks(
+    board: &PcbBoard,
     members: &[BusMember],
     centre: &[Point],
     style: &BusStyle,
@@ -192,7 +196,7 @@ pub fn bus_tracks(
     let offsets = bus_offsets(ordered.len(), pitch);
     let paths = parallel_paths(&centre, &offsets).ok_or(RouteRefusal::TooSharp)?;
     let layer = pcb_layer_token(PcbLayer::Copper(style.layer));
-    let mut tracks = Vec::new();
+    let mut tracks: Vec<Segment> = Vec::new();
     for ((member, anchor), path) in ordered.into_iter().zip(paths) {
         let mut points = vec![anchor];
         points.extend(path);
@@ -204,17 +208,21 @@ pub fn bus_tracks(
                 p.to_mm()
             }
         };
-        tracks.extend(points.windows(2).map(|leg| Segment {
-            uuid: ids(),
-            locked: false,
-            attributes: Default::default(),
-            start: point(leg[0]),
-            end: point(leg[1]),
-            width: style.width_mm,
-            layer: layer.clone(),
-            net: member.net,
-            unknown_columns: Default::default(),
-        }));
+        for leg in points.windows(2) {
+            let track = Segment {
+                uuid: ids(),
+                locked: false,
+                attributes: Default::default(),
+                start: point(leg[0]),
+                end: point(leg[1]),
+                width: style.width_mm,
+                layer: layer.clone(),
+                net: member.net,
+                unknown_columns: Default::default(),
+            };
+            let pieces = uncovered(track, board.segments.iter().chain(&tracks), &mut ids);
+            tracks.extend(pieces);
+        }
     }
     Ok(tracks)
 }

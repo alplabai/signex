@@ -73,7 +73,7 @@ fn a_pair_follows_its_centre_line_each_member_on_its_own_side() {
     assert_eq!(start, Point::new(1.0, 0.0));
     let centre = [start, Point::new(10.0, 0.0)];
     let mut n = 100;
-    let tracks = bus_tracks(&members(), &centre, &STYLE, || {
+    let tracks = bus_tracks(&board, &members(), &centre, &STYLE, || {
         n += 1;
         Uuid::from_u128(n)
     })
@@ -114,7 +114,7 @@ fn a_gap_at_the_clearance_stays_legal_on_a_diagonal_leg() {
     };
     let start = bus_start(&members()).unwrap();
     let centre = [start, Point::new(5.0, 4.0), Point::new(9.0, 4.0)];
-    let tracks = bus_tracks(&members(), &centre, &tight, Uuid::now_v7).expect("tracks");
+    let tracks = bus_tracks(&board, &members(), &centre, &tight, Uuid::now_v7).expect("tracks");
     assert_eq!(tracks.len(), 6, "a join and two legs each");
     land(&board, tracks, &rules);
 }
@@ -139,7 +139,27 @@ fn a_pair_walks_around_an_other_net_pad_and_passes_the_rule_check() {
     assert_eq!(leg.last(), Some(&to));
     let mut centre = vec![from];
     centre.extend(leg);
-    let tracks = bus_tracks(&members(), &centre, &STYLE, Uuid::now_v7).expect("tracks");
+    let tracks = bus_tracks(&board, &members(), &centre, &STYLE, Uuid::now_v7).expect("tracks");
+    land(&board, tracks, &rules);
+}
+
+/// #2492: a member whose offset run lies along a track of its own net
+/// lays only the stretches that track does not cover, joined to its ends.
+#[test]
+fn a_bus_member_along_its_own_track_lays_only_the_rest() {
+    let mut board = stubs(Vec::new());
+    let own: signex_types::pcb::Segment =
+        serde_json::from_value(track(23, (3.0, 0.25), (6.0, 0.25), 1)).unwrap();
+    board.segments.push(own.clone());
+    let centre = [bus_start(&members()).unwrap(), Point::new(10.0, 0.0)];
+    let tracks = bus_tracks(&board, &members(), &centre, &STYLE, Uuid::now_v7).expect("tracks");
+    let a: Vec<_> = tracks.iter().filter(|t| t.net == 1).collect();
+    assert_eq!(a.len(), 3, "the join and the run either side: {a:?}");
+    assert_eq!(a[1].end, own.start, "the run ends on the track");
+    assert_eq!(a[2].start, own.end, "and starts again at its far end");
+    assert!((a[2].end.x - 10.0).abs() < 1e-9);
+    assert_eq!(tracks.iter().filter(|t| t.net == 2).count(), 2, "B is whole");
+    let rules = DrcRules::for_board(&board, &[]).unwrap();
     land(&board, tracks, &rules);
 }
 

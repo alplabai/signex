@@ -1,25 +1,39 @@
 //! The soak (#2482): a seeded driver applies random route, shove, move,
 //! delete, undo and redo actions to one board through the engine, and
-//! checks the board after every action. A failure names its seed and
-//! action index; the same seed and count replay it exactly.
+//! checks the board after every action; every so often it also checks a
+//! route's DRC delta and that the board writes and reads back without loss.
+//! A failure names its seed and action index; the same seed and count
+//! replay it exactly.
 
 use std::collections::HashSet;
 use std::fmt;
+use std::hash::{DefaultHasher, Hasher};
+use std::io;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use pcb_geom::ratsnest;
 use signex_drc::DrcRules;
 use signex_engine::pcb::route::RouteMode;
 use signex_engine::pcb::{BoardCommand, BoardEngine, BoardItem, BoardItemId};
-use signex_types::format::parse_pcb_layer;
+use signex_types::format::{SnxPcb, parse_pcb_layer};
 use signex_types::net_class::NetClass;
 use signex_types::pcb::{PcbBoard, Point, Segment};
 use signex_types::pcb_layer::PcbLayer;
 use uuid::Uuid;
 
+use crate::bench::{drc, drc_delta};
 use crate::fixtures::Fixture;
 use crate::rng::Rng;
 use crate::session::{Routed, plan, route, rules_of};
+
+/// How often the costlier checks run: the DRC delta on every `drc_every`-th
+/// route (0: never), the file round trip every `round_trip_every` actions
+/// and after the last one (0: after the last only).
+#[derive(Debug, Clone, Copy)]
+pub struct Checks {
+    pub drc_every: usize,
+    pub round_trip_every: usize,
+}
 
 /// The high bits of the ids the soak gives new tracks: never a fixture's.
 pub const SOAK_IDS: u128 = 0x2482 << 112;
@@ -68,7 +82,7 @@ impl fmt::Display for Failure {
             f,
             "routing soak on {}: seed {:#x}, action {} ({:?}): {}\n  replay: \
              SIGNEX_SOAK_BOARD={} SIGNEX_SOAK_SEED={:#x} SIGNEX_SOAK_ACTIONS={} \
-             cargo test -p signex-engine --test routing soak_long -- --ignored --nocapture",
+             cargo test --release -p signex-engine --test routing soak_long -- --ignored --nocapture",
             self.board,
             self.seed,
             self.index,
@@ -89,49 +103,84 @@ pub struct Tally {
     pub edits: usize,
     pub undos: usize,
     pub redos: usize,
-    /// Routed tracks laid over a same-net track already there (the same
-    /// layer, collinear, sharing a stretch): a router defect, #2492, counted
-    /// until it is fixed instead of failing the soak.
-    pub overlapped_tracks: usize,
+    /// Routes whose DRC delta was checked.
+    pub drc_checks: usize,
+    /// File round trips checked; 0 when the board as loaded does not
+    /// round-trip, so the soak cannot check it.
+    pub round_trips: usize,
 }
 
 /// The engine, the history the soak expects of it, and what the board held
 /// at load (pre-existing oddities are not the soak's findings).
 struct Soak<'a> {
+    name: &'a str,
     engine: BoardEngine,
     rules: DrcRules,
     classes: &'a [NetClass],
+    checks: Checks,
     rng: Rng,
     next_id: u128,
+    /// Route actions that planned a route, for the DRC sampling.
+    routes: usize,
     /// The board before each step the engine can undo, oldest first.
-    undo: Vec<String>,
+    undo: Vec<u64>,
     /// The board before each undo the engine can redo, newest last.
-    redo: Vec<String>,
+    redo: Vec<u64>,
     initial_zero_length: usize,
+    /// Whether the board as loaded round-trips, so the soak checks it.
+    round_trips: bool,
     tally: Tally,
     /// What the last action did, for a failure message.
     last: String,
 }
 
 /// Run `actions` seeded actions on `fixture`.
-pub fn run(fixture: &Fixture, seed: u64, actions: usize) -> Result<(Tally, PcbBoard), Failure> {
+pub fn run(
+    fixture: &Fixture,
+    seed: u64,
+    actions: usize,
+    checks: Checks,
+) -> Result<(Tally, PcbBoard), Failure> {
+    let round_trips = match round_trip(&fixture.board) {
+        Ok(()) => true,
+        Err(e) => {
+            eprintln!(
+                "{}: the file round trip is not checked: as loaded, {e}",
+                fixture.name
+            );
+            false
+        }
+    };
     let mut soak = Soak {
+        name: &fixture.name,
         engine: BoardEngine::new(fixture.board.clone(), 1),
         rules: rules_of(&fixture.board, &fixture.classes),
         classes: &fixture.classes,
+        checks,
         rng: Rng::new(seed),
         next_id: 0,
+        routes: 0,
         undo: Vec::new(),
         redo: Vec::new(),
         initial_zero_length: zero_length(&fixture.board),
+        round_trips,
         tally: Tally::default(),
         last: String::new(),
     };
+    let round_trip_due = |index: usize| {
+        index + 1 == actions
+            || (checks.round_trip_every > 0 && (index + 1).is_multiple_of(checks.round_trip_every))
+    };
     for index in 0..actions {
         let action = Action::draw(&mut soak.rng);
-        let outcome = catch_unwind(AssertUnwindSafe(|| {
+        let outcome = catch_unwind(AssertUnwindSafe(|| -> Result<(), String> {
             soak.act(action)?;
-            soak.check()
+            soak.check()?;
+            if soak.round_trips && round_trip_due(index) {
+                round_trip(soak.engine.board())?;
+                soak.tally.round_trips += 1;
+            }
+            Ok(())
         }));
         let message = match outcome {
             Ok(Ok(())) => continue,
@@ -158,8 +207,49 @@ fn panic_text(panic: &(dyn std::any::Any + Send)) -> String {
         .unwrap_or_else(|| "a non-text panic".into())
 }
 
-fn snapshot(board: &PcbBoard) -> String {
-    serde_json::to_string(board).expect("a board serializes")
+/// A board's digest: its JSON hashed as it is written, so the 100 steps of
+/// history of a large corpus board keep no copy of it.
+fn snapshot(board: &PcbBoard) -> u64 {
+    struct Digest(DefaultHasher);
+    impl io::Write for Digest {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            Hasher::write(&mut self.0, bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut digest = Digest(DefaultHasher::new());
+    serde_json::to_writer(&mut digest, board).expect("a board serializes");
+    digest.0.finish()
+}
+
+/// `board` written as a `.snxpcb` and read back keeps every track and via
+/// and writes the same file again: what the soak did saves without loss.
+fn round_trip(board: &PcbBoard) -> Result<(), String> {
+    let write = |board: &PcbBoard| {
+        SnxPcb::new(board.clone())
+            .write_string()
+            .map_err(|e| format!("the board does not write: {e:?}"))
+    };
+    let text = write(board)?;
+    let read = SnxPcb::parse(&text)
+        .map_err(|e| format!("the written board does not read back: {e:?}"))?
+        .board;
+    if (read.segments.len(), read.vias.len()) != (board.segments.len(), board.vias.len()) {
+        return Err(format!(
+            "written with {} tracks and {} vias, read back with {} and {}",
+            board.segments.len(),
+            board.vias.len(),
+            read.segments.len(),
+            read.vias.len()
+        ));
+    }
+    if write(&read)? != text {
+        return Err("the board read back writes a different file".into());
+    }
+    Ok(())
 }
 
 impl Soak<'_> {
@@ -181,6 +271,10 @@ impl Soak<'_> {
         let Some(plan) = plan(self.engine.board(), &mut self.rng, mode, legs) else {
             return Ok(());
         };
+        self.routes += 1;
+        let every = self.checks.drc_every;
+        let drc_before = (every > 0 && self.routes.is_multiple_of(every))
+            .then(|| drc(self.engine.board(), &self.rules, self.name));
         let before = snapshot(self.engine.board());
         let revision = self.engine.revision();
         let next_id = &mut self.next_id;
@@ -196,13 +290,26 @@ impl Soak<'_> {
         match routed {
             Routed::Landed(draft) => {
                 self.tally.landed += 1;
-                let board = self.engine.board();
-                self.tally.overlapped_tracks += draft
-                    .tracks
-                    .iter()
-                    .filter(|t| board.segments.iter().any(|s| overlaps(t, s)))
-                    .count();
                 self.stepped(before);
+                // A route never lays a track over same-net copper (#2492).
+                let board = self.engine.board();
+                let overlap = draft.tracks.iter().find_map(|t| {
+                    board
+                        .segments
+                        .iter()
+                        .find(|s| overlaps(t, s))
+                        .map(|s| (t, s))
+                });
+                if let Some((laid, under)) = overlap {
+                    return Err(format!(
+                        "a routed track lies over a same-net track: {laid:?} over {under:?}"
+                    ));
+                }
+                if let Some(before) = drc_before {
+                    let after = drc(board, &self.rules, self.name);
+                    drc_delta(&before, &after, &draft)?;
+                    self.tally.drc_checks += 1;
+                }
             }
             Routed::Refused => {
                 self.tally.refused += 1;
@@ -290,7 +397,7 @@ impl Soak<'_> {
     }
 
     /// A step landed on a board that read `before`.
-    fn stepped(&mut self, before: String) {
+    fn stepped(&mut self, before: u64) {
         self.undo.push(before);
         self.redo.clear();
         // The engine keeps its newest `undo_depth` steps.

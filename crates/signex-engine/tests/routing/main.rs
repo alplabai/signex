@@ -6,28 +6,35 @@
 //!
 //! `cargo test --release -p signex-engine --test routing -- --ignored --nocapture`
 //!
-//! Environment: `SIGNEX_SOAK_SEED` (default 0x2482), `SIGNEX_SOAK_ACTIONS`
-//! (default 10 000), `SIGNEX_SOAK_BOARD` (one board by name, searched in
-//! the whole routing corpus). The short runs take the fixed boards only;
-//! the scheduled ones add every routing corpus board. Per PR the corpus is
-//! checked by loading alone (`corpus_check`). A failure prints the line
-//! that replays it. How it fits together: `docs/PCB_TOOLS.md`, "Router
-//! soak and bench".
+//! The environment variables (seed, length, one board, the check rates,
+//! threads, the report file, the latency assert) are listed in
+//! `docs/PERFORMANCE.md`, "Router soak and bench". The short runs take the
+//! fixed boards only; the scheduled ones add every routing corpus board.
+//! Per PR the corpus is checked by loading alone (`corpus_check`). A
+//! failure prints the line that replays it. How it fits together:
+//! `docs/PCB_TOOLS.md`, "Router soak and bench".
 
 mod bench;
 mod corpus_check;
 mod fixtures;
+mod report;
 mod rng;
 mod session;
 mod soak;
+mod workers;
+
+use std::time::Instant;
 
 use bench::{BoardBench, MEDIAN_LIMIT, P95_LIMIT, ROUNDS_LIMIT, ROUNDS_SHARE};
 use fixtures::Corpus;
+use soak::Checks;
 
 const DEFAULT_SEED: u64 = 0x2482;
 
+/// The variable `name` as a decimal or `0x` hex number; unset or empty is
+/// `None` (the scheduled job passes an empty dispatch input through).
 fn env_number(name: &str) -> Option<u64> {
-    let text = std::env::var(name).ok()?;
+    let text = std::env::var(name).ok().filter(|t| !t.is_empty())?;
     let parsed = match text.strip_prefix("0x") {
         Some(hex) => u64::from_str_radix(hex, 16),
         None => text.parse(),
@@ -38,7 +45,9 @@ fn env_number(name: &str) -> Option<u64> {
 /// The boards `SIGNEX_SOAK_BOARD` picks: one by name from every board,
 /// else the boards `corpus` picks.
 fn boards(corpus: Corpus) -> Vec<fixtures::Fixture> {
-    let only = std::env::var("SIGNEX_SOAK_BOARD").ok();
+    let only = std::env::var("SIGNEX_SOAK_BOARD")
+        .ok()
+        .filter(|name| !name.is_empty());
     let corpus = if only.is_some() { Corpus::All } else { corpus };
     let boards: Vec<_> = fixtures::boards(corpus)
         .into_iter()
@@ -48,19 +57,47 @@ fn boards(corpus: Corpus) -> Vec<fixtures::Fixture> {
     boards
 }
 
-fn soak_all(seed: u64, actions: usize, corpus: Corpus) {
-    for fixture in boards(corpus) {
-        match soak::run(&fixture, seed, actions) {
-            Ok((tally, _)) => println!("soak {:<24} {actions} actions: {tally:?}", fixture.name),
-            Err(failure) => panic!("{failure}"),
+/// Soak every board on `jobs` threads, one report line each, then fail
+/// with every board's failure at once.
+fn soak_all(seed: u64, actions: usize, corpus: Corpus, checks: Checks, jobs: usize) {
+    let fixtures = boards(corpus);
+    let runs = workers::map_in_order(&fixtures, jobs, |fixture| {
+        let started = Instant::now();
+        let outcome = soak::run(fixture, seed, actions, checks).map(|(tally, _)| tally);
+        (outcome, started.elapsed())
+    });
+    let mut failures = Vec::new();
+    for (fixture, (outcome, took)) in fixtures.iter().zip(&runs) {
+        report::emit(&report::soak_line(
+            &fixture.name,
+            seed,
+            actions,
+            outcome,
+            *took,
+        ));
+        if let Err(failure) = outcome {
+            report::emit(&failure.to_string());
+            failures.push(failure.to_string());
         }
     }
+    assert!(
+        failures.is_empty(),
+        "{} of {} boards failed the soak:\n{}",
+        failures.len(),
+        fixtures.len(),
+        failures.join("\n")
+    );
 }
 
-/// Per-PR: a short soak on the fixed boards.
+/// Per-PR: a short soak on the fixed boards, the file round trip after the
+/// last action.
 #[test]
 fn soak_short() {
-    soak_all(DEFAULT_SEED, 150, Corpus::None);
+    let checks = Checks {
+        drc_every: 0,
+        round_trip_every: 0,
+    };
+    soak_all(DEFAULT_SEED, 150, Corpus::None, checks, 1);
 }
 
 /// Scheduled: 10 000 actions on every board, or a replay of a failure.
@@ -69,21 +106,37 @@ fn soak_short() {
 fn soak_long() {
     let seed = env_number("SIGNEX_SOAK_SEED").unwrap_or(DEFAULT_SEED);
     let actions = env_number("SIGNEX_SOAK_ACTIONS").unwrap_or(10_000);
-    soak_all(seed, actions as usize, Corpus::All);
+    let checks = Checks {
+        drc_every: env_number("SIGNEX_SOAK_DRC_EVERY").unwrap_or(25) as usize,
+        round_trip_every: env_number("SIGNEX_SOAK_ROUND_TRIP_EVERY").unwrap_or(1_000) as usize,
+    };
+    let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
+    let jobs = env_number("SIGNEX_SOAK_JOBS").map_or(threads, |n| n as usize);
+    soak_all(seed, actions as usize, Corpus::All, checks, jobs);
 }
 
-/// A seed replays exactly: the same actions give the same board.
+/// A seed replays exactly: the same actions give the same board, with the
+/// DRC delta and the file round trip checked along the way.
 #[test]
 fn a_soak_seed_replays_exactly() {
     let fixture = fixtures::synthetic();
+    let checks = Checks {
+        drc_every: 3,
+        round_trip_every: 20,
+    };
     let run = || {
-        let (tally, board) = soak::run(&fixture, 7, 60).unwrap_or_else(|f| panic!("{f}"));
+        let (tally, board) = soak::run(&fixture, 7, 60, checks).unwrap_or_else(|f| panic!("{f}"));
         (tally, serde_json::to_string(&board).expect("serializes"))
     };
     let first = run();
     assert!(
         first.0.landed > 0,
         "the run routed something: {:?}",
+        first.0
+    );
+    assert!(
+        first.0.drc_checks > 0 && first.0.round_trips > 0,
+        "the costlier checks ran: {:?}",
         first.0
     );
     assert_eq!(run(), first);
@@ -95,7 +148,7 @@ fn bench_all(seed: u64, actions: usize, corpus: Corpus) -> Vec<BoardBench> {
         .map(|fixture| bench::bench(fixture, seed, actions))
         .collect();
     for b in &benches {
-        println!("bench {}", b.line());
+        report::emit(&b.line());
     }
     benches
 }
@@ -213,6 +266,50 @@ fn the_drc_delta_check_tells_a_side_effect_from_the_route_own() {
     assert!(bench::drc_delta(&before, &side_effect, &draft).is_err());
 }
 
+/// The report lines keep the `key=value` form the scheduled job's report
+/// and `docs/PERFORMANCE.md` read: a soak line passed and failed, a bench
+/// line with its latency budget.
+#[test]
+fn the_report_lines_name_every_measure() {
+    use std::time::Duration;
+
+    let tally = soak::Tally {
+        landed: 3,
+        drc_checks: 1,
+        round_trips: 2,
+        ..soak::Tally::default()
+    };
+    let passed = report::soak_line("b", 0x2482, 10, &Ok(tally), Duration::from_secs(2));
+    assert_eq!(
+        passed,
+        "ROUTING-SOAK board=b seed=0x2482 actions=10 result=ok landed=3 refused=0 edits=0 \
+         undos=0 redos=0 drc_checks=1 round_trips=2 seconds=2.0"
+    );
+    let failure = soak::Failure {
+        board: "b".into(),
+        seed: 0x2482,
+        index: 4,
+        action: soak::Action::Undo,
+        message: "m".into(),
+    };
+    let failed = report::soak_line("b", 0x2482, 10, &Err(failure), Duration::ZERO);
+    assert!(failed.ends_with("result=FAILED at_action=4 action=Undo seconds=0.0"));
+    let slow = BoardBench {
+        name: "b".into(),
+        latencies: vec![Duration::from_millis(40)],
+        ..BoardBench::default()
+    };
+    let line = slow.line();
+    assert!(
+        line.starts_with("ROUTING-BENCH board=b seed=0x0 actions=0 "),
+        "{line}"
+    );
+    assert!(
+        line.contains(" p50_ms=40.00 p95_ms=40.00 latency_budget=over "),
+        "{line}"
+    );
+}
+
 /// Per-PR: the DRC delta and convergence on a short run per fixed board.
 #[test]
 fn bench_short() {
@@ -225,17 +322,34 @@ fn bench_short() {
 }
 
 /// Scheduled, in release: every threshold of #2483, latency on the median
-/// board by copper count.
+/// board by copper count. Latency is reported on every run and asserted
+/// only with `SIGNEX_ROUTING_ASSERT_LATENCY=1` (the scheduled job).
 #[test]
 #[ignore = "latency is only meaningful in release: the scheduled job runs it"]
 fn bench_thresholds() {
     let seed = env_number("SIGNEX_SOAK_SEED").unwrap_or(DEFAULT_SEED);
-    let mut benches = bench_all(seed, 300, Corpus::All);
+    let actions = env_number("SIGNEX_BENCH_ACTIONS").unwrap_or(300) as usize;
+    let mut benches = bench_all(seed, actions, Corpus::All);
     assert_delta_and_convergence(&benches);
     benches.sort_by_key(|b| b.copper);
     let median = &benches[benches.len() / 2];
     let (p50, p95) = (median.percentile(0.5), median.percentile(0.95));
-    println!("median board {}: p50 {p50:?}, p95 {p95:?}", median.name);
+    let asserted = report::latency_asserted();
+    report::emit(&format!(
+        "ROUTING-BENCH-MEDIAN board={} p50_ms={} p95_ms={} latency_budget={} latency_asserted={}",
+        median.name,
+        report::ms(p50),
+        report::ms(p95),
+        report::budget(median.within_latency()),
+        if asserted { "yes" } else { "no" },
+    ));
+    if !asserted {
+        println!(
+            "latency not asserted: set {}=1 to fail on it",
+            report::ASSERT_LATENCY
+        );
+        return;
+    }
     assert!(p50 <= MEDIAN_LIMIT, "{}: median {p50:?}", median.name);
     assert!(p95 <= P95_LIMIT, "{}: p95 {p95:?}", median.name);
 }
