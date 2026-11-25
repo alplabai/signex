@@ -615,3 +615,70 @@ fn a_channel_tab_refuses_an_edit_with_a_message() {
         .any(|s| s.uuid == part);
     assert!(gone, "Editor is the editable sheet");
 }
+
+/// The child's channel strip as the panels last saw it.
+fn strip(app: &Signex) -> signex_app::panels::compiled_design::ChannelStripView {
+    app.document_state
+        .panel_ctx
+        .compiled_design
+        .strip
+        .clone()
+        .expect("the child is repeated, so it has a channel strip")
+}
+
+/// #2658: a click on a channel row opens the child on that channel's tab;
+/// a Ctrl+click opens the source sheet itself, on Editor.
+#[test]
+fn a_ctrl_click_on_a_channel_row_opens_the_source_sheet_on_editor() {
+    let mut f = fixture("Repeat(CH, 1, 2)", false);
+    send(&mut f.app, CompiledDesignMsg::CompileRequested);
+    let ch2 = f
+        .app
+        .document_state
+        .panel_ctx
+        .compiled_design
+        .panel
+        .rows
+        .iter()
+        .find(|r| r.name == "CH2")
+        .map(|r| r.index)
+        .expect("the CH2 row");
+
+    send(&mut f.app, CompiledDesignMsg::RowClicked(ch2));
+    assert_eq!(
+        f.app.document_state.active_path.as_deref(),
+        Some(f.child.as_path())
+    );
+    assert_eq!(strip(&f.app).active, Some(2), "a click: the channel's tab");
+
+    send(&mut f.app, CompiledDesignMsg::RowSourceClicked(ch2));
+    assert_eq!(
+        f.app.document_state.active_path.as_deref(),
+        Some(f.child.as_path())
+    );
+    assert_eq!(strip(&f.app).active, None, "a Ctrl+click: Editor");
+}
+
+/// #2658, mockup row 151: after a compile each channel card has its
+/// drawing, with the part named as that channel names it.
+#[test]
+fn a_compile_draws_each_channel_card_with_its_designators() {
+    let mut f = fixture("Repeat(CH, 1, 2)", true);
+    send(&mut f.app, CompiledDesignMsg::FindChanged(String::new()));
+    assert!(
+        strip(&f.app).tabs.iter().all(|t| t.miniature.is_none()),
+        "no drawing before a compile"
+    );
+    send(&mut f.app, CompiledDesignMsg::CompileRequested);
+    let tabs = strip(&f.app).tabs;
+    assert_eq!(tabs.len(), 2);
+    for tab in &tabs {
+        let drawing = tab.miniature.as_ref().expect("a drawing after the compile");
+        let names: Vec<&str> = drawing
+            .designators
+            .iter()
+            .map(|t| t.text.as_str())
+            .collect();
+        assert_eq!(names, [format!("{}_R5", tab.channel.name)]);
+    }
+}

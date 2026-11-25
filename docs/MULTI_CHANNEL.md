@@ -146,6 +146,13 @@ is refused at the mutation gateway with the Messages line "Channel CH1 is a
 compiled view; switch to Editor to edit". Properties show the channel and its
 designator map (logical designator, value, channel designator).
 
+Each card draws its channel's sheet at card scale (#2658): wires, buses and
+part bodies, with the designators and net names that channel has, in the
+schematic canvas colours. Names are drawn at a fixed small size so a small
+card stays legible. The drawing is built by the compile, off the UI thread
+(`signex_net::sheet_miniature`), from the compile's own names, so it shows
+the last compile; before one, a card lists the channel's designators.
+
 ## Bound tables
 
 A table bound to a part's pins or to the project's sheets (`refresh` On
@@ -180,8 +187,13 @@ list opens it, docked on the left as a tab beside Projects.
   Parts and Nets of that instance, under the designators and net names it has
   there. A search also finds them and opens the rows that hold a match.
 - Clicking a row opens its sheet; a channel row opens it on its channel tab.
-  Clicking a part or net row, or a net in Nets mode, opens that instance and
-  selects the element.
+  Ctrl+click (Cmd+click on macOS) on a channel row opens the source sheet
+  itself, on Editor; on a sheet row it is a plain click, as a sheet has one
+  tab (#2658). Clicking a part or net row, or a net in Nets mode, opens that
+  instance and selects the element.
+- The out-of-date banner and row tips give the compile's time in the user's
+  locale (`I18n::time`); the compile keeps the instant it finished, never a
+  worded time (#2733).
 - Out of date: an electrical edit to a compiled sheet (any `DocumentPatch`
   but a colour-only one) marks its rows amber with a dot, and a banner offers
   Recompile. Recompile is never automatic.
@@ -193,11 +205,6 @@ list opens it, docked on the left as a tab beside Projects.
 - Per-channel variant state (a channel, or a part in one channel, not
   fitted) and its display in the channel cards and the panel: it is set in
   the Variant Manager tab, which does not exist yet (#2662).
-- The channel cards list the channel's designators; the miniature drawing of
-  the sheet at card scale with the channel's designators and net names is not
-  drawn yet (#2658).
-- Ctrl+click on a panel row (open in a new tab): a sheet has one tab, so a
-  row click focuses it (#2658).
 - The naming menu opens inline under its field, right-aligned to it, not as
   a floating layer over the dock (#2674).
 - Sheet entry sync does not yet treat `Repeat(<net>)` as matching the port

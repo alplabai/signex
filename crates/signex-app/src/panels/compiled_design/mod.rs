@@ -6,6 +6,8 @@
 
 mod empty;
 mod nets;
+#[cfg(test)]
+mod tests;
 mod tree;
 
 use std::path::PathBuf;
@@ -205,6 +207,8 @@ pub struct ChannelTabView {
     /// The sheet's designators as this channel names them, in the
     /// designator map's order.
     pub designators: Vec<String>,
+    /// The card's drawing of the channel, from the last compile (#2658).
+    pub miniature: Option<std::sync::Arc<signex_net::SheetMiniature>>,
 }
 
 /// The channel strip of the active sheet, when it is repeated somewhere.
