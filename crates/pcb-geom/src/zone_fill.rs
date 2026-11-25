@@ -3,8 +3,9 @@
 //! A pour's fill is its outline less its holes, less the copper of every
 //! other net on its layer grown by the pour's clearance, less the keepouts
 //! that keep pours off that layer, inside the board outline. Copper of the
-//! pour's own net is filled over and joined solidly: no thermal relief
-//! spokes. Pours fill in priority order (a higher `Zone::priority` first,
+//! pour's own net is filled over; a pad of its net is joined solidly, or
+//! with Thermal Relief on through spokes across an air gap (#2580, module
+//! `relief`). Pours fill in priority order (a higher `Zone::priority` first,
 //! then board order), and each clears the fills of other nets' pours filled
 //! before it. Islands below the pour's minimum area, and with
 //! `remove_dead_islands` those touching no copper of its net, are dropped.
@@ -15,6 +16,7 @@
 
 mod islands;
 mod obstacles;
+mod relief;
 
 use std::cmp::Reverse;
 
@@ -201,15 +203,26 @@ fn fill_pour(
         earlier,
     }
     .collect();
-    let mut pieces = difference(&[area], &obstacles);
+    let mut open = difference(&[area], &obstacles);
     if let Some(inside) = inside {
-        pieces = intersection(&pieces, inside);
+        open = intersection(&open, inside);
     }
+    // Spokes stay inside the copper the pour may hold, so they keep every
+    // clearance; they join after the thin parts go, so a spoke narrower than
+    // `min_thickness` stays.
+    let reliefs = relief::reliefs(board, zone, layers, reach);
+    let (mut pieces, spokes) = if reliefs.spokes.is_empty() {
+        (open, Vec::new())
+    } else {
+        let spokes = intersection(&reliefs.spokes, &open);
+        (difference(&open, &reliefs.clear), spokes)
+    };
     if let Ok(min) = mm_to_nm(zone.min_thickness, "zone.min_thickness")
         && min > 1
     {
         pieces = without_thin_parts(&pieces, min);
     }
+    let pieces = relief::joined(pieces, &spokes);
     let (pieces, islands_removed) = islands::drop_islands(board, zone, layers, pieces);
     Ok(ZoneFill {
         zone: zone.uuid,
