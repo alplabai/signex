@@ -114,10 +114,9 @@
 // The ids of the issues raised from block `id`, read from every block's
 // metadata.
 #let _opened-by(id) = {
-  query(<signex-block>)
-    .map(found => found.value)
-    .filter(value => value.kind == "issue" and value.from != none and value.from == id)
-    .map(value => value.id)
+  let raised = query(<signex-block>).map(found => found.value)
+  let issues = raised.filter(value => value.kind == "issue" and value.from == id)
+  issues.map(value => value.id)
 }
 
 // The common frame. A block never splits across a page break.
