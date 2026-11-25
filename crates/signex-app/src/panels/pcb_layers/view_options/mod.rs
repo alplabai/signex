@@ -5,6 +5,8 @@
 //! honour yet is greyed with a tooltip. Layout: `docs/PCB_TOOLS.md`,
 //! "Board view configuration".
 
+#[cfg(test)]
+mod draft_column_tests;
 mod extras;
 mod general;
 mod objects;

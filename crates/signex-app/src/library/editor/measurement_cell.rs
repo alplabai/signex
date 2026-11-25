@@ -1,10 +1,12 @@
 //! The editor of one measurement parameter: a number-only field, an SI
 //! prefix picker and the unit (fixed by the class template's slot, or
-//! the row's own). Users never type a prefix or a unit.
+//! the row's own). A unit is never typed; a `k`, `M` or `u` (`µ`) typed at
+//! the end of the number stays in the field, the picker shows it, and the
+//! commit stores it as the prefix (mockup row 139).
 
 use iced::widget::{column, row};
 use iced::{Element, Length, Widget};
-use signex_library::{ParamSlot, ParamValue, slot_unit};
+use signex_library::{ParamSlot, ParamValue, param_edit::typed_number_and_prefix, slot_unit};
 use signex_types::quantity::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -79,6 +81,11 @@ pub(super) fn view<'a>(
         slot.and_then(slot_unit).as_ref(),
     );
     let event = |msg| super::params::editor_event(address, msg);
+    // The picker mirrors a prefix letter still pending at the field's end.
+    let picked = state.measurement_prefix(name);
+    let shown_prefix = known
+        .as_ref()
+        .map_or(picked, |u| typed_number_and_prefix(&buf, picked, u).1);
 
     let input_slot = slot.cloned();
     let (input_address, input_name) = (address.clone(), name.to_string());
@@ -117,7 +124,7 @@ pub(super) fn view<'a>(
     let (pick_address, pick_name, pick_unit) =
         (address.clone(), name.to_string(), unit_token.clone());
     let picker = known.and_then(|u| {
-        prefix_picker(&u, state.measurement_prefix(name), move |prefix| {
+        prefix_picker(&u, shown_prefix, move |prefix| {
             super::params::editor_event(
                 &pick_address,
                 EditorMsg::ParamPrefixPicked {

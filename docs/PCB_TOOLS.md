@@ -46,8 +46,11 @@ A via whose diameter or drill already differs from its type shows Override
 on, its own values in bold with a reset arrow each; a reset arrow puts one
 back, and Override off puts both back in one undo step. A small
 illustration shows the via on the chosen layer and a cross-section of L1
-(Top) to Ln (Bottom); Protection names its IPC-4761 type and keeps Tented
-Top and Bottom editable per via. A microvia type lists Stacked / Staggered
+(Top) to Ln (Bottom); Protection names its IPC-4761 type on a chip in its
+header and keeps Tented Top and Bottom editable per via. The closed Via
+Type field shows the type's span glyph (the copper layers, with a bar over
+the ones it spans), its name and diameter / drill; Position, Diameter,
+Drill and Finished Hole read in mm. A microvia type lists Stacked / Staggered
 greyed under "Not stored yet". The form of the via about to be placed keeps
 Diameter and Drill editable.
 
@@ -466,12 +469,12 @@ Polygons chip of the selection filter) and opens the area panel (#2523): its
 illustration, Net Information, then Net, Layer and the Pour section: Fill
 Mode (Solid; Hatched is greyed, not supported yet), Clearance, Minimum
 Width, Thermal Relief (the stored switch with Spoke / Gap, read only and
-greyed, since the fill draws no spokes), Corners and Corner Size (Sharp;
-greyed, not stored yet), Priority (a whole number from 0), Remove Islands
-(below an area in mm²), Remove Dead Copper, and the Copper card. Each edit
-is one undo step. `min_island_area` and `remove_dead_islands` are written to
-the file only when set. Fill Mode has no None: the outline-only state is
-Shelve.
+greyed, since the fill draws no spokes), Corners and Corner Size (Sharp,
+size 0; greyed, not stored yet), Priority (a whole number from 0), Remove
+Islands (below an area in mm²), Remove Dead Copper, and the Copper card.
+Each edit is one undo step. `min_island_area` and `remove_dead_islands` are
+written to the file only when set. Fill Mode has no None: the outline-only
+state is Shelve.
 
 The Copper card shows the copper the fill holds (area and pieces, read from
 the fills the app holds), or "shelved · no copper". Its buttons:
@@ -492,19 +495,39 @@ the panel header shows it greyed, with the reason as its tooltip.
 
 ### Pour Cutout and Slice Pour
 
-Both work on the polygon pours of the active copper layer and are one undo
-step each (`signex_engine::pcb::pour_edit`, geometry in
-`pcb_geom::{cut_area, slice_area}`):
+Both work on the active copper layer and are one undo step each.
 
 - **Pour Cutout** (`place_board_pour_cutout`) is drawn like a Solid Region.
-  Closed, its area is cut out of every pour it overlaps: a hole when inside,
-  a notch at an edge, or several pieces.
+  Closed, it places a pour cutout (#2871, DECISIONS 2026-11-24): a region
+  of its own on the layer (`draw::new_pour_cutout`, a zone with the
+  `pour_cutout` fill type and no net, `signex_types::zone_cutout`). It
+  edits no pour. Every polygon pour on the layer leaves the region empty
+  when it fills (`pcb_geom` zone fill obstacles), exactly as drawn, with no
+  clearance round it. It is placed whether or not it overlaps a pour.
+  The region is picked by a click inside it, over the pour under it, and
+  shows in the selection filter as a Region. It moves by dragging or Move,
+  is deleted like any object, and its layer is set in Properties, each one
+  undo step; the pour's fill follows. Its Properties panel shows the layer,
+  its vertices and its area; the board has no area vertex editing yet, so
+  its corners are changed by drawing it again. It holds no copper, so DRC, the copper list,
+  Gerber, PDF and the 3D view read only the pours' fills around it. In the
+  board file it is an entry of `[[pour_cutouts]]` (below).
 - **Slice Pour** (`place_board_slice_pour`) takes two clicks; every pour the
-  segment between them meets is cut in two along the line through them.
+  segment between them meets is cut in two along the line through them
+  (`signex_engine::pcb::pour_edit::slice_pours`, geometry in
+  `pcb_geom::slice_area`). The largest piece keeps the pour (its uuid and
+  settings); every other piece becomes a new pour with the same settings.
+  When nothing is cut, Messages says so and the board is unchanged.
 
-The largest piece keeps the pour (its uuid and settings); every other piece
-becomes a new pour with the same settings, and a pour the cutout covers whole
-is removed. When nothing is cut, Messages says so and the board is unchanged.
+#### Pour cutouts in the board file
+
+A `.snxpcb` keeps its pour cutouts in a `[[pour_cutouts]]` array of zone
+tables, after `[[zones]]` (`format::pour_cutouts`). Each entry is read as a
+cutout whatever its `fill_type` says, and the cutouts are loaded after the
+zones. The array is written only when the board has a cutout, so a board
+without one saves byte for byte as before. A build that does not know the
+array keeps it as an unknown key and writes it back, and never reads a
+cutout as copper.
 
 ### Repour
 
@@ -539,22 +562,23 @@ cursor) is drawn as its outline alone.
 (`PCB_DEFAULT_TEXT_SIZE_MM`) and unturned, reading the catalog's new-string
 text (`pcb-tool-string-text`, "String"), or the text, height and turn set in
 its placement form; the string carries no net. A layer takes a string when
-`PcbLayer::takes_text` holds: the two overlay layers, the mechanical layers
-and the documentation layers (Dimensions among them). On any other layer a
-click places nothing and the Messages panel and the status bar name the
-layers that do. Copper text is not placed yet (#2869): the design rule
-check, pour fill and router read no board text, so copper text would be
-copper they do not keep clear.
-Copper text would be copper that the copper list, the design rule check and
-the ratsnest never read. The canvas draws it (#2387); a click or box picks
-it (`pcb_geom::ItemRef::Text`, the selection filter's Texts kind).
+`PcbLayer::takes_text` holds: the copper layers, the two overlay layers, the
+mechanical layers and the documentation layers (Dimensions among them). On
+any other layer a click places nothing and the Messages panel and the
+status bar name the layers that do. A string on copper is real copper text
+with no net (Caner, 2026-11-24, #2883): see "Copper of no net" under
+[Graphics](#graphics). The canvas draws it (#2387); a click or box picks it
+(`pcb_geom::ItemRef::Text`, the selection filter's Texts kind).
 
 The String panel (#2523) shows the illustration (the text box with its
 Text Height and its Position X/Y origin; the rotation is not drawn), then
 the text across the full width, Layer, Position (X and Y on one row), Text
 Height, Rotation, and the quick rotation steps 0°, 90°, 180° and 270°. A
 step is on while the rotation equals it; a pick sets the rotation as one
-undo step, like a typed one.
+undo step, like a typed one. A string on a bottom-side layer reads mirrored
+on the board, and a read-only "Mirrored (bottom side)" row under Layer says
+so (Caner, 2026-11-24, mockup row 100; `TextFacts::is_mirrored`, the
+same side rule the board renderer mirrors by).
 
 ## Arc
 
@@ -610,16 +634,73 @@ arrow at each end and the value (`value_text`, to `precision` decimals, at
 most 6), drawn by the board renderer and picked by its strokes and the box
 of its value. Two equal points add nothing and say so.
 
-The Dimension panel (#2523) shows the illustration (the two points, the
-extension lines, the Offset and the value), the measured Value on a card
-under it, then Start and End (X and Y on one row each), Offset, and under
-Style: Line Width, Text Height, Precision and Layer (every board layer,
+The Dimension panel (#2523) shows the measured Value on a headline card
+under the header, above the search (mockup row 101), then the illustration
+(the two points, the extension lines, the Offset and the value), then Start
+and End (X and Y on one row each), Offset, and under a Style subhead:
+Line Width, Text Height, Precision and Layer (every board layer,
 copper included; a caption under the row says a dimension on copper is a
 drawing only).
 Precision is a 0 to 6 segmented control, so a precision outside that range
 cannot be entered from the panel. Each edit is one undo step. There is no
 Type row: angular, radial, diameter, leader, baseline and centre-mark
 dimensions have no model yet and are not offered.
+
+The lengths (Start, End, Offset, Line Width, Text Height) and the Value
+card follow the board's Units, mm or mils (Caner, 2026-11-24, mockup row
+101); in mils the Value is the measured length to the dimension's
+precision, and the illustration's value and text height match. A bare
+number typed in mils is read as mils; a number ending in mm, mil or mils
+keeps its unit. The model and the file stay in mm and the value drawn on
+the board stays mm text, so there is no new file column. A Units switch
+drops lengths typed and not yet entered.
+
+### Dimension settings {#dimension-settings}
+
+Each dimension carries its own look (`signex_types::pcb_dimension_style::DimensionStyle`,
+#2868, Caner 2026-11-24), shown in four more sections of the Dimension
+panel, each pick or Enter one undo step:
+
+- **Arrows**: Arrow Style (Filled, a closed triangle; Open, two strokes;
+  None), Arrow Length (from the tip back along the line) and Arrow Width
+  (across the line at the open end).
+- **Text**: Font (Mono, the board's monospace face; Sans, the interface
+  face), Bold, Italic, Text Width (the width of one character; the canvas
+  stretches the glyphs to it), Text Position (Above: beside the line on
+  the side it stands off, Text Gap from it; Inline: on the line, which
+  breaks Text Gap before and after the value, and is left out when the
+  value does not fit between the arrows; Manual: at Text Point) and Text
+  Gap. Text Point shows only for Manual: Along is mm from the middle of
+  the line along it, Across mm from the line on the side the Offset is
+  measured on, so the value moves and turns with the dimension. Picking
+  Manual starts the point where the value was drawn.
+- **Extension Lines**: Extension Offset (the gap between a measured point
+  and the start of its extension line), Overshoot (how far it runs past
+  the dimension line) and Extension Width.
+- **Units and Format**: Unit (mm, mil, in), Show unit, Prefix and Suffix
+  (written before and after the number) and Trailing zeros (off: `10.50`
+  reads `10.5`, `10.00` reads `10`).
+
+Lengths are mm and not below zero; Text Width is above zero. The canvas,
+the pick index (the value's box is Text Width per character) and the PDF
+and SVG assembly drawings draw the arrows, widths and positions. The
+assembly drawings print the value in their one face: Font, Bold, Italic
+and Text Width are drawn on the canvas only.
+
+A new dimension starts from its project's dimension defaults (line
+width, text height, precision and every setting above, stored in the
+`.snxprj` as `project_defaults.dimension`; Caner 2026-11-24). A new
+project is seeded with Preferences ▸ PCB ▸ PCB Defaults (`prefs.json`,
+`pcb_dimension_defaults`) and keeps its own copy from then on; a project
+from before, which stores none, and a board in no project follow
+Preferences. The Dimension tool's form changes them for the next
+dimensions of the session; a placed dimension's Properties change it
+alone. With no saved defaults a new dimension has the look dimensions had
+before these settings: open arrows one text height long and 0.6 wide, the
+value Above, half a text height off the line, extension lines from the
+measured points half a text height past the line at the line width, mm
+with the unit and trailing zeros. Those lengths no longer follow a later
+Text Height edit.
 
 ## Graphics {#graphics}
 
@@ -630,19 +711,30 @@ draws a board drawing (`PcbBoard::graphics`, kinds in
 `signex_types::pcb_graphic`) on the active layer, built by
 `signex_engine::pcb::graphic`, one undo step each.
 
-- **Layer.** Any non-copper layer but the two keep-out layers, whose areas
-  the design rule check reads as rules: overlay, solder mask, paste, fab,
-  assembly, courtyard, mechanical, documentation, the board outline.
-  On copper (Caner, 2026-11-24, #2869) Line and Arc place copper:
+- **Layer.** Any layer but the two keep-out layers, whose areas the design
+  rule check reads as rules: copper, overlay, solder mask, paste, fab,
+  assembly, courtyard, mechanical, documentation, the board outline. On a
+  keep-out a click adds nothing and the Messages panel and the status bar
+  say so. On copper (Caner, 2026-11-24, #2869) Line and Arc place copper:
   Line a run of straight tracks, any angle, on the net of the pad, via or
   track under its first click; Arc a track arc on the net under its start.
   They are tracks for the copper list, DRC and Gerber, and take the Track
   and Arc tools' width and net, which Properties shows while copper is
-  active. Full Circle, Rectangle and Text Frame are not placed on copper yet:
-  the design rule check, pour fill and router read no board drawing, so a
-  copper shape would be copper nothing keeps clear. On those layers and the
-  keep-outs a click adds nothing and the Messages panel and the status bar
-  say so.
+  active. Full Circle, Rectangle and Text Frame on copper (Caner,
+  2026-11-24, #2883) place a drawing whose stroked outline is copper with
+  no net (a text frame's text too); Properties shows the drawing.
+- **Copper of no net (#2883).** A drawing on copper (along its stroke, a
+  text frame's lines included) and a string on copper (along its glyph
+  strokes, in the board stroke font) are copper of no net, listed once by
+  `pcb_geom::drawn_copper` (curves within `ARC_CHORD_ERROR_MM`). The design
+  rule check measures them against every net's copper (a short or a
+  clearance finding naming the drawing or string, net 0); two pieces of no
+  net are never a pair. A pour keeps its clearance from them, unless the
+  pour has no net, as for any other net. The interactive router, via
+  stitching, teardrops and gloss keep clear of them. The Gerber writes them
+  on the copper image as `Conductor` with no net (was `NonConductor`). They
+  join no net: the ratsnest, a new track's net and the edge clearance
+  check do not read them.
 - **Line.** The first click starts a run; each later click adds a line from
   the run's end, any angle. A click on the run's end, Esc or a right-click
   ends the run.
@@ -680,9 +772,8 @@ draws a board drawing (`PcbBoard::graphics`, kinds in
 - **Output.** Saved in `.snxpcb` (`[[extras.board.graphics]]`, each with its
   `uuid`; a text frame's `text` and `font_size`), drawn by the board
   renderer, printed by Board Print (#2402), and drawn into the fabrication
-  layer's Gerber (#2388) when the layer is one (overlay, mask, paste, the
-  board outline); a text frame's text waits there for the stroke font, as
-  board texts do.
+  layer's Gerber (#2388) when the layer is one (copper, overlay, mask,
+  paste, the board outline), with its text frame's text in the stroke font.
 - **Agents.** `add_board_graphic` (`document`, `kind`: `line`, `arc`,
   `circle`, `rectangle` or `text_frame`; `start` and `end`, an arc's or
   circle's centre `at`; optional `layer` and `text`) and `set_board_graphic`
@@ -745,6 +836,23 @@ A board without any has no section and re-saves byte-identical. Each item
 has its own uuid in the board's one id space; a duplicate is repaired on
 load like any other board object.
 
+A `[[free.dimensions]]` row writes its look keys (#2868,
+`signex_types::format::board_dimension`) only where they differ from the
+look of its own text height and line width (`DimensionStyle::for_text_height`):
+`arrow_style` (`filled`, `open`, `none`), `arrow_length`, `arrow_width`,
+`font` (`mono`, `sans`), `bold`, `italic`, `text_width`, `text_position`
+(`above`, `inline`, `manual`), `text_gap`, `text_along`, `text_across`
+(the Text Point, written only for a Manual value; any other value reads
+its point where Above puts it, as the Dimension tool places it),
+`extension_offset`, `extension_overshoot`, `extension_width`, `unit`
+(`mm`, `mil`, `in`), `show_unit`, `prefix`, `suffix`, `trailing_zeros`;
+lengths in integer nm. A dimension of that look writes none of them, so an
+older board reads and re-saves byte-identical; an older reader skips the
+keys (and drops them if it saves).
+`signex_types::format::board_uses_dimension_style` says whether a save
+writes any of them; only such a board (or one with a pour cutout) writes
+`snxpcb/1.11` (`docs/FORMAT_VERSIONS.md`).
+
 ## Selection Filter
 
 The PCB Active Bar's first button. A click (or right-click) opens a
@@ -801,19 +909,28 @@ the Tune rows are the length tuning commands of #2389 (palette, no menu row).
   first row that can run. A click runs it as its menu row does. It is drawn
   selected while one of its group's tools is armed on the board in the main
   window, as a schematic bar button is, and while its dropdown is open.
-- **Dropdown.** A right-click on a group with more than one row opens its
-  rows under a heading with the group's name in capitals (mockup row 108). The tools
+- **Dropdown.** A right-click on a group with more than one row, or a
+  click on the corner triangle, opens its rows under a heading with the group's name in capitals (mockup row 108). The tools
   come first; a group's commands (Repour Selected and Repour All, Change
   Footprint) sit below a separator after them. The row the button shows is
   drawn current, with the accent-soft fill. A live row runs its command and
   is greyed by the same gate as its menu row; a tool the board editor cannot
   run yet is greyed and its tooltip is the reason Place gives ("Place
   Component: not available on boards yet"). A button with a dropdown has the
-  corner triangle; a group of one row (Dimensions, Text) has neither.
+  corner triangle; a group of one row (Dimensions, Text) has neither. A
+  click on the triangle opens the dropdown and a click elsewhere on the
+  button still runs the row it shows (Caner, 2026-11-24, mockup row 108);
+  Move and View work the same way. The triangle is its own button inside
+  the bar button (`ActiveBarButton::on_chevron_press`); a greyed button
+  ignores a click on it.
 - **Glyphs.** Every button is an SVG glyph drawn in the bar's ink: Via, Pad,
   Dimension and Keepout use the board tool glyphs of their dropdown rows
   (`assets/icons/pcb/`), the via a ring around its drill hole and the pad a
-  rounded SMD pad with its centre (mockup row 108). The View button and the
+  rounded SMD pad with its centre (mockup row 108). In Copper Areas, Polygon
+  Pour, Pour Cutout, Slice Pour, Solid Region and Fill share one hatched-area
+  glyph (`pcb/copper_area.svg`), on their rows and on the group button while
+  it shows one of them; Keepout keeps `pcb/keepout.svg` and Room
+  keeps its own glyphs (mockup row 108). The View button and the
   View dropdown draw each turn with an arrow that turns the same way; the
   half turn uses the clockwise arrow and Reset View Rotation has no icon.
   The clockwise arrow's direction comes from the #2503 icon fix.
@@ -884,8 +1001,8 @@ whether or not a row has an icon:
 
 - Hide <layer> (eye crossed out) and Highlight <layer> (every other layer is
   drawn dimmed; picking it again ends the highlight).
-- Layer colour..., Reset layer colour and Reset all layer colours
-  (2026-11-18), with the net colour menu's glyphs. Layer colour... opens the
+- Layer color..., Reset layer color and Reset all layer colors
+  (2026-11-18), with the net colour menu's glyphs. Layer color... opens the
   Layers panel on Layers & Colors with that layer's colour card open under
   its row; it is greyed for the keep-out and mechanical layers, which have no
   colour row yet. A colour is saved with the board
@@ -1033,8 +1150,8 @@ A click on a layer's name makes it the active layer. A click on a colour
 dot opens the colour card under the row, and the open dot gets an accent
 ring: the 24 colours of the board palette (the open layer's colour is
 ringed), a hex field (`#RRGGBB`) that recolours the layer as soon as it reads
-as a colour, and, while the layer has its own colour, Palette colour, which
-gives it the palette's again. A swatch or Palette colour closes the card, as
+as a colour, and, while the layer has its own colour, Palette color, which
+gives it the palette's again. A swatch or Palette color closes the card, as
 does the card's close button, a second click on the dot or a switch to
 another board. An undo, a redo or a reset while the card is open puts the
 layer's colour back in the hex field; a half-typed colour stays. The colour is an

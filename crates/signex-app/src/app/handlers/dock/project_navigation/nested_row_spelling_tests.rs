@@ -69,7 +69,8 @@ fn rename_is_refused_for(shared: &str) {
     settle(&mut app, false);
     let key = key(&app, &["top.snxsch", shared]);
     let opened = app.handle_project_tree_action(ProjectTreeAction::OpenRenameDialog(key));
-    assert_eq!(opened.units(), 0);
+    // Opening queues only the name field's focus and select-all.
+    assert_eq!(opened.units(), super::rename::rename_field_focus().units());
     let renamed = format!("moved-{shared}");
     app.ui_state.rename_dialog.as_mut().expect("opens").buffer = renamed.clone();
 

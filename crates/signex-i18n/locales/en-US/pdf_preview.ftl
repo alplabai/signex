@@ -126,7 +126,7 @@ pdf-watermark-custom = Custom
 pdf-watermark-text = Text
 pdf-watermark-opacity = Opacity
 pdf-watermark-angle = Angle
-pdf-watermark-colour = Colour
+pdf-watermark-colour = Color
 pdf-watermark-pages = Pages
 pdf-watermark-pages-all = All
 pdf-watermark-pages-first = First only
@@ -192,3 +192,18 @@ pdf-page-size-us-legal = US Legal
 pdf-page-size-tabloid = Tabloid
 # The Scale picker entry that prints at a typed percentage.
 pdf-scale-mode-percent = Percent
+
+# mockup rows 111 and 168
+
+# The ISO paper sizes by their bare names, in the Size picker, the page
+# caption and the footer (mockup row 111).
+pdf-paper-size-a0 = A0
+pdf-paper-size-a1 = A1
+pdf-paper-size-a2 = A2
+pdf-paper-size-a3 = A3
+pdf-paper-size-a4 = A4
+pdf-paper-size-a5 = A5
+pdf-paper-size-b5 = B5
+# The pill beside a settings section that is new (mockup row 168); shown in
+# capitals.
+pdf-section-new = New

@@ -55,11 +55,12 @@ fn the_pick_lists_show_the_entries_in_force() {
     for entry in ["US Letter", "Percent"] {
         assert!(shown.iter().any(|t| t == entry), "{entry} in {shown:?}");
     }
-    for other in ["ISO A0", "Fit to Page"] {
+    // Mockup row 111 names the ISO sizes bare ("A4").
+    for other in ["A0", "Fit to Page"] {
         assert!(!shown.iter().any(|t| t == other), "{other} in {shown:?}");
     }
     let shown = section_texts(&app, &preview(PageSize::IsoA4, PdfScale::OneToOne));
-    for entry in ["ISO A4", "1:1"] {
+    for entry in ["A4", "1:1"] {
         assert!(shown.iter().any(|t| t == entry), "{entry} in {shown:?}");
     }
 }

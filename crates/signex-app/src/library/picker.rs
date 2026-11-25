@@ -8,29 +8,38 @@
 //! ```text
 //! ┌─[Place Component   3 libraries · 359 parts ─────────────────── X]─┐
 //! │ [⌕ Search internal PN / MPN / description…]  [Add range filter…]  │
-//! ├────────────────────────────────────────────────────────────────────┤
-//! │ INTERNAL PN      STATE        MPN               DESCRIPTION        │
-//! │ R-0402-10K-1%    ● Released   RC0402FR-0710KL   10 kΩ ±1% 0402     │
-//! │ …                                                                  │
-//! ├────────────────────────────────────────────────────────────────────┤
-//! │ Enter to place                              [ Cancel ] [ Place ]   │
+//! ├────────────────────────────────────────────────────┬───────────────┤
+//! │ INTERNAL PN      STATE      MPN          DESCRIPTION │ [SYMBOL     ] │
+//! │ R-0402-10K-1%    ● Released RC0402FR-07… 10 kΩ ±1%   │ [FOOTPRINT  ] │
+//! │ …                                                    │               │
+//! ├────────────────────────────────────────────────────┴───────────────┤
+//! │ ↑↓ to move · Enter to place                 [ Cancel ] [ Place ]   │
 //! └────────────────────────────────────────────────────────────────────┘
 //! ```
+//!
+//! The right column previews the selected row's symbol and footprint with
+//! the Library Browser's drawings, read off-thread into
+//! `PickerState::preview`, so the footprint is checked before placing.
 
+use iced::widget::scrollable::RelativeOffset;
 use iced::widget::text::{Ellipsis, Wrapping};
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_i18n::{I18n, Localized, UserText, ids, t};
+use signex_library::RowId;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::{button, text};
 
+use super::browser::PreviewLook;
+use super::browser::tiles::{TileSource, footprint_tile, symbol_tile};
 use super::messages::{LibraryMessage, PickerMsg};
 use super::modal_chrome::{cancel_btn, footer_strip, header_with_note_closing, primary_btn_if};
 use super::placed_part::datasheet_choice_view;
-use super::range_filter::range_filter_bar;
+use super::range_filter::{range_filter_add_unavailable, range_filter_bar};
 use super::state::{PickerEntry, PickerMode, PickerState};
 use crate::library::editor::kit::{lifecycle_text, lifecycle_tone};
+use crate::panels::components_panel::details::ComponentDetails;
 use crate::styles::{ChromeMetrics, Radii};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -56,8 +65,10 @@ pub(crate) fn title(mode: &PickerMode, i18n: &I18n) -> String {
     i18n.message_plain(id, &[])
 }
 
-const PICKER_W: f32 = 720.0;
+const PICKER_W: f32 = 880.0;
 const PICKER_H: f32 = 480.0;
+/// Width of the symbol and footprint preview column (mockup row 129).
+const PREVIEW_W: f32 = 250.0;
 /// Width of the State column: the widest state word and its dot.
 const STATE_W: f32 = 104.0;
 /// Height of a part row (`.tbl td` in the design).
@@ -66,14 +77,31 @@ const ROW_H: f32 = 26.0;
 const DOT: f32 = 6.0;
 /// Width of the selected row's leading accent bar.
 const SELECTED_BAR: f32 = 2.0;
+/// Height of a preview tile: three and a half part rows.
+const TILE_H: f32 = ROW_H * 3.5;
+/// The list's scrollable, so ↑ and ↓ keep the selected row in view.
+pub(crate) const LIST_ID: &str = "library-picker-list";
+
+/// The list's relative offset that shows row `index` of `count`: the
+/// row's proportional place, so the row lands inside the viewport
+/// whatever its height (first row at the top, last at the bottom).
+pub(crate) fn list_offset_showing(index: usize, count: usize) -> RelativeOffset {
+    let y = if count < 2 {
+        0.0
+    } else {
+        index.min(count - 1) as f32 / (count - 1) as f32
+    };
+    RelativeOffset { x: 0.0, y }
+}
 
 /// Draws the list `LibraryState::sync_view_caches_in` last built for the
 /// picker; `view` itself filters and clones nothing.
-pub fn view<'a>(
+pub(crate) fn view<'a>(
     picker: &'a PickerState,
     tokens: &'a ThemeTokens,
     i18n: &'a I18n,
     windowed: bool,
+    look: PreviewLook,
 ) -> Element<'a, LibraryMessage> {
     // Change Component (one dialog, mockup row 155) and Open Datasheet reuse
     // this modal with their own card.
@@ -120,7 +148,8 @@ pub fn view<'a>(
         tokens,
     );
     // Range filters on the measurement columns (#1572): "Add range filter…"
-    // beside the search; active filters stack in the same column.
+    // beside the search; active filters stack in the same column. With no
+    // measurement column the control stays, disabled (mockup row 129).
     let range_bar = range_filter_bar(
         &picker.range_filters,
         rows.filter_columns(),
@@ -128,11 +157,11 @@ pub fn view<'a>(
         tokens,
         i18n,
         |msg| LibraryMessage::Picker(PickerMsg::RangeFilter(msg)),
-    );
-    let mut top = row![search].spacing(SP.m).align_y(iced::Alignment::Start);
-    if let Some(bar) = range_bar {
-        top = top.push(bar);
-    }
+    )
+    .unwrap_or_else(|| range_filter_add_unavailable(tokens, i18n));
+    let top = row![search, range_bar]
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Start);
     let top = container(top).padding(iced::Padding {
         top: SP.m + SP.xs,
         right: SP.xl,
@@ -151,19 +180,22 @@ pub fn view<'a>(
             list_col = list_col.push(part_row(entry, is_selected, i18n, tokens));
         }
         scrollable(list_col)
+            .id(LIST_ID)
             .height(Length::Fill)
             .width(Length::Fill)
             .boxed()
     };
-    let rule = r.line_soft;
-    let table = container(column![table_head(i18n, tokens), list].spacing(0))
-        .height(Length::Fill)
-        .style(move |_: &Theme| container::Style {
-            border: Border::default().top(iced::border::Side::default().width(1.0).color(rule)),
-            ..container::Style::default()
-        });
+    let table = column![table_head(i18n, tokens), list]
+        .spacing(0)
+        .width(Length::Fill)
+        .height(Length::Fill);
+    let split = list_and_preview(
+        table.boxed(),
+        preview_column(picker, look, tokens, i18n),
+        tokens,
+    );
 
-    // Only the key that works is named: Enter in the search field.
+    // ↑ and ↓ move the selection; Enter in the search field commits it.
     let hint = text(t!(i18n, ids::LIBRARY_PICKER_HINT_PLACE))
         .size(TS.caption)
         .color(r.ink4)
@@ -181,7 +213,7 @@ pub fn view<'a>(
         tokens,
     );
 
-    let body = container(column![top, table].spacing(0))
+    let body = container(column![top, split].spacing(0))
         .width(Length::Fill)
         .height(Length::Fill);
 
@@ -192,6 +224,85 @@ pub fn view<'a>(
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
+    .boxed()
+}
+
+/// The list and the preview column side by side under a hairline, a
+/// hairline between them.
+fn list_and_preview<'a>(
+    list: Element<'a, LibraryMessage>,
+    preview: Element<'a, LibraryMessage>,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let rule = crate::styles::tokens::resolve(tokens).line_soft;
+    let divider = container(Space::new())
+        .width(crate::styles::HAIRLINE)
+        .height(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(rule)),
+            ..container::Style::default()
+        });
+    container(row![list, divider.boxed(), preview].spacing(0))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            border: Border::default().top(iced::border::Side::default().width(1.0).color(rule)),
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// The picker's read of the selected row, once it is that row's.
+fn selected_details(picker: &PickerState) -> Option<&ComponentDetails> {
+    let (path, summary) = picker.selected.as_ref()?;
+    let key = picker.preview.key.as_ref()?;
+    let same_row = key.library_path == *path && key.row_id == RowId::from_uuid(summary.row_id);
+    same_row
+        .then_some(picker.preview.loaded.as_deref())
+        .flatten()
+}
+
+/// The selected row's read is running, or has not started yet.
+fn preview_loading(picker: &PickerState) -> bool {
+    let Some((path, summary)) = picker.selected.as_ref() else {
+        return false;
+    };
+    let current = picker.preview.key.as_ref().is_some_and(|key| {
+        key.library_path == *path && key.row_id == RowId::from_uuid(summary.row_id)
+    });
+    !current || picker.preview.in_flight()
+}
+
+/// What the shared tiles draw for the selected row; `None` with nothing
+/// selected. Until the row's read lands, neither side counts as unbound.
+fn tile_source(picker: &PickerState) -> Option<TileSource<'_>> {
+    picker.selected.as_ref()?;
+    let details = selected_details(picker);
+    Some(TileSource {
+        details,
+        loading: preview_loading(picker),
+        symbol_unbound: details.is_some_and(|d| d.symbol_unbound),
+        footprint_unbound: details.is_some_and(|d| d.footprint_unbound),
+    })
+}
+
+/// The preview column: the symbol tile over the footprint tile, drawn as
+/// the Library Browser's preview pane draws them.
+fn preview_column<'a>(
+    picker: &'a PickerState,
+    look: PreviewLook,
+    tokens: &'a ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, LibraryMessage> {
+    let source = tile_source(picker);
+    column![
+        symbol_tile(source.as_ref(), look, TILE_H, tokens, i18n),
+        footprint_tile(source.as_ref(), TILE_H, tokens, i18n),
+    ]
+    .spacing(SP.s)
+    .padding(SP.m)
+    .width(Length::Fixed(PREVIEW_W))
+    .height(Length::Fill)
     .boxed()
 }
 
@@ -381,6 +492,9 @@ fn part_row<'a>(
 }
 
 #[cfg(test)]
+mod search_row_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use signex_i18n::Arg;
@@ -435,6 +549,145 @@ mod tests {
         assert!((height(long) - height("C")).abs() < 0.5);
     }
 
+    fn summary(row_id: uuid::Uuid) -> signex_library::ComponentSummary {
+        signex_library::ComponentSummary {
+            row_id,
+            internal_pn: signex_library::InternalPn::new("R-0402-10K-1%"),
+            mpn: "RC0402FR-0710KL".into(),
+            state: signex_library::LifecycleState::Released,
+            description: "10 kΩ ±1% 0402".into(),
+        }
+    }
+
+    /// A picker with one row selected and its preview read started.
+    fn selected_picker() -> (PickerState, crate::library::state::ComponentsPanelRowKey) {
+        let row_id = uuid::Uuid::now_v7();
+        let path = std::path::PathBuf::from("/lib/passives");
+        let key = crate::library::state::ComponentsPanelRowKey {
+            library_path: path.clone(),
+            table: "resistors".into(),
+            row_id: RowId::from_uuid(row_id),
+        };
+        let mut picker = PickerState {
+            selected: Some((path, summary(row_id))),
+            ..PickerState::default()
+        };
+        picker.preview.begin(key.clone(), None);
+        (picker, key)
+    }
+
+    fn details(symbol_unbound: bool, footprint_unbound: bool) -> Box<ComponentDetails> {
+        Box::new(ComponentDetails {
+            internal_pn: "R-0402-10K-1%".into(),
+            class: String::new(),
+            lifecycle: String::new(),
+            state: signex_library::LifecycleState::Released,
+            manufacturer: String::new(),
+            mpn: String::new(),
+            description: String::new(),
+            has_footprint_ref: !footprint_unbound,
+            symbol_unbound,
+            footprint_unbound,
+            symbol: None,
+            footprint: None,
+            default_footprint: None,
+            alternate_footprints: Vec::new(),
+            parameters: Vec::new(),
+            notes: Vec::new(),
+        })
+    }
+
+    fn laid_out(picker: &PickerState) -> Vec<crate::layout_probe::LaidOutText> {
+        let tokens = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
+        let i18n = I18n::en_us_ref();
+        let look = PreviewLook::for_tests();
+        crate::layout_probe::lay_out_texts(
+            view(picker, &tokens, i18n, false, look),
+            iced::Size::new(1200.0, 800.0),
+        )
+    }
+
+    /// Mockup row 129: the card is 880 px wide, and its symbol and
+    /// footprint tiles sit in the right-hand 250 px column.
+    #[test]
+    fn the_card_grows_to_hold_a_250_px_preview_column() {
+        let tokens = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
+        let size = crate::layout_probe::root_size(
+            view(
+                &PickerState::default(),
+                &tokens,
+                I18n::en_us_ref(),
+                false,
+                PreviewLook::for_tests(),
+            ),
+            iced::Size::new(1200.0, 800.0),
+        );
+        assert!((size.width - 880.0).abs() < 0.5, "{size:?}");
+        let texts = laid_out(&PickerState::default());
+        // The column starts 250 px from the card's right edge; a tag sits
+        // inside the column's padding, the tile's hairline and its own
+        // padding.
+        let tag_x = 880.0 - 250.0 + SP.m + crate::styles::HAIRLINE + SP.m;
+        for tag in ["SYMBOL", "FOOTPRINT"] {
+            let bounds = crate::layout_probe::find(&texts, tag).bounds;
+            assert!((bounds.x - tag_x).abs() < 0.5, "{tag} at {bounds:?}");
+            assert!(bounds.x + bounds.width <= 880.0, "{tag} at {bounds:?}");
+        }
+        // The symbol tile is above the footprint tile.
+        let symbol = crate::layout_probe::find(&texts, "SYMBOL").bounds;
+        let footprint = crate::layout_probe::find(&texts, "FOOTPRINT").bounds;
+        assert!(symbol.y < footprint.y);
+    }
+
+    /// While the selected row's read runs both tiles say so; once it lands
+    /// an unbound footprint says it has none and a symbol that could not be
+    /// read says that.
+    #[test]
+    fn the_preview_tiles_follow_the_selected_rows_read() {
+        let (mut picker, key) = selected_picker();
+        let texts = laid_out(&picker);
+        let loading = texts.iter().filter(|t| t.text == "Loading…").count();
+        assert_eq!(loading, 2);
+
+        let generation = picker.preview.generation;
+        assert!(
+            picker
+                .preview
+                .finish(&key, generation, Ok(details(false, true)))
+        );
+        let texts = laid_out(&picker);
+        assert!(texts.iter().any(|t| t.text == "No footprint bound"));
+        assert!(texts.iter().any(|t| t.text == "Could not be read"));
+        assert!(!texts.iter().any(|t| t.text == "Loading…"));
+    }
+
+    /// The picker says what the Library Browser says: an unbound symbol
+    /// (a nil reference included, decided by the row) reads "No symbol
+    /// bound", and a bound footprint that could not be read says so.
+    #[test]
+    fn an_unbound_symbol_reads_as_in_the_library_browser() {
+        let (mut picker, key) = selected_picker();
+        let generation = picker.preview.generation;
+        assert!(
+            picker
+                .preview
+                .finish(&key, generation, Ok(details(true, false)))
+        );
+        let texts = laid_out(&picker);
+        assert!(texts.iter().any(|t| t.text == "No symbol bound"));
+        assert!(texts.iter().any(|t| t.text == "Could not be read"));
+        assert!(!texts.iter().any(|t| t.text == "No footprint bound"));
+    }
+
+    /// Nothing selected: the tiles show only their tags.
+    #[test]
+    fn with_nothing_selected_the_tiles_are_empty() {
+        let texts = laid_out(&PickerState::default());
+        for word in ["Loading…", "Could not be read", "No footprint bound"] {
+            assert!(!texts.iter().any(|t| t.text == word), "{word}");
+        }
+    }
+
     /// Mockup row 129: in the laid-out dialog, a part whose PN and
     /// description are far wider than their columns keeps both on one line
     /// inside the row height (the ellipsis ends them).
@@ -476,6 +729,7 @@ mod tests {
             &tokens,
             I18n::en_us_ref(),
             false,
+            PreviewLook::for_tests(),
         );
         let texts = lay_out_texts(card, iced::Size::new(PICKER_W, PICKER_H));
         for value in [pn, description] {

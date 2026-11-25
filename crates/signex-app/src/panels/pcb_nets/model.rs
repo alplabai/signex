@@ -296,6 +296,8 @@ pub enum PcbPanelMode {
     NetClasses,
     DiffPairs,
     XSignals,
+    /// The board's polygon pours, the compact half of the Polygon Manager
+    /// (mockup rows 106 and 178).
     Polygons,
 }
 
@@ -363,6 +365,9 @@ pub enum PcbPanelMsg {
     PairClicked(String),
     PourClicked(Uuid),
     PourChipPicked(PcbPourChip),
+    /// The Polygons mode and the Polygon Manager tab, which share
+    /// [`PcbPanelUi::polygons`] (mockup row 178).
+    Polygons(crate::panels::PolygonMsg),
 }
 
 /// The panel's own state, kept across context rebuilds.
@@ -379,6 +384,9 @@ pub struct PcbPanelUi {
     pub pair: Option<String>,
     pub pour: Option<Uuid>,
     pub pour_chip: PcbPourChip,
+    /// The Polygon Manager's view state, read by its tab and by this
+    /// panel's Polygons mode.
+    pub polygons: crate::panels::PolygonsUi,
 }
 
 /// `clicked`, unless it is what `current` holds already.
@@ -389,13 +397,21 @@ fn toggled<T: PartialEq>(current: Option<T>, clicked: T) -> Option<T> {
 impl PcbPanelUi {
     pub fn apply(&mut self, msg: PcbPanelMsg) {
         match msg {
+            PcbPanelMsg::Polygons(event) => self.polygons.apply(&event),
             PcbPanelMsg::ModePicked(mode) => self.mode = mode,
             PcbPanelMsg::FilterChanged(filter) => self.filter = filter,
             PcbPanelMsg::ChipPicked(chip) => self.chip = chip,
             PcbPanelMsg::NetClicked(net) => self.selected = toggled(self.selected.take(), net),
             PcbPanelMsg::ClassClicked(class) => self.class = toggled(self.class.take(), class),
             PcbPanelMsg::PairClicked(pair) => self.pair = toggled(self.pair.take(), pair),
-            PcbPanelMsg::PourClicked(pour) => self.pour = toggled(self.pour.take(), pour),
+            PcbPanelMsg::PourClicked(pour) => {
+                self.pour = toggled(self.pour.take(), pour);
+                // One pick for the panel and the Polygon Manager tab
+                // (DECISIONS 2026-11-18, "Tab + compact panel pair").
+                if self.pour == Some(pour) {
+                    self.polygons.current = Some(pour);
+                }
+            }
             PcbPanelMsg::PourChipPicked(chip) => self.pour_chip = chip,
         }
     }

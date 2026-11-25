@@ -226,9 +226,10 @@ impl Signex {
         match panel_msg {
             crate::panels::PanelMsg::SetUnit(unit) => {
                 self.ui_state.unit = *unit;
-                // Typed pitches were read in the old unit.
+                // Typed pitches and lengths were read in the old unit.
                 self.document_state.panel_ctx.visible_grid_draft = None;
                 self.document_state.panel_ctx.snap_grid_draft = None;
+                self.interaction_state.pcb_primitive.drop_drafts();
             }
             crate::panels::PanelMsg::RunErc => {
                 follow = self.handle_run_erc();

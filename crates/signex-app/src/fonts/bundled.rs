@@ -47,6 +47,16 @@ pub const BUNDLED_FONTS: [&[u8]; 11] = [
     JETBRAINS_MONO_MEDIUM,
 ];
 
+/// Every face the app registers with iced: the bundled faces, then iced_aw's
+/// icon font (the ColorPicker's Cancel / OK glyphs; without it their buttons
+/// draw as empty rectangles). `main` and the test layout probe both load
+/// this list, so tests measure text in the faces the app draws.
+pub fn registered() -> impl Iterator<Item = &'static [u8]> {
+    BUNDLED_FONTS
+        .into_iter()
+        .chain(std::iter::once(iced_aw::ICED_AW_FONT_BYTES))
+}
+
 #[cfg(test)]
 mod license_tests {
     /// #1179 — every bundled font file ships with its license: a `.ttf` in

@@ -30,6 +30,7 @@ pub use drawing::{BOARD_HEIGHT, BOARD_WIDTH, SNAP_STEP, VISIBLE_GRID, grid_field
 // The PCB Active Bar's Selection Filter names the kinds as the chips do.
 pub(crate) use filter::kind_label as pick_kind_label;
 use panel::PanelFacts;
+pub use panel::section_open_key as panel_section_open_key;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

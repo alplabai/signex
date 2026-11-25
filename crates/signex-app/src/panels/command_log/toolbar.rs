@@ -1,76 +1,124 @@
-//! The filter bar (search, source chips, result switch, Follow newest) with
-//! the panel's actions at its end (Pause, Save log as…, Clear, More), and
-//! the More strip.
+//! The filter row (search, source chips, result switch, Follow newest), the
+//! panel's title-bar actions (Pause, Save log as…, Clear, More), and the
+//! More strip.
 
 use iced::widget::{Row, Space, column, container, row};
 use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Widget as _};
 use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::chips::{ChipMetrics, ChipStyle, icon_chip};
-use signex_widgets::{Label, ToggleSwitchStyle, segmented, text, text_input, toggle_switch};
+use signex_widgets::{
+    FitBar, Label, ToggleSwitchStyle, segmented, text, text_input, toggle_switch,
+};
 
 use super::{
     CM, CommandLogMsg, CommandLogState, GLYPH_THEME, ICON, LogCounts, PanelContext, PanelMsg,
-    ResultFilter, SP, SourceKind, TS, icon, icon_button, layout, message,
+    ResultFilter, SP, SourceKind, TS, icon, layout, message,
 };
+use crate::panels::TitleAction;
 use crate::styles::{self, HAIRLINE, ti, tokens::resolve};
 
-/// The filter bar, `width` wide. The actions are never clipped: the search
-/// field shrinks first, then the filters wrap, and in a side dock the switch
-/// and the actions take their own line.
+/// The filter row (mockup row 161): the filters, then Follow newest at the
+/// right end. The choice is made at layout time from the measured widths:
+/// while the filters and Follow newest fit on one line with the search field
+/// at its least, they share it and the search field takes the leftover up to
+/// the mock's width; narrower (a side dock), the filters wrap and Follow
+/// newest takes its own line.
 pub(super) fn bar<'a>(
     ctx: &'a PanelContext,
     state: &'a CommandLogState,
     counts: &LogCounts,
     empty: bool,
-    width: f32,
 ) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
-    let filters = filter_group(ctx, state, counts, empty, width);
-    let tail = row![follow_switch(ctx, state), vsep(tokens), actions(ctx, state)]
-        .spacing(SP.s + SP.xs)
-        .align_y(Alignment::Center);
-    let line: Element<'a, PanelMsg> = if layout::actions_on_own_line(width) {
-        column![filters, container(tail).align_right(Length::Fill)]
-            .spacing(SP.s + SP.xs)
-            .width(Length::Fill)
-            .boxed()
-    } else {
-        row![filters, tail]
-            .spacing(SP.s + SP.xs)
-            .align_y(Alignment::Center)
-            .boxed()
+    let veiled = |filters: Element<'a, PanelMsg>| {
+        signex_widgets::inert::unless_read_only_veiled(empty, veil(tokens), filters)
     };
-    container(line)
+    let mut middle: Row<Element<'a, PanelMsg>> =
+        Row::new().spacing(FILTER_GAP).align_y(Alignment::Center);
+    for part in filter_parts(ctx, state, counts) {
+        middle = middle.push(part);
+    }
+    let one_line: Element<'a, PanelMsg> = FitBar::new(
+        veiled(search_field(ctx, &state.log.filters.query, Length::Fill)),
+        veiled(middle.boxed()),
+        follow_switch(ctx, state),
+        stacked(ctx, state, counts, empty),
+    )
+    .field_width(layout::SEARCH_MIN, layout::SEARCH_W)
+    .spacing(FILTER_GAP)
+    .end_spacing(FOLLOW_GAP)
+    .into();
+    container(one_line)
         .padding([SP.s + SP.xs, SP.m + SP.xs])
         .width(Length::Fill)
         .clip(true)
         .boxed()
 }
 
-/// Search, source chips and the result switch, wrapping in the width left.
-/// In an empty session every filter reads 0 and is greyed.
+/// The gap between filters.
+const FILTER_GAP: f32 = SP.s + SP.xs;
+/// The least gap before Follow newest on the shared line.
+const FOLLOW_GAP: f32 = SP.m + SP.xs;
+
+/// The bar when the filters and Follow newest do not share one line: the
+/// filters wrap, the search field at its least, and Follow newest sits on
+/// its own line at the right.
+fn stacked<'a>(
+    ctx: &'a PanelContext,
+    state: &'a CommandLogState,
+    counts: &LogCounts,
+    empty: bool,
+) -> Element<'a, PanelMsg> {
+    let follow = follow_switch(ctx, state);
+    column![
+        filter_group(ctx, state, counts, empty),
+        container(follow).align_right(Length::Fill)
+    ]
+    .spacing(SP.s + SP.xs)
+    .width(Length::Fill)
+    .boxed()
+}
+
+/// Search, source chips and the result switch, wrapping when they do not fit
+/// on one line. In an empty session every filter reads 0 and is greyed.
 fn filter_group<'a>(
     ctx: &'a PanelContext,
     state: &'a CommandLogState,
     counts: &LogCounts,
     empty: bool,
-    width: f32,
 ) -> Element<'a, PanelMsg> {
-    let i18n: &I18n = &ctx.i18n;
     let tokens = &ctx.tokens;
     let mut filters: Row<Element<'a, PanelMsg>> = Row::new()
         .width(Length::Fill)
-        .spacing(SP.s + SP.xs)
+        .spacing(FILTER_GAP)
         .align_y(Alignment::Center);
     filters = filters.push(search_field(
-        tokens,
-        i18n,
+        ctx,
         &state.log.filters.query,
-        layout::search_width(width),
+        Length::Fixed(layout::SEARCH_MIN),
     ));
-    filters = filters.push(vsep(tokens));
-    filters = filters.push(
+    for part in filter_parts(ctx, state, counts) {
+        filters = filters.push(part);
+    }
+    // Wrapping: a longer language takes another line instead of running
+    // out of the panel.
+    let filters = filters.wrap().vertical_spacing(SP.xs).boxed();
+    signex_widgets::inert::unless_read_only_veiled(empty, veil(tokens), filters)
+}
+
+/// The filters after the search field: the Source label and chips, then
+/// the result switch, each group after a short rule.
+fn filter_parts<'a>(
+    ctx: &'a PanelContext,
+    state: &'a CommandLogState,
+    counts: &LogCounts,
+) -> Vec<Element<'a, PanelMsg>> {
+    let i18n: &I18n = &ctx.i18n;
+    let tokens = &ctx.tokens;
+    let mut filters: Vec<Element<'a, PanelMsg>> = Vec::new();
+    filters.push(vsep(tokens));
+    filters.push(
         text(t!(i18n, ids::COMMAND_LOG_SOURCE))
             .size(TS.caption)
             .color(resolve(tokens).ink4)
@@ -95,7 +143,7 @@ fn filter_group<'a>(
         ),
     ] {
         let count = u32::try_from(counts.of_source(kind)).unwrap_or(u32::MAX);
-        filters = filters.push(icon_chip(
+        filters.push(icon_chip(
             glyph,
             t!(i18n, label),
             Some(count),
@@ -106,15 +154,14 @@ fn filter_group<'a>(
             Some(message(CommandLogMsg::SourceToggled(kind))),
         ));
     }
-    filters = filters.push(vsep(tokens));
-    filters = filters.push(result_switch(
+    filters.push(vsep(tokens));
+    filters.push(result_switch(
         tokens,
         i18n,
         state.log.filters.result,
         counts,
     ));
-    let filters = filters.wrap().vertical_spacing(SP.xs).boxed();
-    signex_widgets::inert::unless_read_only_veiled(empty, veil(tokens), filters)
+    filters
 }
 
 /// The Follow newest switch and its label.
@@ -136,55 +183,47 @@ fn follow_switch<'a>(ctx: &'a PanelContext, state: &'a CommandLogState) -> Eleme
     .boxed()
 }
 
-/// The panel's actions: Pause (Resume while paused), Save log as…, Clear
-/// and More.
-fn actions<'a>(ctx: &'a PanelContext, state: &'a CommandLogState) -> Element<'a, PanelMsg> {
+/// The panel's dock title-bar actions (mockup row 161): Pause (Resume while
+/// paused), Save log as…, Clear and More.
+pub(crate) fn title_actions(ctx: &PanelContext) -> Vec<TitleAction> {
     let i18n: &I18n = &ctx.i18n;
-    let tokens = &ctx.tokens;
-    let (pause_glyph, pause_tip) = if state.log.paused {
-        (
-            crate::icons::icon_log_play(GLYPH_THEME),
-            t!(i18n, ids::COMMAND_LOG_RESUME),
-        )
-    } else {
-        (
-            crate::icons::icon_log_pause(GLYPH_THEME),
-            t!(i18n, ids::COMMAND_LOG_PAUSE),
-        )
+    let tid = ctx.theme_id;
+    let paused = ctx.command_log.log.paused;
+    let action = |icon, tip, msg| TitleAction {
+        icon,
+        tip,
+        on_press: Some(message(msg)),
     };
-    row![
-        icon_button(
-            tokens,
-            pause_glyph,
-            pause_tip,
-            state.log.paused,
-            message(CommandLogMsg::PauseToggled),
-        ),
-        icon_button(
-            tokens,
-            crate::icons::icon_log_save(GLYPH_THEME),
+    vec![
+        if paused {
+            action(
+                crate::icons::icon_log_play(tid),
+                t!(i18n, ids::COMMAND_LOG_RESUME),
+                CommandLogMsg::PauseToggled,
+            )
+        } else {
+            action(
+                crate::icons::icon_log_pause(tid),
+                t!(i18n, ids::COMMAND_LOG_PAUSE),
+                CommandLogMsg::PauseToggled,
+            )
+        },
+        action(
+            crate::icons::icon_log_save(tid),
             t!(i18n, ids::COMMAND_LOG_SAVE),
-            false,
-            message(CommandLogMsg::SaveRequested),
+            CommandLogMsg::SaveRequested,
         ),
-        icon_button(
-            tokens,
-            crate::icons::icon_log_trash(GLYPH_THEME),
+        action(
+            crate::icons::icon_log_trash(tid),
             t!(i18n, ids::COMMAND_LOG_CLEAR),
-            false,
-            message(CommandLogMsg::Cleared),
+            CommandLogMsg::Cleared,
         ),
-        icon_button(
-            tokens,
-            crate::icons::icon_log_more(GLYPH_THEME),
+        action(
+            crate::icons::icon_log_more(tid),
             t!(i18n, ids::COMMAND_LOG_MORE),
-            state.more_open,
-            message(CommandLogMsg::MoreToggled),
+            CommandLogMsg::MoreToggled,
         ),
     ]
-    .spacing(SP.xs)
-    .align_y(Alignment::Center)
-    .boxed()
 }
 
 /// What More opens: the Show view commands switch, under the bar's right end.
@@ -231,13 +270,11 @@ pub(super) fn more_strip<'a>(
         .boxed()
 }
 
-/// The search field: a glyph and a borderless input in a field frame.
-fn search_field<'a>(
-    tokens: &ThemeTokens,
-    i18n: &I18n,
-    query: &'a str,
-    width: f32,
-) -> Element<'a, PanelMsg> {
+/// The search field, `width` wide: a glyph and a borderless input in a
+/// field frame.
+fn search_field<'a>(ctx: &'a PanelContext, query: &'a str, width: Length) -> Element<'a, PanelMsg> {
+    let tokens = &ctx.tokens;
+    let i18n: &I18n = &ctx.i18n;
     let r = resolve(tokens);
     let (ink, ink4, accent) = (ti(tokens.text), r.ink4, ti(tokens.accent));
     let input = text_input(t!(i18n, ids::COMMAND_LOG_FILTER_PLACEHOLDER), query)

@@ -10,6 +10,7 @@ use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{Footprint, FpGraphic, Pad, Point};
 use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 
+use crate::graphic::circle_radius;
 use crate::rect::RectNm;
 use crate::shape::Shape;
 use crate::transform::{Placement, sin_cos_deg};
@@ -102,7 +103,8 @@ fn courtyard_extent(footprint: &Footprint, stroke: Stroke) -> Result<Option<Rect
             grow(point, 0)?;
         }
         if let Some(center) = graphic.center {
-            grow(center, mm_to_nm(graphic.radius, "courtyard.radius")?.abs())?;
+            let radius = circle_radius(center, graphic.radius, graphic.start, graphic.end)?;
+            grow(center, radius)?;
         }
         for &point in &graphic.points {
             grow(point, 0)?;

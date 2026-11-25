@@ -22,16 +22,20 @@ mod distributors;
 mod editing;
 mod fast_grids;
 mod graphite_fields;
+#[cfg(test)]
+pub(crate) use graphite_fields::setting_labels;
 mod keycaps;
 mod keymap;
 mod language;
 mod pages_state;
 mod pages_view;
 pub(crate) use pages_view::controls::{GLYPH_EXPAND, GLYPH_SHRINK};
+mod pcb_defaults;
 mod profiles;
 mod schematic_display;
 mod setting_row;
 mod shell;
+mod system_general;
 mod theme_cards;
 mod widgets;
 
@@ -48,6 +52,8 @@ pub use keymap::{KeymapViewMsg, KeymapViewState};
 use language::content_language;
 pub use pages_state::PreferencesPagesState;
 pub use pages_view::{PagesViewMsg, PagesViewState};
+pub use pcb_defaults::PcbDefaultsMsg;
+use pcb_defaults::content_pcb_defaults;
 use profiles::content_profiles;
 pub use profiles::{ProfileAction, ProfilePageMsg, ProfilesMsg};
 pub use schematic_display::BodyFillMsg;
@@ -68,12 +74,17 @@ pub enum PrefNav {
     Appearance,
     /// The interface language (mockup row 144a).
     Language,
+    /// Settings that cover every editor: autosave of recovery copies and
+    /// agent connections (mockup row 147).
+    General,
     /// Schematic annotation settings (the undo scope of an annotate run).
     Annotation,
     /// Schematic editing behaviour (rubber-banding wires on move).
     Editing,
     /// How the schematic is drawn (symbol body fill).
     SchematicDisplay,
+    /// What a new board dimension starts from (#2868).
+    PcbDefaults,
     /// Keyboard-shortcut profile editor — pick / create / delete /
     /// import / export a profile and rebind individual commands via the
     /// chord recorder. Backed by `UiState::preferences_keymap_editor`.
@@ -91,14 +102,17 @@ pub enum PrefNav {
 }
 
 impl PrefNav {
-    /// The pages in nav order (mockup row 143): System, Schematic, Validation, Library.
+    /// The pages in nav order (mockup row 143): System, Schematic, PCB
+    /// (#2868), Validation, Library.
     pub const ALL: &'static [PrefNav] = &[
         PrefNav::Appearance,
         PrefNav::Language,
         PrefNav::Keyboard,
+        PrefNav::General,
         PrefNav::Annotation,
         PrefNav::Editing,
         PrefNav::SchematicDisplay,
+        PrefNav::PcbDefaults,
         PrefNav::RuleProfiles,
         PrefNav::LibraryDistributors,
         PrefNav::ComponentClasses,
@@ -112,7 +126,9 @@ impl PrefNav {
             PrefNav::Annotation => "Annotation",
             PrefNav::Editing => "Editing",
             PrefNav::SchematicDisplay => "Display",
+            PrefNav::PcbDefaults => "PCB Defaults",
             PrefNav::Keyboard => "Keyboard Shortcuts",
+            PrefNav::General => "General",
             PrefNav::RuleProfiles => "Rule Profiles",
             PrefNav::LibraryDistributors => "Distributor APIs",
             PrefNav::ComponentClasses => "Component Classes",
@@ -126,7 +142,9 @@ impl PrefNav {
             PrefNav::Annotation => "Schematic",
             PrefNav::Editing => "Schematic",
             PrefNav::SchematicDisplay => "Schematic",
+            PrefNav::PcbDefaults => "PCB",
             PrefNav::Keyboard => "System",
+            PrefNav::General => "System",
             PrefNav::RuleProfiles => "Validation",
             PrefNav::LibraryDistributors => "Library",
             PrefNav::ComponentClasses => "Library",
@@ -181,6 +199,8 @@ pub enum PrefMsg {
     DraftEdgePanSpeed(crate::app::edge_pan::EdgePanSpeed),
     /// The "Fill symbol bodies" rows changed. Persisted on Save.
     SymbolBodyFill(BodyFillMsg),
+    /// A PCB Defaults row changed (#2868). Persisted on Save.
+    PcbDefaults(PcbDefaultsMsg),
     /// Toggle "Two-finger scroll pans". Persisted on Save.
     DraftTrackpadPan(bool),
     /// Choose "Mouse wheel": zoom or scroll the view. Persisted on Save.
@@ -355,6 +375,8 @@ pub struct PrefsView<'a> {
     /// The fill colour field's preset palette and custom picker are open.
     pub body_fill_palette_open: bool,
     pub body_fill_picker_open: bool,
+    /// The PCB Defaults draft (#2868).
+    pub draft_pcb_defaults: &'a crate::pcb_defaults_prefs::PcbDefaultsDraft,
     pub draft_trackpad_pan: bool,
     pub draft_wheel_mode: crate::canvas::WheelMode,
     pub draft_layer_switcher: crate::layer_strip_prefs::LayerSwitcher,
@@ -502,6 +524,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         PrefNav::Appearance => content_appearance(v),
         PrefNav::Language => content_language(v),
         PrefNav::Keyboard => content_keyboard_shortcuts(v),
+        PrefNav::General => system_general::content_general(v),
         PrefNav::Annotation => content_annotation(v),
         PrefNav::Editing => content_editing(v),
         PrefNav::SchematicDisplay => content_schematic_display(DisplayPage {
@@ -513,6 +536,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             tokens: panel_tokens,
             i18n,
         }),
+        PrefNav::PcbDefaults => content_pcb_defaults(v.draft_pcb_defaults, panel_tokens, i18n),
         PrefNav::RuleProfiles => content_profiles(
             profiles,
             profiles_saving,

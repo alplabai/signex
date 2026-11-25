@@ -163,7 +163,7 @@ panels-filters-delete = Delete
 panels-filters-unnamed = Filter { $number }
 
 # Object kinds a selection filter can include.
-panels-filter-components = Parts
+panels-filter-components = Components
 panels-filter-wires = Wires
 panels-filter-buses = Buses
 panels-filter-sheet-symbols = Sheet Symbols
@@ -658,7 +658,7 @@ panels-net-classes-patterns-hint = VCC*, ?SDA
 panels-net-classes-section = Net Classes
 # Row labels of the selected net class.
 panels-net-classes-name = Name
-panels-net-classes-color = Colour
+panels-net-classes-color = Color
 panels-net-classes-width = Width (mm)
 panels-net-classes-line = Line
 # Line pick-list entries. Default follows the project's line style.
@@ -758,7 +758,7 @@ panels-drawing-color-auto = Auto
 ## Net Classes table (#2417): column titles and cells.
 
 panels-net-classes-column-name = Name
-panels-net-classes-column-color = Colour
+panels-net-classes-column-color = Color
 panels-net-classes-column-width = Width
 panels-net-classes-column-members = Members
 # Colour cell of a class with no colour of its own: the theme's wire colour.
@@ -1036,6 +1036,13 @@ panels-messages-filter-hint = Filter messages
 panels-messages-copy-tooltip = Copy the shown messages
 panels-messages-clear-tooltip = Clear the messages
 panels-messages-none-match = No messages match the filters.
+# find-messages
+# A Messages row's action: open the sheet the line names and select the object.
+panels-messages-show = Show
+# A schematic Net Inspector net row's hover action: draw the net bright on every sheet, or no longer.
+panels-net-inspector-highlight = Highlight
+# Logged when a Net Inspector row's Highlight names a net the project no longer has; $net is its name.
+panels-net-inspector-net-gone = Highlight another net; net { $net } is no longer in the project.
 # Tab + compact dock panel pair (#2523): the panel header's link that opens
 # the same view as a document tab.
 panels-paired-open-as-tab = Open as tab
@@ -1155,7 +1162,7 @@ panels-harness-type = Type
 panels-harness-definition = Definition
 # A link that opens the harness definitions view.
 panels-harness-definition-link = { $type } · { $count } entries · edit…
-panels-harness-colour = Colour
+panels-harness-colour = Color
 panels-harness-colour-default = harness default
 panels-harness-placement = Placement
 panels-harness-x = X
@@ -1325,6 +1332,10 @@ panels-harness-msg-entry-off-connector = Harness entry not placed: click on a ha
 panels-compiled-design-msg-no-project = Compile project: open a sheet of a project first; a sheet outside a project has no compiled design.
 # $why says why the project refused the edit.
 panels-compiled-design-naming-refused = Channel naming not changed: { $why }
+
+# sch-panels-tidy
+# The Canvas Font field (mockup row 40): $family is the font, $size its size in points.
+panels-canvas-font-summary = { $family } · { $size } pt
 # harness-connector-properties
 panels-harness-add-entry = Add entry
 # components-panel-cx

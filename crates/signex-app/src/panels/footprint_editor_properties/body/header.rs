@@ -72,7 +72,18 @@ pub(in crate::panels::footprint_editor_properties) fn is_open(
     key: &str,
     collapsed: &CollapsedSections,
 ) -> bool {
-    !collapsed.contains(key)
+    section_shown(key, collapsed, true)
+}
+
+/// Whether section `key` shows its body. A section closed by default stores
+/// its key in `collapsed` while it is open, so one toggle message serves
+/// both kinds.
+pub(in crate::panels::footprint_editor_properties) fn section_shown(
+    key: &str,
+    collapsed: &CollapsedSections,
+    open_by_default: bool,
+) -> bool {
+    collapsed.contains(key) != open_by_default
 }
 
 /// A collapsible section header: chevron and the upper-cased `title`, with
@@ -85,8 +96,22 @@ pub(in crate::panels::footprint_editor_properties) fn section<'a>(
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, PanelMsg> {
-    let ink = resolve(tokens).ink3;
     let open = is_open(key, collapsed);
+    section_toggle(key, title, trailing, open, tokens, i18n)
+}
+
+/// The section header with its chevron drawn as `open`; a click toggles
+/// `key`. A section that starts closed passes [`section_shown`] with
+/// `open_by_default` false.
+pub(in crate::panels::footprint_editor_properties) fn section_toggle<'a>(
+    key: &str,
+    title: &Localized,
+    trailing: Option<Element<'a, PanelMsg>>,
+    open: bool,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, PanelMsg> {
+    let ink = resolve(tokens).ink3;
     let label = row![
         signex_widgets::chevron::chevron(open, TS.section, resolve(tokens).ink4),
         text(upper(title, i18n))
@@ -354,5 +379,26 @@ pub(in crate::panels::footprint_editor_properties) fn rule<'a>(
             ..container::Style::default()
         })
         .width(Length::Fill)
+        .boxed()
+}
+
+/// An accent text link ("Edit in Sketch ▸", "Show in Sketch") that sends
+/// `msg`.
+pub(in crate::panels::footprint_editor_properties) fn link<'a>(
+    label: Localized,
+    msg: PanelMsg,
+    tokens: &ThemeTokens,
+) -> Element<'a, PanelMsg> {
+    let r = resolve(tokens);
+    let (ink, hover) = (r.accent_text, r.accent_soft);
+    button(text(label).size(TS.caption))
+        .padding([0.0, SP.xs])
+        .on_press(msg)
+        .style(move |_: &Theme, status: button::Status| button::Style {
+            background: matches!(status, button::Status::Hovered | button::Status::Pressed)
+                .then_some(Background::Color(hover)),
+            text_color: ink,
+            ..button::Style::default()
+        })
         .boxed()
 }

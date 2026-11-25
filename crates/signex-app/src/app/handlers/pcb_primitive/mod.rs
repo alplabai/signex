@@ -7,6 +7,7 @@
 //! placement tool is about to place sets the tool's value instead (#2393,
 //! `pcb_tool::form`).
 
+mod dimension_style;
 mod facts;
 mod free;
 mod graphic;
@@ -18,8 +19,12 @@ mod via_type;
 mod zone;
 
 #[cfg(test)]
+mod dimension_style_tests;
+#[cfg(test)]
 mod tune_tests;
 
+pub(crate) use dimension_style::dimension_style_edit;
+pub(crate) use free::dimension_edit;
 pub(crate) use graphic::graphic_edit;
 pub(crate) use zone::zone_edit;
 
@@ -29,8 +34,8 @@ use std::path::Path;
 use pcb_geom::ItemRef;
 use signex_engine::pcb::BoardCommand;
 use signex_engine::pcb::primitive_edit::{
-    PadEdit, PrimitiveEditRefusal, TrackEdit, ViaEdit, pad_edit_command, track_edit_command,
-    via_edit_command,
+    DimensionStyleEdit, PadEdit, PrimitiveEditRefusal, TrackEdit, ViaEdit, pad_edit_command,
+    track_edit_command, via_edit_command,
 };
 use signex_i18n::{MessageId, ids, t};
 use signex_types::pcb::{MaskExpansion, PadShape, PcbBoard};
@@ -42,7 +47,8 @@ use crate::app::Signex;
 use crate::app::state::pcb_edit::CheckedStep;
 use crate::panels::PcbPrimitiveMsg;
 use crate::panels::pcb_primitive_properties::{
-    PrimitiveField, PrimitiveFlag, PrimitiveTarget, parse_number,
+    PrimitiveField, PrimitiveFlag, PrimitiveTarget, is_dimension_length, parse_number,
+    typed_length_mm,
 };
 
 /// The panel's own state: drafts, search, Show More and the net pick.
@@ -99,9 +105,15 @@ impl PcbPrimitivePanel {
     /// Forget the drafts typed on `board` (its undo or redo moved them).
     pub(crate) fn drop_drafts_of(&mut self, board: &Path) {
         if self.draft_target.as_ref().is_some_and(|t| t.board == board) {
-            self.draft_target = None;
-            self.drafts.clear();
+            self.drop_drafts();
         }
+    }
+
+    /// Forget every draft: a length typed in the old Units must not be read
+    /// in the new ones (mockup row 101).
+    pub(crate) fn drop_drafts(&mut self) {
+        self.draft_target = None;
+        self.drafts.clear();
     }
 }
 
@@ -126,6 +138,8 @@ pub(crate) enum PrimitiveEdit {
     Flag(PrimitiveFlag, bool),
     /// A pour's Remove Dead Copper (#2216).
     DeadIslands(bool),
+    /// A field of a dimension's look (#2868).
+    DimensionStyle(DimensionStyleEdit),
 }
 
 impl Signex {
@@ -275,6 +289,13 @@ impl Signex {
                     field_name(*field),
                 );
             }
+            M::DimensionStylePicked { target, edit } => {
+                self.apply_primitive_edit(
+                    target,
+                    PrimitiveEdit::DimensionStyle(edit.clone()),
+                    dimension_style::edit_name(edit),
+                );
+            }
             M::ArcModePicked(mode) => self.pick_arc_mode(*mode),
             M::Via(m) => self.handle_via_msg(m),
             M::Pour(m) => self.handle_pour_msg(m),
@@ -306,10 +327,12 @@ impl Signex {
             } else {
                 PrimitiveEdit::Text(text.to_string())
             }
+        } else if let Some(words) = dimension_style::words_edit(field, text) {
+            PrimitiveEdit::DimensionStyle(words)
         } else if field.is_text() {
             PrimitiveEdit::Designator(text.to_string())
         } else {
-            match parse_number(text) {
+            match self.typed_number(target, field, text) {
                 Some(value) if field == PrimitiveField::TuneLength => {
                     self.tune_track_length(target, value);
                     return;
@@ -326,6 +349,28 @@ impl Signex {
             }
         };
         self.apply_primitive_edit(target, edit, what);
+    }
+
+    /// A number typed into `field`, in mm or degrees; a dimension's lengths
+    /// are typed in the board's Units, as its panel shows them (mockup row
+    /// 101).
+    fn typed_number(
+        &self,
+        target: &PrimitiveTarget,
+        field: PrimitiveField,
+        text: &str,
+    ) -> Option<f64> {
+        let is_dimension = match target.items.first() {
+            Some(item) => matches!(item, ItemRef::Dimension(_)),
+            None => self.interaction_state.pcb_tool.as_ref().is_some_and(|s| {
+                matches!(s.tool, crate::app::pcb_tools::BoardPlaceTool::Dimension)
+            }),
+        };
+        if is_dimension && is_dimension_length(field) {
+            typed_length_mm(text, self.ui_state.unit)
+        } else {
+            parse_number(text)
+        }
     }
 
     /// Run `edit` on the target's items as one labelled step, or say why not.
@@ -434,6 +479,16 @@ fn field_name(field: PrimitiveField) -> MessageId {
         F::Priority => ids::PCB_PRIM_PRIORITY,
         F::MinIslandArea => ids::PCB_PRIM_MIN_ISLAND_AREA,
         F::CenterX | F::CenterY => ids::PCB_PRIM_GRAPHIC_CENTER,
+        F::ArrowLength => ids::PCB_PRIM_DIM_ARROW_LENGTH,
+        F::ArrowWidth => ids::PCB_PRIM_DIM_ARROW_WIDTH,
+        F::TextWidth => ids::PCB_PRIM_DIM_TEXT_WIDTH,
+        F::TextGap => ids::PCB_PRIM_DIM_TEXT_GAP,
+        F::TextAlong | F::TextAcross => ids::PCB_PRIM_DIM_TEXT_AT,
+        F::ExtensionOffset => ids::PCB_PRIM_DIM_EXT_OFFSET,
+        F::ExtensionOvershoot => ids::PCB_PRIM_DIM_EXT_OVERSHOOT,
+        F::ExtensionWidth => ids::PCB_PRIM_DIM_EXT_WIDTH,
+        F::Prefix => ids::PCB_PRIM_DIM_PREFIX,
+        F::Suffix => ids::PCB_PRIM_DIM_SUFFIX,
     }
 }
 

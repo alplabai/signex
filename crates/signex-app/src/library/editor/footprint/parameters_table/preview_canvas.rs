@@ -1,13 +1,15 @@
 //! The row under the parameters table (mockup row 189): the live bake
-//! preview card and, beside it, the Live checks card. The preview is drawn
-//! fresh from the editor's state on every view, so each keystroke that
-//! re-solves redraws it; there is no cache to clear.
+//! preview card, with each driving dimension's line and `name = value
+//! unit` label, and beside it the narrower Live checks card. The row takes the
+//! panel's height left under the table. The preview is drawn fresh from
+//! the editor's state on every view, so each keystroke that re-solves
+//! redraws it; there is no cache to clear.
 
 use iced::mouse;
 use iced::widget::canvas::{self, Frame, Geometry, Path, Stroke};
 use iced::widget::{column, container, row};
 use iced::{Border, Color, Element, Length, Point, Rectangle, Renderer, Theme, Widget as _};
-use signex_i18n::{I18n, Localized, ids, t};
+use signex_i18n::{Arg, I18n, Localized, ids, t};
 use signex_sketch::unit::Quantity;
 use signex_types::theme::ThemeTokens;
 
@@ -21,12 +23,25 @@ use crate::styles::Radii;
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
-/// The height of the preview and Live checks cards, in body text heights.
+/// The least height of the preview and Live checks cards, in body text
+/// heights; they grow into the panel's room.
 pub(super) const LIVE_EM: f32 = 13.0;
+/// Width shares of the preview and Live checks cards (the mockup's drawing
+/// beside a narrower notes column).
+pub(super) const PREVIEW_PORTION: u16 = 2;
+pub(super) const CHECKS_PORTION: u16 = 1;
 /// Edge and pad outline width, in caption heights.
 const STROKE_EM: f32 = 0.1;
 /// How strongly a pad is filled.
 const PAD_FILL_ALPHA: f32 = 0.35;
+/// Arrowhead length and half width of a dimension line, in caption heights.
+const ARROW_EM: f32 = 0.45;
+const ARROW_HALF_EM: f32 = 0.2;
+/// A dimension label's horizontal and vertical padding, in caption heights,
+/// and the average advance of one of its characters, in ems.
+const LABEL_PAD_X_EM: f32 = 0.5;
+const LABEL_PAD_Y_EM: f32 = 0.25;
+const LABEL_ADVANCE_EM: f32 = 0.6;
 
 /// The preview card and the Live checks card, side by side.
 pub(super) fn live_row<'a>(
@@ -42,26 +57,29 @@ pub(super) fn live_row<'a>(
     row![
         live_card(
             preview_card(preview, look, tokens, i18n),
+            PREVIEW_PORTION,
             is_last_good,
             look
         ),
-        live_card(checks, false, look),
+        live_card(checks, CHECKS_PORTION, false, look),
     ]
     .spacing(SP.m)
-    .height(Length::Fixed(TS.body * LIVE_EM))
+    .height(Length::Fill.min(TS.body * LIVE_EM))
     .boxed()
 }
 
-/// One of the two cards, bordered in the error colour when `is_marked`.
+/// One of the two cards, `portion` shares wide, bordered in the error
+/// colour when `is_marked`.
 fn live_card<'a>(
     content: Element<'a, LibraryMessage>,
+    portion: u16,
     is_marked: bool,
     look: Look,
 ) -> Element<'a, LibraryMessage> {
     let border = if is_marked { look.error } else { look.line };
     container(content)
         .padding(SP.s)
-        .width(Length::FillPortion(1))
+        .width(Length::FillPortion(portion))
         .height(Length::Fill)
         .style(move |_: &Theme| container::Style {
             border: Border {
@@ -118,7 +136,7 @@ fn preview_card<'a>(
     let labels = preview
         .dimensions
         .iter()
-        .map(|d| dimension_label(d, i18n).into_string())
+        .map(|d| dimension_label(d, i18n))
         .collect();
     let r = crate::styles::tokens::resolve(tokens);
     let drawing = PreviewDrawing {
@@ -140,27 +158,28 @@ fn preview_card<'a>(
 }
 
 /// `name = value unit`, or the value alone when no parameter drives it.
-fn dimension_label(d: &super::preview::DrivingDimension, i18n: &I18n) -> Localized {
+/// Plain text, without bidi isolation marks: its pill is sized by
+/// character count.
+pub(super) fn dimension_label(d: &super::preview::DrivingDimension, i18n: &I18n) -> String {
     let quantity = if d.is_angle {
         Quantity::angle(d.value)
     } else {
         Quantity::length(d.value)
     };
     let (value, unit) = display_value(quantity);
-    let unit = t!(i18n, unit_id(unit)).into_string();
+    let unit = i18n.message_plain(unit_id(unit), &[]);
     match &d.name {
-        Some(name) => t!(
-            i18n,
+        Some(name) => i18n.message_plain(
             ids::SKETCH_PARAMETERS_PREVIEW_DIMENSION_NAMED,
-            "name" => name.as_str(),
-            "value" => value,
-            "unit" => unit
+            &[
+                ("name", Arg::from(name.as_str())),
+                ("value", Arg::from(value)),
+                ("unit", Arg::from(unit)),
+            ],
         ),
-        None => t!(
-            i18n,
+        None => i18n.message_plain(
             ids::SKETCH_PARAMETERS_PREVIEW_DIMENSION,
-            "value" => value,
-            "unit" => unit
+            &[("value", Arg::from(value)), ("unit", Arg::from(unit))],
         ),
     }
 }
@@ -247,16 +266,82 @@ impl canvas::Program<LibraryMessage> for PreviewDrawing {
             } else {
                 self.label
             };
-            frame.fill_text(canvas::Text {
-                content: label.clone(),
-                position: at(dimension.at),
-                color,
-                size: iced::Pixels(TS.caption),
-                align_x: iced::alignment::Horizontal::Center.into(),
-                align_y: iced::alignment::Vertical::Center,
-                ..canvas::Text::default()
-            });
+            let span = dimension.span.map(|(a, b)| (at(a), at(b)));
+            self.draw_dimension(&mut frame, span, at(dimension.at), label, color);
         }
         vec![frame.into_geometry()]
     }
+}
+
+impl PreviewDrawing {
+    /// One driving dimension on screen: its line with an arrowhead at each
+    /// end (when there is room for both), and its label in a pill centred
+    /// on `centre`.
+    fn draw_dimension(
+        &self,
+        frame: &mut Frame,
+        span: Option<(Point, Point)>,
+        centre: Point,
+        label: &str,
+        color: Color,
+    ) {
+        let stroke = Stroke::default()
+            .with_width(TS.caption * STROKE_EM)
+            .with_color(color);
+        if let Some((a, b)) = span {
+            frame.stroke(&Path::line(a, b), stroke);
+            if a.distance(b) > 2.0 * TS.caption * ARROW_EM {
+                for (tip, tail) in [(a, b), (b, a)] {
+                    let [p, q, r] = arrow_head(tip, tail);
+                    let head = Path::new(|path| {
+                        path.move_to(p);
+                        path.line_to(q);
+                        path.line_to(r);
+                        path.close();
+                    });
+                    frame.fill(&head, color);
+                }
+            }
+        }
+        let rect = label_rect(centre, label);
+        let pill =
+            Path::rounded_rectangle(rect.position(), rect.size(), Radii::GRAPHITE.card.into());
+        frame.fill(&pill, self.ground);
+        frame.stroke(&pill, stroke);
+        frame.fill_text(canvas::Text {
+            content: label.to_owned(),
+            position: centre,
+            color,
+            size: iced::Pixels(TS.caption),
+            align_x: iced::alignment::Horizontal::Center.into(),
+            align_y: iced::alignment::Vertical::Center,
+            ..canvas::Text::default()
+        });
+    }
+}
+
+/// The arrowhead at `tip` of a dimension line coming from `tail`: the tip
+/// and the two back corners.
+pub(super) fn arrow_head(tip: Point, tail: Point) -> [Point; 3] {
+    let (dx, dy) = (tail.x - tip.x, tail.y - tip.y);
+    let len = dx.hypot(dy).max(f32::EPSILON);
+    let (ux, uy) = (dx / len, dy / len);
+    let (back, half) = (TS.caption * ARROW_EM, TS.caption * ARROW_HALF_EM);
+    let base = Point::new(tip.x + ux * back, tip.y + uy * back);
+    [
+        tip,
+        Point::new(base.x - uy * half, base.y + ux * half),
+        Point::new(base.x + uy * half, base.y - ux * half),
+    ]
+}
+
+/// The pill a dimension label reading `text` sits in, centred on `centre`.
+pub(super) fn label_rect(centre: Point, text: &str) -> Rectangle {
+    let chars = text.chars().count() as f32;
+    let width = chars * TS.caption * LABEL_ADVANCE_EM + 2.0 * TS.caption * LABEL_PAD_X_EM;
+    let height = TS.caption * (1.0 + 2.0 * LABEL_PAD_Y_EM);
+    Rectangle::new(
+        Point::new(centre.x - width / 2.0, centre.y - height / 2.0),
+        iced::Size::new(width, height),
+    )
 }

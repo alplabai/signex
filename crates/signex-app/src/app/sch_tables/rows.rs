@@ -195,6 +195,69 @@ pub(crate) fn contents_table_rows(
     (rows, links)
 }
 
+/// A page the project lists, for a contents sheet written before any
+/// compile (mockup row 156: the new sheet lists its pages at once).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DeclaredPage {
+    /// The page's name in the project.
+    pub name: String,
+    /// The sheet file.
+    pub path: PathBuf,
+    /// The row's link, relative to the contents sheet's folder.
+    pub file: String,
+    /// The title block of the open sheet; `None` reads it from the file.
+    pub title: Option<signex_net::SheetTitle>,
+    /// The page's number in the project's sheet numbering, when known.
+    pub number: Option<usize>,
+}
+
+/// The contents entries of `pages`: the numbered pages by their number, then
+/// the rest in the project's order, numbered after the highest known number.
+/// A page that is not open takes its title block from `read` (blank when it
+/// cannot be read). The next compile replaces them with the compiled
+/// hierarchy.
+pub(crate) fn declared_contents(
+    pages: &[DeclaredPage],
+    read: &dyn Fn(&Path) -> Option<signex_net::SheetTitle>,
+) -> Vec<ContentsEntry> {
+    let mut order: Vec<&DeclaredPage> = pages.iter().collect();
+    order.sort_by_key(|page| (page.number.is_none(), page.number));
+    let mut next = pages
+        .iter()
+        .filter_map(|page| page.number)
+        .max()
+        .unwrap_or(0);
+    order
+        .into_iter()
+        .map(|page| {
+            let number = page.number.unwrap_or_else(|| {
+                next += 1;
+                next
+            });
+            let title = page
+                .title
+                .clone()
+                .or_else(|| read(&page.path))
+                .unwrap_or_default();
+            let sheet = if page.name.trim().is_empty() {
+                page.path
+                    .file_stem()
+                    .map_or_else(String::new, |s| s.to_string_lossy().into_owned())
+            } else {
+                page.name.clone()
+            };
+            ContentsEntry {
+                page: number,
+                sheet,
+                title: title.title,
+                revision: title.revision,
+                last_changed: title.date,
+                file: page.file.clone(),
+            }
+        })
+        .collect()
+}
+
 /// The sheets a compile did not read, seen from the sheet holding a table.
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct UnreadSheets<'a> {

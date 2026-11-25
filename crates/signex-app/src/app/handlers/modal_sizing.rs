@@ -145,11 +145,17 @@ fn note_block(lines: usize, padded: bool) -> f32 {
 
 /// What the Rename dialog adds over the layout its base height was measured
 /// on (mockup row 23): the path under the title, the "New name" label, the wider gap
-/// above the field, then the placing-symbol note, the name clash and the
-/// handler's error when they show.
-fn rename_growth(d: &crate::app::RenameDialogState) -> f32 {
+/// above the field, the body's bottom padding over the footer band and the
+/// band's own height over the plain footer, then the folder-kept note, the
+/// placing-symbol note, the name clash and the handler's error when they show.
+fn rename_growth(d: &crate::app::RenameDialogState, keeps_folder: bool) -> f32 {
+    use crate::styles::{dense_band_footer_height, dense_footer_height};
     let sp = crate::styles::Spacing::DEFAULT;
     let mut grow = caption_line() + sp.xs + 1.0 + body_line() + 4.0 + (sp.l - sp.m);
+    grow += sp.l + dense_band_footer_height() - dense_footer_height();
+    if keeps_folder {
+        grow += note_block(1, true);
+    }
     if !d.placing_symbols.is_empty() {
         grow += note_block(2, true);
     }
@@ -259,7 +265,17 @@ impl Signex {
         if let Some(reason) = c.sheet_refs.discard_blocked_reason() {
             height += CALLOUT_HEIGHT + body_growth(column, &reason);
         }
-        height
+        height + self.read_only_note_height(&c.dirty_paths, c.dirty_rows.len(), column)
+    }
+
+    /// Height of the note on a read-only project's unsaved settings (#2904);
+    /// 0 when the prompt lists none.
+    fn read_only_note_height(&self, dirty: &[std::path::PathBuf], rows: usize, column: f32) -> f32 {
+        self.read_only_offer(dirty, rows).map_or(0.0, |offer| {
+            let line =
+                crate::app::read_only_project::read_only_note(self.ui_state.i18n.as_ref(), &offer);
+            CALLOUT_HEIGHT + body_growth(column, &line.to_string())
+        })
     }
 
     /// Height the first stage of the Remove modal needs beyond its base
@@ -316,6 +332,11 @@ impl Signex {
                     } else {
                         0.0
                     }
+                    + self.read_only_note_height(
+                        &c.dirty_paths,
+                        c.dirty_rows.len(),
+                        fixed.width - 2.0 * Spacing::DEFAULT.l - CALLOUT_INSET,
+                    )
             }),
             ModalId::ProjectCloseConfirm => ui
                 .project_close_confirm
@@ -337,9 +358,12 @@ impl Signex {
                 const CAPTION_LINE: f32 = 15.0;
                 const CHOICE_ROW_GAP: f32 = 3.0;
                 let i18n = &self.ui_state.i18n;
-                let detail = n.detail_text(i18n);
-                let mut height =
-                    BASE + (wrapped_lines(&detail, 64) as f32 * MESSAGE_LINE).min(MESSAGE_MAX);
+                // The note is its own text line under the detail.
+                let note_lines = n
+                    .note
+                    .map_or(0, |note| wrapped_lines(&i18n.message_plain(note, &[]), 64));
+                let lines = wrapped_lines(&n.detail_text(i18n), 64) + note_lines;
+                let mut height = BASE + (lines as f32 * MESSAGE_LINE).min(MESSAGE_MAX);
                 if let Some(system) = &n.system {
                     let lines = wrapped_lines(system.as_str(), 66) as f32;
                     height += GAP + SYSTEM_PAD + (lines * CAPTION_LINE).min(MESSAGE_MAX);
@@ -487,7 +511,7 @@ impl Signex {
             ModalId::RenameDialog => ui
                 .rename_dialog
                 .as_ref()
-                .map(|d| fixed.height + rename_growth(d)),
+                .map(|d| fixed.height + rename_growth(d, self.rename_keeps_folder(d))),
             ModalId::EnableVersionControl => ui
                 .enable_version_control
                 .as_ref()

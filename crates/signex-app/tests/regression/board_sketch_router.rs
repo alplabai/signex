@@ -364,3 +364,47 @@ fn a_footprint_with_an_open_profile_offers_close_gap_and_closes_it() {
         "the courtyard bakes"
     );
 }
+
+/// Mockup row 179d (#2903): with the project's rules seeded from a named fab
+/// profile, the inside-corner and min slot checks say which profile they ran
+/// against, and the Fab profile group names it.
+#[test]
+fn the_corner_and_min_slot_checks_name_the_projects_fab_profile() {
+    let mut f = board_of_standard_project();
+    let project = f.app.document_state.projects.last_mut().unwrap();
+    let mut rules = signex_types::project::ProjectRules {
+        profile: Some(signex_types::project::RuleProfileRef {
+            name: "Standard 4-layer".into(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    rules.set_min_slot(Some(0.8));
+    project.data.rules = Some(rules);
+    let l_board = [
+        (0.0, 0.0),
+        (20.0, 0.0),
+        (20.0, 10.0),
+        (10.0, 10.0),
+        (10.0, 20.0),
+        (0.0, 20.0),
+    ];
+    let (sketch, _, edges) = polyline(&l_board, true);
+    sketch_in(&mut f, sketch, edges[0]);
+
+    let board = props(&f);
+    assert_eq!(board.fab_profile.as_deref(), Some("Standard 4-layer"));
+    assert_eq!(board.min_slot, Some(0.8));
+    let lines = texts(&board.outline_checks);
+    assert!(
+        lines.contains(
+            &"Inside corner R 0.00 < R 1.00 of the Standard 4-layer router at (10.00, 10.00)"
+                .to_string()
+        ),
+        "{lines:#?}"
+    );
+    assert!(
+        lines.contains(&"Slots: none narrower than the Standard 4-layer min slot".to_string()),
+        "{lines:#?}"
+    );
+}

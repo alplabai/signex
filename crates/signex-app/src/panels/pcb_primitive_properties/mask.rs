@@ -3,7 +3,8 @@
 //! collapsible sections that stay closed while the rule decides and name
 //! Rule, Manual or Mixed in their header. A setting the selection does not
 //! share shows no tile chosen and a blank field. A side with no opening
-//! (tented) greys its rows.
+//! (tented) greys its rows. Expansion reads to three decimals ("0.050",
+//! mockup rows 95 and 96).
 
 use iced::widget::{column, container, row};
 use iced::{Element, Length, Theme, Widget as _};
@@ -14,7 +15,7 @@ use signex_widgets::inert::Inert;
 use signex_widgets::{CheckboxLabel as _, Label, checkbox, text};
 
 use super::linked::{Segment, segments};
-use super::rows::{Look, Section, labelled, mm_field, with_tip};
+use super::rows::{Look, Section, field as field_input, fixed_mm, labelled, with_tip};
 use super::{PcbPrimitiveMsg, PrimitiveCommon, PrimitiveField, PrimitiveFlag, SP, TS, ViaFacts};
 use crate::panels::{PanelMsg, form_look};
 use crate::styles::ti;
@@ -145,7 +146,7 @@ pub(super) fn source_rows<'a>(
             labelled(
                 look,
                 ids::PCB_PRIM_EXPANSION,
-                mm_field(common, field, manual, look),
+                field_input(common, field, manual.map(fixed_mm), None, look),
             ),
         ),
     );
@@ -265,10 +266,18 @@ pub(super) fn via_mask_section<'a>(
     s.finish()
 }
 
-/// A small caption heading the rows of one side or group.
+/// A small caption heading the rows of one side or group: a step smaller
+/// and fainter than the row labels, with room above it (the mockup's
+/// subhead, rows 97 and 101), so it reads as a heading and not as a row.
 pub(super) fn subhead<'a>(look: Look<'a>, id: MessageId) -> Element<'a, PanelMsg> {
-    column![text(look.t(id)).size(TS.dense).color(look.muted)]
-        .padding([SP.xs, super::rows::PAD_X])
+    let faint = crate::styles::tokens::resolve(look.tokens()).ink4;
+    column![text(look.t(id)).size(TS.caption).color(faint)]
+        .padding(iced::Padding {
+            top: SP.s,
+            right: super::rows::PAD_X,
+            bottom: SP.xs,
+            left: super::rows::PAD_X,
+        })
         .width(Length::Fill)
         .boxed()
 }

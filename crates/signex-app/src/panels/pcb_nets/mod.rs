@@ -5,7 +5,8 @@
 //! pairs the router finds; xSignals the board's xSignals; Polygons the
 //! pours of the Polygon Manager. A pure view over data the panel context
 //! copies from the board, so a detached panel window (mockup row 8) shows
-//! the same mode as the docked one.
+//! the same mode as the docked one. The Polygons mode's Open Polygon
+//! Manager opens the board's Polygon Manager tab (`panels::polygons`).
 
 mod detail;
 mod model;

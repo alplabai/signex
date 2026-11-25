@@ -45,9 +45,7 @@ pub(super) fn bake_linear(
     let pad_attr = match source_entity.pad.as_ref() {
         Some(p) => p,
         None => {
-            warnings.push(format!(
-                "linear array source {source}: no PadAttr on source entity — array skipped"
-            ));
+            warnings.push(super::not_a_pad("linear array", sketch, solve, source));
             return Ok(());
         }
     };

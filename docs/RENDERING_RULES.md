@@ -450,6 +450,10 @@ as its pads are. The board's own drawings (`PcbBoard.graphics`) and texts
   `poly` (a closed outline), `circle`, `arc`, `text`. Another kind, or one
   missing the points it needs, is not drawn; nor is a value `pcb-geom`
   refuses.
+- **Circle:** about its centre through its rim (`end`, else `start`); the
+  saved `radius` only when it has neither. The design rule check's copper
+  and the fabrication outputs take the same radius (`pcb_geom::circle_radius`),
+  as do a footprint's courtyard box, its staging extent and the bake preview.
 - **Arc:** about its centre from its start to its end; with a middle point
   it runs the way that passes it, without one the way of increasing angle.
   The bottom-side mirror reverses it. Drawn as chords of at most 6 degrees.

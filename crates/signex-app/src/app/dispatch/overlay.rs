@@ -156,7 +156,7 @@ impl Signex {
             ProjectMsg::StartScreen(msg) => self.dispatch_start_screen_message(msg),
             ProjectMsg::Thumbnail(msg) => self.dispatch_project_thumbnail_message(msg),
             ProjectMsg::SheetNumbering(msg) => self.dispatch_sheet_numbering_message(msg),
-            ProjectMsg::CloseConfirm(choice) => self.handle_project_close_confirm(choice),
+            ProjectMsg::CloseConfirm(choice) => self.handle_project_close_choice(choice),
             ProjectMsg::AssignFootprints(msg) => self.dispatch_assign_footprints_message(msg),
             ProjectMsg::CompiledDesign(msg) => self.dispatch_compiled_design_message(msg),
             ProjectMsg::CloseRefsResolved { project_id, result } => {
@@ -196,7 +196,7 @@ impl Signex {
             ProjectMsg::WindowHierarchyAssembled(root, generation, assembly) => {
                 self.handle_window_hierarchy_assembled(&root, generation, assembly)
             }
-            ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
+            ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_choice(choice),
             ProjectMsg::Tab(msg) => self.dispatch_project_tab_message(msg),
             ProjectMsg::Rules(msg) => self.dispatch_rules_tab_message(msg),
             ProjectMsg::Git(msg) => self.dispatch_project_git_message(msg),
@@ -680,11 +680,7 @@ impl Signex {
     pub(crate) fn dispatch_erc_message(&mut self, msg: ErcMsg) -> Task<Message> {
         match msg {
             ErcMsg::Run => {
-                let close_task = if self.ui_state.erc_dialog_open {
-                    self.handle_close_erc_dialog()
-                } else {
-                    Task::none()
-                };
+                let close_task = self.close_erc_dialog_for_run();
                 let task = self.handle_run_erc();
                 let finish = self.finish_update();
                 Task::batch([close_task, finish, task])
@@ -794,8 +790,17 @@ impl Signex {
             | EnableVersionControlMsg::ToggleItem(_)
             | EnableVersionControlMsg::AllTicked
             | EnableVersionControlMsg::CommitMessageChanged(_)
-            | EnableVersionControlMsg::CommitEverySaveToggled) => {
+            | EnableVersionControlMsg::CommitEverySaveToggled
+            | EnableVersionControlMsg::AuthorNameChanged(_)
+            | EnableVersionControlMsg::AuthorEmailChanged(_)) => {
                 self.edit_enable_version_control(edit);
+                Task::none()
+            }
+            EnableVersionControlMsg::AuthorProbed {
+                project_dir,
+                has_identity,
+            } => {
+                self.handle_enable_version_control_author_probed(&project_dir, has_identity);
                 Task::none()
             }
             EnableVersionControlMsg::Confirm => self.handle_enable_version_control_confirm(),
@@ -887,13 +892,15 @@ impl Signex {
     ) -> Option<Message> {
         use crate::app::state::ModalId;
         match modal {
-            ModalId::ProjectCloseConfirm => {
-                self.ui_state.project_close_confirm.is_some().then(|| {
+            // Not while Save All is withheld: only a read-only project's
+            // settings are unsaved (#2904).
+            ModalId::ProjectCloseConfirm => (self.ui_state.project_close_confirm.as_ref())
+                .filter(|c| self.save_all_offered(&c.dirty_paths, c.dirty_rows.len()))
+                .map(|_| {
                     Message::Project(ProjectMsg::CloseConfirm(
                         crate::app::ProjectCloseChoice::SaveAll,
                     ))
-                })
-            }
+                }),
             _ => None,
         }
     }

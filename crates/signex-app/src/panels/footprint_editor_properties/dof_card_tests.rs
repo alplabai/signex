@@ -7,7 +7,7 @@ use signex_sketch::id::SketchEntityId;
 use signex_sketch::solver::free_motion::MotionKind;
 
 use super::{dof_card, motion_label};
-use crate::panels::{FootprintSolveSummary, FreeMotionSummary};
+use crate::panels::{FootprintSolveSummary, FreeMotionSummary, SketchDof};
 use crate::styles::PillTone;
 
 fn plain(text: impl Into<String>) -> String {
@@ -32,7 +32,8 @@ fn card_texts(
     conflicts: usize,
     constraints: usize,
 ) -> (String, PillTone, String, String) {
-    let card = dof_card(&solve(dof, conflicts), constraints, &I18n::en_us());
+    let state = SketchDof::of(conflicts, false, dof);
+    let card = dof_card(state, &solve(dof, conflicts), constraints, &I18n::en_us());
     (
         plain(card.number.into_string()),
         card.tone,
@@ -68,6 +69,103 @@ fn an_over_constrained_sketch_shows_its_conflicts_and_keeps_the_last_solve() {
     assert_eq!((number.as_str(), tone), ("\u{2212}1", PillTone::Err));
     assert_eq!(state, "Over-constrained · 1 conflict");
     assert_eq!(detail, "49 constraints · last good solve kept");
+}
+
+#[test]
+fn a_rejected_edit_shows_the_over_constrained_card_over_a_free_solve() {
+    let state = SketchDof::of(0, true, 4);
+    let card = dof_card(state, &solve(4, 0), 7, &I18n::en_us());
+    assert_eq!(
+        (plain(card.number.into_string()).as_str(), card.tone),
+        ("\u{2212}1", PillTone::Err)
+    );
+    assert_eq!(
+        plain(card.state.into_string()),
+        "Over-constrained · 1 conflict"
+    );
+    assert_eq!(
+        plain(card.detail.into_string()),
+        "7 constraints · last good solve kept"
+    );
+}
+
+/// #2855: a sketch whose QR colours read Over while the row reduction finds
+/// no conflict and no free motion. The chip and the card read the row
+/// reduction and say Fully constrained; the canvas colour keeps Over.
+#[test]
+fn the_chip_and_the_card_read_full_where_the_qr_colours_read_over() {
+    use signex_sketch::entity::{Entity, EntityKind};
+    use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+    use signex_sketch::sketch::SketchData;
+    use signex_sketch::solver::FullSolveOutput;
+    use signex_sketch::solver::dof::DofColor;
+    use signex_sketch::solver::lm::SolveResult;
+    use signex_sketch::solver::state::pack;
+
+    use crate::library::editor::standalone::dof_chip::{dof_state, sketch_dof};
+
+    let plane = PlaneId::new();
+    let point = SketchEntityId::new();
+    let sketch = SketchData {
+        planes: vec![Plane {
+            id: plane,
+            kind: PlaneKind::BoardTop,
+        }],
+        entities: vec![Entity::new(
+            point,
+            plane,
+            EntityKind::Point { x: 0.0, y: 0.0 },
+        )],
+        ..SketchData::default()
+    };
+    let packed = pack(&sketch);
+    let out = FullSolveOutput {
+        result: SolveResult {
+            state: packed.vector,
+            index: packed.index,
+            iterations: 4,
+            final_residual_norm: 0.0,
+            elapsed_ms: 3,
+        },
+        colours: std::iter::once((point, DofColor::Over)).collect(),
+        over_constraints: Vec::new(),
+        redundant_constraints: Vec::new(),
+        warnings: Vec::new(),
+        redundancy_pending: false,
+        jacobian: Vec::new(),
+        free_motions: Default::default(),
+        params: Default::default(),
+    };
+    let mut fp = signex_library::Footprint::empty("near-dependent");
+    fp.sketch = Some(sketch);
+    let mut editor = crate::app::FootprintDocument::new(
+        std::path::PathBuf::from("near-dependent.snxfpt"),
+        signex_library::FootprintFile::from_footprint(fp),
+    );
+    editor.state.last_solve = Some(out);
+
+    let (tone, id) = dof_state(&editor);
+    assert_eq!(tone, PillTone::Ok);
+    assert_eq!(
+        plain(signex_i18n::t!(I18n::en_us_ref(), id).into_string()),
+        "Fully constrained · DOF 0"
+    );
+
+    let state = sketch_dof(&editor).expect("a solve to read");
+    assert_eq!(state, SketchDof::Full);
+    let out = editor.state.last_solve.as_ref().expect("the solve");
+    let summary = FootprintSolveSummary {
+        over_constraint_count: out.over_constraints.len(),
+        dof: out.free_motions.dof,
+        ..solve(0, 0)
+    };
+    let card = dof_card(state, &summary, 0, &I18n::en_us());
+    assert_eq!(
+        (plain(card.number.into_string()).as_str(), card.tone),
+        ("0", PillTone::Ok)
+    );
+    assert_eq!(plain(card.state.into_string()), "Fully constrained");
+    assert_eq!(out.colours.get(&point), Some(&DofColor::Over));
 }
 
 fn label(kind: MotionKind, entity_count: usize) -> String {

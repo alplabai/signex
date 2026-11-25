@@ -351,12 +351,14 @@ impl ProjectSetup {
         self.pcb.via_drill_mm = drill;
     }
 
-    /// The defaults to store in the new `.snxprj`.
+    /// The defaults to store in the new `.snxprj`. The dimension defaults
+    /// are not part of a setup: they come from Preferences (#2868).
     pub fn defaults(&self) -> ProjectDefaults {
         ProjectDefaults {
             pcb: Some(self.pcb.clone()),
             sheet: Some(self.sheet.clone()),
             profile: Some(self.profile_id()),
+            dimension: None,
         }
     }
 

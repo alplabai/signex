@@ -367,6 +367,17 @@ pub enum EnableVersionControlMsg {
     CommitMessageChanged(String),
     /// The "Commit every save" switch was flipped.
     CommitEverySaveToggled,
+    /// The worker asking git for a commit author answered (mockup row 26):
+    /// `has_identity` is false when git resolves none. Applied only while
+    /// the dialog still shows `project_dir`.
+    AuthorProbed {
+        project_dir: std::path::PathBuf,
+        has_identity: bool,
+    },
+    /// The author name field (shown only when git has none) was edited.
+    AuthorNameChanged(String),
+    /// The author email field was edited.
+    AuthorEmailChanged(String),
 }
 
 /// What an Enable Version Control run did on disk.

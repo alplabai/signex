@@ -93,6 +93,31 @@ pub(crate) fn matches_filter(
         || i18n.fold_for_search(&entry.label).contains(folded)
 }
 
+/// The key Add Class generates from a label: lower snake case, every run
+/// of other characters one `_`, none at either end ("Transistor — BJT" is
+/// `transistor_bjt`). Empty for a label without an ASCII letter or digit.
+pub(crate) fn key_from_label(label: &str) -> String {
+    let mut key = String::with_capacity(label.len());
+    for c in label.chars() {
+        if c.is_ascii_alphanumeric() {
+            // A class key the user never reads, not display text.
+            // ast-grep-ignore: no-case-in-view
+            key.push(c.to_ascii_lowercase());
+        } else if !key.is_empty() && !key.ends_with('_') {
+            key.push('_');
+        }
+    }
+    let kept = key.trim_end_matches('_').len();
+    key.truncate(kept);
+    key
+}
+
+/// Whether a row's key is still the one generated from its label, so it
+/// follows the label; a key typed by hand stops following.
+pub(crate) fn key_follows_label(entry: &ComponentClassEntry) -> bool {
+    entry.key == key_from_label(&entry.label)
+}
+
 /// Where the row at `index` is after the row at `from` moved to `to`.
 pub(crate) fn follow_move(index: usize, from: usize, to: usize) -> usize {
     if index == from {
@@ -206,6 +231,33 @@ mod tests {
         assert!(matches_filter(&en, &bjt, &fold("TRANSISTOR_")));
         assert!(!matches_filter(&en, &bjt, &fold("mosfet")));
         assert!(matches_filter(&en, &bjt, ""), "an empty filter keeps all");
+    }
+
+    /// Mockup row 150: Add Class generates the key from the label in lower
+    /// snake case, the shape of the seed keys.
+    #[test]
+    fn the_generated_key_is_the_label_in_lower_snake_case() {
+        assert_eq!(key_from_label("Ferrite bead"), "ferrite_bead");
+        assert_eq!(key_from_label("Transistor \u{2014} BJT"), "transistor_bjt");
+        assert_eq!(key_from_label("  Op-Amp (dual) "), "op_amp_dual");
+        assert_eq!(key_from_label("2N2222 NPN"), "2n2222_npn");
+        assert_eq!(key_from_label("LED"), "led");
+        assert_eq!(key_from_label(""), "");
+        assert_eq!(key_from_label(" \u{2014} "), "");
+        for seed in crate::fonts::default_component_classes() {
+            assert!(
+                is_well_formed_key(&key_from_label(&seed.label)),
+                "{}",
+                seed.label
+            );
+        }
+    }
+
+    #[test]
+    fn a_key_typed_by_hand_stops_following_the_label() {
+        assert!(key_follows_label(&class("", "")));
+        assert!(key_follows_label(&class("ferrite_bead", "Ferrite bead")));
+        assert!(!key_follows_label(&class("fb", "Ferrite bead")));
     }
 
     #[test]

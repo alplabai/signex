@@ -82,7 +82,7 @@ fn rows<'a>(
             }),
             ids::PCB_PRIM_NET_LINK_TIP,
         ),
-        (Some(0), _) => value_box(look, look.t(ids::PCB_PRIM_NO_NET)),
+        (Some(0), _) => unlinked(look, look.t(ids::PCB_PRIM_NO_NET)),
         _ => blank(),
     };
     let net = match dot {
@@ -107,7 +107,7 @@ fn rows<'a>(
             }),
             ids::PCB_PRIM_CLASS_LINK_TIP,
         ),
-        None if info.net.is_some() => value_box(look, look.t(ids::PCB_PRIM_NO_CLASS)),
+        None if info.net.is_some() => unlinked(look, look.t(ids::PCB_PRIM_NO_CLASS)),
         None => blank(),
     };
     s.push(
@@ -169,6 +169,16 @@ fn rows<'a>(
     s.finish()
 }
 
+/// No Net or No Class where the link would be: plain muted text at the
+/// link's inset, not a field box, since Net and Class are links (mockup
+/// row 95).
+fn unlinked<'a>(look: Look<'a>, label: Localized) -> Element<'a, PanelMsg> {
+    container(text(label).size(TS.body).color(look.muted))
+        .padding([SP.xs, 0.0])
+        .width(Length::Fill)
+        .boxed()
+}
+
 /// A figure of the table, in the monospace face.
 fn figure<'a>(value: Localized, ink: Color) -> Element<'a, PanelMsg> {
     text(value)
@@ -179,8 +189,9 @@ fn figure<'a>(value: Localized, ink: Color) -> Element<'a, PanelMsg> {
         .boxed()
 }
 
-/// Show More (or Show Less) as a link, and once pressed what else is on
-/// the net, on one caption line.
+/// Show More (or Show Less) as a link and, for a net, what else is on it,
+/// on one caption line (mockup row 95: "Show More · 8 tracks, 2 vias, 4
+/// pads on net").
 fn show_more<'a>(
     look: Look<'a>,
     common: &PrimitiveCommon,
@@ -197,7 +208,7 @@ fn show_more<'a>(
     .style(|_: &Theme, _| iced::widget::button::Style::default())
     .on_press(PanelMsg::PcbPrimitive(PcbPrimitiveMsg::ShowMoreToggled));
     let mut line = row![press].spacing(SP.xs).align_y(iced::Alignment::Center);
-    if common.show_more && info.net.is_some_and(|n| n != 0) {
+    if info.net.is_some_and(|n| n != 0) {
         let counts = t!(
             look.ctx.i18n,
             ids::PCB_PRIM_NET_COUNTS,

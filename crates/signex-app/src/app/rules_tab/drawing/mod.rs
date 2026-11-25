@@ -103,6 +103,25 @@ pub(crate) struct PreviewCommit {
     pub value_mm: f64,
 }
 
+/// The texts a drawing of `target` writes: its notes, then each value
+/// label as shown ("≥ 0.8 mm"), without Fluent's isolation marks.
+#[cfg(test)]
+pub(crate) fn drawn_texts(target: &PreviewTarget, i18n: &I18n) -> Vec<String> {
+    let scene = scene_of(target, BoardInk::new());
+    let mut out: Vec<String> = scene.notes.iter().map(|n| n.text.shown(i18n)).collect();
+    for label in labels::dimension_labels(&scene, Layout::new(false), i18n) {
+        let caption = label.caption.as_ref().map_or("", |c| c.as_str());
+        let shown = format!("{caption} {}", label.value_text());
+        out.push(
+            shown
+                .replace(['\u{2068}', '\u{2069}'], "")
+                .trim()
+                .to_owned(),
+        );
+    }
+    out
+}
+
 /// The scene of `target`, from its kind's builder.
 fn scene_of(target: &PreviewTarget, ink: BoardInk) -> Scene {
     match target {
@@ -187,7 +206,7 @@ pub(crate) fn view<'a>(
     let shown = labels::dimension_labels(&scene, layout, i18n);
     let illustration = Illustration::new(VIEW_W, VIEW_H)
         .height_em(layout.height_em())
-        .parts(scene.parts_with_notes(i18n));
+        .parts(scene.parts_with_notes(i18n, layout.caption_units()));
     // The parts link no field, so the drawing publishes no hover message;
     // the map only satisfies the type.
     let drawing = property_illustration(

@@ -520,8 +520,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "fabrication_outputs"
         | "open_drc_panel" => Needs::Pcb,
         "open_net_classes" | "open_net_classes_panel" => Needs::NetClassTable,
-        // #2216: the pours of the board in view.
-        "repour_selected" | "repour_all" => Needs::Pcb,
+        // #2216, mockup row 178: the pours of the board in view.
+        "repour_selected" | "repour_all" | "polygon_manager" => Needs::Pcb,
         // #2404, #2402, #2488: the board reports, Board Print / PDF and STEP.
         "board_report_bom"
         | "board_report_netlist"

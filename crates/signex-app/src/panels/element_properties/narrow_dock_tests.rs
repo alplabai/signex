@@ -1,6 +1,7 @@
 //! #2751, #2752, #2753: the Properties rows at the narrow (220 px) and the
 //! default (300 px) dock: segment labels never overlap, a paired value stays
-//! readable, and a read-only value is sunken.
+//! readable, a read-only value is sunken, and the Pins table fits with no
+//! Hidden column (mockup row 42).
 
 use iced::{Background, Element, Size, Theme, Widget as _};
 use signex_i18n::UserText;
@@ -131,6 +132,60 @@ fn a_seven_character_value_fits_side_by_side_at_300_px() {
         let room = input.bounds.width - left - right;
         assert!(room >= value.width, "{room} px for {} px", value.width);
     }
+}
+
+/// A panel context whose selection is a two-pin part; pin 2's hidden flag
+/// is `pin2_hidden` ("Yes" / "No").
+fn two_pin_ctx(pin2_hidden: &str) -> crate::panels::PanelContext {
+    let (app, _task) = crate::app::Signex::new();
+    let mut ctx = app.document_state.panel_ctx.clone();
+    ctx.selection_info = vec![
+        ("Type".into(), "Symbol".into()),
+        ("Pin: 1".into(), "A\tPassive\tNo".into()),
+        ("Pin: 2".into(), format!("K\tPassive\t{pin2_hidden}")),
+        ("Pin Net: 1".into(), "/VFB".into()),
+        ("Pin Net: 2".into(), "+3V3".into()),
+    ];
+    ctx
+}
+
+fn pins_view<'a>(ctx: &crate::panels::PanelContext) -> Element<'a, PanelMsg> {
+    let tokens = theme_tokens(ThemeId::GraphiteDark);
+    super::pins::pins_table(ctx, iced::Color::WHITE, crate::styles::ti(tokens.border))
+}
+
+/// Mockup row 42: at the 300 px dock the Pins table has its four columns
+/// and no Hidden column, every cell inside the dock; a hidden pin is a
+/// dimmed row, so it draws differently from the same pin shown.
+#[test]
+fn the_pins_table_fits_300_px_and_dims_a_hidden_pin() {
+    const DOCK: Size = Size::new(300.0, 400.0);
+    let hidden = two_pin_ctx("Yes");
+    let shown: Vec<_> = lay_out_texts(pins_view(&hidden), DOCK);
+    for heading in ["PIN", "NAME", "TYPE", "NET", "K", "+3V3"] {
+        assert!(
+            shown.iter().any(|t| t.text == heading),
+            "{heading} in {shown:?}"
+        );
+    }
+    for absent in ["HIDDEN", "Hidden", "Yes"] {
+        assert!(
+            !shown.iter().any(|t| t.text == absent),
+            "{absent} in {shown:?}"
+        );
+    }
+    for cell in &shown {
+        assert!(
+            cell.bounds.x + cell.bounds.width <= DOCK.width + 0.5,
+            "{cell:?}"
+        );
+    }
+    let visible = two_pin_ctx("No");
+    assert_ne!(
+        crate::layout_probe::draw_pixels(pins_view(&hidden), DOCK),
+        crate::layout_probe::draw_pixels(pins_view(&visible), DOCK),
+        "a hidden pin's row is dimmed"
+    );
 }
 
 #[test]

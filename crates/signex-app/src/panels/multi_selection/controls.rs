@@ -1,8 +1,7 @@
 //! Form controls the selection Properties forms share (#1699): the Graphite
 //! segmented control with an optional "nothing lit" state and per-cell
-//! tooltips, a section header with a count pill, the paired field row
-//! (X | Y, W | H, Start | End) and the field-row hover link of an
-//! illustration.
+//! tooltips, a section header with a count pill and the field-row hover
+//! link of an illustration.
 
 use super::super::*;
 use crate::panels::form_look::{self, FormLook};
@@ -176,67 +175,6 @@ pub(in crate::panels) fn counted_section<'a>(
         col = col.push(content().boxed());
     }
     col.boxed()
-}
-
-/// One half of a [`pair_row`]: the axis mark, the field and its unit.
-pub(in crate::panels) struct PairField<'a> {
-    pub axis: signex_i18n::Localized,
-    pub value: String,
-    pub unit: signex_i18n::Localized,
-    pub on_input: Box<dyn Fn(String) -> PanelMsg + 'a>,
-    pub on_submit: Option<PanelMsg>,
-    pub on_blur: Option<PanelMsg>,
-    /// The error colour while the box holds text it refuses.
-    pub error: Option<Color>,
-}
-
-fn pair_half<'a>(half: PairField<'a>, muted: Color) -> Element<'a, PanelMsg> {
-    let PairField {
-        axis,
-        value,
-        unit,
-        on_input,
-        on_submit,
-        on_blur,
-        error,
-    } = half;
-    let mut input = signex_widgets::text_input(signex_i18n::UserText::new(String::new()), value)
-        .size(TS.body)
-        .padding(SP.s)
-        .width(Length::Fill)
-        .on_input(on_input)
-        .on_blur_maybe(on_blur)
-        .style(form_look::refusable_input_style(error));
-    if let Some(submit) = on_submit {
-        input = input.on_submit(submit);
-    }
-    row![
-        text(axis).size(TS.caption).color(muted),
-        input,
-        text(unit).size(TS.caption).color(muted),
-    ]
-    .spacing(SP.xs)
-    .align_y(iced::Alignment::Center)
-    .width(Length::Fill)
-    .boxed()
-}
-
-/// Two values on one row (X | Y, W | H, Start | End).
-pub(in crate::panels) fn pair_row<'a>(
-    label: impl Into<Label<'a>>,
-    first: PairField<'a>,
-    second: PairField<'a>,
-    muted: Color,
-) -> Element<'a, PanelMsg> {
-    control_row(
-        label,
-        crate::panels::element_properties::rows::pair_line(
-            pair_half(first, muted),
-            pair_half(second, muted),
-            crate::panels::element_properties::rows::PAIR_FIELD_MIN,
-        ),
-        muted,
-    )
 }
 
 /// `row` reporting the pointer to the illustration hover link of `field`,

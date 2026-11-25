@@ -18,6 +18,15 @@ fn pseudolocalize(text: &str) -> Cow<'_, str> {
     fluent_pseudo::transform(text, false, true)
 }
 
+/// Whether `bundle` is the pseudolocale's. Its whole rendered message is
+/// bracketed, so a string drawn without brackets is not from the catalog
+/// (#2064). The transform alone cannot: it sees each text run, not the message.
+fn is_pseudo(bundle: &Bundle) -> bool {
+    bundle.locales.first().is_some_and(|lang| {
+        lang.language.as_str() == "en" && lang.region.as_ref().is_some_and(|r| r.as_str() == "XA")
+    })
+}
+
 /// The bundle of `tag`, built from its embedded sources. A source that does
 /// not parse keeps its good messages and reports the rest.
 pub(crate) fn build(tag: &str) -> Bundle {
@@ -65,8 +74,10 @@ pub(crate) fn render(bundle: &Bundle, id: &str, args: &[(&str, Arg)]) -> Option<
     let mut errors = Vec::new();
     let text = bundle.format_pattern(pattern, Some(&fluent_args), &mut errors);
     let problems = (!errors.is_empty()).then(|| format!("{errors:?}"));
-    Some(Rendered {
-        text: text.into_owned(),
-        problems,
-    })
+    let text = if is_pseudo(bundle) {
+        format!("[{text}]")
+    } else {
+        text.into_owned()
+    };
+    Some(Rendered { text, problems })
 }

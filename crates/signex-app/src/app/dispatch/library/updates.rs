@@ -176,7 +176,7 @@ impl Signex {
         let mut team_entries = Vec::new();
         let mut personal_apply: PersonalUpdates = std::collections::BTreeMap::new();
         for (lib_id, group) in by_lib {
-            let bound = bound_instances(&group, &lib_id, &mut any_failed);
+            let bound = bound_instances(&group, &lib_id, &schematic_path, &mut any_failed);
             if bound.is_empty() {
                 continue;
             }
@@ -195,8 +195,8 @@ impl Signex {
                         .find_map(|(s, r)| blocker(s, r.as_ref(), &lib_id))
                 })
                 .flatten();
-            if let Some(why) = blocked {
-                crate::diagnostics::log_warning(why);
+            if let Some((part, why)) = blocked {
+                crate::diagnostics::log_part_warning(why, &schematic_path, part);
                 any_failed = true;
                 continue;
             }

@@ -9,8 +9,11 @@ use iced::{Element, Length, Widget as _};
 use signex_sketch::id::SketchEntityId;
 use signex_types::theme::ThemeTokens;
 
+use signex_types::sketch::SketchHost;
+
 use super::super::{CollapsedSections, FootprintEditorPanelContext, PanelMsg, PanelPalette};
 
+mod board_pattern;
 mod cutout;
 mod drawing;
 mod expansion;
@@ -51,7 +54,11 @@ pub(in crate::panels::footprint_editor_properties) fn view_role_subform<'a>(
         forms.push(sketch_pad::view(fp, pad, palette, tokens, collapsed, i18n));
     }
     if let Some(pattern) = fp.selected_array.as_ref() {
-        forms.push(pattern::view(fp, pattern, tokens, collapsed, i18n));
+        // A board item has no pad number: the board form (mockup row 179e).
+        forms.push(match fp.sketch_host {
+            SketchHost::Board => board_pattern::view(fp, pattern, tokens, i18n),
+            SketchHost::Footprint => pattern::view(fp, pattern, tokens, collapsed, i18n),
+        });
     }
     if forms.is_empty() {
         return None;

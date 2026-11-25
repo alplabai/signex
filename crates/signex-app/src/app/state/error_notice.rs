@@ -24,6 +24,10 @@ pub struct ErrorNotice {
     /// A choice the card offers beside dismissing it; `None` for a plain
     /// notice, whose only button is OK.
     pub action: Option<NoticeAction>,
+    /// A sentence of the card's own after the detail, e.g. that the edits
+    /// are still open and unsaved (mockup row 11); `None` for most cards.
+    /// Kept out of [`Self::detail_line_en_us`].
+    pub note: Option<MessageId>,
 }
 
 /// How bad what the card reports is; picks its heading glyph.
@@ -82,6 +86,7 @@ impl ErrorNotice {
             detail: detail.into(),
             system: None,
             action: None,
+            note: None,
         }
     }
 
@@ -94,6 +99,16 @@ impl ErrorNotice {
         self
     }
 
+    /// `self` with `error`'s chain as its system part, one cause per line:
+    /// the path line over the OS error line (mockup row 11). A middle
+    /// context (a rename step) keeps its own line: it says where the save
+    /// broke.
+    #[must_use]
+    pub fn with_error_chain(self, error: &anyhow::Error) -> Self {
+        let lines: Vec<String> = error.chain().map(ToString::to_string).collect();
+        self.with_system(lines.join("\n"))
+    }
+
     /// The heading in `i18n`'s language.
     pub fn title_text(&self, i18n: &I18n) -> String {
         self.title.render(i18n)
@@ -104,13 +119,26 @@ impl ErrorNotice {
         self.detail.render(i18n)
     }
 
+    /// The detail and the card's note after it, one space apart: the
+    /// readable sentence as the card shows it.
+    pub fn sentence_text(&self, i18n: &I18n) -> String {
+        let detail = self.detail_text(i18n);
+        match self.note {
+            Some(note) => format!("{detail} {}", i18n.message_plain(note, &[])),
+            None => detail,
+        }
+    }
+
     /// The sentence and, after a colon, the system part, as one en-US line:
     /// the text that leaves the screen (a CLI reason), as the card read
     /// before the system part had its own block.
     pub fn detail_line_en_us(&self) -> String {
         let detail = self.detail.render(&I18n::en_us());
         match &self.system {
-            Some(system) => format!("{detail}: {system}"),
+            Some(system) => {
+                let system: Vec<&str> = system.as_str().lines().collect();
+                format!("{detail}: {}", system.join(": "))
+            }
             None => detail,
         }
     }
@@ -125,9 +153,10 @@ impl ErrorNotice {
     }
 
     /// What the card's Copy button puts on the clipboard for a bug report:
-    /// the heading, the sentence and the system part, a blank line apart.
+    /// the heading, the sentence (with its note) and the system part, a
+    /// blank line apart.
     pub fn copy_text(&self, i18n: &I18n) -> String {
-        let mut parts = vec![self.title_text(i18n), self.detail_text(i18n)];
+        let mut parts = vec![self.title_text(i18n), self.sentence_text(i18n)];
         if let Some(system) = &self.system {
             parts.push(system.as_str().to_owned());
         }
@@ -181,6 +210,7 @@ impl ErrorNotice {
             detail: detail.arg("name", name),
             system: None,
             action: Some(NoticeAction::DiskChanged { path, drift }),
+            note: None,
         }
     }
 
@@ -189,8 +219,20 @@ impl ErrorNotice {
         Self::new(ids::NOTICE_EXPORT_FAILED, detail)
     }
 
-    /// A write failed, and the operation that needed it did not proceed.
+    /// A write of open edits failed, and the operation that needed it did
+    /// not proceed. The card says the edits are still open and unsaved
+    /// (mockup row 11).
     pub fn save(detail: impl Into<Translatable>) -> Self {
+        Self {
+            note: Some(ids::NOTICE_SAVE_FAILED_EDITS_KEPT),
+            ..Self::new(ids::NOTICE_SAVE_FAILED, detail)
+        }
+    }
+
+    /// A write failed that leaves no open edits behind, such as the global
+    /// library list, whose change is dropped. Same heading as
+    /// [`Self::save`], without its note.
+    pub fn save_with_no_open_edits(detail: impl Into<Translatable>) -> Self {
         Self::new(ids::NOTICE_SAVE_FAILED, detail)
     }
 

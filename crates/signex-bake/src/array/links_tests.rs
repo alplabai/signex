@@ -299,3 +299,28 @@ fn a_source_loop_in_a_damaged_file_is_refused_with_a_warning() {
     // Neither looped pattern places a pad; nothing hangs.
     assert!(pads.is_empty(), "{pads:?}");
 }
+
+/// Mockup row 179e, #2772: a pattern of something that is not a pad is
+/// skipped with a warning naming the object and where it is, not its id.
+#[test]
+fn a_pattern_of_a_non_pad_is_skipped_by_name() {
+    let mut f = fixture();
+    f.sketch.arrays.push(linear(f.line, 2, 3.0));
+
+    let (_, warnings) = bake(&f.sketch);
+
+    let skipped: Vec<&String> = warnings
+        .iter()
+        .filter(|w| w.contains("not a pad"))
+        .collect();
+    assert_eq!(
+        skipped,
+        [&"linear array of the line at (5.000, -1.000) mm: the source is not a pad — array skipped"
+            .to_owned()],
+        "{warnings:?}"
+    );
+    assert!(
+        warnings.iter().all(|w| !w.contains(&f.line.to_string())),
+        "no raw id: {warnings:?}"
+    );
+}

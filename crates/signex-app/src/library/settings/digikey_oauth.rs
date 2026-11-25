@@ -17,10 +17,14 @@
 //! parallel async branch in `signex-library`.
 //!
 //! Configuration:
-//! - DigiKey client_id / client_secret are read from the environment
-//!   (`SIGNEX_DIGIKEY_CLIENT_ID` / `SIGNEX_DIGIKEY_CLIENT_SECRET`).
-//!   Unit tests use a wiremock server, so the constants are never
-//!   committed to source.
+//! - A release build carries a built-in client_id only, baked at compile
+//!   time from `SIGNEX_BUILTIN_DIGIKEY_CLIENT_ID` (empty in a dev build). No
+//!   client_secret is ever in the binary: it comes only from the
+//!   environment's `SIGNEX_DIGIKEY_CLIENT_SECRET`, and without one the
+//!   exchange goes as a public PKCE client. The environment's
+//!   `SIGNEX_DIGIKEY_CLIENT_ID` (the user's own app registration) overrides
+//!   the built-in id ([`client_credentials`], mockup row 149). Unit tests use
+//!   a wiremock server, so no credential is committed to source.
 //!
 //! Cancellation:
 //! - Setting the shared flag (`CancelHandle::cancel`, or the dispatcher's
@@ -42,6 +46,13 @@ use crate::ignore::IgnoreResult;
 pub const ENV_CLIENT_ID: &str = "SIGNEX_DIGIKEY_CLIENT_ID";
 /// Environment variable that holds the DigiKey OAuth client_secret.
 pub const ENV_CLIENT_SECRET: &str = "SIGNEX_DIGIKEY_CLIENT_SECRET";
+
+/// The built-in client_id of a release build: the build variable
+/// `SIGNEX_BUILTIN_DIGIKEY_CLIENT_ID` at compile time, empty when unset.
+const BUILTIN_CLIENT_ID: &str = match option_env!("SIGNEX_BUILTIN_DIGIKEY_CLIENT_ID") {
+    Some(id) => id,
+    None => "",
+};
 
 /// Outcome of the OAuth handshake. Returned via the iced `Task` that
 /// drives the flow.
@@ -144,6 +155,8 @@ pub fn run_blocking(
         return fail_and_log(crate::config_root::KEYRING_UNUSED_UNDER_OVERRIDE.to_string());
     }
 
+    let secret_sent = !client_secret.is_empty();
+
     let (listener, redirect_uri) = match bind_callback_listener() {
         Ok(t) => t,
         Err(e) => {
@@ -214,6 +227,7 @@ pub fn run_blocking(
                             ));
                         };
                         auth.exchange_code_guarded(code, verifier, state, &csrf_token, may_persist)
+                            .map_err(|e| hint_missing_secret(e, secret_sent))
                     },
                 );
                 if let Some(outcome) = step {
@@ -628,13 +642,46 @@ fn hex_digit(b: u8) -> Option<u8> {
     }
 }
 
-/// Read environment-supplied DigiKey credentials. Returns empty
-/// strings when unset — the caller treats empty client_id as "not
-/// configured" and surfaces a clear failure.
-pub fn read_env_credentials() -> (String, String) {
-    let id = std::env::var(ENV_CLIENT_ID).unwrap_or_default();
-    let secret = std::env::var(ENV_CLIENT_SECRET).unwrap_or_default();
-    (id, secret)
+/// The DigiKey client_id and client_secret to connect with: the
+/// environment's client id when set, else the built-in id of a release build
+/// (mockup row 149); the secret is the environment's, or empty. Both empty
+/// in a dev build started without the variables; the caller treats an empty
+/// client_id as "not configured" and surfaces a clear failure.
+pub fn client_credentials() -> (String, String) {
+    resolve_credentials(
+        std::env::var(ENV_CLIENT_ID).ok(),
+        std::env::var(ENV_CLIENT_SECRET).ok(),
+        BUILTIN_CLIENT_ID,
+    )
+}
+
+/// The resolution order behind [`client_credentials`]: a set environment
+/// client id overrides the built-in id; the secret is only ever the
+/// environment's, since none is built in. A built-in id with no secret is
+/// configured and connects as a public PKCE client.
+fn resolve_credentials(
+    env_id: Option<String>,
+    env_secret: Option<String>,
+    built_in_id: &str,
+) -> (String, String) {
+    let id = env_id
+        .filter(|id| client_id_configured(id))
+        .unwrap_or_else(|| built_in_id.to_owned());
+    if !client_id_configured(&id) {
+        return (String::new(), String::new());
+    }
+    (id, env_secret.unwrap_or_default())
+}
+
+/// A failed exchange made without a secret names the variable that supplies
+/// one, so a token endpoint that wants it is not a dead end.
+fn hint_missing_secret(e: DigiKeyAuthError, secret_sent: bool) -> DigiKeyAuthError {
+    match e {
+        DigiKeyAuthError::Request(m) if !secret_sent => DigiKeyAuthError::Request(format!(
+            "{m} (no client secret was sent; if DigiKey requires one, set ${ENV_CLIENT_SECRET})"
+        )),
+        other => other,
+    }
 }
 
 /// Whether a client id is usable: the one test the flow and the settings
@@ -643,10 +690,11 @@ pub fn client_id_configured(client_id: &str) -> bool {
     !client_id.is_empty()
 }
 
-/// Whether the environment carries a DigiKey client id. Blocking-free but
-/// an environment read: call it when the settings are made, never in a view.
-pub fn env_client_configured() -> bool {
-    client_id_configured(&read_env_credentials().0)
+/// Whether a DigiKey client id is present, from the environment or built
+/// in. Blocking-free but an environment read: call it when the settings are
+/// made, never in a view.
+pub fn client_configured() -> bool {
+    client_id_configured(&client_credentials().0)
 }
 
 /// Courtesy HTML page shown in the browser after the redirect.
@@ -834,6 +882,79 @@ mod tests {
             Outcome::Failed { reason } => assert!(reason.contains("client_id")),
             other => panic!("expected Failed, got {other:?}"),
         }
+    }
+
+    fn pair(id: &str, secret: &str) -> (String, String) {
+        (id.to_owned(), secret.to_owned())
+    }
+
+    /// Mockup row 149, Caner 2026-11-25: with no environment client id the
+    /// built-in id is used, with the environment's secret or none at all.
+    #[test]
+    fn the_built_in_id_is_used_without_an_environment_client_id() {
+        let built_in = "built-in-id";
+        assert_eq!(
+            resolve_credentials(None, None, built_in),
+            pair("built-in-id", "")
+        );
+        assert_eq!(
+            resolve_credentials(None, Some("env-secret".into()), built_in),
+            pair("built-in-id", "env-secret")
+        );
+        assert_eq!(
+            resolve_credentials(Some(String::new()), Some("env-secret".into()), built_in),
+            pair("built-in-id", "env-secret"),
+            "an empty environment id is no override; the secret is the environment's"
+        );
+    }
+
+    /// Mockup row 149: the environment's client id overrides the built-in
+    /// id and brings its own secret.
+    #[test]
+    fn an_environment_client_id_overrides_the_built_in_id() {
+        let built_in = "built-in-id";
+        assert_eq!(
+            resolve_credentials(Some("env-id".into()), Some("env-secret".into()), built_in),
+            pair("env-id", "env-secret")
+        );
+        assert_eq!(
+            resolve_credentials(Some("env-id".into()), None, built_in),
+            pair("env-id", ""),
+        );
+    }
+
+    /// Mockup row 149: with neither an environment id nor a built-in one
+    /// (a dev build), the id is empty: the card's error state.
+    #[test]
+    fn neither_an_environment_nor_a_built_in_id_is_not_configured() {
+        let (id, secret) = resolve_credentials(None, Some("env-secret".into()), "");
+        assert!(!client_id_configured(&id));
+        assert_eq!(secret, "");
+    }
+
+    /// Caner 2026-11-25: no secret is built in, so a built-in id alone is
+    /// configured and Connect goes as a public PKCE client.
+    #[test]
+    fn a_built_in_id_without_a_secret_is_configured_as_a_public_client() {
+        let (id, secret) = resolve_credentials(None, None, "built-in-id");
+        assert!(client_id_configured(&id), "{id}");
+        assert_eq!(secret, "");
+    }
+
+    /// A refused secretless exchange names the variable that supplies a
+    /// secret; with a secret sent, or on a cancel, the error is untouched.
+    #[test]
+    fn a_failed_exchange_without_a_secret_names_the_secret_variable() {
+        let refused = || DigiKeyAuthError::Request("invalid_client".into());
+        let hinted = hint_missing_secret(refused(), false).to_string();
+        assert!(hinted.contains("invalid_client"), "{hinted}");
+        assert!(hinted.contains(ENV_CLIENT_SECRET), "{hinted}");
+        let plain = hint_missing_secret(refused(), true).to_string();
+        assert!(!plain.contains(ENV_CLIENT_SECRET), "{plain}");
+        assert!(matches!(
+            hint_missing_secret(DigiKeyAuthError::Cancelled, false),
+            DigiKeyAuthError::Cancelled
+        ));
     }
 
     const GOOD_REQUEST: &str = "GET /callback?code=the-code&state=the-state HTTP/1.1\r\n\r\n";

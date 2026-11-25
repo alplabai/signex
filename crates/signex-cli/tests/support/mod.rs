@@ -178,6 +178,7 @@ fn project_data(dir: &Path, libraries: Vec<LibraryEntry>) -> ProjectData {
         }],
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries,
         enable_git: false,
         net_classes: vec![NetClass::named("Power")],

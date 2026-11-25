@@ -32,6 +32,7 @@
 //!         on_press: Some(Msg::SetTool(Tool::Select)),
 //!         on_right_press: Some(Msg::OpenSelectMenu),
 //!         dropdown_indicator: Some(ActiveBarIcon::Svg(CHEVRON_SVG.clone())),
+//!         on_chevron_press: Some(Msg::OpenSelectMenu),
 //!     }),
 //!     ActiveBarItem::Separator,
 //!     // …
@@ -169,6 +170,11 @@ pub struct ActiveBarButton<M: 'static + Clone> {
     /// secondary (right-click) action; pass `None` for buttons that
     /// have no dropdown.
     pub dropdown_indicator: Option<ActiveBarIcon>,
+    /// Message published on a click on the corner indicator, in place of
+    /// `on_press` (mockup row 108): a click on the chevron opens
+    /// the dropdown, a click elsewhere on the button still runs its tool.
+    /// Ignored without a `dropdown_indicator`.
+    pub on_chevron_press: Option<M>,
 }
 
 impl<M: 'static + Clone> Default for ActiveBarButton<M> {
@@ -181,6 +187,7 @@ impl<M: 'static + Clone> Default for ActiveBarButton<M> {
             on_press: None,
             on_right_press: None,
             dropdown_indicator: None,
+            on_chevron_press: None,
         }
     }
 }
@@ -335,21 +342,14 @@ where
 
     // Optional dropdown chevron in the bottom-right corner.
     let icon_content: Element<'a, M> = if let Some(indicator) = b.dropdown_indicator {
-        let indicator_el: Element<'a, M> = match indicator {
-            ActiveBarIcon::Svg(handle) => svg(handle)
-                .width(Length::Fixed(chevron_size))
-                .height(Length::Fixed(chevron_size))
-                .style(move |_: &Theme, _| iced::widget::svg::Style {
-                    color: svg_tint,
-                    ..Default::default()
-                })
-                .boxed(),
-            ActiveBarIcon::Raster(handle) => image::<image::Handle>(handle)
-                .width(Length::Fixed(chevron_size))
-                .height(Length::Fixed(chevron_size))
-                .boxed(),
-            ActiveBarIcon::Glyph(s) => text(raw(s.to_string())).size(10).color(glyph_color).boxed(),
-        };
+        let indicator_el = corner_indicator(
+            indicator,
+            chevron_size,
+            svg_tint,
+            glyph_color,
+            // A greyed button ignores a left click, on the chevron too.
+            b.on_chevron_press.filter(|_| b.enabled),
+        );
         iced::widget::Stack::new()
             .push(
                 container(raw_icon)
@@ -451,4 +451,170 @@ where
         tooltip::Position::Bottom,
     )
     .boxed()
+}
+
+/// The dropdown indicator, `size` square. With `on_press` it is a button of
+/// its own inside the bar button: a click on it publishes that message, and
+/// it takes the press and the release, so the bar button does not run and
+/// the canvas under the bar sees neither (mockup row 108).
+fn corner_indicator<'a, M>(
+    indicator: ActiveBarIcon,
+    size: f32,
+    svg_tint: Option<Color>,
+    glyph_color: Color,
+    on_press: Option<M>,
+) -> Element<'a, M>
+where
+    M: 'static + Clone,
+{
+    let drawn: Element<'a, M> = match indicator {
+        ActiveBarIcon::Svg(handle) => svg(handle)
+            .width(Length::Fixed(size))
+            .height(Length::Fixed(size))
+            .style(move |_: &Theme, _| iced::widget::svg::Style {
+                color: svg_tint,
+                ..Default::default()
+            })
+            .boxed(),
+        ActiveBarIcon::Raster(handle) => image::<image::Handle>(handle)
+            .width(Length::Fixed(size))
+            .height(Length::Fixed(size))
+            .boxed(),
+        ActiveBarIcon::Glyph(s) => text(raw(s.to_string())).size(10).color(glyph_color).boxed(),
+    };
+    let Some(message) = on_press else {
+        return drawn;
+    };
+    let area = container(drawn)
+        .width(Length::Fixed(size))
+        .height(Length::Fixed(size));
+    // No fill of its own: the bar button under it draws the hover.
+    button(area)
+        .padding(0)
+        .style(|_: &Theme, _| iced::widget::button::Style::default())
+        .on_press(message)
+        .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use iced::advanced::Widget as _;
+    use iced::advanced::layout::Limits;
+    use iced::advanced::shell::{Bus, Waker};
+    use iced::advanced::widget::Tree;
+    use iced::advanced::{Layout, Shell, renderer};
+    use iced::mouse;
+    use iced::{Event, Font, Pixels, Point, Rectangle, Size};
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    const RUN: u8 = 1;
+    const RIGHT: u8 = 2;
+    const CHEVRON: u8 = 3;
+
+    fn group_button(on_chevron_press: Option<u8>) -> ActiveBarItem<u8> {
+        ActiveBarItem::Button(ActiveBarButton {
+            icon: ActiveBarIcon::Glyph("T"),
+            on_press: Some(RUN),
+            on_right_press: Some(RIGHT),
+            dropdown_indicator: Some(ActiveBarIcon::Glyph("v")),
+            on_chevron_press,
+            ..ActiveBarButton::default()
+        })
+    }
+
+    /// The messages a press and release of `button` at `at` publish on a
+    /// bar holding only `item`.
+    fn press(item: ActiveBarItem<u8>, button: mouse::Button, at: Point) -> Vec<u8> {
+        let tokens = theme_tokens(ThemeId::DEFAULT);
+        let mut element = view(vec![item], &tokens);
+        let renderer =
+            iced::Renderer::Secondary(iced_vello_cpu::Renderer::new(renderer::Settings {
+                font: Font::DEFAULT,
+                text_size: Pixels(16.0),
+                ..renderer::Settings::default()
+            }));
+        let window = Size::new(200.0, 100.0);
+        let mut tree = Tree::new(&element);
+        tree.diff(&mut element);
+        element.layout(&mut tree, &renderer, &Limits::new(Size::ZERO, window));
+        let layout = Layout::new(tree.size);
+        let cursor = mouse::Cursor::Available(at);
+        let mut bus = Bus::new();
+        for event in [
+            mouse::Event::CursorMoved { position: at },
+            mouse::Event::ButtonPressed(button),
+            mouse::Event::ButtonReleased(button),
+        ] {
+            // One shell per event, as the runtime does.
+            let mut shell = Shell::new(&iced::window::Headless, Waker::noop(), &mut bus);
+            element.update(
+                &mut tree,
+                &Event::Mouse(event),
+                layout,
+                cursor,
+                &renderer,
+                &mut shell,
+                &Rectangle::with_size(window),
+            );
+        }
+        bus.drain().map(|(message, _)| message).collect()
+    }
+
+    /// The centre of the bar's one button, and the centre of its chevron.
+    fn button_points() -> (Point, Point) {
+        let m = Metrics::GRAPHITE;
+        let centre = m.padding + m.btn / 2.0;
+        let corner = m.padding + m.btn - m.chevron / 2.0;
+        (Point::new(centre, centre), Point::new(corner, corner))
+    }
+
+    /// Mockup row 108: a click on the chevron opens the dropdown and does
+    /// not run the tool; a click elsewhere still runs it.
+    #[test]
+    fn a_click_on_the_chevron_sends_its_message_not_the_tool() {
+        let (centre, corner) = button_points();
+        let left = mouse::Button::Left;
+        assert_eq!(press(group_button(Some(CHEVRON)), left, corner), [CHEVRON]);
+        assert_eq!(press(group_button(Some(CHEVRON)), left, centre), [RUN]);
+    }
+
+    /// Right-click keeps opening the dropdown, on the chevron too.
+    #[test]
+    fn a_right_click_still_sends_the_right_press_message() {
+        let (centre, corner) = button_points();
+        let right = mouse::Button::Right;
+        assert_eq!(press(group_button(Some(CHEVRON)), right, centre), [RIGHT]);
+        assert_eq!(press(group_button(Some(CHEVRON)), right, corner), [RIGHT]);
+    }
+
+    /// A greyed button ignores a left click on its chevron, as on the rest
+    /// of it; right-click still opens the dropdown.
+    #[test]
+    fn a_greyed_button_ignores_a_click_on_its_chevron() {
+        let (_, corner) = button_points();
+        let greyed = || {
+            let ActiveBarItem::Button(b) = group_button(Some(CHEVRON)) else {
+                unreachable!("group_button builds a button");
+            };
+            ActiveBarItem::Button(ActiveBarButton {
+                enabled: false,
+                ..b
+            })
+        };
+        let no_messages: [u8; 0] = [];
+        assert_eq!(press(greyed(), mouse::Button::Left, corner), no_messages);
+        assert_eq!(press(greyed(), mouse::Button::Right, corner), [RIGHT]);
+    }
+
+    /// Without a chevron message a click on the corner runs the tool, as
+    /// every bar did before.
+    #[test]
+    fn without_a_chevron_message_the_corner_runs_the_tool() {
+        let (_, corner) = button_points();
+        assert_eq!(
+            press(group_button(None), mouse::Button::Left, corner),
+            [RUN]
+        );
+    }
 }

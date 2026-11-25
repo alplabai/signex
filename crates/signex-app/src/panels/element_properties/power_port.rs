@@ -246,7 +246,7 @@ pub(super) fn push_power_port_sections<'a>(
     );
 
     // ── State ──: a power port locks like any part.
-    super::selected::push_state_section(col, ctx, locked, PanelMsg::ToggleSymbolLocked(id), muted)
+    super::rows::push_state_section(col, ctx, locked, PanelMsg::ToggleSymbolLocked(id))
 }
 
 /// The one Name field. It names the port's net: what is typed stays a draft

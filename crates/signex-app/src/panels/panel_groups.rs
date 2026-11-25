@@ -69,7 +69,6 @@ pub fn panel_group(kind: PanelKind) -> Option<PanelGroup> {
         | PanelKind::CompiledDesign => PanelGroup::Project,
         PanelKind::Properties
         | PanelKind::Filter
-        | PanelKind::SchFilter
         | PanelKind::ObjectList
         | PanelKind::NetInspector
         | PanelKind::Unions => PanelGroup::Inspect,
@@ -203,7 +202,6 @@ mod tests {
             [
                 K::Properties,
                 K::Filter,
-                K::SchFilter,
                 K::ObjectList,
                 K::NetInspector,
                 K::Unions,

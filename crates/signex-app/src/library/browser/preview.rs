@@ -8,6 +8,7 @@
 
 use super::columns::ColumnKind;
 use super::names::PrimitiveNames;
+use super::tiles::{TileSource, footprint_tile, symbol_tile};
 use super::*;
 use crate::library::editor::kit;
 use iced::widget::column;
@@ -140,11 +141,12 @@ pub(super) fn view_preview<'a>(
         );
     }
 
+    let tile_read = tile_source(row, source.browser);
     let tiles = row![
-        container(symbol_tile(row, source.browser, look, tokens, i18n))
+        container(symbol_tile(Some(&tile_read), look, TILE_H, tokens, i18n))
             .width(Length::FillPortion(1))
             .boxed(),
-        container(footprint_tile(row, source.browser, tokens, i18n))
+        container(footprint_tile(Some(&tile_read), TILE_H, tokens, i18n))
             .width(Length::FillPortion(1))
             .boxed(),
     ]
@@ -306,112 +308,14 @@ fn loading(row: &ComponentRow, browser: &LibraryBrowserState) -> bool {
     !current || browser.preview.in_flight()
 }
 
-/// A tile's text in place of a drawing: amber for an unbound side, muted
-/// while loading or when the read failed.
-fn tile_note<'a>(
-    message: signex_i18n::Localized,
-    warn: bool,
-    tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let ink = if warn {
-        theme_ext::warning_color(tokens)
-    } else {
-        crate::styles::tokens::resolve(tokens).ink4
-    };
-    text(message)
-        .size(TS.caption)
-        .color(ink)
-        .align_x(iced::alignment::Horizontal::Center)
-        .boxed()
-}
-
-fn symbol_tile<'a>(
-    row: &'a ComponentRow,
-    browser: &'a LibraryBrowserState,
-    look: PreviewLook,
-    tokens: &'a ThemeTokens,
-    i18n: &I18n,
-) -> Element<'a, LibraryMessage> {
-    let drawing = loaded_for(row, browser).and_then(|d| d.symbol.as_ref());
-    let content = if row.is_symbol_unbound() {
-        tile_note(t!(i18n, ids::LIBRARY_BROWSER_NO_SYMBOL_BOUND), true, tokens)
-    } else if let Some(symbol) = drawing {
-        crate::panels::components_panel::details::symbol_canvas::symbol_preview(
-            symbol.clone(),
-            look.canvas_colors,
-            look.grid,
-            TILE_H - 2.0 * crate::styles::HAIRLINE,
-            look.device_px_per_logical_px,
-        )
-        .map(|()| LibraryMessage::Noop)
-        .boxed()
-    } else if loading(row, browser) {
-        tile_note(
-            t!(i18n, ids::LIBRARY_BROWSER_PREVIEW_LOADING),
-            false,
-            tokens,
-        )
-    } else {
-        tile_note(
-            t!(i18n, ids::LIBRARY_BROWSER_PREVIEW_UNREADABLE),
-            false,
-            tokens,
-        )
-    };
-    kit::preview_tile(
-        content,
-        TILE_H,
-        None,
-        Some(t!(i18n, ids::LIBRARY_PREVIEW_SYMBOL)),
-        tokens,
-    )
-}
-
-fn footprint_tile<'a>(
-    row: &'a ComponentRow,
-    browser: &'a LibraryBrowserState,
-    tokens: &'a ThemeTokens,
-    i18n: &I18n,
-) -> Element<'a, LibraryMessage> {
-    let drawing = loaded_for(row, browser).and_then(|d| d.footprint.as_ref());
-    let content = if row.is_footprint_unbound() {
-        tile_note(
-            t!(i18n, ids::LIBRARY_BROWSER_NO_FOOTPRINT_BOUND),
-            true,
-            tokens,
-        )
-    } else if let Some(model) = drawing {
-        let program =
-            crate::panels::components_panel::details::footprint_canvas::FootprintPreview::new(
-                model,
-            )
-            .with_theme_tokens(tokens);
-        iced::widget::canvas(program)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .boxed()
-    } else if loading(row, browser) {
-        tile_note(
-            t!(i18n, ids::LIBRARY_BROWSER_PREVIEW_LOADING),
-            false,
-            tokens,
-        )
-    } else {
-        tile_note(
-            t!(i18n, ids::LIBRARY_BROWSER_PREVIEW_UNREADABLE),
-            false,
-            tokens,
-        )
-    };
-    // The board palette and ground, as the PCB canvas paints them.
-    let ground = crate::library::editor::footprint::graphite_look_for(tokens).bg;
-    kit::preview_tile(
-        content,
-        TILE_H,
-        Some(ground),
-        Some(t!(i18n, ids::LIBRARY_PREVIEW_FOOTPRINT)),
-        tokens,
-    )
+/// What the shared tiles draw for `row` from the browser's read.
+fn tile_source<'a>(row: &ComponentRow, browser: &'a LibraryBrowserState) -> TileSource<'a> {
+    TileSource {
+        details: loaded_for(row, browser),
+        loading: loading(row, browser),
+        symbol_unbound: row.is_symbol_unbound(),
+        footprint_unbound: row.is_footprint_unbound(),
+    }
 }
 
 /// The file a primitive lives in (its listed name for a file named by a

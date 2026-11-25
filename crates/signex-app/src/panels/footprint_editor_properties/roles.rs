@@ -2,6 +2,8 @@
 //! closed profile with its role, what bakes without an entity, and the way
 //! to preview or run the bake. Rules: `docs/FOOTPRINT_SKETCH.md`, "Roles".
 //! A board sketch's Bake panel reuses the rows as Bake as (mockup row 179).
+//! With the preview open, the footprint's Bake panel shows the section and
+//! puts the buttons last (`bake_panel::view_footprint_bake_panel`).
 
 use iced::widget::{Column, container, row};
 use iced::{Element, Length, Widget as _};
@@ -34,13 +36,18 @@ pub(super) fn view_roles<'a>(
     if !is_open(SECTION, cx.collapsed) {
         return col;
     }
-    profile_rows(col, cx)
+    let col = profile_rows(col, cx)
         .push(caption(t!(i18n, ids::SKETCH_BAKE_ROLES_MASK), tokens))
         .push(caption(
             t!(i18n, ids::SKETCH_BAKE_ROLES_CENTERLINES, "count" => fp.centerline_count),
             tokens,
-        ))
-        .push(bake_buttons(cx))
+        ));
+    // With the preview open, the Bake panel puts the buttons last.
+    if fp.footprint_bake.is_some() {
+        col
+    } else {
+        col.push(bake_buttons(cx))
+    }
 }
 
 /// The Bake as section of a board sketch, in its Bake panel and its
@@ -90,13 +97,11 @@ fn profile_rows<'a>(
     col
 }
 
-fn role_row<'a>(
-    cx: Ctx<'a, '_>,
-    index: usize,
-    profile: &'a ProfileRoleRow,
-) -> Element<'a, PanelMsg> {
+/// "Profile 2 · 4 edges", or "Pad 1 profile · 4 edges" for a pad's profile;
+/// `index` counts the profiles from one.
+pub(super) fn profile_name(cx: Ctx<'_, '_>, index: usize, profile: &ProfileRoleRow) -> String {
     let i18n = cx.i18n;
-    let name = match &profile.pad_number {
+    match &profile.pad_number {
         Some(number) => t!(
             i18n,
             ids::SKETCH_BAKE_ROLES_PAD_PROFILE,
@@ -110,7 +115,16 @@ fn role_row<'a>(
             "edges" => profile.edges
         ),
     }
-    .into_string();
+    .into_string()
+}
+
+fn role_row<'a>(
+    cx: Ctx<'a, '_>,
+    index: usize,
+    profile: &'a ProfileRoleRow,
+) -> Element<'a, PanelMsg> {
+    let i18n = cx.i18n;
+    let name = profile_name(cx, index, profile);
     let labels = role_labels(cx.fp.sketch_host, i18n);
     let label_of = move |r: &RoleTag| {
         labels
@@ -130,12 +144,20 @@ fn role_row<'a>(
     )
 }
 
-fn bake_buttons<'a>(cx: Ctx<'a, '_>) -> Element<'a, PanelMsg> {
+/// Bake preview, or Back to sketch while the preview is open, and Bake.
+/// Bake stays clickable with errors: a refused bake stays in sketch mode
+/// and shows the open ends (mockup row 190, Changed 2026-11-22).
+pub(super) fn bake_buttons<'a>(cx: Ctx<'a, '_>) -> Element<'a, PanelMsg> {
     let (tokens, i18n) = (cx.tokens, cx.i18n);
+    let preview = if cx.fp.footprint_bake.is_some() {
+        ids::EDITORS_SKETCH_BACK_TO_SKETCH
+    } else {
+        ids::EDITORS_SKETCH_BAKE_PREVIEW
+    };
     container(
         row![
             ghost(
-                t!(i18n, ids::EDITORS_SKETCH_BAKE_PREVIEW),
+                t!(i18n, preview),
                 Some(PanelMsg::SketchFix(SketchFixMsg::BakePreviewClicked)),
                 tokens,
             ),

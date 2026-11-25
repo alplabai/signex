@@ -1,8 +1,11 @@
 //! The words of a finished Generate: what was written, why nothing was,
 //! and what the files leave out.
 
+use pcb_geom::GeomError;
 use signex_i18n::{I18n, Localized, ids, t};
-use signex_output::fab::{FabError, FabNote};
+use signex_output::fab::{DrawnCopperFault, DrawnCopperItem, FabError, FabNote};
+use signex_types::pcb_graphic::BoardGraphicKind;
+use signex_types::pcb_layer::CopperLayer;
 
 use super::{FabProblem, FabWritten};
 
@@ -63,7 +66,53 @@ pub(crate) fn note_text(note: FabNote, i18n: &I18n) -> Localized {
             t!(i18n, ids::FAB_OUTPUTS_NOTE_UNNAMED_PARTS, "count" => count)
         }
         FabNote::ItemsSkipped { .. } => t!(i18n, ids::FAB_OUTPUTS_NOTE_SKIPPED, "count" => count),
+        FabNote::DrawnCopperSkipped { item, layer, fault } => {
+            drawn_copper_text(item, layer, fault, i18n)
+        }
     }
+}
+
+/// A board drawing or string left out of the copper (#2883), named by its
+/// kind, identity and layer, with why.
+fn drawn_copper_text(
+    item: DrawnCopperItem,
+    layer: CopperLayer,
+    fault: DrawnCopperFault,
+    i18n: &I18n,
+) -> Localized {
+    let (kind, id) = match item {
+        DrawnCopperItem::Text { id } => ("string", id),
+        DrawnCopperItem::Drawing { id, kind } => (
+            match kind {
+                Some(BoardGraphicKind::Line) => "line",
+                Some(BoardGraphicKind::Arc) => "arc",
+                Some(BoardGraphicKind::Circle) => "circle",
+                Some(BoardGraphicKind::Rectangle) => "rectangle",
+                Some(BoardGraphicKind::TextFrame) => "text-frame",
+                None => "other",
+            },
+            id,
+        ),
+    };
+    let (fault, field, why) = match fault {
+        DrawnCopperFault::UnknownKind => ("unknown-kind", "", String::new()),
+        DrawnCopperFault::MissingPoints => ("missing-points", "", String::new()),
+        DrawnCopperFault::Geometry(GeomError::Unrepresentable(field)) => {
+            ("unrepresentable", field, String::new())
+        }
+        DrawnCopperFault::Geometry(other) => ("other", "", other.to_string()),
+    };
+    let layer = crate::pcb_canvas::layer_style::copper_name(i18n, layer).into_string();
+    t!(
+        i18n,
+        ids::FAB_OUTPUTS_NOTE_DRAWN_COPPER,
+        "kind" => kind,
+        "id" => id.to_string(),
+        "layer" => layer,
+        "fault" => fault,
+        "field" => field,
+        "why" => why
+    )
 }
 
 /// What the written drawings or model leave out.

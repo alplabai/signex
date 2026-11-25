@@ -178,6 +178,8 @@ mod base_rules_tests;
 #[cfg(test)]
 mod class_pair_tests;
 #[cfg(test)]
+mod drawn_copper_tests;
+#[cfg(test)]
 mod explain_tests;
 #[cfg(test)]
 mod findings_tests;

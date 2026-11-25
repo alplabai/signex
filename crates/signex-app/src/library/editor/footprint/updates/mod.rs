@@ -533,7 +533,8 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
             crate::library::editor::footprint::snap_menu::apply(editor, snap)
         }
         FootprintEditorMsg::PadLink(msg) => {
-            editor.state.apply_pad_link(msg);
+            let sketch = editor.primitive().sketch.clone();
+            editor.state.apply_pad_link(msg, sketch.as_ref());
             editor.canvas_cache.clear();
         }
         FootprintEditorMsg::SketchCloseGapRequested { keep, merge } => {

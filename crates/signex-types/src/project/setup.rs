@@ -1,5 +1,5 @@
-//! The defaults a project is created with (#2232): PCB rules and sheet
-//! defaults.
+//! The defaults a project is created with (#2232): PCB rules, sheet
+//! defaults and board dimension defaults (#2868).
 //!
 //! They are the project's own: a PCB or sheet added later starts from them
 //! with no dialog. Every part is optional and written only when set, so a
@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::designator::DesignatorStandard;
 use crate::pcb::{LayerDef, PcbBoard, PcbSetup};
+use crate::pcb_dimension_style::DimensionDefaults;
 use crate::pcb_layer::{CopperLayer, InnerCopper, PcbLayer, TechnicalLayer};
 use crate::schematic::SchematicSheet;
 
@@ -255,6 +256,11 @@ pub struct ProjectDefaults {
     /// profile id. Only the id is stored, never the profile; absent = none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile: Option<String>,
+    /// What a new board dimension in the project starts from (#2868),
+    /// seeded from Preferences ▸ PCB Defaults when the project is made;
+    /// absent (a project from before) follows Preferences.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dimension: Option<DimensionDefaults>,
 }
 
 impl ProjectDefaults {
@@ -299,6 +305,9 @@ pub(super) fn take_project_defaults(data: &mut super::ProjectData, raw: serde_js
                 .map(|(field, why)| format!("{} {why}", field.key()))
                 .collect::<Vec<_>>()
                 .join(", "),
+            _ if defaults.dimension.as_ref().is_some_and(|d| !d.is_sound()) => {
+                "dimension defaults out of range".to_string()
+            }
             _ => {
                 data.project_defaults = defaults;
                 return;

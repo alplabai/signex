@@ -338,11 +338,11 @@ fn an_open_chip_shows_the_colours_and_a_set_colour_is_drawn() {
     let view = PcbLayerView::default();
     let closed = draw_pixels(panel(&context(&view)), WINDOW);
     let open = context_with(&view, ui);
-    for label in ["Palette", "Colour"] {
+    for label in ["Palette", "Color"] {
         assert!(listed(&open, label), "the card shows {label}");
     }
     assert!(
-        !listed(&open, "Palette colour"),
+        !listed(&open, "Palette color"),
         "no palette colour again without a colour of its own"
     );
     let mut coloured = board();

@@ -142,13 +142,12 @@ fn heading<'a>(wide: bool, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Mes
         .padding([SP.xs, SP.m])
         .style(crate::styles::card(tokens));
     Row::<Element<'a, Message>>::new()
-        .push(
-            text(t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_PREVIEW_TITLE))
-                .size(TS.label)
-                .color(ink)
-                .font(semibold())
-                .boxed(),
-        )
+        // An uppercase section label, as mockup row 80 heads the column.
+        .push(super::super::board_output::kit::section_label(
+            t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_PREVIEW_TITLE),
+            i18n,
+            tokens,
+        ))
         .push(Space::new().width(Length::Fill).boxed())
         .push(tooltip(expand, tip, tooltip::Position::Bottom).boxed())
         .align_y(Alignment::Center)

@@ -79,6 +79,25 @@ fab-outputs-note-skipped = { $count ->
     [one] One item with a size or position out of range was left out.
    *[other] { $count } items with a size or position out of range were left out.
 }
+# A board drawing or string on copper left out of the copper images whole
+# (#2883): the design rule check sees no copper there either. $kind is
+# line, arc, circle, rectangle, text-frame, string or other; $fault is
+# unknown-kind, missing-points, unrepresentable (with $field, a model
+# field's name) or other (with $why).
+fab-outputs-note-drawn-copper = { $kind ->
+    [line] The copper line
+    [arc] The copper arc
+    [circle] The copper circle
+    [rectangle] The copper rectangle
+    [text-frame] The copper text frame
+    [string] The copper string
+   *[other] The copper drawing
+} { $id } on { $layer } was left out of the copper: { $fault ->
+    [unknown-kind] its kind is not one this build draws.
+    [missing-points] it lacks the points its shape needs.
+    [unrepresentable] { $field } is not a finite length within 1 km of the origin.
+   *[other] { $why }.
+}
 fab-outputs-note-unnamed-parts = { $count ->
     [one] One part has no designator and has no pick-and-place row.
    *[other] { $count } parts have no designator and have no pick-and-place row.

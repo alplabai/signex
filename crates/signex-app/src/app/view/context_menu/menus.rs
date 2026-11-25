@@ -24,6 +24,7 @@ use signex_i18n::{I18n, MessageId, menu_ids};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
+#[cfg(test)]
 pub(super) use super::board_menu::pcb_canvas_menu_with_blocks;
 
 /// Command ids whose keyboard hint the canvas menu shows.
@@ -173,13 +174,14 @@ impl Signex {
         let context = self.command_context(Some(window_id));
         if context.pcb.shown {
             let blocks = self.reuse_block_names_in_window(Some(window_id));
-            let entries = pcb_canvas_menu_with_blocks(
+            let entries = super::board_menu::board_canvas_menu(
                 &self.ui_state.i18n,
                 tid,
                 &context,
                 active_submenu,
                 &sc,
                 &blocks,
+                self.board_menu_on_pour(Some(window_id)),
             );
             return super::placement::menu_card(entries, tokens, ui_font);
         }
@@ -293,7 +295,10 @@ impl Signex {
                 strip_tabs_to_the_right: !self.strip_tabs_right_of(ctx.tab_idx).is_empty(),
                 // A Project tab stays docked (#1202): an undocked window
                 // would take the main window's shortcuts.
-                undock_unavailable: already_undocked || tab.kind.is_project_page(),
+                // The Gerber Viewer draws in the main window only.
+                undock_unavailable: already_undocked
+                    || tab.kind.is_project_page()
+                    || tab.kind.is_gerber_viewer(),
                 has_file: crate::tab_bar::tab_file_path(tab).is_some(),
                 in_project: self.project_tree_key_of_file(&tab.path).is_some(),
                 close_shortcut: &close_shortcut,

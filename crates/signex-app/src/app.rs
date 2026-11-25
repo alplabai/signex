@@ -43,6 +43,9 @@ pub use diff_pair_classes::{
 };
 pub(crate) mod file_extension;
 pub mod gerber_read;
+// Mockup rows 193 and 193f: the Gerber Viewer tab.
+pub mod gerber_viewer;
+pub use gerber_viewer::{GerberViewerMsg, GerberViewerState};
 mod handlers;
 #[cfg(test)]
 pub(crate) mod hierarchy_fixture;
@@ -58,6 +61,7 @@ pub mod path_op_jobs;
 pub mod path_ops;
 pub(crate) mod pin_junction_repair;
 mod pin_table_tab;
+mod polygon_manager_tab;
 pub mod project_entry_disk;
 pub(crate) mod project_git;
 mod project_tab;
@@ -92,6 +96,7 @@ pub(crate) mod pcb_bar_groups;
 mod pcb_dirty_adapter;
 pub(crate) mod pcb_tools;
 pub(crate) mod project_sheets;
+pub(crate) mod read_only_project;
 mod read_only_refusal;
 pub mod restore_job;
 mod runtime;

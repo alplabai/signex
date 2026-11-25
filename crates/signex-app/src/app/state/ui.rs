@@ -215,6 +215,11 @@ pub struct UiState {
     pub symbol_body_fill: crate::symbol_fill_prefs::SymbolBodyFill,
     /// Draft mirror of [`Self::symbol_body_fill`] for the Preferences dialog.
     pub preferences_draft_symbol_body_fill: crate::symbol_fill_prefs::SymbolBodyFill,
+    /// Saved PCB Defaults: what each new board dimension starts from (#2868).
+    pub pcb_dimension_defaults: signex_types::pcb_dimension_style::DimensionDefaults,
+    /// Draft of [`Self::pcb_dimension_defaults`] for the Preferences dialog,
+    /// boxed like the other dialog drafts (#2412).
+    pub preferences_pcb_defaults: Box<crate::pcb_defaults_prefs::PcbDefaultsDraft>,
     /// The fill colour field's preset palette is open (view state only).
     pub preferences_body_fill_palette_open: bool,
     /// The fill colour field's custom colour picker is open (view state only).
@@ -907,6 +912,10 @@ mod tests {
                 "board_output.dialog",
                 field_size(|ui| &ui.board_output.dialog),
             ),
+            (
+                "preferences_pcb_defaults",
+                field_size(|ui| &ui.preferences_pcb_defaults),
+            ),
         ];
         for (name, size) in sizes {
             assert_eq!(size, pointer, "{name} is {size} B");
@@ -918,7 +927,7 @@ mod tests {
     /// Windows gets 512 B more: its `PathBuf`/`OsString` are 8 B larger.
     #[test]
     fn ui_state_stays_under_its_size_ceiling() {
-        const CEILING: usize = if cfg!(windows) { 7680 } else { 7168 };
+        const CEILING: usize = if cfg!(windows) { 7936 } else { 7424 };
         let size = std::mem::size_of::<super::UiState>();
         assert!(size <= CEILING, "UiState is {size} B, over {CEILING} B");
     }

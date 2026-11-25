@@ -253,6 +253,56 @@ mod tests {
         );
     }
 
+    /// Mockup row 49: the All rules row carries the number of built-in
+    /// rules as its own text, right-aligned at the row's end, above the
+    /// list; not run into the label as "All rules · N rules".
+    #[test]
+    fn the_rule_total_sits_at_the_end_of_the_all_rules_row() {
+        let (ctx, _) = view_with("", true);
+        let texts = laid_out(&ctx);
+        let total = signex_i18n::t!(
+            ctx.i18n,
+            signex_i18n::ids::PROPERTIES_RULE_TOTAL,
+            "count" => signex_erc::RuleKind::ALL.len()
+        )
+        .to_string()
+        .replace(['\u{2068}', '\u{2069}'], "");
+        let at = crate::layout_probe::find(&texts, &total).bounds;
+        assert!(
+            at.x + at.width > WINDOW.width * 0.85,
+            "the rule total is right-aligned: {at:?}"
+        );
+        let first_rule = crate::layout_probe::find(&texts, UNUSED_PIN).bounds;
+        assert!(at.y < first_rule.y, "the total heads the list: {at:?}");
+        assert!(
+            !texts
+                .iter()
+                .any(|t| t.text != total && t.text.contains(&total)),
+            "no run-in count: {texts:#?}"
+        );
+    }
+
+    /// Mockup row 49: the rule filter leads with a search glyph, so its
+    /// text starts past the glyph, no further left than the rule names
+    /// that follow their boxes.
+    #[test]
+    fn the_rule_filter_leads_with_a_search_glyph() {
+        let (ctx, _) = view_with("", true);
+        let filter =
+            signex_i18n::t!(ctx.i18n, signex_i18n::ids::PROPERTIES_RULE_FILTER).to_string();
+        let inputs = crate::layout_probe::lay_out_inputs(view_of(&ctx), WINDOW);
+        let input = inputs
+            .iter()
+            .find(|i| i.text == filter)
+            .unwrap_or_else(|| panic!("no rule filter: {inputs:#?}"))
+            .bounds;
+        let name = crate::layout_probe::find(&laid_out(&ctx), UNUSED_PIN).bounds;
+        assert!(
+            input.x >= name.x,
+            "the filter text follows a search glyph: {input:?} vs {name:?}"
+        );
+    }
+
     #[test]
     fn all_rules_toggles_open_close_or_clear_the_list() {
         let id = uuid::Uuid::now_v7();

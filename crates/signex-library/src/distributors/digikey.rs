@@ -144,6 +144,9 @@ impl DigiKeyAuth {
     }
 
     /// Test constructor: override auth + token URLs (e.g. wiremock).
+    ///
+    /// An empty `client_secret` makes a public client: token requests carry
+    /// the client id in the body and no secret, PKCE being the proof.
     pub fn with_endpoints(
         client_id: impl Into<String>,
         client_secret: impl Into<String>,
@@ -161,8 +164,14 @@ impl DigiKeyAuth {
         let client_id: String = client_id.into();
         let client_id_for_key = client_id.clone();
         let token_url_for_key = token_url.to_string();
-        let client = BasicClient::new(ClientId::new(client_id.clone()))
-            .set_client_secret(ClientSecret::new(client_secret.into()))
+        let client_secret: String = client_secret.into();
+        let mut client = BasicClient::new(ClientId::new(client_id.clone()));
+        // An empty secret would go out as Basic auth `id:`, which a token
+        // endpoint reads as a wrong secret rather than none.
+        if !client_secret.is_empty() {
+            client = client.set_client_secret(ClientSecret::new(client_secret));
+        }
+        let client = client
             .set_auth_uri(auth_url)
             .set_token_uri(token_url)
             .set_redirect_uri(redirect_url);

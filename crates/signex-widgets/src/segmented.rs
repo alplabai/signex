@@ -17,6 +17,7 @@ const SEGMENT_HEIGHT_EM: f32 = 22.0 / 12.0;
 const TRACK_PAD_EM: f32 = 2.0 / 12.0;
 const SEGMENT_GAP_EM: f32 = 2.0 / 12.0;
 const SEGMENT_PAD_EM: f32 = 10.0 / 12.0;
+const COMPACT_SEGMENT_PAD_EM: f32 = 4.0 / 12.0;
 const TRACK_RADIUS_EM: f32 = 7.0 / 12.0;
 const SHADOW_OFFSET_EM: f32 = 1.0 / 12.0;
 const SHADOW_BLUR_EM: f32 = 2.0 / 12.0;
@@ -49,6 +50,9 @@ pub struct SegmentedStyle {
     /// instead of hugging the labels. Either way the segments fold onto more
     /// lines rather than overlap.
     pub fill_width: bool,
+    /// Pad each label with the narrow side padding, for labels that must
+    /// stay on one line in a narrow column (mockup row 116).
+    pub is_compact: bool,
 }
 
 impl SegmentedStyle {
@@ -69,12 +73,28 @@ impl SegmentedStyle {
             active_ink,
             text_size,
             fill_width: false,
+            is_compact: false,
         }
     }
 
     pub fn fill_width(mut self, fill_width: bool) -> Self {
         self.fill_width = fill_width;
         self
+    }
+
+    /// The same style with the narrow side padding on every segment.
+    pub fn compact(mut self, is_compact: bool) -> Self {
+        self.is_compact = is_compact;
+        self
+    }
+
+    /// Side padding of a segment's label at this style.
+    pub fn segment_pad(&self) -> f32 {
+        if self.is_compact {
+            self.text_size * COMPACT_SEGMENT_PAD_EM
+        } else {
+            SegmentedMetrics::from_text_size(self.text_size).segment_pad_h
+        }
     }
 
     /// The same style with `ink` on the unselected segments.
@@ -195,7 +215,7 @@ where
         let medium = label_face(label, style.text_size, ink, segment_font(true));
         let label: Element<'a, M> = WidestFace::new(plain, medium, is_active).into();
         let seg = button(label)
-            .padding(Padding::from([0.0, m.segment_pad_h]))
+            .padding(Padding::from([0.0, style.segment_pad()]))
             .height(m.segment_height)
             .on_press_maybe(on_select.map(|select| select(value)))
             .style(move |_: &Theme, _| button::Style {
@@ -259,6 +279,23 @@ mod tests {
         let b = SegmentedMetrics::from_text_size(18.0);
         assert!((b.track_height - 1.5 * a.track_height).abs() < 1e-4);
         assert!((b.segment_pad_h - 1.5 * a.segment_pad_h).abs() < 1e-4);
+    }
+
+    /// Mockup row 116: a compact control pads its labels 4 px a side at
+    /// the 12 px body, against 10 px for the default.
+    #[test]
+    fn a_compact_style_pads_its_segments_narrower() {
+        let style = SegmentedStyle::new(
+            Color::BLACK,
+            Color::WHITE,
+            Color::BLACK,
+            Color::WHITE,
+            Color::BLACK,
+            12.0,
+        );
+        assert!((style.segment_pad() - 10.0).abs() < 1e-4);
+        assert!((style.compact(true).segment_pad() - 4.0).abs() < 1e-4);
+        assert!(!style.is_compact, "the default is the regular padding");
     }
 
     #[test]

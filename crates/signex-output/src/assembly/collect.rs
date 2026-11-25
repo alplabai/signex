@@ -92,17 +92,24 @@ fn board_drawings(
     }
 }
 
-/// Each linear dimension on a `wanted` layer: its strokes and its value.
+/// Each linear dimension on a `wanted` layer: its strokes, its filled
+/// arrowheads and its value.
 fn dimensions(board: &PcbBoard, wanted: &dyn Fn(&str) -> bool, out: &mut Vec<AssemblyMark>) {
     for dimension in board.free.dimensions.iter().filter(|d| wanted(&d.layer)) {
         let Some(drawing) = dimension.drawing() else {
             continue;
         };
-        for (a, b) in &drawing.strokes {
+        for (index, (a, b)) in drawing.strokes.iter().enumerate() {
             out.push(AssemblyMark::Stroke {
                 points: vec![*a, *b],
                 closed: false,
-                width_mm: dimension.line_width,
+                width_mm: dimension.stroke_width(index),
+                ink: AssemblyInk::Dimension,
+            });
+        }
+        for corners in &drawing.filled_arrows {
+            out.push(AssemblyMark::Fill {
+                rings: vec![corners.to_vec()],
                 ink: AssemblyInk::Dimension,
             });
         }

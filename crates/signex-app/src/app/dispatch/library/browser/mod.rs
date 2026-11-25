@@ -490,6 +490,7 @@ impl Signex {
                 BrowserEditMsg::ParamPrefixPicked { key, prefix } => {
                     modal.unit_menu_open = None;
                     modal.param_prefix.insert(key.clone(), prefix);
+                    param_commit::drop_pending_prefix_letter(modal, &key, template);
                     param_commit::commit_param_buffer(modal, &key, template);
                 }
                 BrowserEditMsg::CommitParam { key } => {

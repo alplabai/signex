@@ -13,7 +13,7 @@ use iced::{Element, Length, Widget as _};
 use signex_i18n::{Localized, UserText, ids, t};
 use signex_widgets::{raw, text, text_input};
 
-use super::super::{FootprintModeKind, PanelMsg};
+use super::super::{FootprintModeKind, PanelMsg, SketchDof};
 use super::body::{Ctx, caption, is_open, kv_row, pill, section};
 use super::conflicts;
 use crate::panels::form_look;
@@ -81,14 +81,15 @@ fn solve_title(cx: Ctx<'_, '_>) -> Localized {
     if cx.fp.board.is_none() {
         return t!(i18n, ids::EDITORS_FP_PROPS_SECTION_SOLVE);
     }
-    match cx.fp.last_solve.as_ref() {
-        Some(solve) if solve.over_constraint_count > 0 => t!(
-            i18n, ids::SKETCH_DOF_SECTION_OVER, "count" => solve.over_constraint_count
-        ),
-        Some(solve) if solve.dof > 0 => {
-            t!(i18n, ids::SKETCH_DOF_SECTION_UNDER, "dof" => solve.dof)
+    let Some(solve) = cx.fp.last_solve.as_ref() else {
+        return t!(i18n, ids::SKETCH_DOF_SECTION);
+    };
+    match super::dof_card::card_dof(cx, solve) {
+        SketchDof::Over { conflicts } => {
+            t!(i18n, ids::SKETCH_DOF_SECTION_OVER, "count" => conflicts)
         }
-        _ => t!(i18n, ids::SKETCH_DOF_SECTION),
+        SketchDof::Under { dof } => t!(i18n, ids::SKETCH_DOF_SECTION_UNDER, "dof" => dof),
+        SketchDof::Full => t!(i18n, ids::SKETCH_DOF_SECTION),
     }
 }
 
@@ -163,7 +164,8 @@ fn solve_section<'a>(
         format!("{:.3e}", solve.final_residual_norm),
     ));
     // A card with conflicts says "last good solve kept", with no time.
-    let card_shows_time = card_counts && solve.over_constraint_count == 0;
+    let conflicted = matches!(super::dof_card::card_dof(cx, solve), SketchDof::Over { .. });
+    let card_shows_time = card_counts && !conflicted;
     if !card_shows_time {
         col = col.push(kv(
             ids::EDITORS_FP_PROPS_ELAPSED,
@@ -204,7 +206,12 @@ fn conflict_rows<'a>(
     if rows.len() > conflicts::MAX_ROWS {
         col = col.push(more_rows(cx, rows.len() - conflicts::MAX_ROWS));
     }
-    col
+    match fp.conflict_suggestion.as_ref() {
+        Some(suggestion) => col.push(super::conflict_suggestion::view(
+            suggestion, cx.tokens, cx.i18n,
+        )),
+        None => col,
+    }
 }
 
 fn parameters_section<'a>(

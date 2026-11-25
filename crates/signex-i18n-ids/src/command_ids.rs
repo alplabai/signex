@@ -699,6 +699,9 @@ define_ids! {
         CMD_MENU_REMOVE_FROM_UNION = "cmd-menu-remove-from-union";
         CMD_BREAK_UNION = "cmd-break-union";
         CMD_MENU_BREAK_UNION = "cmd-menu-break-union";
+        // polygon-manager
+        CMD_POLYGON_MANAGER = "cmd-polygon-manager";
+        CMD_MENU_POLYGON_MANAGER = "cmd-menu-polygon-manager";
         // board-3d-keys-screenshot
         CMD_FLIP_BOARD_3D = "cmd-flip-board-3d";
         CMD_CYCLE_BOARD_3D_LIGHTING = "cmd-cycle-board-3d-lighting";

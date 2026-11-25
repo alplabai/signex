@@ -17,6 +17,7 @@ mod body;
 mod closed_path;
 mod connections;
 mod copper;
+mod drawn_copper;
 mod flip;
 mod free;
 #[cfg(test)]
@@ -67,6 +68,7 @@ pub use copper::{
     CopperItem, collect_copper, copper_layers, layer_bit, layer_mask, net_at, pad_layers,
     pad_pieces, pieces_on, via_layers, via_pieces,
 };
+pub use drawn_copper::{DrawnCopperFault, board_graphic_copper, board_text_copper, drawn_copper};
 pub use flip::flip_footprint;
 pub use free::{
     ARC_CHORD_ERROR_MM, arc_is_copper, arc_shapes, dimension_shapes, free_copper_on,
@@ -74,8 +76,8 @@ pub use free::{
 };
 pub use gloss::{Glossed, gloss};
 pub use graphic::{
-    GraphicShape, PlacedGraphic, board_graphic_placement, board_text_placement,
-    footprint_graphic_placement,
+    GraphicShape, PlacedGraphic, board_graphic_placement, board_text_placement, circle_radius,
+    footprint_graphic_placement, is_polygon_token,
 };
 pub use graphic_index::graphic_strokes;
 pub use index::{
@@ -129,4 +131,4 @@ pub use transform::{Placement, Side, pad_shape, pad_world_center, pad_world_rota
 pub use turned_marquee::{turned_marquee_corners, turned_marquee_mode, turned_marquee_select};
 pub use union_find::UnionFind;
 pub use units::{GeomError, MAX_ABS_NM, NM_PER_MM, PointNm, mm_to_nm, nm_to_mm};
-pub use zone_fill::{Unfilled, ZoneFill, ZoneFills, zone_area, zone_fills};
+pub use zone_fill::{Unfilled, ZoneFill, ZoneFills, pour_fill_order, zone_area, zone_fills};

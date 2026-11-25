@@ -25,6 +25,7 @@ mod bake_outcome;
 mod bake_panel;
 mod board;
 mod body;
+mod conflict_suggestion;
 mod conflicts;
 mod dof_card;
 mod illustration;
@@ -57,11 +58,18 @@ pub(super) fn view_footprint_editor_properties<'a>(
     if let Some(target) = pad_target(fp) {
         let mut col = Column::new().spacing(0).width(Length::Fill);
         if let Some(outcome) = fp.bake_outcome.as_ref() {
-            let pad = fp.selected_pad.as_ref();
-            col = bake_outcome::view_bake_outcome(col, outcome, pad, palette, tokens, i18n);
+            let cx = body::Ctx {
+                fp,
+                palette,
+                tokens,
+                collapsed: collapsed_sections,
+                unit,
+                i18n,
+            };
+            col = bake_outcome::view_bake_outcome(col, cx, outcome);
         }
         col = col.push(pad::view_pad_header(fp, target, tokens, i18n));
-        if let Some(section) = pad::view_driven_by(fp, target, palette, i18n) {
+        if let Some(section) = pad::view_driven_by(fp, target, palette, tokens, i18n) {
             col = col.push(section);
         }
         return scrolled(pad::view_pad_form(

@@ -387,6 +387,7 @@ signex_standard	hint	-	-	place_board_pour_cutout
 signex_standard	hint	-	-	place_board_slice_pour
 signex_standard	hint	-	-	repour_selected
 signex_standard	hint	-	-	repour_all
+signex_standard	hint	-	-	polygon_manager
 signex_standard	hint	-	-	board_shape_from_selection
 signex_standard	hint	-	-	keepout_from_selection
 signex_standard	hint	-	-	panelize_board
@@ -927,6 +928,7 @@ classic	hint	-	-	place_board_pour_cutout
 classic	hint	-	-	place_board_slice_pour
 classic	hint	-	-	repour_selected
 classic	hint	-	-	repour_all
+classic	hint	-	-	polygon_manager
 classic	hint	-	-	board_shape_from_selection
 classic	hint	-	-	keepout_from_selection
 classic	hint	-	-	panelize_board

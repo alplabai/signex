@@ -59,6 +59,13 @@ pub(super) fn card<'a>(
     ]
     .spacing(SP.s)
     .align_y(Alignment::Center);
+    if m.is_default(variant) {
+        head = head.push(pill(
+            t!(m.i18n, ids::VARIANT_MANAGER_DEFAULT),
+            PillTone::Neutral,
+            m.tokens,
+        ));
+    }
     if is_active {
         head = head.push(pill(
             t!(m.i18n, ids::PROJECT_VARIANTS_ACTIVE),
@@ -178,6 +185,7 @@ mod tests {
     use crate::layout_probe::{LaidOutText, lay_out_texts};
     use iced::{Rectangle, Size};
     use signex_output::{VariantMatrix, VariantRow};
+    use signex_types::project::VariantSettings;
     use signex_types::theme::{ThemeId, theme_tokens};
 
     const LONG_NAME: &str = "Prototype build for the field trial with the long name";
@@ -185,10 +193,13 @@ mod tests {
     fn variant_matrix(variants: &[String]) -> VariantMatrix {
         let row = |designator: &str, fitted: Vec<bool>| VariantRow {
             designator: designator.into(),
+            link: None,
             value: "10k".into(),
             source_value: "10k".into(),
             footprint: "R_0603".into(),
+            overridden: vec![false; fitted.len()],
             fitted,
+            parameters: Vec::new(),
         };
         VariantMatrix {
             variants: variants.to_vec(),
@@ -207,6 +218,7 @@ mod tests {
         let matrix = variant_matrix(&definitions);
         let tokens = theme_tokens(tid);
         let active = active.and_then(|name| definitions.iter().find(|d| *d == name));
+        let settings = VariantSettings::default();
         let m = Manager {
             project_id: ProjectId::test_id(32),
             definitions: &definitions,
@@ -214,6 +226,11 @@ mod tests {
             selected: active.map(String::as_str),
             tab: None,
             parts: Parts::Read(&matrix),
+            default: None,
+            shown: Some(matrix.with_settings(&settings)),
+            cell: None,
+            settings: &settings,
+            settings_locked: false,
             stale: false,
             i18n: signex_i18n::I18n::en_us_ref(),
             tokens: &tokens,
@@ -251,8 +268,9 @@ mod tests {
                     let texts = laid_out(tid, active, width);
                     let case = format!("{tid:?}, active {active:?}, {width} wide");
                     // Base, Lite, the long name and Pro, each with its
-                    // three captions and values, and one active pill.
-                    assert_eq!(texts.len(), 4 * 7 + 1, "{case}: {texts:#?}");
+                    // three captions and values, one active pill, and the
+                    // default pill (Base here; Set as default, mockup row 32).
+                    assert_eq!(texts.len(), 4 * 7 + 2, "{case}: {texts:#?}");
                     let lefts = card_lefts(width);
                     for t in &texts {
                         let b = t.bounds;

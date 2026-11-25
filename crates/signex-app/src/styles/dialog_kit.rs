@@ -38,7 +38,8 @@ pub enum DialogButtonKind {
     /// The accent fill, for a call to action beside a `Primary`.
     Accent,
     /// A quiet action with no fill or visible border at rest ("Decide
-    /// later").
+    /// later"), its label drawn in the accent text, as every mockup's
+    /// `.btn.ghost`.
     Ghost,
     /// A text action in the accent ink with no fill or border at rest, nor
     /// when it has no action ("Clear all colors", mockup row 71).
@@ -203,6 +204,35 @@ pub fn dialog_icon_button<'a, M: Clone + 'a>(
     }
 }
 
+/// Alpha of a [`primary_dialog_button`]'s ink while it has no action.
+const PRIMARY_DISABLED_INK_ALPHA: f32 = 0.7;
+
+/// A dialog's call to action on the theme's primary fill (dark ink in the
+/// light theme), as Annotate's Accept (mockup row 75) and Assign
+/// Footprints' Apply (mockup row 80) draw it. `face` builds the content in
+/// the ink it is given; `on_press: None` fades that ink and the fill.
+pub fn primary_dialog_button<'a, M: Clone + 'a>(
+    face: impl FnOnce(iced::Color) -> Element<'a, M>,
+    on_press: Option<M>,
+    tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    let ink = tokens::resolve(tokens).primary_ink;
+    let ink = if on_press.is_some() {
+        ink
+    } else {
+        iced::Color {
+            a: PRIMARY_DISABLED_INK_ALPHA,
+            ..ink
+        }
+    };
+    button(face(ink))
+        .padding([0.0, SP.l])
+        .height(Length::Fixed(ChromeMetrics::DEFAULT.button))
+        .on_press_maybe(on_press)
+        .style(super::primary_button(tokens))
+        .boxed()
+}
+
 /// Horizontal label padding of a dialog button, the same for every role.
 const DENSE_PAD: f32 = 14.0 * 12.0 / 11.0;
 
@@ -334,6 +364,22 @@ pub const fn dense_footer_height() -> f32 {
     ChromeMetrics::DEFAULT.button + 2.0 * SP.l
 }
 
+/// Vertical padding of a dialog's footer band (10 px at the default base).
+const BAND_PAD_Y: f32 = SP.m + SP.xs;
+
+/// Padding of a [`dialog_footer_band`] under a [`dialog_section`] body:
+/// the band's own vertical padding, the body's side padding.
+pub fn dialog_band_padding() -> iced::Padding {
+    iced::Padding::from([BAND_PAD_Y, SP.l])
+}
+
+/// Height of a [`dialog_footer_band`] padded by [`dialog_band_padding`]:
+/// the dense button and the padding. The hairline is the container's top
+/// border, drawn inside the padded bounds, so it takes no layout room.
+pub const fn dense_band_footer_height() -> f32 {
+    ChromeMetrics::DEFAULT.button + 2.0 * BAND_PAD_Y
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -374,6 +420,20 @@ mod tests {
         assert_eq!(
             dense_footer_height(),
             ChromeMetrics::DEFAULT.button + 2.0 * SP.l
+        );
+    }
+
+    /// The band footer is the dense button and its own padding (its
+    /// hairline border takes no layout room), and its sides line up with
+    /// the body's (mockup row 23).
+    #[test]
+    fn the_band_footer_height_follows_its_padding() {
+        let pad = dialog_band_padding();
+        assert_eq!(pad.left, SP.l);
+        assert_eq!(pad.right, SP.l);
+        assert_eq!(
+            dense_band_footer_height(),
+            ChromeMetrics::DEFAULT.button + pad.top + pad.bottom
         );
     }
 

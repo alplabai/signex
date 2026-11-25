@@ -35,6 +35,26 @@ impl Tone {
             Tone::Warn => PillTone::Warn,
         }
     }
+
+    /// The glyph in front of a banner of this tone: a check on an ok
+    /// banner, a warning sign on a warn banner (mockup rows 85, 88).
+    fn glyph(self) -> Option<svg::Handle> {
+        match self {
+            Tone::Ok => Some(glyph(CHECK_GLYPH)),
+            Tone::Warn => Some(glyph(WARN_GLYPH)),
+            Tone::Info => None,
+        }
+    }
+}
+
+// Statics, not consts: `static_glyph` caches by the bytes' address.
+static PLAY_GLYPH: &[u8] = include_bytes!("../../assets/icons/command_log/play.svg");
+static CHECK_GLYPH: &[u8] = include_bytes!("../../assets/icons/command_log/check.svg");
+static WARN_GLYPH: &[u8] = include_bytes!("../../assets/icons/command_log/warn.svg");
+static TARGET_GLYPH: &[u8] = include_bytes!("../../assets/icons/validation/target.svg");
+
+fn glyph(bytes: &'static [u8]) -> svg::Handle {
+    crate::icons::static_glyph(bytes)
 }
 
 fn faded(c: Color, alpha: f32) -> Color {
@@ -51,8 +71,9 @@ fn semibold() -> iced::Font {
     }
 }
 
-/// A full-width primary button: the label, and the key that runs it when
-/// the keymap binds one. `on_press: None` draws it disabled.
+/// A full-width primary button: a play glyph, the label, and the key that
+/// runs it when the keymap binds one. `on_press: None` draws it disabled,
+/// with no glyph ("Running…" replaces the label).
 pub(super) fn run_button<'a>(
     label: Localized,
     key: &str,
@@ -60,9 +81,15 @@ pub(super) fn run_button<'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, PanelMsg> {
     let ink = resolve(tokens).primary_ink;
-    let mut face = row![text(label).size(TS.label).color(ink)]
-        .spacing(SP.s)
-        .align_y(iced::Alignment::Center);
+    let mut face = row![].spacing(SP.s).align_y(iced::Alignment::Center);
+    if on_press.is_some() {
+        face = face.push(crate::styles::tinted_glyph(
+            glyph(PLAY_GLYPH),
+            TS.label,
+            ink,
+        ));
+    }
+    face = face.push(text(label).size(TS.label).color(ink).boxed());
     if !key.is_empty() {
         face = face.push(
             text(signex_i18n::UserText::new(key.to_string()))
@@ -93,9 +120,11 @@ pub(super) fn banner<'a>(
 ) -> Element<'a, PanelMsg> {
     let (fill, ink) = crate::styles::pill_colors(tokens, tone.pill());
     let edge = faded(ink, BANNER_EDGE_ALPHA);
-    let mut line = row![container(body).width(Length::Fill)]
-        .spacing(SP.s)
-        .align_y(iced::Alignment::Center);
+    let mut line = row![].spacing(SP.s).align_y(iced::Alignment::Center);
+    if let Some(handle) = tone.glyph() {
+        line = line.push(crate::styles::tinted_glyph(handle, TS.body, ink));
+    }
+    line = line.push(container(body).width(Length::Fill).boxed());
     if let Some(action) = action {
         line = line.push(action);
     }
@@ -343,6 +372,22 @@ pub(super) fn finding_row<'a>(item: FindingRow<'a>, tokens: &ThemeTokens) -> Ele
         area = area.on_exit(exit);
     }
     area.boxed()
+}
+
+/// The row action that selects and frames a finding: "Show" behind a
+/// target glyph (mockup rows 85, 88).
+pub(super) fn show_action<'a>(
+    label: impl Into<Label<'a>>,
+    on_press: PanelMsg,
+    tokens: &ThemeTokens,
+) -> Element<'a, PanelMsg> {
+    crate::styles::dialog_icon_button(
+        glyph(TARGET_GLYPH),
+        label,
+        crate::styles::DialogButtonKind::Secondary,
+        Some(on_press),
+        tokens,
+    )
 }
 
 /// A small secondary row action ("Show", "Waive net").

@@ -1,7 +1,8 @@
-//! Editing page (mockup row 147): Move and select, Grid, Text and paste, Files and
-//! agents. Long help texts show a summary with More…; the fast grids moved
-//! in from Appearance with a mil readout and the row error, and the snap
-//! preview edits both pitches on its drawing.
+//! Editing page (mockup row 147): Move and select, Grid, Text and paste;
+//! Files and agents moved to System › General. Long help texts show a
+//! summary with More…; the fast grids moved in from Appearance with a mil
+//! readout and the row error, and the snap preview edits both pitches on
+//! its drawing.
 
 mod snap_labels;
 mod snap_preview;
@@ -30,7 +31,7 @@ const STEPPER_H: f32 = TS.body * 13.0 / 6.0;
 const STEPPER_VALUE_W: f32 = TS.body * 11.0 / 3.0;
 
 /// The help under a setting: plain, or a summary that More… opens.
-enum Help {
+pub(super) enum Help {
     Plain(MessageId),
     More(HelpTopic, [MessageId; 2]),
 }
@@ -78,7 +79,13 @@ pub(super) fn content_editing<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         toggle_row(
             v,
             ids::PREFERENCES_NET_HOVER,
-            Help::Plain(ids::PREFERENCES_NET_HOVER_HELP),
+            Help::More(
+                HelpTopic::NetHover,
+                [
+                    ids::PREFERENCES_NET_HOVER_HELP_SUMMARY,
+                    ids::PREFERENCES_NET_HOVER_HELP,
+                ],
+            ),
             (v.draft_net_hover_enabled, PrefMsg::DraftNetHoverEnabled),
         ),
         section(ids::PREFERENCES_EDITING_SECTION_GRID),
@@ -100,34 +107,6 @@ pub(super) fn content_editing<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     items.push(section(ids::PREFERENCES_EDITING_SECTION_TEXT));
     items.push(increment_step_row(v));
     items.push(paste_designators_row(v));
-    items.push(section(ids::PREFERENCES_EDITING_SECTION_FILES));
-    items.push(toggle_row(
-        v,
-        ids::PREFERENCES_AUTOSAVE,
-        Help::More(
-            HelpTopic::Autosave,
-            [
-                ids::PREFERENCES_AUTOSAVE_HELP_SUMMARY,
-                ids::PREFERENCES_AUTOSAVE_HELP,
-            ],
-        ),
-        (v.draft_autosave_enabled, PrefMsg::DraftAutosaveEnabled),
-    ));
-    items.push(toggle_row(
-        v,
-        ids::PREFERENCES_AGENT_CONNECTIONS_LABEL,
-        Help::More(
-            HelpTopic::AgentConnections,
-            [
-                ids::PREFERENCES_AGENT_CONNECTIONS_HELP_SUMMARY,
-                ids::PREFERENCES_AGENT_CONNECTIONS_HELP,
-            ],
-        ),
-        (
-            v.draft_agent_connections_enabled,
-            PrefMsg::DraftAgentConnectionsEnabled,
-        ),
-    ));
     page(items)
 }
 
@@ -161,7 +140,7 @@ fn described<'a>(
 }
 
 /// A setting with a toggle: its draft value and the message a flip sends.
-fn toggle_row<'a>(
+pub(super) fn toggle_row<'a>(
     v: PrefsView<'a>,
     label: MessageId,
     about: Help,
@@ -284,6 +263,33 @@ mod tests {
         );
     }
 
+    /// Mockup row 147: the whole Designators on paste help also names the
+    /// default, Keep unless taken, and says what it does.
+    #[test]
+    fn the_paste_designators_help_names_keep_unless_taken() {
+        let en = I18n::en_us();
+        let help = en.message_plain(ids::PREFERENCES_PASTE_DESIGNATORS_HELP, &[]);
+        let choice = en.message_plain(ids::PREFERENCES_PASTE_DESIGNATORS_KEEP_IF_FREE, &[]);
+        assert_eq!(choice, "Keep unless taken");
+        assert!(
+            help.contains(
+                "Keep unless taken, the default, keeps each designator the project does not \
+                 use yet and gives a taken one the next unused number of its prefix; R? stays R?."
+            ),
+            "{help}"
+        );
+    }
+
+    /// Mockup row 147: the net hover help is cut to the mockup's one sentence.
+    #[test]
+    fn the_net_hover_summary_is_the_mockup_sentence() {
+        let en = I18n::en_us();
+        assert_eq!(
+            en.message_plain(ids::PREFERENCES_NET_HOVER_HELP_SUMMARY, &[]),
+            "Resting the pointer on a wire, pin or label shows a card with the net's name, net class and pins."
+        );
+    }
+
     /// Each summary is shorter than the whole text its More… opens.
     #[test]
     fn every_summary_comes_with_its_whole_help_text() {
@@ -300,6 +306,10 @@ mod tests {
             (
                 ids::PREFERENCES_PASTE_DESIGNATORS_HELP_SUMMARY,
                 ids::PREFERENCES_PASTE_DESIGNATORS_HELP,
+            ),
+            (
+                ids::PREFERENCES_NET_HOVER_HELP_SUMMARY,
+                ids::PREFERENCES_NET_HOVER_HELP,
             ),
             (
                 ids::PREFERENCES_AUTOSAVE_HELP_SUMMARY,

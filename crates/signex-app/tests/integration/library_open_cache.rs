@@ -243,6 +243,7 @@ fn project_referencing(dir: &Path, libs: &[PathBuf]) -> ProjectData {
         sheets: Vec::new(),
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: libs
             .iter()
             .map(|p| LibraryEntry {

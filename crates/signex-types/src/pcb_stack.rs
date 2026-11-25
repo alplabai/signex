@@ -83,6 +83,10 @@ pub struct StackLayer {
     /// Copper weight in oz/ft²; 0 for a row that is not copper.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub copper_weight_oz: f64,
+    /// Loss tangent (Df), copied from the library material picked for the
+    /// row (mockup row 177); 0 while none is known.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub loss_tangent: f64,
 }
 
 fn is_zero(value: &f64) -> bool {
@@ -113,6 +117,7 @@ impl StackLayer {
             thickness_mm,
             dielectric_constant,
             copper_weight_oz,
+            loss_tangent: 0.0,
         }
     }
 
@@ -122,6 +127,7 @@ impl StackLayer {
             self.thickness_mm,
             self.dielectric_constant,
             self.copper_weight_oz,
+            self.loss_tangent,
         ]
         .iter()
         .all(|v| v.is_finite() && *v >= 0.0)
@@ -137,6 +143,11 @@ pub struct LayerStack {
     pub name: Option<String>,
     #[serde(default)]
     pub layers: Vec<StackLayer>,
+    /// The board's solder mask, silkscreen and surface finish (mockup rows
+    /// 105 and 176, Finish sub-tab); `None` until the Finish sub-tab is
+    /// first edited. Saved as `[stackup.finish]`, under `snxpcb/1.10`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finish: Option<BoardFinish>,
 }
 
 /// A typed stackup name as stored: trimmed, `None` when nothing is left.
@@ -216,7 +227,20 @@ impl LayerStack {
         Self {
             name: None,
             layers: rows,
+            finish: None,
         }
+    }
+
+    /// Whether the stack holds data a build before `snxpcb/1.10` would drop
+    /// on save: a finish, or a row's loss tangent.
+    pub fn has_materials_data(&self) -> bool {
+        self.finish.is_some() || self.layers.iter().any(|l| l.loss_tangent != 0.0)
+    }
+
+    /// The finish the Finish sub-tab shows: the stored one, else the
+    /// default.
+    pub fn shown_finish(&self) -> BoardFinish {
+        self.finish.clone().unwrap_or_default()
     }
 }
 
@@ -276,6 +300,177 @@ pub fn copper_at(index: usize, count: usize) -> Option<CopperLayer> {
         Some(CopperLayer::Bottom)
     } else {
         InnerCopper::new(u8::try_from(index).ok()?).map(CopperLayer::Inner)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Board finish (mockup rows 105 and 176, Finish sub-tab)
+// ---------------------------------------------------------------------------
+
+/// Solder mask thickness over bare laminate a new finish starts with, mm.
+pub const DEFAULT_MASK_OVER_LAMINATE_MM: f64 = 0.025;
+
+/// The plating on exposed copper.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SurfaceFinish {
+    /// Electroless nickel, immersion gold; the gold the 3D view draws.
+    #[default]
+    Enig,
+    Enepig,
+    LeadFreeHasl,
+    LeadedHasl,
+    ImmersionSilver,
+    ImmersionTin,
+    /// Organic solderability preservative.
+    Osp,
+    HardGold,
+}
+
+impl SurfaceFinish {
+    pub const ALL: [Self; 8] = [
+        Self::Enig,
+        Self::Enepig,
+        Self::LeadFreeHasl,
+        Self::LeadedHasl,
+        Self::ImmersionSilver,
+        Self::ImmersionTin,
+        Self::Osp,
+        Self::HardGold,
+    ];
+
+    /// Hot-air levelling leaves an uneven surface: not for fine pitch.
+    pub fn is_hasl(self) -> bool {
+        matches!(self, Self::LeadFreeHasl | Self::LeadedHasl)
+    }
+}
+
+/// How the solder mask is applied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MaskType {
+    /// Liquid photoimageable.
+    #[default]
+    Lpi,
+    DryFilm,
+}
+
+impl MaskType {
+    pub const ALL: [Self; 2] = [Self::Lpi, Self::DryFilm];
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MaskGloss {
+    #[default]
+    Glossy,
+    Matte,
+}
+
+impl MaskGloss {
+    pub const ALL: [Self; 2] = [Self::Glossy, Self::Matte];
+}
+
+/// The board faces a mask or silkscreen is on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FinishSides {
+    #[default]
+    Both,
+    Top,
+    Bottom,
+}
+
+impl FinishSides {
+    pub const ALL: [Self; 3] = [Self::Both, Self::Top, Self::Bottom];
+}
+
+/// A mask or silkscreen colour the fab offers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FinishColor {
+    Green,
+    Red,
+    Blue,
+    Black,
+    White,
+    Yellow,
+    Purple,
+}
+
+impl FinishColor {
+    pub const MASK: [Self; 7] = [
+        Self::Green,
+        Self::Red,
+        Self::Blue,
+        Self::Black,
+        Self::White,
+        Self::Yellow,
+        Self::Purple,
+    ];
+    pub const SILKSCREEN: [Self; 3] = [Self::White, Self::Black, Self::Yellow];
+}
+
+/// The solder mask. Its thickness over copper and its Dk are the Solder
+/// Mask rows' of the stack, so they have one home. A field the file leaves
+/// out takes its [`Default`] value.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MaskFinish {
+    pub kind: MaskType,
+    pub color: FinishColor,
+    pub gloss: MaskGloss,
+    pub sides: FinishSides,
+    /// Thickness over bare laminate, mm.
+    pub over_laminate_mm: f64,
+}
+
+impl Default for MaskFinish {
+    fn default() -> Self {
+        Self {
+            kind: MaskType::default(),
+            color: FinishColor::Green,
+            gloss: MaskGloss::default(),
+            sides: FinishSides::default(),
+            over_laminate_mm: DEFAULT_MASK_OVER_LAMINATE_MM,
+        }
+    }
+}
+
+/// A field the file leaves out takes its [`Default`] value.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SilkscreenFinish {
+    pub color: FinishColor,
+    pub sides: FinishSides,
+}
+
+impl Default for SilkscreenFinish {
+    fn default() -> Self {
+        Self {
+            color: FinishColor::White,
+            sides: FinishSides::default(),
+        }
+    }
+}
+
+/// The board's mask, silkscreen and surface finish, as the board file
+/// stores them.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct BoardFinish {
+    #[serde(default)]
+    pub surface: SurfaceFinish,
+    #[serde(default)]
+    pub mask: MaskFinish,
+    #[serde(default)]
+    pub silkscreen: SilkscreenFinish,
+}
+
+impl BoardFinish {
+    /// Every number is finite and not negative.
+    pub fn numbers_valid(&self) -> bool {
+        let mm = self.mask.over_laminate_mm;
+        mm.is_finite() && mm >= 0.0
     }
 }
 

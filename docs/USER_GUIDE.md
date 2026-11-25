@@ -93,15 +93,15 @@ immediately, each with its gesture or key:
 - **Pan**: right-drag
 - **Zoom**: the mouse wheel (with the wheel set to Scroll, Ctrl + wheel, or
   Cmd + wheel on macOS)
-- **Find any command**: the command palette key (`Ctrl+K` in the default
-  profile)
+- **Find any command**: the command palette key (`Ctrl+Shift+P` in the
+  default profile)
 - **All keyboard shortcuts**: `F1`
 
 Its footer says what the mouse wheel is set to; **change** opens
 **Preferences ▸ Appearance**, where the Mouse wheel setting is, and leaves the
 card open. Close it with **Got it**, the ✕ in its corner or `Esc`. It is a
 reminder only; nothing else changes when you dismiss it, and it does not come
-back.
+back on its own. **Help ▸ Show Welcome Tips** opens it again.
 
 `F1` (or **Help ▸ Keyboard Shortcuts**) opens a reference of every working
 binding in the active shortcut profile, grouped by category in two columns.
@@ -110,7 +110,7 @@ match is highlighted and the count under the list says how many match. The
 **Schematic / PCB / All** switch picks which editor's shortcuts are listed; it
 starts on the editor you are in (on **All** in a footprint or library
 editor, or with no editor open). **Edit in Preferences…** closes the sheet
-and opens **Preferences ▸ Keyboard Shortcuts**. `F1` again, **Close** or
+and opens **Preferences ▸ Keyboard shortcuts**. `F1` again, **Close** or
 `Esc` closes it.
 
 ## 3. Create a project
@@ -346,8 +346,8 @@ is tinted red; an undone one is struck through.
   leaves your selection as it was. If one of those items is gone or its
   document is closed, Replay says what is missing and changes nothing;
   **Jump to** shows the part, net or point it named.
-- Zoom, pan and selection commands are hidden until **More ▸ Show view
-  commands** is on.
+- Zoom, pan and selection commands are hidden until you press **More** and turn
+  on the **Show view commands** switch.
 - **Pause logging**, **Save log as…** (a `.jsonl` file), **Clear** and
   **More** are at the right end of the filter bar. The log is kept for this
   session only; nothing is written to disk unless you save it. Details:
@@ -1009,14 +1009,16 @@ Messages line and changes nothing; run it again.
 
 ### Find Similar Objects
 
-**Edit ▸ Find Similar Objects...** (`Shift+F`, or the right-click menu) starts
+**Edit ▸ Find Similar Objects…** (`Shift+F`, or the right-click menu) starts
 from the object under the cursor, or the one selected object. The dialog lists
 its properties with the object's value for each, and a **Same** / **Any**
 choice: **Kind** starts at Same and the rest at Any, so at first every object
 of the same kind matches. A placed part reads as **Part**. **Current sheet**
 counts the matches on the sheet; **Whole project** also counts them on the
 project's other sheets, including closed ones. **Select N** selects the matches
-on the dialog's own sheet; matches elsewhere are only counted. Opened on a
+on the dialog's own sheet; matches elsewhere are listed in Messages, one row
+each (the first 50, then a count of the rest), and a row's **Show** opens its
+sheet and selects the object. Opened on a
 board, it searches that board.
 
 ### Search everywhere
@@ -1062,14 +1064,22 @@ pins that connect nothing or two outputs wired together.
 1. Press `F8`. This runs the check on the project immediately.
    Alternatively choose **Project ▸ Electrical Rules Check**, which opens a
    dialog where you can set the severity of each rule and press **Run ERC**.
-2. The **ERC** panel opens with the results. Its header shows the number of
-   errors, warnings and info items, and `<` and `>` step through them.
-3. Each row shows a severity letter (`E` error, `W` warning, `I` info), the
-   rule, the message, and the sheet and position. Click a row to jump to the
-   item on the canvas. The button at the end of a row either says **Show on
-   Canvas** or, for an unused pin, **Add No-Connect**, which places a
-   no-connect marker on that pin.
-4. **Clear** empties the list.
+2. The **ERC** panel opens with the results. At its top are the **Run ERC**
+   button, with its key, and three count tiles for errors, warnings and info.
+   Press a tile with findings to list only that severity; press it again to list all. A
+   clean run shows "No problems found." with what it checked.
+3. The findings are grouped by rule: each group's heading shows the rule, its
+   severity letter (`E` error, `W` warning, `I` info) and how many findings
+   it holds; click the heading to fold the group. Each row shows its severity
+   letter, the message, and the sheet and position. Click a row to jump to
+   the item on the canvas. Hover a row, or select it, for its buttons:
+   **Show** selects and frames the item; **Add No-Connect**, on an unused
+   pin, places a no-connect marker on that pin; **Waive net**, on a finding
+   about a net, waives the rule for that net; **Waive** asks for a reason, then waives that one
+   finding. Waived findings and nets are listed in the **Waived** group at
+   the end, each with **Restore**.
+4. To empty the list, press the clear button in the panel's title bar (its
+   tooltip says "Clear the ERC results"). It shows once ERC has run.
 
 Besides wiring mistakes, ERC runs completeness checks (a part with no
 footprint or value, an unannotated designator, a single-pin net, a net with no
@@ -1089,7 +1099,8 @@ names that wire's net, which is almost always a mistake.
 The **Messages** panel (**View ▸ Messages**) is the application's runtime
 log, not the ERC results. Read ERC results in the ERC panel.
 
-Before you run the check the panel shows "No ERC diagnostics yet". Run `F8`
+Before you run the check the panel shows
+"Run ERC to populate project-wide diagnostics". Run `F8`
 again after each round of edits. Until you do, the panel keeps the last run's
 results and warns "Results may be out of date": a finding whose part, wire or
 label you have deleted disappears from the panel and the sheet, and **Undo**
@@ -1098,7 +1109,8 @@ finding until the next run, so trust only a fresh run.
 
 In the picture below the check has run on the sheet from section 6. The wire
 ends on the lower pin of `R1`, but the upper pin connects to nothing, so the
-**ERC** panel lists one warning, "Unused pin", with an **Add No-Connect** button.
+**ERC** panel lists one warning in the "Unused pin" group; its row offers
+**Add No-Connect**.
 
 ![The ERC panel at the bottom of the window listing one unused-pin warning for R1](../assets/screenshots/guide-erc.png)
 
@@ -1161,7 +1173,6 @@ was not changed. Open the file in the newer Signex to edit it.
 
 ## 11. Export PDF and BOM
 The PDF is under **File ▸ Export**; the BOM, netlist and ERC report are under **Tools ▸ Reports**. Both need a schematic open.
-Both exports are under **File ▸ Export** and need a schematic open.
 
 **PDF**
 
@@ -1348,7 +1359,8 @@ a PDF. Each step names the section with the detail. The shortcuts are those of
 the default Signex Standard profile; the menu path always works.
 
 1. **Create the project.** Choose **File ▸ New Project**, name it in the
-   save dialog, and keep the `.snxprj` ending (section 3). Signex creates a
+   **New Project** dialog (**Project name**, **Location**) and press
+   **Create project** (section 3). Signex creates a
    folder named after the project; a blank `.snxsch` in it opens in a tab.
 2. **Find a part.** Open **View ▸ Components** and expand **Stock**
    (section 5). Type in the search field (a part number or a value such as
@@ -1359,7 +1371,8 @@ the default Signex Standard profile; the menu path always works.
    Components panel). The part follows the cursor; click to drop it and press
    `Esc` to let go (section 5).
 4. **Wire it.** Choose **Place ▸ Wire** (or press `P` then `W`, or `Ctrl+W`),
-   click to start, click to bend, and double-click to stop (section 6). End
+   click to start, click again to end it (the second click places the wire);
+   press `Insert` to add a corner and keep drawing (section 6). End
    each wire on a pin end of the part.
 5. **Name the net.** Choose **Place ▸ Net Label** (or press `P` then `N`),
    click the wire, press `Esc`, double-click the label, type the name, and press
@@ -1546,7 +1559,7 @@ not fit, scroll the strip sideways. Click a tab to make that layer active;
 new tracks, pours and text go on the active layer, and its tab has the
 accent bar along the top. `+` and `-` step to the next and previous layer,
 `*` to the next signal layer. A right-click on a tab hides, highlights or
-shows layers, sets the layer's colour (**Layer colour...**, saved with the
+shows layers, sets the layer's colour (**Layer color...**, saved with the
 board), sets the tab names (Short, Medium or Long) and the layer numbers,
 and its **Layer stack...** row opens the Layer Stack panel. The button at
 the left end of the tabs picks a layer set.
@@ -1694,8 +1707,9 @@ locked track, a pad or a via is never pushed; the route walks around it.
 4. The pour fills its area and keeps clear of other nets' copper.
 
 Select a pour to change its net, clearance, priority and island removal in
-**Properties**. **Place ▸ Pour Cutout** cuts a hole in a pour and **Place ▸
-Slice Pour** cuts a pour in two. The fill follows every board edit by
+**Properties**. **Place ▸ Pour Cutout** places a cutout region that every
+pour on its layer leaves empty; select it to move it, change its layer or
+delete it, and the pour's copper follows. **Place ▸ Slice Pour** cuts a pour in two. The fill follows every board edit by
 itself; **Tools ▸ Repour All** and **Tools ▸ Repour Selected** fill again and
 report the result in the Messages panel.
 
@@ -1748,7 +1762,7 @@ adds one and **Add net** puts nets in it.
 
 1. With the board in view, choose **Tools ▸ Design Rule Check** (`T D`), or
    press **Run DRC** in the Messages panel.
-2. Choose **Tools ▸ DRC Results** to open the results, grouped by rule.
+2. Choose **Tools ▸ DRC** to open the results, grouped by rule.
 3. Click a row: its objects are selected and the view centres on them.
 4. Fix the board and run DRC again. Results go stale when the board changes.
 
@@ -1757,7 +1771,7 @@ lines still open), keepout violations and every written rule. To accept a
 violation on purpose, press **Waive**, type why, and press **Waive** again.
 **Show waived** lists waived ones; **Unwaive** takes a waiver back.
 
-<!-- screenshot: the DRC Results panel with a clearance violation selected on the board -->
+<!-- screenshot: the DRC panel with a clearance violation selected on the board -->
 
 More detail: [DRC_RULES.md](DRC_RULES.md).
 
@@ -1970,10 +1984,13 @@ never in a project file. Each distributor has a card with its state:
   opens your browser to sign in and stores the refresh token in the keyring;
   **Cancel** stops a sign-in that is still waiting. **Disconnect** removes the
   stored token and forgets the account; if the keyring refuses, the card says
-  why and the message is also in the Messages panel. When Signex was started
-  without `SIGNEX_DIGIKEY_CLIENT_ID` the card shows *Not configured* and
-  Connect stays off until Signex is started with that variable (and
-  `SIGNEX_DIGIKEY_CLIENT_SECRET`) set.
+  why and the message is also in the Messages panel. A release build carries
+  its own DigiKey client id but no client secret; Signex then signs in
+  without one. To use your own DigiKey app, set `SIGNEX_DIGIKEY_CLIENT_ID`
+  (and `SIGNEX_DIGIKEY_CLIENT_SECRET` if the app has a secret); it overrides
+  the built-in id. If a sign-in without a secret is refused, the failure
+  names `SIGNEX_DIGIKEY_CLIENT_SECRET`. Only a build without a built-in id,
+  started without that variable, shows *Not configured* with Connect off.
 - **Mouser** takes an API key. **Test** checks it with one lookup and, if it
   works, saves it in the keyring; the card then shows *Key verified*. Editing
   the key makes it *Not tested* again.
@@ -1988,12 +2005,14 @@ row by its handle to move it; the order is saved at once to the
 
 **Preferences ▸ Library ▸ Component Classes** lists the classes a new library
 starts with. They appear in the class picker of New Component and Edit
-Component; a library's own list is edited in that library.
+Component. It is a seed list for new libraries: removing a class here does
+not change existing libraries; a library's own list is edited in that library.
 
 - The **Key** is what a part stores; the **Label** is what pickers show. Click
   a cell to edit it.
 - **+ Add Class** adds a row at the bottom, marked *new*, with its key ready
-  to type.
+  to type. Type the label and the key is made from it in lower snake case
+  (*Ferrite bead* gives `ferrite_bead`); type a key yourself and it stays.
 - Drag a row by its handle to change the order the picker shows. The filter
   field only hides rows; it does not change the order.
 - Point at a row and press **×** to remove it.

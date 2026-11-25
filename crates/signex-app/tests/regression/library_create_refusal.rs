@@ -37,6 +37,7 @@ fn git_project() -> (Signex, TempDir, std::path::PathBuf) {
         sheets: Vec::new(),
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: true,
         net_classes: Vec::new(),

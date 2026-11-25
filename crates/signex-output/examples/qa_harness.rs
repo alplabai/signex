@@ -102,6 +102,7 @@ fn main() {
         project_parameters: None,
         document_facts: Default::default(),
         sheet_variables: std::collections::BTreeMap::new(),
+        variant_settings: Default::default(),
     };
     let ctx = ExportContext {
         sheets: snapshots,

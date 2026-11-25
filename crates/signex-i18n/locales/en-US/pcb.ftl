@@ -13,11 +13,11 @@ pcb-layer-tab-show-only = Show only this layer
 # The layer's colour, saved with the board: opens the Layers panel's
 # colour picker for the layer; greyed with the reason for a layer whose
 # colour the board cannot change yet.
-pcb-layer-tab-colour = Layer colour...
-pcb-layer-tab-colour-unavailable = This layer's colour cannot be changed yet.
+pcb-layer-tab-colour = Layer color...
+pcb-layer-tab-colour-unavailable = This layer's color cannot be changed yet.
 # Give the layer, or every layer, the board palette colour again.
-pcb-layer-tab-colour-reset = Reset layer colour
-pcb-layer-tab-colour-reset-all = Reset all layer colours
+pcb-layer-tab-colour-reset = Reset layer color
+pcb-layer-tab-colour-reset-all = Reset all layer colors
 # Edit ▸ Origin ▸ Set waits for a click on the board.
 pcb-origin-set-hint = Origin: click on the board to set the origin there. Esc cancels
 # Edit ▸ Origin ▸ Snap to Outline Corner before the pointer was on the board.
@@ -211,7 +211,7 @@ pcb-tool-keepout-needs-layer = Keepout: make a copper layer or a keep-out layer 
 # The text a string placed with the String tool reads until it is edited.
 pcb-tool-string-text = String
 # A String click while the active layer takes no text.
-pcb-tool-string-needs-text-layer = String: make a silkscreen, mechanical or documentation layer active to place a string on it
+pcb-tool-string-needs-text-layer = String: make a copper, silkscreen, mechanical or documentation layer active to place a string on it
 # The free pad, arc, string and dimension tools (#2373): what the Messages
 # panel says when one is armed, and when a click adds nothing.
 pcb-tool-hint-pad = Pad: click to place a through-hole pad on the net under it; Tab edits its shape, size and hole. Esc or a right-click ends the tool
@@ -235,7 +235,7 @@ pcb-arc-mode-any-name = Any angle
 pcb-tool-pour-cutout = Pour Cutout
 pcb-tool-slice-pour = Slice Pour
 pcb-bar-pour-cutout-tooltip = Place Pour Cutout (right-click to close)
-pcb-tool-hint-pour-cutout = Pour Cutout: click each corner, then the first corner, a double-click or a right-click to close it. The area is cut out of every polygon pour it overlaps on the active copper layer, as one step; Esc drops the shape, then ends the tool
+pcb-tool-hint-pour-cutout = Pour Cutout: click each corner, then the first corner, a double-click or a right-click to close it. It places a cutout region on the active copper layer, as one step, which every polygon pour there leaves empty when it fills; Esc drops the shape, then ends the tool
 pcb-bar-slice-pour-tooltip = Slice Pour
 pcb-tool-hint-slice-pour = Slice Pour: click two points on a line across a polygon pour on the active copper layer; each pour the line meets is cut in two along it, as one step. Esc drops the first point, then ends the tool
 pcb-tool-pour-missed = { $tool }: no polygon pour on the active copper layer is cut there, so nothing changed
@@ -389,9 +389,9 @@ pcb-footprint-duplicate = { $count ->
 pcb-footprint-enter-hint = Press Enter to apply the change.
 
 # Tools > Re-Annotate Board (#1312): the Positional Re-Annotate dialog.
-pcb-reannotate-title = Positional Re-Annotate
+pcb-reannotate-title = Re-Annotate Board
 # Under the title. $board is the board document's name.
-pcb-reannotate-subtitle = { $board }
+pcb-reannotate-subtitle = Positional · { $board }
 pcb-reannotate-intro = Numbers the board's parts by where they sit, from 1 within each prefix. Prefixes stay; locked footprints keep their designators.
 # The walk order and its two choices (each card's hint is below them).
 pcb-reannotate-order = Order
@@ -420,9 +420,9 @@ pcb-reannotate-stale = The board changed, so the list was made again. Check it, 
 pcb-reannotate-refused = Nothing was changed: { $why }
 pcb-reannotate-cancel = Cancel
 pcb-reannotate-execute = Execute
-# Under the Designator field and in the Re-Annotate dialog: the board's
-# designators are not carried to the schematic by Update PCB.
-pcb-designator-update-pcb-note = Update PCB renames parts back to the schematic's designators; use Back Annotate to keep them.
+# The Re-Annotate dialog's banner: the board's designators are not carried
+# to the schematic by Update PCB. $command is pcb-reannotate-back-annotate.
+pcb-designator-update-pcb-note = Update PCB renames parts back to the schematic's designators; use { $command } to keep them.
 # $designator is the kept footprint's designator.
 pcb-reannotate-kept-unlinked = { $designator } is not linked to a schematic part, so it keeps its designator.
 # Messages panel lines. $what is the field (Designator or Value), $why the reason.
@@ -628,3 +628,6 @@ pcb-3d-shot-interrupted = the 3D view was left before the screenshot was taken
 # (mockup row 175), and a toolbar tooltip ($tip, "Flip board") with its key.
 pcb-3d-lighting-next-key = · press { $key } for the next
 pcb-3d-tooltip-keyed = { $tip } ({ $key })
+# chrome-copy-help
+# The command the Re-Annotate banner names, in medium weight (mockup row 83).
+pcb-reannotate-back-annotate = Back Annotate

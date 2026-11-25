@@ -1,5 +1,5 @@
-//! The facts of the area panel (#2393): fills, solid regions, polygon pours
-//! and keepouts, read from the zones. The kind is named the way the pick
+//! The facts of the area panel (#2393): fills, solid regions, polygon pours,
+//! keepouts and pour cutouts (#2871), read from the zones. The kind is named the way the pick
 //! filter names it (`pcb_geom::PickKind::of_zone`). A pour also shows its
 //! priority, island rules and the copper its fill holds (#2216), and its
 //! Copper card repours and shelves (#2523): Shelve is one board undo step,
@@ -94,6 +94,9 @@ fn zone_kind(zone: &Zone) -> Option<ZoneKind> {
     if zone.is_pour() {
         return Some(ZoneKind::Pour);
     }
+    if zone.is_pour_cutout() {
+        return Some(ZoneKind::Cutout);
+    }
     match PickKind::of_zone(zone)? {
         PickKind::Keepouts => Some(ZoneKind::Keepout),
         PickKind::Fills => Some(ZoneKind::Fill),
@@ -158,7 +161,9 @@ pub(super) fn zone_facts(
         });
     ZoneFacts {
         kind,
-        is_copper: zones.iter().all(|z| z.fill_type != KEEPOUT_FILL),
+        is_copper: zones
+            .iter()
+            .all(|z| z.fill_type != KEEPOUT_FILL && !z.is_pour_cutout()),
         is_pour: zones.iter().all(|z| z.is_pour()),
         layer,
         layers: area_layers(board, all_keepouts, i18n),
@@ -180,8 +185,18 @@ pub(super) fn zone_facts(
         ),
         menu_open: false,
         unfilled: pour_unfilled(board, zones, fills),
+        outline: match zones {
+            [zone] => Some((zone.outline.len(), outline_area_mm2(zone))),
+            _ => None,
+        },
         common,
     }
+}
+
+/// The area of `zone`'s outline less its holes, in mm²; 0 for an outline
+/// the geometry cannot hold.
+fn outline_area_mm2(zone: &Zone) -> f64 {
+    pcb_geom::zone_area(zone).map_or(0.0, |area| area.twice_area() as f64 / 2.0e12)
 }
 
 /// Why the first selected pour with no fill has none.

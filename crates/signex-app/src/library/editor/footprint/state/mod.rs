@@ -48,7 +48,7 @@ pub mod tool;
 mod zoom_request;
 
 pub use board_backdrop::{BackdropTrack, BoardBackdrop};
-pub use board_checks::{CheckLine, CheckStatus, check_lines};
+pub use board_checks::{CheckLine, CheckStatus, check_lines, check_lines_against};
 pub use canvas_text::SketchCanvasText;
 pub use context_menu::{
     FootprintContextAction, FootprintContextMenuState, FootprintContextSubmenu,
@@ -60,7 +60,9 @@ pub use pad::{
     PadPassthrough, PadSide, PadStackUi, ShapeParamMap,
 };
 pub use pad_link::{PadLinkFocus, PadLinkMsg, PadLinkOffer};
-pub use pad_source::{PadInstance, PadPatternKind, PadSketchSource};
+pub use pad_source::{
+    InstanceOverrides, PadAttribute, PadInstance, PadPatternKind, PadSketchSource,
+};
 pub use placement::{PlaceArcPending, PlacementInput, PlacementInputKind};
 pub use properties_view::{
     COURTYARD_LINE_WIDTH_BUFFER, FOOTPRINT_HEIGHT_BUFFER, PAD_CLEARANCE_BUFFER,

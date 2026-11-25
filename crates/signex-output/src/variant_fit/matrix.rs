@@ -25,6 +25,9 @@ pub struct VariantMatrix {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariantRow {
     pub designator: String,
+    /// The placed part (`settings::part_link`): what the project's variant
+    /// settings find it by.
+    pub link: Option<signex_types::pcb::SymbolLink>,
     /// The value the BOM lists: an `=` value evaluated on its sheet.
     pub value: String,
     /// The value as written, which the parts filter also matches.
@@ -32,6 +35,12 @@ pub struct VariantRow {
     pub footprint: String,
     /// Fitted per column: Base first, then each of [`VariantMatrix::variants`].
     pub fitted: Vec<bool>,
+    /// The part's own fields as its sheets set them (fit-state fields left
+    /// out), by name: what a variant's parameter value replaces.
+    pub parameters: Vec<(String, String)>,
+    /// Per column, whether the variant gives the part a parameter value of
+    /// its own (`VariantMatrix::with_settings`); never Base.
+    pub overridden: Vec<bool>,
 }
 
 impl VariantRow {
@@ -40,13 +49,21 @@ impl VariantRow {
         self.fitted.first().copied().unwrap_or(true)
     }
 
-    /// Whether the variant in `column` fits the part differently from Base.
+    /// Whether the variant in `column` fits the part differently from Base,
+    /// or gives it a parameter value of its own.
     pub fn differs_at(&self, column: usize) -> bool {
         column > 0
-            && self
+            && (self
                 .fitted
                 .get(column)
                 .is_some_and(|&fitted| fitted != self.base_fitted())
+                || self.is_overridden_at(column))
+    }
+
+    /// Whether the variant in `column` gives the part a parameter value of
+    /// its own.
+    pub fn is_overridden_at(&self, column: usize) -> bool {
+        self.overridden.get(column).copied().unwrap_or(false)
     }
 
     /// Whether any variant fits the part differently from Base.
@@ -140,6 +157,10 @@ pub fn variant_matrix(ctx: &ExportContext, variants: &[String]) -> VariantMatrix
             let units: Vec<&Symbol> = part.iter().map(|&member| placed[member].0).collect();
             VariantRow {
                 designator: placed[part[0]].1.to_string(),
+                link: super::part_link(
+                    part.iter()
+                        .map(|&member| (&shown[member].path, placed[member].0.uuid)),
+                ),
                 value: first_set(units.iter().map(|unit| unit.value.as_str())),
                 source_value: first_set(
                     part.iter()
@@ -150,6 +171,8 @@ pub fn variant_matrix(ctx: &ExportContext, variants: &[String]) -> VariantMatrix
                     .iter()
                     .map(|&variant| part_is_fitted(&units, variant))
                     .collect(),
+                parameters: part_parameters(&units),
+                overridden: vec![false; columns.len()],
             }
         })
         .collect();
@@ -158,6 +181,21 @@ pub fn variant_matrix(ctx: &ExportContext, variants: &[String]) -> VariantMatrix
         variants: variants.to_vec(),
         rows,
     }
+}
+
+/// The fields the part's units set, the first unit's value for each name,
+/// in name order; fit-state fields and empty values left out.
+fn part_parameters(units: &[&Symbol]) -> Vec<(String, String)> {
+    let mut out = std::collections::BTreeMap::new();
+    for unit in units {
+        for (name, value) in &unit.fields {
+            if value.trim().is_empty() || super::is_fit_state_field(name) {
+                continue;
+            }
+            out.entry(name.clone()).or_insert_with(|| value.clone());
+        }
+    }
+    out.into_iter().collect()
 }
 
 /// The first value a unit sets, as the BOM merges units.

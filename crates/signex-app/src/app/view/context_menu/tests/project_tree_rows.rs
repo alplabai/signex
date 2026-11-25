@@ -234,8 +234,8 @@ fn compiled_design_and_unions_have_no_more_menu() {
     assert_eq!(title_actions(PanelKind::Unions, &ctx).len(), 1);
 }
 
-/// Mockup row 20: Variant Manager is a live row that opens the Project tab
-/// on its Variants section.
+/// Mockup row 20: Variant Manager is a live row. Since mockup row 32 it
+/// opens the project's Variant Manager tab, not the Project tab.
 #[test]
 fn the_variant_manager_row_opens_the_variants_section() {
     let mut app = app_with_tree();
@@ -246,10 +246,13 @@ fn the_variant_manager_row_opens_the_variants_section() {
     let press = row.on_press.clone().expect("a live row");
     let _ = app.update(press);
     let tab = &app.document_state.tabs[app.document_state.active_tab];
-    assert!(matches!(tab.kind, crate::app::TabKind::Project(p) if p == id));
-    assert_eq!(
-        app.document_state.project_tabs[&id].section,
-        crate::app::ProjectSection::Variants
+    assert!(matches!(tab.kind, crate::app::TabKind::VariantManager(p) if p == id));
+    assert!(
+        app.document_state
+            .tabs
+            .iter()
+            .all(|tab| tab.kind.as_project().is_none()),
+        "no Project tab opens on the way"
     );
 }
 

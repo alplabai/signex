@@ -1,11 +1,11 @@
 //! The area illustration (#2523, mockup row 99): a corner of the pour around a pad of
 //! its net, joined directly, and a pad of another net cleared by the
-//! Clearance; a shelved pour as its dashed outline alone; a keepout as its
-//! outline and what it keeps out. Thermal relief spokes are not drawn: the
+//! Clearance; a shelved pour as its dashed outline alone; a keepout or a
+//! pour cutout (#2871) as its outline and what it keeps out. Thermal relief spokes are not drawn: the
 //! fill joins pads solidly (`docs/PCB_TOOLS.md`, "Polygon Pour").
 
 use iced::{Point, Rectangle, Size};
-use signex_i18n::{I18n, UserText, ids, t};
+use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_widgets::property_illustration::{
     Anchor, Callout, FieldId, Illustration, Ink, Leader, Paint, Part, Primitive, Stroke, Style,
@@ -66,8 +66,16 @@ pub(in crate::panels::pcb_primitive_properties) fn illustration(
         .map_or_else(String::new, |l| l.label.clone());
     // The fill joins pads solidly: no spokes to show yet.
     let art = canvas().feature(THERMAL, false);
-    if f.kind == Some(ZoneKind::Keepout) {
-        return keepout(art, paint, layer_name, i18n);
+    match f.kind {
+        Some(ZoneKind::Keepout) => {
+            let caption = t!(i18n, ids::PCB_PRIM_POUR_DRAWING_KEEPOUT);
+            return keepout(art, paint, layer_name, caption);
+        }
+        Some(ZoneKind::Cutout) => {
+            let caption = t!(i18n, ids::PCB_PRIM_CUTOUT_DRAWING);
+            return keepout(art, paint, layer_name, caption);
+        }
+        _ => {}
     }
     let net = f
         .common
@@ -245,8 +253,14 @@ fn relief(i18n: &I18n) -> Vec<Part> {
     ]
 }
 
-/// A keepout: its outline with a light tint, and what it keeps out.
-fn keepout(art: Illustration, paint: Paint, layer_name: String, i18n: &I18n) -> Illustration {
+/// A keepout or a pour cutout (#2871): its outline with a light tint, and
+/// `caption`, what it keeps out.
+fn keepout(
+    art: Illustration,
+    paint: Paint,
+    layer_name: String,
+    caption: Localized,
+) -> Illustration {
     let (left, right) = (40.0, VIEW_W - 24.0);
     let (top, bottom) = (14.0, VIEW_H - FILL_BOTTOM_INSET);
     let shape = Part::new(
@@ -266,7 +280,7 @@ fn keepout(art: Illustration, paint: Paint, layer_name: String, i18n: &I18n) -> 
     art.part(shape)
         .part(label(
             Point::new((left + right) / 2.0, (top + bottom) / 2.0),
-            t!(i18n, ids::PCB_PRIM_POUR_DRAWING_KEEPOUT),
+            caption,
             Anchor::Middle,
             TextRole::Caption,
             &[KEEPS_OUT],

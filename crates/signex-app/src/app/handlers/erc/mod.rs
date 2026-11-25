@@ -18,6 +18,8 @@ mod annotate_preview;
 #[cfg(test)]
 mod annotate_reset_tests;
 #[cfg(test)]
+mod annotate_session_tests;
+#[cfg(test)]
 mod annotate_tests;
 mod erc_check;
 mod erc_job;

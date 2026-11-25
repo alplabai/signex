@@ -27,7 +27,7 @@ const SP: Spacing = Spacing::DEFAULT;
 // Declared here, not in the folder's `mod.rs`: the section ships with the
 // Board summary it follows.
 #[path = "outline_checks.rs"]
-mod outline_checks;
+pub(super) mod outline_checks;
 
 // The Slot, Pour, Mechanical layer and Component anchor rows (decision 2).
 #[path = "board_targets.rs"]
@@ -36,7 +36,8 @@ mod board_targets;
 /// The Board section with nothing selected (#2356): the board's name, its
 /// outline's size and area, and the sketch's counts. It stands where a
 /// footprint shows its own fields, none of which apply to a board. The
-/// Outline checks section follows it (mockup row 179d).
+/// Outline checks section follows it (mockup row 179d), unless a check
+/// fails and [`view_failing_outline_checks`] showed it at the top.
 pub(super) fn view_board_summary<'a>(
     col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,
@@ -47,6 +48,25 @@ pub(super) fn view_board_summary<'a>(
     i18n: &I18n,
 ) -> Column<Element<'a, PanelMsg>> {
     let col = view_board_facts(col, fp, board, palette, collapsed_sections, unit, i18n);
+    if outline_checks::has_failure(board) {
+        return col;
+    }
+    outline_checks::view_outline_checks(col, board, palette, collapsed_sections, i18n)
+}
+
+/// The Outline checks section and the Fab profile group when a check
+/// fails, for the top of the panel, so the failure and its fix show
+/// without scrolling (mockup row 179d); nothing while every check passes.
+pub(super) fn view_failing_outline_checks<'a>(
+    col: Column<Element<'a, PanelMsg>>,
+    board: &'a BoardSketchProps,
+    palette: PanelPalette,
+    collapsed_sections: &'a CollapsedSections,
+    i18n: &I18n,
+) -> Column<Element<'a, PanelMsg>> {
+    if !outline_checks::has_failure(board) {
+        return col;
+    }
     outline_checks::view_outline_checks(col, board, palette, collapsed_sections, i18n)
 }
 
