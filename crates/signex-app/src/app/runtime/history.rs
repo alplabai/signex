@@ -312,6 +312,9 @@ fn history_target_of(active: &crate::app::TabInfo) -> Option<std::path::PathBuf>
         | crate::app::TabKind::LayerStack
         | crate::app::TabKind::PinTable
         | crate::app::TabKind::VariantManager(_) => None,
+        // A notebook restore would replace text the tab holds; not offered
+        // until the tab can reload a restored file.
+        crate::app::TabKind::Notebook(_) => None,
         _ => Some(active.path.clone()),
     }
 }

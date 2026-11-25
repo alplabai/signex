@@ -381,6 +381,7 @@ impl Signex {
         });
         self.document_state.net_class_history.remove(&target_id);
         self.document_state.project_tabs.remove(&target_id);
+        self.forget_notebook(target_id);
         self.document_state.rules_history.remove(&target_id);
         self.document_state.profile_drift_noted.remove(&target_id);
         self.document_state.active_project = self
@@ -603,6 +604,9 @@ impl Signex {
         {
             return self.save_primitive_tab_blocking(path);
         }
+        if self.notebook_at_path(path).is_some() {
+            return self.save_notebook_blocking(path);
+        }
         anyhow::bail!("no open editor or engine backs this file — it can't be saved automatically")
     }
 
@@ -754,7 +758,8 @@ impl Signex {
         self.document_state.document_saves.forget_disk_records(path);
         self.document_state.remove_engine(path);
         self.document_state.clear_document_dirty(path);
-        self.discard_primitive_editor(path)
+        let notebook = self.discard_notebook_at(path);
+        Task::batch([notebook, self.discard_primitive_editor(path)])
     }
 
     /// Drop the symbol/footprint editor behind `path`, and its tab, so a

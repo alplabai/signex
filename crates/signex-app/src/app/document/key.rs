@@ -58,6 +58,9 @@ impl DocumentKey {
             TabKind::LibraryBrowser(_) => None,
             // Read-only fabrication files: nothing to save or undo.
             TabKind::GerberViewer => None,
+            // The notebook's text saves from its tab (Ctrl+S on the tab, Save
+            // All) and its editor keeps its own undo; no project step.
+            TabKind::Notebook(_) => None,
         }
     }
 }

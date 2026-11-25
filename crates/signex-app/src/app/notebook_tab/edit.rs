@@ -1,0 +1,208 @@
+//! Edits in the notebook editor: typing (with `@` opening the reference
+//! picker in place of typing an `@`), the insert toolbar, the picker's
+//! choice, and moving the cursor to a line or the next problem. Every edit
+//! reads the outline and colours again, marks the file unsaved while the
+//! text differs from it, and asks for a compile.
+
+use std::sync::Arc;
+
+use iced::Task;
+use iced::advanced::text::Position;
+use iced::widget::text_editor::{Action, Cursor, Edit};
+use signex_notebook::{Inserted, Insertion, insertion_text};
+
+use super::open::MAIN_FILE;
+use super::picker::{PICKER_INPUT_ID, Picker};
+use super::{Load, NotebookTab, NotebookText};
+use crate::app::state::ProjectId;
+use crate::app::{Message, Signex};
+
+/// What an editor action does on the tab.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum Acted {
+    /// Nothing changed in the text.
+    Moved,
+    /// The text changed.
+    Edited,
+    /// `@` was typed: the picker opens, nothing is typed.
+    OpensPicker,
+}
+
+/// Perform `action` on `tab`'s text. A read-only file takes no edit.
+pub(super) fn act(tab: &mut NotebookTab, action: Action) -> Acted {
+    let read_only = tab.is_read_only();
+    let Some(text) = &mut tab.text else {
+        return Acted::Moved;
+    };
+    if matches!(action, Action::Edit(Edit::Insert('@'))) && !read_only {
+        return Acted::OpensPicker;
+    }
+    if action.is_edit() && read_only {
+        return Acted::Moved;
+    }
+    let edits = action.is_edit();
+    text.content.perform(action);
+    if edits { Acted::Edited } else { Acted::Moved }
+}
+
+/// Insert `inserted` at the cursor of `text`, on a line of its own for a
+/// block or a figure.
+pub(super) fn paste(text: &mut NotebookText, inserted: &Inserted, own_line: bool) {
+    let (_, column) = text.cursor();
+    let lead = if own_line && column > 0 { "\n" } else { "" };
+    let pasted = format!("{lead}{}", inserted.text);
+    text.content
+        .perform(Action::Edit(Edit::Paste(Arc::new(pasted))));
+}
+
+/// Move the cursor of `text` to the start of 0-based body line `line`.
+pub(super) fn move_to_line(text: &mut NotebookText, line: usize) {
+    let last = text.content.line_count().saturating_sub(1);
+    text.content.move_to(Cursor {
+        position: Position {
+            line: line.min(last),
+            index: 0,
+        },
+        selection: None,
+    });
+}
+
+impl Signex {
+    /// An editor action landed.
+    pub(super) fn notebook_text_acted(&mut self, id: ProjectId, action: Action) -> Task<Message> {
+        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+            return Task::none();
+        };
+        match act(tab, action) {
+            Acted::Moved => Task::none(),
+            Acted::Edited => self.notebook_edited(id),
+            Acted::OpensPicker => self.open_notebook_picker(id),
+        }
+    }
+
+    /// The text changed: read it again, mark it unsaved (or saved again
+    /// when it is back to the file), and compile.
+    pub(super) fn notebook_edited(&mut self, id: ProjectId) -> Task<Message> {
+        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+            return Task::none();
+        };
+        tab.refresh_text();
+        let path = tab.path.clone();
+        if tab.is_unsaved() {
+            self.document_state.mark_document_dirty(&path);
+        } else {
+            self.document_state.clear_document_dirty(&path);
+        }
+        self.request_notebook_compile(id)
+    }
+
+    /// A toolbar button: insert at the cursor.
+    pub(super) fn notebook_insert(
+        &mut self,
+        id: ProjectId,
+        insertion: &Insertion,
+    ) -> Task<Message> {
+        self.notebook_insert_at_cursor(id, insertion).1
+    }
+
+    /// Insert at the cursor and say what was written; `None` when the tab
+    /// holds no text or its file is read-only.
+    pub(super) fn notebook_insert_at_cursor(
+        &mut self,
+        id: ProjectId,
+        insertion: &Insertion,
+    ) -> (Option<Inserted>, Task<Message>) {
+        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+            return (None, Task::none());
+        };
+        tab.block_menu = false;
+        if tab.is_read_only() {
+            return (None, Task::none());
+        }
+        let Some(inserted) = insert_at_cursor(tab, insertion) else {
+            return (None, Task::none());
+        };
+        (Some(inserted), self.notebook_edited(id))
+    }
+
+    /// Open the picker over the editor and focus its query.
+    pub(super) fn open_notebook_picker(&mut self, id: ProjectId) -> Task<Message> {
+        let candidates = self.notebook_candidates(id);
+        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+            return Task::none();
+        };
+        if tab.text.is_none() || tab.is_read_only() {
+            return Task::none();
+        }
+        tab.block_menu = false;
+        tab.picker = Some(Picker::new(candidates));
+        iced::widget::operation::focus(iced::widget::Id::new(PICKER_INPUT_ID))
+    }
+
+    /// Enter in the picker, or a row pressed: insert the call, close it.
+    pub(super) fn notebook_picker_chosen(
+        &mut self,
+        id: ProjectId,
+        row: Option<usize>,
+    ) -> Task<Message> {
+        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+            return Task::none();
+        };
+        let chosen = tab.picker.as_ref().and_then(|picker| picker.chosen(row));
+        tab.picker = None;
+        let Some(reference) = chosen else {
+            return Task::none();
+        };
+        self.notebook_insert(id, &Insertion::Reference(reference))
+    }
+
+    /// Move the cursor to 1-based line `line` of the notebook file.
+    pub(super) fn notebook_line_picked(&mut self, id: ProjectId, line: u32) {
+        let Some(tab) = self.document_state.notebooks.get_mut(&id) else {
+            return;
+        };
+        let Some(body_line) = tab.body_line(line) else {
+            return;
+        };
+        if tab.view == super::ViewMode::Preview {
+            tab.view = super::ViewMode::Split;
+        }
+        if let Some(text) = &mut tab.text {
+            move_to_line(text, body_line);
+        }
+    }
+
+    /// F8 or Go to error: the cursor moves to the problem after it in the
+    /// notebook file, wrapping to the first.
+    pub(super) fn notebook_next_problem(&mut self, id: ProjectId) -> Option<(u32, u32)> {
+        let tab = self.document_state.notebooks.get(&id)?;
+        let text = tab.text.as_ref()?;
+        let (line, _) = text.cursor();
+        let here = tab.file_line(line);
+        let outcome = tab.compile.last.clone()?;
+        let problem = outcome.status.next_problem(MAIN_FILE, here)?;
+        let at = (problem.line, problem.column);
+        self.notebook_line_picked(id, at.0);
+        Some(at)
+    }
+}
+
+/// Write `insertion` at `tab`'s cursor; `None` when the tab holds no text.
+pub(super) fn insert_at_cursor(tab: &mut NotebookTab, insertion: &Insertion) -> Option<Inserted> {
+    let line = tab.text.as_ref().map(|text| text.cursor().0)?;
+    let file_line = tab.file_line(line);
+    let text = tab.text.as_mut()?;
+    let inserted = insertion_text(insertion, &text.outline, MAIN_FILE, file_line);
+    let own_line = !matches!(insertion, Insertion::Reference(_));
+    paste(text, &inserted, own_line);
+    if tab.load == Load::Missing {
+        tab.load = Load::Open;
+    }
+    Some(inserted)
+}
+
+/// The text editor action that types `c`.
+#[cfg(test)]
+pub(super) fn typed(c: char) -> Action {
+    Action::Edit(Edit::Insert(c))
+}
