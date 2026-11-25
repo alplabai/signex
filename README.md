@@ -21,6 +21,10 @@
 </p>
 
 <p align="center">
+  English &middot; <a href="README.zh-CN.md">简体中文</a>
+</p>
+
+<p align="center">
   <a href="#features">Features</a> &middot;
   <a href="#screenshots">Screenshots</a> &middot;
   <a href="#download">Download</a> &middot;
