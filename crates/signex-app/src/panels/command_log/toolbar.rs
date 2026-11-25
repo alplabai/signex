@@ -329,3 +329,7 @@ fn vsep<'a>(tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
         })
         .boxed()
 }
+
+#[cfg(test)]
+#[path = "measure_tests.rs"]
+mod measure_tests;

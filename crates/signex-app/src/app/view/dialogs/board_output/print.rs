@@ -288,3 +288,7 @@ fn show_group<'a>(
     }
     col.boxed()
 }
+
+#[cfg(test)]
+#[path = "tests_print_measure.rs"]
+mod tests_print_measure;
