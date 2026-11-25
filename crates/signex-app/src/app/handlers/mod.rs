@@ -55,6 +55,7 @@ mod pan_zoom_bench;
 pub mod parameter_manager;
 pub mod paste;
 pub mod pcb_drc;
+pub(crate) mod pcb_drc_bodies;
 mod pcb_drc_check;
 mod pcb_drc_results;
 #[cfg(test)]
