@@ -67,7 +67,8 @@ fn a_sheet_points_y_by_its_page_origin() {
 #[test]
 fn the_caption_names_the_turn_and_the_bottom_view() {
     let i18n = i18n();
-    let caption = |degrees, flipped| board_caption(&i18n, degrees, flipped).map(|c| plain(&c));
+    let caption =
+        |degrees, flipped| board_caption(&i18n, degrees, flipped).map(|c| plain(&c.into_string()));
     assert_eq!(caption(0.0, false), None, "no caption at home");
     assert_eq!(caption(90.0, false).as_deref(), Some("90°"));
     assert_eq!(caption(0.0, true).as_deref(), Some("Bottom"));
@@ -92,7 +93,7 @@ fn the_home_dot_shows_while_the_view_is_away_from_home() {
     for origin in [PageOrigin::LowerLeft, PageOrigin::UpperLeft] {
         let sheet = ViewOrientation::Sheet { origin };
         assert!(!sheet.away_from_home(&i18n));
-        assert_eq!(sheet.caption(&i18n), None);
+        assert!(sheet.caption(&i18n).is_none());
         assert!(sheet.tile_shown());
     }
 }
@@ -233,7 +234,7 @@ fn the_sheet_cluster_has_no_flip_caption_and_stays_inside_the_canvas() {
             origin: PageOrigin::UpperLeft
         }
     );
-    assert_eq!(orientation.caption(&app.ui_state.i18n), None);
+    assert!(orientation.caption(&app.ui_state.i18n).is_none());
     let rects = rects_of(&app, main);
     let tile = rects.tile.expect("the tile shows on a sheet");
     assert_eq!(tile.size(), Size::from(super::tile::tile_size(false)));

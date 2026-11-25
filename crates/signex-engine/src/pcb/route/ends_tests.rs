@@ -114,3 +114,79 @@ fn a_same_net_free_pad_off_the_legs_layer_gets_an_end_via() {
     assert_eq!(via.as_ref().map(|via| via.net), Some(A.0));
     assert_eq!(pad_end(&board, AT, &leg, via.as_ref()), PadEnd::Free);
 }
+
+/// #2515 with the maintainer's 2026-11-18 join: copper of no net is an
+/// obstacle, but not the pad of no net a leg ends on or starts from, which
+/// joins the route's net; another pad of no net still is.
+#[test]
+fn a_leg_reaches_the_pad_of_no_net_it_joins_and_keeps_clear_of_another() {
+    use super::tests::{pad, request};
+    use pcb_geom::CopperItem;
+    use signex_drc::DrcRules;
+    use signex_types::corner::CornerRule;
+
+    let none = (0, "");
+    let board = board(
+        vec![pad(1, 0.0, 0.0, A), pad(2, 10.0, 0.0, none)],
+        Vec::new(),
+    );
+    let rules = DrcRules::for_board(&board, &[]).unwrap();
+    let clearance = |a: &CopperItem, b: &CopperItem| rules.clearance_between(a, b);
+    let route = RouteRules {
+        clearance: &clearance,
+        reach: rules.widest_clearance(),
+        corner: CornerRule::default(),
+        mode: RouteMode::Walkaround,
+        grid_mm: 0.5,
+        budget: SEARCH_BUDGET,
+    };
+    let mut draft = RouteDraft::default();
+    let leg = route_leg(
+        &board,
+        &draft,
+        request((0.0, 0.0), (10.0, 0.0)),
+        &route,
+        Uuid::now_v7,
+    )
+    .expect("the leg reaches the pad it joins");
+    assert_eq!(
+        leg.tracks.last().map(|t| t.end),
+        Some(Point::new(10.0, 0.0))
+    );
+    draft.add(leg);
+    let away = route_leg(
+        &board,
+        &draft,
+        request((10.0, 0.0), (10.0, 5.0)),
+        &route,
+        Uuid::now_v7,
+    );
+    assert!(away.is_ok(), "a leg leaves the pad it joined: {away:?}");
+    assert_eq!(draft_fits(&board, &draft, &clearance, route.reach), Ok(()));
+
+    let past = board_with_unnetted_pad_between();
+    let straight = route_leg(
+        &past,
+        &RouteDraft::default(),
+        request((0.0, 0.0), (10.0, 0.0)),
+        &route,
+        Uuid::now_v7,
+    )
+    .expect("a way round");
+    assert!(
+        straight.tracks.len() > 1,
+        "the leg goes round the pad of no net it does not end on"
+    );
+}
+
+fn board_with_unnetted_pad_between() -> PcbBoard {
+    use super::tests::pad;
+    board(
+        vec![
+            pad(1, 0.0, 0.0, A),
+            pad(2, 10.0, 0.0, A),
+            pad(3, 5.0, 0.0, (0, "")),
+        ],
+        Vec::new(),
+    )
+}

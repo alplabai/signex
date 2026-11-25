@@ -226,7 +226,8 @@ pub fn route_leg(
         style,
         via,
     } = leg;
-    let working = draft.applied_to(board);
+    let leg_ends = [(from, style.net), (to, style.net)];
+    let working = ends::with_joined_ends(draft.applied_to(board), leg_ends);
     let world = RouteWorld::with_reach(&working, rules.clearance, rules.reach);
     let (a, b) = (nm(from)?, nm(to)?);
     let width =
@@ -342,7 +343,11 @@ pub fn draft_fits(
     if !unchanged || !present {
         return Err(RouteRefusal::BoardChanged);
     }
-    let working = draft.applied_to(board);
+    let track_ends = draft
+        .tracks
+        .iter()
+        .flat_map(|t| [(t.start, t.net), (t.end, t.net)]);
+    let working = ends::with_joined_ends(draft.applied_to(board), track_ends);
     let world = RouteWorld::with_reach(&working, clearance, reach);
     let crowded = draft
         .tracks

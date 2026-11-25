@@ -96,6 +96,7 @@ pub fn view_to_json(view: &PcbLayerView) -> Value {
         "ratsnest": view.ratsnest_visible(),
         "multi_layer": view.multi_layer_visible(),
         "origin_marker": view.origin_marker_visible(),
+        "orientation_tile": view.orientation_tile_visible(),
         "single_layer": view.single_layer(),
         "flipped": view.flipped(),
         "used_only": view.used_only(),
@@ -124,6 +125,9 @@ pub fn view_from_json(json: &Value) -> PcbLayerView {
         view.toggle_multi_layer();
     }
     view.set_origin_marker_visible(flag("origin_marker", true));
+    if !flag("orientation_tile", true) {
+        view.toggle_orientation_tile();
+    }
     if flag("single_layer", false) {
         view.toggle_single_layer();
     }
@@ -197,6 +201,7 @@ mod tests {
         view.toggle_ratsnest();
         view.toggle_multi_layer();
         view.set_origin_marker_visible(false);
+        view.toggle_orientation_tile();
         view.toggle_single_layer();
         view.toggle_flipped();
         view.set_used_only(true);
@@ -223,6 +228,19 @@ mod tests {
         }
         let plain = PcbLayerView::default();
         assert_eq!(view_from_json(&view_to_json(&plain)), plain);
+    }
+
+    /// #2508 meets #2480: the View Options eye of the orientation tile is
+    /// kept with the board's view; a view saved before it reads as shown.
+    #[test]
+    fn the_orientation_tile_eye_is_kept_with_the_board_view() {
+        let mut hidden = PcbLayerView::default();
+        hidden.toggle_orientation_tile();
+        let json = view_to_json(&hidden.kept());
+        assert_eq!(json["orientation_tile"], json!(false));
+        assert!(!view_from_json(&json).orientation_tile_visible());
+        let older = json!({ "active": "TopCopper", "ratsnest": true });
+        assert!(view_from_json(&older).orientation_tile_visible());
     }
 
     #[test]

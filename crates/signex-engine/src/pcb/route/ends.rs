@@ -197,6 +197,45 @@ fn pad_end_on(board: &PcbBoard, at: Point, net: u32, layers: u32) -> PadEnd {
     }
 }
 
+/// `board` with each pad of no net under an end `(at, net)` of a route of
+/// a net given that net, as joining it will (#2515: copper of no net is an
+/// obstacle, but not the pad the route joins). Only the routing world sees
+/// it; the join itself is [`join_pads`].
+pub(super) fn with_joined_ends(
+    mut board: PcbBoard,
+    ends: impl IntoIterator<Item = (Point, u32)>,
+) -> PcbBoard {
+    for (at, net) in ends {
+        if net == 0 {
+            continue;
+        }
+        let joining: Vec<PadAt> = pads_at(&board, at, u32::MAX)
+            .into_iter()
+            .filter(|pad| pad.net == 0)
+            .collect();
+        let name = board
+            .nets
+            .iter()
+            .find(|n| n.number == net)
+            .map_or_else(String::new, |n| n.name.clone());
+        for hit in joining {
+            let pad = board
+                .footprints
+                .iter_mut()
+                .filter(|f| f.uuid == hit.footprint)
+                .flat_map(|f| f.pads.iter_mut())
+                .find(|p| p.uuid == hit.pad);
+            if let Some(pad) = pad {
+                pad.net = Some(PadNet {
+                    number: net,
+                    name: name.clone(),
+                });
+            }
+        }
+    }
+    board
+}
+
 /// Whether `via` keeps the rules' clearance on `board` with `draft` on it,
 /// and stays out of keepouts that forbid vias.
 pub fn via_fits(

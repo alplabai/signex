@@ -17,16 +17,10 @@ use signex_gfx::view_rotation::ViewRotation;
 use signex_i18n::{menu_ids, t};
 use signex_types::schematic::PageOrigin;
 
-use super::zoom_pill::pill_origin;
+use super::zoom_pill::{ZoomPillCanvas, pill_origin};
 use super::*;
-use crate::canvas::zoom_pill::{PillMessages, PillText, home_size, pill_size};
-use crate::menu_bar::MenuMessage;
+use crate::canvas::zoom_pill::{home_size, pill_size};
 use axes::{ScreenAxes, board_caption};
-
-/// Commands behind the board pill's `-`, `+` and Fit, as on the sheet's.
-const ZOOM_OUT_COMMAND: &str = "zoom_out_at_cursor";
-const ZOOM_IN_COMMAND: &str = "zoom_in_at_cursor";
-const FIT_ALL_COMMAND: &str = "zoom_to_fit";
 
 /// What the main window's canvas shows, as the tile reads it.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -50,7 +44,7 @@ impl ViewOrientation {
     }
 
     /// The tile's caption row: a board's turn and flip; a sheet has none.
-    pub fn caption(self, i18n: &signex_i18n::I18n) -> Option<String> {
+    pub fn caption(self, i18n: &signex_i18n::I18n) -> Option<signex_i18n::Localized> {
         match self {
             Self::Board { rotation, .. } => {
                 board_caption(i18n, rotation.degrees(), rotation.is_mirrored())
@@ -170,11 +164,6 @@ impl Signex {
             menu_ids::HOME_VIEW_HINT_SHEET
         };
         let rects = cluster_rects(canvas, orientation.tile_shown().then_some(away));
-        let place =
-            |element: Element<'static, Message>, at: Rectangle| -> Element<'static, Message> {
-                // The `Translate` spans the window; only the card may take the wheel.
-                signex_widgets::Translate::new(super::scroll_guard(element), (at.x, at.y)).boxed()
-            };
         let home = crate::canvas::zoom_pill::home_view(
             tokens,
             crate::icons::icon_chrome_home(self.ui_state.theme_id),
@@ -195,36 +184,17 @@ impl Signex {
             layers = layers.push(place(tile, at));
         }
         if on_board {
-            layers = layers.push(place(self.board_zoom_pill(), rects.pill));
+            // The sheet's pill (`zoom_pill.rs`), on the board's zoom.
+            let zoom = self.interaction_state.pcb_canvas.zoom_percent();
+            let pill = self.zoom_pill_at(zoom, ZoomPillCanvas::Board);
+            layers = layers.push(place(pill, rects.pill));
         }
         layers.boxed()
     }
+}
 
-    /// The board's zoom pill: the sheet pill's controls and hints, with a
-    /// plain read-out (the zoom presets act on a sheet).
-    fn board_zoom_pill(&self) -> Element<'static, Message> {
-        let i18n = &self.ui_state.i18n;
-        let zoom = self.interaction_state.pcb_canvas.zoom_percent();
-        crate::canvas::zoom_pill::view_with(
-            &self.document_state.panel_ctx.tokens,
-            PillMessages {
-                zoom_out: Message::Menu(MenuMessage::ZoomOut),
-                zoom_in: Message::Menu(MenuMessage::ZoomIn),
-                fit_all: Message::CanvasEvent(crate::canvas::CanvasEvent::FitAll),
-                presets: None,
-            },
-            PillText {
-                readout: t!(i18n, menu_ids::ZOOM_PILL_PERCENT, "percent" => format!("{zoom:.0}"))
-                    .into(),
-                fit: t!(i18n, menu_ids::ZOOM_PILL_FIT).into(),
-                hints: [
-                    self.zoom_pill_hint(ZOOM_OUT_COMMAND),
-                    self.zoom_pill_hint(ZOOM_IN_COMMAND),
-                    None,
-                    self.zoom_pill_hint(FIT_ALL_COMMAND),
-                ],
-            },
-            false,
-        )
-    }
+/// `element` at `at` on the window-wide layer.
+fn place<'a>(element: Element<'a, Message>, at: Rectangle) -> Element<'a, Message> {
+    // The `Translate` spans the window; only the card may take the wheel.
+    signex_widgets::Translate::new(super::scroll_guard(element), (at.x, at.y)).boxed()
 }
