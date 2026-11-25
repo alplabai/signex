@@ -244,7 +244,7 @@ preferences-pcb-dimensions-help = Each new project starts with these as its dime
 preferences-page-pcb-display = Display
 preferences-section-pcb-display = PCB — Display
 preferences-pcb-dim-others = Dim other nets
-preferences-pcb-dim-others-help = While a net is highlighted, the copper of every other net is drawn this much fainter; the highlighted net stays at full brightness. 0% leaves the board as it is, 100% hides the other copper.
+preferences-pcb-dim-others-help = While a net is highlighted, or while you route, drag, move or place copper, the copper of every other net is drawn this much fainter; the nets you are working on stay at full brightness. 0% leaves the board as it is, 100% hides the other copper.
 # Beside the slider: the dim amount, 0 to 100.
 preferences-pcb-dim-others-value = { $percent }%
 
