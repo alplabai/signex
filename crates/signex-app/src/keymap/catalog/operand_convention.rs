@@ -115,6 +115,16 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("diff_pair_class", OperandKind::Text),
     ("via_hole", OperandKind::Text),
     ("current", OperandKind::Text),
+    // #2942: a stage of the board's layout plan and its settings, each a
+    // comma list.
+    ("stage", OperandKind::Text),
+    ("weights", OperandKind::Text),
+    ("rooms", OperandKind::Text),
+    ("keep", OperandKind::Text),
+    ("nets", OperandKind::Text),
+    ("skip", OperandKind::Text),
+    ("pours", OperandKind::Text),
+    ("requirements", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

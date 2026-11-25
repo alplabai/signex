@@ -278,6 +278,8 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "set_board_panel",
         "it edits a board, which no sheet's undo step covers; run it as its own command",
     ),
+    // #2942: the layout plan is board data, a board step of its own.
+    ("layout_plan_set", BOARD_EDIT),
     (
         "swap_pins",
         "it edits the board and its sheet together; run it as its own command",

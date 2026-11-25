@@ -158,6 +158,8 @@ pcb-board-grid-origin-y = Origin Y
 pcb-board-grid-new-name = Grid { $number }
 # The undo step of a guide, grid, sheet or naming edit (#2374).
 pcb-board-options-undo = Board options
+# The undo step of a layout plan change (#2942).
+pcb-board-layout-plan-undo = Layout plan
 # $why says why a board option was not changed.
 pcb-board-options-refused = Board option not changed: { $why }
 

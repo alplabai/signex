@@ -11,6 +11,7 @@ mod deferred;
 #[cfg(unix)]
 mod hold;
 mod journal;
+mod layout_plan;
 #[cfg(unix)]
 mod live;
 mod net_class_membership;

@@ -128,6 +128,10 @@ mod tests {
                 "hide_layer_group",
                 "highlight_layer",
                 "keepout_from_selection",
+                // #2942: the named board's layout plan.
+                "layout_plan_get",
+                "layout_plan_set",
+                "layout_plan_status",
                 "list_documents",
                 "lock_board_items",
                 "measure_board",

@@ -221,6 +221,41 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
+    // #2942: the board's layout plan, read, set one stage at a time (one
+    // undo step) and judged stage by stage. No menu row, no default keys.
+    CommandMetadata {
+        id: "layout_plan_get",
+        category: "pcb",
+        label: command_ids::CMD_LAYOUT_PLAN_GET,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "layout_plan_set",
+        category: "pcb",
+        label: command_ids::CMD_LAYOUT_PLAN_SET,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: operands::LAYOUT_PLAN_SET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "layout_plan_status",
+        category: "pcb",
+        label: command_ids::CMD_LAYOUT_PLAN_STATUS,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
     // #2457: Place ▸ Room draws a room by two corners; one undo step.
     CommandMetadata {
         id: "place_board_room",

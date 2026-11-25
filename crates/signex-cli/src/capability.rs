@@ -175,6 +175,15 @@ mod tests {
         assert_eq!(cap("repour_all"), Capability::Edit);
     }
 
+    /// #2942: setting the layout plan is a board undo step, so it needs
+    /// `edit`; reading it and its status only read.
+    #[test]
+    fn the_layout_plan_is_set_with_edit_and_read_with_read() {
+        assert_eq!(cap("layout_plan_set"), Capability::Edit);
+        assert_eq!(cap("layout_plan_get"), Capability::Read);
+        assert_eq!(cap("layout_plan_status"), Capability::Read);
+    }
+
     #[test]
     fn the_catalogs_writers_and_exporters_are_pinned() {
         let non_default: BTreeSet<_> = all_command_ids()

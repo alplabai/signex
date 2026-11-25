@@ -183,6 +183,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "panelize_board",
             "remove_board_panel",
             "set_board_panel",
+            "layout_plan_set",
             "swap_pins",
             "swap_gates",
             "save_board_reuse_block",
@@ -401,12 +402,15 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Query,
         &[Settings],
     ),
-    // Read: operands only.
+    // Read: operands only. `layout_plan_status` reads the board's last DRC
+    // run, core-bound session state as for `rules_get` above.
     (
         &[
             "board_panel",
             "find_items",
             "find_similar_items",
+            "layout_plan_get",
+            "layout_plan_status",
             "measure_board",
             "query_board_nets",
             "query_pins",
