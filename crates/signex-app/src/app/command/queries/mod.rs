@@ -5,7 +5,9 @@
 //! the Rules manager reads `rules_list`, `rules_get`, `rules_effective`,
 //! `rules_explain`, `rules_conflicts`, `rules_matrix_get` and
 //! `rules_preset_diff` (#2398, `app::rules_tab`; a profile preset reads the
-//! rule profile library, read off the update loop first), and the board
+//! rule profile library, read off the update loop first), the notebook's
+//! `notebook_measurements`, `notebook_timeline` and `notebook_attachments`
+//! (mockup row 199, `app::notebook_measurements`), and the board
 //! queries `measure_board`, `query_board_nets` and `find_similar_items`
 //! (#2403), `board_panel` (#2410, `app::board_panel`), and the Project tab's
 //! `project_settings` (#1689-#1693, `app::project_tab`). Each
@@ -75,9 +77,12 @@ pub(crate) fn is_check(command: &AppCommandId) -> bool {
     CHECK_IDS.contains(&command.as_str())
 }
 
-/// Every query command id.
+/// Every query command id: these and the notebook's measurement reads.
 pub(crate) fn query_command_ids() -> impl Iterator<Item = &'static str> {
-    QUERY_IDS.iter().copied()
+    QUERY_IDS
+        .iter()
+        .copied()
+        .chain(crate::app::notebook_measurements::QUERY_IDS)
 }
 
 /// Is `command` one of the query commands?
@@ -127,6 +132,12 @@ impl Signex {
             "check_erc" => return Some(self.check_erc(command, args)),
             "check_drc" => return Some(self.check_drc(command, args)),
             "check_requirements" => return Some(self.check_requirements(command, args)),
+            // The notebook's measurement reads wait for the notebook's files.
+            "notebook_measurements" | "notebook_timeline" | "notebook_attachments" => {
+                return Some(crate::app::notebook_measurements::query(
+                    self, command, args,
+                ));
+            }
             // The Rules manager's reads (#2398).
             "rules_list" | "rules_get" | "rules_effective" | "rules_explain"
             | "rules_conflicts" => {

@@ -120,6 +120,11 @@
     "category": "design"
   },
   {
+    "id": "attach_notebook_file",
+    "group": "General",
+    "category": "design"
+  },
+  {
     "id": "autoplace_fields",
     "group": "General",
     "category": "edit"
@@ -575,6 +580,11 @@
     "category": "reports"
   },
   {
+    "id": "export_notebook_timeline",
+    "group": "General",
+    "category": "reports"
+  },
+  {
     "id": "fabrication_outputs",
     "group": "Pcb",
     "category": "file"
@@ -775,6 +785,11 @@
     "category": "window"
   },
   {
+    "id": "mark_notebook_attachment_valid",
+    "group": "General",
+    "category": "design"
+  },
+  {
     "id": "measure_board",
     "group": "Pcb",
     "category": "search"
@@ -868,6 +883,21 @@
     "id": "next_signal_layer",
     "group": "Pcb",
     "category": "view"
+  },
+  {
+    "id": "notebook_attachments",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_measurements",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_timeline",
+    "group": "General",
+    "category": "design"
   },
   {
     "id": "number_schematic_sheets",

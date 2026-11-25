@@ -24,6 +24,7 @@ mod history;
 mod layers;
 mod library;
 mod nets;
+mod notebook_measurements;
 mod operands;
 mod pcb_sync;
 mod placement;
@@ -331,6 +332,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     grid::GRID,
     library::LIBRARY,
     workspace::WORKSPACE,
+    notebook_measurements::NOTEBOOK_MEASUREMENTS,
 ];
 
 /// Flattened iterator over every command's metadata, across all groups, in
@@ -691,6 +693,10 @@ mod tests {
             ("grid.rs", include_str!("grid.rs")),
             ("library.rs", include_str!("library.rs")),
             ("workspace.rs", include_str!("workspace.rs")),
+            (
+                "notebook_measurements.rs",
+                include_str!("notebook_measurements.rs"),
+            ),
         ];
 
         let mut missing: Vec<String> = Vec::new();

@@ -73,6 +73,9 @@ assign_footprints	headless_refusal	headless_refusal	gui	none	routing
 assign_net_class	operand_handler	run_operands: named document	core	origin	handler
 assign_net_class	refusal_needs_operands	needs_operands_reason	gui	none	routing
 assign_net_class	headless_missing_operand	needs `document`	core	none	routing
+attach_notebook_file	operand_handler	run_operands: named document	core	origin	handler
+attach_notebook_file	refusal_needs_operands	needs_operands_reason	gui	none	routing
+attach_notebook_file	headless_missing_operand	needs `document`	core	none	routing
 autoplace_fields	bridge	Edit(Extras(AutoplaceFieldsRequested))	core	active document,selection	handler
 autoplace_fields	operand_handler	run_operands: named document	core	origin	handler
 autoplace_fields	in_window_rewrite	document_window	gui	window	routing
@@ -419,6 +422,9 @@ export_board_step	operand_handler	run_operands: named document	core	origin	handl
 export_board_step	in_window_rewrite	document_window	gui	window	routing
 export_board_step	refusal_needs	Pcb	gui	active document	routing
 export_board_step	headless_missing_operand	needs `document`	core	none	routing
+export_notebook_timeline	operand_handler	run_operands: named document	core	origin	handler
+export_notebook_timeline	refusal_needs_operands	needs_operands_reason	gui	none	routing
+export_notebook_timeline	headless_missing_operand	needs `document`	core	none	routing
 fabrication_outputs	bridge	Pcb(FabOutputs(Requested))	gui	active document	gate
 fabrication_outputs	in_window_rewrite	document_window	gui	window	routing
 fabrication_outputs	refusal_needs	Pcb	gui	active document	routing
@@ -565,6 +571,9 @@ lock_board_items	headless_missing_operand	needs `document`	core	none	routing
 manage_workspace_layouts	bridge	DockLayout(Workspace(Manage(Requested)))	gui	settings	handler
 manage_workspace_layouts	in_window_rewrite	document_window	gui	window	routing
 manage_workspace_layouts	headless_refusal	headless_refusal	gui	none	routing
+mark_notebook_attachment_valid	operand_handler	run_operands: named document	core	origin	handler
+mark_notebook_attachment_valid	refusal_needs_operands	needs_operands_reason	gui	none	routing
+mark_notebook_attachment_valid	headless_missing_operand	needs `document`	core	none	routing
 measure_board	query	run_query	core	origin	handler
 measure_board	headless_missing_operand	needs `document`	core	none	routing
 measure_distance	bridge	Tool(SelectTool(Measure))	gui	active document	gate
@@ -640,6 +649,12 @@ next_signal_layer	bridge	Pcb(View(SignalLayerStepped { forward: true }))	gui	act
 next_signal_layer	in_window_rewrite	board_view_in_window|document_window	gui	window	routing
 next_signal_layer	refusal_needs	Pcb	gui	active document	routing
 next_signal_layer	headless_refusal	headless_refusal	gui	none	routing
+notebook_attachments	query	run_query	core	origin	handler
+notebook_attachments	headless_missing_operand	needs `document`	core	none	routing
+notebook_measurements	query	run_query	core	origin	handler
+notebook_measurements	headless_missing_operand	needs `document`	core	none	routing
+notebook_timeline	query	run_query	core	origin	handler
+notebook_timeline	headless_missing_operand	needs `document`	core	none	routing
 number_schematic_sheets	bridge	Project(SheetNumbering(Requested))	gui	active document	gate
 number_schematic_sheets	in_window_rewrite	document_window	gui	window	routing
 number_schematic_sheets	refusal_needs	ProjectSheet	gui	active document	routing

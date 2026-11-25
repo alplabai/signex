@@ -428,3 +428,9 @@ apply_layout_notebook	window	Workspace layout: Notebook	Notebook	General	-	-	Alw
 save_workspace_layout	window	Save the panel arrangement as a workspace layout	Save Layout…	General	-	-	Always	gui_only	-
 manage_workspace_layouts	window	Manage workspace layouts	Manage Layouts…	General	-	-	Always	gui_only	-
 reset_workspace_layout	window	Reset the edited built-in workspace layout	Reset Layout	General	-	-	Always	gui_only	-
+notebook_measurements	design	List the notebook's measurements with their results	-	General	-	-	Always	-	document:document
+notebook_timeline	design	Show the measurement timeline of a net, part or pin	-	General	-	-	Always	-	document:document,net:text?,part:text?,pin:text?,quantity:text?
+notebook_attachments	design	List the notebook's attachments and their stale marks	-	General	-	-	Always	-	document:document
+export_notebook_timeline	reports	Export a measurement timeline as a CSV file	-	General	-	-	Always	-	document:document,net:text?,part:text?,pin:text?,quantity:text?,path:path
+mark_notebook_attachment_valid	design	Mark a stale attachment or reading as still valid	-	General	-	-	Always	-	document:document,file:text?,id:text?
+attach_notebook_file	design	Copy a file into the notebook as an attachment	-	General	-	-	Always	-	document:document,path:path,kind:text?,text:text?,net:text?,part:text?,pin:text?

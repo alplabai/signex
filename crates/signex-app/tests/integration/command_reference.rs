@@ -135,6 +135,12 @@ fn render() -> String {
          [baseline=<run>]` runs the project's requirements list as checks and\n\
          answers in the same shape; rules in [CLI.md](CLI.md), \"Requirement\n\
          checks\".\n\
+         `notebook_measurements`, `notebook_timeline` and `notebook_attachments`\n\
+         read the named project's Design Notebook once its files are read: every\n\
+         reading with its result, one net's, part's or pin's timeline, every\n\
+         attachment with its stale mark; `export_notebook_timeline`,\n\
+         `mark_notebook_attachment_valid` and `attach_notebook_file` write a file.\n\
+         Rules in [NOTEBOOK_MEASUREMENTS.md](NOTEBOOK_MEASUREMENTS.md).\n\
          `measure_board`, `query_board_nets` and `find_similar_items` are board\n\
          queries: a distance on one board, point to point or edge to edge between\n\
          two items; each net's routed length, members and routed state; and the\n\

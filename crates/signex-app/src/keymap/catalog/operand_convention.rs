@@ -115,6 +115,9 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("diff_pair_class", OperandKind::Text),
     ("via_hole", OperandKind::Text),
     ("current", OperandKind::Text),
+    // Mockup row 199: a notebook timeline's pin (`U3.3`) and quantity.
+    ("pin", OperandKind::Text),
+    ("quantity", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

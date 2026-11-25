@@ -130,7 +130,13 @@ mod tests {
                 "keepout_from_selection",
                 "list_documents",
                 "lock_board_items",
+                // Mockup row 199: the notebook's measurements, timelines and
+                // attachments, and Mark still valid, on the named project.
+                "mark_notebook_attachment_valid",
                 "measure_board",
+                "notebook_attachments",
+                "notebook_measurements",
+                "notebook_timeline",
                 "panelize_board",
                 // #2410: pin and gate swap and design reuse, on the named board.
                 "place_board_reuse_block",

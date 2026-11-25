@@ -54,6 +54,7 @@ mod library_delete;
 mod load_gateway;
 mod mutation_gateway;
 pub(crate) mod new_project;
+pub(crate) mod notebook_measurements;
 pub(crate) mod page_tab;
 pub mod parent_reference_disk;
 mod parked_sheets;

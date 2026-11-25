@@ -195,6 +195,20 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "import_dxf_outline",
         crate::app::handlers::pcb_dxf_import::import_dxf_outline,
     ),
+    // Mockup row 199: the notebook's timeline export, Mark still valid and
+    // the copy of a file into notebook/attachments/.
+    (
+        "export_notebook_timeline",
+        crate::app::notebook_measurements::export_notebook_timeline,
+    ),
+    (
+        "mark_notebook_attachment_valid",
+        crate::app::notebook_measurements::mark_notebook_attachment_valid,
+    ),
+    (
+        "attach_notebook_file",
+        crate::app::notebook_measurements::attach_notebook_file,
+    ),
     ("rules_matrix_set", crate::app::rules_tab::rules_matrix_set),
     ("rules_set_create", crate::app::rules_tab::rules_set_create),
     ("rules_set_edit", crate::app::rules_tab::rules_set_edit),
@@ -480,6 +494,19 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "filter_drc_results" => Some(
             "`filter_drc_results` needs the operand `document` — \
              use the filters of the DRC panel",
+        ),
+        // Mockup row 199: a person uses the notebook's margin lane.
+        "export_notebook_timeline" => Some(
+            "`export_notebook_timeline` needs the operands `document`, a target and `path` — \
+             use export CSV under the timeline in the notebook",
+        ),
+        "mark_notebook_attachment_valid" => Some(
+            "`mark_notebook_attachment_valid` needs the operands `document` and `file` or `id` — \
+             use Mark still valid on the stale figure in the notebook",
+        ),
+        "attach_notebook_file" => Some(
+            "`attach_notebook_file` needs the operands `document` and `path` — \
+             drop the file on the notebook page or use Figure",
         ),
         "add_net_class"
         | "rename_net_class"

@@ -206,6 +206,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "send_drawings_backward",
             "send_drawings_to_back",
             "delete_selection",
+            // Mockup row 199: the named project's notebook files.
+            "export_notebook_timeline",
+            "mark_notebook_attachment_valid",
+            "attach_notebook_file",
         ],
         Operand,
         &[],
@@ -411,6 +415,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "query_board_nets",
             "query_pins",
             "read_document",
+            // Mockup row 199: the named project's notebook and sheets.
+            "notebook_measurements",
+            "notebook_timeline",
+            "notebook_attachments",
         ],
         Query,
         &[],

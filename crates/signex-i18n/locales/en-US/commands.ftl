@@ -760,3 +760,11 @@ cmd-menu-polygon-manager = Polygon Manager...
 cmd-flip-board-3d = Turn the board over in the 3D view
 cmd-cycle-board-3d-lighting = Next lighting preset in the 3D view
 cmd-copy-board-3d-screenshot = Copy a screenshot of the 3D view
+# notebook-measurements
+# Mockup row 199: the Design Notebook's readings, timelines and attachments.
+cmd-notebook-measurements = List the notebook's measurements with their results
+cmd-notebook-timeline = Show the measurement timeline of a net, part or pin
+cmd-notebook-attachments = List the notebook's attachments and their stale marks
+cmd-export-notebook-timeline = Export a measurement timeline as a CSV file
+cmd-mark-notebook-attachment-valid = Mark a stale attachment or reading as still valid
+cmd-attach-notebook-file = Copy a file into the notebook as an attachment
