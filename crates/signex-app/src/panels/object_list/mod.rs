@@ -1,10 +1,12 @@
 //! Object List panel (#1259): every object of the sheet in view or of its
 //! project, filtered by text and kind. A click selects the object on the
 //! canvas, a double click zooms to it; rows selected on the canvas carry an
-//! accent edge. A pure view over the rows the panel context holds; the rows
-//! are built in `app/handlers/object_list.rs` only when the documents, the
-//! scope or the picks change.
+//! accent edge. A double click on an editable Name or Value cell edits it in
+//! place instead (#2953, `cell_edit`). A pure view over the rows the panel
+//! context holds; the rows are built in `app/handlers/object_list.rs` only
+//! when the documents, the scope or the picks change.
 
+pub mod cell_edit;
 mod chips;
 pub mod model;
 
@@ -18,6 +20,7 @@ use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_widgets::text;
 
+use cell_edit::{CellEditMsg, ObjectColumn, editable_text};
 pub use model::{
     KindChip, ObjectKind, ObjectListMsg, ObjectListState, ObjectListStatus, ObjectListView,
     ObjectRef, ObjectRow, ObjectScope,
@@ -208,15 +211,20 @@ fn object_row<'a>(
     let value = text(value_label(i18n, &r.value, ctx.unit))
         .size(TS.body)
         .color(ink)
-        .wrapping(iced::widget::text::Wrapping::None);
+        .wrapping(iced::widget::text::Wrapping::None)
+        .boxed();
     let sheet = text(UserText::new(r.sheet.as_str()))
         .size(TS.caption)
         .color(muted)
         .wrapping(iced::widget::text::Wrapping::None);
     let cells = row![
         mark,
-        container(name).width(Length::FillPortion(2)).clip(true),
-        container(value).width(Length::FillPortion(3)).clip(true),
+        container(cell(view, r, ObjectColumn::Name, name))
+            .width(Length::FillPortion(2))
+            .clip(true),
+        container(cell(view, r, ObjectColumn::Value, value))
+            .width(Length::FillPortion(3))
+            .clip(true),
         container(sheet).width(Length::Fixed(SHEET_W)).clip(true),
     ]
     .spacing(SP.s)
@@ -253,6 +261,43 @@ fn object_row<'a>(
         .on_press(msg(ObjectListMsg::RowClicked(r.target.clone())))
         .on_double_click(msg(ObjectListMsg::RowDoubleClicked(r.target.clone())))
         .interaction(iced::mouse::Interaction::Pointer)
+        .boxed()
+}
+
+/// A Name or Value cell: its editor while it is open, else `content`, which
+/// a double click opens when the cell is editable (#2953). A cell of another
+/// sheet than the one in view is not opened here: its double click zooms
+/// there, as the row's does. The cell answers a single click as the row does,
+/// since it takes the press from the row.
+fn cell<'a>(
+    view: &ObjectListView,
+    r: &'a ObjectRow,
+    column: ObjectColumn,
+    content: Element<'a, PanelMsg>,
+) -> Element<'a, PanelMsg> {
+    if let Some(editing) = view.editing.as_ref().filter(|e| e.is_cell(r, column)) {
+        return signex_widgets::text_input(UserText::new(String::new()), editing.draft.clone())
+            .id(iced::widget::Id::new(cell_edit::CELL_INPUT_ID))
+            .on_input(|t| msg(ObjectListMsg::CellEdit(CellEditMsg::DraftChanged(t))))
+            .on_submit(msg(ObjectListMsg::CellEdit(CellEditMsg::Committed)))
+            .size(TS.body)
+            .padding([0.0, SP.xs])
+            .style(crate::panels::form_look::text_input_style)
+            .width(Length::Fill)
+            .boxed();
+    }
+    let on_sheet = view.active_sheet.as_deref() == Some(r.target.sheet.as_path());
+    if !on_sheet || editable_text(r, column).is_none() {
+        return content;
+    }
+    let open = CellEditMsg::Opened {
+        target: r.target.clone(),
+        column,
+    };
+    mouse_area(container(content).width(Length::Fill))
+        .on_press(msg(ObjectListMsg::RowClicked(r.target.clone())))
+        .on_double_click(msg(ObjectListMsg::CellEdit(open)))
+        .interaction(iced::mouse::Interaction::Text)
         .boxed()
 }
 

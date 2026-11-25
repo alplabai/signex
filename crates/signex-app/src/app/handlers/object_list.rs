@@ -92,6 +92,7 @@ impl Signex {
             ObjectListMsg::MoreRowsShown => state.shown = state.row_limit() + ROW_PAGE,
             ObjectListMsg::RowClicked(target) => return self.go_to_object(&target, false),
             ObjectListMsg::RowDoubleClicked(target) => return self.go_to_object(&target, true),
+            ObjectListMsg::CellEdit(edit) => return self.handle_object_list_cell_edit(edit),
             ObjectListMsg::ProjectRowsRead { generation, rows } => {
                 if generation != state.source.generation {
                     return Task::none();

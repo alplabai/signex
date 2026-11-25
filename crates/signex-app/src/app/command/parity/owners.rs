@@ -655,6 +655,7 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "set_net_class_rules",
     "set_object_position",
     "set_object_rotation",
+    "set_object_text",
     "set_pad_shape",
     "set_sheet_symbol_size",
     "set_sheet_variable",

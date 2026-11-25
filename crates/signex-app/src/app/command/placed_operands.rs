@@ -5,7 +5,10 @@
 //! and one undo step. Coordinates are stored mm (Y down from the paper's
 //! top), as every operand point is; the Properties rows convert the shown
 //! unit and page origin before they call in. Rules: `docs/CLI.md`, "Editing
-//! placed objects".
+//! placed objects". `set_object_text` (#2953) is in `text`.
+
+mod text;
+pub(super) use text::set_object_text;
 
 use iced::Task;
 use serde_json::{Value, json};
