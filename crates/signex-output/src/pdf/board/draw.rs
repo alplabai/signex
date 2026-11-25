@@ -13,8 +13,8 @@ use super::frame::{MARGIN_MM, TITLE_BLOCK_MM};
 use super::{BoardLayerSet, BoardPrintOptions, PageFrame};
 use crate::pdf::MM_TO_PT;
 
-pub(super) type Rgb = (f32, f32, f32);
-pub(super) type Pt = (f32, f32);
+pub(crate) type Rgb = (f32, f32, f32);
+pub(crate) type Pt = (f32, f32);
 
 const BLACK: Rgb = (0.0, 0.0, 0.0);
 const PAPER: Rgb = (1.0, 1.0, 1.0);
@@ -327,7 +327,7 @@ fn disc(s: &mut PdfSurface<'_>, frame: &PageFrame, at: (f64, f64), radius_mm: f6
 }
 
 /// Fill `rings` as one even-odd area: an outline and its holes.
-pub(super) fn fill(s: &mut PdfSurface<'_>, rings: &[Vec<Pt>], rgb: Rgb) {
+pub(crate) fn fill(s: &mut PdfSurface<'_>, rings: &[Vec<Pt>], rgb: Rgb) {
     let rings: Vec<&Vec<Pt>> = rings.iter().filter(|r| r.len() >= 3).collect();
     if rings.is_empty() {
         return;
@@ -339,7 +339,7 @@ pub(super) fn fill(s: &mut PdfSurface<'_>, rings: &[Vec<Pt>], rgb: Rgb) {
     s.raw_operator("f*\n");
 }
 
-pub(super) fn stroke(s: &mut PdfSurface<'_>, points: &[Pt], closed: bool, width_pt: f32, rgb: Rgb) {
+pub(crate) fn stroke(s: &mut PdfSurface<'_>, points: &[Pt], closed: bool, width_pt: f32, rgb: Rgb) {
     if points.len() < 2 {
         return;
     }
@@ -391,7 +391,7 @@ fn justified_label(
 
 /// A text centred on `at` (model mm), `size_mm` high, turned by
 /// `rotation_deg`. Too small to read, it is left out.
-pub(super) fn label(
+pub(crate) fn label(
     s: &mut PdfSurface<'_>,
     frame: &PageFrame,
     at: (f64, f64),
@@ -426,7 +426,7 @@ pub(super) fn label(
 }
 
 /// What a page's title block says.
-pub(super) struct TitleBlock<'a> {
+pub(crate) struct TitleBlock<'a> {
     pub title: &'a str,
     pub label: &'a str,
     /// Page mm per board mm.
@@ -437,7 +437,7 @@ pub(super) struct TitleBlock<'a> {
 
 /// The title block: a framed strip under the drawing with the board name,
 /// the page's sets, the scale and the page number.
-pub(super) fn title_block(
+pub(crate) fn title_block(
     s: &mut PdfSurface<'_>,
     frame: &PageFrame,
     block: &TitleBlock<'_>,
