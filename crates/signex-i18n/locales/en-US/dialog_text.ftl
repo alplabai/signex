@@ -423,6 +423,11 @@ dialog-parameter-manager-no-match-title = No part matches the filter
 dialog-parameter-manager-no-match-body = No reference, value or footprint on { $sheet } contains { $query }.
 # The no-match card with All sheets. $query is the typed filter.
 dialog-parameter-manager-no-match-body-all = No reference, value or footprint on the open sheets contains { $query }.
+# Beside the scope switch with All sheets: project sheets the table does not list because they are not open.
+dialog-parameter-manager-closed-sheets = { $count ->
+    [one] 1 sheet of the project is closed and not listed; open it to edit its parameters.
+   *[other] { $count } sheets of the project are closed and not listed; open them to edit their parameters.
+}
 # Messages lines: an edit across several sheets changed no sheet. $sheet is the file name.
 dialog-parameter-manager-refused-busy = Parameter Manager: nothing changed, { $sheet } is being saved or moved.
 dialog-parameter-manager-refused-read-only = Parameter Manager: nothing changed, { $sheet } opens read-only.

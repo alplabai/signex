@@ -245,7 +245,9 @@ impl Signex {
         empty_area(card)
     }
 
-    /// The header's Active sheet / All sheets switch (Caner 2026-11-25).
+    /// The header's Active sheet / All sheets switch (Caner 2026-11-25),
+    /// with All sheets a note counting the project's sheets left out
+    /// because they are not open.
     fn view_parameter_scope_bar(&self) -> Element<'_, Message> {
         let tokens = &self.document_state.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
@@ -265,7 +267,17 @@ impl Signex {
             r.segmented(TS.body),
             |scope| Message::ParameterManager(ParameterManagerMsg::ScopePicked(scope)),
         );
-        let bar = container(switch).padding([SP.m, SP.l]).width(Length::Fill);
+        let mut content = row![switch].spacing(SP.l).align_y(Alignment::Center);
+        let closed = self.closed_parameter_sheets();
+        if closed > 0 {
+            content = content.push(
+                text(t!(i18n, ids::DIALOG_PARAMETER_MANAGER_CLOSED_SHEETS, "count" => closed))
+                    .size(TS.caption)
+                    .color(r.ink3)
+                    .boxed(),
+            );
+        }
+        let bar = container(content).padding([SP.m, SP.l]).width(Length::Fill);
         column![bar, table::rule(r.line_soft, Length::Fill, true)].boxed()
     }
 

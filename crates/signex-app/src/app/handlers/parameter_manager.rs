@@ -153,6 +153,27 @@ impl Signex {
             .collect()
     }
 
+    /// With All sheets, how many sheets the active sheet's project lists
+    /// that no open document holds: the table cannot show them, and the
+    /// scope bar says so. 0 with Active sheet. Reads no file.
+    pub(crate) fn closed_parameter_sheets(&self) -> usize {
+        if self.ui_state.parameter_table.scope != ParameterScope::AllSheets {
+            return 0;
+        }
+        let docs = &self.document_state;
+        let Some(active) = docs.active_path.as_deref() else {
+            return 0;
+        };
+        crate::app::project_sheets::project_pages(docs.document_project(active))
+            .iter()
+            .filter(|page| {
+                let held = self.held_spelling(page);
+                !docs.engines.contains_key(*page)
+                    && held.is_none_or(|held| !docs.engines.contains_key(&held))
+            })
+            .count()
+    }
+
     /// Write one parameter value now. An empty value empties the parameter,
     /// it does not delete it. Keystrokes in one cell are one undo step on
     /// the cell's sheet.
