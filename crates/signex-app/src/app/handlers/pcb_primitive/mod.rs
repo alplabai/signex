@@ -22,6 +22,8 @@ mod zone;
 mod dimension_style_tests;
 #[cfg(test)]
 mod tune_tests;
+#[cfg(test)]
+mod via_limit_tests;
 
 pub(crate) use dimension_style::dimension_style_edit;
 pub(crate) use free::dimension_edit;
