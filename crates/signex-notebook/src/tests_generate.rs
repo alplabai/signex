@@ -401,6 +401,14 @@ fn fail_on_checks_holds_on_an_erc_or_drc_error() {
 }
 
 #[test]
+fn a_fail_on_condition_reads_the_counts_of_an_answer() {
+    assert!(FailOn::Requirements.holds_on(1, 0));
+    assert!(!FailOn::Requirements.holds_on(0, 3));
+    assert!(FailOn::Checks.holds_on(0, 3));
+    assert!(!FailOn::Checks.holds_on(2, 0));
+}
+
+#[test]
 fn a_fail_on_list_reads_its_two_conditions() {
     assert_eq!(
         parse_fail_on("requirements"),

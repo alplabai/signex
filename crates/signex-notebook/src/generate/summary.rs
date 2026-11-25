@@ -249,12 +249,20 @@ impl FailOn {
     }
 
     fn holds(self, summary: &GenerateSummary) -> bool {
+        let errors = [&summary.checks.erc, &summary.checks.drc]
+            .into_iter()
+            .flatten()
+            .map(|counts| counts.errors)
+            .sum::<usize>();
+        self.holds_on(summary.requirements.fail as u64, errors as u64)
+    }
+
+    /// Whether the condition holds for `failed` failing requirements and
+    /// `errors` ERC and DRC errors, as an answer read back from JSON says.
+    pub fn holds_on(self, failed: u64, errors: u64) -> bool {
         match self {
-            FailOn::Requirements => summary.requirements.fail > 0,
-            FailOn::Checks => [&summary.checks.erc, &summary.checks.drc]
-                .into_iter()
-                .flatten()
-                .any(|counts| counts.errors > 0),
+            FailOn::Requirements => failed > 0,
+            FailOn::Checks => errors > 0,
         }
     }
 }

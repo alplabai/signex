@@ -63,6 +63,9 @@ pub enum StartupAction {
     /// A document path cannot be resolved: print why and exit without a
     /// window.
     Refused(String),
+    /// `signex notebook …` (#2945): a Design Notebook command run with no
+    /// window.
+    Notebook(crate::notebook_cli::NotebookCommand),
 }
 
 /// Classify argv (without the program name). `--version` / `--help` win
@@ -73,6 +76,11 @@ where
     I: IntoIterator<Item = OsString>,
 {
     let args: Vec<OsString> = args.into_iter().collect();
+    // `signex notebook …` owns everything after `notebook`, its own --help
+    // included.
+    if args.first().and_then(|arg| arg.to_str()) == Some("notebook") {
+        return notebook_action(&args[1..], cwd);
+    }
     for arg in &args {
         match arg.to_str() {
             Some("--version" | "-V") => return StartupAction::PrintVersion,
@@ -83,6 +91,29 @@ where
     match document_paths(args, cwd) {
         Ok(paths) => StartupAction::Launch(paths),
         Err(why) => StartupAction::Refused(why),
+    }
+}
+
+/// `signex notebook <args>`: the command, or why the line is refused.
+fn notebook_action(args: &[OsString], cwd: Result<&Path, &io::Error>) -> StartupAction {
+    let cwd = match cwd {
+        Ok(cwd) => cwd,
+        Err(why) => {
+            return StartupAction::Refused(format!(
+                "signex notebook: the working directory cannot be read ({why})"
+            ));
+        }
+    };
+    let args: Vec<String> = args
+        .iter()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect();
+    match crate::notebook_cli::parse(&args, cwd) {
+        Ok(command) => StartupAction::Notebook(command),
+        Err(why) => StartupAction::Refused(format!(
+            "signex notebook: {why}\n\n{}",
+            crate::notebook_cli::USAGE
+        )),
     }
 }
 
@@ -97,9 +128,13 @@ pub fn help_text() -> String {
         version_text().as_str(),
         "",
         "Usage: signex [OPTIONS] [FILE]...",
+        "       signex notebook <COMMAND> [OPTIONS]",
         "",
         "Arguments:",
         "  [FILE]...  Documents to open at startup (.snxsch, .snxpcb, .snxprj, ...)",
+        "",
+        "Commands:",
+        "  notebook   Design Notebook commands with no window (signex notebook --help)",
         "",
         "Options:",
         "  -V, --version  Print the version and exit",
@@ -271,5 +306,38 @@ mod tests {
     fn version_text_carries_the_crate_version() {
         assert!(version_text().ends_with(env!("CARGO_PKG_VERSION")));
         assert!(help_text().contains("--version"));
+        assert!(help_text().contains("signex notebook"));
+    }
+
+    /// #2945: `signex notebook …` is a command, its --help its own.
+    #[test]
+    fn notebook_takes_the_rest_of_the_line() {
+        let cwd = Path::new("/work/buck-3v3");
+        let action = startup_action(
+            args(&[
+                "notebook",
+                "generate",
+                "--project",
+                "buck-3v3.snxprj",
+                "--json",
+            ]),
+            Ok(cwd),
+        );
+        let StartupAction::Notebook(crate::notebook_cli::NotebookCommand::Generate(command)) =
+            action
+        else {
+            panic!("expected a notebook command: {action:?}");
+        };
+        assert_eq!(command.project, cwd.join("buck-3v3.snxprj"));
+        assert!(command.json);
+        assert_eq!(
+            startup_action(args(&["notebook", "--help"]), Ok(cwd)),
+            StartupAction::Notebook(crate::notebook_cli::NotebookCommand::Help)
+        );
+        let StartupAction::Refused(why) = startup_action(args(&["notebook", "lint"]), Ok(cwd))
+        else {
+            panic!("expected a refusal");
+        };
+        assert!(why.contains("`lint`"), "{why}");
     }
 }
