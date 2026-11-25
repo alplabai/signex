@@ -10,6 +10,7 @@ use pcb_geom::ItemRef;
 use serde_json::Value;
 use signex_engine::Command;
 use signex_engine::pcb::{BoardCommand, BoardReplayGuard};
+use signex_types::corner::CornerRule;
 use signex_types::pcb::{Footprint, Point};
 use signex_types::schematic::SelectedItem;
 use uuid::Uuid;
@@ -44,11 +45,15 @@ pub(super) enum ReplayInput {
         /// holds anything else.
         guard: BoardReplayGuard,
     },
-    /// Footprints carried by an offset.
+    /// Footprints or vias carried by an offset.
     BoardMove {
         footprints: BTreeSet<Uuid>,
+        vias: BTreeSet<Uuid>,
         delta: Point,
         leaves_tracks: bool,
+        /// The corner the tracks that follow bend at (#2513), so a replay
+        /// bends them as the drop did.
+        corner: CornerRule,
         /// What the move wrote, before and after; set once it has run.
         guard: Option<BoardReplayGuard>,
     },
@@ -96,13 +101,19 @@ impl ReplayInput {
             Self::Sheet { commands, .. } => format!("{commands:?}"),
             Self::Board { commands, .. } => format!("{commands:?}"),
             Self::BoardMove {
-                footprints, delta, ..
-            } => format!(
+                footprints,
+                vias,
+                delta,
+                ..
+            } if vias.is_empty() => format!(
                 "{} footprints by ({}, {})",
                 footprints.len(),
                 delta.x,
                 delta.y
             ),
+            Self::BoardMove { vias, delta, .. } => {
+                format!("{} vias by ({}, {})", vias.len(), delta.x, delta.y)
+            }
             Self::ReuseBlock {
                 name,
                 anchor,
@@ -527,17 +538,40 @@ impl ReplayBook {
         self.board_properties = true;
     }
 
-    /// The board drop about to run moves `footprints` by `delta`.
+    /// The board drop about to run moves `footprints` by `delta`, the
+    /// tracks on their pads bent at `corner`.
     pub(crate) fn note_board_drop(
         &mut self,
         footprints: BTreeSet<Uuid>,
         delta: Point,
         leaves_tracks: bool,
+        corner: CornerRule,
     ) {
         self.board_input = Some(ReplayInput::BoardMove {
             footprints,
+            vias: BTreeSet::new(),
             delta,
             leaves_tracks,
+            corner,
+            guard: None,
+        });
+    }
+
+    /// The via drop about to run moves `vias` by `delta`, the tracks on them
+    /// bent at `corner` (#2513).
+    pub(crate) fn note_via_drop(
+        &mut self,
+        vias: BTreeSet<Uuid>,
+        delta: Point,
+        leaves_tracks: bool,
+        corner: CornerRule,
+    ) {
+        self.board_input = Some(ReplayInput::BoardMove {
+            footprints: BTreeSet::new(),
+            vias,
+            delta,
+            leaves_tracks,
+            corner,
             guard: None,
         });
     }

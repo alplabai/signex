@@ -187,11 +187,17 @@ fn a_dragged_via_lands_on_the_grid_keeps_its_net_and_undoes_in_one_step() {
     let via = rig.via(FREE);
     assert!(close(via.position, 24.0, 13.0), "{:?}", via.position);
     assert_eq!(via.net, 1, "the net is unchanged");
+    // Caner, 2026-11-25 (#2513): the track to the moved via bends at one 45°
+    // corner, straight from (15, 10) to (21, 10), then a new leg to (24, 13).
     let track = &rig.board().segments[0];
-    assert!(close(track.end, 24.0, 13.0), "its end follows: {track:?}");
+    assert!(close(track.end, 21.0, 10.0), "it keeps its fixed leg: {track:?}");
     assert!(
         close(track.start, 15.0, 10.0),
         "its far end stays: {track:?}"
+    );
+    assert!(
+        rig.has_track((21.0, 10.0), (24.0, 13.0)),
+        "the new 45° leg ends on the via"
     );
 
     let _ = rig.app.update(Message::Edit(EditMsg::Undo));
@@ -222,6 +228,17 @@ impl Rig {
     fn track(&self, id: Uuid) -> &signex_types::pcb::Segment {
         let segments = &self.board().segments;
         segments.iter().find(|s| s.uuid == id).unwrap()
+    }
+
+    /// Whether a track of the board runs from `a` to `b`.
+    fn has_track(&self, a: (f64, f64), b: (f64, f64)) -> bool {
+        (self.board().segments.iter())
+            .any(|s| close(s.start, a.0, a.1) && close(s.end, b.0, b.1))
+    }
+
+    /// Whether a track of the board ends at `at`, its stretched end (#2513).
+    fn a_track_ends_at(&self, at: Point) -> bool {
+        (self.board().segments.iter()).any(|s| close(s.end, at.x, at.y))
     }
 
     /// `modifiers` pressed or released with the pointer at `at`.
@@ -256,7 +273,9 @@ impl Rig {
 fn a_track_of_another_net_or_a_locked_track_does_not_follow_the_via() {
     let mut rig = rig_on(board_with_other_tracks());
     rig.drag(Point::new(20.0, 10.0), Point::new(24.0, 13.0));
-    assert!(close(rig.track(TRACK).end, 24.0, 13.0), "its own track");
+    // Its own track bends at one 45° corner onto the via (Caner, 2026-11-25).
+    assert!(close(rig.track(TRACK).end, 21.0, 10.0), "its own track");
+    assert!(rig.has_track((21.0, 10.0), (24.0, 13.0)), "and its new leg");
     assert!(close(rig.track(OTHER_NET).end, 20.0, 10.0), "another net");
     assert!(close(rig.track(LOCKED_TRACK).end, 20.0, 10.0), "locked");
 }
@@ -524,7 +543,9 @@ fn assert_ctrl_latches(board: PcbBoard, track: Uuid, from: Point, at: fn(&Rig) -
         rig.drag(from, to);
         let moved = at(&rig);
         assert!(!close(moved, from.x, from.y), "the plain drag moved it");
-        assert!(close(rig.track(track).end, moved.x, moved.y), "it follows");
+        // The track bends at one 45° corner (Caner, 2026-11-25): its new leg
+        // ends where the object went.
+        assert!(rig.a_track_ends_at(moved), "it follows");
     }
 }
 

@@ -6,7 +6,8 @@
 
 use std::collections::BTreeSet;
 
-use pcb_geom::{ARC_FOLLOW_MAX_GROWTH, ArcFollowFault};
+use pcb_geom::{ARC_FOLLOW_MAX_GROWTH, ArcFollowFault, TrackEnds};
+use signex_types::corner::CornerRule;
 use signex_types::pcb::{Footprint, PCB_GRID_MM, PcbBoard, Point, Via};
 use signex_types::pcb_options::{GridSpec, GridUse};
 use uuid::Uuid;
@@ -130,25 +131,63 @@ pub fn by_designator(board: &PcbBoard, designator: &str) -> Result<Uuid, String>
 }
 
 /// Move every footprint in `ids` by `delta`. The track ends on their pads
-/// move with them (`pcb_geom::tracks_on_pads`, #2379), in the same batch,
-/// so the move stays one undo step.
+/// move with them (`pcb_geom::tracks_on_pads`, #2379), bent at `corner`
+/// ([`stretch_commands`]), in the same batch, so the move stays one undo
+/// step.
 pub fn move_commands(
     board: &PcbBoard,
     ids: &BTreeSet<Uuid>,
     delta: Point,
+    corner: CornerRule,
 ) -> Result<Vec<BoardCommand>, PlacementRefusal> {
     let mut commands = move_footprints_only(board, ids, delta)?;
     if commands.is_empty() {
         return Ok(commands);
     }
-    let tracks: Vec<BoardItem> = pcb_geom::tracks_on_pads(board, ids)
-        .iter()
-        .map(|ends| BoardItem::Segment(ends.follow(&board.segments[ends.index], delta)))
-        .collect();
+    let ends = pcb_geom::tracks_on_pads(board, ids);
+    commands.extend(stretch_commands(board, &ends, delta, corner));
+    Ok(commands)
+}
+
+/// The tracks of `ends` with their following ends moved by `delta`, kept at
+/// 0°, 45° or 90° (#2513, Caner 2026-11-25): a track whose moved end is off
+/// those lines from its fixed end bends at one 45° corner by `corner`
+/// (`pcb_geom::TrackEnds::stretch`), the leg to its moved end a new track.
+/// A `ReplaceItems` of the tracks, then an `AddItems` of the new legs;
+/// nothing for no ends.
+pub fn stretch_commands(
+    board: &PcbBoard,
+    ends: &[TrackEnds],
+    delta: Point,
+    corner: CornerRule,
+) -> Vec<BoardCommand> {
+    let (tracks, legs) = stretched_tracks(board, ends, delta, corner);
+    let mut commands = Vec::new();
     if !tracks.is_empty() {
         commands.push(BoardCommand::ReplaceItems { items: tracks });
     }
-    Ok(commands)
+    if !legs.is_empty() {
+        commands.push(BoardCommand::AddItems { items: legs });
+    }
+    commands
+}
+
+/// The tracks of `ends` stretched by `delta` at `corner`, and their new
+/// legs, as board items.
+fn stretched_tracks(
+    board: &PcbBoard,
+    ends: &[TrackEnds],
+    delta: Point,
+    corner: CornerRule,
+) -> (Vec<BoardItem>, Vec<BoardItem>) {
+    let (mut tracks, mut legs) = (Vec::new(), Vec::new());
+    for track in ends {
+        let segment = &board.segments[track.index];
+        let (kept, leg) = track.stretch(segment, delta, corner, Uuid::now_v7());
+        tracks.push(BoardItem::Segment(kept));
+        legs.extend(leg.map(BoardItem::Segment));
+    }
+    (tracks, legs)
 }
 
 /// Move every footprint in `ids` by `delta` and leave the tracks on their
@@ -198,20 +237,22 @@ pub fn editable_vias<'a>(
 
 /// Move every via in `ids` by `delta`, keeping its net. The track and copper
 /// arc ends on it move with it (`pcb_geom::tracks_on_vias`, `arcs_on_vias`),
-/// in the same command, so the move stays one undo step. Refused whole when
-/// a following arc would collapse or grow past its limit.
+/// in the same batch, so the move stays one undo step; a track bends at
+/// `corner` as [`stretch_commands`] bends it, its new leg added after.
+/// Refused whole when a following arc would collapse or grow past its limit.
 pub fn move_vias(
     board: &PcbBoard,
     ids: &BTreeSet<Uuid>,
     delta: Point,
+    corner: CornerRule,
 ) -> Result<Vec<BoardCommand>, PlacementRefusal> {
     let mut commands = move_vias_only(board, ids, delta)?;
+    let mut legs = Vec::new();
     if let Some(BoardCommand::ReplaceItems { items }) = commands.first_mut() {
-        items.extend(
-            pcb_geom::tracks_on_vias(board, ids)
-                .iter()
-                .map(|ends| BoardItem::Segment(ends.follow(&board.segments[ends.index], delta))),
-        );
+        let ends = pcb_geom::tracks_on_vias(board, ids);
+        let (tracks, new_legs) = stretched_tracks(board, &ends, delta, corner);
+        items.extend(tracks);
+        legs = new_legs;
         for ends in pcb_geom::arcs_on_vias(board, ids) {
             let moved = ends
                 .checked_follow(&board.free.arcs[ends.index], delta)
@@ -223,6 +264,9 @@ pub fn move_vias(
                 })?;
             items.push(BoardItem::Arc(moved));
         }
+    }
+    if !legs.is_empty() {
+        commands.push(BoardCommand::AddItems { items: legs });
     }
     Ok(commands)
 }

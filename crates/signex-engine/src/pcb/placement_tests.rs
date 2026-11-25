@@ -10,6 +10,12 @@ fn id(n: u128) -> Uuid {
     Uuid::from_u128(n)
 }
 
+/// The corner a stretched track bends at with the router's default rule
+/// (#2513).
+fn corner() -> CornerRule {
+    pcb_geom::stretch_rule(CornerRule::default())
+}
+
 fn board() -> PcbBoard {
     let footprint = |n: u128, x: f64, y: f64, rotation: f64, locked: bool| {
         serde_json::json!({
@@ -153,7 +159,7 @@ fn a_locked_footprint_refuses_every_edit() {
         Err(refusal.clone())
     );
     assert_eq!(
-        move_commands(&b, &locked, Point::new(1.0, 0.0)),
+        move_commands(&b, &locked, Point::new(1.0, 0.0), corner()),
         Err(refusal.clone())
     );
     assert_eq!(
@@ -171,11 +177,11 @@ fn refusal_text() -> String {
 fn nothing_selected_and_a_zero_move_do_nothing() {
     let b = board();
     assert_eq!(
-        move_commands(&b, &BTreeSet::new(), Point::new(1.0, 0.0)),
+        move_commands(&b, &BTreeSet::new(), Point::new(1.0, 0.0), corner()),
         Err(PlacementRefusal::NothingSelected)
     );
     assert_eq!(
-        move_commands(&b, &ids(&[1]), Point::new(0.0, 0.0)),
+        move_commands(&b, &ids(&[1]), Point::new(0.0, 0.0), corner()),
         Ok(Vec::new())
     );
     assert_eq!(
@@ -198,13 +204,18 @@ fn a_move_takes_the_track_ends_on_its_pads_along_in_one_step() {
         .unwrap(),
     ];
     let before = b.clone();
-    let commands = move_commands(&b, &ids(&[2]), Point::new(2.0, 1.0)).unwrap();
-    assert_eq!(commands.len(), 2, "{commands:?}");
+    let commands = move_commands(&b, &ids(&[2]), Point::new(2.0, 1.0), corner()).unwrap();
+    // The move, the track and its new 45° leg (#2513, Caner 2026-11-25).
+    assert_eq!(commands.len(), 3, "{commands:?}");
     let mut engine = BoardEngine::new(b, 1);
     engine.execute_batch(commands).expect("the batch runs");
     let track = &engine.board().segments[0];
     assert_eq!(track.start, Point::new(25.0, 10.0));
-    assert_eq!(track.end, Point::new(23.0, 11.0));
+    // (25, 10) to the pad at (23, 11): straight to (24, 10), then 45°.
+    assert_eq!(track.end, Point::new(24.0, 10.0));
+    let leg = &engine.board().segments[1];
+    assert_eq!((leg.start, leg.end), (Point::new(24.0, 10.0), Point::new(23.0, 11.0)));
+    assert_eq!(leg.net, track.net);
     assert_eq!(fp(engine.board(), 2).position, Point::new(22.0, 11.0));
     engine.undo().expect("undo runs");
     assert_eq!(
@@ -262,18 +273,18 @@ fn a_via_move_refuses_an_arc_that_would_collapse_or_grow_too_much() {
     let via = ids(&[50]);
     for dx in [4.0, 4.0 - 0.8e-6] {
         assert_eq!(
-            move_vias(&b, &via, Point::new(dx, 0.0)),
+            move_vias(&b, &via, Point::new(dx, 0.0), corner()),
             Err(PlacementRefusal::ArcCollapses(id(51))),
             "{dx}"
         );
     }
     // 3.1 times the 4 mm chord.
     assert_eq!(
-        move_vias(&b, &via, Point::new(-8.4, 0.0)),
+        move_vias(&b, &via, Point::new(-8.4, 0.0), corner()),
         Err(PlacementRefusal::ArcGrows(id(51), 3.0))
     );
     // 2.9 times: allowed, and the far end stays.
-    let commands = move_vias(&b, &via, Point::new(-7.6, 0.0)).expect("allowed");
+    let commands = move_vias(&b, &via, Point::new(-7.6, 0.0), corner()).expect("allowed");
     let moved = run(b, commands);
     assert_eq!(moved.free.arcs[0].end, Point::new(24.0, 0.0));
     assert!((moved.free.arcs[0].start.x - 12.4).abs() < 1e-9);

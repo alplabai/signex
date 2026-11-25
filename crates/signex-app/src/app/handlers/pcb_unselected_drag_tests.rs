@@ -287,7 +287,9 @@ fn a_stretch_on_a_legal_angle_stays_one_track() {
 }
 
 /// With nothing selected, a press on the via and a drag move it with both
-/// track ends on it; their far ends stay. One undo step.
+/// track ends on it; their far ends stay, and each bends at one 45° corner,
+/// as a track stretched by a dragged track does (Caner, 2026-11-25). One
+/// undo step.
 #[test]
 fn an_unselected_via_drags_and_its_tracks_stretch() {
     let mut r = rig();
@@ -295,9 +297,34 @@ fn an_unselected_via_drags_and_its_tracks_stretch() {
     r.drag(p(15.0, 0.0), p(15.0, 3.0));
     let via = r.board().vias.iter().find(|v| v.uuid == VIA).unwrap();
     assert_eq!(via.position, p(15.0, 3.0), "the via moved");
-    assert_eq!(r.track(TO_VIA), (p(10.0, 0.0), p(15.0, 3.0)));
-    assert_eq!(r.track(FROM_VIA), (p(15.0, 3.0), p(20.0, 0.0)));
+    // (10, 0) to the via at (15, 3): straight to (12, 0), then 45°.
+    assert_eq!(r.track(TO_VIA), (p(10.0, 0.0), p(12.0, 0.0)));
+    assert_eq!(r.tracks_between(p(12.0, 0.0), p(15.0, 3.0)), 1, "its leg");
+    // (20, 0) to the via: straight to (18, 0), then 45°.
+    assert_eq!(r.track(FROM_VIA), (p(18.0, 0.0), p(20.0, 0.0)));
+    assert_eq!(r.tracks_between(p(15.0, 3.0), p(18.0, 0.0)), 1, "its leg");
     assert_eq!(r.track(DRAGGED), (p(5.0, 0.0), p(10.0, 0.0)), "not on the via");
+    r.assert_all_at_legal_angles();
+    r.undo();
+    assert_eq!(r.live(), before, "one undo step");
+}
+
+/// With nothing selected, a press on U1's pad and a drag move the part; the
+/// track on its pad keeps its far end and bends at one 45° corner (Caner,
+/// 2026-11-25). One undo step.
+#[test]
+fn an_unselected_part_drags_and_the_track_on_its_pad_bends_at_45_degrees() {
+    let mut r = rig();
+    let before = r.live();
+    // On the pad, clear of the track along y = 0.
+    r.drag(p(0.0, -0.4), p(0.0, 2.6));
+    let u1 = r.board().footprints.iter().find(|fp| fp.uuid == U1);
+    assert_eq!(u1.expect("U1").position, p(0.0, 3.0), "the part moved");
+    // (5, 0) to the pad at (0, 3): straight to (3, 0), then 45°.
+    assert_eq!(r.track(ON_PAD), (p(3.0, 0.0), p(5.0, 0.0)), "far end stays");
+    assert_eq!(r.tracks_between(p(0.0, 3.0), p(3.0, 0.0)), 1, "its leg");
+    assert_eq!(r.track(DRAGGED), (p(5.0, 0.0), p(10.0, 0.0)), "not on the pad");
+    r.assert_all_at_legal_angles();
     r.undo();
     assert_eq!(r.live(), before, "one undo step");
 }

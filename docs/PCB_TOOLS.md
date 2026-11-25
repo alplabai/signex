@@ -951,7 +951,8 @@ along (#2379). A track end follows when it lies on a moved pad's copper, on a
 copper layer the pad reaches, and the track is on the pad's net: the contact
 the ratsnest counts as connected (`pcb_geom::tracks_on_pads`). Only that end
 moves; the other end stays, so the track stays joined to whatever it meets
-there. The drop runs the footprint moves and the track edits as one batch
+there, and the track bends at one 45° corner when it has to (#2513, "Dragging
+a track or via" below). The drop runs the footprint moves and the track edits as one batch
 (`signex_engine::pcb::placement::move_commands`), one undo step. During the
 drag the preview draws the carried footprints with those tracks at the
 offset, and the ratsnest is read off the board as the drop would leave it,
@@ -995,10 +996,19 @@ and net, runs from the corner to the moved end (`TrackEnds::stretch`). The
 corner follows the router's corner rule when that bends at 45° (45° start or
 45° end, with its flip). With the 90° or any-angle rule, the track leaves its
 fixed end straight and turns 45° into the moved end
-(`pcb_geom::stretch_rule`). The rule is read when the drag starts. The
-dragged track's own ends move with it, so an end of it on a pad or via
-leaves that pad or via. Tracks that a dragged via, or a dragged part's pads,
-take along still turn straight to the moved end, with no corner.
+(`pcb_geom::stretch_rule`). The rule is read when the drag or Edit ▸ Move
+starts. The dragged track's own ends move with it, so an end of it on a pad
+or via leaves that pad or via.
+
+The same corner applies to every track a move takes along by one end: the
+tracks on a dragged or moved part's pads and on a dragged via bend as a
+track stretched by a dragged track does (Caner, 2026-11-25). The drop builds
+them with `signex_engine::pcb::placement::stretch_commands`
+(`move_commands`, `move_vias`): a `ReplaceItems` of the tracks and an
+`AddItems` of the new legs, one undo step. A track with both ends on what
+moves moves whole, with no corner. The Command Log keeps the offset and the
+corner rule of a part or via drop, so a Replay bends the tracks as the drop
+did, whatever the router's rule is by then (`docs/COMMAND_LOG.md`).
 
 ## Moving a designator or comment on its own
 

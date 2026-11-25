@@ -114,7 +114,8 @@ impl Signex {
             "Move: click a reference point, then click where it should go (Esc to cancel)"
         });
         let window = self.interaction_state.acting_window;
-        let carry = PcbCarry::new(CarryKind::Move, path, window, footprints);
+        let mut carry = PcbCarry::new(CarryKind::Move, path, window, footprints);
+        carry.stretch_corner = pcb_geom::stretch_rule(self.interaction_state.corner_rule);
         self.release_board_tool();
         // Measure would take the Move's clicks (#2403).
         self.interaction_state.pcb_query.measure = None;
@@ -250,6 +251,7 @@ impl Signex {
             let window = self.interaction_state.acting_window;
             let mut carry = PcbCarry::new(CarryKind::Drag, path, window, footprints);
             carry.anchor = Some(from);
+            carry.stretch_corner = pcb_geom::stretch_rule(self.interaction_state.corner_rule);
             self.interaction_state.pcb_carry = Some(carry);
             if pick.is_some() {
                 self.widen_drag_to_selection();
@@ -576,17 +578,19 @@ impl Signex {
             let commands = if carry.leaves_tracks {
                 placement::move_footprints_only(board, &carry.footprints, delta)
             } else {
-                placement::move_commands(board, &carry.footprints, delta)
+                placement::move_commands(board, &carry.footprints, delta, carry.stretch_corner)
             };
             (delta, commands)
         });
         self.end_pcb_carry();
         if let Some((delta, built)) = built {
-            // The Command Log keeps the offset, not the absolute positions.
+            // The Command Log keeps the offset and the corner rule, not the
+            // absolute positions, so a replay bends the tracks the same way.
             self.ui_state.command_replay.note_board_drop(
                 carry.footprints.clone(),
                 delta,
                 carry.leaves_tracks,
+                carry.stretch_corner,
             );
             self.run_placement("Move", built);
             self.ui_state.command_replay.forget_board_marks();

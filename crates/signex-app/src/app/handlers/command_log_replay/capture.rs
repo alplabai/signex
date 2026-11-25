@@ -278,9 +278,19 @@ impl Signex {
             return None;
         }
         let board = self.document_state.pcb_board(path)?;
+        // A noted board move guards the corner legs it adds too (#2513).
+        let is_move = matches!(
+            self.ui_state.command_replay.board_input,
+            Some(ReplayInput::BoardMove { .. })
+        );
+        let guard = if is_move {
+            BoardReplayGuard::before_move(board, commands)
+        } else {
+            BoardReplayGuard::before(board, commands)
+        };
         Some(BoardEditRecord {
             commands: commands.to_vec(),
-            guard: BoardReplayGuard::before(board, commands),
+            guard,
         })
     }
 
@@ -303,8 +313,10 @@ impl Signex {
         let input = match dropped {
             Some(ReplayInput::BoardMove {
                 footprints,
+                vias,
                 delta,
                 leaves_tracks,
+                corner,
                 ..
             }) => {
                 let mut guard = guard;
@@ -313,8 +325,10 @@ impl Signex {
                 }
                 ReplayInput::BoardMove {
                     footprints,
+                    vias,
                     delta,
                     leaves_tracks,
+                    corner,
                     guard: Some(guard),
                 }
             }

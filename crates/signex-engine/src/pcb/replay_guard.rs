@@ -123,6 +123,32 @@ impl BoardReplayGuard {
         guard
     }
 
+    /// [`Self::before`] for a board move (#2513): the corner legs it adds
+    /// (`placement::stretch_commands`) are guarded as items that were not
+    /// there before, so the guard holds on the board the move found or left.
+    pub fn before_move(board: &PcbBoard, commands: &[BoardCommand]) -> Self {
+        let as_written: Vec<BoardCommand> = (commands.iter())
+            .map(|command| match command {
+                BoardCommand::AddItems { items } => BoardCommand::ReplaceItems {
+                    items: items.clone(),
+                },
+                other => other.clone(),
+            })
+            .collect();
+        Self::before(board, &as_written)
+    }
+
+    /// [`Self::writes_only_its_targets`] for a move rebuilt on the board as
+    /// it is now: the corner legs it adds are new tracks that write over
+    /// nothing.
+    pub fn move_writes_only_its_targets(&self, board: &PcbBoard, commands: &[BoardCommand]) -> bool {
+        let rest: Vec<BoardCommand> = (commands.iter())
+            .filter(|command| !matches!(command, BoardCommand::AddItems { .. }))
+            .cloned()
+            .collect();
+        self.writes_only_its_targets(board, &rest)
+    }
+
     /// `items` as they stand on `board`, for a command that names them.
     pub fn of_items(board: &PcbBoard, items: &[BoardItemId]) -> Self {
         let mut targets: Vec<GuardedTarget> = Vec::with_capacity(items.len());

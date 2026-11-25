@@ -506,14 +506,16 @@ fn a_board_move_replays_its_offset_while_another_part_is_selected() {
     app.open_pcb_tab(path.clone(), "board".into(), board_with_two_parts());
     let moved = std::collections::BTreeSet::from([uuid::Uuid::from_u128(1)]);
     let delta = signex_types::pcb::Point::new(2.0, 0.0);
+    let corner = pcb_geom::stretch_rule(Default::default());
     let built = signex_engine::pcb::placement::move_commands(
         app.document_state.pcb_board(&path).expect("the board"),
         &moved,
         delta,
+        corner,
     );
     app.ui_state
         .command_replay
-        .note_board_drop(moved, delta, false);
+        .note_board_drop(moved, delta, false, corner);
     assert!(app.run_placement("Move", built));
     let row = newest(&app);
     assert_eq!(row.command, "move_selection");

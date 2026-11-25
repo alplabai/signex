@@ -12,14 +12,14 @@ use std::path::Path;
 use signex_engine::pcb::item_move::move_items;
 use signex_engine::pcb::placement::{self, PlacementRefusal};
 use signex_engine::pcb::{BoardCommand, BoardCommandError, BoardItem, BoardItemId};
-use signex_types::pcb::{PcbBoard, Point, Segment};
+use signex_types::pcb::{PcbBoard, Point};
 use uuid::Uuid;
 
 use super::pcb_placement::refuse;
 use crate::app::Signex;
 use crate::pcb_canvas::{
     CarryKind, DraggedItems, DraggedSelection, PcbCarry, carried_item_ids, carry_delta,
-    followed_tracks, item_carry_delta, item_points, via_carry_delta,
+    item_carry_delta, item_points, via_carry_delta,
 };
 
 /// The commands that move `items` and `rooms` of `board` by `delta`, one
@@ -96,24 +96,26 @@ fn mixed_commands(
     delta: Point,
 ) -> Result<Vec<BoardCommand>, PlacementRefusal> {
     let mut commands = Vec::new();
+    let corner = carry.stretch_corner;
     if !carry.footprints.is_empty() {
         commands.extend(if carry.leaves_tracks {
             placement::move_footprints_only(board, &carry.footprints, delta)?
         } else {
-            placement::move_commands(board, &carry.footprints, delta)?
+            placement::move_commands(board, &carry.footprints, delta, corner)?
         });
     }
     if !carry.vias.is_empty() {
         commands.extend(if carry.leaves_tracks {
             placement::move_vias_only(board, &carry.vias, delta)?
         } else {
-            placement::move_vias(board, &carry.vias, delta)?
+            placement::move_vias(board, &carry.vias, delta, corner)?
         });
     }
-    // The track ends the part and via moves shifted each on its own; they
-    // are put back as one follow per track (`PcbCarry::following`): both
-    // ends of a track from a moved pad to a moved via, none of one carried
-    // whole. An arc carried whole is not also followed by an end.
+    // The track ends the part and via moves shifted each on its own, and
+    // the corner legs they added, are put back as one follow per track
+    // (`PcbCarry::following`): both ends of a track from a moved pad to a
+    // moved via, none of one carried whole. An arc carried whole is not
+    // also followed by an end.
     let whole_arc =
         |item: &BoardItem| matches!(item, BoardItem::Arc(a) if carry.items.contains(&a.uuid));
     for command in &mut commands {
@@ -121,7 +123,11 @@ fn mixed_commands(
             items.retain(|item| !matches!(item, BoardItem::Segment(_)) && !whole_arc(item));
         }
     }
-    commands.retain(|c| !matches!(c, BoardCommand::ReplaceItems { items } if items.is_empty()));
+    commands.retain(|c| match c {
+        BoardCommand::ReplaceItems { items } => !items.is_empty(),
+        BoardCommand::AddItems { .. } => false,
+        _ => true,
+    });
     commands.extend(follow_commands(board, carry, delta));
     let (items, rooms) = (&carry.items, &carry.rooms);
     commands.extend(move_commands(
@@ -135,30 +141,15 @@ fn mixed_commands(
 }
 
 /// The track ends that follow what `carry` holds (`PcbCarry::following`),
-/// moved by `delta` as the drag preview draws them, and the corner legs of
-/// the tracks a carried track stretches (#2513) added; none for a zero
-/// offset.
+/// moved by `delta` and bent at the carry's corner as the drag preview draws
+/// them, with their new legs added (`placement::stretch_commands`, #2513);
+/// none for a zero offset.
 fn follow_commands(board: &PcbBoard, carry: &PcbCarry, delta: Point) -> Vec<BoardCommand> {
     if delta.x == 0.0 && delta.y == 0.0 {
         return Vec::new();
     }
     let following = carry.following(board);
-    let (tracks, legs) = followed_tracks(board, carry, &following, delta, Uuid::now_v7);
-    let segments = |tracks: Vec<Segment>| -> Vec<BoardItem> {
-        tracks.into_iter().map(BoardItem::Segment).collect()
-    };
-    let mut commands = Vec::new();
-    if !tracks.is_empty() {
-        commands.push(BoardCommand::ReplaceItems {
-            items: segments(tracks),
-        });
-    }
-    if !legs.is_empty() {
-        commands.push(BoardCommand::AddItems {
-            items: segments(legs),
-        });
-    }
-    commands
+    placement::stretch_commands(board, &following, delta, carry.stretch_corner)
 }
 
 impl Signex {

@@ -29,6 +29,7 @@ impl Signex {
         let window = self.interaction_state.acting_window;
         let mut carry = PcbCarry::new(CarryKind::Drag, path.to_path_buf(), window, BTreeSet::new());
         carry.anchor = Some(from);
+        carry.stretch_corner = pcb_geom::stretch_rule(self.interaction_state.corner_rule);
         match refused {
             Some(refusal) => refuse("Move", &refusal),
             None => {
@@ -68,8 +69,8 @@ impl Signex {
     ) -> Option<Point> {
         let delta = self.via_drag_delta(carry, from, to)?;
         let board = self.active_pcb()?;
-        let refused =
-            !carry.leaves_tracks && placement::move_vias(board, &carry.vias, delta).is_err();
+        let refused = !carry.leaves_tracks
+            && placement::move_vias(board, &carry.vias, delta, carry.stretch_corner).is_err();
         Some(if refused { Point::new(0.0, 0.0) } else { delta })
     }
 
@@ -77,15 +78,27 @@ impl Signex {
     pub(super) fn drop_via_carry(&mut self, carry: &PcbCarry, from: Point, to: Point) {
         let built = self.via_drag_delta(carry, from, to).and_then(|delta| {
             let board = self.active_pcb()?;
-            Some(if carry.leaves_tracks {
-                placement::move_vias_only(board, &carry.vias, delta)
-            } else {
-                placement::move_vias(board, &carry.vias, delta)
-            })
+            Some((
+                delta,
+                if carry.leaves_tracks {
+                    placement::move_vias_only(board, &carry.vias, delta)
+                } else {
+                    placement::move_vias(board, &carry.vias, delta, carry.stretch_corner)
+                },
+            ))
         });
         self.end_pcb_carry();
-        if let Some(built) = built {
+        if let Some((delta, built)) = built {
+            // The Command Log keeps the offset and the corner rule, so a
+            // replay bends the tracks on the vias as this drop does (#2513).
+            self.ui_state.command_replay.note_via_drop(
+                carry.vias.clone(),
+                delta,
+                carry.leaves_tracks,
+                carry.stretch_corner,
+            );
             self.run_placement("Move", built);
+            self.ui_state.command_replay.forget_board_marks();
         }
     }
 }
