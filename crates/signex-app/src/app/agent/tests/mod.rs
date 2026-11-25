@@ -22,6 +22,7 @@ mod owed_repaint;
 mod presence;
 mod query_surfaces;
 mod refusals;
+mod request_path;
 mod round_trip;
 mod window_layout;
 

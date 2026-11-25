@@ -81,6 +81,14 @@ Two optional request fields name the client for the agent journals (#2253,
 `allow-path:<dir>`). The app records them, never trusts them: its own checks
 apply on top. The client name is also the `client` of the origin.
 
+One optional field is a precondition (#2495): `"if_revision"`, a whole number.
+The request runs only while the document its `document` argument names is
+still at that revision, the one `read_document` reports. Otherwise it is
+refused (`refused`, with the revision it is at) and nothing runs. A request
+with `if_revision` and no `document` is refused too. The request goes through
+the same path as every other surface's (`docs/EXTENSION_API.md`, "One request
+path").
+
 ## Journals
 
 The app writes the access journal of every open project: a connection

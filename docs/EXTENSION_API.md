@@ -213,6 +213,44 @@ returns the `Task` that writes one value on a blocking worker, in the order
 the saves were made (the quit path waits for it), and answers the owner with a
 `PreferenceSaved` payload. It refuses a key outside the owner's prefix.
 
+## One request path
+
+Every surface runs a catalog command through one function,
+`Signex::run_command_request(surface, request)` in
+`crates/signex-app/src/app/command/request/` (also exported from
+`signex_app::headless`). An extension that runs a command from its own code
+uses it too, so its commands run as a menu row or a key runs them.
+
+- **`CommandRequest`**: the command id, its `CommandArgs` and an optional
+  `if_revision`.
+- **`RequestSurface`**: `Gui { window }` (menu rows, keys, the palette and
+  context-menu rows, through `dispatch_command`), `Headless` (`signex-cli`,
+  through `dispatch_command_headless`) or `Agent` (the agent socket, once a
+  request has passed the channel's token, allowlist and document checks; only
+  the agent channel can make this one).
+- **`RequestOutcome`**: `Answered(data)`, `Ran`, `Refused { reason, cause }`,
+  `Failed(reason)`, or `Waiting { ticket }` for a command that waits for its
+  own file reads and answers later. `RefusalCause` says why nothing ran:
+  `NoSuchCommand`, `NotAvailable` or `Revision`.
+
+Each surface keeps its own checks in front of the function and its own runner
+behind it. What the function adds for all of them is the revision check and
+one reading of the outcome. `headless::outcome_verdict` is that reading as the
+`status`, `reason` and `data` of a reply line.
+
+**`if_revision`.** A request with `if_revision = N` runs only while the
+document its `document` operand names is still at revision `N`, the revision
+`read_document` reports. If the document moved, or has no revision (a
+library file, a project), or the request names no `document`, the request is
+refused with `RefusalCause::Revision` before any runner sees it, and nothing
+changes. On the agent socket `if_revision` is a top-level request field
+(`docs/AGENT_SOCKET.md`). `apply_edits` keeps its own `expect_revision`
+operand, which also checks the other sheets its edits name.
+
+After its tasks settle, a request can leave an error notice.
+`RequestOutcome::after_notice` turns a `Ran`, or a `NotAvailable` refusal the
+app explained in a notice, into `Failed`, as the headless runner reports it.
+
 ## Versioning
 
 `signex_app::extension::API_VERSION` is the version of this API. It goes up by
@@ -249,6 +287,8 @@ const _: () = assert!(signex_app::extension::API_VERSION == 1);
   `InstallError::Refused`; `ExtensionHost::{panel, menu_rows,
   active_bar_rows, load_preferences}`; `AppCommandId` accepts
   `ext.<name>.<local>` ids.
+- One request path: `Signex::run_command_request`, `CommandRequest`,
+  `RequestSurface`, `RequestOutcome` and `RefusalCause`, with `if_revision`.
 
 ## Open questions
 
@@ -293,3 +333,14 @@ Choices made in version 1 for the maintainers to confirm or change:
   `prefs.json`, under their full keys. Is that the place, or should each
   extension get a file of its own? Extension preferences show no row in the
   Preferences dialog; should the dialog get a page per extension?
+- **`if_revision` in `signex-cli`.** The agent socket takes `if_revision`;
+  the `signex-cli` request line does not yet, so a headless run cannot ask
+  for it. Should the CLI line take it as a top-level field too?
+- **One revision or many.** `if_revision` checks the one document named by
+  `document`. Should it also take a map of documents to revisions, as
+  `apply_edits` takes `expect_revisions`?
+- **A revision refusal in the journal.** A request refused by `if_revision`
+  writes no edit-journal line, because nothing ran. Should it be recorded?
+- **The GUI's revision refusal.** No GUI surface sets `if_revision`. A GUI
+  refusal for the revision would add no Command Log row and log no
+  Messages line. Is that right for an extension's row?
