@@ -319,7 +319,7 @@ fn only_an_end_on_an_end_of_a_dragged_track_follows() {
         track(6, (2.0, 0.0), (2.0, 5.0), 1, "TopCopper"),
         locked,
     ]);
-    let ends = tracks_on_tracks(&board, &[id(201)].into());
+    let ends = tracks_on_tracks(&board, &[id(201)].into(), &BTreeSet::new());
     assert_eq!(
         ends,
         [
@@ -337,12 +337,38 @@ fn only_an_end_on_an_end_of_a_dragged_track_follows() {
             },
         ]
     );
-    let both = tracks_on_tracks(&board, &[id(201), id(202)].into());
+    let both = tracks_on_tracks(&board, &[id(201), id(202)].into(), &BTreeSet::new());
     assert!(
         both.iter().all(|e| e.track != id(202)),
         "a track carried too is not one that follows: {both:?}"
     );
-    assert!(tracks_on_tracks(&board, &BTreeSet::new()).is_empty());
+    assert!(tracks_on_tracks(&board, &BTreeSet::new(), &BTreeSet::new()).is_empty());
+}
+
+/// #2513 review fix: a joined end on a pad or via that stays is left out,
+/// so that track keeps the pad or via and only the dragged track leaves.
+/// When the pad's footprint or the via moves too, the end follows.
+#[test]
+fn a_joined_end_on_a_pad_or_via_that_stays_does_not_follow() {
+    let mut board = board(vec![
+        // Dragged, ending on U1 pad 1 at (9, 0).
+        track(1, (5.0, 0.0), (9.0, 0.0), 1, "TopCopper"),
+        // Joined to it on the pad.
+        track(2, (9.0, 0.0), (9.0, 4.0), 1, "TopCopper"),
+        // Dragged, ending on the via at (0, 0).
+        track(3, (0.0, 0.0), (0.0, 3.0), 1, "TopCopper"),
+        // Joined to it on the via.
+        track(4, (-3.0, 0.0), (0.0, 0.0), 1, "TopCopper"),
+    ]);
+    board.vias.push(through_via(300, 0.0, 1));
+    let dragged: BTreeSet<Uuid> = [id(201), id(203)].into();
+    assert!(
+        tracks_on_tracks(&board, &dragged, &BTreeSet::new()).is_empty(),
+        "both joined ends stay on their pad and via"
+    );
+    let with_both = tracks_on_tracks(&board, &dragged, &[id(100), id(300)].into());
+    let followers: Vec<Uuid> = with_both.iter().map(|e| e.track).collect();
+    assert_eq!(followers, [id(202), id(204)], "the pad and via move too");
 }
 
 fn ends_of(segment: &Segment, start: bool) -> TrackEnds {

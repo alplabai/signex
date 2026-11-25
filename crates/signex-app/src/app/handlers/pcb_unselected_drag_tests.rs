@@ -75,10 +75,14 @@ struct Rig {
 }
 
 fn rig() -> Rig {
+    rig_with(board())
+}
+
+fn rig_with(board: PcbBoard) -> Rig {
     let dir = tempfile::tempdir().unwrap();
     let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
     let path = dir.path().join("board.snxpcb");
-    app.open_pcb_tab(path.clone(), "board".into(), board());
+    app.open_pcb_tab(path.clone(), "board".into(), board);
     app.ui_state.pcb_snap.objects.clear();
     app.ui_state.pcb_snap.to_guides = false;
     app.ui_state.pcb_snap.to_axes = false;
@@ -378,9 +382,11 @@ fn a_locked_track_stays_and_says_why() {
 }
 
 /// A drag of a selection holding two joined tracks moves both whole, not
-/// also by the end they share, as before #2513; the unselected tracks
-/// joined to them stretch with a 45° corner (Caner, 2026-11-25). One undo
-/// step.
+/// also by the end they share, as before #2513; the unselected track
+/// joined to them off any pad or via stretches with a 45° corner (Caner,
+/// 2026-11-25). The track joined to them on the via that stays keeps the
+/// via, and only the dragged track leaves it (review fix, 2026-11-25). One
+/// undo step.
 #[test]
 fn selected_tracks_still_move_whole() {
     let mut r = rig();
@@ -395,9 +401,40 @@ fn selected_tracks_still_move_whole() {
     assert_eq!(r.track(TO_VIA), (p(10.0, 3.0), p(15.0, 3.0)), "whole");
     assert_eq!(r.track(ON_PAD), (p(0.0, 0.0), p(2.0, 0.0)), "stretched");
     assert_eq!(r.tracks_between(p(2.0, 0.0), p(5.0, 3.0)), 1, "its leg");
-    // (20, 0) to (15, 3): straight to (18, 0), then 45° up.
-    assert_eq!(r.track(FROM_VIA), (p(18.0, 0.0), p(20.0, 0.0)), "stretched");
-    assert_eq!(r.tracks_between(p(15.0, 3.0), p(18.0, 0.0)), 1, "its leg");
+    // Its end on the via that stays stays on the via.
+    assert_eq!(
+        r.track(FROM_VIA),
+        (p(15.0, 0.0), p(20.0, 0.0)),
+        "on the via"
+    );
+    assert_eq!(r.tracks_between(p(15.0, 3.0), p(18.0, 0.0)), 0, "no leg");
+    r.assert_all_at_legal_angles();
+    r.undo();
+    assert_eq!(r.live(), before, "one undo step");
+}
+
+/// Two tracks on U1's pad: dragging one unselected off the pad leaves the
+/// other on it, as before #2513 ("ends on pads stay on the pads", Caner,
+/// 2026-11-25; review fix, 2026-11-25). The dragged track moves whole and
+/// the track joined to its far end, off the pad, stretches. One undo step.
+#[test]
+fn a_track_on_the_same_pad_stays_when_one_is_dragged_off_it() {
+    const ALSO_ON_PAD: Uuid = Uuid::from_u128(0x2513_0015);
+    let mut board = board();
+    let also = serde_json::from_value(track(ALSO_ON_PAD, (0.0, 0.0), (0.0, -5.0), false));
+    board.segments.push(also.unwrap());
+    let mut r = rig_with(board);
+    let before = r.live();
+    r.drag(p(2.5, 0.0), p(2.5, 3.0));
+    assert_eq!(r.track(ON_PAD), (p(0.0, 3.0), p(5.0, 3.0)), "moved whole");
+    assert_eq!(
+        r.track(ALSO_ON_PAD),
+        (p(0.0, 0.0), p(0.0, -5.0)),
+        "stays on the pad"
+    );
+    // (10, 0) to (5, 3): straight to (8, 0), then 45° up.
+    assert_eq!(r.track(DRAGGED), (p(8.0, 0.0), p(10.0, 0.0)), "stretched");
+    assert_eq!(r.tracks_between(p(5.0, 3.0), p(8.0, 0.0)), 1, "its leg");
     r.assert_all_at_legal_angles();
     r.undo();
     assert_eq!(r.live(), before, "one undo step");

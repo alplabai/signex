@@ -291,13 +291,14 @@ impl Soak<'_> {
             Routed::Landed(draft) => {
                 self.tally.landed += 1;
                 self.stepped(before);
-                // A route never lays a track over same-net copper (#2492).
+                // A route never lays a track over same-net copper at least as
+                // wide as it (#2492).
                 let board = self.engine.board();
                 let overlap = draft.tracks.iter().find_map(|t| {
                     board
                         .segments
                         .iter()
-                        .find(|s| overlaps(t, s))
+                        .find(|s| s.width >= t.width && overlaps(t, s))
                         .map(|s| (t, s))
                 });
                 if let Some((laid, under)) = overlap {

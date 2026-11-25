@@ -28,7 +28,7 @@ fn trimmed(laid: &[Segment]) -> Vec<Segment> {
         next += 1;
         Uuid::from_u128(next)
     };
-    uncovered(segment(1, (0.0, 0.0), (10.0, 0.0), 1), laid, &mut ids)
+    uncovered(segment(1, (0.0, 0.0), (10.0, 0.0), 1), laid, &mut ids).pieces
 }
 
 #[test]
@@ -127,4 +127,105 @@ fn a_leg_back_along_the_draft_lays_nothing_over_it() {
     )
     .expect("the second leg");
     assert!(back.tracks.is_empty(), "{:?}", back.tracks);
+}
+
+/// A same-net track narrower than the route does not carry the copper the
+/// route asked for, so it covers nothing; one as wide or wider does.
+#[test]
+fn a_narrower_same_net_track_covers_nothing() {
+    let mut narrow = segment(2, (0.0, 0.0), (10.0, 0.0), 1);
+    narrow.width = 0.2;
+    assert_eq!(trimmed(&[narrow]), [segment(1, (0.0, 0.0), (10.0, 0.0), 1)]);
+    let mut wide = segment(3, (0.0, 0.0), (10.0, 0.0), 1);
+    wide.width = 0.5;
+    assert!(trimmed(&[wide]).is_empty(), "a wider one covers");
+    assert!(trimmed(&[segment(4, (0.0, 0.0), (10.0, 0.0), 1)]).is_empty());
+}
+
+/// The preview names every track nil: an earlier nil-named piece still
+/// covers a later one.
+#[test]
+fn a_laid_track_with_the_same_id_still_covers() {
+    let mut nil = Uuid::nil;
+    let mut track = segment(1, (0.0, 0.0), (10.0, 0.0), 1);
+    track.uuid = Uuid::nil();
+    let mut laid = segment(2, (0.0, 0.0), (4.0, 0.0), 1);
+    laid.uuid = Uuid::nil();
+    let left = uncovered(track, [&laid], &mut nil);
+    assert_eq!(ends(&left.pieces), [((4.0, 0.0), (10.0, 0.0))]);
+}
+
+/// The route keeps the board track it was trimmed against; once that track
+/// is gone or moved the draft would land with a gap, so it is refused.
+#[test]
+fn a_route_along_a_track_removed_since_is_refused() {
+    let mut board = board(Vec::new(), vec![track(11, (0.0, 0.0), (3.0, 0.0), 1)]);
+    let rules = DrcRules::for_board(&board, &[]).unwrap();
+    let clearance = |a: &CopperItem, b: &CopperItem| rules.clearance_between(a, b);
+    let route = walk_rules(&clearance, &rules);
+    let leg = route_leg(
+        &board,
+        &RouteDraft::default(),
+        request((0.0, 0.0), (5.0, 0.0)),
+        &route,
+        Uuid::now_v7,
+    )
+    .expect("a way");
+    assert_eq!(leg.covers, [board.segments[0].clone()]);
+    let mut draft = RouteDraft::default();
+    draft.add(leg);
+    let reach = rules.widest_clearance();
+    assert_eq!(draft_fits(&board, &draft, &clearance, reach), Ok(()));
+    let mut moved = board.clone();
+    moved.segments[0].end = Point::new(2.0, 0.0);
+    assert_eq!(
+        draft_fits(&moved, &draft, &clearance, reach),
+        Err(RouteRefusal::BoardChanged)
+    );
+    board.segments.clear();
+    assert_eq!(
+        draft_fits(&board, &draft, &clearance, reach),
+        Err(RouteRefusal::BoardChanged)
+    );
+}
+
+/// The same for a bus or pair: a member trimmed against its own net's
+/// track is refused once that track is gone.
+#[test]
+fn a_bus_along_a_track_removed_since_is_refused() {
+    let mut board = board(
+        Vec::new(),
+        vec![
+            track(21, (0.0, 0.5), (1.0, 0.5), 1),
+            track(22, (0.0, -0.5), (1.0, -0.5), 2),
+            track(23, (3.0, 0.25), (6.0, 0.25), 1),
+        ],
+    );
+    let members = [
+        BusMember {
+            net: 2,
+            anchor: Point::new(1.0, -0.5),
+        },
+        BusMember {
+            net: 1,
+            anchor: Point::new(1.0, 0.5),
+        },
+    ];
+    let style = BusStyle {
+        layer: signex_types::pcb_layer::CopperLayer::Top,
+        width_mm: 0.25,
+        pitch_mm: 0.5,
+    };
+    let centre = [bus_start(&members).unwrap(), Point::new(10.0, 0.0)];
+    let draft = bus_draft(&board, &members, &centre, &style, Uuid::now_v7).expect("tracks");
+    assert_eq!(draft.covers, [board.segments[2].clone()]);
+    let rules = DrcRules::for_board(&board, &[]).unwrap();
+    let clearance = |a: &CopperItem, b: &CopperItem| rules.clearance_between(a, b);
+    let reach = rules.widest_clearance();
+    assert_eq!(draft_fits(&board, &draft, &clearance, reach), Ok(()));
+    board.segments.pop();
+    assert_eq!(
+        draft_fits(&board, &draft, &clearance, reach),
+        Err(RouteRefusal::BoardChanged)
+    );
 }

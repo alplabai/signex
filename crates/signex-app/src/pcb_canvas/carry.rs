@@ -183,7 +183,11 @@ impl PcbCarry {
         }
         if !self.items.is_empty() {
             // A dragged track stretches the tracks joined to its ends (#2513).
-            add(pcb_geom::tracks_on_tracks(board, &self.items));
+            add(pcb_geom::tracks_on_tracks(
+                board,
+                &self.items,
+                &self.carried(),
+            ));
         }
         ends.retain(|e| !self.items.contains(&e.track));
         ends

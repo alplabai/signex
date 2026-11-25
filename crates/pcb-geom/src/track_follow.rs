@@ -7,7 +7,8 @@
 //! same contact the ratsnest treats as connected. Only that end moves; the
 //! other end stays, so whatever it joins stays joined. On a via an end
 //! follows only at the via's exact position, and on a dragged track only at
-//! one of its ends (#2513).
+//! one of its ends (#2513), unless that end is also on a pad or via that
+//! stays.
 
 use std::collections::BTreeSet;
 
@@ -18,6 +19,7 @@ use uuid::Uuid;
 
 use crate::copper::{layer_mask, pad_layers, via_layers};
 use crate::free::arc_is_copper;
+use crate::index::via_shape;
 use crate::shape::Shape;
 use crate::transform::pad_shape;
 use crate::units::PointNm;
@@ -220,9 +222,16 @@ pub fn tracks_on_vias(board: &PcbBoard, vias: &BTreeSet<Uuid>) -> Vec<TrackEnds>
 /// The tracks of `board` other than `tracks` with an end on an end of one of
 /// `tracks`, to the nanometre, on its layer and net, in board order (#2513):
 /// a dragged track stretches the tracks joined to it. Only the joined end
-/// follows, so their other end stays, on a pad or wherever it is. A locked
-/// track is left out, as for [`tracks_on_pads`].
-pub fn tracks_on_tracks(board: &PcbBoard, tracks: &BTreeSet<Uuid>) -> Vec<TrackEnds> {
+/// follows, so their other end stays, on a pad or wherever it is. A joined
+/// end on the copper of a pad or via that stays (its footprint or the via
+/// not in `moving`) is left out: that track stays on the pad or via and only
+/// the dragged track leaves it. A locked track is left out, as for
+/// [`tracks_on_pads`].
+pub fn tracks_on_tracks(
+    board: &PcbBoard,
+    tracks: &BTreeSet<Uuid>,
+    moving: &BTreeSet<Uuid>,
+) -> Vec<TrackEnds> {
     let spots: Vec<(PointNm, u32, u32)> = (board.segments.iter())
         .filter(|segment| tracks.contains(&segment.uuid))
         .flat_map(|segment| {
@@ -238,9 +247,33 @@ pub fn tracks_on_tracks(board: &PcbBoard, tracks: &BTreeSet<Uuid>) -> Vec<TrackE
     if spots.is_empty() {
         return Vec::new();
     }
-    let mut ends = ends_where(board, |net, layers, p| at_spot(&spots, net, layers, p));
+    let mut ends = ends_where(board, |net, layers, p| {
+        at_spot(&spots, net, layers, p) && !on_still_copper(board, moving, net, layers, p)
+    });
     ends.retain(|e| !tracks.contains(&e.track));
     ends
+}
+
+/// Whether `p` lies on the copper of a pad or via of `net` on a layer of
+/// `layers` that does not move (its footprint or the via not in `moving`).
+fn on_still_copper(
+    board: &PcbBoard,
+    moving: &BTreeSet<Uuid>,
+    net: u32,
+    layers: u32,
+    p: PointNm,
+) -> bool {
+    let on_pad = (board.footprints.iter())
+        .filter(|fp| !moving.contains(&fp.uuid))
+        .flat_map(|fp| fp.pads.iter().map(move |pad| (fp, pad)))
+        .filter(|(_, pad)| pad.net.as_ref().map_or(0, |n| n.number) == net)
+        .filter(|(fp, pad)| pad_layers(fp, pad) & layers != 0)
+        .any(|(fp, pad)| pad_shape(fp, pad).is_ok_and(|shape| shape.contains(p, 0)));
+    on_pad
+        || (board.vias.iter())
+            .filter(|via| !moving.contains(&via.uuid) && via.net == net)
+            .filter(|via| via_layers(via) & layers != 0)
+            .any(|via| via_shape(via).is_ok_and(|shape| shape.contains(p, 0)))
 }
 
 /// The copper arcs of `board` with an end at one of `vias`, by the rule of
