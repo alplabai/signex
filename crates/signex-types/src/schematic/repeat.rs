@@ -114,6 +114,23 @@ pub fn repeated_entry_name(name: &str) -> Option<&str> {
     plain.then_some(inner)
 }
 
+/// The child-sheet port a sheet entry named `name` meets: `<net>` for a
+/// `Repeat(<net>)` entry, else the trimmed name; `None` for a blank name.
+/// Sheet entry sync and `bad_hier_sheet_pin` match entries to ports by it.
+pub fn entry_port_name(name: &str) -> Option<&str> {
+    super::normalize_port_name(name).map(|name| repeated_entry_name(name).unwrap_or(name))
+}
+
+/// The name of entry `entry` once its port is renamed to `port`: a
+/// `Repeat(<net>)` entry stays a repeat (`Repeat(<port>)`), a plain one
+/// takes `port`.
+pub fn renamed_entry(entry: &str, port: &str) -> String {
+    match repeated_entry_name(entry) {
+        Some(_) => format!("{KEYWORD}({port})"),
+        None => port.to_string(),
+    }
+}
+
 /// The text between `Repeat(` and the closing `)`, whitespace-tolerant.
 fn call_argument(text: &str) -> Option<&str> {
     let rest = text.trim().strip_prefix(KEYWORD)?.trim_start();

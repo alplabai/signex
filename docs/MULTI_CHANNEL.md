@@ -16,6 +16,15 @@ The Compiled Design panel shows the project as it compiles (#1308).
   parser is `signex_types::schematic::ChannelRepeat`.
 - A sheet entry named `Repeat(<net>)` gives one net per channel; the child
   sheet has a port named `<net>`. A plain entry is shared by every channel.
+  Every place that matches entries to ports asks
+  `signex_types::schematic::entry_port_name` (`Repeat(VOUT)` meets `VOUT`):
+  `bad_hier_sheet_pin`, Sync Sheet Pins and both directions of Synchronize
+  Sheet Entries and Ports (#2659). A `Repeat(<net>)` entry and its port
+  `<net>` agree, so a sync keeps the entry and adds no plain `<net>` entry
+  beside it. When the port is renamed, the entry stays a repeat of the new
+  name (`Repeat(VOUT_5V)`); when the port is gone, the generated entry is
+  removed under its written name. Symbol to sheet adds the port `<net>` for
+  a new `Repeat(<net>)` entry.
 - Nothing new is stored: the repeat is the designator text and the entry
   names, so a sheet that only uses multi-channel keeps its format version and
   an older build reads a plain sheet symbol with plain entries.
@@ -41,6 +50,13 @@ stays as written. A custom format typed in the menu is checked first
 (`check_format`): it must not be empty or hold spaces, every token must be
 closed and known, and it needs a channel token and the designator or net
 token.
+
+The Designators and Local nets fields each open their menu as a layer
+floating over the dock, under the field and right-aligned to it, so the
+rows below stay where they are (#2674). The menu keeps inside the window,
+above the field when there is no room below. Picking a preset or an
+accepted custom format closes it, and so does a press anywhere outside the
+menu and its field; a press on the field toggles it.
 
 ## Stitching
 
@@ -132,7 +148,10 @@ dependency, which this does not.
   designator and editing the Repeat fields write the same designator through
   the same Name edit, one undo step each. Turning Repeat off restores the
   newest plain designator in the sheet's undo history, however the repeat
-  was written; with none there it takes the file's stem. A From / To that
+  was written; with none there it takes the file's stem, numbered
+  (`child_2`, ...) when another sheet symbol on the sheet holds it, so the
+  switch never writes a name the Name edit refuses (#2790). A file name with
+  no stem gives the channel name. A From / To that
   is invalid or that another sheet symbol holds is refused: the document
   does not change and the box keeps the typed text, outlined as invalid.
 
@@ -205,7 +224,3 @@ list opens it, docked on the left as a tab beside Projects.
 - Per-channel variant state (a channel, or a part in one channel, not
   fitted) and its display in the channel cards and the panel: it is set in
   the Variant Manager tab, which does not exist yet (#2662).
-- The naming menu opens inline under its field, right-aligned to it, not as
-  a floating layer over the dock (#2674).
-- Sheet entry sync does not yet treat `Repeat(<net>)` as matching the port
-  `<net>`; it offers to add `<net>` as a new entry (#2659).

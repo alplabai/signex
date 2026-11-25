@@ -933,7 +933,7 @@ mod repeat;
 mod repeat_tests;
 pub use repeat::{
     ChannelFormatError, ChannelOccurrence, ChannelRepeat, MAX_CHANNELS, RepeatStack, StackLayer,
-    channel_alpha, check_format, repeated_entry_name,
+    channel_alpha, check_format, entry_port_name, renamed_entry, repeated_entry_name,
 };
 mod harness_ops;
 pub use harness_ops::*;

@@ -41,6 +41,8 @@ mod sheet_placement;
 mod sheet_sync;
 mod sheet_sync_entries;
 #[cfg(test)]
+mod sheet_sync_repeat_tests;
+#[cfg(test)]
 mod sheet_sync_tests;
 mod transform;
 
