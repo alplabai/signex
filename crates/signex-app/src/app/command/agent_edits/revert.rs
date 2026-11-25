@@ -158,6 +158,12 @@ pub(in crate::app::command) fn revert(app: &mut Signex, args: &CommandArgs) -> R
     // Undo can bring back an older embedded library symbol.
     app.library.drift.check_pending = true;
     for (member, _, patch) in &taken {
+        // An empty patch would settle nothing, the dirty mark included (#2645).
+        debug_assert_ne!(
+            *patch,
+            signex_engine::DocumentPatch::NONE,
+            "#2645: a revert with no patch"
+        );
         app.after_sheet_change(member, *patch);
     }
     if let Some(reason) = failure {

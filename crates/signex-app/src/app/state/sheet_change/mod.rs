@@ -81,10 +81,10 @@ pub(crate) struct ReadOnlyRefusal {
     pub(crate) notice: Option<Notice>,
 }
 
-/// What the active tail did with a patch.
+/// What [`DocumentState::settle`] did with a patch.
 #[derive(Debug, PartialEq, Eq)]
-enum ActiveSettlement {
-    /// Nothing to show: an empty patch, or no engine behind the active path.
+enum Settlement {
+    /// Nothing to show: an empty patch, or no engine behind the path.
     Unchanged,
     /// An agent's edit list is running: the refresh is owed to its end.
     Owed,
@@ -100,21 +100,12 @@ impl DocumentState {
         patch: DocumentPatch,
         cause: ChangeCause,
     ) -> SheetEdit {
-        let mut events = Vec::new();
-        let outcome = match self.settle_active_into(patch, cause, &mut events) {
-            ActiveSettlement::Unchanged => MutationOutcome::Unchanged,
-            ActiveSettlement::Owed | ActiveSettlement::Shown => MutationOutcome::Changed,
-        };
-        SheetEdit {
-            outcome,
-            refusal: None,
-            events,
-        }
+        let path = self.active_path.clone();
+        self.settle_edit_on(path.as_deref(), patch, cause, Vec::new())
     }
 
-    /// The by-path tail: settle `patch` on the sheet at `path`. Unlike the
-    /// active tail it emits even for an empty patch or a sheet with no
-    /// engine (#2645 keeps the two rule sets apart until it is decided).
+    /// The by-path tail: settle `patch` on the sheet at `path`, by the same
+    /// rules as the active tail (#2645).
     #[must_use = "project the events"]
     pub(crate) fn settle_sheet_at(
         &mut self,
@@ -123,8 +114,27 @@ impl DocumentState {
         cause: ChangeCause,
     ) -> Vec<CoreEvent> {
         let mut events = Vec::new();
-        self.settle_at_into(path, patch, cause, &mut events);
+        self.settle(Some(path), patch, cause, &mut events);
         events
+    }
+
+    /// Settle `patch` on `path` after `events`, as an edit's outcome.
+    fn settle_edit_on(
+        &mut self,
+        path: Option<&Path>,
+        patch: DocumentPatch,
+        cause: ChangeCause,
+        mut events: Vec<CoreEvent>,
+    ) -> SheetEdit {
+        let outcome = match self.settle(path, patch, cause, &mut events) {
+            Settlement::Unchanged => MutationOutcome::Unchanged,
+            Settlement::Owed | Settlement::Shown => MutationOutcome::Changed,
+        };
+        SheetEdit {
+            outcome,
+            refusal: None,
+            events,
+        }
     }
 
     /// An edit of the active sheet made outside the engine's commands: the
@@ -153,53 +163,35 @@ impl DocumentState {
         Some(ReadOnlyRefusal { reason, notice })
     }
 
-    fn settle_active_into(
+    /// The one edit tail (#2645): settle `patch` on the sheet at `path`, the
+    /// active sheet, the sheet an edit acts on, or a sheet named by path.
+    fn settle(
         &mut self,
+        path: Option<&Path>,
         patch: DocumentPatch,
         cause: ChangeCause,
         events: &mut Vec<CoreEvent>,
-    ) -> ActiveSettlement {
+    ) -> Settlement {
         if patch == DocumentPatch::NONE {
-            return ActiveSettlement::Unchanged;
+            return Settlement::Unchanged;
         }
-        // An agent's edit list refreshes the sheet once, when it ends, and
+        // An agent's edit list refreshes its target once, when it ends, and
         // never through the person's canvas (docs/AGENT_EDITS.md).
-        if self.agent_edit_running() {
+        if path.is_some() && path == self.agent_edits.target.as_deref() {
             self.agent_edits.owed |= patch;
-            return ActiveSettlement::Owed;
+            return Settlement::Owed;
         }
         if !patch.is_display_only() {
             self.note_sheet_edit();
         }
-        let Some(path) = self.sync_active_history_dirty() else {
-            return ActiveSettlement::Unchanged;
+        let Some(path) = path.filter(|path| self.engines.contains_key(*path)) else {
+            return Settlement::Unchanged;
         };
-        self.mark_compiled_stale(&path, patch);
-        events.push(DocumentChanged { path, patch, cause }.into());
-        ActiveSettlement::Shown
-    }
-
-    fn settle_at_into(
-        &mut self,
-        path: &Path,
-        patch: DocumentPatch,
-        cause: ChangeCause,
-        events: &mut Vec<CoreEvent>,
-    ) {
-        // Inside an agent's edit list the refresh is owed once, at its end.
-        // A step never runs there: `edit_refusal` refuses undo, redo and revert.
-        if self.agent_edits.target.as_deref() == Some(path) {
-            debug_assert_eq!(cause, ChangeCause::Edit, "a step inside an agent edit");
-            self.agent_edits.owed |= patch;
-            return;
-        }
-        if !patch.is_display_only() {
-            self.note_sheet_edit();
-        }
         self.sync_history_dirty(path);
         self.mark_compiled_stale(path, patch);
         let path = path.to_path_buf();
         events.push(DocumentChanged { path, patch, cause }.into());
+        Settlement::Shown
     }
 
     /// Re-derive the active sheet's dirty mark from its engine history after
