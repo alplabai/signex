@@ -99,6 +99,9 @@ mod tests {
                 "assign_board_net_class",
                 "assign_net_class",
                 "autoplace_fields",
+                // #2470: Back Annotate and Re-Annotate Board on the named
+                // project or board.
+                "back_annotate_schematics",
                 "board_assembly_drawing",
                 "board_panel",
                 "board_report_bom",
@@ -152,6 +155,7 @@ mod tests {
                 "query_board_nets",
                 "query_pins",
                 "read_document",
+                "reannotate_board",
                 "remove_board_panel",
                 "remove_teardrops",
                 "rename_net_class",

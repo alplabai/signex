@@ -175,6 +175,21 @@ mod tests {
         assert_eq!(cap("repour_all"), Capability::Edit);
     }
 
+    /// #2470: New PCB opens the board unsaved and the numbering commands
+    /// change documents in memory: none writes a file, so none needs `save`.
+    #[test]
+    fn a_new_board_and_the_numbering_commands_need_the_edit_capability() {
+        for id in [
+            "new_pcb_document",
+            "annotate_schematic_quietly",
+            "force_annotate_all_schematics",
+            "reannotate_board",
+            "back_annotate_schematics",
+        ] {
+            assert_eq!(cap(id), Capability::Edit, "{id}");
+        }
+    }
+
     #[test]
     fn the_catalogs_writers_and_exporters_are_pinned() {
         let non_default: BTreeSet<_> = all_command_ids()

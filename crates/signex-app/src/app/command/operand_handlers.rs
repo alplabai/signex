@@ -76,6 +76,23 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "update_pcb_from_schematic",
         crate::app::update_pcb::update_pcb_from_schematic,
     ),
+    // #2470: numbering on the document named, answered with each change.
+    (
+        "annotate_schematic_quietly",
+        crate::app::handlers::erc::annotate_quietly_by_operands,
+    ),
+    (
+        "force_annotate_all_schematics",
+        crate::app::handlers::erc::force_annotate_by_operands,
+    ),
+    (
+        "reannotate_board",
+        crate::app::board_reannotate::reannotate_board,
+    ),
+    (
+        "back_annotate_schematics",
+        crate::app::back_annotate::back_annotate_schematics,
+    ),
     ("apply_edits", agent::apply_edits),
     ("revert", agent::revert),
     ("place_net_label", place::net_label),
