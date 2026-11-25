@@ -195,6 +195,19 @@ pub(super) const WIRING: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #2719: the Interactive Routing options on the named board, answered
+    // as JSON; each operand given sets its option first. Changes no board.
+    // No default key.
+    CommandMetadata {
+        id: "route_options",
+        category: "pcb",
+        label: command_ids::CMD_ROUTE_OPTIONS,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: operands::ROUTE_OPTIONS,
+        ..CommandMetadata::DEFAULT
+    },
     // #2373: how the Arc tool's clicks make an arc. Changes no board. No
     // default key.
     CommandMetadata {

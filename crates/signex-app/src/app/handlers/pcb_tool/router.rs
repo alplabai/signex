@@ -388,7 +388,12 @@ impl Signex {
     /// The Messages panel says which; a route being drawn redraws its next
     /// leg.
     pub(crate) fn step_route_mode(&mut self) {
-        let mode = self.interaction_state.route_mode.next();
+        self.set_route_mode(self.interaction_state.route_mode.next());
+    }
+
+    /// Route in `mode` from now on: `cycle_route_mode` and `route_options`
+    /// (#2719) both set it here.
+    pub(crate) fn set_route_mode(&mut self, mode: RouteMode) {
         self.interaction_state.route_mode = mode;
         let id = match mode {
             RouteMode::Walkaround => ids::PCB_ROUTE_MODE_WALKAROUND,

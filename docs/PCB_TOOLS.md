@@ -238,8 +238,18 @@ clearance the design rules ask from other nets' copper (#2389).
   break a clearance (the leg's via included) or enter a keepout is not
   pushed: the leg walks around instead.
   A track of no net is never pushed; the leg walks around it (Caner, 2026-11-25, #2515).
+- **Options (#2719, step 1).** `route_options document=<board>` reads the
+  options the router uses and sets any it is given: the conflict mode
+  (`walkaround`, `push_and_shove`), the corner mode (`90`, `45_start`,
+  `45_end`, `any_angle`, the one Shift+Space steps, shared with wires), the
+  track width and the via diameter and hole of the next leg; while a route
+  is drawn it also names the route's net, class, layer and lengths. The
+  command and the keys set one state, and a width set mid-route is the
+  width the route goes on with. Answer: [CLI.md](CLI.md), "Routing
+  options". The Properties panel's rows for these wait for their mockup row.
 - **Vias.** Making another copper layer active mid-route puts a through via
-  (the board's via size, grown to the written rules' minimum diameter and
+  (the via size set in the tool's form or with `route_options`, else the
+  board's, grown to the written rules' minimum diameter and
   drill for the net) at the route's end with the next leg; a via that would
   not keep the clearance is refused with the leg.
 - **Keepouts.** A leg stays out of a keepout that forbids tracks, a via out

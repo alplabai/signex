@@ -582,6 +582,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "delete_net_class",
                     "set_net_class_rules",
                     "assign_board_net_class",
+                    // #2719: the routing options of the named board.
+                    "route_options",
                     // #2402, #2404: board reports and Board Print / PDF.
                     "board_report_bom",
                     "board_report_netlist",

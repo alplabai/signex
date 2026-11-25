@@ -162,6 +162,8 @@ mod tests {
                 "reset_layer_colors",
                 "resolve",
                 "revert",
+                // #2719: the routing options on the named board.
+                "route_options",
                 "rules_add",
                 "rules_conflicts",
                 "rules_effective",

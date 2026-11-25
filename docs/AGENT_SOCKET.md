@@ -134,7 +134,9 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   (#2399, #2400): `show_drc_violation`, `filter_drc_results`,
   `waive_drc_violation`, `unwaive_drc_violation`, `add_net_class`,
   `rename_net_class`, `delete_net_class`, `set_net_class_rules` and
-  `assign_board_net_class`, each answering with what it did, the board
+  `assign_board_net_class`, each answering with what it did, the
+  Interactive Routing options `route_options` (#2719; tool state, no undo
+  step, [CLI.md](CLI.md), "Routing options"), the board
   edits `set_layer_stack`, `lock_board_items`, `unlock_board_items`,
   `set_via_span` and `set_layer_sizes` (#2401, #2407: each one undo step on
   the board it names, [PCB_LAYER_STACK.md](PCB_LAYER_STACK.md)), the pad edit

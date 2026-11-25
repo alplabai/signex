@@ -576,6 +576,8 @@ cmd-menu-unfill-selected = Unfill Selected
 cmd-place-board-route = Route on the active copper layer around other nets, keeping the rule clearance
 cmd-menu-place-board-route = Interactive Routing
 cmd-cycle-route-mode = Switch Interactive Routing between walking around and pushing other nets' tracks
+# #2719: the routing options an agent or the CLI reads and sets.
+cmd-route-options = Read or set the Interactive Routing options of a board
 # #2401: the layer stack manager, and its edit for an agent or the CLI.
 cmd-board-layer-stack = Open the layer stack manager of the board
 cmd-menu-board-layer-stack = Layer Stack Manager...
