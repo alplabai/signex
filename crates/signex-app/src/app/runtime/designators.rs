@@ -34,14 +34,24 @@ impl Signex {
 
     /// What the active canvas's designators are a function of; `None` with no
     /// active sheet. The engine revision moves on every document change.
-    pub(super) fn designators_key(&self) -> Option<crate::canvas::DesignatorsKey> {
+    fn designators_key(&self) -> Option<crate::canvas::DesignatorsKey> {
         let path = self.document_state.active_path.as_deref()?;
+        Some(self.designators_key_for(path))
+    }
+
+    /// What the designators of any canvas showing the sheet at `path` are a
+    /// function of: the path, the engine `(instance, revision)` and the
+    /// shown placement.
+    pub(super) fn designators_key_for(
+        &self,
+        path: &std::path::Path,
+    ) -> crate::canvas::DesignatorsKey {
         let engine = self
             .document_state
             .engines
             .get(path)
             .map(|engine| (engine.instance_id(), engine.revision()));
-        Some((path.to_path_buf(), engine, self.shown_placement(path)))
+        (path.to_path_buf(), engine, self.shown_placement(path))
     }
 
     /// The placement whose designators the schematic at `path` shows and

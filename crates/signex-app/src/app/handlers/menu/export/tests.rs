@@ -1014,6 +1014,7 @@ pub(crate) mod current_placement;
 
 mod export_status;
 mod lazy_preview;
+mod not_fitted;
 mod sheet_numbering;
 mod tree_nesting_pins;
 

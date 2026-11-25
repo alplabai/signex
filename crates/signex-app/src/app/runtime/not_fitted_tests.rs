@@ -1,11 +1,14 @@
 //! #1294 — the canvas crosses out the parts that are DNP or not fitted in
 //! the project's active variant, follows the variant and its settings, and
-//! stops while "Cross out not-fitted parts" is off.
+//! stops while "Cross out not-fitted parts" is off. An unfocused tile pane
+//! follows them too.
 
 use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 
 use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
 use crate::app::{Message, PreferencesMsg, Signex, TabInfo, TabKind};
+use crate::canvas::CanvasSlot;
 use crate::preferences::PrefMsg;
 use signex_types::project::{VariantPart, VariantSettings};
 use signex_types::schematic::{SchematicSheet, Symbol};
@@ -27,8 +30,13 @@ fn part(uuid: Uuid, reference: &str) -> Symbol {
 /// A project defining Lite whose one sheet, open in the active tab, places
 /// U1 (DNP), U2 (not fitted in Lite on the sheet) and U3.
 fn app() -> (Signex, tempfile::TempDir) {
+    app_listing(&["a.snxsch"])
+}
+
+/// [`app`] with `listed` as the project's sheets.
+fn app_listing(listed: &[&str]) -> (Signex, tempfile::TempDir) {
     let dir = tempfile::tempdir().expect("a folder");
-    let mut app = app_workspace(&dir.path().to_string_lossy(), &["a.snxsch"]);
+    let mut app = app_workspace(&dir.path().to_string_lossy(), listed);
     let path = dir.path().join("a.snxsch");
     let mut u1 = part(U1, "U1");
     u1.dnp = true;
@@ -132,4 +140,81 @@ fn the_crossed_out_parts_follow_an_edit_of_the_sheet() {
     sheet.symbols[2].dnp = true;
     open_with(&mut app.document_state, &path, sheet);
     assert_eq!(crossed_out(&mut app), HashSet::from([U1, U3]));
+}
+
+const U4: Uuid = Uuid::from_u128(4);
+
+/// [`app`] whose project also lists `b.snxsch`, shown in an unfocused tile
+/// pane and placing U4, not fitted in Lite on the sheet. Returns the pane's
+/// sheet too.
+fn app_with_pane() -> (Signex, tempfile::TempDir, PathBuf) {
+    let (mut app, dir) = app_listing(&["a.snxsch", "b.snxsch"]);
+    let path = dir.path().join("b.snxsch");
+    let mut u4 = part(U4, "U4");
+    u4.fields.insert("Fitted@Lite".into(), "no".into());
+    let sheet = SchematicSheet {
+        symbols: vec![u4],
+        ..Default::default()
+    };
+    open_with(&mut app.document_state, &path, sheet);
+    app.interaction_state
+        .tile_panes
+        .schematic
+        .insert(path.clone(), CanvasSlot::default());
+    (app, dir, path)
+}
+
+fn pane_not_fitted(app: &Signex, pane: &Path) -> HashSet<Uuid> {
+    app.interaction_state.tile_panes.schematic[pane]
+        .not_fitted
+        .clone()
+}
+
+#[test]
+fn an_unfocused_tile_pane_follows_the_active_variant_and_an_edit_of_its_sheet() {
+    let (mut app, _dir, pane) = app_with_pane();
+    app.refresh_panel_ctx();
+    assert!(pane_not_fitted(&app, &pane).is_empty(), "Base fits U4");
+    set_active(&mut app, Some("Lite"));
+    app.refresh_panel_ctx();
+    assert_eq!(pane_not_fitted(&app, &pane), HashSet::from([U4]));
+    set_active(&mut app, None);
+    app.refresh_panel_ctx();
+    assert!(pane_not_fitted(&app, &pane).is_empty());
+    let mut sheet = app.document_state.engines[&pane].document().clone();
+    sheet.symbols[0].dnp = true;
+    open_with(&mut app.document_state, &pane, sheet);
+    app.refresh_panel_ctx();
+    assert_eq!(pane_not_fitted(&app, &pane), HashSet::from([U4]));
+}
+
+#[test]
+fn a_pane_is_not_recomputed_while_nothing_its_parts_depend_on_moved() {
+    let (mut app, _dir, pane) = app_with_pane();
+    set_active(&mut app, Some("Lite"));
+    app.refresh_window_not_fitted();
+    assert_eq!(pane_not_fitted(&app, &pane), HashSet::from([U4]));
+    // Emptied behind the refresh's back: only a recompute would refill it.
+    let slot = app.interaction_state.tile_panes.schematic.get_mut(&pane);
+    slot.expect("the pane").not_fitted.clear();
+    app.refresh_window_not_fitted();
+    assert!(
+        pane_not_fitted(&app, &pane).is_empty(),
+        "kept, not recomputed"
+    );
+    app.document_state.projects[0].data.variant_settings = VariantSettings {
+        parts: vec![VariantPart {
+            variant: "Lite".into(),
+            designator: "U4".into(),
+            fitted: Some(false),
+            ..VariantPart::default()
+        }],
+        ..VariantSettings::default()
+    };
+    app.refresh_window_not_fitted();
+    assert_eq!(
+        pane_not_fitted(&app, &pane),
+        HashSet::from([U4]),
+        "new settings recompute"
+    );
 }
