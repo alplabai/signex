@@ -247,7 +247,8 @@ fn app_with_a_compile(path: &std::path::Path) -> Signex {
         CompiledResult {
             design: Arc::new(signex_net::CompiledDesign::default()),
             paths: std::collections::HashMap::from([(key, path.to_path_buf())]),
-            compiled_at: "12:41".to_string(),
+            compiled_at: chrono::DateTime::<chrono::Utc>::UNIX_EPOCH,
+            miniatures: Default::default(),
             stale: Default::default(),
             has_unread_sheets: false,
             unread_paths: Vec::new(),
@@ -364,4 +365,22 @@ fn a_colour_only_edit_or_another_sheet_leaves_the_compile_fresh() {
     );
     let result = app.document_state.compiled_design.results.values().next();
     assert!(result.is_some_and(|r| r.stale.is_empty()));
+}
+
+/// #2733: the core keeps when the compile finished, not a worded time; the
+/// panel words it in the user's locale.
+#[test]
+fn the_compile_time_is_worded_in_the_users_locale() {
+    let mut app = app_with_a_compile(&PathBuf::from("/p/child.snxsch"));
+    let store = &mut app.document_state.compiled_design;
+    let (&project, result) = store.results.iter_mut().next().expect("the compile");
+    let at = chrono::DateTime::from_timestamp(1_700_000_000, 0).expect("a time");
+    result.compiled_at = at;
+    app.document_state.active_project = Some(project);
+    let panel = app.compiled_design_view().panel;
+    assert_eq!(
+        panel.status,
+        crate::panels::compiled_design::CompiledStatus::Ready
+    );
+    assert_eq!(panel.compiled_at, app.ui_state.i18n.time(at));
 }

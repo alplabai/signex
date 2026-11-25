@@ -1,9 +1,9 @@
 //! The compiled channel view: a two-column grid of channel cards on the
 //! sunken ground. A card names its channel and counts its parts and nets;
-//! its body lists the channel's designators. The chosen channel's card is
-//! outlined in the accent; a click chooses that channel. The miniature
-//! drawing of the sheet at card scale is not built yet (see
-//! `docs/MULTI_CHANNEL.md`, "Not built yet").
+//! its body draws the channel's sheet at card scale with its designators
+//! and net names (`miniature.rs`, #2658), or lists its designators before a
+//! compile. The chosen channel's card is outlined in the accent; a click
+//! chooses that channel.
 
 use iced::widget::{Column, Row, Space, column, container, row, scrollable};
 use iced::{Alignment, Background, Border, Element, Length, Padding, Theme, Widget as _};
@@ -98,16 +98,22 @@ fn card<'a>(
     ]
     .spacing(GAP)
     .align_y(Alignment::Center);
-    let mut body: Column<Element<'a, Message>> = column![].spacing(LINE_GAP);
-    for name in tab.designators.iter().take(BODY_ROWS) {
-        body = body.push(
-            text(UserText::new(name.as_str()))
-                .size(TS.caption)
-                .font(mono)
-                .color(res.ink3)
-                .boxed(),
-        );
-    }
+    let body: Element<'a, Message> = match &tab.miniature {
+        Some(miniature) => super::miniature::view(ctx, miniature),
+        None => {
+            let mut list: Column<Element<'a, Message>> = column![].spacing(LINE_GAP);
+            for name in tab.designators.iter().take(BODY_ROWS) {
+                list = list.push(
+                    text(UserText::new(name.as_str()))
+                        .size(TS.caption)
+                        .font(mono)
+                        .color(res.ink3)
+                        .boxed(),
+                );
+            }
+            list.boxed()
+        }
+    };
     let (fill, edge, accent) = (res.raised, res.line_soft, ti(tokens.accent));
     let content = container(column![header, body].spacing(GAP))
         .padding(GAP)

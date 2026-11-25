@@ -51,6 +51,9 @@ pub enum CompiledDesignMsg {
     RowToggled(usize),
     /// A tree row was clicked: open its sheet (a channel on its tab).
     RowClicked(usize),
+    /// A tree row was Ctrl+clicked (Cmd+click on macOS): open its source
+    /// sheet, a channel's on its Editor tab (#2658).
+    RowSourceClicked(usize),
     /// The chevron of a sheet instance: show or hide its parts and nets.
     RowExpanded(usize),
     /// A part or net row was clicked: open its sheet instance and go to it.

@@ -89,8 +89,9 @@ impl Signex {
     }
 
     /// A tree row was clicked: select it and open its sheet; a channel row
-    /// opens the sheet on that channel's tab.
-    pub(super) fn open_compiled_row(&mut self, row: usize) -> Task<Message> {
+    /// opens the sheet on that channel's tab, unless `on_editor` (a
+    /// Ctrl+click, #2658) asks for the source sheet itself, on Editor.
+    pub(super) fn open_compiled_row(&mut self, row: usize, on_editor: bool) -> Task<Message> {
         let Some(project) = self.compile_target() else {
             return Task::none();
         };
@@ -103,7 +104,11 @@ impl Signex {
         let Some(path) = result.path_of(&sheet.key).cloned() else {
             return Task::none();
         };
-        let channel = sheet.channel.as_ref().map(|c| c.index);
+        let channel = sheet
+            .channel
+            .as_ref()
+            .map(|c| c.index)
+            .filter(|_| !on_editor);
         let placement = (sheet.channel.is_none()).then(|| sheet.path.clone());
         let store = &mut self.ui_state.compiled_design;
         store.selected = Some(row);
