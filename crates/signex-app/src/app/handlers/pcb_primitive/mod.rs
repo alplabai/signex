@@ -12,6 +12,7 @@ mod facts;
 mod free;
 mod graphic;
 mod links;
+mod pair;
 mod placement;
 mod stack_facts;
 mod tune;
@@ -26,6 +27,7 @@ mod tune_tests;
 pub(crate) use dimension_style::dimension_style_edit;
 pub(crate) use free::dimension_edit;
 pub(crate) use graphic::graphic_edit;
+pub(crate) use pair::set_diff_pair_width;
 pub(crate) use zone::zone_edit;
 
 use std::collections::BTreeMap;
@@ -336,6 +338,13 @@ impl Signex {
                 Some(value) if field == PrimitiveField::TuneLength => {
                     self.tune_track_length(target, value);
                     return;
+                }
+                // #2585: a pair's Width reaches both tracks of the pair.
+                Some(value) if field == PrimitiveField::Width => {
+                    if self.widen_pair_tracks(target, value) {
+                        return;
+                    }
+                    PrimitiveEdit::Number(field, value)
                 }
                 Some(value) if field.is_mask() => {
                     PrimitiveEdit::Mask(field, MaskExpansion::Manual { mm: value })

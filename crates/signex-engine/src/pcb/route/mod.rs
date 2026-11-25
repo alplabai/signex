@@ -35,7 +35,7 @@ pub use ends::{
     PadAt, PadEnd, copper_under, end_via, join_pads, pad_end, start_on_copper, via_fits,
     via_pad_end,
 };
-pub use pair::{PairNets, PairTuned, diff_pair_of, pair_width_gap, tune_pair};
+pub use pair::{PairNets, PairTuned, diff_pair_of, pair_name, pair_width_gap, tune_pair};
 pub use pair_tracks::{coupled_partner, shared_gap_mm, with_partners};
 pub use tune::{Meander, NetsTuned, TuneRefusal, tune_length, tune_net, tune_nets};
 

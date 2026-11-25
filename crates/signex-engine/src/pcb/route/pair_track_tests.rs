@@ -100,3 +100,11 @@ fn the_shared_gap_reads_only_when_every_track_has_one() {
     };
     assert_eq!(shared_gap_mm(&alone, PAIR, &[Uuid::from_u128(11)]), None);
 }
+
+#[test]
+fn a_pair_is_named_by_what_its_nets_share() {
+    assert_eq!(pair_name("USB_DP", "USB_DM"), "USB_D");
+    assert_eq!(pair_name("USB_P", "USB_N"), "USB");
+    assert_eq!(pair_name("CLK+", "CLK-"), "CLK");
+    assert_eq!(pair_name("A", "B"), "A / B");
+}

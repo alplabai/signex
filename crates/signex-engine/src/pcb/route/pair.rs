@@ -78,6 +78,24 @@ pub fn diff_pair_of(board: &PcbBoard, classes: &[NetClass], net: u32) -> Option<
     }
 }
 
+/// What two pair nets share, without a trailing `_`: `USB_D` for `USB_DP`
+/// and `USB_DM`; both names when they share nothing. The one name the PCB
+/// panel, the Track panel and the length report give a pair.
+pub fn pair_name(positive: &str, negative: &str) -> String {
+    let shared: String = positive
+        .chars()
+        .zip(negative.chars())
+        .take_while(|(a, b)| a == b)
+        .map(|(a, _)| a)
+        .collect();
+    let stem = shared.trim_end_matches(['_', '-', '+', '.']);
+    if stem.is_empty() {
+        format!("{positive} / {negative}")
+    } else {
+        stem.to_owned()
+    }
+}
+
 /// The width and gap a pair keeps: its class's differential-pair values
 /// where set (above zero), else `width_mm` and `gap_mm`; never a gap below
 /// `min_gap_mm`, the clearance the rules ask between the two nets.

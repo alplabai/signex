@@ -108,6 +108,7 @@ fn track() -> TrackFacts {
         locked: Some(false),
         paste_mask: None,
         solder_mask: None,
+        pair: None,
     }
 }
 
