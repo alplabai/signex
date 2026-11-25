@@ -372,11 +372,13 @@ fn a_footprint_with_an_open_profile_offers_close_gap_and_closes_it() {
 fn the_corner_and_min_slot_checks_name_the_projects_fab_profile() {
     let mut f = board_of_standard_project();
     let project = f.app.document_state.projects.last_mut().unwrap();
-    let mut rules = signex_types::project::ProjectRules::default();
-    rules.profile = Some(signex_types::project::RuleProfileRef {
-        name: "Standard 4-layer".into(),
+    let mut rules = signex_types::project::ProjectRules {
+        profile: Some(signex_types::project::RuleProfileRef {
+            name: "Standard 4-layer".into(),
+            ..Default::default()
+        }),
         ..Default::default()
-    });
+    };
     rules.set_min_slot(Some(0.8));
     project.data.rules = Some(rules);
     let l_board = [
