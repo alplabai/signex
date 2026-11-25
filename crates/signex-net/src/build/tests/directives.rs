@@ -3,7 +3,7 @@ use super::*;
 use signex_types::diff_pair_class::DiffPairClass;
 use signex_types::net::NetClassId;
 use signex_types::net_class::NetClass;
-use signex_types::schematic::{BlanketPour, NetRules, SchDirective};
+use signex_types::schematic::{BlanketPour, DirectiveKind, NetRules, SchDirective};
 
 fn id(n: u128) -> Uuid {
     Uuid::from_u128(n)
@@ -397,4 +397,143 @@ fn the_project_netlist_applies_blanket_and_net_parameters_classes() {
     assert_eq!(of("B"), class("SW_NODE"));
     // The one-sheet project still reads exactly as the sheet's own netlist.
     assert_eq!(project.netlist, build_netlist(&sheet));
+}
+
+/// `directive` with the uuid `n`, so two of one kind stay apart.
+fn with_id(mut directive: SchDirective, n: u128) -> SchDirective {
+    directive.set_uuid(id(n));
+    directive
+}
+
+/// #2656: two Net Parameters directives on one net naming different classes.
+/// The first in sheet order wins, and the conflict names the other.
+#[test]
+fn two_net_parameters_on_one_net_conflict_and_the_first_wins() {
+    let mut sheet = two_nets("A", "B");
+    let first = with_id(
+        net_parameters(pt(3.0, 0.0), Some("POWER"), NetRules::default()),
+        101,
+    );
+    let second = with_id(
+        net_parameters(pt(7.0, 0.0), Some("SIGNAL"), NetRules::default()),
+        102,
+    );
+    sheet.directives.extend([first, second]);
+    let netlist = build_netlist(&sheet);
+    assert_eq!(netlist.nets[0].class, class("POWER"));
+    let conflicts = crate::net_class_conflicts(&sheet, &netlist);
+    assert_eq!(conflicts.len(), 1, "{conflicts:?}");
+    let c = &conflicts[0];
+    assert_eq!(c.net_name, "A");
+    assert_eq!(
+        (c.winner.directive, c.winner.class.as_str()),
+        (id(101), "POWER")
+    );
+    assert_eq!(c.winner.at, pt(3.0, 0.0));
+    let lost: Vec<(Uuid, &str)> = c
+        .overridden
+        .iter()
+        .map(|a| (a.directive, a.class.as_str()))
+        .collect();
+    assert_eq!(lost, [(id(102), "SIGNAL")]);
+}
+
+/// Swapping the two directives swaps the winner: the answer follows sheet
+/// order and nothing else.
+#[test]
+fn the_resolution_follows_sheet_order_only() {
+    let mut sheet = two_nets("A", "B");
+    sheet.directives.extend([
+        with_id(
+            net_parameters(pt(7.0, 0.0), Some("SIGNAL"), NetRules::default()),
+            102,
+        ),
+        with_id(
+            net_parameters(pt(3.0, 0.0), Some("POWER"), NetRules::default()),
+            101,
+        ),
+    ]);
+    let netlist = build_netlist(&sheet);
+    assert_eq!(netlist.nets[0].class, class("SIGNAL"));
+    let conflicts = crate::net_class_conflicts(&sheet, &netlist);
+    assert_eq!(conflicts[0].winner.directive, id(102));
+    assert_eq!(conflicts, crate::net_class_conflicts(&sheet, &netlist));
+}
+
+#[test]
+fn a_net_parameters_class_over_a_blanket_class_is_a_conflict() {
+    let mut sheet = two_nets("A", "B");
+    sheet
+        .directives
+        .push(blanket(pt(-1.0, -1.0), pt(11.0, 21.0), Some("SW_NODE")));
+    sheet.directives.push(net_parameters(
+        pt(5.0, 0.0),
+        Some("POWER_IN"),
+        NetRules::default(),
+    ));
+    let netlist = build_netlist(&sheet);
+    let conflicts = crate::net_class_conflicts(&sheet, &netlist);
+    // Only A: B takes the blanket's class from the blanket alone.
+    assert_eq!(conflicts.len(), 1, "{conflicts:?}");
+    let c = &conflicts[0];
+    assert_eq!(c.net_name, "A");
+    assert_eq!(c.winner.kind, DirectiveKind::NetParameters);
+    assert_eq!(c.overridden.len(), 1);
+    assert_eq!(c.overridden[0].kind, DirectiveKind::Blanket);
+    assert_eq!(c.overridden[0].class, "SW_NODE");
+    // A blanket's anchor is its centre, inside it.
+    assert_eq!(c.overridden[0].at, pt(5.0, 10.0));
+}
+
+#[test]
+fn two_blankets_with_different_classes_on_one_net_conflict() {
+    let mut sheet = two_nets("A", "B");
+    let region = (pt(-1.0, -1.0), pt(11.0, 1.0));
+    sheet.directives.extend([
+        with_id(blanket(region.0, region.1, Some("First")), 111),
+        with_id(blanket(region.0, region.1, Some("Second")), 112),
+    ]);
+    let netlist = build_netlist(&sheet);
+    let conflicts = crate::net_class_conflicts(&sheet, &netlist);
+    assert_eq!(conflicts.len(), 1);
+    assert_eq!(conflicts[0].winner.directive, id(111));
+    assert_eq!(conflicts[0].overridden[0].directive, id(112));
+}
+
+#[test]
+fn directives_naming_the_same_class_do_not_conflict() {
+    let mut sheet = two_nets("A", "B");
+    sheet
+        .directives
+        .push(blanket(pt(-1.0, -1.0), pt(11.0, 1.0), Some("POWER")));
+    sheet.directives.push(net_parameters(
+        pt(5.0, 0.0),
+        Some(" POWER "),
+        NetRules::default(),
+    ));
+    let netlist = build_netlist(&sheet);
+    assert!(crate::net_class_conflicts(&sheet, &netlist).is_empty());
+    let all = crate::class_assignments(&sheet, &netlist);
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[0].1.len(), 2, "both assignments are listed");
+}
+
+/// The netlist's classes are the first assignment of each net, so the
+/// conflict list and `Net::class` can never disagree.
+#[test]
+fn every_net_takes_the_winner_of_its_assignments() {
+    let mut sheet = two_nets("A", "B");
+    sheet
+        .directives
+        .push(blanket(pt(-1.0, -1.0), pt(11.0, 21.0), Some("SW_NODE")));
+    sheet.directives.push(net_parameters(
+        pt(5.0, 20.0),
+        Some("POWER_IN"),
+        NetRules::default(),
+    ));
+    let netlist = build_netlist(&sheet);
+    for (net, list) in crate::class_assignments(&sheet, &netlist) {
+        let n = netlist.nets.iter().find(|n| n.id == net).unwrap();
+        assert_eq!(n.class, class(&list[0].class), "{}", n.name);
+    }
 }

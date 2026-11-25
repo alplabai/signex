@@ -842,6 +842,11 @@ pub use directive::{
 pub use directive::{
     BlanketPour, DIFF_PAIR_SUFFIX_PAIRS, DiffPairHalves, NetRules, diff_pair_halves,
 };
+mod directive_flag;
+pub use directive_flag::{
+    DIRECTIVE_FLAG_LINE_MM, DIRECTIVE_FLAG_PAD_MM, DIRECTIVE_FLAG_TEXT_MM, DirectiveFlag,
+    directive_flag, directive_flag_line_origin, directive_flag_lines,
+};
 mod no_erc;
 pub use no_erc::{NoErcDirective, canonical_no_erc_rules, no_erc_rules_suppress};
 mod sheet;

@@ -257,6 +257,7 @@ impl SvgRenderContext {
                 );
             }
         }
+        super::directives::push_directives(&mut elements, &sheet.schematic, &xform, palette, opts);
 
         let document_family = sheet.schematic.font_family.as_deref();
         for label in &sheet.schematic.labels {

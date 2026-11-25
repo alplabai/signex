@@ -117,16 +117,16 @@ pub struct PdfOptions {
     /// Live toggles (renderer honours the value):
     ///   `include_no_erc_markers` (No-ERC directives),
     ///   `include_no_connect_markers` (no-connect X marks),
-    ///   `include_notes`.
+    ///   `include_notes`,
+    ///   `include_parameter_sets` (Net Parameters directives, #2656),
+    ///   `include_blankets` (Net Blankets, #2656).
     ///
     /// Dormant toggles — Standard's schema has no equivalent concept,
     /// so these are stored for Altium-import parity but produce no
-    /// observable difference today: `include_parameter_sets` (Altium
-    /// parameter-set objects), `include_probes` (Altium probe
-    /// markers), `include_blankets` (Altium blanket regions),
-    /// `include_collapsed_notes` (Altium collapsed-note placards).
-    /// Toggle them ahead of time so that round-tripping an Altium
-    /// project keeps the user's intent — when the corresponding
+    /// observable difference today: `include_probes` (Altium probe
+    /// markers), `include_collapsed_notes` (Altium collapsed-note
+    /// placards). Toggle them ahead of time so that round-tripping an
+    /// Altium project keeps the user's intent — when the corresponding
     /// signex-types feature lands the gating is one-line.
     pub include_no_erc_markers: bool,
     /// Draws the no-connect X marks. Separate from the No-ERC

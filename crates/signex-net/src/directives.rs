@@ -11,7 +11,8 @@
 //!   partner ([`diff_pairs`], `diff_pair_classes.rs`).
 //!
 //! Class order: Net Parameters, then Net Blanket, then the project's class
-//! patterns ([`directive_net_classes`], [`fill_pattern_classes`]).
+//! patterns ([`directive_net_classes`], [`fill_pattern_classes`]). Directives
+//! that disagree on a net's class are listed by [`net_class_conflicts`] (#2656).
 //! Design note: `docs/SCHEMATIC_DIRECTIVES.md`.
 
 use std::borrow::Cow;
@@ -19,7 +20,9 @@ use std::collections::{HashMap, HashSet};
 
 use signex_types::net::{Net, NetClassId, NetId, Netlist};
 use signex_types::net_class::{NetClass, first_matching_class};
-use signex_types::schematic::{Aabb, LabelType, NetRules, Point, SchDirective, SchematicSheet};
+use signex_types::schematic::{
+    Aabb, DirectiveKind, LabelType, NetRules, Point, SchDirective, SchematicSheet,
+};
 use uuid::Uuid;
 
 use crate::net_class::wire_at_point;
@@ -281,25 +284,125 @@ pub fn net_parameters(sheet: &SchematicSheet, netlist: &Netlist) -> Vec<NetParam
         .collect()
 }
 
-/// The class the directives of `sheet` give each net of `netlist`: a Net
-/// Parameters directive on the net (the first in sheet order that sets a
-/// class) outranks a Net Blanket.
+/// One directive giving a net a class.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClassAssignment {
+    pub directive: Uuid,
+    /// [`DirectiveKind::NetParameters`] or [`DirectiveKind::Blanket`].
+    pub kind: DirectiveKind,
+    pub class: String,
+    /// The directive's anchor: a Net Parameters flag's position, a Net
+    /// Blanket's centre.
+    pub at: Point,
+}
+
+impl ClassAssignment {
+    fn of(directive: &SchDirective, class: &str) -> Self {
+        Self {
+            directive: directive.uuid(),
+            kind: directive.kind(),
+            class: class.to_string(),
+            at: directive.anchor(),
+        }
+    }
+}
+
+/// Every class assignment the directives of `sheet` make to each net of
+/// `netlist`, in rank order: the Net Parameters directives on the net in
+/// sheet order, then the Net Blankets catching it in sheet order. The first
+/// one is the class the net takes. Nets in id order; a net no directive
+/// classes is left out.
+pub fn class_assignments(
+    sheet: &SchematicSheet,
+    netlist: &Netlist,
+) -> Vec<(NetId, Vec<ClassAssignment>)> {
+    let mut by_net: Vec<(NetId, Vec<ClassAssignment>)> = Vec::new();
+    let mut push = |net: NetId, assignment: ClassAssignment| match by_net
+        .iter_mut()
+        .find(|(id, _)| *id == net)
+    {
+        Some((_, list)) => list.push(assignment),
+        None => by_net.push((net, vec![assignment])),
+    };
+    for d in &sheet.directives {
+        let SchDirective::NetParameters { position, .. } = d else {
+            continue;
+        };
+        if let (Some(class), Some(net)) = (d.net_class(), net_at(sheet, netlist, position)) {
+            push(net.id, ClassAssignment::of(d, class));
+        }
+    }
+    let power = power_names(sheet);
+    let blankets: Vec<(&SchDirective, &str)> = sheet
+        .directives
+        .iter()
+        .filter(|d| d.region().is_some())
+        .filter_map(|d| Some((d, d.net_class()?)))
+        .collect();
+    for net in netlist
+        .nets
+        .iter()
+        .filter(|n| !power.contains(n.name.as_str()))
+    {
+        for &(d, class) in &blankets {
+            if catch_of(sheet, d, &net.wires, &net.junctions).is_some_and(BlanketCatch::is_caught) {
+                push(net.id, ClassAssignment::of(d, class));
+            }
+        }
+    }
+    by_net.sort_by_key(|(id, _)| id.0);
+    by_net
+}
+
+/// A net two directives give different classes (#2656). The net takes the
+/// `winner`'s class ([`class_assignments`] order); `overridden` lists every
+/// later assignment naming another class, in rank order.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NetClassConflict {
+    pub net: NetId,
+    pub net_name: String,
+    pub winner: ClassAssignment,
+    pub overridden: Vec<ClassAssignment>,
+}
+
+/// Every net of `netlist` (built from `sheet`) whose directives disagree on
+/// its class, in net id order. Two directives naming the same class agree.
+pub fn net_class_conflicts(sheet: &SchematicSheet, netlist: &Netlist) -> Vec<NetClassConflict> {
+    class_assignments(sheet, netlist)
+        .into_iter()
+        .filter_map(|(net, mut list)| {
+            let winner = list.remove(0);
+            let overridden: Vec<ClassAssignment> = list
+                .into_iter()
+                .filter(|a| a.class != winner.class)
+                .collect();
+            if overridden.is_empty() {
+                return None;
+            }
+            let net_name = netlist
+                .nets
+                .iter()
+                .find(|n| n.id == net)
+                .map(|n| n.name.clone())
+                .unwrap_or_default();
+            Some(NetClassConflict {
+                net,
+                net_name,
+                winner,
+                overridden,
+            })
+        })
+        .collect()
+}
+
+/// The class the directives of `sheet` give each net of `netlist`: the first
+/// of its [`class_assignments`], so a Net Parameters directive on the net
+/// (the first in sheet order that sets a class) outranks a Net Blanket.
 pub fn directive_net_classes(sheet: &SchematicSheet, netlist: &Netlist) -> Vec<(NetId, String)> {
-    let mut out: Vec<(NetId, String)> = Vec::new();
-    for on in net_parameters(sheet, netlist) {
-        if let Some(class) = on.net_class
-            && !out.iter().any(|(id, _)| *id == on.net)
-        {
-            out.push((on.net, class));
-        }
-    }
-    for (id, class) in blanket_net_classes(sheet, netlist) {
-        if !out.iter().any(|(set, _)| *set == id) {
-            out.push((id, class));
-        }
-    }
-    out.sort_by_key(|(id, _)| id.0);
-    out
+    class_assignments(sheet, netlist)
+        .into_iter()
+        .filter_map(|(id, list)| Some((id, list.into_iter().next()?.class)))
+        .collect()
 }
 
 /// Give every net without a class the first project class whose names or

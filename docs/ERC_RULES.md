@@ -146,6 +146,13 @@ finding located inside a Blanket that excludes its rule id (or `*`). A
 net-level finding counts as located at its anchor pin. Rules and the file
 format: `docs/SCHEMATIC_DIRECTIVES.md`.
 
+| Rule (key) | Default | What fires |
+|---|---|---|
+| `net_class_conflict` | Warning | Two directives give one net different net classes: two Net Parameters directives, a Net Parameters directive and a Net Blanket, or two Net Blankets (#2656). The net keeps the class of the first in rank (Net Parameters before Net Blankets, each in sheet order, `signex_net::class_assignments`). One finding per overridden directive and net, located at that directive (a Net Blanket's centre), with the winning directive as its peer and the net as its tag: `Net SW takes class POWER from a Net Parameters directive; class SIGNAL of this Net Blanket is overridden`. A Blanket that excludes the rule silences it. Directives naming the same class agree. |
+
+A waiver on a finding about a directive lapses when the directive's kind,
+class or place changes.
+
 ## Waivers
 
 Added for #1285. A designer can accept one finding with a reason instead of
