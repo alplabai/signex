@@ -7,6 +7,7 @@ use std::sync::Arc;
 use iced::Task;
 use signex_types::designator::seed_counters;
 
+use crate::app::project_sheets::ProjectSheetSet;
 use crate::app::state::PasteCounters;
 use crate::app::{EditMsg, Message, PasteIntent, PasteRequest, Signex};
 
@@ -26,6 +27,46 @@ pub struct PasteSeed {
     pub unread_sheets: Vec<PathBuf>,
     /// The read itself did not finish; `counters` says nothing.
     pub failed: bool,
+}
+
+impl PasteSeed {
+    /// What `set`, the project's sheets as read, holds for a paste.
+    pub(crate) fn of(set: &ProjectSheetSet) -> Self {
+        let references = || {
+            set.sheets
+                .values()
+                .flat_map(|sheet| sheet.symbols.iter())
+                .filter(|s| !s.is_power && !s.reference.starts_with('#'))
+                .map(|s| s.reference.as_str())
+        };
+        Self {
+            failed: false,
+            counters: seed_counters(references()),
+            used: references().map(|r| r.trim().to_owned()).collect(),
+            net_names: set
+                .sheets
+                .values()
+                .flat_map(signex_net::sheet_net_names)
+                .map(str::to_owned)
+                .collect(),
+            unreadable: set.unreadable.clone(),
+            unread_sheets: crate::app::unread_sheets::unread_sheets(set),
+        }
+    }
+
+    /// Every sheet whose net names are unknown, each once, sorted: the
+    /// unreadable ones and [`Self::unread_sheets`].
+    pub(crate) fn sheets_unread(&self) -> Vec<PathBuf> {
+        let mut sheets: Vec<PathBuf> = self
+            .unreadable
+            .iter()
+            .map(|(path, _)| path.clone())
+            .chain(self.unread_sheets.iter().cloned())
+            .collect();
+        sheets.sort();
+        sheets.dedup();
+        sheets
+    }
 }
 
 impl Signex {
@@ -48,38 +89,16 @@ impl Signex {
         let request = request.clone();
         Some(Task::perform(
             async move {
-                tokio::task::spawn_blocking(move || {
-                    let set = plan.assemble();
-                    let references = || {
-                        set.sheets
-                            .values()
-                            .flat_map(|sheet| sheet.symbols.iter())
-                            .filter(|s| !s.is_power && !s.reference.starts_with('#'))
-                            .map(|s| s.reference.as_str())
-                    };
-                    PasteSeed {
-                        failed: false,
-                        counters: seed_counters(references()),
-                        used: references().map(|r| r.trim().to_owned()).collect(),
-                        net_names: set
-                            .sheets
-                            .values()
-                            .flat_map(signex_net::sheet_net_names)
-                            .map(str::to_owned)
-                            .collect(),
-                        unreadable: set.unreadable.clone(),
-                        unread_sheets: crate::app::unread_sheets::unread_sheets(&set),
-                    }
-                })
-                .await
-                .unwrap_or_else(|error| PasteSeed {
-                    failed: true,
-                    counters: HashMap::new(),
-                    used: HashSet::new(),
-                    net_names: HashSet::new(),
-                    unreadable: vec![(target, format!("the numbering task failed: {error}"))],
-                    unread_sheets: Vec::new(),
-                })
+                tokio::task::spawn_blocking(move || PasteSeed::of(&plan.assemble()))
+                    .await
+                    .unwrap_or_else(|error| PasteSeed {
+                        failed: true,
+                        counters: HashMap::new(),
+                        used: HashSet::new(),
+                        net_names: HashSet::new(),
+                        unreadable: vec![(target, format!("the numbering task failed: {error}"))],
+                        unread_sheets: Vec::new(),
+                    })
             },
             move |seed| {
                 Message::Edit(EditMsg::PasteCountersSeeded {
@@ -100,17 +119,10 @@ impl Signex {
             ));
         }
         // Kept for a failed read too: its net names are just as unknown.
-        self.interaction_state.paste_unread_sheets = request.path.clone().map(|target| {
-            let mut sheets: Vec<PathBuf> = seed
-                .unreadable
-                .iter()
-                .map(|(path, _)| path.clone())
-                .chain(seed.unread_sheets.iter().cloned())
-                .collect();
-            sheets.sort();
-            sheets.dedup();
-            (target, sheets)
-        });
+        self.interaction_state.paste_unread_sheets = request
+            .path
+            .clone()
+            .map(|target| (target, seed.sheets_unread()));
         // A read that did not finish has no numbers: what an earlier read
         // stored for this sheet stays, as it can only skip numbers.
         if seed.failed {
