@@ -11,6 +11,7 @@ use signex_widgets::button;
 
 pub mod board_palette;
 mod buttons;
+mod dashed_outline;
 mod dialog_buttons;
 mod dialog_kit;
 mod dialog_parts;
@@ -25,6 +26,7 @@ pub mod scrollbar;
 pub mod tokens;
 pub mod typography;
 
+pub use dashed_outline::dashed_frame;
 pub use disabled::{DISABLED_OPACITY, dimmed, dimmed_button, read_only_field, read_only_row};
 pub use graphite::{
     PillTone, card, field, floating_shadow, key_cap, key_cap_of, pill, pill_colors,
@@ -34,6 +36,8 @@ pub use graphite_buttons::{ghost_button, primary_button};
 pub use metrics::ChromeMetrics;
 pub use radii::Radii;
 pub use scrollbar::{scrollbar_colors, scrollbar_style, thin_both, thin_scrollbar, thin_vertical};
+
+pub use dialog_kit::{dense_band_footer_height, dialog_band_padding};
 
 pub use buttons::{
     accent_button, danger_button, hover_row, outline_button, subtle_button, subtle_button_with_rest,

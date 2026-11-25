@@ -2,7 +2,7 @@
 
 use iced::widget::{Column, Space, container, row, scrollable, svg};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
-use iced_aw::{NumberInput, Wrap};
+use iced_aw::NumberInput;
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -114,6 +114,8 @@ pub mod pcb_component;
 pub mod pcb_nets;
 pub mod pcb_primitive_properties;
 pub mod pcb_room_properties;
+pub mod polygons;
+pub use polygons::{PolygonFacts, PolygonMsg, PolygonsUi};
 mod projects;
 mod projects_graphite;
 mod properties;
@@ -284,7 +286,6 @@ pub enum PanelKind {
     NetClasses,
     Variants,
     OutputJobs,
-    SchFilter,
     /// Every object of the sheet or the project, listed and selectable
     /// (#1259).
     ObjectList,
@@ -338,7 +339,6 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Annotations,
     PanelKind::Properties,
     PanelKind::Filter,
-    PanelKind::SchFilter,
     PanelKind::ObjectList,
     PanelKind::Erc,
     PanelKind::Messages,
@@ -373,7 +373,6 @@ impl PanelKind {
             PanelKind::Navigator
                 | PanelKind::Properties
                 | PanelKind::Erc
-                | PanelKind::SchFilter
                 | PanelKind::ObjectList
                 | PanelKind::BomStudio
                 | PanelKind::Snippets
@@ -425,7 +424,6 @@ impl PanelKind {
             PanelKind::Layers => ids::PANELS_KIND_LAYERS,
             PanelKind::NetClasses => ids::PANELS_KIND_NET_CLASSES,
             PanelKind::Variants => ids::PANELS_KIND_VARIANTS,
-            PanelKind::SchFilter => ids::PANELS_KIND_SCH_FILTER,
             PanelKind::ObjectList => ids::PANELS_KIND_OBJECT_LIST,
             PanelKind::BomStudio => ids::PANELS_KIND_BOM_STUDIO,
             PanelKind::Favorites => ids::PANELS_KIND_FAVORITES,
@@ -470,7 +468,6 @@ impl PanelKind {
             PanelKind::Layers => "Layers",
             PanelKind::NetClasses => "Net Classes",
             PanelKind::Variants => "Variants",
-            PanelKind::SchFilter => "SCH Filter",
             PanelKind::ObjectList => "Object List",
             PanelKind::BomStudio => "BOM Studio",
             PanelKind::Favorites => "Favorites",
@@ -578,8 +575,8 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Projects => view_projects(ctx),
         PanelKind::Navigator => navigator::view(ctx),
         PanelKind::Properties => view_properties(ctx),
-        // The active editor's selection filter (Graphite mockup #55): a schematic's or a
-        // board's kinds, else the empty card.
+        // The active editor's selection filter (Graphite mockup #55): a schematic's kinds
+        // and presets (mockup rows 40 and 55) or a board's kinds, else the empty card.
         PanelKind::Filter => selection_filter::filter_view(ctx),
         PanelKind::Erc => view_erc(ctx),
         PanelKind::Messages => view_messages(ctx),
@@ -605,7 +602,6 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
             ids::PANELS_STUB_OUTPUT_JOBS,
             ctx,
         ),
-        PanelKind::SchFilter => selection_filter::sch_view(ctx),
         PanelKind::ObjectList => return object_list::view(ctx),
         PanelKind::BomStudio => view_stub(
             ids::PANELS_KIND_BOM_STUDIO,

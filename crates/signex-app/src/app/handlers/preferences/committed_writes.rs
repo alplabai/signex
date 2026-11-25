@@ -17,6 +17,7 @@ impl Signex {
         let net_hover = ui.net_hover_enabled;
         let edge_pan = ui.edge_pan;
         let body_fill = ui.symbol_body_fill;
+        let pcb_defaults = ui.pcb_dimension_defaults.clone();
         let (trackpad_pan, remember_geometry) = (ui.trackpad_pan, ui.remember_window_geometry);
         let wheel_mode = ui.wheel_mode;
         let layer_switcher = ui.layer_switcher;
@@ -63,6 +64,9 @@ impl Signex {
             }),
             write(crate::symbol_fill_prefs::ENABLED_KEY, move || {
                 crate::fonts::write_symbol_body_fill_pref(body_fill)
+            }),
+            write(crate::pcb_defaults_prefs::KEY, move || {
+                crate::fonts::write_pcb_dimension_defaults_pref(&pcb_defaults)
             }),
             write("trackpad_pan", move || {
                 crate::fonts::write_trackpad_pan_pref(trackpad_pan)

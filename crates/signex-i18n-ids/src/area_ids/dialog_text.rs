@@ -247,4 +247,6 @@ define_ids! {
     DIALOG_NET_COLOR_TOAST_CLEARED_UNLABELLED = "dialog-net-color-toast-cleared-unlabelled";
     DIALOG_NET_COLOR_TOAST_CLEARED_NET = "dialog-net-color-toast-cleared-net";
     DIALOG_NET_COLOR_TOAST_UNDO = "dialog-net-color-toast-undo";
+    // find-messages
+    DIALOG_RULES_MATRIX_CYCLE_HINT = "dialog-rules-matrix-cycle-hint";
 }

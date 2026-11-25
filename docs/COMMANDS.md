@@ -379,7 +379,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `cycle_route_mode` | Switch Interactive Routing between walking around and pushing other nets' tracks | pcb | — | — |
 | `delete_layer_set` | Delete a saved layer set | view | — | — |
 | `delete_net_class` | Delete a net class | design | — | — |
-| `edit_layer_color` | Open the colour picker of one layer in the Layers panel | view | — | — |
+| `edit_layer_color` | Open the color picker of one layer in the Layers panel | view | — | — |
 | `export_assembly_svg` | Write the board's top and bottom assembly drawings as SVG files | reports | — | — |
 | `export_board_pdf` | Print the board's layers to a PDF file | reports | — | — |
 | `export_board_report` | Export a board report as a CSV file | reports | — | — |
@@ -407,28 +407,29 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_rules` | Open the design rules of the project | design | — | — |
 | `panelize_board` | Array the board into a manufacturing panel | pcb | — | — |
 | `place_board_arc` | Draw an arc on the active layer | place | — | — |
-| `place_board_circle` | Draw a full circle by its centre and a point on it on the active non-copper layer | place | — | — |
+| `place_board_circle` | Draw a full circle by its centre and a point on it on the active layer | place | — | — |
 | `place_board_diff_pair` | Route a differential pair side by side at its coupled width and gap, around other nets | place | — | — |
 | `place_board_dimension` | Place a linear dimension on the board | place | — | — |
 | `place_board_fill` | Place a rectangle of solid copper on the active copper layer | place | `P F` | — |
-| `place_board_graphic_arc` | Draw an arc by its centre, start and end on the active non-copper layer | place | — | — |
+| `place_board_graphic_arc` | Draw an arc by its centre, start and end on the active layer, as a track arc on copper | place | — | — |
 | `place_board_keepout` | Draw a keepout that keeps copper off a layer | place | `P K` | `K` |
-| `place_board_line` | Draw lines on the active non-copper layer | place | — | — |
+| `place_board_line` | Draw lines on the active layer, as tracks on copper | place | — | — |
 | `place_board_multi_route` | Route the selected nets side by side as a bus, around other nets | place | — | — |
 | `place_board_pad` | Place a free pad on the board | place | — | — |
 | `place_board_polygon_pour` | Place a polygon pour on the active copper layer, filled clear of other nets | place | `P G` | — |
-| `place_board_pour_cutout` | Cut an area out of the polygon pours on the active copper layer | place | — | — |
+| `place_board_pour_cutout` | Place a cutout region the polygon pours on the active copper layer leave empty | place | — | — |
 | `place_board_quick_route` | Route straight to the clicked point at the rule width, without avoiding other nets | place | — | — |
-| `place_board_rectangle` | Draw a rectangle by two corners on the active non-copper layer | place | — | — |
+| `place_board_rectangle` | Draw a rectangle by two corners on the active layer | place | — | — |
 | `place_board_region` | Place a polygon of solid copper on the active copper layer | place | `P R` | — |
 | `place_board_reuse_block` | Place a reuse block on the channel of the selected component | design | — | — |
 | `place_board_room` | Draw a room by two corners: an area for the parts of one sheet | place | — | — |
 | `place_board_route` | Route on the active copper layer around other nets, keeping the rule clearance | place | — | — |
 | `place_board_slice_pour` | Slice the polygon pours on the active copper layer along a line | place | — | — |
-| `place_board_string` | Place a string on the active silkscreen, mechanical or documentation layer | place | — | — |
-| `place_board_text_frame` | Place text wrapped in a box on the active non-copper layer | place | — | — |
+| `place_board_string` | Place a string on the active copper, silkscreen, mechanical or documentation layer | place | — | — |
+| `place_board_text_frame` | Place text wrapped in a box on the active layer | place | — | — |
 | `place_board_track` | Route a track on the active copper layer | place | `P T` | — |
 | `place_board_via` | Place a via on the board | place | `P V` | — |
+| `polygon_manager` | Open the Polygon Manager of the board | pcb | — | — |
 | `prev_layer` | Make the previous layer of the board active | view | `-` | `-` |
 | `query_board_nets` | Query board nets | search | — | — |
 | `reannotate_board` | Re-annotate the board's designators by position | design | — | — |
@@ -438,7 +439,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `repour_all` | Fill every polygon pour of the board again and report their copper | pcb | — | — |
 | `repour_selected` | Fill the selected polygon pours again and report their copper | pcb | — | — |
 | `reset_board_origin` | Move the board origin to the bottom-left of the board outline | edit | — | — |
-| `reset_layer_colors` | Give every layer the board palette colour again | view | — | — |
+| `reset_layer_colors` | Give every layer the board palette color again | view | — | — |
 | `rules_add` | Add a design rule | design | — | — |
 | `rules_conflicts` | List shadowed and conflicting design rules | validation | — | — |
 | `rules_effective` | Show the rule value that governs a net | validation | — | — |
@@ -464,12 +465,12 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `set_board_origin` | Set the board origin at a clicked point | edit | `E O S` | `Shift+O` |
 | `set_board_panel` | Change a setting of the board's panel | pcb | — | — |
 | `set_footprint_text` | Set the place, angle, height or justification of a component's designator or comment | edit | — | — |
-| `set_layer_color` | Give one layer its own colour, saved with the board, or the palette colour again | view | — | — |
+| `set_layer_color` | Give one layer its own color, saved with the board, or the palette color again | view | — | — |
 | `set_layer_sizes` | Set the per-layer copper sizes of vias or pads | modify | — | — |
 | `set_layer_stack` | Replace the layer stack of a board | design | — | — |
 | `set_layer_tab_names` | Name the layer tabs short, medium or long | view | — | — |
 | `set_layer_visible` | Show or hide one layer of the board view | view | — | — |
-| `set_net_class_rules` | Set the colour and board rules of a net class | design | — | — |
+| `set_net_class_rules` | Set the color and board rules of a net class | design | — | — |
 | `set_object_transparency` | Set how transparent one kind of object is drawn | view | — | — |
 | `set_object_visible` | Show or hide one kind of object in the board view | view | — | — |
 | `set_pad_shape` | Set the copper shape of pads, with a trapezoid's delta or a custom outline | modify | — | — |

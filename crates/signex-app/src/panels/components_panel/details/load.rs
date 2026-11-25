@@ -119,6 +119,8 @@ pub fn load_details(
         mpn: row.primary_mpn.mpn.clone(),
         description: row.description.clone(),
         has_footprint_ref: row.footprint_ref.is_some(),
+        symbol_unbound: row.is_symbol_unbound(),
+        footprint_unbound: row.is_footprint_unbound(),
         symbol,
         footprint,
         default_footprint: row.footprint_ref,

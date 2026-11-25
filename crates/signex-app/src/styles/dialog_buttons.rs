@@ -81,7 +81,9 @@ fn look(kind: DialogButtonKind, tokens: &ThemeTokens) -> Look {
         DialogButtonKind::Ghost => Look {
             fills: [Color::TRANSPARENT, overlays()[1], overlays()[2]],
             border: Color::TRANSPARENT,
-            text: ti(tokens.text),
+            // The accent text, as every mockup draws `.btn.ghost` (mockup
+            // row 150, Reset to Defaults…).
+            text: tokens::resolve(tokens).accent_text,
         },
         DialogButtonKind::Link => Look {
             fills: [Color::TRANSPARENT, overlays()[1], overlays()[2]],
@@ -336,6 +338,31 @@ mod tests {
         assert_eq!(
             dialog_label_color(DialogButtonKind::DangerSolid, &dark),
             tokens::resolve(&dark).primary_ink
+        );
+    }
+
+    /// Mockup row 150: a ghost button (Reset to Defaults…) draws its label
+    /// in the accent text with no fill or border at rest, in every theme.
+    #[test]
+    fn a_ghost_button_draws_the_accent_text() {
+        for &id in ThemeId::BUILTINS {
+            let tokens = signex_types::theme::theme_tokens(id);
+            let accent = tokens::resolve(&tokens).accent_text;
+            let rest = style(DialogButtonKind::Ghost, id, button::Status::Active);
+            assert_eq!(rest.text_color, accent, "{id:?}");
+            assert_eq!(fill(&rest), None, "{id:?}");
+            assert_eq!(rest.border.color, Color::TRANSPARENT, "{id:?}");
+            assert_eq!(
+                dialog_label_color(DialogButtonKind::Ghost, &tokens),
+                accent,
+                "{id:?}"
+            );
+        }
+        let light = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
+        assert_ne!(
+            dialog_label_color(DialogButtonKind::Ghost, &light),
+            ti(light.text),
+            "the ghost label is not the body text"
         );
     }
 }

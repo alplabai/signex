@@ -7,7 +7,7 @@ use std::path::Path;
 
 use signex_bom::{BomComponent, BomContext, BomEngineOptions, build_table, validate_table};
 use signex_types::schematic::{
-    PartKey, SchematicSheet, Symbol, group_into_parts, normalized_lib_id,
+    InstancePath, PartKey, SchematicSheet, Symbol, group_into_parts, normalized_lib_id,
 };
 use thiserror::Error;
 
@@ -280,7 +280,14 @@ fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
         .iter()
         .map(|part| (&part.symbol, part.designator.as_str()))
         .collect();
-    let components = placed_components(&placed, &left_out, opts);
+    let paths: Vec<&InstancePath> = shown.iter().map(|part| &part.path).collect();
+    let components = placed_components(
+        &placed,
+        &paths,
+        &left_out,
+        opts,
+        &ctx.metadata.variant_settings,
+    );
 
     BomContext {
         components,
@@ -358,9 +365,12 @@ pub(crate) fn is_part_symbol(sym: &Symbol) -> bool {
 /// flag on unit 2 is not lost to unit 1.
 fn placed_components(
     placed: &[(&Symbol, &str)],
+    paths: &[&InstancePath],
     left_out: &[bool],
     opts: &BomOptions,
+    settings: &signex_types::project::VariantSettings,
 ) -> Vec<BomComponent> {
+    let variant = opts.active_variant.as_deref();
     let mut components = Vec::new();
     let parts = group_into_parts(placed.iter().map(|(sym, designator)| PartKey {
         reference: designator,
@@ -372,7 +382,21 @@ fn placed_components(
         let units: Vec<&Symbol> = part.iter().map(|&member| placed[member].0).collect();
         let sym = units[0];
         let designator = placed[part[0]].1;
-        let merged = units::merge_units(&units, is_fit_state_field);
+        let link = crate::variant_fit::part_link(
+            part.iter()
+                .map(|&member| (paths[member], placed[member].0.uuid)),
+        );
+        let own = signex_types::project::PlacedPart::new(designator, link.as_ref());
+        let mut merged = units::merge_units(&units, is_fit_state_field);
+        // The variant's own values (mockup row 32) before any column reads them.
+        crate::variant_fit::apply_parameters(
+            settings,
+            variant,
+            own,
+            &mut merged.value,
+            &mut merged.footprint,
+            &mut merged.fields,
+        );
 
         let name = merged
             .fields
@@ -393,11 +417,14 @@ fn placed_components(
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| sym.lib_id.clone());
 
-        let variant_fitted = merge_fit_states(
-            units
-                .iter()
-                .map(|unit| resolve_active_variant_fitted(unit, opts.active_variant.as_deref())),
-        );
+        let variant_fitted =
+            crate::variant_fit::project_fit(settings, variant, own).or_else(|| {
+                merge_fit_states(
+                    units
+                        .iter()
+                        .map(|unit| resolve_active_variant_fitted(unit, variant)),
+                )
+            });
         let base_fitted =
             merge_fit_states(units.iter().map(|unit| resolve_base_variant_fitted(unit)));
 

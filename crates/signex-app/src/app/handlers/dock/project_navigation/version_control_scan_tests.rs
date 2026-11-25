@@ -21,6 +21,7 @@ fn scanning_dialog(dir: &str) -> Signex {
         error: None,
         working: false,
         scanning: true,
+        author: crate::app::contracts::CommitAuthor::Resolved,
     });
     app
 }

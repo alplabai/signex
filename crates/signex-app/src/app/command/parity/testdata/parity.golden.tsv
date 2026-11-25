@@ -1006,6 +1006,10 @@ placement_accept	split_core_command	the core command after the router	core	activ
 placement_properties	bridge	Tool(PrePlacementTab)	gui	tool state	handler
 placement_properties	in_window_rewrite	document_window	gui	window	routing
 placement_properties	headless_refusal	headless_refusal	gui	none	routing
+polygon_manager	bridge	Dock(Panel(PcbPanel(Polygons(ManagerOpened))))	gui	active document	gate
+polygon_manager	in_window_rewrite	document_window	gui	window	routing
+polygon_manager	refusal_needs	Pcb	gui	active document	routing
+polygon_manager	headless_refusal	headless_refusal	gui	none	routing
 prev_layer	bridge	Pcb(View(ActiveLayerStepped { forward: false }))	gui	active document	gate
 prev_layer	in_window_rewrite	board_view_in_window|document_window	gui	window	routing
 prev_layer	refusal_needs	Pcb	gui	active document	routing
@@ -1478,7 +1482,7 @@ toggle_ratsnest	bridge	Pcb(View(RatsnestVisibilityToggled))	gui	active document	
 toggle_ratsnest	in_window_rewrite	board_view_in_window|document_window	gui	window	routing
 toggle_ratsnest	refusal_needs	Pcb	gui	active document	routing
 toggle_ratsnest	headless_refusal	headless_refusal	gui	none	routing
-toggle_schematic_filter_panel	bridge	Overlay(PanelToggled(SchFilter))	gui	window	handler
+toggle_schematic_filter_panel	bridge	Overlay(PanelToggled(Filter))	gui	window	handler
 toggle_schematic_filter_panel	in_window_rewrite	document_window	gui	window	routing
 toggle_schematic_filter_panel	headless_refusal	headless_refusal	gui	none	routing
 toggle_schematic_list_panel	bridge	Overlay(PanelToggled(ObjectList))	gui	window	handler

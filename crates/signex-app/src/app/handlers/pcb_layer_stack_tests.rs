@@ -4,8 +4,9 @@
 
 use std::path::{Path, PathBuf};
 
+use signex_types::material_library::{Material, MaterialKind};
 use signex_types::pcb::PcbBoard;
-use signex_types::pcb_stack::{LayerStack, StackLayerKind};
+use signex_types::pcb_stack::{BoardFinish, LayerStack, StackLayerKind};
 use uuid::Uuid;
 
 use crate::app::command::{CommandArgs, CommandOutcome};
@@ -14,7 +15,10 @@ use crate::app::{EditMsg, Message, Signex};
 use crate::dock::DockMessage;
 use crate::keymap::AppCommandId;
 use crate::menu_bar::MenuMessage;
-use crate::panels::layer_stack::CopperUse;
+use crate::panels::layer_stack::{
+    CopperUse, FinishMsg, MaterialDraft, MaterialField, MaterialPick, MaterialSource, MaterialsMsg,
+    StackSubTab, StackUnit, UserLibrary,
+};
 use crate::panels::{LayerStackFacts, LayerStackMsg, PanelKind, PanelMsg, StackField};
 
 /// Top copper, the top overlay and bottom copper, 1.6 mm, and a track on
@@ -188,6 +192,49 @@ fn a_typed_thickness_applies_on_enter_as_one_step() {
     assert!(facts(&app).drafts.is_empty());
     undo(&mut app);
     assert!(board_of(&app, &path).stackup.is_none());
+}
+
+/// Mockup row 177: a layer's Df is typed in the Stack table and applied on
+/// Enter as one undo step; 0 clears it again.
+#[test]
+fn a_typed_loss_tangent_applies_on_enter_and_zero_clears_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+    let row = row_of(&facts(&app), StackLayerKind::Dielectric, 0);
+    let type_df = |app: &mut Signex, text: &str| {
+        send(
+            app,
+            LayerStackMsg::FieldTyped {
+                board: path.clone(),
+                row,
+                field: StackField::LossTangent,
+                text: text.into(),
+            },
+        );
+        send(
+            app,
+            LayerStackMsg::FieldSubmitted {
+                board: path.clone(),
+                row,
+                field: StackField::LossTangent,
+            },
+        );
+    };
+    type_df(&mut app, "0.018");
+    let df = |app: &Signex| {
+        board_of(app, &path)
+            .stackup
+            .as_ref()
+            .expect("stored")
+            .layers[row]
+            .loss_tangent
+    };
+    assert_eq!(df(&app), 0.018);
+    assert_eq!(facts(&app).stack.layers[row].loss_tangent, 0.018);
+    type_df(&mut app, "0");
+    assert_eq!(df(&app), 0.0, "0 clears the Df");
+    undo(&mut app);
+    assert_eq!(df(&app), 0.018, "one undo per edit");
 }
 
 #[test]
@@ -585,4 +632,350 @@ fn a_thickness_edit_keeps_the_layer_tab_order() {
         layers,
         "the tabs keep their order"
     );
+}
+
+// Mockup rows 176 and 177: the Materials and Finish sub-tabs.
+
+fn materials(app: &mut Signex, msg: MaterialsMsg) {
+    send(app, LayerStackMsg::Materials(msg));
+}
+
+fn finish(app: &mut Signex, msg: FinishMsg) {
+    send(app, LayerStackMsg::Finish(msg));
+}
+
+fn sub_tab(app: &mut Signex, path: &Path, tab: StackSubTab) {
+    send(
+        app,
+        LayerStackMsg::SubTabPicked {
+            board: path.to_path_buf(),
+            tab,
+        },
+    );
+}
+
+fn built_in(app: &Signex, name: &str) -> MaterialPick {
+    let index = facts(app)
+        .materials
+        .built_in
+        .iter()
+        .position(|m| m.name == name)
+        .expect("a built-in material");
+    MaterialPick {
+        source: MaterialSource::BuiltIn,
+        index,
+    }
+}
+
+#[test]
+fn the_user_library_is_read_once_when_materials_first_shows() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+    assert_eq!(facts(&app).materials.library, UserLibrary::NotRead);
+    sub_tab(&mut app, &path, StackSubTab::Drills);
+    assert_eq!(
+        facts(&app).materials.library,
+        UserLibrary::NotRead,
+        "only the Materials sub-tab reads it"
+    );
+    sub_tab(&mut app, &path, StackSubTab::Materials);
+    assert_eq!(facts(&app).materials.library, UserLibrary::Reading);
+    let mine = Material {
+        name: "Mine".into(),
+        kind: MaterialKind::Core,
+        dielectric_constant: 3.6,
+        loss_tangent: 0.004,
+        thickness_mm: 0.2,
+    };
+    materials(
+        &mut app,
+        MaterialsMsg::UserLibraryRead(Ok(vec![mine.clone()])),
+    );
+    assert_eq!(
+        facts(&app).materials.library,
+        UserLibrary::Read(vec![mine.clone()])
+    );
+    sub_tab(&mut app, &path, StackSubTab::Stack);
+    sub_tab(&mut app, &path, StackSubTab::Materials);
+    assert_eq!(
+        facts(&app).materials.library,
+        UserLibrary::Read(vec![mine]),
+        "not read again"
+    );
+}
+
+#[test]
+fn a_failed_read_keeps_the_library_unwritable() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+    sub_tab(&mut app, &path, StackSubTab::Materials);
+    materials(
+        &mut app,
+        MaterialsMsg::UserLibraryRead(Err("garbled".into())),
+    );
+    assert_eq!(
+        facts(&app).materials.library,
+        UserLibrary::Failed("garbled".into())
+    );
+    materials(
+        &mut app,
+        MaterialsMsg::DraftTyped {
+            board: path.clone(),
+            field: MaterialField::Name,
+            text: "Mine".into(),
+        },
+    );
+    materials(&mut app, MaterialsMsg::Added { board: path });
+    let panel = &app.interaction_state.pcb_layer_stack;
+    assert_eq!(panel.library, UserLibrary::Failed("garbled".into()));
+    assert!(!panel.library_write.running, "nothing is written over it");
+}
+
+/// The accepted answer of 2026-11-24: the board stores a copy of the values
+/// it uses. One undo step, and undo takes the copy back.
+#[test]
+fn using_a_material_copies_its_values_into_the_selected_layer_as_one_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+    let row = row_of(&facts(&app), StackLayerKind::Dielectric, 0);
+    send(
+        &mut app,
+        LayerStackMsg::RowSelected {
+            board: path.clone(),
+            row,
+        },
+    );
+    sub_tab(&mut app, &path, StackSubTab::Materials);
+    let pick = built_in(&app, "HF hydrocarbon-ceramic core");
+    materials(
+        &mut app,
+        MaterialsMsg::Selected {
+            board: path.clone(),
+            pick,
+        },
+    );
+    assert_eq!(facts(&app).materials.selected, Some(pick));
+    materials(
+        &mut app,
+        MaterialsMsg::Used {
+            board: path.clone(),
+        },
+    );
+    let stored = board_of(&app, &path).stackup.clone().expect("stored");
+    let layer = &stored.layers[row];
+    assert_eq!(layer.material, "HF hydrocarbon-ceramic core");
+    assert_eq!(layer.thickness_mm, 0.508);
+    assert_eq!(layer.dielectric_constant, 3.48);
+    assert_eq!(layer.loss_tangent, 0.0037);
+    assert!(stored.has_materials_data(), "the board keeps the Df");
+    undo(&mut app);
+    assert!(board_of(&app, &path).stackup.is_none(), "one undo step");
+}
+
+#[test]
+fn a_material_that_does_not_fit_the_layer_changes_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+    let copper = row_of(&facts(&app), StackLayerKind::Signal, 0);
+    send(
+        &mut app,
+        LayerStackMsg::RowSelected {
+            board: path.clone(),
+            row: copper,
+        },
+    );
+    let pick = built_in(&app, "Prepreg 1080");
+    materials(
+        &mut app,
+        MaterialsMsg::Selected {
+            board: path.clone(),
+            pick,
+        },
+    );
+    materials(
+        &mut app,
+        MaterialsMsg::Used {
+            board: path.clone(),
+        },
+    );
+    assert!(board_of(&app, &path).stackup.is_none());
+}
+
+#[test]
+fn an_added_material_joins_the_user_library_and_is_written() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+    sub_tab(&mut app, &path, StackSubTab::Materials);
+    materials(&mut app, MaterialsMsg::UserLibraryRead(Ok(Vec::new())));
+    for (field, text) in [
+        (MaterialField::Name, "My prepreg"),
+        (MaterialField::Thickness, "0.1"),
+        (MaterialField::DielectricConstant, "3.9"),
+        (MaterialField::LossTangent, "0.02"),
+    ] {
+        materials(
+            &mut app,
+            MaterialsMsg::DraftTyped {
+                board: path.clone(),
+                field,
+                text: text.into(),
+            },
+        );
+    }
+    materials(
+        &mut app,
+        MaterialsMsg::Added {
+            board: path.clone(),
+        },
+    );
+    let shown = facts(&app).materials;
+    let UserLibrary::Read(entries) = &shown.library else {
+        panic!("{:?}", shown.library);
+    };
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].name, "My prepreg");
+    assert_eq!(entries[0].kind, MaterialKind::Prepreg, "the draft's kind");
+    assert_eq!(entries[0].thickness_mm, 0.1);
+    assert_eq!(shown.draft, MaterialDraft::default(), "the row is cleared");
+    assert!(app.interaction_state.pcb_layer_stack.library_write.running);
+
+    // A second edit while the write runs is owed, then written.
+    materials(
+        &mut app,
+        MaterialsMsg::Removed {
+            board: path.clone(),
+        },
+    );
+    let write = &app.interaction_state.pcb_layer_stack.library_write;
+    assert!(write.running && write.owed);
+    materials(&mut app, MaterialsMsg::UserLibraryWritten(Ok(())));
+    let write = &app.interaction_state.pcb_layer_stack.library_write;
+    assert!(write.running && !write.owed, "the owed write started");
+    materials(
+        &mut app,
+        MaterialsMsg::UserLibraryWritten(Err("disk full".into())),
+    );
+    assert_eq!(
+        facts(&app).materials.write_error.as_deref(),
+        Some("disk full")
+    );
+    assert!(board_of(&app, &path).stackup.is_none(), "no board step");
+}
+
+#[test]
+fn a_draft_that_is_not_a_number_or_a_taken_name_is_not_added() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+    sub_tab(&mut app, &path, StackSubTab::Materials);
+    materials(&mut app, MaterialsMsg::UserLibraryRead(Ok(Vec::new())));
+    let draft = |app: &mut Signex, field, text: &str| {
+        materials(
+            app,
+            MaterialsMsg::DraftTyped {
+                board: path.clone(),
+                field,
+                text: text.into(),
+            },
+        );
+    };
+    draft(&mut app, MaterialField::Name, "Prepreg 1080");
+    draft(&mut app, MaterialField::Thickness, "thin");
+    materials(
+        &mut app,
+        MaterialsMsg::Added {
+            board: path.clone(),
+        },
+    );
+    assert_eq!(facts(&app).materials.library, UserLibrary::Read(Vec::new()));
+    draft(&mut app, MaterialField::Thickness, "0.08");
+    materials(
+        &mut app,
+        MaterialsMsg::Added {
+            board: path.clone(),
+        },
+    );
+    assert_eq!(
+        facts(&app).materials.library,
+        UserLibrary::Read(Vec::new()),
+        "a built-in name is taken"
+    );
+    assert!(!app.interaction_state.pcb_layer_stack.library_write.running);
+}
+
+/// Mockup row 176: a finish pick is one step that stores the finish with
+/// the board; undo takes it back.
+#[test]
+fn a_finish_pick_is_stored_with_the_board_as_one_step() {
+    use signex_types::pcb_stack::{FinishColor, SurfaceFinish};
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+    let shown = facts(&app).finish;
+    assert!(!shown.stored);
+    assert_eq!(shown.finish, BoardFinish::default());
+
+    let same = BoardFinish::default();
+    finish(
+        &mut app,
+        FinishMsg::Picked {
+            board: path.clone(),
+            finish: same,
+        },
+    );
+    assert!(
+        board_of(&app, &path).stackup.is_none(),
+        "picking what shows stores nothing"
+    );
+
+    let mut black = BoardFinish {
+        surface: SurfaceFinish::Osp,
+        ..BoardFinish::default()
+    };
+    black.mask.color = FinishColor::Black;
+    finish(
+        &mut app,
+        FinishMsg::Picked {
+            board: path.clone(),
+            finish: black.clone(),
+        },
+    );
+    let stored = board_of(&app, &path).stackup.clone().expect("stored");
+    assert_eq!(stored.finish, Some(black));
+    assert!(facts(&app).finish.stored);
+    undo(&mut app);
+    assert!(board_of(&app, &path).stackup.is_none());
+}
+
+#[test]
+fn the_mask_thickness_over_laminate_applies_on_enter_in_the_tab_unit() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+    send(
+        &mut app,
+        LayerStackMsg::UnitPicked {
+            board: path.clone(),
+            unit: StackUnit::Um,
+        },
+    );
+    finish(
+        &mut app,
+        FinishMsg::OverLaminateTyped {
+            board: path.clone(),
+            text: "30".into(),
+        },
+    );
+    assert_eq!(facts(&app).finish.draft.as_deref(), Some("30"));
+    assert!(
+        board_of(&app, &path).stackup.is_none(),
+        "typing applies nothing"
+    );
+    finish(
+        &mut app,
+        FinishMsg::OverLaminateSubmitted {
+            board: path.clone(),
+        },
+    );
+    let stored = board_of(&app, &path).stackup.clone().expect("stored");
+    let mm = stored.finish.expect("finish").mask.over_laminate_mm;
+    assert!((mm - 0.03).abs() < 1e-12, "{mm}");
+    assert_eq!(facts(&app).finish.draft, None);
 }

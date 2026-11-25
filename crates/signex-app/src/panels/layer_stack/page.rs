@@ -1,8 +1,8 @@
 //! The tab's frame (mockup row 105): the shared document-tab shell with the
 //! toolbar, the sub-tabs and a footer, around the Stack page (the table on
 //! the left, the cross-section and preview on the right) or the Via Types /
-//! Drill Pairs page. Under the table: the drill pair legend with the edit
-//! hint, and the layer pairs.
+//! Drill Pairs, Materials or Finish page. Under the table: the drill pair
+//! legend with the edit hint, and the layer pairs.
 
 use iced::widget::{Row, Space, column, container, row, scrollable};
 use iced::{Alignment, Background, Element, Length, Theme, Widget as _};
@@ -11,7 +11,8 @@ use signex_widgets::doc_tab_shell::{DocTabShell, DocTabShellStyle, Footer, SubTa
 use signex_widgets::text;
 
 use super::{
-    LayerStackFacts, LayerStackMsg, SP, StackSubTab, TS, drills, msg, section, table, toolbar,
+    LayerStackFacts, LayerStackMsg, SP, StackSubTab, TS, drills, finish, materials, msg, section,
+    table, toolbar,
 };
 use crate::panels::{PanelContext, PanelMsg, empty_state_card};
 use crate::styles::{HAIRLINE, ti, tokens::resolve};
@@ -33,6 +34,8 @@ pub fn view(ctx: &PanelContext) -> Element<'_, PanelMsg> {
     let body = match facts.sub_tab {
         StackSubTab::Stack => stack_page(ctx, facts),
         StackSubTab::Drills => drills::view(ctx, facts),
+        StackSubTab::Materials => materials::view(ctx, facts),
+        StackSubTab::Finish => finish::view(ctx, facts),
     };
     DocTabShell::new(body, DocTabShellStyle::from_tokens(&ctx.tokens, TS.body))
         .toolbar(toolbar::view(ctx, facts))
@@ -259,7 +262,9 @@ mod tests {
     use super::view;
     use crate::layout_probe::{lay_out_texts, messages_on_click};
     use crate::panels::layer_stack::{
-        CopperUse, DrillPairRow, LayerStackFacts, StackSubTab, StackUnit,
+        CopperUse, DrillPairRow, FinishFacts, FinishMsg, LayerStackFacts, LayerStackMsg,
+        MaterialPick, MaterialSource, MaterialsFacts, MaterialsMsg, StackSubTab, StackUnit,
+        UserLibrary,
     };
     use crate::panels::{PanelContext, PanelMsg};
 
@@ -290,6 +295,7 @@ mod tests {
                     ..StackLayer::new(kind)
                 })
                 .collect(),
+            finish: None,
         }
     }
 
@@ -354,6 +360,12 @@ mod tests {
             via_types: Vec::new(),
             has_project: true,
             fab_profile: Some("Standard".into()),
+            materials: MaterialsFacts {
+                built_in: signex_types::material_library::builtin_materials(),
+                library: UserLibrary::Read(Vec::new()),
+                ..MaterialsFacts::default()
+            },
+            finish: FinishFacts::default(),
         }
     }
 
@@ -481,5 +493,184 @@ mod tests {
             !sent.iter().any(|m| matches!(m, PanelMsg::OpenRules)),
             "inert without a project"
         );
+    }
+
+    /// Mockup rows 176 and 177: Materials and Finish follow Stack and Via
+    /// Types / Drill Pairs.
+    #[test]
+    fn the_materials_and_finish_sub_tabs_follow_stack_and_drills() {
+        assert_eq!(
+            StackSubTab::ALL,
+            [
+                StackSubTab::Stack,
+                StackSubTab::Drills,
+                StackSubTab::Materials,
+                StackSubTab::Finish
+            ]
+        );
+        let ctx = context(facts(true));
+        let shown = texts(&ctx);
+        for tab in ["Stack", "Via Types / Drill Pairs", "Materials", "Finish"] {
+            assert!(has(&shown, tab), "{tab}: {shown:?}");
+        }
+        let sent = messages_on_click(view(&ctx), WINDOW, "Materials");
+        assert!(
+            sent.iter().any(|m| matches!(
+                m,
+                PanelMsg::LayerStack(LayerStackMsg::SubTabPicked {
+                    tab: StackSubTab::Materials,
+                    ..
+                })
+            )),
+            "{sent:?}"
+        );
+    }
+
+    fn on(tab: StackSubTab) -> LayerStackFacts {
+        LayerStackFacts {
+            sub_tab: tab,
+            ..facts(true)
+        }
+    }
+
+    #[test]
+    fn the_materials_page_lists_the_library_and_selects_an_entry() {
+        let ctx = context(on(StackSubTab::Materials));
+        let shown = texts(&ctx);
+        for wanted in [
+            "Material library",
+            "Prepreg 1080",
+            "FR-4 core 0.20",
+            "Copper foil 1 oz",
+            "LPI solder mask",
+            "Built-in",
+            "Source",
+            "Use for selected layer",
+            "Add material",
+        ] {
+            assert!(has(&shown, wanted), "{wanted}: {shown:?}");
+        }
+        assert!(
+            has(&shown, "No layer selected: pick one in Stack."),
+            "{shown:?}"
+        );
+        let sent = messages_on_click(view(&ctx), WINDOW, "Prepreg 1080");
+        assert!(
+            sent.iter().any(|m| matches!(
+                m,
+                PanelMsg::LayerStack(LayerStackMsg::Materials(MaterialsMsg::Selected { .. }))
+            )),
+            "{sent:?}"
+        );
+        let used = messages_on_click(view(&ctx), WINDOW, "Use for selected layer");
+        assert!(used.is_empty(), "inert with nothing picked: {used:?}");
+    }
+
+    fn prepreg_pick(facts: &LayerStackFacts) -> MaterialPick {
+        let index = facts
+            .materials
+            .built_in
+            .iter()
+            .position(|m| m.name == "Prepreg 1080")
+            .unwrap();
+        MaterialPick {
+            source: MaterialSource::BuiltIn,
+            index,
+        }
+    }
+
+    #[test]
+    fn use_for_selected_layer_is_live_only_for_a_layer_the_material_fits() {
+        let mut dielectric = on(StackSubTab::Materials);
+        dielectric.selected = Some(2);
+        dielectric.materials.selected = Some(prepreg_pick(&dielectric));
+        let ctx = context(dielectric);
+        assert!(has(&texts(&ctx), "Selected layer: Prepreg"));
+        let sent = messages_on_click(view(&ctx), WINDOW, "Use for selected layer");
+        assert!(
+            sent.iter().any(|m| matches!(
+                m,
+                PanelMsg::LayerStack(LayerStackMsg::Materials(MaterialsMsg::Used { .. }))
+            )),
+            "{sent:?}"
+        );
+
+        let mut copper = on(StackSubTab::Materials);
+        copper.selected = Some(1);
+        copper.materials.selected = Some(prepreg_pick(&copper));
+        let ctx = context(copper);
+        let sent = messages_on_click(view(&ctx), WINDOW, "Use for selected layer");
+        assert!(sent.is_empty(), "a prepreg does not fit copper: {sent:?}");
+    }
+
+    #[test]
+    fn a_library_that_failed_to_read_says_why_and_cannot_be_added_to() {
+        let mut failed = on(StackSubTab::Materials);
+        failed.materials.library = UserLibrary::Failed("bad file".into());
+        let ctx = context(failed);
+        let shown = texts(&ctx);
+        assert!(
+            shown
+                .iter()
+                .any(|t| t.contains("could not be read") && t.contains("bad file")),
+            "{shown:?}"
+        );
+        let sent = messages_on_click(view(&ctx), WINDOW, "Add material");
+        assert!(sent.is_empty(), "{sent:?}");
+    }
+
+    #[test]
+    fn the_finish_page_shows_mask_silkscreen_surface_and_board_materials() {
+        let ctx = context(on(StackSubTab::Finish));
+        let shown = texts(&ctx);
+        for wanted in [
+            "Solder mask",
+            "Silkscreen",
+            "Surface finish",
+            "LPI",
+            "Dry film",
+            "Glossy",
+            "Matte",
+            "Board materials",
+            "Solder Resist",
+            "FR-4",
+        ] {
+            assert!(has(&shown, wanted), "{wanted}: {shown:?}");
+        }
+        assert!(
+            shown.iter().any(|t| t.starts_with("Not set yet")),
+            "a board without a finish shows the defaults: {shown:?}"
+        );
+        assert!(
+            shown
+                .iter()
+                .any(|t| t.starts_with("Over copper") && t.contains("Solder Mask rows")),
+            "the mask row's values: {shown:?}"
+        );
+        let sent = messages_on_click(view(&ctx), WINDOW, "Matte");
+        let picked = sent.iter().find_map(|m| match m {
+            PanelMsg::LayerStack(LayerStackMsg::Finish(FinishMsg::Picked { finish, .. })) => {
+                Some(finish.clone())
+            }
+            _ => None,
+        });
+        let finish = picked.expect("a pick");
+        assert_eq!(finish.mask.gloss, signex_types::pcb_stack::MaskGloss::Matte);
+        assert_eq!(finish.surface, FinishFacts::default().finish.surface);
+    }
+
+    #[test]
+    fn a_hasl_finish_carries_the_fine_pitch_note() {
+        let mut hasl = on(StackSubTab::Finish);
+        hasl.finish.finish.surface = signex_types::pcb_stack::SurfaceFinish::LeadFreeHasl;
+        hasl.finish.stored = true;
+        let shown = texts(&context(hasl));
+        assert!(
+            shown
+                .iter()
+                .any(|t| t.starts_with("HASL is not recommended")),
+            "{shown:?}"
+        );
+        assert!(!shown.iter().any(|t| t.starts_with("Not set yet")));
     }
 }

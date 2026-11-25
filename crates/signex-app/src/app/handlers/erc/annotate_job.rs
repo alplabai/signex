@@ -275,6 +275,7 @@ impl Signex {
             sheets: sheets.sheets.clone(),
             pages_outside_the_hierarchy: sheets.pages_outside_the_hierarchy.clone(),
             unreadable: sheets.unreadable.clone(),
+            unreadable_causes: sheets.unreadable_causes.clone(),
             absent: sheets.absent.clone(),
             refused: sheets.refused.clone(),
             root: sheets.root.clone(),

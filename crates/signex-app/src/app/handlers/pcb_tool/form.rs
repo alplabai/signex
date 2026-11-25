@@ -17,6 +17,7 @@ use signex_engine::pcb::primitive_edit::{
 use signex_i18n::{MessageId, ids, t};
 use signex_types::format::pcb_layer_token;
 use signex_types::pcb::{PadShape, PcbBoard, Point, Segment, Via, Zone};
+use signex_types::pcb_dimension_style::DimensionStyle;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::zone_keepout::KEEPOUT_FILL;
 use uuid::Uuid;
@@ -67,6 +68,10 @@ pub struct BoardToolDefaults {
     pub dimension_line_width_mm: Option<f64>,
     pub dimension_text_height_mm: Option<f64>,
     pub dimension_precision: Option<u8>,
+    /// A dimension's arrows, text, extension lines and number format, and
+    /// its Manual text point (#2868); `None` follows Preferences.
+    pub dimension_style: Option<DimensionStyle>,
+    pub dimension_text_at: Option<Point>,
     /// A pour's priority and island rules (#2216).
     pub pour_priority: Option<f64>,
     pub pour_min_island_mm2: Option<f64>,

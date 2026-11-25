@@ -128,6 +128,7 @@ fn write_project_file(
         sheets: sheets.iter().map(|s| entry(s)).collect(),
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: Vec::new(),
         enable_git: false,
         rules: Default::default(),

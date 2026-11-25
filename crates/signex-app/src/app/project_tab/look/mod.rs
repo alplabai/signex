@@ -298,7 +298,7 @@ pub(in crate::app::project_tab) fn field_label<'a>(
 }
 
 /// `content` with `tip` floating above it in the shared tooltip card.
-fn with_tip<'a>(
+pub(in crate::app::project_tab) fn with_tip<'a>(
     content: Element<'a, Message>,
     tip: Localized,
     tokens: &ThemeTokens,

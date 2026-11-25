@@ -229,7 +229,7 @@ fn actions<'a>(
         resolve(tokens).ink4
     };
     let delete = button(
-        text(t!(i18n, ids::DIALOG_BUTTON_DELETE))
+        text(t!(i18n, ids::PREFERENCES_PROFILES_DELETE_ACTION))
             .size(TS.body)
             .color(delete_ink),
     )
@@ -326,4 +326,143 @@ fn delete_confirm<'a>(name: &'a str, tokens: &'a ThemeTokens, i18n: &I18n) -> El
     ]
     .spacing(SP.xs)
     .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use iced::{Element, Size, Widget as _};
+    use signex_types::project::ErcRules;
+
+    use crate::app::{Message, PreferencesMsg, Signex};
+    use crate::layout_probe::{LaidOutText, lay_out_texts, messages_on_click_at};
+    use crate::preferences::{PrefMsg, ProfilesMsg};
+    use crate::rule_profiles;
+
+    const WINDOW: Size = Size::new(400.0, 900.0);
+    const DEFAULT: &str = "Automotive";
+    const OTHER: &str = "Prototype";
+
+    fn send(app: &mut Signex, msg: ProfilesMsg) {
+        let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+            PrefMsg::Profiles(msg),
+        )));
+    }
+
+    /// Two custom profiles beside the shipped and the machine's rules.
+    fn app_with_two_custom_profiles(lib: &std::path::Path) -> Signex {
+        rule_profiles::write_user_default(lib, ErcRules::default()).unwrap();
+        for name in [DEFAULT, OTHER] {
+            rule_profiles::save_named_profile(lib, name, "1.0", ErcRules::default(), false)
+                .unwrap();
+        }
+        let (mut app, _) = Signex::new();
+        let listing = rule_profiles::list_library(Some(lib));
+        send(&mut app, ProfilesMsg::Listed(Arc::new(listing)));
+        app
+    }
+
+    /// The list column with `DEFAULT` as the default for new projects.
+    fn list(app: &Signex) -> Element<'_, PrefMsg> {
+        super::view(
+            &app.ui_state.profile_manager,
+            Some(DEFAULT),
+            &app.document_state.panel_ctx.tokens,
+            &app.ui_state.i18n,
+        )
+        .boxed()
+    }
+
+    fn texts(app: &Signex) -> Vec<LaidOutText> {
+        lay_out_texts(list(app), WINDOW)
+            .into_iter()
+            .map(|t| LaidOutText {
+                text: t.text.replace(['\u{2068}', '\u{2069}'], ""),
+                bounds: t.bounds,
+            })
+            .collect()
+    }
+
+    /// The top of the row title that starts with `name`.
+    fn title_top(texts: &[LaidOutText], name: &str) -> f32 {
+        let title = format!("{name}  v1.0");
+        crate::layout_probe::find(texts, &title).bounds.y
+    }
+
+    /// Mockup row 148: the custom profile that is the default carries
+    /// "Default for new projects" on a second line, and every other row
+    /// offers Use as default.
+    #[test]
+    fn the_default_custom_row_notes_it_and_the_others_offer_use_as_default() {
+        let lib = tempfile::tempdir().unwrap();
+        let app = app_with_two_custom_profiles(lib.path());
+        let texts = texts(&app);
+        let (top, next) = (title_top(&texts, DEFAULT), title_top(&texts, OTHER));
+
+        let note = crate::layout_probe::find(&texts, "Default for new projects").bounds;
+        assert!(
+            note.y > top && note.y < next,
+            "{note:?} not under {DEFAULT}"
+        );
+        let offers: Vec<f32> = texts
+            .iter()
+            .filter(|t| t.text == "Use as default")
+            .map(|t| t.bounds.center_y())
+            .collect();
+        let rows = app.ui_state.profile_manager.listing.profiles.len() + 1;
+        assert_eq!(offers.len(), rows - 1, "{texts:#?}");
+        assert!(
+            !offers.iter().any(|&y| y > top && y < next),
+            "the default row offers Use as default"
+        );
+    }
+
+    /// Mockup row 148: Use as default on a row makes its profile the default.
+    #[test]
+    fn use_as_default_chooses_that_rows_profile() {
+        let lib = tempfile::tempdir().unwrap();
+        let app = app_with_two_custom_profiles(lib.path());
+        let texts = texts(&app);
+        let top = title_top(&texts, OTHER);
+        let offer = texts
+            .iter()
+            .find(|t| t.text == "Use as default" && t.bounds.center_y() > top)
+            .expect("the other row offers Use as default")
+            .bounds
+            .center();
+
+        let sent = messages_on_click_at(list(&app), WINDOW, None, offer);
+
+        assert!(
+            matches!(
+                sent.as_slice(),
+                [PrefMsg::Profiles(ProfilesMsg::DefaultChosen(Some(name)))] if name == OTHER
+            ),
+            "{sent:?}"
+        );
+    }
+
+    /// Mockup row 148: the delete action reads Delete… because it asks
+    /// first, and asks for the selected custom profile.
+    #[test]
+    fn delete_reads_with_an_ellipsis_and_asks_first() {
+        let lib = tempfile::tempdir().unwrap();
+        let mut app = app_with_two_custom_profiles(lib.path());
+        send(&mut app, ProfilesMsg::Selected(OTHER.into()));
+        let texts = texts(&app);
+        assert!(texts.iter().any(|t| t.text == "Delete…"), "{texts:#?}");
+        assert!(!texts.iter().any(|t| t.text == "Delete"), "{texts:#?}");
+
+        let at = crate::layout_probe::find(&texts, "Delete…").bounds.center();
+        let sent = messages_on_click_at(list(&app), WINDOW, None, at);
+
+        assert!(
+            matches!(
+                sent.as_slice(),
+                [PrefMsg::Profiles(ProfilesMsg::DeleteRequested)]
+            ),
+            "{sent:?}"
+        );
+    }
 }

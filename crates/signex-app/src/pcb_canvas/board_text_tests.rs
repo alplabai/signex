@@ -24,6 +24,7 @@ fn text(content: &str, at: [f32; 2]) -> FootprintTextInput {
         layer: PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
         justify: HAlign::Center,
         designator: false,
+        face: signex_renderer::pcb::TextFace::PLAIN,
     }
 }
 

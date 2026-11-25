@@ -235,6 +235,7 @@ fn write_project(dir: &Path, name: &str, libs: &[PathBuf]) -> PathBuf {
         sheets: Vec::new(),
         variant_definitions: Vec::new(),
         active_variant: None,
+        variant_settings: Default::default(),
         libraries: libs
             .iter()
             .map(|p| LibraryEntry {

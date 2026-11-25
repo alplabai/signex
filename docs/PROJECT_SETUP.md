@@ -115,6 +115,11 @@ profile copy is added after, as for every new project):
   such as `standard`, or a saved profile's `user-...` id). Only the id is
   stored, never the saved profile itself.
 - `annotation.designator_standard`, the existing Project Options setting.
+- `project_defaults.dimension` (#2868): what a new board dimension starts
+  from (line width, text height, precision, arrows, text, extension lines,
+  number format). Every new project gets a copy of Preferences ▸ PCB ▸ PCB
+  Defaults with the rule profile, dialog or not; a setup profile pick does
+  not change it. Out-of-range values make the section unusable, as below.
 
 A PCB or sheet added to the project starts from these through its setup
 dialog (below): `project_defaults.pcb` (layers,

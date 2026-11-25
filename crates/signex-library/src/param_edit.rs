@@ -2,10 +2,12 @@
 //!
 //! Editors present a measurement as a number field, an SI-prefix picker
 //! and a fixed unit ([`ParamValue::measurement_parts`]) and store the
-//! canonical `{base value, unit token}` ([`commit_measurement`]). Users
-//! never type a prefix or a unit into the number field.
+//! canonical `{base value, unit token}` ([`commit_measurement`]). A unit is
+//! never typed into the number field; a `k`, `M` or `u` (`µ`) typed at its
+//! end picks that prefix when the field commits
+//! ([`typed_number_and_prefix`], mockup row 139).
 
-use signex_types::quantity::{MantissaError, SiPrefix, Unit, quantity_from_parts};
+use signex_types::quantity::{MantissaError, SiPrefix, Unit, parse_mantissa, quantity_from_parts};
 
 use crate::param::ParamValue;
 use crate::templates::{ParamKind, ParamSlot, TemplateViolation, slot_violations};
@@ -79,6 +81,47 @@ pub fn commit_measurement(
         value: typed.base(),
         unit: typed.unit().token().to_string(),
     })
+}
+
+/// The prefix a letter typed into the number field picks: only `k`, `M`
+/// and `u` / `µ`, the keys mockup row 139 names. [`SiPrefix::from_char`]
+/// reads the letter; its `K` (kilo, for stored libraries) is not a key.
+fn typed_prefix_letter(c: char) -> Option<SiPrefix> {
+    if c == 'K' {
+        return None;
+    }
+    SiPrefix::from_char(c)
+        .filter(|p| matches!(p, SiPrefix::Kilo | SiPrefix::Mega | SiPrefix::Micro))
+}
+
+/// Number-field text that ends in a prefix letter (`4.7k`, `100u`), split
+/// into the number and the prefix the letter picks. Only a trailing letter
+/// counts, and only one `unit` takes: `4k7`, `4.7uF`, a `k` on a
+/// percentage and a letter after something that is not a number are not
+/// split (the field refuses them). A lone letter gives an empty number.
+///
+/// Editors keep the letter in the field while the user types and resolve
+/// it on commit ([`typed_number_and_prefix`]): split on every keystroke,
+/// `4k7` typed key by key would become `47` in k.
+pub fn split_typed_prefix(text: &str, unit: &Unit) -> Option<(String, SiPrefix)> {
+    let trimmed = text.trim();
+    let letter = trimmed.chars().last()?;
+    let prefix = typed_prefix_letter(letter)?;
+    if !unit.allowed_prefixes().contains(&prefix) {
+        return None;
+    }
+    let number = trimmed[..trimmed.len() - letter.len_utf8()].trim_end();
+    if !number.is_empty() && parse_mantissa(number).is_err() {
+        return None;
+    }
+    Some((number.to_string(), prefix))
+}
+
+/// The number and prefix a measurement field commits: a prefix letter at
+/// the end of `text` ([`split_typed_prefix`]) wins over the `picked`
+/// prefix; any other text commits as typed in `picked`.
+pub fn typed_number_and_prefix(text: &str, picked: SiPrefix, unit: &Unit) -> (String, SiPrefix) {
+    split_typed_prefix(text, unit).unwrap_or_else(|| (text.to_string(), picked))
 }
 
 /// The known unit a template slot fixes, if it fixes one.
@@ -246,6 +289,70 @@ mod tests {
     fn a_typed_prefix_letter_is_refused() {
         assert!(commit_measurement(None, "4k7", SiPrefix::One, &Unit::Ohm).is_err());
         assert!(commit_measurement(None, "4.7", SiPrefix::Kilo, &Unit::Percent).is_err());
+    }
+
+    /// Mockup row 139: k, M and u (µ) typed at the end of the number pick
+    /// the prefix and leave the number in the field.
+    #[test]
+    fn a_trailing_prefix_letter_picks_the_prefix() {
+        let cases = [
+            ("4.7k", Unit::Ohm, "4.7", SiPrefix::Kilo),
+            ("2.2M", Unit::Ohm, "2.2", SiPrefix::Mega),
+            ("100u", Unit::Farad, "100", SiPrefix::Micro),
+            ("100µ", Unit::Farad, "100", SiPrefix::Micro),
+            ("100μ", Unit::Farad, "100", SiPrefix::Micro),
+            (" -5 k ", Unit::Volt, "-5", SiPrefix::Kilo),
+            ("k", Unit::Ohm, "", SiPrefix::Kilo),
+        ];
+        for (typed, unit, number, prefix) in cases {
+            assert_eq!(
+                split_typed_prefix(typed, &unit),
+                Some((number.to_string(), prefix)),
+                "{typed}"
+            );
+        }
+    }
+
+    /// Anything else stays as typed: a letter inside the number, a unit
+    /// after the prefix, a prefix the unit does not take, letters the row
+    /// does not name, and a letter after text that is not a number.
+    #[test]
+    fn other_typed_letters_are_not_a_prefix() {
+        let cases = [
+            ("4k7", Unit::Ohm),
+            ("4.7uF", Unit::Farad),
+            ("4.7k", Unit::Percent),
+            ("4.7k", Unit::Farad),
+            ("4.7m", Unit::Ohm),
+            ("4.7K", Unit::Ohm),
+            ("4.7G", Unit::Ohm),
+            ("4,7k", Unit::Ohm),
+            ("abck", Unit::Ohm),
+            ("4.7", Unit::Ohm),
+            ("", Unit::Ohm),
+        ];
+        for (typed, unit) in cases {
+            assert_eq!(split_typed_prefix(typed, &unit), None, "{typed}");
+        }
+    }
+
+    /// On commit a trailing letter wins over the picked prefix; any other
+    /// text keeps the picked one, so `4k7` still reaches the number parser.
+    #[test]
+    fn a_commit_resolves_the_typed_letter_over_the_picked_prefix() {
+        let kilo = SiPrefix::Kilo;
+        assert_eq!(
+            typed_number_and_prefix("2.2M", kilo, &Unit::Ohm),
+            ("2.2".to_string(), SiPrefix::Mega)
+        );
+        assert_eq!(
+            typed_number_and_prefix("4.7", kilo, &Unit::Ohm),
+            ("4.7".to_string(), kilo)
+        );
+        assert_eq!(
+            typed_number_and_prefix("4k7", SiPrefix::One, &Unit::Ohm),
+            ("4k7".to_string(), SiPrefix::One)
+        );
     }
 
     fn slot(name: &str, unit: &str) -> ParamSlot {

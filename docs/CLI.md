@@ -599,8 +599,9 @@ set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
   line). An agent reaches it only inside `apply_edits`, where its answer is
   that edit's entry of `results`; the fallbacks are named there too, while
   their Messages line waits for the list's commit. A sheet entry stays on
-  its symbol's border. A pin reference is refused here. The Position row in Properties
-  makes the same move with the "keep wires" preference and `auto`.
+  its symbol's border. A pin reference is refused here. The Position row in
+  Properties makes the same move with the "keep wires" preference and
+  `auto`.
 - `set_object_rotation` turns a part in place (its wires follow when "keep
   wires" is on) or sets a label's angle. A power port takes the absolute angle its
   Rotation row always set. Any other kind is refused.
@@ -1067,8 +1068,8 @@ Find by text on a board is `find_items` (designator and value).
 
 ## Working through a running Signex
 
-When a person has the project open in Signex with Preferences > Editing >
-"Allow agent connections" on, `run` sends each command to that process
+When a person has the project open in Signex with Preferences > System ›
+General > "Allow agent connections" on, `run` sends each command to that process
 instead of booting its own (#1924; the app's side, the registry and the
 security rules are in [AGENT_SOCKET.md](AGENT_SOCKET.md)). The command runs
 inside the app's update loop like a click, so the person sees the change at

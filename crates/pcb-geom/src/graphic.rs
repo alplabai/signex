@@ -126,6 +126,12 @@ const BOARD_FRAME: Placement = Placement {
     side: Side::Top,
 };
 
+/// Whether `graphic_type` names a closed polygon through its `points`: the
+/// `poly` and `polygon` tokens, both drawn so by the Gerber.
+pub fn is_polygon_token(graphic_type: &str) -> bool {
+    matches!(graphic_type, "poly" | "polygon")
+}
+
 /// The fields one drawing kind reads, from a footprint or a board drawing.
 struct Source<'a> {
     kind: &'a str,
@@ -170,7 +176,7 @@ fn place(
                     .collect::<Result<Vec<_>, GeomError>>()?,
             }
         }
-        "poly" => {
+        kind if is_polygon_token(kind) => {
             if source.points.len() < 2 {
                 return Ok(None);
             }
@@ -186,8 +192,7 @@ fn place(
             let Some(center) = source.center else {
                 return Ok(None);
             };
-            let rim = source.end.or(source.start);
-            let radius = radius_of(center, source.radius, rim)?;
+            let radius = circle_radius(center, source.radius, source.start, source.end)?;
             GraphicShape::Circle {
                 center: world(center, "graphic.center")?,
                 radius,
@@ -238,6 +243,19 @@ fn arc(placement: &Placement, source: &Source<'_>) -> Result<Option<GraphicShape
         start_deg: (from.y as f64).atan2(from.x as f64).to_degrees(),
         sweep_deg,
     }))
+}
+
+/// A circle's radius in nm, as the view, the design rule check and the
+/// fabrication outputs all read it: the distance from `center` to its rim
+/// (`end`, else `start`) when it has one, else the saved `radius`. The
+/// editor writes the rim and derives the radius from it.
+pub fn circle_radius(
+    center: Point,
+    radius: f64,
+    start: Option<Point>,
+    end: Option<Point>,
+) -> Result<i64, GeomError> {
+    radius_of(center, radius, end.or(start))
 }
 
 /// A circle's or arc's radius: the distance from `center` to a point on its

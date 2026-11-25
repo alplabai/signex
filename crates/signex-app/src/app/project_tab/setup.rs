@@ -279,7 +279,11 @@ impl Signex {
             SetupPart::Sheet => defaults.sheet = Some(draft.setup.sheet.clone()),
             // A user profile carries all three parts.
             SetupPart::Profile => {
+                // The project's dimension defaults (#2868) are not a part
+                // of a profile: they stay.
+                let dimension = defaults.dimension.take();
                 defaults = draft.setup.defaults();
+                defaults.dimension = dimension;
                 designators = (stored_designators != Some(draft.setup.designators))
                     .then_some(draft.setup.designators);
             }

@@ -157,6 +157,7 @@ fn a_long_component_label_keeps_the_copy_to_library_footer_in_its_window() {
             label: LONG.repeat(2),
             previous_unavailable: None,
             error: None,
+            selected: None,
         });
         let _ = app.sync_detached_modals();
         let id = window_of(&app, ModalId::LibraryStockCopy);

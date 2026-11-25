@@ -52,6 +52,11 @@ pub enum ProblemKind {
     NotAFabricationFile,
     #[error("the job file cannot be read: {why}")]
     BadJobFile { why: String },
+    /// The caller could not get the file's bytes (a permission, a lock).
+    #[error("the file cannot be opened: {why}")]
+    Unopenable { why: String },
+    #[error("the file is larger than {limit_mib} MiB")]
+    TooLarge { limit_mib: u64 },
 }
 
 impl ProblemKind {

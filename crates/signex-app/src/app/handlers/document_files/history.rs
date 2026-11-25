@@ -776,15 +776,19 @@ fn restore_kind_of(kind: &crate::app::TabKind) -> Option<RestoreKind> {
     match kind {
         crate::app::TabKind::Schematic => Some(RestoreKind::Schematic),
         crate::app::TabKind::Pcb => Some(RestoreKind::Pcb),
+        crate::app::TabKind::PolygonManager => None,
         crate::app::TabKind::FootprintEditor(_) => Some(RestoreKind::Footprint),
         crate::app::TabKind::SymbolEditor(_) => Some(RestoreKind::Symbol),
+        // Fabrication files are read, never written: nothing to restore.
+        crate::app::TabKind::GerberViewer => None,
         crate::app::TabKind::LibraryBrowser(_) | crate::app::TabKind::ComponentEditor(_) => {
             Some(RestoreKind::Library)
         }
         crate::app::TabKind::Project(_)
         | crate::app::TabKind::Rules(_)
         | crate::app::TabKind::LayerStack
-        | crate::app::TabKind::PinTable => None,
+        | crate::app::TabKind::PinTable
+        | crate::app::TabKind::VariantManager(_) => None,
     }
 }
 

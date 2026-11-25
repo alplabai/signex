@@ -102,9 +102,9 @@ fn size_choice(i18n: &signex_i18n::I18n, size_pt: u32) -> crate::choice::Choice<
     }
 }
 
-/// The B / I / U / T buttons beside the size, in one segmented frame. They
-/// keep today's behaviour: the text styles are not stored on placed text
-/// yet, so a press changes nothing (`PanelMsg::Noop`).
+/// The B / I / U / T buttons beside the size, in one segmented frame. Placed
+/// text does not store a text style yet, so they are drawn disabled in the
+/// faint ink and send nothing (mockup row 41); the tooltip still names each.
 fn text_style_buttons<'a>(i18n: &signex_i18n::I18n) -> Element<'a, PanelMsg> {
     use signex_i18n::{ids, t};
     let ts = crate::styles::TypeScale::DEFAULT;
@@ -120,11 +120,7 @@ fn text_style_buttons<'a>(i18n: &signex_i18n::I18n) -> Element<'a, PanelMsg> {
             )
             .width(Length::Fill)
             .padding([sp.xs, sp.xs])
-            .on_press(PanelMsg::Noop)
-            .style(|theme: &Theme, status| {
-                let hovered = matches!(status, iced::widget::button::Status::Hovered);
-                crate::panels::form_look::segment_cell(theme, false, hovered)
-            });
+            .style(|theme: &Theme, _| disabled_style_cell(theme));
             signex_widgets::tooltip(
                 face,
                 container(text(t!(i18n, tip)).size(ts.caption))
@@ -174,6 +170,15 @@ fn text_style_buttons<'a>(i18n: &signex_i18n::I18n) -> Element<'a, PanelMsg> {
     .boxed()
 }
 
+/// A flat segment cell in the faint ink: how a disabled style button reads.
+fn disabled_style_cell(theme: &Theme) -> iced::widget::button::Style {
+    let cell = crate::panels::form_look::segment_cell(theme, false, false);
+    iced::widget::button::Style {
+        text_color: crate::panels::form_look::FormLook::of(theme).ink4,
+        ..cell
+    }
+}
+
 /// The "Font Size  [10 pt ▾] [B I U T]" row: the size list and the text
 /// style buttons on one row. `on_pick` builds the message for a size.
 #[allow(
@@ -221,7 +226,8 @@ mod tests {
     }
 
     /// The row is labelled Font Size and shows the size and the four style
-    /// buttons; a style button keeps today's no-op.
+    /// buttons; they are disabled until text styles are stored (mockup row
+    /// 41), so a press sends nothing.
     #[test]
     fn the_font_size_row_shows_the_size_and_the_style_buttons() {
         let en = signex_i18n::I18n::en_us();
@@ -236,15 +242,23 @@ mod tests {
         for label in ["Font Size", "B", "I", "U", "T"] {
             assert!(shown.iter().any(|t| t == label), "{label:?} in {shown:?}");
         }
-        let pressed = crate::layout_probe::messages_on_click(
-            font_size_row(&en, 10, PanelMsg::SetPrePlacementFontSize),
-            size,
-            "B",
-        );
-        assert!(
-            matches!(pressed.as_slice(), [PanelMsg::Noop]),
-            "{pressed:?}"
-        );
+        for glyph in ["B", "I", "U", "T"] {
+            let pressed = crate::layout_probe::messages_on_click(
+                font_size_row(&en, 10, PanelMsg::SetPrePlacementFontSize),
+                size,
+                glyph,
+            );
+            assert!(pressed.is_empty(), "{glyph}: {pressed:?}");
+        }
+    }
+
+    /// A disabled style button reads in the faint ink, not the live one.
+    #[test]
+    fn a_disabled_style_button_uses_the_faint_ink() {
+        let theme = Theme::Dark;
+        let look = crate::panels::form_look::FormLook::of(&theme);
+        let style = disabled_style_cell(&theme);
+        assert_eq!(style.text_color, look.ink4);
     }
 
     #[test]

@@ -52,7 +52,7 @@ impl Signex {
                 self.library.settings.digikey_status = Some("Waiting for browser…".to_string());
                 let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
                 self.library.settings.digikey_cancel = Some(cancel_flag.clone());
-                let (client_id, client_secret) = digikey_oauth::read_env_credentials();
+                let (client_id, client_secret) = digikey_oauth::client_credentials();
                 let auth_url = DIGIKEY_AUTH_URL.to_string();
                 let token_url = DIGIKEY_TOKEN_URL.to_string();
                 let opener = self.ui_state.io.opener;

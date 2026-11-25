@@ -327,9 +327,34 @@ fn counted_header<'a>(
     .boxed()
 }
 
-/// The table: a sunken header row, one row per pin, the focused pin's row
-/// on the accent with an accent edge, a hidden pin's state in its tooltip.
-fn pins_table<'a>(ctx: &PanelContext, primary: Color, border_c: Color) -> Element<'a, PanelMsg> {
+/// How a pin's row is drawn: the focused pin on the accent with an accent
+/// edge, a hidden pin dimmed (mockup row 42: a dimmed row and a tooltip, no
+/// Hidden column, so the table fits the 300 px dock), any other in `primary`.
+fn row_look(pin: &PinRow, ctx: &PanelContext, primary: Color) -> RowLook {
+    let r = resolve(&ctx.tokens);
+    if pin.focused {
+        return RowLook {
+            ink: r.accent_soft_ink,
+            fill: Some(r.accent_soft),
+            edge: Some(crate::styles::ti(ctx.tokens.accent)),
+            size: TS.body,
+        };
+    }
+    RowLook {
+        ink: if pin.hidden { r.ink4 } else { primary },
+        fill: None,
+        edge: None,
+        size: TS.body,
+    }
+}
+
+/// The table: a sunken header row, one row per pin drawn by `row_look`, a
+/// hidden pin's state in its tooltip.
+pub(super) fn pins_table<'a>(
+    ctx: &PanelContext,
+    primary: Color,
+    border_c: Color,
+) -> Element<'a, PanelMsg> {
     let i18n = &ctx.i18n;
     let r = resolve(&ctx.tokens);
     let rows = pin_rows(&ctx.selection_info);
@@ -355,6 +380,7 @@ fn pins_table<'a>(ctx: &PanelContext, primary: Color, border_c: Color) -> Elemen
     ));
     let hidden_tip = i18n.message_plain(ids::PROPERTIES_PIN_HIDDEN_TIP, &[]);
     for pin in rows {
+        let look = row_look(&pin, ctx, primary);
         let cells = [
             pin.designator,
             pin.name,
@@ -362,21 +388,6 @@ fn pins_table<'a>(ctx: &PanelContext, primary: Color, border_c: Color) -> Elemen
             pin.electrical_type,
             pin.net.unwrap_or_default(),
         ];
-        let look = if pin.focused {
-            RowLook {
-                ink: r.accent_soft_ink,
-                fill: Some(r.accent_soft),
-                edge: Some(crate::styles::ti(ctx.tokens.accent)),
-                size: TS.body,
-            }
-        } else {
-            RowLook {
-                ink: primary,
-                fill: None,
-                edge: None,
-                size: TS.body,
-            }
-        };
         let line = table_row(cells, show_net, look);
         table = table.push(if pin.hidden {
             signex_widgets::tooltip(
@@ -527,6 +538,24 @@ mod tests {
         assert_eq!(name(0).as_deref(), Some("A"));
         assert_eq!(name(1).as_deref(), Some("K2"));
         assert!(sketch.hidden);
+    }
+
+    /// Mockup row 42: a hidden pin's row is dimmed to the faint ink; a shown
+    /// pin keeps the row ink and the focused pin its accent look.
+    #[test]
+    fn a_hidden_pin_row_is_dimmed() {
+        let (app, _task) = crate::app::Signex::new();
+        let ctx = &app.document_state.panel_ctx;
+        let r = resolve(&ctx.tokens);
+        let primary = Color::from_rgb(0.9, 0.9, 0.9);
+        let mut rows = pin_rows(&info());
+        assert!(rows[1].hidden && rows[1].focused, "fixture");
+        assert_eq!(row_look(&rows[0], ctx, primary).ink, primary);
+        assert_eq!(row_look(&rows[1], ctx, primary).ink, r.accent_soft_ink);
+        rows[1].focused = false;
+        let hidden = row_look(&rows[1], ctx, primary);
+        assert_eq!(hidden.ink, r.ink4);
+        assert_eq!(hidden.fill, None);
     }
 
     #[test]

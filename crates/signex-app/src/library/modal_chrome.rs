@@ -10,14 +10,15 @@
 use iced::widget::text::{Ellipsis, Wrapping};
 use iced::widget::{Column, Space, column, container, row};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget};
+use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::{Label, raw, text};
 
 use super::messages::LibraryMessage;
 use crate::styles::{
-    DialogButtonKind, DialogIcon, LINE_HEIGHT, PillTone, Radii, Spacing, TypeScale, dialog_button,
-    dialog_footer_split, pill_colors, ti, tokens,
+    DialogButtonKind, DialogIcon, LINE_HEIGHT, PillTone, Radii, Spacing, TypeScale, dialog_body,
+    dialog_button, dialog_footer_split, dialog_intro, pill_colors, ti, tokens,
 };
 
 /// Fixed widths of the Library modals that size themselves (the others
@@ -211,6 +212,84 @@ pub(crate) fn danger_btn<'a, M: Clone + 'a>(
     dialog_button(label, DialogButtonKind::Danger, Some(message), tokens)
 }
 
+/// What an unsaved-changes prompt shows between its header and footer: a
+/// warn intro (the question and the count line), the list of unsaved
+/// entries (each with its kind), and notes above or under the list.
+pub(crate) struct UnsavedBody<'a, M> {
+    pub title: String,
+    pub detail: String,
+    /// Notes above the list (the list changed since it was shown).
+    pub above: Vec<Element<'a, M>>,
+    /// The caller's list: the Close Library draft list, or the grouped
+    /// unsaved list the Close Project and Exit confirms share.
+    pub list: Element<'a, M>,
+    /// Notes under the list (what stays open, why Discard All is withheld).
+    pub below: Vec<Element<'a, M>>,
+}
+
+/// The body of every unsaved-changes prompt (Close Library, Close Project,
+/// Exit): the warn intro, then the notes and the list, a medium gap apart.
+pub(crate) fn unsaved_body<'a, M: 'a>(
+    parts: UnsavedBody<'a, M>,
+    tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    let intro = dialog_intro(DialogIcon::Warn, parts.title, Some(parts.detail), tokens);
+    let mut body: Column<Element<'a, M>> = Column::new().spacing(SP.m).push(intro);
+    for note in parts.above {
+        body = body.push(note);
+    }
+    body = body.push(parts.list);
+    for note in parts.below {
+        body = body.push(note);
+    }
+    dialog_body(body)
+}
+
+/// What the three buttons of an unsaved-changes prompt publish. A `None`
+/// Discard All is withheld (the button is left out).
+pub(crate) struct UnsavedActions<M> {
+    pub discard_all: Option<M>,
+    pub cancel: M,
+    pub save_all: M,
+}
+
+/// The footer buttons of an unsaved-changes prompt as `(left, right)`: the
+/// red Discard All alone at the left, away from Save All; Cancel, then the
+/// primary Save All, at the right. The caller lays them on its footer.
+pub(crate) fn unsaved_footer_parts<'a, M: Clone + 'a>(
+    i18n: &I18n,
+    actions: UnsavedActions<M>,
+    tokens: &ThemeTokens,
+) -> (Vec<Element<'a, M>>, Vec<Element<'a, M>>) {
+    let left = actions
+        .discard_all
+        .map(|message| {
+            dialog_button(
+                t!(i18n, ids::DIALOG_UNSAVED_DISCARD_ALL),
+                DialogButtonKind::Danger,
+                Some(message),
+                tokens,
+            )
+        })
+        .into_iter()
+        .collect();
+    let right = vec![
+        dialog_button(
+            t!(i18n, ids::DIALOG_BUTTON_CANCEL),
+            DialogButtonKind::Cancel,
+            Some(actions.cancel),
+            tokens,
+        ),
+        dialog_button(
+            t!(i18n, ids::DIALOG_BUTTON_SAVE_ALL),
+            DialogButtonKind::Primary,
+            Some(actions.save_all),
+            tokens,
+        ),
+    ];
+    (left, right)
+}
+
 /// A notice inside a dialog body: `body` on the soft fill of `tone`, in the
 /// tone's ink, after a status glyph; `actions` go in a row under the body.
 /// The caller decides whether `body` wraps.
@@ -325,8 +404,68 @@ pub(crate) fn mono_value<'a>(value: String, tokens: &ThemeTokens) -> Element<'a,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signex_i18n::{ids, t};
+    use signex_i18n::{UserText, ids, t};
     use signex_types::theme::ThemeId;
+
+    fn unsaved_footer(discard: bool) -> Element<'static, LibraryMessage> {
+        let tokens = signex_types::theme::theme_tokens(ThemeId::BUILTINS[0]);
+        let actions = UnsavedActions {
+            discard_all: discard.then_some(LibraryMessage::ClosePicker),
+            cancel: LibraryMessage::ClosePicker,
+            save_all: LibraryMessage::ClosePicker,
+        };
+        let (left, right) = unsaved_footer_parts(&I18n::en_us(), actions, &tokens);
+        dialog_footer_split(left, right)
+    }
+
+    /// Mockup row 136: the red Discard All alone at the left, then Cancel
+    /// and Save All at the right, standing apart from it.
+    #[test]
+    fn the_unsaved_footer_puts_discard_all_at_the_left() {
+        use crate::layout_probe::{find, lay_out_texts};
+        let texts = lay_out_texts(unsaved_footer(true), iced::Size::new(500.0, 100.0));
+        let discard = find(&texts, "Discard All").bounds;
+        let cancel = find(&texts, "Cancel").bounds;
+        let save = find(&texts, "Save All").bounds;
+        assert!(discard.x < cancel.x && cancel.x < save.x, "{texts:#?}");
+        assert!(
+            cancel.x - (discard.x + discard.width) > 100.0,
+            "Discard All stands apart"
+        );
+    }
+
+    /// A withheld Discard All leaves Cancel and Save All alone.
+    #[test]
+    fn a_withheld_discard_all_is_left_out() {
+        use crate::layout_probe::lay_out_texts;
+        let texts = lay_out_texts(unsaved_footer(false), iced::Size::new(500.0, 100.0));
+        let labels: Vec<&str> = texts.iter().map(|t| t.text.as_str()).collect();
+        assert_eq!(labels, vec!["Cancel", "Save All"]);
+    }
+
+    /// The body is the warn intro, the notes above the list, the list, then
+    /// the notes under it, top to bottom.
+    #[test]
+    fn the_unsaved_body_stacks_intro_notes_and_list() {
+        use crate::layout_probe::{find, lay_out_texts};
+        let tokens = signex_types::theme::theme_tokens(ThemeId::BUILTINS[0]);
+        let line = |s: &str| text(UserText::new(s.to_owned())).boxed();
+        let body: Element<'_, LibraryMessage> = unsaved_body(
+            UnsavedBody {
+                title: "question".into(),
+                detail: "count".into(),
+                above: vec![line("above")],
+                list: line("list"),
+                below: vec![line("below")],
+            },
+            &tokens,
+        );
+        let texts = lay_out_texts(body, iced::Size::new(500.0, 400.0));
+        let y = |label| find(&texts, label).bounds.y;
+        assert!(y("question") < y("count"));
+        assert!(y("count") < y("above") && y("above") < y("list"));
+        assert!(y("list") < y("below"));
+    }
 
     /// The chrome builds from tokens alone for every built-in theme; no
     /// hard-coded colour path remains to diverge per theme.

@@ -8,7 +8,8 @@
 //!
 //! The header is this module's own (#2523, mockup rows 95 to 102: header,
 //! search, illustration, sections): the kind, a count pill, the lock icon,
-//! then the search, or while placing the paused callout. Each kind's view
+//! a dimension's Value card (mockup row 101), then the search, or while
+//! placing the paused callout. Each kind's view
 //! opens with its illustration (`drawing`, linked to its rows by
 //! `linked`). The board panel (#2353) and the component panel (#2354) carry
 //! the same shape, and the three meet in `pcb_board_properties::view`,
@@ -21,6 +22,7 @@
 mod arc;
 mod board_text;
 mod dimension;
+mod dimension_style;
 mod drawing;
 mod facts;
 mod graphic;
@@ -40,6 +42,7 @@ use std::path::PathBuf;
 use iced::widget::{Space, column, container, row, svg};
 use iced::{Element, Length, Padding, Theme, Widget as _};
 use signex_engine::pcb::draw::ArcMode;
+use signex_engine::pcb::primitive_edit::DimensionStyleEdit;
 use signex_i18n::{Localized, MessageId, ids, t};
 use signex_types::pcb::PadShape;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
@@ -47,12 +50,13 @@ use signex_types::pcb_stack::StackMode;
 use signex_widgets::property_illustration::IllustrationMsg;
 use signex_widgets::{button, text, text_input, tooltip};
 
+pub(crate) use dimension::{is_dimension_length, typed_length_mm};
 pub use facts::ViaTypeChoice;
 pub use facts::{
-    ArcFacts, AreaLayerChoice, DimensionFacts, Editability, GraphicFacts, LayerChoice,
-    LayerSizeRow, MaskSideFacts, NetChoice, NetInfo, PadFacts, PcbPrimitiveFacts, PrimitiveCommon,
-    PrimitiveField, PrimitiveFlag, PrimitiveTarget, ShapeChoice, TextFacts, TrackFacts, ViaFacts,
-    ZoneFacts, ZoneKind, shared,
+    ArcFacts, AreaLayerChoice, DimensionFacts, DimensionStyleFacts, Editability, GraphicFacts,
+    LayerChoice, LayerSizeRow, MaskSideFacts, NetChoice, NetInfo, PadFacts, PcbPrimitiveFacts,
+    PrimitiveCommon, PrimitiveField, PrimitiveFlag, PrimitiveTarget, ShapeChoice, TextFacts,
+    TrackFacts, ViaFacts, ZoneFacts, ZoneKind, shared,
 };
 pub use linked::{EndChoice, end_choices, ends_tip};
 pub use via::ViaMsg;
@@ -175,6 +179,12 @@ pub enum PcbPrimitiveMsg {
         field: PrimitiveField,
         value: f64,
     },
+    /// A dimension's arrow style, font, bold, italic, text position, unit,
+    /// unit suffix or trailing zeros was picked (#2868): one undo step.
+    DimensionStylePicked {
+        target: PrimitiveTarget,
+        edit: DimensionStyleEdit,
+    },
     /// The armed Arc tool's Placement was picked: how the next arc is drawn.
     ArcModePicked(ArcMode),
     /// The Via panel's via type, reset arrows and layer chips (mockup row 96).
@@ -223,7 +233,8 @@ pub fn view<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<
 
 /// The header (mockup rows 95-102): the kind, its count pill (a pad's
 /// "{component}-{pad}", "Next to place" while placing), a Shelved pill for
-/// a shelved pour, the lock icon; under it the search, or while placing the
+/// a shelved pour, the lock icon; under it a dimension's Value card (mockup
+/// row 101), then the search, or while placing the
 /// placing callout; and for a locked item the warn callout with Unlock.
 fn header<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<'a, PanelMsg> {
     let look = rows::Look::of(ctx);
@@ -265,6 +276,13 @@ fn header<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<'a
             })
             .width(Length::Fill)
     ];
+    // Mockup row 101: a dimension's measured Value is the headline card,
+    // above the search.
+    if let PcbPrimitiveFacts::Dimension(f) = facts
+        && let Some(card) = dimension::value_card(look, f)
+    {
+        col = col.push(card);
+    }
     if placing {
         let line = if common.placement_paused {
             ids::PCB_PRIM_PLACING_PAUSED
@@ -277,22 +295,27 @@ fn header<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<'a
     }
     let via = matches!(facts, PcbPrimitiveFacts::Via(_));
     if !placing && !via && common.editability == Editability::ItemLocked {
-        let unlock = button(text(look.t(ids::PCB_PRIM_UNLOCK)).size(TS.caption))
-            .padding([SP.xs, SP.s])
-            .style(form_look::ghost_button)
-            .on_press(PanelMsg::PcbPrimitive(PcbPrimitiveMsg::LockToggled {
-                target: common.target.clone(),
-                locked: false,
-            }));
-        col = col.push(callout(
-            look,
-            PillTone::Warn,
-            true,
-            look.t(ids::PCB_PRIM_ITEM_LOCKED),
-            Some(unlock.boxed()),
-        ));
+        col = col.push(locked_callout(look, common));
     }
     col.width(Length::Fill).boxed()
+}
+
+/// The warn callout of a locked item, with Unlock.
+fn locked_callout<'a>(look: rows::Look<'a>, common: &PrimitiveCommon) -> Element<'a, PanelMsg> {
+    let unlock = button(text(look.t(ids::PCB_PRIM_UNLOCK)).size(TS.caption))
+        .padding([SP.xs, SP.s])
+        .style(form_look::ghost_button)
+        .on_press(PanelMsg::PcbPrimitive(PcbPrimitiveMsg::LockToggled {
+            target: common.target.clone(),
+            locked: false,
+        }));
+    callout(
+        look,
+        PillTone::Warn,
+        true,
+        look.t(ids::PCB_PRIM_ITEM_LOCKED),
+        Some(unlock.boxed()),
+    )
 }
 
 /// The header title: the kind, a zone its real kind, a drawing its own.
@@ -306,6 +329,7 @@ fn title(facts: &PcbPrimitiveFacts) -> MessageId {
             Some(ZoneKind::Region) => ids::PCB_PRIM_REGION_TITLE,
             Some(ZoneKind::Pour) => ids::PCB_PRIM_POUR_TITLE,
             Some(ZoneKind::Keepout) => ids::PCB_PRIM_KEEPOUT_TITLE,
+            Some(ZoneKind::Cutout) => ids::PCB_PRIM_CUTOUT_TITLE,
             None => ids::PCB_PRIM_AREA_TITLE,
         },
         PcbPrimitiveFacts::Arc(_) => ids::PCB_PRIM_ARC_TITLE,

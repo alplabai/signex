@@ -672,7 +672,7 @@ mod tests {
     };
     use super::*;
     use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
-    use crate::app::{ProjectSection, TabInfo, TabKind};
+    use crate::app::{TabInfo, TabKind};
     use signex_types::schematic::{SchematicSheet, SelectedItem, SelectedKind, Symbol};
 
     const TID: ThemeId = ThemeId::GraphiteDark;
@@ -1023,11 +1023,15 @@ mod tests {
             app.interaction_state.context_menu.is_none(),
             "the menu closes"
         );
+        // Since mockup row 32 the Variant Manager is its own tab.
         let tab = &app.document_state.tabs[app.document_state.active_tab];
-        assert!(matches!(tab.kind, TabKind::Project(p) if p == id));
-        assert_eq!(
-            app.document_state.project_tabs[&id].section,
-            ProjectSection::Variants
+        assert!(matches!(tab.kind, TabKind::VariantManager(p) if p == id));
+        assert!(
+            app.document_state
+                .tabs
+                .iter()
+                .all(|tab| tab.kind.as_project().is_none()),
+            "no Project tab opens on the way"
         );
         assert_eq!(
             app.document_state.projects[0].data.variant_definitions,
@@ -1051,10 +1055,17 @@ mod tests {
             Some("Lite"),
             "not made active"
         );
+        // Since mockup row 32 the Variant Manager is its own tab.
         let tab = &app.document_state.tabs[app.document_state.active_tab];
-        assert!(matches!(tab.kind, TabKind::Project(p) if p == id));
+        assert!(matches!(tab.kind, TabKind::VariantManager(p) if p == id));
+        assert!(
+            app.document_state
+                .tabs
+                .iter()
+                .all(|tab| tab.kind.as_project().is_none()),
+            "no Project tab opens on the way"
+        );
         let state = &app.document_state.project_tabs[&id];
-        assert_eq!(state.section, ProjectSection::Variants);
         assert_eq!(state.variant_selected.as_deref(), Some("Variant 1"));
         assert!(
             state.variant_rename.is_some(),

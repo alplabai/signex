@@ -3,8 +3,8 @@
 //! Extracted from `panels/mod.rs`. Pure view code, zero behaviour change.
 //! Split into concern-sibling submodules:
 //!
-//! - `general`   — the General tab (General, Page Options, Net Classes,
-//!   Custom Selection Filters) and the Properties button chrome.
+//! - `general`   — the General tab (General, Page Options, Net Classes)
+//!   and the Properties button chrome.
 //! - `page_options` — the Page Options section of the General tab.
 //! - `doc_rows` — the General tab's row builders (label column, segmented
 //!   choice, enable box, typed pairs).

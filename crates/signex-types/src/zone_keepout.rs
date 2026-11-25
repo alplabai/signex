@@ -41,11 +41,15 @@ impl Zone {
         })
     }
 
-    /// Whether the zone is a rule area (a keepout among them), not copper:
-    /// its fill type or its layer names a rule, or it is a keepout.
+    /// Whether the zone is a rule area (a keepout or a pour cutout among
+    /// them), not copper: its fill type or its layer names a rule, or it is
+    /// a keepout or a pour cutout (#2871).
     pub fn is_rule_area(&self) -> bool {
         let fill = self.fill_type.to_ascii_lowercase();
         let layer = self.layer.to_ascii_lowercase();
-        fill.contains("rule") || fill.contains("keepout") || layer.contains("rule")
+        fill.contains("rule")
+            || fill.contains("keepout")
+            || self.is_pour_cutout()
+            || layer.contains("rule")
     }
 }

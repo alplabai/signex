@@ -1310,6 +1310,11 @@
     "category": "interactive"
   },
   {
+    "id": "polygon_manager",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "prev_layer",
     "group": "Pcb",
     "category": "view"

@@ -61,7 +61,9 @@ pub use reference_display::show_board_references;
 pub use substitution::{SubstitutionContext, resolve, resolve_text};
 pub use svg::board::{AssemblySvgOptions, assembly_svg};
 pub use template::{Template, TemplateError, TemplateId, TitleBlockField};
-pub use variant_fit::{VariantMatrix, VariantRow, is_fitted, part_is_fitted, variant_matrix};
+pub use variant_fit::{
+    VariantMatrix, VariantRow, is_fitted, part_is_fitted, project_fit, variant_matrix,
+};
 
 /// The universal exporter trait — one impl per output format.
 pub trait Exporter {
@@ -215,6 +217,9 @@ pub struct ProjectMetadata {
     /// The clock and the files' modified dates the computed tokens show;
     /// every sheet's metadata keeps them from the metadata it derives from.
     pub document_facts: DocumentFacts,
+    /// The project's variant settings (mockup row 32), which the BOM applies
+    /// over what the sheets say; every sheet's metadata keeps them.
+    pub variant_settings: signex_types::project::VariantSettings,
 }
 
 /// What the computed special strings show, formatted by the caller: the
@@ -304,6 +309,7 @@ impl ProjectMetadata {
         }
         out.project_parameters = self.project_parameters.clone();
         out.document_facts = self.document_facts.clone();
+        out.variant_settings = self.variant_settings.clone();
         out
     }
 

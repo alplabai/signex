@@ -555,10 +555,12 @@ library-picker-column-mpn = MPN
 library-picker-column-description = Description
 # Shown in place of the list when no part matches.
 library-picker-empty = No components match. Open a library or refine the filter.
-# Footer hint: Enter in the search field places the selected part.
-library-picker-hint-place = Enter to place
-# Footer hint, Change Component: Enter goes on to the change preview.
-library-picker-hint-next = Enter for Next
+# Footer hint: the up and down arrows move the selection; Enter in the
+# search field places the selected part.
+library-picker-hint-place = ↑↓ to move · Enter to place
+# Footer hint, Change Component: the arrows move the selection; Enter goes
+# on to the change preview.
+library-picker-hint-next = ↑↓ to move · Enter for Next
 
 ## Primitive picker (mockup row 131)
 # Dialog titles, by the kind of primitive picked.
@@ -757,6 +759,10 @@ library-browser-read-only-note = This library ships with Signex and is not edita
 library-browser-preview-loading = Loading…
 # A preview tile whose drawing could not be read.
 library-browser-preview-unreadable = Could not be read
+
+# library-copy-recovery
+# Copy to Library footer primary: copy the stock primitive into the selected library ($library is its name).
+library-stock-copy-copy-to = Copy to { $library }
 # library-browser-columns-and-row-style
 # Tooltip of the column button at the right of the count line, and the
 # heading of the chooser it opens.

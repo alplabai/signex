@@ -56,9 +56,9 @@ fn the_menu_lists_every_row_of_the_tab_menu() {
         [
             "Hide Bottom Layer",
             "Highlight Bottom Layer",
-            "Layer colour...",
-            "Reset layer colour",
-            "Reset all layer colours",
+            "Layer color...",
+            "Reset layer color",
+            "Reset all layer colors",
             "Show only this layer",
             "Show all layers",
             "Hide layers",
@@ -98,7 +98,7 @@ fn the_menu_lists_every_row_of_the_tab_menu() {
     ));
     // 2026-11-18: Layer colour... opens the picker of the tab's layer.
     assert!(matches!(
-        row("Layer colour...").1,
+        row("Layer color...").1,
         Some(Message::Pcb(PcbMsg::LayerTabMenu(
             LayerTabMenuMsg::ColourEditRequested(Some(l))
         ))) if l == layer
@@ -108,8 +108,8 @@ fn the_menu_lists_every_row_of_the_tab_menu() {
     for label in [
         "Drill symbols...",
         "Layer drawing order...",
-        "Reset layer colour",
-        "Reset all layer colours",
+        "Reset layer color",
+        "Reset all layer colors",
     ] {
         assert!(row(label).1.is_none(), "{label} is greyed");
     }
@@ -151,14 +151,14 @@ fn the_reset_rows_follow_the_board_colours() {
         view_event(&row.and_then(|(_, m, _)| m.clone()))
     };
     assert_eq!(
-        sent("Reset layer colour"),
+        sent("Reset layer color"),
         Some(PcbViewMsg::LayerColourSet {
             layer,
             colour: None
         })
     );
     assert_eq!(
-        sent("Reset all layer colours"),
+        sent("Reset all layer colors"),
         Some(PcbViewMsg::LayerColoursReset)
     );
 }
@@ -180,9 +180,9 @@ fn a_read_only_board_greys_the_colour_rows() {
         &state(layer, &view, &prefs, colours),
     ));
     for label in [
-        "Layer colour...",
-        "Reset layer colour",
-        "Reset all layer colours",
+        "Layer color...",
+        "Reset layer color",
+        "Reset all layer colors",
     ] {
         let row = rows.iter().find(|(l, _, _)| l == label);
         assert!(
@@ -202,7 +202,7 @@ fn a_keepout_or_mechanical_layer_greys_layer_colour() {
         &I18n::en_us(),
         &state(keepout, &view, &prefs, TabColours::default()),
     ));
-    let colour = rows.iter().find(|(l, _, _)| l == "Layer colour...");
+    let colour = rows.iter().find(|(l, _, _)| l == "Layer color...");
     assert!(colour.is_some_and(|(_, message, _)| message.is_none()));
 }
 
