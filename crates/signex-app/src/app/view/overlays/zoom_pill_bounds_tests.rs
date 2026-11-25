@@ -85,6 +85,43 @@ fn the_pill_stays_inside_the_canvas_when_the_window_size_is_stale() {
     assert_pill_inside_canvas(&app, main, model, "model size");
 }
 
+/// With a stale model size the preset menu still opens over the drawn pill:
+/// its rows sit in the card `presets_anchor` places against the laid-out
+/// canvas, above the pill and inside the canvas.
+#[test]
+fn the_presets_follow_the_pill_when_the_window_size_is_stale() {
+    let (mut app, main) = graphite_app_with_selected_wire();
+    app.ui_state.window_size = MODEL_DEFAULT;
+    let _ = app.update(crate::app::Message::Ui(
+        crate::app::UiMsg::ZoomPresetsToggled,
+    ));
+    assert!(app.zoom_presets_shown(), "the presets did not open");
+    let canvas = app.canvas_bounds_sized(None, (LAID_OUT.width, LAID_OUT.height));
+    let pill = pill_rect(&app, LAID_OUT);
+    let zoom = app.interaction_state.active_canvas().zoom_percent();
+    let has_selection = app.command_context(None).has_selection;
+    let (_, extent) = app.zoom_presets_card(zoom, has_selection);
+    let (x, y) = super::zoom_presets::presets_anchor(canvas, extent);
+    let card = Rectangle::new(Point::new(x, y), Size::new(extent.0, extent.1));
+    assert!(holds(canvas, card), "card {card:?} leaves canvas {canvas:?}");
+    assert!(
+        card.y + card.height <= pill.y,
+        "card {card:?} overlaps pill {pill:?}"
+    );
+    let texts = lay_out_texts(app.view(main), LAID_OUT);
+    for label in ["50%", "200%", "Fit Selection"] {
+        let row = texts
+            .iter()
+            .find(|t| t.text == label && !pill.contains(t.bounds.center()))
+            .unwrap_or_else(|| panic!("no {label:?} row: {texts:#?}"));
+        assert!(
+            card.contains(row.bounds.center()),
+            "{label:?} at {:?} is not in the card at {card:?}",
+            row.bounds
+        );
+    }
+}
+
 #[test]
 fn the_pill_stays_inside_the_canvas_at_every_right_dock_width() {
     let (mut app, main) = graphite_app_with_selected_wire();
