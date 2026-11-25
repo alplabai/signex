@@ -92,15 +92,30 @@ just a `tracing::info` line and a dirty mark on the schematic.
 In **Team** workflow mode the dispatcher opens the modal so the user can
 review which updates to accept, with checkboxes pre-toggled by `BumpKind`:
 
-- `Patch`: checked by default (compatible auto-update);
-- `Minor`: unchecked by default (review before accepting);
+- `Patch`: checked by default (compatible under semver);
+- `Minor`: checked by default (compatible under semver);
 - `Major`: unchecked, with a warning (likely breaking).
 
+Instances of one part that would draw the same line but for the designator
+(same `lib_id`, library, row, Internal PN and version pair) and carry no
+conflict share one table row listing every designator ("R10, R11"); the
+grouping is `LibraryUpdatesState::rows` in `updates_dialog/rows.rs`. The row's
+checkbox shows ticked only when every member is ticked, and a click on a
+row with mixed ticks ticks them all. A part with a conflict
+keeps its own row, since its answers are per instance. The summary count and
+the per-kind pills count table rows; "Update Selected Components (n)" still
+counts instances.
+
 "Update Selected Components" rewrites the picked Symbols to the latest version
-and dirty-marks the schematic. "Skip All" leaves everything pinned and the
-dispatcher records the schematic in `LibraryState.skipped_updates_for`. Nothing
-renders that set yet; the user-visible trace of a refused or unreadable update
-is its line in the Messages panel.
+and dirty-marks the schematic. "Skip All" leaves everything pinned, records the
+schematic in `LibraryState.skipped_updates_for` and remembers each offered
+`(lib_id, version)` for that sheet in `LibraryState.skipped_versions`
+(`updates_dialog::SkippedVersions`, session state). A later scan of the sheet
+leaves those entries out and keeps the sheet pending; a part whose row moves to
+another version is offered again. "Cancel" closes the modal and remembers
+nothing, so the next scan asks again. Nothing renders `skipped_updates_for`
+yet; the user-visible trace of a refused or unreadable update is its line in
+the Messages panel.
 
 It is painted by `library_updates_overlay` via `collect_overlays`, which runs
 every frame; the builder's `library_updates.is_some()` guard is the only open

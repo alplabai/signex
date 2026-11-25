@@ -223,10 +223,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[],
     ),
-    // The net must be in the GUI's resolved-net cache
-    // (`ui_state.net_class_styles.knows_net`), derived from the documents
-    // like the render cache, and refused while it is not resolved yet.
-    (&["assign_net_class"], Operand, &[RenderCache]),
+    // The net must be in the project netlist stitched from the documents
+    // (`project_has_net`, closed sheets read first), not the GUI's style
+    // cache (#2549), so nothing implicit.
+    (&["assign_net_class"], Operand, &[]),
     // An agent's revert is refused while the person draws, types into or
     // moves on that sheet in any window (`person_busy_on`).
     (

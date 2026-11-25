@@ -21,13 +21,36 @@ use crate::icons;
 use crate::library::editor::footprint::state::{EditorMode, PadsTool};
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
+/// Height of one control of an editor bar: a mode segment, and the
+/// caption bar's buttons (mockup rows 187 and 179, `.seg > span` and
+/// `.btn.sm`: 22 px).
+pub(crate) const EDITOR_BAR_CONTROL_HEIGHT: f32 = crate::styles::chrome_px(22.0 * 11.0 / 12.0);
+
 /// The footprint editor bar (Graphite mockup row 187): the two-state
 /// Footprint / Sketch switch at its left, the 3D toggle beside it, then
-/// `trailing` (the sketch info caption and Parameters in Sketch mode). It
-/// floats at the canvas's top right, just under the Active Bar's band so the
-/// two never overlap at any width, clear of the DOF chips at the top left
-/// and ending above the parameters table card.
+/// `trailing` (the sketch info caption and Parameters in Sketch mode), alone
+/// at the canvas's top right just under the Active Bar's band, so the two
+/// never overlap at any width (the 3D view, which has no DOF chips). Beside
+/// the chips the bar goes into their row instead (`standalone::dof_chip`).
 pub fn mode_switcher_overlay<'a>(
+    editor: &'a FootprintDocument,
+    tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
+    trailing: Option<iced::Element<'a, LibraryMessage>>,
+) -> iced::Element<'a, LibraryMessage> {
+    container(iced::widget::column![
+        iced::widget::Space::new().height(crate::active_bar::bar_band_bottom()),
+        mode_switcher_bar(editor, tokens, i18n, trailing)
+    ])
+    .padding([0.0, Spacing::default().m])
+    .align_x(iced::alignment::Horizontal::Right)
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .boxed()
+}
+
+/// The framed footprint editor bar of [`mode_switcher_overlay`], unplaced.
+pub fn mode_switcher_bar<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
     i18n: &signex_i18n::I18n,
@@ -35,11 +58,10 @@ pub fn mode_switcher_overlay<'a>(
 ) -> iced::Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::mode::ModeSwitch;
     use crate::styles::Radii;
-    use iced::widget::{Space, button as button_style, container as container_style};
+    use iced::widget::{button as button_style, container as container_style};
     use iced::{Alignment, Background, Shadow, Vector};
 
-    // Height of one segment (mockup row 187 `.seg > span`: 22 px).
-    const SEGMENT_H: f32 = crate::styles::chrome_px(22.0 * 11.0 / 12.0);
+    const SEGMENT_H: f32 = EDITOR_BAR_CONTROL_HEIGHT;
 
     // One segment: the lit one on the field fill with ink, a small shadow
     // and medium weight, the other in ink3 on the sunken track.
@@ -163,7 +185,7 @@ pub fn mode_switcher_overlay<'a>(
     }
     let fill = theme_ext::to_color(&tokens.panel_bg);
     let line = theme_ext::border_color(tokens);
-    let bar = container(bar)
+    container(bar)
         .padding([sp.xs, sp.s])
         .style(move |_: &Theme| container_style::Style {
             background: Some(Background::Color(fill)),
@@ -174,18 +196,8 @@ pub fn mode_switcher_overlay<'a>(
                 ..Border::default()
             },
             ..container_style::Style::default()
-        });
-    let below_active_bar = crate::active_bar::bar_top_margin()
-        + crate::active_bar::bar_height_for(&signex_widgets::active_bar::Metrics::GRAPHITE);
-    container(iced::widget::column![
-        Space::new().height(below_active_bar),
-        bar
-    ])
-    .padding([0.0, sp.m])
-    .align_x(iced::alignment::Horizontal::Right)
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .boxed()
+        })
+        .boxed()
 }
 
 /// One Pads-mode tool button, selected while `tool` is the armed tool.

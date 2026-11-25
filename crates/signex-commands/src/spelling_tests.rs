@@ -17,10 +17,11 @@ fn context_spelling(context: ShortcutContext) -> &'static str {
         ShortcutContext::TextInput => "text_input",
         ShortcutContext::CommandPalette => "command_palette",
         ShortcutContext::Placement => "placement",
+        ShortcutContext::Board3d => "board_3d",
     }
 }
 
-const CONTEXTS: [ShortcutContext; 9] = [
+const CONTEXTS: [ShortcutContext; 10] = [
     ShortcutContext::Global,
     ShortcutContext::Schematic,
     ShortcutContext::Footprint,
@@ -30,6 +31,7 @@ const CONTEXTS: [ShortcutContext; 9] = [
     ShortcutContext::TextInput,
     ShortcutContext::CommandPalette,
     ShortcutContext::Placement,
+    ShortcutContext::Board3d,
 ];
 
 /// The profile spelling of `platform`, exhaustive for the same reason.

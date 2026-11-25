@@ -6,6 +6,7 @@ use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 use signex_widgets::tree_view::{TreeIcon, TreeNode, key_of};
 
 use super::TID;
+use crate::app::view::context_menu::project_tree::kind_inks::KindInks;
 use crate::app::view::context_menu::project_tree::library::library_add_new_entries;
 use crate::app::view::context_menu::project_tree::planned::planned_entries;
 use crate::app::view::context_menu::submenu::add_new_entries;
@@ -15,6 +16,11 @@ use crate::app::{
 use crate::menu_bar::MenuMessage;
 
 const SEP: &str = "---";
+
+/// The file-kind inks of [`TID`]'s tokens.
+fn inks() -> KindInks {
+    KindInks::of(&signex_types::theme::theme_tokens(TID))
+}
 
 /// The text of a row's badge pill, if it has one.
 fn badge_of(item: &DropdownItem<Message>) -> Option<&str> {
@@ -287,6 +293,7 @@ fn the_document_leaf_menu_ends_with_a_live_danger_remove_row() {
             SEP,
             "Print...",
             "Show Differences...",
+            "Show History",
             SEP,
             "Remove from Project...",
         ]
@@ -318,6 +325,73 @@ fn the_document_leaf_menu_ends_with_a_live_danger_remove_row() {
     };
     assert_eq!(flagged(|it| it.strong), 1);
     assert_eq!(flagged(|it| it.danger), 1);
+}
+
+/// Mockup row 20: Show History is a live row with an icon and no pill; it
+/// names the clicked leaf.
+#[test]
+fn the_document_leaf_show_history_row_is_live() {
+    let app = app_with_tree();
+    let key = key_of(&app.document_state.panel_ctx.project_tree, &[0, 0, 0]).expect("the leaf");
+    let rows = rows_at(&app, &[0, 0, 0]);
+    let row = item(&rows, "Show History");
+    assert!(!row.disabled && !row.strong && !row.danger);
+    assert!(row.icon.is_some());
+    assert_eq!(badge_of(row), None);
+    assert!(matches!(
+        &row.on_press,
+        Some(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+            ProjectTreeAction::ShowHistory(k)
+        ))) if *k == key
+    ));
+}
+
+/// Mockup row 20: Show History opens the History panel filtered to the file
+/// (This file only on); a second pick keeps the filter on, it is no toggle.
+/// The leaf is already open, so the panel follows it at once; a leaf read on
+/// a worker is covered in `project_navigation::tree_history_tests`.
+#[test]
+fn show_history_opens_the_history_panel_with_this_file_only() {
+    use crate::app::handlers::menu::export::tests::{open_with, sheet_with_net};
+    use crate::app::{TabInfo, TabKind};
+    use crate::panels::PanelKind;
+    let mut app = app_with_tree();
+    let leaf = std::path::PathBuf::from("/p/a.snxsch");
+    let sheet = sheet_with_net("R1", "N", &[]);
+    open_with(&mut app.document_state, &leaf, sheet);
+    app.document_state.tabs.push(TabInfo {
+        title: "a".to_string(),
+        path: leaf.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    assert_eq!(app.history_target_path(), Some(leaf));
+    let _ = app.document_state.dock.close_panel(PanelKind::History);
+    assert!(!app.is_panel_open(PanelKind::History));
+    let rows = rows_at(&app, &[0, 0, 0]);
+    let press = item(&rows, "Show History")
+        .on_press
+        .clone()
+        .expect("a live row");
+    let _ = app.update(press.clone());
+    assert!(app.is_panel_open(PanelKind::History));
+    assert!(app.document_state.history.ui.filter.this_file_only);
+    let shown = &app.document_state.panel_ctx.history;
+    assert!(shown.ui.filter.this_file_only, "the panel reads it");
+    let _ = app.update(press);
+    assert!(app.document_state.history.ui.filter.this_file_only);
+}
+
+/// Mockup row 20: Show History runs on the main window like the other leaf
+/// rows and names its row, so a rebuilt tree cannot retarget it.
+#[test]
+fn show_history_targets_its_row_on_the_main_window() {
+    let key: signex_widgets::tree_view::TreeKey = vec!["proj".into(), "a.snxsch".into()];
+    let action = ProjectTreeAction::ShowHistory(key.clone());
+    assert_eq!(action.row_key(), Some(&key));
+    assert!(!action.changes_only_the_shown_tree());
 }
 
 /// A library: one Add New launcher instead of three flat rows, then
@@ -358,7 +432,7 @@ fn the_library_menu_has_one_add_new_launcher() {
 /// rows ran.
 #[test]
 fn the_library_add_new_flyout_creates_component_symbol_and_footprint() {
-    let rows = library_add_new_entries(signex_i18n::I18n::en_us_ref(), TID);
+    let rows = library_add_new_entries(signex_i18n::I18n::en_us_ref(), TID, inks());
     let mut expected = vec!["Component", "Symbol Library"];
     if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
         expected.push("Footprint Library");
@@ -387,6 +461,7 @@ fn the_add_new_to_project_flyout_is_grouped_documents_libraries_planned() {
     let rows = add_new_entries(
         signex_i18n::I18n::en_us_ref(),
         TID,
+        inks(),
         vec!["proj".to_string()],
     );
     let mut expected = vec![

@@ -16,7 +16,7 @@ mod update;
 #[cfg(test)]
 pub(crate) mod apply_tests;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 use std::sync::Arc;
 

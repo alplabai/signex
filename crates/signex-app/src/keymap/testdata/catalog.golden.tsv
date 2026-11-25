@@ -376,6 +376,9 @@ reset_local_coordinates	view	Reset local coordinates	-	General	-	-	Always	gui_on
 cycle_unit	view	Cycle display unit	-	General	-	-	Always	gui_only	-
 view_board_3d	view	Show the board in 3D, or flat again	3D View	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 flip_board_view	view	View the board from below, or from above again	Flip Board View	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+flip_board_3d	view	Turn the board over in the 3D view	-	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+cycle_board_3d_lighting	view	Next lighting preset in the 3D view	-	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+copy_board_3d_screenshot	view	Copy a screenshot of the 3D view	-	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 cycle_fast_grid	view	Cycle fast grid	-	General	-	-	Always	gui_only	-
 cycle_snap_grid_backward	view	Cycle backward through snap grids	-	General	-	-	Always	gui_only	-
 cycle_snap_grid_forward	view	Open the snap grid picker (footprint editor)	-	General	-	-	Always	gui_only	-
@@ -386,6 +389,7 @@ previous_grid	view	Previous grid	-	General	-	-	Always	gui_only	-
 open_grid_picker	view	Open grid picker	-	General	-	-	Always	gui_only	-
 open_grid_properties	view	Open grid properties	-	General	-	-	Always	gui_only	-
 toggle_electrical_grid	view	Toggle electrical grid	-	General	-	-	Always	gui_only	-
+cycle_board_snapping	view	Cycle board snapping	-	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 toggle_visible_grid	view	Toggle visible grid	Toggle Grid	General	-	-	Always	gui_only	-
 open_library_browser	library	Open library browser	Library Editor	General	-	-	Always	gui_only	-
 edit_library_symbol	library	Edit library symbol	-	General	-	-	RequiresSelection	gui_only	-

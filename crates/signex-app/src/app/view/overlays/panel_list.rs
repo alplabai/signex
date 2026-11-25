@@ -9,7 +9,7 @@ use signex_i18n::{MessageId, UserText, ids, t};
 
 use crate::dock::{PanelPosition, PanelSite};
 use crate::panels::PanelKind;
-use crate::panels::panel_groups::grouped_panels;
+use crate::panels::panel_groups::{PanelGroup, grouped_panels};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
@@ -82,7 +82,6 @@ impl Signex {
             footprint: self.active_footprint_editor_path().is_some(),
         };
         let groups = grouped_panels(|kind| open.offers(kind));
-        let rows: usize = groups.iter().map(|(_, kinds)| kinds.len()).sum();
         let mut list: Column<Element<'_, Message>> = Column::new().spacing(0);
         for (group, kinds) in &groups {
             list = list.push(group_caption(&ui.i18n, group.caption(), tokens));
@@ -96,20 +95,37 @@ impl Signex {
         )
         .padding(crate::status_bar::POPUP_PADDING)
         .style(crate::status_bar::popup(tokens));
-        // Directly above the Panels button, its bottom edge just above the bar.
-        let (ww, wh) = ui.window_size;
-        let popup_h = crate::status_bar::panel_list_height(rows, groups.len())
-            + crate::status_bar::panel_list_foot_height();
-        let status_h = crate::status_bar::status_bar_height(tokens);
-        let left =
-            (ww - crate::status_bar::POPUP_WIDTH - crate::status_bar::POPUP_RIGHT_MARGIN).max(0.0);
-        let top = (wh - popup_h - status_h - crate::status_bar::POPUP_GAP).max(0.0);
+        let at = card_origin(
+            ui.window_size,
+            card_height(&groups),
+            crate::status_bar::status_bar_height(tokens),
+        );
         Self::dismiss_and_place(
             Message::Overlay(OverlayMsg::TogglePanelList),
             popup.boxed(),
-            (left, top),
+            at,
         )
     }
+}
+
+/// Height of the card listing `groups`: its rows, group captions and foot
+/// caption.
+fn card_height(groups: &[(PanelGroup, Vec<PanelKind>)]) -> f32 {
+    let rows = groups.iter().map(|(_, kinds)| kinds.len()).sum();
+    crate::status_bar::panel_list_height(rows, groups.len())
+        + crate::status_bar::panel_list_foot_height()
+}
+
+/// Top-left corner of a card `height` tall in `window` (mockup row 7): at
+/// the bottom right over the Panels button, its bottom edge a popover gap
+/// above a status bar `status_h` tall. A card taller than the room stops at
+/// the window top.
+fn card_origin(window: (f32, f32), height: f32, status_h: f32) -> (f32, f32) {
+    let (ww, wh) = window;
+    let left =
+        (ww - crate::status_bar::POPUP_WIDTH - crate::status_bar::POPUP_RIGHT_MARGIN).max(0.0);
+    let top = (wh - height - status_h - crate::status_bar::POPUP_GAP).max(0.0);
+    (left, top)
 }
 
 /// Which documents the panel list is offering panels for.
@@ -324,6 +340,36 @@ mod tests {
         }
     }
 
+    /// DECISIONS 2026-11-24, mockup row 7: with a sheet open the Project
+    /// group still lists BOM Studio, Export Jobs, Variants and the Design
+    /// Notebook, which do not open as tabs yet; To-Do and Layer Stack are
+    /// not rows.
+    #[test]
+    fn a_sheet_lists_the_tool_documents_that_are_not_tabs_yet() {
+        let sheet = OpenDocuments {
+            schematic: true,
+            pcb: false,
+            footprint: false,
+        };
+        let groups = grouped_panels(|kind| sheet.offers(kind));
+        let project = groups
+            .iter()
+            .find(|(g, _)| *g == PanelGroup::Project)
+            .map(|(_, kinds)| kinds.clone())
+            .unwrap_or_default();
+        for kind in [
+            PanelKind::BomStudio,
+            PanelKind::OutputJobs,
+            PanelKind::Variants,
+            PanelKind::Wiki,
+        ] {
+            assert!(project.contains(&kind), "{kind:?} in {project:?}");
+        }
+        let listed: Vec<PanelKind> = groups.into_iter().flat_map(|(_, k)| k).collect();
+        assert!(!listed.contains(&PanelKind::Todo), "{listed:?}");
+        assert!(!listed.contains(&PanelKind::LayerStack), "{listed:?}");
+    }
+
     /// Mockup row 7: with a board open the PCB group reads Layers, Nets,
     /// Length Matching. Layer Stack is a tab named in the foot, and Net
     /// Classes is a mode of the Nets panel.
@@ -392,6 +438,51 @@ mod tests {
         assert_eq!(app.panel_region(kind), None);
         let _ = app.update(Message::Overlay(OverlayMsg::OpenPanel(kind)));
         assert_eq!(app.panel_region(kind), Some(PanelRegion::Right));
+    }
+
+    /// Mockup row 7: the foot caption names the tool documents that open as
+    /// tabs today, Layer Stack (its own page tab, mockup row 105) and Rules,
+    /// and says how to reach them.
+    #[test]
+    fn the_foot_caption_names_layer_stack_and_rules() {
+        let i18n = signex_i18n::I18n::en_us();
+        let foot = t!(i18n, ids::PANELS_LIST_FOOT).into_string();
+        assert!(foot.starts_with("Layer Stack, Rules"), "{foot}");
+        assert!(foot.contains("command palette"), "{foot}");
+    }
+
+    /// Mockup row 7: in the default window with a sheet open, the card lists
+    /// every offered panel and its foot without reaching the window top; it
+    /// sits at the bottom right over the Panels button, its bottom edge a
+    /// popover gap above the status bar.
+    #[test]
+    fn the_card_sits_just_above_the_panels_button() {
+        let (app, _boot) = Signex::new();
+        let window = app.ui_state.window_size;
+        let status_h = crate::status_bar::status_bar_height(&app.document_state.panel_ctx.tokens);
+        let sheet = OpenDocuments {
+            schematic: true,
+            pcb: false,
+            footprint: false,
+        };
+        let height = card_height(&grouped_panels(|kind| sheet.offers(kind)));
+        let (left, top) = card_origin(window, height, status_h);
+        assert!(top > 0.0, "card {height} tall in {window:?}");
+        let bottom_gap = window.1 - (top + height) - status_h;
+        assert!((bottom_gap - crate::status_bar::POPUP_GAP).abs() < 1e-3);
+        let right_edge = left + crate::status_bar::POPUP_WIDTH;
+        let right_margin = window.0 - right_edge;
+        assert!((right_margin - crate::status_bar::POPUP_RIGHT_MARGIN).abs() < 1e-3);
+    }
+
+    /// A card taller than the room stops at the window top rather than run
+    /// off it.
+    #[test]
+    fn a_card_taller_than_the_window_stops_at_its_top() {
+        let (app, _boot) = Signex::new();
+        let window = app.ui_state.window_size;
+        let (_, top) = card_origin(window, window.1 * 2.0, 0.0);
+        assert_eq!(top, 0.0);
     }
 
     /// The app's own region answer: a panel in the dock reads its region; a

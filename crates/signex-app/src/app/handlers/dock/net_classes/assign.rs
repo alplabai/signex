@@ -41,10 +41,9 @@ impl crate::app::Signex {
         {
             return Err(format!("the project has no net class \"{class}\""));
         }
-        if !self.ui_state.net_class_styles.knows_net(project.id, net) {
-            return Err(format!(
-                "\"{net}\" is not a net of the project netlist (or it is not resolved yet)"
-            ));
+        // The netlist of the documents, not the GUI's style cache (#2549).
+        if !self.project_has_net(&path, net)? {
+            return Err(format!("\"{net}\" is not a net of the project netlist"));
         }
         let (id, before) = (project.id, project.data.net_classes.clone());
         self.handle_net_class_message_on(

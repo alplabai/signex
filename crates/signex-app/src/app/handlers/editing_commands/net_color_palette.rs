@@ -2,15 +2,18 @@
 //! message handler, the rows the palette lists and the picker's Hex field.
 //!
 //! A palette colour is an edit of the active sheet like a pen click: the
-//! wires and junctions of the net under each of its labels take the colour
-//! through [`Signex::commit_net_colors`], one undo step per pick.
+//! wires and junctions of the net under each of its labels and power ports
+//! take the colour through [`Signex::commit_net_colors`], one undo step per
+//! pick.
 
 use super::super::super::*;
 use crate::app::handlers::canvas::net_color_click::{net_elements_in, wire_at};
 use crate::app::mutation_gateway::MutationOutcome;
+use crate::app::state::{NetColorToast, NetColorsCleared};
 use signex_i18n::{ids, t};
-use signex_types::schematic::{Label, LabelType, SchematicSheet};
+use signex_types::schematic::{Label, LabelType, Point, SchematicSheet};
 use signex_types::theme::Color;
+use std::collections::BTreeMap;
 
 /// The colours of a palette row's chooser.
 pub(crate) const CHOOSER_COLORS: [(u8, u8, u8); 10] = [
@@ -29,6 +32,9 @@ pub(crate) const CHOOSER_COLORS: [(u8, u8, u8); 10] = [
 /// Rows the palette window is sized for before its list scrolls.
 const VISIBLE_ROWS: usize = 12;
 
+/// How long the Clear toast shows (mockup row 71).
+const CLEAR_TOAST: std::time::Duration = std::time::Duration::from_secs(6);
+
 /// One palette row: a net label text and the colour its net shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PaletteRow {
@@ -43,39 +49,58 @@ fn is_net_label(label: &Label) -> bool {
     )
 }
 
-/// The net label texts of `sheet` (net, global and hierarchical), each once,
-/// by name.
-pub(crate) fn net_label_names(sheet: &SchematicSheet) -> Vec<String> {
-    sheet
-        .labels
-        .iter()
-        .filter(|l| is_net_label(l))
-        .map(|l| l.text.clone())
-        .collect::<std::collections::BTreeSet<_>>()
-        .into_iter()
-        .collect()
+/// The points that name each net of `sheet`, by name: its net labels
+/// (net, global and hierarchical) and the power-port pin tips that name a net
+/// (`signex_net::name_carrying_tips`, so neither a power flag nor a
+/// contact-only pin does). A net named only by a power port is listed too
+/// (mockup row 71).
+fn net_name_anchors(sheet: &SchematicSheet) -> BTreeMap<String, Vec<Point>> {
+    let mut anchors: BTreeMap<String, Vec<Point>> = BTreeMap::new();
+    for label in sheet.labels.iter().filter(|l| is_net_label(l)) {
+        anchors
+            .entry(label.text.clone())
+            .or_default()
+            .push(label.position);
+    }
+    for (tip, net) in signex_net::name_carrying_tips(sheet) {
+        anchors.entry(net.to_owned()).or_default().push(tip);
+    }
+    anchors
 }
 
-/// The colour `net` shows on `sheet`: the colour of a wire under one of its
-/// labels. A colour covers the whole net, so one wire tells.
-pub(crate) fn net_color_on(sheet: &SchematicSheet, net: &str) -> Option<Color> {
-    sheet
-        .labels
+/// The anchors of `net` in `anchors`, none when the sheet does not name it.
+fn anchors_of<'a>(anchors: &'a BTreeMap<String, Vec<Point>>, net: &str) -> &'a [Point] {
+    anchors.get(net).map(Vec::as_slice).unwrap_or_default()
+}
+
+/// The colour of the net through the first of `points` that sits on a
+/// coloured wire. A colour covers the whole net, so one wire tells.
+fn color_at(sheet: &SchematicSheet, points: &[Point]) -> Option<Color> {
+    points
         .iter()
-        .filter(|l| is_net_label(l) && l.text == net)
-        .filter_map(|l| wire_at(sheet, l.position.x, l.position.y))
+        .filter_map(|p| wire_at(sheet, p.x, p.y))
         .find_map(|wire| sheet.net_colors.get(&wire).copied())
 }
 
-/// The wires and junctions of every net a label named `net` sits on.
+/// The net names the palette lists for `sheet`: its net label texts and its
+/// power ports' nets, each once, by name.
+pub(crate) fn palette_net_names(sheet: &SchematicSheet) -> Vec<String> {
+    net_name_anchors(sheet).into_keys().collect()
+}
+
+/// The colour `net` shows on `sheet`: the colour of a wire under one of its
+/// labels or power ports.
+pub(crate) fn net_color_on(sheet: &SchematicSheet, net: &str) -> Option<Color> {
+    color_at(sheet, anchors_of(&net_name_anchors(sheet), net))
+}
+
+/// The wires and junctions of every net a label or power port named `net`
+/// sits on.
 pub(crate) fn net_label_elements(sheet: &SchematicSheet, net: &str) -> Vec<uuid::Uuid> {
     let mut ids: Vec<uuid::Uuid> = Vec::new();
-    for label in sheet
-        .labels
-        .iter()
-        .filter(|l| is_net_label(l) && l.text == net)
-    {
-        for id in net_elements_in(sheet, label.position.x, label.position.y) {
+    let anchors = net_name_anchors(sheet);
+    for p in anchors_of(&anchors, net) {
+        for id in net_elements_in(sheet, p.x, p.y) {
             if !ids.contains(&id) {
                 ids.push(id);
             }
@@ -88,11 +113,11 @@ pub(crate) fn net_label_elements(sheet: &SchematicSheet, net: &str) -> Vec<uuid:
 /// case), coloured nets first, then by name.
 pub(crate) fn palette_rows(sheet: &SchematicSheet, filter: &str) -> Vec<PaletteRow> {
     let needle = filter.trim().to_lowercase();
-    let mut rows: Vec<PaletteRow> = net_label_names(sheet)
+    let mut rows: Vec<PaletteRow> = net_name_anchors(sheet)
         .into_iter()
-        .filter(|net| needle.is_empty() || net.to_lowercase().contains(&needle))
-        .map(|net| PaletteRow {
-            color: net_color_on(sheet, &net),
+        .filter(|(net, _)| needle.is_empty() || net.to_lowercase().contains(&needle))
+        .map(|(net, points)| PaletteRow {
+            color: color_at(sheet, &points),
             net,
         })
         .collect();
@@ -164,11 +189,11 @@ impl Signex {
             .unwrap_or_default()
     }
 
-    /// How many nets the active sheet labels, filter or not.
+    /// How many nets the active sheet lists, filter or not.
     pub(crate) fn palette_net_count(&self) -> usize {
         self.document_state
             .active_engine()
-            .map_or(0, |engine| net_label_names(engine.document()).len())
+            .map_or(0, |engine| palette_net_names(engine.document()).len())
     }
 
     /// Per-net colour override + F5-palette handler (namespaced family,
@@ -188,7 +213,10 @@ impl Signex {
                 self.close_detached_modal(crate::app::state::ModalId::NetColorPalette)
             }
             NetColorMsg::Set { net, color } => {
-                self.set_palette_net_color(&net, color);
+                let outcome = self.set_palette_net_color(&net, color);
+                if color.is_none() && outcome == MutationOutcome::Changed {
+                    return self.show_clear_toast(NetColorsCleared::Net(net));
+                }
                 Task::none()
             }
             NetColorMsg::CustomShow(show) => {
@@ -271,19 +299,96 @@ impl Signex {
                 self.ui_state.net_color_custom.hex = Some(text);
                 Task::none()
             }
-            NetColorMsg::ClearedAll => {
-                self.ui_state.net_color_palette.chooser = None;
-                if let Some(path) = self.document_state.active_path.clone() {
-                    self.run_clear_all_net_colors(Some(&path));
+            NetColorMsg::ClearedAll => self.clear_all_from_palette(),
+            NetColorMsg::ToastUndone => self.undo_from_clear_toast(),
+            NetColorMsg::ToastExpired(revision) => {
+                let toast = &mut self.ui_state.net_color_palette.toast;
+                if toast.as_ref().is_some_and(|t| t.revision == revision) {
+                    *toast = None;
                 }
                 Task::none()
             }
         }
     }
 
+    /// The palette's Clear all colours: clear the active sheet and say what
+    /// was cleared in the toast.
+    fn clear_all_from_palette(&mut self) -> Task<Message> {
+        self.ui_state.net_color_palette.chooser = None;
+        let Some(path) = self.document_state.active_path.clone() else {
+            return Task::none();
+        };
+        let nets = self.coloured_palette_nets();
+        if self.run_clear_all_net_colors(Some(&path)).sheets == 0 {
+            return Task::none();
+        }
+        self.show_clear_toast(match nets {
+            0 => NetColorsCleared::Unlabelled,
+            n => NetColorsCleared::Nets(n),
+        })
+    }
+
+    /// The toast's Undo: the same Undo as Edit > Undo, run only while the
+    /// clear is still its sheet's newest edit. The toast closes either way.
+    fn undo_from_clear_toast(&mut self) -> Task<Message> {
+        let can_undo = self.net_color_toast_can_undo();
+        self.ui_state.net_color_palette.toast = None;
+        if !can_undo {
+            return Task::none();
+        }
+        self.cancel_move_pick();
+        let rerun = self.step_main_window_history(true);
+        Task::batch([rerun, self.finish_update()])
+    }
+
+    /// How many listed nets (labelled or named by a power port) show a
+    /// colour on the active sheet.
+    fn coloured_palette_nets(&self) -> usize {
+        self.document_state.active_engine().map_or(0, |engine| {
+            palette_rows(engine.document(), "")
+                .iter()
+                .filter(|row| row.color.is_some())
+                .count()
+        })
+    }
+
+    /// Show the toast for a clear just made on the active sheet, and time it
+    /// out after [`CLEAR_TOAST`] unless a newer toast replaced it.
+    fn show_clear_toast(&mut self, cleared: NetColorsCleared) -> Task<Message> {
+        let Some(sheet) = self.document_state.active_path.clone() else {
+            return Task::none();
+        };
+        let Some(revision) = self.document_state.active_engine().map(|e| e.revision()) else {
+            return Task::none();
+        };
+        self.ui_state.net_color_palette.toast = Some(NetColorToast {
+            cleared,
+            sheet,
+            revision,
+        });
+        // Built inside the future: `sleep` needs the runtime the task runs on.
+        Task::perform(async { tokio::time::sleep(CLEAR_TOAST).await }, move |()| {
+            Message::NetColor(NetColorMsg::ToastExpired(revision))
+        })
+    }
+
+    /// Whether the toast's Undo would take back its clear: the toast's sheet
+    /// is active and the clear is still its newest edit.
+    pub(crate) fn net_color_toast_can_undo(&self) -> bool {
+        let Some(toast) = self.ui_state.net_color_palette.toast.as_ref() else {
+            return false;
+        };
+        self.document_state.active_path.as_deref() == Some(toast.sheet.as_path())
+            && self
+                .document_state
+                .active_engine()
+                .is_some_and(|engine| engine.revision() == toast.revision)
+    }
+
     /// Colour `net` on the active sheet (`None` clears it) in one undo step,
-    /// and close the row's chooser.
-    fn set_palette_net_color(&mut self, net: &str, color: Option<Color>) {
+    /// and close the row's chooser. What the commit did; `Unchanged` when no
+    /// label of `net` sits on a wire.
+    fn set_palette_net_color(&mut self, net: &str, color: Option<Color>) -> MutationOutcome {
         self.ui_state.net_color_palette.chooser = None;
         let elements = self
             .document_state
@@ -292,10 +397,13 @@ impl Signex {
             .unwrap_or_default();
         // An alpha of 0 clears. A refusal (a read-only sheet) is already
         // said in Messages by the commit.
-        let applied = !elements.is_empty() && {
+        let outcome = if elements.is_empty() {
+            MutationOutcome::Unchanged
+        } else {
             let paint = color.unwrap_or(Color::new(0, 0, 0, 0));
-            self.commit_net_colors(&elements, paint).0 != MutationOutcome::Failed
+            self.commit_net_colors(&elements, paint).0
         };
+        let applied = !elements.is_empty() && outcome != MutationOutcome::Failed;
         // The per-name record follows the sheet: an empty or refused commit
         // leaves it.
         match color {
@@ -311,6 +419,7 @@ impl Signex {
         for canvas in self.interaction_state.all_schematic_canvases_mut() {
             canvas.clear_content_cache();
         }
+        outcome
     }
 
     /// The custom picker's Use Color: colour the picker's net when it came

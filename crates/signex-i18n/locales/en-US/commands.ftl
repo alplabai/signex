@@ -162,6 +162,8 @@ cmd-menu-reset-workspace-layout = Reset Layout
 cmd-toggle-cross-select-mode = Toggle Cross Select Mode
 cmd-menu-toggle-cross-select-mode = Cross Select Mode
 cmd-toggle-electrical-grid = Toggle electrical grid
+# #2879: the board's Snapping steps All Layers, Current Layer, Off.
+cmd-cycle-board-snapping = Cycle board snapping
 cmd-toggle-floating-panels = Toggle floating panels
 cmd-toggle-properties-panel = Toggle Properties panel
 cmd-toggle-schematic-filter-panel = Toggle schematic filter panel
@@ -733,3 +735,9 @@ cmd-remove-from-union = Remove the selection from its union
 cmd-menu-remove-from-union = Remove Selection from Union
 cmd-break-union = Break the selected union
 cmd-menu-break-union = Break Union
+
+# board-3d-keys-screenshot
+# The board 3D view's Flip, lighting and screenshot buttons (mockup row 175).
+cmd-flip-board-3d = Turn the board over in the 3D view
+cmd-cycle-board-3d-lighting = Next lighting preset in the 3D view
+cmd-copy-board-3d-screenshot = Copy a screenshot of the 3D view

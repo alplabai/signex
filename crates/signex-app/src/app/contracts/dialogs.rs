@@ -44,6 +44,11 @@ pub enum NetColorMsg {
     /// The palette footer's "Clear all colours" was pressed: the active
     /// sheet's net colours go in one undo step.
     ClearedAll,
+    /// The Clear toast's Undo was pressed: the clear is undone while it is
+    /// still the sheet's newest edit.
+    ToastUndone,
+    /// The Clear toast made at this engine revision timed out.
+    ToastExpired(u64),
 }
 
 /// Parameter Manager dialog message family (ADR-0001 D3). Namespaced
@@ -82,6 +87,13 @@ pub enum ParameterManagerMsg {
     /// column `key`. A leave names its column, so it never clears the
     /// hover of the header just entered.
     ColumnHeaderHovered { key: String, is_hovered: bool },
+    /// A cell in the row of `symbol_uuid` took (`is_focused`) or lost the
+    /// focus. A loss names its row, so it never clears the row just
+    /// focused.
+    CellFocused {
+        symbol_uuid: uuid::Uuid,
+        is_focused: bool,
+    },
     /// One pane of the table scrolled to `x`, `y`; the others follow, so the
     /// header row and the Reference column stay in view.
     TableScrolled {

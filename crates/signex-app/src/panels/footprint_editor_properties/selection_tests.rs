@@ -119,3 +119,28 @@ fn a_non_slot_edge_has_no_slot_header() {
     );
     assert!(!has(&texts, "Slot"), "{texts:#?}");
 }
+
+fn position(texts: &[LaidOutText], label: &str) -> usize {
+    texts
+        .iter()
+        .position(|t| t.text == label)
+        .unwrap_or_else(|| panic!("{label} is shown: {texts:#?}"))
+}
+
+/// Mockup row 179 (m179-slot): on a board sketch the Sketch DOF section
+/// sits right under the selection's header, above its Entity section.
+#[test]
+fn a_board_selection_has_the_sketch_dof_section_under_its_header() {
+    let app = app();
+    for slot in [Some((12.0, 3.0)), None] {
+        let fp = line_selected(&app, slot);
+        let texts = texts(&app, &fp);
+        let header = match slot {
+            Some(_) => position(&texts, "Slot"),
+            None => position(&texts, "Sketch entity · Line"),
+        };
+        let dof = position(&texts, "SKETCH DOF");
+        assert!(header < dof, "{texts:#?}");
+        assert!(dof < position(&texts, "ENTITY"), "{texts:#?}");
+    }
+}

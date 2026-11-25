@@ -10,6 +10,7 @@ mod delete_cascade;
 mod dof;
 mod expr_array_index;
 mod expr_eval;
+mod free_motion;
 mod layer_tokens;
 mod linalg;
 mod lm_basic;

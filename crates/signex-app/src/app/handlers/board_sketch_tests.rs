@@ -124,7 +124,10 @@ fn the_canvas_cursor_follows_the_pointer() {
 }
 
 /// Properties shows the board's name and outline, not the footprint fields
-/// of the editor the sketch is hosted on.
+/// of the editor the sketch is hosted on. The sketch has no closed outline
+/// yet, so the size reads from the board's, worded as Board Properties words
+/// it (mockup row 179e: the shown unit, three decimals in mm, no "from board
+/// shape").
 #[test]
 fn properties_show_the_board_not_footprint_fields() {
     let (app, _tmp) = sketching();
@@ -148,7 +151,7 @@ fn properties_show_the_board_not_footprint_fields() {
     ] {
         assert!(!shows(footprint_only), "{footprint_only:?} in {texts:?}");
     }
-    for board_row in ["rover", "Size", "40.00 × 25.00 mm", "Area", "1000.00 mm²"] {
+    for board_row in ["rover", "Size", "40.000 × 25.000 mm", "Area", "1000.00 mm²"] {
         assert!(shows(board_row), "{board_row:?} missing from {texts:?}");
     }
 }

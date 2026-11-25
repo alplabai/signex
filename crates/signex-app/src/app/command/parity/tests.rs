@@ -114,6 +114,7 @@ fn every_context_fact_is_listed() {
         has_schematic: _,
         has_pcb: _,
         pcb_view_turned: _,
+        board_3d_shown: _,
         undocked_has_canvas: _,
         document_is_schematic: _,
         document_is_editor: _,
@@ -164,7 +165,7 @@ fn every_context_fact_is_listed() {
     } = CommandContext::default();
     let names: BTreeSet<&str> = FACTS.iter().map(|(name, _, _)| *name).collect();
     assert_eq!(names.len(), FACTS.len(), "a fact is listed twice");
-    assert_eq!(FACTS.len(), 30 + 17, "30 context facts and 17 board facts");
+    assert_eq!(FACTS.len(), 31 + 17, "31 context facts and 17 board facts");
 }
 
 /// No core row stands on its gate alone: every core route's handler was
@@ -221,9 +222,10 @@ fn the_kill_list_is_in_progress_edit_or_render_cache_only() {
 /// maintainer decision (ADR-0006 slice C, #2504), not a regenerate. Since
 /// #2551 it holds the D-writes that read X (the render cache) or an S value
 /// in progress; the turn, paste and select rows left it as GUI or split
-/// routers, and the two close routes joined it as D-writes.
+/// routers, and the two close routes joined it as D-writes. `assign_net_class`
+/// left it when it stopped reading the GUI's style cache (#2549, Hakan
+/// 2026-11-19).
 const KILL_LIST: &[(&str, &str)] = &[
-    ("assign_net_class", "operand_handler"),
     ("close_active_document", "bridge"),
     ("close_active_document", "operand_handler"),
     ("close_all_documents", "bridge"),

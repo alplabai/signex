@@ -31,8 +31,8 @@ pub use diff_pair_classes::{
 
 mod net_class;
 pub use net_class::{
-    assign_net_classes, element_class_styles, element_net_names, placement_class_styles,
-    placement_net_names, wire_at_point,
+    assign_net_classes, element_class_styles, element_net_names, netlist_has_net,
+    placement_class_styles, placement_net_names, wire_at_point,
 };
 
 mod build;
@@ -49,8 +49,9 @@ pub use build::{
     NetExtent, PlacementIntent, RunEnd, SegmentIndex, SheetConnectivity, SheetPinContacts,
     WireIntent, best_net_name_of, build_netlist, connected_net_items, connected_points,
     flood_net_elements, has_connection_anchor, is_connection_kind, is_power_flag,
-    logical_connectivity, name_carrying_ports, net_extent_at, net_reaches_other_sheets,
-    placement_contacts, placement_intent, point_on_segment, pt_key, wire_intent,
+    logical_connectivity, name_carrying_ports, name_carrying_tips, net_extent_at,
+    net_reaches_other_sheets, placement_contacts, placement_intent, point_on_segment, pt_key,
+    wire_intent,
 };
 pub use bus::{BusAnalysis, BusGeometry, BusGroup, BusLabelName, EntryAttachment, analyse_buses};
 

@@ -170,7 +170,7 @@ pub(super) fn font_size_row<'a>(
         row![
             property_label(t!(i18n, ids::PROPERTIES_FONT_SIZE), st.muted),
             size_list,
-            container(font_style_row(st.muted, st.primary, input_bg, input_bdr))
+            container(font_style_row(i18n, st.muted, input_bg, input_bdr))
                 .width(Length::FillPortion(3)),
         ]
         .spacing(SP.s)

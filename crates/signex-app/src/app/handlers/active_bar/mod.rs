@@ -65,7 +65,7 @@ impl Signex {
             ActiveBarMsg::ToggleAllFilters => self.handle_active_bar_all_filters_toggle(),
             ActiveBarMsg::AllFiltersPicked => self.set_all_selection_filters(true),
             ActiveBarMsg::NoFiltersPicked => self.set_all_selection_filters(false),
-            ActiveBarMsg::ApplyCustomFilter(idx) => self.handle_apply_custom_filter_preset(idx),
+            ActiveBarMsg::ApplyCustomFilter(idx) => self.handle_click_custom_filter_preset(idx),
             ActiveBarMsg::FilterPresetSavePicked => self.handle_save_current_filter_preset(),
             ActiveBarMsg::CornerModePicked(mode) => {
                 self.interaction_state.corner_rule.mode = mode;

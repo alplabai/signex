@@ -1,6 +1,7 @@
 //! The Number Schematic Sheets dialog (#2247, Graphite #78): the project's
 //! pages in hierarchy order, each with a number field, an error banner over
-//! clashes, gaps and high numbers with Auto-number as the fix, and Apply.
+//! clashes and high numbers with Auto-number as the fix, a warning line for
+//! a gap, and Apply.
 //! Draft and rules: `app/sheet_numbering/`.
 
 use iced::widget::{Column, Row, Space, column, container, scrollable, svg};
@@ -176,6 +177,10 @@ fn body<'a>(
     if !lines.is_empty() {
         col = col.push(error_banner(state, lines, i18n, tokens));
     }
+    // A gap only warns (mockup row 78): a warning line that holds nothing back.
+    for line in warning_lines(state, i18n) {
+        col = col.push(text(line).size(TS.body).color(ti(tokens.warning)).boxed());
+    }
     if let Some(problem) = state.error.as_ref() {
         col = col.push(
             text(problem_text(problem, i18n))
@@ -231,7 +236,7 @@ fn problem_text(problem: &NumberingProblem, i18n: &I18n) -> Localized {
 }
 
 /// What holds Apply back: a typed number that is not a sheet number, then
-/// the clashes, gaps and numbers above the page count.
+/// the clashes and numbers above the page count.
 fn banner_lines(state: &SheetNumberingState, i18n: &I18n) -> Vec<Localized> {
     let mut lines = Vec::new();
     if state.has_invalid() {
@@ -243,14 +248,6 @@ fn banner_lines(state: &SheetNumberingState, i18n: &I18n) -> Vec<Localized> {
             NumberingIssue::Clash { number, .. } => {
                 t!(i18n, ids::DIALOG_SHEET_NUMBERING_CLASH, "number" => number)
             }
-            NumberingIssue::Gap { missing } => {
-                let list: Vec<String> = missing.iter().map(usize::to_string).collect();
-                t!(
-                    i18n,
-                    ids::DIALOG_SHEET_NUMBERING_GAP,
-                    "numbers" => list.join(", ")
-                )
-            }
             NumberingIssue::OutOfRange { page, number } => t!(
                 i18n,
                 ids::DIALOG_SHEET_NUMBERING_OUT_OF_RANGE,
@@ -258,12 +255,31 @@ fn banner_lines(state: &SheetNumberingState, i18n: &I18n) -> Vec<Localized> {
                 "number" => number,
                 "count" => rows.len()
             ),
-            // `blocking_issues` leaves these out; typed numbers are checked
-            // by `has_invalid` above.
-            NumberingIssue::InvalidOverride { .. } => continue,
+            // `blocking_issues` leaves these out: typed numbers are checked
+            // by `has_invalid` above, and a gap is a warning.
+            NumberingIssue::InvalidOverride { .. } | NumberingIssue::Gap { .. } => continue,
         });
     }
     lines
+}
+
+/// What only warns: the numbers no page prints.
+fn warning_lines(state: &SheetNumberingState, i18n: &I18n) -> Vec<Localized> {
+    state
+        .warnings()
+        .into_iter()
+        .filter_map(|issue| match issue {
+            NumberingIssue::Gap { missing } => {
+                let list: Vec<String> = missing.iter().map(usize::to_string).collect();
+                Some(t!(
+                    i18n,
+                    ids::DIALOG_SHEET_NUMBERING_GAP,
+                    "numbers" => list.join(", ")
+                ))
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 /// The err-soft banner: the error glyph, the lines, and Auto-number as the
@@ -425,15 +441,10 @@ fn page_row<'a>(
         .font(super::graphite::mono())
         .width(FILE_W)
         .boxed();
-    let wrong = numbered.clash || numbered.invalid || numbered.out_of_range;
-    let value = if wrong {
-        danger
-    } else if numbered.automatic {
-        r.ink4
-    } else {
-        ink
-    };
+    let wrong = is_wrong(&numbered);
+    let value = number_ink(&numbered, tokens);
     let field: Element<'a, Message> = if top_level {
+        let frame = crate::styles::field(tokens, false);
         container(
             text(UserText::new(numbered.row.number.to_string()))
                 .size(TS.body)
@@ -442,7 +453,14 @@ fn page_row<'a>(
         )
         .padding([SP.xs, SP.s])
         .width(FIELD_W)
-        .style(crate::styles::field(tokens, false))
+        // A clashing top-level number is red like any other (mockup row 78).
+        .style(move |theme: &Theme| {
+            let mut style = frame(theme);
+            if wrong {
+                style.border.color = danger;
+            }
+            style
+        })
         .boxed()
     } else {
         text_input(
@@ -474,4 +492,102 @@ fn page_row<'a>(
         .spacing(SP.m)
         .align_y(Alignment::Center)
         .boxed()
+}
+
+/// Whether the row's number clashes, is above the page count or is not a
+/// number: its field is red.
+fn is_wrong(numbered: &NumberedRow<'_>) -> bool {
+    numbered.clash || numbered.invalid || numbered.out_of_range
+}
+
+/// The ink of the row's number: red when wrong, faint when it follows the
+/// hierarchy (the automatic value), full ink when typed (mockup row 78).
+fn number_ink(numbered: &NumberedRow<'_>, tokens: &ThemeTokens) -> Color {
+    if is_wrong(numbered) {
+        tokens::danger(tokens)
+    } else if numbered.automatic {
+        tokens::resolve(tokens).ink4
+    } else {
+        ti(tokens.text)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Mockup row 78 (Caner 2026-11-24): with 1, 1, 2 typed the clash is in
+    /// the error banner and the gap only in the warning line under it.
+    #[test]
+    fn a_gap_leaves_the_banner_for_the_warning_line() {
+        let en = I18n::en_us();
+        let mut state = crate::app::sheet_numbering::tests::shown();
+        state.edit(1, "1".into());
+        state.edit(2, "2".into());
+        let shown = |lines: Vec<Localized>| -> Vec<String> {
+            lines.iter().map(ToString::to_string).collect()
+        };
+        let clash = t!(en, ids::DIALOG_SHEET_NUMBERING_CLASH, "number" => 1usize);
+        assert_eq!(shown(banner_lines(&state, &en)), [clash.to_string()]);
+        let warnings = shown(warning_lines(&state, &en));
+        let plain: Vec<String> = warnings
+            .iter()
+            .map(|line| line.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect();
+        assert_eq!(plain, ["No page is numbered 3."]);
+    }
+
+    fn graphite_light() -> ThemeTokens {
+        signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight)
+    }
+
+    /// Mockup row 78: a number that follows the hierarchy is faint, a typed
+    /// one is full ink. With 3 and 2 typed on the placed pages nothing
+    /// clashes; the top level keeps its automatic 1.
+    #[test]
+    fn an_automatic_number_is_faint_and_a_typed_one_full_ink() {
+        let tokens = graphite_light();
+        let mut state = crate::app::sheet_numbering::tests::shown();
+        state.edit(1, "3".into());
+        state.edit(2, "2".into());
+        let rows = state.numbered_rows();
+        let (faint, full) = (tokens::resolve(&tokens).ink4, ti(tokens.text));
+        assert_ne!(faint, full);
+        assert!(rows[0].automatic && !is_wrong(&rows[0]));
+        assert_eq!(number_ink(&rows[0], &tokens), faint);
+        assert!(!rows[1].automatic && !is_wrong(&rows[1]));
+        assert_eq!(number_ink(&rows[1], &tokens), full);
+        assert_eq!(number_ink(&rows[2], &tokens), full);
+    }
+
+    /// Mockup row 78: when the top-level page's number clashes, its read-only
+    /// field is framed in red, like the clashing typed one.
+    #[test]
+    fn a_clashing_top_level_number_has_a_red_field() {
+        use crate::layout_probe::{draw_pixels, find, lay_out_texts};
+        let en = I18n::en_us();
+        let tokens = graphite_light();
+        let mut state = crate::app::sheet_numbering::tests::shown();
+        state.edit(1, "1".into());
+        let root = || {
+            state
+                .numbered_rows()
+                .into_iter()
+                .next()
+                .expect("the top level")
+        };
+        assert!(root().clash);
+        let window = iced::Size::new(TS.body * 60.0, TS.body * 4.0);
+        let texts = lay_out_texts(page_row(0, root(), &en, &tokens), window);
+        let pixels = draw_pixels(page_row(0, root(), &en, &tokens), window);
+        let number = find(&texts, "1").bounds;
+        let danger = tokens::danger(&tokens).into_rgba8();
+        let edge = number.x - SP.s;
+        let y = number.center_y() as usize;
+        let red = (edge as usize - 2..=edge as usize + 2).any(|x| {
+            let i = (y * window.width as usize + x) * 4;
+            (0..3).all(|c| pixels[i + c].abs_diff(danger[c]) <= 48)
+        });
+        assert!(red, "no red frame left of the top-level number");
+    }
 }

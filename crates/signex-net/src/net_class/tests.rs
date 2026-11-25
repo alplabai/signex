@@ -110,6 +110,26 @@ fn element_net_names_use_the_netlist_name_and_the_first_net_wins() {
 }
 
 #[test]
+fn every_net_of_the_netlist_is_a_member_even_without_a_wire_or_second_on_one() {
+    let shared = Uuid::from_u128(1);
+    let netlist = Netlist {
+        nets: vec![
+            net(1, "/A/SIG", &[shared]),
+            net(2, "/B/SIG", &[shared]),
+            net(3, "LONELY", &[]),
+        ],
+    };
+    for name in ["/A/SIG", "/B/SIG", "LONELY"] {
+        assert!(netlist_has_net(&netlist, name), "{name}");
+    }
+    assert!(
+        !netlist_has_net(&netlist, "SIG"),
+        "a label's own text is no net name"
+    );
+    assert!(!netlist_has_net(&netlist, "NOPE"));
+}
+
+#[test]
 fn a_shared_element_is_named_by_the_net_whose_style_is_drawn() {
     let shared = Uuid::from_u128(1);
     let netlist = Netlist {

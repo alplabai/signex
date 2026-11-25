@@ -371,8 +371,11 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `board_shape_from_selection` | Make the selected closed lines the board outline | design | — | — |
 | `board_sketch` | Enter or leave the board sketch | design | `1` | `1` |
 | `change_footprint` | Change the footprint of the selected components | modify | `F` | `F` |
+| `copy_board_3d_screenshot` | Copy a screenshot of the 3D view | view | `Mod+Shift+C` | `Mod+Shift+C` |
 | `create_rooms_from_sheets` | Make a room for each sheet of the project and move its parts into it | design | — | — |
 | `cycle_arc_mode` | Switch the Arc tool between by centre, by edge and any angle | pcb | — | — |
+| `cycle_board_3d_lighting` | Next lighting preset in the 3D view | view | `H` | `H` |
+| `cycle_board_snapping` | Cycle board snapping | view | `Shift+E` | `Shift+E` |
 | `cycle_route_mode` | Switch Interactive Routing between walking around and pushing other nets' tracks | pcb | — | — |
 | `delete_layer_set` | Delete a saved layer set | view | — | — |
 | `delete_net_class` | Delete a net class | design | — | — |
@@ -384,6 +387,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `fabrication_outputs` | Generate the board's fabrication outputs | file | — | — |
 | `filter_drc_results` | Filter the DRC results by rule, layer and severity | pcb | — | — |
 | `find_similar_items` | Find similar items on a board | search | — | — |
+| `flip_board_3d` | Turn the board over in the 3D view | view | `F` | `F` |
 | `flip_board_view` | View the board from below, or from above again | view | — | — |
 | `flip_selection` | Flip selection to the other board side | modify | `L` | `L` |
 | `gloss_selected_routes` | Shorten the selected routes by cutting their corners where the clearance allows | pcb | — | — |

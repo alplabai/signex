@@ -13,7 +13,7 @@ use signex_engine::pcb::placement::{self, PlacementRefusal, PlacementTransform};
 use signex_engine::pcb::{BoardCommand, BoardItemId};
 use signex_renderer::pcb::{BOARD_OUTLINE, BoardObject, board_layers};
 use signex_types::pcb::Point;
-use signex_types::pcb_layer::PcbLayer;
+use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_options::GridUse;
 use uuid::Uuid;
 
@@ -221,9 +221,13 @@ impl Signex {
                 self.carry_to(from, to);
                 return;
             }
+            // A via or any other object a click there picks (#2870); a press
+            // on a member of the selection carries all of it.
             if let Some(reach) = pick
-                && self.start_via_drag(&path, from, reach)
+                && (self.start_via_drag(&path, from, reach)
+                    || self.start_item_drag(&path, from, reach))
             {
+                self.widen_drag_to_selection();
                 self.carry_to(from, to);
                 return;
             }
@@ -247,6 +251,9 @@ impl Signex {
             let mut carry = PcbCarry::new(CarryKind::Drag, path, window, footprints);
             carry.anchor = Some(from);
             self.interaction_state.pcb_carry = Some(carry);
+            if pick.is_some() {
+                self.widen_drag_to_selection();
+            }
             self.refresh_pcb_highlight();
         }
         self.carry_to(from, to);
@@ -440,9 +447,13 @@ impl Signex {
             Some(window) => state.pcb_canvas_for_window(window),
             None => tile().unwrap_or(&state.pcb_canvas),
         };
+        let active = self
+            .active_tab_path()
+            .map(|path| self.pcb_layer_view(&path).active())
+            .unwrap_or(PcbLayer::Copper(CopperLayer::Top));
         let mut view = SnapView::new(
             &self.ui_state.pcb_snap,
-            self.pcb_active_layer(),
+            active,
             f64::from(canvas.camera_ref().scale()),
         );
         view.snap_on = self.ui_state.snap_enabled;
@@ -493,8 +504,18 @@ impl Signex {
         let delta = if carry.text.is_some() {
             // A text follows the pointer exactly (#2368).
             Point::new(to.x - from.x, to.y - from.y)
+        } else if carry.is_mixed() {
+            let Some(delta) = self.mixed_drag_delta(carry, from, to) else {
+                return;
+            };
+            delta
         } else if !carry.vias.is_empty() {
             let Some(delta) = self.via_preview_delta(carry, from, to) else {
+                return;
+            };
+            delta
+        } else if !carry.items.is_empty() || !carry.rooms.is_empty() {
+            let Some(delta) = self.item_drag_delta(carry, from, to) else {
                 return;
             };
             delta
@@ -531,8 +552,16 @@ impl Signex {
             self.drop_text_carry(&carry);
             return;
         }
+        if carry.is_mixed() {
+            self.drop_mixed_carry(&carry, from, to);
+            return;
+        }
         if !carry.vias.is_empty() {
             self.drop_via_carry(&carry, from, to);
+            return;
+        }
+        if !carry.items.is_empty() || !carry.rooms.is_empty() {
+            self.drop_item_carry(&carry, from, to);
             return;
         }
         if carry.footprints.is_empty() {

@@ -620,7 +620,7 @@ panels-list-region-window = window
 # The PCB panel's row in the panel list, named for its first mode.
 panels-list-row-nets = Nets
 # Foot of the panel list: where the tool documents went.
-panels-list-foot = Layer Stack, Rules and the other tool documents open as tabs, from their menus or the command palette.
+panels-list-foot = Layer Stack, Rules and other tool documents open as tabs, from menus or the command palette.
 panels-erc-running = Running…
 panels-erc-no-findings-left = No findings left since the last run
 panels-erc-empty-hint = Run ERC to populate project-wide diagnostics
@@ -904,6 +904,8 @@ panels-filter-no-presets = No presets yet. Save current keeps the kinds that are
 # A preset and the kinds it turns on; $name is the preset's, $kinds a list of kind names.
 panels-filter-preset-kinds = { $name }: { $kinds }
 panels-filter-preset-no-kinds = { $name }: no kinds
+# Shown while a preset is selected for editing: each kind chip click changes it; $name is the preset's.
+panels-filter-preset-editing = Editing { $name }
 
 ## Object List panel (#1259): every object of the sheet or the project, listed
 ## and selectable. The panel title is panels-kind-object-list.
@@ -1438,3 +1440,7 @@ panels-pcb-classes-matches =
     }
 # The class detail's row of the diff-pair gap and width fields.
 panels-pcb-classes-diff-pair = Diff pair
+# quit-list-snxout-cap
+# Kind code of an Export Job (.snxout) document, as on its tab and in the
+# unsaved list of the Exit confirm.
+panels-tab-kind-output-job = OUT

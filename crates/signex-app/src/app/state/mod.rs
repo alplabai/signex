@@ -73,7 +73,7 @@ mod window_tab;
 pub use crate::app::core::case_fold::CaseFold;
 pub use crate::app::core::document_times::DocumentTimes;
 pub use agent_edits::AgentEdits;
-pub use board_3d::{Board3dSession, BuiltScene};
+pub use board_3d::{Board3dSession, BuiltScene, CaptureResult, MatteBackdrop};
 pub use board_net_classes::BoardNetClassPanelState;
 pub use board_sketch::BoardSketchSession;
 pub use board_sketch_dxf::{
@@ -201,6 +201,32 @@ pub struct NetColorPaletteState {
     pub filter: String,
     /// The net label text whose chooser is open beside its row.
     pub chooser: Option<String>,
+    /// The toast after a Clear, while it shows (mockup row 71).
+    pub toast: Option<NetColorToast>,
+}
+
+/// The net colour palette's toast after a Clear, with its Undo.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NetColorToast {
+    pub cleared: NetColorsCleared,
+    /// The sheet the clear was made on.
+    pub sheet: std::path::PathBuf,
+    /// The sheet's engine revision right after the clear. Unique per edit,
+    /// so it also tells this toast's timeout from an older one's.
+    pub revision: u64,
+}
+
+/// What a palette toast says was cleared.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NetColorsCleared {
+    /// Clear all colours took the colour off this many listed nets (named by
+    /// a label or a power port).
+    Nets(usize),
+    /// Clear all colours took colours off nets that no label or power port
+    /// names.
+    Unlabelled,
+    /// A row chooser's Clear took the colour off this net.
+    Net(String),
 }
 
 /// Transient state for the Move Selection dialog.

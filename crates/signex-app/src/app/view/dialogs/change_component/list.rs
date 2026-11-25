@@ -13,9 +13,9 @@ use signex_widgets::{button, text};
 
 use crate::library::PickerState;
 use crate::library::messages::{LibraryMessage, PickerMsg, PlacedPartMsg};
-use crate::library::picker::{empty_card, mono, search_field};
+use crate::library::picker::{empty_card, mono};
 use crate::library::state::{ChangeFilter, ChangeSession, PickerEntry, PinMatch};
-use crate::styles::{PillTone, ti};
+use crate::styles::{PillTone, dialog_search_field, ti};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
@@ -29,7 +29,7 @@ pub(super) fn view<'a>(
     let r = crate::styles::tokens::resolve(tokens);
     // Enter in the search field reads the picked row while the list shows it.
     let picked = picker.shown_selection();
-    let search = search_field(
+    let search = dialog_search_field(
         t!(i18n, ids::LIBRARY_CHANGE_COMPONENT_SEARCH),
         &picker.filter,
         |s| LibraryMessage::Picker(PickerMsg::FilterChanged(s)),

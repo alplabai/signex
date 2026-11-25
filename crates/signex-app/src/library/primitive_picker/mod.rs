@@ -21,9 +21,9 @@ use signex_widgets::{Label, button, text};
 use super::browser::PreviewLook;
 use super::messages::{LibraryMessage, PrimitivePickerMsg};
 use super::modal_chrome::{cancel_btn, footer_strip, header_with_note_closing, notice_banner};
-use super::picker::{empty_card, mono, search_field};
+use super::picker::{empty_card, mono};
 use super::state::{LibraryState, PrimitivePickerState};
-use crate::styles::{DialogButtonKind, PillTone, Radii, dialog_button};
+use crate::styles::{DialogButtonKind, PillTone, Radii, dialog_button, dialog_search_field};
 use list::{Choice, Group, ListItem, list_items, list_window};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -92,7 +92,7 @@ pub(crate) fn view<'a>(
         tokens,
     );
 
-    let search = container(search_field(
+    let search = container(dialog_search_field(
         t!(i18n, ids::LIBRARY_PRIMITIVE_PICKER_FILTER),
         &picker.filter,
         |s| msg(PrimitivePickerMsg::SetFilter(s)),

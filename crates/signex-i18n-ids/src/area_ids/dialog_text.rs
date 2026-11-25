@@ -242,4 +242,9 @@ define_ids! {
     DIALOG_REPREFIX_SKIP_PER_PLACEMENT = "dialog-reprefix-skip-per-placement";
     DIALOG_REPREFIX_SKIP_MIXED_VERSIONS = "dialog-reprefix-skip-mixed-versions";
     DIALOG_REPREFIX_SKIP_HAND_EDITED = "dialog-reprefix-skip-hand-edited";
+    // net-color-clear-toast
+    DIALOG_NET_COLOR_TOAST_CLEARED = "dialog-net-color-toast-cleared";
+    DIALOG_NET_COLOR_TOAST_CLEARED_UNLABELLED = "dialog-net-color-toast-cleared-unlabelled";
+    DIALOG_NET_COLOR_TOAST_CLEARED_NET = "dialog-net-color-toast-cleared-net";
+    DIALOG_NET_COLOR_TOAST_UNDO = "dialog-net-color-toast-undo";
 }

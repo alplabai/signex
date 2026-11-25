@@ -45,4 +45,6 @@ define_ids! {
     COMMAND_NEEDS_TILEABLE_WINDOWS = "command-needs-tileable-windows";
     COMMAND_NEEDS_TILED = "command-needs-tiled";
     COMMAND_NEEDS_UNSAVED_WORK = "command-needs-unsaved-work";
+    // board-3d-keys-screenshot
+    COMMAND_NEEDS_BOARD_3D_VIEW = "command-needs-board-3d-view";
 }

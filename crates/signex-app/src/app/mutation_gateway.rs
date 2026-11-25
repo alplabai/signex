@@ -252,6 +252,9 @@ impl Signex {
             clear_overlay: true,
             update_selection_info,
         };
+        if step.stepped {
+            self.debug_assert_owed_to_agent_target();
+        }
         self.project_events(step.events, scope);
         step.stepped
     }
@@ -290,12 +293,28 @@ impl Signex {
         let Some(patch) = patch else {
             return false;
         };
+        if patch != signex_engine::DocumentPatch::NONE {
+            self.debug_assert_owed_to_agent_target();
+        }
         let edit = self
             .document_state
             .settle_active_sheet(patch, ChangeCause::Edit);
         let (outcome, _) =
             self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info);
         outcome == MutationOutcome::Changed
+    }
+
+    /// #2645: the active tail owes an agent's run the change of the active
+    /// sheet, the by-path tail only a change of the run's own target. Until
+    /// the two rules are one, no flow may owe a change of another sheet.
+    fn debug_assert_owed_to_agent_target(&self) {
+        let docs = &self.document_state;
+        debug_assert!(
+            !docs.agent_edit_running() || docs.agent_edits.target == docs.active_path,
+            "#2645: an agent run on {:?} was owed a change of the active sheet {:?}",
+            docs.agent_edits.target,
+            docs.active_path,
+        );
     }
 }
 

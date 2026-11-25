@@ -352,3 +352,7 @@ project-preview-expand = Expand preview
 project-preview-close = Close
 project-preview-hint-values = Click a value on the drawing to edit it · Tab moves to the next · Esc closes
 project-preview-hint-sheet = Esc closes
+# dialog-polish
+# The result pill of a project variable's `=` expression that does not
+# evaluate (mockup row 30); the reason is in the Error line under the row.
+project-parameter-unresolved = ?

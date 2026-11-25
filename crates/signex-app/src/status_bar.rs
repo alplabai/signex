@@ -68,6 +68,9 @@ pub(crate) struct SurfaceReadout {
     /// Whether a right-click on the Grid read-out opens the Grid & Snap
     /// popover: on a schematic sheet only.
     pub opens_grid_popover: bool,
+    /// Whether the Grid read-out carries the grid glyph and a caret that
+    /// opens the grid step list: in a footprint editor only (mockup row 63).
+    pub opens_grid_picker: bool,
     /// The board counters (#2460): on a board tab only. With them the layer
     /// pill and the Grid read-out open popovers, and the Selected counter
     /// stands in for the selection summary.
