@@ -47,8 +47,8 @@ format declares only its own table row below.
   and offer a discard that drops only its unsaved settings (#2904). The one
   write of such a project is File ▸ Save Project As… (#2908): a copy in a new
   folder whose `.snxprj` is written in this build's format, keeping the keys
-  this build does not know as they were read; its sheets and boards are
-  copied byte for byte, so a newer-minor sheet stays read-only in the copy.
+  this build does not know as they were read; a newer-minor sheet or board
+  is copied byte for byte, so it stays read-only in the copy.
   The original file is never written.
 - **An older or foreign token** that is not in the list, or a garbled one
   (`snxsch/01`, `snxsch/1.`, a number in a `.snxprj`), is refused naming it.

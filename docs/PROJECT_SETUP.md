@@ -314,17 +314,23 @@ What the copy holds:
   written current; the keys this build does not know are kept as they were
   read. A project with an id gets a new one: a Save As is a new document
   (`docs/DOCUMENT_IDS.md`).
-- **Every document it lists in its folder**, byte for byte as last saved: the
-  root sheet, the sheets, the board, and each project library (its `.snxlib`
-  and the files under its library folders: `classes`, the symbol, footprint
-  and simulation folders, `3dmodels` and `assets/datasheets`). Shared and
-  global libraries are not copied; the copy lists them where they are. Unsaved
-  edits of a listed sheet or board are not in the copy, and the dialog says
-  how many documents have them. A sheet or board copied byte for byte keeps
-  its id, so with both projects open the copy's is renumbered in memory
-  (`Signex::reconcile_document_ids`).
+- **Every document it lists in its folder**: the root sheet, the sheets, the
+  board, and each project library (its `.snxlib` and the files under its
+  library folders: `classes`, the symbol, footprint and simulation folders,
+  `3dmodels` and `assets/datasheets`). Shared and global libraries are not
+  copied; the copy lists them where they are. An unedited document is copied
+  byte for byte. An open document with unsaved edits is encoded from memory
+  when Save copy is pressed, with the encoder its save uses (a sheet by its
+  engine, a board by the `.snxpcb` writer, a symbol or footprint document by
+  its container writer, whole as the editor holds it, without the version
+  bump and row cascade a library save adds), so the copy includes the edits
+  (Caner, 2026-11-25); the dialog notes how many documents that is. The
+  originals stay unsaved and untouched (`project_save_as::unsaved` only
+  reads). A document opened read-only from a newer minor is copied as on
+  disk. A copied sheet or board keeps its id, so with both projects open the
+  copy's is renumbered in memory (`Signex::reconcile_document_ids`).
 
-A listed file that is not on disk, or an entry that lies outside the project
+A listed file that is not on disk and not open with edits, or an entry that lies outside the project
 folder, refuses the whole copy before anything is written. Every file goes
 through `atomic_write`, the `.snxprj` last; a failure removes what the copy
 wrote and the folder it made, and the dialog shows why. The original folder
