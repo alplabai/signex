@@ -1053,6 +1053,44 @@ find_similar_items document=<board> id=<uuid> [fields=kind,value,...]
 
 Find by text on a board is `find_items` (designator and value).
 
+## Board areas
+
+The area tools take operands in place of their clicks (#2470): the board,
+the layer, the outline and, for copper, the net. Each adds one area to the
+open board `document` names as one board undo step, the same area the
+tool's clicks add for that outline, and is on the agent channel. The
+person's Properties form for the tool is not read: a pour's clearance,
+priority and island rules are the board's defaults, and Properties changes
+them afterwards. A read-only board, or one that is not open, is refused.
+
+```text
+place_board_fill document=<board> layer=<copper> start=x,y end=x,y [net=<name>]
+place_board_region document=<board> layer=<copper> corners=x,y;x,y;x,y.. [net=<name>]
+place_board_polygon_pour document=<board> layer=<copper> corners=.. [net=<name>]
+place_board_keepout document=<board> layer=<copper or keep-out> corners=..
+place_board_pour_cutout document=<board> layer=<copper> corners=..
+```
+
+- Points and corners are mm from the board origin with Y up, as the status
+  bar shows them, and are not moved onto the grid. A Fill is the rectangle
+  between `start` and `end`; the other areas take three or more `corners`.
+- `layer` is a layer name (`TopCopper`, `Inner1Copper`, `TopKeepout`). A
+  copper area or a cutout takes one of the board's copper layers; a keepout
+  takes a copper layer or a keep-out layer, which stands for its copper
+  layer. Any other layer, or a copper layer the board's stack does not have,
+  is refused, as is an outline that encloses no area.
+- `net` names a board net (in any case), or is empty for no net. Left out,
+  the area takes the net of the copper under its corners, as a click does.
+  A net the board does not have is refused. A keepout and a cutout have no
+  net.
+- The answer is `{"document", "id", "kind", "layer", "net", "net_name",
+  "revision", "zone"}`: `kind` is `fill`, `region`, `pour`, `keepout` or
+  `pour_cutout`, and `zone` the area as stored. A pour's answer also has
+  `fill`, its copper as `repour_all` reports each pour (`zone`, `filled`,
+  `pieces`, `area_mm2`, `islands_removed`, ...).
+
+Without operands, in a window, each command arms its tool, as before.
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > System ›

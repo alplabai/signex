@@ -445,6 +445,13 @@ says so and draws nothing.
   the same way.
 - A shape whose corners are on one line has no area (checked in integer nm)
   and is not added; the Messages panel says so.
+- **Without a window** (#2470): Fill, Solid Region, Polygon Pour, Keepout
+  and Pour Cutout take the board (`document`), the `layer`, the outline
+  (`start` and `end` for a Fill, `corners` for the others, from the board
+  origin with Y up) and, for copper, the `net`. The click and the operand
+  form build the zone in one place (`signex_engine::pcb::area`); the
+  operand form reads no Properties form. One undo step each, answered with
+  the area as JSON: [CLI.md](CLI.md), "Board areas".
 
 ## Keepout
 
