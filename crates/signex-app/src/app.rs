@@ -14,6 +14,8 @@ mod actions;
 pub(crate) mod agent;
 pub(crate) mod assign_footprints;
 pub(crate) mod back_annotate;
+pub(crate) mod block_diagram_sync;
+pub use block_diagram_sync::BlockDiagramSyncMsg;
 pub(crate) mod board_output;
 pub(crate) mod board_panel;
 pub(crate) mod board_reannotate;

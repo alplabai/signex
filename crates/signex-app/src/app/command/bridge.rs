@@ -325,6 +325,20 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         )),
         // Design ▸ Compile Project and View ▸ Compiled Design (#1279, #1308).
         "compile_project" => Message::from(crate::app::CompiledDesignMsg::CompileRequested),
+        // #2968: the project in view, through the operand handler; a
+        // person's regenerate lists its changes without applying them.
+        "generate_block_diagram" => Message::Project(ProjectMsg::BlockDiagramSync(
+            crate::app::BlockDiagramSyncMsg::Requested {
+                regenerate: false,
+                apply: false,
+            },
+        )),
+        "regenerate_block_diagram" => Message::Project(ProjectMsg::BlockDiagramSync(
+            crate::app::BlockDiagramSyncMsg::Requested {
+                regenerate: true,
+                apply: false,
+            },
+        )),
         "open_compiled_design" => Message::Overlay(OverlayMsg::OpenPanel(
             crate::panels::PanelKind::CompiledDesign,
         )),
