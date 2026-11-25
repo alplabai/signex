@@ -389,6 +389,15 @@ impl Signex {
             .then(|| self.view_board_output_dialog())
     }
 
+    /// Export Design Notebook PDF (mockup row 202).
+    pub(in crate::app::view) fn notebook_pdf_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .notebook_pdf
+            .dialog
+            .is_some()
+            .then(|| self.view_notebook_pdf_dialog())
+    }
+
     pub(in crate::app::view) fn back_annotate_overlay(&self) -> Option<Element<'_, Message>> {
         self.ui_state
             .back_annotate

@@ -27,3 +27,6 @@ pub(super) const BOARD_PRINT: (f32, f32) = (780.0, 600.0);
 pub(super) const BACK_ANNOTATE: (f32, f32) = (720.0, 600.0);
 pub(super) const FAB_OUTPUTS: (f32, f32) = (720.0, 640.0);
 pub(super) const NETLIST_INCOMPLETE: (f32, f32) = (580.0, 360.0);
+/// Export Design Notebook PDF (mockup row 202); its done card is narrower.
+pub(super) const NOTEBOOK_PDF: (f32, f32) = (660.0, 640.0);
+pub(super) const NOTEBOOK_PDF_DONE: (f32, f32) = (520.0, 260.0);

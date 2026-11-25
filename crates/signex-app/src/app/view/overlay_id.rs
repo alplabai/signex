@@ -131,6 +131,8 @@ pub(crate) enum OverlayId {
     DiffPairClasses,
     /// Board Reports and Board Print / PDF (#2404, #2402).
     BoardOutput,
+    /// Export Design Notebook PDF (mockup row 202).
+    NotebookPdf,
     /// Tools ▸ Annotation ▸ Back Annotate Schematics (#1312).
     BackAnnotate,
     /// Project ▸ Compare Board with Schematic… (#2462).
@@ -249,6 +251,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 85] = [
     OverlayId::FabOutputs,
     OverlayId::DiffPairClasses,
     OverlayId::BoardOutput,
+    OverlayId::NotebookPdf,
     OverlayId::BackAnnotate,
     OverlayId::CompareBoard,
     // Above its dialog: Esc closes the confirmation first.
@@ -393,6 +396,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::FabOutputs
         | OverlayId::DiffPairClasses
         | OverlayId::BoardOutput
+        | OverlayId::NotebookPdf
         | OverlayId::BackAnnotate
         | OverlayId::CompareBoard
         | OverlayId::CompareBoardConfirm
@@ -636,6 +640,7 @@ impl Signex {
             OverlayId::FabOutputs => layers.extend(self.fab_outputs_overlay()),
             OverlayId::DiffPairClasses => layers.extend(self.diff_pair_classes_overlay()),
             OverlayId::BoardOutput => layers.extend(self.board_output_overlay()),
+            OverlayId::NotebookPdf => layers.extend(self.notebook_pdf_overlay()),
             OverlayId::BackAnnotate => layers.extend(self.back_annotate_overlay()),
             OverlayId::CompareBoard => layers.extend(self.compare_board_overlay()),
             OverlayId::CompareBoardConfirm => {
