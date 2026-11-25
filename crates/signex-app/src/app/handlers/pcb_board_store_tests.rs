@@ -143,6 +143,38 @@ fn a_rename_moves_an_open_board_to_its_new_path() {
     assert!(!docs.holds_pcb(&path));
 }
 
+/// The store never drops an open board to make room for another at its path:
+/// a second open keeps the first board, and a rename onto an open board
+/// leaves both where they were.
+#[test]
+fn an_open_board_is_never_replaced_at_its_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let uuid_at = |app: &Signex, path: &Path| app.document_state.boards[path].board().uuid;
+    let first = uuid_at(&app, &path);
+
+    let other = empty_board();
+    assert_ne!(other.uuid, first);
+    app.document_state.push_pcb_tab(
+        "again".into(),
+        path.clone(),
+        None,
+        signex_engine::pcb::BoardEngine::new(other, 1),
+    );
+    assert_eq!(uuid_at(&app, &path), first, "the open board was kept");
+
+    let second = dir.path().join("second.snxpcb");
+    app.open_pcb_tab(second.clone(), "second".into(), empty_board());
+    let moved = uuid_at(&app, &second);
+    app.document_state.rekey_open_pcb_board(&second, &path);
+    assert_eq!(uuid_at(&app, &second), moved, "the moved board stayed");
+    assert_eq!(
+        uuid_at(&app, &path),
+        first,
+        "the board at the target is untouched"
+    );
+}
+
 #[test]
 fn a_rename_moves_a_parked_board_to_its_new_path() {
     let dir = tempfile::tempdir().unwrap();

@@ -142,7 +142,17 @@ impl DocumentState {
     }
 
     /// Move the open board at `from` to `to`, where its tab now points.
+    /// A board already open at `to` is never replaced: the moved board
+    /// stays at `from` and the clash is logged.
     pub(crate) fn rekey_open_pcb_board(&mut self, from: &Path, to: &Path) {
+        if self.boards.contains_key(to) {
+            log::warn!(
+                "PCB board rename: a board is already open at {}; the board at {} was not moved",
+                to.display(),
+                from.display()
+            );
+            return;
+        }
         if let Some(board) = self.boards.remove(from) {
             self.boards.insert(to.to_path_buf(), board);
         }
@@ -202,9 +212,18 @@ impl DocumentState {
         project_id: Option<ProjectId>,
         engine: BoardEngine,
     ) {
-        // One PCB tab per path: every open dedupes on the path first.
-        debug_assert!(!self.has_pcb_tab(&path), "a second PCB tab for {path:?}");
-        self.boards.insert(path.clone(), engine);
+        // One PCB tab per path: every open dedupes on the path first. If one
+        // ever slips through, keep the open board (its unsaved edits and
+        // history) rather than replace it, and log the clash.
+        match self.boards.entry(path.clone()) {
+            std::collections::hash_map::Entry::Vacant(slot) => {
+                slot.insert(engine);
+            }
+            std::collections::hash_map::Entry::Occupied(_) => log::warn!(
+                "PCB open: a board is already open at {}; kept the open board",
+                path.display()
+            ),
+        }
         self.tabs.push(TabInfo {
             title,
             path,
