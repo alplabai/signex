@@ -294,6 +294,13 @@ pub const SHEET_VARIABLE: &[Operand] = &[
     optional("remove", OperandKind::Bool),
     optional("document", OperandKind::Document),
 ];
+/// The placed part `id` made a net tie (`on=true`) or an ordinary part
+/// (`on=false`, #1277).
+pub const NET_TIE: &[Operand] = &[
+    required("id", OperandKind::Text),
+    required("on", OperandKind::Bool),
+    optional("document", OperandKind::Document),
+];
 /// The placed part `id` on the sheet `document` (#1667): named, since an
 /// agent has no selection.
 pub const PART_ON_DOCUMENT: &[Operand] = &[

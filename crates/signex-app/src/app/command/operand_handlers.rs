@@ -119,6 +119,7 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("set_sheet_symbol_size", placed::set_sheet_symbol_size),
     ("set_symbol_parameter", placed::set_symbol_parameter),
     ("set_sheet_variable", placed::set_sheet_variable),
+    ("set_net_tie", placed::set_net_tie),
     ("repair_pin_junctions", repair_reset::repair_pin_junctions),
     ("reset_board_origin", repair_reset::reset_board_origin),
     ("reset_layer_colors", repair_reset::reset_layer_colors),
@@ -452,6 +453,12 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_sheet_variable" => Some(
             "`set_sheet_variable` needs the operand `name` — \
              use the Sheet Variables rows in Properties",
+        ),
+        // #1277: no Properties row yet; a part placed from a Net Tie library
+        // symbol is a tie already.
+        "set_net_tie" => Some(
+            "`set_net_tie` needs the operands `id` and `on` — \
+             place the part from a Net Tie library symbol, or run it with them",
         ),
         // #2424: a person draws with the Graphics tools and edits in
         // Properties.

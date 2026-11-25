@@ -556,6 +556,8 @@ mod tests {
             "place_wire",
             // The sheet's bare pin touches get their dots.
             "repair_pin_junctions",
+            // #1277: a part made a net tie or an ordinary part.
+            "set_net_tie",
             "set_object_position",
             "set_object_rotation",
             "set_sheet_symbol_size",

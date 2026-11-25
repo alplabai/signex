@@ -653,6 +653,7 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "set_layer_sizes",
     "set_layer_stack",
     "set_net_class_rules",
+    "set_net_tie",
     "set_object_position",
     "set_object_rotation",
     "set_pad_shape",
