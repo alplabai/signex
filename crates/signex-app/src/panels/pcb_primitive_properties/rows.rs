@@ -254,10 +254,35 @@ pub(super) fn sunken_value<'a>(
     )
 }
 
-/// A length in mm, "N/A" when `None`.
+/// Decimals a length reads with (mockup rows 95 and 98: "0.200 mm").
+const MM_DECIMALS: usize = 3;
+/// Decimals an angle reads with (mockup row 98: "Start 0.0 End 90.0").
+const DEGREE_DECIMALS: usize = 1;
+
+/// `value` to a fixed `decimals`; a value that rounds to zero never reads
+/// with a minus sign.
+fn fixed(value: f64, decimals: usize) -> String {
+    let text = format!("{value:.decimals$}");
+    match text.strip_prefix('-') {
+        Some(rest) if rest.chars().all(|c| c == '0' || c == '.') => rest.to_string(),
+        _ => text,
+    }
+}
+
+/// A length in mm as the track and arc panels show it: "0.200".
+pub(super) fn fixed_mm(value: f64) -> String {
+    fixed(value, MM_DECIMALS)
+}
+
+/// An angle in degrees as the arc panel shows it: "90.0".
+pub(super) fn fixed_degrees(value: f64) -> String {
+    fixed(value, DEGREE_DECIMALS)
+}
+
+/// A length in mm to three decimals, "N/A" when `None`.
 pub(super) fn mm_or_na(look: Look<'_>, value: Option<f64>) -> Localized {
     match value {
-        Some(v) => t!(look.ctx.i18n, signex_i18n::ids::PCB_PRIM_MM, "value" => format_number(v)),
+        Some(v) => t!(look.ctx.i18n, signex_i18n::ids::PCB_PRIM_MM, "value" => fixed_mm(v)),
         None => look.t(signex_i18n::ids::PCB_PRIM_NOT_APPLICABLE),
     }
 }

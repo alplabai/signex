@@ -7,8 +7,9 @@ use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_widgets::Label;
 use signex_widgets::property_illustration::{Anchor, Illustration, TextRole};
 
-use super::{at, band, callout, canvas, cross, dashed, keys, label, layer_label, layer_note, mm3};
+use super::{at, band, callout, canvas, cross, dashed, keys, label, layer_label, layer_note};
 use crate::panels::pcb_primitive_properties::TrackFacts;
+use crate::panels::pcb_primitive_properties::rows::fixed_mm;
 
 /// The width a mixed or unknown selection is drawn with, mm.
 const STAND_IN_WIDTH_MM: f64 = 0.2;
@@ -54,7 +55,7 @@ pub(in crate::panels::pcb_primitive_properties) fn illustration(
                 &[],
             ));
     }
-    let width_label = t!(i18n, ids::PCB_PRIM_DRAWING_WIDTH_VALUE, "value" => mm3(width));
+    let width_label = t!(i18n, ids::PCB_PRIM_DRAWING_WIDTH_VALUE, "value" => fixed_mm(width));
     drawing = drawing.part(callout(
         at(60.0, LOWER_Y - ws / 2.0),
         at(60.0, LOWER_Y + ws / 2.0),
