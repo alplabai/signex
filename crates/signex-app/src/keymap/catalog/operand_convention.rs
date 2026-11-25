@@ -115,6 +115,13 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("diff_pair_class", OperandKind::Text),
     ("via_hole", OperandKind::Text),
     ("current", OperandKind::Text),
+    // #2797: a length-matching group's band (mm), topology, member nets
+    // (comma separated) and new name.
+    ("target", OperandKind::Text),
+    ("tolerance", OperandKind::Text),
+    ("topology", OperandKind::Text),
+    ("members", OperandKind::Text),
+    ("rename", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

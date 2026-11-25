@@ -439,6 +439,35 @@ pub const TUNE_PAIR: &[Operand] = &[
     optional("net", OperandKind::Text),
 ];
 
+/// The width of a differential pair's tracks (#2585): `net` names either
+/// net of the pair (every track of both nets), else the selected tracks
+/// and the tracks coupled to them; `width` in mm.
+pub const SET_PAIR_WIDTH: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("net", OperandKind::Text),
+    required("width", OperandKind::Text),
+];
+
+/// A length-matching group of the named board (#2797), made when the board
+/// has none of that `name`: `target` and `tolerance` in mm (both needed to
+/// make one), `topology` (`star`, `chain`, `fly_by`, `t`), `members` the
+/// net names, comma separated, and `rename` its new name.
+pub const LENGTH_GROUP: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("name", OperandKind::Text),
+    optional("rename", OperandKind::Text),
+    optional("target", OperandKind::Text),
+    optional("tolerance", OperandKind::Text),
+    optional("topology", OperandKind::Text),
+    optional("members", OperandKind::Text),
+];
+
+/// The length-matching group `name` of the named board (#2797).
+pub const REMOVE_LENGTH_GROUP: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("name", OperandKind::Text),
+];
+
 /// Colour the net under a point of the named document's sheet.
 pub const COLOR_NET: &[Operand] = &[
     required("at", OperandKind::Point),

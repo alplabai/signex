@@ -209,6 +209,10 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     ("lock_board_items", BOARD_EDIT),
     ("unlock_board_items", BOARD_EDIT),
     ("set_via_span", BOARD_EDIT),
+    // #2585, #2797: a pair's width and the length-matching groups.
+    ("set_diff_pair_width", BOARD_EDIT),
+    ("set_length_group", BOARD_EDIT),
+    ("remove_length_group", BOARD_EDIT),
     ("set_layer_sizes", BOARD_EDIT),
     ("set_pad_shape", BOARD_EDIT),
     // #2408, #2409: the board Tools edits are board steps of their own.

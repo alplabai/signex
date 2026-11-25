@@ -34,6 +34,7 @@ use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::board_output as output;
 use crate::app::board_reuse as reuse;
 use crate::app::board_tools as tools;
+use crate::app::handlers::length_matching as length;
 use crate::app::handlers::pcb_component::part_swap_operands as swap;
 use crate::app::handlers::pcb_tune as tune;
 use crate::app::{Message, Signex};
@@ -207,6 +208,15 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     // #2389: length tuning on a named board.
     ("tune_net_length", tune::tune_net_length),
     ("tune_diff_pair", tune::tune_diff_pair),
+    // #2585: a differential pair's track width on a named board.
+    (
+        "set_diff_pair_width",
+        crate::app::handlers::pcb_primitive::set_diff_pair_width,
+    ),
+    // #2797: a named board's length-matching groups.
+    ("length_matching", length::length_matching),
+    ("set_length_group", length::set_length_group),
+    ("remove_length_group", length::remove_length_group),
     ("panelize_board", crate::app::board_panel::panelize_board),
     (
         "remove_board_panel",
@@ -492,6 +502,16 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_layer_stack" => Some(
             "`set_layer_stack` needs the operands `document` and `stack` — \
              use the Layer Stack manager",
+        ),
+        // #2585: a person types the width in the Track panel.
+        "set_diff_pair_width" => Some(
+            "`set_diff_pair_width` needs the operands `document` and `width` — \
+             select a track of the pair and use Width in Properties",
+        ),
+        // #2797: a person edits the groups in the Length Matching tab.
+        "set_length_group" | "remove_length_group" => Some(
+            "this command needs the operands `document` and `name` — \
+             use the Length Matching tab (Length Matching...)",
         ),
         "set_via_span" => Some(
             "`set_via_span` needs the operands `document`, `ids` and `layers` — \

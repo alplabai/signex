@@ -586,6 +586,10 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "set_footprint_text" => Needs::Pcb,
         // #2389: length tuning of the selected tracks' nets.
         "tune_net_length" | "tune_diff_pair" => Needs::Pcb,
+        // #2585, #2797: a pair's width and the board's length-matching groups.
+        "set_diff_pair_width" | "length_matching" | "set_length_group" | "remove_length_group" => {
+            Needs::Pcb
+        }
         // #2401, #2407: the layer stack and the track and via edits.
         "board_layer_stack"
         | "set_layer_stack"

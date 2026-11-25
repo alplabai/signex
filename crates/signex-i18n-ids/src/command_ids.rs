@@ -622,6 +622,13 @@ define_ids! {
         CMD_MENU_TUNE_NET_LENGTH = "cmd-menu-tune-net-length";
         CMD_TUNE_DIFF_PAIR = "cmd-tune-diff-pair";
         CMD_MENU_TUNE_DIFF_PAIR = "cmd-menu-tune-diff-pair";
+        // #2585: the width of a differential pair's tracks.
+        CMD_SET_DIFF_PAIR_WIDTH = "cmd-set-diff-pair-width";
+        // #2797: the Length Matching tab and its groups.
+        CMD_LENGTH_MATCHING = "cmd-length-matching";
+        CMD_MENU_LENGTH_MATCHING = "cmd-menu-length-matching";
+        CMD_SET_LENGTH_GROUP = "cmd-set-length-group";
+        CMD_REMOVE_LENGTH_GROUP = "cmd-remove-length-group";
         CMD_CHANGE_FOOTPRINT = "cmd-change-footprint";
         CMD_MENU_CHANGE_FOOTPRINT = "cmd-menu-change-footprint";
         CMD_BOARD_REPORT_BOM = "cmd-board-report-bom";

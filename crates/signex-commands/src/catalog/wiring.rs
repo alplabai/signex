@@ -263,6 +263,57 @@ pub(super) const WIRING: &[CommandMetadata] = &[
         operands: super::operands::TUNE_PAIR,
         ..CommandMetadata::DEFAULT
     },
+    // #2585: the width of a differential pair's tracks, both nets in one
+    // undo step; the Track panel's Width row runs it on a pair. No default
+    // key.
+    CommandMetadata {
+        id: "set_diff_pair_width",
+        category: "modify",
+        label: command_ids::CMD_SET_DIFF_PAIR_WIDTH,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::SET_PAIR_WIDTH,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2797, mockup row 107: the Length Matching tab of the board in view;
+    // with `document` the report of its groups. No default key.
+    CommandMetadata {
+        id: "length_matching",
+        category: "pcb",
+        label: command_ids::CMD_LENGTH_MATCHING,
+        menu_label: Some(command_ids::CMD_MENU_LENGTH_MATCHING),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::NONE,
+        operands: super::operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2797: make or change, and remove, a length-matching group; each one
+    // board undo step. The Length Matching tab's fields run them.
+    CommandMetadata {
+        id: "set_length_group",
+        category: "pcb",
+        label: command_ids::CMD_SET_LENGTH_GROUP,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::LENGTH_GROUP,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "remove_length_group",
+        category: "pcb",
+        label: command_ids::CMD_REMOVE_LENGTH_GROUP,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::REMOVE_LENGTH_GROUP,
+        ..CommandMetadata::DEFAULT
+    },
     // #2407: the span of vias; the Via panel's From and To rows are its
     // surface. One undo step.
     CommandMetadata {
