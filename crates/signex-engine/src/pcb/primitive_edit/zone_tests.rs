@@ -178,3 +178,43 @@ fn a_pour_is_unfilled_in_one_step_and_undone_exactly() {
         "a shelved pour has nothing to unfill"
     );
 }
+
+/// `set_pour_properties`: the priority and island rules of a pour set
+/// together are one replace whose inverse undoes all of them; one refused
+/// value refuses the lot.
+#[test]
+fn several_pour_fields_are_one_replace_and_one_refusal_refuses_all() {
+    let mut b = with_fill(POUR_FILL);
+    let before = b.zones[0].clone();
+    let edits = [
+        ZoneEdit::Priority(2.0),
+        ZoneEdit::MinIslandArea(1.5),
+        ZoneEdit::RemoveDeadIslands(true),
+    ];
+    let command = zone_edits_command(&b, &[id(ZONE_1)], &edits)
+        .expect("allowed")
+        .expect("a change");
+    assert!(matches!(
+        command,
+        crate::pcb::BoardCommand::ReplaceItems { .. }
+    ));
+    let applied = command.apply(&mut b).expect("applies");
+    let zone = &b.zones[0];
+    assert_eq!(
+        (
+            zone.priority,
+            zone.min_island_area,
+            zone.remove_dead_islands
+        ),
+        (2, 1.5, true)
+    );
+    applied.inverse.apply(&mut b).expect("undoes");
+    assert_eq!(b.zones[0], before);
+
+    let refused = [ZoneEdit::Priority(2.0), ZoneEdit::MinIslandArea(-1.0)];
+    assert_eq!(
+        zone_edits_command(&b, &[id(ZONE_1)], &refused),
+        Err(PrimitiveEditRefusal::Negative)
+    );
+    assert_eq!(b.zones[0], before);
+}

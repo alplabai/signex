@@ -61,6 +61,16 @@ pub fn zone_edit_command(
     zones: &[Uuid],
     edit: ZoneEdit,
 ) -> Result<Option<BoardCommand>, PrimitiveEditRefusal> {
+    zone_edits_command(board, zones, &[edit])
+}
+
+/// The command setting every one of `edits`, in order, on every area in
+/// `zones`: one step for several fields. A refused edit refuses them all.
+pub fn zone_edits_command(
+    board: &PcbBoard,
+    zones: &[Uuid],
+    edits: &[ZoneEdit],
+) -> Result<Option<BoardCommand>, PrimitiveEditRefusal> {
     if zones.is_empty() {
         return Err(PrimitiveEditRefusal::Empty);
     }
@@ -72,7 +82,9 @@ pub fn zone_edit_command(
             .find(|z| z.uuid == *id)
             .ok_or(PrimitiveEditRefusal::Gone)?;
         let mut new = old.clone();
-        apply_zone_edit(board, &mut new, edit)?;
+        for edit in edits {
+            apply_zone_edit(board, &mut new, *edit)?;
+        }
         if new != *old {
             changed.push(BoardItem::Zone(new));
         }
