@@ -135,6 +135,8 @@ fn export(ctx: &MenuContext) -> Vec<MenuEntry> {
         // The board and its parts as a STEP model (#2488); greyed without
         // a board in view.
         cmd_item_gated(ctx, cmd("export_board_step", "")),
+        // The project's Design Notebook as PDF (mockup row 202).
+        cmd_item_gated(ctx, cmd("export_notebook_pdf", "")),
     ]
 }
 
@@ -227,6 +229,8 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("toggle_visible_grid", "Shift+Ctrl+G")),
         cmd_item_gated(ctx, cmd("next_grid", "")),
         cmd_item_gated(ctx, cmd("toggle_auto_focus", "F9")),
+        // The notebook's badges on the sheet (mockup row 197).
+        cmd_item_gated(ctx, cmd("toggle_notebook_badges", "")),
         SEP,
         // The board view: greyed unless a PCB is open.
         cmd_item_gated(ctx, cmd("toggle_ratsnest", "")),
@@ -485,6 +489,16 @@ pub(super) fn project(ctx: &MenuContext) -> Vec<MenuEntry> {
         // #2462: the report of every difference between the schematic and
         // the board, gated like Update PCB.
         cmd_item_gated(ctx, cmd("compare_board_with_schematic", "")),
+        SEP,
+        // Mockup rows 195 and 201: docs/MENU_BAR.md#project-design-notebook
+        submenu(
+            ctx,
+            menu_ids::MENU_PROJECT_DESIGN_NOTEBOOK,
+            vec![
+                cmd_item_gated(ctx, cmd("open_design_notebook", "")),
+                cmd_item_gated(ctx, cmd("generate_design_notebook", "")),
+            ],
+        ),
         SEP,
         // Gated like Close Project: with no project there is no tab to open.
         item_if_command(
