@@ -15,12 +15,17 @@
 //! Annotate's write. A footprint row's direction changes the board the net
 //! rows are computed for, so [`CompareReport::set_direction`] says when the
 //! caller must run [`CompareReport::refresh_nets`]. The plain-text report:
-//! `text.rs`. Mapping and defaults: `docs/UPDATE_PCB.md`, "Compare Board
-//! with Schematic".
+//! `text.rs`. The command-line answer and its row ids: `answer.rs`; the
+//! directions a command-line Apply names: `choose.rs`. Mapping and
+//! defaults: `docs/UPDATE_PCB.md`, "Compare Board with Schematic".
 
+mod answer;
+mod choose;
 mod rows;
 mod text;
 
+pub use answer::unavailable_text;
+pub use choose::ChooseRefusal;
 pub use rows::compare;
 
 use signex_net::cross_probe::PartOccurrence;
@@ -505,6 +510,8 @@ impl CompareReport {
     }
 }
 
+#[cfg(test)]
+mod answer_tests;
 #[cfg(test)]
 mod lock_row_tests;
 #[cfg(test)]
