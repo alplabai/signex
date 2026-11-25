@@ -258,7 +258,11 @@ fn table_over_a_probe<'a>(
         .width(iced::Length::Fill)
         .height(iced::Length::Fill)
         .push(below.boxed())
-        .push(super::view::overlay(editor, tokens, i18n).map(|_| Probe::Table))
+        .push(
+            super::view::overlay(editor, tokens, i18n)
+                .map(|_| Probe::Table)
+                .boxed(),
+        )
         .boxed()
 }
 
