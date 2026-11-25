@@ -138,7 +138,7 @@ define_ids! {
     PDF_PAGE_SIZE_US_LEGAL = "pdf-page-size-us-legal";
     PDF_PAGE_SIZE_TABLOID = "pdf-page-size-tabloid";
     PDF_SCALE_MODE_PERCENT = "pdf-scale-mode-percent";
-    // m7/pdf-export-preview
+    // mockup rows 111 and 168
     PDF_PAPER_SIZE_A0 = "pdf-paper-size-a0";
     PDF_PAPER_SIZE_A1 = "pdf-paper-size-a1";
     PDF_PAPER_SIZE_A2 = "pdf-paper-size-a2";

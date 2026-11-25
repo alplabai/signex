@@ -786,7 +786,7 @@ properties-text-style-not-stored = Bold, italic, underline and strikethrough are
 properties-power-illustration-style = Style · { $style }
 # Font Size callout of the power-port illustration. $size is the size in points.
 properties-power-illustration-font-size = Font Size { $size }
-# m7/erc-blanket-directives
+# mockup row 49
 # Suppressed rules (mockup row 49): the All rules enable row, with the
 # number of built-in rules right-aligned on the same row.
 properties-all-rules-name = All rules
@@ -794,7 +794,7 @@ properties-rule-total = { $count ->
     [one] 1 rule
    *[other] { $count } rules
 }
-# m7/sch-props-text-shape
+# mockup rows 47 and 48
 # Border callout of the rectangle drawing (mockup row 48). $width is the
 # Border field's value in mm; $fill is the Fill segment's name.
 properties-drawing-illustration-border = Border { $width } mm · Fill { $fill }
@@ -806,7 +806,7 @@ properties-text-note-illustration-size = { $size } { $unit }
 # Under the Position callout of the text note drawing. $h and $v are the
 # Justify H and Justify V segment names.
 properties-text-note-illustration-justify = Justify { $h } / { $v }
-# m7/sketch-pad-source
+# mockup rows 192 and 125
 # Attribute scope of a patterned pad (mockup row 192, item D1). $source and
 # $instance name the sketch geometry and the pattern instance behind it.
 properties-fp-pad-scope-title = Pad attributes ↔ sketch

@@ -511,15 +511,15 @@ define_ids! {
     PROPERTIES_TEXT_STYLE_NOT_STORED = "properties-text-style-not-stored";
     PROPERTIES_POWER_ILLUSTRATION_STYLE = "properties-power-illustration-style";
     PROPERTIES_POWER_ILLUSTRATION_FONT_SIZE = "properties-power-illustration-font-size";
-    // m7/erc-blanket-directives
+    // mockup row 49
     PROPERTIES_ALL_RULES_NAME = "properties-all-rules-name";
     PROPERTIES_RULE_TOTAL = "properties-rule-total";
-    // m7/sch-props-text-shape
+    // mockup rows 47 and 48
     PROPERTIES_DRAWING_ILLUSTRATION_BORDER = "properties-drawing-illustration-border";
     PROPERTIES_DRAWING_SAMPLE_WIRE = "properties-drawing-sample-wire";
     PROPERTIES_TEXT_NOTE_ILLUSTRATION_SIZE = "properties-text-note-illustration-size";
     PROPERTIES_TEXT_NOTE_ILLUSTRATION_JUSTIFY = "properties-text-note-illustration-justify";
-    // m7/sketch-pad-source
+    // mockup rows 192 and 125
     PROPERTIES_FP_PAD_SCOPE_TITLE = "properties-fp-pad-scope-title";
     PROPERTIES_FP_PAD_SCOPE_FROM = "properties-fp-pad-scope-from";
     PROPERTIES_FP_PAD_SCOPE_ATTRIBUTE = "properties-fp-pad-scope-attribute";

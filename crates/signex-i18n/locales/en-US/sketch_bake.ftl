@@ -74,7 +74,7 @@ sketch-bake-legend-paste = Paste
 sketch-bake-legend-mask = Mask
 sketch-bake-legend-silk = Silk
 sketch-bake-legend-courtyard = Courtyard
-# m7/sketch-roles-bake-preview
+# mockup row 190
 # The Pads ↔ Sketch section after Bake (mockup row 190): what the links are,
 # and the line shown until a pad is clicked.
 sketch-bake-outcome-link-caption = Each pad keeps a link to the sketch entity that made it. Click a pad on the canvas.
