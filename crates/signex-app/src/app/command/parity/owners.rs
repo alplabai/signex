@@ -660,6 +660,7 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "set_sheet_variable",
     "set_symbol_parameter",
     "set_via_span",
+    "smart_paste",
     "stitch_vias",
     "swap_gates",
     "swap_pins",
