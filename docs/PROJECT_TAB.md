@@ -112,8 +112,22 @@ message. The chrome catalog draws a sample of it.
   card. Under the list, Duplicate adds "<name> copy" (then "<name> copy 2",
   ...) carrying what the source changes and the fits its sheets give it, and
   opens its name; it waits for a parts read that holds. Set as default moves
-  the star. The top bar ends with Settings..., Compare variants... and Open
-  in BOM Studio, greyed with a "Not built yet" tooltip. The centre shows a
+  the star. The top bar ends with Settings..., greyed with a "Not built yet"
+  tooltip (the variant defaults are `project_set_default_variant`; the
+  surface waits for a mockup), Compare variants... and Open in BOM Studio
+  (#2949). Compare variants... shows two variants side by side in place of
+  the cards and the matrix (mockup row 59, view d): Base on the left, the
+  selected variant on the right (the first one while Base is selected), a
+  select per side with a swap button between them, one line per difference
+  (a part one side fits and the other does not; else each value, footprint
+  or field the two fitted sides give another value, the right side as a
+  pill), and a footer with the count of differences, the fitted parts on
+  each side and Close. It reads the parts read with the project's variant
+  settings over it (`VariantMatrix::compare`), as the matrix and the BOM
+  do, and changes nothing. Open in BOM Studio opens the BOM preview of the
+  project's sheets (its root sheet when open, else its first open sheet)
+  with the variant selected in the list picked; with no sheet of the
+  project open, Messages says so and nothing opens. The centre shows a
   card per variant
   (parts fitted, cost "—" while no prices are known, changes against Base)
   and the parts matrix: one row per part, a column per variant, Fitted or
@@ -141,9 +155,11 @@ message. The chrome catalog draws a sample of it.
   evaluated on its sheet, #1986); after a sheet edit or a change of the
   project parameters the footer says so and the top bar offers Read again. Names are trimmed, at most 64 characters, no control
   characters, unique ignoring ASCII case, and never `Base`; a refused edit
-  shows its reason and changes nothing. Settings, Compare variants, Open in
-  BOM Studio, alternate parts, the cell menu and the sheet preview are not
-  built yet.
+  shows its reason and changes nothing. The schematic canvas, SVG, PDF and
+  print draw a part's value as the active variant (on paper, the printed
+  variant) gives it; Base, or a cleared value, draws the sheet's value
+  again (#2948). The Settings surface, alternate parts, the cell menu and
+  the sheet preview are not built yet.
 - **Libraries** — the project's libraries in list order, with the path as
   stored (cut from the start so the file name stays visible), the kind (in
   the project, shared, global) and the mount state read from the app as a
@@ -270,7 +286,7 @@ overwrite a value the project stores.
 
 `project_settings document=<project or any of its documents>` answers every
 section as one object: `sheets` (`page`, `name`, `file`, in page order),
-`variants` (`defined`, `active`; `Base` when none is), `libraries` (`name`,
+`variants` (`defined`, `active`, `default`; `Base` when none is), `libraries` (`name`,
 `path` as stored, `kind` `project_local` / `shared` / `global`, `state`
 `mounted` / `read_only` / `missing` / `not_mounted`), `annotation`
 (`annotate_undo` `project` / `per_sheet` / null for the Preferences
@@ -291,6 +307,7 @@ list):
 | `project_rename_variant` | `name`, `value` (the new name) |
 | `project_remove_variant` | `name` |
 | `project_set_active_variant` | `name`, optional; none or `Base` is Base |
+| `project_set_default_variant` | `name`, optional; none or `Base` is Base (Set as default, #2949) |
 | `project_move_library` | `library` (path as stored), `direction` |
 | `project_set_annotate_undo` | `value` `project` / `per_sheet`, optional; none follows Preferences |
 | `project_set_version_control` | `on`; on is refused without a repository |
@@ -304,6 +321,21 @@ does) plus `changed`; an id that names no entry, or more than one, is
 refused. `project_run_requirements` runs the tab's Run checks and answers at
 once; the results land in the tab. `check_requirements` is the query that
 answers with the report.
+
+The Variant Manager's top bar actions are queries (#2949); both need an
+open sheet of the project and change nothing.
+`compare_variants document=<…> from=<variant>? to=<variant>?` (`from`
+defaults to Base, `to` to the active variant, the first one while Base is
+active) answers `project`, `from`, `to` (names as defined; `Base`),
+`from_fitted`, `to_fitted` and `parts`: each part the two differ on, in
+designator order, with `designator`, `from` and `to` (`fitted`,
+`parameters` by name: `Value`, `Footprint`, fields) and `changes`
+(`{"kind": "fit"}` or `{"kind": "parameter", "parameter": <name>}`).
+`variant_bom document=<…> name=<variant>?` (none is the active variant,
+`Base` is Base) answers `project`, `variant`, `parts` (the fitted count)
+and `lines` (`designators`, `quantity`, `name`, `value`, `footprint`), the
+lines Open in BOM Studio opens on. A project with no variant besides Base,
+an unknown name or no open sheet is refused with the reason.
 
 A refused edit changes nothing and says why. The edits are on the agent
 channel and refused inside `apply_edits`: they write the project file, which
