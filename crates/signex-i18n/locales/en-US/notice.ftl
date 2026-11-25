@@ -313,3 +313,24 @@ notice-load-restore-engine-failed = [git] restore: { $file } was restored but it
 # chrome-copy-help
 # After the detail of a Save Failed card (mockup row 11): nothing was lost.
 notice-save-failed-edits-kept = Your edits are still open and unsaved.
+
+## A project written by a newer version opens read-only (#2904)
+
+# The Save Failed card. $project is the project's name; $format is the
+# format it was written in, such as "snxprj/1.2".
+notice-project-read-only-save = '{ $project }' was written by a newer { -brand-name } ({ $format }) and is read-only in this build, so it was not saved. Edit it in that version.
+# The Rename dialog's error. $project is the project's name; $format is the
+# format it was written in.
+notice-project-read-only-rename = Not renamed: '{ $project }' was written by a newer { -brand-name } ({ $format }) and is read-only in this build, so its file list cannot change. Nothing was changed.
+# $project is the project's name; $file is the new sheet's file name.
+notice-project-read-only-add = '{ $project }' was written by a newer { -brand-name } and is read-only in this build, so { $file } was not created.
+# Add Existing in such a project. $project is the project's name; $count is
+# how many files were picked (a whole number); $files lists their names.
+notice-project-read-only-add-existing =
+    { $count ->
+        [one] '{ $project }' was written by a newer { -brand-name } and is read-only in this build, so its file list cannot change: { $files } was not added. Nothing was copied.
+       *[other] '{ $project }' was written by a newer { -brand-name } and is read-only in this build, so its file list cannot change: { $files } were not added. Nothing was copied.
+    }
+# Remove from Project or Delete in such a project. $project is the
+# project's name; $file is the file's name.
+notice-project-read-only-remove = '{ $project }' was written by a newer { -brand-name } and is read-only in this build, so its file list cannot change: { $file } was not removed. Nothing was moved or deleted.

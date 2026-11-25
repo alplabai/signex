@@ -182,7 +182,11 @@ fn value_look(
 }
 
 /// The colour and dash of a dimension line.
-fn dimension_stroke(ink: &LabelInk, conflicting: bool, reference: bool) -> Stroke<'static> {
+pub(super) fn dimension_stroke(
+    ink: &LabelInk,
+    conflicting: bool,
+    reference: bool,
+) -> Stroke<'static> {
     let colour = if conflicting {
         ink.danger
     } else if reference {
@@ -210,7 +214,13 @@ fn draw_dimension_line(frame: &mut canvas::Frame, (a, b): (Point, Point), stroke
     draw_arrow_head(frame, b, a, ARROW_HEAD_PX, solid);
 }
 
-fn draw_value(frame: &mut canvas::Frame, glyph: &Glyph, ink: &LabelInk, conflicting: bool) {
+/// A value glyph: its dimension line, if it has one, and its pill.
+pub(super) fn draw_value(
+    frame: &mut canvas::Frame,
+    glyph: &Glyph,
+    ink: &LabelInk,
+    conflicting: bool,
+) {
     let GlyphFace::Value {
         text,
         editing,

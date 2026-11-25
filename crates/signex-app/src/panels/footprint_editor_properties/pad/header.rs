@@ -168,16 +168,52 @@ pub(in crate::panels::footprint_editor_properties) fn view_pad_header<'a>(
 /// The "Edit in Sketch ▸" link: opens the pad's profile in Sketch mode
 /// (a no-op for a pad without one).
 fn edit_in_sketch<'a>(pad_idx: usize, tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, PanelMsg> {
-    let r = resolve(tokens);
-    let (ink, hover) = (r.accent_text, r.accent_soft);
     button(text(t!(i18n, ids::EDITORS_FP_PAD_EDIT_IN_SKETCH)).size(TS.caption))
         .padding([0.0, SP.xs])
         .on_press(PanelMsg::FpEditorEditPadInSketch { pad_idx })
-        .style(move |_: &Theme, status: button::Status| button::Style {
-            background: matches!(status, button::Status::Hovered | button::Status::Pressed)
-                .then_some(Background::Color(hover)),
-            text_color: ink,
-            ..button::Style::default()
-        })
+        .style(edit_in_sketch_style(tokens))
         .boxed()
+}
+
+/// The link's look (mockup row 125, a ghost link): accent text on no fill,
+/// the soft accent behind it while hovered or pressed.
+fn edit_in_sketch_style(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme, button::Status) -> button::Style + use<> {
+    let r = resolve(tokens);
+    let (ink, hover) = (r.accent_text, r.accent_soft);
+    move |_: &Theme, status: button::Status| button::Style {
+        background: matches!(status, button::Status::Hovered | button::Status::Pressed)
+            .then_some(Background::Color(hover)),
+        text_color: ink,
+        ..button::Style::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    use super::*;
+
+    /// Mockup row 125: "Edit in Sketch ▸" is a ghost link in the accent
+    /// text colour (#A8452A on the light theme, #E0865C on the dark), with
+    /// no fill until hovered.
+    #[test]
+    fn edit_in_sketch_reads_in_the_mockup_accent_text_colour() {
+        for (theme, want) in [
+            (ThemeId::GraphiteLight, [0xA8_i32, 0x45, 0x2A]),
+            (ThemeId::GraphiteDark, [0xE0, 0x86, 0x5C]),
+        ] {
+            let tokens = theme_tokens(theme);
+            let style = edit_in_sketch_style(&tokens);
+            let rest = style(&Theme::Dark, button::Status::Active);
+            let ink = rest.text_color;
+            let got = [ink.r, ink.g, ink.b].map(|v| (v * 255.0).round() as i32);
+            assert_eq!(got, want, "{theme:?}");
+            assert!(rest.background.is_none(), "{theme:?}: no fill at rest");
+            let hovered = style(&Theme::Dark, button::Status::Hovered);
+            assert!(hovered.background.is_some(), "{theme:?}: a fill on hover");
+        }
+    }
 }

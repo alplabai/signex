@@ -5,10 +5,10 @@
 
 use iced::{Color, Point, Rectangle, Vector};
 use signex_drc_dsl::table::LimitField;
-use signex_i18n::{I18n, MessageId, UserText, t};
+use signex_i18n::{Arg, I18n, MessageId, UserText, ids};
 use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 use signex_types::theme::{ThemeId, theme_tokens};
-use signex_widgets::Label;
+use signex_widgets::LengthFormat;
 use signex_widgets::dimension_label::LabelAnchor;
 use signex_widgets::property_illustration::{
     Anchor, Callout, Fill, Paint, Part, Primitive, Stroke, Style, TextLabel, TextRole, Tint, Weight,
@@ -26,6 +26,19 @@ const GRID_STEP: f32 = 16.0;
 /// Where a drawing's title and its note sit.
 const TITLE_AT: Point = Point::new(16.0, 24.0);
 const NOTE_AT: Point = Point::new(16.0, 42.0);
+/// Scale-bar lengths in millimetres; the bar takes the first at least
+/// [`MIN_BAR`] view units long.
+const SCALE_STEPS_MM: [f64; 8] = [0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0];
+const MIN_BAR: f32 = 40.0;
+/// Half the height of a scale-bar end tick, and its label's rise.
+const BAR_TICK: f32 = 4.0;
+const BAR_LABEL_RISE: f32 = 9.0;
+/// A chip's average glyph advance, side padding, height and corner, in
+/// captions.
+const CHIP_GLYPH_EM: f32 = 0.6;
+const CHIP_PAD_EM: f32 = 0.55;
+const CHIP_LINE_EM: f32 = 1.6;
+const CHIP_RADIUS_EM: f32 = 0.35;
 
 /// The board-ground colours of a drawing: the board palette and the
 /// Graphite Dark ink, the same under both chrome themes.
@@ -116,6 +129,35 @@ pub(super) struct ValueLabel {
 pub(super) enum NoteText {
     Id(MessageId),
     User(String),
+    /// A message whose `$a` and `$b` are two other note texts: "Track ↔
+    /// Pad", "PWR ↔ HV · different nets".
+    Pair(MessageId, Box<[NoteText; 2]>),
+    /// A length in millimetres with its unit: the scale bar's "1 mm".
+    Length(f64),
+}
+
+impl NoteText {
+    /// The text as drawn, without Fluent's isolation marks: a chip is
+    /// sized by its characters.
+    pub fn shown(&self, i18n: &I18n) -> String {
+        match self {
+            NoteText::Id(id) => i18n.message_plain(*id, &[]),
+            NoteText::User(name) => name.clone(),
+            NoteText::Pair(id, parts) => {
+                let [a, b] = parts.as_ref();
+                let args = [
+                    ("a", Arg::from(a.shown(i18n))),
+                    ("b", Arg::from(b.shown(i18n))),
+                ];
+                i18n.message_plain(*id, &args)
+            }
+            NoteText::Length(mm) => {
+                let number = LengthFormat::new(i18n, super::labels::UNIT).number(*mm);
+                let args = [("value", Arg::from(number))];
+                i18n.message_plain(ids::RULES_PREVIEW_SCALE_LENGTH, &args)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -125,6 +167,8 @@ pub(super) struct Note {
     pub anchor: Anchor,
     pub role: TextRole,
     pub color: Color,
+    /// Drawn in a chip: a rounded box on the ground, edged in its colour.
+    pub is_boxed: bool,
 }
 
 /// What one drawing shows.
@@ -313,33 +357,75 @@ impl Scene {
             anchor,
             role: TextRole::Note,
             color,
+            is_boxed: false,
+        });
+    }
+
+    /// A note in a chip, centred on `at`: an object's name under it.
+    pub fn chip(&mut self, at: Point, text: NoteText, color: Color) {
+        self.notes.push(Note {
+            at,
+            text,
+            anchor: Anchor::Middle,
+            role: TextRole::Note,
+            color,
+            is_boxed: true,
         });
     }
 
     /// The drawing's title and the note under it, at the top left.
     pub fn title(&mut self, title: MessageId, note: MessageId) {
+        self.title_text(NoteText::Id(title), NoteText::Id(note));
+    }
+
+    /// [`Self::title`] with composed texts ("Track ↔ Track").
+    pub fn title_text(&mut self, title: NoteText, note: NoteText) {
         let (title_ink, note_ink) = (self.ink.title, self.ink.note);
         self.notes.push(Note {
             at: TITLE_AT,
-            text: NoteText::Id(title),
+            text: title,
             anchor: Anchor::Start,
             role: TextRole::Caption,
             color: title_ink,
+            is_boxed: false,
         });
-        self.note(NOTE_AT, NoteText::Id(note), Anchor::Start, note_ink);
+        self.note(NOTE_AT, note, Anchor::Start, note_ink);
     }
 
-    /// Every part, the notes last so they draw on top.
-    pub fn parts_with_notes(&self, i18n: &I18n) -> Vec<Part> {
+    /// A scale bar ending at `right`, `scale` view units per millimetre:
+    /// the first round length at least [`MIN_BAR`] long, named over it.
+    pub fn scale_bar(&mut self, scale: f32, right: Point) {
+        let mm = scale_bar_mm(scale);
+        let left = Point::new(right.x - mm as f32 * scale, right.y);
+        let ink = self.ink.note;
+        self.line(left, right, ink, Weight::Regular);
+        for x in [left.x, right.x] {
+            let (top, bottom) = (right.y - BAR_TICK, right.y + BAR_TICK);
+            self.line(Point::new(x, top), Point::new(x, bottom), ink, Weight::Thin);
+        }
+        let at = Point::new((left.x + right.x) / 2.0, right.y - BAR_LABEL_RISE);
+        self.note(at, NoteText::Length(mm), Anchor::Middle, ink);
+    }
+
+    /// Every part, the notes last so they draw on top. `caption_units` is
+    /// the caption size in view units, which sizes a chip around its text.
+    pub fn parts_with_notes(&self, i18n: &I18n, caption_units: f32) -> Vec<Part> {
         let mut parts = self.parts.clone();
         for note in &self.notes {
-            let text: Label<'static> = match &note.text {
-                NoteText::Id(id) => t!(i18n, *id).into(),
-                NoteText::User(name) => UserText::new(name.clone()).into(),
-            };
+            let shown = note.text.shown(i18n);
+            if note.is_boxed {
+                let r = chip_rect(note, shown.chars().count(), caption_units);
+                let radius = CHIP_RADIUS_EM * caption_units;
+                let mut style = stroke(note.color, Weight::Thin, false);
+                style.fill = Some(Fill {
+                    paint: Paint::Document(self.ink.ground),
+                    tint: Tint::Solid,
+                });
+                parts.push(Part::new(Primitive::RoundedRect { rect: r, radius }, style));
+            }
             let label = TextLabel {
                 at: note.at,
-                text,
+                text: UserText::new(shown).into(),
                 anchor: note.anchor,
                 role: note.role,
             };
@@ -350,4 +436,26 @@ impl Scene {
         }
         parts
     }
+}
+
+/// The scale bar's length for `scale` view units per millimetre.
+pub(super) fn scale_bar_mm(scale: f32) -> f64 {
+    let longest = SCALE_STEPS_MM[SCALE_STEPS_MM.len() - 1];
+    SCALE_STEPS_MM
+        .into_iter()
+        .find(|mm| *mm as f32 * scale >= MIN_BAR)
+        .unwrap_or(longest)
+}
+
+/// The chip around `note`'s text of `chars` characters.
+pub(super) fn chip_rect(note: &Note, chars: usize, caption_units: f32) -> Rectangle {
+    let em = caption_units;
+    let width = (chars as f32 * CHIP_GLYPH_EM + 2.0 * CHIP_PAD_EM) * em;
+    let height = CHIP_LINE_EM * em;
+    let x = match note.anchor {
+        Anchor::Start => note.at.x,
+        Anchor::Middle => note.at.x - width / 2.0,
+        Anchor::End => note.at.x - width,
+    };
+    rect(x, note.at.y - height / 2.0, width, height)
 }

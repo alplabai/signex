@@ -696,10 +696,12 @@ impl Signex {
                 // Start every dirty file's write off the UI thread; the
                 // project closes once all of them completed, or stays open
                 // with an error modal naming each file AND why it did not
-                // save (`handle_save_all_settled`).
+                // save (`handle_save_all_settled`). A read-only project is
+                // left out and prompted for again (#2904).
+                let paths = self.saveable_paths("Close Project", &state.dirty_paths);
                 self.begin_save_all(
                     "Save All",
-                    &state.dirty_paths,
+                    &paths,
                     &state.dirty_rows,
                     crate::app::contracts::SaveAllNext::CloseProject {
                         project_id: state.project_id,
@@ -732,6 +734,7 @@ impl Signex {
                 ));
                 Task::batch(tasks)
             }
+            ProjectCloseChoice::DiscardReadOnly => self.discard_read_only_then_close(*state),
         }
     }
 
@@ -949,13 +952,17 @@ impl Signex {
                     self.ui_state.app_quit_confirm = Some(state);
                     return Task::none();
                 }
+                // A read-only project is left out; the quit gate prompts for
+                // it again (#2904).
+                let paths = self.saveable_paths("Exit", &state.dirty_paths);
                 self.begin_save_all(
                     "Save All (exit)",
-                    &state.dirty_paths,
+                    &paths,
                     &state.dirty_rows,
                     crate::app::contracts::SaveAllNext::Quit,
                 )
             }
+            ProjectCloseChoice::DiscardReadOnly => self.discard_read_only_then_quit(&state),
         }
     }
 }

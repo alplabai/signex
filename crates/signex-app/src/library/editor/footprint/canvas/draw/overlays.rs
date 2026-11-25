@@ -300,8 +300,14 @@ impl FootprintCanvas<'_> {
         ) && let Some(sketch) = self.sketch
         {
             draw_sketch_overlay(frame, cstate, sketch, self.state, conflict_colour);
-            // mockup row 179e — the instances a circle pattern places.
-            super::sketch::draw_pattern_instances(frame, cstate, sketch, self.state);
+            // mockup row 191 — pattern instances, suppressed slots, linear dimensions.
+            super::sketch::draw_pattern_instances(
+                frame,
+                cstate,
+                sketch,
+                self.state,
+                conflict_colour,
+            );
             // v0.22 Phase E2 — DOF direction-arrow overlay.
             draw_dof_direction_arrows(frame, cstate, sketch, self.state);
             draw_sketch_tool_preview(frame, cstate, sketch, self.state);

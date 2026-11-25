@@ -129,7 +129,7 @@ pub fn parameter_request(constraint: ConstraintId) -> FootprintEditorMsg {
 }
 
 /// The name of a constraint kind in the menu header.
-fn kind_name(kind: &ConstraintKind) -> MessageId {
+pub(crate) fn kind_name(kind: &ConstraintKind) -> MessageId {
     use ConstraintKind::*;
     match kind {
         Coincident { .. } => ids::SKETCH_CANVAS_KIND_COINCIDENT,

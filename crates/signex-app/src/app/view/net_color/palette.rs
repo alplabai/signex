@@ -2,7 +2,7 @@
 //! named by a label or a power port (the swatch in a fixed column, the name
 //! in mono, coloured nets first), a chooser floating beside the clicked row,
 //! and the Clear all footer. The window's title bar carries the title and the
-//! net count.
+//! net count. The card keeps its content size, centred, in a larger window.
 
 use iced::widget::{Space, Widget, column, container, row, scrollable, stack, svg};
 use iced::{Alignment, Color, Element, Length, Theme};
@@ -12,7 +12,9 @@ use signex_widgets::{button, text};
 
 use super::row_flyout::RowFlyout;
 use super::{SWATCH, swatch, swatch_button};
-use crate::app::handlers::editing_commands::net_color_palette::{CHOOSER_COLORS, PaletteRow};
+use crate::app::handlers::editing_commands::net_color_palette::{
+    CHOOSER_COLORS, PALETTE_WIDTH, PaletteRow, palette_window_height,
+};
 use crate::app::state::{NetColorToast, NetColorsCleared};
 use crate::app::{Message, NetColorMsg, Signex};
 use crate::styles::{
@@ -123,13 +125,21 @@ impl Signex {
         );
 
         let card = container(column![filter, list, footer].height(Length::Fill))
+            .width(Length::Fill)
+            .height(Length::Fill)
             .style(crate::styles::modal_card(tokens))
             .clip(true)
             .boxed();
-        match state.toast.as_ref() {
+        let card = match state.toast.as_ref() {
             Some(toast) => self.with_clear_toast(card, toast),
             None => card,
-        }
+        };
+        // Content-sized (mockup row 71): at most the size the window opens
+        // at, smaller when the window is, centred when it is larger.
+        let sized = container(card)
+            .width(Length::Fill.max(PALETTE_WIDTH))
+            .height(Length::Fill.max(palette_window_height(self.palette_net_count())));
+        container(sized).center(Length::Fill).boxed()
     }
 
     /// `card` with the Clear toast floating over the foot of its list, above
@@ -396,7 +406,20 @@ mod tests {
     /// accent must be near it and nearer to it than to the plain ink.
     fn assert_accent_ink(pixels: &[u8], window: iced::Size, bounds: iced::Rectangle, app: &Signex) {
         let tokens = &app.document_state.panel_ctx.tokens;
-        let (accent, plain) = (rgb8(resolve(tokens).accent_text), rgb8(ti(tokens.text)));
+        let (accent, plain) = (resolve(tokens).accent_text, ti(tokens.text));
+        assert_ink(pixels, window, bounds, accent, plain);
+    }
+
+    /// The label inside `bounds` is drawn in `want`, not in `other`: the
+    /// pixel closest to `want` is near it and nearer to it than to `other`.
+    fn assert_ink(
+        pixels: &[u8],
+        window: iced::Size,
+        bounds: iced::Rectangle,
+        want: Color,
+        other: Color,
+    ) {
+        let (accent, plain) = (rgb8(want), rgb8(other));
         assert_ne!(accent, plain, "the theme tells the two inks apart");
         let width = window.width as usize;
         let xs = bounds.x.max(0.0) as usize..((bounds.x + bounds.width).ceil() as usize).min(width);
@@ -618,5 +641,124 @@ mod tests {
         .collect();
         assert!(texts.iter().any(|t| t == "+5V"), "{texts:?}");
         assert!(texts.iter().any(|t| t == "Clear all colors"), "{texts:?}");
+    }
+
+    /// The window the audit captures draw the palette in.
+    const LARGE: iced::Size = iced::Size::new(1000.0, 720.0);
+
+    /// The card's bounds when it is centred in `window` at `height`.
+    fn centred_card(window: iced::Size, height: f32) -> iced::Rectangle {
+        iced::Rectangle {
+            x: (window.width - PALETTE_WIDTH) / 2.0,
+            y: (window.height - height) / 2.0,
+            width: PALETTE_WIDTH,
+            height,
+        }
+    }
+
+    /// Whether `inner` lies inside `outer`, to half a pixel.
+    fn inside(inner: iced::Rectangle, outer: iced::Rectangle) -> bool {
+        inner.x >= outer.x - 0.5
+            && inner.y >= outer.y - 0.5
+            && inner.x + inner.width <= outer.x + outer.width + 0.5
+            && inner.y + inner.height <= outer.y + outer.height + 0.5
+    }
+
+    /// Mockup row 71 (#2899): in a window larger than its content the
+    /// palette stays a 360 px card, centred, with the filter and the footer
+    /// inside it and the footer right under the rows.
+    #[test]
+    fn a_larger_window_keeps_the_card_content_sized_and_centred() {
+        let app = app_with_nets(&["A", "B", "C"]);
+        let card = centred_card(LARGE, palette_window_height(3));
+        let inputs = crate::layout_probe::lay_out_inputs(app.view_net_color_palette_body(), LARGE);
+        let filter = inputs
+            .iter()
+            .find(|laid| laid.text == "Filter nets")
+            .expect("the filter input");
+        assert!(inside(filter.bounds, card), "{filter:?} in {card:?}");
+
+        let texts = lay_out_texts(app.view_net_color_palette_body(), LARGE);
+        let last = crate::layout_probe::find(&texts, "C").bounds;
+        let footer = crate::layout_probe::find(&texts, "Clear all colors").bounds;
+        let hint = crate::layout_probe::find(&texts, "Click a row to choose").bounds;
+        for laid in [last, footer, hint] {
+            assert!(inside(laid, card), "{laid:?} in {card:?}");
+        }
+        // The same allowance as the fitted window's test above.
+        let m = ChromeMetrics::DEFAULT;
+        let fit = SP.m + SP.s + SP.l + (m.row - last.height) + (m.button - footer.height);
+        let gap = footer.y - (last.y + last.height);
+        assert!(gap > 0.0 && gap <= fit, "gap {gap}, at most {fit}");
+    }
+
+    /// The card is at most its content size: a window shorter than that
+    /// still shows the footer, and the list scrolls.
+    #[test]
+    fn a_short_window_keeps_the_footer_in_view() {
+        let names: Vec<String> = (0..20).map(|i| format!("N{i:02}")).collect();
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        let app = app_with_nets(&names);
+        let window = iced::Size::new(PALETTE_WIDTH, 200.0);
+        assert!(palette_window_height(names.len()) > window.height);
+        let texts = lay_out_texts(app.view_net_color_palette_body(), window);
+        let footer = crate::layout_probe::find(&texts, "Clear all colors").bounds;
+        assert!(
+            footer.y + footer.height <= window.height,
+            "{footer:?} in {window:?}"
+        );
+    }
+
+    /// Mockup row 71 (#2899): a sheet with no net shows the empty card
+    /// inside the content-sized palette, the footer under it.
+    #[test]
+    fn no_nets_shows_the_empty_card_inside_the_palette() {
+        let (mut app, _task) = Signex::new();
+        add_sheet_with(
+            &mut app,
+            std::path::Path::new("empty.snxsch"),
+            SchematicSheet::default(),
+        );
+        assert_eq!(app.palette_net_count(), 0);
+        let card = centred_card(LARGE, palette_window_height(0));
+        let texts = lay_out_texts(app.view_net_color_palette_body(), LARGE);
+        let empty = crate::layout_probe::find(&texts, "No net labels on the active sheet.").bounds;
+        let footer = crate::layout_probe::find(&texts, "Clear all colors").bounds;
+        assert!(inside(empty, card), "{empty:?} in {card:?}");
+        assert!(inside(footer, card), "{footer:?} in {card:?}");
+        assert!(footer.y > empty.y + empty.height, "{empty:?} {footer:?}");
+    }
+
+    /// Mockup row 71 (#2899): "Clear all colors" uses one ink role in both
+    /// themes: the muted ink with nothing to clear, the accent ink of a link
+    /// once a net has a colour.
+    #[test]
+    fn clear_all_uses_the_same_ink_role_in_light_and_dark() {
+        use signex_types::theme::{ThemeId, theme_tokens};
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let mut app = app_with_nets(&["A"]);
+            app.document_state.panel_ctx.tokens = theme_tokens(id);
+            let window = iced::Size::new(PALETTE_WIDTH, 400.0);
+            let draw = |app: &Signex| {
+                let texts = lay_out_texts(app.view_net_color_palette_body(), window);
+                let label = crate::layout_probe::find(&texts, "Clear all colors").bounds;
+                let pixels =
+                    crate::layout_probe::draw_pixels(app.view_net_color_palette_body(), window);
+                (label, pixels)
+            };
+            let (muted, accent) = {
+                let tokens = &app.document_state.panel_ctx.tokens;
+                (ti(tokens.text_secondary), resolve(tokens).accent_text)
+            };
+            let (label, pixels) = draw(&app);
+            assert_ink(&pixels, window, label, muted, accent);
+
+            let _ = app.update(net_message(NetColorMsg::Set {
+                net: "A".into(),
+                color: Some(signex_types::theme::Color::new(0xE0, 0x54, 0x54, 255)),
+            }));
+            let (label, pixels) = draw(&app);
+            assert_ink(&pixels, window, label, accent, muted);
+        }
     }
 }

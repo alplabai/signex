@@ -843,6 +843,7 @@ impl Signex {
                 board_net_classes: Default::default(),
                 cross_select: Default::default(),
                 board_sketch: None,
+                board_sketch_hint_said: false,
                 board_3d: None,
                 pcb_footprint_draft: None,
                 pcb_component: Default::default(),

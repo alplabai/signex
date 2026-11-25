@@ -193,8 +193,9 @@ stores the waiver with the note in the board (`waive_drc_violation`, one
 board undo step), and Unwaive takes it back (`unwaive_drc_violation`). A
 waived violation is hidden until Show waived is on. The results are marked
 stale when the board or its project's net classes change after the run (a
-waiver alone, or its Undo or Redo, does not). The
-Rule link of a group stays greyed until boards have a Rules table.
+waiver alone, or its Undo or Redo, does not). A
+group's Rule link opens the rule in the Rules tab; Short, Unconnected and
+Keepout groups have none, since no written rule sets them.
 
 The Net Classes panel is a table of the board's project net classes (the
 same table the schematic's net classes and DRC read): name, colour, track
@@ -438,8 +439,9 @@ keep their names; whether to rename them to "Export PDF…" is still open.
 
 The dialog is one screen (#2430): the sheets as thumbnails on the left (an
 unticked sheet's thumbnail is dimmed, not removed), the page in the middle with
-a toolbar for page stepping and zoom and a caption in paper units ("ISO A4
-landscape · 297 × 210 mm · Fit to Page"), and the settings on the right. The
+a toolbar for page stepping and zoom and a caption in paper units ("A4
+landscape · 297 × 210 mm · Fit to Page"; ISO sizes go by their bare names, as
+in the Size picker), and the settings on the right. The
 settings sections, top to bottom: Sheets (Select All · Clear, "N of M"), Pages
 (All / Current / Specific), Page Setup (size, orientation, scale, the margins
 as two rows of two in mm from the page edge), Output (schematic and PCB colour
@@ -451,7 +453,9 @@ how many pages print, on which paper and at which quality, or the last
 export's outcome; Cancel closes the dialog (Close once an export finished)
 and Export PDF… asks where to save.
 
-Watermark, PDF Layers and Bookmarks (#1298): "Print a watermark" is off by
+Watermark, PDF Layers and Bookmarks (#1298) carry a NEW pill on their
+headings (mockup row 168). "Print a watermark" and "Write PDF layers" are
+toggle switches heading their sections. "Print a watermark" is off by
 default; on, it prints DRAFT, CONFIDENTIAL or a custom text at the chosen
 opacity and angle (0, 45, 90 or typed), in a fixed red (#C0392B, shown as a
 swatch; the dialog has no colour picker), on every page or the first only,

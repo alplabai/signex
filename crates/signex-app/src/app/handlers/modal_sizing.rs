@@ -265,7 +265,17 @@ impl Signex {
         if let Some(reason) = c.sheet_refs.discard_blocked_reason() {
             height += CALLOUT_HEIGHT + body_growth(column, &reason);
         }
-        height
+        height + self.read_only_note_height(&c.dirty_paths, c.dirty_rows.len(), column)
+    }
+
+    /// Height of the note on a read-only project's unsaved settings (#2904);
+    /// 0 when the prompt lists none.
+    fn read_only_note_height(&self, dirty: &[std::path::PathBuf], rows: usize, column: f32) -> f32 {
+        self.read_only_offer(dirty, rows).map_or(0.0, |offer| {
+            let line =
+                crate::app::read_only_project::read_only_note(self.ui_state.i18n.as_ref(), &offer);
+            CALLOUT_HEIGHT + body_growth(column, &line.to_string())
+        })
     }
 
     /// Height the first stage of the Remove modal needs beyond its base
@@ -322,6 +332,11 @@ impl Signex {
                     } else {
                         0.0
                     }
+                    + self.read_only_note_height(
+                        &c.dirty_paths,
+                        c.dirty_rows.len(),
+                        fixed.width - 2.0 * Spacing::DEFAULT.l - CALLOUT_INSET,
+                    )
             }),
             ModalId::ProjectCloseConfirm => ui
                 .project_close_confirm

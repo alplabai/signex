@@ -131,4 +131,33 @@ define_ids! {
     SKETCH_DOF_SECTION_OVER = "sketch-dof-section-over";
     BOARD_SKETCH_FAB_PROFILE = "board-sketch-fab-profile";
     BOARD_SKETCH_FAB_PROFILE_NONE = "board-sketch-fab-profile-none";
+    // board-pattern (mockup row 179e)
+    BOARD_PATTERN_TITLE_RECTANGULAR = "board-pattern-title-rectangular";
+    BOARD_PATTERN_TITLE_LINEAR = "board-pattern-title-linear";
+    BOARD_PATTERN_TITLE_CIRCULAR = "board-pattern-title-circular";
+    BOARD_PATTERN_SOURCE = "board-pattern-source";
+    BOARD_PATTERN_SOURCE_ROLE = "board-pattern-source-role";
+    BOARD_PATTERN_COUNT = "board-pattern-count";
+    BOARD_PATTERN_SPACING_X = "board-pattern-spacing-x";
+    BOARD_PATTERN_SPACING_Y = "board-pattern-spacing-y";
+    BOARD_PATTERN_RESOLVED = "board-pattern-resolved";
+    BOARD_PATTERN_BAKES_HOLES = "board-pattern-bakes-holes";
+    BOARD_PATTERN_BAKES_KEEPOUTS = "board-pattern-bakes-keepouts";
+    BOARD_PATTERN_BAKES_CUTOUTS = "board-pattern-bakes-cutouts";
+    BOARD_PATTERN_BAKES_SLOTS = "board-pattern-bakes-slots";
+    BOARD_PATTERN_BAKES_POURS = "board-pattern-bakes-pours";
+    BOARD_PATTERN_BAKES_V_SCORES = "board-pattern-bakes-v-scores";
+    BOARD_PATTERN_BAKES_DRAWINGS = "board-pattern-bakes-drawings";
+    BOARD_PATTERN_BAKES_REFUSED = "board-pattern-bakes-refused";
+    BOARD_PATTERN_BAKES_UNRESOLVED = "board-pattern-bakes-unresolved";
+    SKETCH_DOF_SUGGEST = "sketch-dof-suggest";
+    SKETCH_DOF_SUGGEST_REMOVE = "sketch-dof-suggest-remove";
+    SKETCH_DOF_SUGGEST_CONVERT = "sketch-dof-suggest-convert";
+    BOARD_SKETCH_CHECK_CORNERS_PROFILE = "board-sketch-check-corners-profile";
+    BOARD_SKETCH_CHECK_MIN_SLOT_PROFILE = "board-sketch-check-min-slot-profile";
+    BOARD_SKETCH_CHECK_SKIPPED_ROUTER_PROFILE = "board-sketch-check-skipped-router-profile";
+    BOARD_SKETCH_CHECK_SKIPPED_MIN_SLOT_PROFILE = "board-sketch-check-skipped-min-slot-profile";
+    BOARD_SKETCH_CHECK_CORNER_TIGHT_PROFILE = "board-sketch-check-corner-tight-profile";
+    BOARD_SKETCH_CHECK_SLOT_NARROW_PROFILE = "board-sketch-check-slot-narrow-profile";
+    BOARD_SKETCH_BAKE_DOF = "board-sketch-bake-dof";
 }

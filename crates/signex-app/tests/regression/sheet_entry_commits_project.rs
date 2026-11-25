@@ -303,8 +303,9 @@ fn rename_failure(app: &Signex) -> String {
 }
 
 /// A project read from a newer minor cannot be written, so a sheet rename in
-/// it is undone: the file is back, the saved project keeps its bytes and the
-/// project in memory still names the old file.
+/// it is refused before the file moves (#2904): the file stays, the saved
+/// project keeps its bytes and the project in memory still names the old
+/// file.
 #[test]
 fn rename_in_a_newer_minor_project_is_undone() {
     let mut f = fixture(true);
@@ -322,15 +323,18 @@ fn rename_in_a_newer_minor_project_is_undone() {
         told.contains("Nothing was changed") && told.contains("snxprj/1.2"),
         "{told}"
     );
+    // Refused up front, not moved and moved back.
+    assert!(told.contains("Not renamed"), "{told}");
 }
 
-/// Add New Schematic in a project read from a newer minor: the blank sheet
-/// is removed again, the saved project keeps its bytes and the project in
-/// memory lists no new sheet.
+/// Add New Schematic in a project read from a newer minor is refused before
+/// the blank sheet is written (#2904): no sheet, the saved project keeps its
+/// bytes, the project in memory lists no new sheet, and a card says why.
 #[test]
 fn add_new_schematic_in_a_newer_minor_project_leaves_no_sheet() {
-    let said = "the project file could not be written, so AddedNM.snxsch was not kept";
-    let before = logged_count(said);
+    let kept = "the project file could not be written, so AddedNM.snxsch was not kept";
+    let said = "Add New Schematic refused: AddedNM.snxsch was not created";
+    let (kept_before, before) = (logged_count(kept), logged_count(said));
     let mut f = fixture(true);
     let saved = make_newer_minor(&mut f);
     let path = add_new(&mut f, "AddedNM.snxsch");
@@ -341,6 +345,12 @@ fn add_new_schematic_in_a_newer_minor_project_leaves_no_sheet() {
     assert_eq!(names(memory), ["Second.snxsch"]);
     assert_eq!(memory.schematic_root.as_deref(), Some("Second.snxsch"));
     assert_eq!(logged_count(said), before + 1);
+    assert_eq!(logged_count(kept), kept_before, "no sheet was written");
+    let notice = f.app.document_state.error_notice.as_ref().expect("card");
+    assert!(
+        notice.detail.render_en_us().contains("was not created"),
+        "{notice:?}"
+    );
 }
 
 #[test]
@@ -459,4 +469,109 @@ fn a_rename_whose_move_back_also_fails_tells_the_user_where_the_file_is() {
     );
     assert!(notice.detail.render_en_us().contains("Third.snxsch"));
     assert!(!notice.detail.render_en_us().contains("Nothing was changed"));
+}
+
+/// The names in `dir`, sorted: what a refused change must leave as it was.
+fn listing(dir: &Path) -> Vec<std::ffi::OsString> {
+    let mut names: Vec<_> = std::fs::read_dir(dir)
+        .expect("list")
+        .map(|entry| entry.expect("entry").file_name())
+        .collect();
+    names.sort();
+    names
+}
+
+/// Add Existing in a project read from a newer minor is refused before
+/// anything is copied (#2904): the project folder and the picked file are as
+/// they were, the saved project keeps its bytes, the project in memory lists
+/// nothing new and stays clean, and a card says why.
+#[test]
+fn add_existing_in_a_newer_minor_project_copies_nothing() {
+    let said = "Add Existing refused: OutsideNM.snxsch not added";
+    let before = logged_count(said);
+    let mut f = fixture(true);
+    let saved = make_newer_minor(&mut f);
+    let elsewhere = TempDir::new().expect("tempdir");
+    let picked = elsewhere.path().join("OutsideNM.snxsch");
+    std::fs::write(&picked, b"outside").expect("write picked file");
+    let listed = listing(&f.dir);
+
+    let task = f
+        .app
+        .update(Message::Project(ProjectMsg::AddExistingFilePicked {
+            project_id: f.project,
+            paths: Some(vec![picked.clone()]),
+        }));
+    complete(&mut f.app, task);
+
+    assert_eq!(std::fs::read(&f.prj).unwrap(), saved, "byte-identical");
+    assert_eq!(listing(&f.dir), listed, "nothing was copied in");
+    assert_eq!(std::fs::read(&picked).unwrap(), b"outside");
+    assert_eq!(
+        names(&f.app.document_state.projects[0].data),
+        ["Second.snxsch"]
+    );
+    assert!(!f.app.document_state.is_document_dirty(&f.prj));
+    assert_eq!(logged_count(said), before + 1);
+    let notice = f.app.document_state.error_notice.as_ref().expect("card");
+    let detail = notice.detail.render_en_us();
+    assert!(
+        detail.contains("OutsideNM.snxsch")
+            && detail.contains("was not added")
+            && detail.contains("Nothing was copied"),
+        "{detail}"
+    );
+}
+
+/// Remove from Project and Delete in a project read from a newer minor are
+/// refused before anything is excluded, moved or deleted (#2904): the sheet
+/// and the folder are as they were, the saved project keeps its bytes, the
+/// project in memory still lists the sheet, and a card says why.
+#[test]
+fn remove_and_delete_in_a_newer_minor_project_leave_every_file() {
+    use signex_app::app::{RemoveChoice, RemoveDialogState, RemoveMsg};
+    for (choice, action) in [
+        (RemoveChoice::ExcludeFromProject, "Remove from Project"),
+        (RemoveChoice::DeleteFile, "Delete"),
+    ] {
+        let said = format!("{action} refused: Second.snxsch was not removed");
+        let before = logged_count(&said);
+        let mut f = fixture(true);
+        let saved = make_newer_minor(&mut f);
+        let sheet = f.dir.join("Second.snxsch");
+        let listed = listing(&f.dir);
+        f.app.ui_state.remove_dialog = Some(RemoveDialogState {
+            target_path: sheet.clone(),
+            tree_path: vec![0, 0],
+            project_id: Some(f.project),
+            display_name: "Second.snxsch".to_string(),
+            is_outside_project: false,
+            unsaved_prompt: false,
+            is_directory_package: false,
+            choice: None,
+        });
+
+        let task = f.app.update(Message::Remove(RemoveMsg::Confirm(choice)));
+        complete(&mut f.app, task);
+
+        assert_eq!(
+            std::fs::read(&f.prj).unwrap(),
+            saved,
+            "{action}: byte-identical"
+        );
+        assert_eq!(std::fs::read(&sheet).unwrap(), b"x", "{action}: sheet kept");
+        assert_eq!(listing(&f.dir), listed, "{action}: nothing moved");
+        assert_eq!(
+            names(&f.app.document_state.projects[0].data),
+            ["Second.snxsch"]
+        );
+        assert!(f.app.ui_state.remove_dialog.is_none());
+        assert_eq!(logged_count(&said), before + 1, "{action}");
+        let notice = f.app.document_state.error_notice.as_ref().expect("card");
+        let detail = notice.detail.render_en_us();
+        assert!(
+            detail.contains("was not removed") && detail.contains("Nothing was moved or deleted"),
+            "{action}: {detail}"
+        );
+    }
 }

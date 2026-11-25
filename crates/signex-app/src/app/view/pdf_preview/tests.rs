@@ -87,7 +87,8 @@ fn click_on_and_off(
 }
 
 /// #2060: every page-size and scale name keeps the English its domain
-/// `Display` gives, comes from the catalog, and follows the language.
+/// `Display` gives, comes from the catalog, and follows the language. The
+/// ISO sizes drop the "ISO " prefix, as mockup row 111 names them ("A4").
 #[test]
 fn the_page_setup_names_keep_their_english() {
     use super::page_setup::{page_size_label, scale_mode_label};
@@ -103,8 +104,18 @@ fn the_page_setup_names_keep_their_english() {
         }
     };
     for kind in PageSizeKind::ALL {
-        check(page_size_label(kind), kind.to_string());
+        let display = kind.to_string();
+        let english = display.strip_prefix("ISO ").unwrap_or(&display);
+        check(page_size_label(kind), english.to_owned());
     }
+    assert_eq!(
+        en.message_plain(page_size_label(PageSizeKind::IsoA4), &[]),
+        "A4"
+    );
+    assert_eq!(
+        en.message_plain(page_size_label(PageSizeKind::AnsiA), &[]),
+        "ANSI A"
+    );
     for mode in PdfScaleMode::ALL {
         check(scale_mode_label(mode), mode.to_string());
     }
@@ -424,4 +435,140 @@ fn one_bookmark_per_net_is_the_nets_information_setting() {
         )),
         "{clicked:?}"
     );
+}
+
+/// Mockup row 168 and DECISIONS 2026-11-19 (#2606): Variant is its own
+/// section between Output and Structure, not a row inside the folded
+/// Structure section that mockup row 111 still draws.
+#[test]
+fn the_sections_run_in_the_decided_order() {
+    let (app, _task) = Signex::new();
+    let preview = four_sheets();
+    let texts = texts_of(app.view_pdf_settings_column(&preview), COLUMN);
+    let titles = [
+        "SHEETS",
+        "PAGES",
+        "PAGE SETUP",
+        "OUTPUT",
+        "VARIANT",
+        "STRUCTURE",
+        "WATERMARK",
+        "PDF LAYERS",
+        "BOOKMARKS",
+        "BOOKMARKS AND NETS",
+        "SCHEMATICS INCLUDE",
+    ];
+    let at: Vec<usize> = titles
+        .iter()
+        .map(|title| {
+            texts
+                .iter()
+                .position(|t| t == title)
+                .unwrap_or_else(|| panic!("no {title:?} heading: {texts:#?}"))
+        })
+        .collect();
+    assert!(at.windows(2).all(|w| w[0] < w[1]), "{titles:?} at {at:?}");
+}
+
+/// Mockup row 168: the Watermark, PDF Layers and Bookmarks headings carry a
+/// NEW pill; the sections that were already there do not.
+#[test]
+fn the_new_sections_carry_a_new_pill() {
+    let (app, _task) = Signex::new();
+    let window = Size::new(COLUMN.width, 100.0);
+    let header =
+        |section, title| texts_of(app.pdf_section_header(section, title, None, true), window);
+    for (section, title) in [
+        (PdfSection::Watermark, ids::PDF_SECTION_WATERMARK),
+        (PdfSection::PdfLayers, ids::PDF_SECTION_LAYERS),
+        (PdfSection::Bookmarks, ids::PDF_SECTION_BOOKMARKS),
+    ] {
+        let texts = header(section, title);
+        assert!(texts.iter().any(|t| t == "NEW"), "{section:?}: {texts:?}");
+    }
+    for (section, title) in [
+        (PdfSection::Sheets, ids::PDF_SECTION_SHEETS),
+        (PdfSection::Variant, ids::PDF_SECTION_VARIANT),
+        (
+            PdfSection::BookmarksAndNets,
+            ids::PDF_SECTION_BOOKMARKS_NETS,
+        ),
+    ] {
+        let texts = header(section, title);
+        assert!(!texts.iter().any(|t| t == "NEW"), "{section:?}: {texts:?}");
+    }
+}
+
+/// A heading of `body` laid out for `off` (its switch off) is a toggle
+/// switch: the label sits right of the switch track (a checkbox's label
+/// sits right of a body-sized box), and a press on the label or on the
+/// track sends `toggled`.
+fn assert_heading_switch<'a>(
+    off: &'a PreviewState,
+    label: &str,
+    body: impl Fn(&'a PreviewState) -> iced::Element<'a, Message>,
+    toggled: impl Fn(&PrintPreviewMsg) -> bool,
+) {
+    use signex_widgets::toggle_switch::TRACK_WIDTH;
+    let window = Size::new(COLUMN.width, 1000.0);
+    let texts = lay_out_texts(body(off), window);
+    let bounds = crate::layout_probe::find(&texts, label).bounds;
+    assert!(
+        bounds.x >= TRACK_WIDTH,
+        "{label}: the label starts at {}, inside the switch track",
+        bounds.x
+    );
+    let on_label = messages_on_click_at(body(off), window, None, bounds.center());
+    assert!(sent(&on_label, &toggled), "{label}: {on_label:?}");
+    let track = Point::new(TRACK_WIDTH / 2.0, bounds.center().y);
+    let on_track = messages_on_click_at(body(off), window, None, track);
+    assert!(sent(&on_track, &toggled), "{label}: {on_track:?}");
+}
+
+/// Mockup row 168: "Print a watermark" and "Write PDF layers" are toggle
+/// switches heading their sections.
+#[test]
+fn the_watermark_and_layers_headings_are_switches() {
+    let (app, _task) = Signex::new();
+    let off = four_sheets();
+    assert!(!off.dialog.watermark.is_on && !off.dialog.layers.is_on);
+    assert_heading_switch(
+        &off,
+        "Print a watermark",
+        |p| app.view_pdf_watermark(p),
+        |m| {
+            matches!(
+                m,
+                PrintPreviewMsg::PdfOption(PdfOptionMsg::WatermarkToggled(true))
+            )
+        },
+    );
+    assert_heading_switch(
+        &off,
+        "Write PDF layers",
+        |p| app.view_pdf_layers(p),
+        |m| {
+            matches!(
+                m,
+                PrintPreviewMsg::PdfOption(PdfOptionMsg::PdfLayersToggled(true))
+            )
+        },
+    );
+}
+
+/// Mockup row 111: the header names the project (or document) file and its
+/// sheet count, in a dialog window's own title bar as in the in-window
+/// header.
+#[test]
+fn the_dialog_window_names_the_file_and_its_sheets() {
+    use crate::app::state::ModalId;
+    let (mut app, _task) = Signex::new();
+    assert_eq!(app.detached_modal_subtitle(ModalId::PrintPreview), None);
+    let mut preview = four_sheets();
+    preview.source = PathBuf::from("/w/dcdc.snxsch");
+    app.document_state.preview = Some(preview);
+    let subtitle = app
+        .detached_modal_subtitle(ModalId::PrintPreview)
+        .map(|s| s.replace(['\u{2068}', '\u{2069}'], ""));
+    assert_eq!(subtitle.as_deref(), Some("dcdc.snxsch · 4 sheets"));
 }

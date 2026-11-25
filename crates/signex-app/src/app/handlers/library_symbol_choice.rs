@@ -114,12 +114,14 @@ impl Signex {
             return Task::none();
         }
         let Some((library_path, table, row)) = self.row_of_placed_symbol(&symbol) else {
-            self.report_symbol_choice_failure(&symbol.reference, "its library row is not open");
+            let detail = "its library row is not open";
+            self.report_symbol_choice_failure(&target_sheet, symbol_id, &symbol.reference, detail);
             return Task::none();
         };
         let chosen = split_lib_id(lib_id).map(|(l, s)| PrimitiveRef::new(l, s));
         let Some(chosen) = chosen.filter(|c| row.binds_symbol(c)) else {
-            self.report_symbol_choice_failure(&symbol.reference, "its row does not offer it");
+            let detail = "its row does not offer it";
+            self.report_symbol_choice_failure(&target_sheet, symbol_id, &symbol.reference, detail);
             return Task::none();
         };
         let row_id = RowId::from_uuid(row.row_id);
@@ -187,12 +189,14 @@ impl Signex {
         let resolved = match result {
             Ok(resolved) => *resolved,
             Err(detail) => {
-                self.report_symbol_choice_failure(&reference, &detail);
+                self.report_symbol_choice_failure(&target_sheet, symbol_id, &reference, &detail);
                 return Task::none();
             }
         };
         if !latest {
             self.report_symbol_choice_failure(
+                &target_sheet,
+                symbol_id,
                 &reference,
                 &format!("a newer switch of it was started, so the {label} drawing was dropped"),
             );
@@ -205,6 +209,8 @@ impl Signex {
                 .is_some_and(|e| e.instance_id() == engine_instance);
         if !same_sheet {
             self.report_symbol_choice_failure(
+                &target_sheet,
+                symbol_id,
                 &reference,
                 "the sheet is no longer active or was reopened; pick again",
             );
@@ -215,6 +221,8 @@ impl Signex {
         };
         if !doc.symbols.iter().any(|s| s.uuid == symbol_id) {
             self.report_symbol_choice_failure(
+                &target_sheet,
+                symbol_id,
                 &reference,
                 "the symbol was deleted; nothing switched",
             );
@@ -222,9 +230,11 @@ impl Signex {
         }
         let blockers = signex_engine::switch_blockers(doc, symbol_id, &resolved.lib_symbol);
         if let Some(why) = switch_refusal(&blockers) {
-            crate::diagnostics::log_warning(format!(
-                "{reference}: switching to {label} would {why}; not switched."
-            ));
+            crate::diagnostics::log_part_warning(
+                format!("{reference}: switching to {label} would {why}; not switched."),
+                &target_sheet,
+                symbol_id,
+            );
             return Task::none();
         }
         let body_ref = resolved.lib_symbol.body_ref();
@@ -253,10 +263,35 @@ impl Signex {
             .map_or_else(|| "symbol".to_string(), |s| s.reference.clone())
     }
 
-    fn report_symbol_choice_failure(&self, reference: &str, detail: &str) {
-        crate::diagnostics::log_warning(format!(
-            "Could not switch {reference} to another drawing: {detail}."
-        ));
+    /// The placed symbol `symbol_id` as a Messages row's Show target, `None`
+    /// once it is gone from `sheet` (or the sheet is not open).
+    pub(crate) fn placed_part_item(
+        &self,
+        sheet: &std::path::Path,
+        symbol_id: Uuid,
+    ) -> Option<signex_types::schematic::SelectedItem> {
+        use signex_types::schematic::{SelectedItem, SelectedKind};
+        let engine = self.document_state.engines.get(sheet)?;
+        let placed = engine
+            .document()
+            .symbols
+            .iter()
+            .any(|s| s.uuid == symbol_id);
+        placed.then(|| SelectedItem::new(symbol_id, SelectedKind::Symbol))
+    }
+
+    /// The Messages line names `sheet`, and the part while it is still there
+    /// for Show to select (mockup row 86).
+    fn report_symbol_choice_failure(
+        &self,
+        sheet: &std::path::Path,
+        symbol_id: Uuid,
+        reference: &str,
+        detail: &str,
+    ) {
+        let line = format!("Could not switch {reference} to another drawing: {detail}.");
+        let object = self.placed_part_item(sheet, symbol_id);
+        crate::diagnostics::log_warning_at(line, sheet.to_path_buf(), object);
     }
 }
 

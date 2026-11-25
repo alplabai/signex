@@ -356,4 +356,8 @@ define_ids! {
     RULES_WHY_EXTRA_HIERARCHY = "rules-why-extra-hierarchy";
     RULES_WHY_EXTRA_LAYER = "rules-why-extra-layer";
     RULES_WHY_EXTRA_SCOPED = "rules-why-extra-scoped";
+    // clearance-matrix
+    RULES_PREVIEW_NOTE_CLASS_PAIR = "rules-preview-note-class-pair";
+    RULES_PREVIEW_CAP_AT_LEAST = "rules-preview-cap-at-least";
+    RULES_PREVIEW_SCALE_LENGTH = "rules-preview-scale-length";
 }

@@ -151,13 +151,39 @@ pub(in crate::panels) fn labelled_row<'a>(
     label: impl Into<Label<'a>>,
     control: Element<'a, PanelMsg>,
 ) -> Element<'a, PanelMsg> {
+    row_of(row_label(label), control, Alignment::Center)
+}
+
+/// Inset over a top-aligned row's label, in bodies (5 px at a 12 px body,
+/// mockup row 44 `.fr.top`).
+pub(super) const TOP_LABEL_INSET_EM: f32 = 5.0 / 12.0;
+
+/// [`labelled_row`] for a control taller than a line: the label sits at
+/// the control's top, not its middle (mockup row 44).
+pub(in crate::panels) fn labelled_row_top<'a>(
+    label: impl Into<Label<'a>>,
+    control: Element<'a, PanelMsg>,
+) -> Element<'a, PanelMsg> {
+    let label = container(row_label(label)).padding(iced::Padding {
+        top: TS.body * TOP_LABEL_INSET_EM,
+        ..iced::Padding::ZERO
+    });
+    row_of(label.boxed(), control, Alignment::Start)
+}
+
+/// The label column and the field column, aligned `align`.
+fn row_of<'a>(
+    label: Element<'a, PanelMsg>,
+    control: Element<'a, PanelMsg>,
+    align: Alignment,
+) -> Element<'a, PanelMsg> {
     container(
         iced::widget::row![
-            row_label(label),
+            label,
             container(control).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
         .spacing(SP.m)
-        .align_y(Alignment::Center),
+        .align_y(align),
     )
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
@@ -197,7 +223,10 @@ pub(super) fn field_insets(has_axis: bool, has_unit: bool) -> (f32, f32) {
 }
 
 /// The axis tag and the unit drawn over a field, left and right.
-fn field_tags<'a>(axis: Option<Label<'a>>, unit: Option<Label<'a>>) -> Element<'a, PanelMsg> {
+pub(super) fn field_tags<'a>(
+    axis: Option<Label<'a>>,
+    unit: Option<Label<'a>>,
+) -> Element<'a, PanelMsg> {
     let mut tags = Row::<Element<'a, PanelMsg>>::new()
         .align_y(Alignment::Center)
         .height(Length::Fill)
@@ -434,10 +463,6 @@ pub(in crate::panels) fn check_grid<'a>(
 
 /// The State section with its Locked box, the last section of a placed
 /// object's Properties.
-#[allow(
-    dead_code,
-    reason = "row kit of epic #2523; the g1 Properties units adopt it"
-)]
 pub(in crate::panels) fn push_state_section<'a>(
     col: Column<Element<'a, PanelMsg>>,
     ctx: &'a PanelContext,

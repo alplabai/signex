@@ -13,6 +13,14 @@ use signex_types::pcb_panel::{BoardPanel, PanelField, PanelFieldKind, PanelSepar
 use super::chrome::{Form, Head, Segment, Shown};
 use super::{BoardField, PanelMsg, PcbBoardMsg, PcbBoardSummary, fields};
 
+/// The Panel section's key in the collapsed-sections set.
+pub(super) const SECTION_KEY: &str = "pcb_board_panel";
+
+/// The entry that opens the Panel section, which starts closed.
+pub fn section_open_key() -> String {
+    super::chrome::toggle_key(SECTION_KEY, true)
+}
+
 fn msg(m: PcbBoardMsg) -> Option<PanelMsg> {
     Some(PanelMsg::PcbBoard(m))
 }
@@ -126,13 +134,8 @@ pub(super) fn section<'a>(
     let remove = form.t(ids::BOARD_PANEL_REMOVE);
     let button = form.action(remove.clone(), live(PcbBoardMsg::PanelRemoveClicked), why);
     rows.push(form.row(&[&title, &remove], button));
-    // Closed by default (#2523, mockup row 93), as without a panel.
-    form.section_with(
-        "pcb_board_panel",
-        ids::BOARD_PANEL_SECTION,
-        Head::closed(),
-        rows,
-    )
+    // Closed by default (#2523); Tools > Panelize Board opens it (#2902).
+    form.section_with(SECTION_KEY, ids::BOARD_PANEL_SECTION, Head::closed(), rows)
 }
 
 /// Label | the setting's field, or its value when the board is read-only.

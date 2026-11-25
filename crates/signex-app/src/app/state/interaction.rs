@@ -69,6 +69,9 @@ pub struct InteractionState {
     /// The board in sketch mode and its working copy (#2234); `None` when
     /// no board is in sketch mode.
     pub board_sketch: Option<super::BoardSketchSession>,
+    /// Whether Messages has had the board sketch mode hint this session:
+    /// it is said once, not on every entry (mockup row 187).
+    pub board_sketch_hint_said: bool,
     /// The board shown in 3D in the main window (#2390); `None` when the
     /// main window shows boards flat.
     pub board_3d: Option<super::Board3dSession>,

@@ -8,11 +8,13 @@
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point};
 use signex_sketch::SketchData;
+use signex_sketch::array::{ArrayId, ArrayKind};
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::geom::shapes;
 use signex_sketch::geom::{Point2, extension_hit};
 use signex_sketch::id::SketchEntityId;
 
+use super::pattern_instances::source_slots;
 use crate::library::editor::footprint::canvas::FootprintCanvasState;
 use crate::library::editor::footprint::sketch_mode::mirror_card::{
     MirrorCard, MirrorField, MirrorObject,
@@ -290,7 +292,8 @@ fn extend_ghost(
 /// Mirror (mockup row 191): what the Mirror card's OK writes. The card's
 /// mirror line and picked objects are drawn wide, their copies dashed
 /// about the line, and the Line the next pick would take is drawn wide
-/// under the cursor. A picked pattern shows through its own instances.
+/// under the cursor. A picked pattern shows through its own instances, and
+/// its copy as every instance it bakes, mirrored.
 #[derive(Debug, Default, PartialEq)]
 struct MirrorGhost {
     /// World polylines drawn wide: the hovered Line, the mirror line and
@@ -313,25 +316,32 @@ enum GhostShape {
 /// Segments an Arc or Circle of the Mirror ghost is drawn with.
 const CURVE_SEGMENTS: u32 = 32;
 
+/// The arc of radius `r` about `c` from angle `a0` through `delta`.
+fn sweep(c: (f64, f64), r: f64, a0: f64, delta: f64) -> Vec<(f64, f64)> {
+    (0..=CURVE_SEGMENTS)
+        .map(|i| {
+            let a = a0 + delta * f64::from(i) / f64::from(CURVE_SEGMENTS);
+            (c.0 + r * a.cos(), c.1 + r * a.sin())
+        })
+        .collect()
+}
+
+/// The circle of radius `r` about `c`.
+fn circle_path(c: (f64, f64), r: f64) -> Vec<(f64, f64)> {
+    sweep(c, r, 0.0, std::f64::consts::TAU)
+}
+
 impl Positions<'_> {
     fn shape(&self, id: SketchEntityId) -> Option<GhostShape> {
         use std::f64::consts::TAU;
         let entity = self.sketch.entities.iter().find(|e| e.id == id)?;
-        let sweep = |c: (f64, f64), r: f64, a0: f64, delta: f64| -> Vec<(f64, f64)> {
-            (0..=CURVE_SEGMENTS)
-                .map(|i| {
-                    let a = a0 + delta * f64::from(i) / f64::from(CURVE_SEGMENTS);
-                    (c.0 + r * a.cos(), c.1 + r * a.sin())
-                })
-                .collect()
-        };
         Some(match entity.kind {
             EntityKind::Point { .. } => GhostShape::Point(self.of(id)?),
             EntityKind::Line { start, end } => {
                 GhostShape::Polyline(vec![self.of(start)?, self.of(end)?])
             }
             EntityKind::Circle { center, radius } => {
-                GhostShape::Polyline(sweep(self.of(center)?, radius, 0.0, TAU))
+                GhostShape::Polyline(circle_path(self.of(center)?, radius))
             }
             EntityKind::Arc {
                 center,
@@ -383,9 +393,16 @@ impl MirrorGhost {
             Some((at.of(s)?, at.of(e)?))
         });
         let reflect = line.and_then(|(a, b)| reflection(a, b));
+        let picked = |id| card.objects.contains(&MirrorObject::Entity(id));
         for object in &card.objects {
-            let MirrorObject::Entity(id) = *object else {
-                continue;
+            let id = match *object {
+                MirrorObject::Entity(id) => id,
+                MirrorObject::Pattern(pattern) => {
+                    if let Some(reflect) = &reflect {
+                        ghost.pattern_copies(at, pattern, reflect, picked);
+                    }
+                    continue;
+                }
             };
             match at.shape(id) {
                 Some(GhostShape::Point(p)) => {
@@ -406,6 +423,49 @@ impl MirrorGhost {
             }
         }
         ghost
+    }
+
+    /// The mirrored copy of a picked pattern: the source's own shape at
+    /// every instance it bakes, reflected. A suppressed instance bakes
+    /// nothing and gets no copy; the source's own slot is skipped when
+    /// `picked` holds the source, which then draws once as an entity. A
+    /// picked pattern mirror draws no copy: its instances are not in
+    /// `sketch.arrays` (`signex_bake::pattern_slots` walks arrays only).
+    fn pattern_copies(
+        &mut self,
+        at: &Positions<'_>,
+        pattern: ArrayId,
+        reflect: &impl Fn((f64, f64)) -> (f64, f64),
+        picked: impl Fn(SketchEntityId) -> bool,
+    ) {
+        let Some(solve) = at.state.last_solve.as_ref() else {
+            return;
+        };
+        let Some(array) = at.sketch.arrays.iter().find(|a| a.id == pattern) else {
+            return;
+        };
+        let source = array.kind.source();
+        let (Some(shape), Some(found)) = (at.shape(source), source_slots(array, at.sketch, solve))
+        else {
+            return;
+        };
+        let centre = match array.kind {
+            ArrayKind::Polar { center, .. } => at.of(center),
+            _ => None,
+        };
+        let source_picked = picked(source);
+        for slot in found.slots.iter().filter(|s| !s.suppressed) {
+            if source_picked && (slot.i, slot.j) == (0, 0) {
+                continue;
+            }
+            let place = placement(found.anchor, slot.at, centre);
+            match &shape {
+                GhostShape::Point(p) => self.copied_points.push(reflect(place(*p))),
+                GhostShape::Polyline(path) => self
+                    .copies
+                    .push(path.iter().map(|p| reflect(place(*p))).collect()),
+            }
+        }
     }
 
     fn draw(&self, frame: &mut canvas::Frame, cstate: &FootprintCanvasState) {
@@ -438,6 +498,28 @@ impl MirrorGhost {
                 frame.stroke(&Path::line(from, to), stroke(GHOST_PX));
             }
         }
+    }
+}
+
+/// What carries a pattern's source from its anchor `from` to the slot at
+/// `to`: a turn about a polar pattern's `centre`, as the bake places it,
+/// else a shift. A polar source anchored on its centre shows no turn to
+/// read, and shifts (by nothing).
+fn placement(
+    from: (f64, f64),
+    to: (f64, f64),
+    centre: Option<(f64, f64)>,
+) -> impl Fn((f64, f64)) -> (f64, f64) {
+    let turn = centre.and_then(|c| {
+        let (u, v) = ((from.0 - c.0, from.1 - c.1), (to.0 - c.0, to.1 - c.1));
+        (u.0.hypot(u.1) > 1e-9).then(|| (c, (v.1.atan2(v.0) - u.1.atan2(u.0)).sin_cos()))
+    });
+    move |p: (f64, f64)| match turn {
+        Some((c, (sin, cos))) => {
+            let (dx, dy) = (p.0 - c.0, p.1 - c.1);
+            (c.0 + dx * cos - dy * sin, c.1 + dx * sin + dy * cos)
+        }
+        None => (p.0 + to.0 - from.0, p.1 + to.1 - from.1),
     }
 }
 

@@ -96,6 +96,7 @@ pub(crate) mod pcb_bar_groups;
 mod pcb_dirty_adapter;
 pub(crate) mod pcb_tools;
 pub(crate) mod project_sheets;
+pub(crate) mod read_only_project;
 mod read_only_refusal;
 pub mod restore_job;
 mod runtime;

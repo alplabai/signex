@@ -302,3 +302,128 @@ fn kept_documents_say_why_they_stay_open() {
         "a.snxsch, b.snxsch stay open because other open projects may use them."
     );
 }
+
+/// The Close Project prompt of the read-only `ProjectA` (#2904) listing its
+/// settings and `others` under `/p`, with `sheet_refs`.
+fn read_only_closing(
+    others: &[&str],
+    sheet_refs: crate::app::state::sheet_refs::SheetRefs,
+) -> crate::app::Signex {
+    let mut app = crate::app::handlers::menu::export::tests::app_workspace("/p", &[]);
+    let project = &mut app.document_state.projects[0];
+    project.data.unknown.newer_minor_source = Some("snxprj/1.2".into());
+    let (project_id, prj) = (project.id, project.path.clone());
+    let mut dirty_paths = vec![prj];
+    dirty_paths.extend(paths(others));
+    app.ui_state.project_close_confirm = Some(Box::new(crate::app::ProjectCloseConfirmState {
+        project_id,
+        project_name: "ProjectA".into(),
+        dirty_paths,
+        dirty_rows: Vec::new(),
+        kept_paths: Vec::new(),
+        sheet_refs,
+    }));
+    app
+}
+
+/// The discard button of the read-only `ProjectA`, as drawn.
+fn discard_project_a() -> String {
+    let projects = ["ProjectA".to_string()];
+    crate::app::read_only_project::discard_read_only_label(I18n::en_us_ref(), &projects)
+        .into_string()
+}
+
+/// A read-only project's unsaved settings alone (#2904): Save All is left
+/// out and a warn note says why; the discard names the project, and Cancel
+/// stays.
+#[test]
+fn a_read_only_project_withholds_save_all_and_says_why() {
+    let app = read_only_closing(&[], Default::default());
+    let texts = lay_out_texts(
+        app.view_project_close_confirm_body(),
+        iced::Size::new(900.0, 700.0),
+    );
+    assert!(texts.iter().all(|t| t.text != "Save All"), "{texts:#?}");
+    assert!(texts.iter().all(|t| t.text != "Discard All"), "{texts:#?}");
+    find(&texts, &discard_project_a());
+    find(&texts, "Cancel");
+    assert!(
+        texts.iter().any(|t| {
+            let line = plain(t.text.clone());
+            line.contains("'ProjectA'") && line.contains("Save All is not offered")
+        }),
+        "{texts:#?}"
+    );
+}
+
+/// With a sheet unsaved too, Save All stays for it and the discard names the
+/// read-only project alone (Caner, 2026-11-25); Discard All is gone and the
+/// note says what each button does.
+#[test]
+fn a_read_only_project_with_a_dirty_sheet_keeps_save_all_and_discards_only_its_settings() {
+    use crate::app::ProjectCloseChoice;
+    use crate::app::contracts::{Message, ProjectMsg};
+    let app = read_only_closing(&["a.snxsch"], Default::default());
+    let texts = lay_out_texts(
+        app.view_project_close_confirm_body(),
+        iced::Size::new(900.0, 700.0),
+    );
+    find(&texts, "Save All");
+    find(&texts, "Cancel");
+    assert!(texts.iter().all(|t| t.text != "Discard All"), "{texts:#?}");
+    let note = texts
+        .iter()
+        .map(|t| plain(t.text.clone()))
+        .find(|line| line.contains("read-only in this build"))
+        .expect("the note");
+    assert!(
+        note.contains("Save All saves every other file")
+            && note.contains("Discard 'ProjectA' drops only")
+            && !note.contains("Discard All"),
+        "{note}"
+    );
+    let choice = |label: &str| {
+        let messages = crate::layout_probe::messages_on_click(
+            app.view_project_close_confirm_body(),
+            iced::Size::new(900.0, 700.0),
+            label,
+        );
+        match messages.as_slice() {
+            [Message::Project(ProjectMsg::CloseConfirm(choice))] => *choice,
+            other => panic!("{label}: {other:?}"),
+        }
+    };
+    assert_eq!(
+        choice(&discard_project_a()),
+        ProjectCloseChoice::DiscardReadOnly
+    );
+    assert_eq!(choice("Save All"), ProjectCloseChoice::SaveAll);
+}
+
+/// An unreadable sheet blocks Discard All, but not the discard of the
+/// read-only project's own settings, whose owner is known; no line offers
+/// Discard All.
+#[test]
+fn an_unreadable_sheet_leaves_the_read_only_discard_and_no_line_offers_discard_all() {
+    let mut refs = crate::app::state::sheet_refs::SheetRefs::default();
+    refs.unreadable
+        .push(crate::app::state::sheet_refs::UnreadableSheet {
+            path: PathBuf::from("/p/broken.snxsch"),
+            reason: String::new(),
+            whole_path: false,
+        });
+    let app = read_only_closing(&["a.snxsch"], refs);
+    let texts = lay_out_texts(
+        app.view_project_close_confirm_body(),
+        iced::Size::new(900.0, 700.0),
+    );
+    find(&texts, &discard_project_a());
+    find(&texts, "Save All");
+    assert!(texts.iter().all(|t| t.text != "Discard All"), "{texts:#?}");
+    assert!(
+        texts
+            .iter()
+            .all(|t| !plain(t.text.clone()).contains("Discard All drops")),
+        "{texts:#?}"
+    );
+}

@@ -303,4 +303,5 @@ define_ids! {
     VARIANT_MANAGER_SETTINGS_UNREADABLE = "variant-manager-settings-unreadable";
     // dialog-polish
     PROJECT_PARAMETER_UNRESOLVED = "project-parameter-unresolved";
+    PROJECT_READ_ONLY_BANNER = "project-read-only-banner";
 }

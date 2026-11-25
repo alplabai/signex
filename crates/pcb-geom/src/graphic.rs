@@ -245,8 +245,9 @@ fn arc(placement: &Placement, source: &Source<'_>) -> Result<Option<GraphicShape
     }))
 }
 
-/// A circle's radius in nm, as the view, the design rule check and the
-/// fabrication outputs all read it: the distance from `center` to its rim
+/// A circle's radius in nm, as the view, the design rule check, the
+/// fabrication outputs, the courtyard, the staging extent and the bake
+/// preview all read it: the distance from `center` to its rim
 /// (`end`, else `start`) when it has one, else the saved `radius`. The
 /// editor writes the rim and derives the radius from it.
 pub fn circle_radius(

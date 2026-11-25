@@ -3,6 +3,8 @@
 //! each, and a read-only footprint preview column. Draft and rules:
 //! `app/assign_footprints/`.
 
+#[cfg(test)]
+mod look_tests;
 mod preview;
 mod table;
 
@@ -162,9 +164,8 @@ impl Signex {
                     cancel,
                     tokens,
                 ),
-                dialog_button(
-                    t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_APPLY),
-                    super::graphite::call_to_action(tokens),
+                apply_button(
+                    i18n,
                     state
                         .can_apply()
                         .then(|| af(AssignFootprintsMsg::ApplyRequested)),
@@ -180,6 +181,29 @@ impl Signex {
         .clip(true)
         .boxed()
     }
+}
+
+/// Apply on the primary fill (dark ink in the light theme), as mockup row 80
+/// draws it.
+fn apply_button<'a>(
+    i18n: &I18n,
+    on_press: Option<Message>,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let label = t!(i18n, ids::DIALOG_ASSIGN_FOOTPRINTS_APPLY);
+    crate::styles::primary_dialog_button(
+        |ink| {
+            text(label)
+                .size(TS.label)
+                .color(ink)
+                .height(Length::Fill)
+                .align_y(iced::alignment::Vertical::Center)
+                .wrapping(iced::widget::text::Wrapping::None)
+                .boxed()
+        },
+        on_press,
+        tokens,
+    )
 }
 
 /// The intro, then the filter row, the ticked bar and the table (or why

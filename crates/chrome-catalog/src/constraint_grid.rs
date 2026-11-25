@@ -288,6 +288,7 @@ pub(crate) fn view_samples<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let matrix_words = MatrixText {
         clear: label("Clear: use the fallback"),
         fallback: label("No value of its own: the larger class clearance"),
+        fallback_value: signex_i18n::ids::RULES_MATRIX_DEFAULT,
     };
     let grid =
         container(view(&GRID, &*RULES, format(), &words, style).map(|_| Message::TreeInteracted))

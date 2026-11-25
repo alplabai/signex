@@ -416,4 +416,6 @@ define_ids! {
     PCB_PRIM_DIM_PREFIX = "pcb-prim-dim-prefix";
     PCB_PRIM_DIM_SUFFIX = "pcb-prim-dim-suffix";
     PCB_PRIM_DIM_TRAILING_ZEROS = "pcb-prim-dim-trailing-zeros";
+    // mockup row 96
+    PCB_PRIM_VIA_TYPE_SIZES = "pcb-prim-via-type-sizes";
 }

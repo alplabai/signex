@@ -12,7 +12,8 @@
 //!   selection, the Sketch DOF section follows the selection's header and
 //!   Parameters and Bake as its section (mockup row 179).
 //! - A board sketch with its bake preview open: the Bake panel (mockup row
-//!   179), above any selection.
+//!   179), above any selection. A footprint sketch's open preview shows its
+//!   Bake panel the same way (mockup row 190).
 //!
 //! Un-scrolled: the parent wraps the column in the scrollable.
 
@@ -38,11 +39,12 @@ use super::super::{
     FootprintModeKind, FootprintPadSummary, FootprintSelectedSilkSummary,
     FootprintSketchEntitySummary, PanelMsg, PanelPalette,
 };
+use crate::library::editor::standalone::sketch_exit::FootprintBakeCard;
 use crate::styles::PillTone;
 
 pub(super) use header::{
     banner, caption, check_cell, check_grid, full_width_segment, gated, ghost, is_open, kv_row,
-    mini_head, object_header, pill, rule, section,
+    link, mini_head, object_header, pill, rule, section, section_shown, section_toggle,
 };
 
 /// The field ids that link the illustrations to their rows.
@@ -78,6 +80,9 @@ enum BodyState<'a> {
     /// A board sketch with its bake preview open (mockup row 179): the Bake
     /// panel, whatever is selected; a selection only highlights on the canvas.
     Bake(&'a BoardSketchProps, &'a BoardBakePreview),
+    /// A footprint sketch with its bake preview open (mockup row 190): the
+    /// Bake panel with the card, whatever is selected.
+    FootprintBake(&'a FootprintBakeCard),
     SketchEntity(&'a FootprintSketchEntitySummary),
     SelectedPad(&'a FootprintPadSummary),
     Silk(&'a FootprintSelectedSilkSummary),
@@ -91,6 +96,11 @@ fn body_state(fp: &FootprintEditorPanelContext) -> BodyState<'_> {
         && let Some(preview) = board.bake.as_ref()
     {
         return BodyState::Bake(board, preview);
+    }
+    if fp.mode_kind == FootprintModeKind::Sketch
+        && let Some(card) = fp.footprint_bake.as_ref()
+    {
+        return BodyState::FootprintBake(card);
     }
     if fp.mode_kind == FootprintModeKind::Sketch
         && let Some(entity) = fp.selected_sketch_entity.as_ref()
@@ -132,14 +142,7 @@ pub(super) fn view_body<'a>(
     };
     let col = Column::new().spacing(0).width(Length::Fill);
     let col = match fp.bake_outcome.as_ref() {
-        Some(outcome) => super::bake_outcome::view_bake_outcome(
-            col,
-            outcome,
-            fp.selected_pad.as_ref(),
-            palette,
-            tokens,
-            i18n,
-        ),
+        Some(outcome) => super::bake_outcome::view_bake_outcome(col, cx, outcome),
         None => col,
     };
     match body_state(fp) {
@@ -148,6 +151,9 @@ pub(super) fn view_body<'a>(
             // Bake as: one role picker per closed profile (mockup row 179).
             let col = super::roles::view_board_bake_as(col, cx);
             super::bake_panel::view_bake_panel_tail(col, cx)
+        }
+        BodyState::FootprintBake(card) => {
+            super::bake_panel::view_footprint_bake_panel(col, cx, card)
         }
         BodyState::SketchEntity(entity) => {
             let col = super::selection::view_sketch_entity(col, cx, entity);
@@ -197,9 +203,10 @@ fn sketch_sections_below<'a>(
     }
 }
 
-/// A board sketch with nothing selected: the board header, then the Sketch
-/// DOF, Parameters and Bake as sections right under it (mockup row 179),
-/// the board summary, then the sections the board showed before (#2234).
+/// A board sketch with nothing selected: the board header, a failing
+/// Outline checks section (mockup row 179d), then the Sketch DOF, Parameters
+/// and Bake as sections (mockup row 179), the board summary, then the
+/// sections the board showed before (#2234).
 fn view_board<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     cx: Ctx<'a, '_>,
@@ -211,6 +218,8 @@ fn view_board<'a>(
         Some(t!(i18n, ids::BOARD_SKETCH_TITLE).into()),
         cx.tokens,
     ));
+    // A failing outline check and its fix lead (mockup row 179d).
+    col = super::board::view_failing_outline_checks(col, board, cx.palette, cx.collapsed, i18n);
     let leads = super::sections::leads_with_solve(cx);
     if leads {
         col = super::sections::view_sketch_solve_section(col, cx);

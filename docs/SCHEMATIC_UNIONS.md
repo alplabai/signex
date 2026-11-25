@@ -70,8 +70,9 @@ of member editing.
 
 The outline is drawn in the selection layer, above the drawings: a dashed
 rounded rectangle (6 / 4 px, 1.2 px) 10 px around the members' boxes, with the
-name tab at its top-left, the tags beside the tab and a padlock on the tab
-(closed when locked, open when not). It follows the camera and never enters
+name tab at its top-left, the tags beside the tab and, on a locked union
+only, a padlock at the tab's right end; an unlocked union's tab is that much
+shorter. It follows the camera and never enters
 the content cache, a print or an export.
 
 ## The Unions panel

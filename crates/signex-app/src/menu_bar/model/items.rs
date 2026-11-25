@@ -1,6 +1,6 @@
 //! Row constructors the menu builders share.
 
-use super::{ItemState, Menu, MenuEntry, MenuItem, Shortcut};
+use super::{ItemState, Menu, MenuEntry, MenuIcon, MenuItem, Shortcut};
 use crate::keymap::AppCommandId;
 use crate::menu_bar::{MenuContext, MenuMessage, cmd_label, enabled, shortcut_for};
 use signex_i18n::MessageId;
@@ -29,6 +29,7 @@ fn plain(label: String, state: ItemState) -> MenuEntry {
         shortcut: None,
         state,
         checked: None,
+        icon: None,
     })
 }
 
@@ -60,6 +61,7 @@ pub(super) fn panel_item(
         shortcut: None,
         state: live(action, true),
         checked: Some(ctx.open_panels.contains(&kind)),
+        icon: None,
     })
 }
 
@@ -133,6 +135,7 @@ fn command_row(ctx: &MenuContext, cmd: Cmd, label: String, state: ItemState) -> 
         shortcut,
         state,
         checked: None,
+        icon: None,
     })
 }
 
@@ -176,6 +179,17 @@ pub(super) fn cmd_toggle(ctx: &MenuContext, cmd: Cmd, checked: bool) -> MenuEntr
     match cmd_item(ctx, cmd) {
         MenuEntry::Item(item) => MenuEntry::Item(MenuItem {
             checked: Some(checked),
+            ..item
+        }),
+        other => other,
+    }
+}
+
+/// `entry` with `icon` in its check column.
+pub(super) fn with_icon(entry: MenuEntry, icon: MenuIcon) -> MenuEntry {
+    match entry {
+        MenuEntry::Item(item) => MenuEntry::Item(MenuItem {
+            icon: Some(icon),
             ..item
         }),
         other => other,

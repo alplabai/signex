@@ -21,8 +21,14 @@ impl Signex {
             let Some(engine) = self.document_state.engines.get(path) else {
                 continue;
             };
-            for reference in engine.document().mixed_version_parts_among(ids) {
-                crate::diagnostics::log_warning(mixed_version_text(&reference, path));
+            let doc = engine.document();
+            for reference in doc.mixed_version_parts_among(ids) {
+                let text = mixed_version_text(&reference, path);
+                // Show selects the part's first unit (mockup row 86).
+                match doc.symbols.iter().find(|s| s.reference.trim() == reference) {
+                    Some(unit) => crate::diagnostics::log_part_warning(text, path, unit.uuid),
+                    None => crate::diagnostics::log_warning(text),
+                }
             }
         }
     }

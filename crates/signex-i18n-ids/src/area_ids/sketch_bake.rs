@@ -37,4 +37,9 @@ define_ids! {
     SKETCH_BAKE_LEGEND_MASK = "sketch-bake-legend-mask";
     SKETCH_BAKE_LEGEND_SILK = "sketch-bake-legend-silk";
     SKETCH_BAKE_LEGEND_COURTYARD = "sketch-bake-legend-courtyard";
+    // mockup row 190
+    SKETCH_BAKE_OUTCOME_LINK_CAPTION = "sketch-bake-outcome-link-caption";
+    SKETCH_BAKE_OUTCOME_LINK_EMPTY = "sketch-bake-outcome-link-empty";
+    SKETCH_BAKE_OUTCOME_LINK_FROM = "sketch-bake-outcome-link-from";
+    SKETCH_BAKE_OUTCOME_SHOW_IN_SKETCH = "sketch-bake-outcome-show-in-sketch";
 }

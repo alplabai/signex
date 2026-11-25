@@ -35,6 +35,15 @@ fn store_tick<'a>(
     }
 }
 
+/// The "Split of the document area" tick: shows the dialog's choice (on by
+/// default), and toggles only while there is a split to store.
+fn split_tick(dialog: &SaveLayoutDialog, has_split: bool) -> (bool, Option<SaveLayoutMsg>) {
+    (
+        dialog.store_split,
+        has_split.then_some(SaveLayoutMsg::SplitToggled),
+    )
+}
+
 /// The info banner: soft info fill, the info icon, primary ink.
 fn documents_note<'a>(i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
     let r = tokens::resolve(tokens);
@@ -140,6 +149,7 @@ impl Signex {
         ));
 
         let r = tokens::resolve(tokens);
+        let (split_checked, split_toggle) = split_tick(dialog, has_split);
         let windows = self.arrangement_window_count();
         let extra_windows = column![
             store_tick(false, t!(i18n, ids::WORKSPACE_LAYOUTS_STORE_WINDOWS), None),
@@ -169,9 +179,9 @@ impl Signex {
                 Some(SaveLayoutMsg::PanelsToggled),
             ))
             .push(store_tick(
-                dialog.store_split && has_split,
+                split_checked,
                 t!(i18n, ids::WORKSPACE_LAYOUTS_STORE_SPLIT),
-                has_split.then_some(SaveLayoutMsg::SplitToggled),
+                split_toggle,
             ))
             .push(extra_windows.boxed())
             .push(documents_note(i18n, tokens))
@@ -207,5 +217,37 @@ impl Signex {
         .style(crate::styles::modal_card(tokens))
         .clip(true)
         .boxed()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dialog() -> SaveLayoutDialog {
+        SaveLayoutDialog {
+            name: "Layout 3".into(),
+            store_panels: true,
+            store_split: true,
+        }
+    }
+
+    /// Mockup row 166 and docs/WORKSPACE_LAYOUTS.md: "Split of the document
+    /// area" is on by default, and greyed (still on) while the main window
+    /// is not tiled.
+    #[test]
+    fn the_split_tick_is_on_by_default_and_greyed_without_a_split() {
+        let (checked, on) = split_tick(&dialog(), false);
+        assert!(checked);
+        assert!(on.is_none());
+        let (checked, on) = split_tick(&dialog(), true);
+        assert!(checked);
+        assert!(matches!(on, Some(SaveLayoutMsg::SplitToggled)));
+        let off = SaveLayoutDialog {
+            store_split: false,
+            ..dialog()
+        };
+        assert!(!split_tick(&off, true).0);
+        assert!(!split_tick(&off, false).0);
     }
 }
