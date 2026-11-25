@@ -22,6 +22,7 @@ mod edit;
 mod fault;
 mod file;
 mod geometry;
+mod tokens;
 mod writer;
 
 #[cfg(test)]
