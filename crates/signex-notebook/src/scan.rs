@@ -75,7 +75,7 @@ pub fn scan(source: &str) -> (Vec<Annotation>, Vec<ScanProblem>) {
     };
     let (start, first_line) = match front_matter_end(source) {
         FrontMatter::None => (0, 1),
-        FrontMatter::Closed { body, line } => (body, line),
+        FrontMatter::Closed { body, line, .. } => (body, line),
         FrontMatter::Unclosed => {
             problems.push(problem(1, ProblemKind::UnclosedFrontMatter));
             (0, 1)
@@ -111,10 +111,13 @@ pub fn scan(source: &str) -> (Vec<Annotation>, Vec<ScanProblem>) {
     (annotations, problems)
 }
 
-enum FrontMatter {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum FrontMatter {
     None,
-    /// The Typst starts at byte `body`, on line `line`.
+    /// The TOML is the bytes `toml`, between the fence lines; the Typst
+    /// starts at byte `body`, on line `line`.
     Closed {
+        toml: std::ops::Range<usize>,
         body: usize,
         line: u32,
     },
@@ -122,8 +125,9 @@ enum FrontMatter {
 }
 
 /// Where the TOML front matter between two leading `+++` lines ends. Its
-/// keys hold the reference ids and belong to the notebook tab.
-fn front_matter_end(source: &str) -> FrontMatter {
+/// keys hold the reference ids and belong to the notebook tab; the file
+/// model (`crate::file`) reads them through this same split.
+pub(crate) fn front_matter_end(source: &str) -> FrontMatter {
     let text = source.strip_prefix('\u{feff}').unwrap_or(source);
     let offset = source.len() - text.len();
     let mut lines = text.split_inclusive('\n');
@@ -131,12 +135,15 @@ fn front_matter_end(source: &str) -> FrontMatter {
         return FrontMatter::None;
     }
     let mut at = offset + text.split_inclusive('\n').next().map_or(0, str::len);
+    let toml_start = at;
     for (number, line) in lines.enumerate() {
+        let fence_start = at;
         at += line.len();
         if line.trim() == FRONT_MATTER_FENCE {
             // This fence is line `number + 2`; the Typst starts on the next.
             let line_number = u32::try_from(number + 3).unwrap_or(u32::MAX);
             return FrontMatter::Closed {
+                toml: toml_start..fence_start,
                 body: at,
                 line: line_number,
             };

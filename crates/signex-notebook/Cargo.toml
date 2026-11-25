@@ -1,15 +1,28 @@
 [package]
 name = "signex-notebook"
-description = "Design Notebook annotations: the annotation blocks of a .snxnbk notebook, their kinds, statuses and part, net and pin references, with every read problem kept by line"
+description = "Design Notebook: the .snxnbk file (Typst source with a TOML header), its references, annotation blocks and typed block ids, chapter includes, and the Typst compile pipeline to pages and reproducible PDF"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
-# UI-free and IO-free, std only: the app reads the files and hands over the
-# text, so the panel, the tests and a later notebook tab read the same way
-# (docs/NOTEBOOK_ANNOTATIONS.md).
+# UI-free and IO-free: the caller reads the files (or hands a reader
+# closure) and passes bytes, so the panel, the notebook tab, the CLI and the
+# tests read and compile the same way (docs/NOTEBOOK_ANNOTATIONS.md).
 [dependencies]
+serde = { workspace = true }
+signex-types = { workspace = true }
+thiserror = { workspace = true }
+toml = { workspace = true }
+typst = { workspace = true }
+typst-assets = { workspace = true }
+typst-layout = { workspace = true }
+typst-pdf = { workspace = true }
+typst-render = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
 
 [lints]
 workspace = true

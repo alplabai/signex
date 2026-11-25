@@ -1,34 +1,71 @@
-//! Design Notebook annotations (#2679, Annotations panel: mockup row 165).
+//! The Design Notebook (#2795; mockup rows 195-202, row 60b), and its
+//! annotations (#2679, Annotations panel: mockup row 165).
 //!
-//! A notebook is a `.snxnbk` file in the project's `notebook/` folder:
-//! Typst source with an optional TOML front matter between two `+++` lines.
-//! An annotation is a block written
-//! `#annotation(kind: "issue", status: "open", title: "..", date: "2026-11-17")[ body ]`;
-//! its body may name parts, nets and pins with `#component("U3")`,
-//! `#net("VBUS")` and `#pin("U1", "3")`. [`scan`] lists the blocks of one
-//! source and every problem it met, by line; [`Filter`] picks the ones a
-//! list shows. The grammar and the reading rules are in
-//! `docs/NOTEBOOK_ANNOTATIONS.md`.
+//! A project's notebook is one `.snxnbk` file in its `notebook/` folder
+//! that may `#include` chapter files. A `.snxnbk` file is Typst source
+//! after a TOML header between two `+++` lines; the header holds the format
+//! token and the stored id of each reference, and there is no sidecar file.
+//! [`NotebookFile`] reads and writes one file byte for byte.
+//!
+//! The Typst names the design with `#component("R7")`, `#pin("U3", "3")`
+//! (or `#pin("U3.3")`) and `#net("+3V3")` ([`Reference`]) and records
+//! blocks with one function per kind, `#note`, `#calculation`,
+//! `#measurement`, `#issue` and `#decision`, each with a typed id
+//! ([`BlockId`]: `NOTE-012`, `CALC-2.1`, `MEAS-009`, `ISS-004`,
+//! `DEC-002`). The earlier `#annotation(kind: "...", ...)` block is still
+//! read: [`scan`] lists its blocks and every problem it met, by line, and
+//! [`Filter`] picks the ones a list shows (`docs/NOTEBOOK_ANNOTATIONS.md`).
+//!
+//! [`compile`] turns [`NotebookSources`] into pages over Typst, with the
+//! bundled `@signex/notebook` package and fonts only; a
+//! [`CompiledNotebook`] draws a page for the preview and writes a PDF that
+//! is the same file every time.
 //!
 //! UI-free and IO-free: the caller reads the files.
 
 mod annotation;
+mod compile;
 mod date;
+mod file;
 mod filter;
+mod header;
+mod id;
 mod lexer;
 mod reference;
 mod scan;
+mod sources;
+mod syntax;
+mod world;
 
 pub use annotation::{Annotation, AnnotationKind, Status};
+pub use compile::{
+    Compilation, CompileOptions, CompiledNotebook, Diagnostic, DiagnosticSeverity, PDF_CREATOR,
+    PageImage, PageInfo, compile,
+};
 pub use date::IsoDate;
+pub use file::{HEADER_FENCE, NotebookFile, NotebookFileError};
 pub use filter::{DateWindow, Filter, newest_first};
-pub use reference::Reference;
+pub use header::{Header, HeaderError, NOTEBOOK_FORMAT, StoredReference};
+pub use id::{BlockId, SERIAL_WIDTH};
+pub use reference::{Reference, quote};
 pub use scan::{ProblemKind, SNIPPET_MAX_CHARS, ScanProblem, TITLE_MAX_CHARS, scan};
+pub use sources::{LoadProblem, LoadProblemKind, NotebookSources, resolve};
+pub use syntax::{Include, ReferenceAt, distinct_references, includes, references, typst_source};
+pub use world::{PACKAGE_IMPORT, PACKAGE_NAME, PACKAGE_NAMESPACE, PACKAGE_VERSION};
 
 /// The project folder that holds the notebooks.
 pub const NOTEBOOK_DIR: &str = "notebook";
 /// The extension of a notebook file.
 pub const NOTEBOOK_EXTENSION: &str = "snxnbk";
+/// The notebook file a project's Design Notebook opens: `design.snxnbk`
+/// in [`NOTEBOOK_DIR`].
+pub const DEFAULT_NOTEBOOK_FILE: &str = "design.snxnbk";
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_compile;
+#[cfg(test)]
+mod tests_file;
+#[cfg(test)]
+mod tests_model;

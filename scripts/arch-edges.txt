@@ -63,6 +63,7 @@ signex-library -> signex-sketch
 signex-library -> signex-types
 signex-library-server -> signex-library
 signex-net -> signex-types
+signex-notebook -> signex-types
 signex-output -> pcb-geom
 signex-output -> signex-bom
 signex-output -> signex-types

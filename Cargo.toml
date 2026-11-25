@@ -141,6 +141,14 @@ signex-mcad = { path = "crates/signex-mcad" }
 signex-gerber = { path = "crates/signex-gerber" }
 signex-notebook = { path = "crates/signex-notebook" }
 
+# Design Notebook: the Typst compiler, its paged layout, PDF and raster
+# exporters and its bundled fonts (all Apache-2.0; DECISIONS, Typst row).
+typst = "0.15.1"
+typst-layout = "0.15.1"
+typst-pdf = "0.15.1"
+typst-render = "0.15.1"
+typst-assets = { version = "0.15.1", features = ["fonts"] }
+
 # Library subsystem (v0.9 plan, restored at v0.11)
 chrono = { version = "0.4", features = ["serde"] }
 sha2 = "0.10"
