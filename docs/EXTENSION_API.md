@@ -71,7 +71,7 @@ extensions.
 Every id an extension adds (a catalog command, a panel key, a menu row, a
 Start-screen section, a preference) is `ext.<name>.` followed by exactly one
 snake_case segment, for example `ext.sample.say_hello`; `ext.sample.say.hello`
-is refused. Built-in ids never start with `ext.`, so an extension id cannot
+is refused (Caner, 2026-11-25; docs/DECISIONS.md). Built-in ids never start with `ext.`, so an extension id cannot
 collide with a built-in one or with another extension's.
 `ExtensionId::prefix` gives the prefix and `ExtensionId::owns` checks an id
 against it. One function holds the whole rule,
@@ -504,11 +504,6 @@ Choices made in version 1 for the maintainers to confirm or change:
   addition carry its own position?
 - **Name rules.** A name is a lowercase ASCII identifier. Should names allow
   more (`-`, upper case), or be reserved in a list?
-- **One segment after the name.** An extension id is `ext.<name>.` and
-  exactly one snake_case segment (`ext.sample.say_hello`); a dotted local
-  part (`ext.sample.panel.notes`) is refused for every point. This is the
-  conservative rule, chosen on 2026-11-25 while merging the catalog-command
-  and panel changes. Should the local part take dot-joined segments?
 - **Extension text.** A panel title, a row label, a section heading and a
   command's label are a catalog `MessageId`, and only the built-in catalog
   makes one, so an extension shows the text of an existing message. Should an
