@@ -212,15 +212,14 @@ fn the_component_row_opens_the_part_picker() {
 fn a_group_of_one_row_is_a_button_with_no_dropdown() {
     let app = board_app();
     let items = bar_of(&app);
-    for (group, reason) in [(PcbBarGroup::Text, "Place String")] {
-        assert_eq!(group.rows().len(), 1, "{group:?}");
-        let button = buttons(&items)
-            .into_iter()
-            .find(|button| button.tooltip.starts_with(reason))
-            .unwrap_or_else(|| panic!("a {group:?} button"));
-        assert!(button.enabled, "{group:?} is live");
-        assert!(button.on_right_press.is_none(), "{group:?} has no dropdown");
-    }
+    let (group, reason) = (PcbBarGroup::Text, "Place String");
+    assert_eq!(group.rows().len(), 1, "{group:?}");
+    let button = buttons(&items)
+        .into_iter()
+        .find(|button| button.tooltip.starts_with(reason))
+        .unwrap_or_else(|| panic!("a {group:?} button"));
+    assert!(button.enabled, "{group:?} is live");
+    assert!(button.on_right_press.is_none(), "{group:?} has no dropdown");
 }
 
 /// #2507: the Dimensions group opens a dropdown of the dimension kinds,

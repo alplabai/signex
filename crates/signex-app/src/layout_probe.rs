@@ -264,7 +264,6 @@ pub(crate) fn probe_points<M>(
     window: Size,
     points: &[iced::Point],
 ) -> Vec<PointProbe<M>> {
-    use iced::advanced::Overlay as _;
     use iced::advanced::mouse;
     let renderer = headless_renderer();
     let mut tree = Tree::new(&element);
