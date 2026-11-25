@@ -446,6 +446,7 @@ cmd-set-object-position = Set the position of a placed object
 cmd-set-object-rotation = Set the rotation of a placed part or label
 cmd-set-sheet-symbol-size = Set the size of a sheet symbol
 cmd-set-symbol-parameter = Set a parameter of a placed part
+cmd-set-object-text = Set a part's designator or value, a label's name or a text note's text
 cmd-set-sheet-variable = Set a sheet variable
 cmd-menu-assign-net-class = Assign Net Class...
 cmd-place-component = Place component
@@ -740,6 +741,7 @@ cmd-open-harness-definitions = Open the harness definitions
 ## Differential pair classes (#1282).
 cmd-open-diff-pair-classes = Open the project's differential pair classes
 cmd-menu-open-diff-pair-classes = Differential Pair Classes…
+cmd-list-diff-pairs = List the differential pairs of a project's schematic
 
 ## Named unions (mockup row 158).
 cmd-create-union = Create a union from the selection

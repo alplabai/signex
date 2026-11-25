@@ -118,6 +118,19 @@ pub(super) const PROPERTIES: &[CommandMetadata] = &[
         operands: operands::SYMBOL_PARAMETER,
         ..CommandMetadata::DEFAULT
     },
+    // #2953: the Object List's inline edits run this, as Properties' rows
+    // run the same engine edit. No default key.
+    CommandMetadata {
+        id: "set_object_text",
+        category: "edit",
+        label: command_ids::CMD_SET_OBJECT_TEXT,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::OBJECT_TEXT,
+        ..CommandMetadata::DEFAULT
+    },
     // A sheet variable `${NAME}` and expressions resolve; the Properties
     // panel's Sheet Variables rows run this too.
     CommandMetadata {
