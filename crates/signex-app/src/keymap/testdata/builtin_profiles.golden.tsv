@@ -28,8 +28,6 @@ signex_standard	bind	Global	M M	command:move_object
 signex_standard	bind	Global	P B	command:place_bus
 signex_standard	bind	Global	P N	command:place_net_label
 signex_standard	bind	Global	P P	command:open_components_panel
-signex_standard	bind	Global	P V K	command:place_compile_mask
-signex_standard	bind	Global	P V N	command:place_no_erc
 signex_standard	bind	Global	P W	command:place_wire
 signex_standard	bind	Global	R I	command:report_manager_bom
 signex_standard	bind	Global	Alt+Shift+A	command:force_annotate_all_schematics
@@ -92,6 +90,8 @@ signex_standard	bind	Schematic	P C	command:place_off_sheet_connector
 signex_standard	bind	Schematic	P R	command:place_port
 signex_standard	bind	Schematic	P S	command:place_sheet_symbol
 signex_standard	bind	Schematic	P U	command:place_bus_entry
+signex_standard	bind	Schematic	P V K	command:place_compile_mask
+signex_standard	bind	Schematic	P V N	command:place_no_erc
 signex_standard	bind	Schematic	P X	command:place_no_connect
 signex_standard	bind	Pcb	*	command:next_signal_layer
 signex_standard	bind	Pcb	+	command:next_layer
@@ -653,9 +653,14 @@ classic	bind	Pcb	L	command:flip_selection
 classic	bind	Pcb	Mod+Shift+C	command:copy_board_3d_screenshot
 classic	bind	Pcb	Shift+*	command:next_signal_layer
 classic	bind	Pcb	Shift++	command:next_layer
+classic	bind	Pcb	Alt+Shift+F	command:place_board_fill
+classic	bind	Pcb	Alt+Shift+R	command:place_board_region
 classic	bind	Pcb	Shift+E	command:cycle_board_snapping
+classic	bind	Pcb	Shift+G	command:place_board_polygon_pour
 classic	bind	Pcb	Shift+O	command:set_board_origin
 classic	bind	Pcb	Shift+S	command:toggle_single_layer_mode
+classic	bind	Pcb	Shift+T	command:place_board_track
+classic	bind	Pcb	Shift+V	command:place_board_via
 classic	bind	Board3d	F	command:flip_board_3d
 classic	bind	Footprint	1	command:footprint_mode_sketch
 classic	bind	Footprint	2	command:footprint_mode_pads
@@ -917,13 +922,13 @@ classic	hint	-	-	update_pcb_from_schematic
 classic	hint	-	-	compare_board_with_schematic
 classic	hint	-	-	assign_footprints
 classic	hint	-	F	change_footprint
-classic	hint	-	-	place_board_via
-classic	hint	-	-	place_board_track
-classic	hint	-	-	place_board_fill
-classic	hint	-	-	place_board_region
+classic	hint	-	Shift+V	place_board_via
+classic	hint	-	Shift+T	place_board_track
+classic	hint	-	Alt+Shift+F	place_board_fill
+classic	hint	-	Alt+Shift+R	place_board_region
 classic	hint	-	K	place_board_keepout
 classic	hint	-	1	board_sketch
-classic	hint	-	-	place_board_polygon_pour
+classic	hint	-	Shift+G	place_board_polygon_pour
 classic	hint	-	-	place_board_pour_cutout
 classic	hint	-	-	place_board_slice_pour
 classic	hint	-	-	repour_selected
