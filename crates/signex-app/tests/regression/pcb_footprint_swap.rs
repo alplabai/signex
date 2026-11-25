@@ -15,7 +15,6 @@ use std::path::PathBuf;
 use pcb_geom::{ClickMode, ItemRef};
 use signex_app::app::{
     ContextAction, ContextMenuMsg, EditMsg, FileMsg, FootprintSwapMsg, Message, PcbMsg, Signex,
-    TabDocument,
 };
 use signex_app::diagnostics;
 use signex_app::dock::DockMessage;
@@ -25,6 +24,7 @@ use signex_app::library::messages::PrimitivePickerMsg;
 use signex_app::library::state::PrimitivePickerTarget;
 use signex_app::panels::{FootprintLibrary, PanelMsg, PcbComponentFacts, PcbComponentMsg, Shared};
 use signex_app::pcb_canvas::PcbCanvasMsg;
+use signex_app::test_adapter::BoardEngines;
 use signex_library::ComponentRow;
 use signex_library::primitive::PrimitiveRef;
 use signex_types::format::SnxPcb;
@@ -150,10 +150,8 @@ fn open() -> Fixture {
 
 fn live(app: &Signex) -> PcbBoard {
     let docs = &app.document_state;
-    docs.tabs[docs.active_tab]
-        .cached_document
-        .as_ref()
-        .and_then(TabDocument::as_pcb)
+    docs.tab_board_engine(docs.active_tab)
+        .map(|engine| engine.board())
         .expect("a board is open")
         .clone()
 }

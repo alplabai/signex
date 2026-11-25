@@ -165,9 +165,9 @@ fn a_tab_switch_after_the_board_is_dropped_says_why() {
     run(&mut app, "board_report_bom");
     assert_eq!(shown_kind(&app), Some(BoardReportKind::Bom));
     // A failed History restore leaves the tab without its board.
-    for tab in app.document_state.tabs.iter_mut() {
-        if tab.path == board {
-            tab.cached_document = None;
+    for idx in 0..app.document_state.tabs.len() {
+        if app.document_state.tabs[idx].path == board {
+            app.document_state.take_tab_board_engine(idx);
         }
     }
     app.document_state.error_notice = None;
