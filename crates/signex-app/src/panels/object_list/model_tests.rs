@@ -1,10 +1,11 @@
-//! #1259: the Object List's row builder, filter, counts and selection marks.
+//! #1259: the Object List's row builder, filter, counts and selection marks;
+//! #2630: rows read as the canvas draws them.
 
 use std::path::{Path, PathBuf};
 
 use signex_types::schematic::{
-    ChildSheet, Junction, Label, LabelType, Point, SchDirective, SchematicSheet, SelectedItem,
-    SelectedKind, SheetPin, Symbol, TextNote, Wire,
+    ChildSheet, InstancePath, Junction, Label, LabelType, Point, SchDirective, SchematicSheet,
+    SelectedItem, SelectedKind, SheetPin, Symbol, SymbolInstance, TextNote, Wire,
 };
 use signex_widgets::chips::FilterSet;
 use uuid::Uuid;
@@ -104,7 +105,8 @@ fn power_path() -> PathBuf {
 }
 
 fn rows_with_nets() -> Vec<ObjectRow> {
-    sheet_rows(&power_sheet(), &power_path(), &|wire: Uuid| {
+    let look = SheetLook::default();
+    sheet_rows(&power_sheet(), &power_path(), &look, &|wire: Uuid| {
         (wire == id(8)).then(|| "SW".to_string())
     })
 }
@@ -175,7 +177,8 @@ fn a_wire_reads_its_net_from_the_index_and_its_length() {
     assert_eq!(wire.target.at, Point::new(6.35, 0.0));
 
     // No index: the net is left out, not derived here.
-    let bare = sheet_rows(&power_sheet(), &power_path(), &|_: Uuid| None);
+    let look = SheetLook::default();
+    let bare = sheet_rows(&power_sheet(), &power_path(), &look, &|_: Uuid| None);
     assert!(matches!(
         row(&bare, 8).value,
         RowValue::Length { net: None, .. }
@@ -244,6 +247,7 @@ fn the_view_marks_the_rows_selected_on_the_sheet_in_view() {
     ];
     let view = ObjectListView::build(
         &state,
+        &state.source,
         ObjectListStatus::Ready,
         Some(power_path()),
         &selected,
@@ -260,6 +264,7 @@ fn the_view_marks_the_rows_selected_on_the_sheet_in_view() {
     // The same uuids on another sheet are not this sheet's selection.
     let elsewhere = ObjectListView::build(
         &state,
+        &state.source,
         ObjectListStatus::Ready,
         Some(Path::new("proj").join("Input.snxsch")),
         &selected,
@@ -274,6 +279,7 @@ fn the_view_draws_a_page_of_rows_and_counts_before_the_chips() {
     state.kinds = FilterSet::new([ObjectKind::Wire]);
     let view = ObjectListView::build(
         &state,
+        &state.source,
         ObjectListStatus::Ready,
         Some(power_path()),
         &[],
@@ -286,4 +292,97 @@ fn the_view_draws_a_page_of_rows_and_counts_before_the_chips() {
         "the chips do not narrow the counts"
     );
     assert_eq!(view.row_limit, ROW_PAGE);
+}
+
+/// What the sheet's `${TOKEN}`s resolve to: the sheet variable `VCC`.
+fn vcc_special() -> crate::canvas::SpecialStrings {
+    let mut metadata = signex_output::ProjectMetadata::default();
+    metadata
+        .sheet_variables
+        .insert("VCC".to_string(), "3.3V".to_string());
+    crate::canvas::SpecialStrings {
+        metadata,
+        path: power_path(),
+        filename: "Power.snxsch".to_string(),
+        sheet_name: "Power".to_string(),
+        sheet_number: Some(1),
+        sheet_count: 1,
+    }
+}
+
+/// A sheet whose part has a designator of its own at `placement`, a value
+/// expression, and a text note with a token.
+fn drawn_sheet(placement: &InstancePath) -> SchematicSheet {
+    let mut s = SchematicSheet::default();
+    s.symbols.push(Symbol {
+        instances: vec![SymbolInstance {
+            project: "p".into(),
+            path: placement.to_string(),
+            reference: "QAC7".into(),
+            unit: 1,
+        }],
+        ..part(1, "QAC1", "= VCC / 10mA")
+    });
+    s.symbols.push(Symbol {
+        is_power: true,
+        ..part(2, "#PWR1", "GND")
+    });
+    s.text_notes.push(TextNote {
+        uuid: id(3),
+        text: "VCC is ${VCC}".into(),
+        position: Point::new(5.0, 5.0),
+        rotation: 0.0,
+        font_size: 0.0,
+        font_family: None,
+        justify_h: Default::default(),
+        justify_v: Default::default(),
+        locked: false,
+    });
+    s
+}
+
+/// #2630: a row's name and value are the text the canvas draws: the
+/// designator of the shown placement under the project's standard, the
+/// evaluated value and the resolved note, not the stored text.
+#[test]
+fn names_and_values_read_as_the_canvas_draws_them() {
+    let placement = InstancePath::from_chain(vec![id(100)]);
+    let sheet = drawn_sheet(&placement);
+    let look = SheetLook {
+        placement: Some(placement.clone()),
+        special: Some(vcc_special()),
+        standard: Some(signex_types::designator::DesignatorStandard::Iec81346_2Full),
+    };
+    let rows = sheet_rows(&sheet, &power_path(), &look, &|_: Uuid| None);
+    let part = row(&rows, 1);
+    assert_eq!(part.name, RowName::Text("-QAC7".into()));
+    assert_eq!(part.value, RowValue::Text("330Ω".into()));
+    assert_eq!(row(&rows, 2).name, RowName::Text("GND".into()));
+    assert_eq!(row(&rows, 3).value, RowValue::Text("VCC is 3.3V".into()));
+    // The filter finds what is shown.
+    let all = FilterSet::default();
+    assert_eq!(filtered(&rows, "qac7", &all, en()).len(), 1);
+    assert!(filtered(&rows, "qac1", &all, en()).is_empty());
+
+    // As stored when the canvas draws as stored.
+    let stored = SheetLook::default();
+    let plain = sheet_rows(&sheet, &power_path(), &stored, &|_: Uuid| None);
+    assert_eq!(row(&plain, 1).name, RowName::Text("QAC1".into()));
+    assert_eq!(row(&plain, 3).value, RowValue::Text("VCC is ${VCC}".into()));
+}
+
+/// #2630: forgetting the rows moves the read generation on, never back to
+/// zero, so a read still on its way cannot match a later one.
+#[test]
+fn a_reset_moves_the_read_generation_on() {
+    let mut source = ObjectRowsSource {
+        stamp: Some(9),
+        generation: 4,
+        reading: true,
+        ..ObjectRowsSource::default()
+    };
+    source.reset();
+    assert_eq!(source.generation, 5);
+    assert_eq!(source.stamp, None);
+    assert!(!source.reading && source.rows.is_empty());
 }

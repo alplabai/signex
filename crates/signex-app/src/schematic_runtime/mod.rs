@@ -28,7 +28,7 @@ mod dimension;
 mod directives;
 mod drawings;
 pub(crate) use drawings::annotation_aabb;
-mod drawn_value;
+pub(crate) mod drawn_value;
 mod harness;
 pub mod hit_index;
 pub mod hit_test;
