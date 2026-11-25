@@ -90,17 +90,37 @@ impl Signex {
 
     /// The snapshot of `board` as the view of `path` shows it, without the
     /// ratsnest. Designators draw as the project's standard shows them
-    /// (#1416).
+    /// (#1416). A net highlighted on it dims every other net's copper by the
+    /// Preferences ▸ PCB ▸ Display amount (#2514).
     pub(crate) fn pcb_snapshot_for(&self, path: &Path, board: &PcbBoard) -> PcbSnapshot {
-        PcbSnapshot::from_board_with_view(board, &self.pcb_layer_view(path))
-            .with_designator_standard(self.document_state.designator_standard_for(path))
+        let mut snapshot = PcbSnapshot::from_board_with_view(board, &self.pcb_layer_view(path))
+            .with_designator_standard(self.document_state.designator_standard_for(path));
+        snapshot.paint = snapshot.paint.with_net_focus(
+            self.board_focus_net(path),
+            self.ui_state.pcb_dim_others_percent,
+        );
+        snapshot
+    }
+
+    /// The net highlighted on the board at `path`, if any (#2514).
+    pub(crate) fn board_focus_net(&self, path: &Path) -> Option<u32> {
+        self.interaction_state
+            .pcb_query
+            .net_highlight
+            .as_ref()
+            .filter(|highlight| highlight.path == path)
+            .map(|highlight| highlight.net)
     }
 
     /// [`Self::pcb_snapshot_for`] for what is on the cursor: a ghost is never
-    /// faded by Show only unrouted, or the tool in hand could not be seen.
+    /// faded by Show only unrouted or a highlighted net, or the tool in hand
+    /// could not be seen.
     pub(crate) fn pcb_ghost_snapshot_for(&self, path: &Path, board: &PcbBoard) -> PcbSnapshot {
         let mut snapshot = self.pcb_snapshot_for(path, board);
-        snapshot.paint = snapshot.paint.with_board_dimmed(false);
+        snapshot.paint = snapshot
+            .paint
+            .with_board_dimmed(false)
+            .with_net_focus(None, 0);
         snapshot
     }
 

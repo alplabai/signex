@@ -382,6 +382,11 @@ pub struct UiState {
     /// Draft mirror of [`Self::ui_scale`], as a percent in 10 % steps.
     /// Applied on Save, like the other Appearance drafts.
     pub preferences_draft_ui_scale_percent: u16,
+    /// How much copper off a highlighted board net dims, percent (0..=100,
+    /// default 50; Preferences ▸ PCB ▸ Display, #2514).
+    pub pcb_dim_others_percent: u8,
+    /// Draft mirror of [`Self::pcb_dim_others_percent`]; applied on Save.
+    pub preferences_draft_pcb_dim_others_percent: u8,
     /// Draft mirror of [`Self::zoom_step_percent`]. Also the *effective*
     /// value the canvases zoom with (see [`Self::effective_zoom_step`]).
     pub preferences_draft_zoom_step_percent: u8,

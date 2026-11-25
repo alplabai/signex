@@ -174,6 +174,7 @@ impl Signex {
         let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref_from(prefs);
         let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref_from(prefs);
         let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref_from(prefs);
+        let pcb_dim_others_percent = crate::fonts::read_pcb_dim_others_pref_from(prefs);
         let ui_scale =
             crate::fonts::read_ui_scale_pref_from(prefs, &crate::fonts::prefs_file_path());
         let undo_depth =
@@ -398,6 +399,8 @@ impl Signex {
                 preferences_draft_ui_scale_percent: crate::ui_scale::scale_to_percent(ui_scale),
                 zoom_step_percent,
                 preferences_draft_zoom_step_percent: zoom_step_percent,
+                pcb_dim_others_percent,
+                preferences_draft_pcb_dim_others_percent: pcb_dim_others_percent,
                 annotate_undo,
                 preferences_draft_annotate_undo: annotate_undo,
                 move_keeps_wires,

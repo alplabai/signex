@@ -108,7 +108,9 @@ impl Signex {
         };
         let line = t!(self.ui_state.i18n, id, "net" => name.as_str());
         crate::diagnostics::log_info(line.into_string());
-        self.refresh_pcb_highlight();
+        // The board scene is drawn again: every other net dims (#2514). That
+        // repaints the highlight too.
+        self.sync_pcb_canvas_from_visible_board();
     }
 
     /// Esc on a board: drop the net highlight of the board in view. Whether

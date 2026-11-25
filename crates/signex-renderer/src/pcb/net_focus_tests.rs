@@ -105,7 +105,9 @@ fn alphas(scene: &Scene) -> [[f32; 2]; 5] {
 fn the_net_in_focus_stays_bright_and_the_others_dim_by_the_amount() {
     let plain = alphas(&scene(BoardPaint::default()));
     for (percent, keep) in [(0u8, 1.0f32), (50, 0.5), (100, 0.0)] {
-        let focused = alphas(&scene(BoardPaint::default().with_net_focus(Some(1), percent)));
+        let focused = alphas(&scene(
+            BoardPaint::default().with_net_focus(Some(1), percent),
+        ));
         for (kind, (lit, base)) in focused.iter().zip(plain.iter()).enumerate() {
             assert_eq!(lit[0], base[0], "active net, kind {kind}, {percent} %");
             assert!(

@@ -148,7 +148,12 @@ impl Signex {
             self.interaction_state.pcb_carry = None;
             self.ui_state.command_replay.drop_pending_move();
         }
-        if self.interaction_state.pcb_selection.clear() || carried || unlit {
+        let cleared = self.interaction_state.pcb_selection.clear();
+        if unlit {
+            // The other nets come back to full brightness (#2514); this
+            // repaints the highlight too.
+            self.sync_pcb_canvas_from_visible_board();
+        } else if cleared || carried {
             self.refresh_pcb_highlight();
         }
     }

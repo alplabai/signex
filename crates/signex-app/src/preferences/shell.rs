@@ -263,6 +263,7 @@ pub(super) fn dismiss_button(nav: PrefNav) -> (MessageId, PrefMsg) {
         | PrefNav::Editing
         | PrefNav::SchematicDisplay
         | PrefNav::PcbDefaults
+        | PrefNav::PcbDisplay
         | PrefNav::Keyboard
         | PrefNav::LibraryDistributors
         | PrefNav::ComponentClasses => (ids::DIALOG_BUTTON_CANCEL, PrefMsg::DiscardAndClose),
