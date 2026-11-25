@@ -1,0 +1,48 @@
+format = "snxblk/1"
+diagram_id = "0193a6c0-0000-7000-8000-000000000e00"
+
+[[groups]]
+id = "0193a6c0-0000-7000-8000-000000000e01"
+name = "Group \"A\" \\ B"
+
+[[blocks]]
+id = "0193a6c0-0000-7000-8000-000000000e10"
+name = "Tab\there \\ \"quoted\""
+function = "Line one\nline two\r\nend"
+note = "bell \u0007 escape \u001B delete \u007F form \f back \b"
+shape = "rectangle"
+x_nm = -2500000
+y_nm = 0
+width_nm = 1
+height_nm = 999999999999
+group = "0193a6c0-0000-7000-8000-000000000e01"
+rails = ["+3V3", "V\"Q\"", "ünïcødé"]
+specs = { "a = b" = "c, d", "{brace}" = "[bracket]", "ключ" = "значение" }
+sheet = "0193a6c0-0000-7000-8000-000000000ea1"
+sheet_path = "dir with space/sheet #1.snxsch"
+sheet_state = "linked"
+
+[[blocks.ports]]
+id = "0193a6c0-0000-7000-8000-000000000e11"
+name = "-"
+side = "left"
+offset_nm = 0
+direction = "input"
+
+[[blocks]]
+id = "0193a6c0-0000-7000-8000-000000000e20"
+name = "日本語 block"
+shape = "rectangle"
+x_nm = 50000000
+y_nm = 0
+width_nm = 40000000
+height_nm = 25000000
+
+[[connections]]
+id = "0193a6c0-0000-7000-8000-000000000e30"
+from_block = "0193a6c0-0000-7000-8000-000000000e10"
+from_port = "0193a6c0-0000-7000-8000-000000000e11"
+to_block = "0193a6c0-0000-7000-8000-000000000e20"
+interface = "MIPI \"CSI\""
+label = "# not a comment"
+derived_from = ""
