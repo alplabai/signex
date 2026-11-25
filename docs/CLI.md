@@ -682,6 +682,40 @@ read off the UI thread before the edit runs. Without operands, in a window,
 `place_design_block` and `import_graphics` open a file dialog and put the
 content on the cursor; `autoplace_fields` acts on the selected parts.
 
+### Smart Paste {#smart-paste}
+
+The Smart Paste dialog's choices as operands (#2665, mockup row 155): the
+copy made with `copy` pasted once at an offset or as an array, placed at once
+as one undo step.
+
+```text
+smart_paste [at=x,y] [delta=dx,dy] [copies=n] [designators=next_free|keep_if_free]
+            [nets=keep|rewrite] [net_pattern=..] [net_start=n] [document=..]
+```
+
+- `at` is where the dialog's click lands; left out, the copy's own place, so
+  copy 1 sits `delta` from the original. A pin reference is refused.
+- `delta` is the offset of copy 1 and the step between copies, `<x>,<y>` in
+  mm; left out, the copy's width on the grid plus one grid step, as the
+  dialog opens.
+- `copies` makes the paste an array of that many copies (1 to 64); copy `k`
+  sits `k` steps from `at`.
+- `designators`, `nets`, `net_pattern` and `net_start` are the dialog's
+  Designators and Net names choices, with its defaults (`next_free`,
+  `rewrite`, `${Net}_${n}`, `2`). Power nets are never rewritten.
+
+The project's closed sheets are read off the UI thread first, for their
+designators and net names. As in the dialog, a rewritten net name the project
+already uses, or a project sheet that cannot be read while a net is
+rewritten, refuses the paste and names it; nothing is placed. The answer is
+`{"document", "at", "copies", "delta", "items", "designators", "nets"}`:
+each copied designator with what each copy is called (`{"from", "to"}`),
+and each copied net with its names after the paste (`"after"`: a list,
+`"joins"` when kept, `"power"` for a power net). Without operands a
+headless `smart_paste` keeps its offset paste beside the sheet's content
+(Edit ▸ Paste Special in [MENU_BAR.md](MENU_BAR.md)). An edit list does not
+carry `smart_paste`: the copy it pastes is the person's.
+
 ## Checks on demand
 
 ```text
