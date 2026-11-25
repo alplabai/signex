@@ -633,3 +633,49 @@ fn a_room_is_picked_on_its_edges_and_under_everything_inside() {
         "connectivity holds no rooms"
     );
 }
+
+/// DECISIONS 2026-11-25: a click on a keepout, a Fill, a Solid Region or a
+/// pour cutout drawn over a polygon pour picks the area, not the pour. The
+/// pour has the lowest uuid, so the tie-break alone would pick it.
+#[test]
+fn an_area_over_a_pour_is_picked_before_the_pour() {
+    let mut b = board(Vec::new(), Vec::new(), Vec::new());
+    let tri = |x: f64| [(x, 1.0), (x + 3.0, 1.0), (x, 4.0)];
+    b.zones = vec![
+        area(
+            id(10),
+            "pour",
+            &[(0.0, 0.0), (20.0, 0.0), (20.0, 10.0), (0.0, 10.0)],
+        ),
+        area(id(11), "keepout", &tri(1.0)),
+        area(
+            id(12),
+            "solid",
+            &[(6.0, 1.0), (9.0, 1.0), (9.0, 4.0), (6.0, 4.0)],
+        ),
+        area(id(13), "solid", &tri(11.0)),
+        area(id(14), "pour_cutout", &tri(16.0)),
+    ];
+    let index = BoardIndex::build_selectable(&b);
+    let at = |x: f64, y: f64| PointNm::new((x * MM as f64) as i64, (y * MM as f64) as i64);
+    let zone = |n: u128, kind: PickKind| ItemRef::Zone { zone: id(n), kind };
+    let pour = zone(10, PickKind::Polygons);
+    for (point, expected) in [
+        (at(1.5, 1.5), zone(11, PickKind::Keepouts)),
+        (at(7.5, 2.5), zone(12, PickKind::Fills)),
+        (at(11.5, 1.5), zone(13, PickKind::Regions)),
+        (at(16.5, 1.5), zone(14, PickKind::Regions)),
+    ] {
+        let hits = index.hit_point(point, 0);
+        assert!(hits.contains(&pour) && hits.contains(&expected), "{hits:?}");
+        assert_eq!(
+            crate::selection::pick(&index, point, 0).map(|i| i.item),
+            Some(expected)
+        );
+    }
+    assert_eq!(
+        crate::selection::pick(&index, at(10.0, 8.0), 0).map(|i| i.item),
+        Some(pour),
+        "the pour alone"
+    );
+}

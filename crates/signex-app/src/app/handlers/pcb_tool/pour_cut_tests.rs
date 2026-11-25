@@ -165,6 +165,98 @@ fn a_click_inside_a_pour_cutout_picks_it_and_shows_its_panel() {
     assert!(close(area, 4.0), "{area}");
 }
 
+/// A triangle on the 1 mm grid inside the upper half of the pour, and a
+/// point inside it.
+const TRIANGLE: [(f64, f64); 3] = [(2.0, 2.0), (6.0, 2.0), (6.0, 3.0)];
+const IN_TRIANGLE: (f64, f64) = (5.0, 2.5);
+
+/// Clicks `at` and checks the area drawn after the pour is picked, as
+/// `kind`, and Properties shows it as `zone_kind`.
+fn assert_click_picks_the_area(
+    app: &mut Signex,
+    path: &std::path::Path,
+    at: (f64, f64),
+    kind: PickKind,
+    zone_kind: ZoneKind,
+) {
+    assert!(app.interaction_state.pcb_tool.is_none(), "the tool ended");
+    let zones = &board_of(app, path).zones;
+    assert_eq!(zones.len(), 2, "the pour and the area");
+    let zone = zones[1].uuid;
+    click(app, at.0, at.1);
+    let PcbPrimitiveFacts::Zone(f) = form(app) else {
+        panic!("the area panel");
+    };
+    assert_eq!(f.common.target.items, vec![ItemRef::Zone { zone, kind }]);
+    assert_eq!(f.kind, Some(zone_kind));
+}
+
+/// DECISIONS 2026-11-25: a click inside a keepout over a pour picks the
+/// keepout, not the pour.
+#[test]
+fn a_click_inside_a_keepout_over_a_pour_picks_the_keepout() {
+    use crate::app::{PcbMsg, PcbViewMsg};
+    use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    grid_only(&mut app);
+    draw_pour(&mut app);
+    let _ = app.update(Message::Pcb(PcbMsg::View(PcbViewMsg::ActiveLayerPicked(
+        PcbLayer::Technical(TechnicalLayer::KeepoutTop),
+    ))));
+    run(&mut app, "place_board_keepout");
+    for (x, y) in TRIANGLE {
+        click(&mut app, x, y);
+    }
+    right_click(&mut app);
+    escape(&mut app);
+    assert_click_picks_the_area(
+        &mut app,
+        &path,
+        IN_TRIANGLE,
+        PickKind::Keepouts,
+        ZoneKind::Keepout,
+    );
+}
+
+/// DECISIONS 2026-11-25: a click inside a Fill over a pour picks the Fill.
+#[test]
+fn a_click_inside_a_fill_over_a_pour_picks_the_fill() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    grid_only(&mut app);
+    draw_pour(&mut app);
+    run(&mut app, "place_board_fill");
+    click(&mut app, INSIDE[0].0, INSIDE[0].1);
+    click(&mut app, INSIDE[2].0, INSIDE[2].1);
+    escape(&mut app);
+    assert_click_picks_the_area(&mut app, &path, IN_CUTOUT, PickKind::Fills, ZoneKind::Fill);
+}
+
+/// DECISIONS 2026-11-25: a click inside a Solid Region over a pour picks the
+/// region.
+#[test]
+fn a_click_inside_a_solid_region_over_a_pour_picks_the_region() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    grid_only(&mut app);
+    draw_pour(&mut app);
+    run(&mut app, "place_board_region");
+    for (x, y) in TRIANGLE {
+        click(&mut app, x, y);
+    }
+    right_click(&mut app);
+    escape(&mut app);
+    assert_click_picks_the_area(
+        &mut app,
+        &path,
+        IN_TRIANGLE,
+        PickKind::Regions,
+        ZoneKind::Region,
+    );
+}
+
 /// #2871: dragging the cutout off the pour moves it as one step, and the
 /// repoured fill holds the copper again; the pour's outline never changes.
 #[test]
