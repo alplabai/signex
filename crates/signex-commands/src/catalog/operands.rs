@@ -498,6 +498,24 @@ pub const BOARD_STEP: &[Operand] = &[
     required("path", OperandKind::Path),
     optional("schema", OperandKind::Text),
 ];
+/// The project's Design Notebook as PDF (mockup row 202): which project (or
+/// one of its documents), the notebook file (`design.snxnbk` when left
+/// out) and the file (the default name in `Project Outputs/notebook/` when
+/// left out); the rest are the export dialog's settings.
+pub const NOTEBOOK_PDF_EXPORT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("path", OperandKind::Path),
+    optional("notebook", OperandKind::Text),
+    optional("pages", OperandKind::Text),
+    optional("paper", OperandKind::Text),
+    optional("variant", OperandKind::Text),
+    optional("annotations", OperandKind::Text),
+    optional("stale", OperandKind::Text),
+    optional("title_block", OperandKind::Bool),
+    optional("contents", OperandKind::Bool),
+    optional("bookmarks", OperandKind::Bool),
+    optional("python_source", OperandKind::Bool),
+];
 /// `add_board_graphic` (#2424): a drawing of `kind` (`line`, `arc`,
 /// `circle`, `rectangle`, `text_frame`) on the board `document` names. A
 /// line, rectangle or text frame takes `start` and `end`; an arc its centre

@@ -299,6 +299,21 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: super::operands::BOARD_STEP,
         ..CommandMetadata::DEFAULT
     },
+    // Mockup row 202: File > Export > Design Notebook PDF… and the notebook
+    // toolbar's Export PDF… open the export dialog on the project in view;
+    // headless (`signex-cli notebook export-pdf`) it writes the notebook of
+    // `document`'s project to `path`.
+    CommandMetadata {
+        id: "export_notebook_pdf",
+        category: "reports",
+        label: command_ids::CMD_EXPORT_NOTEBOOK_PDF,
+        menu_label: Some(command_ids::CMD_MENU_EXPORT_NOTEBOOK_PDF),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::operands::NOTEBOOK_PDF_EXPORT,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "project_settings",
         category: "design",

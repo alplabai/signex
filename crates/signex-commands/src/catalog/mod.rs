@@ -426,6 +426,9 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "open_library_browser",
     "open_net_inspector",
     "open_compiled_design",
+    // Mockup row 202: the notebook of the project in view, with or without
+    // an editor open.
+    "export_notebook_pdf",
     "show_current_command_hotkeys",
     "show_current_command_shortcuts",
     "toggle_floating_panels",

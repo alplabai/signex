@@ -54,6 +54,9 @@ mod library_delete;
 mod load_gateway;
 mod mutation_gateway;
 pub(crate) mod new_project;
+// Mockup row 202: Export Design Notebook PDF and `export_notebook_pdf`.
+pub(crate) mod notebook_pdf;
+pub use notebook_pdf::{NotebookPdfMsg, NotebookPdfState};
 pub(crate) mod page_tab;
 pub mod parent_reference_disk;
 mod parked_sheets;

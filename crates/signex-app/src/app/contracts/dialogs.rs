@@ -543,6 +543,9 @@ pub enum ExportMsg {
         source: std::path::PathBuf,
         outcome: Box<ExportWriteOutcome>,
     },
+    /// Export Design Notebook PDF (mockup row 202), routed to
+    /// `dispatch_notebook_pdf_message`.
+    NotebookPdf(crate::app::NotebookPdfMsg),
 }
 
 /// What an export's background file write produced, carried back to `update`

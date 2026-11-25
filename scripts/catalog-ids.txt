@@ -116,6 +116,7 @@ export_assembly_svg
 export_board_pdf
 export_board_report
 export_board_step
+export_notebook_pdf
 fabrication_outputs
 fast_grid_1
 fast_grid_2

@@ -381,6 +381,10 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             ))
         }
         "export_board_step" => Message::from(crate::app::BoardOutputMsg::StepExportRequested),
+        // Mockup row 202: Export Design Notebook PDF on the project in view.
+        "export_notebook_pdf" => {
+            Message::from(crate::app::NotebookPdfMsg::Requested { current_page: None })
+        }
         // #2410: Tools ▸ Panelize Board and Remove Panel, on the board in view.
         "panelize_board" => Message::from(crate::app::BoardPanelMsg::PanelizeRequested),
         "remove_board_panel" => Message::from(crate::app::BoardPanelMsg::RemoveRequested),

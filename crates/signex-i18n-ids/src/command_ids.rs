@@ -720,5 +720,8 @@ define_ids! {
         CMD_FLIP_BOARD_3D = "cmd-flip-board-3d";
         CMD_CYCLE_BOARD_3D_LIGHTING = "cmd-cycle-board-3d-lighting";
         CMD_COPY_BOARD_3D_SCREENSHOT = "cmd-copy-board-3d-screenshot";
+        // Export Design Notebook PDF (mockup row 202).
+        CMD_EXPORT_NOTEBOOK_PDF = "cmd-export-notebook-pdf";
+        CMD_MENU_EXPORT_NOTEBOOK_PDF = "cmd-menu-export-notebook-pdf";
     }
 }
