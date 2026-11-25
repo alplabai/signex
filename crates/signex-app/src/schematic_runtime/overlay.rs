@@ -109,13 +109,7 @@ pub fn draw_erc_markers(
             push_net_marker(&mut overlays, marker, transform, colors);
             continue;
         }
-        let (paper, background) = (to_iced(&colors.paper), to_iced(&colors.background));
-        // Graphite: errors in the theme's err, warnings in its warn.
-        let stroke = match (graphite, marker.severity) {
-            (ink, ErcSeverity::Error) => marker_stroke_from(ink.err, paper, background),
-            (ink, ErcSeverity::Warning) => marker_stroke_from(ink.warn, paper, background),
-            _ => marker_stroke(marker.severity, paper, background),
-        };
+        let stroke = point_marker_stroke(marker.severity, colors, graphite);
         let fill = Color {
             a: MARKER_DISC_ALPHA,
             ..stroke
@@ -136,6 +130,63 @@ pub fn draw_erc_markers(
         DirtyFlags::OVERLAY,
         transform,
     );
+}
+
+/// The ring and cross ink of a point marker. Graphite: errors in the theme's
+/// err, warnings in its warn.
+fn point_marker_stroke(
+    severity: ErcSeverity,
+    colors: &CanvasColors,
+    graphite: &crate::canvas::GraphiteCanvasInk,
+) -> Color {
+    let (paper, background) = (to_iced(&colors.paper), to_iced(&colors.background));
+    match severity {
+        ErcSeverity::Error => marker_stroke_from(graphite.err, paper, background),
+        ErcSeverity::Warning => marker_stroke_from(graphite.warn, paper, background),
+        ErcSeverity::Info => marker_stroke(severity, paper, background),
+    }
+}
+
+/// The text size of a marker caption, in screen px whatever the zoom.
+const CAPTION_PX: f32 = crate::styles::TypeScale::DEFAULT.caption;
+
+/// A finding's caption: the short line under its point marker, such as
+/// `expects CS_ADC` by a mismatched harness entry (mockup row 152).
+#[derive(Debug, Clone, Copy)]
+pub struct ErcCaption<'a> {
+    pub marker: ErcMarker,
+    pub text: &'a str,
+}
+
+/// Draw each caption centred under its marker's halo, in the marker's ink.
+/// Editor-only, like the markers: no print or export draws it.
+pub fn draw_erc_captions(
+    frame: &mut canvas::Frame,
+    captions: &[ErcCaption<'_>],
+    transform: &ScreenTransform,
+    colors: &CanvasColors,
+    graphite: &crate::canvas::GraphiteCanvasInk,
+) {
+    let font = crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT);
+    for caption in captions {
+        frame.fill_text(canvas::Text {
+            content: caption.text.to_string(),
+            position: caption_top_centre(&caption.marker, transform),
+            color: point_marker_stroke(caption.marker.severity, colors, graphite),
+            size: iced::Pixels(CAPTION_PX),
+            font,
+            align_x: iced::alignment::Horizontal::Center.into(),
+            ..canvas::Text::default()
+        });
+    }
+}
+
+/// The top centre of a marker's caption in screen px: right under the halo,
+/// which keeps its px floor zoomed out.
+fn caption_top_centre(marker: &ErcMarker, transform: &ScreenTransform) -> iced::Point {
+    let at = transform.world_to_screen((marker.x_mm, marker.y_mm));
+    let halo_px = (MARKER_HALO_RADIUS_MM * transform.scale).max(MARKER_HALO_RADIUS_MIN_PX);
+    iced::Point::new(at.x, at.y + halo_px)
 }
 
 /// A point finding: a faint halo and disc, a severity ring and a cross, all
@@ -255,6 +306,32 @@ mod tests {
                     "@{scale}: thin cross"
                 );
             }
+        }
+    }
+
+    /// Mockup row 152: a caption sits centred right under its marker's halo
+    /// at every zoom, so the marker never covers it.
+    #[test]
+    fn a_caption_sits_under_the_halo_at_every_zoom() {
+        let marker = ErcMarker {
+            x_mm: 10.0,
+            y_mm: 20.0,
+            severity: ErcSeverity::Warning,
+            net_level: false,
+        };
+        for scale in [1.5_f32, 3.0, 12.0, 40.0] {
+            let transform = ScreenTransform {
+                offset_x: 5.0,
+                offset_y: 7.0,
+                scale,
+                device_px_per_logical_px: 1.0,
+            };
+            let centre = transform.world_to_screen((marker.x_mm, marker.y_mm));
+            let top = caption_top_centre(&marker, &transform);
+            assert_eq!(top.x, centre.x, "@{scale}: centred");
+            let halo_px = (MARKER_HALO_RADIUS_MM * scale).max(MARKER_HALO_RADIUS_MIN_PX);
+            assert!((top.y - centre.y - halo_px).abs() < 1e-3, "@{scale}");
+            assert!(top.y - centre.y >= MARKER_HALO_RADIUS_MIN_PX - 1e-3);
         }
     }
 

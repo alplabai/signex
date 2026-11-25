@@ -146,6 +146,7 @@ fn stale_marker(app: &mut Signex) {
         y: 2.0,
         severity: crate::canvas::ErcMarkerSeverity::Warning,
         net_level: false,
+        caption: None,
     }];
 }
 

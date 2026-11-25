@@ -546,6 +546,26 @@ impl SchematicCanvas<'_> {
             &self.prefs.canvas_colors,
             &self.prefs.graphite,
         );
+        let captions: Vec<crate::schematic_runtime::overlay::ErcCaption<'_>> = self
+            .erc_markers
+            .iter()
+            .zip(&erc_overlay)
+            .filter(|(_, drawn)| !drawn.net_level)
+            .filter_map(|(marker, drawn)| {
+                let text = marker.caption.as_deref()?;
+                Some(crate::schematic_runtime::overlay::ErcCaption {
+                    marker: *drawn,
+                    text,
+                })
+            })
+            .collect();
+        crate::schematic_runtime::overlay::draw_erc_captions(
+            frame,
+            &captions,
+            transform,
+            &self.prefs.canvas_colors,
+            &self.prefs.graphite,
+        );
     }
 
     /// The clicked pin, drawn over its part in the selection colour: the pin
