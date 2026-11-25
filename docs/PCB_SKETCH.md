@@ -466,6 +466,12 @@ arc's centre connects nothing, and a circle is a shape of its own (Caner,
   or is over the cap, a spacing that does not evaluate, a looped source chain.
 - **Outline checks** read every instance: a hole, cutout or keepout with one
   instance outside the board is named by its entity.
+- **The pattern form** (mockup row 179e). A click on a pattern's glyph opens a
+  form titled by its kind (Rectangular, Linear or Circular pattern): Source,
+  Count, Spacing X and Y, and what the bake writes ("Bakes into 4 holes").
+  A spacing that names parameters (`board_w - 2*hole_inset`) shows the value
+  it resolves to beside it. A board item has no pad number, so the footprint
+  form's Numbering section is not offered on a board.
 
 ## Targets {#targets}
 

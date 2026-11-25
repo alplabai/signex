@@ -54,9 +54,7 @@ pub(super) fn bake_grid(
     let pad_attr = match source_entity.pad.as_ref() {
         Some(p) => p,
         None => {
-            warnings.push(format!(
-                "grid array source {source}: no PadAttr on source entity — array skipped"
-            ));
+            warnings.push(super::not_a_pad("grid array", sketch, solve, source));
             return Ok(());
         }
     };

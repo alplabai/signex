@@ -274,3 +274,53 @@ sketch-dof-section-over =
 # profile the project's rules were seeded from.
 board-sketch-fab-profile = Profile { $name }
 board-sketch-fab-profile-none = Profile: the project's rules name none
+# The pattern form of a board sketch (mockup row 179e), titled by its kind.
+board-pattern-title-rectangular = Rectangular pattern
+board-pattern-title-linear = Linear pattern
+board-pattern-title-circular = Circular pattern
+board-pattern-source = Source
+# The source as "Circle · Mounting hole"; $kind and $role are localized.
+board-pattern-source-role = { $kind } · { $role }
+board-pattern-count = Count
+board-pattern-spacing-x = Spacing X
+board-pattern-spacing-y = Spacing Y
+# What a spacing expression resolves to; $value is millimetres.
+board-pattern-resolved = { $value } mm
+# What a bake of the pattern writes; $count is the instances it keeps.
+board-pattern-bakes-holes =
+    { $count ->
+        [one] Bakes into { $count } hole
+       *[other] Bakes into { $count } holes
+    }
+board-pattern-bakes-keepouts =
+    { $count ->
+        [one] Bakes into { $count } keepout
+       *[other] Bakes into { $count } keepouts
+    }
+board-pattern-bakes-cutouts =
+    { $count ->
+        [one] Bakes into { $count } cutout
+       *[other] Bakes into { $count } cutouts
+    }
+board-pattern-bakes-slots =
+    { $count ->
+        [one] Bakes into { $count } slot
+       *[other] Bakes into { $count } slots
+    }
+board-pattern-bakes-pours =
+    { $count ->
+        [one] Bakes into { $count } pour
+       *[other] Bakes into { $count } pours
+    }
+board-pattern-bakes-v-scores =
+    { $count ->
+        [one] Bakes into { $count } V-score
+       *[other] Bakes into { $count } V-scores
+    }
+board-pattern-bakes-drawings =
+    { $count ->
+        [one] Bakes into { $count } mechanical drawing
+       *[other] Bakes into { $count } mechanical drawings
+    }
+board-pattern-bakes-refused = Bake refuses a pattern of the board outline or a component anchor
+board-pattern-bakes-unresolved = Bakes once its count and spacing resolve

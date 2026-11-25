@@ -582,3 +582,7 @@ mod tests;
 #[cfg(test)]
 #[path = "board_sketch_parameter_tests.rs"]
 mod parameter_tests;
+
+#[cfg(test)]
+#[path = "board_sketch_pattern_tests.rs"]
+mod pattern_tests;
