@@ -41,12 +41,7 @@ impl Signex {
     /// board path and never reaches a wire run (#2553).
     pub(crate) fn window_shows_pcb(&self, window: Option<iced::window::Id>) -> bool {
         let (_, path) = self.key_window_tab(window);
-        path.is_some_and(|path| {
-            (self.document_state.tabs.iter())
-                .find(|tab| tab.path == path)
-                .and_then(|tab| tab.cached_document.as_ref())
-                .is_some_and(|doc| doc.as_pcb().is_some())
-        })
+        path.is_some_and(|path| self.document_state.first_tab_board_engine(&path).is_some())
     }
 
     /// The undocked window a key came from (`None`: the main window) and the

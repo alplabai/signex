@@ -9,7 +9,6 @@
 use std::path::Path;
 
 use super::DocumentState;
-use crate::app::TabDocument;
 use signex_engine::pcb::BoardEngine;
 use signex_types::pcb::PcbBoard;
 
@@ -64,6 +63,6 @@ impl DocumentState {
             return;
         };
         let revision = self.stamp_pcb_revision(&path);
-        self.tabs[tab_idx].cached_document = make(revision).map(TabDocument::Pcb);
+        self.set_tab_board_engine(tab_idx, make(revision));
     }
 }

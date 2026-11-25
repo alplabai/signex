@@ -8,7 +8,7 @@ use signex_renderer::pcb::{PcbLayerView, PcbSnapshot};
 use signex_types::pcb::PcbBoard;
 
 use crate::app::state::PcbRatsnest;
-use crate::app::{ContextMenuMsg, Message, Signex, TabDocument};
+use crate::app::{ContextMenuMsg, Message, Signex};
 use crate::canvas::CanvasEvent;
 use crate::pcb_canvas::{
     PcbCanvas, PcbCanvasMsg, PcbCarry, PcbSelectionState, board_after_move, board_without,
@@ -173,7 +173,7 @@ impl Signex {
     ) -> Option<R> {
         let docs = &self.document_state;
         let tab = docs.tabs.get(docs.active_tab)?;
-        let board = tab.cached_document.as_ref().and_then(TabDocument::as_pcb)?;
+        let board = docs.tab_board_engine(docs.active_tab)?.board();
         let revision = docs.pcb_revisions.get(&tab.path).copied().unwrap_or(0);
         let selection = &mut self.interaction_state.pcb_selection;
         selection.sync(Some(tab.path.as_path()), revision);
@@ -243,10 +243,8 @@ impl Signex {
         let standard = self.document_state.designator_standard_for(&path);
         let docs = &self.document_state;
         let board = docs
-            .tabs
-            .get(docs.active_tab)
-            .and_then(|tab| tab.cached_document.as_ref())
-            .and_then(TabDocument::as_pcb);
+            .tab_board_engine(docs.active_tab)
+            .map(|engine| engine.board());
         let interaction = &mut self.interaction_state;
         let canvas = &mut interaction.pcb_canvas;
         canvas.set_highlight(highlight);
