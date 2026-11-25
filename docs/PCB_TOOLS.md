@@ -429,6 +429,23 @@ else the selection, on the board in view only) and for Length Tuning the
 target in mm (`value`); the answer lists each tuned net and its length.
 Coupled (both nets at once) pair meanders are not done yet.
 
+### A differential pair in Properties
+
+Selecting a track of a differential pair (the pair the router finds:
+`_P` / `_N` or `+` / `-` names, or a net class with a pair gap that holds
+two nets) adds three read-only rows under Net in the Track panel (#2585,
+mockup row 95): **Pair** (what the two names share, `USB` for `USB_P` /
+`USB_N`), **Paired Net** (the other net; both when tracks of both nets are
+selected) and **Pair Gap** (the copper gap, edge to edge, to the coupled
+track: the nearest parallel track of the other net on the same layer that
+overlaps it along its length; empty when one track has none or the gaps
+differ). **Width** typed on a pair's tracks reaches the coupled tracks too,
+as one undo step. An agent or the CLI runs the same with
+`set_diff_pair_width document=<board> [net=<name>] width=<mm>`: with `net`,
+every track of both nets of the pair; without it, the selected tracks and
+their coupled tracks. Editing the gap itself moves routed copper and is not
+done; the router keeps the class's pair gap on new routes.
+
 ## Fill and Solid Region
 
 `place_board_fill` (`P F`) and `place_board_region` (`P R`). Both add solid

@@ -151,7 +151,12 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   its own, one board undo step, answered with the text as JSON), and the
   length tuning commands
   `tune_net_length` and `tune_diff_pair` (#2389; one undo step on the named
-  board, answered with the tuned nets and their lengths as JSON), and the
+  board, answered with the tuned nets and their lengths as JSON), the pair
+  width `set_diff_pair_width` (#2585; one undo step, answered with the pair,
+  its nets, the tracks changed and the gap), the length-matching commands
+  `length_matching` (the groups as JSON), `set_length_group` and
+  `remove_length_group` (#2797; one undo step each,
+  [PCB_LENGTH_MATCHING.md](PCB_LENGTH_MATCHING.md)), and the
   panel edits `panelize_board`, `remove_board_panel` and `set_board_panel`
   (#2410; one undo step on the named board each, answered with the panel as
   JSON), and the board's `swap_pins`, `swap_gates`,

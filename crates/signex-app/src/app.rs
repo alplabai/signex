@@ -50,6 +50,7 @@ mod handlers;
 #[cfg(test)]
 pub(crate) mod hierarchy_fixture;
 mod layer_stack_tab;
+mod length_matching_tab;
 mod library_delete;
 mod load_gateway;
 mod mutation_gateway;
