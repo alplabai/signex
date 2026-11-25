@@ -11,6 +11,9 @@
 //! Above all of these, the project's own variant settings (`.snxprj`
 //! `variant_settings`, mockup row 32) decide, applied in [`settings`].
 
+mod channels;
+#[cfg(test)]
+mod channels_tests;
 mod fields;
 mod matrix;
 mod settings;
@@ -22,13 +25,14 @@ mod tests;
 use signex_types::project::is_base_variant;
 use signex_types::schematic::Symbol;
 
+pub use channels::{ChannelFit, MatrixChannels, RowChannel};
 #[cfg(test)]
 pub(crate) use fields::field_value_ci;
 pub(crate) use fields::{
     is_fit_state_field, merge_fit_states, resolve_active_variant_fitted,
     resolve_base_variant_fitted,
 };
-pub use matrix::{VariantMatrix, VariantRow, variant_matrix};
+pub use matrix::{VariantMatrix, VariantRow, variant_matrix, variant_matrix_in_channels};
 pub(crate) use settings::apply_parameters;
 pub use settings::{part_link, project_fit};
 
