@@ -101,7 +101,7 @@ other extension's. Each point is a field with a file of its own under
 
 | Point | Field | Boundary (ADR-0006) | Status in version 1 |
 |---|---|---|---|
-| Catalog commands | `commands: CatalogCommands` | Seen by the application core: names no iced type | empty |
+| Catalog commands | `commands: CatalogCommands` | Seen by the application core: names no iced type | open, see "Catalog commands" |
 | Dock panels | `panels: Panels` | GUI adapter, outside `app/core/` | empty |
 | Menu bar and Active Bar rows | `menu_rows: MenuRows` | GUI adapter, outside `app/core/` | empty |
 | Start-screen sections | `start_screen: StartScreenSections` | GUI adapter, outside `app/core/` | empty |
@@ -112,7 +112,7 @@ type and its `add` method in its file and a line under "Changes by version".
 The rules each point will follow are set in #2495:
 
 - **Catalog commands.** A command has a core handler or is GUI-only, as the
-  core's rules say for every command.
+  core's rules say for every command. Open; see "Catalog commands" below.
 - **Dock panels.** A panel has a stable layout key, a title id, a home dock
   region and its view and update hooks. A saved layout that names a panel key
   no installed extension registered keeps that key (`docs/DECISIONS.md`,
@@ -125,6 +125,81 @@ The rules each point will follow are set in #2495:
 
 Text an extension shows goes through the `.ftl` catalogs like the rest of the
 application; sizes come from the theme and the font size, never fixed pixels.
+
+## Catalog commands
+
+An extension adds a command with one catalog row and one handler:
+
+```rust
+use signex_app::extension::{
+    CommandFlags, CommandMetadata, Extension, ExtensionMsg, ExtensionPoints,
+};
+
+static SAY_HELLO: CommandMetadata = CommandMetadata {
+    id: "ext.sample.say_hello",
+    category: "sample",
+    flags: CommandFlags::RUNS_HEADLESS,
+    ..CommandMetadata::DEFAULT
+};
+
+#[derive(Debug)]
+struct HelloSaid;
+
+impl Extension for Sample {
+    fn name(&self) -> &str {
+        "sample"
+    }
+
+    fn register(&mut self, points: &mut ExtensionPoints) {
+        let added = points.commands.add(&SAY_HELLO, |_args| Ok(HelloSaid));
+        debug_assert!(added.is_ok(), "{added:?}");
+    }
+
+    fn update(&mut self, message: ExtensionMsg) -> iced::Task<signex_app::app::Message> {
+        if message.payload::<HelloSaid>().is_some() { /* ... */ }
+        iced::Task::none()
+    }
+}
+```
+
+- **One command path.** A command runs through `dispatch_command`, as a
+  built-in one does, from every surface that names it by id: a key binding,
+  a menu row and a headless run (`Signex::dispatch_command_headless`). Each
+  run writes its Command Log row. Its handler is called with the run's
+  `CommandArgs` and returns the payload of the `ExtensionMsg` its
+  extension's `update` then receives, or a `Translatable` reason, which is
+  reported as `CommandOutcome::Disabled` and reaches no `update`.
+- **The handler is UI-free.** It reads only the arguments, names no iced type
+  and no GUI state; the core sees it with the row (ADR-0006). Work beyond
+  making the message is the job of `update`, as for any other message.
+- **Headless parity.** The row decides it, as for a built-in row: exactly one
+  of `CommandFlags::GUI_ONLY` and `CommandFlags::RUNS_HEADLESS`. A headless
+  run refuses a GUI-only command with the reason every headless surface
+  gives (`` `<id>` only works in a window ``) and runs the other.
+- **What `add` refuses**, with a `CommandRegistrationError`:
+  - `ShadowsBuiltIn`: the id is a built-in id, or its `<command>` part is
+    one (`ext.sample.undo`);
+  - `OutsideNamespace`: the id is not under the extension's own
+    `ext.<name>.` prefix;
+  - `InvalidId`: the `<command>` part is not snake_case
+    (`AppCommandId::new`);
+  - `Duplicate`: the extension already added the id;
+  - `HeadlessUndecided`: the flags set neither or both of `gui_only` and
+    `runs_headless`;
+  - `TakesOperands` and `MutatesDocument`: this version gives an extension
+    command no operands and no document access.
+
+  A refused row is not added, and install then refuses the whole set with
+  `InstallError::Command`, naming the extension and the first refusal.
+- **Ids.** `AppCommandId` accepts `ext.<name>.<command>` next to the built-in
+  snake_case ids. Built-in ids never start with `ext.` (a test in
+  `signex-commands` pins it) and stay locked by `scripts/catalog-ids.txt`;
+  extension ids are never listed there. `Signex::command_metadata` finds a
+  row of either kind.
+- **Not yet.** An extension command is not listed in the command palette, the
+  Keyboard Shortcuts pane, `docs/COMMANDS.md` or the `signex commands`
+  output, and `signex-cli` installs no extension, so it refuses an `ext.` id
+  as an unknown command. See "Open questions".
 
 ## Versioning
 
@@ -150,8 +225,14 @@ const _: () = assert!(signex_app::extension::API_VERSION == 1);
   `ExtensionMsg`, `ExtensionHost`, `InstallError`, `launch::run` and
   `Signex::with_extensions`.
 - `Message::Extension`, routed to the owning extension alone.
-- `ExtensionPoints` with five empty points: catalog commands, dock panels,
+- `ExtensionPoints` with five points: catalog commands, dock panels,
   menu rows, Start-screen sections and preferences.
+- Catalog commands open: `CatalogCommands::add`, `ExtensionCommand`,
+  `CommandRegistrationError`, `InstallError::Command`,
+  `ExtensionHost::{command, commands}`, `Signex::command_metadata`, and
+  `AppCommandId` accepting `ext.<name>.<command>`
+  (`AppCommandId::{is_extension, extension_local}`,
+  `signex_commands::{EXTENSION_ID_PREFIX, is_extension_name}`).
 
 ## Open questions
 
@@ -176,3 +257,19 @@ Choices made in version 1 for the maintainers to confirm or change:
   addition carry its own position?
 - **Name rules.** A name is a lowercase ASCII identifier. Should names allow
   more (`-`, upper case), or be reserved in a list?
+- **A command id that reads as a built-in one.** `ext.sample.undo` is refused
+  as well as `undo`, so a palette or log line never shows two commands with
+  one name. Should the `<command>` part be free instead?
+- **Operands and document access.** An extension command takes no operands
+  and cannot mutate a document in this version. Should it get operands
+  (parsed against its own row, as a built-in command's are) and a way to
+  edit through the engine?
+- **Labels.** A row's `label` is a `MessageId`, and an extension cannot add
+  messages to the `.ftl` catalogs yet, so its commands show the label of an
+  existing message. How should an extension bring its own messages?
+- **Listings.** The command palette, the Keyboard Shortcuts pane, the
+  `signex commands` output and `docs/COMMANDS.md` list built-in commands only.
+  Should an installed extension's commands appear in the first two (the last
+  two describe the Community build)?
+- **Enablement.** A row's `enable` predicate is carried, not evaluated, as for
+  every built-in row today. Should an extension get a predicate of its own?
