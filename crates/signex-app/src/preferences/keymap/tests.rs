@@ -372,7 +372,10 @@ fn the_page_lists_commands_without_a_key_as_unbound_rows_with_edit() {
         )
     };
     let rows = page("", KeymapContextFilter::All);
-    assert!(rows.iter().any(|row| !row.unassigned), "the binding row stays");
+    assert!(
+        rows.iter().any(|row| !row.unassigned),
+        "the binding row stays"
+    );
     let unbound: Vec<_> = rows.iter().filter(|row| row.unassigned).collect();
     assert!(!unbound.is_empty());
     for row in &unbound {

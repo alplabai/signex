@@ -69,7 +69,11 @@ fn every_command_without_a_key_gets_one_unbound_row() {
         assert!(row.unassigned && row.keyboard_editable && row.trigger.is_empty());
         assert!(!bound.contains(command), "{command} already has a row");
     }
-    let listed = rows.len() + bound.iter().collect::<std::collections::BTreeSet<_>>().len();
+    let listed = rows.len()
+        + bound
+            .iter()
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
     assert!(listed >= super::all_command_ids().count());
     // `offers` narrows the catalog.
     assert!(
@@ -86,7 +90,11 @@ fn a_key_for_a_command_with_none_is_a_new_binding_after_the_others() {
     let before = editor.active_profile().bindings.len();
 
     let slot = editor
-        .assign_active_trigger(command.clone(), ShortcutContext::Global, key("Ctrl+Alt+F12"))
+        .assign_active_trigger(
+            command.clone(),
+            ShortcutContext::Global,
+            key("Ctrl+Alt+F12"),
+        )
         .unwrap();
 
     assert_eq!(slot.binding, before);
@@ -204,7 +212,12 @@ fn removing_a_key_drops_an_emptied_binding_and_keeps_later_drafts_on_their_rows(
 fn clearing_a_command_takes_all_its_keys() {
     let mut editor = custom_editor();
     let command = AppCommandId::new("place_wire").unwrap();
-    assert!(editor.rows().iter().any(|row| row.command.as_ref() == Some(&command)));
+    assert!(
+        editor
+            .rows()
+            .iter()
+            .any(|row| row.command.as_ref() == Some(&command))
+    );
 
     let removed = editor.clear_active_command_keys(&command).unwrap();
 
@@ -227,7 +240,11 @@ fn an_installed_extension_command_is_listed_and_bound_under_its_id() {
         .into_iter()
         .find(|row| row.command.as_ref() == Some(&id))
         .expect("an installed extension command is listed without a key");
-    assert!(row.label.contains("sample") && row.label.contains("OK"), "{}", row.label);
+    assert!(
+        row.label.contains("sample") && row.label.contains("OK"),
+        "{}",
+        row.label
+    );
     assert_eq!(row.category, "sample");
 
     editor
@@ -272,9 +289,13 @@ fn a_binding_to_an_uninstalled_extension_is_kept_and_not_offered_again() {
     let path = dir.path().join("keyboard_shortcuts.toml");
     super::save_profile_set_at(&path, editor.profile_set()).unwrap();
     let loaded: ShortcutProfileSet = super::load_profile_set_at(&path).unwrap();
-    assert!(loaded.active_profile().bindings.iter().any(
-        |binding| binding.action == ShortcutBindingAction::Command(id.clone())
-    ));
+    assert!(
+        loaded
+            .active_profile()
+            .bindings
+            .iter()
+            .any(|binding| binding.action == ShortcutBindingAction::Command(id.clone()))
+    );
 }
 
 #[test]

@@ -39,8 +39,7 @@ pub trait ExtensionView: Send + 'static {
 
     /// Called with each message addressed to this surface. Long or blocking
     /// work goes in the returned `Task`. Does nothing by default.
-    fn update(&mut self, message: ExtensionMsg) -> Task<Message> {
-        let _ = message;
+    fn update(&mut self, _message: ExtensionMsg) -> Task<Message> {
         Task::none()
     }
 }

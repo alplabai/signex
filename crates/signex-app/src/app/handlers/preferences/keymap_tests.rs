@@ -341,7 +341,10 @@ mod recorder_flow {
         send(&mut app, PrefMsg::KeymapRecorderApply);
 
         assert!(app.ui_state.preferences_keymap_recorder.is_none());
-        assert!(app.ui_state.preferences_dirty, "a new key is an unsaved change");
+        assert!(
+            app.ui_state.preferences_dirty,
+            "a new key is an unsaved change"
+        );
         send(&mut app, PrefMsg::Save);
         let path = crate::keymap::config_path().unwrap();
         let saved = crate::keymap::load_profile_set_at(&path).unwrap();
@@ -354,7 +357,10 @@ mod recorder_flow {
             .expect("the key is saved in the custom profile");
         assert_eq!(binding.triggers[0].config_text(), "Ctrl+Alt+Q");
         assert!(
-            app.ui_state.active_keymap.shortcut_label(&command).is_some(),
+            app.ui_state
+                .active_keymap
+                .shortcut_label(&command)
+                .is_some(),
             "the running keymap has it"
         );
     }

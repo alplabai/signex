@@ -56,14 +56,11 @@ pub trait Extension: Send + 'static {
 
     /// Called once at install: add commands, panels, rows, sections and
     /// preferences to `points`. Adds nothing by default.
-    fn register(&mut self, points: &mut ExtensionPoints) {
-        let _ = points;
-    }
+    fn register(&mut self, _points: &mut ExtensionPoints) {}
 
     /// Called with each `Message::Extension` addressed to this extension,
     /// and with no other message. Does nothing by default.
-    fn update(&mut self, message: ExtensionMsg) -> Task<Message> {
-        let _ = message;
+    fn update(&mut self, _message: ExtensionMsg) -> Task<Message> {
         Task::none()
     }
 
@@ -71,9 +68,7 @@ pub trait Extension: Send + 'static {
     /// with the value of each preference the extension added (the stored
     /// one, else its default). Not called for an extension that added no
     /// preference. Does nothing by default.
-    fn preferences_loaded(&mut self, values: &PreferenceValues) {
-        let _ = values;
-    }
+    fn preferences_loaded(&mut self, _values: &PreferenceValues) {}
 }
 
 #[cfg(test)]

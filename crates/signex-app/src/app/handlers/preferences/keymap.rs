@@ -355,13 +355,10 @@ impl Signex {
                 trigger,
                 unassigned,
             } => {
-                self.ui_state.preferences_keymap_recorder =
-                    Some(crate::app::KeymapRecorderState {
-                        unassigned,
-                        ..crate::app::KeymapRecorderState::new(
-                            slot, command, label, context, trigger,
-                        )
-                    });
+                self.ui_state.preferences_keymap_recorder = Some(crate::app::KeymapRecorderState {
+                    unassigned,
+                    ..crate::app::KeymapRecorderState::new(slot, command, label, context, trigger)
+                });
                 self.ui_state.preferences_keymap_status.clear();
             }
             PrefMsg::KeymapRecorderCancel => {
