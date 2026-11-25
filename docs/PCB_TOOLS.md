@@ -1265,12 +1265,14 @@ bar names it; its body starts with two tabs.
 - The more menu, opened in place under the more button; a click outside it
   closes it. Layer Sets: Save current as set... (a name row with Save and a
   close button opens under the search row; Enter saves too) and Delete
-  current set... (live while the view shows a saved set). Import... and
+  current set... (live while the view shows a saved set; greyed, its
+  tooltip says to show one first). Import... and
   Export... are greyed until a view can be saved to a file. View From
   Bottom Side, ticked while the board is seen from below, is the flip of
   the layer tab menu; a click flips the view and closes the menu, as the
   menu's other live rows do. Layer Stack... runs the Layer Stack command and opens
-  the Layer Stack panel; it is greyed when that command cannot run.
+  the Layer Stack panel; it is greyed when that command cannot run, with
+  the command's reason in its tooltip.
 - The Active | Set row: the active layer's dot and name, a dropdown with
   the same choice as the layer tabs; and the set the view shows ("Set:
   All"), a dropdown of the built-in sets, then the saved ones. This is the
@@ -1336,9 +1338,16 @@ and are greyed. Additional Options is closed by default and its header
 counts the options that are on; its eleven checkboxes are greyed until the
 view can draw them.
 
-Apart from the layer colours, all of this is the board view's state, for the
-session; nothing else touches the board file. Saving the view, presets and every greyed control are tracked in
-#2480. Every control has a catalog command that names its board with
+Apart from the layer colours, all of this is the board view's state; nothing
+else touches the board file. The view is kept per board, by its path, in the
+user's `prefs.json` (`pcb_board_views`, #2480): the hidden layers, the active
+layer, the Connection Lines, Multi-Layer and Origin Marker eyes, Single
+Layer, View From Bottom Side, Used On, the layer set the strip lists, the
+hidden kinds of object and their transparencies. A change is written after a
+short quiet period and at quit; a board that opens again takes its kept
+view. The layer highlight and Show only unrouted end with the board and are
+not kept. Every greyed control, in the panel and in the more menu, says why
+in its tooltip; the not-yet ones and presets are tracked in #2480. Every control has a catalog command that names its board with
 `document`: `set_layer_visible`, `set_active_layer`, `set_layer_color`
 (without `color`, the palette colour again), `show_used_layers_only`,
 `set_object_visible` (`kind=all` for All Objects) and
