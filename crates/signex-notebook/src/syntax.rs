@@ -112,7 +112,7 @@ fn reference_of(call: ast::FuncCall<'_>) -> Option<Reference> {
 
 /// Visit `node` and its descendants in source order with their byte
 /// offsets.
-fn walk(node: &SyntaxNode, offset: usize, visit: &mut impl FnMut(&SyntaxNode, usize)) {
+pub(crate) fn walk(node: &SyntaxNode, offset: usize, visit: &mut impl FnMut(&SyntaxNode, usize)) {
     visit(node, offset);
     if node.kind() == SyntaxKind::Error {
         // An error node holds no structure to look into.
@@ -126,7 +126,7 @@ fn walk(node: &SyntaxNode, offset: usize, visit: &mut impl FnMut(&SyntaxNode, us
 }
 
 /// The 1-based line byte `offset` of `text` is on.
-fn line_of(text: &str, offset: usize) -> u32 {
+pub(crate) fn line_of(text: &str, offset: usize) -> u32 {
     let before = text.get(..offset).unwrap_or(text);
     u32::try_from(before.matches('\n').count() + 1).unwrap_or(u32::MAX)
 }

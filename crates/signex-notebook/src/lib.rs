@@ -21,6 +21,12 @@
 //! [`CompiledNotebook`] draws a page for the preview and writes a PDF that
 //! is the same file every time.
 //!
+//! The notebook tab reads the rest from here: the [`outline`], Typst
+//! [`Highlights`], the insert toolbar's text ([`insertion_text`]), the
+//! reference picker's order ([`matching`]), the preview's page colours
+//! ([`PageColours`]), the empty state's [`Template`]s and the compile
+//! status ([`NotebookStatus`]).
+//!
 //! UI-free and IO-free: the caller reads the files.
 
 mod annotation;
@@ -29,12 +35,19 @@ mod date;
 mod file;
 mod filter;
 mod header;
+mod highlight;
 mod id;
+mod insert;
 mod lexer;
+mod outline;
+mod picker;
+mod preview;
 mod reference;
 mod scan;
 mod sources;
+mod status;
 mod syntax;
+mod templates;
 mod world;
 
 pub use annotation::{Annotation, AnnotationKind, Status};
@@ -46,11 +59,20 @@ pub use date::IsoDate;
 pub use file::{HEADER_FENCE, NotebookFile, NotebookFileError};
 pub use filter::{DateWindow, Filter, newest_first};
 pub use header::{Header, HeaderError, NOTEBOOK_FORMAT, StoredReference};
+pub use highlight::{Highlights, Token};
 pub use id::{BlockId, SERIAL_WIDTH};
+pub use insert::{Inserted, Insertion, insertion_text, next_id, numbers_within_section};
+pub use outline::{
+    BlockEntry, Figure, FigureKind, Outline, Section, SourceAt, outline, outline_of_text,
+};
+pub use picker::{Candidate, MAX_ROWS, matching};
+pub use preview::PageColours;
 pub use reference::{Reference, quote};
 pub use scan::{ProblemKind, SNIPPET_MAX_CHARS, ScanProblem, TITLE_MAX_CHARS, scan};
 pub use sources::{LoadProblem, LoadProblemKind, NotebookSources, resolve};
+pub use status::{BlockCounts, NotebookStatus, header_line_count};
 pub use syntax::{Include, ReferenceAt, distinct_references, includes, references, typst_source};
+pub use templates::Template;
 pub use world::{PACKAGE_IMPORT, PACKAGE_NAME, PACKAGE_NAMESPACE, PACKAGE_VERSION};
 
 /// The project folder that holds the notebooks.
