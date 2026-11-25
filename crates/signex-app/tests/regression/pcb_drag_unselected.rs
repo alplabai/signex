@@ -11,6 +11,7 @@ use pcb_geom::ItemRef;
 use signex_app::app::{EditMsg, FileMsg, InputMsg, Message, Signex};
 use signex_app::diagnostics;
 use signex_app::pcb_canvas::PcbCanvasState;
+use signex_app::test_adapter::BoardEngines;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point};
 use uuid::Uuid;

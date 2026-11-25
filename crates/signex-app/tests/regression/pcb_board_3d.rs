@@ -16,6 +16,7 @@ use signex_app::board_3d_shader::{Board3dPointer, Board3dProgram};
 use signex_app::canvas::CanvasEvent;
 use signex_app::keymap::AppCommandId;
 use signex_app::menu_bar::MenuMessage;
+use signex_app::test_adapter::BoardEngines;
 use signex_gfx::camera3d::{OrbitCamera, ViewPreset};
 use signex_renderer::board3d::BoardScene3d;
 use signex_types::format::SnxPcb;

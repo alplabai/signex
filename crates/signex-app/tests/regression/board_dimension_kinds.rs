@@ -9,6 +9,7 @@ use signex_app::diagnostics;
 use signex_app::keymap::AppCommandId;
 use signex_app::menu_bar::MenuMessage;
 use signex_app::pcb_canvas::PcbCanvasMsg;
+use signex_app::test_adapter::BoardEngines;
 use signex_engine::pcb::{BoardCommand, BoardItem};
 use signex_types::format::{SNXPCB_FORMAT_V1_11, SnxPcb};
 use signex_types::pcb::{PcbBoard, Point};

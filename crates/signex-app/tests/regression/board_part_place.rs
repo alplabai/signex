@@ -17,6 +17,7 @@ use signex_app::library::LibraryMessage;
 use signex_app::library::messages::BoardPartError;
 use signex_app::library::state::{ComponentsPanelRowKey, ComponentsRowAction};
 use signex_app::pcb_canvas::{CarryKind, PcbCanvasMsg};
+use signex_app::test_adapter::BoardEngines;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{Footprint, PCB_GRID_MM, PcbBoard, Point};
 use uuid::Uuid;

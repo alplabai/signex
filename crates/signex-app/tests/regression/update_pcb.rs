@@ -12,6 +12,7 @@ use signex_app::app::{
 use signex_app::keymap::{
     AppCommandId, ShortcutBinding, ShortcutBindingAction, ShortcutContext, ShortcutTrigger,
 };
+use signex_app::test_adapter::BoardEngines;
 use signex_engine::pcb::BoardEngine;
 use signex_engine::pcb::eco::{EcoBlock, EcoChange, EcoChangeList, EcoKey, EcoRow};
 use signex_library::adapter::LibraryAdapter;

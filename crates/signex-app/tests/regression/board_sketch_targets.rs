@@ -9,6 +9,7 @@ use signex_app::app::{BoardSketchMsg, EditMsg, FileMsg, Message, PcbMsg, Signex}
 use signex_app::dock::DockMessage;
 use signex_app::library::messages::RoleTag;
 use signex_app::panels::{BoardSketchAttrMsg, PanelMsg};
+use signex_app::test_adapter::BoardEngines;
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::PlaneId;

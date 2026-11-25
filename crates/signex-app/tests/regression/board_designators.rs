@@ -15,6 +15,7 @@ use signex_app::keymap::AppCommandId;
 use signex_app::menu_bar::MenuMessage;
 use signex_app::panels::{FootprintEditability, PanelKind, PanelMsg, PcbFootprintTextMsg};
 use signex_app::pcb_canvas::PcbCanvasMsg;
+use signex_app::test_adapter::BoardEngines;
 use signex_engine::pcb::designators::{
     BottomSideOrder, FootprintTextField, ReannotateOptions, ReannotateOrder, plan_reannotate,
 };

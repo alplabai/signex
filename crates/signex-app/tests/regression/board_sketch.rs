@@ -13,6 +13,7 @@ use signex_app::keymap::{
 use signex_app::library::editor::footprint::SketchTool;
 use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit, RoleTag};
 use signex_app::panels::{BoardSketchAttrMsg, PanelMsg};
+use signex_app::test_adapter::BoardEngines;
 use signex_i18n::RenderTranslatable;
 use signex_sketch::entity::EntityKind;
 use signex_sketch::id::SketchEntityId;

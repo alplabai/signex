@@ -8,6 +8,7 @@ use iced::{Event, Point as ScreenPoint, Rectangle, mouse};
 use signex_app::app::{EditMsg, FileMsg, Message, Signex};
 use signex_app::diagnostics;
 use signex_app::pcb_canvas::PcbCanvasState;
+use signex_app::test_adapter::BoardEngines;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{
     Footprint, NetDef, Pad, PadNet, PadShape, PadType, PcbBoard, Point, Segment,

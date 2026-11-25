@@ -11,6 +11,7 @@ use signex_app::dock::DockMessage;
 use signex_app::panels::pcb_component::DESIGNATOR_FIELD;
 use signex_app::panels::{ComponentField, PanelMsg, PcbComponentFacts, PcbComponentMsg, Shared};
 use signex_app::pcb_canvas::PcbCanvasMsg;
+use signex_app::test_adapter::BoardEngines;
 use signex_engine::pcb::component::LocationField;
 use signex_engine::pcb::designators::FootprintTextField;
 use signex_types::format::SnxPcb;

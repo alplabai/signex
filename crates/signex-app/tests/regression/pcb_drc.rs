@@ -8,6 +8,7 @@ use signex_app::dock::DockMessage;
 use signex_app::keymap::AppCommandId;
 use signex_app::menu_bar::MenuMessage;
 use signex_app::panels::PanelMsg;
+use signex_app::test_adapter::BoardEngines;
 use signex_drc::ViolationKind;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{PcbBoard, Point, Segment};

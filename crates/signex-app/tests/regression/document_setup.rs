@@ -9,6 +9,7 @@ use signex_app::app::{
     SetupKind, Signex,
 };
 use signex_app::io_ports::{HeadlessAnswers, IoPorts};
+use signex_app::test_adapter::BoardEngines;
 use signex_types::designator::DesignatorStandard;
 use signex_types::format::SnxSchematic;
 use signex_types::pcb::PcbBoard;

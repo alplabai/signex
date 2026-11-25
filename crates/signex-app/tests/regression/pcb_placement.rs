@@ -10,6 +10,7 @@ use signex_app::diagnostics;
 use signex_app::keymap::{AppCommandId, KeyStroke, KeyToken, Modifiers};
 use signex_app::menu_bar::MenuMessage;
 use signex_app::pcb_canvas::PcbCanvasMsg;
+use signex_app::test_adapter::BoardEngines;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{
     Footprint, Pad, PadShape, PadType, PcbBoard, Point, Segment, Via, ViaType,

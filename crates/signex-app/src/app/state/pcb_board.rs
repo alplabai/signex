@@ -70,7 +70,7 @@ impl DocumentState {
     /// The engine of the PCB tab at `path`, for a write. A parked engine is
     /// read-only: nothing may step it while its save can be in flight, or the
     /// landing save would clean a board that moved after the snapshot.
-    pub fn board_engine_mut(&mut self, path: &Path) -> Option<&mut BoardEngine> {
+    pub(crate) fn board_engine_mut(&mut self, path: &Path) -> Option<&mut BoardEngine> {
         self.tabs
             .iter_mut()
             .find(|tab| matches!(tab.kind, TabKind::Pcb) && tab.path == path)
@@ -149,7 +149,7 @@ impl DocumentState {
     /// The engine the tab at `idx` holds, never a parked one. `None` for a
     /// tab with no board: a page tab such as Layer Stack, which shares its
     /// board's path, or a board a failed History restore dropped.
-    pub fn tab_board_engine(&self, idx: usize) -> Option<&BoardEngine> {
+    pub(crate) fn tab_board_engine(&self, idx: usize) -> Option<&BoardEngine> {
         self.tabs
             .get(idx)
             .and_then(|tab| tab.cached_document.as_ref())
@@ -158,7 +158,7 @@ impl DocumentState {
 
     /// [`Self::tab_board_engine`] of the first tab at `path`, whatever its
     /// kind: what an undocked window showing `path` draws.
-    pub fn first_tab_board_engine(&self, path: &Path) -> Option<&BoardEngine> {
+    pub(crate) fn first_tab_board_engine(&self, path: &Path) -> Option<&BoardEngine> {
         let idx = self.tabs.iter().position(|tab| tab.path == path)?;
         self.tab_board_engine(idx)
     }

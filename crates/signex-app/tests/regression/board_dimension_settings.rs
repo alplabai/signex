@@ -12,6 +12,7 @@ use signex_app::panels::pcb_primitive_properties::{
 };
 use signex_app::panels::{PanelMsg, PcbPrimitiveMsg};
 use signex_app::pcb_canvas::PcbCanvasMsg;
+use signex_app::test_adapter::BoardEngines;
 use signex_engine::pcb::primitive_edit::DimensionStyleEdit;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{PcbBoard, Point};

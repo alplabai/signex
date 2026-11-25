@@ -10,6 +10,7 @@ use signex_app::app::{
     CommandPaletteMsg, CompareBoardMsg, ContextAction, ContextMenuMsg, EditMsg, Message, Signex,
     TabInfo, TabKind,
 };
+use signex_app::test_adapter::BoardEngines;
 use signex_engine::pcb::BoardEngine;
 use signex_engine::pcb::eco::{BackKey, CompareKind, CompareReport, CompareRow, Direction, EcoKey};
 use signex_types::format::{SnxPcb, SnxSchematic};

@@ -13,6 +13,7 @@ use signex_app::app::{
     CaseProbeOutcome, ContextMenuMsg, FileMsg, Message, OverlayMsg, Signex, TabContextAction,
 };
 use signex_app::diagnostics;
+use signex_app::test_adapter::BoardEngines;
 use signex_engine::pcb::BoardEngine;
 use signex_types::pcb::PcbBoard;
 use tempfile::TempDir;

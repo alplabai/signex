@@ -14,6 +14,7 @@ use signex_app::keymap::{AppCommandId, KeyStroke, KeyToken, Modifiers};
 use signex_app::menu_bar::MenuMessage;
 use signex_app::pcb_canvas::PcbCanvasMsg;
 use signex_app::tab_bar::TabMessage;
+use signex_app::test_adapter::BoardEngines;
 use signex_types::format::{SnxPcb, SnxSchematic};
 use signex_types::pcb::{
     Footprint, LayerDef, Pad, PadShape, PadType, PcbBoard, Point, Segment, SymbolLink,

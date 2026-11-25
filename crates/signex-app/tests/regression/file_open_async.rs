@@ -10,6 +10,7 @@
 //!   opens the tab, failure logs and opens nothing).
 
 use signex_app::app::{CaseProbeOutcome, FileMsg, Message, Signex};
+use signex_app::test_adapter::BoardEngines;
 
 use std::fs;
 use std::path::PathBuf;

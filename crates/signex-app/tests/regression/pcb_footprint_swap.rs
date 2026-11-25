@@ -24,6 +24,7 @@ use signex_app::library::messages::PrimitivePickerMsg;
 use signex_app::library::state::PrimitivePickerTarget;
 use signex_app::panels::{FootprintLibrary, PanelMsg, PcbComponentFacts, PcbComponentMsg, Shared};
 use signex_app::pcb_canvas::PcbCanvasMsg;
+use signex_app::test_adapter::BoardEngines;
 use signex_library::ComponentRow;
 use signex_library::primitive::PrimitiveRef;
 use signex_types::format::SnxPcb;

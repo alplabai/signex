@@ -13,6 +13,7 @@ use signex_app::app::{
 };
 use signex_app::autosave::{AutosaveMsg, RecoveryChoice, sidecar};
 use signex_app::menu_bar::MenuMessage;
+use signex_app::test_adapter::BoardEngines;
 use signex_engine::pcb::BoardEngine;
 use signex_types::pcb::PcbBoard;
 

@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use signex_app::app::{
     FileMsg, LoadedProject, Message, RowFilter, Signex, UpdatePcbMsg, UpdatePcbState,
 };
+use signex_app::test_adapter::BoardEngines;
 use signex_engine::pcb::eco::{EcoBlock, EcoKey};
 use signex_library::adapter::LibraryAdapter;
 use signex_library::adapters::local_git::LocalGitAdapter;

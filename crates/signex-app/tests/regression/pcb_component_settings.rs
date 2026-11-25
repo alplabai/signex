@@ -13,6 +13,7 @@ use signex_app::panels::{
     ComponentField, PanelMsg, PcbComponentFacts, PcbComponentMsg, PcbPrimitiveMsg, Shared,
 };
 use signex_app::pcb_canvas::PcbCanvasMsg;
+use signex_app::test_adapter::BoardEngines;
 use signex_engine::pcb::component_edit::{ComponentSetting, TypedSetting};
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{ComponentType, Footprint, Pad, PadShape, PadType, PcbBoard, Point};
