@@ -227,10 +227,12 @@ pub fn tracks_on_tracks(board: &PcbBoard, tracks: &BTreeSet<Uuid>) -> Vec<TrackE
         .filter(|segment| tracks.contains(&segment.uuid))
         .flat_map(|segment| {
             let layers = layer_mask(std::iter::once(segment.layer.as_str()));
-            [segment.start, segment.end].into_iter().filter_map(move |p| {
-                let at = PointNm::from_mm(p, "track end").ok()?;
-                Some((at, layers, segment.net))
-            })
+            [segment.start, segment.end]
+                .into_iter()
+                .filter_map(move |p| {
+                    let at = PointNm::from_mm(p, "track end").ok()?;
+                    Some((at, layers, segment.net))
+                })
         })
         .collect();
     if spots.is_empty() {

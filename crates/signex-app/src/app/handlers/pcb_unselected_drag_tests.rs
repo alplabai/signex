@@ -128,14 +128,20 @@ impl Rig {
 
     fn press(&mut self, at: Point) {
         let pixel = self.pixel(at);
-        self.send(Event::Mouse(mouse::Event::CursorMoved { position: pixel }), pixel);
+        self.send(
+            Event::Mouse(mouse::Event::CursorMoved { position: pixel }),
+            pixel,
+        );
         let press = mouse::Event::ButtonPressed(mouse::Button::Left);
         self.send(Event::Mouse(press), pixel);
     }
 
     fn move_to(&mut self, at: Point) {
         let pixel = self.pixel(at);
-        self.send(Event::Mouse(mouse::Event::CursorMoved { position: pixel }), pixel);
+        self.send(
+            Event::Mouse(mouse::Event::CursorMoved { position: pixel }),
+            pixel,
+        );
     }
 
     fn release(&mut self, at: Point) {
@@ -229,7 +235,10 @@ fn an_unselected_track_drags_and_stretches_the_tracks_joined_to_it() {
     r.move_to(p(7.5, 3.0));
     let ghost: Vec<Segment> = {
         let carry = r.app.interaction_state.pcb_carry.as_ref().expect("a drag");
-        assert!(carry.items.contains(&DRAGGED), "the press carries the track");
+        assert!(
+            carry.items.contains(&DRAGGED),
+            "the press carries the track"
+        );
         let canvas = &r.app.interaction_state.pcb_canvas;
         assert!(canvas.previews_drag(), "the drag previews on the board");
         let following = canvas.drag_preview_following().to_vec();
@@ -242,15 +251,31 @@ fn an_unselected_track_drags_and_stretches_the_tracks_joined_to_it() {
     assert_eq!(r.track(ON_PAD), (p(0.0, 0.0), p(2.0, 0.0)), "pad end stays");
     assert_eq!(r.tracks_between(p(2.0, 0.0), p(5.0, 3.0)), 1, "its 45° leg");
     // (15, 0) to (10, 3): straight to (13, 0), then 45° up.
-    assert_eq!(r.track(TO_VIA), (p(13.0, 0.0), p(15.0, 0.0)), "via end stays");
-    assert_eq!(r.tracks_between(p(10.0, 3.0), p(13.0, 0.0)), 1, "its 45° leg");
-    assert_eq!(r.track(FROM_VIA), (p(15.0, 0.0), p(20.0, 0.0)), "not joined");
+    assert_eq!(
+        r.track(TO_VIA),
+        (p(13.0, 0.0), p(15.0, 0.0)),
+        "via end stays"
+    );
+    assert_eq!(
+        r.tracks_between(p(10.0, 3.0), p(13.0, 0.0)),
+        1,
+        "its 45° leg"
+    );
+    assert_eq!(
+        r.track(FROM_VIA),
+        (p(15.0, 0.0), p(20.0, 0.0)),
+        "not joined"
+    );
     assert_eq!(r.board().segments.len(), 7, "two new legs");
     r.assert_all_at_legal_angles();
     let via = r.board().vias.iter().find(|v| v.uuid == VIA).unwrap();
     assert_eq!(via.position, p(15.0, 0.0), "the via stays");
     let ids: Vec<Uuid> = ghost.iter().map(|t| t.uuid).collect();
-    assert_eq!(ghost.len(), 5, "the track, both joined and their legs: {ids:?}");
+    assert_eq!(
+        ghost.len(),
+        5,
+        "the track, both joined and their legs: {ids:?}"
+    );
     for drawn in &ghost {
         assert_eq!(
             r.tracks_between(drawn.start, drawn.end),
@@ -303,7 +328,11 @@ fn an_unselected_via_drags_and_its_tracks_stretch() {
     // (20, 0) to the via: straight to (18, 0), then 45°.
     assert_eq!(r.track(FROM_VIA), (p(18.0, 0.0), p(20.0, 0.0)));
     assert_eq!(r.tracks_between(p(15.0, 3.0), p(18.0, 0.0)), 1, "its leg");
-    assert_eq!(r.track(DRAGGED), (p(5.0, 0.0), p(10.0, 0.0)), "not on the via");
+    assert_eq!(
+        r.track(DRAGGED),
+        (p(5.0, 0.0), p(10.0, 0.0)),
+        "not on the via"
+    );
     r.assert_all_at_legal_angles();
     r.undo();
     assert_eq!(r.live(), before, "one undo step");
@@ -323,7 +352,11 @@ fn an_unselected_part_drags_and_the_track_on_its_pad_bends_at_45_degrees() {
     // (5, 0) to the pad at (0, 3): straight to (3, 0), then 45°.
     assert_eq!(r.track(ON_PAD), (p(3.0, 0.0), p(5.0, 0.0)), "far end stays");
     assert_eq!(r.tracks_between(p(0.0, 3.0), p(3.0, 0.0)), 1, "its leg");
-    assert_eq!(r.track(DRAGGED), (p(5.0, 0.0), p(10.0, 0.0)), "not on the pad");
+    assert_eq!(
+        r.track(DRAGGED),
+        (p(5.0, 0.0), p(10.0, 0.0)),
+        "not on the pad"
+    );
     r.assert_all_at_legal_angles();
     r.undo();
     assert_eq!(r.live(), before, "one undo step");

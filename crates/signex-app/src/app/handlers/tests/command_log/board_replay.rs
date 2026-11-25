@@ -781,6 +781,9 @@ fn a_board_move_replay_bends_the_tracks_on_its_pads_as_the_drop_did() {
     assert!(!ran.outcome.is_failed(), "{:?}", ran.outcome);
     assert_eq!(track_lines(&app, &path), bent, "the replay bends it alike");
     let u1 = app.document_state.pcb_board(&path).expect("the board");
-    let u1 = u1.footprints.iter().find(|fp| fp.uuid == uuid::Uuid::from_u128(PART));
+    let u1 = u1
+        .footprints
+        .iter()
+        .find(|fp| fp.uuid == uuid::Uuid::from_u128(PART));
     assert_eq!(u1.expect("U1").position, Point::new(10.0, 13.0));
 }

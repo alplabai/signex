@@ -158,7 +158,11 @@ fn a_bus_member_along_its_own_track_lays_only_the_rest() {
     assert_eq!(a[1].end, own.start, "the run ends on the track");
     assert_eq!(a[2].start, own.end, "and starts again at its far end");
     assert!((a[2].end.x - 10.0).abs() < 1e-9);
-    assert_eq!(tracks.iter().filter(|t| t.net == 2).count(), 2, "B is whole");
+    assert_eq!(
+        tracks.iter().filter(|t| t.net == 2).count(),
+        2,
+        "B is whole"
+    );
     let rules = DrcRules::for_board(&board, &[]).unwrap();
     land(&board, tracks, &rules);
 }

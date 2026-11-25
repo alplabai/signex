@@ -209,6 +209,9 @@ place_board_circle
 place_board_component
 place_board_diff_pair
 place_board_dimension
+place_board_dimension_horizontal
+place_board_dimension_radial
+place_board_dimension_vertical
 place_board_fill
 place_board_graphic_arc
 place_board_keepout
@@ -408,6 +411,7 @@ tune_diff_pair
 tune_net_length
 undo
 undo_last_segment
+unfill_selected
 unlock_board_items
 unselect_all
 untile_documents

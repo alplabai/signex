@@ -30,10 +30,22 @@ fn circle() -> MeasuredCircle {
 #[test]
 fn each_kind_measures_its_own_length() {
     let (start, end) = (p(0.0, 0.0), p(-6.0, 8.0));
-    assert_eq!(kind(DimensionKind::Aligned, start, end, 0.0).value_mm(), 10.0);
-    assert_eq!(kind(DimensionKind::Horizontal, start, end, 0.0).value_mm(), 6.0);
-    assert_eq!(kind(DimensionKind::Vertical, start, end, 0.0).value_mm(), 8.0);
-    assert_eq!(kind(DimensionKind::Radial, start, end, 0.0).value_mm(), 10.0);
+    assert_eq!(
+        kind(DimensionKind::Aligned, start, end, 0.0).value_mm(),
+        10.0
+    );
+    assert_eq!(
+        kind(DimensionKind::Horizontal, start, end, 0.0).value_mm(),
+        6.0
+    );
+    assert_eq!(
+        kind(DimensionKind::Vertical, start, end, 0.0).value_mm(),
+        8.0
+    );
+    assert_eq!(
+        kind(DimensionKind::Radial, start, end, 0.0).value_mm(),
+        10.0
+    );
     let level = kind(DimensionKind::Vertical, start, p(5.0, 0.0), 1.0);
     assert_eq!(level.value_mm(), 0.0);
     assert!(level.drawing().is_none(), "nothing up or down to measure");
@@ -51,7 +63,11 @@ fn a_horizontal_dimension_draws_a_level_line_with_extension_lines_to_it() {
     // The end's extension line runs down from (10, 4) past the line.
     assert!(close(s[1].0, p(10.0, 4.0)) && close(s[1].1, p(10.0, 1.5)));
     assert!(close(s[2].0, p(0.0, 2.0)) && close(s[2].1, p(10.0, 2.0)));
-    assert!(close(drawing.label_at, p(5.0, 3.0)), "{:?}", drawing.label_at);
+    assert!(
+        close(drawing.label_at, p(5.0, 3.0)),
+        "{:?}",
+        drawing.label_at
+    );
 }
 
 #[test]
@@ -72,10 +88,17 @@ fn a_radial_dimension_draws_a_leader_with_one_arrow_and_reads_r() {
     d.style.arrow_length = 1.0;
     let drawing = d.drawing().unwrap();
     assert_eq!(d.extension_strokes(), 0);
-    assert_eq!(d.stroke_width(0), d.line_width, "the leader at the line width");
+    assert_eq!(
+        d.stroke_width(0),
+        d.line_width,
+        "the leader at the line width"
+    );
     assert_eq!(drawing.strokes, [(p(0.0, 0.0), p(4.0, 0.0))], "no offset");
     assert_eq!(drawing.filled_arrows.len(), 1);
-    assert!(close(drawing.filled_arrows[0][0], p(4.0, 0.0)), "on the circle");
+    assert!(
+        close(drawing.filled_arrows[0][0], p(4.0, 0.0)),
+        "on the circle"
+    );
     assert!(drawing.filled_arrows[0][1].x < 4.0, "pointing out");
     assert_eq!(d.value_text(), "R4.00mm");
     d.style.prefix = "~".into();
@@ -96,7 +119,11 @@ fn an_aligned_dimension_draws_as_it_did_before_the_kinds() {
 fn a_circles_edge_and_the_point_toward_a_click() {
     let c = circle();
     assert_eq!(c.edge_distance(p(20.0, 25.5)), 0.5);
-    assert_eq!(c.edge_distance(p(20.0, 20.0)), 5.0, "the centre is 5 mm off");
+    assert_eq!(
+        c.edge_distance(p(20.0, 20.0)),
+        5.0,
+        "the centre is 5 mm off"
+    );
     assert!(close(c.point_toward(p(40.0, 20.0)), p(25.0, 20.0)));
     assert!(close(c.point_toward(p(20.0, 20.0)), p(25.0, 20.0)), "right");
 }

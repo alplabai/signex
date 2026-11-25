@@ -70,7 +70,10 @@ fn assert_pill_inside_canvas(app: &Signex, main: iced::window::Id, size: Size, c
 fn assert_right_dock_open(app: &Signex) {
     let dock = &app.document_state.dock;
     assert!(dock.has_panels(PanelPosition::Right), "no right dock");
-    assert!(!dock.is_collapsed(PanelPosition::Right), "right dock collapsed");
+    assert!(
+        !dock.is_collapsed(PanelPosition::Right),
+        "right dock collapsed"
+    );
 }
 
 /// The issue's case: laid out smaller than the model's size, the pill still
@@ -103,7 +106,10 @@ fn the_presets_follow_the_pill_when_the_window_size_is_stale() {
     let (_, extent) = app.zoom_presets_card(zoom, has_selection);
     let (x, y) = super::zoom_presets::presets_anchor(canvas, extent);
     let card = Rectangle::new(Point::new(x, y), Size::new(extent.0, extent.1));
-    assert!(holds(canvas, card), "card {card:?} leaves canvas {canvas:?}");
+    assert!(
+        holds(canvas, card),
+        "card {card:?} leaves canvas {canvas:?}"
+    );
     assert!(
         card.y + card.height <= pill.y,
         "card {card:?} overlaps pill {pill:?}"
@@ -148,7 +154,10 @@ fn the_pill_stays_inside_the_canvas_with_no_dock() {
         }
     }
     for pos in positions {
-        assert!(!app.document_state.dock.has_panels(pos), "{pos:?} still docked");
+        assert!(
+            !app.document_state.dock.has_panels(pos),
+            "{pos:?} still docked"
+        );
     }
     assert_pill_inside_canvas(&app, main, LAID_OUT, "no dock, stale model size");
     let canvas = app.canvas_bounds_sized(None, (LAID_OUT.width, LAID_OUT.height));

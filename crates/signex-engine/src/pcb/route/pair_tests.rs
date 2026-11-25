@@ -252,5 +252,9 @@ fn a_pair_member_along_its_own_track_lays_only_the_rest() {
     let negative: Vec<_> = tracks.iter().filter(|t| t.net == 2).collect();
     assert_eq!(negative.len(), 2, "the join and the run up to the track");
     assert_eq!(negative[1].end, Point::new(4.0, -0.25), "ends on the track");
-    assert_eq!(tracks.iter().filter(|t| t.net == 1).count(), 2, "USB_P is whole");
+    assert_eq!(
+        tracks.iter().filter(|t| t.net == 1).count(),
+        2,
+        "USB_P is whole"
+    );
 }

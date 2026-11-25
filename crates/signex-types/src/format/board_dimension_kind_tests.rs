@@ -60,7 +60,10 @@ fn an_aligned_dimension_writes_no_kind_and_keeps_its_token() {
     assert!(!dimension_uses_style(&d));
     let text = saved(d.clone());
     let keys = row_keys(&text);
-    assert!(!keys.iter().any(|k| k == "kind" || k == "measures"), "{text}");
+    assert!(
+        !keys.iter().any(|k| k == "kind" || k == "measures"),
+        "{text}"
+    );
     assert_eq!(token_of(&text), SNXPCB_FORMAT_V1, "{text}");
     let file = SnxPcb::parse(&text).expect("reads");
     assert_eq!(file.board.free.dimensions, vec![d]);

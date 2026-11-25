@@ -1,9 +1,9 @@
 //! #2492: a routed track keeps only what same-net tracks of its layer do
 //! not already cover, so a route never lays duplicate copper.
 
-use signex_types::corner::CornerRule;
 use pcb_geom::CopperItem;
 use signex_drc::DrcRules;
+use signex_types::corner::CornerRule;
 use signex_types::pcb::Segment;
 use uuid::Uuid;
 
@@ -34,7 +34,10 @@ fn trimmed(laid: &[Segment]) -> Vec<Segment> {
 #[test]
 fn a_cover_in_the_middle_leaves_the_two_ends_joined_to_it() {
     let pieces = trimmed(&[segment(2, (6.0, 0.0), (3.0, 0.0), 1)]);
-    assert_eq!(ends(&pieces), [((0.0, 0.0), (3.0, 0.0)), ((6.0, 0.0), (10.0, 0.0))]);
+    assert_eq!(
+        ends(&pieces),
+        [((0.0, 0.0), (3.0, 0.0)), ((6.0, 0.0), (10.0, 0.0))]
+    );
     assert_eq!(pieces[0].uuid, Uuid::from_u128(1), "the first keeps the id");
     assert_eq!(pieces[1].uuid, Uuid::from_u128(101));
 }

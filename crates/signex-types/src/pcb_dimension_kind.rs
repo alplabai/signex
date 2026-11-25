@@ -34,7 +34,12 @@ pub enum DimensionKind {
 }
 
 impl DimensionKind {
-    pub const ALL: [Self; 4] = [Self::Aligned, Self::Horizontal, Self::Vertical, Self::Radial];
+    pub const ALL: [Self; 4] = [
+        Self::Aligned,
+        Self::Horizontal,
+        Self::Vertical,
+        Self::Radial,
+    ];
 
     /// The direction from `start` to `end` the value is measured along, a
     /// unit vector, and the measured length; `None` when the length is

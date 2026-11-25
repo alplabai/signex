@@ -106,9 +106,17 @@ fn a_changed_board_view_is_saved_and_restored_in_the_next_launch() {
 
     let mut next = launch();
     next.ui_state.saved_pcb_layer_views = kept;
-    assert_eq!(next.pcb_layer_view(&path), PcbLayerView::default(), "not open yet");
+    assert_eq!(
+        next.pcb_layer_view(&path),
+        PcbLayerView::default(),
+        "not open yet"
+    );
     open(&mut next);
-    assert_eq!(next.pcb_layer_view(&path), changed.kept(), "restored on open");
+    assert_eq!(
+        next.pcb_layer_view(&path),
+        changed.kept(),
+        "restored on open"
+    );
     assert!(
         next.ui_state.saved_pcb_layer_views.is_empty(),
         "the session view took it over"

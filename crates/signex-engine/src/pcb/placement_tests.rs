@@ -214,7 +214,10 @@ fn a_move_takes_the_track_ends_on_its_pads_along_in_one_step() {
     // (25, 10) to the pad at (23, 11): straight to (24, 10), then 45°.
     assert_eq!(track.end, Point::new(24.0, 10.0));
     let leg = &engine.board().segments[1];
-    assert_eq!((leg.start, leg.end), (Point::new(24.0, 10.0), Point::new(23.0, 11.0)));
+    assert_eq!(
+        (leg.start, leg.end),
+        (Point::new(24.0, 10.0), Point::new(23.0, 11.0))
+    );
     assert_eq!(leg.net, track.net);
     assert_eq!(fp(engine.board(), 2).position, Point::new(22.0, 11.0));
     engine.undo().expect("undo runs");

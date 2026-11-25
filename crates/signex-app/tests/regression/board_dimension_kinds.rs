@@ -155,7 +155,10 @@ fn a_radial_dimension_measures_the_arc_clicked_and_follows_it() {
         )
         .expect("the arc moves");
     let followed = &live(&f.app).free.dimensions[0];
-    assert!(close(followed.start, Point::new(30.0, 20.0)), "{followed:?}");
+    assert!(
+        close(followed.start, Point::new(30.0, 20.0)),
+        "{followed:?}"
+    );
     assert!(close(followed.end, Point::new(30.0, 25.0)), "{followed:?}");
     assert_eq!(followed.value_text(), "R5.00mm");
     send(&mut f.app, Message::Edit(EditMsg::Undo));

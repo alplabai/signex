@@ -192,7 +192,10 @@ fn a_dragged_via_lands_on_the_grid_keeps_its_net_and_undoes_in_one_step() {
     // Caner, 2026-11-25 (#2513): the track to the moved via bends at one 45°
     // corner, straight from (15, 10) to (21, 10), then a new leg to (24, 13).
     let track = &rig.board().segments[0];
-    assert!(close(track.end, 21.0, 10.0), "it keeps its fixed leg: {track:?}");
+    assert!(
+        close(track.end, 21.0, 10.0),
+        "it keeps its fixed leg: {track:?}"
+    );
     assert!(
         close(track.start, 15.0, 10.0),
         "its far end stays: {track:?}"
@@ -234,8 +237,7 @@ impl Rig {
 
     /// Whether a track of the board runs from `a` to `b`.
     fn has_track(&self, a: (f64, f64), b: (f64, f64)) -> bool {
-        (self.board().segments.iter())
-            .any(|s| close(s.start, a.0, a.1) && close(s.end, b.0, b.1))
+        (self.board().segments.iter()).any(|s| close(s.start, a.0, a.1) && close(s.end, b.0, b.1))
     }
 
     /// Whether a track of the board ends at `at`, its stretched end (#2513).
@@ -337,8 +339,14 @@ fn the_preview_draws_the_via_and_its_track_where_they_are_going() {
         (drawn.segments.iter()).any(|s| close(s.start, a.0, a.1) && close(s.end, b.0, b.1))
     };
     assert_eq!(drawn.segments.len(), 2, "the track and its new leg");
-    assert!(runs((15.0, 10.0), (21.0, 10.0)), "the track keeps its far end");
-    assert!(runs((21.0, 10.0), (24.0, 13.0)), "the moved track ends on the via");
+    assert!(
+        runs((15.0, 10.0), (21.0, 10.0)),
+        "the track keeps its far end"
+    );
+    assert!(
+        runs((21.0, 10.0), (24.0, 13.0)),
+        "the moved track ends on the via"
+    );
     assert!(close(drawn.vias[0].position, 24.0, 13.0), "the moved via");
     let left = board_without(&before, &carry.carried(), &following);
     assert!(left.segments.is_empty(), "the track left its old place");

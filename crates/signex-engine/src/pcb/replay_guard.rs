@@ -141,7 +141,11 @@ impl BoardReplayGuard {
     /// [`Self::writes_only_its_targets`] for a move rebuilt on the board as
     /// it is now: the corner legs it adds are new tracks that write over
     /// nothing.
-    pub fn move_writes_only_its_targets(&self, board: &PcbBoard, commands: &[BoardCommand]) -> bool {
+    pub fn move_writes_only_its_targets(
+        &self,
+        board: &PcbBoard,
+        commands: &[BoardCommand],
+    ) -> bool {
         let rest: Vec<BoardCommand> = (commands.iter())
             .filter(|command| !matches!(command, BoardCommand::AddItems { .. }))
             .cloned()

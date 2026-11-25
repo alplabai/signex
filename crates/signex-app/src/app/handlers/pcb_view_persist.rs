@@ -68,7 +68,11 @@ impl Signex {
     ) -> Task<Message> {
         match msg {
             BoardViewSaveMsg::SaveDebounceElapsed(generation) => {
-                match self.ui_state.pcb_layer_view_sync.take_if_current(generation) {
+                match self
+                    .ui_state
+                    .pcb_layer_view_sync
+                    .take_if_current(generation)
+                {
                     Some(write) => write_board_views_task(write),
                     None => Task::none(),
                 }

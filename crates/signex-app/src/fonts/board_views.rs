@@ -53,7 +53,10 @@ mod tests {
             .write(&views)
             .expect("written");
         let json = read_prefs_json(&path);
-        assert_eq!(read_board_views_from(json.as_ref()).get(&board), Some(&view));
+        assert_eq!(
+            read_board_views_from(json.as_ref()).get(&board),
+            Some(&view)
+        );
         assert_eq!(json.expect("a file")["ui_font"], "Inter");
     }
 }
