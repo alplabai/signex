@@ -34,7 +34,7 @@ pub(crate) use fields::{
 };
 pub use matrix::{VariantMatrix, VariantRow, variant_matrix, variant_matrix_in_channels};
 pub(crate) use settings::apply_parameters;
-pub use settings::{part_link, project_fit};
+pub use settings::{part_link, placed_part_fitted, project_fit};
 
 /// Whether the part made of `units` (its placed units, at least one) is
 /// fitted in `variant`; `None` or Base's name is Base. The fit

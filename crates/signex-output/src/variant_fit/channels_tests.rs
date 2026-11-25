@@ -195,6 +195,31 @@ fn the_per_variant_bom_drops_the_copies_the_variant_does_not_fit() {
     assert_eq!(fitted(Some("Lite")), ["CH1_R5", "CH3_R5"]);
 }
 
+/// The channel cards' fit is the BOM's: the settings first, then the sheets.
+#[test]
+fn a_copys_fit_takes_the_settings_then_the_sheets() {
+    let (mut sheet, _) = channel_sheet();
+    sheet.symbols[1]
+        .fields
+        .insert("Fitted@Lite".to_string(), "no".to_string());
+    let settings = lite(&sheet);
+    let (r5, c6) = (&sheet.symbols[0], &sheet.symbols[1]);
+    let fitted = |symbol: &Symbol, n: u128, variant: Option<&str>| {
+        placed_part_fitted(&settings, variant, copy_of(symbol, n).placed(), &[symbol])
+    };
+    assert!(fitted(r5, 1, Some("Lite")));
+    assert!(!fitted(r5, 2, Some("Lite")));
+    assert!(fitted(r5, 2, None), "Base is the sheets");
+    assert!(!fitted(c6, 1, Some("Lite")));
+    let unset = VariantSettings::default();
+    assert!(!placed_part_fitted(
+        &unset,
+        Some("Lite"),
+        copy_of(c6, 1).placed(),
+        &[c6]
+    ));
+}
+
 /// An entry keyed by one channel's copy never lands on another channel's,
 /// even when it carries that channel's designator (a naming change).
 #[test]

@@ -36,6 +36,17 @@ pub fn project_fit<'p>(
     settings.part(variant, placed)?.fitted
 }
 
+/// Whether the part `placed` names, made of `units`, is fitted in `variant`:
+/// the settings' fit, else what its sheets say. The fit the BOM counts.
+pub fn placed_part_fitted<'p>(
+    settings: &VariantSettings,
+    variant: Option<&str>,
+    placed: impl Into<PlacedPart<'p>>,
+    units: &[&signex_types::schematic::Symbol],
+) -> bool {
+    project_fit(settings, variant, placed).unwrap_or_else(|| super::part_is_fitted(units, variant))
+}
+
 /// The value, footprint and fields of one part with `variant`'s parameter
 /// values from `settings` put in their place.
 pub(crate) fn apply_parameters(
