@@ -271,6 +271,78 @@ fn rename_is_undone_when_the_saved_project_cannot_be_written() {
     );
 }
 
+/// Rewrite the saved project with the format token `snxprj/1.2`, a newer
+/// minor than this build writes, and load it into the app as an open would.
+/// Returns the bytes on disk.
+fn make_newer_minor(f: &mut Fixture) -> Vec<u8> {
+    let mut body: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&f.prj).unwrap()).expect("project JSON");
+    body["format"] = serde_json::json!("snxprj/1.2");
+    let bytes = serde_json::to_vec_pretty(&body).expect("encode");
+    std::fs::write(&f.prj, &bytes).expect("write fixture");
+    let data = parse_project(&f.prj).expect("a newer minor opens");
+    assert!(data.is_from_newer_minor());
+    f.app.document_state.projects[0].data = data;
+    bytes
+}
+
+/// What the user is told about a failed rename: the dialog's error while it
+/// is open for the file, the card otherwise.
+fn rename_failure(app: &Signex) -> String {
+    app.ui_state
+        .rename_dialog
+        .as_ref()
+        .and_then(|d| d.error.clone())
+        .or_else(|| {
+            app.document_state
+                .error_notice
+                .as_ref()
+                .map(|n| n.detail.render_en_us())
+        })
+        .unwrap_or_default()
+}
+
+/// A project read from a newer minor cannot be written, so a sheet rename in
+/// it is undone: the file is back, the saved project keeps its bytes and the
+/// project in memory still names the old file.
+#[test]
+fn rename_in_a_newer_minor_project_is_undone() {
+    let mut f = fixture(true);
+    let saved = make_newer_minor(&mut f);
+    rename(&mut f.app, &f.dir.join("Second.snxsch"), "ThirdNM.snxsch");
+
+    assert!(f.dir.join("Second.snxsch").exists(), "the file moved back");
+    assert!(!f.dir.join("ThirdNM.snxsch").exists());
+    assert_eq!(std::fs::read(&f.prj).unwrap(), saved, "byte-identical");
+    let memory = &f.app.document_state.projects[0].data;
+    assert_eq!(names(memory), ["Second.snxsch"]);
+    assert_eq!(memory.schematic_root.as_deref(), Some("Second.snxsch"));
+    let told = rename_failure(&f.app);
+    assert!(
+        told.contains("Nothing was changed") && told.contains("snxprj/1.2"),
+        "{told}"
+    );
+}
+
+/// Add New Schematic in a project read from a newer minor: the blank sheet
+/// is removed again, the saved project keeps its bytes and the project in
+/// memory lists no new sheet.
+#[test]
+fn add_new_schematic_in_a_newer_minor_project_leaves_no_sheet() {
+    let said = "the project file could not be written, so AddedNM.snxsch was not kept";
+    let before = logged_count(said);
+    let mut f = fixture(true);
+    let saved = make_newer_minor(&mut f);
+    let path = add_new(&mut f, "AddedNM.snxsch");
+
+    assert!(!path.exists(), "no sheet file is left unlisted");
+    assert_eq!(std::fs::read(&f.prj).unwrap(), saved, "byte-identical");
+    let memory = &f.app.document_state.projects[0].data;
+    assert_eq!(names(memory), ["Second.snxsch"]);
+    assert_eq!(memory.schematic_root.as_deref(), Some("Second.snxsch"));
+    assert_eq!(logged_count(said), before + 1);
+}
+
 #[test]
 fn add_new_schematic_then_discard_all_reopens_with_the_sheet() {
     let said = "Added AddedA.snxsch; the saved project file now lists it";

@@ -209,3 +209,43 @@ fn restore_keeps_the_id_of_the_open_project() {
     assert_eq!(description(&next).as_deref(), Some(EDITED));
     assert_eq!(next.document_state.projects[0].data.document_id, Some(live));
 }
+
+/// A project read from a newer minor cannot be encoded for a save, so it
+/// gets no recovery copy either; the refusal is reported once, not on
+/// every tick.
+#[test]
+fn a_newer_minor_project_gets_no_sidecar_and_the_refusal_is_reported_once() {
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = tempfile::tempdir().unwrap();
+    let file = tmp.path().join("P.snxprj");
+    write_project(&file, &project()).unwrap();
+    let mut body: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    body["format"] = serde_json::json!("snxprj/1.2");
+    let before = serde_json::to_vec_pretty(&body).unwrap();
+    std::fs::write(&file, &before).unwrap();
+    let recovery = tmp.path().join("recovery");
+    let (mut app, prj) = fresh_run(&recovery, &file);
+    assert!(app.document_state.projects[0].data.is_from_newer_minor());
+
+    let said = format!("could not encode {}", prj.display());
+    let logged = || {
+        signex_app::diagnostics::recent_entries()
+            .iter()
+            .filter(|e| e.message.contains(&said))
+            .count()
+    };
+    let reported_before = logged();
+    edit(&mut app, &prj);
+    tick(&mut app);
+    tick(&mut app);
+
+    assert!(!sidecar::sidecar_path(&recovery, &prj).exists());
+    assert!(
+        super::recovery_dir_is_empty(&recovery),
+        "nothing is written to the recovery folder"
+    );
+    assert_eq!(std::fs::read(&file).unwrap(), before, "untouched");
+    assert!(app.document_state.is_document_dirty(&prj));
+    assert_eq!(logged(), reported_before + 1, "reported once, not per tick");
+}
