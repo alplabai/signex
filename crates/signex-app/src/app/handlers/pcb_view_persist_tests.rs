@@ -66,10 +66,10 @@ fn a_changed_board_view_is_saved_and_restored_in_the_next_launch() {
     let prefs = dir.path().join("prefs.json");
 
     let mut app = launch();
-    app.ui_state.pcb_layer_view_sync = BoardViewSync::new(
+    app.ui_state.pcb_layer_view_sync = Box::new(BoardViewSync::new(
         Arc::new(PrefsBoardViewStore::at(prefs.clone())),
         Default::default(),
-    );
+    ));
     let path = open(&mut app);
     view_event(&mut app, PcbViewMsg::LayerVisibilityToggled(OVERLAY));
     view_event(&mut app, PcbViewMsg::ActiveLayerPicked(BOTTOM));
@@ -105,7 +105,7 @@ fn a_changed_board_view_is_saved_and_restored_in_the_next_launch() {
     assert_eq!(kept.get(&path), Some(&changed.kept()));
 
     let mut next = launch();
-    next.ui_state.saved_pcb_layer_views = kept;
+    next.ui_state.saved_pcb_layer_views = Box::new(kept);
     assert_eq!(
         next.pcb_layer_view(&path),
         PcbLayerView::default(),

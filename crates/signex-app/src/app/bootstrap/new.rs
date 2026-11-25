@@ -329,11 +329,13 @@ impl Signex {
                 keymap_profiles,
                 active_keymap,
                 pcb_layer_views: Default::default(),
-                saved_pcb_layer_views: crate::board_view_prefs::read_board_views_from(prefs),
-                pcb_layer_view_sync: crate::board_view_prefs::BoardViewSync::new(
+                saved_pcb_layer_views: Box::new(crate::board_view_prefs::read_board_views_from(
+                    prefs,
+                )),
+                pcb_layer_view_sync: Box::new(crate::board_view_prefs::BoardViewSync::new(
                     std::sync::Arc::new(crate::fonts::PrefsBoardViewStore::user_prefs()),
                     Default::default(),
-                ),
+                )),
                 layer_strip: crate::fonts::read_layer_strip_pref_from(prefs),
                 pcb_view_angle_entry: None,
                 pcb_pick_filter: Default::default(),

@@ -21,12 +21,14 @@ pub struct UiState {
     pub pcb_layer_views:
         std::collections::HashMap<std::path::PathBuf, signex_renderer::pcb::PcbLayerView>,
     /// The views kept by earlier launches (#2480), by board path, until
-    /// their board opens and `pcb_layer_views` takes the view over.
+    /// their board opens and `pcb_layer_views` takes the view over. Boxed: a
+    /// pointer of the size budget (#2412).
     pub saved_pcb_layer_views:
-        std::collections::HashMap<std::path::PathBuf, signex_renderer::pcb::PcbLayerView>,
+        Box<std::collections::HashMap<std::path::PathBuf, signex_renderer::pcb::PcbLayerView>>,
     /// Writes the views of `pcb_layer_views` to `prefs.json` (#2480),
-    /// debounced and off the UI thread.
-    pub pcb_layer_view_sync: crate::board_view_prefs::BoardViewSync,
+    /// debounced and off the UI thread. Boxed: a pointer of the size budget
+    /// (#2412).
+    pub pcb_layer_view_sync: Box<crate::board_view_prefs::BoardViewSync>,
     /// The board layer strip's tab names and saved layer sets (#2394), per
     /// user in `prefs.json`.
     pub layer_strip: crate::layer_strip_prefs::LayerStripPrefs,
