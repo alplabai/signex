@@ -10,10 +10,9 @@ use signex_i18n_ids::ids;
 use super::notices::{
     engine_error_notice, engine_notice_events, locked_refusal, skip_notice, warning_notice,
 };
-use super::{ActiveSettlement, DocumentState, SheetEdit, SheetStep};
+use super::{DocumentState, Settlement, SheetEdit, SheetStep};
 use crate::app::core::event::{ChangeCause, CoreEvent, DocumentChanged};
 use crate::app::core::locked_items::locked_items_pruned;
-use crate::app::core::mutation_outcome::MutationOutcome;
 
 fn document_patch(pair: Option<signex_engine::PatchPair>) -> DocumentPatch {
     pair.map_or(DocumentPatch::NONE, |pair| pair.document)
@@ -141,8 +140,9 @@ impl DocumentState {
                 return Some(Self::not_stepped(events));
             }
         };
-        let settled = self.settle_active_into(patch, ChangeCause::Step, &mut events);
-        if settled != ActiveSettlement::Shown {
+        debug_assert_ne!(patch, DocumentPatch::NONE, "#2645: a step with no patch");
+        let settled = self.settle(Some(&path), patch, ChangeCause::Step, &mut events);
+        if settled != Settlement::Shown {
             // The history moved all the same: an empty patch on the active
             // canvas only asks for the library drift check.
             let patch = DocumentPatch::NONE;
@@ -150,7 +150,7 @@ impl DocumentState {
             events.push(DocumentChanged { path, patch, cause }.into());
         }
         Some(SheetStep {
-            stepped: settled != ActiveSettlement::Unchanged,
+            stepped: settled != Settlement::Unchanged,
             refusal: None,
             events,
         })
@@ -175,17 +175,7 @@ impl DocumentState {
                 return SheetEdit::failed(reason, events);
             }
         };
-        self.settle_at_into(path, patch, ChangeCause::Edit, &mut events);
-        let outcome = if patch == DocumentPatch::NONE {
-            MutationOutcome::Unchanged
-        } else {
-            MutationOutcome::Changed
-        };
-        SheetEdit {
-            outcome,
-            refusal: None,
-            events,
-        }
+        self.settle_edit_on(Some(path), patch, ChangeCause::Edit, events)
     }
 
     /// One undo (`undo`) or redo of the engine history of the sheet at
@@ -230,7 +220,15 @@ impl DocumentState {
                 return Self::step_refused(reason, events);
             }
         };
-        self.settle_at_into(path, patch, ChangeCause::Step, &mut events);
+        // A step never runs inside an agent's edit list: `edit_refusal`
+        // refuses undo, redo and revert.
+        debug_assert_ne!(
+            self.agent_edits.target.as_deref(),
+            Some(path),
+            "a step inside an agent edit"
+        );
+        debug_assert_ne!(patch, DocumentPatch::NONE, "#2645: a step with no patch");
+        self.settle(Some(path), patch, ChangeCause::Step, &mut events);
         SheetStep {
             stepped: true,
             refusal: None,
@@ -238,16 +236,11 @@ impl DocumentState {
         }
     }
 
-    fn settle_edit(&mut self, patch: DocumentPatch, mut events: Vec<CoreEvent>) -> SheetEdit {
-        let outcome = match self.settle_active_into(patch, ChangeCause::Edit, &mut events) {
-            ActiveSettlement::Unchanged => MutationOutcome::Unchanged,
-            ActiveSettlement::Owed | ActiveSettlement::Shown => MutationOutcome::Changed,
-        };
-        SheetEdit {
-            outcome,
-            refusal: None,
-            events,
-        }
+    /// The gateway's tail settles on the sheet the edit acted on: an agent's
+    /// target during its run, which is what owes that sheet its refresh.
+    fn settle_edit(&mut self, patch: DocumentPatch, events: Vec<CoreEvent>) -> SheetEdit {
+        let path = self.edit_path().map(Path::to_path_buf);
+        self.settle_edit_on(path.as_deref(), patch, ChangeCause::Edit, events)
     }
 
     fn not_stepped(events: Vec<CoreEvent>) -> SheetStep {

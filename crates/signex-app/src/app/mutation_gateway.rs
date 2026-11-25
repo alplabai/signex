@@ -293,9 +293,9 @@ impl Signex {
         outcome == MutationOutcome::Changed
     }
 
-    /// #2645: the active tail owes an agent's run the change of the active
-    /// sheet, the by-path tail only a change of the run's own target. Until
-    /// the two rules are one, no flow may owe a change of another sheet.
+    /// #2645: these tails settle on the active sheet, and an agent's run is
+    /// owed only a change of its own target; no flow may change the active
+    /// sheet while a run on another sheet is going.
     fn debug_assert_owed_to_agent_target(&self) {
         let docs = &self.document_state;
         debug_assert!(

@@ -75,12 +75,10 @@ fn a_gateway_call_inside_an_agents_run_reports_changed() {
 // ---- Test 6 (e): paper by path on the active sheet.
 
 /// A1 moves the panel context's paper and the drawn page with a PAPER patch
-/// (`a_paper_change_and_its_undo_reach_the_panel_context_and_the_drawn_page`).
-/// A2 has no paper step of its own. The panel context follows anyway (its
-/// `refresh_panel_ctx` reads the refreshed render snapshot); the drawn page
-/// (`apply_page_dimensions_to_canvas`) stays at the old size today.
+/// (`a_paper_change_and_its_undo_reach_the_panel_context_and_the_drawn_page`);
+/// A2 shares that step since #2645, so on the active sheet both follow.
 #[test]
-fn a_paper_change_by_path_on_the_active_sheet_moves_the_panel_but_not_the_drawn_page_today() {
+fn a_paper_change_by_path_on_the_active_sheet_moves_the_panel_and_the_drawn_page() {
     let mut app = app_with(&[("a.snxsch", 100)]);
     let a = path("a.snxsch");
     let canvas = app.interaction_state.active_canvas();
@@ -90,7 +88,10 @@ fn a_paper_change_by_path_on_the_active_sheet_moves_the_panel_but_not_the_drawn_
     assert_eq!(app.document_state.engines[&a].document().paper_size, "A3");
     assert_eq!(app.document_state.panel_ctx.paper_size, "A3");
     let canvas = app.interaction_state.active_canvas();
-    assert_eq!((canvas.paper_width_mm, canvas.paper_height_mm), page);
+    assert_eq!(
+        (canvas.paper_width_mm, canvas.paper_height_mm),
+        crate::panels::paper_dimensions("A3")
+    );
 }
 
 // ---- Test 8 (g): a selected wire the edit removed.
