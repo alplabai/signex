@@ -178,6 +178,10 @@ pub struct PdfOptions {
     /// The project's resolved defaults for unset widths and sizes (#2026),
     /// the same value the canvas draws with. Built-in by default.
     pub schematic_defaults: signex_types::schematic::SchematicDefaults,
+    /// Draw a part that is not fitted in `variant` (or marked DNP) greyed
+    /// and crossed out, as the canvas does (#1294). The user's "Cross out
+    /// not-fitted parts" preference; on by default.
+    pub draw_not_fitted: bool,
 }
 
 /// How the part bookmarks are grouped.
@@ -296,6 +300,7 @@ impl Default for PdfOptions {
             palette: SchematicPalette::classic(),
             net_class_styles: std::collections::HashMap::new(),
             schematic_defaults: Default::default(),
+            draw_not_fitted: true,
         }
     }
 }
