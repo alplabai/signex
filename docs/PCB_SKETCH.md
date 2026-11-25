@@ -467,7 +467,8 @@ arc's centre connects nothing, and a circle is a shape of its own (Caner,
   which also removes the instances of a pattern that shrank or went.
 - **The cap covers the whole bake.** One bake writes at most
   `MAX_ARRAY_INSTANCES` pattern instances over all its patterns and targets;
-  past it the bake refuses with `TooManyInstances`.
+  past it the bake refuses with `TooManyInstances`, whether one pattern or
+  several go over.
 - **A target that cannot repeat refuses the bake** with `NotPatternable`: the
   board outline (a board has one) and a component anchor (a component is in one
   place).

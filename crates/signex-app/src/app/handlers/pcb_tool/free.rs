@@ -4,7 +4,8 @@
 //! - Arc: on the active layer, by centre, by edge or at any angle
 //!   (`cycle_arc_mode`); a copper arc takes the net under its start;
 //! - Dimension: two clicks for the points it measures, a third for where
-//!   its line stands.
+//!   its line stands, aligned, across or up by its kind; a radial one
+//!   (#2507) is one click on the arc or circle it measures.
 //!
 //! What each places follows the values set in Properties (#2393,
 //! `BoardToolDefaults`).
@@ -17,6 +18,7 @@ use signex_i18n::{MessageId, ids, t};
 use signex_types::pcb::{BoardText, Pad, PadNet, PcbBoard, Point};
 use signex_types::pcb_arc::TrackArc;
 use signex_types::pcb_dimension::LinearDimension;
+use signex_types::pcb_dimension_kind::DimensionKind;
 use signex_types::pcb_dimension_style::DimensionDefaults;
 use signex_types::pcb_layer::PcbLayer;
 use uuid::Uuid;
@@ -101,18 +103,45 @@ impl BoardToolDefaults {
         Some(text)
     }
 
-    /// The dimension the Dimension tool places from `start` to `end`, its
-    /// line through `through`: the PCB defaults of Preferences (#2868),
-    /// then the values set in the tool's form.
+    /// The dimension of `kind` the Dimension tool places from `start` to
+    /// `end`, its line through `through` (#2507; `None` for a radial one,
+    /// see [`Self::radial_dimension`]): the PCB defaults of Preferences
+    /// (#2868), then the values set in the tool's form.
     pub fn dimension(
         &self,
+        kind: DimensionKind,
         base: &DimensionDefaults,
         id: Uuid,
-        (start, end, through): (Point, Point, Point),
+        points: (Point, Point, Point),
         layer: PcbLayer,
     ) -> Option<LinearDimension> {
-        let mut dimension =
-            draw::new_dimension(id, start, end, through, layer)?.with_defaults(base);
+        let dimension = draw::new_kind_dimension(kind, id, points, layer)?;
+        Some(self.styled_dimension(base, dimension))
+    }
+
+    /// The radial dimension the Radial Dimension tool places on the arc or
+    /// circle of `board` nearest `at` (#2507), styled as
+    /// [`Self::dimension`] styles one; `None` with no arc or circle there.
+    pub fn radial_dimension(
+        &self,
+        board: &PcbBoard,
+        base: &DimensionDefaults,
+        id: Uuid,
+        at: Point,
+        layer: PcbLayer,
+    ) -> Option<LinearDimension> {
+        let dimension = draw::new_radial_dimension(board, id, at, layer)?;
+        Some(self.styled_dimension(base, dimension))
+    }
+
+    /// `dimension` with the PCB defaults of `base`, then the values set in
+    /// the tool's form.
+    fn styled_dimension(
+        &self,
+        base: &DimensionDefaults,
+        dimension: LinearDimension,
+    ) -> LinearDimension {
+        let mut dimension = dimension.with_defaults(base);
         dimension.line_width = self.dimension_line_width_mm.unwrap_or(dimension.line_width);
         dimension.text_height = self
             .dimension_text_height_mm
@@ -124,7 +153,7 @@ impl BoardToolDefaults {
         dimension.text_at = self
             .dimension_text_at
             .unwrap_or_else(|| dimension.above_text_at());
-        Some(dimension)
+        dimension
     }
 }
 
@@ -173,9 +202,14 @@ impl Signex {
         }
     }
 
-    /// A Dimension click at `at`: a measured point, or where the line
-    /// stands, which places it.
-    pub(super) fn dimension_clicked(&mut self, at: Point) {
+    /// A click of the Dimension tool of `kind` at `at`: a measured point, or
+    /// where the line stands, which places it; for a radial one (#2507),
+    /// the arc or circle it measures, which places it.
+    pub(super) fn dimension_clicked(&mut self, kind: DimensionKind, at: Point) {
+        if kind == DimensionKind::Radial {
+            self.radial_dimension_clicked(at);
+            return;
+        }
         let Some(clicks) = self.next_clicks(at, 3) else {
             return;
         };
@@ -185,17 +219,38 @@ impl Signex {
         let base = self.tool_dimension_defaults();
         let defaults = &self.interaction_state.pcb_tool_defaults;
         let points = (clicks[0], clicks[1], clicks[2]);
-        match defaults.dimension(&base, Uuid::now_v7(), points, layer) {
-            Some(dimension) => {
-                let name = t!(self.ui_state.i18n, ids::PCB_TOOL_DIMENSION).into_string();
-                let command = draw::place_item(BoardItem::Dimension(dimension));
-                self.run_placement(&name, Ok(vec![command]));
-            }
+        match defaults.dimension(kind, &base, Uuid::now_v7(), points, layer) {
+            Some(dimension) => self.place_dimension(kind, dimension),
             None => {
                 let note = t!(self.ui_state.i18n, ids::PCB_TOOL_NO_DIMENSION);
                 crate::diagnostics::log_warning(note.into_string());
             }
         }
+    }
+
+    /// A Radial Dimension click at `at`: a radial dimension on the arc or
+    /// circle there, or a note that there is none.
+    fn radial_dimension_clicked(&mut self, at: Point) {
+        let (Some(board), Some(layer)) = (self.active_pcb(), self.active_board_layer()) else {
+            return;
+        };
+        let base = self.tool_dimension_defaults();
+        let defaults = &self.interaction_state.pcb_tool_defaults;
+        match defaults.radial_dimension(board, &base, Uuid::now_v7(), at, layer) {
+            Some(dimension) => self.place_dimension(DimensionKind::Radial, dimension),
+            None => {
+                let note = t!(self.ui_state.i18n, ids::PCB_TOOL_NO_RADIAL_DIMENSION);
+                crate::diagnostics::log_warning(note.into_string());
+            }
+        }
+    }
+
+    /// Place `dimension` as one undo step named for its kind's tool.
+    fn place_dimension(&mut self, kind: DimensionKind, dimension: LinearDimension) {
+        let tool = BoardPlaceTool::Dimension(kind);
+        let name = t!(self.ui_state.i18n, tool.name()).into_string();
+        let command = draw::place_item(BoardItem::Dimension(dimension));
+        self.run_placement(&name, Ok(vec![command]));
     }
 
     /// The clicks of the shape with `at` added once it has `needed` of
@@ -247,7 +302,19 @@ impl Signex {
                     None => {}
                 }
             }
-            BoardPlaceTool::Dimension => {
+            // #2507: the radial dimension on the arc or circle under the
+            // pointer.
+            BoardPlaceTool::Dimension(DimensionKind::Radial) => {
+                let base = self.dimension_defaults_for(&session.path);
+                preview.free.dimensions.extend(defaults.radial_dimension(
+                    board,
+                    &base,
+                    Uuid::nil(),
+                    cursor,
+                    layer,
+                ));
+            }
+            BoardPlaceTool::Dimension(kind) => {
                 // Before the second point the line lies on the measured one.
                 let through = clicks.get(2).copied().unwrap_or(clicks[0]);
                 let Some(&end) = clicks.get(1) else {
@@ -256,6 +323,7 @@ impl Signex {
                 let points = (clicks[0], end, through);
                 let base = self.dimension_defaults_for(&session.path);
                 preview.free.dimensions.extend(defaults.dimension(
+                    kind,
                     &base,
                     Uuid::nil(),
                     points,
@@ -334,18 +402,30 @@ impl Signex {
     }
 
     /// The dimension the Dimension tool places next, for its form: a
-    /// stand-in 10 mm long at the pointer with the tool's values.
+    /// stand-in of the armed kind 10 mm long at the pointer with the tool's
+    /// values; for Radial (#2507) the one on the arc or circle under the
+    /// pointer when there is one.
     pub(crate) fn next_board_dimension(&self) -> Option<LinearDimension> {
         let at = self.board_tool_cursor();
         let layer = self.active_board_layer()?;
-        let end = Point::new(at.x + 10.0, at.y);
+        let kind = self
+            .own_board_tool()
+            .and_then(|session| session.tool.dimension_kind())
+            .unwrap_or_default();
+        let base = self.tool_dimension_defaults();
         let defaults = &self.interaction_state.pcb_tool_defaults;
-        defaults.dimension(
-            &self.tool_dimension_defaults(),
-            Uuid::nil(),
-            (at, end, at),
-            layer,
-        )
+        let on_circle = (kind == DimensionKind::Radial)
+            .then(|| self.active_pcb())
+            .flatten()
+            .and_then(|board| defaults.radial_dimension(board, &base, Uuid::nil(), at, layer));
+        if on_circle.is_some() {
+            return on_circle;
+        }
+        let end = Point::new(at.x + 10.0, at.y);
+        let aligned = DimensionKind::Aligned;
+        let mut stand_in = defaults.dimension(aligned, &base, Uuid::nil(), (at, end, at), layer)?;
+        stand_in.kind = kind;
+        Some(stand_in)
     }
 
     /// What a new dimension on the board at `board` starts from (#2868,

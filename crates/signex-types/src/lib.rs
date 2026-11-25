@@ -26,6 +26,7 @@ pub mod pcb;
 pub mod pcb_arc;
 pub mod pcb_component;
 pub mod pcb_dimension;
+pub mod pcb_dimension_kind;
 pub mod pcb_dimension_style;
 pub mod pcb_free;
 pub mod pcb_graphic;

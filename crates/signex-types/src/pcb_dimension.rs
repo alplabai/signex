@@ -1,14 +1,16 @@
-//! A linear board dimension (#2373): the distance between two points, drawn
-//! as a dimension line standing off them, two extension lines, an arrow at
-//! each end and the measured value. Its look is a `DimensionStyle` (#2868).
-//! The board keeps them in `PcbBoard::free` (see docs/PCB_TOOLS.md,
-//! "Dimension").
+//! A board dimension (#2373): the distance between two points, drawn as a
+//! dimension line standing off them, two extension lines, an arrow at each
+//! end and the measured value. Its kind (#2507) says what it measures:
+//! along the two points, across or up, or the radius of an arc or circle
+//! (`DimensionKind`). Its look is a `DimensionStyle` (#2868). The board
+//! keeps them in `PcbBoard::free` (see docs/PCB_TOOLS.md, "Dimension").
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::format::{parse_pcb_layer, pcb_layer_token};
 use crate::pcb::{PCB_DEFAULT_GRAPHIC_WIDTH_MM, PCB_DEFAULT_TEXT_SIZE_MM};
+use crate::pcb_dimension_kind::DimensionKind;
 use crate::pcb_dimension_style::{
     ArrowStyle, DimensionDefaults, DimensionStyle, DimensionTextPosition,
 };
@@ -24,15 +26,21 @@ pub const DIMENSION_MAX_PRECISION: u8 = 6;
 /// How many of `DimensionDrawing::strokes` are extension lines, first.
 pub const EXTENSION_STROKES: usize = 2;
 
-/// A dimension measuring the straight distance from `start` to `end`.
+/// A dimension measuring from `start` to `end` the way its kind says.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LinearDimension {
     pub uuid: Uuid,
+    #[serde(default)]
+    pub kind: DimensionKind,
     pub start: Point,
     pub end: Point,
+    /// The arc or circle a radial dimension measures (`start` is its
+    /// centre); `None` for the other kinds.
+    #[serde(default)]
+    pub measures: Option<Uuid>,
     /// How far the dimension line stands off `start`–`end`, in mm, along the
-    /// quarter turn counter-clockwise from the direction `start` to `end`;
-    /// negative is the other side.
+    /// quarter turn counter-clockwise from the direction the kind measures
+    /// along; negative is the other side. A radial dimension has none.
     #[serde(default)]
     pub offset: f64,
     #[serde(default)]
@@ -84,8 +92,10 @@ impl LinearDimension {
     pub fn new(id: Uuid, start: Point, end: Point, offset: f64) -> Self {
         let mut dimension = Self {
             uuid: id,
+            kind: DimensionKind::Aligned,
             start,
             end,
+            measures: None,
             offset,
             layer: pcb_layer_token(PcbLayer::Technical(TechnicalLayer::Dimensions)),
             line_width: PCB_DEFAULT_GRAPHIC_WIDTH_MM,
@@ -114,20 +124,39 @@ impl LinearDimension {
         parse_pcb_layer(&self.layer)
     }
 
-    /// The measured distance in mm.
+    /// The measured distance in mm: along the points, across, up or the
+    /// radius, as the kind says; 0 when nothing is measured.
     pub fn value_mm(&self) -> f64 {
-        (self.end.x - self.start.x).hypot(self.end.y - self.start.y)
+        self.kind
+            .measure(self.start, self.end)
+            .map_or(0.0, |(_, length)| length)
     }
 
     /// The value as drawn: prefix, the distance to `precision` decimals in
-    /// the style's unit, the unit and the suffix.
+    /// the style's unit, the unit and the suffix. A radius reads `R` before
+    /// the number.
     pub fn value_text(&self) -> String {
+        if self.kind == DimensionKind::Radial {
+            let mut style = self.style.clone();
+            style.prefix.push('R');
+            return style.value_text(self.value_mm(), self.precision);
+        }
         self.style.value_text(self.value_mm(), self.precision)
+    }
+
+    /// How many of `DimensionDrawing::strokes` are extension lines, first:
+    /// a radial dimension has none.
+    pub fn extension_strokes(&self) -> usize {
+        if self.kind == DimensionKind::Radial {
+            0
+        } else {
+            EXTENSION_STROKES
+        }
     }
 
     /// How wide the stroke `index` of `DimensionDrawing::strokes` is drawn.
     pub fn stroke_width(&self, index: usize) -> f64 {
-        if index < EXTENSION_STROKES {
+        if index < self.extension_strokes() {
             self.style.extension_width
         } else {
             self.line_width
@@ -150,13 +179,19 @@ impl LinearDimension {
         self.style.text_width * self.value_text().chars().count().max(1) as f64
     }
 
-    /// What the dimension draws; `None` when its points are the same, a
+    /// What the dimension draws; `None` when it measures nothing (its
+    /// points the same, or level for a horizontal or vertical one), a
     /// number in it is not finite or its text height is not above zero.
+    /// A radial dimension draws its leader from the centre with one arrow
+    /// on the circle and no extension lines.
     pub fn drawing(&self) -> Option<DimensionDrawing> {
-        let length = self.value_mm();
+        let (along, length) = self.kind.measure(self.start, self.end)?;
         let style = &self.style;
         let numbers = [
-            length,
+            self.start.x,
+            self.start.y,
+            self.end.x,
+            self.end.y,
             self.offset,
             self.text_height,
             self.text_at.x,
@@ -166,25 +201,51 @@ impl LinearDimension {
             .iter()
             .chain(style.lengths().iter())
             .all(|v| v.is_finite());
-        if !finite || length == 0.0 || self.text_height <= 0.0 {
+        if !finite || self.text_height <= 0.0 {
             return None;
         }
-        let along = Point::new(
-            (self.end.x - self.start.x) / length,
-            (self.end.y - self.start.y) / length,
-        );
         let normal = Point::new(-along.y, along.x);
         let side = self.side();
         let shift = |p: Point, by: Point, k: f64| Point::new(p.x + by.x * k, p.y + by.y * k);
+        let is_radial = self.kind == DimensionKind::Radial;
+        let offset = if is_radial { 0.0 } else { self.offset };
+        // A horizontal or vertical line measures `end` brought level with
+        // `start`; its extension line runs from `end` to that line.
+        let levelled = matches!(
+            self.kind,
+            DimensionKind::Horizontal | DimensionKind::Vertical
+        );
+        let far = if levelled {
+            shift(self.start, along, length)
+        } else {
+            self.end
+        };
 
-        let a = shift(self.start, normal, self.offset);
-        let b = shift(self.end, normal, self.offset);
-        let overshoot = side * style.extension_overshoot;
-        let from = side * style.extension_offset;
-        let mut strokes = vec![
-            (shift(self.start, normal, from), shift(a, normal, overshoot)),
-            (shift(self.end, normal, from), shift(b, normal, overshoot)),
-        ];
+        let a = shift(self.start, normal, offset);
+        let b = shift(far, normal, offset);
+        let end_side = if levelled {
+            let reach = (b.x - self.end.x) * normal.x + (b.y - self.end.y) * normal.y;
+            if reach < 0.0 {
+                -1.0
+            } else if reach > 0.0 {
+                1.0
+            } else {
+                side
+            }
+        } else {
+            side
+        };
+        let mut strokes = Vec::new();
+        if !is_radial {
+            strokes.push((
+                shift(self.start, normal, side * style.extension_offset),
+                shift(a, normal, side * style.extension_overshoot),
+            ));
+            strokes.push((
+                shift(self.end, normal, end_side * style.extension_offset),
+                shift(b, normal, end_side * style.extension_overshoot),
+            ));
+        }
         let middle = Point::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
         if style.text_position == DimensionTextPosition::Inline {
             // The line breaks around the value; none is left when the value
@@ -206,7 +267,13 @@ impl LinearDimension {
             )
         };
         let mut filled_arrows = Vec::new();
-        for (tip, inward) in [(a, 1.0), (b, -1.0)] {
+        // A radial dimension's one arrow touches the circle.
+        let tips: Vec<(Point, f64)> = if is_radial {
+            vec![(b, -1.0)]
+        } else {
+            vec![(a, 1.0), (b, -1.0)]
+        };
+        for (tip, inward) in tips {
             match style.arrow_style {
                 ArrowStyle::Open => {
                     strokes.push((tip, wing(tip, inward, 1.0)));

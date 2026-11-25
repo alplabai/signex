@@ -65,6 +65,9 @@ impl UiState {
                 self.preferences_draft_symbol_body_fill != self.symbol_body_fill
                     || self.preferences_draft_cross_out_not_fitted != self.cross_out_not_fitted
             }
+            PrefNav::PcbDisplay => {
+                self.preferences_draft_pcb_dim_others_percent != self.pcb_dim_others_percent
+            }
             PrefNav::PcbDefaults => self
                 .preferences_pcb_defaults
                 .differs_from(&self.pcb_dimension_defaults),
@@ -233,6 +236,10 @@ impl Signex {
                 self.ui_state.preferences_draft_zoom_step_percent =
                     crate::canvas::Camera::clamp_zoom_step_percent(percent as i64);
             }
+            PrefMsg::DraftPcbDimOthersPercent(percent) => {
+                // No live preview: the board redraws with it on Save.
+                self.ui_state.preferences_draft_pcb_dim_others_percent = percent.min(100);
+            }
             PrefMsg::DraftUiScalePercent(percent) => {
                 // Snapped to the 10 % steps and clamped, never stored raw.
                 self.ui_state.preferences_draft_ui_scale_percent =
@@ -332,5 +339,28 @@ mod tests {
             [PrefNav::General]
         );
         assert!(app.ui_state.preferences_dirty);
+    }
+
+    /// #2514: the dim amount is a draft of PCB ▸ Display, clamped to
+    /// 100 %; Discard restores the saved amount.
+    #[test]
+    fn the_dim_amount_dots_pcb_display_and_discard_restores_it() {
+        let (mut app, _boot) = Signex::new();
+        let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+        let saved = app.ui_state.pcb_dim_others_percent;
+        let other = if saved == 100 { 0 } else { 100 };
+
+        send(&mut app, PrefMsg::DraftPcbDimOthersPercent(other));
+        assert_eq!(
+            app.ui_state.preferences_pages.dirty_pages,
+            [PrefNav::PcbDisplay]
+        );
+        send(&mut app, PrefMsg::DraftPcbDimOthersPercent(250));
+        assert_eq!(app.ui_state.preferences_draft_pcb_dim_others_percent, 100);
+
+        send(&mut app, PrefMsg::DiscardAndClose);
+        assert_eq!(app.ui_state.preferences_draft_pcb_dim_others_percent, saved);
+        assert_eq!(app.ui_state.pcb_dim_others_percent, saved);
+        assert!(!app.ui_state.preferences_dirty);
     }
 }

@@ -15,6 +15,8 @@ pcb-layers-more-tip = Manage layer sets, import, export, view from bottom, layer
 # Rows of the more menu besides Save current as set..., Import..., Export...
 # and View From Bottom Side.
 pcb-layers-set-delete-current = Delete current set...
+# Tooltip of Delete current set... while the view shows no saved set.
+pcb-layers-set-delete-none = Show a saved layer set to delete it
 pcb-layers-layer-stack = Layer Stack...
 # The Active | Set row: its caption (also the pill of the active layer's
 # row), what it reads while the active layer is hidden, and the set the view
@@ -121,6 +123,8 @@ pcb-view-on = On
 pcb-view-mono = Mono
 # The grid checkbox.
 pcb-view-show-grid = Show Grid
+# The eye that shows or hides the orientation tile over the canvas (mockup row 194).
+pcb-view-orientation-tile = Orientation
 # A row of Object Visibility. $kind is the kind's token.
 pcb-view-object = { $kind ->
     [all] All Objects

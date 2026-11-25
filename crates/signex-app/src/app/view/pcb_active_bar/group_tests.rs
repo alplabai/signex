@@ -3,6 +3,7 @@
 use super::tests::{bar_of, board_app, button_for, buttons, entries, rows, runs};
 use super::*;
 use crate::app::pcb_bar_groups::PcbBarRow;
+use signex_types::pcb_dimension_kind::DimensionKind;
 
 /// The button whose right-click opens `group`'s dropdown.
 fn group_button_of(app: &Signex, group: PcbBarGroup) -> ActiveBarButton<Message> {
@@ -86,10 +87,27 @@ fn each_group_opens_its_dropdown_and_a_row_arms_its_tool() {
         (PcbBarGroup::Graphics, BoardPlaceTool::Line),
         (PcbBarGroup::Graphics, BoardPlaceTool::GraphicArc),
         (PcbBarGroup::Graphics, BoardPlaceTool::TextFrame),
+        // #2507: the Dimensions group, one row per kind.
+        (
+            PcbBarGroup::Dimensions,
+            BoardPlaceTool::Dimension(DimensionKind::Horizontal),
+        ),
+        (
+            PcbBarGroup::Dimensions,
+            BoardPlaceTool::Dimension(DimensionKind::Vertical),
+        ),
+        (
+            PcbBarGroup::Dimensions,
+            BoardPlaceTool::Dimension(DimensionKind::Radial),
+        ),
+        (
+            PcbBarGroup::Dimensions,
+            BoardPlaceTool::Dimension(DimensionKind::Aligned),
+        ),
     ];
     let mut app = board_app();
     for (group, tool) in cases {
-        let command = tool.command().expect("a live tool");
+        let command = tool.command();
         let _ = pick_from_group(&mut app, group, command);
         assert_eq!(armed(&app), Some(tool), "{command} arms its tool");
         assert!(runs(&group_button_of(&app, group), command), "{command}");
@@ -115,7 +133,8 @@ fn a_group_is_drawn_selected_while_its_tool_is_armed() {
 }
 
 /// #2392: the Components group lists Component and Change Footprint; the
-/// swap is greyed by its menu gate while nothing is selected.
+/// swap is greyed by its menu gate while nothing is selected, and Component
+/// is live (#2505).
 #[test]
 fn the_components_group_lists_the_part_rows() {
     let app = board_app();
@@ -123,6 +142,8 @@ fn the_components_group_lists_the_part_rows() {
     let rows = rows(&app, PcbBarMenu::Group(PcbBarGroup::Components));
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].label, "Component");
+    assert_eq!(rows[0].command_id, Some("place_board_component"));
+    assert!(!rows[0].disabled, "#2505: Component runs on a board");
     assert_eq!(rows[1].command_id, Some("change_footprint"));
     assert!(rows[1].disabled, "nothing is selected");
 }
@@ -162,45 +183,65 @@ fn the_route_and_tune_groups_list_their_rows() {
     ));
 }
 
-/// #2392: a row whose tool is not built yet is greyed, runs nothing, and
-/// its tooltip says why, the reason Place on a board gives.
+/// #2505: the Component row was greyed "Place Component: not available on
+/// boards yet". It now opens the part picker, arms no click tool and stays
+/// the group's button, which says what it places.
 #[test]
-fn a_tool_not_built_yet_is_a_greyed_row_with_its_reason() {
-    let app = board_app();
-    // #2373: Pad and Arc are live; Component is the tool still to build.
-    let cases = [(PcbBarGroup::Components, "Component", "Place Component")];
-    for (group, label, reason) in cases {
-        let row = rows(&app, PcbBarMenu::Group(group))
-            .into_iter()
-            .find(|row| row.label == label)
-            .unwrap_or_else(|| panic!("a {label} row"));
-        assert!(row.disabled && row.on_press.is_none(), "{label}");
-        assert_eq!(
-            row.tooltip.as_deref(),
-            Some(format!("{reason}: not available on boards yet").as_str())
-        );
-        assert!(row.icon.is_some(), "{label} has an icon");
-    }
+fn the_component_row_opens_the_part_picker() {
+    let mut app = board_app();
+    let _ = pick_from_group(&mut app, PcbBarGroup::Components, "place_board_component");
+    assert!(app.library.picker.is_some(), "the picker opened");
+    assert_eq!(armed(&app), None, "no click tool");
+    let button = group_button_of(&app, PcbBarGroup::Components);
+    assert!(runs(&button, "place_board_component"));
+    assert!(
+        button.tooltip.starts_with("Place Component"),
+        "{}",
+        button.tooltip
+    );
+    let row = rows(&app, PcbBarMenu::Group(PcbBarGroup::Components))
+        .into_iter()
+        .find(|row| row.label == "Component")
+        .expect("a Component row");
+    assert!(row.icon.is_some(), "Component has an icon");
 }
 
 /// #2392, #2373: a group of one row is one button with no dropdown; the
-/// Dimensions and Text groups run their tool.
+/// Text group runs its tool. (Dimensions has a row per kind since #2507.)
 #[test]
 fn a_group_of_one_row_is_a_button_with_no_dropdown() {
     let app = board_app();
     let items = bar_of(&app);
-    for (group, reason) in [
-        (PcbBarGroup::Dimensions, "Place Dimension"),
-        (PcbBarGroup::Text, "Place String"),
-    ] {
-        assert_eq!(group.rows().len(), 1, "{group:?}");
-        let button = buttons(&items)
-            .into_iter()
-            .find(|button| button.tooltip.starts_with(reason))
-            .unwrap_or_else(|| panic!("a {group:?} button"));
-        assert!(button.enabled, "{group:?} is live");
-        assert!(button.on_right_press.is_none(), "{group:?} has no dropdown");
-    }
+    let (group, reason) = (PcbBarGroup::Text, "Place String");
+    assert_eq!(group.rows().len(), 1, "{group:?}");
+    let button = buttons(&items)
+        .into_iter()
+        .find(|button| button.tooltip.starts_with(reason))
+        .unwrap_or_else(|| panic!("a {group:?} button"));
+    assert!(button.enabled, "{group:?} is live");
+    assert!(button.on_right_press.is_none(), "{group:?} has no dropdown");
+}
+
+/// #2507: the Dimensions group opens a dropdown of the dimension kinds,
+/// each live with the dimension glyph; the button starts on Aligned.
+#[test]
+fn the_dimensions_group_lists_the_dimension_kinds() {
+    let app = board_app();
+    let button = group_button_of(&app, PcbBarGroup::Dimensions);
+    assert!(button.tooltip.starts_with("Place Aligned Dimension"));
+    assert!(runs(&button, "place_board_dimension"));
+    let kinds = rows(&app, PcbBarMenu::Group(PcbBarGroup::Dimensions));
+    let labels: Vec<&str> = kinds.iter().map(|row| row.label.as_str()).collect();
+    assert_eq!(
+        labels,
+        [
+            "Aligned Dimension",
+            "Linear Horizontal Dimension",
+            "Linear Vertical Dimension",
+            "Radial Dimension",
+        ]
+    );
+    assert!(kinds.iter().all(|row| !row.disabled && row.icon.is_some()));
 }
 
 /// #2392: a tool armed from the Place menu (or a key, or the palette) is
@@ -271,6 +312,7 @@ fn the_copper_areas_group_lists_the_pour_rows() {
             Some("place_board_room"),
             Some("repour_selected"),
             Some("repour_all"),
+            Some("unfill_selected"),
         ]
     );
     let labels: Vec<String> = rows(&app, PcbBarMenu::Group(PcbBarGroup::CopperAreas))
@@ -278,9 +320,10 @@ fn the_copper_areas_group_lists_the_pour_rows() {
         .filter(|row| !row.disabled)
         .map(|row| row.label)
         .collect();
-    assert_eq!(labels.len(), 9, "every row is live: {labels:?}");
+    assert_eq!(labels.len(), 10, "every row is live: {labels:?}");
     assert!(labels.iter().any(|l| l == "Pour Cutout"), "{labels:?}");
     assert!(labels.iter().any(|l| l == "Repour All"), "{labels:?}");
+    assert!(labels.iter().any(|l| l == "Unfill Selected"), "{labels:?}");
     let _ = pick_from_group(
         &mut app,
         PcbBarGroup::CopperAreas,
@@ -339,7 +382,8 @@ fn a_group_dropdown_puts_its_commands_below_a_separator() {
     let app = board_app();
     let areas = entries(&app, PcbBarMenu::Group(PcbBarGroup::CopperAreas));
     // The Room tool joins the pour rows (#2457, Caner 2026-11-20).
-    assert_eq!(shape(&areas), "H*......-..", "Polygon Pour is current");
+    // Unfill Selected (#2506) follows the two Repour rows.
+    assert_eq!(shape(&areas), "H*......-...", "Polygon Pour is current");
     let DropdownEntry::Item(first_command) = &areas[9] else {
         panic!("a row after the separator");
     };
@@ -347,8 +391,8 @@ fn a_group_dropdown_puts_its_commands_below_a_separator() {
     let parts = entries(&app, PcbBarMenu::Group(PcbBarGroup::Components));
     assert_eq!(
         shape(&parts),
-        "H.-*",
-        "Change Footprint is what the button shows while Component cannot run"
+        "H*-.",
+        "#2505: Component is what the button shows"
     );
     for group in [PcbBarGroup::Route, PcbBarGroup::Tune, PcbBarGroup::Graphics] {
         let menu = entries(&app, PcbBarMenu::Group(group));

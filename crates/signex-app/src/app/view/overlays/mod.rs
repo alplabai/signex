@@ -23,12 +23,15 @@ mod dock_zones;
 mod filter_menu_tests;
 mod modals;
 mod net_hover;
+mod orientation;
 mod palette;
 #[cfg(test)]
 mod palette_scrim_tests;
 mod panel_list;
 mod placement_paused;
 pub(super) mod read_only_badge;
+#[cfg(test)]
+mod save_project_as_offer_tests;
 mod symbol_hover;
 mod text_edit;
 #[cfg(test)]
@@ -36,6 +39,8 @@ mod window_gate_tests;
 mod zoom_pill;
 #[cfg(test)]
 pub(super) use zoom_pill::pill_origin as zoom_pill_origin;
+#[cfg(test)]
+mod zoom_pill_bounds_tests;
 #[cfg(test)]
 mod zoom_pill_window_tests;
 mod zoom_presets;
@@ -53,7 +58,18 @@ impl Signex {
         &self,
         window: Option<iced::window::Id>,
     ) -> iced::Rectangle {
-        let area = self.document_area_in(window);
+        self.canvas_bounds_sized(window, self.window_size_of(window))
+    }
+
+    /// [`Self::canvas_bounds_in`] for `window` laid out at `size`. A layer
+    /// that learns its own size at layout passes it here, so it follows the
+    /// drawn window even when `window_size` has not heard of a resize (#2911).
+    pub(in crate::app) fn canvas_bounds_sized(
+        &self,
+        window: Option<iced::window::Id>,
+        size: (f32, f32),
+    ) -> iced::Rectangle {
+        let area = self.document_area_sized(size);
         match (window, self.tiled_panes()) {
             (None, Some((layout, panes))) => {
                 let active = self.document_state.active_tab;
@@ -70,6 +86,17 @@ impl Signex {
         &self,
         window: Option<iced::window::Id>,
     ) -> iced::Rectangle {
+        self.document_area_sized(self.window_size_of(window))
+    }
+
+    /// The size the model holds for `window` (`None`: the main window).
+    fn window_size_of(&self, window: Option<iced::window::Id>) -> (f32, f32) {
+        let ui = &self.ui_state;
+        window.map_or(ui.window_size, |w| ui.size_of_window(w))
+    }
+
+    /// [`Self::document_area_in`] in a window of `size`.
+    fn document_area_sized(&self, size: (f32, f32)) -> iced::Rectangle {
         use crate::dock::PanelPosition::{Bottom, Left, Right};
         let dock = &self.document_state.dock;
         let extent = |pos, size| canvas_region::DockExtent {
@@ -79,7 +106,7 @@ impl Signex {
         };
         let ui = &self.ui_state;
         canvas_region::canvas_bounds(
-            window.map_or(ui.window_size, |w| ui.size_of_window(w)),
+            size,
             extent(Left, ui.left_width),
             extent(Right, ui.right_width),
             extent(Bottom, ui.bottom_height),

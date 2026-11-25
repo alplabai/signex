@@ -232,6 +232,15 @@ define_ids! {
     DIALOG_SCHEMATIC_DESIGN_UNREADABLE = "dialog-schematic-design-unreadable";
     DIALOG_NEW_PROJECT_NAME_PLACEHOLDER = "dialog-new-project-name-placeholder";
     DIALOG_NEW_PROJECT_LOCATION_PLACEHOLDER = "dialog-new-project-location-placeholder";
+    DIALOG_SAVE_PROJECT_AS_TITLE = "dialog-save-project-as-title";
+    DIALOG_SAVE_PROJECT_AS_SUBTITLE = "dialog-save-project-as-subtitle";
+    DIALOG_SAVE_PROJECT_AS_DEFAULT_NAME = "dialog-save-project-as-default-name";
+    DIALOG_SAVE_PROJECT_AS_SAVE = "dialog-save-project-as-save";
+    DIALOG_SAVE_PROJECT_AS_SAVING = "dialog-save-project-as-saving";
+    DIALOG_SAVE_PROJECT_AS_NOTE = "dialog-save-project-as-note";
+    DIALOG_SAVE_PROJECT_AS_READ_ONLY = "dialog-save-project-as-read-only";
+    DIALOG_SAVE_PROJECT_AS_UNSAVED = "dialog-save-project-as-unsaved";
+    DIALOG_SAVE_PROJECT_AS_FAILED = "dialog-save-project-as-failed";
     LANGUAGE_SYSTEM_DEFAULT = "language-system-default";
     MENU_FILE = "menu-file";
     OVERLAY_PLACEMENT_PAUSED_ESC_HINT = "overlay-placement-paused-esc-hint";

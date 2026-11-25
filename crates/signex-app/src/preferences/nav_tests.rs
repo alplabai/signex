@@ -79,7 +79,8 @@ fn general_is_a_system_page() {
 }
 
 /// Mockup row 143: the whole nav, page by page, with its group; PCB
-/// Defaults (#2868, Caner 2026-11-24) after the Schematic pages.
+/// Defaults (#2868, Caner 2026-11-24) and PCB Display (#2514) after the
+/// Schematic pages.
 #[test]
 fn the_sidebar_follows_the_mock_groups() {
     let rows: Vec<(&str, &str)> = PrefNav::ALL
@@ -97,6 +98,7 @@ fn the_sidebar_follows_the_mock_groups() {
             ("Schematic", "Editing"),
             ("Schematic", "Display"),
             ("PCB", "PCB Defaults"),
+            ("PCB", "PCB Display"),
             ("Validation", "Rule Profiles"),
             ("Library", "Distributor APIs"),
             ("Library", "Component Classes"),

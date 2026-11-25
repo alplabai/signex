@@ -31,6 +31,11 @@ impl Signex {
         self.ui_state.pcb_dimension_defaults =
             self.ui_state.preferences_pcb_defaults.defaults.clone();
         self.ui_state.preferences_pcb_defaults.texts.clear();
+        // #2514: nets in focus redraw the board with the new amount; the
+        // sync does nothing when no copper dims.
+        self.ui_state.pcb_dim_others_percent =
+            self.ui_state.preferences_draft_pcb_dim_others_percent;
+        self.sync_board_net_focus();
         self.ui_state.trackpad_pan = self.ui_state.preferences_draft_trackpad_pan;
         self.ui_state.wheel_mode = self.ui_state.preferences_draft_wheel_mode;
         self.ui_state.layer_switcher = self.ui_state.preferences_draft_layer_switcher;

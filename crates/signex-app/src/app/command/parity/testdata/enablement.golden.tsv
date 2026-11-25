@@ -145,6 +145,7 @@ highlight_board_net	Pcb	119d310e454dd5e4
 highlight_layer	Pcb	119d310e454dd5e4
 highlight_net_under_cursor	-	f2929686b07ef725
 highlight_related_net_objects	-	f2929686b07ef725
+home_view	Canvas	7db52528128cca61
 import_dxf	Pcb	119d310e454dd5e4
 import_dxf_outline	Pcb	119d310e454dd5e4
 import_graphics	Schematic	f8bd7a5cb84e915b
@@ -206,8 +207,12 @@ place_aligned_dimension	Schematic	f8bd7a5cb84e915b
 place_blanket	Schematic	f8bd7a5cb84e915b
 place_board_arc	EditablePcb	bd0dadc1f2af5e61
 place_board_circle	EditablePcb	bd0dadc1f2af5e61
+place_board_component	EditablePcb	bd0dadc1f2af5e61
 place_board_diff_pair	EditablePcb	bd0dadc1f2af5e61
 place_board_dimension	EditablePcb	bd0dadc1f2af5e61
+place_board_dimension_horizontal	EditablePcb	bd0dadc1f2af5e61
+place_board_dimension_radial	EditablePcb	bd0dadc1f2af5e61
+place_board_dimension_vertical	EditablePcb	bd0dadc1f2af5e61
 place_board_fill	EditablePcb	bd0dadc1f2af5e61
 place_board_graphic_arc	EditablePcb	bd0dadc1f2af5e61
 place_board_keepout	EditablePcb	bd0dadc1f2af5e61
@@ -335,6 +340,7 @@ save_board_reuse_block	ReuseSource	e6894e598b35f83d
 save_document	SaveTarget	2a52f0b0dbe3f4f7
 save_document_as	SaveAsTarget	b6cfd6e46a78555f
 save_layer_set	Pcb	119d310e454dd5e4
+save_project_as	OpenProject	ee0317ecaf5bfb5b
 save_workspace_layout	-	f2929686b07ef725
 select_all	SelectAllTarget	ac2868db6f01027f
 select_board_net	Pcb	119d310e454dd5e4
@@ -407,6 +413,7 @@ tune_diff_pair	Pcb	119d310e454dd5e4
 tune_net_length	Pcb	119d310e454dd5e4
 undo	Undo	70f18f3f5c67b144
 undo_last_segment	DrawInProgress	0f5e18afc16377f1
+unfill_selected	Pcb	119d310e454dd5e4
 unlock_board_items	Pcb	119d310e454dd5e4
 unselect_all	-	f2929686b07ef725
 untile_documents	Tiled	14233587d4d8c6b6

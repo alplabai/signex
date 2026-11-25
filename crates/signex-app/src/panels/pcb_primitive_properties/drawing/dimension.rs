@@ -1,13 +1,16 @@
 //! The dimension illustration (#2523, mockup row 101): the two points it measures,
 //! the extension lines out to the dimension line, the Offset, and the
-//! measured value on the line. A selection whose points differ, or a
-//! dimension not placed yet, is drawn as a 10 mm one.
+//! measured value on the line; a radial one (#2507) as its leader from the
+//! centre with no extension lines and no Offset. A selection whose points
+//! differ, or a dimension not placed yet, is drawn as a 10 mm one.
 
 use iced::Point;
 use signex_i18n::{I18n, UserText, ids, t};
 use signex_widgets::property_illustration::{
     Anchor, Callout, FieldId, Illustration, Ink, Part, Primitive, Style, TextRole, Weight,
 };
+
+use signex_types::pcb_dimension_kind::DimensionKind;
 
 use super::super::{DimensionFacts, format_number};
 use super::{VIEW_H, VIEW_W, canvas, cross, label};
@@ -39,7 +42,13 @@ pub(in crate::panels::pcb_primitive_properties) fn illustration(
         }
         _ => ((0.0, 0.0), (10.0, 0.0)),
     };
-    let offset = f.offset.filter(|o| o.is_finite()).unwrap_or(0.0);
+    // #2507: a radial dimension is a leader from the centre to the circle,
+    // with no offset and no extension lines.
+    let is_radial = f.kind == Some(DimensionKind::Radial);
+    let offset = f
+        .offset
+        .filter(|o| o.is_finite() && !is_radial)
+        .unwrap_or(0.0);
     let [s1, s2, d1, d2] = fitted(start, end, offset);
     let value = f.value.clone().unwrap_or_default();
     let note = t!(
@@ -57,9 +66,11 @@ pub(in crate::panels::pcb_primitive_properties) fn illustration(
     };
     let mut art = canvas()
         .parts(cross(s1, 4.0, &[START]))
-        .parts(cross(s2, 4.0, &[END]))
-        .part(extension(s1, d1))
-        .part(extension(s2, d2))
+        .parts(cross(s2, 4.0, &[END]));
+    if !is_radial {
+        art = art.part(extension(s1, d1)).part(extension(s2, d2));
+    }
+    art = art
         .part(
             Part::callout(Callout::new(d1, d2).label(UserText::new(value)))
                 .linked_all([VALUE, STYLE, LAYER]),
@@ -156,6 +167,43 @@ mod tests {
         // A negative offset of a left-to-right dimension stands below it,
         // which the view draws lower down.
         assert!(d1.y > s1.y && d2.y > s2.y);
+    }
+
+    fn facts(kind: DimensionKind) -> DimensionFacts {
+        use crate::panels::pcb_primitive_properties::drawing::fixture;
+        DimensionFacts {
+            common: fixture::common(vec![pcb_geom::ItemRef::Dimension(uuid::Uuid::from_u128(1))]),
+            kind: Some(kind),
+            start: (Some(0.0), Some(0.0)),
+            end: (Some(5.0), Some(0.0)),
+            offset: Some(-4.0),
+            line_width: Some(0.1),
+            text_height: Some(1.0),
+            precision: Some(2),
+            value: Some("R5.00mm".into()),
+            layer: None,
+            layers: Vec::new(),
+            style: Default::default(),
+        }
+    }
+
+    /// #2507: a radial dimension is drawn as its leader, with no extension
+    /// lines and no Offset callout, whatever offset it holds.
+    #[test]
+    fn a_radial_dimension_draws_no_extension_lines_and_no_offset() {
+        let i18n = I18n::en_us_ref();
+        let offset_parts = |kind| {
+            illustration(&facts(kind), i18n)
+                .visible_parts()
+                .filter(|part| part.is_linked_to(&OFFSET))
+                .count()
+        };
+        assert_eq!(offset_parts(DimensionKind::Radial), 0);
+        assert_eq!(
+            offset_parts(DimensionKind::Aligned),
+            3,
+            "two extension lines and the Offset callout"
+        );
     }
 
     #[test]

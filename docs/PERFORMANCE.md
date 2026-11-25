@@ -9,6 +9,7 @@ Other benches, all run from `cargo test`:
 - PCB render baseline and the GPU frame bench on a 10,000-track board:
   `docs/architecture/pcb-render-bench.md`.
 - Schematic render bench: `docs/architecture/schematic-render-bench.md`.
+- Router soak and bench: "Router soak and bench" at the end of this page.
 
 ## Pan/zoom bench in the real app (#2472)
 
@@ -126,3 +127,85 @@ On Linux or macOS: `SIGNEX_BENCH_PAN_ZOOM=pcb-10k.snxpcb ./signex`.
 
 The bench uses the person's normal settings folder: opening the board adds
 it to the recent files, as File > Open would.
+
+## Router soak and bench (#2482, #2483)
+
+The router's quality bar, from the PCB Routing exit criteria in
+`docs/ROADMAP.md`: on every routing corpus board, 10,000 random routing and
+editing actions with no panic, stuck history or corrupted board; shoves that
+converge within 8 rounds on at least 95% of actions; a median action latency
+of at most 16 ms and a 95th percentile of at most 33 ms on the median board.
+What the soak and the bench do: `docs/PCB_TOOLS.md`, "Router soak and bench".
+The code is `crates/signex-engine/tests/routing/`.
+
+### Runs
+
+| Run | Where | What is asserted |
+|---|---|---|
+| `soak_short`, `bench_short`, `a_soak_seed_replays_exactly` | every `cargo test`, the fixed boards | the soak invariants, the file round trip, the DRC delta, shove convergence |
+| `soak_long` (ignored) | the weekly `routing-soak` workflow, every board | the soak invariants on 10,000 actions, the sampled DRC delta and round trip |
+| `bench_thresholds` (ignored) | the weekly `routing-soak` workflow, every board | the DRC delta and shove convergence; latency only with `SIGNEX_ROUTING_ASSERT_LATENCY=1` |
+
+Latency is asserted only in the scheduled job, which runs the bench alone on
+the runner with one test thread. On a shared or debug machine the timings
+are too noisy to fail on, so there the bench measures and reports them only.
+The workflow is not a required check and never runs on a PR or a push.
+
+Run the long versions locally in release:
+
+```text
+cargo test --release -p signex-engine --test routing -- --ignored --nocapture --test-threads 1
+```
+
+### Switches
+
+| Variable | Meaning | Default |
+|---|---|---|
+| `SIGNEX_SOAK_SEED` | Seed of the soak and bench, decimal or `0x` hex. | `0x2482`; the workflow uses the run number |
+| `SIGNEX_SOAK_ACTIONS` | Actions per board in `soak_long`. | `10000` |
+| `SIGNEX_SOAK_BOARD` | One board by name, searched in every board. | unset: every board |
+| `SIGNEX_SOAK_DRC_EVERY` | `soak_long` checks the DRC delta of every n-th route; `0` never. | `25` |
+| `SIGNEX_SOAK_ROUND_TRIP_EVERY` | `soak_long` checks the file round trip every n actions and after the last; `0` after the last only. | `1000` |
+| `SIGNEX_SOAK_JOBS` | Boards `soak_long` soaks side by side. | the machine's cores |
+| `SIGNEX_BENCH_ACTIONS` | Route actions per board in `bench_thresholds`. | `300` |
+| `SIGNEX_ROUTING_ASSERT_LATENCY` | `1` fails `bench_thresholds` on the latency thresholds. | unset: reported only |
+| `SIGNEX_ROUTING_REPORT` | File the report lines are appended to. | unset: printed only |
+| `SIGNEX_REQUIRE_ROUTING_CORPUS` | `1` fails a run that finds a board left as a Git LFS pointer, or no boards. | unset: such a board is skipped |
+
+An empty variable counts as unset. Every empty dispatch input reaches the tests
+as an empty variable.
+
+### Output
+
+One line per board, printed and appended to `SIGNEX_ROUTING_REPORT`. The
+scheduled job shows them in the run summary and uploads them, with the full
+logs, as the artifact `routing-report-<run number>`.
+
+```text
+ROUTING-SOAK board=odrive-v3 seed=0x2a actions=10000 result=ok landed=2210 refused=771 edits=2381 undos=1290 redos=601 drc_checks=88 round_trips=10 seconds=412.7
+ROUTING-BENCH board=odrive-v3 seed=0x2a actions=300 copper=4120 legs_landed=211 legs_refused=89 shoves=151 converged_pct=97.4 rounds_limit=8 cleared=96 max_rounds=11 p50_ms=6.12 p95_ms=21.40 latency_budget=ok breaks=0
+ROUTING-BENCH-MEDIAN board=odrive-v3 p50_ms=6.12 p95_ms=21.40 latency_budget=ok latency_asserted=yes
+```
+
+The numbers above show the format only. They are not measurements.
+
+- `ROUTING-SOAK`: `result` is `ok` or `FAILED`. A failed line has
+  `at_action` and `action` in place of the counts and is followed by the
+  failure and the command that replays it. `landed` and `refused` count
+  route actions, and `edits` counts moves and deletes. `drc_checks` and
+  `round_trips` count the costlier checks that ran. A `round_trips` of 0 means
+  the board did not round-trip as loaded, so the soak could not check it.
+  `seconds` is the board's wall time.
+- `ROUTING-BENCH`: `legs_landed` and `legs_refused` count the routed legs.
+  `shoves` counts the shove actions that tried a push, and `converged_pct` is
+  the share of them that settled within `rounds_limit` rounds. `cleared`
+  counts the shoves that cleared the way, and `max_rounds` is the most rounds
+  any shove took. `p50_ms` and `p95_ms` are nearest-rank percentiles of the
+  click-to-landed-step time per leg. `latency_budget` is `ok` when the median
+  is at most 16 ms and p95 is at most 33 ms. It is reported for every board,
+  but asserted only on the median board. `breaks` counts routes whose DRC
+  delta was off the route's own copper, or that the router itself refused to
+  land.
+- `ROUTING-BENCH-MEDIAN`: the median board by copper count, which the
+  latency thresholds apply to. `latency_asserted` says whether this run
+  failed on them.

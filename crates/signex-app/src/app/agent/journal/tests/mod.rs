@@ -3,6 +3,7 @@
 mod append;
 mod concurrent;
 mod entries;
+mod journaled_commands;
 mod queue_wait;
 mod refusals;
 mod rotation;

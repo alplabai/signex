@@ -87,6 +87,7 @@ pub(super) fn pad_from_footprint(
             .collect(),
         pad_type: pad.pad_type,
         drill_mm: pad_drill_mm(pad),
+        net: pad.net.as_ref().map_or(0, |net| net.number),
         dimmed: false,
         ink: CopperInk::Unknown,
         shown_on: None,
@@ -247,14 +248,21 @@ fn faded(theme: &ResolvedTheme, kind: BoardObject, color: [f32; 4]) -> [f32; 4] 
     with_alpha_mul(color, theme.paint().opacity(kind))
 }
 
+/// Copper `color` on `net`, faded by the view's transparency of `kind` and
+/// dimmed when another net is in focus (#2514).
+fn net_faded(theme: &ResolvedTheme, kind: BoardObject, net: u32, color: [f32; 4]) -> [f32; 4] {
+    with_alpha_mul(faded(theme, kind, color), theme.paint().net_opacity(net))
+}
+
 pub(super) fn emit_traces(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &mut Scene) {
     scene.lines.clear();
     scene.lines.reserve(snapshot.traces.len());
 
     for trace in &snapshot.traces {
-        let color = faded(
+        let color = net_faded(
             theme,
             trace.object,
+            trace.net,
             copper_color(theme, trace.ink, ColorSlot::Wire),
         );
         scene.lines.push(LineSegment {
@@ -279,9 +287,10 @@ pub(super) fn emit_vias(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &m
     for via in &snapshot.vias {
         let outer = (via.diameter_mm * 0.5).max(0.01);
         let hole = (via.drill_mm * 0.5).clamp(0.0, outer);
-        let color = faded(
+        let color = net_faded(
             theme,
             BoardObject::Vias,
+            via.net,
             copper_color(theme, via.ink.painted(via.shown_on), ColorSlot::Junction),
         );
 
@@ -367,9 +376,10 @@ pub(super) fn emit_static_polygons(
             });
             continue;
         }
-        let copper = faded(
+        let copper = net_faded(
             theme,
             BoardObject::Pads,
+            pad.net,
             copper_color(theme, pad.ink.painted(pad.shown_on), ColorSlot::Pin),
         );
         let fill_color = dim_if(
@@ -398,17 +408,19 @@ pub(super) fn emit_static_polygons(
 
     for zone in &snapshot.zones {
         let fill = dim_if(
-            faded(
+            net_faded(
                 theme,
                 zone.object,
+                zone.net,
                 with_alpha_mul(copper_color(theme, zone.ink, ColorSlot::Ghost), 0.38),
             ),
             zone.dimmed,
         );
         let edge = dim_if(
-            faded(
+            net_faded(
                 theme,
                 zone.object,
+                zone.net,
                 copper_color(theme, zone.ink, ColorSlot::Bus),
             ),
             zone.dimmed,

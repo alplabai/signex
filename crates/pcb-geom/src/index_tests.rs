@@ -384,6 +384,7 @@ fn area(uuid: Uuid, fill: &str, outline: &[(f64, f64)]) -> Zone {
         min_island_area: 0.0,
         remove_dead_islands: false,
         shelved: false,
+        unfilled: false,
         unknown: Default::default(),
     }
 }

@@ -13,6 +13,7 @@ use crate::canvas::CanvasEvent;
 use crate::pcb_canvas::{
     PcbCanvas, PcbCanvasMsg, PcbCarry, PcbSelectionState, board_after_move, board_without,
     board_without_text, carried_board, carried_text_board, followed_arcs, with_arcs_replaced,
+    with_stretched_tracks,
 };
 
 impl Signex {
@@ -212,6 +213,12 @@ impl Signex {
     /// Hand the canvas the copper to paint for the current selection, the
     /// preview of a drag or Move, and what a press grabs to drag (#2240).
     pub(crate) fn refresh_pcb_highlight(&mut self) {
+        // A highlight, route, drag or placement that starts or ends changes
+        // the nets the board keeps bright (#2514): the board is drawn again,
+        // and that comes back here with the scene in step.
+        if self.sync_board_net_focus() {
+            return;
+        }
         // The leg on the pointer is routed here, once per change, not per
         // repaint (#2389).
         self.update_router_preview();
@@ -372,23 +379,28 @@ fn sync_drag_preview(
             .arcs
             .retain(|arc| !arcs.iter().any(|ends| ends.arc == arc.uuid));
         let fills = pcb_geom::zone_fills(&rest);
-        let base = PcbSnapshot::from_board_with_view(&rest, view)
+        let mut base = PcbSnapshot::from_board_with_view(&rest, view)
             .with_designator_standard(standard)
             .with_zone_fills(&fills);
+        // The board under the carry keeps the nets in focus (#2514).
+        if let Some(shown) = canvas.active_renderer_snapshot() {
+            base.paint = base.paint.with_focus_of(&shown.paint);
+        }
         canvas.begin_drag_preview(carried.clone(), carry.leaves_tracks, following, base);
     }
     let following = canvas.drag_preview_following().to_vec();
     canvas.move_drag_preview(carry.delta, || {
         let arcs = followed_arcs(board, &carry.following_arcs(board), carry.delta);
-        let mut moved = carried_board(board, &carried, &following, carry.delta);
+        // A stretched track bends at its corner as the drop bends it (#2513).
+        let moved = carried_board(board, &carried, &following, carry.delta);
+        let mut moved = with_stretched_tracks(moved, board, carry, &following);
         moved.free.arcs = arcs.clone();
         let snapshot = carried_snapshot(&moved, view, standard);
         match ratsnest {
             Some((cache, path)) => {
-                let after = with_arcs_replaced(
-                    board_after_move(board, &carried, &following, carry.delta),
-                    &arcs,
-                );
+                let after = board_after_move(board, &carried, &following, carry.delta);
+                let after = with_stretched_tracks(after, board, carry, &following);
+                let after = with_arcs_replaced(after, &arcs);
                 let fills = pcb_geom::zone_fills(&after);
                 cache.apply_uncached(path, &after, &fills, snapshot)
             }

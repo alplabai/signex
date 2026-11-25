@@ -19,13 +19,21 @@ impl Signex {
             .map(|path| self.pcb_layer_view(path))
             .unwrap_or_default();
         // The more menu's Layer Stack... row runs the catalog command, live
-        // exactly when the command is (mockup row 103).
-        let layer_stack_live = crate::keymap::AppCommandId::new(
+        // exactly when the command is (mockup row 103); greyed, its tooltip
+        // says why (#2480).
+        let layer_stack = crate::keymap::AppCommandId::new(
             crate::app::handlers::pcb_layer_strip::LAYER_STACK_COMMAND,
-        )
-        .is_ok_and(|id| crate::app::command::is_enabled(&id, &self.command_context(None)));
+        );
+        let context = self.command_context(None);
+        let layer_stack_live = layer_stack
+            .as_ref()
+            .is_ok_and(|id| crate::app::command::is_enabled(id, &context));
+        let layer_stack_reason = layer_stack
+            .ok()
+            .and_then(|id| crate::app::command::disabled_reason(&id, &context));
         crate::panels::PcbLayersPanel {
             layer_stack_live,
+            layer_stack_reason,
             saved_sets: self
                 .ui_state
                 .layer_strip

@@ -63,6 +63,10 @@ pub use signex_commands::{AppCommandId, Platform};
 #[cfg(test)]
 mod binding_tests;
 #[cfg(test)]
+mod board_place_binding_tests;
+#[cfg(test)]
+mod board_prefix_tests;
+#[cfg(test)]
 mod catalog_golden_tests;
 #[cfg(test)]
 mod editor_tests;

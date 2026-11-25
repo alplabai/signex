@@ -97,6 +97,8 @@ pub struct PcbLayersPanel {
     pub flipped: bool,
     pub ratsnest_visible: bool,
     pub origin_marker_visible: bool,
+    /// The orientation tile over the canvas (mockup row 194).
+    pub orientation_tile_visible: bool,
     /// The layers the board has objects on, while Used On is on.
     pub used: Option<HashSet<PcbLayer>>,
     /// The board's layer colours and the view's transparencies.
@@ -113,6 +115,8 @@ pub struct PcbLayersPanel {
     /// The Layer Stack command can run: the more menu's Layer Stack... row
     /// is live.
     pub layer_stack_live: bool,
+    /// Why the Layer Stack command cannot run: the greyed row's tooltip.
+    pub layer_stack_reason: Option<signex_i18n::MessageId>,
     /// A board is open; without one the panel shows its empty state.
     pub board_open: bool,
     /// The tab path of the board shown, so an open colour card can tell a
@@ -134,6 +138,7 @@ impl Default for PcbLayersPanel {
             flipped: false,
             ratsnest_visible: true,
             origin_marker_visible: true,
+            orientation_tile_visible: true,
             used: None,
             paint: BoardPaint::default(),
             hidden_objects: Vec::new(),
@@ -142,6 +147,7 @@ impl Default for PcbLayersPanel {
             grid_visible: true,
             board_3d: false,
             layer_stack_live: false,
+            layer_stack_reason: None,
             board_open: false,
             board: None,
             i18n: I18n::en_us(),
@@ -176,6 +182,7 @@ impl PcbLayersPanel {
             flipped: view.flipped(),
             ratsnest_visible: view.ratsnest_visible(),
             origin_marker_visible: view.origin_marker_visible(),
+            orientation_tile_visible: view.orientation_tile_visible(),
             used: view.used_only().then(|| used_layers(board)),
             paint: view.paint_of(board),
             hidden_objects: BoardObject::ALL

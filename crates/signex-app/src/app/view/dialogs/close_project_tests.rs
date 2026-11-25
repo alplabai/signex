@@ -356,6 +356,44 @@ fn a_read_only_project_withholds_save_all_and_says_why() {
     );
 }
 
+/// The prompt of a read-only project offers Save Project As… for it (#2908),
+/// with or without Save All beside it.
+#[test]
+fn a_read_only_project_prompt_offers_save_project_as() {
+    use crate::app::ProjectCloseChoice;
+    use crate::app::contracts::{Message, ProjectMsg};
+    let label = crate::menu_bar::cmd_label(I18n::en_us_ref(), "save_project_as", "-");
+    assert_eq!(label, "Save Project As…");
+    for others in [&[][..], &["a.snxsch"][..]] {
+        let app = read_only_closing(others, Default::default());
+        let messages = crate::layout_probe::messages_on_click(
+            app.view_project_close_confirm_body(),
+            iced::Size::new(900.0, 700.0),
+            &label,
+        );
+        assert!(
+            matches!(
+                messages.as_slice(),
+                [Message::Project(ProjectMsg::CloseConfirm(
+                    ProjectCloseChoice::SaveProjectAs
+                ))]
+            ),
+            "{others:?}: {messages:?}"
+        );
+    }
+    // A prompt with nothing read-only offers no copy.
+    let mut app = read_only_closing(&["a.snxsch"], Default::default());
+    app.document_state.projects[0]
+        .data
+        .unknown
+        .newer_minor_source = None;
+    let texts = lay_out_texts(
+        app.view_project_close_confirm_body(),
+        iced::Size::new(900.0, 700.0),
+    );
+    assert!(texts.iter().all(|t| t.text != label), "{texts:#?}");
+}
+
 /// With a sheet unsaved too, Save All stays for it and the discard names the
 /// read-only project alone (Caner, 2026-11-25); Discard All is gone and the
 /// note says what each button does.

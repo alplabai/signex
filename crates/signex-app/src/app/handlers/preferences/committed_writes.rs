@@ -19,6 +19,7 @@ impl Signex {
         let body_fill = ui.symbol_body_fill;
         let cross_out_not_fitted = ui.cross_out_not_fitted;
         let pcb_defaults = ui.pcb_dimension_defaults.clone();
+        let pcb_dim_others = ui.pcb_dim_others_percent;
         let (trackpad_pan, remember_geometry) = (ui.trackpad_pan, ui.remember_window_geometry);
         let wheel_mode = ui.wheel_mode;
         let layer_switcher = ui.layer_switcher;
@@ -71,6 +72,9 @@ impl Signex {
             }),
             write(crate::pcb_defaults_prefs::KEY, move || {
                 crate::fonts::write_pcb_dimension_defaults_pref(&pcb_defaults)
+            }),
+            write(crate::fonts::PCB_DIM_OTHERS_KEY, move || {
+                crate::fonts::write_pcb_dim_others_pref(pcb_dim_others)
             }),
             write("trackpad_pan", move || {
                 crate::fonts::write_trackpad_pan_pref(trackpad_pan)

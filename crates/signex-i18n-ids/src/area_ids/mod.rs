@@ -26,6 +26,7 @@ mod find;
 mod fp_props;
 mod gerber_viewer;
 mod library;
+mod new_project;
 mod notice;
 mod overlay;
 mod panel_body;
@@ -79,6 +80,7 @@ pub use find::*;
 pub use fp_props::*;
 pub use gerber_viewer::*;
 pub use library::*;
+pub use new_project::*;
 pub use notice::*;
 pub use overlay::*;
 pub use panel_body::*;
@@ -135,6 +137,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         gerber_viewer::GERBER_VIEWER,
         fp_props::FP_PROPS,
         library::LIBRARY,
+        new_project::NEW_PROJECT,
         notice::NOTICE,
         overlay::OVERLAY,
         panel_body::PANEL_BODY,

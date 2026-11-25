@@ -194,6 +194,9 @@ mod pcb_drag_follow;
 // #2364: a component placed from the Components panel onto a board.
 #[path = "regression/board_part_place.rs"]
 mod board_part_place;
+// #2505: Place ▸ Component on a board opens the part picker.
+#[path = "regression/board_place_component.rs"]
+mod board_place_component;
 // #1312 PR 1: board designators in Properties and Re-Annotate Board.
 #[path = "regression/board_designators.rs"]
 mod board_designators;
@@ -234,6 +237,10 @@ mod board_pour_text_dimension_panel;
 // Properties, each one undo step and saved with the board.
 #[path = "regression/board_dimension_settings.rs"]
 mod board_dimension_settings;
+// #2507: aligned, linear and radial dimensions; a radial one follows its
+// arc in the same undo step.
+#[path = "regression/board_dimension_kinds.rs"]
+mod board_dimension_kinds;
 // #1312 PR 2: Back Annotate.
 #[path = "regression/back_annotate.rs"]
 mod back_annotate;
@@ -452,6 +459,11 @@ mod cross_sheet_multiple_names;
 // #1312 — cross probe and Cross Select Mode between the sheet and the board.
 #[path = "regression/cross_probe.rs"]
 mod cross_probe;
+
+// #2907 — nets (wires, labels, sheet entries, pads, tracks, vias, copper
+// zones) cross probe both ways, undocked windows included.
+#[path = "regression/cross_probe_nets.rs"]
+mod cross_probe_nets;
 
 // #2232 — New PCB / New Schematic setup dialogs and saved profiles.
 #[path = "regression/document_setup.rs"]

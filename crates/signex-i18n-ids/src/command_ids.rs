@@ -125,6 +125,8 @@ define_ids! {
         CMD_SAVE_DOCUMENT_AS = "cmd-save-document-as";
         CMD_MENU_SAVE_DOCUMENT_AS = "cmd-menu-save-document-as";
         CMD_SAVE_ALL = "cmd-save-all";
+        CMD_SAVE_PROJECT_AS = "cmd-save-project-as";
+        CMD_MENU_SAVE_PROJECT_AS = "cmd-menu-save-project-as";
         CMD_SELECT_ALL = "cmd-select-all";
         CMD_MENU_SELECT_ALL = "cmd-menu-select-all";
         CMD_SELECT_EXPAND_CONNECTION = "cmd-select-expand-connection";
@@ -479,6 +481,8 @@ define_ids! {
         CMD_MENU_VIEW_ROTATE_180 = "cmd-menu-view-rotate-180";
         CMD_VIEW_ROTATE_RESET = "cmd-view-rotate-reset";
         CMD_MENU_VIEW_ROTATE_RESET = "cmd-menu-view-rotate-reset";
+        CMD_HOME_VIEW = "cmd-home-view";
+        CMD_MENU_HOME_VIEW = "cmd-menu-home-view";
         CMD_VIEW_BOARD_3D = "cmd-view-board-3d";
         CMD_MENU_VIEW_BOARD_3D = "cmd-menu-view-board-3d";
         CMD_TOGGLE_LAYERS_PANEL = "cmd-toggle-layers-panel";
@@ -547,6 +551,8 @@ define_ids! {
         CMD_MENU_REPOUR_SELECTED = "cmd-menu-repour-selected";
         CMD_REPOUR_ALL = "cmd-repour-all";
         CMD_MENU_REPOUR_ALL = "cmd-menu-repour-all";
+        CMD_UNFILL_SELECTED = "cmd-unfill-selected";
+        CMD_MENU_UNFILL_SELECTED = "cmd-menu-unfill-selected";
         CMD_PLACE_BOARD_ROUTE = "cmd-place-board-route";
         CMD_MENU_PLACE_BOARD_ROUTE = "cmd-menu-place-board-route";
         CMD_CYCLE_ROUTE_MODE = "cmd-cycle-route-mode";
@@ -578,6 +584,8 @@ define_ids! {
         CMD_MENU_IMPORT_DXF = "cmd-menu-import-dxf";
         CMD_IMPORT_DXF_OUTLINE = "cmd-import-dxf-outline";
         CMD_MENU_IMPORT_DXF_OUTLINE = "cmd-menu-import-dxf-outline";
+        CMD_PLACE_BOARD_COMPONENT = "cmd-place-board-component";
+        CMD_MENU_PLACE_BOARD_COMPONENT = "cmd-menu-place-board-component";
         CMD_PLACE_BOARD_PAD = "cmd-place-board-pad";
         CMD_MENU_PLACE_BOARD_PAD = "cmd-menu-place-board-pad";
         CMD_PLACE_BOARD_ARC = "cmd-place-board-arc";
@@ -586,6 +594,12 @@ define_ids! {
         CMD_MENU_PLACE_BOARD_STRING = "cmd-menu-place-board-string";
         CMD_PLACE_BOARD_DIMENSION = "cmd-place-board-dimension";
         CMD_MENU_PLACE_BOARD_DIMENSION = "cmd-menu-place-board-dimension";
+        CMD_PLACE_BOARD_DIMENSION_HORIZONTAL = "cmd-place-board-dimension-horizontal";
+        CMD_MENU_PLACE_BOARD_DIMENSION_HORIZONTAL = "cmd-menu-place-board-dimension-horizontal";
+        CMD_PLACE_BOARD_DIMENSION_VERTICAL = "cmd-place-board-dimension-vertical";
+        CMD_MENU_PLACE_BOARD_DIMENSION_VERTICAL = "cmd-menu-place-board-dimension-vertical";
+        CMD_PLACE_BOARD_DIMENSION_RADIAL = "cmd-place-board-dimension-radial";
+        CMD_MENU_PLACE_BOARD_DIMENSION_RADIAL = "cmd-menu-place-board-dimension-radial";
         CMD_CYCLE_ARC_MODE = "cmd-cycle-arc-mode";
         CMD_PLACE_BOARD_LINE = "cmd-place-board-line";
         CMD_MENU_PLACE_BOARD_LINE = "cmd-menu-place-board-line";

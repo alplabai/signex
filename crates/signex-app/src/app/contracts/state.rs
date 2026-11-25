@@ -391,6 +391,10 @@ pub enum ProjectCloseChoice {
     /// Drop only the unsaved settings of the read-only projects in the prompt
     /// (#2904); anything else still unsaved is prompted for again.
     DiscardReadOnly,
+    /// Save Project As… for the read-only project in the prompt (#2908):
+    /// the prompt closes as on Cancel and the dialog opens; nothing is
+    /// discarded or closed.
+    SaveProjectAs,
     /// Dismiss the modal; the project stays open.
     Cancel,
 }

@@ -5,7 +5,9 @@
 //! JSON for an agent or the CLI (`repour_all document=<board>`). Fills
 //! depend on each other (priority, pour-to-pour clearance), so the whole
 //! board is filled; Repour Selected reports the selected pours. Nothing in
-//! the document changes, so there is no undo step.
+//! the document changes, so there is no undo step, unless a pour it names
+//! is unfilled (#2506): Repour first clears that flag as one undo step.
+//! Unfill Selected and the Copper card's Unfill set it, one step too.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -13,6 +15,8 @@ use std::path::Path;
 use iced::Task;
 use pcb_geom::{ItemRef, ZoneFills};
 use serde_json::{Value, json};
+use signex_engine::pcb::pour_edit;
+use signex_engine::pcb::primitive_edit::{ZoneEdit, zone_edit_command};
 use signex_i18n::{ids, t};
 use signex_types::pcb::PcbBoard;
 use uuid::Uuid;
@@ -23,8 +27,8 @@ use crate::app::{Message, Signex};
 
 /// What each pour of `board` (each in `only`, when given) holds under
 /// `fills`, in board order: its identity, net, layer and priority, whether
-/// it is shelved (#2523, then not filled), the pieces and area of its
-/// copper, and the islands its rules dropped.
+/// it is shelved (#2523) or unfilled (#2506; either way not filled), the
+/// pieces and area of its copper, and the islands its rules dropped.
 pub(crate) fn pour_report(
     board: &PcbBoard,
     fills: &ZoneFills,
@@ -45,6 +49,7 @@ pub(crate) fn pour_report(
                 "layer": zone.layer,
                 "priority": zone.priority,
                 "shelved": zone.shelved,
+                "unfilled": zone.is_unfilled_pour(),
                 "filled": fill.is_some(),
                 "pieces": fill.map_or(0, |f| f.pieces.len()),
                 "area_mm2": fill.map_or(0.0, |f| f.area_mm2()),
@@ -72,8 +77,9 @@ impl Signex {
     /// Repour the board at `path` (the board in view is drawn again) and
     /// say in Messages what its pours, or the selected ones, came to.
     pub(crate) fn repour_board(&mut self, path: &Path, selected: bool) {
-        self.refill_pours();
         let only = selected.then(|| self.selected_pours(path));
+        self.fill_unfilled_pours(path, only.as_ref());
+        self.refill_pours();
         self.report_pours(path, only.as_ref());
     }
 
@@ -81,8 +87,53 @@ impl Signex {
     /// `only` came to. Repour on a pour's Copper card names its pours, so
     /// it holds for a board the canvas selection is not on.
     pub(crate) fn repour_pours(&mut self, path: &Path, only: &BTreeSet<Uuid>) {
+        self.fill_unfilled_pours(path, Some(only));
         self.refill_pours();
         self.report_pours(path, Some(only));
+    }
+
+    /// Clear `unfilled` (#2506) on the unfilled pours in `only` (every pour
+    /// for `None`) of the board at `path` as one undo step. A board with
+    /// none is left alone, so a Repour of filled pours stays a refresh.
+    pub(crate) fn fill_unfilled_pours(&mut self, path: &Path, only: Option<&BTreeSet<Uuid>>) {
+        let zones: Option<Vec<Uuid>> = only.map(|set| set.iter().copied().collect());
+        let zones = zones.as_deref();
+        let owed = self
+            .document_state
+            .pcb_board(path)
+            .is_some_and(|board| pour_edit::refill_pours(board, zones).is_some());
+        if !owed {
+            return;
+        }
+        self.run_guarded_board_step(path, ids::PCB_PRIM_POUR_REPOUR, |board| {
+            Ok(pour_edit::refill_pours(board, zones).into_iter().collect())
+        });
+    }
+
+    /// `unfill_selected` (#2506): the selected pours of the board in view
+    /// hold no copper until the next Repour.
+    pub(crate) fn unfill_selected_in_view(&mut self) {
+        let Some(path) = self.active_tab_path().filter(|_| self.has_active_pcb()) else {
+            return;
+        };
+        let zones: Vec<Uuid> = self.selected_pours(&path).into_iter().collect();
+        self.unfill_pours(&path, &zones);
+    }
+
+    /// Unfill the pours `zones` of the board at `path` as one undo step: each
+    /// keeps its outline and holds no copper until the next Repour. With no
+    /// pour, Messages says to select one.
+    pub(crate) fn unfill_pours(&mut self, path: &Path, zones: &[Uuid]) {
+        if zones.is_empty() {
+            let line = t!(self.ui_state.i18n, ids::PCB_POUR_UNFILL_NONE_SELECTED).into_string();
+            crate::diagnostics::log_warning(line);
+            return;
+        }
+        self.run_guarded_board_step(path, ids::PCB_PRIM_POUR_UNFILL, |board| {
+            Ok(zone_edit_command(board, zones, ZoneEdit::Unfilled(true))?
+                .into_iter()
+                .collect())
+        });
     }
 
     /// Drop the computed fills; the board in view is filled and drawn again.
@@ -176,6 +227,8 @@ pub(crate) fn repour_all(app: &mut Signex, args: &CommandArgs) -> (CommandOutcom
     let Some(path) = entry.path else {
         return refused(format!("{} has no file", entry.name));
     };
+    // #2506: every unfilled pour is filled again, as one undo step.
+    app.fill_unfilled_pours(&path, None);
     if app.active_tab_path().as_deref() == Some(path.as_path()) {
         app.interaction_state.pcb_ratsnest.invalidate();
         app.sync_pcb_canvas_from_visible_board();

@@ -174,6 +174,7 @@ impl Signex {
         let symbol_grid_style = crate::fonts::read_symbol_grid_style_pref_from(prefs);
         let symbol_pin_selection = crate::fonts::read_symbol_pin_selection_pref_from(prefs);
         let zoom_step_percent = crate::fonts::read_zoom_step_percent_pref_from(prefs);
+        let pcb_dim_others_percent = crate::fonts::read_pcb_dim_others_pref_from(prefs);
         let ui_scale =
             crate::fonts::read_ui_scale_pref_from(prefs, &crate::fonts::prefs_file_path());
         let undo_depth =
@@ -329,6 +330,13 @@ impl Signex {
                 keymap_profiles,
                 active_keymap,
                 pcb_layer_views: Default::default(),
+                saved_pcb_layer_views: Box::new(crate::board_view_prefs::read_board_views_from(
+                    prefs,
+                )),
+                pcb_layer_view_sync: Box::new(crate::board_view_prefs::BoardViewSync::new(
+                    std::sync::Arc::new(crate::fonts::PrefsBoardViewStore::user_prefs()),
+                    Default::default(),
+                )),
                 layer_strip: crate::fonts::read_layer_strip_pref_from(prefs),
                 pcb_view_angle_entry: None,
                 pcb_pick_filter: Default::default(),
@@ -394,6 +402,8 @@ impl Signex {
                 preferences_draft_ui_scale_percent: crate::ui_scale::scale_to_percent(ui_scale),
                 zoom_step_percent,
                 preferences_draft_zoom_step_percent: zoom_step_percent,
+                pcb_dim_others_percent,
+                preferences_draft_pcb_dim_others_percent: pcb_dim_others_percent,
                 annotate_undo,
                 preferences_draft_annotate_undo: annotate_undo,
                 move_keeps_wires,
@@ -490,6 +500,7 @@ impl Signex {
                 enable_version_control: None,
                 grid_properties: None,
                 new_project: None,
+                save_project_as: None,
                 document_setup: None,
                 setup_profiles: crate::fonts::read_setup_profiles_from(prefs),
                 removed_profile_names: Default::default(),

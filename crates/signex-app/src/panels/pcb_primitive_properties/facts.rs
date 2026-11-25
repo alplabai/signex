@@ -9,6 +9,7 @@ use pcb_geom::ItemRef;
 use signex_engine::pcb::draw::ArcMode;
 use signex_engine::pcb::via_types::ViaTypeKey;
 use signex_types::pcb::{MaskExpansion, PadShape, ViaType};
+use signex_types::pcb_dimension_kind::DimensionKind;
 use signex_types::pcb_dimension_style::{
     ArrowStyle, BoardFont, DimensionTextPosition, DimensionUnits,
 };
@@ -489,10 +490,13 @@ impl TextFacts {
     }
 }
 
-/// Linear dimensions (#2373).
+/// Board dimensions (#2373).
 #[derive(Debug, Clone, PartialEq)]
 pub struct DimensionFacts {
     pub common: PrimitiveCommon,
+    /// The kind the selected dimensions share (#2507); `None` where they
+    /// differ.
+    pub kind: Option<DimensionKind>,
     pub start: (Option<f64>, Option<f64>),
     pub end: (Option<f64>, Option<f64>),
     pub offset: Option<f64>,

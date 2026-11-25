@@ -467,7 +467,8 @@ fn notice_choice_effects<'a>(
 /// The choices a notice offers after its leading Cancel (#1826). On File
 /// Changed on Disk both data-losing choices take the same danger outline and
 /// Save As…, which loses nothing, is the primary (mockup row 11); a board has no
-/// Save As, so its card has no primary.
+/// Save As, so its card has no primary. A read-only project's refused save
+/// offers Save Project As… (#2908).
 fn notice_choice_buttons<'a>(
     i18n: &I18n,
     notice: &crate::app::state::ErrorNotice,
@@ -475,8 +476,20 @@ fn notice_choice_buttons<'a>(
 ) -> Vec<Element<'a, Message>> {
     use crate::app::state::NoticeAction;
     use crate::persist::DiskDrift;
-    let Some(NoticeAction::DiskChanged { drift, .. }) = &notice.action else {
-        return Vec::new();
+    let drift = match &notice.action {
+        Some(NoticeAction::DiskChanged { drift, .. }) => drift,
+        Some(NoticeAction::SaveProjectAs { project }) => {
+            let requested = crate::app::SaveProjectAsMsg::Requested {
+                project: Some(*project),
+            };
+            return vec![dialog_button(
+                t!(i18n, signex_i18n::command_ids::CMD_MENU_SAVE_PROJECT_AS),
+                DialogButtonKind::Primary,
+                Some(Message::from(requested)),
+                tokens,
+            )];
+        }
+        None => return Vec::new(),
     };
     let choice =
         |label: Localized, kind: DialogButtonKind, message: OverlayMsg| -> Element<'a, Message> {

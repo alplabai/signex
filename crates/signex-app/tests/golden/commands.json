@@ -730,6 +730,11 @@
     "category": "select"
   },
   {
+    "id": "home_view",
+    "group": "General",
+    "category": "view"
+  },
+  {
     "id": "import_dxf",
     "group": "Pcb",
     "category": "file"
@@ -1035,12 +1040,32 @@
     "category": "place"
   },
   {
+    "id": "place_board_component",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
     "id": "place_board_diff_pair",
     "group": "Pcb",
     "category": "place"
   },
   {
     "id": "place_board_dimension",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_dimension_horizontal",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_dimension_radial",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_dimension_vertical",
     "group": "Pcb",
     "category": "place"
   },
@@ -1680,6 +1705,11 @@
     "category": "view"
   },
   {
+    "id": "save_project_as",
+    "group": "General",
+    "category": "file"
+  },
+  {
     "id": "save_workspace_layout",
     "group": "General",
     "category": "window"
@@ -2038,6 +2068,11 @@
     "id": "undo_last_segment",
     "group": "General",
     "category": "interactive"
+  },
+  {
+    "id": "unfill_selected",
+    "group": "Pcb",
+    "category": "pcb"
   },
   {
     "id": "unlock_board_items",

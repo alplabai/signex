@@ -415,6 +415,8 @@ pcb-prim-pour-repour-shelved-tip = Unshelve the pour before repouring it
 pcb-prim-pour-shelve = Shelve
 pcb-prim-pour-shelve-tip = Keep the outline, show no copper
 pcb-prim-pour-unshelve = Unshelve
+pcb-prim-pour-unfill = Unfill
+pcb-prim-pour-unfill-tip = Keep the outline, clear the copper until the next Repour
 # The button that opens the menu of board-wide pour commands.
 pcb-prim-pour-menu = ⋯
 pcb-prim-pour-menu-tip = All pours on the board
