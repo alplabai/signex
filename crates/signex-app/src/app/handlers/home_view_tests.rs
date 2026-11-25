@@ -2,7 +2,7 @@
 //! and fits, in one message, with no undo step and no dirty mark; on a sheet
 //! it fits. View ▸ Home View runs the same.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::app::{FileMsg, Message, PcbMsg, PcbViewMsg, Signex, UiMsg, ViewRotationMsg};
 use crate::canvas::overlay_camera_tests::graphite_app_with_selected_wire;
@@ -31,7 +31,7 @@ fn board_app() -> (Signex, PathBuf) {
 }
 
 /// Turn the board view 90° and flip it, then drop any queued fit.
-fn turn_and_flip(app: &mut Signex, path: &PathBuf) {
+fn turn_and_flip(app: &mut Signex, path: &Path) {
     let _ = app.update(Message::Pcb(PcbMsg::ViewRotation(
         ViewRotationMsg::AngleSet(90.0),
     )));
@@ -43,7 +43,7 @@ fn turn_and_flip(app: &mut Signex, path: &PathBuf) {
     canvas.pending_fit.set(None);
 }
 
-fn assert_home(app: &Signex, path: &PathBuf) {
+fn assert_home(app: &Signex, path: &Path) {
     let canvas = &app.interaction_state.pcb_canvas;
     assert_eq!(canvas.view_rotation_deg(), 0.0, "rotation");
     assert!(!app.pcb_layer_view(path).flipped(), "Flip still on");
