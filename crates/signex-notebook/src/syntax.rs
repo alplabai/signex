@@ -137,6 +137,11 @@ pub(crate) fn reference_of(call: ast::FuncCall<'_>) -> Option<Reference> {
     }
 }
 
+/// Visit `node` and its descendants in source order.
+pub(crate) fn visit(node: &SyntaxNode, visit: &mut impl FnMut(&SyntaxNode)) {
+    walk(node, 0, &mut |node, _| visit(node));
+}
+
 /// Visit `node` and its descendants in source order with their byte
 /// offsets.
 pub(crate) fn walk(node: &SyntaxNode, offset: usize, visit: &mut impl FnMut(&SyntaxNode, usize)) {

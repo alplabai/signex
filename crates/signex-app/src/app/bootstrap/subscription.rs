@@ -74,6 +74,8 @@ struct OpenOverlays {
     diff_pair_classes_open: bool,
     notebook_generate_open: bool,
     board_output_open: bool,
+    /// Export Design Notebook PDF (mockup row 202).
+    notebook_pdf_open: bool,
     back_annotate_open: bool,
     compare_board_open: bool,
     compare_board_confirm_open: bool,
@@ -425,6 +427,9 @@ impl OpenOverlays {
             OverlayId::BoardOutput => self
                 .board_output_open
                 .then(|| Message::from(crate::app::BoardOutputMsg::Closed)),
+            OverlayId::NotebookPdf => self
+                .notebook_pdf_open
+                .then(|| Message::from(crate::app::NotebookPdfMsg::Closed)),
             OverlayId::BackAnnotate => self
                 .back_annotate_open
                 .then(|| Message::from(crate::app::BackAnnotateMsg::CloseRequested)),
@@ -799,6 +804,7 @@ impl Signex {
             diff_pair_classes_open: self.ui_state.diff_pair_classes.is_some(),
             notebook_generate_open: self.ui_state.notebook_generate.dialog.is_some(),
             board_output_open: self.ui_state.board_output.dialog.is_some(),
+            notebook_pdf_open: self.ui_state.notebook_pdf.dialog.is_some(),
             back_annotate_open: self.ui_state.back_annotate.is_some(),
             compare_board_open: self.ui_state.compare_board.is_some(),
             compare_board_confirm_open: self
@@ -2022,6 +2028,7 @@ mod tests {
             diff_pair_classes_open,
             notebook_generate_open,
             board_output_open,
+            notebook_pdf_open,
             back_annotate_open,
             compare_board_open,
             compare_board_confirm_open,
@@ -2117,6 +2124,7 @@ mod tests {
                 o.notebook_generate_open = true
             }),
             ("board_output_open", |o| o.board_output_open = true),
+            ("notebook_pdf_open", |o| o.notebook_pdf_open = true),
             ("back_annotate_open", |o| o.back_annotate_open = true),
             ("compare_board_open", |o| o.compare_board_open = true),
             ("compare_board_confirm_open", |o| {

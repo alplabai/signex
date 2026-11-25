@@ -422,10 +422,11 @@ export_board_step	operand_handler	run_operands: named document	core	origin	handl
 export_board_step	in_window_rewrite	document_window	gui	window	routing
 export_board_step	refusal_needs	Pcb	gui	active document	routing
 export_board_step	headless_missing_operand	needs `document`	core	none	routing
-export_notebook_pdf	bridge	Project(Notebook(ExportPdfRequested { project: None }))	gui	active document	gate
+export_notebook_pdf	bridge	Project(Notebook(ExportPdfRequested { project: None }))	gui	active document,render cache	gate
+export_notebook_pdf	operand_handler	run_operands: named document	core	origin,render cache	handler
 export_notebook_pdf	in_window_rewrite	document_window	gui	window	routing
 export_notebook_pdf	refusal_needs	OpenProject	gui	active document	routing
-export_notebook_pdf	headless_refusal	headless_refusal	gui	none	routing
+export_notebook_pdf	headless_missing_operand	needs `document`	core	none	routing
 export_notebook_timeline	operand_handler	run_operands: named document	core	origin	handler
 export_notebook_timeline	refusal_needs_operands	needs_operands_reason	gui	none	routing
 export_notebook_timeline	headless_missing_operand	needs `document`	core	none	routing

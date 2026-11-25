@@ -597,6 +597,7 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "export_board_pdf",
     "export_board_report",
     "export_board_step",
+    "export_notebook_pdf",
     "export_notebook_timeline",
     // #2945: the design report, written into the project with `save`.
     "generate_design_notebook",

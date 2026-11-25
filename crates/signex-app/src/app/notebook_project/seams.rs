@@ -26,7 +26,14 @@ impl Signex {
     /// Open the Export notebook PDF dialog of `target`.
     pub(crate) fn export_design_notebook_pdf(&mut self, target: NotebookTarget) -> Task<Message> {
         say("Export PDF", &target);
-        Task::none()
+        // The notebook tab passes the page it shows (1-based) when it is
+        // the tab in view.
+        let in_view = self.notebook_tab_index(target.project) == Some(self.document_state.active_tab);
+        let current_page = in_view
+            .then(|| self.document_state.notebooks.get(&target.project))
+            .flatten()
+            .map(|tab| tab.page + 1);
+        self.dispatch_notebook_pdf_message(crate::app::NotebookPdfMsg::Requested { current_page })
     }
 
     /// Show or hide the Notebook badges on the schematic.

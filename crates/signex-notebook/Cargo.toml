@@ -14,7 +14,8 @@ serde = { workspace = true }
 # The attachment manifest the bundled package reads (src/derived.rs), the
 # cell result cache file and the cell results the page reads.
 serde_json = { workspace = true }
-# The source hash a cached cell result keeps.
+# The source hash a cached cell result keeps, and the PDF export's checksum
+# shown on its done card (mockup row 202).
 sha2 = { workspace = true }
 signex-types = { workspace = true }
 thiserror = { workspace = true }

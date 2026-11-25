@@ -12,6 +12,7 @@ signex-cli run <project> [options] < commands.jsonl
 signex-cli run <project> <command-id> [--arg key=value]... [options]
 signex-cli commands [--json]
 signex-cli agent-log <project> [--access]
+signex-cli notebook export-pdf --project <project> [options]
 ```
 
 `agent-log` prints the project's agent journal as a table: the edits agents
@@ -1119,6 +1120,29 @@ find_similar_items document=<board> id=<uuid> [fields=kind,value,...]
   `drill`, `shape`. A property the seed does not have is refused.
 
 Find by text on a board is `find_items` (designator and value).
+
+## Design Notebook
+
+`notebook <verb>` runs a Design Notebook command by its own name, as `run`
+would run its catalog command (mockup rows 201 and 202). It takes the
+project with `--project` (or as the first word after the verb), every `run`
+option, and `--json`, which changes nothing: every answer is a JSON line.
+
+```
+signex-cli notebook export-pdf --project buck-3v3.snxprj [--out <file>]
+    [--notebook generated/design-report] [--pages all|current|3-7]
+    [--paper document|a4|letter] [--variant <name>] [--annotations <kinds>]
+    [--stale warn|fail] [--no-title-block] [--no-contents] [--no-bookmarks]
+    [--python-source] [--json] [run options]
+```
+
+`export-pdf` is `run <project> export_notebook_pdf --arg document=<project>
+--arg ... --allow export`: it writes the notebook as a PDF file (the default
+name in `Project Outputs/notebook/` without `--out`) and answers with the
+pages, paper, references and stale ones, the bookmarks written and the
+SHA-256 of the file. A notebook named without an extension is a `.snxnbk`
+file. A stale reference under `--stale fail` refuses the export (exit code 1).
+The settings and the answer are in [NOTEBOOK_PDF.md](NOTEBOOK_PDF.md).
 
 ## Working through a running Signex
 

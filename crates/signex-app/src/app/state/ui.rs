@@ -574,6 +574,10 @@ pub struct UiState {
     /// Board Reports and Board Print / PDF (#2404, #2402): the open dialog
     /// and the print options it was last used with.
     pub board_output: crate::app::BoardOutputState,
+    /// Export Design Notebook PDF (mockup row 202): the open dialog and the
+    /// checksum of each file exported this session. Boxed like
+    /// `new_project`.
+    pub notebook_pdf: Box<crate::app::NotebookPdfState>,
     /// Back Annotate (#1312), while open. Execute writes the sheets in
     /// memory as one undo group; nothing is written to disk. Boxed like
     /// `new_project`.
@@ -934,6 +938,7 @@ mod tests {
                 "board_output.dialog",
                 field_size(|ui| &ui.board_output.dialog),
             ),
+            ("notebook_pdf", field_size(|ui| &ui.notebook_pdf)),
             (
                 "preferences_pcb_defaults",
                 field_size(|ui| &ui.preferences_pcb_defaults),

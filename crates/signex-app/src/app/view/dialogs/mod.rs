@@ -36,6 +36,8 @@ mod netlist_incomplete;
 pub(crate) mod new_project;
 // #2945, mockup row 201: Generate design notebook.
 pub(crate) mod notebook_generate;
+// Mockup row 202: Export Design Notebook PDF.
+mod notebook_pdf;
 mod preview_frame;
 pub(crate) use preview_frame::preview_frame;
 mod project;

@@ -28,6 +28,7 @@ mod gerber_viewer;
 mod library;
 mod new_project;
 mod notebook_measurements;
+mod notebook_pdf;
 mod notebook_references;
 mod notebook_tab;
 mod notice;
@@ -84,6 +85,7 @@ pub use gerber_viewer::*;
 pub use library::*;
 pub use new_project::*;
 pub use notebook_measurements::*;
+pub use notebook_pdf::*;
 pub use notebook_references::*;
 pub use notebook_tab::*;
 pub use notice::*;
@@ -143,6 +145,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         library::LIBRARY,
         new_project::NEW_PROJECT,
         notebook_measurements::NOTEBOOK_MEASUREMENTS,
+        notebook_pdf::NOTEBOOK_PDF,
         notebook_references::NOTEBOOK_REFERENCES,
         notebook_tab::NOTEBOOK_TAB,
         notice::NOTICE,

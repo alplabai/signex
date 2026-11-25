@@ -431,7 +431,7 @@ manage_workspace_layouts	window	Manage workspace layouts	Manage Layouts…	Gener
 reset_workspace_layout	window	Reset the edited built-in workspace layout	Reset Layout	General	-	-	Always	gui_only	-
 open_design_notebook	design	Open the Design Notebook of the project (Wiki)	Open Design Notebook	General	-	-	Always	gui_only	-
 generate_design_notebook	design	Generate a design notebook from the project	Generate from Project…	General	-	-	Always	-	document:document,sections:text?,variant:text?,template:text?,document_number:text?,revision:text?,checks:text?,save:bool?,update:bool?
-export_notebook_pdf	file	Export the Design Notebook as PDF	Design Notebook PDF…	General	-	-	Always	gui_only	-
+export_notebook_pdf	file	Export the Design Notebook as PDF	Design Notebook PDF…	General	-	-	Always	-	document:document,path:path?,notebook:text?,pages:text?,paper:text?,variant:text?,annotations:text?,stale:text?,title_block:bool?,contents:bool?,bookmarks:bool?,python_source:bool?
 notebook_references	design	List the notebook's references and the stale ones	-	General	-	-	Always	-	document:document,file:text?
 notebook_reference_card	design	Read the hover card of a notebook reference	-	General	-	-	Always	-	document:document,kind:text,name:text,file:text?
 notebook_reference_picker	design	List what the @ reference picker offers	-	General	-	-	Always	-	document:document,text:text?,limit:text?

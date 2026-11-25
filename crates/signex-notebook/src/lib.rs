@@ -24,7 +24,9 @@
 //! [`compile`] turns [`NotebookSources`] into pages over Typst, with the
 //! bundled `@signex/notebook` package and fonts only; a
 //! [`CompiledNotebook`] draws a page for the preview and writes a PDF that
-//! is the same file every time.
+//! is the same file every time. [`export`] is the PDF export of mockup
+//! row 202: the stale-reference check, the export settings, the pages
+//! chosen, the bookmarks and the Output Job entry.
 //!
 //! The notebook tab reads the rest from here: the [`outline`], Typst
 //! [`Highlights`], the insert toolbar's text ([`insertion_text`]), the
@@ -59,6 +61,7 @@ pub mod attachment;
 pub mod bench;
 pub mod cell;
 pub mod edit;
+pub mod export;
 pub mod generate;
 pub mod measurement;
 pub mod report;
@@ -112,7 +115,7 @@ pub use card::{
 };
 pub use compile::{
     Compilation, CompileOptions, CompiledNotebook, Diagnostic, DiagnosticSeverity, PDF_CREATOR,
-    PageImage, PageInfo, compile,
+    PageImage, PageInfo, compile, compile_with_inputs,
 };
 pub use date::IsoDate;
 pub use design::{DesignIndex, DesignNet, DesignPart, DesignPin, PinName, natural_order};

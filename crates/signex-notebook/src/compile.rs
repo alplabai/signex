@@ -2,8 +2,11 @@
 //! the preview and a PDF that is the same file, byte for byte, every time
 //! the same notebook is exported.
 
+use std::num::NonZeroUsize;
+
 use typst::diag::{Severity, SourceDiagnostic};
 use typst::foundations::Smart;
+use typst::layout::PageRanges;
 use typst::utils::Scalar;
 use typst::{World, WorldExt};
 use typst_layout::PagedDocument;
@@ -111,7 +114,18 @@ impl Compilation {
 /// Compile `sources` to pages. Pure: the result depends only on the
 /// sources, the options and the bundled package and fonts.
 pub fn compile(sources: &NotebookSources, options: &CompileOptions) -> Compilation {
-    let Some(world) = NotebookWorld::new(sources, options.today, options.cells.to_json()) else {
+    compile_with_inputs(sources, options, &[])
+}
+
+/// [`compile`] with `inputs` as Typst's `sys.inputs`, `(key, text)` pairs;
+/// the PDF export passes its settings this way (`docs/NOTEBOOK_PDF.md`).
+pub fn compile_with_inputs(
+    sources: &NotebookSources,
+    options: &CompileOptions,
+    inputs: &[(String, String)],
+) -> Compilation {
+    let cells = options.cells.to_json();
+    let Some(world) = NotebookWorld::new(sources, options.today, cells, inputs) else {
         return Compilation {
             notebook: None,
             diagnostics: vec![Diagnostic {
@@ -197,10 +211,24 @@ impl CompiledNotebook {
     /// creation time is written and the creator is [`PDF_CREATOR`], so the
     /// same notebook gives the same bytes. Headings become bookmarks.
     pub fn pdf(&self, ident: &str) -> Result<Vec<u8>, Vec<String>> {
+        self.pdf_pages(ident, None)
+    }
+
+    /// [`Self::pdf`] of pages `first` to `last` only (1-based, both
+    /// included); `None` writes every page.
+    pub fn pdf_pages(
+        &self,
+        ident: &str,
+        pages: Option<(usize, usize)>,
+    ) -> Result<Vec<u8>, Vec<String>> {
+        let page_ranges = pages.map(|(first, last)| {
+            PageRanges::new(vec![NonZeroUsize::new(first)..=NonZeroUsize::new(last)])
+        });
         let options = typst_pdf::PdfOptions {
             ident: Smart::Custom(ident.to_string()),
             creator: Smart::Custom(Some(PDF_CREATOR.to_string())),
             timestamp: None,
+            page_ranges,
             ..typst_pdf::PdfOptions::default()
         };
         typst_pdf::pdf(&self.document, &options)

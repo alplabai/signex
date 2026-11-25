@@ -515,6 +515,7 @@ impl Signex {
                 notebook_generate: Default::default(),
                 fab_outputs_writes: 0,
                 board_output: Default::default(),
+                notebook_pdf: Default::default(),
                 back_annotate: None,
                 compare_board: None,
                 find_similar: None,

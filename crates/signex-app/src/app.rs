@@ -58,6 +58,9 @@ pub(crate) mod new_project;
 pub(crate) mod notebook_generate;
 pub use notebook_generate::{NotebookGenerateMsg, NotebookGenerateUi};
 pub(crate) mod notebook_measurements;
+// Mockup row 202: Export Design Notebook PDF and `export_notebook_pdf`.
+pub(crate) mod notebook_pdf;
+pub use notebook_pdf::{NotebookPdfMsg, NotebookPdfState};
 pub(crate) mod notebook_project;
 pub mod notebook_references;
 // Mockup row 195: the Design Notebook tab.
