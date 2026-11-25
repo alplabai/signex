@@ -1035,6 +1035,21 @@
     "category": "place"
   },
   {
+    "id": "place_board_dimension_horizontal",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_dimension_radial",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
+    "id": "place_board_dimension_vertical",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
     "id": "place_board_fill",
     "group": "Pcb",
     "category": "place"

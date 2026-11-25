@@ -69,6 +69,8 @@ mod uuid_repair;
 mod wire_color_repair;
 
 #[cfg(test)]
+mod board_dimension_kind_tests;
+#[cfg(test)]
 mod board_dimension_tests;
 #[cfg(test)]
 mod board_free_tests;

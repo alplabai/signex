@@ -617,9 +617,10 @@ and the shape rows and Net Information are left out.
 
 ## Dimension
 
-`place_board_dimension` (no default key) places a linear dimension: two
+`place_board_dimension` (no default key) places an aligned dimension: two
 clicks for the points it measures, a third for where its line stands (the
-offset is how far the third point stands off the measured line). It goes on
+offset is how far the third point stands off the measured line). The other
+kinds are in [Dimension kinds](#dimension-kinds). It goes on
 the active layer, whichever layer it is, copper included (Caner,
 2026-11-21; this replaced "the active layer when that takes text, else the
 Dimensions layer"). A dimension on copper is a drawing only: the copper
@@ -640,8 +641,45 @@ copper included; a caption under the row says a dimension on copper is a
 drawing only).
 Precision is a 0 to 6 segmented control, so a precision outside that range
 cannot be entered from the panel. Each edit is one undo step. There is no
-Type row: angular, radial, diameter, leader, baseline and centre-mark
-dimensions have no model yet and are not offered.
+Type row: a dimension keeps the kind it was placed with. Angular,
+diameter, leader, datum, baseline and centre-mark dimensions have no model
+yet and are not offered (#2906).
+
+### Dimension kinds {#dimension-kinds}
+
+A dimension has a kind (`signex_types::pcb_dimension_kind::DimensionKind`,
+#2507). Place ▸ Dimension on a board and the PCB Active Bar's Dimensions
+dropdown list them, Aligned first; the bar's button runs the kind used
+last. Each kind takes the dimension look settings below.
+
+- **Aligned** (`place_board_dimension`): the distance along the two
+  points, its line parallel to them. Every dimension from before the kinds
+  is aligned.
+- **Linear Horizontal** (`place_board_dimension_horizontal`) and **Linear
+  Vertical** (`place_board_dimension_vertical`): the same three clicks; the
+  value is the distance across (or up or down) between the points, the
+  line horizontal (or vertical) through the third click, and the second
+  point's extension line runs from it to that line. Two points level with
+  each other add nothing and say so.
+- **Radial** (`place_board_dimension_radial`): one click on or within 1 mm
+  of the edge of an arc or circle (`draw::RADIAL_PICK_REACH_MM`): a free
+  arc, copper or not, or a board drawing that is an arc or a full circle;
+  the nearest edge wins. The dimension is a leader from the centre toward
+  the click with one arrow on the circle and no extension lines; the value
+  reads `R` before the radius (after any prefix). A click on no arc or
+  circle adds nothing and says so. Start is the centre and End the leader's
+  point on the circle.
+
+The values stay live: a dimension's value is measured from its points
+whenever it is drawn, so editing Start or End changes it, and a radial
+dimension names the arc or circle it measures (`measures`). After every
+board edit the board engine puts each radial dimension that is off its
+circle back on it, keeping its leader's direction, in the same undo step
+(`signex_engine::pcb` `dimension_refit`), so moving, resizing or editing
+the arc or circle moves the dimension and its value with it, and undo takes
+both back. While the arc or circle is dragged, the drag preview draws the
+dimension following it. A radial dimension moved on its own goes back onto
+its circle; one whose arc or circle is deleted stays where it is.
 
 The lengths (Start, End, Offset, Line Width, Text Height) and the Value
 card follow the board's Units, mm or mils (Caner, 2026-11-24, mockup row
@@ -846,9 +884,13 @@ its point where Above puts it, as the Dimension tool places it),
 lengths in integer nm. A dimension of that look writes none of them, so an
 older board reads and re-saves byte-identical; an older reader skips the
 keys (and drops them if it saves).
+The kind (#2507) follows the same rule: `kind` (`horizontal`, `vertical`,
+`radial`) is written only for a kind other than aligned, and a radial row
+also writes `measures`, the uuid of its arc or circle; a row without
+`kind` reads as aligned.
 `signex_types::format::board_uses_dimension_style` says whether a save
-writes any of them; only such a board (or one with a pour cutout) writes
-`snxpcb/1.11` (`docs/FORMAT_VERSIONS.md`).
+writes any of these keys; only such a board (or one with a pour cutout or
+drawn copper) writes `snxpcb/1.11` (`docs/FORMAT_VERSIONS.md`).
 
 ## Selection Filter
 
@@ -893,12 +935,13 @@ group (#2392), from the table in `crates/signex-app/src/app/pcb_bar_groups.rs`:
 | Via / Pad | Via, Pad |
 | Copper areas | Polygon Pour, Pour Cutout, Slice Pour, Solid Region, Fill, Keepout, Repour Selected, Repour All |
 | Copper drawing | Track, Arc |
-| Dimensions | Dimension |
+| Dimensions | Aligned, Linear Horizontal, Linear Vertical, Radial (#2507) |
 | Text | String |
 | Graphics | Line, Arc, Full Circle, Rectangle, Text Frame |
 
 Every board placement tool is a row of exactly one group, so the bar and
-Place on a board (its Graphics submenu for the Graphics group) list the same
+Place on a board (its Dimension submenu for the Dimensions group, its
+Graphics submenu for the Graphics group) list the same
 tools; Change Footprint is the Edit and board canvas menu row of #2366, and
 the Tune rows are the length tuning commands of #2389 (palette, no menu row).
 
@@ -914,7 +957,7 @@ the Tune rows are the length tuning commands of #2389 (palette, no menu row).
   is greyed by the same gate as its menu row; a tool the board editor cannot
   run yet is greyed and its tooltip is the reason Place gives ("Place
   Component: not available on boards yet"). A button with a dropdown has the
-  corner triangle; a group of one row (Dimensions, Text) has neither. A
+  corner triangle; a group of one row (Text) has neither. A
   click on the triangle opens the dropdown and a click elsewhere on the
   button still runs the row it shows (Caner, 2026-11-24, mockup row 108);
   Move and View work the same way. The triangle is its own button inside

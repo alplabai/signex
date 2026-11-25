@@ -203,6 +203,38 @@ pub(super) const DRAWING: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
+    // #2507: the other dimension kinds, in Place ▸ Dimension and the PCB
+    // Active Bar's Dimensions dropdown. No default keys.
+    CommandMetadata {
+        id: "place_board_dimension_horizontal",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_DIMENSION_HORIZONTAL,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_DIMENSION_HORIZONTAL),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_dimension_vertical",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_DIMENSION_VERTICAL,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_DIMENSION_VERTICAL),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "place_board_dimension_radial",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_DIMENSION_RADIAL,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_DIMENSION_RADIAL),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
     // #2424: the Graphics tools, on the active non-copper layer. Each arms
     // its tool on the board in view; each drawing is one undo step. No
     // default keys.

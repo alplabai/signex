@@ -255,8 +255,9 @@ pub(super) fn planned_entries(i18n: &I18n, tid: ThemeId) -> Vec<DropdownEntry<Me
 /// Place on a board (#2405): the board placement tools in the order of the
 /// menu bar's Place, each running its command and live when the command is
 /// enabled in `ctx` (greyed on a read-only board), or greyed with the reason
-/// the PCB Active Bar gives while the board editor cannot run it; then Board
-/// Sketch.
+/// the PCB Active Bar gives while the board editor cannot run it, the
+/// dimension kinds under a Dimension heading after String (#2507, the rows
+/// of the menu bar's Place ▸ Dimension); then Board Sketch.
 pub(super) fn board_place_entries(
     i18n: &I18n,
     ctx: &crate::app::command::CommandContext,
@@ -272,20 +273,21 @@ pub(super) fn board_place_entries(
             dd_cmd_disabled(i18n, None, id, &hint(id))
         }
     };
-    let mut v: Vec<DropdownEntry<Message>> = BoardPlaceTool::PLACE_MENU
-        .into_iter()
-        .map(|tool| match tool.state() {
-            ToolState::Live(id) => command(id),
-            ToolState::Unavailable(reason) => {
-                match dd_disabled(None, &text(i18n, tool.name()), None) {
-                    DropdownEntry::Item(item) => {
-                        DropdownEntry::Item(item.tooltip(text(i18n, reason)))
-                    }
-                    other => other,
-                }
-            }
-        })
-        .collect();
+    let entry = |tool: BoardPlaceTool| match tool.state() {
+        ToolState::Live(id) => command(id),
+        ToolState::Unavailable(reason) => match dd_disabled(None, &text(i18n, tool.name()), None) {
+            DropdownEntry::Item(item) => DropdownEntry::Item(item.tooltip(text(i18n, reason))),
+            other => other,
+        },
+    };
+    let mut v: Vec<DropdownEntry<Message>> = Vec::new();
+    for tool in BoardPlaceTool::PLACE_MENU {
+        v.push(entry(tool));
+        if tool == BoardPlaceTool::TextString {
+            v.push(DropdownEntry::Header(text(i18n, menu_ids::MENU_PLACE_DIMENSION)));
+            v.extend(BoardPlaceTool::DIMENSION_MENU.into_iter().map(&entry));
+        }
+    }
     v.push(DropdownEntry::Separator);
     v.push(command("board_sketch"));
     v

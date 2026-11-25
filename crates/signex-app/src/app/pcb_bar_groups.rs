@@ -7,6 +7,8 @@
 
 use std::collections::BTreeMap;
 
+use signex_types::pcb_dimension_kind::DimensionKind;
+
 use crate::app::pcb_tools::BoardPlaceTool;
 
 /// A tool group of the PCB Active Bar, in the bar's order.
@@ -25,7 +27,7 @@ pub enum PcbBarGroup {
     /// that hold copper out of an area; then rooms, the areas a sheet's
     /// parts are placed in (#2457).
     CopperAreas,
-    /// Dimensions on the board.
+    /// Dimensions on the board, one row per kind (#2507).
     Dimensions,
     /// Board text.
     Text,
@@ -93,7 +95,13 @@ impl PcbBarGroup {
                 Command("repour_selected"),
                 Command("repour_all"),
             ],
-            Self::Dimensions => &[Tool(T::Dimension)],
+            // #2507: one row per dimension kind.
+            Self::Dimensions => &[
+                Tool(T::Dimension(DimensionKind::Aligned)),
+                Tool(T::Dimension(DimensionKind::Horizontal)),
+                Tool(T::Dimension(DimensionKind::Vertical)),
+                Tool(T::Dimension(DimensionKind::Radial)),
+            ],
             Self::Text => &[Tool(T::TextString)],
             Self::Graphics => &[
                 Tool(T::Line),
@@ -208,6 +216,7 @@ mod tests {
     fn every_place_tool_is_in_one_group() {
         let tools = BoardPlaceTool::PLACE_MENU
             .into_iter()
+            .chain(BoardPlaceTool::DIMENSION_MENU)
             .chain(BoardPlaceTool::GRAPHICS_MENU);
         for tool in tools {
             let groups = PcbBarGroup::ALL
@@ -259,8 +268,15 @@ mod tests {
         assert!(!last.remember(areas, "place_board_via"), "not this group's");
         assert_eq!(
             last.current(PcbBarGroup::Dimensions),
-            PcbBarRow::Tool(BoardPlaceTool::Dimension),
+            PcbBarRow::Tool(BoardPlaceTool::Dimension(DimensionKind::Aligned)),
             "#2373: Dimension is live"
+        );
+        // #2507: the Dimensions group follows the kind used last.
+        let mut kinds = PcbBarLastTools::default();
+        assert!(kinds.remember(PcbBarGroup::Dimensions, "place_board_dimension_radial"));
+        assert_eq!(
+            kinds.current(PcbBarGroup::Dimensions),
+            PcbBarRow::Tool(BoardPlaceTool::Dimension(DimensionKind::Radial))
         );
     }
 

@@ -225,7 +225,7 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
     assert!(all[0].tooltip.starts_with("Selection Filter"));
     assert!(all[4].tooltip.starts_with("Interactive Routing"));
     assert_eq!(all[5].tooltip, "Length Tuning");
-    assert!(all[8].tooltip.starts_with("Place Dimension"));
+    assert!(all[8].tooltip.starts_with("Place Aligned Dimension"), "#2507");
     assert!(all[9].tooltip.starts_with("Place String"));
 }
 

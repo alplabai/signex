@@ -234,6 +234,10 @@ mod board_pour_text_dimension_panel;
 // Properties, each one undo step and saved with the board.
 #[path = "regression/board_dimension_settings.rs"]
 mod board_dimension_settings;
+// #2507: aligned, linear and radial dimensions; a radial one follows its
+// arc in the same undo step.
+#[path = "regression/board_dimension_kinds.rs"]
+mod board_dimension_kinds;
 // #1312 PR 2: Back Annotate.
 #[path = "regression/back_annotate.rs"]
 mod back_annotate;

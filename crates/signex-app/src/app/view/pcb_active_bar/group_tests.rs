@@ -3,6 +3,7 @@
 use super::tests::{bar_of, board_app, button_for, buttons, entries, rows, runs};
 use super::*;
 use crate::app::pcb_bar_groups::PcbBarRow;
+use signex_types::pcb_dimension_kind::DimensionKind;
 
 /// The button whose right-click opens `group`'s dropdown.
 fn group_button_of(app: &Signex, group: PcbBarGroup) -> ActiveBarButton<Message> {
@@ -86,6 +87,23 @@ fn each_group_opens_its_dropdown_and_a_row_arms_its_tool() {
         (PcbBarGroup::Graphics, BoardPlaceTool::Line),
         (PcbBarGroup::Graphics, BoardPlaceTool::GraphicArc),
         (PcbBarGroup::Graphics, BoardPlaceTool::TextFrame),
+        // #2507: the Dimensions group, one row per kind.
+        (
+            PcbBarGroup::Dimensions,
+            BoardPlaceTool::Dimension(DimensionKind::Horizontal),
+        ),
+        (
+            PcbBarGroup::Dimensions,
+            BoardPlaceTool::Dimension(DimensionKind::Vertical),
+        ),
+        (
+            PcbBarGroup::Dimensions,
+            BoardPlaceTool::Dimension(DimensionKind::Radial),
+        ),
+        (
+            PcbBarGroup::Dimensions,
+            BoardPlaceTool::Dimension(DimensionKind::Aligned),
+        ),
     ];
     let mut app = board_app();
     for (group, tool) in cases {
@@ -184,15 +202,12 @@ fn a_tool_not_built_yet_is_a_greyed_row_with_its_reason() {
 }
 
 /// #2392, #2373: a group of one row is one button with no dropdown; the
-/// Dimensions and Text groups run their tool.
+/// Text group runs its tool. (Dimensions has a row per kind since #2507.)
 #[test]
 fn a_group_of_one_row_is_a_button_with_no_dropdown() {
     let app = board_app();
     let items = bar_of(&app);
-    for (group, reason) in [
-        (PcbBarGroup::Dimensions, "Place Dimension"),
-        (PcbBarGroup::Text, "Place String"),
-    ] {
+    for (group, reason) in [(PcbBarGroup::Text, "Place String")] {
         assert_eq!(group.rows().len(), 1, "{group:?}");
         let button = buttons(&items)
             .into_iter()
@@ -201,6 +216,28 @@ fn a_group_of_one_row_is_a_button_with_no_dropdown() {
         assert!(button.enabled, "{group:?} is live");
         assert!(button.on_right_press.is_none(), "{group:?} has no dropdown");
     }
+}
+
+/// #2507: the Dimensions group opens a dropdown of the dimension kinds,
+/// each live with the dimension glyph; the button starts on Aligned.
+#[test]
+fn the_dimensions_group_lists_the_dimension_kinds() {
+    let app = board_app();
+    let button = group_button_of(&app, PcbBarGroup::Dimensions);
+    assert!(button.tooltip.starts_with("Place Aligned Dimension"));
+    assert!(runs(&button, "place_board_dimension"));
+    let kinds = rows(&app, PcbBarMenu::Group(PcbBarGroup::Dimensions));
+    let labels: Vec<&str> = kinds.iter().map(|row| row.label.as_str()).collect();
+    assert_eq!(
+        labels,
+        [
+            "Aligned Dimension",
+            "Linear Horizontal Dimension",
+            "Linear Vertical Dimension",
+            "Radial Dimension",
+        ]
+    );
+    assert!(kinds.iter().all(|row| !row.disabled && row.icon.is_some()));
 }
 
 /// #2392: a tool armed from the Place menu (or a key, or the palette) is

@@ -54,8 +54,9 @@ pub const SNXPCB_FORMAT_V1_9: &str = "snxpcb/1.9";
 pub const SNXPCB_FORMAT_V1_10: &str = "snxpcb/1.10";
 
 /// Written when the board has a pour cutout (`[[pour_cutouts]]`, #2871), a
-/// dimension with a non-default look ([`super::board_uses_dimension_style`],
-/// #2868), DECISIONS 2026-11-24, or drawn copper: a board drawing or string
+/// dimension with a non-default look or a kind other than aligned
+/// ([`super::board_uses_dimension_style`], #2868, #2507), DECISIONS
+/// 2026-11-24, or drawn copper: a board drawing or string
 /// on a copper layer ([`super::board_has_drawn_copper`], #2883), DECISIONS
 /// 2026-11-25. A build that knows only 1.10 would drop the look keys on
 /// save, has never seen a cutout and does not count drawn copper as copper,

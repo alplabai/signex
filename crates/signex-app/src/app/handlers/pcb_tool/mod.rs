@@ -405,7 +405,7 @@ impl Signex {
             BoardPlaceTool::TextString => self.string_clicked(at),
             BoardPlaceTool::Pad => self.pad_clicked(at),
             BoardPlaceTool::Arc => self.arc_clicked(at),
-            BoardPlaceTool::Dimension => self.dimension_clicked(at),
+            BoardPlaceTool::Dimension(kind) => self.dimension_clicked(kind, at),
             BoardPlaceTool::PourCutout => self.pour_cutout_clicked(at),
             BoardPlaceTool::SlicePour => self.slice_pour_clicked(at),
             BoardPlaceTool::Fill
@@ -483,7 +483,7 @@ impl Signex {
                 self.router_preview(session, &mut preview);
             }
             BoardPlaceTool::TextString => self.string_preview(cursor, &mut preview),
-            BoardPlaceTool::Pad | BoardPlaceTool::Arc | BoardPlaceTool::Dimension => {
+            BoardPlaceTool::Pad | BoardPlaceTool::Arc | BoardPlaceTool::Dimension(_) => {
                 self.free_preview(session, board, cursor, &mut preview);
             }
             BoardPlaceTool::PourCutout | BoardPlaceTool::SlicePour => {

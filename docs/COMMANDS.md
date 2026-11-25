@@ -409,7 +409,10 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_board_arc` | Draw an arc on the active layer | place | — | — |
 | `place_board_circle` | Draw a full circle by its centre and a point on it on the active layer | place | — | — |
 | `place_board_diff_pair` | Route a differential pair side by side at its coupled width and gap, around other nets | place | — | — |
-| `place_board_dimension` | Place a linear dimension on the board | place | — | — |
+| `place_board_dimension` | Place an aligned dimension on the board, measured along its two points | place | — | — |
+| `place_board_dimension_horizontal` | Place a linear dimension on the board, measured across | place | — | — |
+| `place_board_dimension_radial` | Place a radial dimension on an arc or circle of the board | place | — | — |
+| `place_board_dimension_vertical` | Place a linear dimension on the board, measured up or down | place | — | — |
 | `place_board_fill` | Place a rectangle of solid copper on the active copper layer | place | `P F` | — |
 | `place_board_graphic_arc` | Draw an arc by its centre, start and end on the active layer, as a track arc on copper | place | — | — |
 | `place_board_keepout` | Draw a keepout that keeps copper off a layer | place | `P K` | `K` |

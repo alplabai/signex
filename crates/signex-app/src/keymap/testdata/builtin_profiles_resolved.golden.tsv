@@ -294,6 +294,9 @@ signex_standard	hint	-	-	edit_no_erc_rules
 signex_standard	hint	-	-	place_board_arc
 signex_standard	hint	-	-	place_board_string
 signex_standard	hint	-	-	place_board_dimension
+signex_standard	hint	-	-	place_board_dimension_horizontal
+signex_standard	hint	-	-	place_board_dimension_vertical
+signex_standard	hint	-	-	place_board_dimension_radial
 signex_standard	hint	-	-	place_board_line
 signex_standard	hint	-	-	place_board_graphic_arc
 signex_standard	hint	-	-	place_board_circle
@@ -834,6 +837,9 @@ classic	hint	-	-	edit_no_erc_rules
 classic	hint	-	-	place_board_arc
 classic	hint	-	-	place_board_string
 classic	hint	-	-	place_board_dimension
+classic	hint	-	-	place_board_dimension_horizontal
+classic	hint	-	-	place_board_dimension_vertical
+classic	hint	-	-	place_board_dimension_radial
 classic	hint	-	-	place_board_line
 classic	hint	-	-	place_board_graphic_arc
 classic	hint	-	-	place_board_circle
