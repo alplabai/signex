@@ -115,6 +115,16 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("diff_pair_class", OperandKind::Text),
     ("via_hole", OperandKind::Text),
     ("current", OperandKind::Text),
+    // The board's teardrop rule and a pad's own setting (PCB Routing).
+    ("pads", OperandKind::Bool),
+    ("vias", OperandKind::Bool),
+    ("width_share", OperandKind::Text),
+    ("length_share", OperandKind::Text),
+    ("teardrop", OperandKind::Text),
+    // A pour's fill priority and island removal (#2216).
+    ("priority", OperandKind::Text),
+    ("islands_below", OperandKind::Text),
+    ("dead_copper", OperandKind::Bool),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

@@ -196,6 +196,11 @@ mod tests {
                 "set_object_transparency",
                 "set_object_visible",
                 "set_pad_shape",
+                // The board's teardrop rule, a pad's own teardrop setting
+                // and a pour's fill rules, on the named board.
+                "set_pad_teardrop",
+                "set_pour_properties",
+                "set_teardrop_rule",
                 "set_via_span",
                 "show_drc_violation",
                 "show_layer_group",

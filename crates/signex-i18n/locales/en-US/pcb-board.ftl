@@ -160,6 +160,10 @@ pcb-board-grid-new-name = Grid { $number }
 pcb-board-options-undo = Board options
 # $why says why a board option was not changed.
 pcb-board-options-refused = Board option not changed: { $why }
+# The undo step of the board's teardrop rule (`set_teardrop_rule`).
+pcb-board-teardrop-rule-undo = Teardrop rule
+# The undo step of a pad's own teardrop setting (`set_pad_teardrop`).
+pcb-board-pad-teardrop-undo = Pad teardrop
 
 # Guide Manager: lines on the board that snapping can follow.
 pcb-board-section-guides = Guide Manager

@@ -11,6 +11,7 @@ pub use operands::{MAX_TARGETS, Operand, OperandKind};
 mod annotate;
 mod arrange;
 mod board;
+mod board_rule_operands;
 mod categories;
 mod clipboard;
 mod closest;

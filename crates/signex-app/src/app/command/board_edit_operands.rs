@@ -25,16 +25,16 @@ use crate::panels::pcb_primitive_properties::parse_number;
 
 type Ran = (CommandOutcome, Task<Message>);
 
-fn refused(reason: impl Into<String>) -> Ran {
+pub(super) fn refused(reason: impl Into<String>) -> Ran {
     (CommandOutcome::disabled(reason), Task::none())
 }
 
-fn answered(value: serde_json::Value) -> Ran {
+pub(super) fn answered(value: serde_json::Value) -> Ran {
     (CommandOutcome::Answered(value), Task::none())
 }
 
 /// The path of the open board `args` names.
-fn named_board(app: &Signex, args: &CommandArgs, what: &str) -> Result<PathBuf, String> {
+pub(super) fn named_board(app: &Signex, args: &CommandArgs, what: &str) -> Result<PathBuf, String> {
     let Some(OperandValue::Document(target)) = args.operand("document") else {
         return Err(format!("{what} needs the operand `document`"));
     };
@@ -54,7 +54,7 @@ fn named_board(app: &Signex, args: &CommandArgs, what: &str) -> Result<PathBuf, 
     }
 }
 
-fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
+pub(super) fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
     match args.operand(name) {
         Some(OperandValue::Text(text)) => Some(text.as_str()),
         _ => None,
@@ -62,13 +62,13 @@ fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
 }
 
 /// `ids`: the items, as the operand parser read them.
-fn uuids(args: &CommandArgs) -> Result<Vec<Uuid>, &'static str> {
+pub(super) fn uuids(args: &CommandArgs) -> Result<Vec<Uuid>, &'static str> {
     args.targets("ids")
         .map(<[Uuid]>::to_vec)
         .ok_or("the operand `ids` is needed")
 }
 
-fn board<'a>(app: &'a Signex, path: &std::path::Path) -> Option<&'a PcbBoard> {
+pub(super) fn board<'a>(app: &'a Signex, path: &std::path::Path) -> Option<&'a PcbBoard> {
     app.document_state.pcb_board(path)
 }
 
