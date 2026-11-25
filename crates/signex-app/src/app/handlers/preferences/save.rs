@@ -24,6 +24,10 @@ impl Signex {
         self.ui_state.edge_pan = self.ui_state.preferences_draft_edge_pan;
         // Repainted by `sync_theme` below: the canvas colours carry it.
         self.ui_state.symbol_body_fill = self.ui_state.preferences_draft_symbol_body_fill;
+        // #1294: the canvases redraw their parts with or without the cross.
+        self.ui_state.cross_out_not_fitted = self.ui_state.preferences_draft_cross_out_not_fitted;
+        self.refresh_canvas_not_fitted();
+        self.refresh_window_not_fitted();
         // #2868: the next dimension placed starts from these.
         self.ui_state.pcb_dimension_defaults =
             self.ui_state.preferences_pcb_defaults.defaults.clone();

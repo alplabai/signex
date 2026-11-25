@@ -369,6 +369,33 @@ pub fn write_symbol_body_fill_pref_at(path: &Path, fill: crate::symbol_fill_pref
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Cross out not-fitted parts (#1294)
+// ──────────────────────────────────────────────────────────────────────────
+
+/// The `prefs.json` key of "Cross out not-fitted parts".
+pub const CROSS_OUT_NOT_FITTED_KEY: &str = "cross_out_not_fitted";
+
+/// Read "Cross out not-fitted parts". Defaults to on when the key is missing
+/// or not a boolean.
+pub fn read_cross_out_not_fitted_pref_from(json: Option<&serde_json::Value>) -> bool {
+    json.and_then(|json| json[CROSS_OUT_NOT_FITTED_KEY].as_bool())
+        .unwrap_or(true)
+}
+
+pub fn write_cross_out_not_fitted_pref(enabled: bool) {
+    write_cross_out_not_fitted_pref_at(&prefs_path(), enabled)
+}
+
+pub fn write_cross_out_not_fitted_pref_at(path: &Path, enabled: bool) {
+    update_prefs_json(path, CROSS_OUT_NOT_FITTED_KEY, |prefs| {
+        prefs.insert(
+            CROSS_OUT_NOT_FITTED_KEY.to_string(),
+            serde_json::json!(enabled),
+        );
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // PCB Defaults: what a new board dimension starts from (#2868)
 // ──────────────────────────────────────────────────────────────────────────
 

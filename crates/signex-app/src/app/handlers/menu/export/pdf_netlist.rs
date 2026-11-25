@@ -70,6 +70,7 @@ impl Signex {
         options.net_class_styles =
             super::class_styles::export_class_styles(&self.document_state, &source, &ctx);
         options.schematic_defaults = self.document_state.schematic_defaults_for(&source);
+        options.draw_not_fitted = self.ui_state.cross_out_not_fitted;
         // Human-consumed deliverable: a partial PDF beats a refusal — the
         // user may well be printing or reviewing mid-refactor with a child
         // file genuinely absent from disk. So this degrades rather than

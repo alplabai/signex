@@ -227,6 +227,9 @@ preferences-symbol-body-fill-help = When on, the closed rectangles, polygons and
 # Label of the swatch: the colour symbol bodies are filled with.
 preferences-symbol-body-fill-colour = Fill color
 preferences-symbol-body-fill-colour-help = A soft tint of the theme unless you pick a color. Reset to Default goes back to the theme's tint.
+# A part marked DNP, or not fitted in the active variant.
+preferences-cross-out-not-fitted = Cross out not-fitted parts
+preferences-cross-out-not-fitted-help = When on, a part marked DNP or not fitted in the active variant is drawn greyed with a cross over its body: on the canvas and in PDF, SVG and print, where the printed variant decides. Its designator and value stay as they are.
 
 # prefs-rules-library
 # Beside the On / Off control of the rule whose severity the pin connection
