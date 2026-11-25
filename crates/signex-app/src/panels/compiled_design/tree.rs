@@ -217,8 +217,11 @@ fn sheet_row<'a>(
             }
         });
     // Ctrl+click (Cmd on macOS) opens the source sheet on Editor (#2658).
-    let button: CommandPress<'a, PanelMsg> =
-        CommandPress::new(button, msg(CompiledDesignMsg::RowSourceClicked(r.index)));
+    let button: Element<'a, PanelMsg> = CommandPress::new(
+        button.boxed(),
+        msg(CompiledDesignMsg::RowSourceClicked(r.index)),
+    )
+    .boxed();
     let body: Element<'a, PanelMsg> = match tip {
         Some(tip) => signex_widgets::tooltip(
             button,

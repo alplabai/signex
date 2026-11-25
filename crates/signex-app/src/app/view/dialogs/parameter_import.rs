@@ -99,7 +99,8 @@ impl Signex {
         let i18n = self.ui_state.i18n.as_ref();
         let r = tokens::resolve(&self.document_state.panel_ctx.tokens);
         let sheet = shown_name(&state.sheet);
-        let mut content: Column<'a, Message> = column![].spacing(SP.m).height(Length::Fill);
+        let mut content: Column<Element<'a, Message>> =
+            column![].spacing(SP.m).height(Length::Fill);
         if plan.changes.is_empty() {
             content = content.push(
                 text(t!(i18n, ids::PARAMETER_IO_PREVIEW_NOTHING, "sheet" => sheet)).size(TS.body),
@@ -160,7 +161,7 @@ impl Signex {
             ..container::Style::default()
         });
         let user = |s: &str| text(UserText::new(s.to_string())).size(TS.body);
-        let mut rows: Column<'a, Message> = column![].width(Length::Fill);
+        let mut rows: Column<Element<'a, Message>> = column![].width(Length::Fill);
         for change in changes {
             let before = match &change.before {
                 Some(value) => user(value).color(r.ink3).boxed(),

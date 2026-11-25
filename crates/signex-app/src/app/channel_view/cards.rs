@@ -110,7 +110,12 @@ fn card<'a>(
     .align_y(Alignment::Center);
     if let Some(pill) = fit::pill(ctx, view, tab) {
         header = header
-            .push(Space::new().width(Length::Fill).height(Length::Shrink))
+            .push(
+                Space::new()
+                    .width(Length::Fill)
+                    .height(Length::Shrink)
+                    .boxed(),
+            )
             .push(pill)
             .width(Length::Fill);
     }
