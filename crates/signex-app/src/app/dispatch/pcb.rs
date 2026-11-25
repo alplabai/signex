@@ -60,9 +60,9 @@ impl Signex {
                 // From the bar, Place, a key or the palette alike, the
                 // tool's bar group shows it next (#2392).
                 let group = crate::app::pcb_bar_groups::PcbBarGroup::of_tool(tool);
-                let remembered = match (group, tool.command()) {
-                    (Some(group), Some(command)) => self.remember_pcb_bar_row(group, command),
-                    _ => Task::none(),
+                let remembered = match group {
+                    Some(group) => self.remember_pcb_bar_row(group, tool.command()),
+                    None => Task::none(),
                 };
                 Task::batch([form, remembered])
             }

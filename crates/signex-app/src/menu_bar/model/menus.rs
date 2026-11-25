@@ -3,11 +3,11 @@
 
 use super::items::{
     cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, header, item, item_if,
-    item_if_command, item_named, panel_item, placeholder, submenu, unavailable, with_icon,
+    item_if_command, item_named, panel_item, submenu, unavailable, with_icon,
 };
 use super::{MenuEntry, MenuIcon, MenuMessage};
 use crate::app::command::enablement::{new_part_menu_enabled, remove_part_menu_enabled};
-use crate::app::pcb_tools::{BoardPlaceTool, ToolState};
+use crate::app::pcb_tools::BoardPlaceTool;
 use crate::app::update_pcb::PcbSyncLabel;
 use crate::menu_bar::{MenuContext, enabled};
 use crate::panels::PanelKind;
@@ -334,21 +334,20 @@ pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
 }
 
 /// Place on a board: the board placement tools, each running the command its
-/// PCB Active Bar button runs, or greyed with the reason the bar gives while
-/// the board editor cannot run it (one table, #2352, #2373), with the
+/// PCB Active Bar button runs (one table, #2352, #2373, #2505), with the
 /// Dimension submenu of the dimension kinds after String (#2507), the
 /// Graphics submenu of drawings on non-copper layers (#2424), then Board
 /// Sketch, which draws the outline, cutouts and keepouts.
 fn board_place(ctx: &MenuContext) -> Vec<MenuEntry> {
-    let row = |tool: BoardPlaceTool| match tool.state() {
-        ToolState::Live(id) => cmd_item_gated(ctx, cmd(id, "")),
-        ToolState::Unavailable(reason) => placeholder(ctx, tool.name(), reason),
-    };
+    let row = |tool: BoardPlaceTool| cmd_item_gated(ctx, cmd(tool.command(), ""));
     let mut rows: Vec<MenuEntry> = Vec::new();
     for tool in BoardPlaceTool::PLACE_MENU {
         rows.push(row(tool));
         if tool == BoardPlaceTool::TextString {
-            let kinds = BoardPlaceTool::DIMENSION_MENU.into_iter().map(row).collect();
+            let kinds = BoardPlaceTool::DIMENSION_MENU
+                .into_iter()
+                .map(row)
+                .collect();
             rows.push(submenu(ctx, menu_ids::MENU_PLACE_DIMENSION, kinds));
         }
     }

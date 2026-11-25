@@ -408,6 +408,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `panelize_board` | Array the board into a manufacturing panel | pcb | — | — |
 | `place_board_arc` | Draw an arc on the active layer | place | — | — |
 | `place_board_circle` | Draw a full circle by its centre and a point on it on the active layer | place | — | — |
+| `place_board_component` | Pick a library part and place its footprint on the board | place | — | — |
 | `place_board_diff_pair` | Route a differential pair side by side at its coupled width and gap, around other nets | place | — | — |
 | `place_board_dimension` | Place an aligned dimension on the board, measured along its two points | place | — | — |
 | `place_board_dimension_horizontal` | Place a linear dimension on the board, measured across | place | — | — |

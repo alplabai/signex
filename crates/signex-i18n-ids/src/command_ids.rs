@@ -578,6 +578,8 @@ define_ids! {
         CMD_MENU_IMPORT_DXF = "cmd-menu-import-dxf";
         CMD_IMPORT_DXF_OUTLINE = "cmd-import-dxf-outline";
         CMD_MENU_IMPORT_DXF_OUTLINE = "cmd-menu-import-dxf-outline";
+        CMD_PLACE_BOARD_COMPONENT = "cmd-place-board-component";
+        CMD_MENU_PLACE_BOARD_COMPONENT = "cmd-menu-place-board-component";
         CMD_PLACE_BOARD_PAD = "cmd-place-board-pad";
         CMD_MENU_PLACE_BOARD_PAD = "cmd-menu-place-board-pad";
         CMD_PLACE_BOARD_ARC = "cmd-place-board-arc";

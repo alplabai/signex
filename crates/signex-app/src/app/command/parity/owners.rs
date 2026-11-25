@@ -441,6 +441,7 @@ const MENU_SESSION: &[&str] = &[
     "paste_array",
     "place_aligned_dimension",
     "place_blanket",
+    "place_board_component",
     "place_bus",
     "place_bus_entry",
     "place_compile_mask",

@@ -227,8 +227,9 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "mirror_x" => Message::Edit(EditMsg::MirrorSelectedY),
         "mirror_y" => Message::Edit(EditMsg::MirrorSelectedX),
         "flip_selection" => Message::Edit(EditMsg::FlipSelection),
-        // No part in hand: choose one in the picker (#1767).
-        "open_components_panel" | "place_symbol" => {
+        // No part in hand: choose one in the picker (#1767). On a board the
+        // pick goes on the cursor as its footprint (#2505).
+        "open_components_panel" | "place_symbol" | "place_board_component" => {
             Message::Library(crate::library::LibraryMessage::OpenPicker)
         }
         "new_document" | "new_project_with_profile" => Message::Menu(MenuMessage::NewProject),

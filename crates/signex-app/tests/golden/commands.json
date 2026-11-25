@@ -1025,6 +1025,11 @@
     "category": "place"
   },
   {
+    "id": "place_board_component",
+    "group": "Pcb",
+    "category": "place"
+  },
+  {
     "id": "place_board_diff_pair",
     "group": "Pcb",
     "category": "place"

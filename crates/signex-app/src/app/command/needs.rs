@@ -552,6 +552,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_board_route"
         // #2457: a room by two corners.
         | "place_board_room"
+        // #2505: a library part's footprint, from the part picker.
+        | "place_board_component"
         // #2373: free pads, arcs, strings and dimensions.
         | "place_board_pad"
         | "place_board_arc"

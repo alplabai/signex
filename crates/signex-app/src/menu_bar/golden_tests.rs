@@ -317,6 +317,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     // #2410: File ▸ Import, fixture names only.
     ("import_dxf", "ImportDxf"),
     ("import_dxf_outline", "ImportDxfOutline"),
+    // #2505: Place ▸ Component on a board, fixture name only.
+    ("place_board_component", "PlaceBoardComponent"),
     ("place_board_pad", "PlaceBoardPad"),
     ("place_board_arc", "PlaceBoardArc"),
     ("place_board_string", "PlaceBoardString"),
@@ -566,8 +568,8 @@ fn row_path(cols: &str) -> &str {
 
 const PLACE_BOARD_GOLDEN: &str = include_str!("testdata/menu_bar_place_board.golden.tsv");
 
-/// #2360: Place on a board lists the board's tools, greyed with the PCB
-/// Active Bar's reason, then Board Sketch, live.
+/// #2360, #2505: Place on a board lists the board's tools, each live, then
+/// Board Sketch.
 #[test]
 fn model_reproduces_golden_board_place_menu() {
     let ctxs = variants();

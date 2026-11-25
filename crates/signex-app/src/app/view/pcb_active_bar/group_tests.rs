@@ -107,7 +107,7 @@ fn each_group_opens_its_dropdown_and_a_row_arms_its_tool() {
     ];
     let mut app = board_app();
     for (group, tool) in cases {
-        let command = tool.command().expect("a live tool");
+        let command = tool.command();
         let _ = pick_from_group(&mut app, group, command);
         assert_eq!(armed(&app), Some(tool), "{command} arms its tool");
         assert!(runs(&group_button_of(&app, group), command), "{command}");
@@ -133,7 +133,8 @@ fn a_group_is_drawn_selected_while_its_tool_is_armed() {
 }
 
 /// #2392: the Components group lists Component and Change Footprint; the
-/// swap is greyed by its menu gate while nothing is selected.
+/// swap is greyed by its menu gate while nothing is selected, and Component
+/// is live (#2505).
 #[test]
 fn the_components_group_lists_the_part_rows() {
     let app = board_app();
@@ -141,6 +142,8 @@ fn the_components_group_lists_the_part_rows() {
     let rows = rows(&app, PcbBarMenu::Group(PcbBarGroup::Components));
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].label, "Component");
+    assert_eq!(rows[0].command_id, Some("place_board_component"));
+    assert!(!rows[0].disabled, "#2505: Component runs on a board");
     assert_eq!(rows[1].command_id, Some("change_footprint"));
     assert!(rows[1].disabled, "nothing is selected");
 }
@@ -180,25 +183,27 @@ fn the_route_and_tune_groups_list_their_rows() {
     ));
 }
 
-/// #2392: a row whose tool is not built yet is greyed, runs nothing, and
-/// its tooltip says why, the reason Place on a board gives.
+/// #2505: the Component row was greyed "Place Component: not available on
+/// boards yet". It now opens the part picker, arms no click tool and stays
+/// the group's button, which says what it places.
 #[test]
-fn a_tool_not_built_yet_is_a_greyed_row_with_its_reason() {
-    let app = board_app();
-    // #2373: Pad and Arc are live; Component is the tool still to build.
-    let cases = [(PcbBarGroup::Components, "Component", "Place Component")];
-    for (group, label, reason) in cases {
-        let row = rows(&app, PcbBarMenu::Group(group))
-            .into_iter()
-            .find(|row| row.label == label)
-            .unwrap_or_else(|| panic!("a {label} row"));
-        assert!(row.disabled && row.on_press.is_none(), "{label}");
-        assert_eq!(
-            row.tooltip.as_deref(),
-            Some(format!("{reason}: not available on boards yet").as_str())
-        );
-        assert!(row.icon.is_some(), "{label} has an icon");
-    }
+fn the_component_row_opens_the_part_picker() {
+    let mut app = board_app();
+    let _ = pick_from_group(&mut app, PcbBarGroup::Components, "place_board_component");
+    assert!(app.library.picker.is_some(), "the picker opened");
+    assert_eq!(armed(&app), None, "no click tool");
+    let button = group_button_of(&app, PcbBarGroup::Components);
+    assert!(runs(&button, "place_board_component"));
+    assert!(
+        button.tooltip.starts_with("Place Component"),
+        "{}",
+        button.tooltip
+    );
+    let row = rows(&app, PcbBarMenu::Group(PcbBarGroup::Components))
+        .into_iter()
+        .find(|row| row.label == "Component")
+        .expect("a Component row");
+    assert!(row.icon.is_some(), "Component has an icon");
 }
 
 /// #2392, #2373: a group of one row is one button with no dropdown; the
@@ -387,8 +392,8 @@ fn a_group_dropdown_puts_its_commands_below_a_separator() {
     let parts = entries(&app, PcbBarMenu::Group(PcbBarGroup::Components));
     assert_eq!(
         shape(&parts),
-        "H.-*",
-        "Change Footprint is what the button shows while Component cannot run"
+        "H*-.",
+        "#2505: Component is what the button shows"
     );
     for group in [PcbBarGroup::Route, PcbBarGroup::Tune, PcbBarGroup::Graphics] {
         let menu = entries(&app, PcbBarMenu::Group(group));

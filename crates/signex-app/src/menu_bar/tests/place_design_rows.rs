@@ -62,6 +62,19 @@ fn component_opens_the_part_picker() {
     );
 }
 
+/// #2505: on a board, Place ▸ Component was greyed "not available on boards
+/// yet"; it now opens the same part picker and arms no click tool. The pick
+/// goes on the cursor: `regression::board_place_component`.
+#[test]
+fn component_on_a_board_opens_the_part_picker() {
+    let mut app = loaded_board_app();
+    assert!(row_is_live(&app, "Place/Component"));
+    let _ = click(&mut app, "Place/Component");
+    assert!(app.library.picker.is_some(), "the picker opened");
+    assert!(app.interaction_state.pcb_tool.is_none(), "no tool");
+    assert!(app.interaction_state.pcb_carry.is_none(), "no part yet");
+}
+
 #[test]
 fn power_port_arms_the_gnd_port() {
     let mut app = one_symbol_selected();
@@ -465,9 +478,9 @@ fn place_rows(app: &Signex) -> Vec<MenuItem> {
         .collect()
 }
 
-/// #2360, #2373: on a board, Place lists the board's tools. A live tool runs
-/// its command, the ones the board editor cannot run yet are greyed with the
-/// PCB Active Bar's reason, and Board Sketch runs its command.
+/// #2360, #2373, #2505: on a board, Place lists the board's tools. Each is
+/// live and runs the command its PCB Active Bar button runs, Component
+/// included, and Board Sketch runs its command.
 #[test]
 fn place_on_a_board_lists_the_boards_tools() {
     let mut app = loaded_board_app();
@@ -502,32 +515,26 @@ fn place_on_a_board_lists_the_boards_tools() {
     );
     let tools = crate::app::pcb_tools::BoardPlaceTool::PLACE_MENU;
     for (row, tool) in rows[..tools.len()].iter().zip(tools) {
-        if let Some(command) = tool.command() {
-            // #2373: a live tool runs the command its Active Bar button runs.
-            assert!(row.is_enabled(), "{} is live", row.label);
-            assert!(matches!(
-                row.dispatches(),
-                Some(crate::menu_bar::MenuMessage::Command(id)) if id.as_str() == command
-            ));
-            continue;
-        }
-        let ItemState::Placeholder {
-            reason: Some(reason),
-        } = &row.state
-        else {
-            panic!("{} is not greyed with a reason", row.label);
-        };
-        assert!(!row.is_enabled());
-        assert!(
-            reason.ends_with(": not available on boards yet"),
-            "{reason}"
-        );
+        // #2373: a tool runs the command its Active Bar button runs.
+        let command = tool.command();
+        assert!(row.is_enabled(), "{} is live", row.label);
+        assert!(matches!(
+            row.dispatches(),
+            Some(crate::menu_bar::MenuMessage::Command(id)) if id.as_str() == command
+        ));
     }
+    // #2505: Component was the last tool greyed "not available on boards
+    // yet"; no row is a placeholder now.
+    assert!(
+        !rows
+            .iter()
+            .any(|row| matches!(row.state, ItemState::Placeholder { .. })),
+        "no greyed placeholder row"
+    );
     let live: Vec<&MenuItem> = rows.iter().filter(|row| row.is_enabled()).collect();
-    let live_tools = tools.iter().filter(|tool| tool.command().is_some()).count();
-    assert_eq!(live.len(), 1 + live_tools);
+    assert_eq!(live.len(), 1 + tools.len());
     assert!(matches!(
-        live[live_tools].dispatches(),
+        live[tools.len()].dispatches(),
         Some(crate::menu_bar::MenuMessage::Command(id)) if id.as_str() == "board_sketch"
     ));
     let _ = click(&mut app, "Place/Board Sketch");

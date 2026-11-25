@@ -139,13 +139,13 @@ impl BoardToolSession {
 
 impl Signex {
     /// Arm `tool` on the board in view, ending a Move, paste or part on the
-    /// cursor and a net pick. Nothing without a board in view or for a tool
-    /// with no command yet.
+    /// cursor and a net pick. Nothing without a board in view, or for
+    /// Component, which puts a picked part on the cursor instead (#2505).
     pub(crate) fn arm_board_tool(&mut self, tool: BoardPlaceTool) {
         let Some(path) = self.active_tab_path().filter(|_| self.has_active_pcb()) else {
             return;
         };
-        if tool.command().is_none() {
+        if tool == BoardPlaceTool::Component {
             return;
         }
         self.end_pcb_carry();

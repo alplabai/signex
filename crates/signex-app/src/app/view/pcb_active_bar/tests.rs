@@ -1,7 +1,6 @@
 use uuid::Uuid;
 
 use super::*;
-use crate::app::pcb_tools::ToolState;
 
 /// The button that runs `command` on a click.
 pub(super) fn button_for<'a>(
@@ -143,8 +142,8 @@ fn the_pcb_bar_button_is_named_and_drawn_as_board_sketch() {
 /// Align | Components | Route, Tune, Via/Pad, Copper Areas | Dimensions,
 /// Text, Graphics | Board Sketch | View; no Copper Drawing group, as the
 /// Graphics Line and Arc draw tracks on copper (#2869). Fabrication Outputs
-/// is not on the bar (Caner, 2026-11-21). A group with a live row runs it; a
-/// group with none is greyed with a tooltip that says it is not on boards yet.
+/// is not on the bar (Caner, 2026-11-21). Every group runs its row; since
+/// #2505 no button is greyed as not on boards yet.
 #[test]
 fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
     let items = pcb_bar_items(
@@ -196,9 +195,10 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
     );
     assert!(runs(all[1], "move_object"), "Move follows the filter");
     assert!(
-        runs(all[3], "change_footprint"),
-        "Component is not live yet"
+        runs(all[3], "place_board_component"),
+        "#2505: Component heads its group"
     );
+    assert!(all[3].tooltip.starts_with("Place Component"));
     assert!(runs(all[4], "place_board_route"));
     assert!(runs(all[5], "tune_net_length"), "#2389: Tune follows Route");
     assert!(runs(all[6], "place_board_via"), "#2373: Via is live");
@@ -229,9 +229,9 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
     assert!(all[9].tooltip.starts_with("Place String"));
 }
 
-/// #2352 / #2360 / #2392: every tool the Place menu greys on a board is
-/// greyed on the bar too, as a button or a dropdown row, with the same
-/// reason, and the bar greys nothing else for that reason.
+/// #2352 / #2360 / #2392: the bar greys a tool with a reason exactly when the
+/// Place menu does. Since #2505 every Place tool runs on a board, so no
+/// button or dropdown row of the bar is greyed with a reason.
 #[test]
 fn the_bar_greys_the_place_menus_board_tools() {
     let app = board_app();
@@ -256,17 +256,8 @@ fn the_bar_greys_the_place_menus_board_tools() {
                 .filter_map(|row| row.tooltip),
         );
     }
-    greyed.sort();
-    greyed.dedup();
-    let mut place: Vec<String> = BoardPlaceTool::PLACE_MENU
-        .iter()
-        .filter_map(|tool| match tool.state() {
-            ToolState::Unavailable(reason) => Some(t!(&i18n, reason).into_string()),
-            ToolState::Live(_) => None,
-        })
-        .collect();
-    place.sort();
-    assert_eq!(greyed, place);
+    // The Place side: `place_on_a_board_lists_the_boards_tools`.
+    assert!(greyed.is_empty(), "greyed with a reason: {greyed:?}");
 }
 
 /// #2352: Move arms the board's click-to-click move, as Edit ▸ Move does.

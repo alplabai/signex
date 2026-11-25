@@ -424,17 +424,20 @@ fn the_board_place_flyout_runs_the_tools_and_greys_them_when_read_only() {
     assert!(runs(row_message(&place, "Via"), "place_board_via"));
     assert!(runs(row_message(&place, "Keepout"), "place_board_keepout"));
     assert!(runs(row_message(&place, "Board Sketch"), "board_sketch"));
-    // A tool the board editor cannot run yet is greyed, with its reason.
-    // Pad is live since #2373; Component is still greyed.
+    // Pad is live since #2373; Component, greyed "not available on boards
+    // yet" before, opens the part picker since #2505.
     assert!(runs(row_message(&place, "Pad"), "place_board_pad"));
-    assert!(row_message(&place, "Component").is_none());
+    assert!(runs(
+        row_message(&place, "Component"),
+        "place_board_component"
+    ));
     let read_only = board_ctx(PcbTargets {
         shown: true,
         read_only: true,
         ..PcbTargets::default()
     });
     let place = board_place_entries(i18n, &read_only, &hint);
-    for label in ["Via", "Track", "Keepout", "Board Sketch"] {
+    for label in ["Component", "Via", "Track", "Keepout", "Board Sketch"] {
         assert!(disabled_of(&place, label), "{label}");
     }
 }

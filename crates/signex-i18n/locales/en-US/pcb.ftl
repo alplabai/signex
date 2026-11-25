@@ -150,9 +150,9 @@ pcb-bar-move-tooltip = Move (right-click for the move and transform menu)
 pcb-bar-filter-tooltip = Selection Filter (click for the object kinds a click or box picks)
 # Tooltip of the PCB Active Bar's Align button (#2373).
 pcb-bar-align-tooltip = Align (click for the align and distribute menu)
-# Tooltips of the PCB Active Bar's greyed buttons: tools the board editor
-# cannot run yet (#2352).
-pcb-bar-component-unavailable = Place Component: not available on boards yet
+# Tooltip of the PCB Active Bar's Component row (#2505): it opens the part
+# picker and the pick goes on the cursor.
+pcb-bar-component-tooltip = Place Component (pick a part; Space turns it, L flips it to the other side)
 # The badge on the Selection Filter button: how many object kinds are off
 # (mockup row 108). There is no badge while every kind is on.
 pcb-bar-filter-off-count = { $count }
@@ -169,8 +169,7 @@ pcb-bar-group =
         [text] Text
        *[graphics] Graphics
     }
-# Rows of the Place menu on a board (#2360). The ones the board editor cannot
-# run yet are greyed, with the tooltip above as the reason.
+# Rows of the Place menu on a board (#2360).
 pcb-tool-component = Component
 pcb-tool-pad = Pad
 pcb-tool-via = Via

@@ -204,6 +204,7 @@ place_aligned_dimension	Schematic	f8bd7a5cb84e915b
 place_blanket	Schematic	f8bd7a5cb84e915b
 place_board_arc	EditablePcb	bd0dadc1f2af5e61
 place_board_circle	EditablePcb	bd0dadc1f2af5e61
+place_board_component	EditablePcb	bd0dadc1f2af5e61
 place_board_diff_pair	EditablePcb	bd0dadc1f2af5e61
 place_board_dimension	EditablePcb	bd0dadc1f2af5e61
 place_board_dimension_horizontal	EditablePcb	bd0dadc1f2af5e61

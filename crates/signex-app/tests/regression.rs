@@ -194,6 +194,9 @@ mod pcb_drag_follow;
 // #2364: a component placed from the Components panel onto a board.
 #[path = "regression/board_part_place.rs"]
 mod board_part_place;
+// #2505: Place ▸ Component on a board opens the part picker.
+#[path = "regression/board_place_component.rs"]
+mod board_place_component;
 // #1312 PR 1: board designators in Properties and Re-Annotate Board.
 #[path = "regression/board_designators.rs"]
 mod board_designators;

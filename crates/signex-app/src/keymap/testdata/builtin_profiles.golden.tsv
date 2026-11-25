@@ -246,6 +246,7 @@ signex_standard	hint	-	-	place_text_string
 signex_standard	hint	-	-	place_text_frame
 signex_standard	hint	-	-	place_note
 signex_standard	hint	-	-	place_graphic
+signex_standard	hint	-	-	place_board_component
 signex_standard	hint	-	-	place_board_pad
 signex_standard	hint	-	-	swap_pins
 signex_standard	hint	-	-	swap_gates
@@ -796,6 +797,7 @@ classic	hint	-	-	place_text_string
 classic	hint	-	-	place_text_frame
 classic	hint	-	-	place_note
 classic	hint	-	-	place_graphic
+classic	hint	-	-	place_board_component
 classic	hint	-	-	place_board_pad
 classic	hint	-	-	swap_pins
 classic	hint	-	-	swap_gates

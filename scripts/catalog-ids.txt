@@ -206,6 +206,7 @@ place_aligned_dimension
 place_blanket
 place_board_arc
 place_board_circle
+place_board_component
 place_board_diff_pair
 place_board_dimension
 place_board_fill

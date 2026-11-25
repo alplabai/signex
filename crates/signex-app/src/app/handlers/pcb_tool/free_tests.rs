@@ -83,7 +83,7 @@ fn the_four_tools_are_live_rows() {
             "place_board_dimension",
         ),
     ] {
-        assert_eq!(tool.command(), Some(command), "{tool:?}");
+        assert_eq!(tool.command(), command, "{tool:?}");
     }
 }
 

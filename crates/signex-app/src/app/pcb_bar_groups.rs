@@ -1,8 +1,7 @@
 //! The tool groups of the PCB Active Bar (#2392). A group is one button: it
 //! shows and runs the group's last-used row and its right-click opens a
 //! dropdown of every row. A row is a board placement tool from
-//! `pcb_tools.rs`, greyed with its reason while the board editor cannot run
-//! it, or a catalog command. Which row each group last ran is kept in
+//! `pcb_tools.rs` or a catalog command. Which row each group last ran is kept in
 //! `prefs.json` (`pcb_bar_last_tools`), so it outlives the session.
 
 use std::collections::BTreeMap;
@@ -46,12 +45,11 @@ pub enum PcbBarRow {
 }
 
 impl PcbBarRow {
-    /// The command the row runs; `None` while its tool cannot run on a
-    /// board yet.
-    pub(crate) fn command(self) -> Option<&'static str> {
+    /// The command the row runs.
+    pub(crate) fn command(self) -> &'static str {
         match self {
             Self::Tool(tool) => tool.command(),
-            Self::Command(command) => Some(command),
+            Self::Command(command) => command,
         }
     }
 }
@@ -69,8 +67,8 @@ impl PcbBarGroup {
         Self::Graphics,
     ];
 
-    /// The group's rows, top to bottom. The first live row is what the
-    /// button runs until another row is used.
+    /// The group's rows, top to bottom. The first row is what the button
+    /// runs until another row is used.
     pub(crate) fn rows(self) -> &'static [PcbBarRow] {
         use BoardPlaceTool as T;
         use PcbBarRow::{Command, Tool};
@@ -132,12 +130,12 @@ impl PcbBarGroup {
         Self::ALL.into_iter().find(|group| group.key() == key)
     }
 
-    /// The live row of the group that runs `command`.
+    /// The row of the group that runs `command`.
     pub(crate) fn live_row(self, command: &str) -> Option<PcbBarRow> {
         self.rows()
             .iter()
             .copied()
-            .find(|row| row.command() == Some(command))
+            .find(|row| row.command() == command)
     }
 
     /// The group whose rows include `tool`.
@@ -148,30 +146,27 @@ impl PcbBarGroup {
     }
 }
 
-/// The command each group last ran. Only a live row is kept: a command
-/// that is no longer a live row of its group reads as never used.
+/// The command each group last ran. Only a row of the group is kept: a
+/// command that is no longer one of its rows reads as never used.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PcbBarLastTools {
     by_group: BTreeMap<PcbBarGroup, &'static str>,
 }
 
 impl PcbBarLastTools {
-    /// The row `group`'s button shows and runs: the last-used row while it
-    /// is live, else the first live row, else the first row (greyed).
+    /// The row `group`'s button shows and runs: the last-used row, else the
+    /// first row.
     pub(crate) fn current(&self, group: PcbBarGroup) -> PcbBarRow {
-        let rows = group.rows();
         self.by_group
             .get(&group)
             .and_then(|command| group.live_row(command))
-            .or_else(|| rows.iter().copied().find(|row| row.command().is_some()))
-            .unwrap_or(rows[0])
+            .unwrap_or_else(|| group.rows()[0])
     }
 
     /// Note that `group` ran `command`. Whether that changed what the group
-    /// remembers; a command that is not a live row of `group` changes
-    /// nothing.
+    /// remembers; a command that is not a row of `group` changes nothing.
     pub(crate) fn remember(&mut self, group: PcbBarGroup, command: &str) -> bool {
-        let Some(command) = group.live_row(command).and_then(PcbBarRow::command) else {
+        let Some(command) = group.live_row(command).map(PcbBarRow::command) else {
             return false;
         };
         self.by_group.insert(group, command) != Some(command)
@@ -188,7 +183,7 @@ impl PcbBarLastTools {
     }
 
     /// Read the `prefs.json` value. An unknown group, a command that is not
-    /// a live row of its group, or a value of the wrong shape is skipped.
+    /// a row of its group, or a value of the wrong shape is skipped.
     pub(crate) fn from_json(value: Option<&serde_json::Value>) -> Self {
         let mut last = Self::default();
         let Some(map) = value.and_then(serde_json::Value::as_object) else {
@@ -208,7 +203,6 @@ impl PcbBarLastTools {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::pcb_tools::ToolState;
 
     /// Every board placement tool is a row of exactly one group, so the bar
     /// offers each Place row once; Track and the copper Arc are in Place
@@ -234,8 +228,7 @@ mod tests {
         assert_eq!(PcbBarGroup::from_key("copper_drawing"), None, "#2869");
     }
 
-    /// A group starts on its first live row, follows the row used last, and
-    /// never shows a row that cannot run while a live one exists.
+    /// A group starts on its first row and follows the row used last.
     #[test]
     fn a_group_shows_its_last_live_row() {
         let mut last = PcbBarLastTools::default();
@@ -245,16 +238,23 @@ mod tests {
             PcbBarRow::Tool(BoardPlaceTool::PolygonPour),
             "#2216: the first row is live"
         );
+        // #2505: Component runs on a board, so it heads its group; the
+        // group follows Change Footprint and comes back to Component.
         let mut parts = PcbBarLastTools::default();
-        assert!(matches!(
-            BoardPlaceTool::Component.state(),
-            ToolState::Unavailable(_)
-        ));
-        assert!(!parts.remember(PcbBarGroup::Components, "place_board_component"));
+        let components = PcbBarGroup::Components;
         assert_eq!(
-            parts.current(PcbBarGroup::Components),
-            PcbBarRow::Command("change_footprint"),
-            "a greyed row is never shown while a live one exists"
+            parts.current(components),
+            PcbBarRow::Tool(BoardPlaceTool::Component)
+        );
+        assert!(parts.remember(components, "change_footprint"));
+        assert_eq!(
+            parts.current(components),
+            PcbBarRow::Command("change_footprint")
+        );
+        assert!(parts.remember(components, "place_board_component"));
+        assert_eq!(
+            parts.current(components),
+            PcbBarRow::Tool(BoardPlaceTool::Component)
         );
         // #2424: the Graphics group follows its last live row.
         let mut drawing = PcbBarLastTools::default();
