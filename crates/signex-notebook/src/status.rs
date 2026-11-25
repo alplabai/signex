@@ -85,15 +85,19 @@ impl NotebookStatus {
         }
     }
 
-    /// The problem after line `line` of `file` in reading order (file, then
-    /// line), wrapping to the first; `None` with no problem. F8 walks the
-    /// Problems strip with it.
+    /// The first problem of `file` below line `line`, wrapping to its first
+    /// problem; `None` when the file has none. F8 walks the Problems strip
+    /// of the open file with it.
     pub fn next_problem(&self, file: &str, line: u32) -> Option<&Diagnostic> {
-        let mut located: Vec<&Diagnostic> = self.problems.iter().filter(|d| d.line > 0).collect();
-        located.sort_by(|a, b| (&a.file, a.line, a.column).cmp(&(&b.file, b.line, b.column)));
+        let mut located: Vec<&Diagnostic> = self
+            .problems
+            .iter()
+            .filter(|d| d.file == file && d.line > 0)
+            .collect();
+        located.sort_by_key(|d| (d.line, d.column));
         located
             .iter()
-            .find(|d| (d.file.as_str(), d.line) > (file, line))
+            .find(|d| d.line > line)
             .or_else(|| located.first())
             .copied()
     }
@@ -162,7 +166,7 @@ mod tests {
     }
 
     #[test]
-    fn the_next_problem_follows_the_line_and_wraps() {
+    fn the_next_problem_of_a_file_follows_the_line_and_wraps() {
         let problem = |file: &str, line| Diagnostic {
             severity: DiagnosticSeverity::Error,
             file: file.into(),
@@ -192,8 +196,13 @@ mod tests {
         );
         assert_eq!(
             next("design.snxnbk", 40),
+            Some(("design.snxnbk".into(), 12))
+        );
+        assert_eq!(
+            next("chapters/a.snxnbk", 9),
             Some(("chapters/a.snxnbk".into(), 3))
         );
+        assert_eq!(next("other.snxnbk", 1), None);
         let none = NotebookStatus {
             problems: Vec::new(),
             ..status("= A\n")

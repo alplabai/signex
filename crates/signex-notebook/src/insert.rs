@@ -83,7 +83,7 @@ pub fn next_id(kind: AnnotationKind, outline: &Outline, file: &str, line: u32) -
         outline
             .section_at(file, line)
             .and_then(|section| section.number.split('.').next())
-            .and_then(|top| top.parse().ok())
+            .and_then(|top| top.parse::<u64>().ok())
             .into_iter()
             .collect()
     } else {
