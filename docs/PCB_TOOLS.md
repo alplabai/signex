@@ -36,9 +36,11 @@ the last one greyed "not available on boards yet", runs since #2505.
 ## Component {#component}
 
 `place_board_component` (#2505; no key in the shipped profiles) is Place ▸
-Component on a board, the Component row of the board canvas menu's Place
-flyout and the first row of the PCB Active Bar's Components group. It is
-greyed on a read-only board (`Needs::EditablePcb`).
+Component... on a board, the Component... row of the board canvas menu's
+Place flyout (both read "Component..." as on a sheet, since the row opens a
+picker) and the first row of the PCB Active Bar's Components group, which
+reads "Component". It is greyed on a read-only board (`Needs::EditablePcb`).
+Decided by Caner on 2026-11-25 (`docs/DECISIONS.md`).
 
 - **Pick.** It opens the part picker, the one Place ▸ Component... opens on
   a sheet (`LibraryMessage::OpenPicker`). Its Place button reads the row and
@@ -64,7 +66,7 @@ greyed on a read-only board (`Needs::EditablePcb`).
   designator, as for any unlinked footprint (`docs/UPDATE_PCB.md`).
 - **Bar group.** The Components group's button shows Component until
   Change Footprint is run from its dropdown; the group remembers the row
-  its dropdown ran last. Place ▸ Component itself does not change it,
+  its dropdown ran last. Place ▸ Component... itself does not change it,
   since it arms no tool.
 
 ## Via

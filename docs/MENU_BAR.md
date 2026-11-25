@@ -596,7 +596,7 @@ Rows added by #2416, each a catalog command greyed without a sheet:
 ## Place on a board {#place-board}
 
 Place follows the document in view (#2360). While the window shows a board
-(`CommandContext::pcb.shown`), it lists the board's tools: Component, Pad,
+(`CommandContext::pcb.shown`), it lists the board's tools: Component..., Pad,
 Via, Interactive Routing, Track, Arc, Fill, Solid Region, Polygon Pour,
 String, Dimension, Keepout and Room (`place_board_room`, #2457), the
 Graphics submenu (Line, Arc, Full Circle,
@@ -609,8 +609,9 @@ The rows come from one table, `app/pcb_tools.rs` (`BoardPlaceTool::command`),
 which the PCB Active Bar builds its buttons from (#2352), so the two surfaces
 run the same set. Each tool (#2373) is a command row that runs the same
 command as its Active Bar button and arms the tool on the board in view;
-Component (`place_board_component`, #2505) opens the part picker instead and
-the pick goes on the cursor. See "Board placement tools" in
+Component... (`place_board_component`, #2505) opens the part picker instead
+and the pick goes on the cursor; its row carries the ellipsis as on a sheet,
+while the Active Bar row reads "Component" (Caner, 2026-11-25). See "Board placement tools" in
 `docs/PCB_TOOLS.md`. No board tool is a greyed placeholder any more.
 
 The golden fixture marks the sheet's Place rows `-` in the `pcb` column: that

@@ -1,6 +1,6 @@
 # Place on a board (#2360): the `pcb` variant's Place rows.
 # path	kind	label	command_id	shortcut	action	enabled
-Place/Component	item	Component	-	-	PlaceBoardComponent	1
+Place/Component...	item	Component...	-	-	PlaceBoardComponent	1
 Place/Pad	item	Pad	-	-	PlaceBoardPad	1
 Place/Via	item	Via	-	-	PlaceBoardVia	1
 Place/Interactive Routing	item	Interactive Routing	-	-	PlaceBoardRoute	1

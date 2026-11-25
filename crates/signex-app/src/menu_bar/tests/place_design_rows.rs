@@ -68,8 +68,9 @@ fn component_opens_the_part_picker() {
 #[test]
 fn component_on_a_board_opens_the_part_picker() {
     let mut app = loaded_board_app();
-    assert!(row_is_live(&app, "Place/Component"));
-    let _ = click(&mut app, "Place/Component");
+    // "Component..." as on a sheet (Caner, 2026-11-25).
+    assert!(row_is_live(&app, "Place/Component..."));
+    let _ = click(&mut app, "Place/Component...");
     assert!(app.library.picker.is_some(), "the picker opened");
     assert!(app.interaction_state.pcb_tool.is_none(), "no tool");
     assert!(app.interaction_state.pcb_carry.is_none(), "no part yet");
@@ -489,7 +490,8 @@ fn place_on_a_board_lists_the_boards_tools() {
     assert_eq!(
         labels,
         [
-            "Component",
+            // #2505: it opens the part picker, so it reads as on a sheet.
+            "Component...",
             "Pad",
             "Via",
             "Interactive Routing",

@@ -428,7 +428,7 @@ fn the_board_place_flyout_runs_the_tools_and_greys_them_when_read_only() {
     // yet" before, opens the part picker since #2505.
     assert!(runs(row_message(&place, "Pad"), "place_board_pad"));
     assert!(runs(
-        row_message(&place, "Component"),
+        row_message(&place, "Component..."),
         "place_board_component"
     ));
     let read_only = board_ctx(PcbTargets {
@@ -437,7 +437,7 @@ fn the_board_place_flyout_runs_the_tools_and_greys_them_when_read_only() {
         ..PcbTargets::default()
     });
     let place = board_place_entries(i18n, &read_only, &hint);
-    for label in ["Component", "Via", "Track", "Keepout", "Board Sketch"] {
+    for label in ["Component...", "Via", "Track", "Keepout", "Board Sketch"] {
         assert!(disabled_of(&place, label), "{label}");
     }
 }
