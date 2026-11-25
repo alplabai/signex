@@ -105,6 +105,29 @@ fn the_pseudolocale_transforms_text_and_en_us_is_untouched() {
     assert_eq!(t!(i18n("en-US"), ids::MENU_FILE).to_string(), "File");
 }
 
+/// Mockup row 144a (#2064): the pseudolocale brackets each whole message once,
+/// arguments inside, so text without brackets is not from the catalog.
+#[test]
+fn the_pseudolocale_brackets_the_whole_message() {
+    let xa = t!(i18n("en-XA"), ids::MENU_FILE).to_string();
+    assert!(xa.starts_with('[') && xa.ends_with(']'), "{xa}");
+    let sources = ["hello = Hello { $name }, again\n"];
+    let args = [("name", Arg::from("R1"))];
+    let pseudo = render(&build_from(EN_XA, &sources), "hello", &args)
+        .unwrap()
+        .text;
+    assert!(
+        pseudo.starts_with("[Ħ") && pseudo.ends_with(']'),
+        "{pseudo}"
+    );
+    assert_eq!(pseudo.matches('[').count(), 1, "{pseudo}");
+    assert!(pseudo.contains(&format!("{FSI}R1{PDI}")), "{pseudo}");
+    let plain = render(&build_from(EN_US, &sources), "hello", &args)
+        .unwrap()
+        .text;
+    assert_eq!(plain, format!("Hello {FSI}R1{PDI}, again"));
+}
+
 #[test]
 fn numbers_follow_the_locale_through_icu() {
     let source = "count = { $n } items\n";

@@ -76,8 +76,11 @@ mod tests {
         );
         let xa = pseudo().message_plain(ids::NOTICE_MENU_PATH, &args);
         assert!(!xa.contains("menu-project"), "{xa}");
+        // Mockup row 144a: the path and its nested menu are each bracketed.
+        let menu = pseudo().message_plain(crate::menu_ids::MENU_PROJECT, &[]);
         assert!(
-            xa.starts_with(&pseudo().message_plain(crate::menu_ids::MENU_PROJECT, &[])),
+            xa.strip_prefix('[')
+                .is_some_and(|inner| inner.starts_with(&menu)),
             "{xa}"
         );
     }
