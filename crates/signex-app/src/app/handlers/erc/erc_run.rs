@@ -285,6 +285,7 @@ impl Signex {
                     _ => crate::canvas::ErcMarkerSeverity::Info,
                 },
                 caption: self.erc_marker_caption(v),
+                harness_entry: Self::erc_marker_harness_entry(v),
             })
             .collect();
         let canvas = self.interaction_state.active_canvas_mut();

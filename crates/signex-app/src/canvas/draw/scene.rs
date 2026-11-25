@@ -539,6 +539,29 @@ impl SchematicCanvas<'_> {
                 },
             })
             .collect();
+        let mismatched: Vec<crate::schematic_runtime::overlay::MismatchedEntry> = self
+            .erc_markers
+            .iter()
+            .zip(&erc_overlay)
+            .filter_map(|(marker, drawn)| {
+                let entry = marker.harness_entry?;
+                let tab = snapshot.harness.connectors.iter().find_map(|c| {
+                    let index = c.entry_index(entry)?;
+                    Some(c.entry_tab(index))
+                })?;
+                Some(crate::schematic_runtime::overlay::MismatchedEntry {
+                    tab,
+                    severity: drawn.severity,
+                })
+            })
+            .collect();
+        crate::schematic_runtime::overlay::draw_mismatched_entries(
+            frame,
+            &mismatched,
+            transform,
+            &self.prefs.canvas_colors,
+            &self.prefs.graphite,
+        );
         crate::schematic_runtime::overlay::draw_erc_markers(
             frame,
             &erc_overlay,

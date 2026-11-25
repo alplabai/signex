@@ -1221,6 +1221,7 @@ mod tests {
             severity: ErcMarkerSeverity::Error,
             net_level: false,
             caption: None,
+            harness_entry: None,
         });
         let view = SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters));
         assert!(view.selected.is_empty());

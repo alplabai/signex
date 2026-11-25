@@ -80,10 +80,11 @@ entries as a warn banner with two buttons: **Rename** renames this side's entry
 (one undo step) and **Go to** opens the child sheet. An unpaired or nested
 difference appears in the ERC results only, because renaming a nested entry
 would move every signal under it. The canvas marks the entry with the ERC warning
-marker; for a paired mismatch it writes what the far side expects
+marker; for a paired mismatch it also outlines the entry's tab in the marker's
+colour (heavier, over a faint fill) and writes what the far side expects
 (`expects CS_ADC`) under the marker, in the marker's colour, at the caption size
-at every zoom. The caption is editor-only, like the marker: no print or export
-draws it. The Properties drawing of the connector draws the mismatched entry in
+at every zoom. The outline and the caption are editor-only, like the marker: no
+print or export draws them. The Properties drawing of the connector draws the mismatched entry in
 the warn colour with the same `expects CS_ADC` in place of its net (the Entries
 list, shown above the drawing in this state, still names the net).
 
