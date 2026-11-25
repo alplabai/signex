@@ -181,7 +181,14 @@ fn the_panel_opens_in_its_home_region_and_its_messages_reach_its_update() {
 
     // The message the panel's button sends goes to the panel, not to the
     // extension.
-    let owner = ExtensionId::new(NAME).expect("the name");
+    // Outside the crate an id comes only from install: the extension keeps
+    // its own from `ExtensionPoints::owner`; a test reads it off the host.
+    let owner = app
+        .extensions()
+        .ids()
+        .find(|id| id.name() == NAME)
+        .cloned()
+        .expect("the example is installed");
     let pressed = ExtensionMsg::for_view(owner, NOTES, NotesPressed);
     let _task = app.update(Message::Extension(pressed));
     let seen = seen.lock().expect("seen");

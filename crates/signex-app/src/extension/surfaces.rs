@@ -37,7 +37,9 @@ impl ExtensionHost {
             .map_or_else(|| Space::new().boxed(), |view| view.view(cx))
     }
 
-    /// Every menu bar row the extensions added.
+    /// Every menu bar row the extensions added. Owned: the menu context and
+    /// the native menu's state keep them. With no extension it allocates
+    /// nothing.
     pub fn menu_rows(&self) -> Vec<MenuRow> {
         self.points()
             .flat_map(|points| points.menu_rows.menu().iter().cloned())
@@ -52,10 +54,13 @@ impl ExtensionHost {
     }
 
     /// The Active Bar rows of the PCB tool group `group`.
-    pub(crate) fn active_bar_rows_of(&self, group: PcbBarGroup) -> Vec<ActiveBarRow> {
-        let mut rows = self.active_bar_rows();
-        rows.retain(|row| row.group == group);
-        rows
+    pub(crate) fn active_bar_rows_of(
+        &self,
+        group: PcbBarGroup,
+    ) -> impl Iterator<Item = &ActiveBarRow> {
+        self.points()
+            .flat_map(|points| points.menu_rows.active_bar())
+            .filter(move |row| row.group == group)
     }
 
     /// The sections of the Start-screen slot `slot`, drawn. Empty when no

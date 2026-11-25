@@ -440,7 +440,7 @@ pub(in crate::app::view) fn pcb_bar_menu_entries(
         PcbBarMenu::Group(group) => {
             let mut entries = groups::entries(group, i18n, tid, src.ctx, src.last);
             let extension_rows = src.extensions.active_bar_rows_of(group);
-            entries.extend(groups::extension_entries(&extension_rows, i18n, src.ctx));
+            entries.extend(groups::extension_entries(extension_rows, i18n, src.ctx));
             return entries;
         }
         PcbBarMenu::Align | PcbBarMenu::Move | PcbBarMenu::View => {}

@@ -77,8 +77,14 @@ collide with a built-in one or with another extension's.
 against it. One function holds the whole rule,
 `signex_commands::is_extension_id` (re-exported as
 `signex_app::extension::is_extension_id`): `AppCommandId::new`, every
-extension point and the dock layout's kept keys all read it. Built-in command ids stay locked by `scripts/catalog-ids.txt`;
-extension ids are not listed there.
+extension point and the dock layout's kept keys all read it. Built-in command
+ids stay locked by `scripts/catalog-ids.txt`; extension ids are not listed
+there.
+
+An `ExtensionId` has no public constructor: install makes one per extension,
+and the extension receives its own from `ExtensionPoints::owner` in
+`register` (or `PreferenceValues::owner`). So an extension addresses
+messages to itself only and cannot pose as another.
 
 ## Messages
 
@@ -185,7 +191,10 @@ points.menu_rows.add_active_bar_row(PcbBarGroup::Route, label_id, "ext.sample.sa
 A menu row goes at the end of its root menu, after every built-in row and
 below one separator; an Active Bar row goes at the end of a PCB Active Bar
 tool group's dropdown, below one separator. The command must be the
-extension's own (`ext.<name>.<snake_case>`, which `AppCommandId` accepts).
+extension's own (`ext.<name>.<snake_case>`, which `AppCommandId` accepts),
+and one it added with `CatalogCommands::add`, before or after the row:
+install refuses a row whose command was never added
+(`RegisterError::NotRegistered`).
 A click sends `MenuMessage::Command` (an Active Bar row: the group's
 `CommandPicked`), the message a built-in row sends, so the command runs
 through `dispatch_command`, the Command Log records it, the row greys by the
@@ -213,10 +222,13 @@ The values live in `prefs.json`, in its `extensions` object, under their full
 keys (`{"extensions": {"ext.sample.greeting": "hello"}}`). At launch, after
 install and before the first window, `Extension::preferences_loaded` receives
 the value of each key the extension added (the stored one, else its default);
-a stored key it did not add is not read. `save_preference(owner, key, value)`
-returns the `Task` that writes one value on a blocking worker, in the order
-the saves were made (the quit path waits for it), and answers the owner with a
-`PreferenceSaved` payload. It refuses a key outside the owner's prefix.
+a stored key it did not add is not read. The extension keeps those
+`PreferenceValues` to save later: `values.save(key, value)` returns the `Task`
+that writes one value on a blocking worker, in the order the saves were made
+(the quit path waits for it), and answers the extension with a
+`PreferenceSaved` payload. It refuses a key outside the extension's prefix
+(`NotOwned`) and a key it did not add with `Preferences::add`
+(`NotRegistered`).
 
 ## One request path
 
@@ -259,6 +271,20 @@ app explained in a notice, into `Failed`, as the headless runner reports it.
 An extension command takes the same path: the request reaches
 `dispatch_command` (or `dispatch_command_headless`), which hands an installed
 `ext.` id to the extension's handler.
+
+The agent socket's window-layout commands (Tile and Untile) run through the
+`Agent` runner too: they name no document, so their `if_revision` is refused
+as for any request without one.
+
+**Documented exception: a waiting request's second run.** A command that
+waits for its own work (an edit that reads the disk, a check run, a command
+that waits for a project read) answers `Waiting { ticket }`, and when that
+work lands it runs again outside `run_command_request`, in
+`app/agent/deferred.rs`. That second run meets the same checks again first:
+the agent gate (connections on, the session token unchanged, the document
+one of an open project's) and the request's `if_revision`. A request whose
+document moved meanwhile is refused with the revision reason, nothing runs
+and no edit-journal line is written, as at request time.
 
 ## Catalog commands
 
@@ -330,10 +356,23 @@ impl Extension for Sample {
   `signex-commands` pins it) and stay locked by `scripts/catalog-ids.txt`;
   extension ids are never listed there. `Signex::command_metadata` finds a
   row of either kind.
+- **Not on the agent socket.** The agent socket refuses every `ext.` id,
+  installed or not, with "extension commands are not open to the agent
+  socket in version 1". Opening them needs the socket's allowlist rules for
+  extension rows (see "Open questions").
 - **Not yet.** An extension command is not listed in the command palette, the
   Keyboard Shortcuts pane, `docs/COMMANDS.md` or the `signex commands`
   output, and `signex-cli` installs no extension, so it refuses an `ext.` id
   as an unknown command. See "Open questions".
+
+### Behaviour changes
+
+- `AppCommandId` now accepts `ext.<name>.<command>` ids. Where an id is read
+  from a file (a keymap profile's TOML, a saved layout or any other saved
+  data that holds a command id), such an id used to be refused when the file
+  was parsed; it now parses, and is refused later as an unknown command when
+  no installed extension added it. A malformed `ext.` id is still refused at
+  parse, with a message that names the `ext.<name>.<command>` form.
 
 ## Walkthrough: an example extension
 
@@ -373,6 +412,8 @@ host to `Signex::new()` through `with_extensions`; a binary passes the same
   `ExtensionPanelKind`; `app.update(kind.open_message())` docks it in its
   home region, the right dock. A `Message::Extension` addressed to the
   panel's key reaches `Notes::update`, not the extension's own `update`.
+  The test reads the extension's id off `app.extensions().ids()`, since
+  outside the crate an id comes only from install.
 - *Pick the menu row.* `menu_bar_model` built with
   `MenuContext::default().with_extension_rows(app.extensions().menu_rows())`,
   the model the window draws, ends Tools with a separator and the row. The
@@ -410,8 +451,8 @@ const _: () = assert!(signex_app::extension::API_VERSION == 1);
 
 ### Version 1
 
-- The `Extension` trait (`name`, `register`, `update`), `ExtensionId`,
-  `ExtensionMsg`, `ExtensionHost`, `InstallError`, `launch::run` and
+- The `Extension` trait (`name`, `register`, `update`), `ExtensionId` (no
+  public constructor), `ExtensionMsg`, `ExtensionHost`, `InstallError`, `launch::run` and
   `Signex::with_extensions`.
 - `Message::Extension`, routed to the owning extension alone.
 - `ExtensionPoints` with five points: catalog commands, dock panels,
@@ -427,12 +468,13 @@ const _: () = assert!(signex_app::extension::API_VERSION == 1);
   menu and Active Bar rows (`MenuRows::add_menu_row`, `add_active_bar_row`,
   `MenuRoot`), Start-screen sections (`StartScreenSections::add`,
   `StartScreenSlot::HomeEnd`) and preferences (`Preferences::add`,
-  `PreferenceValues`, `save_preference`, `PreferenceSaved`); the
+  `PreferenceValues` with `owner` and `save`, `PreferenceSaved`); the
   `ExtensionView` trait and `ViewContext`; `ExtensionMsg::for_view`;
   `Extension::preferences_loaded`; `ExtensionHost::{panel, menu_rows,
   active_bar_rows, load_preferences}`.
-- One refusal type for every point, `RegisterError`, and
-  `InstallError::Refused`.
+- One refusal type for every point, `RegisterError` (with `NotRegistered`
+  for a row whose command, or a saved preference whose key, was never
+  added), and `InstallError::Refused`.
 - `MenuContext::with_extension_rows`, so code outside the crate builds the
   menu model a window draws; and the example extension
   (`crates/signex-app/tests/example_extension.rs`).
@@ -512,3 +554,6 @@ Choices made in version 1 for the maintainers to confirm or change:
   two describe the Community build)?
 - **Enablement.** A row's `enable` predicate is carried, not evaluated, as for
   every built-in row today. Should an extension get a predicate of its own?
+- **Extension commands on the agent socket.** The socket refuses them in
+  version 1. Should an extension command that names a document be open to
+  agents under the same allowlist rules as a built-in one?

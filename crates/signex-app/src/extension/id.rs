@@ -32,8 +32,10 @@ impl std::error::Error for InvalidExtensionName {}
 impl ExtensionId {
     /// The id for `name`, which starts with a lowercase ASCII letter and
     /// holds only lowercase ASCII letters, digits and `_`
-    /// ([`signex_commands::is_extension_name`]).
-    pub fn new(name: &str) -> Result<Self, InvalidExtensionName> {
+    /// ([`signex_commands::is_extension_name`]). Only install makes one, so
+    /// an extension cannot forge another's id: it gets its own from
+    /// `ExtensionPoints::owner` (or `PreferenceValues::owner`).
+    pub(crate) fn new(name: &str) -> Result<Self, InvalidExtensionName> {
         if signex_commands::is_extension_name(name) {
             Ok(Self(Arc::from(name)))
         } else {

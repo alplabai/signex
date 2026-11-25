@@ -19,7 +19,8 @@ impl AppCommandId {
         if value.is_empty() {
             return Err("command id must not be empty".to_string());
         }
-        if value.starts_with(EXTENSION_ID_PREFIX) {
+        // Bare `ext` heads the extension namespace and names no command.
+        if value.starts_with(EXTENSION_ID_PREFIX) || value == "ext" {
             if !is_extension_id(&value) {
                 return Err(format!(
                     "extension command id `{value}` must be `ext.<name>.<command>`, with an \

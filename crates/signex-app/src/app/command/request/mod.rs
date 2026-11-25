@@ -106,13 +106,18 @@ impl Signex {
         }
     }
 
-    /// The agent channel's runner: a query answers through its handler, any
-    /// other command runs its operands and is journaled.
+    /// The agent channel's runner: a window-layout command runs as its menu
+    /// row does and answers with the layout, a query answers through its
+    /// handler, any other command runs its operands and is journaled.
     fn run_agent_request(
         &mut self,
         command: &AppCommandId,
         args: &CommandArgs,
     ) -> (RequestOutcome, Task<Message>) {
+        if crate::app::agent::is_window_layout(command) {
+            let (outcome, task) = self.run_agent_window_layout(command);
+            return (RequestOutcome::of(command.as_str(), outcome), task);
+        }
         self.agent.serving = true;
         let ran = if is_query(command) {
             self.run_query_headless(command, args)
@@ -131,7 +136,12 @@ impl Signex {
 
     /// Why a request with `if_revision` = `expected` may not run, if it may
     /// not: its `document` names nothing, has no revision, or is at another.
-    fn revision_refusal(&mut self, args: &CommandArgs, expected: u64) -> Option<RequestOutcome> {
+    /// Checked again when a waiting agent request's work lands.
+    pub(crate) fn revision_refusal(
+        &mut self,
+        args: &CommandArgs,
+        expected: u64,
+    ) -> Option<RequestOutcome> {
         let refused =
             |reason: String| Some(RequestOutcome::refused(reason, RefusalCause::Revision));
         let Some(OperandValue::Document(target)) = args.operand("document") else {

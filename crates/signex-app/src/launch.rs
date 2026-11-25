@@ -35,23 +35,6 @@ pub fn run(extensions: Vec<Box<dyn Extension>>) -> iced::Result {
         }
     };
 
-    // Installed before any window, so a bad set refuses the launch the way
-    // a bad argument does. Taken by the boot closure, which iced calls once.
-    let extensions = match ExtensionHost::install(extensions) {
-        Ok(mut host) => {
-            // Read once, before any window, like the UI font below. The
-            // Community binary installs none and reads nothing.
-            if !host.is_empty() {
-                host.load_preferences(&fonts::read_extension_prefs());
-            }
-            Cell::new(Some(host))
-        }
-        Err(error) => {
-            eprintln!("[signex] {error}");
-            std::process::exit(2);
-        }
-    };
-
     gpu_backend::prefer_dx12_on_windows();
 
     // The pan/zoom frame bench, a dev/QA mode (#2472, docs/PERFORMANCE.md):
@@ -77,6 +60,23 @@ pub fn run(extensions: Vec<Box<dyn Extension>>) -> iced::Result {
         eprintln!("[signex] failed to initialize logging: {error:#}");
     }
 
+    // Installed after logging (so a preference read logs) and before any
+    // window, so a bad set refuses the launch the way a bad argument does.
+    let extensions = match ExtensionHost::install(extensions) {
+        Ok(mut host) => {
+            // Read once, before any window, like the UI font below. The
+            // Community binary installs none and reads nothing.
+            if !host.is_empty() {
+                host.load_preferences(&fonts::read_extension_prefs());
+            }
+            Cell::new(Some(host))
+        }
+        Err(error) => {
+            eprintln!("[signex] {error}");
+            std::process::exit(2);
+        }
+    };
+
     // Read the persisted UI font preference (defaults to "Inter").
     let ui_font = signex_widgets::ui_font::set_launch_family(&fonts::read_ui_font_pref());
 
@@ -86,10 +86,12 @@ pub fn run(extensions: Vec<Box<dyn Extension>>) -> iced::Result {
                 Some(config) => Signex::boot_pan_zoom_bench(config.clone()),
                 None => Signex::boot(startup_paths.clone()),
             };
-            (
-                app.with_extensions(extensions.take().unwrap_or_default()),
-                task,
-            )
+            // iced boots once; a second boot would run without the
+            // extensions, so it stops here instead.
+            let host = extensions
+                .take()
+                .expect("the extensions are installed into the first boot only");
+            (app.with_extensions(host), task)
         },
         Signex::update,
         Signex::view,

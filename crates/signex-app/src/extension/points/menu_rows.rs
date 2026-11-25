@@ -99,9 +99,20 @@ impl MenuRows {
         })
     }
 
+    /// The command of every row, menu rows first, in the order they were
+    /// added.
+    pub(super) fn commands(&self) -> impl Iterator<Item = &AppCommandId> {
+        self.menu
+            .iter()
+            .map(|row| &row.command)
+            .chain(self.active_bar.iter().map(|row| &row.command))
+    }
+
     /// Add a row at the end of the menu `root` that runs `command`
     /// (`ext.<name>.<local>`), labelled `label`. Refused, and recorded so
-    /// install refuses the set, when the command is not the owner's.
+    /// install refuses the set, when the command is not the owner's; install
+    /// also refuses a row whose command the owner did not add with
+    /// `CatalogCommands::add` (`RegisterError::NotRegistered`).
     pub fn add_menu_row(
         &mut self,
         root: MenuRoot,

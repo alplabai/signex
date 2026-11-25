@@ -94,10 +94,12 @@ impl ExtensionPoints {
             && self.preferences.is_empty()
     }
 
-    /// The first addition a point refused, if any. A panel and a
-    /// Start-screen section share one key space, since a message addressed
-    /// to a key must reach one surface: a section key a panel already uses
-    /// is refused here.
+    /// The first addition a point refused, if any. Two checks need the
+    /// whole registration and are made here: a panel and a Start-screen
+    /// section share one key space, since a message addressed to a key must
+    /// reach one surface, so a section key a panel already uses is refused;
+    /// and a menu or Active Bar row must run a command the extension added,
+    /// in any order within `register`.
     pub(crate) fn first_error(&self) -> Option<RegisterError> {
         let recorded = self
             .commands
@@ -109,12 +111,19 @@ impl ExtensionPoints {
             .chain(&self.preferences.errors)
             .next()
             .cloned();
-        recorded.or_else(|| {
+        let shared_key = || {
             self.start_screen
                 .keys()
                 .find(|key| self.panels.find(key).is_some())
                 .map(|key| RegisterError::Duplicate(key.to_owned()))
-        })
+        };
+        let unregistered_row = || {
+            self.menu_rows
+                .commands()
+                .find(|command| self.commands.get(command.as_str()).is_none())
+                .map(|command| RegisterError::NotRegistered(command.as_str().to_owned()))
+        };
+        recorded.or_else(shared_key).or_else(unregistered_row)
     }
 
     /// The panel or section `key`'s view hooks, to update it.

@@ -45,18 +45,24 @@ impl DockArea {
 
     /// Dock each kept key that `find` resolves to a registered panel at its
     /// stored place, and keep the rest. A panel already open elsewhere is
-    /// not docked twice. The active tab stays on the panel it was on.
+    /// not docked twice: its entry leaves the region, so the entries stored
+    /// after it move up one place. The active tab stays on the panel it was
+    /// on.
     pub fn adopt_extension_panels(&mut self, find: impl Fn(&str) -> Option<ExtensionPanelKind>) {
         for position in POSITIONS {
             let kept = std::mem::take(&mut self.region_of_mut(position).kept);
             let mut still_kept: Vec<KeptPanelKey> = Vec::new();
-            for entry in kept {
+            // Entries before this one that left the region: open elsewhere.
+            let mut skipped = 0;
+            for mut entry in kept {
+                entry.index = entry.index.saturating_sub(skipped);
                 let Some(panel) = find(entry.key.as_str()) else {
                     still_kept.push(entry);
                     continue;
                 };
                 let kind = PanelKind::Extension(panel);
                 if self.locate(kind).is_some() {
+                    skipped += 1;
                     continue;
                 }
                 let region = self.region_of_mut(position);
@@ -151,6 +157,43 @@ mod tests {
         assert_eq!(
             dock.panel_kinds(PanelPosition::Left),
             [PanelKind::Extension(notes)]
+        );
+    }
+
+    /// Stored on the right: a, ext.x, ext.y, b. ext.x is open on the left,
+    /// so it leaves the right region, and ext.y (no extension registered it)
+    /// moves up into its place: written back, the region reads a, ext.y, b.
+    #[test]
+    fn a_skipped_panel_moves_the_later_kept_keys_up_one_place() {
+        let x = registered("ext.sample.x", PanelPosition::Left);
+        let mut dock = DockArea::new();
+        dock.add_panel(PanelPosition::Left, PanelKind::Extension(x));
+        dock.add_panel(PanelPosition::Right, PanelKind::Properties);
+        dock.add_panel(PanelPosition::Right, PanelKind::History);
+        dock.set_kept_panel_keys(
+            PanelPosition::Right,
+            vec![kept(1, "ext.sample.x"), kept(2, "ext.sample.y")],
+        );
+
+        dock.adopt_extension_panels(|key| (key == x.key()).then_some(x));
+
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Right),
+            [PanelKind::Properties, PanelKind::History]
+        );
+        assert_eq!(
+            dock.kept_panel_keys(PanelPosition::Right),
+            [kept(1, "ext.sample.y")]
+        );
+        let written = crate::fonts::region_to_json(&crate::dock::RegionLayout {
+            panels: dock.panel_kinds(PanelPosition::Right).to_vec(),
+            collapsed: false,
+            width: None,
+            kept: dock.kept_panel_keys(PanelPosition::Right).to_vec(),
+        });
+        assert_eq!(
+            written["panels"],
+            serde_json::json!(["properties", "ext.sample.y", "history"])
         );
     }
 }

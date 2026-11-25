@@ -17,6 +17,10 @@ pub enum RegisterError {
     /// The id is under the owner's prefix but is not an extension id:
     /// `ext.<name>.` and exactly one snake_case segment.
     InvalidId(String),
+    /// The id is the owner's but was never added: a preference saved under
+    /// a key `Preferences::add` did not add, or a menu or Active Bar row
+    /// that runs a command `CatalogCommands::add` did not add.
+    NotRegistered(String),
     /// A command id is a built-in command id, or its `<command>` part is one
     /// (`ext.sample.undo`), so it would read as the built-in command.
     ShadowsBuiltIn(String),
@@ -40,6 +44,7 @@ impl fmt::Display for RegisterError {
                 f,
                 "{id:?} is not an extension id (`ext.<name>.<snake_case>`)"
             ),
+            Self::NotRegistered(id) => write!(f, "{id:?} was never added by the extension"),
             Self::ShadowsBuiltIn(id) => write!(f, "{id:?} shadows a built-in command"),
             Self::HeadlessUndecided(id) => write!(
                 f,

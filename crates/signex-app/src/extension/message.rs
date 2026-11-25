@@ -29,7 +29,9 @@ trait Payload: Any + Debug + Send + Sync {}
 impl<T: Any + Debug + Send + Sync> Payload for T {}
 
 impl ExtensionMsg {
-    /// A message for the extension `extension`, carrying `payload`.
+    /// A message for the extension `extension`, carrying `payload`. An
+    /// extension has only its own id (from `ExtensionPoints::owner`), so it
+    /// addresses only itself.
     pub fn new<T: Any + Debug + Send + Sync>(extension: ExtensionId, payload: T) -> Self {
         Self {
             extension,

@@ -21,7 +21,7 @@ pub use host::{ExtensionHost, InstallError};
 pub use id::{ExtensionId, InvalidExtensionName};
 pub use message::ExtensionMsg;
 pub use points::{ExtensionCommand, ExtensionPoints, PreferenceValues, RegisterError};
-pub use prefs::{PreferenceSaved, save_preference};
+pub use prefs::PreferenceSaved;
 pub use view::{ExtensionView, ViewContext};
 // The one extension id rule, the catalog row types a command is added with,
 // and its handler's refusal.

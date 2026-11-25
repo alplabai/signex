@@ -500,15 +500,16 @@ impl Signex {
         );
         // A command waiting for its reads answers when they land (#2199), with
         // what its run then changed and logged.
-        if let Some(ticket) = self.agent.deferred.take() {
+        if let Some(deferred) = self.agent.deferred.take() {
             // The token matched: the request was let in with this one.
             let waiting = super::deferred::WaitingReply {
                 id,
                 pid: call.pid,
                 reply: call.reply,
                 token: self.agent.token().map(|t| t.as_str().to_string()),
+                if_revision: deferred.if_revision,
             };
-            self.agent.waiting.insert(ticket, waiting);
+            self.agent.waiting.insert(deferred.ticket, waiting);
             return Task::batch([task, turned_away]);
         }
         self.answer_agent(id.as_deref(), call.pid, mark, &before, verdict, &call.reply);
@@ -683,25 +684,23 @@ impl Signex {
             Ok(args) => args,
             Err(error) => return (refused(error.to_string()), none()),
         };
-        // The window layout names no document (#2249), so no revision either.
-        if allow::is_window_layout(&command) {
-            if request.if_revision.is_some() {
-                return (
-                    refused("`if_revision` needs the operand `document`"),
-                    none(),
-                );
+        // The window layout names no document (#2249): the request path
+        // refuses its `if_revision`, and its runner marks the handler reached.
+        if !allow::is_window_layout(&command) {
+            if let Err(why) = self.check_agent_document(&command, &args) {
+                return (refused(why), none());
             }
-            return self.run_agent_window_layout(&command);
+            self.agent.reached_handler = true;
         }
-        if let Err(why) = self.check_agent_document(&command, &args) {
-            return (refused(why), none());
-        }
-        self.agent.reached_handler = true;
-        let request = CommandRequest::new(command, args).with_if_revision(request.if_revision);
+        let if_revision = request.if_revision;
+        let request = CommandRequest::new(command, args).with_if_revision(if_revision);
         let surface = RequestSurface::Agent(AgentGatePassed::after_gate());
         match self.run_command_request(surface, request) {
             (RequestOutcome::Waiting { ticket }, task) => {
-                self.agent.deferred = Some(ticket);
+                self.agent.deferred = Some(super::deferred::DeferredRequest {
+                    ticket,
+                    if_revision,
+                });
                 (refused("waiting for its reads"), task)
             }
             (outcome, task) => (outcome.into_verdict(), task),

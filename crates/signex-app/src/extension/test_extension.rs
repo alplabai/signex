@@ -1,7 +1,8 @@
 //! A sample extension that adds one of everything, for the tests of every
 //! extension point (#2495): the dock panel [`NOTES`], the Start-screen
-//! section [`WELCOME`], a Tools row and a Route-group Active Bar row that
-//! run [`SAY_HELLO`], and the preference [`GREETING`]. What it sees is
+//! section [`WELCOME`], the command [`SAY_HELLO`] and a Tools row and a
+//! Route-group Active Bar row that run it, and the preference [`GREETING`].
+//! What it sees is
 //! recorded in a shared [`Seen`].
 
 use std::sync::{Arc, Mutex};
@@ -24,6 +25,17 @@ pub(crate) const NOTES: &str = "ext.sample.notes";
 pub(crate) const WELCOME: &str = "ext.sample.welcome";
 /// The command its menu and Active Bar rows run.
 pub(crate) const SAY_HELLO: &str = "ext.sample.say_hello";
+/// That command's catalog row: it runs headless as well as in a window.
+static SAY_HELLO_ROW: super::CommandMetadata = super::CommandMetadata {
+    id: SAY_HELLO,
+    category: "sample",
+    flags: super::CommandFlags::RUNS_HEADLESS,
+    ..super::CommandMetadata::DEFAULT
+};
+
+/// What the sample's command handler sends; the sample ignores it.
+#[derive(Debug, Clone, PartialEq)]
+struct HelloSaid;
 /// Its one preference.
 pub(crate) const GREETING: &str = "ext.sample.greeting";
 /// The catalog message every sample label uses ("Wiki").
@@ -107,6 +119,10 @@ impl Extension for Sample {
             .start_screen
             .add(WELCOME, LABEL, StartScreenSlot::HomeEnd, section)
             .expect("the section");
+        points
+            .commands
+            .add(&SAY_HELLO_ROW, |_args| Ok(HelloSaid))
+            .expect("the command its rows run");
         points
             .menu_rows
             .add_menu_row(MenuRoot::Tools, LABEL, SAY_HELLO)

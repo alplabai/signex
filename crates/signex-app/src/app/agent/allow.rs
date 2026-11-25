@@ -22,6 +22,10 @@ pub(super) const WINDOW_LAYOUT: &[&str] = &[
     "untile_documents",
 ];
 
+/// Why an extension's command is refused on the agent channel.
+pub(super) const EXTENSION_COMMANDS_CLOSED: &str =
+    "extension commands are not open to the agent socket in version 1";
+
 /// Is `command` one of [`WINDOW_LAYOUT`]?
 pub(in crate::app) fn is_window_layout(command: &AppCommandId) -> bool {
     WINDOW_LAYOUT.contains(&command.as_str())
@@ -30,6 +34,10 @@ pub(in crate::app) fn is_window_layout(command: &AppCommandId) -> bool {
 /// Why `command` is not on the agent channel, or `None` when it is.
 pub(super) fn refusal(command: &AppCommandId) -> Option<String> {
     let id = command.as_str();
+    // Installed or not (#2495, `docs/EXTENSION_API.md`, "Catalog commands").
+    if command.is_extension() {
+        return Some(EXTENSION_COMMANDS_CLOSED.to_string());
+    }
     let Some(meta) = metadata_for(command) else {
         return Some(format!(
             "unknown command `{id}`{}",
@@ -217,6 +225,19 @@ mod tests {
                 "waive_drc_violation",
             ]
         );
+    }
+
+    /// #2495: no extension command is on the agent channel in version 1,
+    /// with a reason that says so rather than "unknown command".
+    #[test]
+    fn an_extension_command_is_refused_as_closed_to_the_socket() {
+        for name in ["ext.sample.say_hello", "ext.other.read_notes"] {
+            assert_eq!(
+                refusal(&id(name)).as_deref(),
+                Some(EXTENSION_COMMANDS_CLOSED),
+                "{name}"
+            );
+        }
     }
 
     #[test]

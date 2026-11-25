@@ -1,7 +1,8 @@
 //! What one command request came to, read the same way on every surface
 //! (#2495): [`RequestOutcome`] is the typed reading of a [`CommandOutcome`].
-//! The agent reply and `signex-cli` print it through
-//! [`crate::headless::outcome_verdict`]; nothing unknown is ever read as ran.
+//! The agent reply prints it through [`crate::headless::outcome_verdict`],
+//! and `signex-cli` through [`RequestOutcome::after_notice`] then
+//! [`RequestOutcome::into_verdict`]; nothing unknown is ever read as ran.
 
 use serde_json::Value;
 use signex_i18n::RenderTranslatable;

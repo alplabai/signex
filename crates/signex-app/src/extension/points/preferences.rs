@@ -4,8 +4,8 @@
 //! The values live in `prefs.json`, in its `extensions` object, under their
 //! full keys (`fonts::extension_prefs`). At launch each extension receives
 //! its values once, through `Extension::preferences_loaded`; it saves one
-//! with [`crate::extension::save_preference`], which writes off the update
-//! thread.
+//! of the keys it added with `PreferenceValues::save`, which writes off the
+//! update thread.
 
 use std::collections::BTreeMap;
 
@@ -22,19 +22,34 @@ pub struct Preferences {
 }
 
 /// One extension's preference values: the stored value of each key it
-/// added, else that key's default.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct PreferenceValues(BTreeMap<&'static str, serde_json::Value>);
+/// added, else that key's default. Only the application makes one, for the
+/// extension that added the keys; the extension keeps it to save a value
+/// later (`PreferenceValues::save`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PreferenceValues {
+    owner: ExtensionId,
+    values: BTreeMap<&'static str, serde_json::Value>,
+}
 
 impl PreferenceValues {
     /// The value of `key`; `None` for a key the extension did not add.
     pub fn get(&self, key: &str) -> Option<&serde_json::Value> {
-        self.0.get(key)
+        self.values.get(key)
     }
 
     /// Is there no value at all?
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.values.is_empty()
+    }
+
+    /// The extension the values belong to.
+    pub fn owner(&self) -> &ExtensionId {
+        &self.owner
+    }
+
+    /// The key `key` as the extension added it; `None` for one it did not.
+    pub(crate) fn added_key(&self, key: &str) -> Option<&'static str> {
+        self.values.get_key_value(key).map(|(added, _)| *added)
     }
 }
 
@@ -79,11 +94,13 @@ impl Preferences {
         &self,
         stored: &BTreeMap<String, serde_json::Value>,
     ) -> PreferenceValues {
-        PreferenceValues(
-            self.entries
+        PreferenceValues {
+            owner: self.owner.clone(),
+            values: self
+                .entries
                 .iter()
                 .map(|(key, default)| (*key, stored.get(*key).unwrap_or(default).clone()))
                 .collect(),
-        )
+        }
     }
 }

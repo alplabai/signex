@@ -177,17 +177,36 @@ fn preferences_load_from_their_namespace_with_defaults() {
     assert_eq!(values.get("ext.other.greeting"), None);
 }
 
-/// A save goes through a `Task`, never inline, and only for the owner's
-/// own key.
+/// A save goes through a `Task`, never inline, and only for a key the
+/// owner added.
 #[test]
 fn a_preference_is_saved_only_under_its_owners_prefix() {
-    let owner = sample_id();
-    assert!(save_preference(&owner, GREETING, serde_json::json!("hey")).is_ok());
+    let (mut host, seen) = sample_host();
+    host.load_preferences(&BTreeMap::new());
+    let values = seen
+        .lock()
+        .expect("seen")
+        .preferences
+        .clone()
+        .expect("loaded");
+    assert_eq!(values.owner(), &sample_id());
+    assert!(values.save(GREETING, serde_json::json!("hey")).is_ok());
     assert_eq!(
-        save_preference(&owner, "ext.other.greeting", serde_json::json!(1)).err(),
+        values
+            .save("ext.other.greeting", serde_json::json!(1))
+            .err(),
         Some(RegisterError::NotOwned("ext.other.greeting".to_owned()))
     );
-    assert!(save_preference(&owner, "theme", serde_json::json!(1)).is_err());
+    assert!(values.save("theme", serde_json::json!(1)).is_err());
+    // Under the owner's prefix, but never added with `Preferences::add`.
+    assert_eq!(
+        values
+            .save("ext.sample.unknown", serde_json::json!(1))
+            .err(),
+        Some(RegisterError::NotRegistered(
+            "ext.sample.unknown".to_owned()
+        ))
+    );
 }
 
 /// Registers through `add`, for the refusal tests.
@@ -278,6 +297,44 @@ fn install_refuses_an_addition_outside_the_namespace_or_added_twice() {
         None
     );
 }
+
+/// A row must run a command its extension added: install refuses one that
+/// names a command under the owner's prefix that was never added, from the
+/// menu bar or the Active Bar, and accepts it once the command is added
+/// (in either order).
+#[test]
+fn install_refuses_a_row_whose_command_the_extension_never_added() {
+    use super::points::PcbBarGroup;
+    assert_eq!(
+        refusal(|p| {
+            let _ = p.menu_rows.add_menu_row(MenuRoot::Tools, LABEL, SAY_HELLO);
+        }),
+        Some(RegisterError::NotRegistered(SAY_HELLO.to_owned()))
+    );
+    assert_eq!(
+        refusal(|p| {
+            let _ = p
+                .menu_rows
+                .add_active_bar_row(PcbBarGroup::Route, LABEL, SAY_HELLO);
+        }),
+        Some(RegisterError::NotRegistered(SAY_HELLO.to_owned()))
+    );
+    assert_eq!(
+        refusal(|p| {
+            let _ = p.menu_rows.add_menu_row(MenuRoot::Tools, LABEL, SAY_HELLO);
+            let _ = p.commands.add(&ROW_SAY_HELLO, |_| Ok(Pinged(0)));
+        }),
+        None
+    );
+}
+
+/// The catalog row of [`SAY_HELLO`], for the row tests.
+static ROW_SAY_HELLO: CommandMetadata = CommandMetadata {
+    id: SAY_HELLO,
+    category: "sample",
+    flags: CommandFlags::RUNS_HEADLESS,
+    ..CommandMetadata::DEFAULT
+};
 
 /// The Community binary installs nothing: no panel, no row, no section, no
 /// preference, and its menu bar is the built-in one row for row.
