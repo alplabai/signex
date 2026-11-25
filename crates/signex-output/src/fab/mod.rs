@@ -44,7 +44,8 @@ use signex_types::zone_keepout::KEEPOUT_FILL;
 use thiserror::Error;
 
 pub use frame::FabFrame;
-pub use notes::FabNote;
+pub use notes::{DrawnCopperItem, FabNote};
+pub use pcb_geom::DrawnCopperFault;
 
 use layers::{CopperStack, FabLayer, file_function, file_polarity, file_suffix};
 use notes::Tally;
@@ -270,12 +271,14 @@ pub fn generate(
             contents: ipc2581::write_ipc2581(board, extras, &stack, name, &mut own),
         });
         skipped = skipped.max(own.skipped);
+        tally.merge_drawn_copper(&own);
     }
     if let Some(form) = options.odb {
         let mut own = Tally::default();
         let job = odb::write_odb(board, extras, &stack, name, &mut own);
         odb_files(form, name, job, &mut files);
         skipped = skipped.max(own.skipped);
+        tally.merge_drawn_copper(&own);
     }
     let facts = job::JobFacts {
         name: name.to_string(),

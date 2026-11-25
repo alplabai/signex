@@ -217,3 +217,62 @@ fn only_the_documents_ticked_is_not_a_fabrication_set() {
     FabOutput::Ipc2581.toggle(&mut kinds);
     assert!(kinds.has_fab_files());
 }
+
+/// #2883: a copper drawing the conversion refuses is left out of the
+/// Gerber, and the Messages line names it, its layer and why.
+#[test]
+fn a_copper_drawing_left_out_of_the_gerber_is_named_in_messages() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut board = board(&[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]);
+    let drawing = |id: u128, kind: &str, rim_x: f64| signex_types::pcb::BoardGraphic {
+        uuid: Uuid::from_u128(id),
+        graphic_type: kind.into(),
+        layer: "TopCopper".into(),
+        width: 0.2,
+        start: Some(Point::new(2.0, 2.0)),
+        end: Some(Point::new(rim_x, 2.0)),
+        center: Some(Point::new(5.0, 5.0)),
+        radius: 1.0,
+        points: Vec::new(),
+        text: String::new(),
+        font_size: 0.0,
+    };
+    board.graphics.push(drawing(0x90, "line", 8.0));
+    board.graphics.push(drawing(0x91, "circle", f64::NAN));
+    let options = FabOptions {
+        drill: false,
+        centroid: false,
+        test_netlist: false,
+        ipc2581: false,
+        odb: None,
+        ..FabOptions::all("b")
+    };
+    let written = write_fab_outputs(&board, &options, tmp.path()).expect("written");
+    let top = std::fs::read_to_string(tmp.path().join("b-copper-l1-top.gbr")).unwrap();
+    assert!(
+        top.contains("X8000000Y-2000000D01*"),
+        "the good line: {top}"
+    );
+    assert!(
+        !top.lines().any(|l| l.contains('I') && l.ends_with("D01*")),
+        "no circle: {top}"
+    );
+    let i18n = signex_i18n::I18n::new(&signex_i18n::LanguagePref::Locale("en-US".into()));
+    let (line, is_warning) = super::written_message(&written, &i18n);
+    assert!(is_warning, "{line}");
+    let id = Uuid::from_u128(0x91).to_string();
+    let layer = crate::pcb_canvas::layer_style::copper_name(
+        &i18n,
+        signex_types::pcb_layer::CopperLayer::Top,
+    )
+    .into_string();
+    for part in [
+        "The copper circle",
+        id.as_str(),
+        layer.as_str(),
+        "graphic.radius",
+    ] {
+        assert!(line.contains(part), "{part} in {line}");
+    }
+    assert!(!line.contains(&Uuid::from_u128(0x90).to_string()), "{line}");
+}

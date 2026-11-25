@@ -6,11 +6,11 @@ use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
 use super::fixture::{fixture_board, p};
-use crate::fab::FabExtras;
 use crate::fab::collect;
 use crate::fab::layers::{CopperStack, FabLayer};
 use crate::fab::marks::{Function, Mark};
 use crate::fab::notes::Tally;
+use crate::fab::{DrawnCopperFault, DrawnCopperItem, FabExtras, FabNote, FabOptions, generate};
 
 /// The function and net of each stroke on `layer`'s image.
 fn strokes(board: &PcbBoard, layer: FabLayer) -> Vec<(Function, Option<String>)> {
@@ -100,4 +100,83 @@ fn drawings_and_strings_on_a_legend_stay_drawings() {
         marks.iter().all(|(f, _)| *f == Function::Graphic),
         "{marks:?}"
     );
+}
+
+/// The fixture board with a good copper line, and optionally a copper
+/// circle whose rim is not a number and a copper string whose turn is not
+/// one: neither converts to copper.
+fn with_good_and_bad(bad: bool) -> PcbBoard {
+    let mut board = fixture_board();
+    board.graphics.push(drawing(85, "line", "TopCopper"));
+    if bad {
+        let mut circle = drawing(86, "circle", "TopCopper");
+        circle.end = Some(p(f64::NAN, 3.0));
+        board.graphics.push(circle);
+        board.texts.push(BoardText {
+            uuid: Uuid::from_u128(87),
+            text: "REV A".into(),
+            position: p(2.0, 6.0),
+            layer: "TopCopper".into(),
+            font_size: 1.0,
+            rotation: f64::NAN,
+        });
+    }
+    board
+}
+
+fn skipped(item: DrawnCopperItem, field: &'static str) -> FabNote {
+    FabNote::DrawnCopperSkipped {
+        item,
+        layer: CopperLayer::Top,
+        fault: DrawnCopperFault::Geometry(pcb_geom::GeomError::Unrepresentable(field)),
+    }
+}
+
+#[test]
+fn copper_the_conversion_refuses_is_left_out_of_the_gerber_and_named() {
+    let top = FabLayer::Copper(CopperLayer::Top);
+    let good = strokes(&with_good_and_bad(false), top);
+    assert!(good.len() > strokes(&fixture_board(), top).len());
+    assert_eq!(
+        strokes(&with_good_and_bad(true), top),
+        good,
+        "the good line only"
+    );
+    let gerber_only = FabOptions {
+        drill: false,
+        centroid: false,
+        test_netlist: false,
+        ipc2581: false,
+        odb: None,
+        ..FabOptions::all("fab")
+    };
+    let board = with_good_and_bad(true);
+    let set = generate(&board, &FabExtras::default(), &gerber_only).expect("generates");
+    let circle = DrawnCopperItem::Drawing {
+        id: Uuid::from_u128(86),
+        kind: Some(signex_types::pcb_graphic::BoardGraphicKind::Circle),
+    };
+    let string = DrawnCopperItem::Text {
+        id: Uuid::from_u128(87),
+    };
+    assert_eq!(
+        set.notes,
+        vec![
+            skipped(circle, "graphic.radius"),
+            skipped(string, "text.rotation")
+        ]
+    );
+    // Every copper output skips them; each is named once.
+    let all = generate(&board, &FabExtras::default(), &FabOptions::all("fab")).expect("generates");
+    for note in [
+        skipped(circle, "graphic.radius"),
+        skipped(string, "text.rotation"),
+    ] {
+        assert_eq!(
+            all.notes.iter().filter(|n| **n == note).count(),
+            1,
+            "{:?}",
+            all.notes
+        );
+    }
 }

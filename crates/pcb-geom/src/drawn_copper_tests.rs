@@ -117,3 +117,44 @@ fn drawings_and_strings_off_copper_are_not_copper() {
     b.texts.push(string("TopSilkscreen"));
     assert!(drawn_copper(&b).is_empty());
 }
+
+#[test]
+fn a_copper_drawing_that_does_not_convert_is_refused_whole_with_why() {
+    let mut b = board();
+    let mut bad = circle("TopCopper");
+    bad.uuid = Uuid::from_u128(3);
+    bad.end = Some(Point::new(f64::NAN, 10.0));
+    b.graphics.push(bad.clone());
+    b.graphics.push(circle("TopCopper"));
+    assert_eq!(
+        super::board_graphic_copper(&bad),
+        Err(super::DrawnCopperFault::Geometry(
+            crate::GeomError::Unrepresentable("graphic.radius")
+        ))
+    );
+    let copper = drawn_copper(&b);
+    assert!(!copper.is_empty(), "the good circle is copper");
+    assert!(
+        copper.iter().all(|c| !matches!(
+            c.item,
+            ItemRef::Graphic { graphic, .. } if graphic == Uuid::from_u128(3)
+        )),
+        "the refused circle gives no copper"
+    );
+}
+
+#[test]
+fn a_drawing_of_an_unknown_kind_or_missing_its_points_is_refused() {
+    let mut spline = circle("TopCopper");
+    spline.graphic_type = "spline".into();
+    assert_eq!(
+        super::board_graphic_copper(&spline),
+        Err(super::DrawnCopperFault::UnknownKind)
+    );
+    let mut bare = circle("TopCopper");
+    bare.center = None;
+    assert_eq!(
+        super::board_graphic_copper(&bare),
+        Err(super::DrawnCopperFault::MissingPoints)
+    );
+}

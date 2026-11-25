@@ -16,7 +16,7 @@ use super::draw::{Drawing, Drawn, Pen, draw};
 use super::frame::{FabFrame, fab_angle_udeg, is_quarter_turn, swaps_axes};
 use super::layers::{CopperStack, FabLayer, Face};
 use super::marks::{ApertureShape, Attributes, Function, Mark, PadKey, Step, doubled_area};
-use super::notes::Tally;
+use super::notes::{DrawnCopperItem, Tally};
 use super::{FabExtras, FabStroke};
 
 /// The pen the board profile is drawn with: 0.1 mm.
@@ -569,6 +569,18 @@ fn board_graphics(images: &mut Images, board: &PcbBoard, frame: FabFrame, tally:
         let Some(layer) = FabLayer::of_token(&graphic.layer) else {
             continue;
         };
+        // On copper, the item the design rule check sees no copper of
+        // (#2883) is left out whole and named.
+        if let FabLayer::Copper(copper) = layer
+            && let Err(fault) = pcb_geom::board_graphic_copper(graphic)
+        {
+            let item = DrawnCopperItem::Drawing {
+                id: graphic.uuid,
+                kind: graphic.kind(),
+            };
+            tally.skip_drawn_copper(item, copper, fault);
+            continue;
+        }
         let pen = Pen {
             to_fab: &board_to_fab,
             arc_ccw_without_mid: false,
