@@ -2,9 +2,9 @@
 //!
 //! [`Extension::register`](super::Extension::register) fills an
 //! [`ExtensionPoints`] once, when the extension is installed. Each point has a
-//! file of its own. Every point is empty in this version of the API; the
-//! changes that open a point add its entry type and its `add` method there
-//! and list it in `docs/EXTENSION_API.md`, "Changes by version".
+//! file of its own. A point not open yet is empty; the change that opens it
+//! adds its entry type and its `add` method there and lists it in
+//! `docs/EXTENSION_API.md`, "Changes by version".
 //!
 //! Boundaries (ADR-0006): [`CatalogCommands`] is what the application core
 //! sees, so it names no iced type. The other points are GUI adapters.
@@ -15,7 +15,7 @@ mod panels;
 mod preferences;
 mod start_screen;
 
-pub use commands::CatalogCommands;
+pub use commands::{CatalogCommands, CommandRegistrationError, ExtensionCommand};
 pub use menu_rows::MenuRows;
 pub use panels::Panels;
 pub use preferences::Preferences;
@@ -45,8 +45,8 @@ pub struct ExtensionPoints {
 impl ExtensionPoints {
     pub(crate) fn new(owner: ExtensionId) -> Self {
         Self {
+            commands: CatalogCommands::new(owner.clone()),
             owner,
-            commands: CatalogCommands::default(),
             panels: Panels::default(),
             menu_rows: MenuRows::default(),
             start_screen: StartScreenSections::default(),

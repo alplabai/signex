@@ -8,6 +8,7 @@
 //! `Message::Extension` messages addressed to it. The whole contract,
 //! versioning included, is in `docs/EXTENSION_API.md`.
 
+mod dispatch;
 mod host;
 mod id;
 mod message;
@@ -16,7 +17,10 @@ pub mod points;
 pub use host::{ExtensionHost, InstallError};
 pub use id::{ExtensionId, InvalidExtensionName};
 pub use message::ExtensionMsg;
-pub use points::ExtensionPoints;
+pub use points::{CommandRegistrationError, ExtensionCommand, ExtensionPoints};
+// The catalog row types a command is added with, and its handler's refusal.
+pub use signex_commands::catalog::{CommandFlags, CommandMetadata};
+pub use signex_i18n_ids::Translatable;
 
 use iced::Task;
 
@@ -54,5 +58,7 @@ pub trait Extension: Send + 'static {
     }
 }
 
+#[cfg(test)]
+mod command_tests;
 #[cfg(test)]
 mod tests;

@@ -4,8 +4,12 @@
 use std::fmt;
 
 use iced::Task;
+use signex_commands::catalog::CommandMetadata;
 
-use super::{Extension, ExtensionId, ExtensionMsg, ExtensionPoints, InvalidExtensionName};
+use super::{
+    CommandRegistrationError, Extension, ExtensionCommand, ExtensionId, ExtensionMsg,
+    ExtensionPoints, InvalidExtensionName,
+};
 use crate::app::Message;
 
 /// One installed extension and what it registered.
@@ -31,6 +35,12 @@ pub enum InstallError {
     InvalidName(InvalidExtensionName),
     /// Two extensions gave the same name.
     DuplicateName(String),
+    /// A catalog command an extension offered was refused: the first
+    /// refusal, with the extension's name.
+    Command {
+        extension: String,
+        error: CommandRegistrationError,
+    },
 }
 
 impl fmt::Display for InstallError {
@@ -39,6 +49,9 @@ impl fmt::Display for InstallError {
             Self::InvalidName(error) => fmt::Display::fmt(error, f),
             Self::DuplicateName(name) => {
                 write!(f, "two extensions are named {name:?}")
+            }
+            Self::Command { extension, error } => {
+                write!(f, "extension {extension:?}: command {error}")
             }
         }
     }
@@ -49,7 +62,8 @@ impl std::error::Error for InstallError {}
 impl ExtensionHost {
     /// Install `extensions` in order: check each name, then let each one
     /// register its additions. Refuses the whole set if a name is invalid or
-    /// taken, so a binary never runs with half its extensions.
+    /// taken, or a registration was refused, so a binary never runs with
+    /// half its extensions.
     pub fn install(extensions: Vec<Box<dyn Extension>>) -> Result<Self, InstallError> {
         let mut installed: Vec<Installed> = Vec::with_capacity(extensions.len());
         for mut extension in extensions {
@@ -59,6 +73,12 @@ impl ExtensionHost {
             }
             let mut points = ExtensionPoints::new(id.clone());
             extension.register(&mut points);
+            if let Some(error) = points.commands.refused().first() {
+                return Err(InstallError::Command {
+                    extension: id.name().to_owned(),
+                    error: error.clone(),
+                });
+            }
             installed.push(Installed {
                 id,
                 extension,
@@ -81,6 +101,25 @@ impl ExtensionHost {
     /// What each installed extension registered, in install order.
     pub fn points(&self) -> impl Iterator<Item = &ExtensionPoints> {
         self.installed.iter().map(|entry| &entry.points)
+    }
+
+    /// The installed command `id`. Only an `ext.` id can name one, and only
+    /// its owner's table is searched.
+    pub fn command(&self, id: &str) -> Option<&ExtensionCommand> {
+        let rest = id.strip_prefix(signex_commands::EXTENSION_ID_PREFIX)?;
+        let (name, _) = rest.split_once('.')?;
+        self.installed
+            .iter()
+            .find(|entry| entry.id.name() == name)
+            .and_then(|entry| entry.points.commands.get(id))
+    }
+
+    /// Every installed command, by extension in install order, then in the
+    /// order each extension added them.
+    pub fn commands(&self) -> impl Iterator<Item = &ExtensionCommand> {
+        self.installed
+            .iter()
+            .flat_map(|entry| entry.points.commands.iter())
     }
 
     /// Hand `message` to the one extension it names. A message for an id
@@ -112,5 +151,19 @@ impl crate::app::Signex {
     /// The installed extensions.
     pub fn extensions(&self) -> &ExtensionHost {
         &self.extensions
+    }
+
+    /// The catalog row of `command`: a built-in one, else an installed
+    /// extension's. The lookup every dispatch path that must also know an
+    /// extension's commands goes through.
+    pub fn command_metadata(
+        &self,
+        command: &signex_commands::AppCommandId,
+    ) -> Option<&'static CommandMetadata> {
+        crate::keymap::metadata_for(command).or_else(|| {
+            self.extensions
+                .command(command.as_str())
+                .map(ExtensionCommand::metadata)
+        })
     }
 }
