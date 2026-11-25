@@ -89,10 +89,6 @@ pub struct Tally {
     pub edits: usize,
     pub undos: usize,
     pub redos: usize,
-    /// Routed tracks laid over a same-net track already there (the same
-    /// layer, collinear, sharing a stretch): a router defect, #2492, counted
-    /// until it is fixed instead of failing the soak.
-    pub overlapped_tracks: usize,
 }
 
 /// The engine, the history the soak expects of it, and what the board held
@@ -196,13 +192,21 @@ impl Soak<'_> {
         match routed {
             Routed::Landed(draft) => {
                 self.tally.landed += 1;
-                let board = self.engine.board();
-                self.tally.overlapped_tracks += draft
-                    .tracks
-                    .iter()
-                    .filter(|t| board.segments.iter().any(|s| overlaps(t, s)))
-                    .count();
                 self.stepped(before);
+                // A route never lays a track over same-net copper (#2492).
+                let board = self.engine.board();
+                let overlap = draft.tracks.iter().find_map(|t| {
+                    board
+                        .segments
+                        .iter()
+                        .find(|s| overlaps(t, s))
+                        .map(|s| (t, s))
+                });
+                if let Some((laid, under)) = overlap {
+                    return Err(format!(
+                        "a routed track lies over a same-net track: {laid:?} over {under:?}"
+                    ));
+                }
             }
             Routed::Refused => {
                 self.tally.refused += 1;

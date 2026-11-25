@@ -169,7 +169,11 @@ clearance the design rules ask from other nets' copper (#2389).
   (90°: axis-aligned; 45°: axis and diagonal, each corner turning 45° at
   most; any angle: pulled taut) and joins the point with the rule's legs.
   With no way within the search budget the click adds nothing and the
-  Messages panel says so.
+  Messages panel says so. The route's own net is no obstacle, so a leg can
+  run along a track of its net on its layer (one already on the board, or
+  an earlier leg doubling back): the leg lays only the stretches that track
+  does not cover, ending on its ends, never a second track over it (#2492,
+  `route/cover.rs`).
 - **Preview.** The leg on the pointer is routed once per change of what it
   depends on (the pointer's grid point, a leg, the board revision, the
   corner rule, the mode, the layer), not per repaint, with a smaller search
@@ -243,8 +247,7 @@ empty corpus instead.
   just-routed draft fits the board it was routed on. A failure prints its
   seed, action index and the command that replays it. A routed track laid
   over a same-net track already there (same layer, on one line, sharing a
-  stretch) is counted in the run's report (`overlapped_tracks`), not
-  failed, until the router defect #2492 is fixed. Not checked yet (#2482):
+  stretch) fails the soak (#2492). Not checked yet (#2482):
   dangling track ends and connectivity against the net list. The soak's own
   edits make both on purpose (a stub routed into open board, a track moved
   off its pads or across another net), so these checks must first tell an
