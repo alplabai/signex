@@ -77,6 +77,8 @@ limits! {
     MinPasteExpansion => "min_paste_expansion", false;
     MaxPasteExpansion => "max_paste_expansion", true;
     MinCourtyardGap => "min_courtyard_gap", false;
+    MaxComponentHeight => "max_component_height", true;
+    MinBodyClearance => "min_body_clearance", false;
 }
 
 impl LimitKind {
@@ -101,6 +103,7 @@ impl LimitKind {
                 | LimitKind::MinSilkToPad
                 | LimitKind::MinSilkToSilk
                 | LimitKind::MinCourtyardGap
+                | LimitKind::MinBodyClearance
                 | LimitKind::MinMaskExpansion
                 | LimitKind::MinPasteExpansion
         )
@@ -127,6 +130,8 @@ impl LimitKind {
             LimitKind::MinMaskExpansion | LimitKind::MaxMaskExpansion => V::MaskExpansion,
             LimitKind::MinPasteExpansion | LimitKind::MaxPasteExpansion => V::PasteExpansion,
             LimitKind::MinCourtyardGap => V::CourtyardOverlap,
+            LimitKind::MaxComponentHeight => V::ComponentHeight,
+            LimitKind::MinBodyClearance => V::BodyClearance,
         }
     }
 
