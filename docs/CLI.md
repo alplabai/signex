@@ -1061,12 +1061,27 @@ the Update PCB dialog shows ([UPDATE_PCB.md](UPDATE_PCB.md)) and answers
 with it as JSON.
 
 ```text
-update_pcb_from_schematic document=<project, one of its sheets or its board> dry_run=true
-update_pcb_from_schematic document=<project, one of its sheets or its board> apply=true
+update_pcb_from_schematic [document=<project, one of its sheets or its board>] dry_run=true
+update_pcb_from_schematic [document=<project, one of its sheets or its board>] apply=true
 ```
 
-- `document` names the project. Over the agent channel it is one of the
-  project's sheets or its board, as for every command.
+- `document` names the project. Left out, the run acts on the active
+  project's board, so `update_pcb_from_schematic apply=true` works as it
+  did before #2470. The active project is the workspace's: the project
+  opened (or opened again) last, headless too, so `signex-cli run` on one
+  project acts on that project; closing it makes a neighbour active. It is
+  never the tab in view. With one project open and none made active, that
+  project is the default.
+- Another project's board is never updated in the active one's place.
+  When the active project has no board, the run is refused and the refusal
+  lists the other open projects' boards to name with `document=`; with
+  several projects open and none active it is refused and lists every open
+  project's board. With no board to list it is refused as having none, and
+  with no project open as not part of a project.
+- Over the agent channel `document` is always required and is one of the
+  project's sheets or its board: the channel's gate needs a named document
+  (an agent never acts on the person's active one), so the active-project
+  default does not apply there.
 - `dry_run=true` lists the changes and changes nothing: no undo step, no
   dirty flag. When `apply=true` is given too (`--dry-run` on a script), the
   dry run wins.
@@ -1075,7 +1090,8 @@ update_pcb_from_schematic document=<project, one of its sheets or its board> app
   when the board is closed with unsaved edits, read-only or moved on while
   the list was read. The rules the schematic's Net Parameters directives ask
   for are applied with it, as Execute does. The person's tab does not move.
-- Without either the command is refused. It is refused too while the Update
+- Without either the command is refused, a bare headless run included (it
+  opens no dialog). It is refused too while the Update
   PCB dialog is open, or while another run waits for its list; the dialog
   does not open over a run that waits.
 - The project's board is opened when it is not; a project with no board is

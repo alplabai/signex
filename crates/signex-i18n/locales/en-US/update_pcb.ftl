@@ -138,6 +138,14 @@ update-pcb-refused = Update PCB did not run: { $why }
 update-pcb-command-mode = `update_pcb_from_schematic` lists its changes in the Update PCB dialog; run it with `apply=true` to execute the default ticks, or with `dry_run=true` to list them and change nothing
 # The dialog is open, or another run from operands has not finished.
 update-pcb-busy = Update PCB is already open or running; close its dialog or wait for the run to finish
+# Run with no `document` when the active project has no board ($case
+# `active-has-none`; $boards: the other open projects' boards) or no project
+# is active among several ($case `no-active`; $boards: every open project's
+# board). $boards lists their paths, comma-separated.
+update-pcb-which-board = `update_pcb_from_schematic` needs `document=` to choose a board: { $case ->
+    [active-has-none] the active project has no board
+   *[no-active] no project is active
+}; the boards of the open projects are { $boards }
 update-pcb-library-not-opened = Update PCB: library { $library } could not be opened ({ $why }); its parts have no footprint.
 update-pcb-report-saved = Update PCB report saved to { $path }.
 update-pcb-report-failed = The Update PCB report could not be written: { $why }

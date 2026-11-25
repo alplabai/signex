@@ -46,7 +46,7 @@ fn a_headless_run_that_cannot_read_ends_without_a_dialog() {
     assert!(app.ui_state.update_pcb.is_none());
 }
 
-fn project(app: &mut Signex, dir: &std::path::Path) {
+pub(super) fn project(app: &mut Signex, dir: &std::path::Path) {
     use signex_types::project::ProjectData;
     let id = app.document_state.mint_project_id();
     app.document_state.projects.push(crate::app::LoadedProject {
@@ -145,7 +145,7 @@ pub(super) fn headless_project_with(
 fn the_headless_form_refuses_apply_false() {
     let tmp = tempfile::tempdir().expect("tmp");
     let mut app = headless_project(tmp.path());
-    let outcome = run(&mut app, &[&document(tmp.path()), "apply=false"]);
+    let outcome = run(&mut app, &["apply=false"]);
     assert!(
         matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("apply=true")),
         "{outcome:?}"
@@ -154,16 +154,22 @@ fn the_headless_form_refuses_apply_false() {
 }
 
 /// `apply=true` reads the design, executes the default ticks and leaves no
-/// dialog behind; it answers with the list of what it did (#2470).
+/// dialog behind; it answers with the list of what it did (#2470). With no
+/// `document` it acts on the active project's board (Caner, 2026-11-25).
 #[test]
 fn the_headless_form_executes_without_a_dialog() {
     let tmp = tempfile::tempdir().expect("tmp");
     let mut app = headless_project(tmp.path());
-    let outcome = run(&mut app, &[&document(tmp.path()), "apply=true"]);
+    let outcome = run(&mut app, &["apply=true"]);
     let crate::app::command::CommandOutcome::Answered(answer) = &outcome else {
         panic!("answered with the change list: {outcome:?}");
     };
     assert_eq!(answer["dry_run"], false, "{answer}");
+    let board = tmp.path().join("demo.snxpcb").display().to_string();
+    assert_eq!(
+        answer["board"], board,
+        "the active project's board: {answer}"
+    );
     assert!(app.ui_state.update_pcb.is_none(), "no dialog is left open");
 }
 

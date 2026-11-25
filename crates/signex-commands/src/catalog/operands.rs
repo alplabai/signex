@@ -328,9 +328,11 @@ pub const NEW_PROJECT: &[Operand] = &[
 /// Update PCB without the dialog (#1312, #2470): for the project of
 /// `document` (the project, one of its sheets or its board), `apply=true`
 /// executes the rows ticked by default and `dry_run=true` lists them and
-/// changes nothing. Either answers with the change list.
+/// changes nothing. Either answers with the change list. Without `document`
+/// it acts on the active project's board, so `apply=true` alone still runs;
+/// with no board there, or no active project, it is refused, listing boards.
 pub const UPDATE_PCB: &[Operand] = &[
-    required("document", OperandKind::Document),
+    optional("document", OperandKind::Document),
     optional("apply", OperandKind::Bool),
     optional("dry_run", OperandKind::Bool),
 ];

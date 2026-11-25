@@ -60,7 +60,7 @@ fn fixture(dir: &std::path::Path) -> Signex {
     headless_project_with(dir, board, vec![r1()])
 }
 
-fn board_engine(app: &Signex, dir: &std::path::Path) -> &signex_engine::pcb::BoardEngine {
+fn board_engine<'a>(app: &'a Signex, dir: &std::path::Path) -> &'a signex_engine::pcb::BoardEngine {
     app.document_state
         .board_engine(&dir.join("demo.snxpcb"))
         .expect("the board is open")
@@ -211,19 +211,163 @@ fn a_document_of_no_open_project_is_refused() {
     assert!(app.ui_state.update_pcb.is_none());
 }
 
-/// A headless run that names no document is asked for one, and opens
-/// nothing.
+/// A bare headless run is asked for `apply=true` or `dry_run=true`, and
+/// opens nothing: no dialog nobody sees.
 #[test]
-fn a_headless_run_without_operands_is_asked_for_its_document() {
+fn a_headless_run_without_operands_is_asked_for_apply_or_dry_run() {
     let tmp = tempfile::tempdir().expect("tmp");
     let mut app = fixture(tmp.path());
     let id = AppCommandId::new("update_pcb_from_schematic").expect("id");
     let (outcome, _task) = app.run_headless_command_in_test(&id, CommandArgs::none());
+    let why = refusal(&outcome);
     assert!(
-        refusal(&outcome).contains("needs the operand `document`"),
+        why.contains("apply=true") && why.contains("dry_run=true"),
         "{outcome:?}"
     );
     assert!(app.ui_state.update_pcb.is_none(), "no dialog opened");
+}
+
+/// No `document`: the run acts on the active project's board (Caner,
+/// 2026-11-25), the old `apply=true` call included.
+#[test]
+fn with_no_document_the_active_projects_board_is_updated() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let mut app = fixture(tmp.path());
+    let answer = answered(run(&mut app, &["dry_run=true"]));
+    let board = tmp.path().join("demo.snxpcb").display().to_string();
+    assert_eq!(answer["board"], board, "{answer}");
+    assert_eq!(row(&answer, "set_value", "R1")["applies"], true);
+    assert_eq!(board_value(&app, tmp.path()), "1k", "a dry run");
+
+    let answer = answered(run(&mut app, &["apply=true"]));
+    assert_eq!(answer["board"], board, "{answer}");
+    assert_eq!(board_value(&app, tmp.path()), "10k");
+    assert_eq!(
+        board_engine(&app, tmp.path()).undo_len(),
+        1,
+        "one undo step"
+    );
+}
+
+/// One project open and none made active: its board is still the default.
+#[test]
+fn with_one_project_open_and_none_active_its_board_is_the_default() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let mut app = fixture(tmp.path());
+    app.document_state.active_project = None;
+    let answer = answered(run(&mut app, &["dry_run=true"]));
+    let board = tmp.path().join("demo.snxpcb").display().to_string();
+    assert_eq!(answer["board"], board, "{answer}");
+}
+
+/// The fixture's project in `first` and a second one in `second`, each with
+/// R1 at 1k on its open board; each tab belongs to its own project.
+fn two_projects(first: &std::path::Path, second: &std::path::Path) -> Signex {
+    let mut app = fixture(first);
+    let mut board: PcbBoard = signex_types::project::SetupProfile::Standard
+        .pcb(4)
+        .new_board();
+    board.footprints.push(r1_footprint());
+    app.open_pcb_tab(second.join("demo.snxpcb"), "demo.snxpcb".to_string(), board);
+    super::tests::project(&mut app, second);
+    let ids = [
+        app.document_state.projects[0].id,
+        app.document_state.projects[1].id,
+    ];
+    for tab in &mut app.document_state.tabs {
+        let owner = usize::from(tab.path.starts_with(second));
+        tab.project_id = Some(ids[owner]);
+    }
+    app
+}
+
+/// The other project's board: still 1k, with no undo step.
+fn assert_untouched(app: &Signex, dir: &std::path::Path) {
+    assert_eq!(board_value(app, dir), "1k", "{} untouched", dir.display());
+    assert!(!board_engine(app, dir).can_undo(), "{}", dir.display());
+}
+
+/// Two projects, the active one with a board: its board is updated and the
+/// other project's is left alone.
+#[test]
+fn with_two_projects_the_active_ones_board_is_updated() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let other = tempfile::tempdir().expect("tmp");
+    let mut app = two_projects(tmp.path(), other.path());
+    app.document_state.active_project = Some(app.document_state.projects[0].id);
+    let answer = answered(run(&mut app, &["apply=true"]));
+    let board = tmp.path().join("demo.snxpcb").display().to_string();
+    assert_eq!(answer["board"], board, "{answer}");
+    assert_eq!(board_value(&app, tmp.path()), "10k");
+    assert_untouched(&app, other.path());
+}
+
+/// Two projects, the active one with no board: refused, listing the other
+/// project's board, and nothing changes; that board is never taken instead.
+#[test]
+fn with_two_projects_and_no_board_on_the_active_one_the_run_is_refused() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let other = tempfile::tempdir().expect("tmp");
+    let mut app = two_projects(tmp.path(), other.path());
+    app.document_state.active_project = Some(app.document_state.projects[0].id);
+    app.document_state.projects[0].data.pcb_file = None;
+    let why = refusal(&run(&mut app, &["apply=true"]));
+    assert!(why.contains("needs `document=`"), "{why}");
+    assert!(why.contains("the active project has no board"), "{why}");
+    let listed = other.path().join("demo.snxpcb").display().to_string();
+    assert!(why.contains(&listed), "{listed} is listed: {why}");
+    let own = tmp.path().join("demo.snxpcb").display().to_string();
+    assert!(!why.contains(&own), "the active project's own file: {why}");
+    assert!(app.ui_state.update_pcb.is_none(), "nothing opened");
+    assert_untouched(&app, tmp.path());
+    assert_untouched(&app, other.path());
+}
+
+/// Headless with several projects open and none active: refused, listing
+/// every open project's board, and nothing changes.
+#[test]
+fn with_several_projects_and_none_active_the_run_is_refused_with_the_list() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let other = tempfile::tempdir().expect("tmp");
+    let mut app = two_projects(tmp.path(), other.path());
+    app.document_state.active_project = None;
+    let id = AppCommandId::new("update_pcb_from_schematic").expect("id");
+    let args = CommandArgs::parse_operands(&id, &["apply=true"]).expect("operands");
+    let (outcome, _task) = app.run_headless_command_in_test(&id, args);
+    let why = refusal(&outcome);
+    assert!(why.contains("no project is active"), "{why}");
+    for dir in [tmp.path(), other.path()] {
+        let board = dir.join("demo.snxpcb").display().to_string();
+        assert!(why.contains(&board), "{board} is listed: {why}");
+    }
+    assert!(app.ui_state.update_pcb.is_none(), "nothing opened");
+    assert_untouched(&app, tmp.path());
+    assert_untouched(&app, other.path());
+}
+
+/// No `document` and no board in the open projects: refused for the
+/// missing board.
+#[test]
+fn with_no_document_and_no_board_the_run_is_refused() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let mut app = fixture(tmp.path());
+    app.document_state.projects[0].data.pcb_file = None;
+    let outcome = run(&mut app, &["apply=true"]);
+    assert!(refusal(&outcome).contains("no board yet"), "{outcome:?}");
+    assert!(app.ui_state.update_pcb.is_none(), "nothing opened");
+    assert_eq!(board_value(&app, tmp.path()), "1k", "nothing changed");
+}
+
+/// No `document` and no project open: refused as on trunk.
+#[test]
+fn with_no_document_and_no_project_the_run_is_refused() {
+    let (mut app, _t) = Signex::new();
+    let outcome = run(&mut app, &["dry_run=true"]);
+    assert!(
+        refusal(&outcome).contains("not part of a project"),
+        "{outcome:?}"
+    );
+    assert!(app.ui_state.update_pcb.is_none(), "nothing opened");
 }
 
 /// The headless entry waits for the list and answers it.

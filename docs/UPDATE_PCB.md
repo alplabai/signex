@@ -18,7 +18,7 @@ undoable):
 - the Projects tree's project row, Update PCB Document, for the clicked
   project;
 - headless, CLI and the agent channel (#2470):
-  `update_pcb_from_schematic document=<project, sheet or board> apply=true`
+  `update_pcb_from_schematic [document=<project, sheet or board>] apply=true`
   executes the rows ticked by default without a dialog, and `dry_run=true`
   lists them and changes nothing; both answer with the change list as JSON
   ([CLI.md](CLI.md), "Update PCB from schematic"). Without either, or while
@@ -27,8 +27,14 @@ undoable):
 
 From the menus and the palette the project is the one that owns the
 document in view; from the Projects tree, the clicked one; from operands,
-the one `document` names. When its board is not open, it is opened first
-and the list is read once it is.
+the one `document` names, else the active project (the one opened last,
+not the tab in view; with one project open and none active, that one).
+When the active project has no board, or several projects are open and
+none is active, the run is refused and lists the boards to name; another
+project's board is never updated in its place (Caner, 2026-11-25). The
+agent channel always
+needs `document`: its gate acts only on a named document. When the board
+is not open, it is opened first and the list is read once it is.
 
 ## The dialog
 

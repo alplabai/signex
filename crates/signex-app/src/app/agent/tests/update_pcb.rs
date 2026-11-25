@@ -45,6 +45,9 @@ fn a_dry_run_on_the_channel_is_answered_with_the_change_list() {
     assert!(app.agent.waiting.is_empty(), "answered on the socket");
 }
 
+/// The channel keeps its own rule: its gate needs a named document, so the
+/// only-board fallback of a script's call does not apply here, even with a
+/// single board open.
 #[test]
 fn update_pcb_on_the_channel_needs_its_document() {
     let dir = tempfile::tempdir().unwrap();
@@ -55,5 +58,7 @@ fn update_pcb_on_the_channel_needs_its_document() {
         json!({"dry_run": true}),
     );
     assert_eq!(reply["status"], "refused", "{reply}");
+    let reason = reply["reason"].as_str().unwrap_or_default();
+    assert!(reason.contains("explicit `document`"), "{reply}");
     assert!(app.ui_state.update_pcb.is_none());
 }
