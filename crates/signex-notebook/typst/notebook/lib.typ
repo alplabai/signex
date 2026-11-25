@@ -4,14 +4,34 @@
 // layout. Signex serves it from the signex-notebook crate; the reading
 // rules are in docs/NOTEBOOK_ANNOTATIONS.md.
 
+// The settings the PDF export passes as sys.inputs, each "signex-<name>"
+// (docs/NOTEBOOK_PDF.md). The preview passes none, so every page reads as
+// it does on screen.
+#let _input(name, default) = sys.inputs.at("signex-" + name, default: default)
+#let _on(name, default) = _input(name, if default { "true" } else { "false" }) == "true"
+// The annotation kinds the export leaves out, and the names of the stale
+// references, one per line.
+#let _hidden-kinds = _input("hidden-kinds", "").split(",").filter(k => k != "")
+#let _stale-names = _input("stale", "").split("\n").filter(n => n != "")
+
+// A stale reference's mark, in the left margin level with the line.
+#let _stale-mark = context {
+  let x = here().position().x
+  box(place(dx: 10mm - x, text(font: "DejaVu Sans Mono", size: 8pt, "\u{26A0}")))
+}
+
 // One quiet style for every reference: the name in mono with a thin
-// underline. Pages print black on white.
-#let _reference(kind, name) = box(underline(
-  stroke: 0.4pt,
-  offset: 2pt,
-  evade: false,
-  text(font: "DejaVu Sans Mono", size: 0.9em, name),
-))
+// underline. Pages print black on white. A stale one prints the same, as
+// plain text, with a mark in the margin.
+#let _reference(kind, name) = {
+  box(underline(
+    stroke: 0.4pt,
+    offset: 2pt,
+    evade: false,
+    text(font: "DejaVu Sans Mono", size: 0.9em, name),
+  ))
+  if name in _stale-names { _stale-mark }
+}
 
 // A part, by designator: #component("R7").
 #let component(name) = _reference("component", name)
@@ -56,7 +76,8 @@
 // The function of one block kind. Named fields other than id, title and
 // status (owner, target, chosen, value, ...) are accepted for the kinds
 // that print them; the body is optional.
-#let _entry(kind) = (..args) => {
+// A kind the export leaves out prints nothing.
+#let _entry(kind) = (..args) => if kind in _hidden-kinds { none } else {
   let named = args.named()
   let body = args.pos().at(0, default: none)
   if body == none and "value" in named {
@@ -83,12 +104,47 @@
 // still prints.
 #let annotation(kind: "note", ..args) = _entry(kind)(..args)
 
+// A bookmark for a captioned figure or table, under the section it is in.
+// It is a heading that takes no room, is not numbered and stays out of the
+// contents.
+#let _figure-bookmark(it) = {
+  it
+  if it.caption != none {
+    place(hide(heading(
+      level: 3,
+      numbering: none,
+      outlined: false,
+      bookmarked: true,
+      it.caption.body,
+    )))
+  }
+}
+
+// The title block an export prints at the top of the first page.
+#let _title-block(doc, rev, title, date) = block(
+  width: 100%,
+  below: 1.6em,
+  inset: (bottom: 6pt),
+  stroke: (bottom: 0.6pt),
+  {
+    if title != none { text(size: 16pt, weight: "bold", title); linebreak() }
+    text(size: 9pt, {
+      if doc != none [#doc]
+      if rev != none [ · Rev #rev]
+      if date != none [ · #date]
+    })
+  },
+)
+
 // The report layout: #show: report.with(doc: "DN-0042", rev: "B").
-// No creation date is written, so two exports give the same file.
-#let report(doc: none, rev: none, title: none, body) = {
+// No creation date is written, so two exports give the same file. The
+// export may set the paper, the title block, the contents and the
+// bookmarks (_input above); `date` is the revision date.
+#let report(doc: none, rev: none, title: none, date: none, paper: "a4", body) = {
+  let bookmarks = _on("bookmarks", true)
   set document(title: title, date: none)
   set page(
-    paper: "a4",
+    paper: _input("paper", paper),
     margin: (x: 22mm, y: 24mm),
     footer: context text(size: 8pt)[
       #if doc != none [#doc]
@@ -98,7 +154,10 @@
     ],
   )
   set text(font: "Libertinus Serif", size: 10.5pt)
-  set heading(numbering: "1.1")
+  set heading(numbering: "1.1", bookmarked: if bookmarks { auto } else { false })
   set math.equation(numbering: "(1)")
+  show figure: it => if bookmarks and _on("export", false) { _figure-bookmark(it) } else { it }
+  if _on("title-block", false) { _title-block(doc, rev, title, date) }
+  if _on("contents", false) { outline() }
   body
 }

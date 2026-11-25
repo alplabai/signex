@@ -11,6 +11,8 @@ license.workspace = true
 # tests read and compile the same way (docs/NOTEBOOK_ANNOTATIONS.md).
 [dependencies]
 serde = { workspace = true }
+# The export's checksum, shown on its done card (mockup row 202).
+sha2 = { workspace = true }
 signex-types = { workspace = true }
 thiserror = { workspace = true }
 toml = { workspace = true }

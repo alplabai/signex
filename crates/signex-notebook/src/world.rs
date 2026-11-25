@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::LazyLock;
 
 use typst::diag::{FileError, FileResult, PackageError};
-use typst::foundations::{Bytes, Datetime, Duration};
+use typst::foundations::{Bytes, Datetime, Dict, Duration, Str, Value};
 use typst::syntax::package::{PackageSpec, PackageVersion};
 use typst::syntax::{FileId, RootedPath, Source, VirtualPath, VirtualRoot};
 use typst::text::{Font, FontBook};
@@ -65,18 +65,43 @@ pub(crate) struct NotebookWorld {
     sources: HashMap<FileId, Source>,
     files: HashMap<FileId, Bytes>,
     today: Option<Datetime>,
+    /// The library with this compile's `sys.inputs`; `None` uses the shared
+    /// one, which has none.
+    library: Option<LazyHash<Library>>,
 }
 
 impl NotebookWorld {
     /// The world of `notebook`; `today` answers Typst's
     /// `datetime.today()` (none: it is an error, so no page depends on the
-    /// clock). `None` when the notebook's path cannot name a Typst file.
-    pub(crate) fn new(notebook: &NotebookSources, today: Option<IsoDate>) -> Option<Self> {
+    /// clock) and `inputs` are `sys.inputs`. `None` when the notebook's
+    /// path cannot name a Typst file.
+    pub(crate) fn new(
+        notebook: &NotebookSources,
+        today: Option<IsoDate>,
+        inputs: &[(String, String)],
+    ) -> Option<Self> {
+        let library = (!inputs.is_empty()).then(|| {
+            let inputs: Dict = inputs
+                .iter()
+                .map(|(key, text)| {
+                    (
+                        Str::from(key.as_str()),
+                        Value::Str(Str::from(text.as_str())),
+                    )
+                })
+                .collect();
+            LazyHash::new(
+                <Library as LibraryExt>::builder()
+                    .with_inputs(inputs)
+                    .build(),
+            )
+        });
         let mut world = Self {
             main: project_id(notebook.main())?,
             sources: HashMap::new(),
             files: HashMap::new(),
             today: today.and_then(|d| Datetime::from_ymd(d.year(), d.month(), d.day())),
+            library,
         };
         for path in notebook.paths() {
             let (Some(id), Some(bytes)) = (project_id(path), notebook.get(path)) else {
@@ -139,7 +164,7 @@ impl NotebookWorld {
 
 impl World for NotebookWorld {
     fn library(&self) -> &LazyHash<Library> {
-        &LIBRARY
+        self.library.as_ref().unwrap_or(&*LIBRARY)
     }
 
     fn book(&self) -> &LazyHash<FontBook> {

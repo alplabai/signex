@@ -19,13 +19,16 @@
 //! [`compile`] turns [`NotebookSources`] into pages over Typst, with the
 //! bundled `@signex/notebook` package and fonts only; a
 //! [`CompiledNotebook`] draws a page for the preview and writes a PDF that
-//! is the same file every time.
+//! is the same file every time. [`export`] is the PDF export of mockup
+//! row 202: the stale-reference check, the export settings, the pages
+//! chosen, the bookmarks and the Output Job entry.
 //!
 //! UI-free and IO-free: the caller reads the files.
 
 mod annotation;
 mod compile;
 mod date;
+pub mod export;
 mod file;
 mod filter;
 mod header;
@@ -40,7 +43,7 @@ mod world;
 pub use annotation::{Annotation, AnnotationKind, Status};
 pub use compile::{
     Compilation, CompileOptions, CompiledNotebook, Diagnostic, DiagnosticSeverity, PDF_CREATOR,
-    PageImage, PageInfo, compile,
+    PageImage, PageInfo, compile, compile_with_inputs,
 };
 pub use date::IsoDate;
 pub use file::{HEADER_FENCE, NotebookFile, NotebookFileError};
