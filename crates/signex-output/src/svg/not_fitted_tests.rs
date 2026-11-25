@@ -69,6 +69,16 @@ struct Drawn {
 }
 
 fn drawn(sheet: &SheetSnapshot, opts: &PdfOptions, settings: Option<&VariantSettings>) -> Drawn {
+    drawn_with(sheet, opts, settings, None)
+}
+
+/// [`drawn`] with the export's fits decided across its sheets.
+fn drawn_with(
+    sheet: &SheetSnapshot,
+    opts: &PdfOptions,
+    settings: Option<&VariantSettings>,
+    placed_fits: Option<&crate::PlacedFits>,
+) -> Drawn {
     let (refdes, nets) = (HashMap::new(), HashMap::new());
     let inputs = SvgEvaluatorInputs {
         special_strings: None,
@@ -76,6 +86,7 @@ fn drawn(sheet: &SheetSnapshot, opts: &PdfOptions, settings: Option<&VariantSett
         net_name_by_symbol_pin: &nets,
         cell: "",
         variant_settings: settings,
+        placed_fits,
     };
     let page = SvgRenderContext::from_sheet(sheet, opts, 297.0, 210.0, 1.0, Some(&inputs));
     // Each path as (closed, command count, style).
@@ -159,4 +170,38 @@ fn the_printed_variant_and_the_project_settings_decide() {
     assert_eq!(lite.crosses, 2, "not fitted in Lite");
     let base = drawn(&sheet, &options(true, Some("Base")), Some(&settings));
     assert_eq!(base.crosses, 0, "fitted in Base");
+}
+
+#[test]
+fn a_part_whose_other_unit_is_dnp_on_another_page_prints_not_fitted() {
+    let page = page(false);
+    let mut other = SchematicSheet::default();
+    other.symbols.push(Symbol {
+        uuid: uuid::Uuid::now_v7(),
+        lib_id: "L:BODY".into(),
+        reference: "U1".into(),
+        unit: page.schematic.symbols[0].unit + 1,
+        dnp: true,
+        ..Symbol::default()
+    });
+    let none = VariantSettings::default();
+    let fits = crate::PlacedFits::of(
+        &[
+            (&page.schematic, InstancePath::root()),
+            (&other, InstancePath::root()),
+        ],
+        None,
+        &none,
+    );
+    let opts = options(true, None);
+    assert_eq!(
+        drawn(&page, &opts, None).crosses,
+        0,
+        "the page alone fits U1"
+    );
+    let across = drawn_with(&page, &opts, None, Some(&fits));
+    assert_eq!(
+        across.crosses, 2,
+        "the BOM drops U1, so the page crosses it"
+    );
 }

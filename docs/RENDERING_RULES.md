@@ -762,11 +762,17 @@ Display ▸ "Cross out not-fitted parts", on by default, `prefs.json` key
 **Which parts.** A part is not fitted when the BOM would call it so: the
 project's variant settings (Variant Manager) for the variant, else the
 sheets' fit fields for it, else the base fit fields, else not fitted when a
-unit is marked DNP. One unit not fitted makes every unit of the part on the
-sheet not fitted. Power ports are never parts. The canvas reads the
-project's active variant, and so do an undocked window and an unfocused
-tile pane showing a sheet; a PDF, its preview and print read the printed
-variant. `signex_output::not_fitted_symbols` decides for all of them.
+unit is marked DNP. One unit not fitted makes every unit of the part not
+fitted, on every sheet: a part's units are grouped across sheets as the BOM
+groups them, and its settings entry is found by the BOM's part link. A PDF,
+its preview and print decide across every sheet of the export; the canvas
+across the project's open sheets (a unit on a sheet that is not open is not
+counted). A repeated sheet shown once for all its channels crosses a part
+out only when every channel's copy is not fitted. Power ports are never
+parts. The canvas reads the project's active variant, and so do an undocked
+window and an unfocused tile pane showing a sheet; a PDF, its preview and
+print read the printed variant. `signex_output::PlacedFits` decides for all
+of them.
 
 **How it draws.** The part's body graphics, pins, pin names and numbers, its
 library text and its default body fill are greyed: each colour moved 60 %

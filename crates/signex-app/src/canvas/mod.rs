@@ -139,11 +139,21 @@ pub type DesignatorsKey = (
     Option<signex_types::schematic::InstancePath>,
 );
 
+/// One sheet a part's fit is decided across: its path, its engine
+/// `(instance, revision)` and the placements the walk compiles it to.
+pub type FitSheetKey = (
+    std::path::PathBuf,
+    Option<(u64, u64)>,
+    Vec<signex_types::schematic::InstancePath>,
+);
+
 /// The inputs `CanvasSlot::not_fitted` is a function of: the designators'
-/// inputs, the active variant's name and the project's variant settings.
-/// `None` while "Cross out not-fitted parts" is off.
+/// inputs, every sheet the fit is decided across, the active variant's name
+/// and the project's variant settings. `None` while "Cross out not-fitted
+/// parts" is off.
 pub type NotFittedKey = Option<(
     DesignatorsKey,
+    Vec<FitSheetKey>,
     String,
     signex_types::project::VariantSettings,
 )>;

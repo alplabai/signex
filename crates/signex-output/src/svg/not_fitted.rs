@@ -29,12 +29,16 @@ pub(super) fn drawn_not_fitted(
     let settings = inputs
         .and_then(|inputs| inputs.variant_settings)
         .unwrap_or(&sheets_only);
-    crate::variant_fit::not_fitted_symbols(
-        &sheet.schematic,
-        &sheet.placement,
-        opts.variant.as_deref(),
-        settings,
-    )
+    let variant = opts.variant.as_deref();
+    match inputs.and_then(|inputs| inputs.placed_fits) {
+        Some(fits) => fits.not_fitted_on(&sheet.schematic, &sheet.placement, variant, settings),
+        None => crate::variant_fit::not_fitted_symbols(
+            &sheet.schematic,
+            &sheet.placement,
+            variant,
+            settings,
+        ),
+    }
 }
 
 /// `rgb` greyed toward `paper`.

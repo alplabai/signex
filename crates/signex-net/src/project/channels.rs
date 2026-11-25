@@ -233,6 +233,43 @@ impl ChannelDesignators {
         }
     }
 
+    /// Every placement the walk compiles the placement `logical` to, from
+    /// the sheet symbols in `placed` (uuid, designator): a step whose symbol
+    /// is repeated becomes each of its channels, so a repeated sheet's
+    /// logical placement stands for every channel copy. `logical` alone when
+    /// no step is repeated.
+    pub fn compiled_paths<'a>(
+        logical: &InstancePath,
+        placed: impl Iterator<Item = (Uuid, &'a str)> + Clone,
+    ) -> Vec<InstancePath> {
+        let mut chains: Vec<Vec<Uuid>> = vec![Vec::new()];
+        for &step in logical.chain() {
+            let repeat = placed
+                .clone()
+                .find(|(symbol, _)| *symbol == step)
+                .and_then(|(_, designator)| ChannelRepeat::parse(designator));
+            let steps: Vec<Uuid> = match repeat {
+                Some(repeat) => repeat
+                    .occurrences()
+                    .iter()
+                    .map(|channel| channel_uuid(step, channel.number))
+                    .collect(),
+                None => vec![step],
+            };
+            chains = chains
+                .into_iter()
+                .flat_map(|chain| {
+                    steps.iter().map(move |&next| {
+                        let mut longer = chain.clone();
+                        longer.push(next);
+                        longer
+                    })
+                })
+                .collect();
+        }
+        chains.into_iter().map(InstancePath::from_chain).collect()
+    }
+
     /// Whether any placement is a channel of a repeated sheet.
     pub fn has_channels(&self) -> bool {
         !self.placements.is_empty()
