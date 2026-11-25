@@ -19,6 +19,7 @@ use signex_types::theme::{ThemeId, theme_tokens};
 
 use super::{cutout, keepout, pattern, sketch_pad, view_role_subform};
 use crate::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
+use crate::library::editor::footprint::EditorMode;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::panels::{
     ArrayKindSummary, CollapsedSections, FootprintEditorPanelContext, PanelMsg, PanelPalette,
@@ -72,10 +73,21 @@ fn pad_point(plane: PlaneId, sketch: &mut SketchData, drill: Option<DrillSpec>) 
 
 /// The panel context of an editor on `sketch` with `selected` selected.
 fn ctx_with(sketch: SketchData, selected: SketchEntityId) -> FootprintEditorPanelContext {
+    ctx_in_mode(sketch, selected, EditorMode::Normal)
+}
+
+/// [`ctx_with`] with the editor in `mode`: the selected entity's summary
+/// (its kind) is only built in Sketch mode.
+fn ctx_in_mode(
+    sketch: SketchData,
+    selected: SketchEntityId,
+    mode: EditorMode,
+) -> FootprintEditorPanelContext {
     let path = PathBuf::from(PATH);
     let mut footprint = Footprint::empty("roles");
     footprint.sketch = Some(sketch);
-    let editor = FootprintDocument::new(path.clone(), FootprintFile::from_footprint(footprint));
+    let mut editor = FootprintDocument::new(path.clone(), FootprintFile::from_footprint(footprint));
+    editor.state.mode = mode;
     let (mut app, _task) = Signex::new();
     app.document_state
         .footprint_editors
@@ -611,7 +623,8 @@ fn board_hole_grid_ctx(dx: &str, dy: &str) -> FootprintEditorPanelContext {
         id = Some(circle);
     });
     let id = id.unwrap();
-    let mut ctx = ctx_with(sketch, id);
+    // The board's role forms show in Sketch mode only (roles.rs).
+    let mut ctx = ctx_in_mode(sketch, id, EditorMode::Sketch);
     ctx.sketch_host = signex_types::sketch::SketchHost::Board;
     ctx.selected_sketch_role = signex_types::sketch::SketchRole::MountingHole;
     ctx

@@ -526,7 +526,10 @@ fn a_failing_corner_and_add_fillets_are_in_the_panel() {
         "{texts:#?}"
     );
     let view = crate::panels::view_properties(&app.document_state.panel_ctx).boxed();
-    let messages = layout_probe::messages_on_click(view, DOCK, "Add fillets R 1.00");
+    // The click finds the drawn text, whose radius argument keeps its
+    // isolation marks.
+    let messages =
+        layout_probe::messages_on_click(view, DOCK, "Add fillets R \u{2068}1.00\u{2069}");
     assert!(
         messages
             .iter()

@@ -988,10 +988,10 @@ fn same_in_en_xa(mut ctx: PanelContext) -> Vec<String> {
 /// #2059: Document Options and a selected part with its footprint card
 /// draw no catalog text in English under en-XA; only the design's own
 /// words (the part's footprint name) stay. Unit symbols are not translated
-/// (DECISIONS 2026-11-22, Caner, "Unit symbols"), so Document Options pins
-/// its exact tags: in mm the Units segment, whose English text matches, and
-/// the Visible and Snap Grid tags; in mil the two grid tags. One more
-/// hard-coded unit on the panel changes these lists.
+/// (DECISIONS 2026-11-22, Caner, "Unit symbols"), but the pseudolocale
+/// brackets every catalog message (#2064, mockup row 144a), so the Units
+/// segment and the Visible and Snap Grid tags read "[mm]" / "[mil]" and no
+/// unit matches English. A hard-coded unit on the panel shows up here.
 #[test]
 fn the_properties_panel_draws_no_english_under_en_xa() {
     let in_unit = |unit| {
@@ -1001,8 +1001,11 @@ fn the_properties_panel_draws_no_english_under_en_xa() {
         ctx.snap_enabled = true;
         same_in_en_xa(ctx)
     };
-    assert_eq!(in_unit(signex_types::coord::Unit::Mm), ["mm", "mm", "mm"]);
-    assert_eq!(in_unit(signex_types::coord::Unit::Mil), ["mil", "mil"]);
+    assert_eq!(in_unit(signex_types::coord::Unit::Mm), Vec::<String>::new());
+    assert_eq!(
+        in_unit(signex_types::coord::Unit::Mil),
+        Vec::<String>::new()
+    );
     assert_eq!(same_in_en_xa(document_parameters()), Vec::<String>::new());
     let mut part = one_selected(
         SelectedKindForTest::Symbol,
