@@ -412,7 +412,7 @@ mod tests {
         let actions = UnsavedActions {
             discard_all: discard.then_some(LibraryMessage::ClosePicker),
             cancel: LibraryMessage::ClosePicker,
-            save_all: LibraryMessage::ClosePicker,
+            save_all: Some(LibraryMessage::ClosePicker),
         };
         let (left, right) = unsaved_footer_parts(&I18n::en_us(), actions, &tokens);
         dialog_footer_split(left, right)
