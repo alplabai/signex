@@ -1053,6 +1053,83 @@ find_similar_items document=<board> id=<uuid> [fields=kind,value,...]
 
 Find by text on a board is `find_items` (designator and value).
 
+## Placing footprints on a board
+
+These edits put a component of the board `document` names in place, by id
+(#2936). The footprint is named by `id` (its uuid), `designator`, or `ids`
+(a list), exactly one of them. Points count from the board origin with Y up,
+as `measure_board` and Properties read them. Each command is one board undo
+step; a locked footprint refuses the whole edit with the reason (`U2 is
+locked`) and nothing changes.
+
+```text
+set_footprint_position document=<board> id=<uuid> at=x,y
+set_footprint_position document=<board> ids=<uuid>,<uuid> points=x,y;x,y
+set_footprint_rotation document=<board> id=<uuid> rotation=0|90|180|270
+set_footprint_side document=<board> id=<uuid> side=top|bottom
+```
+
+- `set_footprint_position` moves the footprint's origin to `at` as a drag
+  does: the track ends on its pads follow, bent at the corner rule a drag
+  uses. With `ids`, `points` holds one point per id in the same order, and
+  the whole list is one undo step; a track between two listed footprints
+  follows both.
+- `set_footprint_rotation` turns each footprint about its own origin to the
+  rotation the Component view's Rotation row sets; the tracks on its pads
+  stay, as they do for a rotation in the window.
+- `set_footprint_side` flips each footprint onto that side about its origin,
+  as the Component view's Layer row does.
+
+The answer is the footprint after the edit, with the board and whether
+anything changed; with `ids` the footprints are listed under `footprints`.
+
+```json
+{"id": "<uuid>", "designator": "R1", "position": {"x": 20.0, "y": -15.0},
+ "rotation": 90.0, "side": "bottom", "document": "<board path>", "changed": true}
+```
+
+Without operands (the palette, a key) each says to drag the footprint or to
+use the Component view.
+
+## Footprint assignment
+
+A part's footprint and a board footprint are set from a library footprint
+(#2937), written `footprint=<library>:<footprint>`: the library by its id,
+path or name, the footprint by its id or name in that library. The
+footprint's pads are read from the library first, then the edit runs as its
+window does. Each edit is one undo step.
+
+```text
+assign_footprint document=<sheet> id=<part uuid> footprint=<library>:<footprint>
+change_footprint document=<board> id=<uuid> footprint=<library>:<footprint>
+query_footprint_assignments document=<project or sheet>
+```
+
+- `assign_footprint` sets the footprint of the part (`id`, `designator` or
+  `ids` on that sheet) through Tools ▸ Assign Footprints' Apply: every unit
+  of the part on the sheet, as one undo step. The part's own library row
+  must offer the footprint, as in the dialog. The answer is
+  `{"document", "footprint", "changed", "parts": [{"id", "designator",
+  "footprint"}]}`.
+- `change_footprint` swaps each named board footprint for the library one
+  as the footprint picker does: the position, rotation, side, designator,
+  value and pad nets (by pad number) stay, and each linked schematic part on
+  an open sheet takes the same footprint in the same undo step. The answer
+  is `{"document", "footprint", "changed", "footprints": [..as above..],
+  "parts_not_updated": [designators]}`. Without operands it opens the
+  footprint picker for the selection, as before.
+- `query_footprint_assignments` answers `{"document", "parts":
+  [{"id", "sheet", "designator", "value", "footprint", "binding",
+  "resolves"}], "sheets_not_open"}` for the open sheets of the project (or
+  the one sheet named). `binding` is the library footprint the part is
+  built with, `null` when its footprint text was typed over; `resolves` says
+  whether an open library has it.
+
+A footprint that is not in the library is refused with the reason. One
+whose pads do not cover the part is refused with the pins it lacks
+(`R1 pins 1, 2`), and a board footprint whose old pads the new one lacks
+with those pads (`R1.1, R1.2`); nothing changes.
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > System ›
