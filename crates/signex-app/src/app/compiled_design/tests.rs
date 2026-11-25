@@ -384,3 +384,25 @@ fn the_compile_time_is_worded_in_the_users_locale() {
     );
     assert_eq!(panel.compiled_at, app.ui_state.i18n.time(at));
 }
+
+/// #2733: a language switch after the compile rewords its time; nothing
+/// worded at compile time is kept. The hour depends on the host's clock,
+/// so the test reads the shape: en-US has a day period, tr-TR has none.
+#[test]
+fn a_language_switch_rewords_the_compile_time() {
+    let mut app = app_with_a_compile(&PathBuf::from("/p/child.snxsch"));
+    let store = &mut app.document_state.compiled_design;
+    let (&project, result) = store.results.iter_mut().next().expect("the compile");
+    result.compiled_at = chrono::DateTime::from_timestamp(1_700_000_000, 0).expect("a time");
+    app.document_state.active_project = Some(project);
+    let worded_in = |app: &mut Signex, tag: &str| {
+        use signex_i18n::{I18n, LanguagePref};
+        app.ui_state.i18n = Arc::new(I18n::new(&LanguagePref::Locale(tag.into())));
+        app.compiled_design_view().panel.compiled_at
+    };
+    let en = worded_in(&mut app, "en-US");
+    let tr = worded_in(&mut app, "tr-TR");
+    assert!(en.contains("AM") || en.contains("PM"), "{en}");
+    assert!(!tr.contains("AM") && !tr.contains("PM"), "{tr}");
+    assert_ne!(en, tr);
+}
