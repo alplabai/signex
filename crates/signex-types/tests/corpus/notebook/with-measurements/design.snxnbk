@@ -1,0 +1,62 @@
++++
+format = "snxnbk/1"
++++
+#import "@signex/notebook:0.1.0": *
+#show: report.with(doc: "DN-0042", rev: "B", title: [buck-3v3 Design Notebook])
+
+= Bring-up measurements
+
+== Ripple and efficiency
+
+Readings at the rated load on board SN 0007, rev B, with the input at
+12.0 V from a bench supply.
+
+#measurement(
+  id: "MEAS-009",
+  title: [Output rail at 2 A],
+  caption: [Bring-up results, rev B],
+  target: (net("+3V3"), component("C15")),
+  requirements: ("REQ-001", "REQ-002", "REQ-004"),
+  conditions: "VIN 12.0 V, 2.0 A, 25 °C",
+  operator: "j.berg",
+  timestamp: "2026-11-24T15:12",
+  rev: "B",
+  board: "SN 0007",
+)[
+  #measurement(quantity: "+3V3 DC", value: 3.310, unit: "V", nominal: 3.3, tolerance: 2%, instrument: "LAB-0117")
+  #measurement(
+    target: net("+3V3"),
+    quantity: "ripple",
+    value: 18.0,
+    unit: "mV",
+    limit: (max: 30),
+    instrument: "LAB-0042",
+    attach: "scope/ripple-2A-revB.csv",
+  )
+  #measurement(quantity: "Efficiency", value: 91.2, unit: "%", limit: (min: 90))
+  #measurement(quantity: "Load step 0.5→2 A", value: 64, unit: "mV", limit: (max: 100))
+]
+
+#attachment(
+  "scope/ripple-2A-revB.csv",
+  caption: [Output ripple on +3V3 at 2 A, 18.0 mV p-p (limit 30 mV), 1 µs/div],
+  target: (net("+3V3"), component("C15")),
+  taken-with: ("L1": "4.7 µH", "C15": "22 µF"),
+  taken: "2026-11-24T15:12",
+  channels: ((name: "CH1", label: "+3V3", coupling: "AC", scale: "5 mV", bandwidth: "20 MHz"),),
+  cursors: (y1: "9 mV", y2: "-9 mV", x1: "1 µs", x2: "3 µs"),
+)
+
+== Earlier readings
+
+#measurement(
+  id: "MEAS-005",
+  target: net("+3V3"),
+  quantity: "ripple",
+  value: 27.0,
+  unit: "mV",
+  limit: (max: 30),
+  timestamp: "2026-10-09",
+  rev: "A rework",
+  taken-with: ("L1": "3.3 µH"),
+)

@@ -165,9 +165,12 @@ unknown keys sorted, then one `[[references]]` table per reference).
 | `kept-unknown-keys` | unknown keys at the top of the header and in a reference entry, a net with no id, a pin with one |
 | `with-chapters/design` | the notebook file: the package import, the report layout, an `#include` of a chapter file |
 | `with-chapters/chapters/power` | a chapter with its own header; references in markup and in block targets, both pin forms; one block of each kind with a typed id; the earlier `#annotation` form |
+| `with-measurements/design` | measurements (mockup row 199): a `#measurement` block of four readings (nominal and tolerance, max and min limits), a reading on its own that stores the part values it was taken with, and an `#attachment` of the scope capture in `with-measurements/attachments/scope/` (a CSV, not walked as a notebook) |
 
 `with-chapters` is also the compile fixture: it compiles with no
 diagnostic, and two PDF exports of it are the same bytes.
+`with-measurements` compiles with its capture read the way the app reads
+it (`NotebookSources::missing_attachments`).
 
 ## Intentional format change
 
