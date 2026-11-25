@@ -277,3 +277,15 @@ fn an_end_via_reads_the_pads_size_on_the_legs_layer() {
     assert!(end_via(&board, Point::new(1.0, 0.0), &mut leg, via).is_some());
     assert!(end_via(&board, Point::new(0.1, 0.0), &mut leg, via).is_none());
 }
+
+/// #2719: each conflict mode has its own token, read back in any case.
+#[test]
+fn route_mode_tokens_round_trip() {
+    for mode in RouteMode::ALL {
+        assert_eq!(RouteMode::from_token(mode.token()), Some(mode));
+        let upper = mode.token().to_ascii_uppercase();
+        assert_eq!(RouteMode::from_token(&upper), Some(mode));
+        assert_eq!(mode.next().next(), mode);
+    }
+    assert_eq!(RouteMode::from_token("shove"), None);
+}

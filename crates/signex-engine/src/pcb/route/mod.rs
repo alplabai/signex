@@ -68,6 +68,25 @@ impl RouteMode {
             Self::Shove => Self::Walkaround,
         }
     }
+
+    /// Every mode, in [`Self::next`] order.
+    pub const ALL: [Self; 2] = [Self::Walkaround, Self::Shove];
+
+    /// The mode's name for an agent or the CLI (`route_options`, #2719).
+    pub const fn token(self) -> &'static str {
+        match self {
+            Self::Walkaround => "walkaround",
+            Self::Shove => "push_and_shove",
+        }
+    }
+
+    /// The mode named `token` ([`Self::token`]), any case.
+    pub fn from_token(token: &str) -> Option<Self> {
+        let token = token.trim();
+        Self::ALL
+            .into_iter()
+            .find(|m| m.token().eq_ignore_ascii_case(token))
+    }
 }
 
 /// What a leg is routed by.
