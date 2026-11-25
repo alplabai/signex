@@ -193,8 +193,9 @@ stores the waiver with the note in the board (`waive_drc_violation`, one
 board undo step), and Unwaive takes it back (`unwaive_drc_violation`). A
 waived violation is hidden until Show waived is on. The results are marked
 stale when the board or its project's net classes change after the run (a
-waiver alone, or its Undo or Redo, does not). The
-Rule link of a group stays greyed until boards have a Rules table.
+waiver alone, or its Undo or Redo, does not). A
+group's Rule link opens the rule in the Rules tab; Short, Unconnected and
+Keepout groups have none, since no written rule sets them.
 
 The Net Classes panel is a table of the board's project net classes (the
 same table the schematic's net classes and DRC read): name, colour, track
