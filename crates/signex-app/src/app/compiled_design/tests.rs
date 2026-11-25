@@ -163,6 +163,17 @@ fn off_on_a_sheet_opened_repeated_takes_the_file_stem() {
     assert_eq!(designator(&app), "child");
 }
 
+/// #2790: the file stem another sheet symbol holds would be refused, so
+/// Repeat off would leave the repeat on; it takes the next free name.
+#[test]
+fn off_takes_a_free_name_when_the_file_stem_is_held() {
+    let mut app = app_editing("Repeat(CH, 1, 4)", Some("child"));
+
+    app.toggle_repeat(SYMBOL, false);
+
+    assert_eq!(designator(&app), "child_2");
+}
+
 #[test]
 fn a_clashing_to_is_refused_with_the_text_kept_and_marked() {
     let mut app = app_editing("Repeat(CH, 1, 4)", Some("Repeat(CH, 1, 6)"));
