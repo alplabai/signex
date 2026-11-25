@@ -154,6 +154,15 @@ Project tree actions with no menu message or command id (add or remove a
 document, Enable Version Control, History, Validate Project) stay in the tree's
 context menu; the menu gets no stub for them.
 
+## Extension rows {#extension-rows}
+
+A binary built on `signex-app` can install extensions that add rows (#2495,
+`docs/EXTENSION_API.md`, "Menu bar and Active Bar rows"). Each one goes at the
+end of its root menu, after every built-in row and below one separator, and
+runs the extension's own `ext.<name>.` command through `dispatch_command` like
+any command row. The Community binary installs none, so its bar and
+`menu_bar.golden.tsv` are the built-in rows alone.
+
 ## Rows that name a different command {#own-action}
 
 Every row that carries a command id runs that id; no row keeps an action of its
