@@ -391,8 +391,7 @@ pub fn preview_card<'a, M: Clone + 'a>(
     // Fills the Properties column, capped so long lines wrap (mockup row 179d).
     container(card)
         .padding([SP.s, SP.m])
-        .width(Length::Fill)
-        .max_width(TS.body * PREVIEW_CARD_MAX_EM)
+        .width(Length::Fill.max(TS.body * PREVIEW_CARD_MAX_EM))
         .style(crate::styles::modal_card(tokens))
         .boxed()
 }

@@ -6,7 +6,7 @@
 
 use iced::widget::text::Wrapping;
 use iced::widget::{Column, Row, Space, container, row};
-use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget};
+use iced::{Alignment, Background, Color, Element, Length, Theme, Widget};
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::coord::Unit;
 use signex_types::schematic::{HAlign, VAlign, WireWidthPreset};

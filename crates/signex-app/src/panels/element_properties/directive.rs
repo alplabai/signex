@@ -418,7 +418,7 @@ fn rule_total_row<'a>(
     let count = t!(i18n, ids::PROPERTIES_RULE_TOTAL, "count" => total)
         .to_string()
         .replace(['\u{2068}', '\u{2069}'], "");
-    let count = text(count)
+    let count = text(signex_i18n::UserText::new(count))
         .size(TS.caption)
         .color(muted)
         .wrapping(iced::widget::text::Wrapping::None);

@@ -300,7 +300,7 @@ fn span_glyph<'a>(
     let height = FIELD_TEXT_SIZE;
     let pitch = height / count as f32;
     let stroke = (pitch / 2.0).min(height / 6.0);
-    let swatch = |colour: Color, width: Length, tall: f32| -> container::Container<'a, PanelMsg> {
+    let swatch = |colour: Color, width: Length, tall: f32| -> Element<'a, PanelMsg> {
         container(Space::new())
             .width(width)
             .height(Length::Fixed(tall))
@@ -308,6 +308,7 @@ fn span_glyph<'a>(
                 background: Some(Background::Color(colour)),
                 ..container::Style::default()
             })
+            .boxed()
     };
     let lines = column(order.iter().map(|&layer| {
         // The palette colour: a layer repainted in the view (#2363) is not
