@@ -211,6 +211,8 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     ("set_via_span", BOARD_EDIT),
     ("set_layer_sizes", BOARD_EDIT),
     ("set_pad_shape", BOARD_EDIT),
+    ("set_pour_thermal_relief", BOARD_EDIT),
+    ("set_pad_thermal_relief", BOARD_EDIT),
     // #2408, #2409: the board Tools edits are board steps of their own.
     ("stitch_vias", BOARD_EDIT),
     ("add_teardrops", BOARD_EDIT),

@@ -241,6 +241,32 @@ pub(super) const LAYERS: &[CommandMetadata] = &[
         operands: super::operands::SET_PAD_SHAPE,
         ..CommandMetadata::DEFAULT
     },
+    // #2580: a pour's Thermal Relief switch, spoke width and air gap, the
+    // pour panel's rows in agent form. One undo step.
+    CommandMetadata {
+        id: "set_pour_thermal_relief",
+        category: "modify",
+        label: command_ids::CMD_SET_POUR_THERMAL_RELIEF,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::SET_POUR_THERMAL_RELIEF,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2593: a footprint pad's own thermal relief air gap, spoke width and
+    // spoke count, each Rule or Manual. One undo step.
+    CommandMetadata {
+        id: "set_pad_thermal_relief",
+        category: "modify",
+        label: command_ids::CMD_SET_PAD_THERMAL_RELIEF,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::SET_PAD_THERMAL_RELIEF,
+        ..CommandMetadata::DEFAULT
+    },
     // #2363: the Layers panel's board view configuration, on the named
     // board's view: never the board, no undo step.
     CommandMetadata {
