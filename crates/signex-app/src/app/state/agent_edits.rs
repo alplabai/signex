@@ -19,6 +19,10 @@ pub struct AgentEdits {
     /// Every sheet the running list edits (more than one when its edits name
     /// other sheets of the project); empty outside a list.
     pub(crate) touched: Vec<PathBuf>,
+    /// Sheets an edit brought into the running step without naming them
+    /// (#2501: `sync_sheet_entries direction=to_sheet` writes the child).
+    /// Each holds an open transaction until the step commits or rolls back.
+    pub(crate) joined: Vec<JoinedSheet>,
     /// Whether an edit list (not one placement naming a `document`) is running.
     pub(crate) listing: bool,
     /// What the running edit's checks read off the UI thread, set while it
@@ -42,6 +46,16 @@ pub struct AgentEdits {
     /// The undo group the newest recorded step made; the journal reads it
     /// after a command to name the step.
     pub(crate) last_group: Option<UndoGroupId>,
+}
+
+/// A sheet an edit brought into the running agent step (#2501).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct JoinedSheet {
+    pub(crate) path: PathBuf,
+    /// No engine held it: it was loaded, tabless, for this step.
+    pub(crate) tabless: bool,
+    /// It had no unsaved edits when it joined.
+    pub(crate) clean_before: bool,
 }
 
 impl AgentEdits {

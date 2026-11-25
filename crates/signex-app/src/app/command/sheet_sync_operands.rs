@@ -289,10 +289,11 @@ impl Signex {
         Ok(())
     }
 
-    /// Symbol to sheet: the port changes on the child sheet, one undo step of
-    /// its own, left unsaved (a closed child goes to a tabless engine from
-    /// the copy read for this edit). Refused inside an edit list or an
-    /// agent's one-step run: their undo step covers the edited sheet only.
+    /// Symbol to sheet: the port changes on the child sheet, left unsaved (a
+    /// closed child goes to a tabless engine from the copy read for this
+    /// edit). On its own, one undo step of the child; inside an edit list or
+    /// an agent's one-step run, the child joins that step (#2501), so one
+    /// undo reverts the parent and the child.
     fn sync_ports_to_sheet(
         &mut self,
         symbol: &ChildSheet,
@@ -305,10 +306,7 @@ impl Signex {
             .edit_engine()
             .is_some_and(|engine| engine.in_transaction())
         {
-            return Err(
-                "direction=to_sheet edits the child sheet, which this edit's undo step does not cover; run it as a command of its own"
-                    .to_string(),
-            );
+            return self.sync_ports_in_agent_step(symbol, &child_path, &child, preview);
         }
         let loaded: HashMap<PathBuf, SchematicSheet> =
             if self.document_state.engines.contains_key(&child_path) {
@@ -332,5 +330,40 @@ impl Signex {
         })
         .map(|_| ())
         .map_err(write_refusal)
+    }
+
+    /// [`Self::sync_ports_to_sheet`] inside an agent step: the child joins the
+    /// step (`join_agent_step`, the grouped write's checks) and the port
+    /// changes go into its transaction, committed or rolled back with the
+    /// step's other sheets. A transaction that is not an agent step's keeps
+    /// the refusal: nothing would commit the child.
+    fn sync_ports_in_agent_step(
+        &mut self,
+        symbol: &ChildSheet,
+        child_path: &Path,
+        child: &SchematicSheet,
+        preview: &SheetSyncPreview,
+    ) -> Result<(), String> {
+        if self.document_state.agent_edits.target.is_none() {
+            return Err(
+                "direction=to_sheet edits the child sheet, which this edit's undo step does not cover; run it as a command of its own"
+                    .to_string(),
+            );
+        }
+        let path = self.join_agent_step("sync_sheet_entries", child_path, Some(child))?;
+        let Some(engine) = self.document_state.engines.get_mut(&path) else {
+            return Err(format!("{} could not be loaded", path.display()));
+        };
+        let batch = signex_engine::port_sync_commands(
+            engine.document(),
+            symbol,
+            preview,
+            &mut signex_types::object_id::UuidV7Ids,
+        );
+        // An error leaves the child's transaction failed: the step rolls back.
+        engine
+            .execute_batch(batch)
+            .map(|_| ())
+            .map_err(|error| format!("{} refused the change: {error}", path.display()))
     }
 }

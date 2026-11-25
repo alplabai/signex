@@ -23,6 +23,7 @@ mod presence;
 mod query_surfaces;
 mod refusals;
 mod round_trip;
+mod sheet_entry_sync;
 mod window_layout;
 
 use serde_json::{Value, json};

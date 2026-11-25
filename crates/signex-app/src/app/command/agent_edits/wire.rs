@@ -565,7 +565,7 @@ mod tests {
             "set_sheet_symbol_size",
             "set_sheet_variable",
             "set_symbol_parameter",
-            // #1276: `to_sheet` is refused inside a list (it edits the child).
+            // #1276; `to_sheet` brings the child into the list's step (#2501).
             "sync_sheet_entries",
             "sync_sheet_pins",
         ];
