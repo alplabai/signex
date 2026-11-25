@@ -36,6 +36,7 @@ mod card;
 mod compile;
 mod date;
 mod design;
+mod design_read;
 mod file;
 mod filter;
 mod fix;
@@ -62,6 +63,7 @@ pub use compile::{
 };
 pub use date::IsoDate;
 pub use design::{DesignIndex, DesignNet, DesignPart, DesignPin, PinName, natural_order};
+pub use design_read::{PlacedSheet, design_index};
 pub use file::{HEADER_FENCE, NotebookFile, NotebookFileError};
 pub use filter::{DateWindow, Filter, newest_first};
 pub use fix::{
@@ -93,6 +95,8 @@ mod tests;
 mod tests_badges;
 #[cfg(test)]
 mod tests_compile;
+#[cfg(test)]
+mod tests_design;
 #[cfg(test)]
 mod tests_file;
 #[cfg(test)]
