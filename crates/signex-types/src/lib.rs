@@ -16,6 +16,7 @@ pub mod material_library;
 pub mod measure;
 pub mod net;
 pub mod net_class;
+pub mod net_tie;
 pub mod numeric;
 pub mod object_id;
 pub mod part;

@@ -1,13 +1,15 @@
 //! Net ties (#1277; Caner, 2026-11-25): a part marked `net_tie` joins two
-//! named nets on purpose. The netlist keeps both nets; this module records
-//! which nets each tie joins, read off the netlist, so ERC, the netlist
-//! export and the board read one answer. See `docs/NET_TIES.md`.
+//! named nets on purpose. The netlist keeps both nets; [`net_ties`] reads
+//! which nets each tie joins off the netlist, so the netlist export, the
+//! command answers and the tests read one answer. It derives no
+//! connectivity: `signex_net::build_netlist` does. See `docs/NET_TIES.md`.
 
 use std::collections::HashMap;
 
-use signex_types::net::Netlist;
-use signex_types::schematic::{InstancePath, SchematicSheet};
 use uuid::Uuid;
+
+use crate::net::Netlist;
+use crate::schematic::{InstancePath, SchematicSheet};
 
 /// One pin of a net tie and the net it is on.
 #[derive(Debug, Clone, PartialEq, Eq)]

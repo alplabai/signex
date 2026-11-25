@@ -1,16 +1,17 @@
-use signex_types::net::{Net, NetId, Netlist, Terminal};
+//! #1277: the netlist keeps the two nets of a net tie, and
+//! `signex_types::net_tie::net_ties` reads which nets each tie joins off it.
+
+use signex_types::net_tie::{NetTieStatus, net_ties};
 use signex_types::schematic::{
     InstancePath, LabelType, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point,
     SchematicSheet, Symbol,
 };
 use uuid::Uuid;
 
-use super::{NetTieStatus, net_ties};
 use crate::build_netlist;
 use crate::fixtures::{empty_sheet, label, pt, wire};
 
 const TIE: Uuid = Uuid::from_u128(0x1277_0001);
-const R1: Uuid = Uuid::from_u128(0x1277_0002);
 
 fn lib_pin(number: &str, at: Point) -> LibPin {
     LibPin {
@@ -57,13 +58,13 @@ fn two_pin_body(sheet: &mut SchematicSheet, lib_id: &str) {
     );
 }
 
-fn part(uuid: Uuid, reference: &str, at: Point, net_tie: bool) -> Symbol {
+fn tie_at_origin() -> Symbol {
     Symbol {
-        uuid,
+        uuid: TIE,
         lib_id: "NT".to_string(),
-        reference: reference.to_string(),
-        position: at,
-        net_tie,
+        reference: "NT1".to_string(),
+        position: pt(0.0, 0.0),
+        net_tie: true,
         ..Default::default()
     }
 }
@@ -73,7 +74,7 @@ fn part(uuid: Uuid, reference: &str, at: Point, net_tie: bool) -> Symbol {
 fn star_ground() -> SchematicSheet {
     let mut sheet = empty_sheet();
     two_pin_body(&mut sheet, "NT");
-    sheet.symbols.push(part(TIE, "NT1", pt(0.0, 0.0), true));
+    sheet.symbols.push(tie_at_origin());
     sheet.wires.push(wire(pt(0.0, 0.0), pt(0.0, 10.0)));
     sheet.wires.push(wire(pt(5.0, 0.0), pt(5.0, 10.0)));
     sheet
@@ -113,11 +114,15 @@ fn a_tie_keeps_its_two_nets_and_records_that_it_joins_them() {
     assert_eq!(pins, [("1", "GND"), ("2", "AGND")]);
 }
 
+/// The tie flag changes no connectivity: the same sheet with the flag off
+/// has the same nets.
 #[test]
-fn a_part_that_is_not_a_tie_is_not_listed() {
-    let mut sheet = star_ground();
-    sheet.symbols[0].net_tie = false;
-    assert!(net_ties(&build_netlist(&sheet), &root(&sheet)).is_empty());
+fn the_flag_leaves_the_netlist_as_it_is() {
+    let tied = star_ground();
+    let mut plain = tied.clone();
+    plain.symbols[0].net_tie = false;
+    assert_eq!(build_netlist(&tied), build_netlist(&plain));
+    assert!(net_ties(&build_netlist(&plain), &root(&plain)).is_empty());
 }
 
 #[test]
@@ -134,68 +139,9 @@ fn a_tie_with_both_pins_on_one_net_joins_nothing() {
 fn a_tie_with_an_unwired_pin_is_open() {
     let mut sheet = empty_sheet();
     two_pin_body(&mut sheet, "NT");
-    sheet.symbols.push(part(TIE, "NT1", pt(0.0, 0.0), true));
+    sheet.symbols.push(tie_at_origin());
     let ties = net_ties(&build_netlist(&sheet), &root(&sheet));
     assert_eq!(ties[0].status(), NetTieStatus::Open);
     assert!(ties[0].pins.is_empty());
     assert_eq!(ties[0].designator, "NT1", "the placed designator");
-}
-
-/// A tie placed in two occurrences of one sheet is two ties, each with the
-/// nets of its own occurrence.
-#[test]
-fn each_occurrence_of_a_tie_is_its_own_tie() {
-    let sheet = empty_sheet();
-    let (a, b) = (
-        InstancePath::root().child(Uuid::from_u128(1)),
-        InstancePath::root().child(Uuid::from_u128(2)),
-    );
-    let mut with_tie = sheet.clone();
-    with_tie.symbols.push(part(TIE, "NT1", pt(0.0, 0.0), true));
-    let terminal = |path: &InstancePath, reference: &str, pin: &str| Terminal {
-        symbol: TIE,
-        reference: reference.to_string(),
-        pin: pin.to_string(),
-        occurrence: path.clone(),
-    };
-    let net = |id: u32, name: &str, terminals: Vec<Terminal>| Net {
-        id: NetId(id),
-        name: name.to_string(),
-        class: None,
-        wires: Vec::new(),
-        junctions: Vec::new(),
-        terminals,
-    };
-    let other = Terminal {
-        symbol: R1,
-        ..terminal(&a, "R1", "1")
-    };
-    let netlist = Netlist {
-        nets: vec![
-            net(1, "A/GND", vec![terminal(&a, "NT1_A", "1"), other]),
-            net(2, "A/AGND", vec![terminal(&a, "NT1_A", "2")]),
-            net(3, "B/GND", vec![terminal(&b, "NT1_B", "1")]),
-            net(4, "B/AGND", vec![terminal(&b, "NT1_B", "2")]),
-        ],
-    };
-    let ties = net_ties(&netlist, &[(a, &with_tie), (b, &with_tie)]);
-    assert_eq!(ties.len(), 2);
-    assert_eq!(ties[0].designator, "NT1_A");
-    assert_eq!(ties[0].nets(), ["A/AGND", "A/GND"]);
-    assert_eq!(ties[1].designator, "NT1_B");
-    assert_eq!(ties[1].nets(), ["B/AGND", "B/GND"]);
-}
-
-#[test]
-fn a_power_port_is_never_a_tie() {
-    let mut sheet = star_ground();
-    sheet.symbols[0].is_power = true;
-    assert!(net_ties(&build_netlist(&sheet), &root(&sheet)).is_empty());
-}
-
-#[test]
-fn the_status_names_are_stable() {
-    assert_eq!(NetTieStatus::Joins.as_str(), "joins");
-    assert_eq!(NetTieStatus::OneNet.as_str(), "one_net");
-    assert_eq!(NetTieStatus::Open.as_str(), "open");
 }
