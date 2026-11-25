@@ -221,7 +221,8 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
-    // #2457: Place ▸ Room draws a room by two corners; one undo step.
+    // #2457: Place ▸ Room draws a room by two corners; one undo step. With
+    // operands (#2935) it places the room they describe.
     CommandMetadata {
         id: "place_board_room",
         category: "place",
@@ -229,11 +230,13 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_ROOM),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PLACE_ROOM,
         ..CommandMetadata::DEFAULT
     },
     // #2457: Design ▸ Rooms ▸ Create Rooms from Sheets opens its dialog;
-    // Create runs as one undo step. Greyed without a project.
+    // Create runs as one undo step. Greyed without a project. With operands
+    // (#2935) it makes every room with the options they give.
     CommandMetadata {
         id: "create_rooms_from_sheets",
         category: "design",
@@ -241,7 +244,33 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_CREATE_ROOMS_FROM_SHEETS),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_ONLY,
+        flags: CommandFlags::MUTATES,
+        operands: operands::CREATE_ROOMS,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2457: the room's parts packed inside it again; one undo step.
+    CommandMetadata {
+        id: "arrange_in_room",
+        category: "design",
+        label: command_ids::CMD_ARRANGE_IN_ROOM,
+        menu_label: Some(command_ids::CMD_MENU_ARRANGE_IN_ROOM),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: operands::ARRANGE_ROOM,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2941: each room's parts placed inside it by weighted priorities;
+    // placement only, one undo step.
+    CommandMetadata {
+        id: "auto_place",
+        category: "design",
+        label: command_ids::CMD_AUTO_PLACE,
+        menu_label: Some(command_ids::CMD_MENU_AUTO_PLACE),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: operands::AUTO_PLACE,
         ..CommandMetadata::DEFAULT
     },
 ];

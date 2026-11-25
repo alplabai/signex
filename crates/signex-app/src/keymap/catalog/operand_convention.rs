@@ -115,6 +115,16 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("diff_pair_class", OperandKind::Text),
     ("via_hole", OperandKind::Text),
     ("current", OperandKind::Text),
+    // #2457, #2941: rooms and Auto Place in Rooms.
+    ("margin", OperandKind::Length),
+    ("move_parts", OperandKind::Bool),
+    ("keep_parts_inside", OperandKind::Bool),
+    ("replace", OperandKind::Bool),
+    ("room", OperandKind::Text),
+    ("rooms", OperandKind::Text),
+    ("weights", OperandKind::Text),
+    ("thermal_gap", OperandKind::Length),
+    ("separation_gap", OperandKind::Length),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

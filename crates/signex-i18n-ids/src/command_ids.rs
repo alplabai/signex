@@ -661,6 +661,10 @@ define_ids! {
         CMD_MENU_PLACE_BOARD_ROOM = "cmd-menu-place-board-room";
         CMD_CREATE_ROOMS_FROM_SHEETS = "cmd-create-rooms-from-sheets";
         CMD_MENU_CREATE_ROOMS_FROM_SHEETS = "cmd-menu-create-rooms-from-sheets";
+        CMD_ARRANGE_IN_ROOM = "cmd-arrange-in-room";
+        CMD_MENU_ARRANGE_IN_ROOM = "cmd-menu-arrange-in-room";
+        CMD_AUTO_PLACE = "cmd-auto-place";
+        CMD_MENU_AUTO_PLACE = "cmd-menu-auto-place";
         CMD_FOOTPRINT_MODE_PADS = "cmd-footprint-mode-pads";
         CMD_FOOTPRINT_MODE_SKETCH = "cmd-footprint-mode-sketch";
         CMD_FOOTPRINT_MODE_VIEW_3D = "cmd-footprint-mode-view-3d";
