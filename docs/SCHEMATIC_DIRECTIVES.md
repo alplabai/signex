@@ -145,6 +145,20 @@ the Rules tab (High Speed); the dialog shows them read-only, "—" while no
 such rule exists, with a link to the Rules tab (DECISIONS 2026-11-19). The pairs
 are shown in the PCB panel's Differential Pairs mode.
 
+The board-style preview under the fields is edited too (mockup row 153,
+#2661). A press on the width, the gap, the impedance or the tolerance written
+on it opens a field there: Enter commits, Tab commits and opens the next
+value, Esc closes it and leaves the dialog open, and a press elsewhere drops
+the typed text. A value not set opens at what the drawing shows (the drawn
+0.2 mm width or 0.15 mm gap, 0 for the impedance and tolerance) and commits
+nothing when left unchanged. A handle on the N trace drags the gap: it snaps
+to 0.005 mm, keeps the N trace inside the drawing, and the drawing keeps its
+scale while the handle is held; Esc puts the gap back. The expand button
+draws the pair twice as tall. A value set on the drawing is the same edit as
+typing it in its field, so the field shows it and OK applies it with the rest
+as one step. Where the drawing puts each value is decided once, in
+`app/diff_pair_classes/preview.rs`; the view only draws it.
+
 ## Editing
 
 Every placement and edit is one engine command: `Command::PlaceDirective`

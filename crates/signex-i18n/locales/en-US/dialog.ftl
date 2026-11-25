@@ -432,7 +432,10 @@ dialog-dpc-duplicate-name = Two classes have the same name.
 # Callouts of the preview. $value is a length in mm, or —.
 dialog-dpc-width-label = Width { $value } mm
 dialog-dpc-gap-label = Gap { $value } mm
-dialog-dpc-zdiff-label = Zdiff { $ohm } Ω ± { $pct } %
+# The impedance and its tolerance, each a value of its own on the preview. $ohm and $pct are numbers, or —.
+dialog-dpc-zdiff-value = Zdiff { $ohm } Ω
+dialog-dpc-tolerance-value = ± { $pct } %
+dialog-dpc-preview-hint = Top layer, to scale across the pair. Click a value to type it; drag the N trace handle to change the gap.
 dialog-dpc-p-net = P net
 dialog-dpc-n-net = N net
 dialog-dpc-no-project = Differential Pair Classes: open a project first.

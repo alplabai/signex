@@ -151,7 +151,9 @@ define_ids! {
     DIALOG_DPC_DUPLICATE_NAME = "dialog-dpc-duplicate-name";
     DIALOG_DPC_WIDTH_LABEL = "dialog-dpc-width-label";
     DIALOG_DPC_GAP_LABEL = "dialog-dpc-gap-label";
-    DIALOG_DPC_ZDIFF_LABEL = "dialog-dpc-zdiff-label";
+    DIALOG_DPC_ZDIFF_VALUE = "dialog-dpc-zdiff-value";
+    DIALOG_DPC_TOLERANCE_VALUE = "dialog-dpc-tolerance-value";
+    DIALOG_DPC_PREVIEW_HINT = "dialog-dpc-preview-hint";
     DIALOG_DPC_P_NET = "dialog-dpc-p-net";
     DIALOG_DPC_N_NET = "dialog-dpc-n-net";
     DIALOG_DPC_NO_PROJECT = "dialog-dpc-no-project";

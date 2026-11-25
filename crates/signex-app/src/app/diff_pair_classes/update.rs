@@ -72,6 +72,15 @@ impl Signex {
                     class.pair_by_suffix = on;
                 }
             }),
+            M::PreviewActed(msg) => {
+                let Some(state) = self.ui_state.diff_pair_classes.as_mut() else {
+                    return Task::none();
+                };
+                state.menu = None;
+                return state
+                    .act_on_preview(msg)
+                    .map(|msg| crate::app::Message::from(M::PreviewActed(msg)));
+            }
             M::RulesLinkClicked => {
                 let id = crate::keymap::AppCommandId::new("open_rules").expect("a catalog id");
                 return self.dispatch_command(&id, crate::app::command::CommandArgs::none(), None);
@@ -118,6 +127,7 @@ impl Signex {
             members,
             drafts: Vec::new(),
             problem: None,
+            preview: super::PairPreview::default(),
         }));
     }
 
@@ -212,15 +222,17 @@ impl Signex {
     }
 }
 
-/// Select class `index`; its drafts start empty.
+/// Select class `index`; its drafts start empty and a value open on the
+/// preview closes.
 fn select(state: &mut DiffPairClassesState, index: usize) {
     state.selected = index;
     state.drafts.clear();
+    state.preview.close_labels();
 }
 
 /// A typed value: kept as the draft, stored when it reads as a number of 0
-/// or more (blank clears it).
-fn edit_field(state: &mut DiffPairClassesState, field: PairClassField, text: String) {
+/// or more (blank clears it). A value set on the preview comes here too.
+pub(super) fn edit_field(state: &mut DiffPairClassesState, field: PairClassField, text: String) {
     if let Ok(value) = parse_value(&text)
         && let Some(class) = state.classes.get_mut(state.selected)
     {
