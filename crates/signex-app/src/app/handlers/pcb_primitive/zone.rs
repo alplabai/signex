@@ -230,6 +230,9 @@ pub(crate) fn zone_edit(edit: &PrimitiveEdit) -> Option<ZoneEdit> {
         PrimitiveEdit::Number(F::Priority, v) => ZoneEdit::Priority(v),
         PrimitiveEdit::Number(F::MinIslandArea, v) => ZoneEdit::MinIslandArea(v),
         PrimitiveEdit::DeadIslands(on) => ZoneEdit::RemoveDeadIslands(on),
+        PrimitiveEdit::ThermalRelief(on) => ZoneEdit::ThermalRelief(on),
+        PrimitiveEdit::Number(F::ThermalSpokeWidth, v) => ZoneEdit::ThermalSpokeWidth(v),
+        PrimitiveEdit::Number(F::ThermalAirGap, v) => ZoneEdit::ThermalAirGap(v),
         _ => return None,
     })
 }

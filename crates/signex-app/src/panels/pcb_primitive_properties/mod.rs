@@ -120,6 +120,11 @@ pub enum PcbPrimitiveMsg {
         target: PrimitiveTarget,
         on: bool,
     },
+    /// A pour's Thermal Relief switch was turned on or off (#2580).
+    ThermalReliefToggled {
+        target: PrimitiveTarget,
+        on: bool,
+    },
     ShapePicked {
         target: PrimitiveTarget,
         shape: PadShape,

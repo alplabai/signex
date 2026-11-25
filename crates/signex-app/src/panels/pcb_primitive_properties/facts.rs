@@ -100,6 +100,9 @@ pub enum PrimitiveField {
     Priority,
     /// The smallest island a polygon pour keeps, in mm² (#2216).
     MinIslandArea,
+    /// A polygon pour's thermal relief spoke width and air gap, mm (#2580).
+    ThermalSpokeWidth,
+    ThermalAirGap,
     /// An arc's or circle's centre on a board drawing (#2424).
     CenterX,
     CenterY,

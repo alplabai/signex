@@ -138,6 +138,8 @@ pub(crate) enum PrimitiveEdit {
     Flag(PrimitiveFlag, bool),
     /// A pour's Remove Dead Copper (#2216).
     DeadIslands(bool),
+    /// A pour's Thermal Relief switch (#2580).
+    ThermalRelief(bool),
     /// A field of a dimension's look (#2868).
     DimensionStyle(DimensionStyleEdit),
 }
@@ -195,6 +197,13 @@ impl Signex {
                     target,
                     PrimitiveEdit::DeadIslands(*on),
                     ids::PCB_PRIM_REMOVE_DEAD_ISLANDS,
+                );
+            }
+            M::ThermalReliefToggled { target, on } => {
+                self.apply_primitive_edit(
+                    target,
+                    PrimitiveEdit::ThermalRelief(*on),
+                    ids::PCB_PRIM_POUR_THERMAL,
                 );
             }
             M::ShapePicked { target, shape } => {
@@ -478,6 +487,7 @@ fn field_name(field: PrimitiveField) -> MessageId {
         F::Precision => ids::PCB_PRIM_PRECISION,
         F::Priority => ids::PCB_PRIM_PRIORITY,
         F::MinIslandArea => ids::PCB_PRIM_MIN_ISLAND_AREA,
+        F::ThermalSpokeWidth | F::ThermalAirGap => ids::PCB_PRIM_POUR_SPOKE_GAP,
         F::CenterX | F::CenterY => ids::PCB_PRIM_GRAPHIC_CENTER,
         F::ArrowLength => ids::PCB_PRIM_DIM_ARROW_LENGTH,
         F::ArrowWidth => ids::PCB_PRIM_DIM_ARROW_WIDTH,

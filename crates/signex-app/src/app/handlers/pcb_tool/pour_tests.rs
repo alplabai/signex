@@ -285,3 +285,47 @@ fn unfill_selected_is_one_step_and_repour_fills_the_pour_again() {
         "the card's Unfill"
     );
 }
+
+/// #2580: the area panel's Thermal Relief switch and Spoke / Gap fields are
+/// live, one undo step each; switching on shows the defaults the fill uses,
+/// and a gap that is no length above 0 is refused.
+#[test]
+fn the_area_panel_switches_thermal_relief_and_sets_spoke_and_gap_one_step_each() {
+    use signex_types::pcb::{PCB_THERMAL_BRIDGE_MM, PCB_THERMAL_GAP_MM};
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let target = picked_pour(&mut app);
+    assert_eq!(area_panel(&app).thermal.map(|t| t.0), Some(false));
+
+    panel(
+        &mut app,
+        PcbPrimitiveMsg::ThermalReliefToggled {
+            target: target.clone(),
+            on: true,
+        },
+    );
+    assert_eq!(
+        area_panel(&app).thermal,
+        Some((true, PCB_THERMAL_BRIDGE_MM, PCB_THERMAL_GAP_MM))
+    );
+
+    typed_and_entered(&mut app, &target, PrimitiveField::ThermalAirGap, "0.3");
+    typed_and_entered(&mut app, &target, PrimitiveField::ThermalSpokeWidth, "0.4");
+    let zone = &board_of(&app, &path).zones[0];
+    assert_eq!((zone.thermal_gap, zone.thermal_width), (0.3, 0.4));
+    typed_and_entered(&mut app, &target, PrimitiveField::ThermalAirGap, "0");
+    assert_eq!(board_of(&app, &path).zones[0].thermal_gap, 0.3, "refused");
+
+    undo(&mut app);
+    assert_eq!(
+        board_of(&app, &path).zones[0].thermal_width,
+        PCB_THERMAL_BRIDGE_MM
+    );
+    undo(&mut app);
+    assert_eq!(
+        board_of(&app, &path).zones[0].thermal_gap,
+        PCB_THERMAL_GAP_MM
+    );
+    undo(&mut app);
+    assert!(!board_of(&app, &path).zones[0].thermal_relief);
+}

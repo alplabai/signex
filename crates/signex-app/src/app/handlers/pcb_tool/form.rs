@@ -76,6 +76,10 @@ pub struct BoardToolDefaults {
     pub pour_priority: Option<f64>,
     pub pour_min_island_mm2: Option<f64>,
     pub pour_remove_dead_islands: Option<bool>,
+    /// A pour's thermal relief switch, spoke width and air gap (#2580).
+    pub pour_thermal_relief: Option<bool>,
+    pub pour_thermal_width_mm: Option<f64>,
+    pub pour_thermal_gap_mm: Option<f64>,
     /// The line width of a drawing the Graphics tools place (#2424).
     pub graphic_width_mm: Option<f64>,
     /// A text frame's text; `None` reads the catalog's new-frame text.
@@ -95,6 +99,10 @@ impl BoardToolDefaults {
             self.pour_min_island_mm2.map(ZoneEdit::MinIslandArea),
             self.pour_remove_dead_islands
                 .map(ZoneEdit::RemoveDeadIslands),
+            // The switch first: switching on seeds the width and gap.
+            self.pour_thermal_relief.map(ZoneEdit::ThermalRelief),
+            self.pour_thermal_width_mm.map(ZoneEdit::ThermalSpokeWidth),
+            self.pour_thermal_gap_mm.map(ZoneEdit::ThermalAirGap),
         ];
         for edit in edits.into_iter().flatten() {
             // Each value was checked by `apply_zone_edit` when it was set,
@@ -431,6 +439,13 @@ impl Signex {
             ZoneEdit::RemoveDeadIslands(on) if zone.is_pour() => {
                 defaults.pour_remove_dead_islands = Some(on);
             }
+            ZoneEdit::ThermalRelief(on) if zone.is_pour() => {
+                defaults.pour_thermal_relief = Some(on);
+            }
+            ZoneEdit::ThermalSpokeWidth(v) if zone.is_pour() => {
+                defaults.pour_thermal_width_mm = Some(v);
+            }
+            ZoneEdit::ThermalAirGap(v) if zone.is_pour() => defaults.pour_thermal_gap_mm = Some(v),
             _ => return,
         }
         self.refresh_pcb_highlight();
