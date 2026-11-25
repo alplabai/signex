@@ -115,9 +115,44 @@ pub struct BoardPaint {
     /// Show only unrouted is on (mockup row 164): the board is drawn faint
     /// under its ratsnest. Set on a snapshot's paint only.
     board_dimmed: bool,
+    /// A highlighted net (#2514): copper on every other net is drawn
+    /// dimmed by the Preferences ▸ PCB ▸ Display amount. Snapshot only.
+    net_focus: Option<NetFocus>,
+}
+
+/// The net drawn at full brightness, and how much the rest of the copper
+/// dims, percent: 0 not at all, 100 invisible.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NetFocus {
+    pub net: u32,
+    pub dim_percent: u8,
 }
 
 impl BoardPaint {
+    /// This paint with copper off `net` dimmed by `dim_percent` (clamped
+    /// to 100 %), or (`None`) with no net in focus.
+    pub fn with_net_focus(mut self, net: Option<u32>, dim_percent: u8) -> Self {
+        self.net_focus = net.map(|net| NetFocus {
+            net,
+            dim_percent: dim_percent.min(100),
+        });
+        self
+    }
+
+    /// The net in focus, if any.
+    pub fn net_focus(&self) -> Option<NetFocus> {
+        self.net_focus
+    }
+
+    /// The alpha factor copper on `net` is drawn with: 1 with no net in
+    /// focus or on the net in focus, else what the dim amount leaves.
+    pub fn net_opacity(&self, net: u32) -> f32 {
+        match self.net_focus {
+            Some(focus) if focus.net != net => 1.0 - f32::from(focus.dim_percent) / 100.0,
+            _ => 1.0,
+        }
+    }
+
     /// This paint with the board drawn faint under its ratsnest, or not.
     pub fn with_board_dimmed(mut self, dimmed: bool) -> Self {
         self.board_dimmed = dimmed;
@@ -212,5 +247,21 @@ mod tests {
         assert_eq!(paint.transparency(BoardObject::Tracks), 100);
         paint.set_transparency(BoardObject::Tracks, 25);
         assert!((paint.opacity(BoardObject::Tracks) - 0.75).abs() < 1e-6);
+    }
+
+    /// #2514: the net in focus stays opaque; every other net, the unnamed
+    /// net 0 too, keeps what the dim amount leaves.
+    #[test]
+    fn a_net_in_focus_dims_the_other_nets_only() {
+        assert_eq!(BoardPaint::default().net_opacity(7), 1.0);
+        for (percent, other) in [(0, 1.0), (50, 0.5), (100, 0.0)] {
+            let paint = BoardPaint::default().with_net_focus(Some(3), percent);
+            assert_eq!(paint.net_opacity(3), 1.0, "{percent} %");
+            assert!((paint.net_opacity(4) - other).abs() < 1e-6, "{percent} %");
+            assert!((paint.net_opacity(0) - other).abs() < 1e-6, "{percent} %");
+        }
+        let clamped = BoardPaint::default().with_net_focus(Some(3), 250);
+        assert_eq!(clamped.net_focus().map(|f| f.dim_percent), Some(100));
+        assert!(BoardPaint::default().with_net_focus(None, 50).is_default());
     }
 }
