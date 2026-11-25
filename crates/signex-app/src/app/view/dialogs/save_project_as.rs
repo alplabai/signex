@@ -140,7 +140,7 @@ fn fields<'a>(
                 .boxed()
         };
     let muted = tokens::muted_text(tokens);
-    let mut col: Column<'a, Message> = column![
+    let mut col: Column<Element<'a, Message>> = column![
         column![
             caption(i18n, ids::DIALOG_NEW_PROJECT_NAME_LABEL, tokens),
             name
