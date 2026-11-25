@@ -67,7 +67,9 @@ pub(crate) fn region_from_json(region: &serde_json::Value) -> crate::dock::Regio
         .map(|arr| {
             arr.iter()
                 .filter_map(|val| val.as_str().and_then(parse_panel_kind))
-                // Layer Stack is a document tab now, never docked.
+                // Layer Stack is a document tab now, never docked. A stored
+                // SCH Filter panel ("sch_filter") is an unknown key and is
+                // dropped: Filter covers it (mockup rows 40, 55).
                 .filter(|kind| *kind != crate::panels::PanelKind::LayerStack)
                 .collect()
         })
@@ -491,6 +493,24 @@ mod tests {
             "dock": {
                 "left": { "panels": ["projects"], "collapsed": false },
                 "right": { "panels": ["properties", "layer_stack"], "collapsed": false },
+                "bottom": { "panels": ["messages"], "collapsed": false },
+            }
+        });
+        let dock = read_dock_layout_from(Some(&json)).expect("the layout loads");
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Right),
+            [PanelKind::Properties]
+        );
+    }
+
+    /// Mockup rows 40 and 55: the SCH Filter panel is retired into Filter, so
+    /// a layout saved with it loads without it.
+    #[test]
+    fn a_saved_layout_drops_the_sch_filter_panel() {
+        let json = serde_json::json!({
+            "dock": {
+                "left": { "panels": ["projects"], "collapsed": false },
+                "right": { "panels": ["properties", "sch_filter"], "collapsed": false },
                 "bottom": { "panels": ["messages"], "collapsed": false },
             }
         });
