@@ -1,5 +1,6 @@
 //! The board view's layers and ratsnest (#2223). The view of each open board
-//! lives in `UiState::pcb_layer_views`, for the session. The one exception
+//! lives in `UiState::pcb_layer_views` and is kept per board in the user's
+//! preferences (#2480, `pcb_view_persist`). The one exception
 //! is a layer colour: it is saved with the board (2026-11-18), so a colour
 //! event is a `SetBoardOptions` undo step on the board.
 //!

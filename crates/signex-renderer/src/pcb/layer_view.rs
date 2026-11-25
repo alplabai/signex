@@ -2,9 +2,10 @@
 //! hidden, which layer is active, single-layer mode, and whether the
 //! ratsnest is drawn.
 //!
-//! Session state only. It decides what is drawn and what a pointer can hit,
-//! and is never written to the `.snxpcb`. Names and colours of the layers are
-//! the app's: this module only says which layers there are.
+//! It decides what is drawn and what a pointer can hit, and is never written
+//! to the `.snxpcb`; the app keeps it per board in the user's preferences
+//! (#2480, [`PcbLayerView::kept`]). Names and colours of the layers are the
+//! app's: this module only says which layers there are.
 
 use std::collections::HashSet;
 
@@ -177,6 +178,21 @@ impl PcbLayerView {
         self.hidden.contains(&layer)
     }
 
+    /// The layers the user hid, in no order.
+    pub fn hidden_layers(&self) -> impl Iterator<Item = PcbLayer> + '_ {
+        self.hidden.iter().copied()
+    }
+
+    /// This view as it is kept across launches (#2480): the highlight and
+    /// Show only unrouted end with the board, so they are left out.
+    pub fn kept(&self) -> Self {
+        Self {
+            highlighted: None,
+            only_unrouted: false,
+            ..self.clone()
+        }
+    }
+
     /// Whether `layer` is drawn and hit: not hidden, and in single-layer
     /// mode the active layer or the board outline.
     pub fn is_visible(&self, layer: PcbLayer) -> bool {
@@ -250,6 +266,12 @@ impl PcbLayerView {
     /// stay hidden.
     pub fn forget_layer_set(&mut self) {
         self.layer_set = None;
+    }
+
+    /// List `set` in the strip as it was kept (#2480), hiding nothing: the
+    /// layers it hid are kept as hidden layers of their own.
+    pub fn set_layer_set(&mut self, set: Option<ShownLayerSet>) {
+        self.layer_set = set;
     }
 
     /// Whether the strip lists `layer`: every layer without a set.

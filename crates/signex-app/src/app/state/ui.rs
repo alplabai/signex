@@ -15,10 +15,18 @@ use super::{
 pub const DEFAULT_BOTTOM_PANEL_HEIGHT: f32 = 220.0;
 
 pub struct UiState {
-    /// What each open board shows of its layers and ratsnest (#2223). Session
-    /// only: never written to the `.snxpcb`.
+    /// What each board shown this session shows of its layers and ratsnest
+    /// (#2223). Never written to the `.snxpcb`; kept per board in
+    /// `prefs.json` (#2480, `board_view_prefs`).
     pub pcb_layer_views:
         std::collections::HashMap<std::path::PathBuf, signex_renderer::pcb::PcbLayerView>,
+    /// The views kept by earlier launches (#2480), by board path, until
+    /// their board opens and `pcb_layer_views` takes the view over.
+    pub saved_pcb_layer_views:
+        std::collections::HashMap<std::path::PathBuf, signex_renderer::pcb::PcbLayerView>,
+    /// Writes the views of `pcb_layer_views` to `prefs.json` (#2480),
+    /// debounced and off the UI thread.
+    pub pcb_layer_view_sync: crate::board_view_prefs::BoardViewSync,
     /// The board layer strip's tab names and saved layer sets (#2394), per
     /// user in `prefs.json`.
     pub layer_strip: crate::layer_strip_prefs::LayerStripPrefs,

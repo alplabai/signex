@@ -54,6 +54,9 @@ pub enum PcbMsg {
         window: iced::window::Id,
         event: ViewRotationMsg,
     },
+    /// The board views' save loop (#2480): a quiet period ran out or a
+    /// write finished.
+    ViewSave(crate::board_view_prefs::BoardViewSaveMsg),
     /// The board 3D view of the main window (#2390).
     Board3d(Board3dMsg),
     /// Board sketch mode of the main window's board (#2234).

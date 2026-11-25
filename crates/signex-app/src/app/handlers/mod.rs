@@ -124,6 +124,7 @@ mod pcb_via_move;
 #[cfg(test)]
 mod pcb_via_move_tests;
 pub mod pcb_view;
+mod pcb_view_persist;
 pub mod pcb_view_rotation;
 pub mod placed_part;
 pub(crate) mod placement_extras;

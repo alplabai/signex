@@ -228,6 +228,9 @@ impl Signex {
         // project in view changes (mockup row 165).
         tasks.push(self.sync_annotations_panel());
         tasks.push(self.sync_compare_board());
+        // A board that opened takes its kept view; a changed view is saved
+        // soon (#2480).
+        tasks.push(self.sync_pcb_layer_views());
         // A Properties draft of a board no window shows any more goes (#1312).
         self.prune_pcb_footprint_draft();
         self.prune_pcb_component_draft();

@@ -1,7 +1,8 @@
 //! What a board view draws differently from the board palette (#2363): the
 //! colour the user picked for a layer, and how transparent each kind of
-//! object is drawn. Session state of one view, never written to the
-//! `.snxpcb`; the colours are overrides on top of the one board palette.
+//! object is drawn. State of one view, never written to the `.snxpcb` (the
+//! app keeps it per board in the user's preferences, #2480); the colours
+//! are overrides on top of the one board palette.
 
 use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 
