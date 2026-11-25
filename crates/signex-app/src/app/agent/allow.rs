@@ -110,6 +110,8 @@ mod tests {
                 // items `ids` names on the named sheet (or board, Delete).
                 "bring_drawings_forward",
                 "bring_drawings_to_front",
+                // #2954: the part `id` on the named sheet swapped for a row.
+                "change_component",
                 "check_drc",
                 "check_erc",
                 "check_requirements",

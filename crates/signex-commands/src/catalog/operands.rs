@@ -220,6 +220,19 @@ pub const PART: &[Operand] = &[
     optional("mirror", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
+/// The placed part `id` (in place of the selection) changed to the row
+/// `part` of an open `library` (#2954): `pins` maps old pins to new ones by
+/// hand (`1:2,3:-`), `drop` names the user parameters cleared, `dry_run`
+/// answers without changing anything.
+pub const CHANGE_COMPONENT: &[Operand] = &[
+    required("id", OperandKind::Text),
+    required("library", OperandKind::Text),
+    required("part", OperandKind::Text),
+    optional("pins", OperandKind::Text),
+    optional("drop", OperandKind::Text),
+    optional("dry_run", OperandKind::Bool),
+    optional("document", OperandKind::Document),
+];
 /// A sheet symbol between two corners, referring to its child `file` (relative
 /// to the sheet, inside the project folder; never written). `allow_merge` lets
 /// the nets the file brings in short or rename project nets (#2199).

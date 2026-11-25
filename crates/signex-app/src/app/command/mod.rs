@@ -24,6 +24,9 @@ mod board_operands;
 mod board_view_operand_tests;
 mod board_view_operands;
 pub(crate) mod bridge;
+#[cfg(test)]
+mod change_component_operand_tests;
+mod change_component_operands;
 mod component_operand;
 #[cfg(test)]
 mod directive_operand_tests;
