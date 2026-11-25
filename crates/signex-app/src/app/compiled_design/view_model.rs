@@ -88,7 +88,7 @@ impl Signex {
 
     /// The Repeat, Channel naming and Entries rows of the one selected
     /// sheet symbol.
-    fn sheet_symbol_repeat_view(&self) -> Option<SheetSymbolRepeatView> {
+    pub(super) fn sheet_symbol_repeat_view(&self) -> Option<SheetSymbolRepeatView> {
         let [item] = self.interaction_state.active_canvas().selected.as_slice() else {
             return None;
         };

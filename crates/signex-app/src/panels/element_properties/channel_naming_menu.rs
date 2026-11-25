@@ -2,7 +2,8 @@
 //! menus (#1279): Designators and Local nets each open a menu floating over
 //! the dock right under the field, right-aligned to it (#2674), with the
 //! preset formats, a Custom format… field checked by `check_format`, and
-//! the token help line. A press outside the menu and its field closes it.
+//! the token help line. A press outside the menu and its field closes it,
+//! and so does Esc (`Signex::naming_menu_escape`).
 //! The choice is a project setting (`app/compiled_design/naming.rs`).
 
 use iced::widget::{Column, column, container, row};

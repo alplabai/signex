@@ -6,10 +6,10 @@
 //! Real temp dir: `root.snxsch` places `child.snxsch` once through a sheet
 //! symbol; both are open as tabs of one project.
 
-use signex_app::app::{CompiledDesignMsg, EditMsg, Message, Signex};
+use signex_app::app::{CompiledDesignMsg, EditMsg, InputMsg, Message, Signex};
 use signex_app::dock::DockMessage;
-use signex_app::panels::PanelMsg;
-use signex_app::panels::compiled_design::CompiledStatus;
+use signex_app::panels::compiled_design::{CompiledStatus, NamingTarget};
+use signex_app::panels::{PanelKind, PanelMsg};
 use signex_types::schematic::{
     ChildSheet, FillType, Point, SchDrawing, SchTable, SchematicSheet, SelectedItem, SelectedKind,
     Symbol, TableSource,
@@ -681,4 +681,77 @@ fn a_compile_draws_each_channel_card_with_its_designators() {
             .collect();
         assert_eq!(names, [format!("{}_R5", tab.channel.name)]);
     }
+
+fn designator_format(f: &Fixture) -> String {
+    f.app.document_state.projects[0]
+        .data
+        .schematic_design
+        .channel_naming
+        .designator_format
+        .clone()
+}
+
+fn naming_menu_open(f: &Fixture) -> bool {
+    f.app.ui_state.compiled_design.naming_menu.is_some()
+}
+
+/// A repeated sheet symbol selected with Properties in front, so its
+/// Channel naming section shows.
+fn naming_fixture() -> Fixture {
+    let mut f = fixture("Repeat(CH, 1, 4)", false);
+    let id = f.sheet_symbol;
+    select(&mut f.app, id, SelectedKind::ChildSheet);
+    f.app.document_state.dock.show_panel(PanelKind::Properties);
+    f
+}
+
+/// #2674: a style picked in the naming menu is written and closes it.
+#[test]
+fn a_style_picked_in_the_naming_menu_is_the_channel_naming() {
+    let mut f = naming_fixture();
+    let picked = "${Channel}_${Designator}";
+    assert_ne!(designator_format(&f), picked, "the pick is a change");
+
+    send(
+        &mut f.app,
+        CompiledDesignMsg::NamingMenuToggled(NamingTarget::Designators),
+    );
+    assert!(naming_menu_open(&f));
+    send(
+        &mut f.app,
+        CompiledDesignMsg::NamingPicked {
+            target: NamingTarget::Designators,
+            format: picked.to_string(),
+        },
+    );
+
+    assert_eq!(designator_format(&f), picked);
+    assert!(!naming_menu_open(&f), "a pick closes the menu");
+}
+
+/// #2674: Esc closes the naming menu and leaves the naming as it was, a
+/// custom format typed but not submitted included.
+#[test]
+fn esc_closes_the_naming_menu_without_a_change() {
+    let mut f = naming_fixture();
+    let before = designator_format(&f);
+    send(
+        &mut f.app,
+        CompiledDesignMsg::NamingMenuToggled(NamingTarget::Designators),
+    );
+    send(
+        &mut f.app,
+        CompiledDesignMsg::NamingCustomTyped("${Designator}-${Index}".to_string()),
+    );
+    assert!(naming_menu_open(&f));
+
+    crate::settle_support::settle(
+        &mut f.app,
+        Message::Input(InputMsg::EscapePressed { window: None }),
+    );
+
+    assert!(!naming_menu_open(&f), "Esc closes the menu");
+    assert_eq!(designator_format(&f), before, "Esc changes nothing");
+    let selected = &f.app.interaction_state.active_canvas().selected;
+    assert_eq!(selected.len(), 1, "Esc goes no further than the menu");
 }
