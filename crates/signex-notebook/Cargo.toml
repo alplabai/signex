@@ -1,6 +1,6 @@
 [package]
 name = "signex-notebook"
-description = "Design Notebook: the .snxnbk file (Typst source with a TOML header), its references, annotation blocks and typed block ids, chapter includes, and the Typst compile pipeline to pages and reproducible PDF"
+description = "Design Notebook: the .snxnbk file (Typst source with a TOML header), its references, annotation blocks and typed block ids, chapter includes, Python cells (model, cache, scheduler, sandbox rules, runner trait), and the Typst compile pipeline to pages and reproducible PDF"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,8 +11,11 @@ license.workspace = true
 # tests read and compile the same way (docs/NOTEBOOK_ANNOTATIONS.md).
 [dependencies]
 serde = { workspace = true }
-# The attachment manifest the bundled package reads (src/derived.rs).
+# The attachment manifest the bundled package reads (src/derived.rs), the
+# cell result cache file and the cell results the page reads.
 serde_json = { workspace = true }
+# The source hash a cached cell result keeps.
+sha2 = { workspace = true }
 signex-types = { workspace = true }
 thiserror = { workspace = true }
 toml = { workspace = true }

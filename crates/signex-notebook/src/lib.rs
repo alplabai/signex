@@ -46,10 +46,15 @@
 //! as a vector plot. [`bench`] gathers them over a notebook's files and
 //! [`report`] gives the command answers (`docs/NOTEBOOK_MEASUREMENTS.md`).
 //!
+//! Python cells, `#python(label: "...")[```python ... ```]`, compute from
+//! schematic values ([`cell`], mockup row 200); their results reach the
+//! page through [`CompileOptions::cells`].
+//!
 //! UI-free and IO-free: the caller reads the files.
 
 pub mod attachment;
 pub mod bench;
+pub mod cell;
 pub mod edit;
 pub mod measurement;
 pub mod report;
@@ -158,6 +163,10 @@ mod tests;
 mod tests_attachment;
 #[cfg(test)]
 mod tests_badges;
+#[cfg(test)]
+mod tests_cells;
+#[cfg(test)]
+mod tests_cells_run;
 #[cfg(test)]
 mod tests_compile;
 #[cfg(test)]

@@ -43,6 +43,61 @@
   if bench { _bench-measurement(..args) } else { _record-measurement(..args) }
 }
 
+// The Python cell results of this compile, written by Signex (the cell
+// module of the signex-notebook crate). A compile never runs a cell.
+#let _cells = json("cells.json")
+
+// A Python cell: #python(label: "ripple-vs-vin")[```python ... ```].
+// The page shows the cell's state, the values it read with their
+// schematic source, what it printed and its figures; the source is hidden
+// in print unless the export asks for it.
+#let python(label: none, ..args) = {
+  let body = args.pos().at(0, default: none)
+  let cell = if label == none { none } else { _cells.cells.at(label, default: none) }
+  let ink = if cell != none and cell.greyed { luma(55%) } else { black }
+  block(
+    breakable: true,
+    width: 100%,
+    above: 1.2em,
+    below: 1.2em,
+    stroke: (left: 1.5pt + luma(35%)),
+    inset: (left: 8pt, rest: 6pt),
+    {
+      set text(fill: ink)
+      text(weight: "bold", size: 0.85em, "PYTHON")
+      if label != none { h(0.6em); raw(label) }
+      if cell != none { h(1fr); text(size: 0.85em, cell.caption) }
+      if _cells.print_source and body != none { parbreak(); body }
+      if label == none {
+        parbreak()
+        text(size: 0.9em, [Not run: give the cell a label to run it.])
+      } else if cell == none {
+        parbreak()
+        text(size: 0.9em, [Not run yet: Run the cell, or Run all, to compute it.])
+      } else {
+        if cell.values.len() > 0 {
+          parbreak()
+          grid(
+            columns: (auto, auto, auto),
+            column-gutter: 1em,
+            row-gutter: 0.4em,
+            ..cell.values.map(v => (raw(v.symbol), v.value, [from #v.source])).flatten(),
+          )
+        }
+        if cell.stdout != "" { parbreak(); raw(cell.stdout, block: true) }
+        for f in cell.figures {
+          figure(
+            image(bytes(f.svg), format: "svg", width: 100%),
+            caption: if f.caption == "" { none } else { f.caption },
+          )
+        }
+        if cell.note != "" { parbreak(); text(size: 0.9em, cell.note) }
+        if cell.reads != "" { parbreak(); text(size: 0.8em, cell.reads) }
+      }
+    },
+  )
+}
+
 // The report layout: #show: report.with(doc: "DN-0042", rev: "B").
 // No creation date is written, so two exports give the same file.
 #let report(doc: none, rev: none, title: none, body) = {

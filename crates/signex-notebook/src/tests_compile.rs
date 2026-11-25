@@ -146,6 +146,7 @@ fn today_is_only_what_the_caller_passes() {
     );
     let options = CompileOptions {
         today: IsoDate::parse("2026-11-25"),
+        ..CompileOptions::default()
     };
     let compilation = compile(&sources, &options);
     assert!(!compilation.has_errors(), "{:?}", compilation.diagnostics);

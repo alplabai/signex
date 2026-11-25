@@ -80,6 +80,8 @@ format declares only its own table row below.
 | `.snxsym` | `snxsym/v1`, `v2` or `v3` by content; `v4` while any graphic is a Bezier, Pie Chart, Elliptical Arc or Round Rectangle (#2838), whatever else it holds | `snxsym/v1`, `v2`, `v3`, `v4` | refused | refused |
 | `.snxsim` | `snxsim/v1` | `snxsim/v1` | refused | refused |
 | `.snxnbk`, Design Notebook | `snxnbk/1`, the lowest its content needs: the `format` key of the TOML header between the file's two `+++` lines (`signex_notebook::NOTEBOOK_FORMAT`; mockup rows 195-202, #2795). The header also stores each reference's id; there is no sidecar file. A file saved with no change is written back byte for byte, header text included; a file with no header keeps none until it stores a reference id. Chapter files a notebook `#include`s are `.snxnbk` files with their own header | `snxnbk/1` | opens read-only | read as `snxnbk/1` |
+| `.snxnbk`, Python cells | `snxnbk/1`, unchanged: a `#python(label: "...")[```python ... ```]` cell is plain Typst over the bundled package (mockup row 200, `docs/NOTEBOOK_CELLS.md`) | `snxnbk/1` | as above | as above |
+| `.signex/notebook-cells.json`, cell result cache | `notebook-cells/1`, the `format` key of the JSON (`signex_notebook::cell::CELL_CACHE_FORMAT`). A cache, not a document: the same results write the same bytes | `notebook-cells/1` | set aside: the cells show as not run until they run, and the next run writes this build's token | set aside, as a newer token |
 
 `.snxrules` profiles carry a numeric `schema` key instead of a token
 (`docs/architecture/snxrules-format.md`); a newer schema is refused there too.
