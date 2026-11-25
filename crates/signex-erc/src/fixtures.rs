@@ -369,7 +369,64 @@ pub(crate) fn class_conflict_sheet() -> signex_types::schematic::SchematicSheet 
     sheet
         .directives
         .push(net_parameters(12, pt(5.0, 0.0), "POWER"));
+    // A net needs a pin to exist (`signex_net::build_netlist`).
+    class_conflict_pin(&mut sheet, "R1", pt(0.0, 0.0));
+    class_conflict_pin(&mut sheet, "R2", pt(10.0, 0.0));
     sheet
+}
+
+/// A one-pin part at `at` on a [`class_conflict_sheet`], so the wire under it
+/// forms a net.
+pub(crate) fn class_conflict_pin(
+    sheet: &mut signex_types::schematic::SchematicSheet,
+    reference: &str,
+    at: Point,
+) {
+    use signex_types::schematic::{LibPin, LibSymbol, Pin, PinShapeStyle, Symbol};
+    sheet
+        .lib_symbols
+        .entry("R".into())
+        .or_insert_with(|| LibSymbol {
+            id: "R".into(),
+            reference: String::new(),
+            value: String::new(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            description: String::new(),
+            keywords: String::new(),
+            fp_filters: String::new(),
+            in_bom: true,
+            on_board: true,
+            in_pos_files: true,
+            duplicate_pin_numbers_are_jumpers: false,
+            graphics: Vec::new(),
+            pins: vec![LibPin {
+                unit: 0,
+                body_style: 1,
+                pin: Pin {
+                    direction: PinDirection::Passive,
+                    shape_style: PinShapeStyle::Plain,
+                    position: pt(0.0, 0.0),
+                    rotation: 0.0,
+                    length: 0.0,
+                    name: String::new(),
+                    number: "1".into(),
+                    visible: true,
+                    name_visible: true,
+                    number_visible: true,
+                },
+            }],
+            show_pin_numbers: true,
+            show_pin_names: true,
+            pin_name_offset: 0.0,
+        });
+    sheet.symbols.push(Symbol {
+        uuid: Uuid::from_u128(0x2656_0000 + sheet.symbols.len() as u128),
+        lib_id: "R".into(),
+        reference: reference.into(),
+        position: at,
+        ..Default::default()
+    });
 }
 
 /// A harness connector of type `ty` at `at` with entries `names` (#1280).

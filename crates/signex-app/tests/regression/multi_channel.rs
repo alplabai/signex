@@ -700,6 +700,8 @@ fn naming_menu_open(f: &Fixture) -> bool {
 /// Channel naming section shows.
 fn naming_fixture() -> Fixture {
     let mut f = fixture("Repeat(CH, 1, 4)", false);
+    // The first-run tour claims Esc ahead of a panel menu.
+    f.app.ui_state.first_run_tour_open = false;
     let id = f.sheet_symbol;
     select(&mut f.app, id, SelectedKind::ChildSheet);
     f.app.document_state.dock.show_panel(PanelKind::Properties);
@@ -710,7 +712,8 @@ fn naming_fixture() -> Fixture {
 #[test]
 fn a_style_picked_in_the_naming_menu_is_the_channel_naming() {
     let mut f = naming_fixture();
-    let picked = "${Channel}_${Designator}";
+    // Not the default `${Channel}_${Designator}`, so the pick is a change.
+    let picked = "${Designator}_${Channel}";
     assert_ne!(designator_format(&f), picked, "the pick is a change");
 
     send(

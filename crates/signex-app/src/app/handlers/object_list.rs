@@ -430,9 +430,13 @@ impl Signex {
         let special = canvas_special.cloned();
         // The clock ticks and every save moves a modified date: rows no
         // listed text of which uses a token read the same (#2630).
-        if let Some(read) = read_from.and_then(|s| s.special.as_ref())
-            && let Some(now) = special.as_ref()
-            && same_but_document_facts(read, now)
+        // A first read before the canvas had its strings reads the same too.
+        if let Some(read) = read_from
+            && match (read.special.as_ref(), special.as_ref()) {
+                (Some(read), Some(now)) => same_but_document_facts(read, now),
+                (None, _) => true,
+                (Some(_), None) => false,
+            }
             && !self.object_texts_use_tokens(active, scope)
         {
             self.ui_state.object_list.source_of_mut(owner).special = special;

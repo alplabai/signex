@@ -92,6 +92,8 @@ fn one_blanket_overridden_on_two_nets_gives_two_findings() {
     sheet
         .labels
         .push(Label::new("OTHER", Point::new(0.0, 0.5), LabelType::Net));
+    crate::fixtures::class_conflict_pin(&mut sheet, "R3", Point::new(0.0, 0.5));
+    crate::fixtures::class_conflict_pin(&mut sheet, "R4", Point::new(10.0, 0.5));
     sheet.directives.push(net_blanket(
         14,
         Point::new(-2.0, -2.0),
