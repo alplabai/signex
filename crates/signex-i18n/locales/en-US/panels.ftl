@@ -1141,6 +1141,13 @@ panels-channel-strip-count = { $count }
 panels-channel-card-caption = { $parts } parts · { $nets } nets
 # Shown in the compiled view before the project is compiled.
 panels-channel-view-not-compiled = Compile the project to fill the channels with their parts and nets.
+# A channel card's fit in the active variant (#2662). $variant is its name.
+# A click on it leaves every part of the channel out of the variant, or lets
+# the sheets decide again.
+panels-channel-card-fitted = { $variant }: Fitted
+panels-channel-card-not-fitted = { $variant }: Not fitted
+# Some of the channel's parts are not fitted; $count is how many.
+panels-channel-card-partly-fitted = { $variant }: { $count } not fitted
 # The Messages line when an edit is tried in a channel tab. $channel is CH1.
 panels-channel-read-only = Channel { $channel } is a compiled view; switch to Editor to edit
 # The compile result in Messages.

@@ -330,6 +330,9 @@ define_ids! {
     PANELS_CHANNEL_STRIP_COUNT = "panels-channel-strip-count";
     PANELS_CHANNEL_CARD_CAPTION = "panels-channel-card-caption";
     PANELS_CHANNEL_VIEW_NOT_COMPILED = "panels-channel-view-not-compiled";
+    PANELS_CHANNEL_CARD_FITTED = "panels-channel-card-fitted";
+    PANELS_CHANNEL_CARD_NOT_FITTED = "panels-channel-card-not-fitted";
+    PANELS_CHANNEL_CARD_PARTLY_FITTED = "panels-channel-card-partly-fitted";
     PANELS_CHANNEL_READ_ONLY = "panels-channel-read-only";
     PANELS_COMPILED_DESIGN_FAILED = "panels-compiled-design-failed";
     // Signal harnesses (#1280).

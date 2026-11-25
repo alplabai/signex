@@ -155,6 +155,7 @@ impl Signex {
             .compile_target()
             .and_then(|id| self.document_state.compiled_design.results.get(&id));
         let active = self.shown_channel(&path);
+        let variant = self.channel_view_variant();
         let tabs = channels
             .iter()
             .map(|channel| {
@@ -168,6 +169,11 @@ impl Signex {
                         .into_iter()
                         .map(|(_, _, named)| named)
                         .collect(),
+                    fits: result
+                        .map(|r| {
+                            self.channel_part_fits(r, &path, channel.index, variant.as_deref())
+                        })
+                        .unwrap_or_default(),
                 }
             })
             .collect();
@@ -181,6 +187,8 @@ impl Signex {
             tabs,
             active,
             designator_map,
+            variant,
+            is_fit_locked: self.channel_fit_is_locked(),
         })
     }
 

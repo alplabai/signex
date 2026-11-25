@@ -2,9 +2,14 @@
 //! channel view (#1279). Editor is the editable sheet; a channel tab shows
 //! the compiled channels as cards, read-only (the gate is
 //! `Signex::refuse_if_channel_view`, at the mutation gateway). The strip's
-//! data is `PanelContext::compiled_design.strip`, built in update.
+//! data is `PanelContext::compiled_design.strip`, built in update. A card's
+//! variant fit is a project setting, not a sheet edit, so the read-only gate
+//! does not apply to it (#2662).
 
 mod cards;
+mod fit;
+#[cfg(test)]
+mod fit_tests;
 mod strip;
 
 use iced::widget::column;
@@ -63,6 +68,7 @@ mod tests {
             parts: Some(9),
             nets: Some(7),
             designators: vec![format!("CH{i}_R5")],
+            fits: Vec::new(),
         };
         ChannelStripView {
             sheet: PathBuf::from("buck_channel.snxsch"),
@@ -70,6 +76,8 @@ mod tests {
             tabs: (1..=4).map(tab).collect(),
             active,
             designator_map: Vec::new(),
+            variant: None,
+            is_fit_locked: false,
         }
     }
 
