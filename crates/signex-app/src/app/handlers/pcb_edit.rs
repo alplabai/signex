@@ -8,6 +8,7 @@
 use std::path::Path;
 
 use signex_engine::pcb::{BoardCommand, BoardPatch};
+use signex_renderer::pcb::PcbSnapshot;
 
 use crate::app::Signex;
 use crate::app::state::pcb_edit::{BoardEditError, CheckedStep};
@@ -144,6 +145,20 @@ impl Signex {
         let view = self.pcb_layer_view(path);
         let (origin_marker, flipped) = (view.origin_marker_visible(), view.flipped());
         let marks = crate::pcb_canvas::BoardMarks::of(board);
+        // Each window dims for its own tool or carry (#2514); the tile pane
+        // sits in the main window.
+        let ids = self
+            .interaction_state
+            .pcb_canvases
+            .keys()
+            .map(|id| Some(*id));
+        let focused: std::collections::HashMap<Option<iced::window::Id>, PcbSnapshot> = ids
+            .chain([None])
+            .map(|window| {
+                let nets = self.board_focus_nets(path, window);
+                (window, self.with_focus_on(snapshot.clone(), &nets))
+            })
+            .collect();
         let windows = &self.ui_state.windows;
         let pane = self.interaction_state.tile_panes.board.get_mut(path);
         let canvases = self
@@ -157,10 +172,10 @@ impl Signex {
                         if shown == path
                 )
             })
-            .map(|(_, canvas)| canvas)
-            .chain(pane);
-        for canvas in canvases {
-            canvas.set_renderer_snapshot(Some(snapshot.clone()));
+            .map(|(id, canvas)| (Some(*id), canvas))
+            .chain(pane.map(|canvas| (None, canvas)));
+        for (window, canvas) in canvases {
+            canvas.set_renderer_snapshot(focused.get(&window).cloned());
             canvas.set_board_grid(board_grid);
             canvas.set_board_marks(marks.clone());
             canvas.set_origin_marker_visible(origin_marker);

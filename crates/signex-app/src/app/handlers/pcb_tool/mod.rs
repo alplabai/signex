@@ -65,6 +65,8 @@ mod graphic_tests;
 #[cfg(test)]
 mod layer_tests;
 #[cfg(test)]
+mod net_focus_tests;
+#[cfg(test)]
 mod outline_preview_tests;
 #[cfg(test)]
 mod pause_tests;
@@ -137,13 +139,13 @@ impl BoardToolSession {
 
 impl Signex {
     /// Arm `tool` on the board in view, ending a Move, paste or part on the
-    /// cursor and a net pick. Nothing without a board in view or for a tool
-    /// with no command yet.
+    /// cursor and a net pick. Nothing without a board in view, or for
+    /// Component, which puts a picked part on the cursor instead (#2505).
     pub(crate) fn arm_board_tool(&mut self, tool: BoardPlaceTool) {
         let Some(path) = self.active_tab_path().filter(|_| self.has_active_pcb()) else {
             return;
         };
-        if tool.command().is_none() {
+        if tool == BoardPlaceTool::Component {
             return;
         }
         self.end_pcb_carry();
@@ -405,7 +407,7 @@ impl Signex {
             BoardPlaceTool::TextString => self.string_clicked(at),
             BoardPlaceTool::Pad => self.pad_clicked(at),
             BoardPlaceTool::Arc => self.arc_clicked(at),
-            BoardPlaceTool::Dimension => self.dimension_clicked(at),
+            BoardPlaceTool::Dimension(kind) => self.dimension_clicked(kind, at),
             BoardPlaceTool::PourCutout => self.pour_cutout_clicked(at),
             BoardPlaceTool::SlicePour => self.slice_pour_clicked(at),
             BoardPlaceTool::Fill
@@ -483,7 +485,7 @@ impl Signex {
                 self.router_preview(session, &mut preview);
             }
             BoardPlaceTool::TextString => self.string_preview(cursor, &mut preview),
-            BoardPlaceTool::Pad | BoardPlaceTool::Arc | BoardPlaceTool::Dimension => {
+            BoardPlaceTool::Pad | BoardPlaceTool::Arc | BoardPlaceTool::Dimension(_) => {
                 self.free_preview(session, board, cursor, &mut preview);
             }
             BoardPlaceTool::PourCutout | BoardPlaceTool::SlicePour => {

@@ -27,7 +27,7 @@ mod scope;
 mod selection;
 mod sheet_guard;
 
-pub(crate) use book::ReplayBook;
+pub(crate) use book::{BoardDrop, ReplayBook};
 #[cfg(test)]
 pub(super) use safe_list::{SAFE_COMMANDS, replay_proof};
 #[cfg(test)]

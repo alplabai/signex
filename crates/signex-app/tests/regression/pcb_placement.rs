@@ -411,17 +411,27 @@ fn a_ctrl_drag_leaves_the_tracks_and_a_plain_drag_takes_them_along() {
         (Point::new(0.0, 10.0), Point::new(8.0, 10.0))
     );
 
-    // No Ctrl: the end on the pad follows, as before.
+    // No Ctrl: the end on the pad follows to (10.7, 10.16), and since that
+    // is off the track's 0° line it bends at one 45° corner (#2513 (2)-(4)):
+    // the track keeps its fixed end and runs to the corner, a new leg of its
+    // width, layer and net runs on into the pad.
+    let near = |p: Point, x: f64, y: f64| (p.x - x).abs() < 1e-9 && (p.y - y).abs() < 1e-9;
     let mut f = open_board_with(with_track.clone());
     send(&mut f.app, drag(false));
     let edited = one_step(&mut f, dropped());
     assert!(moved_to(&edited));
-    let (start, end) = track(&edited);
+    let (start, corner) = track(&edited);
     assert_eq!(start, Point::new(0.0, 10.0));
-    assert!(
-        (end.x - 10.7).abs() < 1e-9 && (end.y - 10.16).abs() < 1e-9,
-        "{end:?}"
-    );
+    assert!(near(corner, 10.54, 10.0), "{corner:?}");
+    let was = with_track.segments.iter().find(|s| s.uuid == on_pad);
+    let was = was.expect("track");
+    let leg = edited
+        .segments
+        .iter()
+        .find(|s| s.uuid != on_pad && near(s.start, 10.54, 10.0))
+        .expect("the 45° leg into the pad");
+    assert!(near(leg.end, 10.7, 10.16), "{:?}", leg.end);
+    assert_eq!((leg.width, &leg.layer, leg.net), (was.width, &was.layer, 0));
 
     // Ctrl pressed mid-drag latches: a later step without it changes nothing.
     let mut f = open_board_with(with_track);

@@ -150,9 +150,9 @@ pcb-bar-move-tooltip = Move (right-click for the move and transform menu)
 pcb-bar-filter-tooltip = Selection Filter (click for the object kinds a click or box picks)
 # Tooltip of the PCB Active Bar's Align button (#2373).
 pcb-bar-align-tooltip = Align (click for the align and distribute menu)
-# Tooltips of the PCB Active Bar's greyed buttons: tools the board editor
-# cannot run yet (#2352).
-pcb-bar-component-unavailable = Place Component: not available on boards yet
+# Tooltip of the PCB Active Bar's Component row (#2505): it opens the part
+# picker and the pick goes on the cursor.
+pcb-bar-component-tooltip = Place Component (pick a part; Space turns it, L flips it to the other side)
 # The badge on the Selection Filter button: how many object kinds are off
 # (mockup row 108). There is no badge while every kind is on.
 pcb-bar-filter-off-count = { $count }
@@ -169,8 +169,7 @@ pcb-bar-group =
         [text] Text
        *[graphics] Graphics
     }
-# Rows of the Place menu on a board (#2360). The ones the board editor cannot
-# run yet are greyed, with the tooltip above as the reason.
+# Rows of the Place menu on a board (#2360).
 pcb-tool-component = Component
 pcb-tool-pad = Pad
 pcb-tool-via = Via
@@ -181,7 +180,11 @@ pcb-tool-fill = Fill
 pcb-tool-region = Solid Region
 pcb-tool-polygon-pour = Polygon Pour
 pcb-tool-string = String
-pcb-tool-dimension = Dimension
+pcb-tool-dimension = Aligned Dimension
+# #2507: the other dimension kinds.
+pcb-tool-dimension-horizontal = Linear Horizontal Dimension
+pcb-tool-dimension-vertical = Linear Vertical Dimension
+pcb-tool-dimension-radial = Radial Dimension
 pcb-tool-keepout = Keepout
 # Tooltips of the PCB Active Bar's live placement tools (#2373).
 pcb-bar-via-tooltip = Place Via
@@ -193,7 +196,10 @@ pcb-bar-pour-tooltip = Place Polygon Pour (right-click to close)
 pcb-bar-pad-tooltip = Place Pad
 pcb-bar-arc-tooltip = Place Arc (by centre, by edge or any angle: Cycle Arc Mode in the palette)
 pcb-bar-string-tooltip = Place String
-pcb-bar-dimension-tooltip = Place Dimension
+pcb-bar-dimension-tooltip = Place Aligned Dimension
+pcb-bar-dimension-horizontal-tooltip = Place Linear Horizontal Dimension
+pcb-bar-dimension-vertical-tooltip = Place Linear Vertical Dimension
+pcb-bar-dimension-radial-tooltip = Place Radial Dimension (click an arc or circle)
 # What the Messages panel says when a board placement tool is armed (#2373).
 pcb-tool-hint-via = Via: click to place a via on the net under it; Esc or a right-click ends the tool
 pcb-tool-hint-track = Track: click to start a run on the active copper layer (a pad not on it starts with a via), then click each corner; change the layer to add a via. Click the run's end, Esc or a right-click to end the run
@@ -217,9 +223,13 @@ pcb-tool-string-needs-text-layer = String: make a copper, silkscreen, mechanical
 pcb-tool-hint-pad = Pad: click to place a through-hole pad on the net under it; Tab edits its shape, size and hole. Esc or a right-click ends the tool
 pcb-tool-hint-arc = Arc: { $mode }. Esc drops the arc being drawn, then ends the tool
 pcb-tool-hint-string = String: click to place a string on the active silkscreen, mechanical or documentation layer; Tab edits its text and height. Esc or a right-click ends the tool
-pcb-tool-hint-dimension = Dimension: click the two points to measure, then where the dimension line goes. Esc drops the dimension being drawn, then ends the tool
+pcb-tool-hint-dimension = Aligned Dimension: click the two points to measure, then where the dimension line goes. Esc drops the dimension being drawn, then ends the tool
+pcb-tool-hint-dimension-horizontal = Linear Horizontal Dimension: click the two points to measure across, then where the dimension line goes. Esc drops the dimension being drawn, then ends the tool
+pcb-tool-hint-dimension-vertical = Linear Vertical Dimension: click the two points to measure up or down, then where the dimension line goes. Esc drops the dimension being drawn, then ends the tool
+pcb-tool-hint-dimension-radial = Radial Dimension: click on an arc or circle to measure its radius; the leader runs from its centre toward the click. Esc or a right-click ends the tool
 pcb-tool-no-arc = Arc: those points make no arc, so nothing was added
-pcb-tool-no-dimension = Dimension: its two points are the same, so nothing was added
+pcb-tool-no-dimension = Dimension: its two points measure nothing, so nothing was added
+pcb-tool-no-radial-dimension = Radial Dimension: no arc or circle under the click, so nothing was added
 # How the Arc tool's clicks make an arc; `cycle_arc_mode` steps through them.
 pcb-arc-mode-centre = click the centre, the start, then where the arc ends (it runs counter-clockwise)
 pcb-arc-mode-edge = click the two ends of a quarter circle
@@ -246,6 +256,7 @@ pcb-pour-repoured = Repour: { $pours ->
 } filled, { $pieces } areas of copper, { $islands } islands removed
 pcb-pour-none = Repour: the board has no polygon pour
 pcb-pour-none-selected = Repour Selected: select a polygon pour first
+pcb-pour-unfill-none-selected = Unfill Selected: select a polygon pour first
 # Interactive Routing (#2389): its Active Bar tooltip and Messages hint, the
 # lines a leg it cannot route writes, and the mode `cycle_route_mode` picks.
 pcb-bar-route-tooltip = Interactive Routing (Space flips the corner, Shift+Space changes the corner mode)
@@ -257,7 +268,7 @@ pcb-route-unrepresentable = Interactive Routing: a point or the track width is o
 pcb-route-no-rules = Interactive Routing: the board's rules are not usable: { $why }
 pcb-route-mode-walkaround = Interactive Routing: walk around other nets' copper
 pcb-route-mode-shove = Interactive Routing: push other nets' tracks aside, walk around the rest
-pcb-route-board-changed = Interactive Routing: a track the route pushed was changed or removed since, so nothing was added
+pcb-route-board-changed = Interactive Routing: a track the route pushed or runs along was changed or removed since, so nothing was added
 # The board changed under a route being drawn (an undo, an edit elsewhere)
 # and the route no longer fits it; $why says how.
 pcb-route-stale = Interactive Routing: the board changed and the route no longer fits it ({ $why }), so nothing was added; Esc discards the route
@@ -297,6 +308,7 @@ pcb-pour-not-filled = { $pour }: not filled: { $why }
 pcb-pour-unfilled-no-layer = it is on no copper layer
 pcb-pour-unfilled-outline = its outline has fewer than three corners the board geometry can hold
 pcb-pour-unfilled-clearance = its clearance is not a length the board geometry can hold
+pcb-pour-unfilled-until-repour = it was unfilled; Repour fills it again
 # The leg on the pointer found no way; the straight leg drawn shows where
 # it was aimed.
 pcb-route-aim-blocked = the preview found no way to the pointer that keeps the clearance the rules ask; a click searches further and says if there is none

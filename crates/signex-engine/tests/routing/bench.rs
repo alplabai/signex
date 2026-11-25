@@ -17,6 +17,7 @@ use signex_types::pcb::PcbBoard;
 use uuid::Uuid;
 
 use crate::fixtures::Fixture;
+use crate::report::{budget, ms};
 use crate::rng::Rng;
 use crate::session::{Routed, ShoveTry, plan, route, rules_of, shove_rounds};
 
@@ -32,6 +33,9 @@ pub const P95_LIMIT: Duration = Duration::from_millis(33);
 #[derive(Debug, Default)]
 pub struct BoardBench {
     pub name: String,
+    pub seed: u64,
+    /// The route actions asked for.
+    pub actions: usize,
     /// Netted copper items: what ranks the boards by size.
     pub copper: usize,
     pub landed: usize,
@@ -74,12 +78,21 @@ impl BoardBench {
         sorted[((last as f64) * share).round() as usize]
     }
 
+    /// Median latency within [`MEDIAN_LIMIT`] and p95 within [`P95_LIMIT`].
+    pub fn within_latency(&self) -> bool {
+        self.percentile(0.5) <= MEDIAN_LIMIT && self.percentile(0.95) <= P95_LIMIT
+    }
+
+    /// The board's report line (`docs/PERFORMANCE.md`, "Router soak and
+    /// bench").
     pub fn line(&self) -> String {
         format!(
-            "{:<24} copper {:>5}  legs {:>4} landed / {:>4} refused  shove {:>4} actions, \
-             {:>5.1}% converged within {ROUNDS_LIMIT} rounds, {} cleared the way, max {}  \
-             latency median {:>7.2?} p95 {:>7.2?}  breaks {}",
+            "ROUTING-BENCH board={} seed={:#x} actions={} copper={} legs_landed={} \
+             legs_refused={} shoves={} converged_pct={:.1} rounds_limit={ROUNDS_LIMIT} \
+             cleared={} max_rounds={} p50_ms={} p95_ms={} latency_budget={} breaks={}",
             self.name,
+            self.seed,
+            self.actions,
             self.copper,
             self.landed,
             self.refused,
@@ -87,8 +100,9 @@ impl BoardBench {
             self.converged_share() * 100.0,
             self.cleared(),
             self.shoves.iter().map(|s| s.rounds).max().unwrap_or(0),
-            self.percentile(0.5),
-            self.percentile(0.95),
+            ms(self.percentile(0.5)),
+            ms(self.percentile(0.95)),
+            budget(self.within_latency()),
             self.breaks.len(),
         )
     }
@@ -104,6 +118,8 @@ pub fn bench(fixture: &Fixture, seed: u64, actions: usize) -> BoardBench {
     let mut next_id = 0u128;
     let mut out = BoardBench {
         name: fixture.name.clone(),
+        seed,
+        actions,
         copper: collect_copper(&fixture.board).len(),
         ..BoardBench::default()
     };
@@ -171,7 +187,7 @@ fn delete_a_track(engine: &mut BoardEngine, rng: &mut Rng) {
 }
 
 /// The design rule check of `board` as a check report.
-fn drc(board: &PcbBoard, rules: &DrcRules, name: &str) -> CheckReport {
+pub fn drc(board: &PcbBoard, rules: &DrcRules, name: &str) -> CheckReport {
     let report = signex_drc::run(board, rules);
     let names: BTreeMap<u32, String> = board
         .nets

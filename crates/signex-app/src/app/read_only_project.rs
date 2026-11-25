@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use signex_i18n::{I18n, Localized, Translatable, ids, t};
 use signex_types::format_version::FormatVersionError;
 
-use super::state::{ErrorNotice, ProjectId};
+use super::state::{ErrorNotice, NoticeAction, ProjectId};
 use super::{AppQuitConfirmState, Message, ProjectCloseChoice, ProjectCloseConfirmState, Signex};
 use crate::library::modal_chrome::UnsavedActions;
 
@@ -47,6 +47,25 @@ impl ReadOnlyProjectSave {
     pub(crate) fn find(error: &anyhow::Error) -> Option<&Self> {
         error.chain().find_map(|cause| cause.downcast_ref::<Self>())
     }
+}
+
+/// The Save Failed card for a save that failed with `error`: the error chain
+/// as its system part and, for a read-only project's refusal, Save Project
+/// As… for that project (#2908).
+pub(crate) fn save_failure_notice(
+    projects: &[crate::app::state::LoadedProject],
+    context: &str,
+    error: &anyhow::Error,
+) -> ErrorNotice {
+    let mut notice = ErrorNotice::save(save_failure_detail(context, error)).with_error_chain(error);
+    let refused = ReadOnlyProjectSave::find(error)
+        .and_then(|refusal| projects.iter().find(|p| p.path == refusal.path));
+    if let Some(project) = refused {
+        notice.action = Some(NoticeAction::SaveProjectAs {
+            project: project.id,
+        });
+    }
+    notice
 }
 
 /// The Save Failed card's sentence for a save that failed with `error`:
@@ -289,7 +308,17 @@ impl Signex {
             ));
             return iced::Task::none();
         }
+        if choice == ProjectCloseChoice::SaveProjectAs {
+            let project = self.first_read_only_dirty(&state.dirty_paths);
+            let closed = self.handle_project_close_confirm(ProjectCloseChoice::Cancel);
+            return iced::Task::batch([closed, self.open_save_project_as(project)]);
+        }
         self.handle_project_close_confirm(choice)
+    }
+
+    /// The first read-only project whose unsaved `.snxprj` is in `dirty`.
+    fn first_read_only_dirty(&self, dirty: &[PathBuf]) -> Option<ProjectId> {
+        self.read_only_dirty(dirty).first().map(|p| p.id)
     }
 
     /// The Exit choice, refused the same way.
@@ -307,6 +336,13 @@ impl Signex {
         {
             crate::diagnostics::log_warning(format!("Exit: {refused}"));
             return iced::Task::none();
+        }
+        if choice == ProjectCloseChoice::SaveProjectAs
+            && let Some(state) = &self.ui_state.app_quit_confirm
+        {
+            let project = self.first_read_only_dirty(&state.dirty_paths);
+            let declined = self.handle_app_quit_confirm(ProjectCloseChoice::Cancel);
+            return iced::Task::batch([declined, self.open_save_project_as(project)]);
         }
         self.handle_app_quit_confirm(choice)
     }
@@ -369,9 +405,16 @@ impl Signex {
 /// Why `choice` is refused while `offer` stands; `None` when it goes ahead.
 fn refused_choice(choice: ProjectCloseChoice, offer: Option<&ReadOnlyOffer>) -> Option<String> {
     let Some(offer) = offer else {
-        // Nothing read-only to discard: the prompt stays as it is.
-        return (choice == ProjectCloseChoice::DiscardReadOnly)
-            .then(|| "nothing read-only is unsaved, so nothing was discarded".to_string());
+        // Nothing read-only to discard or copy: the prompt stays as it is.
+        return match choice {
+            ProjectCloseChoice::DiscardReadOnly => {
+                Some("nothing read-only is unsaved, so nothing was discarded".to_string())
+            }
+            ProjectCloseChoice::SaveProjectAs => {
+                Some("nothing read-only is unsaved, so Save Project As was not opened".to_string())
+            }
+            _ => None,
+        };
     };
     let names = quoted(&offer.projects);
     match choice {
@@ -423,9 +466,10 @@ pub(crate) fn discard_read_only_label(i18n: &I18n, projects: &[String]) -> Local
 }
 
 /// The footer of the close or quit prompt. With `offer`, the discard names
-/// the read-only projects and drops only their settings, and Save All is
-/// offered while anything else saves; without, Discard All (when
-/// `discard_all` allows it), Cancel and Save All.
+/// the read-only projects and drops only their settings, Save Project As…
+/// copies the first of them (#2908), and Save All is offered while anything
+/// else saves; without, Discard All (when `discard_all` allows it), Cancel
+/// and Save All.
 pub(crate) fn unsaved_actions<M>(
     i18n: &I18n,
     offer: Option<&ReadOnlyOffer>,
@@ -436,12 +480,14 @@ pub(crate) fn unsaved_actions<M>(
         Some(offer) => UnsavedActions {
             discard: Some(choose(ProjectCloseChoice::DiscardReadOnly)),
             discard_label: Some(discard_read_only_label(i18n, &offer.projects)),
+            save_as: Some(choose(ProjectCloseChoice::SaveProjectAs)),
             cancel: choose(ProjectCloseChoice::Cancel),
             save_all: offer.saveable.then(|| choose(ProjectCloseChoice::SaveAll)),
         },
         None => UnsavedActions {
             discard: discard_all.then(|| choose(ProjectCloseChoice::DiscardAll)),
             discard_label: None,
+            save_as: None,
             cancel: choose(ProjectCloseChoice::Cancel),
             save_all: Some(choose(ProjectCloseChoice::SaveAll)),
         },

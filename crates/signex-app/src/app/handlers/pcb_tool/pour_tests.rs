@@ -1,6 +1,7 @@
 //! #2216 — a placed polygon pour through `Signex::update`: a click inside it
 //! picks it and opens the area panel with its priority, island rules and
-//! copper; each panel edit is one undo step; Repour Selected and Repour All.
+//! copper; each panel edit is one undo step; Repour Selected and Repour All;
+//! Unfill (#2506).
 
 use pcb_geom::{ItemRef, PickKind};
 
@@ -12,7 +13,7 @@ use crate::app::{Message, Signex};
 use crate::dock::DockMessage;
 use crate::keymap::AppCommandId;
 use crate::panels::pcb_primitive_properties::{
-    PcbPrimitiveFacts, PrimitiveField, PrimitiveTarget, ZoneFacts, ZoneKind,
+    PcbPrimitiveFacts, PourMsg, PrimitiveField, PrimitiveTarget, ZoneFacts, ZoneKind,
 };
 use crate::panels::{PanelMsg, PcbBoardMsg, PcbPrimitiveMsg};
 
@@ -206,5 +207,81 @@ fn repour_all_named_a_board_answers_with_each_pours_fill() {
     assert!(
         matches!(outcome, CommandOutcome::Disabled { .. }),
         "no board named: {outcome:?}"
+    );
+}
+
+/// The undo steps the board at `path` holds.
+fn steps(app: &Signex, path: &std::path::Path) -> usize {
+    app.document_state
+        .board_engine(path)
+        .expect("the board's engine")
+        .undo_len()
+}
+
+/// #2506: Unfill Selected clears the picked pour's copper and keeps its
+/// outline as one undo step, and the area panel says why it has none; a
+/// Repour of a filled pour adds no step, a Repour of the unfilled one fills
+/// it again as one step; the Copper card's Unfill does what the command
+/// does.
+#[test]
+fn unfill_selected_is_one_step_and_repour_fills_the_pour_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    draw_pour(&mut app);
+    let refused = "Unfill Selected: select a polygon pour first";
+    let refused_before = crate::diagnostics::logged_count(refused);
+    run(&mut app, "unfill_selected");
+    assert!(crate::diagnostics::logged_count(refused) > refused_before);
+    assert!(!board_of(&app, &path).zones[0].unfilled);
+
+    click(&mut app, 5.0, 3.0);
+    let target = area_panel(&app).common.target;
+    let outline = board_of(&app, &path).zones[0].outline.clone();
+    let at_start = steps(&app, &path);
+    run(&mut app, "repour_selected");
+    assert_eq!(
+        steps(&app, &path),
+        at_start,
+        "a filled pour is only refreshed"
+    );
+
+    run(&mut app, "unfill_selected");
+    let zone = &board_of(&app, &path).zones[0];
+    assert!(zone.is_unfilled_pour() && !zone.is_shelved_pour());
+    assert_eq!(zone.outline, outline, "the outline stays");
+    assert_eq!(steps(&app, &path), at_start + 1, "one undo step");
+    let facts = area_panel(&app);
+    assert_eq!(facts.unfilled, Some(pcb_geom::Unfilled::UntilRepour));
+    assert_eq!(facts.copper, None, "no copper");
+
+    panel(
+        &mut app,
+        PcbPrimitiveMsg::Pour(PourMsg::RepourPressed {
+            target: target.clone(),
+        }),
+    );
+    assert!(!board_of(&app, &path).zones[0].unfilled, "Repour fills it");
+    assert_eq!(steps(&app, &path), at_start + 2, "one undo step");
+    let (_, pieces) = area_panel(&app).copper.expect("the fill is computed");
+    assert_eq!(pieces, 2);
+
+    undo(&mut app);
+    assert!(
+        board_of(&app, &path).zones[0].is_unfilled_pour(),
+        "undo of the repour"
+    );
+    undo(&mut app);
+    assert!(
+        !board_of(&app, &path).zones[0].unfilled,
+        "undo of the unfill"
+    );
+
+    panel(
+        &mut app,
+        PcbPrimitiveMsg::Pour(PourMsg::UnfillPressed { target }),
+    );
+    assert!(
+        board_of(&app, &path).zones[0].is_unfilled_pour(),
+        "the card's Unfill"
     );
 }

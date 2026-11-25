@@ -244,6 +244,7 @@ fn zone(layer: &str) -> Zone {
         min_island_area: 0.0,
         remove_dead_islands: false,
         shelved: false,
+        unfilled: false,
         unknown: Default::default(),
     }
 }
@@ -536,6 +537,40 @@ fn a_keepout_is_not_counted_as_an_unfilled_zone() {
         generated(&board).notes,
         vec![FabNote::ZonesNotFilled { count: 1 }]
     );
+}
+
+/// #2506: an unfilled pour is counted as not filled even when the fills of
+/// the other pours are supplied; a shelved pour is not counted.
+#[test]
+fn an_unfilled_pour_is_counted_as_not_filled_beside_supplied_fills() {
+    let mut board = fixture_board();
+    let pour = |n: u128| Zone {
+        uuid: Uuid::from_u128(n),
+        fill_type: signex_types::zone_pour::POUR_FILL.into(),
+        ..zone("BottomCopper")
+    };
+    board.zones.push(pour(81));
+    board.zones.push(Zone {
+        unfilled: true,
+        ..pour(82)
+    });
+    board.zones.push(Zone {
+        shelved: true,
+        ..pour(83)
+    });
+    let ring =
+        |pts: &[(f64, f64)]| -> Vec<Point> { pts.iter().map(|&(x, y)| Point::new(x, y)).collect() };
+    let extras = FabExtras {
+        zone_fills: vec![FilledRegion {
+            layer: PcbLayer::Copper(CopperLayer::Bottom),
+            net_name: "GND".into(),
+            outline: ring(&[(0.0, 0.0), (4.0, 0.0), (4.0, 4.0)]),
+            holes: Vec::new(),
+        }],
+        strokes: Vec::new(),
+    };
+    let set = generate(&board, &extras, &FabOptions::all("fab")).expect("generates");
+    assert_eq!(set.notes, vec![FabNote::ZonesNotFilled { count: 1 }]);
 }
 
 #[test]

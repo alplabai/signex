@@ -17,7 +17,7 @@ pub use profiles::ProfileUndo;
 pub(crate) use profiles::{ProfileStored, store_profile};
 pub use state::NewProjectState;
 pub(crate) use state::{Blocker, NameProblem, RULE_FIELDS, SaveProfileProblem, check_name};
-pub(crate) use target::{TargetProblem, TargetStatus};
+pub(crate) use target::{TargetProblem, TargetStatus, check_target};
 pub(crate) use update::{NAME_INPUT_ID, import_rule_file};
 
 #[cfg(test)]

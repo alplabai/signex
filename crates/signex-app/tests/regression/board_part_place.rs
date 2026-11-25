@@ -41,13 +41,13 @@ fn board() -> PcbBoard {
     .unwrap()
 }
 
-struct Fixture {
-    app: Signex,
-    _tmp: tempfile::TempDir,
+pub(crate) struct Fixture {
+    pub(crate) app: Signex,
+    pub(crate) _tmp: tempfile::TempDir,
 }
 
 /// The board open in the active tab, with Stock mounted.
-fn open() -> Fixture {
+pub(crate) fn open() -> Fixture {
     let _ = diagnostics::init_logging();
     let tmp = tempfile::tempdir().unwrap();
     let path = tmp.path().join("board.snxpcb");
@@ -72,12 +72,12 @@ fn live(app: &Signex) -> PcbBoard {
         .clone()
 }
 
-fn text(app: &Signex) -> String {
+pub(crate) fn text(app: &Signex) -> String {
     serde_json::to_string(&live(app)).unwrap()
 }
 
 /// What the board holds besides D3.
-fn placed(app: &Signex) -> Vec<Footprint> {
+pub(crate) fn placed(app: &Signex) -> Vec<Footprint> {
     live(app)
         .footprints
         .into_iter()
@@ -99,11 +99,11 @@ fn place(app: &mut Signex, key: &ComponentsPanelRowKey) {
     );
 }
 
-fn carry(app: &Signex) -> Option<CarryKind> {
+pub(crate) fn carry(app: &Signex) -> Option<CarryKind> {
     app.interaction_state.pcb_carry.as_ref().map(|c| c.kind)
 }
 
-fn point_at(app: &mut Signex, x: f64, y: f64) {
+pub(crate) fn point_at(app: &mut Signex, x: f64, y: f64) {
     settle(
         app,
         Message::PcbCanvas(PcbCanvasMsg::PointerMoved {
@@ -114,7 +114,7 @@ fn point_at(app: &mut Signex, x: f64, y: f64) {
     );
 }
 
-fn click(app: &mut Signex, x: f64, y: f64) {
+pub(crate) fn click(app: &mut Signex, x: f64, y: f64) {
     settle(
         app,
         Message::PcbCanvas(PcbCanvasMsg::Clicked {
@@ -125,7 +125,7 @@ fn click(app: &mut Signex, x: f64, y: f64) {
     );
 }
 
-fn on_grid(v: f64) -> f64 {
+pub(crate) fn on_grid(v: f64) -> f64 {
     (v / PCB_GRID_MM).round() * PCB_GRID_MM
 }
 

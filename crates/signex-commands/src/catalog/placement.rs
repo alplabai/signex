@@ -187,6 +187,19 @@ pub(super) const PLACEMENT: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
+    // #2505: Place ▸ Component on a board opens the part picker; the pick
+    // goes on the cursor and each click places it as one undo step. No
+    // default key.
+    CommandMetadata {
+        id: "place_board_component",
+        category: "place",
+        label: command_ids::CMD_PLACE_BOARD_COMPONENT,
+        menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_COMPONENT),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::GUI_MUTATES,
+        ..CommandMetadata::DEFAULT
+    },
     // #2373: the free pad, arc, string and dimension tools. Each click (or
     // finished arc or dimension) is one undo step. No default key.
     CommandMetadata {

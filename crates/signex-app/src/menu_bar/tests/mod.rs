@@ -302,6 +302,8 @@ pub(super) struct Probe {
     pub active_bar_menu: bool,
     /// Design ▸ Differential Pair Classes... opens its dialog.
     pub diff_pair_classes: bool,
+    /// File ▸ Save Project As… opens its dialog (#2908).
+    pub save_project_as: bool,
     /// View ▸ Window ▸ Layouts (mockup row 166): the two dialogs and the layout on
     /// screen.
     pub save_layout: bool,
@@ -390,6 +392,7 @@ pub(super) fn probe(app: &Signex) -> Probe {
         find_similar: app.ui_state.find_similar.is_some(),
         active_bar_menu: app.interaction_state.active_bar_menu.is_some(),
         diff_pair_classes: app.ui_state.diff_pair_classes.is_some(),
+        save_project_as: app.ui_state.save_project_as.is_some(),
         save_layout: app.ui_state.workspace_layouts.save.is_some(),
         manage_layouts: app.ui_state.workspace_layouts.manage.is_some(),
         layout_active: app

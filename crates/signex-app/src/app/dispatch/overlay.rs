@@ -149,6 +149,7 @@ impl Signex {
         match msg {
             ProjectMsg::Setup(msg) => self.dispatch_new_project_message(msg),
             ProjectMsg::DocumentSetup(msg) => self.dispatch_document_setup_message(msg),
+            ProjectMsg::SaveAs(msg) => self.dispatch_save_project_as_message(msg),
             ProjectMsg::SetupProfilesWritten { note, undo, result } => {
                 self.setup_profiles_written(note, *undo, result);
                 Task::none()

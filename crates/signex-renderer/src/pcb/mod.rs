@@ -68,6 +68,8 @@ pub struct PadInput {
     /// The drilled hole's diameter, drawn as an opening at `center`; 0 for
     /// a pad with no hole.
     pub drill_mm: f32,
+    /// The pad's net, 0 for none: a net in focus dims the others (#2514).
+    pub net: u32,
     /// Copper off the active layer, drawn faint.
     pub dimmed: bool,
     pub ink: CopperInk,
@@ -209,7 +211,7 @@ mod ratsnest;
 mod used_layers;
 mod zone_fill;
 pub use board_features::{BoardFeaturesInput, HoleInput};
-pub use board_paint::{BoardObject, BoardPaint};
+pub use board_paint::{BoardObject, BoardPaint, NetFocus};
 use emit::*;
 pub use footprint_text::{FootprintTextInput, TextFace};
 pub(crate) use graphics::arc_points;
@@ -378,6 +380,9 @@ mod holes_tests;
 
 #[cfg(test)]
 mod copper_ink_tests;
+
+#[cfg(test)]
+mod net_focus_tests;
 
 #[cfg(test)]
 mod tests {

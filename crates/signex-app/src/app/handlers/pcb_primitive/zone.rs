@@ -2,8 +2,9 @@
 //! keepouts and pour cutouts (#2871), read from the zones. The kind is named the way the pick
 //! filter names it (`pcb_geom::PickKind::of_zone`). A pour also shows its
 //! priority, island rules and the copper its fill holds (#2216), and its
-//! Copper card repours and shelves (#2523): Shelve is one board undo step,
-//! Repour refreshes the computed fill and changes nothing in the document.
+//! Copper card repours, unfills (#2506) and shelves (#2523): Unfill and
+//! Shelve are one board undo step each; Repour refreshes the computed fill
+//! and changes the document only to fill an unfilled pour again.
 
 use std::path::Path;
 
@@ -38,6 +39,11 @@ impl Signex {
             PourMsg::RepourPressed { target } => {
                 self.repour_pours(&target.board, &zone_ids(&target.items).collect());
             }
+            PourMsg::UnfillPressed { target } if !target.is_placement() => {
+                let zones: Vec<Uuid> = zone_ids(&target.items).collect();
+                self.unfill_pours(&target.board, &zones);
+            }
+            PourMsg::UnfillPressed { .. } => {}
             PourMsg::ShelveToggled { target, shelved } => self.shelve_pours(target, *shelved),
             PourMsg::RepourAllPressed { board } => self.repour_board(board, false),
             PourMsg::ShelveAllPressed { board } => self.shelve_board_pours(board, true),

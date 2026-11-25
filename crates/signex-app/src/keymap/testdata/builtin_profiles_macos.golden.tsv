@@ -28,8 +28,6 @@ signex_standard	bind	Global	M M	command:move_object
 signex_standard	bind	Global	P B	command:place_bus
 signex_standard	bind	Global	P N	command:place_net_label
 signex_standard	bind	Global	P P	command:open_components_panel
-signex_standard	bind	Global	P V K	command:place_compile_mask
-signex_standard	bind	Global	P V N	command:place_no_erc
 signex_standard	bind	Global	P W	command:place_wire
 signex_standard	bind	Global	R I	command:report_manager_bom
 signex_standard	bind	Global	⌥⇧A	command:force_annotate_all_schematics
@@ -92,6 +90,8 @@ signex_standard	bind	Schematic	P C	command:place_off_sheet_connector
 signex_standard	bind	Schematic	P R	command:place_port
 signex_standard	bind	Schematic	P S	command:place_sheet_symbol
 signex_standard	bind	Schematic	P U	command:place_bus_entry
+signex_standard	bind	Schematic	P V K	command:place_compile_mask
+signex_standard	bind	Schematic	P V N	command:place_no_erc
 signex_standard	bind	Schematic	P X	command:place_no_connect
 signex_standard	bind	Pcb	*	command:next_signal_layer
 signex_standard	bind	Pcb	+	command:next_layer
@@ -127,6 +127,7 @@ signex_standard	hint	-	⌘O	open_document
 signex_standard	hint	-	⌘S	save_document
 signex_standard	hint	-	⇧⌘S	save_document_as
 signex_standard	hint	-	⌥⌘S	save_all
+signex_standard	hint	-	-	save_project_as
 signex_standard	hint	-	-	revert
 signex_standard	hint	-	⌘W	close_active_document
 signex_standard	hint	-	-	close_all_documents
@@ -246,6 +247,7 @@ signex_standard	hint	-	-	place_text_string
 signex_standard	hint	-	-	place_text_frame
 signex_standard	hint	-	-	place_note
 signex_standard	hint	-	-	place_graphic
+signex_standard	hint	-	-	place_board_component
 signex_standard	hint	-	-	place_board_pad
 signex_standard	hint	-	-	swap_pins
 signex_standard	hint	-	-	swap_gates
@@ -299,6 +301,9 @@ signex_standard	hint	-	-	edit_no_erc_rules
 signex_standard	hint	-	-	place_board_arc
 signex_standard	hint	-	-	place_board_string
 signex_standard	hint	-	-	place_board_dimension
+signex_standard	hint	-	-	place_board_dimension_horizontal
+signex_standard	hint	-	-	place_board_dimension_vertical
+signex_standard	hint	-	-	place_board_dimension_radial
 signex_standard	hint	-	-	place_board_line
 signex_standard	hint	-	-	place_board_graphic_arc
 signex_standard	hint	-	-	place_board_circle
@@ -387,6 +392,7 @@ signex_standard	hint	-	-	place_board_pour_cutout
 signex_standard	hint	-	-	place_board_slice_pour
 signex_standard	hint	-	-	repour_selected
 signex_standard	hint	-	-	repour_all
+signex_standard	hint	-	-	unfill_selected
 signex_standard	hint	-	-	polygon_manager
 signex_standard	hint	-	-	board_shape_from_selection
 signex_standard	hint	-	-	keepout_from_selection
@@ -487,6 +493,7 @@ signex_standard	hint	-	-	view_rotate
 signex_standard	hint	-	-	view_rotate_ccw
 signex_standard	hint	-	-	view_rotate_180
 signex_standard	hint	-	-	view_rotate_reset
+signex_standard	hint	-	-	home_view
 signex_standard	hint	-	-	toggle_origin_marker
 signex_standard	hint	-	E O S	set_board_origin
 signex_standard	hint	-	-	reset_board_origin
@@ -653,9 +660,14 @@ classic	bind	Pcb	L	command:flip_selection
 classic	bind	Pcb	⇧⌘C	command:copy_board_3d_screenshot
 classic	bind	Pcb	⇧*	command:next_signal_layer
 classic	bind	Pcb	⇧+	command:next_layer
+classic	bind	Pcb	⌥⇧F	command:place_board_fill
+classic	bind	Pcb	⌥⇧R	command:place_board_region
 classic	bind	Pcb	⇧E	command:cycle_board_snapping
+classic	bind	Pcb	⇧G	command:place_board_polygon_pour
 classic	bind	Pcb	⇧O	command:set_board_origin
 classic	bind	Pcb	⇧S	command:toggle_single_layer_mode
+classic	bind	Pcb	⇧T	command:place_board_track
+classic	bind	Pcb	⇧V	command:place_board_via
 classic	bind	Board3d	F	command:flip_board_3d
 classic	bind	Footprint	1	command:footprint_mode_sketch
 classic	bind	Footprint	2	command:footprint_mode_pads
@@ -668,6 +680,7 @@ classic	hint	-	⌘O	open_document
 classic	hint	-	⌘S	save_document
 classic	hint	-	⇧⌘S	save_document_as
 classic	hint	-	⌥⌘S	save_all
+classic	hint	-	-	save_project_as
 classic	hint	-	-	revert
 classic	hint	-	-	close_active_document
 classic	hint	-	-	close_all_documents
@@ -787,6 +800,7 @@ classic	hint	-	-	place_text_string
 classic	hint	-	-	place_text_frame
 classic	hint	-	-	place_note
 classic	hint	-	-	place_graphic
+classic	hint	-	-	place_board_component
 classic	hint	-	-	place_board_pad
 classic	hint	-	-	swap_pins
 classic	hint	-	-	swap_gates
@@ -840,6 +854,9 @@ classic	hint	-	-	edit_no_erc_rules
 classic	hint	-	-	place_board_arc
 classic	hint	-	-	place_board_string
 classic	hint	-	-	place_board_dimension
+classic	hint	-	-	place_board_dimension_horizontal
+classic	hint	-	-	place_board_dimension_vertical
+classic	hint	-	-	place_board_dimension_radial
 classic	hint	-	-	place_board_line
 classic	hint	-	-	place_board_graphic_arc
 classic	hint	-	-	place_board_circle
@@ -917,17 +934,18 @@ classic	hint	-	-	update_pcb_from_schematic
 classic	hint	-	-	compare_board_with_schematic
 classic	hint	-	-	assign_footprints
 classic	hint	-	F	change_footprint
-classic	hint	-	-	place_board_via
-classic	hint	-	-	place_board_track
-classic	hint	-	-	place_board_fill
-classic	hint	-	-	place_board_region
+classic	hint	-	⇧V	place_board_via
+classic	hint	-	⇧T	place_board_track
+classic	hint	-	⌥⇧F	place_board_fill
+classic	hint	-	⌥⇧R	place_board_region
 classic	hint	-	K	place_board_keepout
 classic	hint	-	1	board_sketch
-classic	hint	-	-	place_board_polygon_pour
+classic	hint	-	⇧G	place_board_polygon_pour
 classic	hint	-	-	place_board_pour_cutout
 classic	hint	-	-	place_board_slice_pour
 classic	hint	-	-	repour_selected
 classic	hint	-	-	repour_all
+classic	hint	-	-	unfill_selected
 classic	hint	-	-	polygon_manager
 classic	hint	-	-	board_shape_from_selection
 classic	hint	-	-	keepout_from_selection
@@ -1028,6 +1046,7 @@ classic	hint	-	-	view_rotate
 classic	hint	-	-	view_rotate_ccw
 classic	hint	-	-	view_rotate_180
 classic	hint	-	-	view_rotate_reset
+classic	hint	-	-	home_view
 classic	hint	-	-	toggle_origin_marker
 classic	hint	-	⇧O	set_board_origin
 classic	hint	-	-	reset_board_origin

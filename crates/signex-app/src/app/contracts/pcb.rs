@@ -54,6 +54,9 @@ pub enum PcbMsg {
         window: iced::window::Id,
         event: ViewRotationMsg,
     },
+    /// The board views' save loop (#2480): a quiet period ran out or a
+    /// write finished.
+    ViewSave(crate::board_view_prefs::BoardViewSaveMsg),
     /// The board 3D view of the main window (#2390).
     Board3d(Board3dMsg),
     /// Board sketch mode of the main window's board (#2234).
@@ -85,6 +88,9 @@ pub enum PcbMsg {
     /// board in view are computed again and Messages says what the selected
     /// pours (`selected`) or all of them came to.
     RepourRequested { selected: bool },
+    /// `unfill_selected` ran (#2506): the selected pours of the board in
+    /// view hold no copper until the next Repour, as one undo step.
+    UnfillRequested,
     /// Swapping the footprint of placed components (#2366).
     FootprintSwap(FootprintSwapMsg),
     /// The right-click menu of a layer tab (#2379).
@@ -283,6 +289,9 @@ pub enum PcbViewMsg {
     RatsnestVisibilityToggled,
     /// The user asked to show or hide the board origin marker (#2351).
     OriginMarkerVisibilityToggled,
+    /// The user showed or hid the orientation tile over the canvas (its eye
+    /// in View Options, mockup row 194).
+    OrientationTileVisibilityToggled,
     /// The user stepped the active layer to the next or previous one of the
     /// board's layers (`+`, `-`, View ▸ Next / Previous Layer).
     ActiveLayerStepped { forward: bool },

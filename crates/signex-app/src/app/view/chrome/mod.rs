@@ -87,6 +87,7 @@ impl Signex {
             draft_edge_pan: ui.preferences_draft_edge_pan,
             draft_symbol_body_fill: ui.preferences_draft_symbol_body_fill,
             draft_pcb_defaults: &ui.preferences_pcb_defaults,
+            draft_pcb_dim_others_percent: ui.preferences_draft_pcb_dim_others_percent,
             body_fill_palette_open: ui.preferences_body_fill_palette_open,
             body_fill_picker_open: ui.preferences_body_fill_picker_open,
             draft_trackpad_pan: ui.preferences_draft_trackpad_pan,

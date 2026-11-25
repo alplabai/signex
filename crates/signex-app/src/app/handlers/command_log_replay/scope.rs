@@ -127,6 +127,7 @@ fn finishes_on_targets(id: &str) -> bool {
             | "board_shape_from_selection"
             | "keepout_from_selection"
             | "repour_selected"
+            | "unfill_selected"
             | "tune_net_length"
             | "tune_diff_pair"
             | "lock_board_items"

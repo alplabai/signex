@@ -118,15 +118,15 @@ fn board() -> PcbBoard {
     }
 }
 
-struct Fixture {
-    app: Signex,
-    sheet: PathBuf,
-    board: PathBuf,
-    main: iced::window::Id,
-    _tmp: tempfile::TempDir,
+pub(crate) struct Fixture {
+    pub(crate) app: Signex,
+    pub(crate) sheet: PathBuf,
+    pub(crate) board: PathBuf,
+    pub(crate) main: iced::window::Id,
+    pub(crate) _tmp: tempfile::TempDir,
 }
 
-fn send(app: &mut Signex, message: Message) {
+pub(crate) fn send(app: &mut Signex, message: Message) {
     let task = app.update(message);
     crate::drive::drive(app, task);
 }
@@ -187,13 +187,30 @@ fn add_project(app: &mut Signex, dir: &Path) {
 /// The sheet open in the main window; the board too when `open_board`
 /// (behind the sheet).
 fn fixture(open_board: bool) -> Fixture {
+    fixture_with(sheet(), board(), &[], open_board)
+}
+
+/// [`fixture`] over `sheet` and `board`, with `extra` sheets written beside
+/// them (not opened) before anything is read.
+pub(crate) fn fixture_with(
+    sheet: SchematicSheet,
+    board: PcbBoard,
+    extra: &[(&str, SchematicSheet)],
+    open_board: bool,
+) -> Fixture {
     let _ = diagnostics::init_logging();
     let tmp = tempfile::tempdir().unwrap();
     let sheet_path = tmp.path().join("demo.snxsch");
     let board_path = tmp.path().join("demo.snxpcb");
-    let sheet_text = SnxSchematic::new(sheet()).write_string().unwrap();
+    let sheet_text = SnxSchematic::new(sheet).write_string().unwrap();
     std::fs::write(&sheet_path, sheet_text).unwrap();
-    std::fs::write(&board_path, SnxPcb::new(board()).write_string().unwrap()).unwrap();
+    std::fs::write(&board_path, SnxPcb::new(board).write_string().unwrap()).unwrap();
+    for (name, extra_sheet) in extra {
+        let text = SnxSchematic::new(extra_sheet.clone())
+            .write_string()
+            .unwrap();
+        std::fs::write(tmp.path().join(name), text).unwrap();
+    }
     let (mut app, _boot) = Signex::new();
     app.ui_state.first_run_tour_open = false;
     let main = iced::window::Id::unique();
@@ -225,12 +242,12 @@ fn fixture(open_board: bool) -> Fixture {
     f
 }
 
-fn show_sheet(f: &mut Fixture) {
+pub(crate) fn show_sheet(f: &mut Fixture) {
     let path = f.sheet.clone();
     show_in_main(f, &path);
 }
 
-fn show_board(f: &mut Fixture) {
+pub(crate) fn show_board(f: &mut Fixture) {
     let path = f.board.clone();
     show_in_main(f, &path);
 }
@@ -254,7 +271,7 @@ fn show_in_main(f: &mut Fixture, path: &Path) {
 }
 
 /// Undock the tab of `path` into its own window.
-fn undock(f: &mut Fixture, path: &Path) -> iced::window::Id {
+pub(crate) fn undock(f: &mut Fixture, path: &Path) -> iced::window::Id {
     let index = f
         .app
         .document_state
@@ -290,7 +307,7 @@ fn select_all_on_the_sheet(f: &mut Fixture) {
     );
 }
 
-fn main_board_selection(f: &Fixture) -> Vec<ItemRef> {
+pub(crate) fn main_board_selection(f: &Fixture) -> Vec<ItemRef> {
     f.app
         .interaction_state
         .pcb_selection
@@ -299,7 +316,7 @@ fn main_board_selection(f: &Fixture) -> Vec<ItemRef> {
         .collect()
 }
 
-fn window_board_selection(f: &Fixture, window: iced::window::Id) -> Vec<ItemRef> {
+pub(crate) fn window_board_selection(f: &Fixture, window: iced::window::Id) -> Vec<ItemRef> {
     f.app
         .interaction_state
         .pcb_selections
