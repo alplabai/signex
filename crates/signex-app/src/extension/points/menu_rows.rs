@@ -93,7 +93,7 @@ impl MenuRows {
     fn owned_command(&mut self, command: &str) -> Result<AppCommandId, RegisterError> {
         claim(&self.owner, command, false, &mut self.errors)?;
         AppCommandId::new(command).map_err(|_| {
-            let error = RegisterError::InvalidCommand(command.to_owned());
+            let error = RegisterError::InvalidId(command.to_owned());
             self.errors.push(error.clone());
             error
         })

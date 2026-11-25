@@ -8,6 +8,7 @@
 //! `Message::Extension` messages addressed to it. The whole contract,
 //! versioning included, is in `docs/EXTENSION_API.md`.
 
+mod dispatch;
 mod host;
 mod id;
 mod message;
@@ -17,11 +18,16 @@ mod surfaces;
 mod view;
 
 pub use host::{ExtensionHost, InstallError};
-pub use id::{ExtensionId, InvalidExtensionName, is_extension_id};
+pub use id::{ExtensionId, InvalidExtensionName};
 pub use message::ExtensionMsg;
-pub use points::{ExtensionPoints, PreferenceValues};
+pub use points::{ExtensionCommand, ExtensionPoints, PreferenceValues, RegisterError};
 pub use prefs::{PreferenceSaved, save_preference};
 pub use view::{ExtensionView, ViewContext};
+// The one extension id rule, the catalog row types a command is added with,
+// and its handler's refusal.
+pub use signex_commands::catalog::{CommandFlags, CommandMetadata};
+pub use signex_commands::is_extension_id;
+pub use signex_i18n_ids::Translatable;
 
 use iced::Task;
 
@@ -67,6 +73,8 @@ pub trait Extension: Send + 'static {
     }
 }
 
+#[cfg(test)]
+mod command_tests;
 #[cfg(test)]
 mod surface_tests;
 #[cfg(test)]

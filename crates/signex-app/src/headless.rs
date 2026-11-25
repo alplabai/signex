@@ -261,9 +261,11 @@ impl Signex {
         args: CommandArgs,
     ) -> (CommandOutcome, Task<Message>) {
         // A command whose whole effect is window UI is refused, never `Ran`
-        // (#2170). The GUI dispatch never reads this.
-        if let Some(reason) =
-            crate::keymap::metadata_for(command).and_then(|meta| meta.headless_refusal())
+        // (#2170), an installed extension's as well (#2495). The GUI dispatch
+        // never reads this.
+        if let Some(reason) = self
+            .command_metadata(command)
+            .and_then(|meta| meta.headless_refusal())
         {
             return (CommandOutcome::disabled(reason), Task::none());
         }

@@ -253,7 +253,7 @@ fn install_refuses_an_addition_outside_the_namespace_or_added_twice() {
                 .menu_rows
                 .add_menu_row(MenuRoot::Tools, LABEL, "ext.sample.Say");
         }),
-        Some(RegisterError::InvalidCommand("ext.sample.Say".to_owned()))
+        Some(RegisterError::InvalidId("ext.sample.Say".to_owned()))
     );
     assert_eq!(
         refusal(|p| {

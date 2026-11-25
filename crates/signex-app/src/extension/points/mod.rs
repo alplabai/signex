@@ -3,7 +3,8 @@
 //! [`Extension::register`](super::Extension::register) fills an
 //! [`ExtensionPoints`] once, when the extension is installed. Each point has a
 //! file of its own with its entry type and its `add` method, and is listed in
-//! `docs/EXTENSION_API.md`, "Extension points".
+//! `docs/EXTENSION_API.md`, "Extension points". Every point refuses with one
+//! type, [`RegisterError`].
 //!
 //! Boundaries (ADR-0006): [`CatalogCommands`] is what the application core
 //! sees, so it names no iced type. The other points are GUI adapters.
@@ -15,7 +16,7 @@ mod panels;
 mod preferences;
 mod start_screen;
 
-pub use commands::CatalogCommands;
+pub use commands::{CatalogCommands, ExtensionCommand};
 pub use error::RegisterError;
 pub use menu_rows::{ActiveBarRow, MenuRoot, MenuRow, MenuRows, PcbBarGroup};
 pub use panels::{ExtensionPanelKind, Panels};
@@ -43,8 +44,10 @@ pub struct ExtensionPoints {
     pub preferences: Preferences,
 }
 
-/// Claim `id` for `owner`: refused when it is not under the owner's prefix
-/// or is `taken`. A refusal is also pushed to `errors`, which install reads.
+/// Claim `id` for `owner`: refused when it is not under the owner's prefix,
+/// is not an extension id (`ext.<name>.<snake_case>`, the one rule,
+/// [`signex_commands::is_extension_id`]) or is `taken`. A refusal is also
+/// pushed to `errors`, which install reads.
 fn claim(
     owner: &ExtensionId,
     id: &str,
@@ -53,6 +56,8 @@ fn claim(
 ) -> Result<(), RegisterError> {
     let refused = if !owner.owns(id) {
         RegisterError::NotOwned(id.to_owned())
+    } else if !signex_commands::is_extension_id(id) {
+        RegisterError::InvalidId(id.to_owned())
     } else if taken {
         RegisterError::Duplicate(id.to_owned())
     } else {
@@ -65,7 +70,7 @@ fn claim(
 impl ExtensionPoints {
     pub(crate) fn new(owner: ExtensionId) -> Self {
         Self {
-            commands: CatalogCommands::default(),
+            commands: CatalogCommands::new(owner.clone()),
             panels: Panels::new(owner.clone()),
             menu_rows: MenuRows::new(owner.clone()),
             start_screen: StartScreenSections::new(owner.clone()),
@@ -95,9 +100,10 @@ impl ExtensionPoints {
     /// is refused here.
     pub(crate) fn first_error(&self) -> Option<RegisterError> {
         let recorded = self
-            .panels
+            .commands
             .errors
             .iter()
+            .chain(&self.panels.errors)
             .chain(&self.menu_rows.errors)
             .chain(&self.start_screen.errors)
             .chain(&self.preferences.errors)

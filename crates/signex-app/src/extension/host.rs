@@ -4,9 +4,12 @@
 use std::fmt;
 
 use iced::Task;
+use signex_commands::catalog::CommandMetadata;
 
-use super::points::RegisterError;
-use super::{Extension, ExtensionId, ExtensionMsg, ExtensionPoints, InvalidExtensionName};
+use super::{
+    Extension, ExtensionCommand, ExtensionId, ExtensionMsg, ExtensionPoints, InvalidExtensionName,
+    RegisterError,
+};
 use crate::app::Message;
 
 /// One installed extension and what it registered.
@@ -32,7 +35,9 @@ pub enum InstallError {
     InvalidName(InvalidExtensionName),
     /// Two extensions gave the same name.
     DuplicateName(String),
-    /// An extension point refused one of the extension's additions.
+    /// An extension point (a catalog command, a panel, a row, a section or a
+    /// preference) refused one of the extension's additions: the first
+    /// refusal.
     Refused {
         /// The extension's name.
         extension: String,
@@ -101,6 +106,25 @@ impl ExtensionHost {
         self.installed.iter().map(|entry| &entry.points)
     }
 
+    /// The installed command `id`. Only an `ext.` id can name one, and only
+    /// its owner's table is searched.
+    pub fn command(&self, id: &str) -> Option<&ExtensionCommand> {
+        let rest = id.strip_prefix(signex_commands::EXTENSION_ID_PREFIX)?;
+        let (name, _) = rest.split_once('.')?;
+        self.installed
+            .iter()
+            .find(|entry| entry.id.name() == name)
+            .and_then(|entry| entry.points.commands.get(id))
+    }
+
+    /// Every installed command, by extension in install order, then in the
+    /// order each extension added them.
+    pub fn commands(&self) -> impl Iterator<Item = &ExtensionCommand> {
+        self.installed
+            .iter()
+            .flat_map(|entry| entry.points.commands.iter())
+    }
+
     /// Hand `message` to the one extension it names: to the panel or
     /// Start-screen section it is addressed to, else to the extension
     /// itself. A message for an id that is not installed is dropped.
@@ -139,5 +163,19 @@ impl crate::app::Signex {
     /// The installed extensions.
     pub fn extensions(&self) -> &ExtensionHost {
         &self.extensions
+    }
+
+    /// The catalog row of `command`: a built-in one, else an installed
+    /// extension's. The lookup every dispatch path that must also know an
+    /// extension's commands goes through.
+    pub fn command_metadata(
+        &self,
+        command: &signex_commands::AppCommandId,
+    ) -> Option<&'static CommandMetadata> {
+        crate::keymap::metadata_for(command).or_else(|| {
+            self.extensions
+                .command(command.as_str())
+                .map(ExtensionCommand::metadata)
+        })
     }
 }

@@ -19,7 +19,7 @@ pub struct PreferenceSaved {
 /// runs on a blocking worker, in the order the saves were made, and the quit
 /// path waits for it; its outcome comes back to `owner` as a
 /// [`PreferenceSaved`]. Refused when `key` is not under the owner's
-/// `ext.<name>.` prefix.
+/// `ext.<name>.` prefix or is not an extension id.
 pub fn save_preference(
     owner: &ExtensionId,
     key: &'static str,
@@ -27,6 +27,9 @@ pub fn save_preference(
 ) -> Result<Task<Message>, RegisterError> {
     if !owner.owns(key) {
         return Err(RegisterError::NotOwned(key.to_owned()));
+    }
+    if !signex_commands::is_extension_id(key) {
+        return Err(RegisterError::InvalidId(key.to_owned()));
     }
     let owner = owner.clone();
     Ok(crate::fonts::background_pref_merge(

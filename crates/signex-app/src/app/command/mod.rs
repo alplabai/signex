@@ -255,6 +255,13 @@ impl Signex {
         args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> (CommandOutcome, Task<Message>) {
+        // An installed extension's command runs its own handler (#2495); no
+        // built-in route below names an `ext.` id.
+        if command.is_extension()
+            && let Some(result) = self.dispatch_extension_command(command, &args)
+        {
+            return result;
+        }
         // A query answers an agent or the CLI with data; no GUI surface shows
         // that answer, so a palette, key or menu call is refused rather than
         // reported as run (#2172).

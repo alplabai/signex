@@ -31,12 +31,10 @@ impl std::error::Error for InvalidExtensionName {}
 
 impl ExtensionId {
     /// The id for `name`, which starts with a lowercase ASCII letter and
-    /// holds only lowercase ASCII letters, digits and `_`.
+    /// holds only lowercase ASCII letters, digits and `_`
+    /// ([`signex_commands::is_extension_name`]).
     pub fn new(name: &str) -> Result<Self, InvalidExtensionName> {
-        let mut chars = name.chars();
-        let starts_well = chars.next().is_some_and(|c| c.is_ascii_lowercase());
-        let rest_well = chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
-        if starts_well && rest_well {
+        if signex_commands::is_extension_name(name) {
             Ok(Self(Arc::from(name)))
         } else {
             Err(InvalidExtensionName(name.to_owned()))
@@ -54,22 +52,14 @@ impl ExtensionId {
     }
 
     /// Is `id` in this extension's namespace (`ext.<name>.` and at least
-    /// one more character)?
+    /// one more character)? Only the namespace: whether the rest is a valid
+    /// id is [`signex_commands::is_extension_id`].
     pub fn owns(&self, id: &str) -> bool {
-        id.strip_prefix("ext.")
+        id.strip_prefix(signex_commands::EXTENSION_ID_PREFIX)
             .and_then(|rest| rest.strip_prefix(self.name()))
             .and_then(|rest| rest.strip_prefix('.'))
             .is_some_and(|local| !local.is_empty())
     }
-}
-
-/// Is `id` in some extension's namespace: `ext.`, a valid extension name,
-/// `.` and at least one more character? True whether or not that extension
-/// is installed.
-pub fn is_extension_id(id: &str) -> bool {
-    id.strip_prefix("ext.")
-        .and_then(|rest| rest.split_once('.'))
-        .is_some_and(|(name, local)| ExtensionId::new(name).is_ok() && !local.is_empty())
 }
 
 impl fmt::Display for ExtensionId {
