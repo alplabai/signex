@@ -127,8 +127,26 @@ impl Signex {
         // A re-prefix or reset that left one sheet out would split a prefix
         // or a part; Incremental still skips a sheet it cannot change.
         let all_or_nothing = reprefix.is_some() || resets;
-        let (parts, mut next_by_prefix, first_unit, placements) =
-            self.walk_project(&project_set, &ordered_paths, &locked, resets);
+        let numbered: Vec<std::path::PathBuf> = (in_run.iter())
+            .filter(|path| !read_only.contains(*path))
+            .cloned()
+            .collect();
+        let super::annotate_placements::Walked {
+            parts,
+            seed: mut next_by_prefix,
+            first_unit,
+            placements,
+            blocks,
+        } = self.walk_project(&project_set, &ordered_paths, &locked, resets, &numbered);
+        // A page scheme that cannot give every page a block of its own
+        // refuses the run before any sheet changes (#1292).
+        let blocks = match blocks {
+            Ok(blocks) => blocks,
+            Err(why) => {
+                self.refuse_run(label, &format!("{why}. Nothing was changed"));
+                return Task::none();
+            }
+        };
         let mut assigned: std::collections::HashMap<usize, String> =
             std::collections::HashMap::new();
         let mut any_active_changed = false;
@@ -166,6 +184,7 @@ impl Signex {
                 undo_group,
                 reprefix,
                 placements: &placements[sheet],
+                blocks: blocks.as_ref(),
             };
             if read_only.contains(path) || unticked.contains(path) {
                 continue;
