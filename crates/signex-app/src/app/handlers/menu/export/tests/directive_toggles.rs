@@ -65,9 +65,9 @@ fn ticking_compile_masks_or_diff_pairs_redraws_the_preview() {
     assert!(options(&app).include_compile_masks);
     let after_masks = generation(&app);
     assert!(after_masks > before, "a new raster job");
-    let _ = app.update(Message::PrintPreview(
-        PrintPreviewMsg::SetIncludeDiffPairs(true),
-    ));
+    let _ = app.update(Message::PrintPreview(PrintPreviewMsg::SetIncludeDiffPairs(
+        true,
+    )));
     assert!(options(&app).include_diff_pairs);
     assert!(generation(&app) > after_masks, "a new raster job");
 }

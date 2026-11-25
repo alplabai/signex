@@ -231,7 +231,10 @@ fn the_compile_masks_and_diff_pairs_options_are_apart() {
     );
     assert_eq!(
         format!("{:?}", drawn(&s, &pairs_only)),
-        format!("{:?}", drawn(&sheet(vec![diff_pair()]), &masks_and_pairs_on()))
+        format!(
+            "{:?}",
+            drawn(&sheet(vec![diff_pair()]), &masks_and_pairs_on())
+        )
     );
 }
 
