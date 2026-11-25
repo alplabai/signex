@@ -1053,6 +1053,31 @@ find_similar_items document=<board> id=<uuid> [fields=kind,value,...]
 
 Find by text on a board is `find_items` (designator and value).
 
+## Net ties
+
+A net tie joins two named nets on purpose (#1277; `docs/NET_TIES.md`).
+
+```text
+set_net_tie id=<uuid> on=true|false [document=..]
+query_net_ties document=<sheet or board>
+```
+
+- `set_net_tie` makes the placed part `id` a net tie (`on=true`) or an
+  ordinary part again, in one undo step. A power port, any object that is
+  not a part, and an unknown id are refused with the reason. The answer is
+  the placed-object answer ("Editing placed objects" above) with
+  `net_tie`. Without operands it says what it needs. A part placed from a
+  library symbol of type Net Tie is a tie already.
+- `query_net_ties` changes nothing and is on the agent channel. On a sheet
+  it answers `{"document", "kind": "schematic", "count", "ties"}`, each tie
+  `{"id", "designator", "nets", "pins": [{"pin", "net"}], "status"}`; on a
+  board `kind` is `pcb` and each tie is a net-tie footprint
+  `{"id", "designator", "component_type", "nets", "pads": [{"pad", "net"}],
+  "status"}`. `nets` are the distinct nets, sorted; a pin or pad on no net
+  is left out. `status` is `joins` (two or more nets), `one_net` (every pin
+  on one net) or `open` (fewer than two pins on a net). A project sheet that
+  is not open is read for the answer, as `query_pins` reads one.
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > System ›
