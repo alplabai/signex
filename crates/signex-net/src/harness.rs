@@ -502,6 +502,9 @@ type CarryId = (usize, usize);
 /// The leaves one side brings to a carry: `(occurrence, leaves)`.
 type Side<'a> = (usize, &'a Leaves);
 
+/// The net roots a carried harness joins, per harness path.
+type PathRoots<'a> = BTreeMap<&'a str, Vec<(usize, Key)>>;
+
 /// Join every side a chain of carries meets (#2657). Carries that face each
 /// other across an edge are one carry; each side with leaves (a parent's
 /// typed entry or a child's port on a bundle with connectors) is attached to
@@ -536,7 +539,7 @@ fn join_through_carries<'a>(
         }
     }
     // Chain root -> path -> the net roots of that path, in a fixed order.
-    let mut joined: BTreeMap<CarryId, BTreeMap<&str, Vec<(usize, Key)>>> = BTreeMap::new();
+    let mut joined: BTreeMap<CarryId, PathRoots<'_>> = BTreeMap::new();
     for (carry, (occ, leaves)) in sides {
         let chain = find(&mut chains, carry);
         let paths = joined.entry(chain).or_default();
