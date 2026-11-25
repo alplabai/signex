@@ -8,7 +8,7 @@ use signex_types::diff_pair_class::DiffPairClass;
 use signex_types::project::ProjectData;
 use signex_widgets::dimension_label::DimensionLabelMessage as L;
 
-use super::preview::{PairGeometry, PairPreviewMsg, preview_labels};
+use super::preview::{PairGeometry, PairPreviewMsg, preview_labels, value_texts};
 use super::{
     DiffPairClassesMsg, DiffPairClassesState, PairClassField, PairClassProblem, PairMemberRow,
     PairPreview, free_name, new_class,
@@ -322,6 +322,78 @@ fn a_value_typed_on_the_preview_is_the_fields_edit() {
     assert_eq!(applied[0].width_mm, Some(0.25));
     assert_eq!(applied[0].impedance_ohm, Some(90.0));
     assert_eq!(applied[0].impedance_tolerance_pct, Some(10.0));
+}
+
+/// #2661, done when: edits on the preview, typed and dragged, apply on OK
+/// and undo as one step.
+#[test]
+fn preview_edits_apply_on_ok_and_undo_as_one_step() {
+    let mut app = app_with_project(vec![class("USB")]);
+    open(&mut app);
+    on_preview(&mut app, L::LabelPressed(0));
+    on_preview(&mut app, L::DraftEdited("0.25".into()));
+    on_preview(&mut app, L::DraftSubmitted);
+    on_preview(&mut app, L::HandlePressed(1));
+    on_preview(&mut app, L::PointerMoved(iced::Point::ORIGIN));
+    on_preview(&mut app, L::PointerMoved(iced::Point::new(0.0, 20.0)));
+    on_preview(&mut app, L::PointerReleased);
+    let gap = dialog(&app).classes[0].gap_mm.expect("a dragged gap");
+    assert_eq!(
+        classes_of(&app),
+        [class("USB")],
+        "nothing applied before OK"
+    );
+
+    send(&mut app, DiffPairClassesMsg::OkRequested);
+    let applied = classes_of(&app);
+    assert_eq!(applied[0].width_mm, Some(0.25));
+    assert_eq!(applied[0].gap_mm, Some(gap));
+
+    let document = &mut app.document_state;
+    let project = document
+        .projects
+        .iter_mut()
+        .find(|p| p.id == PROJECT)
+        .unwrap();
+    let tab = document.project_tabs.get_mut(&PROJECT).expect("a history");
+    assert!(tab.general_history.undo(&mut project.data));
+    assert_eq!(
+        project.data.schematic_design.diff_pair_classes,
+        [class("USB")],
+        "one undo step puts the preview edits back"
+    );
+    assert!(!tab.general_history.can_undo());
+}
+
+/// #2661, done when: the preview draws the dialog's copy while it is
+/// edited, before OK applies it.
+#[test]
+fn the_preview_shows_a_field_edit_before_ok() {
+    let usb = DiffPairClass {
+        width_mm: Some(0.2),
+        gap_mm: Some(0.15),
+        ..class("USB")
+    };
+    let mut app = app_with_project(vec![usb.clone()]);
+    open(&mut app);
+    let geometry = |app: &Signex| {
+        let s = dialog(app);
+        PairGeometry::of(s.selected_class().expect("a class"), &s.preview)
+    };
+    let before = geometry(&app);
+    send(
+        &mut app,
+        DiffPairClassesMsg::FieldEdited(PairClassField::Width, "0.3".into()),
+    );
+    let after = geometry(&app);
+    assert!(after.trace_w > before.trace_w, "the traces are drawn wider");
+    let en = signex_i18n::I18n::en_us();
+    let [width, ..] = value_texts(dialog(&app).selected_class().expect("a class"), &en);
+    assert!(
+        width.into_string().contains("0.3"),
+        "the drawing writes 0.3"
+    );
+    assert_eq!(classes_of(&app), [usb], "nothing applied before OK");
 }
 
 /// An unset value opens at what the drawing shows; left as it opened, it
