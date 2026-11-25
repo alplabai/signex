@@ -1023,6 +1023,73 @@ Known limits:
 - The ERC and DRC runs a requirement uses are not numbered or kept; run
   `check_erc` or `check_drc` for their findings.
 
+## Design notebook generation
+
+`generate_design_notebook` (#2945, mockup row 201) builds the project's
+design report: requirements and how each was met, the architecture, key
+decisions, a BOM summary, the ERC, DRC and requirement results, simulation
+results, outputs produced, open items and the change log. The report is its
+own notebook file, `notebook/generated/design-report.snxnbk`; the
+hand-written `notebook/design.snxnbk` is only read.
+
+```text
+generate_design_notebook document=<project, or one of its documents>
+    [sections=<list>|all] [variant=<name>] [template=design-report-a4]
+    [document_number=<text>] [revision=<text>] [checks=run|last]
+    [save=true] [update=true]
+```
+
+It answers once its run lands with the summary below. Nothing is written
+without `save=true`, and an existing report is replaced only with
+`update=true`. `checks=run` (the default) runs ERC, DRC and the requirement
+checks; `checks=last` uses the newest runs the session keeps. Its capability
+is `export`.
+
+The same from a terminal, with no window:
+
+```text
+signex notebook generate --project buck-3v3.snxprj --json
+    [--force] [--fail-on requirements,checks] [--sections <list>]
+    [--variant <name>] [--template <name>] [--document <number>]
+    [--revision <rev>] [--checks run|last]
+```
+
+```json
+{
+  "command": "notebook.generate",
+  "project": "buck-3v3.snxprj",
+  "revision": "B", "variant": "Base",
+  "output": "notebook/generated/design-report.snxnbk",
+  "pages": 9,
+  "sections": ["summary", "requirements", "architecture", "decisions", "bom",
+               "checks", "simulation", "outputs", "open-items", "changelog"],
+  "requirements": { "total": 6, "pass": 5, "fail": 1, "failed": ["REQ-005"] },
+  "checks": { "erc": { "errors": 0, "warnings": 2, "waived": 0 },
+              "drc": { "errors": 0, "warnings": 0, "waived": 0 } },
+  "open_items": ["ISS-004", "ISS-005"],
+  "stale_references": 0,
+  "written": true,
+  "status": "ok",
+  "sources": [{ "section": "checks", "from": "ERC run for this report" }],
+  "not_read": [{ "section": "simulation", "why": "no simulation run is recorded for the project" }]
+}
+```
+
+- Exit code 0 when the report was made, a failing requirement included.
+  `--fail-on requirements` exits 1 when a requirement fails, `--fail-on
+  checks` when ERC or DRC has an error; the summary then says
+  `"status": "fail"` and names them in `failed_on`. A report that does not
+  compile is `"status": "error"`, exit 1.
+- A report that is already there is never replaced without `--force`: the
+  run refuses (exit 1, `"status": "refused"` with `--json`) and changes no
+  file.
+- A bad command line or a project that cannot be opened exits 2.
+- Two runs on the same project write the same file: nothing in it depends
+  on the clock.
+- A block meets a requirement when its title or text names the
+  requirement's id; the measurements that name it are its evidence. See
+  `docs/DESIGN_NOTEBOOK_GENERATE.md`.
+
 ## Board queries
 
 Three queries read one open board (#2403), through the same domain code as
