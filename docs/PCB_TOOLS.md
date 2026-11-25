@@ -213,7 +213,10 @@ clearance the design rules ask from other nets' copper (#2389).
   Messages panel says so. The route's own net is no obstacle, so a leg can
   run along a track of its net on its layer (one already on the board, or
   an earlier leg doubling back): the leg lays only the stretches that track
-  does not cover, ending on its ends, never a second track over it (#2492,
+  does not cover, ending on its ends, never a second track over it. Only a
+  track at least as wide as the leg covers it; the route keeps the board
+  tracks it was trimmed against, and one gone or changed when the route
+  ends refuses it rather than land a gap (#2492,
   `route/cover.rs`).
 - **Preview.** The leg on the pointer is routed once per change of what it
   depends on (the pointer's grid point, a leg, the board revision, the
@@ -296,7 +299,8 @@ a pointer or an empty corpus instead.
   writes the same file again. A board that does not round-trip as loaded is
   reported and not round-trip checked. A failure prints its
   seed, action index and the command that replays it. A routed track laid
-  over a same-net track already there (same layer, on one line, sharing a
+  over a same-net track already there and at least as wide (same layer, on
+  one line, sharing a
   stretch) fails the soak (#2492). Not checked yet (#2482):
   dangling track ends and connectivity against the net list. The soak's own
   edits make both on purpose (a stub routed into open board, a track moved

@@ -27,7 +27,9 @@ use super::command::BoardCommand;
 use super::draw::TrackStyle;
 use super::items::BoardItem;
 
-pub use bus::{BusMember, BusStyle, bus_start, bus_tracks, nearest_net_point, route_bus_leg};
+pub use bus::{
+    BusMember, BusStyle, bus_draft, bus_start, bus_tracks, nearest_net_point, route_bus_leg,
+};
 pub use ends::{
     PadAt, PadEnd, copper_under, end_via, join_pads, pad_end, start_on_copper, via_fits,
     via_pad_end,
@@ -94,7 +96,7 @@ pub enum RouteRefusal {
     ViaBlocked,
     #[error("a point or the width is not a length the board geometry can hold")]
     Unrepresentable,
-    #[error("a track the route pushed was changed or removed since")]
+    #[error("a track the route pushed or runs along was changed or removed since")]
     BoardChanged,
     #[error("a corner turns too sharply for the tracks to follow it side by side")]
     TooSharp,
@@ -109,6 +111,9 @@ pub struct RoutedLeg {
     pub shoved: Vec<Segment>,
     /// The pushed tracks as the board held them before the route.
     pub shoved_from: Vec<Segment>,
+    /// The board's same-net tracks the leg's tracks were trimmed against
+    /// (#2492), as the board held them.
+    pub covers: Vec<Segment>,
 }
 
 /// The legs of a route not yet on the board.
@@ -122,6 +127,9 @@ pub struct RouteDraft {
     /// them: a board that no longer holds one as it was has been edited
     /// under the route ([`draft_fits`]).
     pub shoved_from: Vec<Segment>,
+    /// Board tracks the route runs along and so leaves out (#2492), as the
+    /// board held them: one gone or changed leaves a gap ([`draft_fits`]).
+    pub covers: Vec<Segment>,
 }
 
 impl RouteDraft {
@@ -143,6 +151,11 @@ impl RouteDraft {
         for was in leg.shoved_from {
             if !self.shoved_from.iter().any(|held| held.uuid == was.uuid) {
                 self.shoved_from.push(was);
+            }
+        }
+        for cover in leg.covers {
+            if !self.covers.iter().any(|held| held.uuid == cover.uuid) {
+                self.covers.push(cover);
             }
         }
     }
@@ -277,8 +290,13 @@ pub fn route_leg(
     // Same-net copper is no obstacle to the search, so a leg can run along
     // a track of its net: lay only what that copper does not cover (#2492).
     let mut tracks: Vec<Segment> = Vec::with_capacity(routed.len());
+    let mut covers: Vec<Segment> = Vec::new();
     for track in routed {
-        let pieces = cover::uncovered(track, working.segments.iter().chain(&tracks), &mut ids);
+        let pieces = {
+            let left = cover::uncovered(track, working.segments.iter().chain(&tracks), &mut ids);
+            cover::hold_board_covers(&mut covers, board, &left.covers);
+            left.pieces
+        };
         tracks.extend(pieces);
     }
     let shoved: Vec<Segment> = pushed
@@ -295,14 +313,16 @@ pub fn route_leg(
         via,
         shoved,
         shoved_from,
+        covers,
     })
 }
 
 /// Whether `draft` still lands legally on `board`, which may have changed
 /// since the draft was routed (an undo, an edit from another window or
 /// panel): every track it pushed is on the board as it was before the
-/// push, and its tracks, vias and pushed tracks keep the clearance from
-/// other nets' copper and stay out of keepouts that forbid them.
+/// push, every track it runs along is on the board as it was (#2492), and
+/// its tracks, vias and pushed tracks keep the clearance from other nets'
+/// copper and stay out of keepouts that forbid them.
 pub fn draft_fits(
     board: &PcbBoard,
     draft: &RouteDraft,
@@ -313,6 +333,7 @@ pub fn draft_fits(
     let unchanged = draft
         .shoved_from
         .iter()
+        .chain(&draft.covers)
         .all(|was| on_board(was.uuid) == Some(was));
     let present = draft
         .shoved
