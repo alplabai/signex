@@ -760,3 +760,11 @@ cmd-menu-polygon-manager = Polygon Manager...
 cmd-flip-board-3d = Turn the board over in the 3D view
 cmd-cycle-board-3d-lighting = Next lighting preset in the 3D view
 cmd-copy-board-3d-screenshot = Copy a screenshot of the 3D view
+# Snippets and templates (#1283): a snippet is a saved circuit fragment of
+# the project or of the user's library; a template starts a sheet or project.
+cmd-save-snippet = Save the selected circuit as a snippet
+cmd-menu-save-snippet = Save as Snippet
+cmd-place-snippet = Place a saved snippet
+cmd-menu-place-snippet = Snippet...
+cmd-list-snippets = List the snippets of the project and the library
+cmd-list-templates = List the sheet and project templates

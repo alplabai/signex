@@ -115,6 +115,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("diff_pair_class", OperandKind::Text),
     ("via_hole", OperandKind::Text),
     ("current", OperandKind::Text),
+    // #1283: the template a new sheet or project starts from.
+    ("template", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

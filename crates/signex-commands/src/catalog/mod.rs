@@ -29,6 +29,7 @@ mod pcb_sync;
 mod placement;
 mod properties;
 mod query;
+mod reuse;
 mod search;
 mod selection;
 mod tool;
@@ -314,6 +315,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     arrange::ARRANGE,
     transform::TRANSFORM,
     placement::PLACEMENT,
+    reuse::REUSE,
     wiring::WIRING,
     drawing::DRAWING,
     tool::TOOL,

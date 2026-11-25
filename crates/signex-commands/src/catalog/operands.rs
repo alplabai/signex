@@ -77,7 +77,7 @@ pub struct Operand {
     pub required: bool,
 }
 
-const fn required(name: &'static str, kind: OperandKind) -> Operand {
+pub(super) const fn required(name: &'static str, kind: OperandKind) -> Operand {
     Operand {
         name,
         kind,
@@ -85,7 +85,7 @@ const fn required(name: &'static str, kind: OperandKind) -> Operand {
     }
 }
 
-const fn optional(name: &'static str, kind: OperandKind) -> Operand {
+pub(super) const fn optional(name: &'static str, kind: OperandKind) -> Operand {
     Operand {
         name,
         kind,
@@ -316,13 +316,15 @@ pub const SAVE_PATH: &[Operand] = &[
 ];
 
 /// A new project from the dialog's choices (#2232): where, which profile
-/// and `key=value` overrides.
+/// and `key=value` overrides, and a project `template` of the library
+/// (#1283).
 pub const NEW_PROJECT: &[Operand] = &[
     required("name", OperandKind::Text),
     required("location", OperandKind::Path),
     optional("make_folder", OperandKind::Bool),
     optional("profile", OperandKind::Text),
     optional("overrides", OperandKind::Text),
+    optional("template", OperandKind::Text),
 ];
 
 /// Update PCB without the dialog (#1312): `apply=true` executes the rows
@@ -334,10 +336,13 @@ pub const APPLY: &[Operand] = &[required("apply", OperandKind::Bool)];
 pub const NEW_PCB: &[Operand] = &[optional("profile", OperandKind::Text)];
 
 /// New Schematic without the dialog (#2232): `profile` as for `NEW_PCB`;
-/// `name` is the file stem in the project folder (default `Sheet<n>`).
+/// `name` is the file stem in the project folder (default `Sheet<n>`);
+/// `template` a sheet template kept in `scope` (#1283).
 pub const NEW_SCHEMATIC: &[Operand] = &[
     optional("profile", OperandKind::Text),
     optional("name", OperandKind::Text),
+    optional("template", OperandKind::Text),
+    optional("scope", OperandKind::Text),
 ];
 
 /// Turn the board view by `degrees` (90 when left out), clockwise positive

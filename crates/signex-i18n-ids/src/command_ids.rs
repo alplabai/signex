@@ -720,5 +720,12 @@ define_ids! {
         CMD_FLIP_BOARD_3D = "cmd-flip-board-3d";
         CMD_CYCLE_BOARD_3D_LIGHTING = "cmd-cycle-board-3d-lighting";
         CMD_COPY_BOARD_3D_SCREENSHOT = "cmd-copy-board-3d-screenshot";
+        // Snippets and templates (#1283).
+        CMD_SAVE_SNIPPET = "cmd-save-snippet";
+        CMD_MENU_SAVE_SNIPPET = "cmd-menu-save-snippet";
+        CMD_PLACE_SNIPPET = "cmd-place-snippet";
+        CMD_MENU_PLACE_SNIPPET = "cmd-menu-place-snippet";
+        CMD_LIST_SNIPPETS = "cmd-list-snippets";
+        CMD_LIST_TEMPLATES = "cmd-list-templates";
     }
 }
