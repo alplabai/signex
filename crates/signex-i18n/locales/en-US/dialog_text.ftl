@@ -432,6 +432,8 @@ dialog-parameter-manager-closed-sheets = { $count ->
 dialog-parameter-manager-refused-busy = Parameter Manager: nothing changed, { $sheet } is being saved or moved.
 dialog-parameter-manager-refused-read-only = Parameter Manager: nothing changed, { $sheet } opens read-only.
 dialog-parameter-manager-refused-failed = Parameter Manager: nothing changed, { $sheet } refused the edit.
+# Messages line: a cell of another listed sheet was not written. $reason says why, in the edit's own words.
+dialog-parameter-manager-cell-refused = Parameter Manager: { $reason }
 dialog-parameter-manager-no-schematic-title = No active schematic
 dialog-parameter-manager-no-schematic-body = The Parameter Manager edits the parts of the active sheet. Open a schematic sheet, then open it again from Tools ▸ Parameter Manager.
 dialog-parameter-manager-footer-hint = Edits apply as you type · each cell is one undo step (Ctrl+Z)

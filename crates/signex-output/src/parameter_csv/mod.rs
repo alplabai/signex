@@ -1,11 +1,13 @@
-//! The Parameter Manager's CSV file (#1295): the parameters of a sheet's
-//! parts written out, a file read back, and what an import of it changes.
+//! The Parameter Manager's CSV file (#1295): the parameters of the listed
+//! sheets' parts written out, a file read back, and what an import of it
+//! changes.
 //!
 //! RFC 4180, UTF-8 with a byte-order mark and CRLF line ends, written by the
 //! BOM's row writer. The first line holds the column titles: Unique Id (the
-//! key an import matches by), Reference, Value, Footprint, then one column
-//! per parameter in use, sorted. Then one line per listed part (power ports
-//! left out), in sheet order. The format and the import rules:
+//! key an import matches by), Reference, Sheet (only when the table lists
+//! all sheets, #1784), Value, Footprint, then one column per parameter in
+//! use, sorted. Then one line per listed part (power ports left out), sheet
+//! by sheet in sheet order. The format and the import rules:
 //! docs/PARAMETER_CSV.md.
 
 mod plan;
@@ -28,6 +30,8 @@ pub use read::{CsvPart, ParameterCsv, parse};
 pub const UNIQUE_ID_COLUMN: &str = "Unique Id";
 /// Title of the column that names each part.
 pub const REFERENCE_COLUMN: &str = "Reference";
+/// Title of the column that names each part's sheet (All sheets only).
+pub const SHEET_COLUMN: &str = "Sheet";
 /// Title of the value column: written for context, never imported.
 pub const VALUE_COLUMN: &str = "Value";
 /// Title of the footprint column: written for context, never imported.
@@ -48,6 +52,33 @@ pub enum ParameterCsvError {
     Write(String),
 }
 
+/// One part a parameter table lists.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ListedPart<'a> {
+    pub symbol: &'a Symbol,
+    /// The designator the table names it by: the one its canvas draws
+    /// (#1151), which may differ from `symbol.reference`.
+    pub reference: Cow<'a, str>,
+}
+
+impl<'a> ListedPart<'a> {
+    /// `symbol`, named by its own `reference`.
+    pub fn stored(symbol: &'a Symbol) -> Self {
+        Self {
+            symbol,
+            reference: Cow::Borrowed(symbol.reference.as_str()),
+        }
+    }
+}
+
+/// One sheet a parameter table lists, and its listed parts in sheet order.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ListedSheet<'a> {
+    /// What the Sheet column names it; unique among the listed sheets.
+    pub name: String,
+    pub parts: Vec<ListedPart<'a>>,
+}
+
 /// The parts a parameter table lists: every placed symbol except power
 /// ports, in sheet order.
 pub fn listed_parts(sheet: &SchematicSheet) -> Vec<&Symbol> {
@@ -55,40 +86,41 @@ pub fn listed_parts(sheet: &SchematicSheet) -> Vec<&Symbol> {
 }
 
 /// Every parameter one of `parts` carries, sorted.
-pub fn parameter_keys(parts: &[&Symbol]) -> Vec<String> {
+pub fn parameter_keys<'s>(parts: impl IntoIterator<Item = &'s Symbol>) -> Vec<String> {
     parts
-        .iter()
+        .into_iter()
         .flat_map(|s| s.fields.keys().cloned())
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect()
 }
 
-/// `parts` as a parameter table file. A part without a parameter gets an
-/// empty cell.
-pub fn export(parts: &[&Symbol]) -> Result<Vec<u8>, ParameterCsvError> {
-    let keys = parameter_keys(parts);
+/// `sheets` as a parameter table file, with a Sheet column when
+/// `with_sheet`. A part without a parameter gets an empty cell.
+pub fn export(sheets: &[ListedSheet<'_>], with_sheet: bool) -> Result<Vec<u8>, ParameterCsvError> {
+    let keys = parameter_keys(sheets.iter().flat_map(|s| s.parts.iter().map(|p| p.symbol)));
     let mut out = b"\xef\xbb\xbf".to_vec();
-    let mut titles = vec![
-        UNIQUE_ID_COLUMN.to_string(),
-        REFERENCE_COLUMN.to_string(),
-        VALUE_COLUMN.to_string(),
-        FOOTPRINT_COLUMN.to_string(),
-    ];
+    let mut titles = vec![UNIQUE_ID_COLUMN.to_string(), REFERENCE_COLUMN.to_string()];
+    if with_sheet {
+        titles.push(SHEET_COLUMN.to_string());
+    }
+    titles.extend([VALUE_COLUMN.to_string(), FOOTPRINT_COLUMN.to_string()]);
     titles.extend(keys.iter().cloned());
     write_line(&mut out, &titles)?;
-    for part in parts {
-        let mut cells = vec![
-            part.uuid.to_string(),
-            part.reference.clone(),
-            part.value.clone(),
-            part.footprint.clone(),
-        ];
-        cells.extend(
-            keys.iter()
-                .map(|key| part.fields.get(key).cloned().unwrap_or_default()),
-        );
-        write_line(&mut out, &cells)?;
+    for sheet in sheets {
+        for part in &sheet.parts {
+            let symbol = part.symbol;
+            let mut cells = vec![symbol.uuid.to_string(), part.reference.to_string()];
+            if with_sheet {
+                cells.push(sheet.name.clone());
+            }
+            cells.extend([symbol.value.clone(), symbol.footprint.clone()]);
+            cells.extend(
+                keys.iter()
+                    .map(|key| symbol.fields.get(key).cloned().unwrap_or_default()),
+            );
+            write_line(&mut out, &cells)?;
+        }
     }
     Ok(out)
 }

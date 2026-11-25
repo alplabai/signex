@@ -16,12 +16,15 @@ use iced::widget::operation::{Animation, scrollable::scroll_to};
 use iced::widget::scrollable::AbsoluteOffset;
 use signex_engine::Command;
 use signex_i18n::{ids, t};
-use signex_types::schematic::SchematicSheet;
+use signex_output::parameter_csv::{self, ListedPart, ListedSheet};
+use signex_types::designator::DesignatorStandard;
+use signex_types::schematic::{InstancePath, SchematicSheet};
 
 use crate::app::contracts::{ParameterScope, ParameterTablePane};
 use crate::app::sheet_write::{SheetWrite, SheetWriteRefusal};
 use crate::app::state::{ModalId, ParameterCell, Signex};
 use crate::app::{Message, ParameterManagerMsg, UndoGroupKind};
+use crate::schematic_runtime::drawn_value::drawn_designator;
 
 /// Widget id of the scrollable parameter cells.
 pub(crate) const BODY_SCROLL_ID: &str = "parameter-manager-body";
@@ -143,13 +146,35 @@ impl Signex {
         std::iter::once(active).chain(others).collect()
     }
 
-    /// [`Self::parameter_sheets`] with each sheet's live document.
-    pub(crate) fn parameter_documents(&self) -> Vec<(&Path, &SchematicSheet)> {
-        self.parameter_sheets()
-            .iter()
+    /// [`Self::parameter_sheets`] with each sheet's live document, its name
+    /// and how its canvas draws designators.
+    pub(crate) fn parameter_documents(&self) -> Vec<ParameterSheet<'_>> {
+        self.parameter_documents_of(&self.parameter_sheets())
+    }
+
+    /// The open sheets of `paths` as the table lists them, named among
+    /// themselves; the first one's project folder names sheets that share a
+    /// file name. A path no engine holds is left out.
+    pub(crate) fn parameter_documents_of(&self, paths: &[PathBuf]) -> Vec<ParameterSheet<'_>> {
+        let docs = &self.document_state;
+        let held: Vec<(&Path, &SchematicSheet)> = (paths.iter())
             .filter_map(|path| {
-                let (path, engine) = self.document_state.engines.get_key_value(path)?;
+                let (path, engine) = docs.engines.get_key_value(path)?;
                 Some((path.as_path(), engine.document()))
+            })
+            .collect();
+        let dir = (paths.first())
+            .and_then(|first| docs.document_project(first))
+            .and_then(|project| project.path.parent());
+        let paths: Vec<&Path> = held.iter().map(|(path, _)| *path).collect();
+        let names = parameter_sheet_names(&paths, dir);
+        (held.into_iter().zip(names))
+            .map(|((path, doc), name)| ParameterSheet {
+                path,
+                doc,
+                name,
+                placement: self.shown_placement(path),
+                standard: docs.designator_standard_for(path),
             })
             .collect()
     }
@@ -218,9 +243,15 @@ impl Signex {
             // selection info are not touched.
             self.apply_engine_command(command, false, false);
         } else if self.refuse_if_read_only_at(&sheet).is_none()
+            && self.refuse_if_channel_view_at(&sheet).is_none()
             && let Err(reason) = self.execute_on_sheet(&sheet, command)
         {
-            crate::diagnostics::log_warning(format!("Parameter Manager: {reason}"));
+            let line = t!(
+                self.ui_state.i18n,
+                ids::DIALOG_PARAMETER_MANAGER_CELL_REFUSED,
+                "reason" => reason
+            );
+            crate::diagnostics::log_warning(line.into_string());
         }
         Task::none()
     }
@@ -243,7 +274,7 @@ impl Signex {
     pub(crate) fn parameter_session_changes(&self) -> Vec<(ParameterCell, Option<String>)> {
         let session = &self.ui_state.parameter_table.session;
         let mut changes = Vec::new();
-        for (path, doc) in self.parameter_documents() {
+        for ParameterSheet { path, doc, .. } in self.parameter_documents() {
             let changed = session.cells_on(Some(path)).filter(|(cell, before)| {
                 doc.symbols
                     .iter()
@@ -332,14 +363,18 @@ impl Signex {
     ) -> BTreeMap<PathBuf, Vec<Command>> {
         self.parameter_documents()
             .into_iter()
-            .map(|(path, doc)| (path.to_path_buf(), commands(doc)))
+            .map(|sheet| (sheet.path.to_path_buf(), commands(sheet.doc)))
             .collect()
     }
 
     /// Run each sheet's commands as one undo step: through the gateway when
     /// only the active sheet has any, else as one undo group across the
-    /// sheets, all or nothing. `true` when a sheet changed.
-    fn apply_parameter_commands(&mut self, mut by_sheet: BTreeMap<PathBuf, Vec<Command>>) -> bool {
+    /// sheets, all or nothing. `true` when a sheet changed. Also Apply of a
+    /// CSV import (`parameter_io`).
+    pub(crate) fn apply_parameter_commands(
+        &mut self,
+        mut by_sheet: BTreeMap<PathBuf, Vec<Command>>,
+    ) -> bool {
         by_sheet.retain(|_, commands| !commands.is_empty());
         let active = self.document_state.active_path.clone();
         let has_active = active
@@ -349,8 +384,13 @@ impl Signex {
             let commands = by_sheet.into_values().next().unwrap_or_default();
             return self.apply_engine_commands(commands, false, false);
         }
-        // A channel tab of a repeated sheet is a compiled view (#1279).
-        if has_active && self.refuse_if_channel_view().is_some() {
+        // A channel tab of a repeated sheet is a compiled view (#1279), on
+        // whichever listed sheet shows one.
+        let paths: Vec<PathBuf> = by_sheet.keys().cloned().collect();
+        if paths
+            .iter()
+            .any(|path| self.refuse_if_channel_view_at(path).is_some())
+        {
             return false;
         }
         // An open typing run would fold this step into the last cell's.
@@ -414,6 +454,58 @@ fn follow_table_scroll(pane: ParameterTablePane, x: f32, y: f32) -> Task<Message
         ParameterTablePane::Header => to(BODY_SCROLL_ID, Some(x), None),
         ParameterTablePane::References => to(BODY_SCROLL_ID, None, Some(y)),
     }
+}
+
+/// One sheet the Parameter Manager lists.
+#[derive(Debug, Clone)]
+pub(crate) struct ParameterSheet<'a> {
+    pub path: &'a Path,
+    pub doc: &'a SchematicSheet,
+    /// What the Sheet column and the CSV file name it
+    /// ([`parameter_sheet_names`]).
+    pub name: String,
+    /// The placement whose designators its canvas draws (#1151).
+    pub placement: Option<InstancePath>,
+    /// The project's designator standard (#1416).
+    pub standard: Option<DesignatorStandard>,
+}
+
+impl<'a> ParameterSheet<'a> {
+    /// The parts the table lists on the sheet, each named by the designator
+    /// its canvas draws: the one list the table and the CSV file share.
+    pub(crate) fn listed(&self) -> ListedSheet<'a> {
+        let parts = (parameter_csv::listed_parts(self.doc).into_iter())
+            .map(|symbol| ListedPart {
+                symbol,
+                reference: drawn_designator(symbol, self.placement.as_ref(), self.standard),
+            })
+            .collect();
+        ListedSheet {
+            name: self.name.clone(),
+            parts,
+        }
+    }
+}
+
+/// What the Sheet column calls each of `paths`: its file name, or, where two
+/// listed sheets share a file name, its path from `dir` (the project's
+/// folder), else its full path.
+pub(crate) fn parameter_sheet_names(paths: &[&Path], dir: Option<&Path>) -> Vec<String> {
+    let names: Vec<String> = paths
+        .iter()
+        .map(|path| crate::app::view::parameter_manager::sheet_file_name(path))
+        .collect();
+    (paths.iter().zip(&names))
+        .map(|(path, name)| {
+            if names.iter().filter(|other| *other == name).count() < 2 {
+                return name.clone();
+            }
+            match dir.and_then(|dir| path.strip_prefix(dir).ok()) {
+                Some(relative) => relative.display().to_string(),
+                None => path.display().to_string(),
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]

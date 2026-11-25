@@ -185,6 +185,7 @@ define_ids! {
     DIALOG_PARAMETER_MANAGER_REFUSED_BUSY = "dialog-parameter-manager-refused-busy";
     DIALOG_PARAMETER_MANAGER_REFUSED_READ_ONLY = "dialog-parameter-manager-refused-read-only";
     DIALOG_PARAMETER_MANAGER_REFUSED_FAILED = "dialog-parameter-manager-refused-failed";
+    DIALOG_PARAMETER_MANAGER_CELL_REFUSED = "dialog-parameter-manager-cell-refused";
     DIALOG_MOVE_SELECTION_MOVE = "dialog-move-selection-move";
     DIALOG_MOVE_SELECTION_HELP = "dialog-move-selection-help";
     DIALOG_MOVE_SELECTION_HELP_OFF_GRID = "dialog-move-selection-help-off-grid";

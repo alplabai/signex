@@ -59,6 +59,25 @@ fn wire_net_of(nets: Option<&ProjectNetData>, path: &Path, id: Uuid) -> Option<S
     (!name.is_empty()).then(|| name.clone())
 }
 
+/// Whether `a` and `b` differ at most in their document facts (the clock
+/// and the files' modified dates).
+fn same_but_document_facts(
+    a: &crate::canvas::SpecialStrings,
+    b: &crate::canvas::SpecialStrings,
+) -> bool {
+    let mut a = a.clone();
+    a.metadata.document_facts = b.metadata.document_facts.clone();
+    a == *b
+}
+
+/// Whether a text of `sheet` the Object List lists could resolve a token: a
+/// value or a note holding `${`, or an `=` expression.
+fn lists_a_token(sheet: &signex_types::schematic::SchematicSheet) -> bool {
+    let computed = |text: &str| text.contains("${") || text.trim_start().starts_with('=');
+    sheet.symbols.iter().any(|s| computed(&s.value))
+        || sheet.text_notes.iter().any(|t| computed(&t.text))
+}
+
 /// Every project sheet's rows, the sheet in view first and the rest by path.
 fn read_project_rows(read: ProjectRead) -> Vec<ObjectRow> {
     let set = project_sheets::assemble_project_sheets_quiet_from(
@@ -173,6 +192,21 @@ impl Signex {
             }));
         }
         self.open_sheet(target.sheet.clone(), open)
+    }
+
+    /// Whether a listed text of an open sheet `scope` reads from `active`
+    /// could resolve a token, so the clock or a modified date may change
+    /// it. A sheet with no open document is read with no special strings.
+    fn object_texts_use_tokens(&self, active: &Path, scope: ObjectScope) -> bool {
+        let engines = &self.document_state.engines;
+        match scope {
+            ObjectScope::ThisSheet => engines
+                .get(active)
+                .is_some_and(|engine| lists_a_token(engine.document())),
+            ObjectScope::Project => engines
+                .values()
+                .any(|engine| lists_a_token(engine.document())),
+        }
     }
 
     /// The cached net index of the project that owns `path`, if one is built.
@@ -388,15 +422,22 @@ impl Signex {
         let canvas_special = self
             .list_canvas(slot)
             .and_then(|canvas| canvas.special_strings.as_ref());
-        let current = self
-            .ui_state
-            .object_list
-            .source_of(owner)
-            .is_some_and(|s| s.stamp == Some(stamp) && s.special.as_ref() == canvas_special);
-        if current {
+        let source = self.ui_state.object_list.source_of(owner);
+        let read_from = source.filter(|s| s.stamp == Some(stamp));
+        if read_from.is_some_and(|s| s.special.as_ref() == canvas_special) {
             return Task::none();
         }
         let special = canvas_special.cloned();
+        // The clock ticks and every save moves a modified date: rows no
+        // listed text of which uses a token read the same (#2630).
+        if let Some(read) = read_from.and_then(|s| s.special.as_ref())
+            && let Some(now) = special.as_ref()
+            && same_but_document_facts(read, now)
+            && !self.object_texts_use_tokens(active, scope)
+        {
+            self.ui_state.object_list.source_of_mut(owner).special = special;
+            return Task::none();
+        }
         let nets = self.object_list_nets(active);
         if scope == ObjectScope::ThisSheet {
             let look = self.sheet_look(active, special.clone());

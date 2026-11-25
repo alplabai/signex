@@ -170,6 +170,13 @@ impl Signex {
     /// a compiled view is read-only. Said in Messages once per channel.
     pub(crate) fn refuse_if_channel_view(&mut self) -> Option<String> {
         let path = self.document_state.edit_path()?.to_path_buf();
+        self.refuse_if_channel_view_at(&path)
+    }
+
+    /// [`Self::refuse_if_channel_view`] for the sheet at `path`, active or
+    /// not (the Parameter Manager's other listed sheets).
+    pub(crate) fn refuse_if_channel_view_at(&mut self, path: &Path) -> Option<String> {
+        let path = path.to_path_buf();
         let index = self.shown_channel(&path)?;
         let name = self
             .sheet_channels(&path)

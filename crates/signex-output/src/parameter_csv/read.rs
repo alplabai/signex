@@ -1,8 +1,8 @@
 //! Reading a parameter table file back: the records, then the columns.
 
 use super::{
-    FOOTPRINT_COLUMN, ParameterCsvError, REFERENCE_COLUMN, UNIQUE_ID_COLUMN, VALUE_COLUMN,
-    unguarded,
+    FOOTPRINT_COLUMN, ParameterCsvError, REFERENCE_COLUMN, SHEET_COLUMN, UNIQUE_ID_COLUMN,
+    VALUE_COLUMN, unguarded,
 };
 
 /// A parameter table file as read.
@@ -21,6 +21,9 @@ pub struct CsvPart {
     pub unique_id: String,
     /// The Reference cell, trimmed.
     pub reference: String,
+    /// The Sheet cell, trimmed; empty when the file has no such column, and
+    /// then the line may go to a part of any listed sheet.
+    pub sheet: String,
     /// One cell per entry of [`ParameterCsv::keys`]; `None` when the line
     /// ends before that column.
     pub values: Vec<Option<String>>,
@@ -30,6 +33,7 @@ pub struct CsvPart {
 enum Column {
     UniqueId,
     Reference,
+    Sheet,
     /// Value or Footprint: read-only in the table, so never imported.
     Context,
     Parameter(usize),
@@ -37,7 +41,7 @@ enum Column {
     Ignored,
 }
 
-/// Read a parameter table file. The Unique Id, Reference, Value and
+/// Read a parameter table file. The Unique Id, Reference, Sheet, Value and
 /// Footprint titles match in any case, with spaces around them; parameter
 /// titles match as written. A file needs a Unique Id or a Reference column.
 pub fn parse(bytes: &[u8]) -> Result<ParameterCsv, ParameterCsvError> {
@@ -47,6 +51,7 @@ pub fn parse(bytes: &[u8]) -> Result<ParameterCsv, ParameterCsvError> {
     let mut keys: Vec<String> = Vec::new();
     let mut has_unique_id = false;
     let mut has_reference = false;
+    let mut has_sheet = false;
     let mut columns = Vec::with_capacity(titles.len());
     for title in titles {
         let title = unguarded(title);
@@ -63,6 +68,12 @@ pub fn parse(bytes: &[u8]) -> Result<ParameterCsv, ParameterCsvError> {
             }
             has_reference = true;
             Column::Reference
+        } else if fixed.eq_ignore_ascii_case(SHEET_COLUMN) {
+            if has_sheet {
+                return Err(ParameterCsvError::DuplicateColumn(title));
+            }
+            has_sheet = true;
+            Column::Sheet
         } else if fixed.eq_ignore_ascii_case(VALUE_COLUMN)
             || fixed.eq_ignore_ascii_case(FOOTPRINT_COLUMN)
         {
@@ -83,15 +94,15 @@ pub fn parse(bytes: &[u8]) -> Result<ParameterCsv, ParameterCsvError> {
     let rows = records
         .map(|record| {
             let mut part = CsvPart {
-                unique_id: String::new(),
-                reference: String::new(),
                 values: vec![None; keys.len()],
+                ..CsvPart::default()
             };
             for (column, cell) in columns.iter().zip(record) {
                 let cell = unguarded(cell);
                 match column {
                     Column::UniqueId => part.unique_id = cell.trim().to_string(),
                     Column::Reference => part.reference = cell.trim().to_string(),
+                    Column::Sheet => part.sheet = cell.trim().to_string(),
                     Column::Parameter(i) => part.values[*i] = Some(cell),
                     Column::Context | Column::Ignored => {}
                 }
