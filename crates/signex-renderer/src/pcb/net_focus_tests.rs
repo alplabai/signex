@@ -105,9 +105,7 @@ fn alphas(scene: &Scene) -> [[f32; 2]; 5] {
 fn the_net_in_focus_stays_bright_and_the_others_dim_by_the_amount() {
     let plain = alphas(&scene(BoardPaint::default()));
     for (percent, keep) in [(0u8, 1.0f32), (50, 0.5), (100, 0.0)] {
-        let focused = alphas(&scene(
-            BoardPaint::default().with_net_focus(Some(1), percent),
-        ));
+        let focused = alphas(&scene(BoardPaint::default().with_net_focus(&[1], percent)));
         for (kind, (lit, base)) in focused.iter().zip(plain.iter()).enumerate() {
             assert_eq!(lit[0], base[0], "active net, kind {kind}, {percent} %");
             assert!(
@@ -123,6 +121,14 @@ fn the_net_in_focus_stays_bright_and_the_others_dim_by_the_amount() {
 #[test]
 fn without_a_net_in_focus_nothing_dims() {
     let plain = alphas(&scene(BoardPaint::default()));
-    let unfocused = alphas(&scene(BoardPaint::default().with_net_focus(None, 100)));
+    let unfocused = alphas(&scene(BoardPaint::default().with_net_focus(&[], 100)));
     assert_eq!(plain, unfocused);
+}
+
+/// A route or drag of two nets keeps both bright.
+#[test]
+fn every_net_in_focus_stays_bright() {
+    let plain = alphas(&scene(BoardPaint::default()));
+    let both = alphas(&scene(BoardPaint::default().with_net_focus(&[1, 2], 100)));
+    assert_eq!(plain, both);
 }

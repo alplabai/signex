@@ -87,7 +87,7 @@ pub use index::{
 pub use measure::{Span, edge_gap};
 pub use mst::{Edge, euclidean_mst, spanning_forest};
 pub use net_length::{
-    item_net, net_copper, net_items, net_members, net_routed_length_mm, track_length_mm,
+    item_net, net_copper, net_items, net_members, net_routed_length_mm, nets_of, track_length_mm,
     tracks_length_mm, via_span,
 };
 pub use net_report::{NetReport, net_named, net_reports};
