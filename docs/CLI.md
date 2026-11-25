@@ -1053,6 +1053,125 @@ find_similar_items document=<board> id=<uuid> [fields=kind,value,...]
 
 Find by text on a board is `find_items` (designator and value).
 
+## Layout plan
+
+A board keeps a layout plan (#2942): the settings of its layout stages, in
+the order a design runs them, so a script does not pass them on every
+command and a person can read what a script used. It is saved with the
+board and changed only by `layout_plan_set`, one undo step per call (the
+window's Undo takes it back too).
+
+```text
+layout_plan_get document=<board>
+layout_plan_set document=<board> stage=<stage> [<setting>=<list>]... [remove=true]
+layout_plan_status document=<board>
+```
+
+| Stage | Setting | Holds |
+|---|---|---|
+| `placement` | `weights` | the weight of each auto-place priority, `<priority>:<weight>` (`connection`, `thermal`, `separation`, `edges`; a number, 0 or more) |
+| `placement` | `rooms` | the rooms whose parts are placed, by name; none places every part |
+| `placement` | `keep` | the parts left where they are, by designator |
+| `routing` | `nets` | the nets to route, in order; `class:<name>` stands for every net of a net class; none routes every net |
+| `routing` | `skip` | the nets left unrouted |
+| `pours` | `pours` | the pours to fill, by uuid, in fill order; none fills every pour that is not shelved |
+| `checks` | `rules` | the DRC rule ids that must pass (`builtin::clearance`, `user::<name>`); none is every rule |
+| `checks` | `requirements` | the project requirement ids that must pass |
+
+- Each setting is a comma list. A setting given replaces that setting, one
+  left out keeps it, and an empty value clears it; `remove=true` clears the
+  whole stage. A setting of another stage, a stage that is not one of the
+  four, an entry listed twice, a priority or weight that does not read, a
+  pour that is no uuid and a built-in rule this build does not have are
+  refused, and nothing changes. A room, part, net, net class, pour or
+  requirement the board or its project does not have is kept and named in
+  `warnings`: a plan may be written before the board has them.
+- `layout_plan_get` and `layout_plan_set` answer with the plan:
+
+```json
+{"document": "/abs/demo.snxpcb", "revision": 7, "empty": false,
+ "stages": [
+   {"stage": "placement", "set": true,
+    "settings": {"weights": {"connection": 3.0, "edges": 5.0}, "rooms": [], "keep": ["J1"]}},
+   {"stage": "routing", "set": true,
+    "settings": {"nets": ["class:Power", "GND"], "skip": []}},
+   {"stage": "pours", "set": false, "settings": {"pours": []}},
+   {"stage": "checks", "set": false, "settings": {"rules": [], "requirements": []}}],
+ "warnings": ["net class `Power` is not in the project"]}
+```
+
+  `layout_plan_set` adds `stage` (the stage it set) and `changed` (`false`
+  when the values were already those, and then no undo step is made).
+- `layout_plan_status` answers how far each stage is:
+
+```json
+{"document": "/abs/demo.snxpcb", "revision": 7, "drc_current": false,
+ "stages": [
+   {"stage": "placement", "set": true, "state": "done", "reasons": [], "parts": 12, "placed": 12},
+   {"stage": "routing", "set": true, "state": "failing",
+    "reasons": ["net `GND` has 2 connections to route"], "nets": 4, "routed": 3},
+   {"stage": "pours", "set": false, "state": "done", "reasons": [], "pours": 1, "filled": 1},
+   {"stage": "checks", "set": false, "state": "not_started",
+    "reasons": ["the board has no DRC run since its last change; run run_drc"],
+    "findings": 0, "waived": 0}],
+ "next": "routing"}
+```
+
+  `state` is `not_started`, `done` or `failing`; `reasons` says why a stage
+  is not done (at most 20 items named, then `and <n> more`), and `next` is
+  the first stage not done (`null` when all are). A stage with nothing in
+  scope is `not_started`, never `done`. A stage that names something the
+  board or its project does not have is `failing`, and its first reasons say
+  what.
+  - placement: each part in scope (every part, or the parts of the rooms
+    named, less the parts kept) is placed when its body lies inside the
+    board outline, or inside its room shrunk by the room's margin. `failing`
+    when some are placed, `not_started` when none is or the board has no
+    outline.
+  - routing: each net in scope (every net with two pads or more, or the nets
+    and classes named, less the skipped ones) is routed when copper joins
+    all its pads. `not_started` while no net in scope has a track or a via.
+  - pours: each pour in scope is done when it fills (not shelved, not
+    unfilled). `not_started` while none fills.
+  - checks: reads the board's last DRC run, only when it ran on the board as
+    it is now (`drc_current`; Run DRC, `run_drc`, makes one). Each open
+    finding of a rule in scope (a waived finding is not open, a lapsed one
+    is) fails the stage. A requirement named keeps the stage from `done`:
+    the status does not run `check_requirements`; run that for them.
+- Setting the plan, and the window's Undo or Redo of that step, keeps the
+  board's DRC run current: DRC does not check the plan.
+- The board must be open. `layout_plan_get` and `layout_plan_status` are
+  queries (capability `read`); `layout_plan_set` needs `edit`. All three
+  are on the agent channel, and an edit list (`apply_edits`) refuses
+  `layout_plan_set`: run it as its own command.
+- File form: `[board_options.layout_plan]` in the `.snxpcb`, one sub-table
+  per stage that sets anything, each setting under its operand name. A board
+  with a plan writes `snxpcb/1.12`; a board without one keeps its token,
+  byte for byte ([FORMAT_VERSIONS.md](FORMAT_VERSIONS.md)).
+
+```toml
+[board_options.layout_plan.placement]
+keep = [
+    "J1",
+    "H1",
+]
+
+[board_options.layout_plan.placement.weights]
+connection = 3.0
+
+[board_options.layout_plan.routing]
+nets = [
+    "class:Power",
+    "GND",
+]
+```
+
+Known limits:
+
+- The commands that would use the plan when their operands leave a setting
+  out (auto-place, routing, repour) do not read it yet.
+- The plan has no panel in the window; it is read and set by these commands.
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > System ›
