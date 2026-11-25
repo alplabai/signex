@@ -1,4 +1,4 @@
-//! The command line of `signex-cli` (#1923), parsed by hand: three
+//! The command line of `signex-cli` (#1923), parsed by hand: four
 //! subcommands and a handful of flags.
 
 use std::collections::BTreeSet;
@@ -6,6 +6,8 @@ use std::path::PathBuf;
 
 use crate::capability::{self, Capability};
 use crate::input::Limits;
+
+mod notebook;
 
 pub const USAGE: &str = "\
 signex-cli: run Signex commands without a window
@@ -15,6 +17,10 @@ USAGE:
     signex-cli run <project> <command-id> [--arg key=value]... [OPTIONS]
     signex-cli commands [--json]
     signex-cli agent-log <project> [--access]
+    signex-cli notebook export-pdf --project <project> [--out <file>] [--notebook <file>]
+               [--pages all|current|3-7] [--paper document|a4|letter] [--variant <name>]
+               [--annotations <kinds>] [--stale warn|fail] [--no-title-block]
+               [--no-contents] [--no-bookmarks] [--python-source] [OPTIONS]
     signex-cli --help | --version
 
 run reads one JSON command per line from standard input
@@ -40,6 +46,11 @@ OPTIONS (run):
     --max-line-bytes <n>    longest command line (default 65536)
     --max-commands <n>      most commands per run (default 10000)
     --max-file-bytes <n>    largest file a command may read (default 67108864)
+
+notebook export-pdf writes the project's Design Notebook as a PDF file (the
+default name in Project Outputs/notebook/ without --out); it runs as
+`run <project> export_notebook_pdf --arg ... --allow export` and takes the
+run options.
 
 agent-log prints the project's agent journal as a table (the edits agents made;
 with --access, who connected and with what rights). It only reads.
@@ -93,6 +104,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation, Strin
             [other, ..] => Err(format!("`commands` takes only --json, not `{other}`")),
         },
         Some("run") => parse_run(args).map(Invocation::Run),
+        Some("notebook") => notebook::parse(args).map(Invocation::Run),
         Some("agent-log") => parse_agent_log(args),
         Some(other) => Err(format!("unknown subcommand `{other}`")),
     }

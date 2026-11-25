@@ -198,6 +198,7 @@ mod tests {
             (Capability::Export, "export_board_pdf"),
             (Capability::Export, "export_assembly_svg"),
             (Capability::Export, "export_board_step"),
+            (Capability::Export, "export_notebook_pdf"),
         ]);
         assert_eq!(non_default, pinned);
     }
