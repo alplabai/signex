@@ -98,6 +98,7 @@ fn pad(uuid: &str, number: &str) -> Pad {
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
+        thermal: Default::default(),
     }
 }
 

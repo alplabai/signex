@@ -229,6 +229,7 @@ pub(super) fn plain_board() -> PcbBoard {
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
+        thermal: Default::default(),
     };
     let footprint = Footprint {
         schematic_link: None,

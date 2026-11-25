@@ -46,6 +46,7 @@ mod finite_toml;
 mod header_id;
 mod load_repair;
 mod pad_shape_cells;
+mod pad_thermal_cells;
 mod page_extras;
 mod pcb_cells;
 mod pcb_footprints;
@@ -124,6 +125,8 @@ mod pcb_lib_ref_tests;
 mod pcb_lock_name_tests;
 #[cfg(test)]
 mod pcb_pad_shape_tests;
+#[cfg(test)]
+mod pcb_pad_thermal_tests;
 #[cfg(test)]
 mod pcb_rooms_tests;
 #[cfg(test)]

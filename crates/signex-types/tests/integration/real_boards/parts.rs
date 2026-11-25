@@ -49,6 +49,7 @@ fn pad(number: &str, kind: PadType, shape: PadShape, at: Point, size: Point) -> 
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
+        thermal: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }
