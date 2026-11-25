@@ -77,7 +77,7 @@ pub(super) fn content_keyboard_shortcuts<'a>(v: PrefsView<'a>) -> Element<'a, Pr
     let platform = Platform::current();
     let conflicts = editor.active_conflicts();
     let filter = v.keymap_view.context_filter;
-    let rows = filters::visible_rows_with(
+    let rows = filters::page_rows(
         editor,
         i18n,
         v.extension_commands,

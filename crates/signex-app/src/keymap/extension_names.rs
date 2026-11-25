@@ -38,6 +38,11 @@ impl ExtensionCommandNames {
         self.0.get(command)
     }
 
+    /// The installed commands' ids, in id order.
+    pub fn ids(&self) -> impl Iterator<Item = &AppCommandId> {
+        self.0.keys()
+    }
+
     /// Is no extension command installed?
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()

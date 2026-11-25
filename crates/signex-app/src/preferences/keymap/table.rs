@@ -1,5 +1,6 @@
 //! The shortcut table: a bordered card with the header row, then one row
-//! per binding trigger (Command, Category, Context, Shortcut, State). A
+//! per binding trigger and one per command with no key (Command, Category,
+//! Context, Shortcut, State). A
 //! row shows Edit while the pointer is over it, and its "Overridden by"
 //! note as a tooltip. With the recorder open, its popover floats over the
 //! table just under the row it edits.
@@ -57,7 +58,7 @@ pub(super) fn shortcut_table<'a>(input: TableInput<'_>) -> Element<'a, PrefMsg> 
     let mut lines: Vec<Element<'a, PrefMsg>> = vec![header(i18n, tokens)];
     for row_model in rows {
         let state = RowState::of(row_model, conflicts, platform, active_is_custom);
-        let is_open = recorder.is_some_and(|r| r.slot == row_model.slot);
+        let is_open = recorder.is_some_and(|r| r.is_on(row_model));
         lines.push(table_row(
             i18n,
             row_model,
@@ -98,7 +99,7 @@ pub(super) fn shortcut_table<'a>(input: TableInput<'_>) -> Element<'a, PrefMsg> 
     };
     // Anchor the popover under its row; a row the search or the chip hides
     // leaves it at the top of the table.
-    let index = rows.iter().position(|r| r.slot == recorder.slot);
+    let index = rows.iter().position(|r| recorder.is_on(r));
     let top = match index {
         Some(i) => ROW_H * (i as f32 + 2.0) + SP.xs,
         None => ROW_H + SP.xs,
@@ -285,8 +286,8 @@ fn table_row<'a>(
 }
 
 /// The recorder-open message of a row the user can re-record: a keyboard
-/// binding of a command in a custom profile. Built-in profiles and pointer
-/// gestures are read-only.
+/// binding of a command in a custom profile, or a command there with no
+/// key yet. Built-in profiles and pointer gestures are read-only.
 pub(super) fn edit_message(row_model: &KeymapEditorRow, active_is_custom: bool) -> Option<PrefMsg> {
     if !(active_is_custom && row_model.keyboard_editable) {
         return None;
@@ -298,6 +299,7 @@ pub(super) fn edit_message(row_model: &KeymapEditorRow, active_is_custom: bool) 
         label: row_model.label.clone(),
         context: row_model.context,
         trigger: row_model.trigger_config.clone(),
+        unassigned: row_model.unassigned,
     })
 }
 
