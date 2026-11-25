@@ -9,11 +9,13 @@ use serde_json::Value;
 
 use super::journal::AccessEntry;
 use super::journal::record::rights_within;
-use super::reply::{Status, changed_between, messages_since, outcome_verdict};
+use super::reply::{Status, changed_between, messages_since};
 use super::wire::{self, Request};
 use super::{AgentCall, AgentMsg, Input, allow, listener, registry};
 use crate::app::command::queries::is_query;
-use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
+use crate::app::command::{
+    AgentGatePassed, CommandArgs, CommandRequest, OperandValue, RequestOutcome, RequestSurface,
+};
 use crate::app::{DocumentKey, Message, Signex};
 use crate::keymap::AppCommandId;
 
@@ -681,28 +683,28 @@ impl Signex {
             Ok(args) => args,
             Err(error) => return (refused(error.to_string()), none()),
         };
-        // The window layout names no document (#2249).
+        // The window layout names no document (#2249), so no revision either.
         if allow::is_window_layout(&command) {
+            if request.if_revision.is_some() {
+                return (
+                    refused("`if_revision` needs the operand `document`"),
+                    none(),
+                );
+            }
             return self.run_agent_window_layout(&command);
         }
         if let Err(why) = self.check_agent_document(&command, &args) {
             return (refused(why), none());
         }
-        self.agent.serving = true;
         self.agent.reached_handler = true;
-        let ran = if is_query(&command) {
-            self.run_query_headless(&command, &args)
-        } else {
-            Some(self.journaled(&command, &args, |app| app.run_operands(&command, &args)))
-        };
-        self.agent.serving = false;
-        match ran {
-            Some((CommandOutcome::Deferred { ticket }, task)) => {
+        let request = CommandRequest::new(command, args).with_if_revision(request.if_revision);
+        let surface = RequestSurface::Agent(AgentGatePassed::after_gate());
+        match self.run_command_request(surface, request) {
+            (RequestOutcome::Waiting { ticket }, task) => {
                 self.agent.deferred = Some(ticket);
                 (refused("waiting for its reads"), task)
             }
-            Some((outcome, task)) => (outcome_verdict(command.as_str(), outcome, None), task),
-            None => (refused("not a query"), none()),
+            (outcome, task) => (outcome.into_verdict(), task),
         }
     }
 
