@@ -1053,6 +1053,54 @@ find_similar_items document=<board> id=<uuid> [fields=kind,value,...]
 
 Find by text on a board is `find_items` (designator and value).
 
+## Block diagrams
+
+A block diagram is a `.snxblk` document (mockup row 171, #2796;
+`docs/architecture/snxblk-format.md`). `open_document path=<file>.snxblk`
+opens one and answers its id; `new_block_diagram [name=]` makes an empty one
+named after the project (or `name`) in the open project's folder, unsaved,
+and answers `id`, `path` and `kind` (`block_diagram`). Nothing is written
+until `save_document document=<diagram>`, and the first save of a new
+diagram refuses to replace a file already at its path. `list_documents`
+lists open diagrams as kind `block_diagram`.
+
+Every edit names its diagram by path or id, is one step of the diagram's
+own history (`undo` / `redo document=<diagram>`), and answers with the `id`
+of what it made or changed:
+
+```text
+block_add document=<diagram> name=<text> [at=x,y] [size=w,h] [function=] [note=]
+          [shape=rectangle|rounded_rectangle|ellipse|hexagon] [color=#rrggbb]
+          [group=<group id>] [rails=VIN,VOUT] [specs=Vout=3.3 V;Fsw=570 kHz]
+block_set document=<diagram> id=<block> [the same properties] [clear=color,group]
+block_remove document=<diagram> id=<block>
+block_port_add document=<diagram> block=<block> name=<text>
+               [side=left|right|top|bottom] [offset=<mm>] [direction=input|output|bidirectional]
+block_port_remove document=<diagram> id=<port>
+block_link document=<diagram> from=<block or port> to=<block or port>
+           [interface=signal|bus|power|analog|spi|i2c|uart|usb|lvds|<any name>] [label=]
+block_link_set document=<diagram> id=<connection> [interface=] [label=]
+block_unlink document=<diagram> id=<connection>
+block_group document=<diagram> name=<text> [ids=<block>,<block>] [color=#rrggbb]
+block_group_set document=<diagram> id=<group> [name=] [color=] [clear=color]
+block_ungroup document=<diagram> id=<group>
+query_block_diagram document=<diagram>
+```
+
+- `block_add` without `at` places the block right of the others, where the
+  tab's Add Block puts it. `block_add` and `block_set` answer the `block`;
+  `block_link` and `block_link_set` the `connection`; `block_group_set` the
+  `group`; `block_port_add` the port's `block`.
+- `block_remove` answers the `connections` that went with the block (its
+  ports go too); `block_port_remove` the connections that ended on the port;
+  `block_ungroup` the `blocks` it freed, which stay.
+- `query_block_diagram` answers `id`, `path`, `dirty`, `saved` (false until
+  the first save), `read_only` and `diagram`: `groups`, `blocks` (with their
+  `ports` and `sheet` link) and `connections` (`from` and `to` as `block`
+  and `port`, `interface`, `label`, `derived_from`), lengths in mm.
+- A diagram from a newer Signex opens read-only: every edit and its save are
+  refused with the reason.
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > System ›
