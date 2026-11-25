@@ -7,7 +7,7 @@ use iced::Task;
 use iced::widget::operation;
 
 use super::plan::{Listed, listed, plan_copy};
-use super::write::write_copy;
+use super::write::{CopyOutcome, write_copy};
 use super::{SaveProjectAsMsg, SaveProjectAsState};
 use crate::app::handlers::dock::project_navigation::add_io::on_blocking_pool;
 use crate::app::handlers::document_files::new_project::project_file_in;
@@ -54,7 +54,27 @@ impl Signex {
                 });
                 Task::none()
             }
-            M::SubmitRequested => self.save_project_copy(),
+            M::SubmitRequested => self.save_project_copy(Vec::new()),
+            M::KeysNotKeptAccepted => {
+                let accepted = self
+                    .ui_state
+                    .save_project_as
+                    .as_ref()
+                    .and_then(|s| s.not_kept.clone());
+                match accepted {
+                    Some(keys) => self.save_project_copy(keys),
+                    None => Task::none(),
+                }
+            }
+            M::KeysNotKeptFound { project_path, keys } => {
+                self.with_save_as(|s| {
+                    if s.saving.as_deref() == Some(project_path.as_path()) {
+                        s.saving = None;
+                        s.not_kept = Some(keys);
+                    }
+                });
+                Task::none()
+            }
             // While the copy is written, Cancel and Esc wait: it is written
             // and opened anyway.
             M::CancelRequested
@@ -145,6 +165,7 @@ impl Signex {
             generation: 0,
             saving: None,
             error: None,
+            not_kept: None,
         };
         self.ui_state.save_project_as = Some(Box::new(state));
         Task::batch([
@@ -203,8 +224,10 @@ impl Signex {
 
     /// Save: plan the copy from the open project and write it off-thread.
     /// The dialog stays, its Save off, until the writes land. Ignored while
-    /// Save is unavailable.
-    fn save_project_copy(&mut self) -> Task<Message> {
+    /// Save is unavailable. `accepted`: the keys of a newer-minor project the
+    /// person agreed the copy leaves out or changes; any other such key
+    /// stops the copy before it is written, and the dialog names them all.
+    fn save_project_copy(&mut self, accepted: Vec<String>) -> Task<Message> {
         let Some(state) = self.ui_state.save_project_as.as_deref() else {
             return Task::none();
         };
@@ -216,25 +239,37 @@ impl Signex {
         };
         let name = name.to_string();
         let planned = match self.document_state.project_by_id(state.project) {
-            Some(project) => plan_copy(&project.data, project.dir(), &name, &location),
+            Some(project) => plan_copy(&project.data, &project.path, &name, &location),
             None => Err(format!("'{}' is no longer open", state.project_name)),
         };
-        let plan = match planned {
+        let mut plan = match planned {
             Ok(plan) => plan,
             Err(why) => {
                 self.with_save_as(|s| s.error = Some(why));
                 return Task::none();
             }
         };
+        if let Some(check) = plan.keys_check.as_mut() {
+            check.accepted = accepted;
+        }
         let project_path = project_file_in(&location, &name, true);
         self.with_save_as(|s| {
             s.saving = Some(project_path.clone());
             s.error = None;
         });
         Task::perform(on_blocking_pool(move || write_copy(&plan)), move |result| {
-            Message::from(SaveProjectAsMsg::Written {
-                project_path,
-                result,
+            Message::from(match result {
+                Ok(CopyOutcome::NotKept(keys)) => {
+                    SaveProjectAsMsg::KeysNotKeptFound { project_path, keys }
+                }
+                Ok(CopyOutcome::Written(written)) => SaveProjectAsMsg::Written {
+                    project_path,
+                    result: Ok(written),
+                },
+                Err(why) => SaveProjectAsMsg::Written {
+                    project_path,
+                    result: Err(why),
+                },
             })
         })
     }

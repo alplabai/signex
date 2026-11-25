@@ -57,10 +57,23 @@ impl Signex {
             .padding([SP.xl, SP.xl + SP.m])
             .width(Length::Fill)
             .height(Length::Fill);
-        let save_label = if saving {
-            ids::DIALOG_SAVE_PROJECT_AS_SAVING
+        // Once the dialog names keys the copy cannot keep, the primary button
+        // agrees to go without them; until then nothing is written.
+        let (save_label, save_msg) = if saving {
+            (
+                ids::DIALOG_SAVE_PROJECT_AS_SAVING,
+                SaveProjectAsMsg::SubmitRequested,
+            )
+        } else if state.not_kept.is_some() {
+            (
+                ids::DIALOG_SAVE_PROJECT_AS_SAVE_WITHOUT,
+                SaveProjectAsMsg::KeysNotKeptAccepted,
+            )
         } else {
-            ids::DIALOG_SAVE_PROJECT_AS_SAVE
+            (
+                ids::DIALOG_SAVE_PROJECT_AS_SAVE,
+                SaveProjectAsMsg::SubmitRequested,
+            )
         };
         let footer = dialog_footer_split(
             Vec::new(),
@@ -74,9 +87,7 @@ impl Signex {
                 dialog_button(
                     t!(i18n, save_label),
                     super::graphite::call_to_action(tokens),
-                    state
-                        .can_save()
-                        .then(|| sa(SaveProjectAsMsg::SubmitRequested)),
+                    state.can_save().then(|| sa(save_msg)),
                     tokens,
                 ),
             ],
@@ -180,6 +191,15 @@ fn fields<'a>(
     }
     if state.unsaved > 0 {
         let note = t!(i18n, ids::DIALOG_SAVE_PROJECT_AS_UNSAVED, "count" => state.unsaved);
+        col = col.push(line(note.into(), warn));
+    }
+    if let Some(keys) = &state.not_kept {
+        let note = t!(
+            i18n,
+            ids::DIALOG_SAVE_PROJECT_AS_NOT_KEPT,
+            "count" => keys.len(),
+            "keys" => keys.join(", ")
+        );
         col = col.push(line(note.into(), warn));
     }
     let danger = tokens::danger(tokens);

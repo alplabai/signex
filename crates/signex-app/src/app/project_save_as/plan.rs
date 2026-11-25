@@ -34,6 +34,18 @@ pub(crate) struct CopyPlan {
     pub location: PathBuf,
     /// The new `.snxprj`, encoded in this build's format.
     pub project_bytes: Vec<u8>,
+    /// Set for a project read from a newer minor: its `.snxprj` is compared
+    /// with `project_bytes` before anything is written (`dropped_keys`).
+    pub keys_check: Option<KeysCheck>,
+}
+
+/// The comparison a newer-minor copy waits for: the source `.snxprj`, and the
+/// keys the person agreed the copy leaves out or changes. A key not agreed to
+/// stops the copy before anything is written.
+#[derive(Debug, Clone)]
+pub(crate) struct KeysCheck {
+    pub source_file: PathBuf,
+    pub accepted: Vec<String>,
 }
 
 /// `text` as a path inside the project folder, or `None` when it would land
@@ -88,7 +100,8 @@ pub(crate) fn listed(data: &ProjectData) -> Result<Vec<Listed>, String> {
 /// unsaved ones included, named `name` in `folder`, with a new id when the
 /// project has one (a Save As is a new document, docs/DOCUMENT_IDS.md). A
 /// project read from a newer minor is written in this build's format; the
-/// keys this build does not know are kept as they were read.
+/// keys this build does not know are kept as they were read, and what it
+/// reads leniently or into an object with no bag is checked by `KeysCheck`.
 pub(crate) fn copy_bytes(data: &ProjectData, name: &str, folder: &Path) -> Result<Vec<u8>, String> {
     let mut copy = data.clone();
     copy.unknown.newer_minor_source = None;
@@ -100,20 +113,31 @@ pub(crate) fn copy_bytes(data: &ProjectData, name: &str, folder: &Path) -> Resul
     encode_project(&copy).map_err(|e| e.to_string())
 }
 
-/// Plan the copy of the project in `source_dir` holding `data` as `name`
-/// under `location`.
+/// Plan the copy of the project read from `source_file` (its `.snxprj`)
+/// holding `data` as `name` under `location`. A newer-minor project's copy
+/// waits for its keys check, with nothing accepted yet.
 pub(crate) fn plan_copy(
     data: &ProjectData,
-    source_dir: &Path,
+    source_file: &Path,
     name: &str,
     location: &Path,
 ) -> Result<CopyPlan, String> {
     let folder = location.join(name);
+    let source_dir = source_file.parent().unwrap_or(Path::new("."));
+    let keys_check = data
+        .unknown
+        .newer_minor_source
+        .is_some()
+        .then(|| KeysCheck {
+            source_file: source_file.to_path_buf(),
+            accepted: Vec::new(),
+        });
     Ok(CopyPlan {
         source_dir: source_dir.to_path_buf(),
         listed: listed(data)?,
         name: name.to_string(),
         location: location.to_path_buf(),
         project_bytes: copy_bytes(data, name, &folder)?,
+        keys_check,
     })
 }

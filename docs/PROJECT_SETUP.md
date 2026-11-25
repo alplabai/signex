@@ -311,13 +311,28 @@ What the copy holds:
   settings included, under the new name and folder, in this build's format:
   the lowest `.snxprj` token its content needs (`snxprj_token`). A project
   read from a newer minor (read-only here, `docs/FORMAT_VERSIONS.md`) is
-  written current; the keys this build does not know are kept as they were
-  read. A project with an id gets a new one: a Save As is a new document
-  (`docs/DOCUMENT_IDS.md`).
+  written current. Keys this build does not know are kept as they were read
+  where the object holding them has a bag for unknown keys (the top level,
+  sheets and libraries among them). Others are not: a value this build
+  reads leniently and cannot read (`fab_outputs`, `router_tool_diameter`)
+  reads as absent, and an object with no place for unknown keys (such as
+  `fab_outputs`) loses the fields it does not know. So before anything is
+  written, Save compares the copy's `.snxprj` with the source file, key by
+  key at the top level and inside every object and same-length list. If a key
+  of the source is missing from the copy or has a different value there
+  (other than `format`, `name`, `dir` and `document_id`, which the copy
+  rewrites), nothing is written. The dialog lists those keys by their place
+  in the file (`fab_outputs.laser_marking`, `sheets[1].colour`), and its
+  primary button becomes **Save copy without them**. Only that button writes
+  the copy, and the writer checks again that every key it would drop was the
+  one agreed to (`project_save_as::dropped_keys`, `KeysCheck`). A key the
+  copy adds is not listed, and numbers compare by value. A project with an id
+  gets a new one: a Save As is a new document (`docs/DOCUMENT_IDS.md`).
 - **Every document it lists in its folder**, byte for byte as last saved: the
   root sheet, the sheets, the board, and each project library (its `.snxlib`
   and the files under its library folders: `classes`, the symbol, footprint
-  and simulation folders, `3dmodels` and `assets/datasheets`). Shared and
+  and simulation folders, `3dmodels` and `assets/datasheets`; a library kept
+  as a `*.snxlib/` folder is copied whole, every file under it). Shared and
   global libraries are not copied; the copy lists them where they are. Unsaved
   edits of a listed sheet or board are not in the copy, and the dialog says
   how many documents have them. A sheet or board copied byte for byte keeps
@@ -327,10 +342,13 @@ What the copy holds:
 A listed file that is not on disk, or an entry that lies outside the project
 folder, refuses the whole copy before anything is written. Every file goes
 through `atomic_write`, the `.snxprj` last; a failure removes what the copy
-wrote and the folder it made, and the dialog shows why. The original folder
-is only read. Once written, the copy opens beside the project, which stays
-open and unchanged (its unsaved settings stay unsaved). A library's history
-(`.git`) is not copied.
+wrote, every folder below the copy's folder that this left empty (those
+`atomic_write` made included), and the copy's folder when Save made it, and
+the dialog shows why. A target folder that was there before stays, empty.
+The original folder is only read. Once written, the copy opens beside the
+project, which stays open and unchanged (its unsaved settings stay unsaved).
+A library's history (`.git`) beside its `.snxlib` is not copied; a library
+kept as a folder takes whatever that folder holds.
 
 A project written by a newer build offers the same dialog from its Save
 Failed card (`NoticeAction::SaveProjectAs`) and from the Close Project and

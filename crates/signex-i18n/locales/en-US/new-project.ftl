@@ -251,3 +251,17 @@ dialog-save-project-as-unsaved =
 # The copy could not be written; $why is the reason the writer gave. Nothing
 # of the copy is left behind and the open project is unchanged.
 dialog-save-project-as-failed = The copy was not saved: { $why }
+
+# The project was written by a newer version, and this version cannot keep
+# some of its settings as they are in the file: the copy would leave them out
+# or change them. Nothing was written. $keys lists them by their place in the
+# project file, separated by commas; $count is how many (a whole number).
+dialog-save-project-as-not-kept =
+    { $count ->
+        [one] This version cannot keep one setting of the project file as it is written: { $keys }. The copy would leave it out or change it. Nothing has been written yet.
+       *[other] This version cannot keep { $count } settings of the project file as they are written: { $keys }. The copy would leave them out or change them. Nothing has been written yet.
+    }
+
+# The primary button once the dialog names the settings the copy cannot keep:
+# it writes the copy without them.
+dialog-save-project-as-save-without = Save copy without them

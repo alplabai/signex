@@ -46,8 +46,12 @@ format declares only its own table row below.
   Project and Exit still save every other file with Save All, skipping it,
   and offer a discard that drops only its unsaved settings (#2904). The one
   write of such a project is File ▸ Save Project As… (#2908): a copy in a new
-  folder whose `.snxprj` is written in this build's format, keeping the keys
-  this build does not know as they were read; its sheets and boards are
+  folder whose `.snxprj` is written in this build's format. Unknown keys are
+  kept where the object holding them has a bag for them. A key the copy
+  would still leave out or change (a leniently read value such as
+  `fab_outputs`, or a field of an object with no such bag) is listed in the
+  dialog, and nothing is written until the person agrees to go without it
+  (`docs/PROJECT_SETUP.md`, "Save Project As"). Its sheets and boards are
   copied byte for byte, so a newer-minor sheet stays read-only in the copy.
   The original file is never written.
 - **An older or foreign token** that is not in the list, or a garbled one
