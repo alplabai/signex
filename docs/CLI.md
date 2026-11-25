@@ -1053,6 +1053,110 @@ find_similar_items document=<board> id=<uuid> [fields=kind,value,...]
 
 Find by text on a board is `find_items` (designator and value).
 
+## BOM and part search
+
+The priced BOM, the alternate parts of a BOM line, the parametric part
+search and the swap of a placed part (#2938, #1297). Prices, stock and
+lifecycle states come from what the open libraries cached; nothing here
+fetches a price. `query_bom` and `search_parts` are queries (capability
+`read`); the alternate edits and `change_component` change a project or a
+sheet in memory (capability `edit`) and reach the disk only through a save.
+
+```text
+query_bom document=<project, sheet or board> [quantity=<boards>] [currency=<code>] [variant=<name>]
+bom_add_alternate document=<project> line=<key> library=<id or path> part=<row id or part number>
+bom_remove_alternate document=<project> line=<key> library=.. part=..
+bom_set_alternate_order document=<project> line=<key> library=.. part=.. position=<n>
+search_parts [query=<words>] [value=..] [package=..] [tolerance=..] [rating=..]
+             [min_stock=<n>] [quantity=<n>] [refresh=false] [limit=<n>]
+change_component document=<sheet> id=<part uuid> library=<id or path> part=<row id or part number>
+```
+
+### `query_bom`
+
+The project's BOM grouped as the BOM export groups it (every sheet, each
+placement of a child sheet once, closed sheets read off the UI thread, the
+parts the project's board leaves out not listed), priced for a build of
+`quantity` boards (default 1) as `bom_cost` prices it: each line buys its
+fitted quantity times `quantity`, at least the distributor's minimum order,
+at that quantity's price break, rounded to cents. `variant` is a variant of
+the project, or `Base`; without it the project's active variant is used. The
+answer comes when the build lands:
+
+- `project`, `variant` (`null` for the base design), `source` (`cache`),
+  `quantity`, `currency` (upper-cased, `null` when not given) and `warnings`
+  (sheets or a board that could not be read).
+- `lines`, each with `key` (what the alternate edits name the line by: its
+  library row `<library id>/<row id>`, else `mpn:<MPN>`; `null` for a line
+  with neither), `designators`, `quantity` (fitted per board),
+  `build_quantity`, `name`, `value`, `footprint`, `description`,
+  `library_row`, `mpn`, `price` (the line's part priced for the build:
+  `distributor`, `currency`, `unit_price`, `extended_price`, `buy_qty`,
+  `stock`, `age`; `null` without a cached price), `unpriced` (`no_price` or
+  `other_currency` when the line is left out of the total, else `null`),
+  `alternates` (each `row` and its `price` for the build, or `null`) and
+  `served_by`: when the line's part has no price, a price only in another
+  currency, or less stock than the build needs (`reason`: `no_price`,
+  `other_currency`, `no_stock`), the first alternate that has a price and the
+  stock, with its `price`; else `null`.
+- `totals` (the counted lines' cost for the build, per currency), `total` and
+  `unit_cost` (the build's cost and the cost per board, when every line is
+  counted in one currency, else `null`), `known_total` (the counted lines'
+  cost when some line is not, else `null`) and `unpriced` (the designators of
+  each line left out). A line with no price in the currency is reported here,
+  never counted as zero; the total stays the part's own price, not the
+  alternate's.
+
+### Alternates
+
+A BOM line lists alternate parts, library rows in order of preference,
+stored in the project file under `bom_alternates` (no format token change;
+skipped when there are none). Each edit is one step of the project's
+General history (Undo in the Project tab takes it back), marks the project
+unsaved, and answers `{line, alternates, changed}`. `line` is the `key`
+`query_bom` answers; `library` and `part` name the row as `place_component`
+does, or, for a library that is not open, by the library id and the row id.
+`position` is 1 for the most preferred. An alternate already listed, the
+line's own part, an alternate not listed and a position past the list are
+refused with the reason. The BOM export's Alternates column (off by default)
+lists a line's alternates.
+
+### `search_parts`
+
+The rows of every open library that match: `query` is read as the
+Components panel reads its search words (`100n`, `4k7` and `16V` match a
+parameter of that value, other words the part numbers, manufacturer and
+description), and each parameter operand must hold too: `value` (the row's
+value, as a number with a prefix and unit, else as text), `package`
+(the package, case ignored), `tolerance` (at most this, `1%`), `rating`
+(at least this, `16V`, read from `rating`, `voltage_max`, `power` or
+`current_max`) and `min_stock` (a cached offer with that many in stock).
+The answer is `source` (`cache`), `count` (how many matched), `truncated`
+and `matches` (at most `limit`, default 50, up to 500), each with `library`,
+`library_name`, `part` (the row id), `internal_pn`, `mpn`, `manufacturer`,
+`description`, `lifecycle`, `parameters`, `stock` (the largest cached) and
+`offers` (`distributor`, `currency`, `stock`, `breaks`, `unit_price` at
+`quantity`, default 1, and `age`). `refresh=true` is refused: the search
+never fetches; refresh the library's prices in the Library panel first.
+
+### Place or swap
+
+A match is placed with `place_component library=<library> part=<part>`
+(above), or swapped for a placed part with `change_component`: the part
+`id` names on the sheet `document` names gets the row's symbol, footprint
+and parameters, as the Change Component dialog's Change does with every
+Keep now box ticked: one undo step, the row read off the UI thread first. A
+locked part, a part whose units are on other sheets, and a row with no
+drawing for the placed unit are refused. The answer is `{designator, id,
+changed, from: {lib_id, library, part}, to: {lib_id, library, part,
+internal_pn}, pins: {dangling, moved, gained}}`, the pins whose connection
+the swap leaves, moves or makes. Without operands, in a window,
+`change_component` opens the dialog as it always did.
+
+Over the agent channel `document=` names one of the project's sheets or its
+board, as for the requirement checks; the project file itself is refused at
+the agent gate.
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > System ›

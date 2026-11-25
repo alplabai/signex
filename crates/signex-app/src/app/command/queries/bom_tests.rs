@@ -39,7 +39,7 @@ fn row(pn: &str, sku: &str, parameters: &[(&str, ParamValue)]) -> ComponentRow {
     let mut row = crate::library::component_preview::test_row();
     row.internal_pn = InternalPn::new(pn);
     row.primary_mpn = signex_library::ManufacturerPart::draft("Acme", format!("{pn}-MPN"));
-    row.supply = vec![DistributorListing::new("DigiKey", sku)];
+    row.supply = vec![DistributorListing::new("Distributor A", sku)];
     row.state = LifecycleState::Released;
     row.parameters = parameters
         .iter()
@@ -57,7 +57,7 @@ fn ohms(value: f64) -> ParamValue {
 
 fn priced(sku: &str, stock: u32, breaks: &[(u32, f64)]) -> RowPricing {
     RowPricing::from([(
-        "DigiKey".to_string(),
+        "Distributor A".to_string(),
         BTreeMap::from([(
             sku.to_string(),
             CachedPricing {
@@ -333,7 +333,7 @@ fn search_parts_matches_words_and_parameters_from_the_cache() {
     assert_eq!(resistor["mpn"], "R-10K-MPN");
     assert_eq!(resistor["lifecycle"], "released");
     assert_eq!(resistor["stock"], 1000);
-    assert_eq!(resistor["offers"][0]["distributor"], "DigiKey");
+    assert_eq!(resistor["offers"][0]["distributor"], "Distributor A");
     assert_eq!(resistor["offers"][0]["unit_price"], 0.1);
     assert_eq!(resistor["offers"][0]["age"], "2 d ago");
 
