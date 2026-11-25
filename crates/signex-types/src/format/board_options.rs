@@ -54,6 +54,9 @@ pub(in crate::format) struct BoardOptionsRaw {
     /// `snxpcb/1.5`, `format::snxpcb_token`).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     layer_colors: BTreeMap<String, String>,
+    /// `[board_options.teardrops]` (`snxpcb/1.12`), `format::board_teardrops`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    teardrops: Option<super::board_teardrops::TeardropsRaw>,
 }
 
 /// The layer colours of `raw`, in token order; a token this build does not
@@ -174,6 +177,7 @@ pub(in crate::format) fn read(raw: Option<BoardOptionsRaw>) -> Result<BoardOptio
         drc_waivers: raw.drc_waivers,
         panel: raw.panel.map(super::board_panel::read).transpose()?,
         layer_colors: layer_colors(raw.layer_colors)?,
+        teardrops: super::board_teardrops::read(raw.teardrops)?,
     })
 }
 
@@ -277,6 +281,7 @@ pub(in crate::format) fn write(out: &mut String, board: &PcbBoard) -> Result<(),
                 .iter()
                 .map(|c| (super::pcb_layer_token(c.layer), c.color.to_hex()))
                 .collect(),
+            teardrops: super::board_teardrops::write(&options.teardrops)?,
         },
     };
     out.push('\n');

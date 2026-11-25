@@ -11,6 +11,7 @@ use uuid::Uuid;
 use crate::pcb::Point;
 use crate::pcb_layer::PcbLayer;
 pub use crate::pcb_origin::BoardOrigin;
+use crate::pcb_teardrop_rule::TeardropRule;
 use crate::theme::Color;
 
 /// The colours a guide or grid swatch steps through, first one the default
@@ -67,6 +68,10 @@ pub struct BoardOptions {
     /// Saved as `[board_options.layer_colors]` (`snxpcb/1.5`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub layer_colors: Vec<LayerColor>,
+    /// The teardrop rule and the per-pad overrides. Saved as
+    /// `[board_options.teardrops]` (`snxpcb/1.12`) when not the default.
+    #[serde(default, skip_serializing_if = "TeardropRule::is_default")]
+    pub teardrops: TeardropRule,
 }
 
 /// A colour the user gave one board layer: the canvas, the layer tabs and

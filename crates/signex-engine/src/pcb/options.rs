@@ -73,6 +73,10 @@ fn check(options: &BoardOptions) -> Result<(), BoardCommandError> {
     if let Some(panel) = &options.panel {
         panel.check().map_err(BoardCommandError::Panel)?;
     }
+    options
+        .teardrops
+        .check()
+        .map_err(BoardCommandError::TeardropRule)?;
     Ok(())
 }
 
