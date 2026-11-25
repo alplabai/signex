@@ -21,6 +21,9 @@
 //! [`CompiledNotebook`] draws a page for the preview and writes a PDF that
 //! is the same file every time.
 //!
+//! [`generate`] builds the design report of mockup row 201 from what the
+//! caller gathered about the project, as its own notebook file.
+//!
 //! UI-free and IO-free: the caller reads the files.
 
 mod annotation;
@@ -28,6 +31,7 @@ mod compile;
 mod date;
 mod file;
 mod filter;
+pub mod generate;
 mod header;
 mod id;
 mod lexer;
@@ -67,5 +71,9 @@ mod tests;
 mod tests_compile;
 #[cfg(test)]
 mod tests_file;
+#[cfg(test)]
+mod tests_generate;
+#[cfg(test)]
+mod tests_generate_report;
 #[cfg(test)]
 mod tests_model;
