@@ -1,7 +1,8 @@
 //! #2645: the four rows where the active-sheet tail (A1,
 //! `finish_schematic_mutation`) and the by-path tail (A2,
-//! `after_sheet_change`) follow different rules on trunk today. One test per
-//! row and tail; the PR that makes the two rules one flips the side it drops.
+//! `after_sheet_change`) followed different rules until both became one
+//! `settle` (decided 2026-11-25, docs/DECISIONS.md). One test per row and
+//! tail, each on the decided rule.
 
 use std::path::{Path, PathBuf};
 
@@ -62,16 +63,13 @@ fn row_1_the_active_tail_returns_on_an_empty_patch_before_the_dirty_sync() {
 }
 
 #[test]
-fn row_1_the_by_path_tail_syncs_dirty_and_refreshes_the_panel_on_an_empty_patch() {
+fn row_1_the_by_path_tail_returns_on_an_empty_patch_before_the_dirty_sync() {
     let (mut app, a, _) = two_sheets();
     app.document_state.keep_document_dirty_until_saved(&a);
     reset_panel_build(&mut app);
     app.after_sheet_change(&a, DocumentPatch::NONE);
-    assert!(
-        !dirty(&app, &a),
-        "synced from the history at its save point"
-    );
-    assert!(panel_rebuilt(&app));
+    assert!(dirty(&app, &a), "no dirty sync");
+    assert!(!panel_rebuilt(&app), "no panel refresh");
 }
 
 // ---- Row 2: an agent's run on another sheet.
@@ -79,7 +77,7 @@ fn row_1_the_by_path_tail_syncs_dirty_and_refreshes_the_panel_on_an_empty_patch(
 /// The wrapper's #2645 `debug_assert` refuses this state, so the test runs
 /// its core half and projection as the wrapper does.
 #[test]
-fn row_2_the_active_tail_owes_the_active_sheets_change_to_an_agent_run_on_another_sheet() {
+fn row_2_the_active_tail_settles_the_active_sheet_an_agent_run_on_another_sheet_does_not_target() {
     let (mut app, a, b) = two_sheets();
     let patch = paper_on_engine(&mut app, &a);
     begin_agent_run(&mut app, &b);
@@ -93,9 +91,23 @@ fn row_2_the_active_tail_owes_the_active_sheets_change_to_an_agent_run_on_anothe
         update_selection_info: true,
     };
     app.project_events(edit.events, scope);
-    assert_eq!(app.document_state.agent_edits.owed, DocumentPatch::PAPER);
-    assert!(!dirty(&app, &a), "the dirty mark waits for the run's end");
-    assert_eq!(content_clears(&app), clears, "the canvas was not repainted");
+    assert_eq!(app.document_state.agent_edits.owed, DocumentPatch::NONE);
+    assert!(dirty(&app, &a));
+    assert!(content_clears(&app) > clears, "the active canvas repainted");
+}
+
+/// The gateway settles on the sheet the edit acted on: a person's edit run
+/// through `on_edit_target` on a sheet that is not the active one marks that
+/// sheet dirty, never the active one.
+#[test]
+fn row_2_a_gateway_edit_on_the_edit_target_marks_the_target_dirty() {
+    let (mut app, a, b) = two_sheets();
+    let changed = app.on_edit_target(&b, |app| app.apply_engine_command(paper("A3"), true, true));
+    assert!(changed);
+    assert_eq!(app.document_state.engines[&b].document().paper_size, "A3");
+    assert!(dirty(&app, &b), "the target is marked dirty");
+    assert!(!dirty(&app, &a), "the active sheet is untouched");
+    assert_eq!(app.document_state.agent_edits.owed, DocumentPatch::NONE);
 }
 
 #[test]
@@ -141,13 +153,13 @@ fn row_3_the_active_tail_with_no_engine_stops_after_the_erc_epoch() {
 }
 
 #[test]
-fn row_3_the_by_path_tail_with_no_engine_still_refreshes_the_panel() {
+fn row_3_the_by_path_tail_with_no_engine_stops_after_the_erc_epoch() {
     let (mut app, ghost) = active_without_engine();
     let epoch = app.document_state.sheet_edit_epoch;
     reset_panel_build(&mut app);
     app.after_sheet_change(&ghost, DocumentPatch::PAPER);
     assert_eq!(app.document_state.sheet_edit_epoch, epoch + 1);
-    assert!(panel_rebuilt(&app));
+    assert!(!panel_rebuilt(&app), "no panel refresh");
 }
 
 // ---- Row 4: a paper change of the active sheet.
@@ -163,12 +175,25 @@ fn row_4_the_active_tail_moves_the_panel_and_the_drawn_page() {
 }
 
 #[test]
-fn row_4_the_by_path_tail_moves_the_panel_but_not_the_drawn_page() {
+fn row_4_the_by_path_tail_moves_the_panel_and_the_drawn_page() {
     let (mut app, a, _) = two_sheets();
-    let page = drawn_page(&app);
-    assert_eq!(page, crate::panels::paper_dimensions("A4"));
+    assert_eq!(drawn_page(&app), crate::panels::paper_dimensions("A4"));
     let patch = paper_on_engine(&mut app, &a);
     app.after_sheet_change(&a, patch);
     assert_eq!(app.document_state.panel_ctx.paper_size, "A3");
-    assert_eq!(drawn_page(&app), page);
+    assert_eq!(drawn_page(&app), crate::panels::paper_dimensions("A3"));
+}
+
+/// The named change of the decision: an undo or redo by path of a paper
+/// change on the active sheet redraws the page frame at the size it takes.
+#[test]
+fn row_4_an_undo_and_redo_by_path_of_a_paper_change_redraw_the_drawn_page() {
+    let (mut app, a, _) = two_sheets();
+    assert_eq!(app.execute_on_sheet(&a, paper("A3")), Ok(true));
+    assert_eq!(drawn_page(&app), crate::panels::paper_dimensions("A3"));
+    assert_eq!(app.step_sheet_on(&a, true), Ok(true));
+    assert_eq!(app.document_state.panel_ctx.paper_size, "A4");
+    assert_eq!(drawn_page(&app), crate::panels::paper_dimensions("A4"));
+    assert_eq!(app.step_sheet_on(&a, false), Ok(true));
+    assert_eq!(drawn_page(&app), crate::panels::paper_dimensions("A3"));
 }
