@@ -94,16 +94,20 @@ impl DocumentSetupState {
         SheetChoice {
             sheet: self.draft.setup.sheet.clone(),
             designators: chosen.then_some(self.draft.setup.designators),
+            template: None,
         }
     }
 }
 
 /// What a new sheet is made with: its size, orientation and title block,
-/// and, when chosen, the project's designator standard.
+/// and, when chosen, the project's designator standard and the sheet
+/// template whose frame it takes (#1283).
 #[derive(Debug, Clone, PartialEq)]
 pub struct SheetChoice {
     pub sheet: SheetDefaults,
     pub designators: Option<DesignatorStandard>,
+    /// The `.snxsch` of a sheet template, read when the sheet is written.
+    pub template: Option<std::path::PathBuf>,
 }
 
 /// What happened in the New PCB or New Schematic dialog.

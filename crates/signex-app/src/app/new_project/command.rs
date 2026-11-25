@@ -39,8 +39,22 @@ fn setup_from(args: &CommandArgs, users: &[UserProfile]) -> Result<ProjectSetup,
     Ok(setup)
 }
 
+/// The folder of the library's project template `template` names (#1283);
+/// `None` when none is named. Reads no disk: the write reads the template.
+fn project_template(args: &CommandArgs) -> Result<Option<std::path::PathBuf>, String> {
+    let Some(name) = text(args, "template") else {
+        return Ok(None);
+    };
+    let name = crate::app::design_reuse::checked_name(name, "project template")?;
+    let root = crate::app::design_reuse::user_library_root()
+        .ok_or("this machine has no user folder for a library")?;
+    Ok(Some(
+        signex_types::reuse::ReuseKind::ProjectTemplate.entry_path(&root, &name),
+    ))
+}
+
 /// `new_project_with_profile name=.. location=.. [make_folder=..] [profile=..]
-/// [overrides=..]`.
+/// [overrides=..] [template=..]`.
 pub(crate) fn new_project_with_profile(app: &mut Signex, args: &CommandArgs) -> Ran {
     let (Some(name), Some(location)) = (text(args, "name"), text(args, "location")) else {
         return refused("`new_project_with_profile` needs the operands `name` and `location`");
@@ -59,10 +73,15 @@ pub(crate) fn new_project_with_profile(app: &mut Signex, args: &CommandArgs) -> 
     } else {
         NewProjectLayout::InPlace
     };
+    let template = match project_template(args) {
+        Ok(template) => template,
+        Err(reason) => return refused(format!("`new_project_with_profile`: {reason}")),
+    };
     let chosen = std::path::Path::new(location).join(format!("{name}.snxprj"));
     let plan = NewProjectPlan {
         layout,
         setup: Some(setup),
+        template,
     };
     match app.start_new_project(chosen, plan) {
         Ok(task) => (CommandOutcome::Ran, task),
