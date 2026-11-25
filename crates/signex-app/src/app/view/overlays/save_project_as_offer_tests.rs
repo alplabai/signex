@@ -12,14 +12,17 @@ fn guarded(mut layers: Vec<Element<'_, Message>>) -> Element<'_, Message> {
     super::scroll_guard(layers.pop().expect("one layer"))
 }
 
-/// The workspace project, read as `snxprj/1.2`, after its Save was refused.
+/// The workspace project, read as `snxprj/1.2`, after the Save of its
+/// unsaved settings was refused. A Save of a project with nothing unsaved
+/// writes nothing and is never refused, so the settings are marked unsaved.
 fn refused_app() -> (Signex, crate::app::ProjectId) {
     let mut app = crate::app::handlers::menu::export::tests::app_workspace("/ro", &[]);
     app.ui_state.first_run_tour_open = false;
     app.ui_state.window_size = (WINDOW.width, WINDOW.height);
     let project = &mut app.document_state.projects[0];
     project.data.unknown.newer_minor_source = Some("snxprj/1.2".into());
-    let id = project.id;
+    let (id, path) = (project.id, project.path.clone());
+    app.document_state.mark_document_dirty(&path);
     let Err(error) = app.begin_project_save(id) else {
         panic!("a read-only project's save is refused");
     };
