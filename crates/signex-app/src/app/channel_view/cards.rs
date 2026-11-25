@@ -94,16 +94,11 @@ fn card<'a>(
         _ => t!(i18n, ids::PANELS_CHANNEL_VIEW_NOT_COMPILED),
     };
     let is_not_fitted = tab.is_not_fitted();
-    let name_ink = if is_not_fitted {
-        res.ink4
-    } else {
-        ti(tokens.text)
-    };
     let mut header = row![
         text(UserText::new(tab.channel.name.as_str()))
             .size(TS.body)
             .font(mono)
-            .color(name_ink),
+            .color(fit::name_ink(ctx, tab)),
         text(caption).size(TS.caption).color(res.ink3),
     ]
     .spacing(GAP)

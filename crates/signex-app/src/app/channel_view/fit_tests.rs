@@ -111,6 +111,10 @@ fn a_channel_left_out_entirely_reads_as_not_fitted_and_its_parts_greyed() {
         fit::line_ink(&ctx, ch2, "CH2_R5"),
         "a part left out is greyed"
     );
+    // The name of a channel left out entirely is greyed; a channel with
+    // some parts left out keeps its ink.
+    assert_ne!(fit::name_ink(&ctx, ch3), fit::name_ink(&ctx, ch1));
+    assert_eq!(fit::name_ink(&ctx, ch2), fit::name_ink(&ctx, ch1));
     // A click leaves a channel out; on a channel left out entirely it lets
     // the sheets decide again.
     assert_eq!(fit::channel_click(ch1), Some(false));
