@@ -14,7 +14,7 @@ use signex_types::project::{FabTemplate, PcbDefaults, SetupProfile};
 use super::UpdatePcbMsg;
 use super::state::{Phase, file_name};
 use crate::app::state::{ErrorNotice, ProjectId};
-use crate::app::{Message, Signex, TabDocument, TabInfo, TabKind};
+use crate::app::{Message, Signex};
 
 /// Copper layers of a new board in a project with no PCB defaults: the
 /// Standard profile's.
@@ -151,13 +151,12 @@ impl Signex {
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         let revision = self.document_state.stamp_pcb_revision(&path);
-        self.document_state.tabs.push(TabInfo {
-            title: file_name(&path),
-            path: path.clone(),
-            cached_document: Some(TabDocument::Pcb(BoardEngine::unsaved(board, revision))),
+        self.document_state.push_pcb_tab(
+            file_name(&path),
+            path.clone(),
             project_id,
-            kind: TabKind::Pcb,
-        });
+            BoardEngine::unsaved(board, revision),
+        );
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
         self.apply_loaded_pcb_document(true, true);
         self.document_state.mark_document_dirty(&path);
